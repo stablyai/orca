@@ -4,7 +4,11 @@ import {
   LINEAR_ISSUE_LINK_CLEARED
 } from '../../../../shared/linear/links'
 import { parseIssueLinkInput, type IssueLinkProvider } from '../../../../shared/issue-link-input'
-import type { WorkspaceSourceProvider } from '../../../../shared/new-workspace/workspace-source'
+import {
+  buildBeadsWorkspaceSource,
+  type WorkspaceSourceProvider
+} from '../../../../shared/new-workspace/workspace-source'
+import type { TaskSourceContext } from '../../../../shared/task-source-context'
 import type { WorktreeMeta } from '../../../../shared/worktree/meta-types'
 import type { WorkspaceLinkedItem } from '../../../../shared/worktree/types'
 
@@ -47,6 +51,11 @@ export type WorktreeMetaLiveLinks = {
   linkedWorkItemProvider?: WorkspaceSourceProvider | null
   /** `linkedWorkItem` also describes PRs and MRs, which this row does not own. */
   linkedWorkItemType?: WorkspaceLinkedItem['type'] | null
+  /** Beads has no scalar link field; the stored id lives on `linkedWorkItem`. */
+  linkedBeadsIdentifier?: string | null
+  /** The repo-backed beads context a beads save persists alongside the item —
+   *  without it the main process nulls the mismatched stored context. */
+  beadsSourceContext?: TaskSourceContext | null
 }
 
 export function parseExplicitGitHubIssueUrl(input: string): string | null {
@@ -118,6 +127,10 @@ function issueLinkIdentity(
   if (parsed.provider === 'github') {
     return `github:${parsed.number}`
   }
+  if (parsed.provider === 'beads') {
+    // Why: exact compare — bd ids are stored lowercase and are not case-folded.
+    return `beads:${parsed.beadsId}`
+  }
   const organizationUrlKey = parsed.organizationUrlKey ?? storedLinearOrganizationUrlKey ?? ''
   return `linear:${parsed.identifier}:${organizationUrlKey.trim().toLowerCase()}`
 }
@@ -153,6 +166,9 @@ function keepsLinkedWorkItem(
   }
   if (parsed.provider === 'github') {
     return live.linkedWorkItemProvider === 'github' && parsed.number === live.linkedIssue
+  }
+  if (parsed.provider === 'beads') {
+    return live.linkedWorkItemProvider === 'beads' && parsed.beadsId === live.linkedBeadsIdentifier
   }
   if (
     live.linkedWorkItemProvider !== 'linear' ||
@@ -191,10 +207,12 @@ function buildIssueLinkUpdates(
   // field also records the PR or MR a workspace was created from, and provider
   // because GitLab and Jira issues have no slot in this row — displacing what it
   // cannot display would destroy a link the user was never shown and has no
-  // other editor to restore it from.
+  // other editor to restore it from. Beads is displayable here, so it displaces.
   const displacedWorkItem: Partial<WorktreeMeta> =
     !keepsLinkedWorkItem(trimmed, draft.issueProvider, live) &&
-    (live.linkedWorkItemProvider === 'github' || live.linkedWorkItemProvider === 'linear') &&
+    (live.linkedWorkItemProvider === 'github' ||
+      live.linkedWorkItemProvider === 'linear' ||
+      live.linkedWorkItemProvider === 'beads') &&
     live.linkedWorkItemType === 'issue'
       ? { linkedWorkItem: null, linkedTaskSourceContext: null }
       : {}
@@ -228,6 +246,19 @@ function buildIssueLinkUpdates(
       linkedIssue: parsed.number,
       ...displacedLinear,
       ...displacedWorkItem
+    }
+  }
+
+  if (parsed.provider === 'beads') {
+    // Why: linkedWorkItem is beads' only slot, so writing it replaces whatever
+    // record was there — including a PR/MR provenance item the github/linear
+    // branches deliberately leave alone. The title starts as the bare id; the
+    // dialog enriches it from `bd show` before persisting when the repo answers.
+    return {
+      linkedIssue: null,
+      ...displacedLinear,
+      linkedWorkItem: buildBeadsWorkspaceSource({ id: parsed.beadsId, title: parsed.beadsId }),
+      linkedTaskSourceContext: live.beadsSourceContext ?? null
     }
   }
 

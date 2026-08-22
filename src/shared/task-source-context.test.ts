@@ -151,6 +151,44 @@ describe('task source context', () => {
     ).toContain(encodeURIComponent('https://example.atlassian.net/OPS'))
   })
 
+  it('accepts beads as a provider and scopes its cache by workspace prefix', () => {
+    expect(
+      normalizeTaskSourceContext({
+        provider: 'beads',
+        projectId: 'project-1',
+        repoId: 'repo-1',
+        providerIdentity: { provider: 'beads', prefix: 'orca' }
+      })
+    ).toEqual({
+      kind: 'task-source',
+      provider: 'beads',
+      projectId: 'project-1',
+      hostId: 'local',
+      projectHostSetupId: null,
+      repoId: 'repo-1',
+      providerIdentity: { provider: 'beads', prefix: 'orca' },
+      accountLabel: null
+    })
+
+    const scoped = getTaskSourceCacheScope({
+      provider: 'beads',
+      projectId: 'project-1',
+      hostId: LOCAL_EXECUTION_HOST_ID,
+      repoId: 'repo-1',
+      providerIdentity: { provider: 'beads', prefix: 'orca' }
+    })
+    expect(scoped).toContain(encodeURIComponent('orca'))
+    expect(scoped).not.toBe(
+      getTaskSourceCacheScope({
+        provider: 'beads',
+        projectId: 'project-1',
+        hostId: LOCAL_EXECUTION_HOST_ID,
+        repoId: 'repo-1',
+        providerIdentity: { provider: 'beads', prefix: 'other' }
+      })
+    )
+  })
+
   it('drops provider identities that do not match the source provider', () => {
     expect(
       normalizeTaskSourceContext({

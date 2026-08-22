@@ -958,6 +958,27 @@ import {
   searchIssues as searchJiraIssues,
   updateIssue as updateJiraIssue
 } from '../jira/issues'
+import { getBeadsWorkspaceStatus, type BeadsExecutionTarget } from '../beads/client'
+import {
+  clampBeadsIssueLimit,
+  getBeadsIssue,
+  listBeadsIssues,
+  updateBeadsIssueStatus,
+  type BeadsGetIssueResult,
+  type BeadsListIssuesResult,
+  type BeadsListStatusScope,
+  type BeadsUpdateIssueResult
+} from '../beads/issues'
+import {
+  addBeadsIssueComment,
+  getBeadsIssueDetails,
+  type BeadsIssueDetailsResult
+} from '../beads/issue-details'
+import type {
+  BeadsIssuePreset,
+  BeadsIssueStatus,
+  BeadsWorkspaceStatus
+} from '../../shared/beads-types'
 import {
   clearProjectItemFieldValue,
   getProjectViewTable,
@@ -38091,6 +38112,70 @@ export class OrcaRuntimeService {
     siteId?: string
   ): ReturnType<typeof getJiraProjectStatusOrder> {
     return getJiraProjectStatusOrder(projectKey, siteId)
+  }
+
+  // ── Beads integration ──
+
+  // Why: bd must run where the repo checkout lives — this host for local repos,
+  // the SSH host for connectionId repos (via the relay exec channel).
+  private beadsTargetForRepo(repo: Repo): BeadsExecutionTarget {
+    const localGitOptions = repo.connectionId
+      ? {}
+      : (this.getLocalGitExecutionOptionArgs(repo)[0] ?? {})
+    return {
+      repoPath: repo.path,
+      connectionId: repo.connectionId ?? null,
+      ...(localGitOptions.wslDistro ? { wslDistro: localGitOptions.wslDistro } : {})
+    }
+  }
+
+  async beadsGetStatus(repoSelector: string): Promise<{ status: BeadsWorkspaceStatus }> {
+    const repo = await this.resolveRepoSelector(repoSelector)
+    return { status: await getBeadsWorkspaceStatus(this.beadsTargetForRepo(repo)) }
+  }
+
+  async beadsListIssues(
+    repoSelector: string,
+    preset: BeadsIssuePreset = 'open',
+    limit?: number,
+    // beads-query-filter.v1 params; when present they override the preset route.
+    filter?: { statusScope?: BeadsListStatusScope; assignee?: string }
+  ): Promise<BeadsListIssuesResult> {
+    const repo = await this.resolveRepoSelector(repoSelector)
+    return listBeadsIssues(this.beadsTargetForRepo(repo), {
+      preset,
+      ...(filter?.statusScope !== undefined ? { statusScope: filter.statusScope } : {}),
+      ...(filter?.assignee !== undefined ? { assignee: filter.assignee } : {}),
+      limit: clampBeadsIssueLimit(limit)
+    })
+  }
+
+  async beadsGetIssue(repoSelector: string, id: string): Promise<BeadsGetIssueResult> {
+    const repo = await this.resolveRepoSelector(repoSelector)
+    return getBeadsIssue(this.beadsTargetForRepo(repo), id)
+  }
+
+  async beadsUpdateIssue(
+    repoSelector: string,
+    id: string,
+    status: BeadsIssueStatus
+  ): Promise<BeadsUpdateIssueResult> {
+    const repo = await this.resolveRepoSelector(repoSelector)
+    return updateBeadsIssueStatus(this.beadsTargetForRepo(repo), id, status)
+  }
+
+  async beadsGetIssueDetails(repoSelector: string, id: string): Promise<BeadsIssueDetailsResult> {
+    const repo = await this.resolveRepoSelector(repoSelector)
+    return getBeadsIssueDetails(this.beadsTargetForRepo(repo), id)
+  }
+
+  async beadsAddComment(
+    repoSelector: string,
+    id: string,
+    text: string
+  ): Promise<BeadsIssueDetailsResult> {
+    const repo = await this.resolveRepoSelector(repoSelector)
+    return addBeadsIssueComment(this.beadsTargetForRepo(repo), id, text)
   }
 
   // ── Browser automation ──

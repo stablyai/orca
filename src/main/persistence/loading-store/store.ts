@@ -121,7 +121,7 @@ import { getRepoIdFromWorktreeId, getWorktreePathBasenameFromId } from '../../..
 import { hasWorktreeRemovalRepoOwnerOnOtherHost } from '../../worktree-removal-repo-owner'
 import { isPathInsideOrEqual } from '../../../shared/cross-platform-path'
 import { normalizeTerminalQuickCommands } from '../../../shared/terminal-quick-commands'
-import { normalizeTaskProviderSettings } from '../../../shared/task-providers'
+import { TASK_PROVIDERS, normalizeTaskProviderSettings } from '../../../shared/task-providers'
 import { normalizeAutoRenameBranchFromWorkDefaultOn } from '../../../shared/auto-rename-branch-from-work-settings'
 import {
   addMobilePairingCustomAddress,
@@ -1039,15 +1039,38 @@ export class Store {
         })
         const visibleTaskProvidersDefaultedForJira =
           parsed.settings?.visibleTaskProvidersDefaultedForJira === true
-        const migratedVisibleTaskProviders = visibleTaskProvidersDefaultedForJira
+        const jiraVisibleTaskProviders = visibleTaskProvidersDefaultedForJira
           ? rawTaskProviderSettings.visibleTaskProviders
           : rawTaskProviderSettings.visibleTaskProviders.includes('jira')
             ? rawTaskProviderSettings.visibleTaskProviders
             : [...rawTaskProviderSettings.visibleTaskProviders, 'jira' as const]
-        const taskProviderSettings = normalizeTaskProviderSettings({
+        const visibleTaskProvidersDefaultedForBeads =
+          parsed.settings?.visibleTaskProvidersDefaultedForBeads === true
+        const migratedVisibleTaskProviders = visibleTaskProvidersDefaultedForBeads
+          ? jiraVisibleTaskProviders
+          : jiraVisibleTaskProviders.includes('beads')
+            ? jiraVisibleTaskProviders
+            : [...jiraVisibleTaskProviders, 'beads' as const]
+        const preRepairTaskProviderSettings = normalizeTaskProviderSettings({
           visibleTaskProviders: migratedVisibleTaskProviders,
           defaultTaskSource: rawTaskProviderSettings.defaultTaskSource
         })
+        const visibleTaskProvidersRestoredForBeadsRollout =
+          parsed.settings?.visibleTaskProvidersRestoredForBeadsRollout === true
+        const applyBeadsRolloutGithubRepair =
+          !visibleTaskProvidersRestoredForBeadsRollout &&
+          preRepairTaskProviderSettings.defaultTaskSource === 'beads' &&
+          !preRepairTaskProviderSettings.visibleTaskProviders.includes('github')
+        const taskProviderSettings = applyBeadsRolloutGithubRepair
+          ? {
+              defaultTaskSource: preRepairTaskProviderSettings.defaultTaskSource,
+              visibleTaskProviders: TASK_PROVIDERS.filter(
+                (provider) =>
+                  provider === 'github' ||
+                  preRepairTaskProviderSettings.visibleTaskProviders.includes(provider)
+              )
+            }
+          : preRepairTaskProviderSettings
         const primarySelectionDefaultedForLinux =
           parsed.settings?.primarySelectionMiddleClickPasteDefaultedForLinux === true
         const primarySelectionDefaultedForTerminalDefaults =
@@ -1064,7 +1087,11 @@ export class Store {
         if (migratePrimarySelectionPlatformDefault || stampPrimarySelectionTerminalDefaults) {
           this.loadNeedsSave = true
         }
-        if (!visibleTaskProvidersDefaultedForJira) {
+        if (
+          !visibleTaskProvidersDefaultedForJira ||
+          !visibleTaskProvidersDefaultedForBeads ||
+          !visibleTaskProvidersRestoredForBeadsRollout
+        ) {
           this.loadNeedsSave = true
         }
         const claudeAgentTeamsDefaultDisabledMigrated =
@@ -1265,6 +1292,8 @@ export class Store {
             defaultTaskSource: taskProviderSettings.defaultTaskSource,
             visibleTaskProviders: taskProviderSettings.visibleTaskProviders,
             visibleTaskProvidersDefaultedForJira: true,
+            visibleTaskProvidersDefaultedForBeads: true,
+            visibleTaskProvidersRestoredForBeadsRollout: true,
             terminalShortcutPolicy: normalizeTerminalShortcutPolicy(
               parsed.settings?.terminalShortcutPolicy
             ),

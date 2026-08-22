@@ -149,11 +149,15 @@ export function useWorktreeIssueLink(args: {
       ]?.data?.url ?? null
     )
   })
-  const canOpenIssue = isLinear
-    ? Boolean(parsedLinearIssue)
-    : issueInputLooksLikeUrl
-      ? Boolean(issueUrlFromInput)
-      : Boolean(cachedIssueUrl || (issueRepo && issueNumber))
+  // Why: beads issues have no web URL to open; the affordance stays disabled.
+  const canOpenIssue =
+    issueProvider === 'beads'
+      ? false
+      : isLinear
+        ? Boolean(parsedLinearIssue)
+        : issueInputLooksLikeUrl
+          ? Boolean(issueUrlFromInput)
+          : Boolean(cachedIssueUrl || (issueRepo && issueNumber))
 
   const handleOpenIssue = useCallback(async () => {
     if (openingIssue) {

@@ -9,6 +9,7 @@ import {
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
+import { BeadsIcon } from '@/components/icons/BeadsIcon'
 import { LinearIcon } from '@/components/icons/LinearIcon'
 import { ChevronDown, ExternalLink, Github, LoaderCircle } from 'lucide-react'
 import { cn } from '@/lib/utils'
@@ -32,9 +33,13 @@ export function issueAdornmentReserve(providerLabel: string): string {
 }
 
 function providerLabel(provider: IssueLinkProvider): string {
-  return provider === 'linear'
-    ? translate('auto.components.sidebar.WorktreeIssueLinkField.25852bfc59', 'Linear')
-    : translate('auto.components.sidebar.WorktreeIssueLinkField.5b440069e6', 'GitHub')
+  if (provider === 'linear') {
+    return translate('auto.components.sidebar.WorktreeIssueLinkField.25852bfc59', 'Linear')
+  }
+  if (provider === 'beads') {
+    return translate('auto.components.sidebar.WorktreeIssueLinkField.beadsProvider', 'Beads')
+  }
+  return translate('auto.components.sidebar.WorktreeIssueLinkField.5b440069e6', 'GitHub')
 }
 
 function ProviderIcon({
@@ -44,11 +49,13 @@ function ProviderIcon({
   provider: IssueLinkProvider
   className?: string
 }): React.JSX.Element {
-  return provider === 'linear' ? (
-    <LinearIcon className={className} />
-  ) : (
-    <Github className={className} />
-  )
+  if (provider === 'linear') {
+    return <LinearIcon className={className} />
+  }
+  if (provider === 'beads') {
+    return <BeadsIcon className={className} />
+  }
+  return <Github className={className} />
 }
 
 export type WorktreeIssueLinkFieldProps = {
@@ -115,15 +122,22 @@ export function WorktreeIssueLinkField(props: WorktreeIssueLinkFieldProps): Reac
       )
     }
     if (isInvalid) {
-      return provider === 'linear'
-        ? translate(
-            'auto.components.sidebar.WorktreeIssueLinkField.964d9bc00a',
-            'Not a Linear issue key or linear.app issue URL.'
-          )
-        : translate(
-            'auto.components.sidebar.WorktreeIssueLinkField.0a7a2c6efd',
-            'Not a GitHub issue number or issue URL.'
-          )
+      if (provider === 'linear') {
+        return translate(
+          'auto.components.sidebar.WorktreeIssueLinkField.964d9bc00a',
+          'Not a Linear issue key or linear.app issue URL.'
+        )
+      }
+      if (provider === 'beads') {
+        return translate(
+          'auto.components.sidebar.WorktreeIssueLinkField.beadsInvalid',
+          'Not a Beads issue id (like orca-1a2b).'
+        )
+      }
+      return translate(
+        'auto.components.sidebar.WorktreeIssueLinkField.0a7a2c6efd',
+        'Not a GitHub issue number or issue URL.'
+      )
     }
     // Why: ranked above displacement because it answers the click the user just
     // made, and it clears as soon as they edit the value that caused it.
@@ -154,6 +168,12 @@ export function WorktreeIssueLinkField(props: WorktreeIssueLinkFieldProps): Reac
         { link: displacedLinkLabels[0] }
       )
     }
+    if (provider === 'beads') {
+      return translate(
+        'auto.components.sidebar.WorktreeIssueLinkField.beadsHelper',
+        'Enter a bd issue id from this repo. Leave blank to remove the link.'
+      )
+    }
     return translate(
       'auto.components.sidebar.WorktreeIssueLinkField.f047887705',
       'Paste a GitHub or Linear URL, or enter a number. Leave blank to remove the link.'
@@ -175,10 +195,17 @@ export function WorktreeIssueLinkField(props: WorktreeIssueLinkFieldProps): Reac
           onKeyDown={onKeyDown}
           disabled={isReadOnly}
           aria-invalid={isInvalid || undefined}
-          placeholder={translate(
-            'auto.components.sidebar.WorktreeIssueLinkField.662ae142f8',
-            'Issue #, or a GitHub or Linear URL'
-          )}
+          placeholder={
+            provider === 'beads'
+              ? translate(
+                  'auto.components.sidebar.WorktreeIssueLinkField.beadsPlaceholder',
+                  'Beads issue id'
+                )
+              : translate(
+                  'auto.components.sidebar.WorktreeIssueLinkField.662ae142f8',
+                  'Issue #, or a GitHub or Linear URL'
+                )
+          }
           className="h-8 text-xs"
           style={{ paddingRight: issueAdornmentReserve(label) }}
         />

@@ -348,6 +348,94 @@ describe('buildWorktreeMetaUpdates', () => {
     })
   })
 
+  it('writes a beads id into linkedWorkItem with its repo source context', () => {
+    const beadsSourceContext = {
+      kind: 'task-source',
+      provider: 'beads',
+      projectId: 'repo-1',
+      hostId: 'local',
+      repoId: 'repo-1'
+    } as const
+    const updates = buildUpdates(
+      { issueInput: 'orca-4f8a2c', issueProvider: 'beads' },
+      {},
+      { linkedIssue: 42, beadsSourceContext }
+    )
+
+    expect(updates.linkedIssue).toBeNull()
+    expect(updates.linkedWorkItem).toEqual({
+      provider: 'beads',
+      type: 'issue',
+      number: 0,
+      title: 'orca-4f8a2c',
+      url: '',
+      beadsIdentifier: 'orca-4f8a2c'
+    })
+    expect(updates.linkedTaskSourceContext).toEqual(beadsSourceContext)
+  })
+
+  it('displaces a beads linked work item when another provider is saved', () => {
+    const updates = buildUpdates(
+      { issueInput: '12' },
+      {},
+      {
+        linkedWorkItemProvider: 'beads',
+        linkedWorkItemType: 'issue',
+        linkedBeadsIdentifier: 'orca-4f8a2c'
+      }
+    )
+
+    expect(updates.linkedIssue).toBe(12)
+    expect(updates).toHaveProperty('linkedWorkItem', null)
+    expect(updates).toHaveProperty('linkedTaskSourceContext', null)
+  })
+
+  it('clears a beads linked work item when the field is emptied', () => {
+    const updates = buildUpdates(
+      { issueInput: '', issueProvider: 'beads' },
+      { issueInput: 'orca-4f8a2c', issueProvider: 'beads' },
+      {
+        linkedWorkItemProvider: 'beads',
+        linkedWorkItemType: 'issue',
+        linkedBeadsIdentifier: 'orca-4f8a2c'
+      }
+    )
+
+    expect(updates).toHaveProperty('linkedIssue', null)
+    expect(updates).toHaveProperty('linkedWorkItem', null)
+    expect(updates).toHaveProperty('linkedTaskSourceContext', null)
+  })
+
+  it('emits nothing when a stored beads id is resaved unchanged', () => {
+    const updates = buildUpdates(
+      { issueInput: 'orca-4f8a2c', issueProvider: 'beads' },
+      { issueInput: 'orca-4f8a2c', issueProvider: 'beads' },
+      {
+        linkedWorkItemProvider: 'beads',
+        linkedWorkItemType: 'issue',
+        linkedBeadsIdentifier: 'orca-4f8a2c'
+      }
+    )
+
+    expect(updates).toEqual({ linkedPR: null })
+  })
+
+  // bd ids are stored lowercase and are not case-folded like Linear keys, so a
+  // different casing names a different id and replaces the stored link.
+  it('treats a beads id casing change as a different issue', () => {
+    const updates = buildUpdates(
+      { issueInput: 'ORCA-4F8A2C', issueProvider: 'beads' },
+      { issueInput: 'orca-4f8a2c', issueProvider: 'beads' },
+      {
+        linkedWorkItemProvider: 'beads',
+        linkedWorkItemType: 'issue',
+        linkedBeadsIdentifier: 'orca-4f8a2c'
+      }
+    )
+
+    expect(updates.linkedWorkItem).toMatchObject({ beadsIdentifier: 'ORCA-4F8A2C' })
+  })
+
   // Persistence stamps lastActivityAt on any comment write, so re-emitting an
   // unchanged note reorders the workspace under the time-decay sidebar sort.
   it('emits no comment when the note is unchanged', () => {

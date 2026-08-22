@@ -37,6 +37,11 @@ export type JiraWorkspaceSource = WorkspaceSourceLinkedItem & {
   type: 'issue'
 }
 
+export type BeadsWorkspaceSource = WorkspaceSourceLinkedItem & {
+  provider: 'beads'
+  type: 'issue'
+}
+
 export type WorkspaceSourceItemLike = Omit<WorkspaceSourceLinkedItem, 'provider'> & {
   provider?: WorkspaceSourceProvider
 }
@@ -49,6 +54,7 @@ export type WorkspaceSourceSelectionKind =
   | 'branch'
   | 'linear'
   | 'jira'
+  | 'beads'
 
 export type WorkspaceSourceSelection = {
   kind: WorkspaceSourceSelectionKind
@@ -84,6 +90,9 @@ export function getWorkspaceSourceProvider(item: WorkspaceSourceItemLike): Works
   }
   if (item.linearIdentifier) {
     return 'linear'
+  }
+  if (item.beadsIdentifier) {
+    return 'beads'
   }
   if (item.jiraIdentifier || isJiraIssueUrl(item.url)) {
     return 'jira'
@@ -157,6 +166,21 @@ export function buildJiraWorkspaceSource(
   }
 }
 
+export function buildBeadsWorkspaceSource(issue: {
+  id: string
+  title: string
+}): BeadsWorkspaceSource {
+  return {
+    provider: 'beads',
+    type: 'issue',
+    number: 0,
+    title: issue.title,
+    // Why: beads issues have no web URL; consumers must guard on empty url.
+    url: '',
+    beadsIdentifier: issue.id
+  }
+}
+
 export function shouldApplyWorkspaceSourceAutoName(args: {
   currentName: string
   lastAutoName: string
@@ -198,20 +222,23 @@ export function buildWorkspaceSourceSelection(args: {
       ? 'linear'
       : provider === 'jira'
         ? 'jira'
-        : provider === 'gitlab'
-          ? linkedWorkItem.type === 'mr'
-            ? 'gitlab-mr'
-            : 'gitlab-issue'
-          : linkedWorkItem.type === 'pr'
-            ? 'github-pr'
-            : 'github-issue'
+        : provider === 'beads'
+          ? 'beads'
+          : provider === 'gitlab'
+            ? linkedWorkItem.type === 'mr'
+              ? 'gitlab-mr'
+              : 'gitlab-issue'
+            : linkedWorkItem.type === 'pr'
+              ? 'github-pr'
+              : 'github-issue'
   return {
     kind,
     label:
       provider === 'linear' || provider === 'jira' || linkedWorkItem.number === 0
         ? linkedWorkItem.title
         : `#${linkedWorkItem.number} ${linkedWorkItem.title}`,
-    url: linkedWorkItem.url
+    // Why: beads issues have no web URL; drop the empty string instead of emitting a dead link.
+    url: linkedWorkItem.url || undefined
   }
 }
 

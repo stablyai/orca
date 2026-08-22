@@ -1,7 +1,10 @@
 import React from 'react'
 import { Github, Gitlab, LayoutGrid, List } from 'lucide-react'
 
+import { BeadsIcon } from '@/components/icons/BeadsIcon'
 import { JiraIcon } from '@/components/icons/JiraIcon'
+import type { BeadsIssuePreset } from '../../../shared/beads-types'
+import type { BeadsTypeScope } from '../../../shared/beads-task-query'
 import { createLocalizedCatalog } from '@/i18n/localized-catalog'
 import { translate } from '@/i18n/i18n'
 import {
@@ -131,7 +134,29 @@ export const getSourceOptions = createLocalizedCatalog((): SourceOption[] => [
     id: 'jira',
     label: translate('auto.components.TaskPage.9cd11ba218', 'Jira'),
     Icon: ({ className }) => <JiraIcon className={className} />
+  },
+  {
+    id: 'beads',
+    label: translate('auto.components.TaskPage.beadsSourceLabel', 'Beads'),
+    // Why: matches the Beads card icon in Settings > Tasks until a dedicated mark exists.
+    Icon: ({ className }) => <BeadsIcon className={className} />
   }
+])
+
+export type BeadsPreset = { id: BeadsIssuePreset; label: string }
+export type BeadsTypeScopeTab = { id: BeadsTypeScope; label: string }
+
+/** Beads twin of the GitHub Issues/PRs mode buttons; ADRs = decision issues. */
+export const getBeadsTypeScopeTabs = createLocalizedCatalog((): BeadsTypeScopeTab[] => [
+  { id: 'issues', label: translate('auto.components.TaskPage.dfc0c79bd8', 'Issues') },
+  { id: 'adrs', label: translate('auto.components.TaskPage.beadsTypeScopeAdrs', 'ADRs') }
+])
+
+export const getBeadsPresets = createLocalizedCatalog((): BeadsPreset[] => [
+  { id: 'open', label: translate('auto.components.TaskPage.606a85c774', 'Open') },
+  { id: 'assigned', label: translate('auto.components.TaskPage.94f0339621', 'Assigned to me') },
+  // Why: `bd ready` — open issues with no active blockers, Beads' signature filter.
+  { id: 'ready', label: translate('auto.components.TaskPage.beadsPresetReady', 'Ready') }
 ])
 
 export const getJiraPresets = createLocalizedCatalog((): JiraPreset[] => [

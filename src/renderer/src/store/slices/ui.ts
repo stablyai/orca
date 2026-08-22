@@ -36,6 +36,11 @@ import {
   normalizeManualRepoOrder
 } from '../../../../shared/manual-repo-order'
 import { isTopLevelView } from '../../../../shared/top-level-view'
+import {
+  getBeadsFetchPlan,
+  getBeadsPresetQuery,
+  parseBeadsTaskQuery
+} from '../../../../shared/beads-task-query'
 import { isReleaseChannel, type ReleaseChannel } from '../../../../shared/release-channel'
 import type { UsagePercentageDisplay } from '../../../../shared/usage-percentage-display'
 import {
@@ -71,6 +76,7 @@ import {
 import { PER_REPO_FETCH_LIMIT } from '../../../../shared/work-items'
 import {
   normalizeVisibleTaskProviders,
+  resolveBeadsTaskProviderAvailability,
   restoreAvailableDefaultTaskProvider,
   resolveVisibleTaskProvider
 } from '../../../../shared/task-providers'
@@ -90,6 +96,7 @@ import {
 } from '../../../../shared/browser-page-zoom'
 import { persistedUIValuesEqual } from '../../../../shared/persisted-ui-equality'
 import {
+  getRepoExecutionHostId,
   normalizeExecutionHostOrder,
   normalizeExecutionHostScope,
   normalizeVisibleExecutionHostIds,
@@ -105,6 +112,7 @@ import {
 import { clampMarkdownTocPanelWidth } from '../../../../shared/markdown-toc-panel-width'
 import { clampCombinedDiffFileTreeWidth } from '../../../../shared/combined-diff-file-tree-width'
 import { normalizeKagiSessionLink } from '../../../../shared/browser-url'
+import { buildBeadsRepoTaskSourceContext } from '../../lib/beads-repo-task-source-context'
 import type { OrcaHookScriptKind } from '../../lib/orca-hook-trust'
 import {
   isSettingsNavigationTarget,
@@ -116,6 +124,7 @@ import {
   sanitizeSetupScriptPromptDismissals
 } from '../../lib/setup-script-prompt'
 import { DEFAULT_PET_ID, isBundledPetId } from '../../components/pet/pet-models'
+import { getTaskEligibleRepos } from '../../components/task-page-default-repo-selection'
 import { revokeCustomPetBlobUrl } from '../../components/pet/pet-blob-cache'
 import { isGitRepoKind } from '../../../../shared/repo-kind'
 import type { WorkspacePortScanResult } from '../../../../shared/workspace-ports'
@@ -302,6 +311,7 @@ const MAX_LEFT_SIDEBAR_WIDTH = 500
 // Why: right-sidebar resize is window-relative, so widths can far exceed 500px on wide displays; this ceiling is only a corruption safety net.
 const MAX_RIGHT_SIDEBAR_WIDTH = 4000
 const LINEAR_TASK_PREFETCH_LIMIT = 36
+
 // Why: bound disk growth across hard quits (crash paths leave acks pinned); mirrors HYDRATE_MAX_AGE_MS in agent-hooks/server.ts.
 const HYDRATE_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000
 const VALID_TASK_PRESETS = new Set<TaskViewPresetId>([
@@ -329,6 +339,11 @@ const VALID_JIRA_PRESETS = new Set<NonNullable<TaskResumeState['jiraPreset']>>([
   'reported',
   'all',
   'done'
+])
+const VALID_BEADS_PRESETS = new Set<NonNullable<TaskResumeState['beadsPreset']>>([
+  'open',
+  'assigned',
+  'ready'
 ])
 
 function resolvePaneKeyWorktreeIdFromTabs(state: AppState, paneKey: string): string | null {
@@ -588,6 +603,16 @@ function sanitizeTaskResumeState(value: unknown): TaskResumeState | undefined {
   if (typeof input.jiraQuery === 'string') {
     next.jiraQuery = input.jiraQuery
   }
+  // Why: without these the beads query bar re-seeds to its default on every relaunch.
+  if (
+    typeof input.beadsPreset === 'string' &&
+    VALID_BEADS_PRESETS.has(input.beadsPreset as NonNullable<TaskResumeState['beadsPreset']>)
+  ) {
+    next.beadsPreset = input.beadsPreset as NonNullable<TaskResumeState['beadsPreset']>
+  }
+  if (typeof input.beadsQuery === 'string') {
+    next.beadsQuery = input.beadsQuery
+  }
 
   return Object.keys(next).length > 0 ? next : undefined
 }
@@ -717,7 +742,7 @@ export type UISlice = {
     note: string
     attachments: string[]
     linkedWorkItem: {
-      provider?: 'github' | 'gitlab' | 'linear' | 'jira'
+      provider?: 'github' | 'gitlab' | 'linear' | 'jira' | 'beads'
       type: 'issue' | 'pr' | 'mr'
       number: number
       title: string
@@ -725,6 +750,7 @@ export type UISlice = {
       linearIdentifier?: string
       linearBranchName?: string
       jiraIdentifier?: string
+      beadsIdentifier?: string
       repoId?: string
     } | null
     /** Preserve where provider data came from, separately from the host chosen to run the workspace. */
@@ -1357,7 +1383,11 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
       preferredVisibleTaskProviders,
       {
         gitlabInstalled: state.preflightStatus?.glab?.installed === true,
-        linearConnected: state.linearStatus?.connected === true
+        linearConnected: state.linearStatus?.connected === true,
+        bdInstalled: resolveBeadsTaskProviderAvailability({
+          localBdInstalled: state.preflightStatus?.bd?.installed === true,
+          repoHostIds: state.repos.map((repo) => getRepoExecutionHostId(repo))
+        })
       },
       state.settings?.defaultTaskSource
     )
@@ -1421,6 +1451,39 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
           },
           { sourceContext }
         )
+      }
+    }
+    if (resolvedSource === 'beads' && typeof state.prefetchBeadsIssues === 'function') {
+      // Why: must mint the same fetch plan TaskPage derives from the resume query,
+      // or the warm cache entries live under keys the page never reads.
+      const resumeQuery =
+        state.taskResumeState?.beadsQuery ||
+        getBeadsPresetQuery(state.taskResumeState?.beadsPreset ?? 'open')
+      const plan = getBeadsFetchPlan(parseBeadsTaskQuery(resumeQuery))
+      // Why: must match TaskPage's repo-picker eligibility, or the warm entries cover repos the page never fetches.
+      const eligibleRepos = getTaskEligibleRepos(state.repos)
+      const selectedRepos = (() => {
+        const preferred = data.preselectedRepoId
+        if (preferred) {
+          const repo = eligibleRepos.find((r) => r.id === preferred)
+          return repo ? [repo] : []
+        }
+        const persisted = state.settings?.defaultRepoSelection
+        if (Array.isArray(persisted)) {
+          const selected = eligibleRepos.filter((repo) => persisted.includes(repo.id))
+          if (selected.length > 0) {
+            return selected
+          }
+        }
+        return eligibleRepos
+      })()
+      // Why: qualifiers beyond the fetch scope filter client-side, so the warmed
+      // list serves any resume query with the same plan.
+      for (const repo of selectedRepos) {
+        const context = buildBeadsRepoTaskSourceContext(repo)
+        if (context) {
+          state.prefetchBeadsIssues(context, plan)
+        }
       }
     }
   },

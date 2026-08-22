@@ -26,6 +26,7 @@ export type TaskSourceHostAvailability = {
     | 'missing-task-source-capability'
     | 'missing-provider-auth'
     | 'unavailable-source-tool'
+    | 'uninitialized-source-workspace'
     | 'unsupported-provider'
 }
 
@@ -49,17 +50,12 @@ export function getTaskSourceContextSummary(args: {
   switch (args.provider) {
     case 'github':
     case 'gitlab':
+    case 'beads':
       return getRepoBackedTaskSourceSummary(args)
     case 'linear':
-      return getAccountBackedTaskSourceSummary(args.providerLabel, {
-        accountLabel: args.linearWorkspaceName,
-        accountHostId: args.accountHostId,
-        hostLabelById: args.hostLabelById,
-        hostAvailability: args.hostAvailability
-      })
     case 'jira':
       return getAccountBackedTaskSourceSummary(args.providerLabel, {
-        accountLabel: args.jiraSiteName,
+        accountLabel: args.provider === 'linear' ? args.linearWorkspaceName : args.jiraSiteName,
         accountHostId: args.accountHostId,
         hostLabelById: args.hostLabelById,
         hostAvailability: args.hostAvailability
@@ -198,6 +194,8 @@ function getProviderIdentityLabel(
       return identity.workspaceName ?? identity.workspaceId ?? null
     case 'jira':
       return identity.siteUrl ?? identity.siteId ?? null
+    case 'beads':
+      return identity.prefix ?? null
   }
 }
 
@@ -252,6 +250,8 @@ function getAvailabilityStatusLabel(availability: TaskSourceHostAvailability): s
       return 'provider auth needed'
     case 'unavailable-source-tool':
       return 'source tool unavailable'
+    case 'uninitialized-source-workspace':
+      return 'source not initialized'
     case 'unsupported-provider':
       return 'provider unsupported on this host'
   }

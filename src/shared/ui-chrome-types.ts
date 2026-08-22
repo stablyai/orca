@@ -79,6 +79,8 @@ export type TaskResumeState = {
   }
   jiraPreset?: 'assigned' | 'reported' | 'all' | 'done'
   jiraQuery?: string
+  beadsPreset?: 'open' | 'assigned' | 'ready'
+  beadsQuery?: string
 }
 
 export type RightSidebarTab =

@@ -128,6 +128,8 @@ export function createSettings(overrides: Partial<GlobalSettings> = {}): GlobalS
     defaultTaskSource: 'github',
     visibleTaskProviders: ['github', 'gitlab', 'linear', 'jira'],
     visibleTaskProvidersDefaultedForJira: true,
+    visibleTaskProvidersDefaultedForBeads: true,
+    visibleTaskProvidersRestoredForBeadsRollout: true,
     defaultRepoSelection: null,
     defaultLinearTeamSelection: null,
     opencodeSessionCookie: '',

@@ -56,6 +56,11 @@ export function useTaskSourceProviderReadiness(
     reviewReadyForConnection &&
     preflightStatus?.glab?.installed === true &&
     preflightStatus.glab.authenticated === true
+  // An installed-but-outdated bd is not usable, so it must not read as connected.
+  const bdReady =
+    reviewReadyForConnection &&
+    preflightStatus?.bd?.installed === true &&
+    preflightStatus.bd.versionSupported === true
   const jiraChecking = jiraStatusContextKey !== providerRuntimeContextKey || !jiraStatusChecked
   const jiraConnected = !jiraChecking && jiraStatus.connected === true
   const linearChecking =
@@ -89,9 +94,17 @@ export function useTaskSourceProviderReadiness(
         connected: jiraConnected,
         checking: jiraChecking,
         visible: visible.has('jira')
+      },
+      // Beads has no credentials: "connected" is the bd CLI preflight probe at a supported version.
+      beads: {
+        connected: bdReady,
+        checking: reviewChecking,
+        unavailable: reviewUnavailable,
+        visible: visible.has('beads')
       }
     }
   }, [
+    bdReady,
     githubConnected,
     gitlabConnected,
     jiraChecking,

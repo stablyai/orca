@@ -106,7 +106,13 @@ describe('Store', () => {
     expect(store.getSettings().showTasksButton).toBe(true)
     expect(store.getSettings().showAutomationsButton).toBe(true)
     expect(store.getSettings().combinedDiffFileTreeVisibleByDefault).toBe(false)
-    expect(store.getSettings().visibleTaskProviders).toEqual(['github', 'gitlab', 'linear', 'jira'])
+    expect(store.getSettings().visibleTaskProviders).toEqual([
+      'github',
+      'gitlab',
+      'linear',
+      'jira',
+      'beads'
+    ])
     expect(store.getSettings().experimentalActivity).toBe(false)
     expect(store.getSettings().experimentalActivityDefaultedOffForAllUsers).toBe(true)
     expect(store.getSettings().experimentalTerminalAttention).toBe(false)
@@ -473,7 +479,7 @@ describe('Store', () => {
     })
 
     const store = await createStore()
-    expect(store.getSettings().visibleTaskProviders).toEqual(['gitlab', 'jira'])
+    expect(store.getSettings().visibleTaskProviders).toEqual(['gitlab', 'jira', 'beads'])
   })
 
   it('preserves a deliberate Jira provider opt-out after migration', async () => {
@@ -491,7 +497,73 @@ describe('Store', () => {
     })
 
     const store = await createStore()
-    expect(store.getSettings().visibleTaskProviders).toEqual(['gitlab'])
+    expect(store.getSettings().visibleTaskProviders).toEqual(['gitlab', 'beads'])
+  })
+
+  it('preserves a deliberate Beads provider opt-out after migration', async () => {
+    writeDataFile({
+      schemaVersion: 1,
+      repos: [],
+      worktreeMeta: {},
+      settings: {
+        visibleTaskProviders: ['gitlab', 'jira'],
+        visibleTaskProvidersDefaultedForJira: true,
+        visibleTaskProvidersDefaultedForBeads: true
+      },
+      ui: {},
+      githubCache: { pr: {}, issue: {} },
+      workspaceSession: {}
+    })
+
+    const store = await createStore()
+    expect(store.getSettings().visibleTaskProviders).toEqual(['gitlab', 'jira'])
+  })
+
+  it('restores GitHub once for profiles stranded by the beads rollout', async () => {
+    writeDataFile({
+      schemaVersion: 1,
+      repos: [],
+      worktreeMeta: {},
+      settings: {
+        visibleTaskProviders: ['gitlab', 'linear', 'beads'],
+        defaultTaskSource: 'beads',
+        visibleTaskProvidersDefaultedForJira: true,
+        visibleTaskProvidersDefaultedForBeads: true
+      },
+      ui: {},
+      githubCache: { pr: {}, issue: {} },
+      workspaceSession: {}
+    })
+
+    const store = await createStore()
+    expect(store.getSettings().defaultTaskSource).toBe('beads')
+    expect(store.getSettings().visibleTaskProviders).toEqual([
+      'github',
+      'gitlab',
+      'linear',
+      'beads'
+    ])
+  })
+
+  it('preserves a deliberate GitHub opt-out once the rollout repair has run', async () => {
+    writeDataFile({
+      schemaVersion: 1,
+      repos: [],
+      worktreeMeta: {},
+      settings: {
+        visibleTaskProviders: ['gitlab', 'linear', 'beads'],
+        defaultTaskSource: 'beads',
+        visibleTaskProvidersDefaultedForJira: true,
+        visibleTaskProvidersDefaultedForBeads: true,
+        visibleTaskProvidersRestoredForBeadsRollout: true
+      },
+      ui: {},
+      githubCache: { pr: {}, issue: {} },
+      workspaceSession: {}
+    })
+
+    const store = await createStore()
+    expect(store.getSettings().visibleTaskProviders).toEqual(['gitlab', 'linear', 'beads'])
   })
 
   it('normalizes malformed terminal shortcut policy on load', async () => {
@@ -537,7 +609,7 @@ describe('Store', () => {
 
     const store = await createStore()
     expect(store.getSettings().defaultTaskSource).toBe('github')
-    expect(store.getSettings().visibleTaskProviders).toEqual(['github', 'linear', 'jira'])
+    expect(store.getSettings().visibleTaskProviders).toEqual(['github', 'linear', 'jira', 'beads'])
   })
 
   it('normalizes invalid task provider defaults on load', async () => {
@@ -553,7 +625,7 @@ describe('Store', () => {
 
     const store = await createStore()
     expect(store.getSettings().defaultTaskSource).toBe('gitlab')
-    expect(store.getSettings().visibleTaskProviders).toEqual(['gitlab', 'jira'])
+    expect(store.getSettings().visibleTaskProviders).toEqual(['gitlab', 'jira', 'beads'])
   })
 
   it('normalizes persisted open-in applications on load', async () => {

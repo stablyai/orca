@@ -30,6 +30,7 @@ import {
   KNOWN_TUI_AGENT_DETECTION_COMMANDS,
   resolveDetectedTuiAgentIds
 } from './tui-agent-detection-commands'
+import { isSupportedBdVersion, parseBdVersionLine } from '../beads/client'
 
 export type PreflightStatus = {
   git: { installed: boolean }
@@ -39,6 +40,8 @@ export type PreflightStatus = {
   // affordances (the GitLab tab in the source picker, MR list, etc.)
   // gate on `glab?.authenticated`.
   glab?: { installed: boolean; authenticated: boolean }
+  // Why: bd (Beads) needs no auth; readiness is "installed at a supported version".
+  bd?: { installed: boolean; version: string | null; versionSupported: boolean }
   bitbucket?: { configured: boolean; authenticated: boolean; account: string | null }
   azureDevOps?: {
     configured: boolean
@@ -212,6 +215,25 @@ async function isGhAuthenticated(wslTarget?: WslPreflightTarget): Promise<boolea
   }
 }
 
+// Why: one spawn yields installed + version — `bd --version` prints "bd version X.Y.Z (...)".
+async function probeBdVersion(
+  wslTarget?: WslPreflightTarget
+): Promise<{ installed: boolean; version: string | null; versionSupported: boolean }> {
+  try {
+    const { stdout } = await (wslTarget
+      ? execCommandInWsl(wslTarget, `${shellQuote('bd')} --version`)
+      : execLocalPreflightCommand('bd', ['--version']))
+    const version = parseBdVersionLine(stdout)
+    return {
+      installed: true,
+      version,
+      versionSupported: version !== null && isSupportedBdVersion(version)
+    }
+  } catch {
+    return { installed: false, version: null, versionSupported: false }
+  }
+}
+
 // Why: parallel to isGhAuthenticated for the glab CLI. glab writes auth
 // status to stderr in some versions and stdout in others; check both.
 async function isGlabAuthenticated(wslTarget?: WslPreflightTarget): Promise<boolean> {
@@ -252,10 +274,11 @@ export async function runPreflightCheck(
     _resetKnownHostsCache()
   }
 
-  const [gitProbe, ghProbe, glabProbe] = await Promise.all([
+  const [gitProbe, ghProbe, glabProbe, bdProbe] = await Promise.all([
     detectCommandRuntime('git', context),
     detectCommandRuntime('gh', context),
-    detectCommandRuntime('glab', context)
+    detectCommandRuntime('glab', context),
+    probeBdVersion(wslTarget ?? undefined)
   ])
 
   const [ghAuthenticated, glabAuthenticated, bitbucket, azureDevOps, gitea] = await Promise.all([
@@ -270,6 +293,7 @@ export async function runPreflightCheck(
     git: { installed: gitProbe.installed },
     gh: { installed: ghProbe.installed, authenticated: ghAuthenticated },
     glab: { installed: glabProbe.installed, authenticated: glabAuthenticated },
+    bd: bdProbe,
     bitbucket,
     azureDevOps,
     gitea

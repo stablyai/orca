@@ -9,6 +9,8 @@ export type PreflightStatus = {
   gh: { installed: boolean; authenticated: boolean }
   /** Optional — older preload payloads predating GitLab support omit it; consumers gate on `glab?.installed`. */
   glab?: { installed: boolean; authenticated: boolean }
+  /** bd (Beads) needs no auth; readiness is a supported local/WSL version. */
+  bd?: { installed: boolean; version: string | null; versionSupported: boolean }
   bitbucket?: { configured: boolean; authenticated: boolean; account: string | null }
   azureDevOps?: {
     configured: boolean

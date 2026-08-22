@@ -1,5 +1,6 @@
 import { useMemo } from 'react'
 import { useAppStore } from '@/store'
+import { buildBeadsRepoTaskSourceContext } from '@/lib/beads-repo-task-source-context'
 import { findIndexedWorktreeOwner } from '@/lib/worktree-runtime-owner-index'
 import type { Worktree } from '../../../../shared/worktree/types'
 import { parseWorkspaceKey } from '../../../../shared/workspace-scope'
@@ -19,6 +20,7 @@ export function useWorktreeMetaWorkspace(args: {
   worktree: Worktree | undefined
   linkedIssue: number | null
   linkedLinearIssue: string | null
+  linkedBeadsIssue: string | null
   /** The persisted value and its provider, from one source so they cannot drift. */
   currentIssue: string
   currentProvider: IssueLinkProvider
@@ -59,30 +61,57 @@ export function useWorktreeMetaWorkspace(args: {
   )
   const linkedIssue = worktree?.linkedIssue ?? null
   const linkedLinearIssue = worktree?.linkedLinearIssue ?? null
+  // Why: beads has no scalar link field — the link lives only in linkedWorkItem.
+  const linkedBeadsIssue =
+    worktree?.linkedWorkItem?.provider === 'beads' && worktree.linkedWorkItem.type === 'issue'
+      ? (worktree.linkedWorkItem.beadsIdentifier ?? null)
+      : null
   // Why: `typeof` rather than a null check — an unhydrated projection can leave
   // linkedIssue undefined, which `!== null` would read as a GitHub link.
   const currentProvider: IssueLinkProvider =
-    typeof linkedIssue === 'number' ? 'github' : linkedLinearIssue ? 'linear' : 'github'
+    typeof linkedIssue === 'number'
+      ? 'github'
+      : linkedLinearIssue
+        ? 'linear'
+        : linkedBeadsIssue
+          ? 'beads'
+          : 'github'
   const currentIssue =
     currentProvider === 'linear'
       ? (linkedLinearIssue ?? '')
-      : typeof linkedIssue === 'number'
-        ? String(linkedIssue)
-        : ''
+      : currentProvider === 'beads'
+        ? (linkedBeadsIssue ?? '')
+        : typeof linkedIssue === 'number'
+          ? String(linkedIssue)
+          : ''
   // Why: displacement is decided against live state, not the frozen snapshot —
   // the dialog's warning reads the same values, so a link added by the CLI while
   // the dialog was open cannot outlive a save that promised to displace it.
+  // Why: a beads save writes linkedWorkItem + linkedTaskSourceContext, and the
+  // context must name the repo's execution host or the main process nulls it.
+  const repo = useAppStore((s) => {
+    const repoId = worktree?.repoId
+    return repoId ? (s.repos.find((item) => item.id === repoId) ?? null) : null
+  })
+  const beadsSourceContext = useMemo(
+    () => (repo ? buildBeadsRepoTaskSourceContext(repo) : null),
+    [repo]
+  )
   const liveLinks = useMemo<WorktreeMetaLiveLinks>(
     () => ({
       linkedIssue,
       linkedLinearIssue,
       linkedLinearIssueOrganizationUrlKey: worktree?.linkedLinearIssueOrganizationUrlKey ?? null,
       linkedWorkItemProvider: worktree?.linkedWorkItem?.provider ?? null,
-      linkedWorkItemType: worktree?.linkedWorkItem?.type ?? null
+      linkedWorkItemType: worktree?.linkedWorkItem?.type ?? null,
+      linkedBeadsIdentifier: linkedBeadsIssue,
+      beadsSourceContext
     }),
     [
       linkedIssue,
       linkedLinearIssue,
+      linkedBeadsIssue,
+      beadsSourceContext,
       worktree?.linkedLinearIssueOrganizationUrlKey,
       worktree?.linkedWorkItem
     ]
@@ -92,6 +121,7 @@ export function useWorktreeMetaWorkspace(args: {
     worktree,
     linkedIssue,
     linkedLinearIssue,
+    linkedBeadsIssue,
     currentIssue,
     currentProvider,
     // Why: folder workspaces persist links only through their creation-time

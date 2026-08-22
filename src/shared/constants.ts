@@ -330,6 +330,8 @@ export function getDefaultSettings(homedir: string): GlobalSettings {
     defaultTaskSource: 'github',
     visibleTaskProviders: [...TASK_PROVIDERS],
     visibleTaskProvidersDefaultedForJira: true,
+    visibleTaskProvidersDefaultedForBeads: true,
+    visibleTaskProvidersRestoredForBeadsRollout: true,
     defaultRepoSelection: null,
     defaultLinearTeamSelection: null,
     opencodeSessionCookie: '',

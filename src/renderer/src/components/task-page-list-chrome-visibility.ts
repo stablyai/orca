@@ -8,6 +8,7 @@ export type TaskPageListChromeVisibilityState = {
   hasLinearIssueDetail: boolean
   hasLinearProjectContext: boolean
   hasLinearViewContext: boolean
+  hasBeadsDetail: boolean
 }
 
 export function shouldHideTaskPageListChrome({
@@ -17,7 +18,8 @@ export function shouldHideTaskPageListChrome({
   hasJiraDetail,
   hasLinearIssueDetail,
   hasLinearProjectContext,
-  hasLinearViewContext
+  hasLinearViewContext,
+  hasBeadsDetail
 }: TaskPageListChromeVisibilityState): boolean {
   // Why: provider-specific selection can intentionally survive source switches;
   // stale detail state from another provider must not hide the active list chrome.
@@ -30,5 +32,7 @@ export function shouldHideTaskPageListChrome({
       return hasJiraDetail
     case 'linear':
       return hasLinearIssueDetail || hasLinearProjectContext || hasLinearViewContext
+    case 'beads':
+      return hasBeadsDetail
   }
 }

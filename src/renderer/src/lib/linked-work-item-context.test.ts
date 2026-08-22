@@ -164,6 +164,20 @@ describe('getLinkedWorkItemPromptContext', () => {
     expectNoProductWorkflowDirection(result.linkedContextBlocks[0])
   })
 
+  it('returns an id + bd command reference for Beads items instead of the empty url', () => {
+    const result = getLinkedWorkItemPromptContext({
+      provider: 'beads',
+      url: '',
+      title: 'Fix the flaky sync',
+      beadsIdentifier: 'orca-a3f8'
+    })
+
+    expect(result.linkedUrls).toEqual([])
+    expect(result.linkedContextBlocks).toEqual([
+      'Linked Beads issue: orca-a3f8\nFix the flaky sync\nRun `bd show orca-a3f8` in the repository for full details.'
+    ])
+  })
+
   it('falls back to the URL for non-Linear items', () => {
     expect(
       getLinkedWorkItemPromptContext({
@@ -181,6 +195,31 @@ describe('getLinkedWorkItemPromptContext', () => {
 })
 
 describe('resolveQuickCreateLinkedWorkItemPrompt', () => {
+  it('drafts the note above the Beads reference block', () => {
+    const result = resolveQuickCreateLinkedWorkItemPrompt(
+      {
+        provider: 'beads',
+        number: 0,
+        url: '',
+        title: 'Fix the flaky sync',
+        beadsIdentifier: 'orca-a3f8'
+      },
+      'typed fallback note'
+    )
+
+    expect(result.prompt).toBe('')
+    expect(result.draftPrompt).toBe(
+      [
+        'typed fallback note',
+        '',
+        'Linked Beads issue: orca-a3f8',
+        'Fix the flaky sync',
+        'Run `bd show orca-a3f8` in the repository for full details.',
+        ''
+      ].join('\n')
+    )
+  })
+
   it('drafts the note above the link-only Linear reference', () => {
     const result = resolveQuickCreateLinkedWorkItemPrompt(
       { number: 0, ...LINEAR_ITEM },

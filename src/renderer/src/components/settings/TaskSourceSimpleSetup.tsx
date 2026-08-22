@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { JiraConnectDialog } from '@/components/jira-connect-dialog'
+import { getRendererAppPlatform } from '@/lib/renderer-app-platform'
 import { Button } from '@/components/ui/button'
 import { TaskSourceShowInTasksStep } from './TaskSourceShowInTasksStep'
 import { TaskSourceStepRow } from './TaskSourceStepRow'
@@ -70,6 +71,77 @@ export function CodeHostSetupSteps(
       <TaskSourceShowInTasksStep
         index={2}
         providerLabel={props.providerLabel}
+        visible={props.visible}
+        canHide={props.canHide}
+        onToggleVisible={props.onToggleVisible}
+      />
+    </ol>
+  )
+}
+
+// No credentials and no Integrations card: bd is a local CLI, so setup is install + per-repo init.
+export function BeadsSetupSteps(
+  props: ConnectStepProps & { unavailable?: boolean; onRetryConnection: () => void }
+): React.JSX.Element {
+  const installState = getConnectStepState(props)
+
+  return (
+    <ol className="divide-y divide-border/50">
+      <TaskSourceStepRow
+        index={1}
+        state={installState}
+        title={translate(
+          'auto.components.settings.TasksPane.beadsInstallTitle',
+          'Install the bd CLI'
+        )}
+        description={
+          props.unavailable
+            ? translate(
+                'auto.components.settings.TasksPane.beadsCheckUnavailable',
+                "Orca couldn't check for the bd CLI. Try again."
+              )
+            : translate(
+                'auto.components.settings.TasksPane.beadsInstallDescription',
+                'Beads stores issues inside the repo itself; Orca reads them with the bd CLI.'
+              )
+        }
+        action={
+          <Button
+            type="button"
+            size="sm"
+            variant={props.connected ? 'outline' : 'default'}
+            onClick={props.onRetryConnection}
+          >
+            {props.unavailable
+              ? translate('auto.components.settings.TasksPane.retryConnection', 'Try again')
+              : translate('auto.components.settings.TasksPane.beadsRecheck', 'Re-check')}
+          </Button>
+        }
+      >
+        {!props.connected && !props.unavailable && !props.checking ? (
+          <code className="inline-block rounded bg-muted px-1.5 py-0.5 font-mono text-[11px] text-muted-foreground">
+            {/* Shell command / URL literal — never localized; brew only applies on macOS. */}
+            {getRendererAppPlatform() === 'darwin'
+              ? 'brew install beads'
+              : 'https://beads.gascity.com'}
+          </code>
+        ) : null}
+      </TaskSourceStepRow>
+      <TaskSourceStepRow
+        index={2}
+        state={installState}
+        title={translate(
+          'auto.components.settings.TasksPane.beadsInitTitle',
+          'Run bd init in your repo'
+        )}
+        description={translate(
+          'auto.components.settings.TasksPane.beadsInitDescription',
+          'Initialize each repo you want to track. The Tasks page shows which selected repos have Beads set up.'
+        )}
+      />
+      <TaskSourceShowInTasksStep
+        index={3}
+        providerLabel={translate('auto.components.settings.TasksPane.beadsLabel', 'Beads')}
         visible={props.visible}
         canHide={props.canHide}
         onToggleVisible={props.onToggleVisible}

@@ -6,7 +6,8 @@ import type { WorkspaceSourceProvider } from './new-workspace/workspace-source'
 // so adding Jira here is a one-entry change rather than a new axis.
 export const ISSUE_LINK_PROVIDERS = [
   'github',
-  'linear'
+  'linear',
+  'beads'
 ] as const satisfies readonly WorkspaceSourceProvider[]
 
 export type IssueLinkProvider = (typeof ISSUE_LINK_PROVIDERS)[number]
@@ -38,6 +39,15 @@ export function getIssueLinkProviderFromUrl(input: string): IssueLinkProvider | 
 export type ParsedIssueLinkInput =
   | { provider: 'github'; number: number }
   | { provider: 'linear'; identifier: string; organizationUrlKey?: string }
+  | { provider: 'beads'; beadsId: string }
+
+/** bd ids are `<prefix>-<hash>` (children append `.n`). The interior hyphen is
+ *  required so a bare number stays GitHub-shaped, and case is preserved — bd
+ *  ids are stored lowercase and must not be normalized like Linear keys. */
+export function parseBeadsIssueIdInput(input: string): string | null {
+  const trimmed = input.trim()
+  return /^[A-Za-z0-9][A-Za-z0-9._-]*-[A-Za-z0-9._]+$/.test(trimmed) ? trimmed : null
+}
 
 /**
  * Single parse shared by the dialog's save gate and its payload builder, so a
@@ -55,6 +65,12 @@ export function parseIssueLinkInput(
   if (provider === 'linear') {
     const parsed = parseLinearIssueInput(trimmed)
     return parsed ? { provider: 'linear', ...parsed } : null
+  }
+
+  if (provider === 'beads') {
+    // Why: beads issues have no URL form; only the chip can name this provider.
+    const beadsId = parseBeadsIssueIdInput(trimmed)
+    return beadsId ? { provider: 'beads', beadsId } : null
   }
 
   const link = parseGitHubIssueOrPRLink(trimmed)

@@ -45,7 +45,7 @@ vi.mock('@/hooks/useInstalledAgentSkills', () => ({
   useInstalledAgentSkillNames: () => mocks.skill
 }))
 
-const ALL_PROVIDERS: readonly TaskProvider[] = ['github', 'gitlab', 'linear', 'jira']
+const ALL_PROVIDERS: readonly TaskProvider[] = ['github', 'gitlab', 'linear', 'jira', 'beads']
 
 let root: Root | null = null
 let container: HTMLDivElement | null = null
@@ -74,7 +74,8 @@ beforeEach(() => {
     settings: {},
     preflightStatus: {
       gh: { installed: true, authenticated: true },
-      glab: { installed: true, authenticated: true }
+      glab: { installed: true, authenticated: true },
+      bd: { installed: true, version: '1.1.2', versionSupported: true }
     },
     preflightStatusChecked: true,
     preflightStatusContextKey: 'local',
@@ -122,6 +123,37 @@ describe('useTaskSourceProviderReadiness', () => {
       skillInstalled: true,
       skillChecking: false
     })
+    expect(latest?.beads).toMatchObject({ connected: true, checking: false })
+  })
+
+  it('reports beads disconnected when the bd preflight probe is absent or uninstalled', async () => {
+    // Old snapshots predating the bd probe omit the field entirely.
+    mocks.state.preflightStatus = {
+      gh: { installed: true, authenticated: true },
+      glab: { installed: true, authenticated: true }
+    }
+
+    await renderProbe()
+    expect(latest?.beads.connected).toBe(false)
+
+    mocks.state.preflightStatus = {
+      bd: { installed: false, version: null, versionSupported: false }
+    }
+    await renderProbe()
+    expect(latest?.beads.connected).toBe(false)
+  })
+
+  it('reports beads disconnected when bd is installed but below the supported version', async () => {
+    // An outdated bd cannot serve the Tasks page, so Settings must not show it green.
+    mocks.state.preflightStatus = {
+      gh: { installed: true, authenticated: true },
+      glab: { installed: true, authenticated: true },
+      bd: { installed: true, version: '1.0.5', versionSupported: false }
+    }
+
+    await renderProbe()
+
+    expect(latest?.beads.connected).toBe(false)
   })
 
   it('does not read code-host connection facts out of a failed preflight snapshot', async () => {
@@ -135,6 +167,9 @@ describe('useTaskSourceProviderReadiness', () => {
     expect(latest?.gitlab.connected).toBe(false)
     expect(latest?.github.unavailable).toBe(true)
     expect(latest?.gitlab.unavailable).toBe(true)
+    // bd rides the same preflight snapshot, so it degrades the same way.
+    expect(latest?.beads.connected).toBe(false)
+    expect(latest?.beads.unavailable).toBe(true)
   })
 
   it('keeps the known skill result while a focus-triggered rescan is in flight', async () => {

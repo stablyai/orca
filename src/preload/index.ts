@@ -2055,6 +2055,34 @@ const api = {
     }): Promise<JiraProjectStatusOrder> => ipcRenderer.invoke('jira:getProjectStatusOrder', args)
   },
 
+  beads: {
+    getStatus: (args: { repoId: string }): Promise<unknown> =>
+      ipcRenderer.invoke('beads:getStatus', args),
+
+    listIssues: (args: {
+      repoId: string
+      preset?: 'open' | 'assigned' | 'ready'
+      limit?: number
+      statusScope?: 'open' | 'all' | 'ready'
+      assignee?: string
+    }): Promise<unknown> => ipcRenderer.invoke('beads:listIssues', args),
+
+    getIssue: (args: { repoId: string; id: string }): Promise<unknown> =>
+      ipcRenderer.invoke('beads:getIssue', args),
+
+    getIssueDetails: (args: { repoId: string; id: string }): Promise<unknown> =>
+      ipcRenderer.invoke('beads:getIssueDetails', args),
+
+    addComment: (args: { repoId: string; id: string; text: string }): Promise<unknown> =>
+      ipcRenderer.invoke('beads:addComment', args),
+
+    updateIssue: (args: {
+      repoId: string
+      id: string
+      status: 'open' | 'in_progress' | 'blocked' | 'deferred' | 'closed'
+    }): Promise<unknown> => ipcRenderer.invoke('beads:updateIssue', args)
+  },
+
   starNag: {
     onShow: (
       callback: (payload?: { mode?: 'gh' | 'web'; surface?: 'card' | 'toast' }) => void
