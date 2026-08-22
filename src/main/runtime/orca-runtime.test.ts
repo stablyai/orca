@@ -16315,6 +16315,38 @@ describe('OrcaRuntimeService', () => {
     })
   })
 
+  it('resolves tui-idle from the Antigravity 1.1.17 accept-edits prompt', async () => {
+    const runtime = new OrcaRuntimeService(store)
+    runtime.setPtyController({
+      spawn: vi.fn().mockResolvedValue({ id: 'pty-bg' }),
+      write: () => true,
+      kill: () => true,
+      getForegroundProcess: async () => null
+    })
+    const { handle } = await runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`)
+    runtime.onPtyData(
+      'pty-bg',
+      [
+        'Antigravity CLI 1.1.17',
+        'user@example.com (Google AI Pro)',
+        'Gemini 3.7 Flash (High)',
+        '~/orca/workspaces/orca/agy-dispatch-issue',
+        '> Accept-edits mode: file edits auto-approved (shift+tab to cycle)',
+        '? for shortcuts'
+      ].join('\n'),
+      Date.now()
+    )
+
+    await expect(
+      runtime.waitForTerminal(handle, { condition: 'tui-idle', timeoutMs: 200 })
+    ).resolves.toMatchObject({
+      handle,
+      condition: 'tui-idle',
+      satisfied: true,
+      status: 'running'
+    })
+  })
+
   it('resolves Antigravity ready prompts with newline-heavy pasted tails without splitting', async () => {
     const runtime = new OrcaRuntimeService(store)
     runtime.setPtyController({

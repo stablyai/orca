@@ -40053,8 +40053,9 @@ function findAntigravityReadyPromptIndex(normalized: string): number | null {
       }
       if (
         promptIndex === null &&
-        trimmedEnd - trimmedStart === 1 &&
-        normalized.charCodeAt(trimmedStart) === 62
+        normalized.charCodeAt(trimmedStart) === 62 &&
+        (trimmedEnd - trimmedStart === 1 ||
+          normalized.startsWith('> accept-edits mode:', trimmedStart))
       ) {
         promptIndex = trimmedStart
       }
