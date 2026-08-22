@@ -36,12 +36,16 @@ function makeEntry(): LinearClientForWorkspace {
   } as unknown as LinearClientForWorkspace
 }
 
-function rawIssue(id: string) {
+function rawIssue(
+  id: string,
+  project: { id: string; name: string; color?: string | null } | null = null
+) {
   return {
     id,
     identifier: id,
     title: id,
     url: `https://linear.app/${id}`,
+    project,
     priority: 0,
     updatedAt: '2026-01-01T00:00:00.000Z',
     labelIds: [],
@@ -223,6 +227,32 @@ describe('Linear project queries', () => {
     await expect(stalePromise).resolves.toMatchObject({
       items: [{ id: 'LIN-STALE' }]
     })
+  })
+
+  it('selects and maps optional project summaries for project issue reads', async () => {
+    rawRequest.mockResolvedValueOnce({
+      data: {
+        project: {
+          issues: {
+            nodes: [
+              rawIssue('LIN-1', { id: 'project-1', name: 'Orca', color: '#5e6ad2' }),
+              rawIssue('LIN-2')
+            ],
+            pageInfo: { hasNextPage: false }
+          }
+        }
+      }
+    })
+    const { listProjectIssues } = await import('./projects')
+
+    await expect(listProjectIssues('project-1', 20, 'workspace-1')).resolves.toMatchObject({
+      items: [
+        { id: 'LIN-1', project: { id: 'project-1', name: 'Orca', color: '#5e6ad2' } },
+        { id: 'LIN-2', project: undefined }
+      ]
+    })
+    expect(rawRequest.mock.calls[0][0]).toContain('project {')
+    expect(rawRequest.mock.calls[0][0]).toContain('color')
   })
 
   it('loads project issue reads above Linear connection page size', async () => {
@@ -471,6 +501,31 @@ describe('Linear project queries', () => {
     staleRequest.resolve(customViewIssuesResponse('ISSUE-STALE'))
     await expect(stalePromise).resolves.toMatchObject({
       items: [{ id: 'ISSUE-STALE' }]
+    })
+  })
+
+  it('maps optional project summaries for issue custom views', async () => {
+    rawRequest.mockResolvedValueOnce({
+      data: {
+        customView: {
+          modelName: 'Issue',
+          issues: {
+            nodes: [
+              rawIssue('ISSUE-1', { id: 'project-1', name: 'Orca', color: null }),
+              rawIssue('ISSUE-2')
+            ],
+            pageInfo: { hasNextPage: false }
+          }
+        }
+      }
+    })
+    const { listCustomViewIssues } = await import('./projects')
+
+    await expect(listCustomViewIssues('view-1', 20, 'workspace-1')).resolves.toMatchObject({
+      items: [
+        { id: 'ISSUE-1', project: { id: 'project-1', name: 'Orca', color: undefined } },
+        { id: 'ISSUE-2', project: undefined }
+      ]
     })
   })
 

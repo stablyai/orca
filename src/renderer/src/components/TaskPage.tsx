@@ -193,6 +193,7 @@ import {
 } from '../../../shared/execution-host-registry'
 import { getHostDisplayLabelOverrides } from '../../../shared/host-setting-overrides'
 import LinearIssueWorkspace from '@/components/LinearIssueWorkspace'
+import { LinearIssueProjectLabel } from '@/components/linear-issue-project-label'
 import {
   LinearCollectionNotice,
   LinearCustomViewTable,
@@ -235,6 +236,7 @@ import {
   deriveTaskPageGitHubWorkItemsFetchOptions,
   findTaskPageDialogWorkItem,
   findTaskPageLinearIssue,
+  preferFreshTaskPageLinearIssue,
   reconcileTaskPageLinearIssuesAfterLandingRefresh,
   reconcileTaskPagePagesAfterLandingRefresh,
   reconcileTaskPagePagesWithWorkItemsCache,
@@ -429,6 +431,7 @@ import {
 import { translate } from '@/i18n/i18n'
 import { formatUiRelativeTimeFromDate } from '@/i18n/relative-time-format'
 import {
+  DEFAULT_LINEAR_DISPLAY_PROPERTIES,
   getGitHubModeButtons,
   getGitHubTaskKindPresets,
   getGitLabIssueFilters,
@@ -962,6 +965,9 @@ function TaskPageJiraErrorBanner({
 
 function getLinearIssueGridTemplate(visibleProperties: ReadonlySet<LinearDisplayProperty>): string {
   const columns = ['96px', 'minmax(240px,1.55fr)']
+  if (visibleProperties.has('project')) {
+    columns.push('minmax(140px,0.75fr)')
+  }
   if (visibleProperties.has('labels')) {
     columns.push('minmax(168px,0.9fr)')
   }
@@ -5150,14 +5156,16 @@ export default function TaskPage(): React.JSX.Element {
 
   const displayedLinearIssues = useMemo(
     () =>
-      activeLinearIssues.map(
-        (issue) =>
+      activeLinearIssues.map((issue) =>
+        preferFreshTaskPageLinearIssue(
+          issue,
           findTaskPageLinearIssue(
             linearCacheSnapshot.issueCache,
             linearCacheSnapshot.searchCache,
             linearCacheSnapshot.listCache,
             issue.id
-          ) ?? issue
+          )
+        )
       ),
     [
       activeLinearIssues,
@@ -11378,6 +11386,9 @@ export default function TaskPage(): React.JSX.Element {
                 >
                   <span>{translate('auto.components.TaskPage.37e7ee311e', 'Key')}</span>
                   <span>{translate('auto.components.TaskPage.b1eaa18ace', 'Issue')}</span>
+                  {effectiveLinearDisplayProperties.has('project') ? (
+                    <span>{translate('auto.components.TaskPage.00022ec0ba', 'Project')}</span>
+                  ) : null}
                   {effectiveLinearDisplayProperties.has('labels') ? (
                     <span>{translate('auto.components.TaskPage.d0ca4aa1d0', 'Labels')}</span>
                   ) : null}
@@ -11401,10 +11412,41 @@ export default function TaskPage(): React.JSX.Element {
                 </div>
               ) : null}
 
+
               <div
                 className="min-h-0 flex-1 overflow-y-auto scrollbar-sleek"
                 style={{ scrollbarGutter: 'stable' }}
               >
+                {linearViewMode === 'list' && linearGroupBy === 'none' ? (
+                  <div
+                    className="sticky top-0 z-10 grid h-8 items-center gap-3 border-b border-border/50 bg-muted px-3 text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground max-lg:!hidden lg:grid-cols-[var(--linear-grid-template)] [&>span]:min-w-0 [&>span]:truncate"
+                    style={linearIssueGridStyle}
+                  >
+                    <span>{translate('auto.components.TaskPage.37e7ee311e', 'Key')}</span>
+                    <span>{translate('auto.components.TaskPage.b1eaa18ace', 'Issue')}</span>
+                    {effectiveLinearDisplayProperties.has('project') ? (
+                      <span>{translate('auto.components.TaskPage.00022ec0ba', 'Project')}</span>
+                    ) : null}
+                    {effectiveLinearDisplayProperties.has('labels') ? (
+                      <span>{translate('auto.components.TaskPage.d0ca4aa1d0', 'Labels')}</span>
+                    ) : null}
+                    {effectiveLinearDisplayProperties.has('team') ? (
+                      <span>{translate('auto.components.TaskPage.a98cbe7664', 'Team')}</span>
+                    ) : null}
+                    {effectiveLinearDisplayProperties.has('state') ? (
+                      <span>{translate('auto.components.TaskPage.154b0fa623', 'Status')}</span>
+                    ) : null}
+                    {effectiveLinearDisplayProperties.has('assignee') ? (
+                      <span className="text-center">
+                        {translate('auto.components.TaskPage.d2a876ca53', 'Assignee')}
+                      </span>
+                    ) : null}
+                    {effectiveLinearDisplayProperties.has('updated') ? (
+                      <span>{translate('auto.components.TaskPage.f362667d55', 'Updated')}</span>
+                    ) : null}
+                    <span />
+                  </div>
+                ) : null}
                 {activeLinearIssueError ? (
                   <div className="border-b border-border px-4 py-4 text-sm text-destructive">
                     {activeLinearIssueError}
@@ -11714,6 +11756,12 @@ export default function TaskPage(): React.JSX.Element {
                                   {effectiveLinearDisplayProperties.has('team') ? (
                                     <span className="truncate">{teamLabel}</span>
                                   ) : null}
+                                  {effectiveLinearDisplayProperties.has('project') ? (
+                                    <LinearIssueProjectLabel
+                                      project={issue.project}
+                                      className="max-w-full text-[11px]"
+                                    />
+                                  ) : null}
                                   {effectiveLinearDisplayProperties.has('updated') ? (
                                     <span>{formatRelativeTime(issue.updatedAt)}</span>
                                   ) : null}
@@ -11851,8 +11899,21 @@ export default function TaskPage(): React.JSX.Element {
                                   <span className="truncate">{attachedWorkspaceLabel}</span>
                                 </span>
                               ) : null}
+                              {effectiveLinearDisplayProperties.has('project') ? (
+                                <LinearIssueProjectLabel
+                                  project={issue.project}
+                                  className="max-w-[12rem] text-[11px] lg:!hidden"
+                                />
+                              ) : null}
                             </div>
                           </div>
+
+                          {effectiveLinearDisplayProperties.has('project') ? (
+                            <LinearIssueProjectLabel
+                              project={issue.project}
+                              className="text-[12px] max-lg:!hidden"
+                            />
+                          ) : null}
 
                           {effectiveLinearDisplayProperties.has('labels') ? (
                             <div className="flex min-w-0 items-center gap-1 max-lg:!hidden">

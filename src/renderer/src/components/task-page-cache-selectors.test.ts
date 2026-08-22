@@ -11,6 +11,7 @@ import {
   deriveTaskPageGitHubWorkItemsFetchOptions,
   findTaskPageDialogWorkItem,
   findTaskPageLinearDrawerIssue,
+  preferFreshTaskPageLinearIssue,
   reconcileTaskPageItemsAfterLandingRefresh,
   reconcileTaskPageLinearIssuesAfterLandingRefresh,
   reconcileTaskPagePagesAfterLandingRefresh,
@@ -352,6 +353,61 @@ describe('task page cache selectors', () => {
     )
 
     expect(next).toEqual([refreshedFirst, refreshedSecond])
+  })
+
+  it('merges Linear landing refresh project-only changes', () => {
+    const current = {
+      ...linearIssue('LIN-1'),
+      identifier: 'ENG-1',
+      url: 'https://linear.test/ENG-1',
+      state: { name: 'Todo', type: 'unstarted', color: '#111111' },
+      team: { id: 'team-1', name: 'Team', key: 'ENG' },
+      labels: [],
+      labelIds: [],
+      priority: 2,
+      updatedAt: '2026-01-01',
+      project: { id: 'project-1', name: 'Orca', color: '#5e6ad2' }
+    } as LinearIssue
+    const refreshed = {
+      ...current,
+      project: { id: 'project-1', name: 'Orca Desktop', color: '#26b5ce' }
+    }
+
+    const next = reconcileTaskPageLinearIssuesAfterLandingRefresh([current], [refreshed])
+
+    expect(next).toEqual([refreshed])
+  })
+
+  it('prefers a fresher context issue over a stale general-cache issue', () => {
+    const cached = {
+      ...linearIssue('LIN-1'),
+      updatedAt: '2026-01-01T00:00:00.000Z',
+      project: { id: 'project-1', name: 'Orca', color: '#5e6ad2' }
+    } as LinearIssue
+    const current = {
+      ...cached,
+      updatedAt: '2026-01-02T00:00:00.000Z',
+      project: { id: 'project-2', name: 'Desktop', color: '#26b5ce' }
+    }
+
+    expect(preferFreshTaskPageLinearIssue(current, cached)).toBe(current)
+    expect(preferFreshTaskPageLinearIssue(cached, current)).toBe(current)
+    expect(preferFreshTaskPageLinearIssue(current, null)).toBe(current)
+  })
+
+  it('prefers a parseable current issue over a cached issue with an unparseable updatedAt', () => {
+    const cached = {
+      ...linearIssue('LIN-1'),
+      updatedAt: 'not-a-date',
+      project: { id: 'project-1', name: 'Orca', color: '#5e6ad2' }
+    } as LinearIssue
+    const current = {
+      ...cached,
+      updatedAt: '2026-01-02T00:00:00.000Z',
+      project: { id: 'project-2', name: 'Desktop', color: '#26b5ce' }
+    }
+
+    expect(preferFreshTaskPageLinearIssue(current, cached)).toBe(current)
   })
 
   it('returns null while the Linear drawer is closed and finds open issues by stable reference', () => {
