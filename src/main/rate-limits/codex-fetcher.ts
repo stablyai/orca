@@ -94,6 +94,8 @@ type RateLimitResetCredits = {
 // Why: the Codex app-server wraps rate limit data as { rateLimits: { primary, secondary, ... } }.
 type RpcRateLimitsResponse = {
   rateLimits?: CodexRateLimitWindowsSnapshot | null
+  planType?: unknown
+  individualLimit?: unknown
   rateLimitResetCredits?: {
     availableCount?: number
     totalEarnedCount?: number
@@ -129,12 +131,22 @@ type BackendRateLimitWindow = {
   reset_at?: number
 }
 
+type BackendIndividualLimit = {
+  source?: string
+  limit?: unknown
+  used?: unknown
+  used_percent?: unknown
+  remaining_percent?: unknown
+  reset_at?: unknown
+}
+
 type BackendUsageResponse = {
   plan_type?: string
   rate_limit?: {
     primary_window?: BackendRateLimitWindow | null
     secondary_window?: BackendRateLimitWindow | null
   } | null
+  spend_control?: { individual_limit?: BackendIndividualLimit | null } | null
   rate_limit_reset_credits?: BackendRateLimitResetCreditsResponse | null
 }
 
@@ -504,6 +516,67 @@ function mapRpcWindow(
   }
 }
 
+function finiteNumber(value: unknown): number | null {
+  if (typeof value === 'number') {
+    return Number.isFinite(value) ? value : null
+  }
+  if (typeof value === 'string' && value.trim()) {
+    const parsed = Number(value)
+    return Number.isFinite(parsed) ? parsed : null
+  }
+  return null
+}
+
+function mapIndividualLimit(raw: unknown): RateLimitWindow | null {
+  if (!raw || typeof raw !== 'object') {
+    return null
+  }
+  const value = raw as Record<string, unknown>
+  const limit = finiteNumber(value.limit)
+  const used = finiteNumber(value.used)
+  const usedPercent = finiteNumber(value.used_percent ?? value.usedPercent)
+  const remainingPercent = finiteNumber(value.remaining_percent ?? value.remainingPercent)
+  let percent: number | null = null
+
+  const numericFields = [
+    value.limit,
+    value.used,
+    value.used_percent ?? value.usedPercent,
+    value.remaining_percent ?? value.remainingPercent
+  ]
+  if (
+    numericFields.some(
+      (field) => field !== undefined && field !== null && finiteNumber(field) === null
+    )
+  ) {
+    return null
+  }
+  if (limit !== null && limit <= 0) {
+    return null
+  }
+  if (used !== null && used < 0) {
+    return null
+  }
+  if (limit !== null && limit > 0 && used !== null) {
+    percent = (used / limit) * 100
+  } else if (usedPercent !== null) {
+    percent = usedPercent
+  } else if (remainingPercent !== null) {
+    percent = 100 - remainingPercent
+  } else {
+    return null
+  }
+
+  const rawReset = value.reset_at ?? value.resetsAt
+  const resetMilliseconds =
+    typeof rawReset === 'string' && finiteNumber(rawReset) === null
+      ? parseCreditTimestamp(rawReset)
+      : null
+  const reset =
+    finiteNumber(rawReset) ?? (resetMilliseconds !== null ? resetMilliseconds / 1000 : null)
+  return mapRpcWindow({ usedPercent: percent, resetsAt: reset }, 43_200)
+}
+
 function backendWindowToSnapshot(
   raw: BackendRateLimitWindow | null | undefined
 ): CodexRateWindowSnapshot | null {
@@ -548,14 +621,14 @@ async function fetchViaBackend(
     return null
   }
   const payload = (await response.json()) as BackendUsageResponse
-  // Why: reject missing plan_type so the app-server fallback runs.
-  if (typeof payload.plan_type !== 'string') {
-    return null
-  }
   const classified = classifyCodexRateLimitWindows({
     primary: backendWindowToSnapshot(payload.rate_limit?.primary_window),
     secondary: backendWindowToSnapshot(payload.rate_limit?.secondary_window)
   })
+  const monthly = mapIndividualLimit(payload.spend_control?.individual_limit)
+  if (!classified.session && !classified.weekly && !monthly) {
+    return null
+  }
   return {
     provider: 'codex',
     session: mapRpcWindow(
@@ -566,8 +639,9 @@ async function fetchViaBackend(
       classified.weekly,
       snapshotWindowMinutes(classified.weekly, CODEX_WEEKLY_WINDOW_MINUTES)
     ),
+    monthly,
     // Surfaced for the status-bar Usage row (e.g. "Codex · Plus").
-    planType: payload.plan_type,
+    ...(typeof payload.plan_type === 'string' ? { planType: payload.plan_type } : {}),
     ...(payload.rate_limit_reset_credits !== undefined
       ? {
           rateLimitResetCredits:
@@ -582,9 +656,19 @@ async function fetchViaBackend(
 
 async function withBackendSessionWindow(
   limits: ProviderRateLimits,
-  options?: FetchCodexRateLimitsOptions
+  options?: FetchCodexRateLimitsOptions,
+  context?: { backendAttempted?: boolean }
 ): Promise<ProviderRateLimits> {
-  if (options?.signal?.aborted || limits.session || !limits.weekly) {
+  const knownNonBusiness =
+    typeof limits.planType === 'string' && limits.planType.toLowerCase() !== 'business'
+  if (
+    options?.signal?.aborted ||
+    limits.status !== 'ok' ||
+    limits.session ||
+    context?.backendAttempted ||
+    (knownNonBusiness && !limits.weekly) ||
+    (!limits.weekly && limits.monthly)
+  ) {
     return limits
   }
   try {
@@ -593,18 +677,19 @@ async function withBackendSessionWindow(
       return limits
     }
     const rateLimitResetCredits = backend.rateLimitResetCredits ?? limits.rateLimitResetCredits
-    if (!backend.session) {
-      return rateLimitResetCredits === limits.rateLimitResetCredits
-        ? limits
-        : { ...limits, rateLimitResetCredits }
-    }
+    const backendOwnsResult = Boolean(backend.session || backend.monthly || !limits.weekly)
     return {
       ...limits,
-      session: backend.session,
-      weekly: backend.weekly ?? limits.weekly,
-      planType: backend.planType ?? limits.planType,
+      session: limits.session ?? backend.session,
+      weekly: backend.session
+        ? (backend.weekly ?? limits.weekly)
+        : (limits.weekly ?? backend.weekly),
+      monthly: limits.monthly ?? backend.monthly,
+      ...(backendOwnsResult && backend.planType && !limits.planType
+        ? { planType: backend.planType }
+        : {}),
       ...(rateLimitResetCredits !== undefined ? { rateLimitResetCredits } : {}),
-      updatedAt: backend.updatedAt
+      ...(backendOwnsResult ? { updatedAt: backend.updatedAt } : {})
     }
   } catch {
     return limits
@@ -801,9 +886,19 @@ async function fetchViaRpc(options?: FetchCodexRateLimitsOptions): Promise<Provi
 
             const wrapper = msg.result as RpcRateLimitsResponse | undefined
             const result = wrapper?.rateLimits
+            const reported = result as
+              | (CodexRateLimitWindowsSnapshot & {
+                  planType?: unknown
+                  individualLimit?: unknown
+                })
+              | null
+              | undefined
             const classifiedWindows = classifyCodexRateLimitWindows(result)
             const session = mapRpcWindow(classifiedWindows.session, CODEX_SESSION_WINDOW_MINUTES)
             const weekly = mapRpcWindow(classifiedWindows.weekly, CODEX_WEEKLY_WINDOW_MINUTES)
+            const individualLimit = mapIndividualLimit(
+              wrapper?.individualLimit ?? reported?.individualLimit
+            )
             const rateLimitResetCredits = mapRpcRateLimitResetCredits(
               wrapper?.rateLimitResetCredits
             )
@@ -813,6 +908,10 @@ async function fetchViaRpc(options?: FetchCodexRateLimitsOptions): Promise<Provi
                 provider: 'codex',
                 session,
                 weekly,
+                monthly: individualLimit,
+                ...(typeof (wrapper?.planType ?? reported?.planType) === 'string'
+                  ? { planType: (wrapper?.planType ?? reported?.planType) as string }
+                  : {}),
                 ...(rateLimitResetCredits !== undefined ? { rateLimitResetCredits } : {}),
                 updatedAt: Date.now(),
                 error: null,
@@ -1231,8 +1330,10 @@ export async function fetchCodexRateLimits(
   }
 
   // Path A (WSL): use Codex's backend usage contract so a routine poll skips spawning a login shell to rebuild the CLI env.
+  let backendAttempted = false
   if (options?.codexHomePath && parseWslUncPath(options.codexHomePath)) {
     try {
+      backendAttempted = true
       const backendResult = await fetchViaBackend(options)
       if (options?.signal?.aborted) {
         return abortedCodexRateLimitResult()
@@ -1274,7 +1375,7 @@ export async function fetchCodexRateLimits(
       return abortedCodexRateLimitResult()
     }
     if (rpcResult.status === 'ok' || rpcResult.status === 'unavailable') {
-      const withSession = await withBackendSessionWindow(rpcResult, options)
+      const withSession = await withBackendSessionWindow(rpcResult, options, { backendAttempted })
       const withResetCredits = await withBackendRateLimitResetCredits(withSession, options)
       return options?.signal?.aborted ? abortedCodexRateLimitResult() : withResetCredits
     }
@@ -1311,7 +1412,7 @@ export async function fetchCodexRateLimits(
     if (options?.signal?.aborted) {
       return abortedCodexRateLimitResult()
     }
-    const withSession = await withBackendSessionWindow(ptyResult, options)
+    const withSession = await withBackendSessionWindow(ptyResult, options, { backendAttempted })
     const withResetCredits = await withBackendRateLimitResetCredits(withSession, options)
     return options?.signal?.aborted ? abortedCodexRateLimitResult() : withResetCredits
   } catch (err) {
