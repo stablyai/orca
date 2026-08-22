@@ -3,7 +3,11 @@ import type React from 'react'
 import type { Virtualizer } from '@tanstack/react-virtual'
 import { useAppStore } from '@/store'
 import { activateAndRevealWorktree } from '@/lib/worktree-activation'
-import type { ExecutionHostId } from '../../../../../../shared/execution-host'
+import {
+  getSettingsFocusedExecutionHostId,
+  getWorktreeExecutionHostId,
+  type ExecutionHostId
+} from '../../../../../../shared/execution-host'
 import {
   composeWorktreeHostIdentity,
   getWorktreeHostIdentity
@@ -15,6 +19,14 @@ import type { PinnedWorktreeDisplayPolicy } from '../grouping/row-types'
 import type { RenderRow } from '../listing/render-row'
 import { getCyclableWorktrees, resolveCycledWorktreeId } from '../../worktree-keyboard-cycle'
 import { findPreferredRenderRowIndexForWorktreeIdentity } from './render-row-lookup'
+import {
+  getActiveProjectKey,
+  getCyclableProjects,
+  resolveCycledProjectWorktree,
+  type ProjectCycleDirection
+} from '../../project-keyboard-cycle'
+import { getAllWorktreesFromState, getRepoMapFromState } from '@/store/selectors'
+import { getProjectHostSetupProjectionFromState } from '@/store/project-host-setup-selector'
 
 function isEditableTarget(target: EventTarget | null): boolean {
   if (!(target instanceof HTMLElement)) {
@@ -112,6 +124,57 @@ export function useWorktreeListKeyboardNavigation(args: {
     ]
   )
 
+  const navigateProject = useCallback(
+    (direction: ProjectCycleDirection) => {
+      const state = useAppStore.getState()
+      const worktrees = getAllWorktreesFromState(state)
+      const repoMap = getRepoMapFromState(state)
+      const projection = getProjectHostSetupProjectionFromState(state)
+      const projectGrouping = {
+        projects: projection.projects,
+        projectHostSetups: projection.setups
+      }
+      const target = resolveCycledProjectWorktree({
+        projects: getCyclableProjects({ rows, worktrees, repoMap, projectGrouping }),
+        activeProjectKey: getActiveProjectKey({
+          activeWorktreeId,
+          activeWorkspaceExecutionHostId,
+          worktrees,
+          repoMap,
+          projectGrouping
+        }),
+        direction,
+        lastVisitedAtByWorktreeId: state.lastVisitedAtByWorktreeId
+      })
+      if (!target) {
+        return
+      }
+
+      const targetExecutionHostId = getWorktreeExecutionHostId(
+        target,
+        repoMap.get(target.repoId),
+        getSettingsFocusedExecutionHostId(state.settings)
+      )
+      activateAndRevealWorktree(target.id, { executionHostId: targetExecutionHostId })
+      const rowIndex = findPreferredRenderRowIndexForWorktreeIdentity(
+        renderRows,
+        target,
+        pinnedDisplayPolicy
+      )
+      if (rowIndex !== -1) {
+        virtualizer.scrollToIndex(rowIndex, { align: 'auto' })
+      }
+    },
+    [
+      activeWorkspaceExecutionHostId,
+      activeWorktreeId,
+      pinnedDisplayPolicy,
+      renderRows,
+      rows,
+      virtualizer
+    ]
+  )
+
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (activeModal !== 'none' || isEditableTarget(e.target)) {
@@ -134,12 +197,36 @@ export function useWorktreeListKeyboardNavigation(args: {
         markDirectScrollInput()
         navigateWorktree(direction)
         e.preventDefault()
+        return
+      }
+
+      const projectDirection = keybindingMatchesAction(
+        'project.navigatePrevious',
+        e,
+        platform,
+        keybindings
+      )
+        ? 'previous'
+        : keybindingMatchesAction('project.navigateNext', e, platform, keybindings)
+          ? 'next'
+          : null
+      if (projectDirection) {
+        markDirectScrollInput()
+        navigateProject(projectDirection)
+        e.preventDefault()
       }
     }
 
     window.addEventListener('keydown', handleKeyDown, { capture: true })
     return () => window.removeEventListener('keydown', handleKeyDown, { capture: true })
-  }, [activeModal, keybindings, markDirectScrollInput, navigateWorktree, scrollRef])
+  }, [
+    activeModal,
+    keybindings,
+    markDirectScrollInput,
+    navigateProject,
+    navigateWorktree,
+    scrollRef
+  ])
 
   const handleContainerKeyDown = useCallback(
     (e: React.KeyboardEvent) => {

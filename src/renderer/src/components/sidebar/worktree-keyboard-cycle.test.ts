@@ -7,6 +7,11 @@ import {
   getCyclableWorktrees,
   resolveCycledWorktreeId
 } from './worktree-keyboard-cycle'
+import {
+  getActiveProjectKey,
+  getCyclableProjects,
+  resolveCycledProjectWorktree
+} from './project-keyboard-cycle'
 
 describe('resolveCycledWorktreeId', () => {
   const worktreeIds = ['a', 'b', 'c']
@@ -170,5 +175,109 @@ describe('WorktreeList keyboard cycling', () => {
     expect(navigateWorktree).toContain('executionHostId: nextWorktree.hostId')
     expect(navigateWorktree).toContain('resolveCycledWorktreeId')
     expect(navigateWorktree).not.toContain('buildRows(')
+  })
+})
+
+describe('project keyboard cycling', () => {
+  const repos = [
+    { id: 'repo-a', path: '/repo-a', displayName: 'A', badgeColor: '#737373', addedAt: 1 },
+    {
+      id: 'repo-b',
+      path: '/repo-b',
+      displayName: 'B',
+      badgeColor: '#737373',
+      addedAt: 2,
+      executionHostId: 'ssh:dev'
+    },
+    { id: 'repo-c', path: '/repo-c', displayName: 'C', badgeColor: '#737373', addedAt: 3 }
+  ]
+  const repoMap = new Map(repos.map((repo) => [repo.id, repo as never]))
+  const worktrees = [
+    { id: 'a-main', repoId: 'repo-a', isMainWorktree: true, isArchived: false },
+    { id: 'b-main', repoId: 'repo-b', isMainWorktree: true, isArchived: false },
+    { id: 'b-recent', repoId: 'repo-b', isMainWorktree: false, isArchived: false },
+    { id: 'c-main', repoId: 'repo-c', isMainWorktree: true, isArchived: false }
+  ] as never[]
+
+  it('uses rendered project order and appends collapsed or filtered projects', () => {
+    const rows: HostSectionRow[] = [
+      {
+        type: 'header',
+        key: 'repo:repo-b',
+        label: 'B',
+        count: 2,
+        tone: 'neutral',
+        repo: repos[1] as never
+      },
+      {
+        type: 'header',
+        key: 'repo:repo-a',
+        label: 'A',
+        count: 1,
+        tone: 'neutral',
+        repo: repos[0] as never
+      }
+    ]
+
+    expect(getCyclableProjects({ rows, worktrees, repoMap }).map((project) => project.key)).toEqual(
+      ['repo:repo-b', 'repo:repo-a', 'repo:repo-c']
+    )
+  })
+
+  it('wraps between projects and restores the target project’s recent workspace', () => {
+    const projects = getCyclableProjects({ rows: [], worktrees, repoMap })
+
+    expect(
+      resolveCycledProjectWorktree({
+        projects,
+        activeProjectKey: 'repo:repo-a',
+        direction: 'previous',
+        lastVisitedAtByWorktreeId: {}
+      })?.id
+    ).toBe('c-main')
+    expect(
+      resolveCycledProjectWorktree({
+        projects,
+        activeProjectKey: 'repo:repo-a',
+        direction: 'next',
+        lastVisitedAtByWorktreeId: { 'b-main': 10, 'b-recent': 20 }
+      })?.id
+    ).toBe('b-recent')
+  })
+
+  it('enters from the requested edge for folder workspaces and no-ops with one project', () => {
+    const projects = getCyclableProjects({ rows: [], worktrees, repoMap })
+    expect(
+      resolveCycledProjectWorktree({
+        projects,
+        activeProjectKey: null,
+        direction: 'previous',
+        lastVisitedAtByWorktreeId: {}
+      })?.id
+    ).toBe('c-main')
+    expect(
+      resolveCycledProjectWorktree({
+        projects: projects.slice(0, 1),
+        activeProjectKey: projects[0]?.key ?? null,
+        direction: 'next',
+        lastVisitedAtByWorktreeId: {}
+      })
+    ).toBeNull()
+  })
+
+  it('resolves the active project with host-qualified worktree selection', () => {
+    const hostWorktrees = [
+      { id: 'shared', repoId: 'repo-a', hostId: 'local', isArchived: false },
+      { id: 'shared', repoId: 'repo-b', isArchived: false }
+    ] as never[]
+
+    expect(
+      getActiveProjectKey({
+        activeWorktreeId: 'shared',
+        activeWorkspaceExecutionHostId: 'ssh:dev',
+        worktrees: hostWorktrees,
+        repoMap
+      })
+    ).toBe('repo:repo-b')
   })
 })
