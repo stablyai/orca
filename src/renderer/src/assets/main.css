@@ -851,6 +851,7 @@ html.native-shell .app-layout {
 }
 
 .titlebar {
+  position: relative;
   height: 36px;
   min-height: 36px;
   display: flex;
@@ -3085,34 +3086,97 @@ html.native-shell .app-layout {
 }
 
 .titlebar-session-view-host {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+}
+
+.titlebar-session-view-host > div,
+.titlebar-session-command {
+  width: 100%;
+  height: 100%;
+}
+
+.titlebar-session-command {
+  position: relative;
   display: flex;
-  flex: 1;
+  align-items: center;
+}
+
+.titlebar-session-context {
+  -webkit-app-region: no-drag;
+  pointer-events: auto;
+  position: absolute;
+  left: 12px;
+  display: flex;
   min-width: 0;
-  align-self: stretch;
+  max-width: calc(50% - 102px);
+  align-items: center;
+  gap: 6px;
+  color: var(--muted-foreground);
+  font-size: 11px;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.titlebar-session-agent-icon {
+  display: inline-flex;
+  width: 20px;
+  height: 20px;
+  flex: 0 0 auto;
   align-items: center;
   justify-content: center;
-  pointer-events: none;
+  border: 1px solid color-mix(in srgb, var(--border) 74%, transparent);
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--muted) 45%, transparent);
+  color: var(--foreground);
+}
+
+.titlebar-session-context-label {
+  flex: 0 0 auto;
+  color: var(--foreground);
+  font-weight: 600;
+}
+
+.titlebar-session-context-separator {
+  width: 2px;
+  height: 2px;
+  flex: 0 0 auto;
+  border-radius: 999px;
+  background: currentColor;
+}
+
+.titlebar-session-context-detail {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .titlebar-session-view-switcher {
   -webkit-app-region: no-drag;
   pointer-events: auto;
+  position: absolute;
+  left: 50%;
+  top: 50%;
   display: inline-flex;
   align-items: center;
   gap: 2px;
-  height: 28px;
+  height: 30px;
   padding: 2px;
   border: 1px solid color-mix(in srgb, var(--border) 78%, transparent);
-  border-radius: var(--radius);
-  background: color-mix(in srgb, var(--muted) 52%, transparent);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--muted) 46%, transparent);
+  box-shadow: inset 0 1px 0 color-mix(in srgb, var(--foreground) 4%, transparent);
+  transform: translate(-50%, -50%);
 }
 
 .titlebar-session-view-switcher > button {
-  height: 22px;
-  min-width: 66px;
+  height: 24px;
+  min-width: 70px;
   padding: 0 12px;
   border: 0;
-  border-radius: calc(var(--radius) - 3px);
+  border-radius: 5px;
   background: transparent;
   color: var(--muted-foreground);
   font-size: 12px;
@@ -3131,10 +3195,48 @@ html.native-shell .app-layout {
 .titlebar-session-view-switcher > button[data-state='active'] {
   background: var(--background);
   color: var(--foreground);
-  box-shadow: 0 1px 2px color-mix(in srgb, var(--foreground) 12%, transparent);
+  box-shadow:
+    0 1px 2px color-mix(in srgb, var(--foreground) 12%, transparent),
+    inset 0 0 0 1px color-mix(in srgb, var(--border) 58%, transparent);
 }
 
 .titlebar-session-view-switcher > button:focus-visible {
   outline: 2px solid var(--ring);
   outline-offset: -2px;
+}
+
+@media (max-width: 980px) {
+  .titlebar-session-context-detail,
+  .titlebar-session-context-separator {
+    display: none;
+  }
+}
+
+@media (max-width: 760px) {
+  .titlebar-session-context {
+    display: none;
+  }
+}
+
+@keyframes native-chat-typing-cadence {
+  0%,
+  100% {
+    opacity: 0.35;
+    transform: scale(0.82);
+  }
+  45% {
+    opacity: 0.9;
+    transform: scale(1);
+  }
+}
+
+.native-chat-typing-dot {
+  animation: native-chat-typing-cadence 1.15s cubic-bezier(0.22, 1, 0.36, 1) infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .native-chat-typing-dot {
+    animation: none;
+    opacity: 0.7;
+  }
 }

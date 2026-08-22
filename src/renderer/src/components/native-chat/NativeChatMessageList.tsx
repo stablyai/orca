@@ -17,6 +17,8 @@ import { stripNoiseMessages } from './native-chat-noise'
 import { foldToolMessages, splitNativeChatBlocks } from './native-chat-tool-fold'
 import { isNearBottom, shouldShowJumpToLatest, type ScrollGeometry } from './native-chat-autoscroll'
 import { isNativeChatPastedImagePath } from './native-chat-image-paste'
+import { splitNativeChatSessionContext } from './native-chat-context-disclosure'
+import { NativeChatSessionContextDisclosure } from './NativeChatSessionContextDisclosure'
 import { NativeChatToolRun } from './NativeChatToolRun'
 import { NativeChatCopyButton } from './NativeChatCopyButton'
 import { NATIVE_CHAT_STREAMING_ID } from '../../../../shared/native-chat-streaming'
@@ -109,7 +111,7 @@ function TypingIndicatorRow(): React.JSX.Element {
         {[0, 1, 2].map((i) => (
           <span
             key={i}
-            className="size-1.5 animate-bounce rounded-full bg-muted-foreground/70"
+            className="native-chat-typing-dot size-1.5 rounded-full bg-muted-foreground/70"
             // Stagger the three dots so they ripple rather than pulse in unison.
             style={{ animationDelay: `${i * 160}ms` }}
           />
@@ -141,10 +143,14 @@ function MessageRow({
   const rowRef = useRef<HTMLDivElement | null>(null)
   const { prose, tools } = useMemo(() => splitNativeChatBlocks(message.blocks), [message.blocks])
   const markdown = proseToMarkdown(prose)
-  const hasImages = prose.some((block) => block.type === 'image-ref')
   const isUser = message.role === 'user'
   const isReasoning = message.role === 'reasoning'
   const isSystem = message.role === 'system'
+  const disclosedUserContent = useMemo(
+    () => splitNativeChatSessionContext(isUser ? markdown : ''),
+    [isUser, markdown]
+  )
+  const hasImages = prose.some((block) => block.type === 'image-ref')
 
   const scrollToTop = useCallback(() => {
     if (rowRef.current) {
@@ -170,11 +176,11 @@ function MessageRow({
         {/* User turns get a distinct muted fill (not the card/canvas color) so
             the prompt reads apart from the assistant's body copy. */}
         <div className="max-w-[85%] rounded-lg rounded-tr-sm bg-muted px-3.5 py-2.5 text-sm text-foreground">
-          {markdown ? (
+          {disclosedUserContent.visibleText ? (
             <>
               <ImageAttachmentRefs blocks={prose} />
               <CommentMarkdown
-                content={markdown}
+                content={disclosedUserContent.visibleText}
                 variant="document"
                 className="text-sm"
                 onLinkClick={onLinkClick}
@@ -184,6 +190,7 @@ function MessageRow({
           ) : (
             <ImageAttachmentRefs blocks={prose} />
           )}
+          <NativeChatSessionContextDisclosure disclosure={disclosedUserContent} />
         </div>
         {deliveryFailed ? (
           <div className="max-w-[85%] text-[11px] text-destructive/80">
@@ -197,6 +204,33 @@ function MessageRow({
     )
   }
 
+  if (isReasoning) {
+    return (
+      <div ref={rowRef} className="max-w-full text-sm text-muted-foreground">
+        <details className="group/reasoning border-l-2 border-border/60 pl-3">
+          <summary className="cursor-pointer select-none py-1 text-xs font-medium not-italic hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+            {translate('components.native-chat.reasoningDisclosure', 'Reasoning')}
+          </summary>
+          <div className="pt-1 italic leading-relaxed">
+            <ImageAttachmentRefs blocks={prose} />
+            {markdown ? (
+              <CommentMarkdown
+                content={markdown}
+                variant="document"
+                className="text-sm"
+                onLinkClick={onLinkClick}
+                allowFileUriLinks={allowFileUriLinks}
+              />
+            ) : null}
+            {tools.length > 0 ? (
+              <NativeChatToolRun blocks={tools} expandSignal={expandSignal} />
+            ) : null}
+          </div>
+        </details>
+      </div>
+    )
+  }
+
   // Plain assistant prose is the copyable unit; reasoning/system asides stay
   // chrome-free. The controls reveal on hover (and on keyboard focus-within).
   const showControls = !isReasoning && !isSystem && markdown.length > 0
@@ -206,8 +240,6 @@ function MessageRow({
       ref={rowRef}
       className={cn(
         'group relative max-w-full text-sm leading-relaxed text-foreground',
-        // Reasoning is the agent thinking aloud — quieter, italic, like an aside.
-        isReasoning && 'border-l-2 border-border/60 pl-3 italic text-muted-foreground',
         isSystem && 'text-xs text-muted-foreground'
       )}
     >

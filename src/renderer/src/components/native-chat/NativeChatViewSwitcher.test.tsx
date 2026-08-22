@@ -27,6 +27,11 @@ function renderSwitcher(isChatViewMode: boolean, onToggleNativeChat = vi.fn()) {
       <NativeChatViewSwitcher
         isChatViewMode={isChatViewMode}
         onToggleNativeChat={onToggleNativeChat}
+        contextLabel="Codex"
+        contextDetail="Fix titlebar polish"
+        instanceId="session-one"
+        chatPanelId="session-one-chat-panel"
+        terminalPanelId="session-one-terminal-panel"
       />
     )
   })
@@ -50,6 +55,12 @@ describe('NativeChatViewSwitcher', () => {
     expect(tabList).not.toBeNull()
     expect(tabs.map((tab) => tab.textContent?.trim())).toEqual(['Chat', 'Terminal'])
     expect(tabs.map((tab) => tab.getAttribute('aria-selected'))).toEqual(['false', 'true'])
+    expect(tabs.map((tab) => tab.getAttribute('aria-controls'))).toEqual([
+      'session-one-chat-panel',
+      'session-one-terminal-panel'
+    ])
+    expect(container.textContent).toContain('Codex')
+    expect(container.textContent).toContain('Fix titlebar polish')
   })
 
   it('only toggles when the inactive view is selected', () => {

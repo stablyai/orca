@@ -13,6 +13,7 @@ import { useShallow } from 'zustand/react/shallow'
 import { createPortal } from 'react-dom'
 import type { CSSProperties } from 'react'
 import type { IDisposable } from '@xterm/xterm'
+import { translate } from '@/i18n/i18n'
 import { useAppStore } from '../../store'
 import { useLinkRoutingPreferenceDialog } from '@/components/link-routing-preference-dialog'
 import { DaemonActionDialog, useDaemonActions } from '@/components/shared/useDaemonActions'
@@ -240,6 +241,7 @@ import {
   getCachedUnifiedTerminalTabForWorktree
 } from './terminal-unified-tab-lookup'
 import { resolveNativeChatLeafTitleAgent } from './native-chat-leaf-title-agent'
+import { formatAgentTypeLabel } from '@/lib/agent-status'
 import { selectTerminalPaneHostState } from './terminal-pane-host-state'
 import {
   isXtermHelperTextarea,
@@ -2961,6 +2963,93 @@ function TerminalPane(
   const activePaneCanToggleChat = canToggleChatForLeaf(activePane?.leafId ?? null)
   const titlebarSessionViewTarget = useNativeChatTitlebarPortalTarget()
   const contextMenuCanToggleChat = canToggleChatForLeaf(contextMenuLeafId)
+  const activeSessionAgent = resolveAgentForLeaf(activePane?.leafId ?? null)
+  const activeSessionContextLabel = formatAgentTypeLabel(activeSessionAgent)
+  const activePaneTitle = activePane ? paneTitles[activePane.id]?.trim() : ''
+  const activePaneNumber = activePane
+    ? managedPanes.findIndex((pane) => pane.id === activePane.id) + 1
+    : 0
+  const activeSessionContextDetail =
+    activePaneTitle ||
+    (managedPanes.length > 1 && activePaneNumber > 0
+      ? translate('components.native-chat.toggle.paneLabel', 'Pane {{value0}}', {
+          value0: activePaneNumber
+        })
+      : terminalTab?.title?.trim() || null)
+  const sessionViewInstanceId = `session-view-${tabId.replace(/[^a-zA-Z0-9_-]/g, '-')}`
+  const chatPanelId = `${sessionViewInstanceId}-chat-panel`
+  const terminalPanelId = `${sessionViewInstanceId}-terminal-panel`
+  const chatTabId = `${sessionViewInstanceId}-chat-tab`
+  const terminalTabId = `${sessionViewInstanceId}-terminal-tab`
+
+  useLayoutEffect(() => {
+    const paneContainer = activePane?.container
+    if (!isActive || !activePaneCanToggleChat || !paneContainer) {
+      return
+    }
+
+    const previousId = paneContainer.getAttribute('id')
+    const previousRole = paneContainer.getAttribute('role')
+    const previousLabelledBy = paneContainer.getAttribute('aria-labelledby')
+    paneContainer.id = terminalPanelId
+
+    if (!activePaneIsChatLeaf) {
+      paneContainer.setAttribute('role', 'tabpanel')
+      paneContainer.setAttribute('aria-labelledby', terminalTabId)
+    } else {
+      paneContainer.removeAttribute('role')
+      paneContainer.removeAttribute('aria-labelledby')
+    }
+
+    const obscuredNodes = activePaneIsChatLeaf
+      ? Array.from(paneContainer.children).filter(
+          (node): node is HTMLElement =>
+            node instanceof HTMLElement && !node.hasAttribute('data-native-chat-view-panel')
+        )
+      : []
+    const obscuredState = obscuredNodes.map((node) => ({
+      node,
+      inert: node.inert,
+      ariaHidden: node.getAttribute('aria-hidden')
+    }))
+    for (const node of obscuredNodes) {
+      node.inert = true
+      node.setAttribute('aria-hidden', 'true')
+    }
+
+    return () => {
+      if (previousId === null) {
+        paneContainer.removeAttribute('id')
+      } else {
+        paneContainer.id = previousId
+      }
+      if (previousRole === null) {
+        paneContainer.removeAttribute('role')
+      } else {
+        paneContainer.setAttribute('role', previousRole)
+      }
+      if (previousLabelledBy === null) {
+        paneContainer.removeAttribute('aria-labelledby')
+      } else {
+        paneContainer.setAttribute('aria-labelledby', previousLabelledBy)
+      }
+      for (const { node, inert, ariaHidden } of obscuredState) {
+        node.inert = inert
+        if (ariaHidden === null) {
+          node.removeAttribute('aria-hidden')
+        } else {
+          node.setAttribute('aria-hidden', ariaHidden)
+        }
+      }
+    }
+  }, [
+    activePane?.container,
+    activePaneCanToggleChat,
+    activePaneIsChatLeaf,
+    isActive,
+    terminalPanelId,
+    terminalTabId
+  ])
   return (
     <>
       <div
@@ -3058,6 +3147,11 @@ function TerminalPane(
             <NativeChatViewSwitcher
               isChatViewMode={activePaneIsChatLeaf}
               onToggleNativeChat={handleToggleNativeChat}
+              contextLabel={activeSessionContextLabel}
+              contextDetail={activeSessionContextDetail}
+              instanceId={sessionViewInstanceId}
+              chatPanelId={chatPanelId}
+              terminalPanelId={terminalPanelId}
             />,
             titlebarSessionViewTarget
           )
@@ -3085,7 +3179,13 @@ function TerminalPane(
       />
       {effectiveChatViewMode && chatPane?.container
         ? createPortal(
-            <div className="absolute inset-0 z-10 flex min-h-0 min-w-0 bg-background">
+            <div
+              id={chatPanelId}
+              role="tabpanel"
+              aria-labelledby={chatTabId}
+              data-native-chat-view-panel="true"
+              className="absolute inset-0 z-10 flex min-h-0 min-w-0 bg-background"
+            >
               <NativeChatView
                 terminalTabId={tabId}
                 isVisible={isRendererVisible}

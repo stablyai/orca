@@ -28,9 +28,14 @@ export function NativeChatTitlebarPortalHost(): React.JSX.Element {
   const portal = useContext(NativeChatTitlebarPortalContext)
 
   return (
-    <div className="titlebar-session-view-host">
-      <div id="titlebar-session-view-switcher" ref={portal?.setTarget} />
-    </div>
+    <>
+      {/* Keep trailing titlebar actions at the right edge while the portal host
+          spans the full titlebar for true geometric centering. */}
+      <div className="min-w-0 flex-1" />
+      <div className="titlebar-session-view-host">
+        <div id="titlebar-session-view-switcher" ref={portal?.setTarget} />
+      </div>
+    </>
   )
 }
 
