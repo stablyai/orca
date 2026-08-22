@@ -100,7 +100,7 @@ describe('preserved relay build reconnect', () => {
   it.each([
     ['without a version prefix', '0.1.0+111111111111'],
     ['with a version prefix', 'v0.1.0+111111111111']
-  ])('reconnects the persisted relay $label', async (_label, previousBuildId) => {
+  ])('reconnects the persisted relay %s', async (_label, previousBuildId) => {
     const conn = makeMockConnection()
     vi.mocked(execCommand)
       .mockResolvedValueOnce('__ORCA_REMOTE_PLATFORM__ Linux x86_64')
@@ -156,7 +156,10 @@ describe('preserved relay build reconnect', () => {
     ).toBe(false)
   })
 
-  it('does not reconnect a build from another relay protocol version', async () => {
+  it.each([
+    ['another relay protocol version', '0.2.0+111111111111'],
+    ['the current build with a version prefix', 'v0.1.0+abcdef012345']
+  ])('does not reconnect %s', async (_label, previousBuildId) => {
     const conn = makeMockConnection()
     vi.mocked(execCommand)
       .mockResolvedValueOnce('__ORCA_REMOTE_PLATFORM__ Linux x86_64')
@@ -171,7 +174,7 @@ describe('preserved relay build reconnect', () => {
       undefined,
       undefined,
       'target-a',
-      '0.2.0+111111111111'
+      previousBuildId
     )
 
     expect(result.serverBuildId).toBe('0.1.0+abcdef012345')
@@ -179,7 +182,7 @@ describe('preserved relay build reconnect', () => {
       ...vi.mocked(execCommand).mock.calls.map(([, command]) => command),
       ...vi.mocked(conn.exec).mock.calls.map(([command]) => command as string)
     ]
-    expect(commands.some((command) => command.includes('0.2.0+111111111111'))).toBe(false)
+    expect(commands.some((command) => command.includes(previousBuildId))).toBe(false)
   })
 
   it('reconnects the persisted build through its Windows active pipe', async () => {

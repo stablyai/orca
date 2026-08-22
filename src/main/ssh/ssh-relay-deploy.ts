@@ -639,7 +639,10 @@ function isCompatiblePreferredRelayBuild(
   preferredServerBuildId: string | undefined,
   currentServerBuildId: string
 ): preferredServerBuildId is string {
-  if (!preferredServerBuildId || preferredServerBuildId === currentServerBuildId) {
+  if (!preferredServerBuildId) {
+    return false
+  }
+  if (preferredServerBuildId.replace(/^v/, '') === currentServerBuildId.replace(/^v/, '')) {
     return false
   }
   const versionPattern = /^v?(\d+\.\d+\.\d+)(?:\+[0-9a-f]+)?$/
