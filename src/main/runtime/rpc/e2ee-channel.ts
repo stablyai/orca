@@ -14,6 +14,7 @@ import {
   isMobileE2EETextPayloadWithinLimit
 } from './mobile-e2ee-outbound-admission'
 import { parseRemoteRuntimeJsonText } from '../../../shared/remote-runtime-request-frames'
+import { MOBILE_E2EE_V2_PROTOCOL } from '../../../shared/mobile-e2ee-v2-contract'
 import type { MobileE2EEOutboundMemoryBudget } from './mobile-e2ee-outbound-memory-budget'
 import { MobileE2EEDesktopOutboundOwner } from './mobile-e2ee-desktop-outbound-owner'
 import { parseRuntimeClientCapabilities } from './runtime-client-capabilities'
@@ -202,6 +203,14 @@ export class E2EEChannel {
         expectedContext: this.transportContext
       })
       if (!session) {
+        // Why: an app-version skew changes the E2EE protocol string, so the
+        // handshake can never succeed. Say so instead of a generic error —
+        // the fix is updating the stale side, not retrying.
+        const protocol = (hello as { context?: { protocol?: unknown } }).context?.protocol
+        if (typeof protocol === 'string' && protocol !== MOBILE_E2EE_V2_PROTOCOL) {
+          this.onError(4004, 'E2EE protocol version mismatch — update the mobile app and desktop')
+          return
+        }
         this.onError(4001, 'Invalid e2ee_hello v2')
         return
       }
