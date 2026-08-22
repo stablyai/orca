@@ -14,20 +14,27 @@ import { isCurrentRendererMainFrame, type RendererIpcEvent } from './renderer-ip
 import type { TerminalWindowTransferCoordinatorOptions } from './terminal-window-transfer-coordinator-options'
 import {
   clearTerminalWindowTransferWaiters,
+  markTerminalWindowCommandReady,
+  sendTerminalWindowTransferCommand,
+  settleTerminalWindowTransferAck,
+  waitUntilTerminalWindowCommandReady
+} from './terminal-window-transfer-command'
+import {
+  finishCommittedTerminalWindowTransfer,
+  getTerminalWindowTransferSourceError,
   getTerminalWindowBounds,
   installTerminalWindowTransferAbortListeners,
-  isTerminalWindowTransferSeed,
   prepareTerminalWindowTargetRecord,
   removeTerminalWindowTransferAbortListeners,
   rollbackTerminalWindowTransfer,
-  sendTerminalWindowTransferCommand,
   sessionHasTerminalTab,
   sessionMatchesTerminalWindowTarget,
-  settleTerminalWindowTransferAck,
-  waitUntilTerminalWindowCommandReady,
+  isPointInsideRectangle,
+  type TerminalWindowCommandReadyWaiter,
   type TerminalWindowTransfer,
   type TerminalWindowTransferOperations
 } from './terminal-window-transfer-operation'
+import { isTerminalWindowTransferSeed } from './terminal-window-transfer-seed-validation'
 
 export const TERMINAL_WINDOW_TRANSFER_ACK_TIMEOUT_MS = 10_000
 
@@ -45,9 +52,9 @@ export class TerminalWindowTransferCoordinator {
   readonly #timeoutMs: number
   readonly #transfers = new Map<string, TerminalWindowTransfer>()
   readonly #operations: TerminalWindowTransferOperations
-  readonly #commandReady = new Set<number>()
-  readonly #commandReadyWaiters = new Map<number, Set<() => void>>()
-  readonly #trackedRenderers = new Set<number>()
+  readonly #commandReady = new Set<WebContents>()
+  readonly #commandReadyWaiters = new Map<WebContents, Set<TerminalWindowCommandReadyWaiter>>()
+  readonly #trackedRenderers = new Set<WebContents>()
   #fenced = false
 
   constructor(options: TerminalWindowTransferCoordinatorOptions) {
@@ -90,19 +97,12 @@ export class TerminalWindowTransferCoordinator {
     if (!window || !role) {
       throw new Error('untrusted_ui_renderer')
     }
-    if (!this.#trackedRenderers.has(sender.id)) {
-      this.#trackedRenderers.add(sender.id)
-      sender.on('did-start-loading', () => this.#commandReady.delete(sender.id))
-      sender.once('destroyed', () => {
-        this.#trackedRenderers.delete(sender.id)
-        this.#commandReady.delete(sender.id)
-      })
-    }
-    this.#commandReady.add(sender.id)
-    for (const resolve of this.#commandReadyWaiters.get(sender.id) ?? []) {
-      resolve()
-    }
-    this.#commandReadyWaiters.delete(sender.id)
+    markTerminalWindowCommandReady(
+      this.#commandReady,
+      this.#commandReadyWaiters,
+      this.#trackedRenderers,
+      sender
+    )
     return { windowId: window.id, role, transitionFenced: this.#fenced }
   }
 
@@ -126,11 +126,11 @@ export class TerminalWindowTransferCoordinator {
       return { ok: false, error: 'terminal_transfer_in_progress' }
     }
     const sourceBefore = this.#sessions.get(source.id, seed.hostId)
-    if (!sessionHasTerminalTab(sourceBefore, seed.tabId)) {
-      return { ok: false, error: 'terminal_transfer_source_missing' }
-    }
-    if (seed.ptyIds.some((id) => !this.#owners.owns(id, sender))) {
-      return { ok: false, error: 'terminal_transfer_source_not_owner' }
+    const sourceError = getTerminalWindowTransferSourceError(sourceBefore, seed, (id) =>
+      this.#owners.owns(id, sender)
+    )
+    if (sourceError) {
+      return { ok: false, error: sourceError }
     }
 
     let abort!: (error: Error) => void
@@ -139,7 +139,9 @@ export class TerminalWindowTransferCoordinator {
       transferId: randomUUID(),
       seed,
       source,
+      sourceRenderer: sender,
       target: null,
+      targetRenderer: null,
       sourceBefore,
       targetBefore: null,
       createdTarget: false,
@@ -164,12 +166,7 @@ export class TerminalWindowTransferCoordinator {
     try {
       const point = this.#getCursorPoint()
       const sourceBounds = source.getBounds()
-      if (
-        point.x >= sourceBounds.x &&
-        point.y >= sourceBounds.y &&
-        point.x < sourceBounds.x + sourceBounds.width &&
-        point.y < sourceBounds.y + sourceBounds.height
-      ) {
+      if (isPointInsideRectangle(point, sourceBounds)) {
         throw new Error('terminal_transfer_pointer_inside_source')
       }
       let target = this.#windows.getWindowAtPoint(point, source.id)
@@ -198,6 +195,7 @@ export class TerminalWindowTransferCoordinator {
         )
       }
       transfer.target = target
+      transfer.targetRenderer = target.webContents
       installTerminalWindowTransferAbortListeners(this.#operations, transfer)
       this.#sessions.set(
         target.id,
@@ -210,21 +208,21 @@ export class TerminalWindowTransferCoordinator {
       }
       await Promise.race([
         Promise.all([
-          this.#owners.waitUntilDispatcherReady(target.webContents, this.#timeoutMs),
+          this.#owners.waitUntilDispatcherReady(transfer.targetRenderer, this.#timeoutMs),
           waitUntilTerminalWindowCommandReady(
             this.#commandReady,
             this.#commandReadyWaiters,
-            target.webContents,
+            transfer.targetRenderer,
             this.#timeoutMs
           )
         ]),
         transfer.aborted
       ])
-      this.#handoff(seed.ptyIds, source.webContents, target.webContents)
+      this.#handoff(seed.ptyIds, sender, transfer.targetRenderer)
       transfer.handedOff = true
 
       transfer.targetImportAttempted = true
-      await sendTerminalWindowTransferCommand(this.#operations, transfer, target.webContents, {
+      await sendTerminalWindowTransferCommand(this.#operations, transfer, transfer.targetRenderer, {
         transferId: transfer.transferId,
         tabId: seed.tabId,
         phase: 'target-import',
@@ -237,7 +235,7 @@ export class TerminalWindowTransferCoordinator {
       const sourceAck = await sendTerminalWindowTransferCommand(
         this.#operations,
         transfer,
-        source.webContents,
+        sender,
         {
           transferId: transfer.transferId,
           tabId: seed.tabId,
@@ -246,14 +244,12 @@ export class TerminalWindowTransferCoordinator {
       )
       transfer.committed = true
       transfer.handedOff = false
-      if (transfer.createdTarget && !target.isDestroyed()) {
-        target.show()
-        target.focus()
-      }
-      if (sourceAck.empty && this.#windows.getRole(source.id) === 'secondary') {
-        this.#sessions.retire(source.id, 'empty-close')
-        source.close()
-      }
+      finishCommittedTerminalWindowTransfer(
+        transfer,
+        sourceAck.empty === true,
+        () => this.#windows.getRole(source.id) === 'secondary',
+        () => this.#sessions.retire(source.id, 'empty-close')
+      )
       return { ok: true, targetWindowId: target.id }
     } catch (error) {
       await rollbackTerminalWindowTransfer(this.#operations, transfer)
