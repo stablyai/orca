@@ -51,6 +51,55 @@ peer confirms it. The existing pattern is `SetOutputPaused` (opcode 16):
 - the client sends opcode 16 only after that echo (`stream.supportsOutputPause`);
 - the host only acts on opcode 16 when it negotiated it (`stream.supportsOutputPause`).
 
+`OutputSpan` (opcode 15) is the worked example, and it is worth reading closely because
+the obvious fix was wrong on half the paths.
+
+It shipped ungated in v1.4.147 (2026-07-19) on both the legacy `terminal.subscribe`
+stream and the multiplex stream, so transformed emissions (SSH relay, startup ingress,
+daemon keep-tail salvage) reached mobile as an opcode its vendored table does not
+contain — dropped with no error, no banner, no retry. On `terminal.subscribe` it is now
+gated on `capabilities.outputSpan`, and a sender that has not been told the peer can
+decode a span **downgrades to plain `Output`** rather than sending nothing.
+
+On `terminal.multiplex` it is deliberately **not** gated. Two reasons, and both
+generalise:
+
+**A capability cannot retroactively prove incapability.** The gate keys off the peer
+declaring `outputSpan`, a flag no shipped build sends. Opcode 15 predates every
+capability a multiplex peer could declare — `ackOutput` by 9 days, `ackOutputSourceRanges`
+by 10 — so "did not declare it" is indistinguishable between a build from before the
+opcode and the entire installed base from after it. Since mixed versions are the normal
+state, a gate added after an opcode ships reads the whole fleet as incapable.
+
+**A fallback is only a fallback if it is lossless for that peer.** A plain `Output`
+frame carries `(data, seq)` and nothing else, so the receiver can only reconstruct a run
+as `seq - data.length`. A transformed run has `rawLength !== data.length` by definition.
+Downgrading it to `Output` therefore cannot be made correct for a peer that tracks
+`seq`, and the desktop multiplex client does: it head-blocks the ack queue on a
+zero-byte frame, reads a false dropped-frame gap on every transformed emission, and
+detaches the stream when a >48 KiB run flips the source-range ledger's mapping mode.
+The downgrade works on `terminal.subscribe` for exactly one reason — mobile ignores
+Output `seq` entirely — and that fact, not the capability flag, is what licenses it.
+
+So: for an opcode carrying user-visible data, "don't send it" is still data loss, and a
+gate needs a fallback that preserves the payload. But check what the fallback frame can
+actually express for the peer you are aiming it at before you reach for one, and prefer
+gating at the point where the new opcode was genuinely new rather than adding a gate to
+a path where it has already shipped.
+
+### Mobile vendors its own opcode table
+
+`mobile/` is a separate pnpm workspace, so
+`mobile/src/transport/terminal-stream-protocol.ts` has historically held a **hand-copied**
+enum knowing only 1-6 and 12. Adding an opcode to the shared file did not add it to
+mobile, and nothing failed — not typecheck, not lint, not the cross-version harness,
+which pairs desktop builds only. The two tables drifted silently by construction.
+
+`terminal-subscribe-output-span-capability.test.ts` now parses mobile's real source and
+forces an explicit per-opcode decision, so a new opcode is neither "mobile decodes it"
+nor "gated" until someone says which. Until mobile shares the table outright, treat
+every mobile-reachable opcode above 12 as unsupported unless the stream negotiated it.
+
 Reuse an existing opcode with a new optional payload field (Rule 1) whenever that
 expresses the change; reach for a new opcode only when framing genuinely differs.
 

@@ -88,6 +88,13 @@ for (const [source, label, marker] of [
   ],
   [CHUNK_SOURCE, 'terminal-output-frame-chunks.ts', 'const text = data.slice(chunkStart, end)'],
   [CHUNK_SOURCE, 'terminal-output-frame-chunks.ts', 'data.charCodeAt(index + 1)'],
+  // This file is JavaScript, so tsc cannot flag a changed generator signature; assert the
+  // options contract textually instead of discovering it as a runtime TypeError.
+  [
+    CHUNK_SOURCE,
+    'terminal-output-frame-chunks.ts',
+    "transformedRuns: 'span' | 'downgrade-to-text'"
+  ],
   [CLIPBOARD_SOURCE, 'clipboard-text.ts', 'export function measureClipboardTextByteLength('],
   [CLIPBOARD_SOURCE, 'clipboard-text.ts', 'text.codePointAt(index)']
 ]) {
@@ -113,6 +120,13 @@ const { TerminalStreamOpcode, encodeTerminalStreamJson, encodeTerminalStreamText
 const { exceedsTerminalStreamChunkBytes, iterateTerminalOutputFrameChunks } = await import(
   new URL('../../src/main/runtime/rpc/terminal-output-frame-chunks.ts', import.meta.url).href
 )
+
+// The production generator takes a required options argument that this JS file cannot be
+// type-checked against; the marker list above fails loudly if its shape changes. `'span'`
+// is the mode `iterateBefore` models, so both arms emit identical frames.
+function iterateAfter(data, meta) {
+  return iterateTerminalOutputFrameChunks(data, meta, { transformedRuns: 'span' })
+}
 
 function previousGate(data) {
   return (
@@ -298,7 +312,7 @@ function median(samples) {
 function measureInterleaved(data, meta) {
   for (let index = 0; index < WARMUP; index += 1) {
     drain(iterateBefore, data, meta)
-    drain(iterateTerminalOutputFrameChunks, data, meta)
+    drain(iterateAfter, data, meta)
   }
   const beforeSamples = []
   const afterSamples = []
@@ -313,7 +327,7 @@ function measureInterleaved(data, meta) {
     const runAfter = () => {
       const start = performance.now()
       for (let index = 0; index < ITERATIONS; index += 1) {
-        drain(iterateTerminalOutputFrameChunks, data, meta)
+        drain(iterateAfter, data, meta)
       }
       afterSamples.push((performance.now() - start) / ITERATIONS)
     }
@@ -373,7 +387,7 @@ let comparedFixtures = 0
 for (const fixture of fixtures) {
   const meta = fixture.meta(fixture.data)
   const before = describeFrames(iterateBefore, fixture.data, meta)
-  const after = describeFrames(iterateTerminalOutputFrameChunks, fixture.data, meta)
+  const after = describeFrames(iterateAfter, fixture.data, meta)
   if (before !== after) {
     throw new Error(`frames differ for ${fixture.label}`)
   }

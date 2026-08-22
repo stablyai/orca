@@ -15,6 +15,8 @@ export const JOURNEY_STEPS = [
   'first-snapshot',
   'input-reaches-process',
   'live-output',
+  'transformed-output',
+  'large-transformed-output',
   'reveal-snapshot',
   'transport-drop',
   'resubscribe',
@@ -28,6 +30,15 @@ const FIRST_INPUT = 'echo cross-version\r'
 const SECOND_INPUT = 'echo after-reconnect\r'
 const LIVE_OUTPUT = 'cross-version live output\r\n'
 const INITIAL_BUFFER = 'initial scrollback\r\n'
+// A transformed run: the host consumed TRANSFORMED_RAW_LENGTH raw code units and has
+// this much left to display. `rawLength !== display.length` is the shape that decides
+// OutputSpan vs plain Output, and it had no cross-version coverage before STA-3482.
+const TRANSFORMED_OUTPUT = 'transformed run\r\n'
+const TRANSFORMED_RAW_LENGTH = TRANSFORMED_OUTPUT.length + 31
+// Past TERMINAL_STREAM_CHUNK_BYTES (48 KiB) so the transformed run must be split; the
+// multi-frame arm is where a dropped yield loses a whole chunk of user output.
+const LARGE_TRANSFORMED_OUTPUT = `HEAD${'x'.repeat(64 * 1024)}TAIL\r\n`
+const LARGE_TRANSFORMED_RAW_LENGTH = LARGE_TRANSFORMED_OUTPUT.length + 97
 const BARRIER_TIMEOUT_MS = 10_000
 
 export type JourneyRecord = {
@@ -45,6 +56,8 @@ export type JourneyRecord = {
   snapshotsRendered: string[]
   /** Live output the client's pane received. */
   dataRendered: string[]
+  /** Per-delivery `(rawLength, transformed)` as the CLIENT reconstructed them. */
+  dataMeta: { length: number; rawLength?: number; transformed?: boolean }[]
   /** Exact texts the host wrote to the PTY. */
   inputAtProcess: string[]
   /** Snapshot the reveal step resolved with. */
@@ -104,6 +117,7 @@ export async function runTerminalSkewJourney(args: {
     snapshotStarts: [],
     snapshotsRendered: [],
     dataRendered: [],
+    dataMeta: [],
     inputAtProcess: hostStub.writtenInput,
     revealSnapshot: null,
     transportCloses: 0,
@@ -139,8 +153,13 @@ export async function runTerminalSkewJourney(args: {
 
   let subscribedCount = 0
   const callbacks = {
-    onData: (data: string) => {
+    onData: (data: string, meta?: { rawLength?: number; transformed?: boolean }) => {
       record.dataRendered.push(data)
+      record.dataMeta.push({
+        length: data.length,
+        rawLength: meta?.rawLength,
+        transformed: meta?.transformed
+      })
     },
     onSnapshot: (data: string) => {
       record.snapshotsRendered.push(data)
@@ -192,6 +211,19 @@ export async function runTerminalSkewJourney(args: {
     )
     record.completed.push('live-output')
 
+    hostStub.emitTransformedOutput(TRANSFORMED_OUTPUT, TRANSFORMED_RAW_LENGTH)
+    await barrier('transformed-output: client never rendered the transformed run', () =>
+      record.dataRendered.join('').includes(TRANSFORMED_OUTPUT.trim())
+    )
+    record.completed.push('transformed-output')
+
+    hostStub.emitTransformedOutput(LARGE_TRANSFORMED_OUTPUT, LARGE_TRANSFORMED_RAW_LENGTH)
+    await barrier(
+      'large-transformed-output: client never rendered the full multi-chunk transformed run',
+      () => record.dataRendered.join('').includes(LARGE_TRANSFORMED_OUTPUT)
+    )
+    record.completed.push('large-transformed-output')
+
     // Hide/reveal: the pane drops xterm and asks the host to re-publish the buffer.
     const revealed = await terminal.serializeBuffer({ scrollbackRows: 200 })
     if (!revealed) {
@@ -239,5 +271,9 @@ export const JOURNEY_INPUTS = {
   first: FIRST_INPUT,
   second: SECOND_INPUT,
   output: LIVE_OUTPUT,
+  transformed: TRANSFORMED_OUTPUT,
+  transformedRawLength: TRANSFORMED_RAW_LENGTH,
+  largeTransformed: LARGE_TRANSFORMED_OUTPUT,
+  largeTransformedRawLength: LARGE_TRANSFORMED_RAW_LENGTH,
   initialBuffer: INITIAL_BUFFER
 }

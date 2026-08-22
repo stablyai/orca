@@ -1,6 +1,7 @@
 export type HostTerminalDataMeta = {
   seq?: number
   rawLength?: number
+  transformed?: boolean
   cwd?: string
 }
 
@@ -22,6 +23,14 @@ export type HostTerminalRuntimeStub = {
   serializeCount: number
   /** Push PTY output to every host-side data listener. */
   emitOutput: (data: string, meta?: HostTerminalDataMeta) => void
+  /**
+   * Push a transformed run: `display` is what the user should see, `rawLength` the
+   * larger raw code-unit run it stands for (an SSH relay stripping OSC sequences, or
+   * a query absorbed with nothing left to display). This is the only emission shape
+   * whose `seq` cannot be recovered from the display text, so it is the one that
+   * decides whether a peer may be sent OutputSpan or plain Output.
+   */
+  emitTransformedOutput: (display: string, rawLength: number) => void
   /** Names of runtime methods the host called that the stub does not implement. */
   missingRuntimeMethods: string[]
   /** Run the host's registered teardown for one connection, as a socket close does. */
@@ -51,6 +60,7 @@ export function createHostTerminalRuntimeStub(
     buffer: options.initialBuffer ?? '',
     serializeCount: 0,
     emitOutput: () => {},
+    emitTransformedOutput: () => {},
     missingRuntimeMethods: [],
     closeConnection: () => {}
   }
@@ -80,6 +90,16 @@ export function createHostTerminalRuntimeStub(
     // Snapshot: a listener may unsubscribe while the host fans this out.
     for (const listener of Array.from(dataListeners)) {
       listener(data, resolved)
+    }
+  }
+
+  stub.emitTransformedOutput = (display, rawLength) => {
+    stub.buffer += display
+    // The high-water mark advances by the RAW run, which is exactly why a plain
+    // Output frame cannot carry it: the receiver only sees `display`.
+    outputSequence += rawLength
+    for (const listener of Array.from(dataListeners)) {
+      listener(display, { seq: outputSequence, rawLength, transformed: true })
     }
   }
 

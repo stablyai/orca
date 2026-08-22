@@ -612,7 +612,10 @@ function* iterateTerminalStreamTextPayloads(data: string): Generator<Uint8Array<
   if (!data) {
     return
   }
-  for (const chunk of iterateTerminalOutputFrameChunks(data)) {
+  // Text-only payloads (no meta), so no run is transformed and neither mode can fire.
+  for (const chunk of iterateTerminalOutputFrameChunks(data, undefined, {
+    transformedRuns: 'span'
+  })) {
     yield chunk.bytes
   }
 }
@@ -1091,6 +1094,7 @@ const TerminalSubscribe = TerminalHandle.extend({
       terminalBinaryStream: z.literal(1).optional(),
       desktopViewportClaims: z.literal(1).optional(),
       mobileInputLeaseOnly: z.literal(1).optional(),
+      outputSpan: z.literal(1).optional(),
       writeUnavailable: z.literal(1).optional()
     })
     .optional()
@@ -1113,6 +1117,10 @@ const TerminalMultiplexSubscribeFrame = TerminalHandle.extend({
       ackOutputSourceRanges: z.literal(1).optional(),
       desktopViewportClaims: z.literal(1).optional(),
       outputPause: z.literal(1).optional(),
+      // No `outputSpan` here on purpose: OutputSpan is unconditional on multiplex.
+      // Opcode 15 (v1.4.147, 2026-07-19) predates every capability a peer could declare
+      // to prove it, so absence proves nothing and would read the installed base as
+      // incapable. See docs/reference/remote-wire-compatibility.md.
       writeUnavailable: z.literal(1).optional()
     })
     .optional()
@@ -2609,7 +2617,18 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
                 meta.seq
               )
             }
-            for (const chunk of iterateTerminalOutputFrameChunks(data, meta)) {
+            // Why spans for desktop: it tracks output `seq` and runs the ack/source-range ledger, so
+            // downgrading a transformed run to plain Output would strip the raw high-water mark both
+            // the ledger and its gap detector depend on. OutputSpan has also shipped unconditionally
+            // on this path since v1.4.147, so no desktop peer exists that a downgrade would help.
+            //
+            // Why not for mobile: `client.type` admits 'mobile' here (see `stream.isMobile`, and the
+            // mobile multiplex cases in terminal-multiplex.test.ts), and a mobile decoder does not
+            // know opcode 15 — it would drop the frame silently, which is STA-3482 on a second path.
+            // Mobile keeps no seq accounting, so the text downgrade is lossless for it.
+            for (const chunk of iterateTerminalOutputFrameChunks(data, meta, {
+              transformedRuns: stream.isMobile ? 'downgrade-to-text' : 'span'
+            })) {
               queueOrSendOutput(stream, chunk)
             }
           }),
@@ -3000,6 +3019,7 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
           : runtime.getRendererTerminalSerializerGeneration(ptyId)
         : 0
       const supportsDesktopViewportClaims = params.capabilities?.desktopViewportClaims === 1
+      const supportsOutputSpan = params.capabilities?.outputSpan === 1
       const supportsWriteUnavailable = params.capabilities?.writeUnavailable === 1
       if (mobileInputLeaseOnly && clientId) {
         let closed = false
@@ -3239,7 +3259,12 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
             meta.seq
           )
         }
-        for (const chunk of iterateTerminalOutputFrameChunks(data, meta)) {
+        for (const chunk of iterateTerminalOutputFrameChunks(data, meta, {
+          // Mobile is this path's only client and it ignores Output `seq` entirely, so
+          // folding a transformed run into text frames loses nothing a phone can observe —
+          // whereas an undecodable OutputSpan loses the output itself (STA-3482).
+          transformedRuns: supportsOutputSpan ? 'span' : 'downgrade-to-text'
+        })) {
           sendFrame(chunk.opcode ?? TerminalStreamOpcode.Output, chunk.bytes, chunk.seq)
         }
       })

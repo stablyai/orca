@@ -148,7 +148,9 @@ function describeFrames(frames: Iterable<TerminalOutputFrameChunk>): FrameShape[
 
 function expectEquivalent(data: string, meta: TerminalOutputMeta | undefined, label: string): void {
   const legacy = describeFrames(legacyIterateTerminalOutputFrameChunks(data, meta))
-  const next = describeFrames(iterateTerminalOutputFrameChunks(data, meta))
+  const next = describeFrames(
+    iterateTerminalOutputFrameChunks(data, meta, { transformedRuns: 'span' })
+  )
   expect(next, label).toEqual(legacy)
 }
 
@@ -321,7 +323,7 @@ describe('iterateTerminalOutputFrameChunks equivalence with the pre-optimization
     const meta = seqPreservingMeta(data, seq)
 
     expectEquivalent(data, meta, 'unsafe seq rounding')
-    const frames = [...iterateTerminalOutputFrameChunks(data, meta)]
+    const frames = [...iterateTerminalOutputFrameChunks(data, meta, { transformedRuns: 'span' })]
     expect(frames.at(-1)?.seq).toBe(9_007_199_254_740_992)
   })
 
@@ -498,7 +500,11 @@ describe('iterateTerminalOutputFrameChunks equivalence with the pre-optimization
 
   it('keeps every emitted frame within the wire cap and reassembles to the input', () => {
     const data = `${'a'.repeat(200 * 1024)}${SURROGATE_PAIR.repeat(4096)}${LONE_HIGH}`
-    const frames = [...iterateTerminalOutputFrameChunks(data, seqPreservingMeta(data, 999_999))]
+    const frames = [
+      ...iterateTerminalOutputFrameChunks(data, seqPreservingMeta(data, 999_999), {
+        transformedRuns: 'span'
+      })
+    ]
     expect(frames.length).toBeGreaterThan(4)
     for (const frame of frames) {
       expect(frame.bytes.byteLength).toBeLessThanOrEqual(TERMINAL_STREAM_CHUNK_BYTES)
@@ -516,18 +522,24 @@ describe('iterateTerminalOutputFrameChunks equivalence with the pre-optimization
     // 3-byte code points: 16384 code units = 49152 bytes = exactly the cap.
     const exact = '\u20ac'.repeat(TERMINAL_STREAM_CHUNK_BYTES / 3)
     expect(Buffer.byteLength(exact, 'utf8')).toBe(TERMINAL_STREAM_CHUNK_BYTES)
-    expect([...iterateTerminalOutputFrameChunks(exact)]).toHaveLength(1)
+    expect([
+      ...iterateTerminalOutputFrameChunks(exact, undefined, { transformedRuns: 'span' })
+    ]).toHaveLength(1)
     expect([...legacyIterateTerminalOutputFrameChunks(exact)]).toHaveLength(1)
     const overByOne = `${exact}a`
-    expect([...iterateTerminalOutputFrameChunks(overByOne)].length).toBeGreaterThan(1)
+    expect(
+      [...iterateTerminalOutputFrameChunks(overByOne, undefined, { transformedRuns: 'span' })]
+        .length
+    ).toBeGreaterThan(1)
     expect([...legacyIterateTerminalOutputFrameChunks(overByOne)].length).toBeGreaterThan(1)
   })
 
-  // The chunking loop is only reached when rawLength === data.length and transformed
-  // is falsy, which makes canPreserveChunkSeq === (typeof meta.seq === 'number') and
-  // therefore shouldDelayFinalSeq unconditionally false. The branch survives here
-  // (it also survived in the pre-optimization code) purely as defence in depth.
-  it('never reaches the delayed-final-seq branch for any meta shape', () => {
+  // Under 'span' the chunking loop is only reached when rawLength === data.length and
+  // transformed is falsy, which makes canPreserveChunkSeq === (typeof meta.seq === 'number')
+  // and therefore shouldDelayFinalSeq unconditionally false. Under 'downgrade-to-text' the
+  // span branch is skipped, so the same meta shapes DO reach it — that is the whole
+  // fallback path, and the block below is its only coverage.
+  it('never reaches the delayed-final-seq branch under span framing', () => {
     for (const data of ['', 'a', 'abc', 'x'.repeat(200)]) {
       for (const seq of [undefined, 0, 5] as (number | undefined)[]) {
         for (const rawDelta of [undefined, 0, 1, -1] as (number | undefined)[]) {
@@ -549,6 +561,165 @@ describe('iterateTerminalOutputFrameChunks equivalence with the pre-optimization
             expect(reachesChunkLoop && shouldDelayFinalSeq, JSON.stringify(meta)).toBe(false)
           }
         }
+      }
+    }
+  })
+})
+
+/**
+ * The 'downgrade-to-text' contract, asserted directly because the legacy reference has no
+ * downgrade mode to compare against. Three properties are load-bearing for the mobile
+ * `terminal.subscribe` client:
+ *   1. every display code unit arrives, in order (a dropped yield is silent data loss);
+ *   2. no frame exceeds the wire cap;
+ *   3. no frame except the last claims a seq, and the last claims exactly `meta.seq`,
+ *      because a transformed run's seq cannot map back to UTF-16 chunk offsets.
+ */
+function expectDowngradeContract(
+  data: string,
+  meta: TerminalOutputMeta | undefined,
+  label: string
+): void {
+  const frames = [
+    ...iterateTerminalOutputFrameChunks(data, meta, { transformedRuns: 'downgrade-to-text' })
+  ]
+  for (const frame of frames) {
+    expect(frame.opcode, `${label}: downgraded frames are plain Output`).toBeUndefined()
+    expect(frame.bytes.byteLength, `${label}: frame within wire cap`).toBeLessThanOrEqual(
+      TERMINAL_STREAM_CHUNK_BYTES
+    )
+  }
+  const rejoined = Buffer.concat(frames.map((frame) => Buffer.from(frame.bytes))).toString('utf8')
+  expect(rejoined, `${label}: every display code unit survives`).toBe(
+    Buffer.from(new TextEncoder().encode(data)).toString('utf8')
+  )
+  expect(
+    frames.reduce((total, frame) => total + frame.displayLength, 0),
+    `${label}: displayLength totals the payload`
+  ).toBe(data.length)
+  const seqs = frames.map((frame) => frame.seq)
+  expect(
+    seqs.slice(0, -1).filter((seq) => seq !== undefined),
+    `${label}: no early seq`
+  ).toEqual([])
+  expect(seqs.at(-1), `${label}: final frame carries the raw high-water mark`).toBe(meta?.seq)
+}
+
+describe('iterateTerminalOutputFrameChunks downgrade-to-text framing', () => {
+  it('never emits OutputSpan, whatever the meta says', () => {
+    for (const meta of metaShapesFor('transformed payload')) {
+      const frames = [
+        ...iterateTerminalOutputFrameChunks('transformed payload', meta.meta, {
+          transformedRuns: 'downgrade-to-text'
+        })
+      ]
+      expect(
+        frames.map((frame) => frame.opcode),
+        meta.label
+      ).toEqual(frames.map(() => undefined))
+    }
+  })
+
+  // Why no frame at all: a zero-byte Output is rejected by the ack/source-range ledger, whose
+  // canAccept requires encodedBytes > 0. Emitting one parks the chunk forever and head-blocks every
+  // later frame behind it. The run carries no display bytes, and its raw high-water mark is only
+  // meaningful to a seq-tracking peer — which by definition never receives a downgrade. So the
+  // frame has no reader and one very bad failure mode; dropping it is lossless and unblocks the queue.
+  it('emits no frame for an absorbed zero-byte transformed run', () => {
+    const frames = [
+      ...iterateTerminalOutputFrameChunks(
+        '',
+        { seq: 9, rawLength: 9, transformed: true },
+        { transformedRuns: 'downgrade-to-text' }
+      )
+    ]
+    expect(frames).toHaveLength(0)
+  })
+
+  // An ordinary empty emission is NOT a transformed run and must still frame identically in both
+  // modes, so the drop above cannot widen into a general "swallow empty output" rule.
+  it('still emits an empty frame for an untransformed zero-byte emission', () => {
+    const frames = [
+      ...iterateTerminalOutputFrameChunks('', { seq: 9 }, { transformedRuns: 'downgrade-to-text' })
+    ]
+    expect(frames).toHaveLength(1)
+    expect(frames[0]?.bytes.byteLength).toBe(0)
+    expect(frames[0]?.seq).toBe(9)
+  })
+
+  it('splits a transformed run across chunks without losing or reordering text', () => {
+    for (const chunkCount of [1, 2, 3, 5, 9]) {
+      const data = `${'m'.repeat(TERMINAL_STREAM_CHUNK_BYTES * chunkCount)}${SURROGATE_PAIR}tail`
+      const meta: TerminalOutputMeta = {
+        seq: 3 * data.length,
+        rawLength: 3 * data.length,
+        transformed: true
+      }
+      expectDowngradeContract(data, meta, `downgrade chunks=${chunkCount}`)
+      // Anti-vacuous: the split arm ran, not the single-frame arm.
+      expect(
+        [...iterateTerminalOutputFrameChunks(data, meta, { transformedRuns: 'downgrade-to-text' })]
+          .length
+      ).toBeGreaterThan(chunkCount)
+    }
+  })
+
+  it('holds the contract across UTF-8 widths, lone surrogates and cap boundaries', () => {
+    const units = ['a', 'é', '€', SURROGATE_PAIR, LONE_HIGH, LONE_LOW]
+    for (const unit of units) {
+      for (const codeUnits of [1, 1024, TERMINAL_STREAM_CHUNK_BYTES, 90 * 1024]) {
+        const data = repeatToLength(unit, codeUnits)
+        for (const meta of [
+          { seq: 7 * data.length, rawLength: 7 * data.length, transformed: true },
+          { seq: 5, rawLength: data.length + 11 },
+          { rawLength: data.length + 3 },
+          undefined
+        ] as (TerminalOutputMeta | undefined)[]) {
+          expectDowngradeContract(data, meta, `unit=${escapeUnits(unit)} units=${codeUnits}`)
+        }
+      }
+    }
+    for (let offset = -4; offset <= 4; offset += 1) {
+      const data = `${'a'.repeat(TERMINAL_STREAM_CHUNK_BYTES + offset)}${SURROGATE_PAIR}${'b'.repeat(64)}`
+      expectDowngradeContract(
+        data,
+        { seq: 2 * data.length, rawLength: 2 * data.length, transformed: true },
+        `cap boundary offset=${offset}`
+      )
+    }
+  })
+
+  it('fuzzes 600 near-cap transformed payloads', () => {
+    const random = makeRandom(0x0d09_6ade)
+    for (let trial = 0; trial < 600; trial += 1) {
+      const fillerLength = TERMINAL_STREAM_CHUNK_BYTES - 6 + Math.floor(random() * 12)
+      const data = 'q'.repeat(fillerLength) + randomText(random, 1 + Math.floor(random() * 24))
+      expectDowngradeContract(
+        data,
+        { seq: 4 * data.length, rawLength: 4 * data.length, transformed: true },
+        `fuzz-downgrade trial=${trial}`
+      )
+    }
+  }, 30_000)
+
+  it('matches span framing byte for byte when no run is transformed', () => {
+    // Same input, both modes: only a transformed run may frame differently, so an
+    // accidental behaviour change in the shared chunk loop shows up here.
+    for (const data of [
+      '',
+      'a',
+      'x'.repeat(200 * 1024),
+      repeatToLength(SURROGATE_PAIR, 60 * 1024)
+    ]) {
+      for (const meta of [undefined, { seq: 42, rawLength: data.length }]) {
+        expect(
+          describeFrames(
+            iterateTerminalOutputFrameChunks(data, meta, { transformedRuns: 'downgrade-to-text' })
+          ),
+          `len=${data.length} seq=${meta?.seq}`
+        ).toEqual(
+          describeFrames(iterateTerminalOutputFrameChunks(data, meta, { transformedRuns: 'span' }))
+        )
       }
     }
   })

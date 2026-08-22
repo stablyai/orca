@@ -27,17 +27,27 @@ const EXPECTED_JOURNEY_FRAMES = [
   'H>C SnapshotEnd',
   'C>H Input',
   'H>C Output',
+  // A transformed run (rawLength !== data.length) must travel as OutputSpan on multiplex.
+  // If this ever reads `H>C Output`, a host downgraded a run it cannot losslessly downgrade.
+  'H>C OutputSpan',
+  'H>C OutputSpan',
   'C>H SnapshotRequest',
+  // Two chunks from here on: the large transformed run pushed the scrollback past one.
   'H>C SnapshotStart',
+  'H>C SnapshotChunk',
   'H>C SnapshotChunk',
   'H>C SnapshotEnd',
   'C>H Subscribe',
   'H>C SnapshotStart',
   'H>C SnapshotChunk',
+  'H>C SnapshotChunk',
   'H>C SnapshotEnd',
   'C>H Input',
   'C>H Unsubscribe'
 ]
+
+// Stable across every build pairing in this suite; the codec never renumbers an opcode.
+const SNAPSHOT_REQUEST_OPCODE = 11
 
 let baselineRef: string
 let current: TerminalWireBuild
@@ -81,10 +91,36 @@ function expectWireCompatible(record: JourneyRecord): void {
 
   // Rule 3 — what the host publishes, as the client actually rendered it.
   expect(record.snapshotsRendered[0]).toBe(JOURNEY_INPUTS.initialBuffer)
-  expect(record.dataRendered.join('')).toBe(JOURNEY_INPUTS.output)
-  expect(record.revealSnapshot?.data).toBe(
-    `${JOURNEY_INPUTS.initialBuffer}${JOURNEY_INPUTS.output}`
+  expect(record.dataRendered.join('')).toBe(
+    `${JOURNEY_INPUTS.output}${JOURNEY_INPUTS.transformed}${JOURNEY_INPUTS.largeTransformed}`
   )
+  expect(record.revealSnapshot?.data).toBe(
+    `${JOURNEY_INPUTS.initialBuffer}${JOURNEY_INPUTS.output}${JOURNEY_INPUTS.transformed}${JOURNEY_INPUTS.largeTransformed}`
+  )
+
+  // The transformed runs arrived whole and carried their RAW length, not their display
+  // length. A downgraded run would report `rawLength === length`, which makes the client
+  // reconstruct a start past its high-water mark and read a dropped-frame gap.
+  const transformed = record.dataMeta.filter((entry) => entry.transformed)
+  expect(transformed).toEqual([
+    {
+      length: JOURNEY_INPUTS.transformed.length,
+      rawLength: JOURNEY_INPUTS.transformedRawLength,
+      transformed: true
+    },
+    {
+      length: JOURNEY_INPUTS.largeTransformed.length,
+      rawLength: JOURNEY_INPUTS.largeTransformedRawLength,
+      transformed: true
+    }
+  ])
+  // A false gap self-heals by pulling a fresh snapshot, which would show up as an extra
+  // client -> host SnapshotRequest. Only the scripted hide/reveal may issue one.
+  expect(
+    record.observed.filter(
+      (frame) => frame.direction === 'client-to-host' && frame.opcode === SNAPSHOT_REQUEST_OPCODE
+    )
+  ).toHaveLength(1)
   expect(record.revealSnapshot).toMatchObject({ cols: 120, rows: 40 })
   for (const start of record.snapshotStarts) {
     expect(start).toMatchObject({ kind: 'scrollback', cols: 120, rows: 40, source: 'headless' })

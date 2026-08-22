@@ -28,6 +28,9 @@ export enum TerminalStreamOpcode {
   // Why 14: Ack already occupies 13 on current clients; older runtimes ignore
   // this opcode and still receive the compatibility Resize frame behind it.
   ClaimViewport = 14,
+  // Unconditional on `terminal.multiplex`; negotiated on `terminal.subscribe`, whose
+  // mobile client vendors a decoder that stops at 12 and drops this frame silently.
+  // Only the subscribe path may downgrade to Output, because only mobile ignores `seq`.
   OutputSpan = 15,
   // Negotiated per stream; older hosts reject unknown opcodes, so clients send only after capability confirmation.
   SetOutputPaused = 16,

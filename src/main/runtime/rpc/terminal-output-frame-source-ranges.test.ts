@@ -26,33 +26,37 @@ describe('terminal output frame source ranges', () => {
   it('maps encoded chunk boundaries to exact ordered source subranges', () => {
     const data = 'a'.repeat(TERMINAL_STREAM_CHUNK_BYTES + 2)
     const frames = Array.from(
-      iterateTerminalOutputFrameChunks(data, {
-        seq: data.length,
-        rawLength: data.length,
-        sourceRanges: [
-          range({
-            sourceEndSu: TERMINAL_STREAM_CHUNK_BYTES - 1,
-            displayEnd: TERMINAL_STREAM_CHUNK_BYTES - 1,
-            transform: {
-              transformed: false,
-              rawLengthSu: TERMINAL_STREAM_CHUNK_BYTES - 1,
-              scalarSafe: true
-            }
-          }),
-          range({
-            spanId: 'span-2',
-            sourceStartSu: TERMINAL_STREAM_CHUNK_BYTES - 1,
-            sourceEndSu: data.length,
-            displayStart: TERMINAL_STREAM_CHUNK_BYTES - 1,
-            displayEnd: data.length,
-            transform: {
-              transformed: false,
-              rawLengthSu: data.length - TERMINAL_STREAM_CHUNK_BYTES + 1,
-              scalarSafe: true
-            }
-          })
-        ]
-      })
+      iterateTerminalOutputFrameChunks(
+        data,
+        {
+          seq: data.length,
+          rawLength: data.length,
+          sourceRanges: [
+            range({
+              sourceEndSu: TERMINAL_STREAM_CHUNK_BYTES - 1,
+              displayEnd: TERMINAL_STREAM_CHUNK_BYTES - 1,
+              transform: {
+                transformed: false,
+                rawLengthSu: TERMINAL_STREAM_CHUNK_BYTES - 1,
+                scalarSafe: true
+              }
+            }),
+            range({
+              spanId: 'span-2',
+              sourceStartSu: TERMINAL_STREAM_CHUNK_BYTES - 1,
+              sourceEndSu: data.length,
+              displayStart: TERMINAL_STREAM_CHUNK_BYTES - 1,
+              displayEnd: data.length,
+              transform: {
+                transformed: false,
+                rawLengthSu: data.length - TERMINAL_STREAM_CHUNK_BYTES + 1,
+                scalarSafe: true
+              }
+            })
+          ]
+        },
+        { transformedRuns: 'span' }
+      )
     )
 
     expect(frames).toHaveLength(2)
@@ -84,12 +88,16 @@ describe('terminal output frame source ranges', () => {
       splittable: false,
       transform: { transformed: true, rawLengthSu: 9, scalarSafe: false }
     })
-    const [frame] = iterateTerminalOutputFrameChunks('xyz', {
-      seq: 9,
-      rawLength: 9,
-      transformed: true,
-      sourceRanges: [sourceRange]
-    })
+    const [frame] = iterateTerminalOutputFrameChunks(
+      'xyz',
+      {
+        seq: 9,
+        rawLength: 9,
+        transformed: true,
+        sourceRanges: [sourceRange]
+      },
+      { transformedRuns: 'span' }
+    )
 
     expect(frame?.sourceRanges).toEqual([sourceRange])
   })

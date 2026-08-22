@@ -50,12 +50,43 @@ export function exceedsTerminalStreamChunkBytes(data: string): boolean {
   return false
 }
 
+export type TerminalOutputFrameChunkOptions = {
+  /**
+   * How to frame a transformed run, where `rawLength !== data.length`.
+   *
+   * `'downgrade-to-text'` folds the run into plain `Output` frames for a peer that cannot
+   * decode `OutputSpan`. That is lossy by construction: an `Output` frame carries only
+   * `(data, seq)`, so the receiver can only derive the run start as `seq - data.length`.
+   * It is therefore legal ONLY for a peer that ignores `seq` outright — today just the
+   * mobile `terminal.subscribe` client. A seq-tracking peer must always get `'span'`.
+   *
+   * Required, not defaulted: the choice is a wire-compatibility decision per call site.
+   */
+  transformedRuns: 'span' | 'downgrade-to-text'
+}
+
 export function* iterateTerminalOutputFrameChunks(
   data: string,
-  meta?: TerminalOutputMeta
+  meta: TerminalOutputMeta | undefined,
+  options: TerminalOutputFrameChunkOptions
 ): Generator<TerminalOutputFrameChunk> {
   const rawLength = meta?.rawLength ?? data.length
-  if (meta?.transformed || rawLength !== data.length) {
+  // Why nothing at all: a fully absorbed run (an OSC query consumed with no display bytes) has
+  // rawLength > 0 and data === ''. A span carries that high-water mark, but a downgraded Output
+  // cannot, and `encodeTerminalStreamText('')` is zero bytes — which the ack/source-range ledger
+  // rejects (`canAccept` requires encodedBytes > 0), parking the chunk forever and head-blocking
+  // every later frame behind it. There is nothing to display and no seq a downgraded peer reads,
+  // so emitting no frame is both lossless for that peer and the only framing the ledger accepts.
+  // Scoped to transformed runs only: an ordinary empty emission must still frame identically in both
+  // modes, or downgrade-to-text stops being byte-equivalent to span framing for untransformed data.
+  if (
+    options.transformedRuns === 'downgrade-to-text' &&
+    data.length === 0 &&
+    (meta?.transformed || rawLength !== data.length)
+  ) {
+    return
+  }
+  if (options.transformedRuns === 'span' && (meta?.transformed || rawLength !== data.length)) {
     yield {
       opcode: TerminalStreamOpcode.OutputSpan,
       bytes: encodeTerminalStreamJson({ data, rawLength, transformed: true }),
@@ -75,8 +106,8 @@ export function* iterateTerminalOutputFrameChunks(
     return
   }
   const canPreserveChunkSeq = typeof meta?.seq === 'number' && rawLength === data.length
-  // Unreachable past the OutputSpan branch above (rawLength === data.length there), but kept
-  // as defence in depth: it is the only shape that can carry a seq the chunk offsets can't map.
+  // Only reachable under `'downgrade-to-text'`: a transformed run's seq is a raw high-water
+  // mark that cannot map back to UTF-16 chunk offsets, so no intermediate frame may claim one.
   const shouldDelayFinalSeq = !canPreserveChunkSeq && typeof meta?.seq === 'number'
   const startSeq = canPreserveChunkSeq ? meta.seq! - rawLength : undefined
   let chunkStart = 0
