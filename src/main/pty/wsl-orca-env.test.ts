@@ -5,7 +5,10 @@ import {
   SETUP_AGENT_SEQUENCE_STARTUP_COMMAND_ENV,
   SETUP_AGENT_SEQUENCE_STARTUP_SCRIPT_ENV
 } from '../../shared/setup-agent-sequencing'
-import { addOrcaWslInteropEnv, stampWslOrchestrationCompatibilityHost } from './wsl-orca-env'
+import {
+  addOrcaWslInteropEnv,
+  stampWslOrchestrationCompatibilityHost
+} from './wsl-orca-env'
 
 describe('addOrcaWslInteropEnv', () => {
   it('marks the Orca terminal handle for Windows to WSL env import', () => {
@@ -243,3 +246,4 @@ describe('addOrcaWslInteropEnv', () => {
     expect(env.WSLENV).not.toContain('ORCA_OPENCODE_CONFIG_DIR')
   })
 })
+

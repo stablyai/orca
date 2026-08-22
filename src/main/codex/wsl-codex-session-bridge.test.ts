@@ -79,9 +79,7 @@ describe('syncWslCodexSessionsIntoManagedHome', () => {
   })
 
   it('parses the summary after leading stdout noise', async () => {
-    mockRunWslProcessSuccess(
-      'Welcome to Ubuntu\nprofile output\n{"scannedFiles":4,"linkedFiles":3}\n'
-    )
+    mockRunWslProcessSuccess('Welcome to Ubuntu\nprofile output\n{"scannedFiles":4,"linkedFiles":3}\n')
 
     const summary = await syncWslCodexSessionsIntoManagedHome({
       distro: 'Ubuntu',

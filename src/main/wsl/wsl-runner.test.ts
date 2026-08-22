@@ -100,26 +100,12 @@ describe('probe lane', () => {
     runProcessMock.mockImplementation(async (spec: { args: string[] }) => {
       call += 1
       if (call === 1) {
-        return {
-          environmentResolved: true,
-          code: 1,
-          signal: null,
-          stdout: '',
-          stderr: 'stopped',
-          timedOut: false
-        }
+        return { environmentResolved: true, code: 1, signal: null, stdout: '', stderr: 'stopped', timedOut: false }
       }
       const script = spec.args.at(-1) ?? ''
       const begin = /__ORCA_WSL_CAPTURE_BEGIN_[a-z0-9]+__/.exec(script)?.[0] ?? ''
       const end = /__ORCA_WSL_CAPTURE_END_[a-z0-9]+__/.exec(script)?.[0] ?? ''
-      return {
-        environmentResolved: true,
-        code: 0,
-        signal: null,
-        stdout: `${begin}${end}`,
-        stderr: '',
-        timedOut: false
-      }
+      return { environmentResolved: true, code: 0, signal: null, stdout: `${begin}${end}`, stderr: '', timedOut: false }
     })
     // Default is to refuse: answering "is codex installed?" on the bare default
     // PATH reports an nvm install as absent, which is #9725.
@@ -290,7 +276,9 @@ describe('program is not an assignment', () => {
     // `env PATH=… HOME=… FOO=bar` has no command left: it prints the whole
     // guest environment and exits 0 -- success, with the environment as stdout.
     seedWslGuestEnvironmentForTests(undefined, ENVIRONMENT)
-    await expect(runWslProcess({ lane: 'probe', program: 'FOO=bar' })).rejects.toThrow(/assignment/)
+    await expect(runWslProcess({ lane: 'probe', program: 'FOO=bar' })).rejects.toThrow(
+      /assignment/
+    )
   })
 })
 

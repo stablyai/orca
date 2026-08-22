@@ -145,9 +145,7 @@ export function runHook(
     for (const [key, value] of Object.entries(guardedEnv)) {
       if (
         value !== undefined &&
-        (key === 'GIT_TERMINAL_PROMPT' ||
-          key === 'GCM_INTERACTIVE' ||
-          key.startsWith('GIT_CONFIG_'))
+        (key === 'GIT_TERMINAL_PROMPT' || key === 'GCM_INTERACTIVE' || key.startsWith('GIT_CONFIG_'))
       ) {
         guestEnv[key] = value
       }

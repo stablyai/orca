@@ -17,13 +17,7 @@ function lastSpec(): RunWslProcessSpec {
 describe('detectWslCommandsOnPath', () => {
   beforeEach(() => {
     runWslProcessMock.mockReset()
-    runWslProcessMock.mockResolvedValue({
-      environmentResolved: true,
-      code: 0,
-      stdout: '',
-      stderr: '',
-      timedOut: false
-    })
+    runWslProcessMock.mockResolvedValue({ environmentResolved: true, code: 0, stdout: '', stderr: '', timedOut: false })
   })
 
   afterEach(() => {

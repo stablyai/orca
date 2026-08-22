@@ -152,6 +152,7 @@ describe('bash-only payloads declare their interpreter', () => {
 describe('wsl.exe is spawned through one runner', () => {
   const offenders = findSpawnSites()
 
+
   it('still detects a known spawn shape', () => {
     // Why name a specific file rather than assert a total: `offenders.length +
     // ALLOWLIST.length >= N` cannot fail while the allowlist alone exceeds N,

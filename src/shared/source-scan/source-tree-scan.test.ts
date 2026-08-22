@@ -36,12 +36,12 @@ describe('stripComments', () => {
   })
 
   it('is not derailed by a quote inside a regex literal', () => {
-    const source = ['const re = /[\'"]/', '/* spawn(bad) */', 'spawn(good)'].join('\n')
+    const source = ["const re = /['\"]/", '/* spawn(bad) */', 'spawn(good)'].join('\n')
     expect(stripComments(source)).not.toContain('bad')
   })
 
   it('handles an escaped quote inside a string', () => {
-    const source = ["const s = 'it\\'s'", '/* spawn(bad) */'].join('\n')
+    const source = ['const s = \'it\\\'s\'', '/* spawn(bad) */'].join('\n')
     expect(stripComments(source)).not.toContain('bad')
   })
 })

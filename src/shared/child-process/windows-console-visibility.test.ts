@@ -46,6 +46,9 @@ const SOURCE_ROOT = resolve(__dirname, '../..')
  */
 const OWNER_FILE = 'shared/child-process/run-process.ts'
 
+
+
+
 /** The call's argument text, brace-matched so a nested options literal stays whole. */
 function readCallArguments(source: string, openParenIndex: number): string {
   let depth = 0
@@ -71,11 +74,9 @@ function findOffenders(): string[] {
     const decommented = stripComments(file.source)
     // Resolve `import { spawn as sp }` so a renamed binding is still a spawn.
     // The previous comment claimed this; only three names were hardcoded.
-    const aliases = [
-      ...decommented.matchAll(
-        /\b(?:spawn|spawnSync|execFile|execFileSync|exec|execSync|fork)\s+as\s+(\w+)/g
-      )
-    ].map((match) => match[1])
+    const aliases = [...decommented.matchAll(/\b(?:spawn|spawnSync|execFile|execFileSync|exec|execSync|fork)\s+as\s+(\w+)/g)].map(
+      (match) => match[1]
+    )
     // The import test needs the module name, which blanking would erase; the
     // call scan needs parens inside strings neutralised. Two views, one file.
     if (!CHILD_PROCESS_IMPORT.test(decommented)) {

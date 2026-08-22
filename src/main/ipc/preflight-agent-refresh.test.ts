@@ -130,13 +130,7 @@ describe('preflight', () => {
     })
     runWslProcessMock.mockImplementation(async ({ script }: { script: string }) => {
       if (script.includes("'claude'")) {
-        return {
-          environmentResolved: true,
-          code: 0,
-          stdout: '__ORCA_AGENT_PATH__claude\t/home/test/.local/bin/claude\n',
-          stderr: '',
-          timedOut: false
-        }
+        return { environmentResolved: true, code: 0, stdout: '__ORCA_AGENT_PATH__claude\t/home/test/.local/bin/claude\n', stderr: '', timedOut: false }
       }
       throw new Error('not found')
     })
@@ -189,13 +183,7 @@ describe('preflight', () => {
         throw new Error(`unexpected command ${String(command)}`)
       }
       if (String(args[0]) === 'opencode') {
-        return {
-          environmentResolved: true,
-          code: 0,
-          stdout: '/Users/test/.opencode/bin/opencode\n',
-          stderr: '',
-          timedOut: false
-        }
+        return { environmentResolved: true, code: 0, stdout: '/Users/test/.opencode/bin/opencode\n', stderr: '', timedOut: false }
       }
       throw new Error('not found')
     })
@@ -231,13 +219,7 @@ describe('preflight', () => {
         throw new Error(`unexpected command ${String(command)}`)
       }
       if (String(args[0]) === 'claude') {
-        return {
-          environmentResolved: true,
-          code: 0,
-          stdout: '/Users/test/.local/bin/claude\n',
-          stderr: '',
-          timedOut: false
-        }
+        return { environmentResolved: true, code: 0, stdout: '/Users/test/.local/bin/claude\n', stderr: '', timedOut: false }
       }
       throw new Error('not found')
     })
