@@ -18,6 +18,7 @@ import {
 import { translate } from '@/i18n/i18n'
 import { RichMarkdownSpellcheckSetting } from './RichMarkdownSpellcheckSetting'
 import { EditorWordWrapSetting } from './EditorWordWrapSetting'
+import { InlineGitBlameSetting } from './InlineGitBlameSetting'
 import { EditorFontFamilySetting } from './EditorFontFamilySetting'
 import {
   createAutoSaveDelayDraftState,
@@ -32,6 +33,7 @@ type GeneralEditorSettingsSectionProps = {
   onRequestFontSuggestions?: () => void
 }
 
+/** Renders general editor settings, including the inline blame toggle. */
 export function GeneralEditorSettingsSection({
   settings,
   updateSettings,
@@ -231,6 +233,8 @@ export function GeneralEditorSettingsSection({
       />
 
       <EditorWordWrapSetting settings={settings} updateSettings={updateSettings} />
+
+      <InlineGitBlameSetting settings={settings} updateSettings={updateSettings} />
 
       <SearchableSetting
         title={translate(

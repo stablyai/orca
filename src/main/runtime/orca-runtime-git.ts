@@ -1,4 +1,5 @@
 /* eslint-disable max-lines -- Why: runtime git dispatch stays in one boundary so local, SSH, and runtime-environment behavior remains comparable. */
+import { isAbsolute, relative } from 'node:path'
 import type {
   GitBranchCompareResult,
   GitCommitCompareResult,
@@ -19,6 +20,7 @@ import type { CommitMessageDraftContext } from '../../shared/commit-message-gene
 import { assertGitDiffWithinTransportBudget } from '../../shared/git-diff-transport-budget'
 import { getCommitMessageModelDiscoveryHostKey } from '../../shared/commit-message-host-key'
 import type { GitHistoryOptions, GitHistoryResult } from '../../shared/git-history'
+import type { GitBlameResult } from '../../shared/git-blame'
 import {
   mergeLegacyCommitMessageAiIntoSourceControlAi,
   type ResolvedSourceControlAiGenerationParams
@@ -50,6 +52,7 @@ import {
 import { checkoutBranch, listLocalBranches } from '../git/checkout'
 import type { RuntimeGitCheckoutResult, RuntimeGitLocalBranches } from '../../shared/runtime-types'
 import { getHistory as getGitHistory } from '../git/history'
+import { getBlame as getGitBlame } from '../git/blame'
 import { getUpstreamStatus } from '../git/upstream'
 import { gitFastForward, gitFetch, gitPull, gitPullRebaseFromBase, gitPush } from '../git/remote'
 import { gitSyncForkDefaultBranch } from '../git/fork-sync'
@@ -96,6 +99,7 @@ type RuntimeCommitMessageSettingsOverride = Partial<
   sourceControlAiResolvedParams?: ResolvedSourceControlAiGenerationParams
 }
 
+/** Merges per-call generation settings over the worktree's global settings. */
 function getRuntimeGitGenerationSettings(
   settings: GlobalSettings,
   settingsOverride: RuntimeCommitMessageSettingsOverride | undefined,
@@ -118,6 +122,7 @@ function getRuntimeGitGenerationSettings(
   return mergedSettings
 }
 
+/** Converts a runtime path to a safe worktree-relative path. */
 function normalizeRuntimeGitRelativePath(filePath: string): string {
   const relativePath = normalizeRuntimeRelativePath(filePath)
   if (relativePath === '') {
@@ -128,6 +133,16 @@ function normalizeRuntimeGitRelativePath(filePath: string): string {
   return relativePath
 }
 
+/**
+ * Resolves a blame target to a safe path relative to the selected worktree.
+ * Renderer blame calls may carry the editor's absolute host path; runtime RPC
+ * must not let that path escape the resolved worktree on SSH or remote hosts.
+ */
+function normalizeRuntimeBlamePath(worktreePath: string, filePath: string): string {
+  const candidate = isAbsolute(filePath) ? relative(worktreePath, filePath) : filePath
+  return normalizeRuntimeGitRelativePath(candidate)
+}
+
 type RuntimeGitTarget = {
   worktree: ResolvedRuntimeGitWorktree
   repo?: Repo
@@ -135,10 +150,12 @@ type RuntimeGitTarget = {
   localGitOptions?: GitRuntimeOptions
 }
 
+/** Returns local git options for a target, suppressing SSH-specific overrides. */
 function localGitOptionsForTarget(target: RuntimeGitTarget): GitRuntimeOptions {
   return target.connectionId ? {} : (target.localGitOptions ?? {})
 }
 
+/** Resolves the local agent runtime target, including WSL when configured. */
 function localAgentRuntimeTargetForTarget(
   target: RuntimeGitTarget
 ): CommitMessageAgentRuntimeTarget {
@@ -146,6 +163,7 @@ function localAgentRuntimeTargetForTarget(
   return wslDistro ? { runtime: 'wsl', wslDistro } : { runtime: 'host' }
 }
 
+/** Builds the local text-generation target for a worktree. */
 function localTextGenerationTargetForTarget(
   target: RuntimeGitTarget,
   env?: NodeJS.ProcessEnv
@@ -175,6 +193,7 @@ export type RuntimeGitCommandHost = {
   getWorktreeLinkedIssueMeta?(worktreeId: string): PullRequestLinkedIssueMeta | null | undefined
 }
 
+/** Runtime-facing git command dispatch with local and SSH routing. */
 export class RuntimeGitCommands {
   constructor(private readonly host: RuntimeGitCommandHost) {}
 
@@ -255,22 +274,43 @@ export class RuntimeGitCommands {
     return checkIgnoredPaths(target.worktree.path, relativePaths, localGitOptionsForTarget(target))
   }
 
+  /** Loads history for a worktree file through local Git or the SSH provider. */
   async getRuntimeGitHistory(
     worktreeSelector: string,
     options: GitHistoryOptions = {}
   ): Promise<GitHistoryResult> {
     const target = await this.host.resolveRuntimeGitTarget(worktreeSelector)
+    const historyOptions = options.filePath
+      ? { ...options, filePath: normalizeRuntimeGitRelativePath(options.filePath) }
+      : options
     const provider = target.connectionId ? getSshGitProvider(target.connectionId) : null
     if (target.connectionId) {
       if (!provider) {
         throw new Error(SSH_GIT_PROVIDER_UNAVAILABLE_MESSAGE)
       }
-      return provider.getHistory(target.worktree.path, options)
+      return provider.getHistory(target.worktree.path, historyOptions)
     }
     return getGitHistory(target.worktree.path, {
-      ...options,
+      ...historyOptions,
       ...localGitOptionsForTarget(target)
     })
+  }
+
+  /**
+   * Reads inline blame for a worktree file, resolving the path against the
+   * selected worktree before forwarding to local Git or the SSH provider.
+   */
+  async getRuntimeGitBlame(worktreeSelector: string, filePath: string): Promise<GitBlameResult> {
+    const target = await this.host.resolveRuntimeGitTarget(worktreeSelector)
+    const relativePath = normalizeRuntimeBlamePath(target.worktree.path, filePath)
+    const provider = target.connectionId ? getSshGitProvider(target.connectionId) : null
+    if (target.connectionId) {
+      if (!provider) {
+        throw new Error(SSH_GIT_PROVIDER_UNAVAILABLE_MESSAGE)
+      }
+      return provider.getBlame(target.worktree.path, relativePath)
+    }
+    return getGitBlame(target.worktree.path, relativePath, localGitOptionsForTarget(target))
   }
 
   async getRuntimeGitConflictOperation(worktreeSelector: string): Promise<GitConflictOperation> {

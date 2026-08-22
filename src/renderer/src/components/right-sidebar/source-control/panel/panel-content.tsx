@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { GitHistoryPanel } from '../sync/git-history-panel'
 import { shouldShowSourceControlCompareUnavailableCard } from './header-toolbar'
 import { shouldRenderCommitArea } from '../commit/component-gates'
@@ -8,6 +9,14 @@ import { CompareUnavailable } from '../sync/compare-summary'
 import { SourceControlCommitSurface } from './commit-surface'
 import { SourceControlForkPushNotice } from './fork-push-notice'
 import type { SourceControlPanelReadyProps } from './panel-props'
+import { GitFileHistoryDialog } from '@/components/editor/GitFileHistoryDialog'
+import { joinPath } from '@/lib/path'
+
+type SourceControlFileHistoryTarget = {
+  worktreeId: string
+  worktreePath: string
+  relativePath: string
+}
 
 /** The scrolling surface: status, commit affordances, the file sections and the history dock. */
 export function SourceControlPanelContent(props: SourceControlPanelReadyProps) {
@@ -79,6 +88,9 @@ export function SourceControlPanelContent(props: SourceControlPanelReadyProps) {
     filteredGrouped.unstaged.length > 0 ||
     filteredGrouped.untracked.length > 0
   const hasFilteredBranchEntries = filteredBranchEntries.length > 0
+  const [fileHistoryTarget, setFileHistoryTarget] = useState<SourceControlFileHistoryTarget | null>(
+    null
+  )
   const showGenericEmptyState =
     !hasUncommittedEntries && branchSummary?.status === 'ready' && branchEntries.length === 0
 
@@ -217,10 +229,36 @@ export function SourceControlPanelContent(props: SourceControlPanelReadyProps) {
             onOpenCommit={(item) => void openHistoryCommitDiff(item)}
             onLoadCommitFiles={loadCommitFiles}
             onOpenCommitFile={openCommitFile}
+            onFileHistory={(_item, entry) => {
+              if (currentWorktreeId && worktreePath) {
+                setFileHistoryTarget({
+                  worktreeId: currentWorktreeId,
+                  worktreePath,
+                  relativePath: entry.path
+                })
+              }
+            }}
             onCommitAction={handleCommitAction}
           />
         </div>
       )}
+
+      <GitFileHistoryDialog
+        open={fileHistoryTarget !== null}
+        onOpenChange={(open) => {
+          if (!open) {
+            setFileHistoryTarget(null)
+          }
+        }}
+        title={fileHistoryTarget?.relativePath ?? ''}
+        relativePath={fileHistoryTarget?.relativePath ?? ''}
+        filePath={
+          fileHistoryTarget
+            ? joinPath(fileHistoryTarget.worktreePath, fileHistoryTarget.relativePath)
+            : ''
+        }
+        worktreeId={fileHistoryTarget?.worktreeId}
+      />
     </>
   )
 }

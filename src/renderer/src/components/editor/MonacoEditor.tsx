@@ -9,6 +9,8 @@ import { computeEditorFontSize, resolveEditorFontFamily } from '@/lib/editor-fon
 
 import { useContextualCopySetup } from './useContextualCopySetup'
 import { MonacoGutterContextMenu } from './MonacoGutterContextMenu'
+import { GitFileHistoryDialog } from './GitFileHistoryDialog'
+import { useGitBlame } from './useGitBlame'
 import { isLinuxUserAgent } from '../terminal-pane/pane-helpers'
 import { buildFileEditorWordWrapOptions } from './file-editor-word-wrap-options'
 import { getMonacoAutoHeightForContent, isMonacoAutoHeightCapped } from './monaco-auto-height'
@@ -21,6 +23,7 @@ import { useMonacoEditorDecorations } from './use-monaco-editor-decorations'
 import { useMonacoEditorMount } from './use-monaco-editor-mount'
 import { snapshotMonacoViewState } from './monaco-view-state-persistence'
 import { MonacoMarkdownAnnotationOverlay } from './MonacoMarkdownAnnotationOverlay'
+import { translate } from '@/i18n/i18n'
 
 type MonacoEditorProps = {
   fileId: string
@@ -114,6 +117,7 @@ export default function MonacoEditor({
   const [gutterMenuOpen, setGutterMenuOpen] = useState(false)
   const [gutterMenuPoint, setGutterMenuPoint] = useState({ x: 0, y: 0 })
   const [gutterMenuLine, setGutterMenuLine] = useState(1)
+  const [gitFileHistoryOpen, setGitFileHistoryOpen] = useState(false)
   const isDark =
     settings?.theme === 'dark' ||
     (settings?.theme === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches)
@@ -136,6 +140,12 @@ export default function MonacoEditor({
     language,
     worktreeId,
     markdownAnnotationsEnabled
+  })
+  useGitBlame({
+    editor: mountedEditor,
+    worktreeId,
+    filePath,
+    enabled: settings?.enableInlineGitBlame !== false
   })
 
   // Why useLayoutEffect: cleanup runs before @monaco-editor/react disposes the editor, so getScrollTop() still reads valid state on unmount.
@@ -200,6 +210,20 @@ export default function MonacoEditor({
     annotations,
     gutterMenu: { setGutterMenuOpen, setGutterMenuPoint, setGutterMenuLine }
   })
+
+  useEffect(() => {
+    if (!mountedEditor) {
+      return
+    }
+    const gitHistoryAction = mountedEditor.addAction({
+      id: 'orca.gitHistory',
+      label: translate('auto.components.editor.GitFileHistoryDialog.399ece93d0', 'Git History'),
+      contextMenuGroupId: 'navigation',
+      contextMenuOrder: 3,
+      run: () => setGitFileHistoryOpen(true)
+    })
+    return () => gitHistoryAction.dispose()
+  }, [mountedEditor])
 
   // Navigate to line and highlight match when requested (for already-mounted editor)
   useEffect(() => {
@@ -266,6 +290,14 @@ export default function MonacoEditor({
       />
 
       {toastNode}
+      <GitFileHistoryDialog
+        open={gitFileHistoryOpen}
+        onOpenChange={setGitFileHistoryOpen}
+        title={relativePath}
+        relativePath={relativePath}
+        filePath={filePath}
+        worktreeId={worktreeId}
+      />
       <MonacoGutterContextMenu
         open={gutterMenuOpen}
         onOpenChange={setGutterMenuOpen}

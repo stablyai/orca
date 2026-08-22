@@ -2109,6 +2109,7 @@ async function callAbortableRuntimeStatus<TResult>(
   }
 }
 
+/** Builds the web preload git API backed by the active runtime. */
 function createGitApi(): NonNullable<Partial<PreloadApi>['git']> {
   return {
     status: async ({
@@ -2155,12 +2156,20 @@ function createGitApi(): NonNullable<Partial<PreloadApi>['git']> {
     // Why: the "add huge folder to .gitignore" flow is desktop-only; the web runtime makes no offer, so return no candidates.
     findHugeFoldersToIgnore: async () => [],
     appendGitignore: async () => false,
-    history: async ({ worktreePath, limit, baseRef }) => {
+    history: async ({ worktreePath, limit, baseRef, filePath }) => {
       const worktree = await resolveRuntimeWorktreeByPath(worktreePath)
       return callRuntimeResult('git.history', {
         worktree: toRuntimeWorktreeSelector(worktree.id),
         limit,
-        baseRef
+        baseRef,
+        ...(filePath ? { filePath } : {})
+      })
+    },
+    blame: async ({ worktreePath, filePath }) => {
+      const worktree = await resolveRuntimeWorktreeByPath(worktreePath)
+      return callRuntimeResult('git.blame', {
+        worktree: toRuntimeWorktreeSelector(worktree.id),
+        filePath
       })
     },
     conflictOperation: async ({ worktreePath }) => {

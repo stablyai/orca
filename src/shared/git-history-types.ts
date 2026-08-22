@@ -56,6 +56,8 @@ export type GitHistoryItem = {
 export type GitHistoryOptions = {
   limit?: number
   baseRef?: string | null
+  /** When set, history is scoped to commits touching this relative path. */
+  filePath?: string
 }
 
 export type GitHistoryResult = {

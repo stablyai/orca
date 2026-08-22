@@ -33,6 +33,7 @@ export {
 } from './git-history-types'
 export { compareGitHistoryItemRefsByCategory, parseGitHistoryLog } from './git-history-log-parser'
 
+/** Clamps a requested history limit to a valid range. */
 function clampHistoryLimit(limit: number | undefined): number {
   if (!Number.isFinite(limit)) {
     return GIT_HISTORY_DEFAULT_LIMIT
@@ -43,6 +44,7 @@ function clampHistoryLimit(limit: number | undefined): number {
   )
 }
 
+/** Resolves a revision to a commit OID when it exists. */
 async function resolveCommit(
   git: GitHistoryExecutor,
   cwd: string,
@@ -63,6 +65,7 @@ async function resolveCommit(
   }
 }
 
+/** Resolves a revision to its symbolic full ref name. */
 async function resolveSymbolicFullName(
   git: GitHistoryExecutor,
   cwd: string,
@@ -91,6 +94,7 @@ async function resolveSymbolicFullName(
   }
 }
 
+/** Resolves the checked-out branch and current ref for HEAD. */
 async function resolveCurrentRef(
   git: GitHistoryExecutor,
   cwd: string,
@@ -120,6 +124,7 @@ async function resolveCurrentRef(
   }
 }
 
+/** Resolves the upstream tracking ref for a branch. */
 async function resolveUpstreamRef(
   git: GitHistoryExecutor,
   cwd: string,
@@ -148,6 +153,7 @@ async function resolveUpstreamRef(
   }
 }
 
+/** Resolves an optional named ref into a history ref item. */
 async function resolveNamedRef(
   git: GitHistoryExecutor,
   cwd: string,
@@ -164,6 +170,7 @@ async function resolveNamedRef(
   return revision ? gitHistoryRefFromFullName(fullName, normalized, revision) : undefined
 }
 
+/** Loads history by resolving refs and running git log through an executor. */
 export async function loadGitHistoryFromExecutor(
   git: GitHistoryExecutor,
   cwd: string,
@@ -206,18 +213,19 @@ export async function loadGitHistoryFromExecutor(
     }
   }
 
-  const { stdout } = await git(
-    [
-      'log',
-      `--format=${GIT_HISTORY_COMMIT_FORMAT}`,
-      '-z',
-      '--topo-order',
-      '--decorate=full',
-      `-n${limit + 1}`,
-      ...historyRevisions
-    ],
-    cwd
-  )
+  const logArgs = [
+    'log',
+    `--format=${GIT_HISTORY_COMMIT_FORMAT}`,
+    '-z',
+    '--topo-order',
+    '--decorate=full',
+    `-n${limit + 1}`,
+    ...historyRevisions
+  ]
+  if (options.filePath) {
+    logArgs.push('--follow', '--', options.filePath)
+  }
+  const { stdout } = await git(logArgs, cwd)
   const parsed = parseGitHistoryLog(stdout)
   const items = parsed.slice(0, limit)
   const hasIncomingChanges =

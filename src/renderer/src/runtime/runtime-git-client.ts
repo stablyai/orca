@@ -23,6 +23,7 @@ import type { HostedReviewProvider } from '../../../shared/hosted-review'
 import type { ResolvedSourceControlAiGenerationParams } from '../../../shared/source-control-ai'
 import { getCommitMessageModelDiscoveryHostKeyForScope } from '../../../shared/commit-message-host-key'
 import type { GitHistoryOptions, GitHistoryResult } from '../../../shared/git-history'
+import type { GitBlameResult } from '../../../shared/git-blame'
 import { getRepoIdFromWorktreeId, splitWorktreeIdForFilesystem } from '../../../shared/worktree/id'
 import { callRuntimeRpc, getActiveRuntimeTarget } from './runtime-rpc-client'
 import { toRuntimeWorktreeSelector } from './runtime-worktree-selector'
@@ -296,6 +297,27 @@ export async function getRuntimeGitHistory(
     'git.history',
     { worktree: toRuntimeWorktreeSelector(context.worktreeId), ...options },
     { timeoutMs: 15_000 }
+  )
+}
+
+/** Routes inline blame for one file to local IPC or the active runtime. */
+export async function getRuntimeGitBlame(
+  context: RuntimeGitContext,
+  filePath: string
+): Promise<GitBlameResult> {
+  const target = getActiveRuntimeTarget(context.settings)
+  if (target.kind === 'local' || !context.worktreeId) {
+    return window.api.git.blame({
+      worktreePath: resolveLocalWorktreePath(context),
+      connectionId: context.connectionId,
+      filePath
+    })
+  }
+  return callRuntimeRpc<GitBlameResult>(
+    target,
+    'git.blame',
+    { worktree: toRuntimeWorktreeSelector(context.worktreeId), filePath },
+    { timeoutMs: 30_000 }
   )
 }
 

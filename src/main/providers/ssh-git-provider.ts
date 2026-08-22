@@ -19,6 +19,7 @@ import type {
 import type { RemoveWorktreeResult } from '../../shared/worktree/create-types'
 import type { GitPushTarget, GitWorktreeInfo } from '../../shared/worktree/types'
 import type { GitHistoryOptions, GitHistoryResult } from '../../shared/git-history'
+import type { GitBlameResult } from '../../shared/git-blame'
 import { buildHostedRemoteCommitUrl, buildHostedRemoteFileUrl } from '../git/hosted-remote-url'
 import { JsonRpcErrorCode } from '../ssh/relay-protocol'
 import { requestGitStreamable } from '../ssh/ssh-git-response-stream-reader'
@@ -86,6 +87,7 @@ function filterUntrackedPorcelainStatus(stdout: string | undefined): string | un
   return trackedLines.length > 0 ? trackedLines.join('\n') : undefined
 }
 
+/** SSH-backed implementation of the git provider contract. */
 export class SshGitProvider implements IGitProvider {
   private readonly gitDiffReadDedupe = new InFlightPromiseDedupe<GitDiffResult | GitDiffResult[]>()
   private readonly statusReadLeaseOwner = new GitStatusReadLeaseOwner<GitStatusResult>()
@@ -208,6 +210,16 @@ export class SshGitProvider implements IGitProvider {
       worktreePath,
       ...options
     })) as GitHistoryResult
+  }
+
+  /**
+   * Forwards a blame request to the relay running on the SSH host.
+   */
+  async getBlame(worktreePath: string, filePath: string): Promise<GitBlameResult> {
+    return (await this.mux.request('git.blame', {
+      worktreePath,
+      filePath
+    })) as GitBlameResult
   }
 
   async commit(

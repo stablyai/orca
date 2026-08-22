@@ -10,6 +10,7 @@ import {
   generateRuntimeCommitMessage,
   generateRuntimePullRequestFields,
   getRuntimeGitDiff,
+  getRuntimeGitBlame,
   getRuntimeGitHistory,
   getRuntimeGitIgnoredPaths,
   getRuntimeGitStatus,
@@ -29,6 +30,7 @@ const gitCheckIgnored = vi.fn()
 const gitSubmoduleStatus = vi.fn()
 const gitDiff = vi.fn()
 const gitHistory = vi.fn()
+const gitBlame = vi.fn()
 const gitBulkStage = vi.fn()
 const gitBulkDiscard = vi.fn()
 const gitCommit = vi.fn()
@@ -53,6 +55,7 @@ beforeEach(() => {
   gitSubmoduleStatus.mockReset()
   gitDiff.mockReset()
   gitHistory.mockReset()
+  gitBlame.mockReset()
   gitBulkStage.mockReset()
   gitBulkDiscard.mockReset()
   gitCommit.mockReset()
@@ -79,6 +82,7 @@ beforeEach(() => {
         submoduleStatus: gitSubmoduleStatus,
         diff: gitDiff,
         history: gitHistory,
+        blame: gitBlame,
         bulkStage: gitBulkStage,
         bulkDiscard: gitBulkDiscard,
         commit: gitCommit,
@@ -308,14 +312,38 @@ describe('runtime git client', () => {
         worktreePath: '/repo',
         connectionId: 'ssh-1'
       },
-      { limit: 25, baseRef: 'origin/main' }
+      { limit: 25, baseRef: 'origin/main', filePath: 'src/a.ts' }
     )
 
     expect(gitHistory).toHaveBeenCalledWith({
       worktreePath: '/repo',
       connectionId: 'ssh-1',
       limit: 25,
-      baseRef: 'origin/main'
+      baseRef: 'origin/main',
+      filePath: 'src/a.ts'
+    })
+    expect(runtimeEnvironmentCall).not.toHaveBeenCalled()
+  })
+
+  it('uses local git IPC for blame when no remote runtime is active', async () => {
+    gitBlame.mockResolvedValue([
+      { sha: 'a'.repeat(40), shortSha: 'aaaaaaa', author: 'Ada', authorTime: 1, summary: 'init' }
+    ])
+
+    await getRuntimeGitBlame(
+      {
+        settings: { activeRuntimeEnvironmentId: null },
+        worktreeId: 'wt-1',
+        worktreePath: '/repo',
+        connectionId: 'ssh-1'
+      },
+      'src/a.ts'
+    )
+
+    expect(gitBlame).toHaveBeenCalledWith({
+      worktreePath: '/repo',
+      connectionId: 'ssh-1',
+      filePath: 'src/a.ts'
     })
     expect(runtimeEnvironmentCall).not.toHaveBeenCalled()
   })
@@ -349,6 +377,14 @@ describe('runtime git client', () => {
       },
       { limit: 50, baseRef: 'origin/main' }
     )
+    await getRuntimeGitBlame(
+      {
+        settings: { activeRuntimeEnvironmentId: 'env-1' },
+        worktreeId: 'wt-1',
+        worktreePath: '/repo'
+      },
+      'src/a.ts'
+    )
 
     expect(runtimeEnvironmentCall).toHaveBeenNthCalledWith(1, {
       selector: 'env-1',
@@ -372,6 +408,12 @@ describe('runtime git client', () => {
       method: 'git.history',
       params: { worktree: 'id:wt-1', limit: 50, baseRef: 'origin/main' },
       timeoutMs: 15_000
+    })
+    expect(runtimeEnvironmentCall).toHaveBeenNthCalledWith(4, {
+      selector: 'env-1',
+      method: 'git.blame',
+      params: { worktree: 'id:wt-1', filePath: 'src/a.ts' },
+      timeoutMs: 30_000
     })
   })
 

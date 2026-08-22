@@ -1,6 +1,7 @@
 import type React from 'react'
-import { ArrowUpRight, RefreshCw } from 'lucide-react'
+import { ArrowUpRight, History, RefreshCw } from 'lucide-react'
 import { STATUS_COLORS, STATUS_LABELS } from '../../status-display'
+import { Button } from '@/components/ui/button'
 import {
   toPermanentSourceControlRowOpenEvent,
   toSourceControlRowOpenEvent,
@@ -22,10 +23,12 @@ export type GitHistoryCommitFilesState =
 
 function CommitFileRow({
   entry,
-  onOpen
+  onOpen,
+  onHistory
 }: {
   entry: GitBranchChangeEntry
   onOpen: (entry: GitBranchChangeEntry, event: SourceControlRowOpenEvent) => void
+  onHistory?: (entry: GitBranchChangeEntry) => void
 }): React.JSX.Element {
   const status = entry.status as GitFileStatus
   const FileIcon = getFileTypeIcon(entry.path)
@@ -34,36 +37,62 @@ function CommitFileRow({
   const dirPath = parentDir === '.' ? '' : parentDir
 
   return (
-    <button
-      type="button"
-      className="group flex w-full min-w-0 cursor-pointer items-center gap-1 py-1 pl-9 pr-3 text-left text-xs transition-colors hover:bg-accent/40"
-      title={entry.path}
-      data-testid="git-history-commit-file"
-      onClick={(event) => onOpen(entry, toSourceControlRowOpenEvent(event))}
-      onDoubleClick={(event) => onOpen(entry, toPermanentSourceControlRowOpenEvent(event))}
-    >
-      <FileIcon className="size-3.5 shrink-0" style={{ color: STATUS_COLORS[status] }} />
-      <span className="min-w-0 flex-1 truncate">
-        <span className="text-foreground">{fileName}</span>
-        {dirPath && <span className="ml-1.5 text-[11px] text-muted-foreground">{dirPath}</span>}
-      </span>
-      <span
-        className="w-4 shrink-0 text-center text-[10px] font-bold"
-        style={{ color: STATUS_COLORS[status] }}
+    <div className="group flex w-full min-w-0 items-stretch">
+      <button
+        type="button"
+        className="flex min-w-0 flex-1 items-center gap-1 py-1 pl-9 pr-3 text-left text-xs transition-colors hover:bg-accent/40"
+        title={entry.path}
+        data-testid="git-history-commit-file"
+        onClick={(event) => onOpen(entry, toSourceControlRowOpenEvent(event))}
+        onDoubleClick={(event) => onOpen(entry, toPermanentSourceControlRowOpenEvent(event))}
       >
-        {STATUS_LABELS[status]}
-      </span>
-    </button>
+        <FileIcon className="size-3.5 shrink-0" style={{ color: STATUS_COLORS[status] }} />
+        <span className="min-w-0 flex-1 truncate">
+          <span className="text-foreground">{fileName}</span>
+          {dirPath && <span className="ml-1.5 text-[11px] text-muted-foreground">{dirPath}</span>}
+        </span>
+        <span
+          className="w-4 shrink-0 text-center text-[10px] font-bold"
+          style={{ color: STATUS_COLORS[status] }}
+        >
+          {STATUS_LABELS[status]}
+        </span>
+      </button>
+      {onHistory && (
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon-xs"
+          className="my-auto mr-2 shrink-0 text-muted-foreground opacity-100 transition-opacity hover:text-foreground focus-visible:text-foreground can-hover:opacity-0 can-hover:group-hover:opacity-100"
+          title={translate(
+            'auto.components.right.sidebar.GitHistoryCommitFiles.711cf5e588',
+            'Show file history'
+          )}
+          aria-label={translate(
+            'auto.components.right.sidebar.GitHistoryCommitFiles.711cf5e588',
+            'Show file history'
+          )}
+          onClick={(event) => {
+            event.stopPropagation()
+            onHistory(entry)
+          }}
+        >
+          <History className="size-3.5" />
+        </Button>
+      )}
+    </div>
   )
 }
 
 function CommitFilesBody({
   state,
   onOpenFile,
+  onHistory,
   onOpenAll
 }: {
   state: GitHistoryCommitFilesState
   onOpenFile: (entry: GitBranchChangeEntry, event: SourceControlRowOpenEvent) => void
+  onHistory?: (entry: GitBranchChangeEntry) => void
   onOpenAll?: () => void
 }): React.JSX.Element {
   if (state.status === 'loading') {
@@ -102,7 +131,7 @@ function CommitFilesBody({
   return (
     <>
       {state.entries.map((entry) => (
-        <CommitFileRow key={entry.path} entry={entry} onOpen={onOpenFile} />
+        <CommitFileRow key={entry.path} entry={entry} onOpen={onOpenFile} onHistory={onHistory} />
       ))}
       {onOpenAll && (
         <button
@@ -128,12 +157,14 @@ export function GitHistoryCommitFiles({
   author,
   timestamp,
   onOpenFile,
+  onHistory,
   onOpenAll
 }: {
   state: GitHistoryCommitFilesState
   author?: string
   timestamp?: number
   onOpenFile: (entry: GitBranchChangeEntry, event: SourceControlRowOpenEvent) => void
+  onHistory?: (entry: GitBranchChangeEntry) => void
   onOpenAll?: () => void
 }): React.JSX.Element {
   // Author and date move off the dense commit row and surface here on expand.
@@ -141,7 +172,12 @@ export function GitHistoryCommitFiles({
   return (
     <div className="border-l border-border/60 bg-muted/20">
       {meta && <div className="py-1 pl-9 pr-3 text-[11px] text-muted-foreground">{meta}</div>}
-      <CommitFilesBody state={state} onOpenFile={onOpenFile} onOpenAll={onOpenAll} />
+      <CommitFilesBody
+        state={state}
+        onOpenFile={onOpenFile}
+        onHistory={onHistory}
+        onOpenAll={onOpenAll}
+      />
     </div>
   )
 }

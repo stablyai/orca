@@ -168,6 +168,7 @@ function getDefaultWorkspaceDir(homeDir: string): string {
   return [trimmedHomeDir, 'orca', 'workspaces'].join(separator)
 }
 
+/** Builds default global settings for a user home directory. */
 export function getDefaultSettings(homedir: string): GlobalSettings {
   return {
     workspaceDir: getDefaultWorkspaceDir(homedir),
@@ -190,6 +191,7 @@ export function getDefaultSettings(homedir: string): GlobalSettings {
     editorAutoSave: false,
     editorAutoSaveDelayMs: DEFAULT_EDITOR_AUTO_SAVE_DELAY_MS,
     editorMinimapEnabled: false,
+    enableInlineGitBlame: true,
     // Why empty: the editor keeps following the terminal font unless the user opts in.
     editorFontFamily: '',
     editorWordWrap: true,
