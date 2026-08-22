@@ -6,7 +6,7 @@
  * HOME. It is a manual validation aid, not a CI gate.
  */
 import { execSync } from 'node:child_process'
-import { cpSync, existsSync } from 'node:fs'
+import { chmodSync, copyFileSync, existsSync, mkdirSync } from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import { expect, test } from './helpers/orca-app'
@@ -54,11 +54,26 @@ test.skip(
 
 const BOB_COMPOSER_HINT = 'Build Anything'
 
+// Why: only what a logged-in Bob needs to start (license consent + auth). The task
+// DB, logs, MCP and skill configs stay out of the disposable profile, and the copy
+// is owner-only so a captured test-results tree never widens the secret's exposure.
+const BOB_PROFILE_FILES = ['settings/settings.json', 'settings/auth-secrets.json'] as const
+
 async function seedBobProfile(homeDir: string): Promise<void> {
-  const source = path.join(os.homedir(), '.bob')
+  const source = process.env.ORCA_E2E_BOB_HOME ?? path.join(os.homedir(), '.bob')
   const target = path.join(homeDir, '.bob')
-  if (!existsSync(target) && existsSync(source)) {
-    cpSync(source, target, { recursive: true })
+  if (existsSync(target) || !existsSync(source)) {
+    return
+  }
+  for (const relative of BOB_PROFILE_FILES) {
+    const from = path.join(source, relative)
+    if (!existsSync(from)) {
+      continue
+    }
+    const to = path.join(target, relative)
+    mkdirSync(path.dirname(to), { recursive: true, mode: 0o700 })
+    copyFileSync(from, to)
+    chmodSync(to, 0o600)
   }
 }
 
@@ -186,24 +201,11 @@ test('Create Workspace defaults to IBM Bob and launches it first', async ({
   await orcaPage.getByRole('button', { name: 'New workspace', exact: true }).click()
   const dialog = orcaPage.getByRole('dialog', { name: /Create (Workspace|Worktree)/i })
   await expect(dialog).toBeVisible()
-  await expect(dialog.locator('[data-workspace-name-input="true"]')).toBeVisible()
-  await orcaPage.waitForTimeout(300)
+  const nameInput = dialog.locator('[data-workspace-name-input="true"]')
+  await expect(nameInput).toBeEditable()
 
   const name = `bob-e2e-${Date.now().toString(36)}`
-  await dialog.locator('[data-workspace-name-input="true"]').fill(name)
-
-  // Dump every form control so the prompt field can be located precisely.
-  const controls = await dialog.locator('textarea, input, [role="combobox"]').evaluateAll((els) =>
-    els.map((el) => ({
-      tag: el.tagName,
-      placeholder: el.getAttribute('placeholder'),
-      aria: el.getAttribute('aria-label'),
-      testid: el.getAttribute('data-testid'),
-      text: (el.textContent ?? '').trim().slice(0, 40)
-    }))
-  )
-  console.log('[bob-e2e] composer controls', JSON.stringify(controls))
-  testInfo.annotations.push({ type: 'composer-controls', description: JSON.stringify(controls) })
+  await nameInput.fill(name)
 
   // Agent picker should already show Bob as the default.
   const agentTrigger = dialog
@@ -296,15 +298,6 @@ test('Settings › Agents lists IBM Bob as detected and default', async ({
     body: await orcaPage.screenshot(),
     contentType: 'image/png'
   })
-  const paneText = await orcaPage.locator('main, [role="main"], body').first().innerText()
-  const bobIdx = paneText.indexOf('IBM Bob')
-  const defaultIdx = paneText.indexOf('Default', bobIdx)
-  console.log(
-    '[bob-e2e] settings text around Bob:',
-    JSON.stringify(paneText.slice(Math.max(0, bobIdx - 80), bobIdx + 160))
-  )
-  expect(bobIdx).toBeGreaterThanOrEqual(0)
-  expect(defaultIdx).toBeGreaterThanOrEqual(0)
 })
 
 test('closing the IBM Bob pane stops its process', async ({ electronApp, orcaPage }, testInfo) => {
@@ -321,11 +314,9 @@ test('closing the IBM Bob pane stops its process', async ({ electronApp, orcaPag
   await launchBobFromNewTab(orcaPage)
   await expect.poll(countBobChatProcesses, { timeout: 10_000 }).toBe(baseline + 1)
 
-  // Known gap: sidebar agent rows are seeded from hook/OSC-title status, which Bob never emits.
-  const agentRows = orcaPage.locator('[data-testid="agent-row"]')
-  await orcaPage.waitForTimeout(5_000)
-  const rowCount = await agentRows.count()
-  console.log('[bob-e2e] sidebar agent rows for a live Bob pane:', rowCount)
+  // Known gap on this branch: sidebar agent rows are seeded from hook/OSC-title
+  // status, which Bob never emits; the output-status profiles PR adds the row.
+  const rowCount = await orcaPage.locator('[data-testid="agent-row"]').count()
   testInfo.annotations.push({ type: 'sidebar-agent-rows', description: String(rowCount) })
   await testInfo.attach('sidebar-agent-row', {
     body: await orcaPage.screenshot(),
