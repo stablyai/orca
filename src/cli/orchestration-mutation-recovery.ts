@@ -1,3 +1,4 @@
+import { quoteShellToken } from '../shared/ephemeral-vm-recipe-process'
 import { RuntimeClientError } from './runtime-client'
 
 export function orchestrationMutationRecoveryError(error: unknown): unknown {
@@ -43,13 +44,17 @@ export function residualResourceRecoveryLines(residualResources: unknown): strin
     if (!id) {
       continue
     }
+    // Why quoting: the id is interpolated into a command meant to be copied and pasted —
+    // a worktree id embeds a path, which can carry spaces or shell metacharacters.
+    const quotedId = quoteShellToken(id)
     if (record?.kind === 'terminal') {
       lines.push(
-        `If terminal ${id} is still residual after the outcome is settled: orca terminal close --terminal ${id} --json.`
+        `If terminal ${id} is still residual after the outcome is settled: orca terminal close --terminal ${quotedId} --json.`
       )
     } else if (record?.kind === 'worktree') {
+      const quotedSelector = quoteShellToken(`id:${id}`)
       lines.push(
-        `If worktree ${id} is still residual after the outcome is settled: orca worktree rm --worktree id:${id} --force --json (verify nothing valuable was written first).`
+        `If worktree ${id} is still residual after the outcome is settled: orca worktree rm --worktree ${quotedSelector} --force --json (verify nothing valuable was written first).`
       )
     }
   }

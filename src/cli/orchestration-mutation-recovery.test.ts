@@ -30,6 +30,26 @@ describe('residualResourceRecoveryLines', () => {
     ).toEqual([])
   })
 
+  it('quotes ids shell-safely so copied commands survive spaces and metacharacters', () => {
+    const lines = residualResourceRecoveryLines([
+      { kind: 'worktree', id: 'repo::D:/workspaces/my work/child; rm -rf /' },
+      { kind: 'terminal', id: "term_ev'il" }
+    ])
+
+    // The displayed name stays raw; the pasted command quotes the id (posix form when
+    // not on win32 — the win32 branch double-quotes, also covered by quoteShellToken's
+    // own tests).
+    if (process.platform !== 'win32') {
+      expect(lines[0]).toContain(
+        `orca worktree rm --worktree 'id:repo::D:/workspaces/my work/child; rm -rf /' --force --json`
+      )
+      expect(lines[1]).toContain(`orca terminal close --terminal 'term_ev'''il' --json`)
+    } else {
+      expect(lines[0]).toContain('--worktree "id:repo::D:/workspaces/my work/child; rm -rf /"')
+      expect(lines[1]).toContain('--terminal "term_ev'il"')
+    }
+  })
+
   it('returns nothing for absent or non-array residue', () => {
     expect(residualResourceRecoveryLines(undefined)).toEqual([])
     expect(residualResourceRecoveryLines(null)).toEqual([])

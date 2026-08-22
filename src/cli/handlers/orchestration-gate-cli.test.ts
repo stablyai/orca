@@ -230,11 +230,13 @@ describe('orchestration gate commands carry caller identity', () => {
     expect(output.error.message).toMatch(/Residual resources:.*repo::child.*term_worker/)
     // Why (#15944): the residue is actionable, not just named — each resource gets its
     // reclaim command, after the --retry-request line it must not preempt.
+    // The ids are shell-quoted inside the pasted command ("term_worker" on win32,
+    // 'term_worker' elsewhere), so match with optional quotes around them.
     expect(output.error.message).toMatch(
-      /--retry-request mutation_1[\s\S]*orca terminal close --terminal term_worker --json/
+      /--retry-request mutation_1[\s\S]*orca terminal close --terminal ['"]?term_worker['"]? --json/
     )
     expect(output.error.message).toMatch(
-      /orca worktree rm --worktree id:repo::child --force --json/
+      /orca worktree rm --worktree ['"]?id:repo::child['"]? --force --json/
     )
     expect(output.error.message).not.toMatch(/restart Orca/i)
     expect(output.error.data).toMatchObject({
