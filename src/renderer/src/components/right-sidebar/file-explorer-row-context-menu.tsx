@@ -13,7 +13,8 @@ import {
   Pencil,
   Search,
   SquareTerminal,
-  Trash2
+  Trash2,
+  Replace
 } from 'lucide-react'
 import { toast } from 'sonner'
 import {
@@ -28,6 +29,11 @@ import { detectLanguage } from '@/lib/language-detect'
 import { openFileInBrowserTab } from '@/lib/file-preview'
 import { isLocalPathOpenBlocked, showLocalPathOpenBlockedToast } from '@/lib/local-path-open-guard'
 import { translate } from '@/i18n/i18n'
+import type { TreeNode } from './file-explorer-types'
+import {
+  getFileExplorerOwnerUnresolvedMessage,
+  requireMatchingFileExplorerOperationRoute
+} from './file-explorer-operation-owner'
 import type { FileExplorerRowProps } from './FileExplorerRow'
 import {
   shouldShowCollapseFolderAction,
@@ -141,6 +147,40 @@ export function FileExplorerRowContextMenu({
     void copyFileToOsClipboard(node, connectionId)
   }, [connectionId, node])
 
+  // Why: single-click now stacks a new tab per file; this is the explicit way to
+  // swap the active editor tab's contents instead.
+  const handleReplaceCurrentTab = useCallback((): void => {
+    if (!activeWorktreeId || node.isDirectory) {
+      return
+    }
+    const state = useAppStore.getState()
+    let fileRuntimeEnvironmentId: string | null = null
+    try {
+      const route = requireMatchingFileExplorerOperationRoute(activeWorktreeId, node.operationOwner)
+      fileRuntimeEnvironmentId = route.settings.activeRuntimeEnvironmentId?.trim() || null
+    } catch {
+      toast.error(getFileExplorerOwnerUnresolvedMessage())
+      return
+    }
+    if (state.activeFileId) {
+      state.closeFile(state.activeFileId)
+    }
+    state.openFile(
+      {
+        filePath: node.path,
+        relativePath: node.relativePath,
+        worktreeId: activeWorktreeId,
+        runtimeEnvironmentId: fileRuntimeEnvironmentId ?? undefined,
+        language: detectLanguage(node.name),
+        mode: 'edit'
+      },
+      {
+        focusEditor: true,
+        suppressActiveRuntimeFallback: fileRuntimeEnvironmentId === null
+      }
+    )
+  }, [activeWorktreeId, node])
+
   return (
     <ContextMenuContent
       className="w-64 bg-[rgba(255,255,255,0.82)] dark:bg-[rgba(0,0,0,0.72)]"
@@ -186,6 +226,15 @@ export function FileExplorerRowContextMenu({
           <ContextMenuShortcut>{copyRelativePathShortcutLabel}</ContextMenuShortcut>
         ) : null}
       </ContextMenuItem>
+      {!node.isDirectory && activeWorktreeId && (
+        <ContextMenuItem onSelect={handleReplaceCurrentTab}>
+          <Replace />
+          {translate(
+            'auto.components.right.sidebar.FileExplorerRow.replace-current-tab',
+            'Replace Current Tab'
+          )}
+        </ContextMenuItem>
+      )}
       {!node.isDirectory && (
         <ContextMenuItem onSelect={() => onDuplicate(node)}>
           <Files />

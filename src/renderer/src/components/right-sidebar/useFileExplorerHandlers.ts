@@ -147,7 +147,10 @@ export async function activateFileExplorerNode(args: {
       mode: 'edit'
     },
     {
-      preview: true,
+      // Why: each activation opens its own permanent tab so browsing stacks tabs
+      // instead of replacing the preview; "Replace Current Tab" lives in the
+      // row context menu.
+      preview: false,
       // Why: activating an Explorer file is a focus handoff even if the rich
       // editor finishes mounting after the row receives browser focus.
       focusEditor: true,
