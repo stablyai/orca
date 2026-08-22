@@ -128,6 +128,29 @@ describe('WorktreeList lineage child card renderer', () => {
     expect(markup).not.toContain('No workspaces found')
   })
 
+  it('renders nesting actions in the project group header menu', async () => {
+    setProjectGroupWithoutWorktreeRowsState()
+    const markup = await renderWorktreeListMarkup()
+
+    expect(markup).toContain('New subgroup…')
+    // Why: a lone root group has no destination, so its move submenu stays hidden.
+    expect(markup).not.toContain('Top level')
+    expect(markup).toContain('Rename group')
+  })
+
+  it('offers Top level and sibling destinations once another group exists', async () => {
+    setProjectGroupWithoutWorktreeRowsState()
+    const [group] = mockStore.state.projectGroups as ProjectGroup[]
+    mockStore.state = {
+      ...mockStore.state,
+      projectGroups: [group!, { ...group!, id: 'group-2', name: 'Tooling', tabOrder: 1 }]
+    }
+    const markup = await renderWorktreeListMarkup()
+
+    expect(markup).toContain('Top level')
+    expect(markup).toContain('Tooling')
+  })
+
   it('renders a collapse chevron on project group headers with children', async () => {
     setProjectGroupWithoutWorktreeRowsState()
     const markup = await renderWorktreeListMarkup()

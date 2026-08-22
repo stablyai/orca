@@ -63,7 +63,9 @@ const ProjectGroupUpdate = z.object({
     name: OptionalString,
     isCollapsed: z.boolean().optional(),
     tabOrder: OptionalFiniteNumber,
-    color: OptionalString.nullable().optional()
+    color: OptionalString.nullable().optional(),
+    // Why: optional so older hosts strip it and older clients never send it (wire compat).
+    parentGroupId: OptionalString.nullable().optional()
   })
 })
 

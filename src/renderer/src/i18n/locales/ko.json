@@ -4607,7 +4607,13 @@
           "hostDisconnected": "연결 끊김",
           "failedNestWorkspace": "워크스페이스를 중첩하지 못했습니다",
           "sidebarRowMissing": "대상이 더 이상 존재하지 않습니다",
-          "failedUnnestWorkspace": "워크트리 펼치기 실패"
+          "failedUnnestWorkspace": "워크트리 펼치기 실패",
+          "newSubgroup": "새 하위 그룹…",
+          "newSubgroupTitle": "새 하위 그룹",
+          "newSubgroupDesc": "{{value0}} 아래에 중첩된 그룹을 만듭니다.",
+          "moveGroupTopLevel": "최상위",
+          "groupMoveFailed": "그룹을 이동하지 못했습니다",
+          "groupMoveFailedDesc": "그룹은 이전 위치에 그대로 남았습니다. 그룹은 자기 자신이나 자신의 하위 그룹 안으로, 또는 사이드바에서 허용하는 깊이보다 더 깊게 중첩할 수 없습니다. 원격 런타임은 업데이트가 필요할 수도 있습니다."
         },
         "WorktreeMetaDialog": {
           "3db0a2a593": "취소",

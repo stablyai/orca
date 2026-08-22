@@ -1,3 +1,5 @@
+import { MAX_PROJECT_GROUP_DEPTH } from '../../../../../../shared/project-group-reparent'
+
 export const SIDEBAR_TREE_INDENT = 18
 // Why: keeps project-grouped cards reading as children after the surface inset is subtracted.
 const PROJECT_WORKTREE_CARD_EXTRA_INDENT = 2
@@ -20,7 +22,7 @@ export const PROJECT_GROUP_HEADER_BASE_PADDING = 10
 // Why: shared with project headers so titles don't shift when grouping mode changes.
 export const WORKTREE_SECTION_HEADER_PADDING_LEFT = PROJECT_GROUP_HEADER_BASE_PADDING
 export const PROJECT_GROUP_HEADER_INDENT = 10
-export const MAX_PROJECT_GROUP_HEADER_DEPTH = 6
+export const MAX_PROJECT_GROUP_HEADER_DEPTH = MAX_PROJECT_GROUP_DEPTH
 
 function clampDepth(depth: number): number {
   return Math.max(0, Math.floor(Number.isFinite(depth) ? depth : 0))

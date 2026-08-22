@@ -196,4 +196,40 @@ describe('projectGroups IPC validation', () => {
 
     expect(mockStore.updateProjectGroup).not.toHaveBeenCalled()
   })
+
+  it('forwards parentGroupId re-parent updates to persistence', () => {
+    mockStore.updateProjectGroup.mockReturnValue({ id: 'group-1', parentGroupId: 'group-2' })
+
+    expect(
+      handlers.get('projectGroups:update')!(null, {
+        groupId: 'group-1',
+        updates: { parentGroupId: 'group-2' }
+      })
+    ).toEqual({ id: 'group-1', parentGroupId: 'group-2' })
+    expect(mockStore.updateProjectGroup).toHaveBeenCalledWith('group-1', {
+      parentGroupId: 'group-2'
+    })
+
+    handlers.get('projectGroups:update')!(null, {
+      groupId: 'group-1',
+      updates: { parentGroupId: null }
+    })
+    expect(mockStore.updateProjectGroup).toHaveBeenLastCalledWith('group-1', {
+      parentGroupId: null
+    })
+  })
+
+  it('surfaces persistence nesting rejections to the caller', () => {
+    mockStore.updateProjectGroup.mockImplementation(() => {
+      throw new Error('A project group cannot be moved into itself')
+    })
+
+    expect(() =>
+      handlers.get('projectGroups:update')!(null, {
+        groupId: 'group-1',
+        updates: { parentGroupId: 'group-1' }
+      })
+    ).toThrow('A project group cannot be moved into itself')
+    expect(mockWindow.webContents.send).not.toHaveBeenCalled()
+  })
 })

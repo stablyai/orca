@@ -17,6 +17,11 @@ export type ProjectGroup = {
   updatedAt: number
 }
 
+/** Mutable fields of a project group; `parentGroupId` re-parents (null = top level). */
+export type ProjectGroupUpdates = Partial<
+  Pick<ProjectGroup, 'name' | 'isCollapsed' | 'tabOrder' | 'color' | 'parentGroupId'>
+>
+
 export type NestedRepoScanOptions = {
   maxDepth?: number
   maxRepos?: number

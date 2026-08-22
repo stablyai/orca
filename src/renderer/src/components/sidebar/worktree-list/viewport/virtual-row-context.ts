@@ -102,6 +102,8 @@ export function buildWorktreeVirtualRowContext(args: BuildArgs): WorktreeVirtual
       },
       onRenameProjectGroup: props.handleRenameProjectGroup,
       onDeleteProjectGroup: props.handleDeleteProjectGroup,
+      onCreateProjectSubgroup: props.handleCreateProjectSubgroup,
+      onMoveProjectGroupToGroup: props.handleMoveProjectGroupToGroup,
       onCreateFolderWorkspace: props.handleCreateFolderWorkspace,
       onWorkspaceStatusDragOver: statusDrag.handleWorkspaceStatusDragOver,
       onWorkspaceStatusDragLeave: statusDrag.handleWorkspaceStatusDragLeave,

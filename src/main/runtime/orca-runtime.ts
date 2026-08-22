@@ -305,7 +305,8 @@ import type {
   NestedRepoScanResult,
   ProjectGroup,
   ProjectGroupImportMode,
-  ProjectGroupImportResult
+  ProjectGroupImportResult,
+  ProjectGroupUpdates
 } from '../../shared/project-group-types'
 import type {
   Project,
@@ -20694,7 +20695,7 @@ export class OrcaRuntimeService {
 
   async updateProjectGroup(
     groupId: string,
-    updates: Partial<Pick<ProjectGroup, 'name' | 'isCollapsed' | 'tabOrder' | 'color'>>
+    updates: ProjectGroupUpdates
   ): Promise<ProjectGroup | null> {
     if (!this.store?.updateProjectGroup) {
       throw new Error('runtime_unavailable')

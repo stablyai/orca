@@ -4624,7 +4624,13 @@
           "hostDisconnected": "Desconectado",
           "failedNestWorkspace": "No se pudo anidar el espacio de trabajo",
           "sidebarRowMissing": "El destino ya no existe",
-          "failedUnnestWorkspace": "Error al expandir el espacio de trabajo"
+          "failedUnnestWorkspace": "Error al expandir el espacio de trabajo",
+          "newSubgroup": "Nuevo subgrupo…",
+          "newSubgroupTitle": "Nuevo subgrupo",
+          "newSubgroupDesc": "Crea un grupo anidado dentro de {{value0}}.",
+          "moveGroupTopLevel": "Nivel superior",
+          "groupMoveFailed": "No se pudo mover el grupo",
+          "groupMoveFailedDesc": "El grupo conservó su ubicación anterior. Un grupo no puede anidarse dentro de sí mismo, de sus propios subgrupos ni más profundo de lo que permite la barra lateral; los runtimes remotos también pueden necesitar una actualización."
         },
         "WorktreeMetaDialog": {
           "3db0a2a593": "Cancelar",

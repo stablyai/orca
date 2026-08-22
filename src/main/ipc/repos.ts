@@ -817,7 +817,8 @@ const ProjectGroupUpdateArgs = z.object({
     name: z.string().optional(),
     isCollapsed: z.boolean().optional(),
     tabOrder: z.number().finite().optional(),
-    color: z.string().nullable().optional()
+    color: z.string().nullable().optional(),
+    parentGroupId: z.string().nullable().optional()
   })
 })
 

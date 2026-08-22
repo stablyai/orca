@@ -49,6 +49,8 @@ export type VirtualizedWorktreeViewportProps = {
   handleRemoveProjectFromGroup: (repo: Repo) => void
   handleRenameProjectGroup: (groupId: string, currentName: string) => void
   handleDeleteProjectGroup: (groupId: string, groupName: string) => void
+  handleCreateProjectSubgroup: (parentGroupId: string, parentName: string) => void
+  handleMoveProjectGroupToGroup: (groupId: string, parentGroupId: string | null) => void
   handleCreateFolderWorkspace: (projectGroup: ProjectGroup) => void
   activeModal: string
   pendingRevealWorktree: PendingSidebarWorktreeReveal | null

@@ -8,6 +8,7 @@ import type { Repo } from '../../../../../../shared/repo-types'
 
 export type ProjectGroupNameDialogState =
   | { type: 'create-from-repo'; repo: Repo }
+  | { type: 'create-subgroup'; parentGroupId: string; parentName: string }
   | { type: 'rename'; groupId: string; currentName: string }
 
 export type ProjectGroupDeleteDialogState = {
@@ -58,6 +59,18 @@ function reportProjectGroupDeleteFailures(result: {
   }
 }
 
+function reportProjectGroupNestingFailure(): void {
+  toast.error(
+    translate('auto.components.sidebar.WorktreeList.groupMoveFailed', 'Failed to move group'),
+    {
+      description: translate(
+        'auto.components.sidebar.WorktreeList.groupMoveFailedDesc',
+        'The group kept its previous place. Groups cannot be nested into themselves, into their own subgroups, or deeper than the sidebar allows; remote runtimes may also need an update.'
+      )
+    }
+  )
+}
+
 // Create/rename/delete flows for project groups, including the contained-project fan-out.
 export function useProjectGroupDialogs(args: {
   repos: readonly Repo[]
@@ -99,6 +112,22 @@ export function useProjectGroupDialogs(args: {
     setNameDialog({ type: 'rename', groupId, currentName })
   }, [])
 
+  const handleCreateProjectSubgroup = useCallback((parentGroupId: string, parentName: string) => {
+    setNameDialog({ type: 'create-subgroup', parentGroupId, parentName })
+  }, [])
+
+  const handleMoveProjectGroupToGroup = useCallback(
+    async (groupId: string, parentGroupId: string | null) => {
+      const updated = await updateProjectGroup(groupId, { parentGroupId })
+      const group = useAppStore.getState().projectGroups.find((entry) => entry.id === groupId)
+      // Why: an older remote runtime strips the unknown field and answers with the unmoved group.
+      if (!updated || (group && (group.parentGroupId ?? null) !== parentGroupId)) {
+        reportProjectGroupNestingFailure()
+      }
+    },
+    [updateProjectGroup]
+  )
+
   const handleSubmitProjectGroupName = useCallback(
     async (name: string) => {
       if (!nameDialog) {
@@ -108,6 +137,13 @@ export function useProjectGroupDialogs(args: {
         const group = await createProjectGroup(name)
         if (group) {
           await moveProjectToGroup(nameDialog.repo.id, group.id)
+        }
+        return
+      }
+      if (nameDialog.type === 'create-subgroup') {
+        const group = await createProjectGroup(name, { parentGroupId: nameDialog.parentGroupId })
+        if (!group) {
+          reportProjectGroupNestingFailure()
         }
         return
       }
@@ -165,6 +201,8 @@ export function useProjectGroupDialogs(args: {
     handleMoveProjectToGroup,
     handleRemoveProjectFromGroup,
     handleRenameProjectGroup,
+    handleCreateProjectSubgroup,
+    handleMoveProjectGroupToGroup,
     handleSubmitProjectGroupName,
     handleDeleteProjectGroup,
     handleConfirmDeleteProjectGroup

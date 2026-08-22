@@ -8,7 +8,8 @@ import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import type {
   NestedRepoScanResult,
   ProjectGroup,
-  ProjectGroupImportResult
+  ProjectGroupImportResult,
+  ProjectGroupUpdates
 } from '../../../../shared/project-group-types'
 import type {
   Project,
@@ -1851,7 +1852,10 @@ export type RepoSlice = {
     runtimeEnvironmentId?: string | null
     mode: 'group' | 'separate'
   }) => Promise<ProjectGroupImportResult | null>
-  createProjectGroup: (name: string) => Promise<ProjectGroup | null>
+  createProjectGroup: (
+    name: string,
+    options?: { parentGroupId?: string | null }
+  ) => Promise<ProjectGroup | null>
   createFolderWorkspace: (
     args: {
       projectGroupId: string
@@ -1883,10 +1887,7 @@ export type RepoSlice = {
     options?: { executionHostId?: ExecutionHostId }
   ) => Promise<boolean>
   deleteFolderWorkspace: (folderWorkspaceId: string) => Promise<boolean>
-  updateProjectGroup: (
-    groupId: string,
-    updates: Partial<Pick<ProjectGroup, 'name' | 'isCollapsed' | 'tabOrder' | 'color'>>
-  ) => Promise<boolean>
+  updateProjectGroup: (groupId: string, updates: ProjectGroupUpdates) => Promise<boolean>
   deleteProjectGroup: (groupId: string) => Promise<boolean>
   deleteProjectGroupWithContainedProjects: (
     groupId: string,
@@ -2772,22 +2773,22 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
     }
   },
 
-  createProjectGroup: async (name) => {
+  createProjectGroup: async (name, options) => {
     try {
       const target = getActiveRuntimeTarget(get().settings)
+      // Why: only sent when nesting so the payload stays identical to what older hosts already accept.
+      const args = {
+        name,
+        createdFrom: 'manual' as const,
+        ...(options?.parentGroupId ? { parentGroupId: options.parentGroupId } : {})
+      }
       const group =
         target.kind === 'local'
-          ? await window.api.projectGroups.create({
-              name,
-              createdFrom: 'manual'
-            })
+          ? await window.api.projectGroups.create(args)
           : (
-              await callRuntimeRpc<{ group: ProjectGroup }>(
-                target,
-                'projectGroup.create',
-                { name, createdFrom: 'manual' },
-                { timeoutMs: 15_000 }
-              )
+              await callRuntimeRpc<{ group: ProjectGroup }>(target, 'projectGroup.create', args, {
+                timeoutMs: 15_000
+              })
             ).group
       const ownedGroup = projectGroupWithFetchedOwner(group, target)
       set((s) => ({

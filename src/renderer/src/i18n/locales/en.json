@@ -5335,7 +5335,13 @@
           "groupDeleteFailedDesc": "Something went wrong while deleting the group. No projects were removed.",
           "failedNestWorkspace": "Failed to nest workspace",
           "sidebarRowMissing": "Target no longer exists",
-          "failedUnnestWorkspace": "Failed to unnest workspace"
+          "failedUnnestWorkspace": "Failed to unnest workspace",
+          "newSubgroup": "New subgroup…",
+          "newSubgroupTitle": "New Subgroup",
+          "newSubgroupDesc": "Create a group nested under {{value0}}.",
+          "moveGroupTopLevel": "Top level",
+          "groupMoveFailed": "Failed to move group",
+          "groupMoveFailedDesc": "The group kept its previous place. Groups cannot be nested into themselves, into their own subgroups, or deeper than the sidebar allows; remote runtimes may also need an update."
         },
         "WorktreeMetaDialog": {
           "3db0a2a593": "Cancel",

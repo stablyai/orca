@@ -525,7 +525,7 @@ describe('repo RPC methods', () => {
     await dispatcher.dispatch(
       makeRequest('projectGroup.update', {
         groupId: group.id,
-        updates: { name: 'Core', isCollapsed: true }
+        updates: { name: 'Core', isCollapsed: true, parentGroupId: 'group-parent' }
       })
     )
     await dispatcher.dispatch(makeRequest('projectGroup.delete', { groupId: group.id }))
@@ -573,7 +573,8 @@ describe('repo RPC methods', () => {
     })
     expect(runtime.updateProjectGroup).toHaveBeenCalledWith(group.id, {
       name: 'Core',
-      isCollapsed: true
+      isCollapsed: true,
+      parentGroupId: 'group-parent'
     })
     expect(runtime.deleteProjectGroup).toHaveBeenCalledWith(group.id)
     expect(runtime.moveProjectToGroup).toHaveBeenCalledWith('repo-1', group.id, 2)

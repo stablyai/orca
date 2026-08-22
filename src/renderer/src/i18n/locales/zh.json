@@ -4617,7 +4617,13 @@
           "hostDisconnected": "已断开连接",
           "failedNestWorkspace": "无法嵌套工作区",
           "sidebarRowMissing": "目标不再存在",
-          "failedUnnestWorkspace": "展开工作区失败"
+          "failedUnnestWorkspace": "展开工作区失败",
+          "newSubgroup": "新建子组…",
+          "newSubgroupTitle": "新建子组",
+          "newSubgroupDesc": "在 {{value0}} 下创建一个嵌套的组。",
+          "moveGroupTopLevel": "顶层",
+          "groupMoveFailed": "移动组失败",
+          "groupMoveFailedDesc": "该组保留在原来的位置。组不能嵌套到自身、自己的子组中，也不能超过侧边栏允许的深度；远程运行时可能也需要更新。"
         },
         "WorktreeMetaDialog": {
           "3db0a2a593": "取消",

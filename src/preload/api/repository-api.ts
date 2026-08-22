@@ -7,7 +7,8 @@ import type {
   NestedRepoScanResult,
   ProjectGroup,
   ProjectGroupImportMode,
-  ProjectGroupImportResult
+  ProjectGroupImportResult,
+  ProjectGroupUpdates
 } from '../../shared/project-group-types'
 import type {
   Project,
@@ -138,10 +139,7 @@ export type ProjectGroupsApi = {
     parentGroupId?: string | null
     createdFrom?: ProjectGroup['createdFrom']
   }) => Promise<ProjectGroup>
-  update: (args: {
-    groupId: string
-    updates: Partial<Pick<ProjectGroup, 'name' | 'isCollapsed' | 'tabOrder' | 'color'>>
-  }) => Promise<ProjectGroup | null>
+  update: (args: { groupId: string; updates: ProjectGroupUpdates }) => Promise<ProjectGroup | null>
   delete: (args: { groupId: string }) => Promise<boolean>
   moveProject: (args: {
     projectId: string
