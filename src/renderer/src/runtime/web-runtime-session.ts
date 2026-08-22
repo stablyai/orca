@@ -473,6 +473,7 @@ export async function createWebRuntimeSessionBrowserTab(args: {
   stagedTitle?: string
   stagedFocusAddressBar?: boolean
   failureLogMode?: 'details' | 'operation-only'
+  onCreatedPage?: (browserPageId: string) => void
 }): Promise<boolean> {
   const environmentId =
     args.environmentId?.trim() ??
@@ -664,6 +665,7 @@ export async function createWebRuntimeSessionBrowserTab(args: {
       worktreeId: args.worktreeId,
       remotePageId: guardedPageId
     })
+    args.onCreatedPage?.(created.browserPageId)
     return true
   } catch (error) {
     unsubscribeFocusGuard()

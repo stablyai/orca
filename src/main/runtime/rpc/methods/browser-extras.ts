@@ -1,5 +1,6 @@
 import { z } from 'zod'
 import { defineMethod, type RpcMethod } from '../core'
+import { withBrowserEnvironmentForwarding } from '../../browser-command-environment-forwarding'
 import { assertRpcClipboardTextWriteWithinLimit } from '../rpc-clipboard-text-validation'
 import { BrowserTarget, OptionalFiniteNumber } from '../schemas'
 import {
@@ -34,7 +35,7 @@ const MouseClick = MouseXY.merge(MouseButton).extend({
   modifiers: MouseModifiers
 })
 
-export const BROWSER_EXTRA_METHODS: RpcMethod[] = [
+const BROWSER_EXTRA_METHOD_DEFINITIONS: RpcMethod[] = [
   defineMethod({
     name: 'browser.cookie.get',
     params: CookieGet,
@@ -179,3 +180,10 @@ export const BROWSER_EXTRA_METHODS: RpcMethod[] = [
     handler: async (params, { runtime }) => runtime.browserStorageSessionClear(params)
   })
 ]
+
+export const BROWSER_EXTRA_METHODS: RpcMethod[] = withBrowserEnvironmentForwarding(
+  BROWSER_EXTRA_METHOD_DEFINITIONS,
+  (method, params, timeoutMs, ctx) =>
+    ctx.runtime.forwardBrowserCommandToEnvironment?.(method, params, timeoutMs) ??
+    Promise.resolve({ handled: false })
+)

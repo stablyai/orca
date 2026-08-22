@@ -151,6 +151,11 @@ export type RuntimeBrowserCommandHost = {
   getAvailableAuthoritativeWindow(): BrowserWindow | null
   // Why: headless serve backs pages with a main-process offscreen backend; null when the environment can't support offscreen browsing.
   getOffscreenBrowserBackend(): BrowserBackend | null
+  forwardBrowserCommandToEnvironment?(
+    method: string,
+    params: unknown,
+    timeoutMs: number
+  ): Promise<{ handled: boolean; result?: unknown }>
   // Why: the session-tab snapshot owns focus, so a headless create must mark itself active or paired clients snap back to a terminal.
   markHeadlessBrowserSessionTabActive?(
     worktreeId: string | undefined,
@@ -593,10 +598,36 @@ export class RuntimeBrowserCommands {
   }
 
   async browserTabList(params: { worktree?: string }): Promise<BrowserTabListResult> {
-    const worktreeId = await this.resolveBrowserWorktreeId(params.worktree)
+    // Why: an unresolvable selector may name a worktree only the owning
+    // runtime environment knows, so give that environment a chance first.
+    let worktreeId: string | undefined
+    try {
+      worktreeId = await this.resolveBrowserWorktreeId(params.worktree)
+    } catch (error) {
+      const forwarded = await this.tryForwardBrowserCommand('browser.tabList', params)
+      if (forwarded.handled) {
+        return forwarded.result as BrowserTabListResult
+      }
+      throw error
+    }
     const result = this.requireAgentBrowserBridge().tabList(worktreeId)
     return {
       tabs: result.tabs.map((tab) => this.enrichBrowserTabInfo(tab))
+    }
+  }
+
+  private async tryForwardBrowserCommand(
+    method: string,
+    params: unknown
+  ): Promise<{ handled: boolean; result?: unknown }> {
+    try {
+      return (
+        (await this.host.forwardBrowserCommandToEnvironment?.(method, params, 30_000)) ?? {
+          handled: false
+        }
+      )
+    } catch {
+      return { handled: false }
     }
   }
 
@@ -1332,7 +1363,7 @@ export class RuntimeBrowserCommands {
         params.page
       )
     }
-    const { browserPageId } = await this.createBrowserTabInRenderer(
+    const { browserPageId, hostedRemotely } = await this.createBrowserTabInRenderer(
       url,
       worktreeId,
       params.profileId,
@@ -1340,6 +1371,10 @@ export class RuntimeBrowserCommands {
       params.activate,
       params.page
     )
+
+    if (hostedRemotely) {
+      return { browserPageId }
+    }
 
     // Why: the webview must mount and register before the tab is operable, so wait here (returning the ID anyway on timeout).
     if (params.waitForRegistration !== false) {
@@ -1497,11 +1532,13 @@ export class RuntimeBrowserCommands {
       profile.id,
       profile.partition
     )
-    // Why: wait for the cloned tab's webview to register so the returned browserPageId is operable by the next CLI call.
-    try {
-      await waitForTabRegistration(created.browserPageId)
-    } catch {
-      // Best-effort: registration may not fire if the worktree is hidden.
+    if (!created.hostedRemotely) {
+      // Why: wait for the cloned tab's webview to register so the returned browserPageId is operable by the next CLI call.
+      try {
+        await waitForTabRegistration(created.browserPageId)
+      } catch {
+        // Best-effort: registration may not fire if the worktree is hidden.
+      }
     }
     return {
       browserPageId: created.browserPageId,
@@ -1763,44 +1800,54 @@ export class RuntimeBrowserCommands {
     sessionPartition: string | undefined,
     activate?: boolean,
     requestedPageId?: string
-  ): Promise<{ browserPageId: string }> {
+  ): Promise<{ browserPageId: string; hostedRemotely?: boolean }> {
     const win = this.host.getAuthoritativeWindow()
     const requestId = randomUUID()
 
-    const browserPageId = await new Promise<string>((resolve, reject) => {
-      const timer = setTimeout(() => {
-        ipcMain.removeListener('browser:tabCreateReply', handler)
-        reject(new Error('Tab creation timed out'))
-      }, 10_000)
+    const created = await new Promise<{ browserPageId: string; hostedRemotely?: boolean }>(
+      (resolve, reject) => {
+        const timer = setTimeout(() => {
+          ipcMain.removeListener('browser:tabCreateReply', handler)
+          reject(new Error('Tab creation timed out'))
+        }, 10_000)
 
-      const handler = (
-        event: Electron.IpcMainEvent,
-        reply: { requestId: string; browserPageId?: string; error?: string }
-      ): void => {
-        if (event.sender !== win.webContents || reply.requestId !== requestId) {
-          return
+        const handler = (
+          event: Electron.IpcMainEvent,
+          reply: {
+            requestId: string
+            browserPageId?: string
+            hostedRemotely?: boolean
+            error?: string
+          }
+        ): void => {
+          if (event.sender !== win.webContents || reply.requestId !== requestId) {
+            return
+          }
+          clearTimeout(timer)
+          ipcMain.removeListener('browser:tabCreateReply', handler)
+          if (reply.error) {
+            reject(new Error(reply.error))
+          } else {
+            resolve({
+              browserPageId: reply.browserPageId!,
+              hostedRemotely: reply.hostedRemotely
+            })
+          }
         }
-        clearTimeout(timer)
-        ipcMain.removeListener('browser:tabCreateReply', handler)
-        if (reply.error) {
-          reject(new Error(reply.error))
-        } else {
-          resolve(reply.browserPageId!)
-        }
+        ipcMain.on('browser:tabCreateReply', handler)
+        win.webContents.send('browser:requestTabCreate', {
+          requestId,
+          url,
+          worktreeId,
+          ...(requestedPageId ? { browserPageId: requestedPageId } : {}),
+          // Why: keep these undefined (not null) when no profile is chosen so the renderer still applies default-profile inheritance.
+          sessionProfileId: profileId,
+          sessionPartition,
+          activate
+        })
       }
-      ipcMain.on('browser:tabCreateReply', handler)
-      win.webContents.send('browser:requestTabCreate', {
-        requestId,
-        url,
-        worktreeId,
-        ...(requestedPageId ? { browserPageId: requestedPageId } : {}),
-        // Why: keep these undefined (not null) when no profile is chosen so the renderer still applies default-profile inheritance.
-        sessionProfileId: profileId,
-        sessionPartition,
-        activate
-      })
-    })
+    )
 
-    return { browserPageId }
+    return created
   }
 }

@@ -133,6 +133,7 @@ import {
 } from '../store/pinned-tab-close-guard'
 import {
   closeWebRuntimeSessionTab,
+  createWebRuntimeSessionBrowserTab,
   createWebRuntimeSessionTerminal,
   isWebRuntimeSessionActive
 } from '@/runtime/web-runtime-session'
@@ -159,7 +160,10 @@ import { showTerminalShortcutCaptureNotification } from '@/lib/terminal-shortcut
 import { resolveAgentStatusTerminalTitle } from '@/lib/agent-status-terminal-title'
 import { titleHasAgentName } from '../../../shared/agent-detection'
 import { isDecorativeAgentTitleFrameChange } from '../../../shared/agent-decorative-title-signature'
-import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
+import {
+  getExplicitRuntimeEnvironmentIdForWorktree,
+  getRuntimeEnvironmentIdForWorktree
+} from '@/lib/worktree-runtime-owner'
 import { resolveTerminalWorktreeRoute } from '@/lib/terminal-worktree-route'
 import { resolveAgentPaneAuthorityKey } from '@/store/slices/agent-pane-authority'
 import type {
@@ -2443,17 +2447,6 @@ export function useIpcEvents(): void {
     unsubs.push(
       window.api.ui.onRequestTabCreate((data) => {
         try {
-          if (isRuntimeEnvironmentActive()) {
-            // Why: browser automation targets client-local Electron webviews that runtime agents can't see or control.
-            window.api.ui.replyTabCreate({
-              requestId: data.requestId,
-              error: translate(
-                'auto.hooks.useIpcEvents.291c8ed902',
-                'Browser tabs are unavailable while a remote runtime is active'
-              )
-            })
-            return
-          }
           const store = useAppStore.getState()
           const worktreeId = data.worktreeId ?? store.activeWorktreeId
           if (!worktreeId) {
@@ -2461,6 +2454,48 @@ export function useIpcEvents(): void {
               requestId: data.requestId,
               error: translate('auto.hooks.useIpcEvents.f000b2ff76', 'No active worktree')
             })
+            return
+          }
+          // Why: browser tabs follow the worktree's owning host, not the global
+          // runtime focus. A merely focused runtime must not block local tabs;
+          // a remote-owned worktree gets a host-owned tab that mirrors back.
+          const runtimeEnvironmentId = getExplicitRuntimeEnvironmentIdForWorktree(store, worktreeId)
+          if (runtimeEnvironmentId) {
+            void createWebRuntimeSessionBrowserTab({
+              worktreeId,
+              environmentId: runtimeEnvironmentId,
+              url: data.url,
+              selectWorktree: false,
+              focusOnCreate: data.activate === true,
+              onCreatedPage: (browserPageId) => {
+                // Why: the tab lives on the remote host; there is no local
+                // webview to register, so main must skip its registration wait
+                // and post-create CDP navigation.
+                window.api.ui.replyTabCreate({
+                  requestId: data.requestId,
+                  browserPageId,
+                  hostedRemotely: true
+                })
+              }
+            })
+              .then((created) => {
+                if (!created) {
+                  window.api.ui.replyTabCreate({
+                    requestId: data.requestId,
+                    error: translate(
+                      'auto.hooks.useIpcEvents.51ed420ac1',
+                      'Browser tab creation failed on runtime environment {{value0}}',
+                      { value0: runtimeEnvironmentId }
+                    )
+                  })
+                }
+              })
+              .catch((err: unknown) => {
+                window.api.ui.replyTabCreate({
+                  requestId: data.requestId,
+                  error: err instanceof Error ? err.message : 'Tab creation failed'
+                })
+              })
             return
           }
           // Why: CLI-created tabs should land in the active browser tab's group, not the terminal's UI-active group.
@@ -2498,16 +2533,6 @@ export function useIpcEvents(): void {
     unsubs.push(
       window.api.ui.onRequestTabSetProfile((data) => {
         try {
-          if (isRuntimeEnvironmentActive()) {
-            window.api.ui.replyTabSetProfile({
-              requestId: data.requestId,
-              error: translate(
-                'auto.hooks.useIpcEvents.f45fa2b03c',
-                'Browser profiles are unavailable while a remote runtime is active'
-              )
-            })
-            return
-          }
           const store = useAppStore.getState()
           const owningWorkspace = Object.values(store.browserTabsByWorktree)
             .flat()
@@ -2525,6 +2550,18 @@ export function useIpcEvents(): void {
                 'auto.hooks.useIpcEvents.0e3cf53060',
                 'Browser tab {{value0}} not found',
                 { value0: data.browserPageId }
+              )
+            })
+            return
+          }
+          // Why: remote-mirrored tabs are profile-managed on their owning host;
+          // only local webviews can be torn down and remounted here.
+          if (getExplicitRuntimeEnvironmentIdForWorktree(store, owningWorkspace.worktreeId)) {
+            window.api.ui.replyTabSetProfile({
+              requestId: data.requestId,
+              error: translate(
+                'auto.hooks.useIpcEvents.3f3d2530e7',
+                'Browser profile switching is unavailable for remote-hosted tabs'
               )
             })
             return
@@ -2552,16 +2589,9 @@ export function useIpcEvents(): void {
     unsubs.push(
       window.api.ui.onRequestTabClose((data) => {
         try {
-          if (isRuntimeEnvironmentActive()) {
-            window.api.ui.replyTabClose({
-              requestId: data.requestId,
-              error: translate(
-                'auto.hooks.useIpcEvents.291c8ed902',
-                'Browser tabs are unavailable while a remote runtime is active'
-              )
-            })
-            return
-          }
+          // Why: no global runtime guard here — local worktrees must stay
+          // closable while a runtime is focused, and remote-mirrored pages
+          // already close through their owning environment.
           const store = useAppStore.getState()
           const explicitTargetId = data.tabId ?? null
           const replyBrowserTabNotFound = (tabId: string): void => {

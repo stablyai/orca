@@ -139,14 +139,24 @@ describe('openHttpLink', () => {
     expect(createBrowserTabMock).not.toHaveBeenCalled()
   })
 
-  it('routes to the system browser when a remote runtime environment is active', () => {
+  it('opens in-app when a local worktree is known even if a remote runtime is focused', () => {
     storeState.settings = { openLinksInApp: true, activeRuntimeEnvironmentId: 'env-1' }
 
     openHttpLink('https://example.com/', { worktreeId: 'wt-1' })
 
-    expect(openUrlMock).toHaveBeenCalledWith('https://example.com/')
-    expect(createBrowserTabMock).not.toHaveBeenCalled()
-    expect(setActiveWorktreeMock).not.toHaveBeenCalled()
+    expect(createBrowserTabMock).toHaveBeenCalledWith('wt-1', 'https://example.com/', {
+      activate: true
+    })
+    expect(openUrlMock).not.toHaveBeenCalled()
+  })
+
+  it('does not treat a missing sourceOwner as remote just because a runtime is focused', () => {
+    storeState.settings = { openLinksInApp: true, activeRuntimeEnvironmentId: 'env-1' }
+
+    openHttpLink('https://example.com/', { worktreeId: 'wt-1' })
+
+    expect(createBrowserTabMock).toHaveBeenCalled()
+    expect(openUrlMock).not.toHaveBeenCalled()
   })
 
   it('honors an explicit local document owner despite an unrelated active runtime', () => {
@@ -450,11 +460,13 @@ describe('openHttpLink', () => {
     expect(createBrowserTabMock).not.toHaveBeenCalled()
   })
 
-  it('does not label localhost links while a remote runtime is active', async () => {
+  it('still labels localhost links when a remote runtime is focused but ownership is unset', async () => {
     storeState.settings = {
       localhostWorktreeLabelsEnabled: true,
       activeRuntimeEnvironmentId: 'web-runtime'
     }
+    storeState.repos = [{ id: 'repo-1', displayName: 'snapstudio' }]
+    storeState.worktreesByRepo = { 'repo-1': [{ id: 'wt-main', projectId: 'repo-1' }] }
     storeState.workspacePortScan = {
       result: {
         platform: 'darwin',
@@ -478,9 +490,13 @@ describe('openHttpLink', () => {
         ]
       }
     }
+    registerLocalhostLabelMock.mockResolvedValue({
+      url: 'http://snapstudio-main.orca.localhost:60016/'
+    })
 
-    await expect(resolveLocalhostHttpLinkDisplayUrl('http://localhost:5180/')).resolves.toBe(null)
-    expect(registerLocalhostLabelMock).not.toHaveBeenCalled()
+    await expect(resolveLocalhostHttpLinkDisplayUrl('http://localhost:5180/')).resolves.toBe(
+      'http://snapstudio-main.orca.localhost:60016/'
+    )
   })
 
   // Why: the hover label must describe the click's real destination — a remote pane's

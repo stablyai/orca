@@ -1,4 +1,5 @@
 import { defineMethod, type RpcMethod } from '../core'
+import { withBrowserEnvironmentForwarding } from '../../browser-command-environment-forwarding'
 import { BrowserTarget, requiredString } from '../schemas'
 import {
   Check,
@@ -38,7 +39,7 @@ const CertificateProceed = BrowserTarget.extend({
   challengeId: requiredString('Missing required challengeId')
 })
 
-export const BROWSER_CORE_METHODS: RpcMethod[] = [
+const BROWSER_CORE_METHOD_DEFINITIONS: RpcMethod[] = [
   defineMethod({
     name: 'browser.snapshot',
     params: BrowserTarget,
@@ -286,3 +287,12 @@ export const BROWSER_CORE_METHODS: RpcMethod[] = [
     handler: async (params, { runtime }) => runtime.browserHighlight(params)
   })
 ]
+
+// Why: desktop CDP only sees local webviews. Retry target-misses against the
+// worktree's owning environment so remote-hosted tabs stay operable.
+export const BROWSER_CORE_METHODS: RpcMethod[] = withBrowserEnvironmentForwarding(
+  BROWSER_CORE_METHOD_DEFINITIONS,
+  (method, params, timeoutMs, ctx) =>
+    ctx.runtime.forwardBrowserCommandToEnvironment?.(method, params, timeoutMs) ??
+    Promise.resolve({ handled: false })
+)

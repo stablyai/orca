@@ -654,6 +654,7 @@ import {
 import { advertisedUrlWatcher } from '../ports/advertised-url-watcher'
 import type { AutomationService } from '../automations/service'
 import { RuntimeBrowserCommands } from './orca-runtime-browser'
+import { forwardBrowserCommandToOwningEnvironment } from './browser-command-environment-forwarding'
 import { RemoteRuntimeTerminalCreateIdempotency } from './remote-runtime-terminal-create-idempotency'
 import { deriveRemoteRuntimeTerminalCreateHandle } from './remote-runtime-terminal-create-identity'
 import {
@@ -38101,6 +38102,8 @@ export class OrcaRuntimeService {
     getAuthoritativeWindow: () => this.getAuthoritativeWindow(),
     getAvailableAuthoritativeWindow: () => this.getAvailableAuthoritativeWindow(),
     getOffscreenBrowserBackend: () => this.offscreenBrowserBackend,
+    forwardBrowserCommandToEnvironment: (method, params, timeoutMs) =>
+      this.forwardBrowserCommandToEnvironment(method, params, timeoutMs),
     // Why: bind directly, not a wrapper arrow — a hand-listed wrapper dropped targetGroupId, so a right-split browser landed in the left.
     markHeadlessBrowserSessionTabActive: this.markHeadlessBrowserSessionTabActive.bind(this),
     notifyHeadlessBrowserSessionTabsChanged: (worktreeId) =>
@@ -38577,6 +38580,54 @@ export class OrcaRuntimeService {
     }
     const win = BrowserWindow.fromId(this.authoritativeWindowId)
     return win && !win.isDestroyed() ? win : null
+  }
+
+  // Why: browser RPC retries target-misses against the worktree's owning
+  // environment, never the globally focused runtime. A focused runtime that
+  // does not own this worktree must not receive the command.
+  async resolveBrowserCommandOwnerEnvironmentId(params: unknown): Promise<string | null> {
+    const worktreeSelector =
+      typeof (params as { worktree?: unknown } | null | undefined)?.worktree === 'string'
+        ? (params as { worktree: string }).worktree.trim()
+        : ''
+    if (!worktreeSelector) {
+      return null
+    }
+    let worktreeId = worktreeSelector.startsWith('id:') ? worktreeSelector.slice(3) : ''
+    if (!worktreeId) {
+      try {
+        worktreeId = (await this.resolveWorktreeSelector(worktreeSelector)).id
+      } catch {
+        return null
+      }
+    }
+    const hostId = this.store?.getWorktreeMeta?.(worktreeId)?.hostId
+    const host = parseExecutionHostId(hostId)
+    return host?.kind === 'runtime' ? host.environmentId : null
+  }
+
+  async forwardBrowserCommandToEnvironment(
+    method: string,
+    params: unknown,
+    timeoutMs: number
+  ): Promise<{ handled: boolean; result?: unknown }> {
+    const environmentId = await this.resolveBrowserCommandOwnerEnvironmentId(params)
+    if (!environmentId) {
+      return { handled: false }
+    }
+    let userDataPath: string
+    try {
+      userDataPath = app.getPath('userData')
+    } catch {
+      return { handled: false }
+    }
+    return forwardBrowserCommandToOwningEnvironment({
+      environmentId,
+      userDataPath,
+      method,
+      params,
+      timeoutMs
+    })
   }
 }
 

@@ -125,8 +125,9 @@ export function openHttpLink(url: string, opts: OpenHttpLinkOptions = {}): void 
     return
   }
   const state = storeAccessor?.()
-  const remoteRuntimeActive = Boolean(state?.settings?.activeRuntimeEnvironmentId?.trim())
-  const sourceIsLocal = sourceOwner ? sourceOwner.kind === 'local' : !remoteRuntimeActive
+  // Why: missing sourceOwner is not evidence of remoteness. Global runtime focus
+  // belongs to an unrelated workspace and must not reclassify this click.
+  const sourceIsLocal = !sourceOwner || sourceOwner.kind === 'local'
   const openLinksInApp = state?.settings?.openLinksInApp === true
   const modifier = resolveModifierRouting(
     Boolean(modifierHeld),
@@ -196,14 +197,11 @@ function localhostLabelRouteForHttpLink(
   if (sourceOwner && sourceOwner.kind !== 'local') {
     return null
   }
-  if (!sourceOwner && state.settings?.activeRuntimeEnvironmentId?.trim()) {
-    return null
-  }
   const sourceScan =
     sourceOwner?.kind === 'local'
       ? (state.workspacePortScansByKey?.['local:all'] ?? null)
       : undefined
-  return localhostLabelRouteForTerminalLink(url, state, sourceOwner?.kind === 'local', sourceScan)
+  return localhostLabelRouteForTerminalLink(url, state, sourceScan)
 }
 
 export async function resolveLocalhostHttpLinkDisplayUrl(
@@ -244,13 +242,9 @@ async function openLabeledLocalhostLink(
 function localhostLabelRouteForTerminalLink(
   rawUrl: string,
   state: ReturnType<StoreAccessor>,
-  ignoreActiveRuntime = false,
   sourceScan?: WorkspacePortScanResult | null
 ): LocalhostWorktreeLabelRoute | null {
-  if (
-    state.settings?.localhostWorktreeLabelsEnabled !== true ||
-    (!ignoreActiveRuntime && state.settings?.activeRuntimeEnvironmentId?.trim())
-  ) {
+  if (state.settings?.localhostWorktreeLabelsEnabled !== true) {
     return null
   }
   // Why: only loopback links we can attribute to a scanned workspace port

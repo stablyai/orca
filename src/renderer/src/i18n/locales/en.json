@@ -856,6 +856,8 @@
         "a8d2bf8e9e": "No active browser tab to close",
         "291c8ed902": "Browser tabs are unavailable while a remote runtime is active",
         "f45fa2b03c": "Browser profiles are unavailable while a remote runtime is active",
+        "51ed420ac1": "Browser tab creation failed on runtime environment {{value0}}",
+        "3f3d2530e7": "Browser profile switching is unavailable for remote-hosted tabs",
         "f000b2ff76": "No active worktree",
         "56d3ec4203": "Failed to create untitled markdown file.",
         "f6300deb8b": "New Browser Tab",

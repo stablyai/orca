@@ -734,6 +734,8 @@
         "a8d2bf8e9e": "No hay ninguna pestaña activa del navegador para cerrar",
         "291c8ed902": "Las pestañas del navegador no están disponibles mientras haya un host remoto activo",
         "f45fa2b03c": "Los perfiles del navegador no están disponibles mientras haya un host remoto activo",
+        "51ed420ac1": "Error al crear la pestaña del navegador en el entorno de runtime {{value0}}",
+        "3f3d2530e7": "El cambio de perfil no está disponible para pestañas alojadas en remoto",
         "f000b2ff76": "No hay ningún worktree activo",
         "56d3ec4203": "No se pudo crear el archivo Markdown sin título.",
         "f6300deb8b": "Nueva pestaña del navegador",

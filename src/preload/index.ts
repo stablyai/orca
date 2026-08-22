@@ -3846,6 +3846,7 @@ const api = {
     replyTabCreate: (reply: {
       requestId: string
       browserPageId?: string
+      hostedRemotely?: boolean
       error?: string
     }): void => {
       ipcRenderer.send('browser:tabCreateReply', reply)
