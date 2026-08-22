@@ -8,7 +8,6 @@ import { execFile, type ExecFileException } from 'node:child_process'
 // on the output side instead — see pty-startup-reply-echo-shapes.ts.
 
 /** `unknown` means "could not be determined", never "assume quiet". */
-export type PtySlaveLineDisciplineEcho = 'echoing' | 'quiet' | 'unknown'
 
 export type PtySlaveLineEditorState = 'line-editor' | 'other' | 'unknown'
 

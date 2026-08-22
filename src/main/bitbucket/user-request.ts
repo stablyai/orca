@@ -56,10 +56,3 @@ export async function fetchBitbucketUserResult(
 }
 
 /** Convenience for callers that only need the account, not the failure reason. */
-export async function fetchBitbucketUser(
-  config: BitbucketAuthConfig,
-  timeoutMs: number = USER_REQUEST_TIMEOUT_MS
-): Promise<RawBitbucketUser | null> {
-  const result = await fetchBitbucketUserResult(config, timeoutMs)
-  return result.ok ? result.user : null
-}

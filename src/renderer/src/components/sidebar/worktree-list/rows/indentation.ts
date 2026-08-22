@@ -16,7 +16,7 @@ export const LINEAGE_CHILDREN_INLINE_OFFSET =
   LINEAGE_IMMEDIATE_PARENT_STEP - WORKTREE_CARD_SURFACE_MARGIN - FLUSH_CARD_MIN_CONTENT_INSET
 // Why: sub-tree-step surface indent preserving the compact grouped child-card rhythm.
 const GROUPED_WORKTREE_CARD_SURFACE_INDENT = 14
-export const PROJECT_GROUP_HEADER_BASE_PADDING = 10
+const PROJECT_GROUP_HEADER_BASE_PADDING = 10
 // Why: shared with project headers so titles don't shift when grouping mode changes.
 export const WORKTREE_SECTION_HEADER_PADDING_LEFT = PROJECT_GROUP_HEADER_BASE_PADDING
 export const PROJECT_GROUP_HEADER_INDENT = 10

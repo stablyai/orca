@@ -19,20 +19,6 @@ export type GitLabIssueState = 'opened' | 'closed'
 export type MRMergeableState = 'MERGEABLE' | 'CONFLICTING' | 'UNKNOWN'
 
 // Why: field names mirror PRCheckDetail so the rendering layer can share a row component.
-export type MRCheckDetail = {
-  name: string
-  status: 'queued' | 'in_progress' | 'completed'
-  conclusion:
-    | 'success'
-    | 'failure'
-    | 'cancelled'
-    | 'timed_out'
-    | 'neutral'
-    | 'skipped'
-    | 'pending'
-    | null
-  url: string | null
-}
 
 export type MRInfo = {
   number: number

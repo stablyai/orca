@@ -29,7 +29,6 @@ import { detectLanguage } from '@/lib/language-detect'
 import { openFileInBrowserTab } from '@/lib/file-preview'
 import { isLocalPathOpenBlocked, showLocalPathOpenBlockedToast } from '@/lib/local-path-open-guard'
 import { translate } from '@/i18n/i18n'
-import type { TreeNode } from './file-explorer-types'
 import {
   getFileExplorerOwnerUnresolvedMessage,
   requireMatchingFileExplorerOperationRoute

@@ -97,9 +97,6 @@ function resolveDumpDirectory(): string | null {
   }
 }
 
-export function getCrashpadDumpDirectory(): string | null {
-  return crashpadDumpDirectory
-}
 
 /** Test seam; production callers go through startCrashpadCapture. */
 export function _setCrashpadCaptureStateForTest(

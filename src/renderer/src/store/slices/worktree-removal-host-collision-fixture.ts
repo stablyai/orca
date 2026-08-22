@@ -20,10 +20,6 @@ export const COLLIDING_WORKTREE_ID = 'repo1::/shared/workspace/path'
 export const COLLIDING_WORKTREE_PATH = '/shared/workspace/path'
 export const LOCAL_HOST: ExecutionHostId = 'local'
 export const SSH_HOST: ExecutionHostId = 'ssh:ssh-1'
-export const RELAY_HOST: ExecutionHostId = 'runtime:env-1'
-
-export const HOST_COLLISION_MESSAGE =
-  'Error: this workspace exists on multiple hosts at the same path'
 export const HOST_UNRESOLVED_MESSAGE =
   'MCode cannot tell which host owns this workspace. Refresh projects and review it again.'
 

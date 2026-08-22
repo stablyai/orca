@@ -82,7 +82,6 @@ export function createPaneContainer(): HTMLElement {
   return container
 }
 
-export type MockPaneDisposable = { dispose: Mock }
 
 export type MockPaneBuffer = {
   type: 'normal' | 'alternate'

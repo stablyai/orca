@@ -18,10 +18,6 @@ export function shouldAdjustWorktreeSidebarMeasuredRowScroll(args: {
   return !args.isScrolling && args.now >= args.suppressUntil
 }
 
-export type WorktreeSidebarScrollSuppression = ReturnType<
-  typeof useWorktreeSidebarScrollSuppression
->
-
 // Tracks the two suppression windows the virtualizer honours: measurement correction
 // (any scroll movement) and anchor restore (direct user input or a settling reveal).
 export function useWorktreeSidebarScrollSuppression(

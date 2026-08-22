@@ -1,7 +1,5 @@
 import { cleanGeneratedCommitMessage, truncateDiffForPrompt } from './commit-message-prompt'
-import type { TuiAgent } from './tui-agent'
 
-export type CommitMessageDraftAgent = TuiAgent | 'custom'
 
 export type CommitMessageDraftContext = {
   branch: string | null

@@ -130,20 +130,6 @@ export function handleTerminalHttpLink(
   })
 }
 
-export function openHttpLinkAtTerminalMouseEvent(
-  terminal: Terminal,
-  event: MouseEvent,
-  deps: UrlLinkHitTestDeps
-): boolean {
-  if (event.button !== 0 || !isTerminalHttpLinkActivation(event)) {
-    return false
-  }
-  const position = getTerminalBufferPositionForMouseEvent(terminal, event)
-  if (!position) {
-    return false
-  }
-  return openHttpLinkAtBufferPosition(terminal.buffer.active, position, terminal.cols, deps)
-}
 
 export function findHttpLinkAtTerminalMouseEvent(
   terminal: Terminal,

@@ -14,7 +14,6 @@ export type LinearWorkspace = LinearViewer & {
 }
 
 export type LinearWorkspaceSelection = (string & {}) | 'all'
-export type LinearWorkspaceSelector = LinearWorkspaceSelection | undefined
 export type LinearConcreteWorkspaceId = string
 
 export type LinearWorkspaceError = {

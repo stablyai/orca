@@ -40,13 +40,6 @@ const NON_RETRYABLE_SKILL_TRANSFER_ERRORS = new Set([
   'skill-install-ssh-download-unavailable'
 ])
 
-export async function supportsSkillManagementOnSsh(
-  provider: SkillSshProviderSource
-): Promise<boolean> {
-  return (await skillSshRelayCapabilities(requireSkillSshRelayClient(provider))).includes(
-    SKILL_MANAGEMENT_CAPABILITY
-  )
-}
 
 export async function installSkillOnSshHost(input: {
   provider: SkillSshProviderSource

@@ -89,19 +89,8 @@ export function isSkillInstallProviderId(value: string): value is SkillInstallPr
   return PROVIDERS_BY_ID.has(value as SkillInstallProviderId)
 }
 
-export function skillInstallProvider(
-  id: SkillInstallProviderId
-): SkillInstallProviderDefinition | undefined {
-  return PROVIDERS_BY_ID.get(id)
-}
 
 /** Detected agents MCode can actually place skills for, in registry order. */
-export function installableSkillProviders(
-  detectedProviders: readonly string[]
-): SkillInstallProviderDefinition[] {
-  const detected = new Set(detectedProviders)
-  return SKILL_INSTALL_PROVIDERS.filter((provider) => detected.has(provider.id))
-}
 
 /**
  * An explicit choice is authoritative, including agents the target may install

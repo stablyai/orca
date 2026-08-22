@@ -304,7 +304,3 @@ export function useSourceControlCommitMessageGeneration({
     isGenerating
   }
 }
-
-export type SourceControlCommitMessageGeneration = ReturnType<
-  typeof useSourceControlCommitMessageGeneration
->

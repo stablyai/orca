@@ -12,8 +12,6 @@ export const SkillInstallFailureCategorySchema = z.enum([
   'cancelled'
 ])
 
-export type SkillInstallFailureCategory = z.infer<typeof SkillInstallFailureCategorySchema>
-
 export const SkillInstallFailureSchema = z
   .object({
     category: SkillInstallFailureCategorySchema,

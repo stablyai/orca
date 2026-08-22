@@ -33,19 +33,3 @@ export const RelayPhoneHelloSchema = z.union([
 ])
 
 export type RelayPhoneHello = z.infer<typeof RelayPhoneHelloSchema>
-
-export const RelayMovedSchema = z
-  .object({
-    type: z.literal('relay-moved'),
-    v: z.literal(1),
-    cellUrl: z.string().refine((value) => {
-      try {
-        const parsed = new URL(value)
-        return parsed.protocol === 'https:' && parsed.origin === value
-      } catch {
-        return false
-      }
-    }),
-    assignmentEpoch: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER)
-  })
-  .strict()

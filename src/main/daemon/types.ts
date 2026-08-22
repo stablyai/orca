@@ -352,9 +352,6 @@ export type ListSessionsResult = {
   sessions: SessionInfo[]
 }
 
-export type ShutdownIfIdleResult = {
-  retiring: boolean
-}
 
 export type SystemResolverHealth = 'healthy' | 'unhealthy' | 'unknown'
 

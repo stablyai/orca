@@ -21,7 +21,6 @@ export const RELAY_BUILD_PLATFORMS = [
   'win32-arm64'
 ] as const
 
-export type RelayBuildPlatform = (typeof RELAY_BUILD_PLATFORMS)[number]
 
 export function isWindowsRelayPlatform(platform: string): boolean {
   return platform.startsWith('win32-')

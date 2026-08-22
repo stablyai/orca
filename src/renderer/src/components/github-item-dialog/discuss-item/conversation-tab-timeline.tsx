@@ -8,13 +8,8 @@ import type {
 import { translate } from '@/i18n/i18n'
 import {
   getTimelineStateReasonLabel,
-  getTimelineTargetLabel,
-  type IssueConversationEntry
+  getTimelineTargetLabel
 } from './issue-conversation-entries'
-import {
-  renderCommentCard,
-  type ConversationCommentCardContext
-} from './conversation-tab-comment-card'
 
 export function renderTimelineTarget(
   target: GitHubIssueTimelineTarget | undefined
@@ -154,14 +149,6 @@ export function renderTimelineActivity(activity: GitHubIssueTimelineItem): React
   )
 }
 
-export function renderIssueConversationEntry(
-  entry: IssueConversationEntry,
-  ctx: ConversationCommentCardContext
-): React.JSX.Element {
-  return entry.kind === 'comment'
-    ? renderCommentCard(entry.comment, false, ctx)
-    : renderTimelineActivity(entry.activity)
-}
 
 export function ConversationTabTimelineActivity({
   activity

@@ -1,8 +1,5 @@
 import { translate } from '@/i18n/i18n'
-import type {
-  WorkspaceCleanupScanError,
-  WorkspaceCleanupScanProgress
-} from '../../../../shared/workspace-cleanup'
+import type { WorkspaceCleanupScanError } from '../../../../shared/workspace-cleanup'
 
 function isDisconnectedRemoteScanError(message: string): boolean {
   return (
@@ -48,21 +45,6 @@ export function formatWorkspaceCleanupScanNotice(
   )
 }
 
-export function formatWorkspaceCleanupScanProgress(
-  progress: WorkspaceCleanupScanProgress | null
-): string {
-  if (!progress || progress.scannedWorktreeCount === 0) {
-    return translate(
-      'auto.components.workspace.cleanup.WorkspaceCleanupDialog.4cc5b73efe',
-      'Finding workspaces...'
-    )
-  }
-  return translate(
-    'auto.components.workspace.cleanup.WorkspaceCleanupDialog.7b7bde5181',
-    'Checked workspaces so far: {{value0}}',
-    { value0: progress.scannedWorktreeCount }
-  )
-}
 
 export function formatWorkspaceCleanupReadyToast(
   workspaceCount: number,

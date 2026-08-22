@@ -140,7 +140,3 @@ export function useSourceControlCreatePrIntentFlows(
 
   return { ...createPrIntentReview, ...createPrIntentProbes, ...createPrIntentRun }
 }
-
-export type SourceControlCreatePrIntentFlows = ReturnType<
-  typeof useSourceControlCreatePrIntentFlows
->
