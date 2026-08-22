@@ -20,6 +20,10 @@ describe('agent session resume metadata', () => {
     expect(isResumableTuiAgent('prime-agent')).toBe(true)
   })
 
+  it('treats hermes as a resumable TUI agent', () => {
+    expect(isResumableTuiAgent('hermes')).toBe(true)
+  })
+
   it.each([
     ['claude', { session_id: 'claude-session' }, { key: 'session_id', id: 'claude-session' }],
     ['codex', { session_id: 'codex-session' }, { key: 'session_id', id: 'codex-session' }],
@@ -44,7 +48,8 @@ describe('agent session resume metadata', () => {
       'prime-agent',
       { session_id: 'prime-session', session_file: '/tmp/prime-session.jsonl' },
       { key: 'session_id', id: 'prime-session', transcriptPath: '/tmp/prime-session.jsonl' }
-    ]
+    ],
+    ['hermes', { session_id: 'hermes-session' }, { key: 'session_id', id: 'hermes-session' }]
   ] as const)('extracts %s provider session ids', (source, payload, expected) => {
     expect(extractAgentProviderSession(source, payload)).toEqual(expected)
   })
@@ -69,16 +74,22 @@ describe('agent session resume metadata', () => {
       'prime-agent',
       { key: 'session_id', id: 's1', transcriptPath: '/tmp/prime-session.jsonl' },
       ['prime-agent', '--resume', '/tmp/prime-session.jsonl']
-    ]
+    ],
+    ['hermes', { key: 'session_id', id: 's1' }, ['hermes', '--resume', 's1']]
   ] as const)('builds %s resume argv', (agent, providerSession, expected) => {
     expect(getAgentResumeArgv(agent, providerSession)).toEqual(expected)
   })
 
   it('rejects unsupported sources and unsafe ids', () => {
     expect(extractAgentProviderSession('cursor', { session_id: 'cursor-session' })).toBeNull()
+    expect(extractAgentProviderSession('amp', { session_id: 'amp-session' })).toBeNull()
+    expect(extractAgentProviderSession('copilot', { session_id: 'copilot-session' })).toBeNull()
     expect(normalizeAgentProviderSession({ key: 'session_id', id: 'bad\nid' })).toBeNull()
     expect(normalizeAgentProviderSession({ key: 'session_id', id: '--last' })).toBeNull()
     expect(extractAgentProviderSession('codex', { session_id: '--last' })).toBeNull()
+    expect(extractAgentProviderSession('hermes', { session_id: '--last' })).toBeNull()
+    expect(extractAgentProviderSession('hermes', { session_id: 'bad\nid' })).toBeNull()
+    expect(extractAgentProviderSession('hermes', { conversation_id: 'hermes-conversation' })).toBeNull()
     expect(normalizeAgentProviderSession({ key: 'session_id', id: 'ok' })).toEqual({
       key: 'session_id',
       id: 'ok'
@@ -107,6 +118,10 @@ describe('agent session resume metadata', () => {
     expect(getAgentResumeArgv('devin', { key: 'conversation_id', id: 'x' })).toBeNull()
   })
 
+  it('rejects hermes resume when provider session key is not session_id', () => {
+    expect(getAgentResumeArgv('hermes', { key: 'conversation_id', id: 'x' })).toBeNull()
+  })
+
   it('captures the hook transcript_path for native-chat agents (claude/codex)', () => {
     expect(
       extractAgentProviderSession('claude', {
@@ -127,6 +142,12 @@ describe('agent session resume metadata', () => {
     expect(
       extractAgentProviderSession('gemini', { session_id: 'gs', transcript_path: '/x/r.jsonl' })
     ).toEqual({ key: 'session_id', id: 'gs' })
+    expect(
+      extractAgentProviderSession('hermes', {
+        session_id: 'hermes-session',
+        transcript_path: '/x/hermes.jsonl'
+      })
+    ).toEqual({ key: 'session_id', id: 'hermes-session' })
   })
 
   it('round-trips transcriptPath through normalizeAgentProviderSession', () => {
