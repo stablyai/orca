@@ -22,9 +22,6 @@ export class OrcaRuntimeWithCreateTerminalSideEffectCommandCodeDetector extends 
   ): NonNullable<RuntimePtyTitleTrackerEntry['commandCodeDetector']> {
     // Why: Command Code keeps its legacy fact kinds so what hosts publish for it
     // is unchanged for older clients; other scraped agents use the generic kinds.
-    const feedsLifecycle = new Set(
-      AGENT_OUTPUT_STATUS_PROFILES.filter((p) => p.feedsPromptLifecycle).map((p) => p.agent)
-    )
     return createAgentOutputStatusObserver({
       startupCommand: this.terminalSpawnCommandsByPtyId.get(ptyId) ?? null,
       onWorking: (agent, prompt) => {
@@ -34,9 +31,6 @@ export class OrcaRuntimeWithCreateTerminalSideEffectCommandCodeDetector extends 
             ? { kind: 'command-code-working', prompt }
             : { kind: 'agent-output-working', agent, prompt }
         )
-        if (feedsLifecycle.has(agent)) {
-          this.recordAgentPromptLifecycleState(ptyId, 'working')
-        }
       },
       onDone: (agent, prompt) => {
         this.recordTerminalSideEffectFact(
@@ -45,17 +39,29 @@ export class OrcaRuntimeWithCreateTerminalSideEffectCommandCodeDetector extends 
             ? { kind: 'command-code-done', prompt }
             : { kind: 'agent-output-done', agent, prompt }
         )
-        if (feedsLifecycle.has(agent)) {
-          this.recordAgentPromptLifecycleState(ptyId, 'idle')
-        }
       },
       onWaiting: (agent, prompt) => {
         this.recordTerminalSideEffectFact(ptyId, { kind: 'agent-output-waiting', agent, prompt })
-        if (feedsLifecycle.has(agent)) {
-          this.recordAgentPromptLifecycleState(ptyId, 'permission')
-        }
       }
     })
+  }
+
+  protected createPromptLifecycleOutputObserver(
+    ptyId: string
+  ): RuntimePtyTitleTrackerEntry['promptLifecycleDetector'] {
+    const profiles = AGENT_OUTPUT_STATUS_PROFILES.filter((profile) => profile.feedsPromptLifecycle)
+    if (profiles.length === 0) {
+      return null
+    }
+    return createAgentOutputStatusObserver(
+      {
+        startupCommand: this.terminalSpawnCommandsByPtyId.get(ptyId) ?? null,
+        onWorking: () => this.recordAgentPromptLifecycleState(ptyId, 'working'),
+        onDone: () => this.recordAgentPromptLifecycleState(ptyId, 'idle'),
+        onWaiting: () => this.recordAgentPromptLifecycleState(ptyId, 'permission')
+      },
+      profiles
+    )
   }
 
   protected extractLastOsc7CwdForPty(

@@ -224,6 +224,7 @@ export class OrcaRuntimeWithOnPtyData extends OrcaRuntimeWithPreparePtyExecution
       // detector's bounded recent-text window; the detector strips remaining
       // control sequences itself, exactly like the renderer byte path.
       titleTrackerEntry.commandCodeDetector?.observe(agentStatusChunk.cleanData)
+      titleTrackerEntry.promptLifecycleDetector?.observe(agentStatusChunk.cleanData)
     } finally {
       titleTrackerEntry.applyingChunk = false
       try {
