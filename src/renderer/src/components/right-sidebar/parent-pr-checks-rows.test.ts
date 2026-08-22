@@ -167,6 +167,7 @@ describe('buildParentPrChecksProjection', () => {
       status: 'cancelled',
       group: 'needsAttention',
       checkTone: 'cancelled',
+      reviewStatus: 'cancelled',
       summary: 'Checks cancelled'
     })
     expect(cancelled.summary).toMatchObject({ failing: 0, cancelled: 1 })
