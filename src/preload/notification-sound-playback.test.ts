@@ -79,19 +79,23 @@ describe('createNotificationSoundPlayback', () => {
     expect(playback.isPlaying()).toBe(false)
   })
 
-  it('stops the fallback timer once ended fires, and a late timer fires nothing', () => {
+  it("a finished playback's fallback timer cannot release the next window early", () => {
     const playback = createNotificationSoundPlayback()
     const first = fakeAudio()
     playback.begin(first.audio)
-    first.emit('ended')
-
-    // The timer for the finished playback must not release the NEXT one early.
+    // Stagger the windows so their deadlines differ: the first began at t=0, the second at
+    // t=half-bound, so the first timer's deadline must not still the second's flag.
+    vi.advanceTimersByTime(MAX_NOTIFICATION_SOUND_PLAYBACK_MS / 2)
     const second = fakeAudio()
     playback.begin(second.audio)
-    vi.advanceTimersByTime(MAX_NOTIFICATION_SOUND_PLAYBACK_MS + 5)
-    expect(playback.isPlaying()).toBe(false)
+    first.emit('ended')
 
-    second.emit('ended')
+    // Past the FIRST window's deadline (t=10000) but before the second's (t=15000): the
+    // second window must survive the first timer's firing.
+    vi.advanceTimersByTime(MAX_NOTIFICATION_SOUND_PLAYBACK_MS - 1)
+    expect(playback.isPlaying()).toBe(true)
+
+    vi.advanceTimersByTime(1)
     expect(playback.isPlaying()).toBe(false)
   })
 
