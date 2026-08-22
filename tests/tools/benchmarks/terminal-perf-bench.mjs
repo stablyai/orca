@@ -19,14 +19,14 @@ import {
   pickFreePort,
   stopDevApp,
   waitForStoreReady
-} from '../../config/scripts/windows-apphang-repro/electron-dev-session.mjs'
+} from '../../../config/scripts/windows-apphang-repro/electron-dev-session.mjs'
 import {
   pollUntil,
   rendererActionTimeoutMs,
   runWithTimeout,
   setupTimeoutMs
-} from '../../config/scripts/windows-apphang-repro/repro-timing.mjs'
-import { safeRemoveLocalDirectory } from '../../config/scripts/windows-apphang-repro/wsl-workspace-fixture.mjs'
+} from '../../../config/scripts/windows-apphang-repro/repro-timing.mjs'
+import { safeRemoveLocalDirectory } from '../../../config/scripts/windows-apphang-repro/wsl-workspace-fixture.mjs'
 
 const rootDir = path.resolve(fileURLToPath(new URL('../..', import.meta.url)))
 const scenarioTimeoutMs = 300_000

@@ -35,7 +35,9 @@ describe('Monaco external-content undo history', () => {
 
     syncContentUpdate(editorInstance, 'first line\nappended', 'read-only-live-tail')
 
-    expect(model.getValue()).toBe('first line\nappended')
+    // Why: Monaco picks the model EOL from the host OS (CRLF on Windows), so
+    // compare content-normalized — the assertion targets undo behavior.
+    expect(model.getValue().replace(/\r\n/g, '\n')).toBe('first line\nappended')
     expect(model.canUndo()).toBe(false)
   })
 

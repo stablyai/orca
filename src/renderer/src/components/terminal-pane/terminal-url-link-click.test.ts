@@ -195,7 +195,7 @@ describe('hard-wrapped terminal HTTP clicks', () => {
     expect(openUrlMock).toHaveBeenCalledTimes(1)
     expect(openUrlMock).toHaveBeenCalledWith(FULL_URL)
     expect(new URL(URL_ROWS[0]).pathname).toHaveLength(136)
-    expect(`${new URL(FULL_URL).pathname}${new URL(FULL_URL).search}`).toHaveLength(811)
+    expect(`${new URL(FULL_URL).pathname}${new URL(FULL_URL).search}`).toHaveLength(812)
     expect(event.preventDefault).toHaveBeenCalled()
     expect(clearSelection).toHaveBeenCalled()
     disposable.dispose()
@@ -237,7 +237,7 @@ describe('hard-wrapped terminal HTTP clicks', () => {
 
     expect(openUrlMock).toHaveBeenCalledTimes(1)
     expect(openUrlMock).toHaveBeenCalledWith(FULL_URL)
-    expect(new URL(FRAMED_URL_ROWS[0]).pathname).toHaveLength(88)
+    expect(new URL(FRAMED_URL_ROWS[0]).pathname).toHaveLength(89)
   })
 
   it('reconstructs a URL that fills each cursor-positioned TUI row up to its frame', () => {

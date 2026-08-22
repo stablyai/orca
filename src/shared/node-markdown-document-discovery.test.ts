@@ -13,9 +13,11 @@ function entry(name: string, kind: 'directory' | 'file' | 'symlink' = 'file'): D
 }
 
 function reader(entriesByPath: Record<string, Dirent[]>) {
+  // Why: production passes absolute paths through node:path.join, which yields
+  // backslashes on Windows; normalize so lookups stay separator-agnostic.
   return async (path: string): Promise<AsyncIterable<Dirent>> => ({
     async *[Symbol.asyncIterator]() {
-      yield* entriesByPath[path] ?? []
+      yield* entriesByPath[path.replace(/\\/g, '/')] ?? []
     }
   })
 }
