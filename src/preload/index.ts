@@ -332,6 +332,7 @@ import type {
 } from '../shared/crash-reporting'
 import type { RendererHeapStatistics } from '../shared/renderer-heap-statistics'
 import { readRendererHeapStatistics } from './renderer-heap-statistics-reader'
+import { createNotificationSoundPlayback } from './notification-sound-playback'
 import { createUpdaterQuitAbortRelay } from '../shared/renderer-restart-preparation'
 import {
   prepareAndInvokeAppRestart,
@@ -406,14 +407,10 @@ let cachedNotificationSound: {
   blobUrl: string
   audio: HTMLAudioElement
 } | null = null
-let isNotificationSoundPlaying = false
-// Why: audio.play() can reject before ended/error fires — cleanup hook prevents leaked listeners on the cached Audio.
-let cleanupNotificationSoundPlayback: (() => void) | null = null
+const notificationSoundPlayback = createNotificationSoundPlayback()
 
 function clearNotificationSoundPlaybackState(): void {
-  cleanupNotificationSoundPlayback?.()
-  cleanupNotificationSoundPlayback = null
-  isNotificationSoundPlaying = false
+  notificationSoundPlayback.forceRelease()
 }
 
 function disposeCachedNotificationSound(): void {
@@ -2336,7 +2333,7 @@ const api = {
     }): Promise<NotificationSoundResult> => {
       try {
         // Why: drop replays while still ringing; the test button passes force to always confirm.
-        if (!options?.force && isNotificationSoundPlaying) {
+        if (!options?.force && notificationSoundPlayback.isPlaying()) {
           return { played: false, reason: 'deduped' }
         }
 
@@ -2374,22 +2371,7 @@ const api = {
         if (typeof options?.volume === 'number' && Number.isFinite(options.volume)) {
           audio.volume = Math.min(1, Math.max(0, options.volume / 100))
         }
-        isNotificationSoundPlaying = true
-        cleanupNotificationSoundPlayback?.()
-        const release = (): void => {
-          cleanup()
-          if (cleanupNotificationSoundPlayback === cleanup) {
-            cleanupNotificationSoundPlayback = null
-          }
-          isNotificationSoundPlaying = false
-        }
-        const cleanup = (): void => {
-          audio.removeEventListener('ended', release)
-          audio.removeEventListener('error', release)
-        }
-        cleanupNotificationSoundPlayback = cleanup
-        audio.addEventListener('ended', release)
-        audio.addEventListener('error', release)
+        const release = notificationSoundPlayback.begin(audio)
         try {
           await audio.play()
         } catch {
