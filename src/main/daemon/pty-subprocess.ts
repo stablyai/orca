@@ -61,7 +61,7 @@ import { isWindowsGitBashShellPath, resolveWindowsGitBashShellPath } from '../gi
 import { WINDOWS_GIT_BASH_SHELL } from '../../shared/windows-terminal-shell'
 import { resolveAgentForegroundProcessWithAvailability } from '../providers/agent-foreground-process'
 import { readWindowsConptyProcessIds } from '../providers/windows-conpty-process-membership'
-import { assignHostProcessToKillOnCloseJob } from '../windows/windows-pty-job'
+import { assignHostProcessToKillOnCloseJob, terminatePtyJob } from '../windows/windows-pty-job'
 import {
   isAgentForegroundWrapperProcess,
   recognizeAgentProcess,
@@ -1321,10 +1321,18 @@ export async function createPtySubprocess(opts: PtySubprocessOptions): Promise<S
         throw error
       }
     },
+    terminateOwnedTree: () => terminatePtyJob(proc),
     forceKill: () => {
       // Why: after reap/dispose proc.pid is a recycled pid, so SIGKILL would hit an unrelated process (forceKill only signals a live child).
+      if (dead) {
+        return
+      }
       // Why: Windows node-pty kill already closed ConPTY; forcing again can double-close the native handle.
-      if (dead || (process.platform === 'win32' && nodePtyKillIssued)) {
+      // That left forceKill a permanent no-op after any kill(), so a wedged ConPTY -- which
+      // never fires onExit -- had no escalation at all (#9854). The job is that escalation:
+      // it terminates the tree without touching the shell handle node-pty owns.
+      if (process.platform === 'win32' && nodePtyKillIssued) {
+        terminatePtyJob(proc)
         return
       }
       try {

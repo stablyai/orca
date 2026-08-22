@@ -25,6 +25,7 @@ function createMockSubprocess(): SubprocessHandle {
     write() {},
     resize() {},
     kill() {},
+    terminateOwnedTree: () => 'unavailable' as const,
     forceKill() {},
     signal() {},
     onData() {},
