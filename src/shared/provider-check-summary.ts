@@ -1,6 +1,6 @@
 import type { ProviderCheckSummary } from './github/pull-request-types'
 
-export type CheckOutcome = 'passed' | 'failed' | 'pending' | 'neutral'
+export type CheckOutcome = 'passed' | 'failed' | 'pending' | 'cancelled' | 'neutral'
 
 export type CheckOutcomeInput = { status?: string | null; conclusion?: string | null }
 
@@ -14,9 +14,13 @@ const FAILED_CONCLUSIONS = new Set([
   'error',
   'startup_failure',
   'timed_out',
-  'cancelled',
   'action_required'
 ])
+
+// Why: a cancellation blocks the merge exactly like a failure, but it is not one — the
+// user (or a superseding push) stopped the run. It rolls up into its own bucket so
+// aggregate surfaces can say "Cancelled" instead of "Failed" (#15847).
+const CANCELLED_CONCLUSIONS = new Set(['cancelled'])
 
 /** The single provider-neutral verdict for one check; every check surface must route through it. */
 export function classifyCheckOutcome(check: CheckOutcomeInput): CheckOutcome {
@@ -24,6 +28,9 @@ export function classifyCheckOutcome(check: CheckOutcomeInput): CheckOutcome {
   const status = (check.status ?? '').toLowerCase()
   if (FAILED_CONCLUSIONS.has(conclusion)) {
     return 'failed'
+  }
+  if (CANCELLED_CONCLUSIONS.has(conclusion)) {
+    return 'cancelled'
   }
   if (PASSED_CONCLUSIONS.has(conclusion)) {
     return 'passed'
@@ -37,7 +44,8 @@ export function classifyCheckOutcome(check: CheckOutcomeInput): CheckOutcome {
 
 /** Rolls up counted outcomes; passing checks win over neutral ones so one neutral cannot demote a green PR. */
 export function resolveProviderCheckState(
-  counts: Pick<ProviderCheckSummary, 'total' | 'passed' | 'failed' | 'pending'>
+  counts: Pick<ProviderCheckSummary, 'total' | 'passed' | 'failed' | 'pending'> &
+    Partial<Pick<ProviderCheckSummary, 'cancelled'>>
 ): ProviderCheckSummary['state'] {
   if (counts.total === 0) {
     return 'none'
@@ -47,6 +55,11 @@ export function resolveProviderCheckState(
   }
   if (counts.pending > 0) {
     return 'pending'
+  }
+  // Why: cancelled sits below pending — while anything is still running the honest live state is
+  // pending — and above passing, because a cancelled set is deliberately not green.
+  if ((counts.cancelled ?? 0) > 0) {
+    return 'cancelled'
   }
   return counts.passed > 0 ? 'success' : 'neutral'
 }
@@ -58,6 +71,7 @@ export function summarizeProviderChecks(
   let failed = 0
   let pending = 0
   let neutral = 0
+  let cancelled = 0
   for (const check of checks) {
     const outcome = classifyCheckOutcome(check)
     if (outcome === 'passed') {
@@ -66,18 +80,21 @@ export function summarizeProviderChecks(
       failed += 1
     } else if (outcome === 'pending') {
       pending += 1
+    } else if (outcome === 'cancelled') {
+      cancelled += 1
     } else {
       neutral += 1
     }
   }
   const total = checks.length
   return {
-    state: resolveProviderCheckState({ total, passed, failed, pending }),
+    state: resolveProviderCheckState({ total, passed, failed, pending, cancelled }),
     total,
     passed,
     failed,
     pending,
-    neutral
+    neutral,
+    cancelled
   }
 }
 
@@ -94,6 +111,9 @@ export function getProviderChecksLabel(summary: ProviderCheckSummary | undefined
   }
   if (summary.pending > 0) {
     return `${summary.pending} pending`
+  }
+  if ((summary.cancelled ?? 0) > 0) {
+    return `${summary.cancelled} cancelled`
   }
   return summary.state === 'neutral'
     ? 'Unresolved checks'

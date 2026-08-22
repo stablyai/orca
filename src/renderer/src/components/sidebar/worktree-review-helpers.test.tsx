@@ -125,4 +125,15 @@ describe('ReviewIcon', () => {
     expect(stateless('pending')).toContain('text-amber-500/85')
     expect(stateless('success')).not.toContain('text-emerald-500/80')
   })
+
+  // Why: a cancelled rollup must keep the muted tone of the Checks panel rows — painting it rose
+  // told the user a deliberately stopped run had failed (#15847).
+  it('paints a cancelled review with the muted tone, not the failure tone', () => {
+    const markup = renderToStaticMarkup(
+      <ReviewIcon review={{ ...gitlabReview, status: 'cancelled' }} className="size-3" />
+    )
+
+    expect(markup).toContain('text-muted-foreground/60')
+    expect(markup).not.toContain('text-rose-500/85')
+  })
 })

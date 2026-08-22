@@ -80,6 +80,10 @@ function getReviewStatusTooltip(review: WorktreeCardPrDisplay): string {
   if (review.status === 'pending') {
     return `${label} checks: Pending`
   }
+  if (review.status === 'cancelled') {
+    // Why: "Cancelled", not "Failed" — the run was stopped on purpose (#15847).
+    return `${label} checks: Cancelled`
+  }
   if (review.status === 'success') {
     return `${label} checks: Passing`
   }

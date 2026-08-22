@@ -1,6 +1,9 @@
 export type PRState = 'open' | 'closed' | 'merged' | 'draft'
 export type IssueState = 'open' | 'closed'
-export type CheckStatus = 'pending' | 'success' | 'failure' | 'neutral'
+// Why: `cancelled` is its own aggregate verdict — it blocks merging like a failure but must not
+// read as one anywhere (#15847). Older hosts never send it (they fold it into `failure`), so
+// renderer switches may simply fall through to their neutral branch for it.
+export type CheckStatus = 'pending' | 'success' | 'failure' | 'cancelled' | 'neutral'
 
 export type PRMergeableState = 'MERGEABLE' | 'CONFLICTING' | 'UNKNOWN'
 export type PRReviewDecision = 'APPROVED' | 'CHANGES_REQUESTED' | 'REVIEW_REQUIRED'
@@ -111,12 +114,15 @@ export type GitHubAssignableUser = {
 }
 
 export type ProviderCheckSummary = {
-  state: 'success' | 'failure' | 'pending' | 'neutral' | 'none'
+  state: 'success' | 'failure' | 'pending' | 'cancelled' | 'neutral' | 'none'
   total: number
   passed: number
   failed: number
   pending: number
   neutral: number
+  // Why: optional because a paired host can predate the cancelled bucket; an absent count
+  // reads as zero everywhere, which is exactly the old-host behavior.
+  cancelled?: number
 }
 
 export type GitHubPRReviewSummary = {

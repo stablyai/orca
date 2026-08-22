@@ -83,32 +83,32 @@ const PARITY_CASES: ParityCase[] = [
   {
     name: 'all success',
     checks: [completed('success'), completed('success')],
-    expected: { state: 'success', passed: 2, failed: 0, pending: 0, neutral: 0 }
+    expected: { state: 'success', passed: 2, failed: 0, pending: 0, cancelled: 0, neutral: 0 }
   },
   {
     name: 'success plus skipped',
     checks: [completed('success'), completed('skipped')],
-    expected: { state: 'success', passed: 2, failed: 0, pending: 0, neutral: 0 }
+    expected: { state: 'success', passed: 2, failed: 0, pending: 0, cancelled: 0, neutral: 0 }
   },
   {
     name: 'all skipped',
     checks: [completed('skipped'), completed('skipped')],
-    expected: { state: 'success', passed: 2, failed: 0, pending: 0, neutral: 0 }
+    expected: { state: 'success', passed: 2, failed: 0, pending: 0, cancelled: 0, neutral: 0 }
   },
   {
     name: 'success plus neutral',
     checks: [completed('success'), completed('neutral')],
-    expected: { state: 'success', passed: 1, failed: 0, pending: 0, neutral: 1 }
+    expected: { state: 'success', passed: 1, failed: 0, pending: 0, cancelled: 0, neutral: 1 }
   },
   {
     name: 'all neutral',
     checks: [completed('neutral')],
-    expected: { state: 'neutral', passed: 0, failed: 0, pending: 0, neutral: 1 }
+    expected: { state: 'neutral', passed: 0, failed: 0, pending: 0, cancelled: 0, neutral: 1 }
   },
   {
     name: 'success plus failure',
     checks: [completed('success'), completed('failure')],
-    expected: { state: 'failure', passed: 1, failed: 1, pending: 0, neutral: 0 }
+    expected: { state: 'failure', passed: 1, failed: 1, pending: 0, cancelled: 0, neutral: 0 }
   },
   {
     name: 'success plus running',
@@ -116,13 +116,14 @@ const PARITY_CASES: ParityCase[] = [
       completed('success'),
       { name: 'ci', status: 'in_progress', conclusion: null, url: null }
     ],
-    expected: { state: 'pending', passed: 1, failed: 0, pending: 1, neutral: 0 }
+    expected: { state: 'pending', passed: 1, failed: 0, pending: 1, cancelled: 0, neutral: 0 }
   },
   gitLabCase('GitLab manual gate only', ['manual'], {
     state: 'neutral',
     passed: 0,
     failed: 0,
     pending: 0,
+    cancelled: 0,
     neutral: 1
   }),
   gitLabCase('GitLab manual gate alongside a green pipeline', ['manual', 'success'], {
@@ -130,6 +131,7 @@ const PARITY_CASES: ParityCase[] = [
     passed: 1,
     failed: 0,
     pending: 0,
+    cancelled: 0,
     neutral: 1
   }),
   gitLabCase('GitLab skipped-only pipeline', ['skipped', 'skipped'], {
@@ -137,6 +139,7 @@ const PARITY_CASES: ParityCase[] = [
     passed: 2,
     failed: 0,
     pending: 0,
+    cancelled: 0,
     neutral: 0
   }),
   gitLabCase('GitLab success alongside an unrecognized job status', ['success', 'wat'], {
@@ -144,25 +147,29 @@ const PARITY_CASES: ParityCase[] = [
     passed: 1,
     failed: 0,
     pending: 0,
+    cancelled: 0,
     neutral: 1
   }),
+  // Why: a canceled job is the GitLab face of #15847 — it keeps blocking the merge but rolls up
+  // into the cancelled bucket instead of painting the MR red.
   gitLabCase('GitLab canceled job', ['success', 'canceled'], {
-    state: 'failure',
+    state: 'cancelled',
     passed: 1,
-    failed: 1,
+    failed: 0,
     pending: 0,
+    cancelled: 1,
     neutral: 0
   }),
   gitLabCase(
     'GitLab manual gate alongside a running job',
     ['manual', 'running'],
-    { state: 'pending', passed: 0, failed: 0, pending: 1, neutral: 1 },
+    { state: 'pending', passed: 0, failed: 0, pending: 1, cancelled: 0, neutral: 1 },
     'running'
   ),
   {
     name: 'genuine action_required',
     checks: [completed('success'), completed('action_required')],
-    expected: { state: 'failure', passed: 1, failed: 1, pending: 0, neutral: 0 }
+    expected: { state: 'failure', passed: 1, failed: 1, pending: 0, cancelled: 0, neutral: 0 }
   }
 ]
 
@@ -181,11 +188,13 @@ describe('provider check classification parity', () => {
         // Both panes split action_required into its own amber chip; it is still the failed bucket.
         failed: paneCounts.failing + paneCounts.needsAction,
         pending: paneCounts.pending,
+        cancelled: paneCounts.cancelled,
         neutral: paneCounts.neutral
       }).toEqual({
         passed: expected.passed,
         failed: expected.failed,
         pending: expected.pending,
+        cancelled: expected.cancelled ?? 0,
         neutral: expected.neutral
       })
       expect(getCheckCountChips(paneCounts).find((chip) => chip.tone === 'neutral')?.label).toBe(

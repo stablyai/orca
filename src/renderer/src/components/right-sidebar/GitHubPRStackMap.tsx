@@ -32,6 +32,13 @@ function stackEntryStatus(entry: GitHubPRStackEntry): string {
   if (entry.checksStatus === 'pending') {
     return translate('auto.components.right.sidebar.GitHubPRStackMap.316039b5db', 'checks pending')
   }
+  if (entry.checksStatus === 'cancelled') {
+    // Why: the stack badge names what happened — a cancelled set is not a failed one (#15847).
+    return translate(
+      'auto.components.right.sidebar.GitHubPRStackMap.9f14c3e2a1',
+      'checks cancelled'
+    )
+  }
   if (entry.reviewDecision === 'CHANGES_REQUESTED') {
     return translate(
       'auto.components.right.sidebar.GitHubPRStackMap.4b1e5ee9d3',

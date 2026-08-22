@@ -24,8 +24,11 @@ type FolderWorkspaceCardPrDisplayArgs = {
 const REVIEW_STATUS_PRIORITY: Record<NonNullable<WorktreeCardPrDisplay['status']>, number> = {
   failure: 0,
   pending: 1,
-  success: 2,
-  neutral: 3
+  // Why: cancelled outranks green in the folder rollup — a cancelled child is still not passing —
+  // but sits below pending while anything is still running.
+  cancelled: 2,
+  success: 3,
+  neutral: 4
 }
 
 export function getFolderWorkspaceCardPrDisplay({

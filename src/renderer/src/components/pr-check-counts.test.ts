@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { getCheckCounts, getChecksSummaryLabel } from './pr-check-counts'
+import { getCheckCountChips, getCheckCounts, getChecksSummaryLabel } from './pr-check-counts'
 import {
   getProviderChecksLabel,
   summarizeProviderChecks
@@ -27,6 +27,7 @@ describe('getCheckCounts', () => {
       failing: 0,
       needsAction: 0,
       pending: 0,
+      cancelled: 0,
       neutral: 0
     })
     expect(getChecksSummaryLabel(checks)).toBe('All checks passing')
@@ -42,6 +43,7 @@ describe('getCheckCounts', () => {
       failing: 1,
       needsAction: 1,
       pending: 0,
+      cancelled: 0,
       neutral: 0
     })
     expect(getChecksSummaryLabel([check('action_required')])).toBe('1 check needs action')
@@ -58,6 +60,7 @@ describe('getCheckCounts', () => {
       failing: 0,
       needsAction: 0,
       pending: 1,
+      cancelled: 0,
       neutral: 1
     })
     expect(getChecksSummaryLabel(checks)).toBe('1 check pending')
@@ -73,6 +76,7 @@ describe('getCheckCounts', () => {
       failing: 0,
       needsAction: 0,
       pending: 0,
+      cancelled: 0,
       neutral: 1
     })
     expect(getChecksSummaryLabel(checks)).toBe('0 of 1 checks passing')
@@ -80,5 +84,31 @@ describe('getCheckCounts', () => {
 
   it('reports no checks for an empty list', () => {
     expect(getChecksSummaryLabel([])).toBe('No checks found')
+  })
+
+  // Why: a cancellation blocks the merge but is not a defect — counting it under `failing` made
+  // the check tabs call a deliberately stopped run "1 failing" (#15847).
+  it('counts cancelled checks in their own bucket, never as failing', () => {
+    const checks = [check('cancelled', 'build'), check('success', 'lint')]
+
+    expect(getCheckCounts(checks)).toEqual({
+      passing: 1,
+      failing: 0,
+      needsAction: 0,
+      pending: 0,
+      cancelled: 1,
+      neutral: 0
+    })
+    expect(getChecksSummaryLabel(checks)).toBe('1 check cancelled')
+    expect(getProviderChecksLabel(summarizeProviderChecks(checks))).toBe('1 cancelled')
+    expect(getCheckCountChips(getCheckCounts(checks))).toContainEqual({
+      tone: 'cancelled',
+      label: '1 cancelled'
+    })
+  })
+
+  it('still labels a set with a real failure as failing when cancellations ride along', () => {
+    const checks = [check('cancelled', 'build'), check('failure', 'test')]
+    expect(getChecksSummaryLabel(checks)).toBe('1 check failing')
   })
 })

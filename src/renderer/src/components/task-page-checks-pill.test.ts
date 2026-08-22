@@ -51,4 +51,24 @@ describe('task page checks pill', () => {
       })
     ).toBe('No checks')
   })
+
+  // Why: the pill is the aggregate surface users scan first; a cancelled-only set must read
+  // "cancelled" on a muted pill, not "failing" on a red one (#15847).
+  it('labels a cancelled-only summary as cancelled on the muted pill', () => {
+    const item = {
+      checksSummary: {
+        state: 'cancelled' as const,
+        total: 2,
+        passed: 1,
+        failed: 0,
+        pending: 0,
+        cancelled: 1,
+        neutral: 0
+      }
+    }
+
+    expect(getChecksLabel(item)).toBe('1 cancelled')
+    expect(getChecksPillTone(item)).toContain('text-muted-foreground')
+    expect(getChecksPillTone(item)).not.toContain('rose')
+  })
 })

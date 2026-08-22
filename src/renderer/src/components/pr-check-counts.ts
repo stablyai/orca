@@ -7,6 +7,7 @@ export type PRCheckCounts = {
   failing: number
   needsAction: number
   pending: number
+  cancelled: number
   neutral: number
 }
 
@@ -34,13 +35,14 @@ export function getCheckCounts(checks: readonly PRCheckDetail[]): PRCheckCounts 
     failing: summary.failed - needsAction,
     needsAction,
     pending: summary.pending,
+    cancelled: summary.cancelled ?? 0,
     neutral: summary.neutral
   }
 }
 
 /** `tone` keys the caller's `CHECK_COLOR`/`CHECK_ICON` maps so styling stays with the surface. */
 export type PRCheckCountChip = {
-  tone: 'success' | 'failure' | 'action_required' | 'pending' | 'neutral'
+  tone: 'success' | 'failure' | 'action_required' | 'pending' | 'cancelled' | 'neutral'
   label: string
 }
 
@@ -85,6 +87,14 @@ export function getCheckCountChips(counts: PRCheckCounts): PRCheckCountChip[] {
       })
     })
   }
+  if (counts.cancelled > 0) {
+    chips.push({
+      tone: 'cancelled',
+      label: translate('auto.components.pr-check-counts.cancelledChip', '{{value0}} cancelled', {
+        value0: counts.cancelled
+      })
+    })
+  }
   if (counts.neutral > 0) {
     chips.push({
       tone: 'neutral',
@@ -110,6 +120,10 @@ export function getChecksSummaryLabel(checks: readonly PRCheckDetail[]): string 
   }
   if (counts.pending > 0) {
     return `${counts.pending} ${counts.pending === 1 ? 'check' : 'checks'} pending`
+  }
+  // Why: cancelled blocks the merge but is not a defect — it must not read as failing (#15847).
+  if (counts.cancelled > 0) {
+    return `${counts.cancelled} ${counts.cancelled === 1 ? 'check' : 'checks'} cancelled`
   }
   if (counts.passing === checks.length) {
     return 'All checks passing'

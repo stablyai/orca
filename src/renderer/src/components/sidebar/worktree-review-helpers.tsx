@@ -55,6 +55,11 @@ function getCheckTone(review: WorktreeCardPrDisplay): string | null {
   if (review.status === 'pending') {
     return 'text-amber-500/85'
   }
+  // Why: cancelled reads muted like the Checks panel's own rows — red would claim a defect the
+  // run never had (#15847).
+  if (review.status === 'cancelled') {
+    return 'text-muted-foreground/60'
+  }
   if (review.state === 'open' && review.status === 'success') {
     return 'text-emerald-500/80'
   }

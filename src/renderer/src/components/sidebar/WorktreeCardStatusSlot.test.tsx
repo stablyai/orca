@@ -214,6 +214,29 @@ describe('WorktreeCardStatusSlot', () => {
     expect(markup).not.toContain('bg-emerald-500')
   })
 
+  // Why: the tooltip is the first place a user learns why the PR glyph is flagged; a stopped run
+  // must say "Cancelled" with the muted tone instead of claiming "Failed" (#15847).
+  it('words and tones a cancelled review as cancelled, not failed', () => {
+    const markup = renderToStaticMarkup(
+      <WorktreeCardStatusSlot
+        worktreeId="wt-1"
+        showStatus
+        showUnreadAction={false}
+        isUnread={false}
+        unreadTooltip="Mark as unread"
+        onPointerDown={vi.fn()}
+        onToggleUnread={vi.fn()}
+        prDisplay={{ ...review, status: 'cancelled' }}
+        newCardStyle
+      />
+    )
+
+    expect(markup).toContain('PR checks: Cancelled')
+    expect(markup).toContain('text-muted-foreground/60')
+    expect(markup).not.toContain('PR checks: Failed')
+    expect(markup).not.toContain('text-rose-500/85')
+  })
+
   it('uses the unified compact review glyph for GitLab MR status', () => {
     const markup = renderToStaticMarkup(
       <WorktreeCardStatusSlot
