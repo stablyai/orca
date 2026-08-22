@@ -14,6 +14,7 @@ export type RemoteBrowserScreencastSubscribe = (
     onBinary?: (bytes: Uint8Array<ArrayBufferLike>) => void
     onError?: (error: { code: string; message: string }) => void
     onClose?: () => void
+    onSubscriptionStart?: (handle: { unsubscribe: () => void }) => void
   }
 ) => Promise<{ unsubscribe: () => void }>
 
@@ -37,6 +38,7 @@ export type RemoteBrowserScreencastEvents = {
   onPageMissing: () => void
   onFrame: (bytes: Uint8Array<ArrayBufferLike>) => void
   onClosed: () => void
+  onSubscriptionStart?: (handle: { unsubscribe: () => void }) => void
 }
 
 // Translates one runtime screencast subscription's raw RPC envelope traffic into the semantic
@@ -77,7 +79,8 @@ export async function openRemoteBrowserScreencastStream(
         }
         events.onTransportError(error.message)
       },
-      onClose: () => events.onClosed()
+      onClose: () => events.onClosed(),
+      onSubscriptionStart: events.onSubscriptionStart
     }
   )
 }

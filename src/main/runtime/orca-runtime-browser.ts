@@ -158,6 +158,10 @@ export type RuntimeBrowserCommandHost = {
     targetGroupId?: string
   ): void
   notifyHeadlessBrowserSessionTabsChanged?(worktreeId: string): void
+  waitForBrowserSessionTabPublication?(
+    worktreeId: string | undefined,
+    browserPageId: string
+  ): Promise<void>
 }
 
 export class RuntimeBrowserCommands {
@@ -1356,6 +1360,9 @@ export class RuntimeBrowserCommands {
     if (wcId != null) {
       bridge.setActiveTab(wcId, worktreeId)
     }
+    if (!params.page) {
+      await this.host.waitForBrowserSessionTabPublication?.(worktreeId, browserPageId)
+    }
 
     // Why: the webview loads about:blank first; route navigation through the bridge so its registered owner remains authoritative.
     if (url && url !== 'about:blank') {
@@ -1752,6 +1759,11 @@ export class RuntimeBrowserCommands {
     // Why: only user-initiated creates (activate:true) mark the tab active; agent/background creates must not yank a connected client to it.
     if (activate === true) {
       this.host.markHeadlessBrowserSessionTabActive?.(worktreeId, browserPageId, targetGroupId)
+    } else if (worktreeId) {
+      this.host.notifyHeadlessBrowserSessionTabsChanged?.(worktreeId)
+    }
+    if (!requestedPageId && worktreeId) {
+      await this.host.waitForBrowserSessionTabPublication?.(worktreeId, browserPageId)
     }
     return { browserPageId }
   }

@@ -616,6 +616,8 @@ import {
 import { resolveConfiguredWorktreeBasePaths } from '../../shared/worktree/configured-worktree-base-path'
 import {
   BROWSER_HEADLESS_RUNTIME_CAPABILITY,
+  BROWSER_DIRECT_HISTORY_NAVIGATION_RUNTIME_CAPABILITY,
+  BROWSER_DIRECT_RAW_INPUT_RUNTIME_CAPABILITY,
   BROWSER_CERTIFICATE_TRUST_RUNTIME_CAPABILITY,
   MIN_COMPATIBLE_RUNTIME_CLIENT_VERSION,
   ORCHESTRATION_CONTRACT_RUNTIME_CAPABILITY,
@@ -3024,6 +3026,14 @@ export class OrcaRuntimeService {
   private readonly rendererPublicationThrottle = new RendererPublicationThrottle()
   private tabs = new Map<string, RuntimeSyncedTab>()
   private mobileSessionTabsByWorktree = new Map<string, RuntimeMobileSessionTabsSnapshot>()
+  private publishedBrowserPageIdsByWorktree = new Map<string, Set<string>>()
+  private browserTabPublicationWaiters = new Set<{
+    worktreeId?: string
+    browserPageId: string
+    resolve: () => void
+    reject: (error: Error) => void
+    timer: ReturnType<typeof setTimeout>
+  }>()
   // Why: renderer publication ordering must be judged against the renderer's
   // own last-accepted (epoch, version) — never against the stored snapshot's
   // version, which main-local touches bump independently and can push
@@ -6103,6 +6113,12 @@ export class OrcaRuntimeService {
     // can host a page so remote clients can surface Proceed Anyway (Unsafe).
     if (canBrowse) {
       capabilities.push(BROWSER_CERTIFICATE_TRUST_RUNTIME_CAPABILITY)
+      if (process.env.ORCA_E2E_DISABLE_BROWSER_DIRECT_HISTORY_NAVIGATION !== '1') {
+        capabilities.push(BROWSER_DIRECT_HISTORY_NAVIGATION_RUNTIME_CAPABILITY)
+      }
+      if (process.env.ORCA_E2E_DISABLE_BROWSER_DIRECT_RAW_INPUT !== '1') {
+        capabilities.push(BROWSER_DIRECT_RAW_INPUT_RUNTIME_CAPABILITY)
+      }
     }
     return {
       runtimeId: this.runtimeId,
@@ -8740,6 +8756,7 @@ export class OrcaRuntimeService {
         this.clientSessionTabSelections.project(result, subscription.clientNavigationId)
       )
     }
+    this.recordPublishedBrowserSessionTabs(snapshot.worktree, result)
   }
 
   private async refreshMobileSessionPtyRecords(
@@ -10590,6 +10607,11 @@ export class OrcaRuntimeService {
       this.mobileSessionTabListeners.delete(subscription)
       if (this.mobileSessionTabListeners.size === 0) {
         this.mobileSessionTabsAgentStatusHeartbeat.cancelPending()
+        for (const waiter of this.browserTabPublicationWaiters) {
+          clearTimeout(waiter.timer)
+          waiter.resolve()
+        }
+        this.browserTabPublicationWaiters.clear()
       }
     }
   }
@@ -33386,6 +33408,7 @@ export class OrcaRuntimeService {
       )
     }
     this.clientSessionTabSelections.forgetWorktree(worktreeId)
+    this.publishedBrowserPageIdsByWorktree.delete(worktreeId)
   }
 
   notifyMobileSessionTabsChanged(worktreeId?: string): void {
@@ -33423,6 +33446,7 @@ export class OrcaRuntimeService {
         this.clientSessionTabSelections.project(result, subscription.clientNavigationId)
       )
     }
+    this.recordPublishedBrowserSessionTabs(worktreeId, result)
   }
 
   private notifyMobileSessionTabSnapshots(): void {
@@ -33436,7 +33460,61 @@ export class OrcaRuntimeService {
           this.clientSessionTabSelections.project(result, subscription.clientNavigationId)
         )
       }
+      this.recordPublishedBrowserSessionTabs(snapshot.worktree, result)
     }
+  }
+
+  private recordPublishedBrowserSessionTabs(
+    worktreeId: string,
+    snapshot: RuntimeMobileSessionTabsResult
+  ): void {
+    const pageIds = new Set(
+      snapshot.tabs.flatMap((tab) =>
+        tab.type === 'browser' && tab.browserPageId ? [tab.browserPageId] : []
+      )
+    )
+    this.publishedBrowserPageIdsByWorktree.set(worktreeId, pageIds)
+    for (const waiter of [...this.browserTabPublicationWaiters]) {
+      if (
+        (waiter.worktreeId && waiter.worktreeId !== worktreeId) ||
+        !pageIds.has(waiter.browserPageId)
+      ) {
+        continue
+      }
+      clearTimeout(waiter.timer)
+      this.browserTabPublicationWaiters.delete(waiter)
+      waiter.resolve()
+    }
+  }
+
+  private waitForBrowserSessionTabPublication(
+    worktreeId: string | undefined,
+    browserPageId: string,
+    timeoutMs = 8_000
+  ): Promise<void> {
+    if (this.mobileSessionTabListeners.size === 0) {
+      return Promise.resolve()
+    }
+    const alreadyPublished = worktreeId
+      ? this.publishedBrowserPageIdsByWorktree.get(worktreeId)?.has(browserPageId)
+      : [...this.publishedBrowserPageIdsByWorktree.values()].some((ids) => ids.has(browserPageId))
+    if (alreadyPublished) {
+      return Promise.resolve()
+    }
+    return new Promise<void>((resolve, reject) => {
+      const waiter = {
+        worktreeId,
+        browserPageId,
+        resolve,
+        reject,
+        timer: setTimeout(() => {
+          this.browserTabPublicationWaiters.delete(waiter)
+          reject(new Error(`Browser page ${browserPageId} was not published to session tabs`))
+        }, timeoutMs)
+      }
+      waiter.timer.unref?.()
+      this.browserTabPublicationWaiters.add(waiter)
+    })
   }
 
   private getMobileSessionTabsForWorktree(
@@ -38104,7 +38182,9 @@ export class OrcaRuntimeService {
     // Why: bind directly, not a wrapper arrow — a hand-listed wrapper dropped targetGroupId, so a right-split browser landed in the left.
     markHeadlessBrowserSessionTabActive: this.markHeadlessBrowserSessionTabActive.bind(this),
     notifyHeadlessBrowserSessionTabsChanged: (worktreeId) =>
-      this.notifyMobileSessionTabsChanged(worktreeId)
+      this.notifyMobileSessionTabsChanged(worktreeId),
+    waitForBrowserSessionTabPublication: (worktreeId, browserPageId) =>
+      this.waitForBrowserSessionTabPublication(worktreeId, browserPageId)
   })
 
   private readonly emulatorCommands = new RuntimeEmulatorCommands({

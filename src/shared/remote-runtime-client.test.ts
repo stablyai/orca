@@ -189,6 +189,29 @@ describe('subscribeRemoteRuntimeRequest', () => {
       offSpy.mockRestore()
     }
   })
+
+  it('aborts and closes a subscription while it is still negotiating', async () => {
+    const server = await createSubscriptionServer({ holdSubscriptionResponse: true })
+    const controller = new AbortController()
+    const closeSpy = vi.spyOn(WebSocketClient.prototype, 'close')
+    try {
+      const pending = subscribeRemoteRuntimeRequest(
+        server.pairing,
+        'browser.screencast',
+        {},
+        60_000,
+        { onResponse: vi.fn(), onError: vi.fn() },
+        undefined,
+        controller.signal
+      )
+      await server.nextAuth
+      controller.abort()
+      await expect(pending).rejects.toMatchObject({ name: 'AbortError' })
+      expect(closeSpy).toHaveBeenCalled()
+    } finally {
+      closeSpy.mockRestore()
+    }
+  })
 })
 
 describe('sendRemoteRuntimeRequest', () => {
@@ -360,6 +383,7 @@ describe('sendRemoteRuntimeRequest', () => {
 async function createSubscriptionServer(
   options: {
     sendMismatchedResponseAfterSubscribe?: boolean
+    holdSubscriptionResponse?: boolean
     // Why: half-open simulation — the socket stays open but never answers
     // protocol pings, like a wedged tunnel that swallows frames silently.
     disableAutoPong?: boolean
@@ -420,13 +444,15 @@ async function createSubscriptionServer(
       }
 
       const request = JSON.parse(plaintext) as { id: string }
-      sendEncrypted(ws, sharedKey, {
-        id: request.id,
-        ok: true,
-        streaming: true,
-        result: { type: 'subscribed' },
-        _meta: { runtimeId: 'runtime-test' }
-      })
+      if (!options.holdSubscriptionResponse) {
+        sendEncrypted(ws, sharedKey, {
+          id: request.id,
+          ok: true,
+          streaming: true,
+          result: { type: 'subscribed' },
+          _meta: { runtimeId: 'runtime-test' }
+        })
+      }
       if (options.sendMismatchedResponseAfterSubscribe) {
         sendEncrypted(ws, sharedKey, {
           id: `${request.id}-mismatch`,

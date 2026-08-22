@@ -14,7 +14,7 @@ export type RemoteBrowserStreamLifecycleDeps = Omit<RemoteBrowserPageSessionDeps
   subscribeScreencast: RemoteBrowserScreencastSubscribe
   waitForViewportSize: () => Promise<RemoteBrowserViewportSize | null>
   readViewportSize: () => RemoteBrowserViewportSize | null
-  syncViewport: (pageId: string) => Promise<void>
+  syncViewport: (pageId: string, size: RemoteBrowserViewportSize | null) => Promise<void>
   getDeviceScaleFactor: () => number
   // Why one setter instead of separate busy/error/reconnect calls: those three always described a
   // single thing — what this stream is doing — and writing them independently is what let them

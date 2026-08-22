@@ -5,6 +5,9 @@ type BrowserCreationFaultSnapshot = {
   armed: boolean
   capabilityRejectionArmed: boolean
   createdPageId: string | null
+  provisionalPageId: string | null
+  requestedKnownPageId: boolean | null
+  releasedPageSnapshotSuppressed: boolean
   suppressedPageIds: string[]
 }
 
@@ -12,6 +15,7 @@ type BrowserCreationFaultApi = {
   arm: () => void
   armCapabilityRejection: () => void
   release: () => boolean
+  releaseWithPublicationLag: () => boolean
   reset: () => void
   snapshot: () => BrowserCreationFaultSnapshot
 }
@@ -23,7 +27,11 @@ type BrowserCreationFaultWindow = Window & {
 let armed = false
 let capabilityRejectionArmed = false
 let createdPageId: string | null = null
+let provisionalPageId: string | null = null
+let requestedKnownPageId: boolean | null = null
 let failNextReconciliation = false
+let suppressNextReleasedPageSnapshot = false
+let releasedPageSnapshotSuppressed = false
 let releaseCreatedPage: (() => void) | null = null
 let createdPageBarrier: Promise<void> | null = null
 const suppressedPageIds = new Set<string>()
@@ -34,7 +42,11 @@ function resetFault(): void {
   armed = false
   capabilityRejectionArmed = false
   createdPageId = null
+  provisionalPageId = null
+  requestedKnownPageId = null
   failNextReconciliation = false
+  suppressNextReleasedPageSnapshot = false
+  releasedPageSnapshotSuppressed = false
   releaseCreatedPage = null
   createdPageBarrier = null
   suppressedPageIds.clear()
@@ -67,11 +79,24 @@ function exposeFaultApi(): void {
       release()
       return true
     },
+    releaseWithPublicationLag: () => {
+      if (!armed || !createdPageId || !releaseCreatedPage) {
+        return false
+      }
+      suppressNextReleasedPageSnapshot = true
+      const release = releaseCreatedPage
+      releaseCreatedPage = null
+      release()
+      return true
+    },
     reset: resetFault,
     snapshot: () => ({
       armed,
       capabilityRejectionArmed,
       createdPageId,
+      provisionalPageId,
+      requestedKnownPageId,
+      releasedPageSnapshotSuppressed,
       suppressedPageIds: [...suppressedPageIds]
     })
   }
@@ -87,11 +112,17 @@ export function throwIfE2eWebRuntimeBrowserCapabilityUnavailable(): void {
   throw new Error('E2E forced browser capability rejection')
 }
 
-export async function pauseAfterE2eWebRuntimeBrowserCreate(remotePageId: string): Promise<void> {
+export async function pauseAfterE2eWebRuntimeBrowserCreate(
+  remotePageId: string,
+  clientProvisionalPageId: string,
+  clientRequestedKnownPageId: boolean
+): Promise<void> {
   if (!e2eConfig.exposeStore || !armed || !createdPageBarrier) {
     return
   }
   createdPageId = remotePageId
+  provisionalPageId = clientProvisionalPageId
+  requestedKnownPageId = clientRequestedKnownPageId
   await createdPageBarrier
 }
 
@@ -117,6 +148,12 @@ export function suppressE2eWebRuntimeBrowserSnapshot(
       break
     }
     suppressedPageIds.add(pageId)
+  }
+  if (createdPageId && pageIds.includes(createdPageId) && suppressNextReleasedPageSnapshot) {
+    suppressNextReleasedPageSnapshot = false
+    releasedPageSnapshotSuppressed = true
+    armed = false
+    return true
   }
   return pageIds.length > 0
 }

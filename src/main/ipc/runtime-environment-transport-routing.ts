@@ -200,7 +200,8 @@ export async function subscribeRuntimeEnvironment(
         | { type: 'close' }
     ) => void
     onClose: () => void
-  }
+  },
+  signal?: AbortSignal
 ): Promise<RemoteRuntimeSubscription> {
   const environment = resolveEnvironment(userDataPath, selector)
   const pairing = getPreferredPairingOffer(environment)
@@ -239,7 +240,10 @@ export async function subscribeRuntimeEnvironment(
     if (
       shouldUseSharedControlSubscription(method) &&
       !shouldKeepDedicatedSubscriptionSocket(method) &&
-      (await supportsSharedControl(userDataPath, environment, pairing, effectiveTimeoutMs))
+      (await waitForPromiseWithSignal(
+        supportsSharedControl(userDataPath, environment, pairing, effectiveTimeoutMs),
+        signal
+      ))
     ) {
       return await subscribeRemoteRuntimeSharedControlRequest(
         environment.id,
@@ -247,7 +251,8 @@ export async function subscribeRuntimeEnvironment(
         method,
         params,
         effectiveTimeoutMs,
-        callbacksWithMarkUsed
+        callbacksWithMarkUsed,
+        signal
       )
     }
     return await subscribeRemoteRuntimeRequest(
@@ -255,10 +260,12 @@ export async function subscribeRuntimeEnvironment(
       method,
       params,
       effectiveTimeoutMs,
-      callbacksWithMarkUsed
+      callbacksWithMarkUsed,
+      undefined,
+      signal
     )
   } catch (error) {
-    if (error instanceof Error) {
+    if (error instanceof Error && error.name !== 'AbortError') {
       error.message = withRemoteRuntimeTailscaleHint(error.message, pairing.endpoint)
     }
     throw error

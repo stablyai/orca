@@ -2043,6 +2043,8 @@ describe('OrcaRuntimeService', () => {
     expect(status.capabilities).toContain('project-host-setup.v1')
     expect(status.capabilities).toContain('linear.issue-attribute-filter.v1')
     expect(status.capabilities).not.toContain('browser.screencast.v1')
+    expect(status.capabilities).not.toContain('browser.direct-history-navigation.v1')
+    expect(status.capabilities).not.toContain('browser.direct-raw-input.v1')
     expect(typeof status.protocolVersion).toBe('number')
     expect(typeof status.minCompatibleMobileVersion).toBe('number')
     expect(status.protocolVersion).toBeGreaterThanOrEqual(1)
@@ -2171,6 +2173,8 @@ describe('OrcaRuntimeService', () => {
     runtime.attachWindow(TEST_WINDOW_ID)
 
     expect(runtime.getStatus().capabilities).toContain('browser.screencast.v1')
+    expect(runtime.getStatus().capabilities).toContain('browser.direct-history-navigation.v1')
+    expect(runtime.getStatus().capabilities).toContain('browser.direct-raw-input.v1')
   })
 
   it('advertises safe Codex reset-credit RPC support as a static capability', () => {
@@ -2301,6 +2305,8 @@ describe('OrcaRuntimeService', () => {
     // ...and the headless marker tells clients not to fall back to a local tab.
     expect(capabilities).toContain('browser.headless.v1')
     expect(capabilities).toContain('browser.certificate-trust.v1')
+    expect(capabilities).toContain('browser.direct-history-navigation.v1')
+    expect(capabilities).toContain('browser.direct-raw-input.v1')
   })
   it('surfaces live offscreen load failures in headless browser snapshots', () => {
     const runtime = createRuntime()
@@ -2434,6 +2440,8 @@ describe('OrcaRuntimeService', () => {
 
     expect(runtime.getStatus().capabilities).not.toContain('browser.certificate-trust.v1')
     expect(runtime.getStatus().capabilities).not.toContain('browser.screencast.v1')
+    expect(runtime.getStatus().capabilities).not.toContain('browser.direct-history-navigation.v1')
+    expect(runtime.getStatus().capabilities).not.toContain('browser.direct-raw-input.v1')
   })
 
   it('closes a worktree’s offscreen browser pages when its metadata is removed (leak fix)', () => {
@@ -50881,5 +50889,78 @@ describe('resolveWorktreeScanCacheTtlMs', () => {
     } finally {
       vi.useRealTimers()
     }
+  })
+
+  it('records browser pages emitted by active headless snapshots', async () => {
+    const runtime = createRuntime()
+    runtime.setAgentBrowserBridge({
+      tabList: vi.fn(() => ({
+        tabs: [{ browserPageId: 'page-1', title: 'Browser', url: 'about:blank' }]
+      }))
+    } as never)
+    const listener = vi.fn()
+    const internals = runtime as unknown as {
+      mobileSessionTabListeners: Set<unknown>
+      emitMobileSessionTabsSnapshot: (snapshot: unknown) => void
+      waitForBrowserSessionTabPublication: (
+        worktreeId: string,
+        browserPageId: string,
+        timeoutMs?: number
+      ) => Promise<void>
+    }
+    internals.mobileSessionTabListeners.add({ listener, clientNavigationId: undefined })
+    internals.emitMobileSessionTabsSnapshot({
+      worktree: TEST_WORKTREE_ID,
+      publicationEpoch: 'headless:test',
+      snapshotVersion: 1,
+      activeGroupId: null,
+      activeTabId: 'browser-tab',
+      activeTabType: 'browser',
+      tabs: [
+        {
+          id: 'browser-tab',
+          type: 'browser',
+          browserWorkspaceId: 'browser-tab',
+          browserPageId: 'page-1',
+          title: 'Browser',
+          url: 'about:blank',
+          isActive: true
+        }
+      ],
+      tabGroups: []
+    })
+
+    await expect(
+      internals.waitForBrowserSessionTabPublication(TEST_WORKTREE_ID, 'page-1', 50)
+    ).resolves.toBeUndefined()
+  })
+
+  it('does not keep the process alive for a pending browser publication', async () => {
+    const runtime = createRuntime()
+    const internals = runtime as unknown as {
+      mobileSessionTabListeners: Set<unknown>
+      browserTabPublicationWaiters: Set<{
+        resolve: () => void
+        timer: ReturnType<typeof setTimeout>
+      }>
+      waitForBrowserSessionTabPublication: (
+        worktreeId: string,
+        browserPageId: string,
+        timeoutMs?: number
+      ) => Promise<void>
+    }
+    internals.mobileSessionTabListeners.add({ listener: vi.fn(), clientNavigationId: undefined })
+
+    const pending = internals.waitForBrowserSessionTabPublication(
+      TEST_WORKTREE_ID,
+      'page-pending',
+      8_000
+    )
+    const waiter = [...internals.browserTabPublicationWaiters][0]
+
+    expect(waiter.timer.hasRef()).toBe(false)
+    clearTimeout(waiter.timer)
+    waiter.resolve()
+    await expect(pending).resolves.toBeUndefined()
   })
 })

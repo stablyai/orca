@@ -514,8 +514,10 @@ export async function subscribeRemoteRuntimeRequest<TResult>(
   params: unknown,
   timeoutMs: number,
   callbacks: RemoteRuntimeSubscriptionCallbacks<TResult>,
-  livenessOptions?: RemoteRuntimeSocketLivenessOptions
+  livenessOptions?: RemoteRuntimeSocketLivenessOptions,
+  signal?: AbortSignal
 ): Promise<RemoteRuntimeSubscription> {
+  throwIfSignalAborted(signal)
   const requestId = randomUUID()
   const serializedRequest = serializeRemoteRuntimeRpcRequest({
     requestId,
@@ -538,6 +540,7 @@ export async function subscribeRemoteRuntimeRequest<TResult>(
     let liveness: RemoteRuntimeSocketLivenessMonitor | null = null
 
     const cleanupSocketListeners = (): WebSocket | null => {
+      signal?.removeEventListener('abort', onAbort)
       liveness?.stop()
       liveness = null
       sendQueue?.dispose()
@@ -632,7 +635,18 @@ export async function subscribeRemoteRuntimeRequest<TResult>(
       }
       settled = true
       clearTimeout(timeout)
+      signal?.removeEventListener('abort', onAbort)
       resolve({ requestId, close, sendBinary })
+    }
+
+    const onAbort = (): void => {
+      if (settled) {
+        return
+      }
+      settled = true
+      clearTimeout(timeout)
+      closeSocketAfterCleanup()
+      reject(abortSignalReason(signal!))
     }
 
     const fail = (error: RemoteRuntimeClientError): void => {
@@ -735,6 +749,10 @@ export async function subscribeRemoteRuntimeRequest<TResult>(
     ws.on('message', onMessage)
     ws.on('pong', onLivenessSignal)
     ws.on('ping', onLivenessSignal)
+    signal?.addEventListener('abort', onAbort, { once: true })
+    if (signal?.aborted) {
+      onAbort()
+    }
 
     // Why: dedicated stream sockets (terminal.multiplex, browser.screencast)
     // ride the same tunnels as shared control; a half-open drop must surface

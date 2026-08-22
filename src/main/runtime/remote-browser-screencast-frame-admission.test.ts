@@ -8,6 +8,24 @@ import { startBrowserScreencast } from '../browser/browser-screencast-stream'
 import { E2EEChannel } from './rpc/e2ee-channel'
 import { sendRemoteBrowserScreencastFrame } from './remote-browser-screencast-frame-admission'
 
+function createJpegFrame(width: number, height: number, byteLength = 21): Buffer {
+  const frame = Buffer.alloc(byteLength)
+  frame.set([
+    0xff,
+    0xd8,
+    0xff,
+    0xc0,
+    0,
+    17,
+    8,
+    height >> 8,
+    height & 0xff,
+    width >> 8,
+    width & 0xff
+  ])
+  return frame
+}
+
 function createMockWebContents() {
   let attached = false
   const dbg = new EventEmitter() as EventEmitter & {
@@ -112,7 +130,9 @@ describe('sendRemoteBrowserScreencastFrame', () => {
 
     try {
       webContents.debugger.emit('message', {}, 'Page.screencastFrame', {
-        data: Buffer.alloc(REMOTE_RUNTIME_MAX_OUTBOUND_BINARY_FRAME_BYTES + 1).toString('base64'),
+        data: createJpegFrame(1, 1, REMOTE_RUNTIME_MAX_OUTBOUND_BINARY_FRAME_BYTES + 1).toString(
+          'base64'
+        ),
         sessionId: 42,
         metadata: {}
       })
@@ -128,7 +148,7 @@ describe('sendRemoteBrowserScreencastFrame', () => {
       expect(transport.ws.send).toHaveBeenCalledTimes(sendsAfterDrop)
 
       webContents.debugger.emit('message', {}, 'Page.screencastFrame', {
-        data: Buffer.from('next-frame').toString('base64'),
+        data: createJpegFrame(1, 1).toString('base64'),
         sessionId: 43,
         metadata: {}
       })

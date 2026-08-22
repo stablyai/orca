@@ -9,38 +9,12 @@ import {
   remoteBrowserStreamNotice,
   type RemoteBrowserStreamStatus
 } from './remote-browser-stream-status'
-
-export type Gate = {
-  wait: Promise<void>
-  release: () => void
-  fail: (error: unknown) => void
-}
-
-export function createGate(): Gate {
-  let release!: () => void
-  let fail!: (error: unknown) => void
-  const wait = new Promise<void>((resolve, reject) => {
-    release = () => resolve()
-    fail = (error: unknown) => reject(error)
-  })
-  // Why: the gate is released by the test, not by this tick; an unhandled rejection would fail the run.
-  wait.catch(() => {})
-  return { wait, release, fail }
-}
-
-export type FakeScreencastStream = {
-  pageId: string
-  params: unknown
-  viewportWidth: number | undefined
-  unsubscribeCount: number
-  emitReady: () => void
-  emitEnd: () => void
-  emitStreamError: (message: string) => void
-  emitMalformedSuccess: () => void
-  emitResponseFailure: (code: string, message: string) => void
-  emitTransportError: (code: string, message: string) => void
-  emitClose: () => void
-}
+import {
+  createGate,
+  RemoteBrowserRecoveryEvalGate,
+  type Gate
+} from './remote-browser-stream-test-gate'
+import type { FakeScreencastStream } from './remote-browser-fake-screencast-stream'
 
 export function rpcError(code: string, message: string): Error {
   return Object.assign(new Error(message), { code })
@@ -59,6 +33,8 @@ export function createHarness() {
   const closedPages: (string | null)[] = []
   const streams: FakeScreencastStream[] = []
   const rpcLog: string[] = []
+  const closedCreatedPages: string[] = []
+  const syncedViewportSizes: (RemoteBrowserViewportSize | null)[] = []
 
   let capabilities: string[] = ['browser.screencast.v1']
   let storedHandle: RemoteBrowserPageHandle | null = null
@@ -66,13 +42,22 @@ export function createHarness() {
   let statusGate: Gate | null = null
   let viewportGate: Gate | null = null
   let tabShowGate: Gate | null = null
+  let tabCreateGate: Gate | null = null
   let subscribeGate: Gate | null = null
+  const recoveryEval = new RemoteBrowserRecoveryEvalGate()
   let persistentSubscribeError: unknown = null
   const subscribeErrorQueue: unknown[] = []
   let subscribeAttempts = 0
+  let tabCreateAttempts = 0
+  let handledFrames = 0
   let closeBeforeNextSubscribeRejects = false
 
-  const callRpc = (async (_target: unknown, method: string) => {
+  const callRpc = (async (
+    _target: unknown,
+    method: string,
+    params?: unknown,
+    options?: { signal?: AbortSignal }
+  ) => {
     rpcLog.push(method)
     if (method === 'status.get') {
       if (statusGate) {
@@ -91,13 +76,71 @@ export function createHarness() {
       return { tab: { url: 'https://example.test/', title: 'Example' } }
     }
     if (method === 'browser.tabCreate') {
-      return { browserPageId: 'page-1' }
+      tabCreateAttempts += 1
+      if (tabCreateGate) {
+        const gate = tabCreateGate
+        tabCreateGate = null
+        await gate.wait
+      }
+      return { browserPageId: `page-${tabCreateAttempts}` }
+    }
+    if (method === 'browser.tabClose') {
+      closedCreatedPages.push((params as { page: string }).page)
+    }
+    if (method === 'browser.eval') {
+      await recoveryEval.wait(options?.signal)
     }
     return {}
   }) as unknown as RemoteBrowserRpcCall
 
   const subscribeScreencast: RemoteBrowserScreencastSubscribe = async (args, callbacks) => {
     subscribeAttempts += 1
+    const params = args.params as {
+      page: string
+      viewportWidth?: number
+      viewportHeight?: number
+    }
+    const respond = (result: unknown): void => {
+      callbacks.onResponse({ id: 'sub-1', ok: true, result, _meta: { runtimeId: 'runtime-1' } })
+    }
+    const stream: FakeScreencastStream = {
+      pageId: params.page,
+      params: args.params,
+      viewportWidth: params.viewportWidth,
+      viewportHeight: params.viewportHeight,
+      unsubscribeCount: 0,
+      emitReady: () =>
+        respond({
+          type: 'ready',
+          subscriptionId: 'sub-1',
+          browserPageId: params.page,
+          format: 'jpeg',
+          tab: { url: 'https://example.test/', title: 'Example' }
+        }),
+      emitFrame: () => callbacks.onBinary?.(new Uint8Array([1, 2, 3])),
+      emitEnd: () => respond({ type: 'end', subscriptionId: 'sub-1' }),
+      emitStreamError: (message) => respond({ type: 'error', message }),
+      emitMalformedSuccess: () => respond(null),
+      emitResponseFailure: (code, message) =>
+        callbacks.onResponse({
+          id: 'sub-1',
+          ok: false,
+          error: { code, message },
+          _meta: { runtimeId: 'runtime-1' }
+        }),
+      emitTransportError: (code, message) => callbacks.onError?.({ code, message }),
+      emitClose: () => callbacks.onClose?.()
+    }
+    let unsubscribed = false
+    const handle = {
+      unsubscribe: () => {
+        if (!unsubscribed) {
+          unsubscribed = true
+          stream.unsubscribeCount += 1
+        }
+      }
+    }
+    callbacks.onSubscriptionStart?.(handle)
     if (subscribeGate) {
       const gate = subscribeGate
       subscribeGate = null
@@ -117,48 +160,12 @@ export function createHarness() {
     if (error) {
       throw error
     }
-    const params = args.params as {
-      page: string
-      viewportWidth?: number
-    }
-    const respond = (result: unknown): void => {
-      callbacks.onResponse({ id: 'sub-1', ok: true, result, _meta: { runtimeId: 'runtime-1' } })
-    }
-    const stream: FakeScreencastStream = {
-      pageId: params.page,
-      params: args.params,
-      viewportWidth: params.viewportWidth,
-      unsubscribeCount: 0,
-      emitReady: () =>
-        respond({
-          type: 'ready',
-          subscriptionId: 'sub-1',
-          browserPageId: params.page,
-          format: 'jpeg',
-          tab: { url: 'https://example.test/', title: 'Example' }
-        }),
-      emitEnd: () => respond({ type: 'end', subscriptionId: 'sub-1' }),
-      emitStreamError: (message) => respond({ type: 'error', message }),
-      emitMalformedSuccess: () => respond(null),
-      emitResponseFailure: (code, message) =>
-        callbacks.onResponse({
-          id: 'sub-1',
-          ok: false,
-          error: { code, message },
-          _meta: { runtimeId: 'runtime-1' }
-        }),
-      emitTransportError: (code, message) => callbacks.onError?.({ code, message }),
-      emitClose: () => callbacks.onClose?.()
-    }
     streams.push(stream)
-    return {
-      unsubscribe: () => {
-        stream.unsubscribeCount += 1
-      }
-    }
+    return handle
   }
 
-  const lifecycle = new RemoteBrowserStreamLifecycle({
+  let lifecycle!: RemoteBrowserStreamLifecycle
+  lifecycle = new RemoteBrowserStreamLifecycle({
     identity: {
       isMounted: () => identity.mounted,
       isActive: () => identity.active,
@@ -188,11 +195,15 @@ export function createHarness() {
       return viewportSize
     },
     readViewportSize: () => viewportSize,
-    syncViewport: async () => {},
+    syncViewport: async (_pageId, size) => {
+      syncedViewportSizes.push(size)
+    },
     getDeviceScaleFactor: () => 1,
     setStatus: (status) => statusLog.push(status),
     clearFrame: () => {},
-    handleFrameBytes: () => {}
+    handleFrameBytes: () => {
+      handledFrames += 1
+    }
   })
 
   return {
@@ -203,8 +214,22 @@ export function createHarness() {
     closedPages,
     streams,
     rpcLog,
+    closedCreatedPages,
+    syncedViewportSizes,
     get subscribeAttempts(): number {
       return subscribeAttempts
+    },
+    get tabCreateAttempts(): number {
+      return tabCreateAttempts
+    },
+    get handledFrames(): number {
+      return handledFrames
+    },
+    get recoveryEvalAbortCount(): number {
+      return recoveryEval.abortCount
+    },
+    get recoveryEvalSignal(): AbortSignal | null {
+      return recoveryEval.signal
     },
     // Kept as accessors so the assertions written against the old three-variable shape still read
     // naturally — they now derive from the one status, which is the point of the change.
@@ -255,10 +280,18 @@ export function createHarness() {
       tabShowGate = gate
       return gate
     },
+    holdNextTabCreate: (): Gate => {
+      const gate = createGate()
+      tabCreateGate = gate
+      return gate
+    },
     holdNextSubscribe: (): Gate => {
       const gate = createGate()
       subscribeGate = gate
       return gate
+    },
+    holdNextRecoveryEval: (): Gate => {
+      return recoveryEval.hold()
     }
   }
 }
@@ -273,6 +306,7 @@ export async function openStreamAndConfirmReady(harness: Harness): Promise<() =>
   const close = harness.lifecycle.open()
   await settle()
   harness.streams[0].emitReady()
+  harness.streams[0].emitFrame()
   await settle()
   return close
 }

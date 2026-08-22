@@ -2708,6 +2708,150 @@
       "demotionRule": "Demote if one runtime terminal link creates a client-owned or duplicate browser, targets a runtime other than the pane owner, invokes the client external browser for Orca Browser, or removes the source terminal."
     },
     {
+      "id": "browser-session.mixed-version-remote-interaction",
+      "title": "Mixed-version paired browsers keep correct authority, input, history, and frame geometry",
+      "maturity": "experimental",
+      "protection": "partial",
+      "owner": "browser-runtime",
+      "layer": "paired-browser-wire-compatibility",
+      "surfaces": [
+        "headed paired-runtime browser panes",
+        "headless paired-runtime browser panes",
+        "mixed-version browser input and history",
+        "remote screencast frame geometry"
+      ],
+      "platforms": ["macos", "linux", "windows"],
+      "providers": ["remote-runtime"],
+      "coveredPlatforms": ["macos", "windows"],
+      "coveredProviders": ["remote-runtime"],
+      "coverageNotes": "Deterministic contracts cover old-host capability negotiation, acknowledged history fallback, direct new-host navigation cleanup, raw input fallback, malformed host-surface rejection and acknowledgement, one-shot legacy viewport renegotiation, legacy frame containment, click mapping, and scoped publication waits. An isolated macOS headless paired host/client covers click, wheel, keyboard, and Back with both direct capabilities disabled. A headed Mac dev client paired to unchanged physical Windows 2 (1.4.184) covers the actual New Browser Tab action, Example.com link click, Back, Forward, Reload, host page inventory, client store identity, a complete aspect-matched frame after the old host captures only 533 of 1097 requested pixels, and absence of reconnect/toast failure.",
+      "motivatingLinks": [
+        "https://linear.app/stably/issue/STA-4525",
+        "https://github.com/stablyai/orca/issues/14883",
+        "https://github.com/stablyai/orca/pull/14987"
+      ],
+      "invariant": "A browser pane owned by a paired runtime never creates or controls a local fallback page. New clients must remain usable against hosts without direct raw-input or history capabilities, and old clients must safely ignore the new optional capabilities. History actions acknowledge before an old host replaces the page, upgraded hosts navigate without a helper process, and every published or rendered frame preserves one uniform page-to-pixel transform so visible pointer coordinates reach the authoritative host page. When an old host captures only part of the requested viewport, the client renegotiates once to the largest complete aspect-matched viewport and keeps page layout, pixels, and input coordinates aligned across navigation and reconnect.",
+      "oracle": "Run the focused contracts with the exact physical mismatch of a 1097x917 requested client viewport and a 533x917 headed-host capture. Require an upgraded host to reject capturePage, publish the viewport-correct CDP capture, and publish nothing if both paths remain malformed. Require a new client to renegotiate the legacy stream once to 533x446, synchronize the authoritative page viewport, preserve that fallback across navigation/reconnect and observer sync, re-arm only after a real pane resize, and avoid looping if the fallback frame remains malformed. Also require legacy frame containment, actual-pixel click mapping, gutter rejection, malformed CDP acknowledgement, and scoped-only publication waits. Disable both direct capabilities on a real paired headless host and require click, Back, wheel, and keyboard to mutate the host page without a stream error. On physical Windows 2, require one host page and one matching Mac mirror after the actual New Browser Tab action, then require a complete aspect-matched frame plus visible click, Back, Forward, and Reload success with no local page, reconnect state, or failure toast.",
+      "commands": [
+        "pnpm exec vitest run --config config/vitest.config.ts src/main/browser/agent-browser-bridge-mouse-input.test.ts src/main/browser/browser-history-navigation.test.ts src/main/browser/browser-screencast-host-surface-capture.test.ts src/main/browser/browser-screencast-stream.test.ts src/main/runtime/orca-runtime-browser.test.ts src/main/runtime/orca-runtime.test.ts src/renderer/src/components/browser-pane/stream-remote/remote-browser-frame-point.test.ts src/renderer/src/components/browser-pane/stream-remote/remote-browser-frame-style.test.ts src/renderer/src/components/browser-pane/remote-browser-legacy-input.test.ts --reporter=dot",
+        "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/browser-pane/stream-remote/remote-browser-legacy-viewport.test.ts --reporter=dot",
+        "pnpm exec playwright test tests/e2e/paired-remote-browser-legacy-input.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1 --reporter=line",
+        "pnpm exec playwright test tests/e2e/paired-browser-host-generated-publication.spec.ts --config tests/playwright.config.ts --project electron-headful --workers=1 --reporter=line"
+      ],
+      "testFiles": [
+        "src/main/browser/agent-browser-bridge-mouse-input.test.ts",
+        "src/main/browser/browser-history-navigation.test.ts",
+        "src/main/browser/browser-screencast-host-surface-capture.test.ts",
+        "src/main/browser/browser-screencast-stream.test.ts",
+        "src/main/runtime/orca-runtime-browser.test.ts",
+        "src/main/runtime/orca-runtime.test.ts",
+        "src/renderer/src/components/browser-pane/stream-remote/remote-browser-frame-point.test.ts",
+        "src/renderer/src/components/browser-pane/stream-remote/remote-browser-frame-style.test.ts",
+        "src/renderer/src/components/browser-pane/remote-browser-legacy-input.test.ts",
+        "src/renderer/src/components/browser-pane/stream-remote/remote-browser-legacy-viewport.test.ts",
+        "tests/e2e/paired-remote-browser-legacy-input.spec.ts",
+        "tests/e2e/paired-browser-host-generated-publication.spec.ts"
+      ],
+      "assertionRefs": [
+        {
+          "file": "src/main/browser/browser-screencast-host-surface-capture.test.ts",
+          "assertions": [
+            "a 533x917 host capture falls through to a 1097x917 client-authoritative capture",
+            "no malformed frame is published when both fallback paths retain host geometry"
+          ]
+        },
+        {
+          "file": "src/renderer/src/components/browser-pane/stream-remote/remote-browser-legacy-viewport.test.ts",
+          "assertions": [
+            "a partial 533x917 legacy capture selects a complete 533x446 compatibility viewport",
+            "uniformly scaled corrected frames and undersized captures do not trigger fallback"
+          ]
+        },
+        {
+          "file": "src/renderer/src/components/browser-pane/stream-remote/remote-browser-frame-point.test.ts",
+          "assertions": [
+            "legacy host pixels map one-to-one to authoritative pointer coordinates",
+            "blank containment gutters reject pointer input"
+          ]
+        },
+        {
+          "file": "src/main/browser/browser-history-navigation.test.ts",
+          "assertions": [
+            "direct Back and Forward settle on navigation events",
+            "navigation failure and timeout remove every listener and timer owner"
+          ]
+        },
+        {
+          "file": "src/main/runtime/orca-runtime-browser.test.ts",
+          "assertions": [
+            "unscoped headless creates do not wait for an impossible worktree publication"
+          ]
+        },
+        {
+          "file": "tests/e2e/paired-remote-browser-legacy-input.spec.ts",
+          "assertions": [
+            "a paired host with both direct capabilities disabled accepts visible click, Back, wheel, and keyboard input",
+            "the client browser stream stays live without a remote-browser error"
+          ]
+        },
+        {
+          "file": "tests/e2e/paired-browser-host-generated-publication.spec.ts",
+          "assertions": [
+            "host-generated browser creation reaches the client session snapshot before the RPC settles",
+            "the client renders the authoritative host page without creating a local fallback"
+          ]
+        }
+      ],
+      "evidenceRuns": [
+        {
+          "date": "2026-08-17",
+          "runner": "local",
+          "platform": "macos",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/main/browser/agent-browser-bridge-mouse-input.test.ts src/main/browser/browser-history-navigation.test.ts src/main/browser/browser-screencast-host-surface-capture.test.ts src/main/browser/browser-screencast-stream.test.ts src/main/runtime/orca-runtime-browser.test.ts src/main/runtime/orca-runtime.test.ts src/renderer/src/components/browser-pane/stream-remote/remote-browser-frame-point.test.ts src/renderer/src/components/browser-pane/stream-remote/remote-browser-frame-style.test.ts src/renderer/src/components/browser-pane/remote-browser-legacy-input.test.ts --reporter=dot",
+          "result": "passed",
+          "durationSeconds": 12,
+          "summary": "Focused contract files passed with direct and legacy history, raw-input compatibility, exact 533x917 host-surface rejection/containment, viewport-correct host fallback, pointer mapping, malformed-frame acknowledgement, and scoped publication waits."
+        },
+        {
+          "date": "2026-08-17",
+          "runner": "local",
+          "platform": "macos",
+          "command": "pnpm exec playwright test tests/e2e/paired-remote-browser-legacy-input.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1 --reporter=line",
+          "result": "passed",
+          "durationSeconds": 15.9,
+          "summary": "One isolated paired-runtime Electron journey passed with both direct capabilities disabled; click, Back, wheel, keyboard, host-page state, and stream health all converged."
+        }
+      ],
+      "runtimeBudget": {
+        "p95Seconds": 45,
+        "scope": "focused mixed-version contracts plus one isolated paired-runtime Electron journey"
+      },
+      "flakeHistory": {
+        "status": "not-started",
+        "evidence": "Fresh deterministic local contracts and isolated paired-runtime E2E pass; CI and soak history have not started."
+      },
+      "redGreenEvidence": {
+        "status": "complete",
+        "evidence": "The unchanged physical Windows 2 baseline created no browser under the original request shape and, after creation compatibility was restored, published 533x917 pixels for a claimed 1097x917 viewport; the original renderer stretched those pixels and misrouted clicks. The candidate created exactly one authoritative Windows page, safely contained the legacy frame, and completed click, Back, Forward, and Reload. The focused frame and history assertions fail against the prior fill-only renderer, unconditional capturePage fallback, and helper-owned Back path. Disabling the lifecycle fixes on the same oracle produces five deterministic failures: viewport switch, viewport restoration, driver fallback, malformed-frame acknowledgement, and destroyed-load cleanup."
+      },
+      "performanceBudget": {
+        "required": true,
+        "evidence": "New clients add only constant-time capability and frame-geometry checks, reuse existing RPCs, and add no opcode, polling, retry loop, subprocess, or local browser. New hosts remove helper-process history navigation. Snapshot capture performs one extra existing CDP fallback only when capturePage returns incompatible geometry, and malformed frames are dropped rather than retried or fanned out."
+      },
+      "promotionCriteria": [
+        "Collect 100 consecutive focused CI passes or 14 days without an unexplained flake.",
+        "Collect a physical Windows candidate-host run proving full-width viewport-correct capture.",
+        "Collect live Linux paired-host and multi-client reconnect evidence.",
+        "Keep mixed-version create, input, history, frame geometry, and no-local-fallback assertions green."
+      ],
+      "knownGaps": [
+        "The unchanged old Windows host cannot send pixels outside its 533-pixel BrowserView, so the new client preserves those pixels with a blank gutter instead of reconstructing missing content.",
+        "The final upgraded Windows host full-width capture path is contract-covered but not yet physically exercised.",
+        "Live Linux, multiple simultaneous clients, folder workspaces, and SSH-owned workspace journeys remain uncollected for this gate; SSH uses a distinct provider path."
+      ],
+      "demotionRule": "Demote if a remotely owned pane falls back locally, an old host can wedge acknowledged input/history, an upgraded host publishes host-sized pixels for a client viewport, malformed legacy pixels are stretched or receive gutter input, or disconnect/reconnect leaves a stale page, frame, listener, timer, or stream error."
+    },
+    {
       "id": "browser-session.remote-html-preview-ownership",
       "title": "Paired HTML previews keep one host page and one stable client split",
       "maturity": "experimental",
@@ -3096,25 +3240,39 @@
       "providers": ["remote-runtime"],
       "coveredPlatforms": ["macos", "linux"],
       "coveredProviders": ["remote-runtime"],
-      "coverageNotes": "Deterministic fake-clock tests cover counted backoff, in-flight ownership and handoff, cancellation, supersession, transient and permanent failures, late stale rejection, silent hosts, flapping streams, viewport restarts, stale events, budget exhaustion, and manual recovery. A headless paired-runtime journey drops the real runtime connection, proves the bounded retry state and visible Reconnect control, reconnects the same host, and requires a newly painted frame. Headed paired-server, Windows, sleep/wake, and real network-partition evidence remain uncollected.",
+      "coverageNotes": "Deterministic fake-clock tests cover counted backoff, first-frame proof and repaint recovery, stale-frame rejection, duplicate-ready idempotence, in-flight RPC cancellation, ownership and handoff, supersession, transient and permanent failures, silent hosts, flapping streams, viewport restarts, budget exhaustion, and manual recovery. A headless paired-runtime journey covers disconnect/reconnect. PR evidence includes a manual headed Mac client against an unchanged Windows 1.4.184 desktop host, but Windows is not counted as covered until that run has a durable replayable gate. Sleep/wake and real network-partition evidence remain uncollected.",
       "motivatingLinks": [
         "https://github.com/stablyai/orca/pull/12787",
         "https://linear.app/stably/issue/STA-3483"
       ],
-      "invariant": "A current remote browser stream that closes must retry transient failures on one counted, capped backoff chain. Cancellation, pane or runtime supersession, missing pages, and permanent failures stop that chain without stale state mutation. A stream that stays healthy refills the budget; a silent or flapping stream cannot retry forever. Exhaustion and every non-retrying failure leave an actionable Reconnect control, and manual reconnect creates a fresh stream without resurrecting stale subscriptions.",
-      "oracle": "With one fake clock and exact pane, operation, stream, page, and runtime identities, drop a confirmed stream and require the counted delay sequence, one active chain, stale-token rejection, exact cancellation, full cleanup, and either a new live subscription or one stopped state with Reconnect after exhaustion. Inject transport error without close, close racing rejection, never-ready subscriptions, ready-then-end flapping, viewport supersession, missing pages, and permanent failures. In a separate paired client against an isolated headless Orca host, paint one remote frame, disconnect the owning runtime, require the bounded-retry notice and Reconnect control, reconnect, click once, and require a different frame object URL from the recovered stream.",
+      "invariant": "A current remote browser stream is live only after its own first frame, not merely its ready acknowledgement or a stale frame from a superseded stream. A frame-less ready stream requests at most one safe compositor repaint per attempt, then joins one counted, capped backoff chain. Cancellation, pane or runtime supersession, transport failure, missing pages, and permanent failures stop that chain and abort in-flight recovery without stale state mutation. Exhaustion and every non-retrying failure leave an actionable Reconnect control, and manual reconnect creates a fresh stream without resurrecting stale subscriptions.",
+      "oracle": "With one fake clock and exact pane, operation, stream, page, and runtime identities, inject ready with zero frames and require opening state, one old-host-safe repaint RPC, live only after the current stream's frame, no repeated status writes, duplicate-ready idempotence, exact in-flight RPC cancellation, and bounded retry to Reconnect if every repaint remains frame-less. Replace a stream and deliver its stale frame before the replacement ready; then deliver late ready/frame after transport failure and require no liveness, frame, viewport, or tab-state mutation. Drop a confirmed stream and require the counted delay sequence, one active chain, stale-token rejection, exact cancellation, and full cleanup. Also inject close racing rejection, never-ready subscriptions, ready-then-end flapping, viewport supersession, missing pages, and permanent failures. In paired headless journeys, require authoritative host page state plus a newly painted client frame.",
       "commands": [
         "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/browser-pane/stream-remote/remote-browser-stream-errors.test.ts src/renderer/src/components/browser-pane/stream-remote/remote-browser-stream-lifecycle.test.ts src/renderer/src/components/browser-pane/stream-remote/remote-browser-stream-restart-scheduler.test.ts src/renderer/src/components/browser-pane/stream-remote/remote-browser-stream-status.test.ts",
+        "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/browser-pane/stream-remote/remote-browser-stream-first-frame.test.ts",
+        "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/browser-pane/stream-remote/remote-browser-legacy-viewport.test.ts",
+        "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/runtime/runtime-rpc-client-cancellation.test.ts",
+        "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/browser-pane/stream-remote/remote-browser-stream-errors.test.ts src/renderer/src/components/browser-pane/stream-remote/remote-browser-stream-lifecycle.test.ts src/renderer/src/components/browser-pane/stream-remote/remote-browser-stream-restart-scheduler.test.ts src/renderer/src/components/browser-pane/stream-remote/remote-browser-stream-status.test.ts src/renderer/src/components/browser-pane/stream-remote/remote-browser-stream-first-frame.test.ts src/renderer/src/components/browser-pane/stream-remote/remote-browser-legacy-viewport.test.ts src/renderer/src/runtime/runtime-rpc-client-cancellation.test.ts",
         "pnpm exec playwright test tests/e2e/paired-remote-browser-stream-reconnect.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1"
       ],
       "testFiles": [
+        "src/renderer/src/components/browser-pane/stream-remote/remote-browser-legacy-viewport.test.ts",
         "src/renderer/src/components/browser-pane/stream-remote/remote-browser-stream-errors.test.ts",
         "src/renderer/src/components/browser-pane/stream-remote/remote-browser-stream-lifecycle.test.ts",
         "src/renderer/src/components/browser-pane/stream-remote/remote-browser-stream-restart-scheduler.test.ts",
         "src/renderer/src/components/browser-pane/stream-remote/remote-browser-stream-status.test.ts",
+        "src/renderer/src/components/browser-pane/stream-remote/remote-browser-stream-first-frame.test.ts",
+        "src/renderer/src/runtime/runtime-rpc-client-cancellation.test.ts",
         "tests/e2e/paired-remote-browser-stream-reconnect.spec.ts"
       ],
       "assertionRefs": [
+        {
+          "file": "src/renderer/src/components/browser-pane/stream-remote/remote-browser-legacy-viewport.test.ts",
+          "assertions": [
+            "legacy partial frames choose a bounded aspect-preserving viewport",
+            "corrected or unusably small frames do not trigger compatibility recovery"
+          ]
+        },
         {
           "file": "src/renderer/src/components/browser-pane/stream-remote/remote-browser-stream-restart-scheduler.test.ts",
           "assertions": [
@@ -3131,6 +3289,22 @@
             "stale, superseded, missing-page, and permanent-failure work cannot mutate the current pane",
             "manual reopen starts a fresh budget and adopts one current subscription",
             "a late stale rejection cannot clear the replacement stream's ready deadline"
+          ]
+        },
+        {
+          "file": "src/renderer/src/components/browser-pane/stream-remote/remote-browser-stream-first-frame.test.ts",
+          "assertions": [
+            "ready without a frame stays opening, requests one repaint, and either paints or retries",
+            "first-frame deadlines and the in-flight repaint RPC stop on frame, close, replacement, and unmount",
+            "stale frames and post-transport events cannot prove or repaint a replacement stream",
+            "duplicate ready and later frame events are idempotent",
+            "budget exhaustion stops at six total subscriptions with no retained timers"
+          ]
+        },
+        {
+          "file": "src/renderer/src/runtime/runtime-rpc-client-cancellation.test.ts",
+          "assertions": [
+            "cancellation before subscription admission unsubscribes the pending remote request exactly once"
           ]
         },
         {
@@ -3160,6 +3334,16 @@
           "result": "passed",
           "durationSeconds": 59.8,
           "summary": "Both isolated headless paired-runtime scenarios passed: bounded recovery after a live-stream disconnect and manual recovery when the first stream never opened."
+        },
+        {
+          "date": "2026-08-17",
+          "commit": "c6016e2963e1f5e456f25d57a43b54494582a8ea",
+          "runner": "local",
+          "platform": "macos",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/browser-pane/stream-remote/remote-browser-stream-errors.test.ts src/renderer/src/components/browser-pane/stream-remote/remote-browser-stream-lifecycle.test.ts src/renderer/src/components/browser-pane/stream-remote/remote-browser-stream-restart-scheduler.test.ts src/renderer/src/components/browser-pane/stream-remote/remote-browser-stream-status.test.ts src/renderer/src/components/browser-pane/stream-remote/remote-browser-stream-first-frame.test.ts src/renderer/src/components/browser-pane/stream-remote/remote-browser-legacy-viewport.test.ts src/renderer/src/runtime/runtime-rpc-client-cancellation.test.ts",
+          "result": "passed",
+          "durationSeconds": 0.39,
+          "summary": "Seven focused stream, viewport, and cancellation files passed 98 deterministic lifecycle, recovery, and abort tests."
         }
       ],
       "runtimeBudget": {
@@ -3172,23 +3356,20 @@
       },
       "redGreenEvidence": {
         "status": "complete",
-        "evidence": "The byte-identical scheduler oracle fails with the reschedule disabled at one attempt instead of four and passes after restoration. On the PR head, the delayed handoff oracle counted two scheduled attempts instead of one, and the late stale-rejection oracle lost the replacement ready deadline and never offered reconnect; both pass after the ownership fixes. Current main structurally contains the original one-shot timer dead end. The focused suite passes 61 tests, and the isolated paired-runtime CI journey passes both disconnect and cold-open recovery scenarios."
+        "evidence": "The original byte-identical six-test first-frame oracle is red on 04072c54e9 and with only frame-gated live state disabled because ready immediately publishes live with zero frames. Six added race/cleanup cases are red on 0282778103: stale frames publish false live, post-error frames paint, duplicate ready repeats work, and close/frame/unmount do not abort the repaint RPC. All are green on candidate c6016e2963, which also asserts exactly six total subscriptions and zero timers after exhaustion; the exact-head stream/viewport/cancellation run passed 98 tests on 2026-08-17. The scheduler oracle fails with rescheduling disabled and passes after restoration. The isolated paired-runtime journey passes both disconnect and cold-open recovery scenarios. The physical Windows 1.4.184 run is manual evidence only and remains excluded from coveredPlatforms until replayable automation exists."
       },
       "performanceBudget": {
         "required": true,
-        "evidence": "Each pane retains at most one retry timer, one in-flight attempt, and one ready deadline. Automatic recovery makes at most five counted attempts with no global scan, subprocess, polling loop, or cross-pane fanout; exhaustion stops background work until explicit user reconnect."
+        "evidence": "Each pane retains at most one retry timer, one in-flight attempt, one ready deadline, one first-frame deadline, and one abortable repaint RPC. A frame-less attempt makes one existing browser.eval RPC and no polling, global scan, subprocess, per-frame status write, or cross-pane fanout. Frame, close, replacement, transport failure, and unmount abort that RPC. Automatic recovery remains capped at five counted retries after the initial subscription; exhaustion leaves zero timers and stops background work until explicit user reconnect."
       },
       "promotionCriteria": [
-        "Run the same journey against a headed Orca desktop server and retain independent host/client state evidence.",
-        "Collect Linux and physical Windows paired-server evidence plus sleep/wake or network-partition recovery.",
-        "Collect 100 consecutive focused CI passes or 14 days without an unexplained flake.",
-        "Replace the E2E's post-exhaustion elapsed-time check with an exact subscribe-attempt oracle."
+        "Collect sleep/wake or network-partition recovery evidence.",
+        "Collect 100 consecutive focused CI passes or 14 days without an unexplained flake."
       ],
       "knownGaps": [
-        "The paired journey covers headless orca serve, not the primary headed desktop-server topology.",
         "The live fault is an explicit disconnect rather than sleep/wake or a real network partition.",
         "The E2E observes UI convergence and new frame identity but does not count screencast subscribe attempts directly.",
-        "Live Linux and Windows evidence is uncollected."
+        "Live Linux evidence and a durable replayable physical Windows gate are uncollected."
       ],
       "demotionRule": "Keep experimental or demote if retries can stop before recovery or exhaustion, continue after exhaustion, run in parallel, mutate a superseded pane, hide the Reconnect control, leak a subscription or timer, or fail to paint a new frame after manual reconnect."
     },

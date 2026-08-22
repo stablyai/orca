@@ -56,10 +56,18 @@ function jpegWithSize(width: number, height: number): Buffer {
   ])
 }
 
+function labeledJpeg(label: string): Buffer {
+  return Buffer.concat([jpegWithSize(800, 600), Buffer.from(label)])
+}
+
+function readJpegLabel(image: Uint8Array): string {
+  return Buffer.from(image).subarray(jpegWithSize(800, 600).byteLength).toString()
+}
+
 describe('startBrowserScreencast', () => {
   it('emits an initial captured frame before CDP produces screencast events', async () => {
     const webContents = createMockWebContents()
-    const firstFrame = Buffer.from('first-frame')
+    const firstFrame = labeledJpeg('first-frame')
     webContents.debugger.sendCommand.mockImplementation(async (method: string) => {
       if (method === 'Page.captureScreenshot') {
         return { data: firstFrame.toString('base64') }
@@ -82,7 +90,7 @@ describe('startBrowserScreencast', () => {
     const frame = decodeBrowserScreencastFrame(onFrame.mock.calls[0][0])
     expect(frame?.seq).toBe(0)
     expect(frame?.format).toBe('jpeg')
-    expect(Buffer.from(frame?.image ?? new Uint8Array()).toString()).toBe('first-frame')
+    expect(readJpegLabel(frame?.image ?? new Uint8Array())).toBe('first-frame')
     expect(webContents.debugger.sendCommand).toHaveBeenCalledWith('Page.captureScreenshot', {
       format: 'jpeg',
       quality: 70,
@@ -146,17 +154,17 @@ describe('startBrowserScreencast', () => {
     })
 
     webContents.debugger.emit('message', {}, 'Page.screencastFrame', {
-      data: Buffer.from('live-frame').toString('base64'),
+      data: labeledJpeg('live-frame').toString('base64'),
       sessionId: 42,
       metadata: { deviceWidth: 800, deviceHeight: 600 }
     })
     await vi.waitFor(() => expect(onFrame).toHaveBeenCalledTimes(1))
 
-    resolveInitialCapture({ data: Buffer.from('stale-frame').toString('base64') })
+    resolveInitialCapture({ data: labeledJpeg('stale-frame').toString('base64') })
     await new Promise((resolve) => setTimeout(resolve, 0))
 
     const frame = decodeBrowserScreencastFrame(onFrame.mock.calls[0][0])
-    expect(Buffer.from(frame?.image ?? new Uint8Array()).toString()).toBe('live-frame')
+    expect(readJpegLabel(frame?.image ?? new Uint8Array())).toBe('live-frame')
     expect(onFrame).toHaveBeenCalledTimes(1)
     expect(webContents.debugger.sendCommand).toHaveBeenCalledWith('Page.screencastFrameAck', {
       sessionId: 42
@@ -164,6 +172,34 @@ describe('startBrowserScreencast', () => {
 
     session.stop()
     await session.done
+  })
+
+  it('acknowledges empty live screencast frames so CDP keeps streaming', async () => {
+    const webContents = createMockWebContents()
+    const session = await startBrowserScreencast(webContents as never, {
+      format: 'jpeg',
+      quality: 70,
+      maxWidth: 1440,
+      maxHeight: 1200,
+      everyNthFrame: 1,
+      minFrameIntervalMs: 0,
+      onFrame: vi.fn()
+    })
+
+    try {
+      webContents.debugger.emit('message', {}, 'Page.screencastFrame', {
+        data: '',
+        sessionId: 42
+      })
+      await vi.waitFor(() =>
+        expect(webContents.debugger.sendCommand).toHaveBeenCalledWith('Page.screencastFrameAck', {
+          sessionId: 42
+        })
+      )
+    } finally {
+      session.stop()
+      await session.done
+    }
   })
 
   it('does not emit a stale navigation fallback capture after newer live frames', async () => {
@@ -191,13 +227,13 @@ describe('startBrowserScreencast', () => {
     try {
       await Promise.resolve()
       webContents.debugger.emit('message', {}, 'Page.screencastFrame', {
-        data: Buffer.from('first-live-frame').toString('base64'),
+        data: labeledJpeg('first-live-frame').toString('base64'),
         sessionId: 42,
         metadata: { deviceWidth: 800, deviceHeight: 600 }
       })
       expect(onFrame).toHaveBeenCalledTimes(1)
 
-      pendingCaptures[0]?.({ data: Buffer.from('stale-initial').toString('base64') })
+      pendingCaptures[0]?.({ data: labeledJpeg('stale-initial').toString('base64') })
       await Promise.resolve()
       await Promise.resolve()
       expect(onFrame).toHaveBeenCalledTimes(1)
@@ -208,19 +244,17 @@ describe('startBrowserScreencast', () => {
       expect(pendingCaptures).toHaveLength(2)
 
       webContents.debugger.emit('message', {}, 'Page.screencastFrame', {
-        data: Buffer.from('newer-live-frame').toString('base64'),
+        data: labeledJpeg('newer-live-frame').toString('base64'),
         sessionId: 43,
         metadata: { deviceWidth: 800, deviceHeight: 600 }
       })
-      pendingCaptures[1]?.({ data: Buffer.from('stale-navigation').toString('base64') })
+      pendingCaptures[1]?.({ data: labeledJpeg('stale-navigation').toString('base64') })
       await Promise.resolve()
       await Promise.resolve()
 
       expect(onFrame).toHaveBeenCalledTimes(2)
       const secondFrame = decodeBrowserScreencastFrame(onFrame.mock.calls[1][0])
-      expect(Buffer.from(secondFrame?.image ?? new Uint8Array()).toString()).toBe(
-        'newer-live-frame'
-      )
+      expect(readJpegLabel(secondFrame?.image ?? new Uint8Array())).toBe('newer-live-frame')
     } finally {
       session.stop()
       await session.done
@@ -288,7 +322,7 @@ describe('startBrowserScreencast', () => {
     webContents.debugger.sendCommand.mockImplementation(async (method: string) => {
       if (method === 'Page.captureScreenshot') {
         captureCount += 1
-        return { data: Buffer.from(`capture-${captureCount}`).toString('base64') }
+        return { data: labeledJpeg(`capture-${captureCount}`).toString('base64') }
       }
       return {}
     })
@@ -309,7 +343,7 @@ describe('startBrowserScreencast', () => {
 
     await vi.waitFor(() => expect(onFrame).toHaveBeenCalledTimes(2))
     const frame = decodeBrowserScreencastFrame(onFrame.mock.calls[1][0])
-    expect(Buffer.from(frame?.image ?? new Uint8Array()).toString()).toBe('capture-2')
+    expect(readJpegLabel(frame?.image ?? new Uint8Array())).toBe('capture-2')
 
     session.stop()
     await session.done
@@ -333,19 +367,19 @@ describe('startBrowserScreencast', () => {
 
     try {
       webContents.debugger.emit('message', {}, 'Page.screencastFrame', {
-        data: Buffer.from('first-live-frame').toString('base64'),
+        data: labeledJpeg('first-live-frame').toString('base64'),
         sessionId: 42,
         metadata: { deviceWidth: 800, deviceHeight: 600 }
       })
       now = 1050
       webContents.debugger.emit('message', {}, 'Page.screencastFrame', {
-        data: Buffer.from('dropped-live-frame').toString('base64'),
+        data: labeledJpeg('dropped-live-frame').toString('base64'),
         sessionId: 43,
         metadata: { deviceWidth: 800, deviceHeight: 600 }
       })
       now = 1120
       webContents.debugger.emit('message', {}, 'Page.screencastFrame', {
-        data: Buffer.from('second-live-frame').toString('base64'),
+        data: labeledJpeg('second-live-frame').toString('base64'),
         sessionId: 44,
         metadata: { deviceWidth: 800, deviceHeight: 600 }
       })
@@ -357,9 +391,7 @@ describe('startBrowserScreencast', () => {
         })
       )
       const secondFrame = decodeBrowserScreencastFrame(onFrame.mock.calls[1][0])
-      expect(Buffer.from(secondFrame?.image ?? new Uint8Array()).toString()).toBe(
-        'second-live-frame'
-      )
+      expect(readJpegLabel(secondFrame?.image ?? new Uint8Array())).toBe('second-live-frame')
     } finally {
       dateNow.mockRestore()
       session.stop()
@@ -386,19 +418,19 @@ describe('startBrowserScreencast', () => {
 
     try {
       webContents.debugger.emit('message', {}, 'Page.screencastFrame', {
-        data: Buffer.from('before-menu').toString('base64'),
+        data: labeledJpeg('before-menu').toString('base64'),
         sessionId: 42,
         metadata: { deviceWidth: 800, deviceHeight: 600 }
       })
       now = 1040
       webContents.debugger.emit('message', {}, 'Page.screencastFrame', {
-        data: Buffer.from('menu-opening').toString('base64'),
+        data: labeledJpeg('menu-opening').toString('base64'),
         sessionId: 43,
         metadata: { deviceWidth: 800, deviceHeight: 600 }
       })
       now = 1060
       webContents.debugger.emit('message', {}, 'Page.screencastFrame', {
-        data: Buffer.from('menu-open-final').toString('base64'),
+        data: labeledJpeg('menu-open-final').toString('base64'),
         sessionId: 44,
         metadata: { deviceWidth: 800, deviceHeight: 600 }
       })
@@ -409,7 +441,7 @@ describe('startBrowserScreencast', () => {
 
       expect(onFrame).toHaveBeenCalledTimes(2)
       const frame = decodeBrowserScreencastFrame(onFrame.mock.calls[1][0])
-      expect(Buffer.from(frame?.image ?? new Uint8Array()).toString()).toBe('menu-open-final')
+      expect(readJpegLabel(frame?.image ?? new Uint8Array())).toBe('menu-open-final')
     } finally {
       dateNow.mockRestore()
       session.stop()
@@ -439,7 +471,7 @@ describe('startBrowserScreencast', () => {
 
     try {
       webContents.debugger.emit('message', {}, 'Page.screencastFrame', {
-        data: Buffer.from('backpressured-frame').toString('base64'),
+        data: labeledJpeg('backpressured-frame').toString('base64'),
         sessionId: 42,
         metadata: { deviceWidth: 800, deviceHeight: 600 }
       })
@@ -482,13 +514,13 @@ describe('startBrowserScreencast', () => {
     let stopped = false
     try {
       webContents.debugger.emit('message', {}, 'Page.screencastFrame', {
-        data: Buffer.from('before-stop').toString('base64'),
+        data: labeledJpeg('before-stop').toString('base64'),
         sessionId: 42,
         metadata: { deviceWidth: 800, deviceHeight: 600 }
       })
       now = 1040
       webContents.debugger.emit('message', {}, 'Page.screencastFrame', {
-        data: Buffer.from('pending-before-stop').toString('base64'),
+        data: labeledJpeg('pending-before-stop').toString('base64'),
         sessionId: 43,
         metadata: { deviceWidth: 800, deviceHeight: 600 }
       })
@@ -498,7 +530,7 @@ describe('startBrowserScreencast', () => {
       stopped = true
       now = 1060
       webContents.debugger.emit('message', {}, 'Page.screencastFrame', {
-        data: Buffer.from('late-after-stop').toString('base64'),
+        data: labeledJpeg('late-after-stop').toString('base64'),
         sessionId: 44,
         metadata: { deviceWidth: 800, deviceHeight: 600 }
       })
@@ -507,7 +539,7 @@ describe('startBrowserScreencast', () => {
 
       expect(onFrame).toHaveBeenCalledTimes(1)
       const frame = decodeBrowserScreencastFrame(onFrame.mock.calls[0][0])
-      expect(Buffer.from(frame?.image ?? new Uint8Array()).toString()).toBe('before-stop')
+      expect(readJpegLabel(frame?.image ?? new Uint8Array())).toBe('before-stop')
       expect(webContents.debugger.sendCommand).toHaveBeenCalledWith('Page.screencastFrameAck', {
         sessionId: 44
       })

@@ -48,6 +48,7 @@ import {
 import { insertTextThroughCdp } from './browser-text-insertion'
 import type { BrowserManager } from './browser-manager'
 import { ANTI_DETECTION_SCRIPT } from './anti-detection'
+import { resolveCdpKeypressDefinition } from './cdp-keypress'
 
 const CAPTURE_LOG_LIMIT = 1000
 
@@ -578,7 +579,7 @@ export class CdpBridge {
       const sender = this.makeCdpSender(guest)
       await this.ensureDebuggerAttached(guest)
 
-      const keyDef = resolveKeyDefinition(key)
+      const keyDef = resolveCdpKeypressDefinition(key)
       await sender('Input.dispatchKeyEvent', {
         type: 'keyDown',
         ...keyDef
@@ -1716,52 +1717,4 @@ export class CdpBridge {
 
     this.processingQueues.delete(tabId)
   }
-}
-
-// Why: Input.dispatchKeyEvent needs `text` for keys with default actions (Enter/Tab), or Chrome skips the action.
-type KeyDefinition = {
-  key: string
-  code: string
-  windowsVirtualKeyCode?: number
-  text?: string
-}
-
-const KEY_DEFINITIONS: Record<string, KeyDefinition> = {
-  Enter: { key: 'Enter', code: 'Enter', windowsVirtualKeyCode: 13, text: '\r' },
-  Tab: { key: 'Tab', code: 'Tab', windowsVirtualKeyCode: 9, text: '\t' },
-  Escape: { key: 'Escape', code: 'Escape', windowsVirtualKeyCode: 27 },
-  Backspace: { key: 'Backspace', code: 'Backspace', windowsVirtualKeyCode: 8 },
-  Delete: { key: 'Delete', code: 'Delete', windowsVirtualKeyCode: 46 },
-  ArrowUp: { key: 'ArrowUp', code: 'ArrowUp', windowsVirtualKeyCode: 38 },
-  ArrowDown: { key: 'ArrowDown', code: 'ArrowDown', windowsVirtualKeyCode: 40 },
-  ArrowLeft: { key: 'ArrowLeft', code: 'ArrowLeft', windowsVirtualKeyCode: 37 },
-  ArrowRight: { key: 'ArrowRight', code: 'ArrowRight', windowsVirtualKeyCode: 39 },
-  Home: { key: 'Home', code: 'Home', windowsVirtualKeyCode: 36 },
-  End: { key: 'End', code: 'End', windowsVirtualKeyCode: 35 },
-  PageUp: { key: 'PageUp', code: 'PageUp', windowsVirtualKeyCode: 33 },
-  PageDown: { key: 'PageDown', code: 'PageDown', windowsVirtualKeyCode: 34 },
-  Space: { key: ' ', code: 'Space', windowsVirtualKeyCode: 32, text: ' ' }
-}
-
-function resolveKeyDefinition(key: string): KeyDefinition {
-  if (KEY_DEFINITIONS[key]) {
-    return KEY_DEFINITIONS[key]
-  }
-  // Why: sites that check event.code drop events with invalid code values.
-  if (key.length === 1) {
-    const charCode = key.charCodeAt(0)
-    if (charCode >= 48 && charCode <= 57) {
-      return { key, code: `Digit${key}`, windowsVirtualKeyCode: charCode, text: key }
-    }
-    if ((charCode >= 65 && charCode <= 90) || (charCode >= 97 && charCode <= 122)) {
-      return {
-        key,
-        code: `Key${key.toUpperCase()}`,
-        windowsVirtualKeyCode: key.toUpperCase().charCodeAt(0),
-        text: key
-      }
-    }
-    return { key, code: '', windowsVirtualKeyCode: charCode, text: key }
-  }
-  return { key, code: key }
 }

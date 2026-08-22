@@ -115,6 +115,54 @@ describe('WebRuntimeClient', () => {
     expect(child.close).toHaveBeenCalledWith({ notifySubscriptions: true })
   })
 
+  it('exposes a pending child handle before WebSocket subscription admission', async () => {
+    const client = new WebRuntimeClient({
+      v: 2,
+      endpoint: 'ws://127.0.0.1:6768',
+      deviceToken: 'token',
+      publicKeyB64: Buffer.alloc(32).toString('base64')
+    })
+    let resolveSubscription!: (handle: {
+      unsubscribe: () => void
+      sendBinary: (bytes: Uint8Array<ArrayBufferLike>) => void
+    }) => void
+    const internals = client as unknown as {
+      childClients: Set<WebRuntimeClient>
+    }
+    const admissionSpy = vi
+      .spyOn(
+        WebRuntimeClient.prototype as unknown as {
+          subscribeOnCurrentConnection: WebRuntimeClient['subscribeOnCurrentConnection']
+        },
+        'subscribeOnCurrentConnection'
+      )
+      .mockImplementation(
+        () =>
+          new Promise((resolve) => {
+            resolveSubscription = resolve
+          })
+      )
+    const onSubscriptionStart = vi.fn()
+    const subscriptionPromise = client.subscribe(
+      'browser.screencast',
+      { page: 'page-1' },
+      { onResponse: vi.fn(), onSubscriptionStart }
+    )
+    await vi.waitFor(() => expect(onSubscriptionStart).toHaveBeenCalledOnce())
+
+    const child = [...internals.childClients][0]
+    expect(child).toBeDefined()
+    const childClose = vi.spyOn(child!, 'close')
+    onSubscriptionStart.mock.calls[0]![0].unsubscribe()
+
+    expect(childClose).toHaveBeenCalledWith({ notifySubscriptions: false })
+    resolveSubscription({ unsubscribe: vi.fn(), sendBinary: vi.fn() })
+    const subscription = await subscriptionPromise
+    subscription.unsubscribe()
+    client.close()
+    admissionSpy.mockRestore()
+  })
+
   it('passes local close semantics to child subscription clients', () => {
     const client = new WebRuntimeClient({
       v: 2,

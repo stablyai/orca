@@ -76,7 +76,8 @@ export class RemoteRuntimeSharedControlConnection {
     method: string,
     params: unknown,
     timeoutMs: number,
-    callbacks: SharedControlTypes.SharedControlSubscriptionCallbacks<TResult>
+    callbacks: SharedControlTypes.SharedControlSubscriptionCallbacks<TResult>,
+    signal?: AbortSignal
   ): Promise<SharedControlTypes.RemoteRuntimeSharedSubscription> {
     return startSharedControlSubscription({
       subscriptions: this.subscriptions,
@@ -84,7 +85,7 @@ export class RemoteRuntimeSharedControlConnection {
       method,
       params,
       callbacks,
-      ensureReady: () => this.ensureReadyWithTimeout(timeoutMs),
+      ensureReady: () => this.ensureReadyWithTimeout(timeoutMs, signal),
       sendSubscription: (subscription) => this.sendSubscription(subscription),
       closeSubscription: (requestId) => this.closeSubscription(requestId)
     })

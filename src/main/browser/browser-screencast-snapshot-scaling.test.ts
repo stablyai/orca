@@ -4,6 +4,24 @@ import { describe, expect, it, vi } from 'vitest'
 
 import { startBrowserScreencast } from './browser-screencast-stream'
 
+function createJpegFrame(width: number, height: number): Buffer {
+  const frame = Buffer.alloc(21)
+  frame.set([
+    0xff,
+    0xd8,
+    0xff,
+    0xc0,
+    0,
+    17,
+    8,
+    height >> 8,
+    height & 0xff,
+    width >> 8,
+    width & 0xff
+  ])
+  return frame
+}
+
 function createMockWebContents(capturePage: () => Promise<unknown>) {
   let attached = false
   const dbg = new EventEmitter() as EventEmitter & {
@@ -24,16 +42,20 @@ function createMockWebContents(capturePage: () => Promise<unknown>) {
 }
 
 function createCapturedImage(width: number, height: number) {
+  let resizedSize = { width, height }
   const resized = {
-    getSize: vi.fn(() => ({ width, height })),
+    getSize: vi.fn(() => resizedSize),
     resize: vi.fn(),
-    toJPEG: vi.fn(() => Buffer.from('scaled-frame')),
+    toJPEG: vi.fn(() => createJpegFrame(resizedSize.width, resizedSize.height)),
     toPNG: vi.fn(() => Buffer.from('scaled-frame'))
   }
   const image = {
     getSize: vi.fn(() => ({ width, height })),
-    resize: vi.fn(() => resized),
-    toJPEG: vi.fn(() => Buffer.from('captured-frame')),
+    resize: vi.fn((size: { width: number; height: number }) => {
+      resizedSize = size
+      return resized
+    }),
+    toJPEG: vi.fn(() => createJpegFrame(width, height)),
     toPNG: vi.fn(() => Buffer.from('captured-frame'))
   }
   return { image, resized }

@@ -2916,11 +2916,10 @@ void app.whenReady().then(async () => {
   starNag = new StarNagService(store, stats)
   starNag.start()
   starNag.registerIpcHandlers()
-  runtimeService.setAgentBrowserBridge(
-    new AgentBrowserBridge(browserManager, {
-      onTabsChanged: (worktreeId) => runtimeService.notifyMobileSessionTabsChanged(worktreeId)
-    })
-  )
+  const agentBrowserBridge = new AgentBrowserBridge(browserManager, {
+    onTabsChanged: (worktreeId) => runtimeService.notifyMobileSessionTabsChanged(worktreeId)
+  })
+  runtimeService.setAgentBrowserBridge(agentBrowserBridge)
 
   // Emulator bridge (serve-sim). macOS-only feature (gated in CLI/runtime); always ship like agent-browser.
   // Why: externally started serve-sim processes must stay independent — only Orca-managed/attached helpers belong to a workspace.
@@ -3165,7 +3164,11 @@ void app.whenReady().then(async () => {
     await runtime.reconcileLegacyWorkerTerminals()
     // Why: headless servers can't mount <webview> panes; use offscreen WebContents, gated on a real display so browser.headless.v1 stays honest.
     if (headlessBrowserDisplayAvailable) {
-      runtime.setOffscreenBrowserBackend(new OffscreenBrowserBackend(browserManager))
+      runtime.setOffscreenBrowserBackend(
+        new OffscreenBrowserBackend(browserManager, (webContentsId) =>
+          agentBrowserBridge.onTabClosed(webContentsId)
+        )
+      )
     }
     // Why: headless servers have no renderer graph publisher; publish an explicit empty graph so status clients see a ready server.
     runtime.syncWindowGraph(HEADLESS_RUNTIME_WINDOW_ID, { tabs: [], leaves: [] })

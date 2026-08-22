@@ -70,7 +70,10 @@ vi.mock('./web-runtime-browser-materialization', () => ({
   hasMaterializedWebRuntimeBrowserPage: mocks.hasMaterializedWebRuntimeBrowserPage
 }))
 
-afterEach(() => resetWebSessionCloseIntentForTests())
+afterEach(() => {
+  resetWebSessionCloseIntentForTests()
+  vi.useRealTimers()
+})
 
 describe('createWebRuntimeSessionBrowserTab', () => {
   beforeEach(() => {
@@ -182,36 +185,47 @@ describe('createWebRuntimeSessionBrowserTab', () => {
   })
 
   it('cleans up and reports failure when the created browser cannot reconcile', async () => {
+    vi.useFakeTimers()
     mocks.hasMaterializedWebRuntimeBrowserPage.mockReturnValue(false)
-    const runtimeCall = vi
-      .fn()
-      .mockResolvedValueOnce({
-        id: 'create',
-        ok: true,
-        result: { browserPageId: 'remote-browser-page-1' }
-      })
-      .mockResolvedValueOnce({
-        id: 'list',
-        ok: false,
-        error: { code: 'remote_runtime_timeout', message: 'session tabs timed out' }
-      })
-      .mockResolvedValueOnce({ id: 'close', ok: true, result: { closed: true } })
-      .mockResolvedValueOnce({ id: 'list-after-close', ok: true, result: makeSnapshot() })
+    let listCount = 0
+    const runtimeCall = vi.fn((request: { method: string }) => {
+      if (request.method === 'browser.tabCreate') {
+        return Promise.resolve({
+          id: 'create',
+          ok: true,
+          result: { browserPageId: 'remote-browser-page-1' }
+        })
+      }
+      if (request.method === 'browser.tabClose') {
+        return Promise.resolve({ id: 'close', ok: true, result: { closed: true } })
+      }
+      listCount += 1
+      return Promise.resolve(
+        listCount <= 5
+          ? {
+              id: `list-${listCount}`,
+              ok: false,
+              error: { code: 'remote_runtime_timeout', message: 'session tabs timed out' }
+            }
+          : { id: 'list-after-close', ok: true, result: makeSnapshot() }
+      )
+    })
     vi.stubGlobal('window', { api: { runtimeEnvironments: { call: runtimeCall } } })
 
-    await expect(
-      createWebRuntimeSessionBrowserTab({
-        worktreeId: WORKTREE_ID,
-        environmentId: ENVIRONMENT_ID,
-        clientTargetGroupId: 'client-preview-group',
-        clientTargetGroupCreated: true,
-        focusOnCreate: false
-      })
-    ).resolves.toBe(false)
+    const creating = createWebRuntimeSessionBrowserTab({
+      worktreeId: WORKTREE_ID,
+      environmentId: ENVIRONMENT_ID,
+      clientTargetGroupId: 'client-preview-group',
+      clientTargetGroupCreated: true,
+      focusOnCreate: false
+    })
+    await vi.advanceTimersByTimeAsync(1_600)
+    await expect(creating).resolves.toBe(false)
 
-    expect(runtimeCall).toHaveBeenNthCalledWith(3, {
+    expect(
+      runtimeCall.mock.calls.find(([request]) => request.method === 'browser.tabClose')?.[0]
+    ).toMatchObject({
       selector: ENVIRONMENT_ID,
-      method: 'browser.tabClose',
       params: {
         worktree: `id:${WORKTREE_ID}`,
         page: 'remote-browser-page-1'
@@ -368,6 +382,7 @@ describe('createWebRuntimeSessionBrowserTab', () => {
   })
 
   it('rechecks split reservations after delayed host rollback', async () => {
+    vi.useFakeTimers()
     mocks.getState.mockReturnValue({
       ...mocks.getState(),
       runtimeStatusByEnvironmentId: new Map(
@@ -419,6 +434,7 @@ describe('createWebRuntimeSessionBrowserTab', () => {
       clientTargetGroupCreated: true,
       focusOnCreate: false
     })
+    await vi.advanceTimersByTimeAsync(1_600)
     await vi.waitFor(() =>
       expect(
         runtimeCall.mock.calls.some(([request]) => request.method === 'browser.tabClose')

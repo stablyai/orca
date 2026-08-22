@@ -3,7 +3,10 @@ import type { RuntimeStatus } from '../../../shared/runtime-types'
 import type { RuntimeCapability } from '../../../shared/protocol-version'
 import { withBrowserPaneUiRuntimeRpcSource } from '../../../shared/runtime-rpc-feature-interaction-source'
 import { assertRuntimeStatusCompatible } from './runtime-protocol-compat'
-import { createRuntimeRpcAbortError } from './abortable-runtime-environment-call'
+import {
+  createRuntimeRpcAbortError,
+  waitForRuntimeRpcPromise
+} from './abortable-runtime-environment-call'
 import { callRuntimeEnvironmentWithRevision } from './runtime-rpc-environment-call'
 import { RuntimeRpcCallError, unwrapRuntimeRpcResult } from './runtime-rpc-result'
 import { captureRuntimeEnvironmentRequestRevision } from './runtime-environment-revision'
@@ -98,12 +101,13 @@ async function ensureRuntimeEnvironmentCompatible(
   options: {
     timeoutMs?: number
     reuseRecentCompatibilityFailure?: boolean
+    signal?: AbortSignal
     expectedEnvironmentPairingRevision?: number
   } = {}
 ): Promise<void> {
   const cached = getCachedRuntimeCompatibilityCheck(environmentId, options)
   if (cached) {
-    await cached.check
+    await waitForRuntimeRpcPromise(cached.check, options.signal)
     return
   }
   const entry: RuntimeCompatibilityCacheEntry = {
@@ -127,21 +131,23 @@ async function ensureRuntimeEnvironmentCompatible(
     entry.status = status
     entry.statusCheckedAt = Date.now()
   })()
-  entry.check = check
+  entry.check = check.then(
+    () => {
+      if (runtimeCompatibilityChecks.get(environmentId) === entry) {
+        entry.provenCompatible = true
+      }
+    },
+    (error) => {
+      if (runtimeCompatibilityChecks.get(environmentId) === entry) {
+        // Why: startup asks each remote for repos, groups, then folders; an
+        // offline runtime should pay one timeout during that burst, not three.
+        entry.failedAt = Date.now()
+      }
+      throw error
+    }
+  )
   rememberRuntimeEnvironmentCompatibility(environmentId, entry)
-  try {
-    await check
-    if (runtimeCompatibilityChecks.get(environmentId) === entry) {
-      entry.provenCompatible = true
-    }
-  } catch (error) {
-    if (runtimeCompatibilityChecks.get(environmentId) === entry) {
-      // Why: startup asks each remote for repos, groups, then folders; an
-      // offline runtime should pay one timeout during that burst, not three.
-      entry.failedAt = Date.now()
-    }
-    throw error
-  }
+  await waitForRuntimeRpcPromise(entry.check, options.signal)
 }
 
 function getCachedRuntimeCompatibilityCheck(

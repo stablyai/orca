@@ -55,6 +55,35 @@ function dispatch(ipc: ReturnType<typeof createIpc>, event: SubscriptionEvent): 
 }
 
 describe('subscribeRuntimeEnvironmentFromPreload', () => {
+  it('exposes cleanup before main finishes opening the subscription', async () => {
+    const subscription = deferred<{ subscriptionId: string; requestId: string }>()
+    const ipc = createIpc()
+    ipc.invoke.mockImplementation((channel: string) =>
+      channel === 'runtimeEnvironments:subscribe'
+        ? (subscription.promise as Promise<unknown>)
+        : (Promise.resolve({}) as Promise<unknown>)
+    )
+    const onSubscriptionStart = vi.fn()
+
+    const cleanupPromise = subscribeRuntimeEnvironmentFromPreload(
+      ipc,
+      { selector: 'desk', method: 'browser.screencast' },
+      { onResponse: vi.fn(), onSubscriptionStart },
+      () => 'sub-pending'
+    )
+
+    expect(onSubscriptionStart).toHaveBeenCalledOnce()
+    const handle = onSubscriptionStart.mock.calls[0]![0]
+    handle.unsubscribe()
+    expect(ipc.listenerCount()).toBe(0)
+    expect(ipc.invoke).toHaveBeenCalledWith('runtimeEnvironments:unsubscribe', {
+      subscriptionId: 'sub-pending'
+    })
+
+    subscription.resolve({ subscriptionId: 'sub-pending', requestId: 'rpc-pending' })
+    await expect(cleanupPromise).resolves.toBe(handle)
+  })
+
   it('registers the subscription event listener before invoking main', async () => {
     const subscription = deferred<{ subscriptionId: string; requestId: string }>()
     const ipc = createIpc()

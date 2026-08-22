@@ -44,6 +44,7 @@ type SubscriptionCallbacks = {
   onClose?: () => void
   onTransportInterrupted?: () => void
   onTransportReplayed?: () => void
+  onSubscriptionStart?: (handle: WebRuntimeSubscriptionHandle) => void
 }
 
 type RuntimeSubscription = {
@@ -141,9 +142,10 @@ export class WebRuntimeClient {
       this.childClients.delete(client)
       client.close({ notifySubscriptions })
     }
+    const { onSubscriptionStart, ...streamCallbacks } = callbacks
     try {
       const wrappedCallbacks: SubscriptionCallbacks = {
-        ...callbacks,
+        ...streamCallbacks,
         onError: (error) => {
           callbacks.onError?.(error)
           closeChild()
@@ -153,12 +155,17 @@ export class WebRuntimeClient {
           closeChild()
         }
       }
-      const handle = await client.subscribeOnCurrentConnection(
+      const admission = client.subscribeOnCurrentConnection(
         method,
         params,
         wrappedCallbacks,
         options
       )
+      onSubscriptionStart?.({
+        unsubscribe: closeChild,
+        sendBinary: () => {}
+      })
+      const handle = await admission
       return {
         unsubscribe: () => {
           // Why: emit the teardown RPC before closing the child socket so the server reaps the fs-watcher on view-toggle.

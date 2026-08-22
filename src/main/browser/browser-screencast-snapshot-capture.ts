@@ -6,7 +6,11 @@ import type {
   BrowserScreencastOptions,
   PendingScreencastFrame
 } from './browser-screencast-stream-types'
-import { positiveInteger, scaleSnapshotToFit } from './browser-screencast-viewport-fit'
+import {
+  isLiveFrameCompatibleWithViewport,
+  positiveInteger,
+  scaleSnapshotToFit
+} from './browser-screencast-viewport-fit'
 
 type BrowserScreencastSnapshotCaptureDeps = {
   webContents: WebContents
@@ -85,10 +89,12 @@ export function createBrowserScreencastSnapshotCapture(
             height: viewportHeight
           })
           const capture = scaleSnapshotToFit(nativeImage, options)
-          const buffer =
-            options.format === 'png' ? capture.toPNG() : capture.toJPEG(options.quality)
-          if (buffer.byteLength > 0) {
-            image = new Uint8Array(buffer)
+          if (isLiveFrameCompatibleWithViewport(capture.getSize(), options)) {
+            const buffer =
+              options.format === 'png' ? capture.toPNG() : capture.toJPEG(options.quality)
+            if (buffer.byteLength > 0) {
+              image = new Uint8Array(buffer)
+            }
           }
         } catch {
           image = null
@@ -131,6 +137,9 @@ export function createBrowserScreencastSnapshotCapture(
         return
       }
       const imageSize = readBrowserScreencastImageSize(image, options.format)
+      if (!imageSize || !isLiveFrameCompatibleWithViewport(imageSize, options)) {
+        return
+      }
       const baseMetadata =
         viewportWidth && viewportHeight
           ? { deviceWidth: viewportWidth, deviceHeight: viewportHeight }

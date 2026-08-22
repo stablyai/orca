@@ -104,6 +104,8 @@ describe('AgentBrowserBridge', () => {
   // ── Embedded CDP ownership ──
 
   it('passes --cdp on every helper command family so a restarted daemon cannot launch Chrome', async () => {
+    const wc = mockWebContents(100)
+    webContentsFromIdMock.mockReturnValue(wc)
     succeedWith({ snapshot: '...' })
     await bridge.snapshot()
 
@@ -121,7 +123,7 @@ describe('AgentBrowserBridge', () => {
     await bridge.consoleLog()
     await bridge.exec('get title')
 
-    for (const command of ['click', 'mouse', 'set', 'console', 'get']) {
+    for (const command of ['click', 'set', 'console', 'get']) {
       const call = execFileMock.mock.calls.find((candidate: unknown[]) =>
         (candidate[1] as string[]).includes(command)
       )
@@ -130,6 +132,10 @@ describe('AgentBrowserBridge', () => {
       expect(args).toContain('--cdp')
       expect(args[args.indexOf('--cdp') + 1]).toBe('9222')
     }
+    expect(wc.debugger.sendCommand).toHaveBeenCalledWith(
+      'Input.dispatchMouseEvent',
+      expect.objectContaining({ type: 'mouseMoved', x: 10, y: 20 })
+    )
   })
 
   // ── --json always appended ──

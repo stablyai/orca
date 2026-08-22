@@ -25,6 +25,19 @@ describe('RemoteBrowserStreamLifecycle', () => {
     expect(harness.busyLog.at(-1)).toBe(false)
   })
 
+  it('keeps a same-page release target valid across a stream restart', async () => {
+    const harness = createHarness()
+    await openStreamAndConfirmReady(harness)
+    const token = harness.lifecycle.tokens.createOperationToken('page-1')
+    expect(token).not.toBeNull()
+
+    harness.lifecycle.tokens.supersedeOperations()
+
+    expect(harness.lifecycle.tokens.isCurrentPageTarget(token!)).toBe(true)
+    harness.lifecycle.tokens.setRemotePage('page-2')
+    expect(harness.lifecycle.tokens.isCurrentPageTarget(token!)).toBe(false)
+  })
+
   it('tags the screencast request as browser-pane UI traffic', async () => {
     const harness = createHarness()
     await openStreamAndConfirmReady(harness)
@@ -50,11 +63,51 @@ describe('RemoteBrowserStreamLifecycle', () => {
     harness.lifecycle.open()
     await settle()
     harness.streams[1].emitReady()
+    harness.streams[1].emitFrame()
     await settle()
 
     expect(harness.streams.map((stream) => stream.pageId)).toEqual(['page-1', 'page-1'])
     expect(harness.rpcLog.filter((method) => method === 'browser.tabCreate')).toHaveLength(1)
     expect(harness.currentStatusKind).toBe('live')
+  })
+
+  it('shares one authoritative page when navigation overlaps the initial remote create', async () => {
+    const harness = createHarness()
+    const createGate = harness.holdNextTabCreate()
+    harness.lifecycle.open()
+    await settle()
+
+    const navigationToken = harness.lifecycle.tokens.createOperationToken()
+    expect(navigationToken).not.toBeNull()
+    const navigationPage = harness.lifecycle.session.ensureRemotePage(navigationToken!)
+    await settle()
+
+    expect(harness.tabCreateAttempts).toBe(1)
+    createGate.release()
+    await expect(navigationPage).resolves.toBe('page-1')
+    await settle()
+
+    expect(harness.streams).toHaveLength(1)
+    expect(harness.streams[0].pageId).toBe('page-1')
+  })
+
+  it('closes the created page when every overlapping waiter is superseded', async () => {
+    const harness = createHarness()
+    const createGate = harness.holdNextTabCreate()
+    const close = harness.lifecycle.open()
+    await settle()
+
+    const overlapping = harness.lifecycle.session.ensureRemotePage(
+      harness.lifecycle.tokens.createOperationToken()!
+    )
+    close()
+    createGate.release()
+    await expect(overlapping).resolves.toBeNull()
+    await settle()
+
+    expect(harness.tabCreateAttempts).toBe(1)
+    expect(harness.closedCreatedPages).toEqual(['page-1'])
+    expect(harness.streams).toHaveLength(0)
   })
 
   // Closing a tab while its stream is parked runs dispose() with no effect cleanup left to pair
@@ -162,6 +215,7 @@ describe('RemoteBrowserStreamLifecycle', () => {
 
     await vi.advanceTimersByTimeAsync(1000)
     harness.streams[1].emitReady()
+    harness.streams[1].emitFrame()
     await settle()
 
     expect(harness.currentError).toBeNull()
@@ -177,7 +231,8 @@ describe('RemoteBrowserStreamLifecycle', () => {
     await vi.advanceTimersByTimeAsync(500)
     await vi.advanceTimersByTimeAsync(1000)
     harness.streams[1].emitReady()
-    // Why the wait: 'ready' alone no longer refills the budget — only a stream that stayed up does.
+    harness.streams[1].emitFrame()
+    // Why the wait: a first frame alone does not refill the budget — only a sustained stream does.
     await vi.advanceTimersByTimeAsync(15_000)
 
     harness.streams[1].emitEnd()
@@ -200,6 +255,157 @@ describe('RemoteBrowserStreamLifecycle', () => {
     expect(harness.streams).toHaveLength(2)
     expect(harness.streams[0].unsubscribeCount).toBe(1)
     expect(harness.streams[1].viewportWidth).toBe(1200)
+  })
+
+  it('renegotiates one legacy host-sized frame to a complete native-width viewport', async () => {
+    const harness = createHarness()
+    harness.setViewportSize({ width: 1097, height: 917 })
+    await openStreamAndConfirmReady(harness)
+    const recovered = harness.lifecycle.recoverLegacyFrame({
+      imageWidth: 533,
+      imageHeight: 917,
+      deviceWidth: 1097,
+      deviceHeight: 917
+    })
+    await settle()
+
+    expect(recovered).toBe(true)
+    expect(harness.streams).toHaveLength(2)
+    expect(harness.streams[0].unsubscribeCount).toBe(1)
+    expect(harness.streams[1]).toMatchObject({ viewportWidth: 533, viewportHeight: 917 })
+    harness.streams[0].emitClose()
+    await settle()
+    expect(harness.streams).toHaveLength(2)
+    harness.streams[1].emitReady()
+    await settle()
+    expect(harness.syncedViewportSizes.at(-1)).toEqual({ width: 533, height: 917 })
+
+    const secondRecovery = harness.lifecycle.recoverLegacyFrame({
+      imageWidth: 320,
+      imageHeight: 446,
+      deviceWidth: 533,
+      deviceHeight: 446
+    })
+    await settle()
+
+    expect(secondRecovery).toBe(false)
+    expect(harness.streams).toHaveLength(2)
+  })
+
+  it('leaves a corrected host frame on its existing stream', async () => {
+    const harness = createHarness()
+    harness.setViewportSize({ width: 1097, height: 917 })
+    await openStreamAndConfirmReady(harness)
+
+    expect(
+      harness.lifecycle.recoverLegacyFrame({
+        imageWidth: 2194,
+        imageHeight: 1834,
+        deviceWidth: 1097,
+        deviceHeight: 917
+      })
+    ).toBe(false)
+    expect(harness.streams).toHaveLength(1)
+    expect(harness.streams[0].unsubscribeCount).toBe(0)
+  })
+
+  it('keeps the compatibility viewport when a live stream reconnects', async () => {
+    const harness = createHarness()
+    harness.setViewportSize({ width: 1097, height: 917 })
+    await openStreamAndConfirmReady(harness)
+    expect(
+      harness.lifecycle.recoverLegacyFrame({
+        imageWidth: 533,
+        imageHeight: 917,
+        deviceWidth: 1097,
+        deviceHeight: 917
+      })
+    ).toBe(true)
+    await settle()
+    harness.streams[1].emitReady()
+    await settle()
+
+    harness.streams[1].emitEnd()
+    await vi.advanceTimersByTimeAsync(500)
+
+    expect(harness.streams[2]).toMatchObject({ viewportWidth: 533, viewportHeight: 917 })
+    harness.streams[2].emitReady()
+    await settle()
+    expect(harness.syncedViewportSizes.at(-1)).toEqual({ width: 533, height: 917 })
+  })
+
+  it('keeps observer viewport syncs on the active compatibility viewport', async () => {
+    const harness = createHarness()
+    harness.setViewportSize({ width: 1097, height: 917 })
+    await openStreamAndConfirmReady(harness)
+    expect(
+      harness.lifecycle.recoverLegacyFrame({
+        imageWidth: 533,
+        imageHeight: 917,
+        deviceWidth: 1097,
+        deviceHeight: 917
+      })
+    ).toBe(true)
+    await settle()
+    harness.streams[1].emitReady()
+    await settle()
+
+    expect(harness.lifecycle.viewportForSync()).toEqual({ width: 533, height: 917 })
+  })
+
+  it('releases the compatibility viewport before syncing a real pane resize', async () => {
+    const harness = createHarness()
+    harness.setViewportSize({ width: 1097, height: 917 })
+    await openStreamAndConfirmReady(harness)
+    expect(
+      harness.lifecycle.recoverLegacyFrame({
+        imageWidth: 533,
+        imageHeight: 917,
+        deviceWidth: 1097,
+        deviceHeight: 917
+      })
+    ).toBe(true)
+    await settle()
+    harness.streams[1].emitReady()
+    await settle()
+
+    harness.setViewportSize({ width: 1200, height: 900 })
+
+    expect(harness.lifecycle.viewportForSync()).toEqual({ width: 1200, height: 900 })
+  })
+
+  it('allows one fresh compatibility negotiation after a real pane resize', async () => {
+    const harness = createHarness()
+    harness.setViewportSize({ width: 1097, height: 917 })
+    await openStreamAndConfirmReady(harness)
+    expect(
+      harness.lifecycle.recoverLegacyFrame({
+        imageWidth: 533,
+        imageHeight: 917,
+        deviceWidth: 1097,
+        deviceHeight: 917
+      })
+    ).toBe(true)
+    await settle()
+    harness.streams[1].emitReady()
+    await settle()
+
+    harness.setViewportSize({ width: 1200, height: 900 })
+    harness.lifecycle.restartForViewport('page-1')
+    await settle()
+    harness.streams[2].emitReady()
+    await settle()
+
+    expect(
+      harness.lifecycle.recoverLegacyFrame({
+        imageWidth: 533,
+        imageHeight: 900,
+        deviceWidth: 1200,
+        deviceHeight: 900
+      })
+    ).toBe(true)
+    await settle()
+    expect(harness.streams[3]).toMatchObject({ viewportWidth: 533, viewportHeight: 900 })
   })
 
   // waitForViewportSize can block for a few frames while the element is unmeasurable. An attempt
@@ -226,6 +432,7 @@ describe('RemoteBrowserStreamLifecycle', () => {
 
     // The reopen's own stream must still own the pane: its 'ready' has to land.
     supersedingStream.emitReady()
+    supersedingStream.emitFrame()
     await settle()
     expect(harness.currentStatusKind).toBe('live')
   })
@@ -305,6 +512,30 @@ describe('RemoteBrowserStreamLifecycle', () => {
     expect(harness.appliedTitles).toEqual(titlesBeforeRestart)
   })
 
+  it('bounds legacy navigation refresh retries and cancels them on supersession', async () => {
+    const harness = createHarness()
+    await openStreamAndConfirmReady(harness)
+    const refreshToken = harness.lifecycle.tokens.createOperationToken('page-1')!
+    const initialTabShows = harness.rpcLog.filter((method) => method === 'browser.tabShow').length
+
+    harness.lifecycle.session.scheduleTabInfoRefresh(refreshToken, 250, 4)
+    await vi.advanceTimersByTimeAsync(3_750)
+
+    expect(harness.rpcLog.filter((method) => method === 'browser.tabShow')).toHaveLength(
+      initialTabShows + 4
+    )
+
+    harness.lifecycle.session.scheduleTabInfoRefresh(refreshToken, 250, 4)
+    harness.lifecycle.open()
+    await settle()
+    const tabShowsAfterOpen = harness.rpcLog.filter((method) => method === 'browser.tabShow').length
+    await vi.advanceTimersByTimeAsync(4_000)
+
+    expect(harness.rpcLog.filter((method) => method === 'browser.tabShow')).toHaveLength(
+      tabShowsAfterOpen
+    )
+  })
+
   it('closes a page the runtime reports as missing instead of retrying it', async () => {
     const harness = createHarness()
     await openStreamAndConfirmReady(harness)
@@ -323,6 +554,7 @@ describe('RemoteBrowserStreamLifecycle', () => {
 
     expect(() => harness.streams[0].emitMalformedSuccess()).not.toThrow()
     harness.streams[0].emitReady()
+    harness.streams[0].emitFrame()
     await settle()
 
     expect(harness.currentStatusKind).toBe('live')
@@ -397,6 +629,7 @@ describe('RemoteBrowserStreamLifecycle', () => {
 
     expect(harness.streams).toHaveLength(2)
     harness.streams[1].emitReady()
+    harness.streams[1].emitFrame()
     await settle()
     expect(harness.currentStatusKind).toBe('live')
   })
@@ -417,6 +650,20 @@ describe('RemoteBrowserStreamLifecycle', () => {
     await vi.advanceTimersByTimeAsync(400_000)
 
     expect(harness.reconnectOffered).toBe(true)
+  })
+
+  it('unsubscribes while a stream is still opening', async () => {
+    const harness = createHarness()
+    const pendingSubscribe = harness.holdNextSubscribe()
+    const close = harness.lifecycle.open()
+    await settle()
+
+    close()
+    pendingSubscribe.release()
+    await settle()
+
+    expect(harness.streams).toHaveLength(1)
+    expect(harness.streams[0].unsubscribeCount).toBe(1)
   })
 })
 
@@ -569,6 +816,7 @@ describe('RemoteBrowserStreamLifecycle transport error', () => {
     harness.streams[0].emitEnd()
     await vi.advanceTimersByTimeAsync(500)
     harness.streams[1].emitReady()
+    harness.streams[1].emitFrame()
     await settle()
 
     // Let the replacement prove itself — longer than the window that earns a refill.

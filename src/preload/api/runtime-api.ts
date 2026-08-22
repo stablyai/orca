@@ -102,6 +102,7 @@ export type RuntimeApi = {
         onBinary?: (bytes: Uint8Array<ArrayBufferLike>) => void
         onError?: (error: { code: string; message: string }) => void
         onClose?: () => void
+        onSubscriptionStart?: (handle: RuntimeEnvironmentSubscriptionHandle) => void
       }
     ) => Promise<RuntimeEnvironmentSubscriptionHandle>
   }

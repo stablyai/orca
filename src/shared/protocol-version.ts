@@ -73,6 +73,11 @@ export const BROWSER_CERTIFICATE_TRUST_RUNTIME_CAPABILITY = 'browser.certificate
 // treat a preallocated page ID as canonical when this is advertised.
 export const BROWSER_TAB_CREATE_KNOWN_ID_RUNTIME_CAPABILITY =
   'browser.tab-create-known-id.v1' as const
+// Why: older desktop hosts route raw input through a helper that can wedge the page command queue.
+export const BROWSER_DIRECT_RAW_INPUT_RUNTIME_CAPABILITY = 'browser.direct-raw-input.v1' as const
+// Why: older hosts run history navigation through a helper whose reply can be lost during page replacement.
+export const BROWSER_DIRECT_HISTORY_NAVIGATION_RUNTIME_CAPABILITY =
+  'browser.direct-history-navigation.v1' as const
 // Why: hosts without this strip terminal.send's inputKind (zod object drops
 // unknown keys), so a mobile xterm query reply would land as ordinary
 // floor-taking input. Mobile must not forward replies unless advertised.

@@ -12,6 +12,7 @@ type RuntimeEnvironmentSubscriptionCallbacks = {
   onBinary?: (bytes: Uint8Array<ArrayBufferLike>) => void
   onError?: (error: { code: string; message: string }) => void
   onClose?: () => void
+  onSubscriptionStart?: (handle: RuntimeEnvironmentSubscriptionHandle) => void
 }
 
 export type RuntimeEnvironmentSubscriptionHandle = {
@@ -136,11 +137,29 @@ export async function subscribeRuntimeEnvironmentFromPreload(
   const releaseCurrentSubscription = (): void => {
     releaseSubscription(ipc, dispatcher, subscriptionId)
   }
+  let unsubscribed = false
+  const handle: RuntimeEnvironmentSubscriptionHandle = {
+    unsubscribe: () => {
+      if (unsubscribed) {
+        return
+      }
+      unsubscribed = true
+      releaseCurrentSubscription()
+      void ipc.invoke('runtimeEnvironments:unsubscribe', { subscriptionId })
+    },
+    sendBinary: (bytes) => {
+      if (!unsubscribed) {
+        ipc.send('runtimeEnvironments:subscriptionBinary', { subscriptionId, bytes })
+      }
+    }
+  }
+  const resultPromise = ipc.invoke('runtimeEnvironments:subscribe', {
+    ...args,
+    subscriptionId
+  })
+  callbacks.onSubscriptionStart?.(handle)
   try {
-    const result = (await ipc.invoke('runtimeEnvironments:subscribe', {
-      ...args,
-      subscriptionId
-    })) as { subscriptionId: string; requestId: string }
+    const result = (await resultPromise) as { subscriptionId: string; requestId: string }
     if (result.subscriptionId !== subscriptionId) {
       releaseCurrentSubscription()
       throw new Error('Runtime environment subscription id mismatch')
@@ -150,13 +169,5 @@ export async function subscribeRuntimeEnvironmentFromPreload(
     throw error
   }
 
-  return {
-    unsubscribe: () => {
-      releaseCurrentSubscription()
-      void ipc.invoke('runtimeEnvironments:unsubscribe', { subscriptionId })
-    },
-    sendBinary: (bytes) => {
-      ipc.send('runtimeEnvironments:subscriptionBinary', { subscriptionId, bytes })
-    }
-  }
+  return handle
 }

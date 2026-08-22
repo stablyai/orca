@@ -176,7 +176,9 @@ describe('registerRuntimeEnvironmentHandlers', () => {
       'terminal.subscribe',
       { terminal: 't1' },
       25,
-      expect.any(Object)
+      expect.any(Object),
+      undefined,
+      expect.any(AbortSignal)
     )
     expect(sent).toEqual([
       expect.objectContaining({ subscriptionId: result.subscriptionId, type: 'response' }),
@@ -203,6 +205,58 @@ describe('registerRuntimeEnvironmentHandlers', () => {
     expect(close).toHaveBeenCalled()
     expect(destroyedListenerRemoved).toHaveBeenCalledWith('destroyed', expect.any(Function))
     markUsedSpy.mockRestore()
+  })
+
+  it('aborts a pending streaming subscription when its owner unsubscribes', async () => {
+    registerRuntimeEnvironmentHandlers(store as never)
+    subscribeRemoteRuntimeRequestMock.mockImplementation(
+      (
+        _pairing,
+        _method,
+        _params,
+        _timeoutMs,
+        _callbacks,
+        _livenessOptions,
+        signal?: AbortSignal
+      ) =>
+        new Promise((_resolve, reject) => {
+          signal?.addEventListener('abort', () => reject(signal.reason), { once: true })
+        })
+    )
+    const add = handler<
+      { name: string; pairingCode: string },
+      { environment: { id: string; name: string } }
+    >('runtimeEnvironments:addFromPairingCode')
+    await add(null, { name: 'desk', pairingCode: pairingCode() })
+    const subscribe = handler<
+      { selector: string; method: string; subscriptionId: string },
+      { subscriptionId: string; requestId: string }
+    >('runtimeEnvironments:subscribe')
+    const result = subscribe(
+      {
+        sender: {
+          id: 1,
+          isDestroyed: () => false,
+          send: vi.fn(),
+          once: vi.fn(),
+          removeListener: vi.fn()
+        }
+      },
+      {
+        selector: 'desk',
+        method: 'browser.screencast',
+        subscriptionId: 'pending-browser-stream'
+      }
+    )
+    await vi.waitFor(() => expect(subscribeRemoteRuntimeRequestMock).toHaveBeenCalledOnce())
+
+    const unsubscribe = handler<{ subscriptionId: string }, { unsubscribed: boolean }>(
+      'runtimeEnvironments:unsubscribe'
+    )
+    expect(
+      unsubscribe({ sender: { id: 1 } }, { subscriptionId: 'pending-browser-stream' })
+    ).toEqual({ unsubscribed: true })
+    await expect(result).rejects.toMatchObject({ name: 'AbortError' })
   })
 
   it('rejects cross-window streaming subscription control', async () => {

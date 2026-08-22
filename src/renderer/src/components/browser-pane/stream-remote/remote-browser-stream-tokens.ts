@@ -89,6 +89,18 @@ export class RemoteBrowserOperationTokens {
     )
   }
 
+  isCurrentPageTarget(token: RemoteBrowserOperationToken): boolean {
+    return (
+      token.remotePageId !== null &&
+      this.identity.isMounted() &&
+      this.identity.isActive() &&
+      this.identity.browserPageExists(token.tabId) &&
+      this.identity.getTabId() === token.tabId &&
+      this.identity.getEnvironmentId() === token.environmentId &&
+      this.remotePageId === token.remotePageId
+    )
+  }
+
   isCurrentStreamOperation(token: RemoteBrowserStreamToken): boolean {
     return this.isCurrent(toOperationToken(token))
   }

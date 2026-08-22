@@ -11,7 +11,7 @@ export type RemoteBrowserRpcCall = <TResult>(
   target: RuntimeClientTarget,
   method: string,
   params?: unknown,
-  options?: { timeoutMs?: number; suppressFeatureInteraction?: boolean }
+  options?: { timeoutMs?: number; suppressFeatureInteraction?: boolean; signal?: AbortSignal }
 ) => Promise<TResult>
 
 export type RemoteBrowserPageHandle = {
@@ -31,11 +31,20 @@ export type RemoteBrowserPageSessionDeps = {
   closeMissingRemotePage(remotePageId: string | null): void
 }
 
+type PendingRemotePageCreate = {
+  target: Extract<RuntimeClientTarget, { kind: 'environment' }>
+  worktree: string
+  waiters: Set<RemoteBrowserOperationToken>
+  result: Promise<string | null>
+}
+
 // Owns the runtime-side page this pane is bound to: creating or adopting it, reading its tab info,
 // and the debounced post-input refresh. Split from the stream lifecycle so page identity stays
 // testable on its own.
 export class RemoteBrowserPageSession {
+  private readonly pendingCreates = new Map<string, PendingRemotePageCreate>()
   private tabRefreshTimer: ReturnType<typeof setTimeout> | null = null
+  private tabRefreshGeneration = 0
 
   constructor(private readonly deps: RemoteBrowserPageSessionDeps) {}
 
@@ -83,32 +92,46 @@ export class RemoteBrowserPageSession {
     }
   }
 
-  scheduleTabInfoRefresh(token: RemoteBrowserOperationToken, delayMs = 250): void {
+  scheduleTabInfoRefresh(token: RemoteBrowserOperationToken, delayMs = 250, attempts = 1): void {
     const { tokens } = this.deps
     if (!tokens.isCurrent(token)) {
       return
     }
     this.cancelTabInfoRefresh()
-    this.tabRefreshTimer = setTimeout(() => {
-      this.tabRefreshTimer = null
-      if (!tokens.isCurrent(token)) {
-        return
-      }
-      void this.fetchTabInfo(token)
-        .then((tab) => {
-          if (tab && tokens.isCurrent(token)) {
-            this.deps.applyTabInfo(tab)
-          }
-        })
-        .catch((error: unknown) => {
-          if (tokens.isCurrent(token) && isRemoteBrowserPageMissingError(error)) {
-            this.deps.closeMissingRemotePage(token.remotePageId)
-          }
-        })
-    }, delayMs)
+    const generation = this.tabRefreshGeneration
+    const schedule = (nextDelayMs: number, remainingAttempts: number): void => {
+      this.tabRefreshTimer = setTimeout(() => {
+        this.tabRefreshTimer = null
+        if (!tokens.isCurrent(token) || generation !== this.tabRefreshGeneration) {
+          return
+        }
+        void this.fetchTabInfo(token)
+          .then((tab) => {
+            if (tab && tokens.isCurrent(token) && generation === this.tabRefreshGeneration) {
+              this.deps.applyTabInfo(tab)
+            }
+          })
+          .catch((error: unknown) => {
+            if (tokens.isCurrent(token) && isRemoteBrowserPageMissingError(error)) {
+              this.deps.closeMissingRemotePage(token.remotePageId)
+            }
+          })
+          .finally(() => {
+            if (
+              remainingAttempts > 1 &&
+              tokens.isCurrent(token) &&
+              generation === this.tabRefreshGeneration
+            ) {
+              schedule(nextDelayMs * 2, remainingAttempts - 1)
+            }
+          })
+      }, nextDelayMs)
+    }
+    schedule(delayMs, Math.max(1, attempts))
   }
 
   cancelTabInfoRefresh(): void {
+    this.tabRefreshGeneration += 1
     if (this.tabRefreshTimer !== null) {
       clearTimeout(this.tabRefreshTimer)
       this.tabRefreshTimer = null
@@ -118,31 +141,61 @@ export class RemoteBrowserPageSession {
   private async createRemotePage(token: RemoteBrowserOperationToken): Promise<string | null> {
     const target: RuntimeClientTarget = { kind: 'environment', environmentId: token.environmentId }
     const worktree = this.deps.getWorktreeSelector()
+    const key = `${target.environmentId}\0${worktree}`
+    let pending = this.pendingCreates.get(key)
+    if (!pending) {
+      const waiters = new Set<RemoteBrowserOperationToken>()
+      pending = {
+        target,
+        worktree,
+        waiters,
+        result: Promise.resolve(null)
+      }
+      pending.result = this.createAndReconcileRemotePage(pending).finally(() => {
+        if (this.pendingCreates.get(key) === pending) {
+          this.pendingCreates.delete(key)
+        }
+      })
+      this.pendingCreates.set(key, pending)
+    }
+    pending.waiters.add(token)
+    const remotePageId = await pending.result
+    return remotePageId && this.deps.tokens.isCurrent(token) ? remotePageId : null
+  }
+
+  private async createAndReconcileRemotePage(
+    pending: PendingRemotePageCreate
+  ): Promise<string | null> {
     const currentUrl = this.deps.getCurrentUrl()
     const initialUrl =
       currentUrl === ORCA_BROWSER_BLANK_URL ? 'about:blank' : currentUrl || 'about:blank'
     const created = await this.deps.callRpc<{ browserPageId: string }>(
-      target,
+      pending.target,
       'browser.tabCreate',
-      { worktree, url: initialUrl },
+      { worktree: pending.worktree, url: initialUrl },
       { timeoutMs: 30_000, suppressFeatureInteraction: true }
     )
-    if (!this.deps.tokens.isCurrent(token)) {
-      void this.deps
-        .callRpc(
-          target,
-          'browser.tabClose',
-          { worktree, page: created.browserPageId },
-          { timeoutMs: 15_000, suppressFeatureInteraction: true }
-        )
-        .catch(() => {})
+    if (![...pending.waiters].some((waiter) => this.deps.tokens.isCurrent(waiter))) {
+      this.closeCreatedRemotePage(pending, created.browserPageId)
       return null
     }
+
     this.deps.tokens.setRemotePage(created.browserPageId)
     this.deps.writeStoredHandle({
-      environmentId: target.environmentId,
+      environmentId: pending.target.environmentId,
       remotePageId: created.browserPageId
     })
     return created.browserPageId
+  }
+
+  private closeCreatedRemotePage(pending: PendingRemotePageCreate, remotePageId: string): void {
+    void this.deps
+      .callRpc(
+        pending.target,
+        'browser.tabClose',
+        { worktree: pending.worktree, page: remotePageId },
+        { timeoutMs: 15_000, suppressFeatureInteraction: true }
+      )
+      .catch(() => {})
   }
 }

@@ -27,10 +27,21 @@ type RetainedRemoteRuntimeSubscription = RemoteRuntimeSubscription & {
   removeDestroyedListener: () => void
   notifyClosed: () => void
 }
+type PendingRemoteRuntimeSubscription = {
+  environmentId: string
+  ownerWebContentsId: number
+  abort: (reason?: unknown) => void
+}
 const remoteRuntimeSubscriptions = new Map<string, RetainedRemoteRuntimeSubscription>()
+const pendingRemoteRuntimeSubscriptions = new Map<string, PendingRemoteRuntimeSubscription>()
 const getUserDataPath = (): string => app.getPath('userData')
 
 function closeSubscriptionsForEnvironment(environmentId: string): void {
+  for (const subscription of pendingRemoteRuntimeSubscriptions.values()) {
+    if (subscription.environmentId === environmentId) {
+      subscription.abort(new Error('Runtime environment pairing changed; refresh and try again'))
+    }
+  }
   // Why: removed runtimes must not retain terminal/browser WebSockets until renderer teardown.
   for (const [subscriptionId, subscription] of remoteRuntimeSubscriptions) {
     if (subscription.environmentId !== environmentId) {
@@ -96,7 +107,10 @@ export function registerRuntimeEnvironmentHandlers(store: Store): void {
         typeof args.subscriptionId === 'string' && args.subscriptionId.length > 0
           ? args.subscriptionId
           : randomUUID()
-      if (remoteRuntimeSubscriptions.has(subscriptionId)) {
+      if (
+        remoteRuntimeSubscriptions.has(subscriptionId) ||
+        pendingRemoteRuntimeSubscriptions.has(subscriptionId)
+      ) {
         throw new Error('Runtime environment subscription id already exists')
       }
       const environment = resolveEnvironment(getUserDataPath(), args.selector)
@@ -115,6 +129,7 @@ export function registerRuntimeEnvironmentHandlers(store: Store): void {
         getRuntimeEnvironmentTransportGeneration(environment.id) === transportGeneration
       const sender = event.sender
       const ownerWebContentsId = sender.id
+      const abortController = new AbortController()
       let senderDestroyed = sender.isDestroyed()
       let subscription: RemoteRuntimeSubscription | null = null
       let destroyedListenerAttached = false
@@ -127,6 +142,7 @@ export function registerRuntimeEnvironmentHandlers(store: Store): void {
       }
       const closeSubscription = (): void => {
         senderDestroyed = true
+        abortController.abort()
         const retained = remoteRuntimeSubscriptions.get(subscriptionId) ?? null
         remoteRuntimeSubscriptions.delete(subscriptionId)
         if (retained) {
@@ -153,6 +169,12 @@ export function registerRuntimeEnvironmentHandlers(store: Store): void {
       }
       sender.once('destroyed', closeSubscription)
       destroyedListenerAttached = true
+      const pendingSubscription = {
+        environmentId: environment.id,
+        ownerWebContentsId,
+        abort: (reason?: unknown) => abortController.abort(reason)
+      }
+      pendingRemoteRuntimeSubscriptions.set(subscriptionId, pendingSubscription)
       try {
         subscription = await subscribeRuntimeEnvironment(
           getUserDataPath(),
@@ -180,11 +202,18 @@ export function registerRuntimeEnvironmentHandlers(store: Store): void {
               retained?.removeDestroyedListener()
               remoteRuntimeSubscriptions.delete(subscriptionId)
             }
-          }
+          },
+          abortController.signal
         )
       } catch (error) {
+        if (pendingRemoteRuntimeSubscriptions.get(subscriptionId) === pendingSubscription) {
+          pendingRemoteRuntimeSubscriptions.delete(subscriptionId)
+        }
         removeDestroyedListener()
         throw error
+      }
+      if (pendingRemoteRuntimeSubscriptions.get(subscriptionId) === pendingSubscription) {
+        pendingRemoteRuntimeSubscriptions.delete(subscriptionId)
       }
       let pairingIsCurrent = false
       try {
@@ -193,6 +222,19 @@ export function registerRuntimeEnvironmentHandlers(store: Store): void {
           (currentEnvironment.pairingRevision ?? currentEnvironment.createdAt) === pairingRevision
       } catch {
         pairingIsCurrent = false
+      }
+      if (abortController.signal.aborted) {
+        if (
+          abortController.signal.reason instanceof Error &&
+          abortController.signal.reason.name !== 'AbortError'
+        ) {
+          removeDestroyedListener()
+          subscription.close()
+          throw abortController.signal.reason
+        }
+        removeDestroyedListener()
+        subscription.close()
+        return { subscriptionId, requestId: subscription.requestId }
       }
       if (!transportIsCurrent() || !pairingIsCurrent) {
         removeDestroyedListener()
@@ -223,11 +265,19 @@ export function registerRuntimeEnvironmentHandlers(store: Store): void {
     'runtimeEnvironments:unsubscribe',
     (event, args: { subscriptionId: string }): { unsubscribed: boolean } => {
       const subscription = remoteRuntimeSubscriptions.get(args.subscriptionId)
-      if (!subscription || subscription.ownerWebContentsId !== event.sender.id) {
+      if (subscription) {
+        if (subscription.ownerWebContentsId !== event.sender.id) {
+          return { unsubscribed: false }
+        }
+        remoteRuntimeSubscriptions.delete(args.subscriptionId)
+        subscription.close()
+        return { unsubscribed: true }
+      }
+      const pending = pendingRemoteRuntimeSubscriptions.get(args.subscriptionId)
+      if (!pending || pending.ownerWebContentsId !== event.sender.id) {
         return { unsubscribed: false }
       }
-      remoteRuntimeSubscriptions.delete(args.subscriptionId)
-      subscription.close()
+      pending.abort()
       return { unsubscribed: true }
     }
   )
