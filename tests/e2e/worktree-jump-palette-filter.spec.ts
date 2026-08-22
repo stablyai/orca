@@ -180,4 +180,20 @@ test.describe('Worktree jump-palette filters', () => {
     await searchFixtureWorkspaces(orcaPage, fixture)
     await expect(filterTrigger(orcaPage)).not.toContainText('1')
   })
+
+  test('pressing Enter creates a worktree from a typed name', async ({ orcaPage }) => {
+    await openPalette(orcaPage)
+    const input = palette(orcaPage).getByPlaceholder(SEARCH_PLACEHOLDER)
+    await input.fill(`cmd-j-enter-${Date.now()}`)
+    await expect(
+      palette(orcaPage).locator('[cmdk-item][data-value="__create_worktree__"]')
+    ).toBeVisible()
+
+    await input.press('Enter')
+
+    const createDialog = orcaPage.getByRole('dialog', { name: /Create (Workspace|Worktree)/i })
+    await expect(createDialog).toBeVisible()
+    await orcaPage.keyboard.press('Escape')
+    await expect(createDialog).toBeHidden()
+  })
 })

@@ -2736,6 +2736,7 @@ function WorktreeJumpPaletteContent({
     if (
       !isWorktreePaletteCreateActivationAllowed({
         hasTaskUrlIntent: taskSourceUrl !== null,
+        hasCreateName: trimmed.length > 0,
         selectionMovedByUser: selectionMovedByUserRef.current
       })
     ) {
