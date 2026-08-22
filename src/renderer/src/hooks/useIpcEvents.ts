@@ -3529,8 +3529,15 @@ export function useIpcEvents(): void {
             : undefined
       }
       const applyPostCommitNotification = (): void => {
-        if (statusWorktreeId && (options?.replay !== true || resolvedPayload.state === 'working')) {
+        if (
+          statusWorktreeId &&
+          data.isReplay !== true &&
+          (options?.replay !== true || resolvedPayload.state === 'working')
+        ) {
           // Why: local Codex/Claude hooks arrive via this main-process IPC path, not the PTY OSC fallback, so task-complete notifications must observe accepted hook state here too.
+          // Why isReplay is excluded entirely: a reconnect replay re-delivers a cached terminal
+          // status this renderer's coordinator already observed live — and the user was already
+          // notified about; observing it would fire the notification again on every reconnect cycle.
           const notificationPayload =
             typeof data.stateStartedAt === 'number'
               ? { ...resolvedPayload, stateStartedAt: data.stateStartedAt }

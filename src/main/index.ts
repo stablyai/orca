@@ -1647,6 +1647,7 @@ function openMainWindow(options: { revealOnDidFinishLoad?: boolean } = {}): Brow
         ...(providerSession ? { providerSession } : {}),
         ...(promptInteractionKey ? { promptInteractionKey } : {}),
         ...(restoredUnconfirmed ? { restoredUnconfirmed: true } : {}),
+        ...(isReplay ? { isReplay: true } : {}),
         ...(observation ? { observation } : {}),
         ...(orchestration ? { orchestration } : {})
       }

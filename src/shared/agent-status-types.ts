@@ -253,6 +253,9 @@ export type AgentStatusIpcPayload = ParsedAgentStatusPayload & {
   promptInteractionKey?: string
   /** See AgentStatusEntry.restoredUnconfirmed — hydrated nonterminal provenance. */
   restoredUnconfirmed?: boolean
+  /** Re-delivery of a cached status (reconnect replay), not a live transition. Replays refresh
+   *  status UI but must not fire task-complete notifications. */
+  isReplay?: boolean
 } & WithAgentStatusObservation
 
 /** Wire shape for ordinary pane teardown or a stamped SSH disconnect batch. */
