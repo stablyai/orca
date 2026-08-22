@@ -53,6 +53,13 @@ describe('worker-start agent resolution', () => {
         runtime: fakeRuntime('gemini').runtime
       })
     ).toThrow(/Unknown --agent "codx"/)
+    expect(() =>
+      prepareLocalWorkerStart({
+        params: { ...baseParams, agent: '' },
+        createsWorktree: false,
+        runtime: fakeRuntime('gemini').runtime
+      })
+    ).toThrow(/Unknown --agent ""/)
   })
 
   it('still fails when --agent is omitted and no usable default exists', () => {
