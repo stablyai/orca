@@ -76,6 +76,30 @@ printf '@echo off\r\ncorepack pnpm %%*\r\n' > "$TEMP/pnpmshim/pnpm.cmd"
 export PATH="$PATH:$TEMP/pnpmshim"
 ```
 
+The sweep also needs node-pty built from Orca's patched sources:
+
+```bash
+npm_config_build_from_source=true corepack pnpm rebuild node-pty
+```
+
+`pnpm install` will not do this for you:
+`requiresPatchedNodePtySourceBuild()` in
+`config/scripts/ensure-native-runtime.mjs` returns `false` on win32, so a normal
+install takes the published prebuild — which carries none of the job-object
+exports the Windows patch adds to `src/win/conpty.cc`. That predates the patch,
+so it is a gap rather than a decision, but it is the state today.
+
+Without the rebuild, four tests fail on `isPtyJobOwnershipAvailable()` being
+false: three in `src/main/windows/windows-pty-job.win32.test.ts` and one in
+`src/main/windows/windows-host-job.win32.test.ts`. The baseline is `{}`, so
+they read as a regression rather than as a missing prerequisite. Only
+`package_windows` does this in CI, which is why the sharded `test_windows` lane
+excludes those two files.
+
+Note what the rebuild costs: it deletes `prebuilds/`. Any test that reads a
+file out of there — a case faking `darwin` and reaching node-pty's macOS
+spawn-helper, say — must stub the lookup rather than depend on the install mode.
+
 ---
 
 ## Root cause catalogue

@@ -507,8 +507,11 @@ jobs:
       # Why the same exclusions as the Linux shards: they are live-shell and
       # node-pty cases that need a real terminal, not anything Windows-specific.
       # The two job-object suites are excluded for a different reason: they need
-      # a node-pty compiled from Orca's patched sources, which only the `windows`
-      # job below builds -- and it runs both of them there.
+      # a node-pty compiled from Orca's patched sources, which only package_windows
+      # builds -- and it runs both of them there.
+      # Why not copy its build_from_source step here: that is a node-gyp compile
+      # in each of 8 shards, and it deletes prebuilds/ under the whole suite --
+      # a lot of blast radius for two files another job already covers.
       - name: Test shard
         shell: bash
         run: |
