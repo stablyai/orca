@@ -1,5 +1,6 @@
 import type { ManagedPaneInternal } from './pane-manager-types'
 import { reattachWebglIfNeeded } from './pane-webgl-reattach'
+import { releaseAbandonedSynchronizedOutput } from './terminal-synchronized-output-release'
 import { resetAndRefreshAllTerminalWebglAtlases } from './pane-manager-registry'
 
 type PaneGetter = () => Iterable<ManagedPaneInternal>
@@ -54,6 +55,10 @@ function flushPaneRevealRepaints(): void {
   for (const pane of livePanes) {
     try {
       reattachWebglIfNeeded(pane)
+      // Why before the reset+refresh below: a TUI hidden mid-`?2026h` leaves
+      // xterm's synchronized-output latch set, and RenderService buffers every
+      // refresh while it holds — so the repaint would render zero rows.
+      releaseAbandonedSynchronizedOutput(pane.terminal)
     } catch {
       /* ignore — one pane's teardown must not block global recovery */
     }

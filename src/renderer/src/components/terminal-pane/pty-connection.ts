@@ -72,6 +72,7 @@ import {
   type SafeFitContinuationHandle
 } from '@/lib/pane-manager/pane-tree-ops'
 import { requestStablePaneFit } from '@/lib/pane-manager/pane-fit-resize-observer'
+import { releaseAbandonedSynchronizedOutput } from '@/lib/pane-manager/terminal-synchronized-output-release'
 import {
   bindPanePtyId,
   getFitOverrideForPty,
@@ -8641,6 +8642,12 @@ export function connectPanePty(
           if (!isCurrentReattachPayload()) {
             return
           }
+          // Why here: a restored-open pane never crosses hide→reveal, so the
+          // reveal repaint's release never runs for it. Live bytes are still
+          // deferred at this point, so a latch can only have come from the
+          // replay — releasing it cannot tear a frame the TUI is mid-way
+          // through. Without this the fit below repaints zero rows.
+          releaseAbandonedSynchronizedOutput(pane.terminal)
           reattachPayloadApplied = true
         }
       }
