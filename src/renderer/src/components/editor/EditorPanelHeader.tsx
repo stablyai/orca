@@ -118,38 +118,26 @@ export function EditorPanelHeader({
         onOpenContainingFolder={onOpenContainingFolder}
       />
       {canOpenPreviewToSide && (
-        <TooltipProvider delayDuration={300}>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                type="button"
-                variant="ghost"
-                size="xs"
-                className="text-muted-foreground hover:text-foreground"
-                onClick={onOpenPreviewToSide}
-                data-testid="open-html-in-orca-browser"
-                aria-label={translate(
-                  'auto.components.editor.EditorPanelHeader.fc199c9fbe',
-                  'Open in Orca Browser'
-                )}
-              >
-                <Globe />
-                <span>
-                  {translate(
-                    'auto.components.editor.EditorPanelHeader.fc199c9fbe',
-                    'Open in Orca Browser'
-                  )}
-                </span>
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent side="bottom" sideOffset={4}>
-              {translate(
-                'auto.components.editor.EditorPanelHeader.fb8331694e',
-                'Open Preview to the Side'
-              )}
-            </TooltipContent>
-          </Tooltip>
-        </TooltipProvider>
+        <Button
+          type="button"
+          variant="ghost"
+          size="xs"
+          className="text-muted-foreground hover:text-foreground"
+          onClick={onOpenPreviewToSide}
+          data-testid="open-html-in-orca-browser"
+          aria-label={translate(
+            'auto.components.editor.EditorPanelHeader.fc199c9fbe',
+            'Open in Orca Browser'
+          )}
+        >
+          <Globe />
+          <span>
+            {translate(
+              'auto.components.editor.EditorPanelHeader.fc199c9fbe',
+              'Open in Orca Browser'
+            )}
+          </span>
+        </Button>
       )}
       {isSingleDiff && (
         <TooltipProvider delayDuration={300}>
