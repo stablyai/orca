@@ -114,7 +114,8 @@ describe('createBackgroundSleepingAgentWakeDispatcher', () => {
         readinessListener = listener
         return unsubscribe
       },
-      wake
+      wake,
+      getRemoteHydrationTargetId: () => null
     })
 
     dispatcher.request('wt-cold')

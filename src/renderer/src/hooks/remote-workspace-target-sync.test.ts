@@ -9,6 +9,7 @@ import { PSEUDO_LOCALIZATION_LOCALE } from '@/i18n/pseudo-localization'
 import type { AppState } from '../store/types'
 import type {
   DirectSshPreparationInput,
+  DirectSshPreparationOutcome,
   DirectSshPreparationToken
 } from './direct-ssh-reconnect-coordinator'
 import { createRemoteWorkspaceTargetSync } from './remote-workspace-target-sync'
@@ -16,14 +17,17 @@ import { createRemoteWorkspaceTargetSync } from './remote-workspace-target-sync'
 type Deferred<T> = {
   promise: Promise<T>
   resolve: (value: T) => void
+  reject: (error: unknown) => void
 }
 
 function deferred<T>(): Deferred<T> {
   let resolve!: (value: T) => void
-  const promise = new Promise<T>((settle) => {
+  let reject!: (error: unknown) => void
+  const promise = new Promise<T>((settle, fail) => {
     resolve = settle
+    reject = fail
   })
-  return { promise, resolve }
+  return { promise, resolve, reject }
 }
 
 const owner: DirectSshAuthority = {
@@ -113,6 +117,8 @@ function appState(overrides: Record<string, unknown> = {}): AppState {
     layoutByWorktree: {},
     activeGroupIdByWorktree: {},
     sshConnectionStates: new Map(),
+    remoteWorkspaceHydratedTargetIds: new Set(),
+    remoteWorkspaceSyncStatusByTargetId: {},
     lastVisitedAtByWorktreeId: {},
     defaultTerminalTabsAppliedByWorktreeId: {},
     hydrateWorkspaceSession: vi.fn(),
@@ -152,21 +158,25 @@ function createHarness(
       snapshotRevision
     })
   )
-  const prepareOnly = vi.fn(async (input: DirectSshPreparationInput) => ({
-    status: 'complete' as const,
-    token: token(input.snapshotRevision ?? null),
-    repoOutcomes: {
-      complete: 1,
-      'non-authoritative': 0,
-      'timed-out': 0,
-      'cancel-budget-exhausted': 0,
-      canceled: 0,
-      stale: 0,
-      rejected: 0
-    },
-    lineageOutcome: 'complete' as const
-  }))
+  const prepareOnly = vi.fn(
+    async (input: DirectSshPreparationInput): Promise<DirectSshPreparationOutcome> => ({
+      status: 'complete',
+      token: token(input.snapshotRevision ?? null),
+      repoOutcomes: {
+        complete: 1,
+        'non-authoritative': 0,
+        'timed-out': 0,
+        'cancel-budget-exhausted': 0,
+        canceled: 0,
+        stale: 0,
+        rejected: 0
+      },
+      lineageOutcome: 'complete'
+    })
+  )
   const finalizeHydratedTerminals = vi.fn(() => 1)
+  const remotePullStarted = vi.fn()
+  const remotePullSettled = vi.fn()
   const sync = createRemoteWorkspaceTargetSync({
     store: { getState: () => state },
     remoteWorkspace: { get, setForConnectedTargets },
@@ -174,7 +184,11 @@ function createHarness(
     isPreparationTokenCurrent: () => current,
     capturePreparationInput,
     prepareOnly,
-    finalizeHydratedTerminals
+    finalizeHydratedTerminals,
+    remotePullLifecycle: {
+      started: remotePullStarted,
+      settled: remotePullSettled
+    }
   })
   return {
     sync,
@@ -182,6 +196,8 @@ function createHarness(
     capturePreparationInput,
     prepareOnly,
     finalizeHydratedTerminals,
+    remotePullStarted,
+    remotePullSettled,
     makeStale: () => {
       current = false
     }
@@ -257,11 +273,11 @@ describe('createRemoteWorkspaceTargetSync', () => {
 
     expect(state.hydrateTabsSession).not.toHaveBeenCalled()
     expect(state.markRemoteWorkspaceHydrated).not.toHaveBeenCalled()
-    expect(state.setRemoteWorkspaceSyncStatus).toHaveBeenCalledTimes(1)
-    expect(state.setRemoteWorkspaceSyncStatus).toHaveBeenCalledWith('target-a', {
-      phase: 'pulling',
-      direction: 'pull'
-    })
+    expect(state.setRemoteWorkspaceSyncStatus).toHaveBeenCalledTimes(2)
+    expect(state.setRemoteWorkspaceSyncStatus).toHaveBeenLastCalledWith(
+      'target-a',
+      expect.objectContaining({ phase: 'error', direction: 'pull' })
+    )
   })
 
   it('prepares an unsolicited snapshot once and preserves newer local terminal fields', async () => {
@@ -553,5 +569,167 @@ describe('createRemoteWorkspaceTargetSync', () => {
     expect(merged.tabsByWorktree).toEqual({
       'folder:folder-a': [{ id: 'folder-tab', worktreeId: 'folder:folder-a', ptyId: null }]
     })
+  })
+})
+
+describe('pull conclusion without an apply token', () => {
+  it('concludes syncAfterConnect with a terminal error phase when the apply token cannot be built', async () => {
+    const state = appState()
+    const get = vi.fn(async () => snapshot(1))
+    const { sync } = createHarness(state, get)
+
+    // Why: a revision-mismatched token must still settle the pull.
+    await sync.syncAfterConnect(token(999))
+    await flush()
+
+    expect(state.markRemoteWorkspaceHydrated).not.toHaveBeenCalled()
+    expect(state.setRemoteWorkspaceSyncStatus).toHaveBeenCalledWith(
+      owner.targetId,
+      expect.objectContaining({ phase: 'error', direction: 'pull' })
+    )
+  })
+
+  it('concludes applyUnsolicitedSnapshot with a terminal error phase when the apply token cannot be built', async () => {
+    const state = appState()
+    const get = vi.fn(async () => snapshot(1))
+    const harness = createHarness(state, get)
+    harness.prepareOnly.mockResolvedValueOnce({
+      status: 'complete' as const,
+      token: token(999),
+      repoOutcomes: {
+        complete: 1,
+        'non-authoritative': 0,
+        'timed-out': 0,
+        'cancel-budget-exhausted': 0,
+        canceled: 0,
+        stale: 0,
+        rejected: 0
+      },
+      lineageOutcome: 'complete' as const
+    })
+
+    await harness.sync.applyUnsolicitedSnapshot(owner.targetId, snapshot(1))
+    await flush()
+
+    expect(state.markRemoteWorkspaceHydrated).not.toHaveBeenCalled()
+    expect(state.setRemoteWorkspaceSyncStatus).toHaveBeenCalledWith(
+      owner.targetId,
+      expect.objectContaining({ phase: 'error', direction: 'pull' })
+    )
+  })
+})
+
+describe('workspace-ready timeout conclusion', () => {
+  it('concludes with a terminal error phase when local hydration times out before the pull', async () => {
+    vi.useFakeTimers()
+    try {
+      const state = appState({ workspaceSessionReady: false } as never)
+      const get = vi.fn(async () => snapshot(1))
+      const harness = createHarness(state, get)
+
+      const run = harness.sync.syncAfterConnect(token())
+      await vi.advanceTimersByTimeAsync(11_000)
+      await run
+
+      expect(get).not.toHaveBeenCalled()
+      expect(state.setRemoteWorkspaceSyncStatus).toHaveBeenCalledWith(
+        owner.targetId,
+        expect.objectContaining({ phase: 'error', direction: 'pull' })
+      )
+      expect(harness.remotePullSettled).toHaveBeenCalledOnce()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+})
+
+describe('remote pull lifecycle', () => {
+  it.each([
+    ['snapshot applied', snapshot(1)],
+    ['revision zero', snapshot(0)],
+    ['offline', null]
+  ] as const)('settles the %s outcome', async (_name, result) => {
+    const state = appState()
+    const harness = createHarness(state, async () => result)
+
+    await harness.sync.syncAfterConnect(token())
+
+    expect(harness.remotePullStarted).toHaveBeenCalledOnce()
+    expect(harness.remotePullSettled).toHaveBeenCalledOnce()
+    expect(harness.remotePullSettled).toHaveBeenCalledWith(owner.targetId)
+  })
+
+  it('settles a rejected unsolicited preparation with no token', async () => {
+    const harness = createHarness(appState(), async () => null)
+    harness.prepareOnly.mockResolvedValueOnce({
+      status: 'stopped' as const,
+      token: null,
+      repoOutcomes: {
+        complete: 0,
+        'non-authoritative': 0,
+        'timed-out': 0,
+        'cancel-budget-exhausted': 0,
+        canceled: 0,
+        stale: 0,
+        rejected: 1
+      },
+      lineageOutcome: 'canceled' as const
+    })
+
+    await harness.sync.applyUnsolicitedSnapshot(owner.targetId, snapshot(2))
+
+    expect(harness.remotePullSettled).toHaveBeenCalledOnce()
+  })
+
+  it('settles a rejected fetch after authority changes', async () => {
+    const pendingGet = deferred<RemoteWorkspaceSnapshot | null>()
+    const get = vi.fn(() => pendingGet.promise)
+    const state = appState()
+    const harness = createHarness(state, get)
+    const run = harness.sync.syncAfterConnect(token())
+    await flush()
+    harness.makeStale()
+    pendingGet.reject(new Error('changed authority'))
+
+    await expect(run).rejects.toThrow('changed authority')
+
+    expect(harness.remotePullSettled).toHaveBeenCalledOnce()
+    expect(state.setRemoteWorkspaceSyncStatus).toHaveBeenLastCalledWith(
+      owner.targetId,
+      expect.objectContaining({ phase: 'error', direction: 'pull' })
+    )
+  })
+
+  it('settles overlapping stale arrivals independently', async () => {
+    const firstGet = deferred<RemoteWorkspaceSnapshot | null>()
+    const get = vi
+      .fn<(args: { targetId: string }) => Promise<RemoteWorkspaceSnapshot | null>>()
+      .mockImplementationOnce(() => firstGet.promise)
+      .mockResolvedValueOnce(snapshot(0))
+    const harness = createHarness(appState(), get)
+    const first = harness.sync.syncAfterConnect(token())
+    await flush()
+
+    await harness.sync.syncAfterConnect(token())
+    expect(harness.remotePullSettled).toHaveBeenCalledOnce()
+
+    firstGet.resolve(snapshot(1))
+    await first
+    expect(harness.remotePullStarted).toHaveBeenCalledTimes(2)
+    expect(harness.remotePullSettled).toHaveBeenCalledTimes(2)
+  })
+
+  it('settles an in-flight pull once when stopped', async () => {
+    const pendingGet = deferred<RemoteWorkspaceSnapshot | null>()
+    const harness = createHarness(appState(), () => pendingGet.promise)
+    const run = harness.sync.syncAfterConnect(token())
+    await flush()
+
+    harness.sync.stop()
+    expect(harness.remotePullSettled).toHaveBeenCalledOnce()
+
+    pendingGet.resolve(null)
+    await run
+    expect(harness.remotePullSettled).toHaveBeenCalledOnce()
   })
 })

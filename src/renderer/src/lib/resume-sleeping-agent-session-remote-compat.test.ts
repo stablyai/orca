@@ -61,4 +61,44 @@ describe('remote sleeping-agent compatibility', () => {
     expect(resumeSleepingAgentSessionsForWorktree('wt-1')).toBe(1)
     expect(useAppStore.getState().sleepingAgentSessionsByPaneKey[value.paneKey]).toBeUndefined()
   })
+
+  it('never defers an SSH folder workspace excluded from snapshot projection', () => {
+    const folderKey = 'folder:folder-a'
+    const value = { ...record('quit'), worktreeId: folderKey }
+    useAppStore.setState({
+      repos: [
+        {
+          id: 'repo-1',
+          path: '/repo',
+          projectGroupId: 'group-a',
+          connectionId: 'target-a',
+          executionHostId: 'ssh:target-a'
+        }
+      ],
+      worktreesByRepo: {},
+      folderWorkspaces: [
+        {
+          id: 'folder-a',
+          projectGroupId: 'group-a',
+          folderPath: '/repo',
+          connectionId: 'target-a'
+        }
+      ],
+      projectGroups: [
+        {
+          id: 'group-a',
+          parentGroupId: null,
+          connectionId: 'target-a',
+          executionHostId: 'ssh:target-a'
+        }
+      ],
+      tabsByWorktree: { [folderKey]: [] },
+      sshConnectionStates: new Map([['target-a', { status: 'connected' }]]),
+      remoteWorkspaceHydratedTargetIds: new Set<string>(),
+      remoteWorkspaceSyncStatusByTargetId: {},
+      sleepingAgentSessionsByPaneKey: { [value.paneKey]: value }
+    } as never)
+
+    expect(resumeSleepingAgentSessionsForWorktree(folderKey)).toBe(1)
+  })
 })

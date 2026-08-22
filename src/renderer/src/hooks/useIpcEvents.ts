@@ -110,6 +110,7 @@ import {
   refreshRuntimeProjectWorktreesAndLineage
 } from './runtime-project-refresh-scheduler'
 import { createRuntimeClientEventsSync } from './runtime-client-events-sync'
+import { stopDirectSshHydrationLifecycle } from './direct-ssh-hydration-teardown'
 import { detectLanguage } from '@/lib/language-detect'
 import { makePaneKey, parsePaneKey } from '../../../shared/stable-pane-id'
 import { collectLeafIdsInOrder } from '@/components/terminal-pane/layout-serialization'
@@ -733,6 +734,21 @@ export function useIpcEvents(): void {
     >
     const directSshTerminalActions = (): DirectSshTerminalActions =>
       useAppStore.getState() as DirectSshTerminalActions
+    const remoteWorkspaceApi = window.api.remoteWorkspace
+    const backgroundSleepingAgentWakeDispatcher = createBackgroundSleepingAgentWakeDispatcher({
+      remoteHydrationEnabled: remoteWorkspaceApi !== undefined
+    })
+    const runRemotePullLifecycle = async <T>(
+      targetId: string,
+      run: () => Promise<T>
+    ): Promise<T> => {
+      backgroundSleepingAgentWakeDispatcher.remotePullStarted(targetId)
+      try {
+        return await run()
+      } finally {
+        backgroundSleepingAgentWakeDispatcher.remotePullSettled(targetId)
+      }
+    }
     let remoteWorkspaceTargetSync: RemoteWorkspaceTargetSync | null = null
     const reconnectCoordinator = createDirectSshReconnectCoordinator({
       scheduler,
@@ -752,7 +768,6 @@ export function useIpcEvents(): void {
         remoteWorkspaceTargetSync?.syncAfterConnect(token),
       onTelemetry: createDirectSshReconnectProductTelemetryAdapter()
     })
-    const remoteWorkspaceApi = window.api.remoteWorkspace
     if (remoteWorkspaceApi) {
       remoteWorkspaceTargetSync = createRemoteWorkspaceTargetSync({
         store: useAppStore,
@@ -765,7 +780,11 @@ export function useIpcEvents(): void {
         finalizeHydratedTerminals: (authority) =>
           directSshAuthoritiesEqual(reconnectAuthorityByTarget.get(authority.targetId), authority)
             ? reconnectCoordinator.finalizeHydratedTerminals(authority)
-            : 0
+            : 0,
+        remotePullLifecycle: {
+          started: backgroundSleepingAgentWakeDispatcher.remotePullStarted,
+          settled: backgroundSleepingAgentWakeDispatcher.remotePullSettled
+        }
       })
     }
     const prepareAndSyncDirectSshTarget = async (
@@ -773,32 +792,30 @@ export function useIpcEvents(): void {
       reason: DirectSshPreparationReason,
       options?: { authorityAlreadyReplaced?: boolean }
     ): Promise<void> => {
-      try {
-        if (!options?.authorityAlreadyReplaced) {
-          reconnectCoordinator.replaceAuthority(authority)
+      await runRemotePullLifecycle(authority.targetId, async () => {
+        try {
+          if (!options?.authorityAlreadyReplaced) {
+            reconnectCoordinator.replaceAuthority(authority)
+          }
+          const input: DirectSshPreparationInput | null =
+            await hostHydration.capturePreparationInput(authority, reason)
+          if (!input) {
+            return
+          }
+          const prepared = await reconnectCoordinator.prepareOnly(input)
+          if (prepared.token && hostHydration.isPreparationTokenCurrent(prepared.token)) {
+            await remoteWorkspaceTargetSync?.syncAfterConnect(prepared.token)
+          }
+        } catch (error) {
+          if (directSshAuthoritiesEqual(currentDirectSshAuthority(authority.targetId), authority)) {
+            useAppStore.getState().setRemoteWorkspaceSyncStatus(authority.targetId, {
+              phase: 'error',
+              message: error instanceof Error ? error.message : 'Workspace sync failed'
+            })
+          }
         }
-        const input: DirectSshPreparationInput | null = await hostHydration.capturePreparationInput(
-          authority,
-          reason
-        )
-        if (!input) {
-          return
-        }
-        const prepared = await reconnectCoordinator.prepareOnly(input)
-        if (prepared.token && hostHydration.isPreparationTokenCurrent(prepared.token)) {
-          await remoteWorkspaceTargetSync?.syncAfterConnect(prepared.token)
-        }
-      } catch (error) {
-        if (directSshAuthoritiesEqual(currentDirectSshAuthority(authority.targetId), authority)) {
-          useAppStore.getState().setRemoteWorkspaceSyncStatus(authority.targetId, {
-            phase: 'error',
-            message: error instanceof Error ? error.message : 'Workspace sync failed'
-          })
-        }
-      }
+      })
     }
-    const backgroundSleepingAgentWakeDispatcher = createBackgroundSleepingAgentWakeDispatcher()
-    unsubs.push(backgroundSleepingAgentWakeDispatcher.dispose)
     type PendingAgentStatusEvent = {
       data: AgentStatusIpcPayload
       firstSeenAt: number
@@ -3059,7 +3076,14 @@ export function useIpcEvents(): void {
           : null
       routeDirectSshConnectedState(
         {
-          coordinator: reconnectCoordinator,
+          coordinator: {
+            requestReconnect: (nextAuthority) =>
+              runRemotePullLifecycle(nextAuthority.targetId, () =>
+                reconnectCoordinator.requestReconnect(nextAuthority)
+              ),
+            correctUnboundTerminals: reconnectCoordinator.correctUnboundTerminals,
+            replaceAuthority: reconnectCoordinator.replaceAuthority
+          },
           coordinatorRoutingEnabled: isDirectSshReconnectCoordinatorRoutingEnabled(),
           invalidateStaleTerminalBindings: (nextAuthority) =>
             directSshTerminalActions().invalidateStaleDirectSshTargetPtyBindings?.(nextAuthority) ??
@@ -3978,16 +4002,19 @@ export function useIpcEvents(): void {
       liveAgentStatusBurstQueue.length = 0
       mobileStateHydrationDisposed = true
       pendingMobileStateEvents.length = 0
-      unsubscribeRuntimeEnvironmentStore()
-      unsubscribeAgentStatusStore()
-      unsubs.forEach((fn) => fn())
       directSshEffectStopped = true
       for (const deadline of authorityReconciliationDeadlines) {
         clearTimeout(deadline.timer)
         deadline.settle()
       }
       authorityReconciliationDeadlines.clear()
-      remoteWorkspaceTargetSync?.stop()
+      stopDirectSshHydrationLifecycle(
+        backgroundSleepingAgentWakeDispatcher,
+        remoteWorkspaceTargetSync
+      )
+      unsubscribeRuntimeEnvironmentStore()
+      unsubscribeAgentStatusStore()
+      unsubs.forEach((fn) => fn())
       hostHydration.stop()
       reconnectCoordinator.stop()
       reconnectAuthorityByTarget.clear()
