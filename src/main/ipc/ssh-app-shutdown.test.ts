@@ -147,7 +147,7 @@ describe('SSH IPC handlers', () => {
     )
   })
 
-  it('detaches the remaining sessions and still returns when one session throws mid-transition', async () => {
+  it('isolates renderer send failures while detaching every session', async () => {
     const targets: Record<string, SshTarget> = {
       'ssh-1': { id: 'ssh-1', label: 'A', host: 'a.example.com', port: 22, username: 'deploy' },
       'ssh-2': { id: 'ssh-2', label: 'B', host: 'b.example.com', port: 22, username: 'deploy' }
@@ -164,8 +164,7 @@ describe('SSH IPC handlers', () => {
     await handlers.get('ssh:connect')!(null, { targetId: 'ssh-2' })
     mockConnectionManager.disconnectAll.mockClear().mockResolvedValue(undefined)
     vi.mocked(mockStore.markSshRemotePtyLeasesForShutdown).mockClear()
-    // Why webContents.send: quit destroys the renderer, and that is what makes broadcastEmptyLists
-    // throw out of the pre-pass for whichever session reaches it first.
+    // Quit can destroy the renderer before relay list resets; fanout contains that send failure.
     mockWindow.webContents.send.mockImplementation((_channel: string, payload: unknown) => {
       if ((payload as { targetId?: string } | undefined)?.targetId === 'ssh-1') {
         throw new Error('Object has been destroyed')
@@ -173,9 +172,7 @@ describe('SSH IPC handlers', () => {
     })
     quitTeardownStartGate.tryStart({ preventDefault() {} })
 
-    // Why not-throw rather than a resolved promise: the caller is a non-async will-quit listener, so
-    // a synchronous throw escapes it and skips killAllPty, the watchers and store.flushAsync() — the
-    // very flush that persists the detached leases this pre-pass just staged.
+    // The non-async will-quit caller must continue through the remaining teardown work.
     let shutdown!: Promise<SshShutdownResult>
     expect(() => {
       shutdown = beginSshShutdown()
@@ -184,11 +181,7 @@ describe('SSH IPC handlers', () => {
     expect(mockStore.markSshRemotePtyLeasesForShutdown).toHaveBeenCalledWith('ssh-2', 'detached')
 
     const result = await shutdown
-    expect(
-      result.errors.some(
-        (error) => error instanceof Error && error.message === 'Object has been destroyed'
-      )
-    ).toBe(true)
+    expect(result.errors).toEqual([])
   })
 
   it('reports the target and phase left unfinished when the shutdown budget expires', async () => {
