@@ -126,6 +126,7 @@ import {
 import { runWithGitReadCacheInvalidation } from '../git/status'
 import { isAdmissibleDirectSshAuthority } from '../../shared/ssh-retained-payload-admission'
 import { isCurrentSshProviderAuthority } from '../ssh/ssh-provider-authority'
+import { broadcastToOrcaWindows } from '../window/orca-window-broadcast'
 
 // Why: `method` is the IPC entry point the user took, not what they added (never path/URL/name); repos:create → 'folder_picker'.
 // Why: `isGitRepo` is a non-identifying git-vs-folder signal from the caller's detection; pass undefined when unknown, never default false.
@@ -2773,9 +2774,7 @@ function getRepoForExecutionHost(
 
 export function notifyReposChanged(mainWindow: BrowserWindow): void {
   wakeFolderRepoGitUpgradeWatch()
-  if (!mainWindow.isDestroyed()) {
-    mainWindow.webContents.send('repos:changed')
-  }
+  broadcastToOrcaWindows(() => mainWindow, 'repos:changed')
   // Why: paired clients only refetch a remote catalog on this event; without it a
   // host-side delete or rename stays invisible to them indefinitely (#11994).
   try {

@@ -12,8 +12,12 @@ export function broadcastToOrcaWindows(
     windows.push(legacyWindow)
   }
   for (const window of windows) {
-    if (!window.isDestroyed() && !window.webContents.isDestroyed()) {
-      window.webContents.send(channel, ...args)
+    if (!window.isDestroyed() && window.webContents.isDestroyed?.() !== true) {
+      try {
+        window.webContents.send(channel, ...args)
+      } catch {
+        // One unavailable renderer must not block sibling windows.
+      }
     }
   }
 }

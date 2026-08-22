@@ -106,6 +106,24 @@ describe('SSH credential prompt ownership', () => {
     })
   })
 
+  it('skips a recent destroyed renderer without unregistering its window', async () => {
+    const older = createWindow(1)
+    const recent = createWindow(2)
+    recent.webContents.destroyed = true
+    orcaWindowManager.register(older as never, 'control')
+    orcaWindowManager.register(recent as never, 'secondary')
+    orcaWindowManager.noteFocused(older.id)
+    orcaWindowManager.noteFocused(recent.id)
+
+    const result = requestCredential(() => null, 'target-1', 'password', 'deploy')
+    const requestId = requestIdFrom(older)
+    submit(older, requestId, 'secret')
+
+    await expect(result).resolves.toBe('secret')
+    expect(recent.webContents.send).not.toHaveBeenCalled()
+    expect(orcaWindowManager.getWindow(recent.id)).toBe(recent)
+  })
+
   it('rejects another window and an obsolete or subframe sender', async () => {
     const owner = createWindow(1)
     const other = createWindow(2)

@@ -47,7 +47,7 @@ export function requestCredential(
   kind: SshCredentialKind,
   detail: string
 ): Promise<string | null> {
-  const window = orcaWindowManager.getMostRecentWindow() ?? getMainWindow()
+  const window = orcaWindowManager.getMostRecentRendererWindow() ?? getMainWindow()
   if (!window || window.isDestroyed() || window.webContents.isDestroyed()) {
     return Promise.resolve(null)
   }

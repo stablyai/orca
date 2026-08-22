@@ -4,12 +4,12 @@ import { OrcaWindowManager } from './orca-window-manager'
 function makeWindow(
   id: number,
   bounds: { x: number; y: number; width: number; height: number },
-  options: { destroyed?: boolean; visible?: boolean } = {}
+  options: { destroyed?: boolean; visible?: boolean; webContentsDestroyed?: boolean } = {}
 ) {
   const webContents = {
     id: id + 100,
     getType: () => 'window',
-    isDestroyed: () => options.destroyed === true
+    isDestroyed: () => options.destroyed === true || options.webContentsDestroyed === true
   }
   return {
     id,
@@ -85,6 +85,23 @@ describe('OrcaWindowManager', () => {
     expect(manager.getControlWindow()).toBe(second)
     expect(manager.getRole(second.id)).toBe('control')
     expect(manager.getRole(third.id)).toBe('secondary')
+  })
+
+  it('finds the most recent live renderer without removing a recoverable window', () => {
+    const manager = new OrcaWindowManager()
+    const older = makeWindow(1, { x: 0, y: 0, width: 800, height: 600 })
+    const recent = makeWindow(
+      2,
+      { x: 800, y: 0, width: 800, height: 600 },
+      { webContentsDestroyed: true }
+    )
+    manager.register(older as never, 'control')
+    manager.register(recent as never, 'secondary')
+    manager.noteFocused(older.id)
+    manager.noteFocused(recent.id)
+
+    expect(manager.getMostRecentRendererWindow()).toBe(older)
+    expect(manager.getWindow(recent.id)).toBe(recent)
   })
 
   it('re-elects after control removal and fails closed when empty', () => {

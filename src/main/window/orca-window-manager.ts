@@ -116,6 +116,12 @@ export class OrcaWindowManager {
     return this.#rankedEntries()[0]?.window ?? null
   }
 
+  getMostRecentRendererWindow(): BrowserWindow | null {
+    return (
+      this.#rankedEntries().find(({ window }) => !window.webContents.isDestroyed())?.window ?? null
+    )
+  }
+
   promoteControl(): BrowserWindow | null {
     const existing = this.getControlWindow()
     if (existing || this.#activeControlTransition) {

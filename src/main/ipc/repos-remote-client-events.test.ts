@@ -42,7 +42,29 @@ vi.mock('./ssh', () => ({ getActiveMultiplexer: vi.fn() }))
 type HandlerMap = Map<string, (_event: unknown, args: unknown) => unknown>
 
 const handlers: HandlerMap = new Map()
-const mainWindow = { isDestroyed: () => false, webContents: { send: vi.fn() } }
+const mainWindow = {
+  id: 1,
+  isDestroyed: () => false,
+  webContents: {
+    id: 101,
+    isDestroyed: () => false,
+    getType: () => 'window' as const,
+    send: vi.fn()
+  }
+}
+
+function createSecondaryWindow() {
+  return {
+    id: 2,
+    isDestroyed: () => false,
+    webContents: {
+      id: 102,
+      isDestroyed: () => false,
+      getType: () => 'window' as const,
+      send: vi.fn()
+    }
+  }
+}
 
 /** Fresh module instance per test so the module-scoped notifier holder starts unset. */
 async function registerHandlersWithoutNotifier(): Promise<typeof ReposModule> {
@@ -114,5 +136,23 @@ describe('repo IPC mutations notify paired clients', () => {
     })
 
     await expect(handlers.get('repos:remove')!(null, { repoId: 'repo-1' })).resolves.toBeUndefined()
+  })
+
+  it('fans out to both windows when the first renderer send fails', async () => {
+    const notify = vi.fn()
+    await registerHandlersWithNotifier(notify)
+    const { orcaWindowManager } = await import('../window/orca-window-manager')
+    const secondary = createSecondaryWindow()
+    orcaWindowManager.register(mainWindow as never, 'control')
+    orcaWindowManager.register(secondary as never, 'secondary')
+    mainWindow.webContents.send.mockImplementationOnce(() => {
+      throw new Error('frame unavailable')
+    })
+
+    await expect(handlers.get('repos:remove')!(null, { repoId: 'repo-1' })).resolves.toBeUndefined()
+
+    expect(mainWindow.webContents.send).toHaveBeenCalledOnce()
+    expect(secondary.webContents.send).toHaveBeenCalledExactlyOnceWith('repos:changed')
+    expect(notify).toHaveBeenCalledOnce()
   })
 })
