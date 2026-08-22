@@ -6,6 +6,7 @@ import {
 } from './agent-name-token-match'
 import { containsAgentSpinnerGlyph, isCursorAgentTitle } from './agent-title-core'
 import { stripLeadingAgentTitleDecorationOrEmpty } from './agent-title-decoration'
+import { isCodexNativeSessionTitle } from './codex-terminal-title'
 import { isOpenCodeNativeTitle } from './opencode-terminal-title'
 import { getWrapperTitleSegments } from './terminal-title-wrapper-segments'
 import {
@@ -79,7 +80,12 @@ export function isPiAgentTitle(title: string): boolean {
  * agents have different (or no) caching semantics.
  */
 export function isClaudeAgent(title: string): boolean {
-  if (!title || isClaudeManagementTitle(title) || isOpenCodeNativeTitle(title)) {
+  if (
+    !title ||
+    isClaudeManagementTitle(title) ||
+    isOpenCodeNativeTitle(title) ||
+    isCodexNativeSessionTitle(title)
+  ) {
     return false
   }
   const lower = title.toLowerCase()
@@ -127,6 +133,9 @@ export function getAgentLabel(title: string): string | null {
   // include status glyphs from other agents without changing OpenCode identity.
   if (isOpenCodeNativeTitle(title)) {
     return 'OpenCode'
+  }
+  if (isCodexNativeSessionTitle(title)) {
+    return 'Codex'
   }
   // Why: Claude Code title text is often the task title. If that task mentions
   // another CLI, the Claude-specific prefix is the identity signal, not the words.
