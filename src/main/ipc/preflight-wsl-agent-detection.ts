@@ -5,27 +5,48 @@ import { buildPosixCommandPathLookupScript } from '../../shared/posix-command-pa
 import { buildWslExecArgs, buildWslLoginShellCommand } from '../../shared/wsl-login-shell-command'
 
 const execFileAsync = promisify(execFile)
-const WSL_AGENT_DETECTION_TIMEOUT_MS = 10000
+// Why: WSL2 cold boots can exceed 10s (VM start + distro init). A timed-out
+// probe previously looked identical to "no agents installed"; give cold boots
+// headroom so a slow first probe does not silently empty the agent picker.
+const WSL_AGENT_DETECTION_TIMEOUT_MS = 30000
 const WSL_AGENT_DETECTION_PREFIX = '__ORCA_AGENT_PATH__'
 
 export type WslPreflightTarget = {
   distro?: string
 }
 
+/**
+ * Result of a WSL agent-path probe.
+ *
+ * `failed` distinguishes a probe that errored or timed out (wsl.exe cold start,
+ * distro stopped, shell parse error) from a probe that ran and found nothing.
+ * Without it, a failed probe is indistinguishable from "no agents installed",
+ * which surfaces as an empty agent picker with no retry affordance.
+ */
+export type WslAgentDetectionResult = {
+  found: ReadonlySet<string>
+  failed: boolean
+}
+
 export async function detectWslCommandsOnPath(
   wslTarget: WslPreflightTarget,
   commands: readonly string[]
-): Promise<Set<string>> {
+): Promise<WslAgentDetectionResult> {
   const uniqueCommands = [...new Set(commands.filter(Boolean))]
   if (uniqueCommands.length === 0) {
-    return new Set()
+    return { found: new Set(), failed: false }
   }
 
   const commandList = uniqueCommands.map(shellQuote).join(' ')
-  const lookupScript = buildPosixCommandPathLookupScript({
-    kind: 'shell-variable',
-    name: 'cmd'
-  })
+  const lookupScript = buildPosixCommandPathLookupScript(
+    {
+      kind: 'shell-variable',
+      name: 'cmd'
+    },
+    // Why: skip the Windows-drive /mnt tail WSL appends to PATH — drvfs stats
+    // are slow enough to time the probe out (issue #9725 root cause).
+    { skipWindowsMountDirs: true }
+  )
   // Newlines keep the loop valid in zsh and every POSIX shell used here.
   const script = [
     `for cmd in ${commandList}; do`,
@@ -41,9 +62,9 @@ export async function detectWslCommandsOnPath(
     // cache an empty result. One probe through the distro user's login shell
     // matches zsh/bash PATH customizations from their normal terminals.
     const { stdout } = await execWslAgentDetectionCommand(wslTarget, script)
-    return parseWslDetectedCommands(stdout)
+    return { found: parseWslDetectedCommands(stdout), failed: false }
   } catch {
-    return new Set()
+    return { found: new Set(), failed: true }
   }
 }
 

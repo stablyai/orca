@@ -35,7 +35,10 @@ describe('isCommandOnPath', () => {
     expect(runPreflightCommandInWslMock).toHaveBeenCalledOnce()
     const [, command] = runPreflightCommandInWslMock.mock.calls[0] as [{ distro: string }, string]
     expect(command).toContain(
-      buildPosixCommandPathLookupScript({ kind: 'literal', value: 'codex' })
+      buildPosixCommandPathLookupScript(
+        { kind: 'literal', value: 'codex' },
+        { skipWindowsMountDirs: true }
+      )
     )
     expect(command).toContain(
       ['if [ -n "$resolved" ]; then', `printf '${sentinel}%s\\n' "$resolved"`, 'fi'].join('\n')

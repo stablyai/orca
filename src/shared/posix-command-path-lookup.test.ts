@@ -24,6 +24,7 @@ type ShellCase = {
 const isWindows = process.platform === 'win32'
 const WSL_TEST_COMMAND_TIMEOUT_MS = 10_000
 let wslShAvailable: boolean | null = null
+let writableMntRoot: string | null | undefined
 const shellCases: ShellCase[] = [
   { name: 'sh', path: executablePath(['/bin/sh']) },
   { name: 'bash', path: executablePath(['/bin/bash', '/usr/bin/bash']) },
@@ -229,6 +230,101 @@ describe('buildPosixCommandPathLookupScript', () => {
     expect(script).toContain(`_orca_lookup_command='agent'\\''; echo injected; '\\'''`)
   })
 
+  it('emits the drive-letter /mnt guard only when skipWindowsMountDirs is set', () => {
+    const withSkip = buildPosixCommandPathLookupScript(
+      { kind: 'literal', value: 'agent' },
+      { skipWindowsMountDirs: true }
+    )
+    const withoutSkip = buildPosixCommandPathLookupScript({ kind: 'literal', value: 'agent' })
+
+    expect(withSkip).toContain('case "$_orca_lookup_component" in')
+    expect(withSkip).toContain('/mnt/[A-Za-z]|/mnt/[A-Za-z]/*)')
+    expect(withSkip).not.toContain('/mnt|/mnt/*)')
+    expect(withoutSkip).not.toContain('/mnt/[A-Za-z]|/mnt/[A-Za-z]/*)')
+  })
+
+  it.skipIf(executablePath(['/bin/sh']) === null)(
+    'the /mnt guard matches only single-letter drive mounts, not multi-letter /mnt paths',
+    () => {
+      const guard = [
+        'case "$_orca_lookup_component" in',
+        '  /mnt/[A-Za-z]|/mnt/[A-Za-z]/*)',
+        '    printf matched ;;',
+        '  *)',
+        '    printf searchable ;;',
+        'esac'
+      ].join('\n')
+      const execGuard = (component: string): string =>
+        execFileSync('/bin/sh', ['-c', `_orca_lookup_component='${component}'; ${guard}`], {
+          encoding: 'utf8'
+        })
+          .trim()
+          .split('\n')
+          .at(-1) ?? ''
+
+      expect(execGuard('/mnt/c')).toBe('matched')
+      expect(execGuard('/mnt/c/Windows/System32')).toBe('matched')
+      expect(execGuard('/mnt/w')).toBe('matched')
+      // Multi-letter /mnt mounts (custom Linux mounts, WSL internals like
+      // /mnt/wsl and /mnt/wslg) stay searchable.
+      expect(execGuard('/mnt/wsl')).toBe('searchable')
+      expect(execGuard('/mnt/data')).toBe('searchable')
+      expect(execGuard('/mnt/backup/bin')).toBe('searchable')
+      expect(execGuard('/mnt')).toBe('searchable')
+    }
+  )
+
+  it.skipIf(executablePath(['/bin/sh']) === null || getWritableMntRoot() === null)(
+    'skips Windows-drive /mnt PATH components when skipWindowsMountDirs is set',
+    () => {
+      const mntRoot = getWritableMntRoot()!
+      const fixtureDir = join(mntRoot, `orca-mnt-lookup-${process.pid}`)
+      const mntExecutable = join(fixtureDir, 'mnt-agent')
+      const nativeDir = mkdtempSync(join(tmpdir(), 'orca-mnt-native-'))
+      const nativeExecutable = join(nativeDir, 'native-agent')
+      const buildScript = (name: string, skip: boolean): string =>
+        [
+          buildPosixCommandPathLookupScript(
+            { kind: 'literal', value: name },
+            skip ? { skipWindowsMountDirs: true } : {}
+          ),
+          `printf '%s\\n' "$resolved"`
+        ].join('\n')
+      try {
+        mkdirSync(fixtureDir)
+        writeFileSync(mntExecutable, '#!/bin/sh\nexit 0\n')
+        chmodSync(mntExecutable, 0o755)
+        writeFileSync(nativeExecutable, '#!/bin/sh\nexit 0\n')
+        chmodSync(nativeExecutable, 0o755)
+        const path = `${fixtureDir}:${nativeDir}`
+
+        // Without the skip the /mnt component wins the lookup.
+        const foundWithMnt = execFileSync('/bin/sh', ['-c', buildScript('mnt-agent', false)], {
+          encoding: 'utf8',
+          env: { ...process.env, PATH: path }
+        }).trim()
+        expectResolvedExecutable(foundWithMnt, mntExecutable)
+
+        // With the skip the /mnt component is ignored.
+        const skippedMnt = execFileSync('/bin/sh', ['-c', buildScript('mnt-agent', true)], {
+          encoding: 'utf8',
+          env: { ...process.env, PATH: path }
+        }).trim()
+        expect(skippedMnt).toBe('')
+
+        // Native-path agents still resolve with the skip on.
+        const nativeWithSkip = execFileSync('/bin/sh', ['-c', buildScript('native-agent', true)], {
+          encoding: 'utf8',
+          env: { ...process.env, PATH: path }
+        }).trim()
+        expectResolvedExecutable(nativeWithSkip, nativeExecutable)
+      } finally {
+        rmSync(fixtureDir, { force: true, recursive: true })
+        rmSync(nativeDir, { force: true, recursive: true })
+      }
+    }
+  )
+
   it.skipIf(!canRunWslSh())(
     'resolves through the Windows-to-WSL login-shell boundary with inline masks',
     () => {
@@ -276,6 +372,26 @@ function canRunWslSh(): boolean {
     wslShAvailable = false
   }
   return wslShAvailable
+}
+
+/** First writable /mnt/<drive> root, or null when none exists (non-WSL hosts, CI). */
+function getWritableMntRoot(): string | null {
+  if (isWindows || writableMntRoot !== undefined) {
+    return writableMntRoot ?? null
+  }
+  for (const root of ['/mnt/c/Users/Public', '/mnt/c/Windows/Temp']) {
+    try {
+      const probe = join(root, `.orca-wsl-write-${process.pid}`)
+      writeFileSync(probe, '')
+      rmSync(probe, { force: true })
+      writableMntRoot = root
+      return root
+    } catch {
+      // Try the next candidate; none writable means the behavioral /mnt test skips.
+    }
+  }
+  writableMntRoot = null
+  return null
 }
 
 function withExecutableFixture(
