@@ -57,18 +57,30 @@ describe('findPosixShell', () => {
     // Why a child process: the search caches its answer for the life of a
     // process, so the stripped PATH only means anything to a fresh one.
     const url = pathToFileURL(join(__dirname, 'posix-shell.ts')).href
+    // Why the resolve hook: bare node applies ESM resolution, which rejects the
+    // extensionless relative specifiers TypeScript sources are written with.
     const probe = spawnSync(
       process.execPath,
       [
         '--input-type=module',
         '--eval',
-        `const m = await import(${JSON.stringify(url)})
+        `import { registerHooks } from 'node:module'
+         registerHooks({
+           resolve(specifier, context, next) {
+             try {
+               return next(specifier, context)
+             } catch {
+               return next(specifier + '.ts', context)
+             }
+           }
+         })
+         const m = await import(${JSON.stringify(url)})
          process.stdout.write(m.findPosixShell() ?? '')`
       ],
       { encoding: 'utf8', env: environment }
     )
 
-    expect(probe.stdout.trim()).not.toBe('')
+    expect(probe.stdout.trim(), probe.stderr).not.toBe('')
     expect(spawnSync(probe.stdout.trim(), ['-c', 'exit 0'], { stdio: 'ignore' }).status).toBe(0)
   })
 })

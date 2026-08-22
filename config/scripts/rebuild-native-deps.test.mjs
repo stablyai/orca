@@ -135,6 +135,7 @@ describe('rebuild-native-deps patched node-pty rebuild', () => {
         writeFakeElectronRebuild(projectDir, { logPathEnv: 'ORCA_REBUILD_TEST_LOG' })
         writeFakeLoadableNodePty(projectDir, { nativeDir: '../build/Release/' })
         writeFakeWindowsRegistry(projectDir)
+        writeFakeWindowsProcessTree(projectDir)
         writeFakeNodePtyConptyPayload(projectDir, process.arch)
 
         const result = runRebuildScript(projectDir, {
@@ -189,6 +190,8 @@ describe('rebuild-native-deps patched node-pty rebuild', () => {
         writeFakeUsableElectronPackage(projectDir, { platform: 'win32' })
         writeFakeElectronRebuild(projectDir, { logPathEnv: 'ORCA_REBUILD_TEST_LOG' })
         writeFakeLoadableNodePty(projectDir)
+        // Only the registry may fail here; an unstubbed addon would join it in onlyModules.
+        writeFakeWindowsProcessTree(projectDir)
         writeFakeNodePtyConptyPayload(projectDir, process.arch)
 
         const result = runRebuildScript(projectDir, {
@@ -516,6 +519,12 @@ function writeFakeWindowsRegistry(projectDir) {
     join(registryDir, 'index.js'),
     'exports.HK = { CU: 0x80000001 }; exports.getRegistryKey = () => ({})\n'
   )
+}
+
+function writeFakeWindowsProcessTree(projectDir) {
+  const processTreeDir = join(projectDir, 'node_modules', '@vscode', 'windows-process-tree')
+  mkdirSync(processTreeDir, { recursive: true })
+  writeFileSync(join(processTreeDir, 'index.js'), 'exports.getProcessList = () => []')
 }
 
 function writeNodePtyPatchFile(projectDir) {

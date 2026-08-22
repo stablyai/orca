@@ -1,6 +1,6 @@
-import { spawnSync } from 'node:child_process'
 import { existsSync } from 'node:fs'
 import { delimiter, dirname, isAbsolute, join, resolve } from 'node:path'
+import { runProcessSync } from './child-process/run-process'
 
 /** Where a POSIX shell is, asked by running one.
  *
@@ -20,7 +20,12 @@ let resolved: string | null | undefined
 let canonical: boolean | undefined
 
 function runs(candidate: string): boolean {
-  return spawnSync(candidate, ['-c', 'exit 0'], { stdio: 'ignore' }).status === 0
+  // A candidate that is not installed throws rather than reporting an exit; that is a "no".
+  try {
+    return runProcessSync({ program: candidate, args: ['-c', 'exit 0'] }).code === 0
+  } catch {
+    return false
+  }
 }
 
 /** The shell inside the Git installation, found without consulting PATH for it.
@@ -30,11 +35,20 @@ function runs(candidate: string): boolean {
  *  suite then answers differently depending on which shell launched it. Asking
  *  git where it lives makes the answer a property of the machine instead. */
 function gitBundledShell(): string | null {
-  const execPath = spawnSync('git', ['--exec-path'], { encoding: 'utf8' })
-  if (execPath.status !== 0 || !execPath.stdout.trim()) {
+  let stdout: string
+  try {
+    const execPath = runProcessSync({ program: 'git', args: ['--exec-path'] })
+    if (execPath.code !== 0) {
+      return null
+    }
+    stdout = execPath.stdout.trim()
+  } catch {
     return null
   }
-  let directory = resolve(execPath.stdout.trim())
+  if (!stdout) {
+    return null
+  }
+  let directory = resolve(stdout)
   for (let depth = 0; depth < GIT_ROOT_SEARCH_DEPTH; depth += 1) {
     const candidate = join(directory, 'usr', 'bin', process.platform === 'win32' ? 'sh.exe' : 'sh')
     if (existsSync(candidate)) {
