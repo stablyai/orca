@@ -216,9 +216,6 @@ type CreateMainWindowOptions = {
   /** Marks the in-place recovery reload so did-finish-load's PTY orphan sweep spares live sessions until restore re-attaches (#5787). */
   onBeforeRecoveryReload?: (webContentsId: number) => void
   orcaWindowRole?: OrcaWindowRole
-  restorePrimaryBounds?: boolean
-  persistPrimaryBounds?: boolean
-  showWhenReady?: boolean
   initialBounds?: Electron.Rectangle
 }
 
@@ -234,8 +231,10 @@ export function createMainWindow(
   store: Store | null,
   opts?: CreateMainWindowOptions
 ): BrowserWindow {
-  const restorePrimaryBounds = opts?.restorePrimaryBounds !== false
-  const persistPrimaryBounds = opts?.persistPrimaryBounds !== false
+  const isSecondaryWindow = opts?.orcaWindowRole === 'secondary'
+  const restorePrimaryBounds = !isSecondaryWindow
+  const persistPrimaryBounds = !isSecondaryWindow
+  const showWhenReady = !isSecondaryWindow
   const rawSavedBounds = restorePrimaryBounds ? store?.getUI().windowBounds : undefined
   // Why: reject min-size or substantially off-screen bounds so the titlebar stays reachable after display changes.
   const savedBounds =
@@ -318,6 +317,7 @@ export function createMainWindow(
   })
   const rendererWebContentsId = mainWindow.webContents.id
   orcaWindowManager.register(mainWindow, opts?.orcaWindowRole)
+  let roleOnClose = orcaWindowManager.getRole(mainWindow.id)
   mainWindow.on('focus', () => orcaWindowManager.noteFocused(mainWindow.id))
   installWindowsPathRegistryChangeListener(mainWindow)
 
@@ -364,7 +364,7 @@ export function createMainWindow(
   // Why: macOS+Electron 41 re-emits ready-to-show on webview-guest creation; a one-shot guard stops re-running maximize() after resize (#591).
   let handledInitialReadyToShow = false
   let initialRevealFallbackTimer: ReturnType<typeof setTimeout> | null =
-    opts?.showWhenReady !== false && (process.platform === 'win32' || process.platform === 'linux')
+    showWhenReady && (process.platform === 'win32' || process.platform === 'linux')
       ? setTimeout(() => {
           // Why: GPU/driver failures on Windows/Linux can prevent ready-to-show forever, hiding the only app window (#8421).
           initialRevealFallbackTimer = null
@@ -391,7 +391,7 @@ export function createMainWindow(
     handledInitialReadyToShow = true
     clearInitialRevealFallbackTimer()
 
-    if (opts?.showWhenReady === false) {
+    if (!showWhenReady) {
       return
     }
 
@@ -1033,6 +1033,7 @@ export function createMainWindow(
   const hideToTrayIfEnabled = (): boolean => {
     const isRendererCrashed = mainWindow.webContents.isCrashed?.() ?? false
     if (
+      orcaWindowManager.getRole(mainWindow.id) !== 'control' ||
       process.platform !== 'win32' ||
       rendererProcessGone ||
       isRendererCrashed ||
@@ -1061,6 +1062,7 @@ export function createMainWindow(
   }
 
   mainWindow.on('close', (e) => {
+    roleOnClose = orcaWindowManager.getRole(mainWindow.id) ?? roleOnClose
     // Why: Alt+F4/programmatic closes hit the native event; apply the same minimize-to-tray guard the renderer-drawn X uses.
     if (!windowCloseConfirmed && hideToTrayIfEnabled()) {
       e.preventDefault()
@@ -1186,7 +1188,7 @@ export function createMainWindow(
     // Why: the dashboard pop-out is a companion of the main window — close it
     // alongside so it never orphans as a lone window after the app window is
     // gone (e.g. on macOS where the app stays alive after the window closes).
-    if (opts?.orcaWindowRole !== 'secondary') {
+    if (roleOnClose === 'control') {
       closeDashboardPopout()
     }
     clearInitialRevealFallbackTimer()

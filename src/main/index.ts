@@ -1618,9 +1618,6 @@ function openMainWindow(options: { revealOnDidFinishLoad?: boolean } = {}): Brow
         title: devInstanceIdentity.name,
         getKeybindings: () => keybindings?.getOverrides(),
         orcaWindowRole: 'secondary',
-        restorePrimaryBounds: false,
-        persistPrimaryBounds: false,
-        showWhenReady: false,
         initialBounds: bounds
       })
       const secondaryId = secondary.id
