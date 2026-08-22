@@ -78,7 +78,8 @@ function getManagedTrustEntry(
 }
 
 function expectedManagedCommand(scriptPath: string): string {
-  return `if [ -f '${scriptPath}' ] && [ -r '${scriptPath}' ]; then /bin/sh '${scriptPath}'; else ${POSIX_HOOK_STDIN_DRAIN_COMMAND}; fi`
+  // Why: the wrapper execs the script so a runner-enforced timeout kill reaches the real process (#15833).
+  return `if [ -f '${scriptPath}' ] && [ -r '${scriptPath}' ]; then exec /bin/sh '${scriptPath}'; else ${POSIX_HOOK_STDIN_DRAIN_COMMAND}; fi`
 }
 
 describe('Codex WSL runtime hook install', () => {

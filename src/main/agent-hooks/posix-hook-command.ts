@@ -16,7 +16,9 @@ export function wrapPosixHookCommand(
   const envPrefix = Object.entries(env)
     .map(([key, value]) => `${key}='${value.replaceAll("'", "'\\''")}'`)
     .join(' ')
-  const invocation = envPrefix ? `${envPrefix} /bin/sh ${quoted}` : `/bin/sh ${quoted}`
+  // Why (#15833): `exec` replaces the wrapper shell with the script process so a runner-enforced
+  // timeout kill reaches the real script instead of dying against the wrapper and stranding it.
+  const invocation = envPrefix ? `${envPrefix} exec /bin/sh ${quoted}` : `exec /bin/sh ${quoted}`
   const fallback =
     options.fallbackStdout === undefined
       ? POSIX_HOOK_STDIN_DRAIN_COMMAND

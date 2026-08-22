@@ -188,7 +188,9 @@ export type { CodexWslRuntimeHookInstallPlan }
 function wrapReadablePosixHookCommand(scriptPath: string): string {
   const quoted = `'${scriptPath.replaceAll("'", "'\\''")}'`
   // Why: WSL hooks are written from Windows over UNC where the exec bit is unreliable; a missing script must still own stdin.
-  return `if [ -f ${quoted} ] && [ -r ${quoted} ]; then /bin/sh ${quoted}; else ${POSIX_HOOK_STDIN_DRAIN_COMMAND}; fi`
+  // Why (#15833): `exec` replaces the wrapper shell with the script process, so a runner-enforced
+  // timeout kill reaches the real script instead of dying against the wrapper and stranding it.
+  return `if [ -f ${quoted} ] && [ -r ${quoted} ]; then exec /bin/sh ${quoted}; else ${POSIX_HOOK_STDIN_DRAIN_COMMAND}; fi`
 }
 
 function getSystemConfigPath(): string {
@@ -764,6 +766,12 @@ function removeStaleWslRuntimeManagedHookTrustEntries(
   })
 }
 
+// Why (#15833): Codex 0.149 never closes the hook's stdin and does not enforce the
+// config-declared timeout for a shell-wrapped command holding stdin, so an unbounded
+// read wedged every UserPromptSubmit. Two seconds under MANAGED_HOOK_TIMEOUT_SECONDS so
+// the script still exits before any runner that does enforce its kill.
+const CODEX_POSIX_STDIN_CAPTURE_BUDGET_SECONDS = MANAGED_HOOK_TIMEOUT_SECONDS - 2
+
 function getManagedScript(target: 'local' | 'posix' = 'local'): string {
   if (target === 'local' && process.platform === 'win32') {
     return [
@@ -781,7 +789,9 @@ function getManagedScript(target: 'local' | 'posix' = 'local'): string {
 
   return [
     '#!/bin/sh',
-    ...buildPosixHookPayloadCapture(),
+    ...buildPosixHookPayloadCapture('exit', {
+      maxWaitSeconds: CODEX_POSIX_STDIN_CAPTURE_BUDGET_SECONDS
+    }),
     // Why: sourcing refreshes PORT/TOKEN/ENV/VERSION from the current Orca so a surviving PTY keeps reporting after a restart (see claude/hook-service.ts).
     'load_hook_endpoint() {',
     '  endpoint_path="$1"',
