@@ -30,7 +30,8 @@ export const YOLO_TUI_AGENT_ARGS: Partial<Record<TuiAgent, string>> = {
   ante: '--yolo',
   trae: '--yolo',
   droid: '--auto high',
-  bob: '--yolo'
+  // Why: Bob Shell 2.x deprecated `--yolo`; `--auto-approve` is the `bob chat` option.
+  bob: '--auto-approve'
 }
 
 export const YOLO_TUI_AGENT_ENV: Partial<Record<TuiAgent, Record<string, string>>> = {
