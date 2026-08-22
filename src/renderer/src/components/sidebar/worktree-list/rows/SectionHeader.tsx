@@ -50,10 +50,13 @@ export type SectionHeaderRowContext = {
   dragOverStatus: WorkspaceStatus | null
   pinDragOver: boolean
   headerDrag: WorktreeSidebarHeaderDrag
-  getCachedFolderWorkspacePathStatus: (request: {
-    scope: 'project-group'
-    projectGroupId: string
-  }) => FolderWorkspacePathStatus | null
+  getCachedFolderWorkspacePathStatus: (
+    request: {
+      scope: 'project-group'
+      projectGroupId: string
+    },
+    scope: { projectGroup: ProjectGroup }
+  ) => FolderWorkspacePathStatus | null
   toggleGroupWithScrollAnchor: (groupKey: string) => void
   projectActions: RepoHeaderProjectActions
   onRenameProjectGroup: (groupId: string, currentName: string) => void
@@ -158,10 +161,13 @@ export function renderWorktreeSectionHeaderRow(args: {
       ? row.projectGroup
       : null
   const projectGroupPathStatus = folderBackedProjectGroup
-    ? ctx.getCachedFolderWorkspacePathStatus({
-        scope: 'project-group',
-        projectGroupId: folderBackedProjectGroup.id
-      })
+    ? ctx.getCachedFolderWorkspacePathStatus(
+        {
+          scope: 'project-group',
+          projectGroupId: folderBackedProjectGroup.id
+        },
+        { projectGroup: folderBackedProjectGroup }
+      )
     : null
   const isHeaderCollapsed = ctx.collapsedGroups.has(row.key)
   // Why: repo/project/status/pinned share compact section chrome; flat "All" stays a simple label.

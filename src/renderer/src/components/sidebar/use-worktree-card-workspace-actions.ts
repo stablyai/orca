@@ -54,7 +54,10 @@ export function useWorktreeCardWorkspaceActions({
       event.stopPropagation()
       if (showDeleteQuickAction) {
         if (folderWorkspaceId) {
-          void deleteFolderWorkspace(folderWorkspaceId).then((deleted) => {
+          void deleteFolderWorkspace(
+            folderWorkspaceId,
+            worktree.hostId ? { executionHostId: worktree.hostId } : undefined
+          ).then((deleted) => {
             if (
               deleted &&
               useAppStore.getState().activeWorktreeId === folderWorkspaceKey(folderWorkspaceId)

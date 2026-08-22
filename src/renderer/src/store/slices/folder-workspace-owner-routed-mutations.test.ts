@@ -107,7 +107,13 @@ describe('folder workspace owner-routed mutations', () => {
     })
 
     await expect(
-      store.getState().updateFolderWorkspace(folderWorkspace.id, { comment: 'Ready' })
+      store
+        .getState()
+        .updateFolderWorkspace(
+          folderWorkspace.id,
+          { comment: 'Ready' },
+          { executionHostId: 'runtime:env-owner' }
+        )
     ).resolves.toBe(true)
 
     expect(runtimeEnvironmentCall).toHaveBeenCalledWith({
@@ -427,5 +433,38 @@ describe('folder workspace owner-routed mutations', () => {
       timeoutMs: 15_000
     })
     expect(folderWorkspacesDelete).not.toHaveBeenCalled()
+  })
+
+  it('deletes only the requested host when folder ids collide', async () => {
+    const localFolder = makeFolderWorkspace({ executionHostId: 'local' })
+    const runtimeFolder = makeFolderWorkspace({
+      executionHostId: 'runtime:env-owner',
+      folderPath: '/runtime/folder'
+    })
+    const purgeWorktreeTerminalState = vi.fn()
+    runtimeEnvironmentCall.mockResolvedValue({
+      id: 'rpc-delete-colliding-folder',
+      ok: true,
+      result: { deleted: true },
+      _meta: { runtimeId: 'runtime-owner' }
+    })
+    const store = createTestStore()
+    store.setState({
+      projectGroups: [
+        { ...projectGroup, executionHostId: 'local' },
+        { ...projectGroup, executionHostId: 'runtime:env-owner' }
+      ],
+      folderWorkspaces: [localFolder, runtimeFolder],
+      purgeWorktreeTerminalState
+    })
+
+    await expect(
+      store
+        .getState()
+        .deleteFolderWorkspace(runtimeFolder.id, { executionHostId: 'runtime:env-owner' })
+    ).resolves.toBe(true)
+
+    expect(store.getState().folderWorkspaces).toEqual([localFolder])
+    expect(purgeWorktreeTerminalState).not.toHaveBeenCalled()
   })
 })

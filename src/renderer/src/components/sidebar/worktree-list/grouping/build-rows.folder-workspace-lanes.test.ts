@@ -96,6 +96,42 @@ describe('folder workspaces render under every Group by mode', () => {
     const rows = buildSidebarRows({ groupBy: 'repo' })
     expect(folderRows(rows).map((row) => row.key)).toEqual(['folder-workspace:fw-1'])
   })
+
+  it('pairs same-id folders and groups by execution host', () => {
+    const runtimeHostId: ExecutionHostId = 'runtime:env-1'
+    const groups = [
+      { ...GROUP, name: 'Local group', executionHostId: 'local' as const },
+      { ...GROUP, name: 'Runtime group', executionHostId: runtimeHostId }
+    ]
+    const workspaces = [
+      makeFolderWorkspace({ name: 'Local folder', executionHostId: 'local' }),
+      makeFolderWorkspace({ name: 'Runtime folder', executionHostId: runtimeHostId })
+    ]
+    const rows = buildSidebarRows({
+      groupBy: 'repo',
+      projectGroups: groups,
+      folderWorkspaces: workspaces,
+      worktrees: []
+    })
+
+    expect(
+      folderRows(rows).map((row) => [
+        row.folderWorkspace.executionHostId,
+        row.projectGroup.executionHostId
+      ])
+    ).toEqual([
+      ['local', 'local'],
+      [runtimeHostId, runtimeHostId]
+    ])
+    const headers = rows.filter(
+      (row): row is Extract<Row, { type: 'header' }> => row.type === 'header'
+    )
+    expect(headers.map((row) => [row.label, row.count])).toEqual([
+      ['Local group', 1],
+      ['Runtime group', 1]
+    ])
+    expect(new Set(headers.map((row) => row.key)).size).toBe(2)
+  })
 })
 
 describe('a folder workspace can be the only member of a lane', () => {

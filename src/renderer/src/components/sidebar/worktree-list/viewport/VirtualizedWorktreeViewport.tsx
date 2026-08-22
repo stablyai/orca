@@ -131,6 +131,7 @@ export const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktr
 
   const virtualization = useWorktreeListVirtualizer({
     renderRows,
+    defaultHostId: props.defaultHostId,
     firstHeaderIndex,
     scrollRef,
     scrollOffsetRef,
@@ -169,6 +170,7 @@ export const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktr
 
   const { virtualItems, measureVirtualRowElement } = useVirtualRowMeasurementSync({
     renderRows,
+    defaultHostId: props.defaultHostId,
     virtualization,
     scrollRef,
     scrollOffsetRef,

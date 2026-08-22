@@ -203,11 +203,15 @@ function seedEmptiedFolderWorkspaceOnTwoHosts(): void {
 describe('activating a folder workspace whose last terminal was closed', () => {
   it('re-seeds a terminal when the workspace is opened', () => {
     seedEmptiedFolderWorkspaceOnTwoHosts()
+    const revealWorktreeInSidebar = useAppStore.getState().revealWorktreeInSidebar
 
     const result = activateAndRevealFolderWorkspace(FOLDER_ID, { executionHostId: 'local' })
 
     expect(result).not.toBe(false)
     expect(useAppStore.getState().tabsByWorktree[FOLDER_KEY]).toHaveLength(1)
+    expect(revealWorktreeInSidebar).toHaveBeenCalledWith(FOLDER_KEY, {
+      executionHostId: 'local'
+    })
   })
 
   it('re-seeds when the restored active folder workspace is reopened on the same host', () => {

@@ -28,6 +28,11 @@ import {
   pendingActivationTerminalPrepCancels,
   shouldDeferActivationTerminalPrep
 } from './activation-terminal-prep'
+import {
+  getSettingsFocusedExecutionHostId,
+  type ExecutionHostId
+} from '../../../../../../shared/execution-host'
+import { getFolderWorkspaceHostIdFromGroups } from '../../../../../../shared/folder-workspace-host'
 
 export function createSetActiveWorktree(
   set: WorktreeSliceSet,
@@ -52,6 +57,7 @@ export function createSetActiveWorktree(
     let shouldClearUnread = false
     let shouldPrepareTerminalTabs = false
     let shouldTagTerminalTabs = false
+    let folderOwnerHostId: ExecutionHostId | null = null
     set((current) => {
       const transitioned = stateTransition
         ? ({ ...current, ...stateTransition.patch } as AppState)
@@ -79,6 +85,11 @@ export function createSetActiveWorktree(
       }
 
       const worktree = findKnownWorktreeById(s, worktreeId, executionHostId)
+      const activeExecutionHostId =
+        workspaceScope?.type === 'folder'
+          ? (worktree?.hostId ?? executionHostId ?? getSettingsFocusedExecutionHostId(s.settings))
+          : (executionHostId ?? null)
+      folderOwnerHostId = workspaceScope?.type === 'folder' ? activeExecutionHostId : null
       shouldClearUnread = Boolean(worktree?.isUnread)
       const {
         restoredRightSidebarExplorerView,
@@ -124,7 +135,12 @@ export function createSetActiveWorktree(
       const nextFolderWorkspaces =
         shouldClearUnread && workspaceScope?.type === 'folder'
           ? s.folderWorkspaces.map((workspace) =>
-              workspace.id === workspaceScope.folderWorkspaceId
+              workspace.id === workspaceScope.folderWorkspaceId &&
+              getFolderWorkspaceHostIdFromGroups(
+                workspace,
+                s.projectGroups,
+                getSettingsFocusedExecutionHostId(s.settings)
+              ) === activeExecutionHostId
                 ? { ...workspace, isUnread: false }
                 : workspace
             )
@@ -157,7 +173,7 @@ export function createSetActiveWorktree(
           : { ...s.activeTabTypeByWorktree, [worktreeId]: activeTabType }
       const hasStateChange =
         s.activeWorktreeId !== worktreeId ||
-        s.activeWorkspaceExecutionHostId !== (executionHostId ?? null) ||
+        s.activeWorkspaceExecutionHostId !== activeExecutionHostId ||
         // Why: a pending-creation panel can show over the prior worktree; a non-null activePendingCreationId counts as a change.
         s.activePendingCreationId !== null ||
         s.activeFileId !== activeFileId ||
@@ -186,7 +202,7 @@ export function createSetActiveWorktree(
         activeWorkspaceKey: isWorkspaceKey(worktreeId)
           ? worktreeId
           : worktreeWorkspaceKey(worktreeId),
-        activeWorkspaceExecutionHostId: executionHostId ?? null,
+        activeWorkspaceExecutionHostId: activeExecutionHostId,
         activePendingCreationId: null,
         activeFileId,
         activeBrowserTabId,
@@ -266,7 +282,11 @@ export function createSetActiveWorktree(
 
     if (shouldClearUnread) {
       if (workspaceScope?.type === 'folder') {
-        void get().updateFolderWorkspace(workspaceScope.folderWorkspaceId, { isUnread: false })
+        void get().updateFolderWorkspace(
+          workspaceScope.folderWorkspaceId,
+          { isUnread: false },
+          folderOwnerHostId ? { executionHostId: folderOwnerHostId } : undefined
+        )
         return true
       }
       persistPassiveWorktreeMetaForOwner(

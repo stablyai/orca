@@ -3,11 +3,16 @@ import type { Worktree } from './worktree/types'
 import { folderWorkspaceKey } from './workspace-scope'
 import { parseExecutionHostId, toSshExecutionHostId } from './execution-host'
 import { normalizeWorkspaceCreatorProvenance } from './workspace-creator-provenance'
+import type { ExecutionHostId } from './execution-host'
 
-export function folderWorkspaceToWorktree(folderWorkspace: FolderWorkspace): Worktree {
+function projectFolderWorkspaceToWorktree(
+  folderWorkspace: FolderWorkspace,
+  resolvedHostId?: ExecutionHostId
+): Worktree {
   const linkedTask = folderWorkspace.linkedTask
   const creatorProvenance = normalizeWorkspaceCreatorProvenance(folderWorkspace.creatorProvenance)
   const hostId =
+    resolvedHostId ??
     folderWorkspace.executionHostId ??
     (folderWorkspace.connectionId ? toSshExecutionHostId(folderWorkspace.connectionId) : 'local')
   const parsedHost = parseExecutionHostId(hostId)
@@ -53,4 +58,15 @@ export function folderWorkspaceToWorktree(folderWorkspace: FolderWorkspace): Wor
       ? { runtimeOwnerEnvironmentId: parsedHost.environmentId }
       : {})
   }
+}
+
+export function folderWorkspaceToWorktree(folderWorkspace: FolderWorkspace): Worktree {
+  return projectFolderWorkspaceToWorktree(folderWorkspace)
+}
+
+export function folderWorkspaceToWorktreeForHost(
+  folderWorkspace: FolderWorkspace,
+  hostId: ExecutionHostId
+): Worktree {
+  return projectFolderWorkspaceToWorktree(folderWorkspace, hostId)
 }

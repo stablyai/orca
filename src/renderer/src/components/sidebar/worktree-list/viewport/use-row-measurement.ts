@@ -14,6 +14,7 @@ import {
 import { getRenderRowKey } from '../listing/render-row'
 import type { RenderRow } from '../listing/render-row'
 import type { WorktreeListVirtualizer } from './use-virtualizer'
+import type { ExecutionHostId } from '../../../../../../shared/execution-host'
 
 const recordKeyCountCache = new WeakMap<Record<string, unknown>, number>()
 
@@ -31,6 +32,7 @@ export function countRecordKeysByReference(record: Record<string, unknown>): num
 // sticky-header slots the render pass reads out of refs.
 export function useVirtualRowMeasurementSync(args: {
   renderRows: RenderRow[]
+  defaultHostId: ExecutionHostId
   virtualization: WorktreeListVirtualizer
   scrollRef: React.RefObject<HTMLDivElement | null>
   scrollOffsetRef: React.MutableRefObject<number>
@@ -40,6 +42,7 @@ export function useVirtualRowMeasurementSync(args: {
 }) {
   const {
     renderRows,
+    defaultHostId,
     virtualization,
     scrollRef,
     scrollOffsetRef,
@@ -51,10 +54,13 @@ export function useVirtualRowMeasurementSync(args: {
   const prCacheLen = useAppStore((s) => countRecordKeysByReference(s.prCache))
   const issueCacheLen = useAppStore((s) => countRecordKeysByReference(s.issueCache))
   const renderRowKeySignature = useMemo(
-    () => renderRows.map(getRenderRowKey).join('\n'),
-    [renderRows]
+    () => renderRows.map((row) => getRenderRowKey(row, defaultHostId)).join('\n'),
+    [defaultHostId, renderRows]
   )
-  const activeRenderRowKeys = useMemo(() => new Set(renderRows.map(getRenderRowKey)), [renderRows])
+  const activeRenderRowKeys = useMemo(
+    () => new Set(renderRows.map((row) => getRenderRowKey(row, defaultHostId))),
+    [defaultHostId, renderRows]
+  )
   const lineageRowRekeys = useMemo(() => buildLineageRowRekeyMap(renderRows), [renderRows])
   const totalSize = virtualizer.getTotalSize()
   const virtualItems = virtualizer.getVirtualItems()

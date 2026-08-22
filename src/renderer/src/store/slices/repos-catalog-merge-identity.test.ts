@@ -136,6 +136,26 @@ describe('catalog merge referential stability', () => {
     expect(store.getState().folderWorkspaces[0]).toBe(firstEntry)
   })
 
+  it('stamps a legacy folder from its runtime-owned project group', async () => {
+    const store = createTestStore()
+    store.setState({
+      projectGroups: [
+        {
+          ...projectGroup,
+          connectionId: 'legacy-ssh',
+          executionHostId: 'runtime:env-1'
+        }
+      ]
+    })
+    folderWorkspacesList.mockResolvedValue([
+      clone({ ...folderWorkspace, connectionId: 'legacy-ssh', executionHostId: undefined })
+    ])
+
+    await store.getState().fetchFolderWorkspaces()
+
+    expect(store.getState().folderWorkspaces[0]?.executionHostId).toBe('runtime:env-1')
+  })
+
   it('appends new entries and replaces changed ones while keeping order', async () => {
     const store = createTestStore()
 

@@ -1,4 +1,8 @@
-import { parseExecutionHostId, toSshExecutionHostId } from '../../../shared/execution-host'
+import {
+  getSettingsFocusedExecutionHostId,
+  parseExecutionHostId,
+  toSshExecutionHostId
+} from '../../../shared/execution-host'
 import type { ExecutionHostId, ParsedExecutionHost } from '../../../shared/execution-host'
 import type { FolderWorkspace } from '../../../shared/folder-workspace-types'
 import type { ProjectGroup } from '../../../shared/project-group-types'
@@ -11,6 +15,7 @@ import {
   getSingleFocusedRuntimeEnvironmentId,
   type SingleRuntimeLegacyOwnerState
 } from './single-runtime-legacy-owner'
+import { getFolderWorkspaceHostIdFromGroups } from '../../../shared/folder-workspace-host'
 
 type RuntimeExecutionHost = Extract<ParsedExecutionHost, { kind: 'runtime' }>
 
@@ -46,11 +51,43 @@ export function findFolderWorkspaceOwner(
   FolderWorkspace,
   'id' | 'projectGroupId' | 'connectionId' | 'executionHostId' | 'diffComments'
 > | null {
-  return findIndexedFolderWorkspaceOwner(
+  const preferredHostId = getPreferredFolderExecutionHostId(
+    state,
+    folderWorkspaceId,
+    executionHostId
+  )
+  const indexedOwner = findIndexedFolderWorkspaceOwner(
     state.folderWorkspaces,
     folderWorkspaceId,
-    getPreferredFolderExecutionHostId(state, folderWorkspaceId, executionHostId)
+    preferredHostId
   )
+  if (!preferredHostId) {
+    return indexedOwner
+  }
+  const ownerCandidates = (state.folderWorkspaces ?? []).filter(
+    (workspace) => workspace.id === folderWorkspaceId
+  )
+  const matchingOwners = ownerCandidates.filter(
+    (workspace) =>
+      getFolderWorkspaceHostIdFromGroups(
+        workspace,
+        state.projectGroups ?? [],
+        getSettingsFocusedExecutionHostId(state.settings)
+      ) === preferredHostId
+  )
+  if (matchingOwners.length === 1) {
+    return matchingOwners[0]!
+  }
+  const hasAuthoritativeOwner = ownerCandidates.some(
+    (workspace) =>
+      Boolean(parseExecutionHostId(workspace.executionHostId) || workspace.connectionId?.trim()) ||
+      (state.projectGroups ?? []).some(
+        (group) =>
+          group.id === workspace.projectGroupId &&
+          Boolean(parseExecutionHostId(group.executionHostId) || group.connectionId?.trim())
+      )
+  )
+  return hasAuthoritativeOwner ? null : indexedOwner
 }
 
 function findFolderProjectGroup(

@@ -3,7 +3,10 @@ import type { FolderWorkspace } from '../../../../../../shared/folder-workspace-
 import type { ProjectGroup } from '../../../../../../shared/project-group-types'
 import { folderWorkspaceKey } from '../../../../../../shared/workspace-scope'
 import type { RenderRow } from '../listing/render-row'
-import { findPreferredRenderRowIndexForWorktreeIdentity } from './render-row-lookup'
+import {
+  findPreferredRenderRowIndexForWorktreeIdentity,
+  rowKeyMatchesRenderRow
+} from './render-row-lookup'
 
 const FOLDER_WORKSPACE: FolderWorkspace = {
   id: 'fw-1',
@@ -78,5 +81,43 @@ describe('host-qualified reveal lookup finds folder workspaces', () => {
         'single-location'
       )
     ).toBe(-1)
+  })
+
+  it('selects the requested host when folder ids collide', () => {
+    const rows: RenderRow[] = ['local', 'runtime:env-1'].map((executionHostId) => ({
+      type: 'folder-workspace',
+      key: `folder-workspace:${executionHostId}`,
+      folderWorkspace: { ...FOLDER_WORKSPACE, executionHostId },
+      projectGroup: { ...PROJECT_GROUP, executionHostId },
+      depth: 0,
+      groupDepth: 0
+    })) as RenderRow[]
+
+    expect(
+      findPreferredRenderRowIndexForWorktreeIdentity(
+        rows,
+        { id: folderWorkspaceKey(FOLDER_WORKSPACE.id), hostId: 'runtime:env-1' },
+        'single-location'
+      )
+    ).toBe(1)
+  })
+
+  it('matches an unowned folder row using the focused host default', () => {
+    const row = {
+      type: 'folder-workspace',
+      key: `folder-workspace:${FOLDER_WORKSPACE.id}`,
+      folderWorkspace: FOLDER_WORKSPACE,
+      projectGroup: PROJECT_GROUP,
+      depth: 0,
+      groupDepth: 0
+    } as RenderRow
+
+    expect(
+      rowKeyMatchesRenderRow(
+        row,
+        `runtime:focused|${folderWorkspaceKey(FOLDER_WORKSPACE.id)}`,
+        'runtime:focused'
+      )
+    ).toBe(true)
   })
 })

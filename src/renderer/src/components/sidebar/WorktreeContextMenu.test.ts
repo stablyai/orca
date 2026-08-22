@@ -295,7 +295,10 @@ describe('planWorkspaceStatusAssignment (context-menu "Move to Status" routing)'
         statuses,
         false
       )
-    ).toEqual({ kind: 'local-only', localWriteIds: ['a'] })
+    ).toEqual({
+      kind: 'local-only',
+      localWrites: [{ worktreeId: 'a', executionHostId: undefined }]
+    })
   })
 
   it('writes nothing on the local-only path when every worktree already has the target status', () => {
@@ -306,6 +309,19 @@ describe('planWorkspaceStatusAssignment (context-menu "Move to Status" routing)'
         statuses,
         false
       )
-    ).toEqual({ kind: 'local-only', localWriteIds: [] })
+    ).toEqual({ kind: 'local-only', localWrites: [] })
+  })
+
+  it('keeps host identity on local-only writes with colliding ids', () => {
+    const local = { ...wt('same', 'todo'), hostId: 'local' as const }
+    const runtime = { ...wt('same', 'todo'), hostId: 'runtime:env-1' as const }
+
+    expect(planWorkspaceStatusAssignment([local, runtime], 'in-review', statuses, false)).toEqual({
+      kind: 'local-only',
+      localWrites: [
+        { worktreeId: 'same', executionHostId: 'local' },
+        { worktreeId: 'same', executionHostId: 'runtime:env-1' }
+      ]
+    })
   })
 })

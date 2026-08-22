@@ -3,11 +3,10 @@ import type { WorktreeSliceGet, WorktreeSliceSet } from '../listing/worktree-sli
 import { folderWorkspaceKey } from '../../../../../../shared/workspace-scope'
 import { markInputQuietSchedulerInput } from '@/lib/input-quiet-scheduler'
 import { moveFocusToRendererBeforeFocusedWebviewHidden } from '../../browser-webview-cleanup'
-import {
-  findKnownWorktreeById,
-  folderWorkspaceMatchesHost
-} from '../listing/detected-worktree-meta'
+import { findKnownWorktreeById } from '../listing/detected-worktree-meta'
 import { shouldDeferActivationTerminalPrep } from './activation-terminal-prep'
+import { getSettingsFocusedExecutionHostId } from '../../../../../../shared/execution-host'
+import { getFolderWorkspaceHostIdFromGroups } from '../../../../../../shared/folder-workspace-host'
 
 export function createSetActiveFolderWorkspace(
   set: WorktreeSliceSet,
@@ -19,6 +18,7 @@ export function createSetActiveFolderWorkspace(
     if (!workspace) {
       return
     }
+    const ownerHostId = workspace.hostId ?? getSettingsFocusedExecutionHostId(get().settings)
     if (shouldDeferActivationTerminalPrep()) {
       markInputQuietSchedulerInput()
     }
@@ -101,7 +101,7 @@ export function createSetActiveFolderWorkspace(
         activeRepoId: null,
         activeWorktreeId: workspaceKey,
         activeWorkspaceKey: workspaceKey,
-        activeWorkspaceExecutionHostId: executionHostId ?? null,
+        activeWorkspaceExecutionHostId: ownerHostId,
         activePendingCreationId: null,
         activeFileId,
         activeBrowserTabId,
@@ -115,7 +115,11 @@ export function createSetActiveFolderWorkspace(
         folderWorkspaces: workspace.isUnread
           ? s.folderWorkspaces.map((entry) =>
               entry.id === folderWorkspaceId &&
-              (!executionHostId || folderWorkspaceMatchesHost(entry, executionHostId))
+              getFolderWorkspaceHostIdFromGroups(
+                entry,
+                s.projectGroups,
+                getSettingsFocusedExecutionHostId(s.settings)
+              ) === ownerHostId
                 ? { ...entry, isUnread: false }
                 : entry
             )
@@ -126,7 +130,7 @@ export function createSetActiveFolderWorkspace(
       void get().updateFolderWorkspace(
         folderWorkspaceId,
         { isUnread: false },
-        executionHostId ? { executionHostId } : undefined
+        { executionHostId: ownerHostId }
       )
     }
   }

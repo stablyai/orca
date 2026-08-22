@@ -31,6 +31,7 @@ import {
   type IssueLinkProvider
 } from '../../../../shared/issue-link-input'
 import { WorktreeDisplayNameField } from './WorktreeDisplayNameField'
+import { normalizeExecutionHostId } from '../../../../shared/execution-host'
 
 function resizeCommentTextarea(textarea: HTMLTextAreaElement): void {
   textarea.style.height = 'auto'
@@ -69,6 +70,9 @@ const WorktreeMetaDialog = React.memo(function WorktreeMetaDialog() {
   // Why: the opening row names its repo bucket for workspace IDs the owner index
   // reads as ambiguous across hosts.
   const ownerRepoId = typeof modalData.repoId === 'string' ? modalData.repoId : null
+  const executionHostId = normalizeExecutionHostId(
+    typeof modalData.executionHostId === 'string' ? modalData.executionHostId : null
+  )
   const {
     worktree,
     linkedIssue,
@@ -77,7 +81,7 @@ const WorktreeMetaDialog = React.memo(function WorktreeMetaDialog() {
     currentProvider,
     isFolderWorkspace,
     liveLinks
-  } = useWorktreeMetaWorkspace({ worktreeId, ownerRepoId })
+  } = useWorktreeMetaWorkspace({ worktreeId, ownerRepoId, executionHostId })
   // Why: ChecksPanel seeds the PR it is looking at, which may not be linked yet.
   const currentPR =
     typeof modalData.currentPR === 'number'
@@ -224,7 +228,11 @@ const WorktreeMetaDialog = React.memo(function WorktreeMetaDialog() {
     try {
       const updates = buildWorktreeMetaUpdates(draft, snapshot, liveLinks)
 
-      const result = await updateWorktreeMeta(worktreeId, updates)
+      const result = await updateWorktreeMeta(
+        worktreeId,
+        updates,
+        executionHostId ? { executionHostId } : undefined
+      )
       // Why: a failed save refetches and reverts the optimistic write. Closing
       // here would report success for an edit that silently undid itself, and
       // would discard the name, comment and PR changes in the same payload.
@@ -249,6 +257,7 @@ const WorktreeMetaDialog = React.memo(function WorktreeMetaDialog() {
     }
   }, [
     worktreeId,
+    executionHostId,
     canSave,
     draft,
     snapshot,
@@ -265,7 +274,7 @@ const WorktreeMetaDialog = React.memo(function WorktreeMetaDialog() {
       if (isPlainEnter || isScreenSubmitShortcut(e)) {
         e.preventDefault()
         e.stopPropagation()
-        handleSave()
+        void handleSave()
       }
     },
     [handleSave]
@@ -275,7 +284,7 @@ const WorktreeMetaDialog = React.memo(function WorktreeMetaDialog() {
     (e: React.KeyboardEvent<HTMLInputElement>) => {
       if (e.key === 'Enter') {
         e.preventDefault()
-        handleSave()
+        void handleSave()
       }
     },
     [handleSave]

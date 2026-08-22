@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import type { FolderWorkspace } from './folder-workspace-types'
-import { folderWorkspaceToWorktree } from './folder-workspace-worktree'
+import {
+  folderWorkspaceToWorktree,
+  folderWorkspaceToWorktreeForHost
+} from './folder-workspace-worktree'
 
 function makeFolderWorkspace(overrides: Partial<FolderWorkspace> = {}): FolderWorkspace {
   return {
@@ -140,6 +143,18 @@ describe('folderWorkspaceToWorktree', () => {
     expect(worktree).toMatchObject({
       hostId: 'runtime:shared%20server',
       runtimeOwnerEnvironmentId: 'shared server'
+    })
+  })
+
+  it('uses a resolved group owner over legacy folder identity', () => {
+    const worktree = folderWorkspaceToWorktreeForHost(
+      makeFolderWorkspace({ connectionId: 'legacy-ssh' }),
+      'runtime:env-1'
+    )
+
+    expect(worktree).toMatchObject({
+      hostId: 'runtime:env-1',
+      runtimeOwnerEnvironmentId: 'env-1'
     })
   })
 

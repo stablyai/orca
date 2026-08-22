@@ -34,7 +34,7 @@ export function createUpdateWorktreeMeta(
 ): WorktreeSlice['updateWorktreeMeta'] {
   return async (worktreeId, updates, options) => {
     const shouldApplyUpdate = options?.shouldApply
-    const existingWorktree = get().getKnownWorktreeById(worktreeId)
+    const existingWorktree = get().getKnownWorktreeById(worktreeId, options?.executionHostId)
     if (shouldApplyUpdate && !shouldApplyUpdate(existingWorktree)) {
       return { ok: true }
     }
@@ -49,7 +49,8 @@ export function createUpdateWorktreeMeta(
         // reporting ok would show the dialog a save that silently undid itself.
         const updated = await get().updateFolderWorkspace(
           workspaceScope.folderWorkspaceId,
-          folderUpdates
+          folderUpdates,
+          options?.executionHostId ? { executionHostId: options.executionHostId } : undefined
         )
         return updated
           ? { ok: true }

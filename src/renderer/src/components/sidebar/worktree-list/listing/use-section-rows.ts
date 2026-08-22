@@ -9,9 +9,9 @@ import type { Repo } from '../../../../../../shared/repo-types'
 import type { WorkspaceStatusDefinition, Worktree } from '../../../../../../shared/worktree/types'
 import type { WorktreeLineage } from '../../../../../../shared/worktree/lineage-types'
 import type { ExecutionHostId } from '../../../../../../shared/execution-host'
-import { folderWorkspaceKey } from '../../../../../../shared/workspace-scope'
 import { getHostDisplayLabelOverrides } from '../../../../../../shared/host-setting-overrides'
 import { buildRows } from '../grouping/build-rows'
+import { getFolderWorkspaceSidebarRowKey } from './render-row'
 import type { ProjectGroupingModel } from '../grouping/project-grouping'
 import type { PinnedWorktreeDisplayPolicy, Row, WorktreeGroupBy } from '../grouping/row-types'
 import { getLogicalRepoOrderRankById } from '../../project-header-drop'
@@ -45,7 +45,10 @@ type SectionRowsArgs = {
   workspaceHostScope: AppState['workspaceHostScope']
 }
 
-function collectRenderedSidebarRowKeys(sectionRows: ReturnType<typeof addHostSectionRows>) {
+function collectRenderedSidebarRowKeys(
+  sectionRows: ReturnType<typeof addHostSectionRows>,
+  defaultHostId: ExecutionHostId
+) {
   const keys = new Set<string>()
   for (const row of sectionRows) {
     if (row.type === 'header') {
@@ -53,7 +56,7 @@ function collectRenderedSidebarRowKeys(sectionRows: ReturnType<typeof addHostSec
     } else if (row.type === 'item') {
       keys.add(row.rowKey)
     } else if (row.type === 'folder-workspace') {
-      keys.add(folderWorkspaceKey(row.folderWorkspace.id))
+      keys.add(getFolderWorkspaceSidebarRowKey(row, defaultHostId))
     } else if (row.type === 'pending-creation') {
       keys.add(`pending:${row.creationId}`)
     } else if (row.type === 'imported-worktrees-card') {
@@ -240,8 +243,8 @@ export function useSidebarSectionRows(args: SectionRowsArgs) {
     ]
   )
   const renderedSidebarRowKeys = useMemo(
-    () => collectRenderedSidebarRowKeys(sectionRows),
-    [sectionRows]
+    () => collectRenderedSidebarRowKeys(sectionRows, defaultHostId),
+    [defaultHostId, sectionRows]
   )
 
   return {

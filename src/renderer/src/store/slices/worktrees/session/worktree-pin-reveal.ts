@@ -59,7 +59,7 @@ export function createSetWorktreesPinnedAndReveal(
   _set: WorktreeSliceSet,
   get: WorktreeSliceGet
 ): WorktreeSlice['setWorktreesPinnedAndReveal'] {
-  return (worktreeIds, isPinned) => {
+  return (worktreeIds, isPinned, hostId) => {
     // Only follow a toggled row with the viewport when it's the focused worktree, not an unfocused card.
     const activeSidebarWorktreeId = getActiveSidebarWorkspaceId(
       get().activeWorkspaceKey,
@@ -71,7 +71,7 @@ export function createSetWorktreesPinnedAndReveal(
     let didChange = false
     let revealWorktreeId: string | null = null
     for (const worktreeId of worktreeIds) {
-      const current = get().getKnownWorktreeById(worktreeId)
+      const current = get().getKnownWorktreeById(worktreeId, hostId)
       if (!current || current.isPinned === isPinned) {
         continue
       }
@@ -79,7 +79,11 @@ export function createSetWorktreesPinnedAndReveal(
       changedWorktreeIds.add(worktreeId)
       const workspaceScope = parseWorkspaceKey(worktreeId)
       if (workspaceScope?.type === 'folder') {
-        void get().updateWorktreeMeta(worktreeId, { isPinned })
+        void get().updateWorktreeMeta(
+          worktreeId,
+          { isPinned },
+          hostId ? { executionHostId: hostId } : undefined
+        )
       } else {
         updates.set(worktreeId, { isPinned })
       }
@@ -103,7 +107,11 @@ export function createSetWorktreesPinnedAndReveal(
       void get().updateWorktreesMeta(updates)
     }
     if (revealWorktreeId !== null) {
-      get().revealWorktreeInSidebar(revealWorktreeId, { behavior: 'smooth', highlight: true })
+      get().revealWorktreeInSidebar(revealWorktreeId, {
+        behavior: 'smooth',
+        highlight: true,
+        ...(hostId ? { executionHostId: hostId } : {})
+      })
     }
   }
 }

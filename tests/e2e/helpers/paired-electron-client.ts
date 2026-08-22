@@ -142,7 +142,7 @@ export async function launchPairedElectronClient(
   offer: RuntimeDesktopPairingOffer,
   testInfo: TestInfo,
   name: string,
-  options: { extraEnv?: Record<string, string> } = {}
+  options: { extraEnv?: Record<string, string>; headful?: boolean } = {}
 ): Promise<PairedElectronClient> {
   const userDataDir = mkdtempSync(path.join(os.tmpdir(), 'orca-e2e-paired-desktop-'))
   const directSshProbePath = path.join(userDataDir, 'forbidden-local-ssh-connects.jsonl')
@@ -164,7 +164,7 @@ export async function launchPairedElectronClient(
     env: {
       ...homeIsolation.env,
       NODE_ENV: 'development',
-      ORCA_E2E_HEADLESS: '1',
+      ...(options.headful ? { ORCA_E2E_HEADFUL: '1' } : { ORCA_E2E_HEADLESS: '1' }),
       ORCA_E2E_FORBID_LOCAL_SSH_CONNECT_PROBE: directSshProbePath
     }
   })

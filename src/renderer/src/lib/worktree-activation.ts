@@ -127,8 +127,11 @@ export function activateAndRevealFolderWorkspace(
     opts?.providesInitialSurface
   )
 
-  if (opts?.sidebarRevealBehavior) {
-    state.revealWorktreeInSidebar(workspaceKey, { behavior: opts.sidebarRevealBehavior })
+  if (opts?.sidebarRevealBehavior || opts?.executionHostId) {
+    state.revealWorktreeInSidebar(workspaceKey, {
+      ...(opts.sidebarRevealBehavior ? { behavior: opts.sidebarRevealBehavior } : {}),
+      ...(opts.executionHostId ? { executionHostId: opts.executionHostId } : {})
+    })
   } else {
     state.revealWorktreeInSidebar(workspaceKey)
   }

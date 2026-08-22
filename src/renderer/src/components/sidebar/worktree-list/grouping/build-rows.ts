@@ -76,7 +76,11 @@ export function buildRows(
   const projectIndex = buildProjectGroupingIndex(projectGrouping)
   // Membership is decided once, above the groupBy switch: every mode renders the
   // same set of folder workspaces and only chooses where they land (#15362).
-  const renderableFolderWorkspaces = getRenderableFolderWorkspaces(folderWorkspaces, projectGroups)
+  const renderableFolderWorkspaces = getRenderableFolderWorkspaces(
+    folderWorkspaces,
+    projectGroups,
+    defaultHostId
+  )
   const cyclicLineageIds = nestLineage
     ? getCyclicProjectedWorktreeLineageIds(lineageById, worktreeMap)
     : new Set<string>()
@@ -241,7 +245,8 @@ export function buildRows(
     projectGroups,
     folderWorkspaces: renderableFolderWorkspaces,
     projectOrderBy,
-    repoOrder
+    repoOrder,
+    defaultHostId
   })
 
   return result

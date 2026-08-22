@@ -1,13 +1,14 @@
-import { folderWorkspaceKey } from '../../../../../../shared/workspace-scope'
 import type { RenderRow } from '../listing/render-row'
 import {
   getWorktreeExecutionHostId,
+  LOCAL_EXECUTION_HOST_ID,
   type ExecutionHostId
 } from '../../../../../../shared/execution-host'
 import type { PinnedWorktreeDisplayPolicy } from '../grouping/row-types'
 import { isPinnedWorktreeRow } from '../listing/renderable-rows'
 import { getRenderRowWorktreeItem, renderRowContainsWorktree } from './render-row-lookup'
 import { getWorktreeOptionId } from '../rows/option-dom'
+import { getFolderWorkspaceSidebarRowKey } from '../listing/render-row'
 
 export function getRenderRowOptionId(
   row: RenderRow | undefined,
@@ -33,7 +34,9 @@ export function getRenderRowOptionId(
     return getWorktreeOptionId(row.rowKey)
   }
   if (row.type === 'folder-workspace') {
-    return getWorktreeOptionId(folderWorkspaceKey(row.folderWorkspace.id))
+    return getWorktreeOptionId(
+      getFolderWorkspaceSidebarRowKey(row, executionHostId ?? LOCAL_EXECUTION_HOST_ID)
+    )
   }
   return undefined
 }

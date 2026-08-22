@@ -136,10 +136,12 @@ export function buildWorktreeVirtualRowContext(args: BuildArgs): WorktreeVirtual
       onCardDragEnd: runtime.clearWorktreeDrag
     },
     folderWorkspace: {
+      defaultHostId: props.defaultHostId,
       groupBy: props.groupBy,
       newCardStyle: args.newCardStyle,
       settings: args.settings,
       activeWorktreeId: props.activeWorktreeId,
+      activeWorkspaceExecutionHostId: props.activeWorkspaceExecutionHostId,
       currentWorktreeId: props.currentWorktreeId,
       selectedWorktreeIds: props.selectedWorktreeIds,
       repoMap: props.repoMap,

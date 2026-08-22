@@ -14,6 +14,7 @@ import {
 } from './virtual-rows'
 import { getRenderRowKey } from '../listing/render-row'
 import type { RenderRow } from '../listing/render-row'
+import type { ExecutionHostId } from '../../../../../../shared/execution-host'
 import { WORKTREE_SIDEBAR_REVEAL_TOP_INSET } from '../../worktree-sidebar-reveal'
 import {
   shouldAdjustWorktreeSidebarMeasuredRowScroll,
@@ -26,12 +27,13 @@ export type WorktreeListVirtualizer = ReturnType<typeof useWorktreeListVirtualiz
 // from writing a stale height into the wrong slot.
 export function useWorktreeListVirtualizer(args: {
   renderRows: RenderRow[]
+  defaultHostId: ExecutionHostId
   firstHeaderIndex: number
   scrollRef: React.RefObject<HTMLDivElement | null>
   scrollOffsetRef: React.MutableRefObject<number>
   suppressMeasurementAdjustmentUntilRef: React.MutableRefObject<number>
 }) {
-  const { renderRows, firstHeaderIndex, scrollRef, scrollOffsetRef } = args
+  const { renderRows, defaultHostId, firstHeaderIndex, scrollRef, scrollOffsetRef } = args
   const stickyHeaderIndexes = useMemo(() => getStickyHeaderIndexes(renderRows), [renderRows])
   const activeStickyHeaderIndexRef = useRef<number | null>(null)
   const activeStickyHostIndexRef = useRef<number | null>(null)
@@ -43,17 +45,17 @@ export function useWorktreeListVirtualizer(args: {
       if (!row) {
         return `__stale_${index}`
       }
-      return getRenderRowKey(row)
+      return getRenderRowKey(row, defaultHostId)
     },
-    [renderRows]
+    [defaultHostId, renderRows]
   )
   const getExpectedVirtualRowKey = useCallback(
     (element: Element) => {
       const index = getVirtualRowIndex(element)
       const row = index === null ? undefined : renderRows[index]
-      return row ? getRenderRowKey(row) : null
+      return row ? getRenderRowKey(row, defaultHostId) : null
     },
-    [renderRows]
+    [defaultHostId, renderRows]
   )
   const isCurrentVirtualRowElement = useCallback(
     (element: Element) => {

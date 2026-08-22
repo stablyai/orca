@@ -78,7 +78,9 @@ export function usePendingSidebarReveal(args: PendingSidebarRevealArgs): void {
         pendingRevealWorktree.worktreeId,
         argsRef.current.worktrees,
         argsRef.current.folderWorkspaces,
-        pendingRevealWorktree.executionHostId
+        pendingRevealWorktree.executionHostId,
+        argsRef.current.projectGroups,
+        argsRef.current.defaultHostId
       )
       const targetIndex = pendingRevealWorktree.executionHostId
         ? findPreferredRenderRowIndexForWorktreeIdentity(
@@ -121,7 +123,8 @@ export function usePendingSidebarReveal(args: PendingSidebarRevealArgs): void {
       if (revealedOption) {
         if (pendingRevealWorktree.highlight) {
           const revealedRowKey =
-            revealedOption.dataset.worktreeRowKey ?? getRenderRowSidebarKey(targetRow)
+            revealedOption.dataset.worktreeRowKey ??
+            getRenderRowSidebarKey(targetRow, argsRef.current.defaultHostId)
           if (revealedRowKey) {
             flashRevealedRow(revealedRowKey)
           }
@@ -237,7 +240,7 @@ export function usePendingSidebarReveal(args: PendingSidebarRevealArgs): void {
         return
       }
       const targetIndex = renderRows.findIndex((row) =>
-        rowKeyMatchesRenderRow(row, pendingRevealSidebarRow.rowKey)
+        rowKeyMatchesRenderRow(row, pendingRevealSidebarRow.rowKey, argsRef.current.defaultHostId)
       )
       if (targetIndex === -1) {
         if (retryPendingReveal()) {

@@ -2,10 +2,31 @@ import { useMemo } from 'react'
 import { useAppStore } from '@/store'
 import { findIndexedWorktreeOwner } from '@/lib/worktree-runtime-owner-index'
 import type { Worktree } from '../../../../shared/worktree/types'
+import type { FolderWorkspace } from '../../../../shared/folder-workspace-types'
+import type { ProjectGroup } from '../../../../shared/project-group-types'
 import { parseWorkspaceKey } from '../../../../shared/workspace-scope'
-import { folderWorkspaceToWorktree } from '../../../../shared/folder-workspace-worktree'
+import { folderWorkspaceToWorktreeForHost } from '../../../../shared/folder-workspace-worktree'
+import { getFolderWorkspaceHostIdFromGroups } from '../../../../shared/folder-workspace-host'
+import { LOCAL_EXECUTION_HOST_ID, type ExecutionHostId } from '../../../../shared/execution-host'
 import type { IssueLinkProvider } from '../../../../shared/issue-link-input'
 import type { WorktreeMetaLiveLinks } from './worktree-meta-updates'
+
+export function findFolderWorkspaceForMeta(
+  folderWorkspaces: readonly FolderWorkspace[],
+  projectGroups: readonly ProjectGroup[],
+  folderWorkspaceId: string,
+  executionHostId: ExecutionHostId | null
+): FolderWorkspace | null {
+  return (
+    folderWorkspaces.find(
+      (item) =>
+        item.id === folderWorkspaceId &&
+        (!executionHostId ||
+          getFolderWorkspaceHostIdFromGroups(item, projectGroups, executionHostId) ===
+            executionHostId)
+    ) ?? null
+  )
+}
 
 /** Resolves the workspace the meta dialog edits and the issue-link state it
  *  seeds from. Link state is read from the store rather than threaded through
@@ -15,6 +36,7 @@ export function useWorktreeMetaWorkspace(args: {
   worktreeId: string
   /** The repo bucket the opening row belongs to, when it knows. */
   ownerRepoId: string | null
+  executionHostId: ExecutionHostId | null
 }): {
   worktree: Worktree | undefined
   linkedIssue: number | null
@@ -26,7 +48,7 @@ export function useWorktreeMetaWorkspace(args: {
   /** Link state as it stands now, for save-time displacement decisions. */
   liveLinks: WorktreeMetaLiveLinks
 } {
-  const { worktreeId, ownerRepoId } = args
+  const { worktreeId, ownerRepoId, executionHostId } = args
   const workspaceScope = useMemo(() => parseWorkspaceKey(worktreeId), [worktreeId])
   const indexedWorktree = useAppStore((s) => {
     // Why: the same workspace ID can exist under two hosts, which the owner index
@@ -48,14 +70,31 @@ export function useWorktreeMetaWorkspace(args: {
   // the stored record — a stable reference — and the projection happens outside
   // it, because a selector that built the object would return a fresh identity
   // on every store write and re-render the dialog continuously.
+  const projectGroups = useAppStore((s) => s.projectGroups)
   const folderWorkspace = useAppStore((s) =>
     workspaceScope?.type === 'folder'
-      ? (s.folderWorkspaces.find((item) => item.id === workspaceScope.folderWorkspaceId) ?? null)
+      ? findFolderWorkspaceForMeta(
+          s.folderWorkspaces,
+          s.projectGroups,
+          workspaceScope.folderWorkspaceId,
+          executionHostId
+        )
       : null
   )
   const worktree = useMemo(
-    () => (folderWorkspace ? folderWorkspaceToWorktree(folderWorkspace) : indexedWorktree),
-    [folderWorkspace, indexedWorktree]
+    () =>
+      folderWorkspace
+        ? folderWorkspaceToWorktreeForHost(
+            folderWorkspace,
+            executionHostId ??
+              getFolderWorkspaceHostIdFromGroups(
+                folderWorkspace,
+                projectGroups,
+                LOCAL_EXECUTION_HOST_ID
+              )
+          )
+        : indexedWorktree,
+    [executionHostId, folderWorkspace, indexedWorktree, projectGroups]
   )
   const linkedIssue = worktree?.linkedIssue ?? null
   const linkedLinearIssue = worktree?.linkedLinearIssue ?? null

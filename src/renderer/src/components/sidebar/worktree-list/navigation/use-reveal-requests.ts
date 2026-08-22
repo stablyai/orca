@@ -7,6 +7,7 @@ import {
 import type { FolderWorkspace } from '../../../../../../shared/folder-workspace-types'
 import type { Worktree } from '../../../../../../shared/worktree/types'
 import type { ExecutionHostId } from '../../../../../../shared/execution-host'
+import type { ProjectGroup } from '../../../../../../shared/project-group-types'
 import { composeWorktreeHostIdentity } from '../../../../../../shared/worktree/host-qualified-identity'
 import type { WorktreeGroupBy } from '../grouping/row-types'
 import { getKnownSidebarWorktreeById } from './folder-reveal'
@@ -22,6 +23,8 @@ export function useSidebarRevealRequests(args: {
   worktreeMap: Map<string, Worktree>
   worktrees: readonly Worktree[]
   folderWorkspaces: readonly FolderWorkspace[]
+  projectGroups: readonly ProjectGroup[]
+  defaultHostId: ExecutionHostId
   hasFilters: boolean
   clearFilters: () => void
 }): void {
@@ -34,6 +37,8 @@ export function useSidebarRevealRequests(args: {
     worktreeMap,
     worktrees,
     folderWorkspaces,
+    projectGroups,
+    defaultHostId,
     hasFilters,
     clearFilters
   } = args
@@ -92,7 +97,9 @@ export function useSidebarRevealRequests(args: {
         worktreeMap,
         folderWorkspaces,
         worktrees,
-        currentSidebarExecutionHostId
+        currentSidebarExecutionHostId,
+        projectGroups,
+        defaultHostId
       )
       if (!activeWorktree || activeWorktree.isArchived) {
         return
@@ -116,7 +123,9 @@ export function useSidebarRevealRequests(args: {
       clearFilters,
       currentSidebarWorktreeId,
       currentSidebarExecutionHostId,
+      defaultHostId,
       folderWorkspaces,
+      projectGroups,
       revealSidebarRow,
       renderedWorktreeIdentities,
       revealWorktreeInSidebar,

@@ -121,6 +121,45 @@ describe('folder workspace generic activation and activity', () => {
     })
   })
 
+  it('clears unread only for the requested host when folder ids collide', async () => {
+    const localFolder = makeFolderWorkspace({ executionHostId: 'local', isUnread: true })
+    const runtimeFolder = makeFolderWorkspace({
+      executionHostId: 'runtime:env-1',
+      folderPath: '/runtime/folder',
+      isUnread: true
+    })
+    const updateFolderWorkspace = vi.fn().mockResolvedValue(true)
+    const store = createTestStore()
+    store.setState({
+      projectGroups: [
+        { ...projectGroup, executionHostId: 'local' },
+        { ...projectGroup, executionHostId: 'runtime:env-1' }
+      ],
+      folderWorkspaces: [localFolder, runtimeFolder],
+      refreshGitHubForWorktreeIfStale: vi.fn(),
+      updateFolderWorkspace
+    } as Partial<AppState>)
+
+    store.getState().setActiveWorktree(folderWorkspaceKey(runtimeFolder.id), 'runtime:env-1')
+    await Promise.resolve()
+
+    expect(
+      store.getState().folderWorkspaces.map((workspace) => ({
+        hostId: workspace.executionHostId,
+        isUnread: workspace.isUnread
+      }))
+    ).toEqual([
+      { hostId: 'local', isUnread: true },
+      { hostId: 'runtime:env-1', isUnread: false }
+    ])
+    expect(store.getState().activeWorkspaceExecutionHostId).toBe('runtime:env-1')
+    expect(updateFolderWorkspace).toHaveBeenCalledWith(
+      runtimeFolder.id,
+      { isUnread: false },
+      { executionHostId: 'runtime:env-1' }
+    )
+  })
+
   it('coalesces repeated activity persistence while keeping local activity current', async () => {
     vi.useFakeTimers()
     vi.setSystemTime(1_000)

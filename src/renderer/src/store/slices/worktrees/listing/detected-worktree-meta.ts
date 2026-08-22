@@ -1,20 +1,21 @@
 import type { AppState } from '../../../types'
 import type { FolderWorkspace } from '../../../../../../shared/folder-workspace-types'
+import type { ProjectGroup } from '../../../../../../shared/project-group-types'
 import type { WorktreeMeta } from '../../../../../../shared/worktree/meta-types'
 import type { DetectedWorktreeListResult, Worktree } from '../../../../../../shared/worktree/types'
 import type { ExecutionHostId } from '../../../../../../shared/execution-host'
 import {
-  LOCAL_EXECUTION_HOST_ID,
-  parseExecutionHostId,
-  toSshExecutionHostId
+  getSettingsFocusedExecutionHostId,
+  LOCAL_EXECUTION_HOST_ID
 } from '../../../../../../shared/execution-host'
 import { parseWorkspaceKey } from '../../../../../../shared/workspace-scope'
-import { folderWorkspaceToWorktree } from '../../../../../../shared/folder-workspace-worktree'
+import { folderWorkspaceToWorktreeForHost } from '../../../../../../shared/folder-workspace-worktree'
+import { getFolderWorkspaceHostIdFromGroups } from '../../../../../../shared/folder-workspace-host'
 import { findIndexedWorktreeOwnerForHost } from '@/lib/worktree-runtime-owner-index'
 import { findWorktreeById, withoutErasedRequiredWorktreeFields } from '../../worktree-helpers'
 import { worktreeMatchesHost } from './worktree-host-ownership'
 
-const folderWorkspaceWorktreeCache = new WeakMap<FolderWorkspace, Worktree>()
+const folderWorkspaceWorktreeCache = new WeakMap<FolderWorkspace, Map<ExecutionHostId, Worktree>>()
 
 export function applyDetectedWorktreeUpdates(
   detectedWorktreesByRepo: AppState['detectedWorktreesByRepo'],
@@ -43,38 +44,51 @@ export function applyDetectedWorktreeUpdates(
 }
 
 export function folderWorkspaceMatchesHost(
-  workspace: Pick<FolderWorkspace, 'connectionId' | 'executionHostId'>,
+  workspace: Pick<FolderWorkspace, 'connectionId' | 'executionHostId' | 'projectGroupId'>,
+  projectGroups: readonly Pick<ProjectGroup, 'id' | 'connectionId' | 'executionHostId'>[],
   executionHostId: ExecutionHostId
 ): boolean {
   return (
-    (parseExecutionHostId(workspace.executionHostId)?.id ??
-      (workspace.connectionId?.trim()
-        ? toSshExecutionHostId(workspace.connectionId)
-        : LOCAL_EXECUTION_HOST_ID)) === executionHostId
+    getFolderWorkspaceHostIdFromGroups(workspace, projectGroups, executionHostId) ===
+    executionHostId
   )
 }
 
 export function findKnownWorktreeById(
-  state: Pick<AppState, 'worktreesByRepo' | 'detectedWorktreesByRepo' | 'folderWorkspaces'>,
+  state: Pick<
+    AppState,
+    | 'worktreesByRepo'
+    | 'detectedWorktreesByRepo'
+    | 'folderWorkspaces'
+    | 'projectGroups'
+    | 'settings'
+  >,
   worktreeId: string,
   executionHostId?: ExecutionHostId
 ): Worktree | DetectedWorktreeListResult['worktrees'][number] | undefined {
   const workspaceScope = parseWorkspaceKey(worktreeId)
   if (workspaceScope?.type === 'folder') {
+    const projectGroups = state.projectGroups ?? []
+    const defaultHostId = getSettingsFocusedExecutionHostId(state.settings)
     const folderWorkspace = state.folderWorkspaces.find(
       (workspace) =>
         workspace.id === workspaceScope.folderWorkspaceId &&
-        (!executionHostId || folderWorkspaceMatchesHost(workspace, executionHostId))
+        (!executionHostId ||
+          getFolderWorkspaceHostIdFromGroups(workspace, projectGroups, defaultHostId) ===
+            executionHostId)
     )
     if (!folderWorkspace) {
       return undefined
     }
-    const cached = folderWorkspaceWorktreeCache.get(folderWorkspace)
+    const hostId = getFolderWorkspaceHostIdFromGroups(folderWorkspace, projectGroups, defaultHostId)
+    const cached = folderWorkspaceWorktreeCache.get(folderWorkspace)?.get(hostId)
     if (cached) {
       return cached
     }
-    const worktree = folderWorkspaceToWorktree(folderWorkspace)
-    folderWorkspaceWorktreeCache.set(folderWorkspace, worktree)
+    const worktree = folderWorkspaceToWorktreeForHost(folderWorkspace, hostId)
+    const byHost = folderWorkspaceWorktreeCache.get(folderWorkspace) ?? new Map()
+    byHost.set(hostId, worktree)
+    folderWorkspaceWorktreeCache.set(folderWorkspace, byHost)
     return worktree
   }
   const visible = executionHostId

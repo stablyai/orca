@@ -1,7 +1,11 @@
-import { folderWorkspaceToWorktree } from '../../../../shared/folder-workspace-worktree'
+import {
+  folderWorkspaceToWorktree,
+  folderWorkspaceToWorktreeForHost
+} from '../../../../shared/folder-workspace-worktree'
 import type { Worktree } from '../../../../shared/worktree/types'
 import { getWorktreeHostIdentity } from '../../../../shared/worktree/host-qualified-identity'
 import type { HostSectionRow } from './host-section-rows'
+import type { ExecutionHostId } from '../../../../shared/execution-host'
 import { PINNED_GROUP_KEY } from './worktree-list/grouping/group-keys'
 import type { PinnedWorktreeDisplayPolicy, WorktreeRow } from './worktree-list/grouping/row-types'
 
@@ -53,12 +57,19 @@ export function getRenderedWorktreesInSidebarOrder(
     getPreferredWorktreeRows(itemRows, pinnedDisplayPolicy).map((row) => row.rowKey)
   )
   const renderedWorktrees: Worktree[] = []
+  let currentHostId: ExecutionHostId | undefined
 
   for (const row of rows) {
-    if (row.type === 'item' && preferredRowKeys.has(row.rowKey)) {
+    if (row.type === 'host-header') {
+      currentHostId = row.hostId
+    } else if (row.type === 'item' && preferredRowKeys.has(row.rowKey)) {
       renderedWorktrees.push(row.worktree)
     } else if (row.type === 'folder-workspace') {
-      renderedWorktrees.push(folderWorkspaceToWorktree(row.folderWorkspace))
+      renderedWorktrees.push(
+        currentHostId
+          ? folderWorkspaceToWorktreeForHost(row.folderWorkspace, currentHostId)
+          : folderWorkspaceToWorktree(row.folderWorkspace)
+      )
     }
   }
   return renderedWorktrees
