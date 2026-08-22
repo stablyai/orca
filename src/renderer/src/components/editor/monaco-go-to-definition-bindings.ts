@@ -8,6 +8,7 @@ import { useAppStore } from '@/store'
 import { normalizeRuntimePathForComparison } from '../../../../shared/cross-platform-path'
 import { installEditorGoToDefinitionShortcut } from './editor-shortcuts'
 import { runGoToDefinition } from './go-to-definition-controller'
+import { isGoToDefinitionMouseGesture } from './go-to-definition-mouse-gesture'
 import { getMonacoCodebaseSearchQuery } from './monaco-codebase-search'
 
 type MonacoApi = Parameters<OnMount>[1]
@@ -125,14 +126,19 @@ export function installMonacoGoToDefinitionBindings(
   })
   const cleanupShortcut = installEditorGoToDefinitionShortcut(editorDomNode, trigger)
   const mouseDownSubscription = editorInstance.onMouseDown((event) => {
-    const modifierPressed =
-      getShortcutPlatform() === 'darwin' ? event.event.metaKey : event.event.ctrlKey
+    const targetPosition = event.target.position
     if (
-      modifierPressed &&
-      event.target.type === monaco.editor.MouseTargetType.CONTENT_TEXT &&
-      event.target.position
+      isGoToDefinitionMouseGesture({
+        platform: getShortcutPlatform(),
+        metaKey: event.event.metaKey,
+        ctrlKey: event.event.ctrlKey,
+        leftButton: event.event.leftButton,
+        contentText: event.target.type === monaco.editor.MouseTargetType.CONTENT_TEXT,
+        hasPosition: Boolean(targetPosition)
+      }) &&
+      targetPosition
     ) {
-      editorInstance.setPosition(event.target.position)
+      editorInstance.setPosition(targetPosition)
       trigger()
     }
   })
