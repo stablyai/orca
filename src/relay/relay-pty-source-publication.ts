@@ -26,6 +26,7 @@ import {
   appendPtySourceOutput,
   projectPtySourceOutputToLegacy,
   ptySourceDeliveryClosed,
+  ptySourceDeliveryFullyAcknowledged,
   type RelayPtySourceOutput
 } from './relay-pty-source-output'
 import type { SshPtyConsumerSessionAdapter } from './ssh-pty-consumer-session-adapter'
@@ -88,7 +89,7 @@ export class RelayPtySourcePublication {
       current?.clientId === context.clientId &&
       !current.restoreRequired &&
       current.sourceExitState !== 'pending' &&
-      this.deliveryClosedUnderRecord(current)
+      ptySourceDeliveryClosed(this.session, current.identity)
     ) {
       // Why: a canceled delivery can never resume as 'existing'; retire it so re-attach opens fresh.
       this.sender.wakeSendWaiters(current)
@@ -196,6 +197,9 @@ export class RelayPtySourcePublication {
 
   accepts = (id: string): boolean => this.deliveries.has(id)
 
+  deliveryFullyAcknowledged = (id: string): boolean =>
+    ptySourceDeliveryFullyAcknowledged(this.session, this.deliveries.get(id))
+
   receivingActivation(id: string, clientId: number): PtySourceReceivingActivation | undefined {
     const record = this.deliveries.get(id)
     return record?.clientId === clientId && !record.restoreRequired
@@ -219,7 +223,7 @@ export class RelayPtySourcePublication {
     }
     if (!output.sourceAccepted && !appendPtySourceOutput(this.session, record, output)) {
       this.counters.appendDenied++
-      if (this.deliveryClosedUnderRecord(record)) {
+      if (ptySourceDeliveryClosed(this.session, record.identity)) {
         this.sender.wakeSendWaiters(record)
         this.deliveries.delete(id)
         // Why: deferred — publish() can run inside flushPendingOutput's captured-queue drain,
@@ -273,10 +277,6 @@ export class RelayPtySourcePublication {
   dispose = (): void => {
     this.legacyExits.clear()
     this.sender.dispose()
-  }
-
-  private deliveryClosedUnderRecord(record: RelayPtySourceDeliveryRecord): boolean {
-    return ptySourceDeliveryClosed(this.session, record.identity)
   }
 
   private registerActivationSettlement(

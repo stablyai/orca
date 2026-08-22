@@ -8509,7 +8509,8 @@ export function connectPanePty(
               // Why after the snapshot: painting the model discards the replay, but the app's kitty
               // pushes during the outage exist ONLY there. Snapshot first for the pre-outage
               // baseline, then the replay layers the outage on top — otherwise Option/Alt chords
-              // encode against a stale flag stack.
+              // encode against a stale flag stack. scanReplay applies pushes as idempotent sets, so
+              // re-scanning bytes main's model already ingested cannot grow the mirrored stack.
               kittyKeyboardModes.scanReplay(connectResult.replay)
             }
             // Why shared: park+reveal of an alt-screen TUI needs the same

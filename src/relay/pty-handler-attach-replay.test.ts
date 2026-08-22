@@ -204,6 +204,85 @@ describe('PtyHandler', () => {
     expect(result).toEqual({ incarnationId: spawn.incarnationId })
   })
 
+  // The attach replay is handed to the client AND deleted from the publish queue, so those bytes
+  // never reach the client's terminal model through the normal delivery. Naming how many trailing
+  // code units that is lets the client put them back instead of guessing at the overlap.
+  // The acknowledgement predicate this stubs out is covered against the real credit ledger in
+  // relay-pty-source-delivery-acknowledged.test.ts; here it is only a delegation boundary.
+  const attachWithQueuedOutput = async (
+    publicationOverrides: Record<string, unknown>
+  ): Promise<Record<string, unknown>> => {
+    let dataCallback: ((data: string) => void) | undefined
+    mockPtySpawn.mockReturnValue({
+      ...mockPtyInstance,
+      onData: vi.fn((cb: (data: string) => void) => {
+        dataCallback = cb
+      }),
+      onExit: vi.fn()
+    })
+    await spawnPty()
+    const publish = vi.fn().mockReturnValueOnce(true).mockReturnValue(false)
+    handler.setSourcePublication({
+      activate: vi.fn(() => 'existing'),
+      accepts: vi.fn(() => true),
+      publish,
+      dispose: vi.fn(),
+      ...publicationOverrides
+    } as never)
+    dataCallback!('delivered before the blip')
+    vi.advanceTimersByTime(8)
+    // The transport dies here: publishing fails, so these bytes stay queued and are exactly the
+    // suffix of the replay the consumer's model never sees.
+    dataCallback!('|never published')
+    vi.advanceTimersByTime(8)
+    return (await attachPty({
+      id: 'pty-1',
+      requireReplay: true,
+      suppressReplayNotification: true
+    })) as unknown as Record<string, unknown>
+  }
+
+  it('reports the pending output chars dropped at attach so the client can reconcile its model', async () => {
+    const result = await attachWithQueuedOutput({
+      deliveryFullyAcknowledged: vi.fn(() => true)
+    })
+
+    expect(result.replay).toBe('delivered before the blip|never published')
+    expect(result.replayUnseenChars).toBe('|never published'.length)
+    expect((result.replay as string).slice(-(result.replayUnseenChars as number))).toBe(
+      '|never published'
+    )
+  })
+
+  it('omits the unseen count when the delivery has bytes it cannot prove arrived', async () => {
+    // An unacked in-flight tail is missing from the consumer's model too, and it is never resent —
+    // the relay cannot name how much, so it must say nothing rather than under-report.
+    const result = await attachWithQueuedOutput({
+      deliveryFullyAcknowledged: vi.fn(() => false)
+    })
+
+    expect(result.replay).toBe('delivered before the blip|never published')
+    expect(result.replayUnseenChars).toBeUndefined()
+  })
+
+  it('omits the unseen count for a spawn-time replay with no source delivery', async () => {
+    let dataCallback: ((data: string) => void) | undefined
+    mockPtySpawn.mockReturnValue({
+      ...mockPtyInstance,
+      onData: vi.fn((cb: (data: string) => void) => {
+        dataCallback = cb
+      }),
+      onExit: vi.fn()
+    })
+    const spawn = await spawnPty()
+    dataCallback!('buffered output')
+
+    const result = await attachPty({ id: 'pty-1', suppressReplayNotification: true })
+
+    // Legacy fan-out has no acknowledgements at all, so nothing here is provable.
+    expect(result).toEqual({ incarnationId: spawn.incarnationId, replay: 'buffered output' })
+  })
+
   it('requires restore when the V1 pending-send recovery fence expires', async () => {
     const spawn = await spawnPty()
     const waitForPendingSend = vi.fn().mockResolvedValue(false)

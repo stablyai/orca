@@ -12796,6 +12796,54 @@ export class OrcaRuntimeService {
       })
   }
 
+  /** Whether a headless emulator already backs this PTY — the seed/catch-up fork. */
+  hasHeadlessTerminal(ptyId: string): boolean {
+    return this.headlessTerminals.has(ptyId)
+  }
+
+  /**
+   * Append bytes the model never accepted onto the EXISTING headless emulator.
+   *
+   * Why separate from seedHeadlessTerminal: that one refuses when an emulator exists (re-seeding
+   * duplicates every byte), which is always the case on an in-place SSH reconnect — yet the relay's
+   * reattach replay is routed around acceptPtyData, so without this the model stays short by the
+   * outage forever. Seed semantics on purpose: no forwardQueryReplies (historical queries must
+   * answer no one), no renderer projection (the renderer paints this same tail itself), no
+   * waiters/transcripts/lastOutputAt (these are historical bytes, not fresh activity).
+   *
+   * `ingestedSequenceFence` is the ingest sequence the caller read BEFORE the attach: the withheld
+   * tail predates everything published after it, so appending it once live bytes have already been
+   * ingested would garble the emulator instead of merely leaving it stale. onPtyData advances that
+   * counter synchronously at ingestion, so an unmoved fence also covers writes still queued on the
+   * chain.
+   *
+   * Returns false when there is no emulator to append to (the caller can fall back to a seed) or
+   * when the fence moved.
+   */
+  appendHeadlessTerminalCatchUp(
+    ptyId: string,
+    data: string,
+    ingestedSequenceFence: number
+  ): boolean {
+    if (!data || this.getPtyOutputSequence(ptyId) !== ingestedSequenceFence) {
+      return false
+    }
+    const state = this.headlessTerminals.get(ptyId)
+    if (!state) {
+      return false
+    }
+    this.recordOsc7MetadataForPty(ptyId, data)
+    this.recordRecentPtyOutputForPathProvenance(ptyId, data)
+    state.writeChain = state.writeChain
+      .then(async () => {
+        await state.emulator.write(data)
+      })
+      .catch(() => {
+        // Best-effort: live data keeps populating the emulator even if the catch-up write fails.
+      })
+    return true
+  }
+
   // Why: reattach/cold-restore/replay payloads arrive as spawn RPC results and
   // never pass through onPtyData, so after a relaunch the records backing
   // `terminal list`/`terminal read` stayed blank while the session was alive.

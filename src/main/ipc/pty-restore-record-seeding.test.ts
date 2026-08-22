@@ -15,7 +15,9 @@ import {
   registerPtyHandlers,
   clearProviderPtyState,
   getPtyIdForPaneKey,
-  setLocalPtyProvider
+  registerSshPtyProvider,
+  setLocalPtyProvider,
+  unregisterSshPtyProvider
 } from './pty'
 
 vi.mock('electron', () => import('./pty-ipc-mock-registry').then((m) => m.electronModuleMock()))
@@ -125,33 +127,80 @@ describe('registerPtyHandlers', () => {
       { cwd: '/projects/legacy', oscLinks: undefined, preferProviderIfExisting: true }
     )
   })
+  // The relay's reattach replay is routed around main's model by construction (attach returns it as
+  // an RPC payload and deletes the still-queued bytes from the publish queue), so main is the only
+  // party that can put those bytes back. These cases pin who ingests what.
+  // Why a live ingest counter rather than an absent getPtyOutputSequence: a stub that reports 0 for
+  // every read makes every fence assertion below hold no matter when the fence was taken.
+  const replaySeedRuntime = (
+    handle: string,
+    overrides: Record<string, unknown> = {}
+  ): { runtime: Record<string, unknown>; ingest: { sequence: number } } => {
+    const ingest = { sequence: 3 }
+    return {
+      ingest,
+      runtime: {
+        setPtyController: vi.fn(),
+        noteTerminalSpawnCommand: vi.fn(),
+        seedHeadlessTerminal: vi.fn(),
+        hasHeadlessTerminal: vi.fn(() => false),
+        // Mirrors OrcaRuntimeService.appendHeadlessTerminalCatchUp: a fence that no longer matches
+        // the ingest sequence means live bytes already landed, so the older tail is refused.
+        appendHeadlessTerminalCatchUp: vi.fn(
+          (_ptyId: string, _data: string, fence: number) => fence === ingest.sequence
+        ),
+        getPtyOutputSequence: vi.fn(() => ingest.sequence),
+        onPtySpawned: vi.fn(),
+        onPtyData: vi.fn(() => {
+          ingest.sequence += 1
+        }),
+        onPtyExit: vi.fn(),
+        createPreAllocatedTerminalHandle: vi.fn(() => handle),
+        registerPreAllocatedHandleForPty: vi.fn(),
+        preAllocateHandleForPty: vi.fn(),
+        ...overrides
+      }
+    }
+  }
+
+  const replayReattachProvider = (
+    result: Record<string, unknown>,
+    onSpawn?: () => void
+  ): unknown => ({
+    spawn: vi.fn(async () => {
+      onSpawn?.()
+      return result
+    }),
+    write: vi.fn(),
+    resize: vi.fn(),
+    kill: vi.fn(),
+    shutdown: vi.fn(),
+    sendSignal: vi.fn(),
+    getCwd: vi.fn(),
+    getInitialCwd: vi.fn(),
+    clearBuffer: vi.fn(),
+    acknowledgeDataEvent: vi.fn(),
+    hasChildProcesses: vi.fn(),
+    serialize: vi.fn(),
+    revive: vi.fn(),
+    getDefaultShell: vi.fn(),
+    getProfiles: vi.fn(),
+    onData: vi.fn(() => vi.fn()),
+    onReplay: vi.fn(() => vi.fn()),
+    onExit: vi.fn(() => vi.fn()),
+    listProcesses: vi.fn(async () => []),
+    getForegroundProcess: vi.fn(async () => null)
+  })
+
   it('seeds the headless emulator from an SSH relay reattach replay', async () => {
-    setLocalPtyProvider({
-      spawn: vi.fn(async () => ({
+    setLocalPtyProvider(
+      replayReattachProvider({
         id: 'pty-ssh-reattach',
         isReattach: true,
         replay: 'relay history\r\n'
-      })),
-      write: vi.fn(),
-      resize: vi.fn(),
-      kill: vi.fn(),
-      shutdown: vi.fn(),
-      onData: vi.fn(() => vi.fn()),
-      onExit: vi.fn(() => vi.fn()),
-      listProcesses: vi.fn(async () => []),
-      getForegroundProcess: vi.fn(async () => null)
-    } as never)
-    const runtime = {
-      setPtyController: vi.fn(),
-      noteTerminalSpawnCommand: vi.fn(),
-      seedHeadlessTerminal: vi.fn(),
-      onPtySpawned: vi.fn(),
-      onPtyData: vi.fn(),
-      onPtyExit: vi.fn(),
-      createPreAllocatedTerminalHandle: vi.fn(() => 'handle-ssh-reattach'),
-      registerPreAllocatedHandleForPty: vi.fn(),
-      preAllocateHandleForPty: vi.fn()
-    }
+      }) as never
+    )
+    const { runtime } = replaySeedRuntime('handle-ssh-reattach')
     registerPtyHandlers(mainWindow as never, runtime as never)
 
     await handlers.get('pty:spawn')!(null, { cols: 80, rows: 24 })
@@ -163,6 +212,296 @@ describe('registerPtyHandlers', () => {
       'relay history\r\n'
     )
   })
+
+  it('appends only the unseen replay suffix when the headless emulator already exists', async () => {
+    // The in-place reconnect: the emulator survives the transport, so the fresh-emulator seed
+    // no-ops and only the never-published tail may be written — re-seeding would duplicate the rest.
+    setLocalPtyProvider(
+      replayReattachProvider({
+        id: 'ssh:host-a@@pty-7',
+        isReattach: true,
+        replay: 'BEFORE-OUTAGE|DURING-OUTAGE',
+        replayUnseenChars: 'DURING-OUTAGE'.length
+      }) as never
+    )
+    const { runtime, ingest } = replaySeedRuntime('handle-ssh-catchup', {
+      hasHeadlessTerminal: vi.fn(() => true)
+    })
+    registerPtyHandlers(mainWindow as never, runtime as never)
+
+    const response = await handlers.get('pty:spawn')!(null, {
+      cols: 80,
+      rows: 24,
+      sessionId: 'ssh:host-a@@pty-7'
+    })
+
+    expect(runtime.seedHeadlessTerminal).not.toHaveBeenCalled()
+    // Third argument is the pre-attach ingest fence: the append is only ordered while nothing has
+    // been ingested since the attach was issued.
+    expect(runtime.appendHeadlessTerminalCatchUp).toHaveBeenCalledWith(
+      'ssh:host-a@@pty-7',
+      'DURING-OUTAGE',
+      ingest.sequence
+    )
+    expect(runtime.appendHeadlessTerminalCatchUp).toHaveReturnedWith(true)
+    // The relay's credit accounting is main's alone; the renderer must never arbitrate its paint on
+    // it, and no renderer type declares it.
+    expect((response as Record<string, unknown>).replayUnseenChars).toBeUndefined()
+  })
+
+  it('leaves the model untouched when the unseen length is unknown', async () => {
+    // A legacy relay omits replayUnseenChars. Absent must never be read as zero, and guessing the
+    // overlap by matching bytes would silently duplicate or drop a frame.
+    setLocalPtyProvider(
+      replayReattachProvider({
+        id: 'ssh:host-a@@pty-8',
+        isReattach: true,
+        replay: 'BEFORE-OUTAGE|DURING-OUTAGE'
+      }) as never
+    )
+    const { runtime } = replaySeedRuntime('handle-ssh-legacy', {
+      hasHeadlessTerminal: vi.fn(() => true)
+    })
+    registerPtyHandlers(mainWindow as never, runtime as never)
+
+    await handlers.get('pty:spawn')!(null, {
+      cols: 80,
+      rows: 24,
+      sessionId: 'ssh:host-a@@pty-8'
+    })
+
+    expect(runtime.appendHeadlessTerminalCatchUp).not.toHaveBeenCalled()
+    expect(runtime.seedHeadlessTerminal).not.toHaveBeenCalled()
+  })
+
+  it('skips the catch-up for a non-SSH pty id that reuses this handler', async () => {
+    // Folder-workspace and other remote-runtime panes share this branch; their replay never took
+    // the relay's around-the-model route, so appending it would duplicate bytes the model has.
+    setLocalPtyProvider(
+      replayReattachProvider({
+        id: 'daemon-pty-9',
+        isReattach: true,
+        replay: 'BEFORE-OUTAGE|DURING-OUTAGE',
+        replayUnseenChars: 'DURING-OUTAGE'.length
+      }) as never
+    )
+    const { runtime } = replaySeedRuntime('handle-daemon-reattach', {
+      hasHeadlessTerminal: vi.fn(() => true)
+    })
+    registerPtyHandlers(mainWindow as never, runtime as never)
+
+    await handlers.get('pty:spawn')!(null, { cols: 80, rows: 24, sessionId: 'daemon-pty-9' })
+
+    expect(runtime.appendHeadlessTerminalCatchUp).not.toHaveBeenCalled()
+  })
+
+  it('fences the catch-up on the sequence read before a direct reattach spawn', async () => {
+    // The other route to the same catch-up: no stable-pane owner, the session id alone drives the
+    // reattach. Its fence must be taken beside that spawn for the same reason.
+    const { runtime, ingest } = replaySeedRuntime('handle-ssh-direct-fence', {
+      hasHeadlessTerminal: vi.fn(() => true)
+    })
+    const sequenceAtAttach = ingest.sequence
+    setLocalPtyProvider(
+      replayReattachProvider(
+        {
+          id: 'ssh:host-a@@pty-10',
+          isReattach: true,
+          replay: 'BEFORE-OUTAGE|DURING-OUTAGE',
+          replayUnseenChars: 'DURING-OUTAGE'.length
+        },
+        () => {
+          ingest.sequence += 1
+        }
+      ) as never
+    )
+    registerPtyHandlers(mainWindow as never, runtime as never)
+
+    await handlers.get('pty:spawn')!(null, {
+      cols: 80,
+      rows: 24,
+      sessionId: 'ssh:host-a@@pty-10'
+    })
+
+    expect(runtime.appendHeadlessTerminalCatchUp).toHaveBeenCalledWith(
+      'ssh:host-a@@pty-10',
+      'DURING-OUTAGE',
+      sequenceAtAttach
+    )
+    expect(runtime.appendHeadlessTerminalCatchUp).toHaveReturnedWith(false)
+  })
+
+  it('fences the catch-up on the sequence read before a pre-adoption attach', async () => {
+    // The stable-pane reconnect adopts BEFORE the spawn body runs, with awaits in between: bytes the
+    // relay published after the attach can be ingested first, and the withheld tail predates them.
+    // Read the fence late and it equals the already-advanced sequence, so an out-of-order append
+    // looks legal; taken beside the attach it no longer matches and the runtime refuses.
+    const connectionId = 'ssh-catchup-fence'
+    const tabId = 'tab-catchup-fence'
+    const leafId = '55555555-5555-4555-8555-555555555555'
+    const paneKey = makePaneKey(tabId, leafId)
+    const worktreeId = 'repo-ssh::/remote/catchup-fence'
+    const ptyId = `ssh:${connectionId}@@relay-pty`
+    const { runtime, ingest } = replaySeedRuntime('handle-catchup-fence', {
+      hasHeadlessTerminal: vi.fn(() => true),
+      resolveTerminalPane: vi.fn(() => ({
+        handle: 'handle-catchup-fence',
+        tabId,
+        leafId,
+        ptyId,
+        worktreeId
+      })),
+      beginPtyRegistration: vi.fn(),
+      cancelPendingPtyRegistration: vi.fn(),
+      assertPtyRegistrationAllowed: vi.fn(),
+      registerPty: vi.fn(),
+      getDriver: vi.fn(() => ({ kind: 'host' }))
+    })
+    const sequenceAtAttach = ingest.sequence
+    registerSshPtyProvider(
+      connectionId,
+      replayReattachProvider(
+        {
+          id: ptyId,
+          isReattach: true,
+          replay: 'BEFORE-OUTAGE|DURING-OUTAGE',
+          replayUnseenChars: 'DURING-OUTAGE'.length
+        },
+        () => {
+          // Live bytes crossing the data socket while the attach RPC is in flight.
+          ingest.sequence += 1
+        }
+      ) as never
+    )
+
+    try {
+      registerPtyHandlers(mainWindow as never, runtime as never)
+
+      await handlers.get('pty:spawn')!(null, {
+        cols: 80,
+        rows: 24,
+        cwd: '/remote/catchup-fence',
+        connectionId,
+        worktreeId,
+        tabId,
+        leafId,
+        env: {
+          ORCA_PANE_KEY: paneKey,
+          ORCA_TAB_ID: tabId,
+          ORCA_WORKTREE_ID: worktreeId
+        }
+      })
+
+      expect(runtime.appendHeadlessTerminalCatchUp).toHaveBeenCalledWith(
+        ptyId,
+        'DURING-OUTAGE',
+        sequenceAtAttach
+      )
+      expect(runtime.appendHeadlessTerminalCatchUp).toHaveReturnedWith(false)
+    } finally {
+      unregisterSshPtyProvider(connectionId)
+      clearProviderPtyState(ptyId)
+    }
+  })
+
+  it('omits the main-internal replay credit from a deduped pane spawn reply', async () => {
+    // The runtime pane create resolves the reservation; a pty:spawn racing it for the same pane
+    // returns that payload verbatim, so the strip has to sit at the resolve — a per-return-site
+    // strip leaves this route (and the next one added) publishing the field to the renderer.
+    const connectionId = 'ssh-dedupe-strip'
+    const tabId = 'tab-dedupe-strip'
+    const leafId = '66666666-6666-4666-8666-666666666666'
+    const paneKey = makePaneKey(tabId, leafId)
+    const worktreeId = 'repo-ssh::/remote/dedupe-strip'
+    const ptyId = `ssh:${connectionId}@@relay-pty-dedupe`
+    let controller: { spawn?: (opts: Record<string, unknown>) => Promise<unknown> } | null = null
+    const { runtime } = replaySeedRuntime('handle-dedupe-strip', {
+      setPtyController: vi.fn((next: typeof controller) => {
+        controller = next
+      }),
+      hasHeadlessTerminal: vi.fn(() => true),
+      resolveTerminalPane: vi.fn(() => ({
+        handle: 'handle-dedupe-strip',
+        tabId,
+        leafId,
+        ptyId,
+        worktreeId
+      })),
+      beginPtyRegistration: vi.fn(),
+      cancelPendingPtyRegistration: vi.fn(),
+      assertPtyRegistrationAllowed: vi.fn(),
+      registerPty: vi.fn(),
+      getDriver: vi.fn(() => ({ kind: 'host' }))
+    })
+    let releaseSpawn!: () => void
+    let spawnStarted!: () => void
+    const spawnGate = new Promise<void>((resolve) => {
+      releaseSpawn = resolve
+    })
+    const spawnEntered = new Promise<void>((resolve) => {
+      spawnStarted = resolve
+    })
+    const gatedSpawn = vi.fn(async () => {
+      spawnStarted()
+      await spawnGate
+      return {
+        id: ptyId,
+        isReattach: true,
+        replay: 'BEFORE-OUTAGE|DURING-OUTAGE',
+        replayUnseenChars: 'DURING-OUTAGE'.length
+      }
+    })
+    registerSshPtyProvider(connectionId, {
+      ...(replayReattachProvider({}) as Record<string, unknown>),
+      spawn: gatedSpawn
+    } as never)
+
+    try {
+      registerPtyHandlers(mainWindow as never, runtime as never)
+
+      const runtimeSpawn = controller!.spawn!({
+        cols: 80,
+        rows: 24,
+        cwd: '/remote/dedupe-strip',
+        connectionId,
+        worktreeId,
+        tabId,
+        leafId,
+        preAllocatedHandle: 'handle-dedupe-strip'
+      })
+      // The reservation exists once the provider spawn is in flight, so the racing IPC call below
+      // takes the dedupe early-return instead of starting a second spawn.
+      await spawnEntered
+      const dedupedSpawn = handlers.get('pty:spawn')!(null, {
+        cols: 80,
+        rows: 24,
+        cwd: '/remote/dedupe-strip',
+        connectionId,
+        worktreeId,
+        tabId,
+        leafId,
+        env: {
+          ORCA_PANE_KEY: paneKey,
+          ORCA_TAB_ID: tabId,
+          ORCA_WORKTREE_ID: worktreeId
+        }
+      })
+      releaseSpawn()
+      await runtimeSpawn
+      const deduped = (await dedupedSpawn) as Record<string, unknown>
+
+      // Proves this really is the forwarded reservation payload and not a fresh spawn result.
+      expect(gatedSpawn).toHaveBeenCalledTimes(1)
+      expect(deduped.id).toBe(ptyId)
+      expect(deduped.replay).toBe('BEFORE-OUTAGE|DURING-OUTAGE')
+      expect(deduped.isReattach).toBe(true)
+      expect('replayUnseenChars' in deduped).toBe(false)
+    } finally {
+      unregisterSshPtyProvider(connectionId)
+      clearProviderPtyState(ptyId)
+    }
+  })
+
   // STA repro (post-restart blind orchestrator): reattach restore payloads
   // arrive as spawn RPC results, never through onPtyData, so without record
   // seeding `terminal list` reported connected terminals with empty

@@ -21,6 +21,8 @@ import type { SshPtyReceivingActivationLease } from './ssh-pty-notification-rout
 
 export type SshPtyAttachResult = {
   replay?: string
+  /** Trailing code units of `replay` this attach withheld from the modeled stream. */
+  replayUnseenChars?: number
   incarnationId?: PtyIncarnationId
   sourceRecovery?: PtySourceRecoveryResult
   sourceActivation?: PtySourceReceivingActivation
@@ -41,6 +43,7 @@ export function parseSshPtyAttachResult(value: unknown): SshPtyAttachResult {
   }
   const result = value as {
     replay?: unknown
+    replayUnseenChars?: unknown
     incarnationId?: unknown
     sourceRecovery?: unknown
     sourceActivation?: unknown
@@ -48,6 +51,14 @@ export function parseSshPtyAttachResult(value: unknown): SshPtyAttachResult {
   if (result.replay !== undefined && typeof result.replay !== 'string') {
     throw new Error('Invalid SSH PTY attach replay')
   }
+  // Why dropped rather than rejected: a nonsense count from an old/odd relay must degrade to
+  // "coverage unknown", which is the legacy behavior, not fail the whole reattach.
+  const replayUnseenChars =
+    typeof result.replay === 'string' &&
+    nonNegativeInteger(result.replayUnseenChars) &&
+    Number(result.replayUnseenChars) <= result.replay.length
+      ? Number(result.replayUnseenChars)
+      : undefined
   if (result.incarnationId !== undefined && !isPtyIncarnationId(result.incarnationId)) {
     // Why: a present-but-invalid identity cannot safely fence delayed exits from a reused relay id.
     throw new Error('Invalid SSH PTY attach incarnation')
@@ -66,6 +77,7 @@ export function parseSshPtyAttachResult(value: unknown): SshPtyAttachResult {
   }
   return {
     ...(typeof result.replay === 'string' ? { replay: result.replay } : {}),
+    ...(replayUnseenChars === undefined ? {} : { replayUnseenChars }),
     ...(isPtyIncarnationId(result.incarnationId) ? { incarnationId: result.incarnationId } : {}),
     ...(sourceRecovery ? { sourceRecovery } : {}),
     ...(activation ? { sourceActivation: activation } : {})
@@ -214,6 +226,9 @@ export async function reattachSshPtySession(args: {
       id: toAppSshPtyId(args.connectionId, relaySessionId),
       isReattach: true,
       ...(attachResult.replay ? { replay: attachResult.replay } : {}),
+      ...(attachResult.replay && attachResult.replayUnseenChars !== undefined
+        ? { replayUnseenChars: attachResult.replayUnseenChars }
+        : {}),
       ...(attachResult.incarnationId ? { incarnationId: attachResult.incarnationId } : {}),
       ...(attachResult.sourceRecovery ? { sourceRecovery: attachResult.sourceRecovery } : {}),
       ...(attachResult.sourceActivation ? { sourceActivation: attachResult.sourceActivation } : {}),

@@ -2501,6 +2501,9 @@ export class SshRelaySession {
         return
       }
       if (!recoveryRequest && !targetedDeliveryRecovery) {
+        // Why no model catch-up here: this limb runs only when sourceRecoveryRequest returned
+        // undefined, i.e. the owner has no outputFlowControl — which is exactly when the relay is in
+        // legacy fan-out and can never name an unseen count. There is nothing provable to ingest.
         this.forwardReattachReplay(appPtyId, attachResult.replay ?? '')
       }
       sourceActivationLease?.commit()

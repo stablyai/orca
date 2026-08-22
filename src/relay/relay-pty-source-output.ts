@@ -22,6 +22,31 @@ export function ptySourceDeliveryClosed(
   return !state || state === 'closed' || state === 'closing'
 }
 
+/**
+ * Whether the CONSUMER has acknowledged every source unit this delivery ever received.
+ *
+ * Why creditedEndSu and not sentEndSu: `sentEndSu` advances in commitPtySourceSend on SINK
+ * settlement — bytes written into a socket that may already be dying, never acked, never applied to
+ * the consumer's model. Only `creditedEndSu` is the consumer's own frontier, so only
+ * `creditedEndSu === receivedEndSu` proves the consumer holds everything (it also implies nothing is
+ * unsent, since creditedEndSu <= sentEndSu <= receivedEndSu).
+ *
+ * This is the precondition that makes the still-queued, never-published bytes the EXACT gap in the
+ * consumer's model. A false costs nothing; a wrong true would duplicate or drop a frame.
+ */
+export function ptySourceDeliveryFullyAcknowledged(
+  session: SshPtyConsumerSessionAdapter,
+  record:
+    | Pick<RelayPtySourceDeliveryRecord, 'identity' | 'restoreRequired' | 'rotationPending'>
+    | undefined
+): boolean {
+  if (!record || record.restoreRequired || record.rotationPending) {
+    return false
+  }
+  const snapshot = session.sourceDeliverySnapshotIfKnown(record.identity)
+  return snapshot?.state === 'active' && snapshot.creditedEndSu === snapshot.receivedEndSu
+}
+
 export function appendPtySourceOutput(
   session: SshPtyConsumerSessionAdapter,
   record: RelayPtySourceDeliveryRecord,

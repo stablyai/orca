@@ -11255,6 +11255,70 @@ describe('OrcaRuntimeService', () => {
     expect(snapshot?.cwd).toBe('/projects/restored')
   })
 
+  // The SSH relay's reattach replay never passes through acceptPtyData, and seedHeadlessTerminal
+  // refuses an existing emulator, so an in-place reconnect leaves the model short by the outage
+  // forever without this append.
+  it('appends an SSH reattach catch-up onto the existing headless emulator', async () => {
+    const runtime = createRuntime()
+    syncSinglePty(runtime, 'pty-1')
+    runtime.onPtyData('pty-1', 'before outage\r\n', 100)
+    const fence = runtime.getPtyOutputSequence('pty-1')
+
+    expect(runtime.hasHeadlessTerminal('pty-1')).toBe(true)
+    expect(runtime.appendHeadlessTerminalCatchUp('pty-1', 'during outage\r\n', fence)).toBe(true)
+
+    const snapshot = await runtime.serializeMainTerminalBuffer('pty-1', { scrollbackRows: 100 })
+    expect(snapshot?.data).toContain('before outage')
+    expect(snapshot?.data).toContain('during outage')
+  })
+
+  it('refuses an SSH reattach catch-up once live bytes were ingested past the fence', () => {
+    // The withheld tail predates whatever the relay published after it; appending it behind newer
+    // bytes would garble the emulator instead of merely leaving the model stale.
+    const runtime = createRuntime()
+    syncSinglePty(runtime, 'pty-1')
+    runtime.onPtyData('pty-1', 'before outage\r\n', 100)
+    const fence = runtime.getPtyOutputSequence('pty-1')
+    runtime.onPtyData('pty-1', 'raced past the attach\r\n', 101)
+
+    expect(runtime.appendHeadlessTerminalCatchUp('pty-1', 'during outage\r\n', fence)).toBe(false)
+  })
+
+  it('refuses an SSH reattach catch-up when no headless emulator exists', () => {
+    const runtime = createRuntime()
+    syncSinglePty(runtime, 'pty-1')
+
+    expect(runtime.hasHeadlessTerminal('pty-1')).toBe(false)
+    // Why false and not a lazy create: the caller must fall back to a seed, which owns the
+    // dimensions and the "this is the whole buffer" semantics an append cannot claim.
+    expect(
+      runtime.appendHeadlessTerminalCatchUp(
+        'pty-1',
+        'during outage\r\n',
+        runtime.getPtyOutputSequence('pty-1')
+      )
+    ).toBe(false)
+  })
+
+  it('keeps an SSH reattach catch-up free of live-output side effects', async () => {
+    const runtime = createRuntime()
+    syncSinglePty(runtime, 'pty-1')
+    runtime.onPtyData('pty-1', 'before outage\r\n', 100)
+    const before = (await runtime.listTerminals()).terminals[0]
+
+    // Historical bytes: no waiters, no transcript tail, no lastOutputAt bump, no query replies.
+    runtime.appendHeadlessTerminalCatchUp(
+      'pty-1',
+      'during outage\x1b[?62;c\r\n',
+      runtime.getPtyOutputSequence('pty-1')
+    )
+    await runtime.serializeMainTerminalBuffer('pty-1', { scrollbackRows: 100 })
+    const after = (await runtime.listTerminals()).terminals[0]
+
+    expect(typeof before.lastOutputAt).toBe('number')
+    expect(after.lastOutputAt).toBe(before.lastOutputAt)
+  })
+
   it('adopts OSC7 host metadata from seeded headless terminal scrollback', async () => {
     const runtime = createRuntime()
     syncSinglePty(runtime, 'pty-1')

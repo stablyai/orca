@@ -1762,6 +1762,7 @@ export class PtyHandler {
   ): Promise<{
     incarnationId: string
     replay?: string
+    replayUnseenChars?: number
     sourceRecovery?: PtySourceRecoveryResult
     sourceActivation?: PtySourceReceivingActivation
   }> {
@@ -1848,6 +1849,7 @@ export class PtyHandler {
     // Why: retain replay buffers so later restarts receive full history.
     const replay = managed.buffered.read()
     if (replay) {
+      const replayUnseenChars = this.replayUnseenChars(id, replay, activation)
       // Why: drop pending batched bytes already in the replay buffer so attach doesn't render them twice.
       this.pendingOutputByPty.delete(id)
       this.clearOutputFlushTimerIfIdle()
@@ -1856,6 +1858,7 @@ export class PtyHandler {
         return {
           incarnationId: managed.incarnationId,
           replay,
+          ...(replayUnseenChars === undefined ? {} : { replayUnseenChars }),
           ...(sourceActivation ? { sourceActivation } : {})
         }
       }
@@ -1865,6 +1868,30 @@ export class PtyHandler {
       incarnationId: managed.incarnationId,
       ...(sourceActivation ? { sourceActivation } : {})
     }
+  }
+
+  /**
+   * How many trailing code units of `replay` THIS attach withholds from the modeled stream, or
+   * undefined when the relay cannot name that number exactly.
+   *
+   * Scope, stated narrowly on purpose: only the still-queued bytes deleted just below qualify.
+   * emitIngressData appends the same string to the replay buffer and to the publish queue in one
+   * step, and the queue drains strictly from the front, so the queue is a contiguous code-unit
+   * suffix of the replay. It is the consumer's exact gap only when the surviving delivery has
+   * acknowledged everything it received (an unacked in-flight tail died in the socket and is never
+   * resent — unbounded and unnameable) and only when it IS the surviving delivery ('opened' means a
+   * fresh ledger whose zeroed counters say nothing about what the dead one lost). Legacy fan-out has
+   * no acks at all, so it never qualifies. This says nothing about bytes an EARLIER attach dropped.
+   */
+  private replayUnseenChars(id: string, replay: string, activation: unknown): number | undefined {
+    if (activation !== 'existing' || !this.sourcePublication?.deliveryFullyAcknowledged(id)) {
+      return undefined
+    }
+    const pendingChars = (this.pendingOutputByPty.get(id) ?? []).reduce(
+      (total, pending) => total + pending.data.length,
+      0
+    )
+    return pendingChars <= replay.length ? pendingChars : undefined
   }
 
   private writeData(params: Record<string, unknown>): void {

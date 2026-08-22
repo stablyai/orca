@@ -96,6 +96,11 @@ import {
   isSshPtyNotFoundError
 } from '../providers/ssh-pty-errors'
 import { parseAppSshPtyId, toAppSshPtyId, toRelaySshPtyId } from '../providers/ssh-pty-id'
+import {
+  applySshReattachReplayModelCatchUp,
+  capturePtyModelIngestFence,
+  type PtyModelIngestFence
+} from './ssh-reattach-replay-model-catchup'
 import { createPtySpawnTiming } from './pty-spawn-timing'
 import {
   isSafePtySessionId,
@@ -670,19 +675,31 @@ function rejectPaneSpawnReservation(
   }
 }
 
+// Why here: relay credit accounting is main's business alone, and dedupe waiters forward the
+// resolved reservation payload verbatim to the renderer — stripping at each return site instead
+// leaves the next early-return free to leak it again.
+function stripMainInternalSpawnFields<T extends Partial<PtySpawnResult>>(response: T): T {
+  if (response.replayUnseenChars === undefined) {
+    return response
+  }
+  const { replayUnseenChars: _mainInternal, ...rest } = response
+  return rest as T
+}
+
 function resolvePaneSpawnReservation<T extends PaneSpawnReservationResult>(
   paneKey: string | null | undefined,
   reservation: PaneSpawnReservation | null | undefined,
   response: T
 ): T {
+  const stripped = stripMainInternalSpawnFields(response)
   if (!reservation) {
-    return response
+    return stripped
   }
-  reservation.resolve(response)
+  reservation.resolve(stripped)
   if (paneKey) {
     clearPaneSpawnReservation(paneKey, reservation)
   }
-  return response
+  return stripped
 }
 
 type StablePaneOwner = {
@@ -698,6 +715,8 @@ type StablePaneOwner = {
 type StablePaneAdoption = {
   result: PtySpawnResult
   owner: StablePaneOwner
+  /** Pre-attach model fence, minted beside the attach RPC; shared adopters consume it once. */
+  modelIngestFence: PtyModelIngestFence | null
   materialized?: true
 } | null
 const stablePaneAdoptionsByOwnerKey = new Map<string, Promise<StablePaneAdoption>>()
@@ -837,6 +856,15 @@ type StablePaneSpawnContext = {
   connectionId?: string | null
   resolveOwner?: () => StablePaneOwner | null
   onFreshSpawn?: (result: PtySpawnResult) => void
+  /** Fence subject for the non-owner spawn below, which may still come back as a reattach. */
+  expectedPtyId?: string
+}
+
+/** Every attach that can produce a relay replay returns its pre-attach fence beside the result. */
+type StablePaneAttachOutcome = {
+  result: PtySpawnResult
+  owner: StablePaneOwner | null
+  modelIngestFence: PtyModelIngestFence | null
 }
 
 function stablePanePersistenceFence(
@@ -882,9 +910,12 @@ function persistAdmittedStablePaneBinding(args: {
 
 async function attachStablePaneOwner(
   args: StablePaneSpawnContext & { owner: StablePaneOwner }
-): Promise<{ result: PtySpawnResult; owner: StablePaneOwner } | null> {
+): Promise<(StablePaneAttachOutcome & { owner: StablePaneOwner }) | null> {
   const { owner, provider, runtime, spawnOptions } = args
   let result: PtySpawnResult
+  // Why on this line: this spawn IS the reattach whose replay bypasses the model, so the fence must
+  // predate it — read after the await, live bytes have already advanced it and it proves nothing.
+  const modelIngestFence = capturePtyModelIngestFence(runtime, owner.ptyId)
   try {
     result = await provider.spawn({
       ...spawnOptions,
@@ -946,21 +977,22 @@ async function attachStablePaneOwner(
   ) {
     throw new Error('terminal_pane_owner_changed')
   }
-  return { result, owner }
+  return { result, owner, modelIngestFence }
 }
 
-async function spawnForStablePane(
-  args: StablePaneSpawnContext
-): Promise<{ result: PtySpawnResult; owner: StablePaneOwner | null }> {
+async function spawnForStablePane(args: StablePaneSpawnContext): Promise<StablePaneAttachOutcome> {
   if (args.owner) {
     const attached = await attachStablePaneOwner({ ...args, owner: args.owner })
     if (attached) {
       return attached
     }
   }
+  // Why fenced too: with no stable-pane owner a plain spawn carrying sessionId is still the SSH
+  // reattach, and its replay is withheld from the model exactly the same way.
+  const modelIngestFence = capturePtyModelIngestFence(args.runtime, args.expectedPtyId)
   const result = await args.provider.spawn(args.spawnOptions)
   args.onFreshSpawn?.(result)
-  return { result, owner: null }
+  return { result, owner: null, modelIngestFence }
 }
 
 function settlePendingPaneSerializer(paneKey: string, gen: number): boolean {
@@ -4484,6 +4516,9 @@ export function registerPtyHandlers(
           ...(owner.incarnationId ? { incarnationId: owner.incarnationId } : {})
         },
         owner,
+        // Why never fenced: this pane's attach was another spawn's, and that spawn already owns the
+        // one chance to ingest its withheld tail — a second append would duplicate it.
+        modelIngestFence: null,
         materialized: true as const
       }
     }
@@ -6155,6 +6190,11 @@ export function registerPtyHandlers(
       // before they existed, so the claim must not erase what the pane may
       // have scanned from those bytes live.
       let snapshotKittyFlagsCoverReconciledSeq = true
+      // Why hoisted: the reattach replay catch-up may only append to the model when NOTHING was
+      // ingested during the attach RPC — the withheld tail predates any such bytes, so appending it
+      // behind them would garble the emulator rather than merely leave it stale. Minted beside the
+      // attach itself (see capturePtyModelIngestFence), never re-read down here.
+      let modelIngestFence: PtyModelIngestFence | null = null
       let preparedProvisionalExecutionContext = false
       let releaseWorktreeSpawn: (() => void) | undefined
       try {
@@ -6751,6 +6791,7 @@ export function registerPtyHandlers(
                 owner: stablePaneOwnerCandidate,
                 worktreeId: args.worktreeId,
                 connectionId: args.connectionId,
+                ...(expectedPtyId ? { expectedPtyId } : {}),
                 resolveOwner: () =>
                   resolveStablePaneOwner(
                     runtime,
@@ -6762,6 +6803,9 @@ export function registerPtyHandlers(
               })
           result = stablePaneSpawn.result
           stablePaneOwner = stablePaneSpawn.owner
+          // Why carried rather than read here: the pre-adopted branch attached long before this
+          // line, with awaits in between during which live bytes can advance the counter.
+          modelIngestFence = stablePaneSpawn.modelIngestFence
           if (
             stablePaneOwner &&
             isMintedSessionId &&
@@ -7013,6 +7057,7 @@ export function registerPtyHandlers(
 
         // Why: seed the headless emulator before registerPty so concurrent live PTY data lands on top of the seed, not replacing it (mobile keeps the daemon-restored scrollback).
         // Skip when the renderer will be authoritative — its xterm buffer is richer than the daemon snapshot.
+        let seededHeadlessFromReplay = false
         if (runtime && !rendererPreSignaled && !rendererAlreadyRegistered) {
           const snapshotSeedSize =
             typeof result.snapshotCols === 'number' && typeof result.snapshotRows === 'number'
@@ -7052,9 +7097,27 @@ export function registerPtyHandlers(
             // Why: the relay reattach replay is the one restore main never ingests, so without
             // this seed its model is a mere suffix of what the renderer painted — and a later
             // park-reveal would outrank the fuller relay replay with that fragment.
-            runtime.seedHeadlessTerminal(result.id, result.replay)
+            // Why probed rather than just called: seedHeadlessTerminal no-ops on an existing
+            // emulator, and an emulator that survived an in-place reconnect needs the unseen
+            // suffix appended below instead — only a fresh one ends up holding exactly this replay.
+            seededHeadlessFromReplay = !runtime.hasHeadlessTerminal(result.id)
+            if (seededHeadlessFromReplay) {
+              runtime.seedHeadlessTerminal(result.id, result.replay)
+            }
           }
         }
+        // Why here and not in the provider: only main owns the model, and only main knows whether
+        // the seed above already ingested this replay. Without this the model stays stale by the
+        // outage and every later park-reveal repaints that stale frame.
+        applySshReattachReplayModelCatchUp({
+          runtime,
+          ptyId: result.id,
+          isReattach: result.isReattach === true,
+          replay: result.replay,
+          replayUnseenChars: result.replayUnseenChars,
+          seededFromReplay: seededHeadlessFromReplay,
+          modelIngestFence
+        })
         if (
           typeof args.worktreeId === 'string' &&
           args.worktreeId.length > 0 &&
@@ -7168,6 +7231,8 @@ export function registerPtyHandlers(
           }
         }
         const response = {
+          // Why no replayUnseenChars strip here: resolvePaneSpawnReservation drops main-internal
+          // fields on every reply path, including dedupe early-returns this literal never reaches.
           ...result,
           // Why both or neither: a pane can only adopt proven kitty flags together
           // with the sequence boundary they describe.
