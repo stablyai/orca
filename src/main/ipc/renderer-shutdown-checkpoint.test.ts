@@ -49,6 +49,29 @@ const makeEvent = (): { sender: { id: number }; returnValue?: unknown } => ({
   sender: { id: 101 }
 })
 
+function makeSession(tabId: string) {
+  return {
+    ...getDefaultWorkspaceSession(),
+    activeRepoId: 'repo',
+    activeWorktreeId: 'wt',
+    activeTabId: tabId,
+    tabsByWorktree: {
+      wt: [
+        {
+          id: tabId,
+          worktreeId: 'wt',
+          title: tabId,
+          customTitle: null,
+          color: null,
+          sortOrder: 0,
+          createdAt: 1,
+          ptyId: `pty-${tabId}`
+        }
+      ]
+    }
+  }
+}
+
 describe('registerRendererShutdownCheckpointHandler', () => {
   beforeEach(() => {
     syncHandlers.clear()
@@ -116,29 +139,9 @@ describe('registerRendererShutdownCheckpointHandler', () => {
     }
     registerRendererShutdownCheckpointHandler(store as never)
     const handler = syncHandlers.get('app:stage-before-unload-sync')
-    const session = (tabId: string) => ({
-      activeRepoId: 'repo',
-      activeWorktreeId: 'wt',
-      activeTabId: tabId,
-      tabsByWorktree: {
-        wt: [
-          {
-            id: tabId,
-            worktreeId: 'wt',
-            title: tabId,
-            customTitle: null,
-            color: null,
-            sortOrder: 0,
-            createdAt: 1,
-            ptyId: `pty-${tabId}`
-          }
-        ]
-      },
-      terminalLayoutsByTabId: {}
-    })
 
-    handler?.(makeEvent(), { sessions: [{ state: session('tab-a') }], ui: {} })
-    handler?.({ sender: { id: 102 } }, { sessions: [{ state: session('tab-b') }], ui: {} })
+    handler?.(makeEvent(), { sessions: [{ state: makeSession('tab-a') }], ui: {} })
+    handler?.({ sender: { id: 102 } }, { sessions: [{ state: makeSession('tab-b') }], ui: {} })
 
     expect(store.stageWorkspaceSessionBeforeUnload).toHaveBeenLastCalledWith(
       expect.objectContaining({
@@ -148,6 +151,66 @@ describe('registerRendererShutdownCheckpointHandler', () => {
       }),
       'local'
     )
+  })
+
+  it('merges each host independently across two window checkpoints', () => {
+    const store = {
+      getWorkspaceSession: vi.fn(() => getDefaultWorkspaceSession()),
+      setWorkspaceSession: vi.fn(),
+      stageWorkspaceSessionBeforeUnload: vi.fn(),
+      updateUI: vi.fn(),
+      flushPendingOrThrowAsync: vi.fn(() => Promise.resolve())
+    }
+    registerRendererShutdownCheckpointHandler(store as never)
+    const handler = syncHandlers.get('app:stage-before-unload-sync')
+    handler?.(makeEvent(), {
+      sessions: [
+        { state: makeSession('local-a') },
+        { state: makeSession('ssh-a'), hostId: 'ssh:server-1' }
+      ],
+      ui: {}
+    })
+    handler?.(
+      { sender: { id: 102 } },
+      {
+        sessions: [
+          { state: makeSession('local-b') },
+          { state: makeSession('ssh-b'), hostId: 'ssh:server-1' }
+        ],
+        ui: {}
+      }
+    )
+
+    const [local, localHost] = store.stageWorkspaceSessionBeforeUnload.mock.calls.at(-2)!
+    const [ssh, sshHost] = store.stageWorkspaceSessionBeforeUnload.mock.calls.at(-1)!
+    expect(localHost).toBe('local')
+    expect(local.tabsByWorktree.wt.map((tab: { id: string }) => tab.id)).toEqual([
+      'local-a',
+      'local-b'
+    ])
+    expect(sshHost).toBe('ssh:server-1')
+    expect(ssh.tabsByWorktree.wt.map((tab: { id: string }) => tab.id)).toEqual(['ssh-a', 'ssh-b'])
+  })
+
+  it('fails closed before staging state from an untrusted sender', () => {
+    const store = {
+      stageWorkspaceSessionBeforeUnload: vi.fn(),
+      updateUI: vi.fn(),
+      flushPendingOrThrowAsync: vi.fn(() => Promise.resolve())
+    }
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+    registerRendererShutdownCheckpointHandler(store as never)
+    const event = { sender: { id: 999 }, returnValue: undefined as unknown }
+
+    syncHandlers.get('app:stage-before-unload-sync')?.(event, {
+      sessions: [{ state: makeSession('untrusted') }],
+      ui: { activeView: 'settings' }
+    })
+
+    expect(event.returnValue).toEqual({ ok: false })
+    expect(store.stageWorkspaceSessionBeforeUnload).not.toHaveBeenCalled()
+    expect(store.updateUI).not.toHaveBeenCalled()
+    expect(store.flushPendingOrThrowAsync).not.toHaveBeenCalled()
   })
 
   it('reports a staging failure so the renderer can retry', () => {

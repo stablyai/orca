@@ -1402,14 +1402,15 @@ function openMainWindow(options: { revealOnDidFinishLoad?: boolean } = {}): Brow
     probeWindowsInstallDirAcl({ isServeMode })
   }
 
+  const resumeAfterQuitAbort = (): void => {
+    isQuitting = false
+    clearExpectedRendererReload()
+    getWindowSessionRegistry(store!).resumeAfterQuitAbort()
+    terminalWindowTransfers?.resumeAfterQuitAbort()
+  }
   const window = createMainWindow(store, {
     getIsQuitting: () => isQuitting,
-    onQuitAborted: () => {
-      isQuitting = false
-      clearExpectedRendererReload()
-      getWindowSessionRegistry(store!).resumeAfterQuitAbort()
-      terminalWindowTransfers?.resumeAfterQuitAbort()
-    },
+    onQuitAborted: resumeAfterQuitAbort,
     onRendererProcessGone: (details, webContentsId) => {
       recordProcessGoneCrash(
         'renderer',
@@ -1612,6 +1613,7 @@ function openMainWindow(options: { revealOnDidFinishLoad?: boolean } = {}): Brow
     createSecondaryWindow: (bounds) => {
       const secondary = createMainWindow(store, {
         getIsQuitting: () => isQuitting,
+        onQuitAborted: resumeAfterQuitAbort,
         deferLoad: true,
         title: devInstanceIdentity.name,
         getKeybindings: () => keybindings?.getOverrides(),

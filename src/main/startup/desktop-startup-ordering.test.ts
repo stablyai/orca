@@ -236,6 +236,12 @@ describe('startup ordering', () => {
     expect(source.slice(0, willQuitStart)).not.toContain('stopTccPromptNoticeForQuit')
   })
 
+  it('resumes quit-frozen window state when either top-level renderer vetoes quit', () => {
+    const source = readFileSync(join(process.cwd(), 'src/main/index.ts'), 'utf8')
+
+    expect(source.match(/onQuitAborted: resumeAfterQuitAbort/g)).toHaveLength(2)
+  })
+
   it('keeps the power bridge through vetoable before-quit and disposes after commit', () => {
     const source = readFileSync(join(process.cwd(), 'src/main/index.ts'), 'utf8')
     const beforeQuitStart = source.indexOf("app.on('before-quit'")

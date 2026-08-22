@@ -111,7 +111,49 @@ describe('session IPC window partitioning', () => {
     expect(store.flush).toHaveBeenCalledOnce()
   })
 
-  it('rejects session access from an unregistered renderer', () => {
+  it('patches only the sender window and requested host with local fallback intact', () => {
+    const store = {
+      getWorkspaceSession: vi.fn(() => getDefaultWorkspaceSession()),
+      setWorkspaceSession: vi.fn(),
+      flush: vi.fn(),
+      flushOrThrow: vi.fn(),
+      readTerminalScrollbackSnapshot: vi.fn()
+    }
+    registerSessionHandlers(store as never)
+    const event = { sender: { id: 101 } }
+    getInvokeHandler('session:set')(event, makeSession('local-tab'))
+    getInvokeHandler('session:set')(event, makeSession('ssh-tab'), 'ssh:server-1')
+
+    getInvokeHandler('session:patch')(event, { activeTabId: 'ssh-patched' }, 'ssh:server-1')
+
+    expect(getInvokeHandler('session:get')(event).activeTabId).toBe('local-tab')
+    expect(getInvokeHandler('session:get')(event, 'ssh:server-1').activeTabId).toBe('ssh-patched')
+    expect(store.setWorkspaceSession).toHaveBeenLastCalledWith(
+      expect.objectContaining({ activeTabId: 'ssh-patched' }),
+      'ssh:server-1'
+    )
+  })
+
+  it('trust-checks flush and synchronous scrollback reads', () => {
+    const store = {
+      getWorkspaceSession: vi.fn(() => getDefaultWorkspaceSession()),
+      setWorkspaceSession: vi.fn(),
+      flush: vi.fn(),
+      flushOrThrow: vi.fn(),
+      readTerminalScrollbackSnapshot: vi.fn(() => 'scrollback')
+    }
+    registerSessionHandlers(store as never)
+    const event = { sender: { id: 101 }, returnValue: undefined as unknown }
+
+    getInvokeHandler('session:flush')(event)
+    getSyncHandler('session:read-terminal-scrollback-sync')(event, { ref: 'snapshot/ref' })
+
+    expect(store.flushOrThrow).toHaveBeenCalledOnce()
+    expect(store.readTerminalScrollbackSnapshot).toHaveBeenCalledWith('snapshot/ref')
+    expect(event.returnValue).toBe('scrollback')
+  })
+
+  it('rejects every session channel from an unregistered renderer', () => {
     const store = {
       getWorkspaceSession: vi.fn(() => getDefaultWorkspaceSession()),
       setWorkspaceSession: vi.fn(),
@@ -121,9 +163,25 @@ describe('session IPC window partitioning', () => {
     }
     registerSessionHandlers(store as never)
 
-    expect(() => getInvokeHandler('session:get')({ sender: { id: 999 } })).toThrow(
+    const event = { sender: { id: 999 }, returnValue: undefined as unknown }
+    expect(() => getInvokeHandler('session:get')(event)).toThrow('untrusted_ui_renderer')
+    expect(() => getInvokeHandler('session:set')(event, makeSession('tab'))).toThrow(
       'untrusted_ui_renderer'
     )
+    expect(() => getInvokeHandler('session:patch')(event, { activeTabId: 'tab' })).toThrow(
+      'untrusted_ui_renderer'
+    )
+    expect(() => getInvokeHandler('session:flush')(event)).toThrow('untrusted_ui_renderer')
+    expect(() => getSyncHandler('session:set-sync')(event, makeSession('tab'))).toThrow(
+      'untrusted_ui_renderer'
+    )
+    expect(() =>
+      getSyncHandler('session:read-terminal-scrollback-sync')(event, { ref: 'snapshot/ref' })
+    ).toThrow('untrusted_ui_renderer')
     expect(store.getWorkspaceSession).not.toHaveBeenCalled()
+    expect(store.setWorkspaceSession).not.toHaveBeenCalled()
+    expect(store.flush).not.toHaveBeenCalled()
+    expect(store.flushOrThrow).not.toHaveBeenCalled()
+    expect(store.readTerminalScrollbackSnapshot).not.toHaveBeenCalled()
   })
 })
