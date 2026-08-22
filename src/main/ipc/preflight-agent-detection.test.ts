@@ -516,12 +516,34 @@ describe('preflight', () => {
         throw new Error('not found')
       }
       if (command === 'bob' && String(args[0]) === '--help') {
-        return { stdout: 'bob\nIBM Bob Shell\n  --prompt-interactive <text>\n', stderr: '' }
+        return {
+          stdout:
+            'Usage: bob [options] [command]\n\nBob in your terminal\n\n  --accept-license  Accept the IBM license agreement and continue\n',
+          stderr: ''
+        }
       }
       throw new Error(`unexpected command ${String(command)}`)
     })
 
     await expect(detectInstalledAgents()).resolves.toEqual(['bob'])
+  })
+
+  it('excludes an unrelated bob executable whose help carries no Bob Shell signature', async () => {
+    // Why: the exclusion is otherwise fail-open, so any stray `bob` script would pass as IBM Bob.
+    execFileAsyncMock.mockImplementation(async (command, args) => {
+      if (command === 'which') {
+        if (String(args[0]) === 'bob') {
+          return { stdout: '/home/test/.local/bin/bob\n' }
+        }
+        throw new Error('not found')
+      }
+      if (command === 'bob' && String(args[0]) === '--help') {
+        return { stdout: 'usage: bob <target>\nProject build runner\n', stderr: '' }
+      }
+      throw new Error(`unexpected command ${String(command)}`)
+    })
+
+    await expect(detectInstalledAgents()).resolves.toEqual([])
   })
 
   it('deduplicates Mistral Vibe when both current and legacy executables exist', async () => {
