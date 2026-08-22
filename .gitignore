@@ -158,3 +158,10 @@ tests/e2e/.cross-version-checkouts/
 # IS committed). Also keeps oxfmt/oxlint, which honor this file, from walking
 # vendored gems.
 /mobile/vendor/
+
+# Local tool/design working artifacts
+.bug-hunter/
+.impeccable/
+ui-audit-*/
+ui-redesign-round-*/
+tests/.bench-fixtures/
