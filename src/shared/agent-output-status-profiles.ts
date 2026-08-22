@@ -26,7 +26,9 @@ export type AgentOutputStatusObserverArgs = {
   onWaiting?: (agent: TuiAgent, prompt: string) => void
 }
 
-/** One observer per PTY running every profile; the first profile to fire owns the chunk. */
+/** One observer per PTY running every profile. Every detector sees every chunk (each keeps
+ *  its own rolling window); a PTY normally arms only one profile, and the write side's
+ *  pane-ownership gate decides which agent may own the status row if two ever fire. */
 export function createAgentOutputStatusObserver(
   args: AgentOutputStatusObserverArgs,
   profiles: readonly AgentOutputStatusProfile[] = AGENT_OUTPUT_STATUS_PROFILES
