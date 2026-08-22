@@ -35,6 +35,9 @@ export function setWithLRU<K, V>(
 // React re-renders (unlike Zustand, which would broadcast state changes on
 // every scroll event even though no component renders from scroll position).
 export const scrollTopCache = new Map<string, number>()
+// ProseMirror selections use document offsets, so they cannot share Monaco's
+// line-and-column cursor cache.
+export const richMarkdownSelectionCache = new Map<string, { from: number; to: number }>()
 
 // Why: Same rationale as scrollTopCache — module-scoped avoids Zustand
 // re-renders on every cursor move.

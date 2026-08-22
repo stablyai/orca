@@ -1,4 +1,5 @@
 import type { Editor } from '@tiptap/react'
+import { TextSelection } from '@tiptap/pm/state'
 
 /**
  * Auto-focuses the rich markdown editor on mount so users can start typing
@@ -30,21 +31,22 @@ export function autoFocusRichEditor(
     // Why: explicit file-open requests may hand focus to the editor; ordinary
     // lazy mounts must still leave unrelated fields and dialogs alone.
     const canTakeFocus =
-      force || active === null || active === document.body || (rootEl?.contains(active) ?? false)
+      force ||
+      active === null ||
+      active === document.body ||
+      (rootEl?.contains(active) ?? false) ||
+      (active instanceof HTMLElement && active.hasAttribute('data-tab-id'))
     if (!canTakeFocus) {
       return
     }
-    // Why: pass 'start' (not null) to resolve to a proper TextSelection at
-    // doc position 1. With null, Tiptap keeps whatever the editor's current
-    // selection happens to be on mount — for a freshly-created empty doc
-    // that's an AllSelection, which renders as a visible 0-width highlight
-    // inside the placeholder instead of a normal blinking caret.
-    //
+    // Preserve a restored TextSelection; forced and non-text focus starts at position 1.
+    const focusPosition =
+      force || !(nextEditor.state.selection instanceof TextSelection) ? 'start' : null
     // Why: `scrollIntoView: false` prevents Tiptap's focus command from
     // scrolling the cursor into view, which would otherwise race with
     // useEditorScrollRestore's RAF retry loop and clobber the cached
     // scroll position on every tab switch.
-    nextEditor.commands.focus('start', { scrollIntoView: false })
+    nextEditor.commands.focus(focusPosition, { scrollIntoView: false })
   })
   return () => {
     if (frameId !== null) {
