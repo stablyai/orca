@@ -138,6 +138,7 @@ type TerminalMultiplexStream = {
   ackInFlightBytes: number
   ackWindowBytes: number
   supportsOutputPause: boolean
+  supportsTerminalExited: boolean
   supportsWriteUnavailable: boolean
   outputPaused: boolean
   supportsDesktopViewportClaims: boolean
@@ -1113,6 +1114,7 @@ const TerminalMultiplexSubscribeFrame = TerminalHandle.extend({
       ackOutputSourceRanges: z.literal(1).optional(),
       desktopViewportClaims: z.literal(1).optional(),
       outputPause: z.literal(1).optional(),
+      terminalExited: z.literal(1).optional(),
       writeUnavailable: z.literal(1).optional()
     })
     .optional()
@@ -2582,6 +2584,7 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
           ackInFlightBytes: 0,
           ackWindowBytes: TERMINAL_MULTIPLEX_ACK_STREAM_INITIAL_WINDOW_BYTES,
           supportsOutputPause: request.capabilities?.outputPause === 1,
+          supportsTerminalExited: request.capabilities?.terminalExited === 1,
           supportsWriteUnavailable: request.capabilities?.writeUnavailable === 1,
           outputPaused: false,
           supportsDesktopViewportClaims: request.capabilities?.desktopViewportClaims === 1,
@@ -2711,10 +2714,13 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
             rows: serialized?.rows ?? size?.rows,
             displayMode,
             seq: layoutSeq,
-            ...((stream.ackOutputSourceRanges || stream.supportsOutputPause) && {
+            ...((stream.ackOutputSourceRanges ||
+              stream.supportsOutputPause ||
+              stream.supportsTerminalExited) && {
               capabilities: {
                 ...(stream.ackOutputSourceRanges ? { ackOutputSourceRanges: 1 as const } : {}),
-                ...(stream.supportsOutputPause ? { outputPause: 1 as const } : {})
+                ...(stream.supportsOutputPause ? { outputPause: 1 as const } : {}),
+                ...(stream.supportsTerminalExited ? { terminalExited: 1 as const } : {})
               }
             }),
             ...(stream.ackOutputSourceRanges ? { streamGeneration: stream.streamGeneration } : {}),
@@ -2897,8 +2903,11 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
               condition: 'exit',
               signal: stream.exitWaiterAbort.signal
             })
-            .then(() => {
+            .then((wait) => {
               if (streams.get(request.streamId) === stream) {
+                if (stream.supportsTerminalExited) {
+                  emit({ type: 'exited', streamId: request.streamId, exitCode: wait.exitCode })
+                }
                 detachStream(request.streamId, true)
               }
             })

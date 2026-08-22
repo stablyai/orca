@@ -33789,6 +33789,17 @@ export class OrcaRuntimeService {
         typeof rawTurnCompletedAt === 'number' && Number.isFinite(rawTurnCompletedAt)
           ? rawTurnCompletedAt
           : undefined
+      const lifecyclePty =
+        liveLeafPty ??
+        (pty && this.mobileTerminalTabMatchesPty(snapshot.worktree, tab, pty) ? pty : null)
+      // Host-owned lifecycle distinguishes a process exit from a lost PTY record.
+      const lifecycle: 'live' | 'disconnected' | 'exited' | undefined = terminalHandle
+        ? 'live'
+        : lifecyclePty
+          ? lifecyclePty.lastExitCode !== null
+            ? 'exited'
+            : 'disconnected'
+          : undefined
       tabs.push({
         type: 'terminal',
         id: tab.id,
@@ -33809,6 +33820,7 @@ export class OrcaRuntimeService {
         ...(tab.launchDraftCreatedAt !== undefined
           ? { launchDraftCreatedAt: tab.launchDraftCreatedAt }
           : {}),
+        ...(lifecycle ? { lifecycle } : {}),
         isActive: tab.isActive,
         ...(terminalHandle
           ? { status: 'ready' as const, terminal: terminalHandle }
