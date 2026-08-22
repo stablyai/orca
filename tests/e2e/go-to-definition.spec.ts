@@ -52,7 +52,9 @@ test.describe('Go to Definition (Cmd+B)', () => {
     await orcaPage.evaluate(
       ({ wid, filePath }) => {
         const store = window.__store
-        if (!store) return
+        if (!store) {
+          return
+        }
         const state = store.getState()
         state.openFile({
           filePath,
@@ -114,7 +116,9 @@ test.describe('Go to Definition (Cmd+B)', () => {
     await orcaPage.evaluate(
       ({ wid, filePath }) => {
         const store = window.__store
-        if (!store) return
+        if (!store) {
+          return
+        }
         const state = store.getState()
         state.openFile({
           filePath,

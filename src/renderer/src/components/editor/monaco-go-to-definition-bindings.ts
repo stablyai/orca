@@ -32,11 +32,9 @@ function deriveWorktreeRoot(filePath: string, relativePath: string): string | nu
     if (separatorIndex < 0) {
       return null
     }
-    if (separatorIndex === 0 || (separatorIndex === 2 && /^[A-Za-z]:[\\/]/.test(root))) {
-      root = root.slice(0, separatorIndex + 1)
-    } else {
-      root = root.slice(0, separatorIndex)
-    }
+    const keepRootSeparator =
+      separatorIndex === 0 || (separatorIndex === 2 && /^[A-Za-z]:[\\/]/.test(root))
+    root = root.slice(0, keepRootSeparator ? separatorIndex + 1 : separatorIndex)
   }
 
   const reconstructedPath = joinPath(root, relativePath)
