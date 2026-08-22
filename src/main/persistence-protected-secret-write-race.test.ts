@@ -40,16 +40,18 @@ vi.mock('./telemetry/cohort-classifier', () => ({
 }))
 
 vi.mock('electron', () => ({
-  app: { getPath: () => testState.dir },
-  safeStorage: {
-    isEncryptionAvailable: () => cipherState.available,
-    encryptString: (plaintext: string) => Buffer.from(`enc:${plaintext}`, 'utf-8'),
-    decryptString: (ciphertext: Buffer) => ciphertext.toString('utf-8').slice('enc:'.length)
-  }
+  app: { getPath: () => testState.dir }
 }))
 
 async function createStore() {
   vi.resetModules()
+  const { setSecretStore } = await import('../shared/secret-store')
+  setSecretStore({
+    isEncryptionAvailable: () => cipherState.available,
+    encryptString: (plaintext) => Buffer.from(`enc:${plaintext}`, 'utf-8'),
+    decryptString: (ciphertext) => ciphertext.toString('utf-8').slice('enc:'.length),
+    describeUnavailable: () => null
+  })
   const { Store, initDataPath } = await import('./persistence')
   initDataPath()
   return new Store()

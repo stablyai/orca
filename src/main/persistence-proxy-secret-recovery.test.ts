@@ -28,26 +28,7 @@ vi.mock('electron', () => ({
   app: {
     getPath: () => testState.dir
   },
-  session: { defaultSession: undefined },
-  safeStorage: {
-    isEncryptionAvailable: () => {
-      if (cipherState.availabilityThrows) {
-        throw new Error('safeStorage cannot be used before the app is ready')
-      }
-      return cipherState.encryptionAvailable
-    },
-    encryptString: (plaintext: string) => Buffer.from(`enc:${randomUUID()}:${plaintext}`, 'utf-8'),
-    decryptString: (ciphertext: Buffer) => {
-      if (cipherState.decryptAlwaysThrows) {
-        throw new Error('keychain access denied')
-      }
-      const decoded = ciphertext.toString('utf-8')
-      if (!decoded.startsWith('enc:')) {
-        throw new Error('invalid ciphertext')
-      }
-      return decoded.slice('enc:'.length + 36 + 1)
-    }
-  }
+  session: { defaultSession: undefined }
 }))
 
 vi.mock('./telemetry/client', () => ({
@@ -60,6 +41,27 @@ vi.mock('./telemetry/cohort-classifier', () => ({
 
 async function createStore() {
   vi.resetModules()
+  const { setSecretStore } = await import('../shared/secret-store')
+  setSecretStore({
+    isEncryptionAvailable: () => {
+      if (cipherState.availabilityThrows) {
+        throw new Error('safeStorage cannot be used before the app is ready')
+      }
+      return cipherState.encryptionAvailable
+    },
+    encryptString: (plaintext) => Buffer.from(`enc:${randomUUID()}:${plaintext}`, 'utf-8'),
+    decryptString: (ciphertext) => {
+      if (cipherState.decryptAlwaysThrows) {
+        throw new Error('keychain access denied')
+      }
+      const decoded = ciphertext.toString('utf-8')
+      if (!decoded.startsWith('enc:')) {
+        throw new Error('invalid ciphertext')
+      }
+      return decoded.slice('enc:'.length + 36 + 1)
+    },
+    describeUnavailable: () => null
+  })
   const { Store, initDataPath } = await import('./persistence')
   initDataPath()
   return new Store()

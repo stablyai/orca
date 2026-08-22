@@ -27,21 +27,6 @@ const DETERMINISTIC_IV = 'd'.repeat(36)
 vi.mock('electron', () => ({
   app: {
     getPath: () => testState.dir
-  },
-  safeStorage: {
-    isEncryptionAvailable: () => cipherState.encryptionAvailable,
-    encryptString: (plaintext: string) =>
-      Buffer.from(
-        `enc:${cipherState.deterministic ? DETERMINISTIC_IV : randomUUID()}:${plaintext}`,
-        'utf-8'
-      ),
-    decryptString: (ciphertext: Buffer) => {
-      const decoded = ciphertext.toString('utf-8')
-      if (!decoded.startsWith('enc:')) {
-        throw new Error('invalid ciphertext')
-      }
-      return decoded.slice('enc:'.length + 36 + 1)
-    }
   }
 }))
 
@@ -55,6 +40,23 @@ vi.mock('./telemetry/cohort-classifier', () => ({
 
 async function createStore() {
   vi.resetModules()
+  const { setSecretStore } = await import('../shared/secret-store')
+  setSecretStore({
+    isEncryptionAvailable: () => cipherState.encryptionAvailable,
+    encryptString: (plaintext) =>
+      Buffer.from(
+        `enc:${cipherState.deterministic ? DETERMINISTIC_IV : randomUUID()}:${plaintext}`,
+        'utf-8'
+      ),
+    decryptString: (ciphertext) => {
+      const decoded = ciphertext.toString('utf-8')
+      if (!decoded.startsWith('enc:')) {
+        throw new Error('invalid ciphertext')
+      }
+      return decoded.slice('enc:'.length + 36 + 1)
+    },
+    describeUnavailable: () => null
+  })
   const { Store, initDataPath } = await import('./persistence')
   initDataPath()
   return new Store()

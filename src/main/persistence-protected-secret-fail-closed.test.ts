@@ -19,31 +19,7 @@ vi.mock('./ssh/ssh-config-parser', () => ({
 }))
 
 vi.mock('electron', () => ({
-  app: { getPath: () => testState.dir },
-  safeStorage: {
-    isEncryptionAvailable: () => {
-      if (cipherState.availability === 'throws') {
-        throw new Error('keychain access denied')
-      }
-      return cipherState.availability === 'available'
-    },
-    encryptString: (plaintext: string) => {
-      if (cipherState.encryptionThrows) {
-        throw new Error('keychain encryption failed')
-      }
-      return Buffer.from(`enc:${randomUUID()}:${plaintext}`, 'utf-8')
-    },
-    decryptString: (ciphertext: Buffer) => {
-      if (cipherState.decryptionThrows) {
-        throw new Error('keychain decryption failed')
-      }
-      const decoded = ciphertext.toString('utf-8')
-      if (!decoded.startsWith('enc:')) {
-        throw new Error('invalid ciphertext')
-      }
-      return decoded.slice('enc:'.length + 36 + 1)
-    }
-  }
+  app: { getPath: () => testState.dir }
 }))
 
 vi.mock('./telemetry/client', () => ({ track: vi.fn() }))
@@ -53,6 +29,32 @@ vi.mock('./telemetry/cohort-classifier', () => ({
 
 async function createStore() {
   vi.resetModules()
+  const { setSecretStore } = await import('../shared/secret-store')
+  setSecretStore({
+    isEncryptionAvailable: () => {
+      if (cipherState.availability === 'throws') {
+        throw new Error('keychain access denied')
+      }
+      return cipherState.availability === 'available'
+    },
+    encryptString: (plaintext) => {
+      if (cipherState.encryptionThrows) {
+        throw new Error('keychain encryption failed')
+      }
+      return Buffer.from(`enc:${randomUUID()}:${plaintext}`, 'utf-8')
+    },
+    decryptString: (ciphertext) => {
+      if (cipherState.decryptionThrows) {
+        throw new Error('keychain decryption failed')
+      }
+      const decoded = ciphertext.toString('utf-8')
+      if (!decoded.startsWith('enc:')) {
+        throw new Error('invalid ciphertext')
+      }
+      return decoded.slice('enc:'.length + 36 + 1)
+    },
+    describeUnavailable: () => null
+  })
   const { Store, initDataPath } = await import('./persistence')
   initDataPath()
   return new Store()

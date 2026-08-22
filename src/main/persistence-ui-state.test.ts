@@ -7,7 +7,6 @@ import { getDefaultPersistedState } from '../shared/constants'
 import { createDefaultWorkspaceCleanupBrowseState } from '../shared/workspace-cleanup-browse-state'
 import {
   testState,
-  createStore,
   dataFile,
   writeDataFile,
   readDataFile,
@@ -32,19 +31,28 @@ const { trackMock, getCohortAtEmitMock } = vi.hoisted(() => ({
 vi.mock('electron', () => ({
   app: {
     getPath: () => testState.dir
-  },
-  safeStorage: {
+  }
+}))
+
+async function createStore() {
+  vi.resetModules()
+  const { setSecretStore } = await import('../shared/secret-store')
+  setSecretStore({
     isEncryptionAvailable: () => true,
-    encryptString: (plaintext: string) => Buffer.from(`encrypted:${plaintext}`, 'utf-8'),
-    decryptString: (ciphertext: Buffer) => {
+    encryptString: (plaintext) => Buffer.from(`encrypted:${plaintext}`, 'utf-8'),
+    decryptString: (ciphertext) => {
       const decoded = ciphertext.toString('utf-8')
       if (!decoded.startsWith('encrypted:')) {
         throw new Error('invalid ciphertext')
       }
       return decoded.slice('encrypted:'.length)
-    }
-  }
-}))
+    },
+    describeUnavailable: () => null
+  })
+  const { Store, initDataPath } = await import('./persistence')
+  initDataPath()
+  return new Store()
+}
 
 vi.mock('./telemetry/client', () => ({
   track: trackMock
