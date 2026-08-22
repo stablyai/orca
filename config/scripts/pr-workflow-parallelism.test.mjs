@@ -20,7 +20,8 @@ const shellContractFiles = [
 ]
 const patchedNodePtyContractFiles = [
   'src/main/daemon/node-pty-fd-leak.test.ts',
-  'src/main/pty/omp-shell-wrapper.node-pty.test.ts'
+  'src/main/pty/omp-shell-wrapper.node-pty.test.ts',
+  'src/shared/fish-query-reply-child-stdin.node-pty.test.ts'
 ]
 const nativeShellContractFiles = [...shellContractFiles, ...patchedNodePtyContractFiles]
 const testFilePatterns = [
@@ -334,6 +335,7 @@ describe('PR workflow parallelism', () => {
 
   it('keeps verify as the aggregate required check', () => {
     expect(workflow.jobs.verify.needs).toEqual([
+      'code_paths',
       'static_analysis',
       'root_directory_guard',
       'typecheck',

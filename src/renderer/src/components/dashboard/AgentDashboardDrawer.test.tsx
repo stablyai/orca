@@ -85,23 +85,14 @@ describe('AgentDashboardDrawer', () => {
     expect(useAppStore.getState().agentDashboardDrawerOpen).toBe(false)
   })
 
-  it('hands map rendering to the dedicated popout', () => {
-    const openPopout = vi.mocked(window.api.dashboard.openPopout)
+  it('does not hand the drawer over to an agent map popout', () => {
     render(<AgentDashboardDrawer statusBarVisible />)
     expect(mocks.boardProps).toBeNull()
 
     act(() => useAppStore.setState({ agentDashboardDrawerOpen: true }))
-    expect(mocks.boardProps?.initialView).toBe('board')
-    expect(mocks.boardProps?.workspaceContextMenusEnabled).toBeUndefined()
-    const onOpenMap = mocks.boardProps?.onOpenMap
-    expect(onOpenMap).toBeTypeOf('function')
-
-    act(() => {
-      ;(onOpenMap as () => void)()
-    })
-
-    expect(openPopout).toHaveBeenCalledWith('map')
-    expect(useAppStore.getState().agentDashboardDrawerOpen).toBe(false)
+    expect(mocks.boardProps).not.toBeNull()
+    expect(mocks.boardProps?.onOpenMap).toBeUndefined()
+    expect(mocks.boardProps?.initialView).toBeUndefined()
   })
 
   it('reveals a colliding worktree on the card execution host', () => {

@@ -1,4 +1,4 @@
-import { execFile } from 'node:child_process'
+import { runProcess } from '../../shared/child-process/run-process'
 import os from 'node:os'
 import { performance } from 'node:perf_hooks'
 import {
@@ -151,26 +151,17 @@ async function enumerateWindowsWithTypeperf(): Promise<WindowsProcessResourceRow
   }
 }
 
-function execFileText(file: string, args: string[]): Promise<string> {
-  return new Promise<string>((resolve, reject) => {
-    execFile(
-      file,
-      args,
-      {
-        encoding: 'utf8',
-        maxBuffer: PROCESS_QUERY_MAX_BUFFER,
-        timeout: PROCESS_QUERY_TIMEOUT_MS,
-        windowsHide: true
-      },
-      (err, output) => {
-        if (err) {
-          reject(err)
-          return
-        }
-        resolve(String(output))
-      }
-    )
+async function execFileText(file: string, args: string[]): Promise<string> {
+  const result = await runProcess({
+    program: file,
+    args,
+    timeoutMs: PROCESS_QUERY_TIMEOUT_MS,
+    maxOutputBytes: PROCESS_QUERY_MAX_BUFFER
   })
+  if (result.timedOut || result.code !== 0) {
+    throw new Error(`${file} exited ${result.code ?? 'on timeout'}`)
+  }
+  return result.stdout
 }
 
 function parseWindowsProcessSample(stdout: string): ParsedWindowsProcessSample {

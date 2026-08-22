@@ -96,6 +96,13 @@ describe('detectLanguage', () => {
     }
   })
 
+  it('maps .liquid files to the Monaco built-in liquid language id, including the compound .html.liquid form', () => {
+    expect(detectLanguage('theme.liquid')).toBe('liquid')
+    expect(detectLanguage('sections/header.liquid')).toBe('liquid')
+    expect(detectLanguage('templates/product.html.liquid')).toBe('liquid')
+    expect(detectLanguage('C:\\theme\\snippets\\CART.LIQUID')).toBe('liquid')
+  })
+
   it('keeps .json/.jsonc on the built-in json language and unknown on plaintext', () => {
     expect(detectLanguage('config/settings.json')).toBe('json')
     expect(detectLanguage('config/tsconfig.jsonc')).toBe('json')

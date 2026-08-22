@@ -1,142 +1,120 @@
-// Regression guard: the Windows agent foreground-process scan re-forks
-// powershell.exe (or the wmic fallback) on a ~1s/pane cadence. Electron's main
-// process has no console, so a spawn without windowsHide pops a fresh conhost
-// window per scan that flashes and steals keyboard focus from the foreground app
-// (including Orca's own terminal). Both probes MUST pass windowsHide: true.
+/**
+ * The scan that gates PTY teardown used to fork `powershell.exe` (with a `wmic`
+ * fallback) on a ~1s/pane cadence. Two of the cases this suite used to carry —
+ * "the powershell probe passes windowsHide" and "the wmic fallback passes
+ * windowsHide" — are gone because there is no child process to hide any more.
+ *
+ * What survives is the contract that does not depend on the mechanism: a
+ * teardown-time read must be fresh, and a 32-wide worktree delete must still
+ * collapse into one scan.
+ */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-const { execFileMock } = vi.hoisted(() => ({ execFileMock: vi.fn() }))
+const getAllProcessesMock = vi.fn()
 
-vi.mock('child_process', () => ({ execFile: execFileMock }))
-
+import { __setWindowsProcessTreeLoaderForTests } from '../windows/windows-process-table'
 import {
   queryWindowsProcessDescendants,
   queryWindowsProcessRowsFresh,
   resetWindowsProcessRowsSnapshotForTests
 } from './windows-foreground-process-rows'
+// A real snapshot always contains the process doing the querying; the reader
+// rejects a table without it, because that is what a blocked
+// CreateToolhelp32Snapshot looks like (an empty list, not an error).
+const SELF_PROCESS_ROW = { pid: process.pid, ppid: 0, name: 'vitest.exe', commandLine: 'vitest' }
+const withSelf = <T>(rows: readonly T[]): (T | typeof SELF_PROCESS_ROW)[] => [
+  SELF_PROCESS_ROW,
+  ...rows
+]
 
-type ExecFileCallback = (err: unknown, result: { stdout: string; stderr: string }) => void
-type ExecFileCall = [string, string[], Record<string, unknown>, ExecFileCallback]
-
-const POWERSHELL_ROWS_JSON = JSON.stringify([
+const NATIVE_ROWS = [
   {
-    ProcessId: 100,
-    ParentProcessId: 50,
-    Name: 'powershell.exe',
-    CommandLine: 'powershell.exe',
-    ExecutablePath: 'C:/Windows/System32/WindowsPowerShell/v1.0/powershell.exe'
+    pid: 100,
+    ppid: 50,
+    name: 'powershell.exe',
+    commandLine: '"C:/Windows/System32/WindowsPowerShell/v1.0/powershell.exe" -NoProfile'
   },
   {
-    ProcessId: 200,
-    ParentProcessId: 100,
-    Name: 'node.exe',
-    CommandLine: 'node C:/Users/dev/AppData/codex/bin/codex.js',
-    ExecutablePath: 'C:/Program Files/nodejs/node.exe'
+    pid: 200,
+    ppid: 100,
+    name: 'node.exe',
+    commandLine: 'node C:/Users/dev/AppData/codex/bin/codex.js'
   }
-])
+]
 
-const WMIC_ROWS_VALUE =
-  'CommandLine=powershell.exe\n' +
-  'ExecutablePath=C:/Windows/System32/WindowsPowerShell/v1.0/powershell.exe\n' +
-  'Name=powershell.exe\n' +
-  'ParentProcessId=50\n' +
-  'ProcessId=100\n\n' +
-  'CommandLine=node C:/Users/dev/AppData/codex/bin/codex.js\n' +
-  'ExecutablePath=C:/Program Files/nodejs/node.exe\n' +
-  'Name=node.exe\n' +
-  'ParentProcessId=100\n' +
-  'ProcessId=200\n'
-
-/** Returns the options object passed to the mocked execFile for a given command. */
-function optionsForCommand(command: string): Record<string, unknown> | undefined {
-  const call = execFileMock.mock.calls.find((args) => (args as ExecFileCall)[0] === command) as
-    | ExecFileCall
-    | undefined
-  return call?.[2]
-}
-
-describe('windows foreground process rows spawn options', () => {
+describe('windows process rows', () => {
   let platform: PropertyDescriptor | undefined
 
   beforeEach(() => {
-    execFileMock.mockReset()
-    resetWindowsProcessRowsSnapshotForTests()
+    getAllProcessesMock.mockReset()
+    getAllProcessesMock.mockImplementation((cb: (rows: unknown) => void) => {
+      cb(withSelf(NATIVE_ROWS))
+    })
     platform = Object.getOwnPropertyDescriptor(process, 'platform')
     Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
+    __setWindowsProcessTreeLoaderForTests(() => ({
+      ProcessDataFlag: { None: 0, Memory: 1, CommandLine: 2 },
+      getAllProcesses: getAllProcessesMock
+    }))
   })
 
   afterEach(() => {
+    __setWindowsProcessTreeLoaderForTests()
     if (platform) {
       Object.defineProperty(process, 'platform', platform)
     }
   })
 
-  it('hides the console window for the powershell process-table scan', async () => {
-    execFileMock.mockImplementation((_cmd: string, _args, _opts, cb: ExecFileCallback) => {
-      cb(null, { stdout: POWERSHELL_ROWS_JSON, stderr: '' })
-    })
+  const scanCount = (): number => getAllProcessesMock.mock.calls.length
 
+  it('walks descendants from the native snapshot', async () => {
     const candidates = await queryWindowsProcessDescendants(100)
-
     expect(candidates?.[0]?.pid).toBe(200)
-    expect(optionsForCommand('powershell.exe')).toMatchObject({ windowsHide: true })
   })
 
-  it('hides the console window for the wmic fallback scan', async () => {
-    execFileMock.mockImplementation((cmd: string, _args, _opts, cb: ExecFileCallback) => {
-      // Force the powershell probe to miss so the wmic fallback runs.
-      if (cmd === 'powershell.exe') {
-        cb(new Error('powershell unavailable'), { stdout: '', stderr: '' })
-        return
-      }
-      cb(null, { stdout: WMIC_ROWS_VALUE, stderr: '' })
+  it('rejects a snapshot that does not contain the querying process', async () => {
+    // A blocked CreateToolhelp32Snapshot returns an EMPTY list rather than an
+    // error, and "nothing is running" is a claim teardown acts on. Our own pid
+    // is unfalsifiably present in any honest snapshot.
+    getAllProcessesMock.mockImplementation((cb: (rows: unknown) => void) => {
+      cb([{ pid: 100, ppid: 50, name: 'other.exe', commandLine: 'other' }])
     })
-
-    const candidates = await queryWindowsProcessDescendants(100)
-
-    expect(candidates?.[0]?.pid).toBe(200)
-    expect(optionsForCommand('wmic')).toMatchObject({ windowsHide: true })
-  })
-})
-
-// Regression guard: the PID-identity probe that gates `taskkill /T /F` needs rows
-// from a scan started after it asked, but worktree delete tears down PTYs 32-wide.
-// Reading the table uncached would fork 32 powershell cold-starts per delete.
-describe('queryWindowsProcessRowsFresh', () => {
-  let platform: PropertyDescriptor | undefined
-
-  beforeEach(() => {
-    execFileMock.mockReset()
     resetWindowsProcessRowsSnapshotForTests()
-    platform = Object.getOwnPropertyDescriptor(process, 'platform')
-    Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
-    execFileMock.mockImplementation((_cmd: string, _args, _opts, cb: ExecFileCallback) => {
-      cb(null, { stdout: POWERSHELL_ROWS_JSON, stderr: '' })
+
+    await expect(queryWindowsProcessRowsFresh()).rejects.toThrow(/unreadable/)
+  })
+
+  it('reports an unreadable table as unavailable, not as an empty machine', async () => {
+    // An empty table is a claim that nothing is running, and callers act on it
+    // by declaring a tree dead. Unavailable has to stay distinguishable.
+    getAllProcessesMock.mockImplementation((cb: (rows: unknown) => void) => {
+      cb(undefined)
     })
+    resetWindowsProcessRowsSnapshotForTests()
+
+    await expect(queryWindowsProcessRowsFresh()).rejects.toThrow()
+    expect(await queryWindowsProcessDescendants(100)).toBeNull()
   })
 
-  afterEach(() => {
-    if (platform) {
-      Object.defineProperty(process, 'platform', platform)
-    }
+  it('returns null when the root is absent from the snapshot', async () => {
+    // Only an observed root can authoritatively have no descendants.
+    expect(await queryWindowsProcessDescendants(999)).toBeNull()
   })
-
-  const powershellScanCount = (): number =>
-    execFileMock.mock.calls.filter((call) => call[0] === 'powershell.exe').length
 
   it('collapses a burst of concurrent identity probes into one scan', async () => {
+    // A worktree delete tears down PTYs 32-wide.
     const rows = await Promise.all(Array.from({ length: 32 }, () => queryWindowsProcessRowsFresh()))
 
-    expect(powershellScanCount()).toBe(1)
-    expect(rows[31]?.map((row) => row.pid)).toEqual([100, 200])
+    expect(scanCount()).toBe(1)
+    expect(rows[31]?.map((row) => row.pid)).toEqual([process.pid, 100, 200])
   })
 
   it('never answers from the TTL cache, which can predate the recycle it detects', async () => {
     await queryWindowsProcessDescendants(100)
-    expect(powershellScanCount()).toBe(1)
+    expect(scanCount()).toBe(1)
 
     await queryWindowsProcessRowsFresh()
 
-    expect(powershellScanCount()).toBe(2)
+    expect(scanCount()).toBe(2)
   })
 })

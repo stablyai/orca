@@ -1099,16 +1099,35 @@ async function prepareWorktreePushTargetSsh(
         : false
     } else {
       remoteName = await ensureUniqueRemoteName(execGit, repoPath, target.remoteName)
-      await provider.exec(['remote', 'add', remoteName, target.remoteUrl], repoPath)
+      try {
+        await provider.exec(['remote', 'add', remoteName, target.remoteUrl], repoPath)
+      } catch (error) {
+        // Why: relays predating fork-remote support reject this exec by policy; name the fix instead of surfacing their rule.
+        if (error instanceof Error && error.message.includes('Destructive git remote operations')) {
+          throw new Error(
+            'This SSH host is running an older Orca relay that cannot add a fork remote for a PR workspace. Reconnect to deploy the latest relay, then try again.'
+          )
+        }
+        throw error
+      }
       remoteCreated = true
     }
   }
-  await provider.fetchRemoteTrackingRef(
-    repoPath,
-    remoteName,
-    target.branchName,
-    `refs/remotes/${remoteName}/${target.branchName}`
-  )
+  try {
+    await provider.fetchRemoteTrackingRef(
+      repoPath,
+      remoteName,
+      target.branchName,
+      `refs/remotes/${remoteName}/${target.branchName}`
+    )
+  } catch (error) {
+    // Why: mirrors the local path — a fetch failure aborts the create, so the
+    // remote we just added on the host would be orphaned with no owner to clean it.
+    if (remoteCreated) {
+      await provider.exec(['remote', 'remove', remoteName], repoPath).catch(() => {})
+    }
+    throw error
+  }
   return { ...sanitizedTarget, remoteName, ...(remoteCreated ? { remoteCreated: true } : {}) }
 }
 

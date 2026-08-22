@@ -1,8 +1,8 @@
 /* eslint-disable max-lines -- Why: WSL CLI status/install/remove share one state machine;
    splitting the installer would separate conflict checks from the operations they guard. */
-import { execFile } from 'node:child_process'
 import type { CliInstallStatus } from '../../shared/cli-install-types'
 import { getDefaultWslDistro } from '../wsl'
+import { runWslProcess } from '../wsl/wsl-runner'
 import { CliInstaller } from './cli-installer'
 import {
   buildManagedLegacyRemoveCommand,
@@ -214,7 +214,9 @@ export class WslCliInstaller {
     await this.run(
       this.distro as string,
       [
-        'set -euo pipefail',
+        // Why -eu not -euo pipefail: transported via runWslProcess's `sh -s`,
+        // and no pipe here needs pipefail -- dash on Ubuntu 20.04 lacks the option.
+        'set -eu',
         `mkdir -p ${quoteShell(status.pathDirectory as string)}`,
         `mkdir -p ${quoteShell(getPosixDirname(getBridgePathFromCommandPath(status.commandPath)))}`,
         buildRegistrationLockPrelude(status.commandPath),
@@ -282,9 +284,7 @@ export class WslCliInstaller {
       // startup reconciliation as opt-in proof, silently undoing this removal.
       await this.run(
         this.distro as string,
-        ['set -euo pipefail', buildManagedLegacyRemoveCommand(quoteShell(legacyCommandPath))].join(
-          '\n'
-        )
+        ['set -eu', buildManagedLegacyRemoveCommand(quoteShell(legacyCommandPath))].join('\n')
       )
       return status
     }
@@ -457,57 +457,31 @@ export class WslCliInstaller {
 }
 
 async function runWslCommand(distro: string, command: string): Promise<string> {
-  return new Promise((resolve, reject) => {
-    let child: ReturnType<typeof execFile> | null = null
-    let settled = false
-
-    const finish = (error: Error | null, stdout = ''): void => {
-      if (settled) {
-        return
-      }
-      settled = true
-      clearTimeout(timeout)
-      if (error) {
-        reject(error)
-        return
-      }
-      resolve(stdout)
-    }
-
-    // Why: WSL CLI status/install/remove backs Settings UI; a wedged wsl.exe
-    // process must not leave the command registration flow pending forever.
-    const timeout = setTimeout(() => {
-      child?.kill()
-      finish(new Error(`WSL command timed out after ${WSL_COMMAND_TIMEOUT_MS}ms.`))
-    }, WSL_COMMAND_TIMEOUT_MS)
-
-    try {
-      child = execFile(
-        'wsl.exe',
-        ['-d', distro, '--exec', 'bash', '-lc', buildEncodedWslBashCommand(command)],
-        {
-          encoding: 'utf8',
-          timeout: WSL_COMMAND_TIMEOUT_MS
-        },
-        (error, stdout) => {
-          finish(error ?? null, stdout)
-        }
-      )
-    } catch (error) {
-      finish(error instanceof Error ? error : new Error(String(error)))
-    }
-  })
-}
-
-function buildEncodedWslBashCommand(command: string): string {
-  // Why: raw multiline heredocs can be flattened while crossing wsl.exe's
-  // Windows command-line boundary. Send one shell-safe line and decode inside WSL.
-  const encoded = Buffer.from(command, 'utf8').toString('base64')
-  return `set -o pipefail; printf %s ${quoteShell(encoded)} | base64 -d | bash`
+  // Why the probe lane fixes #14288: the prior login shell (`bash -lc`) sourced
+  // ~/.profile, so one blocking line there ate the whole 10s timeout.
+  let result: Awaited<ReturnType<typeof runWslProcess>>
+  try {
+    result = await runWslProcess({
+      distro,
+      lane: 'probe',
+      script: command,
+      timeoutMs: WSL_COMMAND_TIMEOUT_MS
+    })
+  } catch {
+    // Why map: the runner's raw "guest environment is unavailable" otherwise
+    // reaches Settings verbatim through ipc/cli.ts -> toast.error.
+    throw new Error('Could not reach the WSL distro. Try again.')
+  }
+  if (result.timedOut) {
+    throw new Error(`WSL command timed out after ${WSL_COMMAND_TIMEOUT_MS}ms.`)
+  }
+  if (result.code !== 0) {
+    throw new Error(result.stderr.trim() || `WSL command failed with exit code ${result.code}.`)
+  }
+  return result.stdout
 }
 
 export const _internals = {
-  buildEncodedWslBashCommand,
   buildWslBridgeScript,
   buildWslLauncher,
   getBridgePathFromCommandPath,

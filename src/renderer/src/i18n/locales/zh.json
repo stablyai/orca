@@ -5071,6 +5071,12 @@
           "5e1b8d3f62": "永久隐藏外部工作树",
           "c3e8a1f4b2": "不再显示"
         },
+        "NoticeHostGlyph": {
+          "hostDisconnected": "{{hostName}} 已断开连接",
+          "sshHostProject": "SSH 主机 {{hostName}} 上的项目",
+          "localHostProject": "此主机上的项目",
+          "runtimeHostProject": "{{hostName}} 上的项目"
+        },
         "newExternalWorktreesInboxActions": {
           "a11c2f6d89": "无法保持外部工作树隐藏。请重试。",
           "b7e4d1a062": "无法导入外部工作树。请重试。",
@@ -13605,7 +13611,13 @@
           "3e3b2c369f": "cron",
           "e81a02d61b": "保存前输入有效的五字段 cron。",
           "968e66d686": "输入一个五字段 cron。",
-          "cadb7b0bc9": "无效的"
+          "cadb7b0bc9": "无效的",
+          "f6ca30da23": "有效的自定义 cron",
+          "a226dbdd40": "分钟",
+          "ec9c1e35df": "小时",
+          "2d82246d23": "日",
+          "0e1de0358b": "月",
+          "77e96bded6": "星期"
         },
         "AutomationDetail": {
           "007c8ad874": "提示词",
@@ -13907,6 +13919,16 @@
               "category": "维护",
               "name": "每小时维护检查",
               "prompt": "检查是否有卡住的工作、过时的生成文件、失败的验证以及任何需要人工注意的内容。仅报告需处理的问题。"
+            }
+          },
+          "schedule": {
+            "label": {
+              "a95afb7483": "每小时 :{{minute}}",
+              "280ccd2701": "每天 {{time}}",
+              "3f1422adc1": "工作日 {{time}}",
+              "cc71e252ba": "每{{day}} {{time}}",
+              "ba20c92073": "自定义日程",
+              "086a5a9fe2": "无效日程"
             }
           }
         },

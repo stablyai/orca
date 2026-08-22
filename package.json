@@ -54,7 +54,7 @@
     "dev": "pnpm run ensure:electron-runtime && node config/scripts/run-electron-vite-dev.mjs",
     "dev-stable-name": "pnpm run ensure:electron-runtime && node config/scripts/run-electron-vite-dev.mjs --stable-name",
     "dev:web": "vite --config vite.web.config.ts --host 127.0.0.1",
-    "build:relay": "node config/scripts/build-relay.mjs",
+    "build:relay": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON config/scripts/build-relay.mjs",
     "build:computer-macos": "node config/scripts/build-computer-macos.mjs",
     "build:keyboard-layout-macos": "node config/scripts/build-keyboard-layout-macos.mjs",
     "build:notification-status-macos": "node config/scripts/build-notification-status-macos.mjs",
@@ -263,6 +263,7 @@
     "zustand": "^5.0.14"
   },
   "optionalDependencies": {
+    "@vscode/windows-process-tree": "0.8.0",
     "sherpa-onnx-darwin-arm64": "1.12.37",
     "sherpa-onnx-darwin-x64": "1.12.37",
     "sherpa-onnx-linux-arm64": "1.12.37",
@@ -314,7 +315,8 @@
       "@xterm/addon-webgl@0.20.0-beta.286": "config/patches/@xterm__addon-webgl@0.20.0-beta.286.patch",
       "@xterm/addon-serialize@0.15.0-beta.287": "config/patches/@xterm__addon-serialize@0.15.0-beta.287.patch",
       "@xterm/xterm@6.1.0-beta.287": "config/patches/@xterm__xterm@6.1.0-beta.287.patch",
-      "lint-staged@16.4.0": "config/patches/lint-staged@16.4.0.patch"
+      "lint-staged@16.4.0": "config/patches/lint-staged@16.4.0.patch",
+      "@vscode/windows-process-tree@0.8.0": "config/patches/@vscode__windows-process-tree@0.8.0.patch"
     }
   },
   "reactDoctor": {

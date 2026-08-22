@@ -250,9 +250,7 @@ function candidateMatchesContextPath(
   if (normalizedContextPaths.length === 0) {
     return false
   }
-  const haystack = normalizePathForCommandMatch(
-    [candidate.command, candidate.executablePath].filter(Boolean).join('\n')
-  )
+  const haystack = normalizePathForCommandMatch(candidate.command)
   return normalizedContextPaths.some((contextPath) =>
     commandLineContainsPath(haystack, contextPath)
   )

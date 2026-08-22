@@ -41,8 +41,9 @@ import type { RateLimitService } from '../rate-limits/service'
 import { parseWslUncPath } from '../../shared/wsl-paths'
 import { toWindowsWslPath } from '../wsl'
 import { buildEncodedWslBashCommand } from '../wsl-bash-command'
+import { runWslProcess } from '../wsl/wsl-runner'
 import {
-  buildWslCodexAvailabilityArgs,
+  buildWslCodexAvailabilityScript,
   buildWslCodexLoginArgs,
   WSL_CODEX_AVAILABILITY_TIMEOUT_MS
 } from './wsl-codex-command'
@@ -71,6 +72,7 @@ const WINDOWS_RM_RETRY_DELAY_MS = 150
 const WINDOWS_LOGIN_AUTH_POLL_INTERVAL_MS = 500
 const WINDOWS_LOGIN_POST_AUTH_EXIT_GRACE_MS = 5_000
 const WINDOWS_LOGIN_TREE_KILL_TIMEOUT_MS = 5_000
+const WSL_MANAGED_HOME_TIMEOUT_MS = 5_000
 
 type CodexOAuthCredentials = {
   idToken: string | null
@@ -754,7 +756,7 @@ export class CodexAccountService {
 
   private async doAddAccount(target?: CodexAccountAddTarget): Promise<CodexRateLimitAccountsState> {
     const accountId = randomUUID()
-    const managedHome = this.createManagedHome(accountId, target)
+    const managedHome = await this.createManagedHome(accountId, target)
     const { managedHomePath } = managedHome
     try {
       const canonicalConfig = this.readCanonicalConfigForManagedHome(managedHomePath)
@@ -773,7 +775,7 @@ export class CodexAccountService {
     target?: CodexAccountAddTarget
   ): Promise<CodexRateLimitAccountsState> {
     const accountId = randomUUID()
-    const managedHome = this.createManagedHome(accountId, target)
+    const managedHome = await this.createManagedHome(accountId, target)
     const { managedHomePath } = managedHome
     try {
       const canonicalConfig = this.readCanonicalConfigForManagedHome(managedHomePath)
@@ -897,7 +899,7 @@ export class CodexAccountService {
     options?: CodexAccountReauthenticateOptions
   ): Promise<CodexRateLimitAccountsState> {
     const account = this.requireAccount(accountId)
-    const managedHomePath = this.ensureManagedHomeForReauthentication(account)
+    const managedHomePath = await this.ensureManagedHomeForReauthentication(account)
     const accountTarget = getCodexSelectionTargetForAccount(account)
     const selectedAccountId = getSelectedCodexAccountIdForTarget(
       this.store.getSettings(),
@@ -1181,11 +1183,11 @@ export class CodexAccountService {
     }
   }
 
-  private createManagedHome(
+  private async createManagedHome(
     accountId: string,
     target?: CodexAccountAddTarget
-  ): ManagedHomeLocation {
-    const wslHome = this.tryCreateWslManagedHome(accountId, target)
+  ): Promise<ManagedHomeLocation> {
+    const wslHome = await this.tryCreateWslManagedHome(accountId, target)
     if (wslHome) {
       return wslHome
     }
@@ -1202,25 +1204,32 @@ export class CodexAccountService {
     }
   }
 
-  private tryCreateWslManagedHome(
+  private async tryCreateWslManagedHome(
     accountId: string,
     target?: CodexAccountAddTarget
-  ): ManagedHomeLocation | null {
+  ): Promise<ManagedHomeLocation | null> {
     if (process.platform !== 'win32' || target?.runtime !== 'wsl') {
       return null
     }
 
-    const distroArgs = target.wslDistro?.trim() ? ['-d', target.wslDistro.trim()] : []
-    const infoOutput = execFileSync(
-      'wsl.exe',
-      [...distroArgs, '--exec', 'bash', '-lc', 'printf "%s\\n%s\\n" "$WSL_DISTRO_NAME" "$HOME"'],
-      { encoding: 'utf-8', timeout: 5000 }
-    )
-    const [rawDistro, rawHome] = infoOutput
+    const requestedDistro = target.wslDistro?.trim() || undefined
+    const info = await runWslProcess({
+      distro: requestedDistro,
+      lane: 'probe',
+      // Degrade rather than refuse: $HOME and $WSL_DISTRO_NAME come from wsl.exe itself, not the login PATH -- the same rationale the Claude sites use.
+      allowDegradedEnvironment: true,
+      script: 'printf "%s\\n%s\\n" "$WSL_DISTRO_NAME" "$HOME"',
+      shell: 'bash',
+      timeoutMs: WSL_MANAGED_HOME_TIMEOUT_MS
+    })
+    if (info.code !== 0 || info.timedOut) {
+      throw new Error('Could not resolve the active WSL home directory for Codex login.')
+    }
+    const [rawDistro, rawHome] = info.stdout
       .replaceAll(String.fromCharCode(0), '')
       .split(/\r?\n/)
       .map((line) => line.trim())
-    const distro = target.wslDistro?.trim() || rawDistro
+    const distro = requestedDistro || rawDistro
     const home = rawHome
     if (!distro || !home?.startsWith('/')) {
       throw new Error('Could not resolve the active WSL home directory for Codex login.')
@@ -1228,25 +1237,25 @@ export class CodexAccountService {
 
     const wslLinuxHomePath = `${home.replace(/\/$/, '')}/.local/share/orca/codex-accounts/${accountId}/home`
     const markerPath = `${wslLinuxHomePath}/.orca-managed-home`
-    execFileSync(
-      'wsl.exe',
-      [
-        '-d',
-        distro,
-        '--exec',
-        'bash',
-        '-lc',
-        `mkdir -p ${shellQuote(wslLinuxHomePath)} && printf '%s\\n' ${shellQuote(accountId)} > ${shellQuote(markerPath)}`
-      ],
-      { encoding: 'utf-8', timeout: 5000 }
-    )
+    const created = await runWslProcess({
+      distro,
+      lane: 'probe',
+      // Degrade rather than refuse: $HOME and $WSL_DISTRO_NAME come from wsl.exe itself, not the login PATH -- the same rationale the Claude sites use.
+      allowDegradedEnvironment: true,
+      script: `mkdir -p ${shellQuote(wslLinuxHomePath)} && printf '%s\\n' ${shellQuote(accountId)} > ${shellQuote(markerPath)}`,
+      shell: 'bash',
+      timeoutMs: WSL_MANAGED_HOME_TIMEOUT_MS
+    })
+    if (created.code !== 0 || created.timedOut) {
+      throw new Error('Could not create the managed Codex home inside WSL.')
+    }
 
     const managedHomePath = toWindowsWslPath(wslLinuxHomePath, distro)
     let trustedManagedHomePath: string
     try {
       trustedManagedHomePath = this.assertManagedHomePath(managedHomePath, accountId)
     } catch (error) {
-      this.safeRemoveWslManagedHomeCandidate(distro, wslLinuxHomePath, accountId)
+      await this.safeRemoveWslManagedHomeCandidate(distro, wslLinuxHomePath, accountId)
       throw error
     }
 
@@ -1420,10 +1429,12 @@ export class CodexAccountService {
     return root
   }
 
-  private ensureManagedHomeForReauthentication(account: CodexManagedAccount): string {
+  private async ensureManagedHomeForReauthentication(
+    account: CodexManagedAccount
+  ): Promise<string> {
     const wslInfo = parseWslUncPath(account.managedHomePath)
     if (wslInfo && process.platform === 'win32') {
-      this.ensureExpectedWslManagedHomeForReauthentication(account, wslInfo)
+      await this.ensureExpectedWslManagedHomeForReauthentication(account, wslInfo)
       return this.assertManagedHomePath(account.managedHomePath, account.id)
     }
 
@@ -1452,10 +1463,10 @@ export class CodexAccountService {
     return this.assertManagedHomePath(expectedManagedHomePath, account.id)
   }
 
-  private ensureExpectedWslManagedHomeForReauthentication(
+  private async ensureExpectedWslManagedHomeForReauthentication(
     account: CodexManagedAccount,
     wslInfo: { distro: string; linuxPath: string }
-  ): void {
+  ): Promise<void> {
     if (
       account.managedHomeRuntime !== 'wsl' ||
       account.wslDistro !== wslInfo.distro ||
@@ -1465,29 +1476,31 @@ export class CodexAccountService {
       return
     }
 
-    execFileSync(
-      'wsl.exe',
-      [
-        '-d',
-        wslInfo.distro,
-        '--exec',
-        'bash',
-        '-lc',
-        buildEncodedWslBashCommand(
-          [
-            'set -euo pipefail',
-            `candidate=${shellQuote(wslInfo.linuxPath)}`,
-            `expected_marker=${shellQuote(account.id)}`,
-            'marker="$candidate/.orca-managed-home"',
-            'if [ -e "$candidate" ] && [ ! -f "$marker" ]; then exit 41; fi',
-            'if [ -f "$marker" ] && [ "$(cat "$marker")" != "$expected_marker" ]; then exit 42; fi',
-            'mkdir -p -- "$candidate"',
-            'printf "%s\\n" "$expected_marker" > "$marker"'
-          ].join('\n')
-        )
-      ],
-      { encoding: 'utf-8', timeout: 5000 }
-    )
+    const result = await runWslProcess({
+      distro: wslInfo.distro,
+      lane: 'probe',
+      // Degrade rather than refuse: $HOME and $WSL_DISTRO_NAME come from wsl.exe itself, not the login PATH -- the same rationale the Claude sites use.
+      allowDegradedEnvironment: true,
+      script: [
+        'set -euo pipefail',
+        `candidate=${shellQuote(wslInfo.linuxPath)}`,
+        `expected_marker=${shellQuote(account.id)}`,
+        'marker="$candidate/.orca-managed-home"',
+        'if [ -e "$candidate" ] && [ ! -f "$marker" ]; then exit 41; fi',
+        'if [ -f "$marker" ] && [ "$(cat "$marker")" != "$expected_marker" ]; then exit 42; fi',
+        'mkdir -p -- "$candidate"',
+        'printf "%s\\n" "$expected_marker" > "$marker"'
+      ].join('\n'),
+      shell: 'bash',
+      timeoutMs: WSL_MANAGED_HOME_TIMEOUT_MS
+    })
+    // Why: 41/42 mean the path is not this account's home; re-auth must refuse
+    // rather than write credentials into someone else's directory.
+    if (result.code !== 0 || result.timedOut) {
+      throw new Error(
+        `Could not prepare the managed Codex home in WSL ${wslInfo.distro} for re-authentication.`
+      )
+    }
   }
 
   private isMissingManagedHomeError(error: unknown): boolean {
@@ -1553,7 +1566,7 @@ export class CodexAccountService {
                 ].join('\n')
               )
             ],
-            { encoding: 'utf-8', timeout: 5000 }
+            { windowsHide: true, encoding: 'utf-8', timeout: 5000 }
           ).trim()
           if (!canonicalLinuxPath) {
             throw new Error('Managed Codex home directory does not exist on disk.')
@@ -1593,42 +1606,40 @@ export class CodexAccountService {
     })
   }
 
-  private safeRemoveWslManagedHomeCandidate(
+  private async safeRemoveWslManagedHomeCandidate(
     distro: string,
     linuxHomePath: string,
     expectedAccountId: string
-  ): void {
+  ): Promise<void> {
     // Why: creation can fail after mkdir/marker but before trust, so cleanup must verify the marker/account ID inside WSL.
     try {
-      execFileSync(
-        'wsl.exe',
-        [
-          '-d',
-          distro,
-          '--exec',
-          'bash',
-          '-lc',
-          buildEncodedWslBashCommand(
-            [
-              'set -euo pipefail',
-              `candidate=${shellQuote(linuxHomePath)}`,
-              `expected_marker=${shellQuote(expectedAccountId)}`,
-              'managed_root="${HOME%/}/.local/share/orca/codex-accounts"',
-              'candidate_real=$(readlink -f -- "$candidate" 2>/dev/null || true)',
-              'managed_root_real=$(readlink -f -- "$managed_root" 2>/dev/null || true)',
-              'test -n "$candidate_real"',
-              'test -n "$managed_root_real"',
-              'case "$candidate_real" in "$managed_root_real"/*/home) ;; *) exit 0 ;; esac',
-              'test -f "$candidate_real/.orca-managed-home"',
-              'test "$(cat "$candidate_real/.orca-managed-home")" = "$expected_marker"',
-              'rm -rf -- "$candidate_real"',
-              'parent_dir=$(dirname -- "$candidate_real")',
-              'case "$parent_dir" in "$managed_root_real"/*) rmdir -- "$parent_dir" 2>/dev/null || true ;; esac'
-            ].join('\n')
-          )
-        ],
-        { encoding: 'utf-8', timeout: 5000 }
-      )
+      const result = await runWslProcess({
+        distro,
+        lane: 'probe',
+        // Degrade rather than refuse: $HOME and $WSL_DISTRO_NAME come from wsl.exe itself, not the login PATH -- the same rationale the Claude sites use.
+        allowDegradedEnvironment: true,
+        script: [
+          'set -euo pipefail',
+          `candidate=${shellQuote(linuxHomePath)}`,
+          `expected_marker=${shellQuote(expectedAccountId)}`,
+          'managed_root="${HOME%/}/.local/share/orca/codex-accounts"',
+          'candidate_real=$(readlink -f -- "$candidate" 2>/dev/null || true)',
+          'managed_root_real=$(readlink -f -- "$managed_root" 2>/dev/null || true)',
+          'test -n "$candidate_real"',
+          'test -n "$managed_root_real"',
+          'case "$candidate_real" in "$managed_root_real"/*/home) ;; *) exit 0 ;; esac',
+          'test -f "$candidate_real/.orca-managed-home"',
+          'test "$(cat "$candidate_real/.orca-managed-home")" = "$expected_marker"',
+          'rm -rf -- "$candidate_real"',
+          'parent_dir=$(dirname -- "$candidate_real")',
+          'case "$parent_dir" in "$managed_root_real"/*) rmdir -- "$parent_dir" 2>/dev/null || true ;; esac'
+        ].join('\n'),
+        shell: 'bash',
+        timeoutMs: WSL_MANAGED_HOME_TIMEOUT_MS
+      })
+      if (result.code !== 0 || result.timedOut) {
+        throw new Error(`WSL cleanup exited with ${result.timedOut ? 'a timeout' : result.code}`)
+      }
     } catch (error) {
       console.warn('[codex-accounts] Failed to clean up WSL managed home candidate:', error)
     }
@@ -1693,7 +1704,7 @@ export class CodexAccountService {
   private async runCodexLogin(managedHomePath: string): Promise<void> {
     const wslInfo = parseWslUncPath(managedHomePath)
     if (wslInfo) {
-      this.assertWslCodexCliAvailable(wslInfo)
+      await this.assertWslCodexCliAvailable(wslInfo)
     }
     // Why: reauthentication starts with an existing auth.json. Only new auth
     // bytes prove this login completed; existence alone would kill the
@@ -1849,16 +1860,30 @@ export class CodexAccountService {
     })
   }
 
-  private assertWslCodexCliAvailable(wslInfo: { distro: string; linuxPath: string }): void {
+  private async assertWslCodexCliAvailable(wslInfo: {
+    distro: string
+    linuxPath: string
+  }): Promise<void> {
+    // Why the runner's default (throw) and not allowDegradedEnvironment: without
+    // the login PATH an nvm-installed codex is invisible, and this message would
+    // turn "we could not check" into "not installed" (#9725).
+    let result: Awaited<ReturnType<typeof runWslProcess>>
     try {
-      execFileSync('wsl.exe', buildWslCodexAvailabilityArgs(wslInfo.distro), {
-        encoding: 'utf-8',
-        timeout: WSL_CODEX_AVAILABILITY_TIMEOUT_MS
+      result = await runWslProcess({
+        distro: wslInfo.distro,
+        lane: 'probe',
+        script: buildWslCodexAvailabilityScript(),
+        timeoutMs: WSL_CODEX_AVAILABILITY_TIMEOUT_MS
       })
-    } catch (error) {
+    } catch {
+      // Why map: the runner's raw "guest environment is unavailable" would
+      // otherwise reach the account dialog verbatim.
+      throw new Error('Could not check the Codex CLI in WSL. Try again.')
+    }
+    if (result.code !== 0 || result.timedOut) {
       throw new Error(
         `Codex CLI is not available in WSL ${wslInfo.distro}. Install Codex in that distro or switch Account location to Windows.`,
-        { cause: error }
+        { cause: new Error(result.stderr.trim() || `codex lookup exited with ${result.code}`) }
       )
     }
   }

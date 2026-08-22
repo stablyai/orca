@@ -12,6 +12,28 @@ export class RipgrepUnavailableError extends Error {
   }
 }
 
+/** rg could not be launched even though ripgrep itself is installed; retryable, never install guidance. */
+export class RipgrepLaunchFailureError extends Error {
+  constructor(message: string) {
+    super(message)
+    this.name = 'RipgrepLaunchFailureError'
+  }
+}
+
+// Why: fork/exec pressure (out of processes, fds, or memory) is not evidence that ripgrep is missing.
+const TRANSIENT_SPAWN_ERROR_CODES: ReadonlySet<string> = new Set([
+  'EAGAIN',
+  'EMFILE',
+  'ENFILE',
+  'ENOMEM',
+  'ETXTBSY'
+])
+
+export function isTransientRipgrepSpawnError(error: unknown): boolean {
+  const code = (error as { code?: unknown } | null | undefined)?.code
+  return typeof code === 'string' && TRANSIENT_SPAWN_ERROR_CODES.has(code)
+}
+
 function ignoreRipgrepSpawnError(): void {}
 
 export function killSpawnedRipgrepProcess(child: ChildProcess): boolean {

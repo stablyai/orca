@@ -13,18 +13,21 @@ vi.mock('fs', () => ({
   chmodSync: vi.fn()
 }))
 
-const { execMock, execFileMock, gitExecFileSyncMock } = vi.hoisted(() => ({
+const { execMock, runWslProcessMock, gitExecFileSyncMock } = vi.hoisted(() => ({
   execMock: vi.fn(),
-  execFileMock: vi.fn(),
+  runWslProcessMock: vi.fn(),
   gitExecFileSyncMock: vi.fn()
 }))
 
 vi.mock('child_process', () => ({
   exec: execMock,
-  execFile: execFileMock,
   execFileSync: vi.fn(),
   // runner.ts imports spawn from child_process transitively.
   spawn: vi.fn()
+}))
+
+vi.mock('./wsl/wsl-runner', () => ({
+  runWslProcess: runWslProcessMock
 }))
 
 vi.mock('./git/runner', async () => ({
@@ -135,22 +138,15 @@ describe('runHook', () => {
     }
   })
 
-  it('runs WSL hooks through wsl.exe and translates env paths to Linux', async () => {
+  it('runs WSL hooks through runWslProcess and translates env paths to Linux', async () => {
     execMock.mockReset()
-    execFileMock.mockReset()
-    execFileMock.mockImplementation((_file, _args, options, callback) => {
-      callback?.(null, '', '')
-      expect(options).toEqual(
-        expect.objectContaining({
-          env: expect.objectContaining({
-            ORCA_ROOT_PATH: '/mnt/c/Users/jinwo/git/orca',
-            ORCA_WORKTREE_PATH: '/home/jin/feature',
-            CONDUCTOR_ROOT_PATH: '/mnt/c/Users/jinwo/git/orca',
-            GHOSTX_ROOT_PATH: '/mnt/c/Users/jinwo/git/orca'
-          })
-        })
-      )
-      return {} as never
+    runWslProcessMock.mockReset()
+    runWslProcessMock.mockResolvedValue({
+      environmentResolved: true,
+      code: 0,
+      stdout: '',
+      stderr: '',
+      timedOut: false
     })
 
     const fs = await import('node:fs')
@@ -171,19 +167,23 @@ describe('runHook', () => {
       })
 
       expect(result).toEqual({ success: true, output: '' })
-      expect(execFileMock).toHaveBeenCalledWith(
-        'wsl.exe',
-        ['-d', 'Ubuntu', '--exec', 'bash', '-c', "cd '/home/jin/feature' && echo hello"],
-        // #7652 regression: the unattended WSL hook branch must carry the
-        // credential guard, and WSLENV is what carries it into the distro.
+      expect(runWslProcessMock).toHaveBeenCalledWith(
         expect.objectContaining({
+          distro: 'Ubuntu',
+          lane: 'probe',
+          script: 'echo hello',
+          cwd: '/home/jin/feature',
+          // #7652 regression: the unattended WSL hook branch must carry the
+          // credential guard into the guest env.
           env: expect.objectContaining({
+            ORCA_ROOT_PATH: '/mnt/c/Users/jinwo/git/orca',
+            ORCA_WORKTREE_PATH: '/home/jin/feature',
+            CONDUCTOR_ROOT_PATH: '/mnt/c/Users/jinwo/git/orca',
+            GHOSTX_ROOT_PATH: '/mnt/c/Users/jinwo/git/orca',
             GIT_TERMINAL_PROMPT: '0',
-            GCM_INTERACTIVE: 'never',
-            WSLENV: expect.stringContaining('GIT_TERMINAL_PROMPT')
+            GCM_INTERACTIVE: 'never'
           })
-        }),
-        expect.any(Function)
+        })
       )
       expect(execMock).not.toHaveBeenCalled()
     } finally {
@@ -196,14 +196,13 @@ describe('runHook', () => {
 
   it('runs Windows-path hooks through WSL when the project runtime targets WSL', async () => {
     execMock.mockReset()
-    execFileMock.mockReset()
-    // Why: assert on the captured options after runHook resolves — an expect()
-    // thrown inside the mock is swallowed by runHook's own error handling.
-    let capturedOptions: unknown
-    execFileMock.mockImplementation((_file, _args, options, callback) => {
-      capturedOptions = options
-      callback?.(null, '', '')
-      return {} as never
+    runWslProcessMock.mockReset()
+    runWslProcessMock.mockResolvedValue({
+      environmentResolved: true,
+      code: 0,
+      stdout: '',
+      stderr: '',
+      timedOut: false
     })
 
     const fs = await import('node:fs')
@@ -215,9 +214,6 @@ describe('runHook', () => {
       configurable: true,
       value: 'win32'
     })
-    // Why: keep the WSLENV assertion hermetic on hosts that export WSLENV.
-    const originalWslenv = process.env.WSLENV
-    delete process.env.WSLENV
 
     try {
       const { runHook } = await import('./hooks')
@@ -233,35 +229,17 @@ describe('runHook', () => {
       )
 
       expect(result).toEqual({ success: true, output: '' })
-      expect(execFileMock).toHaveBeenCalledWith(
-        'wsl.exe',
-        [
-          '-d',
-          'Ubuntu',
-          '--exec',
-          'bash',
-          '-c',
-          "cd '/mnt/c/Users/jinwo/git/orca-feature' && echo hello"
-        ],
-        expect.any(Object),
-        expect.any(Function)
-      )
-      expect(capturedOptions).toEqual(
+      expect(runWslProcessMock).toHaveBeenCalledWith(
         expect.objectContaining({
+          distro: 'Ubuntu',
+          lane: 'probe',
+          script: 'echo hello',
+          cwd: '/mnt/c/Users/jinwo/git/orca-feature',
           env: expect.objectContaining({
             ORCA_ROOT_PATH: '/mnt/c/Users/jinwo/git/orca',
             ORCA_WORKTREE_PATH: '/mnt/c/Users/jinwo/git/orca-feature',
             CONDUCTOR_ROOT_PATH: '/mnt/c/Users/jinwo/git/orca',
-            GHOSTX_ROOT_PATH: '/mnt/c/Users/jinwo/git/orca',
-            // Why: wsl.exe only imports Windows env vars named in WSLENV, so
-            // setting the vars on the execFile env alone is not enough (#9206).
-            // /u because runHook pre-translated the values to Linux paths.
-            // stringContaining, not exact: promptGuardShellEnv (#7652) appends
-            // its own guard keys (GIT_TERMINAL_PROMPT, …) after these — the
-            // setup vars must remain registered alongside them.
-            WSLENV: expect.stringContaining(
-              'ORCA_ROOT_PATH/u:ORCA_WORKTREE_PATH/u:CONDUCTOR_ROOT_PATH/u:GHOSTX_ROOT_PATH/u:ORCA_WORKSPACE_NAME/u'
-            )
+            GHOSTX_ROOT_PATH: '/mnt/c/Users/jinwo/git/orca'
           })
         })
       )
@@ -271,11 +249,6 @@ describe('runHook', () => {
         configurable: true,
         value: originalPlatform
       })
-      if (originalWslenv === undefined) {
-        delete process.env.WSLENV
-      } else {
-        process.env.WSLENV = originalWslenv
-      }
     }
   })
 
@@ -331,11 +304,17 @@ describe('runHook', () => {
   })
 
   it('settles WSL hooks when wsl.exe never reports completion', async () => {
-    vi.useFakeTimers()
+    // Why no fake timers: the timeout is now runProcess's own, internal to the
+    // mocked runWslProcess -- there is nothing left in hooks.ts to advance.
     execMock.mockReset()
-    execFileMock.mockReset()
-    const killMock = vi.fn()
-    execFileMock.mockImplementation(() => ({ kill: killMock }) as never)
+    runWslProcessMock.mockReset()
+    runWslProcessMock.mockResolvedValue({
+      environmentResolved: true,
+      code: null,
+      stdout: '',
+      stderr: '',
+      timedOut: true
+    })
 
     const fs = await import('node:fs')
     vi.mocked(fs.existsSync).mockReturnValue(true)
@@ -349,26 +328,16 @@ describe('runHook', () => {
 
     try {
       const { runHook } = await import('./hooks')
-      const promise = runHook('setup', '\\\\wsl.localhost\\Ubuntu\\home\\jin\\feature', {
+      const result = await runHook('setup', '\\\\wsl.localhost\\Ubuntu\\home\\jin\\feature', {
         ...makeRepo(),
         path: 'C:\\Users\\jinwo\\git\\orca'
       })
-      let settled = false
-      void promise.finally(() => {
-        settled = true
-      })
 
-      await vi.advanceTimersByTimeAsync(120_000)
-      await Promise.resolve()
-
-      expect(settled).toBe(true)
-      await expect(promise).resolves.toMatchObject({
+      expect(result).toMatchObject({
         success: false,
         output: expect.stringContaining('Hook timed out')
       })
-      expect(killMock).toHaveBeenCalled()
     } finally {
-      vi.useRealTimers()
       Object.defineProperty(process, 'platform', {
         configurable: true,
         value: originalPlatform
