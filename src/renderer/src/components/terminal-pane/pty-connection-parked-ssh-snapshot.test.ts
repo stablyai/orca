@@ -1,8 +1,11 @@
 import type * as React from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
+  POST_REPLAY_LIVE_AGENT_REATTACH_RESET,
   POST_REPLAY_REATTACH_RESET,
-  RESET_GRAPHIC_RENDITION
+  RESET_GRAPHIC_RENDITION,
+  RESET_KITTY_KEYBOARD_PROTOCOL,
+  RESET_TERMINAL_CURSOR_STYLE
 } from '../../../../shared/terminal-mode-reset-profiles'
 import { toAppSshPtyId } from '../../../../shared/ssh-pty-id'
 import type { SshConnectionState } from '../../../../shared/ssh-types'
@@ -18,7 +21,10 @@ import {
   type MockTransport
 } from './pty-connection-test-pane-fixtures'
 import { buildPaneConnectionDeps } from './pty-connection-test-deps'
-import { createInitialStoreState } from './pty-connection-test-store-fixtures'
+import {
+  buildReattachPaneTitleState,
+  createInitialStoreState
+} from './pty-connection-test-store-fixtures'
 import type { StoreState } from './pty-connection-test-store-state'
 import {
   installTerminalTestGlobals,
@@ -134,6 +140,10 @@ vi.mock('./pty-dispatcher', async (importOriginal) => {
 
 function createDeps(overrides: Record<string, unknown> = {}) {
   return buildPaneConnectionDeps(() => mockStoreState, overrides)
+}
+
+function setReattachPaneTitle(title: string): void {
+  mockStoreState = buildReattachPaneTitleState(mockStoreState, title)
 }
 
 describe('connectPanePty', () => {
@@ -513,7 +523,7 @@ describe('connectPanePty', () => {
     const transport = createMockTransport(localPtyId)
     transport.connect.mockImplementation(async ({ sessionId }: { sessionId?: string }) => {
       transport.getPtyId.mockReturnValue(localPtyId)
-      return sessionId ? { id: localPtyId, isReattach: true } : null
+      return sessionId ? { id: localPtyId, isReattach: true, showCursor: true } : null
     })
     transportFactoryQueue.push(transport)
     const getMainBufferSnapshot = vi.mocked(window.api.pty.getMainBufferSnapshot)
@@ -525,8 +535,10 @@ describe('connectPanePty', () => {
       seq: 558,
       source: 'headless',
       alternateScreen: true,
+      showCursor: false,
       scrollbackAnsi: 'FLOATING-PARK-HISTORY\r\n'
     })
+    setReattachPaneTitle('Cursor Agent')
     mockStoreState = {
       ...mockStoreState,
       tabsByWorktree: {
@@ -567,6 +579,8 @@ describe('connectPanePty', () => {
     expect(writes.join('')).toContain('FLOATING-PARK-HISTORY')
     expect(writes.join('')).toContain('FLOATING-PARK-ALT-FRAME')
     expect(writes.filter((write) => write.includes('FLOATING-PARK-ALT-FRAME'))).toHaveLength(1)
+    expect(writes).toContain(`${RESET_TERMINAL_CURSOR_STYLE}${RESET_KITTY_KEYBOARD_PROTOCOL}`)
+    expect(writes).not.toContain(POST_REPLAY_LIVE_AGENT_REATTACH_RESET)
     expect(pane.terminal.resize).toHaveBeenCalledWith(113, 32)
   })
 

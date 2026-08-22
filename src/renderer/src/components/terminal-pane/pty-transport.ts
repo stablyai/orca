@@ -917,6 +917,9 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
               ? { snapshotFrameRestoreAnsi: spawnResult.snapshotFrameRestoreAnsi }
               : {}),
             isAlternateScreen: spawnResult.isAlternateScreen,
+            ...(typeof spawnResult.showCursor === 'boolean'
+              ? { showCursor: spawnResult.showCursor }
+              : {}),
             sessionExpired: spawnResult.sessionExpired,
             coldRestore: spawnResult.coldRestore,
             replay: spawnResult.replay,

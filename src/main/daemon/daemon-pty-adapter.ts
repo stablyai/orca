@@ -1006,6 +1006,9 @@ export class DaemonPtyAdapter implements IPtyProvider {
         : {}),
       isReattach: true,
       isAlternateScreen: isAltScreen,
+      ...(typeof reattachSnapshot.modes.showCursor === 'boolean'
+        ? { showCursor: reattachSnapshot.modes.showCursor }
+        : {}),
       // Why: the snapshot ANSI has no title frame; carry lastTitle beside it so main can seed title records after a relaunch.
       ...(reattachSnapshot.lastTitle ? { lastTitle: reattachSnapshot.lastTitle } : {}),
       // Why: carry the mid-escape tail so the renderer writes it after the reattach reset, else a split escape renders literally (#7329).
@@ -1433,6 +1436,7 @@ export class DaemonPtyAdapter implements IPtyProvider {
       source: 'headless',
       oscLinks: snapshot.oscLinks,
       alternateScreen: snapshot.modes.alternateScreen,
+      showCursor: snapshot.modes.showCursor,
       // Why known `0` is carried too: it proves the app negotiated nothing at
       // this boundary, which is a different fact from a source that cannot say.
       ...(kittyKeyboardFlags !== undefined ? { kittyKeyboardFlags } : {}),

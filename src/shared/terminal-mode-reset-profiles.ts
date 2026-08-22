@@ -105,9 +105,17 @@ export function replayPayloadEndsWithCursorHidden(payload: string): boolean {
   return hideIndex !== -1 && hideIndex > payload.lastIndexOf('\x1b[?25h')
 }
 
-// Why: some agents hide the real cursor and draw their own, so preserve the payload's final visibility (pty-connection re-shows it if the agent was actually a dead TUI).
-export function buildPostReplayLiveAgentReattachReset(payload: string): string {
-  return replayPayloadEndsWithCursorHidden(payload)
+// Why: some agents hide the real cursor and draw their own. Prefer tracked
+// showCursor (same bit the alt-screen restore path already trusts) so a
+// hide-once ?25l that has scrolled out of the replay window is not force-shown.
+// Fall back to the payload scan only when no tracked state exists.
+export function buildPostReplayLiveAgentReattachReset(
+  payload: string,
+  showCursor?: boolean
+): string {
+  const cursorHidden =
+    typeof showCursor === 'boolean' ? !showCursor : replayPayloadEndsWithCursorHidden(payload)
+  return cursorHidden
     ? `${RESET_TERMINAL_CURSOR_STYLE}${RESET_KITTY_KEYBOARD_PROTOCOL}`
     : POST_REPLAY_LIVE_AGENT_REATTACH_RESET
 }

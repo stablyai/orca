@@ -27,6 +27,7 @@ export function readTerminalModes(
     sgrMousePixelsMode: mouseModes.sgrMousePixelsMode,
     applicationCursor: buffer.type === 'normal' ? terminal.modes.applicationCursorKeysMode : false,
     alternateScreen: buffer.type === 'alternate',
-    kittyKeyboardFlags: readKittyKeyboardFlags(terminal)
+    kittyKeyboardFlags: readKittyKeyboardFlags(terminal),
+    showCursor: terminal.modes.showCursor
   }
 }

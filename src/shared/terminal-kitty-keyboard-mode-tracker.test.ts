@@ -82,6 +82,33 @@ describe('TerminalKittyKeyboardModeTracker', () => {
     expect(tracker.flags).toBe(7)
   })
 
+  it('tracks cursor visibility transitions, including split sequences and resets', () => {
+    const tracker = new TerminalKittyKeyboardModeTracker()
+    expect(tracker.hasObservedCursorVisibility).toBe(false)
+    expect(tracker.cursorVisible).toBe(true)
+
+    tracker.scan('\x1b[?25')
+    tracker.scan('l')
+    expect(tracker.hasObservedCursorVisibility).toBe(true)
+    expect(tracker.cursorVisible).toBe(false)
+
+    tracker.scan('\x1b[?25h')
+    expect(tracker.cursorVisible).toBe(true)
+
+    const risTracker = new TerminalKittyKeyboardModeTracker()
+    risTracker.scan('\x1bc')
+    expect(risTracker.hasObservedCursorVisibility).toBe(true)
+    expect(risTracker.cursorVisible).toBe(true)
+
+    tracker.reset()
+    expect(tracker.hasObservedCursorVisibility).toBe(false)
+    expect(tracker.cursorVisible).toBe(true)
+
+    tracker.scan('\x1b[!p')
+    expect(tracker.hasObservedCursorVisibility).toBe(true)
+    expect(tracker.cursorVisible).toBe(true)
+  })
+
   it('caps the mirrored stack without losing the current flags', () => {
     const tracker = new TerminalKittyKeyboardModeTracker()
     for (let i = 0; i < 40; i++) {
