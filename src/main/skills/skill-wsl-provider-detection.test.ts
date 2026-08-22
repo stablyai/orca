@@ -65,6 +65,31 @@ describe('detectSkillProvidersInWsl', () => {
     expect(found).toEqual(['codex'])
   })
 
+  it.each([
+    ['reports unverifiable rather than empty', '', true],
+    ['still trusts a genuine empty result', '', false]
+  ])('%s', async (_case, stdout, unresolved) => {
+    // The script ends in `|| true`, so "ran without the login PATH" and "no
+    // providers installed" are the same exit 0 with the same empty stdout.
+    // Callers skip the ~/.codex and ~/.claude skill roots on an empty list, so
+    // conflating them loses an nvm-installed provider's skills (#9725).
+    runWslProcessMock.mockResolvedValue({
+      environmentResolved: !unresolved,
+      code: 0,
+      stdout,
+      stderr: '',
+      timedOut: false
+    })
+
+    if (unresolved) {
+      await expect(detectSkillProvidersInWsl('Ubuntu')).rejects.toThrow(
+        'skill-install-wsl-provider-detection-failed'
+      )
+    } else {
+      await expect(detectSkillProvidersInWsl('Ubuntu')).resolves.toEqual([])
+    }
+  })
+
   it('rejects when wsl.exe cannot be started', async () => {
     runWslProcessMock.mockRejectedValue(new Error('spawn wsl.exe ENOENT'))
 

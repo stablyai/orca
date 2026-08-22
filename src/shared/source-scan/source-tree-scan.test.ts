@@ -98,6 +98,18 @@ describe('regex literals', () => {
     expect(blankStringContents(source)).toContain('banner with a renderer')
   })
 
+
+  it.each([
+    ['postfix decrement', "const half = n-- / 2; execFile(bin, args, { cwd: '/usr/bin' })", 'execFile(bin, args'],
+    ['non-null assertion', 'const b = done! / total!\nexecFile(y)\n', 'execFile(y)'],
+    ['JSX self-close', 'const a = c ? <A size={14} /> : <B size={14} />\nexecFile(x)\n', 'execFile(x)']
+  ])('reads %s as division, not a pattern', (_case, source, survives) => {
+    // Blanking live code is the dangerous direction: the swallowed span took a
+    // whole execFile call with it and left no desync behind, so the guard saw
+    // zero calls and called the file clean.
+    expect(blankStringContents(source)).toContain(survives)
+  })
+
   it('still reads division as division', () => {
     const source = 'const a = (x) / 2\nconst b = arr[i] / 2\nspawn("wsl.exe")\n'
     expect(blankStringContents(source)).toContain('spawn(')

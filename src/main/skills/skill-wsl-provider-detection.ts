@@ -23,7 +23,15 @@ export async function detectSkillProvidersInWsl(distro: string): Promise<string[
   if (result.code !== 0) {
     throw new Error('skill-install-wsl-provider-detection-failed')
   }
-  return result.stdout
+  const providers = result.stdout
     .split(/\r?\n/u)
     .filter((provider) => provider === 'codex' || provider === 'claude')
+  // The script ends in `|| true`, so a lookup that ran without the login PATH
+  // exits 0 with nothing found -- identical to a genuine empty result. Callers
+  // skip the ~/.codex and ~/.claude skill roots on an empty list, so an
+  // nvm-installed provider would silently lose its skills (#9725).
+  if (providers.length === 0 && !result.environmentResolved) {
+    throw new Error('skill-install-wsl-provider-detection-failed')
+  }
+  return providers
 }

@@ -151,10 +151,25 @@ export function blankStringContentsDesynced(source: string): boolean {
   return blankStringContents(source, true) !== ''
 }
 
-/** After a value `/` is division; after an operator or opener it opens a regex. */
+/**
+ * After a value `/` is division; after an opener or a binary operator it opens
+ * a regex.
+ *
+ * The set is deliberately narrow, because the two errors are not symmetric. A
+ * false negative leaves a pattern unblanked, which at worst desyncs the lexer
+ * -- and every caller treats desync as an offender, so it fails closed. A
+ * false positive blanks live code, and a scan that cannot see a call reports
+ * it clean. A wider set cost 13 real JSX spans (`<Icon size={14} /> : <Icon`)
+ * and swallowed a whole `execFile(...)` after `n-- / 2`, with no desync to
+ * show for it.
+ *
+ * So the postfix and value-terminating characters are excluded even though
+ * each also has a prefix reading: `!` (non-null assertion vs `!/re/.test(x)`),
+ * `+` `-` `*` `%` `^` `~` (postfix `--`/`++`), and `>` `}` (JSX close).
+ */
 function startsRegexLiteral(emitted: string): boolean {
   const prev = emitted.replace(/\s+$/, '').at(-1)
-  return prev === undefined || '(,=:[!&|?{};+-*%~^<>'.includes(prev)
+  return prev === undefined || '(,=:[&|?;'.includes(prev)
 }
 
 /** End index (exclusive) of the regex literal opening at `start`, or -1. */

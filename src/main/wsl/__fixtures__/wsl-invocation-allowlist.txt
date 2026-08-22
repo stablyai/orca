@@ -1,11 +1,12 @@
+# Files that spawn wsl.exe directly instead of through src/main/wsl/wsl-runner.ts.
 #
 # Enforced by ../wsl-invocation-boundary.test.ts. This list only shrinks -- its
-# express because it always prepends --exec.
-# Files that spawn wsl.exe directly instead of through src/main/wsl/wsl-runner.ts.
-# host-level flag like --status / --list that the guest-command API cannot
 # length is the W3 goalpost.
+#
 # Remaining entries need a runner mode that does not exist: a long-lived
 # streaming child (OAuth logins, the hook relay), a synchronous caller, or a
+# host-level flag like --status / --list that the guest-command API cannot
+# express because it always prepends --exec.
 main/agent-hooks/wsl-hook-relay-launch.ts
 main/claude-accounts/service.ts
 main/codex-accounts/runtime-home-service.ts
