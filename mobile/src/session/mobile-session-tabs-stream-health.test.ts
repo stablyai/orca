@@ -134,6 +134,29 @@ describe('MobileSessionTabsStreamHealth', () => {
     expect(harness.apply).toHaveBeenCalledTimes(2)
   })
 
+  it('coalesces repeated retries and releases the retry cohort after failure', async () => {
+    const harness = makeHarness()
+    harness.controller.setReconciliationActive(true)
+
+    const halfOpen = harness.controller.requestReconciliation()
+    const retry = harness.controller.retryReconciliation()
+    const repeatedRetry = harness.controller.retryReconciliation()
+    expect(harness.sendRequest).toHaveBeenCalledTimes(2)
+    expect(repeatedRetry).toBe(retry)
+
+    harness.requests[1]!.resolve(failure())
+    await retry
+    const nextRetry = harness.controller.retryReconciliation()
+    expect(harness.sendRequest).toHaveBeenCalledTimes(3)
+    expect(nextRetry).not.toBe(retry)
+
+    harness.requests[2]!.resolve(success(result(3)))
+    await nextRetry
+    harness.requests[0]!.resolve(success(result(1)))
+    await halfOpen
+    expect(harness.apply).toHaveBeenCalledTimes(1)
+  })
+
   it('starts distinct pre- and post-snapshot lists and discards the stale barrier', async () => {
     const harness = makeHarness()
     harness.controller.setReconciliationActive(true)

@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi, afterEach } from 'vitest'
 import type * as EditorAutosaveModule from '@/components/editor/editor-autosave'
-import type { FsChangedPayload } from '../../../shared/types'
+import type { FsChangedPayload } from '../../../shared/filesystem-entry-types'
 
 vi.mock('@/store', () => ({
   useAppStore: {
@@ -287,7 +287,8 @@ describe('createExternalWatchEventHandler tombstone coalescing', () => {
       filePath: 'C:\\Repo\\notes.md',
       relativePath: 'notes.md',
       mode: 'edit' as const,
-      isDirty: false
+      isDirty: false,
+      runtimeEnvironmentId: 'env-1'
     }
     vi.mocked(useAppStore.getState).mockReturnValue({
       openFiles: [file],
@@ -324,7 +325,8 @@ describe('createExternalWatchEventHandler tombstone coalescing', () => {
       filePath: '//Server/Share/Repo/notes.md',
       relativePath: 'notes.md',
       mode: 'edit' as const,
-      isDirty: false
+      isDirty: false,
+      runtimeEnvironmentId: 'env-1'
     }
     vi.mocked(useAppStore.getState).mockReturnValue({
       openFiles: [file],

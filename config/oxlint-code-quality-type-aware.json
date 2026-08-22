@@ -12,6 +12,7 @@
   },
   "rules": {
     "typescript/await-thenable": "warn",
+    "typescript/no-redundant-type-constituents": "warn",
     "typescript/restrict-plus-operands": "warn",
     "typescript/restrict-template-expressions": "warn",
     "typescript/switch-exhaustiveness-check": [

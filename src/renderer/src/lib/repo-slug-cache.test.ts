@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from 'vitest'
-import type { Repo } from '../../../shared/types'
-import { githubRepoIdentityKey } from '../../../shared/github-repository-identity-key'
+import type { Repo } from '../../../shared/repo-types'
+import { githubRepoIdentityKey } from '../../../shared/github/repository-identity-key'
 import {
   REPO_SLUG_FAILURE_TTL_MS,
   clearRepoSlugCacheValues,
@@ -44,6 +44,62 @@ describe('repo slug cache host identity', () => {
     expect(
       lookupReposBySlugFromCache([dotCom, enterprise], null, 'acme/widgets', 'ghe.example:8443')
     ).toEqual([enterprise])
+  })
+
+  it('routes an upstream project row to the fork clone that tracks it', () => {
+    const fork = { ...repo('fork'), upstream: { owner: 'SciPhi-AI', repo: 'R2R' } }
+    slugByRepoId.set(
+      slugCacheKey(fork.id, settingsForRepoOwner(fork, null)),
+      githubRepoIdentityKey({ owner: 'me', repo: 'r2r-mirror' })
+    )
+
+    expect(lookupReposBySlugFromCache([fork], null, 'SciPhi-AI/R2R')).toEqual([fork])
+  })
+
+  it('prefers the clone that owns the slug over a fork of it', () => {
+    const origin = repo('origin')
+    const fork = { ...repo('fork'), upstream: { owner: 'SciPhi-AI', repo: 'R2R' } }
+    slugByRepoId.set(
+      slugCacheKey(origin.id, settingsForRepoOwner(origin, null)),
+      githubRepoIdentityKey({ owner: 'SciPhi-AI', repo: 'R2R' })
+    )
+    slugByRepoId.set(
+      slugCacheKey(fork.id, settingsForRepoOwner(fork, null)),
+      githubRepoIdentityKey({ owner: 'me', repo: 'r2r-mirror' })
+    )
+
+    expect(lookupReposBySlugFromCache([origin, fork], null, 'SciPhi-AI/R2R')).toEqual([origin])
+  })
+
+  it('does not route a GHES row to a same-named github.com fork parent', () => {
+    const fork = { ...repo('fork'), upstream: { owner: 'acme', repo: 'widgets' } }
+    slugByRepoId.set(
+      slugCacheKey(fork.id, settingsForRepoOwner(fork, null)),
+      githubRepoIdentityKey({ owner: 'me', repo: 'widgets' })
+    )
+
+    expect(lookupReposBySlugFromCache([fork], null, 'acme/widgets', 'ghe.example:8443')).toEqual([])
+  })
+
+  it('scopes a host-less fork parent to the host the fork itself was cloned from', () => {
+    const enterpriseFork = { ...repo('fork'), upstream: { owner: 'acme', repo: 'widgets' } }
+    slugByRepoId.set(
+      slugCacheKey(enterpriseFork.id, settingsForRepoOwner(enterpriseFork, null)),
+      githubRepoIdentityKey({ owner: 'me', repo: 'widgets', host: 'ghe.example:8443' })
+    )
+
+    expect(
+      lookupReposBySlugFromCache([enterpriseFork], null, 'acme/widgets', 'ghe.example:8443')
+    ).toEqual([enterpriseFork])
+    expect(lookupReposBySlugFromCache([enterpriseFork], null, 'acme/widgets')).toEqual([])
+  })
+
+  it('drops the fork alias while its own origin is unresolved', () => {
+    const fork = { ...repo('fork'), upstream: { owner: 'acme', repo: 'widgets' } }
+
+    expect(lookupReposBySlugFromCache([fork], null, 'acme/widgets')).toEqual([])
+    slugByRepoId.set(slugCacheKey(fork.id, settingsForRepoOwner(fork, null)), null)
+    expect(lookupReposBySlugFromCache([fork], null, 'acme/widgets')).toEqual([])
   })
 
   it('expires negative slug resolutions so an external GHES login can recover', () => {

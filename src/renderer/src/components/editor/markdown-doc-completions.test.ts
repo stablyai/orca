@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { MarkdownDocument } from '../../../../shared/types'
+import type { MarkdownDocument } from '../../../../shared/filesystem-entry-types'
 import {
   getMarkdownDocCompletionContext,
   getMarkdownDocCompletionDocuments,

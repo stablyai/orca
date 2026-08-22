@@ -117,7 +117,7 @@ export function reclaimProjectionRecord(
     return
   }
   const index = ids.indexOf(id)
-  if (index >= 0) {
+  if (index !== -1) {
     ids.splice(index, 1)
   }
   if (ids.length === 0) {

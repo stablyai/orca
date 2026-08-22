@@ -1,7 +1,7 @@
 import { createElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { AskPrompt } from './mobile-native-chat-ask'
+import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import type { AskPrompt } from '../../../src/shared/native-chat-ask'
 import { useMobileNativeChatAskDismiss } from './use-mobile-native-chat-ask-dismiss'
 
 describe('useMobileNativeChatAskDismiss', () => {
@@ -10,7 +10,6 @@ describe('useMobileNativeChatAskDismiss', () => {
   let renders = 0
 
   beforeEach(() => {
-    globalThis.IS_REACT_ACT_ENVIRONMENT = true
     renders = 0
   })
 
@@ -45,20 +44,9 @@ describe('useMobileNativeChatAskDismiss', () => {
   }
 
   async function mount(props: Parameters<typeof Harness>[0]): Promise<void> {
-    const original = console.error
-    const consoleSpy = vi.spyOn(console, 'error').mockImplementation((...args) => {
-      if (typeof args[0] === 'string' && args[0].includes('react-test-renderer is deprecated')) {
-        return
-      }
-      original(...args)
+    await act(async () => {
+      renderer = create(createElement(Harness, props))
     })
-    try {
-      await act(async () => {
-        renderer = create(createElement(Harness, props))
-      })
-    } finally {
-      consoleSpy.mockRestore()
-    }
   }
 
   async function update(props: Parameters<typeof Harness>[0]): Promise<void> {

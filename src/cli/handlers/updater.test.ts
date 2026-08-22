@@ -4,7 +4,7 @@ import type {
   RemoteServerUpdaterWaitResult,
   RemoteServerUpdateSupport
 } from '../../shared/remote-server-update'
-import type { UpdateStatus } from '../../shared/types'
+import type { UpdateStatus } from '../../shared/update-status-types'
 import type { HandlerContext } from '../dispatch'
 import { RuntimeClientError, type RuntimeRpcSuccess } from '../runtime-client'
 import type { RuntimeClient } from '../runtime-client'

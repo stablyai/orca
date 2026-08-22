@@ -14,12 +14,8 @@ import type {
   OpenCodeUsageScanState,
   OpenCodeUsageSummary
 } from '../../../../shared/opencode-usage-types'
-import {
-  buildUsageOverview,
-  formatUsageCost,
-  formatUsageTokens,
-  getRecentUsageDays
-} from './usage-overview-model'
+import { getRecentUsageDays } from './usage-overview-daily-series'
+import { buildUsageOverview, formatUsageCost, formatUsageTokens } from './usage-overview-model'
 
 function enabledClaudeScanState(): ClaudeUsageScanState {
   return {

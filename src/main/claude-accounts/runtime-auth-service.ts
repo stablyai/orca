@@ -3,7 +3,7 @@ import { execFileSync } from 'node:child_process'
 import { chmodSync, existsSync, mkdirSync, readFileSync, rmSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { app } from 'electron'
-import type { ClaudeManagedAccount } from '../../shared/types'
+import type { ClaudeManagedAccount } from '../../shared/managed-account-types'
 import type { Store } from '../persistence'
 import { writeFileAtomically } from '../codex-accounts/fs-utils'
 import type { ClaudeEnvPatch } from './environment'
@@ -151,8 +151,8 @@ export class ClaudeRuntimeAuthService {
     })
   }
 
-  getRuntimeConfigDir(): string {
-    return this.pathResolver.getRuntimePaths().configDir
+  getRuntimeConfigDir(target?: ClaudeAccountSelectionTarget): string {
+    return this.getPreparation(target).configDir
   }
 
   private initializeLastSyncedState(): void {
@@ -1090,7 +1090,7 @@ export class ClaudeRuntimeAuthService {
             [
               '-d',
               wslInfo.distro,
-              '--',
+              '--exec',
               'bash',
               '-lc',
               buildEncodedWslBashCommand(

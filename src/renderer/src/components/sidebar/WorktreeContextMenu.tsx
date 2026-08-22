@@ -34,13 +34,16 @@ import { useAppStore } from '@/store'
 import type { AppState } from '@/store/types'
 import { useAllWorktrees, useRepoById, useRepoMap, useWorktreeMap } from '@/store/selectors'
 import { cn } from '@/lib/utils'
+import type { Repo } from '../../../../shared/repo-types'
 import type {
-  Repo,
-  Worktree,
   WorkspaceStatus,
-  WorkspaceStatusDefinition
-} from '../../../../shared/types'
-import { runWorktreeBatchDelete, runWorktreeDelete } from './delete-worktree-flow'
+  WorkspaceStatusDefinition,
+  Worktree
+} from '../../../../shared/worktree/types'
+import {
+  createWorktreeContextMenuDeleteIntent,
+  deferWorktreeContextMenuDeleteIntent
+} from './worktree-context-menu-delete-intent'
 import { runSleepWorktrees } from './sleep-worktree-flow'
 import { activateAndRevealWorktree } from '@/lib/worktree-activation'
 import { VIRTUALIZED_SCROLL_ANCHOR_RECORD_EVENT } from '@/hooks/useVirtualizedScrollAnchor'
@@ -62,11 +65,9 @@ import {
 import { WorkspaceSleepMenuItems } from './WorkspaceSleepMenuItems'
 import { isEventTargetInsideCurrentTarget } from './worktree-card-dom-events'
 import { translate } from '@/i18n/i18n'
-import {
-  folderWorkspaceKey,
-  parseWorkspaceKey,
-  worktreeWorkspaceKey
-} from '../../../../shared/workspace-scope'
+import { unnestWorktrees } from './worktree-unnest'
+import { parseWorkspaceKey, worktreeWorkspaceKey } from '../../../../shared/workspace-scope'
+import { getDeleteStateForWorktreeHost } from './worktree-delete-state-host-match'
 
 type Props = {
   worktree: Worktree
@@ -332,10 +333,10 @@ const WorktreeContextMenu = React.memo(function WorktreeContextMenu({
   const projectGroups = useAppStore((s) => s.projectGroups)
   const createProjectGroup = useAppStore((s) => s.createProjectGroup)
   const moveProjectToGroup = useAppStore((s) => s.moveProjectToGroup)
-  const deleteFolderWorkspace = useAppStore((s) => s.deleteFolderWorkspace)
-  const setActiveWorktree = useAppStore((s) => s.setActiveWorktree)
   const repo = useRepoById(worktree.repoId)
-  const deleteState = useAppStore((s) => s.deleteStateByWorktreeId[worktree.id])
+  const deleteState = useAppStore((s) =>
+    getDeleteStateForWorktreeHost(worktree, s.deleteStateByWorktreeId)
+  )
   const [menuOpen, setMenuOpen] = useState(false)
   // Why: the Developer submenu is a power-user affordance, so it is revealed by
   // holding Option/Alt at right-click — captured at open time (like the Help
@@ -421,11 +422,14 @@ const WorktreeContextMenu = React.memo(function WorktreeContextMenu({
   const lineageDescendantCount = lineageMenuActions.descendants.length
   const subtreeSleepableWorktrees = lineageMenuActions.sleepableTargets
   const deletingContext = useMemo(
-    () => activeContextWorktrees.some((item) => deleteStateByWorktreeId[item.id]?.isDeleting),
+    () =>
+      activeContextWorktrees.some(
+        (item) => getDeleteStateForWorktreeHost(item, deleteStateByWorktreeId)?.isDeleting
+      ),
     [activeContextWorktrees, deleteStateByWorktreeId]
   )
   const deletingSubtree = lineageMenuActions.targets.some(
-    (item) => deleteStateByWorktreeId[item.id]?.isDeleting
+    (item) => getDeleteStateForWorktreeHost(item, deleteStateByWorktreeId)?.isDeleting
   )
   const contextDeletePending = isMultiContext ? deletingContext : deletingSubtree
   const contextWorkspaceStatus = useMemo(() => {
@@ -674,48 +678,19 @@ const WorktreeContextMenu = React.memo(function WorktreeContextMenu({
   }, [sleepWorktreesAfterMenuClose, subtreeSleepableWorktrees])
 
   const handleDelete = useCallback(() => {
-    // Folder mode handled inline because it routes to a different modal;
-    // standard delete delegates to the shared runWorktreeDelete helper.
     const restoreSidebarPosition = preserveDeleteSiblingPosition(scopeRef.current)
     scopeRef.current
       ?.closest('[data-worktree-sidebar]')
       ?.dispatchEvent(new Event(VIRTUALIZED_SCROLL_ANCHOR_RECORD_EVENT))
+    const intent = createWorktreeContextMenuDeleteIntent({
+      worktree,
+      batchDeleteWorktrees,
+      isMultiContext,
+      ...(folderWorkspaceId ? { folderWorkspaceId } : {})
+    })
+    deferWorktreeContextMenuDeleteIntent(intent, restoreSidebarPosition)
     setMenuOpenState(false)
-    // Why: Delete can remove the active row and remount the sidebar. Run it
-    // after menu close for the same reason as Sleep above.
-    window.setTimeout(() => {
-      if (isMultiContext) {
-        runWorktreeBatchDelete(batchDeleteWorktrees.map((item) => item.id))
-        restoreSidebarPosition()
-        return
-      }
-      if (folderWorkspaceId) {
-        void deleteFolderWorkspace(folderWorkspaceId).then((deleted) => {
-          if (
-            deleted &&
-            useAppStore.getState().activeWorktreeId === folderWorkspaceKey(folderWorkspaceId)
-          ) {
-            setActiveWorktree(null)
-          }
-        })
-        restoreSidebarPosition()
-        return
-      }
-      // Why delegate to runWorktreeDelete: keeps the delete-vs-project-removal
-      // decision tree (and its rationale) in one place shared with command
-      // surfaces and the memory popover's inline Delete action.
-      runWorktreeDelete(worktree.id)
-      restoreSidebarPosition()
-    }, 50)
-  }, [
-    batchDeleteWorktrees,
-    deleteFolderWorkspace,
-    folderWorkspaceId,
-    isMultiContext,
-    setActiveWorktree,
-    setMenuOpenState,
-    worktree.id
-  ])
+  }, [batchDeleteWorktrees, folderWorkspaceId, isMultiContext, setMenuOpenState, worktree])
 
   const handleOpenParent = useCallback(() => {
     if (validParentWorktreeId) {
@@ -769,8 +744,9 @@ const WorktreeContextMenu = React.memo(function WorktreeContextMenu({
   )
 
   const handleRemoveParentLink = useCallback(() => {
-    void Promise.all(
-      activeContextWorktrees.map((item) => updateWorktreeLineage(item.id, { noParent: true }))
+    void unnestWorktrees(
+      activeContextWorktrees.map((item) => item.id),
+      updateWorktreeLineage
     )
   }, [activeContextWorktrees, updateWorktreeLineage])
 

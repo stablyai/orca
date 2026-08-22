@@ -2,7 +2,10 @@ import { useCallback, useMemo, useRef, type KeyboardEvent } from 'react'
 import { track } from '@/lib/telemetry'
 import { notifyInstalledAgentSkillsChanged } from '@/hooks/useInstalledAgentSkills'
 import { useActiveProjectSkillRuntime } from '@/hooks/useActiveProjectSkillRuntime'
-import { buildSkillCommandForRuntime } from '../settings/CliSkillRuntimeSetup'
+import {
+  buildSkillCommandForRuntime,
+  buildSkillSetupTerminalCommand
+} from '../settings/CliSkillRuntimeSetup'
 import { OnboardingInlineCommandTerminal } from './OnboardingInlineCommandTerminal'
 import {
   getOnboardingFeatureSetupAgentRuntime,
@@ -29,9 +32,12 @@ export function FeatureSetupInlineTerminal({
   const terminalInteractedTrackedRef = useRef(false)
   const activeSkillRuntime = useActiveProjectSkillRuntime()
   const setupRuntime = runtimeContext ?? activeSkillRuntime
-  const runtimeCommand = buildSkillCommandForRuntime(
-    command,
-    getOnboardingFeatureSetupAgentRuntime(setupRuntime)
+  const agentRuntime = getOnboardingFeatureSetupAgentRuntime(setupRuntime)
+  const copiedCommand = buildSkillCommandForRuntime(command, agentRuntime)
+  const prepareCommandForShell = useCallback(
+    (terminalCommand: string, effectiveShell: string | undefined) =>
+      buildSkillSetupTerminalCommand(terminalCommand, effectiveShell, agentRuntime),
+    [agentRuntime]
   )
 
   const selectionTelemetry = useMemo(
@@ -70,8 +76,10 @@ export function FeatureSetupInlineTerminal({
 
   return (
     <OnboardingInlineCommandTerminal
-      command={runtimeCommand}
+      command={copiedCommand}
+      prepareCommandForShell={prepareCommandForShell}
       shellOverride={setupRuntime.terminalShellOverride}
+      forceHostRuntime={Boolean(setupRuntime.installDisabledReason)}
       title={translate(
         'auto.components.onboarding.FeatureSetupInlineTerminal.c767ab7061',
         'Skill setup'

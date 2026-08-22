@@ -22,18 +22,45 @@ import { useSetupGuideProgress } from './use-setup-guide-progress'
 import { useSetupGuideOpenCloseTelemetry } from './use-setup-guide-telemetry'
 import { translate } from '@/i18n/i18n'
 
+const SETUP_GUIDE_CLOSE_LINGER_MS = 300
+
 export default function SetupGuideModal(): JSX.Element | null {
-  const activeModal = useAppStore((s) => s.activeModal)
+  const open = useAppStore((s) => s.activeModal === 'setup-guide')
+  const [lingering, setLingering] = useState(open)
+  useEffect(() => {
+    if (open) {
+      setLingering(true)
+      return
+    }
+    const timer = window.setTimeout(() => setLingering(false), SETUP_GUIDE_CLOSE_LINGER_MS)
+    return () => window.clearTimeout(timer)
+  }, [open])
+
+  if (!open && !lingering) {
+    return null
+  }
+  return <SetupGuideModalContent open={open} lingering={lingering} />
+}
+
+function SetupGuideModalContent({
+  open,
+  lingering
+}: {
+  open: boolean
+  lingering: boolean
+}): JSX.Element {
   const modalData = useAppStore((s) => s.modalData)
   const closeModal = useAppStore((s) => s.closeModal)
   const setSetupGuideSidebarDismissed = useAppStore((s) => s.setSetupGuideSidebarDismissed)
-  const isOpen = activeModal === 'setup-guide'
   const setupSteps = useMemo(() => getFeatureWallSetupSteps(), [])
   const [userSelectedStep, setUserSelectedStep] = useState(false)
   const [orchestrationSkillInstalled, setOrchestrationSkillInstalled] = useState(false)
   const [browserUseSkillInstalled, setBrowserUseSkillInstalled] = useState(false)
+  // Why: keep progress inputs live through the close-animation linger; dropping
+  // them mid-fade flips completed rows back to "not done yet" on screen.
+  const progressInputsActive = open || lingering
   const progress = useSetupGuideProgress(
-    isOpen,
+    progressInputsActive,
     orchestrationSkillInstalled,
     browserUseSkillInstalled
   )
@@ -52,14 +79,14 @@ export default function SetupGuideModal(): JSX.Element | null {
   const activeStep = setupSteps.find((step) => step.id === activeStepId) ?? setupSteps[0] ?? null
 
   useSetupGuideOpenCloseTelemetry({
-    isOpen,
+    isOpen: open,
     source: telemetrySource,
     progress,
     activeStepId: activeStep?.id ?? null
   })
 
   useEffect(() => {
-    if (!isOpen) {
+    if (!open) {
       setUserSelectedStep(false)
       return
     }
@@ -68,18 +95,18 @@ export default function SetupGuideModal(): JSX.Element | null {
     }
     setUserSelectedStep(false)
     setActiveStepId(requestedStepId)
-  }, [isOpen, requestedStepId])
+  }, [open, requestedStepId])
 
   useEffect(() => {
-    if (!isOpen || userSelectedStep || requestedStepId !== null) {
+    if (!open || userSelectedStep || requestedStepId !== null) {
       return
     }
     setActiveStepId(getFirstIncompleteFeatureWallSetupStepId(progress.stepDone))
-  }, [isOpen, progress.stepDone, requestedStepId, userSelectedStep])
+  }, [open, progress.stepDone, requestedStepId, userSelectedStep])
 
   useEffect(() => {
     if (
-      !isOpen ||
+      !open ||
       userSelectedStep ||
       requestedStepId === null ||
       activeStep?.id !== requestedStepId ||
@@ -91,15 +118,15 @@ export default function SetupGuideModal(): JSX.Element | null {
     if (nextUnfinishedCoreStepId !== activeStep.id) {
       setActiveStepId(nextUnfinishedCoreStepId)
     }
-  }, [activeStep, isOpen, progress.stepDone, requestedStepId, userSelectedStep])
+  }, [activeStep, open, progress.stepDone, requestedStepId, userSelectedStep])
 
   const handleSelectStep = (id: FeatureWallSetupStepId): void => {
     setUserSelectedStep(true)
     setActiveStepId(id)
   }
 
-  const handleOpenChange = (open: boolean): void => {
-    if (!open) {
+  const handleOpenChange = (nextOpen: boolean): void => {
+    if (!nextOpen) {
       closeModal()
     }
   }
@@ -108,12 +135,8 @@ export default function SetupGuideModal(): JSX.Element | null {
     setSetupGuideSidebarDismissed(true)
   }, [setSetupGuideSidebarDismissed])
 
-  if (!isOpen) {
-    return null
-  }
-
   return (
-    <Dialog open={isOpen} onOpenChange={handleOpenChange}>
+    <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent
         className="grid h-[min(780px,calc(100vh-2rem))] w-[min(1080px,calc(100vw-2rem))] max-w-none grid-rows-[auto_minmax(0,1fr)] gap-0 p-0 sm:max-w-none"
         tabIndex={-1}

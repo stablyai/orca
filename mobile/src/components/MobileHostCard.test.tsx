@@ -1,6 +1,6 @@
 import { createElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { ConnectionVerdict } from '../transport/connection-health'
 import type { MobileConnectionPath } from '../transport/stable-logical-rpc-client'
 import type { ConnectionState, HostCredentialStatus, HostProfile } from '../transport/types'
@@ -38,10 +38,6 @@ const loaded: HostWorktreeInfo = {
 
 describe('MobileHostCard', () => {
   let renderer: ReactTestRenderer | null = null
-
-  beforeEach(() => {
-    globalThis.IS_REACT_ACT_ENVIRONMENT = true
-  })
 
   afterEach(() => {
     act(() => renderer?.unmount())
@@ -98,22 +94,23 @@ describe('MobileHostCard', () => {
   it('names the relay while the dial is still in flight', async () => {
     const lines = await renderCard(undefined, {
       state: 'connecting',
-      verdict: { kind: 'normal', label: 'Connecting…' },
+      verdict: { kind: 'normal', label: 'Connecting via Relay…' },
       path: 'relay'
     })
 
-    expect(lines).toContain('Connecting…')
-    expect(lines).toContain(' · Orca Relay')
+    expect(lines).toContain('Connecting via Relay…')
+    expect(lines).not.toContain(' · Orca Relay')
   })
 
   it('names the relay while a failed direct dial is still retrying', async () => {
     const lines = await renderCard(undefined, {
       state: 'reconnecting',
-      verdict: { kind: 'normal', label: 'Reconnecting…' },
+      verdict: { kind: 'normal', label: 'Connecting via Relay…' },
       path: 'relay'
     })
 
-    expect(lines).toContain(' · Orca Relay')
+    expect(lines).toContain('Connecting via Relay…')
+    expect(lines).not.toContain(' · Orca Relay')
   })
 
   it('leaves an idle disconnected host unlabelled', async () => {

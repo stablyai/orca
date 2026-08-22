@@ -1,6 +1,6 @@
 import { createElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
 import { MobileNativeChatOverlay } from './MobileNativeChatOverlay'
 import type { MobileNativeChatController } from './use-mobile-native-chat-controller'
@@ -14,17 +14,6 @@ vi.mock('./MobileNativeChatView', () => ({ MobileNativeChatView: 'ChatView' }))
 
 function assistantTurn(id: string, text: string): NativeChatMessage {
   return { id, role: 'assistant', blocks: [{ type: 'text', text }], timestamp: 0, source: 'hook' }
-}
-
-function suppressRendererWarning(): () => void {
-  const original = console.error
-  const spy = vi.spyOn(console, 'error').mockImplementation((...args) => {
-    if (typeof args[0] === 'string' && args[0].includes('react-test-renderer is deprecated')) {
-      return
-    }
-    original(...args)
-  })
-  return () => spy.mockRestore()
 }
 
 /** One render of the route: chat visible or not, the transcript it currently
@@ -69,24 +58,15 @@ function overlayElement(tick: Tick): ReturnType<typeof createElement> {
 describe('MobileNativeChatOverlay streaming gate', () => {
   let renderer: ReactTestRenderer | null = null
 
-  beforeEach(() => {
-    globalThis.IS_REACT_ACT_ENVIRONMENT = true
-  })
-
   afterEach(() => {
     act(() => renderer?.unmount())
     renderer = null
   })
 
   async function render(tick: Tick): Promise<void> {
-    const restore = suppressRendererWarning()
-    try {
-      await act(async () => {
-        renderer = create(overlayElement(tick))
-      })
-    } finally {
-      restore()
-    }
+    await act(async () => {
+      renderer = create(overlayElement(tick))
+    })
   }
 
   async function update(tick: Tick): Promise<void> {

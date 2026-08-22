@@ -1,6 +1,6 @@
 import type { StateCreator } from 'zustand'
 import type { AppState } from '../types'
-import type { TuiAgent } from '../../../../shared/types'
+import type { TuiAgent } from '../../../../shared/tui-agent'
 
 export type PaneForegroundAgentEntry = {
   /** Recognized agent process in the pane's foreground; null when unknown. */
@@ -9,6 +9,10 @@ export type PaneForegroundAgentEntry = {
   routingTrusted?: boolean
   /** True after exit/input evidence revokes routing until provider confirmation. */
   routingRevoked?: boolean
+  /** True while previously trusted routing awaits provider revalidation. Retains
+   *  Shift+Enter byte capability only — the Ctrl+Enter resolver deliberately does
+   *  not read it, because its fallback is a plain CR that submits either way. */
+  routingConfirmationPending?: boolean
   /** True once the foreground is proven back at the shell (OSC 133;D) —
    *  process-grade launched-agent exit evidence, independent of titles. */
   shellForeground: boolean
@@ -44,6 +48,7 @@ export const createPaneForegroundAgentSlice: StateCreator<
         current.agent === entry.agent &&
         current.routingTrusted === entry.routingTrusted &&
         current.routingRevoked === entry.routingRevoked &&
+        current.routingConfirmationPending === entry.routingConfirmationPending &&
         current.shellForeground === entry.shellForeground
       ) {
         return s
@@ -64,7 +69,12 @@ export const createPaneForegroundAgentSlice: StateCreator<
     })
   },
   clearPaneForegroundAgentByTabPrefix: (tabIdPrefix) => {
-    set((s) => clearEntriesByTabPrefixes(s.paneForegroundAgentByPaneKey, [`${tabIdPrefix}:`]) ?? s)
+    set(
+      (s) =>
+        buildPaneForegroundAgentTabPrefixClearPatch(s.paneForegroundAgentByPaneKey, [
+          `${tabIdPrefix}:`
+        ]) ?? s
+    )
   },
   clearPaneForegroundAgentByWorktree: (worktreeId) => {
     // Why: entries carry no worktreeId, so this must run while the worktree's
@@ -72,14 +82,16 @@ export const createPaneForegroundAgentSlice: StateCreator<
     // awaiting terminal teardown).
     set((s) => {
       const prefixes = (s.tabsByWorktree[worktreeId] ?? []).map((tab) => `${tab.id}:`)
-      return clearEntriesByTabPrefixes(s.paneForegroundAgentByPaneKey, prefixes) ?? s
+      return (
+        buildPaneForegroundAgentTabPrefixClearPatch(s.paneForegroundAgentByPaneKey, prefixes) ?? s
+      )
     })
   }
 })
 
-function clearEntriesByTabPrefixes(
+export function buildPaneForegroundAgentTabPrefixClearPatch(
   entries: Record<string, PaneForegroundAgentEntry>,
-  tabPrefixes: string[]
+  tabPrefixes: readonly string[]
 ): Pick<PaneForegroundAgentSlice, 'paneForegroundAgentByPaneKey'> | null {
   if (tabPrefixes.length === 0) {
     return null

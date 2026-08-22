@@ -8,10 +8,11 @@ import type {
   ProjectHostSetupExistingFolderArgs,
   ProjectHostSetupResult,
   ProjectHostSetupUpdateArgs,
-  ProjectHostSetupUpdateResult,
-  RepoKind
-} from '../../shared/types'
-import type { CommandHandler } from '../dispatch'
+  ProjectHostSetupUpdateResult
+} from '../../shared/project-types'
+import type { ExecutionHostId } from '../../shared/execution-host'
+import type { RepoKind } from '../../shared/repo-types'
+import type { CommandHandler, HandlerContext } from '../dispatch'
 import {
   formatProjectHostSetupCreateResult,
   formatProjectHostSetupDeleteResult,
@@ -21,9 +22,62 @@ import {
   formatProjectList,
   printResult
 } from '../format'
+import {
+  hostFilterMatchesHostId,
+  parseHostFlag,
+  resolveHostFlagTarget
+} from '../execution-host-flag'
 import { getOptionalStringFlag, getRequiredStringFlag } from '../flags'
 import { resolveRepoPathArgument } from '../repo-path-arguments'
-import { RuntimeClientError } from '../runtime-client'
+import { RuntimeClientError, type RuntimeRpcSuccess } from '../runtime-client'
+
+// Why: an Orca server that predates project host setup answers `method_not_found`, which reads
+// as an Orca bug rather than a version gap — and since --host runtime:<id> now routes these
+// commands to that server, a client can reach an older host without meaning to. The desktop
+// already names this case; match it instead of surfacing the raw dispatcher error.
+async function callProjectHostSetup<TResult>(
+  client: HandlerContext['client'],
+  method: string,
+  params?: unknown
+): Promise<RuntimeRpcSuccess<TResult>> {
+  try {
+    // Why: forward the exact arity the caller used; passing an explicit undefined would change
+    // the request shape for the no-params methods.
+    return params === undefined
+      ? await client.call<TResult>(method)
+      : await client.call<TResult>(method, params)
+  } catch (error) {
+    if (error instanceof RuntimeClientError && error.code === 'method_not_found') {
+      throw new RuntimeClientError(
+        'incompatible_runtime',
+        'This Orca server does not support project host setup yet. Update Orca on the server and try again.'
+      )
+    }
+    throw error
+  }
+}
+
+async function getResolvedHostId(
+  flags: Map<string, string | boolean>,
+  client: HandlerContext['client']
+): Promise<ExecutionHostId> {
+  const host = await resolveHostFlagTarget(flags, client)
+  if (!host) {
+    throw new RuntimeClientError('invalid_argument', 'Missing required --host')
+  }
+  return host.id
+}
+
+// Why: the setup paths keep the unresolved id on purpose. The runtime rejects every `ssh:` host
+// for those operations regardless of whether it exists, so resolving first would answer "no such
+// target" and imply the command would have worked with the right id.
+function getRequiredHostId(flags: Map<string, string | boolean>): ExecutionHostId {
+  const host = parseHostFlag(flags)
+  if (!host) {
+    throw new RuntimeClientError('invalid_argument', 'Missing required --host')
+  }
+  return host.id
+}
 
 function getOptionalRepoKind(flags: Map<string, string | boolean>): RepoKind | undefined {
   const kind = getOptionalStringFlag(flags, 'kind')
@@ -43,12 +97,15 @@ export const PROJECT_HANDLERS: Record<string, CommandHandler> = {
   },
   'project setups': async ({ flags, client, json }) => {
     const projectFilter = getOptionalStringFlag(flags, 'project')
-    const hostFilter = getOptionalStringFlag(flags, 'host')
-    const result = await client.call<{ setups: ProjectHostSetup[] }>('projectHostSetup.list')
+    const hostFilter = await resolveHostFlagTarget(flags, client)
+    const result = await callProjectHostSetup<{ setups: ProjectHostSetup[] }>(
+      client,
+      'projectHostSetup.list'
+    )
     const setups = result.result.setups.filter(
       (setup) =>
         (projectFilter === undefined || setup.projectId === projectFilter) &&
-        (hostFilter === undefined || setup.hostId === hostFilter)
+        (hostFilter === undefined || hostFilterMatchesHostId(hostFilter, setup.hostId))
     )
     printResult({ ...result, result: { setups } }, json, formatProjectHostSetupList)
   },
@@ -56,12 +113,13 @@ export const PROJECT_HANDLERS: Record<string, CommandHandler> = {
     const rawPath = getRequiredStringFlag(flags, 'path')
     const args: ProjectHostSetupExistingFolderArgs = {
       projectId: getRequiredStringFlag(flags, 'project'),
-      hostId: getRequiredStringFlag(flags, 'host') as ProjectHostSetupExistingFolderArgs['hostId'],
+      hostId: getRequiredHostId(flags),
       path: resolveRepoPathArgument(rawPath, cwd, client.isRemote, 'Remote project setup'),
       kind: getOptionalRepoKind(flags),
       displayName: getOptionalStringFlag(flags, 'display-name')
     }
-    const result = await client.call<{ result: ProjectHostSetupResult }>(
+    const result = await callProjectHostSetup<{ result: ProjectHostSetupResult }>(
+      client,
       'projectHostSetup.setupExistingFolder',
       args
     )
@@ -71,7 +129,7 @@ export const PROJECT_HANDLERS: Record<string, CommandHandler> = {
     const rawDestination = getRequiredStringFlag(flags, 'destination')
     const args: ProjectHostSetupCloneArgs = {
       projectId: getRequiredStringFlag(flags, 'project'),
-      hostId: getRequiredStringFlag(flags, 'host') as ProjectHostSetupCloneArgs['hostId'],
+      hostId: getRequiredHostId(flags),
       url: getRequiredStringFlag(flags, 'url'),
       destination: resolveRepoPathArgument(
         rawDestination,
@@ -81,7 +139,8 @@ export const PROJECT_HANDLERS: Record<string, CommandHandler> = {
       ),
       displayName: getOptionalStringFlag(flags, 'display-name')
     }
-    const result = await client.call<{ result: ProjectHostSetupResult }>(
+    const result = await callProjectHostSetup<{ result: ProjectHostSetupResult }>(
+      client,
       'projectHostSetup.clone',
       args
     )
@@ -91,7 +150,12 @@ export const PROJECT_HANDLERS: Record<string, CommandHandler> = {
     const path = getOptionalStringFlag(flags, 'path')
     const args: ProjectHostSetupCreateArgs = {
       projectId: getRequiredStringFlag(flags, 'project'),
-      hostId: getRequiredStringFlag(flags, 'host') as ProjectHostSetupCreateArgs['hostId'],
+      // Why: unlike the setup paths below, the runtime does not reject `ssh:` here — this records
+      // independent metadata — so an unknown target would persist a row pointing at a machine
+      // that does not exist. Resolving catches that. `local` and `runtime:` pass through
+      // untouched, because this is also the provisioning path and a runtime host legitimately
+      // may not exist yet when its metadata is written.
+      hostId: await getResolvedHostId(flags, client),
       setupId: getOptionalStringFlag(flags, 'setup-id'),
       path:
         path === undefined
@@ -104,7 +168,8 @@ export const PROJECT_HANDLERS: Record<string, CommandHandler> = {
       setupState: getOptionalSetupState(flags),
       setupMethod: getOptionalIndependentSetupMethod(flags)
     }
-    const result = await client.call<{ result: ProjectHostSetupCreateResult }>(
+    const result = await callProjectHostSetup<{ result: ProjectHostSetupCreateResult }>(
+      client,
       'projectHostSetup.create',
       args
     )
@@ -127,14 +192,16 @@ export const PROJECT_HANDLERS: Record<string, CommandHandler> = {
         setupMethod: getOptionalSetupMethod(flags)
       }
     }
-    const result = await client.call<{ result: ProjectHostSetupUpdateResult }>(
+    const result = await callProjectHostSetup<{ result: ProjectHostSetupUpdateResult }>(
+      client,
       'projectHostSetup.update',
       args
     )
     printResult(result, json, formatProjectHostSetupUpdateResult)
   },
   'project setup-delete': async ({ flags, client, json }) => {
-    const result = await client.call<{ result: ProjectHostSetupDeleteResult }>(
+    const result = await callProjectHostSetup<{ result: ProjectHostSetupDeleteResult }>(
+      client,
       'projectHostSetup.delete',
       {
         setupId: getRequiredStringFlag(flags, 'setup')

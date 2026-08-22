@@ -1,16 +1,21 @@
-import type { Repo, Worktree } from '../../../../shared/types'
+import type { Repo } from '../../../../shared/repo-types'
+import type { Worktree } from '../../../../shared/worktree/types'
 import type { WorktreeDeleteState } from '../../store/slices/worktree-helpers'
 import { isFolderWorkspaceDelete } from './delete-worktree-dialog-copy'
+import { getDeleteStateForWorktreeHost } from './worktree-delete-state-host-match'
+import { getWorktreeHostIdentity } from '../../../../shared/worktree/host-qualified-identity'
 
 export function getDeleteWorktreeDirtyChangeCounts({
   deleteTargets,
   deleteStateByWorktreeId,
   gitStatusByWorktree,
+  gitStatusByWorktreeIdentity,
   repoMap
 }: {
   deleteTargets: readonly Worktree[]
   deleteStateByWorktreeId: Record<string, WorktreeDeleteState | undefined>
   gitStatusByWorktree: Record<string, readonly unknown[] | undefined>
+  gitStatusByWorktreeIdentity?: ReadonlyMap<string, readonly unknown[]>
   repoMap: ReadonlyMap<string, Repo>
 }): Map<string, number> {
   const result = new Map<string, number>()
@@ -18,14 +23,22 @@ export function getDeleteWorktreeDirtyChangeCounts({
     if (item.isMainWorktree || isFolderWorkspaceDelete(repoMap, item)) {
       continue
     }
-    const forceDeleteReason = deleteStateByWorktreeId[item.id]?.forceDeleteReason
-    const changeCount = gitStatusByWorktree[item.id]?.length
+    const resultKey = item.hostId ? getWorktreeHostIdentity(item) : item.id
+    const forceDeleteReason = getDeleteStateForWorktreeHost(
+      item,
+      deleteStateByWorktreeId
+    )?.forceDeleteReason
+    const changeCount = (
+      item.hostId
+        ? gitStatusByWorktreeIdentity?.get(getWorktreeHostIdentity(item))
+        : gitStatusByWorktree[item.id]
+    )?.length
     if ((changeCount ?? 0) > 0) {
-      result.set(item.id, changeCount ?? 0)
+      result.set(resultKey, changeCount ?? 0)
     } else if (forceDeleteReason === 'dirty') {
       // Why: Git proved the worktree dirty even when renderer status has not
       // loaded; keep the warning visible without inventing a file count.
-      result.set(item.id, 0)
+      result.set(resultKey, 0)
     }
   }
   return result

@@ -25,10 +25,15 @@ Accounts:
   account list              List managed Claude and Codex accounts on this Orca host
 
 Skills:
+  skills installed          List installed skill selectors
+  skills share              Publish selected skills behind one unlisted link
   skills list               List version-matched skill guides bundled with this Orca CLI
   skills get                Print a version-matched skill guide as Markdown
   skills install            Install bundled Orca skills globally via the community skills CLI
   skills update             Update already-installed Orca skills via the community skills CLI
+
+Hosts:
+  host list                 List targetable machines and how to name each one
 
 Environments:
   environment add           Save a remote Orca runtime from a pairing code
@@ -111,7 +116,7 @@ Orchestration:
   orchestration worker-start Start a supervised worker locally or on a connected Orca server
   orchestration worker-show Inspect one supervised worker
   orchestration worker-read Read bounded output from one supervised worker
-  orchestration worker-stop Stop one supervised worker
+  orchestration worker-stop Fence one Dispatch; stop only its supervised worker
   orchestration worker-abandon Fence an uncertain worker without claiming it stopped
   orchestration worker-release Release a settled worker's terminal after archiving its output
   orchestration worker-retain Keep a worker terminal live for debugging
@@ -227,6 +232,7 @@ Common Commands:
   orca agent-context [--json]
   orca account add [--agent claude|codex] [--json]
   orca account list [--json]
+  orca host list [--json]
   orca environment add --name <name> --pairing-code <code> [--json]
   orca environment list [--json]
   orca environment show --environment <selector> [--json]
@@ -450,7 +456,16 @@ function formatCommandFlagHelp(flag: string, commandPath: string[]): string {
     return '--workspace <id|all>  Connected Linear workspace id, or all'
   }
   if (command === 'linear list-issues' && flag === 'cursor') {
-    return '--cursor <cursor>      Opaque cursor returned by a previous list-issues page'
+    return '--cursor <cursor>      Opaque cursor from a previous list-issues page; issued cursors bind the workspace, raw Linear cursors need --workspace'
+  }
+  if (command === 'linear list-issues' && flag === 'priority') {
+    return '--priority <0-4>       0=none, 1=urgent, 2=high, 3=medium, 4=low'
+  }
+  if (command === 'linear list-issues' && flag === 'limit') {
+    return '--limit <n>            Max issues to return; omit to return every match'
+  }
+  if (command === 'artifacts list' && flag === 'cursor') {
+    return '--cursor <cursor>      Opaque cursor returned by a previous artifacts page'
   }
   if (command === 'orchestration worker-read' && flag === 'cursor') {
     return '--cursor <cursor>      Opaque cursor returned by a previous worker-read page'

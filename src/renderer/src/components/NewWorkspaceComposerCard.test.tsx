@@ -31,7 +31,9 @@ vi.mock('@/store', () => ({
         setRuntimeEnvironmentStatus: storeMocks.setRuntimeEnvironmentStatus,
         activeModal: 'none',
         settings: { defaultTuiAgent: null, disabledTuiAgents: [] },
-        updateSettings: vi.fn()
+        updateSettings: vi.fn(),
+        projects: [],
+        repos: []
       }),
     {
       getState: () => ({
@@ -60,6 +62,10 @@ vi.mock('@/components/agent/AgentCombobox', () => ({
 vi.mock('@/components/sidebar/AddRemoteHostDialog', () => ({
   AddRemoteHostDialog: ({ mode }: { mode: 'ssh' | 'server' | null }) =>
     mode ? <div data-testid="add-remote-host-dialog" data-mode={mode} /> : null
+}))
+
+vi.mock('@/components/new-workspace/SetProjectLocationDialog', () => ({
+  SetProjectLocationDialog: () => null
 }))
 
 vi.mock('@/components/sparse/SparseCheckoutPresetSelect', () => ({
@@ -155,7 +161,8 @@ const devboxNeedsSetupHostOption: ProjectHostSetupOption = {
   label: 'Devbox',
   detail: 'Project location not set',
   isAvailable: true,
-  attention: false
+  attention: false,
+  canSetLocation: true
 }
 
 const disconnectedDevboxNeedsSetupHostOption: ProjectHostSetupOption = {
@@ -167,6 +174,7 @@ const disconnectedDevboxNeedsSetupHostOption: ProjectHostSetupOption = {
   detail: 'Connect this host to set up projects',
   isAvailable: false,
   attention: false,
+  canSetLocation: false,
   connectAction: { kind: 'ssh', targetId: 'devbox' }
 }
 
@@ -179,6 +187,7 @@ const disconnectedBastionNeedsSetupHostOption: ProjectHostSetupOption = {
   detail: 'Connect this host to set up projects',
   isAvailable: false,
   attention: false,
+  canSetLocation: false,
   connectAction: { kind: 'ssh', targetId: 'bastion' }
 }
 
@@ -328,6 +337,26 @@ describe('NewWorkspaceComposerCard folder task source mode', () => {
     current?.container.remove()
     current = null
     vi.clearAllMocks()
+  })
+
+  it('keeps the Advanced focus highlight inside the composer edge', () => {
+    current = renderCard()
+
+    const advancedButton = [...current.container.querySelectorAll('button')].find((button) =>
+      button.textContent?.includes('Advanced')
+    )
+
+    expect(advancedButton?.className).toContain('focus-visible:ring-inset')
+  })
+
+  it('removes collapsed Advanced controls from the Tab order', () => {
+    current = renderCard({ advancedOpen: false, branchesEnabled: true })
+
+    const advancedPanel = [...current.container.querySelectorAll('[aria-hidden="true"]')].find(
+      (element) => element.querySelector('textarea[placeholder="Write a note"]') !== null
+    )
+
+    expect(advancedPanel?.hasAttribute('inert')).toBe(true)
   })
 
   it('passes folder child repos into the create-from field without a source trigger', () => {
@@ -581,7 +610,8 @@ describe('NewWorkspaceComposerCard folder task source mode', () => {
     openRunTargetPicker(current.container)
 
     const devboxItem = findRunTargetItem('Devbox')
-    expect(devboxItem?.textContent).toContain('Project location not set')
+    expect(devboxItem?.textContent).not.toContain('Project location not set')
+    expect(devboxItem?.textContent).toContain('Set project location')
     // Not-connected rows stay highlightable (never `disabled`) so they hover like
     // the other rows; they're quieted visually instead.
     expect(devboxItem?.hasAttribute('data-disabled')).toBe(false)
@@ -849,5 +879,44 @@ describe('NewWorkspaceComposerCard folder task source mode', () => {
 
     expect(hostChanges).toEqual(['setup-builder'])
     expect(recipeChanges).toEqual([null])
+  })
+})
+
+describe('NewWorkspaceComposerCard note sizing', () => {
+  // Sizing is layout-driven (field-sizing) rather than a JS measure pass, and happy-dom
+  // has no layout engine, so these assert the class contract that produces the growth.
+  afterEach(() => {
+    act(() => current?.root.unmount())
+    current?.container.remove()
+    current = null
+  })
+
+  function findNoteTextarea(container: HTMLElement): HTMLTextAreaElement {
+    const label = [...container.querySelectorAll('label')].find(
+      (candidate) => candidate.textContent?.trim() === 'Note'
+    )
+    const textarea = label?.parentElement?.querySelector('textarea')
+    expect(textarea).toBeTruthy()
+    return textarea as HTMLTextAreaElement
+  }
+
+  it('sizes from the note value, so a PR prefill written straight to state still shows in full', () => {
+    // #10575: the prefill never fires an input event, so nothing but the value can drive height.
+    current = renderCard({
+      advancedOpen: true,
+      note: `PR #10575 — ${'a note title long enough to wrap over several lines '.repeat(3)}`
+    })
+
+    expect(findNoteTextarea(current.container).className).toContain('[field-sizing:content]')
+  })
+
+  it('keeps a note past the height cap readable instead of clipping it', () => {
+    current = renderCard({ advancedOpen: true, note: 'a'.repeat(4000) })
+
+    const { className } = findNoteTextarea(current.container)
+    expect(className).toContain('max-h-40')
+    expect(className).toContain('overflow-y-auto')
+    expect(className).toContain('scrollbar-sleek')
+    expect(className).not.toContain('overflow-hidden')
   })
 })

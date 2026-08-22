@@ -1,5 +1,5 @@
 import type { RemoteServerUpdaterSnapshot } from '../../shared/remote-server-update'
-import type { UpdateStatus } from '../../shared/types'
+import type { UpdateStatus } from '../../shared/update-status-types'
 import type { CommandHandler } from '../dispatch'
 import { printResult } from '../format'
 import { RuntimeClientError, type RuntimeRpcSuccess } from '../runtime-client'

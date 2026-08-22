@@ -2,7 +2,9 @@
    spawn failure handling, and output normalization; keeping them together
    prevents those paths from drifting. */
 import { spawn, type ChildProcess } from 'node:child_process'
-import type { GlobalSettings, Repo, TuiAgent } from '../../shared/types'
+import type { GlobalSettings } from '../../shared/global-settings-types'
+import type { Repo } from '../../shared/repo-types'
+import type { TuiAgent } from '../../shared/tui-agent'
 import {
   buildCommitMessagePrompt,
   splitGeneratedCommitMessage,
@@ -28,16 +30,20 @@ import {
   sanitizeBranchSlug,
   type BranchNameWorkContext
 } from '../../shared/branch-name-from-work'
-import {
-  getCommitMessageAgentSpec,
-  type CommitMessageAgentCapability,
-  type CommitMessageModelCapability
+import type {
+  CommitMessageAgentCapability,
+  CommitMessageModelCapability
 } from '../../shared/commit-message-agent-spec'
+import {
+  getAgentModelProbeSpec,
+  type AgentModelProbeSpec
+} from '../../shared/agent-model-probe-spec'
 import {
   planAgentBinary,
   planCommitMessageGeneration,
   type CommitMessagePlan
 } from '../../shared/commit-message-plan'
+import type { CommandTemplateBackslash } from '../../shared/commit-message-prompt'
 import { LOCAL_COMMIT_MESSAGE_HOST_KEY } from '../../shared/commit-message-host-key'
 import {
   resolveSourceControlAiForOperation,
@@ -229,7 +235,7 @@ function userFacingUnsafeWindowsBatchArgs(label: string): string {
 }
 
 function toModelDiscoveryCapability(
-  spec: NonNullable<ReturnType<typeof getCommitMessageAgentSpec>>,
+  spec: AgentModelProbeSpec,
   models = spec.models,
   defaultModelId = spec.defaultModelId,
   catalogOrigin: 'probe' | 'spec' = 'spec'
@@ -250,7 +256,7 @@ function toModelDiscoveryCapability(
 }
 
 function finalizeModelDiscoveryOutput(
-  spec: NonNullable<ReturnType<typeof getCommitMessageAgentSpec>>,
+  spec: AgentModelProbeSpec,
   stdout: string,
   stderr: string,
   code: number | null
@@ -289,14 +295,15 @@ function finalizeModelDiscoveryOutput(
 }
 
 function planModelDiscovery(
-  spec: NonNullable<ReturnType<typeof getCommitMessageAgentSpec>>,
-  agentCommandOverride?: string
+  spec: AgentModelProbeSpec,
+  agentCommandOverride?: string,
+  backslash: CommandTemplateBackslash = 'escape'
 ): { ok: true; plan: CommitMessagePlan } | { ok: false; error: string } {
   const modelDiscovery = spec.modelDiscovery
   if (!modelDiscovery) {
     return { ok: false, error: `${spec.label} does not support dynamic model discovery.` }
   }
-  const command = planAgentBinary(modelDiscovery.binary, agentCommandOverride)
+  const command = planAgentBinary(modelDiscovery.binary, agentCommandOverride, backslash)
   if (!command.ok) {
     return command
   }
@@ -317,9 +324,9 @@ export async function discoverCommitMessageModelsLocal(
   agentCommandOverride?: string,
   options: CommitMessageModelDiscoveryLocalOptions = {}
 ): Promise<DiscoverCommitMessageModelsResult> {
-  const spec = getCommitMessageAgentSpec(agentId)
+  const spec = getAgentModelProbeSpec(agentId)
   if (!spec) {
-    return { success: false, error: `Agent "${agentId}" does not support AI commit messages.` }
+    return { success: false, error: `Agent "${agentId}" does not support model discovery.` }
   }
 
   if (spec.modelSource === 'static' || !spec.modelDiscovery) {
@@ -336,7 +343,15 @@ export async function discoverCommitMessageModelsLocal(
       const spawnEnv = env ?? process.env
       let discoveryStdin: string | null = null
       try {
-        const planned = planModelDiscovery(spec, agentCommandOverride)
+        const planned = planModelDiscovery(
+          spec,
+          agentCommandOverride,
+          commandBackslashMode({
+            kind: 'local',
+            cwd: options.cwd ?? '',
+            wslDistro: options.wslDistro
+          })
+        )
         if (!planned.ok) {
           markProcessClosed()
           resolve({ success: false, error: planned.error })
@@ -504,9 +519,9 @@ export async function discoverCommitMessageModelsRemote(
   ) => Promise<RemoteCommitMessageExecResult>,
   agentCommandOverride?: string
 ): Promise<DiscoverCommitMessageModelsResult> {
-  const spec = getCommitMessageAgentSpec(agentId)
+  const spec = getAgentModelProbeSpec(agentId)
   if (!spec) {
-    return { success: false, error: `Agent "${agentId}" does not support AI commit messages.` }
+    return { success: false, error: `Agent "${agentId}" does not support model discovery.` }
   }
   if (spec.modelSource === 'static' || !spec.modelDiscovery) {
     return toModelDiscoveryCapability(spec)
@@ -818,6 +833,21 @@ function runLocalPlan(
   return { result, processClosed }
 }
 
+/**
+ * How the user's command override should read `\`.
+ *
+ * `'literal'` only when the command provably runs on native Windows: a LOCAL
+ * target, on win32, with no WSL distro. A WSL target runs a Linux binary inside
+ * the distro, and a remote target runs on a host whose platform this process
+ * cannot see — POSIX escaping stays the default for both.
+ */
+export function commandBackslashMode(
+  target: CommitMessageGenerationTarget,
+  platform: NodeJS.Platform = process.platform
+): CommandTemplateBackslash {
+  return platform === 'win32' && target.kind === 'local' && !target.wslDistro ? 'literal' : 'escape'
+}
+
 type LocalGenerationTarget = Extract<CommitMessageGenerationTarget, { kind: 'local' }>
 
 function runLocalPlanForAgent(
@@ -1096,7 +1126,10 @@ export async function generateCommitMessageFromContext(
           linkedIssue: formatLinkedIssueTemplateValue(context.linkedIssue)
         })
       : buildCommitMessagePrompt(context, params.customPrompt ?? '')
-  const planned = planCommitMessageGeneration(params, prompt)
+  const planned = planCommitMessageGeneration(
+    { ...params, backslash: commandBackslashMode(target) },
+    prompt
+  )
   if (!planned.ok) {
     return { success: false, error: planned.error }
   }
@@ -1168,7 +1201,10 @@ export async function generatePullRequestFieldsFromContext(
           linkedIssue: formatLinkedIssueTemplateValue(context.linkedIssue)
         })
       : buildPullRequestFieldsPrompt(context, params.customPrompt ?? '')
-  const planned = planCommitMessageGeneration(params, prompt)
+  const planned = planCommitMessageGeneration(
+    { ...params, backslash: commandBackslashMode(target) },
+    prompt
+  )
   if (!planned.ok) {
     return {
       success: false,
@@ -1218,7 +1254,10 @@ export async function generateBranchNameFromContext(
           assistantMessage: context.assistantMessage ?? ''
         })
       : buildBranchNamePrompt(context, params.customPrompt ?? '')
-  const planned = planCommitMessageGeneration(params, prompt)
+  const planned = planCommitMessageGeneration(
+    { ...params, backslash: commandBackslashMode(target) },
+    prompt
+  )
   if (!planned.ok) {
     return { success: false, error: planned.error }
   }

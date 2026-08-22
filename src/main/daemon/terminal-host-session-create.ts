@@ -9,6 +9,8 @@ import type { CreateOrAttachResult } from './terminal-host-create-contract'
 import type { TerminalHostOptions } from './terminal-host-options'
 import type { TerminalHostTombstones } from './terminal-host-tombstones'
 import type { TerminalSessionTeardown } from './terminal-session-teardown'
+import { resolveDaemonSessionScrollbackRows } from './daemon-session-scrollback-window'
+import { TerminalAttachCanceledError } from './daemon-errors'
 import { SessionNotFoundError } from './types'
 import { resolveWslSessionContext } from './wsl-session-context'
 
@@ -17,19 +19,16 @@ type TerminalHostSessionCreateDependencies = {
   sessionTeardown: TerminalSessionTeardown
   killedTombstones: TerminalHostTombstones
   spawnSubprocess: TerminalHostOptions['spawnSubprocess']
-  creationFenced: boolean
   onDeadSessionRemoved: (sessionId: string) => void
   onSessionCreated: (sessionId: string, generation: string | undefined, isAlive: boolean) => void
   onSessionExit: (sessionId: string, generation: string | undefined) => void
+  reportReadinessEvent?: (event: string, details: Record<string, unknown>) => void
 }
 
 export async function createOrAttachTerminalSession(
   opts: InternalCreateOrAttachOptions,
   deps: TerminalHostSessionCreateDependencies
 ): Promise<CreateOrAttachResult> {
-  if (deps.creationFenced) {
-    throw new Error('Terminal host is shutting down')
-  }
   opts.onSessionResolved?.(opts.sessionId)
   const existing = deps.sessions.get(opts.sessionId)
 
@@ -74,7 +73,16 @@ export async function createOrAttachTerminalSession(
   deps.killedTombstones.clearForCreate(opts.sessionId)
   const size = normalizePtySize(opts.cols, opts.rows)
   const wslDistro = resolveWslSessionContext(opts)?.distro
-  const subprocess = deps.spawnSubprocess({
+  return await spawnAndPublishSession(opts, deps, { size, wslDistro })
+}
+
+async function spawnAndPublishSession(
+  opts: InternalCreateOrAttachOptions,
+  deps: TerminalHostSessionCreateDependencies,
+  ctx: { size: { cols: number; rows: number }; wslDistro: string | undefined }
+): Promise<CreateOrAttachResult> {
+  const { size, wslDistro } = ctx
+  const subprocess = await deps.spawnSubprocess({
     sessionId: opts.sessionId,
     cols: size.cols,
     rows: size.rows,
@@ -86,7 +94,9 @@ export async function createOrAttachTerminalSession(
     ...(opts.launchAgent ? { launchAgent: opts.launchAgent } : {}),
     shellOverride: opts.shellOverride,
     terminalWindowsWslDistro: opts.terminalWindowsWslDistro,
-    terminalWindowsPowerShellImplementation: opts.terminalWindowsPowerShellImplementation
+    terminalWindowsPowerShellImplementation: opts.terminalWindowsPowerShellImplementation,
+    isCanceled: opts.isCanceled,
+    ...(opts.cancelSignal ? { cancelSignal: opts.cancelSignal } : {})
   })
 
   // Why: a fallback shell does not emit the preferred shell's ready marker;
@@ -107,14 +117,28 @@ export async function createOrAttachTerminalSession(
       wslDistro
     }),
     shellReadySupported,
+    scrollback: resolveDaemonSessionScrollbackRows(),
     historySeedChunks: opts.historySeedChunks,
     ...(opts.startupIngress ? { startupIngress: opts.startupIngress } : {}),
     wslDistro,
     onExit: () => deps.onSessionExit(opts.sessionId, opts.agentSessionGeneration),
+    ...(deps.reportReadinessEvent ? { reportReadinessEvent: deps.reportReadinessEvent } : {}),
     ...(opts.shellReadyTimeoutMs !== undefined
       ? { shellReadyTimeoutMs: opts.shellReadyTimeoutMs }
       : {})
   })
+
+  if (opts.isCanceled?.()) {
+    // Retain cleanup ownership if the native child refuses to exit.
+    deps.sessions.set(opts.sessionId, session)
+    await session.forceKillAndDisposeSubprocess()
+    if (deps.sessions.get(opts.sessionId) === session) {
+      session.dispose()
+      deps.sessions.delete(opts.sessionId)
+      deps.onDeadSessionRemoved(opts.sessionId)
+    }
+    throw new TerminalAttachCanceledError(opts.sessionId)
+  }
 
   deps.sessions.set(opts.sessionId, session)
   deps.onSessionCreated(opts.sessionId, opts.agentSessionGeneration, session.isAlive)

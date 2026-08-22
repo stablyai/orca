@@ -1,8 +1,8 @@
 import { renderToStaticMarkup } from 'react-dom/server'
 import type { ReactNode } from 'react'
 import { describe, expect, it, vi } from 'vitest'
-import { SourceControlHeaderToolbar } from './source-control-header-toolbar'
-import type { GitBranchCompareSummary } from '../../../../shared/types'
+import { SourceControlHeaderToolbar } from './source-control/panel/header-toolbar'
+import type { GitBranchCompareSummary } from '../../../../shared/git-diff-compare-types'
 import type { GitBranchLineTotal } from '../../../../shared/git-status-types'
 import type { WorktreeGitIdentityDisplay } from '@/lib/worktree-git-identity-display'
 import type { PrimaryAction } from './source-control-primary-action'
@@ -13,7 +13,7 @@ vi.mock('@/components/ui/tooltip', () => ({
   TooltipTrigger: ({ children }: { children: ReactNode }) => <>{children}</>
 }))
 
-vi.mock('./source-control-header-overflow-menu', () => ({
+vi.mock('./source-control/panel/header-overflow-menu', () => ({
   SourceControlHeaderOverflowMenu: () => <button type="button">More actions</button>
 }))
 
@@ -132,7 +132,7 @@ describe('SourceControlHeaderToolbar branch identity', () => {
   it('threads the branch line total down to the base-ref line', () => {
     const markup = renderToolbar({ branchLineTotal: { added: 24, removed: 3, mergeBase: 'base' } })
 
-    expect(markup).toContain('aria-label="24 additions, 3 deletions"')
+    expect(markup).toContain('aria-label="24 lines added, 3 lines deleted"')
     expect(markup).toContain('+24')
     expect(markup).toContain('-3')
   })

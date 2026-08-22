@@ -2,13 +2,20 @@ import { useCallback, useState } from 'react'
 import { Loader2 } from 'lucide-react'
 import { translate } from '@/i18n/i18n'
 import { useMountedRef } from '@/hooks/useMountedRef'
-
-export type RuntimeHostConnectionState = 'connected' | 'checking' | 'reconnecting' | 'disconnected'
+import {
+  isConnectedRuntimeHostState,
+  type RuntimeHostConnectionState
+} from '@/runtime/runtime-host-connection-state'
 
 function runtimeStatusLabel(state: RuntimeHostConnectionState): string {
   switch (state) {
     case 'connected':
       return translate('auto.components.status.bar.SshStatusSegment.runtime_online', 'Connected')
+    case 'workspace-window-closed':
+      return translate(
+        'auto.components.status.bar.SshStatusSegment.runtime_workspace_window_closed',
+        'Workspace window closed'
+      )
     case 'checking':
       return translate('auto.components.status.bar.SshStatusSegment.runtime_checking', 'Checking')
     case 'reconnecting':
@@ -28,6 +35,7 @@ function runtimeDotColor(state: RuntimeHostConnectionState): string {
   switch (state) {
     case 'connected':
       return 'bg-emerald-500'
+    case 'workspace-window-closed':
     case 'checking':
     case 'reconnecting':
       return 'bg-yellow-500'
@@ -37,7 +45,7 @@ function runtimeDotColor(state: RuntimeHostConnectionState): string {
 }
 
 function runtimeStatusTone(state: RuntimeHostConnectionState): string {
-  if (state === 'checking' || state === 'reconnecting') {
+  if (state === 'checking' || state === 'reconnecting' || state === 'workspace-window-closed') {
     return 'text-yellow-500'
   }
   return 'text-muted-foreground'
@@ -46,6 +54,7 @@ function runtimeStatusTone(state: RuntimeHostConnectionState): string {
 function runtimeActionLabel(state: RuntimeHostConnectionState): string | null {
   switch (state) {
     case 'connected':
+    case 'workspace-window-closed':
       return translate('auto.components.status.bar.SshStatusSegment.59b553e2aa', 'Disconnect')
     case 'disconnected':
       return translate('auto.components.status.bar.SshStatusSegment.63f36455cc', 'Connect')
@@ -73,7 +82,7 @@ export function RuntimeHostStatusRow({
   const actionLabel = runtimeActionLabel(state)
 
   const handleAction = useCallback(async () => {
-    const action = state === 'connected' ? onDisconnect : onConnect
+    const action = isConnectedRuntimeHostState(state) ? onDisconnect : onConnect
     if (!action) {
       return
     }
@@ -116,7 +125,7 @@ export function RuntimeHostStatusRow({
       </div>
       {busy ? (
         <Loader2 className="size-3 shrink-0 animate-spin text-muted-foreground" />
-      ) : actionLabel && (state === 'connected' ? onDisconnect : onConnect) ? (
+      ) : actionLabel && (isConnectedRuntimeHostState(state) ? onDisconnect : onConnect) ? (
         <button
           type="button"
           onClick={() => void handleAction()}

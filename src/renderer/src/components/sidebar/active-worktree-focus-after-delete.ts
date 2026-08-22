@@ -2,7 +2,9 @@ import { useAppStore } from '@/store'
 import { getRepoMapFromState, getWorktreeMapFromState } from '@/store/selectors'
 import { activateAndRevealWorktree } from '@/lib/worktree-activation'
 import { isRuntimeOwnedSshTargetId, parseExecutionHostId } from '../../../../shared/execution-host'
-import type { Repo, Worktree } from '../../../../shared/types'
+import type { Repo } from '../../../../shared/repo-types'
+import type { Worktree } from '../../../../shared/worktree/types'
+import { getDeleteStateForWorktreeHost } from './worktree-delete-state-host-match'
 
 type AppStoreState = ReturnType<typeof useAppStore.getState>
 
@@ -46,7 +48,7 @@ function pickNextWorktreeIdAfterDelete(
   const siblings = (state.worktreesByRepo[repoId] ?? []).filter(
     (worktree) =>
       worktree.id !== deletedWorktreeId &&
-      !deleteState[worktree.id]?.isDeleting &&
+      !getDeleteStateForWorktreeHost(worktree, deleteState)?.isDeleting &&
       // Skip siblings hosted on the now-destroyed runtime-owned SSH target (see helper).
       !isHostedOnRuntimeOwnedSshTarget(worktree, repoById)
   )

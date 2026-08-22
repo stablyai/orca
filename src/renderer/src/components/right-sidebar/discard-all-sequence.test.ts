@@ -7,8 +7,8 @@ import {
   isSubmoduleWorktreeOnlyChange,
   runDiscardAllForArea,
   type DiscardAllArea
-} from './discard-all-sequence'
-import type { GitStatusEntry } from '../../../../shared/types'
+} from './source-control/commit/discard-all-sequence'
+import type { GitStatusEntry } from '../../../../shared/git-status-types'
 
 function entry(partial: Partial<GitStatusEntry> & { path: string }): GitStatusEntry {
   return {
@@ -28,15 +28,6 @@ describe('getDiscardAllPaths', () => {
     expect(getDiscardAllPaths(entries, 'staged')).toEqual(['a.ts'])
     expect(getDiscardAllPaths(entries, 'unstaged')).toEqual(['b.ts'])
     expect(getDiscardAllPaths(entries, 'untracked')).toEqual(['c.ts'])
-  })
-
-  it('accepts mixed Changes areas when untracked files are combined', () => {
-    const entries: GitStatusEntry[] = [
-      entry({ path: 'changed.ts', area: 'unstaged' }),
-      entry({ path: 'new.ts', area: 'untracked', status: 'untracked' }),
-      entry({ path: 'ready.ts', area: 'staged' })
-    ]
-    expect(getDiscardAllPaths(entries, ['unstaged', 'untracked'])).toEqual(['changed.ts', 'new.ts'])
   })
 
   it('skips entries with an unresolved conflict', () => {

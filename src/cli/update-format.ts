@@ -1,5 +1,5 @@
 import type { RemoteServerUpdateSupport } from '../shared/remote-server-update'
-import type { UpdateStatus } from '../shared/types'
+import type { UpdateStatus } from '../shared/update-status-types'
 
 export type UpdateCommandResult = {
   operation: 'check' | 'update'

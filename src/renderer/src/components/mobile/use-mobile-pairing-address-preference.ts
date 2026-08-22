@@ -45,6 +45,7 @@ export function useMobilePairingAddressPreference(args: {
   const [customAddresses, setCustomAddresses] = useState(savedCustomAddresses)
   const selectedAddressRef = useRef(selectedAddress)
   const selectedAddressIsManualRef = useRef(savedCustomAddress !== undefined)
+  const selectedAddressWasExplicitlySelectedRef = useRef(savedCustomAddress !== undefined)
   const customAddressesRef = useRef(savedCustomAddresses)
   const observedCustomAddressRef = useRef(savedCustomAddress)
   const pendingCustomAddressWritesRef = useRef<(string | undefined)[]>([])
@@ -54,7 +55,8 @@ export function useMobilePairingAddressPreference(args: {
       const nextAddress = selectRefreshedNetworkAddress(
         selectedAddressRef.current,
         interfaces,
-        selectedAddressIsManualRef.current
+        selectedAddressIsManualRef.current,
+        selectedAddressWasExplicitlySelectedRef.current
       )
       if (nextAddress === selectedAddressRef.current) {
         return
@@ -64,6 +66,7 @@ export function useMobilePairingAddressPreference(args: {
       const hadSelection = selectedAddressRef.current !== undefined
       selectedAddressRef.current = nextAddress
       selectedAddressIsManualRef.current = false
+      selectedAddressWasExplicitlySelectedRef.current = false
       setSelectedAddress(nextAddress)
       setSelectedAddressIsCustom(false)
       if (hadSelection) {
@@ -76,11 +79,16 @@ export function useMobilePairingAddressPreference(args: {
   const commitAddress = useCallback(
     (address: string, isManual: boolean): void => {
       const addressChanged = selectedAddressRef.current !== address
-      if (!addressChanged && selectedAddressIsManualRef.current === isManual) {
+      if (
+        !addressChanged &&
+        selectedAddressIsManualRef.current === isManual &&
+        selectedAddressWasExplicitlySelectedRef.current
+      ) {
         return
       }
       selectedAddressRef.current = address
       selectedAddressIsManualRef.current = isManual
+      selectedAddressWasExplicitlySelectedRef.current = true
       setSelectedAddress(address)
       setSelectedAddressIsCustom(isManual)
       const customAddress = isManual ? address : undefined
@@ -144,6 +152,7 @@ export function useMobilePairingAddressPreference(args: {
       const addressChanged = selectedAddressRef.current !== nextAddress
       selectedAddressRef.current = nextAddress
       selectedAddressIsManualRef.current = false
+      selectedAddressWasExplicitlySelectedRef.current = false
       setSelectedAddress(nextAddress)
       setSelectedAddressIsCustom(false)
       pendingCustomAddressWritesRef.current.push(undefined)
@@ -175,6 +184,7 @@ export function useMobilePairingAddressPreference(args: {
     const addressChanged = selectedAddressRef.current !== nextAddress
     selectedAddressRef.current = nextAddress
     selectedAddressIsManualRef.current = savedCustomAddress !== undefined
+    selectedAddressWasExplicitlySelectedRef.current = savedCustomAddress !== undefined
     setSelectedAddress(nextAddress)
     setSelectedAddressIsCustom(savedCustomAddress !== undefined)
     if (addressChanged) {

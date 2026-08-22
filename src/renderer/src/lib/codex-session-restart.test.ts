@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
 import { shouldUseShellReadyStartupDelivery } from '../../../shared/codex-startup-delivery'
-import type { TuiAgent } from '../../../shared/types'
+import type { TuiAgent } from '../../../shared/tui-agent'
 import {
   CODEX_ACCOUNT_RESTART_STARTUP,
   markLiveCodexSessionsForRestart,
@@ -668,16 +668,90 @@ describe('markLiveCodexSessionsForRestart lane scoping', () => {
       vi.mocked(window.api.codexAccounts.listRecordedPaneLanes).mockResolvedValue({
         'pty-1': 'host'
       })
+      vi.mocked(window.api.codexAccounts.listStalePanes).mockResolvedValue([
+        {
+          ptyId: 'pty-1',
+          launchAccountId: 'account-a',
+          activeAccountId: 'account-b',
+          reason: 'account-change'
+        }
+      ])
 
       await markLiveCodexSessionsForRestart({
         previousAccountLabel: ACCOUNT_A,
         nextAccountLabel: ACCOUNT_B,
+        previousAccountId: 'account-a',
+        nextAccountId: 'account-b',
         target: { runtime: 'host' }
       })
 
       expect(useAppStore.getState().codexRestartNoticeByPtyId['pty-1']).toEqual({
         previousAccountLabel: ACCOUNT_A,
-        nextAccountLabel: ACCOUNT_B
+        nextAccountLabel: ACCOUNT_B,
+        previousAccountId: 'account-a',
+        nextAccountId: 'account-b'
+      })
+    })
+
+    it('suppresses a null-to-account reauth notice when the recorded pane is already current', async () => {
+      seedPanes([{ ptyId: 'pty-1' }])
+      vi.mocked(window.api.codexAccounts.listRecordedPaneLanes).mockResolvedValue({
+        'pty-1': 'host'
+      })
+
+      await markLiveCodexSessionsForRestart({
+        previousAccountLabel: 'System default',
+        nextAccountLabel: ACCOUNT_A,
+        previousAccountId: null,
+        nextAccountId: 'account-a',
+        target: { runtime: 'host' }
+      })
+
+      expect(window.api.codexAccounts.listStalePanes).toHaveBeenCalledWith({
+        ptyIds: ['pty-1']
+      })
+      expect(useAppStore.getState().codexRestartNoticeByPtyId).toEqual({})
+    })
+
+    it('classifies current, stale, and unrecorded panes independently', async () => {
+      seedPanes([{ ptyId: 'pty-current' }, { ptyId: 'pty-stale' }, { ptyId: 'pty-unknown' }])
+      vi.mocked(window.api.codexAccounts.listRecordedPaneLanes).mockResolvedValue({
+        'pty-current': 'host',
+        'pty-stale': 'host'
+      })
+      vi.mocked(window.api.codexAccounts.listStalePanes).mockResolvedValue([
+        {
+          ptyId: 'pty-stale',
+          launchAccountId: 'account-a',
+          activeAccountId: 'account-b',
+          reason: 'account-change'
+        }
+      ])
+
+      await markLiveCodexSessionsForRestart({
+        previousAccountLabel: ACCOUNT_A,
+        nextAccountLabel: ACCOUNT_B,
+        previousAccountId: 'account-a',
+        nextAccountId: 'account-b',
+        target: { runtime: 'host' }
+      })
+
+      expect(window.api.codexAccounts.listStalePanes).toHaveBeenCalledWith({
+        ptyIds: ['pty-current', 'pty-stale']
+      })
+      expect(useAppStore.getState().codexRestartNoticeByPtyId).toEqual({
+        'pty-stale': {
+          previousAccountLabel: ACCOUNT_A,
+          nextAccountLabel: ACCOUNT_B,
+          previousAccountId: 'account-a',
+          nextAccountId: 'account-b'
+        },
+        'pty-unknown': {
+          previousAccountLabel: ACCOUNT_A,
+          nextAccountLabel: ACCOUNT_B,
+          previousAccountId: 'account-a',
+          nextAccountId: 'account-b'
+        }
       })
     })
 

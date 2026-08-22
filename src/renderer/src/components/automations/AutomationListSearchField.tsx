@@ -34,6 +34,8 @@ export function AutomationListSearchField({
       <Search className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
       <Input
         ref={inputRef}
+        type="text"
+        autoFocus
         value={query}
         aria-label={translate(
           'auto.components.automations.AutomationListSearchField.label',
@@ -41,7 +43,7 @@ export function AutomationListSearchField({
         )}
         placeholder={translate(
           'auto.components.automations.AutomationListSearchField.placeholder',
-          'Search by name, project, or prompt'
+          'Search...'
         )}
         aria-invalid={isTooLarge || undefined}
         aria-describedby={isTooLarge ? 'automations-list-search-too-large' : undefined}
@@ -49,7 +51,8 @@ export function AutomationListSearchField({
         // so the first Escape clears the query without also losing focus.
         data-escape-clears-value={hasText ? 'true' : undefined}
         className={cn(
-          'h-8 border-border/60 bg-background pl-8 text-xs',
+          // Flat list search: no elevation/halo; soft focus border only.
+          'h-8 border-border bg-background pl-8 text-xs shadow-none focus-visible:border-ring/70 focus-visible:ring-0 dark:bg-background',
           hasText && (isTooLarge ? 'pr-20' : 'pr-7')
         )}
         onChange={(event) => onQueryChange(event.target.value)}

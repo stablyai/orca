@@ -13,8 +13,7 @@ import {
 import { parsePairingCode, type PairingOffer } from '../../shared/pairing'
 import { launchOrcaApp } from './launch'
 import { getDefaultUserDataPath, readMetadata } from './metadata'
-import { getCliStatus } from './status'
-import { buildRemoteCliStatusResult } from './remote-cli-status'
+import { getCliStatus, projectRemoteAppStatus } from './status'
 import { sendRequest } from './transport'
 import { RuntimeClientError, RuntimeRpcFailureError, type RuntimeRpcSuccess } from './types'
 import { markEnvironmentUsed, resolveEnvironmentPairingOffer } from './environments'
@@ -161,7 +160,32 @@ export class RuntimeClient {
     if (this.remotePairing) {
       const response = await this.call<RuntimeStatus>('status.get')
       this.remoteCompat.noteVerifiedStatus(response.result)
-      return buildRemoteCliStatusResult(response)
+      const graphState = response.result.graphStatus
+      return {
+        id: response.id,
+        ok: true,
+        result: {
+          target: {
+            kind: 'environment',
+            environment: this.environmentSelector ?? 'pairing-code'
+          },
+          app: projectRemoteAppStatus(response.result),
+          runtime: {
+            state: graphState === 'ready' ? 'ready' : 'graph_not_ready',
+            reachable: true,
+            runtimeId: response.result.runtimeId,
+            ...(response.result.appVersion ? { appVersion: response.result.appVersion } : {}),
+            ...(response.result.remoteUpdateSupport
+              ? { remoteUpdateSupport: response.result.remoteUpdateSupport }
+              : {}),
+            ...(response.result.capabilities ? { capabilities: response.result.capabilities } : {})
+          },
+          graph: {
+            state: graphState
+          }
+        },
+        _meta: response._meta
+      }
     }
     return getCliStatus(this.userDataPath)
   }

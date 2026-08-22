@@ -19,15 +19,13 @@ import {
   type CodexRateWindowSnapshot
 } from './codex-rate-limit-window-classification'
 import { resolveCodexCommand } from '../codex-cli/command'
+import { CODEX_READ_ONLY_APP_SERVER_ARGS } from '../codex-cli/codex-read-only-app-server-args'
 import { withMacTailscaleDnsHint } from '../network/macos-tailscale-dns-diagnostic'
 import { getCmdExePath, getSpawnArgsForWindows } from '../win32-utils'
 import { cleanupHiddenRateLimitPty, registerHiddenRateLimitPty } from './hidden-pty-cleanup'
 import { parseWslUncPath } from '../../shared/wsl-paths'
 import { extractCodexAuthError, isCodexAuthError } from '../../shared/codex-auth-errors'
-import {
-  buildWslLoginShellCommand,
-  escapeWslShCommandForWindows
-} from '../../shared/wsl-login-shell-command'
+import { buildWslExecArgs, buildWslLoginShellCommand } from '../../shared/wsl-login-shell-command'
 import {
   getHiddenRateLimitWslCwdSetupCommands,
   resolveHiddenRateLimitPtyCwd
@@ -41,6 +39,8 @@ import {
   resolveCodexHomeProcessLockKey,
   withCodexHomeProcessLock
 } from '../codex-cli/codex-home-process-lock'
+import { isCodexStateDbBackfillPending } from '../codex/codex-state-db'
+import { startCodexStateDbBackfillRecoveryInBackground } from '../codex/codex-state-db-backfill-recovery'
 
 const RPC_TIMEOUT_MS = 10_000
 const WSL_RPC_TIMEOUT_MS = 25_000
@@ -188,7 +188,7 @@ function buildWslCodexCommand(
     : loginShellCommand
   return {
     command: 'wsl.exe',
-    args: ['-d', wslInfo.distro, '--', 'sh', '-c', escapeWslShCommandForWindows(command)]
+    args: buildWslExecArgs(wslInfo.distro, ['sh', '-c', command])
   }
 }
 
@@ -612,7 +612,7 @@ async function withBackendSessionWindow(
 }
 
 // ---------------------------------------------------------------------------
-// RPC fetch — spawn `codex -s read-only -a untrusted app-server`
+// RPC fetch — spawn a read-only, non-interactive `codex app-server`
 // ---------------------------------------------------------------------------
 
 async function fetchViaRpc(options?: FetchCodexRateLimitsOptions): Promise<ProviderRateLimits> {
@@ -625,7 +625,7 @@ async function fetchViaRpc(options?: FetchCodexRateLimitsOptions): Promise<Provi
     let resolved = false
     let rpcId = 0
 
-    const codexArgs = ['-s', 'read-only', '-a', 'untrusted', 'app-server']
+    const codexArgs = [...CODEX_READ_ONLY_APP_SERVER_ARGS]
     const wslCodex = options?.codexHomePath
       ? buildWslCodexCommand(options.codexHomePath, codexArgs, { isolateRpcStdio: true })
       : null
@@ -1246,6 +1246,19 @@ export async function fetchCodexRateLimits(
         return abortedCodexRateLimitResult()
       }
       // Why: token, routing, and CA behavior can differ; retain CLI fallbacks.
+    }
+  }
+
+  if (options?.codexHomePath && isCodexStateDbBackfillPending(options.codexHomePath)) {
+    // Why: a bounded quota probe can steal an expired backfill lease, then die before indexing finishes.
+    void startCodexStateDbBackfillRecoveryInBackground(options.codexHomePath)
+    return {
+      provider: 'codex',
+      session: null,
+      weekly: null,
+      updatedAt: Date.now(),
+      error: 'Codex is rebuilding its session index; usage will refresh when recovery finishes',
+      status: 'error'
     }
   }
 

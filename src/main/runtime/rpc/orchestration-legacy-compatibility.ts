@@ -82,8 +82,11 @@ export class OrchestrationLegacyCompatibility {
       return { handled: false }
     }
     if (request.method === 'orchestration.runUse' && values.takeoverLegacy === true) {
+      // Why: takeover is a current-contract recovery action. An exact fresh runtime launch
+      // already proves its live PTY, process, pane, host, handle, and launch secret.
       const callerAuthority = this.runtime.verifyOrchestrationCompatibilityCaller(
-        request.orchestrationCompatibilityEvidence
+        request.orchestrationCompatibilityEvidence,
+        { currentRuntimeLaunchSufficient: true }
       )
       return {
         handled: false,
@@ -203,7 +206,7 @@ export class OrchestrationLegacyCompatibility {
     request: RpcRequest,
     params: unknown,
     signal?: AbortSignal
-  ): Promise<unknown | undefined> {
+  ): Promise<unknown> {
     if (request.method === 'orchestration.send') {
       return await handleLegacyLifecycleSend({
         runtime: this.runtime,

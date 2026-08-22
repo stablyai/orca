@@ -1,7 +1,7 @@
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it, vi } from 'vitest'
 import { NestedRepoChecklist } from './NestedRepoChecklist'
-import type { NestedRepoScanResult } from '../../../../shared/types'
+import type { NestedRepoScanResult } from '../../../../shared/project-group-types'
 
 const scan: NestedRepoScanResult = {
   selectedPath: '/workspace/platform',

@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest'
 import { mapRuntimeError } from './errors'
+import {
+  ARTIFACT_SHARING_DISABLED_CODE,
+  ARTIFACT_SHARING_DISABLED_MESSAGE,
+  ArtifactSharingDisabledError
+} from '../../../shared/artifact-sharing-gate'
 
 class LineageError extends Error {
   code = 'LINEAGE_PARENT_NOT_FOUND'
@@ -9,8 +14,39 @@ class LineageError extends Error {
 }
 
 describe('mapRuntimeError', () => {
+  it('preserves the stable skill failure category and retryability across RPC', () => {
+    expect(
+      mapRuntimeError(
+        'req_1',
+        { runtimeId: 'runtime-1' },
+        new Error('skill-download-transport-failed')
+      )
+    ).toMatchObject({
+      ok: false,
+      error: {
+        code: 'skill_install_failure',
+        message: 'skill-download-transport-failed',
+        data: {
+          category: 'transport',
+          code: 'skill-download-transport-failed',
+          retryable: true
+        }
+      }
+    })
+  })
+
   it.each(['terminal_tab_close_timeout', 'terminal_tab_not_found', 'terminal_tab_pinned'])(
     'preserves the durable terminal tab close failure %s',
+    (code) => {
+      expect(mapRuntimeError('req_1', { runtimeId: 'runtime-1' }, new Error(code))).toMatchObject({
+        ok: false,
+        error: { code, message: code }
+      })
+    }
+  )
+
+  it.each(['agent_prompt_blocked', 'agent_prompt_stalled', 'request_aborted'])(
+    'preserves the agent prompt failure %s',
     (code) => {
       expect(mapRuntimeError('req_1', { runtimeId: 'runtime-1' }, new Error(code))).toMatchObject({
         ok: false,
@@ -137,6 +173,25 @@ describe('mapRuntimeError', () => {
     })
   })
 
+  it('does not recommend a blind retry after a coordinate press may have landed', () => {
+    const message =
+      'coordinate click aborted because the recipient changed; 1 press(es) may already have been delivered'
+    const error = Object.assign(new Error(message), { code: 'window_not_focused' })
+
+    const response = mapRuntimeError('req_1', { runtimeId: 'runtime-1' }, error)
+
+    expect(response.error).toMatchObject({
+      code: 'window_not_focused',
+      message,
+      data: {
+        nextSteps: [
+          expect.stringContaining('verify whether the intended action already occurred'),
+          expect.stringContaining('Do not retry the click if it already took effect')
+        ]
+      }
+    })
+  })
+
   it('preserves structured lineage error codes and data for CLI recovery hints', () => {
     const response = mapRuntimeError(
       'req_1',
@@ -155,6 +210,21 @@ describe('mapRuntimeError', () => {
         }
       },
       _meta: { runtimeId: 'runtime-1' }
+    })
+  })
+})
+
+describe('artifact sharing denial', () => {
+  it('reaches the CLI with its code, message, and next steps intact', () => {
+    expect(
+      mapRuntimeError('req_1', { runtimeId: 'runtime-1' }, new ArtifactSharingDisabledError())
+    ).toMatchObject({
+      ok: false,
+      error: {
+        code: ARTIFACT_SHARING_DISABLED_CODE,
+        message: ARTIFACT_SHARING_DISABLED_MESSAGE,
+        data: { nextSteps: expect.arrayContaining([expect.stringContaining('Settings')]) }
+      }
     })
   })
 })

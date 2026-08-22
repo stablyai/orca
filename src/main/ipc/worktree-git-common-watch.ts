@@ -1,6 +1,7 @@
 import { stat } from 'node:fs/promises'
 import { join } from 'node:path'
 import { subscribeViaWatcherProcess } from './parcel-watcher-process'
+import { isWatcherProcessFailure } from './parcel-watcher-process-failure'
 import type { WorktreeBaseWatchTarget } from './worktree-base-directory-event-filter'
 import type {
   WorktreeBasePollEvent,
@@ -30,12 +31,14 @@ async function startGitCommonNarrowWatch(
   onEvents: (events: WorktreeBasePollEvent[]) => void,
   pollIntervalMs: number,
   visibility: WorktreePollerWindowVisibility,
+  onFullScan?: () => void,
   onWatchError?: (error: Error) => void
 ): Promise<WorktreeBaseSubscription> {
   const worktreesDir = join(target.path, 'worktrees')
   let disposed = false
   let subscription: WorktreeBaseSubscription | null = null
   let existenceTimer: ReturnType<typeof setInterval> | null = null
+  let pollingFallbackPromise: Promise<void> | null = null
   let subscribing = false
   let parkedWhileHidden = false
 
@@ -44,6 +47,38 @@ async function startGitCommonNarrowWatch(
       clearInterval(existenceTimer)
       existenceTimer = null
     }
+  }
+
+  const shouldUsePollingFallback = (error: unknown): boolean =>
+    isWatcherProcessFailure(error) &&
+    (error.code === 'supervisor_crash_fuse' || error.code === 'process_unavailable')
+
+  const ensurePollingFallback = (): Promise<void> => {
+    if (pollingFallbackPromise) {
+      return pollingFallbackPromise
+    }
+    stopExistencePoll()
+    const pending = startGitCommonPolling(
+      target.path,
+      onEvents,
+      pollIntervalMs,
+      visibility,
+      onFullScan,
+      false
+    ).then(async (fallback) => {
+      if (disposed || subscription) {
+        await fallback.unsubscribe()
+        return
+      }
+      subscription = fallback
+    })
+    const tracked = pending.finally(() => {
+      if (pollingFallbackPromise === tracked) {
+        pollingFallbackPromise = null
+      }
+    })
+    pollingFallbackPromise = tracked
+    return pollingFallbackPromise
   }
 
   const tryUpgradeToNarrowWatch = async (): Promise<void> => {
@@ -116,7 +151,7 @@ async function startGitCommonNarrowWatch(
     // sometimes surfaced as an error, sometimes as a delete event for the
     // root. Either way: notify, drop the dead stream, and let the existence
     // poll re-arm when a future worktree add recreates the dir.
-    const teardownAndRearm = (): void => {
+    const teardown = (): void => {
       active = false
       errored = true
       const current = subscription
@@ -124,6 +159,9 @@ async function startGitCommonNarrowWatch(
       if (current) {
         void current.unsubscribe().catch(() => {})
       }
+    }
+    const teardownAndRearm = (): void => {
+      teardown()
       armExistencePoll()
     }
     try {
@@ -139,7 +177,16 @@ async function startGitCommonNarrowWatch(
             } else {
               onEvents([{ type: 'update', path: worktreesDir }])
             }
-            teardownAndRearm()
+            if (shouldUsePollingFallback(error)) {
+              teardown()
+              void ensurePollingFallback().catch(() => {
+                if (!disposed) {
+                  armExistencePoll()
+                }
+              })
+            } else {
+              teardownAndRearm()
+            }
             return
           }
           if (events.length > 0) {
@@ -169,11 +216,16 @@ async function startGitCommonNarrowWatch(
       )
       if (disposed || errored) {
         void sub.unsubscribe().catch(() => {})
-        return !errored
+        await pollingFallbackPromise?.catch(() => {})
+        return !errored || subscription !== null
       }
       subscription = { unsubscribe: () => sub.unsubscribe() }
       return true
-    } catch {
+    } catch (error) {
+      if (shouldUsePollingFallback(error)) {
+        await ensurePollingFallback()
+        return subscription !== null
+      }
       return false
     }
   }
@@ -189,6 +241,7 @@ async function startGitCommonNarrowWatch(
       disposed = true
       stopExistencePoll()
       unsubscribeVisibility()
+      await pollingFallbackPromise?.catch(() => {})
       const current = subscription
       subscription = null
       if (current) {
@@ -210,7 +263,14 @@ export async function startGitCommonWatch(
 ): Promise<WorktreeBaseSubscription> {
   if (platform === 'darwin') {
     const [narrowWatch, primaryMetadataPoll] = await Promise.all([
-      startGitCommonNarrowWatch(target, onEvents, pollIntervalMs, visibility, onWatchError),
+      startGitCommonNarrowWatch(
+        target,
+        onEvents,
+        pollIntervalMs,
+        visibility,
+        onFullScan,
+        onWatchError
+      ),
       startGitCommonPrimaryPolling(
         target.path,
         getStatusRefPaths,

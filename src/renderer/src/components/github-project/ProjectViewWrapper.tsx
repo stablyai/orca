@@ -32,16 +32,18 @@ import { useAppStore } from '@/store'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import { projectViewCacheKey } from '@/store/slices/github'
 import type {
-  GetProjectViewTableResult,
   GitHubIssueType,
   GitHubProjectFieldMutationValue,
   GitHubProjectRow,
   GitHubProjectTable,
+  GitHubProjectViewSummary
+} from '../../../../shared/github/project-types'
+import type {
+  GetProjectViewTableResult,
   GitHubProjectViewError,
-  GitHubProjectViewSummary,
   ListProjectViewsResult
-} from '../../../../shared/github-project-types'
-import type { GitHubWorkItem } from '../../../../shared/types'
+} from '../../../../shared/github/project-result-types'
+import type { GitHubWorkItem } from '../../../../shared/github/work-item-types'
 import ProjectPicker, { type ResolvedProjectSelection } from './ProjectPicker'
 import ProjectViewList from './ProjectViewList'
 import ProjectItemSlugDialog from './ProjectItemSlugDialog'
@@ -64,7 +66,8 @@ import { buildTaskSourceContextFromRepo } from '../../../../shared/task-source-c
 import {
   githubProjectHost,
   githubProjectIdentityKey
-} from '../../../../shared/github-project-identity'
+} from '../../../../shared/github/project-identity'
+import { buildProjectWorkItem } from './project-work-item'
 
 type Props = {
   selectedRepoIds: ReadonlySet<string>
@@ -94,43 +97,6 @@ function getProjectViewSourceScope(settings: Parameters<typeof getActiveRuntimeT
   return target.kind === 'environment' ? `runtime:${target.environmentId}` : 'local'
 }
 
-export function buildProjectWorkItem(
-  row: GitHubProjectRow,
-  repoId: string,
-  host?: string
-): GitHubWorkItem | null {
-  if (row.itemType !== 'ISSUE' && row.itemType !== 'PULL_REQUEST') {
-    return null
-  }
-  if (row.content.number == null || !row.content.url) {
-    return null
-  }
-  const [owner, repo] = row.content.repository?.split('/') ?? []
-  // Why: Project rows can reach mutation controls before detail hydration, so
-  // preserve their host-bearing repository identity on the initial item.
-  const prRepo = owner && repo ? { owner, repo, host: githubProjectHost(host) } : undefined
-  return {
-    id: `${row.itemType === 'PULL_REQUEST' ? 'pr' : 'issue'}:${row.content.number}`,
-    type: row.itemType === 'PULL_REQUEST' ? 'pr' : 'issue',
-    number: row.content.number,
-    title: row.content.title,
-    state:
-      row.content.state === 'MERGED'
-        ? 'merged'
-        : row.content.state === 'CLOSED'
-          ? 'closed'
-          : row.content.isDraft
-            ? 'draft'
-            : 'open',
-    url: row.content.url,
-    labels: row.content.labels.map((label) => label.name),
-    updatedAt: row.updatedAt,
-    author: null,
-    repoId,
-    prRepo
-  }
-}
-
 export default function ProjectViewWrapper({ selectedRepoIds }: Props): React.JSX.Element {
   const settings = useAppStore((s) => s.settings)
   const projectViewCache = useAppStore((s) => s.projectViewCache)
@@ -141,7 +107,7 @@ export default function ProjectViewWrapper({ selectedRepoIds }: Props): React.JS
   const patchProjectRowIssueType = useAppStore((s) => s.patchProjectRowIssueType)
   const addRepoFromStore = useAppStore((s) => s.addRepo)
   const repos = useAppStore((s) => s.repos)
-  const { lookupSlug, ready: slugIndexReady } = useRepoSlugIndex()
+  const { lookupSlug, lookupSlugMatches, ready: slugIndexReady } = useRepoSlugIndex()
   const mountedRef = useMountedRef()
 
   const activeProject = settings?.githubProjects?.activeProject ?? null
@@ -375,9 +341,14 @@ export default function ProjectViewWrapper({ selectedRepoIds }: Props): React.JS
   const filteredTable = useMemo(
     () =>
       table && slugIndexReady
-        ? filterProjectTableRowsBySelectedRepos(table, lookupSlug, slugIndexReady, selectedRepoIds)
+        ? filterProjectTableRowsBySelectedRepos(
+            table,
+            lookupSlugMatches,
+            slugIndexReady,
+            selectedRepoIds
+          )
         : null,
-    [table, slugIndexReady, lookupSlug, selectedRepoIds]
+    [table, slugIndexReady, lookupSlugMatches, selectedRepoIds]
   )
   const lastFilteredTableRef = useRef<CachedVisibleProjectTable | null>(null)
   // Why: ref-cache prevents a blank table while the slug index rebuilds, without forcing a second render.
@@ -528,7 +499,7 @@ export default function ProjectViewWrapper({ selectedRepoIds }: Props): React.JS
       }
       const resolution = resolveSelectedProjectRowRepo({
         row,
-        lookupSlug,
+        lookupSlugMatches,
         host: table.project.host,
         slugIndexReady,
         selectedRepoIds
@@ -584,7 +555,7 @@ export default function ProjectViewWrapper({ selectedRepoIds }: Props): React.JS
       currentCacheKey,
       table,
       buildOrigin,
-      lookupSlug,
+      lookupSlugMatches,
       slugIndexReady,
       selectedRepoIds,
       openProjectRowUrlWithToast
@@ -602,7 +573,7 @@ export default function ProjectViewWrapper({ selectedRepoIds }: Props): React.JS
       }
       const resolution = resolveSelectedProjectRowRepo({
         row,
-        lookupSlug,
+        lookupSlugMatches,
         host: table.project.host,
         slugIndexReady,
         selectedRepoIds
@@ -671,7 +642,7 @@ export default function ProjectViewWrapper({ selectedRepoIds }: Props): React.JS
       currentCacheKey,
       table,
       buildOrigin,
-      lookupSlug,
+      lookupSlugMatches,
       slugIndexReady,
       selectedRepoIds,
       openProjectRowUrlWithToast

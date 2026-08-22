@@ -2,7 +2,8 @@ import {
   getCyclicWorktreeLineageChildIds,
   isValidResolvedWorktreeLineageEdge
 } from '../../../../shared/resolved-worktree-lineage'
-import type { Worktree, WorktreeLineage } from '../../../../shared/types'
+import type { WorktreeLineage } from '../../../../shared/worktree/lineage-types'
+import type { Worktree } from '../../../../shared/worktree/types'
 
 export type LineageRenderInfo =
   | { state: 'none' }
@@ -15,7 +16,7 @@ export function getProjectedWorktreeLineage(
   worktree: Worktree,
   lineageById: Readonly<Record<string, WorktreeLineage>>
 ): WorktreeLineage | null | undefined {
-  if (Object.prototype.hasOwnProperty.call(lineageById, worktree.id)) {
+  if (Object.hasOwn(lineageById, worktree.id)) {
     return lineageById[worktree.id]
   }
   return (worktree as WorktreeWithResolvedLineage).lineage

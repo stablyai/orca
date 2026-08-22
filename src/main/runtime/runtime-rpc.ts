@@ -15,6 +15,7 @@ import {
 import { RpcDispatcher } from './rpc/dispatcher'
 import type { RpcRequest, RpcResponse } from './rpc/core'
 import { errorResponse } from './rpc/errors'
+import { fingerprintAuthenticatedPairingCredential } from './rpc/orchestration-mutation-executor'
 import type { RpcMessageContext, RpcTransport } from './rpc/transport'
 import { UnixSocketTransport } from './rpc/unix-socket-transport'
 import { WebSocketTransport } from './rpc/ws-transport'
@@ -184,6 +185,7 @@ const MOBILE_RPC_METHOD_ALLOWLIST = new Set([
   'accounts.subscribe',
   'accounts.unsubscribe',
   'aiVault.listSessions',
+  'aiVault.resolveSessionTitles',
   'aiVault.prepareSessionResume',
   'browser.back',
   'browser.dialogAccept',
@@ -315,6 +317,7 @@ const MOBILE_RPC_METHOD_ALLOWLIST = new Set([
   'host.wsl.isAvailable',
   'host.wsl.listDistros',
   'hostedReview.create',
+  'hostedReview.createStacked',
   'hostedReview.forBranch',
   'hostedReview.getCreationEligibility',
   'linear.getCustomView',
@@ -427,6 +430,7 @@ const MOBILE_RPC_METHOD_ALLOWLIST = new Set([
   'worktree.activate',
   'worktree.create',
   'worktree.forceDeleteBranch',
+  'worktree.listRetiredNames',
   'worktree.prefetchCreateBase',
   'worktree.ps',
   'worktree.show',
@@ -715,6 +719,7 @@ export class OrcaRuntimeRpcServer {
       endpoint,
       deviceToken: device.token,
       publicKeyB64,
+      pairedDeviceId: device.deviceId,
       scope
     })
     return {
@@ -927,6 +932,7 @@ export class OrcaRuntimeRpcServer {
         endpoint: direct.endpoint,
         deviceToken: device.token,
         publicKeyB64,
+        pairedDeviceId: device.deviceId,
         scope: 'mobile',
         relay: relayPairing.relay
       })
@@ -1406,7 +1412,7 @@ export class OrcaRuntimeRpcServer {
     // never orphan a running 0.0.0.0 listener outside activeTransports (and thus outside stop()).
     this.activeTransports[index] = widened.transport
     const metaIndex = this.transports.findIndex((meta) => meta.kind === 'websocket')
-    if (metaIndex >= 0) {
+    if (metaIndex !== -1) {
       this.transports[metaIndex] = { kind: 'websocket', endpoint: widened.endpoint }
     }
     try {
@@ -1448,7 +1454,7 @@ export class OrcaRuntimeRpcServer {
       )
       this.activeTransports.splice(index, 1)
       const metaIndex = this.transports.findIndex((meta) => meta.kind === 'websocket')
-      if (metaIndex >= 0) {
+      if (metaIndex !== -1) {
         this.transports.splice(metaIndex, 1)
       }
       this.wsBoundHost = null
@@ -1463,7 +1469,7 @@ export class OrcaRuntimeRpcServer {
     // orphan a live transport outside activeTransports (and thus outside stop()).
     this.activeTransports[index] = restored.transport
     const metaIndex = this.transports.findIndex((meta) => meta.kind === 'websocket')
-    if (metaIndex >= 0) {
+    if (metaIndex !== -1) {
       this.transports[metaIndex] = { kind: 'websocket', endpoint: restored.endpoint }
     }
     try {
@@ -1708,6 +1714,8 @@ export class OrcaRuntimeRpcServer {
         : undefined
     try {
       await this.dispatcher.dispatchStreaming(request, replyForRequest, {
+        // Why: the validated credential preserves existing federation ownership without trusting request fields.
+        authenticatedCallerFingerprint: fingerprintAuthenticatedPairingCredential(token),
         connectionId,
         clientId: token,
         pairedDeviceId: device.deviceId,

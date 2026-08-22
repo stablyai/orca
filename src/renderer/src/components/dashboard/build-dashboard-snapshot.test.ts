@@ -7,7 +7,8 @@ import {
 } from '../../../../shared/agent-status-types'
 import { DASHBOARD_MAX_LABEL_LENGTH } from '../../../../shared/dashboard-snapshot'
 import { makePaneKey } from '../../../../shared/stable-pane-id'
-import type { TerminalTab, Worktree } from '../../../../shared/types'
+import type { TerminalTab } from '../../../../shared/terminal-tab-types'
+import type { Worktree } from '../../../../shared/worktree/types'
 import { selectRuntimeAgentOrchestrationBatch } from '../sidebar/worktree-agent-orchestration-batch'
 import type * as DashboardSnapshotWorkspacesModule from './dashboard-snapshot-workspaces'
 import type * as AgentRowLineageModule from './agent-row-lineage'
@@ -47,6 +48,7 @@ const LEAF_ID = '11111111-1111-4111-8111-111111111111'
 const CHILD_LEAF_ID = '33333333-3333-4333-8333-333333333333'
 const GRANDCHILD_LEAF_ID = '44444444-4444-4444-8444-444444444444'
 const GONE_LEAF_ID = '22222222-2222-4222-8222-222222222222'
+const SPLIT_SIBLING_LEAF_ID = '55555555-5555-4555-8555-555555555555'
 const PANE_KEY = makePaneKey(TAB_ID, LEAF_ID)
 const CHILD_PANE_KEY = makePaneKey(TAB_ID, CHILD_LEAF_ID)
 const GRANDCHILD_PANE_KEY = makePaneKey(TAB_ID, GRANDCHILD_LEAF_ID)
@@ -335,6 +337,46 @@ describe('buildDashboardSnapshot', () => {
     expect(unnamed.cards[0].conversationName).toBeUndefined()
   })
 
+  // STA-2811: both panes of a split tab carried the focused pane's title.
+  it('names each pane of a split tab from its own title', () => {
+    const siblingPaneKey = makePaneKey(TAB_ID, SPLIT_SIBLING_LEAF_ID)
+    const snapshot = buildDashboardSnapshot(
+      baseState({
+        agentStatusByPaneKey: {
+          [PANE_KEY]: entry({}),
+          [siblingPaneKey]: entry({ paneKey: siblingPaneKey })
+        },
+        // The tab title is whichever pane has focus, so it must not name both.
+        tabsByWorktree: { w1: [{ ...tab(), title: '\u2733 Linear work log' }] },
+        terminalLayoutsByTabId: {
+          [TAB_ID]: {
+            root: {
+              type: 'split',
+              direction: 'horizontal',
+              first: { type: 'leaf', leafId: LEAF_ID },
+              second: { type: 'leaf', leafId: SPLIT_SIBLING_LEAF_ID }
+            },
+            activeLeafId: LEAF_ID,
+            expandedLeafId: null,
+            ptyIdsByLeafId: { [LEAF_ID]: 'pty1', [SPLIT_SIBLING_LEAF_ID]: 'pty2' }
+          }
+        },
+        ptyIdsByTabId: { [TAB_ID]: ['pty1', 'pty2'] },
+        // Pane ids are replay-creation-ordered: 1 -> first leaf, 2 -> second.
+        runtimePaneTitlesByTabId: {
+          [TAB_ID]: { 1: '\u2733 Linear work log', 2: '\u2733 Redis cache strategy' }
+        }
+      }),
+      NOW
+    )
+
+    const nameByPaneKey = new Map(
+      snapshot.cards.map((card) => [card.paneKey, card.conversationName])
+    )
+    expect(nameByPaneKey.get(PANE_KEY)).toBe('Linear work log')
+    expect(nameByPaneKey.get(siblingPaneKey)).toBe('Redis cache strategy')
+  })
+
   // Why: `orca terminal rename --title` is unbounded, and the main-process
   // validator drops any card whose label exceeds the shared bound.
   it('truncates labels to the length the snapshot validator accepts', () => {
@@ -601,6 +643,50 @@ describe('buildDashboardSnapshot', () => {
     expect(hostIdentityReads).toBe(0)
     expect(mapMetadataCalls.hostKind).not.toHaveBeenCalled()
     expect(mapMetadataCalls.parentPaneKey).not.toHaveBeenCalled()
+  })
+
+  it('indexes runtime host labels once per detailed snapshot', () => {
+    let environmentIdReads = 0
+    const environmentCount = 24
+    const runtimeEnvironments = Array.from({ length: environmentCount }, (_, index) => {
+      const environment = { id: `environment-${index}`, name: `Builder ${index}` }
+      Object.defineProperty(environment, 'id', {
+        enumerable: true,
+        get: () => {
+          environmentIdReads += 1
+          return `environment-${index}`
+        }
+      })
+      return environment
+    }) as unknown as DashboardSnapshotState['runtimeEnvironments']
+    const executionHostId = `runtime:environment-${environmentCount - 1}` as const
+
+    const snapshot = buildDashboardSnapshot(
+      baseState({
+        repos: [
+          {
+            id: 'r1',
+            path: '/r1',
+            displayName: 'Repo One',
+            badgeColor: '#000',
+            addedAt: 0,
+            executionHostId
+          }
+        ],
+        worktreesByRepo: {
+          r1: [
+            { ...worktree(), hostId: executionHostId },
+            { ...worktree('w2', 'wt-two'), hostId: executionHostId }
+          ]
+        },
+        runtimeEnvironments,
+        agentStatusByPaneKey: { [PANE_KEY]: entry({}) }
+      }),
+      NOW
+    )
+
+    expect(snapshot.cards[0].hostLabel).toBe(`Builder ${environmentCount - 1}`)
+    expect(environmentIdReads).toBe(environmentCount)
   })
 
   it("resolves a live pty's host-input profile for card snapshots", () => {

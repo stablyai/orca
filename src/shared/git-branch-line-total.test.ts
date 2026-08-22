@@ -15,6 +15,7 @@ import {
 import type { GitLineStats } from './git-uncommitted-line-stats'
 
 const MERGE_BASE = 'a1b2c3d4e5f60718293a4b5c6d7e8f90a1b2c3d4'
+const NO_LINES = { added: 0, removed: 0 }
 const OTHER_MERGE_BASE = '0f1e2d3c4b5a69788796a5b4c3d2e1f00f1e2d3c'
 
 function statsMap(entries: Record<string, GitLineStats>): ReadonlyMap<string, GitLineStats> {
@@ -58,7 +59,7 @@ describe('sumGitBranchLineTotal', () => {
         }),
         untracked: statsMap({})
       })
-    ).toEqual({ added: 4, removed: 1, mergeBase: MERGE_BASE })
+    ).toEqual({ added: 4, removed: 1, mergeBase: MERGE_BASE, test: NO_LINES, generated: NO_LINES })
   })
 
   it('counts a half-binary entry on the side git did report', () => {
@@ -68,7 +69,7 @@ describe('sumGitBranchLineTotal', () => {
         tracked: statsMap({ 'odd.txt': { added: 3 } }),
         untracked: statsMap({ 'new.bin': {} })
       })
-    ).toEqual({ added: 3, removed: 0, mergeBase: MERGE_BASE })
+    ).toEqual({ added: 3, removed: 0, mergeBase: MERGE_BASE, test: NO_LINES, generated: NO_LINES })
   })
 
   it('adds untracked additions on top of the tracked range and echoes the merge base', () => {
@@ -78,7 +79,7 @@ describe('sumGitBranchLineTotal', () => {
         tracked: statsMap({ 'src/a.ts': { added: 10, removed: 2 } }),
         untracked: statsMap({ 'src/new.ts': { added: 7, removed: 0 }, 'src/also.ts': { added: 1 } })
       })
-    ).toEqual({ added: 18, removed: 2, mergeBase: MERGE_BASE })
+    ).toEqual({ added: 18, removed: 2, mergeBase: MERGE_BASE, test: NO_LINES, generated: NO_LINES })
   })
 
   it('returns an all-zero total for a pure rename rather than omitting it', () => {
@@ -88,7 +89,71 @@ describe('sumGitBranchLineTotal', () => {
         tracked: statsMap({ 'g.txt': { added: 0, removed: 0 } }),
         untracked: statsMap({})
       })
-    ).toEqual({ added: 0, removed: 0, mergeBase: MERGE_BASE })
+    ).toEqual({ added: 0, removed: 0, mergeBase: MERGE_BASE, test: NO_LINES, generated: NO_LINES })
+  })
+
+  it('splits out the test-file share of both halves, untracked files included', () => {
+    expect(
+      sumGitBranchLineTotal({
+        mergeBase: MERGE_BASE,
+        tracked: statsMap({
+          'src/a.ts': { added: 10, removed: 2 },
+          'src/a.test.ts': { added: 30, removed: 5 },
+          'e2e/login.ts': { added: 4, removed: 1 }
+        }),
+        untracked: statsMap({ 'src/b.spec.ts': { added: 6 }, 'src/b.ts': { added: 2 } })
+      })
+    ).toEqual({
+      added: 52,
+      removed: 8,
+      mergeBase: MERGE_BASE,
+      test: { added: 40, removed: 6 },
+      generated: NO_LINES
+    })
+  })
+
+  it('splits generated lines out of both the total and the test share', () => {
+    expect(
+      sumGitBranchLineTotal({
+        mergeBase: MERGE_BASE,
+        tracked: statsMap({
+          'src/a.ts': { added: 10, removed: 2 },
+          'src/a.test.ts': { added: 30, removed: 5 },
+          'pnpm-lock.yaml': { added: 900, removed: 400 },
+          'api/service.pb.go': { added: 120, removed: 0 },
+          // Generated wins the overlap: a snapshot is both, and counts as churn.
+          'src/__snapshots__/a.tsx.snap': { added: 50, removed: 20 }
+        }),
+        untracked: statsMap({ 'dist/bundle.js': { added: 5000 } })
+      })
+    ).toEqual({
+      added: 6110,
+      removed: 427,
+      mergeBase: MERGE_BASE,
+      test: { added: 30, removed: 5 },
+      generated: { added: 6070, removed: 420 }
+    })
+  })
+
+  it('keeps the three buckets disjoint so they sum back to the total', () => {
+    const total = sumGitBranchLineTotal({
+      mergeBase: MERGE_BASE,
+      tracked: statsMap({
+        'src/a.ts': { added: 10, removed: 2 },
+        'src/a.test.ts': { added: 30, removed: 5 },
+        'go.sum': { added: 7, removed: 3 },
+        'tests/fixtures/repo.json': { added: 4, removed: 1 }
+      }),
+      untracked: statsMap({ 'src/b.ts': { added: 2 } })
+    })
+
+    const source = {
+      added: total.added - total.test!.added - total.generated!.added,
+      removed: total.removed - total.test!.removed - total.generated!.removed
+    }
+    expect(source).toEqual({ added: 12, removed: 2 })
+    expect(total.test).toEqual({ added: 34, removed: 6 })
+    expect(total.generated).toEqual({ added: 7, removed: 3 })
   })
 })
 
@@ -178,7 +243,13 @@ describe('computeGitBranchLineTotal', () => {
         untrackedPaths: ['new.txt'],
         runDiffNumstat: async () => '4\t1\tsrc/a.ts\0'
       })
-    ).resolves.toEqual({ added: 7, removed: 1, mergeBase: MERGE_BASE })
+    ).resolves.toEqual({
+      added: 7,
+      removed: 1,
+      mergeBase: MERGE_BASE,
+      test: NO_LINES,
+      generated: NO_LINES
+    })
   })
 
   it('omits the total when the ranged numstat fails instead of publishing untracked-only zeros', async () => {
@@ -218,8 +289,8 @@ describe('computeGitBranchLineTotal', () => {
     release()
 
     expect(await both).toEqual([
-      { added: 4, removed: 1, mergeBase: MERGE_BASE },
-      { added: 4, removed: 1, mergeBase: MERGE_BASE }
+      { added: 4, removed: 1, mergeBase: MERGE_BASE, test: NO_LINES, generated: NO_LINES },
+      { added: 4, removed: 1, mergeBase: MERGE_BASE, test: NO_LINES, generated: NO_LINES }
     ])
     expect(runDiffNumstat).toHaveBeenCalledTimes(1)
   })
@@ -365,7 +436,13 @@ describe('computeGitBranchLineTotal ranged-diff cooldown', () => {
     }
   }
 
-  const TOTAL = { added: 10, removed: 2, mergeBase: MERGE_BASE }
+  const TOTAL = {
+    added: 10,
+    removed: 2,
+    mergeBase: MERGE_BASE,
+    test: NO_LINES,
+    generated: NO_LINES
+  }
 
   beforeEach(() => {
     nowMs = 0

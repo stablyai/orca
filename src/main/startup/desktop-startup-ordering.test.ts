@@ -26,15 +26,20 @@ describe('startup ordering', () => {
     expect(attachBlock).toContain(
       'awaitLocalPtyProviderStartup: () => localPtyProviderStartupReady'
     )
-    expect(source).toContain('firstWindowStartupServicesReady = startupServices.firstWindowReady')
-    expect(source).toContain('localPtyStartupReady = startupServices.localPtyReady')
+    expect(source).toContain(
+      'firstWindowStartupServicesReady = services.then((value) => value.firstWindowReady)'
+    )
+    expect(source).toContain('localPtyStartupReady = services.then((value) => value.localPtyReady)')
 
-    const windowIndex = desktopStartup.indexOf('Promise.resolve(openMainWindow())')
+    const windowIndex = desktopStartup.indexOf('Promise.resolve(desktopWindow ?? openMainWindow())')
     const rpcStartIndex = desktopStartup.indexOf('desktopRuntimeRpc.start()')
     const legacyRpcStartIndex = desktopStartup.indexOf('runtimeRpc.start()')
 
     expect(windowIndex).toBeGreaterThanOrEqual(0)
     expect(Math.max(rpcStartIndex, legacyRpcStartIndex)).toBeGreaterThanOrEqual(0)
+    expect(desktopStartup).toMatch(
+      /shellPathReady\s*\.then\(\(\) => (?:desktopRuntimeRpc|runtimeRpc)\.start\(\)\)/
+    )
     expect(desktopStartup).toContain('recordRuntimeRpcStartFailure(')
     // Why: `void`, not `await` — awaiting the dialog would park the rest of startup behind a modal.
     expect(desktopStartup).toMatch(/void showRuntimeRpcStartupFailureDialog\(\s*win,/)
@@ -60,7 +65,7 @@ describe('startup ordering', () => {
   it('bounds WSL reconciliation before serve RPC while leaving desktop startup independent', () => {
     const source = readFileSync(join(process.cwd(), 'src/main/index.ts'), 'utf8')
     const barrierStart = source.indexOf("ipcMain.handle('app:awaitFirstWindowStartupServices'")
-    const barrierEnd = source.indexOf("ipcMain.handle(\n  'app:startupDiagnostic'", barrierStart)
+    const barrierEnd = source.indexOf("'app:startupDiagnostic'", barrierStart)
     const barrier = source.slice(barrierStart, barrierEnd)
     const reconciliationStart = source.indexOf(
       'managedWslCliReconciliationReady = reconcileManagedWslCliRegistrations('
@@ -68,22 +73,40 @@ describe('startup ordering', () => {
     const serveStart = source.indexOf('if (serveOptions) {', reconciliationStart)
     const serveReady = source.indexOf('await printServeReady(serveOptions)', serveStart)
     const serveEnd = source.indexOf('return', serveReady)
-    const desktopWindowStart = source.indexOf('Promise.resolve(openMainWindow())')
+    const desktopWindowStart = source.indexOf(
+      'const desktopStartup = startWindowsDesktopBeforeShellPathReady('
+    )
+    const desktopWindowJoin = source.indexOf(
+      'Promise.resolve(desktopWindow ?? openMainWindow())',
+      serveEnd
+    )
     const serveStartup = source.slice(serveStart, serveEnd)
-    const desktopStartup = source.slice(serveEnd, desktopWindowStart)
+    const desktopStartup = source.slice(reconciliationStart, serveStart)
 
+    expect(barrierStart).toBeGreaterThanOrEqual(0)
+    expect(barrierEnd).toBeGreaterThan(barrierStart)
     expect(reconciliationStart).toBeGreaterThanOrEqual(0)
     expect(serveStart).toBeGreaterThan(reconciliationStart)
     expect(serveEnd).toBeGreaterThan(serveStart)
     // Why: bound against serveEnd, not reconciliationStart — an earlier openMainWindow() call
     // would steal this anchor, collapse desktopStartup to '', and pass the negative check below.
-    expect(desktopWindowStart).toBeGreaterThan(serveEnd)
+    expect(desktopWindowStart).toBeGreaterThan(reconciliationStart)
+    expect(desktopWindowStart).toBeLessThan(serveStart)
+    expect(desktopWindowJoin).toBeGreaterThan(serveEnd)
     expect(serveStartup).toContain('await managedWslCliStartupBarrierReady')
     expect(serveStartup).not.toContain('await managedWslCliReconciliationReady')
     expect(serveStartup.indexOf('await managedWslCliStartupBarrierReady')).toBeLessThan(
       serveStartup.indexOf('await runtimeRpc.start()')
     )
     expect(desktopStartup).not.toContain('await managedWslCliReconciliationReady')
+    expect(desktopStartup).toContain(
+      "process.platform === 'win32' && app.isPackaged && !serveOptions"
+    )
+    expect(desktopStartup).toContain(
+      'openWindow: () => openMainWindow({ revealOnDidFinishLoad: true })'
+    )
+    expect(desktopStartup).toContain('shellPathReady,')
+    expect(desktopStartup).toContain('startServices: startTerminalRuntimeStartupServices')
     expect(barrier).toContain('managedWslCliStartupBarrierReady')
     expect(barrier).not.toContain('managedWslCliReconciliationReady')
     expect(barrier).toContain("ipcMain.handle('app:recoverLegacyWorkerTerminalsForRendererStartup'")
@@ -98,19 +121,29 @@ describe('startup ordering', () => {
   it('reconciles retained Codex homes after authoritative daemon inventory', () => {
     const source = readFileSync(join(process.cwd(), 'src/main/index.ts'), 'utf8')
     const daemonInitIndex = source.indexOf('await initDaemonPtyProvider(signal')
-    const routeGateIndex = source.indexOf(
-      'codexRuntimeHome?.isHostSystemDefaultRealHome()',
+    const retainedPaneGateIndex = source.indexOf(
+      'hasRecordedManagedHostCodexPane()',
       daemonInitIndex
     )
     const inventoryIndex = source.indexOf('await listLiveDaemonPtyIds()', daemonInitIndex)
     const reconciliation = 'codexRuntimeHome?.reconcileLegacySharedHomeForRetainedPanes()'
     const reconciliationIndex = source.indexOf(reconciliation, inventoryIndex)
+    const hookReconciliationIndex = source.indexOf(
+      'reconcileRetainedCodexHookHomes({',
+      inventoryIndex
+    )
     const serveIndex = source.indexOf('if (serveOptions) {', reconciliationIndex)
-    const desktopIndex = source.indexOf('Promise.resolve(openMainWindow())', serveIndex)
+    const desktopIndex = source.indexOf(
+      'Promise.resolve(desktopWindow ?? openMainWindow())',
+      serveIndex
+    )
 
     expect(daemonInitIndex).toBeGreaterThanOrEqual(0)
-    expect(routeGateIndex).toBeGreaterThan(daemonInitIndex)
-    expect(inventoryIndex).toBeGreaterThan(routeGateIndex)
+    expect(retainedPaneGateIndex).toBeGreaterThan(daemonInitIndex)
+    expect(inventoryIndex).toBeGreaterThan(daemonInitIndex)
+    expect(inventoryIndex).toBeGreaterThan(retainedPaneGateIndex)
+    expect(hookReconciliationIndex).toBeGreaterThan(inventoryIndex)
+    expect(hookReconciliationIndex).toBeLessThan(reconciliationIndex)
     expect(reconciliationIndex).toBeGreaterThan(inventoryIndex)
     expect(serveIndex).toBeGreaterThan(reconciliationIndex)
     expect(desktopIndex).toBeGreaterThan(serveIndex)
@@ -154,6 +187,33 @@ describe('startup ordering', () => {
 
     expect(attachIndex).toBeGreaterThanOrEqual(0)
     expect(startIndex).toBeGreaterThan(attachIndex)
+  })
+
+  it('wires bounded teardown state to reporting but not recovery or close behavior', () => {
+    const source = readFileSync(join(process.cwd(), 'src/main/index.ts'), 'utf8')
+    const scopeStart = source.indexOf('function getExpectedTeardownScope(')
+    const scopeEnd = source.indexOf('function markRecoveryReloadInFlight(', scopeStart)
+    const scope = source.slice(scopeStart, scopeEnd)
+    const windowStart = source.indexOf('const window = createMainWindow(store, {')
+    const windowEnd = source.indexOf('onRendererRecoveryExhausted:', windowStart)
+    const windowOptions = source.slice(windowStart, windowEnd)
+    const recorderStart = source.indexOf('function recordProcessGoneCrash(')
+    const recorderEnd = source.indexOf('function shutdownWatchersOnce(', recorderStart)
+    const recorder = source.slice(recorderStart, recorderEnd)
+
+    expect(scopeStart).toBeGreaterThanOrEqual(0)
+    expect(scopeEnd).toBeGreaterThan(scopeStart)
+    expect(scope).toContain('resolveExpectedTeardownScope({')
+    expect(scope).toContain('includeSystemSessionEnd')
+    expect(windowStart).toBeGreaterThanOrEqual(0)
+    expect(windowEnd).toBeGreaterThan(windowStart)
+    expect(windowOptions).toContain('getIsQuitting: () => isQuitting')
+    expect(windowOptions).toContain(
+      'expectedTeardown: getExpectedTeardownScope(webContentsId, false)'
+    )
+    expect(recorderStart).toBeGreaterThanOrEqual(0)
+    expect(recorderEnd).toBeGreaterThan(recorderStart)
+    expect(recorder).toContain('expectedTeardown: getExpectedTeardownScope(webContentsId)')
   })
 
   it('attaches renderer services before starting the TCC prompt watcher', () => {

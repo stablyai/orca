@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { join, sep } from 'node:path'
-import type { GlobalSettings, Repo } from '../../shared/types'
+import type { GlobalSettings } from '../../shared/global-settings-types'
+import type { Repo } from '../../shared/repo-types'
 import type {
   WorktreeBasePollEvent,
   WorktreeBasePollerOptions
@@ -351,6 +352,44 @@ describe('worktree base directory watcher', () => {
     expect(resolve).toHaveBeenCalledTimes(2)
     await vi.advanceTimersByTimeAsync(300)
     expect(notifyWorktreesChanged).toHaveBeenCalledWith(expect.anything(), 'repo-1')
+  })
+
+  it('throttles repeated structural refreshes from watcher failures', async () => {
+    await syncWorktreeBaseDirectoryWatchers(makeStore([makeRepo()]) as never, makeWindow() as never)
+    const onWatchError = pollerOptions.get(PROJECT_GIT_COMMON_DIR)?.onWatchError
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+
+    onWatchError?.(new Error('watch interrupted'))
+    await vi.advanceTimersByTimeAsync(300)
+    onWatchError?.(new Error('watch interrupted'))
+    await vi.advanceTimersByTimeAsync(300)
+
+    expect(notifyWorktreesChanged).toHaveBeenCalledTimes(1)
+
+    await vi.advanceTimersByTimeAsync(60_000)
+    onWatchError?.(new Error('watch interrupted'))
+    await vi.advanceTimersByTimeAsync(300)
+    warn.mockRestore()
+
+    expect(notifyWorktreesChanged).toHaveBeenCalledTimes(2)
+  })
+
+  it('lets a real event reset the watcher-failure refresh cooldown', async () => {
+    await syncWorktreeBaseDirectoryWatchers(makeStore([makeRepo()]) as never, makeWindow() as never)
+    const onWatchError = pollerOptions.get(PROJECT_GIT_COMMON_DIR)?.onWatchError
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+
+    onWatchError?.(new Error('watch interrupted'))
+    await vi.advanceTimersByTimeAsync(300)
+    emit(PROJECT_GIT_COMMON_DIR, [{ type: 'update', path: join(PROJECT_GIT_COMMON_DIR, 'config') }])
+    await vi.advanceTimersByTimeAsync(300)
+    vi.mocked(notifyWorktreesChanged).mockClear()
+
+    onWatchError?.(new Error('watch interrupted'))
+    await vi.advanceTimersByTimeAsync(300)
+    warn.mockRestore()
+
+    expect(notifyWorktreesChanged).toHaveBeenCalledOnce()
   })
 
   it('keeps linked HEAD and lock metadata structural', async () => {

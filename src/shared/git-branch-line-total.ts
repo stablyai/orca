@@ -5,6 +5,8 @@ import {
   parseNumstat,
   type GitLineStats
 } from './git-uncommitted-line-stats'
+import { isGeneratedCodePath } from './generated-code-path'
+import { isTestCodePath } from './test-code-path'
 
 export type { GitBranchLineTotal }
 
@@ -87,17 +89,37 @@ export function sumGitBranchLineTotal(input: {
 }): GitBranchLineTotal {
   let added = 0
   let removed = 0
-  for (const stats of input.tracked.values()) {
-    // Binary files parse to undefined in numstat and contribute nothing, matching
-    // the per-file rows.
-    added += stats.added ?? 0
-    removed += stats.removed ?? 0
+  let testAdded = 0
+  let testRemoved = 0
+  let generatedAdded = 0
+  let generatedRemoved = 0
+  for (const source of [input.tracked, input.untracked]) {
+    for (const [filePath, stats] of source) {
+      // Binary files parse to undefined in numstat and contribute nothing, matching
+      // the per-file rows.
+      const fileAdded = stats.added ?? 0
+      const fileRemoved = stats.removed ?? 0
+      added += fileAdded
+      removed += fileRemoved
+      // Generated wins the overlap (a snapshot is both): the point of the bucket
+      // is to separate authored lines from churn, and a regenerated file is churn
+      // wherever it lives.
+      if (isGeneratedCodePath(filePath)) {
+        generatedAdded += fileAdded
+        generatedRemoved += fileRemoved
+      } else if (isTestCodePath(filePath)) {
+        testAdded += fileAdded
+        testRemoved += fileRemoved
+      }
+    }
   }
-  for (const stats of input.untracked.values()) {
-    added += stats.added ?? 0
-    removed += stats.removed ?? 0
+  return {
+    added,
+    removed,
+    mergeBase: input.mergeBase,
+    test: { added: testAdded, removed: testRemoved },
+    generated: { added: generatedAdded, removed: generatedRemoved }
   }
-  return { added, removed, mergeBase: input.mergeBase }
 }
 
 // Why: one shared exec per (host, worktree, mergeBase). The renderer's own
