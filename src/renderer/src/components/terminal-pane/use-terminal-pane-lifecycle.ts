@@ -79,7 +79,7 @@ import { RESET_KITTY_KEYBOARD_PROTOCOL } from '../../../../shared/terminal-mode-
 import { resolveTerminalLayoutActiveLeafId } from './terminal-layout-leaf-ids'
 import { makePaneKey } from '../../../../shared/stable-pane-id'
 import { applyExpandedLayoutTo, restoreExpandedLayoutFrom } from './expand-collapse'
-import { applyTerminalAppearance } from './terminal-appearance'
+import { applyTerminalAppearance, terminalBackgroundNeedsTransparency } from './terminal-appearance'
 import { createOsc52OscHandler } from './osc52-clipboard'
 import {
   showOsc52ClipboardBlockedToast,
@@ -1638,6 +1638,10 @@ export function useTerminalPaneLifecycle({
           cursorStyle,
           cursorInactiveStyle: resolveTerminalCursorInactiveStyle(cursorStyle),
           cursorBlink: currentSettings?.terminalCursorBlink ?? true,
+          // Why at construction: xterm documents allowTransparency as pre-open; seed it so panes never rely on the post-open toggle.
+          allowTransparency: currentSettings
+            ? terminalBackgroundNeedsTransparency(currentSettings)
+            : false,
           scrollSensitivity: normalizeTerminalScrollSensitivity(
             currentSettings?.terminalScrollSensitivity
           ),
