@@ -260,6 +260,38 @@ describe('terminal window transfer authoritative preflight', () => {
     ).toBe(false)
   })
 
+  it('rejects a multibyte rootless buffer above the UTF-8 byte limit', () => {
+    expect(
+      isTerminalWindowTransferSeed({
+        ...terminalWindowSeed(),
+        layout: {
+          root: null,
+          activeLeafId: null,
+          expandedLeafId: null,
+          buffersByLeafId: {
+            retained: 'é'.repeat(TERMINAL_SCROLLBACK_SESSION_BUFFER_BYTE_LIMIT / 2 + 1)
+          }
+        }
+      })
+    ).toBe(false)
+  })
+
+  it('accepts a multibyte rootless buffer at the UTF-8 byte limit', () => {
+    expect(
+      isTerminalWindowTransferSeed({
+        ...terminalWindowSeed(),
+        layout: {
+          root: null,
+          activeLeafId: null,
+          expandedLeafId: null,
+          buffersByLeafId: {
+            retained: 'é'.repeat(TERMINAL_SCROLLBACK_SESSION_BUFFER_BYTE_LIMIT / 2)
+          }
+        }
+      })
+    ).toBe(true)
+  })
+
   it('accepts a legacy local folder workspace without persisted groups', async () => {
     const h = createTerminalWindowTransferHarness()
     const folderSeed = {

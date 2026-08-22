@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { folderWorkspaceKey, worktreeWorkspaceKey } from '../../shared/workspace-scope'
 import {
   removeTransferredTerminalSession,
   restoreTransferredTerminalSession
@@ -229,7 +230,7 @@ describe('terminal window transfer target session rollback', () => {
     })
   })
 
-  it('does not restore target selectors after their prior entities were concurrently deleted', () => {
+  it('restores an empty active workspace after its only prior tab was concurrently deleted', () => {
     const prior = terminalWindowSession(false)
     addDeletedPriorSelectors(prior)
     const current = terminalWindowSession(true)
@@ -241,18 +242,31 @@ describe('terminal window transfer target session rollback', () => {
 
     expect(restored.activeTabId).toBeNull()
     expect(restored.activeTabIdByWorktree?.['wt-1'] ?? null).toBeNull()
-    expect(restored.activeWorktreeId).toBeNull()
+    expect(restored.activeWorktreeId).toBe('wt-1')
     expect(restored.activeGroupIdByWorktree?.['wt-1']).toBeUndefined()
+  })
+
+  it('does not restore an empty workspace after its active identity moved away', () => {
+    const prior = terminalWindowSession(false)
+    addDeletedPriorSelectors(prior)
+    const current = terminalWindowSession(true)
+    current.activeWorkspaceKey = worktreeWorkspaceKey('other')
+
+    const restored = removeTransferredTerminalSession(current, prior, terminalWindowSeed())
+
+    expect(restored.activeWorktreeId).toBeNull()
   })
 
   it('restores a prior empty folder workspace selector', () => {
     const prior = terminalWindowSession(false)
-    prior.activeWorktreeId = 'folder:empty'
+    const folderId = folderWorkspaceKey('empty')
+    prior.activeWorktreeId = folderId
     const current = terminalWindowSession(true)
+    current.activeWorkspaceKey = folderId
 
     const restored = removeTransferredTerminalSession(current, prior, terminalWindowSeed())
 
-    expect(restored.activeWorktreeId).toBe('folder:empty')
+    expect(restored.activeWorktreeId).toBe(folderId)
   })
 
   it('does not restore source selectors after their prior entities were concurrently deleted', () => {

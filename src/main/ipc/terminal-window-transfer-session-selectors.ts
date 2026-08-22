@@ -1,6 +1,11 @@
 import type { TerminalWindowTransferSeed } from '../../shared/terminal-window-transfer'
 import type { WorkspaceSessionState } from '../../shared/workspace-session-state-types'
-import { parseWorkspaceKey } from '../../shared/workspace-scope'
+import {
+  folderWorkspaceKey,
+  getActiveSidebarWorkspaceId,
+  parseWorkspaceKey,
+  worktreeWorkspaceKey
+} from '../../shared/workspace-scope'
 
 function workspaceKeys(workspaceId: string): string[] {
   const scope = parseWorkspaceKey(workspaceId)
@@ -18,12 +23,27 @@ function hasWorkspaceContent(state: WorkspaceSessionState, workspaceId: string):
   )
 }
 
+function canonicalWorkspaceKey(workspaceId: string): string {
+  const scope = parseWorkspaceKey(workspaceId)
+  return scope?.type === 'folder'
+    ? folderWorkspaceKey(scope.folderWorkspaceId)
+    : worktreeWorkspaceKey(scope?.type === 'worktree' ? scope.worktreeId : workspaceId)
+}
+
 function canRestoreWorkspace(
   next: WorkspaceSessionState,
-  prior: WorkspaceSessionState,
+  current: WorkspaceSessionState,
   workspaceId: string
 ): boolean {
-  return !hasWorkspaceContent(prior, workspaceId) || hasWorkspaceContent(next, workspaceId)
+  const activeWorkspaceId = getActiveSidebarWorkspaceId(
+    current.activeWorkspaceKey ?? null,
+    current.activeWorktreeId
+  )
+  return (
+    hasWorkspaceContent(next, workspaceId) ||
+    (activeWorkspaceId !== null &&
+      canonicalWorkspaceKey(activeWorkspaceId) === canonicalWorkspaceKey(workspaceId))
+  )
 }
 
 function hasTab(state: WorkspaceSessionState, tabId: string, workspaceId?: string): boolean {
@@ -144,11 +164,15 @@ export function reconcileTerminalTransferSelectors(
     current.activeRepoId && current.activeRepoId !== seed.repo.id
       ? current.activeRepoId
       : (prior.activeRepoId ?? (options.fallbackToTransfer ? seed.repo.id : null))
+  const currentWorkspaceWasTransferred =
+    current.activeWorktreeId === seed.worktreeId && prior.activeWorktreeId !== seed.worktreeId
   next.activeWorktreeId =
-    (current.activeWorktreeId && hasWorkspaceContent(next, current.activeWorktreeId)
+    (current.activeWorktreeId &&
+    !currentWorkspaceWasTransferred &&
+    canRestoreWorkspace(next, current, current.activeWorktreeId)
       ? current.activeWorktreeId
       : null) ??
-    (prior.activeWorktreeId && canRestoreWorkspace(next, prior, prior.activeWorktreeId)
+    (prior.activeWorktreeId && canRestoreWorkspace(next, current, prior.activeWorktreeId)
       ? prior.activeWorktreeId
       : null) ??
     (options.fallbackToTransfer && hasWorkspaceContent(next, seed.worktreeId)

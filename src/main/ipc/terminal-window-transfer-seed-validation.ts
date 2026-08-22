@@ -1,3 +1,4 @@
+import { Buffer } from 'node:buffer'
 import { isDeepStrictEqual } from 'node:util'
 import { LOCAL_EXECUTION_HOST_ID, normalizeExecutionHostId } from '../../shared/execution-host'
 import type {
@@ -81,7 +82,8 @@ function isLeafStringRecord(
       leafId.length > MAX_LAYOUT_KEY_LENGTH ||
       (leaves && !leaves.has(leafId)) ||
       typeof item !== 'string' ||
-      item.length > maxValueLength
+      item.length > maxValueLength ||
+      Buffer.byteLength(item) > maxValueLength
     ) {
       return false
     }
