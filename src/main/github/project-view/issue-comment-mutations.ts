@@ -1,4 +1,5 @@
 import { assertPositiveInt, projectGhExecOptions, runRest, validateSlugArgs } from './internals'
+import { withGhApiJsonInput } from '../gh-api-json-input'
 import type { PRComment } from '../../../shared/github/comment-types'
 import type {
   GitHubProjectCommentMutationResult,
@@ -44,17 +45,18 @@ export async function addIssueCommentBySlug(
   if (typeof args.body !== 'string' || !args.body.trim()) {
     return { ok: false, error: { type: 'validation_error', message: 'Comment body required.' } }
   }
-  const result = await runRest<RawIssueCommentResponse>(
-    [
-      '-X',
-      'POST',
-      `repos/${args.owner}/${args.repo}/issues/${args.number}/comments`,
-      '--raw-field',
-      `body=${args.body}`
-    ],
-    undefined,
-    'core',
-    projectGhExecOptions(args.host)
+  const result = await withGhApiJsonInput({ body: args.body }, (inputArgs) =>
+    runRest<RawIssueCommentResponse>(
+      [
+        '-X',
+        'POST',
+        `repos/${args.owner}/${args.repo}/issues/${args.number}/comments`,
+        ...inputArgs
+      ],
+      undefined,
+      'core',
+      projectGhExecOptions(args.host)
+    )
   )
   return result.ok
     ? { ok: true, comment: mapIssueComment(result.data, args.body) }
@@ -75,17 +77,18 @@ export async function updateIssueCommentBySlug(
   if (typeof args.body !== 'string' || !args.body.trim()) {
     return { ok: false, error: { type: 'validation_error', message: 'Comment body required.' } }
   }
-  const result = await runRest<unknown>(
-    [
-      '-X',
-      'PATCH',
-      `repos/${args.owner}/${args.repo}/issues/comments/${args.commentId}`,
-      '--raw-field',
-      `body=${args.body}`
-    ],
-    undefined,
-    'core',
-    projectGhExecOptions(args.host)
+  const result = await withGhApiJsonInput({ body: args.body }, (inputArgs) =>
+    runRest<unknown>(
+      [
+        '-X',
+        'PATCH',
+        `repos/${args.owner}/${args.repo}/issues/comments/${args.commentId}`,
+        ...inputArgs
+      ],
+      undefined,
+      'core',
+      projectGhExecOptions(args.host)
+    )
   )
   return result.ok ? { ok: true } : { ok: false, error: result.error }
 }

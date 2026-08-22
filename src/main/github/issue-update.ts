@@ -1,5 +1,6 @@
 import type { GitHubIssueUpdate } from '../../shared/issue-mutation-types'
 import type { LocalGitExecOptions } from './gh-utils'
+import { withGhApiJsonInput } from './gh-api-json-input'
 import { getIssueGitHubApiRepository, resolveGitHubRepoExecution } from './github-api-repository'
 import { acquire, classifyGhError, ghExecFileAsync, release } from './gh-utils'
 
@@ -67,16 +68,17 @@ export async function updateIssue(
   if (updates.body !== undefined) {
     await acquire()
     try {
-      await ghExecFileAsync(
-        [
-          'api',
-          '-X',
-          'PATCH',
-          `repos/${ownerRepo.owner}/${ownerRepo.repo}/issues/${issueNumber}`,
-          '--raw-field',
-          `body=${updates.body}`
-        ],
-        ghOptions
+      await withGhApiJsonInput({ body: updates.body }, (inputArgs) =>
+        ghExecFileAsync(
+          [
+            'api',
+            '-X',
+            'PATCH',
+            `repos/${ownerRepo.owner}/${ownerRepo.repo}/issues/${issueNumber}`,
+            ...inputArgs
+          ],
+          ghOptions
+        )
       )
     } catch (err) {
       const stderr = err instanceof Error ? err.message : String(err)
