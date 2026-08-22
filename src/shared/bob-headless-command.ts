@@ -20,9 +20,17 @@ const BOB_OPTIONS_WITH_OPTIONAL_VALUE = new Set(['--resume', '-r'])
 
 const BOB_EXECUTABLE_EXTENSION_RE = /\.(?:exe|cmd|bat|ps1|js|mjs|cjs)$/i
 
+const BOB_SCRIPT_EXTENSION_RE = /\.(?:js|mjs|cjs)$/i
+const BOB_PACKAGE_PATH_RE = /node_modules[\\/]bobshell[\\/]/i
+
 function isBobExecutableToken(token: string): boolean {
-  const basename = getCommandTokenPathBasename(token.trim().replace(/^["']|["']$/g, ''))
-  return basename.toLowerCase().replace(BOB_EXECUTABLE_EXTENSION_RE, '') === 'bob'
+  const path = token.trim().replace(/^["']|["']$/g, '')
+  const basename = getCommandTokenPathBasename(path)
+  if (basename.toLowerCase().replace(BOB_EXECUTABLE_EXTENSION_RE, '') !== 'bob') {
+    return false
+  }
+  // Why: any repo can ship a `bob.js`; only the bobshell package's script is IBM Bob.
+  return !BOB_SCRIPT_EXTENSION_RE.test(basename) || BOB_PACKAGE_PATH_RE.test(path)
 }
 
 // Why: Bob ships as a node script, so recognition also sees it as `node …/bob.js`.
