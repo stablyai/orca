@@ -890,6 +890,12 @@ const FIVE_HOUR_RE = /(?<![\w-][^\S\r\n]{0,4})5h\s+limit[^\d%\r\n]*(\d+)%(?:\s*(
 const WEEKLY_RE = /(?<![\w-][^\S\r\n]{0,4})weekly\s+limit[^\d%\r\n]*(\d+)%(?:\s*(used|left))?/i
 // Why: model-scoped limit rows must still stop a per-window reset-text scan.
 const ANY_LIMIT_LABEL_RE = /(?:5h|weekly)\s+limit/i
+// Why: Codex 0.144+ often answers the first /status with an async placeholder
+// ("refresh requested; run /status again shortly") before percent limits appear.
+const STATUS_REFRESH_PENDING_RE = /refresh requested|run\s+\/status\s+again/i
+const STATUS_RETRY_DELAY_MS = 750
+const MAX_STATUS_ATTEMPTS = 2
+const STATUS_REFRESH_PENDING_ERROR = 'Codex usage refresh still pending — try again shortly'
 
 // eslint-disable-next-line no-control-regex
 const PTY_CONTROL_SEQUENCE_RE = /\x1b\[[0-?]*[ -/]*[@-~]/g
@@ -949,6 +955,20 @@ function parsePtyStatus(output: string): {
   return { session, weekly }
 }
 
+function describePtyStatusFailure(output: string, fallback: string): string {
+  const clean = stripPtyControlSequences(output)
+  const authError = extractCodexAuthError(clean)
+  if (authError) {
+    return authError
+  }
+  // Why: distinguish "CLI never answered" from "CLI answered but limits were
+  // still pending" so the status bar does not blame a false PTY hang.
+  if (STATUS_REFRESH_PENDING_RE.test(clean)) {
+    return STATUS_REFRESH_PENDING_ERROR
+  }
+  return withMacTailscaleDnsHint(fallback, clean)
+}
+
 async function fetchViaPty(options?: FetchCodexRateLimitsOptions): Promise<ProviderRateLimits> {
   if (options?.signal?.aborted) {
     return abortedCodexRateLimitResult()
@@ -969,6 +989,8 @@ async function fetchViaPty(options?: FetchCodexRateLimitsOptions): Promise<Provi
     let output = ''
     let resolved = false
     let sentStatus = false
+    let statusAttempts = 0
+    let statusRetryTimer: ReturnType<typeof setTimeout> | null = null
     let settleTimer: ReturnType<typeof setTimeout> | null = null
     let timeout: ReturnType<typeof setTimeout> | null = null
 
@@ -988,6 +1010,7 @@ async function fetchViaPty(options?: FetchCodexRateLimitsOptions): Promise<Provi
     let statusEnter: ReturnType<typeof setTimeout> | null = null
     function sendStatusCommand(): void {
       sentStatus = true
+      statusAttempts += 1
       if (statusNudge) {
         clearTimeout(statusNudge)
         statusNudge = null
@@ -1032,11 +1055,7 @@ async function fetchViaPty(options?: FetchCodexRateLimitsOptions): Promise<Provi
       }
     })
 
-    function settleAborted(): void {
-      if (resolved) {
-        return
-      }
-      resolved = true
+    function clearPtyTimers(): void {
       if (timeout) {
         clearTimeout(timeout)
         timeout = null
@@ -1045,8 +1064,35 @@ async function fetchViaPty(options?: FetchCodexRateLimitsOptions): Promise<Provi
         clearTimeout(settleTimer)
         settleTimer = null
       }
+      if (statusRetryTimer) {
+        clearTimeout(statusRetryTimer)
+        statusRetryTimer = null
+      }
+    }
+
+    function settleAborted(): void {
+      if (resolved) {
+        return
+      }
+      resolved = true
+      clearPtyTimers()
       cleanupHiddenRateLimitPty(term, termDisposables, { kill: true })
       resolve(abortedCodexRateLimitResult())
+    }
+
+    function scheduleStatusRetry(): void {
+      if (resolved || statusRetryTimer || statusAttempts >= MAX_STATUS_ATTEMPTS) {
+        return
+      }
+      // Why: first /status often only queues a backend refresh; one delayed
+      // retry is enough for the second panel to include percent limits.
+      statusRetryTimer = setTimeout(() => {
+        statusRetryTimer = null
+        if (resolved || statusAttempts >= MAX_STATUS_ATTEMPTS) {
+          return
+        }
+        sendStatusCommand()
+      }, STATUS_RETRY_DELAY_MS)
     }
 
     if (options?.signal) {
@@ -1063,17 +1109,14 @@ async function fetchViaPty(options?: FetchCodexRateLimitsOptions): Promise<Provi
     timeout = setTimeout(() => {
       if (!resolved) {
         resolved = true
-        if (settleTimer) {
-          clearTimeout(settleTimer)
-          settleTimer = null
-        }
+        clearPtyTimers()
         cleanupHiddenRateLimitPty(term, termDisposables, { kill: true })
         resolve({
           provider: 'codex',
           session: null,
           weekly: null,
           updatedAt: Date.now(),
-          error: extractCodexAuthError(output) ?? withMacTailscaleDnsHint('PTY timeout', output),
+          error: describePtyStatusFailure(output, 'PTY timeout'),
           status: 'error'
         })
       }
@@ -1089,14 +1132,7 @@ async function fetchViaPty(options?: FetchCodexRateLimitsOptions): Promise<Provi
       const authError = extractCodexAuthError(output)
       if (authError) {
         resolved = true
-        if (timeout) {
-          clearTimeout(timeout)
-          timeout = null
-        }
-        if (settleTimer) {
-          clearTimeout(settleTimer)
-          settleTimer = null
-        }
+        clearPtyTimers()
         cleanupHiddenRateLimitPty(term, termDisposables, { kill: true })
         resolve({
           provider: 'codex',
@@ -1117,10 +1153,20 @@ async function fetchViaPty(options?: FetchCodexRateLimitsOptions): Promise<Provi
         return
       }
 
+      // Why: pending-refresh and limit detection must both survive styled TUI output.
+      const clean = sentStatus ? stripPtyControlSequences(output) : ''
+
+      if (
+        sentStatus &&
+        statusAttempts < MAX_STATUS_ATTEMPTS &&
+        STATUS_REFRESH_PENDING_RE.test(clean)
+      ) {
+        scheduleStatusRetry()
+      }
+
       // Check if we have parseable output
       // Why: colored meter bars embed digits inside CSI sequences, so probe cleaned text.
-      const probe = sentStatus && !settleTimer ? stripPtyControlSequences(output) : null
-      if (probe !== null && (FIVE_HOUR_RE.test(probe) || WEEKLY_RE.test(probe))) {
+      if (sentStatus && !settleTimer && (FIVE_HOUR_RE.test(clean) || WEEKLY_RE.test(clean))) {
         // Why: the TUI keeps streaming after status is parseable; one settle timer lets the panel finish flushing.
         settleTimer = setTimeout(() => {
           settleTimer = null
@@ -1128,14 +1174,12 @@ async function fetchViaPty(options?: FetchCodexRateLimitsOptions): Promise<Provi
             return
           }
           resolved = true
-          if (timeout) {
-            clearTimeout(timeout)
-            timeout = null
-          }
+          clearPtyTimers()
           cleanupHiddenRateLimitPty(term, termDisposables, { kill: true })
 
-          const clean = stripPtyControlSequences(output)
-          const { session, weekly } = parsePtyStatus(clean)
+          // Re-strip after the settle delay so trailing chunks are included.
+          const settledClean = stripPtyControlSequences(output)
+          const { session, weekly } = parsePtyStatus(settledClean)
 
           resolve({
             provider: 'codex',
@@ -1145,7 +1189,7 @@ async function fetchViaPty(options?: FetchCodexRateLimitsOptions): Promise<Provi
             error:
               session || weekly
                 ? null
-                : withMacTailscaleDnsHint('Failed to parse CLI output', clean),
+                : withMacTailscaleDnsHint('Failed to parse CLI output', settledClean),
             status: session || weekly ? 'ok' : 'error'
           })
         }, 500)
@@ -1157,16 +1201,9 @@ async function fetchViaPty(options?: FetchCodexRateLimitsOptions): Promise<Provi
 
     const onExitDisposable = term.onExit(() => {
       cleanupHiddenRateLimitPty(term, termDisposables, { kill: false })
-      if (settleTimer) {
-        clearTimeout(settleTimer)
-        settleTimer = null
-      }
       if (!resolved) {
         resolved = true
-        if (timeout) {
-          clearTimeout(timeout)
-          timeout = null
-        }
+        clearPtyTimers()
         const clean = stripPtyControlSequences(output)
         const { session, weekly } = parsePtyStatus(clean)
         resolve({
@@ -1177,8 +1214,7 @@ async function fetchViaPty(options?: FetchCodexRateLimitsOptions): Promise<Provi
           error:
             session || weekly
               ? null
-              : (extractCodexAuthError(clean) ??
-                withMacTailscaleDnsHint('CLI exited before status was available', clean)),
+              : describePtyStatusFailure(output, 'CLI exited before status was available'),
           status: session || weekly ? 'ok' : 'error'
         })
       }

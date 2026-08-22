@@ -12,6 +12,21 @@ describe('isCodexAuthError', () => {
     expect(isCodexAuthError('plain provider error')).toBe(false)
     expect(isCodexAuthError(null)).toBe(false)
   })
+
+  it('matches token_invalidated / signing-in-again usage API failures', () => {
+    expect(
+      isCodexAuthError(
+        'Your authentication token has been invalidated. Please try signing in again.'
+      )
+    ).toBe(true)
+    expect(isCodexAuthError('auth error code: token_invalidated')).toBe(true)
+    expect(
+      isCodexAuthError(
+        'failed to fetch codex rate limits: GET https://chatgpt.com/backend-api/wham/usage failed: 401 Unauthorized; body={"error":{"message":"Your authentication token has been invalidated. Please try signing in again.","code":"token_invalidated"}}'
+      )
+    ).toBe(true)
+    expect(isCodexAuthError('RPC timeout')).toBe(false)
+  })
 })
 
 describe('extractCodexAuthError', () => {

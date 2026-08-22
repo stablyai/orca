@@ -1,9 +1,13 @@
+// Why: auth wording drifts across app-server and CLI; match stable machine codes and known user-facing variants.
 const CODEX_AUTH_ERROR_PATTERNS = [
   /access token could not be refreshed/i,
   /authentication session could not be refreshed/i,
+  /authentication token has been invalidated/i,
+  /token_invalidated/i,
   /refresh token (?:has expired|was already used|was revoked)/i,
   /you have since logged out or signed in to another account/i,
-  /please (?:log out and )?sign in again/i,
+  // Covers "sign in", "log out and sign in", and "try signing in" variants.
+  /please (?:try )?(?:log out and )?sign(?:ing)? in again/i,
   /please reauthenticate/i,
   /not logged in/i,
   /sign in with chatgpt/i,
