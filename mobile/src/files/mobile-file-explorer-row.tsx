@@ -84,8 +84,7 @@ function TreeRow(props: {
   const { item, expanded, onPreviewFile, onToggleDirectory } = props
   const isDirectory = item.kind === 'directory'
   const isExpanded = expanded.has(item.relativePath)
-  // Images and videos render in the mobile viewer (via files.readPreview), so those
-  // binaries are openable; only non-previewable binaries are unavailable.
+  // Only binaries the mobile viewer can render (images, videos) stay openable.
   const previewable =
     item.kind !== 'directory' &&
     canPreviewMobileFileRow({ kind: item.kind, relativePath: item.relativePath })

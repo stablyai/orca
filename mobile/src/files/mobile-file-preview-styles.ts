@@ -152,8 +152,6 @@ export const filePreviewStyles = StyleSheet.create({
     flex: 1,
     backgroundColor: colors.editorSurface
   },
-  // Fills the pane and letterboxes inside itself (contentFit="contain"), so portrait
-  // recordings get the same room as landscape ones.
   video: {
     flex: 1
   },
