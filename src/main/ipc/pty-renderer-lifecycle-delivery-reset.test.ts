@@ -61,12 +61,21 @@ describe('registerPtyHandlers', () => {
     createMockProc,
     getPtyWriteListener,
     getPtyAckDataListener,
+    getPtySetActiveRendererPtyListener,
     getPtySetRendererPtyVisibleListener,
+    getPtySetHiddenRendererPtyListener,
+    getPtySetDeliveryInterestListener,
     getPtyRendererDispatcherReadyListener,
     getMainWindowWebContentsListener,
     getMainFrameNavigationListener,
     foreignWindowIpcEvent
   } = setupPtyIpcSuite()
+  const reportRendererViewHints = (event: unknown, id: string, enabled: boolean): void => {
+    getPtySetActiveRendererPtyListener()(event, { id, active: enabled })
+    getPtySetRendererPtyVisibleListener()(event, { id, visible: enabled })
+    getPtySetHiddenRendererPtyListener()(event, { id, hidden: enabled })
+    getPtySetDeliveryInterestListener()(event, { id, interested: enabled })
+  }
 
   it('reloads one renderer without closing delivery for another renderer', async () => {
     vi.useFakeTimers()
@@ -178,6 +187,99 @@ describe('registerPtyHandlers', () => {
     } finally {
       vi.useRealTimers()
     }
+  })
+
+  it('clears transferred renderer hints without clearing target-owned PTYs', async () => {
+    registerPtyHandlers(mainWindow as never)
+    const transferred = await Promise.all(
+      ['source-a', 'source-b'].map(
+        async () =>
+          (await handlers.get('pty:spawn')!(mainWindowIpcEvent, {
+            cols: 80,
+            rows: 24
+          })) as { id: string }
+      )
+    )
+    const targetOwned = (await handlers.get('pty:spawn')!(mainWindowIpcEvent, {
+      cols: 80,
+      rows: 24
+    })) as { id: string }
+    const secondary = foreignWindowIpcEvent.sender
+    registerPtyRenderer(secondary as never)
+    ptyRendererOwners.markDispatcherReady(secondary as never)
+    ptyRendererOwners.handoff([targetOwned.id], mainWindow.webContents as never, secondary as never)
+    for (const { id } of transferred) {
+      reportRendererViewHints(mainWindowIpcEvent, id, true)
+    }
+    reportRendererViewHints(foreignWindowIpcEvent, targetOwned.id, true)
+
+    handoffPtyRendererOwnership(
+      transferred.map(({ id }) => id),
+      mainWindow.webContents as never,
+      secondary as never
+    )
+
+    expect(getPtyRendererDeliveryDebugSnapshot()).toMatchObject({
+      activeRendererPtyCount: 1,
+      hiddenDeliveryGatedPtyCount: 1,
+      hiddenDeliveryGatedVisiblePtyCount: 1,
+      deliveryInterestPtyCount: 1
+    })
+    reportRendererViewHints(foreignWindowIpcEvent, targetOwned.id, false)
+    expect(getPtyRendererDeliveryDebugSnapshot()).toMatchObject({
+      activeRendererPtyCount: 0,
+      hiddenDeliveryGatedPtyCount: 0,
+      hiddenDeliveryGatedVisiblePtyCount: 0,
+      deliveryInterestPtyCount: 0
+    })
+  })
+
+  it('clears only the destroyed renderer hints without a navigation signal', async () => {
+    registerPtyHandlers(mainWindow as never)
+    const destroyedRendererPty = (await handlers.get('pty:spawn')!(mainWindowIpcEvent, {
+      cols: 80,
+      rows: 24
+    })) as { id: string }
+    const survivingPty = (await handlers.get('pty:spawn')!(mainWindowIpcEvent, {
+      cols: 80,
+      rows: 24
+    })) as { id: string }
+    const secondary = foreignWindowIpcEvent.sender
+    registerPtyRenderer(secondary as never)
+    ptyRendererOwners.markDispatcherReady(secondary as never)
+    ptyRendererOwners.handoff(
+      [destroyedRendererPty.id],
+      mainWindow.webContents as never,
+      secondary as never
+    )
+    for (const [event, id] of [
+      [foreignWindowIpcEvent, destroyedRendererPty.id],
+      [mainWindowIpcEvent, survivingPty.id]
+    ] as const) {
+      reportRendererViewHints(event, id, true)
+    }
+    const destroyed = secondary.on.mock.calls.find(
+      (call: unknown[]) => call[0] === 'destroyed'
+    )?.[1] as (() => void) | undefined
+
+    expect(destroyed).toBeTypeOf('function')
+    destroyed!()
+
+    expect(ptyRendererOwners.getOwner(destroyedRendererPty.id)).toBeNull()
+    expect(ptyRendererOwners.owns(survivingPty.id, mainWindow.webContents as never)).toBe(true)
+    expect(getPtyRendererDeliveryDebugSnapshot()).toMatchObject({
+      activeRendererPtyCount: 1,
+      hiddenDeliveryGatedPtyCount: 1,
+      hiddenDeliveryGatedVisiblePtyCount: 1,
+      deliveryInterestPtyCount: 1
+    })
+    reportRendererViewHints(mainWindowIpcEvent, survivingPty.id, false)
+    expect(getPtyRendererDeliveryDebugSnapshot()).toMatchObject({
+      activeRendererPtyCount: 0,
+      hiddenDeliveryGatedPtyCount: 0,
+      hiddenDeliveryGatedVisiblePtyCount: 0,
+      deliveryInterestPtyCount: 0
+    })
   })
 
   it('orphan-sweeps only the reloading secondary renderer PTYs', async () => {

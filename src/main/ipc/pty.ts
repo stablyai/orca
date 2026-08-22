@@ -268,6 +268,7 @@ export function handoffPtyRendererOwnership(
   to: WebContents
 ): void {
   ptyRendererOwners.handoff(ptyIds, from, to)
+  clearRendererPtyViewHints(ptyIds)
   resetRendererDeliveryAccountingForLifecycleReset(from, ptyIds)
   for (const id of ptyIds) {
     sendToPtyOwner(id, 'pty:modelRestoreNeeded', { id, reason: 'delivery-heal' })
@@ -355,6 +356,7 @@ const visibleRendererPtys = new Set<string>()
 const rendererVisibilityKnownPtys = new Set<string>()
 let invalidatePendingPtyDrainPriority = (_id?: string, _schedule?: boolean): void => {}
 let invalidatePendingPtyDrainPolicy = (_id?: string, _schedule?: boolean): void => {}
+let resyncRendererPtyBackgroundedDelivery = (_ids: readonly string[]): void => {}
 const pendingHiddenRendererResizeOutputPtys = new Set<string>()
 const deliveredHiddenRendererResizeOutputPtys = new Set<string>()
 const KEEP_HISTORY_STOP_SETTLE_MS = 1_000
@@ -2385,16 +2387,25 @@ function markRendererPtysHiddenForRendererLifecycleReset(webContents?: WebConten
   mainDeliveryBreadcrumbs.record('renderer-lifecycle-reset')
   // Why: renderer-owned hints die with the page; clear visibility so surviving daemon/SSH PTYs fail closed until the new renderer reports.
   const ownedIds = ptyRendererOwners.beginReload(webContents)
-  const activePriorityChanged = ownedIds.some((id) => activeRendererPtys.delete(id))
-  for (const id of ownedIds) {
-    visibleRendererPtys.delete(id)
-  }
-  resetRendererScopedHiddenPtyDeliveryState(ownedIds)
+  clearRendererPtyViewHints(ownedIds)
   // Why: the dead page never ACKs its in-flight bytes, so leaked accounting would delivery-gate surviving PTYs forever after a reload/crash.
   resetRendererDeliveryAccountingForLifecycleReset(webContents, ownedIds)
-  if (activePriorityChanged) {
-    invalidatePendingPtyDrainPriority()
+}
+
+function clearRendererPtyViewHints(ids: readonly string[]): void {
+  const activeIds = ids.filter((id) => activeRendererPtys.delete(id))
+  const hiddenIds = ids.filter((id) => isHiddenRendererPty(id))
+  for (const id of ids) {
+    visibleRendererPtys.delete(id)
   }
+  resetRendererScopedHiddenPtyDeliveryState(ids)
+  for (const id of activeIds) {
+    invalidatePendingPtyDrainPriority(id)
+  }
+  for (const id of hiddenIds) {
+    invalidatePendingPtyDrainPolicy(id)
+  }
+  resyncRendererPtyBackgroundedDelivery(ids)
 }
 
 export function registerPtyRenderer(webContents: WebContents): () => void {
@@ -2415,6 +2426,7 @@ export function registerPtyRenderer(webContents: WebContents): () => void {
     }
     removed = true
     const ownedIds = ptyRendererOwners.removeRenderer(webContents)
+    clearRendererPtyViewHints(ownedIds)
     resetRendererDeliveryAccountingForLifecycleReset(webContents, ownedIds)
     if (rendererGateResetWebContents === webContents) {
       clearRendererDispatcherReadyWatchdog()
@@ -2844,6 +2856,11 @@ export function registerPtyHandlers(
   function resyncBackgroundedDeliveriesAfterGateReset(): void {
     for (const id of backgroundedDeliverySyncByPty.keys()) {
       syncPtyBackgroundedDelivery(id, 'gate-reset')
+    }
+  }
+  resyncRendererPtyBackgroundedDelivery = (ids) => {
+    for (const id of ids) {
+      syncPtyBackgroundedDelivery(id, 'renderer-reset')
     }
   }
 
