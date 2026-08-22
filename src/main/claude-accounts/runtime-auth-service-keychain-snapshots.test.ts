@@ -678,7 +678,7 @@ describe('ClaudeRuntimeAuthService', () => {
     expect(testState.legacyKeychainCredentials).toBe(systemCredentials)
   })
 
-  it('does not enter managed mode when keychain snapshot capture fails', async () => {
+  it('enters managed mode without overwriting a keychain whose snapshot cannot be read', async () => {
     const runtimeCredentialsPath = join(testState.fakeHomeDir, '.claude', '.credentials.json')
     const systemCredentials = createClaudeCredentialsJson('system@example.com', 'system')
     const managedCredentials = createClaudeCredentialsJson('user@example.com', 'managed')
@@ -700,9 +700,15 @@ describe('ClaudeRuntimeAuthService', () => {
     const service = new ClaudeRuntimeAuthService(store as never)
     settings.activeClaudeManagedAccountId = 'account-1'
     testState.throwScopedKeychainRead = true
-    await expect(service.syncForCurrentSelection()).rejects.toThrow(
-      'Cannot capture current Claude Keychain credentials'
-    )
+    await expect(service.syncForCurrentSelection()).resolves.toBeUndefined()
+
+    expect(readFileSync(runtimeCredentialsPath, 'utf-8')).toBe(managedCredentials)
+    expect(testState.scopedKeychainCredentials).toBe(systemCredentials)
+    expect(testState.legacyKeychainCredentials).toBe(systemCredentials)
+
+    testState.throwScopedKeychainRead = false
+    settings.activeClaudeManagedAccountId = null
+    await service.syncForCurrentSelection()
 
     expect(readFileSync(runtimeCredentialsPath, 'utf-8')).toBe(systemCredentials)
     expect(testState.scopedKeychainCredentials).toBe(systemCredentials)

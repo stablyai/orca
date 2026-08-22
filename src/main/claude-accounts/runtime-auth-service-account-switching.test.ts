@@ -41,7 +41,7 @@ describe('ClaudeRuntimeAuthService', () => {
     cleanupRuntimeAuthTestState()
   })
 
-  it('reads back refreshed file credentials when keychain reads fail', async () => {
+  it('continues launch without overwriting unreadable Keychain credentials', async () => {
     const runtimeCredentialsPath = join(testState.fakeHomeDir, '.claude', '.credentials.json')
     const originalCredentials = createClaudeCredentialsJson('user@example.com', 'original')
     const refreshedCredentials = createClaudeCredentialsJson('user@example.com', 'refreshed')
@@ -64,10 +64,14 @@ describe('ClaudeRuntimeAuthService', () => {
     writeFileSync(runtimeCredentialsPath, refreshedCredentials, 'utf-8')
     testState.throwScopedKeychainRead = true
     testState.throwLegacyKeychainRead = true
-    await service.syncForCurrentSelection()
+    await expect(service.prepareForClaudeLaunch()).resolves.toMatchObject({
+      provenance: 'managed:account-1'
+    })
 
-    expect(readManagedCredentialsForTest('account-1', managedAuthPath)).toBe(refreshedCredentials)
+    expect(readManagedCredentialsForTest('account-1', managedAuthPath)).toBe(originalCredentials)
     expect(readFileSync(runtimeCredentialsPath, 'utf-8')).toBe(refreshedCredentials)
+    expect(testState.scopedKeychainCredentials).toBe(originalCredentials)
+    expect(testState.legacyKeychainCredentials).toBe(originalCredentials)
     warn.mockRestore()
   })
 

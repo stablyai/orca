@@ -19,6 +19,9 @@ export const testState = {
   throwRuntimeKeychainWrite: false,
   throwLegacyRuntimeKeychainWrite: false,
   throwScopedKeychainWrite: false,
+  throwManagedKeychainWrite: false,
+  onLegacyKeychainRead: null as (() => void) | null,
+  onManagedKeychainWrite: null as (() => void) | null,
   runtimeWriteConfigDir: null as string | null,
   managedKeychainCredentials: new Map<string, string>()
 }
@@ -101,6 +104,7 @@ export function createKeychainMock() {
             if (testState.throwLegacyKeychainRead) {
               throw new Error('legacy keychain read failed')
             }
+            testState.onLegacyKeychainRead?.()
             return testState.legacyKeychainCredentials
           })()
     ),
@@ -125,6 +129,10 @@ export function createKeychainMock() {
       async (accountId: string) => testState.managedKeychainCredentials.get(accountId) ?? null
     ),
     writeManagedClaudeKeychainCredentials: vi.fn(async (accountId: string, contents: string) => {
+      if (testState.throwManagedKeychainWrite) {
+        throw new Error(`security failed with payload ${contents}`)
+      }
+      testState.onManagedKeychainWrite?.()
       testState.managedKeychainCredentials.set(accountId, contents)
     })
   }
@@ -150,6 +158,9 @@ export function resetRuntimeAuthTestState(): void {
   testState.throwRuntimeKeychainWrite = false
   testState.throwLegacyRuntimeKeychainWrite = false
   testState.throwScopedKeychainWrite = false
+  testState.throwManagedKeychainWrite = false
+  testState.onLegacyKeychainRead = null
+  testState.onManagedKeychainWrite = null
   testState.runtimeWriteConfigDir = null
   testState.managedKeychainCredentials.clear()
   testState.userDataDir = mkdtempSync(join(tmpdir(), 'orca-claude-runtime-'))
@@ -228,11 +239,13 @@ export function createClaudeCredentialsJson(
   email: string,
   accessToken: string,
   organizationUuid: string | null = null,
-  expiresAt = Date.now() + 60_000
+  expiresAt = Date.now() + 60_000,
+  accountUuid: string | null = null
 ): string {
   return `${JSON.stringify({
     claudeAiOauth: {
       email,
+      ...(accountUuid ? { accountUuid } : {}),
       ...(organizationUuid ? { organizationUuid } : {}),
       accessToken,
       refreshToken: `${accessToken}-refresh`,

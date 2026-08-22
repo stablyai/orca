@@ -166,6 +166,48 @@ describe('ClaudeRuntimeAuthService', () => {
     expect(readFileSync(runtimeCredentialsPath, 'utf-8')).toBe(managedCredentials)
   })
 
+  it('rejects a newer embedded UUID that conflicts with managed identity on cold start', async () => {
+    const runtimeCredentialsPath = join(testState.fakeHomeDir, '.claude', '.credentials.json')
+    const managedCredentials = createClaudeCredentialsJson(
+      'same@example.com',
+      'managed-account-a',
+      null,
+      1_000,
+      'account-a'
+    )
+    const runtimeCredentials = createClaudeCredentialsJson(
+      'same@example.com',
+      'runtime-account-b',
+      null,
+      9_000,
+      'account-b'
+    )
+    writeFileSync(runtimeCredentialsPath, runtimeCredentials, 'utf-8')
+    const managedAuthPath = createManagedClaudeAuth(
+      testState.userDataDir,
+      'managed-record',
+      managedCredentials,
+      '{"accountUuid":"account-a","emailAddress":"same@example.com"}\n'
+    )
+    const store = createStore(
+      createSettings({
+        claudeManagedAccounts: [
+          createClaudeAccount('managed-record', managedAuthPath, { email: 'same@example.com' })
+        ],
+        activeClaudeManagedAccountId: 'managed-record'
+      })
+    )
+    const { ClaudeRuntimeAuthService } = await import('./runtime-auth-service')
+    const service = new ClaudeRuntimeAuthService(store as never)
+
+    await service.syncForCurrentSelection()
+
+    expect(readManagedCredentialsForTest('managed-record', managedAuthPath)).toBe(
+      managedCredentials
+    )
+    expect(readFileSync(runtimeCredentialsPath, 'utf-8')).toBe(managedCredentials)
+  })
+
   it('rejects runtime read-back from a different Claude identity', async () => {
     const runtimeCredentialsPath = join(testState.fakeHomeDir, '.claude', '.credentials.json')
     const selectedCredentials = createClaudeCredentialsJson('user@example.com', 'selected')

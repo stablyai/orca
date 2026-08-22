@@ -62,6 +62,15 @@ describe('isOauthTokenExpiring', () => {
     expect(isOauthTokenExpiring(credentials(), NOW)).toBe(false)
   })
 
+  it('normalizes numeric-string and epoch-second expiry values', () => {
+    expect(
+      isOauthTokenExpiring(credentials({ expiresAt: String(NOW + 60 * 60 * 1000) }), NOW)
+    ).toBe(false)
+    expect(isOauthTokenExpiring(credentials({ expiresAt: String(NOW / 1000 + 3600) }), NOW)).toBe(
+      false
+    )
+  })
+
   it('is true within the 5-minute buffer', () => {
     expect(isOauthTokenExpiring(credentials({ expiresAt: NOW + 60 * 1000 }), NOW)).toBe(true)
   })

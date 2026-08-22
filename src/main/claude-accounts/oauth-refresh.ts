@@ -1,5 +1,6 @@
 import { net, session } from 'electron'
 import { ensureElectronProxyFromEnvironment } from '../network/proxy-settings'
+import { readCredentialExpiresAt } from './credential-freshness'
 
 // Why: the OAuth client id and token endpoint are the public Claude Code
 // values, verified against the installed `claude` binary (2.1.177) and the
@@ -67,8 +68,8 @@ export function isOauthTokenExpiring(credentialsJson: string, now: number = Date
   if (!oauth) {
     return false
   }
-  const expiresAt = oauth.expiresAt
-  if (typeof expiresAt !== 'number' || !Number.isFinite(expiresAt)) {
+  const expiresAt = readCredentialExpiresAt(credentialsJson)
+  if (expiresAt === null) {
     return true
   }
   return now + OAUTH_EXPIRY_BUFFER_MS >= expiresAt

@@ -420,7 +420,7 @@ describe('ClaudeRuntimeAuthService', () => {
     }
   })
 
-  it('falls back to atomic write when the unchanged check cannot read the target', async () => {
+  it('does not overwrite an unreadable runtime credential file', async () => {
     if (hostPlatform === 'win32') {
       return
     }
@@ -448,7 +448,9 @@ describe('ClaudeRuntimeAuthService', () => {
     writeFileSync(join(managedAuthPath, '.credentials.json'), rotatedCredentials, 'utf-8')
     chmodSync(runtimeCredentialsPath, 0o000)
     try {
-      await service.syncForCurrentSelection()
+      await expect(service.prepareForClaudeLaunch()).resolves.toMatchObject({
+        provenance: 'managed:account-1'
+      })
     } finally {
       if (existsSync(runtimeCredentialsPath)) {
         chmodSync(runtimeCredentialsPath, 0o600)
@@ -456,7 +458,43 @@ describe('ClaudeRuntimeAuthService', () => {
       warn.mockRestore()
     }
 
-    expect(readFileSync(runtimeCredentialsPath, 'utf-8')).toBe(rotatedCredentials)
+    expect(readFileSync(runtimeCredentialsPath, 'utf-8')).toBe(managedCredentials)
+  })
+
+  it('continues first launch without overwriting an unreadable runtime credential file', async () => {
+    if (hostPlatform === 'win32') {
+      return
+    }
+
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const runtimeCredentialsPath = join(testState.fakeHomeDir, '.claude', '.credentials.json')
+    const systemCredentials = createClaudeCredentialsJson('system@example.com', 'system')
+    const managedCredentials = createClaudeCredentialsJson('user@example.com', 'managed')
+    writeFileSync(runtimeCredentialsPath, systemCredentials, 'utf-8')
+    const managedAuthPath = createManagedClaudeAuth(
+      testState.userDataDir,
+      'account-1',
+      managedCredentials
+    )
+    const settings = createSettings({
+      claudeManagedAccounts: [createClaudeAccount('account-1', managedAuthPath)],
+      activeClaudeManagedAccountId: 'account-1'
+    })
+    const store = createStore(settings)
+    const { ClaudeRuntimeAuthService } = await import('./runtime-auth-service')
+    const service = new ClaudeRuntimeAuthService(store as never)
+
+    chmodSync(runtimeCredentialsPath, 0o000)
+    try {
+      await expect(service.prepareForClaudeLaunch()).resolves.toMatchObject({
+        provenance: 'managed:account-1'
+      })
+    } finally {
+      chmodSync(runtimeCredentialsPath, 0o600)
+      warn.mockRestore()
+    }
+
+    expect(readFileSync(runtimeCredentialsPath, 'utf-8')).toBe(systemCredentials)
   })
 
   it('tightens credential file permissions when unchanged content is already present', async () => {
