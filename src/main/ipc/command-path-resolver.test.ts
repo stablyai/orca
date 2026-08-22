@@ -72,6 +72,7 @@ describe('isCommandOnLocalPath', () => {
   // PATHEXT resolution + case-insensitive `Path` key.
   describe('win32 (synthetic)', () => {
     let dir = ''
+    let privateCodexBin = ''
     beforeAll(async () => {
       dir = await mkdtemp(path.join(tmpdir(), 'cmd-resolver-win32-'))
       // Why: the fixture extension matches a PATHEXT entry's case exactly so these
@@ -80,6 +81,15 @@ describe('isCommandOnLocalPath', () => {
       // do NOT emulate that in the resolver, so we must not depend on a
       // case-insensitive FS here — this suite also runs on case-sensitive Linux CI.
       await writeFile(path.join(dir, 'tool.CMD'), '@echo off\n')
+      privateCodexBin = path.join(
+        dir,
+        'WindowsApps',
+        'OpenAI.Codex_26.818.3698.0_x64__2p2nqsd0c76g0',
+        'app',
+        'resources'
+      )
+      await mkdir(privateCodexBin, { recursive: true })
+      await writeFile(path.join(privateCodexBin, 'codex.EXE'), '')
     })
     afterAll(async () => {
       await rm(dir, { recursive: true, force: true })
@@ -110,6 +120,15 @@ describe('isCommandOnLocalPath', () => {
           env: { Path: dir, PATHEXT: '.EXE' }
         })
       ).resolves.toBe(true)
+    })
+
+    it('rejects the private Codex MSIX binary as an installed CLI', async () => {
+      await expect(
+        isCommandOnLocalPath('codex', {
+          platform: 'win32',
+          env: { Path: privateCodexBin, PATHEXT: '.EXE' }
+        })
+      ).resolves.toBe(false)
     })
   })
 })

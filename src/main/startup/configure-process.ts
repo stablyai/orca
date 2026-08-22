@@ -3,6 +3,10 @@ import { existsSync, mkdirSync, readFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { getVersionManagerBinPaths } from '../codex-cli/command'
+import {
+  getCodexDesktopBinPaths,
+  isPrivateCodexMsixResourcePath
+} from '../../shared/windows-codex-cli-paths'
 import { getMainE2EConfig } from '../e2e-config'
 
 const DEV_PARENT_SHUTDOWN_GRACE_MS = 3000
@@ -105,14 +109,15 @@ export function resetDevParentShutdownRequestForTests(): void {
 }
 
 export function patchPackagedProcessPath(): void {
-  if (!app.isPackaged) {
+  const isWindows = process.platform === 'win32'
+  if (!app.isPackaged && !isWindows) {
     return
   }
 
   const home = process.env.HOME ?? ''
   const extraPaths: string[] = []
 
-  if (process.platform !== 'win32') {
+  if (!isWindows) {
     extraPaths.push('/opt/homebrew/bin', '/opt/homebrew/sbin', '/usr/local/bin', '/usr/local/sbin')
 
     if (process.platform === 'linux') {
@@ -134,19 +139,25 @@ export function patchPackagedProcessPath(): void {
     }
   }
 
-  // Why: version-manager CLIs use env-node shebangs, so node must be on PATH or spawns fail (also seeds Windows user-local dirs).
+  // Why: version-manager CLIs use env-node shebangs, so node must be on PATH or spawns fail.
   extraPaths.push(...getVersionManagerBinPaths())
+  if (isWindows) {
+    extraPaths.push(...getCodexDesktopBinPaths())
+  }
 
   const pathKey = process.platform === 'win32' && process.env.Path !== undefined ? 'Path' : 'PATH'
   const currentPath = process.env[pathKey] ?? ''
   const pathDelimiter = getProcessPathDelimiter()
-  const existing = new Set(currentPath.split(pathDelimiter))
-  const missing = extraPaths.filter((path) => !existing.has(path))
+  const originalSegments = currentPath.split(pathDelimiter).filter(Boolean)
+  const currentSegments = originalSegments.filter(
+    (entry) => !isWindows || !isPrivateCodexMsixResourcePath(entry)
+  )
+  const normalize = (entry: string): string => (isWindows ? entry.toLowerCase() : entry)
+  const existing = new Set(currentSegments.map(normalize))
+  const missing = extraPaths.filter((entry) => !existing.has(normalize(entry)))
 
-  if (missing.length > 0) {
-    process.env[pathKey] = [...missing, ...currentPath.split(pathDelimiter).filter(Boolean)].join(
-      pathDelimiter
-    )
+  if (missing.length > 0 || currentSegments.length !== originalSegments.length) {
+    process.env[pathKey] = [...missing, ...currentSegments].join(pathDelimiter)
   }
 }
 

@@ -81,7 +81,9 @@ end`
 }
 
 export function getPowerShellCodexShellLaunchPreflight(): string {
-  return `$mcodeCodexCommand = Get-Command codex -ErrorAction SilentlyContinue | Select-Object -First 1
+  return `$mcodeCodexCommand = Get-Command codex -All -ErrorAction SilentlyContinue |
+    Where-Object { $_.Source -notlike '*\\WindowsApps\\OpenAI.Codex_*\\app\\resources\\codex*' } |
+    Select-Object -First 1
 if ($env:MCODE_CODEX_LAUNCH_PREFLIGHT -and $mcodeCodexCommand -and
     $mcodeCodexCommand.CommandType -in @("Application", "ExternalScript")) {
     function Global:codex {
@@ -89,7 +91,9 @@ if ($env:MCODE_CODEX_LAUNCH_PREFLIGHT -and $mcodeCodexCommand -and
             & $env:MCODE_CODEX_LAUNCH_PREFLIGHT agent hooks prepare-codex *> $null
         } catch {
         }
-        $mcodeCodexExecutable = Get-Command codex -CommandType Application,ExternalScript -ErrorAction SilentlyContinue | Select-Object -First 1
+        $mcodeCodexExecutable = Get-Command codex -All -CommandType Application,ExternalScript -ErrorAction SilentlyContinue |
+            Where-Object { $_.Source -notlike '*\\WindowsApps\\OpenAI.Codex_*\\app\\resources\\codex*' } |
+            Select-Object -First 1
         if (-not $mcodeCodexExecutable) {
             Write-Error "codex executable not found"
             $global:LASTEXITCODE = 127

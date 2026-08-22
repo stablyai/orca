@@ -1,4 +1,4 @@
-import { chmodSync, mkdtempSync, mkdirSync, writeFileSync } from 'node:fs'
+import { chmodSync, mkdtempSync, mkdirSync, utimesSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { delimiter, dirname, join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
@@ -8,6 +8,7 @@ import {
   resolveCliCommands,
   resolveCodexCommand
 } from './command'
+import { getCodexDesktopBinPaths } from '../../shared/windows-codex-cli-paths'
 
 function makeExecutable(path: string): void {
   mkdirSync(dirname(path), { recursive: true })
@@ -114,6 +115,38 @@ describe('resolveCodexCommand', () => {
     expect(resolveCodexCommand({ platform: 'win32', pathEnv: '', homePath: root })).toBe(pnpmPath)
   })
 
+  it('skips the private Codex MSIX binary and uses the extracted desktop CLI', () => {
+    const root = mkdtempSync(join(tmpdir(), 'mcode-codex-command-'))
+    const privatePackageBin = join(
+      root,
+      'WindowsApps',
+      'OpenAI.Codex_26.818.3698.0_x64__2p2nqsd0c76g0',
+      'app',
+      'resources'
+    )
+    const privatePackageCommand = join(privatePackageBin, 'codex.exe')
+    const desktopCommand = join(
+      root,
+      'AppData',
+      'Local',
+      'OpenAI',
+      'Codex',
+      'bin',
+      'release-hash',
+      'codex.exe'
+    )
+    makeExecutable(privatePackageCommand)
+    makeExecutable(desktopCommand)
+
+    expect(
+      resolveCodexCommand({
+        platform: 'win32',
+        pathEnv: privatePackageBin,
+        homePath: root
+      })
+    ).toBe(desktopCommand)
+  })
+
   it('finds Codex in yarn global bin on macOS', () => {
     const root = mkdtempSync(join(tmpdir(), 'mcode-codex-command-'))
     const yarnPath = join(root, '.yarn', 'bin', 'codex')
@@ -158,6 +191,22 @@ describe('resolveCodexCommand', () => {
     const root = mkdtempSync(join(tmpdir(), 'mcode-codex-command-'))
 
     expect(resolveCodexCommand({ platform: 'linux', pathEnv: '', homePath: root })).toBe('codex')
+  })
+})
+
+describe('getCodexDesktopBinPaths', () => {
+  it('ignores incomplete app versions and prefers the newest extracted CLI', () => {
+    const root = mkdtempSync(join(tmpdir(), 'mcode-codex-desktop-bin-'))
+    const binRoot = join(root, 'AppData', 'Local', 'OpenAI', 'Codex', 'bin')
+    const oldBin = join(binRoot, 'old-release')
+    const newBin = join(binRoot, 'new-release')
+    mkdirSync(join(binRoot, 'incomplete-release'), { recursive: true })
+    makeExecutable(join(oldBin, 'codex.exe'))
+    makeExecutable(join(newBin, 'codex.exe'))
+    utimesSync(join(oldBin, 'codex.exe'), new Date(1_000), new Date(1_000))
+    utimesSync(join(newBin, 'codex.exe'), new Date(2_000), new Date(2_000))
+
+    expect(getCodexDesktopBinPaths({ platform: 'win32', homePath: root })).toEqual([newBin, oldBin])
   })
 })
 

@@ -167,6 +167,24 @@ describe('patchPackagedProcessPath', () => {
     expect(segments).toContain(userLocalBin)
     expect(segments.indexOf(userLocalBin)).toBeLessThan(segments.indexOf('C:\\Windows\\System32'))
   })
+
+  it('removes private Codex MSIX resources from Windows child-process PATH', async () => {
+    const { app } = await import('electron')
+    const { patchPackagedProcessPath } = await import('./configure-process')
+
+    setPlatform('win32')
+    Object.defineProperty(app, 'isPackaged', { configurable: true, value: false })
+    const privateCodexResources =
+      'C:\\Program Files\\WindowsApps\\OpenAI.Codex_26.818.3698.0_x64__2p2nqsd0c76g0\\app\\resources'
+    process.env.PATH = `${privateCodexResources};C:\\Windows\\System32`
+
+    patchPackagedProcessPath()
+
+    const segments = (process.env.PATH ?? '').split(';')
+    expect(segments).not.toContain(privateCodexResources)
+    expect(segments).toContain(join(homedir(), '.local', 'bin'))
+    expect(segments).toContain('C:\\Windows\\System32')
+  })
 })
 
 describe('configureDevUserDataPath', () => {

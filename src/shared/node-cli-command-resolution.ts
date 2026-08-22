@@ -1,6 +1,7 @@
 import { accessSync, constants, existsSync, readdirSync, statSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { delimiter, dirname, join } from 'node:path'
+import { getCodexDesktopBinPaths, isPrivateCodexMsixCliPath } from './windows-codex-cli-paths'
 
 type ResolveCommandOptions = {
   pathEnv?: string | null
@@ -53,12 +54,13 @@ function compareVersionDesc(left: string, right: string): number {
 function findFirstExecutable(
   platform: NodeJS.Platform,
   directories: string[],
-  executableNames: string[]
+  executableNames: string[],
+  acceptCandidate: (candidate: string) => boolean = () => true
 ): string | null {
   for (const directory of directories) {
     for (const executableName of executableNames) {
       const candidate = join(directory, executableName)
-      if (isRunnableCommand(platform, candidate)) {
+      if (acceptCandidate(candidate) && isRunnableCommand(platform, candidate)) {
         return candidate
       }
     }
@@ -154,8 +156,17 @@ export function resolveCliCommand(
 ): string {
   const platform = options.platform ?? process.platform
   const executableNames = getExecutableNames(platform, commandName)
+  const acceptCandidate =
+    platform === 'win32' && commandName.toLowerCase() === 'codex'
+      ? (candidate: string): boolean => !isPrivateCodexMsixCliPath(candidate)
+      : undefined
   const pathEnv = options.pathEnv ?? process.env.PATH ?? process.env.Path ?? null
-  const pathCandidate = findFirstExecutable(platform, splitPath(pathEnv), executableNames)
+  const pathCandidate = findFirstExecutable(
+    platform,
+    splitPath(pathEnv),
+    executableNames,
+    acceptCandidate
+  )
   if (pathCandidate) {
     return pathCandidate
   }
@@ -171,8 +182,17 @@ export function resolveCliCommand(
     findFirstExecutable(
       platform,
       getBaseVersionManagerDirectories(platform, homePath),
-      executableNames
-    )
+      executableNames,
+      acceptCandidate
+    ) ??
+    (commandName.toLowerCase() === 'codex'
+      ? findFirstExecutable(
+          platform,
+          getCodexDesktopBinPaths({ platform, homePath }),
+          executableNames,
+          acceptCandidate
+        )
+      : null)
   return versionManagerCandidate ?? commandName
 }
 
@@ -192,9 +212,29 @@ export function resolveCliCommands(
 
   for (const commandName of new Set(commandNames)) {
     const executableNames = getExecutableNames(platform, commandName)
-    const pathCandidate = findFirstExecutable(platform, pathDirectories, executableNames)
+    const acceptCandidate =
+      platform === 'win32' && commandName.toLowerCase() === 'codex'
+        ? (candidate: string): boolean => !isPrivateCodexMsixCliPath(candidate)
+        : undefined
+    const pathCandidate = findFirstExecutable(
+      platform,
+      pathDirectories,
+      executableNames,
+      acceptCandidate
+    )
+    const desktopCodexCandidate =
+      commandName.toLowerCase() === 'codex'
+        ? findFirstExecutable(
+            platform,
+            getCodexDesktopBinPaths({ platform, homePath }),
+            executableNames,
+            acceptCandidate
+          )
+        : null
     const installCandidate =
-      pathCandidate ?? findFirstExecutable(platform, installDirectories, executableNames)
+      pathCandidate ??
+      findFirstExecutable(platform, installDirectories, executableNames, acceptCandidate) ??
+      desktopCodexCandidate
     resolved.set(commandName, installCandidate ?? commandName)
   }
 

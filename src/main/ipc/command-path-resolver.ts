@@ -1,5 +1,6 @@
 import { access, constants as fsConstants, stat } from 'node:fs/promises'
 import path from 'node:path'
+import { isPrivateCodexMsixCliPath } from '../../shared/windows-codex-cli-paths'
 
 export type ResolveCommandOptions = {
   /** Defaults to `process.platform`. Lets tests exercise the win32 lookup on posix. */
@@ -95,6 +96,9 @@ export async function isCommandOnLocalPath(
       // Why: preserve the prior `.some(line => path.isAbsolute(line))` filter
       // over where/which stdout — only absolute resolutions count.
       if (!isAbsolute(candidate)) {
+        continue
+      }
+      if (isWin && isPrivateCodexMsixCliPath(candidate)) {
         continue
       }
       if (await isExecutableFile(candidate, isWin)) {

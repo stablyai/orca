@@ -1,4 +1,12 @@
-import { chmodSync, existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import {
+  chmodSync,
+  copyFileSync,
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  rmSync,
+  writeFileSync
+} from 'node:fs'
 import { tmpdir } from 'node:os'
 import { delimiter, isAbsolute, join } from 'node:path'
 import { execFileSync, spawnSync } from 'node:child_process'
@@ -153,6 +161,55 @@ describe('PowerShell Codex shell launch preflight', () => {
       '$mcodeCodexCommand.CommandType -in @("Application", "ExternalScript")'
     )
   })
+
+  it('filters private Codex MSIX package binaries from command resolution', () => {
+    expect(getPowerShellCodexShellLaunchPreflight()).toContain(
+      ".Source -notlike '*\\WindowsApps\\OpenAI.Codex_*\\app\\resources\\codex*'"
+    )
+  })
+
+  it.skipIf(process.platform !== 'win32' || !pwshAvailable)(
+    'launches the safe CLI when a private Codex MSIX binary appears first on PATH',
+    () => {
+      const root = mkdtempSync(join(tmpdir(), 'mcode-codex-pwsh-msix-'))
+      const privateBin = join(
+        root,
+        'WindowsApps',
+        'OpenAI.Codex_26.818.3698.0_x64__2p2nqsd0c76g0',
+        'app',
+        'resources'
+      )
+      const safeBin = join(root, 'safe-bin')
+      roots.push(root)
+      mkdirSync(privateBin, { recursive: true })
+      mkdirSync(safeBin)
+      copyFileSync(
+        process.env.ComSpec ?? 'C:\\Windows\\System32\\cmd.exe',
+        join(privateBin, 'codex.exe')
+      )
+      writeExecutable(join(safeBin, 'codex.cmd'), '@echo launched\r\n')
+      writeExecutable(join(safeBin, 'mcode-test.cmd'), '@exit /b 0\r\n')
+      const pwshPath = execFileSync('where.exe', ['pwsh.exe'], { encoding: 'utf-8' })
+        .split(/\r?\n/)
+        .find(Boolean)
+
+      const result = spawnSync(
+        pwshPath ?? 'pwsh',
+        ['-NoLogo', '-NoProfile', '-Command', `${getPowerShellCodexShellLaunchPreflight()}\ncodex`],
+        {
+          encoding: 'utf-8',
+          env: {
+            ...process.env,
+            PATH: `${privateBin}${delimiter}${safeBin}`,
+            MCODE_CODEX_LAUNCH_PREFLIGHT: join(safeBin, 'mcode-test.cmd')
+          }
+        }
+      )
+
+      expect(result.status, result.stderr).toBe(0)
+      expect(result.stdout.trim()).toBe('launched')
+    }
+  )
 
   it.skipIf(!pwshAvailable)('fails open when native errors are promoted', () => {
     const root = mkdtempSync(join(tmpdir(), 'mcode-codex-pwsh-failure-'))
