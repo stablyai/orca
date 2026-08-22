@@ -381,6 +381,10 @@ import type {
 } from '../../../shared/linear/workspace-types'
 import type { Repo } from '../../../shared/repo-types'
 import type { TaskProvider } from '../../../shared/task-providers'
+import {
+  resolveTaskSourceSelectionSwap,
+  type TaskSourceSelectionStash
+} from './task-source-selection-swap'
 import type { TaskViewPresetId } from '../../../shared/ui-chrome-types'
 import type { PreflightStatus } from '../../../preload/api-types'
 import {
@@ -3227,6 +3231,27 @@ export default function TaskPage(): React.JSX.Element {
   const [taskSource, setTaskSource] = useState<TaskProvider>(
     resolveVisibleTaskProvider(preferredTaskSource, visibleTaskProviders)
   )
+  // Why (#15784): one project selection shared across task tools made every
+  // source switch fetch against the wrong provider (GitHub repos under glab,
+  // GitLab repos with no GitHub source). Stash per source, restore on switch.
+  const repoSelectionBySourceRef = useRef<TaskSourceSelectionStash>({})
+  const lastTaskSourceRef = useRef<TaskProvider>(taskSource)
+  useEffect(() => {
+    const previousSource = lastTaskSourceRef.current
+    if (previousSource === taskSource) {
+      return
+    }
+    lastTaskSourceRef.current = taskSource
+    const swap = resolveTaskSourceSelectionSwap({
+      previousSource,
+      nextSource: taskSource,
+      currentSelection: repoSelection,
+      stash: repoSelectionBySourceRef.current,
+      fallbackSelection: resolvedInitialSelection
+    })
+    repoSelectionBySourceRef.current = swap.stash
+    setRepoSelection(swap.nextSelection)
+  }, [taskSource, repoSelection, resolvedInitialSelection])
   const runtimePreflightMountedRef = useRef(true)
   const runtimePreflightRequestedHostIdsRef = useRef<Set<TaskSourceContext['hostId']>>(new Set())
   const [runtimePreflightStatusByHostId, setRuntimePreflightStatusByHostId] = useState<
