@@ -63,22 +63,17 @@ export function getSimulatorTabForWorktree(
   const activeWorktree = worktrees.find((worktree) =>
     activeExecutionHostId ? isExecutionHostAliasForWorktree(activeExecutionHostId, worktree) : false
   )
+  const simulatorTabs = (state.unifiedTabsByWorktree[worktreeId] ?? []).filter(
+    (tab) => tab.contentType === 'simulator'
+  )
   if (worktrees.length === 0) {
     if (executionHostId) {
-      return (
-        (state.unifiedTabsByWorktree[worktreeId] ?? []).find(
-          (tab) => tab.contentType === 'simulator' && tab.executionHostId === executionHostId
-        ) ?? null
-      )
+      return simulatorTabs.find((tab) => tab.executionHostId === executionHostId) ?? null
     }
-    return (
-      (state.unifiedTabsByWorktree[worktreeId] ?? []).find(
-        (tab) => tab.contentType === 'simulator'
-      ) ?? null
-    )
+    return simulatorTabs[0] ?? null
   }
   if (executionHostId && !activeWorktree) {
-    return null
+    return simulatorTabs.find((tab) => tab.executionHostId === executionHostId) ?? null
   }
   const target = activeWorktree ?? (worktrees.length === 1 ? worktrees[0] : null)
   if (!target) {
@@ -86,11 +81,8 @@ export function getSimulatorTabForWorktree(
   }
   const ambiguousWorktreeIds = findAmbiguousWorktreeIds(worktrees)
   return (
-    (state.unifiedTabsByWorktree[worktreeId] ?? []).find(
-      (tab) =>
-        tab.contentType === 'simulator' &&
-        isUnifiedTabOwnedByWorktree(tab, target, ambiguousWorktreeIds)
-    ) ?? null
+    simulatorTabs.find((tab) => isUnifiedTabOwnedByWorktree(tab, target, ambiguousWorktreeIds)) ??
+    null
   )
 }
 

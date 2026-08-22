@@ -385,6 +385,28 @@ describe('ensureSimulatorTab', () => {
     })
   })
 
+  it('reuses an explicitly owned simulator before its worktree row hydrates', async () => {
+    mockStoreState.activeWorktreeId = 'wt-other'
+    mockStoreState.allWorktrees.mockReturnValue([{ id: 'wt-1', hostId: 'runtime:host-b' }])
+    mockStoreState.unifiedTabsByWorktree = {
+      'wt-1': [
+        {
+          id: 'sim-local',
+          groupId: 'group-1',
+          worktreeId: 'wt-1',
+          executionHostId: 'local',
+          contentType: 'simulator'
+        }
+      ]
+    }
+    const { ensureSimulatorTab } = await import('./ensure-simulator-tab')
+
+    expect(ensureSimulatorTab('wt-1', { surfacePane: false, executionHostId: 'local' })).toBe(
+      'sim-local'
+    )
+    expect(mockStoreState.createUnifiedTab).not.toHaveBeenCalled()
+  })
+
   it('does not create or focus a simulator tab when disabled in settings', async () => {
     mockStoreState.settings = { mobileEmulatorEnabled: false }
     const { ensureSimulatorTab } = await import('./ensure-simulator-tab')
