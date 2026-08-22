@@ -48,4 +48,38 @@ describe('terminal window transfer target session rollback', () => {
     expect(restored.remoteSessionIdsByTabId?.['tab-1']).toBe('remote-old')
     expect(restored.openFilesByWorktree).toEqual(staged.openFilesByWorktree)
   })
+
+  it('removes a ghost group by workspace even when another workspace reused its id', () => {
+    const prior = terminalWindowSession(false)
+    prior.tabGroups = {
+      workspaceB: [
+        {
+          id: 'group-1',
+          worktreeId: 'workspaceB',
+          activeTabId: 'tab-b',
+          tabOrder: ['tab-b'],
+          recentTabIds: ['tab-b']
+        }
+      ]
+    }
+    prior.tabGroupLayouts = { workspaceB: { type: 'leaf', groupId: 'group-1' } }
+    const current = structuredClone(prior)
+    current.tabGroups!.workspaceA = [
+      {
+        id: 'group-1',
+        worktreeId: 'workspaceA',
+        activeTabId: 'tab-1',
+        tabOrder: ['tab-1'],
+        recentTabIds: ['tab-1']
+      }
+    ]
+    current.tabGroupLayouts!.workspaceA = { type: 'leaf', groupId: 'group-1' }
+
+    const restored = removeTransferredTerminalSession(current, prior, terminalWindowSeed())
+
+    expect(restored.tabGroups?.workspaceA).toEqual([])
+    expect(restored.tabGroupLayouts?.workspaceA).toBeUndefined()
+    expect(restored.tabGroups?.workspaceB).toEqual(prior.tabGroups.workspaceB)
+    expect(restored.tabGroupLayouts?.workspaceB).toEqual(prior.tabGroupLayouts.workspaceB)
+  })
 })

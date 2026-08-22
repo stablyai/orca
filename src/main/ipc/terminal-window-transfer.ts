@@ -24,6 +24,7 @@ import {
   getTerminalWindowBounds,
   installTerminalWindowTransferAbortListeners,
   prepareTerminalWindowTargetRecord,
+  revealCreatedTerminalWindowTarget,
   removeTerminalWindowTransferAbortListeners,
   isPointInsideRectangle,
   type TerminalWindowCommandReadyWaiter,
@@ -31,7 +32,7 @@ import {
   type TerminalWindowTransferOperations
 } from './terminal-window-transfer-operation'
 import {
-  commitTerminalWindowTransferAfterSourceLoss,
+  recoverTerminalTransferAfterSourceLoss,
   rollbackTerminalWindowTransfer
 } from './terminal-window-transfer-recovery'
 import {
@@ -251,7 +252,8 @@ export class TerminalWindowTransferCoordinator {
       )
       return { ok: true, targetWindowId: target.id }
     } catch (error) {
-      if (await commitTerminalWindowTransferAfterSourceLoss(this.#operations, transfer)) {
+      const recovery = await recoverTerminalTransferAfterSourceLoss(this.#operations, transfer)
+      if (recovery === 'committed') {
         finishCommittedTerminalWindowTransfer(
           transfer,
           false,
@@ -259,6 +261,10 @@ export class TerminalWindowTransferCoordinator {
           () => undefined
         )
         return { ok: true, targetWindowId: transfer.target!.id }
+      }
+      if (recovery === 'failed') {
+        revealCreatedTerminalWindowTarget(transfer)
+        return { ok: false, error: 'terminal_transfer_target_recovery_failed' }
       }
       await rollbackTerminalWindowTransfer(this.#operations, transfer)
       return { ok: false, error: error instanceof Error ? error.message : String(error) }

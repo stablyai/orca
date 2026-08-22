@@ -191,6 +191,186 @@ describe('terminal window transfer lifecycle recovery', () => {
     )
   })
 
+  it('builds isolated created-target authority after two failed renderer imports', async () => {
+    const h = createTerminalWindowTransferHarness({ createTarget: true })
+    configureCreatedTarget(h)
+    const transferSeed = terminalWindowSeed()
+    transferSeed.group = {
+      ...transferSeed.group,
+      tabOrder: ['tab-1', 'tab-2'],
+      recentTabIds: ['tab-2', 'tab-1']
+    }
+    const source = terminalWindowSession(true)
+    source.tabGroups!['wt-1']![0] = structuredClone(transferSeed.group)
+    source.tabsByWorktree['wt-1']!.push({
+      ...transferSeed.tab,
+      id: 'tab-2',
+      ptyId: 'pty-2',
+      title: 'Other terminal'
+    })
+    source.unifiedTabs!['wt-1']!.push({
+      ...source.unifiedTabs!['wt-1']![0]!,
+      id: 'tab-2',
+      entityId: 'tab-2',
+      label: 'Other terminal'
+    })
+    h.records.set(h.source.id, source)
+    let importAttempts = 0
+    const coordinator = await createCoordinator(h, {
+      registerRenderer: () => {
+        h.owners.registerRenderer(h.target.webContents as never)
+        return () => h.owners.removeRenderer(h.target.webContents as never)
+      },
+      loadWindow: () => {
+        h.owners.markDispatcherReady(h.target.webContents as never)
+        coordinator.getContext(ipcEvent(h.target.webContents) as never)
+      }
+    })
+    h.target.webContents.send.mockImplementation((_channel, command) => {
+      if (command.phase === 'target-import' && ++importAttempts === 1) {
+        h.source.emit('close')
+      }
+      queueMicrotask(() =>
+        coordinator.acknowledge(ipcEvent(h.target.webContents) as never, {
+          ...command,
+          ok: false,
+          error: 'target_import_boom'
+        })
+      )
+    })
+
+    await expect(
+      coordinator.detach(ipcEvent(h.source.webContents) as never, transferSeed)
+    ).resolves.toEqual({ ok: true, targetWindowId: h.target.id })
+    const target = h.records.get(h.target.id)!
+    expect(importAttempts).toBe(2)
+    expect(target).toMatchObject({
+      activeRepoId: transferSeed.repo.id,
+      activeWorkspaceKey: transferSeed.canonicalWorkspaceKey,
+      activeWorkspaceExecutionHostId: transferSeed.hostId,
+      activeWorktreeId: transferSeed.worktreeId,
+      activeTabId: transferSeed.tabId,
+      activeTabIdByWorktree: { 'wt-1': transferSeed.tabId },
+      activeTabTypeByWorktree: { 'wt-1': 'terminal' },
+      activeGroupIdByWorktree: { 'wt-1': transferSeed.group.id }
+    })
+    expect(target.tabsByWorktree['wt-1']?.map(({ id }) => id)).toEqual(['tab-1'])
+    expect(target.tabGroups?.['wt-1']?.[0]?.tabOrder).toEqual(['tab-1'])
+    expect(target.unifiedTabs?.['wt-1']?.[0]).toMatchObject({
+      id: 'tab-1',
+      entityId: 'tab-1',
+      groupId: transferSeed.group.id
+    })
+    expect(h.target.show).toHaveBeenCalledOnce()
+  })
+
+  it('imports into the existing target active group without changing its selection', async () => {
+    const h = createTerminalWindowTransferHarness()
+    const target = terminalWindowSession(false)
+    target.activeRepoId = 'target-repo'
+    target.activeWorktreeId = 'target-worktree-selection'
+    target.activeTabId = 'tab-other'
+    target.activeTabIdByWorktree = { 'wt-1': 'tab-other' }
+    target.activeTabTypeByWorktree = { 'wt-1': 'editor' }
+    target.activeGroupIdByWorktree = { 'wt-1': 'target-group' }
+    target.tabGroups = {
+      'wt-1': [
+        {
+          id: 'target-group',
+          worktreeId: 'wt-1',
+          activeTabId: 'tab-other',
+          tabOrder: ['tab-other'],
+          recentTabIds: ['tab-other']
+        }
+      ]
+    }
+    target.tabGroupLayouts = { 'wt-1': { type: 'leaf', groupId: 'target-group' } }
+    h.records.set(h.target.id, target)
+    let importAttempts = 0
+    const coordinator = await createCoordinator(h, { createSecondaryWindow: vi.fn() })
+    coordinator.getContext(ipcEvent(h.target.webContents) as never)
+    h.target.webContents.send.mockImplementation((_channel, command) => {
+      if (command.phase === 'target-import' && ++importAttempts === 1) {
+        h.source.emit('close')
+      }
+      queueMicrotask(() =>
+        coordinator.acknowledge(ipcEvent(h.target.webContents) as never, {
+          ...command,
+          ok: false,
+          error: 'target_import_boom'
+        })
+      )
+    })
+
+    await expect(
+      coordinator.detach(ipcEvent(h.source.webContents) as never, terminalWindowSeed())
+    ).resolves.toEqual({ ok: true, targetWindowId: h.target.id })
+    const recovered = h.records.get(h.target.id)!
+    expect(recovered).toMatchObject({
+      activeRepoId: 'target-repo',
+      activeWorktreeId: 'target-worktree-selection',
+      activeTabId: 'tab-other',
+      activeTabIdByWorktree: { 'wt-1': 'tab-other' },
+      activeTabTypeByWorktree: { 'wt-1': 'editor' },
+      activeGroupIdByWorktree: { 'wt-1': 'target-group' }
+    })
+    expect(recovered.tabGroups?.['wt-1']?.[0]).toMatchObject({
+      id: 'target-group',
+      activeTabId: 'tab-other',
+      tabOrder: ['tab-other', 'tab-1']
+    })
+    expect(recovered.unifiedTabs?.['wt-1']?.find(({ id }) => id === 'tab-1')?.groupId).toBe(
+      'target-group'
+    )
+  })
+
+  it('reveals but does not commit when source-loss target fallback persistence fails', async () => {
+    const h = createTerminalWindowTransferHarness({ createTarget: true })
+    configureCreatedTarget(h)
+    const originalSet = h.sessions.set.getMockImplementation()!
+    let setCount = 0
+    h.sessions.set.mockImplementation((...args) => {
+      if (++setCount === 2) {
+        throw new Error('target_recovery_persist_boom')
+      }
+      originalSet(...args)
+    })
+    let importAttempts = 0
+    const coordinator = await createCoordinator(h, {
+      registerRenderer: () => {
+        h.owners.registerRenderer(h.target.webContents as never)
+        return () => h.owners.removeRenderer(h.target.webContents as never)
+      },
+      loadWindow: () => {
+        h.owners.markDispatcherReady(h.target.webContents as never)
+        coordinator.getContext(ipcEvent(h.target.webContents) as never)
+      }
+    })
+    h.target.webContents.send.mockImplementation((_channel, command) => {
+      if (command.phase === 'target-import' && ++importAttempts === 1) {
+        h.source.emit('close')
+      }
+      queueMicrotask(() =>
+        coordinator.acknowledge(ipcEvent(h.target.webContents) as never, {
+          ...command,
+          ok: false,
+          error: 'target_import_boom'
+        })
+      )
+    })
+
+    await expect(
+      coordinator.detach(ipcEvent(h.source.webContents) as never, terminalWindowSeed())
+    ).resolves.toEqual({ ok: false, error: 'terminal_transfer_target_recovery_failed' })
+    expect(h.records.get(h.source.id)?.tabsByWorktree['wt-1']?.[0]).toEqual(
+      terminalWindowSeed().tab
+    )
+    expect(h.owners.owns('pty-1', h.target.webContents as never)).toBe(true)
+    expect(h.target.show).toHaveBeenCalledOnce()
+    expect(h.target.destroy).not.toHaveBeenCalled()
+    expect(h.sessions.retire).not.toHaveBeenCalled()
+  })
+
   it('hands ownership back to an exact live source when the target closes', async () => {
     const h = createTerminalWindowTransferHarness()
     const coordinator = await createCoordinator(h, { createSecondaryWindow: vi.fn() })

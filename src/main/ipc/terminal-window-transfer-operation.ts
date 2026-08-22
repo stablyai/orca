@@ -197,19 +197,8 @@ export function finishCommittedTerminalWindowTransfer(
   isSourceSecondary: () => boolean,
   retireSource: () => void
 ): void {
-  const { source, target } = transfer
-  if (transfer.createdTarget && target && !target.isDestroyed()) {
-    try {
-      target.show()
-    } catch {
-      // The transfer is durable; revealing the window is best-effort.
-    }
-    try {
-      target.focus()
-    } catch {
-      // The committed owner must not roll back on a focus failure.
-    }
-  }
+  const { source } = transfer
+  revealCreatedTerminalWindowTarget(transfer)
   try {
     if (sourceEmpty && isSourceSecondary()) {
       try {
@@ -220,5 +209,22 @@ export function finishCommittedTerminalWindowTransfer(
     }
   } catch {
     // Empty-window cleanup follows the committed transaction.
+  }
+}
+
+export function revealCreatedTerminalWindowTarget(transfer: TerminalWindowTransfer): void {
+  const { target } = transfer
+  if (!transfer.createdTarget || !target || target.isDestroyed()) {
+    return
+  }
+  try {
+    target.show()
+  } catch {
+    // The transfer backing survives a reveal failure.
+  }
+  try {
+    target.focus()
+  } catch {
+    // The last owner must not roll back on a focus failure.
   }
 }

@@ -9,6 +9,9 @@ import {
   removeTransferredTerminalSessionBacking,
   restoreTransferredTerminalSession
 } from './terminal-window-transfer-session-patch'
+import { importTransferredTerminalSession } from './terminal-window-transfer-target-import'
+
+export type TerminalWindowSourceLossRecovery = 'not-applicable' | 'committed' | 'failed'
 
 export async function rollbackTerminalWindowTransfer(
   operations: TerminalWindowTransferOperations,
@@ -135,10 +138,10 @@ export async function rollbackTerminalWindowTransfer(
   }
 }
 
-export async function commitTerminalWindowTransferAfterSourceLoss(
+export async function recoverTerminalTransferAfterSourceLoss(
   operations: TerminalWindowTransferOperations,
   transfer: TerminalWindowTransfer
-): Promise<boolean> {
+): Promise<TerminalWindowSourceLossRecovery> {
   const { source, target, targetRenderer, seed } = transfer
   if (
     !transfer.sourceLost ||
@@ -149,7 +152,7 @@ export async function commitTerminalWindowTransferAfterSourceLoss(
     targetRenderer.isDestroyed() ||
     !seed.ptyIds.every((id) => operations.owners.owns(id, targetRenderer))
   ) {
-    return false
+    return 'not-applicable'
   }
   if (!transfer.targetImported) {
     try {
@@ -168,15 +171,19 @@ export async function commitTerminalWindowTransferAfterSourceLoss(
   try {
     operations.sessions.set(
       target.id,
-      restoreTransferredTerminalSession(
+      importTransferredTerminalSession(
         operations.sessions.get(target.id, seed.hostId),
+        transfer.targetBefore!,
         transfer.sourceBefore,
-        seed
+        seed,
+        transfer.createdTarget
       ),
       seed.hostId
     )
   } catch {
-    // WindowSessionRegistry mutates its record before persistence can fail.
+    if (!transfer.targetImported) {
+      return 'failed'
+    }
   }
   try {
     operations.sessions.set(
@@ -192,5 +199,5 @@ export async function commitTerminalWindowTransferAfterSourceLoss(
   }
   transfer.committed = true
   transfer.handedOff = false
-  return true
+  return 'committed'
 }

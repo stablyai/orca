@@ -85,7 +85,7 @@ function restoreGroup(current: TabGroup | undefined, prior: TabGroup, tabId: str
   return { ...current, tabOrder, recentTabIds, activeTabId }
 }
 
-function appendMissingGroup(
+export function appendMissingGroup(
   current: TabGroupLayoutNode | undefined,
   groupId: string
 ): TabGroupLayoutNode {
@@ -226,15 +226,12 @@ export function removeTransferredTerminalSession(
     )
   }
 
-  const priorGroupIds = new Set(
-    Object.values(prior.tabGroups ?? {}).flatMap((groups) => groups.map(({ id }) => id))
-  )
   for (const [key, groups] of Object.entries(next.tabGroups ?? {})) {
     const removedGroupIds: string[] = []
     next.tabGroups![key] = groups.flatMap((group) => {
       const priorGroup = prior.tabGroups?.[key]?.find(({ id }) => id === group.id)
       const tabOrder = group.tabOrder.filter((id) => id !== seed.tabId)
-      if (tabOrder.length === 0 && !priorGroupIds.has(group.id)) {
+      if (tabOrder.length === 0 && !priorGroup) {
         removedGroupIds.push(group.id)
         return []
       }
