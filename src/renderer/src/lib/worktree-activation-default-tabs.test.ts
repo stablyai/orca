@@ -1,13 +1,89 @@
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
+import type * as ConnectionContextModule from '@/lib/connection-context'
 import { ensureWorktreeHasInitialTerminal } from './worktree-initial-terminal-seeding'
 import {
   createMockStore,
   registerWorktreeActivationReset
 } from './worktree-activation-test-harness'
 
+// Why: these cases assert activation ordering for local worktrees; the fixtures never
+// register repos, which getConnectionId reports as unknown-owner and the
+// initial-terminal gate would defer on. Pin the owner to local by default.
+const mockConnectionId: { value: string | null | undefined } = { value: null }
+vi.mock('@/lib/connection-context', async (importOriginal) => ({
+  ...(await importOriginal<typeof ConnectionContextModule>()),
+  getConnectionId: () => mockConnectionId.value
+}))
+
 registerWorktreeActivationReset()
 
+afterEach(() => {
+  mockConnectionId.value = null
+})
+
 describe('ensureWorktreeHasInitialTerminal', () => {
+  it('creates nothing for a remote worktree whose target has not hydrated a snapshot', () => {
+    mockConnectionId.value = 'ssh-target-1'
+    const createTab = vi.fn(() => ({ id: 'tab-1' }))
+    const store = createMockStore({ createTab })
+
+    const result = ensureWorktreeHasInitialTerminal(store, 'wt-1')
+
+    expect(result).toBeNull()
+    expect(createTab).not.toHaveBeenCalled()
+    expect(store.markDefaultTerminalTabsApplied).not.toHaveBeenCalled()
+  })
+
+  it('still applies an explicit launch payload while the target is unhydrated', () => {
+    mockConnectionId.value = 'ssh-target-1'
+    const createTab = vi.fn(() => ({ id: 'tab-1' }))
+    const store = createMockStore({ createTab })
+
+    const result = ensureWorktreeHasInitialTerminal(
+      store,
+      'wt-1',
+      undefined,
+      undefined,
+      undefined,
+      {
+        runCommands: true,
+        tabs: [{ title: 'Server', command: 'pnpm dev' }]
+      }
+    )
+
+    expect(result).toBe('tab-1')
+    expect(store.markDefaultTerminalTabsApplied).toHaveBeenCalledWith('wt-1')
+  })
+
+  it('creates nothing while the worktree path awaits deferred snapshot hydration', () => {
+    mockConnectionId.value = 'ssh-target-1'
+    const createTab = vi.fn(() => ({ id: 'tab-1' }))
+    const store = createMockStore({
+      createTab,
+      remoteWorkspaceHydratedTargetIds: new Set(['ssh-target-1']),
+      pendingDeferredWorktreePathsByTargetId: { 'ssh-target-1': ['/tmp/worktrees/wt-1'] }
+    })
+
+    const result = ensureWorktreeHasInitialTerminal(store, 'repo-1::/tmp/worktrees/wt-1')
+
+    expect(result).toBeNull()
+    expect(createTab).not.toHaveBeenCalled()
+  })
+
+  it('creates the initial terminal for a remote worktree once its target has hydrated', () => {
+    mockConnectionId.value = 'ssh-target-1'
+    const createTab = vi.fn(() => ({ id: 'tab-1' }))
+    const store = createMockStore({
+      createTab,
+      remoteWorkspaceHydratedTargetIds: new Set(['ssh-target-1'])
+    })
+
+    const result = ensureWorktreeHasInitialTerminal(store, 'repo-1::/tmp/worktrees/wt-1')
+
+    expect(result).toBe('tab-1')
+    expect(createTab).toHaveBeenCalledTimes(1)
+  })
+
   it('creates a single tab without setup split when no setup is provided', () => {
     const store = createMockStore()
 

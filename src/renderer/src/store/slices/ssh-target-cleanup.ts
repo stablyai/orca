@@ -206,6 +206,8 @@ export function buildRemovedSshTargetCleanupPatch(
   const removedConnectionState = nextConnectionStates.delete(targetId)
   const nextLabels = new Map(state.sshTargetLabels)
   const removedLabel = nextLabels.delete(targetId)
+  const { [targetId]: removedPendingDeferred, ...nextPendingDeferredWorktreePathsByTargetId } =
+    state.pendingDeferredWorktreePathsByTargetId
   const nextHydrated = new Set(state.remoteWorkspaceHydratedTargetIds)
   const removedHydrated = nextHydrated.delete(targetId)
   const removedSyncStatus = Object.hasOwn(state.remoteWorkspaceSyncStatusByTargetId, targetId)
@@ -226,6 +228,7 @@ export function buildRemovedSshTargetCleanupPatch(
     removedConnectionState ||
     removedLabel ||
     removedHydrated ||
+    removedPendingDeferred !== undefined ||
     removedSyncStatus ||
     removedPortForwards ||
     removedDetectedPorts ||
@@ -248,6 +251,9 @@ export function buildRemovedSshTargetCleanupPatch(
     ...(removedConnectionState ? { sshConnectionStates: nextConnectionStates } : {}),
     ...(removedLabel ? { sshTargetLabels: nextLabels } : {}),
     ...(removedHydrated ? { remoteWorkspaceHydratedTargetIds: nextHydrated } : {}),
+    ...(removedPendingDeferred !== undefined
+      ? { pendingDeferredWorktreePathsByTargetId: nextPendingDeferredWorktreePathsByTargetId }
+      : {}),
     ...(removedSyncStatus ? { remoteWorkspaceSyncStatusByTargetId: nextSyncStatus } : {}),
     ...(removedPortForwards ? { portForwardsByConnection: nextPortForwards } : {}),
     ...(removedDetectedPorts ? { detectedPortsByConnection: nextDetectedPorts } : {}),

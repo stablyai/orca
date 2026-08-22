@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
+import type * as ConnectionContextModule from '@/lib/connection-context'
 import { ensureWorktreeHasInitialTerminal } from './worktree-initial-terminal-seeding'
 import type { AppStoreState } from './worktree-activation-test-harness'
 import {
@@ -6,6 +7,14 @@ import {
   registerWorktreeActivationReset
 } from './worktree-activation-test-harness'
 import { useAppStore } from '@/store'
+
+// Why: these cases assert activation ordering for local and web-runtime worktrees; the
+// fixtures never register repos in the global store, which getConnectionId reports as
+// unknown-owner and the initial-terminal gate would defer on. Pin the owner to local.
+vi.mock('@/lib/connection-context', async (importOriginal) => ({
+  ...(await importOriginal<typeof ConnectionContextModule>()),
+  getConnectionId: () => null
+}))
 
 registerWorktreeActivationReset()
 

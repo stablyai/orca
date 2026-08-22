@@ -179,6 +179,7 @@ export function createRemoteWorkspaceTargetSync(
           arrival,
           isArrivalCurrent,
           isPreparationTokenCurrent: deps.isPreparationTokenCurrent,
+          getCurrentAuthority: deps.getCurrentAuthority,
           waitForWorkspaceSessionReady,
           finalizeHydratedTerminals: deps.finalizeHydratedTerminals
         })
@@ -239,6 +240,7 @@ export function createRemoteWorkspaceTargetSync(
         arrival,
         isArrivalCurrent,
         isPreparationTokenCurrent: deps.isPreparationTokenCurrent,
+        getCurrentAuthority: deps.getCurrentAuthority,
         waitForWorkspaceSessionReady,
         finalizeHydratedTerminals: deps.finalizeHydratedTerminals
       })

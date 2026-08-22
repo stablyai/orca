@@ -12,6 +12,8 @@ import type { AgentStartedTelemetry } from '@/lib/worktree-startup-payload'
 export type WorktreeActivationStore = Partial<WorktreeRuntimeOwnerState> & {
   tabsByWorktree: Record<string, { id: string }[]>
   defaultTerminalTabsAppliedByWorktreeId: Record<string, true>
+  remoteWorkspaceHydratedTargetIds: ReadonlySet<string>
+  pendingDeferredWorktreePathsByTargetId: Readonly<Record<string, readonly string[]>>
   createTab: (
     worktreeId: string,
     targetGroupId?: string,

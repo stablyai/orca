@@ -93,6 +93,7 @@ async function applySnapshot(store: TestStore, snap: RemoteWorkspaceSnapshot): P
     arrival: 1,
     isArrivalCurrent: () => true,
     isPreparationTokenCurrent: () => true,
+    getCurrentAuthority: () => authority,
     waitForWorkspaceSessionReady: async () => true,
     finalizeHydratedTerminals: () => 0
   })

@@ -46,6 +46,8 @@ export function registerWorktreeActivationReset(): void {
 export type MockActivationStore = {
   tabsByWorktree: Record<string, { id: string }[]>
   defaultTerminalTabsAppliedByWorktreeId: Record<string, true>
+  remoteWorkspaceHydratedTargetIds: ReadonlySet<string>
+  pendingDeferredWorktreePathsByTargetId: Readonly<Record<string, readonly string[]>>
   createTab: Mock<() => { id: string }>
   setActiveTab: Mock<() => void>
   setTabCustomTitle: Mock<() => void>
@@ -62,6 +64,8 @@ export function createMockStore(overrides: Record<string, unknown> = {}): MockAc
   return {
     tabsByWorktree: {} as Record<string, { id: string }[]>,
     defaultTerminalTabsAppliedByWorktreeId: {} as Record<string, true>,
+    remoteWorkspaceHydratedTargetIds: new Set<string>(),
+    pendingDeferredWorktreePathsByTargetId: {} as Record<string, readonly string[]>,
     createTab: vi.fn(() => ({ id: 'tab-1' })),
     setActiveTab: vi.fn(),
     setTabCustomTitle: vi.fn(),

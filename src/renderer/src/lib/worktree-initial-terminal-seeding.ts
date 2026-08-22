@@ -9,6 +9,7 @@ import { agentKindToTuiAgent } from '../../../shared/agent-kind'
 import { useAppStore } from '@/store'
 import { isWebRuntimeSessionActive } from '@/runtime/web-runtime-session'
 import { queueHookCommandsForFirstWorktreeTab } from '@/lib/hook-command-delayed-delivery'
+import { shouldDeferInitialTerminalCreation } from '@/lib/remote-workspace-pending-hydration'
 import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
 import { initialAgentTabViewModeProps } from './native-chat-initial-view-mode'
 import { getConnectionId } from '@/lib/connection-context'
@@ -46,6 +47,28 @@ export function ensureWorktreeHasInitialTerminal(
   opts?: InitialTerminalOptions
 ): string | null {
   const { renderableTabCount } = store.reconcileWorktreeTabModel(worktreeId)
+  // Why: only the automatic bare tab is deferred — an explicit launch payload (creation
+  // templates, setup scripts, agent startup) must run now or it would be silently lost,
+  // and it signals a fresh worktree rather than one whose snapshot tabs are in flight.
+  if (
+    !startup &&
+    !setup &&
+    !issueCommand &&
+    !defaultTabs &&
+    shouldAutoCreateInitialTerminal(
+      renderableTabCount,
+      Object.hasOwn(store.tabsByWorktree, worktreeId)
+    ) &&
+    shouldDeferInitialTerminalCreation(
+      worktreeId,
+      getConnectionId(worktreeId),
+      store.remoteWorkspaceHydratedTargetIds,
+      store.pendingDeferredWorktreePathsByTargetId
+    )
+  ) {
+    // Why: nothing is created or marked applied, so the Terminal auto-create effect (which subscribes to every gate input) retries once the owner resolves or the snapshot lands.
+    return null
+  }
   // Why: creating a terminal just because the legacy terminal slice is empty gives editor/browser-only worktrees an unexpected extra tab.
   const ownerState =
     store.settings !== undefined || store.repos !== undefined || store.worktreesByRepo !== undefined

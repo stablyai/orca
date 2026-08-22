@@ -2,9 +2,9 @@ import type { StoreApi } from 'zustand'
 import type { RemoteWorkspaceSnapshot } from '../../../shared/remote-workspace-types'
 import { importRemoteWorkspaceSession } from '../../../shared/remote-workspace-session-projection'
 import type { DirectSshAuthority } from '../../../shared/ssh-types'
+import type { WorkspaceSessionState } from '../../../shared/workspace-session-state-types'
 import { translate } from '@/i18n/i18n'
 import { buildWorkspaceSessionPayload } from '../lib/workspace-session'
-import { resolveDirectSshTargetScope } from '../lib/direct-ssh-target-scope'
 import type { AppState } from '../store/types'
 import {
   admitDirectSshSnapshotApplyToken,
@@ -13,12 +13,20 @@ import {
 } from './direct-ssh-reconnect-coordinator'
 import { directSshAuthoritiesEqual } from './direct-ssh-reconnect-tokens'
 import {
+  buildDeferredWorktreeMerge,
+  currentRecoveryTabIds,
+  deferredSnapshotTabPaths,
+  exactTargetWorktreeIds
+} from './remote-workspace-deferred-hydration'
+import {
   mergeDirectSshRemoteWorkspaceSession,
   uniqueWorktreeIdByPath
 } from './remote-workspace-session-merge'
 
 const REMOTE_WORKSPACE_SNAPSHOT_WRITE_SUPPRESS_MS = 1_000
 const SNAPSHOT_TERMINAL_RECONNECT_TIMEOUT_MS = 30_000
+const SNAPSHOT_DEFERRED_RESOLVE_TIMEOUT_MS = 600_000
+const SNAPSHOT_DEFERRED_POLL_MS = 1_000
 let snapshotApplyDepth = 0
 let snapshotWriteSuppressUntil = 0
 
@@ -33,44 +41,66 @@ type RemoteWorkspaceSnapshotApplyInput = {
   arrival: number
   isArrivalCurrent: (targetId: string, arrival: number) => boolean
   isPreparationTokenCurrent: (token: DirectSshPreparationToken) => boolean
+  getCurrentAuthority: (targetId: string) => DirectSshAuthority | null
   waitForWorkspaceSessionReady: () => Promise<boolean>
   finalizeHydratedTerminals: (authority: DirectSshAuthority) => number
 }
 
-function exactTargetWorktreeIds(state: AppState, authority: DirectSshAuthority): Set<string> {
-  return resolveDirectSshTargetScope({
-    targetId: authority.targetId,
-    catalogRevision: 0,
-    repos: state.repos,
-    worktreesByRepo: state.worktreesByRepo,
-    detectedWorktreesByRepo: state.detectedWorktreesByRepo,
-    folderWorkspaces: state.folderWorkspaces,
-    projectGroups: state.projectGroups,
-    restoredRuntimeHostIdByWorkspaceSessionKey: state.restoredRuntimeHostIdByWorkspaceSessionKey
-  }).gitWorktreeIds
-}
-
-function currentRecoveryTabIds(
-  state: AppState,
+async function hydrateAndReconnectWorktrees(
+  store: Pick<StoreApi<AppState>, 'getState'>,
+  merged: WorkspaceSessionState,
+  workspaceKeys: string[],
   authority: DirectSshAuthority,
-  worktreeIds: ReadonlySet<string>
-): Set<string> {
-  const targetTabIds = new Set(
-    [...worktreeIds].flatMap((worktreeId) =>
-      (state.tabsByWorktree[worktreeId] ?? []).map((tab) => tab.id)
-    )
-  )
-  return new Set(
-    [
-      ...Object.entries(state.directSshPaneRetryByTabId),
-      ...Object.entries(state.directSshLivePtyBindingByTabId)
-    ]
-      .filter(
-        ([tabId, entry]) =>
-          targetTabIds.has(tabId) && directSshAuthoritiesEqual(entry.authority, authority)
-      )
-      .map(([tabId]) => tabId)
-  )
+  snapshot: RemoteWorkspaceSnapshot,
+  isStillCurrent: () => boolean,
+  finalizeHydratedTerminals: (authority: DirectSshAuthority) => number
+): Promise<void> {
+  snapshotApplyDepth += 1
+  try {
+    const currentStore = store.getState()
+    currentStore.hydrateWorkspaceSession(merged, {
+      directSshAuthority: authority,
+      replaceWorkspaceKeys: workspaceKeys
+    })
+    currentStore.hydrateTabsSession(merged, { replaceWorkspaceKeys: workspaceKeys })
+    // Why: direct SSH snapshots project terminal state only; global editor/browser hydration would reset unrelated hosts.
+    currentStore.markRemoteWorkspaceHydrated(authority.targetId)
+    currentStore.setRemoteWorkspaceSyncStatus(authority.targetId, {
+      phase: 'synced',
+      direction: 'pull',
+      revision: snapshot.revision,
+      updatedAt: snapshot.updatedAt,
+      lastSyncedAt: Date.now(),
+      message: translate('auto.hooks.useIpcEvents.4f78ba5885', 'Workspace synced')
+    })
+    const reconnectAbort = new AbortController()
+    let reconnectTimer: ReturnType<typeof setTimeout> | null = null
+    await Promise.race([
+      Promise.resolve()
+        .then(() =>
+          store.getState().reconnectPersistedTerminals(reconnectAbort.signal, {
+            directSshAuthority: authority,
+            workspaceKeys
+          })
+        )
+        .catch(() => {}),
+      new Promise<void>((resolve) => {
+        reconnectTimer = setTimeout(() => {
+          reconnectAbort.abort()
+          resolve()
+        }, SNAPSHOT_TERMINAL_RECONNECT_TIMEOUT_MS)
+      })
+    ])
+    if (reconnectTimer) {
+      clearTimeout(reconnectTimer)
+    }
+    if (isStillCurrent()) {
+      finalizeHydratedTerminals(authority)
+    }
+  } finally {
+    snapshotWriteSuppressUntil = Date.now() + REMOTE_WORKSPACE_SNAPSHOT_WRITE_SUPPRESS_MS
+    snapshotApplyDepth -= 1
+  }
 }
 
 export async function applyDirectSshRemoteWorkspaceSnapshot({
@@ -80,6 +110,7 @@ export async function applyDirectSshRemoteWorkspaceSnapshot({
   arrival,
   isArrivalCurrent,
   isPreparationTokenCurrent,
+  getCurrentAuthority,
   waitForWorkspaceSessionReady,
   finalizeHydratedTerminals
 }: RemoteWorkspaceSnapshotApplyInput): Promise<void> {
@@ -121,51 +152,99 @@ export async function applyDirectSshRemoteWorkspaceSnapshot({
   if (!isArrivalCurrent(authority.targetId, arrival) || !isPreparationTokenCurrent(token)) {
     return
   }
-  snapshotApplyDepth += 1
-  try {
-    const currentStore = store.getState()
-    const replaceWorkspaceKeys = [...worktreeIds]
-    currentStore.hydrateWorkspaceSession(merged, {
-      directSshAuthority: authority,
-      replaceWorkspaceKeys
-    })
-    currentStore.hydrateTabsSession(merged, { replaceWorkspaceKeys })
-    // Why: direct SSH snapshots project terminal state only; global editor/browser hydration would reset unrelated hosts.
-    currentStore.markRemoteWorkspaceHydrated(authority.targetId)
-    currentStore.setRemoteWorkspaceSyncStatus(authority.targetId, {
-      phase: 'synced',
+  // Why: the hydrate below marks the target hydrated and then awaits terminal reconnects for up to 30s; the pending paths must be registered first or the initial-terminal gate reads "hydrated, nothing pending" and creates a junk tab into a still-empty deferred worktree.
+  const initialDeferredPaths = deferredSnapshotTabPaths(state, authority, snapshot)
+  store.getState().setPendingDeferredWorktreePaths(authority.targetId, initialDeferredPaths)
+  await hydrateAndReconnectWorktrees(
+    store,
+    merged,
+    [...worktreeIds],
+    authority,
+    snapshot,
+    () => isArrivalCurrent(authority.targetId, arrival) && isPreparationTokenCurrent(token),
+    finalizeHydratedTerminals
+  )
+
+  // Why: the import above silently drops snapshot paths the catalog cannot resolve yet; remote catalogs fill in asynchronously (often only on worktree activation), so retry those paths until they resolve or the deadline expires. The watch seeds from the set registered before the hydrate, not a recompute: a path that resolved while the hydrate awaited terminal reconnects was still dropped at import time and needs the late pass below — a recompute would end the watch before its first pass and leave those tabs with neither an import nor a pending registration.
+  let pendingPaths = initialDeferredPaths
+  if (pendingPaths.length === 0) {
+    return
+  }
+  console.warn(
+    '[remote-workspace] snapshot tabs deferred until the worktree catalog resolves their paths',
+    pendingPaths
+  )
+  // Why: only arrival supersession or authority loss ends the watch; preparation tokens also go stale on every routine catalog refresh, which must not abort a pending late hydrate.
+  const isWatchCurrent = (): boolean =>
+    isArrivalCurrent(authority.targetId, arrival) &&
+    directSshAuthoritiesEqual(getCurrentAuthority(authority.targetId), authority)
+  const reportUnresolved = (): void => {
+    store.getState().setRemoteWorkspaceSyncStatus(authority.targetId, {
+      phase: 'error',
       direction: 'pull',
-      revision: snapshot.revision,
-      updatedAt: snapshot.updatedAt,
-      lastSyncedAt: Date.now(),
-      message: translate('auto.hooks.useIpcEvents.4f78ba5885', 'Workspace synced')
+      message: translate(
+        'auto.hooks.useIpcEvents.deferredWorktreeTabsUnresolved',
+        'Some remote worktree tabs were not restored because their worktrees never appeared in the catalog'
+      )
     })
-    const reconnectAbort = new AbortController()
-    let reconnectTimer: ReturnType<typeof setTimeout> | null = null
-    await Promise.race([
-      Promise.resolve()
-        .then(() =>
-          store.getState().reconnectPersistedTerminals(reconnectAbort.signal, {
-            directSshAuthority: authority,
-            workspaceKeys: replaceWorkspaceKeys
-          })
+  }
+  const deferredDeadline = Date.now() + SNAPSHOT_DEFERRED_RESOLVE_TIMEOUT_MS
+  // Why: the first pass runs before any sleep — a path that resolved during the hydrate's reconnect wait has already departed, and its tabs must hydrate immediately; gates reading the pending registration treat a missing tab in a "hydrated, nothing pending" worktree as gone for good.
+  let firstPass = true
+  while (isWatchCurrent()) {
+    if (firstPass) {
+      firstPass = false
+    } else {
+      if (Date.now() >= deferredDeadline) {
+        console.warn(
+          '[remote-workspace] giving up on deferred snapshot tabs; their worktree paths never resolved in the catalog',
+          pendingPaths
         )
-        .catch(() => {}),
-      new Promise<void>((resolve) => {
-        reconnectTimer = setTimeout(() => {
-          reconnectAbort.abort()
-          resolve()
-        }, SNAPSHOT_TERMINAL_RECONNECT_TIMEOUT_MS)
-      })
-    ])
-    if (reconnectTimer) {
-      clearTimeout(reconnectTimer)
+        // Why: an expired path will never hydrate — leaving it registered would suppress initial-terminal creation for that worktree indefinitely.
+        store.getState().setPendingDeferredWorktreePaths(authority.targetId, [])
+        reportUnresolved()
+        return
+      }
+      await new Promise((resolve) => setTimeout(resolve, SNAPSHOT_DEFERRED_POLL_MS))
+      if (!isWatchCurrent()) {
+        return
+      }
     }
-    if (isArrivalCurrent(authority.targetId, arrival) && isPreparationTokenCurrent(token)) {
-      finalizeHydratedTerminals(authority)
+    const lateState = store.getState()
+    const remaining = deferredSnapshotTabPaths(lateState, authority, snapshot)
+    const departed = pendingPaths.filter((worktreePath) => !remaining.includes(worktreePath))
+    pendingPaths = remaining
+    if (departed.length === 0) {
+      store.getState().setPendingDeferredWorktreePaths(authority.targetId, pendingPaths)
+      continue
     }
-  } finally {
-    snapshotWriteSuppressUntil = Date.now() + REMOTE_WORKSPACE_SNAPSHOT_WRITE_SUPPRESS_MS
-    snapshotApplyDepth -= 1
+    // Why: pending membership means "not uniquely resolvable", so a departed path resolves uniquely by definition; buildDeferredWorktreeMerge re-resolves against the same state snapshot and drops anything that cannot map.
+    const { lateScope, lateMerged } = buildDeferredWorktreeMerge(
+      lateState,
+      authority,
+      snapshot,
+      departed
+    )
+    if (!isWatchCurrent()) {
+      return
+    }
+    console.warn(
+      '[remote-workspace] late catalog resolution hydrating deferred snapshot worktrees',
+      departed
+    )
+    await hydrateAndReconnectWorktrees(
+      store,
+      lateMerged,
+      [...lateScope],
+      authority,
+      snapshot,
+      isWatchCurrent,
+      finalizeHydratedTerminals
+    )
+    // Why: the registration updates only after the departed paths' tabs are in the store — gates read "hydrated, nothing pending" as fully loaded, which must never be observable while a departed path's tabs are still absent.
+    store.getState().setPendingDeferredWorktreePaths(authority.targetId, pendingPaths)
+    if (pendingPaths.length === 0) {
+      return
+    }
   }
 }
