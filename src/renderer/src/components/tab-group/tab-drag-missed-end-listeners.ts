@@ -1,7 +1,10 @@
 /** Window-level safety net for a tab drag whose end/cancel event never arrives.
  *  Electron/dnd-kit can occasionally miss drag end; a stuck drag ref makes all
  *  later tab clicks look like drag releases. Returns the release function. */
-export function installTabDragMissedEndListeners(onMissedEnd: () => void): () => void {
+export function installTabDragMissedEndListeners(
+  onMissedEnd: () => void,
+  ignoreWindowTransition: () => boolean = () => false
+): () => void {
   let cleanupTimer: number | null = null
 
   const clearIfDndMissedEnd = (): void => {
@@ -14,10 +17,16 @@ export function installTabDragMissedEndListeners(onMissedEnd: () => void): () =>
     }, 0)
   }
 
+  const clearOnWindowTransition = (): void => {
+    if (!ignoreWindowTransition()) {
+      clearIfDndMissedEnd()
+    }
+  }
+
   window.addEventListener('pointerup', clearIfDndMissedEnd)
   window.addEventListener('pointercancel', clearIfDndMissedEnd)
-  window.addEventListener('blur', clearIfDndMissedEnd)
-  window.addEventListener('focus', clearIfDndMissedEnd)
+  window.addEventListener('blur', clearOnWindowTransition)
+  window.addEventListener('focus', clearOnWindowTransition)
 
   return () => {
     if (cleanupTimer !== null) {
@@ -25,7 +34,7 @@ export function installTabDragMissedEndListeners(onMissedEnd: () => void): () =>
     }
     window.removeEventListener('pointerup', clearIfDndMissedEnd)
     window.removeEventListener('pointercancel', clearIfDndMissedEnd)
-    window.removeEventListener('blur', clearIfDndMissedEnd)
-    window.removeEventListener('focus', clearIfDndMissedEnd)
+    window.removeEventListener('blur', clearOnWindowTransition)
+    window.removeEventListener('focus', clearOnWindowTransition)
   }
 }

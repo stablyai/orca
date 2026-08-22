@@ -9,7 +9,13 @@ import {
 import { CLIPBOARD_TEXT_MEASURE_YIELD_CODE_UNITS } from '../../shared/clipboard-text'
 import { PtyWriteUnavailableError } from '../providers/pty-write-unavailable-error'
 import { wslHookRelayManager } from '../agent-hooks/wsl-hook-relay-manager'
-import { registerPtyHandlers, deletePtyOwnership, setLocalPtyProvider } from './pty'
+import {
+  registerPtyHandlers,
+  deletePtyOwnership,
+  getPtyRendererDeliveryDebugSnapshot,
+  setLocalPtyProvider
+} from './pty'
+import { ptyRendererOwners } from './pty-renderer-owners'
 
 vi.mock('electron', () => import('./pty-ipc-mock-registry').then((m) => m.electronModuleMock()))
 vi.mock('fs', () => import('./pty-ipc-mock-registry').then((m) => m.fsModuleMock()))
@@ -63,7 +69,9 @@ describe('registerPtyHandlers', () => {
     foreignWindowIpcEvent,
     createMockProc,
     installDaemonTestProvider,
-    getPtyWriteListener
+    getPtyWriteListener,
+    getPtyResizeListener,
+    getPtyAckDataListener
   } = setupPtyIpcSuite()
 
   it('acknowledges pty writes only for owned PTYs', async () => {
@@ -133,6 +141,127 @@ describe('registerPtyHandlers', () => {
     expect(writeAccepted(mainWindowIpcEvent, { id: result.id, data: 1 })).toBe(false)
     expect(writeAccepted(foreignWindowIpcEvent, { id: result.id, data: 'x' })).toBe(false)
     expect(mockProc.proc.write).not.toHaveBeenCalled()
+  })
+  it('accepts PTY input only from its current renderer owner after handoff', async () => {
+    const mockProc = createMockProc()
+    spawnMock.mockReturnValue(mockProc.proc)
+    registerPtyHandlers(mainWindow as never)
+    const result = (await handlers.get('pty:spawn')!(mainWindowIpcEvent, {
+      cols: 80,
+      rows: 24
+    })) as { id: string }
+    const secondary = foreignWindowIpcEvent.sender
+    ptyRendererOwners.registerRenderer(secondary as never)
+    ptyRendererOwners.markDispatcherReady(secondary as never)
+    ptyRendererOwners.handoff([result.id], mainWindow.webContents as never, secondary as never)
+    const write = getPtyWriteListener()
+
+    write(mainWindowIpcEvent, { id: result.id, data: 'old-owner' })
+    write(foreignWindowIpcEvent, { id: result.id, data: 'new-owner' })
+
+    expect(mockProc.proc.write).toHaveBeenCalledTimes(1)
+    expect(mockProc.proc.write).toHaveBeenCalledWith('new-owner')
+  })
+  it('routes PTY output only to its current renderer owner after handoff', async () => {
+    vi.useFakeTimers()
+    const mockProc = createMockProc()
+    spawnMock.mockReturnValue(mockProc.proc)
+
+    try {
+      registerPtyHandlers(mainWindow as never)
+      const result = (await handlers.get('pty:spawn')!(mainWindowIpcEvent, {
+        cols: 80,
+        rows: 24
+      })) as { id: string }
+      const secondary = foreignWindowIpcEvent.sender
+      ptyRendererOwners.registerRenderer(secondary as never)
+      ptyRendererOwners.markDispatcherReady(secondary as never)
+      ptyRendererOwners.handoff([result.id], mainWindow.webContents as never, secondary as never)
+      mainWindow.webContents.send.mockClear()
+      secondary.send.mockClear()
+
+      mockProc.emitData('secondary-output')
+      vi.advanceTimersByTime(2)
+
+      expect(mainWindow.webContents.send).not.toHaveBeenCalledWith('pty:data', expect.anything())
+      expect(secondary.send).toHaveBeenCalledWith('pty:data', {
+        id: result.id,
+        data: 'secondary-output'
+      })
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+  it('rejects old-owner resize and kill after handoff', async () => {
+    const mockProc = createMockProc()
+    spawnMock.mockReturnValue(mockProc.proc)
+    registerPtyHandlers(mainWindow as never)
+    const result = (await handlers.get('pty:spawn')!(mainWindowIpcEvent, {
+      cols: 80,
+      rows: 24
+    })) as { id: string }
+    const secondary = foreignWindowIpcEvent.sender
+    ptyRendererOwners.registerRenderer(secondary as never)
+    ptyRendererOwners.markDispatcherReady(secondary as never)
+    ptyRendererOwners.handoff([result.id], mainWindow.webContents as never, secondary as never)
+    const resize = getPtyResizeListener()
+
+    resize(mainWindowIpcEvent, { id: result.id, cols: 90, rows: 30 })
+    resize(foreignWindowIpcEvent, { id: result.id, cols: 100, rows: 40 })
+
+    expect(mockProc.proc.resize).toHaveBeenCalledTimes(1)
+    expect(mockProc.proc.resize).toHaveBeenCalledWith(100, 40)
+    await expect(handlers.get('pty:kill')!(mainWindowIpcEvent, { id: result.id })).rejects.toThrow(
+      'pty_renderer_not_owner'
+    )
+    expect(mockProc.proc.kill).not.toHaveBeenCalled()
+  })
+  it('accepts delivery ACKs only from the current renderer owner', async () => {
+    vi.useFakeTimers()
+    const mockProc = createMockProc()
+    spawnMock.mockReturnValue(mockProc.proc)
+
+    try {
+      registerPtyHandlers(mainWindow as never)
+      const result = (await handlers.get('pty:spawn')!(mainWindowIpcEvent, {
+        cols: 80,
+        rows: 24
+      })) as { id: string }
+      const secondary = foreignWindowIpcEvent.sender
+      ptyRendererOwners.registerRenderer(secondary as never)
+      ptyRendererOwners.markDispatcherReady(secondary as never)
+      ptyRendererOwners.handoff([result.id], mainWindow.webContents as never, secondary as never)
+      mockProc.emitData('data')
+      vi.advanceTimersByTime(2)
+      const ack = getPtyAckDataListener()
+
+      ack(mainWindowIpcEvent, { id: result.id, processedChars: 4 })
+      expect(getPtyRendererDeliveryDebugSnapshot().rendererInFlightChars).toBe(4)
+
+      ack(foreignWindowIpcEvent, { id: result.id, processedChars: 4 })
+      expect(getPtyRendererDeliveryDebugSnapshot().rendererInFlightChars).toBe(0)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+  it('does not route PTY output to control after renderer ownership is gone', async () => {
+    vi.useFakeTimers()
+    const mockProc = createMockProc()
+    spawnMock.mockReturnValue(mockProc.proc)
+
+    try {
+      registerPtyHandlers(mainWindow as never)
+      await handlers.get('pty:spawn')!(mainWindowIpcEvent, { cols: 80, rows: 24 })
+      ptyRendererOwners.removeRenderer(mainWindow.webContents as never)
+      mainWindow.webContents.send.mockClear()
+
+      mockProc.emitData('unowned-output')
+      vi.advanceTimersByTime(2)
+
+      expect(mainWindow.webContents.send).not.toHaveBeenCalledWith('pty:data', expect.anything())
+    } finally {
+      vi.useRealTimers()
+    }
   })
   it('silently drops writes to a live PTY after ownership loss until pty:listSessions rebuilds it (frozen-terminal repro)', async () => {
     const mockProc = createMockProc()

@@ -34,3 +34,13 @@ export function getDragPointer(event: DragPointerEvent): { x: number; y: number 
     y: initial.top + initial.height / 2 + event.delta.y
   }
 }
+
+export function isDragPointerOutsideViewport(pointer: { x: number; y: number } | null): boolean {
+  return Boolean(
+    pointer &&
+    (pointer.x < 0 ||
+      pointer.y < 0 ||
+      pointer.x >= window.innerWidth ||
+      pointer.y >= window.innerHeight)
+  )
+}

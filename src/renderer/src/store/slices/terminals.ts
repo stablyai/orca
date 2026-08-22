@@ -48,6 +48,7 @@ import { resolveLocalWindowsTerminalShellOverrideForTab } from '../../../../shar
 import { WINDOWS_GIT_BASH_SHELL } from '../../../../shared/windows-terminal-shell'
 import type { AgentStartedTelemetry } from '../../lib/worktree-startup-payload'
 import type { AiVaultSessionTitle } from '../../../../shared/ai-vault-session-title'
+import type { TerminalWindowTransferSeed } from '../../../../shared/terminal-window-transfer'
 import { scheduleRuntimeGraphSync } from '@/runtime/sync-runtime-graph'
 import { terminalLayoutEqual } from '@/lib/terminal-layout-equality'
 import { sweepRetiredTerminalTabState } from './retired-terminal-tab-state-sweep'
@@ -634,6 +635,8 @@ export type TerminalSlice = {
     }
   ) => TerminalTab
   openNewTerminalTabInActiveWorkspace: (groupId: string) => Promise<void>
+  importTransferredTerminalTab: (seed: TerminalWindowTransferSeed) => boolean
+  removeTransferredTerminalTab: (tabId: string) => boolean
   closeTab: (
     tabId: string,
     opts?: {
@@ -1105,6 +1108,130 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
         [groupId]: quickCommandId
       }
     }))
+  },
+
+  importTransferredTerminalTab: (seed) => {
+    const existing = Object.values(get().tabsByWorktree)
+      .flat()
+      .find((tab) => tab.id === seed.tabId)
+    if (existing) {
+      return existing.worktreeId === seed.worktreeId
+    }
+    set((state) => {
+      const existingGroups = state.groupsByWorktree[seed.worktreeId] ?? []
+      const activeGroup = existingGroups.find(
+        (group) => group.id === state.activeGroupIdByWorktree[seed.worktreeId]
+      )
+      const seededGroup = existingGroups.find((group) => group.id === seed.group.id)
+      const targetGroup = activeGroup ??
+        seededGroup ?? {
+          ...seed.group,
+          activeTabId: null,
+          tabOrder: [],
+          recentTabIds: []
+        }
+      const targetGroupId = targetGroup.id
+      const nextGroup = {
+        ...targetGroup,
+        activeTabId: seed.tabId,
+        tabOrder: dedupeTabOrder([...targetGroup.tabOrder, seed.tabId]),
+        recentTabIds: pushRecentTabId(
+          sanitizeRecentTabIds(targetGroup.recentTabIds, [...targetGroup.tabOrder, seed.tabId]),
+          seed.tabId
+        )
+      }
+      const groups =
+        seededGroup || activeGroup
+          ? updateGroup(existingGroups, nextGroup)
+          : [...existingGroups, nextGroup]
+      const unifiedTab: Tab = {
+        id: seed.tabId,
+        entityId: seed.tabId,
+        groupId: targetGroupId,
+        worktreeId: seed.worktreeId,
+        contentType: 'terminal',
+        label: seed.tab.title,
+        ...(seed.tab.generatedTitle ? { generatedLabel: seed.tab.generatedTitle } : {}),
+        ...(seed.tab.aiVaultTitle ? { aiVaultTitle: seed.tab.aiVaultTitle } : {}),
+        ...(seed.tab.quickCommandLabel ? { quickCommandLabel: seed.tab.quickCommandLabel } : {}),
+        customLabel: seed.tab.customTitle,
+        color: seed.tab.color,
+        sortOrder: nextGroup.tabOrder.indexOf(seed.tabId),
+        createdAt: seed.tab.createdAt,
+        ...(seed.tab.isPinned ? { isPinned: true } : {}),
+        ...(seed.tab.viewMode ? { viewMode: seed.tab.viewMode } : {})
+      }
+      return {
+        repos: state.repos.some((repo) => repo.id === seed.repo.id)
+          ? state.repos
+          : [...state.repos, structuredClone(seed.repo)],
+        tabsByWorktree: {
+          ...state.tabsByWorktree,
+          [seed.worktreeId]: [
+            ...(state.tabsByWorktree[seed.worktreeId] ?? []),
+            structuredClone(seed.tab)
+          ]
+        },
+        unifiedTabsByWorktree: {
+          ...state.unifiedTabsByWorktree,
+          [seed.worktreeId]: [...(state.unifiedTabsByWorktree[seed.worktreeId] ?? []), unifiedTab]
+        },
+        groupsByWorktree: { ...state.groupsByWorktree, [seed.worktreeId]: groups },
+        activeGroupIdByWorktree: {
+          ...state.activeGroupIdByWorktree,
+          [seed.worktreeId]: targetGroupId
+        },
+        layoutByWorktree: {
+          ...state.layoutByWorktree,
+          [seed.worktreeId]: state.layoutByWorktree[seed.worktreeId] ?? {
+            type: 'leaf',
+            groupId: targetGroupId
+          }
+        },
+        ptyIdsByTabId: { ...state.ptyIdsByTabId, [seed.tabId]: [...seed.ptyIds] },
+        terminalLayoutsByTabId: {
+          ...state.terminalLayoutsByTabId,
+          [seed.tabId]: structuredClone(seed.layout)
+        },
+        tabBarOrderByWorktree: {
+          ...state.tabBarOrderByWorktree,
+          [seed.worktreeId]: dedupeTabOrder([
+            ...(state.tabBarOrderByWorktree[seed.worktreeId] ?? []),
+            seed.tabId
+          ])
+        },
+        activeRepoId: seed.repo.id,
+        activeWorktreeId: seed.worktreeId,
+        activeWorkspaceKey: seed.canonicalWorkspaceKey,
+        activeWorkspaceExecutionHostId: seed.hostId,
+        activeTabId: seed.tabId,
+        activeTabIdByWorktree: {
+          ...state.activeTabIdByWorktree,
+          [seed.worktreeId]: seed.tabId
+        },
+        activeTabType: 'terminal',
+        activeTabTypeByWorktree: {
+          ...state.activeTabTypeByWorktree,
+          [seed.worktreeId]: 'terminal'
+        }
+      }
+    })
+    return true
+  },
+
+  removeTransferredTerminalTab: (tabId) => {
+    const exists = Object.values(get().tabsByWorktree)
+      .flat()
+      .some((tab) => tab.id === tabId)
+    if (!exists) {
+      return true
+    }
+    get().closeTab(tabId, {
+      reason: 'pty-exit',
+      recordInteraction: false,
+      captureRecentlyClosed: false
+    })
+    return true
   },
 
   claimAutomaticAgentResume: (tabId, claim) => {

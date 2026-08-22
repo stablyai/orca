@@ -37,6 +37,7 @@ vi.mock('electron', () => ({
 import {
   clearTrustedUIRendererWebContentsId,
   getTrustedUIRendererWindow,
+  isTrustedUIRenderer,
   registerUIHandlers,
   sendToTrustedUIRenderer,
   setTrustedUIRendererWebContentsId
@@ -173,6 +174,24 @@ describe('UI IPC', () => {
     expect(newRendererSend).toHaveBeenCalledWith('gh:prRefreshEvent', { sequence: 2 })
   })
 
+  it('trusts every explicitly registered Orca window renderer', () => {
+    const first = makeUIEvent({ id: 17 }).sender
+    const second = makeUIEvent({ id: 42 }).sender
+
+    setTrustedUIRendererWebContentsId(17)
+    setTrustedUIRendererWebContentsId(42)
+
+    expect(isTrustedUIRenderer(first as never)).toBe(true)
+    expect(isTrustedUIRenderer(second as never)).toBe(true)
+  })
+
+  it('does not trust an unregistered dev-server window by origin alone', () => {
+    vi.stubEnv('ELECTRON_RENDERER_URL', 'http://localhost:5173')
+    const sender = makeUIEvent({ getURL: () => 'http://localhost:5173/workspace' }).sender
+
+    expect(isTrustedUIRenderer(sender as never)).toBe(false)
+  })
+
   it('routes native paste fallback to the requesting webContents only', () => {
     const paste = vi.fn()
     const pasteAndMatchStyle = vi.fn()
@@ -210,6 +229,25 @@ describe('UI IPC', () => {
 
     expect(copy).toHaveBeenCalledOnce()
     expect(selectAll).toHaveBeenCalledOnce()
+  })
+
+  it('reads maximized state from the requesting Orca window', () => {
+    const first = makeUIEvent({ id: 17 })
+    const second = makeUIEvent({ id: 42 })
+    const firstWindow = { isDestroyed: () => false, isMaximized: () => false }
+    const secondWindow = { isDestroyed: () => false, isMaximized: () => true }
+    setTrustedUIRendererWebContentsId(17)
+    setTrustedUIRendererWebContentsId(42)
+    fromWebContentsMock.mockImplementation((sender) =>
+      sender === second.sender ? secondWindow : firstWindow
+    )
+
+    registerUIHandlers(makeStore() as never)
+
+    const handler = handleMock.mock.calls.find(([channel]) => channel === 'window:isMaximized')?.[1]
+    expect(handler).toBeTypeOf('function')
+    expect(handler?.(first)).toBe(false)
+    expect(handler?.(second)).toBe(true)
   })
 
   it('allows native selection fallback from the exact dashboard popout renderer', () => {
@@ -301,11 +339,12 @@ describe('UI IPC', () => {
     expect(paste).not.toHaveBeenCalled()
   })
 
-  it('allows native paste fallback only from the configured dev renderer origin', () => {
+  it('allows native paste fallback only from an explicitly registered dev renderer', () => {
     const paste = vi.fn()
     const pasteAndMatchStyle = vi.fn()
     const event = makeUIEvent({ getURL: () => 'http://localhost:5173/workspace' })
     vi.stubEnv('ELECTRON_RENDERER_URL', 'http://localhost:5173')
+    setTrustedUIRendererWebContentsId(17)
     fromWebContentsMock.mockReturnValue({ webContents: { paste, pasteAndMatchStyle } })
 
     registerUIHandlers(makeStore() as never)
@@ -318,9 +357,11 @@ describe('UI IPC', () => {
 
     fromWebContentsMock.mockClear()
     paste.mockClear()
-    nativePasteHandler?.(makeUIEvent({ getURL: () => 'http://127.0.0.1:5173/workspace' }))
-    nativePasteHandler?.(makeUIEvent({ getURL: () => 'file:///orca/index.html' }))
-    nativePasteHandler?.(makeUIEvent({ getURL: () => 'not a url' }))
+    nativePasteHandler?.(
+      makeUIEvent({ id: 18, getURL: () => 'http://localhost:5173/another-window' })
+    )
+    nativePasteHandler?.(makeUIEvent({ id: 19, getURL: () => 'http://127.0.0.1:5173/workspace' }))
+    nativePasteHandler?.(makeUIEvent({ id: 20, getURL: () => 'file:///orca/index.html' }))
 
     expect(fromWebContentsMock).not.toHaveBeenCalled()
     expect(paste).not.toHaveBeenCalled()

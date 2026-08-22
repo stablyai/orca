@@ -171,7 +171,7 @@ describe('createMainWindow', () => {
 
     createMainWindow(null, { onRendererProcessGone })
 
-    ipcHandlers['window:confirm-close']?.()
+    ipcHandlers['window:confirm-close']?.({ sender: webContents })
     windowHandlers['render-process-gone']?.(
       {} as never,
       {

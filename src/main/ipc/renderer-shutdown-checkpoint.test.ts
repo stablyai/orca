@@ -1,9 +1,13 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { getDefaultWorkspaceSession } from '../../shared/constants'
 
 const { syncHandlers, invokeHandlers } = vi.hoisted(() => ({
   syncHandlers: new Map<
     string,
-    (event: { returnValue?: unknown }, args: Record<string, unknown>) => void
+    (
+      event: { sender: { id: number }; returnValue?: unknown },
+      args: Record<string, unknown>
+    ) => void
   >(),
   invokeHandlers: new Map<string, () => Promise<{ ok: boolean }>>()
 }))
@@ -13,7 +17,10 @@ vi.mock('electron', () => ({
     on: vi.fn(
       (
         channel: string,
-        handler: (event: { returnValue?: unknown }, args: Record<string, unknown>) => void
+        handler: (
+          event: { sender: { id: number }; returnValue?: unknown },
+          args: Record<string, unknown>
+        ) => void
       ) => {
         syncHandlers.set(channel, handler)
       }
@@ -24,12 +31,23 @@ vi.mock('electron', () => ({
   }
 }))
 
+vi.mock('../window/orca-window-manager', () => ({
+  orcaWindowManager: {
+    getControlWindow: () => ({ id: 1 }),
+    getWindowForSender: (sender: { id: number }) =>
+      sender.id === 101 ? { id: 1 } : sender.id === 102 ? { id: 2 } : null
+  }
+}))
+
 import {
   registerRendererShutdownCheckpointHandler,
   SHUTDOWN_CHECKPOINT_FLUSH_DEADLINE_MS
 } from './renderer-shutdown-checkpoint'
 
 const AWAIT_CHANNEL = 'app:await-before-unload-checkpoint'
+const makeEvent = (): { sender: { id: number }; returnValue?: unknown } => ({
+  sender: { id: 101 }
+})
 
 describe('registerRendererShutdownCheckpointHandler', () => {
   beforeEach(() => {
@@ -54,9 +72,15 @@ describe('registerRendererShutdownCheckpointHandler', () => {
 
     const handler = syncHandlers.get('app:stage-before-unload-sync')
     expect(handler).toBeDefined()
-    const event: { returnValue?: unknown } = {}
-    const localSession = { activeWorktreeId: 'local-worktree' }
-    const remoteSession = { activeWorktreeId: 'remote-worktree' }
+    const event = makeEvent()
+    const localSession = {
+      ...getDefaultWorkspaceSession(),
+      activeWorktreeId: 'local-worktree'
+    }
+    const remoteSession = {
+      ...getDefaultWorkspaceSession(),
+      activeWorktreeId: 'remote-worktree'
+    }
     handler?.(event, {
       sessions: [{ state: localSession }, { state: remoteSession, hostId: 'runtime:host-1' }],
       ui: { activeView: 'settings' }
@@ -65,7 +89,7 @@ describe('registerRendererShutdownCheckpointHandler', () => {
     expect(store.stageWorkspaceSessionBeforeUnload).toHaveBeenNthCalledWith(
       1,
       localSession,
-      undefined
+      'local'
     )
     expect(store.stageWorkspaceSessionBeforeUnload).toHaveBeenNthCalledWith(
       2,
@@ -82,6 +106,50 @@ describe('registerRendererShutdownCheckpointHandler', () => {
     expect(event.returnValue).toEqual({ ok: true })
   })
 
+  it('stages a merged snapshot when two Orca windows unload', () => {
+    const store = {
+      getWorkspaceSession: vi.fn(() => ({ tabsByWorktree: {}, terminalLayoutsByTabId: {} })),
+      setWorkspaceSession: vi.fn(),
+      stageWorkspaceSessionBeforeUnload: vi.fn(),
+      updateUI: vi.fn(),
+      flushPendingOrThrowAsync: vi.fn(() => Promise.resolve())
+    }
+    registerRendererShutdownCheckpointHandler(store as never)
+    const handler = syncHandlers.get('app:stage-before-unload-sync')
+    const session = (tabId: string) => ({
+      activeRepoId: 'repo',
+      activeWorktreeId: 'wt',
+      activeTabId: tabId,
+      tabsByWorktree: {
+        wt: [
+          {
+            id: tabId,
+            worktreeId: 'wt',
+            title: tabId,
+            customTitle: null,
+            color: null,
+            sortOrder: 0,
+            createdAt: 1,
+            ptyId: `pty-${tabId}`
+          }
+        ]
+      },
+      terminalLayoutsByTabId: {}
+    })
+
+    handler?.(makeEvent(), { sessions: [{ state: session('tab-a') }], ui: {} })
+    handler?.({ sender: { id: 102 } }, { sessions: [{ state: session('tab-b') }], ui: {} })
+
+    expect(store.stageWorkspaceSessionBeforeUnload).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        tabsByWorktree: {
+          wt: [expect.objectContaining({ id: 'tab-a' }), expect.objectContaining({ id: 'tab-b' })]
+        }
+      }),
+      'local'
+    )
+  })
+
   it('reports a staging failure so the renderer can retry', () => {
     const store = {
       stageWorkspaceSessionBeforeUnload: vi.fn(),
@@ -93,7 +161,7 @@ describe('registerRendererShutdownCheckpointHandler', () => {
     registerRendererShutdownCheckpointHandler(store as never)
 
     const handler = syncHandlers.get('app:stage-before-unload-sync')
-    const event: { returnValue?: unknown } = {}
+    const event = makeEvent()
     handler?.(event, { sessions: [], ui: { activeView: 'settings' } })
 
     expect(event.returnValue).toEqual({ ok: false })
@@ -111,7 +179,7 @@ describe('registerRendererShutdownCheckpointHandler', () => {
       throw new Error('invalid state')
     })
     const handler = syncHandlers.get('app:stage-before-unload-sync')
-    const event: { returnValue?: unknown } = {}
+    const event = makeEvent()
     handler?.(event, { sessions: [], ui: { activeView: 'settings' } })
 
     expect(store.flushPendingOrThrowAsync).not.toHaveBeenCalled()
@@ -128,7 +196,7 @@ describe('registerRendererShutdownCheckpointHandler', () => {
     registerRendererShutdownCheckpointHandler(store as never)
 
     const handler = syncHandlers.get('app:stage-before-unload-sync')
-    const event: { returnValue?: unknown } = {}
+    const event = makeEvent()
     handler?.(event, { sessions: [], ui: { activeView: 'settings' } })
 
     expect(event.returnValue).toEqual({ ok: true })
@@ -148,7 +216,7 @@ describe('registerRendererShutdownCheckpointHandler', () => {
     }
     registerRendererShutdownCheckpointHandler(store as never)
 
-    syncHandlers.get('app:stage-before-unload-sync')?.({}, { sessions: [], ui: {} })
+    syncHandlers.get('app:stage-before-unload-sync')?.(makeEvent(), { sessions: [], ui: {} })
     const checkpoint = invokeHandlers.get(AWAIT_CHANNEL)?.()
     let settled: unknown = 'pending'
     void checkpoint?.then((result) => {
@@ -171,7 +239,7 @@ describe('registerRendererShutdownCheckpointHandler', () => {
     vi.spyOn(console, 'error').mockImplementation(() => {})
     registerRendererShutdownCheckpointHandler(store as never)
 
-    const event: { returnValue?: unknown } = {}
+    const event = makeEvent()
     syncHandlers.get('app:stage-before-unload-sync')?.(event, { sessions: [], ui: {} })
 
     expect(event.returnValue).toEqual({ ok: true })
@@ -190,7 +258,7 @@ describe('registerRendererShutdownCheckpointHandler', () => {
     vi.useFakeTimers()
     try {
       registerRendererShutdownCheckpointHandler(store as never)
-      syncHandlers.get('app:stage-before-unload-sync')?.({}, { sessions: [], ui: {} })
+      syncHandlers.get('app:stage-before-unload-sync')?.(makeEvent(), { sessions: [], ui: {} })
       const checkpoint = invokeHandlers.get(AWAIT_CHANNEL)?.()
 
       await vi.advanceTimersByTimeAsync(SHUTDOWN_CHECKPOINT_FLUSH_DEADLINE_MS)

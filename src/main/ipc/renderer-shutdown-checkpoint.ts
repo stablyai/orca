@@ -3,6 +3,8 @@ import type { ExecutionHostId } from '../../shared/execution-host'
 import type { PersistedUIState } from '../../shared/persisted-ui-state-types'
 import type { WorkspaceSessionState } from '../../shared/workspace-session-state-types'
 import type { Store } from '../persistence'
+import { getWindowSessionRegistry } from '../persistence/window-session-registry'
+import { orcaWindowManager } from '../window/orca-window-manager'
 
 type StageBeforeUnloadSyncArgs = {
   sessions: { state: WorkspaceSessionState; hostId?: ExecutionHostId }[]
@@ -44,13 +46,16 @@ export function registerRendererShutdownCheckpointHandler(store: Store): void {
   // Why: beforeunload cannot await, so the sync reply only reports staging.
   // Durability is joined out-of-band by paths that are about to navigate.
   let pendingCheckpoint: Promise<ShutdownCheckpointResult> = Promise.resolve({ ok: true })
+  const sessions = getWindowSessionRegistry(store)
 
   ipcMain.on('app:stage-before-unload-sync', (event, args: StageBeforeUnloadSyncArgs) => {
     let ok = true
     try {
-      for (const { state, hostId } of args.sessions) {
-        store.stageWorkspaceSessionBeforeUnload(state, hostId)
+      const window = orcaWindowManager.getWindowForSender(event.sender)
+      if (!window) {
+        throw new Error('untrusted_ui_renderer')
       }
+      sessions.stageBeforeUnload(window.id, args.sessions)
       store.updateUI(args.ui)
     } catch (error) {
       console.error('[app] Failed to stage renderer state before unload:', error)

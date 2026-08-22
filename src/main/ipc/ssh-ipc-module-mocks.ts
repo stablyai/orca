@@ -203,7 +203,8 @@ export function createSshIpcMocks(): SshIpcMocks {
       getSshPtyProvider: vi.fn(),
       getPtyIdsForConnection: vi.fn().mockReturnValue([]),
       isCurrentPtyExit: vi.fn().mockReturnValue(true),
-      isRendererPtyOutputPaused: vi.fn().mockReturnValue(false)
+      isRendererPtyOutputPaused: vi.fn().mockReturnValue(false),
+      sendToPtyOwner: vi.fn().mockReturnValue(true)
     },
     sshFilesystemDispatch: {
       registerSshFilesystemProvider: vi.fn(),

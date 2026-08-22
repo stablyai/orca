@@ -15,6 +15,7 @@ import type {
   SshIpcTestSource,
   SshPortForwardManagerMock
 } from './ssh-ipc-mock-shapes'
+import { orcaWindowManager } from '../window/orca-window-manager'
 
 export type RelayDisposeCallback = (reason: 'shutdown' | 'connection_lost') => void
 
@@ -33,7 +34,16 @@ export type SshLeaseStoreMock = {
   removeSshRemotePtyLeases: Mock
 }
 
-export type MockBrowserWindow = { isDestroyed: () => boolean; webContents: { send: Mock } }
+export type MockBrowserWindow = {
+  id: number
+  isDestroyed: () => boolean
+  webContents: {
+    id: number
+    send: Mock
+    isDestroyed: () => boolean
+    getType: () => 'window'
+  }
+}
 
 export type RelayLaunchResultMock = {
   transport: { write: Mock; onData: Mock; onClose: Mock }
@@ -104,14 +114,22 @@ export function createSshIpcHarness(mocks: SshIpcMocks): SshIpcHarness {
     markSshRemotePtyLeasesAttachedAsync: vi.fn(),
     removeSshRemotePtyLeases: vi.fn()
   }
-  const mockWindow = {
-    isDestroyed: () => false,
-    webContents: { send: vi.fn() }
+  let nextWindowId = 1
+  const makeWindow = (): MockBrowserWindow => {
+    const id = nextWindowId++
+    return {
+      id,
+      isDestroyed: () => false,
+      webContents: {
+        id: id + 100,
+        send: vi.fn(),
+        isDestroyed: () => false,
+        getType: () => 'window'
+      }
+    }
   }
-  const createMockWindow = () => ({
-    isDestroyed: () => false,
-    webContents: { send: vi.fn() }
-  })
+  const mockWindow = makeWindow()
+  const createMockWindow = () => makeWindow()
   const createConnectionManagerMock = () => ({
     connect: vi.fn(),
     disconnect: vi.fn(),
@@ -157,6 +175,10 @@ export function createSshIpcHarness(mocks: SshIpcMocks): SshIpcHarness {
 
   const reset = async (): Promise<void> => {
     await resetSshHandlerStateForTests()
+    for (const window of orcaWindowManager.getAllWindows()) {
+      orcaWindowManager.unregister(window.id)
+    }
+    orcaWindowManager.register(mockWindow as never, 'control')
     handlers.clear()
     mockNextConnectionManagers.length = 0
     mockNextPortForwardManagers.length = 0

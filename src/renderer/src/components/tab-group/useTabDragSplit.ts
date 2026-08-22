@@ -20,7 +20,7 @@ import {
   restoreTabDragActivationSnapshot,
   type TabDragActivationSnapshot
 } from './tab-drag-preview-activation'
-import { getDragPointer } from './tab-drag-pointer'
+import { getDragPointer, isDragPointerOutsideViewport } from './tab-drag-pointer'
 import { TabDragPointerSensor } from './tab-drag-pointer-sensor'
 import {
   captureTabGroupPanelGeometrySnapshot,
@@ -64,6 +64,9 @@ export function canDropTabForPaneColumnSplit(args: {
 }
 
 const collisionDetection: CollisionDetection = (args) => {
+  if (isDragPointerOutsideViewport(args.pointerCoordinates)) {
+    return []
+  }
   const pointerCollisions = pointerWithin(args)
   return pointerCollisions.length > 0 ? pointerCollisions : closestCenter(args)
 }
@@ -104,6 +107,7 @@ export function useTabDragSplit({
   const [activeDrag, setActiveDrag] = useState<TabDragItemData | null>(null)
   const preDragActivationSnapshotRef = useRef<TabDragActivationSnapshot | null>(null)
   const tabDragActiveRef = useRef(false)
+  const dragOutsideWindowRef = useRef(false)
   const dragGeometryRef = useRef<TabGroupPanelGeometrySnapshot | null>(null)
   const clearDragStateRef = useRef<() => void>(() => {})
   const tabInsertion = useHoveredTabInsertion(isTabDragData, getDragPointer)
@@ -113,7 +117,11 @@ export function useTabDragSplit({
     releaseMissedEndFallback,
     releaseWebviewDragPassthrough,
     setDragRootNode
-  } = useTabDragGestureLifecycle({ clearDragStateRef, tabDragActiveRef })
+  } = useTabDragGestureLifecycle({
+    clearDragStateRef,
+    dragOutsideWindowRef,
+    tabDragActiveRef
+  })
   const {
     clear: clearHoveredDropTarget,
     handleDragUpdate,
@@ -138,6 +146,7 @@ export function useTabDragSplit({
 
   const clearDragState = useCallback(() => {
     tabDragActiveRef.current = false
+    dragOutsideWindowRef.current = false
     releaseWebviewDragPassthrough()
     releaseMissedEndFallback()
     setActiveDrag(null)
@@ -199,6 +208,7 @@ export function useTabDragSplit({
 
       setActiveDrag(dragData)
       tabDragActiveRef.current = true
+      dragOutsideWindowRef.current = false
       installMissedEndFallback()
       dragGeometryRef.current = captureTabGroupPanelGeometrySnapshot(worktreeId)
       preDragActivationSnapshotRef.current = captureTabDragActivationSnapshot(worktreeId)
@@ -209,6 +219,8 @@ export function useTabDragSplit({
 
   const onDragMove = useCallback(
     (event: DragMoveEvent) => {
+      const pointer = getDragPointer(event)
+      dragOutsideWindowRef.current = isDragPointerOutsideViewport(pointer)
       handleDragUpdate(event)
     },
     [handleDragUpdate]
@@ -221,6 +233,7 @@ export function useTabDragSplit({
 
   const onDragEnd = useCallback(
     (event: DragEndEvent) => {
+      releaseMissedEndFallback()
       commitTabDragDrop({
         event,
         worktreeId,
@@ -230,7 +243,14 @@ export function useTabDragSplit({
         finishDrag
       })
     },
-    [dragGeometryRef, dropUnifiedTab, finishDrag, reorderUnifiedTabs, worktreeId]
+    [
+      dragGeometryRef,
+      dropUnifiedTab,
+      finishDrag,
+      releaseMissedEndFallback,
+      reorderUnifiedTabs,
+      worktreeId
+    ]
   )
 
   // Why: dnd-kit fires onDragCancel (not onDragEnd) when the user presses

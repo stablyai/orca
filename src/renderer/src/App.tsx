@@ -7,6 +7,7 @@ import { LinkRoutingPreferenceDialogProvider } from './components/link-routing-p
 import { SkillFreshnessNudge } from './components/skills/SkillFreshnessNudge'
 import PinnedTabCloseDialog from './components/terminal-pane/PinnedTabCloseDialog'
 import RunningTerminalCloseDialog from './components/terminal-pane/RunningTerminalCloseDialog'
+import { useTerminalWindowTransfer } from './components/terminal-pane/use-terminal-window-transfer'
 import WorktreeBaseFallbackDialog from './components/WorktreeBaseFallbackDialog'
 import { useUnreadDockBadge } from './hooks/useUnreadDockBadge'
 import { AppBackgroundServices } from './app-shell/AppBackgroundServices'
@@ -36,11 +37,14 @@ function App(): React.JSX.Element {
   const floatingWorkspace = useFloatingWorkspacePanel()
   const onboardingGate = useOnboardingAndFeatureTips()
   const clearUnreadDockBadge = useUnreadDockBadge()
+  const terminalWindowContext = useTerminalWindowTransfer()
 
   useAppShellServices()
   useAppStartupHydration(onboardingGate.applyStartupOnboardingState)
   useAppSessionPersistence()
-  useRuntimeGraphSync()
+  useRuntimeGraphSync(
+    terminalWindowContext?.role === 'control' && !terminalWindowContext.transitionFenced
+  )
   usePersistedUIWriter()
   useDocumentAppearance()
   useWindowVisibilityEffects()

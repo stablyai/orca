@@ -48,9 +48,16 @@ import { setLocalPtyProvider, unregisterSshPtyProvider } from './pty'
 import { _resetHiddenRendererPtyDeliveryGateForTest } from './pty-hidden-delivery-gate'
 import { __resetShellStartupEnvCache } from '../pty/shell-startup-env'
 import { _resetWslCachesForTests } from '../wsl'
+import { ptyRendererOwners } from './pty-renderer-owners'
 
 /** The mocked webContents each suite asserts sends against. */
-export type PtyIpcTestWebContents = { on: Mock; send: Mock; removeListener: Mock }
+export type PtyIpcTestWebContents = {
+  id: number
+  on: Mock
+  send: Mock
+  removeListener: Mock
+  isDestroyed: Mock
+}
 
 /** The mocked BrowserWindow handed to registerPtyHandlers. */
 export type PtyIpcTestMainWindow = {
@@ -77,14 +84,22 @@ export function createPtyIpcSuiteEnvironment(): PtyIpcSuiteEnvironment {
     isVisible: () => true,
     isMinimized: () => false,
     webContents: {
+      id: 1,
       on: vi.fn(),
       send: vi.fn(),
-      removeListener: vi.fn()
+      removeListener: vi.fn(),
+      isDestroyed: vi.fn(() => false)
     }
   }
   const mainWindowIpcEvent = { sender: mainWindow.webContents }
   const foreignWindowIpcEvent = {
-    sender: { on: vi.fn(), send: vi.fn(), removeListener: vi.fn() }
+    sender: {
+      id: 2,
+      on: vi.fn(),
+      send: vi.fn(),
+      removeListener: vi.fn(),
+      isDestroyed: vi.fn(() => false)
+    }
   }
   const envScope = createPtyIpcProcessEnvScope()
 
@@ -228,6 +243,8 @@ export function createPtyIpcSuiteEnvironment(): PtyIpcSuiteEnvironment {
   })
 
   afterEach(() => {
+    ptyRendererOwners.removeRenderer(mainWindow.webContents as never)
+    ptyRendererOwners.removeRenderer(foreignWindowIpcEvent.sender as never)
     _resetLocalPtyProviderStateForTest()
     _resetWslCachesForTests()
     vi.useRealTimers()

@@ -4,12 +4,13 @@ import { useAppStore } from '../../store'
 import { mirrorWebRuntimeTabMove } from '../tab-bar/web-runtime-tab-move-mirror'
 import { resolveTabInsertion } from './tab-insertion'
 import { resolveSourceGroupRestoreOnDrop } from './tab-drag-preview-target'
-import { getDragPointer } from './tab-drag-pointer'
+import { getDragPointer, isDragPointerOutsideViewport } from './tab-drag-pointer'
 import {
   resolveActivePaneColumnSplitTarget,
   type TabGroupPanelGeometrySnapshot
 } from './tab-group-panel-split-target'
 import { isPaneDropData, isTabDragData, type TabDragItemData } from './tab-drag-data'
+import { captureTerminalWindowTransferSeed } from '../terminal-pane/terminal-tab-window-transfer'
 
 type AppState = ReturnType<typeof useAppStore.getState>
 
@@ -22,6 +23,7 @@ export function commitTabDragDrop({
   dragGeometryRef,
   dropUnifiedTab,
   reorderUnifiedTabs,
+  detachTerminalWindow = (seed) => window.api.terminalWindow.detach(seed),
   finishDrag
 }: {
   event: DragEndEvent
@@ -29,6 +31,7 @@ export function commitTabDragDrop({
   dragGeometryRef: RefObject<TabGroupPanelGeometrySnapshot | null>
   dropUnifiedTab: AppState['dropUnifiedTab']
   reorderUnifiedTabs: AppState['reorderUnifiedTabs']
+  detachTerminalWindow?: typeof window.api.terminalWindow.detach
   finishDrag: (restoreSnapshot: boolean, activeData?: TabDragItemData) => void
 }): void {
   const activeData = event.active.data.current
@@ -76,7 +79,19 @@ export function commitTabDragDrop({
   }
 
   if (!event.over) {
-    finishDrag(true)
+    const pointer = getDragPointer(event)
+    const captured =
+      isDragPointerOutsideViewport(pointer) && activeData.tabType === 'terminal'
+        ? captureTerminalWindowTransferSeed(state, activeData.unifiedTabId)
+        : null
+    if (!captured?.ok) {
+      finishDrag(true)
+      return
+    }
+    void detachTerminalWindow(captured.seed).then(
+      (result) => finishDrag(!result.ok),
+      () => finishDrag(true)
+    )
     return
   }
 

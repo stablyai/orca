@@ -1,4 +1,4 @@
-import { BrowserWindow, ipcMain } from 'electron'
+import { ipcMain } from 'electron'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 import type {
   RuntimeBrowserDriverState,
@@ -10,6 +10,7 @@ import type {
 import type { RuntimeRpcResponse } from '../../shared/runtime-rpc-envelope'
 import { TERMINAL_FIT_RESTORE_DEADLINE_MS } from '../../shared/terminal-fit-restore-deadline'
 import { RpcDispatcher } from '../runtime/rpc/dispatcher'
+import { orcaWindowManager } from '../window/orca-window-manager'
 
 function boundTerminalFitRestore(pending: Promise<boolean>): Promise<boolean> {
   let timer: ReturnType<typeof setTimeout> | undefined
@@ -29,9 +30,12 @@ export function registerRuntimeHandlers(runtime: OrcaRuntimeService): void {
   ipcMain.handle(
     'runtime:syncWindowGraph',
     (event, graph: RuntimeRendererSyncWindowGraph): RuntimeSyncWindowGraphResult => {
-      const window = BrowserWindow.fromWebContents(event.sender)
+      const window = orcaWindowManager.getWindowForSender(event.sender)
       if (!window) {
         throw new Error('Runtime graph sync must originate from a BrowserWindow')
+      }
+      if (orcaWindowManager.getRole(window.id) !== 'control') {
+        throw new Error('Runtime graph sync must originate from the control window')
       }
       if (event.senderFrame !== event.sender.mainFrame) {
         // Why: a disposed main frame can leave an invoke queued after its

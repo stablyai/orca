@@ -26,6 +26,7 @@ import { RelayVersionMismatchError } from '../ssh/ssh-relay-version-mismatch-err
 import type { SshConnectionState, SshConnectionStatus, SshTarget } from '../../shared/ssh-types'
 import { assertSshMutationExpectation } from '../ssh/ssh-connection-generation'
 import { createSshIpcHarness } from './ssh-ipc-test-harness'
+import { orcaWindowManager } from '../window/orca-window-manager'
 
 const {
   mockSshStore,
@@ -45,7 +46,8 @@ describe('SSH IPC handlers', () => {
     relayReconnectDelaysMs,
     relayLostStabilizedMs,
     getLatestRelayDisposeCallback,
-    useSlowRelayLaunchOnce
+    useSlowRelayLaunchOnce,
+    createMockWindow
   } = harness
 
   beforeEach(harness.reset)
@@ -116,6 +118,33 @@ describe('SSH IPC handlers', () => {
         providerEpoch: expect.any(String),
         connectionGeneration: 1
       })
+    })
+  })
+
+  it('broadcasts shared SSH state to every Orca window', async () => {
+    const secondary = createMockWindow()
+    orcaWindowManager.register(secondary as never, 'secondary')
+    const target: SshTarget = {
+      id: 'ssh-1',
+      label: 'Server',
+      host: 'example.com',
+      port: 22,
+      username: 'deploy'
+    }
+    mockSshStore.getTarget.mockReturnValue(target)
+    mockConnectionManager.connect.mockResolvedValue({})
+    mockConnectionManager.getState.mockReturnValue({
+      targetId: 'ssh-1',
+      status: 'connected',
+      error: null,
+      reconnectAttempt: 0
+    })
+
+    await handlers.get('ssh:connect')!(null, { targetId: 'ssh-1' })
+
+    expect(secondary.webContents.send).toHaveBeenCalledWith('ssh:state-changed', {
+      targetId: 'ssh-1',
+      state: expect.objectContaining({ targetId: 'ssh-1', status: 'connected' })
     })
   })
 

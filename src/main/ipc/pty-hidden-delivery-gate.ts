@@ -109,9 +109,16 @@ export function recordHiddenRendererPtyDataDrop(
  *  preserved — surviving daemon/SSH PTYs may have dropped bytes the old
  *  renderer never restored; the new renderer's first hidden/visible sync
  *  re-marks or unmarks and the unmark path re-emits the restore marker. */
-export function resetRendererScopedHiddenPtyDeliveryState(): void {
-  hiddenRendererPtys.clear()
-  deliveryInterestRendererPtys.clear()
+export function resetRendererScopedHiddenPtyDeliveryState(ids?: Iterable<string>): void {
+  if (!ids) {
+    hiddenRendererPtys.clear()
+    deliveryInterestRendererPtys.clear()
+    return
+  }
+  for (const id of ids) {
+    hiddenRendererPtys.delete(id)
+    deliveryInterestRendererPtys.delete(id)
+  }
 }
 
 /** Full per-PTY teardown — wired into clearProviderPtyState so every exit

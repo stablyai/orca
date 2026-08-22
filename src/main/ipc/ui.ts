@@ -2,16 +2,25 @@ import { BrowserWindow, ipcMain, webContents, type WebContents } from 'electron'
 import type { Store } from '../persistence'
 import type { PersistedUIState } from '../../shared/persisted-ui-state-types'
 import { isFeatureInteractionId } from '../../shared/feature-interactions'
+import { orcaWindowManager } from '../window/orca-window-manager'
 
-let trustedUIRendererWebContentsId: number | null = null
+const trustedUIRendererWebContentsIds = new Set<number>()
+let preferredTrustedUIRendererWebContentsId: number | null = null
 
 export function setTrustedUIRendererWebContentsId(webContentsId: number | null): void {
-  trustedUIRendererWebContentsId = webContentsId
+  if (webContentsId == null) {
+    trustedUIRendererWebContentsIds.clear()
+    preferredTrustedUIRendererWebContentsId = null
+    return
+  }
+  trustedUIRendererWebContentsIds.add(webContentsId)
+  preferredTrustedUIRendererWebContentsId = webContentsId
 }
 
 export function clearTrustedUIRendererWebContentsId(webContentsId: number): void {
-  if (trustedUIRendererWebContentsId === webContentsId) {
-    trustedUIRendererWebContentsId = null
+  trustedUIRendererWebContentsIds.delete(webContentsId)
+  if (preferredTrustedUIRendererWebContentsId === webContentsId) {
+    preferredTrustedUIRendererWebContentsId = [...trustedUIRendererWebContentsIds].at(-1) ?? null
   }
 }
 
@@ -27,8 +36,16 @@ export function sendToTrustedUIRenderer(
 export function getTrustedUIRendererWebContents(
   excludedWebContentsId?: number
 ): WebContents | null {
+  const controlRenderer = orcaWindowManager.getControlWindow()?.webContents
+  if (
+    controlRenderer &&
+    !controlRenderer.isDestroyed() &&
+    controlRenderer.id !== excludedWebContentsId
+  ) {
+    return controlRenderer
+  }
   // Why: exact targeting avoids waking retained browser/utility windows that cannot consume app UI events.
-  const rendererId = trustedUIRendererWebContentsId
+  const rendererId = preferredTrustedUIRendererWebContentsId
   if (rendererId == null || rendererId === excludedWebContentsId) {
     return null
   }
@@ -40,6 +57,10 @@ export function getTrustedUIRendererWebContents(
 }
 
 export function getTrustedUIRendererWindow(): BrowserWindow | null {
+  const controlWindow = orcaWindowManager.getControlWindow()
+  if (controlWindow) {
+    return controlWindow
+  }
   const renderer = getTrustedUIRendererWebContents()
   return renderer ? BrowserWindow.fromWebContents(renderer) : null
 }
@@ -72,6 +93,16 @@ export function registerUIHandlers(
       throw new Error('invalid_feature_interaction_id')
     }
     return store.recordFeatureInteraction(id)
+  })
+
+  ipcMain.handle('window:isMaximized', (event) => {
+    if (!isTrustedUIRenderer(event.sender)) {
+      return false
+    }
+    const window =
+      orcaWindowManager.getWindowForSender(event.sender) ??
+      BrowserWindow.fromWebContents(event.sender)
+    return window != null && !window.isDestroyed() && window.isMaximized()
   })
 
   ipcMain.removeAllListeners('ui:performNativePaste')
@@ -110,20 +141,5 @@ export function isTrustedUIRenderer(sender: WebContents): boolean {
   if (sender.isDestroyed() || sender.getType() !== 'window') {
     return false
   }
-  if (trustedUIRendererWebContentsId != null) {
-    return sender.id === trustedUIRendererWebContentsId
-  }
-
-  const senderUrl = sender.getURL()
-  if (process.env.ELECTRON_RENDERER_URL) {
-    try {
-      return new URL(senderUrl).origin === new URL(process.env.ELECTRON_RENDERER_URL).origin
-    } catch {
-      return false
-    }
-  }
-
-  // Why: packaged fallback must be tied to the created main window id, not any
-  // file:// document that can obtain this IPC channel.
-  return false
+  return orcaWindowManager.isTrustedSender(sender) || trustedUIRendererWebContentsIds.has(sender.id)
 }

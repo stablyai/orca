@@ -31,8 +31,10 @@ import {
   getLocalPtyProvider,
   getSshPtyProvider,
   registerHeadlessPtyRuntime,
+  sendToPtyOwner,
   type CodexHomeLaunchContext
 } from './ipc/pty'
+import { ptyRendererOwners } from './ipc/pty-renderer-owners'
 import {
   initDaemonPtyProvider,
   disconnectDaemon,
@@ -51,6 +53,11 @@ import { closeAllWatchers } from './ipc/filesystem-watcher'
 import { disposeWorktreeBaseDirectoryWatchers } from './ipc/worktree-base-directory-watcher'
 import { stopFolderRepoGitUpgradeWatch } from './ipc/folder-repo-git-upgrade'
 import { registerCoreHandlers } from './ipc/register-core-handlers'
+import {
+  registerTerminalWindowTransferHandlers,
+  type TerminalWindowTransferCoordinator
+} from './ipc/terminal-window-transfer'
+import { getWindowSessionRegistry } from './persistence/window-session-registry'
 import { initObservability, shutdownObservability } from './observability'
 import { registerMobileHandlers } from './ipc/mobile'
 import { initTelemetry, shutdownTelemetry, trackAppOpenedOnce, track } from './telemetry/client'
@@ -210,6 +217,7 @@ import {
   ensureAutoUpdaterConfigured
 } from './window/attach-main-window-services'
 import { createMainWindow, loadMainWindow } from './window/createMainWindow'
+import { orcaWindowManager } from './window/orca-window-manager'
 import {
   getDashboardPopoutWindow,
   zoomDashboardPopoutIfFocused
@@ -357,6 +365,8 @@ import { installLinuxBareOrcaDispatcher } from './cli/linux-bare-orca-dispatcher
 import { reconcileManagedWslCliRegistrations } from './cli/wsl-cli-registration-reconciliation'
 
 let mainWindow: BrowserWindow | null = null
+let terminalWindowTransfers: TerminalWindowTransferCoordinator | null = null
+let terminalWindowQuitFence: Promise<void> = Promise.resolve()
 /** Whether a manual app.quit() (Cmd+Q) is in progress; lets the close handler skip the running-process confirmation and go straight to close. */
 let isQuitting = false
 let store: Store | null = null
@@ -1396,6 +1406,8 @@ function openMainWindow(options: { revealOnDidFinishLoad?: boolean } = {}): Brow
     onQuitAborted: () => {
       isQuitting = false
       clearExpectedRendererReload()
+      getWindowSessionRegistry(store!).resumeAfterQuitAbort()
+      terminalWindowTransfers?.resumeAfterQuitAbort()
     },
     onRendererProcessGone: (details, webContentsId) => {
       recordProcessGoneCrash(
@@ -1528,51 +1540,99 @@ function openMainWindow(options: { revealOnDidFinishLoad?: boolean } = {}): Brow
   )
   automations.setWebContents(window.webContents)
   automations.start()
-  attachMainWindowServices(
-    window,
+  const attachControlServices = (controlWindow: BrowserWindow): void => {
+    attachMainWindowServices(
+      controlWindow,
+      store!,
+      runtime!,
+      prepareCodexRuntimeHomeForLaunch,
+      (target) => claudeRuntimeAuth!.prepareForClaudeLaunch(target),
+      {
+        prepareCodexSessionResume: prepareCodexSessionResumeForLaunch,
+        awaitLocalPtyStartup: () => localPtyStartupReady,
+        awaitLocalPtyProviderStartup: () => localPtyProviderStartupReady,
+        onBeforeRendererReload: ({ ignoreCache, webContentsId }) => {
+          if (controlWindow.webContents.id === webContentsId) {
+            markExpectedRendererReload(webContentsId)
+          }
+          recordCrashBreadcrumb('renderer_reload_requested', { ignoreCache })
+        },
+        // Why: let the PTY layer skip its orphan sweep on the recovery reload that re-fires did-finish-load, so live local sessions survive (#5787).
+        isRecoveryReloadInFlight,
+        onCodexHomePtySpawned: handleCodexHomePtySpawned,
+        onPtyExit: handlePtyExit,
+        onBeforeUpdateQuit: () =>
+          preserveAgentAuthBeforeRestart({ codexRuntimeHome, claudeRuntimeAuth, store }),
+        updateInstallMode: resolveUpdateInstallMode(isServeMode),
+        onWorktreeLifecycle: emitPluginWorktreeLifecycle
+      }
+    )
+  }
+  attachControlServices(window)
+  const bindControlWindowLifecycle = (controlWindow: BrowserWindow): void => {
+    const controlWindowId = controlWindow.id
+    const controlWebContentsId = controlWindow.webContents.id
+    controlWindow.on('closed', () => {
+      if (mainWindow !== controlWindow) {
+        return
+      }
+      clearExpectedRendererReload(controlWebContentsId)
+      if (!isQuitting) {
+        getWindowSessionRegistry(store!).retire(controlWindowId, 'user-close')
+      }
+      const promoted = isQuitting ? null : orcaWindowManager.promoteControl()
+      if (promoted) {
+        mainWindow = promoted
+        attachControlServices(promoted)
+        automations?.setWebContents(promoted.webContents)
+        rateLimits?.attach(promoted)
+        bindControlWindowLifecycle(promoted)
+        promoted.on('show', resumeSyntheticTitleSpinnerTimer)
+        promoted.on('restore', resumeSyntheticTitleSpinnerTimer)
+        promoted.on('hide', stopSyntheticTitleSpinnerTimer)
+        promoted.on('minimize', stopSyntheticTitleSpinnerTimer)
+        promoted.on('show', notifyMainWindowBecameVisible)
+        promoted.on('restore', notifyMainWindowBecameVisible)
+        promoted.webContents.reload()
+        return
+      }
+      mainWindow = null
+      automations?.setWebContents(null)
+      agentHookServer.setListener(null)
+      agentHookServer.setPaneStatusClearListener(null)
+      setMigrationUnsupportedPtyListener(null)
+      stopAllSyntheticTitleSpinners()
+    })
+  }
+  terminalWindowTransfers ??= registerTerminalWindowTransferHandlers({
     store,
-    runtime,
-    prepareCodexRuntimeHomeForLaunch,
-    (target) => claudeRuntimeAuth!.prepareForClaudeLaunch(target),
-    {
-      prepareCodexSessionResume: prepareCodexSessionResumeForLaunch,
-      awaitLocalPtyStartup: () => localPtyStartupReady,
-      awaitLocalPtyProviderStartup: () => localPtyProviderStartupReady,
-      onBeforeRendererReload: ({ ignoreCache, webContentsId }) => {
-        if (window.webContents.id === webContentsId) {
-          markExpectedRendererReload(webContentsId)
-        }
-        recordCrashBreadcrumb('renderer_reload_requested', { ignoreCache })
-      },
-      // Why: let the PTY layer skip its orphan sweep on the recovery reload that re-fires did-finish-load, so live local sessions survive (#5787).
-      isRecoveryReloadInFlight,
-      onCodexHomePtySpawned: handleCodexHomePtySpawned,
-      onPtyExit: handlePtyExit,
-      onBeforeUpdateQuit: () =>
-        preserveAgentAuthBeforeRestart({ codexRuntimeHome, claudeRuntimeAuth, store }),
-      updateInstallMode: resolveUpdateInstallMode(isServeMode),
-      onWorktreeLifecycle: emitPluginWorktreeLifecycle
+    getIsQuitting: () => isQuitting,
+    createSecondaryWindow: (bounds) => {
+      const secondary = createMainWindow(store, {
+        getIsQuitting: () => isQuitting,
+        deferLoad: true,
+        title: devInstanceIdentity.name,
+        getKeybindings: () => keybindings?.getOverrides(),
+        orcaWindowRole: 'secondary',
+        restorePrimaryBounds: false,
+        persistPrimaryBounds: false,
+        showWhenReady: false,
+        initialBounds: bounds
+      })
+      const secondaryId = secondary.id
+      secondary.on('closed', () => {
+        getWindowSessionRegistry(store!).retire(secondaryId, 'user-close')
+      })
+      return secondary
     }
-  )
+  })
   // Why: attach the durable renderer pull now, but launch the diagnostic process after first paint.
   initTccPromptNotice(window, { deferWatchUntilReadyToShow: true })
   rateLimits.attach(window)
   // Why: quota probes spawn CLIs and hit network, so don't fetch immediately and compete with first paint; show/focus listeners refresh later.
   rateLimits.start({ fetchImmediately: false })
-  window.on('closed', () => {
-    if (mainWindow === window) {
-      mainWindow = null
-    }
-    clearExpectedRendererReload(rendererWebContentsId)
-    automations?.setWebContents(null)
-    // Why: detach the hook listener on close so the server never fires into destroyed webContents before reopen, and replay runs only on deliberate recreations.
-    agentHookServer.setListener(null)
-    agentHookServer.setPaneStatusClearListener(null)
-    setMigrationUnsupportedPtyListener(null)
-    // Why: stop the spinner timer here — it would fire into destroyed webContents, and per-pane teardown may never run for restored-but-untorn panes.
-    stopAllSyntheticTitleSpinners()
-  })
   mainWindow = window
+  bindControlWindowLifecycle(window)
   window.on('show', resumeSyntheticTitleSpinnerTimer)
   window.on('restore', resumeSyntheticTitleSpinnerTimer)
   window.on('hide', stopSyntheticTitleSpinnerTimer)
@@ -2025,14 +2085,11 @@ registerPaneKeyTeardownListener((paneKey) => {
 })
 
 function sendSyntheticTitle(ptyId: string, data: string, options: { force?: boolean } = {}): void {
-  if (!mainWindow || mainWindow.isDestroyed()) {
-    return
-  }
   // Why: throttle decorative spinner frames (up to 80ms/agent); final/permission frames are forced because they drive BEL.
   if (
     !shouldSendSyntheticTitleFrame({
       force: options.force === true,
-      windowVisible: isSyntheticTitleWindowVisible()
+      windowVisible: isSyntheticTitleWindowVisible(ptyId)
     })
   ) {
     return
@@ -2041,23 +2098,20 @@ function sendSyntheticTitle(ptyId: string, data: string, options: { force?: bool
   runtime?.ingestSyntheticTitleFrame(ptyId, data)
   // Why: only the kill-switch-off renderer byte-parses synthetic frames; under main authority the copy mints phantom ACKs (see synthetic-title-frame-routing.ts).
   if (shouldCopySyntheticTitleFrameToPtyData(store?.getSettings())) {
-    mainWindow.webContents.send('pty:data', { id: ptyId, data })
+    sendToPtyOwner(ptyId, 'pty:data', { id: ptyId, data })
   }
 }
 
-function isSyntheticTitleWindowVisible(): boolean {
-  return (
-    mainWindow !== null &&
-    !mainWindow.isDestroyed() &&
-    mainWindow.isVisible() &&
-    !mainWindow.isMinimized()
-  )
+function isSyntheticTitleWindowVisible(ptyId: string): boolean {
+  const target = ptyRendererOwners.getTarget(ptyId)
+  const window = target ? BrowserWindow.fromWebContents(target) : null
+  return window !== null && !window.isDestroyed() && window.isVisible() && !window.isMinimized()
 }
 
 function canSendDecorativeSyntheticTitle(): boolean {
   return shouldSendSyntheticTitleFrame({
     force: false,
-    windowVisible: isSyntheticTitleWindowVisible()
+    windowVisible: mainWindow?.isVisible() === true && mainWindow.isMinimized() === false
   })
 }
 
@@ -2635,9 +2689,7 @@ void app.whenReady().then(async () => {
     },
     // Why: serve can be promoted in place, so wire the listener from startup; runtime enables desktop-only scanners only for a ready renderer.
     onTerminalSideEffects: (batch: TerminalSideEffectBatch) => {
-      if (mainWindow && !mainWindow.isDestroyed()) {
-        mainWindow.webContents.send('pty:sideEffect', batch)
-      }
+      sendToPtyOwner(batch.ptyId, 'pty:sideEffect', batch)
     },
     getDesktopWindowStatus: getDesktopWindowStatus,
     // Why: worktree.ps pulls hook-reported agent status (same source as the desktop sidebar) at query time so mobile shows the same agents.
@@ -3297,6 +3349,10 @@ app.on('before-quit', () => {
     })
   }
   isQuitting = true
+  if (store) {
+    getWindowSessionRegistry(store).freezeForQuit()
+  }
+  terminalWindowQuitFence = terminalWindowTransfers?.fenceForQuit() ?? Promise.resolve()
   desktopRelayService?.fenceAndCloseNow()
   runtimeRpc?.setMobileRelayPairingProvider(null)
   unsubscribeAgentAwakeStatusChanges?.()
@@ -3405,6 +3461,7 @@ app.on('will-quit', (e) => {
   // Losing at most the last debounce interval beats a quit that never completes, and the
   // temp+rename swap means a write cut short by the deadline leaves the old file intact.
   settleTeardownWithinDeadline([
+    { name: 'terminal-window-transfers', promise: terminalWindowQuitFence },
     { name: 'daemon', promise: daemonTeardown },
     { name: 'runtime-rpc', promise: rpcStopAndClear },
     { name: 'watchers', promise: watcherShutdown },

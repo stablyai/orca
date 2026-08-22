@@ -21,6 +21,11 @@ import type { AgentHookInstallStatus } from '../shared/agent-hook-types'
 import type { CodexConfigSyncStatus } from '../shared/codex-config-sync-types'
 import type { TerminalPaneSplitSource } from '../shared/feature-education-telemetry'
 import type { TerminalTabCreateReply } from '../shared/terminal-reveal-identity'
+import type {
+  TerminalWindowTransferAck,
+  TerminalWindowTransferCommand,
+  TerminalWindowTransferSeed
+} from '../shared/terminal-window-transfer'
 import type { ProjectExecutionRuntimeResolution } from '../shared/project-execution-runtime'
 import type { StartupCommandDelivery } from '../shared/codex-startup-delivery'
 import type {
@@ -3213,6 +3218,20 @@ const api = {
       ipcRenderer.sendSync('session:set-sync', args, hostId)
     }
   } satisfies PreloadApi['session'],
+
+  terminalWindow: {
+    detach: (seed: TerminalWindowTransferSeed) => ipcRenderer.invoke('terminalWindow:detach', seed),
+    ack: (ack: TerminalWindowTransferAck) => ipcRenderer.send('terminalWindow:ack', ack),
+    onCommand: (callback) => {
+      const listener = (
+        _event: Electron.IpcRendererEvent,
+        command: TerminalWindowTransferCommand
+      ): void => callback(command)
+      ipcRenderer.on('terminalWindow:command', listener)
+      return () => ipcRenderer.removeListener('terminalWindow:command', listener)
+    },
+    getContext: () => ipcRenderer.invoke('terminalWindow:getContext')
+  } satisfies PreloadApi['terminalWindow'],
 
   remoteWorkspace: {
     get: (args) => ipcRenderer.invoke('remoteWorkspace:get', args),

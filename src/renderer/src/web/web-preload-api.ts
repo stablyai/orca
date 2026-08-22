@@ -558,6 +558,13 @@ function createWebPreloadApi(): Partial<PreloadApi> {
     })
 
   return {
+    terminalWindow: {
+      detach: () => Promise.resolve({ ok: false, error: 'terminal_window_transfer_unavailable' }),
+      ack: () => {},
+      onCommand: () => noopUnsubscribe,
+      getContext: () =>
+        Promise.resolve({ windowId: 0, role: 'control' as const, transitionFenced: false })
+    },
     app: {
       getIdentity: () =>
         Promise.resolve({

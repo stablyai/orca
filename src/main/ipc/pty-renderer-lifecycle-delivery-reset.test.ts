@@ -1,7 +1,12 @@
 import { describe, expect, it, vi } from 'vitest'
 import { spawnMock } from './pty-ipc-mock-registry'
 import { setupPtyIpcSuite } from './pty-ipc-test-harness'
-import { registerPtyHandlers, getPtyRendererDeliveryDebugSnapshot } from './pty'
+import {
+  registerPtyHandlers,
+  registerPtyRenderer,
+  getPtyRendererDeliveryDebugSnapshot
+} from './pty'
+import { ptyRendererOwners } from './pty-renderer-owners'
 
 vi.mock('electron', () => import('./pty-ipc-mock-registry').then((m) => m.electronModuleMock()))
 vi.mock('fs', () => import('./pty-ipc-mock-registry').then((m) => m.fsModuleMock()))
@@ -58,8 +63,89 @@ describe('registerPtyHandlers', () => {
     getPtySetRendererPtyVisibleListener,
     getPtyRendererDispatcherReadyListener,
     getMainWindowWebContentsListener,
-    getMainFrameNavigationListener
+    getMainFrameNavigationListener,
+    foreignWindowIpcEvent
   } = setupPtyIpcSuite()
+
+  it('reloads one renderer without closing delivery for another renderer', async () => {
+    vi.useFakeTimers()
+    const firstProc = createMockProc()
+    const secondProc = createMockProc()
+    spawnMock.mockReturnValueOnce(firstProc.proc).mockReturnValueOnce(secondProc.proc)
+
+    try {
+      registerPtyHandlers(mainWindow as never)
+      const first = (await handlers.get('pty:spawn')!(mainWindowIpcEvent, {
+        cols: 80,
+        rows: 24
+      })) as { id: string }
+      const second = (await handlers.get('pty:spawn')!(mainWindowIpcEvent, {
+        cols: 80,
+        rows: 24
+      })) as { id: string }
+      const secondary = foreignWindowIpcEvent.sender
+      registerPtyRenderer(secondary as never)
+      ptyRendererOwners.markDispatcherReady(secondary as never)
+      ptyRendererOwners.handoff([second.id], mainWindow.webContents as never, secondary as never)
+      const secondaryNavigation = secondary.on.mock.calls.find(
+        (call: unknown[]) => call[0] === 'did-start-navigation'
+      )![1] as (details: { isMainFrame: boolean; isSameDocument: boolean }) => void
+      mainWindow.webContents.send.mockClear()
+      secondary.send.mockClear()
+
+      secondaryNavigation({ isMainFrame: true, isSameDocument: false })
+      firstProc.emitData('primary-stays-live')
+      secondProc.emitData('secondary-held')
+      vi.advanceTimersByTime(2)
+
+      expect(mainWindow.webContents.send).toHaveBeenCalledWith('pty:data', {
+        id: first.id,
+        data: 'primary-stays-live'
+      })
+      expect(secondary.send).not.toHaveBeenCalledWith('pty:data', expect.anything())
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('reports delivery pressure only for the requesting renderer owner', async () => {
+    vi.useFakeTimers()
+    const firstProc = createMockProc()
+    const secondProc = createMockProc()
+    spawnMock.mockReturnValueOnce(firstProc.proc).mockReturnValueOnce(secondProc.proc)
+
+    try {
+      registerPtyHandlers(mainWindow as never)
+      await handlers.get('pty:spawn')!(mainWindowIpcEvent, {
+        cols: 80,
+        rows: 24
+      })
+      const second = (await handlers.get('pty:spawn')!(mainWindowIpcEvent, {
+        cols: 80,
+        rows: 24
+      })) as { id: string }
+      const secondary = foreignWindowIpcEvent.sender
+      registerPtyRenderer(secondary as never)
+      ptyRendererOwners.markDispatcherReady(secondary as never)
+      ptyRendererOwners.handoff([second.id], mainWindow.webContents as never, secondary as never)
+
+      firstProc.emitData('primary-output')
+      secondProc.emitData('secondary-output')
+      vi.advanceTimersByTime(2)
+
+      expect(
+        handlers.get('pty:reportRendererDeliveryState')!(foreignWindowIpcEvent, {
+          processedCharsByPty: {},
+          receivedCharsByPty: {}
+        })
+      ).toMatchObject({
+        inFlightTotalChars: 'secondary-output'.length,
+        inFlightPtyCount: 1
+      })
+    } finally {
+      vi.useRealTimers()
+    }
+  })
 
   it('batches PTY output when it is not responding to recent input', async () => {
     vi.useFakeTimers()

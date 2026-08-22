@@ -61,6 +61,7 @@ import { installPrivilegedWindowNavigationPolicy } from './privileged-window-nav
 import { isMacosTahoeOrNewer } from './macos-tahoe-release'
 import { registerPluginPanelNavigationGuard } from '../plugins/plugin-panel-navigation-guard'
 import { installWindowsPathRegistryChangeListener } from '../pty/windows-path-registry-change'
+import { orcaWindowManager, type OrcaWindowRole } from './orca-window-manager'
 
 // Why: show/restore/resume can overlap before the size nudge resets; never capture the temporary width as the next baseline.
 const activeRepaintJiggles = new WeakSet<BrowserWindow>()
@@ -215,6 +216,11 @@ type CreateMainWindowOptions = {
   onBeforeReload?: (options: { ignoreCache: boolean; webContentsId: number }) => void
   /** Marks the in-place recovery reload so did-finish-load's PTY orphan sweep spares live sessions until restore re-attaches (#5787). */
   onBeforeRecoveryReload?: (webContentsId: number) => void
+  orcaWindowRole?: OrcaWindowRole
+  restorePrimaryBounds?: boolean
+  persistPrimaryBounds?: boolean
+  showWhenReady?: boolean
+  initialBounds?: Electron.Rectangle
 }
 
 export function loadMainWindow(mainWindow: BrowserWindow): void {
@@ -229,7 +235,9 @@ export function createMainWindow(
   store: Store | null,
   opts?: CreateMainWindowOptions
 ): BrowserWindow {
-  const rawSavedBounds = store?.getUI().windowBounds
+  const restorePrimaryBounds = opts?.restorePrimaryBounds !== false
+  const persistPrimaryBounds = opts?.persistPrimaryBounds !== false
+  const rawSavedBounds = restorePrimaryBounds ? store?.getUI().windowBounds : undefined
   // Why: reject min-size or substantially off-screen bounds so the titlebar stays reachable after display changes.
   const savedBounds =
     rawSavedBounds &&
@@ -244,7 +252,7 @@ export function createMainWindow(
       rawSavedBounds
     )
   }
-  const savedMaximized = store?.getUI().windowMaximized ?? false
+  const savedMaximized = restorePrimaryBounds ? (store?.getUI().windowMaximized ?? false) : false
   // Why: on first launch fill the primary display work area so the window feels spacious without maximize(); saved bounds win later.
   const defaultBounds = (() => {
     try {
@@ -267,9 +275,13 @@ export function createMainWindow(
     blur && process.platform === 'win32' ? { backgroundMaterial: 'acrylic' as const } : {}
 
   const mainWindow = new BrowserWindow({
-    width: savedBounds?.width ?? defaultBounds.width,
-    height: savedBounds?.height ?? defaultBounds.height,
-    ...(savedBounds ? { x: savedBounds.x, y: savedBounds.y } : {}),
+    width: opts?.initialBounds?.width ?? savedBounds?.width ?? defaultBounds.width,
+    height: opts?.initialBounds?.height ?? savedBounds?.height ?? defaultBounds.height,
+    ...(opts?.initialBounds
+      ? { x: opts.initialBounds.x, y: opts.initialBounds.y }
+      : savedBounds
+        ? { x: savedBounds.x, y: savedBounds.y }
+        : {}),
     minWidth: MIN_WIDTH,
     minHeight: MIN_HEIGHT,
     title: opts?.title ?? 'Orca',
@@ -306,6 +318,8 @@ export function createMainWindow(
     }
   })
   const rendererWebContentsId = mainWindow.webContents.id
+  orcaWindowManager.register(mainWindow, opts?.orcaWindowRole)
+  mainWindow.on('focus', () => orcaWindowManager.noteFocused(mainWindow.id))
   installWindowsPathRegistryChangeListener(mainWindow)
   // Why: native paste fallback is privileged IPC; only the top-level renderer may request it.
   setTrustedUIRendererWebContentsId(rendererWebContentsId)
@@ -353,7 +367,7 @@ export function createMainWindow(
   // Why: macOS+Electron 41 re-emits ready-to-show on webview-guest creation; a one-shot guard stops re-running maximize() after resize (#591).
   let handledInitialReadyToShow = false
   let initialRevealFallbackTimer: ReturnType<typeof setTimeout> | null =
-    process.platform === 'win32' || process.platform === 'linux'
+    opts?.showWhenReady !== false && (process.platform === 'win32' || process.platform === 'linux')
       ? setTimeout(() => {
           // Why: GPU/driver failures on Windows/Linux can prevent ready-to-show forever, hiding the only app window (#8421).
           initialRevealFallbackTimer = null
@@ -380,6 +394,10 @@ export function createMainWindow(
     handledInitialReadyToShow = true
     clearInitialRevealFallbackTimer()
 
+    if (opts?.showWhenReady === false) {
+      return
+    }
+
     // Why: in E2E headless mode keep the window hidden (Playwright drives via CDP) so tests don't steal focus.
     const e2eConfig = getMainE2EConfig()
     if (e2eConfig.headless) {
@@ -400,6 +418,9 @@ export function createMainWindow(
   // Why: teardown still emits resize/move/unmaximize at near-min bounds; freeze persistence once closing so they can't clobber the saved size.
   let windowClosing = false
   const saveBounds = (): void => {
+    if (!persistPrimaryBounds) {
+      return
+    }
     if (boundsTimer) {
       clearTimeout(boundsTimer)
     }
@@ -441,7 +462,9 @@ export function createMainWindow(
     if (windowClosing) {
       return
     }
-    store?.updateUI({ windowMaximized: true })
+    if (persistPrimaryBounds) {
+      store?.updateUI({ windowMaximized: true })
+    }
     mainWindow.webContents.send('window:maximize-changed', true)
   })
   mainWindow.on('unmaximize', () => {
@@ -453,10 +476,14 @@ export function createMainWindow(
     // Why: mirror the saveBounds guard — unmaximize during teardown can land at min size; don't persist that as remembered size.
     if (bounds.width <= MIN_WIDTH || bounds.height <= MIN_HEIGHT) {
       console.warn('[window] Skipping unmaximize-time persist of near-min bounds:', bounds)
-      store?.updateUI({ windowMaximized: false })
+      if (persistPrimaryBounds) {
+        store?.updateUI({ windowMaximized: false })
+      }
       return
     }
-    store?.updateUI({ windowMaximized: false, windowBounds: bounds })
+    if (persistPrimaryBounds) {
+      store?.updateUI({ windowMaximized: false, windowBounds: bounds })
+    }
   })
 
   mainWindow.on('enter-full-screen', () => {
@@ -1083,7 +1110,12 @@ export function createMainWindow(
     mainWindow.webContents.send('window:unload-prevented')
   })
 
-  const onConfirmClose = (): void => {
+  const ownsSender = (event: Electron.IpcMainEvent): boolean =>
+    event.sender.id === rendererWebContentsId
+  const onConfirmClose = (event: Electron.IpcMainEvent): void => {
+    if (!ownsSender(event)) {
+      return
+    }
     clearQuitRendererAckTimer()
     windowCloseConfirmed = true
     if (!mainWindow.isDestroyed()) {
@@ -1091,20 +1123,29 @@ export function createMainWindow(
     }
   }
   const trafficLightChannel = 'ui:sync-traffic-lights'
-  const onSyncTrafficLights = (_event: Electron.IpcMainEvent, zoomFactor: number): void => {
+  const onSyncTrafficLights = (event: Electron.IpcMainEvent, zoomFactor: number): void => {
+    if (!ownsSender(event)) {
+      return
+    }
     syncTrafficLightPosition(mainWindow, zoomFactor)
   }
   ipcMain.on(trafficLightChannel, onSyncTrafficLights)
 
   // Why: renderer-drawn window controls on Windows/Linux replicate the native title-bar buttons hidden by custom chrome.
   const minimizeChannel = 'window:minimize'
-  const onMinimize = (): void => {
+  const onMinimize = (event: Electron.IpcMainEvent): void => {
+    if (!ownsSender(event)) {
+      return
+    }
     if (!mainWindow.isDestroyed()) {
       mainWindow.minimize()
     }
   }
   const maximizeChannel = 'window:maximize'
-  const onMaximize = (): void => {
+  const onMaximize = (event: Electron.IpcMainEvent): void => {
+    if (!ownsSender(event)) {
+      return
+    }
     if (mainWindow.isDestroyed()) {
       return
     }
@@ -1116,7 +1157,10 @@ export function createMainWindow(
   }
   // Why: mainWindow.close() from an IPC handler on Windows can make 'close' misfire, so send window:close-requested directly.
   const requestCloseChannel = 'window:request-close'
-  const onRequestClose = (): void => {
+  const onRequestClose = (event: Electron.IpcMainEvent): void => {
+    if (!ownsSender(event)) {
+      return
+    }
     if (mainWindow.isDestroyed()) {
       return
     }
@@ -1128,19 +1172,16 @@ export function createMainWindow(
   }
   // Why: renderer-drawn title-bar ··· menu button replicates the Alt-key reveal autoHideMenuBar provides (Windows/Linux).
   const popupMenuChannel = 'menu:popup'
-  const onPopupMenu = (): void => {
+  const onPopupMenu = (event: Electron.IpcMainEvent): void => {
+    if (!ownsSender(event)) {
+      return
+    }
     Menu.getApplicationMenu()?.popup({ window: mainWindow })
-  }
-  // Why: WindowControls mounts after window:maximize-changed already fired, so expose a synchronous getter to init its icon.
-  const isMaximizedChannel = 'window:isMaximized'
-  const onIsMaximized = (): boolean => {
-    return !mainWindow.isDestroyed() && mainWindow.isMaximized()
   }
   ipcMain.on(minimizeChannel, onMinimize)
   ipcMain.on(maximizeChannel, onMaximize)
   ipcMain.on(requestCloseChannel, onRequestClose)
   ipcMain.on(popupMenuChannel, onPopupMenu)
-  ipcMain.handle(isMaximizedChannel, onIsMaximized)
 
   ipcMain.on(confirmCloseChannel, onConfirmClose)
   ipcMain.on(closeRequestReceivedChannel, onCloseRequestReceived)
@@ -1148,7 +1189,9 @@ export function createMainWindow(
     // Why: the dashboard pop-out is a companion of the main window — close it
     // alongside so it never orphans as a lone window after the app window is
     // gone (e.g. on macOS where the app stays alive after the window closes).
-    closeDashboardPopout()
+    if (opts?.orcaWindowRole !== 'secondary') {
+      closeDashboardPopout()
+    }
     clearInitialRevealFallbackTimer()
     clearQuitRendererAckTimer()
     // Why: default-deny the Cmd+B carve-out after the window is gone so a stale-true flag can't leak into later state.
@@ -1161,10 +1204,8 @@ export function createMainWindow(
     ipcMain.removeListener(trafficLightChannel, onSyncTrafficLights)
     ipcMain.removeListener(minimizeChannel, onMinimize)
     ipcMain.removeListener(maximizeChannel, onMaximize)
-    browserManager.setDictationShortcutForwardingPredicate(null)
     ipcMain.removeListener(requestCloseChannel, onRequestClose)
     ipcMain.removeListener(popupMenuChannel, onPopupMenu)
-    ipcMain.removeHandler(isMaximizedChannel)
     ipcMain.removeListener(confirmCloseChannel, onConfirmClose)
     ipcMain.removeListener(closeRequestReceivedChannel, onCloseRequestReceived)
     ipcMain.removeListener(markdownFocusChannel, onMarkdownEditorFocused)
@@ -1175,6 +1216,10 @@ export function createMainWindow(
     // Why: powerMonitor is app-global; without this the resume relay leaks and fires against a destroyed webContents.
     powerMonitor.removeListener('resume', onSystemResume)
     clearTrustedUIRendererWebContentsId(rendererWebContentsId)
+    orcaWindowManager.unregister(mainWindow.id)
+    if (orcaWindowManager.getAllWindows().length === 0) {
+      browserManager.setDictationShortcutForwardingPredicate(null)
+    }
     // Why: on updater shutdown 'closed' can fire after webContents is destroyed, so don't touch mainWindow.webContents here.
     app.removeListener('before-quit', freezeBoundsOnQuit)
   })

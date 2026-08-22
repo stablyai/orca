@@ -61,6 +61,7 @@ import {
   resetSshProviderAuthorities,
   rotateSshProviderAuthority
 } from '../ssh/ssh-provider-authority'
+import { orcaWindowManager } from '../window/orca-window-manager'
 
 let sshStore: SshConnectionStore | null = null
 let connectionManager: SshConnectionManager | null = null
@@ -101,6 +102,23 @@ const credentialRequestedForTarget = new Set<string>()
 
 function getCurrentMainWindow(): BrowserWindow | null {
   return currentGetMainWindow()
+}
+
+function broadcastToOrcaWindows(
+  fallback: () => BrowserWindow | null,
+  channel: string,
+  payload: unknown
+): void {
+  const windows = orcaWindowManager.getAllWindows()
+  const legacyWindow = fallback()
+  if (windows.length === 0 && legacyWindow && !legacyWindow.isDestroyed()) {
+    windows.push(legacyWindow)
+  }
+  for (const window of windows) {
+    if (!window.isDestroyed() && !window.webContents.isDestroyed()) {
+      window.webContents.send(channel, payload)
+    }
+  }
 }
 
 export async function connectRegisteredSshTarget(targetId: string): Promise<SshConnectionState> {
@@ -422,10 +440,10 @@ function broadcastSshState(
     return
   }
   const enrichedState = withSshRemotePlatform(targetId, state)
-  const win = getMainWindow()
-  if (win && !win.isDestroyed()) {
-    win.webContents.send('ssh:state-changed', { targetId, state: enrichedState })
-  }
+  broadcastToOrcaWindows(getMainWindow, 'ssh:state-changed', {
+    targetId,
+    state: enrichedState
+  })
   // Why: paired remote clients have no ssh:state-changed IPC; without this their terminals keep a stale reconnect overlay.
   currentRuntime?.notifySshStateChanged?.(targetId, enrichedState)
 }
@@ -469,11 +487,7 @@ function getPublicSshState(targetId: string): SshConnectionState | undefined {
 }
 
 function broadcastPortForwards(getMainWindow: () => BrowserWindow | null, targetId: string): void {
-  const win = getMainWindow()
-  if (!win || win.isDestroyed()) {
-    return
-  }
-  win.webContents.send('ssh:port-forwards-changed', {
+  broadcastToOrcaWindows(getMainWindow, 'ssh:port-forwards-changed', {
     targetId,
     forwards: listForwardsEnriched(targetId)
   })
@@ -485,11 +499,7 @@ function broadcastDetectedPorts(
   ports: DetectedPort[],
   options?: Parameters<typeof enrichSshDetectedPorts>[3]
 ): void {
-  const win = getMainWindow()
-  if (!win || win.isDestroyed()) {
-    return
-  }
-  win.webContents.send('ssh:detected-ports-changed', {
+  broadcastToOrcaWindows(getMainWindow, 'ssh:detected-ports-changed', {
     targetId,
     ports: enrichDetected(targetId, ports, options)
   })
@@ -680,7 +690,12 @@ function createSshConnectionCallbacks(): SshConnectionCallbacks {
   return {
     onCredentialRequest: (targetId, kind, detail) => {
       credentialRequestedForTarget.add(targetId)
-      return requestCredential(getCurrentMainWindow, targetId, kind, detail)
+      return requestCredential(
+        () => orcaWindowManager.getMostRecentWindow() ?? getCurrentMainWindow(),
+        targetId,
+        kind,
+        detail
+      )
     },
     onStateChange: (targetId: string, state: SshConnectionState) => {
       if (testingTargets.has(targetId)) {

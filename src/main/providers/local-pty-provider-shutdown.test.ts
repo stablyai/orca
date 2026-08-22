@@ -240,6 +240,16 @@ describe('LocalPtyProvider', () => {
       expect(provider.hasPty(id)).toBe(false)
     })
 
+    it('does not orphan-clean PTYs protected by another renderer owner', async () => {
+      const killSpy = vi.fn()
+      mockProc.kill = killSpy
+      const { id } = await provider.spawn({ cols: 80, rows: 24 })
+
+      expect(provider.killOrphanedPtys(1, new Set([id]))).toEqual([])
+      expect(killSpy).not.toHaveBeenCalled()
+      expect(provider.hasPty(id)).toBe(true)
+    })
+
     it('escalates graceful shutdown before orphan cleanup disables the kill handle', async () => {
       vi.useFakeTimers()
       try {

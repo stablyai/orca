@@ -6,6 +6,7 @@ import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Tab, TabGroup, TabGroupLayoutNode } from '../../../../shared/tab-types'
 import { useAppStore } from '../../store'
+import { TEST_REPO } from '../../store/slices/store-test-helpers'
 import type { TabDragItemData } from './useTabDragSplit'
 import { shouldActivateTabDragFromDistanceSample } from './tab-drag-pointer-sensor'
 import {
@@ -27,6 +28,7 @@ vi.mock('../../runtime/web-runtime-session', () => ({
 
 const WT = 'wt-1'
 const mounted: { container: HTMLDivElement; root: Root }[] = []
+const detachTerminalWindow = vi.fn()
 
 function makeGroup(id: string, tabOrder: string[]): TabGroup {
   return {
@@ -113,8 +115,16 @@ function renderDragHook(): ReturnType<typeof useTabDragSplit> {
 }
 
 beforeEach(() => {
+  detachTerminalWindow.mockResolvedValue({ ok: true, targetWindowId: 2 })
+  window.api = {
+    terminalWindow: { detach: detachTerminalWindow }
+  } as never
   useAppStore.setState({
+    repos: [TEST_REPO],
+    activeRepoId: TEST_REPO.id,
     activeWorktreeId: WT,
+    activeWorkspaceKey: 'worktree:wt-1',
+    activeWorkspaceExecutionHostId: 'local',
     activeGroupIdByWorktree: { [WT]: 'group-1' },
     groupsByWorktree: {
       [WT]: [makeGroup('group-1', ['tab-1', 'tab-3']), makeGroup('group-2', ['tab-2'])]
@@ -126,7 +136,7 @@ beforeEach(() => {
           groupId: 'group-1',
           worktreeId: WT,
           contentType: 'terminal',
-          entityId: 'term-1',
+          entityId: 'tab-1',
           label: 'one',
           customLabel: null,
           color: null,
@@ -138,7 +148,7 @@ beforeEach(() => {
           groupId: 'group-2',
           worktreeId: WT,
           contentType: 'terminal',
-          entityId: 'term-2',
+          entityId: 'tab-2',
           label: 'two',
           customLabel: null,
           color: null,
@@ -150,7 +160,7 @@ beforeEach(() => {
           groupId: 'group-1',
           worktreeId: WT,
           contentType: 'terminal',
-          entityId: 'term-3',
+          entityId: 'tab-3',
           label: 'three',
           customLabel: null,
           color: null,
@@ -159,6 +169,23 @@ beforeEach(() => {
         } satisfies Tab
       ]
     },
+    tabsByWorktree: {
+      [WT]: [
+        { id: 'tab-1', worktreeId: WT, title: 'one', ptyId: 'pty-1' },
+        { id: 'tab-2', worktreeId: WT, title: 'two', ptyId: 'pty-2' },
+        { id: 'tab-3', worktreeId: WT, title: 'three', ptyId: 'pty-3' }
+      ] as never
+    },
+    ptyIdsByTabId: {
+      'tab-1': ['pty-1'],
+      'tab-2': ['pty-2'],
+      'tab-3': ['pty-3']
+    },
+    terminalLayoutsByTabId: {
+      'tab-1': { root: { type: 'leaf', leafId: 'leaf-1' }, activeLeafId: 'leaf-1' },
+      'tab-2': { root: { type: 'leaf', leafId: 'leaf-2' }, activeLeafId: 'leaf-2' },
+      'tab-3': { root: { type: 'leaf', leafId: 'leaf-3' }, activeLeafId: 'leaf-3' }
+    } as never,
     layoutByWorktree: {
       [WT]: {
         type: 'split',
@@ -360,5 +387,44 @@ describe('useTabDragSplit', () => {
       groupId: 'group-2',
       splitDirection: 'right'
     })
+  })
+
+  it('detaches a terminal dropped outside the source window', async () => {
+    const activeData = { ...makeDragData('group-1'), tabType: 'terminal' as const }
+    const drag = renderDragHook()
+    const outside = { x: window.innerWidth + 50, y: 20 }
+
+    act(() => {
+      drag.onDragStart(
+        makeDragEvent(activeData, outside) as unknown as Parameters<typeof drag.onDragStart>[0]
+      )
+      drag.onDragEnd(
+        makeDragEvent(activeData, outside) as unknown as Parameters<typeof drag.onDragEnd>[0]
+      )
+    })
+    await act(async () => {})
+
+    expect(detachTerminalWindow).toHaveBeenCalledWith(
+      expect.objectContaining({ tabId: 'tab-1', ptyIds: ['pty-1'] })
+    )
+    expect(drag.isTabDragActiveRef.current).toBe(false)
+  })
+
+  it('keeps an outside drag alive across blur but still clears on pointer cancel', async () => {
+    const activeData = { ...makeDragData('group-1'), tabType: 'terminal' as const }
+    const drag = renderDragHook()
+    const outsideEvent = makeDragEvent(activeData, { x: window.innerWidth + 50, y: 20 })
+
+    act(() => {
+      drag.onDragStart(outsideEvent as unknown as Parameters<typeof drag.onDragStart>[0])
+      drag.onDragMove(outsideEvent as unknown as Parameters<typeof drag.onDragMove>[0])
+      window.dispatchEvent(new Event('blur'))
+    })
+    await act(async () => new Promise((resolve) => window.setTimeout(resolve, 0)))
+    expect(drag.isTabDragActiveRef.current).toBe(true)
+
+    act(() => window.dispatchEvent(new Event('pointercancel')))
+    await act(async () => new Promise((resolve) => window.setTimeout(resolve, 0)))
+    expect(drag.isTabDragActiveRef.current).toBe(false)
   })
 })

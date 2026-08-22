@@ -1,10 +1,13 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-const { handleMock, removeHandlerMock, fromWebContentsMock } = vi.hoisted(() => ({
-  handleMock: vi.fn(),
-  removeHandlerMock: vi.fn(),
-  fromWebContentsMock: vi.fn()
-}))
+const { handleMock, removeHandlerMock, fromWebContentsMock, windowForSenderMock, roleMock } =
+  vi.hoisted(() => ({
+    handleMock: vi.fn(),
+    removeHandlerMock: vi.fn(),
+    fromWebContentsMock: vi.fn(),
+    windowForSenderMock: vi.fn(),
+    roleMock: vi.fn()
+  }))
 
 vi.mock('electron', () => ({
   BrowserWindow: {
@@ -16,6 +19,13 @@ vi.mock('electron', () => ({
   }
 }))
 
+vi.mock('../window/orca-window-manager', () => ({
+  orcaWindowManager: {
+    getWindowForSender: windowForSenderMock,
+    getRole: roleMock
+  }
+}))
+
 import { registerRuntimeHandlers } from './runtime'
 import { TERMINAL_FIT_RESTORE_DEADLINE_MS } from '../../shared/terminal-fit-restore-deadline'
 
@@ -24,6 +34,10 @@ describe('registerRuntimeHandlers', () => {
     handleMock.mockReset()
     removeHandlerMock.mockReset()
     fromWebContentsMock.mockReset()
+    windowForSenderMock.mockReset()
+    windowForSenderMock.mockReturnValue({ id: 17 })
+    roleMock.mockReset()
+    roleMock.mockReturnValue('control')
   })
 
   it('routes sync requests through the authoritative browser window id', () => {
@@ -50,6 +64,25 @@ describe('registerRuntimeHandlers', () => {
 
     expect(runtime.syncWindowGraph).toHaveBeenCalledWith(17, graph)
     expect(result).toEqual({ graphStatus: 'ready' })
+  })
+
+  it('rejects graph publication from a secondary window', () => {
+    const runtime = { syncWindowGraph: vi.fn() }
+    registerRuntimeHandlers(runtime as never)
+    const handler = handleMock.mock.calls.find(
+      ([channel]) => channel === 'runtime:syncWindowGraph'
+    )![1]
+    const currentMainFrame = {}
+    const sender = { mainFrame: currentMainFrame }
+    roleMock.mockReturnValue('secondary')
+
+    expect(() =>
+      handler(
+        { sender, senderFrame: currentMainFrame },
+        { tabs: [], leaves: [], rendererGeneration: 'renderer-1' }
+      )
+    ).toThrow('Runtime graph sync must originate from the control window')
+    expect(runtime.syncWindowGraph).not.toHaveBeenCalled()
   })
 
   it('rejects a graph publication queued by a superseded main frame', () => {

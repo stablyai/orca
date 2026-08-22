@@ -363,7 +363,7 @@ describe('createMainWindow', () => {
     expect(webContents.setBackgroundThrottling).not.toHaveBeenCalledWith(false)
     expect(windowHandlers.get('restore')).toHaveLength(1)
     expect(windowHandlers.get('show')).toHaveLength(1)
-    expect(windowHandlers.get('focus')).toHaveLength(1)
+    expect(windowHandlers.get('focus')).toHaveLength(2)
 
     windowHandlers.get('show')?.[0]?.()
     windowHandlers.get('restore')?.[0]?.()
@@ -388,7 +388,7 @@ describe('createMainWindow', () => {
     // Why: focus covers occlusion-uncover with invalidate only — no setSize
     // jiggle that would resize terminals on every window focus.
     const setSizeCalls = browserWindowInstance.setSize.mock.calls.length
-    windowHandlers.get('focus')?.[0]?.()
+    windowHandlers.get('focus')?.at(-1)?.()
     expect(webContents.invalidate).toHaveBeenCalledTimes(4)
     expect(browserWindowInstance.setSize).toHaveBeenCalledTimes(setSizeCalls)
   })
