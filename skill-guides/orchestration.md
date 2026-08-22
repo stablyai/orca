@@ -219,10 +219,9 @@ orca orchestration task-create --spec "<worker A task>" --json
 orca orchestration task-create --spec "<worker B task>" --json
 orca orchestration worker-start --task <task_a> --worktree current --json
 orca orchestration worker-start --task <task_b> --worktree current --agent codex --json
-orca orchestration worker-start --task <task_c> --worktree current --agent bob --json
 ```
 
-Omit `--agent` to launch the user's default agent from Settings; that is the normal choice. Pass `--agent <id>` only when the task or the user calls for a specific agent (any installed and enabled Orca agent id, for example `claude`, `codex`, `bob`, `gemini`, `cursor`). Workers never inherit the coordinator's own agent. If Settings has no enabled default, or the named agent is disabled (IBM Bob is opt-in by default), `worker-start` fails with `agent_unconfigured`; an older Orca host may also require an explicit `--agent`.
+Omit `--agent` to launch the user's default agent from Settings; that is the normal choice. Pass `--agent <id>` only when the task or the user calls for a specific agent (any installed and enabled Orca agent id, for example `claude`, `codex`, `gemini`, `cursor`). Workers never inherit the coordinator's own agent. If Settings has no enabled default, or the named agent is disabled, `worker-start` fails with `agent_unconfigured`; an older Orca host may also require an explicit `--agent`.
 
 `current` and exact existing worktrees create a fresh agent terminal and do not rerun setup. Reuse an existing agent only with `--terminal <handle>`.
 
