@@ -294,7 +294,10 @@ test('Settings › Agents lists IBM Bob as detected and default', async ({
   })
 })
 
-test('closing the IBM Bob pane stops its process', async ({ electronApp, orcaPage }, testInfo) => {
+test('IBM Bob gets a scraped sidebar status row and closing the pane stops its process', async ({
+  electronApp,
+  orcaPage
+}, testInfo) => {
   // Why: the process count uses pgrep; Windows needs a process-table query before this can run there.
   test.skip(process.platform === 'win32', 'pgrep-based process check has no Windows equivalent yet')
   const homeDir = await electronApp.evaluate(() => process.env.HOME ?? '')
@@ -308,10 +311,35 @@ test('closing the IBM Bob pane stops its process', async ({ electronApp, orcaPag
   await launchBobFromNewTab(orcaPage)
   await expect.poll(countBobChatProcesses, { timeout: 10_000 }).toBe(baseline + 1)
 
-  // Known gap on this branch: sidebar agent rows are seeded from hook/OSC-title
-  // status, which Bob never emits; the output-status profiles PR adds the row.
-  const rowCount = await orcaPage.locator('[data-testid="agent-row"]').count()
-  testInfo.annotations.push({ type: 'sidebar-agent-rows', description: String(rowCount) })
+  // Why: Bob emits no hooks or title status; its sidebar row comes from the
+  // output-status scrape, which (like Command Code) only has a turn to report
+  // once a prompt is submitted.
+  await orcaPage.keyboard.type('reply with exactly: PONG')
+  await orcaPage.keyboard.press('Enter')
+  const readBobRows = () =>
+    orcaPage.evaluate(() => {
+      const s = window.__store!.getState() as unknown as {
+        agentStatusByPaneKey: Record<
+          string,
+          { agentType?: string; state?: string; prompt?: string }
+        >
+      }
+      return Object.values(s.agentStatusByPaneKey)
+        .filter((e) => e.agentType === 'bob')
+        .map((e) => `${e.state}:${e.prompt}`)
+    })
+  await expect
+    .poll(readBobRows, { timeout: 30_000 })
+    .toContainEqual(expect.stringMatching(/^(working|done):reply with exactly: PONG$/))
+  await expect
+    .poll(readBobRows, { timeout: 60_000 })
+    .toContainEqual('done:reply with exactly: PONG')
+  // Why: the worktree card renders the compact agent row as "<title> - IBM Bob".
+  await expect(orcaPage.getByText(/bob - IBM Bob/).first()).toBeVisible({ timeout: 15_000 })
+  await testInfo.attach('sidebar-bob-row', {
+    body: await orcaPage.screenshot(),
+    contentType: 'image/png'
+  })
   await testInfo.attach('sidebar-agent-row', {
     body: await orcaPage.screenshot(),
     contentType: 'image/png'
