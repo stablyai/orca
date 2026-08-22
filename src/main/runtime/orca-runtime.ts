@@ -1564,7 +1564,6 @@ type TerminalCreateOptions = {
   sessionId?: string
   isNewSession?: boolean
   preAllocatedHandle?: string
-  persistHostSessionBinding?: boolean
   // Why: only the host-derived structured resume path may attach provider
   // identity; opaque terminal.create commands remain ordinary shells.
   agentSessionClaim?: AgentSessionExecutionClaim
@@ -18402,9 +18401,7 @@ export class OrcaRuntimeService {
     const recovery = this.createTerminal(`id:${expectedWorktreeId}`, {
       tabId: parsed.tabId,
       leafId: parsed.leafId,
-      focus: false,
-      // Why: the HUB renderer may publish its exited layout while recovery is in flight; persist the replacement before that stale graph can orphan it.
-      persistHostSessionBinding: true
+      focus: false
     }).then((terminal) => ({
       handle: terminal.handle,
       tabId: parsed.tabId,
@@ -27786,7 +27783,6 @@ export class OrcaRuntimeService {
       presentation: request.presentation ?? 'background',
       tabId: request.placement?.tabId,
       leafId: request.placement?.leafId,
-      persistHostSessionBinding: true,
       agentSessionClaim: claim,
       signal: _caller.signal
     })
@@ -27974,7 +27970,6 @@ export class OrcaRuntimeService {
           leafId: operationLeafId,
           preAllocatedHandle: operationHandle,
           viewMode: request.viewMode,
-          persistHostSessionBinding: true,
           agentSessionCreateOperationId: executionOperationId,
           signal: caller.signal,
           onPtySpawnCommitted: () => {
@@ -28196,10 +28191,6 @@ export class OrcaRuntimeService {
         if (launchOpts.signal?.aborted) {
           throw new Error('client_disconnected')
         }
-        const persistHostSessionBinding =
-          launchOpts.persistHostSessionBinding ||
-          launchOpts.surfaceOwner === false ||
-          this.getAvailableAuthoritativeWindow() === null
         let result: Awaited<ReturnType<NonNullable<RuntimePtyController['spawn']>>>
         try {
           result = await this.ptyController.spawn({
@@ -28248,12 +28239,10 @@ export class OrcaRuntimeService {
             ...(adoptedBeforeLaunch ? { adoptedStablePane: adoptedBeforeLaunch } : {}),
             ...(launchOpts.sessionId ? { sessionId: launchOpts.sessionId } : {}),
             ...(!adoptedBeforeLaunch && launchOpts.isNewSession ? { isNewSession: true } : {}),
-            // Why: a headless-created pane has no renderer session writer. Persist
-            // its tab/leaf binding at spawn so a later promoted window reattaches
-            // the live daemon or SSH PTY instead of replacing it with a fresh one.
-            // Re-check freshly: the entry-time snapshot can go stale across the
-            // awaits above if the authoritative window is destroyed mid-spawn.
-            ...(persistHostSessionBinding ? { persistHostSessionBinding: true } : {})
+            // Why: a host-initiated create has no renderer session writer, so
+            // without its own binding graph sync cannot classify the terminal
+            // and prunes the tab out from under a running agent.
+            persistHostSessionBinding: true
           })
         } finally {
           releaseStablePaneCreate?.()
@@ -28293,9 +28282,9 @@ export class OrcaRuntimeService {
         })
         const pty = this.getOrCreatePtyWorktreeRecord(result.id)
         if (pty) {
-          if (persistHostSessionBinding) {
-            pty.runtimeSessionOwned = true
-          }
+          // Released again by releaseRuntimeSessionOwnershipForRendererRetiredTabs
+          // once the renderer de-persists the tab, i.e. when the user closes it.
+          pty.runtimeSessionOwned = true
           if (!adoptedStablePane) {
             if (launchOpts.title) {
               const observedAt = this.nextTitleObservationSequence()
@@ -29041,7 +29030,6 @@ export class OrcaRuntimeService {
           ? { sessionId: stableSessionId }
           : {}),
       ...(isNewSession ? { isNewSession: true } : {}),
-      persistHostSessionBinding: true,
       // Why: this method publishes the authoritative snapshot below; skip the intermediate publish to avoid a wrong-group flash.
       deferMobileSessionPublish: true,
       signal: opts.signal
