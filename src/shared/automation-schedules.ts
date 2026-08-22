@@ -27,10 +27,11 @@ type ParsedCron = {
   months: Set<number>
   daysOfWeek: Set<number>
   // Why (#15896): vixie's DOM_STAR/DOW_STAR keys restriction off the field literally starting
-  // with `*`, never off how many values it enumerated — `1-31` and `0/1` enumerate the whole
-  // range without being stars, and inferring from set size made OR/AND day matching diverge
-  // from every vixie-derived cron. "Restricted" here means "the field narrows the day choice":
-  // a star never narrows, a full enumeration without a star still does.
+  // with `*`, never off how many values it enumerated — `1-31` enumerates the whole range
+  // without being a star, and inferring from set size made OR/AND day matching diverge from
+  // every vixie-derived cron. The flags pick the matching mode; the parsed sets decide what
+  // each field covers. "Restricted" here means "the field narrows the day choice": a star
+  // never narrows, a full enumeration without a star still does.
   dayOfMonthRestricted: boolean
   dayOfWeekRestricted: boolean
 }

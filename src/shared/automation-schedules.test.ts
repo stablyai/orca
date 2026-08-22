@@ -117,21 +117,21 @@ describe('automation schedules', () => {
 
     // `1-31` is not a star: both day fields restricted → OR → the always-matching day-of-month
     // fires every day, not Mondays only.
-    expect(nextAutomationOccurrenceAfter('0 9 1-31 * 1', after, dtstart)).toBe(
+    expect(nextAutomationOccurrenceAfter('0 9 1-31 * 1', dtstart, after)).toBe(
       new Date('2026-05-02T09:00:00').getTime()
     )
     // N/step spellings carry no star either, so they stay restricted and keep OR matching —
     // with today's parser `1/1` covers only the 1st and `0/1` only Sundays, so the next fire
     // is the first OR-branch hit after the anchor (Monday 05-04 / Sunday 05-03).
-    expect(nextAutomationOccurrenceAfter('0 0 1/1 * 1', after, dtstart)).toBe(
+    expect(nextAutomationOccurrenceAfter('0 0 1/1 * 1', dtstart, after)).toBe(
       new Date('2026-05-04T00:00:00').getTime()
     )
-    expect(nextAutomationOccurrenceAfter('0 9 1 * 0/1', after, dtstart)).toBe(
+    expect(nextAutomationOccurrenceAfter('0 9 1 * 0/1', dtstart, after)).toBe(
       new Date('2026-05-03T09:00:00').getTime()
     )
     // A starred day-of-month (`*/2` = odd days from the 1st) switches to AND: the day must be
     // an odd day AND a Monday — 2026-05-11 is the first such Monday after the anchor.
-    expect(nextAutomationOccurrenceAfter('0 9 */2 * 1', after, dtstart)).toBe(
+    expect(nextAutomationOccurrenceAfter('0 9 */2 * 1', dtstart, after)).toBe(
       new Date('2026-05-11T09:00:00').getTime()
     )
   })
