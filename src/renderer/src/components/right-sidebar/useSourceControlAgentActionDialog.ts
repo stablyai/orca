@@ -22,6 +22,14 @@ import { useSourceControlAgentActionStart } from './useSourceControlAgentActionS
 
 const DEFAULT_SAVE_TARGET_VALUE = 'global'
 
+/**
+ * Custom hook that manages the state and launch arguments for the Source Control Agent Action Dialog.
+ * It resolves initial and fallback agents, handles custom agent launch arguments (defaulting to YOLO mode
+ * for Gemini when no custom arguments are set), and coordinates starting the agent action.
+ *
+ * @param props - Configuration properties for the dialog.
+ * @returns The structured dialog state and event handlers.
+ */
 export function useSourceControlAgentActionDialog({
   open,
   onOpenChange,
@@ -127,12 +135,12 @@ export function useSourceControlAgentActionDialog({
         detectedAgents: nextAgents,
         disabledAgents
       })
-      const finalAgent = savedAgentId ?? fallbackAgent
+      const finalAgent = fallbackAgent
       setSelectedAgent(finalAgent)
       if (savedAgentArgs === null || savedAgentArgs === undefined) {
-        if (finalAgent) {
-          setAgentArgs(resolveTuiAgentLaunchArgs(finalAgent, settings?.agentDefaultArgs))
-        }
+        setAgentArgs(
+          finalAgent ? resolveTuiAgentLaunchArgs(finalAgent, settings?.agentDefaultArgs) : ''
+        )
       }
       setDetectedOpenCycle(cycle)
     })
@@ -271,6 +279,12 @@ export function useSourceControlAgentActionDialog({
       },
     [resetDeliveryPlan]
   )
+  /**
+   * Updates the selected agent and resolves the appropriate launch arguments.
+   * If saved arguments are not present, resolves the per-agent defaults from the saved settings.
+   *
+   * @param nextAgent - The newly selected TUI agent, or null if no agent is selected.
+   */
   const handleSelectedAgentChange = useCallback(
     (nextAgent: TuiAgent | null) => {
       setSelectedAgent(nextAgent)
