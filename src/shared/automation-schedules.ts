@@ -26,6 +26,11 @@ type ParsedCron = {
   daysOfMonth: Set<number>
   months: Set<number>
   daysOfWeek: Set<number>
+  // Why (#15896): vixie's DOM_STAR/DOW_STAR keys restriction off the field literally starting
+  // with `*`, never off how many values it enumerated — `1-31` and `0/1` enumerate the whole
+  // range without being stars, and inferring from set size made OR/AND day matching diverge
+  // from every vixie-derived cron. "Restricted" here means "the field narrows the day choice":
+  // a star never narrows, a full enumeration without a star still does.
   dayOfMonthRestricted: boolean
   dayOfWeekRestricted: boolean
 }
@@ -205,8 +210,8 @@ function parseCronExpression(expression: string): ParsedCron {
     daysOfMonth,
     months: parseCronField({ value: month, min: 1, max: 12, field: 'month', names: MONTH_NAMES }),
     daysOfWeek,
-    dayOfMonthRestricted: daysOfMonth.size !== 31,
-    dayOfWeekRestricted: daysOfWeek.size !== 7
+    dayOfMonthRestricted: !dayOfMonth.trim().startsWith('*'),
+    dayOfWeekRestricted: !dayOfWeek.trim().startsWith('*')
   }
 }
 
@@ -380,9 +385,12 @@ function classifyParsedCronSchedule(rule: ParsedCron): AutomationCronScheduleCla
   }
   const minute = getSingleSetValue(rule.minutes)
   const hour = getSingleSetValue(rule.hours)
-  const unrestrictedDayOfMonth = !rule.dayOfMonthRestricted
+  // Why coverage rather than the star flags (#15896): `*/2` carries a star but only covers half
+  // the month — labeling it "Daily" would promise runs the schedule never makes. The star flags
+  // drive vixie OR/AND matching; labels must describe what actually fires.
+  const unrestrictedDayOfMonth = setContainsRange(rule.daysOfMonth, 1, 31)
   const unrestrictedMonth = setContainsRange(rule.months, 1, 12)
-  const unrestrictedDayOfWeek = !rule.dayOfWeekRestricted
+  const unrestrictedDayOfWeek = setContainsRange(rule.daysOfWeek, 0, 6)
   const unrestrictedCalendar = unrestrictedDayOfMonth && unrestrictedMonth
   if (
     minute !== null &&
@@ -502,6 +510,9 @@ function cronDateMatches(rule: ParsedCron, timestamp: number): boolean {
   }
   const dayOfMonthMatches = rule.daysOfMonth.has(date.getDate())
   const dayOfWeekMatches = rule.daysOfWeek.has(date.getDay())
+  // Why (#15896): vixie semantics — when either day field is starred (`*`, `*/2`, …) both must
+  // match (the starred one matches everything, so the other alone decides); when neither is
+  // starred — even if one enumerates its whole range — either matching fires the day.
   if (rule.dayOfMonthRestricted && rule.dayOfWeekRestricted) {
     return dayOfMonthMatches || dayOfWeekMatches
   }

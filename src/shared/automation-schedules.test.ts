@@ -108,6 +108,43 @@ describe('automation schedules', () => {
     expect(formatAutomationSchedule('FREQ=HOURLY;BYMINUTE=5')).toBe('Hourly at :05')
   })
 
+  it('keys cron day restriction off the literal star, not the enumerated set size', () => {
+    // Vixie/cronie table from #15896, anchored at Friday 2026-05-01T12:00 — restriction is
+    // DOM_STAR/DOW_STAR (the field literally starts with `*`), so a field that merely
+    // enumerates its whole range stays restricted and keeps OR day matching.
+    const after = new Date('2026-05-01T12:00:00').getTime()
+    const dtstart = new Date('2026-05-01T00:00:00').getTime()
+
+    // `1-31` is not a star: both day fields restricted → OR → the always-matching day-of-month
+    // fires every day, not Mondays only.
+    expect(nextAutomationOccurrenceAfter('0 9 1-31 * 1', after, dtstart)).toBe(
+      new Date('2026-05-02T09:00:00').getTime()
+    )
+    // N/step spellings carry no star either, so they stay restricted and keep OR matching —
+    // with today's parser `1/1` covers only the 1st and `0/1` only Sundays, so the next fire
+    // is the first OR-branch hit after the anchor (Monday 05-04 / Sunday 05-03).
+    expect(nextAutomationOccurrenceAfter('0 0 1/1 * 1', after, dtstart)).toBe(
+      new Date('2026-05-04T00:00:00').getTime()
+    )
+    expect(nextAutomationOccurrenceAfter('0 9 1 * 0/1', after, dtstart)).toBe(
+      new Date('2026-05-03T09:00:00').getTime()
+    )
+    // A starred day-of-month (`*/2` = odd days from the 1st) switches to AND: the day must be
+    // an odd day AND a Monday — 2026-05-11 is the first such Monday after the anchor.
+    expect(nextAutomationOccurrenceAfter('0 9 */2 * 1', after, dtstart)).toBe(
+      new Date('2026-05-11T09:00:00').getTime()
+    )
+  })
+
+  it('does not label starred-but-partial day coverage as daily', () => {
+    // The star drives vixie matching, but `*/2` only covers half the month — the friendly
+    // label must not promise a run every day (#15896).
+    expect(classifyAutomationCronSchedule('0 9 */2 * *').kind).toBe('custom')
+    // Full enumeration without a star really does fire daily under OR matching, so the label
+    // may stay "Daily".
+    expect(formatAutomationSchedule('0 9 1-31 * *')).toMatch(/^Daily at /)
+  })
+
   it('computes custom cron schedules', () => {
     const next = nextAutomationOccurrenceAfter(
       '15 10 * * 1-5',
