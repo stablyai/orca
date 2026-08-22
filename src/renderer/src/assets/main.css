@@ -3083,3 +3083,58 @@ html.native-shell .app-layout {
     inset 0 1px 0 0 color-mix(in srgb, var(--foreground) 5%, transparent),
     0 10px 24px rgba(0, 0, 0, 0.18);
 }
+
+.titlebar-session-view-host {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  align-self: stretch;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+}
+
+.titlebar-session-view-switcher {
+  -webkit-app-region: no-drag;
+  pointer-events: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  height: 28px;
+  padding: 2px;
+  border: 1px solid color-mix(in srgb, var(--border) 78%, transparent);
+  border-radius: var(--radius);
+  background: color-mix(in srgb, var(--muted) 52%, transparent);
+}
+
+.titlebar-session-view-switcher > button {
+  height: 22px;
+  min-width: 66px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: calc(var(--radius) - 3px);
+  background: transparent;
+  color: var(--muted-foreground);
+  font-size: 12px;
+  font-weight: 550;
+  line-height: 22px;
+  cursor: pointer;
+  transition:
+    background-color 120ms ease-out,
+    color 120ms ease-out;
+}
+
+.titlebar-session-view-switcher > button:hover {
+  color: var(--foreground);
+}
+
+.titlebar-session-view-switcher > button[data-state='active'] {
+  background: var(--background);
+  color: var(--foreground);
+  box-shadow: 0 1px 2px rgb(0 0 0 / 0.12);
+}
+
+.titlebar-session-view-switcher > button:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: -2px;
+}

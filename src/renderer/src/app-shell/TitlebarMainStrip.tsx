@@ -49,10 +49,15 @@ export function TitlebarMainStrip({ layout }: { layout: AppChromeLayout }): Reac
       {layout.activeView === 'activity' ? (
         <ActivityTitlebarControls />
       ) : layout.creationLayoutActive ? null : (
-        <div
-          id="titlebar-tabs"
-          className={`flex flex-1 min-w-0 self-stretch${!layout.workspaceChromeActive ? ' invisible pointer-events-none' : ''}`}
-        />
+        <>
+          {layout.workspaceChromeActive ? (
+            <div className="titlebar-session-view-host">
+              <div id="titlebar-session-view-switcher" />
+            </div>
+          ) : (
+            <div id="titlebar-tabs" className="invisible flex min-w-0 flex-1 self-stretch" />
+          )}
+        </>
       )}
       {layout.showTitlebarExpandButton && (
         <Tooltip>

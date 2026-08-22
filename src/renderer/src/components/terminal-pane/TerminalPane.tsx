@@ -110,6 +110,7 @@ import { shouldShowMobileDriverOverlay } from './mobile-driver-overlay-visibilit
 import { getAllDrivers, getDriverForPty, isPtyLocked } from '@/lib/pane-manager/mobile-driver-state'
 import { shouldChatTakeOverMobileSurface } from '../native-chat/native-chat-send-eligibility'
 import { canToggleNativeChat } from '../native-chat/native-chat-availability'
+import { NativeChatViewSwitcher } from '../native-chat/NativeChatViewSwitcher'
 import {
   nativeChatLaunchAgentForLeaf,
   resolveNativeChatLeafRoute,
@@ -2957,6 +2958,7 @@ function TerminalPane(
   )
   // Each toggle gates on its own leaf (header=active, menu=opened-over), so mixed splits show it only where chat can render.
   const activePaneCanToggleChat = canToggleChatForLeaf(activePane?.leafId ?? null)
+  const titlebarSessionViewTarget = document.getElementById('titlebar-session-view-switcher')
   const contextMenuCanToggleChat = canToggleChatForLeaf(contextMenuLeafId)
   return (
     <>
@@ -3050,6 +3052,15 @@ function TerminalPane(
           )
         : null}
       <DaemonActionDialog api={daemonActions} />
+      {isActive && activePaneCanToggleChat && titlebarSessionViewTarget
+        ? createPortal(
+            <NativeChatViewSwitcher
+              isChatViewMode={activePaneIsChatLeaf}
+              onToggleNativeChat={handleToggleNativeChat}
+            />,
+            titlebarSessionViewTarget
+          )
+        : null}
       {isActive && (
         <TerminalSessionStateSaveFailureDialog
           open={sessionStateSaveFailureOpen}
@@ -3214,9 +3225,6 @@ function TerminalPane(
         hiddenStartupStyle={hiddenStartupStyle}
         managerRef={managerRef}
         paneTransportsRef={paneTransportsRef}
-        canToggleNativeChat={activePaneCanToggleChat}
-        isChatViewMode={activePaneIsChatLeaf}
-        onToggleNativeChat={handleToggleNativeChat}
         canContinueAgentSessionInNewSession={activePaneCanContinueInNewSession}
         onContinueAgentSessionInNewSession={(pane) =>
           contextMenu.runForPane(pane.id, contextMenu.onContinueAgentSessionInNewSession)
