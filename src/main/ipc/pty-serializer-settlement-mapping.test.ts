@@ -10,6 +10,7 @@ import {
 import {
   registerPtyHandlers,
   registerPtyRenderer,
+  handoffPtyRendererOwnership,
   registerSshPtyProvider,
   clearProviderPtyState,
   deletePtyOwnership,
@@ -300,6 +301,7 @@ describe('registerPtyHandlers', () => {
       worktreeId: 'wt-1',
       env: { ORCA_PANE_KEY: ` ${paneKey} ` }
     })
+    ptyRendererOwners.claim(result.id, mainWindow.webContents as never)
     const replacementGen = (await handlers.get('pty:declarePendingPaneSerializer')!(null, {
       paneKey
     })) as number
@@ -368,6 +370,7 @@ describe('registerPtyHandlers', () => {
       paneKey
     })) as number
     await spawn()
+    ptyRendererOwners.claim(reusedPtyId, mainWindow.webContents as never)
     await handlers.get('pty:settlePaneSerializer')!(null, { paneKey, gen: firstGen })
     const priorGeneration = spawnController.getRendererSerializerGeneration?.(reusedPtyId) ?? 0
 
@@ -440,6 +443,90 @@ describe('registerPtyHandlers', () => {
     expect(hasPendingRendererSerializerForPaneKey(paneKey)).toBe(true)
     await handlers.get('pty:settlePaneSerializer')!(mainWindowIpcEvent, { paneKey, gen })
     expect(hasPendingRendererSerializerForPaneKey(paneKey)).toBe(false)
+  })
+  it('rejects a serializer declaration for a pane owned by another renderer', async () => {
+    registerPtyHandlers(mainWindow as never)
+    registerPtyRenderer(foreignWindowIpcEvent.sender as never)
+    const tabId = 'tab-bound-owner'
+    const leafId = '77777777-7777-4777-8777-777777777777'
+    const paneKey = makePaneKey(tabId, leafId)
+
+    const result = (await handlers.get('pty:spawn')!(mainWindowIpcEvent, {
+      cols: 80,
+      rows: 24,
+      worktreeId: 'wt-bound-owner',
+      tabId,
+      leafId,
+      env: { ORCA_PANE_KEY: paneKey }
+    })) as { id: string }
+    expect(ptyRendererOwners.owns(result.id, mainWindow.webContents as never)).toBe(true)
+
+    await expect(
+      handlers.get('pty:declarePendingPaneSerializer')!(foreignWindowIpcEvent, { paneKey })
+    ).rejects.toThrow('untrusted_ui_renderer')
+    expect(hasPendingRendererSerializerForPaneKey(paneKey)).toBe(false)
+  })
+  it('rejects late serializer settlement from the old owner after handoff', async () => {
+    type RuntimeSpawnController = {
+      hasRendererSerializer?(ptyId: string): boolean
+    }
+    let controller: RuntimeSpawnController | null = null
+    const runtime = {
+      setPtyController: vi.fn((value) => {
+        controller = value
+      }),
+      preAllocateHandleForPty: vi.fn(() => null),
+      registerPty: vi.fn(),
+      noteTerminalSpawnCommand: vi.fn(),
+      onPtySpawned: vi.fn(),
+      onPtyExit: vi.fn(),
+      onPtyData: vi.fn()
+    }
+    registerPtyHandlers(mainWindow as never, runtime as never)
+    const spawnController = controller as unknown as RuntimeSpawnController
+    registerPtyRenderer(foreignWindowIpcEvent.sender as never)
+    ptyRendererOwners.markDispatcherReady(foreignWindowIpcEvent.sender as never)
+    const tabId = 'tab-serializer-handoff'
+    const leafId = '88888888-8888-4888-8888-888888888888'
+    const paneKey = makePaneKey(tabId, leafId)
+    const sourceGen = (await handlers.get('pty:declarePendingPaneSerializer')!(mainWindowIpcEvent, {
+      paneKey
+    })) as number
+    const result = (await handlers.get('pty:spawn')!(mainWindowIpcEvent, {
+      cols: 80,
+      rows: 24,
+      worktreeId: 'wt-serializer-handoff',
+      tabId,
+      leafId,
+      env: { ORCA_PANE_KEY: paneKey }
+    })) as { id: string }
+
+    handoffPtyRendererOwnership(
+      [result.id],
+      mainWindow.webContents as never,
+      foreignWindowIpcEvent.sender as never
+    )
+    await handlers.get('pty:settlePaneSerializer')!(mainWindowIpcEvent, {
+      paneKey,
+      gen: sourceGen
+    })
+    await handlers.get('pty:clearPendingPaneSerializer')!(mainWindowIpcEvent, {
+      paneKey,
+      gen: sourceGen
+    })
+
+    expect(hasPendingRendererSerializerForPaneKey(paneKey)).toBe(true)
+    expect(spawnController.hasRendererSerializer?.(result.id)).toBe(false)
+    const targetGen = (await handlers.get('pty:declarePendingPaneSerializer')!(
+      foreignWindowIpcEvent,
+      { paneKey }
+    )) as number
+    await handlers.get('pty:settlePaneSerializer')!(foreignWindowIpcEvent, {
+      paneKey,
+      gen: targetGen
+    })
+    expect(hasPendingRendererSerializerForPaneKey(paneKey)).toBe(false)
+    expect(spawnController.hasRendererSerializer?.(result.id)).toBe(true)
   })
   it('rejects pending serializer declaration from an obsolete frame', async () => {
     registerPtyHandlers(mainWindow as never)

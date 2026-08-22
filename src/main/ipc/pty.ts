@@ -995,6 +995,14 @@ function settlePendingPaneSerializer(paneKey: string, gen: number, sender: WebCo
   if (pending?.gen !== gen || pending.ownerWebContents !== sender) {
     return false
   }
+  const generationPtyId = pendingPtyIdBySerializerGeneration.get(gen)
+  const panePtyId = paneKeyPtyId.get(paneKey)
+  if (
+    (generationPtyId && !ptyRendererOwners.owns(generationPtyId, sender)) ||
+    (panePtyId && panePtyId !== generationPtyId && !ptyRendererOwners.owns(panePtyId, sender))
+  ) {
+    return false
+  }
   pendingByPaneKey.delete(paneKey)
   return true
 }
@@ -8247,6 +8255,10 @@ export function registerPtyHandlers(
       }
       const sender = getCurrentPtyEventSender(event)
       if (!sender) {
+        throw new Error('untrusted_ui_renderer')
+      }
+      const mappedPtyId = paneKeyPtyId.get(args.paneKey)
+      if (mappedPtyId && !ptyRendererOwners.owns(mappedPtyId, sender)) {
         throw new Error('untrusted_ui_renderer')
       }
       return declarePendingPaneSerializer(args.paneKey, sender)
