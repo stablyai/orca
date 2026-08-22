@@ -239,7 +239,11 @@ export function blankStringContents(source: string, reportDesync = false): strin
     // which reads as a string opener and desyncs the rest of the file. The
     // classic prev-token test disambiguates it from division: after a value a
     // `/` divides, after an operator or opener it starts a pattern.
-    if (char === '/' && startsRegexLiteral(out)) {
+    // `/*` and `//` open comments, never patterns. Callers normally strip
+    // comments first, but this runs standalone too, and at index 0 a file
+    // starting with a banner comment read as one giant regex.
+    const next = source[index + 1]
+    if (char === '/' && next !== '/' && next !== '*' && startsRegexLiteral(out)) {
       const end = findRegexLiteralEnd(source, index)
       if (end !== -1) {
         out += `/${' '.repeat(end - index - 1)}`

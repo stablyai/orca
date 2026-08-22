@@ -77,3 +77,30 @@ describe('blankStringContents', () => {
     expect(blankStringContents(source).split('\n')).toHaveLength(source.split('\n').length)
   })
 })
+
+describe('regex literals', () => {
+  it('does not let an apostrophe in a pattern open a string', () => {
+    // The real shape, from a shell quoter: the `'` inside /'/g read as a string
+    // opener and desynced every later line, so a scan of the file silently
+    // found nothing and its guard reported clean.
+    const source = "const q = (v: string): string => `'${v.replace(/'/g, \"x\")}'`\nspawn('wsl.exe')\n"
+    expect(blankStringContents(source, true)).not.toBe('desynced')
+    expect(blankStringContents(source)).toContain('spawn(')
+  })
+
+  it('treats a leading block comment as a comment, not a pattern', () => {
+    // `/*` at index 0 has no preceding token, so the prev-token test called it
+    // a pattern and swallowed to the next `/` -- 110k characters of a real
+    // file, in the direction that hides offenders.
+    const source = '/* banner with a renderer/Electron slash */\nspawn("wsl.exe")\n'
+    // Assert the swallowed span itself survives: `spawn(` sits after the bad
+    // region, so checking only for it passes even while the banner is eaten.
+    expect(blankStringContents(source)).toContain('banner with a renderer')
+  })
+
+  it('still reads division as division', () => {
+    const source = 'const a = (x) / 2\nconst b = arr[i] / 2\nspawn("wsl.exe")\n'
+    expect(blankStringContents(source)).toContain('spawn(')
+    expect(blankStringContents(source, true)).not.toBe('desynced')
+  })
+})
