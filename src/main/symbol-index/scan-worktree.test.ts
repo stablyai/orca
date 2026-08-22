@@ -12,9 +12,7 @@ describe('scan-worktree', () => {
     return root
   }
   afterEach(async () => {
-    await Promise.all(
-      createdRoots.splice(0).map((r) => rm(r, { recursive: true, force: true }))
-    )
+    await Promise.all(createdRoots.splice(0).map((r) => rm(r, { recursive: true, force: true })))
   })
 
   it('lists supported files and skips node_modules/.git', async () => {
@@ -30,7 +28,7 @@ describe('scan-worktree', () => {
     expect(files).toEqual([path.join(root, 'a.ts')])
   })
 
-  it('bounds directory traversal via maxDirs even when no indexable files are found', async () => {
+  it('bounds directory traversal via maxDirs before maxFiles', async () => {
     const root = await makeRoot('orca-scan-dirs-')
     for (let i = 0; i < 5; i++) {
       const sub = path.join(root, `d${i}`)
@@ -39,9 +37,8 @@ describe('scan-worktree', () => {
     }
 
     const files = await listIndexableFiles(root, { maxFiles: 100, maxDirs: 3 })
-    // Only a subset of the 5 subdirectories may be visited before the
-    // maxDirs bound trips, even though maxFiles was never reached.
-    expect(files.length).toBeLessThan(5)
+    expect(files.length).toBeGreaterThan(0)
+    expect(files.length).toBeLessThanOrEqual(3)
   })
 
   it('maps extensions to language ids', () => {
