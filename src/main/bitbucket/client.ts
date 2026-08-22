@@ -131,11 +131,12 @@ async function getBuildStatus(
   if (!headSha) {
     return { status: 'neutral' }
   }
-  const data = await requestJson<{ values?: RawBitbucketBuildStatus[] }>(
+  const data = await requestJson<{ values?: RawBitbucketBuildStatus[]; next?: unknown }>(
     `/repositories/${encodedRepoPath(repo)}/commit/${encodeURIComponent(headSha)}/statuses/build`,
     { searchParams: { pagelen: '100' } }
   )
-  return deriveBitbucketBuildStatuses(data?.values ?? [])
+  const statuses = deriveBitbucketBuildStatuses(data?.values ?? [])
+  return data?.next === undefined || data.next === null ? statuses : { status: statuses.status }
 }
 
 async function normalizePullRequest(
