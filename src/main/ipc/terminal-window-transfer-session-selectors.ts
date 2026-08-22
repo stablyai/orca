@@ -49,7 +49,7 @@ function pickTab(
   if (current && current !== transferredTabId && hasTab(state, current, workspaceId)) {
     return current
   }
-  if (prior) {
+  if (prior && hasTab(state, prior, workspaceId)) {
     return prior
   }
   return fallbackToTransfer && hasTab(state, transferredTabId, workspaceId)
@@ -140,14 +140,18 @@ export function reconcileTerminalTransferSelectors(
     (current.activeWorktreeId && hasWorkspaceContent(next, current.activeWorktreeId)
       ? current.activeWorktreeId
       : null) ??
-    prior.activeWorktreeId ??
-    (options.fallbackToTransfer ? seed.worktreeId : null)
+    (prior.activeWorktreeId && hasWorkspaceContent(next, prior.activeWorktreeId)
+      ? prior.activeWorktreeId
+      : null) ??
+    (options.fallbackToTransfer && hasWorkspaceContent(next, seed.worktreeId)
+      ? seed.worktreeId
+      : null)
 
   const currentGroupId = current.activeGroupIdByWorktree?.[seed.worktreeId]
   const priorGroupId = prior.activeGroupIdByWorktree?.[seed.worktreeId]
   const groupId = hasGroup(next, seed.worktreeId, currentGroupId)
     ? currentGroupId
-    : (priorGroupId ??
+    : ((hasGroup(next, seed.worktreeId, priorGroupId) ? priorGroupId : undefined) ??
       (options.fallbackToTransfer && hasGroup(next, seed.worktreeId, options.targetGroupId)
         ? options.targetGroupId
         : undefined))

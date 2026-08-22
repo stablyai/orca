@@ -3,7 +3,42 @@ import {
   removeTransferredTerminalSession,
   restoreTransferredTerminalSession
 } from './terminal-window-transfer-session-patch'
+import { importTransferredTerminalSession } from './terminal-window-transfer-target-import'
 import { terminalWindowSeed, terminalWindowSession } from './terminal-window-transfer-test-fixture'
+
+function addDeletedPriorSelectors(
+  state: ReturnType<typeof terminalWindowSession>,
+  activeWorktreeId = 'wt-1'
+): void {
+  state.activeTabId = 'tab-gone'
+  state.activeTabIdByWorktree = { 'wt-1': 'tab-gone' }
+  state.activeWorktreeId = activeWorktreeId
+  state.activeGroupIdByWorktree = { 'wt-1': 'group-gone' }
+  state.tabsByWorktree['wt-1'] = [
+    ...(state.tabsByWorktree['wt-1'] ?? []),
+    { ...terminalWindowSeed().tab, id: 'tab-gone', ptyId: 'pty-gone' }
+  ]
+  if (activeWorktreeId !== 'wt-1') {
+    state.tabsByWorktree[activeWorktreeId] = [
+      {
+        ...terminalWindowSeed().tab,
+        id: 'tab-workspace-gone',
+        ptyId: 'pty-workspace-gone',
+        worktreeId: activeWorktreeId
+      }
+    ]
+  }
+  state.tabGroups ??= {}
+  state.tabGroups['wt-1'] = [
+    ...(state.tabGroups['wt-1'] ?? []),
+    {
+      id: 'group-gone',
+      worktreeId: 'wt-1',
+      activeTabId: 'tab-gone',
+      tabOrder: ['tab-gone']
+    }
+  ]
+}
 
 describe('terminal window transfer target session rollback', () => {
   it('restores prior tab-scoped backing values instead of deleting them', () => {
@@ -191,6 +226,61 @@ describe('terminal window transfer target session rollback', () => {
       activeTabIdByWorktree: { 'wt-1': 'tab-live' },
       activeTabTypeByWorktree: { 'wt-1': 'terminal' },
       activeGroupIdByWorktree: { 'wt-1': 'group-live' }
+    })
+  })
+
+  it('does not restore target selectors after their prior entities were concurrently deleted', () => {
+    const prior = terminalWindowSession(false)
+    addDeletedPriorSelectors(prior)
+    const current = terminalWindowSession(true)
+    current.activeTabId = terminalWindowSeed().tabId
+    current.activeTabIdByWorktree = { 'wt-1': terminalWindowSeed().tabId }
+    current.activeGroupIdByWorktree = { 'wt-1': terminalWindowSeed().group.id }
+
+    const restored = removeTransferredTerminalSession(current, prior, terminalWindowSeed())
+
+    expect(restored.activeTabId).toBeNull()
+    expect(restored.activeTabIdByWorktree?.['wt-1'] ?? null).toBeNull()
+    expect(restored.activeWorktreeId).toBeNull()
+    expect(restored.activeGroupIdByWorktree?.['wt-1']).toBeUndefined()
+  })
+
+  it('does not restore source selectors after their prior entities were concurrently deleted', () => {
+    const prior = terminalWindowSession(true)
+    addDeletedPriorSelectors(prior, 'workspace-gone')
+    const current = terminalWindowSession(false)
+    current.activeWorktreeId = null
+
+    const restored = restoreTransferredTerminalSession(current, prior, terminalWindowSeed())
+
+    expect(restored.activeTabId).toBeNull()
+    expect(restored.activeTabIdByWorktree?.['wt-1'] ?? null).toBeNull()
+    expect(restored.activeWorktreeId).toBeNull()
+    expect(restored.activeGroupIdByWorktree?.['wt-1']).toBeUndefined()
+  })
+
+  it('imports with live transfer selectors when prior target entities were concurrently deleted', () => {
+    const prior = terminalWindowSession(false)
+    addDeletedPriorSelectors(prior, 'workspace-gone')
+    const current = terminalWindowSession(false)
+    current.activeTabId = null
+    current.activeTabIdByWorktree = { 'wt-1': null }
+    current.activeWorktreeId = null
+    current.activeGroupIdByWorktree = {}
+
+    const imported = importTransferredTerminalSession(
+      current,
+      prior,
+      terminalWindowSession(true),
+      terminalWindowSeed(),
+      false
+    )
+
+    expect(imported).toMatchObject({
+      activeTabId: 'tab-1',
+      activeTabIdByWorktree: { 'wt-1': 'tab-1' },
+      activeWorktreeId: 'wt-1',
+      activeGroupIdByWorktree: { 'wt-1': 'group-1' }
     })
   })
 })
