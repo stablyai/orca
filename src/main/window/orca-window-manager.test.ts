@@ -164,4 +164,16 @@ describe('OrcaWindowManager', () => {
     expect(manager.getControlWindow()).toBeNull()
     expect(manager.isTrustedSender(destroyed.webContents as never)).toBe(false)
   })
+
+  it('retains a destroyed window role until explicit removal', () => {
+    const manager = new OrcaWindowManager()
+    const state = { destroyed: false }
+    const window = makeWindow(1, { x: 0, y: 0, width: 800, height: 600 }, state)
+    manager.register(window as never, 'control')
+    state.destroyed = true
+
+    expect(manager.getRole(window.id)).toBe('control')
+    manager.remove(window.id)
+    expect(manager.getRole(window.id)).toBeNull()
+  })
 })

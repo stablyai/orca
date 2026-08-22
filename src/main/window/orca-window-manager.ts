@@ -77,7 +77,7 @@ export class OrcaWindowManager {
   }
 
   getRole(windowId: number): OrcaWindowRole | null {
-    return this.#liveEntry(windowId)?.role ?? null
+    return this.#windows.get(windowId)?.role ?? null
   }
 
   getWindowForSender(sender: WebContents): BrowserWindow | null {

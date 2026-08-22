@@ -301,6 +301,7 @@ describe('createMainWindow multi-window registration', () => {
 
     createMainWindow(null, { deferLoad: true, orcaWindowRole: 'secondary' })
     currentRole = 'control'
+    promotedControl.instance.isDestroyed.mockReturnValue(true)
     promotedControl.windowHandlers.get('closed')?.forEach((handler) => handler())
 
     expect(closeDashboardMock).toHaveBeenCalledOnce()
