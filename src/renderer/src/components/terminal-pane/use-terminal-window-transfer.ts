@@ -49,6 +49,7 @@ export async function executeTerminalWindowTransferCommand(
     fresh
   )
   return {
+    transferId: command.transferId,
     tabId: command.tabId,
     phase: command.phase,
     ok: true,
@@ -66,6 +67,7 @@ export function useTerminalWindowTransfer(): TerminalWindowContext | null {
         (ack) => window.api.terminalWindow.ack(ack),
         (error) =>
           window.api.terminalWindow.ack({
+            transferId: command.transferId,
             tabId: command.tabId,
             phase: command.phase,
             ok: false,

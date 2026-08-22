@@ -1,3 +1,6 @@
+// @vitest-environment happy-dom
+
+import { renderHook, waitFor } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const mocks = vi.hoisted(() => ({
@@ -14,13 +17,17 @@ vi.mock('@/lib/workspace-session', () => ({ buildWorkspaceSessionPayload: mocks.
 vi.mock('@/lib/workspace-session-host-persistence', () => ({
   persistWorkspaceSessionByHost: mocks.persist
 }))
+vi.mock('./pty-dispatcher', () => ({ ensurePtyDispatcher: vi.fn() }))
 
-import { executeTerminalWindowTransferCommand } from './use-terminal-window-transfer'
+import {
+  executeTerminalWindowTransferCommand,
+  useTerminalWindowTransfer
+} from './use-terminal-window-transfer'
 
 describe('executeTerminalWindowTransferCommand', () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    globalThis.window = { api: { session: {} } } as never
+    globalThis.window.api = { session: {} } as never
   })
 
   it('imports, durably persists, and acknowledges a transferred terminal', async () => {
@@ -47,11 +54,13 @@ describe('executeTerminalWindowTransferCommand', () => {
 
     await expect(
       executeTerminalWindowTransferCommand({
+        transferId: 'transfer-1',
         tabId: 'tab-1',
         phase: 'target-import',
         seed
       })
     ).resolves.toEqual({
+      transferId: 'transfer-1',
       tabId: 'tab-1',
       phase: 'target-import',
       ok: true,
@@ -59,5 +68,44 @@ describe('executeTerminalWindowTransferCommand', () => {
     })
     expect(importTransferredTerminalTab).toHaveBeenCalledWith(seed)
     expect(mocks.persist).toHaveBeenCalledOnce()
+  })
+
+  it('copies the transfer ID into rejected command ACKs', async () => {
+    const ack = vi.fn()
+    let onCommand!: (command: never) => void
+    globalThis.window.api = {
+      session: {},
+      terminalWindow: {
+        ack,
+        detach: vi.fn(),
+        getContext: vi.fn().mockResolvedValue({
+          windowId: 1,
+          role: 'control',
+          transitionFenced: false
+        }),
+        onCommand: vi.fn((callback) => {
+          onCommand = callback
+          return vi.fn()
+        })
+      }
+    } as never
+    mocks.getState.mockReturnValue({ workspaceSessionReady: true, hydrationSucceeded: true })
+
+    renderHook(() => useTerminalWindowTransfer())
+    onCommand({
+      transferId: 'transfer-rejected',
+      tabId: 'tab-1',
+      phase: 'target-import'
+    } as never)
+
+    await waitFor(() =>
+      expect(ack).toHaveBeenCalledWith({
+        transferId: 'transfer-rejected',
+        tabId: 'tab-1',
+        phase: 'target-import',
+        ok: false,
+        error: 'terminal_transfer_seed_missing'
+      })
+    )
   })
 })

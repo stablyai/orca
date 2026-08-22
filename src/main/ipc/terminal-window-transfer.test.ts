@@ -246,7 +246,61 @@ describe('TerminalWindowTransferCoordinator', () => {
       'terminalWindow:command',
       expect.objectContaining({ phase: 'source-remove' })
     )
+    const targetCommand = h.target.webContents.send.mock.calls[0]?.[1]
+    const sourceCommand = h.source.webContents.send.mock.calls[0]?.[1]
+    expect(targetCommand.transferId).toEqual(expect.any(String))
+    expect(targetCommand.transferId).not.toBe('')
+    expect(sourceCommand.transferId).toBe(targetCommand.transferId)
     expect(h.owners.owns('pty-1', h.target.webContents as never)).toBe(true)
+  })
+
+  it('settles only the current well-formed ACK for the exact transfer', async () => {
+    const h = createHarness()
+    const { TerminalWindowTransferCoordinator } = await import('./terminal-window-transfer')
+    let coordinator!: InstanceType<typeof TerminalWindowTransferCoordinator>
+    coordinator = new TerminalWindowTransferCoordinator({
+      store: {} as never,
+      createSecondaryWindow: vi.fn(),
+      windows: h.windows,
+      sessions: h.sessions as never,
+      owners: h.owners,
+      getCursorPoint: () => ({ x: 700, y: 100 }),
+      handoff: h.handoff,
+      timeoutMs: 100
+    })
+    h.target.webContents.send.mockImplementation((_channel, command) => {
+      queueMicrotask(() => {
+        coordinator.acknowledge(ipcEvent(h.target.webContents) as never, {
+          ...command,
+          ok: false,
+          error: 'invalid_ack_settled',
+          empty: 'yes'
+        })
+        coordinator.acknowledge(ipcEvent(h.target.webContents) as never, {
+          ...command,
+          transferId: 'stale-transfer',
+          ok: false,
+          error: 'stale_ack_settled'
+        })
+        coordinator.acknowledge(ipcEvent(h.target.webContents) as never, {
+          ...command,
+          ok: true
+        })
+      })
+    })
+    h.source.webContents.send.mockImplementation((_channel, command) => {
+      queueMicrotask(() =>
+        coordinator.acknowledge(ipcEvent(h.source.webContents) as never, {
+          ...command,
+          ok: true
+        })
+      )
+    })
+    coordinator.getContext(ipcEvent(h.target.webContents) as never)
+
+    await expect(
+      coordinator.detach(ipcEvent(h.source.webContents) as never, seed())
+    ).resolves.toEqual({ ok: true, targetWindowId: 2 })
   })
 
   it('rejects a mismatched target without moving ownership', async () => {

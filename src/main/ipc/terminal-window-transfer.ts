@@ -1,8 +1,8 @@
+import { randomUUID } from 'node:crypto'
 import { ipcMain, screen, type BrowserWindow, type IpcMainEvent, type WebContents } from 'electron'
 import { getDefaultWorkspaceSession } from '../../shared/constants'
 import type {
   TerminalWindowContext,
-  TerminalWindowTransferAck,
   TerminalWindowTransferResult
 } from '../../shared/terminal-window-transfer'
 import { getWindowSessionRegistry } from '../persistence/window-session-registry'
@@ -23,6 +23,7 @@ import {
   sendTerminalWindowTransferCommand,
   sessionHasTerminalTab,
   sessionMatchesTerminalWindowTarget,
+  settleTerminalWindowTransferAck,
   waitUntilTerminalWindowCommandReady,
   type TerminalWindowTransfer,
   type TerminalWindowTransferOperations
@@ -135,6 +136,7 @@ export class TerminalWindowTransferCoordinator {
     let abort!: (error: Error) => void
     let finish!: () => void
     const transfer: TerminalWindowTransfer = {
+      transferId: randomUUID(),
       seed,
       source,
       target: null,
@@ -223,6 +225,7 @@ export class TerminalWindowTransferCoordinator {
 
       transfer.targetImportAttempted = true
       await sendTerminalWindowTransferCommand(this.#operations, transfer, target.webContents, {
+        transferId: transfer.transferId,
         tabId: seed.tabId,
         phase: 'target-import',
         seed
@@ -236,6 +239,7 @@ export class TerminalWindowTransferCoordinator {
         transfer,
         source.webContents,
         {
+          transferId: transfer.transferId,
           tabId: seed.tabId,
           phase: 'source-remove'
         }
@@ -262,22 +266,10 @@ export class TerminalWindowTransferCoordinator {
     }
   }
 
-  acknowledge(event: RendererIpcEvent, ack: TerminalWindowTransferAck): void {
+  acknowledge(event: RendererIpcEvent, input: unknown): void {
     const sender = this.#getTrustedSender(event)
-    if (!sender) {
-      return
-    }
-    const transfer = this.#transfers.get(ack?.tabId)
-    const waiter = transfer?.waiters.get(ack?.phase)
-    if (!waiter || waiter.sender !== sender) {
-      return
-    }
-    transfer!.waiters.delete(ack.phase)
-    clearTimeout(waiter.timer)
-    if (ack.ok) {
-      waiter.resolve(ack)
-    } else {
-      waiter.reject(new Error(ack.error || `terminal_transfer_${ack.phase}_failed`))
+    if (sender) {
+      settleTerminalWindowTransferAck(this.#transfers, sender, input)
     }
   }
 
@@ -304,7 +296,7 @@ export function registerTerminalWindowTransferHandlers(
   ipcMain.removeAllListeners('terminalWindow:ack')
   ipcMain.handle('terminalWindow:detach', (event, seed) => coordinator.detach(event, seed))
   ipcMain.handle('terminalWindow:getContext', (event) => coordinator.getContext(event))
-  ipcMain.on('terminalWindow:ack', (event: IpcMainEvent, ack: TerminalWindowTransferAck) => {
+  ipcMain.on('terminalWindow:ack', (event: IpcMainEvent, ack: unknown) => {
     coordinator.acknowledge(event, ack)
   })
   return coordinator

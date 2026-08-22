@@ -22,18 +22,47 @@ export type TerminalWindowTransferPhase =
   | 'source-remove'
   | 'source-restore'
 
-export type TerminalWindowTransferCommand = {
+type TerminalWindowTransferCommandIdentity = {
+  transferId: string
   tabId: string
-  phase: TerminalWindowTransferPhase
-  seed?: TerminalWindowTransferSeed
 }
 
+export type TerminalWindowTransferCommand = TerminalWindowTransferCommandIdentity &
+  (
+    | {
+        phase: 'target-import' | 'source-restore'
+        seed: TerminalWindowTransferSeed
+      }
+    | {
+        phase: 'target-remove' | 'source-remove'
+        seed?: never
+      }
+  )
+
 export type TerminalWindowTransferAck = {
+  transferId: string
   tabId: string
   phase: TerminalWindowTransferPhase
   ok: boolean
   error?: string
   empty?: boolean
+}
+
+export function isTerminalWindowTransferAck(value: unknown): value is TerminalWindowTransferAck {
+  const ack = value as Partial<TerminalWindowTransferAck> | null
+  return Boolean(
+    ack &&
+    typeof ack.transferId === 'string' &&
+    ack.transferId.length > 0 &&
+    typeof ack.tabId === 'string' &&
+    ack.tabId.length > 0 &&
+    ['target-import', 'target-remove', 'source-remove', 'source-restore'].includes(
+      ack.phase ?? ''
+    ) &&
+    typeof ack.ok === 'boolean' &&
+    (ack.error === undefined || typeof ack.error === 'string') &&
+    (ack.empty === undefined || typeof ack.empty === 'boolean')
+  )
 }
 
 export type TerminalWindowTransferResult =

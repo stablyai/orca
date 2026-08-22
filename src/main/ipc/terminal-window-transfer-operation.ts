@@ -1,11 +1,12 @@
 import type { BrowserWindow, WebContents } from 'electron'
 import { LOCAL_EXECUTION_HOST_ID, normalizeExecutionHostId } from '../../shared/execution-host'
 import { isWorkspaceKey, worktreeWorkspaceKey } from '../../shared/workspace-scope'
-import type {
-  TerminalWindowTransferAck,
-  TerminalWindowTransferCommand,
-  TerminalWindowTransferPhase,
-  TerminalWindowTransferSeed
+import {
+  isTerminalWindowTransferAck,
+  type TerminalWindowTransferAck,
+  type TerminalWindowTransferCommand,
+  type TerminalWindowTransferPhase,
+  type TerminalWindowTransferSeed
 } from '../../shared/terminal-window-transfer'
 import type { WorkspaceSessionState } from '../../shared/workspace-session-state-types'
 import type { WindowSessionRegistry } from '../persistence/window-session-registry'
@@ -20,6 +21,7 @@ type CommandWaiter = {
 }
 
 export type TerminalWindowTransfer = {
+  transferId: string
   seed: TerminalWindowTransferSeed
   source: BrowserWindow
   target: BrowserWindow | null
@@ -198,7 +200,7 @@ export async function rollbackTerminalWindowTransfer(
         operations,
         transfer,
         target.webContents,
-        { tabId: seed.tabId, phase: 'target-remove' },
+        { transferId: transfer.transferId, tabId: seed.tabId, phase: 'target-remove' },
         true
       ).catch(() => undefined)
     )
@@ -209,7 +211,7 @@ export async function rollbackTerminalWindowTransfer(
         operations,
         transfer,
         source.webContents,
-        { tabId: seed.tabId, phase: 'source-restore', seed },
+        { transferId: transfer.transferId, tabId: seed.tabId, phase: 'source-restore', seed },
         true
       ).catch(() => undefined)
     )
@@ -280,4 +282,31 @@ export function clearTerminalWindowTransferWaiters(transfer: TerminalWindowTrans
     waiter.reject(new Error('terminal_transfer_finished'))
   }
   transfer.waiters.clear()
+}
+
+export function settleTerminalWindowTransferAck(
+  transfers: ReadonlyMap<string, TerminalWindowTransfer>,
+  sender: WebContents,
+  input: unknown
+): void {
+  if (!isTerminalWindowTransferAck(input)) {
+    return
+  }
+  const transfer = transfers.get(input.tabId)
+  const waiter = transfer?.waiters.get(input.phase)
+  if (
+    !transfer ||
+    transfer.transferId !== input.transferId ||
+    !waiter ||
+    waiter.sender !== sender
+  ) {
+    return
+  }
+  transfer.waiters.delete(input.phase)
+  clearTimeout(waiter.timer)
+  if (input.ok) {
+    waiter.resolve(input)
+  } else {
+    waiter.reject(new Error(input.error || `terminal_transfer_${input.phase}_failed`))
+  }
 }
