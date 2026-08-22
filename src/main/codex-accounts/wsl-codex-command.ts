@@ -46,7 +46,11 @@ export function buildWslCodexIdentityProbe(distro: string): WslCodexIdentityProb
   }
 }
 
-export function buildWslCodexAppServerArgs(distro: string, linuxHomePath: string): string[] {
+export function buildWslCodexAppServerArgs(
+  distro: string,
+  linuxHomePath: string,
+  appServerArgs: readonly string[] = ['app-server']
+): string[] {
   const command = [
     buildCodexPathLookup(),
     'if [ -z "$resolved" ]; then',
@@ -54,7 +58,7 @@ export function buildWslCodexAppServerArgs(distro: string, linuxHomePath: string
     '  exit 127',
     'fi',
     `export CODEX_HOME=${quotePosixShell(linuxHomePath)}`,
-    'exec "$resolved" app-server'
+    `exec "$resolved" ${appServerArgs.map(quotePosixShell).join(' ')}`
   ].join('\n')
   return buildWslCodexShellArgs(distro, command)
 }

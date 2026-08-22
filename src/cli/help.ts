@@ -452,7 +452,13 @@ function formatCommandFlagHelp(flag: string, commandPath: string[]): string {
     return '--workspace <id|all>  Connected Linear workspace id, or all'
   }
   if (command === 'linear list-issues' && flag === 'cursor') {
-    return '--cursor <cursor>      Opaque cursor returned by a previous list-issues page'
+    return '--cursor <cursor>      Opaque cursor from a previous list-issues page; issued cursors bind the workspace, raw Linear cursors need --workspace'
+  }
+  if (command === 'linear list-issues' && flag === 'priority') {
+    return '--priority <0-4>       0=none, 1=urgent, 2=high, 3=medium, 4=low'
+  }
+  if (command === 'linear list-issues' && flag === 'limit') {
+    return '--limit <n>            Max issues to return; omit to return every match'
   }
   if (command === 'artifacts list' && flag === 'cursor') {
     return '--cursor <cursor>      Opaque cursor returned by a previous artifacts page'
