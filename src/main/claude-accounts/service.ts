@@ -1,7 +1,7 @@
 /* eslint-disable max-lines -- Why: Claude managed accounts need one audited owner
 for login, credential capture, Keychain storage, selection, and rate-limit refresh. */
 import { createHash, randomUUID } from 'node:crypto'
-import { execFileSync, spawn } from 'node:child_process'
+import { spawn } from 'node:child_process'
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, relative, resolve, sep } from 'node:path'
@@ -33,7 +33,7 @@ import { beginClaudeAuthSwitch, endClaudeAuthSwitch } from './live-pty-gate'
 import { findDuplicateClaudeAccount } from './claude-duplicate-account'
 import { parseWslUncPath } from '../../shared/wsl-paths'
 import { toWindowsWslPath } from '../wsl'
-import { buildEncodedWslBashCommand } from '../wsl-bash-command'
+import { runWslProcess } from '../wsl/wsl-runner'
 import { buildWindowsCommandInvocation } from './windows-command-invocation'
 import {
   getClaudeSelectionTargetForAccount,
@@ -162,7 +162,7 @@ export class ClaudeAccountService {
     target?: ClaudeAccountAddTarget
   ): Promise<ClaudeRateLimitAccountsState> {
     const accountId = randomUUID()
-    const managedAuth = this.createManagedAuthDir(accountId, target)
+    const managedAuth = await this.createManagedAuthDir(accountId, target)
     const previousSettings = this.store.getSettings()
     try {
       const captured = await this.runClaudeLoginAndCapture(managedAuth)
@@ -183,7 +183,7 @@ export class ClaudeAccountService {
     options?: ClaudeAccountImportOptions
   ): Promise<ClaudeRateLimitAccountsState> {
     const accountId = randomUUID()
-    const managedAuth = this.createManagedAuthDir(accountId, options)
+    const managedAuth = await this.createManagedAuthDir(accountId, options)
     const previousSettings = this.store.getSettings()
     try {
       const captured = await this.captureFromExistingConfigDir(
@@ -332,7 +332,7 @@ export class ClaudeAccountService {
 
   private async doReauthenticateAccount(accountId: string): Promise<ClaudeRateLimitAccountsState> {
     const account = this.requireAccount(accountId)
-    const managedAuthPath = this.assertManagedAuthPath(account.managedAuthPath, accountId)
+    const managedAuthPath = await this.assertManagedAuthPath(account.managedAuthPath, accountId)
     const previousSettings = this.store.getSettings()
     const previousManagedAuth = await this.readManagedAuthSnapshot(accountId, managedAuthPath)
     const captured = await this.runClaudeLoginAndCapture({
@@ -390,7 +390,7 @@ export class ClaudeAccountService {
       }
       if (restoredManagedCredentials || !wroteManagedCredentials) {
         try {
-          this.restoreManagedOauthSnapshot(accountId, managedAuthPath, previousManagedAuth)
+          await this.restoreManagedOauthSnapshot(accountId, managedAuthPath, previousManagedAuth)
         } catch (rollbackError) {
           console.warn(
             '[claude-accounts] Failed to restore managed oauth metadata during rollback:',
@@ -581,7 +581,7 @@ export class ClaudeAccountService {
       wslLinuxAuthPath: null
     }
   ): Promise<CapturedClaudeAuth> {
-    const tempConfig = this.createTemporaryClaudeConfigDir(location)
+    const tempConfig = await this.createTemporaryClaudeConfigDir(location)
     const loginAbortController = new AbortController()
     this.cancelPendingClaudeLogin = () => {
       if (loginAbortController.signal.aborted) {
@@ -635,7 +635,7 @@ export class ClaudeAccountService {
           cleanupError = error
         }
       }
-      this.removeTemporaryClaudeConfigDir(tempConfig)
+      await this.removeTemporaryClaudeConfigDir(tempConfig)
       this.cancelPendingClaudeLogin = null
     }
     if (captureError) {
@@ -647,11 +647,11 @@ export class ClaudeAccountService {
     return captured!
   }
 
-  private createTemporaryClaudeConfigDir(location: ManagedClaudeAuthLocation): {
+  private async createTemporaryClaudeConfigDir(location: ManagedClaudeAuthLocation): Promise<{
     windowsPath: string
     linuxPath: string | null
     wslDistro: string | null
-  } {
+  }> {
     if (location.managedAuthRuntime !== 'wsl') {
       return {
         windowsPath: mkdtempSync(join(tmpdir(), 'orca-claude-login-')),
@@ -662,21 +662,18 @@ export class ClaudeAccountService {
     if (!location.wslDistro) {
       throw new Error('Could not resolve the active WSL distribution for Claude login.')
     }
-    const linuxPath = execFileSync(
-      'wsl.exe',
-      [
-        '-d',
-        location.wslDistro,
-        '--exec',
-        'bash',
-        '-lc',
-        'mktemp -d "${TMPDIR:-/tmp}/orca-claude-login.XXXXXX"'
-      ],
-      { encoding: 'utf-8', timeout: 5000 }
-    )
-      .replaceAll(String.fromCharCode(0), '')
-      .trim()
-    if (!linuxPath.startsWith('/')) {
+    const created = await runWslProcess({
+      distro: location.wslDistro,
+      lane: 'probe',
+      shell: 'bash',
+      script: 'mktemp -d "${TMPDIR:-/tmp}/orca-claude-login.XXXXXX"',
+      timeoutMs: 5000,
+      // Why degraded is allowed: mktemp is a coreutil on the default PATH, so an
+      // unprobed distro must not turn a working sign-in into a failed one.
+      allowDegradedEnvironment: true
+    })
+    const linuxPath = created.stdout.replaceAll(String.fromCharCode(0), '').trim()
+    if (created.code !== 0 || created.timedOut || !linuxPath.startsWith('/')) {
       throw new Error('Could not create a temporary WSL Claude login directory.')
     }
     return {
@@ -686,25 +683,23 @@ export class ClaudeAccountService {
     }
   }
 
-  private removeTemporaryClaudeConfigDir(tempConfig: {
+  private async removeTemporaryClaudeConfigDir(tempConfig: {
     windowsPath: string
     linuxPath: string | null
     wslDistro: string | null
-  }): void {
+  }): Promise<void> {
     if (tempConfig.linuxPath && tempConfig.wslDistro) {
       try {
-        execFileSync(
-          'wsl.exe',
-          [
-            '-d',
-            tempConfig.wslDistro,
-            '--exec',
-            'bash',
-            '-lc',
-            `rm -rf -- ${shellQuote(tempConfig.linuxPath)}`
-          ],
-          { encoding: 'utf-8', timeout: 5000 }
-        )
+        await runWslProcess({
+          distro: tempConfig.wslDistro,
+          lane: 'probe',
+          program: 'rm',
+          args: ['-rf', '--', tempConfig.linuxPath],
+          timeoutMs: 5000,
+          // Why degraded is allowed: leaving a login temp dir behind is worse than
+          // running rm on the default PATH, and this is already best-effort.
+          allowDegradedEnvironment: true
+        })
       } catch {
         // Best-effort cleanup.
       }
@@ -817,7 +812,7 @@ export class ClaudeAccountService {
     managedAuthPath: string,
     credentialsJson: string
   ): Promise<void> {
-    const trustedPath = this.assertManagedAuthPath(managedAuthPath, accountId)
+    const trustedPath = await this.assertManagedAuthPath(managedAuthPath, accountId)
     if (process.platform === 'darwin') {
       await writeManagedClaudeKeychainCredentials(accountId, credentialsJson)
     } else {
@@ -830,7 +825,7 @@ export class ClaudeAccountService {
     managedAuthPath: string,
     oauthAccount: unknown
   ): Promise<void> {
-    const trustedPath = this.assertManagedAuthPath(managedAuthPath, accountId)
+    const trustedPath = await this.assertManagedAuthPath(managedAuthPath, accountId)
     writeClaudeManagedAuthFile(
       trustedPath,
       'oauth-account.json',
@@ -842,7 +837,7 @@ export class ClaudeAccountService {
     accountId: string,
     managedAuthPath: string
   ): Promise<ManagedClaudeAuthSnapshot> {
-    const trustedPath = this.assertManagedAuthPath(managedAuthPath, accountId)
+    const trustedPath = await this.assertManagedAuthPath(managedAuthPath, accountId)
     return {
       credentialsJson:
         process.platform === 'darwin'
@@ -857,7 +852,7 @@ export class ClaudeAccountService {
     managedAuthPath: string,
     snapshot: ManagedClaudeAuthSnapshot
   ): Promise<void> {
-    const trustedPath = this.assertManagedAuthPath(managedAuthPath, accountId)
+    const trustedPath = await this.assertManagedAuthPath(managedAuthPath, accountId)
     const credentialsPath = join(trustedPath, '.credentials.json')
     if (process.platform === 'darwin') {
       await (snapshot.credentialsJson !== null
@@ -870,12 +865,12 @@ export class ClaudeAccountService {
     }
   }
 
-  private restoreManagedOauthSnapshot(
+  private async restoreManagedOauthSnapshot(
     accountId: string,
     managedAuthPath: string,
     snapshot: ManagedClaudeAuthSnapshot
-  ): void {
-    const trustedPath = this.assertManagedAuthPath(managedAuthPath, accountId)
+  ): Promise<void> {
+    const trustedPath = await this.assertManagedAuthPath(managedAuthPath, accountId)
     const oauthPath = join(trustedPath, 'oauth-account.json')
     if (snapshot.oauthAccountJson !== null) {
       writeClaudeManagedAuthFile(trustedPath, 'oauth-account.json', snapshot.oauthAccountJson)
@@ -884,11 +879,11 @@ export class ClaudeAccountService {
     }
   }
 
-  private createManagedAuthDir(
+  private async createManagedAuthDir(
     accountId: string,
     target?: ClaudeAccountAddTarget
-  ): ManagedClaudeAuthLocation {
-    const wslAuth = this.tryCreateWslManagedAuthDir(accountId, target)
+  ): Promise<ManagedClaudeAuthLocation> {
+    const wslAuth = await this.tryCreateWslManagedAuthDir(accountId, target)
     if (wslAuth) {
       return wslAuth
     }
@@ -897,55 +892,64 @@ export class ClaudeAccountService {
     mkdirSync(managedAuthPath, { recursive: true })
     writeFileSync(join(managedAuthPath, '.orca-managed-claude-auth'), `${accountId}\n`, 'utf-8')
     return {
-      managedAuthPath: this.assertManagedAuthPath(managedAuthPath, accountId),
+      managedAuthPath: await this.assertManagedAuthPath(managedAuthPath, accountId),
       managedAuthRuntime: 'host',
       wslDistro: null,
       wslLinuxAuthPath: null
     }
   }
 
-  private tryCreateWslManagedAuthDir(
+  private async tryCreateWslManagedAuthDir(
     accountId: string,
     target?: ClaudeAccountAddTarget
-  ): ManagedClaudeAuthLocation | null {
+  ): Promise<ManagedClaudeAuthLocation | null> {
     if (process.platform !== 'win32' || target?.runtime !== 'wsl') {
       return null
     }
 
-    const distroArgs = target.wslDistro?.trim() ? ['-d', target.wslDistro.trim()] : []
-    const infoOutput = execFileSync(
-      'wsl.exe',
-      [...distroArgs, '--exec', 'bash', '-lc', 'printf "%s\\n%s\\n" "$WSL_DISTRO_NAME" "$HOME"'],
-      { encoding: 'utf-8', timeout: 5000 }
-    )
-    const [rawDistro, rawHome] = infoOutput
-      .replaceAll(String.fromCharCode(0), '')
-      .split(/\r?\n/)
-      .map((line) => line.trim())
-    const distro = target.wslDistro?.trim() || rawDistro
+    const requestedDistro = target.wslDistro?.trim() || undefined
+    const info = await runWslProcess({
+      distro: requestedDistro,
+      lane: 'probe',
+      shell: 'bash',
+      script: 'printf "%s\\n%s\\n" "$WSL_DISTRO_NAME" "$HOME"',
+      timeoutMs: 5000,
+      // Why degraded is allowed: both variables come from wsl.exe itself, not from
+      // the login PATH, so an unprobed distro still answers correctly here.
+      allowDegradedEnvironment: true
+    })
+    const [rawDistro, rawHome] =
+      info.code === 0 && !info.timedOut
+        ? info.stdout
+            .replaceAll(String.fromCharCode(0), '')
+            .split(/\r?\n/)
+            .map((line) => line.trim())
+        : []
+    const distro = requestedDistro || rawDistro
     const home = rawHome
     if (!distro || !home?.startsWith('/')) {
       throw new Error('Could not resolve the active WSL home directory for Claude login.')
     }
 
     const wslLinuxAuthPath = `${home.replace(/\/$/, '')}/.local/share/orca/claude-accounts/${accountId}/auth`
-    const markerPath = `${wslLinuxAuthPath}/.orca-managed-claude-auth`
-    execFileSync(
-      'wsl.exe',
-      [
-        '-d',
-        distro,
-        '--exec',
-        'bash',
-        '-lc',
-        `mkdir -p ${shellQuote(wslLinuxAuthPath)} && printf '%s\\n' ${shellQuote(accountId)} > ${shellQuote(markerPath)}`
-      ],
-      { encoding: 'utf-8', timeout: 5000 }
-    )
+    const created = await runWslProcess({
+      distro,
+      lane: 'probe',
+      shell: 'bash',
+      script: 'mkdir -p "$1" && printf \'%s\\n\' "$2" > "$1/.orca-managed-claude-auth"',
+      args: [wslLinuxAuthPath, accountId],
+      timeoutMs: 5000,
+      // Why degraded is allowed: mkdir is a coreutil on the default PATH, and the
+      // target path was already resolved from the guest's own $HOME above.
+      allowDegradedEnvironment: true
+    })
+    if (created.code !== 0 || created.timedOut) {
+      throw new Error('Could not create the managed WSL Claude auth directory.')
+    }
 
     const managedAuthPath = toWindowsWslPath(wslLinuxAuthPath, distro)
     return {
-      managedAuthPath: this.assertManagedAuthPath(managedAuthPath, accountId),
+      managedAuthPath: await this.assertManagedAuthPath(managedAuthPath, accountId),
       managedAuthRuntime: 'wsl',
       wslDistro: distro,
       wslLinuxAuthPath
@@ -958,7 +962,10 @@ export class ClaudeAccountService {
     return root
   }
 
-  private assertManagedAuthPath(candidatePath: string, expectedAccountId?: string): string {
+  private async assertManagedAuthPath(
+    candidatePath: string,
+    expectedAccountId?: string
+  ): Promise<string> {
     const wslInfo = parseWslUncPath(candidatePath)
     if (wslInfo) {
       if (
@@ -969,31 +976,32 @@ export class ClaudeAccountService {
       }
       if (process.platform === 'win32') {
         try {
-          const canonicalLinuxPath = execFileSync(
-            'wsl.exe',
-            [
-              '-d',
-              wslInfo.distro,
-              '--exec',
-              'bash',
-              '-lc',
-              buildEncodedWslBashCommand(
-                [
-                  'set -euo pipefail',
-                  `candidate=${shellQuote(wslInfo.linuxPath)}`,
-                  'managed_root="${HOME%/}/.local/share/orca/claude-accounts"',
-                  'candidate_real=$(readlink -f -- "$candidate")',
-                  'managed_root_real=$(readlink -f -- "$managed_root")',
-                  'test -f "$candidate_real/.orca-managed-claude-auth"',
-                  expectedAccountId
-                    ? `test "$(cat "$candidate_real/.orca-managed-claude-auth")" = ${shellQuote(expectedAccountId)}`
-                    : 'test -n "$(cat "$candidate_real/.orca-managed-claude-auth")"',
-                  'case "$candidate_real" in "$managed_root_real"/*/auth) printf "%s\\n" "$candidate_real" ;; *) exit 35 ;; esac'
-                ].join('\n')
-              )
-            ],
-            { encoding: 'utf-8', timeout: 5000 }
-          ).trim()
+          const owned = await runWslProcess({
+            distro: wslInfo.distro,
+            lane: 'probe',
+            shell: 'bash',
+            script: [
+              'set -euo pipefail',
+              `candidate=${shellQuote(wslInfo.linuxPath)}`,
+              'managed_root="${HOME%/}/.local/share/orca/claude-accounts"',
+              'candidate_real=$(readlink -f -- "$candidate")',
+              'managed_root_real=$(readlink -f -- "$managed_root")',
+              'test -f "$candidate_real/.orca-managed-claude-auth"',
+              expectedAccountId
+                ? `test "$(cat "$candidate_real/.orca-managed-claude-auth")" = ${shellQuote(expectedAccountId)}`
+                : 'test -n "$(cat "$candidate_real/.orca-managed-claude-auth")"',
+              'case "$candidate_real" in "$managed_root_real"/*/auth) printf "%s\\n" "$candidate_real" ;; *) exit 35 ;; esac'
+            ].join('\n'),
+            timeoutMs: 5000,
+            // Why degraded is allowed: the ownership proof is the script's own
+            // marker and containment checks, not the login PATH, and refusing here
+            // would fail every managed read/write on a distro Orca could not probe.
+            allowDegradedEnvironment: true
+          })
+          if (owned.code !== 0 || owned.timedOut) {
+            throw new Error('Managed Claude auth directory does not exist on disk.')
+          }
+          const canonicalLinuxPath = owned.stdout.trim()
           if (!canonicalLinuxPath) {
             throw new Error('Managed Claude auth directory does not exist on disk.')
           }
@@ -1036,7 +1044,7 @@ export class ClaudeAccountService {
 
   private async safeRemoveManagedAuth(accountId: string, candidatePath: string): Promise<void> {
     try {
-      const managedAuthPath = this.assertManagedAuthPath(candidatePath, accountId)
+      const managedAuthPath = await this.assertManagedAuthPath(candidatePath, accountId)
       rmSync(resolve(managedAuthPath, '..'), { recursive: true, force: true })
     } catch (error) {
       console.warn('[claude-accounts] Refusing to remove untrusted managed auth:', error)
@@ -1092,6 +1100,9 @@ export class ClaudeAccountService {
         // the local callback server before the browser returns.
         stdio: [options?.keepStdinOpen ? 'pipe' : 'ignore', 'pipe', 'pipe'],
         shell: spawnConfig.shell,
+        // On Windows this is wsl.exe or a cmd invocation; without the flag it
+        // opens a console and steals foreground on every managed login (#10488).
+        windowsHide: true,
         windowsVerbatimArguments: spawnConfig.windowsVerbatimArguments,
         env: spawnConfig.env,
         // Why: Claude auth can leave browser/login descendants alive after denial.

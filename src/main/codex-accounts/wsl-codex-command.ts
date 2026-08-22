@@ -9,9 +9,9 @@ import {
 export const WSL_CODEX_AVAILABILITY_TIMEOUT_MS = 5_000
 export const WSL_CODEX_NOT_FOUND_MESSAGE = 'Codex CLI not found in the WSL login-shell PATH.'
 
-export function buildWslCodexAvailabilityArgs(distro: string): string[] {
-  const command = [buildCodexPathLookup(), '[ -n "$resolved" ]'].join('\n')
-  return buildWslCodexShellArgs(distro, command)
+/** Exits 0 only when `codex` resolves on the login PATH the runner supplies. */
+export function buildWslCodexAvailabilityScript(): string {
+  return [buildCodexPathLookup(), '[ -n "$resolved" ]'].join('\n')
 }
 
 export type WslCodexIdentityProbe = {

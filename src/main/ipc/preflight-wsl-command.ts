@@ -1,12 +1,5 @@
-import { execFile } from 'node:child_process'
-import { promisify } from 'node:util'
-import {
-  buildWslCapturedLoginShellCommand,
-  buildWslExecArgs
-} from '../../shared/wsl-login-shell-command'
+import { runWslProcess } from '../wsl/wsl-runner'
 import type { WslPreflightTarget } from './preflight-wsl-agent-detection'
-
-const execFileAsync = promisify(execFile)
 
 export type PreflightWslCommandResult = { stdout: string; stderr: string }
 
@@ -15,17 +8,30 @@ export async function runPreflightCommandInWsl(
   command: string,
   timeoutMs: number
 ): Promise<PreflightWslCommandResult> {
-  // Why: callers match this stdout against version and auth-status patterns; a
-  // distro rc banner ahead of the real output makes a working CLI look missing.
-  const captured = buildWslCapturedLoginShellCommand(command)
-  const result = (await execFileAsync(
-    'wsl.exe',
-    buildWslExecArgs(target.distro, ['sh', '-c', captured.command]),
-    {
-      encoding: 'utf-8',
-      timeout: timeoutMs
-    }
-  )) as PreflightWslCommandResult
-  const payload = captured.readStdout(result.stdout)
-  return payload === null ? result : { ...result, stdout: payload }
+  // Why probe: the cached login PATH gives the user's real nvm/mise/asdf PATH
+  // with no shell in the loop, so there is no rc/motd banner to strip.
+  const result = await runWslProcess({
+    distro: target.distro,
+    lane: 'probe',
+    script: command,
+    // Why degrade: every caller collapses a throw into "not installed" or
+    // "not authenticated" (isCommandAvailable, isGhAuthenticated). Refusing
+    // here turns a slow distro into a confident wrong answer -- #9725 through
+    // the other door, on the branch built to close it.
+    allowDegradedEnvironment: true,
+    timeoutMs
+  })
+  // runWslProcess resolves on a timeout and on a non-zero exit; the caller's
+  // try/catch (isCommandAvailable/isCommandOnPath, and isGhAuthenticated's
+  // stdout/stderr marker fallback) expects a rejection carrying stdout/stderr,
+  // matching what execFile's promisified callback put on a non-zero-exit error.
+  if (result.timedOut || result.code !== 0) {
+    throw Object.assign(new Error(`WSL command failed: ${command}`), {
+      code: result.code,
+      stdout: result.stdout,
+      stderr: result.stderr,
+      timedOut: result.timedOut
+    })
+  }
+  return { stdout: result.stdout, stderr: result.stderr }
 }

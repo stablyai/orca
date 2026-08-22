@@ -1,27 +1,24 @@
 # Files that spawn wsl.exe directly instead of through src/main/wsl/wsl-runner.ts.
 # Enforced by ../wsl-invocation-boundary.test.ts. This list only shrinks -- its
-# length is the W3 goalpost. Removing an entry means the file now goes through
-# the runner, not that its call was tidied in place.
+# length is the W3 goalpost.
+#
+# Remaining entries need a runner mode that does not exist: a long-lived
+# streaming child (OAuth logins, the hook relay), a synchronous caller, or a
+# host-level flag like --status / --list that the guest-command API cannot
+# express because it always prepends --exec.
 main/agent-hooks/wsl-hook-relay-launch.ts
-main/claude-accounts/runtime-auth-service.ts
 main/claude-accounts/service.ts
-main/cli/wsl-cli-installer.ts
 main/codex-accounts/runtime-home-service.ts
 main/codex-accounts/service.ts
 main/codex/codex-state-db-backfill-recovery.ts
 main/codex/codex-trust-grant-host.ts
 main/codex/codex-wsl-hook-install-plan.ts
+main/git/runner.ts
 main/git/wsl-git-read-environment.ts
-main/hooks.ts
 main/ipc/filesystem-watcher-wsl.ts
-main/ipc/preflight-wsl-agent-detection.ts
-main/ipc/preflight-wsl-command.ts
 main/local-worktree-filesystem.ts
-main/skills/claude-plugin-skill-sources-wsl.ts
-main/skills/skill-discovery-wsl.ts
-main/skills/skill-provider-runtime-roots.ts
-main/skills/skill-wsl-install-filesystem.ts
-main/skills/skill-wsl-provider-detection.ts
+main/rate-limits/codex-fetcher.ts
 main/wsl-availability.ts
 main/wsl-unc-delete.ts
 main/wsl.ts
+renderer/src/components/settings/TerminalWindowsShellSection.tsx

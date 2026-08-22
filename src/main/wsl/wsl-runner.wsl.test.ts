@@ -33,23 +33,26 @@ describeOnWsl('runWslProcess against a real distro', () => {
     // probe budget -- this is #14288 reproduced, not simulated.
     await guest(`cp -f "$HOME/.profile" ${PROFILE} 2>/dev/null || true`)
     await guest(`printf '\\nsleep 60\\n' >> "$HOME/.profile"`)
-    invalidateWslGuestEnvironment()
+    invalidateWslGuestEnvironment(undefined, true)
   }, 120_000)
 
   afterAll(async () => {
     await guest(`cp -f ${PROFILE} "$HOME/.profile" 2>/dev/null || rm -f "$HOME/.profile"`)
     await guest(`rm -f ${PROFILE}`)
-    invalidateWslGuestEnvironment()
+    invalidateWslGuestEnvironment(undefined, true)
   }, 120_000)
 
   it('probe lane survives a ~/.profile that blocks for a minute', async () => {
-    // The first call pays one login shell (which the blocking profile stalls,
-    // so it times out and the lane degrades); every later call must not.
-    // What must never happen is the probe lane inheriting the stall per call.
+    // The blocking profile makes the probe time out, so the lane degrades --
+    // that is the point: the call must still answer inside its own budget
+    // rather than inheriting the 60s stall. This is #14288 against a real
+    // distro, and it needs allowDegradedEnvironment because the runner
+    // otherwise refuses an unresolved PATH.
     const started = Date.now()
     const result = await runWslProcess({
       lane: 'probe',
       distro: DISTRO,
+      allowDegradedEnvironment: true,
       program: '/bin/echo',
       args: ['orca-probe-ok'],
       timeoutMs: 15_000
@@ -61,7 +64,13 @@ describeOnWsl('runWslProcess against a real distro', () => {
 
   it('second probe-lane call does not pay the login shell again', async () => {
     const started = Date.now()
-    await runWslProcess({ lane: 'probe', distro: DISTRO, program: '/bin/true', timeoutMs: 15_000 })
+    await runWslProcess({
+      lane: 'probe',
+      distro: DISTRO,
+      program: '/bin/true',
+      timeoutMs: 15_000,
+      allowDegradedEnvironment: true
+    })
     expect(Date.now() - started).toBeLessThan(5_000)
   }, 30_000)
 
@@ -89,6 +98,7 @@ describeOnWsl('runWslProcess against a real distro', () => {
     const result = await runWslProcess({
       lane: 'probe',
       distro: DISTRO,
+      allowDegradedEnvironment: true,
       script,
       args: ['ORCA_ARG'],
       timeoutMs: 30_000
@@ -105,6 +115,7 @@ describeOnWsl('runWslProcess against a real distro', () => {
     const result = await runWslProcess({
       lane: 'probe',
       distro: DISTRO,
+      allowDegradedEnvironment: true,
       script: 'printf %s "$ORCA_WSLENV_PROBE"',
       env: { ORCA_WSLENV_PROBE: 'crossed' },
       timeoutMs: 30_000
@@ -116,6 +127,7 @@ describeOnWsl('runWslProcess against a real distro', () => {
     const result = await runWslProcess({
       lane: 'probe',
       distro: DISTRO,
+      allowDegradedEnvironment: true,
       program: '/bin/pwd',
       cwd: '/tmp',
       timeoutMs: 30_000

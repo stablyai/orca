@@ -1,5 +1,11 @@
-import { readFileSync, readdirSync, statSync } from 'node:fs'
-import { join, relative, resolve } from 'node:path'
+import { join, resolve } from 'node:path'
+import {
+  blankStringContents,
+  blankStringContentsDesynced,
+  readAllowlist,
+  scanSourceTree,
+  stripComments
+} from '../source-scan/source-tree-scan'
 import { describe, expect, it } from 'vitest'
 
 /**
@@ -17,64 +23,31 @@ import { describe, expect, it } from 'vitest'
  * file from it means either adding the flag or, better, routing the call
  * through the chokepoint.
  */
-const ALLOWLIST: readonly string[] = readFileSync(
-  join(__dirname, '__fixtures__', 'windows-console-visibility-allowlist.txt'),
-  'utf8'
+const ALLOWLIST: readonly string[] = readAllowlist(
+  join(__dirname, '__fixtures__', 'windows-console-visibility-allowlist.txt')
 )
-  .split('\n')
-  .map((line) => line.trim())
-  .filter((line) => line.length > 0 && !line.startsWith('#'))
 
 const CHILD_PROCESS_IMPORT =
   /from\s+['"](?:node:)?child_process['"]|require\(\s*['"](?:node:)?child_process['"]/
-const SPAWN_CALL = /\b(?:spawn|spawnSync|execFile|execFileSync|exec|execSync)\s*\(/g
-const IGNORED_DIRECTORIES = new Set([
-  'node_modules',
-  'dist',
-  'out',
-  'build',
-  '.git',
-  '__fixtures__'
-])
+// Includes the promisified and renamed spellings -- `execAsync`, `spawnDetached`,
+// `execFileCb` -- because a plain-name regex misses a `promisify(exec)` or an
+// `import { spawn as sp }`, and those are real spawns.
+const SPAWN_CALL =
+  /\b(?:spawn|spawnSync|spawnDetached|execFile|execFileSync|execFileAsync|execFileCb|exec|execSync|execAsync)\s*\(/g
 const SOURCE_ROOT = resolve(__dirname, '../..')
-
 /**
- * Blank out comments before scanning.
+ * `run-process.ts` is the chokepoint: it sets windowsHide in `resolveSpawn`,
+ * not at the call, so scanning it flags its own implementation.
  *
- * Why: `runner.ts` documents its wrapper as `execFileSync('git', args, {...})`
- * in a doc comment. Counted as a call it can never be satisfied, so the file
- * would sit on the allowlist forever and a genuine regression in it would be
- * pre-approved -- a ratchet that only looks like one.
+ * `fork` is deliberately absent from SPAWN_CALL. Node forwards the option to
+ * spawn at runtime, but `ForkOptions` does not declare it, so the two live
+ * sites (`daemon/daemon-init.ts`, `plugins/plugin-host-process.ts`) cannot be
+ * fixed without a cast. Recorded here rather than silently unscanned.
  */
-function stripComments(source: string): string {
-  return source.replace(/\/\*[\s\S]*?\*\//g, ' ').replace(/(^|[^:])\/\/[^\n]*/g, '$1')
-}
+const OWNER_FILE = 'shared/child-process/run-process.ts'
 
-function isTestFile(path: string): boolean {
-  return (
-    /\.(?:test|spec)\.tsx?$/.test(path) ||
-    /(?:test-harness|test-utils|test-setup|test-fixture|repro)/.test(path) ||
-    path.includes('/__tests__/')
-  )
-}
 
-function collectSourceFiles(root: string): string[] {
-  const found: string[] = []
-  for (const entry of readdirSync(root)) {
-    if (IGNORED_DIRECTORIES.has(entry)) {
-      continue
-    }
-    const path = join(root, entry)
-    if (statSync(path).isDirectory()) {
-      found.push(...collectSourceFiles(path))
-      continue
-    }
-    if (/\.tsx?$/.test(entry)) {
-      found.push(path)
-    }
-  }
-  return found
-}
+
 
 /** The call's argument text, brace-matched so a nested options literal stays whole. */
 function readCallArguments(source: string, openParenIndex: number): string {
@@ -94,18 +67,40 @@ function readCallArguments(source: string, openParenIndex: number): string {
 
 function findOffenders(): string[] {
   const offenders = new Set<string>()
-  for (const path of collectSourceFiles(SOURCE_ROOT)) {
-    const relativePath = relative(SOURCE_ROOT, path).replace(/\\/g, '/')
-    if (isTestFile(relativePath)) {
+  for (const file of scanSourceTree(SOURCE_ROOT)) {
+    if (file.relativePath === OWNER_FILE) {
       continue
     }
-    const source = stripComments(readFileSync(path, 'utf8'))
-    if (!CHILD_PROCESS_IMPORT.test(source)) {
+    const decommented = stripComments(file.source)
+    // Resolve `import { spawn as sp }` so a renamed binding is still a spawn.
+    // The previous comment claimed this; only three names were hardcoded.
+    const aliases = [...decommented.matchAll(/\b(?:spawn|spawnSync|execFile|execFileSync|exec|execSync|fork)\s+as\s+(\w+)/g)].map(
+      (match) => match[1]
+    )
+    // The import test needs the module name, which blanking would erase; the
+    // call scan needs parens inside strings neutralised. Two views, one file.
+    if (!CHILD_PROCESS_IMPORT.test(decommented)) {
       continue
     }
-    for (const match of source.matchAll(SPAWN_CALL)) {
-      if (!readCallArguments(source, match.index + match[0].length - 1).includes('windowsHide')) {
-        offenders.add(relativePath)
+    // Fail closed: if the lexer lost its bearings, the scan below cannot be
+    // trusted, so the file counts as an offender rather than as clean.
+    if (blankStringContentsDesynced(decommented)) {
+      offenders.add(file.relativePath)
+      continue
+    }
+    const source = blankStringContents(decommented)
+    const calls = aliases.length
+      ? new RegExp(`${SPAWN_CALL.source}|\\b(?:${aliases.join('|')})\\s*\\(`, 'g')
+      : SPAWN_CALL
+    for (const match of source.matchAll(calls)) {
+      const args = readCallArguments(source, match.index + match[0].length - 1)
+      // `exec(command: string, …)` is a declaration. Require a type after the
+      // colon: `exec(useAlt ? 'a' : 'b', …)` is a call and was being skipped.
+      if (/^\(\s*\w+\s*\??\s*:\s*[A-Za-z{[(]/.test(args)) {
+        continue
+      }
+      if (!/windowsHide\s*:\s*true/.test(args)) {
+        offenders.add(file.relativePath)
       }
     }
   }
@@ -118,7 +113,10 @@ describe('direct child-process calls hide the Windows console', () => {
   it('scans a realistic number of files', () => {
     // Guards against an import-pattern change quietly emptying the scan, which
     // would make every assertion below pass without checking anything.
-    expect(offenders.length + ALLOWLIST.length).toBeGreaterThan(50)
+    // Naming a file that definitely offends: `offenders + allowlist > N`
+    // cannot fail while the allowlist alone exceeds N, so it passed even for a
+    // scanner that found nothing.
+    expect(offenders).toContain('main/wsl.ts')
   })
 
   it('adds no new file that spawns without windowsHide', () => {

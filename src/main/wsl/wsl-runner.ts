@@ -11,25 +11,10 @@ import { resolveWslExecutablePath } from './wsl-executable-path'
 /**
  * The single place Orca runs a program inside WSL.
  *
- * Five decisions have to be made on every `wsl.exe` call, each has a right
- * answer, and each has shipped wrong:
- *
- * - **Separator.** `--` makes wsl.exe expand `$name` in every forwarded
- *   argument before the guest runs, even with no shell in the command, so
- *   `awk '{print $2}'` loses its field reference (#12964). Always `--exec`.
- * - **Shell.** A login shell on a probe path sources `~/.profile`, so one
- *   blocking line eats the whole timeout (#14288) and every call pays startup
- *   (#9768). No login shell on a user-facing path means PATH does not match the
- *   user's terminal, so nvm-installed agents read as absent (#9725, #7563,
- *   #8366). Hence two lanes, chosen explicitly.
- * - **Fencing.** An interactive login shell runs the distro rc, and stock
- *   Ubuntu writes its "run as administrator" hint to *stdout*, so anything
- *   parsing that stream reads the banner as data (#11327, #11823).
- * - **WSLENV.** Unset, a Windows-side variable silently never crosses into the
- *   guest (#12557).
- * - **Payload.** Scripts go in on stdin. A script on stdin has no quoting
- *   boundary to escape from, which is what the base64 and `eval` wrappers were
- *   working around (#14292).
+ * Five things have to be decided per call -- separator, shell, stdout fencing,
+ * WSLENV, payload transport -- and each has shipped wrong: #12964, #14288 /
+ * #9768 / #9725, #11327, #12557, #14292 respectively. See
+ * docs/reference/wsl-command-execution.md.
  */
 
 export type WslLane =
@@ -47,8 +32,23 @@ export type WslLane =
  * was never made explicit. `script` makes the runner supply `sh -s` itself.
  */
 export type WslCommand =
-  | { program: string; args?: readonly string[]; script?: never }
-  | { script: string; args?: readonly string[]; program?: never }
+  | { program: string; args?: readonly string[]; script?: never; shell?: never }
+  | {
+      script: string
+      args?: readonly string[]
+      program?: never
+      /**
+       * Interpreter for `script`. Defaults to `sh`, which on Debian and Ubuntu
+       * is dash.
+       *
+       * Why this is not just always `sh`: a payload using process substitution
+       * (`done < <(find ...)`), `local`, or `[[ ]]` is bash-only, and dash
+       * rejects it with `Syntax error: word unexpected` -- the exact signature
+       * in #14292. A caller that writes bash must say so; silently downgrading
+       * its interpreter is how that error reaches users.
+       */
+      shell?: 'sh' | 'bash'
+    }
 
 export type WslSpec = WslCommand & {
   /** Undefined selects the distro's default. */
@@ -64,10 +64,26 @@ export type WslSpec = WslCommand & {
   env?: Readonly<Record<string, string>>
   timeoutMs?: number
   maxOutputBytes?: number
-  signal?: AbortSignal
+  /**
+   * Proceed when the login PATH could not be established.
+   *
+   * Default is to throw. Three separate reviews found the same class of bug --
+   * a call that answers "is this installed?" running on the bare default PATH
+   * and reporting an nvm-installed tool absent (#9725). Making degradation
+   * opt-in puts that decision in the one place a reader will look, instead of
+   * relying on every call site to remember to check `environmentResolved`.
+   */
+  allowDegradedEnvironment?: boolean
 }
 
 export type WslResult = {
+  /**
+   * False when the login PATH could not be established, so the call ran on the
+   * distro's default PATH. A caller deciding "is this tool installed?" must
+   * report unverifiable rather than absent -- an nvm-installed binary is
+   * invisible without the login PATH, which is #9725 exactly.
+   */
+  environmentResolved: boolean
   code: number | null
   /** Payload only — on the interactive lane the rc banner is removed by the fence. */
   stdout: string
@@ -76,6 +92,21 @@ export type WslResult = {
 }
 
 export const DEFAULT_WSL_TIMEOUT_MS = 30_000
+
+/**
+ * The guest login PATH could not be established.
+ *
+ * Typed so a caller answering "is this installed?" can report unverifiable
+ * rather than absent -- reporting an nvm-installed tool absent is #9725, and a
+ * bare Error would just be swallowed by the same catch that handles real
+ * failures.
+ */
+export class WslGuestEnvironmentUnavailableError extends Error {
+  constructor(distro: string | undefined) {
+    super(`WSL guest environment for ${distro ?? 'the default distro'} is unavailable`)
+    this.name = 'WslGuestEnvironmentUnavailableError'
+  }
+}
 
 function assertGuestPath(cwd: string): void {
   // Why reject rather than convert: a caller passing a Windows path here has
@@ -86,16 +117,17 @@ function assertGuestPath(cwd: string): void {
   }
 }
 
+/** Use `script` to run a script; a command line here is the thing being prevented. */
 function assertNotShellString(program: string): void {
-  // Why: the base64 and eval wrappers exist because this boundary was never
-  // enforced. `script` is the supported way to run a script.
-  //
-  // Why metacharacters and not whitespace: a guest binary may legitimately live
-  // under a path containing a space, and --exec passes it as one argv element,
-  // so a space is harmless. A `;` or `|` means the caller is building a command
-  // line, which is the thing being prevented.
+  // Metacharacters, not whitespace: --exec passes argv elements, so a spaced
+  // path is fine.
   if (/[;&|<>$`\n\r]/.test(program) || /^\S+\s+-/.test(program)) {
     throw new Error(`WSL program must be a single binary, received ${program}`)
+  }
+  // After `env PATH=… HOME=…`, a name=value program is a third assignment: env
+  // prints the environment and exits 0.
+  if (program.includes('=')) {
+    throw new Error(`WSL program must not look like an assignment, received ${program}`)
   }
 }
 
@@ -121,13 +153,18 @@ function withGuestCwd(cwd: string | undefined, argv: readonly string[]): string[
     return [...argv]
   }
   assertGuestPath(cwd)
+  // Why: `exec` with no operands is a no-op, so the wrapper would cd and exit 0
+  // having run nothing -- the one shape that turns it into a silent success.
+  if (argv.length === 0) {
+    throw new Error('WSL invocation has no command to run')
+  }
   return ['sh', '-c', 'cd "$1" || exit 1; shift; exec "$@"', 'orca-wsl', cwd, ...argv]
 }
 
-/** `sh -s --` for a script on stdin, otherwise the program itself. */
+/** `<shell> -s --` for a script on stdin, otherwise the program itself. */
 function guestCommandArgv(spec: WslSpec): string[] {
   return spec.script !== undefined
-    ? ['sh', '-s', '--', ...(spec.args ?? [])]
+    ? [spec.shell ?? 'sh', '-s', '--', ...(spec.args ?? [])]
     : [spec.program, ...(spec.args ?? [])]
 }
 
@@ -152,16 +189,26 @@ function buildInteractiveArgv(spec: WslSpec): {
   const captured = buildWslCapturedLoginShellCommand(body)
   return {
     argv: ['sh', '-c', captured.command],
-    readStdout: (stdout: string) => captured.readStdout(stdout) ?? ''
+    // Why throw rather than default to '': readStdout returns null precisely to
+    // distinguish "the fence never appeared" from "the payload was empty". An rc
+    // that redirects stdout, or output truncated before the begin marker, would
+    // otherwise return a clean, empty, wrong answer.
+    readStdout: (stdout: string) => {
+      const payload = captured.readStdout(stdout)
+      if (payload === null) {
+        throw new Error('WSL login shell produced no fenced output')
+      }
+      return payload
+    }
   }
 }
 
 /**
  * Run a program inside WSL.
  *
- * Falls back from the probe lane to the interactive lane when the distro's
- * environment cannot be probed — an unprobed distro is "we could not ask", and
- * running with no PATH at all would turn that into a wrong answer.
+ * Throws when the guest login PATH cannot be established, unless the caller
+ * passes `allowDegradedEnvironment`. Falling back to the login shell here would
+ * re-run ~/.profile -- the stall this exists to remove.
  */
 export async function runWslProcess(spec: WslSpec): Promise<WslResult> {
   if (spec.program !== undefined) {
@@ -170,33 +217,52 @@ export async function runWslProcess(spec: WslSpec): Promise<WslResult> {
   if (spec.cwd) {
     assertGuestPath(spec.cwd)
   }
+  const deadline = Date.now() + (spec.timeoutMs ?? DEFAULT_WSL_TIMEOUT_MS)
 
-  const environment = spec.lane === 'probe' ? await getWslGuestEnvironment(spec.distro) : null
-  // Why a script never takes the interactive lane: the login shell owns stdin,
-  // and the script is delivered on stdin. If the shell consumes it first, the
-  // inner `sh -s` reads EOF, runs nothing, and exits 0 -- a silent wrong answer,
-  // which is strictly worse than the degraded PATH avoided by taking this path.
-  // A script therefore always runs as `--exec sh -s --`, with the cached
-  // environment applied when there is one.
+  // Why both lanes when there is a script: a script never runs under the login
+  // shell (see below), so on the interactive lane it would otherwise get no
+  // login PATH at all -- strictly less than the probe lane, for a caller that
+  // explicitly asked for the user's terminal PATH.
+  const wantsEnvironment = spec.lane === 'probe' || spec.script !== undefined
+  // Leave the command at least a third of the budget: a probe that eats it all
+  // turns a healthy command into a spurious timeout.
+  // Cap the probe at half the budget and at 4s: a 5s caller was giving the
+  // probe 3333ms and its own command 1667ms, tighter than the 5s it had before
+  // the runner existed, which is how a cold distro read as "not installed".
+  const remainingForProbe = deadline - Date.now()
+  const probeBudgetMs = Math.max(1, Math.min(4_000, Math.floor(remainingForProbe / 2)))
+  const environment = wantsEnvironment
+    ? await getWslGuestEnvironment(spec.distro, probeBudgetMs)
+    : null
+
+  // Probe failure must NOT fall back to the login shell. That lane sources
+  // ~/.profile, which is the stall this runner exists to remove (#14288) -- and
+  // the probe most often fails *because* the distro is slow, so the fallback
+  // would hit the hazard exactly when it is worst. Run shell-free with the
+  // distro's default PATH instead: degraded, never blocking.
+  if (wantsEnvironment && environment === null && !spec.allowDegradedEnvironment) {
+    throw new WslGuestEnvironmentUnavailableError(spec.distro)
+  }
+
   const lane =
-    environment === null && spec.script === undefined
-      ? // Why fall back rather than run with no PATH: an unprobed distro is
-        // "we could not ask", and answering with an empty environment turns
-        // that into a wrong answer.
-        ({ kind: 'interactive', ...buildInteractiveArgv(spec) } as const)
+    spec.lane === 'interactive' && spec.script === undefined
+      ? ({ kind: 'interactive', ...buildInteractiveArgv(spec) } as const)
       : ({ kind: 'probe', argv: buildGuestArgv(environment, spec) } as const)
 
+  // One budget for the whole call: the probe used to run on its own 10s timer
+  // ahead of the timed leg, so a 5s caller could wait 15s.
+  const remainingMs = Math.max(1, deadline - Date.now())
   const result = await runProcess({
     program: resolveWslExecutablePath(),
     args: buildWslExecArgs(spec.distro, lane.argv),
     env: buildHostEnv(spec.env),
     input: spec.script,
-    timeoutMs: spec.timeoutMs ?? DEFAULT_WSL_TIMEOUT_MS,
-    maxOutputBytes: spec.maxOutputBytes,
-    signal: spec.signal
+    timeoutMs: remainingMs,
+    maxOutputBytes: spec.maxOutputBytes
   })
 
   return {
+    environmentResolved: !wantsEnvironment || environment !== null,
     code: result.code,
     stdout: lane.kind === 'interactive' ? lane.readStdout(result.stdout) : result.stdout,
     stderr: result.stderr,

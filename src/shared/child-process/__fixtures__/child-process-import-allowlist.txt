@@ -30,10 +30,8 @@ src/main/automations/precheck-runner.ts
 src/main/browser/agent-browser-bridge.ts
 src/main/browser/browser-cookie-import.ts
 src/main/claude-accounts/keychain.ts
-src/main/claude-accounts/runtime-auth-service.ts
 src/main/claude-accounts/service.ts
 src/main/cli/cli-installer.ts
-src/main/cli/wsl-cli-installer.ts
 src/main/codex-accounts/runtime-home-service.ts
 src/main/codex-accounts/service.ts
 src/main/codex/codex-app-server-client.ts
@@ -42,7 +40,6 @@ src/main/codex/codex-app-server-session.ts
 src/main/codex/codex-state-db-backfill-recovery.ts
 src/main/codex/codex-trust-grant-host.ts
 src/main/codex/codex-wsl-hook-install-plan.ts
-src/main/codex/wsl-codex-session-bridge.ts
 src/main/computer/desktop-script-provider-bridge.ts
 src/main/computer/macos-computer-use-permission-status.ts
 src/main/computer/macos-computer-use-permissions.ts
@@ -88,8 +85,6 @@ src/main/ipc/parcel-watcher-supervisor-disposal.ts
 src/main/ipc/parcel-watcher-supervisor-message.ts
 src/main/ipc/parcel-watcher-supervisor-subscribe.ts
 src/main/ipc/preflight-command-exec.ts
-src/main/ipc/preflight-wsl-agent-detection.ts
-src/main/ipc/preflight-wsl-command.ts
 src/main/ipc/repos.ts
 src/main/ipc/worktree-apfs-clone.ts
 src/main/ipc/wsl-watcher-process-exit.ts
@@ -118,12 +113,7 @@ src/main/runtime/orca-runtime-files.ts
 src/main/runtime/tls-certificate.ts
 src/main/runtime/windows-default-route-interfaces.ts
 src/main/runtime/windows-mobile-firewall.ts
-src/main/skills/claude-plugin-skill-sources-wsl.ts
-src/main/skills/skill-discovery-wsl.ts
-src/main/skills/skill-provider-runtime-roots.ts
 src/main/skills/skill-update-run.ts
-src/main/skills/skill-wsl-install-filesystem.ts
-src/main/skills/skill-wsl-provider-detection.ts
 src/main/ssh/ssh-connection.ts
 src/main/ssh/ssh-proxy-command.ts
 src/main/ssh/ssh-remote-cli-host-passthrough.ts
@@ -143,7 +133,6 @@ src/main/window/clipboard-ipc-handlers.ts
 src/main/windows-process-tree-kill.ts
 src/main/workspace-space-analysis.ts
 src/main/wsl-availability.ts
-src/main/wsl-fish-history-cleanup.ts
 src/main/wsl-unc-delete.ts
 src/main/wsl.ts
 src/main/zsh-startup-hook-pty-harness.ts
