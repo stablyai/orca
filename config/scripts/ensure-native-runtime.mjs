@@ -13,7 +13,9 @@ const runtime = readRuntimeArg()
 
 const NATIVE_MODULES = [
   'node-pty',
-  ...(process.platform === 'win32' ? ['windows-native-registry'] : [])
+  ...(process.platform === 'win32'
+    ? ['windows-native-registry', '@vscode/windows-process-tree']
+    : [])
 ]
 const NODE_PTY_CONPTY_RUNTIME_FILES = ['conpty.dll', 'OpenConsole.exe']
 const CHILD_CHECK_FLAG = '--check-only'
@@ -244,6 +246,13 @@ function collectNativeModuleFailures() {
 }
 
 function loadNativeModule(moduleName) {
+  if (moduleName === '@vscode/windows-process-tree') {
+    // Why call through: the package defers its .node addon until first use, so
+    // a bare require would not catch an ABI mismatch or a missing build.
+    const processTree = require(moduleName)
+    processTree.getAllProcesses(() => {}, processTree.ProcessDataFlag.None)
+    return
+  }
   if (moduleName === 'windows-native-registry') {
     const registry = require(moduleName)
     // Why: the package defers loading its .node addon until the first registry call.
