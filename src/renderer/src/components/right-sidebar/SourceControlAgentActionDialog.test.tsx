@@ -310,4 +310,25 @@ describe('SourceControlAgentActionDialog', () => {
     expect(mocks.onStart).toHaveBeenCalledTimes(1)
     expect(mocks.onLaunched).toHaveBeenCalledTimes(1)
   })
+
+  it('falls back to default agent arguments (like --yolo for gemini) when savedAgentArgs is null', async () => {
+    resetStore(
+      settingsWithGlobalRecipe({
+        agentId: 'gemini',
+        commandInputTemplate: '{basePrompt}',
+        agentArgs: undefined
+      })
+    )
+    renderControlledDialog({
+      savedAgentId: 'gemini',
+      savedAgentArgs: null
+    })
+    expect(container.textContent).not.toContain('Launch agent')
+    await vi.waitFor(() => expect(mocks.onStart).toHaveBeenCalledTimes(1))
+    expect(mocks.onStart).toHaveBeenCalledWith({
+      agent: 'gemini',
+      commandInput: 'Resolve conflicts.',
+      agentArgs: '--yolo'
+    })
+  })
 })

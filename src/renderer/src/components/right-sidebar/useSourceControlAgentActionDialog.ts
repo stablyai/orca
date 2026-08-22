@@ -9,6 +9,7 @@ import { useRepoById } from '@/store/selectors'
 import { renderSourceControlActionCommandTemplate } from '../../../../shared/source-control-ai-actions'
 import { isTuiAgentEnabled } from '../../../../shared/tui-agent-selection'
 import type { TuiAgent } from '../../../../shared/tui-agent'
+import { resolveTuiAgentLaunchArgs } from '../../../../shared/tui-agent-launch-defaults'
 import type { SourceControlAgentActionDialogProps } from './SourceControlAgentActionDialog'
 import type { UseSourceControlAgentActionDialogResult } from './source-control-agent-action-dialog-result'
 import { useSavedSourceControlAgentActionAutoStart } from './useSavedSourceControlAgentActionAutoStart'
@@ -58,8 +59,11 @@ export function useSourceControlAgentActionDialog({
   const [commandTemplate, setCommandTemplate] = useState(
     savedCommandInputTemplate ?? '{basePrompt}'
   )
-  const [agentArgs, setAgentArgs] = useState(savedAgentArgs ?? '')
   const [selectedAgent, setSelectedAgent] = useState<TuiAgent | null>(savedAgentId ?? null)
+  const [agentArgs, setAgentArgs] = useState(
+    savedAgentArgs ??
+      (savedAgentId ? resolveTuiAgentLaunchArgs(savedAgentId, settings?.agentDefaultArgs) : '')
+  )
   const [detectedAgents, setDetectedAgents] = useState<TuiAgent[]>([])
   const [detecting, setDetecting] = useState(false)
   const openCycleRef = useRef(0)
@@ -105,8 +109,11 @@ export function useSourceControlAgentActionDialog({
     wasOpenRef.current = true
     setDetectedOpenCycle(null)
     setCommandTemplate(savedCommandInputTemplate ?? '{basePrompt}')
-    setAgentArgs(savedAgentArgs ?? '')
     setSelectedAgent(savedAgentId ?? null)
+    setAgentArgs(
+      savedAgentArgs ??
+        (savedAgentId ? resolveTuiAgentLaunchArgs(savedAgentId, settings?.agentDefaultArgs) : '')
+    )
     setSaveLaunchRecipe(true)
     setSaveTargetValue(defaultSaveTargetValue)
     let stale = false
@@ -114,16 +121,19 @@ export function useSourceControlAgentActionDialog({
       if (stale || openCycleRef.current !== cycle) {
         return
       }
-      setSelectedAgent(
-        (current) =>
-          current ??
-          pickSourceControlLaunchAgent({
-            savedAgent: savedAgentId,
-            defaultAgent: settings?.defaultTuiAgent,
-            detectedAgents: nextAgents,
-            disabledAgents
-          })
-      )
+      const fallbackAgent = pickSourceControlLaunchAgent({
+        savedAgent: savedAgentId,
+        defaultAgent: settings?.defaultTuiAgent,
+        detectedAgents: nextAgents,
+        disabledAgents
+      })
+      const finalAgent = savedAgentId ?? fallbackAgent
+      setSelectedAgent(finalAgent)
+      if (savedAgentArgs === null || savedAgentArgs === undefined) {
+        if (finalAgent) {
+          setAgentArgs(resolveTuiAgentLaunchArgs(finalAgent, settings?.agentDefaultArgs))
+        }
+      }
       setDetectedOpenCycle(cycle)
     })
     return () => {
@@ -138,7 +148,8 @@ export function useSourceControlAgentActionDialog({
     savedAgentArgs,
     savedCommandInputTemplate,
     repoId,
-    settings?.defaultTuiAgent
+    settings?.defaultTuiAgent,
+    settings?.agentDefaultArgs
   ])
 
   const closeDialog = useCallback(() => onOpenChange(false), [onOpenChange])
@@ -260,7 +271,23 @@ export function useSourceControlAgentActionDialog({
       },
     [resetDeliveryPlan]
   )
-  const onSelectedAgentChange = useMemo(() => resetPlanAfter(setSelectedAgent), [resetPlanAfter])
+  const handleSelectedAgentChange = useCallback(
+    (nextAgent: TuiAgent | null) => {
+      setSelectedAgent(nextAgent)
+      if (savedAgentArgs === null || savedAgentArgs === undefined) {
+        if (nextAgent) {
+          setAgentArgs(resolveTuiAgentLaunchArgs(nextAgent, settings?.agentDefaultArgs))
+        } else {
+          setAgentArgs('')
+        }
+      }
+    },
+    [savedAgentArgs, settings?.agentDefaultArgs]
+  )
+  const onSelectedAgentChange = useMemo(
+    () => resetPlanAfter(handleSelectedAgentChange),
+    [resetPlanAfter, handleSelectedAgentChange]
+  )
   const onAgentArgsChange = useMemo(() => resetPlanAfter(setAgentArgs), [resetPlanAfter])
   const onCommandTemplateChange = useMemo(
     () => resetPlanAfter(setCommandTemplate),
