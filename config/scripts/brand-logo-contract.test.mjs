@@ -23,4 +23,10 @@ describe('Parallel Merge brand assets', () => {
     expect(renderer).toContain("readFileSync(resourcePath('logo.svg'), 'utf8')")
     expect(renderer).not.toMatch(/<path\s+d=/)
   })
+
+  it('brands the dev Windows Electron executable with the dev icon', () => {
+    const runner = read('config', 'scripts', 'run-electron-vite-dev.mjs')
+    expect(runner).toContain("path.join(repoRoot, 'resources', 'build', 'icon-dev.ico')")
+    expect(runner).toContain("requireFromBuilder('app-builder-lib/out/util/resEdit')")
+  })
 })

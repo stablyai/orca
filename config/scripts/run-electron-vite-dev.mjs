@@ -474,10 +474,55 @@ function getElectronExecutable() {
   return path.join(repoRoot, 'node_modules', '.bin', 'electron')
 }
 
+// Why: Windows groups/labels the taskbar by the executable's embedded icon;
+// stock electron.exe shows the generic Electron glyph in Start/taskbar pins.
+// Stamp the dev icon onto it so the whole shell reads as MCode Dev.
+async function brandWindowsElectronIcon() {
+  if (process.platform !== 'win32') {
+    return
+  }
+  const executablePath = path.join(
+    repoRoot,
+    'node_modules',
+    'electron',
+    'dist',
+    'electron.exe'
+  )
+  const iconPath = path.join(repoRoot, 'resources', 'build', 'icon-dev.ico')
+  // Why: branding rewrites the resource section, so skip when the exe already
+  // carries this icon; a pnpm install restores the stock exe and the mtime
+  // check rebrands exactly once after that.
+  if (!existsSync(executablePath) || getMtimeMs(executablePath) > getMtimeMs(iconPath)) {
+    return
+  }
+  // ponytail: best-effort cosmetic stamping — a failure must never block pnpm dev.
+  try {
+    // Why createRequire: app-builder-lib is a transitive dep under pnpm's strict
+    // layout; electron-builder (root dep) is the stable path to resolve it from.
+    const { createRequire } = await import('node:module')
+    const requireFromBuilder = createRequire(
+      path.join(repoRoot, 'node_modules', 'electron-builder', 'package.json')
+    )
+    const { editWindowsResources } = requireFromBuilder('app-builder-lib/out/util/resEdit')
+    const { version } = JSON.parse(readFileSync(path.join(repoRoot, 'package.json'), 'utf8'))
+    await editWindowsResources({
+      file: executablePath,
+      iconPath,
+      fileVersion: version,
+      productVersion: version,
+      versionStrings: { FileDescription: 'MCode Dev', ProductName: 'MCode Dev' }
+    })
+    console.log('[mcode-dev] Branded dev Electron executable with icon-dev.ico')
+  } catch (error) {
+    console.warn(`[mcode-dev] Could not brand electron.exe icon: ${error?.message ?? error}`)
+  }
+}
+
 if (process.env.MCODE_SKIP_DEV_CLI_PREPARE !== '1') {
   prepareDevCliWrapper()
 }
 
+await brandWindowsElectronIcon()
 seedDevInstanceIdentityEnv()
 if (!useStableElectronName && process.env.MCODE_SKIP_DEV_ELECTRON_APP_PREPARE !== '1') {
   prepareMacDevElectronApp()
