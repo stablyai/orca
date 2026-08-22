@@ -193,7 +193,10 @@ export function createParkedTerminalCommandStatusPolicy(options: {
         state,
         prompt:
           normalizedPrompt ||
-          (currentEntry?.state === 'working' || currentEntry?.state === 'waiting'
+          // Why: only this agent's own unfinished turn may lend its prompt; a
+          // pane just taken over from another agent must not inherit that prompt.
+          (currentEntry?.agentType === agent &&
+          (currentEntry.state === 'working' || currentEntry.state === 'waiting')
             ? currentEntry.prompt
             : ''),
         agentType: agent,

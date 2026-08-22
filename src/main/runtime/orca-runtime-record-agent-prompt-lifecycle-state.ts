@@ -87,6 +87,7 @@ export class OrcaRuntimeWithRecordAgentPromptLifecycleState extends OrcaRuntimeW
     this.stopRequestedPtyIds.delete(ptyId)
     this.agentPromptLifecycleByPtyId.delete(ptyId)
     this.agentPromptPermissionSequenceByPtyId.delete(ptyId)
+    this.clearAgentOutputIdleSettle(ptyId)
     this.agentPromptExplicitStatusFloorByPtyId.set(ptyId, Date.now())
     this.legacyWorkerRecovery.deleteRecoveredPty(ptyId)
     // Why: a respawn under the same session id needs its own subscriber-driven attach.

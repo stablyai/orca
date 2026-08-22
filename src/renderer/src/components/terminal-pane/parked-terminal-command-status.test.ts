@@ -139,6 +139,29 @@ describe('createParkedTerminalCommandStatusPolicy', () => {
     policy.dispose()
   })
 
+  it("does not lend another agent's prompt to an empty Bob working seed", async () => {
+    mockStoreState.agentStatusByPaneKey[PANE_KEY] = makeStatusEntry({
+      state: 'working',
+      prompt: 'claude was here',
+      agentType: 'claude'
+    })
+    mockStoreState.paneForegroundAgentByPaneKey[PANE_KEY] = {
+      agent: 'bob'
+    } as PaneForegroundAgentEntry
+    const policy = await createPolicy(PTY_ID_LOCAL)
+
+    policy.onAgentOutputWorking('bob', '')
+
+    expect(mockStoreState.setAgentStatus).toHaveBeenLastCalledWith(
+      PANE_KEY,
+      expect.objectContaining({ state: 'working', prompt: '', agentType: 'bob' }),
+      '✳ Build feature',
+      undefined,
+      ROUTING
+    )
+    policy.dispose()
+  })
+
   it('rejects a scraped Bob row when another agent owns the pane', async () => {
     mockStoreState.tabsByWorktree[WORKTREE_ID] = [{ id: TAB_ID, launchAgent: 'claude' }]
     const policy = await createPolicy(PTY_ID_LOCAL)

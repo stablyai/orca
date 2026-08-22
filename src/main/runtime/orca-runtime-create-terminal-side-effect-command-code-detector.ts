@@ -39,6 +39,8 @@ export class OrcaRuntimeWithCreateTerminalSideEffectCommandCodeDetector extends 
     )
   }
 
+  // Why: a pending idle settle belongs to one process generation; it must not
+  // stamp a replacement process (same PTY id) as idle.
   protected clearAgentOutputIdleSettle(ptyId: string): void {
     const timer = this.agentOutputIdleSettleTimersByPtyId.get(ptyId)
     if (timer !== undefined) {
