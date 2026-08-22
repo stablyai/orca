@@ -331,4 +331,28 @@ describe('SourceControlAgentActionDialog', () => {
       agentArgs: '--yolo'
     })
   })
+
+  it('falls back to an enabled fallback agent when the saved agent is disabled or stale', async () => {
+    mocks.ensureDetectedAgents.mockResolvedValue(['gemini'])
+    mocks.ensureRemoteDetectedAgents.mockResolvedValue(['gemini'])
+    resetStore(
+      settingsWithGlobalRecipe({
+        agentId: 'codex',
+        commandInputTemplate: '{basePrompt}',
+        agentArgs: ''
+      })
+    )
+    renderControlledDialog({
+      savedAgentId: 'codex',
+      savedAgentArgs: null
+    })
+    await vi.waitFor(() => expect(mocks.ensureDetectedAgents).toHaveBeenCalledTimes(1))
+    await flushEffects()
+
+    expect(mocks.onStart).not.toHaveBeenCalled()
+    expect(container.textContent).toContain('Launch agent')
+    expect(container.querySelector('[data-agent-value]')?.getAttribute('data-agent-value')).toBe(
+      'gemini'
+    )
+  })
 })
