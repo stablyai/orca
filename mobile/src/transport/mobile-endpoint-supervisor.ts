@@ -17,6 +17,7 @@ import type { MobileRelayCredentialBundle } from './mobile-relay-credential-bund
 import { MobileEndpointNudgeRouter } from './mobile-endpoint-nudge-router'
 import { MobileRelayDirectGraceTimer } from './mobile-relay-direct-grace-timer'
 import { MobileRelaySessionEstablisher } from './mobile-relay-session-establisher'
+import * as recoveryPresentation from './mobile-relay-recovery-presentation'
 import type { StableLogicalRpcClient } from './stable-logical-rpc-client'
 import type { ForegroundNudgeReason, HostProfile } from './types'
 
@@ -57,19 +58,14 @@ export class MobileEndpointSupervisor {
     })
     this.logRelay = createRelayRecoveryLog(dependencies.now, dependencies.onLog)
     this.relayReconnect = new RelayReconnectController(dependencies, this.recoverRelay.bind(this))
+    this.relayReconnect.reportRecoveryTo(logical)
     this.nudgeRouter = new MobileEndpointNudgeRouter({
       logical,
       controller: this.relayReconnect,
-      now: dependencies.now,
       isStopped: () => this.stopped,
       isForeground: () => this.foreground,
       setForeground: (foreground) => this.setForeground(foreground),
       replaceRelay: () => void this.recoverRelay(true, true),
-      recoverAfterDeadProbe: (detail) => {
-        this.logRelay('relay probe failed; recovering', detail)
-        suspendRelayIfStillConnected(this.relayReconnect, this.logical)
-        void this.recoverRelay()
-      },
       scheduleDirectProbe: () => this.directProbe.schedule(0)
     })
     this.leaseRotation = new RelayLeaseRotationTimer(dependencies, () => {
@@ -160,6 +156,7 @@ export class MobileEndpointSupervisor {
       } else {
         // Why: the direct client enters reconnecting after its first failed
         // dial and may never publish disconnected while its retry loop lives.
+        recoveryPresentation.onActiveFailure(this.logical, this.relayReconnect, state, this.bundle)
         this.relayReconnect.handleStateFailure(this.logical, state)
       }
     })
@@ -183,25 +180,25 @@ export class MobileEndpointSupervisor {
     } else {
       // Why: background phones must not hold billed relay data splices.
       this.relayReconnect.suspendActiveRelay(this.logical)
-      this.directProbe.clear()
-      this.relayReconnect.clear()
-      this.leaseRotation.clear()
-      this.directGrace.clear()
+      this.clearScheduledRecovery()
     }
   }
 
-  nudge(reason: ForegroundNudgeReason): void {
-    this.nudgeRouter.nudge(reason)
-  }
+  nudge = (reason: ForegroundNudgeReason): void => this.nudgeRouter.nudge(reason)
 
   stop(): void {
     this.stopped = true
     this.unsubscribeState?.()
     this.unsubscribeState = null
+    this.clearScheduledRecovery()
+  }
+
+  private clearScheduledRecovery(): void {
     this.directProbe.clear()
     this.relayReconnect.clear()
     this.leaseRotation.clear()
     this.directGrace.clear()
+    this.logical.setRecoveryPath(null)
   }
 
   // forceReplacement: dial past the "direct still looks live" guard — a lease
@@ -241,7 +238,6 @@ export class MobileEndpointSupervisor {
       return
     }
     this.operationInFlight = true
-    let lastError: Error | null = null
     let retryAfterOperation = false
     try {
       const selection = await selectDialableRelayCredentials({
@@ -252,6 +248,7 @@ export class MobileEndpointSupervisor {
       })
       this.bundle = selection.bundle
       if (selection.credentials.length === 0) {
+        this.logical.setRecoveryPath(null)
         // Why: "expired" vs "missing" separates a sleep-past-expiry phone
         // (needs re-pair or LAN) from a Keychain failure in field reports.
         this.logRelay(
@@ -267,6 +264,12 @@ export class MobileEndpointSupervisor {
         }
         return
       }
+      const recoveryNeeded =
+        forceReplacement || this.relayReconnect.needsRecovery(this.logical.getState())
+      if (this.stopped || !this.foreground || !recoveryNeeded) {
+        return
+      }
+      this.logical.setRecoveryPath('relay', this.relayReconnect.getFailureCount())
       const dialed = await this.sessionEstablisher.dialEligible(selection.credentials)
       if (dialed.outcome === 'established') {
         // Why: a fresh socket satisfies any replacement intent queued mid-dial.
@@ -275,15 +278,16 @@ export class MobileEndpointSupervisor {
         return
       }
       if (dialed.outcome === 'aborted') {
+        this.logical.setRecoveryPath(null)
         // Why: direct won the race or the supervisor went inactive — not a
         // failure; booking backoff would delay the next genuine recovery.
         return
       }
-      lastError = dialed.error
       // Why: cleanup may happen while a relay dial is awaiting the network;
       // record its outcome without recreating a foreground retry timer.
       const scheduleRetry = (!forceReplacement || ownsRecovery) && this.foreground && !this.stopped
-      this.relayReconnect.registerFailure(lastError, scheduleRetry)
+      this.relayReconnect.registerFailure(dialed.error, scheduleRetry)
+      recoveryPresentation.clearIfCredentialBlocked(this.logical, this.relayReconnect)
       if (ownsRecovery) {
         suspendRelayIfStillConnected(this.relayReconnect, this.logical)
       }

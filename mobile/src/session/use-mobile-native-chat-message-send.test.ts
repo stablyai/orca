@@ -4,11 +4,15 @@
 import { createElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+// Type-only, so it is erased before the `./mobile-native-chat-send` mock below applies.
+import type { MobileNativeChatSendOutcome } from './mobile-native-chat-send'
 
 const sendWithOutcome = vi.fn()
 const clearInputWrite = vi.fn()
+const typeCommandWithOutcome = vi.fn()
 vi.mock('./mobile-native-chat-send', () => ({
   sendMobileNativeChatMessageWithOutcome: (...args: unknown[]) => sendWithOutcome(...args),
+  typeMobileNativeChatCommandWithOutcome: (...args: unknown[]) => typeCommandWithOutcome(...args),
   clearMobileNativeChatInput: (...args: unknown[]) => clearInputWrite(...args),
   openMobileNativeChatSendBudget: () => Date.now() + 15_000,
   MOBILE_NATIVE_CHAT_SEND_TIMEOUT_MS: 15_000,
@@ -34,6 +38,9 @@ describe('useMobileNativeChatMessageSend', () => {
   let renderer: ReactTestRenderer | null = null
   let api: Send | null = null
   const acceptSend = vi.fn()
+  const captureSendOrigin = vi.fn(() => ({ draftKey: 'k', pendingKey: 'p' }) as never)
+  const clearDraftForSend = vi.fn()
+  const restoreRejectedDraft = vi.fn()
   const holdUnconfirmedSend = vi.fn()
   const onCommandSend = vi.fn()
   const commandSendRef = { current: onCommandSend }
@@ -53,10 +60,10 @@ describe('useMobileNativeChatMessageSend', () => {
         deviceTokenRef: { current: 'device' },
         agentRef,
         commandSendRef,
-        captureSendOrigin: () => ({ draftKey: 'k', pendingKey: 'p' }) as never,
+        captureSendOrigin,
         readSeededLaunchDraftSeed,
-        clearDraftForSend: () => {},
-        restoreRejectedDraft: () => {},
+        clearDraftForSend,
+        restoreRejectedDraft,
         acceptSend,
         holdUnconfirmedSend,
         onSendError
@@ -69,10 +76,12 @@ describe('useMobileNativeChatMessageSend', () => {
   }
 
   const sentArgs = (): {
+    text?: string
     clearInputFirst?: boolean
     resolvedLaunchDraft?: { text: string; createdAt: number }
   } =>
     sendWithOutcome.mock.calls[0]![0] as {
+      text?: string
       clearInputFirst?: boolean
       resolvedLaunchDraft?: { text: string; createdAt: number }
     }
@@ -80,12 +89,16 @@ describe('useMobileNativeChatMessageSend', () => {
     (clearInputWrite.mock.calls[0]?.[0] ?? {}) as { clearInput?: string }
 
   beforeEach(() => {
-    globalThis.IS_REACT_ACT_ENVIRONMENT = true
     sendWithOutcome.mockReset()
     sendWithOutcome.mockResolvedValue('accepted')
     clearInputWrite.mockReset()
     clearInputWrite.mockResolvedValue(true)
+    typeCommandWithOutcome.mockReset()
+    typeCommandWithOutcome.mockResolvedValue('accepted')
     acceptSend.mockReset()
+    captureSendOrigin.mockClear()
+    clearDraftForSend.mockReset()
+    restoreRejectedDraft.mockReset()
     holdUnconfirmedSend.mockReset()
     onCommandSend.mockReset()
     commandSendRef.current = onCommandSend
@@ -216,24 +229,46 @@ describe('useMobileNativeChatMessageSend', () => {
     expect(onCommandSend).toHaveBeenCalledWith('/clear')
   })
 
-  it('never creates an optimistic echo for an unknown slash token', async () => {
-    // `/model` is not in Claude's autocomplete catalog, but the session-option
-    // recorder still recognizes it without claiming a generic command ran.
-    mount(() => null)
-    await act(async () => {
-      await api!.send('/model sonnet')
-    })
-    expect(acceptSend).not.toHaveBeenCalled()
-    expect(onCommandSend).toHaveBeenCalledWith('/model sonnet')
-  })
+  it.each(['claude', 'openclaude'] as const)(
+    'keeps %s composer slash sends pasted',
+    async (agent) => {
+      // `/model` is not in Claude's autocomplete catalog, but the session-option
+      // recorder still recognizes it without claiming a generic command ran.
+      mount(() => null, agent)
+      await act(async () => {
+        await api!.send('/model sonnet')
+      })
+      expect(acceptSend).not.toHaveBeenCalled()
+      expect(onCommandSend).toHaveBeenCalledWith('/model sonnet')
+      expect(sendWithOutcome).toHaveBeenCalledOnce()
+      expect(typeCommandWithOutcome).not.toHaveBeenCalled()
+    }
+  )
 
-  it('classifies per agent: /model is a catalog command for Codex', async () => {
+  it('types Codex composer slash sends instead of pasting them', async () => {
     mount(() => null, 'codex')
     await act(async () => {
       await api!.send('/model')
     })
     expect(acceptSend).not.toHaveBeenCalled()
     expect(onCommandSend).toHaveBeenCalledWith('/model')
+    expect(typeCommandWithOutcome).toHaveBeenCalledWith(
+      expect.objectContaining({ command: '/model', terminal: 'term' })
+    )
+    expect(sendWithOutcome).not.toHaveBeenCalled()
+  })
+
+  it('keeps Codex skill sends pasted', async () => {
+    mount(() => null, 'codex')
+    await act(async () => {
+      await api!.send('$ref-oss')
+    })
+    expect(acceptSend).not.toHaveBeenCalled()
+    expect(onCommandSend).toHaveBeenCalledWith('$ref-oss')
+    expect(sendWithOutcome).toHaveBeenCalledWith(
+      expect.objectContaining({ text: '$ref-oss', terminal: 'term' })
+    )
+    expect(typeCommandWithOutcome).not.toHaveBeenCalled()
   })
 
   it('holds only chat sends for transcript confirmation on a lost ack', async () => {
@@ -249,16 +284,44 @@ describe('useMobileNativeChatMessageSend', () => {
     expect(holdUnconfirmedSend).toHaveBeenCalledTimes(1)
   })
 
-  it('dispatchCommand surfaces the outcome without echo or composer sync', async () => {
-    mount(() => ({ text: DRAFT, createdAt: 1 }))
+  it.each(['claude', 'openclaude'] as const)(
+    'keeps %s session-option commands pasted',
+    async (agent) => {
+      mount(() => ({ text: DRAFT, createdAt: 1 }), agent)
+      let outcome: string | undefined
+      await act(async () => {
+        outcome = await api!.dispatchCommand('/model sonnet', { delivery: 'type' })
+      })
+      expect(outcome).toBe('accepted')
+      expect(acceptSend).not.toHaveBeenCalled()
+      expect(onCommandSend).not.toHaveBeenCalled()
+      expect(sentArgs().resolvedLaunchDraft).toBeUndefined()
+    }
+  )
+
+  it('routes typed picker commands around the pasted composer-text send', async () => {
+    mount(() => null, 'codex')
     let outcome: string | undefined
     await act(async () => {
-      outcome = await api!.dispatchCommand('/model sonnet')
+      outcome = await api!.dispatchCommand('/model', { delivery: 'type' })
     })
     expect(outcome).toBe('accepted')
-    expect(acceptSend).not.toHaveBeenCalled()
-    expect(onCommandSend).not.toHaveBeenCalled()
-    expect(sentArgs().resolvedLaunchDraft).toBeUndefined()
+    expect(typeCommandWithOutcome).toHaveBeenCalledWith(
+      expect.objectContaining({ command: '/model', terminal: 'term' })
+    )
+    expect(sendWithOutcome).not.toHaveBeenCalled()
+  })
+
+  it('types Codex session-option commands without caller delivery metadata', async () => {
+    mount(() => null, 'codex')
+    await act(async () => {
+      await api!.dispatchCommand('/model')
+    })
+
+    expect(typeCommandWithOutcome).toHaveBeenCalledWith(
+      expect.objectContaining({ command: '/model', terminal: 'term' })
+    )
+    expect(sendWithOutcome).not.toHaveBeenCalled()
   })
 
   it('binds classification to the agent that started the send', async () => {
@@ -327,5 +390,54 @@ describe('useMobileNativeChatMessageSend', () => {
     // The answer released its own hold on the way out.
     expect(acquireMobileNativeChatTerminalWrite('term')).toBe(true)
     releaseMobileNativeChatTerminalWrite('term')
+  })
+
+  // The host writes these bytes verbatim, so whitespace the match key drops must
+  // not reach the agent's input line and glue the next rapid send onto it (#14262).
+  it('trims trailing whitespace without changing leading prompt content', async () => {
+    mount(() => null)
+    await act(async () => {
+      await api!.send('  run the tests \n')
+    })
+    expect(sentArgs().text).toBe('  run the tests')
+    expect(captureSendOrigin).toHaveBeenCalledWith('  run the tests')
+    expect(acceptSend.mock.calls[0]![1]).toBe('  run the tests')
+  })
+
+  it('trims trailing whitespace on a question answer too', async () => {
+    mount(() => null)
+    await act(async () => {
+      await api!.answerQuestion('\n 1 ')
+    })
+    expect(sentArgs().text).toBe('\n 1')
+  })
+
+  // #14819: the trim is a wire concern only. A rejected send hands the composer
+  // back to the user, and it has to be the draft they typed, blank lines included.
+  it('restores the untrimmed draft when the send is rejected', async () => {
+    const draft = 'first line\n\nsecond line\n\n'
+    sendWithOutcome.mockResolvedValue('rejected')
+    mount(() => null)
+
+    await act(async () => {
+      await api!.send(draft)
+    })
+
+    expect(sentArgs().text).toBe('first line\n\nsecond line')
+    expect(restoreRejectedDraft.mock.calls[0]![1]).toBe(draft)
+    expect(clearDraftForSend.mock.calls[0]![1]).toBe(draft)
+  })
+
+  it('restores the untrimmed draft when the launch-draft pre-clear is rejected', async () => {
+    const draft = 'ship it   '
+    clearInputWrite.mockResolvedValue(false)
+    mount(() => ({ text: DRAFT, createdAt: 1 }))
+
+    await act(async () => {
+      await api!.send(draft)
+    })
+
+    expect(sendWithOutcome).not.toHaveBeenCalled()
+    expect(restoreRejectedDraft.mock.calls[0]![1]).toBe(draft)
   })
 })

@@ -1,5 +1,6 @@
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../shared/constants'
-import type { BrowserTab, TabGroup } from '../../../shared/types'
+import type { BrowserTab } from '../../../shared/browser-workspace-types'
+import type { TabGroup } from '../../../shared/tab-types'
 import { getGroupVisibleTabOrder } from '@/components/tab-bar/group-tab-order'
 import {
   getNextTabAcrossAllTypes,

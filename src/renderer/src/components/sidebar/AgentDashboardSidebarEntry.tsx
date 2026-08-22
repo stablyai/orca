@@ -1,6 +1,7 @@
-import { LayoutDashboard, MessageCircleQuestion } from 'lucide-react'
+import { LayoutDashboard } from 'lucide-react'
 import { useAppStore } from '@/store'
 import { cn } from '@/lib/utils'
+import { AgentQuestionIcon } from '@/components/AgentQuestionIcon'
 import { DASHBOARD_BUCKET_ORDER, type DashboardBucket } from '../../../../shared/dashboard-snapshot'
 import { useAgentBucketCounts } from '@/components/dashboard/useAgentBucketCounts'
 import { translate } from '@/i18n/i18n'
@@ -46,7 +47,7 @@ function DashboardBucketCounts({
           className="inline-flex items-center gap-1 text-[10px] tabular-nums text-worktree-sidebar-foreground/55"
         >
           {bucket === 'attention' ? (
-            <MessageCircleQuestion className="size-2.5 text-amber-500" aria-hidden />
+            <AgentQuestionIcon className="size-2.5" />
           ) : (
             <span className={cn('size-1.5 rounded-full', DASHBOARD_BUCKET_DOT_CLASS[bucket])} />
           )}

@@ -12,7 +12,7 @@ function contrastRatio(a: string, b: string): number {
     const n = Number.parseInt(hex.replace('#', ''), 16)
     const toLinear = (channel: number): number => {
       const c = channel / 255
-      return c <= 0.03928 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4)
+      return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4
     }
     const r = toLinear((n >> 16) & 0xff)
     const g = toLinear((n >> 8) & 0xff)

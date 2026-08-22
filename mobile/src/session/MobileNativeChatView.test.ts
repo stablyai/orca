@@ -1,6 +1,6 @@
 import { createElement } from 'react'
 import { act, create, type ReactTestInstance, type ReactTestRenderer } from 'react-test-renderer'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
 import { MobileNativeChatView } from './MobileNativeChatView'
 
@@ -71,17 +71,7 @@ type Overrides = {
   onClearSendError?: () => void
   inputLockReason?: 'disconnected' | 'waiting' | null
   onSend?: (text: string) => Promise<boolean>
-}
-
-function suppressRendererWarning(): () => void {
-  const original = console.error
-  const spy = vi.spyOn(console, 'error').mockImplementation((...args) => {
-    if (typeof args[0] === 'string' && args[0].includes('react-test-renderer is deprecated')) {
-      return
-    }
-    original(...args)
-  })
-  return () => spy.mockRestore()
+  pending?: Parameters<typeof MobileNativeChatView>[0]['pending']
 }
 
 function assistantTurn(id: string, text: string): NativeChatMessage {
@@ -105,24 +95,15 @@ function chatViewElement(overrides: Overrides): ReturnType<typeof createElement>
 describe('MobileNativeChatView', () => {
   let renderer: ReactTestRenderer | null = null
 
-  beforeEach(() => {
-    globalThis.IS_REACT_ACT_ENVIRONMENT = true
-  })
-
   afterEach(() => {
     act(() => renderer?.unmount())
     renderer = null
   })
 
   async function render(overrides: Overrides = {}): Promise<void> {
-    const restore = suppressRendererWarning()
-    try {
-      await act(async () => {
-        renderer = create(chatViewElement(overrides))
-      })
-    } finally {
-      restore()
-    }
+    await act(async () => {
+      renderer = create(chatViewElement(overrides))
+    })
   }
 
   async function update(overrides: Overrides = {}): Promise<void> {
@@ -135,6 +116,13 @@ describe('MobileNativeChatView', () => {
   function listIds(): string[] {
     const list = renderer!.root.find((node) => node.type === 'FlatList')
     return (list.props.data as { id: string }[]).map((row) => row.id)
+  }
+
+  function renderedRow(id: string): ReturnType<typeof createElement> {
+    const list = renderer!.root.find((node) => node.type === 'FlatList')
+    const data = list.props.data as NativeChatMessage[]
+    const index = data.findIndex((row) => row.id === id)
+    return list.props.renderItem({ item: data[index], index })
   }
 
   function banners(): ReactTestInstance[] {
@@ -205,6 +193,15 @@ describe('MobileNativeChatView', () => {
     await update({ folded, streaming: 'The tests' })
 
     expect(listIds()).toEqual(['a1', 'streaming'])
+  })
+
+  it('renders an accepted optimistic image send without a queued state', async () => {
+    await render({
+      pending: [{ id: 'pending-1', text: 'look', images: ['file:///phone-photo.jpg'] }]
+    })
+
+    expect(listIds()).toEqual(['pending-1'])
+    expect(renderedRow('pending-1').props).not.toHaveProperty('queued')
   })
 
   it('keeps a visible lock through a subscribed-end lease blip', async () => {

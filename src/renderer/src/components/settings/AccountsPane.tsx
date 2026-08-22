@@ -4,12 +4,12 @@
    error handling and restart prompts below; splitting them into separate files
    would scatter those flows without a meaningful abstraction boundary. */
 import { useEffect, useRef, useState } from 'react'
+import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import type {
   ClaudeRateLimitAccountsState,
   CodexRateLimitAccountsState,
-  CodexSystemDefaultIdentity,
-  GlobalSettings
-} from '../../../../shared/types'
+  CodexSystemDefaultIdentity
+} from '../../../../shared/managed-account-types'
 import { resolveLocalAccountRuntimeTarget } from '../../../../shared/local-account-runtime'
 import { getRendererAppPlatform } from '../../lib/renderer-app-platform'
 import { Badge } from '../ui/badge'
@@ -19,6 +19,7 @@ import { Label } from '../ui/label'
 import { Popover, PopoverContent, PopoverTrigger } from '../ui/popover'
 import { Separator } from '../ui/separator'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select'
+import { Switch } from '../ui/switch'
 import {
   AlertTriangle,
   ExternalLink,
@@ -94,6 +95,49 @@ import {
   selectCodexProviderAccount,
   watchProviderAccounts
 } from '@/runtime/runtime-provider-accounts-client'
+
+// Why: bounded so a permanently unreadable home cannot poll forever; ~5 minutes
+// total is long enough to outlast an antivirus scan or backup pass.
+const CODEX_CONFIG_SYNC_RETRY_MS = 30_000
+const CODEX_CONFIG_SYNC_RETRY_LIMIT = 10
+
+function watchCodexConfigSyncStatus(
+  onStatus: (status: CodexConfigSyncStatus | null) => void
+): () => void {
+  let cancelled = false
+  let attempts = 0
+  let retryTimer: ReturnType<typeof setTimeout> | null = null
+  const poll = (): void => {
+    void window.api.codexConfigSync
+      .status()
+      .then((status) => {
+        if (cancelled) {
+          return
+        }
+        onStatus(status)
+        if (
+          status.state === 'stalled' &&
+          status.reason === 'managed-home-unavailable' &&
+          attempts < CODEX_CONFIG_SYNC_RETRY_LIMIT
+        ) {
+          attempts += 1
+          retryTimer = setTimeout(poll, CODEX_CONFIG_SYNC_RETRY_MS)
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          onStatus(null)
+        }
+      })
+  }
+  poll()
+  return () => {
+    cancelled = true
+    if (retryTimer !== null) {
+      clearTimeout(retryTimer)
+    }
+  }
+}
 
 export { getAccountsPaneSearchEntries }
 
@@ -382,12 +426,12 @@ export function AccountsPane({
     useState<CodexRateLimitAccountsState>(emptyCodexAccountsState)
   const [codexAccountsLoaded, setCodexAccountsLoaded] = useState(false)
   const [codexAction, setCodexAction] = useState<
-    'idle' | 'adding' | `reauth:${string}` | `remove:${string}` | `select:${string | 'system'}`
+    'idle' | 'adding' | `reauth:${string}` | `remove:${string}` | `select:${string}`
   >('idle')
   const [claudeAccounts, setClaudeAccounts] =
     useState<ClaudeRateLimitAccountsState>(emptyClaudeAccountsState)
   const [claudeAction, setClaudeAction] = useState<
-    'idle' | 'adding' | `reauth:${string}` | `remove:${string}` | `select:${string | 'system'}`
+    'idle' | 'adding' | `reauth:${string}` | `remove:${string}` | `select:${string}`
   >('idle')
   // Why: capture the account's runtime slot when the dialog opens; the roster
   // can change underneath an open dialog and lose the slot to diff for restarts.
@@ -451,22 +495,12 @@ export function AccountsPane({
       setCodexConfigSync(null)
       return
     }
-    let cancelled = false
-    void window.api.codexConfigSync
-      .status()
-      .then((status) => {
-        if (!cancelled) {
-          setCodexConfigSync(status)
-        }
-      })
-      .catch(() => {
-        if (!cancelled) {
-          setCodexConfigSync(null)
-        }
-      })
-    return () => {
-      cancelled = true
-    }
+    // Why: a temporarily locked managed home clears on its own, but this effect
+    // only reruns on scope/runtime/selection changes — none of which a lock
+    // release triggers. Without a retry the warning would stick until remount.
+    // Serialized (timeout, not interval) so a slow response can never be
+    // overwritten by an older one.
+    return watchCodexConfigSyncStatus(setCodexConfigSync)
     // Why: the status resolves whichever home the ACTIVE selection mirrors into
     // (per-account, shared, or none for the real-home lane), so switching
     // accounts must refetch or the banner describes the previous account.
@@ -1179,23 +1213,28 @@ export function AccountsPane({
             <div className="flex items-start gap-2 rounded-md border border-destructive/40 bg-destructive/5 px-3 py-2 text-xs text-destructive">
               <AlertTriangle className="mt-0.5 size-3.5 shrink-0" />
               <span>
-                {codexConfigSyncWarning === 'missing-source'
+                {codexConfigSyncWarning === 'managed-home-unavailable'
                   ? translate(
-                      'auto.components.settings.AccountsPane.codexConfigSyncMissingSource',
-                      'Codex is still using the settings it last synced because {{value0}} is missing. Restore that file to resume syncing.',
-                      { value0: codexConfigSync?.systemConfigPath ?? '' }
+                      'auto.components.settings.AccountsPane.codexConfigSyncManagedHomeUnavailable',
+                      'Orca could not read this account\u2019s Codex files just now, so settings may not be syncing. This usually clears on its own \u2014 antivirus or a backup tool briefly locks them.'
                     )
-                  : codexConfigSyncWarning === 'blank-source'
+                  : codexConfigSyncWarning === 'missing-source'
                     ? translate(
-                        'auto.components.settings.AccountsPane.codexConfigSyncBlankSource',
-                        'Codex is still using the settings it last synced because {{value0}} is empty. That is expected while a synced folder finishes downloading.',
+                        'auto.components.settings.AccountsPane.codexConfigSyncMissingSource',
+                        'Codex is still using the settings it last synced because {{value0}} is missing. Restore that file to resume syncing.',
                         { value0: codexConfigSync?.systemConfigPath ?? '' }
                       )
-                    : translate(
-                        'auto.components.settings.AccountsPane.codexConfigSyncUnreadableSource',
-                        "Codex is still using the settings it last synced because {{value0}} could not be read. Check that file's permissions.",
-                        { value0: codexConfigSync?.systemConfigPath ?? '' }
-                      )}
+                    : codexConfigSyncWarning === 'blank-source'
+                      ? translate(
+                          'auto.components.settings.AccountsPane.codexConfigSyncBlankSource',
+                          'Codex is still using the settings it last synced because {{value0}} is empty. That is expected while a synced folder finishes downloading.',
+                          { value0: codexConfigSync?.systemConfigPath ?? '' }
+                        )
+                      : translate(
+                          'auto.components.settings.AccountsPane.codexConfigSyncUnreadableSource',
+                          "Codex is still using the settings it last synced because {{value0}} could not be read. Check that file's permissions.",
+                          { value0: codexConfigSync?.systemConfigPath ?? '' }
+                        )}
               </span>
             </div>
           ) : null}
@@ -1555,25 +1594,19 @@ export function AccountsPane({
               )}
             </p>
           </div>
-          <button
-            role="switch"
-            aria-checked={settings.geminiCliOAuthEnabled}
-            onClick={() => {
+          <Switch
+            aria-label={translate(
+              'auto.components.settings.AccountsPane.96f3649526',
+              'Use Gemini CLI credentials (experimental)'
+            )}
+            checked={settings.geminiCliOAuthEnabled}
+            onCheckedChange={(checked) => {
               recordFeatureInteraction('usage-tracking')
               updateSettings({
-                geminiCliOAuthEnabled: !settings.geminiCliOAuthEnabled
+                geminiCliOAuthEnabled: checked
               })
             }}
-            className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer items-center rounded-full border border-transparent transition-colors ${
-              settings.geminiCliOAuthEnabled ? 'bg-foreground' : 'bg-muted-foreground/30'
-            }`}
-          >
-            <span
-              className={`pointer-events-none block size-3.5 rounded-full bg-background shadow-sm transition-transform ${
-                settings.geminiCliOAuthEnabled ? 'translate-x-4' : 'translate-x-0.5'
-              }`}
-            />
-          </button>
+          />
         </SearchableSetting>
       </section>
     ) : null,

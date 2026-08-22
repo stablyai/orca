@@ -1,7 +1,5 @@
 import { HEX_COLOR_RE } from './color-validation'
 
-export const LEFT_SIDEBAR_APPEARANCE_MODES = ['default', 'match-terminal', 'tinted'] as const
-
 export const DEFAULT_LEFT_SIDEBAR_TINT_COLOR = '#18181b'
 export const DEFAULT_LEFT_SIDEBAR_TINT_OPACITY = 0.08
 export const MAX_LEFT_SIDEBAR_TINT_OPACITY = 0.35

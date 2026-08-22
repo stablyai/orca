@@ -20,13 +20,12 @@ type LinkProbe = {
 type TooltipState = {
   display: string
   text: string
-  currentLinkText: string | null
   cursor: string
   paneBottom: number
   terminalBottom: number
   tooltipTop: number
+  tooltipBottom: number
   tooltipHeight: number
-  reserveHeight: number
 }
 
 async function locateUrl(page: Page, url: string): Promise<LinkProbe | null> {
@@ -62,23 +61,24 @@ async function locateUrl(page: Page, url: string): Promise<LinkProbe | null> {
 }
 
 async function moveToLink(page: Page, probe: LinkProbe): Promise<void> {
-  await page.evaluate(({ col, row, tabId }) => {
+  const point = await page.evaluate(({ col, row, tabId }) => {
     const manager = window.__paneManagers?.get(tabId)
     const pane = manager?.getActivePane?.() ?? manager?.getPanes?.()[0] ?? null
     const screen = pane?.terminal.element?.querySelector<HTMLElement>('.xterm-screen')
     if (!pane || !screen) {
       throw new Error('xterm-screen element unavailable')
     }
+    const cell = pane.terminal.dimensions?.css.cell
+    if (!cell?.width || !cell.height) {
+      throw new Error('terminal cell dimensions unavailable')
+    }
     const rect = screen.getBoundingClientRect()
-    screen.dispatchEvent(
-      new MouseEvent('mousemove', {
-        bubbles: true,
-        cancelable: true,
-        clientX: rect.left + (col + 0.5) * (rect.width / pane.terminal.cols),
-        clientY: rect.top + (row + 0.5) * (rect.height / pane.terminal.rows)
-      })
-    )
+    return {
+      x: rect.left + (col + 0.5) * cell.width,
+      y: rect.top + (row + 0.5) * cell.height
+    }
   }, probe)
+  await page.mouse.move(point.x, point.y)
 }
 
 async function readTooltipState(page: Page, tabId: string): Promise<TooltipState> {
@@ -90,26 +90,19 @@ async function readTooltipState(page: Page, tabId: string): Promise<TooltipState
       throw new Error('terminal pane unavailable')
     }
 
-    const linkifier = (
-      pane.terminal as unknown as {
-        _core?: { linkifier?: { currentLink?: { link?: { text?: string } } } }
-      }
-    )._core?.linkifier
     const paneRect = pane.container.getBoundingClientRect()
     const terminalRect = pane.terminal.element?.parentElement?.getBoundingClientRect()
     const tooltipRect = pane.linkTooltip.getBoundingClientRect()
-    const reserveHeight = tooltipRect.height
 
     return {
       display: pane.linkTooltip.style.display,
       text: pane.linkTooltip.textContent ?? '',
-      currentLinkText: linkifier?.currentLink?.link?.text ?? null,
       cursor: getComputedStyle(screen).cursor,
       paneBottom: paneRect.bottom,
       terminalBottom: terminalRect?.bottom ?? 0,
       tooltipTop: tooltipRect.top,
-      tooltipHeight: tooltipRect.height,
-      reserveHeight
+      tooltipBottom: tooltipRect.bottom,
+      tooltipHeight: tooltipRect.height
     }
   }, tabId)
 }
@@ -119,7 +112,7 @@ async function captureProof(page: Page, testInfo: TestInfo, name: string): Promi
 }
 
 test.describe('Issue #12656 terminal link tooltip', () => {
-  test('clears hover state on window blur and reserves the tooltip strip', async ({
+  test('clears hover state without permanently shrinking the terminal', async ({
     orcaPage
   }, testInfo) => {
     await waitForSessionReady(orcaPage)
@@ -150,36 +143,31 @@ test.describe('Issue #12656 terminal link tooltip', () => {
     if (!probe) {
       throw new Error('URL probe disappeared before hover')
     }
+    const idle = await readTooltipState(orcaPage, probe.tabId)
+    expect(Math.abs(idle.paneBottom - idle.terminalBottom)).toBeLessThanOrEqual(1)
     await expect
       .poll(async () => {
         await moveToLink(orcaPage, probe)
         return readTooltipState(orcaPage, probe.tabId)
       })
-      .toMatchObject({ display: '', currentLinkText: url })
+      .toMatchObject({ display: '', text: expect.stringContaining(url) })
 
     const hovered = await readTooltipState(orcaPage, probe.tabId)
     expect(hovered.text).toContain(url)
     expect(hovered.tooltipHeight).toBeGreaterThan(0)
-    expect(hovered.tooltipTop).toBeGreaterThanOrEqual(hovered.terminalBottom - 1)
-    // Why: bound the gap on both sides. A lower bound alone also passes when the
-    // reserve var fails to resolve and .xterm-container collapses to height:auto,
-    // which leaves a huge gap and an undersized terminal.
-    expect(hovered.paneBottom - hovered.terminalBottom).toBeGreaterThanOrEqual(
-      hovered.reserveHeight - 1
-    )
-    expect(hovered.paneBottom - hovered.terminalBottom).toBeLessThanOrEqual(
-      hovered.reserveHeight + 1
-    )
+    expect(Math.abs(hovered.paneBottom - hovered.terminalBottom)).toBeLessThanOrEqual(1)
+    expect(Math.abs(hovered.paneBottom - hovered.tooltipBottom)).toBeLessThanOrEqual(1)
+    expect(hovered.tooltipTop).toBeLessThan(hovered.terminalBottom)
     await captureProof(orcaPage, testInfo, 'issue-12656-fixed-hover.png')
 
     await orcaPage.evaluate(() => window.dispatchEvent(new Event('blur')))
     await expect
       .poll(() => readTooltipState(orcaPage, probe.tabId))
-      .toMatchObject({ display: 'none', currentLinkText: null, cursor: 'text' })
+      .toMatchObject({ display: 'none', cursor: 'text' })
+    const cleared = await readTooltipState(orcaPage, probe.tabId)
+    expect(Math.abs(cleared.paneBottom - cleared.terminalBottom)).toBeLessThanOrEqual(1)
     await captureProof(orcaPage, testInfo, 'issue-12656-fixed-after-blur.png')
 
-    // Keep the output assertion adjacent to the visual state checks so the
-    // reserved strip cannot hide the final terminal line without detection.
     await expect.poll(() => getTerminalContent(orcaPage)).toContain(url)
   })
 })

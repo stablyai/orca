@@ -25,12 +25,18 @@ test('cmd+p quick open prioritizes the filename and reveals the full path on hov
   })
   const dialog = orcaPage.getByRole('dialog', { name: 'Go to file' })
   await expect(dialog).toBeVisible()
+  const inputBox = await dialog.locator('[data-cmdk-input-wrapper]').boundingBox()
+  expect(inputBox).not.toBeNull()
+  expect(inputBox!.height).toBeLessThanOrEqual(45)
   const input = dialog.locator('input[placeholder="Go to file..."]')
   await input.fill('QuickOpenTarget')
 
   const row = dialog.getByRole('option').filter({ hasText: 'QuickOpenTarget.tsx' }).first()
   await expect(row).toBeVisible()
   await expect(row).toContainText('packages/orca/src/renderer/src/components/navigation/')
+  const rowBox = await row.boundingBox()
+  expect(rowBox).not.toBeNull()
+  expect(rowBox!.height).toBeLessThanOrEqual(29)
   const rowText = await row.textContent()
   expect(rowText?.indexOf('QuickOpenTarget.tsx')).toBeLessThan(
     rowText?.indexOf('packages/orca/src/renderer/src/components/navigation/') ?? -1

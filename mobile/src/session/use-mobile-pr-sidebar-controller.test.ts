@@ -1,5 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
-import type { GitHubWorkItemDetails, PRCheckDetail, PRInfo } from '../../../src/shared/types'
+import type { PRCheckDetail } from '../../../src/shared/github/check-types'
+import type { PRInfo } from '../../../src/shared/github/pull-request-types'
+import type { GitHubWorkItemDetails } from '../../../src/shared/github/work-item-types'
 import type { HostedReviewInfo } from '../../../src/shared/hosted-review'
 import type { GitHubPrReadOutcome } from './github-pr-rpc'
 import {

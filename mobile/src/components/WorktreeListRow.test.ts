@@ -127,7 +127,6 @@ describe('memoized worktree rows', () => {
   let renderer: ReactTestRenderer | null = null
 
   beforeEach(() => {
-    ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
     agentSpinnerRender.mockClear()
     agentStateDotRender.mockClear()
   })

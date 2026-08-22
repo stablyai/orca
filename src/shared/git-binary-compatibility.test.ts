@@ -200,6 +200,38 @@ describeBinaryCompatibility('real Git binary compatibility', () => {
     })
   })
 
+  it('supports isolated worktree backup refs', async () => {
+    const worktree = 'compat-lint-staged'
+    const backupRef = 'refs/worktree/lint-staged-backups/compat'
+    await runGit(['worktree', 'add', '-b', 'compat-lint-staged', worktree])
+    await writeFile(join(repoPath, worktree, 'tracked.txt'), 'staged\n')
+    await runGit(['-C', worktree, 'add', 'tracked.txt'])
+    await writeFile(join(repoPath, worktree, 'tracked.txt'), 'staged\nunstaged\n')
+
+    const backupOid = (await runGit(['-C', worktree, 'stash', 'create'])).stdout.trim()
+    await runGit([
+      '-C',
+      worktree,
+      'update-ref',
+      backupRef,
+      backupOid,
+      '0000000000000000000000000000000000000000'
+    ])
+    await expect(
+      runGit(['-C', worktree, 'rev-parse', '--verify', backupRef])
+    ).resolves.toMatchObject({ stdout: `${backupOid}\n` })
+    await expect(runGit(['rev-parse', '--verify', backupRef])).rejects.toBeDefined()
+
+    await runGit(['-C', worktree, 'reset', '--hard', 'HEAD'])
+    await expect(
+      runGit(['-C', worktree, 'stash', 'apply', '--quiet', '--index', backupRef])
+    ).resolves.toBeDefined()
+    await expect(runGit(['-C', worktree, 'status', '--short'])).resolves.toMatchObject({
+      stdout: 'MM tracked.txt\n'
+    })
+    await runGit(['-C', worktree, 'update-ref', '-d', backupRef, backupOid])
+  })
+
   it('degrades indexed credential config safely at the Git 2.31 boundary', async () => {
     const guardEnv = gitCredentialPromptGuardEnv({}, 'linux')
     await expect(runGit(['status', '--short'], guardEnv)).resolves.toBeDefined()
@@ -225,5 +257,26 @@ describeBinaryCompatibility('real Git binary compatibility', () => {
 
     expect(lines[0]).toBe('--end-of-options')
     expect(lines.find((line) => line !== '--end-of-options')).toMatch(/^refs\//)
+  })
+
+  // Why pin this: `show --end-of-options <oid>:<path>` is the only Git command on the
+  // pinned SSH branch-diff path, and both blob sides depend on it resolving against the
+  // named commit rather than live HEAD, and on failing (not falling back) for a path
+  // absent at that commit — that failure is what renders additions and deletions.
+  it('reads a blob at a pinned object id', async () => {
+    await writeFile(join(repoPath, 'pinned.txt'), 'pinned\n')
+    await runGit(['add', 'pinned.txt'])
+    await runGit(['commit', '-qm', 'pinned'])
+    const pinnedOid = (await runGit(['rev-parse', 'HEAD'])).stdout.trim()
+
+    await writeFile(join(repoPath, 'pinned.txt'), 'moved on\n')
+    await runGit(['commit', '-qam', 'after pinned'])
+
+    await expect(
+      runGit(['show', '--end-of-options', `${pinnedOid}:pinned.txt`])
+    ).resolves.toMatchObject({ stdout: 'pinned\n' })
+    await expect(
+      runGit(['show', '--end-of-options', `${pinnedOid}:absent.txt`])
+    ).rejects.toBeDefined()
   })
 })

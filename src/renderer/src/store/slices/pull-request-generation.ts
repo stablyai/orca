@@ -1,5 +1,5 @@
 import type { StateCreator } from 'zustand'
-import type { GlobalSettings } from '../../../../shared/types'
+import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import type { AppState } from '../types'
 
 export type PullRequestFieldName = 'base' | 'title' | 'body' | 'draft'

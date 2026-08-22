@@ -2,11 +2,20 @@ import { EventEmitter } from 'node:events'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-const { childSpawnMock, readFileMock, resolveCodexCommandMock, ptySpawnMock } = vi.hoisted(() => ({
+const {
+  childSpawnMock,
+  readFileMock,
+  resolveCodexCommandMock,
+  ptySpawnMock,
+  isBackfillPendingMock,
+  startBackfillRecoveryMock
+} = vi.hoisted(() => ({
   childSpawnMock: vi.fn(),
   readFileMock: vi.fn(),
   resolveCodexCommandMock: vi.fn(),
-  ptySpawnMock: vi.fn()
+  ptySpawnMock: vi.fn(),
+  isBackfillPendingMock: vi.fn(() => false),
+  startBackfillRecoveryMock: vi.fn(() => Promise.resolve(null))
 }))
 
 vi.mock('node:child_process', () => ({
@@ -25,6 +34,14 @@ vi.mock('node-pty', () => ({
   spawn: ptySpawnMock
 }))
 
+vi.mock('../codex/codex-state-db', () => ({
+  isCodexStateDbBackfillPending: isBackfillPendingMock
+}))
+
+vi.mock('../codex/codex-state-db-backfill-recovery', () => ({
+  startCodexStateDbBackfillRecoveryInBackground: startBackfillRecoveryMock
+}))
+
 // Default to signed-in so the spawn paths under test still run; the auth gate
 // itself is covered by codex-auth-presence.test.ts and the no-auth case below.
 vi.mock('./codex-auth-presence', () => ({
@@ -34,6 +51,8 @@ vi.mock('./codex-auth-presence', () => ({
 import { fetchCodexRateLimits } from './codex-fetcher'
 import { probeCodexAuthPresence } from './codex-auth-presence'
 import { getActiveHiddenRateLimitPtyCount } from './hidden-pty-cleanup'
+import { getCmdExePath } from '../win32-utils'
+import { CODEX_READ_ONLY_APP_SERVER_ARGS } from '../codex-cli/codex-read-only-app-server-args'
 
 function makeDisposable() {
   return { dispose: vi.fn() }
@@ -116,6 +135,7 @@ describe('fetchCodexRateLimits', () => {
     resolveCodexCommandMock.mockReturnValue('codex')
     vi.mocked(probeCodexAuthPresence).mockResolvedValue('present')
     readFileMock.mockRejectedValue(new Error('no auth fixture'))
+    isBackfillPendingMock.mockReturnValue(false)
     vi.stubGlobal('fetch', vi.fn())
   })
 
@@ -134,6 +154,20 @@ describe('fetchCodexRateLimits', () => {
       error: 'Codex not signed in'
     })
 
+    expect(childSpawnMock).not.toHaveBeenCalled()
+    expect(ptySpawnMock).not.toHaveBeenCalled()
+  })
+
+  it('does not let a quota probe steal an incomplete state-DB backfill lease', async () => {
+    isBackfillPendingMock.mockReturnValue(true)
+
+    await expect(
+      fetchCodexRateLimits({ codexHomePath: '/managed-home', allowPtyFallback: false })
+    ).resolves.toMatchObject({
+      status: 'error',
+      error: expect.stringContaining('session index')
+    })
+    expect(startBackfillRecoveryMock).toHaveBeenCalledWith('/managed-home')
     expect(childSpawnMock).not.toHaveBeenCalled()
     expect(ptySpawnMock).not.toHaveBeenCalled()
   })
@@ -677,20 +711,20 @@ describe('fetchCodexRateLimits', () => {
 
       const [spawnFile, spawnArgs, spawnOptions] = childSpawnMock.mock.calls[0]
       expect(spawnFile).toBe('wsl.exe')
-      expect(spawnArgs.slice(0, 5)).toEqual(['-d', 'Ubuntu', '--', 'sh', '-c'])
+      expect(spawnArgs.slice(0, 5)).toEqual(['-d', 'Ubuntu', '--exec', 'sh', '-c'])
       const shellCommand = spawnArgs.at(-1) as string
-      expect(shellCommand).toContain('_orca_wsl_shell=\\$(getent passwd')
-      expect(shellCommand).toContain('bash|zsh|ksh|mksh|ash) exec "\\$_orca_wsl_shell" -ilc')
+      expect(shellCommand).toContain('_orca_wsl_shell=$(getent passwd')
+      expect(shellCommand).toContain('bash|zsh|ksh|mksh|ash) exec "$_orca_wsl_shell" -ilc')
       expect(shellCommand).toContain(
         'exec 3<&0\nexec 4>&1\nexec </dev/null\nexec >/dev/null\n_orca_wsl_shell='
       )
-      expect(shellCommand).toContain('mkdir -p "\\$orca_rate_limit_cwd"')
-      expect(shellCommand).toContain('cd "\\$orca_rate_limit_cwd"')
+      expect(shellCommand).toContain('mkdir -p "$orca_rate_limit_cwd"')
+      expect(shellCommand).toContain('cd "$orca_rate_limit_cwd"')
       expect(shellCommand).toContain(
         "export CODEX_HOME='\\''/home/alice/.local/share/orca/account/home'\\''"
       )
       expect(shellCommand).toContain(
-        "exec codex '\\''-s'\\'' '\\''read-only'\\'' '\\''-a'\\'' '\\''untrusted'\\'' '\\''app-server'\\'' <&3 >&4 3<&- 4>&-"
+        "exec codex '\\''-c'\\'' '\\''approval_policy=never'\\'' '\\''-s'\\'' '\\''read-only'\\'' '\\''-a'\\'' '\\''never'\\'' '\\''app-server'\\'' <&3 >&4 3<&- 4>&-"
       )
       expect(shellCommand.match(/<&3 >&4 3<&- 4>&-/g)).toHaveLength(3)
       expect(shellCommand.match(/exec codex [^\n]+<&3 >&4 3<&- 4>&-/g)).toHaveLength(3)
@@ -716,6 +750,8 @@ describe('fetchCodexRateLimits', () => {
       configurable: true,
       value: 'win32'
     })
+    const codexCommand = 'C:\\Users\\alice\\AppData\\Roaming\\npm\\codex.cmd'
+    resolveCodexCommandMock.mockReturnValue(codexCommand)
     const rpcChild = makeRpcChild()
     childSpawnMock.mockReturnValue(rpcChild)
     rpcChild.stdin.write.mockImplementation((line: string) => {
@@ -751,8 +787,8 @@ describe('fetchCodexRateLimits', () => {
       await resultPromise
 
       const [spawnFile, spawnArgs, spawnOptions] = childSpawnMock.mock.calls[0]
-      expect(spawnFile).toBe('codex')
-      expect(spawnArgs).toEqual(['-s', 'read-only', '-a', 'untrusted', 'app-server'])
+      expect(spawnFile).toBe(getCmdExePath())
+      expect(spawnArgs).toEqual(['/d', '/c', codexCommand, ...CODEX_READ_ONLY_APP_SERVER_ARGS])
       expect(spawnOptions).toEqual(
         expect.objectContaining({
           env: expect.objectContaining({ CODEX_HOME: 'C:\\Users\\alice\\.codex' })
@@ -798,16 +834,16 @@ describe('fetchCodexRateLimits', () => {
 
       const [spawnFile, spawnArgs, spawnOptions] = ptySpawnMock.mock.calls[0]
       expect(spawnFile).toBe('wsl.exe')
-      expect(spawnArgs.slice(0, 5)).toEqual(['-d', 'Ubuntu', '--', 'sh', '-c'])
+      expect(spawnArgs.slice(0, 5)).toEqual(['-d', 'Ubuntu', '--exec', 'sh', '-c'])
       const shellCommand = spawnArgs.at(-1) as string
-      expect(shellCommand).toContain('_orca_wsl_shell=\\$(getent passwd')
-      expect(shellCommand).toContain('bash|zsh|ksh|mksh|ash) exec "\\$_orca_wsl_shell" -ilc')
+      expect(shellCommand).toContain('_orca_wsl_shell=$(getent passwd')
+      expect(shellCommand).toContain('bash|zsh|ksh|mksh|ash) exec "$_orca_wsl_shell" -ilc')
       expect(shellCommand).not.toContain('exec 3<&0')
       expect(shellCommand).not.toContain('exec </dev/null')
       expect(shellCommand).not.toContain('exec >/dev/null')
       expect(shellCommand).not.toContain('<&3 >&4 3<&- 4>&-')
-      expect(shellCommand).toContain('mkdir -p "\\$orca_rate_limit_cwd"')
-      expect(shellCommand).toContain('cd "\\$orca_rate_limit_cwd"')
+      expect(shellCommand).toContain('mkdir -p "$orca_rate_limit_cwd"')
+      expect(shellCommand).toContain('cd "$orca_rate_limit_cwd"')
       expect(shellCommand).toContain(
         "export CODEX_HOME='\\''/home/alice/.local/share/orca/account/home'\\''"
       )

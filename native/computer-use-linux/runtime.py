@@ -408,8 +408,11 @@ def render_accessibility_tree(root, window_rect, root_path, compact_browser_tabs
         item = record(node, len(records), path, window_rect)
         child_items = list(children(node))
         role_key = (item["controlType"] or "").lower()
-        summary_values = text_snippets(node, limit=8, max_depth=4)
-        generic_summary = " ".join(summary_values) if role_key in {"panel", "filler", "unknown", "section"} and not item["name"] and not item["value"] and len(summary_values) >= 2 and is_plain_text_subtree(node) else None
+        generic_summary = None
+        if role_key in {"panel", "filler", "unknown", "section"} and not item["name"] and not item["value"]:
+            summary_values = text_snippets(node, limit=8, max_depth=4)
+            if len(summary_values) >= 2 and is_plain_text_subtree(node):
+                generic_summary = " ".join(summary_values)
         if should_elide(item, len(child_items), generic_summary):
             for child_index, child in child_items:
                 walk(child, depth, path + [child_index])

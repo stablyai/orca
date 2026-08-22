@@ -9,7 +9,7 @@ import type {
   ClaudeManagedAccount,
   ClaudeManagedAccountSummary,
   ClaudeRateLimitAccountsState
-} from '../../shared/types'
+} from '../../shared/managed-account-types'
 import type { Store } from '../persistence'
 import type { RateLimitService } from '../rate-limits/service'
 import { invokeLoginCallbackSafely } from '../accounts/safe-login-callback-invocation'
@@ -167,6 +167,10 @@ export class ClaudeAccountService {
 
   cancelPendingLogin(): boolean {
     return this.cancelPendingClaudeLogin?.() ?? false
+  }
+
+  getRuntimeConfigDir(target?: ClaudeAccountSelectionTarget): string {
+    return this.runtimeAuth.getRuntimeConfigDir(target)
   }
 
   private serializeMutation<T>(fn: () => Promise<T>): Promise<T> {
@@ -695,7 +699,7 @@ export class ClaudeAccountService {
       [
         '-d',
         location.wslDistro,
-        '--',
+        '--exec',
         'bash',
         '-lc',
         'mktemp -d "${TMPDIR:-/tmp}/orca-claude-login.XXXXXX"'
@@ -726,7 +730,7 @@ export class ClaudeAccountService {
           [
             '-d',
             tempConfig.wslDistro,
-            '--',
+            '--exec',
             'bash',
             '-lc',
             `rm -rf -- ${shellQuote(tempConfig.linuxPath)}`
@@ -943,7 +947,7 @@ export class ClaudeAccountService {
     const distroArgs = target.wslDistro?.trim() ? ['-d', target.wslDistro.trim()] : []
     const infoOutput = execFileSync(
       'wsl.exe',
-      [...distroArgs, '--', 'bash', '-lc', 'printf "%s\\n%s\\n" "$WSL_DISTRO_NAME" "$HOME"'],
+      [...distroArgs, '--exec', 'bash', '-lc', 'printf "%s\\n%s\\n" "$WSL_DISTRO_NAME" "$HOME"'],
       { encoding: 'utf-8', timeout: 5000 }
     )
     const [rawDistro, rawHome] = infoOutput
@@ -963,7 +967,7 @@ export class ClaudeAccountService {
       [
         '-d',
         distro,
-        '--',
+        '--exec',
         'bash',
         '-lc',
         `mkdir -p ${shellQuote(wslLinuxAuthPath)} && printf '%s\\n' ${shellQuote(accountId)} > ${shellQuote(markerPath)}`
@@ -1002,7 +1006,7 @@ export class ClaudeAccountService {
             [
               '-d',
               wslInfo.distro,
-              '--',
+              '--exec',
               'bash',
               '-lc',
               buildEncodedWslBashCommand(
@@ -1092,7 +1096,7 @@ export class ClaudeAccountService {
               args: [
                 '-d',
                 configDir.wslDistro,
-                '--',
+                '--exec',
                 'bash',
                 '-lc',
                 `export CLAUDE_CONFIG_DIR=${shellQuote(configDir.linuxPath)}; exec claude ${args.map(shellQuote).join(' ')}`

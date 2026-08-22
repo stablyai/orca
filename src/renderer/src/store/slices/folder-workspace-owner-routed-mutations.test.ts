@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { FolderWorkspace, ProjectGroup } from '../../../../shared/types'
+import type { FolderWorkspace } from '../../../../shared/folder-workspace-types'
+import type { ProjectGroup } from '../../../../shared/project-group-types'
 import {
   createCompatibleRuntimeStatusResponseIfNeeded,
   type RuntimeEnvironmentCallRequest
@@ -269,6 +270,7 @@ describe('folder workspace owner-routed mutations', () => {
         { isUnread: true },
         { executionHostId: 'runtime:env-owner' }
       )
+    await vi.waitFor(() => expect(runtimeEnvironmentCall).toHaveBeenCalledTimes(1))
     await store.getState().fetchFolderWorkspaces({ runtimeEnvironmentId: null })
     resolveRuntimeUpdate({
       id: 'rpc-update-folder',

@@ -64,7 +64,7 @@ export function canonicalizeAgentSessionIdentity(
   if (!providerSession || !getAgentResumeArgv(agent, providerSession)) {
     throw new Error('agent_session_identity_required')
   }
-  if (agent !== 'pi') {
+  if (agent !== 'pi' && agent !== 'prime-agent') {
     return { agent, providerSession }
   }
   const transcriptPath = providerSession.transcriptPath
@@ -116,7 +116,9 @@ export class AgentSessionClaimSigner {
       args.identity.agent,
       args.identity.providerSession.key,
       args.identity.providerSession.id,
-      args.identity.agent === 'pi' ? (args.identity.providerSession.transcriptPath ?? '') : ''
+      args.identity.agent === 'pi' || args.identity.agent === 'prime-agent'
+        ? (args.identity.providerSession.transcriptPath ?? '')
+        : ''
     ]
     const worktreeFields = [
       'orca-agent-session-worktree-v1',

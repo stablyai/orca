@@ -7,6 +7,11 @@ import { EventEmitter } from 'node:events'
 import { runInNewContext } from 'node:vm'
 import { describe, expect, it } from 'vitest'
 import {
+  DEV_BUNDLE_ID,
+  DEV_HELPER_BUNDLE_ID,
+  getDevHelperPlistPatches
+} from './dev-electron-bundle-identity.mjs'
+import {
   BOOTSTRAP_FATAL_LOG_ENV_VAR,
   BOOTSTRAP_FATAL_LOG_FILE_NAME,
   createBootstrapFatalExitBanner
@@ -196,14 +201,18 @@ describe('Electron Vite output contract', () => {
   })
 
   it('rejects prototype properties as build targets', () => {
-    expect(targetConfig).toContain('Object.prototype.hasOwnProperty.call(configByTarget, target)')
+    // Own-property check only: an inherited key like `constructor` must not select a build target.
+    expect(targetConfig).toContain('Object.hasOwn(configByTarget, target)')
   })
 
   it('gives the dev terminal daemon helper the TCC identity watched by Orca', () => {
-    expect(devRunner).toContain('const helperBundleId = `${bundleId}.helper`')
+    // Asserted on the values rather than the source text: the ids moved into
+    // dev-electron-bundle-identity.mjs so every dev bundle signs to one cdhash.
+    expect(DEV_HELPER_BUNDLE_ID).toBe(`${DEV_BUNDLE_ID}.helper`)
+    expect(getDevHelperPlistPatches()).toEqual([
+      { key: 'CFBundleIdentifier', value: DEV_HELPER_BUNDLE_ID }
+    ])
     expect(devRunner).toContain("'Electron Helper.app',")
-    expect(devRunner).toContain(
-      "setPlistValue(helperPlistPath, 'CFBundleIdentifier', helperBundleId)"
-    )
+    expect(devRunner).toContain('setPlistValue(helperPlistPath, key, value)')
   })
 })

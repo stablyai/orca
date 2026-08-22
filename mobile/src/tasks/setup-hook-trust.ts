@@ -1,4 +1,4 @@
-import type { PersistedTrustedOrcaHooks } from '../../../src/shared/types'
+import type { PersistedTrustedOrcaHooks } from '../../../src/shared/orca-yaml-hook-types'
 import type { RpcClient } from '../transport/rpc-client'
 
 export type SetupHookTrust = {

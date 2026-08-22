@@ -6,6 +6,7 @@ import type {
 } from './native-chat-session-options'
 
 export type CatalogAgentInteractionDetection = 'claude-model-switch-confirmation'
+export type CatalogCommandDelivery = 'type'
 
 export type CatalogMidSessionApply =
   | {
@@ -15,7 +16,7 @@ export type CatalogMidSessionApply =
       detectAgentInteraction?: CatalogAgentInteractionDetection
     }
   | { kind: 'toggle-command'; command: string }
-  | { kind: 'agent-picker'; command: string }
+  | { kind: 'agent-picker'; command: string; delivery?: CatalogCommandDelivery }
   | { kind: 'unsupported' }
 
 export type CatalogOptionApply = {
@@ -60,6 +61,20 @@ export type AgentSessionOptionCatalog = {
   /** Launch-safe options for opaque model ids that are absent from the static catalog. */
   unknownModelOptions?: CatalogOption[]
   composeModelValue?: (modelId: string, values: Record<string, SessionOptionValue>) => string
+  /** Why: a seeded id the CLI has retired is a fatal launch, so a successful probe
+   * must be able to drop it rather than only add. Membership only — option menus
+   * still come from the seed. */
+  discoveredModelsAreAuthoritative?: true
+  /** Set only when the `isDefault` model is provably what the CLI runs with no model
+   * flag, so an untouched draft may show it as selected. Off means `isDefault` stays
+   * decorative: agents whose default comes from account or user config would otherwise
+   * present a guess as the launch's model. Adopting this default as a persisted launch
+   * flag additionally requires a probe to confirm it — see `adoptModelAsLaunchDefault`.
+   *
+   * Known gap: "no model flag" is unverified. A user `-m` in `agentArgs` launches that
+   * model while the picker, which never reads launch args, still names the CLI default.
+   * A real fix means threading `modelApply.agentArgsOverride` through to the surface. */
+  defaultModelIsCliDefault?: true
   listModels?: {
     command: string
     parse: (stdout: string) => CatalogModel[]

@@ -73,8 +73,8 @@ export class DaemonPtyRouter implements IPtyProvider {
     return this.current.supportsAgentSessionCreateOperations()
   }
 
-  async attach(id: string): Promise<void> {
-    await this.adapterFor(id).attach(id)
+  async attach(id: string): ReturnType<IPtyProvider['attach']> {
+    return await this.adapterFor(id).attach(id)
   }
 
   hasPty(id: string): boolean {
@@ -89,8 +89,12 @@ export class DaemonPtyRouter implements IPtyProvider {
     return await this.ownerResolver.probe(id)
   }
 
-  write(id: string, data: string): void {
-    this.adapterFor(id).write(id, data)
+  write(id: string, data: string): boolean {
+    return this.adapterFor(id).write(id, data)
+  }
+
+  writeWithSettlement(id: string, data: string): Promise<boolean> {
+    return this.adapterFor(id).writeWithSettlement(id, data)
   }
 
   resize(id: string, cols: number, rows: number): void {

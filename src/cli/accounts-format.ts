@@ -8,7 +8,7 @@ import type {
   ClaudeRateLimitAccountsState,
   CodexManagedAccountSummary,
   CodexRateLimitAccountsState
-} from '../shared/types'
+} from '../shared/managed-account-types'
 import type { ProviderRateLimits } from '../shared/rate-limit-types'
 
 type AccountRow = {

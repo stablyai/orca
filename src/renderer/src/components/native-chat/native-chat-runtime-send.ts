@@ -20,6 +20,10 @@ import {
   NATIVE_CHAT_SUBMIT
 } from './native-chat-send'
 import {
+  AGENT_TUI_COMMAND_KEY_INTERVAL_MS,
+  typeAgentTuiCommand
+} from '../../../../shared/agent-tui-command-typing'
+import {
   cancelNativeChatPtySends,
   enqueueNativeChatPtySend,
   resetNativeChatPtySendQueuesForTests,
@@ -211,6 +215,61 @@ export async function sendNativeChatMessageVerified(
     return false
   }
   return sendRuntimePtyInputVerified(settings, ptyId, NATIVE_CHAT_SUBMIT)
+}
+
+/** Types a slash command as individual keys so Codex opens its command palette. */
+export async function typeNativeChatCommand(
+  settings: RuntimeSettings,
+  ptyId: string,
+  command: string,
+  signal?: AbortSignal
+): Promise<boolean> {
+  cancelNativeChatPtySends(ptyId)
+  await waitForNativeChatPtyIdle(ptyId)
+  const outcome = await typeAgentTuiCommand({
+    command,
+    signal,
+    write: async (key) =>
+      (await sendRuntimePtyInputVerified(settings, ptyId, key)) ? 'accepted' : 'rejected'
+  })
+  return outcome === 'accepted'
+}
+
+/** Queues a typed slash command with composer sends on the same PTY. */
+export function sendNativeChatTypedCommand(
+  settings: RuntimeSettings,
+  ptyId: string,
+  command: string
+): NativeChatSendHandle {
+  const controller = new AbortController()
+  return enqueueNativeChatPtySend(
+    ptyId,
+    (command.length + 1) * AGENT_TUI_COMMAND_KEY_INTERVAL_MS,
+    ({ isCancelled, markSubmitted }) => {
+      const finish = (outcome: 'accepted' | 'rejected' | 'unknown'): void => {
+        if (!isCancelled() && outcome !== 'accepted') {
+          clearUnsubmittedAgentInput(settings, ptyId)
+        }
+        markSubmitted()
+      }
+      void typeAgentTuiCommand({
+        command,
+        signal: controller.signal,
+        write: async (key) => {
+          if (isCancelled()) {
+            return 'rejected'
+          }
+          return (await sendRuntimePtyInputVerified(settings, ptyId, key)) ? 'accepted' : 'rejected'
+        }
+      }).then(finish, () => finish('rejected'))
+    },
+    {
+      onCancelUnsubmitted: () => {
+        controller.abort()
+        clearUnsubmittedAgentInput(settings, ptyId)
+      }
+    }
+  )
 }
 
 export function sendNativeChatMessageWithImageAttachments(

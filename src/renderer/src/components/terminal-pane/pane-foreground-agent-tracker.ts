@@ -3,7 +3,7 @@ import {
   recognizeAgentProcess
 } from '../../../../shared/agent-process-recognition'
 import { isShellProcess } from '../../../../shared/shell-process-detection'
-import type { TuiAgent } from '../../../../shared/types'
+import type { TuiAgent } from '../../../../shared/tui-agent'
 import type { PaneForegroundAgentEntry } from '@/store/slices/pane-foreground-agent'
 
 // Why: settle after exec, then place the final generic retry beyond sequential
@@ -43,6 +43,8 @@ type PaneForegroundAgentTrackerDeps = {
  * leak their own 133;D onto the main PTY.
  */
 export function createPaneForegroundAgentTracker(deps: PaneForegroundAgentTrackerDeps): {
+  /** True while any read is scheduled or running, whatever its authority. */
+  hasReadInFlight: () => boolean
   onVisiblePtyBound: (expectsAgent?: boolean) => boolean
   onCommandStarted: (expectedAgent?: TuiAgent | null) => void
   /** True when pane identity must remain visible until an async shell confirmation. */
@@ -97,6 +99,23 @@ export function createPaneForegroundAgentTracker(deps: PaneForegroundAgentTracke
     }, delayMs)
   }
 
+  const hasPendingRead = (): boolean => scheduledReadReason !== null || activeReadReason !== null
+
+  // Why: the store entry outlives this tracker, so any capability a caller retained
+  // pending a read must be released by whichever exit ends that read. A superseded
+  // read is the one exception — its successor settles for it.
+  const releaseRetainedCapability = (hadReadInFlight: boolean): void => {
+    if (hadReadInFlight) {
+      deps.onVisibleForegroundSettled?.('inconclusive')
+    }
+  }
+
+  const settleAbortedRead = (generation: number): void => {
+    if (!disposed && generation === readGeneration) {
+      deps.onVisibleForegroundSettled?.('inconclusive')
+    }
+  }
+
   async function readForeground(
     generation: number,
     retryIndex: number,
@@ -104,6 +123,7 @@ export function createPaneForegroundAgentTracker(deps: PaneForegroundAgentTracke
   ): Promise<void> {
     const ptyId = trackablePtyId()
     if (disposed || generation !== readGeneration || !ptyId) {
+      settleAbortedRead(generation)
       return
     }
     let processName: string | null = null
@@ -122,6 +142,7 @@ export function createPaneForegroundAgentTracker(deps: PaneForegroundAgentTracke
     // Why: a pane key can be rebound while process inspection is pending; the
     // old PTY's identity must never publish into its replacement session.
     if (disposed || generation !== readGeneration || trackablePtyId() !== ptyId) {
+      settleAbortedRead(generation)
       return
     }
     const recognized = recognizeAgentProcess(processName)
@@ -192,6 +213,10 @@ export function createPaneForegroundAgentTracker(deps: PaneForegroundAgentTracke
         return
       }
       if ((hasForegroundAgentEvidence || hasKnownAgentEvidence) && !isShellProcess(processName)) {
+        // Why: this read may have replaced a cancelled visible-pty confirmation.
+        // It publishes nothing, so without settling here the capability it was
+        // asked to revalidate would be retained with no read left to clear it.
+        deps.onVisibleForegroundSettled?.('inconclusive')
         return
       }
       // Why: the 133;D fired AND the foreground shows no agent — together that is
@@ -208,6 +233,12 @@ export function createPaneForegroundAgentTracker(deps: PaneForegroundAgentTracke
   }
 
   return {
+    // Why: onVisiblePtyBound refuses to schedule while a higher-authority
+    // command read owns the pane, so "it scheduled nothing" must not be read
+    // as "nothing will confirm this pane".
+    hasReadInFlight(): boolean {
+      return hasPendingRead()
+    },
     onVisiblePtyBound(expectsAgent = false) {
       // Why: command-start and command-finished reads own the exit decision;
       // visibility recovery is lower-authority and must never cancel them.
@@ -219,8 +250,10 @@ export function createPaneForegroundAgentTracker(deps: PaneForegroundAgentTracke
       ) {
         return false
       }
+      const hadReadBeforeVisibleBind = hasPendingRead()
       cancelPendingRead()
       if (!trackablePtyId()) {
+        releaseRetainedCapability(hadReadBeforeVisibleBind)
         return false
       }
       if (expectsAgent || deps.hasKnownAgentIdentity?.() === true) {
@@ -232,8 +265,10 @@ export function createPaneForegroundAgentTracker(deps: PaneForegroundAgentTracke
       return true
     },
     onCommandStarted(expectedAgent = null) {
+      const hadReadBeforeCommandStart = hasPendingRead()
       cancelPendingRead()
       if (!trackablePtyId()) {
+        releaseRetainedCapability(hadReadBeforeCommandStart)
         return
       }
       const alreadyHasKnownIdentity = deps.hasKnownAgentIdentity?.() === true
@@ -260,8 +295,10 @@ export function createPaneForegroundAgentTracker(deps: PaneForegroundAgentTracke
       // a D that cancels one must re-confirm — never fast-path to shell, which the
       // sampleVisiblePaneForegroundAgent gate would then latch, permanently hiding
       // an idle reattached agent's icon (the "codex reattached at rest" bug).
+      const hadReadBeforeCommandFinish = hasPendingRead()
       cancelPendingRead()
       if (!trackablePtyId()) {
+        releaseRetainedCapability(hadReadBeforeCommandFinish)
         return false
       }
       // Why: trust the 133;D and mark shell without an RPC only when nothing hints
@@ -277,8 +314,10 @@ export function createPaneForegroundAgentTracker(deps: PaneForegroundAgentTracke
       return true
     },
     dispose() {
+      const hadReadAtDispose = hasPendingRead()
       disposed = true
       cancelPendingRead()
+      releaseRetainedCapability(hadReadAtDispose)
     }
   }
 }

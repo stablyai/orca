@@ -1,6 +1,9 @@
 import { describe, expect, it, vi } from 'vitest'
 import { OrcaRuntimeService } from './orca-runtime'
-import type { CodexRateLimitAccountsState, ClaudeRateLimitAccountsState } from '../../shared/types'
+import type {
+  CodexRateLimitAccountsState,
+  ClaudeRateLimitAccountsState
+} from '../../shared/managed-account-types'
 
 function createRuntimeWithAccountServices(overrides: {
   codexAddAccount?: (

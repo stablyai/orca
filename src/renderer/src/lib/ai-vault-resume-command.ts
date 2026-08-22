@@ -15,13 +15,7 @@ import {
   resolveTuiAgentLaunchEnv
 } from '../../../shared/tui-agent-launch-defaults'
 import { parseWslUncPath } from '../../../shared/wsl-paths'
-import { resolveWindowsShellStartupFamily } from '../../../shared/windows-terminal-shell'
 import type { AgentStartupShell } from '../../../shared/tui-agent-startup-shell'
-import {
-  clearEnvCommand,
-  commandSeparator,
-  resolveStartupShell
-} from '../../../shared/tui-agent-startup-shell'
 import type { AppState } from '@/store/types'
 import type { AiVaultSessionDragPayload } from '@/lib/ai-vault-session-drag'
 import { getLocalProjectExecutionRuntimeContext } from '@/lib/local-preflight-context'
@@ -29,7 +23,10 @@ import { CLIENT_PLATFORM } from '@/lib/new-workspace'
 import { buildAgentResumeStartupPlan } from '@/lib/tui-agent-startup'
 import { getExecutionHostIdForWorktree } from '@/lib/worktree-runtime-owner'
 import { LOCAL_EXECUTION_HOST_ID, parseExecutionHostId } from '../../../shared/execution-host'
-import { parseWorkspaceKey } from '../../../shared/workspace-scope'
+import {
+  getAiVaultResumeWorkspacePath,
+  resolveAiVaultResumeStartupShell
+} from '@/lib/ai-vault-resume-shell'
 
 type AiVaultResumeCommandSession = Pick<
   AiVaultSession,
@@ -41,6 +38,7 @@ type AiVaultResumeCommandSession = Pick<
 
 export type AiVaultResumeStartup = {
   command: string
+  cwd?: string
   env?: Record<string, string>
   envToDelete?: string[]
   launchConfig?: SleepingAgentLaunchConfig
@@ -65,22 +63,22 @@ type AiVaultResumeWorktreeArgs = {
 }
 
 export function buildAiVaultResumeCopyCommandForWorktree(args: AiVaultResumeWorktreeArgs): string {
-  const command = buildAiVaultResumeForWorktree(args).command
-  if (args.session.agent !== 'codex' || args.session.codexHome !== null) {
-    return command
-  }
-  const shell = resolveAiVaultResumeShell(args)
-  const separator = commandSeparator(shell)
-  const clearHomes = ['CODEX_HOME', 'ORCA_CODEX_HOME']
-    .map((name) => clearEnvCommand(name, shell))
-    .join(separator)
-  return `${clearHomes}${separator}${command}`
+  // Why an `env -u` prefix on the agent rather than a preceding clear statement:
+  // this text is COPIED, so it runs in a shell Orca never spawned and cannot
+  // seed. A clear statement has to test `$fish_pid`, an unbound expansion that
+  // aborts the line under `set -u` — and because the clear came first, it took
+  // the agent launch down with it (the regression that reverted #14863).
+  const clearEnvNames =
+    args.session.agent === 'codex' && args.session.codexHome === null
+      ? (['CODEX_HOME', 'ORCA_CODEX_HOME'] as const)
+      : undefined
+  return buildAiVaultResumeForWorktree(args, true, clearEnvNames).command
 }
 
 export function buildAiVaultResumeStartupForWorktree(
   args: AiVaultResumeWorktreeArgs
 ): AiVaultResumeStartup {
-  return buildAiVaultResumeForWorktree(args)
+  return buildAiVaultResumeForWorktree(args, false)
 }
 
 /**
@@ -120,7 +118,13 @@ export function buildAiVaultDropRepinStartup(args: {
   })
 }
 
-function buildAiVaultResumeForWorktree(args: AiVaultResumeWorktreeArgs): AiVaultResumeStartup {
+function buildAiVaultResumeForWorktree(
+  args: AiVaultResumeWorktreeArgs,
+  embedCwd: boolean,
+  /** Copy-path only: names the pasted line must strip off the agent itself.
+   *  Spawned startups drop them through `envToDelete` instead. */
+  clearEnvNames?: readonly string[]
+): AiVaultResumeStartup {
   const providerSession = getAiVaultAgentProviderSession(args.session)
   if (
     args.session.executionHostId &&
@@ -151,9 +155,11 @@ function buildAiVaultResumeForWorktree(args: AiVaultResumeWorktreeArgs): AiVault
   const liveShell: AgentStartupShell | undefined =
     platform === 'win32'
       ? isLocalSession
-        ? resolveWindowsShellStartupFamily(args.state.settings?.terminalWindowsShell)
+        ? resolveAiVaultResumeShell(args)
         : 'powershell'
       : undefined
+  const cwd = embedCwd ? args.session.cwd : null
+  const startupCwd = !embedCwd && args.session.cwd ? { cwd: args.session.cwd } : {}
   if (providerSession && isResumableTuiAgent(args.session.agent)) {
     const startupPlan = buildAgentResumeStartupPlan({
       agent: args.session.agent,
@@ -181,21 +187,24 @@ function buildAiVaultResumeForWorktree(args: AiVaultResumeWorktreeArgs): AiVault
                 agent: args.session.agent,
                 sessionId: args.session.sessionId,
                 resumeFilePath,
-                cwd: args.session.cwd,
+                cwd,
                 platform,
                 commandOverride: startupPlan.launchConfig.agentCommand,
                 codexHome,
-                shell: liveShell
+                shell: liveShell,
+                clearEnvNames
               })
             : buildAiVaultResumeShellCommand({
                 resumeCommand: startupPlan.launchCommand,
-                cwd: args.session.cwd,
+                cwd,
                 platform,
                 codexHome,
-                shell: liveShell
+                shell: liveShell,
+                clearEnvNames
               }),
         ...(startupPlan.env ? { env: startupPlan.env } : {}),
         ...realHomeCodexResumeEnvDeletion(args.session),
+        ...startupCwd,
         launchConfig: startupPlan.launchConfig,
         providerSession
       }
@@ -210,14 +219,16 @@ function buildAiVaultResumeForWorktree(args: AiVaultResumeWorktreeArgs): AiVault
       // forward it too — otherwise a custom OMP_CODING_AGENT_DIR / WSL-store
       // session would resume by id against the default store and miss.
       resumeFilePath,
-      cwd: args.session.cwd,
+      cwd,
       platform,
       commandOverride: args.commandOverride,
       codexHome,
       // Why: non-resumable agents queue through this fallback too, so it must
       // quote for the live Windows shell like the startup-plan branch above.
-      shell: liveShell
+      shell: liveShell,
+      clearEnvNames
     }),
+    ...startupCwd,
     ...realHomeCodexResumeEnvDeletion(args.session)
   }
 }
@@ -231,11 +242,12 @@ function resolveAiVaultResumeShell(args: AiVaultResumeWorktreeArgs): AgentStartu
       : getAiVaultResumePlatform(args.state, args.worktreeId)
   const isLocalSession =
     !args.session.executionHostId || args.session.executionHostId === LOCAL_EXECUTION_HOST_ID
-  const shell =
-    platform === 'win32' && isLocalSession
-      ? resolveWindowsShellStartupFamily(args.state.settings?.terminalWindowsShell)
-      : undefined
-  return resolveStartupShell(platform, shell)
+  return resolveAiVaultResumeStartupShell({
+    state: args.state,
+    worktreeId: args.worktreeId,
+    platform,
+    isLocalSession
+  })
 }
 
 export function getAiVaultAgentProviderSession(
@@ -247,7 +259,7 @@ export function getAiVaultAgentProviderSession(
   if (session.agent === 'antigravity') {
     return { key: 'conversation_id', id: session.sessionId }
   }
-  if (session.agent === 'pi') {
+  if (session.agent === 'pi' || session.agent === 'prime-agent') {
     return session.filePath
       ? { key: 'session_id', id: session.sessionId, transcriptPath: session.filePath }
       : null
@@ -297,27 +309,4 @@ export function getAiVaultResumePlatform(
 
   const workspacePath = getAiVaultResumeWorkspacePath(state, targetWorktreeId)
   return workspacePath && parseWslUncPath(workspacePath) ? 'linux' : CLIENT_PLATFORM
-}
-
-function getAiVaultResumeWorkspacePath(
-  state: Pick<AppState, 'folderWorkspaces' | 'worktreesByRepo'>,
-  worktreeId: string | null | undefined
-): string | null {
-  if (!worktreeId) {
-    return null
-  }
-  const workspaceScope = parseWorkspaceKey(worktreeId)
-  if (workspaceScope?.type === 'folder') {
-    return (
-      state.folderWorkspaces.find((workspace) => workspace.id === workspaceScope.folderWorkspaceId)
-        ?.folderPath ?? null
-    )
-  }
-  const targetWorktreeId =
-    workspaceScope?.type === 'worktree' ? workspaceScope.worktreeId : worktreeId
-  return (
-    Object.values(state.worktreesByRepo ?? {})
-      .flat()
-      .find((candidate) => candidate.id === targetWorktreeId)?.path ?? null
-  )
 }

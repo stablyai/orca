@@ -12,7 +12,7 @@ export type {
 
 // ─── Protocol Version ────────────────────────────────────────────────
 import type { StartupCommandDelivery } from '../../shared/codex-startup-delivery'
-import type { TuiAgent } from '../../shared/types'
+import type { TuiAgent } from '../../shared/tui-agent'
 import type { PtyStartupIngressIntent } from '../../shared/pty-startup-ingress'
 import type {
   AgentSessionExecutionClaim,
@@ -26,6 +26,7 @@ export type { TerminalSnapshot } from './terminal-snapshot'
 export {
   AGENT_SESSION_CLAIM_DAEMON_PROTOCOL_VERSION,
   AGENT_SESSION_CREATE_OPERATION_DAEMON_PROTOCOL_VERSION,
+  ASYNC_CWD_VALIDATION_DAEMON_PROTOCOL_VERSION,
   CLEAN_DISCONNECT_PROTOCOL_VERSION,
   COMPLETION_PROCESS_INSPECTION_PROTOCOL_VERSION,
   GET_FOREGROUND_PROCESS_PROTOCOL_VERSION,
@@ -85,6 +86,8 @@ export type CreateOrAttachRequest = {
     terminalWindowsPowerShellImplementation?: 'auto' | 'powershell.exe' | 'pwsh.exe'
     shellReadySupported?: boolean
     shellReadyTimeoutMs?: number
+    /** Server-side fence that prevents a client timeout from publishing an orphan PTY. */
+    cancelAfterMs?: number
     startupIngress?: PtyStartupIngressIntent
     agentSessionEnsure?: {
       claim: AgentSessionExecutionClaim
@@ -102,7 +105,7 @@ export type CloseStartupQueryAuthorityRequest = {
 export type CancelCreateOrAttachRequest = {
   id: string
   type: 'cancelCreateOrAttach'
-  payload: { sessionId: string }
+  payload: { sessionId: string; requestId?: string }
 }
 
 export type WriteRequest = {
@@ -282,9 +285,13 @@ export type TakePendingOutputRequest = {
 
 export type TakePendingOutputResult = {
   records: PendingOutputRecord[]
-  /** Monotonic per-session batch sequence. The history log stores it so the
+  /** Drained pending queue. Absent on older daemons. includeSnapshot still
+   *  keeps `records` as held-only so mixed-version adapters do not double-replay. */
+  drainedRecords?: PendingOutputRecord[]
+  /** Non-decreasing per-session batch sequence. The history log stores it so the
    *  cold-restore reader can detect a lost batch (gap) and discard the log
-   *  instead of replaying a stream with missing bytes. */
+   *  instead of replaying a stream with missing bytes. Snapshot, record, and
+   *  overflow takes advance it; empty incremental takes repeat the prior value. */
   seq: number
   /** True when the session's pending buffer exceeded its cap and records were
    *  dropped. The caller must fall back to a full snapshot checkpoint. */
@@ -383,23 +390,6 @@ export type DaemonSessionInfo = SessionInfo & {
 // existing importers keep one types entry point.
 export * from './daemon-stream-events'
 
-// ─── Binary Frame Protocol (Daemon ↔ PTY Subprocess) ────────────────
-//
-// 5-byte header: [type:1][length:4 big-endian]
-// Followed by `length` bytes of payload.
-
-export const enum FrameType {
-  Data = 0x01,
-  Resize = 0x02,
-  Exit = 0x03,
-  Error = 0x04,
-  Kill = 0x05,
-  Signal = 0x06
-}
-
-export const FRAME_HEADER_SIZE = 5
-export const FRAME_MAX_PAYLOAD = 1024 * 1024 // 1MB
-
 // ─── Notify prefix ──────────────────────────────────────────────────
 // Requests with IDs starting with this prefix are fire-and-forget:
 // the daemon processes them but does not send a response.
@@ -410,6 +400,9 @@ export const NOTIFY_PREFIX = 'notify_'
 // live in daemon-errors.ts (this file is capped for wire-shape declarations).
 export {
   TerminalAttachCanceledError,
+  DaemonConnectionLostError,
   DaemonProtocolError,
+  DaemonRequestTimeoutError,
+  DAEMON_UNAVAILABLE_RECONNECT_MESSAGE,
   SessionNotFoundError
 } from './daemon-errors'

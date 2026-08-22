@@ -1,16 +1,21 @@
 import type { StateCreator } from 'zustand'
-import { toast } from 'sonner'
 import type { AppState } from '../types'
 import type { PublicKnownRuntimeEnvironment } from '../../../../shared/runtime-environments'
 import type { RuntimeStatus } from '../../../../shared/runtime-types'
+import { runtimeEnvironmentStatusesEqual } from './runtime-environment-status-equality'
 import {
   clearRecentRuntimeCompatibilityFailure,
-  clearRuntimeCompatibilityCache,
-  unwrapRuntimeRpcResult
+  clearRuntimeCompatibilityCache
 } from '@/runtime/runtime-rpc-client'
 import { replaceRuntimeEnvironmentRevisions } from '@/runtime/runtime-environment-revision'
-import { translate } from '@/i18n/i18n'
 import { bumpProviderRuntimeSessionGeneration } from '@/lib/provider-runtime-context'
+import {
+  dismissRuntimeDisconnectedToast,
+  showRuntimeDisconnectedToast
+} from './runtime-environment-disconnect-toast'
+import { reconcileCatalogRows } from './repo-identity-reconcile'
+import { createRuntimeStatusHydration } from './runtime-status-hydration'
+import { refreshRuntimeEnvironmentStatus } from './runtime-status-refresh'
 
 /** Live status for one saved runtime environment, as last observed by the
  * renderer. `status === null` records a probe that failed or timed out so the
@@ -18,6 +23,8 @@ import { bumpProviderRuntimeSessionGeneration } from '@/lib/provider-runtime-con
 export type RuntimeEnvironmentStatus = {
   status: RuntimeStatus | null
   appVersion?: string | null
+  /** When the stored status was last *observed to change*; an unchanged re-probe
+   * is dropped rather than rewritten, so this is not a probe-freshness clock. */
   checkedAt: number
   connectionGeneration?: number
 }
@@ -25,7 +32,7 @@ export type RuntimeEnvironmentStatus = {
 export type RuntimeStatusSlice = {
   /** Saved remote Orca servers. Host pickers use this to show user-chosen names
    * instead of opaque runtime ids. */
-  runtimeEnvironments: PublicKnownRuntimeEnvironment[]
+  runtimeEnvironments: readonly PublicKnownRuntimeEnvironment[]
   /** True only after the saved-runtime catalog has loaded successfully. Gates
    * fail-closed host routing, so a failed read must NOT flip it. */
   runtimeEnvironmentCatalogHydrated: boolean
@@ -45,7 +52,7 @@ export type RuntimeStatusSlice = {
   removedRuntimeEnvironmentIds: ReadonlySet<string>
   /** Replaces the saved-environment list, trims stale status entries, and
    * retires state owned by any environment that just left the saved list. */
-  setRuntimeEnvironments: (environments: PublicKnownRuntimeEnvironment[]) => void
+  setRuntimeEnvironments: (environments: readonly PublicKnownRuntimeEnvironment[]) => void
   /** Merges one environment's status. Replaces the prior entry for that id. */
   setRuntimeEnvironmentStatus: (
     environmentId: string,
@@ -64,89 +71,13 @@ export type RuntimeStatusSlice = {
 }
 
 const connectionGenerationByEnvironment = new Map<string, number>()
-const activeRuntimeDisconnectedToasts = new Map<string, symbol>()
-const RUNTIME_DISCONNECTED_TOAST_DURATION_MS = 4_000
-
-function getRuntimeDisconnectedToastId(environmentId: string): string {
-  return `runtime-environment-disconnected:${environmentId}`
-}
-
-function showRuntimeDisconnectedToast(environmentId: string, getState: () => AppState): void {
-  const environment = getState().runtimeEnvironments.find((entry) => entry.id === environmentId)
-  const toastId = getRuntimeDisconnectedToastId(environmentId)
-  const activation = Symbol(toastId)
-  const title = environment?.name
-    ? translate(
-        'auto.store.slices.runtime.status.runtimeHostUnreachableNamed',
-        "Can't reach {{hostName}}",
-        { hostName: environment.name }
-      )
-    : translate(
-        'auto.store.slices.runtime.status.runtimeHostUnreachable',
-        "Can't reach Orca server"
-      )
-  activeRuntimeDisconnectedToasts.set(toastId, activation)
-  const clearActiveToast = (): void => {
-    if (activeRuntimeDisconnectedToasts.get(toastId) === activation) {
-      activeRuntimeDisconnectedToasts.delete(toastId)
-    }
-  }
-  let retrying = false
-  const showToast = (duration = RUNTIME_DISCONNECTED_TOAST_DURATION_MS): void => {
-    toast.warning(title, {
-      id: toastId,
-      description: translate(
-        'auto.store.slices.runtime.status.runtimeHostDisconnectedDescription',
-        'Check that Orca is running on this server and that your network connection is working, then try again.'
-      ),
-      duration,
-      action: {
-        label: translate('auto.store.slices.runtime.status.tryAgain', 'Try again'),
-        onClick: (event) => {
-          // Why: Sonner otherwise deletes the keyed toast after the action callback.
-          event.preventDefault()
-          if (retrying) {
-            return
-          }
-          retrying = true
-          showToast(Number.POSITIVE_INFINITY)
-          void getState()
-            .refreshRuntimeEnvironmentStatus(environmentId)
-            .then((reachable) => {
-              const stillSaved = getState().runtimeEnvironments.some(
-                (entry) => entry.id === environmentId
-              )
-              if (
-                !reachable &&
-                stillSaved &&
-                activeRuntimeDisconnectedToasts.get(toastId) === activation
-              ) {
-                showToast()
-              }
-            })
-            .finally(() => {
-              retrying = false
-            })
-        }
-      },
-      onDismiss: clearActiveToast,
-      onAutoClose: clearActiveToast
-    })
-  }
-  showToast()
-}
-
-function dismissRuntimeDisconnectedToast(environmentId: string): void {
-  const toastId = getRuntimeDisconnectedToastId(environmentId)
-  if (!activeRuntimeDisconnectedToasts.delete(toastId)) {
-    return
-  }
-  toast.dismiss?.(toastId)
-}
 
 export function getRuntimeEnvironmentConnectionGeneration(environmentId: string): number {
   return connectionGenerationByEnvironment.get(environmentId) ?? 0
 }
+
+export const clearRuntimeEnvironmentConnectionGenerationsForTests = (): void =>
+  connectionGenerationByEnvironment.clear()
 
 function advanceRuntimeEnvironmentConnectionGeneration(environmentId: string): number {
   const next = getRuntimeEnvironmentConnectionGeneration(environmentId) + 1
@@ -221,8 +152,25 @@ export const createRuntimeStatusSlice: StateCreator<AppState, [], [], RuntimeSta
           removedChanged = true
         }
       }
+      // Why: list()/hydrate always allocate (IPC structuredClone + redact remaps
+      // endpoints[]). Reuse equal rows so Object.is subscribers don't miss 100%.
+      const reconciled = reconcileCatalogRows(
+        s.runtimeEnvironments,
+        environments,
+        (environment) => environment.id
+      )
+      const catalogUnchanged = reconciled === s.runtimeEnvironments
+      if (
+        catalogUnchanged &&
+        s.runtimeEnvironmentCatalogHydrated &&
+        s.runtimeEnvironmentCatalogSettled &&
+        !statusesChanged &&
+        !removedChanged
+      ) {
+        return s
+      }
       return {
-        runtimeEnvironments: environments,
+        runtimeEnvironments: catalogUnchanged ? s.runtimeEnvironments : reconciled,
         runtimeEnvironmentCatalogHydrated: true,
         runtimeEnvironmentCatalogSettled: true,
         ...(statusesChanged ? { runtimeStatusByEnvironmentId: nextStatuses } : {}),
@@ -234,6 +182,7 @@ export const createRuntimeStatusSlice: StateCreator<AppState, [], [], RuntimeSta
     // Optional-chained: minimal store assemblies (some unit tests) omit the
     // detected-agents slice.
     get().retainRuntimeDetectedAgents?.(environments.map((environment) => environment.id))
+    get().retainRuntimeTerminalQuickCommands?.(environments.map((environment) => environment.id))
     // A detached environment's mirrored SSH state must not outlive it.
     get().retainEnvironmentSshState?.(environments.map((environment) => environment.id))
     for (const id of replacedEnvironmentIds) {
@@ -250,6 +199,7 @@ export const createRuntimeStatusSlice: StateCreator<AppState, [], [], RuntimeSta
 
   setRuntimeEnvironmentStatus: (environmentId, status, options) => {
     const previous = get().runtimeStatusByEnvironmentId.get(environmentId)
+    const pairedDeviceId = status.status?.pairedDeviceId?.trim()
     // Why: a non-null status proves the runtime just answered, so drop any stale
     // "offline" compat failure before this online transition fires the
     // reuse-flagged background refetches — a recovered host must re-probe.
@@ -257,25 +207,46 @@ export const createRuntimeStatusSlice: StateCreator<AppState, [], [], RuntimeSta
       clearRecentRuntimeCompatibilityFailure(environmentId, status.status)
     }
     set((s) => {
-      const next = new Map(s.runtimeStatusByEnvironmentId)
       const sessionEnded = status.status === null && previous?.status != null
       const connectionChanged =
         status.status !== null &&
         (previous?.status == null || previous.status.runtimeId !== status.status.runtimeId)
       const activeEnvironmentId = s.settings?.activeRuntimeEnvironmentId?.trim()
-      if (connectionChanged) {
-        advanceRuntimeEnvironmentConnectionGeneration(environmentId)
-      }
+      const connectionGeneration = connectionChanged
+        ? advanceRuntimeEnvironmentConnectionGeneration(environmentId)
+        : (previous?.connectionGeneration ??
+          status.connectionGeneration ??
+          getRuntimeEnvironmentConnectionGeneration(environmentId))
       if (activeEnvironmentId === environmentId && (sessionEnded || connectionChanged)) {
         bumpProviderRuntimeSessionGeneration()
       }
-      next.set(environmentId, {
-        ...status,
-        connectionGeneration: connectionChanged
-          ? (previous?.connectionGeneration ?? 0) + 1
-          : (previous?.connectionGeneration ?? status.connectionGeneration ?? 0)
-      })
-      return { runtimeStatusByEnvironmentId: next }
+      const nextEntry = { ...status, connectionGeneration }
+      const currentEntry = s.runtimeStatusByEnvironmentId.get(environmentId)
+      // Why: an unchanged re-probe must not invalidate every Map subscriber. Real
+      // transitions change `status` or advance `connectionGeneration`, so they still write.
+      const statusUnchanged = Boolean(
+        currentEntry && runtimeEnvironmentStatusesEqual(currentEntry, nextEntry)
+      )
+      const environmentIndex = pairedDeviceId
+        ? s.runtimeEnvironments.findIndex((environment) => environment.id === environmentId)
+        : -1
+      const runtimeEnvironments =
+        environmentIndex >= 0 &&
+        s.runtimeEnvironments[environmentIndex].pairedDeviceId !== pairedDeviceId
+          ? s.runtimeEnvironments.map((environment, index) =>
+              index === environmentIndex ? { ...environment, pairedDeviceId } : environment
+            )
+          : s.runtimeEnvironments
+      const environmentsChanged = runtimeEnvironments !== s.runtimeEnvironments
+      if (statusUnchanged && !environmentsChanged) {
+        return s
+      }
+      return {
+        runtimeStatusByEnvironmentId: statusUnchanged
+          ? s.runtimeStatusByEnvironmentId
+          : new Map(s.runtimeStatusByEnvironmentId).set(environmentId, nextEntry),
+        ...(environmentsChanged ? { runtimeEnvironments } : {})
+      }
     })
     if (options?.suppressDisconnectToast) {
       dismissRuntimeDisconnectedToast(environmentId)
@@ -319,43 +290,20 @@ export const createRuntimeStatusSlice: StateCreator<AppState, [], [], RuntimeSta
     })
   },
 
-  refreshRuntimeEnvironmentStatus: async (environmentId, timeoutMs = 10_000) => {
-    try {
-      const response = await window.api.runtimeEnvironments.getStatus({
-        selector: environmentId,
-        timeoutMs
-      })
-      const status = unwrapRuntimeRpcResult<RuntimeStatus>(response)
-      // setRuntimeEnvironmentStatus drops any stale compat failure on a non-null
+  refreshRuntimeEnvironmentStatus: (environmentId, timeoutMs = 10_000) =>
+    refreshRuntimeEnvironmentStatus(environmentId, timeoutMs, (status) => {
+      // Why: setRuntimeEnvironmentStatus drops any stale compat failure on a non-null
       // (reachable) status, so a recovered host's reuse-flagged refetches re-probe.
       get().setRuntimeEnvironmentStatus(environmentId, { status, checkedAt: Date.now() })
-      return true
-    } catch {
-      get().setRuntimeEnvironmentStatus(environmentId, {
-        status: null,
-        checkedAt: Date.now()
-      })
-      return false
-    }
-  },
+    }),
 
-  hydrateRuntimeEnvironmentStatuses: async () => {
-    let environments: PublicKnownRuntimeEnvironment[]
-    try {
-      environments = await window.api.runtimeEnvironments.list()
-    } catch (err) {
-      console.error('Failed to list runtime environments for status hydration:', err)
-      // Why: settled, not hydrated. Skill discovery must stop waiting and fall
-      // back to the local host, but host routing keeps failing closed on an
-      // unknown catalog rather than acting on a stale empty list.
-      set({ runtimeEnvironmentCatalogSettled: true })
-      return
-    }
-    get().setRuntimeEnvironments(environments)
-    // Why: fire-and-forget per env; one unreachable server must not block the
-    // others, and a failure records a null status rather than nothing.
-    await Promise.allSettled(
-      environments.map((environment) => get().refreshRuntimeEnvironmentStatus(environment.id))
-    )
-  }
+  hydrateRuntimeEnvironmentStatuses: createRuntimeStatusHydration({
+    listEnvironments: () => window.api.runtimeEnvironments.list(),
+    getCurrentEnvironments: () => get().runtimeEnvironments,
+    publishEnvironments: (environments) => get().setRuntimeEnvironments(environments),
+    refreshEnvironmentStatus: (environmentId) =>
+      get().refreshRuntimeEnvironmentStatus(environmentId),
+    // Why: failed reads release catalog waiters without claiming routing is safe.
+    markCatalogSettled: () => set({ runtimeEnvironmentCatalogSettled: true })
+  })
 })

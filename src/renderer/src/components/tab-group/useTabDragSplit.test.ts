@@ -4,7 +4,7 @@
 import { act, createElement } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { Tab, TabGroup, TabGroupLayoutNode } from '../../../../shared/types'
+import type { Tab, TabGroup, TabGroupLayoutNode } from '../../../../shared/tab-types'
 import { useAppStore } from '../../store'
 import type { TabDragItemData } from './useTabDragSplit'
 import { shouldActivateTabDragFromDistanceSample } from './tab-drag-pointer-sensor'
@@ -16,7 +16,7 @@ import {
   useTabDragSplit
 } from './useTabDragSplit'
 
-vi.mock('../browser-pane/webview-registry', () => ({
+vi.mock('../browser-pane/host-guest/webview-registry', () => ({
   acquireWebviewsDragPassthrough: vi.fn(() => vi.fn())
 }))
 

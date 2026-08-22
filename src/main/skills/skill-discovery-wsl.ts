@@ -16,9 +16,9 @@ import {
   type SkillScanRoot
 } from './skill-discovery-sources'
 import { discoverClaudePluginSkillSourcesInWsl } from './claude-plugin-skill-sources-wsl'
+import type { SkillProviderRootOverrides } from './skill-provider-destinations'
 
 const MAX_MARKDOWN_BYTES = 256 * 1024
-const MAX_PACKAGE_FILES = 200
 const WSL_SCAN_TIMEOUT_MS = 10_000
 const WSL_SCAN_MAX_BUFFER_BYTES = 128 * 1024 * 1024
 
@@ -37,15 +37,9 @@ export function buildWslSkillDiscoveryCommand(roots: readonly SkillScanRoot[]): 
     `  printf '%s\\0%s\\0%s\\0' R "$root_index" 1`,
     `  while IFS= read -r -d '' skill_file; do`,
     `    canonical_path=$(realpath -- "$skill_file" 2>/dev/null || printf '%s' "$skill_file")`,
-    `    directory_path=\${skill_file%/*}`,
     `    updated_at=$(stat -c '%Y' -- "$skill_file" 2>/dev/null || true)`,
     `    encoded_markdown=$(head -c ${MAX_MARKDOWN_BYTES} -- "$skill_file" 2>/dev/null | base64 | tr -d '\\n') || continue`,
-    '    file_count=0',
-    `    while IFS= read -r -d '' package_file; do`,
-    '      file_count=$((file_count + 1))',
-    `      [ "$file_count" -ge ${MAX_PACKAGE_FILES} ] && break`,
-    `    done < <(find -L "$directory_path" -type f -print0 2>/dev/null)`,
-    `    printf '%s\\0%s\\0%s\\0%s\\0%s\\0%s\\0' S "$root_index" "$skill_file" "$canonical_path" "$updated_at" "$file_count"`,
+    `    printf '%s\\0%s\\0%s\\0%s\\0%s\\0' S "$root_index" "$skill_file" "$canonical_path" "$updated_at"`,
     `    printf '%s' "$encoded_markdown"`,
     `    printf '\\0'`,
     `  done < <(find -L "$root_path" -mindepth 1 -maxdepth "$max_depth" -type f -name 'SKILL.md' -print0 2>/dev/null)`,
@@ -62,7 +56,7 @@ function executeWslSkillDiscovery(distro: string, command: string): Promise<stri
   return new Promise((resolve, reject) => {
     execFile(
       'wsl.exe',
-      ['-d', distro, '--', 'bash', '-c', command],
+      ['-d', distro, '--exec', 'bash', '-c', command],
       {
         encoding: 'utf8',
         maxBuffer: WSL_SCAN_MAX_BUFFER_BYTES,
@@ -115,7 +109,6 @@ export function parseWslSkillDiscoveryOutput(
     const skillFilePath = readProtocolField(fields, index++)
     const canonicalSkillFilePath = readProtocolField(fields, index++)
     const updatedAtSeconds = Number.parseInt(readProtocolField(fields, index++), 10)
-    const fileCount = Number.parseInt(readProtocolField(fields, index++), 10)
     const markdown = Buffer.from(readProtocolField(fields, index++), 'base64').toString('utf8')
     const existing = skillsByCanonicalPath.get(canonicalSkillFilePath)
     if (existing) {
@@ -153,7 +146,6 @@ export function parseWslSkillDiscoveryOutput(
       directoryPath,
       skillFilePath,
       installed: true,
-      fileCount: Number.isFinite(fileCount) ? fileCount : 0,
       updatedAt: Number.isFinite(updatedAtSeconds) ? updatedAtSeconds * 1000 : null
     })
   }
@@ -180,6 +172,7 @@ export async function discoverSkillsInWsl(args: {
   distro: string
   homeDir: string
   cwd: string
+  providerRootOverrides?: SkillProviderRootOverrides
 }): Promise<SkillDiscoveryResult> {
   // Plugin roots are resolved (in JS) from metadata this first wsl.exe call
   // reads, then fed to the scan's own wsl.exe call below — two sequential
@@ -201,7 +194,8 @@ export async function discoverSkillsInWsl(args: {
       homeDir: args.homeDir,
       cwd: args.cwd,
       repos: [],
-      pathApi: pathPosix
+      pathApi: pathPosix,
+      providerRootOverrides: args.providerRootOverrides
     }),
     ...pluginRoots
   ]

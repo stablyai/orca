@@ -40,7 +40,7 @@ describe('parseWorkspaceSession', () => {
     }
   })
 
-  it('rejects blank external SSH file ownership', () => {
+  it('drops an open file with blank external SSH ownership, keeping the session', () => {
     const result = parseWorkspaceSession({
       activeRepoId: null,
       activeWorktreeId: 'wt',
@@ -60,7 +60,10 @@ describe('parseWorkspaceSession', () => {
       }
     })
 
-    expect(result.ok).toBe(false)
+    expect(result.ok).toBe(true)
+    if (result.ok) {
+      expect(result.value.openFilesByWorktree?.wt).toEqual([])
+    }
   })
 
   it('accepts a fully populated session with optional fields', () => {
@@ -194,7 +197,7 @@ describe('parseWorkspaceSession', () => {
     }
   })
 
-  it('rejects a session where ptyId is a number (schema drift)', () => {
+  it('drops a tab where ptyId is a number (schema drift) without failing the session', () => {
     const result = parseWorkspaceSession({
       activeRepoId: null,
       activeWorktreeId: null,
@@ -215,9 +218,9 @@ describe('parseWorkspaceSession', () => {
       },
       terminalLayoutsByTabId: {}
     })
-    expect(result.ok).toBe(false)
-    if (!result.ok) {
-      expect(result.error).toContain('ptyId')
+    expect(result.ok).toBe(true)
+    if (result.ok) {
+      expect(result.value.tabsByWorktree.wt).toEqual([])
     }
   })
 
@@ -235,6 +238,11 @@ describe('parseWorkspaceSession', () => {
             title: 'Claude working',
             defaultTitle: 'Terminal 1',
             generatedTitle: 'Refactor auth',
+            aiVaultTitle: {
+              agent: 'codex',
+              sessionId: 'session-1',
+              title: 'Provider thread name'
+            },
             customTitle: null,
             color: null,
             sortOrder: 0,
@@ -253,6 +261,11 @@ describe('parseWorkspaceSession', () => {
             contentType: 'terminal',
             label: 'Claude working',
             generatedLabel: 'Refactor auth',
+            aiVaultTitle: {
+              agent: 'codex',
+              sessionId: 'session-1',
+              title: 'Provider thread name'
+            },
             customLabel: null,
             color: null,
             sortOrder: 0,
@@ -265,7 +278,56 @@ describe('parseWorkspaceSession', () => {
     expect(result.ok).toBe(true)
     if (result.ok) {
       expect(result.value.tabsByWorktree.wt[0].generatedTitle).toBe('Refactor auth')
+      expect(result.value.tabsByWorktree.wt[0].aiVaultTitle?.title).toBe('Provider thread name')
       expect(result.value.unifiedTabs?.wt[0].generatedLabel).toBe('Refactor auth')
+      expect(result.value.unifiedTabs?.wt[0].aiVaultTitle?.title).toBe('Provider thread name')
+    }
+  })
+
+  it('drops malformed AI Vault titles without rejecting the workspace session', () => {
+    const result = parseWorkspaceSession({
+      activeRepoId: null,
+      activeWorktreeId: 'wt',
+      activeTabId: 'tab1',
+      tabsByWorktree: {
+        wt: [
+          {
+            id: 'tab1',
+            ptyId: null,
+            worktreeId: 'wt',
+            title: 'Codex',
+            aiVaultTitle: { agent: 'future-agent', sessionId: 'session-1', title: 'Name' },
+            customTitle: null,
+            color: null,
+            sortOrder: 0,
+            createdAt: 0
+          }
+        ]
+      },
+      terminalLayoutsByTabId: {},
+      unifiedTabs: {
+        wt: [
+          {
+            id: 'tab1',
+            entityId: 'tab1',
+            groupId: 'group1',
+            worktreeId: 'wt',
+            contentType: 'terminal',
+            label: 'Codex',
+            aiVaultTitle: 'malformed',
+            customLabel: null,
+            color: null,
+            sortOrder: 0,
+            createdAt: 0
+          }
+        ]
+      }
+    })
+
+    expect(result.ok).toBe(true)
+    if (result.ok) {
+      expect(result.value.tabsByWorktree.wt[0].aiVaultTitle).toBeUndefined()
+      expect(result.value.unifiedTabs?.wt[0].aiVaultTitle).toBeUndefined()
     }
   })
 
@@ -345,6 +407,47 @@ describe('parseWorkspaceSession', () => {
     expect(parseWorkspaceSession(null).ok).toBe(false)
     expect(parseWorkspaceSession('garbage').ok).toBe(false)
     expect(parseWorkspaceSession(42).ok).toBe(false)
+  })
+
+  it('drops one truncated tab without discarding other persisted worktrees', () => {
+    const validTab = {
+      id: 'tab-good',
+      ptyId: null,
+      worktreeId: 'worktree-good',
+      title: 'Terminal',
+      customTitle: null,
+      color: null,
+      sortOrder: 0,
+      createdAt: 1_700_000_000_000
+    }
+    const result = parseWorkspaceSession({
+      activeRepoId: null,
+      activeWorktreeId: 'worktree-good',
+      activeTabId: 'tab-good',
+      tabsByWorktree: {
+        'worktree-good': [validTab],
+        'worktree-corrupt': [
+          {
+            id: 'tab-truncated',
+            ptyId: null,
+            worktreeId: 'worktree-corrupt',
+            title: 'Terminal',
+            sortOrder: 0,
+            generation: 3,
+            startupCwd: '/workspace'
+          }
+        ]
+      },
+      terminalLayoutsByTabId: {}
+    })
+
+    expect(result.ok).toBe(true)
+    if (result.ok) {
+      expect(result.value.tabsByWorktree).toEqual({
+        'worktree-good': [validTab],
+        'worktree-corrupt': []
+      })
+    }
   })
 
   it('drops bad lastVisitedAtByWorktreeId entries rather than failing the session', () => {

@@ -379,7 +379,7 @@ export class WslCliInstaller {
   private async readCommandFile(
     distro: string,
     commandPath: string
-  ): Promise<string | 'not_file' | null> {
+  ): Promise<(string & {}) | 'not_file' | null> {
     const output = await this.run(
       distro,
       [
@@ -484,7 +484,7 @@ async function runWslCommand(distro: string, command: string): Promise<string> {
     try {
       child = execFile(
         'wsl.exe',
-        ['-d', distro, '--', 'bash', '-lc', buildEncodedWslBashCommand(command)],
+        ['-d', distro, '--exec', 'bash', '-lc', buildEncodedWslBashCommand(command)],
         {
           encoding: 'utf8',
           timeout: WSL_COMMAND_TIMEOUT_MS

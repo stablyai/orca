@@ -12,7 +12,12 @@ import type {
   AiVaultPrepareSessionResumeArgs,
   AiVaultPrepareSessionResumeResult
 } from '../../shared/ai-vault-resume-preparation'
+import type {
+  AiVaultSessionTitlesArgs,
+  AiVaultSessionTitlesResult
+} from '../../shared/ai-vault-session-title'
 import { parseAiVaultListResult } from './session-list-result-validation'
+import { parseAiVaultSessionTitlesResult } from './session-title-result-validation'
 
 export type RuntimeAiVaultHostInfo = {
   environmentId: string
@@ -100,6 +105,27 @@ export async function scanRuntimeAiVaultSessions(
     environmentId,
     message: response.error.message
   })
+}
+
+export async function resolveRuntimeAiVaultSessionTitles(
+  userDataPath: string,
+  environmentId: string,
+  args: AiVaultSessionTitlesArgs
+): Promise<AiVaultSessionTitlesResult> {
+  const response = await callRuntimeEnvironment(
+    userDataPath,
+    environmentId,
+    'aiVault.resolveSessionTitles',
+    { requests: args.requests }
+  )
+  if (response.ok !== true) {
+    return { titles: [] }
+  }
+  try {
+    return parseAiVaultSessionTitlesResult(response.result)
+  } catch {
+    return { titles: [] }
+  }
 }
 
 export async function prepareRuntimeAiVaultSessionResume(

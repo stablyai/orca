@@ -4,7 +4,7 @@ import React, { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { ORPHAN_WORKTREE_ID } from '../../../../shared/constants'
-import type { BrowserWorkspace } from '../../../../shared/types'
+import type { BrowserWorkspace } from '../../../../shared/browser-workspace-types'
 import type { UnifiedSessionRow, UnifiedWorktreeRow } from './resource-usage-merge-types'
 
 vi.mock('@/store', () => {

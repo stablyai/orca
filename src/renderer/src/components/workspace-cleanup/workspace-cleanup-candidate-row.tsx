@@ -3,16 +3,18 @@ import {
   AlertTriangle,
   Check,
   ChevronDown,
+  CircleDot,
   Clock3,
   EyeOff,
+  ExternalLink,
   FileWarning,
   GitBranch,
   GitPullRequest,
+  HardDrive,
   Loader2,
-  Search,
+  Monitor,
   SquareTerminal,
-  Trash2,
-  type LucideIcon
+  Trash2
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
@@ -31,69 +33,45 @@ import {
   formatBranchSafetyDetails,
   formatContextDetails,
   formatGitStatus,
-  getCandidateStatus,
+  getCandidateFactStatus,
   getContextCount,
   getDirtyGitLabel,
   getReviewPillTone,
   getWorkspaceCleanupBlockerLabels,
-  shouldShowGitMetadataChip,
-  type StatusPillTone
+  shouldShowGitMetadataChip
 } from './workspace-cleanup-candidate-row-data'
 import { StatusPill } from './workspace-cleanup-status-pill'
+import { WorkspaceCleanupMetadataChip } from './workspace-cleanup-metadata-chip'
+import {
+  getWorkspaceCleanupCandidateAccessibleName,
+  getWorkspaceCleanupCandidateHostLabel
+} from './workspace-cleanup-host-label'
 
 export type WorkspaceCleanupDeletionPhase = 'deleting' | 'queued'
 
 type CandidateRowProps = {
   candidate: WorkspaceCleanupCandidate
+  /** Host-qualified row key; the same `worktreeId` can appear once per host. */
+  identity: string
   deletionPhase?: WorkspaceCleanupDeletionPhase
   expanded: boolean
   failure?: string
+  /** A focused git re-scan is in flight, so "Not checked" is provisional. */
+  gitEvidencePending?: boolean
   last: boolean
   lastActivityLabel: string
   removing?: boolean
+  /** Joined from the workspace-space scan; null when that scan has not run. */
+  sizeLabel?: string | null
+  /** User-configured status label; null when this broad-scan row is not in renderer state. */
+  workspaceStatusLabel?: string | null
   reviewInfo: WorkspaceCleanupReviewInfo
   selected: boolean
   onIgnore: (candidate: WorkspaceCleanupCandidate) => void
   onRemove: (candidate: WorkspaceCleanupCandidate) => void
-  onToggleExpanded: (worktreeId: string) => void
-  onToggleSelected: (worktreeId: string) => void
+  onToggleExpanded: (identity: string) => void
+  onToggleSelected: (identity: string) => void
   onView: (candidate: WorkspaceCleanupCandidate) => void
-}
-
-function MetadataIconChip({
-  icon: Icon,
-  label,
-  value,
-  tone = 'neutral'
-}: {
-  icon: LucideIcon
-  label: string
-  value?: string
-  tone?: StatusPillTone
-}): React.JSX.Element {
-  return (
-    <Tooltip>
-      <TooltipTrigger asChild>
-        <span
-          className={cn(
-            'inline-flex h-5 shrink-0 items-center gap-1 rounded-full border px-1.5 text-[11px] font-medium',
-            'border-border bg-background text-muted-foreground',
-            tone === 'ready' &&
-              'border-[color:color-mix(in_srgb,var(--git-decoration-added)_45%,transparent)] bg-[color:color-mix(in_srgb,var(--git-decoration-added)_10%,transparent)] text-[var(--git-decoration-added)]',
-            tone === 'review' && 'bg-muted text-foreground',
-            tone === 'destructive' && 'border-destructive/30 text-destructive'
-          )}
-          aria-label={label}
-        >
-          <Icon className="size-3" aria-hidden="true" />
-          {value ? <span>{value}</span> : null}
-        </span>
-      </TooltipTrigger>
-      <TooltipContent side="top" sideOffset={4}>
-        {label}
-      </TooltipContent>
-    </Tooltip>
-  )
 }
 
 // Why: the cleanup list re-renders on every checkbox/expand/search keystroke;
@@ -103,12 +81,16 @@ function MetadataIconChip({
 // prop identity changes); virtualization, not memo, bounds that cost.
 export const CandidateRow = React.memo(function CandidateRow({
   candidate,
+  identity,
   deletionPhase,
   expanded,
   failure,
+  gitEvidencePending = false,
   last,
   lastActivityLabel,
   removing = false,
+  sizeLabel = null,
+  workspaceStatusLabel = null,
   reviewInfo,
   selected,
   onIgnore,
@@ -125,10 +107,15 @@ export const CandidateRow = React.memo(function CandidateRow({
   const blockers = getWorkspaceCleanupBlockerLabels(candidate)
   const contextDetails = formatContextDetails(candidate)
   const branchSafetyDetails = formatBranchSafetyDetails(candidate)
-  const status = getCandidateStatus(candidate)
+  const factStatus = getCandidateFactStatus(candidate)
   const dirtyLabel = getDirtyGitLabel(candidate)
+  const gitLabel = getWorkspaceCleanupGitLabel(candidate)
   const showGitMetadataChip = shouldShowGitMetadataChip(candidate)
   const contextCount = getContextCount(candidate)
+  const candidateAccessibleName = getWorkspaceCleanupCandidateAccessibleName(candidate)
+  const hostLabel = getWorkspaceCleanupCandidateHostLabel(candidate)
+  const sizeValue =
+    sizeLabel ?? translate('components.workspace.cleanup.browse.notMeasured', 'Not measured')
   const hasExpandableDetails =
     blockers.length > 0 ||
     candidate.path.length > 0 ||
@@ -154,9 +141,9 @@ export const CandidateRow = React.memo(function CandidateRow({
             aria-label={translate(
               'auto.components.workspace.cleanup.WorkspaceCleanupDialog.bbb1ab6a6f',
               'Select {{value0}}',
-              { value0: candidate.displayName }
+              { value0: candidateAccessibleName }
             )}
-            onClick={() => onToggleSelected(candidate.worktreeId)}
+            onClick={() => onToggleSelected(identity)}
             className="mt-0.5 flex size-4 shrink-0 items-center justify-center rounded border border-border bg-background text-primary hover:bg-accent focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
           >
             {selected ? <Check className="size-3" strokeWidth={3} /> : null}
@@ -169,7 +156,16 @@ export const CandidateRow = React.memo(function CandidateRow({
 
         <div className="min-w-0">
           <div className="flex min-w-0 flex-wrap items-center gap-1.5">
-            <span className="min-w-0 truncate text-sm font-medium">{candidate.displayName}</span>
+            <span data-workspace-cleanup-row-name className="min-w-0 truncate text-sm font-medium">
+              {candidate.displayName}
+            </span>
+            <WorkspaceCleanupMetadataChip
+              icon={Monitor}
+              label={translate('components.workspace.cleanup.host.label', 'Host: {{value0}}', {
+                value0: hostLabel
+              })}
+              value={hostLabel}
+            />
             {deletionPhase ? (
               <StatusPill tone="destructive">
                 {deletionPhase === 'queued'
@@ -182,10 +178,21 @@ export const CandidateRow = React.memo(function CandidateRow({
                       'Deleting…'
                     )}
               </StatusPill>
-            ) : (
-              <StatusPill tone={status.tone}>{status.label}</StatusPill>
-            )}
-            <MetadataIconChip
+            ) : factStatus ? (
+              <StatusPill tone={factStatus.tone}>{factStatus.label}</StatusPill>
+            ) : null}
+            {workspaceStatusLabel ? (
+              <WorkspaceCleanupMetadataChip
+                icon={CircleDot}
+                label={translate(
+                  'components.workspace.cleanup.browse.workspaceStatus',
+                  'Workspace status: {{value0}}',
+                  { value0: workspaceStatusLabel }
+                )}
+                value={workspaceStatusLabel}
+              />
+            ) : null}
+            <WorkspaceCleanupMetadataChip
               icon={Clock3}
               label={`${translate(
                 'auto.components.workspace.cleanup.WorkspaceCleanupDialog.352f15d6fc',
@@ -193,24 +200,50 @@ export const CandidateRow = React.memo(function CandidateRow({
               )} ${lastActivityLabel}`}
               value={formatCompactActivityLabel(lastActivityLabel)}
             />
-            {dirtyLabel && showGitMetadataChip ? (
-              <MetadataIconChip icon={FileWarning} label={dirtyLabel} tone="destructive" />
+            <WorkspaceCleanupMetadataChip
+              icon={HardDrive}
+              label={translate(
+                'components.workspace.cleanup.browse.sizeOnDisk',
+                'Size on disk: {{value0}}',
+                { value0: sizeValue }
+              )}
+              value={sizeValue}
+            />
+            {gitEvidencePending ? (
+              <span
+                role="status"
+                className="inline-flex h-5 shrink-0 items-center gap-1 rounded-full border border-border bg-background px-1.5 text-[11px] font-medium text-muted-foreground"
+                aria-label={translate(
+                  'components.workspace.cleanup.browse.checkingGitRow',
+                  'Checking git status'
+                )}
+              >
+                <Loader2 className="size-3 animate-spin" aria-hidden="true" />
+              </span>
+            ) : dirtyLabel && showGitMetadataChip ? (
+              <WorkspaceCleanupMetadataChip
+                icon={FileWarning}
+                label={dirtyLabel}
+                value={dirtyLabel}
+                tone="destructive"
+              />
             ) : showGitMetadataChip ? (
-              <MetadataIconChip
+              <WorkspaceCleanupMetadataChip
                 icon={GitBranch}
                 label={formatGitStatus(candidate)}
-                tone={getWorkspaceCleanupGitLabel(candidate) === 'Clean' ? 'ready' : 'review'}
+                value={gitLabel}
+                tone={gitLabel === 'Clean' ? 'ready' : 'review'}
               />
             ) : null}
             {contextDetails ? (
-              <MetadataIconChip
+              <WorkspaceCleanupMetadataChip
                 icon={SquareTerminal}
                 label={contextDetails}
                 value={String(contextCount)}
               />
             ) : null}
             {reviewInfo.label ? (
-              <MetadataIconChip
+              <WorkspaceCleanupMetadataChip
                 icon={GitPullRequest}
                 label={getReviewTooltip(reviewInfo)}
                 value={reviewInfo.label}
@@ -256,7 +289,7 @@ export const CandidateRow = React.memo(function CandidateRow({
                         )
                   }
                   aria-expanded={expanded}
-                  onClick={() => onToggleExpanded(candidate.worktreeId)}
+                  onClick={() => onToggleExpanded(identity)}
                 >
                   <ChevronDown
                     className={cn('size-3.5 transition-transform', expanded && 'rotate-180')}
@@ -282,20 +315,17 @@ export const CandidateRow = React.memo(function CandidateRow({
                 variant="ghost"
                 size="icon-xs"
                 aria-label={translate(
-                  'auto.components.workspace.cleanup.WorkspaceCleanupDialog.1bffc07ba7',
-                  'View {{value0}}',
-                  { value0: candidate.displayName }
+                  'components.workspace.cleanup.browse.openWorkspaceNamed',
+                  'Open {{value0}}',
+                  { value0: candidateAccessibleName }
                 )}
                 onClick={() => onView(candidate)}
               >
-                <Search className="size-3.5" />
+                <ExternalLink className="size-3.5" />
               </Button>
             </TooltipTrigger>
             <TooltipContent side="top" sideOffset={4}>
-              {translate(
-                'auto.components.workspace.cleanup.WorkspaceCleanupDialog.ee81adfcef',
-                'View'
-              )}
+              {translate('components.workspace.cleanup.browse.openWorkspace', 'Open workspace')}
             </TooltipContent>
           </Tooltip>
           {!ignored ? (
@@ -307,7 +337,7 @@ export const CandidateRow = React.memo(function CandidateRow({
                   aria-label={translate(
                     'auto.components.workspace.cleanup.WorkspaceCleanupDialog.a9957007eb',
                     'Ignore {{value0}}',
-                    { value0: candidate.displayName }
+                    { value0: candidateAccessibleName }
                   )}
                   onClick={() => onIgnore(candidate)}
                 >
@@ -331,7 +361,7 @@ export const CandidateRow = React.memo(function CandidateRow({
                   aria-label={translate(
                     'auto.components.workspace.cleanup.WorkspaceCleanupDialog.3828408538',
                     'Remove {{value0}}',
-                    { value0: candidate.displayName }
+                    { value0: candidateAccessibleName }
                   )}
                   className="text-destructive hover:text-destructive"
                   onClick={() => onRemove(candidate)}

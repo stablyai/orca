@@ -27,7 +27,10 @@ import type {
   RuntimeAccountsSnapshot,
   RuntimeStatus
 } from '../../shared/runtime-types'
-import type { ClaudeRateLimitAccountsState, CodexRateLimitAccountsState } from '../../shared/types'
+import type {
+  ClaudeRateLimitAccountsState,
+  CodexRateLimitAccountsState
+} from '../../shared/managed-account-types'
 import { getRequiredStringFlag } from '../flags'
 import {
   formatAccountRemoveResult,

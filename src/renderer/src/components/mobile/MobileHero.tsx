@@ -7,6 +7,7 @@ import { getChannelTagline, type InstallCopy, type IosChannel } from './mobile-p
 import type { MobilePairingConnectionMode } from '../../../../shared/mobile-pairing-connection-mode'
 import type { MobileRelayMintFailure } from '../../../../shared/mobile-relay-mint-failure'
 import { MobileHeroPairingStep } from './MobileHeroPairingStep'
+import { MobileAndroidInstallHelp } from './MobileAndroidInstallHelp'
 export { HeroIntro } from './MobileHeroIntro'
 export { HeroPaired, type PairedDevice } from './MobileHeroPairedDevices'
 import { translate } from '@/i18n/i18n'
@@ -22,9 +23,11 @@ type HeroFlowProps = {
   installCopy: InstallCopy
   iosChannel: IosChannel
   onIosChannelChange: (next: IosChannel) => void
+  onOpenAndroidInstallGuide: () => void
   onOpenInstallUrl: () => void
   onCopyInstallUrl: () => void
   pairQrDataUrl: string | null
+  pairQrSize?: number | null
   pairingUrl: string | null
   pairingQrError: boolean
   relayMintFailure: MobileRelayMintFailure | null
@@ -60,9 +63,11 @@ export function HeroFlow({
   installCopy,
   iosChannel,
   onIosChannelChange,
+  onOpenAndroidInstallGuide,
   onOpenInstallUrl,
   onCopyInstallUrl,
   pairQrDataUrl,
+  pairQrSize = null,
   pairingUrl,
   pairingQrError,
   relayMintFailure,
@@ -200,6 +205,9 @@ export function HeroFlow({
                   {translate('auto.components.mobile.MobileHero.aa97420ba4', 'Copy install link')}
                 </button>
               </div>
+              {platform === 'android' ? (
+                <MobileAndroidInstallHelp onOpenGuide={onOpenAndroidInstallGuide} />
+              ) : null}
             </div>
             <div className="mp-qr mp-qr-large">
               {installQrUrl ? (
@@ -222,6 +230,7 @@ export function HeroFlow({
         >
           <MobileHeroPairingStep
             pairQrDataUrl={pairQrDataUrl}
+            pairQrSize={pairQrSize}
             pairingUrl={pairingUrl}
             pairingQrError={pairingQrError}
             relayMintFailure={relayMintFailure}

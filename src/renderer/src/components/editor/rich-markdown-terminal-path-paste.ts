@@ -14,7 +14,7 @@ function readClipboardText(event: ClipboardEvent, type: string): string {
 function getWindowsPathBasename(filePath: string): string {
   const normalized = filePath.replaceAll('/', '\\')
   const separatorIndex = normalized.lastIndexOf('\\')
-  return separatorIndex >= 0 ? normalized.slice(separatorIndex + 1) : normalized
+  return separatorIndex !== -1 ? normalized.slice(separatorIndex + 1) : normalized
 }
 
 function extractClipboardAnchors(html: string): ClipboardAnchor[] {

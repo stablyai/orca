@@ -1,6 +1,6 @@
 import { createElement, type ReactElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { RpcClient } from '../transport/rpc-client'
 import type { ConnectionState } from '../transport/types'
 import { MobileGitHistoryList } from './MobileGitHistoryList'
@@ -43,10 +43,6 @@ const compareResponse = {
 
 describe('MobileGitHistoryList', () => {
   let renderer: ReactTestRenderer | null = null
-
-  beforeEach(() => {
-    globalThis.IS_REACT_ACT_ENVIRONMENT = true
-  })
 
   afterEach(() => {
     act(() => renderer?.unmount())
