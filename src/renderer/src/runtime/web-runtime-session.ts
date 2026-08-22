@@ -19,10 +19,8 @@ import type {
   SleepingAgentLaunchConfig,
   AgentProviderSessionMetadata
 } from '../../../shared/agent-session-resume'
-import {
-  AGENT_SESSION_OMP_RESUME_PATH_RUNTIME_CAPABILITY,
-  BROWSER_TAB_CREATE_KNOWN_ID_RUNTIME_CAPABILITY
-} from '../../../shared/protocol-version'
+import { BROWSER_TAB_CREATE_KNOWN_ID_RUNTIME_CAPABILITY } from '../../../shared/protocol-version'
+import { agentResumeHostAuthorityCapability } from './agent-resume-host-authority-capability'
 import type {
   AgentLaunchPreferences,
   AgentPromptDelivery,
@@ -337,13 +335,15 @@ async function createWebRuntimeSessionTerminalResult(
                   })) as RuntimeRpcResponse<RuntimeCreateAgentSessionResult>
                 )
               )
+      const resumeHostAuthorityCapability =
+        args.agentSessionKind === 'resume' ? agentResumeHostAuthorityCapability(agent) : undefined
       const created = await runRemoteAgentSessionLaunch<{
         terminal: CreatedAgentTerminalIdentity
       }>({
         environmentId,
         ...(hostAuthority ? { hostAuthority } : {}),
-        ...(args.agentSessionKind === 'resume' && agent === 'omp'
-          ? { hostAuthorityCapability: AGENT_SESSION_OMP_RESUME_PATH_RUNTIME_CAPABILITY }
+        ...(resumeHostAuthorityCapability
+          ? { hostAuthorityCapability: resumeHostAuthorityCapability }
           : {}),
         legacy: async () => {
           const response = await callEnvironment({

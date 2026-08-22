@@ -288,8 +288,7 @@ export function getAgentResumeArgv(
     // resume commands, so local and remote resumes agree on one spelling.
     case 'copilot':
       return providerSession.key === 'session_id' ? ['copilot', `--resume=${id}`] : null
-    // Why: Kimi sessions are work-dir-scoped, so this only resumes from the pane's
-    // own cwd — which is where restore relaunches it.
+    // Why: Kimi resumes by id with --session; sessions are work-dir-scoped (enforced by callers).
     case 'kimi':
       return providerSession.key === 'session_id' ? ['kimi', '--session', id] : null
   }
