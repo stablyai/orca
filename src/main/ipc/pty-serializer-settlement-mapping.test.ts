@@ -66,8 +66,14 @@ vi.mock('../codex/codex-state-db-backfill-recovery', () =>
 )
 
 describe('registerPtyHandlers', () => {
-  const { handlers, mainWindow, mainWindowIpcEvent, foreignWindowIpcEvent, getPtyWriteListener } =
-    setupPtyIpcSuite()
+  const {
+    handlers,
+    mainWindow,
+    mainWindowIpcEvent,
+    foreignWindowIpcEvent,
+    getPtyWriteListener,
+    createMockProc
+  } = setupPtyIpcSuite()
 
   it('does not clear runtime-owned SSH reattach state on identity mismatch', async () => {
     type RuntimeSpawnController = {
@@ -527,6 +533,49 @@ describe('registerPtyHandlers', () => {
     })
     expect(hasPendingRendererSerializerForPaneKey(paneKey)).toBe(false)
     expect(spawnController.hasRendererSerializer?.(result.id)).toBe(true)
+  })
+  it('lets the recorded renderer clear a pending serializer after physical exit', async () => {
+    type RuntimeSpawnController = {
+      hasRendererSerializer?(ptyId: string): boolean
+    }
+    let controller: RuntimeSpawnController | null = null
+    const runtime = {
+      setPtyController: vi.fn((value) => {
+        controller = value
+      }),
+      preAllocateHandleForPty: vi.fn(() => null),
+      registerPty: vi.fn(),
+      noteTerminalSpawnCommand: vi.fn(),
+      onPtySpawned: vi.fn(),
+      onPtyExit: vi.fn(),
+      onPtyData: vi.fn()
+    }
+    const mockProc = createMockProc()
+    spawnMock.mockReturnValue(mockProc.proc)
+    registerPtyHandlers(mainWindow as never, runtime as never)
+    const spawnController = controller as unknown as RuntimeSpawnController
+    const tabId = 'tab-serializer-exit'
+    const leafId = '99999999-9999-4999-8999-999999999999'
+    const paneKey = makePaneKey(tabId, leafId)
+    const gen = (await handlers.get('pty:declarePendingPaneSerializer')!(mainWindowIpcEvent, {
+      paneKey
+    })) as number
+    const result = (await handlers.get('pty:spawn')!(mainWindowIpcEvent, {
+      cols: 80,
+      rows: 24,
+      worktreeId: 'wt-serializer-exit',
+      tabId,
+      leafId,
+      env: { ORCA_PANE_KEY: paneKey }
+    })) as { id: string }
+
+    mockProc.emitExit(0)
+    expect(ptyRendererOwners.getOwner(result.id)).toBeNull()
+    expect(hasPendingRendererSerializerForPaneKey(paneKey)).toBe(true)
+    await handlers.get('pty:clearPendingPaneSerializer')!(mainWindowIpcEvent, { paneKey, gen })
+
+    expect(hasPendingRendererSerializerForPaneKey(paneKey)).toBe(false)
+    expect(spawnController.hasRendererSerializer?.(result.id)).toBe(false)
   })
   it('rejects pending serializer declaration from an obsolete frame', async () => {
     registerPtyHandlers(mainWindow as never)

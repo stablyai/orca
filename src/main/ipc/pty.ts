@@ -8297,9 +8297,25 @@ export function registerPtyHandlers(
       if (!sender) {
         return
       }
-      if (settlePendingPaneSerializer(args.paneKey, args.gen, sender)) {
-        pendingPtyIdBySerializerGeneration.delete(args.gen)
+      const pending = pendingByPaneKey.get(args.paneKey)
+      if (pending?.gen !== args.gen || pending.ownerWebContents !== sender) {
+        return
       }
+      const generationPtyId = pendingPtyIdBySerializerGeneration.get(args.gen)
+      const panePtyId = paneKeyPtyId.get(args.paneKey)
+      if (
+        (generationPtyId &&
+          ptyRendererOwners.getOwner(generationPtyId) &&
+          !ptyRendererOwners.owns(generationPtyId, sender)) ||
+        (panePtyId &&
+          panePtyId !== generationPtyId &&
+          ptyRendererOwners.getOwner(panePtyId) &&
+          !ptyRendererOwners.owns(panePtyId, sender))
+      ) {
+        return
+      }
+      pendingByPaneKey.delete(args.paneKey)
+      pendingPtyIdBySerializerGeneration.delete(args.gen)
     }
   )
 
