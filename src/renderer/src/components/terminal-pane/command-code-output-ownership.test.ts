@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import { canAgentOutputOwnPane, canCommandCodeOutputOwnPane } from './command-code-output-ownership'
+import { canAgentOutputOwnPane } from './command-code-output-ownership'
+
+const canCommandCodeOutputOwnPane = (
+  args: Omit<Parameters<typeof canAgentOutputOwnPane>[0], 'agent'>
+): boolean => canAgentOutputOwnPane({ agent: 'command-code', ...args })
 
 describe('canAgentOutputOwnPane', () => {
   it('gates a scraped status on the pane belonging to that agent', () => {

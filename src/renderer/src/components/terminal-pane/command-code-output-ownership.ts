@@ -21,12 +21,3 @@ export function canAgentOutputOwnPane(args: {
       : (args.retainedPaneOwnerAgent ?? args.paneOwnerAgent)
   return !paneOwnerAgent || paneOwnerAgent === 'unknown' || paneOwnerAgent === args.agent
 }
-
-export function canCommandCodeOutputOwnPane(args: {
-  foregroundAgent?: TuiAgent | null
-  shellForeground?: boolean
-  paneOwnerAgent?: AgentType | null
-  retainedPaneOwnerAgent?: AgentType | null
-}): boolean {
-  return canAgentOutputOwnPane({ agent: 'command-code', ...args })
-}

@@ -84,6 +84,26 @@ describe('createBobOutputStatusDetector', () => {
     expect(onWaiting).toHaveBeenCalledWith('use the docs skill')
   })
 
+  it('reports done after an approval with no spinner in between', () => {
+    // Why: rejecting the approval (or a turn whose last action was the approval)
+    // returns straight to the composer; the row must still complete.
+    const { instance, onWaiting, onDone } = detector()
+    instance.observe(IDLE_COMPOSER)
+    instance.observe(PROMPT_ECHO + SPINNER_FRAME)
+    instance.observe(APPROVAL)
+    expect(onWaiting).toHaveBeenCalledTimes(1)
+    expect(instance.observe(IDLE_COMPOSER)).toBe(true)
+    expect(onDone).toHaveBeenCalledWith('Run the shell command then reply with exactly: FINISHED')
+  })
+
+  it('does not read a prompt mentioning the skill approval as waiting', () => {
+    const { instance, onWaiting, onWorking } = detector()
+    instance.observe(IDLE_COMPOSER)
+    instance.observe(` ❯ explain what 'Allow Bob to use this skill' means\n${SPINNER_FRAME}`)
+    expect(onWaiting).not.toHaveBeenCalled()
+    expect(onWorking).toHaveBeenCalledWith("explain what 'Allow Bob to use this skill' means")
+  })
+
   it('seeds from an in-flight turn so a parked pane can settle to done', () => {
     const { instance, onDone } = detector({ inFlightTurn: { prompt: 'fix the tests' } })
     expect(instance.observe(IDLE_COMPOSER)).toBe(true)

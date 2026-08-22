@@ -30,8 +30,8 @@ export type ParkedTerminalCommandStatusPolicy = {
   dispose: () => void
 }
 
-// Why only 'working': an in-flight turn is the one state a recreated detector can still
-// resolve, and it proves the Command Code TUI is live — a stale 'done' row would arm the
+// Why only in-flight states (working / waiting): those are what a recreated detector
+// can still resolve, and they prove the TUI is live — a stale 'done' row would arm the
 // scrape against whatever process replaced it. Shared by parked watchers and the reveal
 // remount, which both recreate the detector long past the banner.
 export function readInFlightAgentOutputTurn(
@@ -39,16 +39,7 @@ export function readInFlightAgentOutputTurn(
   agent: TuiAgent
 ): { prompt: string } | null {
   const entry = useAppStore.getState().agentStatusByPaneKey?.[paneKey]
-  // Why: a 'waiting' row is also an unfinished turn the recreated detector must resolve.
   if (entry?.agentType !== agent || (entry.state !== 'working' && entry.state !== 'waiting')) {
-    return null
-  }
-  return { prompt: entry.prompt }
-}
-
-export function readInFlightCommandCodeTurn(paneKey: string): { prompt: string } | null {
-  const entry = useAppStore.getState().agentStatusByPaneKey?.[paneKey]
-  if (entry?.agentType !== 'command-code' || entry.state !== 'working') {
     return null
   }
   return { prompt: entry.prompt }
@@ -132,7 +123,12 @@ export function createParkedTerminalCommandStatusPolicy(options: {
     }
     const currentState = useAppStore.getState()
     const currentEntry = currentState.agentStatusByPaneKey[paneKey]
-    if (currentEntry?.agentType !== agent || currentEntry.state !== 'working') {
+    // Why: a waiting (approval) row is the same unfinished turn; an approval that
+    // ends the turn returns to the composer with no spinner in between.
+    if (
+      currentEntry?.agentType !== agent ||
+      (currentEntry.state !== 'working' && currentEntry.state !== 'waiting')
+    ) {
       return
     }
     const currentPrompt = currentEntry.prompt.trim()

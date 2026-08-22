@@ -5,6 +5,7 @@ import type {
   RuntimePtyWorktreeRecord
 } from './runtime-terminal-state-records'
 import {
+  AGENT_OUTPUT_DONE_SETTLE_MS,
   AGENT_OUTPUT_STATUS_PROFILES,
   createAgentOutputStatusObserver
 } from '../../shared/agent-output-status-profiles'
@@ -20,30 +21,30 @@ export class OrcaRuntimeWithCreateTerminalSideEffectCommandCodeDetector extends 
   protected createTerminalSideEffectCommandCodeDetector(
     ptyId: string
   ): NonNullable<RuntimePtyTitleTrackerEntry['commandCodeDetector']> {
-    // Why: Command Code keeps its legacy fact kinds so what hosts publish for it
-    // is unchanged for older clients; other scraped agents use the generic kinds.
-    return createAgentOutputStatusObserver({
-      startupCommand: this.terminalSpawnCommandsByPtyId.get(ptyId) ?? null,
-      onWorking: (agent, prompt) => {
-        this.recordTerminalSideEffectFact(
-          ptyId,
-          agent === 'command-code'
-            ? { kind: 'command-code-working', prompt }
-            : { kind: 'agent-output-working', agent, prompt }
-        )
+    // Why: profiles that feed the prompt lifecycle are scraped by the always-on
+    // lifecycle observer (which also emits their facts), so each chunk is scanned
+    // once per profile. Command Code keeps its legacy fact kinds so what hosts
+    // publish for it is unchanged for older clients.
+    return createAgentOutputStatusObserver(
+      {
+        startupCommand: this.terminalSpawnCommandsByPtyId.get(ptyId) ?? null,
+        onWorking: (_agent, prompt) => {
+          this.recordTerminalSideEffectFact(ptyId, { kind: 'command-code-working', prompt })
+        },
+        onDone: (_agent, prompt) => {
+          this.recordTerminalSideEffectFact(ptyId, { kind: 'command-code-done', prompt })
+        }
       },
-      onDone: (agent, prompt) => {
-        this.recordTerminalSideEffectFact(
-          ptyId,
-          agent === 'command-code'
-            ? { kind: 'command-code-done', prompt }
-            : { kind: 'agent-output-done', agent, prompt }
-        )
-      },
-      onWaiting: (agent, prompt) => {
-        this.recordTerminalSideEffectFact(ptyId, { kind: 'agent-output-waiting', agent, prompt })
-      }
-    })
+      AGENT_OUTPUT_STATUS_PROFILES.filter((profile) => !profile.feedsPromptLifecycle)
+    )
+  }
+
+  protected clearAgentOutputIdleSettle(ptyId: string): void {
+    const timer = this.agentOutputIdleSettleTimersByPtyId.get(ptyId)
+    if (timer !== undefined) {
+      clearTimeout(timer)
+      this.agentOutputIdleSettleTimersByPtyId.delete(ptyId)
+    }
   }
 
   protected createPromptLifecycleOutputObserver(
@@ -56,9 +57,29 @@ export class OrcaRuntimeWithCreateTerminalSideEffectCommandCodeDetector extends 
     return createAgentOutputStatusObserver(
       {
         startupCommand: this.terminalSpawnCommandsByPtyId.get(ptyId) ?? null,
-        onWorking: () => this.recordAgentPromptLifecycleState(ptyId, 'working'),
-        onDone: () => this.recordAgentPromptLifecycleState(ptyId, 'idle'),
-        onWaiting: () => this.recordAgentPromptLifecycleState(ptyId, 'permission')
+        onWorking: (agent, prompt) => {
+          this.clearAgentOutputIdleSettle(ptyId)
+          this.recordTerminalSideEffectFact(ptyId, { kind: 'agent-output-working', agent, prompt })
+          this.recordAgentPromptLifecycleState(ptyId, 'working')
+        },
+        onDone: (agent, prompt) => {
+          this.recordTerminalSideEffectFact(ptyId, { kind: 'agent-output-done', agent, prompt })
+          // Why: the composer repaints mid-turn; like the renderer's done settle,
+          // only record idle if no working/waiting repaint arrives in the window.
+          this.clearAgentOutputIdleSettle(ptyId)
+          this.agentOutputIdleSettleTimersByPtyId.set(
+            ptyId,
+            setTimeout(() => {
+              this.agentOutputIdleSettleTimersByPtyId.delete(ptyId)
+              this.recordAgentPromptLifecycleState(ptyId, 'idle')
+            }, AGENT_OUTPUT_DONE_SETTLE_MS)
+          )
+        },
+        onWaiting: (agent, prompt) => {
+          this.clearAgentOutputIdleSettle(ptyId)
+          this.recordTerminalSideEffectFact(ptyId, { kind: 'agent-output-waiting', agent, prompt })
+          this.recordAgentPromptLifecycleState(ptyId, 'permission')
+        }
       },
       profiles
     )

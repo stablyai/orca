@@ -13,9 +13,8 @@ export const AGENT_OUTPUT_STATUS_PROFILES: readonly AgentOutputStatusProfile[] =
   BOB_OUTPUT_STATUS_PROFILE
 ]
 
-export function isOutputStatusAgent(agent: string | null | undefined): agent is TuiAgent {
-  return AGENT_OUTPUT_STATUS_PROFILES.some((profile) => profile.agent === agent)
-}
+/** Renderer done-settle and main's idle-settle share this window: these TUIs repaint the composer while tools run. */
+export const AGENT_OUTPUT_DONE_SETTLE_MS = 1500
 
 export type AgentOutputStatusObserverArgs = {
   startupCommand?: string | null

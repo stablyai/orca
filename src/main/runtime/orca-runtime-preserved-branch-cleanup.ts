@@ -108,6 +108,11 @@ export class OrcaRuntimeWithPreservedBranchCleanup extends OrcaRuntimeWithTermin
 
   protected readonly agentPromptSubmissionTailByPtyId = new Map<string, Promise<void>>()
 
+  protected readonly agentOutputIdleSettleTimersByPtyId = new Map<
+    string,
+    ReturnType<typeof setTimeout>
+  >()
+
   protected readonly agentPromptLifecycleByPtyId = new Map<
     string,
     { status: AgentStatus | null; workingSequence: number; updatedAt: number }

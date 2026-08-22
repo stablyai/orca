@@ -28,7 +28,7 @@ const BOB_IDLE_PROMPT_RE = new RegExp(`(?:^|[\\r\\n])\\s*❯\\s+${BOB_COMPOSER_P
 const BOB_WAITING_RES = [
   /(?:^|[\r\n])\s*→?\s*Approve Once\b/,
   /(?:^|[\r\n])\s*Approve commands:/,
-  /Allow Bob to use this skill/
+  /(?:^|[\r\n])\s*Allow Bob to use this skill\b/
 ] as const
 
 function isBobLaunchCommand(command: string | null | undefined): boolean {
@@ -40,7 +40,9 @@ function isBobLaunchCommand(command: string | null | undefined): boolean {
 }
 
 function rawTextMayContainBobBanner(rawText: string): boolean {
-  return rawText.includes('B') || rawText.includes('P')
+  // Why: the banner needs the composer placeholder or the steer hint; these
+  // substrings are rare in other output, so most chunks skip the strip+regex path.
+  return rawText.includes('Anything') || rawText.includes('steer')
 }
 
 function isBobIdlePromptCandidate(value: string): boolean {

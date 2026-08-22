@@ -53,7 +53,7 @@ const commandStatusPolicy = {
   onCommandCodeDone: vi.fn(),
   dispose: vi.fn()
 }
-// Partial mock: readInFlightCommandCodeTurn stays real so detector seeding reads the store.
+// Partial mock: readInFlightAgentOutputTurn stays real so detector seeding reads the store.
 vi.mock('./parked-terminal-command-status', async (importOriginal) => ({
   ...(await importOriginal<typeof ParkedTerminalCommandStatus>()),
   createParkedTerminalCommandStatusPolicy: vi.fn(() => commandStatusPolicy)

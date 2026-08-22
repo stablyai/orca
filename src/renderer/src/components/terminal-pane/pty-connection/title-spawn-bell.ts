@@ -189,7 +189,12 @@ export function installTitleSpawnBell(session: ConnectPanePtySession): void {
       }
       const currentState = useAppStore.getState()
       const currentEntry = currentState.agentStatusByPaneKey[session.cacheKey]
-      if (currentEntry?.agentType !== agent || currentEntry.state !== 'working') {
+      // Why: a waiting (approval) row is the same unfinished turn; an approval that
+      // ends the turn returns to the composer with no spinner in between.
+      if (
+        currentEntry?.agentType !== agent ||
+        (currentEntry.state !== 'working' && currentEntry.state !== 'waiting')
+      ) {
         return
       }
       const currentPrompt = currentEntry.prompt.trim()
