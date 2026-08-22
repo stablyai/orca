@@ -9,9 +9,9 @@ import {
 export const WSL_CODEX_AVAILABILITY_TIMEOUT_MS = 5_000
 export const WSL_CODEX_NOT_FOUND_MESSAGE = 'Codex CLI not found in the WSL login-shell PATH.'
 
-export function buildWslCodexAvailabilityArgs(distro: string): string[] {
-  const command = [buildCodexPathLookup(), '[ -n "$resolved" ]'].join('\n')
-  return buildWslCodexShellArgs(distro, command)
+/** Exits 0 only when `codex` resolves on the login PATH the runner supplies. */
+export function buildWslCodexAvailabilityScript(): string {
+  return [buildCodexPathLookup(), '[ -n "$resolved" ]'].join('\n')
 }
 
 export type WslCodexIdentityProbe = {
@@ -46,7 +46,11 @@ export function buildWslCodexIdentityProbe(distro: string): WslCodexIdentityProb
   }
 }
 
-export function buildWslCodexAppServerArgs(distro: string, linuxHomePath: string): string[] {
+export function buildWslCodexAppServerArgs(
+  distro: string,
+  linuxHomePath: string,
+  appServerArgs: readonly string[] = ['app-server']
+): string[] {
   const command = [
     buildCodexPathLookup(),
     'if [ -z "$resolved" ]; then',
@@ -54,7 +58,7 @@ export function buildWslCodexAppServerArgs(distro: string, linuxHomePath: string
     '  exit 127',
     'fi',
     `export CODEX_HOME=${quotePosixShell(linuxHomePath)}`,
-    'exec "$resolved" app-server'
+    `exec "$resolved" ${appServerArgs.map(quotePosixShell).join(' ')}`
   ].join('\n')
   return buildWslCodexShellArgs(distro, command)
 }

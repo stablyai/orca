@@ -1,6 +1,8 @@
 /* eslint-disable max-lines -- Why: cookie import is one pipeline (detect → decrypt → stage → swap) that must stay together to keep encryption/schema/staging in sync. */
 import { app, type BrowserWindow, dialog, session } from 'electron'
 import { execFileSync } from 'node:child_process'
+import { runProcessSync } from '../../shared/child-process/run-process'
+import { windowsPowerShellPath } from '../../shared/child-process/windows-system-binary'
 import { createDecipheriv, pbkdf2Sync, randomUUID } from 'node:crypto'
 import {
   appendFileSync,
@@ -1108,13 +1110,22 @@ function getWindowsEncryptionKey(browser: DetectedBrowser): EncryptionKeyResult 
       '[Convert]::ToBase64String($out)'
     ].join('')
 
-    const result = execFileSync(
-      'powershell',
-      ['-NoProfile', '-NonInteractive', '-Command', script],
-      { encoding: 'utf-8', timeout: 10_000, input: dpapiData }
-    ).trim()
+    // Why runProcessSync and an absolute path: a bare `powershell` spawn from a
+    // GUI-subsystem process opens a visible conhost that takes foreground, so
+    // keystrokes typed into an Orca terminal during a cookie import land in the
+    // black box (#14543), and PATH under Electron is not the user's (#11771).
+    const result = runProcessSync({
+      program: windowsPowerShellPath(),
+      args: ['-NoProfile', '-NonInteractive', '-Command', script],
+      timeoutMs: 10_000,
+      input: dpapiData
+    })
+    if (result.code !== 0 || result.timedOut) {
+      diag('  Windows DPAPI key extraction failed: PowerShell exited non-zero')
+      return null
+    }
 
-    return { key: Buffer.from(result, 'base64'), mode: 'aes-256-gcm' }
+    return { key: Buffer.from(result.stdout.trim(), 'base64'), mode: 'aes-256-gcm' }
   } catch (err) {
     diag(`  Windows DPAPI key extraction failed: ${String(err)}`)
     return null

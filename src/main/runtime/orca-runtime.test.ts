@@ -3299,11 +3299,12 @@ describe('OrcaRuntimeService', () => {
       leafId: HEADLESS_LEAF_ID,
       worktreeId: TEST_WORKTREE_ID
     })
+    // persistHostSessionBinding is no longer a per-call opt-in: createTerminal
+    // is host-initiated by construction and always persists its binding.
     expect(createTerminal).toHaveBeenCalledWith(`id:${TEST_WORKTREE_ID}`, {
       tabId,
       leafId: HEADLESS_LEAF_ID,
-      focus: false,
-      persistHostSessionBinding: true
+      focus: false
     })
   })
 
@@ -13728,8 +13729,7 @@ describe('OrcaRuntimeService', () => {
         command: 'codex',
         presentation: 'background',
         tabId,
-        leafId,
-        persistHostSessionBinding: true
+        leafId
       })
     ).rejects.toThrow('agent_session_exited_during_start')
     await expect(runtime.listTerminals(`id:${TEST_WORKTREE_ID}`)).resolves.toMatchObject({
@@ -14954,7 +14954,13 @@ describe('OrcaRuntimeService', () => {
     )
   })
 
-  it('keeps ordinary desktop background terminal persistence opt-in', async () => {
+  // Why (flipped by the aug20 "windows 2" incident): #8646 scoped the persisted
+  // binding to windowless promotion, which left a host-initiated terminal on a
+  // host running the full app with neither a persisted tab nor runtime
+  // ownership — unclassifiable, so graph sync pruned the tab off a live agent.
+  // The renderer adopts under the pre-minted tabId, so persisting early cannot
+  // fork a second tab; it only makes the host's own create durable.
+  it('persists the host session binding even when a window is attached', async () => {
     const spawn = vi.fn().mockResolvedValue({ id: 'pty-bg' })
     const runtime = new OrcaRuntimeService(store)
     const webContents = { send: vi.fn() }
@@ -14976,7 +14982,7 @@ describe('OrcaRuntimeService', () => {
     const spawnOptions = spawn.mock.calls[0]?.[0] as
       | { persistHostSessionBinding?: boolean }
       | undefined
-    expect(spawnOptions?.persistHostSessionBinding).toBeUndefined()
+    expect(spawnOptions?.persistHostSessionBinding).toBe(true)
   })
 
   it('falls back to background terminal creation for renderer-backed requests without a renderer window', async () => {
@@ -28885,7 +28891,6 @@ describe('OrcaRuntimeService', () => {
 
     const created = await runtime.createTerminal(`id:${TEST_WORKTREE_ID}`, {
       presentation: 'background',
-      persistHostSessionBinding: true,
       tabId,
       leafId,
       launchAgent: 'codex'

@@ -31,7 +31,10 @@ const PACKAGED_RUNTIME_PACKAGE_ROOTS = [
   'yaml',
   'zod'
 ]
-const WINDOWS_PACKAGED_RUNTIME_PACKAGE_ROOTS = ['windows-native-registry']
+const WINDOWS_PACKAGED_RUNTIME_PACKAGE_ROOTS = [
+  '@vscode/windows-process-tree',
+  'windows-native-registry'
+]
 
 const NODE_PTY_PREBUILD_PREFIX_BY_PLATFORM = {
   darwin: 'darwin-',

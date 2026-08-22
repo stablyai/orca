@@ -1,9 +1,10 @@
+import type { WslResult } from '../wsl/wsl-runner'
 import { posix as pathPosix } from 'node:path'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-const execFileMock = vi.hoisted(() => vi.fn())
+const runWslProcessMock = vi.hoisted(() => vi.fn())
 
-vi.mock('node:child_process', () => ({ execFile: execFileMock }))
+vi.mock('../wsl/wsl-runner', () => ({ runWslProcess: runWslProcessMock }))
 
 import { buildSkillDiscoverySources } from './skill-discovery-sources'
 import { discoverSkillsInWsl } from './skill-discovery-wsl'
@@ -12,15 +13,12 @@ function record(...fields: string[]): string {
   return `${fields.join('\0')}\0`
 }
 
-function completeExecFileCall(callIndex: number, stdout: string): void {
-  const callback = execFileMock.mock.calls[callIndex]?.[3] as
-    | ((error: Error | null, stdout: string) => void)
-    | undefined
-  callback?.(null, stdout)
+function wslResult(stdout: string): WslResult {
+  return { environmentResolved: true, code: 0, stdout, stderr: '', timedOut: false }
 }
 
 describe('WSL Claude plugin skill discovery', () => {
-  beforeEach(() => execFileMock.mockReset())
+  beforeEach(() => runWslProcessMock.mockReset())
 
   it('reads enabled plugin metadata and scans the selected install inside the distro', async () => {
     const homeDir = '/home/alice'
@@ -53,19 +51,13 @@ describe('WSL Claude plugin skill discovery', () => {
       record('R', String(baseRootCount), '1'),
       record('S', String(baseRootCount), skillPath, skillPath, '1700000000', markdown)
     ].join('')
-    execFileMock.mockImplementationOnce((..._args: unknown[]) => {
-      queueMicrotask(() => completeExecFileCall(0, metadataOutput))
-    })
-    execFileMock.mockImplementationOnce((..._args: unknown[]) => {
-      queueMicrotask(() => completeExecFileCall(1, scanOutput))
-    })
+    runWslProcessMock.mockResolvedValueOnce(wslResult(metadataOutput))
+    runWslProcessMock.mockResolvedValueOnce(wslResult(scanOutput))
 
     const result = await discoverSkillsInWsl({ distro: 'Ubuntu', homeDir, cwd })
 
-    expect(execFileMock).toHaveBeenCalledTimes(2)
-    const scanArgs = execFileMock.mock.calls[1]?.[1] as string[]
-    const encoded = /printf %s '([^']+)'/.exec(scanArgs[5] ?? '')?.[1]
-    const scanScript = Buffer.from(encoded ?? '', 'base64').toString('utf8')
+    expect(runWslProcessMock).toHaveBeenCalledTimes(2)
+    const scanScript = runWslProcessMock.mock.calls[1]?.[0].script as string
     expect(scanScript).toContain(`${installPath}/skills`)
     expect(result.skills).toEqual([
       expect.objectContaining({

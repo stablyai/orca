@@ -24,7 +24,8 @@ const mocks = vi.hoisted(() => ({
   moveUnifiedTabToGroup: vi.fn(),
   setRemoteBrowserPageHandle: vi.fn(),
   focusBrowserTabInWorktree: vi.fn(),
-  applyFreshWebSessionTabsSnapshot: vi.fn(),
+  applyWebSessionTabsSnapshot: vi.fn(),
+  decideWebSessionTabsSnapshot: vi.fn(() => ({ apply: true, settlesHostMirror: true })),
   acceptReplayedWebSessionTabsSnapshot: vi.fn(),
   resolveHostSessionTabIdForWebSessionTab: vi.fn(),
   trackTerminalPaneSplit: vi.fn(),
@@ -44,9 +45,13 @@ vi.mock('../store', () => ({
 
 vi.mock('./web-session-tabs-sync', () => ({
   acceptReplayedWebSessionTabsSnapshot: mocks.acceptReplayedWebSessionTabsSnapshot,
-  applyFreshWebSessionTabsSnapshot: mocks.applyFreshWebSessionTabsSnapshot,
-  applyWebSessionTabsStorePatch: (buildPatch: (state: unknown) => unknown) =>
-    mocks.setState(buildPatch),
+  applyWebSessionTabsSnapshot: mocks.applyWebSessionTabsSnapshot,
+  decideWebSessionTabsSnapshot: mocks.decideWebSessionTabsSnapshot,
+  applyWebSessionTabsStorePatch: (buildPatch: (state: unknown) => unknown) => {
+    mocks.setState(buildPatch)
+    // The production caller invokes the returned settle receipt.
+    return () => {}
+  },
   resolveHostSessionTabIdForWebSessionTab: mocks.resolveHostSessionTabIdForWebSessionTab
 }))
 
@@ -114,7 +119,7 @@ describe('createWebRuntimeSessionBrowserTab', () => {
     })
     resolveList({ id: 'list', ok: true, result: snapshot })
     await expect(pendingCreate).resolves.toBe(true)
-    await vi.waitFor(() => expect(mocks.applyFreshWebSessionTabsSnapshot).toHaveBeenCalledTimes(1))
+    await vi.waitFor(() => expect(mocks.applyWebSessionTabsSnapshot).toHaveBeenCalledTimes(1))
 
     expect(runtimeCall).toHaveBeenNthCalledWith(1, {
       selector: ENVIRONMENT_ID,
@@ -138,7 +143,7 @@ describe('createWebRuntimeSessionBrowserTab', () => {
       },
       timeoutMs: 15_000
     })
-    expect(mocks.applyFreshWebSessionTabsSnapshot).toHaveBeenCalledWith(
+    expect(mocks.applyWebSessionTabsSnapshot).toHaveBeenCalledWith(
       { state: 'before', activeWorktreeId: WORKTREE_ID },
       snapshot,
       ENVIRONMENT_ID
@@ -148,7 +153,7 @@ describe('createWebRuntimeSessionBrowserTab', () => {
       WORKTREE_ID
     )
     expect(mocks.acceptReplayedWebSessionTabsSnapshot.mock.invocationCallOrder[0]).toBeLessThan(
-      mocks.applyFreshWebSessionTabsSnapshot.mock.invocationCallOrder[0]!
+      mocks.applyWebSessionTabsSnapshot.mock.invocationCallOrder[0]!
     )
     expect(peekWebSessionFocusIntent({ environmentId: ENVIRONMENT_ID }, WORKTREE_ID)).toBeNull()
     expect(mocks.createBrowserTab).not.toHaveBeenCalled()
@@ -413,10 +418,10 @@ describe('createWebRuntimeSessionBrowserTab', () => {
       })
     ).resolves.toBe(true)
 
-    await vi.waitFor(() => expect(mocks.applyFreshWebSessionTabsSnapshot).toHaveBeenCalledTimes(1))
+    await vi.waitFor(() => expect(mocks.applyWebSessionTabsSnapshot).toHaveBeenCalledTimes(1))
 
     expect(mocks.setActiveWorktree).toHaveBeenCalledWith(WORKTREE_ID, RUNTIME_EXECUTION_HOST_ID)
-    expect(mocks.applyFreshWebSessionTabsSnapshot).toHaveBeenCalledWith(
+    expect(mocks.applyWebSessionTabsSnapshot).toHaveBeenCalledWith(
       { state: 'before-stage', activeWorktreeId: 'other-worktree' },
       snapshot,
       ENVIRONMENT_ID
@@ -590,7 +595,7 @@ describe('createWebRuntimeSessionBrowserTab', () => {
       })
     ).resolves.toBe(true)
 
-    await vi.waitFor(() => expect(mocks.applyFreshWebSessionTabsSnapshot).toHaveBeenCalledTimes(1))
+    await vi.waitFor(() => expect(mocks.applyWebSessionTabsSnapshot).toHaveBeenCalledTimes(1))
     expect(mocks.setRemoteBrowserPageHandle).not.toHaveBeenCalled()
   })
 })

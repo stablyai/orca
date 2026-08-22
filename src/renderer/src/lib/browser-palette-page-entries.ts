@@ -8,11 +8,17 @@ import {
   buildSearchableBrowserPageDocument,
   type SearchableBrowserPage
 } from './browser-palette-search'
+import {
+  findAmbiguousWorktreeIds,
+  getUnifiedTabPaletteExecutionHostId,
+  isUnifiedTabOwnedByWorktree
+} from './unified-tab-host-ownership'
 
 type BrowserPaletteActiveTabType = 'browser' | 'editor' | 'terminal' | 'simulator'
 
 export type BuildSearchableBrowserPagesOptions = {
   worktrees: readonly Worktree[]
+  ownershipWorktrees?: readonly Pick<Worktree, 'id'>[]
   repoMap: ReadonlyMap<string, { displayName?: string | null }>
   repoMapByHostIdentity?: ReadonlyMap<string, { displayName?: string | null }>
   worktreeOrder: ReadonlyMap<string, number>
@@ -28,6 +34,7 @@ export type BuildSearchableBrowserPagesOptions = {
 
 export function buildSearchableBrowserPages({
   worktrees,
+  ownershipWorktrees,
   repoMap,
   repoMapByHostIdentity,
   worktreeOrder,
@@ -40,6 +47,7 @@ export function buildSearchableBrowserPages({
   activeTabType
 }: BuildSearchableBrowserPagesOptions): SearchableBrowserPage[] {
   const entries: SearchableBrowserPage[] = []
+  const ambiguousWorktreeIds = findAmbiguousWorktreeIds(ownershipWorktrees ?? worktrees)
   for (const worktree of worktrees) {
     const repoName =
       resolvePaletteRepoForWorktree(worktree, repoMap, repoMapByHostIdentity)?.displayName ?? ''
@@ -48,12 +56,26 @@ export function buildSearchableBrowserPages({
       worktreeOrder.get(worktree.id) ??
       Number.MAX_SAFE_INTEGER
     const focusedAtByWorkspaceId = new Map<string, number>()
-    for (const tab of unifiedTabsByWorktree?.[worktree.id] ?? []) {
-      if (tab.contentType === 'browser' && tab.lastFocusedAt) {
+    const unifiedTabs = unifiedTabsByWorktree?.[worktree.id] ?? []
+    for (const tab of unifiedTabs) {
+      if (
+        tab.contentType === 'browser' &&
+        isUnifiedTabOwnedByWorktree(tab, worktree, ambiguousWorktreeIds) &&
+        tab.lastFocusedAt
+      ) {
         focusedAtByWorkspaceId.set(tab.entityId, tab.lastFocusedAt)
       }
     }
     for (const workspace of browserTabsByWorktree[worktree.id] ?? []) {
+      const unifiedTab = unifiedTabs.find(
+        (tab) =>
+          tab.contentType === 'browser' &&
+          tab.entityId === workspace.id &&
+          isUnifiedTabOwnedByWorktree(tab, worktree, ambiguousWorktreeIds)
+      )
+      if (!unifiedTab && ambiguousWorktreeIds.has(worktree.id)) {
+        continue
+      }
       const workspaceFocusedAt = focusedAtByWorkspaceId.get(workspace.id)
       for (const page of browserPagesByWorkspace[workspace.id] ?? []) {
         entries.push({
@@ -62,6 +84,7 @@ export function buildSearchableBrowserPages({
           worktree,
           repoName,
           worktreeSortIndex,
+          executionHostId: getUnifiedTabPaletteExecutionHostId(unifiedTab, worktree),
           isCurrentPage:
             isPaletteCurrentWorktree(worktree, activeWorktreeId, activeWorkspaceExecutionHostId) &&
             activeTabType === 'browser' &&

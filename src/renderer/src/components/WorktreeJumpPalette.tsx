@@ -101,8 +101,10 @@ import {
 } from '@/lib/browser-palette-search'
 import { buildSearchableBrowserPages } from '@/lib/browser-palette-page-entries'
 import {
+  buildPaletteWorktreeIndex,
   isPaletteCurrentWorktree,
-  resolvePaletteRepoForWorktree
+  resolvePaletteRepoForWorktree,
+  resolvePaletteWorktree
 } from '@/lib/palette-repo-resolution'
 import { activateBrowserPagePaletteResult } from '@/lib/browser-page-palette-activation'
 import { activateSimulatorTabPaletteResult } from '@/lib/simulator-tab-palette-activation'
@@ -139,11 +141,8 @@ import {
 import { RepoBadgeMark } from '@/components/repo/RepoBadgeLabel'
 import { buildSidebarHostOptions } from '@/components/sidebar/sidebar-host-options'
 import { getPaletteHostBadge } from '@/components/cmd-j/palette-host-badge'
-import {
-  composeWorktreeHostIdentity,
-  getWorktreeHostIdentity
-} from '../../../shared/worktree/host-qualified-identity'
-import { findRepoForHost, getRepoHostIdentity } from '@/store/slices/repo-host-identity'
+import { getWorktreeHostIdentity } from '../../../shared/worktree/host-qualified-identity'
+import { getRepoHostIdentity } from '@/store/slices/repo-host-identity'
 import type { Repo } from '../../../shared/repo-types'
 import {
   getSettingsFocusedExecutionHostId,
@@ -832,16 +831,12 @@ function WorktreeJumpPaletteContent({
     () => new Map(repos.map((repo) => [getRepoHostIdentity(repo), repo])),
     [repos]
   )
-  // Why not repoMap.get(worktree.repoId): one repo id can be registered on two hosts, so the
-  // bare map is last-wins and one side of the collision renders the other host's repo — wrong
-  // name, wrong badge, and a false SSH chip on a purely local workspace. Falls back to the
-  // bare lookup so a worktree with no host, or no repo on its host, keeps its badge.
+  // Why one resolver: a runtime-owned SSH row must not bypass fail-closed ownership through its physical host.
   const resolveRepoForWorktree = useCallback(
-    (worktree: Pick<Worktree, 'id' | 'repoId' | 'hostId'>): Repo | undefined =>
-      (worktree.hostId
-        ? findRepoForHost(repos, worktree.repoId, { hostId: worktree.hostId, settings })
-        : null) ?? resolvePaletteRepoForWorktree(worktree, repoMap, repoByHostIdentity),
-    [repoByHostIdentity, repoMap, repos, settings]
+    (
+      worktree: Pick<Worktree, 'id' | 'repoId' | 'hostId' | 'runtimeOwnerEnvironmentId'>
+    ): Repo | undefined => resolvePaletteRepoForWorktree(worktree, repoMap, repoByHostIdentity),
+    [repoByHostIdentity, repoMap]
   )
 
   const hostLabelOverrides = useMemo(() => getHostDisplayLabelOverrides(settings), [settings])
@@ -1070,34 +1065,16 @@ function WorktreeJumpPaletteContent({
     [hasQuery, browserSortedWorktrees, searchScopeWorktrees]
   )
 
-  // Why: browser search includes archived worktrees, so this map must cover all worktrees, not just non-archived.
-  // Why keyed on the host identity (STA-4343): `repoId::path` repeats across hosts, so a bare
-  // id lets the last host inserted win and both rows then resolve to the same workspace.
-  const worktreeMap = useMemo(() => {
-    const map = new Map<string, Worktree>()
-    for (const worktree of browserSortedWorktrees) {
-      map.set(getWorktreeHostIdentity(worktree), worktree)
-    }
-    return map
-  }, [browserSortedWorktrees])
-
-  // Why a bare-id fallback: rows built before a host was stamped carry none, and dropping
-  // them would be a worse regression than resolving them the old ambiguous way.
-  const worktreeByBareId = useMemo(() => {
-    const map = new Map<string, Worktree>()
-    for (const worktree of browserSortedWorktrees) {
-      if (!map.has(worktree.id)) {
-        map.set(worktree.id, worktree)
-      }
-    }
-    return map
-  }, [browserSortedWorktrees])
+  // Why browser search includes archived worktrees, so its host-qualified metadata index must too.
+  const paletteWorktreeIndex = useMemo(
+    () => buildPaletteWorktreeIndex(browserSortedWorktrees),
+    [browserSortedWorktrees]
+  )
 
   const resolveWorktree = useCallback(
     (worktreeId: string, hostId: ExecutionHostId | undefined): Worktree | undefined =>
-      worktreeMap.get(composeWorktreeHostIdentity(hostId, worktreeId)) ??
-      worktreeByBareId.get(worktreeId),
-    [worktreeByBareId, worktreeMap]
+      resolvePaletteWorktree(paletteWorktreeIndex, worktreeId, hostId),
+    [paletteWorktreeIndex]
   )
 
   const worktreeOrder = useMemo(
@@ -1191,6 +1168,7 @@ function WorktreeJumpPaletteContent({
     }
     return buildSearchableBrowserPages({
       worktrees: browserSortedWorktrees,
+      ownershipWorktrees: allWorktrees,
       repoMap,
       repoMapByHostIdentity: repoByHostIdentity,
       worktreeOrder,
@@ -1208,6 +1186,7 @@ function WorktreeJumpPaletteContent({
     activeTabType,
     activeWorktreeId,
     activeWorkspaceExecutionHostId,
+    allWorktrees,
     browserPagesByWorkspace,
     browserTabsByWorktree,
     browserSortedWorktrees,
@@ -1228,6 +1207,7 @@ function WorktreeJumpPaletteContent({
     }
     return buildSearchableSimulatorTabs({
       worktrees: browserSortedWorktrees,
+      ownershipWorktrees: allWorktrees,
       repoMap,
       repoMapByHostIdentity: repoByHostIdentity,
       worktreeOrder,
@@ -1244,6 +1224,7 @@ function WorktreeJumpPaletteContent({
     activeTabType,
     activeWorktreeId,
     activeWorkspaceExecutionHostId,
+    allWorktrees,
     browserSortedWorktrees,
     groupsByWorktree,
     repoMap,
@@ -1263,6 +1244,7 @@ function WorktreeJumpPaletteContent({
     }
     return buildSearchableWorkspaceTabs({
       worktrees: browserSortedWorktrees,
+      ownershipWorktrees: allWorktrees,
       repoMap,
       repoMapByHostIdentity: repoByHostIdentity,
       worktreeOrder,
@@ -1298,6 +1280,7 @@ function WorktreeJumpPaletteContent({
     activeWorktreeId,
     activeWorkspaceExecutionHostId,
     agentStatusByPaneKey,
+    allWorktrees,
     browserSortedWorktrees,
     groupsByWorktree,
     openFiles,

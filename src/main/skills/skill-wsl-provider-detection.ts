@@ -1,4 +1,4 @@
-import { execFile } from 'node:child_process'
+import { runWslProcess } from '../wsl/wsl-runner'
 
 const DETECTION_SCRIPT = [
   'set -eu',
@@ -6,21 +6,24 @@ const DETECTION_SCRIPT = [
   'command -v claude >/dev/null 2>&1 && printf "claude\\n" || true'
 ].join('\n')
 
-export function detectSkillProvidersInWsl(distro: string): Promise<string[]> {
-  return new Promise((resolve, reject) => {
-    execFile(
-      'wsl.exe',
-      ['-d', distro, '--exec', 'sh', '-c', DETECTION_SCRIPT],
-      { encoding: 'utf8', timeout: 10_000, windowsHide: true },
-      (error, stdout) => {
-        if (error) {
-          reject(new Error('skill-install-wsl-provider-detection-failed'))
-          return
-        }
-        resolve(
-          stdout.split(/\r?\n/u).filter((provider) => provider === 'codex' || provider === 'claude')
-        )
-      }
-    )
-  })
+export async function detectSkillProvidersInWsl(distro: string): Promise<string[]> {
+  let result
+  try {
+    // Why probe: a bare `sh -c` has no login shell, so a PATH built by nvm/mise
+    // rc files never applies and an installed codex/claude reads as absent.
+    result = await runWslProcess({
+      distro,
+      lane: 'probe',
+      script: DETECTION_SCRIPT,
+      timeoutMs: 10_000
+    })
+  } catch {
+    throw new Error('skill-install-wsl-provider-detection-failed')
+  }
+  if (result.code !== 0) {
+    throw new Error('skill-install-wsl-provider-detection-failed')
+  }
+  return result.stdout
+    .split(/\r?\n/u)
+    .filter((provider) => provider === 'codex' || provider === 'claude')
 }

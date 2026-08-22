@@ -215,6 +215,7 @@ import type {
   SkillUploadChunkRequest
 } from '../../shared/skill-upload-session-contract'
 import { SkillUploadSessionService } from '../skills/skill-upload-session-service'
+import { SKILL_UPLOAD_STAGING_ROOT_NAME } from '../skills/skill-upload-staging-ownership'
 import type { SkillSshWorkspaceAuthority } from '../../shared/skill-ssh-relay-contract'
 import {
   installSkillBundleOnSshHost,
@@ -612,6 +613,7 @@ import {
   resolveCustomWorktreeVisibilitySources,
   type WorktreeVisibilitySourceMatcher
 } from '../../shared/worktree/visibility-sources'
+import { resolveConfiguredWorktreeBasePaths } from '../../shared/worktree/configured-worktree-base-path'
 import {
   BROWSER_HEADLESS_RUNTIME_CAPABILITY,
   BROWSER_CERTIFICATE_TRUST_RUNTIME_CAPABILITY,
@@ -905,6 +907,7 @@ import {
   sanitizeLinearErrorMessage
 } from '../linear/issue-context-errors'
 import { listMcpIssues } from '../linear/mcp-issue-list'
+import { linearPriorityLabel } from '../../shared/linear/priority-label'
 import { writeIssueRelation } from '../linear/issue-relation-write'
 import {
   createProject as createLinearProject,
@@ -1561,7 +1564,6 @@ type TerminalCreateOptions = {
   sessionId?: string
   isNewSession?: boolean
   preAllocatedHandle?: string
-  persistHostSessionBinding?: boolean
   // Why: only the host-derived structured resume path may attach provider
   // identity; opaque terminal.create commands remain ordinary shells.
   agentSessionClaim?: AgentSessionExecutionClaim
@@ -3669,6 +3671,7 @@ export class OrcaRuntimeService {
   private skillCloudService: SkillCloudService | null = null
   private agentSkillShareInProgress = false
   private skillUploadSessions: SkillUploadSessionService | null = null
+  private skillUploadSessionsDisposed = false
   private readonly skillTransactionRecovery: Promise<unknown>
   private readonly skillInstallOperations = new Map<string, AbortController>()
   private readonly skillInstallProgress = new Map<string, SkillBundleInstallProgress>()
@@ -5704,10 +5707,20 @@ export class OrcaRuntimeService {
   }
 
   private requireSkillUploadSessions(): SkillUploadSessionService {
+    if (this.skillUploadSessionsDisposed) {
+      throw new Error('skill-upload-service-disposed')
+    }
     this.skillUploadSessions ??= new SkillUploadSessionService(
-      join(app.getPath('userData'), 'skill-installs', 'remote-uploads')
+      join(app.getPath('userData'), 'skill-installs', SKILL_UPLOAD_STAGING_ROOT_NAME)
     )
     return this.skillUploadSessions
+  }
+
+  async disposeSkillUploadSessions(): Promise<void> {
+    this.skillUploadSessionsDisposed = true
+    const sessions = this.skillUploadSessions
+    this.skillUploadSessions = null
+    await sessions?.dispose()
   }
 
   getRuntimeId(): string {
@@ -18398,9 +18411,7 @@ export class OrcaRuntimeService {
     const recovery = this.createTerminal(`id:${expectedWorktreeId}`, {
       tabId: parsed.tabId,
       leafId: parsed.leafId,
-      focus: false,
-      // Why: the HUB renderer may publish its exited layout while recovery is in flight; persist the replacement before that stale graph can orphan it.
-      persistHostSessionBinding: true
+      focus: false
     }).then((terminal) => ({
       handle: terminal.handle,
       tabId: parsed.tabId,
@@ -23339,7 +23350,8 @@ export class OrcaRuntimeService {
       const repoOwnerCount = store.getRepos().filter((candidate) => candidate.id === repo.id).length
       const matcher = createWorktreeVisibilitySourceMatcher(
         [repo.path, ...worktrees.map((worktree) => worktree.path)],
-        resolveCustomWorktreeVisibilitySources(repo, visibilityDefaults)
+        resolveCustomWorktreeVisibilitySources(repo, visibilityDefaults),
+        resolveConfiguredWorktreeBasePaths(repo)
       )
       const detected = worktrees.map((worktree) =>
         this.toRuntimeDetectedWorktree(
@@ -23368,7 +23380,8 @@ export class OrcaRuntimeService {
     }
     const worktreeVisibilitySourceMatcher = createWorktreeVisibilitySourceMatcher(
       [repo.path, ...scan.worktrees.map((worktree) => worktree.path)],
-      resolveCustomWorktreeVisibilitySources(repo, visibilityDefaults)
+      resolveCustomWorktreeVisibilitySources(repo, visibilityDefaults),
+      resolveConfiguredWorktreeBasePaths(repo)
     )
     const expectedHostId = getRepoExecutionHostId(repo)
     const repoOwnerCount = store.getRepos().filter((candidate) => candidate.id === repo.id).length
@@ -23480,7 +23493,8 @@ export class OrcaRuntimeService {
           repo.id,
           createWorktreeVisibilitySourceMatcher(
             [repo.path, ...(checkoutPathsByRepoId.get(repo.id) ?? [])],
-            resolveCustomWorktreeVisibilitySources(repo, visibilityDefaults)
+            resolveCustomWorktreeVisibilitySources(repo, visibilityDefaults),
+            resolveConfiguredWorktreeBasePaths(repo)
           )
         ])
     )
@@ -27783,7 +27797,6 @@ export class OrcaRuntimeService {
       presentation: request.presentation ?? 'background',
       tabId: request.placement?.tabId,
       leafId: request.placement?.leafId,
-      persistHostSessionBinding: true,
       agentSessionClaim: claim,
       signal: _caller.signal
     })
@@ -27971,7 +27984,6 @@ export class OrcaRuntimeService {
           leafId: operationLeafId,
           preAllocatedHandle: operationHandle,
           viewMode: request.viewMode,
-          persistHostSessionBinding: true,
           agentSessionCreateOperationId: executionOperationId,
           signal: caller.signal,
           onPtySpawnCommitted: () => {
@@ -28193,10 +28205,6 @@ export class OrcaRuntimeService {
         if (launchOpts.signal?.aborted) {
           throw new Error('client_disconnected')
         }
-        const persistHostSessionBinding =
-          launchOpts.persistHostSessionBinding ||
-          launchOpts.surfaceOwner === false ||
-          this.getAvailableAuthoritativeWindow() === null
         let result: Awaited<ReturnType<NonNullable<RuntimePtyController['spawn']>>>
         try {
           result = await this.ptyController.spawn({
@@ -28245,12 +28253,10 @@ export class OrcaRuntimeService {
             ...(adoptedBeforeLaunch ? { adoptedStablePane: adoptedBeforeLaunch } : {}),
             ...(launchOpts.sessionId ? { sessionId: launchOpts.sessionId } : {}),
             ...(!adoptedBeforeLaunch && launchOpts.isNewSession ? { isNewSession: true } : {}),
-            // Why: a headless-created pane has no renderer session writer. Persist
-            // its tab/leaf binding at spawn so a later promoted window reattaches
-            // the live daemon or SSH PTY instead of replacing it with a fresh one.
-            // Re-check freshly: the entry-time snapshot can go stale across the
-            // awaits above if the authoritative window is destroyed mid-spawn.
-            ...(persistHostSessionBinding ? { persistHostSessionBinding: true } : {})
+            // Why: a host-initiated create has no renderer session writer, so
+            // without its own binding graph sync cannot classify the terminal
+            // and prunes the tab out from under a running agent.
+            persistHostSessionBinding: true
           })
         } finally {
           releaseStablePaneCreate?.()
@@ -28290,9 +28296,9 @@ export class OrcaRuntimeService {
         })
         const pty = this.getOrCreatePtyWorktreeRecord(result.id)
         if (pty) {
-          if (persistHostSessionBinding) {
-            pty.runtimeSessionOwned = true
-          }
+          // Released again by releaseRuntimeSessionOwnershipForRendererRetiredTabs
+          // once the renderer de-persists the tab, i.e. when the user closes it.
+          pty.runtimeSessionOwned = true
           if (!adoptedStablePane) {
             if (launchOpts.title) {
               const observedAt = this.nextTitleObservationSequence()
@@ -29038,7 +29044,6 @@ export class OrcaRuntimeService {
           ? { sessionId: stableSessionId }
           : {}),
       ...(isNewSession ? { isNewSession: true } : {}),
-      persistHostSessionBinding: true,
       // Why: this method publishes the authoritative snapshot below; skip the intermediate publish to avoid a wrong-group flash.
       deferMobileSessionPublish: true,
       signal: opts.signal
@@ -35862,14 +35867,16 @@ export class OrcaRuntimeService {
         code: this.linearWorkspaceErrorCode(error.type),
         message: sanitizeLinearErrorMessage(error.message)
       }))
+      const hasMore = result.hasMore === true || result.items.length > limit
       return {
         projects,
+        truncated: hasMore,
         meta: {
           query: params.query,
           workspaceId: params.workspaceId,
           limit,
           returned: projects.length,
-          hasMore: result.hasMore === true || result.items.length > limit,
+          hasMore,
           partial: workspaceErrors.length > 0,
           workspaceErrors
         }
@@ -35909,11 +35916,13 @@ export class OrcaRuntimeService {
           estimate: issue.estimate,
           dueDate: issue.dueDate,
           updatedAt: issue.updatedAt,
+          priorityLabel: linearPriorityLabel(issue.priority),
           workspace: {
             id: issue.workspaceId ?? workspaceId ?? '',
             name: issue.workspaceName ?? issue.workspaceId ?? workspaceId ?? ''
           }
         })),
+        truncated: result.hasMore === true,
         meta: {
           filter,
           workspaceId,

@@ -7,7 +7,6 @@ import {
 } from '../../shared/setup-agent-sequencing'
 import {
   addOrcaWslInteropEnv,
-  addWorktreeSetupWslInteropEnv,
   stampWslOrchestrationCompatibilityHost
 } from './wsl-orca-env'
 
@@ -248,18 +247,3 @@ describe('addOrcaWslInteropEnv', () => {
   })
 })
 
-describe('addWorktreeSetupWslInteropEnv', () => {
-  it('registers only setup vars, sharing the /u-vs-/p flag logic with the PTY path (#9206)', () => {
-    const env: Record<string, string | undefined> = {
-      ORCA_ROOT_PATH: '/mnt/c/Users/jin/repo',
-      ORCA_WORKTREE_PATH: 'C:\\Users\\jin\\repo-worktrees\\fix-1',
-      ORCA_WORKSPACE_NAME: 'fix-1',
-      // Terminal-only vars must not leak into runHook's WSLENV.
-      ORCA_TERMINAL_HANDLE: 'term_wsl'
-    }
-
-    addWorktreeSetupWslInteropEnv(env)
-
-    expect(env.WSLENV).toBe('ORCA_ROOT_PATH/u:ORCA_WORKTREE_PATH/p:ORCA_WORKSPACE_NAME/u')
-  })
-})

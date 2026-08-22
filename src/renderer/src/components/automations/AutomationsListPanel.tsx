@@ -31,6 +31,10 @@ import type {
 import { AutomationListTableHeader } from './AutomationListTableHeader'
 import { AutomationListToolbar } from './AutomationListToolbar'
 import { indexLatestAutomationRuns } from './automation-list-last-run'
+import {
+  getAutomationListArrowNavigationTarget,
+  type AutomationListArrowKey
+} from './automation-list-keyboard-navigation'
 
 type AutomationsListPanelProps = {
   hasListItems: boolean
@@ -125,6 +129,62 @@ export function AutomationsListPanel({
   // Why: one pass over runs for the whole list — each row renders its own
   // component, so indexing per row would be O(rows × runs) on every re-render.
   const lastRunByAutomationId = React.useMemo(() => indexLatestAutomationRuns(runs), [runs])
+  const listScrollRef = React.useRef<HTMLDivElement>(null)
+  const pendingKeyboardScrollRef = React.useRef(false)
+
+  const handleSearchArrowNavigate = React.useCallback(
+    (key: AutomationListArrowKey) => {
+      const next = getAutomationListArrowNavigationTarget({
+        items: visibleItems,
+        selectedId,
+        selectedExternalKey,
+        key
+      })
+      if (!next) {
+        return
+      }
+      const alreadySelected =
+        next.kind === 'local'
+          ? selectedExternalKey === null && selectedId === next.id
+          : selectedExternalKey === next.id
+      if (alreadySelected) {
+        listScrollRef.current
+          ?.querySelector('[data-current="true"]')
+          ?.scrollIntoView({ block: 'nearest' })
+        return
+      }
+      pendingKeyboardScrollRef.current = true
+      // Why: arrows only move the highlight — detail is a full-page drill-in that
+      // unmounts this list, so opening it here would end navigation on first press.
+      if (next.kind === 'local') {
+        selectExternalKey(null)
+        selectAutomationId(next.id)
+      } else {
+        selectAutomationId(null)
+        selectExternalKey(next.id)
+        // External items have no runs tab; keep the pane tab valid for the next open.
+        setActivePaneTab('overview')
+      }
+    },
+    [
+      selectAutomationId,
+      selectExternalKey,
+      selectedExternalKey,
+      selectedId,
+      setActivePaneTab,
+      visibleItems
+    ]
+  )
+
+  React.useEffect(() => {
+    if (!pendingKeyboardScrollRef.current) {
+      return
+    }
+    pendingKeyboardScrollRef.current = false
+    listScrollRef.current
+      ?.querySelector('[data-current="true"]')
+      ?.scrollIntoView({ block: 'nearest' })
+  }, [selectedExternalKey, selectedId])
 
   return (
     <section
@@ -173,6 +233,7 @@ export function AutomationsListPanel({
             listSearchQuery={listSearchQuery}
             isListSearchQueryTooLarge={isListSearchQueryTooLarge}
             onListSearchQueryChange={onListSearchQueryChange}
+            onSearchArrowNavigate={handleSearchArrowNavigate}
             filter={listFilter}
             onFilterChange={onListFilterChange}
             onRefresh={onRefresh}
@@ -181,6 +242,7 @@ export function AutomationsListPanel({
           />
 
           <div
+            ref={listScrollRef}
             className={cn(
               'scrollbar-sleek min-h-0 flex-1 overflow-auto',
               LIST_TABLE_CONTAINER_CLASS

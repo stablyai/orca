@@ -101,7 +101,8 @@ export function listFilesWithRg(
         // stop working.
         const child = spawn('rg', ['--no-messages', ...args], {
           cwd: rootPath,
-          stdio: ['ignore', 'pipe', 'pipe']
+          stdio: ['ignore', 'pipe', 'pipe'],
+          windowsHide: true
         })
         let timer: ReturnType<typeof setTimeout> | null = null
         const cleanup = (): void => {

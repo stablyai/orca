@@ -62,7 +62,9 @@ if (ignoreModules.length > 0) {
 const NATIVE_MODULES = [
   'node-pty',
   'cpu-features',
-  ...(rebuildPlatform === 'win32' ? ['windows-native-registry'] : [])
+  ...(rebuildPlatform === 'win32'
+    ? ['windows-native-registry', '@vscode/windows-process-tree']
+    : [])
 ]
 const onlyModules = NATIVE_MODULES.filter((m) => !ignoreModules.includes(m))
 const forceRebuild =
