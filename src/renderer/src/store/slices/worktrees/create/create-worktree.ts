@@ -113,6 +113,7 @@ export function createCreateWorktree(
             ...(linkedWorkItem !== undefined ? { linkedWorkItem } : {}),
             ...(linkedTaskSourceContext !== undefined ? { linkedTaskSourceContext } : {}),
             ...(startup ? { startup } : {}),
+            ...(startupDraft ? { startupDraft } : {}),
             ...(creationId ? { creationId } : {}),
             ...(automationProvenanceRequest ? { automationProvenanceRequest } : {})
           }

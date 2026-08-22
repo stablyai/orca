@@ -214,6 +214,7 @@ describe('createWorktree base status merge', () => {
         undefined,
         undefined,
         {
+          startupDraft: 'https://github.com/stablyai/orca/issues/42',
           provisionedRoot: {
             runtimeId: 'runtime-1',
             executionHostId: 'ssh:runtime-ssh-runtime-1',
@@ -227,7 +228,8 @@ describe('createWorktree base status merge', () => {
         repoId: 'repo1',
         runtimeId: 'runtime-1',
         executionHostId: 'ssh:runtime-ssh-runtime-1',
-        expectedPath: '/workspace/repo'
+        expectedPath: '/workspace/repo',
+        startupDraft: 'https://github.com/stablyai/orca/issues/42'
       })
     )
     expect(mockApi.worktrees.create).not.toHaveBeenCalled()
