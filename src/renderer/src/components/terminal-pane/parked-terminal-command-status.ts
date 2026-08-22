@@ -17,12 +17,16 @@ import {
   openCommandCodeDoneSettle,
   setCommandCodeDoneSettleExecutor
 } from './command-code-done-settle'
-import { canCommandCodeOutputOwnPane } from './command-code-output-ownership'
+import { canAgentOutputOwnPane } from './command-code-output-ownership'
+import type { TuiAgent } from '../../../../shared/tui-agent'
 
 export type ParkedTerminalCommandStatusPolicy = {
   onCommandFinished: (bestEffortExitCode: number | null) => void
   onCommandCodeWorking: (prompt: string) => void
   onCommandCodeDone: (prompt: string) => void
+  onAgentOutputWorking: (agent: TuiAgent, prompt: string) => void
+  onAgentOutputDone: (agent: TuiAgent, prompt: string) => void
+  onAgentOutputWaiting: (agent: TuiAgent, prompt: string) => void
   dispose: () => void
 }
 
@@ -30,6 +34,18 @@ export type ParkedTerminalCommandStatusPolicy = {
 // resolve, and it proves the Command Code TUI is live — a stale 'done' row would arm the
 // scrape against whatever process replaced it. Shared by parked watchers and the reveal
 // remount, which both recreate the detector long past the banner.
+export function readInFlightAgentOutputTurn(
+  paneKey: string,
+  agent: TuiAgent
+): { prompt: string } | null {
+  const entry = useAppStore.getState().agentStatusByPaneKey?.[paneKey]
+  // Why: a 'waiting' row is also an unfinished turn the recreated detector must resolve.
+  if (entry?.agentType !== agent || (entry.state !== 'working' && entry.state !== 'waiting')) {
+    return null
+  }
+  return { prompt: entry.prompt }
+}
+
 export function readInFlightCommandCodeTurn(paneKey: string): { prompt: string } | null {
   const entry = useAppStore.getState().agentStatusByPaneKey?.[paneKey]
   if (entry?.agentType !== 'command-code' || entry.state !== 'working') {
@@ -63,7 +79,7 @@ export function createParkedTerminalCommandStatusPolicy(options: {
     })
   }
 
-  const canApplyCommandCodeOutputStatus = (): boolean => {
+  const canApplyAgentOutputStatus = (agent: TuiAgent): boolean => {
     const state = useAppStore.getState()
     const tab = (state.tabsByWorktree[worktreeId] ?? []).find((entry) => entry.id === tabId)
     const foreground = state.paneForegroundAgentByPaneKey[paneKey]
@@ -72,7 +88,8 @@ export function createParkedTerminalCommandStatusPolicy(options: {
       startupLaunchAgent: state.agentLaunchConfigByPaneKey[paneKey]?.identity.agentType,
       hookAgent: state.agentStatusByPaneKey[paneKey]?.agentType
     })
-    return canCommandCodeOutputOwnPane({
+    return canAgentOutputOwnPane({
+      agent,
       foregroundAgent: foreground?.agent,
       shellForeground: foreground?.shellForeground,
       paneOwnerAgent,
@@ -108,14 +125,14 @@ export function createParkedTerminalCommandStatusPolicy(options: {
   }
 
   // Complete the row only while it is still this turn's command-code/working entry.
-  const settleCommandCodeDone = (normalizedPrompt: string): void => {
+  const settleAgentOutputDone = (normalizedPrompt: string, agent: TuiAgent): void => {
     const routing = resolveRouting()
     if (!routing) {
       return
     }
     const currentState = useAppStore.getState()
     const currentEntry = currentState.agentStatusByPaneKey[paneKey]
-    if (currentEntry?.agentType !== 'command-code' || currentEntry.state !== 'working') {
+    if (currentEntry?.agentType !== agent || currentEntry.state !== 'working') {
       return
     }
     const currentPrompt = currentEntry.prompt.trim()
@@ -128,7 +145,7 @@ export function createParkedTerminalCommandStatusPolicy(options: {
       {
         state: 'done',
         prompt: currentPrompt || normalizedPrompt,
-        agentType: 'command-code',
+        agentType: agent,
         observation: rendererAgentStatusObservations.observe(paneKey, {
           origin: 'process',
           observedAt: Date.now(),
@@ -147,8 +164,66 @@ export function createParkedTerminalCommandStatusPolicy(options: {
   // unrecoverably early (the same-prompt-done guard then drops a genuine working repaint).
   const releaseCommandCodeDoneSettleExecutor = setCommandCodeDoneSettleExecutor(
     paneKey,
-    settleCommandCodeDone
+    settleAgentOutputDone
   )
+
+  const seedAgentOutputRow = (
+    agent: TuiAgent,
+    state: 'working' | 'waiting',
+    prompt: string
+  ): void => {
+    if (!canApplyAgentOutputStatus(agent)) {
+      return
+    }
+    clearCommandCodeOutputDoneTimer()
+    const routing = resolveRouting()
+    if (!routing) {
+      return
+    }
+    const currentState = useAppStore.getState()
+    const currentEntry = currentState.agentStatusByPaneKey[paneKey]
+    const currentTitle = currentState.runtimePaneTitlesByTabId?.[tabId]?.[paneId]
+    const normalizedPrompt = prompt.trim()
+    if (
+      currentEntry?.agentType === agent &&
+      currentEntry.state === 'done' &&
+      (!normalizedPrompt || normalizedPrompt === currentEntry.prompt.trim())
+    ) {
+      return
+    }
+    currentState.setAgentStatus(
+      paneKey,
+      {
+        state,
+        prompt:
+          normalizedPrompt ||
+          (currentEntry?.state === 'working' || currentEntry?.state === 'waiting'
+            ? currentEntry.prompt
+            : ''),
+        agentType: agent,
+        observation: rendererAgentStatusObservations.observe(paneKey, {
+          origin: 'process',
+          observedAt: Date.now(),
+          kind: 'transition'
+        })
+      },
+      currentTitle,
+      undefined,
+      routing
+    )
+  }
+
+  const scheduleAgentOutputDone = (agent: TuiAgent, prompt: string): void => {
+    if (!canApplyAgentOutputStatus(agent)) {
+      return
+    }
+    const normalizedPrompt = prompt.trim()
+    if (!normalizedPrompt) {
+      cancelCommandCodeDoneSettle(paneKey)
+      return
+    }
+    openCommandCodeDoneSettle(paneKey, normalizedPrompt, agent)
+  }
 
   return {
     onCommandFinished: (bestEffortExitCode: number | null): void => {
@@ -168,58 +243,26 @@ export function createParkedTerminalCommandStatusPolicy(options: {
       dropCommandFinishedStatusIfSameTurn(useAppStore.getState().agentStatusByPaneKey[paneKey])
     },
 
-    // Port of pty-connection's seedCommandCodeOutputWorkingStatus (store-level only).
     onCommandCodeWorking: (prompt: string): void => {
-      if (!canApplyCommandCodeOutputStatus()) {
-        return
-      }
-      clearCommandCodeOutputDoneTimer()
-      const routing = resolveRouting()
-      if (!routing) {
-        return
-      }
-      const currentState = useAppStore.getState()
-      const currentEntry = currentState.agentStatusByPaneKey[paneKey]
-      const currentTitle = currentState.runtimePaneTitlesByTabId?.[tabId]?.[paneId]
-      const normalizedPrompt = prompt.trim()
-      if (
-        currentEntry?.agentType === 'command-code' &&
-        currentEntry.state === 'done' &&
-        (!normalizedPrompt || normalizedPrompt === currentEntry.prompt.trim())
-      ) {
-        return
-      }
-      currentState.setAgentStatus(
-        paneKey,
-        {
-          state: 'working',
-          prompt:
-            normalizedPrompt || (currentEntry?.state === 'working' ? currentEntry.prompt : ''),
-          agentType: 'command-code',
-          observation: rendererAgentStatusObservations.observe(paneKey, {
-            origin: 'process',
-            observedAt: Date.now(),
-            kind: 'transition'
-          })
-        },
-        currentTitle,
-        undefined,
-        routing
-      )
+      seedAgentOutputRow('command-code', 'working', prompt)
     },
 
-    // Port of pty-connection's scheduleCommandCodeOutputDoneStatus: Command Code keeps rendering
-    // the composer while tools run, so only complete the row if no active repaint arrives.
+    // Why the settle: these TUIs keep rendering the composer while tools run, so
+    // only complete the row if no active repaint arrives within the window.
     onCommandCodeDone: (prompt: string): void => {
-      if (!canApplyCommandCodeOutputStatus()) {
-        return
-      }
-      const normalizedPrompt = prompt.trim()
-      if (!normalizedPrompt) {
-        cancelCommandCodeDoneSettle(paneKey)
-        return
-      }
-      openCommandCodeDoneSettle(paneKey, normalizedPrompt)
+      scheduleAgentOutputDone('command-code', prompt)
+    },
+
+    onAgentOutputWorking: (agent: TuiAgent, prompt: string): void => {
+      seedAgentOutputRow(agent, 'working', prompt)
+    },
+
+    onAgentOutputDone: (agent: TuiAgent, prompt: string): void => {
+      scheduleAgentOutputDone(agent, prompt)
+    },
+
+    onAgentOutputWaiting: (agent: TuiAgent, prompt: string): void => {
+      seedAgentOutputRow(agent, 'waiting', prompt)
     },
 
     dispose: (): void => {

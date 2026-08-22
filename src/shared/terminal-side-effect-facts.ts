@@ -5,6 +5,7 @@
  * renderer store handler owns notification/unread policy.
  */
 
+import type { TuiAgent } from './tui-agent'
 import type { ParsedAgentStatusPayload } from './agent-status-types'
 import type { TerminalGitHubPRLink } from './terminal-github-pr-link-detector'
 
@@ -29,6 +30,12 @@ export type TerminalSideEffectFact =
    *  against its live status row before completing the turn. */
   | { kind: 'command-code-working'; prompt: string }
   | { kind: 'command-code-done'; prompt: string }
+  /** Output scrape for other hookless agents (IBM Bob). Same semantics as the
+   *  command-code pair plus waiting (an approval prompt the user must answer).
+   *  Command Code keeps its own kinds so what hosts publish for it is unchanged. */
+  | { kind: 'agent-output-working'; agent: TuiAgent; prompt: string }
+  | { kind: 'agent-output-done'; agent: TuiAgent; prompt: string }
+  | { kind: 'agent-output-waiting'; agent: TuiAgent; prompt: string }
   /** DECSET 2031 color-scheme subscribe observed in the byte stream. Emitted
    *  so hidden-delivery-gated views (whose bytes never arrive) can still record
    *  the subscription and push later theme flips; subscribing is never answered. */

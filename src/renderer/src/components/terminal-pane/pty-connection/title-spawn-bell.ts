@@ -7,7 +7,8 @@ import {
   openCommandCodeDoneSettle,
   setCommandCodeDoneSettleExecutor
 } from '../command-code-done-settle'
-import { canCommandCodeOutputOwnPane } from '../command-code-output-ownership'
+import { canAgentOutputOwnPane } from '../command-code-output-ownership'
+import type { TuiAgent } from '../../../../../shared/tui-agent'
 import { resolveCompatibleAgentTypeForOwner } from '../../../../../shared/agent-title-owner'
 import { rendererAgentStatusObservations } from '@/lib/renderer-agent-status-observations'
 
@@ -113,10 +114,11 @@ export function installTitleSpawnBell(session: ConnectPanePtySession): void {
       .setAgentStatus(session.cacheKey, statusPayload, terminalTitle, undefined, routing)
   }
 
-  session.canApplyCommandCodeOutputStatus = (): boolean => {
+  session.canApplyAgentOutputStatus = (agent: TuiAgent): boolean => {
     const state = useAppStore.getState()
     const foreground = state.paneForegroundAgentByPaneKey[session.cacheKey]
-    return canCommandCodeOutputOwnPane({
+    return canAgentOutputOwnPane({
+      agent,
       foregroundAgent: foreground?.agent,
       shellForeground: foreground?.shellForeground,
       paneOwnerAgent: session.getAuthoritativePaneAgent(),
@@ -124,8 +126,12 @@ export function installTitleSpawnBell(session: ConnectPanePtySession): void {
     })
   }
 
-  session.seedCommandCodeOutputWorkingStatus = (prompt: string): void => {
-    if (!session.canApplyCommandCodeOutputStatus()) {
+  session.seedAgentOutputRow = (
+    agent: TuiAgent,
+    state: 'working' | 'waiting',
+    prompt: string
+  ): void => {
+    if (!session.canApplyAgentOutputStatus(agent)) {
       return
     }
     session.clearCommandCodeOutputDoneTimer()
@@ -139,7 +145,7 @@ export function installTitleSpawnBell(session: ConnectPanePtySession): void {
       currentState.runtimePaneTitlesByTabId?.[session.deps.tabId]?.[session.pane.id]
     const normalizedPrompt = prompt.trim()
     if (
-      currentEntry?.agentType === 'command-code' &&
+      currentEntry?.agentType === agent &&
       currentEntry.state === 'done' &&
       (!normalizedPrompt || normalizedPrompt === currentEntry.prompt.trim())
     ) {
@@ -148,9 +154,13 @@ export function installTitleSpawnBell(session: ConnectPanePtySession): void {
     currentState.setAgentStatus(
       session.cacheKey,
       {
-        state: 'working',
-        prompt: normalizedPrompt || (currentEntry?.state === 'working' ? currentEntry.prompt : ''),
-        agentType: 'command-code',
+        state,
+        prompt:
+          normalizedPrompt ||
+          (currentEntry?.state === 'working' || currentEntry?.state === 'waiting'
+            ? currentEntry.prompt
+            : ''),
+        agentType: agent,
         observation: rendererAgentStatusObservations.observe(session.cacheKey, {
           origin: 'process',
           observedAt: Date.now(),
@@ -162,6 +172,8 @@ export function installTitleSpawnBell(session: ConnectPanePtySession): void {
       routing
     )
   }
+  session.seedCommandCodeOutputWorkingStatus = (prompt: string): void =>
+    session.seedAgentOutputRow('command-code', 'working', prompt)
 
   // Why the settle window lives outside this binding: park unmounts the pane
   // mid-settle, so a pane-owned timer would be cancelled with nothing left to
@@ -170,14 +182,14 @@ export function installTitleSpawnBell(session: ConnectPanePtySession): void {
   // owner (parked watcher or remounted pane) holds the pane next.
   session.releaseCommandCodeDoneSettleExecutor = setCommandCodeDoneSettleExecutor(
     session.cacheKey,
-    (normalizedPrompt) => {
+    (normalizedPrompt, agent) => {
       const routing = session.resolveCurrentAgentStatusRouting()
       if (!routing) {
         return
       }
       const currentState = useAppStore.getState()
       const currentEntry = currentState.agentStatusByPaneKey[session.cacheKey]
-      if (currentEntry?.agentType !== 'command-code' || currentEntry.state !== 'working') {
+      if (currentEntry?.agentType !== agent || currentEntry.state !== 'working') {
         return
       }
       const currentPrompt = currentEntry.prompt.trim()
@@ -191,7 +203,7 @@ export function installTitleSpawnBell(session: ConnectPanePtySession): void {
         {
           state: 'done',
           prompt: currentPrompt || normalizedPrompt,
-          agentType: 'command-code',
+          agentType: agent,
           observation: rendererAgentStatusObservations.observe(session.cacheKey, {
             origin: 'process',
             observedAt: Date.now(),
@@ -206,8 +218,8 @@ export function installTitleSpawnBell(session: ConnectPanePtySession): void {
   )
   session.clearCommandCodeOutputDoneTimer = (): void =>
     cancelCommandCodeDoneSettle(session.cacheKey)
-  session.scheduleCommandCodeOutputDoneStatus = (prompt: string): void => {
-    if (!session.canApplyCommandCodeOutputStatus()) {
+  session.scheduleAgentOutputDoneStatus = (agent: TuiAgent, prompt: string): void => {
+    if (!session.canApplyAgentOutputStatus(agent)) {
       return
     }
     const normalizedPrompt = prompt.trim()
@@ -215,10 +227,12 @@ export function installTitleSpawnBell(session: ConnectPanePtySession): void {
       cancelCommandCodeDoneSettle(session.cacheKey)
       return
     }
-    // Why: Command Code keeps rendering the composer while tools run. Only
+    // Why: these TUIs keep rendering the composer while tools run. Only
     // complete the row if no active status repaint arrives during this window.
-    openCommandCodeDoneSettle(session.cacheKey, normalizedPrompt)
+    openCommandCodeDoneSettle(session.cacheKey, normalizedPrompt, agent)
   }
+  session.scheduleCommandCodeOutputDoneStatus = (prompt: string): void =>
+    session.scheduleAgentOutputDoneStatus('command-code', prompt)
 
   installPanePtyVisibilityBind(session)
 }

@@ -12,6 +12,7 @@
  * where pre-mount output produces no attention side effects. The one exception
  * is a PTY whose consumer just unregistered: see the handoff buffer below.
  */
+import type { TuiAgent } from '../../../../shared/tui-agent'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import type { ParsedAgentStatusPayload } from '../../../../shared/agent-status-types'
 import type { TerminalGitHubPRLink } from '../../../../shared/terminal-github-pr-link-detector'
@@ -85,6 +86,10 @@ export type TerminalSideEffectFactConsumerCallbacks = {
    *  done is settle-checked by the pane policy before completing the turn. */
   onCommandCodeWorking?: (prompt: string) => void
   onCommandCodeDone?: (prompt: string) => void
+  /** Output scrape for other hookless agents (see agent-output-* facts). */
+  onAgentOutputWorking?: (agent: TuiAgent, prompt: string) => void
+  onAgentOutputDone?: (agent: TuiAgent, prompt: string) => void
+  onAgentOutputWaiting?: (agent: TuiAgent, prompt: string) => void
   /** DECSET 2031 subscribe observed by main's tracker. Registered only by
    *  hidden-delivery-gated consumers (their bytes never arrive); it records the
    *  subscription for later theme-flip pushes, it does not answer. */
@@ -143,6 +148,15 @@ function applyLiveFact(entry: ConsumerEntry, fact: TerminalSideEffectFact, seq: 
       return
     case 'command-code-done':
       entry.callbacks.onCommandCodeDone?.(fact.prompt)
+      return
+    case 'agent-output-working':
+      entry.callbacks.onAgentOutputWorking?.(fact.agent, fact.prompt)
+      return
+    case 'agent-output-done':
+      entry.callbacks.onAgentOutputDone?.(fact.agent, fact.prompt)
+      return
+    case 'agent-output-waiting':
+      entry.callbacks.onAgentOutputWaiting?.(fact.agent, fact.prompt)
       return
     case '2031-subscribe':
       entry.callbacks.onMode2031Subscribe?.()

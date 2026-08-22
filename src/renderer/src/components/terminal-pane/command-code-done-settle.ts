@@ -10,9 +10,11 @@
 
 // Mirrors the mounted and parked policies: the settle window must be identical
 // whether the pane is mounted or parked, or park/reveal changes completion timing.
+import type { TuiAgent } from '../../../../shared/tui-agent'
+
 export const COMMAND_CODE_OUTPUT_DONE_SETTLE_MS = 1500
 
-type CommandCodeDoneSettleExecutor = (normalizedPrompt: string) => void
+type CommandCodeDoneSettleExecutor = (normalizedPrompt: string, agent: TuiAgent) => void
 
 const executorByPaneKey = new Map<string, CommandCodeDoneSettleExecutor>()
 const timerByPaneKey = new Map<string, ReturnType<typeof setTimeout>>()
@@ -34,14 +36,18 @@ export function setCommandCodeDoneSettleExecutor(
   }
 }
 
-export function openCommandCodeDoneSettle(paneKey: string, normalizedPrompt: string): void {
+export function openCommandCodeDoneSettle(
+  paneKey: string,
+  normalizedPrompt: string,
+  agent: TuiAgent = 'command-code'
+): void {
   cancelCommandCodeDoneSettle(paneKey)
   timerByPaneKey.set(
     paneKey,
     setTimeout(() => {
       timerByPaneKey.delete(paneKey)
       // Why optional: a pane torn down with no successor has no row worth completing.
-      executorByPaneKey.get(paneKey)?.(normalizedPrompt)
+      executorByPaneKey.get(paneKey)?.(normalizedPrompt, agent)
     }, COMMAND_CODE_OUTPUT_DONE_SETTLE_MS)
   )
 }

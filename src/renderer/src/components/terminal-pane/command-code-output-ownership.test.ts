@@ -1,5 +1,16 @@
 import { describe, expect, it } from 'vitest'
-import { canCommandCodeOutputOwnPane } from './command-code-output-ownership'
+import { canAgentOutputOwnPane, canCommandCodeOutputOwnPane } from './command-code-output-ownership'
+
+describe('canAgentOutputOwnPane', () => {
+  it('gates a scraped status on the pane belonging to that agent', () => {
+    expect(canAgentOutputOwnPane({ agent: 'bob' })).toBe(true)
+    expect(canAgentOutputOwnPane({ agent: 'bob', paneOwnerAgent: 'bob' })).toBe(true)
+    expect(canAgentOutputOwnPane({ agent: 'bob', foregroundAgent: 'bob' })).toBe(true)
+    expect(canAgentOutputOwnPane({ agent: 'bob', paneOwnerAgent: 'claude' })).toBe(false)
+    expect(canAgentOutputOwnPane({ agent: 'bob', foregroundAgent: 'command-code' })).toBe(false)
+    expect(canAgentOutputOwnPane({ agent: 'bob', shellForeground: true })).toBe(false)
+  })
+})
 
 describe('canCommandCodeOutputOwnPane', () => {
   it('allows the banner fallback when no stronger identity exists', () => {

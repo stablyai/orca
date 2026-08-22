@@ -115,6 +115,61 @@ describe('createParkedTerminalCommandStatusPolicy', () => {
     policy.dispose()
   })
 
+  it('seeds a scraped Bob working row and a waiting row on its approval prompt', async () => {
+    mockStoreState.tabsByWorktree[WORKTREE_ID] = [{ id: TAB_ID, launchAgent: 'bob' }]
+    const policy = await createPolicy(PTY_ID_LOCAL)
+
+    policy.onAgentOutputWorking('bob', 'run the tests')
+    expect(mockStoreState.setAgentStatus).toHaveBeenLastCalledWith(
+      PANE_KEY,
+      expect.objectContaining({ state: 'working', prompt: 'run the tests', agentType: 'bob' }),
+      '✳ Build feature',
+      undefined,
+      ROUTING
+    )
+
+    policy.onAgentOutputWaiting('bob', 'run the tests')
+    expect(mockStoreState.setAgentStatus).toHaveBeenLastCalledWith(
+      PANE_KEY,
+      expect.objectContaining({ state: 'waiting', prompt: 'run the tests', agentType: 'bob' }),
+      '✳ Build feature',
+      undefined,
+      ROUTING
+    )
+    policy.dispose()
+  })
+
+  it('rejects a scraped Bob row when another agent owns the pane', async () => {
+    mockStoreState.tabsByWorktree[WORKTREE_ID] = [{ id: TAB_ID, launchAgent: 'claude' }]
+    const policy = await createPolicy(PTY_ID_LOCAL)
+
+    policy.onAgentOutputWorking('bob', 'run the tests')
+
+    expect(mockStoreState.setAgentStatus).not.toHaveBeenCalled()
+    policy.dispose()
+  })
+
+  it('settles a scraped Bob turn to done after the window', async () => {
+    mockStoreState.agentStatusByPaneKey[PANE_KEY] = makeStatusEntry({
+      state: 'working',
+      prompt: 'run the tests',
+      agentType: 'bob'
+    })
+    const policy = await createPolicy(PTY_ID_LOCAL)
+
+    policy.onAgentOutputDone('bob', 'run the tests')
+    vi.advanceTimersByTime(DONE_SETTLE_MS)
+
+    expect(mockStoreState.setAgentStatus).toHaveBeenCalledWith(
+      PANE_KEY,
+      expect.objectContaining({ state: 'done', prompt: 'run the tests', agentType: 'bob' }),
+      '✳ Build feature',
+      undefined,
+      ROUTING
+    )
+    policy.dispose()
+  })
+
   it('writes nothing when connection routing does not resolve', async () => {
     resolveLiveAgentStatusConnectionRouting.mockReturnValue(undefined)
     const policy = await createPolicy(PTY_ID_LOCAL)
@@ -290,7 +345,7 @@ describe('createParkedTerminalCommandStatusPolicy', () => {
 
     expect(mockStoreState.setAgentStatus).not.toHaveBeenCalled()
     vi.advanceTimersByTime(1)
-    expect(revealedPaneSettle).toHaveBeenCalledExactlyOnceWith('Fix the spinner')
+    expect(revealedPaneSettle).toHaveBeenCalledExactlyOnceWith('Fix the spinner', 'command-code')
   })
 
   // Why: the transferred window is still a settle window — a working repaint from the

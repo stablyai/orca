@@ -4,7 +4,10 @@ import type {
   RuntimePtyTitleTrackerEntry,
   RuntimePtyWorktreeRecord
 } from './runtime-terminal-state-records'
-import { createCommandCodeOutputStatusDetector } from '../../shared/command-code-output-status'
+import {
+  AGENT_OUTPUT_STATUS_PROFILES,
+  createAgentOutputStatusObserver
+} from '../../shared/agent-output-status-profiles'
 import { extractLastOsc7Uri, extractOscScanTail } from '../daemon/osc7-uri-extraction'
 import { parseFileUriPathParts } from '../daemon/osc7-file-uri'
 import { splitWorktreeIdForFilesystem } from '../../shared/worktree/id'
@@ -17,13 +20,40 @@ export class OrcaRuntimeWithCreateTerminalSideEffectCommandCodeDetector extends 
   protected createTerminalSideEffectCommandCodeDetector(
     ptyId: string
   ): NonNullable<RuntimePtyTitleTrackerEntry['commandCodeDetector']> {
-    return createCommandCodeOutputStatusDetector({
+    // Why: Command Code keeps its legacy fact kinds so what hosts publish for it
+    // is unchanged for older clients; other scraped agents use the generic kinds.
+    const feedsLifecycle = new Set(
+      AGENT_OUTPUT_STATUS_PROFILES.filter((p) => p.feedsPromptLifecycle).map((p) => p.agent)
+    )
+    return createAgentOutputStatusObserver({
       startupCommand: this.terminalSpawnCommandsByPtyId.get(ptyId) ?? null,
-      onWorking: (prompt) => {
-        this.recordTerminalSideEffectFact(ptyId, { kind: 'command-code-working', prompt })
+      onWorking: (agent, prompt) => {
+        this.recordTerminalSideEffectFact(
+          ptyId,
+          agent === 'command-code'
+            ? { kind: 'command-code-working', prompt }
+            : { kind: 'agent-output-working', agent, prompt }
+        )
+        if (feedsLifecycle.has(agent)) {
+          this.recordAgentPromptLifecycleState(ptyId, 'working')
+        }
       },
-      onDone: (prompt) => {
-        this.recordTerminalSideEffectFact(ptyId, { kind: 'command-code-done', prompt })
+      onDone: (agent, prompt) => {
+        this.recordTerminalSideEffectFact(
+          ptyId,
+          agent === 'command-code'
+            ? { kind: 'command-code-done', prompt }
+            : { kind: 'agent-output-done', agent, prompt }
+        )
+        if (feedsLifecycle.has(agent)) {
+          this.recordAgentPromptLifecycleState(ptyId, 'idle')
+        }
+      },
+      onWaiting: (agent, prompt) => {
+        this.recordTerminalSideEffectFact(ptyId, { kind: 'agent-output-waiting', agent, prompt })
+        if (feedsLifecycle.has(agent)) {
+          this.recordAgentPromptLifecycleState(ptyId, 'permission')
+        }
       }
     })
   }

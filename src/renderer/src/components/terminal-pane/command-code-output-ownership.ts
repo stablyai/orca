@@ -1,14 +1,16 @@
 import type { AgentType } from '../../../../shared/agent-status-types'
 import type { TuiAgent } from '../../../../shared/tui-agent'
 
-export function canCommandCodeOutputOwnPane(args: {
+/** Whether a scraped output status for `agent` may write this pane's status row. */
+export function canAgentOutputOwnPane(args: {
+  agent: TuiAgent
   foregroundAgent?: TuiAgent | null
   shellForeground?: boolean
   paneOwnerAgent?: AgentType | null
   retainedPaneOwnerAgent?: AgentType | null
 }): boolean {
   if (args.foregroundAgent) {
-    return args.foregroundAgent === 'command-code'
+    return args.foregroundAgent === args.agent
   }
   if (args.shellForeground) {
     return false
@@ -17,5 +19,14 @@ export function canCommandCodeOutputOwnPane(args: {
     args.paneOwnerAgent && args.paneOwnerAgent !== 'unknown'
       ? args.paneOwnerAgent
       : (args.retainedPaneOwnerAgent ?? args.paneOwnerAgent)
-  return !paneOwnerAgent || paneOwnerAgent === 'unknown' || paneOwnerAgent === 'command-code'
+  return !paneOwnerAgent || paneOwnerAgent === 'unknown' || paneOwnerAgent === args.agent
+}
+
+export function canCommandCodeOutputOwnPane(args: {
+  foregroundAgent?: TuiAgent | null
+  shellForeground?: boolean
+  paneOwnerAgent?: AgentType | null
+  retainedPaneOwnerAgent?: AgentType | null
+}): boolean {
+  return canAgentOutputOwnPane({ agent: 'command-code', ...args })
 }

@@ -239,6 +239,55 @@ describe('registerTerminalSideEffectFactConsumer', () => {
     ])
   })
 
+  it('routes agent-output scrape facts with their agent to the registered consumer', () => {
+    const events: unknown[][] = []
+    registerTerminalSideEffectFactConsumer({
+      ptyId: PTY_ID,
+      callbacks: {
+        onAgentOutputWorking: (agent, prompt) => events.push(['working', agent, prompt]),
+        onAgentOutputWaiting: (agent, prompt) => events.push(['waiting', agent, prompt]),
+        onAgentOutputDone: (agent, prompt) => events.push(['done', agent, prompt])
+      }
+    })
+
+    _dispatchTerminalSideEffectBatchForTest(
+      batch([
+        { kind: 'agent-output-working', agent: 'bob', prompt: 'run the tests' },
+        { kind: 'agent-output-waiting', agent: 'bob', prompt: 'run the tests' },
+        { kind: 'agent-output-done', agent: 'bob', prompt: 'run the tests' }
+      ])
+    )
+
+    expect(events).toEqual([
+      ['working', 'bob', 'run the tests'],
+      ['waiting', 'bob', 'run the tests'],
+      ['done', 'bob', 'run the tests']
+    ])
+  })
+
+  it('never replays agent-output scrape facts', () => {
+    const events: unknown[][] = []
+    registerTerminalSideEffectFactConsumer({
+      ptyId: PTY_ID,
+      callbacks: {
+        onTitleChange: (normalizedTitle) => events.push(['title', normalizedTitle]),
+        onAgentOutputWorking: (agent, prompt) => events.push(['working', agent, prompt])
+      }
+    })
+
+    _dispatchTerminalSideEffectBatchForTest(
+      batch(
+        [
+          { kind: 'title', normalizedTitle: 'restored', rawTitle: 'restored' },
+          { kind: 'agent-output-working', agent: 'bob', prompt: 'run the tests' }
+        ],
+        { replay: true, seq: 5 }
+      )
+    )
+
+    expect(events).toEqual([['title', 'restored']])
+  })
+
   it('never replays command-code scrape facts', () => {
     // Why: a replayed working/done seed would resurrect a finished turn's
     // status row — replay batches restore title state only.

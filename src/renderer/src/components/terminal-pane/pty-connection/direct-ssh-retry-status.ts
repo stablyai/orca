@@ -16,8 +16,8 @@ import {
   resolveWindowsShellOverride
 } from '@/lib/pane-manager/windows-pty-compatibility'
 import { shouldSuppressCodexAutoApprovalStatus } from '../codex-auto-approval-notification-suppression'
-import { createCommandCodeOutputStatusDetector } from '../../../../../shared/command-code-output-status'
-import { readInFlightCommandCodeTurn } from '../parked-terminal-command-status'
+import { createAgentOutputStatusObserver } from '../../../../../shared/agent-output-status-profiles'
+import { readInFlightAgentOutputTurn } from '../parked-terminal-command-status'
 import { getExecutionHostIdForWorktree } from '@/lib/worktree-runtime-owner'
 import { CLIENT_PLATFORM } from '@/lib/new-workspace'
 import { resolveAgentStatusTerminalTitle } from '@/lib/agent-status-terminal-title'
@@ -250,14 +250,15 @@ export function installDirectSshRetryStatus(session: ConnectPanePtySession): voi
   // the byte detector too would double-drive the seed/settle policy above.
   session.commandCodeOutputStatusDetector = session.mainSideEffectAuthority
     ? null
-    : createCommandCodeOutputStatusDetector({
+    : createAgentOutputStatusObserver({
         startupCommand: session.paneStartup?.command,
         // Why the seed: a reveal remount recreates this detector long past the banner
         // (and with no startup command); a turn parked mid-flight must still arm the
         // scrape so its return to the idle composer completes the row.
-        inFlightTurn: readInFlightCommandCodeTurn(session.cacheKey),
-        onWorking: session.seedCommandCodeOutputWorkingStatus,
-        onDone: session.scheduleCommandCodeOutputDoneStatus
+        readInFlightTurn: (agent) => readInFlightAgentOutputTurn(session.cacheKey, agent),
+        onWorking: (agent, prompt) => session.seedAgentOutputRow(agent, 'working', prompt),
+        onDone: session.scheduleAgentOutputDoneStatus,
+        onWaiting: (agent, prompt) => session.seedAgentOutputRow(agent, 'waiting', prompt)
       })
   session.shouldDeliverStartupViaTerminalPaste = session.paneStartup?.delivery === 'terminal-paste'
   session.shouldUseProviderSshStartupDelivery =
