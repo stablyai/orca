@@ -71,7 +71,16 @@ export function configureElectronNetworkCompatibility(
 }
 
 export function disableUnsupportedChromiumFeatures(): void {
-  appendDisabledChromiumFeatures(['FedCm'])
+  const features = ['FedCm']
+  // Why: Windows' native window-occlusion calculation intermittently marks a
+  // visible, focused window as occluded, so Chromium flips the renderer to
+  // "hidden" and throttles its timers to ~1/sec — file loads, retries, and GC
+  // all crawl while the user is actively using the app. Trust minimize/restore
+  // state instead of native occlusion on Windows.
+  if (process.platform === 'win32') {
+    features.push('CalculateNativeWinOcclusion')
+  }
+  appendDisabledChromiumFeatures(features)
 }
 
 function appendDisabledChromiumFeatures(features: string[]): void {

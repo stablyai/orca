@@ -30,8 +30,14 @@ import { useOnboardingAndFeatureTips } from './app-shell/use-onboarding-and-feat
 import { usePersistedUIWriter } from './app-shell/use-persisted-ui-writer'
 import { useRuntimeGraphSync } from './app-shell/use-runtime-graph-sync'
 import { useWindowVisibilityEffects } from './app-shell/use-window-visibility-effects'
+import { prefetchEditorChunks } from './components/editor/prefetch-editor-chunks'
 
 function App(): React.JSX.Element {
+  // Why: warm the lazy editor chunks at idle so the first file open is instant.
+  useEffect(() => {
+    prefetchEditorChunks()
+  }, [])
+
   const layout = useAppChromeLayout()
   const floatingWorkspace = useFloatingWorkspacePanel()
   const onboardingGate = useOnboardingAndFeatureTips()
