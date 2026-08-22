@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { WorkspaceSessionState } from '../../shared/workspace-session-state-types'
 import type { TerminalWindowTransferCoordinatorOptions } from './terminal-window-transfer-coordinator-options'
+import { isTerminalWindowTransferSeed } from './terminal-window-transfer-seed-validation'
 import {
   createTerminalWindowTransferHarness,
   ipcEvent,
@@ -95,6 +96,23 @@ describe('terminal window transfer authoritative preflight', () => {
       (state) => {
         state.remoteSessionIdsByTabId = { 'tab-1': 'remote-old' }
       }
+    ],
+    [
+      'other terminal PTY',
+      (state) => {
+        state.tabsByWorktree.other = [
+          { ...terminalWindowSeed().tab, id: 'tab-other', ptyId: 'pty-1' }
+        ]
+      }
+    ],
+    [
+      'other terminal layout PTY',
+      (state) => {
+        state.terminalLayoutsByTabId.other = {
+          ...terminalWindowSeed().layout,
+          ptyIdsByLeafId: { 'leaf-other': 'pty-1' }
+        }
+      }
     ]
   ]
 
@@ -156,6 +174,37 @@ describe('terminal window transfer authoritative preflight', () => {
       })
     ).resolves.toEqual({ ok: false, error: 'terminal_transfer_source_mismatch' })
     expectNoMutation(h)
+  })
+
+  it.each([
+    {
+      root: null,
+      activeLeafId: 'single-pane',
+      expandedLeafId: null
+    },
+    {
+      root: null,
+      activeLeafId: null,
+      expandedLeafId: null,
+      ptyIdsByLeafId: { retained: 'pty-1' },
+      buffersByLeafId: { retained: '' }
+    }
+  ])('accepts a structurally valid rootless terminal layout', (layout) => {
+    expect(isTerminalWindowTransferSeed({ ...terminalWindowSeed(), layout })).toBe(true)
+  })
+
+  it('still rejects non-string rootless layout records', () => {
+    expect(
+      isTerminalWindowTransferSeed({
+        ...terminalWindowSeed(),
+        layout: {
+          root: null,
+          activeLeafId: null,
+          expandedLeafId: null,
+          ptyIdsByLeafId: { retained: 42 }
+        }
+      })
+    ).toBe(false)
   })
 
   it('accepts a legacy local folder workspace without persisted groups', async () => {

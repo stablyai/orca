@@ -48,12 +48,13 @@ function collectLayoutLeaves(root: unknown): Set<string> | null {
   return leaves
 }
 
-function isLeafStringRecord(value: unknown, leaves: ReadonlySet<string>): boolean {
+function isLeafStringRecord(value: unknown, leaves: ReadonlySet<string> | null): boolean {
   return (
     value === undefined ||
     (isRecord(value) &&
       Object.entries(value).every(
-        ([leafId, item]) => leaves.has(leafId) && typeof item === 'string'
+        ([leafId, item]) =>
+          leafId.length > 0 && (!leaves || leaves.has(leafId)) && typeof item === 'string'
       ))
   )
 }
@@ -62,13 +63,18 @@ function isTransferLayout(value: unknown): boolean {
   if (!isRecord(value)) {
     return false
   }
-  const leaves = collectLayoutLeaves(value.root)
+  const rootless = value.root === null
+  const leaves = rootless ? null : collectLayoutLeaves(value.root)
   return Boolean(
-    leaves &&
+    (rootless || leaves) &&
     (value.activeLeafId === null ||
-      (typeof value.activeLeafId === 'string' && leaves.has(value.activeLeafId))) &&
+      (typeof value.activeLeafId === 'string' &&
+        value.activeLeafId.length > 0 &&
+        (!leaves || leaves.has(value.activeLeafId)))) &&
     (value.expandedLeafId === null ||
-      (typeof value.expandedLeafId === 'string' && leaves.has(value.expandedLeafId))) &&
+      (typeof value.expandedLeafId === 'string' &&
+        value.expandedLeafId.length > 0 &&
+        (!leaves || leaves.has(value.expandedLeafId)))) &&
     isLeafStringRecord(value.ptyIdsByLeafId, leaves) &&
     isLeafStringRecord(value.buffersByLeafId, leaves) &&
     isLeafStringRecord(value.scrollbackRefsByLeafId, leaves) &&

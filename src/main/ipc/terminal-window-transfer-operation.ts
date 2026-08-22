@@ -155,6 +155,7 @@ export function installTerminalWindowTransferAbortListeners(
     if (
       transfer.handedOff &&
       transfer.targetRenderer &&
+      !transfer.sourceLost &&
       !transfer.sourceRenderer.isDestroyed() &&
       operations.owners.isRegistered(transfer.sourceRenderer) &&
       operations.owners.isDispatcherReady(transfer.sourceRenderer)

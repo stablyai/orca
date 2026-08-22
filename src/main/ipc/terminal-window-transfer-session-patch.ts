@@ -6,6 +6,7 @@ import {
   collectTabGroupLayoutGroupIds,
   removeTabGroupLayoutLeaf
 } from '../runtime/headless-tab-group-split-layout'
+import { reconcileTerminalTransferSelectors } from './terminal-window-transfer-session-selectors'
 
 function withoutTab<T extends { id: string }>(items: readonly T[], tabId: string): T[] {
   return items.filter(({ id }) => id !== tabId)
@@ -121,11 +122,18 @@ function restoreTabKeyedRecord(
 
 export function sessionHasTerminalTransferBacking(
   state: WorkspaceSessionState,
-  tabId: string
+  tabId: string,
+  ptyIds: readonly string[]
 ): boolean {
+  const transferredPtyIds = new Set(ptyIds)
   return (
-    Object.values(state.tabsByWorktree).some((tabs) => tabs.some(({ id }) => id === tabId)) ||
+    Object.values(state.tabsByWorktree).some((tabs) =>
+      tabs.some(({ id, ptyId }) => id === tabId || (ptyId && transferredPtyIds.has(ptyId)))
+    ) ||
     Object.hasOwn(state.terminalLayoutsByTabId, tabId) ||
+    Object.values(state.terminalLayoutsByTabId).some((layout) =>
+      Object.values(layout.ptyIdsByLeafId ?? {}).some((id) => transferredPtyIds.has(id))
+    ) ||
     Object.values(state.unifiedTabs ?? {}).some((tabs) =>
       tabs.some(({ id, entityId }) => id === tabId || entityId === tabId)
     ) ||
@@ -179,11 +187,17 @@ export function restoreTransferredTerminalSession(
       group.group.id
     )
   }
-  next.remoteSessionIdsByTabId = restoreTabKeyedRecord(
+  const remoteSessions = restoreTabKeyedRecord(
     next.remoteSessionIdsByTabId,
     prior.remoteSessionIdsByTabId,
     seed.tabId
   )
+  if (remoteSessions) {
+    next.remoteSessionIdsByTabId = remoteSessions
+  } else {
+    delete next.remoteSessionIdsByTabId
+  }
+  reconcileTerminalTransferSelectors(next, current, prior, seed, {})
   return next
 }
 
@@ -275,11 +289,17 @@ export function removeTransferredTerminalSession(
       priorGroup.group.id
     )
   }
-  next.remoteSessionIdsByTabId = restoreTabKeyedRecord(
+  const remoteSessions = restoreTabKeyedRecord(
     next.remoteSessionIdsByTabId,
     prior.remoteSessionIdsByTabId,
     seed.tabId
   )
+  if (remoteSessions) {
+    next.remoteSessionIdsByTabId = remoteSessions
+  } else {
+    delete next.remoteSessionIdsByTabId
+  }
+  reconcileTerminalTransferSelectors(next, current, prior, seed, {})
   return next
 }
 

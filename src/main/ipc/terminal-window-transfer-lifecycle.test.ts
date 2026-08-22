@@ -191,6 +191,48 @@ describe('terminal window transfer lifecycle recovery', () => {
     )
   })
 
+  it('does not forward-commit when the target closes during source-loss import recovery', async () => {
+    const h = createTerminalWindowTransferHarness({ createTarget: true })
+    configureCreatedTarget(h)
+    let importAttempts = 0
+    const coordinator = await createCoordinator(h, {
+      registerRenderer: () => {
+        h.owners.registerRenderer(h.target.webContents as never)
+        return () => h.owners.removeRenderer(h.target.webContents as never)
+      },
+      loadWindow: () => {
+        h.owners.markDispatcherReady(h.target.webContents as never)
+        coordinator.getContext(ipcEvent(h.target.webContents) as never)
+      }
+    })
+    h.target.webContents.send.mockImplementation((_channel, command) => {
+      if (command.phase === 'target-import') {
+        importAttempts += 1
+        if (importAttempts === 1) {
+          h.source.emit('close')
+        } else {
+          h.target.emit('close')
+        }
+      }
+      queueMicrotask(() =>
+        coordinator.acknowledge(ipcEvent(h.target.webContents) as never, {
+          ...command,
+          ok: true
+        })
+      )
+    })
+
+    await expect(
+      coordinator.detach(ipcEvent(h.source.webContents) as never, terminalWindowSeed())
+    ).resolves.toEqual({ ok: false, error: 'terminal_transfer_source_lost' })
+    expect(importAttempts).toBe(2)
+    expect(h.handoff).toHaveBeenCalledTimes(1)
+    expect(h.target.show).not.toHaveBeenCalled()
+    expect(h.target.destroy).toHaveBeenCalledOnce()
+    expect(h.sessions.retire).toHaveBeenCalledWith(h.target.id, 'empty-close')
+    expect(h.records.has(h.target.id)).toBe(false)
+  })
+
   it('builds isolated created-target authority after two failed renderer imports', async () => {
     const h = createTerminalWindowTransferHarness({ createTarget: true })
     configureCreatedTarget(h)
@@ -268,7 +310,7 @@ describe('terminal window transfer lifecycle recovery', () => {
     const h = createTerminalWindowTransferHarness()
     const target = terminalWindowSession(false)
     target.activeRepoId = 'target-repo'
-    target.activeWorktreeId = 'target-worktree-selection'
+    target.activeWorktreeId = 'wt-1'
     target.activeTabId = 'tab-other'
     target.activeTabIdByWorktree = { 'wt-1': 'tab-other' }
     target.activeTabTypeByWorktree = { 'wt-1': 'editor' }
@@ -285,6 +327,19 @@ describe('terminal window transfer lifecycle recovery', () => {
       ]
     }
     target.tabGroupLayouts = { 'wt-1': { type: 'leaf', groupId: 'target-group' } }
+    target.tabsByWorktree['wt-1'] = [
+      { ...terminalWindowSeed().tab, id: 'tab-other', ptyId: 'pty-other' }
+    ]
+    target.unifiedTabs = {
+      'wt-1': [
+        {
+          ...terminalWindowSession(true).unifiedTabs!['wt-1']![0]!,
+          id: 'tab-other',
+          entityId: 'tab-other',
+          groupId: 'target-group'
+        }
+      ]
+    }
     h.records.set(h.target.id, target)
     let importAttempts = 0
     const coordinator = await createCoordinator(h, { createSecondaryWindow: vi.fn() })
@@ -308,7 +363,7 @@ describe('terminal window transfer lifecycle recovery', () => {
     const recovered = h.records.get(h.target.id)!
     expect(recovered).toMatchObject({
       activeRepoId: 'target-repo',
-      activeWorktreeId: 'target-worktree-selection',
+      activeWorktreeId: 'wt-1',
       activeTabId: 'tab-other',
       activeTabIdByWorktree: { 'wt-1': 'tab-other' },
       activeTabTypeByWorktree: { 'wt-1': 'editor' },

@@ -2,6 +2,7 @@ import type { Tab, TabGroup } from '../../shared/tab-types'
 import type { TerminalWindowTransferSeed } from '../../shared/terminal-window-transfer'
 import type { WorkspaceSessionState } from '../../shared/workspace-session-state-types'
 import { appendMissingGroup } from './terminal-window-transfer-session-patch'
+import { reconcileTerminalTransferSelectors } from './terminal-window-transfer-session-selectors'
 
 function withoutTransferredTab<T extends { id: string }>(items: readonly T[], tabId: string): T[] {
   return items.filter(({ id }) => id !== tabId)
@@ -63,14 +64,6 @@ function buildUnifiedTerminalTab(
   }
 }
 
-function preservedActiveTab(
-  current: string | null | undefined,
-  prior: string | null | undefined,
-  tabId: string
-): string {
-  return current && current !== tabId ? current : prior && prior !== tabId ? prior : tabId
-}
-
 export function importTransferredTerminalSession(
   current: WorkspaceSessionState,
   targetBefore: WorkspaceSessionState,
@@ -119,32 +112,14 @@ export function importTransferredTerminalSession(
     delete next.remoteSessionIdsByTabId[seed.tabId]
   }
 
-  const activeTabId = preservedActiveTab(next.activeTabId, targetBefore.activeTabId, seed.tabId)
-  const currentWorkspaceTab = next.activeTabIdByWorktree?.[seed.worktreeId]
-  const priorWorkspaceTab = targetBefore.activeTabIdByWorktree?.[seed.worktreeId]
-  const activeWorkspaceTab = preservedActiveTab(currentWorkspaceTab, priorWorkspaceTab, seed.tabId)
-  next.activeTabId = createdTarget ? seed.tabId : activeTabId
-  next.activeTabIdByWorktree = {
-    ...next.activeTabIdByWorktree,
-    [seed.worktreeId]: createdTarget ? seed.tabId : activeWorkspaceTab
-  }
-  next.activeTabTypeByWorktree = {
-    ...next.activeTabTypeByWorktree,
-    [seed.worktreeId]: createdTarget
-      ? 'terminal'
-      : (next.activeTabTypeByWorktree?.[seed.worktreeId] ??
-        targetBefore.activeTabTypeByWorktree?.[seed.worktreeId] ??
-        'terminal')
-  }
-  next.activeGroupIdByWorktree = {
-    ...next.activeGroupIdByWorktree,
-    [seed.worktreeId]: group.id
-  }
+  reconcileTerminalTransferSelectors(next, current, targetBefore, seed, {
+    createdTarget,
+    fallbackToTransfer: true,
+    targetGroupId: group.id
+  })
   if (createdTarget) {
-    next.activeRepoId = seed.repo.id
     next.activeWorkspaceKey = seed.canonicalWorkspaceKey
     next.activeWorkspaceExecutionHostId = seed.hostId
-    next.activeWorktreeId = seed.worktreeId
   }
   return next
 }

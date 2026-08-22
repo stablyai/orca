@@ -153,7 +153,7 @@ export class TerminalWindowTransferCoordinator {
         const state = this.#sessions.get(target.id, seed.hostId)
         if (
           !sessionMatchesTerminalWindowTarget(state, seed) ||
-          sessionHasTerminalTransferBacking(state, seed.tabId)
+          sessionHasTerminalTransferBacking(state, seed.tabId, seed.ptyIds)
         ) {
           throw new Error('terminal_transfer_target_mismatch')
         }
@@ -191,7 +191,7 @@ export class TerminalWindowTransferCoordinator {
       const targetCurrent = this.#sessions.get(target.id, seed.hostId)
       if (
         (!transfer.createdTarget && !sessionMatchesTerminalWindowTarget(targetCurrent, seed)) ||
-        sessionHasTerminalTransferBacking(targetCurrent, seed.tabId)
+        sessionHasTerminalTransferBacking(targetCurrent, seed.tabId, seed.ptyIds)
       ) {
         throw new Error('terminal_transfer_target_mismatch')
       }

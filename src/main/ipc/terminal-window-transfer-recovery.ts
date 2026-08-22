@@ -23,7 +23,8 @@ export async function rollbackTerminalWindowTransfer(
   const { source, sourceRenderer, target, targetRenderer, seed } = transfer
   const canHandoffBack =
     !transfer.targetLost ||
-    (!sourceRenderer.isDestroyed() &&
+    (!transfer.sourceLost &&
+      !sourceRenderer.isDestroyed() &&
       operations.owners.isRegistered(sourceRenderer) &&
       operations.owners.isDispatcherReady(sourceRenderer))
   if (transfer.prepared && transfer.handedOff && targetRenderer && canHandoffBack) {
@@ -138,6 +139,26 @@ export async function rollbackTerminalWindowTransfer(
   }
 }
 
+function hasLiveTargetAuthority(
+  operations: TerminalWindowTransferOperations,
+  transfer: TerminalWindowTransfer
+): boolean {
+  const { target, targetRenderer, seed } = transfer
+  try {
+    return Boolean(
+      target &&
+      targetRenderer &&
+      !transfer.targetLost &&
+      !target.isDestroyed() &&
+      !targetRenderer.isDestroyed() &&
+      target.webContents === targetRenderer &&
+      seed.ptyIds.every((id) => operations.owners.owns(id, targetRenderer))
+    )
+  } catch {
+    return false
+  }
+}
+
 export async function recoverTerminalTransferAfterSourceLoss(
   operations: TerminalWindowTransferOperations,
   transfer: TerminalWindowTransfer
@@ -145,12 +166,10 @@ export async function recoverTerminalTransferAfterSourceLoss(
   const { source, target, targetRenderer, seed } = transfer
   if (
     !transfer.sourceLost ||
-    transfer.targetLost ||
     !transfer.handedOff ||
     !target ||
     !targetRenderer ||
-    targetRenderer.isDestroyed() ||
-    !seed.ptyIds.every((id) => operations.owners.owns(id, targetRenderer))
+    !hasLiveTargetAuthority(operations, transfer)
   ) {
     return 'not-applicable'
   }
@@ -167,6 +186,9 @@ export async function recoverTerminalTransferAfterSourceLoss(
     } catch {
       // Main-process backing remains the durable fallback.
     }
+  }
+  if (!hasLiveTargetAuthority(operations, transfer)) {
+    return 'not-applicable'
   }
   try {
     operations.sessions.set(
