@@ -1,11 +1,4 @@
-import {
-  app,
-  clipboard,
-  ipcMain,
-  nativeImage,
-  type IpcMainInvokeEvent,
-  type WebContents
-} from 'electron'
+import { app, clipboard, ipcMain, nativeImage, type IpcMainInvokeEvent } from 'electron'
 import { spawn } from 'node:child_process'
 import { open, stat } from 'node:fs/promises'
 import type { Store } from '../persistence'
@@ -39,8 +32,7 @@ import { saveClipboardImageBufferInRuntime } from './clipboard-runtime-image-upl
 import { readWindowsClipboardImageFileAsPng } from './clipboard-windows-image-file'
 import { writeClipboardTextAndVerify } from './clipboard-text-write-verify'
 import { isDashboardPopoutRenderer } from './dashboard-popout-window'
-
-let trustedClipboardRendererWebContentsId: number | null = null
+import { isTrustedUIRenderer } from '../ipc/ui'
 
 type ClipboardWriteFileRequest = {
   filePath: string
@@ -57,10 +49,6 @@ async function saveClipboardImageBufferForTarget(
     return saveClipboardImageBufferInRuntime(app.getPath('userData'), runtimeEnvironmentId, buffer)
   }
   return saveClipboardImageBufferAsTempFile(buffer, args)
-}
-
-export function setTrustedClipboardRendererWebContentsId(webContentsId: number | null): void {
-  trustedClipboardRendererWebContentsId = webContentsId
 }
 
 // Run a short-lived OS clipboard helper (PowerShell / wl-copy / xclip), feeding
@@ -244,7 +232,7 @@ function makeClipboardFileDeps(
 }
 
 function assertTrustedClipboardSender(event: IpcMainInvokeEvent): void {
-  if (!isTrustedClipboardRenderer(event.sender)) {
+  if (!isTrustedUIRenderer(event.sender)) {
     throw new Error('Unauthorized clipboard IPC sender')
   }
 }
@@ -252,27 +240,7 @@ function assertTrustedClipboardSender(event: IpcMainInvokeEvent): void {
 function assertTrustedClipboardTextSender(event: IpcMainInvokeEvent): void {
   // Why: terminal copy/paste runs in the exact dashboard popout window, but its
   // clipboard authority must not extend to image, file, or remote operations.
-  if (!isTrustedClipboardRenderer(event.sender) && !isDashboardPopoutRenderer(event.sender)) {
+  if (!isTrustedUIRenderer(event.sender) && !isDashboardPopoutRenderer(event.sender)) {
     throw new Error('Unauthorized clipboard IPC sender')
   }
-}
-
-function isTrustedClipboardRenderer(sender: WebContents): boolean {
-  if (sender.isDestroyed() || sender.getType() !== 'window') {
-    return false
-  }
-  if (trustedClipboardRendererWebContentsId != null) {
-    return sender.id === trustedClipboardRendererWebContentsId
-  }
-
-  const senderUrl = sender.getURL()
-  if (process.env.ELECTRON_RENDERER_URL) {
-    try {
-      return new URL(senderUrl).origin === new URL(process.env.ELECTRON_RENDERER_URL).origin
-    } catch {
-      return false
-    }
-  }
-
-  return senderUrl.startsWith('file://')
 }

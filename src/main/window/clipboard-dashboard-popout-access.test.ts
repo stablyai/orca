@@ -7,7 +7,8 @@ const {
   clipboardReadImage,
   clipboardWriteImage,
   clipboardWriteBuffer,
-  isDashboardPopoutRenderer
+  isDashboardPopoutRenderer,
+  isTrustedUIRenderer
 } = vi.hoisted(() => ({
   handlers: new Map<string, (...args: unknown[]) => unknown>(),
   clipboardReadText: vi.fn(() => 'terminal clipboard text'),
@@ -15,7 +16,8 @@ const {
   clipboardReadImage: vi.fn(),
   clipboardWriteImage: vi.fn(),
   clipboardWriteBuffer: vi.fn(),
-  isDashboardPopoutRenderer: vi.fn(() => true)
+  isDashboardPopoutRenderer: vi.fn(() => true),
+  isTrustedUIRenderer: vi.fn(() => false)
 }))
 
 vi.mock('electron', () => ({
@@ -37,16 +39,14 @@ vi.mock('electron', () => ({
 }))
 
 vi.mock('./dashboard-popout-window', () => ({ isDashboardPopoutRenderer }))
+vi.mock('../ipc/ui', () => ({ isTrustedUIRenderer }))
 vi.mock('./clipboard-remote-file-copy', () => ({
   cleanupExpiredRemoteClipboardFiles: vi.fn(async () => undefined),
   scheduleLegacyRemoteClipboardFileCleanup: vi.fn(),
   writeRemoteFileToClipboard: vi.fn()
 }))
 
-import {
-  registerClipboardHandlers,
-  setTrustedClipboardRendererWebContentsId
-} from './clipboard-ipc-handlers'
+import { registerClipboardHandlers } from './clipboard-ipc-handlers'
 
 const popoutEvent = {
   sender: {
@@ -63,7 +63,6 @@ describe('dashboard popout clipboard access', () => {
     vi.clearAllMocks()
     isDashboardPopoutRenderer.mockReturnValue(true)
     clipboardReadText.mockReturnValue('terminal clipboard text')
-    setTrustedClipboardRendererWebContentsId(17)
     registerClipboardHandlers({} as never)
   })
 

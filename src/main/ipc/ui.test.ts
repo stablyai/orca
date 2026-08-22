@@ -35,13 +35,13 @@ vi.mock('electron', () => ({
 }))
 
 import {
-  clearTrustedUIRendererWebContentsId,
+  broadcastToTrustedUIRenderers,
   getTrustedUIRendererWindow,
   isTrustedUIRenderer,
   registerUIHandlers,
-  sendToTrustedUIRenderer,
-  setTrustedUIRendererWebContentsId
+  sendToTrustedUIRenderer
 } from './ui'
+import { orcaWindowManager } from '../window/orca-window-manager'
 
 function makeStore() {
   return {
@@ -66,6 +66,29 @@ function makeUIEvent(senderOverrides: Record<string, unknown> = {}): {
   }
 }
 
+let nextWindowId = 1_000
+
+function registerTrustedEvent(
+  event: ReturnType<typeof makeUIEvent>,
+  windowOverrides: Record<string, unknown> = {},
+  role?: 'control' | 'secondary'
+): Record<string, unknown> {
+  const window = {
+    id: nextWindowId++,
+    webContents: event.sender,
+    isDestroyed: () => false,
+    ...windowOverrides
+  }
+  orcaWindowManager.register(window as never, role)
+  return window
+}
+
+function clearTrustedWindows(): void {
+  for (const window of orcaWindowManager.getAllWindows()) {
+    orcaWindowManager.remove(window.id)
+  }
+}
+
 function getNativePasteHandler():
   | ((event: ReturnType<typeof makeUIEvent>, options?: { mode?: unknown }) => void)
   | undefined {
@@ -80,6 +103,7 @@ function getNativeSelectionActionHandler():
 
 describe('UI IPC', () => {
   beforeEach(() => {
+    clearTrustedWindows()
     vi.stubEnv('ELECTRON_RENDERER_URL', '')
     fromIdMock.mockReset()
     fromWebContentsMock.mockReset()
@@ -90,15 +114,62 @@ describe('UI IPC', () => {
     handleMock.mockReset()
     onMock.mockReset()
     removeAllListenersMock.mockReset()
-    setTrustedUIRendererWebContentsId(null)
   })
 
   afterEach(() => {
+    clearTrustedWindows()
     vi.unstubAllEnvs()
+  })
+
+  it('separates control sends from trusted-window broadcasts', () => {
+    const controlSender = {
+      id: 901,
+      getType: () => 'window',
+      isDestroyed: () => false,
+      send: vi.fn()
+    }
+    const secondarySender = {
+      id: 902,
+      getType: () => 'window',
+      isDestroyed: () => false,
+      send: vi.fn()
+    }
+    const makeWindow = (id: number, sender: typeof controlSender) => ({
+      id,
+      webContents: sender,
+      isDestroyed: () => false
+    })
+    const control = makeWindow(801, controlSender)
+    const secondary = makeWindow(802, secondarySender)
+    orcaWindowManager.register(control as never, 'control')
+    orcaWindowManager.register(secondary as never, 'secondary')
+
+    try {
+      expect(isTrustedUIRenderer(controlSender as never)).toBe(true)
+      expect(isTrustedUIRenderer(secondarySender as never)).toBe(true)
+      expect(isTrustedUIRenderer({ ...secondarySender, getType: () => 'webview' } as never)).toBe(
+        false
+      )
+      expect(isTrustedUIRenderer({ ...secondarySender, id: 999, send: vi.fn() } as never)).toBe(
+        false
+      )
+
+      sendToTrustedUIRenderer('control:event', { ok: true })
+      broadcastToTrustedUIRenderers('broadcast:event', { ok: true })
+
+      expect(controlSender.send).toHaveBeenCalledWith('control:event', { ok: true })
+      expect(secondarySender.send).not.toHaveBeenCalledWith('control:event', { ok: true })
+      expect(controlSender.send).toHaveBeenCalledWith('broadcast:event', { ok: true })
+      expect(secondarySender.send).toHaveBeenCalledWith('broadcast:event', { ok: true })
+    } finally {
+      orcaWindowManager.remove(control.id)
+      orcaWindowManager.remove(secondary.id)
+    }
   })
 
   it('sends app events once to the trusted renderer without waking 100 browser guests', () => {
     const rendererSend = vi.fn()
+    const event = makeUIEvent({ send: rendererSend })
     const guestSends = Array.from({ length: 100 }, () => vi.fn())
     getAllWebContentsMock.mockReturnValue(
       guestSends.map((send, index) => ({
@@ -107,13 +178,10 @@ describe('UI IPC', () => {
         send
       }))
     )
-    fromIdMock.mockReturnValue({ id: 17, isDestroyed: () => false, send: rendererSend })
-    setTrustedUIRendererWebContentsId(17)
+    registerTrustedEvent(event, {}, 'control')
 
     sendToTrustedUIRenderer('gh:prRefreshEvent', { sequence: 1 })
 
-    expect(fromIdMock).toHaveBeenCalledOnce()
-    expect(fromIdMock).toHaveBeenCalledWith(17)
     expect(rendererSend).toHaveBeenCalledOnce()
     expect(rendererSend).toHaveBeenCalledWith('gh:prRefreshEvent', { sequence: 1 })
     expect(getAllWebContentsMock).not.toHaveBeenCalled()
@@ -121,52 +189,41 @@ describe('UI IPC', () => {
   })
 
   it('resolves only the BrowserWindow that owns the trusted renderer', () => {
-    const renderer = { id: 17, isDestroyed: () => false }
-    const mainWindow = { id: 'main' }
-    fromIdMock.mockReturnValue(renderer)
-    fromWebContentsMock.mockReturnValue(mainWindow)
-    setTrustedUIRendererWebContentsId(17)
+    let destroyed = false
+    const event = makeUIEvent({ isDestroyed: () => destroyed })
+    const mainWindow = registerTrustedEvent(event, { isDestroyed: () => destroyed }, 'control')
 
     expect(getTrustedUIRendererWindow()).toBe(mainWindow)
-    expect(fromWebContentsMock).toHaveBeenCalledWith(renderer)
 
-    fromIdMock.mockReturnValue({ id: 17, isDestroyed: () => true })
+    destroyed = true
     expect(getTrustedUIRendererWindow()).toBeNull()
   })
 
-  it('skips missing, destroyed, and originating renderers', () => {
+  it('skips missing and originating renderers', () => {
     const rendererSend = vi.fn()
-    setTrustedUIRendererWebContentsId(17)
-
-    fromIdMock.mockReturnValueOnce(undefined)
-    sendToTrustedUIRenderer('gh:workItemMutated', { number: 7 })
-
-    fromIdMock.mockReturnValueOnce({ id: 17, isDestroyed: () => true, send: rendererSend })
-    sendToTrustedUIRenderer('gh:workItemMutated', { number: 7 })
+    const event = makeUIEvent({ send: rendererSend })
+    const window = registerTrustedEvent(event, {}, 'control')
 
     sendToTrustedUIRenderer('gh:workItemMutated', { number: 7 }, 17)
+    orcaWindowManager.remove(window.id as number)
+    sendToTrustedUIRenderer('gh:workItemMutated', { number: 7 })
 
-    expect(fromIdMock).toHaveBeenCalledTimes(2)
     expect(rendererSend).not.toHaveBeenCalled()
   })
 
   it('routes to a reopened window without retaining the closed renderer', () => {
     const oldRendererSend = vi.fn()
     const newRendererSend = vi.fn()
-    fromIdMock.mockImplementation((id) =>
-      id === 17
-        ? { id, isDestroyed: () => false, send: oldRendererSend }
-        : { id, isDestroyed: () => false, send: newRendererSend }
-    )
-
-    setTrustedUIRendererWebContentsId(17)
+    const oldEvent = makeUIEvent({ id: 17, send: oldRendererSend })
+    const oldWindow = registerTrustedEvent(oldEvent, {}, 'control')
     sendToTrustedUIRenderer('gh:prRefreshEvent', { sequence: 1 })
 
-    setTrustedUIRendererWebContentsId(42)
-    clearTrustedUIRendererWebContentsId(17)
+    orcaWindowManager.remove(oldWindow.id as number)
+    const newEvent = makeUIEvent({ id: 42, send: newRendererSend })
+    const newWindow = registerTrustedEvent(newEvent, {}, 'control')
     sendToTrustedUIRenderer('gh:prRefreshEvent', { sequence: 2 })
 
-    clearTrustedUIRendererWebContentsId(42)
+    orcaWindowManager.remove(newWindow.id as number)
     sendToTrustedUIRenderer('gh:prRefreshEvent', { sequence: 3 })
 
     expect(oldRendererSend).toHaveBeenCalledTimes(1)
@@ -175,14 +232,14 @@ describe('UI IPC', () => {
   })
 
   it('trusts every explicitly registered Orca window renderer', () => {
-    const first = makeUIEvent({ id: 17 }).sender
-    const second = makeUIEvent({ id: 42 }).sender
+    const first = makeUIEvent({ id: 17 })
+    const second = makeUIEvent({ id: 42 })
 
-    setTrustedUIRendererWebContentsId(17)
-    setTrustedUIRendererWebContentsId(42)
+    registerTrustedEvent(first, {}, 'control')
+    registerTrustedEvent(second, {}, 'secondary')
 
-    expect(isTrustedUIRenderer(first as never)).toBe(true)
-    expect(isTrustedUIRenderer(second as never)).toBe(true)
+    expect(isTrustedUIRenderer(first.sender as never)).toBe(true)
+    expect(isTrustedUIRenderer(second.sender as never)).toBe(true)
   })
 
   it('does not trust an unregistered dev-server window by origin alone', () => {
@@ -197,7 +254,7 @@ describe('UI IPC', () => {
     const pasteAndMatchStyle = vi.fn()
     const event = makeUIEvent()
     const sender = event.sender
-    setTrustedUIRendererWebContentsId(17)
+    registerTrustedEvent(event, {}, 'control')
     fromWebContentsMock.mockReturnValue({ webContents: { paste, pasteAndMatchStyle } })
 
     registerUIHandlers(makeStore() as never)
@@ -216,7 +273,7 @@ describe('UI IPC', () => {
     const copy = vi.fn()
     const selectAll = vi.fn()
     const event = makeUIEvent()
-    setTrustedUIRendererWebContentsId(17)
+    registerTrustedEvent(event, {}, 'control')
     fromWebContentsMock.mockReturnValue({ webContents: { copy, selectAll } })
 
     registerUIHandlers(makeStore() as never)
@@ -234,13 +291,8 @@ describe('UI IPC', () => {
   it('reads maximized state from the requesting Orca window', () => {
     const first = makeUIEvent({ id: 17 })
     const second = makeUIEvent({ id: 42 })
-    const firstWindow = { isDestroyed: () => false, isMaximized: () => false }
-    const secondWindow = { isDestroyed: () => false, isMaximized: () => true }
-    setTrustedUIRendererWebContentsId(17)
-    setTrustedUIRendererWebContentsId(42)
-    fromWebContentsMock.mockImplementation((sender) =>
-      sender === second.sender ? secondWindow : firstWindow
-    )
+    registerTrustedEvent(first, { isMaximized: () => false }, 'control')
+    registerTrustedEvent(second, { isMaximized: () => true }, 'secondary')
 
     registerUIHandlers(makeStore() as never)
 
@@ -272,7 +324,7 @@ describe('UI IPC', () => {
   it('ignores native paste fallback from stale or browser senders', () => {
     const paste = vi.fn()
     const pasteAndMatchStyle = vi.fn()
-    setTrustedUIRendererWebContentsId(17)
+    registerTrustedEvent(makeUIEvent(), {}, 'control')
     fromWebContentsMock.mockReturnValue({ webContents: { paste, pasteAndMatchStyle } })
 
     registerUIHandlers(makeStore() as never)
@@ -316,24 +368,25 @@ describe('UI IPC', () => {
     expect(pasteAndMatchStyle).not.toHaveBeenCalled()
   })
 
-  it('clears the trusted renderer id without clearing a newer window id', () => {
+  it('stops trusting a renderer only when its window is removed', () => {
     const paste = vi.fn()
     const pasteAndMatchStyle = vi.fn()
-    setTrustedUIRendererWebContentsId(17)
-    clearTrustedUIRendererWebContentsId(42)
+    const event = makeUIEvent()
+    const window = registerTrustedEvent(event, {}, 'control')
+    orcaWindowManager.remove(42)
     fromWebContentsMock.mockReturnValue({ webContents: { paste, pasteAndMatchStyle } })
 
     registerUIHandlers(makeStore() as never)
 
-    getNativePasteHandler()?.(makeUIEvent())
+    getNativePasteHandler()?.(event)
 
     expect(paste).toHaveBeenCalledTimes(1)
 
-    clearTrustedUIRendererWebContentsId(17)
+    orcaWindowManager.remove(window.id as number)
     fromWebContentsMock.mockClear()
     paste.mockClear()
 
-    getNativePasteHandler()?.(makeUIEvent())
+    getNativePasteHandler()?.(event)
 
     expect(fromWebContentsMock).not.toHaveBeenCalled()
     expect(paste).not.toHaveBeenCalled()
@@ -344,7 +397,7 @@ describe('UI IPC', () => {
     const pasteAndMatchStyle = vi.fn()
     const event = makeUIEvent({ getURL: () => 'http://localhost:5173/workspace' })
     vi.stubEnv('ELECTRON_RENDERER_URL', 'http://localhost:5173')
-    setTrustedUIRendererWebContentsId(17)
+    registerTrustedEvent(event, {}, 'control')
     fromWebContentsMock.mockReturnValue({ webContents: { paste, pasteAndMatchStyle } })
 
     registerUIHandlers(makeStore() as never)

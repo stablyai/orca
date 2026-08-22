@@ -176,7 +176,7 @@ export function createSshIpcHarness(mocks: SshIpcMocks): SshIpcHarness {
   const reset = async (): Promise<void> => {
     await resetSshHandlerStateForTests()
     for (const window of orcaWindowManager.getAllWindows()) {
-      orcaWindowManager.unregister(window.id)
+      orcaWindowManager.remove(window.id)
     }
     orcaWindowManager.register(mockWindow as never, 'control')
     handlers.clear()

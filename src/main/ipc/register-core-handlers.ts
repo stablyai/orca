@@ -34,7 +34,6 @@ import { registerTerminalPreviewHandlers } from './terminal-preview'
 import { registerDeveloperPermissionHandlers } from './developer-permissions'
 import { registerComputerUsePermissionHandlers } from './computer-use-permissions'
 import { setAgentBrowserBridgeRef, registerBrowserHandlers } from './browser'
-import { setTrustedBrowserRendererWebContentsId } from './browser-renderer-trust'
 import { registerSessionHandlers } from './session'
 import { registerSettingsHandlers } from './settings'
 import { registerDiagnosticsHandlers } from './diagnostics'
@@ -48,7 +47,7 @@ import { registerTelemetryHandlers } from './telemetry'
 import { registerShellHandlers } from './shell'
 import { registerPetHandlers } from './pet'
 import { registerPluginHandlers } from './plugins'
-import { registerUIHandlers, setTrustedUIRendererWebContentsId } from './ui'
+import { registerUIHandlers } from './ui'
 import { registerEmulatorFrameStreamHandlers } from './emulator-frame-stream'
 import { registerEmulatorVideoStreamHandlers } from './emulator-video-stream'
 import { registerSpeechHandlers } from './speech'
@@ -63,10 +62,7 @@ import { registerClaudeAccountHandlers } from './claude-accounts'
 import { registerMiniMaxCredentialsHandlers } from './minimax-credentials'
 import { registerGrokAccountHandlers } from './grok-accounts'
 import { registerUpdaterHandlers } from '../window/attach-main-window-services'
-import {
-  registerClipboardHandlers,
-  setTrustedClipboardRendererWebContentsId
-} from '../window/clipboard-ipc-handlers'
+import { registerClipboardHandlers } from '../window/clipboard-ipc-handlers'
 import { isDashboardPopoutRenderer } from '../window/dashboard-popout-window'
 import type { ClaudeUsageStore } from '../claude-usage/store'
 import type { CodexUsageStore } from '../codex-usage/store'
@@ -113,7 +109,6 @@ export function registerCoreHandlers(
   codexAccounts: CodexAccountService,
   claudeAccounts: ClaudeAccountService,
   rateLimits: RateLimitService,
-  mainWindowWebContentsId: number | null = null,
   automations?: AutomationService,
   commitMessageAgentEnv?: CommitMessageAgentEnvironmentResolvers,
   agentAwakeService?: AgentAwakeService,
@@ -125,11 +120,7 @@ export function registerCoreHandlers(
 ): void {
   // Why: on macOS the app can stay alive after all windows close, then
   // openMainWindow() is called again on 'activate'. ipcMain.handle() throws
-  // if a channel is registered twice, so we guard to register only once and
-  // just update the per-window web-contents ID on subsequent calls.
-  setTrustedBrowserRendererWebContentsId(mainWindowWebContentsId)
-  setTrustedClipboardRendererWebContentsId(mainWindowWebContentsId)
-  setTrustedUIRendererWebContentsId(mainWindowWebContentsId)
+  // if a channel is registered twice, so app-global handlers register once.
   setAgentBrowserBridgeRef(runtime.getAgentBrowserBridge())
   if (registered) {
     return

@@ -133,12 +133,16 @@ vi.mock('../providers/ssh-filesystem-dispatch', () => ({
 vi.mock('../ipc/runtime-environment-transport-routing', () => ({
   callRuntimeEnvironment: callRuntimeEnvironmentMock
 }))
+vi.mock('../ipc/ui', () => ({
+  isTrustedUIRenderer: (sender: Electron.WebContents) =>
+    sender.id === 17 &&
+    !sender.isDestroyed() &&
+    sender.getType() === 'window' &&
+    sender.getURL() === 'file:///orca/index.html'
+}))
 vi.mock('./dashboard-popout-window', () => ({ isDashboardPopoutRenderer: () => false }))
 
-import {
-  registerClipboardHandlers,
-  setTrustedClipboardRendererWebContentsId
-} from './clipboard-ipc-handlers'
+import { registerClipboardHandlers } from './clipboard-ipc-handlers'
 
 const REMOTE_CLIPBOARD_STAGING_ROOT = join(
   '/tmp',
@@ -231,7 +235,6 @@ describe('registerClipboardHandlers', () => {
     randomUUIDMock.mockReturnValue('00000000-0000-4000-8000-000000000000')
     getSshFilesystemProviderMock.mockReset()
     callRuntimeEnvironmentMock.mockReset()
-    setTrustedClipboardRendererWebContentsId(null)
   })
 
   afterEach(() => {
@@ -272,7 +275,6 @@ describe('registerClipboardHandlers', () => {
   })
 
   it('rejects clipboard IPC from senders outside the current main renderer', async () => {
-    setTrustedClipboardRendererWebContentsId(17)
     registerClipboardHandlers({} as never)
 
     const handlers = getRegisteredHandlers()

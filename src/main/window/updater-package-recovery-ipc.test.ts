@@ -1,7 +1,6 @@
-import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { IpcMainInvokeEvent, WebContents } from 'electron'
 import type { Store } from '../persistence'
-import type * as IpcUiModule from '../ipc/ui'
 
 const {
   handleMock,
@@ -59,10 +58,7 @@ vi.mock('../updater', () => ({
   showLinuxPackage: showLinuxPackageMock
 }))
 
-// Why: the seam stays mocked so one test can prove the wiring, but it defaults to delegating to the
-// real predicate so the sender cases below exercise its actual branches.
-vi.mock('../ipc/ui', async (importOriginal) => ({
-  ...(await importOriginal<typeof IpcUiModule>()),
+vi.mock('../ipc/ui', () => ({
   isTrustedUIRenderer: (sender: unknown) => isTrustedUIRendererMock(sender)
 }))
 
@@ -78,7 +74,7 @@ const UNAUTHORIZED = 'Unauthorized updater package recovery sender'
 
 type InvokeHandler = (event: IpcMainInvokeEvent, ...args: unknown[]) => unknown
 
-let actualUi: typeof IpcUiModule
+let trustedId = TRUSTED_ID
 
 function getHandler(channel: string): InvokeHandler {
   const handler = handleMock.mock.calls.find(([name]) => name === channel)?.[1] as
@@ -114,18 +110,16 @@ function expectBothChannelsRejected(sender: Partial<WebContents>): void {
 }
 
 describe('updater linux package recovery IPC handlers', () => {
-  beforeAll(async () => {
-    // An unmocked copy, so the trusted-id state it reads is the one these tests set.
-    actualUi = await vi.importActual<typeof IpcUiModule>('../ipc/ui')
-  })
-
   beforeEach(() => {
     handleMock.mockReset()
     removeHandlerMock.mockReset()
-    isTrustedUIRendererMock
-      .mockReset()
-      .mockImplementation((sender) => actualUi.isTrustedUIRenderer(sender as WebContents))
-    actualUi.setTrustedUIRendererWebContentsId(TRUSTED_ID)
+    trustedId = TRUSTED_ID
+    isTrustedUIRendererMock.mockReset().mockImplementation((sender) => {
+      const candidate = sender as WebContents
+      return (
+        candidate.id === trustedId && !candidate.isDestroyed() && candidate.getType() === 'window'
+      )
+    })
     getLinuxPackageInstallInstructionsMock
       .mockReset()
       .mockResolvedValue({ ok: true, command: "sudo apt install -- '<pkg>'", packageFileName: 'p' })
@@ -163,7 +157,6 @@ describe('updater linux package recovery IPC handlers', () => {
     await expect(getHandler(RECOVERY_CHANNELS[1])(event)).resolves.toBeUndefined()
   })
 
-  // Each row is a distinct branch of the real isTrustedUIRenderer, not a relabelled mock return.
   it.each([
     ['a guest webview', webContents({ getType: () => 'webview' })],
     ['a utility renderer', webContents({ getType: () => 'offscreen' })],
@@ -173,8 +166,8 @@ describe('updater linux package recovery IPC handlers', () => {
     expectBothChannelsRejected(sender)
   })
 
-  it('rejects a foreign-origin renderer when only the dev URL fallback applies', () => {
-    actualUi.setTrustedUIRendererWebContentsId(null)
+  it('rejects a foreign-origin unregistered renderer', () => {
+    isTrustedUIRendererMock.mockReturnValue(false)
     vi.stubEnv('ELECTRON_RENDERER_URL', 'http://localhost:5173')
 
     expectBothChannelsRejected(webContents({ getURL: () => 'http://evil.invalid/index.html' }))
@@ -185,7 +178,7 @@ describe('updater linux package recovery IPC handlers', () => {
     void getHandler(RECOVERY_CHANNELS[0])(event)
 
     // The main window was replaced between calls; the previously served sender is now stale.
-    actualUi.setTrustedUIRendererWebContentsId(TRUSTED_ID + 1)
+    trustedId = TRUSTED_ID + 1
 
     expect(() => getHandler(RECOVERY_CHANNELS[0])(event)).toThrow(UNAUTHORIZED)
     expect(getLinuxPackageInstallInstructionsMock).toHaveBeenCalledTimes(1)

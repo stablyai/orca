@@ -1,28 +1,8 @@
-import { BrowserWindow, ipcMain, webContents, type WebContents } from 'electron'
+import { BrowserWindow, ipcMain, type WebContents } from 'electron'
 import type { Store } from '../persistence'
 import type { PersistedUIState } from '../../shared/persisted-ui-state-types'
 import { isFeatureInteractionId } from '../../shared/feature-interactions'
 import { orcaWindowManager } from '../window/orca-window-manager'
-
-const trustedUIRendererWebContentsIds = new Set<number>()
-let preferredTrustedUIRendererWebContentsId: number | null = null
-
-export function setTrustedUIRendererWebContentsId(webContentsId: number | null): void {
-  if (webContentsId == null) {
-    trustedUIRendererWebContentsIds.clear()
-    preferredTrustedUIRendererWebContentsId = null
-    return
-  }
-  trustedUIRendererWebContentsIds.add(webContentsId)
-  preferredTrustedUIRendererWebContentsId = webContentsId
-}
-
-export function clearTrustedUIRendererWebContentsId(webContentsId: number): void {
-  trustedUIRendererWebContentsIds.delete(webContentsId)
-  if (preferredTrustedUIRendererWebContentsId === webContentsId) {
-    preferredTrustedUIRendererWebContentsId = [...trustedUIRendererWebContentsIds].at(-1) ?? null
-  }
-}
 
 export function sendToTrustedUIRenderer(
   channel: string,
@@ -33,36 +13,35 @@ export function sendToTrustedUIRenderer(
   renderer?.send(channel, payload)
 }
 
+export function broadcastToTrustedUIRenderers(
+  channel: string,
+  payload: unknown,
+  excludedWebContentsId?: number
+): void {
+  for (const window of orcaWindowManager.getAllWindows()) {
+    const renderer = window.webContents
+    if (!renderer.isDestroyed() && renderer.id !== excludedWebContentsId) {
+      renderer.send(channel, payload)
+    }
+  }
+}
+
 export function getTrustedUIRendererWebContents(
   excludedWebContentsId?: number
 ): WebContents | null {
   const controlRenderer = orcaWindowManager.getControlWindow()?.webContents
   if (
-    controlRenderer &&
-    !controlRenderer.isDestroyed() &&
-    controlRenderer.id !== excludedWebContentsId
+    !controlRenderer ||
+    controlRenderer.isDestroyed() ||
+    controlRenderer.id === excludedWebContentsId
   ) {
-    return controlRenderer
-  }
-  // Why: exact targeting avoids waking retained browser/utility windows that cannot consume app UI events.
-  const rendererId = preferredTrustedUIRendererWebContentsId
-  if (rendererId == null || rendererId === excludedWebContentsId) {
     return null
   }
-  const renderer = webContents.fromId(rendererId)
-  if (!renderer || renderer.isDestroyed()) {
-    return null
-  }
-  return renderer
+  return controlRenderer
 }
 
 export function getTrustedUIRendererWindow(): BrowserWindow | null {
-  const controlWindow = orcaWindowManager.getControlWindow()
-  if (controlWindow) {
-    return controlWindow
-  }
-  const renderer = getTrustedUIRendererWebContents()
-  return renderer ? BrowserWindow.fromWebContents(renderer) : null
+  return orcaWindowManager.getControlWindow()
 }
 
 export function registerUIHandlers(
@@ -73,11 +52,7 @@ export function registerUIHandlers(
   // RPC). Broadcast every change so the desktop re-hydrates when mobile (or
   // another window) updates it — bi-directional sync, mirroring settings:changed.
   store.onUIChanged((ui) => {
-    for (const window of BrowserWindow.getAllWindows()) {
-      if (!window.isDestroyed()) {
-        window.webContents.send('ui:stateChanged', ui)
-      }
-    }
+    broadcastToTrustedUIRenderers('ui:stateChanged', ui)
   })
 
   ipcMain.handle('ui:get', () => {
@@ -138,8 +113,5 @@ export function registerUIHandlers(
 }
 
 export function isTrustedUIRenderer(sender: WebContents): boolean {
-  if (sender.isDestroyed() || sender.getType() !== 'window') {
-    return false
-  }
-  return orcaWindowManager.isTrustedSender(sender) || trustedUIRendererWebContentsIds.has(sender.id)
+  return orcaWindowManager.isTrustedSender(sender)
 }

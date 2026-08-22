@@ -32,16 +32,15 @@ vi.mock('../browser/browser-cookie-import', () => ({
   pickCookieFile: vi.fn(),
   selectBrowserProfile: vi.fn()
 }))
+vi.mock('./ui', () => ({ isTrustedUIRenderer: vi.fn(() => true) }))
 
 import { registerBrowserHandlers } from './browser'
-import { setTrustedBrowserRendererWebContentsId } from './browser-renderer-trust'
 
 describe('browser session profile IPC', () => {
   beforeEach(() => {
     handleMock.mockReset()
     removeHandlerMock.mockReset()
     createProfileMock.mockReset()
-    setTrustedBrowserRendererWebContentsId(null)
   })
 
   it('forwards the user-agent mode from a trusted renderer', () => {

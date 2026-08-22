@@ -1508,7 +1508,6 @@ function openMainWindow(options: { revealOnDidFinishLoad?: boolean } = {}): Brow
     codexAccounts,
     claudeAccounts,
     rateLimits,
-    rendererWebContentsId,
     automations,
     {
       prepareForCodexLaunch: prepareCodexRuntimeHomeForLaunch,
@@ -1572,6 +1571,7 @@ function openMainWindow(options: { revealOnDidFinishLoad?: boolean } = {}): Brow
   const bindControlWindowLifecycle = (controlWindow: BrowserWindow): void => {
     const controlWindowId = controlWindow.id
     const controlWebContentsId = controlWindow.webContents.id
+    const transitionToken = orcaWindowManager.beginControlTransition(controlWindowId)
     controlWindow.on('closed', () => {
       if (mainWindow !== controlWindow) {
         return
@@ -1580,7 +1580,13 @@ function openMainWindow(options: { revealOnDidFinishLoad?: boolean } = {}): Brow
       if (!isQuitting) {
         getWindowSessionRegistry(store!).retire(controlWindowId, 'user-close')
       }
-      const promoted = isQuitting ? null : orcaWindowManager.promoteControl()
+      const promoted =
+        isQuitting || transitionToken == null
+          ? null
+          : orcaWindowManager.electControlDuringTransition(transitionToken)
+      if (transitionToken != null) {
+        orcaWindowManager.finishControlTransition(transitionToken)
+      }
       if (promoted) {
         mainWindow = promoted
         attachControlServices(promoted)

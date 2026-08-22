@@ -24,7 +24,6 @@ const {
   registerPetHandlersMock,
   registerSessionHandlersMock,
   registerUIHandlersMock,
-  setTrustedUIRendererWebContentsIdMock,
   registerFilesystemHandlersMock,
   registerRuntimeHandlersMock,
   registerRuntimeEnvironmentHandlersMock,
@@ -38,12 +37,10 @@ const {
   registerMiniMaxCredentialsHandlersMock,
   registerGrokAccountHandlersMock,
   registerClipboardHandlersMock,
-  setTrustedClipboardRendererWebContentsIdMock,
   registerUpdaterHandlersMock,
   registerRateLimitHandlersMock,
   registerBrowserHandlersMock,
   setAgentBrowserBridgeRefMock,
-  setTrustedBrowserRendererWebContentsIdMock,
   registerFilesystemWatcherHandlersMock,
   registerAppHandlersMock,
   registerLinearHandlersMock,
@@ -89,7 +86,6 @@ const {
   registerPetHandlersMock: vi.fn(),
   registerSessionHandlersMock: vi.fn(),
   registerUIHandlersMock: vi.fn(),
-  setTrustedUIRendererWebContentsIdMock: vi.fn(),
   registerFilesystemHandlersMock: vi.fn(),
   registerRuntimeHandlersMock: vi.fn(),
   registerRuntimeEnvironmentHandlersMock: vi.fn(),
@@ -103,12 +99,10 @@ const {
   registerMiniMaxCredentialsHandlersMock: vi.fn(),
   registerGrokAccountHandlersMock: vi.fn(),
   registerClipboardHandlersMock: vi.fn(),
-  setTrustedClipboardRendererWebContentsIdMock: vi.fn(),
   registerUpdaterHandlersMock: vi.fn(),
   registerRateLimitHandlersMock: vi.fn(),
   registerBrowserHandlersMock: vi.fn(),
   setAgentBrowserBridgeRefMock: vi.fn(),
-  setTrustedBrowserRendererWebContentsIdMock: vi.fn(),
   registerFilesystemWatcherHandlersMock: vi.fn(),
   registerAppHandlersMock: vi.fn(),
   registerLinearHandlersMock: vi.fn(),
@@ -263,8 +257,7 @@ vi.mock('./session', () => ({
 }))
 
 vi.mock('./ui', () => ({
-  registerUIHandlers: registerUIHandlersMock,
-  setTrustedUIRendererWebContentsId: setTrustedUIRendererWebContentsIdMock
+  registerUIHandlers: registerUIHandlersMock
 }))
 
 vi.mock('./emulator-frame-stream', () => ({
@@ -336,17 +329,12 @@ vi.mock('../window/attach-main-window-services', () => ({
 }))
 
 vi.mock('../window/clipboard-ipc-handlers', () => ({
-  registerClipboardHandlers: registerClipboardHandlersMock,
-  setTrustedClipboardRendererWebContentsId: setTrustedClipboardRendererWebContentsIdMock
+  registerClipboardHandlers: registerClipboardHandlersMock
 }))
 
 vi.mock('./browser', () => ({
   registerBrowserHandlers: registerBrowserHandlersMock,
   setAgentBrowserBridgeRef: setAgentBrowserBridgeRefMock
-}))
-
-vi.mock('./browser-renderer-trust', () => ({
-  setTrustedBrowserRendererWebContentsId: setTrustedBrowserRendererWebContentsIdMock
 }))
 
 vi.mock('./app', () => ({
@@ -410,7 +398,6 @@ describe('registerCoreHandlers', () => {
     registerPetHandlersMock.mockReset()
     registerSessionHandlersMock.mockReset()
     registerUIHandlersMock.mockReset()
-    setTrustedUIRendererWebContentsIdMock.mockReset()
     registerFilesystemHandlersMock.mockReset()
     registerRuntimeHandlersMock.mockReset()
     registerRuntimeEnvironmentHandlersMock.mockReset()
@@ -423,12 +410,10 @@ describe('registerCoreHandlers', () => {
     registerClaudeAccountHandlersMock.mockReset()
     registerMiniMaxCredentialsHandlersMock.mockReset()
     registerClipboardHandlersMock.mockReset()
-    setTrustedClipboardRendererWebContentsIdMock.mockReset()
     registerUpdaterHandlersMock.mockReset()
     registerRateLimitHandlersMock.mockReset()
     registerBrowserHandlersMock.mockReset()
     setAgentBrowserBridgeRefMock.mockReset()
-    setTrustedBrowserRendererWebContentsIdMock.mockReset()
     registerFilesystemWatcherHandlersMock.mockReset()
     registerAppHandlersMock.mockReset()
     registerLinearHandlersMock.mockReset()
@@ -473,7 +458,6 @@ describe('registerCoreHandlers', () => {
       codexAccounts as never,
       claudeAccounts as never,
       rateLimits as never,
-      null,
       undefined,
       undefined,
       agentAwakeService as never,
@@ -558,9 +542,6 @@ describe('registerCoreHandlers', () => {
     expect(registerShellHandlersMock).toHaveBeenCalledWith(store)
     expect(registerClipboardHandlersMock).toHaveBeenCalledWith(store)
     expect(registerUpdaterHandlersMock).toHaveBeenCalled()
-    expect(setTrustedBrowserRendererWebContentsIdMock).toHaveBeenCalledWith(null)
-    expect(setTrustedClipboardRendererWebContentsIdMock).toHaveBeenCalledWith(null)
-    expect(setTrustedUIRendererWebContentsIdMock).toHaveBeenCalledWith(null)
     expect(registerBrowserHandlersMock).toHaveBeenCalled()
     expect(registerFilesystemWatcherHandlersMock).toHaveBeenCalled()
     expect(registerSpeechHandlersMock).toHaveBeenCalledWith(store)
@@ -620,7 +601,7 @@ describe('registerCoreHandlers', () => {
     )
   })
 
-  it('only registers IPC handlers once but always updates web contents id', () => {
+  it('only registers app-global IPC handlers once', () => {
     // The first test already called registerCoreHandlers, so the module-level
     // guard is now set. beforeEach reset all mocks, so call counts are 0.
     const store2 = { marker: 'store2' }
@@ -642,14 +623,9 @@ describe('registerCoreHandlers', () => {
       openCodeUsage2 as never,
       codexAccounts2 as never,
       claudeAccounts2 as never,
-      rateLimits2 as never,
-      42
+      rateLimits2 as never
     )
 
-    // Web contents ID should always be updated
-    expect(setTrustedBrowserRendererWebContentsIdMock).toHaveBeenCalledWith(42)
-    expect(setTrustedClipboardRendererWebContentsIdMock).toHaveBeenCalledWith(42)
-    expect(setTrustedUIRendererWebContentsIdMock).toHaveBeenCalledWith(42)
     // IPC handlers should NOT be registered again
     expect(registerCliHandlersMock).not.toHaveBeenCalled()
     expect(registerPreflightHandlersMock).not.toHaveBeenCalled()

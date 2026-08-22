@@ -1,9 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-const { registerWindowMock, unregisterWindowMock, noteFocusedMock, getAllWindowsMock } = vi.hoisted(
+const { registerWindowMock, removeWindowMock, noteFocusedMock, getAllWindowsMock } = vi.hoisted(
   () => ({
     registerWindowMock: vi.fn(),
-    unregisterWindowMock: vi.fn(),
+    removeWindowMock: vi.fn(),
     noteFocusedMock: vi.fn(),
     getAllWindowsMock: vi.fn()
   })
@@ -29,7 +29,7 @@ vi.mock('./orca-window-manager', () => ({
     getAllWindows: getAllWindowsMock,
     noteFocused: noteFocusedMock,
     register: registerWindowMock,
-    unregister: unregisterWindowMock
+    remove: removeWindowMock
   }
 }))
 
@@ -94,7 +94,7 @@ describe('createMainWindow multi-window registration', () => {
   beforeEach(() => {
     resetMainWindowMocks()
     registerWindowMock.mockReset()
-    unregisterWindowMock.mockReset()
+    removeWindowMock.mockReset()
     noteFocusedMock.mockReset()
     getAllWindowsMock.mockReset()
   })
@@ -133,7 +133,7 @@ describe('createMainWindow multi-window registration', () => {
 
     getAllWindowsMock.mockReturnValue([second.instance])
     first.windowHandlers.get('closed')?.forEach((handler) => handler())
-    expect(unregisterWindowMock).toHaveBeenCalledWith(1)
+    expect(removeWindowMock).toHaveBeenCalledWith(1)
     expect(browserManager.setDictationShortcutForwardingPredicate).not.toHaveBeenLastCalledWith(
       null
     )

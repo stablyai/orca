@@ -21,18 +21,41 @@ function makeWindow(
 }
 
 describe('OrcaWindowManager', () => {
+  it('keeps duplicate registration idempotent and exposes window state', () => {
+    const manager = new OrcaWindowManager()
+    const control = makeWindow(7, { x: 0, y: 0, width: 800, height: 600 })
+
+    manager.register(control as never, 'control')
+    manager.noteFocused(control.id)
+    manager.register(control as never)
+
+    expect(manager.getWindow(control.id)).toBe(control)
+    expect(manager.getAllWindows()).toEqual([control])
+    expect(manager.getFocusedWindow()).toBe(control)
+    expect(manager.getControlWindow()).toBe(control)
+    expect(manager.getControlWindowId()).toBe(control.id)
+    expect(manager.getRole(control.id)).toBe('control')
+  })
+
   it('maps every registered Orca renderer without trusting unknown senders', () => {
     const manager = new OrcaWindowManager()
     const control = makeWindow(1, { x: 0, y: 0, width: 800, height: 600 })
     const secondary = makeWindow(2, { x: 800, y: 0, width: 800, height: 600 })
+    const webview = makeWindow(3, { x: 1600, y: 0, width: 800, height: 600 })
+    webview.webContents.getType = () => 'webview'
 
     manager.register(control as never, 'control')
     manager.register(secondary as never, 'secondary')
+    manager.register(webview as never, 'secondary')
 
     expect(manager.getWindowForSender(control.webContents as never)).toBe(control)
     expect(manager.getWindowForSender(secondary.webContents as never)).toBe(secondary)
     expect(manager.isTrustedSender(control.webContents as never)).toBe(true)
     expect(manager.isTrustedSender(secondary.webContents as never)).toBe(true)
+    expect(manager.isTrustedSender(webview.webContents as never)).toBe(false)
+    expect(
+      manager.isTrustedSender({ ...secondary.webContents, getType: () => 'window' } as never)
+    ).toBe(false)
     expect(
       manager.isTrustedSender({
         id: 999,
@@ -56,12 +79,56 @@ describe('OrcaWindowManager', () => {
 
     expect(manager.getMostRecentWindow()).toBe(second)
 
-    manager.unregister(first.id)
+    manager.remove(first.id)
 
     expect(manager.promoteControl()).toBe(second)
     expect(manager.getControlWindow()).toBe(second)
     expect(manager.getRole(second.id)).toBe('control')
     expect(manager.getRole(third.id)).toBe('secondary')
+  })
+
+  it('re-elects after control removal and fails closed when empty', () => {
+    const manager = new OrcaWindowManager()
+    const control = makeWindow(1, { x: 0, y: 0, width: 800, height: 600 })
+    const fallback = makeWindow(2, { x: 800, y: 0, width: 800, height: 600 })
+    manager.register(control as never, 'control')
+    manager.register(fallback as never, 'secondary')
+    manager.noteFocused(fallback.id)
+
+    manager.remove(control.id)
+
+    expect(manager.getControlWindow()).toBe(fallback)
+    expect(manager.getControlWindowId()).toBe(fallback.id)
+
+    manager.remove(fallback.id)
+
+    expect(manager.getControlWindow()).toBeNull()
+    expect(manager.getControlWindowId()).toBeNull()
+    expect(manager.getFocusedWindow()).toBeNull()
+  })
+
+  it('fences control election with the latest transition token', () => {
+    const manager = new OrcaWindowManager()
+    const control = makeWindow(1, { x: 0, y: 0, width: 800, height: 600 })
+    const fallback = makeWindow(2, { x: 800, y: 0, width: 800, height: 600 })
+    manager.register(control as never, 'control')
+    manager.register(fallback as never, 'secondary')
+    manager.noteFocused(fallback.id)
+    const staleToken = manager.beginControlTransition(control.id)
+    const activeToken = manager.beginControlTransition(control.id)
+
+    expect(staleToken).not.toBeNull()
+    expect(activeToken).not.toBeNull()
+    manager.remove(control.id)
+    expect(manager.getControlWindow()).toBeNull()
+
+    expect(manager.electControlDuringTransition(staleToken!)).toBeNull()
+    expect(manager.finishControlTransition(staleToken!)).toBe(false)
+    expect(manager.getControlWindow()).toBeNull()
+
+    expect(manager.electControlDuringTransition(activeToken!)).toBe(fallback)
+    expect(manager.finishControlTransition(activeToken!)).toBe(true)
+    expect(manager.getControlWindow()).toBe(fallback)
   })
 
   it('uses the lowest window id when no focus order distinguishes candidates', () => {

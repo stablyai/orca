@@ -16,7 +16,8 @@ const {
   cancelDownloadMock,
   proceedCertificateMock,
   browserWindowFromWebContentsMock,
-  webContentsFromIdMock
+  webContentsFromIdMock,
+  isTrustedUIRendererMock
 } = vi.hoisted(() => ({
   removeHandlerMock: vi.fn(),
   handleMock: vi.fn(),
@@ -33,7 +34,8 @@ const {
   cancelDownloadMock: vi.fn(),
   proceedCertificateMock: vi.fn(),
   browserWindowFromWebContentsMock: vi.fn(),
-  webContentsFromIdMock: vi.fn()
+  webContentsFromIdMock: vi.fn(),
+  isTrustedUIRendererMock: vi.fn()
 }))
 
 vi.mock('electron', () => ({
@@ -67,6 +69,7 @@ vi.mock('../browser/browser-manager', () => ({
     cancelDownload: cancelDownloadMock
   }
 }))
+vi.mock('./ui', () => ({ isTrustedUIRenderer: isTrustedUIRendererMock }))
 
 import { registerBrowserHandlers, setAgentBrowserBridgeRef } from './browser'
 import {
@@ -101,6 +104,10 @@ describe('registerBrowserHandlers', () => {
     webContentsFromIdMock.mockReturnValue({ isDestroyed: () => false })
     openDevToolsMock.mockResolvedValue(true)
     setAnnotationViewportBridgeMock.mockResolvedValue(true)
+    isTrustedUIRendererMock.mockReset()
+    isTrustedUIRendererMock.mockImplementation(
+      (sender) => !sender.isDestroyed() && sender.getType() === 'window'
+    )
     setAgentBrowserBridgeRef(null)
   })
 

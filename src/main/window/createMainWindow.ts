@@ -53,7 +53,6 @@ import {
   richMarkdownContextMenuTargetChannel,
   type RichMarkdownContextMenuTableTarget
 } from '../../shared/rich-markdown-context-menu'
-import { clearTrustedUIRendererWebContentsId, setTrustedUIRendererWebContentsId } from '../ipc/ui'
 import { resolveWindowCloseAction } from './window-close-decision'
 import { rectHasVisibleAreaOnAnyDisplay } from './window-bounds-validation'
 import { closeDashboardPopout } from './dashboard-popout-window'
@@ -321,8 +320,6 @@ export function createMainWindow(
   orcaWindowManager.register(mainWindow, opts?.orcaWindowRole)
   mainWindow.on('focus', () => orcaWindowManager.noteFocused(mainWindow.id))
   installWindowsPathRegistryChangeListener(mainWindow)
-  // Why: native paste fallback is privileged IPC; only the top-level renderer may request it.
-  setTrustedUIRendererWebContentsId(rendererWebContentsId)
 
   // Unlike query-session-end, session-end cannot be canceled before this signal is recorded.
   if (process.platform === 'win32') {
@@ -1215,8 +1212,7 @@ export function createMainWindow(
     ipcMain.removeListener(richMarkdownContextMenuTargetChannel, onRichMarkdownContextMenuTarget)
     // Why: powerMonitor is app-global; without this the resume relay leaks and fires against a destroyed webContents.
     powerMonitor.removeListener('resume', onSystemResume)
-    clearTrustedUIRendererWebContentsId(rendererWebContentsId)
-    orcaWindowManager.unregister(mainWindow.id)
+    orcaWindowManager.remove(mainWindow.id)
     if (orcaWindowManager.getAllWindows().length === 0) {
       browserManager.setDictationShortcutForwardingPredicate(null)
     }
