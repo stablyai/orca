@@ -9997,7 +9997,9 @@
               "title": "Theme Mode",
               "keyword_target": "target",
               "keyword_editing": "editing"
-            }
+            },
+            "57f2d9cf07": "Background Image",
+            "fbd6db2462": "Draw an image behind every terminal pane."
           },
           "windows": {
             "search": {
@@ -11281,6 +11283,21 @@
         },
         "shortcutDefinitionCatalog": {
           "missionControlConflict": "Blocked by Mission Control. Remap here or change it in System Settings."
+        },
+        "TerminalBackgroundImageSetting": {
+          "38b326d424": "Failed to load background image",
+          "0bdb168ee2": "Cover",
+          "67dd10e508": "Contain",
+          "3f2880d508": "Stretch",
+          "64e97c6791": "Center",
+          "ae369d4605": "Background Image",
+          "b6559dbb21": "Draw an image behind every terminal pane.",
+          "d434de1d39": "Terminal background preview",
+          "5b2d06d2ae": "Choose image…",
+          "9adb6af93d": "Remove",
+          "ec2d7b014e": "Image Opacity",
+          "adfba5db13": "How strongly the image shows through. 0 hides it, 1 is fully visible.",
+          "2ff86e95a3": "Image Fit"
         }
       },
       "right": {

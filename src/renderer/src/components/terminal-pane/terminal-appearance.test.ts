@@ -4,7 +4,9 @@ import { getDefaultSettings } from '../../../../shared/constants'
 import {
   applyTerminalAppearance,
   hexToRgba,
-  publishTerminalViewAttributesAtAppStart
+  publishTerminalViewAttributesAtAppStart,
+  terminalBackgroundNeedsTransparency,
+  withTransparentBackground
 } from './terminal-appearance'
 import { maybePushMode2031Flip } from './terminal-mode-2031-replies'
 import { safeFit } from '@/lib/pane-manager/pane-fit'
@@ -359,6 +361,79 @@ describe('applyTerminalAppearance theme assignment', () => {
 
     // Latest wins, exactly one write: intermediate hidden values never touch xterm.
     expect(writes).toEqual([21])
+  })
+
+  it('enables transparency and clears the xterm fill when a background image is set', () => {
+    const pane = makePane(1)
+    const manager = makeManager([pane])
+    const settings = getDefaultSettings('/tmp')
+    const image = 'data:image/png;base64,AAAA'
+
+    applyTerminalAppearance(
+      manager,
+      { ...settings, theme: 'dark', terminalBackgroundImage: image },
+      true,
+      new Map(),
+      new Map(),
+      'false',
+      new Map(),
+      new Map()
+    )
+
+    expect(pane.terminal.options.allowTransparency).toBe(true)
+    expect(pane.terminal.options.theme?.background).toMatch(/^rgba\(\d+, \d+, \d+, 0\)$/)
+    // The root still gets the real theme color so the image composites over the theme, not over nothing.
+    const styleOptions = vi.mocked(manager.setPaneStyleOptions).mock.calls[0][0]
+    expect(styleOptions.splitBackground).toMatch(/^#/)
+    expect(styleOptions.backgroundImage).toBe(image)
+  })
+
+  it('keeps the opaque fill and no image layer when the image is cleared', () => {
+    const pane = makePane(1)
+    const manager = makeManager([pane])
+    const settings = getDefaultSettings('/tmp')
+
+    applyTerminalAppearance(
+      manager,
+      { ...settings, theme: 'dark' },
+      true,
+      new Map(),
+      new Map(),
+      'false',
+      new Map(),
+      new Map()
+    )
+
+    expect(pane.terminal.options.allowTransparency).toBe(false)
+    expect(pane.terminal.options.theme?.background).toMatch(/^#/)
+    expect(vi.mocked(manager.setPaneStyleOptions).mock.calls[0][0].backgroundImage).toBeNull()
+  })
+})
+
+describe('withTransparentBackground', () => {
+  it('zeroes alpha while preserving the RGB of hex and rgba backgrounds', () => {
+    expect(withTransparentBackground({ background: '#1e1e2e' }).background).toBe(
+      'rgba(30, 30, 46, 0)'
+    )
+    expect(withTransparentBackground({ background: 'rgba(30, 30, 46, 0.8)' }).background).toBe(
+      'rgba(30, 30, 46, 0)'
+    )
+  })
+
+  it('leaves unparseable or missing backgrounds alone', () => {
+    expect(withTransparentBackground({ background: 'transparent' }).background).toBe('transparent')
+    expect(withTransparentBackground({}).background).toBeUndefined()
+  })
+})
+
+describe('terminalBackgroundNeedsTransparency', () => {
+  it('is true for a fractional opacity or any image, false otherwise', () => {
+    expect(terminalBackgroundNeedsTransparency({})).toBe(false)
+    expect(terminalBackgroundNeedsTransparency({ terminalBackgroundOpacity: 1 })).toBe(false)
+    expect(terminalBackgroundNeedsTransparency({ terminalBackgroundOpacity: 0.9 })).toBe(true)
+    expect(
+      terminalBackgroundNeedsTransparency({ terminalBackgroundImage: 'data:image/png;base64,AA' })
+    ).toBe(true)
   })
 })
 

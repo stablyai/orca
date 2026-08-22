@@ -23,6 +23,7 @@ import type {
 import type { NotificationSettings } from './notification-settings-types'
 import type { CtrlTabOrderMode } from './tab-types'
 import type { TerminalColorOverrides } from './terminal-color-overrides'
+import type { TerminalBackgroundImageFit } from './terminal-background-image'
 import type { TerminalQuickCommand } from './terminal-quick-command-types'
 import type { TuiAgent } from './tui-agent'
 import type {
@@ -141,6 +142,10 @@ export type GlobalSettings = {
   terminalPaneOpacityTransitionMs: number
   terminalDividerThicknessPx: number
   terminalBackgroundOpacity?: number
+  /** Inline `data:image/*` URL drawn behind every terminal pane; absent means no image. */
+  terminalBackgroundImage?: string
+  terminalBackgroundImageOpacity?: number
+  terminalBackgroundImageFit?: TerminalBackgroundImageFit
   terminalColorOverrides?: TerminalColorOverrides
   terminalPaddingX?: number
   terminalPaddingY?: number

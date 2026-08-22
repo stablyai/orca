@@ -18,6 +18,7 @@ import {
   disposeDividersIn
 } from './pane-divider'
 import { cancelActivePaneDrag, createDragReorderState, handlePaneDrop } from './pane-drag-reorder'
+import { applyRootBackgroundImage } from './pane-background-image'
 import { beginPaneDragFromPointerDown } from './pane-drag-pointer'
 import { setLigaturesEnabled, disposePane } from './pane-lifecycle'
 import { fitAllPanesInternal } from './pane-tree-ops'
@@ -246,6 +247,7 @@ export class PaneManager {
     applyPaneOpacity(this.panes.values(), this.activePaneId, this.styleOptions)
     applyDividerStyles(this.root, this.styleOptions)
     applyRootBackground(this.root, this.styleOptions)
+    applyRootBackgroundImage(this.root, this.styleOptions)
   }
 
   setPaneLigaturesEnabled(paneId: number, enabled: boolean): void {

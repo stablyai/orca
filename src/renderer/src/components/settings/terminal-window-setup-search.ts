@@ -52,6 +52,19 @@ export const getTerminalWindowSearchEntries = createLocalizedCatalog(() => [
     ]
   },
   {
+    title: translate('auto.components.settings.terminal.search.57f2d9cf07', 'Background Image'),
+    description: translate(
+      'auto.components.settings.terminal.search.fbd6db2462',
+      'Draw an image behind every terminal pane.'
+    ),
+    keywords: [
+      ...translateSearchKeyword('auto.components.settings.terminal.search.0a5dc25bf0', 'image'),
+      ...translateSearchKeyword('auto.components.settings.terminal.search.38367540fe', 'wallpaper'),
+      ...translateSearchKeyword('auto.components.settings.terminal.search.88121181db', 'picture'),
+      ...translateSearchKeyword('auto.components.settings.terminal.search.f6dd9ff606', 'background')
+    ]
+  },
+  {
     title: translate('auto.components.settings.terminal.search.72d0482137', 'Window Blur'),
     description: translate(
       'auto.components.settings.terminal.search.bc2054657a',
