@@ -178,10 +178,11 @@ describe('preserved relay build reconnect', () => {
     )
 
     expect(result.serverBuildId).toBe('0.1.0+abcdef012345')
-    const commands = [
-      ...vi.mocked(execCommand).mock.calls.map(([, command]) => command),
-      ...vi.mocked(conn.exec).mock.calls.map(([command]) => command as string)
-    ]
+    const hostCommands = vi.mocked(execCommand).mock.calls.map(([, command]) => command)
+    const channelCommands = vi.mocked(conn.exec).mock.calls.map(([command]) => command as string)
+    const commands = [...hostCommands, ...channelCommands]
+    expect(hostCommands.filter((command) => command.startsWith('test -S '))).toHaveLength(1)
+    expect(channelCommands.some((command) => command.includes('relay.js --detached'))).toBe(true)
     expect(commands.some((command) => command.includes(previousBuildId))).toBe(false)
   })
 
