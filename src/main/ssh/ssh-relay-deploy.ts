@@ -45,7 +45,10 @@ import {
   RELAY_DEPLOY_TEARDOWN_TIMEOUT_MS,
   RELAY_DEPLOY_TIMEOUT_MS
 } from './ssh-relay-deploy-timing'
-import { createSshOperationAbortError, shellEscape } from './ssh-connection-utils'
+import { shellEscape } from './ssh-connection-utils'
+import { createRelayGenerationToken } from './ssh-relay-generation-owner-commands'
+import { recoverFailedRelayReconnect } from './ssh-relay-generation-reap'
+import { waitForRelayPollDelay } from './ssh-relay-poll-delay'
 import {
   probeBuildToolchain,
   formatMissingToolchainError,
@@ -1360,12 +1363,7 @@ async function launchRelay(
   graceTimeSeconds?: number,
   relayInstanceId?: string,
   signal?: AbortSignal
-): Promise<{
-  transport: MultiplexerTransport
-  nodePath: string
-  sockPath: string
-  credentialFile: string
-}> {
+): Promise<PosixRelayLaunch> {
   // Why: graceTimeSeconds comes from user-editable SshTarget config; floor+clamp to an integer prevents shell injection if the type ever loosened.
   const requestedGraceTime = Math.floor(graceTimeSeconds ?? DEFAULT_SSH_RELAY_GRACE_PERIOD_SECONDS)
   const graceTime =
@@ -1415,57 +1413,123 @@ async function launchRelay(
     return { ...launched, credentialFile }
   }
 
+  const connectToExistingRelay = async (): Promise<PosixRelayLaunch> => {
+    const channel = await conn.exec(
+      `cd ${escapedDir} && ${escapedNode} relay.js --connect --sock-path ${shellEscape(sockFile)} --credential-file ${shellEscape(credentialFile)}`,
+      { signal }
+    )
+    return {
+      transport: await waitForSentinel(channel, signal),
+      nodePath,
+      sockPath: sockFile,
+      credentialFile
+    }
+  }
+
+  const launchFreshRelay = (): Promise<PosixRelayLaunch> =>
+    launchDetachedPosixRelay(conn, hostPlatform, {
+      remoteDir,
+      nodePath,
+      sockFile,
+      credentialFile,
+      graceTime,
+      connectToExistingRelay,
+      signal
+    })
+
   // Why: after a restart the relay may still be alive in its grace period; --connect to its socket preserves PTY state and scrollback.
+  // Why: only the probe and the reconnect attempt may fail open into a fresh launch. Once recovery
+  // starts it owns the fail-closed contract, so it runs outside this try and every error it raises
+  // propagates — a transport blip must never become a blind relaunch over a live relay (#8585).
+  let reconnectFailed = false
   try {
     const probeOutput = await execCommand(
       conn,
-      `test -S ${shellEscape(sockFile)} && echo ALIVE || echo DEAD`,
+      // Why three states: `test -S` is also false for a regular file, a directory or a dangling
+      // symlink at the endpoint path. Collapsing those into DEAD sent them to a blind fresh launch.
+      `if test -S ${shellEscape(sockFile)} && test ! -L ${shellEscape(sockFile)}; then echo ALIVE; elif test -e ${shellEscape(sockFile)} || test -L ${shellEscape(sockFile)}; then echo OCCUPIED; else echo DEAD; fi`,
       { signal }
     )
-    console.warn(`[ssh-relay] Socket probe result: "${probeOutput.trim()}"`)
-    if (probeOutput.trim() === 'ALIVE') {
+    const probeState = probeOutput.trim()
+    console.warn(`[ssh-relay] Socket probe result: "${probeState}"`)
+    if (probeState === 'OCCUPIED') {
+      // Why: something that is not a socket holds the endpoint. Recovery refuses it with a typed
+      // reason instead of launching over it.
+      reconnectFailed = true
+    } else if (probeState === 'ALIVE') {
       console.log('[ssh-relay] Existing relay socket found, attempting reconnect...')
-      try {
-        const channel = await conn.exec(
-          `cd ${escapedDir} && ${escapedNode} relay.js --connect --sock-path ${shellEscape(sockFile)} --credential-file ${shellEscape(credentialFile)}`,
-          { signal }
-        )
-        const transport = await waitForSentinel(channel, signal)
-        console.log('[ssh-relay] Reconnected to existing relay via socket')
-        return { transport, nodePath, sockPath: sockFile, credentialFile }
-      } catch (err) {
-        signal?.throwIfAborted()
-        console.warn(
-          '[ssh-relay] Socket reconnect failed, launching fresh relay:',
-          err instanceof Error ? err.message : String(err)
-        )
-        // Why: stale socket from a crashed relay — remove it so the fresh launch can bind at the same path.
-        await execCommand(conn, `rm -f ${shellEscape(sockFile)}`, { signal }).catch(
-          (cleanupErr) => {
-            if (isUnconfirmedSshCommandTermination(cleanupErr)) {
-              throw cleanupErr
-            }
-          }
-        )
-        signal?.throwIfAborted()
-      }
+      const reconnected = await connectToExistingRelay()
+      console.log('[ssh-relay] Reconnected to existing relay via socket')
+      return reconnected
     }
   } catch (err) {
     if (isUnconfirmedSshCommandTermination(err)) {
       throw err
     }
     signal?.throwIfAborted()
-    // Probe failed — fall through to fresh launch
+    reconnectFailed = true
+    console.warn(
+      '[ssh-relay] Socket probe or reconnect failed:',
+      err instanceof Error ? err.message : String(err)
+    )
   }
 
+  if (reconnectFailed) {
+    // Why: the socket may still be owned by a live relay holding PTYs. Prove which generation owns
+    // it, terminate only that one, and relaunch — never unlink an unproven owner.
+    const recovery = await recoverFailedRelayReconnect(conn, hostPlatform, {
+      sockPath: sockFile,
+      signal,
+      reconnect: connectToExistingRelay,
+      relaunch: launchFreshRelay
+    })
+    if (recovery.status !== 'unsupported') {
+      return recovery.value
+    }
+    // Why nothing here: `unsupported` means a named-pipe endpoint, where the historical `rm -f` was
+    // a no-op anyway. Leaving it out keeps "recovery unlinks nothing" true of the whole module.
+  }
+
+  return launchFreshRelay()
+}
+
+type PosixRelayLaunch = {
+  transport: MultiplexerTransport
+  nodePath: string
+  sockPath: string
+  credentialFile: string
+}
+
+type PosixRelayLaunchOptions = {
+  remoteDir: string
+  nodePath: string
+  sockFile: string
+  credentialFile: string
+  graceTime: number
+  /** Bridges the SSH channel to the freshly launched daemon; owned by the caller's socket scope. */
+  connectToExistingRelay: () => Promise<PosixRelayLaunch>
+  signal?: AbortSignal
+}
+
+async function launchDetachedPosixRelay(
+  conn: SshConnection,
+  hostPlatform: RemoteHostPlatform,
+  options: PosixRelayLaunchOptions
+): Promise<PosixRelayLaunch> {
+  const { remoteDir, nodePath, sockFile, credentialFile, graceTime, signal } = options
+  const escapedDir = shellEscape(remoteDir)
+  const escapedNode = shellEscape(nodePath)
   // Why: relay must outlive the SSH connection so PTY sessions survive app restarts — nohup + </dev/null + & detach it from the exec channel.
   // Why: execCommand would block on channel close that backgrounded children never allow; fire-and-forget via conn.exec, the socket poll detects readiness.
   const logFile = `${remoteDir}/relay.log`
   await writeRelayEndpointCredential(conn, hostPlatform, nodePath, credentialFile, {
     signal
   })
+  // Why: the owner token is minted per launch and appears both in argv and in the manifest the relay
+  // publishes beside its socket, so a later reconnect failure can identify this exact generation.
+  const ownerToken = createRelayGenerationToken()
   // Why: --log-file lets the relay rotate relay.log in-process; the shell redirect stays to capture pre-JS boot/crash output.
-  const launchCmd = `cd ${escapedDir} && chmod 600 ${shellEscape(credentialFile)} && nohup ${escapedNode} relay.js --detached --grace-time ${graceTime} --sock-path ${shellEscape(sockFile)} --credential-file ${shellEscape(credentialFile)} --log-file ${shellEscape(logFile)} > ${shellEscape(logFile)} 2>&1 </dev/null &`
+  const launchCmd = `cd ${escapedDir} && chmod 600 ${shellEscape(credentialFile)} && nohup ${escapedNode} relay.js --detached --grace-time ${graceTime} --sock-path ${shellEscape(sockFile)} --credential-file ${shellEscape(credentialFile)} --log-file ${shellEscape(logFile)} --owner-token ${shellEscape(ownerToken)} > ${shellEscape(logFile)} 2>&1 </dev/null &`
   const launchChannel = await conn.exec(launchCmd, { signal })
   launchChannel.on('data', () => {})
   launchChannel.on('error', () => {})
@@ -1497,7 +1561,7 @@ async function launchRelay(
         signal?.throwIfAborted()
         /* exec failed, retry */
       }
-      await waitForRelayPoll(POLL_INTERVAL_MS, signal)
+      await waitForRelayPollDelay(POLL_INTERVAL_MS, signal)
     }
   } finally {
     launchChannel.close()
@@ -1514,34 +1578,7 @@ async function launchRelay(
   }
 
   // Why: backgrounded relay's stdout goes to a log file, not the exec channel; --connect bridges this channel to its Unix socket.
-  const channel = await conn.exec(
-    `cd ${escapedDir} && ${escapedNode} relay.js --connect --sock-path ${shellEscape(sockFile)} --credential-file ${shellEscape(credentialFile)}`,
-    { signal }
-  )
-  return {
-    transport: await waitForSentinel(channel, signal),
-    nodePath,
-    sockPath: sockFile,
-    credentialFile
-  }
-}
-
-function waitForRelayPoll(delayMs: number, signal?: AbortSignal): Promise<void> {
-  return new Promise((resolve, reject) => {
-    const onAbort = (): void => {
-      clearTimeout(timeout)
-      signal?.removeEventListener('abort', onAbort)
-      reject(createSshOperationAbortError())
-    }
-    const timeout = setTimeout(() => {
-      signal?.removeEventListener('abort', onAbort)
-      resolve()
-    }, delayMs)
-    signal?.addEventListener('abort', onAbort, { once: true })
-    if (signal?.aborted) {
-      onAbort()
-    }
-  })
+  return options.connectToExistingRelay()
 }
 
 function buildWindowsRelayFallbackEndpoint(

@@ -6,6 +6,7 @@ import type { BrowserWindow } from 'electron'
 import { deployAndLaunchRelay } from './ssh-relay-deploy'
 import { execCommand } from './ssh-relay-deploy-helpers'
 import { isRelayVersionMismatchError } from './ssh-relay-version-mismatch-error'
+import { isTerminalRelayGenerationRecoveryError } from './ssh-relay-generation-reap'
 import { SshChannelMultiplexer } from './ssh-channel-multiplexer'
 import { SshPtyProvider } from '../providers/ssh-pty-provider'
 import type { SshPtyAttachResult } from '../providers/ssh-pty-session-reattach'
@@ -621,9 +622,14 @@ export class SshRelaySession {
         )
         this._state = 'idle'
       }
-      // Why: terminal on first connect — a deployed binary against a still-running legacy daemon, or a
-      // claim another connection holds. Notify the callback but still rethrow.
-      if (isRelayVersionMismatchError(err) || isSshOwnerAdmissionBlockedError(err)) {
+      // Why: terminal on first connect — a deployed binary against a still-running legacy daemon, a
+      // claim another connection holds, or a relay whose owner could not be proven. Notify the
+      // callback but still rethrow.
+      if (
+        isRelayVersionMismatchError(err) ||
+        isSshOwnerAdmissionBlockedError(err) ||
+        isTerminalRelayGenerationRecoveryError(err)
+      ) {
         console.warn(
           `[ssh-relay-session] Terminal relay error on initial connect for ${this.targetId}: ${err.message}`
         )
@@ -775,9 +781,15 @@ export class SshRelaySession {
             : 'connection_lost'
         )
       }
-      // Why terminal: neither a version mismatch nor a blocked owner claim is reconcilable by backoff
-      // retry, so fire the typed callback and drop out of 'reconnecting'.
-      if (isRelayVersionMismatchError(err) || isSshOwnerAdmissionBlockedError(err)) {
+      // Why terminal: a version mismatch, a blocked owner claim, and an unprovable relay owner are
+      // all unreconcilable by backoff retry — retrying an unprovable owner just re-runs a recovery
+      // that refuses again, while hiding the one message that tells the user how to clear it.
+      // Fire the typed callback and drop out of 'reconnecting'.
+      if (
+        isRelayVersionMismatchError(err) ||
+        isSshOwnerAdmissionBlockedError(err) ||
+        isTerminalRelayGenerationRecoveryError(err)
+      ) {
         console.warn(
           `[ssh-relay-session] Terminal relay error for ${this.targetId}: ${err.message}`
         )
