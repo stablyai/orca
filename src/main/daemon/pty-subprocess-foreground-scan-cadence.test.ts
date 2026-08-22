@@ -9,6 +9,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import type * as LocalPtyUtils from '../providers/local-pty-utils'
 
 const { spawnMock, isPwshAvailableMock, resolveAgentForegroundProcessMock } = vi.hoisted(() => ({
   spawnMock: vi.fn(),
@@ -38,6 +39,16 @@ vi.mock('../providers/windows-powershell-executable', () => ({
       : [WINDOWS_POWERSHELL_ABS, CMD_ABS],
   getWindowsCmdPath: () => CMD_ABS
 }))
+
+// Why stub the helper lookup: these cases fake darwin on a non-darwin checkout,
+// so production's macOS spawn-helper preflight runs for real. Whether it finds
+// one is an accident of how node-pty was installed here -- a source build (the
+// mode that carries the Windows job-object patch) deletes prebuilds/ outright.
+// Helper discovery is not what these tests are about.
+vi.mock('../providers/local-pty-utils', async (importOriginal) => {
+  const actual = await importOriginal<typeof LocalPtyUtils>()
+  return { ...actual, getNodePtySpawnHelperCandidates: () => [__filename] }
+})
 
 vi.mock('../providers/agent-foreground-process', () => ({
   resolveAgentForegroundProcessWithAvailability: async (...args: unknown[]) => {
