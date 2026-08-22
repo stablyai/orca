@@ -17,15 +17,14 @@ beforeEach(() => {
 })
 
 describe('runPreflightCommandInWsl', () => {
-  it('degrades rather than letting a slow distro read as "not installed"', async () => {
+  it('prefers the login PATH but never lets its absence decide the answer', async () => {
     // Every caller collapses a throw into a verdict: isCommandAvailable returns
     // false ("not installed"), isGhAuthenticated reads an empty payload as
-    // "not authenticated". Refusing here turns a slow distro into a confident
-    // wrong answer -- #9725 through the other door.
+    // "not authenticated". A missing login PATH must therefore never be fatal.
     await runPreflightCommandInWsl({ distro: 'Ubuntu' }, 'gh --version', 5_000)
 
     expect(runWslProcessMock).toHaveBeenCalledWith(
-      expect.objectContaining({ allowDegradedEnvironment: true, distro: 'Ubuntu' })
+      expect.objectContaining({ loginPath: 'preferred', distro: 'Ubuntu' })
     )
   })
 

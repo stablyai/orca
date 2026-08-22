@@ -164,7 +164,7 @@ describe('runHook', () => {
       expect(runWslProcessMock).toHaveBeenCalledWith(
         expect.objectContaining({
           distro: 'Ubuntu',
-          lane: 'probe',
+          loginPath: 'preferred',
           script: 'echo hello',
           cwd: '/home/jin/feature',
           // #7652 regression: the unattended WSL hook branch must carry the
@@ -220,7 +220,7 @@ describe('runHook', () => {
       expect(runWslProcessMock).toHaveBeenCalledWith(
         expect.objectContaining({
           distro: 'Ubuntu',
-          lane: 'probe',
+          loginPath: 'preferred',
           script: 'echo hello',
           cwd: '/mnt/c/Users/jinwo/git/orca-feature',
           env: expect.objectContaining({

@@ -5,7 +5,7 @@ vi.mock('../wsl/wsl-runner', () => ({ runWslProcess: runWslProcessMock }))
 
 import { detectSkillProvidersInWsl } from './skill-wsl-provider-detection'
 
-type RunWslProcessSpec = { distro: string; lane: string; script: string }
+type RunWslProcessSpec = { distro: string; loginPath: string; script: string }
 
 describe('detectSkillProvidersInWsl', () => {
   beforeEach(() => {
@@ -16,7 +16,7 @@ describe('detectSkillProvidersInWsl', () => {
     vi.restoreAllMocks()
   })
 
-  it('runs on the probe lane so a PATH-only install (nvm/mise) is still found (regression)', async () => {
+  it('asks for the login PATH so a nvm/mise-only install is still found (regression)', async () => {
     // Before this migration the site ran `sh -c` with no login shell, so an
     // nvm-installed codex/claude -- reachable only through the PATH a login
     // shell assembles from rc files -- resolved to nothing via `command -v`
@@ -32,7 +32,7 @@ describe('detectSkillProvidersInWsl', () => {
     const found = await detectSkillProvidersInWsl('Ubuntu')
 
     const [spec] = runWslProcessMock.mock.calls.at(-1) as [RunWslProcessSpec]
-    expect(spec.lane).toBe('probe')
+    expect(spec.loginPath).toBe('preferred')
     expect(spec.distro).toBe('Ubuntu')
     expect(found).toEqual(['codex'])
   })

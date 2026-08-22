@@ -463,7 +463,7 @@ async function runWslCommand(distro: string, command: string): Promise<string> {
   try {
     result = await runWslProcess({
       distro,
-      lane: 'probe',
+      loginPath: 'preferred',
       script: command,
       timeoutMs: WSL_COMMAND_TIMEOUT_MS
     })

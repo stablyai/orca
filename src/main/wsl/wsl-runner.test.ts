@@ -54,23 +54,20 @@ afterEach(() => {
 })
 
 describe('separator', () => {
-  it.each([
-    ['probe', 'probe'],
-    ['interactive', 'interactive']
-  ] as const)('uses --exec and never -- on the %s lane', async (_name, lane) => {
+  it.each([['none'], ['preferred']] as const)('uses --exec and never -- with loginPath %s', async (lane) => {
     // Why this is pinned on both lanes: under `--`, wsl.exe expands $name in
     // every forwarded argument before the guest runs -- even with no shell in
     // the command -- so a script means something other than what it says
     // (#12964). No escaping on our side is a reliable substitute.
     seedWslGuestEnvironmentForTests(undefined, ENVIRONMENT)
-    await runWslProcess({ lane, program: '/usr/bin/git', args: ['status'] })
+    await runWslProcess({ loginPath: lane, program: '/usr/bin/git', args: ['status'] })
     expect(lastArgv()).toContain('--exec')
     expect(lastArgv()).not.toContain('--')
   })
 
   it('passes the distro before --exec', async () => {
     seedWslGuestEnvironmentForTests('Ubuntu', ENVIRONMENT)
-    await runWslProcess({ lane: 'probe', distro: 'Ubuntu', program: '/bin/true' })
+    await runWslProcess({ loginPath: 'preferred', distro: 'Ubuntu', program: '/bin/true' })
     expect(lastArgv().slice(0, 3)).toEqual(['-d', 'Ubuntu', '--exec'])
   })
 })
@@ -80,7 +77,7 @@ describe('probe lane', () => {
     // The whole point: the user's real PATH without paying for -- or being
     // blocked by -- a login shell on every call (#14288, #9768).
     seedWslGuestEnvironmentForTests(undefined, ENVIRONMENT)
-    await runWslProcess({ lane: 'probe', program: 'codex', args: ['--version'] })
+    await runWslProcess({ loginPath: 'preferred', program: 'codex', args: ['--version'] })
     expect(lastArgv()).toEqual([
       '--exec',
       '/usr/bin/env',
@@ -91,64 +88,27 @@ describe('probe lane', () => {
     ])
   })
 
-  it('reports an unresolved environment rather than pretending the PATH is real', async () => {
-    // Falling back to the login shell here would re-run ~/.profile -- the very
-    // stall the probe lane exists to avoid, and most likely to bite exactly
-    // when the probe just failed. So the call proceeds on the default PATH and
-    // says so, and callers deciding "installed?" must treat that as unknown.
-    let call = 0
-    runProcessMock.mockImplementation(async (spec: { args: string[] }) => {
-      call += 1
-      if (call === 1) {
-        return { environmentResolved: true, code: 1, signal: null, stdout: '', stderr: 'stopped', timedOut: false }
-      }
-      const script = spec.args.at(-1) ?? ''
-      const begin = /__ORCA_WSL_CAPTURE_BEGIN_[a-z0-9]+__/.exec(script)?.[0] ?? ''
-      const end = /__ORCA_WSL_CAPTURE_END_[a-z0-9]+__/.exec(script)?.[0] ?? ''
-      return { environmentResolved: true, code: 0, signal: null, stdout: `${begin}${end}`, stderr: '', timedOut: false }
+  it('runs anyway and says the PATH is unresolved', async () => {
+    // A missing login PATH used to throw, and every knob this runner carried --
+    // cooldown tiers, budget splitting, a re-probe heuristic, an opt-out on 19
+    // of 23 sites -- existed to work around that. It is now just a fact in the
+    // result.
+    runProcessMock.mockResolvedValue({
+      code: 1,
+      signal: null,
+      stdout: '',
+      stderr: 'distro is stopped',
+      timedOut: false
     })
-    // Default is to refuse: answering "is codex installed?" on the bare default
-    // PATH reports an nvm install as absent, which is #9725.
-    await expect(runWslProcess({ lane: 'probe', program: 'codex' })).rejects.toThrow(
-      /guest environment/
-    )
-
-    const degraded = await runWslProcess({
-      lane: 'probe',
-      program: 'codex',
-      allowDegradedEnvironment: true
-    })
-    expect(degraded.environmentResolved).toBe(false)
+    const result = await runWslProcess({ loginPath: 'preferred', program: 'codex' })
+    expect(result.environmentResolved).toBe(false)
     expect(lastArgv()).toEqual(['--exec', 'codex'])
   })
 
   it('reports a resolved environment on the happy path', async () => {
     seedWslGuestEnvironmentForTests(undefined, ENVIRONMENT)
-    const result = await runWslProcess({ lane: 'probe', program: 'codex' })
+    const result = await runWslProcess({ loginPath: 'preferred', program: 'codex' })
     expect(result.environmentResolved).toBe(true)
-  })
-})
-
-describe('interactive lane', () => {
-  it('always fences stdout, even when the caller ignores it', async () => {
-    // Stock Ubuntu writes its rc hint to stdout, so an unfenced parse reads the
-    // banner as data (#11327, #11823). A caller that starts parsing later must
-    // not have to remember to opt in.
-    runProcessMock.mockImplementation(async (spec: { args: string[] }) => {
-      const script = spec.args.at(-1) ?? ''
-      const begin = /__ORCA_WSL_CAPTURE_BEGIN_[a-z0-9]+__/.exec(script)?.[0] ?? ''
-      const end = /__ORCA_WSL_CAPTURE_END_[a-z0-9]+__/.exec(script)?.[0] ?? ''
-      return {
-        environmentResolved: true,
-        code: 0,
-        signal: null,
-        stdout: `Ubuntu banner: run a command as administrator\n${begin}payload${end}`,
-        stderr: '',
-        timedOut: false
-      }
-    })
-    const result = await runWslProcess({ lane: 'interactive', program: 'claude' })
-    expect(result.stdout).toBe('payload')
   })
 })
 
@@ -159,7 +119,7 @@ describe('scripts', () => {
     // (#14292), and why this is the only supported way to run one.
     seedWslGuestEnvironmentForTests(undefined, ENVIRONMENT)
     const script = `case "$x" in a) echo 'it'\\''s fine';; esac`
-    await runWslProcess({ lane: 'probe', script, args: ['/tmp/root'] })
+    await runWslProcess({ loginPath: 'preferred', script, args: ['/tmp/root'] })
     expect(runProcessMock.mock.calls.at(-1)?.[0].input).toBe(script)
     expect(lastArgv()).toEqual([
       '--exec',
@@ -180,7 +140,7 @@ describe('WSLENV', () => {
     // Unset, a Windows-side variable silently never reaches the guest (#12557).
     seedWslGuestEnvironmentForTests(undefined, ENVIRONMENT)
     await runWslProcess({
-      lane: 'probe',
+      loginPath: 'preferred',
       program: '/bin/true',
       env: { GITLAB_HOST: 'git.example.com', GH_TOKEN: 't' }
     })
@@ -189,17 +149,27 @@ describe('WSLENV', () => {
     expect(env.WSLENV?.split(':')).toEqual(expect.arrayContaining(['GITLAB_HOST', 'GH_TOKEN']))
   })
 
-  it('leaves the host environment alone when nothing is propagated', async () => {
+  it('always sets WSL_UTF8, even with nothing to propagate', async () => {
+    // Without it wsl.exe writes its own error text as UTF-16LE, so anything
+    // surfacing stderr shows NUL-riddled output (#9010).
     seedWslGuestEnvironmentForTests(undefined, ENVIRONMENT)
-    await runWslProcess({ lane: 'probe', program: '/bin/true' })
-    expect(runProcessMock.mock.calls.at(-1)?.[0].env).toBeUndefined()
+    await runWslProcess({ loginPath: 'preferred', program: '/bin/true' })
+    const env = runProcessMock.mock.calls.at(-1)?.[0].env as NodeJS.ProcessEnv
+    expect(env.WSL_UTF8).toBe('1')
+  })
+
+  it('adds no WSLENV entry when nothing is propagated', async () => {
+    seedWslGuestEnvironmentForTests(undefined, ENVIRONMENT)
+    await runWslProcess({ loginPath: 'preferred', program: '/bin/true' })
+    const env = runProcessMock.mock.calls.at(-1)?.[0].env as NodeJS.ProcessEnv
+    expect(env.WSLENV).toBe(process.env.WSLENV)
   })
 })
 
 describe('guest cwd', () => {
   it('cds inside the guest rather than passing a Windows cwd to wsl.exe', async () => {
     seedWslGuestEnvironmentForTests(undefined, ENVIRONMENT)
-    await runWslProcess({ lane: 'probe', program: '/usr/bin/git', cwd: '/home/u/repo' })
+    await runWslProcess({ loginPath: 'preferred', program: '/usr/bin/git', cwd: '/home/u/repo' })
     expect(runProcessMock.mock.calls.at(-1)?.[0].cwd).toBeUndefined()
     expect(lastArgv()).toContain('/home/u/repo')
     expect(lastArgv()).toContain('sh')
@@ -209,7 +179,7 @@ describe('guest cwd', () => {
     // A Windows path here means a mistake further up; converting it silently
     // hides that.
     seedWslGuestEnvironmentForTests(undefined, ENVIRONMENT)
-    await expect(runWslProcess({ lane: 'probe', program: '/bin/true', cwd })).rejects.toThrow(
+    await expect(runWslProcess({ loginPath: 'preferred', program: '/bin/true', cwd })).rejects.toThrow(
       /guest path/
     )
   })
@@ -219,7 +189,7 @@ describe('program is a binary, not a shell string', () => {
   it.each([['sh -c echo hi'], ['a; b'], ['a | b'], ['a && b'], ['echo $HOME'], ['a > b']])(
     'rejects %s',
     async (program) => {
-      await expect(runWslProcess({ lane: 'probe', program })).rejects.toThrow(/single binary/)
+      await expect(runWslProcess({ loginPath: 'preferred', program })).rejects.toThrow(/single binary/)
     }
   )
 
@@ -228,46 +198,8 @@ describe('program is a binary, not a shell string', () => {
     // rejecting it would fail legitimate installs under a spaced directory.
     seedWslGuestEnvironmentForTests(undefined, ENVIRONMENT)
     await expect(
-      runWslProcess({ lane: 'probe', program: '/home/u/my tools/codex' })
+      runWslProcess({ loginPath: 'preferred', program: '/home/u/my tools/codex' })
     ).resolves.toBeDefined()
-  })
-})
-
-describe('a script gets the cached environment on both lanes', () => {
-  it('applies the cached PATH even when the caller asked for interactive', async () => {
-    // A script never runs under the login shell (it owns stdin), so without
-    // this the interactive lane would give a script LESS PATH than the probe
-    // lane -- for a caller that explicitly asked for the user's terminal PATH.
-    seedWslGuestEnvironmentForTests(undefined, ENVIRONMENT)
-    await runWslProcess({ lane: 'interactive', script: 'command -v codex' })
-    expect(lastArgv()).toEqual([
-      '--exec',
-      '/usr/bin/env',
-      'PATH=/home/u/.nvm/bin:/usr/bin',
-      'HOME=/home/u',
-      'sh',
-      '-s',
-      '--'
-    ])
-  })
-})
-
-describe('a missing fence is a failure, not empty output', () => {
-  it('throws rather than returning a clean empty result', async () => {
-    // readStdout returns null precisely to distinguish "no fence" from "empty
-    // payload". An rc that redirects stdout would otherwise yield a silent
-    // wrong answer.
-    runProcessMock.mockResolvedValue({
-      environmentResolved: true,
-      code: 0,
-      signal: null,
-      stdout: 'banner only, no fence',
-      stderr: '',
-      timedOut: false
-    })
-    await expect(runWslProcess({ lane: 'interactive', program: 'claude' })).rejects.toThrow(
-      /no fenced output/
-    )
   })
 })
 
@@ -276,7 +208,7 @@ describe('program is not an assignment', () => {
     // `env PATH=… HOME=… FOO=bar` has no command left: it prints the whole
     // guest environment and exits 0 -- success, with the environment as stdout.
     seedWslGuestEnvironmentForTests(undefined, ENVIRONMENT)
-    await expect(runWslProcess({ lane: 'probe', program: 'FOO=bar' })).rejects.toThrow(
+    await expect(runWslProcess({ loginPath: 'preferred', program: 'FOO=bar' })).rejects.toThrow(
       /assignment/
     )
   })
@@ -288,7 +220,7 @@ describe('timeout budget', () => {
     // 5s caller could reach runProcess with 1ms left and report a timeout for a
     // command that would have taken milliseconds.
     seedWslGuestEnvironmentForTests(undefined, ENVIRONMENT)
-    await runWslProcess({ lane: 'probe', program: '/bin/true', timeoutMs: 5_000 })
+    await runWslProcess({ loginPath: 'preferred', program: '/bin/true', timeoutMs: 5_000 })
     const passed = runProcessMock.mock.calls.at(-1)?.[0].timeoutMs as number
     expect(passed).toBeGreaterThan(1_000)
     expect(passed).toBeLessThanOrEqual(5_000)
@@ -308,10 +240,9 @@ describe('the probe never starves the command', () => {
     // and passes for any split. allowDegradedEnvironment keeps the call alive
     // once the probe fails.
     await runWslProcess({
-      lane: 'probe',
+      loginPath: 'preferred',
       program: '/bin/true',
       timeoutMs,
-      allowDegradedEnvironment: true
     })
     const probeMs = runProcessMock.mock.calls[0]?.[0].timeoutMs as number
     expect(probeMs).toBeLessThanOrEqual(timeoutMs - floor)
@@ -321,7 +252,7 @@ describe('the probe never starves the command', () => {
 describe('script interpreter', () => {
   it('defaults to sh', async () => {
     seedWslGuestEnvironmentForTests(undefined, ENVIRONMENT)
-    await runWslProcess({ lane: 'probe', script: 'echo hi' })
+    await runWslProcess({ loginPath: 'preferred', script: 'echo hi' })
     expect(lastArgv()).toContain('sh')
     expect(lastArgv()).not.toContain('bash')
   })
@@ -332,7 +263,7 @@ describe('script interpreter', () => {
     // unexpected` -- the #14292 signature -- so a bash caller must be able to
     // say so rather than be silently downgraded.
     seedWslGuestEnvironmentForTests(undefined, ENVIRONMENT)
-    await runWslProcess({ lane: 'probe', script: 'done < <(find .)', shell: 'bash' })
+    await runWslProcess({ loginPath: 'preferred', script: 'done < <(find .)', shell: 'bash' })
     expect(lastArgv()).toContain('bash')
     expect(lastArgv()).not.toContain('sh')
   })
@@ -351,7 +282,7 @@ describe('a script never rides the interactive lane', () => {
       stderr: 'distro is stopped',
       timedOut: false
     })
-    await runWslProcess({ lane: 'probe', script: 'echo hi', allowDegradedEnvironment: true })
+    await runWslProcess({ loginPath: 'preferred', script: 'echo hi' })
     expect(lastArgv()).toEqual(['--exec', 'sh', '-s', '--'])
     expect(runProcessMock.mock.calls.at(-1)?.[0].input).toBe('echo hi')
   })

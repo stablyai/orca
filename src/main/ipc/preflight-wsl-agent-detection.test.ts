@@ -6,7 +6,7 @@ vi.mock('../wsl/wsl-runner', () => ({ runWslProcess: runWslProcessMock }))
 import { detectWslCommandsOnPath } from './preflight-wsl-agent-detection'
 import { buildPosixCommandPathLookupScript } from '../../shared/posix-command-path-lookup'
 
-type RunWslProcessSpec = { distro?: string; lane: string; script: string }
+type RunWslProcessSpec = { distro?: string; loginPath: string; script: string }
 
 function lastSpec(): RunWslProcessSpec {
   const call = runWslProcessMock.mock.calls.at(-1)
@@ -24,11 +24,11 @@ describe('detectWslCommandsOnPath', () => {
     vi.restoreAllMocks()
   })
 
-  it('runs on the probe lane -- no shell, so no rc/motd banner can appear', async () => {
+  it('asks for the login PATH without running a shell, so no banner can appear', async () => {
     await detectWslCommandsOnPath({ distro: 'Ubuntu' }, ['claude'])
 
     const spec = lastSpec()
-    expect(spec.lane).toBe('probe')
+    expect(spec.loginPath).toBe('preferred')
     expect(spec.distro).toBe('Ubuntu')
   })
 

@@ -405,7 +405,7 @@ describe('preflight', () => {
     // pinned by its own tests. What this suite owns is that detection asks the
     // right distro on the lane that carries the user's PATH.
     expect(runWslProcessMock).toHaveBeenCalledWith(
-      expect.objectContaining({ distro: 'Ubuntu', lane: 'probe' })
+      expect.objectContaining({ distro: 'Ubuntu', loginPath: 'preferred' })
     )
   })
 
@@ -433,7 +433,7 @@ describe('preflight', () => {
     expect(resolveCliCommandsMock).not.toHaveBeenCalled()
     // No distro named: the runner resolves the default.
     expect(runWslProcessMock).toHaveBeenCalledWith(
-      expect.objectContaining({ distro: undefined, lane: 'probe' })
+      expect.objectContaining({ distro: undefined, loginPath: 'preferred' })
     )
   })
 })

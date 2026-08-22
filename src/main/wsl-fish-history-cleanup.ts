@@ -50,11 +50,8 @@ async function runCleanup(
 ): Promise<void> {
   const result = await run({
     distro,
-    lane: 'probe',
+    loginPath: 'none',
     // The old `--exec fish` spawn never sourced a login shell either, so a
-    // probe failure must run degraded rather than turn a working cleanup into
-    // an error.
-    allowDegradedEnvironment: true,
     program: 'fish',
     args: ['--command', fishCleanupScript(session)],
     timeoutMs: 5_000

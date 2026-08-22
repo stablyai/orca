@@ -1,10 +1,6 @@
 import { addWslEnvKeys } from '../../shared/wsl-env'
 import { runProcess } from '../../shared/child-process/run-process'
-import {
-  buildWslCapturedLoginShellCommand,
-  buildWslExecArgs,
-  quotePosixShell
-} from '../../shared/wsl-login-shell-command'
+import { buildWslExecArgs } from '../../shared/wsl-login-shell-command'
 import { getWslGuestEnvironment, type WslGuestEnvironment } from './wsl-guest-environment'
 import { resolveWslExecutablePath } from './wsl-executable-path'
 
@@ -17,11 +13,20 @@ import { resolveWslExecutablePath } from './wsl-executable-path'
  * docs/reference/wsl-command-execution.md.
  */
 
-export type WslLane =
-  /** No shell. Cached login PATH/HOME, applied via `env`. */
-  | 'probe'
-  /** Login shell, always fenced. For anything whose PATH must match the user's terminal. */
-  | 'interactive'
+/**
+ * How much the call needs the user's login PATH.
+ *
+ * Why one axis and not `lane` + `allowDegradedEnvironment`: 19 of 23 sites
+ * passed the opt-out, and two of them said in comments that they did not want
+ * the login PATH at all -- the flag had become the `'none'` this union was
+ * missing. A required discriminator whose default nobody wants is not a
+ * discriminator.
+ */
+export type WslLoginPath =
+  /** The command reads $HOME or absolute paths only. No probe. */
+  | 'none'
+  /** Use the cached login PATH when there is one; run anyway when there is not. */
+  | 'preferred'
 
 /**
  * What to run: a single binary, or a script.
@@ -53,27 +58,14 @@ export type WslCommand =
 export type WslSpec = WslCommand & {
   /** Undefined selects the distro's default. */
   distro?: string
-  /**
-   * Required, with no default. The wrong lane is the most common WSL defect in
-   * this tree, and a default lets a call site pick it by omission.
-   */
-  lane: WslLane
+  /** Required, with no default: the wrong answer here is the defect this file exists to prevent. */
+  loginPath: WslLoginPath
   /** Guest (POSIX) path. */
   cwd?: string
   /** Host variables to propagate into the guest; sets WSLENV automatically. */
   env?: Readonly<Record<string, string>>
   timeoutMs?: number
   maxOutputBytes?: number
-  /**
-   * Proceed when the login PATH could not be established.
-   *
-   * Default is to throw. Three separate reviews found the same class of bug --
-   * a call that answers "is this installed?" running on the bare default PATH
-   * and reporting an nvm-installed tool absent (#9725). Making degradation
-   * opt-in puts that decision in the one place a reader will look, instead of
-   * relying on every call site to remember to check `environmentResolved`.
-   */
-  allowDegradedEnvironment?: boolean
 }
 
 export type WslResult = {
@@ -92,21 +84,6 @@ export type WslResult = {
 }
 
 export const DEFAULT_WSL_TIMEOUT_MS = 30_000
-
-/**
- * The guest login PATH could not be established.
- *
- * Typed so a caller answering "is this installed?" can report unverifiable
- * rather than absent -- reporting an nvm-installed tool absent is #9725, and a
- * bare Error would just be swallowed by the same catch that handles real
- * failures.
- */
-export class WslGuestEnvironmentUnavailableError extends Error {
-  constructor(distro: string | undefined) {
-    super(`WSL guest environment for ${distro ?? 'the default distro'} is unavailable`)
-    this.name = 'WslGuestEnvironmentUnavailableError'
-  }
-}
 
 function assertGuestPath(cwd: string): void {
   // Why reject rather than convert: a caller passing a Windows path here has
@@ -131,13 +108,20 @@ function assertNotShellString(program: string): void {
   }
 }
 
-/** Host env plus the WSLENV entries that let it cross the boundary. */
-function buildHostEnv(env: WslSpec['env']): NodeJS.ProcessEnv | undefined {
-  if (!env || Object.keys(env).length === 0) {
-    return undefined
+/**
+ * Host env plus WSL_UTF8 and the WSLENV entries that let values cross.
+ *
+ * Why WSL_UTF8 unconditionally: without it `wsl.exe` writes its OWN messages
+ * ("There is no distribution with the supplied name") as UTF-16LE, so every
+ * caller that surfaces stderr shows NUL-riddled text. Setting it per-call site
+ * is how it got lost -- the relay set it, the migration dropped it, and nothing
+ * noticed because the happy path is pure ASCII. Credit: #9010.
+ */
+function buildHostEnv(env: WslSpec['env']): NodeJS.ProcessEnv {
+  const merged: NodeJS.ProcessEnv = { ...process.env, ...env, WSL_UTF8: '1' }
+  if (env && Object.keys(env).length > 0) {
+    addWslEnvKeys(merged, Object.keys(env))
   }
-  const merged: NodeJS.ProcessEnv = { ...process.env, ...env }
-  addWslEnvKeys(merged, Object.keys(env))
   return merged
 }
 
@@ -177,38 +161,13 @@ function buildGuestArgv(environment: WslGuestEnvironment | null, spec: WslSpec):
   return withGuestCwd(spec.cwd, argv)
 }
 
-function buildInteractiveArgv(spec: WslSpec): {
-  argv: string[]
-  readStdout: (stdout: string) => string
-} {
-  // Why the whole invocation goes through the fence: a caller that does not
-  // parse stdout today may start tomorrow, and the banner is invisible until
-  // then.
-  const quoted = guestCommandArgv(spec).map(quotePosixShell).join(' ')
-  const body = spec.cwd ? `cd ${quotePosixShell(spec.cwd)} || exit 1\n${quoted}` : quoted
-  const captured = buildWslCapturedLoginShellCommand(body)
-  return {
-    argv: ['sh', '-c', captured.command],
-    // Why throw rather than default to '': readStdout returns null precisely to
-    // distinguish "the fence never appeared" from "the payload was empty". An rc
-    // that redirects stdout, or output truncated before the begin marker, would
-    // otherwise return a clean, empty, wrong answer.
-    readStdout: (stdout: string) => {
-      const payload = captured.readStdout(stdout)
-      if (payload === null) {
-        throw new Error('WSL login shell produced no fenced output')
-      }
-      return payload
-    }
-  }
-}
-
 /**
  * Run a program inside WSL.
  *
- * Throws when the guest login PATH cannot be established, unless the caller
- * passes `allowDegradedEnvironment`. Falling back to the login shell here would
- * re-run ~/.profile -- the stall this exists to remove.
+ * A missing login PATH is never fatal: the call runs on the distro's default
+ * PATH and reports `environmentResolved: false`. Every knob this file used to
+ * carry -- cooldown tiers, budget splitting, a re-probe heuristic, an opt-out
+ * flag on 19 of 23 sites -- existed only because that case used to throw.
  */
 export async function runWslProcess(spec: WslSpec): Promise<WslResult> {
   if (spec.program !== undefined) {
@@ -223,7 +182,7 @@ export async function runWslProcess(spec: WslSpec): Promise<WslResult> {
   // shell (see below), so on the interactive lane it would otherwise get no
   // login PATH at all -- strictly less than the probe lane, for a caller that
   // explicitly asked for the user's terminal PATH.
-  const wantsEnvironment = spec.lane === 'probe' || spec.script !== undefined
+  const wantsEnvironment = spec.loginPath === 'preferred'
   // Leave the command at least a third of the budget: a probe that eats it all
   // turns a healthy command into a spurious timeout.
   // Cap the probe at half the budget and at 4s: a 5s caller was giving the
@@ -240,21 +199,14 @@ export async function runWslProcess(spec: WslSpec): Promise<WslResult> {
   // the probe most often fails *because* the distro is slow, so the fallback
   // would hit the hazard exactly when it is worst. Run shell-free with the
   // distro's default PATH instead: degraded, never blocking.
-  if (wantsEnvironment && environment === null && !spec.allowDegradedEnvironment) {
-    throw new WslGuestEnvironmentUnavailableError(spec.distro)
-  }
-
-  const lane =
-    spec.lane === 'interactive' && spec.script === undefined
-      ? ({ kind: 'interactive', ...buildInteractiveArgv(spec) } as const)
-      : ({ kind: 'probe', argv: buildGuestArgv(environment, spec) } as const)
+  const argv = buildGuestArgv(environment, spec)
 
   // One budget for the whole call: the probe used to run on its own 10s timer
   // ahead of the timed leg, so a 5s caller could wait 15s.
   const remainingMs = Math.max(1, deadline - Date.now())
   const result = await runProcess({
     program: resolveWslExecutablePath(),
-    args: buildWslExecArgs(spec.distro, lane.argv),
+    args: buildWslExecArgs(spec.distro, argv),
     env: buildHostEnv(spec.env),
     input: spec.script,
     timeoutMs: remainingMs,
@@ -264,7 +216,7 @@ export async function runWslProcess(spec: WslSpec): Promise<WslResult> {
   return {
     environmentResolved: !wantsEnvironment || environment !== null,
     code: result.code,
-    stdout: lane.kind === 'interactive' ? lane.readStdout(result.stdout) : result.stdout,
+    stdout: result.stdout,
     stderr: result.stderr,
     timedOut: result.timedOut
   }

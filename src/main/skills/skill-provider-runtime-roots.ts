@@ -50,9 +50,7 @@ type WslEnvironmentProbe = (distro: string) => Promise<string>
 async function probeWslGrokHome(distro: string): Promise<string> {
   const result = await runWslProcess({
     distro,
-    lane: 'probe',
-    // Degrade rather than refuse: reads $HOME, which wsl.exe supplies without a login shell.
-    allowDegradedEnvironment: true,
+    loginPath: 'preferred',
     script: WSL_GROK_HOME_SCRIPT,
     timeoutMs: WSL_ENV_PROBE_TIMEOUT_MS,
     maxOutputBytes: WSL_ENV_PROBE_MAX_BYTES

@@ -296,14 +296,14 @@ describe('preflight', () => {
     expect(runWslProcessMock).toHaveBeenCalledWith(
       expect.objectContaining({
         distro: 'Ubuntu',
-        lane: 'probe',
+        loginPath: 'preferred',
         script: expect.stringMatching(/gh[\s\S]*--version/)
       })
     )
     expect(runWslProcessMock).toHaveBeenCalledWith(
       expect.objectContaining({
         distro: 'Ubuntu',
-        lane: 'probe',
+        loginPath: 'preferred',
         script: expect.stringMatching(/gh[\s\S]*auth status/)
       })
     )

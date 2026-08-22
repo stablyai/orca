@@ -71,7 +71,9 @@ describe('CodexAccountService config sync', () => {
     const runWslProcessMock = vi.fn(async (spec: WslSpec) => {
       const script = String(spec.script)
       expect(spec.distro).toBe('Debian')
-      expect(spec.lane).toBe('probe')
+      // 'none': the script reads $HOME and $WSL_DISTRO_NAME, which wsl.exe
+      // supplies from /etc/passwd without a login shell.
+      expect(spec.loginPath).toBe('none')
       if (script.includes('WSL_DISTRO_NAME')) {
         return wslOk('Debian\n/home/alice\n')
       }

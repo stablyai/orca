@@ -181,14 +181,10 @@ export async function runWslInstallProcess(
 ): Promise<{ code: number | null; stderr: string }> {
   const result = await runWslProcess({
     distro,
-    lane: 'probe',
+    loginPath: 'none',
     script,
     timeoutMs: INSTALL_TIMEOUT_MS,
     maxOutputBytes: MAX_STARTUP_BUFFER_BYTES,
-    // The install script only shells out to base64/mkdir/mv/chmod, all on any
-    // default PATH -- it must still run when the login-PATH probe itself is
-    // what's wedged, which is exactly the state this call recovers from.
-    allowDegradedEnvironment: true
   })
   return result.timedOut
     ? { code: null, stderr: `${result.stderr}\ninstall timed out after ${INSTALL_TIMEOUT_MS}ms` }

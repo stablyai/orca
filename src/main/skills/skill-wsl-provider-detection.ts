@@ -13,7 +13,7 @@ export async function detectSkillProvidersInWsl(distro: string): Promise<string[
     // rc files never applies and an installed codex/claude reads as absent.
     result = await runWslProcess({
       distro,
-      lane: 'probe',
+      loginPath: 'preferred',
       script: DETECTION_SCRIPT,
       timeoutMs: 10_000
     })

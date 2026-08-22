@@ -50,9 +50,8 @@ describeOnWsl('runWslProcess against a real distro', () => {
     // otherwise refuses an unresolved PATH.
     const started = Date.now()
     const result = await runWslProcess({
-      lane: 'probe',
+      loginPath: 'preferred',
       distro: DISTRO,
-      allowDegradedEnvironment: true,
       program: '/bin/echo',
       args: ['orca-probe-ok'],
       timeoutMs: 15_000
@@ -65,11 +64,10 @@ describeOnWsl('runWslProcess against a real distro', () => {
   it('second probe-lane call does not pay the login shell again', async () => {
     const started = Date.now()
     await runWslProcess({
-      lane: 'probe',
+      loginPath: 'preferred',
       distro: DISTRO,
       program: '/bin/true',
       timeoutMs: 15_000,
-      allowDegradedEnvironment: true
     })
     expect(Date.now() - started).toBeLessThan(5_000)
   }, 30_000)
@@ -78,7 +76,7 @@ describeOnWsl('runWslProcess against a real distro', () => {
     // Stock Ubuntu writes its rc hint to stdout. Anything parsing that stream
     // reads the banner as data unless the fence removes it (#11327, #11823).
     const result = await runWslProcess({
-      lane: 'interactive',
+      loginPath: 'preferred',
       distro: DISTRO,
       program: '/bin/echo',
       args: ['ORCA_PAYLOAD'],
@@ -96,9 +94,8 @@ describeOnWsl('runWslProcess against a real distro', () => {
       `echo "x" | awk '{print $1}'`
     ].join('\n')
     const result = await runWslProcess({
-      lane: 'probe',
+      loginPath: 'preferred',
       distro: DISTRO,
-      allowDegradedEnvironment: true,
       script,
       args: ['ORCA_ARG'],
       timeoutMs: 30_000
@@ -113,9 +110,8 @@ describeOnWsl('runWslProcess against a real distro', () => {
 
   it('propagated env crosses the boundary via WSLENV', async () => {
     const result = await runWslProcess({
-      lane: 'probe',
+      loginPath: 'preferred',
       distro: DISTRO,
-      allowDegradedEnvironment: true,
       script: 'printf %s "$ORCA_WSLENV_PROBE"',
       env: { ORCA_WSLENV_PROBE: 'crossed' },
       timeoutMs: 30_000
@@ -125,9 +121,8 @@ describeOnWsl('runWslProcess against a real distro', () => {
 
   it('runs in the requested guest cwd', async () => {
     const result = await runWslProcess({
-      lane: 'probe',
+      loginPath: 'preferred',
       distro: DISTRO,
-      allowDegradedEnvironment: true,
       program: '/bin/pwd',
       cwd: '/tmp',
       timeoutMs: 30_000

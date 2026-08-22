@@ -12,13 +12,8 @@ export async function runPreflightCommandInWsl(
   // with no shell in the loop, so there is no rc/motd banner to strip.
   const result = await runWslProcess({
     distro: target.distro,
-    lane: 'probe',
+    loginPath: 'preferred',
     script: command,
-    // Why degrade: every caller collapses a throw into "not installed" or
-    // "not authenticated" (isCommandAvailable, isGhAuthenticated). Refusing
-    // here turns a slow distro into a confident wrong answer -- #9725 through
-    // the other door, on the branch built to close it.
-    allowDegradedEnvironment: true,
     timeoutMs
   })
   // runWslProcess resolves on a timeout and on a non-zero exit; the caller's
