@@ -132,7 +132,7 @@ test('IBM Bob launches from the New tab menu with its own identity', async ({
     const active = all.find((t) => t.id === s.activeTabId)
     return active?.launchAgent ?? null
   })
-  testInfo.annotations.push({ type: 'active-tab-launchAgent', description: String(tabAgent) })
+  expect(tabAgent).toBe('bob')
   await testInfo.attach('bob-launched', {
     body: await orcaPage.screenshot(),
     contentType: 'image/png'
@@ -283,7 +283,15 @@ test('Settings › Agents lists IBM Bob as detected and default', async ({
 
   const bobLabel = orcaPage.getByText('IBM Bob', { exact: true }).first()
   await expect(bobLabel).toBeVisible({ timeout: 30_000 })
-  await expect(orcaPage.getByText(/^Default$/).first()).toBeVisible()
+  // Why: prove Bob owns the default — the row button titled "Default agent" must sit in
+  // the same agent row as the IBM Bob label, not anywhere on the page.
+  const bobRowWithDefault = orcaPage
+    .locator('div')
+    .filter({ has: orcaPage.getByText('IBM Bob', { exact: true }) })
+    .filter({ has: orcaPage.getByTitle('Default agent') })
+    .last()
+  await expect(bobRowWithDefault).toBeVisible({ timeout: 15_000 })
+  await expect(bobRowWithDefault.getByTitle('Default agent')).toHaveText(/Default/)
   await testInfo.attach('settings-agents', {
     body: await orcaPage.screenshot(),
     contentType: 'image/png'
@@ -300,6 +308,8 @@ test('Settings › Agents lists IBM Bob as detected and default', async ({
 })
 
 test('closing the IBM Bob pane stops its process', async ({ electronApp, orcaPage }, testInfo) => {
+  // Why: the process count uses pgrep; Windows needs a process-table query before this can run there.
+  test.skip(process.platform === 'win32', 'pgrep-based process check has no Windows equivalent yet')
   const homeDir = await electronApp.evaluate(() => process.env.HOME ?? '')
   await seedBobProfile(homeDir)
   await waitForSessionReady(orcaPage)
