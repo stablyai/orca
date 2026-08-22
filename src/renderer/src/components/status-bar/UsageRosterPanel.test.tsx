@@ -247,6 +247,44 @@ describe('UsageRow', () => {
     expect(markup).toContain('25%')
     expect(markup).toContain('60%')
   })
+
+  it('renders all four independent Antigravity quota buckets', () => {
+    const bucket = (name: string, usedPercent: number, windowMinutes: number) => ({
+      name,
+      usedPercent,
+      windowMinutes,
+      resetsAt: null,
+      resetDescription: null
+    })
+    const markup = renderToStaticMarkup(
+      <UsageRow
+        p={{
+          provider: 'antigravity',
+          session: bucket('summary', 9, 300),
+          weekly: null,
+          buckets: [
+            bucket('Gemini weekly', 2, 10_080),
+            bucket('Gemini 5h', 9, 300),
+            bucket('Claude/GPT weekly', 0, 10_080),
+            bucket('Claude/GPT 5h', 1, 300)
+          ],
+          updatedAt: 0,
+          status: 'ok',
+          error: null
+        }}
+        display="used"
+        state={{ kind: 'usage', statusLabel: null }}
+        showSignInAction={false}
+        now={mocks.now}
+      />
+    )
+
+    expect(markup.match(/data-usage-window=/g)).toHaveLength(4)
+    expect(markup).toContain('Gemini weekly')
+    expect(markup).toContain('Gemini 5h')
+    expect(markup).toContain('Claude/GPT weekly')
+    expect(markup).toContain('Claude/GPT 5h')
+  })
 })
 
 describe('UsageRosterPanel density picker', () => {
