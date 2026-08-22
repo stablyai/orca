@@ -329,7 +329,8 @@ export const TUI_AGENT_CONFIG: Record<TuiAgent, TuiAgentConfig> = {
   },
   devin: {
     detectCmd: 'devin',
-    launchCmd: 'devin',
+    // Why: first-run trust menu swallows PTY input as "No, exit"; `--permission-mode bypass` does not skip it.
+    launchCmd: 'devin --respect-workspace-trust=false',
     expectedProcess: 'devin',
     // Why: `devin -- <prompt>` auto-submits immediately (docs.devin.ai/cli), so start the REPL with no argv prompt.
     promptInjectionMode: 'stdin-after-start'

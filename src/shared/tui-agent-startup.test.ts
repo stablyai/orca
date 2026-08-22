@@ -916,11 +916,11 @@ describe('tui agent startup plans', () => {
     })
     expect(plan).toEqual({
       agent: 'devin',
-      launchCommand: "devin '--permission-mode' 'bypass'",
+      launchCommand: "devin --respect-workspace-trust=false '--permission-mode' 'bypass'",
       expectedProcess: 'devin',
       followupPrompt: 'fix the tests',
       launchConfig: {
-        agentCommand: "devin '--permission-mode' 'bypass'",
+        agentCommand: "devin --respect-workspace-trust=false '--permission-mode' 'bypass'",
         agentArgs: '--permission-mode bypass',
         agentEnv: {}
       }

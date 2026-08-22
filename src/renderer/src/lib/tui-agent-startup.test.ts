@@ -252,11 +252,11 @@ describe('buildAgentStartupPlan', () => {
       })
     ).toEqual({
       agent: 'devin',
-      launchCommand: "devin '--permission-mode' 'bypass'",
+      launchCommand: "devin --respect-workspace-trust=false '--permission-mode' 'bypass'",
       expectedProcess: 'devin',
       followupPrompt: 'Trace the failing test',
       launchConfig: {
-        agentCommand: "devin '--permission-mode' 'bypass'",
+        agentCommand: "devin --respect-workspace-trust=false '--permission-mode' 'bypass'",
         agentArgs: '--permission-mode bypass',
         agentEnv: {}
       }
