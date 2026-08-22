@@ -22,10 +22,11 @@ vi.mock('../providers/ssh-git-dispatch', () => mocks.sshGitDispatch)
 vi.mock('../ssh/ssh-port-forward', () => mocks.sshPortForward)
 vi.mock('../ssh/ssh-port-scanner', () => mocks.sshPortScanner)
 
-import { getSshConnectionManager, registerSshHandlers } from './ssh'
+import { getSshConnectionManager, registerSshHandlers, resetSshHandlerStateForTests } from './ssh'
 import type { SshTarget } from '../../shared/ssh-types'
 import type { SshPtyDataCallback } from '../providers/ssh-pty-provider-contract'
 import { createSshIpcHarness } from './ssh-ipc-test-harness'
+import { orcaWindowManager } from '../window/orca-window-manager'
 
 const {
   mockSshStore,
@@ -249,6 +250,8 @@ describe('SSH IPC handlers', () => {
   it('refreshes live session callbacks to the newest window and output authorities', async () => {
     const firstWindow = createMockWindow()
     const secondWindow = createMockWindow()
+    orcaWindowManager.remove(mockWindow.id)
+    orcaWindowManager.register(firstWindow as never, 'control')
     const firstRuntime = {
       onPtyData: vi.fn(),
       onPtyExit: vi.fn()
@@ -292,6 +295,8 @@ describe('SSH IPC handlers', () => {
     firstWindow.webContents.send.mockClear()
     secondWindow.webContents.send.mockClear()
 
+    orcaWindowManager.remove(firstWindow.id)
+    orcaWindowManager.register(secondWindow as never, 'control')
     registerSshHandlers(mockStore as never, () => secondWindow as never, secondRuntime as never)
     const callbacks = mockConnectionManager.callbacksRef.current as {
       onStateChange: (targetId: string, state: unknown) => void
@@ -363,5 +368,36 @@ describe('SSH IPC handlers', () => {
     expect(replacementPortForwardManager.dispose).not.toHaveBeenCalled()
     expect(mockNextConnectionManagers).toHaveLength(1)
     expect(mockNextPortForwardManagers).toHaveLength(1)
+  })
+
+  it('settles an owned credential request during explicit test reset', async () => {
+    vi.useFakeTimers()
+    const callbacks = mockConnectionManager.callbacksRef.current as {
+      onCredentialRequest: (
+        targetId: string,
+        kind: 'password',
+        detail: string
+      ) => Promise<string | null>
+    }
+    const result = callbacks.onCredentialRequest('ssh-1', 'password', 'deploy')
+    const requestId = mockWindow.webContents.send.mock.calls.find(
+      ([channel]) => channel === 'ssh:credential-request'
+    )?.[1].requestId as string
+
+    try {
+      await resetSshHandlerStateForTests()
+
+      await expect(Promise.race([result, Promise.resolve('pending')])).resolves.toBeNull()
+      expect(mockWindow.webContents.send).toHaveBeenCalledWith('ssh:credential-resolved', {
+        requestId
+      })
+      expect(mockWindow.webContents.removeListener).toHaveBeenCalledWith(
+        'destroyed',
+        expect.any(Function)
+      )
+    } finally {
+      await vi.runAllTimersAsync()
+      vi.useRealTimers()
+    }
   })
 })

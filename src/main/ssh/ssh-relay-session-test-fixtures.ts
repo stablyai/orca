@@ -37,7 +37,7 @@ export function createMockDeps(): SshRelaySessionTestDeps {
     // keeps establish-path tests exercising the scan-on-ready behavior.
     isVisible: () => true,
     isMinimized: () => false,
-    webContents: { send: vi.fn() }
+    webContents: { send: vi.fn(), isDestroyed: () => false }
   } as unknown as BrowserWindow
   const getMainWindow = vi.fn().mockReturnValue(mockWindow)
   return { mockConn, mockStore, mockPortForward, getMainWindow, mockWindow }

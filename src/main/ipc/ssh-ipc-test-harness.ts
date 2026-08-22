@@ -39,9 +39,12 @@ export type MockBrowserWindow = {
   isDestroyed: () => boolean
   webContents: {
     id: number
+    mainFrame: object
     send: Mock
     isDestroyed: () => boolean
     getType: () => 'window'
+    once: Mock
+    removeListener: Mock
   }
 }
 
@@ -122,9 +125,12 @@ export function createSshIpcHarness(mocks: SshIpcMocks): SshIpcHarness {
       isDestroyed: () => false,
       webContents: {
         id: id + 100,
+        mainFrame: {},
         send: vi.fn(),
         isDestroyed: () => false,
-        getType: () => 'window'
+        getType: () => 'window',
+        once: vi.fn(),
+        removeListener: vi.fn()
       }
     }
   }

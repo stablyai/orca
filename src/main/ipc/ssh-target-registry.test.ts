@@ -24,6 +24,7 @@ vi.mock('../ssh/ssh-port-scanner', () => mocks.sshPortScanner)
 
 import type { SshTarget } from '../../shared/ssh-types'
 import { createSshIpcHarness } from './ssh-ipc-test-harness'
+import { orcaWindowManager } from '../window/orca-window-manager'
 
 const {
   mockSshStore,
@@ -36,7 +37,7 @@ const {
 
 describe('SSH IPC handlers', () => {
   const harness = createSshIpcHarness(mocks)
-  const { handlers, mockStore, mockWindow } = harness
+  const { handlers, mockStore, mockWindow, createMockWindow } = harness
 
   beforeEach(harness.reset)
 
@@ -83,6 +84,11 @@ describe('SSH IPC handlers', () => {
   })
 
   it('ssh:addTarget returns exact re-adoption evidence and refreshes repos', async () => {
+    const secondary = createMockWindow()
+    const destroyedRenderer = createMockWindow()
+    destroyedRenderer.webContents.isDestroyed = () => true
+    orcaWindowManager.register(secondary as never, 'secondary')
+    orcaWindowManager.register(destroyedRenderer as never, 'secondary')
     const target = {
       id: 'ssh-new',
       label: 'Server',
@@ -99,7 +105,9 @@ describe('SSH IPC handlers', () => {
     const result = await handlers.get('ssh:addTarget')!(null, { target })
 
     expect(result).toEqual({ target, repoReadoptions })
-    expect(mockWindow.webContents.send).toHaveBeenCalledWith('repos:changed')
+    expect(mockWindow.webContents.send).toHaveBeenCalledExactlyOnceWith('repos:changed')
+    expect(secondary.webContents.send).toHaveBeenCalledExactlyOnceWith('repos:changed')
+    expect(destroyedRenderer.webContents.send).not.toHaveBeenCalled()
     expect(mockSshStore.lastRepoReadoptions).toEqual([])
   })
 

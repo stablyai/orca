@@ -43,7 +43,11 @@ import {
   getWorktreeIdsForConnection
 } from '../ports/ssh-advertised-url-enrichment'
 import { advertisedUrlWatcher } from '../ports/advertised-url-watcher'
-import { requestCredential, registerCredentialHandler } from './ssh-passphrase'
+import {
+  clearPendingCredentialRequests,
+  requestCredential,
+  registerCredentialHandler
+} from './ssh-passphrase'
 import {
   clearProviderPtyState,
   deletePtyOwnership,
@@ -61,7 +65,7 @@ import {
   resetSshProviderAuthorities,
   rotateSshProviderAuthority
 } from '../ssh/ssh-provider-authority'
-import { orcaWindowManager } from '../window/orca-window-manager'
+import { broadcastToOrcaWindows } from '../window/orca-window-broadcast'
 
 let sshStore: SshConnectionStore | null = null
 let connectionManager: SshConnectionManager | null = null
@@ -102,23 +106,6 @@ const credentialRequestedForTarget = new Set<string>()
 
 function getCurrentMainWindow(): BrowserWindow | null {
   return currentGetMainWindow()
-}
-
-function broadcastToOrcaWindows(
-  fallback: () => BrowserWindow | null,
-  channel: string,
-  payload: unknown
-): void {
-  const windows = orcaWindowManager.getAllWindows()
-  const legacyWindow = fallback()
-  if (windows.length === 0 && legacyWindow && !legacyWindow.isDestroyed()) {
-    windows.push(legacyWindow)
-  }
-  for (const window of windows) {
-    if (!window.isDestroyed() && !window.webContents.isDestroyed()) {
-      window.webContents.send(channel, payload)
-    }
-  }
 }
 
 export async function connectRegisteredSshTarget(targetId: string): Promise<SshConnectionState> {
@@ -690,12 +677,7 @@ function createSshConnectionCallbacks(): SshConnectionCallbacks {
   return {
     onCredentialRequest: (targetId, kind, detail) => {
       credentialRequestedForTarget.add(targetId)
-      return requestCredential(
-        () => orcaWindowManager.getMostRecentWindow() ?? getCurrentMainWindow(),
-        targetId,
-        kind,
-        detail
-      )
+      return requestCredential(getCurrentMainWindow, targetId, kind, detail)
     },
     onStateChange: (targetId: string, state: SshConnectionState) => {
       if (testingTargets.has(targetId)) {
@@ -982,7 +964,7 @@ export function registerSshHandlers(
   persistedStore = store
   registerAdvertisedUrlRefresh(getCurrentMainWindow)
 
-  registerCredentialHandler(getCurrentMainWindow)
+  registerCredentialHandler()
 
   const callbacks = createSshConnectionCallbacks()
   if (connectionManager) {
@@ -1022,10 +1004,7 @@ export function registerSshHandlers(
     )) {
       rotateSshProviderAuthority(targetId)
     }
-    const win = getCurrentMainWindow()
-    if (win && !win.isDestroyed()) {
-      win.webContents.send('repos:changed')
-    }
+    broadcastToOrcaWindows(getCurrentMainWindow, 'repos:changed')
     return repoReadoptions
   }
 
@@ -1777,6 +1756,7 @@ export async function resetSshHandlerStateForTests(): Promise<void> {
     ipcMain.removeHandler(ch)
   }
   ipcMain.removeHandler('ssh:submitCredential')
+  clearPendingCredentialRequests()
 
   // Why: allSettled — a rejected disposal write must not abort the rest of the reset and leak state into the next test.
   await Promise.allSettled(

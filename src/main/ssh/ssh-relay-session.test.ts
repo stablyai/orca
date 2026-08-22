@@ -8,13 +8,19 @@ import {
 import { SSH_RELAY_CONFIGURE_GRACE_TIME_METHOD } from '../../shared/ssh-types'
 import { createMockDeps, mockDeploySuccess } from './ssh-relay-session-test-fixtures'
 
-const { acceptOutputDataMock, muxRequestMock, openConsumerSessionMock, pauseAdapterMock } =
-  vi.hoisted(() => ({
-    acceptOutputDataMock: vi.fn().mockResolvedValue(undefined),
-    muxRequestMock: vi.fn(),
-    openConsumerSessionMock: vi.fn(),
-    pauseAdapterMock: vi.fn()
-  }))
+const {
+  acceptOutputDataMock,
+  muxRequestMock,
+  openConsumerSessionMock,
+  pauseAdapterMock,
+  sendToPtyOwnerMock
+} = vi.hoisted(() => ({
+  acceptOutputDataMock: vi.fn().mockResolvedValue(undefined),
+  muxRequestMock: vi.fn(),
+  openConsumerSessionMock: vi.fn(),
+  pauseAdapterMock: vi.fn(),
+  sendToPtyOwnerMock: vi.fn().mockReturnValue(true)
+}))
 
 vi.mock('./ssh-relay-deploy', () => ({
   deployAndLaunchRelay: vi.fn()
@@ -100,7 +106,8 @@ vi.mock('../ipc/pty', () => ({
   deletePtyOwnership: vi.fn(),
   setPtyOwnership: vi.fn(),
   restorePtyIncarnation: vi.fn(),
-  isCurrentPtyExit: vi.fn(() => true)
+  isCurrentPtyExit: vi.fn(() => true),
+  sendToPtyOwner: sendToPtyOwnerMock
 }))
 
 vi.mock('../providers/ssh-filesystem-dispatch', () => ({
@@ -143,6 +150,7 @@ describe('SshRelaySession', () => {
     muxRequestMock.mockResolvedValue([])
     mockDeploySuccess()
     vi.mocked(getPtyIdsForConnection).mockReturnValue([])
+    sendToPtyOwnerMock.mockReset().mockReturnValue(true)
   })
 
   it('hands each PTY data event exactly once to the bounded main intake', async () => {
@@ -433,7 +441,7 @@ describe('SshRelaySession', () => {
   })
 
   it('forwards reconnect replay after the attach attempt is still current', async () => {
-    const { mockConn, mockStore, mockPortForward, getMainWindow, mockWindow } = createMockDeps()
+    const { mockConn, mockStore, mockPortForward, getMainWindow } = createMockDeps()
     const session = new SshRelaySession('target-1', getMainWindow, mockStore, mockPortForward)
     await session.establish(mockConn)
     vi.clearAllMocks()
@@ -449,14 +457,14 @@ describe('SshRelaySession', () => {
 
     await session.reconnect(mockConn)
 
-    expect(mockWindow.webContents.send).toHaveBeenCalledWith('pty:replay', {
+    expect(sendToPtyOwnerMock).toHaveBeenCalledWith('ssh:target-1@@pty-1', 'pty:replay', {
       id: 'ssh:target-1@@pty-1',
       data: 'restored-output'
     })
   })
 
   it('does not wall-clock dedupe identical replay payloads from distinct reconnects', async () => {
-    const { mockConn, mockStore, mockPortForward, getMainWindow, mockWindow } = createMockDeps()
+    const { mockConn, mockStore, mockPortForward, getMainWindow } = createMockDeps()
     const session = new SshRelaySession('target-1', getMainWindow, mockStore, mockPortForward)
     await session.establish(mockConn)
     vi.clearAllMocks()
@@ -473,9 +481,9 @@ describe('SshRelaySession', () => {
     await session.reconnect(mockConn)
     await session.reconnect(mockConn)
 
-    const replaySends = vi
-      .mocked(mockWindow.webContents.send)
-      .mock.calls.filter(([channel]) => channel === 'pty:replay')
+    const replaySends = sendToPtyOwnerMock.mock.calls.filter(
+      ([, channel]) => channel === 'pty:replay'
+    )
     expect(mockAttach).toHaveBeenCalledTimes(2)
     expect(replaySends).toHaveLength(2)
   })
@@ -574,7 +582,7 @@ describe('SshRelaySession', () => {
   })
 
   it('does not expire a live reused relay id when attach rejects identity mismatch', async () => {
-    const { mockConn, mockStore, mockPortForward, getMainWindow, mockWindow } = createMockDeps()
+    const { mockConn, mockStore, mockPortForward, getMainWindow } = createMockDeps()
     const session = new SshRelaySession('target-1', getMainWindow, mockStore, mockPortForward)
     await session.establish(mockConn)
     vi.clearAllMocks()
@@ -609,10 +617,11 @@ describe('SshRelaySession', () => {
     expect(clearProviderPtyState).not.toHaveBeenCalledWith('ssh:target-1@@pty-1')
     expect(deletePtyOwnership).not.toHaveBeenCalledWith('ssh:target-1@@pty-1')
     expect(mockStore.markSshRemotePtyLease).not.toHaveBeenCalledWith('target-1', 'pty-1', 'expired')
-    expect(mockWindow.webContents.send).not.toHaveBeenCalledWith('pty:exit', {
-      id: 'ssh:target-1@@pty-1',
-      code: -1
-    })
+    expect(sendToPtyOwnerMock).not.toHaveBeenCalledWith(
+      'ssh:target-1@@pty-1',
+      'pty:exit',
+      expect.anything()
+    )
   })
 
   it('rejects establish if detach wins while reattach is in flight', async () => {
@@ -672,7 +681,7 @@ describe('SshRelaySession', () => {
   })
 
   it('invalidates and broadcasts remote PTYs that cannot reattach after relay reconnect', async () => {
-    const { mockConn, mockStore, mockPortForward, getMainWindow, mockWindow } = createMockDeps()
+    const { mockConn, mockStore, mockPortForward, getMainWindow } = createMockDeps()
     const session = new SshRelaySession('target-1', getMainWindow, mockStore, mockPortForward)
     await session.establish(mockConn)
     vi.clearAllMocks()
@@ -695,7 +704,7 @@ describe('SshRelaySession', () => {
     expect(mockAttach).toHaveBeenCalledWith('pty-live')
     expect(clearProviderPtyState).toHaveBeenCalledWith('ssh:target-1@@pty-stale')
     expect(deletePtyOwnership).toHaveBeenCalledWith('ssh:target-1@@pty-stale')
-    expect(mockWindow.webContents.send).toHaveBeenCalledWith('pty:exit', {
+    expect(sendToPtyOwnerMock).toHaveBeenCalledWith('ssh:target-1@@pty-stale', 'pty:exit', {
       id: 'ssh:target-1@@pty-stale',
       code: -1
     })

@@ -34,7 +34,8 @@ const {
   mockDeployAndLaunchRelay,
   mockMux,
   mockRegisterSshGitProvider,
-  mockPortForwardManager
+  mockPortForwardManager,
+  mockPortScannerCallbacks
 } = mocks
 
 describe('SSH IPC handlers', () => {
@@ -121,9 +122,12 @@ describe('SSH IPC handlers', () => {
     })
   })
 
-  it('broadcasts shared SSH state to every Orca window', async () => {
+  it('fans shared SSH UI events out once per live Orca window', async () => {
     const secondary = createMockWindow()
+    const destroyedRenderer = createMockWindow()
+    destroyedRenderer.webContents.isDestroyed = () => true
     orcaWindowManager.register(secondary as never, 'secondary')
+    orcaWindowManager.register(destroyedRenderer as never, 'secondary')
     const target: SshTarget = {
       id: 'ssh-1',
       label: 'Server',
@@ -141,11 +145,59 @@ describe('SSH IPC handlers', () => {
     })
 
     await handlers.get('ssh:connect')!(null, { targetId: 'ssh-1' })
-
-    expect(secondary.webContents.send).toHaveBeenCalledWith('ssh:state-changed', {
+    mockWindow.webContents.send.mockClear()
+    secondary.webContents.send.mockClear()
+    destroyedRenderer.webContents.send.mockClear()
+    const stateCallbacks = mockConnectionManager.callbacksRef.current as {
+      onStateChange: (targetId: string, state: SshConnectionState) => void
+    }
+    const forwardCallbacks = mockPortForwardManager.callbacksRef.current as {
+      onForwardClosed: (
+        entry: {
+          id: string
+          connectionId: string
+          localPort: number
+          remoteHost: string
+          remotePort: number
+        },
+        reason: { kind: 'expected' }
+      ) => void
+    }
+    stateCallbacks.onStateChange('ssh-1', {
       targetId: 'ssh-1',
-      state: expect.objectContaining({ targetId: 'ssh-1', status: 'connected' })
+      status: 'error',
+      error: 'network down',
+      reconnectAttempt: 0
     })
+    forwardCallbacks.onForwardClosed(
+      {
+        id: 'forward-1',
+        connectionId: 'ssh-1',
+        localPort: 4100,
+        remoteHost: '127.0.0.1',
+        remotePort: 3000
+      },
+      { kind: 'expected' }
+    )
+    const onDetectedPorts = mockPortScannerCallbacks.get('ssh-1') as (
+      targetId: string,
+      ports: { host: string; port: number; pid: number; processName: string }[],
+      platform: string
+    ) => void
+    onDetectedPorts(
+      'ssh-1',
+      [{ host: '127.0.0.1', port: 3000, pid: 12, processName: 'node' }],
+      'linux-x64'
+    )
+
+    for (const window of [mockWindow, secondary]) {
+      expect(window.webContents.send.mock.calls.map(([channel]) => channel)).toEqual([
+        'ssh:state-changed',
+        'ssh:port-forwards-changed',
+        'ssh:detected-ports-changed'
+      ])
+    }
+    expect(destroyedRenderer.webContents.send).not.toHaveBeenCalled()
   })
 
   it('ssh:connect exposes the detected remote platform in public state', async () => {

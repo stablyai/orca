@@ -67,7 +67,7 @@ import { PortScanner } from './ssh-port-scanner'
 import { isMainWindowVisible, onMainWindowBecameVisible } from '../window/main-window-visibility'
 import type { SshPortForwardManager } from './ssh-port-forward'
 import type { SshConnection } from './ssh-connection'
-import { orcaWindowManager } from '../window/orca-window-manager'
+import { broadcastToOrcaWindows } from '../window/orca-window-broadcast'
 import { joinRemotePath, isWindowsRemoteHost, type RemoteHostPlatform } from './ssh-remote-platform'
 import { makeRemoteDirectoryCommand } from './ssh-remote-commands'
 import { createRemoteCliInstallPlan } from './ssh-remote-cli-launcher'
@@ -1676,23 +1676,14 @@ export class SshRelaySession {
 
   // Why: shared by establish()/reconnect() so both paths reset renderer lists the same way.
   private broadcastEmptyLists(): void {
-    const windows = orcaWindowManager.getAllWindows()
-    const legacyWindow = this.getMainWindow()
-    if (windows.length === 0 && legacyWindow && !legacyWindow.isDestroyed()) {
-      windows.push(legacyWindow)
-    }
-    for (const window of windows) {
-      if (!window.isDestroyed() && !window.webContents.isDestroyed()) {
-        window.webContents.send('ssh:port-forwards-changed', {
-          targetId: this.targetId,
-          forwards: []
-        })
-        window.webContents.send('ssh:detected-ports-changed', {
-          targetId: this.targetId,
-          ports: []
-        })
-      }
-    }
+    broadcastToOrcaWindows(this.getMainWindow, 'ssh:port-forwards-changed', {
+      targetId: this.targetId,
+      forwards: []
+    })
+    broadcastToOrcaWindows(this.getMainWindow, 'ssh:detected-ports-changed', {
+      targetId: this.targetId,
+      ports: []
+    })
   }
 
   private startPortScanning(): void {

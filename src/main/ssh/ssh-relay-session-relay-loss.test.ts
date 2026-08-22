@@ -3,6 +3,7 @@ import { SshRelaySession } from './ssh-relay-session'
 import type { SshConnection } from './ssh-connection'
 import { SSH_RELAY_CONFIGURE_GRACE_TIME_METHOD } from '../../shared/ssh-types'
 import { createMockDeps, mockDeploySuccess } from './ssh-relay-session-test-fixtures'
+import { orcaWindowManager } from '../window/orca-window-manager'
 
 // #11953: the grace-time notify is the last thing establish()/reconnect() do
 // before latching 'ready', and it can dispose the mux synchronously (writer
@@ -138,6 +139,9 @@ describe('SshRelaySession relay loss during setup', () => {
   let armProviderRegistrationFailure = false
 
   beforeEach(() => {
+    for (const window of orcaWindowManager.getAllWindows()) {
+      orcaWindowManager.remove(window.id)
+    }
     vi.clearAllMocks()
     armGraceTimeFailure = false
     armProviderRegistrationFailure = false
@@ -150,6 +154,47 @@ describe('SshRelaySession relay loss during setup', () => {
       serverBuildId: 'test-relay-build'
     }))
     mockDeploySuccess()
+  })
+
+  it('broadcasts relay empty-list resets to every live Orca window', async () => {
+    muxRequestMock.mockResolvedValue([])
+    const { mockStore, mockPortForward } = createMockDeps()
+    const createWindow = (id: number) => ({
+      id,
+      isDestroyed: () => false,
+      isVisible: () => true,
+      isMinimized: () => false,
+      webContents: {
+        id: id + 100,
+        send: vi.fn(),
+        isDestroyed: () => false,
+        getType: () => 'window' as const
+      }
+    })
+    const control = createWindow(901)
+    const secondary = createWindow(902)
+    const destroyedRenderer = createWindow(903)
+    destroyedRenderer.webContents.isDestroyed = () => true
+    orcaWindowManager.register(control as never, 'control')
+    orcaWindowManager.register(secondary as never, 'secondary')
+    orcaWindowManager.register(destroyedRenderer as never, 'secondary')
+    const session = new SshRelaySession(
+      'target-1',
+      () => control as never,
+      mockStore,
+      mockPortForward
+    )
+    await session.establish({} as SshConnection)
+
+    session.beginShutdownDetach()
+
+    for (const window of [control, secondary]) {
+      expect(window.webContents.send.mock.calls).toEqual([
+        ['ssh:port-forwards-changed', { targetId: 'target-1', forwards: [] }],
+        ['ssh:detected-ports-changed', { targetId: 'target-1', ports: [] }]
+      ])
+    }
+    expect(destroyedRenderer.webContents.send).not.toHaveBeenCalled()
   })
 
   function createSession(): {
