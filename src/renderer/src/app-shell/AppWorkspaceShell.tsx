@@ -6,6 +6,7 @@ import RightSidebar from '../components/right-sidebar'
 import { RecoverableRenderErrorBoundary } from '../components/error-boundaries/RecoverableRenderErrorBoundary'
 import { FloatingTerminalToggleButton } from '../components/floating-terminal/FloatingTerminalToggleButton'
 import { TerminalWorkbenchContainer } from '../components/TerminalWorkbenchContainer'
+import { NativeChatTitlebarPortalProvider } from '../components/native-chat/NativeChatTitlebarPortal'
 import type { VirtualizedScrollAnchor } from '../hooks/useVirtualizedScrollAnchor'
 import { TitlebarLeftControls } from './TitlebarLeftControls'
 import { TitlebarMainStrip } from './TitlebarMainStrip'
@@ -101,135 +102,143 @@ export function AppWorkspaceShell(props: {
   const sidebarScrollRefs = { scrollOffsetRef, scrollAnchorRef }
 
   return (
-    // Why: workspace activation is a hot path; activeWorktreeId in reset keys would remount whole surfaces during wake.
-    <RecoverableRenderErrorBoundary
-      boundaryId="app.workspace-shell"
-      surface="workspace-shell"
-      resetKey={layout.activeView}
-      title={translate('auto.App.df1d56bf87', 'The workspace shell hit an error.')}
-      description={translate(
-        'auto.App.8504ddf267',
-        'The app is still running. Retry the shell or use the menu to report the crash details.'
-      )}
-    >
-      <div className="flex flex-row flex-1 min-h-0 overflow-hidden">
-        {/* Why: keep the non-workspace titlebar inside this left+center wrapper so it doesn't span over the right-sidebar column. */}
-        <div className="flex flex-col flex-1 min-w-0 min-h-0">
-          {/* Why: workspace view drops the full-width titlebar so tab groups extend to the top; settings/landing/tasks keep it. */}
-          {!layout.leftTitlebarChromeLayout.shouldMount ? (
-            <div className="titlebar">
-              <div className="flex items-center shrink-0 mr-2">{titlebarLeftControls}</div>
-              {titlebarMainStrip}
-            </div>
-          ) : null}
-          <div className="flex flex-row flex-1 min-h-0 overflow-hidden">
-            {layout.showSidebar ? (
-              layout.leftTitlebarChromeLayout.shouldMount ? (
-                /* Why: when the sidebar is collapsed, take this titlebar-height header out of flex layout so the terminal/editor reclaim the left edge. */
-                <div
-                  className={`flex min-h-0 flex-col shrink-0${layout.sidebarOpen ? '' : ' relative w-0 overflow-visible'}`}
-                >
-                  <div
-                    // Why: floating titlebar-left occludes the center column's border-l seam; border-r restores that line, w-max sizes it to its own controls.
-                    className={`titlebar-left${
-                      layout.leftTitlebarChromeLayout.isFloating
-                        ? ' titlebar-left-floating absolute top-0 left-0 z-10 w-max border-r border-border'
-                        : ''
-                    }`}
-                    style={{
-                      // Why: custom sidebar appearances are scoped to the sidebar root; mirror those vars onto the header in the same left-column panel.
-                      ...(layout.sidebarOpen ? layout.leftSidebarStyle : undefined),
-                      // Why: size from the wrapper's live width so the header tracks in-flight drag resizes (persisted to Zustand only on mouseup).
-                      width: layout.sidebarOpen ? '100%' : undefined
-                    }}
-                  >
-                    {titlebarLeftControls}
-                  </div>
-                  {/* Why: flex-1/min-h-0 slot needed under the fixed 36px header, else the sidebar collapses to content height and loses its scroll viewport. */}
-                  <div className="flex min-h-0 flex-1">
-                    <WorktreeSidebar layout={layout} scrollRefs={sidebarScrollRefs} />
-                  </div>
-                </div>
-              ) : (
-                <WorktreeSidebar layout={layout} scrollRefs={sidebarScrollRefs} />
-              )
+    <NativeChatTitlebarPortalProvider>
+      {/* Why: workspace activation is a hot path; activeWorktreeId in reset keys would remount whole surfaces during wake. */}
+      <RecoverableRenderErrorBoundary
+        boundaryId="app.workspace-shell"
+        surface="workspace-shell"
+        resetKey={layout.activeView}
+        title={translate('auto.App.df1d56bf87', 'The workspace shell hit an error.')}
+        description={translate(
+          'auto.App.8504ddf267',
+          'The app is still running. Retry the shell or use the menu to report the crash details.'
+        )}
+      >
+        <div className="flex flex-row flex-1 min-h-0 overflow-hidden">
+          {/* Why: keep the non-workspace titlebar inside this left+center wrapper so it doesn't span over the right-sidebar column. */}
+          <div className="flex flex-col flex-1 min-w-0 min-h-0">
+            {/* Why: workspace view drops the full-width titlebar so tab groups extend to the top; settings/landing/tasks keep it. */}
+            {!layout.leftTitlebarChromeLayout.shouldMount ? (
+              <div className="titlebar">
+                <div className="flex items-center shrink-0 mr-2">{titlebarLeftControls}</div>
+                {titlebarMainStrip}
+              </div>
             ) : null}
-            <div className="flex flex-col flex-1 min-w-0 min-h-0 overflow-hidden">
-              {/* Why: workspace mode now owns a global Chat/Terminal switch above its local tab groups; other stacked pages keep the legacy titlebar rule. */}
-              {layout.workspaceChromeActive ||
-              (layout.stackedSidebarOpen &&
-                layout.activeView !== 'automations' &&
-                layout.activeView !== 'artifacts') ? (
-                <div className="titlebar">{titlebarMainStrip}</div>
-              ) : null}
-              <div className="relative flex flex-1 min-w-0 min-h-0 overflow-hidden">
-                <div className="flex flex-1 min-w-0 min-h-0 flex-col">
-                  {layout.shouldMountTerminalWorkbench ? (
-                    <TerminalWorkbenchContainer isVisible={layout.terminalWorkbenchVisible}>
-                      <Suspense fallback={null}>
-                        <RecoverableRenderErrorBoundary
-                          boundaryId="terminal.workbench"
-                          surface="terminal-workbench"
-                          resetKey="terminal"
-                          title={translate(
-                            'auto.App.5a9519aef0',
-                            'The workspace workbench hit an error.'
-                          )}
-                          description={translate(
-                            'auto.App.98d4ea2823',
-                            'Terminal, browser, or editor rendering failed in this workspace. Retry to remount it.'
-                          )}
-                        >
-                          <Terminal />
-                        </RecoverableRenderErrorBoundary>
-                      </Suspense>
-                    </TerminalWorkbenchContainer>
-                  ) : null}
-                  <Suspense fallback={null}>
-                    <RecoverableRenderErrorBoundary
-                      boundaryId={`page.${layout.activeView}`}
-                      surface="page"
-                      resetKey={layout.activeView}
-                      title={translate('auto.App.b7a714db1e', 'This page hit an error.')}
-                      description={translate(
-                        'auto.App.03a14f6b5b',
-                        'Retry the page or navigate to another MCode surface.'
-                      )}
+            <div className="flex flex-row flex-1 min-h-0 overflow-hidden">
+              {layout.showSidebar ? (
+                layout.leftTitlebarChromeLayout.shouldMount ? (
+                  /* Why: when the sidebar is collapsed, take this titlebar-height header out of flex layout so the terminal/editor reclaim the left edge. */
+                  <div
+                    className={`flex min-h-0 flex-col shrink-0${layout.sidebarOpen ? '' : ' relative w-0 overflow-visible'}`}
+                  >
+                    <div
+                      // Why: floating titlebar-left occludes the center column's border-l seam; border-r restores that line, w-max sizes it to its own controls.
+                      className={`titlebar-left${
+                        layout.leftTitlebarChromeLayout.isFloating
+                          ? ' titlebar-left-floating absolute top-0 left-0 z-10 w-max border-r border-border'
+                          : ''
+                      }`}
+                      style={{
+                        // Why: custom sidebar appearances are scoped to the sidebar root; mirror those vars onto the header in the same left-column panel.
+                        ...(layout.sidebarOpen ? layout.leftSidebarStyle : undefined),
+                        // Why: size from the wrapper's live width so the header tracks in-flight drag resizes (persisted to Zustand only on mouseup).
+                        width: layout.sidebarOpen ? '100%' : undefined
+                      }}
                     >
-                      <ActivePage layout={layout} />
-                    </RecoverableRenderErrorBoundary>
-                  </Suspense>
-                </div>
-                {floatingWorkspace.showToggleButton ? (
-                  <FloatingTerminalToggleButton
-                    open={floatingWorkspace.open}
-                    onToggle={() => floatingWorkspace.setOpenWithFocus((open) => !open)}
+                      {titlebarLeftControls}
+                    </div>
+                    {/* Why: flex-1/min-h-0 slot needed under the fixed 36px header, else the sidebar collapses to content height and loses its scroll viewport. */}
+                    <div className="flex min-h-0 flex-1">
+                      <WorktreeSidebar layout={layout} scrollRefs={sidebarScrollRefs} />
+                    </div>
+                  </div>
+                ) : (
+                  <WorktreeSidebar layout={layout} scrollRefs={sidebarScrollRefs} />
+                )
+              ) : null}
+              <div className="flex flex-col flex-1 min-w-0 min-h-0 overflow-hidden">
+                {/* Why: workspace mode now owns a global Chat/Terminal switch above its local tab groups; other stacked pages keep the legacy titlebar rule. */}
+                {layout.workspaceChromeActive ||
+                (layout.stackedSidebarOpen &&
+                  layout.activeView !== 'automations' &&
+                  layout.activeView !== 'artifacts') ? (
+                  <div className="titlebar">{titlebarMainStrip}</div>
+                ) : null}
+                {layout.workspaceChromeActive ? (
+                  <div
+                    id="titlebar-tabs"
+                    className="empty:hidden flex h-[32px] shrink-0 items-stretch border-b border-border bg-card pr-1.5"
                   />
                 ) : null}
+                <div className="relative flex flex-1 min-w-0 min-h-0 overflow-hidden">
+                  <div className="flex flex-1 min-w-0 min-h-0 flex-col">
+                    {layout.shouldMountTerminalWorkbench ? (
+                      <TerminalWorkbenchContainer isVisible={layout.terminalWorkbenchVisible}>
+                        <Suspense fallback={null}>
+                          <RecoverableRenderErrorBoundary
+                            boundaryId="terminal.workbench"
+                            surface="terminal-workbench"
+                            resetKey="terminal"
+                            title={translate(
+                              'auto.App.5a9519aef0',
+                              'The workspace workbench hit an error.'
+                            )}
+                            description={translate(
+                              'auto.App.98d4ea2823',
+                              'Terminal, browser, or editor rendering failed in this workspace. Retry to remount it.'
+                            )}
+                          >
+                            <Terminal />
+                          </RecoverableRenderErrorBoundary>
+                        </Suspense>
+                      </TerminalWorkbenchContainer>
+                    ) : null}
+                    <Suspense fallback={null}>
+                      <RecoverableRenderErrorBoundary
+                        boundaryId={`page.${layout.activeView}`}
+                        surface="page"
+                        resetKey={layout.activeView}
+                        title={translate('auto.App.b7a714db1e', 'This page hit an error.')}
+                        description={translate(
+                          'auto.App.03a14f6b5b',
+                          'Retry the page or navigate to another MCode surface.'
+                        )}
+                      >
+                        <ActivePage layout={layout} />
+                      </RecoverableRenderErrorBoundary>
+                    </Suspense>
+                  </div>
+                  {floatingWorkspace.showToggleButton ? (
+                    <FloatingTerminalToggleButton
+                      open={floatingWorkspace.open}
+                      onToggle={() => floatingWorkspace.setOpenWithFocus((open) => !open)}
+                    />
+                  ) : null}
+                </div>
               </div>
             </div>
           </div>
+          {/* Why: keep the shell mounted for layout stability (heavy panels disconnect while closed); unmount on the distraction-free tasks view. */}
+          {layout.showRightSidebarControls ? (
+            <RecoverableRenderErrorBoundary
+              boundaryId="right-sidebar"
+              surface="right-sidebar"
+              resetKey={
+                layout.rightSidebarTab === 'explorer'
+                  ? `${layout.rightSidebarTab}:${layout.rightSidebarExplorerView}`
+                  : layout.rightSidebarTab
+              }
+              title={translate('auto.App.ed6b168d00', 'The right sidebar hit an error.')}
+              description={translate(
+                'auto.App.8d1e160ed1',
+                'Retry the sidebar or switch tabs to reload this surface.'
+              )}
+            >
+              <RightSidebar />
+            </RecoverableRenderErrorBoundary>
+          ) : null}
         </div>
-        {/* Why: keep the shell mounted for layout stability (heavy panels disconnect while closed); unmount on the distraction-free tasks view. */}
-        {layout.showRightSidebarControls ? (
-          <RecoverableRenderErrorBoundary
-            boundaryId="right-sidebar"
-            surface="right-sidebar"
-            resetKey={
-              layout.rightSidebarTab === 'explorer'
-                ? `${layout.rightSidebarTab}:${layout.rightSidebarExplorerView}`
-                : layout.rightSidebarTab
-            }
-            title={translate('auto.App.ed6b168d00', 'The right sidebar hit an error.')}
-            description={translate(
-              'auto.App.8d1e160ed1',
-              'Retry the sidebar or switch tabs to reload this surface.'
-            )}
-          >
-            <RightSidebar />
-          </RecoverableRenderErrorBoundary>
-        ) : null}
-      </div>
-    </RecoverableRenderErrorBoundary>
+      </RecoverableRenderErrorBoundary>
+    </NativeChatTitlebarPortalProvider>
   )
 }

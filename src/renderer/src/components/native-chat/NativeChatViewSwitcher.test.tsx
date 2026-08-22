@@ -68,11 +68,17 @@ describe('NativeChatViewSwitcher', () => {
   it('switches views with the tab-list arrow keys', () => {
     const { container, onToggleNativeChat } = renderSwitcher(true)
     const chatTab = container.querySelector<HTMLButtonElement>('[role="tab"][aria-selected="true"]')
+    const terminalTab = container.querySelector<HTMLButtonElement>(
+      '[role="tab"][aria-selected="false"]'
+    )
+
+    chatTab?.focus()
 
     act(() =>
       chatTab?.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true }))
     )
 
     expect(onToggleNativeChat).toHaveBeenCalledTimes(1)
+    expect(document.activeElement).toBe(terminalTab)
   })
 })

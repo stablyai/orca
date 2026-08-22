@@ -17,7 +17,16 @@ export function NativeChatViewSwitcher({
       return
     }
     event.preventDefault()
-    onToggleNativeChat?.()
+    const tabs = Array.from(
+      event.currentTarget.parentElement?.querySelectorAll<HTMLButtonElement>('[role="tab"]') ?? []
+    )
+    const currentIndex = tabs.indexOf(event.currentTarget)
+    const direction = event.key === 'ArrowRight' ? 1 : -1
+    const nextTab = tabs[(currentIndex + direction + tabs.length) % tabs.length]
+    nextTab?.focus()
+    if (nextTab?.getAttribute('aria-selected') !== 'true') {
+      onToggleNativeChat?.()
+    }
   }
 
   return (

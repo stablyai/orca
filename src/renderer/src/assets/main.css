@@ -3131,7 +3131,7 @@ html.native-shell .app-layout {
 .titlebar-session-view-switcher > button[data-state='active'] {
   background: var(--background);
   color: var(--foreground);
-  box-shadow: 0 1px 2px rgb(0 0 0 / 0.12);
+  box-shadow: 0 1px 2px color-mix(in srgb, var(--foreground) 12%, transparent);
 }
 
 .titlebar-session-view-switcher > button:focus-visible {

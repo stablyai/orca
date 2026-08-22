@@ -3,6 +3,7 @@ import { translate } from '@/i18n/i18n'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { TOGGLE_TERMINAL_PANE_EXPAND_EVENT } from '@/constants/terminal'
 import { ActivityTitlebarControls } from '../components/activity/ActivityTitlebarControls'
+import { NativeChatTitlebarPortalHost } from '../components/native-chat/NativeChatTitlebarPortal'
 import { useShortcutLabel } from '../hooks/useShortcutLabel'
 import { useAppStore } from '../store'
 import { hasCustomTitleBar } from './app-window-chrome'
@@ -51,9 +52,7 @@ export function TitlebarMainStrip({ layout }: { layout: AppChromeLayout }): Reac
       ) : layout.creationLayoutActive ? null : (
         <>
           {layout.workspaceChromeActive ? (
-            <div className="titlebar-session-view-host">
-              <div id="titlebar-session-view-switcher" />
-            </div>
+            <NativeChatTitlebarPortalHost />
           ) : (
             <div id="titlebar-tabs" className="invisible flex min-w-0 flex-1 self-stretch" />
           )}

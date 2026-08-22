@@ -111,6 +111,7 @@ import { getAllDrivers, getDriverForPty, isPtyLocked } from '@/lib/pane-manager/
 import { shouldChatTakeOverMobileSurface } from '../native-chat/native-chat-send-eligibility'
 import { canToggleNativeChat } from '../native-chat/native-chat-availability'
 import { NativeChatViewSwitcher } from '../native-chat/NativeChatViewSwitcher'
+import { useNativeChatTitlebarPortalTarget } from '../native-chat/NativeChatTitlebarPortal'
 import {
   nativeChatLaunchAgentForLeaf,
   resolveNativeChatLeafRoute,
@@ -2958,7 +2959,7 @@ function TerminalPane(
   )
   // Each toggle gates on its own leaf (header=active, menu=opened-over), so mixed splits show it only where chat can render.
   const activePaneCanToggleChat = canToggleChatForLeaf(activePane?.leafId ?? null)
-  const titlebarSessionViewTarget = document.getElementById('titlebar-session-view-switcher')
+  const titlebarSessionViewTarget = useNativeChatTitlebarPortalTarget()
   const contextMenuCanToggleChat = canToggleChatForLeaf(contextMenuLeafId)
   return (
     <>
