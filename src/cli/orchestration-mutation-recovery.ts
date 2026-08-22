@@ -16,9 +16,44 @@ export function orchestrationMutationRecoveryError(error: unknown): unknown {
     typeof data?.failedStage === 'string' ? `Failed stage: ${data.failedStage}.` : undefined,
     Array.isArray(data?.residualResources)
       ? `Residual resources: ${JSON.stringify(data.residualResources)}.`
-      : undefined
-  ].filter((line): line is string => line !== undefined)
+      : undefined,
+    ...residualResourceRecoveryLines(data?.residualResources)
+  ]
+    .filter((line): line is string => line !== undefined)
   return new RuntimeClientError(error.code, message.join('\n'), error.data)
+}
+
+/**
+ * Why (#15944): the receipt names what a failed mutation left behind but not what to do with
+ * it — the mutation got a recovery command (`--retry-request`), the residue got nothing, and
+ * the orchestration guide ends at "inspect residualResources". Attach the reclaim command per
+ * kind so a coordinator can clear the residue without reading source.
+ *
+ * The commands intentionally come AFTER the `--retry-request` line: a retried mutation may
+ * adopt the same resources, so they are only for residue that survives the settled outcome.
+ */
+export function residualResourceRecoveryLines(residualResources: unknown): string[] {
+  if (!Array.isArray(residualResources)) {
+    return []
+  }
+  const lines: string[] = []
+  for (const resource of residualResources) {
+    const record = objectRecord(resource)
+    const id = typeof record?.id === 'string' && record.id.length > 0 ? record.id : null
+    if (!id) {
+      continue
+    }
+    if (record?.kind === 'terminal') {
+      lines.push(
+        `If terminal ${id} is still residual after the outcome is settled: orca terminal close --terminal ${id} --json.`
+      )
+    } else if (record?.kind === 'worktree') {
+      lines.push(
+        `If worktree ${id} is still residual after the outcome is settled: orca worktree rm --worktree id:${id} --force --json (verify nothing valuable was written first).`
+      )
+    }
+  }
+  return lines
 }
 
 function isUnknownMutationOutcomeCode(code: string): boolean {

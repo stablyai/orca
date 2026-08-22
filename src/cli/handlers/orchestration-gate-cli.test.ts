@@ -228,6 +228,14 @@ describe('orchestration gate commands carry caller identity', () => {
     expect(output.error.message).toContain('may already have taken effect')
     expect(output.error.message).toContain('Failed stage: dispatch_input')
     expect(output.error.message).toMatch(/Residual resources:.*repo::child.*term_worker/)
+    // Why (#15944): the residue is actionable, not just named — each resource gets its
+    // reclaim command, after the --retry-request line it must not preempt.
+    expect(output.error.message).toMatch(
+      /--retry-request mutation_1[\s\S]*orca terminal close --terminal term_worker --json/
+    )
+    expect(output.error.message).toMatch(
+      /orca worktree rm --worktree id:repo::child --force --json/
+    )
     expect(output.error.message).not.toMatch(/restart Orca/i)
     expect(output.error.data).toMatchObject({
       orchestrationRequestId: 'mutation_1',
