@@ -437,10 +437,7 @@ describe('terminal window transfer lifecycle recovery', () => {
     ).resolves.toEqual({ ok: false, error: 'terminal_transfer_target_lost' })
     expect(h.owners.owns('pty-1', h.source.webContents as never)).toBe(true)
     expect(h.records.get(h.source.id)).toEqual(terminalWindowSession(true))
-    expect(h.records.get(h.target.id)).toEqual({
-      ...terminalWindowSession(false),
-      activeWorktreeId: null
-    })
+    expect(h.records.get(h.target.id)).toEqual(terminalWindowSession(false))
   })
 
   it('keeps source durable backing if target loss cannot hand ownership back', async () => {

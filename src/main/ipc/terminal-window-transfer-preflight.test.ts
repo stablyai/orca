@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { TERMINAL_SCROLLBACK_SESSION_BUFFER_BYTE_LIMIT } from '../../shared/terminal-scrollback-limits'
 import type { WorkspaceSessionState } from '../../shared/workspace-session-state-types'
 import type { TerminalWindowTransferCoordinatorOptions } from './terminal-window-transfer-coordinator-options'
 import { isTerminalWindowTransferSeed } from './terminal-window-transfer-seed-validation'
@@ -202,6 +203,58 @@ describe('terminal window transfer authoritative preflight', () => {
           activeLeafId: null,
           expandedLeafId: null,
           ptyIdsByLeafId: { retained: 42 }
+        }
+      })
+    ).toBe(false)
+  })
+
+  it('rejects a rootless layout whose backing records exceed the shared leaf limit', () => {
+    const record = (prefix: string, count: number): Record<string, string> =>
+      Object.fromEntries(
+        Array.from({ length: count }, (_, index) => [`${prefix}-${index}`, `${prefix}-${index}`])
+      )
+
+    expect(
+      isTerminalWindowTransferSeed({
+        ...terminalWindowSeed(),
+        layout: {
+          root: null,
+          activeLeafId: null,
+          expandedLeafId: null,
+          ptyIdsByLeafId: record('pty', 257),
+          buffersByLeafId: record('buffer', 256),
+          scrollbackRefsByLeafId: record('scrollback', 256),
+          titlesByLeafId: record('title', 256)
+        }
+      })
+    ).toBe(false)
+  })
+
+  it('rejects an oversized rootless layout leaf key', () => {
+    expect(
+      isTerminalWindowTransferSeed({
+        ...terminalWindowSeed(),
+        layout: {
+          root: null,
+          activeLeafId: null,
+          expandedLeafId: null,
+          ptyIdsByLeafId: { ['leaf'.repeat(1_025)]: 'pty-1' }
+        }
+      })
+    ).toBe(false)
+  })
+
+  it('rejects an oversized rootless layout backing value', () => {
+    expect(
+      isTerminalWindowTransferSeed({
+        ...terminalWindowSeed(),
+        layout: {
+          root: null,
+          activeLeafId: null,
+          expandedLeafId: null,
+          buffersByLeafId: {
+            retained: 'x'.repeat(TERMINAL_SCROLLBACK_SESSION_BUFFER_BYTE_LIMIT + 1)
+          }
         }
       })
     ).toBe(false)

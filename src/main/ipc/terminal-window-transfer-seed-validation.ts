@@ -6,11 +6,15 @@ import type {
   TerminalTab
 } from '../../shared/terminal-tab-types'
 import type { TerminalWindowTransferSeed } from '../../shared/terminal-window-transfer'
+import { TERMINAL_SCROLLBACK_SESSION_BUFFER_BYTE_LIMIT } from '../../shared/terminal-scrollback-limits'
 import type { WorkspaceSessionState } from '../../shared/workspace-session-state-types'
 import { isWorkspaceKey, worktreeWorkspaceKey } from '../../shared/workspace-scope'
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   Boolean(value) && typeof value === 'object' && !Array.isArray(value)
+
+const MAX_LAYOUT_ENTRIES = 1024
+const MAX_LAYOUT_KEY_LENGTH = 4_096
 
 function collectLayoutLeaves(root: unknown): Set<string> | null {
   if (!isRecord(root)) {
@@ -21,12 +25,17 @@ function collectLayoutLeaves(root: unknown): Set<string> | null {
   let count = 0
   while (stack.length > 0) {
     const { node: raw, depth } = stack.pop()!
-    if (!isRecord(raw) || depth > 64 || ++count > 1024) {
+    if (!isRecord(raw) || depth > 64 || ++count > MAX_LAYOUT_ENTRIES) {
       return null
     }
     const node = raw as Partial<TerminalPaneLayoutNode>
     if (node.type === 'leaf') {
-      if (typeof node.leafId !== 'string' || node.leafId.length === 0 || leaves.has(node.leafId)) {
+      if (
+        typeof node.leafId !== 'string' ||
+        node.leafId.length === 0 ||
+        node.leafId.length > MAX_LAYOUT_KEY_LENGTH ||
+        leaves.has(node.leafId)
+      ) {
         return null
       }
       leaves.add(node.leafId)
@@ -48,15 +57,36 @@ function collectLayoutLeaves(root: unknown): Set<string> | null {
   return leaves
 }
 
-function isLeafStringRecord(value: unknown, leaves: ReadonlySet<string> | null): boolean {
-  return (
-    value === undefined ||
-    (isRecord(value) &&
-      Object.entries(value).every(
-        ([leafId, item]) =>
-          leafId.length > 0 && (!leaves || leaves.has(leafId)) && typeof item === 'string'
-      ))
-  )
+function isLeafStringRecord(
+  value: unknown,
+  leaves: ReadonlySet<string> | null,
+  recordLeafIds: Set<string>,
+  maxValueLength: number
+): boolean {
+  if (value === undefined) {
+    return true
+  }
+  if (!isRecord(value)) {
+    return false
+  }
+  for (const leafId in value) {
+    if (!Object.hasOwn(value, leafId)) {
+      continue
+    }
+    const item = value[leafId]
+    recordLeafIds.add(leafId)
+    if (
+      recordLeafIds.size > MAX_LAYOUT_ENTRIES ||
+      leafId.length === 0 ||
+      leafId.length > MAX_LAYOUT_KEY_LENGTH ||
+      (leaves && !leaves.has(leafId)) ||
+      typeof item !== 'string' ||
+      item.length > maxValueLength
+    ) {
+      return false
+    }
+  }
+  return true
 }
 
 function isTransferLayout(value: unknown): boolean {
@@ -65,20 +95,33 @@ function isTransferLayout(value: unknown): boolean {
   }
   const rootless = value.root === null
   const leaves = rootless ? null : collectLayoutLeaves(value.root)
+  const recordLeafIds = new Set<string>()
   return Boolean(
     (rootless || leaves) &&
     (value.activeLeafId === null ||
       (typeof value.activeLeafId === 'string' &&
         value.activeLeafId.length > 0 &&
+        value.activeLeafId.length <= MAX_LAYOUT_KEY_LENGTH &&
         (!leaves || leaves.has(value.activeLeafId)))) &&
     (value.expandedLeafId === null ||
       (typeof value.expandedLeafId === 'string' &&
         value.expandedLeafId.length > 0 &&
+        value.expandedLeafId.length <= MAX_LAYOUT_KEY_LENGTH &&
         (!leaves || leaves.has(value.expandedLeafId)))) &&
-    isLeafStringRecord(value.ptyIdsByLeafId, leaves) &&
-    isLeafStringRecord(value.buffersByLeafId, leaves) &&
-    isLeafStringRecord(value.scrollbackRefsByLeafId, leaves) &&
-    isLeafStringRecord(value.titlesByLeafId, leaves)
+    isLeafStringRecord(value.ptyIdsByLeafId, leaves, recordLeafIds, MAX_LAYOUT_KEY_LENGTH) &&
+    isLeafStringRecord(
+      value.buffersByLeafId,
+      leaves,
+      recordLeafIds,
+      TERMINAL_SCROLLBACK_SESSION_BUFFER_BYTE_LIMIT
+    ) &&
+    isLeafStringRecord(
+      value.scrollbackRefsByLeafId,
+      leaves,
+      recordLeafIds,
+      MAX_LAYOUT_KEY_LENGTH
+    ) &&
+    isLeafStringRecord(value.titlesByLeafId, leaves, recordLeafIds, MAX_LAYOUT_KEY_LENGTH)
   )
 }
 

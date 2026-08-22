@@ -18,6 +18,14 @@ function hasWorkspaceContent(state: WorkspaceSessionState, workspaceId: string):
   )
 }
 
+function canRestoreWorkspace(
+  next: WorkspaceSessionState,
+  prior: WorkspaceSessionState,
+  workspaceId: string
+): boolean {
+  return !hasWorkspaceContent(prior, workspaceId) || hasWorkspaceContent(next, workspaceId)
+}
+
 function hasTab(state: WorkspaceSessionState, tabId: string, workspaceId?: string): boolean {
   const keys = workspaceId
     ? workspaceKeys(workspaceId)
@@ -140,7 +148,7 @@ export function reconcileTerminalTransferSelectors(
     (current.activeWorktreeId && hasWorkspaceContent(next, current.activeWorktreeId)
       ? current.activeWorktreeId
       : null) ??
-    (prior.activeWorktreeId && hasWorkspaceContent(next, prior.activeWorktreeId)
+    (prior.activeWorktreeId && canRestoreWorkspace(next, prior, prior.activeWorktreeId)
       ? prior.activeWorktreeId
       : null) ??
     (options.fallbackToTransfer && hasWorkspaceContent(next, seed.worktreeId)

@@ -245,6 +245,16 @@ describe('terminal window transfer target session rollback', () => {
     expect(restored.activeGroupIdByWorktree?.['wt-1']).toBeUndefined()
   })
 
+  it('restores a prior empty folder workspace selector', () => {
+    const prior = terminalWindowSession(false)
+    prior.activeWorktreeId = 'folder:empty'
+    const current = terminalWindowSession(true)
+
+    const restored = removeTransferredTerminalSession(current, prior, terminalWindowSeed())
+
+    expect(restored.activeWorktreeId).toBe('folder:empty')
+  })
+
   it('does not restore source selectors after their prior entities were concurrently deleted', () => {
     const prior = terminalWindowSession(true)
     addDeletedPriorSelectors(prior, 'workspace-gone')
