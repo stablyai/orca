@@ -18,6 +18,7 @@ import type {
 
 export type CodexPaneHomeRoute =
   | 'real-home'
+  | 'workspace-real-home'
   | 'shared-home'
   | 'account-home'
   | 'custom-home'
@@ -131,6 +132,7 @@ function isPaneAccountRecord(value: unknown): value is CodexPaneAccountRecord {
 function isPaneHomeRoute(value: unknown): value is CodexPaneHomeRoute {
   return (
     value === 'real-home' ||
+    value === 'workspace-real-home' ||
     value === 'shared-home' ||
     value === 'account-home' ||
     value === 'custom-home' ||
@@ -227,11 +229,16 @@ export function getCodexPaneAccount(ptyId: string): CodexPaneAccountRecord | nul
   return readRegistry().panes[ptyId] ?? null
 }
 
-/** `custom-home` stays conservative because it can mask a non-comparable shared-home route. */
+/** Workspace-scoped real homes are concrete even though they are not globally comparable. */
 export function isCodexPaneHomeRouteProvenAwayFromSharedHome(
   route: CodexPaneHomeRoute | undefined
 ): boolean {
-  return route === 'real-home' || route === 'account-home' || route === 'wsl-home'
+  return (
+    route === 'real-home' ||
+    route === 'workspace-real-home' ||
+    route === 'account-home' ||
+    route === 'wsl-home'
+  )
 }
 
 /**
@@ -274,6 +281,13 @@ export function hasRecordedManagedHostCodexPane(): boolean {
         record.homeRoute === 'shared-home' ||
         record.homeRoute === 'custom-home' ||
         (record.homeRoute === 'account-home' && record.accountId !== null))
+  )
+}
+
+/** True when a retained host pane still depends on workspace-scoped real-home hooks. */
+export function hasRecordedWorkspaceRealHomeCodexPane(): boolean {
+  return Object.values(readRegistry().panes).some(
+    (record) => record.selectionKey === 'host' && record.homeRoute === 'workspace-real-home'
   )
 }
 

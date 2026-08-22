@@ -225,6 +225,7 @@ import { ensureCodexStateDbBackfillRecoveryStarted } from '../codex/codex-state-
 import {
   environmentCodexHomeOverrideContextsEqual,
   getCustomCodexHomeOverrideForLaunch,
+  isWindowsSystemCodexHomeWorkspace,
   shellStartupCodexHomeOverrideContextsEqual
 } from '../codex/codex-real-home-path'
 import type { CodexSessionResumePreparation } from '../codex/codex-session-resume-home'
@@ -1489,6 +1490,7 @@ function recordCodexPaneAccountForSpawn(args: {
   pinnedByResume: boolean
   launchCodexHomePath: string | null
   launchEnv?: NodeJS.ProcessEnv
+  workspacePath?: string
   target: CodexAccountSelectionTarget
   settings: GlobalSettings | undefined
 }): void {
@@ -1527,6 +1529,10 @@ function recordCodexPaneAccountForSpawn(args: {
             recheckableEnvironmentOverride !== undefined) &&
             (customHomeOverride?.source !== 'shell-startup' ||
               recheckableShellStartupOverride !== undefined)),
+        workspaceScopedRealHome:
+          args.target.runtime === 'host' &&
+          args.launchCodexHomePath === null &&
+          isWindowsSystemCodexHomeWorkspace(args.workspacePath),
         shellStartupHomeOverride: args.pinnedByResume ? undefined : recheckableShellStartupOverride,
         environmentHomeOverride: args.pinnedByResume ? undefined : recheckableEnvironmentOverride,
         systemCodexHomePath: getSystemCodexHomePath(),
@@ -5346,6 +5352,7 @@ export function registerPtyHandlers(
           pinnedByResume: codexResumeHomeSelected,
           launchCodexHomePath: selectedCodexHomePath,
           launchEnv: args.env,
+          workspacePath: cwd,
           target: codexSelectionTarget,
           settings: getSettings?.()
         })
@@ -6911,6 +6918,7 @@ export function registerPtyHandlers(
           pinnedByResume: codexResumeHomeSelected,
           launchCodexHomePath: selectedCodexHomePath,
           launchEnv: baseEnv,
+          workspacePath: cwd,
           target: codexSelectionTarget,
           settings: getSettings?.()
         })

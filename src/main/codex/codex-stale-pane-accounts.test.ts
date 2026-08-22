@@ -9,6 +9,7 @@ import {
   getCodexPaneAccount,
   hasRecordedLegacySharedCodexPane,
   hasRecordedManagedHostCodexPane,
+  hasRecordedWorkspaceRealHomeCodexPane,
   isCodexPaneHomeRouteProvenAwayFromSharedHome,
   reconcileCodexPaneAccountsWithLivePtys,
   recordCodexPaneAccount
@@ -50,6 +51,7 @@ afterEach(() => {
 describe('codex pane account registry', () => {
   it.each([
     ['real-home', true],
+    ['workspace-real-home', true],
     ['account-home', true],
     ['wsl-home', true],
     ['shared-home', false],
@@ -170,6 +172,26 @@ describe('codex pane account registry', () => {
     })
 
     expect(hasRecordedManagedHostCodexPane()).toBe(true)
+  })
+
+  it('keeps real-home hooks only while a workspace-scoped host pane is retained', () => {
+    recordCodexPaneAccount('pty-workspace-real', {
+      selectionKey: 'host',
+      accountId: null,
+      homeRoute: 'workspace-real-home'
+    })
+    recordCodexPaneAccount('pty-wsl-workspace-real', {
+      selectionKey: 'wsl:Ubuntu',
+      accountId: null,
+      homeRoute: 'workspace-real-home'
+    })
+
+    expect(hasRecordedWorkspaceRealHomeCodexPane()).toBe(true)
+    expect(hasRecordedLegacySharedCodexPane()).toBe(false)
+    expect(hasRecordedManagedHostCodexPane()).toBe(false)
+
+    forgetCodexPaneAccount('pty-workspace-real')
+    expect(hasRecordedWorkspaceRealHomeCodexPane()).toBe(false)
   })
 
   it('drops leaked records that are absent from the authoritative daemon inventory', () => {
@@ -373,6 +395,23 @@ describe('listStaleCodexPanes', () => {
         ptyIds: ['pty-1'],
         settings: settingsWithSelection(null),
         activeHostHomeRoute: 'real-home'
+      })
+    ).toEqual([])
+  })
+
+  it('does not compare a workspace-scoped real home with the global host route', () => {
+    recordCodexPaneAccount('pty-1', {
+      selectionKey: 'host',
+      accountId: null,
+      homeRoute: 'workspace-real-home'
+    })
+    _internals.resetCache()
+
+    expect(
+      listStaleCodexPanes({
+        ptyIds: ['pty-1'],
+        settings: settingsWithSelection(null),
+        activeHostHomeRoute: 'shared-home'
       })
     ).toEqual([])
   })
