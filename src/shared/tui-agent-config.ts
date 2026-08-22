@@ -1,5 +1,6 @@
 import type { TuiAgent } from './tui-agent'
 import { getOrcaCliCommandNameForPlatform } from './orca-cli-command-name'
+import { KIMCHI_TUI_AGENT_CONFIG } from './tui-agent-kimchi-config'
 
 export type AgentPromptInjectionMode =
   | 'argv'
@@ -143,6 +144,7 @@ export const TUI_AGENT_CONFIG: Record<TuiAgent, TuiAgentConfig> = {
     // Why: Pi decodes CSI-u; Esc+CR submits after tool subprocesses reset live KKP state (#9703).
     windowsShiftEnterEncoding: 'csi-u'
   },
+  kimchi: KIMCHI_TUI_AGENT_CONFIG,
   omp: {
     detectCmd: 'omp',
     launchCmd: 'omp',

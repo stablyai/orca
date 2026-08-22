@@ -121,6 +121,16 @@ describe('PluginOverlayManager', () => {
     expect(readFileSync(result!.statusExtensionPath!, 'utf8')).not.toContain('// pi extension')
   })
 
+  it('installs the Kimchi status extension into the default Kimchi harness dir', () => {
+    manager.setSources({ kimchiExtensionSource: '// kimchi extension' })
+    const result = manager.materializePi('tab-kimchi:0', undefined, 'kimchi')
+    expect(result?.sourceAgentDir).toBe(join(homeDir, '.config', 'kimchi', 'harness'))
+    expect(readFileSync(result!.statusExtensionPath!, 'utf8')).toContain('// kimchi extension')
+    expect(readFileSync(result!.statusExtensionPath!, 'utf8')).toContain(
+      '@orca-managed-pi-extension'
+    )
+  })
+
   it('installs Orca status extension into the remote default Pi agent dir', () => {
     const piAgentDir = join(homeDir, '.pi', 'agent')
     mkdirSync(join(piAgentDir, 'skills', 'my-skill'), { recursive: true })

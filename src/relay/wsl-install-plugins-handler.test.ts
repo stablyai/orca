@@ -190,4 +190,16 @@ describe.skipIf(process.platform === 'win32')('createInstallPluginsHandler (gues
       expect(res.overlayDirs.opencode).toBeUndefined()
     })
   })
+
+  it('caches the Kimchi extension source and reports it installed', () => {
+    withHome((home) => {
+      const install = createInstallPluginsHandler(new PluginOverlayManager({ homeDir: home }), {
+        HOME: home
+      } as NodeJS.ProcessEnv)
+      const res = install({ kimchiExtensionSource: '// kimchi extension' })
+
+      expect(res.installed.kimchi).toBe(true)
+      expect(res.installed.opencode).toBe(false)
+    })
+  })
 })

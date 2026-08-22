@@ -37,7 +37,7 @@ type PiManagedExtensionEnv = {
   statusExtensionPath?: string
 }
 
-type LegacyOverlayAgentKind = Exclude<PiAgentKind, 'prime-agent'>
+type LegacyOverlayAgentKind = Exclude<PiAgentKind, 'prime-agent' | 'kimchi'>
 
 // Why: old Orca versions used per-kind overlay roots. Keep the names so
 // upgrade-time cleanup can remove stale PTY-scoped Pi/OMP overlay dirs without
@@ -55,10 +55,17 @@ const OVERLAY_ROOT_DIR_NAME: Record<LegacyOverlayAgentKind, string> = {
 const AGENT_HOME_DIR_NAME: Record<PiAgentKind, string> = {
   pi: '.pi',
   omp: '.omp',
-  'prime-agent': '.prime'
+  'prime-agent': '.prime',
+  kimchi: '.config/kimchi/harness'
 }
 
 function getDefaultPiAgentDir(kind: PiAgentKind): string {
+  // Why: kimchi's config dir is already the agent root; appending 'agent'
+  // would place extensions at ~/.config/kimchi/harness/agent/extensions,
+  // but kimchi expects them at ~/.config/kimchi/harness/extensions.
+  if (kind === 'kimchi') {
+    return join(homedir(), AGENT_HOME_DIR_NAME[kind])
+  }
   return join(homedir(), AGENT_HOME_DIR_NAME[kind], PI_AGENT_SUBDIR)
 }
 
@@ -177,7 +184,7 @@ export class PiTitlebarExtensionService {
     options?: { materializeDefaultHome?: boolean }
   ): Record<string, string> {
     const sourceAgentDir = existingAgentDir || getDefaultPiAgentDir(kind)
-    if (kind !== 'prime-agent') {
+    if (kind !== 'prime-agent' && kind !== 'kimchi') {
       try {
         this.safeRemoveOverlay(this.getPtyOverlayDir(ptyId, kind), kind)
         this.safeRemoveOverlay(this.getLegacyOverlayDir(ptyId, kind), kind)
@@ -214,6 +221,8 @@ export class PiTitlebarExtensionService {
       }
     } else if (kind === 'prime-agent') {
       env.ORCA_PRIME_AGENT_SOURCE_AGENT_DIR = installed.sourceAgentDir
+    } else if (kind === 'kimchi') {
+      env.ORCA_KIMCHI_SOURCE_AGENT_DIR = installed.sourceAgentDir
     } else {
       env.ORCA_PI_SOURCE_AGENT_DIR = installed.sourceAgentDir
     }

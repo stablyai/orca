@@ -1446,7 +1446,8 @@ export class SshRelaySession {
         opencodePluginSource: openCodeInternals.getOpenCodePluginSource(),
         piExtensionSource: getPiAgentStatusExtensionSource('pi'),
         ompExtensionSource: getPiAgentStatusExtensionSource('omp'),
-        primeAgentExtensionSource: getPiAgentStatusExtensionSource('prime-agent')
+        primeAgentExtensionSource: getPiAgentStatusExtensionSource('prime-agent'),
+        kimchiExtensionSource: getPiAgentStatusExtensionSource('kimchi')
       })
     } catch (err) {
       // Why: -32601 = older relay without the handler; CONNECTION_LOST/DISPOSED = routine mid-flight teardown — swallow both.

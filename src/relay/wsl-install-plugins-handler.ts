@@ -14,7 +14,7 @@ import {
 } from '../shared/wsl-hook-relay-contract'
 
 export type InstallPluginsResult = {
-  installed: { opencode: boolean; pi: boolean; omp: boolean; primeAgent: boolean }
+  installed: { opencode: boolean; pi: boolean; omp: boolean; primeAgent: boolean; kimchi: boolean }
   overlayDirs: { opencode?: string }
 }
 
@@ -42,16 +42,19 @@ export function createInstallPluginsHandler(
     const pi = params.piExtensionSource
     const omp = params.ompExtensionSource
     const primeAgent = params.primeAgentExtensionSource
+    const kimchi = params.kimchiExtensionSource
     // Why: bound per-source bytes so a buggy/hostile host can't OOM the guest relay.
     assertPluginSourceUnderByteCap('opencodePluginSource', opencode)
     assertPluginSourceUnderByteCap('piExtensionSource', pi)
     assertPluginSourceUnderByteCap('ompExtensionSource', omp)
     assertPluginSourceUnderByteCap('primeAgentExtensionSource', primeAgent)
+    assertPluginSourceUnderByteCap('kimchiExtensionSource', kimchi)
     pluginOverlay.setSources({
       opencodePluginSource: typeof opencode === 'string' ? opencode : undefined,
       piExtensionSource: typeof pi === 'string' ? pi : undefined,
       ompExtensionSource: typeof omp === 'string' ? omp : undefined,
-      primeAgentExtensionSource: typeof primeAgent === 'string' ? primeAgent : undefined
+      primeAgentExtensionSource: typeof primeAgent === 'string' ? primeAgent : undefined,
+      kimchiExtensionSource: typeof kimchi === 'string' ? kimchi : undefined
     })
     let opencodeDir: string | undefined
     if (pluginOverlay.hasOpenCodeSource()) {
@@ -85,7 +88,8 @@ export function createInstallPluginsHandler(
         opencode: pluginOverlay.hasOpenCodeSource(),
         pi: pluginOverlay.hasPiSource('pi'),
         omp: pluginOverlay.hasPiSource('omp'),
-        primeAgent: pluginOverlay.hasPiSource('prime-agent')
+        primeAgent: pluginOverlay.hasPiSource('prime-agent'),
+        kimchi: pluginOverlay.hasPiSource('kimchi')
       },
       overlayDirs: opencodeDir ? { opencode: opencodeDir } : {}
     }

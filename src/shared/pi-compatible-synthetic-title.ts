@@ -1,8 +1,8 @@
-export type PiCompatibleSyntheticAgentLabel = 'Pi' | 'OMP'
+export type PiCompatibleSyntheticAgentLabel = 'Pi' | 'OMP' | 'Kimchi'
 export type PiCompatibleSyntheticAgentStatus = 'working' | 'permission' | 'idle'
 
 const PI_COMPATIBLE_SYNTHETIC_TITLE_RE =
-  /^\s*(?:[\u2800-\u28ff]\s+)?(pi|omp)(?:\s+-\s+action required|\s+(?:ready|idle|done))?\s*$/i
+  /^\s*(?:[\u2800-\u28ff]\s+)?(pi|omp|kimchi)(?:\s+-\s+action required|\s+(?:ready|idle|done))?\s*$/i
 // Why: legacy Pi/OMP-compatible shells can emit the delimiter before cwd text exists.
 const LEGACY_PI_COMPATIBLE_TITLE_RE = /^\s*(?:[\u2800-\u28ff]\s+)?π(?:\s*[-:]|\s)\s*.*$/u
 
@@ -23,7 +23,10 @@ export function getPiCompatibleSyntheticAgentLabel(
   if (!match) {
     return null
   }
-  return match[1].toLowerCase() === 'omp' ? 'OMP' : 'Pi'
+  if (match[1].toLowerCase() === 'omp') {
+    return 'OMP'
+  }
+  return match[1].toLowerCase() === 'kimchi' ? 'Kimchi' : 'Pi'
 }
 
 export function getPiCompatibleSyntheticAgentStatus(

@@ -309,6 +309,25 @@ describe('registerPtyHandlers', () => {
           expect(env.PRIME_AGENT_CODING_AGENT_DIR).toBeUndefined()
         })
       })
+      it('does not install or inject a Kimchi extension for an explicit WSL launch', async () => {
+        await withWin32Platform(async () => {
+          const env = await daemonSpawnAndGetEnv(
+            {
+              KIMCHI_CODING_AGENT_DIR: 'C:\\Users\\test\\.config\\kimchi\\harness',
+              ORCA_KIMCHI_SOURCE_AGENT_DIR: 'C:\\stale\\orca-agent-status.ts'
+            },
+            undefined,
+            undefined,
+            undefined,
+            { shellOverride: 'wsl.exe', command: 'kimchi', launchAgent: 'kimchi' }
+          )
+
+          expect(piBuildPtyEnvMock).not.toHaveBeenCalled()
+          expect(env.ORCA_KIMCHI_SOURCE_AGENT_DIR).toBeUndefined()
+          expect(env.ORCA_WSL_HOOK_INSTANCE).toBeUndefined()
+          expect(env.KIMCHI_CODING_AGENT_DIR).toBe('C:\\Users\\test\\.config\\kimchi\\harness')
+        })
+      })
       it('points OPENCODE_CONFIG_DIR at the guest overlay when the WSL relay reports it', async () => {
         const guestDir = '/home/jin/.orca-relay/opencode-overlays/abc'
         const spy = vi.spyOn(wslHookRelayManager, 'getOpenCodeOverlayDir').mockReturnValue(guestDir)

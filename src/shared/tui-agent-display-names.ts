@@ -17,6 +17,7 @@ export const TUI_AGENT_DISPLAY_NAMES: Record<TuiAgent, string> = {
   opencode: 'OpenCode',
   'mimo-code': 'MiMo Code',
   pi: 'Pi',
+  kimchi: 'Kimchi',
   omp: 'OMP',
   'prime-agent': 'Prime Agent',
   gemini: 'Gemini',

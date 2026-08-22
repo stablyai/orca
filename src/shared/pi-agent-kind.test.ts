@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import { detectExplicitPiAgentKindFromCommand, detectPiAgentKindFromCommand } from './pi-agent-kind'
+import {
+  detectExplicitPiAgentKindFromCommand,
+  detectPiAgentKindFromCommand,
+  isPiCompatibleAgentType
+} from './pi-agent-kind'
 
 describe('detectPiAgentKindFromCommand', () => {
   it('returns "pi" for undefined or empty commands', () => {
@@ -25,6 +29,13 @@ describe('detectPiAgentKindFromCommand', () => {
     )
     expect(detectPiAgentKindFromCommand('PRIME-AGENT.EXE')).toBe('prime-agent')
     expect(detectPiAgentKindFromCommand('prime-agent.cmd')).toBe('prime-agent')
+  })
+
+  it('returns "kimchi" for Kimchi launches', () => {
+    expect(detectPiAgentKindFromCommand('kimchi')).toBe('kimchi')
+    expect(detectPiAgentKindFromCommand('kimchi --session session.jsonl')).toBe('kimchi')
+    expect(detectPiAgentKindFromCommand('/usr/local/bin/kimchi')).toBe('kimchi')
+    expect(detectPiAgentKindFromCommand('KIMCHI.EXE')).toBe('kimchi')
   })
 
   it('returns "omp" for omp launched via an absolute path', () => {
@@ -53,6 +64,13 @@ describe('detectPiAgentKindFromCommand', () => {
     expect(detectPiAgentKindFromCommand('pomp.exe')).toBe('pi')
   })
 
+  it('does not confuse "kimchi" with substrings', () => {
+    // Why: regression guard for the kimchi boundary; falls back to 'pi'
+    // when no match, which matches the pre-launch default.
+    expect(detectPiAgentKindFromCommand('kimchi-tools')).toBe('pi')
+    expect(detectPiAgentKindFromCommand('my-kimchi-script')).toBe('pi')
+  })
+
   it('matches case-insensitively on Windows-style executables', () => {
     expect(detectPiAgentKindFromCommand('OMP.EXE')).toBe('omp')
     expect(detectPiAgentKindFromCommand('PI.CMD')).toBe('pi')
@@ -60,11 +78,13 @@ describe('detectPiAgentKindFromCommand', () => {
 })
 
 describe('detectExplicitPiAgentKindFromCommand', () => {
-  it('identifies explicit Pi, OMP, and Prime launches', () => {
+  it('identifies explicit Pi, OMP, Prime, and Kimchi launches', () => {
     expect(detectExplicitPiAgentKindFromCommand('pi --resume')).toBe('pi')
     expect(detectExplicitPiAgentKindFromCommand('/usr/local/bin/omp.sh')).toBe('omp')
     expect(detectExplicitPiAgentKindFromCommand('PI.CMD')).toBe('pi')
     expect(detectExplicitPiAgentKindFromCommand('prime-agent.exe')).toBe('prime-agent')
+    expect(detectExplicitPiAgentKindFromCommand('kimchi')).toBe('kimchi')
+    expect(detectExplicitPiAgentKindFromCommand('/usr/local/bin/kimchi --resume')).toBe('kimchi')
   })
 
   it('does not classify bare shells or other agents as Pi launches', () => {
@@ -82,5 +102,23 @@ describe('detectExplicitPiAgentKindFromCommand', () => {
     expect(detectExplicitPiAgentKindFromCommand('prime-agent "compare pi and omp"')).toBe(
       'prime-agent'
     )
+    expect(detectExplicitPiAgentKindFromCommand('kimchi "compare pi"')).toBe('kimchi')
+  })
+})
+
+describe('isPiCompatibleAgentType', () => {
+  it('accepts pi-family agent kinds', () => {
+    expect(isPiCompatibleAgentType('pi')).toBe(true)
+    expect(isPiCompatibleAgentType('omp')).toBe(true)
+    expect(isPiCompatibleAgentType('prime-agent')).toBe(true)
+    expect(isPiCompatibleAgentType('kimchi')).toBe(true)
+  })
+
+  it('rejects non-pi-family and falsy values', () => {
+    expect(isPiCompatibleAgentType('codex')).toBe(false)
+    expect(isPiCompatibleAgentType('claude')).toBe(false)
+    expect(isPiCompatibleAgentType('')).toBe(false)
+    expect(isPiCompatibleAgentType(null)).toBe(false)
+    expect(isPiCompatibleAgentType(undefined)).toBe(false)
   })
 })

@@ -164,6 +164,32 @@ describe('PiTitlebarExtensionService', () => {
     expectPiHomeIntact()
   })
 
+  it('installs Kimchi extensions into the selected agent dir and routes status to /hook/kimchi', () => {
+    const svc = new PiTitlebarExtensionService()
+    const env = svc.buildPtyEnv('pty-kimchi', piHome, 'kimchi')
+
+    expect(env.ORCA_KIMCHI_SOURCE_AGENT_DIR).toBe(piHome)
+    expect(env.KIMCHI_CODING_AGENT_DIR).toBeUndefined()
+    const extensions = readdirSync(join(piHome, 'extensions')).sort()
+    expect(extensions).toEqual([
+      'orca-agent-status.ts',
+      'orca-prefill.ts',
+      'orca-titlebar-spinner.ts',
+      'user-ext'
+    ])
+    const statusExtensionSource = readFileSync(
+      join(piHome, 'extensions', 'orca-agent-status.ts'),
+      'utf-8'
+    )
+    const prefillExtensionSource = readFileSync(
+      join(piHome, 'extensions', 'orca-prefill.ts'),
+      'utf-8'
+    )
+    expect(statusExtensionSource).toContain('/hook/kimchi')
+    expect(prefillExtensionSource).toContain('process.env.ORCA_KIMCHI_PREFILL')
+    expectPiHomeIntact()
+  })
+
   it('installs only Prime status into the selected Prime agent dir', () => {
     const svc = new PiTitlebarExtensionService()
     const env = svc.buildPtyEnv('pty-prime', piHome, 'prime-agent')
@@ -684,6 +710,46 @@ describe('PiTitlebarExtensionService', () => {
           expect.stringContaining('omp-managed-status-extension')
         )
         expect(existsSync(ompEnv.ORCA_OMP_STATUS_EXTENSION!)).toBe(true)
+      } finally {
+        homedirOverride.current = ''
+        rmSync(fakeHome, { recursive: true, force: true })
+      }
+    })
+
+    it('launching kimchi installs into ~/.config/kimchi/harness/extensions (no agent/ segment)', () => {
+      const fakeHome = mkdtempSync(join(tmpdir(), 'orca-kimchi-home-'))
+      expect(existsSync(join(fakeHome, '.config', 'kimchi', 'harness'))).toBe(false)
+
+      homedirOverride.current = fakeHome
+      try {
+        const svc = new PiTitlebarExtensionService()
+        const env = svc.buildPtyEnv('pty-kimchi-default', undefined, 'kimchi')
+
+        const harnessDir = join(fakeHome, '.config', 'kimchi', 'harness')
+        expect(env.ORCA_KIMCHI_SOURCE_AGENT_DIR).toBe(harnessDir)
+        expect(existsSync(join(harnessDir, 'extensions', 'orca-agent-status.ts'))).toBe(true)
+        expect(existsSync(join(harnessDir, 'extensions', 'orca-prefill.ts'))).toBe(true)
+        expect(existsSync(join(harnessDir, 'extensions', 'orca-titlebar-spinner.ts'))).toBe(true)
+        expect(existsSync(join(fakeHome, '.config', 'kimchi', 'harness', 'agent'))).toBe(false)
+      } finally {
+        homedirOverride.current = ''
+        rmSync(fakeHome, { recursive: true, force: true })
+      }
+    })
+
+    it('bare-shell prep does not create a missing ~/.config/kimchi/harness home (#10196)', () => {
+      const fakeHome = mkdtempSync(join(tmpdir(), 'orca-no-eager-kimchi-home-'))
+      expect(existsSync(join(fakeHome, '.config', 'kimchi', 'harness'))).toBe(false)
+
+      homedirOverride.current = fakeHome
+      try {
+        const svc = new PiTitlebarExtensionService()
+        const kimchiEnv = svc.buildPtyEnv('pty-bare-kimchi', undefined, 'kimchi', {
+          materializeDefaultHome: false
+        })
+
+        expect(kimchiEnv).toEqual({})
+        expect(existsSync(join(fakeHome, '.config', 'kimchi', 'harness'))).toBe(false)
       } finally {
         homedirOverride.current = ''
         rmSync(fakeHome, { recursive: true, force: true })

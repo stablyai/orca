@@ -32,7 +32,7 @@ import { join } from 'node:path'
 import { mirrorEntry, safeRemoveOverlay } from '../main/pty/overlay-mirror'
 import type { PiAgentKind } from '../shared/pi-agent-kind'
 
-type LegacyOverlayAgentKind = Exclude<PiAgentKind, 'prime-agent'>
+type LegacyOverlayAgentKind = Exclude<PiAgentKind, 'prime-agent' | 'kimchi'>
 
 const RELAY_HOOKS_DIR = '.orca-relay'
 const OPENCODE_OVERLAY_SUBDIR = 'opencode-overlays'
@@ -62,7 +62,8 @@ function withOrcaManagedPiExtensionMarker(source: string): string {
 const PI_AGENT_HOME_DIR_NAME: Record<PiAgentKind, string> = {
   pi: '.pi',
   omp: '.omp',
-  'prime-agent': '.prime'
+  'prime-agent': '.prime',
+  kimchi: '.config/kimchi/harness'
 }
 
 function safeDirName(input: string): string {
@@ -85,6 +86,8 @@ export type PluginSources = {
   ompExtensionSource?: string
   /** Source body of Prime Agent's `orca-agent-status.ts` to install in its real agent dir. */
   primeAgentExtensionSource?: string
+  /** Source body of Kimchi's `orca-agent-status.ts` to install in its real agent dir. */
+  kimchiExtensionSource?: string
 }
 
 /** Result of installing Pi-compatible status into a real agent home or OMP fallback path. */
@@ -106,7 +109,8 @@ export class PluginOverlayManager {
   private piExtensionSources: Record<PiAgentKind, string | null> = {
     pi: null,
     omp: null,
-    'prime-agent': null
+    'prime-agent': null,
+    kimchi: null
   }
   private homeDir: string
   private opencodeRoot: string
@@ -142,6 +146,11 @@ export class PluginOverlayManager {
     if (typeof sources.primeAgentExtensionSource === 'string') {
       this.piExtensionSources['prime-agent'] = withOrcaManagedPiExtensionMarker(
         sources.primeAgentExtensionSource
+      )
+    }
+    if (typeof sources.kimchiExtensionSource === 'string') {
+      this.piExtensionSources.kimchi = withOrcaManagedPiExtensionMarker(
+        sources.kimchiExtensionSource
       )
     }
   }
@@ -244,6 +253,12 @@ export class PluginOverlayManager {
   }
 
   private getDefaultPiAgentDir(kind: PiAgentKind): string {
+    // Why: kimchi's config dir is already the agent root; appending 'agent'
+    // would place extensions at ~/.config/kimchi/harness/agent/extensions,
+    // but kimchi expects them at ~/.config/kimchi/harness/extensions.
+    if (kind === 'kimchi') {
+      return join(this.homeDir, PI_AGENT_HOME_DIR_NAME[kind])
+    }
     return join(this.homeDir, PI_AGENT_HOME_DIR_NAME[kind], PI_AGENT_SUBDIR)
   }
 

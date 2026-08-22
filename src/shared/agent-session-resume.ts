@@ -9,6 +9,7 @@ export const RESUMABLE_TUI_AGENTS = [
   'antigravity',
   'opencode',
   'pi',
+  'kimchi',
   'mimo-code',
   'droid',
   'grok',
@@ -175,7 +176,8 @@ export function agentProviderSessionsEqual(
   return (
     left.key === right.key &&
     left.id === right.id &&
-    ((agent !== 'pi' && agent !== 'prime-agent') || left.transcriptPath === right.transcriptPath)
+    ((agent !== 'pi' && agent !== 'prime-agent' && agent !== 'kimchi') ||
+      left.transcriptPath === right.transcriptPath)
   )
 }
 
@@ -210,6 +212,7 @@ export function extractAgentProviderSession(
       return id ? { key: 'session_id', id } : null
     }
     case 'pi':
+    case 'kimchi':
     case 'prime-agent': {
       const id = readSessionId(payload, ['session_id'])
       const providerSession = id
@@ -259,6 +262,10 @@ export function getAgentResumeArgv(
     case 'pi':
       return providerSession.key === 'session_id' && providerSession.transcriptPath
         ? ['pi', '--session', providerSession.transcriptPath]
+        : null
+    case 'kimchi':
+      return providerSession.key === 'session_id' && providerSession.transcriptPath
+        ? ['kimchi', '--session', providerSession.transcriptPath]
         : null
     case 'prime-agent':
       return providerSession.key === 'session_id' && providerSession.transcriptPath

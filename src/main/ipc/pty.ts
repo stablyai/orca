@@ -1591,6 +1591,24 @@ function resolvePiAgentSourceDir(
     )
   }
 
+  if (kind === 'kimchi') {
+    const publicDir = readEnvWithProcessFallback(baseEnv, primaryKey)
+    const ownOverlayDir = readEnvWithProcessFallback(baseEnv, 'ORCA_KIMCHI_CODING_AGENT_DIR')
+    const piOverlayDir = readEnvWithProcessFallback(baseEnv, 'ORCA_PI_CODING_AGENT_DIR')
+    const ompOverlayDir = readEnvWithProcessFallback(baseEnv, 'ORCA_OMP_CODING_AGENT_DIR')
+    // Why: if KIMCHI_CODING_AGENT_DIR is a restored Orca overlay or another
+    // pi-family agent's overlay, remirroring would leak extension state.
+    if (
+      publicDir &&
+      publicDir !== ownOverlayDir &&
+      publicDir !== piOverlayDir &&
+      publicDir !== ompOverlayDir
+    ) {
+      return publicDir
+    }
+    return readSessionShellStartupEnvVar(primaryKey, baseEnv)
+  }
+
   const overlayKey = kind === 'omp' ? 'ORCA_OMP_CODING_AGENT_DIR' : 'ORCA_PI_CODING_AGENT_DIR'
   const otherOverlayKey = kind === 'omp' ? 'ORCA_PI_CODING_AGENT_DIR' : 'ORCA_OMP_CODING_AGENT_DIR'
 
@@ -1619,6 +1637,11 @@ function clearPiAgentShadowEnv(baseEnv: Record<string, string>, kind: PiAgentKin
     delete baseEnv.ORCA_OMP_STATUS_EXTENSION
     return
   }
+  if (kind === 'kimchi') {
+    delete baseEnv.ORCA_KIMCHI_CODING_AGENT_DIR
+    delete baseEnv.ORCA_KIMCHI_SOURCE_AGENT_DIR
+    return
+  }
   if (kind === 'prime-agent') {
     delete baseEnv.ORCA_PRIME_AGENT_SOURCE_AGENT_DIR
     delete baseEnv.ORCA_PRIME_AGENT_STATUS_EXTENSION
@@ -1644,6 +1667,15 @@ function exposePiManagedExtensionEnv(
       baseEnv.ORCA_OMP_STATUS_EXTENSION = managedEnv.ORCA_OMP_STATUS_EXTENSION
     } else {
       delete baseEnv.ORCA_OMP_STATUS_EXTENSION
+    }
+    return
+  }
+  if (kind === 'kimchi') {
+    delete baseEnv.ORCA_KIMCHI_CODING_AGENT_DIR
+    if (managedEnv.ORCA_KIMCHI_SOURCE_AGENT_DIR) {
+      baseEnv.ORCA_KIMCHI_SOURCE_AGENT_DIR = managedEnv.ORCA_KIMCHI_SOURCE_AGENT_DIR
+    } else {
+      delete baseEnv.ORCA_KIMCHI_SOURCE_AGENT_DIR
     }
     return
   }
@@ -1798,6 +1830,10 @@ export function buildPtyHostEnv(
     piAgentKind === 'prime-agent'
       ? resolvePiAgentSourceDir(baseEnv, 'prime-agent')
       : resolveScopedPiAgentSourceDir(baseEnv, 'prime-agent')
+  const preexistingKimchiAgentDir =
+    piAgentKind === 'kimchi'
+      ? resolvePiAgentSourceDir(baseEnv, 'kimchi')
+      : resolveScopedPiAgentSourceDir(baseEnv, 'kimchi')
 
   if (opts.agentStatusHooksEnabled) {
     // Why: OPENCODE_CONFIG_DIR is a single path, not a colon-list; mirror the user's value into an overlay so their plugins and Orca's status plugin coexist. See docs/opencode-config-dir-collision.md.
@@ -1871,6 +1907,7 @@ export function buildPtyHostEnv(
     clearPiAgentShadowEnv(baseEnv, 'pi')
     clearPiAgentShadowEnv(baseEnv, 'omp')
     clearPiAgentShadowEnv(baseEnv, 'prime-agent')
+    clearPiAgentShadowEnv(baseEnv, 'kimchi')
     // Why: bare shells historically defaulted to Pi + OMP shadow prep and
     // created ~/.<agent>/agent even when the user never launches those agents
     // (#10196). Only create default homes on an explicit Pi/OMP launch;
@@ -1902,6 +1939,17 @@ export function buildPtyHostEnv(
       Object.assign(baseEnv, primeEnv)
       exposePiManagedExtensionEnv(baseEnv, 'prime-agent', primeEnv)
     }
+
+    if (piAgentKind === 'kimchi' && !opts.isWsl) {
+      const kimchiEnv = piTitlebarExtensionService.buildPtyEnv(
+        id,
+        preexistingKimchiAgentDir,
+        'kimchi',
+        { materializeDefaultHome: explicitPiAgentKind === 'kimchi' }
+      )
+      Object.assign(baseEnv, kimchiEnv)
+      exposePiManagedExtensionEnv(baseEnv, 'kimchi', kimchiEnv)
+    }
   } else {
     // Why: nested PTYs must not inherit stale source or overlay state from another agent.
     restoreOrStripOverlayEnv(baseEnv, {
@@ -1913,6 +1961,11 @@ export function buildPtyHostEnv(
       primary: 'PI_CODING_AGENT_DIR',
       overlay: 'ORCA_OMP_CODING_AGENT_DIR',
       source: 'ORCA_OMP_SOURCE_AGENT_DIR'
+    })
+    restoreOrStripOverlayEnv(baseEnv, {
+      primary: 'KIMCHI_CODING_AGENT_DIR',
+      overlay: 'ORCA_KIMCHI_CODING_AGENT_DIR',
+      source: 'ORCA_KIMCHI_SOURCE_AGENT_DIR'
     })
     delete baseEnv.ORCA_OMP_STATUS_EXTENSION
     delete baseEnv.ORCA_PRIME_AGENT_SOURCE_AGENT_DIR

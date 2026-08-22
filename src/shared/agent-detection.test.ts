@@ -158,6 +158,10 @@ describe('Pi-compatible title detection', () => {
     ['OMP - action required', 'OMP', 'permission'],
     ['\u280b Pi', 'Pi', 'working'],
     ['Pi ready', 'Pi', 'idle'],
+    ['\u280b Kimchi', 'Kimchi', 'working'],
+    ['Kimchi ready', 'Kimchi', 'idle'],
+    ['Kimchi', 'Kimchi', 'idle'],
+    ['Kimchi - action required', 'Kimchi', 'permission'],
     // Why: normalizeTerminalTitle collapses idle π frames to bare "Pi"; re-detection
     // from stored lastOscTitle must still classify idle, not neutral.
     ['Pi', 'Pi', 'idle'],
@@ -184,6 +188,11 @@ describe('Pi-compatible title detection', () => {
     ['\u280b π: tmp', 'omp', '\u280b OMP'],
     ['\u280b π - tmp', 'omp', '\u280b OMP'],
     ['\u280b OMP', 'pi', '\u280b Pi'],
+    ['π - tmp', 'kimchi', 'Kimchi ready'],
+    ['\u280b π - tmp', 'kimchi', '\u280b Kimchi'],
+    ['Pi ready', 'kimchi', 'Kimchi ready'],
+    ['\u280b Pi', 'kimchi', '\u280b Kimchi'],
+    ['Kimchi ready', 'pi', 'Pi ready'],
     ['lucky-echidna | \u283c π - Diagnose Orca terminal title flicker - test', 'omp', '\u280b OMP'],
     ['lucky-echidna | Pi ready', 'omp', 'OMP ready'],
     ['Codex | Pi ready', 'omp', 'OMP ready'],
@@ -210,6 +219,7 @@ describe('Pi-compatible title detection', () => {
     expect(hasCompatibleAgentTitleIdentity('Pi ready')).toBe(true)
     expect(hasCompatibleAgentTitleIdentity('π - tmp')).toBe(true)
     expect(hasCompatibleAgentTitleIdentity('\u280b OMP')).toBe(true)
+    expect(hasCompatibleAgentTitleIdentity('Kimchi ready')).toBe(true)
     expect(hasCompatibleAgentTitleIdentity('Fix pi bugs')).toBe(false)
     expect(hasCompatibleAgentTitleIdentity('\u280b Codex')).toBe(false)
   })

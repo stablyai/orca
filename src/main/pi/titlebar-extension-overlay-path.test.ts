@@ -1,9 +1,20 @@
 import { existsSync, mkdirSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
+import type * as osModule from 'node:os'
 import { join, sep } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 const userDataDir = mkdtempSync(join(tmpdir(), 'orca-pi-overlay-path-userdata-'))
+
+const homedirOverride = vi.hoisted(() => ({ current: '' as string }))
+
+vi.mock('os', async (importOriginal) => {
+  const actual = await importOriginal<typeof osModule>()
+  return {
+    ...actual,
+    homedir: () => homedirOverride.current || actual.homedir()
+  }
+})
 
 vi.mock('electron', () => ({
   app: {
@@ -17,6 +28,10 @@ vi.mock('electron', () => ({
 }))
 
 import { PiTitlebarExtensionService } from './titlebar-extension-service'
+
+function kimchiHome(home: string): string {
+  return join(home, '.config', 'kimchi', 'harness')
+}
 
 const PATH_SHAPED_PTY_ID = [
   '50c010a2-bc8e-4eb1-8847-5812133ad6df',
@@ -68,5 +83,25 @@ describe('PiTitlebarExtensionService legacy overlay paths', () => {
     svc.clearPty(PATH_SHAPED_PTY_ID)
 
     expect(existsSync(legacyOverlayDir)).toBe(false)
+  })
+
+  it('does not create legacy overlays for Kimchi and targets ~/.config/kimchi/harness/extensions', () => {
+    const fakeHome = mkdtempSync(join(tmpdir(), 'orca-kimchi-overlay-path-home-'))
+    const svc = new PiTitlebarExtensionService()
+
+    homedirOverride.current = fakeHome
+    try {
+      const env = svc.buildPtyEnv(PATH_SHAPED_PTY_ID, undefined, 'kimchi')
+
+      const harnessDir = kimchiHome(fakeHome)
+      expect(env.ORCA_KIMCHI_SOURCE_AGENT_DIR).toBe(harnessDir)
+      expect(existsSync(join(userDataDir, 'pi-agent-overlays'))).toBe(false)
+      expect(existsSync(join(userDataDir, 'omp-agent-overlays'))).toBe(false)
+      expect(existsSync(join(harnessDir, 'extensions', 'orca-agent-status.ts'))).toBe(true)
+      expect(existsSync(join(harnessDir, 'agent'))).toBe(false)
+    } finally {
+      homedirOverride.current = ''
+      rmSync(fakeHome, { recursive: true, force: true })
+    }
   })
 })

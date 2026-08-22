@@ -37,3 +37,4 @@ export type TuiAgent =
   | 'ante' // Ante (Antigma Labs)
   | 'trae' // Trae CLI
   | 'prime-agent' // Prime Agent (Prime Intellect)
+  | 'kimchi' // Kimchi (kimchi.dev, pi-mono harness)

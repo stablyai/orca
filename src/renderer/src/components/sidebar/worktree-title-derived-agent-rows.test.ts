@@ -90,6 +90,46 @@ describe('buildTitleDerivedAgentRows', () => {
     ])
   })
 
+  it('normalizes Pi-compatible title-derived rows to the launched Kimchi owner', () => {
+    const rows = buildWorktreeAgentRows({
+      tabs: [makeTab('tab-1', { launchAgent: 'kimchi' })],
+      entries: [],
+      retained: [],
+      runtimePaneTitlesByTabId: {
+        'tab-1': {
+          1: '⠋ π: tmp'
+        }
+      },
+      ptyIdsByTabId: { 'tab-1': ['pty-kimchi'] },
+      terminalLayoutsByTabId: { 'tab-1': makeSingleLayout(LEAF_ID_1) },
+      now: 2000
+    })
+
+    expect(rows.map((row) => [row.agentType, row.state, row.entry.terminalTitle])).toEqual([
+      ['kimchi', 'working', '⠋ Kimchi']
+    ])
+  })
+
+  it('keeps the kimchi agent type for title-derived idle rows', () => {
+    const rows = buildWorktreeAgentRows({
+      tabs: [makeTab('tab-1', { launchAgent: 'kimchi' })],
+      entries: [],
+      retained: [],
+      runtimePaneTitlesByTabId: {
+        'tab-1': {
+          1: 'Kimchi ready'
+        }
+      },
+      ptyIdsByTabId: { 'tab-1': ['pty-kimchi'] },
+      terminalLayoutsByTabId: { 'tab-1': makeSingleLayout(LEAF_ID_1) },
+      now: 2000
+    })
+
+    expect(rows.map((row) => [row.agentType, row.state, row.entry.lastAssistantMessage])).toEqual([
+      ['kimchi', 'idle', 'Idle']
+    ])
+  })
+
   it('keeps Pi-compatible title-derived rows as Pi for launched Pi sessions', () => {
     const rows = buildWorktreeAgentRows({
       tabs: [makeTab('tab-1', { launchAgent: 'pi' })],

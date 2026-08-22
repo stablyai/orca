@@ -226,7 +226,8 @@ const TITLE_LABEL_TO_AGENT: Partial<Record<string, TuiAgent>> = {
   Droid: 'droid',
   Hermes: 'hermes',
   Pi: 'pi',
-  OMP: 'omp'
+  OMP: 'omp',
+  Kimchi: 'kimchi'
 }
 
 function hasGenericClaudeStatusPrefix(title: string): boolean {

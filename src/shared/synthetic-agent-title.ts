@@ -42,6 +42,14 @@ export const SYNTHETIC_AGENT_TITLE_PROFILES: Record<string, SyntheticAgentTitleP
     idleLabel: 'OMP ready',
     titleIdentityGroup: 'pi-compatible'
   },
+  kimchi: {
+    workingLabel: 'Kimchi',
+    permissionLabel: 'Kimchi - action required',
+    idleLabel: 'Kimchi ready',
+    // Why: kimchi is pi-mono based and emits the same π-style title frames as
+    // pi, so owner-driven normalization must render them under the Kimchi name.
+    titleIdentityGroup: 'pi-compatible'
+  },
   droid: {
     workingLabel: 'Droid',
     permissionLabel: 'Droid - action required',
