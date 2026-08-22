@@ -1,8 +1,9 @@
 import { useMemo } from 'react'
-import { ArrowDown, ArrowUp, Columns2, Eye, FileText, ListTree, Rows2 } from 'lucide-react'
+import { ArrowDown, ArrowUp, Columns2, FileText, Globe, ListTree, Rows2 } from 'lucide-react'
 import { useAppStore } from '@/store'
 import { selectWorktreeDiffCommentsOrEmpty } from '@/store/worktree-diff-comments-selector'
 import type { OpenFile } from '@/store/slices/editor'
+import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import EditorViewToggle, {
   CSV_VIEW_MODE_METADATA,
@@ -120,17 +121,26 @@ export function EditorPanelHeader({
         <TooltipProvider delayDuration={300}>
           <Tooltip>
             <TooltipTrigger asChild>
-              <button
+              <Button
                 type="button"
-                className="p-1 rounded hover:bg-accent text-muted-foreground hover:text-foreground transition-colors flex-shrink-0"
+                variant="ghost"
+                size="xs"
+                className="text-muted-foreground hover:text-foreground"
                 onClick={onOpenPreviewToSide}
+                data-testid="open-html-in-orca-browser"
                 aria-label={translate(
-                  'auto.components.editor.EditorPanelHeader.fb8331694e',
-                  'Open Preview to the Side'
+                  'auto.components.editor.EditorPanelHeader.fc199c9fbe',
+                  'Open in Orca Browser'
                 )}
               >
-                <Eye size={14} />
-              </button>
+                <Globe />
+                <span>
+                  {translate(
+                    'auto.components.editor.EditorPanelHeader.fc199c9fbe',
+                    'Open in Orca Browser'
+                  )}
+                </span>
+              </Button>
             </TooltipTrigger>
             <TooltipContent side="bottom" sideOffset={4}>
               {translate(

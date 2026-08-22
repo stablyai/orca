@@ -138,4 +138,12 @@ describe('EditorPanelHeader', () => {
       })
     ).not.toContain('data-artifact-publish')
   })
+
+  it('labels the HTML preview action as an Orca Browser option', () => {
+    const html = renderHeader({ canOpenPreviewToSide: true })
+
+    expect(html).toContain('aria-label="Open in Orca Browser"')
+    expect(html).toContain('>Open in Orca Browser</span>')
+    expect(html).toContain('Open Preview to the Side')
+  })
 })

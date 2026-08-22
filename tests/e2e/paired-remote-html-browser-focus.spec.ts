@@ -60,7 +60,7 @@ test('keeps remote HTML preview placement and focuses it only after a click', as
     const fixtureRow = page.locator('[data-file-explorer-row]').filter({ hasText: FIXTURE_NAME })
     await expect(fixtureRow).toBeVisible({ timeout: 30_000 })
     await fixtureRow.click()
-    const openPreviewToSide = page.getByRole('button', { name: 'Open Preview to the Side' })
+    const openPreviewToSide = page.getByTestId('open-html-in-orca-browser')
     await expect(openPreviewToSide).toBeVisible({ timeout: 30_000 })
     const sourceEditor = await page.evaluate((targetWorktreeId) => {
       const state = window.__store?.getState()
