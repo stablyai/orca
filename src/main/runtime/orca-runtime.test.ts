@@ -16315,7 +16315,10 @@ describe('OrcaRuntimeService', () => {
     })
   })
 
-  it('resolves tui-idle from the Antigravity 1.1.17 accept-edits prompt', async () => {
+  it.each([
+    '> Accept-edits mode: file edits auto-approved (shift+tab to cycle)',
+    '> Plan mode: research & plan only (shift+tab to cycle)'
+  ])('resolves tui-idle from Antigravity 1.1.17 mode prompt %s', async (prompt) => {
     const runtime = new OrcaRuntimeService(store)
     runtime.setPtyController({
       spawn: vi.fn().mockResolvedValue({ id: 'pty-bg' }),
@@ -16331,7 +16334,7 @@ describe('OrcaRuntimeService', () => {
         'user@example.com (Google AI Pro)',
         'Gemini 3.7 Flash (High)',
         '~/orca/workspaces/orca/agy-dispatch-issue',
-        '> Accept-edits mode: file edits auto-approved (shift+tab to cycle)',
+        prompt,
         '? for shortcuts'
       ].join('\n'),
       Date.now()
