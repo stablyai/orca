@@ -218,6 +218,7 @@ import {
 } from './window/attach-main-window-services'
 import { createMainWindow, loadMainWindow } from './window/createMainWindow'
 import { orcaWindowManager } from './window/orca-window-manager'
+import { bindControlWindowHandoff } from './window/control-window-handoff'
 import {
   getDashboardPopoutWindow,
   zoomDashboardPopoutIfFocused
@@ -1571,23 +1572,17 @@ function openMainWindow(options: { revealOnDidFinishLoad?: boolean } = {}): Brow
   const bindControlWindowLifecycle = (controlWindow: BrowserWindow): void => {
     const controlWindowId = controlWindow.id
     const controlWebContentsId = controlWindow.webContents.id
-    const transitionToken = orcaWindowManager.beginControlTransition(controlWindowId)
-    controlWindow.on('closed', () => {
-      if (mainWindow !== controlWindow) {
-        return
-      }
-      clearExpectedRendererReload(controlWebContentsId)
-      if (!isQuitting) {
-        getWindowSessionRegistry(store!).retire(controlWindowId, 'user-close')
-      }
-      const promoted =
-        isQuitting || transitionToken == null
-          ? null
-          : orcaWindowManager.electControlDuringTransition(transitionToken)
-      if (transitionToken != null) {
-        orcaWindowManager.finishControlTransition(transitionToken)
-      }
-      if (promoted) {
+    bindControlWindowHandoff(controlWindow, {
+      windows: orcaWindowManager,
+      isCurrentControl: () => mainWindow === controlWindow,
+      getIsQuitting: () => isQuitting,
+      onWindowClosed: () => {
+        clearExpectedRendererReload(controlWebContentsId)
+        if (!isQuitting) {
+          getWindowSessionRegistry(store!).retire(controlWindowId, 'user-close')
+        }
+      },
+      onHandoff: (promoted) => {
         mainWindow = promoted
         attachControlServices(promoted)
         automations?.setWebContents(promoted.webContents)
@@ -1600,14 +1595,15 @@ function openMainWindow(options: { revealOnDidFinishLoad?: boolean } = {}): Brow
         promoted.on('show', notifyMainWindowBecameVisible)
         promoted.on('restore', notifyMainWindowBecameVisible)
         promoted.webContents.reload()
-        return
+      },
+      onVacated: () => {
+        mainWindow = null
+        automations?.setWebContents(null)
+        agentHookServer.setListener(null)
+        agentHookServer.setPaneStatusClearListener(null)
+        setMigrationUnsupportedPtyListener(null)
+        stopAllSyntheticTitleSpinners()
       }
-      mainWindow = null
-      automations?.setWebContents(null)
-      agentHookServer.setListener(null)
-      agentHookServer.setPaneStatusClearListener(null)
-      setMigrationUnsupportedPtyListener(null)
-      stopAllSyntheticTitleSpinners()
     })
   }
   terminalWindowTransfers ??= registerTerminalWindowTransferHandlers({
