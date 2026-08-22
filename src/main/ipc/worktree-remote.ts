@@ -1113,12 +1113,21 @@ async function prepareWorktreePushTargetSsh(
       remoteCreated = true
     }
   }
-  await provider.fetchRemoteTrackingRef(
-    repoPath,
-    remoteName,
-    target.branchName,
-    `refs/remotes/${remoteName}/${target.branchName}`
-  )
+  try {
+    await provider.fetchRemoteTrackingRef(
+      repoPath,
+      remoteName,
+      target.branchName,
+      `refs/remotes/${remoteName}/${target.branchName}`
+    )
+  } catch (error) {
+    // Why: mirrors the local path — a fetch failure aborts the create, so the
+    // remote we just added on the host would be orphaned with no owner to clean it.
+    if (remoteCreated) {
+      await provider.exec(['remote', 'remove', remoteName], repoPath).catch(() => {})
+    }
+    throw error
+  }
   return { ...sanitizedTarget, remoteName, ...(remoteCreated ? { remoteCreated: true } : {}) }
 }
 
