@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   derivePipelineStatus,
+  derivePipelineStatuses,
   mapGitLabIssueInfo,
   mapMRInfo,
   mapMRState,
@@ -281,6 +282,14 @@ describe('derivePipelineStatus', () => {
     expect(derivePipelineStatus('canceled')).toBe('neutral')
     expect(derivePipelineStatus('canceling')).toBe('neutral')
     expect(derivePipelineStatus([{ status: 'canceled' }])).toBe('failure')
+    expect(derivePipelineStatuses('canceled')).toEqual({
+      status: 'neutral',
+      presentationStatus: 'cancelled'
+    })
+    expect(derivePipelineStatuses([{ status: 'canceled' }])).toEqual({
+      status: 'failure',
+      presentationStatus: 'cancelled'
+    })
   })
 
   it('rolls up an array of jobs', () => {
@@ -294,6 +303,9 @@ describe('derivePipelineStatus', () => {
     expect(derivePipelineStatus([{ status: 'action_required' }, { status: 'success' }])).toBe(
       'failure'
     )
+    expect(derivePipelineStatuses([{ status: 'canceled' }, { status: 'failed' }])).toEqual({
+      status: 'failure'
+    })
   })
 
   it('keeps a manual deploy gate from failing an otherwise green pipeline', () => {

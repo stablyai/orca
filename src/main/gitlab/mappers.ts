@@ -1,10 +1,14 @@
-import type { CheckStatus } from '../../shared/github/pull-request-types'
+import type { CheckPresentationStatus, CheckStatus } from '../../shared/github/pull-request-types'
 import type { GitLabIssueInfo, GitLabWorkItem, MRInfo, MRState } from '../../shared/gitlab-types'
 import {
   mapGitLabPipelineJobStatusToCheckStatus,
   mapGitLabPipelineJobStatusToConclusion
 } from '../../shared/gitlab-pipeline-checks'
-import { summarizeProviderChecks } from '../../shared/provider-check-summary'
+import {
+  getProviderCheckStatuses,
+  summarizeProviderChecks,
+  type ProviderCheckStatuses
+} from '../../shared/provider-check-summary'
 
 // ── Pipeline job mapping (GitLab REST `/pipelines/:id/jobs`) ────────
 // Why: GitLab pipeline jobs roughly map to GitHub check-runs, but use a
@@ -99,7 +103,11 @@ type GitLabMRRaw = {
   author?: { username?: string | null; avatar_url?: string | null } | null
 }
 
-export function mapMRInfo(data: GitLabMRRaw, pipelineStatus: CheckStatus): MRInfo {
+export function mapMRInfo(
+  data: GitLabMRRaw,
+  pipelineStatus: CheckStatus,
+  pipelinePresentationStatus?: CheckPresentationStatus
+): MRInfo {
   const mergeable = deriveMergeable(data)
   const mergeStateStatus = deriveMergeStateStatus(data, mergeable)
   return {
@@ -108,6 +116,7 @@ export function mapMRInfo(data: GitLabMRRaw, pipelineStatus: CheckStatus): MRInf
     state: mapMRState(data.state, data.draft, data.title),
     url: data.web_url ?? data.url ?? '',
     pipelineStatus,
+    ...(pipelinePresentationStatus ? { pipelinePresentationStatus } : {}),
     updatedAt: data.updated_at ?? data.updatedAt ?? '',
     mergeable,
     ...(mergeStateStatus ? { mergeStateStatus } : {}),
@@ -173,19 +182,25 @@ function deriveMergeStateStatus(
 export function derivePipelineStatus(
   rollup: { status?: string }[] | { status?: string } | string | null | undefined
 ): CheckStatus {
+  return derivePipelineStatuses(rollup).status
+}
+
+export function derivePipelineStatuses(
+  rollup: { status?: string }[] | { status?: string } | string | null | undefined
+): ProviderCheckStatuses {
   if (!rollup) {
-    return 'neutral'
+    return { status: 'neutral' }
   }
   if (typeof rollup === 'string') {
-    return classifyPipelineString(rollup)
+    return classifyPipelineStringStatuses(rollup)
   }
   if (!Array.isArray(rollup)) {
-    return classifyPipelineString(rollup.status ?? '')
+    return classifyPipelineStringStatuses(rollup.status ?? '')
   }
   // Why: a job array is just a check list, so route it through the shared classifier instead of
   // re-deriving the rules here — a local copy drifted (manual-only read green, an unrecognized
   // status demoted a passing pipeline to neutral).
-  const { state } = summarizeProviderChecks(
+  const summary = summarizeProviderChecks(
     rollup.map((job) => {
       const s = job.status?.toLowerCase() ?? ''
       return {
@@ -194,8 +209,7 @@ export function derivePipelineStatus(
       }
     })
   )
-  // Why: CheckStatus has no 'none'; an empty job list carries the same "nothing to report" meaning.
-  return state === 'none' ? 'neutral' : state
+  return getProviderCheckStatuses(summary)
 }
 
 // ── Raw → GitLabWorkItem mapping ────────────────────────────────────
@@ -327,4 +341,15 @@ function classifyPipelineString(status: string): CheckStatus {
     return 'pending'
   }
   return 'neutral'
+}
+
+function classifyPipelineStringStatuses(status: string): ProviderCheckStatuses {
+  const checkStatus = classifyPipelineString(status)
+  const normalized = status.toLowerCase()
+  return {
+    status: checkStatus,
+    ...(normalized === 'canceled' || normalized === 'cancelled'
+      ? { presentationStatus: 'cancelled' as const }
+      : {})
+  }
 }

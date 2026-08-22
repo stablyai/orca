@@ -2,6 +2,7 @@ import { useMemo, useRef, useState } from 'react'
 import { localizedHostedReviewCopy } from '@/i18n/hosted-review-localized-copy'
 import type { HostedReviewInfo } from '../../../../../../shared/hosted-review'
 import { isGitHubPRSuppressed } from '../../../../../../shared/worktree/github-pr-suppression'
+import { hostedReviewInfoFromGitHubPRInfo } from '../../../../../../shared/hosted-review-github'
 import { resolveHostedReviewCreationProvider } from '../../../../../../shared/hosted-review-creation-providers'
 import type { SourceControlWorktreeContext } from '../listing/use-worktree-context'
 import type {
@@ -56,7 +57,7 @@ export function useSourceControlHostedReviewState({
       return null
     }
     if (activePrFromQueue) {
-      return { provider: 'github', ...activePrFromQueue, status: activePrFromQueue.checksStatus }
+      return hostedReviewInfoFromGitHubPRInfo(activePrFromQueue)
     }
     return hostedReviewEntryData
   }, [activePrFromQueue, hostedReviewCacheKey, hostedReviewEntryData])

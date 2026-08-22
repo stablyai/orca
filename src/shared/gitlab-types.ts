@@ -1,6 +1,7 @@
 /* GitLab-specific shared types, split from `./types` to avoid merge conflicts on upstream syncs; re-exported from `./types` for import stability. */
 import type { ClassifiedError } from './classified-error'
 import type {
+  CheckPresentationStatus,
   CheckStatus,
   PRConflictSummary,
   ProviderCheckSummary
@@ -40,6 +41,7 @@ export type MRInfo = {
   state: MRState
   url: string
   pipelineStatus: CheckStatus
+  pipelinePresentationStatus?: CheckPresentationStatus
   updatedAt: string
   mergeable: MRMergeableState
   /** GitLab `detailed_merge_status` (or a short alias) for UI that needs more than MERGEABLE/CONFLICTING/UNKNOWN. */

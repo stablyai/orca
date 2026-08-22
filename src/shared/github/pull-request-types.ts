@@ -1,6 +1,7 @@
 export type PRState = 'open' | 'closed' | 'merged' | 'draft'
 export type IssueState = 'open' | 'closed'
 export type CheckStatus = 'pending' | 'success' | 'failure' | 'neutral'
+export type CheckPresentationStatus = CheckStatus | 'cancelled'
 
 export type PRMergeableState = 'MERGEABLE' | 'CONFLICTING' | 'UNKNOWN'
 export type PRReviewDecision = 'APPROVED' | 'CHANGES_REQUESTED' | 'REVIEW_REQUIRED'
@@ -54,6 +55,8 @@ export type PRInfo = {
   state: PRState
   url: string
   checksStatus: CheckStatus
+  /** Optional so newer clients fall back to checksStatus against older runtimes. */
+  checksPresentationStatus?: CheckPresentationStatus
   updatedAt: string
   mergeable: PRMergeableState
   reviewDecision?: PRReviewDecision | null
@@ -115,6 +118,8 @@ export type ProviderCheckSummary = {
   total: number
   passed: number
   failed: number
+  /** Included in failed for legacy consumers; newer UI subtracts this presentation-only bucket. */
+  cancelled?: number
   pending: number
   neutral: number
 }

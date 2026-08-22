@@ -67,6 +67,28 @@ describe('syncPRChecksStatus', () => {
     expect(result?.prCache?.['repo-id::main']?.data?.checksStatus).toBe('success')
   })
 
+  it('sets and clears the optional cancellation presentation state', () => {
+    const cancelled = syncPRChecksStatus(baseState, '/repo', 'repo-id', 'main', [
+      { name: 'build', status: 'completed', conclusion: 'cancelled', url: null }
+    ])
+    expect(cancelled?.prCache?.['repo-id::main']?.data).toMatchObject({
+      checksStatus: 'failure',
+      checksPresentationStatus: 'cancelled'
+    })
+
+    const succeeded = syncPRChecksStatus(
+      { ...baseState, ...cancelled } as AppState,
+      '/repo',
+      'repo-id',
+      'main',
+      [{ name: 'build', status: 'completed', conclusion: 'success', url: null }]
+    )
+    expect(succeeded?.prCache?.['repo-id::main']?.data?.checksStatus).toBe('success')
+    expect('checksPresentationStatus' in (succeeded?.prCache?.['repo-id::main']?.data ?? {})).toBe(
+      false
+    )
+  })
+
   it('updates the local repo key while a runtime is focused when repo owner is known', () => {
     const state = {
       prCache: {

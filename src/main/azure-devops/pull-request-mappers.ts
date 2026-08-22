@@ -1,4 +1,14 @@
-import type { CheckStatus, PRMergeableState } from '../../shared/github/pull-request-types'
+import type {
+  CheckPresentationStatus,
+  CheckStatus,
+  PRMergeableState
+} from '../../shared/github/pull-request-types'
+import {
+  getProviderCheckStatuses,
+  summarizeProviderChecks,
+  type CheckOutcomeInput,
+  type ProviderCheckStatuses
+} from '../../shared/provider-check-summary'
 
 export type RawAzureDevOpsStatus = {
   state?: string | null
@@ -31,6 +41,7 @@ export type AzureDevOpsPullRequestInfo = {
   state: 'open' | 'closed' | 'merged' | 'draft'
   url: string
   status: CheckStatus
+  checkPresentationStatus?: CheckPresentationStatus
   updatedAt: string
   mergeable: PRMergeableState
   headSha?: string
@@ -64,50 +75,47 @@ export function mapAzureDevOpsMergeable(mergeStatus: string | null | undefined):
   }
 }
 
-function classifyAzureDevOpsStatus(state: string | null | undefined): CheckStatus {
+function normalizeAzureDevOpsStatus(state: string | null | undefined): CheckOutcomeInput {
   switch (state?.trim().toLowerCase()) {
     case 'succeeded':
     case 'success':
-      return 'success'
+      return { status: 'completed', conclusion: 'success' }
     case 'failed':
     case 'error':
     case 'rejected':
+      return { status: 'completed', conclusion: 'failure' }
     case 'canceled':
     case 'cancelled':
-      return 'failure'
+      return { status: 'completed', conclusion: 'cancelled' }
     case 'pending':
     case 'inprogress':
     case 'in_progress':
     case 'queued':
     case 'running':
-      return 'pending'
+      return { status: 'in_progress', conclusion: 'pending' }
     case undefined:
     default:
-      return 'neutral'
+      return { status: 'completed', conclusion: 'neutral' }
   }
 }
 
 export function deriveAzureDevOpsStatus(statuses: readonly RawAzureDevOpsStatus[]): CheckStatus {
-  if (statuses.length === 0) {
-    return 'neutral'
-  }
-  const classified = statuses.map((status) => classifyAzureDevOpsStatus(status.state))
-  if (classified.includes('failure')) {
-    return 'failure'
-  }
-  if (classified.includes('pending')) {
-    return 'pending'
-  }
-  if (classified.every((status) => status === 'success')) {
-    return 'success'
-  }
-  return 'neutral'
+  return deriveAzureDevOpsStatuses(statuses).status
+}
+
+export function deriveAzureDevOpsStatuses(
+  statuses: readonly RawAzureDevOpsStatus[]
+): ProviderCheckStatuses {
+  return getProviderCheckStatuses(
+    summarizeProviderChecks(statuses.map((status) => normalizeAzureDevOpsStatus(status.state)))
+  )
 }
 
 export function mapAzureDevOpsPullRequest(
   raw: RawAzureDevOpsPullRequest,
   status: CheckStatus,
-  webBaseUrl: string
+  webBaseUrl: string,
+  checkPresentationStatus?: CheckPresentationStatus
 ): AzureDevOpsPullRequestInfo | null {
   if (typeof raw.pullRequestId !== 'number' || !raw.title) {
     return null
@@ -120,6 +128,7 @@ export function mapAzureDevOpsPullRequest(
     url:
       raw._links?.web?.href ?? `${webBaseUrl.replace(/\/+$/, '')}/pullrequest/${raw.pullRequestId}`,
     status,
+    ...(checkPresentationStatus ? { checkPresentationStatus } : {}),
     updatedAt: raw.closedDate ?? raw.creationDate ?? '',
     mergeable: mapAzureDevOpsMergeable(raw.mergeStatus),
     ...(headSha ? { headSha } : {})

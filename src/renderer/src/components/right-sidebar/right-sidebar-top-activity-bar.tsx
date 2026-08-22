@@ -1,6 +1,6 @@
 import React from 'react'
 import type { ActiveRightSidebarTab, ActivityBarPosition } from '@/store/slices/editor'
-import type { CheckStatus } from '../../../../shared/github/pull-request-types'
+import type { CheckPresentationStatus } from '../../../../shared/github/pull-request-types'
 import { cn } from '@/lib/utils'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { ContextMenu, ContextMenuTrigger } from '@/components/ui/context-menu'
@@ -29,7 +29,7 @@ export function RightSidebarTopActivityBar({
   topActivityLayout: { visibleItems: ActivityBarItem[]; overflowItems: ActivityBarItem[] }
   effectiveTab: ActiveRightSidebarTab
   onSelectTab: (tab: ActiveRightSidebarTab) => void
-  checksStatus: CheckStatus | null
+  checksStatus: CheckPresentationStatus | null
   closeButton: React.ReactNode
   activityBarPosition: ActivityBarPosition
   onChangeActivityBarPosition: (pos: ActivityBarPosition) => void

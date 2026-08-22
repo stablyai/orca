@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   deriveAzureDevOpsStatus,
+  deriveAzureDevOpsStatuses,
   mapAzureDevOpsPullRequest,
   mapAzureDevOpsPullRequestState
 } from './pull-request-mappers'
@@ -18,6 +19,13 @@ describe('Azure DevOps pull request mappers', () => {
     expect(deriveAzureDevOpsStatus([{ state: 'succeeded' }, { state: 'pending' }])).toBe('pending')
     expect(deriveAzureDevOpsStatus([{ state: 'succeeded' }, { state: 'failed' }])).toBe('failure')
     expect(deriveAzureDevOpsStatus([])).toBe('neutral')
+    expect(deriveAzureDevOpsStatuses([{ state: 'canceled' }])).toEqual({
+      status: 'failure',
+      presentationStatus: 'cancelled'
+    })
+    expect(deriveAzureDevOpsStatuses([{ state: 'canceled' }, { state: 'failed' }])).toEqual({
+      status: 'failure'
+    })
   })
 
   it('maps a raw PR into hosted review info', () => {

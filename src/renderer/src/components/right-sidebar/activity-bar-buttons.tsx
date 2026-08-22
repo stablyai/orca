@@ -1,7 +1,7 @@
 import React from 'react'
 import { MoreHorizontal } from 'lucide-react'
 import type { ActiveRightSidebarTab } from '@/store/slices/editor'
-import type { CheckStatus } from '../../../../shared/github/pull-request-types'
+import type { CheckPresentationStatus } from '../../../../shared/github/pull-request-types'
 import { cn } from '@/lib/utils'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { RIGHT_SIDEBAR_HEADER_NO_DRAG_CLASS_NAME } from './right-sidebar-titlebar-drag-regions'
@@ -26,17 +26,21 @@ export type ActivityBarItem = {
   /** When true, shown only for worktrees that belong to an SSH repo. */
   sshOnly?: boolean
   /** Host-owned health indicator; plugin content cannot style this chrome. */
-  statusIndicator?: CheckStatus
+  statusIndicator?: CheckPresentationStatus
 }
 
-const STATUS_DOT_COLOR: Record<CheckStatus, string> = {
+const STATUS_DOT_COLOR: Record<CheckPresentationStatus, string> = {
   success: 'bg-emerald-500',
   failure: 'bg-rose-500',
+  cancelled: 'bg-muted-foreground',
   pending: 'bg-amber-500',
   neutral: 'bg-muted-foreground'
 }
 
-function activityItemAriaLabel(item: ActivityBarItem, status?: CheckStatus | null): string {
+function activityItemAriaLabel(
+  item: ActivityBarItem,
+  status?: CheckPresentationStatus | null
+): string {
   const base = item.shortcut ? `${item.title} (${item.shortcut})` : item.title
   return status === 'failure'
     ? `${base} — ${translate('auto.components.right.sidebar.activityBar.error', 'Error')}`
@@ -52,7 +56,7 @@ export function TopActivityOverflowMenu({
   items: ActivityBarItem[]
   activeTab: ActiveRightSidebarTab
   onSelect: (tab: ActiveRightSidebarTab) => void
-  checksStatus?: CheckStatus | null
+  checksStatus?: CheckPresentationStatus | null
 }): React.JSX.Element {
   const hiddenChecksStatus =
     checksStatus && checksStatus !== 'neutral' && items.some((item) => item.id === 'checks')
@@ -132,7 +136,7 @@ export function ActivityBarButton({
   active: boolean
   onClick: () => void
   layout: 'top' | 'side'
-  statusIndicator?: CheckStatus | null
+  statusIndicator?: CheckPresentationStatus | null
 }): React.JSX.Element {
   const Icon = item.icon
   const isTop = layout === 'top'

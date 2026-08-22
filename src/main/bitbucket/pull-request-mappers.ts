@@ -1,4 +1,14 @@
-import type { CheckStatus, PRMergeableState } from '../../shared/github/pull-request-types'
+import type {
+  CheckPresentationStatus,
+  CheckStatus,
+  PRMergeableState
+} from '../../shared/github/pull-request-types'
+import {
+  getProviderCheckStatuses,
+  summarizeProviderChecks,
+  type CheckOutcomeInput,
+  type ProviderCheckStatuses
+} from '../../shared/provider-check-summary'
 
 export type RawBitbucketPullRequest = {
   id?: number
@@ -31,6 +41,7 @@ export type BitbucketPullRequestInfo = {
   state: 'open' | 'closed' | 'merged'
   url: string
   status: CheckStatus
+  checkPresentationStatus?: CheckPresentationStatus
   updatedAt: string
   mergeable: PRMergeableState
   headSha?: string
@@ -59,25 +70,39 @@ export function mapBitbucketPullRequestState(
 export function deriveBitbucketBuildStatus(
   statuses: readonly RawBitbucketBuildStatus[]
 ): CheckStatus {
-  if (statuses.length === 0) {
-    return 'neutral'
+  return deriveBitbucketBuildStatuses(statuses).status
+}
+
+function normalizeBitbucketBuildStatus(state: string | null | undefined): CheckOutcomeInput {
+  switch (state?.trim().toUpperCase()) {
+    case 'SUCCESSFUL':
+      return { status: 'completed', conclusion: 'success' }
+    case 'FAILED':
+    case 'ERROR':
+      return { status: 'completed', conclusion: 'failure' }
+    case 'STOPPED':
+      return { status: 'completed', conclusion: 'cancelled' }
+    case 'INPROGRESS':
+    case 'PENDING':
+      return { status: 'in_progress', conclusion: 'pending' }
+    case undefined:
+    default:
+      return { status: 'completed', conclusion: 'neutral' }
   }
-  const states = statuses.map((status) => status.state?.trim().toUpperCase() ?? '')
-  if (states.some((state) => state === 'FAILED' || state === 'STOPPED' || state === 'ERROR')) {
-    return 'failure'
-  }
-  if (states.some((state) => state === 'INPROGRESS' || state === 'PENDING')) {
-    return 'pending'
-  }
-  if (states.every((state) => state === 'SUCCESSFUL')) {
-    return 'success'
-  }
-  return 'neutral'
+}
+
+export function deriveBitbucketBuildStatuses(
+  statuses: readonly RawBitbucketBuildStatus[]
+): ProviderCheckStatuses {
+  return getProviderCheckStatuses(
+    summarizeProviderChecks(statuses.map((status) => normalizeBitbucketBuildStatus(status.state)))
+  )
 }
 
 export function mapBitbucketPullRequest(
   raw: RawBitbucketPullRequest,
-  status: CheckStatus
+  status: CheckStatus,
+  checkPresentationStatus?: CheckPresentationStatus
 ): BitbucketPullRequestInfo | null {
   if (typeof raw.id !== 'number' || !raw.title || !raw.links?.html?.href) {
     return null
@@ -89,6 +114,7 @@ export function mapBitbucketPullRequest(
     state: mapBitbucketPullRequestState(raw.state),
     url: raw.links.html.href,
     status,
+    ...(checkPresentationStatus ? { checkPresentationStatus } : {}),
     updatedAt: raw.updated_on ?? '',
     mergeable: 'UNKNOWN',
     ...(headSha ? { headSha } : {})

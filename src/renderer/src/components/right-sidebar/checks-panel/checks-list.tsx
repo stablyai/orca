@@ -38,6 +38,7 @@ export function ChecksList(props: ChecksListProps): React.JSX.Element {
     rows,
     passingCount,
     failingCount,
+    cancelledCount,
     pendingCount,
     neutralCount,
     toggleCheckExpanded,
@@ -73,6 +74,16 @@ export function ChecksList(props: ChecksListProps): React.JSX.Element {
               {translate(
                 'auto.components.right.sidebar.checks.panel.content.5e52f4ef7f',
                 'failing'
+              )}
+            </span>
+          )}
+          {cancelledCount > 0 && (
+            <span className="flex items-center gap-1">
+              <CircleX className="size-3 text-muted-foreground/60" />
+              {cancelledCount}{' '}
+              {translate(
+                'auto.components.right.sidebar.checks.panel.content.checksCancelledChip',
+                'cancelled'
               )}
             </span>
           )}

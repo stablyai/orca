@@ -152,6 +152,25 @@ describe('buildParentPrChecksProjection', () => {
       }).rows[0]
     ).toMatchObject({ status: 'pending', group: 'pending' })
 
+    const cancelled = makeProjection({
+      worktree,
+      repo,
+      hostedReviewCache: {
+        [cacheKey]: {
+          data: makeReview({ status: 'failure', checkPresentationStatus: 'cancelled' }),
+          fetchedAt: 1,
+          linkedReviewHintKey: ''
+        }
+      }
+    })
+    expect(cancelled.rows[0]).toMatchObject({
+      status: 'cancelled',
+      group: 'needsAttention',
+      checkTone: 'cancelled',
+      summary: 'Checks cancelled'
+    })
+    expect(cancelled.summary).toMatchObject({ failing: 0, cancelled: 1 })
+
     expect(
       makeProjection({
         worktree,

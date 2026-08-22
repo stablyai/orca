@@ -218,6 +218,26 @@ describe('WorktreeCardStatusSlot', () => {
     expect(markup).not.toContain('data-tooltip-root')
   })
 
+  it('shows cancelled checks with a muted tone in the left sidebar', () => {
+    const markup = renderToStaticMarkup(
+      <WorktreeCardStatusSlot
+        worktreeId="wt-1"
+        showStatus
+        showUnreadAction={false}
+        isUnread={false}
+        unreadTooltip="Mark as unread"
+        onPointerDown={vi.fn()}
+        onToggleUnread={vi.fn()}
+        prDisplay={{ ...review, checkPresentationStatus: 'cancelled' }}
+        newCardStyle
+      />
+    )
+
+    expect(markup).toContain('PR checks: Cancelled')
+    expect(markup).toContain('text-muted-foreground/60')
+    expect(markup).not.toContain('text-rose-500/85')
+  })
+
   it('uses the unified compact review glyph for GitLab MR status', () => {
     const markup = renderToStaticMarkup(
       <WorktreeCardStatusSlot

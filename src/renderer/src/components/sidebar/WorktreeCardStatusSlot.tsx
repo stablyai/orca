@@ -8,7 +8,7 @@ import { FilledBellIcon } from './WorktreeCardHelpers'
 import StatusIndicator from './StatusIndicator'
 import { useWorktreeActivityStatus } from './use-worktree-activity-status'
 import type { WorktreeCardPrDisplay } from './worktree-card-pr-display'
-import { getReviewLabel, ReviewIcon } from './worktree-review-helpers'
+import { getReviewCheckStatus, getReviewLabel, ReviewIcon } from './worktree-review-helpers'
 
 type WorktreeCardStatusSlotProps = {
   worktreeId: string
@@ -65,6 +65,7 @@ function overlayNewCardUnreadStatus(
 
 function getReviewStatusLabel(review: WorktreeCardPrDisplay): string {
   const label = getReviewLabel(review)
+  const status = getReviewCheckStatus(review)
   if (review.state === 'merged') {
     return `${label}: Merged`
   }
@@ -74,13 +75,16 @@ function getReviewStatusLabel(review: WorktreeCardPrDisplay): string {
   if (review.state === 'draft') {
     return `${label}: Draft`
   }
-  if (review.status === 'failure') {
+  if (status === 'failure') {
     return `${label} checks: Failed`
   }
-  if (review.status === 'pending') {
+  if (status === 'cancelled') {
+    return `${label} checks: Cancelled`
+  }
+  if (status === 'pending') {
     return `${label} checks: Pending`
   }
-  if (review.status === 'success') {
+  if (status === 'success') {
     return `${label} checks: Passing`
   }
   return `${label}: Open`

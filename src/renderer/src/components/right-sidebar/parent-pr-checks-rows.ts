@@ -68,7 +68,9 @@ export function summarizeParentPrChecksRows(
   return {
     attached: rows.length,
     knownReview: rows.filter((row) => row.reviewLabel !== null && row.status !== 'noReview').length,
-    failing: rows.filter((row) => row.group === 'needsAttention').length,
+    failing: rows.filter((row) => row.group === 'needsAttention' && row.status !== 'cancelled')
+      .length,
+    cancelled: rows.filter((row) => row.status === 'cancelled').length,
     pending: rows.filter((row) => row.group === 'pending').length,
     passing: rows.filter((row) => row.group === 'passing').length,
     noPr: rows.filter((row) => row.status === 'noReview').length,

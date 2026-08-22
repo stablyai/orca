@@ -1,6 +1,6 @@
 import type { AppState } from '../../store/types'
 import { getRepoMapFromState, getWorktreeMapFromState } from '../../store/selectors'
-import type { CheckStatus } from '../../../../shared/github/pull-request-types'
+import type { CheckPresentationStatus } from '../../../../shared/github/pull-request-types'
 import { getGitHubPRCacheKey } from '../../store/slices/github-cache-key'
 import { getHostedReviewCacheKey } from '../../store/slices/hosted-review-cache-identity'
 import { isGitHubPRSuppressed } from '../../../../shared/worktree/github-pr-suppression'
@@ -15,7 +15,9 @@ function branchDisplayName(branch: string): string {
   return branch.replace(/^refs\/heads\//, '')
 }
 
-export function getActiveChecksStatus(state: ActiveChecksStatusState): CheckStatus | null {
+export function getActiveChecksStatus(
+  state: ActiveChecksStatusState
+): CheckPresentationStatus | null {
   const activeWorktree = state.activeWorktreeId
     ? (getWorktreeMapFromState(state).get(state.activeWorktreeId) ?? null)
     : null
@@ -55,7 +57,7 @@ export function getActiveChecksStatus(state: ActiveChecksStatusState): CheckStat
   )
   const hostedReview = state.hostedReviewCache?.[hostedReviewCacheKey]?.data ?? null
   if (hostedReview && hostedReview.provider !== 'github') {
-    return hostedReview.status
+    return hostedReview.checkPresentationStatus ?? hostedReview.status
   }
   if (
     (activeWorktree.linkedGitLabMR ?? null) !== null ||
@@ -67,10 +69,10 @@ export function getActiveChecksStatus(state: ActiveChecksStatusState): CheckStat
   }
   const branchPR = state.prCache[prCacheKey]?.data ?? null
   if (branchPR && !isGitHubPRSuppressed(activeWorktree, branchPR.number)) {
-    return branchPR.checksStatus
+    return branchPR.checksPresentationStatus ?? branchPR.checksStatus
   }
   return hostedReview?.provider === 'github' &&
     !isGitHubPRSuppressed(activeWorktree, hostedReview.number)
-    ? hostedReview.status
+    ? (hostedReview.checkPresentationStatus ?? hostedReview.status)
     : null
 }

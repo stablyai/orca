@@ -6,6 +6,7 @@ import { PullRequestIcon, checksLabel } from './WorktreeCardHelpers'
 import type { WorktreeCardPrDisplay } from './worktree-card-pr-display'
 import type { IssueInfo } from '../../../../shared/github/pull-request-types'
 import { translate } from '@/i18n/i18n'
+import { getReviewCheckStatus } from './worktree-review-helpers'
 
 function MetadataStatusBadge({
   label,
@@ -154,10 +155,11 @@ export function ReviewStateBadge({
 }
 
 export function ReviewChecksBadge({
-  status
+  review
 }: {
-  status: WorktreeCardPrDisplay['status']
+  review: WorktreeCardPrDisplay
 }): React.JSX.Element | null {
+  const status = getReviewCheckStatus(review)
   if (!status || status === 'neutral') {
     return null
   }
@@ -180,6 +182,17 @@ export function ReviewChecksBadge({
       <MetadataStatusBadge
         label={label}
         className="border-rose-500/25 bg-rose-500/5 text-rose-600 dark:text-rose-300"
+      >
+        <CircleX />
+      </MetadataStatusBadge>
+    )
+  }
+
+  if (status === 'cancelled') {
+    return (
+      <MetadataStatusBadge
+        label={label}
+        className="border-border bg-muted/30 text-muted-foreground"
       >
         <CircleX />
       </MetadataStatusBadge>

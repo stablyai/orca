@@ -11,7 +11,10 @@ import {
 import { Button } from '@/components/ui/button'
 import type { PRCheckDetail } from '../../../../../shared/github/check-types'
 import type { ConflictReview } from './conflict-summary'
-import { summarizeProviderChecks } from '../../../../../shared/provider-check-summary'
+import {
+  getProviderCheckFailureCount,
+  summarizeProviderChecks
+} from '../../../../../shared/provider-check-summary'
 import { translate } from '@/i18n/i18n'
 
 export function PRTriageStrip({
@@ -46,7 +49,8 @@ export function PRTriageStrip({
   // `{status: completed, conclusion: null}` check used to spin here as "1 pending" forever while
   // the pill two panes away called it unresolved.
   const summary = summarizeProviderChecks(checks)
-  const failingCount = summary.failed
+  const failingCount = getProviderCheckFailureCount(summary)
+  const cancelledCount = summary.cancelled ?? 0
   const pendingCount = summary.pending
 
   if (resolvedReview?.mergeable === 'CONFLICTING') {
@@ -97,6 +101,32 @@ export function PRTriageStrip({
             )}
             {translate('auto.components.right.sidebar.checks.panel.content.b45db92d0e', 'Fix')}
           </Button>
+        </div>
+      </div>
+    )
+  }
+
+  if (cancelledCount > 0) {
+    return (
+      <div className="border-b border-border px-3 py-2">
+        <div className="flex min-w-0 items-center gap-2">
+          <CircleX className="size-3.5 shrink-0 text-muted-foreground/60" />
+          <div className="min-w-0 flex-1">
+            <div className="truncate text-[11px] font-medium text-foreground">
+              {cancelledCount}{' '}
+              {translate(
+                'auto.components.right.sidebar.checks.panel.content.cancelledCheck',
+                'cancelled check'
+              )}
+              {cancelledCount === 1 ? '' : 's'}
+            </div>
+            <div className="truncate text-[10px] text-muted-foreground">
+              {translate(
+                'auto.components.right.sidebar.checks.panel.content.cancelledCheckHint',
+                'Cancelled checks remain non-passing until they are rerun.'
+              )}
+            </div>
+          </div>
         </div>
       </div>
     )

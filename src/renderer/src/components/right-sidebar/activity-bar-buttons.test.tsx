@@ -44,4 +44,26 @@ describe('TopActivityOverflowMenu', () => {
       'More sidebar tabs — Error'
     )
   })
+
+  it('does not announce cancellation as an error', async () => {
+    const container = document.createElement('div')
+    document.body.appendChild(container)
+    const root = createRoot(container)
+    roots.push(root)
+    const item: ActivityBarItem = {
+      id: 'checks',
+      icon: () => <span />,
+      title: 'Checks',
+      shortcut: '',
+      statusIndicator: 'cancelled'
+    }
+
+    await act(async () => {
+      root.render(
+        <TopActivityOverflowMenu items={[item]} activeTab="explorer" onSelect={vi.fn()} />
+      )
+    })
+
+    expect(container.querySelector('button')?.getAttribute('aria-label')).toBe('More sidebar tabs')
+  })
 })

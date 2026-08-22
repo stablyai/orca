@@ -1,10 +1,12 @@
 import type {
+  CheckPresentationStatus,
   CheckStatus,
   PRMergeableState,
   PRReviewDecision,
   PRState,
   ProviderCheckSummary
 } from '../../../shared/github/pull-request-types'
+import { getProviderCheckPresentationState } from '../../../shared/provider-check-summary'
 import { canEnableGitHubPRAutoMerge } from '../../../shared/github/pull-request-auto-merge-availability'
 import { translate } from '@/i18n/i18n'
 
@@ -14,6 +16,7 @@ export type GitHubPRMergeStateInput = {
   mergeStateStatus?: string | null
   reviewDecision?: PRReviewDecision | null
   checksStatus?: CheckStatus
+  checksPresentationStatus?: CheckPresentationStatus
   checksSummary?: ProviderCheckSummary
   autoMergeEnabled?: boolean
   autoMergeAllowed?: boolean | null
@@ -40,15 +43,11 @@ const SUCCESS_TONE =
 const WARNING_TONE = 'border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-200'
 const DANGER_TONE = 'border-rose-500/30 bg-rose-500/10 text-rose-700 dark:text-rose-200'
 
-function checksState(item: GitHubPRMergeStateInput): CheckStatus | 'none' | undefined {
+function checksState(item: GitHubPRMergeStateInput): CheckPresentationStatus | 'none' | undefined {
   if (item.checksSummary) {
-    return item.checksSummary.state
+    return getProviderCheckPresentationState(item.checksSummary)
   }
-  return item.checksStatus
-}
-
-function checksPassed(item: GitHubPRMergeStateInput): boolean {
-  return checksState(item) === 'success'
+  return item.checksPresentationStatus ?? item.checksStatus
 }
 
 function hasFullMergeMetadata(item: GitHubPRMergeStateInput): boolean {
@@ -206,7 +205,7 @@ export function presentGitHubPRMergeState(
   if (!hasFullMergeMetadata(item)) {
     // Why: GitHub can omit merge metadata while checks are already green; let
     // users attempt merge and rely on the main-process preflight for blockers.
-    if (checksPassed(item)) {
+    if (checksState(item) === 'success') {
       return passedChecksMergePresentation(autoMergeAction)
     }
     return {
@@ -268,19 +267,31 @@ export function presentGitHubPRMergeState(
               'GitHub says this PR can merge, but some checks failed'
             )
           }
-        : checkState === 'pending'
+        : checkState === 'cancelled'
           ? {
               label: translate(
-                'auto.components.github.pr.merge.state.4e2507176b',
-                'Checks pending'
+                'auto.components.github.pr.merge.state.checksCancelled',
+                'Checks cancelled'
               ),
-              tone: WARNING_TONE,
+              tone: MUTED_TONE,
               tooltip: translate(
-                'auto.components.github.pr.merge.state.9bd983ce8f',
-                'GitHub says this PR can merge, but checks are still running'
+                'auto.components.github.pr.merge.state.checksCancelledTooltip',
+                'GitHub says this PR can merge, but some checks were cancelled'
               )
             }
-          : null
+          : checkState === 'pending'
+            ? {
+                label: translate(
+                  'auto.components.github.pr.merge.state.4e2507176b',
+                  'Checks pending'
+                ),
+                tone: WARNING_TONE,
+                tooltip: translate(
+                  'auto.components.github.pr.merge.state.9bd983ce8f',
+                  'GitHub says this PR can merge, but checks are still running'
+                )
+              }
+            : null
     return {
       label: checkStatus?.label ?? 'Able to merge',
       tone: checkStatus?.tone ?? SUCCESS_TONE,
@@ -295,7 +306,7 @@ export function presentGitHubPRMergeState(
   }
   // Why: GitHub may still report intermediate mergeability while checks are
   // green; the merge command re-checks authoritative blockers before merging.
-  if (checksPassed(item)) {
+  if (checksState(item) === 'success') {
     return passedChecksMergePresentation(autoMergeAction)
   }
   return {
