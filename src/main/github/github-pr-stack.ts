@@ -13,6 +13,10 @@ import {
   type GitHubApiRepository,
   type GitHubRepoExecOptions
 } from './github-api-repository'
+import {
+  deriveStackChecksPresentationStatus,
+  type GitHubPRStackCheckRollup
+} from './github-pr-stack-check-presentation'
 import { noteRepositoryRateLimitSpend, repositoryRateLimitGuard } from './rate-limit'
 
 const STACK_CACHE_TTL_MS = 30_000
@@ -37,7 +41,7 @@ type GraphQLStackEntry = {
     mergeable?: unknown
     reviewDecision?: unknown
     mergeStateStatus?: unknown
-    statusCheckRollup?: { state?: unknown } | null
+    statusCheckRollup?: GitHubPRStackCheckRollup | null
   } | null
 }
 
@@ -135,6 +139,10 @@ function mapStackEntry(entry: GraphQLStackEntry): GitHubPRStackEntry | null {
     return null
   }
   const reviewDecision = mapReviewDecision(pr.reviewDecision)
+  const checksStatus = mapStackCheckStatus(pr.statusCheckRollup?.state)
+  const checksPresentationStatus = pr.statusCheckRollup
+    ? deriveStackChecksPresentationStatus(pr.statusCheckRollup, checksStatus)
+    : undefined
   return {
     position: entry.position,
     number: pr.number,
@@ -142,7 +150,8 @@ function mapStackEntry(entry: GraphQLStackEntry): GitHubPRStackEntry | null {
     url: pr.url,
     ...(typeof pr.updatedAt === 'string' ? { updatedAt: pr.updatedAt } : {}),
     state: mapStackPRState(pr.state, pr.isDraft),
-    checksStatus: mapStackCheckStatus(pr.statusCheckRollup?.state),
+    checksStatus,
+    ...(checksPresentationStatus ? { checksPresentationStatus } : {}),
     mergeable: mapStackMergeable(pr.mergeable),
     ...(reviewDecision !== undefined ? { reviewDecision } : {}),
     ...(typeof pr.mergeStateStatus === 'string' ? { mergeStateStatus: pr.mergeStateStatus } : {}),
@@ -196,7 +205,18 @@ query($owner: String!, $repo: String!, $pr: Int!) {
               mergeable
               reviewDecision
               mergeStateStatus
-              statusCheckRollup { state }
+              statusCheckRollup {
+                state
+                contexts(first: 100) {
+                  totalCount
+                  pageInfo { hasNextPage }
+                  nodes {
+                    __typename
+                    ... on CheckRun { status conclusion }
+                    ... on StatusContext { state }
+                  }
+                }
+              }
             }
           }
         }

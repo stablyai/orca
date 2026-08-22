@@ -33,6 +33,8 @@ export type GitHubPRStackEntry = {
   updatedAt?: string
   state: PRState
   checksStatus: CheckStatus
+  /** Optional so newer clients fall back to checksStatus against older runtimes. */
+  checksPresentationStatus?: CheckPresentationStatus
   mergeable: PRMergeableState
   reviewDecision?: PRReviewDecision | null
   mergeStateStatus?: string | null

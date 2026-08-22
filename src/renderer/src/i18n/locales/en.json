@@ -13036,6 +13036,7 @@
             "568c647ccd": "draft",
             "bea9ade223": "conflicts",
             "838aadf512": "checks failed",
+            "checksCancelled": "checks cancelled",
             "316039b5db": "checks pending",
             "4b1e5ee9d3": "changes requested",
             "9a17b5255c": "review needed",
