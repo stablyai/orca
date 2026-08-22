@@ -90,7 +90,7 @@ export function AiVaultPanelHeader({
           <div className="truncate text-[11px] text-muted-foreground">
             {hasScanResult ? (
               <>
-                <span className="@max-[300px]/ai-vault:hidden">
+                <span className="readout @max-[300px]/ai-vault:hidden">
                   {translate(
                     'auto.components.right.sidebar.AiVaultPanel.shownRecent',
                     '{{value0}} shown · {{value1}} recent',

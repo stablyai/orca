@@ -46,8 +46,15 @@ export function SessionMetadata({
       data-testid="ai-vault-session-metadata"
       className="mt-1 grid min-w-0 grid-cols-[auto_minmax(0,1fr)] gap-x-1.5 gap-y-0.5 text-[11px] leading-4 text-muted-foreground"
     >
-      <span className="flex size-4 shrink-0 items-center justify-center text-muted-foreground">
-        <AgentIcon agent={session.agent} size={14} />
+      {/* Test Bench: the agent icon rides its channel chip — a stable tinted
+          square so your eye maps agent → channel across every surface. */}
+      <span
+        className="flex size-4 shrink-0 items-center justify-center rounded-[4px]"
+        style={{
+          backgroundColor: `color-mix(in srgb, ${agentChannelColor(session.agent)} 16%, transparent)`
+        }}
+      >
+        <AgentIcon agent={session.agent} size={12} />
       </span>
       <div className="flex min-w-0 items-center gap-1.5">
         {/* Why: 'done' is the resting state of every finished pane — badging it
@@ -164,4 +171,21 @@ export function conversationRoleLabel(
     return translate('auto.components.right.sidebar.AiVaultSessionRow.systemRole', 'System')
   }
   return translate('auto.components.right.sidebar.AiVaultSessionRow.sessionRole', 'Session')
+}
+
+/** Test Bench channel identity: a stable accent hue per agent family, defined
+ *  as theme-aware CSS variables in main.css. Unknown agents fall back to the
+ *  muted foreground so unrecognized entries stay quiet. */
+const AGENT_CHANNEL_VAR: Record<string, string> = {
+  claude: 'var(--channel-claude)',
+  'claude-agent-teams': 'var(--channel-claude)',
+  openclaude: 'var(--channel-claude)',
+  codex: 'var(--channel-codex)',
+  grok: 'var(--channel-grok)',
+  pi: 'var(--channel-pi)',
+  omp: 'var(--channel-omp)'
+}
+
+export function agentChannelColor(agent: string | null | undefined): string {
+  return AGENT_CHANNEL_VAR[agent ?? ''] ?? 'var(--muted-foreground)'
 }

@@ -151,6 +151,13 @@
   --radius: 0.5rem;
   /* Scope graticule line — only for measuring surfaces (charts, git graph). */
   --graticule-line: rgb(25 28 33 / 0.05);
+  /* Channel identities (Test Bench): stable per-agent accent hues, light-theme
+     depth. Identity chips, not states — states keep their own tokens. */
+  --channel-claude: #8a6a00;
+  --channel-codex: #0e7c90;
+  --channel-grok: #c2317f;
+  --channel-pi: #664dc0;
+  --channel-omp: #1a7f42;
   --mcode-security-background: #f1f0eb;
   --mcode-security-foreground: #191c21;
   --mcode-security-card: #faf9f6;
@@ -388,6 +395,12 @@
 .dark {
   /* Scope graticule line — only for measuring surfaces (charts, git graph). */
   --graticule-line: rgb(255 255 255 / 0.045);
+  /* Channel identities (Test Bench), dark-theme brightness. */
+  --channel-claude: #e3b341;
+  --channel-codex: #53c6d8;
+  --channel-grok: #e06ca8;
+  --channel-pi: #9e86ff;
+  --channel-omp: #63d48e;
 }
 
 .plugin-security-chrome {
