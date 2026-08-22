@@ -622,11 +622,11 @@ describe('registerPtyHandlers', () => {
       const daemon = installObservableDaemonTestProvider()
       try {
         registerPtyHandlers(mainWindow as never, runtime as never)
-        // Why daemon provider: survives reloads and keeps orphan-kill off this webContents, so 'did-finish-load' means gate reset only.
+        // Why daemon provider: survives reloads and keeps orphan-kill off this webContents.
         const reloadHandlers = mainWindow.webContents.on.mock.calls
           .filter((call: unknown[]) => call[0] === 'did-finish-load')
           .map((call: unknown[]) => call[1] as () => void)
-        expect(reloadHandlers).toHaveLength(1)
+        expect(reloadHandlers).toHaveLength(2)
         const result = (await handlers.get('pty:spawn')!(null, {
           cols: 80,
           rows: 24,
@@ -641,7 +641,7 @@ describe('registerPtyHandlers', () => {
         expect(mainWindow.webContents.send).toHaveBeenCalledTimes(1)
 
         // Renderer reload: hidden marks die with the old renderer, but dropped bytes were never restored — memory must survive.
-        reloadHandlers[0]()
+        reloadHandlers.at(-1)!()
         expect(getPtyRendererDeliveryDebugSnapshot()).toMatchObject({
           hiddenDeliveryGatedPtyCount: 0
         })
@@ -678,7 +678,7 @@ describe('registerPtyHandlers', () => {
         const reloadHandlers = mainWindow.webContents.on.mock.calls
           .filter((call: unknown[]) => call[0] === 'did-finish-load')
           .map((call: unknown[]) => call[1] as () => void)
-        expect(reloadHandlers).toHaveLength(1)
+        expect(reloadHandlers).toHaveLength(2)
         const result = (await handlers.get('pty:spawn')!(null, {
           cols: 80,
           rows: 24,
@@ -699,7 +699,7 @@ describe('registerPtyHandlers', () => {
         )
 
         // Why: the renderer reload killed the sidecar's ref count without a release IPC — the leaked hold must not force-feed the PTY forever.
-        reloadHandlers[0]()
+        reloadHandlers.at(-1)!()
         mainWindow.webContents.send.mockClear()
         setHidden(null, { id: result.id, hidden: true })
         daemon.emitData(result.id, 'gated after reload')

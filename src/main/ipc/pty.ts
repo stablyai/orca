@@ -266,8 +266,8 @@ export function handoffPtyRendererOwnership(
   from: WebContents,
   to: WebContents
 ): void {
-  resetRendererDeliveryAccountingForLifecycleReset(undefined, ptyIds)
   ptyRendererOwners.handoff(ptyIds, from, to)
+  resetRendererDeliveryAccountingForLifecycleReset(from, ptyIds)
   for (const id of ptyIds) {
     sendToPtyOwner(id, 'pty:modelRestoreNeeded', { id, reason: 'delivery-heal' })
   }
@@ -2239,10 +2239,6 @@ let localDataUnsub: (() => void) | null = null
 let localExitUnsub: (() => void) | null = null
 let localBackgroundStreamUnsub: (() => void) | null = null
 let localWriteUnavailableUnsub: (() => void) | null = null
-let didFinishLoadHandler: (() => void) | null = null
-let didFinishLoadWebContents: WebContents | null = null
-let rendererLifecycleResetWebContents: WebContents | null = null
-let rendererLifecycleResetHandler: (() => void) | null = null
 // Why: the hidden-delivery gate registries mirror renderer state; a reload/crash destroys owners without unregistering, so they reset when the renderer is replaced (drop memory preserved).
 let rendererGateResetLoadHandler: (() => void) | null = null
 let rendererGateResetGoneHandler: (() => void) | null = null
@@ -2255,9 +2251,6 @@ type RendererNavigationDetails = {
   isMainFrame: boolean
   isSameDocument: boolean
 }
-
-// Why: navigation details identify the triggering frame; querying aggregate load state can misclassify an overlapping subframe load.
-let rendererDidStartNavigationHandler: ((details: RendererNavigationDetails) => void) | null = null
 
 // Why: Restart daemon must re-bind provider→renderer listeners after replaceDaemonProvider swaps localProvider, else subscribers stay bound to the disposed adapter and new PTY data silently drops.
 let rebindProviderListeners: (() => void) | null = null
@@ -2360,6 +2353,7 @@ let resetRendererDeliveryAccountingForLifecycleReset = (
 ): void => {}
 // Bridged so a re-registration can cancel the prior closure's dispatcher-ready watchdog before wiring its own.
 let clearRendererDispatcherReadyWatchdog = (): void => {}
+let handlePtyRendererDidFinishLoad = (_webContents: WebContents): void => {}
 
 export function getPtyRendererDeliveryDebugSnapshot(): PtyRendererDeliveryDebugSnapshot {
   return readPtyRendererDeliveryDebugSnapshot()
@@ -2369,22 +2363,18 @@ export function resetPtyRendererDeliveryDebug(): void {
   resetPtyRendererDeliveryDebugSnapshot()
 }
 
-function clearDidFinishLoadHandler(): void {
-  if (didFinishLoadHandler && didFinishLoadWebContents) {
-    didFinishLoadWebContents.removeListener('did-finish-load', didFinishLoadHandler)
-  }
-  didFinishLoadHandler = null
-  didFinishLoadWebContents = null
-}
-
 function markRendererPtysHiddenForRendererLifecycleReset(webContents?: WebContents): void {
+  if (
+    !webContents ||
+    !ptyRendererOwners.isRegistered(webContents) ||
+    !ptyRendererOwners.isDispatcherReady(webContents)
+  ) {
+    return
+  }
   // A reload/crash in the breadcrumb history is load-bearing context for any freeze report.
   mainDeliveryBreadcrumbs.record('renderer-lifecycle-reset')
   // Why: renderer-owned hints die with the page; clear visibility so surviving daemon/SSH PTYs fail closed until the new renderer reports.
-  const ownedIds =
-    webContents && ptyRendererOwners.isRegistered(webContents)
-      ? ptyRendererOwners.beginReload(webContents)
-      : []
+  const ownedIds = ptyRendererOwners.beginReload(webContents)
   const activePriorityChanged = ownedIds.some((id) => activeRendererPtys.delete(id))
   for (const id of ownedIds) {
     visibleRendererPtys.delete(id)
@@ -2398,8 +2388,10 @@ function markRendererPtysHiddenForRendererLifecycleReset(webContents?: WebConten
 }
 
 export function registerPtyRenderer(webContents: WebContents): () => void {
+  if (ptyRendererOwners.isRegistered(webContents)) {
+    return () => {}
+  }
   ptyRendererOwners.registerRenderer(webContents)
-  markRendererPtysHiddenForRendererLifecycleReset(webContents)
   const reset = (): void => markRendererPtysHiddenForRendererLifecycleReset(webContents)
   const navigate = (details: RendererNavigationDetails): void => {
     if (details.isMainFrame && !details.isSameDocument) {
@@ -2407,56 +2399,20 @@ export function registerPtyRenderer(webContents: WebContents): () => void {
     }
   }
   const destroy = (): void => {
-    reset()
     ptyRendererOwners.removeRenderer(webContents)
   }
+  const finishLoad = (): void => handlePtyRendererDidFinishLoad(webContents)
   webContents.on('did-start-navigation', navigate)
+  webContents.on('did-finish-load', finishLoad)
   webContents.on('render-process-gone', reset)
   webContents.on('destroyed', destroy)
   return () => {
     webContents.removeListener('did-start-navigation', navigate)
+    webContents.removeListener('did-finish-load', finishLoad)
     webContents.removeListener('render-process-gone', reset)
     webContents.removeListener('destroyed', destroy)
     ptyRendererOwners.removeRenderer(webContents)
   }
-}
-
-function clearRendererLifecycleResetHandlers(): void {
-  if (!rendererLifecycleResetWebContents) {
-    return
-  }
-  if (rendererDidStartNavigationHandler) {
-    rendererLifecycleResetWebContents.removeListener(
-      'did-start-navigation',
-      rendererDidStartNavigationHandler
-    )
-  }
-  if (rendererLifecycleResetHandler) {
-    rendererLifecycleResetWebContents.removeListener(
-      'render-process-gone',
-      rendererLifecycleResetHandler
-    )
-    rendererLifecycleResetWebContents.removeListener('destroyed', rendererLifecycleResetHandler)
-  }
-  rendererLifecycleResetWebContents = null
-  rendererLifecycleResetHandler = null
-  rendererDidStartNavigationHandler = null
-}
-
-function registerRendererLifecycleResetHandlers(webContents: WebContents): void {
-  clearRendererLifecycleResetHandlers()
-  markRendererPtysHiddenForRendererLifecycleReset(webContents)
-  rendererLifecycleResetWebContents = webContents
-  rendererLifecycleResetHandler = () => markRendererPtysHiddenForRendererLifecycleReset(webContents)
-  rendererDidStartNavigationHandler = (details) => {
-    if (!details.isMainFrame || details.isSameDocument) {
-      return
-    }
-    markRendererPtysHiddenForRendererLifecycleReset(webContents)
-  }
-  webContents.on('did-start-navigation', rendererDidStartNavigationHandler)
-  webContents.on('render-process-gone', rendererLifecycleResetHandler)
-  webContents.on('destroyed', rendererLifecycleResetHandler)
 }
 
 function clearRendererGateResetHandlers(): void {
@@ -2512,11 +2468,27 @@ export function registerPtyHandlers(
   resetRendererDeliveryAccountingForLifecycleReset = () => {}
   invalidatePendingPtyDrainPriority = () => {}
   invalidatePendingPtyDrainPolicy = () => {}
-  ptyRendererOwners.registerRenderer(mainWindow.webContents)
-  registerRendererLifecycleResetHandlers(mainWindow.webContents)
+  registerPtyRenderer(mainWindow.webContents)
+
+  const getCurrentPtyEventSender = (
+    event: IpcMainEvent | IpcMainInvokeEvent | null
+  ): WebContents | null => {
+    if (!event) {
+      return mainWindow.webContents
+    }
+    return event.senderFrame !== null &&
+      event.senderFrame === event.sender.mainFrame &&
+      ptyRendererOwners.isRegistered(event.sender)
+      ? event.sender
+      : null
+  }
 
   const claimPtyForRenderer = (event: IpcMainInvokeEvent | null, id: string): void => {
-    ptyRendererOwners.claim(id, event?.sender ?? mainWindow.webContents)
+    const sender = getCurrentPtyEventSender(event)
+    if (!sender) {
+      throw new Error('untrusted_ui_renderer')
+    }
+    ptyRendererOwners.claim(id, sender)
   }
 
   const getPtyRendererTarget = (id: string): WebContents | null => ptyRendererOwners.getTarget(id)
@@ -2838,9 +2810,13 @@ export function registerPtyHandlers(
     return accounting ? accounting.sentChars - accounting.ackedChars : 0
   }
 
-  function adjustRendererInFlightChars(id: string, delta: number): void {
+  function adjustRendererInFlightChars(
+    id: string,
+    delta: number,
+    rendererWebContentsId?: number
+  ): void {
     rendererInFlightTotalChars = Math.max(0, rendererInFlightTotalChars + delta)
-    const webContentsId = ptyRendererOwners.getOwner(id)?.webContentsId
+    const webContentsId = rendererWebContentsId ?? ptyRendererOwners.getOwner(id)?.webContentsId
     if (webContentsId == null) {
       return
     }
@@ -2873,19 +2849,6 @@ export function registerPtyHandlers(
 
   function deletePendingPtyData(id: string): void {
     pendingData.delete(id)
-  }
-
-  function clearPendingPtyData(): void {
-    for (const pending of pendingData.values()) {
-      if (pending.projectionAdmissionIds) {
-        sshOutputIntake?.transferProjections(
-          pending.projectionAdmissionIds,
-          'renderer-lifecycle-reset'
-        )
-      }
-    }
-    pendingData.clear()
-    sourceCreditPendingPtys.clear()
   }
 
   function readCurrentPtyRendererDeliveryDebugSnapshot(): PtyRendererDeliveryDebugSnapshot {
@@ -3060,7 +3023,7 @@ export function registerPtyHandlers(
     for (const id of resetIds) {
       producerFlowControl.release(id)
       sshOutputIntake?.transferPtyProjections(id, 'renderer-lifecycle-reset')
-      adjustRendererInFlightChars(id, -getRendererInFlightCharsForPty(id))
+      adjustRendererInFlightChars(id, -getRendererInFlightCharsForPty(id), webContents?.id)
       rendererDeliveryAccountingByPty.delete(id)
       const pending = pendingData.get(id)
       if (pending?.projectionAdmissionIds) {
@@ -3627,20 +3590,6 @@ export function registerPtyHandlers(
 
   function flushPendingData(): void {
     flushTimer = null
-    if (mainWindow.isDestroyed()) {
-      // Why release now: bookkeeping is being wiped, so no future drain can resume these producers — local shells would wedge.
-      producerFlowControl.releaseAll()
-      clearDeliveryResyncProbe()
-      deliveryResyncUnansweredWarnedWebContentsIds.clear()
-      clearPendingPtyData()
-      pendingOverflowMarkedPtys.clear()
-      rendererDeliveryAccountingByPty.clear()
-      rendererInFlightTotalChars = 0
-      rendererInFlightCharsByWebContentsId.clear()
-      lastAckReceivedAtMsByWebContentsId.clear()
-      clearDispatcherReadyWatchdog()
-      return
-    }
     // Ordinary boot-window data is blocked in the queue; hidden-droppable entries still retire before renderer readiness.
     const settings = getSettings?.()
     let writes = 0
@@ -3656,6 +3605,17 @@ export function registerPtyHandlers(
           break
         }
         const { id, pending } = selection
+        if (!getPtyRendererTarget(id)) {
+          pendingData.remove(selection)
+          if (pending.projectionAdmissionIds) {
+            sshOutputIntake?.transferProjections(
+              pending.projectionAdmissionIds,
+              'renderer-unavailable'
+            )
+          }
+          updateProducerFlowControl(id)
+          continue
+        }
         // Why drop, never re-queue: the model already ingested hidden-gated bytes; reveal restores from the snapshot+seq machinery.
         if (shouldDropHiddenRendererPtyData(id, settings)) {
           pendingData.remove(selection)
@@ -3824,8 +3784,9 @@ export function registerPtyHandlers(
   }
 
   function preparePtyExitForRenderer(payload: { id: string; code: number }): (() => void) | null {
-    if (mainWindow.isDestroyed()) {
-      sshOutputIntake?.transferPtyProjections(payload.id, 'renderer-destroyed')
+    if (!getPtyRendererTarget(payload.id)) {
+      sshOutputIntake?.transferPtyProjections(payload.id, 'renderer-unavailable')
+      deletePendingPtyData(payload.id)
       return () => {}
     }
     if (rendererExitingPtyIds.has(payload.id)) {
@@ -3885,11 +3846,6 @@ export function registerPtyHandlers(
   }
 
   function finalizePtyExitForRenderer(payload: { id: string; code: number }): void {
-    if (mainWindow.isDestroyed()) {
-      rendererCreditBeforeExitByPty.delete(payload.id)
-      ptyRendererOwners.release(payload.id)
-      return
-    }
     const hadReleasableRendererCredit =
       rendererCreditBeforeExitByPty.get(payload.id) ??
       getRendererInFlightCharsForPty(payload.id) > 0
@@ -3953,24 +3909,10 @@ export function registerPtyHandlers(
     const preservesSeq = !payload.transformed && rawLength === payload.data.length
     const startSeq = typeof outputSeq === 'number' ? Math.max(0, outputSeq - rawLength) : undefined
     const projectionId = projection?.identity.projectionSemanticsId
-    if (mainWindow.isDestroyed()) {
+    if (!getPtyRendererTarget(payload.id)) {
       if (projectionId) {
-        sshOutputIntake?.transferProjections([projectionId], 'renderer-destroyed')
+        sshOutputIntake?.transferProjections([projectionId], 'renderer-unavailable')
       }
-      if (flushTimer) {
-        clearTimeout(flushTimer)
-        flushTimer = null
-      }
-      producerFlowControl.releaseAll()
-      clearDeliveryResyncProbe()
-      deliveryResyncUnansweredWarnedWebContentsIds.clear()
-      clearPendingPtyData()
-      pendingOverflowMarkedPtys.clear()
-      rendererDeliveryAccountingByPty.clear()
-      rendererInFlightTotalChars = 0
-      rendererInFlightCharsByWebContentsId.clear()
-      lastAckReceivedAtMsByWebContentsId.clear()
-      clearDispatcherReadyWatchdog()
       return
     }
     if (rendererExitingPtyIds.has(payload.id)) {
@@ -4284,7 +4226,12 @@ export function registerPtyHandlers(
   } | null
   const pendingSerializeRequests = new Map<
     string,
-    { resolve: (result: SerializeResult) => void; timeout: NodeJS.Timeout; webContentsId: number }
+    {
+      resolve: (result: SerializeResult) => void
+      timeout: NodeJS.Timeout
+      ptyId: string
+      webContents: WebContents
+    }
   >()
 
   function settleSerializeRequest(requestId: string, result: SerializeResult): void {
@@ -4316,7 +4263,13 @@ export function registerPtyHandlers(
       if (typeof args?.requestId !== 'string') {
         return
       }
-      if (pendingSerializeRequests.get(args.requestId)?.webContentsId !== event.sender.id) {
+      const pending = pendingSerializeRequests.get(args.requestId)
+      const sender = getCurrentPtyEventSender(event)
+      if (
+        !pending ||
+        sender !== pending.webContents ||
+        !ptyRendererOwners.owns(pending.ptyId, sender)
+      ) {
         return
       }
       const snapshot = args.snapshot
@@ -4371,7 +4324,12 @@ export function registerPtyHandlers(
       const timeout = setTimeout(() => {
         settleSerializeRequest(requestId, null)
       }, 750)
-      pendingSerializeRequests.set(requestId, { resolve, timeout, webContentsId: target.id })
+      pendingSerializeRequests.set(requestId, {
+        resolve,
+        timeout,
+        ptyId,
+        webContents: target
+      })
       const payload: {
         requestId: string
         ptyId: string
@@ -4402,24 +4360,19 @@ export function registerPtyHandlers(
   mainWindow.webContents.on('did-finish-load', rendererGateResetLoadHandler)
   mainWindow.webContents.on('render-process-gone', rendererGateResetGoneHandler)
 
-  // Why: only LocalPtyProvider PTYs (main-process) can be orphaned on reload; daemon sessions survive by design and cleanup would kill them.
-  clearDidFinishLoadHandler()
-  if (localProvider instanceof LocalPtyProvider) {
-    const lp = localProvider
-    didFinishLoadHandler = () => {
-      // Why: always advance to keep the generation monotonic, but skip the sweep on crash/freeze-recovery reload — it would kill live local PTYs before session restore (#5787).
-      const generation = lp.advanceGeneration()
-      if (options?.isRecoveryReloadInFlight?.(mainWindow.webContents.id)) {
-        return
-      }
-      // Why: the retained provider onExit callback is the only physical-exit proof; it clears ownership after the OS reaps it.
-      lp.killOrphanedPtys(
-        generation - 1,
-        new Set(ptyRendererOwners.getOwnedIdsExcept(mainWindow.webContents))
-      )
+  // Why: only in-process PTYs can be orphan-swept; every renderer load protects PTYs owned by all other windows.
+  handlePtyRendererDidFinishLoad = (webContents) => {
+    if (!(localProvider instanceof LocalPtyProvider)) {
+      return
     }
-    didFinishLoadWebContents = mainWindow.webContents
-    mainWindow.webContents.on('did-finish-load', didFinishLoadHandler)
+    const generation = localProvider.advanceGeneration()
+    if (options?.isRecoveryReloadInFlight?.(webContents.id)) {
+      return
+    }
+    localProvider.killOrphanedPtys(
+      generation - 1,
+      new Set(ptyRendererOwners.getOwnedIdsExcept(webContents))
+    )
   }
 
   const assertFolderWorkspacePtyPathUsable = async (
@@ -6212,6 +6165,9 @@ export function registerPtyHandlers(
         }
       }
     ) => {
+      if (!getCurrentPtyEventSender(event)) {
+        throw new Error('untrusted_ui_renderer')
+      }
       const codexHomeLaunchStartedAt = !args.connectionId ? new Date() : undefined
       const codexHomeLaunchStartedSequence = !args.connectionId ? ++ptyLifecycleSequence : undefined
       const initialLeafId =
@@ -7487,7 +7443,10 @@ export function registerPtyHandlers(
   const isPtyEventFromOwner = (
     event: IpcMainEvent | IpcMainInvokeEvent | null,
     id: string
-  ): boolean => ptyRendererOwners.owns(id, event?.sender ?? mainWindow.webContents)
+  ): boolean => {
+    const sender = getCurrentPtyEventSender(event)
+    return sender ? ptyRendererOwners.owns(id, sender) : false
+  }
 
   const writePtyInput = (args: PtyWritePayload): boolean | Promise<boolean> => {
     // Why: mobile-presence-lock defense-in-depth — the renderer's onData guard can let one keystroke slip during the state-flip lag, so catch it server-side. See docs/mobile-presence-lock.md.
@@ -7674,11 +7633,15 @@ export function registerPtyHandlers(
   ipcMain.on(
     'pty:deliveryResyncResponse',
     (event, args: { requestId: number; processedCharsByPty: Record<string, number> }) => {
-      if (args?.requestId !== deliveryResyncProbesByWebContentsId.get(event.sender.id)?.requestId) {
+      const sender = getCurrentPtyEventSender(event)
+      if (
+        !sender ||
+        args?.requestId !== deliveryResyncProbesByWebContentsId.get(sender.id)?.requestId
+      ) {
         return
       }
-      clearDeliveryResyncProbe(event.sender.id)
-      deliveryResyncUnansweredWarnedWebContentsIds.delete(event.sender.id)
+      clearDeliveryResyncProbe(sender.id)
+      deliveryResyncUnansweredWarnedWebContentsIds.delete(sender.id)
       // Why max-merge: the renderer's cumulative totals are authoritative for what it processed, draining exactly the in-flight debt from lost ACKs.
       let creditedAny = false
       for (const [id, processedChars] of Object.entries(args.processedCharsByPty ?? {})) {
@@ -7702,6 +7665,10 @@ export function registerPtyHandlers(
   ipcMain.handle(
     'pty:reportRendererDeliveryState',
     (event, args: PtyRendererDeliveryStateReport): PtyRendererDeliveryHealthReply => {
+      const sender = getCurrentPtyEventSender(event)
+      if (!sender) {
+        return { inFlightTotalChars: 0, inFlightPtyCount: 0, msSinceLastAck: null }
+      }
       // Extra repair lane for the lost-ACK variant: identical max-merge to the resync response, so a heal is only reached when merging cannot drain.
       let creditedAny = false
       for (const [id, processedChars] of Object.entries(args?.processedCharsByPty ?? {})) {
@@ -7721,15 +7688,15 @@ export function registerPtyHandlers(
       // Why the main-side ACK-silence check: requiring main to have also seen no ACK stops a buggy/foreign caller from writing off live delivery.
       if (
         args?.heal === true &&
-        (rendererInFlightCharsByWebContentsId.get(event.sender.id) ?? 0) > 0 &&
-        (!lastAckReceivedAtMsByWebContentsId.has(event.sender.id) ||
-          Date.now() - lastAckReceivedAtMsByWebContentsId.get(event.sender.id)! >=
+        (rendererInFlightCharsByWebContentsId.get(sender.id) ?? 0) > 0 &&
+        (!lastAckReceivedAtMsByWebContentsId.has(sender.id) ||
+          Date.now() - lastAckReceivedAtMsByWebContentsId.get(sender.id)! >=
             PTY_DELIVERY_HEAL_MIN_ACK_SILENCE_MS)
       ) {
         writtenOff = writeOffLostRendererDelivery(
           args,
           (id) => isPtyEventFromOwner(event, id),
-          event.sender.id
+          sender.id
         )
         creditedAny ||= writtenOff.length > 0
       }
@@ -7737,15 +7704,15 @@ export function registerPtyHandlers(
       let inFlightPtyCount = 0
       for (const [id, accounting] of rendererDeliveryAccountingByPty) {
         if (
-          ptyRendererOwners.getOwner(id)?.webContentsId === event.sender.id &&
+          ptyRendererOwners.getOwner(id)?.webContentsId === sender.id &&
           accounting.sentChars - accounting.ackedChars > 0
         ) {
           inFlightPtyCount++
         }
       }
-      const lastAckReceivedAtMs = lastAckReceivedAtMsByWebContentsId.get(event.sender.id) ?? null
+      const lastAckReceivedAtMs = lastAckReceivedAtMsByWebContentsId.get(sender.id) ?? null
       return {
-        inFlightTotalChars: rendererInFlightCharsByWebContentsId.get(event.sender.id) ?? 0,
+        inFlightTotalChars: rendererInFlightCharsByWebContentsId.get(sender.id) ?? 0,
         inFlightPtyCount,
         msSinceLastAck: lastAckReceivedAtMs === null ? null : Date.now() - lastAckReceivedAtMs,
         ...(writtenOff.length > 0 ? { writtenOff } : {})
@@ -7756,21 +7723,19 @@ export function registerPtyHandlers(
   // Why: renderer signals its pty:data listener is live; until then sends are held so boot-window bytes can't drop into a listener-less page and pin the gate.
   ipcMain.removeAllListeners('pty:rendererDispatcherReady')
   ipcMain.on('pty:rendererDispatcherReady', (event) => {
-    // Why: the reconcile below destructively clears delivery accounting, so a straggler handshake from a dying window must not reset the new window.
-    if (!ptyRendererOwners.isRegistered(event.sender)) {
+    const frame = event.senderFrame
+    const sender = getCurrentPtyEventSender(event)
+    if (!sender || !frame || ptyRendererOwners.isDispatcherReadyForFrame(sender, frame)) {
       return
     }
-    // Why: a handshake while the gate is already open means a page load whose lifecycle reset was missed; clear the dead page's stale accounting so it can't permanently gate survivors.
-    if (ptyRendererOwners.isDispatcherReady(event.sender)) {
-      resetRendererDeliveryAccountingForLifecycleReset(
-        event.sender,
-        ptyRendererOwners.getOwnedIds(event.sender)
-      )
+    if (ptyRendererOwners.isDispatcherReady(sender)) {
+      markRendererPtysHiddenForRendererLifecycleReset(sender)
     }
-    // Why: real handshake landed — cancel the self-heal watchdog so it can't later force-open the gate.
-    clearDispatcherReadyWatchdog()
-    ptyRendererOwners.markDispatcherReady(event.sender)
-    rendererPtyDispatcherReady = true
+    if (sender === mainWindow.webContents) {
+      clearDispatcherReadyWatchdog()
+      rendererPtyDispatcherReady = true
+    }
+    ptyRendererOwners.markDispatcherReady(sender, frame)
     pendingData.reactivateBlocked()
     schedulePendingDataFlush(0)
   })
@@ -7870,7 +7835,7 @@ export function registerPtyHandlers(
 
   ipcMain.removeAllListeners('pty:terminalViewAttributes')
   ipcMain.on('pty:terminalViewAttributes', (event, args: unknown) => {
-    if (!ptyRendererOwners.isRegistered(event?.sender ?? mainWindow.webContents)) {
+    if (!getCurrentPtyEventSender(event)) {
       return
     }
     // Why validate-or-drop: a malformed palette gives a wrong color reply that breaks TUI theme detection worse than the silent-until-first-push default.

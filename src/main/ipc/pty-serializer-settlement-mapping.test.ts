@@ -17,6 +17,7 @@ import {
   setLocalPtyProvider,
   unregisterSshPtyProvider
 } from './pty'
+import { ptyRendererOwners } from './pty-renderer-owners'
 
 vi.mock('electron', () => import('./pty-ipc-mock-registry').then((m) => m.electronModuleMock()))
 vi.mock('fs', () => import('./pty-ipc-mock-registry').then((m) => m.fsModuleMock()))
@@ -161,6 +162,7 @@ describe('registerPtyHandlers', () => {
       expect(store.persistPtyBinding).not.toHaveBeenCalled()
       expect(openCodeClearPtyMock).not.toHaveBeenCalledWith(appPtyId)
       expect(piClearPtyMock).not.toHaveBeenCalledWith(appPtyId)
+      ptyRendererOwners.claim(appPtyId, mainWindow.webContents as never)
       getPtyWriteListener()(mainWindowIpcEvent, { id: appPtyId, data: 'echo still-owned' })
       expect(remoteWrite).toHaveBeenCalledWith(appPtyId, 'echo still-owned')
     } finally {

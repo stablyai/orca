@@ -162,6 +162,25 @@ describe('registerPtyHandlers', () => {
     expect(mockProc.proc.write).toHaveBeenCalledTimes(1)
     expect(mockProc.proc.write).toHaveBeenCalledWith('new-owner')
   })
+  it('rejects PTY input queued by a superseded main frame', async () => {
+    const mockProc = createMockProc()
+    spawnMock.mockReturnValue(mockProc.proc)
+    registerPtyHandlers(mainWindow as never)
+    const result = (await handlers.get('pty:spawn')!(mainWindowIpcEvent, {
+      cols: 80,
+      rows: 24
+    })) as { id: string }
+    const write = getPtyWriteListener()
+
+    write(
+      { sender: mainWindow.webContents, senderFrame: { generation: 'old' } },
+      { id: result.id, data: 'stale-page' }
+    )
+    write(mainWindowIpcEvent, { id: result.id, data: 'current-page' })
+
+    expect(mockProc.proc.write).toHaveBeenCalledTimes(1)
+    expect(mockProc.proc.write).toHaveBeenCalledWith('current-page')
+  })
   it('routes PTY output only to its current renderer owner after handoff', async () => {
     vi.useFakeTimers()
     const mockProc = createMockProc()

@@ -32,6 +32,41 @@ describe('PtyRendererOwners', () => {
     expect(owners.getTarget('pty-1')).toBe(first)
   })
 
+  it('rejects WebContents id reuse without transferring trust or ownership', () => {
+    const owners = new PtyRendererOwners()
+    const original = makeRenderer(1)
+    const reusedId = makeRenderer(1)
+    owners.registerRenderer(original as never)
+    owners.claim('pty-1', original as never)
+
+    expect(() => owners.registerRenderer(reusedId as never)).toThrow('untrusted_ui_renderer')
+    expect(owners.removeRenderer(reusedId as never)).toEqual([])
+    expect(owners.getTarget('pty-1')).toBe(original)
+
+    expect(owners.removeRenderer(original as never)).toEqual(['pty-1'])
+    expect(owners.removeRenderer(original as never)).toEqual([])
+    owners.registerRenderer(reusedId as never)
+    expect(owners.claim('pty-2', reusedId as never)).toEqual({
+      webContentsId: 1,
+      generation: 0
+    })
+  })
+
+  it('keeps renderer state intact on duplicate registration', () => {
+    const owners = new PtyRendererOwners()
+    const renderer = makeRenderer(1)
+    owners.registerRenderer(renderer as never)
+    owners.claim('pty-1', renderer as never)
+    owners.markDispatcherReady(renderer as never)
+    owners.setVisible(renderer as never, 'pty-1', true)
+
+    owners.registerRenderer(renderer as never)
+
+    expect(owners.isDispatcherReady(renderer as never)).toBe(true)
+    expect(owners.getViewState('pty-1').visible).toBe(true)
+    expect(owners.getOwner('pty-1')).toEqual({ webContentsId: 1, generation: 0 })
+  })
+
   it('tracks dispatcher readiness per renderer', () => {
     const owners = new PtyRendererOwners()
     const first = makeRenderer(1)
@@ -119,6 +154,39 @@ describe('PtyRendererOwners', () => {
     expect(owners.owns('pty-1', first as never)).toBe(false)
     expect(owners.owns('pty-1', second as never)).toBe(true)
     expect(owners.isDispatcherReadyFor('pty-1')).toBe(true)
+  })
+
+  it('rejects a duplicate PTY in a group handoff without moving any owner', () => {
+    const owners = new PtyRendererOwners()
+    const first = makeRenderer(1)
+    const second = makeRenderer(2)
+    owners.registerRenderer(first as never)
+    owners.registerRenderer(second as never)
+    owners.claim('pty-1', first as never)
+    owners.claim('pty-2', first as never)
+    owners.markDispatcherReady(second as never)
+
+    expect(() =>
+      owners.handoff(['pty-1', 'pty-1', 'pty-2'], first as never, second as never)
+    ).toThrow('pty_renderer_duplicate_handoff')
+    expect(owners.owns('pty-1', first as never)).toBe(true)
+    expect(owners.owns('pty-2', first as never)).toBe(true)
+  })
+
+  it('advances handoff generation beyond the target renderer load', () => {
+    const owners = new PtyRendererOwners()
+    const first = makeRenderer(1)
+    const second = makeRenderer(2)
+    owners.registerRenderer(first as never)
+    owners.registerRenderer(second as never)
+    owners.claim('pty-1', first as never)
+    owners.beginReload(second as never)
+    owners.beginReload(second as never)
+    owners.markDispatcherReady(second as never)
+
+    expect(owners.handoff(['pty-1'], first as never, second as never)).toEqual([
+      { id: 'pty-1', fromGeneration: 0, toGeneration: 3 }
+    ])
   })
 
   it('removes only the closed renderer and reports its orphaned PTYs', () => {

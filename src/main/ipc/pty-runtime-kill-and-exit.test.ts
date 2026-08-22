@@ -12,6 +12,7 @@ import {
   rebindLocalProviderListeners,
   getLocalPtyProvider
 } from './pty'
+import { ptyRendererOwners } from './pty-renderer-owners'
 
 vi.mock('electron', () => import('./pty-ipc-mock-registry').then((m) => m.electronModuleMock()))
 vi.mock('fs', () => import('./pty-ipc-mock-registry').then((m) => m.fsModuleMock()))
@@ -58,8 +59,13 @@ vi.mock('../codex/codex-state-db-backfill-recovery', () =>
 )
 
 describe('registerPtyHandlers', () => {
-  const { handlers, mainWindow, installDaemonTestProvider, installObservableDaemonTestProvider } =
-    setupPtyIpcSuite()
+  const {
+    handlers,
+    mainWindow,
+    mainWindowIpcEvent,
+    installDaemonTestProvider,
+    installObservableDaemonTestProvider
+  } = setupPtyIpcSuite()
 
   it('routes runtime foreground confirmation to the provider owning the captured PTY', async () => {
     const confirmForegroundProcess = vi.fn(async () => 'codex')
@@ -187,10 +193,11 @@ describe('registerPtyHandlers', () => {
     } as never)
     handlers.clear()
     registerPtyHandlers(mainWindow as never)
+    ptyRendererOwners.claim('local-pty', mainWindow.webContents as never)
 
-    await expect(handlers.get('pty:kill')!(null, { id: 'local-pty' })).rejects.toThrow(
-      'daemon unavailable'
-    )
+    await expect(
+      handlers.get('pty:kill')!(mainWindowIpcEvent, { id: 'local-pty' })
+    ).rejects.toThrow('daemon unavailable')
   })
   it('rejects runtime terminal IDs before unowned local provider routing', async () => {
     const shutdown = vi.spyOn(getLocalPtyProvider(), 'shutdown')
@@ -232,8 +239,12 @@ describe('registerPtyHandlers', () => {
     } as never)
     handlers.clear()
     registerPtyHandlers(mainWindow as never, runtime as never)
+    ptyRendererOwners.claim('local-pty', mainWindow.webContents as never)
 
-    await handlers.get('pty:kill')!(null, { id: 'local-pty', keepHistory: true })
+    await handlers.get('pty:kill')!(mainWindowIpcEvent, {
+      id: 'local-pty',
+      keepHistory: true
+    })
 
     expect(shutdown).toHaveBeenCalledWith('local-pty', {
       immediate: true,
@@ -283,8 +294,9 @@ describe('registerPtyHandlers', () => {
     } as never)
     handlers.clear()
     registerPtyHandlers(mainWindow as never, runtime as never)
+    ptyRendererOwners.claim('local-pty', mainWindow.webContents as never)
 
-    await handlers.get('pty:kill')!(null, { id: 'local-pty' })
+    await handlers.get('pty:kill')!(mainWindowIpcEvent, { id: 'local-pty' })
 
     expect(runtime.onPtyExit).toHaveBeenCalledTimes(1)
     expect(runtime.onPtyExit).toHaveBeenCalledWith('local-pty', 0, undefined, undefined)
@@ -325,8 +337,9 @@ describe('registerPtyHandlers', () => {
     } as never)
     handlers.clear()
     registerPtyHandlers(mainWindow as never, runtime as never)
+    ptyRendererOwners.claim('local-pty', mainWindow.webContents as never)
 
-    await handlers.get('pty:kill')!(null, { id: 'local-pty' })
+    await handlers.get('pty:kill')!(mainWindowIpcEvent, { id: 'local-pty' })
     for (const listener of exitListeners) {
       listener({ id: 'local-pty', code: 0 })
     }
@@ -387,7 +400,10 @@ describe('registerPtyHandlers', () => {
     )
 
     const daemonSessionId = 'wt-1@@11111111-1111-1111-1111-111111111111'
-    const pendingKill = handlers.get('pty:kill')!(null, { id: daemonSessionId }) as Promise<void>
+    ptyRendererOwners.claim(daemonSessionId, mainWindow.webContents as never)
+    const pendingKill = handlers.get('pty:kill')!(mainWindowIpcEvent, {
+      id: daemonSessionId
+    }) as Promise<void>
 
     await Promise.resolve()
     expect(awaitLocalPtyStartup).not.toHaveBeenCalled()

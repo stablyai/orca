@@ -271,24 +271,32 @@ describe('registerPtyHandlers', () => {
     exitCb?.({ exitCode: -1 })
     expect(onExitDisposable.dispose).toHaveBeenCalledTimes(1)
   })
-  it('removes the previous orphan-cleanup listener from its original webContents', () => {
+  it('keeps prior renderer lifecycle listeners while moving the control delivery gate', () => {
+    const firstMainFrame = {}
     const firstWindow = {
       isDestroyed: () => false,
       isFocused: () => true,
       isVisible: () => true,
       isMinimized: () => false,
       webContents: {
+        id: 101,
+        mainFrame: firstMainFrame,
+        isDestroyed: () => false,
         on: vi.fn(),
         send: vi.fn(),
         removeListener: vi.fn()
       }
     }
+    const secondMainFrame = {}
     const secondWindow = {
       isDestroyed: () => false,
       isFocused: () => true,
       isVisible: () => true,
       isMinimized: () => false,
       webContents: {
+        id: 102,
+        mainFrame: secondMainFrame,
+        isDestroyed: () => false,
         on: vi.fn(),
         send: vi.fn(),
         removeListener: vi.fn()
@@ -315,19 +323,20 @@ describe('registerPtyHandlers', () => {
     } as never)
     registerPtyHandlers(secondWindow as never)
 
-    // Every first-window load listener was detached from its webContents.
-    for (const [, handler] of firstWindowLoadHandlers) {
-      expect(firstWindow.webContents.removeListener).toHaveBeenCalledWith(
-        'did-finish-load',
-        handler
-      )
-    }
-    // The non-Local provider keeps orphan cleanup off the second window — only the renderer-gate reset listener remains.
+    expect(firstWindow.webContents.removeListener).not.toHaveBeenCalledWith(
+      'did-finish-load',
+      firstWindowLoadHandlers[0]?.[1]
+    )
+    expect(firstWindow.webContents.removeListener).toHaveBeenCalledWith(
+      'did-finish-load',
+      firstWindowLoadHandlers[1]?.[1]
+    )
+    // Every registered renderer retains its own lifecycle load listener; the control also has the delivery-gate listener.
     expect(
       secondWindow.webContents.on.mock.calls.filter(
         ([eventName]) => eventName === 'did-finish-load'
       )
-    ).toHaveLength(1)
+    ).toHaveLength(2)
   })
   // Why (#5787): a recovery reload re-fires did-finish-load; suppress the orphan sweep so live LOCAL PTYs survive until session restore re-adopts them.
   it('does not sweep local PTYs during a recovery reload', async () => {

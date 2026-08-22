@@ -53,6 +53,7 @@ import { ptyRendererOwners } from './pty-renderer-owners'
 /** The mocked webContents each suite asserts sends against. */
 export type PtyIpcTestWebContents = {
   id: number
+  mainFrame: object
   on: Mock
   send: Mock
   removeListener: Mock
@@ -78,6 +79,7 @@ export type PtyIpcSuiteEnvironment = {
 /** Registers the shared beforeEach/afterEach every pty IPC suite file relies on. */
 export function createPtyIpcSuiteEnvironment(): PtyIpcSuiteEnvironment {
   const handlers = new Map<string, (_event: unknown, args: unknown) => unknown>()
+  const mainFrame = {}
   const mainWindow = {
     isDestroyed: () => false,
     isFocused: () => true,
@@ -85,21 +87,25 @@ export function createPtyIpcSuiteEnvironment(): PtyIpcSuiteEnvironment {
     isMinimized: () => false,
     webContents: {
       id: 1,
+      mainFrame,
       on: vi.fn(),
       send: vi.fn(),
       removeListener: vi.fn(),
       isDestroyed: vi.fn(() => false)
     }
   }
-  const mainWindowIpcEvent = { sender: mainWindow.webContents }
+  const mainWindowIpcEvent = { sender: mainWindow.webContents, senderFrame: mainFrame }
+  const foreignMainFrame = {}
   const foreignWindowIpcEvent = {
     sender: {
       id: 2,
+      mainFrame: foreignMainFrame,
       on: vi.fn(),
       send: vi.fn(),
       removeListener: vi.fn(),
       isDestroyed: vi.fn(() => false)
-    }
+    },
+    senderFrame: foreignMainFrame
   }
   const envScope = createPtyIpcProcessEnvScope()
 
@@ -144,9 +150,18 @@ export function createPtyIpcSuiteEnvironment(): PtyIpcSuiteEnvironment {
     getCodexPaneAccountMock.mockReset()
     ensureCodexBackfillRecoveryMock.mockReset()
     ensureCodexBackfillRecoveryMock.mockResolvedValue(undefined)
+    mainWindow.webContents.mainFrame = mainFrame
+    mainWindowIpcEvent.senderFrame = mainFrame
     mainWindow.webContents.on.mockReset()
     mainWindow.webContents.send.mockReset()
     mainWindow.webContents.removeListener.mockReset()
+    foreignWindowIpcEvent.sender.mainFrame = foreignMainFrame
+    foreignWindowIpcEvent.senderFrame = foreignMainFrame
+    foreignWindowIpcEvent.sender.on.mockReset()
+    foreignWindowIpcEvent.sender.send.mockReset()
+    foreignWindowIpcEvent.sender.removeListener.mockReset()
+    foreignWindowIpcEvent.sender.isDestroyed.mockReset()
+    foreignWindowIpcEvent.sender.isDestroyed.mockReturnValue(false)
     // Why: hidden-delivery gate state is module-level (PTY-keyed), so tests must not leak hidden bits across cases.
     _resetHiddenRendererPtyDeliveryGateForTest()
     __resetShellStartupEnvCache()

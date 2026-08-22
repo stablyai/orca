@@ -9,6 +9,7 @@ type RendererState = {
   webContents: WebContents
   generation: number
   dispatcherReady: boolean
+  readyFrame: WebContents['mainFrame'] | null
   active: Set<string>
   visible: Set<string>
   hidden: Set<string>
@@ -32,13 +33,16 @@ export class PtyRendererOwners {
   registerRenderer(webContents: WebContents): void {
     const existing = this.#renderers.get(webContents.id)
     if (existing) {
-      existing.webContents = webContents
+      if (existing.webContents !== webContents) {
+        throw new Error('untrusted_ui_renderer')
+      }
       return
     }
     this.#renderers.set(webContents.id, {
       webContents,
       generation: 0,
       dispatcherReady: false,
+      readyFrame: null,
       active: new Set(),
       visible: new Set(),
       hidden: new Set(),
@@ -107,8 +111,10 @@ export class PtyRendererOwners {
     return target && !isDestroyed(target) ? target : null
   }
 
-  markDispatcherReady(sender: WebContents): void {
-    this.#requireRenderer(sender).dispatcherReady = true
+  markDispatcherReady(sender: WebContents, frame = sender.mainFrame): void {
+    const renderer = this.#requireRenderer(sender)
+    renderer.dispatcherReady = true
+    renderer.readyFrame = frame
     const waiters = this.#readyWaiters.get(sender.id)
     if (!waiters) {
       return
@@ -141,6 +147,11 @@ export class PtyRendererOwners {
 
   isDispatcherReady(sender: WebContents): boolean {
     return this.#requireRenderer(sender).dispatcherReady
+  }
+
+  isDispatcherReadyForFrame(sender: WebContents, frame: WebContents['mainFrame']): boolean {
+    const renderer = this.#requireRenderer(sender)
+    return renderer.dispatcherReady && renderer.readyFrame === frame
   }
 
   isDispatcherReadyFor(ptyId: string): boolean {
@@ -189,6 +200,7 @@ export class PtyRendererOwners {
     )
     renderer.generation = highestOwnerGeneration + 1
     renderer.dispatcherReady = false
+    renderer.readyFrame = null
     renderer.active.clear()
     renderer.visible.clear()
     renderer.hidden.clear()
@@ -206,6 +218,9 @@ export class PtyRendererOwners {
   ): { id: string; fromGeneration: number; toGeneration: number }[] {
     this.#requireRenderer(from)
     const target = this.#requireRenderer(to)
+    if (new Set(ptyIds).size !== ptyIds.length) {
+      throw new Error('pty_renderer_duplicate_handoff')
+    }
     if (!target.dispatcherReady) {
       throw new Error('pty_renderer_not_ready')
     }
@@ -216,7 +231,7 @@ export class PtyRendererOwners {
     }
     return ptyIds.map((id) => {
       const owner = this.#owners.get(id)!
-      const toGeneration = owner.generation + 1
+      const toGeneration = Math.max(owner.generation, target.generation) + 1
       this.#deleteViewFlags(from.id, id)
       this.#owners.set(id, { webContentsId: to.id, generation: toGeneration })
       return { id, fromGeneration: owner.generation, toGeneration }
@@ -224,6 +239,9 @@ export class PtyRendererOwners {
   }
 
   removeRenderer(sender: WebContents): string[] {
+    if (this.#renderers.get(sender.id)?.webContents !== sender) {
+      return []
+    }
     const ownedIds = this.#ownedIds(sender.id)
     for (const id of ownedIds) {
       this.#owners.delete(id)

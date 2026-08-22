@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { onMock, spawnMock, trackMock, classifyErrorMock } from './pty-ipc-mock-registry'
 import { setupPtyIpcSuite } from './pty-ipc-test-harness'
 import { registerPtyHandlers, setLocalPtyProvider } from './pty'
+import { ptyRendererOwners } from './pty-renderer-owners'
 
 vi.mock('electron', () => import('./pty-ipc-mock-registry').then((m) => m.electronModuleMock()))
 vi.mock('fs', () => import('./pty-ipc-mock-registry').then((m) => m.fsModuleMock()))
@@ -169,6 +170,9 @@ describe('registerPtyHandlers', () => {
 
     it('registers exactly one persistent listener regardless of concurrent in-flight requests', async () => {
       const { listener, controller } = setup()
+      for (let index = 1; index <= 12; index++) {
+        ptyRendererOwners.claim(`pty-${index}`, mainWindow.webContents as never)
+      }
       const inflight = [
         controller.serializeBuffer('pty-1'),
         controller.serializeBuffer('pty-2'),
@@ -196,6 +200,8 @@ describe('registerPtyHandlers', () => {
     })
     it('routes each response to the originating request via requestId', async () => {
       const { listener, controller } = setup()
+      ptyRendererOwners.claim('pty-a', mainWindow.webContents as never)
+      ptyRendererOwners.claim('pty-b', mainWindow.webContents as never)
       const a = controller.serializeBuffer('pty-a')
       const b = controller.serializeBuffer('pty-b')
       const ids = getSentRequestIds()
@@ -221,6 +227,7 @@ describe('registerPtyHandlers', () => {
     })
     it('ignores responses with unknown requestId without affecting pending requests', async () => {
       const { listener, controller } = setup()
+      ptyRendererOwners.claim('pty-1', mainWindow.webContents as never)
       const pending = controller.serializeBuffer('pty-1')
       const realRequestId = getSentRequestIds()[0]
 
@@ -244,6 +251,7 @@ describe('registerPtyHandlers', () => {
       vi.useFakeTimers()
       try {
         const { controller } = setup()
+        ptyRendererOwners.claim('pty-stuck', mainWindow.webContents as never)
         const pending = controller.serializeBuffer('pty-stuck')
         vi.advanceTimersByTime(750)
         await expect(pending).resolves.toBeNull()
@@ -253,6 +261,7 @@ describe('registerPtyHandlers', () => {
     })
     it('resolves to null when the response snapshot is malformed', async () => {
       const { listener, controller } = setup()
+      ptyRendererOwners.claim('pty-bad', mainWindow.webContents as never)
       const pending = controller.serializeBuffer('pty-bad')
       const requestId = getSentRequestIds()[0]
       listener(null, { requestId, snapshot: { data: 'ok', cols: 'not-a-number' } })
@@ -274,6 +283,7 @@ describe('registerPtyHandlers', () => {
       const runtime = { setPtyController: vi.fn() }
       handlers.clear()
       registerPtyHandlers(mainWindow as never, runtime as never)
+      ptyRendererOwners.claim('pty-1', mainWindow.webContents as never)
       const controller = runtime.setPtyController.mock.calls[0]?.[0] as {
         serializeProviderBuffer(ptyId: string, opts?: { scrollbackRows?: number }): Promise<unknown>
       }
@@ -310,6 +320,7 @@ describe('registerPtyHandlers', () => {
       }
       handlers.clear()
       registerPtyHandlers(mainWindow as never, runtime as never)
+      ptyRendererOwners.claim('pty-1', mainWindow.webContents as never)
 
       const result = await handlers.get('pty:getMainBufferSnapshot')!(null, {
         id: 'pty-1',
@@ -354,6 +365,7 @@ describe('registerPtyHandlers', () => {
       }
       handlers.clear()
       registerPtyHandlers(mainWindow as never, runtime as never)
+      ptyRendererOwners.claim('daemon-pty', mainWindow.webContents as never)
       provider.emitDataGap('daemon-pty', 512)
 
       const result = await handlers.get('pty:getMainBufferSnapshot')!(null, {
@@ -395,6 +407,7 @@ describe('registerPtyHandlers', () => {
       }
       handlers.clear()
       registerPtyHandlers(mainWindow as never, runtime as never)
+      ptyRendererOwners.claim('daemon-pty', mainWindow.webContents as never)
       provider.emitDataGap('daemon-pty', 512)
 
       const result = await handlers.get('pty:getMainBufferSnapshot')!(null, {

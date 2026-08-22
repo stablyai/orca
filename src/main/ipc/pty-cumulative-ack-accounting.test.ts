@@ -6,6 +6,7 @@ import {
   getPtyRendererDeliveryDebugSnapshot,
   setLocalPtyProvider
 } from './pty'
+import { ptyRendererOwners } from './pty-renderer-owners'
 
 vi.mock('electron', () => import('./pty-ipc-mock-registry').then((m) => m.electronModuleMock()))
 vi.mock('fs', () => import('./pty-ipc-mock-registry').then((m) => m.fsModuleMock()))
@@ -54,6 +55,7 @@ vi.mock('../codex/codex-state-db-backfill-recovery', () =>
 describe('registerPtyHandlers', () => {
   const {
     mainWindow,
+    mainWindowIpcEvent,
     createMockProc,
     getPtyAckDataListener,
     DELIVERY_RESYNC_UNANSWERED_WARNING,
@@ -210,6 +212,7 @@ describe('registerPtyHandlers', () => {
         getProfiles: vi.fn()
       } as never)
       registerPtyHandlers(mainWindow as never)
+      ptyRendererOwners.claim('cumulative-pty', mainWindow.webContents as never)
       const ackData = getPtyAckDataListener()
       mainWindow.webContents.send.mockClear()
 
@@ -217,8 +220,8 @@ describe('registerPtyHandlers', () => {
       vi.advanceTimersByTime(8)
 
       // Why: cumulative totals clamp to what main sent; a replayed total credits SSH/relay flow control 0, not duplicate bytes.
-      ackData(null, { id: 'cumulative-pty', processedChars: 1024 })
-      ackData(null, { id: 'cumulative-pty', processedChars: 1024 })
+      ackData(mainWindowIpcEvent, { id: 'cumulative-pty', processedChars: 1024 })
+      ackData(mainWindowIpcEvent, { id: 'cumulative-pty', processedChars: 1024 })
 
       expect(acknowledgeDataEvent).toHaveBeenNthCalledWith(
         1,

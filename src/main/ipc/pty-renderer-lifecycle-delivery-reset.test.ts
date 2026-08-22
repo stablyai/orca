@@ -4,7 +4,8 @@ import { setupPtyIpcSuite } from './pty-ipc-test-harness'
 import {
   registerPtyHandlers,
   registerPtyRenderer,
-  getPtyRendererDeliveryDebugSnapshot
+  getPtyRendererDeliveryDebugSnapshot,
+  handoffPtyRendererOwnership
 } from './pty'
 import { ptyRendererOwners } from './pty-renderer-owners'
 
@@ -106,6 +107,174 @@ describe('registerPtyHandlers', () => {
     } finally {
       vi.useRealTimers()
     }
+  })
+
+  it('keeps secondary data and exit delivery live after the control window is destroyed', async () => {
+    vi.useFakeTimers()
+    const mockProc = createMockProc()
+    spawnMock.mockReturnValue(mockProc.proc)
+    const originalIsDestroyed = mainWindow.isDestroyed
+
+    try {
+      registerPtyHandlers(mainWindow as never)
+      const result = (await handlers.get('pty:spawn')!(mainWindowIpcEvent, {
+        cols: 80,
+        rows: 24
+      })) as { id: string }
+      const secondary = foreignWindowIpcEvent.sender
+      registerPtyRenderer(secondary as never)
+      ptyRendererOwners.markDispatcherReady(secondary as never)
+      ptyRendererOwners.handoff([result.id], mainWindow.webContents as never, secondary as never)
+      mainWindow.isDestroyed = () => true
+
+      mockProc.emitData('secondary-output')
+      vi.advanceTimersByTime(2)
+      mockProc.emitExit(7)
+
+      expect(secondary.send).toHaveBeenCalledWith('pty:data', {
+        id: result.id,
+        data: 'secondary-output'
+      })
+      expect(secondary.send).toHaveBeenCalledWith(
+        'pty:exit',
+        expect.objectContaining({ id: result.id, code: 7 })
+      )
+    } finally {
+      mainWindow.isDestroyed = originalIsDestroyed
+      vi.useRealTimers()
+    }
+  })
+
+  it('preserves delivery accounting when a group handoff fails validation', async () => {
+    vi.useFakeTimers()
+    const mockProc = createMockProc()
+    spawnMock.mockReturnValue(mockProc.proc)
+
+    try {
+      registerPtyHandlers(mainWindow as never)
+      const result = (await handlers.get('pty:spawn')!(mainWindowIpcEvent, {
+        cols: 80,
+        rows: 24
+      })) as { id: string }
+      const secondary = foreignWindowIpcEvent.sender
+      registerPtyRenderer(secondary as never)
+      ptyRendererOwners.markDispatcherReady(secondary as never)
+      mockProc.emitData('accounted-output')
+      vi.advanceTimersByTime(2)
+      const before = getPtyRendererDeliveryDebugSnapshot()
+
+      expect(() =>
+        handoffPtyRendererOwnership(
+          [result.id, 'not-owned'],
+          mainWindow.webContents as never,
+          secondary as never
+        )
+      ).toThrow('pty_renderer_not_owner')
+      expect(getPtyRendererDeliveryDebugSnapshot()).toMatchObject({
+        rendererInFlightChars: before.rendererInFlightChars,
+        pendingChars: before.pendingChars
+      })
+      expect(ptyRendererOwners.owns(result.id, mainWindow.webContents as never)).toBe(true)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('orphan-sweeps only the reloading secondary renderer PTYs', async () => {
+    const firstProc = createMockProc()
+    const secondProc = createMockProc()
+    Object.assign(secondProc.proc, { pid: 99_998, process: 'zsh' })
+    const firstKill = firstProc.proc.kill
+    const secondKill = secondProc.proc.kill
+    spawnMock.mockReturnValueOnce(firstProc.proc).mockReturnValueOnce(secondProc.proc)
+    registerPtyHandlers(mainWindow as never)
+    const first = (await handlers.get('pty:spawn')!(mainWindowIpcEvent, {
+      cols: 80,
+      rows: 24
+    })) as { id: string }
+    const second = (await handlers.get('pty:spawn')!(mainWindowIpcEvent, {
+      cols: 80,
+      rows: 24
+    })) as { id: string }
+    const secondary = foreignWindowIpcEvent.sender
+    registerPtyRenderer(secondary as never)
+    ptyRendererOwners.markDispatcherReady(secondary as never)
+    ptyRendererOwners.handoff([second.id], mainWindow.webContents as never, secondary as never)
+    const navigate = secondary.on.mock.calls.find(
+      (call: unknown[]) => call[0] === 'did-start-navigation'
+    )![1] as (details: { isMainFrame: boolean; isSameDocument: boolean }) => void
+    const finishLoad = secondary.on.mock.calls.find(
+      (call: unknown[]) => call[0] === 'did-finish-load'
+    )?.[1] as (() => void) | undefined
+
+    expect(finishLoad).toBeTypeOf('function')
+    navigate({ isMainFrame: true, isSameDocument: false })
+    finishLoad!()
+    ptyRendererOwners.markDispatcherReady(secondary as never)
+    navigate({ isMainFrame: true, isSameDocument: false })
+    finishLoad!()
+
+    expect(firstKill).not.toHaveBeenCalled()
+    expect(secondKill).toHaveBeenCalled()
+    expect(ptyRendererOwners.getOwner(first.id)?.webContentsId).toBe(mainWindow.webContents.id)
+  })
+
+  it('installs one lifecycle reset when an existing secondary becomes control', async () => {
+    const mockProc = createMockProc()
+    spawnMock.mockReturnValue(mockProc.proc)
+    registerPtyHandlers(mainWindow as never)
+    const result = (await handlers.get('pty:spawn')!(mainWindowIpcEvent, {
+      cols: 80,
+      rows: 24
+    })) as { id: string }
+    const secondary = foreignWindowIpcEvent.sender
+    registerPtyRenderer(secondary as never)
+    ptyRendererOwners.markDispatcherReady(secondary as never)
+    ptyRendererOwners.handoff([result.id], mainWindow.webContents as never, secondary as never)
+    const promotedWindow = { ...mainWindow, webContents: secondary }
+
+    registerPtyHandlers(promotedWindow as never)
+    const removedNavigationListeners = new Set(
+      secondary.removeListener.mock.calls
+        .filter((call: unknown[]) => call[0] === 'did-start-navigation')
+        .map((call: unknown[]) => call[1])
+    )
+    const navigationListeners = secondary.on.mock.calls.filter(
+      (call: unknown[]) =>
+        call[0] === 'did-start-navigation' && !removedNavigationListeners.has(call[1])
+    )
+    const generationBefore = ptyRendererOwners.getOwner(result.id)!.generation
+    for (const [, listener] of navigationListeners) {
+      ;(listener as (details: { isMainFrame: boolean; isSameDocument: boolean }) => void)({
+        isMainFrame: true,
+        isSameDocument: false
+      })
+    }
+
+    expect(navigationListeners).toHaveLength(1)
+    expect(ptyRendererOwners.getOwner(result.id)!.generation).toBe(generationBefore + 1)
+  })
+
+  it('ignores dispatcher readiness queued by a superseded main frame', async () => {
+    const mockProc = createMockProc()
+    spawnMock.mockReturnValue(mockProc.proc)
+    registerPtyHandlers(mainWindow as never)
+    const result = (await handlers.get('pty:spawn')!(mainWindowIpcEvent, {
+      cols: 80,
+      rows: 24
+    })) as { id: string }
+    const handleRendererLoading = getMainFrameNavigationListener()
+    const handleRendererDispatcherReady = getPtyRendererDispatcherReadyListener()
+
+    handleRendererLoading()
+    handleRendererDispatcherReady({
+      sender: mainWindow.webContents,
+      senderFrame: { generation: 'old' }
+    })
+    expect(ptyRendererOwners.isDispatcherReadyFor(result.id)).toBe(false)
+
+    handleRendererDispatcherReady(mainWindowIpcEvent)
+    expect(ptyRendererOwners.isDispatcherReadyFor(result.id)).toBe(true)
   })
 
   it('reports delivery pressure only for the requesting renderer owner', async () => {
@@ -418,9 +587,14 @@ describe('registerPtyHandlers', () => {
         rendererPtyDispatcherReady: true
       })
 
-      // Handshake while the gate is open proves a missed lifecycle reset; reconcile or survivors stay pinned at the cap.
+      // A handshake from a new current main frame proves a missed lifecycle reset; reconcile or survivors stay pinned at the cap.
       mainWindow.webContents.send.mockClear()
-      handleRendererDispatcherReady()
+      const replacementFrame = {}
+      mainWindow.webContents.mainFrame = replacementFrame
+      handleRendererDispatcherReady({
+        sender: mainWindow.webContents,
+        senderFrame: replacementFrame
+      })
       const reconciled = getPtyRendererDeliveryDebugSnapshot()
       expect(reconciled).toMatchObject({
         rendererInFlightChars: 0,

@@ -59,7 +59,7 @@ export function createPtyIpcListenerAccessors(ctx: {
     return visibleCall[1] as (event: unknown, args: { id: string; visible: boolean }) => void
   }
 
-  function getPtyRendererDispatcherReadyListener(): () => void {
+  function getPtyRendererDispatcherReadyListener(): (event?: unknown) => void {
     const readyCall = onMock.mock.calls.find(
       (call: unknown[]) => call[0] === 'pty:rendererDispatcherReady'
     )
@@ -68,7 +68,7 @@ export function createPtyIpcListenerAccessors(ctx: {
     }
     const listener = readyCall[1] as (event: unknown) => void
     // Why: the production handler sender-guards its destructive reconcile, so tests must present as the main window.
-    return () => listener(mainWindowIpcEvent)
+    return (event = mainWindowIpcEvent) => listener(event)
   }
 
   function getMainWindowWebContentsListener(eventName: string): (...args: unknown[]) => void {
