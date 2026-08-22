@@ -284,23 +284,39 @@ describe('WindowSessionRegistry', () => {
     })
   })
 
-  it('persists the target scrollback reference before the source record drops it', () => {
-    const { manager, store } = makeHarness()
-    const registry = new WindowSessionRegistry(store as never, manager as never)
-    const source = makeSession('tab-1', { scrollbackRef: 'scrollback/ref-1' })
-    registry.set(1, source)
-    registry.set(2, source)
-    registry.set(1, getDefaultWorkspaceSession())
+  it('unions leaf backing for the same terminal layout with control conflicts winning', () => {
+    const control = makeSession('tab-1')
+    const secondary = makeSession('tab-1')
+    control.terminalLayoutsByTabId['tab-1'] = {
+      root: { type: 'leaf', leafId: 'leaf-control' },
+      activeLeafId: 'leaf-control',
+      expandedLeafId: 'leaf-control',
+      ptyIdsByLeafId: { shared: 'pty-control' },
+      buffersByLeafId: { shared: 'buffer-control' },
+      scrollbackRefsByLeafId: { shared: 'ref-control' },
+      titlesByLeafId: { shared: 'title-control' }
+    }
+    secondary.terminalLayoutsByTabId['tab-1'] = {
+      root: { type: 'leaf', leafId: 'leaf-secondary' },
+      activeLeafId: 'leaf-secondary',
+      expandedLeafId: null,
+      ptyIdsByLeafId: { shared: 'pty-secondary', 'leaf-secondary': 'pty-secondary-only' },
+      buffersByLeafId: { shared: 'buffer-secondary', 'leaf-secondary': 'buffer-secondary-only' },
+      scrollbackRefsByLeafId: { shared: 'ref-secondary', 'leaf-secondary': 'ref-secondary-only' },
+      titlesByLeafId: { shared: 'title-secondary', 'leaf-secondary': 'title-secondary-only' }
+    }
 
-    const writes = store.setWorkspaceSession.mock.calls.map(([state]) => state)
-    const targetPrepared = writes.at(-2) as WorkspaceSessionState
-    const sourceRemoved = writes.at(-1) as WorkspaceSessionState
-    expect(
-      Object.values(targetPrepared.terminalLayoutsByTabId['tab-1']?.scrollbackRefsByLeafId ?? {})
-    ).toContain('scrollback/ref-1')
-    expect(
-      Object.values(sourceRemoved.terminalLayoutsByTabId['tab-1']?.scrollbackRefsByLeafId ?? {})
-    ).toContain('scrollback/ref-1')
+    const layout = mergeWindowSessions([control, secondary]).terminalLayoutsByTabId['tab-1']
+
+    expect(layout).toEqual({
+      root: { type: 'leaf', leafId: 'leaf-control' },
+      activeLeafId: 'leaf-control',
+      expandedLeafId: 'leaf-control',
+      ptyIdsByLeafId: { shared: 'pty-control', 'leaf-secondary': 'pty-secondary-only' },
+      buffersByLeafId: { shared: 'buffer-control', 'leaf-secondary': 'buffer-secondary-only' },
+      scrollbackRefsByLeafId: { shared: 'ref-control', 'leaf-secondary': 'ref-secondary-only' },
+      titlesByLeafId: { shared: 'title-control', 'leaf-secondary': 'title-secondary-only' }
+    })
   })
 
   it('patches one window record then writes the merged host session', () => {

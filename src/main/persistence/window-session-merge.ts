@@ -1,5 +1,6 @@
 import { getDefaultWorkspaceSession } from '../../shared/constants'
 import type { TabGroup, TabGroupLayoutNode } from '../../shared/tab-types'
+import type { TerminalLayoutSnapshot } from '../../shared/terminal-tab-types'
 import { normalizeBrowserHistoryEntries } from '../../shared/workspace-session-browser-history'
 import type { WorkspaceSessionState } from '../../shared/workspace-session-state-types'
 import {
@@ -124,6 +125,39 @@ function mergeTabGroupLayouts(
   )
 }
 
+function mergeLeafBackingRecords(
+  preferred: Record<string, string> | undefined,
+  fallback: Record<string, string> | undefined
+): Record<string, string> | undefined {
+  return preferred || fallback ? { ...fallback, ...preferred } : undefined
+}
+
+function mergeTerminalLayouts(
+  states: readonly WorkspaceSessionState[]
+): Record<string, TerminalLayoutSnapshot> {
+  const merged: Record<string, TerminalLayoutSnapshot> = {}
+  for (const state of states) {
+    for (const [tabId, layout] of Object.entries(state.terminalLayoutsByTabId)) {
+      const preferred = merged[tabId]
+      if (!preferred) {
+        merged[tabId] = layout
+        continue
+      }
+      merged[tabId] = {
+        ...preferred,
+        ptyIdsByLeafId: mergeLeafBackingRecords(preferred.ptyIdsByLeafId, layout.ptyIdsByLeafId),
+        buffersByLeafId: mergeLeafBackingRecords(preferred.buffersByLeafId, layout.buffersByLeafId),
+        scrollbackRefsByLeafId: mergeLeafBackingRecords(
+          preferred.scrollbackRefsByLeafId,
+          layout.scrollbackRefsByLeafId
+        ),
+        titlesByLeafId: mergeLeafBackingRecords(preferred.titlesByLeafId, layout.titlesByLeafId)
+      }
+    }
+  }
+  return merged
+}
+
 export function mergeWindowSessions(
   states: readonly WorkspaceSessionState[]
 ): WorkspaceSessionState {
@@ -136,12 +170,7 @@ export function mergeWindowSessions(
     (state) => state.tabsByWorktree,
     (tab) => tab.id
   )
-  merged.terminalLayoutsByTabId = {}
-  for (const state of states) {
-    for (const [tabId, layout] of Object.entries(state.terminalLayoutsByTabId)) {
-      merged.terminalLayoutsByTabId[tabId] ??= layout
-    }
-  }
+  merged.terminalLayoutsByTabId = mergeTerminalLayouts(states)
 
   const openFilesByWorktree = mergeArrayMap(
     states,
