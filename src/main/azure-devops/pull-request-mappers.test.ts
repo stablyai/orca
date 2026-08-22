@@ -18,6 +18,7 @@ describe('Azure DevOps pull request mappers', () => {
     expect(deriveAzureDevOpsStatus([{ state: 'succeeded' }])).toBe('success')
     expect(deriveAzureDevOpsStatus([{ state: 'succeeded' }, { state: 'pending' }])).toBe('pending')
     expect(deriveAzureDevOpsStatus([{ state: 'succeeded' }, { state: 'failed' }])).toBe('failure')
+    expect(deriveAzureDevOpsStatus([{ state: 'succeeded' }, { state: 'unknown' }])).toBe('neutral')
     expect(deriveAzureDevOpsStatus([])).toBe('neutral')
     expect(deriveAzureDevOpsStatuses([{ state: 'canceled' }])).toEqual({
       status: 'failure',

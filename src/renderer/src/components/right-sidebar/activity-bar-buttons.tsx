@@ -42,9 +42,13 @@ function activityItemAriaLabel(
   status?: CheckPresentationStatus | null
 ): string {
   const base = item.shortcut ? `${item.title} (${item.shortcut})` : item.title
-  return status === 'failure'
-    ? `${base} — ${translate('auto.components.right.sidebar.activityBar.error', 'Error')}`
-    : base
+  if (status === 'failure') {
+    return `${base} — ${translate('auto.components.right.sidebar.activityBar.error', 'Error')}`
+  }
+  if (status === 'cancelled') {
+    return `${base} — ${translate('auto.components.right.sidebar.activityBar.cancelled', 'Cancelled')}`
+  }
+  return base
 }
 
 export function TopActivityOverflowMenu({
@@ -82,7 +86,9 @@ export function TopActivityOverflowMenu({
           aria-label={
             hiddenItemStatus === 'failure'
               ? `${moreTabsLabel} — ${translate('auto.components.right.sidebar.activityBar.error', 'Error')}`
-              : moreTabsLabel
+              : hiddenItemStatus === 'cancelled'
+                ? `${moreTabsLabel} — ${translate('auto.components.right.sidebar.activityBar.checksCancelled', 'Checks cancelled')}`
+                : moreTabsLabel
           }
         >
           <MoreHorizontal size={16} />
@@ -100,13 +106,15 @@ export function TopActivityOverflowMenu({
         {items.map((item) => {
           const Icon = item.icon
           const active = item.id === activeTab
+          const itemStatus =
+            item.statusIndicator ?? (item.id === 'checks' ? hiddenChecksStatus : null)
           return (
             <DropdownMenuItem
               key={item.id}
               onSelect={() => onSelect(item.id)}
               className={cn(active && 'bg-accent text-accent-foreground')}
               aria-current={active ? 'page' : undefined}
-              aria-label={activityItemAriaLabel(item, item.statusIndicator)}
+              aria-label={activityItemAriaLabel(item, itemStatus)}
             >
               <Icon size={14} />
               <span>{item.title}</span>

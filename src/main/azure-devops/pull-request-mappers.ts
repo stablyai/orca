@@ -4,6 +4,7 @@ import type {
   PRMergeableState
 } from '../../shared/github/pull-request-types'
 import {
+  classifyCheckOutcome,
   getProviderCheckStatuses,
   summarizeProviderChecks,
   type CheckOutcomeInput,
@@ -106,9 +107,24 @@ export function deriveAzureDevOpsStatus(statuses: readonly RawAzureDevOpsStatus[
 export function deriveAzureDevOpsStatuses(
   statuses: readonly RawAzureDevOpsStatus[]
 ): ProviderCheckStatuses {
-  return getProviderCheckStatuses(
-    summarizeProviderChecks(statuses.map((status) => normalizeAzureDevOpsStatus(status.state)))
+  const normalized = statuses.map((status) => normalizeAzureDevOpsStatus(status.state))
+  const outcomes = normalized.map(classifyCheckOutcome)
+  const sharedStatuses = getProviderCheckStatuses(summarizeProviderChecks(normalized))
+  const status: CheckStatus = outcomes.some(
+    (outcome) => outcome === 'failed' || outcome === 'cancelled'
   )
+    ? 'failure'
+    : outcomes.some((outcome) => outcome === 'pending')
+      ? 'pending'
+      : outcomes.length > 0 && outcomes.every((outcome) => outcome === 'passed')
+        ? 'success'
+        : 'neutral'
+  return {
+    status,
+    ...(sharedStatuses.presentationStatus === 'cancelled'
+      ? { presentationStatus: 'cancelled' as const }
+      : {})
+  }
 }
 
 export function mapAzureDevOpsPullRequest(

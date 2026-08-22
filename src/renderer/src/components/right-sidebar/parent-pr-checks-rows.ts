@@ -25,6 +25,7 @@ import {
 } from './parent-pr-checks-row-types'
 import {
   classifyParentPrChecksRowStatus,
+  getRowCheckDetailNames,
   getRowCheckTone,
   getRowSummary,
   groupForRowStatus
@@ -126,7 +127,7 @@ function buildParentPrChecksRow(
     hasFallbackReview: fallbackDisplay !== null
   })
   const checkDetails = getCheckDetails(args, review, branch)
-  const detailNames = getCheckDetailNames(checkDetails)
+  const detailNames = getRowCheckDetailNames(checkDetails, status)
 
   return {
     id: args.worktree.id,
@@ -219,25 +220,6 @@ function getCheckDetails(
     return []
   }
   return getGitHubChecksEntry({ ...args, repo: args.repo }, review)?.data ?? []
-}
-
-function getCheckDetailNames(checks: readonly PRCheckDetail[]): string[] {
-  const interesting = checks.filter(
-    (check) =>
-      check.conclusion === 'failure' ||
-      check.conclusion === 'timed_out' ||
-      check.conclusion === 'cancelled' ||
-      check.conclusion === 'action_required' ||
-      check.conclusion === 'pending' ||
-      check.conclusion === null ||
-      check.status === 'queued' ||
-      check.status === 'in_progress'
-  )
-  const ordered = [
-    ...interesting.filter((check) => check.conclusion === 'action_required'),
-    ...interesting.filter((check) => check.conclusion !== 'action_required')
-  ]
-  return ordered.slice(0, 2).map((check) => check.name)
 }
 
 function getGitHubChecksEntry(

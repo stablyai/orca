@@ -286,7 +286,19 @@ describe('derivePipelineStatus', () => {
       status: 'neutral',
       presentationStatus: 'cancelled'
     })
+    expect(derivePipelineStatuses('canceling')).toEqual({
+      status: 'neutral',
+      presentationStatus: 'cancelled'
+    })
+    expect(derivePipelineStatuses({ status: 'canceling' })).toEqual({
+      status: 'neutral',
+      presentationStatus: 'cancelled'
+    })
     expect(derivePipelineStatuses([{ status: 'canceled' }])).toEqual({
+      status: 'failure',
+      presentationStatus: 'cancelled'
+    })
+    expect(derivePipelineStatuses([{ status: 'canceling' }])).toEqual({
       status: 'failure',
       presentationStatus: 'cancelled'
     })

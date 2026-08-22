@@ -75,6 +75,27 @@ describe('task page cache selectors', () => {
     expect(reconcileTaskPageItemsAfterLandingRefresh([current], [refreshed])).toEqual([refreshed])
   })
 
+  it('reconciles a failed check count that becomes cancellation-only', () => {
+    const current = {
+      ...workItem('pr-1', 'repo-1'),
+      updatedAt: '2026-08-22T00:00:00.000Z',
+      checksSummary: {
+        state: 'failure' as const,
+        total: 1,
+        passed: 0,
+        failed: 1,
+        pending: 0,
+        neutral: 0
+      }
+    }
+    const refreshed = {
+      ...current,
+      checksSummary: { ...current.checksSummary, cancelled: 1 }
+    }
+
+    expect(reconcileTaskPageItemsAfterLandingRefresh([current], [refreshed])).toEqual([refreshed])
+  })
+
   it('keeps the selected work-item cache slice shallow-equal across unrelated cache writes', () => {
     const repo = { id: 'repo-1', path: '/repo/one' }
     const selectedEntry = entry<GitHubWorkItem[]>([workItem('issue-1', 'repo-1')])

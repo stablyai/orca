@@ -348,7 +348,7 @@ function classifyPipelineStringStatuses(status: string): ProviderCheckStatuses {
   const normalized = status.toLowerCase()
   return {
     status: checkStatus,
-    ...(normalized === 'canceled' || normalized === 'cancelled'
+    ...(normalized === 'canceled' || normalized === 'cancelled' || normalized === 'canceling'
       ? { presentationStatus: 'cancelled' as const }
       : {})
   }

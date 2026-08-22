@@ -19,6 +19,9 @@ describe('Bitbucket pull request mappers', () => {
     expect(deriveBitbucketBuildStatus([{ state: 'SUCCESSFUL' }])).toBe('success')
     expect(deriveBitbucketBuildStatus([{ state: 'INPROGRESS' }])).toBe('pending')
     expect(deriveBitbucketBuildStatus([{ state: 'FAILED' }])).toBe('failure')
+    expect(deriveBitbucketBuildStatus([{ state: 'SUCCESSFUL' }, { state: 'UNKNOWN' }])).toBe(
+      'neutral'
+    )
     expect(deriveBitbucketBuildStatuses([{ state: 'STOPPED' }])).toEqual({
       status: 'failure',
       presentationStatus: 'cancelled'

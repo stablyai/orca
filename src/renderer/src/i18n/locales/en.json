@@ -13018,7 +13018,9 @@
             "loadFailed": "The plugin panel could not be loaded."
           },
           "activityBar": {
-            "error": "Error"
+            "error": "Error",
+            "cancelled": "Cancelled",
+            "checksCancelled": "Checks cancelled"
           },
           "AiVaultSessionLimitMenu": {
             "historyDepth": "History depth: {{value0}}",

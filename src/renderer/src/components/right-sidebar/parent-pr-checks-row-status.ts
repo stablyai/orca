@@ -1,4 +1,5 @@
 import type { CheckPresentationStatus } from '../../../../shared/github/pull-request-types'
+import type { PRCheckDetail } from '../../../../shared/github/check-types'
 import type { HostedReviewInfo } from '../../../../shared/hosted-review'
 import { translate } from '@/i18n/i18n'
 import type {
@@ -236,4 +237,31 @@ export function getRowSummary(
         'Unavailable for this worktree'
       )
   }
+}
+
+export function getRowCheckDetailNames(
+  checks: readonly PRCheckDetail[],
+  status: ParentPrChecksRowStatus
+): string[] {
+  const interesting = checks.filter((check) => {
+    if (status === 'failing') {
+      return ['failure', 'timed_out', 'action_required'].includes(check.conclusion ?? '')
+    }
+    if (status === 'cancelled') {
+      return check.conclusion === 'cancelled'
+    }
+    if (status === 'pending') {
+      return (
+        check.conclusion === 'pending' ||
+        check.conclusion === null ||
+        ['queued', 'in_progress'].includes(check.status)
+      )
+    }
+    return false
+  })
+  const ordered = [
+    ...interesting.filter((check) => check.conclusion === 'action_required'),
+    ...interesting.filter((check) => check.conclusion !== 'action_required')
+  ]
+  return ordered.slice(0, 2).map((check) => check.name)
 }

@@ -3,7 +3,12 @@
 import { act } from 'react'
 import { createRoot } from 'react-dom/client'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { TopActivityOverflowMenu, type ActivityBarItem } from './activity-bar-buttons'
+import { TooltipProvider } from '@/components/ui/tooltip'
+import {
+  ActivityBarButton,
+  TopActivityOverflowMenu,
+  type ActivityBarItem
+} from './activity-bar-buttons'
 
 vi.mock('@/i18n/i18n', () => ({
   translate: (_key: string, fallback: string) => fallback
@@ -45,7 +50,7 @@ describe('TopActivityOverflowMenu', () => {
     )
   })
 
-  it('does not announce cancellation as an error', async () => {
+  it('announces hidden cancelled checks from the More button', async () => {
     const container = document.createElement('div')
     document.body.appendChild(container)
     const root = createRoot(container)
@@ -54,16 +59,55 @@ describe('TopActivityOverflowMenu', () => {
       id: 'checks',
       icon: () => <span />,
       title: 'Checks',
-      shortcut: '',
-      statusIndicator: 'cancelled'
+      shortcut: ''
     }
 
     await act(async () => {
       root.render(
-        <TopActivityOverflowMenu items={[item]} activeTab="explorer" onSelect={vi.fn()} />
+        <TopActivityOverflowMenu
+          items={[item]}
+          activeTab="explorer"
+          onSelect={vi.fn()}
+          checksStatus="cancelled"
+        />
       )
     })
 
-    expect(container.querySelector('button')?.getAttribute('aria-label')).toBe('More sidebar tabs')
+    expect(container.querySelector('button')?.getAttribute('aria-label')).toBe(
+      'More sidebar tabs — Checks cancelled'
+    )
+  })
+})
+
+describe('ActivityBarButton', () => {
+  it('announces cancelled checks on the visible button', async () => {
+    const container = document.createElement('div')
+    document.body.appendChild(container)
+    const root = createRoot(container)
+    roots.push(root)
+    const item: ActivityBarItem = {
+      id: 'checks',
+      icon: () => <span />,
+      title: 'Checks',
+      shortcut: '⌘8'
+    }
+
+    await act(async () => {
+      root.render(
+        <TooltipProvider>
+          <ActivityBarButton
+            item={item}
+            active={false}
+            onClick={vi.fn()}
+            layout="top"
+            statusIndicator="cancelled"
+          />
+        </TooltipProvider>
+      )
+    })
+
+    expect(container.querySelector('button')?.getAttribute('aria-label')).toBe(
+      'Checks (⌘8) — Cancelled'
+    )
   })
 })
