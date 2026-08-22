@@ -391,6 +391,37 @@ Wait for `tui-idle` before dispatching. Always pass `--timeout-ms`; real coding 
 - Coordinators must account for every settled worker terminal before waiting again or ending the turn: immediately reuse the exact worker for a new Dispatch, explicitly retain it at the user's request with `worker-retain`, or run `worker-release`. Do not leave a completed worker live merely to inspect output; released workers remain readable through `worker-read`.
 - Coordinators should use `task-list --ready` as external memory, dispatch parallel waves, and avoid dependency chains deeper than 3-4 steps.
 
+## Fleet Echo
+
+`check`, `send`, `reply`, `inbox`, `task-create`, `task-list`, `task-update`, `dispatch`, and `dispatch-show` return an optional `fleet` block: a live snapshot of active dispatches (`pending`/`dispatched` only) on the current Run, up to 12 lanes, with `truncated: true` when more exist. `ask` never returns it (it blocks until answered, so a snapshot at return time would already be stale) and neither does `reset` (it tears the Run down). Under `--json` the block is `result.fleet`; in text mode it prints as a trailing block. Suppress it with `--no-fleet`.
+
+Each lane:
+
+```text
+fleet <runId>: <n> lanes, none needing attention, quietest <quietMs>
+```
+
+and, as soon as any lane needs attention, the full table instead — every lane, not just the degraded one:
+
+```text
+<handle>  <taskId>  <dispatchId>  <quietMs>  hb:<heartbeatAge>  <delivery>[:<deliveryEvidence>][ (<processState>)]
+```
+
+- `delivery: not_accepted` is the signal that matters: the prompt was handed to the terminal but nothing indicates it started a turn. Text mode renders this as `NOT_ACCEPTED`, deliberately loud. Treat it as "look now", not as "re-dispatch now", and **confirm with `terminal read` before re-dispatching** — a re-dispatch on a false positive duplicates work that is already running.
+- `deliveryEvidence` says which observation the verdict was read from, because the two are not equally strong. Text mode appends it to the verdict (`NOT_ACCEPTED:output`, `accepted:stage`).
+  - `worker_stage` — read from the worker-dispatch row a `worker-start` writes. A `not_accepted` here is authoritative: the start never got as far as handing the prompt over. An `accepted` here is weaker than it looks: `stage='input_accepted'` is written once the prompt write returns, so it means the runtime wrote the prompt, **not** that the agent began a turn. A composer that swallowed the submit still reports `accepted:stage` (#14525).
+  - `terminal_output` — no worker row exists, because `dispatch --inject` deliberately leaves the lane `unsupervised`. The verdict is inferred from the terminal having produced no output since `dispatched_at`. A worker that thinks for a while before printing anything reads as `NOT_ACCEPTED:output` while perfectly healthy.
+  - absent — nothing was available to read, and `delivery` is `unknown`.
+- Neither basis observes the agent itself. Both answer "did the sender believe it sent" or "did the pane make a noise"; a turn-start observation would answer the actual question for every lane shape, and does not exist on this path yet.
+- `processState` is `dead` or `unknown` — never `live` on this build. A connected PTY doesn't prove the agent inside it is alive, so the runtime won't claim liveness it hasn't verified. `unknown` is not an error.
+- Federated (remote) lanes report `unknown` for `processState` only — liveness facts are host-local, and only the runtime that owns the PTY has them. `delivery` still resolves normally: federated worker-start writes `stage='input_accepted'` to the local worker-dispatch row just like a local start, so these lanes report `accepted` once the remote worker is ready.
+- `check --wait` returns `fleet` on timeout too, so a timeout tells you why nobody spoke, not just that nobody did.
+- **The block answers "which lane should I look at", not "is my fleet healthy right now".** It rides on responses, so you only see it when you ask. A coordinator parked in `check --wait` learns nothing until that call returns, which can be its whole timeout. This is a cheap read surface, not an alerting mechanism; do not build a supervision strategy that assumes the block will interrupt you.
+- Lanes are ordered by what needs attention first — a `not_accepted` read from the worker row, then one inferred from silence, then a dead process, then the longest silence — so the 12-lane cap truncates the healthy tail rather than a broken lane created late. Ranking sees a wider window than it reports; past that window it falls back to oldest-first, and `truncated: true` says only that more exist, not how many.
+- Under `--json` the block is always the full lane list; only text mode collapses a healthy fleet to one line.
+- `heartbeatAgeMs` (`hb:` in text mode) is how long ago the lane's last accepted heartbeat landed; `hb:—` means it has never sent one, which is normal for a lane that has not started work or is parked inside `ask`/`check --wait`. Read it as freshness, not as a verdict: a worker mid-way through a long tool call sends no heartbeat and is perfectly healthy.
+- **Heartbeats no longer wake you.** A valid `heartbeat` is recorded as lane state and kept out of the idle push, so it never starts a coordinator turn to say nothing changed. It stays unread, so an explicit `orca orchestration check` still lists it and `check --wait --types heartbeat` still resolves on one. A heartbeat the runtime *rejected* still pushes — that one is a report that a lane's lifecycle claim was refused, not a liveness ping. Every other type — `worker_done`, `escalation`, `question`, `decision_gate` — pushes exactly as before.
+
 ## Example
 
 ```bash

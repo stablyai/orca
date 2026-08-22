@@ -167,6 +167,24 @@ export function getLatestDispatchForTerminal(
     .get(handle) as DispatchContextRow | undefined
 }
 
+// Why: the fleet echo runs on every orchestration command, so this stays one indexed join and never scans settled rows.
+export function listActiveDispatchesForRun(
+  this: OrchestrationDb,
+  runId: string,
+  limit: number
+): DispatchContextRow[] {
+  return this.db
+    .prepare(
+      // Why: dispatch_contexts.run_id is denormalized from the task, and nothing enforces the two agree — demand both match the caller's Run so a divergent row can never leak another Run's lane.
+      `SELECT dc.* FROM dispatch_contexts dc
+       JOIN tasks t ON t.id = dc.task_id
+       WHERE dc.run_id = ? AND t.run_id = dc.run_id AND dc.status IN ('pending', 'dispatched')
+       ORDER BY dc.rowid ASC
+       LIMIT ?`
+    )
+    .all(runId, limit) as DispatchContextRow[]
+}
+
 export type DispatchLookupMethods = {
   getActiveDispatchForTerminal: typeof getActiveDispatchForTerminal
   hasAnyDispatchContexts: typeof hasAnyDispatchContexts
@@ -175,6 +193,7 @@ export type DispatchLookupMethods = {
   isDispatchMessageSender: typeof isDispatchMessageSender
   findActiveDispatchForAssignee: typeof findActiveDispatchForAssignee
   getLatestDispatchForTerminal: typeof getLatestDispatchForTerminal
+  listActiveDispatchesForRun: typeof listActiveDispatchesForRun
 }
 
 export function attachDispatchLookup(ctor: { prototype: object }): void {
@@ -185,6 +204,7 @@ export function attachDispatchLookup(ctor: { prototype: object }): void {
     getActiveDispatchMailboxOwners,
     isDispatchMessageSender,
     findActiveDispatchForAssignee,
-    getLatestDispatchForTerminal
+    getLatestDispatchForTerminal,
+    listActiveDispatchesForRun
   })
 }

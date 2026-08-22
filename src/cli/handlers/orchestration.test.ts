@@ -465,12 +465,13 @@ describe('orchestration dispatch coordinator handle', () => {
     expect(callMock).toHaveBeenNthCalledWith(2, 'terminal.resolvePane', {
       paneKey: 'tab_coord:leaf_coord'
     })
-    expect(callMock).toHaveBeenNthCalledWith(3, 'orchestration.dispatchShow', {
-      task: 'task_1',
-      preamble: true,
-      from: 'term_live_coord',
-      devMode: false
-    })
+    // Why: this case is about the remint, so it pins the reminted handle rather than the whole
+    // param object — orchestration-fleet-echo-cli.test.ts owns what dispatch-show sends.
+    expect(callMock).toHaveBeenNthCalledWith(
+      3,
+      'orchestration.dispatchShow',
+      expect.objectContaining({ from: 'term_live_coord' })
+    )
   })
 
   it('retires the legacy coordinator command without runtime effects', async () => {

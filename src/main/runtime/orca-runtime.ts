@@ -17328,6 +17328,20 @@ export class OrcaRuntimeService {
     }
   }
 
+  // Why: fleet echo needs a handful of named lanes' terminal state, not a full listing per lane.
+  async listTerminalSummariesForHandles(
+    handles: readonly string[]
+  ): Promise<RuntimeTerminalSummary[]> {
+    if (handles.length === 0) {
+      return []
+    }
+    const { terminals } = await this.listTerminals(undefined, handles.length, {
+      handles,
+      includeVisualLayouts: false
+    })
+    return terminals
+  }
+
   async inspectTerminalProcessIncarnationLiveness(
     processIncarnation: string,
     serializedHostScope: string | null

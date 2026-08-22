@@ -716,6 +716,52 @@ describe('orchestration RPC methods', () => {
     })
   })
 
+  describe('orchestration.check fleet echo', () => {
+    function setupRunWithActiveDispatch() {
+      setup()
+      vi.spyOn(runtime, 'listTerminalSummariesForHandles').mockResolvedValue([])
+      // Why: createTask defaults an omitted runId to the legacy Run, which the bound-Run query would then exclude — the lane assertion has to exercise the caller's own Run.
+      const task = db.createTask({ runId: activeRunId as string, spec: 'fleet echo work' })
+      const dispatch = db.createDispatchContext(task.id, 'term_worker')
+      return { runtime, run: { id: activeRunId as string }, dispatchId: dispatch.id }
+    }
+
+    it('returns a lane for each active dispatch in the bound run', async () => {
+      const { run, dispatchId } = setupRunWithActiveDispatch()
+
+      const result = (await call('orchestration.check', {
+        terminal: 'term_coord'
+      })) as { fleet?: { runId: string; lanes: { dispatchId: string }[] } }
+
+      expect(result.fleet?.runId).toBe(run.id)
+      expect(result.fleet?.lanes.map((lane) => lane.dispatchId)).toContain(dispatchId)
+    })
+
+    it('omits the block when fleet is false', async () => {
+      setupRunWithActiveDispatch()
+
+      const result = (await call('orchestration.check', {
+        terminal: 'term_coord',
+        fleet: false
+      })) as { fleet?: unknown }
+
+      expect(result.fleet).toBeUndefined()
+    })
+
+    it('returns the block on a wait timeout', async () => {
+      const { run } = setupRunWithActiveDispatch()
+      vi.spyOn(runtime, 'waitForMessage').mockResolvedValueOnce('timed_out')
+
+      const result = (await call('orchestration.check', {
+        terminal: 'term_coord',
+        wait: true,
+        timeoutMs: 1
+      })) as { fleet?: { runId: string } }
+
+      expect(result.fleet?.runId).toBe(run.id)
+    })
+  })
+
   describe('orchestration.inbox', () => {
     it('returns all messages', async () => {
       setup()

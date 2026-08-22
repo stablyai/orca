@@ -10,9 +10,10 @@ describe('orchestration RPC methods', () => {
   let db: OrchestrationDb
   let runtime: OrcaRuntimeService
   let ctx: RpcContext
+  let activeRunId: string | undefined
 
   function setup(withBoundRun = true): void {
-    ;({ db, runtime, ctx } = h.setup(withBoundRun))
+    ;({ db, runtime, ctx, activeRunId } = h.setup(withBoundRun))
   }
 
   afterEach(() => {
@@ -506,6 +507,114 @@ describe('orchestration RPC methods', () => {
       await expect(
         call('orchestration.dispatchShow', { task: 'task_fake', preamble: true })
       ).rejects.toThrow('Task not found')
+    })
+  })
+
+  describe('fleet echo', () => {
+    function setupRunWithActiveDispatch() {
+      setup()
+      vi.spyOn(runtime, 'listTerminalSummariesForHandles').mockResolvedValue([])
+      // Why: createTask defaults an omitted runId to the legacy Run, which the bound-Run query then
+      // excludes — the lane assertions have to exercise the caller's own Run to mean anything.
+      const task = db.createTask({ runId: activeRunId as string, spec: 'fleet echo work' })
+      const dispatch = db.createDispatchContext(task.id, 'term_worker')
+      return { run: { id: activeRunId as string }, task, dispatch }
+    }
+
+    it.each([
+      ['orchestration.taskList', {}],
+      ['orchestration.inbox', { callerTerminalHandle: 'term_coord' }]
+    ])('%s carries the fleet block', async (method, extra) => {
+      const { run } = setupRunWithActiveDispatch()
+
+      const result = (await call(method, extra)) as { fleet?: { runId: string } }
+
+      expect(result.fleet?.runId).toBe(run.id)
+    })
+
+    it('orchestration.dispatchShow carries the fleet block when the caller owns the task Run', async () => {
+      const { run, task } = setupRunWithActiveDispatch()
+
+      const result = (await call('orchestration.dispatchShow', {
+        task: task.id,
+        callerTerminalHandle: 'term_coord'
+      })) as { fleet?: { runId: string } }
+
+      expect(result.fleet?.runId).toBe(run.id)
+    })
+
+    it('orchestration.dispatchShow omits the fleet block for a task in another Run', async () => {
+      // Why: dispatchShow's Run comes from the *task*, not the caller — without this check,
+      // any caller naming a --task from another Run would receive that Run's lane roster.
+      setup()
+      vi.spyOn(runtime, 'listTerminalSummariesForHandles').mockResolvedValue([])
+      const otherRun = db.createRun({
+        objective: 'Other Run',
+        coordinatorHandle: 'term_other_coord',
+        coordinatorPaneKey: 'tab_other:leaf_other'
+      })
+      const task = db.createTask({ spec: 'belongs to another run', runId: otherRun.id })
+      db.createDispatchContext(task.id, 'term_worker')
+
+      const result = (await call('orchestration.dispatchShow', {
+        task: task.id,
+        callerTerminalHandle: 'term_coord'
+      })) as { fleet?: { runId: string } }
+
+      expect(result.fleet).toBeUndefined()
+    })
+
+    it('orchestration.dispatchShow omits the fleet block when no caller handle is given', async () => {
+      const { task } = setupRunWithActiveDispatch()
+
+      const result = (await call('orchestration.dispatchShow', {
+        task: task.id
+      })) as { fleet?: { runId: string } }
+
+      expect(result.fleet).toBeUndefined()
+    })
+
+    it('orchestration.taskCreate carries the fleet block', async () => {
+      const { run } = setupRunWithActiveDispatch()
+
+      const result = (await call('orchestration.taskCreate', {
+        spec: 'more work'
+      })) as { fleet?: { runId: string } }
+
+      expect(result.fleet?.runId).toBe(run.id)
+    })
+
+    it('orchestration.taskUpdate carries the fleet block', async () => {
+      const { run, task } = setupRunWithActiveDispatch()
+
+      const result = (await call('orchestration.taskUpdate', {
+        id: task.id,
+        status: 'completed'
+      })) as { fleet?: { runId: string } }
+
+      expect(result.fleet?.runId).toBe(run.id)
+    })
+
+    it('orchestration.dispatch carries the fleet block', async () => {
+      const { run } = setupRunWithActiveDispatch()
+      const other = db.createTask({ spec: 'second task' })
+
+      const result = (await call('orchestration.dispatch', {
+        task: other.id,
+        to: 'term_worker2'
+      })) as { fleet?: { runId: string } }
+
+      expect(result.fleet?.runId).toBe(run.id)
+    })
+
+    it('omits the block when fleet is false', async () => {
+      setupRunWithActiveDispatch()
+
+      const result = (await call('orchestration.taskList', {
+        fleet: false
+      })) as { fleet?: unknown }
+
+      expect(result.fleet).toBeUndefined()
     })
   })
 })

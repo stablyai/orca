@@ -91,7 +91,11 @@ export function getUndeliveredUnreadMessages(
   this: OrchestrationDb,
   toHandle: string,
   types?: MessageType[],
-  options?: { excludeTypes?: readonly string[]; limit?: number }
+  options?: {
+    excludeTypes?: readonly string[]
+    excludeSilentHeartbeats?: boolean
+    limit?: number
+  }
 ): MessageRow[] {
   const conditions = [
     'to_handle = ?',
@@ -107,6 +111,18 @@ export function getUndeliveredUnreadMessages(
   if (options?.excludeTypes?.length) {
     conditions.push(`type NOT IN (${options.excludeTypes.map(() => '?').join(',')})`)
     params.push(...options.excludeTypes)
+  }
+  if (options?.excludeSilentHeartbeats) {
+    // Why: this has to narrow the read, not the result. A valid heartbeat is never delivered and
+    // stays unread, so heartbeats accumulate at the head of `sequence` and a caller filtering after
+    // LIMIT would eventually get a page that is entirely heartbeats — dropping them all and pushing
+    // nothing while a worker_done waits behind them (#14910).
+    // A rejected heartbeat is an event, not a liveness ping, and still delivers. instr rather than
+    // LIKE because the marker key contains an underscore, which LIKE reads as a wildcard; the key is
+    // written verbatim by addLifecycleRejectionMarker, so this cannot produce a false negative.
+    conditions.push(
+      `NOT (type = 'heartbeat' AND instr(COALESCE(payload, ''), '_orcaLifecycleRejection') = 0)`
+    )
   }
   const limitSql = options?.limit === undefined ? '' : ' LIMIT ?'
   if (options?.limit !== undefined) {
