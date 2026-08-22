@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { quoteShellToken } from '../shared/ephemeral-vm-recipe-process'
 import { residualResourceRecoveryLines } from './orchestration-mutation-recovery'
 
 describe('residualResourceRecoveryLines', () => {
@@ -12,10 +13,14 @@ describe('residualResourceRecoveryLines', () => {
 
     expect(lines).toHaveLength(2)
     expect(lines[0]).toBe(
-      'If terminal term_worker is still residual after the outcome is settled: orca terminal close --terminal term_worker --json.'
+      `If terminal term_worker is still residual after the outcome is settled: orca terminal close --terminal ${quoteShellToken(
+        'term_worker'
+      )} --json.`
     )
     expect(lines[1]).toBe(
-      'If worktree repo::child is still residual after the outcome is settled: orca worktree rm --worktree id:repo::child --force --json (verify nothing valuable was written first).'
+      `If worktree repo::child is still residual after the outcome is settled: orca worktree rm --worktree ${quoteShellToken(
+        'id:repo::child'
+      )} --force --json (verify nothing valuable was written first).`
     )
   })
 
@@ -33,20 +38,21 @@ describe('residualResourceRecoveryLines', () => {
   it('quotes ids shell-safely so copied commands survive spaces and metacharacters', () => {
     const lines = residualResourceRecoveryLines([
       { kind: 'worktree', id: 'repo::D:/workspaces/my work/child; rm -rf /' },
-      { kind: 'terminal', id: "term_ev'il" }
+      { kind: 'terminal', id: "term_ev" + "'" + "il" }
     ])
 
-    // The displayed name stays raw; the pasted command quotes the id (posix form when
-    // not on win32 — the win32 branch double-quotes, also covered by quoteShellToken's
-    // own tests).
+    // The displayed name stays raw; the pasted command quotes the id (posix
+    // single-quoting off win32, cmd.exe double-quoting on it).
     if (process.platform !== 'win32') {
       expect(lines[0]).toContain(
-        `orca worktree rm --worktree 'id:repo::D:/workspaces/my work/child; rm -rf /' --force --json`
+        "orca worktree rm --worktree " + "'" + "id:repo::D:/workspaces/my work/child; rm -rf /" + "'" + " --force --json"
       )
-      expect(lines[1]).toContain(`orca terminal close --terminal 'term_ev'''il' --json`)
+      expect(lines[1]).toContain(
+        "orca terminal close --terminal " + "'" + "term_ev" + "'\\''" + "il" + "'" + " --json"
+      )
     } else {
       expect(lines[0]).toContain('--worktree "id:repo::D:/workspaces/my work/child; rm -rf /"')
-      expect(lines[1]).toContain('--terminal "term_ev'il"')
+      expect(lines[1]).toContain('--terminal "term_ev' + "'" + 'il"')
     }
   })
 
