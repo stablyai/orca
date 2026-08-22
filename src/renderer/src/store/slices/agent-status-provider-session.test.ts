@@ -69,6 +69,43 @@ describe('recordAgentProviderSession', () => {
     )
   })
 
+  it('does not recreate sleeping identity from a late done after shell foreground', () => {
+    const store = createTestStore()
+    const paneKey = 'tab-1:leaf-1'
+    const providerSession = { key: 'session_id' as const, id: 'claude-session-1' }
+    store.setState({
+      tabsByWorktree: {
+        'wt-1': [makeTab({ id: 'tab-1', worktreeId: 'wt-1' })]
+      }
+    } as Partial<AppState>)
+
+    store
+      .getState()
+      .setAgentStatus(
+        paneKey,
+        { state: 'working', prompt: '', agentType: 'claude' },
+        'Claude',
+        { updatedAt: 10, stateStartedAt: 10 },
+        { tabId: 'tab-1', worktreeId: 'wt-1' },
+        { providerSession }
+      )
+    store.getState().setPaneForegroundAgent(paneKey, { agent: null, shellForeground: true })
+    store.getState().clearSleepingAgentSession(paneKey)
+    expect(store.getState().sleepingAgentSessionsByPaneKey[paneKey]).toBeUndefined()
+    store
+      .getState()
+      .setAgentStatus(
+        paneKey,
+        { state: 'done', prompt: '', agentType: 'claude' },
+        'Claude',
+        { updatedAt: 20, stateStartedAt: 20 },
+        { tabId: 'tab-1', worktreeId: 'wt-1' },
+        { providerSession }
+      )
+
+    expect(store.getState().sleepingAgentSessionsByPaneKey[paneKey]).toBeUndefined()
+  })
+
   // Why: `done` is the resting state, and both OSC 9999 repaints and reconnect snapshot
   // replays re-deliver a metadata-less `done` onto an already-done row. Retaining only the
   // first one still blanked the chat the moment a second landed (#10630).

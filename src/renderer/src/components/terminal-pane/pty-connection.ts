@@ -1271,6 +1271,29 @@ export function connectPanePty(
     const [paneKey, record] = selectedLegacyMatch
     return { paneKey, record }
   }
+  const getShellOwnedSleepingRecordForPane = (
+    state: ReturnType<typeof useAppStore.getState>
+  ): { paneKey: string; record: SleepingAgentSessionRecord } | null => {
+    const matchedRecord = getSleepingRecordForPane(state)
+    if (!matchedRecord || matchedRecord.paneKey === cacheKey) {
+      return matchedRecord
+    }
+    const matchedClaimKey = getProviderSessionClaimKey(matchedRecord.record)
+    const hasConflictingLegacySession = Object.entries(state.sleepingAgentSessionsByPaneKey).some(
+      ([paneKey, record]) => {
+        const legacy = parseLegacyNumericPaneKey(paneKey)
+        return (
+          legacy?.tabId === deps.tabId &&
+          record.worktreeId === deps.worktreeId &&
+          (!record.tabId || record.tabId === deps.tabId) &&
+          getProviderSessionClaimKey(record) !== matchedClaimKey
+        )
+      }
+    )
+    // Why: renderer-local numeric pane IDs can be reused, so shell cleanup
+    // requires every same-tab legacy row to identify one provider session.
+    return hasConflictingLegacySession ? null : matchedRecord
+  }
   const isLegacyWorkerAutomaticResumeBlocked = (): boolean =>
     getSleepingRecordForPane(useAppStore.getState())?.record.automaticResumeBlockedBy ===
     'legacy-orchestration-worker'
@@ -1292,6 +1315,25 @@ export function connectPanePty(
       ) {
         // Why: legacy pane aliases can leave multiple sleeping rows for one
         // provider session; once this pane resumes it, every alias is stale.
+        state.clearSleepingAgentSession(paneKey)
+      }
+    }
+  }
+  const clearShellOwnedSleepingRecord = (
+    state: ReturnType<typeof useAppStore.getState>,
+    consumed: { paneKey: string; record: SleepingAgentSessionRecord }
+  ): void => {
+    state.clearSleepingAgentSession(consumed.paneKey)
+    const consumedClaimKey = getProviderSessionClaimKey(consumed.record)
+    for (const [paneKey, record] of Object.entries(state.sleepingAgentSessionsByPaneKey)) {
+      const legacy = parseLegacyNumericPaneKey(paneKey)
+      if (
+        paneKey !== consumed.paneKey &&
+        legacy?.tabId === deps.tabId &&
+        (!record.tabId || record.tabId === deps.tabId) &&
+        getProviderSessionClaimKey(record) === consumedClaimKey
+      ) {
+        // Why: shell confirmation owns this tab, not another tab with the same provider metadata.
         state.clearSleepingAgentSession(paneKey)
       }
     }
@@ -2086,6 +2128,7 @@ export function connectPanePty(
     return (
       Boolean(state.paneForegroundAgentByPaneKey[cacheKey]?.agent) ||
       paneHasLiveHookAgentIcon(state) ||
+      Boolean(getShellOwnedSleepingRecordForPane(state)?.record.agent) ||
       isTuiAgent(registeredLaunchAgent)
     )
   }
@@ -2149,6 +2192,11 @@ export function connectPanePty(
     publish: (entry) => useAppStore.getState().setPaneForegroundAgent(cacheKey, entry),
     hasKnownAgentIdentity: paneHasKnownAgentIdentity,
     onConfirmedShellForeground: (reason) => {
+      const state = useAppStore.getState()
+      const sleepingRecord = getShellOwnedSleepingRecordForPane(state)
+      if (sleepingRecord) {
+        clearShellOwnedSleepingRecord(state, sleepingRecord)
+      }
       clearStaleAgentTabTitleOnConfirmedShell()
       // Why: a hard-killed agent leaves mouse/focus/kitty modes armed, and the
       // surviving shell then receives pointer moves as typed SGR reports; the
