@@ -96,57 +96,61 @@ describe('agent process recognition', () => {
   })
 
   it('does not recognize IBM Bob one-shot commands as interactive agents', () => {
+    // Why: Bob Shell 2.x runs `-p/--prompt` and `run` headless; `mcp`, `--list-tasks`
+    // and the info flags print and exit.
     expect(recognizeAgentProcessFromCommandLine('bob -p "summarize this diff"')).toBeNull()
     expect(recognizeAgentProcessFromCommandLine('bob -psummarize')).toBeNull()
     expect(recognizeAgentProcessFromCommandLine('bob --prompt "review this"')).toBeNull()
     expect(recognizeAgentProcessFromCommandLine('bob --prompt=review')).toBeNull()
-    expect(recognizeAgentProcessFromCommandLine('bob "review this"')).toBeNull()
-    expect(recognizeAgentProcessFromCommandLine('bob --model granite "review this"')).toBeNull()
-    expect(recognizeAgentProcessFromCommandLine('bob --prompt-interactive "review this"')).toEqual({
-      agent: 'bob',
-      processName: 'bob'
-    })
-    expect(recognizeAgentProcessFromCommandLine('bob -i "review this"')).toEqual({
-      agent: 'bob',
-      processName: 'bob'
-    })
-    expect(recognizeAgentProcessFromCommandLine('bob --resume latest')).toEqual({
-      agent: 'bob',
-      processName: 'bob'
-    })
-  })
-
-  it('does not read IBM Bob option values as positional prompts', () => {
-    // Why: --auth-method and --extensions take values but are hidden from `bob --help`.
-    expect(recognizeAgentProcessFromCommandLine('bob --auth-method api-key')).toEqual({
-      agent: 'bob',
-      processName: 'bob'
-    })
-    expect(recognizeAgentProcessFromCommandLine('bob -e review-tools')).toEqual({
-      agent: 'bob',
-      processName: 'bob'
-    })
-    expect(
-      recognizeAgentProcessFromCommandLine('bob --auth-method=api-key "review this"')
-    ).toBeNull()
-  })
-
-  it('keeps the IBM Bob yolo launch line recognized as an interactive agent', () => {
-    // Why: yolo mode prefixes --yolo before the prompt flag Orca appends.
-    expect(
-      recognizeAgentProcessFromCommandLine('bob --yolo --prompt-interactive "fix it"')
-    ).toEqual({ agent: 'bob', processName: 'bob' })
-  })
-
-  it('treats IBM Bob management subcommands and post-terminator prompts as one-shot', () => {
+    expect(recognizeAgentProcessFromCommandLine('bob run "review this"')).toBeNull()
+    expect(recognizeAgentProcessFromCommandLine('bob run --format json review')).toBeNull()
     expect(recognizeAgentProcessFromCommandLine('bob mcp list')).toBeNull()
-    expect(recognizeAgentProcessFromCommandLine('bob extensions list')).toBeNull()
-    expect(recognizeAgentProcessFromCommandLine('bob -- --prompt-interactive')).toBeNull()
+    expect(recognizeAgentProcessFromCommandLine('bob --list-tasks')).toBeNull()
+    expect(recognizeAgentProcessFromCommandLine('bob --list-tasks all')).toBeNull()
+    expect(recognizeAgentProcessFromCommandLine('bob -v')).toBeNull()
+    expect(recognizeAgentProcessFromCommandLine('bob --show-license')).toBeNull()
+    expect(recognizeAgentProcessFromCommandLine('bob -- review this')).toBeNull()
+  })
+
+  it('recognizes IBM Bob chat launches as interactive agents', () => {
+    expect(recognizeAgentProcessFromCommandLine('bob')).toEqual({
+      agent: 'bob',
+      processName: 'bob'
+    })
+    expect(recognizeAgentProcessFromCommandLine('bob chat')).toEqual({
+      agent: 'bob',
+      processName: 'bob'
+    })
+    expect(recognizeAgentProcessFromCommandLine('bob chat --trust --auto-approve')).toEqual({
+      agent: 'bob',
+      processName: 'bob'
+    })
+    expect(recognizeAgentProcessFromCommandLine('bob chat --mode plan -w /repo')).toEqual({
+      agent: 'bob',
+      processName: 'bob'
+    })
+    // Why: `--resume [task-id]` takes an optional value that must not read as a prompt.
+    expect(recognizeAgentProcessFromCommandLine('bob --resume')).toEqual({
+      agent: 'bob',
+      processName: 'bob'
+    })
+    expect(recognizeAgentProcessFromCommandLine('bob -r abc123')).toEqual({
+      agent: 'bob',
+      processName: 'bob'
+    })
+    expect(recognizeAgentProcessFromCommandLine('bob chat -r abc123')).toEqual({
+      agent: 'bob',
+      processName: 'bob'
+    })
+    expect(recognizeAgentProcessFromCommandLine('bob --accept-license')).toEqual({
+      agent: 'bob',
+      processName: 'bob'
+    })
   })
 
   it('filters wrapped IBM Bob one-shot commands without dropping interactive shells', () => {
     expect(
-      recognizeAgentProcessFromCommandLine('node /Users/dev/.nvm/versions/node/bin/bob review')
+      recognizeAgentProcessFromCommandLine('node /Users/dev/.nvm/versions/node/bin/bob run review')
     ).toBeNull()
     expect(
       recognizeAgentProcessFromCommandLine(
@@ -155,18 +159,18 @@ describe('agent process recognition', () => {
     ).toBeNull()
     expect(
       recognizeAgentProcessFromCommandLine(
-        String.raw`node C:\Users\dev\AppData\Roaming\npm\bob.cmd --prompt-interactive review`
+        String.raw`node C:\Users\dev\AppData\Roaming\npm\bob.cmd chat --trust`
       )
     ).toEqual({ agent: 'bob', processName: 'bob' })
     // Why: the npm install runs the bundle directly, so the script path is the only bob token.
     expect(
       recognizeAgentProcessFromCommandLine(
-        'node /Users/dev/.nvm/versions/node/v25.7.0/lib/node_modules/bobshell/bundle/bob.js --prompt-interactive review'
+        'node /Users/dev/.nvm/versions/node/v26.5.1/lib/node_modules/bobshell/dist/bob.js chat'
       )
     ).toEqual({ agent: 'bob', processName: 'bob' })
     expect(
       recognizeAgentProcessFromCommandLine(
-        'node /Users/dev/.nvm/versions/node/v25.7.0/lib/node_modules/bobshell/bundle/bob.js review'
+        'node /Users/dev/.nvm/versions/node/v26.5.1/lib/node_modules/bobshell/dist/bob.js -p review'
       )
     ).toBeNull()
   })

@@ -221,19 +221,23 @@ const TUI_AGENT_CONFIG_SOURCE: Record<TuiAgent, TuiAgentConfigSource> = {
   },
   bob: {
     detectCmd: 'bob',
-    launchCmd: 'bob',
+    // Why: Bob Shell 2.x puts the TUI behind `chat` (bare `bob` only opens it on a TTY,
+    // and `--auto-approve` is a `chat` option). `--trust` skips the first-launch trust
+    // menu that would otherwise consume the injected prompt paste.
+    launchCmd: 'bob chat --trust',
     expectedProcess: 'bob',
-    // Why: MordechaiHadad/bob is a Neovim version manager that also installs as `bob`.
-    // Its help text names Neovim and IBM Bob's does not, so a match means the PATH hit
-    // belongs to the other tool. Fail-open keeps a real IBM Bob install detectable.
+    // Why: MordechaiHadad/bob is a Neovim version manager that also installs as `bob`,
+    // and any stray script can hold the name too. Neovim in the help text excludes the
+    // hit; otherwise Bob Shell's own banner/IBM license line must be present. A failed
+    // probe keeps the agent so a real install is never hidden.
     detectIdentityExclusion: {
       args: ['--help'],
-      excludePattern: /\bneo\s?vim\b|\bnvim\b/i
+      excludePattern: /\bneo\s?vim\b|\bnvim\b/i,
+      requirePattern: /Bob in your terminal|\bIBM\b|\bbob ?shell\b/i
     },
-    // Why: Bob's `--prompt` and positional prompts are one-shot modes.
-    // `--prompt-interactive` executes the initial prompt and keeps the hosted
-    // shell alive for follow-up work.
-    promptInjectionMode: 'flag-prompt-interactive'
+    // Why: Bob Shell 2.x has no interactive initial-prompt flag (`-p`/`run` are
+    // headless and need BOB_API_KEY), so inject after the chat UI is up.
+    promptInjectionMode: 'stdin-after-start'
   },
   grok: {
     detectCmd: 'grok',

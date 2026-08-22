@@ -22,6 +22,8 @@ export type TuiAgentDetectionRuntime = NodeJS.Platform | 'wsl'
 export type TuiAgentIdentityExclusion = {
   args: readonly string[]
   excludePattern: RegExp
+  /** When set, a successful probe must also match this, or the agent is excluded. */
+  requirePattern?: RegExp
 }
 
 export type TuiAgentConfig = {
