@@ -60,7 +60,8 @@ describe('registerPtyHandlers', () => {
     getPtyAckDataListener,
     getPtySetActiveRendererPtyListener,
     getMainFrameNavigationListener,
-    getPtyDataSendCalls
+    getPtyDataSendCalls,
+    claimMainRendererPty
   } = setupPtyIpcSuite()
 
   it('drains large batched PTY output in bounded slices', async () => {
@@ -370,6 +371,7 @@ describe('registerPtyHandlers', () => {
       registerPtyHandlers(mainWindow as never)
       const ptyIds = Array.from({ length: 100 }, (_, index) => `pressure-pty-${index}`)
       for (const id of ptyIds) {
+        claimMainRendererPty(id)
         provider.emitData(id, 'a')
       }
       vi.runAllTimers()

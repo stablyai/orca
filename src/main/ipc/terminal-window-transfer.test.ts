@@ -30,6 +30,7 @@ vi.mock('../window/createMainWindow', () => ({ loadMainWindow: vi.fn() }))
 
 class FakeWebContents extends EventEmitter {
   readonly id: number
+  readonly mainFrame = {}
   readonly send = vi.fn()
   destroyed = false
 
@@ -45,6 +46,10 @@ class FakeWebContents extends EventEmitter {
   isDestroyed(): boolean {
     return this.destroyed
   }
+}
+
+function ipcEvent(sender: FakeWebContents, senderFrame: object | null = sender.mainFrame) {
+  return { sender, senderFrame }
 }
 
 class FakeWindow extends EventEmitter {
@@ -173,9 +178,13 @@ describe('TerminalWindowTransferCoordinator', () => {
     })
 
     await coordinator.fenceForQuit()
-    expect(coordinator.getContext(h.source.webContents as never).transitionFenced).toBe(true)
+    expect(coordinator.getContext(ipcEvent(h.source.webContents) as never).transitionFenced).toBe(
+      true
+    )
     coordinator.resumeAfterQuitAbort()
-    expect(coordinator.getContext(h.source.webContents as never).transitionFenced).toBe(false)
+    expect(coordinator.getContext(ipcEvent(h.source.webContents) as never).transitionFenced).toBe(
+      false
+    )
   })
 
   it('matches legacy local target identity without weakening explicit host checks', () => {
@@ -206,17 +215,25 @@ describe('TerminalWindowTransferCoordinator', () => {
     })
     h.target.webContents.send.mockImplementation((_channel, command) => {
       queueMicrotask(() =>
-        coordinator.acknowledge(h.target.webContents as never, { ...command, ok: true })
+        coordinator.acknowledge(ipcEvent(h.target.webContents) as never, {
+          ...command,
+          ok: true
+        })
       )
     })
     h.source.webContents.send.mockImplementation((_channel, command) => {
       queueMicrotask(() =>
-        coordinator.acknowledge(h.source.webContents as never, { ...command, ok: true })
+        coordinator.acknowledge(ipcEvent(h.source.webContents) as never, {
+          ...command,
+          ok: true
+        })
       )
     })
-    coordinator.getContext(h.target.webContents as never)
+    coordinator.getContext(ipcEvent(h.target.webContents) as never)
 
-    await expect(coordinator.detach(h.source.webContents as never, seed())).resolves.toEqual({
+    await expect(
+      coordinator.detach(ipcEvent(h.source.webContents) as never, seed())
+    ).resolves.toEqual({
       ok: true,
       targetWindowId: 2
     })
@@ -247,12 +264,65 @@ describe('TerminalWindowTransferCoordinator', () => {
       timeoutMs: 10
     })
 
-    await expect(coordinator.detach(h.source.webContents as never, seed())).resolves.toEqual({
+    await expect(
+      coordinator.detach(ipcEvent(h.source.webContents) as never, seed())
+    ).resolves.toEqual({
       ok: false,
       error: 'terminal_transfer_target_mismatch'
     })
     expect(h.handoff).not.toHaveBeenCalled()
     expect(h.owners.owns('pty-1', h.source.webContents as never)).toBe(true)
+  })
+
+  it('rejects detach and context requests from an obsolete renderer frame', async () => {
+    const h = createHarness()
+    const { TerminalWindowTransferCoordinator } = await import('./terminal-window-transfer')
+    const coordinator = new TerminalWindowTransferCoordinator({
+      store: {} as never,
+      createSecondaryWindow: vi.fn(),
+      windows: h.windows,
+      sessions: h.sessions as never,
+      owners: h.owners,
+      getCursorPoint: () => ({ x: 700, y: 100 }),
+      handoff: h.handoff,
+      timeoutMs: 10
+    })
+    const obsoleteFrame = ipcEvent(h.source.webContents, {})
+
+    expect(() => coordinator.getContext(obsoleteFrame as never)).toThrow('untrusted_ui_renderer')
+    await expect(coordinator.detach(obsoleteFrame as never, seed())).resolves.toEqual({
+      ok: false,
+      error: 'untrusted_ui_renderer'
+    })
+    expect(h.handoff).not.toHaveBeenCalled()
+  })
+
+  it('does not settle a transfer waiter from an obsolete-frame ACK', async () => {
+    const h = createHarness()
+    const { TerminalWindowTransferCoordinator } = await import('./terminal-window-transfer')
+    const coordinator = new TerminalWindowTransferCoordinator({
+      store: {} as never,
+      createSecondaryWindow: vi.fn(),
+      windows: h.windows,
+      sessions: h.sessions as never,
+      owners: h.owners,
+      getCursorPoint: () => ({ x: 700, y: 100 }),
+      handoff: h.handoff,
+      timeoutMs: 1
+    })
+    h.target.webContents.send.mockImplementation((_channel, command) => {
+      queueMicrotask(() =>
+        coordinator.acknowledge(ipcEvent(h.target.webContents, {}) as never, {
+          ...command,
+          ok: true
+        })
+      )
+    })
+    coordinator.getContext(ipcEvent(h.target.webContents) as never)
+
+    await expect(
+      coordinator.detach(ipcEvent(h.source.webContents) as never, seed())
+    ).resolves.toEqual({ ok: false, error: 'terminal_transfer_target-import_timeout' })
   })
 
   it('reverses ownership and restores records when target import fails', async () => {
@@ -270,7 +340,7 @@ describe('TerminalWindowTransferCoordinator', () => {
     })
     h.target.webContents.send.mockImplementation((_channel, command) => {
       queueMicrotask(() =>
-        coordinator.acknowledge(h.target.webContents as never, {
+        coordinator.acknowledge(ipcEvent(h.target.webContents) as never, {
           ...command,
           ok: command.phase === 'target-remove'
         })
@@ -278,12 +348,17 @@ describe('TerminalWindowTransferCoordinator', () => {
     })
     h.source.webContents.send.mockImplementation((_channel, command) => {
       queueMicrotask(() =>
-        coordinator.acknowledge(h.source.webContents as never, { ...command, ok: true })
+        coordinator.acknowledge(ipcEvent(h.source.webContents) as never, {
+          ...command,
+          ok: true
+        })
       )
     })
-    coordinator.getContext(h.target.webContents as never)
+    coordinator.getContext(ipcEvent(h.target.webContents) as never)
 
-    await expect(coordinator.detach(h.source.webContents as never, seed())).resolves.toEqual({
+    await expect(
+      coordinator.detach(ipcEvent(h.source.webContents) as never, seed())
+    ).resolves.toEqual({
       ok: false,
       error: 'terminal_transfer_target-import_failed'
     })
@@ -310,22 +385,30 @@ describe('TerminalWindowTransferCoordinator', () => {
       getCursorPoint: () => ({ x: 1900, y: 100 }),
       getWorkArea: () => ({ x: 1440, y: 0, width: 1440, height: 900 }),
       registerRenderer: vi.fn(() => vi.fn()),
-      loadWindow: vi.fn(() => coordinator.getContext(h.target.webContents as never)),
+      loadWindow: vi.fn(() => coordinator.getContext(ipcEvent(h.target.webContents) as never)),
       handoff: h.handoff,
       timeoutMs: 100
     })
     h.target.webContents.send.mockImplementation((_channel, command) => {
       queueMicrotask(() =>
-        coordinator.acknowledge(h.target.webContents as never, { ...command, ok: true })
+        coordinator.acknowledge(ipcEvent(h.target.webContents) as never, {
+          ...command,
+          ok: true
+        })
       )
     })
     h.source.webContents.send.mockImplementation((_channel, command) => {
       queueMicrotask(() =>
-        coordinator.acknowledge(h.source.webContents as never, { ...command, ok: true })
+        coordinator.acknowledge(ipcEvent(h.source.webContents) as never, {
+          ...command,
+          ok: true
+        })
       )
     })
 
-    await expect(coordinator.detach(h.source.webContents as never, seed())).resolves.toEqual({
+    await expect(
+      coordinator.detach(ipcEvent(h.source.webContents) as never, seed())
+    ).resolves.toEqual({
       ok: true,
       targetWindowId: 2
     })
@@ -356,20 +439,22 @@ describe('TerminalWindowTransferCoordinator', () => {
       getCursorPoint: () => ({ x: 700, y: 100 }),
       getWorkArea: () => ({ x: 0, y: 0, width: 1200, height: 800 }),
       registerRenderer: vi.fn(() => vi.fn()),
-      loadWindow: vi.fn(() => coordinator.getContext(h.target.webContents as never)),
+      loadWindow: vi.fn(() => coordinator.getContext(ipcEvent(h.target.webContents) as never)),
       handoff: h.handoff,
       timeoutMs: 100
     })
     h.target.webContents.send.mockImplementation((_channel, command) => {
       queueMicrotask(() =>
-        coordinator.acknowledge(h.target.webContents as never, {
+        coordinator.acknowledge(ipcEvent(h.target.webContents) as never, {
           ...command,
           ok: command.phase === 'target-remove'
         })
       )
     })
 
-    await expect(coordinator.detach(h.source.webContents as never, seed())).resolves.toEqual({
+    await expect(
+      coordinator.detach(ipcEvent(h.source.webContents) as never, seed())
+    ).resolves.toEqual({
       ok: false,
       error: 'terminal_transfer_target-import_failed'
     })

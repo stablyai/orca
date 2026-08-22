@@ -57,7 +57,8 @@ vi.mock('../codex/codex-state-db-backfill-recovery', () =>
 // A detached relay PTY is designed to outlive the provider that addressed it, so
 // "the SSH provider is gone" is never evidence that the remote process stopped.
 describe('stopping a PTY whose SSH provider is unregistered', () => {
-  const { handlers, mainWindow, installObservableDaemonTestProvider } = setupPtyIpcSuite()
+  const { handlers, mainWindow, installObservableDaemonTestProvider, claimMainRendererPty } =
+    setupPtyIpcSuite()
 
   function installController(): {
     controller: {
@@ -118,6 +119,7 @@ describe('stopping a PTY whose SSH provider is unregistered', () => {
     const ptyId = 'ssh-renderer-detached'
     setPtyOwnership(ptyId, 'ssh-dropped')
     const { runtime } = installController()
+    claimMainRendererPty(ptyId)
     try {
       await handlers.get('pty:kill')!(null, { id: ptyId })
 

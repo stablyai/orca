@@ -48,7 +48,7 @@ vi.mock('../codex/codex-state-db-backfill-recovery', () =>
 )
 
 describe('registerPtyHandlers', () => {
-  const { handlers, mainWindow, mainWindowIpcEvent } = setupPtyIpcSuite()
+  const { handlers, mainWindow, mainWindowIpcEvent, claimMainRendererPty } = setupPtyIpcSuite()
 
   // Why: daemon resize is fire-and-forget, so pty:getSize must report the APPLIED size, not the requested one (Claude-Code split-pane desync).
   describe('pty:getSize reports applied size, not requested size', () => {
@@ -243,6 +243,7 @@ describe('registerPtyHandlers', () => {
       }
       handlers.clear()
       registerPtyHandlers(mainWindow as never, runtime as never)
+      claimMainRendererPty('pty-1')
       const call = onMock.mock.calls.find((entry: unknown[]) => entry[0] === 'pty:claimViewport')
       const claimListener = call?.[1] as
         | ((event: unknown, args: { id: string; cols: number; rows: number }) => void)

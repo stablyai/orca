@@ -55,6 +55,7 @@ export type PtyIpcTestWebContents = {
   id: number
   mainFrame: object
   on: Mock
+  once: Mock
   send: Mock
   removeListener: Mock
   isDestroyed: Mock
@@ -72,8 +73,9 @@ export type PtyIpcTestMainWindow = {
 export type PtyIpcSuiteEnvironment = {
   handlers: Map<string, (event: unknown, args: unknown) => unknown>
   mainWindow: PtyIpcTestMainWindow
-  mainWindowIpcEvent: { sender: PtyIpcTestWebContents }
-  foreignWindowIpcEvent: { sender: PtyIpcTestWebContents }
+  mainWindowIpcEvent: { sender: PtyIpcTestWebContents; senderFrame: object }
+  foreignWindowIpcEvent: { sender: PtyIpcTestWebContents; senderFrame: object }
+  claimMainRendererPty: (id: string) => void
 }
 
 /** Registers the shared beforeEach/afterEach every pty IPC suite file relies on. */
@@ -89,6 +91,7 @@ export function createPtyIpcSuiteEnvironment(): PtyIpcSuiteEnvironment {
       id: 1,
       mainFrame,
       on: vi.fn(),
+      once: vi.fn(),
       send: vi.fn(),
       removeListener: vi.fn(),
       isDestroyed: vi.fn(() => false)
@@ -101,6 +104,7 @@ export function createPtyIpcSuiteEnvironment(): PtyIpcSuiteEnvironment {
       id: 2,
       mainFrame: foreignMainFrame,
       on: vi.fn(),
+      once: vi.fn(),
       send: vi.fn(),
       removeListener: vi.fn(),
       isDestroyed: vi.fn(() => false)
@@ -153,11 +157,15 @@ export function createPtyIpcSuiteEnvironment(): PtyIpcSuiteEnvironment {
     mainWindow.webContents.mainFrame = mainFrame
     mainWindowIpcEvent.senderFrame = mainFrame
     mainWindow.webContents.on.mockReset()
+    mainWindow.webContents.once.mockReset()
     mainWindow.webContents.send.mockReset()
     mainWindow.webContents.removeListener.mockReset()
+    mainWindow.webContents.isDestroyed.mockReset()
+    mainWindow.webContents.isDestroyed.mockReturnValue(false)
     foreignWindowIpcEvent.sender.mainFrame = foreignMainFrame
     foreignWindowIpcEvent.senderFrame = foreignMainFrame
     foreignWindowIpcEvent.sender.on.mockReset()
+    foreignWindowIpcEvent.sender.once.mockReset()
     foreignWindowIpcEvent.sender.send.mockReset()
     foreignWindowIpcEvent.sender.removeListener.mockReset()
     foreignWindowIpcEvent.sender.isDestroyed.mockReset()
@@ -171,7 +179,7 @@ export function createPtyIpcSuiteEnvironment(): PtyIpcSuiteEnvironment {
       if (handlers.has(channel)) {
         throw new Error(`Attempted to register a second handler for '${channel}'`)
       }
-      handlers.set(channel, handler)
+      handlers.set(channel, (event, args) => handler(event ?? mainWindowIpcEvent, args))
     })
     removeHandlerMock.mockImplementation((channel: string) => {
       handlers.delete(channel)
@@ -258,6 +266,13 @@ export function createPtyIpcSuiteEnvironment(): PtyIpcSuiteEnvironment {
   })
 
   afterEach(() => {
+    for (const webContents of [mainWindow.webContents, foreignWindowIpcEvent.sender]) {
+      for (const [event, listener] of webContents.once.mock.calls) {
+        if (event === 'destroyed') {
+          ;(listener as () => void)()
+        }
+      }
+    }
     ptyRendererOwners.removeRenderer(mainWindow.webContents as never)
     ptyRendererOwners.removeRenderer(foreignWindowIpcEvent.sender as never)
     _resetLocalPtyProviderStateForTest()
@@ -282,5 +297,13 @@ export function createPtyIpcSuiteEnvironment(): PtyIpcSuiteEnvironment {
     envScope.restoreProcessEnv()
   })
 
-  return { handlers, mainWindow, mainWindowIpcEvent, foreignWindowIpcEvent }
+  return {
+    handlers,
+    mainWindow,
+    mainWindowIpcEvent,
+    foreignWindowIpcEvent,
+    claimMainRendererPty: (id) => {
+      ptyRendererOwners.claim(id, mainWindow.webContents as never)
+    }
+  }
 }

@@ -5,15 +5,13 @@ import type {
   TerminalWindowTransferAck,
   TerminalWindowTransferResult
 } from '../../shared/terminal-window-transfer'
-import type { Store } from '../persistence'
-import {
-  getWindowSessionRegistry,
-  type WindowSessionRegistry
-} from '../persistence/window-session-registry'
+import { getWindowSessionRegistry } from '../persistence/window-session-registry'
 import { loadMainWindow } from '../window/createMainWindow'
-import { orcaWindowManager, type OrcaWindowManager } from '../window/orca-window-manager'
+import { orcaWindowManager } from '../window/orca-window-manager'
 import { handoffPtyRendererOwnership, registerPtyRenderer, sendToPtyOwner } from './pty'
-import { ptyRendererOwners, type PtyRendererOwners } from './pty-renderer-owners'
+import { ptyRendererOwners } from './pty-renderer-owners'
+import { isCurrentRendererMainFrame, type RendererIpcEvent } from './renderer-ipc-frame-trust'
+import type { TerminalWindowTransferCoordinatorOptions } from './terminal-window-transfer-coordinator-options'
 import {
   clearTerminalWindowTransferWaiters,
   getTerminalWindowBounds,
@@ -32,27 +30,12 @@ import {
 
 export const TERMINAL_WINDOW_TRANSFER_ACK_TIMEOUT_MS = 10_000
 
-type CoordinatorOptions = {
-  store: Store
-  createSecondaryWindow: (bounds: Electron.Rectangle) => BrowserWindow
-  getIsQuitting?: () => boolean
-  windows?: OrcaWindowManager
-  sessions?: WindowSessionRegistry
-  owners?: PtyRendererOwners
-  getCursorPoint?: () => Electron.Point
-  getWorkArea?: (point: Electron.Point) => Electron.Rectangle
-  loadWindow?: (window: BrowserWindow) => void
-  registerRenderer?: (webContents: WebContents) => () => void
-  handoff?: (ptyIds: readonly string[], from: WebContents, to: WebContents) => void
-  timeoutMs?: number
-}
-
 export class TerminalWindowTransferCoordinator {
   readonly #createSecondaryWindow: (bounds: Electron.Rectangle) => BrowserWindow
   readonly #getIsQuitting: () => boolean
-  readonly #windows: OrcaWindowManager
-  readonly #sessions: WindowSessionRegistry
-  readonly #owners: PtyRendererOwners
+  readonly #windows: NonNullable<TerminalWindowTransferCoordinatorOptions['windows']>
+  readonly #sessions: NonNullable<TerminalWindowTransferCoordinatorOptions['sessions']>
+  readonly #owners: NonNullable<TerminalWindowTransferCoordinatorOptions['owners']>
   readonly #getCursorPoint: () => Electron.Point
   readonly #getWorkArea: (point: Electron.Point) => Electron.Rectangle
   readonly #loadWindow: (window: BrowserWindow) => void
@@ -66,7 +49,7 @@ export class TerminalWindowTransferCoordinator {
   readonly #trackedRenderers = new Set<number>()
   #fenced = false
 
-  constructor(options: CoordinatorOptions) {
+  constructor(options: TerminalWindowTransferCoordinatorOptions) {
     this.#createSecondaryWindow = options.createSecondaryWindow
     this.#getIsQuitting = options.getIsQuitting ?? (() => false)
     this.#windows = options.windows ?? orcaWindowManager
@@ -87,7 +70,20 @@ export class TerminalWindowTransferCoordinator {
     }
   }
 
-  getContext(sender: WebContents): TerminalWindowContext {
+  #getTrustedSender(event: RendererIpcEvent): WebContents | null {
+    const sender = event.sender
+    return isCurrentRendererMainFrame(event) &&
+      this.#windows.getWindowForSender(sender) &&
+      this.#owners.isRegistered(sender)
+      ? sender
+      : null
+  }
+
+  getContext(event: RendererIpcEvent): TerminalWindowContext {
+    const sender = this.#getTrustedSender(event)
+    if (!sender) {
+      throw new Error('untrusted_ui_renderer')
+    }
     const window = this.#windows.getWindowForSender(sender)
     const role = window ? this.#windows.getRole(window.id) : null
     if (!window || !role) {
@@ -109,7 +105,11 @@ export class TerminalWindowTransferCoordinator {
     return { windowId: window.id, role, transitionFenced: this.#fenced }
   }
 
-  async detach(sender: WebContents, input: unknown): Promise<TerminalWindowTransferResult> {
+  async detach(event: RendererIpcEvent, input: unknown): Promise<TerminalWindowTransferResult> {
+    const sender = this.#getTrustedSender(event)
+    if (!sender) {
+      return { ok: false, error: 'untrusted_ui_renderer' }
+    }
     if (this.#fenced || this.#getIsQuitting()) {
       return { ok: false, error: 'window_transfer_fenced' }
     }
@@ -262,7 +262,11 @@ export class TerminalWindowTransferCoordinator {
     }
   }
 
-  acknowledge(sender: WebContents, ack: TerminalWindowTransferAck): void {
+  acknowledge(event: RendererIpcEvent, ack: TerminalWindowTransferAck): void {
+    const sender = this.#getTrustedSender(event)
+    if (!sender) {
+      return
+    }
     const transfer = this.#transfers.get(ack?.tabId)
     const waiter = transfer?.waiters.get(ack?.phase)
     if (!waiter || waiter.sender !== sender) {
@@ -292,16 +296,16 @@ export class TerminalWindowTransferCoordinator {
 }
 
 export function registerTerminalWindowTransferHandlers(
-  options: CoordinatorOptions
+  options: TerminalWindowTransferCoordinatorOptions
 ): TerminalWindowTransferCoordinator {
   const coordinator = new TerminalWindowTransferCoordinator(options)
   ipcMain.removeHandler('terminalWindow:detach')
   ipcMain.removeHandler('terminalWindow:getContext')
   ipcMain.removeAllListeners('terminalWindow:ack')
-  ipcMain.handle('terminalWindow:detach', (event, seed) => coordinator.detach(event.sender, seed))
-  ipcMain.handle('terminalWindow:getContext', (event) => coordinator.getContext(event.sender))
+  ipcMain.handle('terminalWindow:detach', (event, seed) => coordinator.detach(event, seed))
+  ipcMain.handle('terminalWindow:getContext', (event) => coordinator.getContext(event))
   ipcMain.on('terminalWindow:ack', (event: IpcMainEvent, ack: TerminalWindowTransferAck) => {
-    coordinator.acknowledge(event.sender, ack)
+    coordinator.acknowledge(event, ack)
   })
   return coordinator
 }

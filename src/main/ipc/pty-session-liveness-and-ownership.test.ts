@@ -55,7 +55,7 @@ vi.mock('../codex/codex-state-db-backfill-recovery', () =>
 )
 
 describe('registerPtyHandlers', () => {
-  const { handlers, mainWindow, mainWindowIpcEvent } = setupPtyIpcSuite()
+  const { handlers, mainWindow, mainWindowIpcEvent, claimMainRendererPty } = setupPtyIpcSuite()
 
   it('never answers liveness for a paired-runtime handle from the local registry', async () => {
     const hasPty = vi.fn(() => false)
@@ -157,6 +157,8 @@ describe('registerPtyHandlers', () => {
       ])
     )
 
+    claimMainRendererPty('ssh:ssh-a@@pty-1')
+    claimMainRendererPty('ssh:ssh-b@@pty-1')
     await handlers.get('pty:kill')!(null, { id: 'ssh:ssh-a@@pty-1' })
     await handlers.get('pty:kill')!(null, { id: 'ssh:ssh-b@@pty-1' })
 
@@ -318,6 +320,7 @@ describe('registerPtyHandlers', () => {
       undefined,
       store as never
     )
+    claimMainRendererPty('ssh:ssh-1@@relay-pty')
 
     await handlers.get('pty:kill')!(null, { id: 'ssh:ssh-1@@relay-pty' })
 
@@ -361,6 +364,7 @@ describe('registerPtyHandlers', () => {
       undefined,
       store as never
     )
+    claimMainRendererPty('ssh:ssh-1@@relay-pty')
 
     await handlers.get('pty:kill')!(null, { id: 'ssh:ssh-1@@relay-pty' })
 
@@ -423,11 +427,13 @@ describe('registerPtyHandlers', () => {
       listenerFor('pty:write')(mainWindowIpcEvent, { id: 'remote-pty', data: 'x' })
     ).not.toThrow()
     expect(() =>
-      listenerFor('pty:resize')(null, { id: 'remote-pty', cols: 100, rows: 30 })
+      listenerFor('pty:resize')(mainWindowIpcEvent, { id: 'remote-pty', cols: 100, rows: 30 })
     ).not.toThrow()
-    expect(() => listenerFor('pty:ackColdRestore')(null, { id: 'remote-pty' })).not.toThrow()
     expect(() =>
-      listenerFor('pty:signal')(null, { id: 'remote-pty', signal: 'SIGINT' })
+      listenerFor('pty:ackColdRestore')(mainWindowIpcEvent, { id: 'remote-pty' })
+    ).not.toThrow()
+    expect(() =>
+      listenerFor('pty:signal')(mainWindowIpcEvent, { id: 'remote-pty', signal: 'SIGINT' })
     ).not.toThrow()
 
     await expect(handlers.get('pty:kill')!(null, { id: 'remote-pty' })).resolves.toBeUndefined()
@@ -482,6 +488,7 @@ describe('registerPtyHandlers', () => {
     }))
     registerPtyHandlers(mainWindow as never)
     setLocalPtyProvider({ inspectProcess } as never)
+    claimMainRendererPty('legacy-daemon-pty')
 
     await expect(
       handlers.get('pty:inspectProcess')!(null, { id: 'legacy-daemon-pty' })
@@ -494,6 +501,7 @@ describe('registerPtyHandlers', () => {
   it('settles a stale renderer process inspection as unavailable', async () => {
     registerPtyHandlers(mainWindow as never)
     setLocalPtyProvider({ hasPty: vi.fn(() => false) } as never)
+    claimMainRendererPty('gone-pty')
 
     await expect(handlers.get('pty:inspectProcess')!(null, { id: 'gone-pty' })).resolves.toEqual({
       foregroundProcess: null,

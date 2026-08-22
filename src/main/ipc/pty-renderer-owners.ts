@@ -229,9 +229,15 @@ export class PtyRendererOwners {
         throw new Error('pty_renderer_not_owner')
       }
     }
+    const toGeneration =
+      Math.max(
+        target.generation,
+        ...this.#ownedIds(to.id).map((id) => this.#owners.get(id)?.generation ?? 0),
+        ...ptyIds.map((id) => this.#owners.get(id)!.generation)
+      ) + 1
+    target.generation = toGeneration
     return ptyIds.map((id) => {
       const owner = this.#owners.get(id)!
-      const toGeneration = Math.max(owner.generation, target.generation) + 1
       this.#deleteViewFlags(from.id, id)
       this.#owners.set(id, { webContentsId: to.id, generation: toGeneration })
       return { id, fromGeneration: owner.generation, toGeneration }

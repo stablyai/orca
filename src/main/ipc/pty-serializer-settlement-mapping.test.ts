@@ -9,6 +9,7 @@ import {
 } from '../providers/ssh-pty-errors'
 import {
   registerPtyHandlers,
+  registerPtyRenderer,
   registerSshPtyProvider,
   clearProviderPtyState,
   deletePtyOwnership,
@@ -64,7 +65,8 @@ vi.mock('../codex/codex-state-db-backfill-recovery', () =>
 )
 
 describe('registerPtyHandlers', () => {
-  const { handlers, mainWindow, mainWindowIpcEvent, getPtyWriteListener } = setupPtyIpcSuite()
+  const { handlers, mainWindow, mainWindowIpcEvent, foreignWindowIpcEvent, getPtyWriteListener } =
+    setupPtyIpcSuite()
 
   it('does not clear runtime-owned SSH reattach state on identity mismatch', async () => {
     type RuntimeSpawnController = {
@@ -394,34 +396,61 @@ describe('registerPtyHandlers', () => {
     }
 
     registerPtyHandlers(mainWindow as never, runtime as never)
+    registerPtyRenderer(foreignWindowIpcEvent.sender as never)
     const ptyId = 'remote:env-1@@terminal-1'
     const spawnController = controller as unknown as RuntimeSpawnController
 
     expect(spawnController.hasRendererSerializer?.(ptyId)).toBe(false)
     await handlers.get('pty:reportRendererSerializerReady')!(null, { ptyId: 'local-pty' })
     expect(spawnController.hasRendererSerializer?.('local-pty')).toBe(false)
+    ptyRendererOwners.claim(ptyId, mainWindow.webContents as never)
+    await handlers.get('pty:reportRendererSerializerReady')!(foreignWindowIpcEvent, { ptyId })
+    await handlers.get('pty:reportRendererSerializerReady')!(
+      { sender: mainWindow.webContents, senderFrame: {} },
+      { ptyId }
+    )
+    expect(spawnController.hasRendererSerializer?.(ptyId)).toBe(false)
     await handlers.get('pty:reportRendererSerializerReady')!(null, { ptyId })
     expect(spawnController.hasRendererSerializer?.(ptyId)).toBe(true)
     expect(spawnController.getRendererSerializerGeneration?.(ptyId)).toBe(1)
   })
   it('clears pending pane serializer declarations when their renderer is destroyed', async () => {
     registerPtyHandlers(mainWindow as never)
+    registerPtyRenderer(foreignWindowIpcEvent.sender as never)
     const paneKey = makePaneKey('tab-crash', '22222222-2222-4222-8222-222222222222')
-    const destroyedListeners: (() => void)[] = []
-    const sender = {
-      id: 42,
-      once: vi.fn((event: string, listener: () => void) => {
-        if (event === 'destroyed') {
-          destroyedListeners.push(listener)
-        }
-      })
-    }
-
-    await handlers.get('pty:declarePendingPaneSerializer')!({ sender }, { paneKey })
+    await handlers.get('pty:declarePendingPaneSerializer')!(foreignWindowIpcEvent, { paneKey })
 
     expect(hasPendingRendererSerializerForPaneKey(paneKey)).toBe(true)
-    expect(destroyedListeners).toHaveLength(1)
-    destroyedListeners[0]()
+    const destroyed = foreignWindowIpcEvent.sender.once.mock.calls.find(
+      ([event]) => event === 'destroyed'
+    )?.[1] as (() => void) | undefined
+    expect(destroyed).toBeTypeOf('function')
+    destroyed!()
+    expect(hasPendingRendererSerializerForPaneKey(paneKey)).toBe(false)
+  })
+  it('rejects cross-renderer settlement of a pending serializer declaration', async () => {
+    registerPtyHandlers(mainWindow as never)
+    registerPtyRenderer(foreignWindowIpcEvent.sender as never)
+    const paneKey = makePaneKey('tab-owner', '55555555-5555-4555-8555-555555555555')
+    const gen = (await handlers.get('pty:declarePendingPaneSerializer')!(mainWindowIpcEvent, {
+      paneKey
+    })) as number
+
+    await handlers.get('pty:settlePaneSerializer')!(foreignWindowIpcEvent, { paneKey, gen })
+    expect(hasPendingRendererSerializerForPaneKey(paneKey)).toBe(true)
+    await handlers.get('pty:settlePaneSerializer')!(mainWindowIpcEvent, { paneKey, gen })
+    expect(hasPendingRendererSerializerForPaneKey(paneKey)).toBe(false)
+  })
+  it('rejects pending serializer declaration from an obsolete frame', async () => {
+    registerPtyHandlers(mainWindow as never)
+    const paneKey = makePaneKey('tab-old', '66666666-6666-4666-8666-666666666666')
+
+    await expect(
+      handlers.get('pty:declarePendingPaneSerializer')!(
+        { sender: mainWindow.webContents, senderFrame: {} },
+        { paneKey }
+      )
+    ).rejects.toThrow('untrusted_ui_renderer')
     expect(hasPendingRendererSerializerForPaneKey(paneKey)).toBe(false)
   })
   it('ignores renderer-provided ORCA_TERMINAL_HANDLE for local PTY spawns', async () => {

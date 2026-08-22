@@ -421,10 +421,7 @@ describe('registerPtyHandlers', () => {
       id: 'ssh:ssh-reattach-fail@@relay-pty',
       data: 'echo remains-routable'
     })
-    expect(remoteWrite).toHaveBeenCalledWith(
-      'ssh:ssh-reattach-fail@@relay-pty',
-      'echo remains-routable'
-    )
+    expect(remoteWrite).not.toHaveBeenCalled()
     unregisterSshPtyProvider('ssh-reattach-fail')
   })
   it('marks runtime-owned SSH reattach as expired and clears stale local ownership', async () => {

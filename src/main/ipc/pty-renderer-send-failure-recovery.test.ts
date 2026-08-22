@@ -57,7 +57,8 @@ describe('registerPtyHandlers', () => {
     getPtyWriteListener,
     getPtyRendererDispatcherReadyListener,
     getMainFrameNavigationListener,
-    getPtyDataSendCalls
+    getPtyDataSendCalls,
+    claimMainRendererPty
   } = setupPtyIpcSuite()
 
   it('keeps only a partial remainder after a synchronous renderer send failure', () => {
@@ -66,6 +67,7 @@ describe('registerPtyHandlers', () => {
     try {
       const provider = installObservableDaemonTestProvider()
       registerPtyHandlers(mainWindow as never)
+      claimMainRendererPty('send-fail-partial')
       mainWindow.webContents.send.mockClear()
       const firstChunk = 'x'.repeat(16 * 1024)
       let failed = false
@@ -115,6 +117,7 @@ describe('registerPtyHandlers', () => {
     try {
       const provider = installObservableDaemonTestProvider()
       registerPtyHandlers(mainWindow as never)
+      claimMainRendererPty('send-fail-reset')
       const resetRenderer = getMainFrameNavigationListener()
       const readyRenderer = getPtyRendererDispatcherReadyListener()
       let failed = false
@@ -197,6 +200,7 @@ describe('registerPtyHandlers', () => {
     try {
       const provider = installObservableDaemonTestProvider()
       registerPtyHandlers(mainWindow as never)
+      claimMainRendererPty('send-fail-exit')
       const pending = 'x'.repeat(320 * 1024)
       provider.emitData('send-fail-exit', pending)
       expect(provider.pauseProducer).toHaveBeenCalledWith('send-fail-exit')
@@ -238,6 +242,7 @@ describe('registerPtyHandlers', () => {
     try {
       const provider = installObservableDaemonTestProvider()
       registerPtyHandlers(mainWindow as never)
+      claimMainRendererPty('flood-pty')
       provider.emitData('flood-pty', 'x'.repeat(3 * 1024 * 1024))
       expect(getPtyRendererDeliveryDebugSnapshot()).toMatchObject({
         pendingPtyCount: 1,

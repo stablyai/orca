@@ -179,12 +179,16 @@ describe('registerPtyHandlers', () => {
         }
       }): Promise<{ id: string }>
     }
+    let exitListener: ((event: { exitCode: number }) => void) | null = null
+    const kill = vi.fn(() => exitListener?.({ exitCode: 0 }))
     const proc = {
       onData: vi.fn(),
-      onExit: vi.fn(),
+      onExit: vi.fn((listener: (event: { exitCode: number }) => void) => {
+        exitListener = listener
+      }),
       write: vi.fn(),
       resize: vi.fn(),
-      kill: vi.fn(),
+      kill,
       process: 'zsh',
       pid: 12345
     }
@@ -239,7 +243,7 @@ describe('registerPtyHandlers', () => {
     expect(store.persistPtyBinding).toHaveBeenCalledWith(
       expect.objectContaining({ expectedSourceBinding })
     )
-    expect(proc.kill).toHaveBeenCalledOnce()
+    expect(kill).toHaveBeenCalledOnce()
   })
   it('reports lower-owner commit before rejecting an early-exited runtime incarnation', async () => {
     const persistPtyBinding = vi.fn()

@@ -12,12 +12,19 @@ export function createPtyIpcListenerAccessors(ctx: {
   mainWindowIpcEvent: unknown
 }) {
   const { handlers, mainWindow, mainWindowIpcEvent } = ctx
+  const withMainWindowEvent = <T>(
+    listener: (event: unknown, args: T) => void
+  ): ((event: unknown, args: T) => void) => {
+    return (event, args) => listener(event ?? mainWindowIpcEvent, args)
+  }
   function getPtyWriteListener(): (event: unknown, args: { id: string; data: string }) => void {
     const writeCall = onMock.mock.calls.find((call: unknown[]) => call[0] === 'pty:write')
     if (!writeCall) {
       throw new Error('missing pty:write listener')
     }
-    return writeCall[1] as (event: unknown, args: { id: string; data: string }) => void
+    return withMainWindowEvent(
+      writeCall[1] as (event: unknown, args: { id: string; data: string }) => void
+    )
   }
   function getPtyAckDataListener(): (
     event: unknown,
@@ -27,10 +34,12 @@ export function createPtyIpcListenerAccessors(ctx: {
     if (!ackCall) {
       throw new Error('missing pty:ackData listener')
     }
-    return ackCall[1] as (
-      event: unknown,
-      args: { id: string; charCount?: number; processedChars?: number }
-    ) => void
+    return withMainWindowEvent(
+      ackCall[1] as (
+        event: unknown,
+        args: { id: string; charCount?: number; processedChars?: number }
+      ) => void
+    )
   }
 
   function getPtySetActiveRendererPtyListener(): (
@@ -43,7 +52,9 @@ export function createPtyIpcListenerAccessors(ctx: {
     if (!activeCall) {
       throw new Error('missing pty:setActiveRendererPty listener')
     }
-    return activeCall[1] as (event: unknown, args: { id: string; active: boolean }) => void
+    return withMainWindowEvent(
+      activeCall[1] as (event: unknown, args: { id: string; active: boolean }) => void
+    )
   }
 
   function getPtySetRendererPtyVisibleListener(): (
@@ -56,7 +67,9 @@ export function createPtyIpcListenerAccessors(ctx: {
     if (!visibleCall) {
       throw new Error('missing pty:setRendererPtyVisible listener')
     }
-    return visibleCall[1] as (event: unknown, args: { id: string; visible: boolean }) => void
+    return withMainWindowEvent(
+      visibleCall[1] as (event: unknown, args: { id: string; visible: boolean }) => void
+    )
   }
 
   function getPtyRendererDispatcherReadyListener(): (event?: unknown) => void {
@@ -94,10 +107,9 @@ export function createPtyIpcListenerAccessors(ctx: {
     if (!resizeCall) {
       throw new Error('missing pty:resize listener')
     }
-    return resizeCall[1] as (
-      event: unknown,
-      args: { id: string; cols: number; rows: number }
-    ) => void
+    return withMainWindowEvent(
+      resizeCall[1] as (event: unknown, args: { id: string; cols: number; rows: number }) => void
+    )
   }
 
   function getPtySetHiddenRendererPtyListener(): (
@@ -110,7 +122,9 @@ export function createPtyIpcListenerAccessors(ctx: {
     if (!hiddenCall) {
       throw new Error('missing pty:setHiddenRendererPty listener')
     }
-    return hiddenCall[1] as (event: unknown, args: { id: string; hidden: boolean }) => void
+    return withMainWindowEvent(
+      hiddenCall[1] as (event: unknown, args: { id: string; hidden: boolean }) => void
+    )
   }
 
   function getPtySetDeliveryInterestListener(): (
@@ -123,7 +137,9 @@ export function createPtyIpcListenerAccessors(ctx: {
     if (!interestCall) {
       throw new Error('missing pty:setPtyDeliveryInterest listener')
     }
-    return interestCall[1] as (event: unknown, args: { id: string; interested: boolean }) => void
+    return withMainWindowEvent(
+      interestCall[1] as (event: unknown, args: { id: string; interested: boolean }) => void
+    )
   }
   const DELIVERY_RESYNC_UNANSWERED_WARNING =
     '[pty] delivery resync probe unanswered — renderer IPC unresponsive'
@@ -155,10 +171,12 @@ export function createPtyIpcListenerAccessors(ctx: {
     if (!responseCall) {
       throw new Error('missing pty:deliveryResyncResponse listener')
     }
-    return responseCall[1] as (
-      event: unknown,
-      args: { requestId: number; processedCharsByPty: Record<string, number> }
-    ) => void
+    return withMainWindowEvent(
+      responseCall[1] as (
+        event: unknown,
+        args: { requestId: number; processedCharsByPty: Record<string, number> }
+      ) => void
+    )
   }
   function reportRendererDeliveryState(args: {
     receivedCharsByPty: Record<string, number>

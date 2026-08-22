@@ -9,6 +9,7 @@ import {
 } from '../daemon/daemon-init'
 import type { MacDaemonTccAttributionHealth } from '../daemon/daemon-tcc-attribution'
 import type { DaemonSessionInfo } from '../daemon/types'
+import { isTrustedUIRendererEvent } from './ui'
 
 // Why: poll past the daemon's 5s SIGTERM→SIGKILL ladder (KILL_TIMEOUT_MS in session.ts), else slow-exiting shells falsely look "refused".
 const MAX_POLL_ATTEMPTS = 65
@@ -61,7 +62,10 @@ export function registerDaemonManagementHandlers(): void {
   // Why: lets Settings warn that macOS privacy grants no longer reach daemon terminals (STA-3491).
   ipcMain.handle(
     'pty:management:macTccAttribution',
-    async (): Promise<{ health: MacDaemonTccAttributionHealth }> => {
+    async (event): Promise<{ health: MacDaemonTccAttributionHealth }> => {
+      if (!isTrustedUIRendererEvent(event)) {
+        return { health: 'unknown' }
+      }
       try {
         return { health: await getCurrentDaemonMacTccAttributionHealth() }
       } catch {
@@ -72,7 +76,10 @@ export function registerDaemonManagementHandlers(): void {
 
   ipcMain.handle(
     'pty:management:listSessions',
-    async (): Promise<{ sessions: DaemonSessionInfo[]; degraded: boolean }> => {
+    async (event): Promise<{ sessions: DaemonSessionInfo[]; degraded: boolean }> => {
+      if (!isTrustedUIRendererEvent(event)) {
+        return { sessions: [], degraded: false }
+      }
       const sessions = await collectSessions(getDaemonAdapters())
       return { sessions, degraded: isDaemonDegraded() }
     }
@@ -81,11 +88,16 @@ export function registerDaemonManagementHandlers(): void {
   // Why: tears down sessions across all adapters (current + legacy); daemon processes survive. See docs/daemon-staleness-ux.md §Phase 1.
   ipcMain.handle(
     'pty:management:killAll',
-    async (): Promise<{
+    async (
+      event
+    ): Promise<{
       killedCount: number
       remainingCount: number
       killedSessionIds: string[]
     }> => {
+      if (!isTrustedUIRendererEvent(event)) {
+        return { killedCount: 0, remainingCount: 0, killedSessionIds: [] }
+      }
       const adapters = getDaemonAdapters()
       // Why: snapshot session IDs up front so mid-kill respawns aren't counted as "remaining".
       const initial = await collectSessions(adapters)
@@ -139,7 +151,10 @@ export function registerDaemonManagementHandlers(): void {
 
   ipcMain.handle(
     'pty:management:killOne',
-    async (_event, args: { sessionId: string }): Promise<{ success: boolean }> => {
+    async (event, args: { sessionId: string }): Promise<{ success: boolean }> => {
+      if (!isTrustedUIRendererEvent(event)) {
+        return { success: false }
+      }
       if (typeof args?.sessionId !== 'string' || args.sessionId.length === 0) {
         return { success: false }
       }
@@ -162,7 +177,10 @@ export function registerDaemonManagementHandlers(): void {
     }
   )
 
-  ipcMain.handle('pty:management:restart', async (): Promise<{ success: boolean }> => {
+  ipcMain.handle('pty:management:restart', async (event): Promise<{ success: boolean }> => {
+    if (!isTrustedUIRendererEvent(event)) {
+      return { success: false }
+    }
     try {
       await restartDaemon()
       return { success: true }

@@ -55,8 +55,13 @@ vi.mock('../codex/codex-state-db-backfill-recovery', () =>
 )
 
 describe('registerPtyHandlers', () => {
-  const { handlers, mainWindow, installDaemonTestProvider, installObservableDaemonTestProvider } =
-    setupPtyIpcSuite()
+  const {
+    handlers,
+    mainWindow,
+    installDaemonTestProvider,
+    installObservableDaemonTestProvider,
+    claimMainRendererPty
+  } = setupPtyIpcSuite()
 
   // Why: the cap/flag must never fire in the common case (renderer keeps up), so small output carries no droppedBacklog.
   it('does not flag droppedBacklog for ordinary small output under the cap', async () => {
@@ -238,6 +243,7 @@ describe('registerPtyHandlers', () => {
       ])
     )
 
+    claimMainRendererPty('remote-pty')
     await handlers.get('pty:kill')!(null, { id: 'remote-pty' })
     expect(sshShutdown).toHaveBeenCalledWith('remote-pty', {
       immediate: true,
@@ -294,6 +300,8 @@ describe('registerPtyHandlers', () => {
     }
     registerPtyHandlers(mainWindow as never)
     setLocalPtyProvider(capabilityProvider as never)
+    claimMainRendererPty('current-pty')
+    claimMainRendererPty('legacy-pty')
     const result = await handlers.get('pty:getAuthoritativeBufferSnapshotCapabilities')?.(null, {
       ids: ['current-pty', 'legacy-pty', 'current-pty', 42]
     })
@@ -315,6 +323,7 @@ describe('registerPtyHandlers', () => {
       undefined,
       { awaitLocalPtyProviderStartup }
     )
+    claimMainRendererPty('restored-local-pty')
     const pending = Promise.resolve(
       handlers.get('pty:getAuthoritativeBufferSnapshotCapabilities')?.(null, {
         ids: ['restored-local-pty']
@@ -348,6 +357,8 @@ describe('registerPtyHandlers', () => {
       undefined,
       { awaitLocalPtyProviderStartup }
     )
+    claimMainRendererPty('remote:environment@@pty-1')
+    claimMainRendererPty('ssh:ssh-1@@pty-2')
 
     const result = await handlers.get('pty:getAuthoritativeBufferSnapshotCapabilities')?.(null, {
       ids: ['remote:environment@@pty-1', 'ssh:ssh-1@@pty-2']
@@ -363,6 +374,7 @@ describe('registerPtyHandlers', () => {
     // Null is never cached, so missing optional methods must resolve false.
     registerPtyHandlers(mainWindow as never)
     setLocalPtyProvider({ spawn: vi.fn(), write: vi.fn() } as never)
+    claimMainRendererPty('local-pty')
 
     const result = await handlers.get('pty:getAuthoritativeBufferSnapshotCapabilities')?.(null, {
       ids: ['local-pty']
@@ -399,6 +411,8 @@ describe('registerPtyHandlers', () => {
       getProfiles: vi.fn()
     } as never)
     registerPtyHandlers(mainWindow as never)
+    claimMainRendererPty('live-pty')
+    claimMainRendererPty('dead-pty')
 
     await expect(handlers.get('pty:hasPty')!(null, { id: 'live-pty' })).resolves.toBe(true)
     await expect(handlers.get('pty:hasPty')!(null, { id: 'dead-pty' })).resolves.toBe(false)

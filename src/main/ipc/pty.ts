@@ -247,6 +247,7 @@ import { resolveLocalProjectRuntimeForWorktreeId } from '../local-project-runtim
 import { isPtyIncarnationId } from '../../shared/pty-incarnation'
 import type { PtyListedSession } from '../../shared/pty-listed-session'
 import { ptyRendererOwners } from './pty-renderer-owners'
+import { isCurrentRendererMainFrame } from './renderer-ipc-frame-trust'
 
 export function sendToPtyOwner(ptyId: string, channel: string, payload: unknown): boolean {
   const target = ptyRendererOwners.getTarget(ptyId)
@@ -395,8 +396,8 @@ export function registerPaneKeyTeardownListener(listener: PaneKeyTeardownListene
 
 // Why: renderer pre-declares serializer ownership before pty:spawn to suppress the daemon-snapshot seed; gen tokens prevent paneKey-reuse races on teardown. See docs/mobile-prefer-renderer-scrollback.md.
 let pendingSerializerGenSeq = 0
-const pendingByPaneKey = new Map<string, { gen: number; ownerWebContentsId: number | null }>()
-const pendingPaneSerializerCleanupRegistered = new Set<number>()
+const pendingByPaneKey = new Map<string, { gen: number; ownerWebContents: WebContents }>()
+const pendingPaneSerializerCleanupRegistered = new Set<WebContents>()
 type PaneSpawnReservation = {
   promise: Promise<PaneSpawnReservationResult>
   resolve: (result: PaneSpawnReservationResult) => void
@@ -592,32 +593,32 @@ function rememberPaneKeyForPty(ptyId: string, paneKey: unknown): string | null {
   return normalizedPaneKey
 }
 
-function cleanupPendingPaneSerializersForSender(ownerWebContentsId: number): void {
-  pendingPaneSerializerCleanupRegistered.delete(ownerWebContentsId)
+function cleanupPendingPaneSerializersForSender(ownerWebContents: WebContents): void {
+  pendingPaneSerializerCleanupRegistered.delete(ownerWebContents)
   for (const [paneKey, pending] of pendingByPaneKey) {
-    if (pending.ownerWebContentsId === ownerWebContentsId) {
+    if (pending.ownerWebContents === ownerWebContents) {
       pendingByPaneKey.delete(paneKey)
       pendingPtyIdBySerializerGeneration.delete(pending.gen)
     }
   }
 }
 
-function registerPendingPaneSerializerCleanup(sender: WebContents | undefined): void {
-  if (!sender || pendingPaneSerializerCleanupRegistered.has(sender.id)) {
+function registerPendingPaneSerializerCleanup(sender: WebContents): void {
+  if (pendingPaneSerializerCleanupRegistered.has(sender)) {
     return
   }
-  pendingPaneSerializerCleanupRegistered.add(sender.id)
-  sender.once('destroyed', () => cleanupPendingPaneSerializersForSender(sender.id))
+  pendingPaneSerializerCleanupRegistered.add(sender)
+  sender.once('destroyed', () => cleanupPendingPaneSerializersForSender(sender))
 }
 
-function declarePendingPaneSerializer(paneKey: string, sender: WebContents | undefined): number {
+function declarePendingPaneSerializer(paneKey: string, sender: WebContents): number {
   const gen = ++pendingSerializerGenSeq
   registerPendingPaneSerializerCleanup(sender)
   const replaced = pendingByPaneKey.get(paneKey)
   if (replaced) {
     pendingPtyIdBySerializerGeneration.delete(replaced.gen)
   }
-  pendingByPaneKey.set(paneKey, { gen, ownerWebContentsId: sender?.id ?? null })
+  pendingByPaneKey.set(paneKey, { gen, ownerWebContents: sender })
   const existingPtyId = paneKeyPtyId.get(paneKey)
   if (existingPtyId) {
     pendingPtyIdBySerializerGeneration.set(gen, existingPtyId)
@@ -989,8 +990,9 @@ async function spawnForStablePane(
   return { result, owner: null }
 }
 
-function settlePendingPaneSerializer(paneKey: string, gen: number): boolean {
-  if (pendingByPaneKey.get(paneKey)?.gen !== gen) {
+function settlePendingPaneSerializer(paneKey: string, gen: number, sender: WebContents): boolean {
+  const pending = pendingByPaneKey.get(paneKey)
+  if (pending?.gen !== gen || pending.ownerWebContents !== sender) {
     return false
   }
   pendingByPaneKey.delete(paneKey)
@@ -2398,20 +2400,29 @@ export function registerPtyRenderer(webContents: WebContents): () => void {
       reset()
     }
   }
-  const destroy = (): void => {
-    ptyRendererOwners.removeRenderer(webContents)
+  let removed = false
+  const remove = (): void => {
+    if (removed) {
+      return
+    }
+    removed = true
+    const ownedIds = ptyRendererOwners.removeRenderer(webContents)
+    resetRendererDeliveryAccountingForLifecycleReset(webContents, ownedIds)
+    if (rendererGateResetWebContents === webContents) {
+      clearRendererDispatcherReadyWatchdog()
+    }
   }
   const finishLoad = (): void => handlePtyRendererDidFinishLoad(webContents)
   webContents.on('did-start-navigation', navigate)
   webContents.on('did-finish-load', finishLoad)
   webContents.on('render-process-gone', reset)
-  webContents.on('destroyed', destroy)
+  webContents.on('destroyed', remove)
   return () => {
     webContents.removeListener('did-start-navigation', navigate)
     webContents.removeListener('did-finish-load', finishLoad)
     webContents.removeListener('render-process-gone', reset)
-    webContents.removeListener('destroyed', destroy)
-    ptyRendererOwners.removeRenderer(webContents)
+    webContents.removeListener('destroyed', remove)
+    remove()
   }
 }
 
@@ -2446,6 +2457,29 @@ export function unbindLocalProviderListeners(): void {
 
 // ─── IPC Registration ───────────────────────────────────────────────
 
+type PtyHandlerOptions = {
+  prepareCodexSessionResume?: PrepareCodexSessionResume
+  awaitLocalPtyStartup?: () => Promise<void>
+  awaitLocalPtyProviderStartup?: () => Promise<void>
+  // Why: returns true once for the crash-recovery reload so its did-finish-load skips the orphan sweep and keeps live PTYs (#5787).
+  isRecoveryReloadInFlight?: (webContentsId: number) => boolean
+  onCodexHomePtySpawned?: (args: CodexHomePtySpawnedLifecycleArgs) => void
+  onPtyExit?: (id: string, exitSequence: number) => void
+  reuseRegisteredState?: boolean
+}
+
+type PtyHandlerContext = {
+  mainWindow: BrowserWindow
+  runtime?: OrcaRuntimeService
+  getSelectedCodexHomePath?: GetSelectedCodexHomePath
+  getSettings?: () => GlobalSettings
+  prepareClaudeAuth?: PrepareClaudeAuth
+  store?: Store
+  options?: PtyHandlerOptions
+}
+
+let updateRegisteredPtyHandlerContext: ((context: PtyHandlerContext) => void) | null = null
+
 export function registerPtyHandlers(
   mainWindow: BrowserWindow,
   runtime?: OrcaRuntimeService,
@@ -2453,16 +2487,21 @@ export function registerPtyHandlers(
   getSettings?: () => GlobalSettings,
   prepareClaudeAuth?: PrepareClaudeAuth,
   store?: Store,
-  options?: {
-    prepareCodexSessionResume?: PrepareCodexSessionResume
-    awaitLocalPtyStartup?: () => Promise<void>
-    awaitLocalPtyProviderStartup?: () => Promise<void>
-    // Why: returns true once for the crash-recovery reload so its did-finish-load skips the orphan sweep and keeps live PTYs (#5787).
-    isRecoveryReloadInFlight?: (webContentsId: number) => boolean
-    onCodexHomePtySpawned?: (args: CodexHomePtySpawnedLifecycleArgs) => void
-    onPtyExit?: (id: string, exitSequence: number) => void
-  }
+  options?: PtyHandlerOptions
 ): void {
+  if (options?.reuseRegisteredState && updateRegisteredPtyHandlerContext) {
+    updateRegisteredPtyHandlerContext({
+      mainWindow,
+      runtime,
+      getSelectedCodexHomePath,
+      getSettings,
+      prepareClaudeAuth,
+      store,
+      options
+    })
+    return
+  }
+  updateRegisteredPtyHandlerContext = null
   // Why: a re-registration means a new window owns delivery — cancel the prior closure's watchdog and neutralize its bridged reset so mark-hidden below can't arm a timer against the dead closure.
   clearRendererDispatcherReadyWatchdog()
   resetRendererDeliveryAccountingForLifecycleReset = () => {}
@@ -2471,19 +2510,14 @@ export function registerPtyHandlers(
   registerPtyRenderer(mainWindow.webContents)
 
   const getCurrentPtyEventSender = (
-    event: IpcMainEvent | IpcMainInvokeEvent | null
+    event: IpcMainEvent | IpcMainInvokeEvent
   ): WebContents | null => {
-    if (!event) {
-      return mainWindow.webContents
-    }
-    return event.senderFrame !== null &&
-      event.senderFrame === event.sender.mainFrame &&
-      ptyRendererOwners.isRegistered(event.sender)
+    return isCurrentRendererMainFrame(event) && ptyRendererOwners.isRegistered(event.sender)
       ? event.sender
       : null
   }
 
-  const claimPtyForRenderer = (event: IpcMainInvokeEvent | null, id: string): void => {
+  const claimPtyForRenderer = (event: IpcMainInvokeEvent, id: string): void => {
     const sender = getCurrentPtyEventSender(event)
     if (!sender) {
       throw new Error('untrusted_ui_renderer')
@@ -4343,22 +4377,45 @@ export function registerPtyHandlers(
   }
 
   // Why: reload/crash orphans delivery-interest holds and hidden marks; reset so surviving PTYs aren't stuck force-fed or gated — each pane's first sync re-marks.
-  clearRendererGateResetHandlers()
-  const resetRendererPtyDeliveryGateState = (): void => {
-    const gateDebug = getHiddenRendererPtyDeliveryDebug()
-    const ownedIds = ptyRendererOwners.getOwnedIds(mainWindow.webContents)
-    resetRendererScopedHiddenPtyDeliveryState(ownedIds)
-    if (gateDebug.hiddenDeliveryGatedPtyCount > 0 || gateDebug.deliveryInterestPtyCount > 0) {
-      invalidatePendingPtyDrainPolicy()
+  const attachControlRenderer = (): void => {
+    clearRendererGateResetHandlers()
+    const webContents = mainWindow.webContents
+    const resetRendererPtyDeliveryGateState = (): void => {
+      if (!ptyRendererOwners.isRegistered(webContents)) {
+        return
+      }
+      const gateDebug = getHiddenRendererPtyDeliveryDebug()
+      const ownedIds = ptyRendererOwners.getOwnedIds(webContents)
+      resetRendererScopedHiddenPtyDeliveryState(ownedIds)
+      if (gateDebug.hiddenDeliveryGatedPtyCount > 0 || gateDebug.deliveryInterestPtyCount > 0) {
+        invalidatePendingPtyDrainPolicy()
+      }
+      // Why: the daemon pacer must not keep throttling ptys whose hidden marks died with the renderer; the fresh renderer's sync re-marks the still-hidden ones.
+      resyncBackgroundedDeliveriesAfterGateReset()
     }
-    // Why: the daemon pacer must not keep throttling ptys whose hidden marks died with the renderer; the fresh renderer's sync re-marks the still-hidden ones.
-    resyncBackgroundedDeliveriesAfterGateReset()
+    rendererGateResetLoadHandler = resetRendererPtyDeliveryGateState
+    rendererGateResetGoneHandler = resetRendererPtyDeliveryGateState
+    rendererGateResetWebContents = webContents
+    webContents.on('did-finish-load', rendererGateResetLoadHandler)
+    webContents.on('render-process-gone', rendererGateResetGoneHandler)
   }
-  rendererGateResetLoadHandler = resetRendererPtyDeliveryGateState
-  rendererGateResetGoneHandler = resetRendererPtyDeliveryGateState
-  rendererGateResetWebContents = mainWindow.webContents
-  mainWindow.webContents.on('did-finish-load', rendererGateResetLoadHandler)
-  mainWindow.webContents.on('render-process-gone', rendererGateResetGoneHandler)
+  attachControlRenderer()
+
+  if (options?.reuseRegisteredState) {
+    updateRegisteredPtyHandlerContext = (context) => {
+      clearDispatcherReadyWatchdog()
+      mainWindow = context.mainWindow
+      runtime = context.runtime
+      getSelectedCodexHomePath = context.getSelectedCodexHomePath
+      getSettings = context.getSettings
+      prepareClaudeAuth = context.prepareClaudeAuth
+      store = context.store
+      options = context.options
+      registerPtyRenderer(mainWindow.webContents)
+      rendererPtyDispatcherReady = ptyRendererOwners.isDispatcherReady(mainWindow.webContents)
+      attachControlRenderer()
+    }
+  }
 
   // Why: only in-process PTYs can be orphan-swept; every renderer load protects PTYs owned by all other windows.
   handlePtyRendererDidFinishLoad = (webContents) => {
@@ -6117,10 +6174,19 @@ export function registerPtyHandlers(
   })
 
   installPowerSignalBreadcrumbs()
-  ipcMain.handle('pty:getRendererDeliveryDebugSnapshot', (): PtyRendererDeliveryDebugSnapshot => {
-    return getPtyRendererDeliveryDebugSnapshot()
-  })
-  ipcMain.handle('pty:resetRendererDeliveryDebug', (): void => {
+  ipcMain.handle(
+    'pty:getRendererDeliveryDebugSnapshot',
+    (event): PtyRendererDeliveryDebugSnapshot => {
+      if (!getCurrentPtyEventSender(event)) {
+        return { ...EMPTY_PTY_RENDERER_DELIVERY_DEBUG_SNAPSHOT }
+      }
+      return getPtyRendererDeliveryDebugSnapshot()
+    }
+  )
+  ipcMain.handle('pty:resetRendererDeliveryDebug', (event): void => {
+    if (!getCurrentPtyEventSender(event)) {
+      return
+    }
     resetPtyRendererDeliveryDebug()
   })
 
@@ -6165,7 +6231,8 @@ export function registerPtyHandlers(
         }
       }
     ) => {
-      if (!getCurrentPtyEventSender(event)) {
+      const rendererClaimSender = getCurrentPtyEventSender(event)
+      if (!rendererClaimSender) {
         throw new Error('untrusted_ui_renderer')
       }
       const codexHomeLaunchStartedAt = !args.connectionId ? new Date() : undefined
@@ -6254,6 +6321,7 @@ export function registerPtyHandlers(
       let stablePaneBindingPersisted = false
       let rejectedRegistrationCandidate: PtySpawnResult | null = null
       let pendingRegistrationPtyId: string | null = null
+      let provisionalRendererClaimId: string | null = null
       // Why hoisted to the reply scope: main reconciles the provider sequence
       // deep inside the spawn path, but the pane needs that renderer-domain
       // boundary beside the daemon snapshot's kitty flags.
@@ -6479,10 +6547,11 @@ export function registerPtyHandlers(
             : null
         const stablePaneKey = verifiedPaneKey ?? migrationUnsupportedPaneKey
         let baseEnv = baseEnvWithAuth ? { ...baseEnvWithAuth } : undefined
+        const currentRuntime = runtime
         const shouldRefreshAgentTeamsEnv =
           !preAdoptedStablePane &&
           !args.connectionId &&
-          runtime !== undefined &&
+          currentRuntime !== undefined &&
           stablePaneKey !== null &&
           shouldRefreshNativeClaudeAgentTeamsEnv({
             command: args.command,
@@ -6490,16 +6559,18 @@ export function registerPtyHandlers(
           })
         let effectiveLaunchConfig = args.launchConfig
         const shouldPreAllocateTerminalHandle =
-          runtime !== undefined &&
+          currentRuntime !== undefined &&
           ((!(provider instanceof LocalPtyProvider) &&
             !routesFreshSpawnsToLocalProvider(provider)) ||
             shouldRefreshAgentTeamsEnv)
-        const preAllocatedHandle = shouldPreAllocateTerminalHandle
-          ? (preAdoptedStablePane?.owner.handle ?? runtime.createPreAllocatedTerminalHandle())
-          : null
-        if (shouldRefreshAgentTeamsEnv && preAllocatedHandle) {
+        const preAllocatedHandle =
+          shouldPreAllocateTerminalHandle && currentRuntime
+            ? (preAdoptedStablePane?.owner.handle ??
+              currentRuntime.createPreAllocatedTerminalHandle())
+            : null
+        if (shouldRefreshAgentTeamsEnv && preAllocatedHandle && currentRuntime) {
           // Why: Agent Teams ids/tokens are process-local, so the team env must be regenerated for the new leader PTY.
-          const prepared = await runtime.prepareClaudeAgentTeamsLeaderForHandle({
+          const prepared = await currentRuntime.prepareClaudeAgentTeamsLeaderForHandle({
             handle: preAllocatedHandle,
             baseEnv: baseEnv ?? {}
           })
@@ -6816,6 +6887,13 @@ export function registerPtyHandlers(
             : null
         }
         finishTerminalInstall = beginPtySpawnForWorktree(args.worktreeId, cwd, args.connectionId)
+        const provisionalExpectedPtyId = earlyStablePaneOwner?.ptyId ?? effectiveSessionAppId
+        if (provisionalExpectedPtyId) {
+          if (!ptyRendererOwners.getOwner(provisionalExpectedPtyId)) {
+            provisionalRendererClaimId = provisionalExpectedPtyId
+          }
+          claimPtyForRenderer(event, provisionalExpectedPtyId)
+        }
         const initiallyHidden = args.initiallyHidden === true
         // Why: daemon PTYs can emit before spawn() resolves, so the hidden mark must beat byte zero (terminal-query-authority.md §races); other providers are safe with the post-spawn mark below.
         const preSpawnHiddenMarkId =
@@ -6841,6 +6919,16 @@ export function registerPtyHandlers(
           const expectedPtyId =
             stablePaneOwnerCandidate?.ptyId ?? effectiveSessionAppId ?? effectiveSessionId
           if (expectedPtyId) {
+            if (provisionalRendererClaimId && provisionalRendererClaimId !== expectedPtyId) {
+              if (ptyRendererOwners.owns(provisionalRendererClaimId, rendererClaimSender)) {
+                ptyRendererOwners.release(provisionalRendererClaimId)
+              }
+              provisionalRendererClaimId = null
+            }
+            if (!ptyRendererOwners.getOwner(expectedPtyId)) {
+              provisionalRendererClaimId = expectedPtyId
+            }
+            claimPtyForRenderer(event, expectedPtyId)
             runtime?.beginPtyRegistration?.(expectedPtyId)
             pendingRegistrationPtyId = expectedPtyId
           }
@@ -7301,6 +7389,12 @@ export function registerPtyHandlers(
             : {})
         }
         // Why: renderer tab state cannot reliably infer background and reattached PTYs in the daemon inventory.
+        if (provisionalRendererClaimId && provisionalRendererClaimId !== result.id) {
+          if (ptyRendererOwners.owns(provisionalRendererClaimId, rendererClaimSender)) {
+            ptyRendererOwners.release(provisionalRendererClaimId)
+          }
+        }
+        provisionalRendererClaimId = null
         claimPtyForRenderer(event, result.id)
         sendPtySpawnedToRenderer(result.id)
         if (!args.connectionId) {
@@ -7323,6 +7417,12 @@ export function registerPtyHandlers(
         }
         return resolvePaneSpawnReservation(paneSpawnReservationKey, paneSpawnReservation, response)
       } catch (err) {
+        if (provisionalRendererClaimId) {
+          if (ptyRendererOwners.owns(provisionalRendererClaimId, rendererClaimSender)) {
+            ptyRendererOwners.release(provisionalRendererClaimId)
+          }
+          provisionalRendererClaimId = null
+        }
         if (pendingRegistrationPtyId) {
           runtime?.cancelPendingPtyRegistration?.(
             pendingRegistrationPtyId,
@@ -7440,10 +7540,7 @@ export function registerPtyHandlers(
     (value as { cols: number }).cols > 0 &&
     (value as { rows: number }).rows > 0
 
-  const isPtyEventFromOwner = (
-    event: IpcMainEvent | IpcMainInvokeEvent | null,
-    id: string
-  ): boolean => {
+  const isPtyEventFromOwner = (event: IpcMainEvent | IpcMainInvokeEvent, id: string): boolean => {
     const sender = getCurrentPtyEventSender(event)
     return sender ? ptyRendererOwners.owns(id, sender) : false
   }
@@ -7520,7 +7617,12 @@ export function registerPtyHandlers(
 
   ipcMain.removeAllListeners('pty:claimViewport')
   ipcMain.on('pty:claimViewport', (event, args: unknown) => {
-    if (!runtime || !isPtyViewportClaimPayload(args) || !isPtyEventFromOwner(event, args.id)) {
+    const currentRuntime = runtime
+    if (
+      !currentRuntime ||
+      !isPtyViewportClaimPayload(args) ||
+      !isPtyEventFromOwner(event, args.id)
+    ) {
       return
     }
     const prior = hostViewportClaimTails.get(args.id)
@@ -7528,10 +7630,10 @@ export function registerPtyHandlers(
     const claim = (
       prior
         ? prior.then(
-            () => runtime.claimRemoteDesktopHost(args.id, args.cols, args.rows),
-            () => runtime.claimRemoteDesktopHost(args.id, args.cols, args.rows)
+            () => currentRuntime.claimRemoteDesktopHost(args.id, args.cols, args.rows),
+            () => currentRuntime.claimRemoteDesktopHost(args.id, args.cols, args.rows)
           )
-        : runtime.claimRemoteDesktopHost(args.id, args.cols, args.rows)
+        : currentRuntime.claimRemoteDesktopHost(args.id, args.cols, args.rows)
     ).catch(() => false)
     hostViewportClaimTails.set(args.id, claim)
     void claim.then(() => {
@@ -7609,10 +7711,11 @@ export function registerPtyHandlers(
   ipcMain.on(
     'pty:ackData',
     (event, args: { id: string; charCount?: number; processedChars?: number }) => {
-      if (!isPtyEventFromOwner(event, args?.id)) {
+      const sender = getCurrentPtyEventSender(event)
+      if (!sender || !ptyRendererOwners.owns(args?.id, sender)) {
         return
       }
-      const rendererWebContentsId = event?.sender.id ?? mainWindow.webContents.id
+      const rendererWebContentsId = sender.id
       lastAckReceivedAtMsByWebContentsId.set(rendererWebContentsId, Date.now())
       // Why: a live ACK channel means a future unanswered probe is a fresh diagnostic event, not a continuation of the last silent streak.
       deliveryResyncUnansweredWarnedWebContentsIds.delete(rendererWebContentsId)
@@ -7742,14 +7845,16 @@ export function registerPtyHandlers(
 
   ipcMain.removeAllListeners('pty:setActiveRendererPty')
   ipcMain.on('pty:setActiveRendererPty', (event, args: { id: string; active: boolean }) => {
-    if (typeof args.id !== 'string' || !args.id || !isPtyEventFromOwner(event, args.id)) {
+    const sender = getCurrentPtyEventSender(event)
+    if (
+      !sender ||
+      typeof args.id !== 'string' ||
+      !args.id ||
+      !ptyRendererOwners.owns(args.id, sender)
+    ) {
       return
     }
-    ptyRendererOwners.setActive(
-      event?.sender ?? mainWindow.webContents,
-      args.id,
-      args.active === true
-    )
+    ptyRendererOwners.setActive(sender, args.id, args.active === true)
     // Why: renderer scheduling hint only — active panes just get first chance at the bounded output reserve; reads/state/notifications continue for inactive terminals.
     if (args.active) {
       if (activeRendererPtys.has(args.id)) {
@@ -7764,14 +7869,16 @@ export function registerPtyHandlers(
 
   ipcMain.removeAllListeners('pty:setRendererPtyVisible')
   ipcMain.on('pty:setRendererPtyVisible', (event, args: { id: string; visible: boolean }) => {
-    if (typeof args.id !== 'string' || !args.id || !isPtyEventFromOwner(event, args.id)) {
+    const sender = getCurrentPtyEventSender(event)
+    if (
+      !sender ||
+      typeof args.id !== 'string' ||
+      !args.id ||
+      !ptyRendererOwners.owns(args.id, sender)
+    ) {
       return
     }
-    ptyRendererOwners.setVisible(
-      event?.sender ?? mainWindow.webContents,
-      args.id,
-      args.visible === true
-    )
+    ptyRendererOwners.setVisible(sender, args.id, args.visible === true)
     // Why: data produced while no renderer can see this PTY must keep that origin through batching, even if the user switches back before the flush lands.
     rendererVisibilityKnownPtys.add(args.id)
     if (args.visible) {
@@ -7785,14 +7892,16 @@ export function registerPtyHandlers(
 
   ipcMain.removeAllListeners('pty:setHiddenRendererPty')
   ipcMain.on('pty:setHiddenRendererPty', (event, args: { id: string; hidden: boolean }) => {
-    if (typeof args.id !== 'string' || !args.id || !isPtyEventFromOwner(event, args.id)) {
+    const sender = getCurrentPtyEventSender(event)
+    if (
+      !sender ||
+      typeof args.id !== 'string' ||
+      !args.id ||
+      !ptyRendererOwners.owns(args.id, sender)
+    ) {
       return
     }
-    ptyRendererOwners.setHidden(
-      event?.sender ?? mainWindow.webContents,
-      args.id,
-      args.hidden === true
-    )
+    ptyRendererOwners.setHidden(sender, args.id, args.hidden === true)
     mainDeliveryBreadcrumbs.record(args.hidden === true ? 'gate-mark' : 'gate-unmark', {
       id: redactPtyIdForDiagnostics(args.id)
     })
@@ -7847,14 +7956,16 @@ export function registerPtyHandlers(
 
   ipcMain.removeAllListeners('pty:setPtyDeliveryInterest')
   ipcMain.on('pty:setPtyDeliveryInterest', (event, args: { id: string; interested: boolean }) => {
-    if (typeof args.id !== 'string' || !args.id || !isPtyEventFromOwner(event, args.id)) {
+    const sender = getCurrentPtyEventSender(event)
+    if (
+      !sender ||
+      typeof args.id !== 'string' ||
+      !args.id ||
+      !ptyRendererOwners.owns(args.id, sender)
+    ) {
       return
     }
-    ptyRendererOwners.setInterested(
-      event?.sender ?? mainWindow.webContents,
-      args.id,
-      args.interested === true
-    )
+    ptyRendererOwners.setInterested(sender, args.id, args.interested === true)
     // Why: any delivery interest suppresses the hidden-delivery gate (raw-byte consumers keep receiving while hidden); not synced to the daemon pacer so interest churn can't un-pace a flood.
     const settings = getSettings?.()
     const wasDroppable = shouldDropHiddenRendererPtyData(args.id, settings)
@@ -7939,7 +8050,10 @@ export function registerPtyHandlers(
     }
   })
 
-  ipcMain.handle('pty:listSessions', async (): Promise<PtyListedSession[]> => {
+  ipcMain.handle('pty:listSessions', async (event): Promise<PtyListedSession[]> => {
+    if (!getCurrentPtyEventSender(event)) {
+      return []
+    }
     const deduped = new Map<string, PtyListedSession>()
     const admission = new PtyProcessListAdmission()
     await visitPtyProcessListingsInBatches(
@@ -7974,6 +8088,9 @@ export function registerPtyHandlers(
   ipcMain.handle(
     'pty:getAuthoritativeBufferSnapshotCapabilities',
     async (event, args: { ids?: unknown }) => {
+      if (!getCurrentPtyEventSender(event)) {
+        return []
+      }
       const ids = Array.isArray(args?.ids) ? args.ids.slice(0, 512) : []
       const hasLocalPtyId = ids.some((value) => {
         if (
@@ -8128,20 +8245,30 @@ export function registerPtyHandlers(
       if (!isValidPaneKey(args.paneKey)) {
         throw new Error('Invalid paneKey')
       }
-      return declarePendingPaneSerializer(args.paneKey, event?.sender)
+      const sender = getCurrentPtyEventSender(event)
+      if (!sender) {
+        throw new Error('untrusted_ui_renderer')
+      }
+      return declarePendingPaneSerializer(args.paneKey, sender)
     }
   )
 
   ipcMain.handle(
     'pty:settlePaneSerializer',
-    async (_event, args: { paneKey?: unknown; gen?: unknown }): Promise<void> => {
+    async (event, args: { paneKey?: unknown; gen?: unknown }): Promise<void> => {
       if (!isValidPaneKey(args.paneKey) || typeof args.gen !== 'number') {
         return
       }
+      const sender = getCurrentPtyEventSender(event)
+      if (!sender) {
+        return
+      }
       const ptyId = pendingPtyIdBySerializerGeneration.get(args.gen)
-      const settledCurrentGeneration = settlePendingPaneSerializer(args.paneKey, args.gen)
+      const settledCurrentGeneration = settlePendingPaneSerializer(args.paneKey, args.gen, sender)
       // Why: the generation-to-PTY binding survives late teardown of a reused id; paneKey reverse maps may already be gone.
-      pendingPtyIdBySerializerGeneration.delete(args.gen)
+      if (settledCurrentGeneration) {
+        pendingPtyIdBySerializerGeneration.delete(args.gen)
+      }
       if (settledCurrentGeneration && ptyId) {
         rendererSerializerReadiness.markReady(ptyId)
       }
@@ -8150,23 +8277,31 @@ export function registerPtyHandlers(
 
   ipcMain.handle(
     'pty:clearPendingPaneSerializer',
-    async (_event, args: { paneKey?: unknown; gen?: unknown }): Promise<void> => {
+    async (event, args: { paneKey?: unknown; gen?: unknown }): Promise<void> => {
       if (!isValidPaneKey(args.paneKey) || typeof args.gen !== 'number') {
         return
       }
-      settlePendingPaneSerializer(args.paneKey, args.gen)
-      pendingPtyIdBySerializerGeneration.delete(args.gen)
+      const sender = getCurrentPtyEventSender(event)
+      if (!sender) {
+        return
+      }
+      if (settlePendingPaneSerializer(args.paneKey, args.gen, sender)) {
+        pendingPtyIdBySerializerGeneration.delete(args.gen)
+      }
     }
   )
 
   ipcMain.handle(
     'pty:reportRendererSerializerReady',
-    async (_event, args: { ptyId?: unknown }): Promise<void> => {
+    async (event, args: { ptyId?: unknown }): Promise<void> => {
       if (
         typeof args.ptyId !== 'string' ||
         !args.ptyId.startsWith('remote:') ||
         args.ptyId.length > 512
       ) {
+        return
+      }
+      if (!isPtyEventFromOwner(event, args.ptyId)) {
         return
       }
       // Why: remote-runtime panes skip the local spawn cooperation gate, so their exact PTY id is the only readiness key.

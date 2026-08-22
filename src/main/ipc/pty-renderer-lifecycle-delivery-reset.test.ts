@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { spawnMock } from './pty-ipc-mock-registry'
+import { onMock, spawnMock } from './pty-ipc-mock-registry'
 import { setupPtyIpcSuite } from './pty-ipc-test-harness'
 import {
   registerPtyHandlers,
@@ -255,6 +255,54 @@ describe('registerPtyHandlers', () => {
     expect(ptyRendererOwners.getOwner(result.id)!.generation).toBe(generationBefore + 1)
   })
 
+  it('preserves secondary delivery credit when that renderer becomes control', async () => {
+    vi.useFakeTimers()
+    const mockProc = createMockProc()
+    spawnMock.mockReturnValue(mockProc.proc)
+
+    try {
+      registerPtyHandlers(
+        mainWindow as never,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        { reuseRegisteredState: true }
+      )
+      const result = (await handlers.get('pty:spawn')!(mainWindowIpcEvent, {
+        cols: 80,
+        rows: 24
+      })) as { id: string }
+      const secondary = foreignWindowIpcEvent.sender
+      registerPtyRenderer(secondary as never)
+      ptyRendererOwners.markDispatcherReady(secondary as never)
+      ptyRendererOwners.handoff([result.id], mainWindow.webContents as never, secondary as never)
+      mockProc.emitData('unacknowledged')
+      vi.advanceTimersByTime(2)
+      const ackBeforePromotion = getPtyAckDataListener()
+      const ipcListenerCountBeforePromotion = onMock.mock.calls.length
+      expect(getPtyRendererDeliveryDebugSnapshot().rendererInFlightChars).toBe(14)
+
+      registerPtyHandlers(
+        { ...mainWindow, webContents: secondary } as never,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        { reuseRegisteredState: true }
+      )
+
+      expect(onMock.mock.calls).toHaveLength(ipcListenerCountBeforePromotion)
+      expect(getPtyRendererDeliveryDebugSnapshot().rendererInFlightChars).toBe(14)
+      ackBeforePromotion(foreignWindowIpcEvent, { id: result.id, processedChars: 14 })
+      expect(getPtyRendererDeliveryDebugSnapshot().rendererInFlightChars).toBe(0)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it('ignores dispatcher readiness queued by a superseded main frame', async () => {
     const mockProc = createMockProc()
     spawnMock.mockReturnValue(mockProc.proc)
@@ -311,6 +359,36 @@ describe('registerPtyHandlers', () => {
         inFlightTotalChars: 'secondary-output'.length,
         inFlightPtyCount: 1
       })
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('rejects global delivery debug and session inventory from an obsolete frame', async () => {
+    vi.useFakeTimers()
+    const mockProc = createMockProc()
+    spawnMock.mockReturnValue(mockProc.proc)
+
+    try {
+      registerPtyHandlers(mainWindow as never)
+      await handlers.get('pty:spawn')!(mainWindowIpcEvent, { cols: 80, rows: 24 })
+      const secondary = foreignWindowIpcEvent.sender
+      registerPtyRenderer(secondary as never)
+      mockProc.emitData('guarded-output')
+      vi.advanceTimersByTime(2)
+      const obsoleteFrameEvent = { sender: secondary, senderFrame: {} }
+
+      expect(
+        handlers.get('pty:getRendererDeliveryDebugSnapshot')!(obsoleteFrameEvent, {})
+      ).toMatchObject({ rendererInFlightChars: 0 })
+      handlers.get('pty:resetRendererDeliveryDebug')!(obsoleteFrameEvent, {})
+      expect(
+        handlers.get('pty:getRendererDeliveryDebugSnapshot')!(mainWindowIpcEvent, {})
+      ).toMatchObject({ rendererInFlightChars: 'guarded-output'.length })
+      await expect(handlers.get('pty:listSessions')!(obsoleteFrameEvent, {})).resolves.toEqual([])
+      await expect(handlers.get('pty:listSessions')!(mainWindowIpcEvent, {})).resolves.not.toEqual(
+        []
+      )
     } finally {
       vi.useRealTimers()
     }
@@ -613,9 +691,11 @@ describe('registerPtyHandlers', () => {
         data: 'post-reconcile output'
       })
 
-      // A straggler ACK from the dead page is clamped and cannot underflow the reconciled counters below zero.
-      ackData(null, { id: spawnResult.id, charCount: 512 * 1024 })
-      expect(getPtyRendererDeliveryDebugSnapshot().rendererInFlightChars).toBe(0)
+      // A straggler ACK from the dead page cannot credit bytes delivered to the replacement frame.
+      ackData(mainWindowIpcEvent, { id: spawnResult.id, charCount: 512 * 1024 })
+      expect(getPtyRendererDeliveryDebugSnapshot().rendererInFlightChars).toBe(
+        'post-reconcile output'.length
+      )
     } finally {
       vi.useRealTimers()
     }

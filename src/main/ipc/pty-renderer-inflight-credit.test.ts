@@ -56,7 +56,8 @@ describe('registerPtyHandlers', () => {
     getPtyWriteListener,
     getPtyAckDataListener,
     getPtyDataSendCalls,
-    getDeliveryResyncProbeCalls
+    getDeliveryResyncProbeCalls,
+    claimMainRendererPty
   } = setupPtyIpcSuite()
 
   it('forwards only actually in-flight bytes to provider ACK backpressure', async () => {
@@ -92,6 +93,7 @@ describe('registerPtyHandlers', () => {
         getProfiles: vi.fn()
       } as never)
       registerPtyHandlers(mainWindow as never)
+      claimMainRendererPty('remote-like-pty')
       const ackData = getPtyAckDataListener()
       mainWindow.webContents.send.mockClear()
 

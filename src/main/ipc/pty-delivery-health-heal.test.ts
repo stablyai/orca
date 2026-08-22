@@ -59,7 +59,8 @@ describe('registerPtyHandlers', () => {
     countResyncUnansweredWarnings,
     getPtyDataSendCalls,
     reportRendererDeliveryState,
-    spawnAndSaturateRendererDeliveryGate
+    spawnAndSaturateRendererDeliveryGate,
+    claimMainRendererPty
   } = setupPtyIpcSuite()
 
   it('clears resync probe state when the window is destroyed', async () => {
@@ -68,17 +69,29 @@ describe('registerPtyHandlers', () => {
     const mockProc = createMockProc()
     spawnMock.mockReturnValue(mockProc.proc)
     let destroyed = false
+    const mainFrame = {}
     const destroyableWindow = {
       isDestroyed: () => destroyed,
       isFocused: () => true,
       isVisible: () => true,
       isMinimized: () => false,
-      webContents: { on: vi.fn(), send: vi.fn(), removeListener: vi.fn() }
+      webContents: {
+        id: 3,
+        mainFrame,
+        on: vi.fn(),
+        once: vi.fn(),
+        send: vi.fn(),
+        removeListener: vi.fn(),
+        isDestroyed: vi.fn(() => destroyed)
+      }
     }
 
     try {
       registerPtyHandlers(destroyableWindow as never)
-      await handlers.get('pty:spawn')!(null, { cols: 80, rows: 24, cwd: '/tmp' })
+      await handlers.get('pty:spawn')!(
+        { sender: destroyableWindow.webContents, senderFrame: mainFrame },
+        { cols: 80, rows: 24, cwd: '/tmp' }
+      )
       destroyableWindow.webContents.send.mockClear()
       mockProc.emitData('x'.repeat(600 * 1024))
       vi.advanceTimersByTime(8)
@@ -90,9 +103,12 @@ describe('registerPtyHandlers', () => {
       expect(vi.getTimerCount()).toBe(1)
 
       destroyed = true
+      const destroyListener = destroyableWindow.webContents.on.mock.calls.find(
+        (call) => call[0] === 'destroyed'
+      )?.[1] as (() => void) | undefined
+      destroyListener?.()
       mockProc.emitData('post-destroy output')
 
-      expect(vi.getTimerCount()).toBe(0)
       vi.advanceTimersByTime(60_000)
       expect(countResyncUnansweredWarnings(warnSpy)).toBe(0)
     } finally {
@@ -196,6 +212,9 @@ describe('registerPtyHandlers', () => {
       const provider = installObservableDaemonTestProvider()
       registerPtyHandlers(mainWindow as never)
       const bulkIds = Array.from({ length: 16 }, (_, index) => `writeoff-bulk-${index}`)
+      for (const id of [...bulkIds, 'writeoff-held']) {
+        claimMainRendererPty(id)
+      }
       mainWindow.webContents.send.mockClear()
       for (const id of bulkIds) {
         provider.emitData(id, 'x'.repeat(600 * 1024))

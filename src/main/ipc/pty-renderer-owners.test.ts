@@ -189,6 +189,23 @@ describe('PtyRendererOwners', () => {
     ])
   })
 
+  it('advances generation across consecutive source handoffs to one target', () => {
+    const owners = new PtyRendererOwners()
+    const first = makeRenderer(1)
+    const second = makeRenderer(2)
+    const target = makeRenderer(3)
+    owners.registerRenderer(first as never)
+    owners.registerRenderer(second as never)
+    owners.registerRenderer(target as never)
+    owners.claim('pty-1', first as never)
+    owners.claim('pty-2', second as never)
+    owners.markDispatcherReady(target as never)
+
+    expect(owners.handoff(['pty-1'], first as never, target as never)[0]?.toGeneration).toBe(1)
+    expect(owners.handoff(['pty-2'], second as never, target as never)[0]?.toGeneration).toBe(2)
+    expect(owners.getOwner('pty-1')?.generation).toBeLessThan(owners.getOwner('pty-2')!.generation)
+  })
+
   it('removes only the closed renderer and reports its orphaned PTYs', () => {
     const owners = new PtyRendererOwners()
     const first = makeRenderer(1)

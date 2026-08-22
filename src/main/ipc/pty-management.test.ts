@@ -6,13 +6,15 @@ const {
   removeHandlerMock,
   getDaemonProviderMock,
   restartDaemonMock,
-  getCurrentDaemonMacTccAttributionHealthMock
+  getCurrentDaemonMacTccAttributionHealthMock,
+  isTrustedUIRendererEventMock
 } = vi.hoisted(() => ({
   handleMock: vi.fn(),
   removeHandlerMock: vi.fn(),
   getDaemonProviderMock: vi.fn(),
   restartDaemonMock: vi.fn(),
-  getCurrentDaemonMacTccAttributionHealthMock: vi.fn(async () => 'unknown')
+  getCurrentDaemonMacTccAttributionHealthMock: vi.fn(async () => 'unknown'),
+  isTrustedUIRendererEventMock: vi.fn(() => true)
 }))
 
 vi.mock('electron', () => ({
@@ -23,6 +25,10 @@ vi.mock('../daemon/daemon-init', () => ({
   getDaemonProvider: getDaemonProviderMock,
   restartDaemon: restartDaemonMock,
   getCurrentDaemonMacTccAttributionHealth: getCurrentDaemonMacTccAttributionHealthMock
+}))
+
+vi.mock('./ui', () => ({
+  isTrustedUIRendererEvent: isTrustedUIRendererEventMock
 }))
 
 // Why: the handler uses `provider instanceof DaemonPtyRouter` to branch
@@ -148,6 +154,8 @@ describe('pty:management IPC handlers', () => {
     restartDaemonMock.mockReset()
     getCurrentDaemonMacTccAttributionHealthMock.mockReset()
     getCurrentDaemonMacTccAttributionHealthMock.mockResolvedValue('unknown')
+    isTrustedUIRendererEventMock.mockReset()
+    isTrustedUIRendererEventMock.mockReturnValue(true)
   })
 
   afterEach(() => {
@@ -521,5 +529,32 @@ describe('pty:management IPC handlers', () => {
 
       expect(result.success).toBe(false)
     })
+  })
+
+  it('rejects destructive management and inventory requests from an untrusted frame', async () => {
+    const current = makeAdapter(5, [makeSession('new-1')])
+    getDaemonProviderMock.mockReturnValue(current)
+    restartDaemonMock.mockResolvedValue({ killedCount: 1 })
+    isTrustedUIRendererEventMock.mockReturnValue(false)
+    const { registerDaemonManagementHandlers } = await importFresh()
+    registerDaemonManagementHandlers()
+    const handlers = buildHandlerMap()
+
+    await expect(handlers['pty:management:listSessions']({})).resolves.toEqual({
+      sessions: [],
+      degraded: false
+    })
+    await expect(handlers['pty:management:killAll']({})).resolves.toEqual({
+      killedCount: 0,
+      remainingCount: 0,
+      killedSessionIds: []
+    })
+    await expect(handlers['pty:management:killOne']({}, { sessionId: 'new-1' })).resolves.toEqual({
+      success: false
+    })
+    await expect(handlers['pty:management:restart']({})).resolves.toEqual({ success: false })
+    expect(current.listSessions).not.toHaveBeenCalled()
+    expect(current.shutdown).not.toHaveBeenCalled()
+    expect(restartDaemonMock).not.toHaveBeenCalled()
   })
 })

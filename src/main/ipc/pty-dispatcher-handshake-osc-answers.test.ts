@@ -91,7 +91,7 @@ describe('registerPtyHandlers', () => {
       })
 
       // The genuine main-window handshake still opens the gate and drains.
-      rawReadyListener({ sender: mainWindow.webContents })
+      rawReadyListener(mainWindowIpcEvent)
       vi.advanceTimersByTime(8)
       expect(mainWindow.webContents.send).toHaveBeenCalledWith('pty:data', {
         id: spawnResult.id,

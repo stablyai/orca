@@ -496,7 +496,7 @@ describe('registerPtyHandlers', () => {
       expect.any(String),
       'term_expected'
     )
-    expect(mainWindow.webContents.send).toHaveBeenCalledWith('pty:spawned', {
+    expect(mainWindow.webContents.send).not.toHaveBeenCalledWith('pty:spawned', {
       id: spawned.id
     })
   })

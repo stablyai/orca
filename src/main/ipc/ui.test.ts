@@ -38,6 +38,7 @@ import {
   broadcastToTrustedUIRenderers,
   getTrustedUIRendererWindow,
   isTrustedUIRenderer,
+  isTrustedUIRendererEvent,
   registerUIHandlers,
   sendToTrustedUIRenderer
 } from './ui'
@@ -54,15 +55,19 @@ function makeStore() {
 
 function makeUIEvent(senderOverrides: Record<string, unknown> = {}): {
   sender: Record<string, unknown>
+  senderFrame: object
 } {
+  const mainFrame = {}
   return {
     sender: {
       id: 17,
+      mainFrame,
       getType: () => 'window',
       getURL: () => 'file:///orca/index.html',
       isDestroyed: () => false,
       ...senderOverrides
-    }
+    },
+    senderFrame: mainFrame
   }
 }
 
@@ -240,6 +245,15 @@ describe('UI IPC', () => {
 
     expect(isTrustedUIRenderer(first.sender as never)).toBe(true)
     expect(isTrustedUIRenderer(second.sender as never)).toBe(true)
+  })
+
+  it('trusts only the current main frame of a registered renderer', () => {
+    const event = makeUIEvent()
+    registerTrustedEvent(event, {}, 'control')
+
+    expect(isTrustedUIRendererEvent(event as never)).toBe(true)
+    expect(isTrustedUIRendererEvent({ ...event, senderFrame: {} } as never)).toBe(false)
+    expect(isTrustedUIRendererEvent({ ...event, senderFrame: null } as never)).toBe(false)
   })
 
   it('does not trust an unregistered dev-server window by origin alone', () => {

@@ -58,7 +58,8 @@ vi.mock('../codex/codex-state-db-backfill-recovery', () =>
 )
 
 describe('registerPtyHandlers', () => {
-  const { handlers, mainWindow, mainWindowIpcEvent, getPtyWriteListener } = setupPtyIpcSuite()
+  const { handlers, mainWindow, mainWindowIpcEvent, getPtyWriteListener, claimMainRendererPty } =
+    setupPtyIpcSuite()
 
   describe('spawn environment', () => {
     describe('daemon-active provider (parity with LocalPtyProvider)', () => {
@@ -129,7 +130,7 @@ describe('registerPtyHandlers', () => {
             id: scopedPtyId,
             data: 'echo still-owned'
           })
-          expect(remoteWrite).toHaveBeenCalledWith(scopedPtyId, 'echo still-owned')
+          expect(remoteWrite).not.toHaveBeenCalled()
         } finally {
           deletePtyOwnership(scopedPtyId)
         }
@@ -170,6 +171,7 @@ describe('registerPtyHandlers', () => {
           undefined,
           store as never
         )
+        claimMainRendererPty('remote-pty')
 
         try {
           await expect(
@@ -280,6 +282,7 @@ describe('registerPtyHandlers', () => {
         } as never)
         handlers.clear()
         registerPtyHandlers(mainWindow as never, runtime as never)
+        claimMainRendererPty('local-pty')
         const controller = runtime.setPtyController.mock.calls[0]?.[0] as {
           kill: (ptyId: string) => boolean
         }
@@ -333,6 +336,7 @@ describe('registerPtyHandlers', () => {
         } as never)
         handlers.clear()
         registerPtyHandlers(mainWindow as never, runtime as never)
+        claimMainRendererPty('local-pty')
         const controller = runtime.setPtyController.mock.calls[0]?.[0] as {
           stopAndWait: (ptyId: string, opts?: { keepHistory?: boolean }) => Promise<boolean>
         }
@@ -385,6 +389,7 @@ describe('registerPtyHandlers', () => {
         } as never)
         handlers.clear()
         registerPtyHandlers(mainWindow as never, runtime as never)
+        claimMainRendererPty('local-pty')
         const controller = runtime.setPtyController.mock.calls[0]?.[0] as {
           markReversibleStops: (ptyIds: readonly string[]) => () => void
           stopAndWait: (ptyId: string) => Promise<boolean>

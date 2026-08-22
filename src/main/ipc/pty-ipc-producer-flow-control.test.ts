@@ -62,7 +62,8 @@ describe('registerPtyHandlers', () => {
     mainWindow,
     installObservableDaemonTestProvider,
     getPtyAckDataListener,
-    getPtyDataSendCalls
+    getPtyDataSendCalls,
+    claimMainRendererPty
   } = setupPtyIpcSuite()
 
   it('pauses and resumes the exact SSH provider generation across reconnect replacement', async () => {
@@ -152,6 +153,7 @@ describe('registerPtyHandlers', () => {
     const id = 'ssh:exit-data-race@@relay-pty'
 
     registerPtyHandlers(mainWindow as never, runtime as never)
+    claimMainRendererPty(id)
     mainWindow.webContents.send.mockClear()
     await acceptSshPtyOutputData({
       id,
@@ -192,6 +194,7 @@ describe('registerPtyHandlers', () => {
     try {
       const provider = installObservableDaemonTestProvider()
       registerPtyHandlers(mainWindow as never)
+      claimMainRendererPty('flood-pty')
       mainWindow.webContents.send.mockClear()
 
       const finalPendingData = 'x'.repeat(320 * 1024)
@@ -211,6 +214,7 @@ describe('registerPtyHandlers', () => {
     try {
       const provider = installObservableDaemonTestProvider()
       registerPtyHandlers(mainWindow as never)
+      claimMainRendererPty('flood-pty')
       mainWindow.webContents.send.mockClear()
 
       const finalPendingData = 'x'.repeat(320 * 1024)
@@ -253,6 +257,7 @@ describe('registerPtyHandlers', () => {
     try {
       const provider = installObservableDaemonTestProvider()
       registerPtyHandlers(mainWindow as never)
+      claimMainRendererPty('send-fail-complete')
       mainWindow.webContents.send.mockClear()
       let failed = false
       let markerFailed = false

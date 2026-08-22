@@ -1,8 +1,15 @@
-import { BrowserWindow, ipcMain, type WebContents } from 'electron'
+import {
+  BrowserWindow,
+  ipcMain,
+  type IpcMainEvent,
+  type IpcMainInvokeEvent,
+  type WebContents
+} from 'electron'
 import type { Store } from '../persistence'
 import type { PersistedUIState } from '../../shared/persisted-ui-state-types'
 import { isFeatureInteractionId } from '../../shared/feature-interactions'
 import { orcaWindowManager } from '../window/orca-window-manager'
+import { isCurrentRendererMainFrame } from './renderer-ipc-frame-trust'
 
 export function sendToTrustedUIRenderer(
   channel: string,
@@ -114,4 +121,10 @@ export function registerUIHandlers(
 
 export function isTrustedUIRenderer(sender: WebContents): boolean {
   return orcaWindowManager.isTrustedSender(sender)
+}
+
+export function isTrustedUIRendererEvent(
+  event: Pick<IpcMainEvent | IpcMainInvokeEvent, 'sender' | 'senderFrame'>
+): boolean {
+  return isCurrentRendererMainFrame(event) && isTrustedUIRenderer(event.sender)
 }

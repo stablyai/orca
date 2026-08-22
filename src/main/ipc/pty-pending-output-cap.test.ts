@@ -54,7 +54,8 @@ describe('registerPtyHandlers', () => {
     mainWindow,
     createMockProc,
     installObservableDaemonTestProvider,
-    getPtyAckDataListener
+    getPtyAckDataListener,
+    claimMainRendererPty
   } = setupPtyIpcSuite()
 
   it('caps per-PTY pending output while the renderer is starved and heals via a droppedOutput sentinel', async () => {
@@ -199,6 +200,7 @@ describe('registerPtyHandlers', () => {
     try {
       const provider = installObservableDaemonTestProvider()
       registerPtyHandlers(mainWindow as never)
+      claimMainRendererPty('flood-pty')
       mainWindow.webContents.send.mockClear()
 
       // Flood in 64KB chunks like a `yes`-style producer honoring pause — node-pty pause() stops the fd read, so it stops emitting.
@@ -252,6 +254,8 @@ describe('registerPtyHandlers', () => {
         )
       }
       registerPtyHandlers(mainWindow as never, runtime as never)
+      claimMainRendererPty('source-credit-pty')
+      claimMainRendererPty('legacy-pty')
       mainWindow.webContents.send.mockClear()
 
       const sourceChunk = 's'.repeat(128 * 1024)
