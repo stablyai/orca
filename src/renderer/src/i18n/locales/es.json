@@ -13591,7 +13591,13 @@
           "3e3b2c369f": "expresión cron",
           "e81a02d61b": "Ingrese un cron válido de cinco campos antes de guardar.",
           "968e66d686": "Ingrese un cron de cinco campos.",
-          "cadb7b0bc9": "inválido"
+          "cadb7b0bc9": "inválido",
+          "f6ca30da23": "Cron personalizado válido",
+          "a226dbdd40": "Minuto",
+          "ec9c1e35df": "Hora",
+          "2d82246d23": "Día",
+          "0e1de0358b": "Mes",
+          "77e96bded6": "Día de la semana"
         },
         "AutomationDetail": {
           "007c8ad874": "Inmediato",
@@ -13893,6 +13899,16 @@
               "category": "Mantenimiento",
               "name": "Control de mantenimiento cada hora",
               "prompt": "Compruebe si hay trabajos atascados, archivos generados obsoletos, validación fallida y cualquier cosa que necesite atención humana. Informe solo problemas procesables."
+            }
+          },
+          "schedule": {
+            "label": {
+              "a95afb7483": "Cada hora en el minuto {{minute}}",
+              "280ccd2701": "Todos los días a las {{time}}",
+              "3f1422adc1": "Días laborables a las {{time}}",
+              "cc71e252ba": "Cada {{day}} a las {{time}}",
+              "ba20c92073": "Programación personalizada",
+              "086a5a9fe2": "Programación no válida"
             }
           }
         },

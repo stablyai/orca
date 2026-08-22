@@ -14983,7 +14983,13 @@
           "3e3b2c369f": "Cron expression",
           "e81a02d61b": "Enter a valid five-field cron before saving.",
           "968e66d686": "Enter a five-field cron.",
-          "cadb7b0bc9": "invalid"
+          "cadb7b0bc9": "invalid",
+          "f6ca30da23": "Valid custom cron",
+          "a226dbdd40": "Minute",
+          "ec9c1e35df": "Hour",
+          "2d82246d23": "Day",
+          "0e1de0358b": "Month",
+          "77e96bded6": "Weekday"
         },
         "AutomationDetail": {
           "007c8ad874": "Prompt",
@@ -15302,6 +15308,16 @@
                 "done": "Done",
                 "failed": "Failed"
               }
+            }
+          },
+          "schedule": {
+            "label": {
+              "086a5a9fe2": "Invalid schedule",
+              "ba20c92073": "Custom schedule",
+              "a95afb7483": "Hourly at :{{minute}}",
+              "280ccd2701": "Daily at {{time}}",
+              "3f1422adc1": "Weekdays at {{time}}",
+              "cc71e252ba": "{{day}}s at {{time}}"
             }
           }
         },

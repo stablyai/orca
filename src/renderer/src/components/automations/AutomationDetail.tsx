@@ -5,7 +5,7 @@ import { Badge } from '@/components/ui/badge'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { getAgentCatalog, AgentIcon } from '@/lib/agent-catalog'
 import type { Automation, AutomationRun } from '../../../../shared/automations-types'
-import { formatAutomationSchedule } from '../../../../shared/automation-schedules'
+import { formatUiAutomationSchedule } from './automation-schedule-label'
 import { formatAutomationPrecheckTimeout } from '../../../../shared/automation-precheck'
 import { formatAutomationDateTimeWithRelative } from './automation-page-parts'
 import {
@@ -227,7 +227,7 @@ export function AutomationDetail({
       <div className="grid grid-cols-[repeat(auto-fit,minmax(9rem,1fr))] gap-5 rounded-md border border-border/50 bg-muted/30 px-4 py-3 shadow-sm">
         <DetailMetric
           label={translate('auto.components.automations.AutomationDetail.18763ded26', 'Schedule')}
-          value={formatAutomationSchedule(automation.rrule)}
+          value={formatUiAutomationSchedule(automation.rrule)}
         />
         <DetailMetric
           label={translate('auto.components.automations.AutomationDetail.578ff46987', 'Next run')}
