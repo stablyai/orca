@@ -108,6 +108,18 @@ describe('automation schedules', () => {
     expect(formatAutomationSchedule('FREQ=HOURLY;BYMINUTE=5')).toBe('Hourly at :05')
   })
 
+  it('rejects steps wider than the field span instead of silently degrading', () => {
+    // `5/90` and `*/90` on minutes used to validate, collapse to a single value, and run
+    // hourly while the label promised the user's cadence (#15895).
+    expect(isValidAutomationCronSchedule('5/90 * * * *')).toBe(false)
+    expect(isValidAutomationCronSchedule('*/90 * * * *')).toBe(false)
+    expect(isValidAutomationSchedule('5/90 * * * *')).toBe(false)
+    // A step within the full field span stays accepted, including in-range steps on a bare
+    // start value (their expansion is #15864's scope).
+    expect(isValidAutomationCronSchedule('5/15 * * * *')).toBe(true)
+    expect(isValidAutomationCronSchedule('*/15 * * * *')).toBe(true)
+  })
+
   it('computes custom cron schedules', () => {
     const next = nextAutomationOccurrenceAfter(
       '15 10 * * 1-5',

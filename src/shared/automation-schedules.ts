@@ -134,6 +134,13 @@ function parseCronField(args: {
     if (!Number.isInteger(step) || step < 1) {
       throw new Error(`Invalid cron ${args.field}.`)
     }
+    // Why (#15895): a step wider than the whole field can never advance within it — the loop
+    // below would silently collapse to the start value while validation still accepted the
+    // expression, discarding the user's stated cadence. The threshold is the full field span
+    // (not the written range) so `5/15` on minutes stays parseable for its own widening fix.
+    if (step > args.max - args.min) {
+      throw new Error(`Invalid cron ${args.field}.`)
+    }
 
     let start: number
     let end: number

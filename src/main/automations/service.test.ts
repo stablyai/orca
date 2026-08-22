@@ -86,6 +86,62 @@ describe('AutomationService', () => {
     )
   })
 
+  it('isolates an unparseable schedule so siblings keep firing', async () => {
+    vi.setSystemTime(new Date('2026-05-13T08:59:00'))
+    const store = await createStore()
+    store.addRepo(makeRepo())
+    const common = {
+      prompt: 'Check the repo',
+      agentId: 'claude',
+      projectId: 'r1',
+      workspaceMode: 'existing',
+      workspaceId: 'wt1',
+      timezone: 'UTC',
+      dtstart: new Date('2026-05-12T00:00:00').getTime()
+    } as const
+    // A cadence persisted by an older build that the parser now rejects (#15895): created
+    // with a valid schedule, then rewritten in place, since creation itself now validates.
+    const brokenRow = store.createAutomation({
+      ...common,
+      name: 'Broken cadence',
+      rrule: '5 * * * *'
+    })
+    const broken = {
+      ...brokenRow,
+      rrule: '5/90 * * * *',
+      nextRunAt: new Date('2026-05-13T08:00:00').getTime()
+    }
+    const healthy = store.createAutomation({
+      ...common,
+      name: 'Morning check',
+      rrule: 'FREQ=DAILY;BYHOUR=9;BYMINUTE=0'
+    })
+    // 'Broken cadence' sorts first, so without per-automation isolation its throw would
+    // abort the tick before the healthy automation is ever evaluated.
+    vi.spyOn(store, 'listAutomations').mockReturnValue([broken, healthy])
+
+    vi.setSystemTime(new Date('2026-05-13T09:01:00'))
+    const send = vi.fn()
+    const service = new AutomationService(store, { tickMs: 60_000 })
+    service.setWebContents({ isDestroyed: () => false, send } as never)
+    service.start()
+    service.setRendererReady()
+
+    // The sibling still dispatches even though the broken row fails evaluation first.
+    await vi.waitFor(() =>
+      expect(send).toHaveBeenCalledWith('automations:dispatchRequested', expect.any(Object))
+    )
+    service.stop()
+
+    const [, payload] = send.mock.calls[0]
+    expect(payload.automation.id).toBe(healthy.id)
+
+    const brokenRuns = store.listAutomationRuns(broken.id)
+    expect(brokenRuns).toHaveLength(1)
+    expect(brokenRuns[0]?.status).toBe('dispatch_failed')
+    expect(brokenRuns[0]?.error).toContain('Schedule could not be evaluated')
+  })
+
   it('returns the persisted status for manual runs after dispatch is requested', async () => {
     vi.setSystemTime(new Date('2026-05-13T08:00:00Z'))
     const store = await createStore()

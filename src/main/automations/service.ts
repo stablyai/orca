@@ -177,7 +177,17 @@ export class AutomationService {
         if (!automation.enabled || automation.nextRunAt > now) {
           continue
         }
-        await this.evaluateAutomation(automation, now)
+        try {
+          await this.evaluateAutomation(automation, now)
+        } catch (error) {
+          // Why (#15895): one broken row must never abort the tick — without this, a single
+          // automation whose persisted schedule cannot be evaluated stalled every other
+          // automation on the host until its schedule was edited away.
+          console.warn(
+            `[automations] evaluation failed for automation ${automation.id}:`,
+            error
+          )
+        }
       }
     } finally {
       this.evaluating = false
@@ -185,7 +195,25 @@ export class AutomationService {
   }
 
   private async evaluateAutomation(automation: Automation, now: number): Promise<void> {
-    const scheduledFor = this.store.getLatestAutomationOccurrence(automation, now)
+    let scheduledFor: number | null
+    try {
+      scheduledFor = this.store.getLatestAutomationOccurrence(automation, now)
+    } catch (error) {
+      // Why (#15895): surface the unparseable schedule on its own run instead of throwing out
+      // of the tick — the user sees which automation broke and why, siblings keep firing, and
+      // advancing prevents the bad row from hot-looping every tick.
+      const run = this.store.createAutomationRun(automation, now)
+      this.store.updateAutomationRun({
+        runId: run.id,
+        status: 'dispatch_failed',
+        workspaceId: automation.workspaceId,
+        error: `Schedule could not be evaluated: ${
+          error instanceof Error ? error.message : String(error)
+        }`
+      })
+      this.store.advanceAutomationNextRun(automation.id, now)
+      return
+    }
     if (scheduledFor === null) {
       this.store.advanceAutomationNextRun(automation.id, now)
       return
