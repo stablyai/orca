@@ -200,6 +200,10 @@ export function barColor(usedPct: number): string {
   return 'bg-red-500'
 }
 
+/**
+ * One rate-limit window: label, meter, the used/reset row, and — where the
+ * window's timing supports it — a pace marker and its reading.
+ */
 function ProviderRateLimitWindowSection({
   window,
   label,
@@ -256,6 +260,11 @@ function ProviderRateLimitWindowSection({
   )
 }
 
+/**
+ * A provider's usage card — one section per window, plus reset credits and any
+ * error state. Shared by the status-bar detail menu and the hover tooltip,
+ * which is why the palette is threaded through rather than hard-coded.
+ */
 export function ProviderPanel({
   p,
   inverted = false,

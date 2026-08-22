@@ -30,6 +30,7 @@ export function formatUsagePaceOutlook(pace: UsagePace): string {
   })
 }
 
+/** Both halves as one line: "19% in reserve · Lasts until reset". */
 export function formatUsagePaceLine(pace: UsagePace): string {
   return `${formatUsagePaceDelta(pace)} · ${formatUsagePaceOutlook(pace)}`
 }

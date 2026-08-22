@@ -30,6 +30,14 @@ export const USAGE_PACE_ON_PACE_BAND_PERCENT = 2
 /** Below this much elapsed window, a burn rate extrapolated from it is fiction. */
 export const USAGE_PACE_MIN_ELAPSED_PERCENT = 3
 
+/**
+ * Measures a window's spend against an even burn through it.
+ *
+ * Returns null wherever the reading would be invented rather than measured: no
+ * reset timestamp, a reset already past, a reset further out than the window is
+ * long (so `resetsAt` and `windowMinutes` disagree), or too little of the window
+ * elapsed to extrapolate from.
+ */
 export function getUsagePace(window: RateLimitWindow, now: number): UsagePace | null {
   const { resetsAt, windowMinutes } = window
   if (resetsAt == null || !Number.isFinite(resetsAt) || !Number.isFinite(now)) {
@@ -76,6 +84,10 @@ export function getUsagePace(window: RateLimitWindow, now: number): UsagePace | 
   }
 }
 
+/**
+ * Extends the burn rate observed so far to the end of the window: does the
+ * remaining capacity outlast the reset, and if not, how long until it is gone.
+ */
 function projectRunOut(
   usedPercent: number,
   elapsedMs: number,
