@@ -11495,6 +11495,202 @@ describe('OrcaRuntimeService', () => {
     expect(cwds.get('pty-debian')).toBe('\\\\wsl.localhost\\Debian\\home\\me\\repo')
   })
 
+  it('keeps an initial preallocated handle when execution context precedes the first PTY record', async () => {
+    const runtime = new OrcaRuntimeService(store)
+    const ptyId = `${TEST_WORKTREE_ID}@@prepared-first-spawn`
+    const handle = runtime.preAllocateHandleForPty(ptyId)
+    runtime.setPtyController({
+      write: () => true,
+      kill: () => true,
+      getForegroundProcess: async () => null
+    })
+
+    // A preview installs an async fence generation, but does not prove that a
+    // process lifecycle already existed.
+    await expect(runtime.writeTerminalPreviewInput(ptyId, 'probe')).resolves.toBe(true)
+
+    runtime.preparePtyExecutionContext(ptyId, null, { resetIncarnation: true })
+    runtime.onPtyData(ptyId, 'first prepared process output\n', 100)
+    runtime.onPtySpawned(ptyId)
+    syncSinglePty(runtime, ptyId)
+    runtime.registerPty(ptyId, TEST_WORKTREE_ID, null, {
+      tabId: 'tab-1',
+      leafId: 'pane:1',
+      incarnationId: 'inc-first'
+    })
+
+    expect((await runtime.listTerminals()).terminals[0]?.handle).toBe(handle)
+    await expect(
+      runtime.readTerminal(handle, { expectedIncarnationId: 'inc-first' })
+    ).resolves.toMatchObject({
+      incarnationId: 'inc-first',
+      tail: ['first prepared process output']
+    })
+  })
+
+  it.each([
+    { label: 'known', nextIncarnation: 'inc-next' },
+    { label: 'unknown', nextIncarnation: undefined }
+  ])(
+    'clears late prior-process bytes at a prepared $label replacement spawn',
+    async ({ nextIncarnation }) => {
+      const runtime = new OrcaRuntimeService(store)
+      syncSinglePty(runtime)
+      runtime.registerPty('pty-1', TEST_WORKTREE_ID, null, {
+        tabId: 'tab-1',
+        leafId: 'pane:1',
+        incarnationId: 'inc-old'
+      })
+      const [oldTerminal] = (await runtime.listTerminals()).terminals
+
+      runtime.preparePtyExecutionContext('pty-1', null, { resetIncarnation: true })
+      const [preparedTerminal] = (await runtime.listTerminals()).terminals
+      runtime.onPtyData('pty-1', 'late prior-process output\n', 100)
+      runtime.onPtySpawned('pty-1', nextIncarnation)
+      runtime.registerPty(
+        'pty-1',
+        TEST_WORKTREE_ID,
+        null,
+        nextIncarnation
+          ? { tabId: 'tab-1', leafId: 'pane:1', incarnationId: nextIncarnation }
+          : undefined
+      )
+
+      const [replacement] = (await runtime.listTerminals()).terminals
+      expect(replacement.handle).not.toBe(oldTerminal.handle)
+      expect(replacement.handle).not.toBe(preparedTerminal.handle)
+      await expect(runtime.readTerminal(oldTerminal.handle)).rejects.toThrow(
+        'terminal_handle_stale'
+      )
+      await expect(runtime.readTerminal(preparedTerminal.handle)).rejects.toThrow(
+        'terminal_handle_stale'
+      )
+      const read = await runtime.readTerminal(
+        replacement.handle,
+        nextIncarnation ? { expectedIncarnationId: nextIncarnation } : undefined
+      )
+      expect(read.tail).toEqual([])
+      expect(read.tail.join('\n')).not.toContain('late prior-process output')
+    }
+  )
+
+  it.each([
+    { label: 'known', nextIncarnation: 'inc-next' },
+    { label: 'unknown', nextIncarnation: undefined }
+  ])(
+    'clears late graph-observed bytes at a prepared $label replacement spawn',
+    async ({ nextIncarnation }) => {
+      const runtime = new OrcaRuntimeService(store)
+      syncSinglePty(runtime)
+      const [observedTerminal] = (await runtime.listTerminals()).terminals
+      runtime.onPtyData('pty-1', 'observed prior-process output\n', 99)
+
+      runtime.preparePtyExecutionContext('pty-1', null, { resetIncarnation: true })
+      const [preparedTerminal] = (await runtime.listTerminals()).terminals
+      runtime.onPtyData('pty-1', 'late prior-process output\n', 100)
+      runtime.onPtySpawned('pty-1', nextIncarnation)
+      runtime.registerPty(
+        'pty-1',
+        TEST_WORKTREE_ID,
+        null,
+        nextIncarnation
+          ? { tabId: 'tab-1', leafId: 'pane:1', incarnationId: nextIncarnation }
+          : undefined
+      )
+
+      const [replacement] = (await runtime.listTerminals()).terminals
+      expect(replacement.handle).not.toBe(observedTerminal.handle)
+      expect(replacement.handle).not.toBe(preparedTerminal.handle)
+      await expect(runtime.readTerminal(observedTerminal.handle)).rejects.toThrow(
+        'terminal_handle_stale'
+      )
+      await expect(runtime.readTerminal(preparedTerminal.handle)).rejects.toThrow(
+        'terminal_handle_stale'
+      )
+      const read = await runtime.readTerminal(
+        replacement.handle,
+        nextIncarnation ? { expectedIncarnationId: nextIncarnation } : undefined
+      )
+      expect(read.tail).toEqual([])
+      expect(read.tail.join('\n')).not.toContain('prior-process output')
+    }
+  )
+
+  it.each([
+    { label: 'known', nextIncarnation: 'inc-next' },
+    { label: 'unknown', nextIncarnation: undefined }
+  ])(
+    'clears late recordless screen bytes at a prepared $label replacement spawn',
+    async ({ nextIncarnation }) => {
+      const runtime = new OrcaRuntimeService(store)
+      const ptyId = 'controller-only'
+      runtime.preparePtyExecutionContext(ptyId, null, { resetIncarnation: true })
+      runtime.onPtySpawned(ptyId, undefined, { awaitsRegistration: false })
+
+      runtime.preparePtyExecutionContext(ptyId, null, { resetIncarnation: true })
+      const preparedHandle = runtime.preAllocateHandleForPty(ptyId)
+      runtime.onPtyData(ptyId, '\x1b[?1049hLate prior-process screen\r\n', 100)
+      runtime.onPtySpawned(ptyId, nextIncarnation)
+      runtime.registerPty(
+        ptyId,
+        TEST_WORKTREE_ID,
+        null,
+        nextIncarnation
+          ? { tabId: 'tab-1', leafId: 'pane:1', incarnationId: nextIncarnation }
+          : undefined
+      )
+
+      const [replacement] = (await runtime.listTerminals()).terminals
+      expect(replacement.handle).not.toBe(preparedHandle)
+      await expect(runtime.readTerminal(preparedHandle)).rejects.toThrow()
+      const read = await runtime.readTerminal(replacement.handle, {
+        screen: true,
+        ...(nextIncarnation ? { expectedIncarnationId: nextIncarnation } : {})
+      })
+      expect(read.tail).toEqual([])
+      expect(read.tail.join('\n')).not.toContain('Late prior-process screen')
+    }
+  )
+
+  it('retires pristine null-incarnation handles at an explicit execution lifecycle reset', async () => {
+    const runtime = new OrcaRuntimeService(store)
+    const handle = runtime.preAllocateHandleForPty('pty-1')
+    syncSinglePty(runtime)
+    expect((await runtime.listTerminals()).terminals[0]?.handle).toBe(handle)
+
+    runtime.preparePtyExecutionContext('pty-1', null, { resetIncarnation: true })
+
+    const [replacement] = (await runtime.listTerminals()).terminals
+    expect(replacement.handle).not.toBe(handle)
+    await expect(runtime.readTerminal(handle)).rejects.toThrow('terminal_handle_stale')
+  })
+
+  it('clears known incarnation authority and output at an explicit execution lifecycle reset', async () => {
+    const runtime = new OrcaRuntimeService(store)
+    syncSinglePty(runtime)
+    runtime.registerPty('pty-1', TEST_WORKTREE_ID, null, {
+      tabId: 'tab-1',
+      leafId: 'pane:1',
+      incarnationId: 'inc-old'
+    })
+    const [original] = (await runtime.listTerminals()).terminals
+    runtime.onPtyData('pty-1', 'old-lifecycle-line\n', 100)
+
+    runtime.preparePtyExecutionContext('pty-1', null, { resetIncarnation: true })
+
+    const [replacement] = (await runtime.listTerminals()).terminals
+    expect(replacement.handle).not.toBe(original.handle)
+    await expect(
+      runtime.readTerminal(original.handle, { expectedIncarnationId: 'inc-old' })
+    ).rejects.toThrow('terminal_handle_stale')
+    await expect(
+      runtime.readTerminal(replacement.handle, { expectedIncarnationId: 'inc-old' })
+    ).rejects.toThrow('terminal_handle_stale')
+    const read = await runtime.readTerminal(replacement.handle)
+    expect(read.tail).toEqual([])
+    expect(read).not.toHaveProperty('incarnationId')
+  })
+
   it('does not retain WSL context when a PTY id is reused', () => {
     setPlatform('win32')
     const runtime = new OrcaRuntimeService(store)
@@ -17272,6 +17468,234 @@ describe('OrcaRuntimeService', () => {
     expect(writes).toEqual(['x'.repeat(TERMINAL_INPUT_CHUNK_MAX_BYTES), 'tail'])
   })
 
+  it('stops a multi-chunk terminal.send when the admitted incarnation is replaced', async () => {
+    const writes: string[] = []
+    const runtime = new OrcaRuntimeService(store)
+    runtime.setPtyController({
+      write: (_ptyId, data) => {
+        writes.push(data)
+        return true
+      },
+      kill: () => true,
+      getForegroundProcess: async () => null
+    })
+    runtime.attachWindow(1)
+    runtime.syncWindowGraph(1, { tabs: [], leaves: [] })
+    runtime.registerPty('pty-owned', TEST_WORKTREE_ID, null, {
+      tabId: 'tab-1',
+      leafId: 'pane:1',
+      incarnationId: 'inc-a'
+    })
+    const [terminal] = (await runtime.listTerminals()).terminals
+    const text = `${'x'.repeat(TERMINAL_INPUT_CHUNK_MAX_BYTES)}tail`
+
+    await expect(
+      runtime.sendTerminal(
+        terminal.handle,
+        { text },
+        {
+          afterWrite: () => {
+            runtime.registerPty('pty-owned', TEST_WORKTREE_ID, null, {
+              tabId: 'tab-1',
+              leafId: 'pane:1',
+              incarnationId: 'inc-b'
+            })
+          }
+        }
+      )
+    ).rejects.toThrow('terminal_handle_stale')
+    expect(writes).toEqual(['x'.repeat(TERMINAL_INPUT_CHUNK_MAX_BYTES)])
+  })
+
+  it('stops an in-flight send at a pristine null-to-null spawn boundary', async () => {
+    const writes: string[] = []
+    const runtime = new OrcaRuntimeService(store)
+    runtime.setPtyController({
+      write: (_ptyId, data) => {
+        writes.push(data)
+        return true
+      },
+      kill: () => true,
+      getForegroundProcess: async () => null
+    })
+    syncSinglePty(runtime)
+    const [terminal] = (await runtime.listTerminals()).terminals
+    const text = `${'x'.repeat(TERMINAL_INPUT_CHUNK_MAX_BYTES)}tail`
+
+    await expect(
+      runtime.sendTerminal(
+        terminal.handle,
+        { text },
+        {
+          afterWrite: () => {
+            runtime.onPtySpawned('pty-1', undefined, { awaitsRegistration: false })
+          }
+        }
+      )
+    ).rejects.toThrow('terminal_handle_stale')
+    expect(writes).toEqual(['x'.repeat(TERMINAL_INPUT_CHUNK_MAX_BYTES)])
+  })
+
+  it('does not write a terminal.send suffix after the admitted incarnation is replaced', async () => {
+    vi.useFakeTimers()
+    try {
+      const writes: string[] = []
+      const runtime = new OrcaRuntimeService(store)
+      runtime.setPtyController({
+        write: (_ptyId, data) => {
+          writes.push(data)
+          if (data === 'notes') {
+            setTimeout(() => {
+              runtime.registerPty('pty-owned', TEST_WORKTREE_ID, null, {
+                tabId: 'tab-1',
+                leafId: 'pane:1',
+                incarnationId: 'inc-b'
+              })
+            }, 250)
+          }
+          return true
+        },
+        kill: () => true,
+        getForegroundProcess: async () => null
+      })
+      runtime.attachWindow(1)
+      runtime.syncWindowGraph(1, { tabs: [], leaves: [] })
+      runtime.registerPty('pty-owned', TEST_WORKTREE_ID, null, {
+        tabId: 'tab-1',
+        leafId: 'pane:1',
+        incarnationId: 'inc-a'
+      })
+      const [terminal] = (await runtime.listTerminals()).terminals
+
+      const sendPromise = runtime.sendTerminal(terminal.handle, { text: 'notes', enter: true })
+      const rejection = expect(sendPromise).rejects.toThrow('terminal_handle_stale')
+      await vi.runAllTimersAsync()
+
+      await rejection
+      expect(writes).toEqual(['notes'])
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('stops preview input when the PTY lifecycle changes between chunks', async () => {
+    vi.useFakeTimers()
+    try {
+      const writes: string[] = []
+      const runtime = new OrcaRuntimeService(store)
+      runtime.setPtyController({
+        write: (_ptyId, data) => {
+          writes.push(data)
+          if (writes.length === 1) {
+            setTimeout(() => {
+              runtime.preparePtyExecutionContext('pty-1', null, {
+                resetIncarnation: true
+              })
+            }, 0)
+          }
+          return true
+        },
+        kill: () => true,
+        getForegroundProcess: async () => null
+      })
+      syncSinglePty(runtime)
+      runtime.registerPty('pty-1', TEST_WORKTREE_ID, null, {
+        tabId: 'tab-1',
+        leafId: 'pane:1',
+        incarnationId: 'inc-a'
+      })
+      const text = `${'x'.repeat(TERMINAL_INPUT_CHUNK_MAX_BYTES)}tail`
+
+      const writePromise = runtime.writeTerminalPreviewInput('pty-1', text)
+      await vi.runAllTimersAsync()
+
+      await expect(writePromise).resolves.toBe(false)
+      expect(writes).toEqual(['x'.repeat(TERMINAL_INPUT_CHUNK_MAX_BYTES)])
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('writes fenced preview input for a controller-only PTY without a runtime record', async () => {
+    const writes: string[] = []
+    const runtime = new OrcaRuntimeService(store)
+    runtime.setPtyController({
+      write: (ptyId, data) => {
+        writes.push(`${ptyId}:${data}`)
+        return true
+      },
+      kill: () => true,
+      getForegroundProcess: async () => null
+    })
+
+    await expect(runtime.writeTerminalPreviewInput('controller-only', 'input')).resolves.toBe(true)
+    expect(writes).toEqual(['controller-only:input'])
+  })
+
+  it('stops controller-only preview input at a recordless spawn boundary', async () => {
+    vi.useFakeTimers()
+    try {
+      const writes: string[] = []
+      const runtime = new OrcaRuntimeService(store)
+      runtime.setPtyController({
+        write: (_ptyId, data) => {
+          writes.push(data)
+          if (writes.length === 1) {
+            setTimeout(() => {
+              runtime.onPtySpawned('controller-only', undefined, {
+                awaitsRegistration: false
+              })
+            }, 0)
+          }
+          return true
+        },
+        kill: () => true,
+        getForegroundProcess: async () => null
+      })
+      const text = `${'x'.repeat(TERMINAL_INPUT_CHUNK_MAX_BYTES)}tail`
+
+      const writePromise = runtime.writeTerminalPreviewInput('controller-only', text)
+      await vi.runAllTimersAsync()
+
+      await expect(writePromise).resolves.toBe(false)
+      expect(writes).toEqual(['x'.repeat(TERMINAL_INPUT_CHUNK_MAX_BYTES)])
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('stops controller-only preview input at a recordless execution reset boundary', async () => {
+    vi.useFakeTimers()
+    try {
+      const writes: string[] = []
+      const runtime = new OrcaRuntimeService(store)
+      runtime.setPtyController({
+        write: (_ptyId, data) => {
+          writes.push(data)
+          if (writes.length === 1) {
+            setTimeout(() => {
+              runtime.preparePtyExecutionContext('controller-only', null, {
+                resetIncarnation: true
+              })
+            }, 0)
+          }
+          return true
+        },
+        kill: () => true,
+        getForegroundProcess: async () => null
+      })
+      const text = `${'x'.repeat(TERMINAL_INPUT_CHUNK_MAX_BYTES)}tail`
+
+      const writePromise = runtime.writeTerminalPreviewInput('controller-only', text)
+      await vi.runAllTimersAsync()
+
+      await expect(writePromise).resolves.toBe(false)
+      expect(writes).toEqual(['x'.repeat(TERMINAL_INPUT_CHUNK_MAX_BYTES)])
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it('yields while validating accepted large terminal.send text before provider writes', async () => {
     const writes: string[] = []
     const runtime = new OrcaRuntimeService(store)
@@ -17931,6 +18355,547 @@ describe('OrcaRuntimeService', () => {
     expect(thirdRead.nextCursor).toBe('2')
   })
 
+  it('attests guarded reads for runtime-owned terminals', async () => {
+    const runtime = new OrcaRuntimeService(store)
+    runtime.attachWindow(1)
+    runtime.syncWindowGraph(1, { tabs: [], leaves: [] })
+    runtime.registerPty('pty-owned', TEST_WORKTREE_ID, null, {
+      tabId: 'tab-1',
+      leafId: 'pane:1',
+      incarnationId: 'inc-owned'
+    })
+    const [terminal] = (await runtime.listTerminals()).terminals
+
+    await expect(
+      runtime.readTerminal(terminal.handle, { expectedIncarnationId: 'inc-owned' })
+    ).resolves.toMatchObject({
+      handle: terminal.handle,
+      incarnationId: 'inc-owned',
+      worktreeId: TEST_WORKTREE_ID
+    })
+    await expect(
+      runtime.readTerminal(terminal.handle, { expectedIncarnationId: 'inc-replacement' })
+    ).rejects.toThrow('terminal_handle_stale')
+  })
+
+  it('retires runtime-owned handles when the PTY incarnation changes', async () => {
+    const runtime = new OrcaRuntimeService(store)
+    runtime.attachWindow(1)
+    runtime.syncWindowGraph(1, { tabs: [], leaves: [] })
+    runtime.registerPty('pty-owned', TEST_WORKTREE_ID, null, {
+      tabId: 'tab-1',
+      leafId: 'pane:1',
+      incarnationId: 'inc-a'
+    })
+    const [original] = (await runtime.listTerminals()).terminals
+
+    runtime.registerPty('pty-owned', TEST_WORKTREE_ID, null, {
+      tabId: 'tab-1',
+      leafId: 'pane:1',
+      incarnationId: 'inc-b'
+    })
+
+    const [replacement] = (await runtime.listTerminals()).terminals
+    expect(replacement.handle).not.toBe(original.handle)
+    await expect(
+      runtime.readTerminal(original.handle, { expectedIncarnationId: 'inc-b' })
+    ).rejects.toThrow('terminal_handle_stale')
+  })
+
+  it('preserves a pristine preallocated handle for first attestation but retires it on replacement', async () => {
+    const runtime = new OrcaRuntimeService(store)
+    const preAllocatedHandle = runtime.preAllocateHandleForPty('pty-1')
+    syncSinglePty(runtime)
+
+    runtime.registerPty('pty-1', TEST_WORKTREE_ID, null, {
+      tabId: 'tab-1',
+      leafId: 'pane:1',
+      incarnationId: 'inc-a'
+    })
+    expect((await runtime.listTerminals()).terminals[0]?.handle).toBe(preAllocatedHandle)
+
+    runtime.registerPty('pty-1', TEST_WORKTREE_ID, null, {
+      tabId: 'tab-1',
+      leafId: 'pane:1',
+      incarnationId: 'inc-b'
+    })
+
+    const [replacement] = (await runtime.listTerminals()).terminals
+    expect(replacement.handle).not.toBe(preAllocatedHandle)
+    await expect(
+      runtime.readTerminal(preAllocatedHandle, { expectedIncarnationId: 'inc-b' })
+    ).rejects.toThrow('terminal_handle_stale')
+  })
+
+  it('preserves first legacy pre-spawn output and handle but retires them on respawn', async () => {
+    const runtime = new OrcaRuntimeService(store)
+    const ptyId = `${TEST_WORKTREE_ID}@@daemon-first-spawn`
+    const preAllocatedHandle = runtime.preAllocateHandleForPty(ptyId)
+    runtime.setPtyController({
+      write: () => true,
+      kill: () => true,
+      getForegroundProcess: async () => null
+    })
+    runtime.attachWindow(1)
+    runtime.syncWindowGraph(1, { tabs: [], leaves: [] })
+
+    // Lazy controller-only observation must fence at spawn without being
+    // mistaken for a previous process lifecycle.
+    await expect(runtime.writeTerminalPreviewInput(ptyId, 'probe')).resolves.toBe(true)
+    runtime.onPtyData(ptyId, 'first-process pre-spawn output\r\n', 100)
+    runtime.onPtySpawned(ptyId)
+    runtime.synchronizePtyOutputSequenceFromProvider(ptyId, { value: 0, generation: 'reset' }, 0)
+    runtime.registerPty(ptyId, TEST_WORKTREE_ID)
+
+    const [firstSpawn] = (await runtime.listTerminals()).terminals
+    expect(firstSpawn.handle).toBe(preAllocatedHandle)
+    await expect(runtime.readTerminal(preAllocatedHandle)).resolves.toMatchObject({
+      handle: preAllocatedHandle,
+      worktreeId: TEST_WORKTREE_ID,
+      tail: ['first-process pre-spawn output']
+    })
+
+    runtime.onPtyData(ptyId, 'ambiguous replacement pre-spawn output\r\n', 101)
+    runtime.onPtySpawned(ptyId)
+    runtime.registerPty(ptyId, TEST_WORKTREE_ID)
+
+    const [secondSpawn] = (await runtime.listTerminals()).terminals
+    expect(secondSpawn.handle).not.toBe(preAllocatedHandle)
+    await expect(runtime.readTerminal(preAllocatedHandle)).rejects.toThrow('terminal_handle_stale')
+    await expect(runtime.readTerminal(secondSpawn.handle)).resolves.toMatchObject({ tail: [] })
+  })
+
+  it('clears a published lifecycle admission when the PTY generation ends', () => {
+    const runtime = new OrcaRuntimeService(store)
+    const ptyId = `${TEST_WORKTREE_ID}@@admission-exit`
+    const admissions = (
+      runtime as unknown as {
+        ptyLifecycleAdmissions: Map<string, 'prepared' | 'prepared-replacement' | 'spawned'>
+      }
+    ).ptyLifecycleAdmissions
+
+    runtime.onPtySpawned(ptyId)
+    expect(admissions.get(ptyId)).toBe('spawned')
+
+    runtime.onPtyExit(ptyId, 0)
+    expect(admissions.has(ptyId)).toBe(false)
+  })
+
+  it('attests guarded reads for renderer leaf terminals', async () => {
+    const runtime = new OrcaRuntimeService(store)
+    syncSinglePty(runtime)
+    const [terminal] = (await runtime.listTerminals()).terminals
+
+    await expect(
+      runtime.readTerminal(terminal.handle, { expectedIncarnationId: 'inc-renderer' })
+    ).rejects.toThrow('terminal_handle_stale')
+
+    runtime.registerPty('pty-1', TEST_WORKTREE_ID, null, {
+      tabId: 'tab-1',
+      leafId: 'pane:1',
+      incarnationId: 'inc-renderer'
+    })
+
+    await expect(
+      runtime.readTerminal(terminal.handle, { expectedIncarnationId: 'inc-renderer' })
+    ).resolves.toMatchObject({
+      handle: terminal.handle,
+      incarnationId: 'inc-renderer',
+      worktreeId: TEST_WORKTREE_ID
+    })
+  })
+
+  it('does not expose retained leaf output after a same-pty incarnation replacement', async () => {
+    const runtime = new OrcaRuntimeService(store)
+    syncSinglePty(runtime)
+    runtime.registerPty('pty-1', TEST_WORKTREE_ID, null, {
+      tabId: 'tab-1',
+      leafId: 'pane:1',
+      incarnationId: 'inc-a'
+    })
+    const [terminal] = (await runtime.listTerminals()).terminals
+
+    runtime.onPtyData('pty-1', 'incarnation-a-line-1\nincarnation-a-line-2\n', 100)
+    await expect(
+      runtime.readTerminal(terminal.handle, { expectedIncarnationId: 'inc-a', cursor: 0 })
+    ).resolves.toMatchObject({
+      tail: ['incarnation-a-line-1', 'incarnation-a-line-2'],
+      nextCursor: '2'
+    })
+
+    runtime.registerPty('pty-1', TEST_WORKTREE_ID, null, {
+      tabId: 'tab-1',
+      leafId: 'pane:1',
+      incarnationId: 'inc-b'
+    })
+    const [replacementTerminal] = (await runtime.listTerminals()).terminals
+    expect(replacementTerminal.handle).not.toBe(terminal.handle)
+    await expect(
+      runtime.readTerminal(terminal.handle, { expectedIncarnationId: 'inc-b' })
+    ).rejects.toThrow('terminal_handle_stale')
+
+    const replacementPreview = await runtime.readTerminal(replacementTerminal.handle, {
+      expectedIncarnationId: 'inc-b'
+    })
+    expect(replacementPreview.tail).toEqual([])
+    expect(replacementPreview.latestCursor).toBe('0')
+    expect(replacementPreview.incarnationId).toBe('inc-b')
+
+    const replacementCursorRead = await runtime.readTerminal(replacementTerminal.handle, {
+      expectedIncarnationId: 'inc-b',
+      cursor: 0
+    })
+    expect(replacementCursorRead.tail).toEqual([])
+    expect(replacementCursorRead.nextCursor).toBe('0')
+    expect(replacementCursorRead.latestCursor).toBe('0')
+    expect(replacementCursorRead.incarnationId).toBe('inc-b')
+
+    runtime.onPtyData('pty-1', 'incarnation-b-line\n', 101)
+    const replacementOutput = await runtime.readTerminal(replacementTerminal.handle, {
+      expectedIncarnationId: 'inc-b',
+      cursor: 0
+    })
+    expect(replacementOutput.tail).toEqual(['incarnation-b-line'])
+    expect(replacementOutput.tail.join('\n')).not.toContain('incarnation-a')
+  })
+
+  it('does not attest retained output captured before the first known incarnation', async () => {
+    const runtime = new OrcaRuntimeService(store)
+    syncSinglePty(runtime)
+    const [terminal] = (await runtime.listTerminals()).terminals
+
+    runtime.onPtyData('pty-1', 'unattested-line\n', 100)
+    runtime.registerPty('pty-1', TEST_WORKTREE_ID, null, {
+      tabId: 'tab-1',
+      leafId: 'pane:1',
+      incarnationId: 'inc-b'
+    })
+
+    await expect(
+      runtime.readTerminal(terminal.handle, { expectedIncarnationId: 'inc-b' })
+    ).rejects.toThrow('terminal_handle_stale')
+    const [attestedTerminal] = (await runtime.listTerminals()).terminals
+
+    const firstAttestedPreview = await runtime.readTerminal(attestedTerminal.handle, {
+      expectedIncarnationId: 'inc-b'
+    })
+    expect(firstAttestedPreview.tail).toEqual([])
+    expect(firstAttestedPreview.latestCursor).toBe('0')
+
+    const firstAttestedCursorRead = await runtime.readTerminal(attestedTerminal.handle, {
+      expectedIncarnationId: 'inc-b',
+      cursor: 0
+    })
+    expect(firstAttestedCursorRead.tail).toEqual([])
+    expect(firstAttestedCursorRead.nextCursor).toBe('0')
+    expect(firstAttestedCursorRead.latestCursor).toBe('0')
+
+    runtime.onPtyData('pty-1', 'incarnation-b-line\n', 101)
+    const replacementOutput = await runtime.readTerminal(attestedTerminal.handle, {
+      expectedIncarnationId: 'inc-b',
+      cursor: 0
+    })
+    expect(replacementOutput.tail).toEqual(['incarnation-b-line'])
+    expect(replacementOutput.tail.join('\n')).not.toContain('unattested-line')
+  })
+
+  it('revokes exited incarnation authority before an unattested same-id replacement', async () => {
+    const runtime = new OrcaRuntimeService(store)
+    syncSinglePty(runtime)
+    runtime.registerPty('pty-1', TEST_WORKTREE_ID, null, {
+      tabId: 'tab-1',
+      leafId: 'pane:1',
+      incarnationId: 'inc-old'
+    })
+    const [oldTerminal] = (await runtime.listTerminals()).terminals
+    runtime.onPtyData('pty-1', 'old-process-line\n', 100)
+
+    runtime.onPtyExit('pty-1', 0, 'inc-old')
+    runtime.onPtyData('pty-1', 'ambiguous-replacement-line\n', 101)
+    runtime.onPtySpawned('pty-1', undefined, { awaitsRegistration: false })
+    runtime.registerPty('pty-1', TEST_WORKTREE_ID)
+    runtime.onPtyData('pty-1', 'unattested-replacement-line\n', 102)
+
+    await expect(
+      runtime.readTerminal(oldTerminal.handle, { expectedIncarnationId: 'inc-old' })
+    ).rejects.toThrow('terminal_handle_stale')
+    const [unattestedTerminal] = (await runtime.listTerminals()).terminals
+    await expect(
+      runtime.readTerminal(unattestedTerminal.handle, { expectedIncarnationId: 'inc-old' })
+    ).rejects.toThrow('terminal_handle_stale')
+    await expect(runtime.readTerminal(unattestedTerminal.handle)).resolves.toMatchObject({
+      tail: ['unattested-replacement-line']
+    })
+    expect(await runtime.readTerminal(unattestedTerminal.handle)).not.toHaveProperty(
+      'incarnationId'
+    )
+
+    runtime.registerPty('pty-1', TEST_WORKTREE_ID, null, {
+      tabId: 'tab-1',
+      leafId: 'pane:1',
+      incarnationId: 'inc-new'
+    })
+    const [attestedTerminal] = (await runtime.listTerminals()).terminals
+    expect(attestedTerminal.handle).not.toBe(unattestedTerminal.handle)
+    await expect(
+      runtime.readTerminal(attestedTerminal.handle, { expectedIncarnationId: 'inc-new' })
+    ).resolves.toMatchObject({ tail: [], incarnationId: 'inc-new' })
+
+    runtime.onPtyData('pty-1', 'new-process-line\n', 103)
+    await expect(
+      runtime.readTerminal(attestedTerminal.handle, { expectedIncarnationId: 'inc-new' })
+    ).resolves.toMatchObject({ tail: ['new-process-line'], incarnationId: 'inc-new' })
+  })
+
+  it('preserves a known SSH incarnation across an unconfirmed no-lease reattach', async () => {
+    const runtime = new OrcaRuntimeService(store)
+    const ptyId = 'ssh:target-1@@relay-pty-1'
+    syncSinglePty(runtime, ptyId)
+    runtime.registerPty(ptyId, TEST_WORKTREE_ID, 'target-1', {
+      tabId: 'tab-1',
+      leafId: 'pane:1',
+      incarnationId: 'inc-ssh'
+    })
+    runtime.onPtyData(ptyId, 'preserved ssh output\n', 100)
+    const [beforeDisconnect] = (await runtime.listTerminals()).terminals
+
+    runtime.onPtyExit(ptyId, -1, 'inc-ssh', { hostExitConfirmed: false })
+    runtime.onPtySpawned(ptyId, 'inc-ssh', { awaitsRegistration: false })
+
+    const [reattached] = (await runtime.listTerminals()).terminals
+    expect(reattached.handle).toBe(beforeDisconnect.handle)
+    await expect(
+      runtime.readTerminal(reattached.handle, { expectedIncarnationId: 'inc-ssh' })
+    ).resolves.toMatchObject({
+      incarnationId: 'inc-ssh',
+      tail: ['preserved ssh output']
+    })
+  })
+
+  it('retires a graph-discovered null lifecycle after exit before its null replacement spawn', async () => {
+    const runtime = new OrcaRuntimeService(store)
+    syncSinglePty(runtime)
+    const [oldTerminal] = (await runtime.listTerminals()).terminals
+    runtime.onPtyData('pty-1', 'old graph-only output\n', 100)
+
+    runtime.onPtyExit('pty-1', 0)
+    runtime.onPtyData('pty-1', 'ambiguous replacement output\n', 101)
+    runtime.onPtySpawned('pty-1', undefined, { awaitsRegistration: false })
+
+    const [replacement] = (await runtime.listTerminals()).terminals
+    expect(replacement.handle).not.toBe(oldTerminal.handle)
+    await expect(runtime.readTerminal(oldTerminal.handle)).rejects.toThrow('terminal_handle_stale')
+    await expect(runtime.readTerminal(replacement.handle)).resolves.toMatchObject({ tail: [] })
+  })
+
+  it('applies a pending incarnation when registration omits its binding', async () => {
+    const runtime = new OrcaRuntimeService(store)
+    syncSinglePty(runtime)
+    runtime.registerPty('pty-1', TEST_WORKTREE_ID, null, {
+      tabId: 'tab-1',
+      leafId: 'pane:1',
+      incarnationId: 'inc-a'
+    })
+    const [original] = (await runtime.listTerminals()).terminals
+
+    runtime.onPtyExit('pty-1', 0, 'inc-a')
+    runtime.beginPtyRegistration('pty-1', 'inc-b')
+    runtime.registerPty('pty-1', TEST_WORKTREE_ID)
+    runtime.onPtyData('pty-1', 'incarnation-b-line\n', 101)
+
+    const [replacement] = (await runtime.listTerminals()).terminals
+    expect(replacement.handle).not.toBe(original.handle)
+    await expect(
+      runtime.readTerminal(original.handle, { expectedIncarnationId: 'inc-a' })
+    ).rejects.toThrow('terminal_handle_stale')
+    await expect(
+      runtime.readTerminal(replacement.handle, { expectedIncarnationId: 'inc-a' })
+    ).rejects.toThrow('terminal_handle_stale')
+    await expect(
+      runtime.readTerminal(replacement.handle, { expectedIncarnationId: 'inc-b' })
+    ).resolves.toMatchObject({
+      incarnationId: 'inc-b',
+      tail: ['incarnation-b-line']
+    })
+  })
+
+  it('does not carry retained output across a same-pty worktree reassignment', async () => {
+    const runtime = new OrcaRuntimeService(store)
+    const preAllocatedHandle = runtime.preAllocateHandleForPty('pty-1')
+    syncSinglePty(runtime)
+    runtime.registerPty('pty-1', TEST_WORKTREE_ID, null, {
+      tabId: 'tab-1',
+      leafId: 'pane:1',
+      incarnationId: 'inc-shared'
+    })
+    const [oldTerminal] = (await runtime.listTerminals()).terminals
+    expect(oldTerminal.handle).toBe(preAllocatedHandle)
+    runtime.onPtyData('pty-1', 'old-worktree-line\n', 100)
+
+    runtime.markRendererReloading(1)
+    const nextWorktreeId = `${TEST_REPO_ID}::/tmp/worktree-b`
+    runtime.registerPty('pty-1', nextWorktreeId, null, {
+      tabId: 'tab-1',
+      leafId: 'pane:1',
+      incarnationId: 'inc-shared'
+    })
+    runtime.syncWindowGraph(1, {
+      tabs: [
+        {
+          tabId: 'tab-1',
+          worktreeId: nextWorktreeId,
+          title: 'Codex',
+          activeLeafId: 'pane:1',
+          layout: null
+        }
+      ],
+      leaves: [
+        {
+          tabId: 'tab-1',
+          worktreeId: nextWorktreeId,
+          leafId: 'pane:1',
+          paneRuntimeId: 1,
+          ptyId: 'pty-1',
+          paneTitle: null
+        }
+      ]
+    })
+
+    const [replacementTerminal] = (await runtime.listTerminals()).terminals
+    expect(replacementTerminal.handle).not.toBe(oldTerminal.handle)
+    expect(replacementTerminal.worktreeId).toBe(nextWorktreeId)
+    await expect(
+      runtime.readTerminal(oldTerminal.handle, { expectedIncarnationId: 'inc-shared' })
+    ).rejects.toThrow('terminal_handle_stale')
+    const firstReplacementRead = await runtime.readTerminal(replacementTerminal.handle, {
+      expectedIncarnationId: 'inc-shared',
+      cursor: 0
+    })
+    expect(firstReplacementRead.worktreeId).toBe(nextWorktreeId)
+    expect(firstReplacementRead.tail).toEqual([])
+    expect(firstReplacementRead.nextCursor).toBe('0')
+
+    runtime.onPtyData('pty-1', 'new-worktree-line\n', 101)
+    const replacementOutput = await runtime.readTerminal(replacementTerminal.handle, {
+      expectedIncarnationId: 'inc-shared',
+      cursor: 0
+    })
+    expect(replacementOutput.tail).toEqual(['new-worktree-line'])
+    expect(replacementOutput.tail.join('\n')).not.toContain('old-worktree-line')
+  })
+
+  it('preserves terminal provenance across equivalent Windows worktree spellings', async () => {
+    const runtime = new OrcaRuntimeService(store)
+    const windowsWorktree = `${TEST_REPO_ID}::C:\\Repo\\Feature`
+    const equivalentWorktree = `${TEST_REPO_ID}::c:/repo/feature`
+    const syncWindowsPty = (worktreeId: string): void => {
+      runtime.syncWindowGraph(1, {
+        tabs: [
+          {
+            tabId: 'tab-1',
+            worktreeId,
+            title: 'Codex',
+            activeLeafId: 'pane:1',
+            layout: null
+          }
+        ],
+        leaves: [
+          {
+            tabId: 'tab-1',
+            worktreeId,
+            leafId: 'pane:1',
+            paneRuntimeId: 1,
+            ptyId: 'pty-windows',
+            paneTitle: null
+          }
+        ]
+      })
+    }
+
+    runtime.attachWindow(1)
+    syncWindowsPty(windowsWorktree)
+    runtime.registerPty('pty-windows', equivalentWorktree, null, {
+      tabId: 'tab-1',
+      leafId: 'pane:1',
+      incarnationId: 'inc-windows'
+    })
+    runtime.onPtyData('pty-windows', 'retained-line\n', 100)
+    const [terminal] = (await runtime.listTerminals()).terminals
+
+    syncWindowsPty(equivalentWorktree)
+
+    const [afterEquivalentSync] = (await runtime.listTerminals()).terminals
+    expect(afterEquivalentSync.handle).toBe(terminal.handle)
+    await expect(
+      runtime.readTerminal(terminal.handle, { expectedIncarnationId: 'inc-windows' })
+    ).resolves.toMatchObject({
+      handle: terminal.handle,
+      incarnationId: 'inc-windows',
+      tail: ['retained-line']
+    })
+  })
+
+  it('drops incarnation authority on a graph-only worktree reassignment', async () => {
+    const runtime = new OrcaRuntimeService(store)
+    syncSinglePty(runtime)
+    runtime.registerPty('pty-1', TEST_WORKTREE_ID, null, {
+      tabId: 'tab-1',
+      leafId: 'pane:1',
+      incarnationId: 'inc-old'
+    })
+    const [oldTerminal] = (await runtime.listTerminals()).terminals
+    runtime.onPtyData('pty-1', 'old-worktree-line\n', 100)
+
+    const nextWorktreeId = `${TEST_REPO_ID}::/tmp/worktree-b`
+    runtime.syncWindowGraph(1, {
+      tabs: [
+        {
+          tabId: 'tab-1',
+          worktreeId: nextWorktreeId,
+          title: 'Codex',
+          activeLeafId: 'pane:1',
+          layout: null
+        }
+      ],
+      leaves: [
+        {
+          tabId: 'tab-1',
+          worktreeId: nextWorktreeId,
+          leafId: 'pane:1',
+          paneRuntimeId: 1,
+          ptyId: 'pty-1',
+          paneTitle: null
+        }
+      ]
+    })
+
+    const [unattestedTerminal] = (await runtime.listTerminals()).terminals
+    expect(unattestedTerminal.handle).not.toBe(oldTerminal.handle)
+    await expect(
+      runtime.readTerminal(unattestedTerminal.handle, { expectedIncarnationId: 'inc-old' })
+    ).rejects.toThrow('terminal_handle_stale')
+
+    runtime.registerPty('pty-1', nextWorktreeId, null, {
+      tabId: 'tab-1',
+      leafId: 'pane:1',
+      incarnationId: 'inc-new'
+    })
+    await expect(
+      runtime.readTerminal(unattestedTerminal.handle, {
+        expectedIncarnationId: 'inc-new',
+        cursor: 0
+      })
+    ).resolves.toMatchObject({ tail: [], worktreeId: nextWorktreeId })
+
+    runtime.onPtyData('pty-1', 'new-worktree-line\n', 101)
+    await expect(
+      runtime.readTerminal(unattestedTerminal.handle, {
+        expectedIncarnationId: 'inc-new',
+        cursor: 0
+      })
+    ).resolves.toMatchObject({ tail: ['new-worktree-line'], worktreeId: nextWorktreeId })
+  })
+
   it('paginates retained terminal output with explicit limits and truncation metadata', async () => {
     const runtime = new OrcaRuntimeService(store)
 
@@ -18518,6 +19483,114 @@ describe('OrcaRuntimeService', () => {
     expect(runtime.isTerminalAlternateScreen('pty-1')).toBe(false)
   })
 
+  it('rejects a guarded read when the provider generation resets during capture', async () => {
+    type Snapshot = {
+      data: string
+      cols: number
+      rows: number
+      seq: number
+      source: 'headless'
+      alternateScreen: boolean
+    }
+    let resolveSnapshot!: (snapshot: Snapshot) => void
+    const serializeProviderBuffer = vi.fn(
+      () =>
+        new Promise<Snapshot>((resolve) => {
+          resolveSnapshot = resolve
+        })
+    )
+    const runtime = new OrcaRuntimeService(store)
+    runtime.setPtyController({
+      write: () => true,
+      kill: () => true,
+      getForegroundProcess: async () => null,
+      serializeProviderBuffer,
+      hasRendererSerializer: () => false
+    })
+    syncSinglePty(runtime)
+    runtime.registerPty('pty-1', TEST_WORKTREE_ID, null, {
+      tabId: 'tab-1',
+      leafId: 'pane:1',
+      incarnationId: 'inc-stable'
+    })
+    runtime.synchronizePtyOutputSequenceFromProvider(
+      'pty-1',
+      { value: 900, generation: 'continued' },
+      0
+    )
+    const [terminal] = (await runtime.listTerminals()).terminals
+
+    const readPromise = runtime.readTerminal(terminal.handle, {
+      expectedIncarnationId: 'inc-stable'
+    })
+    const rejection = expect(readPromise).rejects.toThrow('terminal_handle_stale')
+    await vi.waitFor(() => expect(serializeProviderBuffer).toHaveBeenCalledOnce())
+    runtime.synchronizePtyOutputSequenceFromProvider(
+      'pty-1',
+      { value: 0, generation: 'reset' },
+      runtime.getPtyOutputSequence('pty-1')
+    )
+    resolveSnapshot({
+      data: '\x1b[?1049hReset provider frame\r\n',
+      cols: 80,
+      rows: 24,
+      seq: 900,
+      source: 'headless',
+      alternateScreen: true
+    })
+
+    await rejection
+  })
+
+  it('rejects an unguarded read when a null-incarnation handle is re-adopted', async () => {
+    type Snapshot = {
+      data: string
+      cols: number
+      rows: number
+      seq: number
+      source: 'headless'
+      alternateScreen: boolean
+    }
+    let resolveSnapshot!: (snapshot: Snapshot) => void
+    const serializeProviderBuffer = vi.fn(
+      () =>
+        new Promise<Snapshot>((resolve) => {
+          resolveSnapshot = resolve
+        })
+    )
+    const runtime = new OrcaRuntimeService(store)
+    runtime.setPtyController({
+      write: () => true,
+      kill: () => true,
+      getForegroundProcess: async () => null,
+      serializeProviderBuffer,
+      hasRendererSerializer: () => false
+    })
+    syncSinglePty(runtime)
+    runtime.synchronizePtyOutputSequenceFromProvider(
+      'pty-1',
+      { value: 900, generation: 'continued' },
+      0
+    )
+    const [terminal] = (await runtime.listTerminals()).terminals
+
+    const readPromise = runtime.readTerminal(terminal.handle)
+    const rejection = expect(readPromise).rejects.toThrow('terminal_handle_stale')
+    await vi.waitFor(() => expect(serializeProviderBuffer).toHaveBeenCalledOnce())
+    runtime.onPtySpawned('pty-1', undefined, { awaitsRegistration: false })
+    runtime.registerPreAllocatedHandleForPty('pty-1', terminal.handle)
+    resolveSnapshot({
+      data: '\x1b[?1049hReplacement process frame\r\n',
+      cols: 80,
+      rows: 24,
+      seq: 900,
+      source: 'headless',
+      alternateScreen: true
+    })
+
+    await rejection
+  })
+
   it('rejects a visible frame when its terminal handle changes during capture', async () => {
     type Snapshot = {
       data: string
@@ -18551,6 +19624,7 @@ describe('OrcaRuntimeService', () => {
     const [terminal] = (await runtime.listTerminals()).terminals
 
     const readPromise = runtime.readTerminal(terminal.handle)
+    const rejection = expect(readPromise).rejects.toThrow('terminal_handle_stale')
     await vi.waitFor(() => expect(serializeProviderBuffer).toHaveBeenCalledOnce())
     syncSinglePty(runtime, 'pty-2')
     resolveSnapshot({
@@ -18562,7 +19636,170 @@ describe('OrcaRuntimeService', () => {
       alternateScreen: true
     })
 
-    await expect(readPromise).rejects.toThrow('terminal_handle_stale')
+    await rejection
+  })
+
+  it('rejects a guarded read when the same PTY id changes incarnation during capture', async () => {
+    type Snapshot = {
+      data: string
+      cols: number
+      rows: number
+      seq: number
+      source: 'headless'
+      alternateScreen: boolean
+    }
+    let resolveSnapshot!: (snapshot: Snapshot) => void
+    const serializeProviderBuffer = vi.fn(
+      () =>
+        new Promise<Snapshot>((resolve) => {
+          resolveSnapshot = resolve
+        })
+    )
+    const runtime = new OrcaRuntimeService(store)
+    runtime.setPtyController({
+      write: () => true,
+      kill: () => true,
+      getForegroundProcess: async () => null,
+      serializeProviderBuffer,
+      hasRendererSerializer: () => false
+    })
+    syncSinglePty(runtime)
+    runtime.registerPty('pty-1', TEST_WORKTREE_ID, null, {
+      tabId: 'tab-1',
+      leafId: 'pane:1',
+      incarnationId: 'inc-old'
+    })
+    runtime.synchronizePtyOutputSequenceFromProvider(
+      'pty-1',
+      { value: 900, generation: 'continued' },
+      0
+    )
+    const [terminal] = (await runtime.listTerminals()).terminals
+
+    const readPromise = runtime.readTerminal(terminal.handle, {
+      expectedIncarnationId: 'inc-old'
+    })
+    const rejection = expect(readPromise).rejects.toThrow('terminal_handle_stale')
+    await vi.waitFor(() => expect(serializeProviderBuffer).toHaveBeenCalledOnce())
+    runtime.registerPty('pty-1', TEST_WORKTREE_ID, null, {
+      tabId: 'tab-1',
+      leafId: 'pane:1',
+      incarnationId: 'inc-new'
+    })
+    resolveSnapshot({
+      data: '\x1b[?1049hReplacement process frame\r\n',
+      cols: 80,
+      rows: 24,
+      seq: 900,
+      source: 'headless',
+      alternateScreen: true
+    })
+
+    await rejection
+  })
+
+  it('rejects a guarded read when the PTY worktree changes during capture', async () => {
+    type Snapshot = {
+      data: string
+      cols: number
+      rows: number
+      seq: number
+      source: 'headless'
+      alternateScreen: boolean
+    }
+    let resolveSnapshot!: (snapshot: Snapshot) => void
+    const serializeProviderBuffer = vi.fn(
+      () =>
+        new Promise<Snapshot>((resolve) => {
+          resolveSnapshot = resolve
+        })
+    )
+    const runtime = new OrcaRuntimeService(store)
+    runtime.setPtyController({
+      write: () => true,
+      kill: () => true,
+      getForegroundProcess: async () => null,
+      serializeProviderBuffer,
+      hasRendererSerializer: () => false
+    })
+    syncSinglePty(runtime)
+    runtime.registerPty('pty-1', TEST_WORKTREE_ID, null, {
+      tabId: 'tab-1',
+      leafId: 'pane:1',
+      incarnationId: 'inc-old'
+    })
+    runtime.synchronizePtyOutputSequenceFromProvider(
+      'pty-1',
+      { value: 900, generation: 'continued' },
+      0
+    )
+    const [terminal] = (await runtime.listTerminals()).terminals
+
+    const readPromise = runtime.readTerminal(terminal.handle, {
+      expectedIncarnationId: 'inc-old'
+    })
+    const rejection = expect(readPromise).rejects.toThrow('terminal_handle_stale')
+    await vi.waitFor(() => expect(serializeProviderBuffer).toHaveBeenCalledOnce())
+    runtime.registerPty('pty-1', `${TEST_REPO_ID}::/tmp/worktree-b`, null, {
+      tabId: 'tab-1',
+      leafId: 'pane:1',
+      incarnationId: 'inc-old'
+    })
+    resolveSnapshot({
+      data: '\x1b[?1049hMoved process frame\r\n',
+      cols: 80,
+      rows: 24,
+      seq: 900,
+      source: 'headless',
+      alternateScreen: true
+    })
+
+    await rejection
+  })
+
+  it('rejects a renderer snapshot when the same PTY id changes incarnation', async () => {
+    type Snapshot = { data: string; cols: number; rows: number }
+    let resolveSnapshot!: (snapshot: Snapshot) => void
+    const serializeBuffer = vi.fn(
+      () =>
+        new Promise<Snapshot>((resolve) => {
+          resolveSnapshot = resolve
+        })
+    )
+    const runtime = new OrcaRuntimeService(store)
+    runtime.setPtyController({
+      write: () => true,
+      kill: () => true,
+      getForegroundProcess: async () => null,
+      serializeBuffer,
+      hasRendererSerializer: () => true
+    })
+    syncSinglePty(runtime)
+    runtime.registerPty('pty-1', TEST_WORKTREE_ID, null, {
+      tabId: 'tab-1',
+      leafId: 'pane:1',
+      incarnationId: 'inc-old'
+    })
+    const [terminal] = (await runtime.listTerminals()).terminals
+    runtime.onPtyData('pty-1', `${Array.from({ length: 3000 }, () => '').join('\n')}\n`, 100)
+
+    const readPromise = runtime.readTerminal(terminal.handle, {
+      expectedIncarnationId: 'inc-old'
+    })
+    const rejection = expect(readPromise).rejects.toThrow('terminal_handle_stale')
+    await vi.waitFor(() => expect(serializeBuffer).toHaveBeenCalledOnce())
+    runtime.registerPty('pty-1', TEST_WORKTREE_ID, null, {
+      tabId: 'tab-1',
+      leafId: 'pane:1',
+      incarnationId: 'inc-new'
+    })
+    resolveSnapshot({
+      data: '\x1b[?1049hReplacement renderer frame\r\n',
+      cols: 80,
+      rows: 24
+    })
+
+    await rejection
   })
 
   it('bounds provider visible frames for read and show responses', async () => {
@@ -36069,7 +37306,7 @@ describe('OrcaRuntimeService', () => {
       ).leaves
       expect(leaves.size).toBeGreaterThan(0)
       const rebuilt = [...leaves.values()][0]
-      expect(rebuilt.lastAgentStatus).toBe('idle')
+      expect(rebuilt.lastAgentStatus).toBeNull()
       expect(rebuilt.lastAgentStatusObservedLive).toBe(false)
 
       setInMemoryOrchestrationMessages(runtime, db)
@@ -36165,14 +37402,16 @@ describe('OrcaRuntimeService', () => {
       runtime.onPtyExit('pty-1', 0)
       runtime.onPtySpawned('pty-1', undefined, { awaitsRegistration: false })
       setInMemoryOrchestrationMessages(runtime, db)
-      bindSinglePtyRun(db, terminal.handle)
+      const [replacement] = (await runtime.listTerminals()).terminals
+      expect(replacement.handle).not.toBe(terminal.handle)
+      bindSinglePtyRun(db, replacement.handle)
       const message = db.insertMessage({
         from: 'sender',
-        to: terminal.handle,
+        to: replacement.handle,
         subject: 'after same id respawn'
       })
 
-      runtime.notifyMessageArrived(terminal.handle, 'status')
+      runtime.notifyMessageArrived(replacement.handle, 'status')
       await Promise.resolve()
 
       expect(write).not.toHaveBeenCalled()

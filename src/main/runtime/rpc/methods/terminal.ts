@@ -74,6 +74,7 @@ import {
 import type { TerminalSnapshotUnavailableReason } from '../../../../shared/terminal-snapshot-unavailability'
 import type { RemoteTerminalSourceRangeReplacementReservation } from '../../remote-terminal-source-range-consumer'
 import { withTerminalCloseAttribution } from '../terminal-close-attribution'
+import { isPtyIncarnationId, type PtyIncarnationId } from '../../../../shared/pty-incarnation'
 
 const REQUESTED_SNAPSHOT_BYTE_BUDGET = 2 * 1024 * 1024
 const TERMINAL_OUTPUT_FLUSH_MS = 5
@@ -868,6 +869,11 @@ const TerminalHandle = z.object({
   terminal: requiredString('Missing terminal handle')
 })
 
+const TerminalIncarnationId = z.custom<PtyIncarnationId>(
+  isPtyIncarnationId,
+  'Invalid PTY incarnation'
+)
+
 const TerminalFocus = TerminalHandle.extend({
   navigation: z.enum(['caller', 'host']).optional()
 })
@@ -901,6 +907,7 @@ const TerminalRecoverPane = z.object({
 })
 
 const TerminalRead = TerminalHandle.extend({
+  expectedIncarnationId: TerminalIncarnationId.optional(),
   cursor: z
     .unknown()
     .transform((value) => {
@@ -1231,6 +1238,7 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
     params: TerminalRead,
     handler: async (params, { runtime }) => ({
       terminal: await runtime.readTerminal(params.terminal, {
+        expectedIncarnationId: params.expectedIncarnationId,
         cursor: params.cursor,
         limit: params.limit,
         screen: params.screen

@@ -8,8 +8,10 @@ import type {
   RuntimeTerminalSend,
   RuntimeTerminalShow,
   RuntimeTerminalSplit,
-  RuntimeTerminalWait
+  RuntimeTerminalWait,
+  RuntimeStatus
 } from '../../shared/runtime-types'
+import { TERMINAL_READ_INCARNATION_FENCE_RUNTIME_CAPABILITY } from '../../shared/protocol-version'
 import type { CommandHandler } from '../dispatch'
 import { shouldUseRendererBackedInteractiveTerminal } from '../codex-command-classification'
 import {
@@ -68,6 +70,14 @@ export const TERMINAL_HANDLERS: Record<string, CommandHandler> = {
     printResult(result, json, formatTerminalShow)
   },
   'terminal read': async ({ flags, client, cwd, json }) => {
+    const expectedIncarnationId = getOptionalStringFlag(flags, 'expected-incarnation-id')
+    let capabilityRuntimeId: string | undefined
+    if (flags.has('expected-incarnation-id') && expectedIncarnationId === undefined) {
+      throw new RuntimeClientError(
+        'invalid_argument',
+        '--expected-incarnation-id must not be empty'
+      )
+    }
     const cursorFlag = getOptionalStringFlag(flags, 'cursor')
     const cursor =
       cursorFlag !== undefined && /^\d+$/.test(cursorFlag)
@@ -85,8 +95,26 @@ export const TERMINAL_HANDLERS: Record<string, CommandHandler> = {
         '--screen reads the current rendered screen, which has no cursor to page from. Use --cursor without --screen to page through accumulated output.'
       )
     }
+    if (expectedIncarnationId !== undefined) {
+      const status = await client.call<RuntimeStatus>('status.get')
+      if (
+        !status.result.capabilities?.includes(TERMINAL_READ_INCARNATION_FENCE_RUNTIME_CAPABILITY)
+      ) {
+        throw new RuntimeClientError(
+          'incompatible_runtime',
+          'The connected Orca runtime cannot safely fence terminal reads by process incarnation.'
+        )
+      }
+      const statusRuntimeId = status._meta?.runtimeId
+      if (typeof statusRuntimeId !== 'string' || statusRuntimeId.length === 0) {
+        throw new RuntimeClientError('terminal_handle_stale', 'terminal_handle_stale')
+      }
+      capabilityRuntimeId = statusRuntimeId
+    }
+    const terminalHandle = await getTerminalHandle(flags, cwd, client)
     const result = await client.call<{ terminal: RuntimeTerminalRead }>('terminal.read', {
-      terminal: await getTerminalHandle(flags, cwd, client),
+      terminal: terminalHandle,
+      ...(expectedIncarnationId !== undefined ? { expectedIncarnationId } : {}),
       ...(cursor !== undefined ? { cursor } : {}),
       ...(screen ? { screen: true } : {}),
       limit: getOptionalPositiveIntegerFlag(flags, 'limit')
@@ -99,6 +127,16 @@ export const TERMINAL_HANDLERS: Record<string, CommandHandler> = {
         'incompatible_runtime',
         'This Orca host does not support --screen reads, so it answered with accumulated output instead of the rendered screen. Update Orca on the host, or drop --screen to read accumulated output deliberately.'
       )
+    }
+    if (
+      expectedIncarnationId !== undefined &&
+      (result._meta?.runtimeId !== capabilityRuntimeId ||
+        result.result.terminal.handle !== terminalHandle ||
+        result.result.terminal.incarnationId !== expectedIncarnationId ||
+        typeof result.result.terminal.worktreeId !== 'string' ||
+        result.result.terminal.worktreeId.length === 0)
+    ) {
+      throw new RuntimeClientError('terminal_handle_stale', 'terminal_handle_stale')
     }
     printResult(result, json, formatTerminalRead)
   },
