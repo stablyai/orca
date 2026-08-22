@@ -161,6 +161,13 @@ export function getPiAgentStatusExtensionSource(kind: PiAgentKind = 'pi'): strin
     ...getPiAgentStatusRuntimeDetectionSourceLines(kind),
     '',
     'function post(hookEventName: string, extra: Record<string, unknown> = {}): void {',
+    ...(kind === 'kimchi'
+      ? [
+          '  // Why: the kimchi harness marks sub-agent sessions with KIMCHI_SUBAGENT=1;',
+          '  // their lifecycle must not drive pane status or completion notifications.',
+          "  if (process.env.KIMCHI_SUBAGENT === '1') return"
+        ]
+      : []),
     '  const ompRuntime = isOmpRuntime()',
     '  pendingPost = {',
     '    hookEventName,',
