@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
   buildAgentDraftLaunchPlan,
-  buildAgentResumeStartupPlan,
   buildAgentStartupPlan,
   buildShellCommandFromArgv,
   planAgentCliArgsSuffix
@@ -39,7 +38,8 @@ describe('draft prefill teardown ordering (#14975)', () => {
       agent: 'pi',
       draft: 'hello',
       cmdOverrides: {},
-      platform: 'darwin'
+      platform: 'darwin',
+      agentStatusHookSettings: null
     })
 
     const command = plan?.launchCommand ?? ''
@@ -64,7 +64,8 @@ describe('tui agent startup plans', () => {
       agent: 'claude',
       prompt: "fix Bob's branch",
       cmdOverrides: {},
-      platform: 'linux'
+      platform: 'linux',
+      agentStatusHookSettings: null
     })
 
     expect(plan?.launchCommand).toBe("claude 'fix Bob'\"'\"'s branch'")
@@ -75,7 +76,8 @@ describe('tui agent startup plans', () => {
       agent: 'claude',
       prompt: 'fix Bob\'s "quoted" branch',
       cmdOverrides: {},
-      platform: 'win32'
+      platform: 'win32',
+      agentStatusHookSettings: null
     })
 
     expect(plan?.launchCommand).toBe("claude 'fix Bob''s \"quoted\" branch'")
@@ -93,7 +95,8 @@ describe('tui agent startup plans', () => {
       prompt: 'fix "quoted" & %PATH%',
       cmdOverrides: {},
       platform: 'win32',
-      shell: 'cmd'
+      shell: 'cmd',
+      agentStatusHookSettings: null
     })
 
     expect(plan?.launchCommand).toBe('claude "fix ^"quoted^" ^& ^%PATH^%"')
@@ -104,7 +107,8 @@ describe('tui agent startup plans', () => {
       agent: 'grok',
       prompt: '--version',
       cmdOverrides: {},
-      platform: 'linux'
+      platform: 'linux',
+      agentStatusHookSettings: null
     })
 
     expect(plan?.launchCommand).toBe("grok -- '--version'")
@@ -115,7 +119,8 @@ describe('tui agent startup plans', () => {
       agent: 'grok',
       prompt: '-h',
       cmdOverrides: {},
-      platform: 'win32'
+      platform: 'win32',
+      agentStatusHookSettings: null
     })
 
     expect(plan?.launchCommand).toBe("grok -- '-h'")
@@ -127,7 +132,8 @@ describe('tui agent startup plans', () => {
       prompt: 'help',
       cmdOverrides: {},
       platform: 'win32',
-      shell: 'cmd'
+      shell: 'cmd',
+      agentStatusHookSettings: null
     })
 
     expect(plan?.launchCommand).toBe('grok -- "help"')
@@ -139,7 +145,8 @@ describe('tui agent startup plans', () => {
       prompt: '--version',
       cmdOverrides: {},
       agentArgs: '--always-approve',
-      platform: 'win32'
+      platform: 'win32',
+      agentStatusHookSettings: null
     })
 
     expect(plan?.launchCommand).toBe("grok '--always-approve' -- '--version'")
@@ -150,7 +157,8 @@ describe('tui agent startup plans', () => {
       agent: 'codex',
       prompt: '--version',
       cmdOverrides: {},
-      platform: 'linux'
+      platform: 'linux',
+      agentStatusHookSettings: null
     })
 
     expect(plan?.launchCommand).toBe("codex '--version'")
@@ -168,7 +176,8 @@ describe('tui agent startup plans', () => {
       cmdOverrides: {},
       agentArgs: '--yolo',
       platform: testCase.platform,
-      shell: testCase.shell
+      shell: testCase.shell,
+      agentStatusHookSettings: null
     })
 
     expect(plan?.launchCommand).not.toContain(prompt)
@@ -200,7 +209,8 @@ describe('tui agent startup plans', () => {
       agent: 'hermes',
       prompt: 'run it',
       cmdOverrides: {},
-      platform: 'linux'
+      platform: 'linux',
+      agentStatusHookSettings: null
     })
 
     expect(plan?.launchCommand).toMatch(/^sh -c /)
@@ -218,7 +228,8 @@ describe('tui agent startup plans', () => {
       prompt: 'run privately',
       cmdOverrides: { hermes: 'hermes --tui --provider anthropic' },
       agentArgs: '--yolo',
-      platform: 'linux'
+      platform: 'linux',
+      agentStatusHookSettings: null
     })
 
     const script = unwrapPosixShellScript(plan?.launchCommand)
@@ -243,7 +254,8 @@ describe('tui agent startup plans', () => {
       prompt: 'run it',
       cmdOverrides: { hermes: testCase.override },
       platform: 'win32',
-      shell: testCase.shell
+      shell: testCase.shell,
+      agentStatusHookSettings: null
     })
 
     expect(unwrapPowerShellScript(plan?.launchCommand)).toContain(testCase.expected)
@@ -255,7 +267,8 @@ describe('tui agent startup plans', () => {
       prompt: 'run it',
       cmdOverrides: { hermes: 'hermes --provider copilot chat --tui' },
       agentArgs: '--provider copilot chat --yolo',
-      platform: 'linux'
+      platform: 'linux',
+      agentStatusHookSettings: null
     })
 
     const script = unwrapPosixShellScript(plan?.launchCommand)
@@ -268,7 +281,8 @@ describe('tui agent startup plans', () => {
       agent: 'hermes',
       prompt: 'run it',
       cmdOverrides: { hermes: 'hermes --profile chat --tui' },
-      platform: 'linux'
+      platform: 'linux',
+      agentStatusHookSettings: null
     })
 
     expect(unwrapPosixShellScript(plan?.launchCommand)).toContain("'--profile' 'chat'")
@@ -280,7 +294,8 @@ describe('tui agent startup plans', () => {
       prompt: 'automation prompt',
       cmdOverrides: { hermes: 'hermes --query override --cli' },
       agentArgs: '-q=second-override --query=third-override -qfourth-override --tui',
-      platform: 'linux'
+      platform: 'linux',
+      agentStatusHookSettings: null
     })
 
     const script = unwrapPosixShellScript(plan?.launchCommand)
@@ -296,7 +311,8 @@ describe('tui agent startup plans', () => {
       agent: 'hermes',
       prompt: 'run it',
       cmdOverrides: { hermes: 'uv run hermes --tui' },
-      platform: 'linux'
+      platform: 'linux',
+      agentStatusHookSettings: null
     })
 
     expect(unwrapPosixShellScript(plan?.launchCommand)).toContain("'uv' 'run' 'hermes' 'chat'")
@@ -307,7 +323,8 @@ describe('tui agent startup plans', () => {
       agent: 'hermes',
       prompt: 'run it',
       cmdOverrides: { hermes: 'sudo -u hermes hermes --tui' },
-      platform: 'linux'
+      platform: 'linux',
+      agentStatusHookSettings: null
     })
 
     expect(unwrapPosixShellScript(plan?.launchCommand)).toContain(
@@ -320,7 +337,8 @@ describe('tui agent startup plans', () => {
       agent: 'hermes',
       prompt: 'run it',
       cmdOverrides: { hermes: 'sudo -u hermes hermes chat --tui' },
-      platform: 'linux'
+      platform: 'linux',
+      agentStatusHookSettings: null
     })
 
     const script = unwrapPosixShellScript(plan?.launchCommand)
@@ -333,7 +351,8 @@ describe('tui agent startup plans', () => {
       agent: 'hermes',
       prompt: 'run it',
       cmdOverrides: { hermes: 'hermes chat --resume hermes --tui' },
-      platform: 'linux'
+      platform: 'linux',
+      agentStatusHookSettings: null
     })
 
     const script = unwrapPosixShellScript(plan?.launchCommand)
@@ -346,7 +365,8 @@ describe('tui agent startup plans', () => {
       agent: 'hermes',
       prompt: 'run it',
       cmdOverrides: { hermes: 'HERMES_HOME=/tmp/test uv run hermes --tui' },
-      platform: 'linux'
+      platform: 'linux',
+      agentStatusHookSettings: null
     })
 
     expect(unwrapPosixShellScript(plan?.launchCommand)).toContain(
@@ -360,7 +380,8 @@ describe('tui agent startup plans', () => {
         agent: 'hermes',
         prompt: 'run it',
         cmdOverrides: { hermes: 'custom-agent --tui' },
-        platform: 'linux'
+        platform: 'linux',
+        agentStatusHookSettings: null
       })
     ).toBeNull()
   })
@@ -370,7 +391,8 @@ describe('tui agent startup plans', () => {
       agent: 'hermes',
       prompt: 'x'.repeat(24_000),
       cmdOverrides: {},
-      platform: 'win32'
+      platform: 'win32',
+      agentStatusHookSettings: null
     })
 
     expect(plan).toBeNull()
@@ -384,7 +406,8 @@ describe('tui agent startup plans', () => {
         prompt,
         cmdOverrides: {},
         platform: 'win32',
-        shell: 'cmd'
+        shell: 'cmd',
+        agentStatusHookSettings: null
       })
 
       expect(plan?.launchCommand).not.toContain(prompt)
@@ -398,7 +421,8 @@ describe('tui agent startup plans', () => {
       prompt: 'run remotely',
       cmdOverrides: {},
       platform: 'win32',
-      isRemote: true
+      isRemote: true,
+      agentStatusHookSettings: null
     })
 
     expect(unwrapPowerShellScript(plan?.launchCommand)).toContain(
@@ -411,7 +435,8 @@ describe('tui agent startup plans', () => {
       agent: 'hermes',
       prompt: '界'.repeat(50_000),
       cmdOverrides: {},
-      platform: 'linux'
+      platform: 'linux',
+      agentStatusHookSettings: null
     })
 
     expect(plan).toBeNull()
@@ -423,7 +448,8 @@ describe('tui agent startup plans', () => {
       prompt: '',
       cmdOverrides: {},
       platform: 'linux',
-      allowEmptyPromptLaunch: true
+      allowEmptyPromptLaunch: true,
+      agentStatusHookSettings: null
     })
 
     expect(plan?.launchCommand).toBe('hermes --tui')
@@ -435,7 +461,8 @@ describe('tui agent startup plans', () => {
       agent: 'codex',
       prompt: 'fix it',
       cmdOverrides: {},
-      platform: 'linux'
+      platform: 'linux',
+      agentStatusHookSettings: null
     })
 
     expect(plan?.launchCommand).toBe("codex 'fix it'")
@@ -448,7 +475,8 @@ describe('tui agent startup plans', () => {
       prompt: '',
       cmdOverrides: {},
       platform: 'linux',
-      allowEmptyPromptLaunch: true
+      allowEmptyPromptLaunch: true,
+      agentStatusHookSettings: null
     })
 
     expect(plan).toEqual({
@@ -465,7 +493,8 @@ describe('tui agent startup plans', () => {
       agent: 'claude',
       prompt: 'fix it',
       cmdOverrides: {},
-      platform: 'linux'
+      platform: 'linux',
+      agentStatusHookSettings: null
     })
 
     expect(plan?.launchCommand).toBe("claude 'fix it'")
@@ -478,7 +507,8 @@ describe('tui agent startup plans', () => {
       prompt: '',
       cmdOverrides: {},
       platform: 'linux',
-      allowEmptyPromptLaunch: true
+      allowEmptyPromptLaunch: true,
+      agentStatusHookSettings: null
     })
 
     expect(plan?.launchCommand).toBe('orca-ide claude-teams')
@@ -495,7 +525,8 @@ describe('tui agent startup plans', () => {
       cmdOverrides: {},
       platform: 'linux',
       isRemote: true,
-      allowEmptyPromptLaunch: true
+      allowEmptyPromptLaunch: true,
+      agentStatusHookSettings: null
     })
 
     expect(plan?.launchCommand).toBe('orca claude-teams')
@@ -510,7 +541,8 @@ describe('tui agent startup plans', () => {
       cmdOverrides: {},
       platform: 'win32',
       isRemote: true,
-      allowEmptyPromptLaunch: true
+      allowEmptyPromptLaunch: true,
+      agentStatusHookSettings: null
     })
 
     expect(plan?.launchCommand).toBe('orca.cmd claude-teams')
@@ -526,7 +558,8 @@ describe('tui agent startup plans', () => {
       cmdOverrides: {},
       platform: 'linux',
       isRemote: false,
-      allowEmptyPromptLaunch: true
+      allowEmptyPromptLaunch: true,
+      agentStatusHookSettings: null
     })
 
     expect(plan?.launchCommand).toBe('orca-ide claude-teams')
@@ -537,7 +570,8 @@ describe('tui agent startup plans', () => {
       agent: 'openclaude',
       prompt: 'fix it',
       cmdOverrides: {},
-      platform: 'linux'
+      platform: 'linux',
+      agentStatusHookSettings: null
     })
 
     expect(plan).toEqual({
@@ -554,7 +588,8 @@ describe('tui agent startup plans', () => {
       agent: 'mistral-vibe',
       prompt: 'fix it',
       cmdOverrides: {},
-      platform: 'linux'
+      platform: 'linux',
+      agentStatusHookSettings: null
     })
 
     expect(plan).toEqual({
@@ -571,7 +606,8 @@ describe('tui agent startup plans', () => {
       agent: 'qwen-code',
       prompt: 'fix it',
       cmdOverrides: {},
-      platform: 'linux'
+      platform: 'linux',
+      agentStatusHookSettings: null
     })
 
     expect(plan).toEqual({
@@ -588,7 +624,8 @@ describe('tui agent startup plans', () => {
       agent: 'claude',
       prompt: 'fix it',
       cmdOverrides: { claude: 'claude --dangerously-skip-permissions' },
-      platform: 'linux'
+      platform: 'linux',
+      agentStatusHookSettings: null
     })
 
     expect(plan?.launchCommand).toBe("claude --dangerously-skip-permissions 'fix it'")
@@ -599,101 +636,11 @@ describe('tui agent startup plans', () => {
       agent: 'codex',
       prompt: 'fix it',
       cmdOverrides: { codex: 'codex --profile work' },
-      platform: 'linux'
+      platform: 'linux',
+      agentStatusHookSettings: null
     })
 
     expect(plan?.launchCommand).toBe("codex --profile work 'fix it'")
-  })
-
-  it('builds Windows resume plans that PowerShell can invoke', () => {
-    const plan = buildAgentResumeStartupPlan({
-      agent: 'codex',
-      providerSession: { key: 'session_id', id: 's1' },
-      cmdOverrides: {},
-      platform: 'win32'
-    })
-
-    expect(plan?.launchCommand).toBe("codex 'resume' 's1'")
-  })
-
-  it('quotes Windows resume argv for cmd.exe when shell is cmd', () => {
-    const plan = buildAgentResumeStartupPlan({
-      agent: 'grok',
-      providerSession: { key: 'session_id', id: '019fc272-80fa-7a91-80a2-9c461ef1a9da' },
-      cmdOverrides: {},
-      agentArgs: '--permission-mode bypassPermissions',
-      platform: 'win32',
-      shell: 'cmd'
-    })
-
-    // Why: cmd.exe treats single quotes as literal characters. Resume must use
-    // double quotes (or unquoted tokens) so the CLI receives clean argv.
-    expect(plan?.launchCommand).toBe(
-      'grok "--permission-mode" "bypassPermissions" "--resume" "019fc272-80fa-7a91-80a2-9c461ef1a9da"'
-    )
-  })
-
-  it('keeps cmd-quoted agentCommand aligned with cmd resume suffix', () => {
-    const plan = buildAgentResumeStartupPlan({
-      agent: 'grok',
-      providerSession: { key: 'session_id', id: '019fc272-80fa-7a91-80a2-9c461ef1a9da' },
-      cmdOverrides: {},
-      agentCommand: 'grok "--permission-mode" "bypassPermissions"',
-      platform: 'win32',
-      shell: 'cmd'
-    })
-
-    // Regression: agentCommand from a prior cmd launch + PowerShell-default resume
-    // suffix produced mixed quoting and broke reboot restore on cmd.exe tabs.
-    expect(plan?.launchCommand).toBe(
-      'grok "--permission-mode" "bypassPermissions" "--resume" "019fc272-80fa-7a91-80a2-9c461ef1a9da"'
-    )
-  })
-
-  it('honors command overrides when building POSIX resume plans', () => {
-    const plan = buildAgentResumeStartupPlan({
-      agent: 'codex',
-      providerSession: { key: 'session_id', id: 's1' },
-      cmdOverrides: { codex: 'codex --profile work' },
-      platform: 'linux'
-    })
-
-    expect(plan?.launchCommand).toBe("codex --profile work 'resume' 's1'")
-  })
-
-  it('uses a captured launch command when building resume plans after overrides change', () => {
-    const plan = buildAgentResumeStartupPlan({
-      agent: 'codex',
-      providerSession: { key: 'session_id', id: 's1' },
-      cmdOverrides: { codex: 'codex --profile changed' },
-      agentCommand: 'codex --profile captured',
-      platform: 'linux'
-    })
-
-    expect(plan?.launchCommand).toBe("codex --profile captured 'resume' 's1'")
-    expect(plan?.launchConfig).toEqual({
-      agentCommand: 'codex --profile captured',
-      agentArgs: '',
-      agentEnv: {}
-    })
-  })
-
-  it('keeps an AI Vault OMP file locator separate from provider identity', () => {
-    const plan = buildAgentResumeStartupPlan({
-      agent: 'omp',
-      providerSession: { key: 'session_id', id: 'omp-session-1' },
-      cmdOverrides: {},
-      ompResumeFilePath: '/custom/root/project/session.jsonl',
-      platform: 'linux'
-    })
-
-    expect(plan?.launchCommand).toBe("omp '--resume' '/custom/root/project/session.jsonl'")
-    expect(plan?.launchConfig).toEqual({
-      agentCommand: 'omp',
-      agentArgs: '',
-      agentEnv: {},
-      ompResumeFilePath: '/custom/root/project/session.jsonl'
-    })
   })
 
   it('appends shell-quoted CLI arguments before prompt delivery flags', () => {
@@ -702,7 +649,8 @@ describe('tui agent startup plans', () => {
       prompt: 'fix it',
       cmdOverrides: {},
       agentArgs: '--model sonnet --add-dir "path with spaces"',
-      platform: 'linux'
+      platform: 'linux',
+      agentStatusHookSettings: null
     })
 
     expect(plan?.launchCommand).toBe(
@@ -716,7 +664,8 @@ describe('tui agent startup plans', () => {
       prompt: 'fix it',
       cmdOverrides: {},
       agentArgs: '--model sonnet --name "Bob\'s"',
-      platform: 'win32'
+      platform: 'win32',
+      agentStatusHookSettings: null
     })
 
     expect(plan?.launchCommand).toBe("claude '--model' 'sonnet' '--name' 'Bob''s' 'fix it'")
@@ -729,7 +678,8 @@ describe('tui agent startup plans', () => {
       cmdOverrides: {},
       agentEnv: { GOOSE_MODE: 'auto' },
       platform: 'linux',
-      allowEmptyPromptLaunch: true
+      allowEmptyPromptLaunch: true,
+      agentStatusHookSettings: null
     })
 
     expect(plan?.launchCommand).toBe('goose')
@@ -749,7 +699,8 @@ describe('tui agent startup plans', () => {
       agentArgs: '',
       agentEnv: {},
       platform: 'linux',
-      allowEmptyPromptLaunch: true
+      allowEmptyPromptLaunch: true,
+      agentStatusHookSettings: null
     })
 
     expect(plan?.launchConfig).toEqual({ agentCommand: 'claude', agentArgs: '', agentEnv: {} })
@@ -764,7 +715,8 @@ describe('tui agent startup plans', () => {
       prompt: 'fix it',
       cmdOverrides: {},
       agentArgs: resolveTuiAgentLaunchArgs('opencode', agentDefaultArgs),
-      platform: 'linux'
+      platform: 'linux',
+      agentStatusHookSettings: null
     })
 
     expect(plan?.launchCommand).toBe("opencode --prompt 'fix it'")
@@ -788,7 +740,8 @@ describe('tui agent startup plans', () => {
         agent: 'opencode',
         draft: 'x',
         cmdOverrides: {},
-        platform: 'darwin'
+        platform: 'darwin',
+        agentStatusHookSettings: null
       })
     ).toBeNull()
     expect(
@@ -796,7 +749,8 @@ describe('tui agent startup plans', () => {
         agent: 'mimo-code',
         draft: 'x',
         cmdOverrides: {},
-        platform: 'darwin'
+        platform: 'darwin',
+        agentStatusHookSettings: null
       })
     ).toBeNull()
   })
@@ -813,7 +767,8 @@ describe('tui agent startup plans', () => {
         agent: 'grok',
         draft: 'x',
         cmdOverrides: {},
-        platform: 'darwin'
+        platform: 'darwin',
+        agentStatusHookSettings: null
       })
     ).toBeNull()
   })
@@ -824,7 +779,8 @@ describe('tui agent startup plans', () => {
       prompt: 'fix it',
       cmdOverrides: {},
       agentArgs: '--trust-all-tools',
-      platform: 'linux'
+      platform: 'linux',
+      agentStatusHookSettings: null
     })
 
     expect(plan?.launchCommand).toBe("kiro-cli chat --tui '--trust-all-tools'")
@@ -836,7 +792,8 @@ describe('tui agent startup plans', () => {
       prompt: 'fix it',
       cmdOverrides: {},
       agentArgs: '--allow "*"',
-      platform: 'linux'
+      platform: 'linux',
+      agentStatusHookSettings: null
     })
 
     expect(plan?.launchCommand).toBe("cn '--allow' '*'")
@@ -848,7 +805,8 @@ describe('tui agent startup plans', () => {
         agent: 'pi',
         draft: 'https://github.com/acme/repo/issues/42',
         cmdOverrides: {},
-        platform: 'win32'
+        platform: 'win32',
+        agentStatusHookSettings: null
       })?.launchCommand
     ).toBe('pi; Remove-Item Env:ORCA_PI_PREFILL -ErrorAction SilentlyContinue')
 
@@ -858,7 +816,8 @@ describe('tui agent startup plans', () => {
         draft: 'https://github.com/acme/repo/issues/42',
         cmdOverrides: {},
         platform: 'win32',
-        shell: 'cmd'
+        shell: 'cmd',
+        agentStatusHookSettings: null
       })?.launchCommand
     ).toBe('pi & set "ORCA_PI_PREFILL="')
   })
@@ -873,7 +832,8 @@ describe('tui agent startup plans', () => {
       agent: 'omp',
       draft: 'fix the omp regression',
       cmdOverrides: {},
-      platform: 'linux'
+      platform: 'linux',
+      agentStatusHookSettings: null
     })
 
     expect(plan).not.toBeNull()
@@ -890,7 +850,8 @@ describe('tui agent startup plans', () => {
         agent: 'claude',
         draft: 'x'.repeat(25_000),
         cmdOverrides: {},
-        platform: 'win32'
+        platform: 'win32',
+        agentStatusHookSettings: null
       })
     ).toBeNull()
   })
@@ -901,7 +862,8 @@ describe('tui agent startup plans', () => {
         agent: 'pi',
         draft: 'x'.repeat(25_000),
         cmdOverrides: {},
-        platform: 'win32'
+        platform: 'win32',
+        agentStatusHookSettings: null
       })
     ).toBeNull()
   })
@@ -912,7 +874,8 @@ describe('tui agent startup plans', () => {
       prompt: 'fix the tests',
       cmdOverrides: {},
       agentArgs: resolveTuiAgentLaunchArgs('devin', null),
-      platform: 'linux'
+      platform: 'linux',
+      agentStatusHookSettings: null
     })
     expect(plan).toEqual({
       agent: 'devin',
@@ -933,7 +896,8 @@ describe('tui agent startup plans', () => {
       draft: 'prefill text',
       cmdOverrides: {},
       agentEnv: { ORCA_AGENT_MODE: 'managed' },
-      platform: 'linux'
+      platform: 'linux',
+      agentStatusHookSettings: null
     })
 
     expect(plan?.env).toEqual({ ORCA_AGENT_MODE: 'managed', ORCA_PI_PREFILL: 'prefill text' })

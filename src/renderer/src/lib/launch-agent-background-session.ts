@@ -94,7 +94,8 @@ export async function launchAgentBackgroundSession(
     platform: launchPlatform,
     shell: startupShell,
     isRemote,
-    allowEmptyPromptLaunch: !hasPrompt || isFollowupPath
+    allowEmptyPromptLaunch: !hasPrompt || isFollowupPath,
+    agentStatusHookSettings: store.settings ?? null
   })
   if (!startupPlan) {
     return null

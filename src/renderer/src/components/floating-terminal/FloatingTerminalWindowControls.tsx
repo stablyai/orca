@@ -79,7 +79,8 @@ export function FloatingTerminalWindowControls({
       agentArgs: resolveTuiAgentLaunchArgs(defaultAgent, state.settings?.agentDefaultArgs),
       agentEnv: resolveTuiAgentLaunchEnv(defaultAgent, state.settings?.agentDefaultEnv),
       platform: CLIENT_PLATFORM,
-      allowEmptyPromptLaunch: true
+      allowEmptyPromptLaunch: true,
+      agentStatusHookSettings: state.settings ?? null
     })
     if (!startupPlan) {
       toast.error(

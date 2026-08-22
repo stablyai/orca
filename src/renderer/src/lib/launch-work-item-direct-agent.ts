@@ -32,6 +32,9 @@ export function buildDirectWorkItemAgentStartupPlan(args: {
         experimentalNativeChat?: boolean
         openAgentTabsInChatByDefault?: boolean
         nativeChatSessionOptions?: PersistedNativeChatSessionOptions
+        // Both gate managed status hooks; the launch plan needs each (#11941).
+        agentStatusHooksEnabled?: boolean
+        disabledTuiAgents?: readonly string[]
       }
     | null
     | undefined
@@ -70,6 +73,7 @@ export function buildDirectWorkItemAgentStartupPlan(args: {
           cmdOverrides: args.settings?.agentCmdOverrides ?? {},
           platform: args.launchPlatform,
           isRemote: args.isRemote,
+          agentStatusHookSettings: args.settings ?? null,
           agentArgs: effectiveAgentArgs,
           agentEnv: effectiveAgentEnv,
           sessionOptions
@@ -102,6 +106,7 @@ export function buildDirectWorkItemAgentStartupPlan(args: {
     cmdOverrides: args.settings?.agentCmdOverrides ?? {},
     platform: args.launchPlatform,
     isRemote: args.isRemote,
+    agentStatusHookSettings: args.settings ?? null,
     agentArgs: effectiveAgentArgs,
     agentEnv: effectiveAgentEnv,
     sessionOptions,

@@ -3,7 +3,7 @@ import { basename } from 'node:path'
 import { homedir, userInfo } from 'node:os'
 import { promisify } from 'node:util'
 import { installRemoteManagedAgentHooks } from './remote-managed-hook-installers'
-import type { AgentHookTarget } from '../../shared/agent-hook-types'
+import type { AgentHookInstallStatus, AgentHookTarget } from '../../shared/agent-hook-types'
 import { createManagedHookLocalFilesystem } from './managed-hook-local-filesystem'
 import { withManagedHookInstallLock } from './managed-hook-install-lock'
 import {
@@ -18,6 +18,10 @@ const GROK_HOME_PROBE_TIMEOUT_MS = 8_000
 export type ManagedHookInstallSummary = {
   installers: number
   errors: number
+  /** Per-agent results, so the client can report which agent failed on this
+   *  host instead of a bare count. Optional on the wire: a relay that predates
+   *  the field answers without it and the client reports `unknown` (#8711). */
+  statuses: AgentHookInstallStatus[]
 }
 
 function defaultGrokHome(home: string): string {
@@ -82,7 +86,7 @@ export async function installManagedHooks(options?: {
   // Why: empty/omitted allowlist fails closed before any home/host probes.
   const agents = options?.agents ?? []
   if (agents.length === 0) {
-    return { installers: 0, errors: 0 }
+    return { installers: 0, errors: 0, statuses: [] }
   }
   const home = homedir()
   const grokHomeDir = await resolveRelayGrokHome(home, options?.signal)
@@ -106,7 +110,8 @@ export async function installManagedHooks(options?: {
       )
       return {
         installers: results.length,
-        errors: results.filter((result) => result.state === 'error').length
+        errors: results.filter((result) => result.state === 'error').length,
+        statuses: results
       }
     },
     hostIdentity

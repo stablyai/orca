@@ -17,6 +17,9 @@ import { SshFilesystemProvider } from '../providers/ssh-filesystem-provider'
 import { isMethodNotFoundError } from './ssh-filesystem-stream-reader'
 import { SshGitProvider } from '../providers/ssh-git-provider'
 import { agentHookServer } from '../agent-hooks/server'
+import type { AgentHookHostOutcome, AgentHookHostState } from '../../shared/agent-hook-host-status'
+import { readManagedHookInstallOutcome } from '../agent-hooks/remote-hook-install-outcome'
+import type { AgentHookInstallStatus } from '../../shared/agent-hook-types'
 import { isAgentStatusHooksEnabled } from '../agent-hooks/managed-agent-hook-controls'
 import {
   buildManagedHookDetectionCommands,
@@ -314,6 +317,9 @@ export class SshRelaySession {
   private currentConnection: SshConnection | null = null
   private hostPlatform: RemoteHostPlatform | null = null
   private remoteCliBridgeEnv: RemoteCliBridgeEnv | null = null
+  // Why (#8711): `agent hooks status` must answer for the host that runs the
+  // agent, so the last remote managed-hook result outlives the install call.
+  private managedHookOutcome: AgentHookHostOutcome | null = null
   private aiVaultListMethodSupported: boolean | null = null
   private aiVaultTitleMethodSupported: boolean | null = null
   private pendingPtyReattaches = new Map<string, PendingPtyReattach>()
@@ -1267,15 +1273,38 @@ export class SshRelaySession {
     })
   }
 
+  /** Last known managed-hook state on the host this session reaches. Defaults
+   *  to `unknown`, so a diagnostic asked while the install is still in flight —
+   *  or after it silently never ran — says so instead of falling back to the
+   *  local machine's answer (#8711). */
+  getManagedHookOutcome(): AgentHookHostOutcome {
+    return (
+      this.managedHookOutcome ?? {
+        state: 'unknown',
+        detail: 'Remote managed hook install has not reported yet.',
+        statuses: []
+      }
+    )
+  }
+
+  private recordManagedHookOutcome(
+    state: AgentHookHostState,
+    detail: string | null,
+    statuses: readonly AgentHookInstallStatus[] = []
+  ): void {
+    this.managedHookOutcome = { state, detail, statuses }
+  }
+
   private async installManagedHooksOnRemote(
     mux: SshChannelMultiplexer,
     shouldContinue?: () => boolean
   ): Promise<void> {
-    if (
-      !isRemoteAgentHooksEnabled() ||
-      !this.areAgentStatusHooksEnabled() ||
-      (shouldContinue && !shouldContinue())
-    ) {
+    if (!isRemoteAgentHooksEnabled() || !this.areAgentStatusHooksEnabled()) {
+      this.recordManagedHookOutcome('skipped', 'Agent status hooks are disabled.')
+      return
+    }
+    if (shouldContinue && !shouldContinue()) {
+      this.recordManagedHookOutcome('unknown', 'Connection closed before the install started.')
       return
     }
     if (
@@ -1283,6 +1312,10 @@ export class SshRelaySession {
       isWindowsRemoteHost(this.remoteCliBridgeEnv.hostPlatform)
     ) {
       // Why: managed hook installers emit POSIX-only scripts/paths; Windows remotes rely on relay-injected env + plugin overlays instead.
+      this.recordManagedHookOutcome(
+        'skipped',
+        'Windows remote: managed hook scripts are not installed on this host.'
+      )
       return
     }
 
@@ -1292,7 +1325,15 @@ export class SshRelaySession {
         commands: buildManagedHookDetectionCommands(store.getSettings?.() ?? null, 'linux')
       })) as { agents?: unknown }
       const agents = detectedManagedHookAgents(detected?.agents)
-      if (agents.length === 0 || (shouldContinue && !shouldContinue())) {
+      if (agents.length === 0) {
+        this.recordManagedHookOutcome(
+          'skipped',
+          'No managed agent CLI was detected on the remote host.'
+        )
+        return
+      }
+      if (shouldContinue && !shouldContinue()) {
+        this.recordManagedHookOutcome('unknown', 'Connection closed before the install completed.')
         return
       }
       const hostKeyFingerprint = this.requireReadyConnection().getHostKeyFingerprint?.()
@@ -1302,7 +1343,10 @@ export class SshRelaySession {
       }
       const result = (await mux.request(AGENT_HOOK_INSTALL_MANAGED_HOOKS_METHOD, params)) as {
         errors?: unknown
+        statuses?: unknown
       }
+      const outcome = readManagedHookInstallOutcome(result)
+      this.recordManagedHookOutcome(outcome.state, outcome.detail, outcome.statuses)
       if (typeof result.errors === 'number' && result.errors > 0) {
         console.warn(
           `[ssh-relay-session] ${result.errors} remote managed hook installers failed for ${this.targetId}`
@@ -1311,6 +1355,7 @@ export class SshRelaySession {
     } catch (error) {
       // Why: teardown routinely cancels this best-effort request; only warn for
       // installer failures that survive the connection lifecycle.
+      const detail = error instanceof Error ? error.message : String(error)
       const code = (error as { code?: unknown })?.code
       if (
         code === -32601 ||
@@ -1318,12 +1363,14 @@ export class SshRelaySession {
         code === 'DISPOSED' ||
         mux.isDisposed()
       ) {
+        // Why: a torn-down connection proves nothing about the remote install,
+        // so leave the host unknown rather than claiming it failed or worked.
+        this.recordManagedHookOutcome('unknown', `Install could not be confirmed: ${detail}`)
         return
       }
+      this.recordManagedHookOutcome('error', detail)
       console.warn(
-        `[ssh-relay-session] relay managed hook install failed for ${this.targetId}: ${
-          error instanceof Error ? error.message : String(error)
-        }`
+        `[ssh-relay-session] relay managed hook install failed for ${this.targetId}: ${detail}`
       )
     }
   }

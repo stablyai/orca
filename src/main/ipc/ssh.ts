@@ -11,6 +11,7 @@ import type { SshConnection, SshConnectionCallbacks } from '../ssh/ssh-connectio
 import { SshConnectionManager } from '../ssh/ssh-connection-manager'
 import type { SshChannelMultiplexer } from '../ssh/ssh-channel-multiplexer'
 import { SshRelaySession, type SshRelayAiVaultHostInfo } from '../ssh/ssh-relay-session'
+import type { AgentHookHostReport } from '../../shared/agent-hook-host-status'
 import type {
   SshAiVaultRelayListParams,
   SshAiVaultRelayTitleParams
@@ -161,6 +162,29 @@ export function getActiveSshAiVaultHostInfo(targetId: string): SshRelayAiVaultHo
     return null
   }
   return activeSessions.get(targetId)?.getAiVaultHostInfo() ?? null
+}
+
+/** Managed-hook state for every SSH host Orca currently reaches, named by the
+ *  host that actually runs the agents there (#8711). A connected host always
+ *  appears, even when its install never reported — silence would let the local
+ *  answer stand in for a host Orca could not check. */
+export function listActiveSshAgentHookReports(): AgentHookHostReport[] {
+  const labels = new Map(listRegisteredSshTargets().map((target) => [target.id, target.label]))
+  return [...activeSessions.values()].flatMap((session) => {
+    if (isRuntimeOwnedSshTargetId(session.targetId)) {
+      return []
+    }
+    return [
+      {
+        host: {
+          kind: 'ssh' as const,
+          targetId: session.targetId,
+          label: labels.get(session.targetId) ?? session.targetId
+        },
+        ...session.getManagedHookOutcome()
+      }
+    ]
+  })
 }
 
 export function getActiveSshAiVaultHostInfos(): SshRelayAiVaultHostInfo[] {

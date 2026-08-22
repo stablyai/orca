@@ -139,7 +139,8 @@ describe('one Unix startup dialect', () => {
       agent: 'pi',
       draft: 'hello',
       cmdOverrides: {},
-      platform: 'darwin'
+      platform: 'darwin',
+      agentStatusHookSettings: null
     })
 
     expect(plan?.launchCommand).toBe(

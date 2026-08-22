@@ -29,7 +29,7 @@ const LOCAL_WINDOWS_ARGS: AgentResumeLaunchTargetArgs = {
 
 async function resolveWith(
   overrides: Partial<AgentResumeLaunchTargetArgs>
-): Promise<{ platform: NodeJS.Platform; shell: string | undefined }> {
+): Promise<{ platform: NodeJS.Platform; shell: string | undefined; isRemote: boolean }> {
   const { resolveAgentResumeLaunchTarget } = await import('./agent-resume-launch-target')
   return resolveAgentResumeLaunchTarget({
     ...LOCAL_WINDOWS_ARGS,
@@ -52,7 +52,8 @@ describe('resolveAgentResumeLaunchTarget on a Windows client', () => {
   it('quotes for cmd.exe when the global Windows shell is cmd.exe', async () => {
     await expect(resolveWith({ terminalWindowsShell: 'cmd.exe' })).resolves.toEqual({
       platform: 'win32',
-      shell: 'cmd'
+      shell: 'cmd',
+      isRemote: false
     })
   })
 
@@ -62,20 +63,22 @@ describe('resolveAgentResumeLaunchTarget on a Windows client', () => {
         terminalWindowsShell: 'powershell.exe',
         tabShellOverride: 'C:\\WINDOWS\\system32\\cmd.exe'
       })
-    ).resolves.toEqual({ platform: 'win32', shell: 'cmd' })
+    ).resolves.toEqual({ platform: 'win32', shell: 'cmd', isRemote: false })
   })
 
   it('quotes for POSIX on a Git Bash tab', async () => {
     await expect(resolveWith({ terminalWindowsShell: 'git-bash' })).resolves.toEqual({
       platform: 'win32',
-      shell: 'posix'
+      shell: 'posix',
+      isRemote: false
     })
   })
 
   it('keeps PowerShell quoting when no Windows shell is configured', async () => {
     await expect(resolveWith({})).resolves.toEqual({
       platform: 'win32',
-      shell: 'powershell'
+      shell: 'powershell',
+      isRemote: false
     })
   })
 
@@ -86,7 +89,7 @@ describe('resolveAgentResumeLaunchTarget on a Windows client', () => {
         executionHostId: 'ssh:ssh-1',
         terminalWindowsShell: 'cmd.exe'
       })
-    ).resolves.toEqual({ platform: 'linux', shell: undefined })
+    ).resolves.toEqual({ platform: 'linux', shell: undefined, isRemote: true })
   })
 
   it('does not describe a remote runtime host with the local Windows shell setting', async () => {
@@ -95,7 +98,15 @@ describe('resolveAgentResumeLaunchTarget on a Windows client', () => {
         executionHostId: 'runtime:prod-box',
         terminalWindowsShell: 'cmd.exe'
       })
-    ).resolves.toEqual({ platform: 'win32', shell: undefined })
+    ).resolves.toEqual({ platform: 'win32', shell: undefined, isRemote: true })
+  })
+
+  // Why: the shell branch reads an absent executionHostId as remote (null !==
+  // 'local'). A launch decision must not — an unowned local pane is still local.
+  it('does not call an unowned local pane remote', async () => {
+    await expect(resolveWith({ executionHostId: null })).resolves.toMatchObject({
+      isRemote: false
+    })
   })
 
   it('keeps POSIX quoting for a WSL UNC worktree', async () => {
@@ -104,7 +115,7 @@ describe('resolveAgentResumeLaunchTarget on a Windows client', () => {
         worktreePath: '\\\\wsl.localhost\\Ubuntu\\home\\neil\\repo',
         terminalWindowsShell: 'cmd.exe'
       })
-    ).resolves.toEqual({ platform: 'linux', shell: undefined })
+    ).resolves.toEqual({ platform: 'linux', shell: undefined, isRemote: false })
   })
 
   it('keeps POSIX quoting for a project pinned to a WSL runtime', async () => {
@@ -122,7 +133,7 @@ describe('resolveAgentResumeLaunchTarget on a Windows client', () => {
         } as AgentResumeLaunchTargetArgs['projectRuntime'],
         terminalWindowsShell: 'cmd.exe'
       })
-    ).resolves.toEqual({ platform: 'linux', shell: undefined })
+    ).resolves.toEqual({ platform: 'linux', shell: undefined, isRemote: false })
   })
 })
 
@@ -144,6 +155,6 @@ describe('resolveAgentResumeLaunchTarget off Windows', () => {
         worktreePath: '/Users/neil/repo',
         terminalWindowsShell: 'cmd.exe'
       })
-    ).resolves.toEqual({ platform: 'darwin', shell: undefined })
+    ).resolves.toEqual({ platform: 'darwin', shell: undefined, isRemote: false })
   })
 })

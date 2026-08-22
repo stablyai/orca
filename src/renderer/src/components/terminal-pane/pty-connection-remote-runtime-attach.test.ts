@@ -368,10 +368,12 @@ describe('connectPanePty', () => {
     expect(transport.connect).toHaveBeenCalledTimes(1)
     expect(transport.connect).toHaveBeenCalledWith(
       expect.objectContaining({
-        command: "codex '--dangerously-bypass-approvals-and-sandbox' 'resume' 'codex-session-1'",
+        command:
+          "codex '-c' 'features.hooks=true' '--dangerously-bypass-approvals-and-sandbox' 'resume' 'codex-session-1'",
         launchAgent: 'codex',
         launchConfig: {
-          agentCommand: "codex '--dangerously-bypass-approvals-and-sandbox'",
+          agentCommand:
+            "codex '-c' 'features.hooks=true' '--dangerously-bypass-approvals-and-sandbox'",
           agentArgs: '--dangerously-bypass-approvals-and-sandbox',
           agentEnv: {}
         },

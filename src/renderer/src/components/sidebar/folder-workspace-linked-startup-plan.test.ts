@@ -18,7 +18,8 @@ describe('buildFolderWorkspaceLinkedStartupPlan', () => {
       agentArgs: '--provider "value with space"',
       platform: 'win32',
       shell: 'cmd',
-      isRemote: false
+      isRemote: false,
+      agentStatusHookSettings: null
     })
 
     expect(plan?.launchCommand).toBe('hermes --tui "--provider" "value with space"')

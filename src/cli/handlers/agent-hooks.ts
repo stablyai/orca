@@ -11,6 +11,11 @@ import {
   getDefaultUserDataPath
 } from '../runtime-client'
 import type { AgentHookInstallStatus } from '../../shared/agent-hook-types'
+import {
+  formatAgentHookHostReports,
+  summarizeAgentHookHostState,
+  type AgentHookHostReport
+} from '../../shared/agent-hook-host-status'
 import { getDefaultPersistedState } from '../../shared/constants'
 import { normalizeDisabledTuiAgents } from '../../shared/tui-agent-selection'
 import type { GlobalSettings } from '../../shared/global-settings-types'
@@ -26,6 +31,10 @@ type AgentHookCommandResult = {
   settingsPath: string
   appliedBy: 'runtime' | 'offline'
   statuses: AgentHookInstallStatus[]
+  /** Per-host managed hook state, local host first. `statuses` above stays for
+   *  compatibility but describes the local host only — read `hosts` to learn
+   *  whether the host that runs the agent can fire its hooks at all (#8711). */
+  hosts: AgentHookHostReport[]
 }
 
 function getDataPath(): string {
@@ -174,17 +183,55 @@ function localSuccess<TResult>(result: TResult): RuntimeRpcSuccess<TResult> {
 }
 
 function formatAgentHookCommandResult(result: AgentHookCommandResult): string {
-  const statusSummary = result.statuses
-    .map((status) => `${status.agent}: ${status.state}`)
-    .join('\n')
   return [
     `agentStatusHooksEnabled: ${result.enabled}`,
     `appliedBy: ${result.appliedBy}`,
     `settingsPath: ${result.settingsPath}`,
-    statusSummary
+    formatAgentHookHostReports(result.hosts),
+    result.appliedBy === 'offline' ? RUNTIME_UNREACHABLE_NOTICE : ''
   ]
     .filter(Boolean)
     .join('\n')
+}
+
+function localOnlyHosts(statuses: AgentHookInstallStatus[]): AgentHookHostReport[] {
+  return [
+    {
+      host: { kind: 'local' },
+      state: summarizeAgentHookHostState(statuses),
+      detail: null,
+      statuses
+    }
+  ]
+}
+
+/** Why (#8711): without the runtime, this command can see the local machine and
+ *  nothing else. It must say so — a bare local list reads as a verdict for every
+ *  host, which is what made `codex: installed` misdirect SSH debugging. */
+const RUNTIME_UNREACHABLE_NOTICE =
+  'ssh: unknown — Orca is not running; SSH host hook status is unavailable from this machine.'
+
+async function readAgentHookHostReports(client: RuntimeClient): Promise<{
+  hosts: AgentHookHostReport[]
+  appliedBy: 'runtime' | 'offline'
+}> {
+  try {
+    const response = await client.call<{ hosts?: AgentHookHostReport[] }>(
+      'agentHooks.status',
+      undefined,
+      { timeoutMs: 10_000 }
+    )
+    const hosts = response.result.hosts
+    if (Array.isArray(hosts) && hosts.length > 0) {
+      return { hosts, appliedBy: 'runtime' }
+    }
+  } catch {
+    // Fall through to the local-only report below.
+  }
+  return {
+    hosts: localOnlyHosts(getManagedAgentHookStatuses()),
+    appliedBy: 'offline'
+  }
 }
 
 async function setAgentHooksEnabled(
@@ -197,11 +244,15 @@ async function setAgentHooksEnabled(
   const statuses = updatedRuntime
     ? getManagedAgentHookStatuses()
     : await applyAgentStatusHooksEnabled(enabled, offlineUpdate?.settings)
+  const hosts = updatedRuntime
+    ? (await readAgentHookHostReports(client)).hosts
+    : localOnlyHosts(statuses)
   return {
     enabled,
     settingsPath,
     appliedBy: updatedRuntime ? 'runtime' : 'offline',
-    statuses
+    statuses,
+    hosts
   }
 }
 
@@ -214,12 +265,15 @@ export const AGENT_HOOK_HANDLERS: Record<string, CommandHandler> = {
         settings.agentStatusHooksEnabled && !settings.disabledTuiAgents.includes('codex')
     })
   },
-  'agent hooks status': async ({ json }) => {
+  'agent hooks status': async ({ client, json }) => {
+    const { hosts, appliedBy } = await readAgentHookHostReports(client)
+    const local = hosts.find((report) => report.host.kind === 'local')
     const result: AgentHookCommandResult = {
       enabled: readHookSettingsFromDisk().agentStatusHooksEnabled,
       settingsPath: getDataPath(),
-      appliedBy: 'offline',
-      statuses: getManagedAgentHookStatuses()
+      appliedBy,
+      statuses: [...(local?.statuses ?? [])],
+      hosts
     }
     printResult(localSuccess(result), json, formatAgentHookCommandResult)
   },

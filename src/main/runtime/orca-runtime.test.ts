@@ -6083,7 +6083,8 @@ describe('OrcaRuntimeService', () => {
       expect(spawn).toHaveBeenCalledWith(
         expect.objectContaining({
           cwd: '/remote/agent-feature',
-          command: "codex '--dangerously-bypass-approvals-and-sandbox' 'hi'",
+          command:
+            "codex '-c' 'features.hooks=true' '--dangerously-bypass-approvals-and-sandbox' 'hi'",
           worktreeId: result.worktree.id
         })
       )
@@ -46125,7 +46126,7 @@ describe('OrcaRuntimeService', () => {
       expect(spawn).toHaveBeenCalledWith(
         expect.objectContaining({
           cwd: '/remote/mobile-codex-draft',
-          command: "codex '--dangerously-bypass-approvals-and-sandbox'",
+          command: "codex '-c' 'features.hooks=true' '--dangerously-bypass-approvals-and-sandbox'",
           connectionId: 'ssh-1',
           worktreeId: result.worktree.id
         })

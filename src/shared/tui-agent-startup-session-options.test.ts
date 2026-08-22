@@ -15,7 +15,8 @@ describe('tui agent startup session options', () => {
       platform: 'linux',
       allowEmptyPromptLaunch: true,
       sessionOptions: { model: 'opus', effort: 'xhigh', fastMode: true },
-      agentArgs: '--model haiku'
+      agentArgs: '--model haiku',
+      agentStatusHookSettings: null
     })
     expect(plan?.launchCommand).toBe("claude '--model' 'opus' '--effort' 'xhigh' '--model' 'haiku'")
     expect(plan?.sessionOptions).toBeUndefined()
@@ -29,7 +30,8 @@ describe('tui agent startup session options', () => {
       platform: 'linux',
       allowEmptyPromptLaunch: true,
       sessionOptions: { model: 'opus', effort: 'xhigh' },
-      agentArgs: '--effort low'
+      agentArgs: '--effort low',
+      agentStatusHookSettings: null
     })
     expect(plan?.sessionOptions).toEqual({ model: 'opus' })
   })
@@ -43,7 +45,8 @@ describe('tui agent startup session options', () => {
       allowEmptyPromptLaunch: true,
       sessionOptions: { model: 'custom-codex-model', effort: 'high' },
       sessionOptionsOverrideAgentArgs: true,
-      agentArgs: '-m gpt-5.5 -c model_reasoning_effort=low'
+      agentArgs: '-m gpt-5.5 -c model_reasoning_effort=low',
+      agentStatusHookSettings: null
     })
     expect(plan?.launchCommand).toBe(
       "codex '-m' 'custom-codex-model' '-c' 'model_reasoning_effort=high'"
@@ -63,7 +66,8 @@ describe('tui agent startup session options', () => {
       allowEmptyPromptLaunch: true,
       sessionOptions: { model: 'custom-codex-model', effort: 'high' },
       sessionOptionsOverrideAgentArgs: true,
-      agentArgs: '--dangerously-bypass-approvals-and-sandbox -- literal'
+      agentArgs: '--dangerously-bypass-approvals-and-sandbox -- literal',
+      agentStatusHookSettings: null
     })
     expect(plan?.launchCommand).toBe(
       "codex '--dangerously-bypass-approvals-and-sandbox' '-m' 'custom-codex-model' '-c' 'model_reasoning_effort=high' '--' 'literal'"
@@ -78,7 +82,8 @@ describe('tui agent startup session options', () => {
         platform: 'linux',
         shell: 'posix',
         sessionOptions: { model: 'custom-codex-model', effort: 'high' },
-        sessionOptionsOverrideAgentArgs: true
+        sessionOptionsOverrideAgentArgs: true,
+        agentStatusHookSettings: null
       })
     ).toEqual({
       ok: false,
@@ -95,7 +100,8 @@ describe('tui agent startup session options', () => {
       platform: 'linux',
       allowEmptyPromptLaunch: true,
       sessionOptions: { model: 'gpt-5.6-sol', effort: 'medium' },
-      agentArgs: '--model gpt-5.5'
+      agentArgs: '--model gpt-5.5',
+      agentStatusHookSettings: null
     })
     expect(plan?.sessionOptions).toBeUndefined()
   })
@@ -108,7 +114,8 @@ describe('tui agent startup session options', () => {
       platform: 'linux',
       allowEmptyPromptLaunch: true,
       sessionOptions: { model: 'gpt-5.6-sol', effort: 'medium' },
-      agentArgs: '--dangerously-bypass-approvals-and-sandbox'
+      agentArgs: '--dangerously-bypass-approvals-and-sandbox',
+      agentStatusHookSettings: null
     })
     expect(plan?.launchConfig.agentCommand).toBe(
       "codex '--dangerously-bypass-approvals-and-sandbox'"
@@ -123,7 +130,8 @@ describe('tui agent startup session options', () => {
       platform: 'linux',
       isRemote: true,
       allowEmptyPromptLaunch: true,
-      sessionOptions: { model: "team's-model", effort: 'high' }
+      sessionOptions: { model: "team's-model", effort: 'high' },
+      agentStatusHookSettings: null
     })
     expect(plan?.launchCommand).toContain(`'team'"'"'s-model'`)
   })
@@ -134,7 +142,8 @@ describe('tui agent startup session options', () => {
       draft: 'review this',
       cmdOverrides: {},
       platform: 'linux',
-      sessionOptions: { model: 'opus', effort: 'high' }
+      sessionOptions: { model: 'opus', effort: 'high' },
+      agentStatusHookSettings: null
     })
     expect(plan?.launchCommand).toContain("claude '--model' 'opus' '--effort' 'high'")
     expect(plan?.sessionOptions).toEqual({ model: 'opus', effort: 'high' })
@@ -146,7 +155,8 @@ describe('tui agent startup session options', () => {
       providerSession: { key: 'session_id', id: 'thread-1' },
       cmdOverrides: {},
       platform: 'linux',
-      sessionOptions: { model: 'gpt-5.5', effort: 'high' }
+      sessionOptions: { model: 'gpt-5.5', effort: 'high' },
+      agentStatusHookSettings: null
     })
     expect(plan?.launchCommand).toBe("codex 'resume' 'thread-1'")
     expect(plan?.sessionOptions).toBeUndefined()

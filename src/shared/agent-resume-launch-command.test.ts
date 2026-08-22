@@ -516,7 +516,8 @@ describe('buildAgentResumeStartupPlan claude selector guard', () => {
         agentArgs: '--resume',
         platform,
         shell,
-        allowEmptyPromptLaunch: true
+        allowEmptyPromptLaunch: true,
+        agentStatusHookSettings: null
       })
       expect(initial).not.toBeNull()
       const restored = buildAgentResumeStartupPlan({
@@ -526,7 +527,8 @@ describe('buildAgentResumeStartupPlan claude selector guard', () => {
         agentArgs: initial?.launchConfig.agentArgs,
         agentCommand: initial?.launchConfig.agentCommand,
         platform,
-        shell
+        shell,
+        agentStatusHookSettings: null
       })
       expect(restored).not.toBeNull()
       expectSingleAuthoritativeResume(restored?.launchCommand ?? '', shell)
@@ -539,7 +541,8 @@ describe('buildAgentResumeStartupPlan claude selector guard', () => {
       providerSession,
       cmdOverrides: {},
       agentArgs: '--resume stale-session --model sonnet',
-      platform: 'linux'
+      platform: 'linux',
+      agentStatusHookSettings: null
     })
     expect(restored?.launchCommand).toBe(`claude '--model' 'sonnet' '--resume' '${SESSION_ID}'`)
   })
@@ -550,7 +553,8 @@ describe('buildAgentResumeStartupPlan claude selector guard', () => {
       providerSession,
       cmdOverrides: {},
       agentCommand: 'claude --model $(cat ~/.claude-model) "unterminated',
-      platform: 'darwin'
+      platform: 'darwin',
+      agentStatusHookSettings: null
     })
     expect(restored).not.toBeNull()
     expect(restored?.launchCommand.endsWith(`'--resume' '${SESSION_ID}'`)).toBe(true)
@@ -562,7 +566,8 @@ describe('buildAgentResumeStartupPlan claude selector guard', () => {
       providerSession,
       cmdOverrides: {},
       agentArgs: '--resume',
-      platform: 'linux'
+      platform: 'linux',
+      agentStatusHookSettings: null
     })
     expect(restored?.launchCommand).toBe(`gemini '--resume' '--resume' '${SESSION_ID}'`)
   })
@@ -573,7 +578,8 @@ describe('buildAgentResumeStartupPlan claude selector guard', () => {
       providerSession,
       cmdOverrides: {},
       agentCommand: "claude '--resume'",
-      platform: 'linux'
+      platform: 'linux',
+      agentStatusHookSettings: null
     })
     expect(restored?.launchConfig.agentCommand).toBe("claude '--resume'")
   })

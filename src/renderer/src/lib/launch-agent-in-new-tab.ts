@@ -130,7 +130,8 @@ export function launchAgentInNewTab(args: LaunchAgentInNewTabArgs): LaunchAgentI
     isRemote,
     agentArgs: effectiveAgentArgs,
     agentEnv,
-    sessionOptions: resolveInitialNativeChatSessionOptions(store.settings, initialViewModeOptions)
+    sessionOptions: resolveInitialNativeChatSessionOptions(store.settings, initialViewModeOptions),
+    agentStatusHookSettings: store.settings ?? null
   }
   const { startupPlan, pasteDraftAfterLaunch, submitPastedPrompt } = planLaunchAgentStartupPrompt({
     base: startupPlanBase,

@@ -1,4 +1,5 @@
 import { isShellProcess } from './agent-detection'
+import type { AgentStatusHookSettings } from './agent-status-hooks-for-agent'
 import {
   getAgentResumeArgv,
   type AgentProviderSessionMetadata,
@@ -41,21 +42,31 @@ function appliedSessionOptionProps(values: Record<string, SessionOptionValue>) {
   return Object.keys(values).length > 0 ? { sessionOptions: { ...values } } : {}
 }
 
-export function buildAgentStartupPlan(args: {
-  agent: TuiAgent
-  prompt: string
+/** Inputs every launch plan resolves its base command from. */
+type AgentLaunchPlanCommonArgs = {
   cmdOverrides: Partial<Record<TuiAgent, string>>
   platform: NodeJS.Platform
   shell?: AgentStartupShell
-  allowEmptyPromptLaunch?: boolean
   agentArgs?: string | null
   agentEnv?: Record<string, string> | null
   sessionOptions?: Record<string, SessionOptionValue>
-  sessionOptionsOverrideAgentArgs?: boolean
   /** Why: SSH remotes deploy the CLI shim as plain `orca`, so the Linux-only
    * `orca-ide` rename must be skipped for remote launches. */
   isRemote?: boolean
-}): AgentStartupPlan | null {
+  /** Required, not optional (#11941): the old optional boolean defaulted to
+   * "hooks off", inverting the shipped default for every surface that forgot it.
+   * Passed as settings, not a flag, so no caller repeats the derivation. */
+  agentStatusHookSettings: AgentStatusHookSettings | null
+}
+
+export function buildAgentStartupPlan(
+  args: AgentLaunchPlanCommonArgs & {
+    agent: TuiAgent
+    prompt: string
+    allowEmptyPromptLaunch?: boolean
+    sessionOptionsOverrideAgentArgs?: boolean
+  }
+): AgentStartupPlan | null {
   const { agent, prompt, cmdOverrides, platform, allowEmptyPromptLaunch = false } = args
   const shell = resolveStartupShell(platform, args.shell)
   const trimmedPrompt = prompt.trim()
@@ -69,7 +80,8 @@ export function buildAgentStartupPlan(args: {
     agentArgs: usesQuery ? null : args.agentArgs,
     sessionOptions: args.sessionOptions,
     sessionOptionsOverrideAgentArgs: args.sessionOptionsOverrideAgentArgs,
-    isRemote: args.isRemote
+    isRemote: args.isRemote,
+    agentStatusHookSettings: args.agentStatusHookSettings
   })
   if (!baseCommand.ok) {
     return null
@@ -185,20 +197,17 @@ export function buildAgentStartupPlan(args: {
   }
 }
 
-export function buildAgentResumeStartupPlan(args: {
-  agent: ResumableTuiAgent
-  providerSession: AgentProviderSessionMetadata
-  cmdOverrides: Partial<Record<TuiAgent, string>>
-  platform: NodeJS.Platform
-  shell?: AgentStartupShell
-  agentArgs?: string | null
-  agentEnv?: Record<string, string> | null
-  agentCommand?: string | null
-  ompResumeFilePath?: string | null
-  sessionOptions?: Record<string, SessionOptionValue>
-  /** Why: see buildAgentStartupPlan — remote launches use the plain `orca` shim. */
-  isRemote?: boolean
-}): AgentStartupPlan | null {
+// Why the hooks settings matter on resume: a resumed remote Codex re-attaches to
+// the same env-less app-server a fresh launch does. A stored `agentCommand`
+// already carries the override, so only the rebuild path needs it.
+export function buildAgentResumeStartupPlan(
+  args: AgentLaunchPlanCommonArgs & {
+    agent: ResumableTuiAgent
+    providerSession: AgentProviderSessionMetadata
+    agentCommand?: string | null
+    ompResumeFilePath?: string | null
+  }
+): AgentStartupPlan | null {
   const argv = getAgentResumeArgv(args.agent, args.providerSession, args.ompResumeFilePath)
   if (!argv) {
     return null
@@ -214,7 +223,8 @@ export function buildAgentResumeStartupPlan(args: {
         platform: args.platform,
         shell,
         agentArgs: args.agentArgs,
-        isRemote: args.isRemote
+        isRemote: args.isRemote,
+        agentStatusHookSettings: args.agentStatusHookSettings
       })
   if (!baseCommand.ok) {
     return null
@@ -243,18 +253,9 @@ export type AgentDraftLaunchPlan = {
   sessionOptions?: Record<string, SessionOptionValue>
 }
 
-export function buildAgentDraftLaunchPlan(args: {
-  agent: TuiAgent
-  draft: string
-  cmdOverrides: Partial<Record<TuiAgent, string>>
-  platform: NodeJS.Platform
-  shell?: AgentStartupShell
-  agentArgs?: string | null
-  agentEnv?: Record<string, string> | null
-  sessionOptions?: Record<string, SessionOptionValue>
-  /** Why: see buildAgentStartupPlan — remote launches use the plain `orca` shim. */
-  isRemote?: boolean
-}): AgentDraftLaunchPlan | null {
+export function buildAgentDraftLaunchPlan(
+  args: AgentLaunchPlanCommonArgs & { agent: TuiAgent; draft: string }
+): AgentDraftLaunchPlan | null {
   const { agent, draft, cmdOverrides, platform } = args
   const shell = resolveStartupShell(platform, args.shell)
   const config = TUI_AGENT_CONFIG[agent]
@@ -269,7 +270,8 @@ export function buildAgentDraftLaunchPlan(args: {
     shell,
     agentArgs: args.agentArgs,
     sessionOptions: args.sessionOptions,
-    isRemote: args.isRemote
+    isRemote: args.isRemote,
+    agentStatusHookSettings: args.agentStatusHookSettings
   })
   if (!baseCommand.ok) {
     return null

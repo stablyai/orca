@@ -4,12 +4,16 @@ import {
   type AgentHookInstallManagedHooksParams
 } from '../shared/agent-hook-relay'
 import type { RelayDispatcher, RequestContext } from './dispatcher'
-import type { AgentHookTarget } from '../shared/agent-hook-types'
+import type { AgentHookInstallStatus, AgentHookTarget } from '../shared/agent-hook-types'
 import { isManagedAgentHookTarget } from '../shared/managed-agent-hook-targets'
 
 export type ManagedHookInstallSummary = {
   installers: number
   errors: number
+  /** Optional on the wire: clients older than #8711 ignore it, and a client
+   *  talking to a relay that predates it must report the host as `unknown`
+   *  rather than assuming the per-agent results were all green. */
+  statuses?: AgentHookInstallStatus[]
 }
 
 export type ManagedHookRuntime = {

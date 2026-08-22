@@ -19,7 +19,8 @@ describe('buildAgentStartupPlan', () => {
         agent: 'claude',
         prompt: 'Fix the bug',
         cmdOverrides: {},
-        platform: 'darwin'
+        platform: 'darwin',
+        agentStatusHookSettings: null
       })
     ).toEqual({
       agent: 'claude',
@@ -36,7 +37,8 @@ describe('buildAgentStartupPlan', () => {
         agent: 'gemini',
         prompt: 'Investigate this regression',
         cmdOverrides: {},
-        platform: 'linux'
+        platform: 'linux',
+        agentStatusHookSettings: null
       })
     ).toEqual({
       agent: 'gemini',
@@ -53,7 +55,8 @@ describe('buildAgentStartupPlan', () => {
         agent: 'antigravity',
         prompt: 'Investigate this regression',
         cmdOverrides: {},
-        platform: 'linux'
+        platform: 'linux',
+        agentStatusHookSettings: null
       })
     ).toEqual({
       agent: 'antigravity',
@@ -70,7 +73,8 @@ describe('buildAgentStartupPlan', () => {
         agent: 'aider',
         prompt: 'Refactor the parser',
         cmdOverrides: {},
-        platform: 'linux'
+        platform: 'linux',
+        agentStatusHookSettings: null
       })
     ).toEqual({
       agent: 'aider',
@@ -87,7 +91,8 @@ describe('buildAgentStartupPlan', () => {
         agent: 'autohand',
         prompt: 'Add tests for the parser',
         cmdOverrides: {},
-        platform: 'linux'
+        platform: 'linux',
+        agentStatusHookSettings: null
       })
     ).toEqual({
       agent: 'autohand',
@@ -104,7 +109,8 @@ describe('buildAgentStartupPlan', () => {
         agent: 'ante',
         prompt: 'Summarize the failing tests',
         cmdOverrides: {},
-        platform: 'linux'
+        platform: 'linux',
+        agentStatusHookSettings: null
       })
     ).toEqual({
       agent: 'ante',
@@ -121,7 +127,8 @@ describe('buildAgentStartupPlan', () => {
         agent: 'trae',
         prompt: 'Summarize the failing tests',
         cmdOverrides: {},
-        platform: 'linux'
+        platform: 'linux',
+        agentStatusHookSettings: null
       })
     ).toEqual({
       agent: 'trae',
@@ -139,7 +146,8 @@ describe('buildAgentStartupPlan', () => {
         agent: 'trae',
         prompt: 'help me name this config',
         cmdOverrides: {},
-        platform: 'linux'
+        platform: 'linux',
+        agentStatusHookSettings: null
       })?.launchCommand
     ).toBe("traecli -- 'help me name this config'")
   })
@@ -150,7 +158,8 @@ describe('buildAgentStartupPlan', () => {
         agent: 'prime-agent',
         prompt: 'Summarize the failing tests',
         cmdOverrides: {},
-        platform: 'linux'
+        platform: 'linux',
+        agentStatusHookSettings: null
       })
     ).toEqual({
       agent: 'prime-agent',
@@ -168,7 +177,8 @@ describe('buildAgentStartupPlan', () => {
         agent: 'prime-agent',
         prompt: 'help me name this config',
         cmdOverrides: {},
-        platform: 'linux'
+        platform: 'linux',
+        agentStatusHookSettings: null
       })?.launchCommand
     ).toBe("prime-agent -- 'help me name this config'")
   })
@@ -179,7 +189,8 @@ describe('buildAgentStartupPlan', () => {
         agent: 'cursor',
         prompt: 'Review this file',
         cmdOverrides: {},
-        platform: 'darwin'
+        platform: 'darwin',
+        agentStatusHookSettings: null
       })
     ).toEqual({
       agent: 'cursor',
@@ -196,7 +207,8 @@ describe('buildAgentStartupPlan', () => {
         agent: 'droid',
         prompt: 'Ship the fix',
         cmdOverrides: { droid: '/opt/factory/bin/droid' },
-        platform: 'linux'
+        platform: 'linux',
+        agentStatusHookSettings: null
       })
     ).toEqual({
       agent: 'droid',
@@ -213,7 +225,8 @@ describe('buildAgentStartupPlan', () => {
         agent: 'copilot',
         prompt: 'Fix the bug',
         cmdOverrides: {},
-        platform: 'darwin'
+        platform: 'darwin',
+        agentStatusHookSettings: null
       })
     ).toEqual({
       agent: 'copilot',
@@ -230,7 +243,8 @@ describe('buildAgentStartupPlan', () => {
         agent: 'grok',
         prompt: 'Trace the failing test',
         cmdOverrides: {},
-        platform: 'linux'
+        platform: 'linux',
+        agentStatusHookSettings: null
       })
     ).toEqual({
       agent: 'grok',
@@ -248,7 +262,8 @@ describe('buildAgentStartupPlan', () => {
         prompt: 'Trace the failing test',
         cmdOverrides: {},
         agentArgs: resolveTuiAgentLaunchArgs('devin', null),
-        platform: 'linux'
+        platform: 'linux',
+        agentStatusHookSettings: null
       })
     ).toEqual({
       agent: 'devin',
@@ -269,7 +284,8 @@ describe('buildAgentStartupPlan', () => {
         agent: 'command-code',
         prompt: 'Fix the issue',
         cmdOverrides: {},
-        platform: 'win32'
+        platform: 'win32',
+        agentStatusHookSettings: null
       })
     ).toEqual({
       agent: 'command-code',
@@ -286,7 +302,8 @@ describe('buildAgentStartupPlan', () => {
         agent: 'codex',
         prompt: '   ',
         cmdOverrides: {},
-        platform: 'darwin'
+        platform: 'darwin',
+        agentStatusHookSettings: null
       })
     ).toBeNull()
   })
@@ -297,7 +314,8 @@ describe('buildAgentStartupPlan', () => {
         agent: 'copilot',
         prompt: 'Fix the bug',
         cmdOverrides: {},
-        platform: 'darwin'
+        platform: 'darwin',
+        agentStatusHookSettings: null
       })
     ).toEqual({
       agent: 'copilot',
@@ -316,7 +334,8 @@ describe('buildAgentDraftLaunchPlan', () => {
         agent: 'claude',
         draft: 'https://github.com/acme/repo/issues/42',
         cmdOverrides: {},
-        platform: 'darwin'
+        platform: 'darwin',
+        agentStatusHookSettings: null
       })
     ).toEqual({
       agent: 'claude',
@@ -332,7 +351,8 @@ describe('buildAgentDraftLaunchPlan', () => {
         agent: 'codex',
         draft: 'https://github.com/acme/repo/issues/42',
         cmdOverrides: {},
-        platform: 'darwin'
+        platform: 'darwin',
+        agentStatusHookSettings: null
       })
     ).toBeNull()
   })
@@ -348,7 +368,8 @@ describe('buildAgentDraftLaunchPlan', () => {
         agent: 'pi',
         draft: 'https://github.com/acme/repo/issues/42',
         cmdOverrides: {},
-        platform: 'darwin'
+        platform: 'darwin',
+        agentStatusHookSettings: null
       })
     ).toEqual({
       agent: 'pi',
@@ -365,7 +386,8 @@ describe('buildAgentDraftLaunchPlan', () => {
         agent: 'claude',
         draft: '   ',
         cmdOverrides: {},
-        platform: 'darwin'
+        platform: 'darwin',
+        agentStatusHookSettings: null
       })
     ).toBeNull()
   })
@@ -376,7 +398,8 @@ describe('buildAgentDraftLaunchPlan', () => {
         agent: 'claude',
         draft: 'review this',
         cmdOverrides: { claude: '/opt/anthropic/bin/claude' },
-        platform: 'linux'
+        platform: 'linux',
+        agentStatusHookSettings: null
       })
     ).toEqual({
       agent: 'claude',
@@ -392,7 +415,8 @@ describe('buildAgentDraftLaunchPlan', () => {
         agent: 'openclaude',
         draft: 'review this',
         cmdOverrides: {},
-        platform: 'linux'
+        platform: 'linux',
+        agentStatusHookSettings: null
       })
     ).toEqual({
       agent: 'openclaude',

@@ -407,7 +407,10 @@ describe('launchWorkItemDirect', () => {
       agentEnv: {},
       sessionOptions: undefined,
       platform: 'win32',
-      isRemote: false
+      isRemote: false,
+      // Why: the builder derives hooks itself now, so the launch surface is
+      // asserted to hand it the real settings rather than a pre-chewed boolean.
+      agentStatusHookSettings: mocks.store.settings
     })
     expect(buildAgentStartupPlan).not.toHaveBeenCalledWith(
       expect.objectContaining({
@@ -598,7 +601,8 @@ describe('launchWorkItemDirect', () => {
       agentEnv: {},
       sessionOptions: undefined,
       platform: 'linux',
-      isRemote: true
+      isRemote: true,
+      agentStatusHookSettings: mocks.store.settings
     })
     expect(buildAgentStartupPlan).toHaveBeenCalledWith({
       agent: 'cursor',
@@ -609,6 +613,7 @@ describe('launchWorkItemDirect', () => {
       sessionOptions: undefined,
       platform: 'linux',
       isRemote: true,
+      agentStatusHookSettings: mocks.store.settings,
       allowEmptyPromptLaunch: true
     })
     expect(mocks.activateAndRevealWorktree).toHaveBeenCalledWith(

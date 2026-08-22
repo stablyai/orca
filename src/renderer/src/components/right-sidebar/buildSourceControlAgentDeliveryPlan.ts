@@ -50,7 +50,8 @@ export function buildSourceControlAgentDeliveryPlan({
     cmdOverrides: settings?.agentCmdOverrides,
     terminalWindowsShell: settings?.terminalWindowsShell,
     platform: launchPlatform,
-    isRemote
+    isRemote,
+    agentStatusHookSettings: settings ?? null
   })
   if (!result.ok) {
     return { status: 'error', error: result.error }

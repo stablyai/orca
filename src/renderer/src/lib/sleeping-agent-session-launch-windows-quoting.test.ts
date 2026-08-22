@@ -136,6 +136,8 @@ describe('launchSleepingAgentSession Windows shell quoting', () => {
     )
   })
 
+  // Why: an SSH resume carries the launch-scoped hooks override a fresh remote
+  // Codex launch gets, so it does not re-attach to an env-less app-server (#11941).
   it('ignores the local Windows shell setting for an SSH workspace', async () => {
     store.settings.terminalWindowsShell = 'cmd.exe'
     store.repos = [{ id: 'repo-1', connectionId: 'ssh-1', path: '/home/neil/repo' }]
@@ -151,7 +153,7 @@ describe('launchSleepingAgentSession Windows shell quoting', () => {
     }
 
     await expect(launch()).resolves.toBe(
-      `codex '--dangerously-bypass-approvals-and-sandbox' 'resume' '${SESSION_ID}'`
+      `codex '-c' 'features.hooks=true' '--dangerously-bypass-approvals-and-sandbox' 'resume' '${SESSION_ID}'`
     )
   })
 })

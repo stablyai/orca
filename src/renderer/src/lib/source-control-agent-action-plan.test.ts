@@ -10,7 +10,8 @@ describe('planSourceControlAgentActionLaunch', () => {
         promptDelivery: 'submit-after-ready',
         detectedAgents: ['codex'],
         disabledAgents: ['codex'],
-        platform: 'darwin'
+        platform: 'darwin',
+        agentStatusHookSettings: null
       })
     ).toEqual({ ok: false, error: 'The selected agent is disabled in Settings.' })
   })
@@ -22,7 +23,8 @@ describe('planSourceControlAgentActionLaunch', () => {
         commandInput: 'Fix checks',
         promptDelivery: 'submit-after-ready',
         detectedAgents: ['codex'],
-        platform: 'linux'
+        platform: 'linux',
+        agentStatusHookSettings: null
       })
     ).toEqual({ ok: false, error: 'The selected agent was not detected on this workspace host.' })
   })
@@ -33,7 +35,8 @@ describe('planSourceControlAgentActionLaunch', () => {
       commandInput: 'Fix checks',
       promptDelivery: 'submit-after-ready',
       detectedAgents: ['codex'],
-      platform: 'linux'
+      platform: 'linux',
+      agentStatusHookSettings: null
     })
 
     expect(result.ok && result.delivery).toBe('paste-submit')
@@ -49,7 +52,8 @@ describe('planSourceControlAgentActionLaunch', () => {
       agentArgs: '--model gpt-5.5',
       promptDelivery: 'submit-after-ready',
       detectedAgents: ['codex'],
-      platform: 'linux'
+      platform: 'linux',
+      agentStatusHookSettings: null
     })
 
     expect(result.ok && result.commandLabel).toBe("codex '--model' 'gpt-5.5'")
@@ -73,7 +77,8 @@ describe('planSourceControlAgentActionLaunch', () => {
         promptDelivery: 'auto-submit',
         detectedAgents: ['hermes'],
         platform: 'win32',
-        terminalWindowsShell
+        terminalWindowsShell,
+        agentStatusHookSettings: null
       })
 
       expect(result.ok && result.plan.launchCommand).toContain(expectedCommand)
@@ -89,7 +94,8 @@ describe('planSourceControlAgentActionLaunch', () => {
         agentArgs: '--model "unterminated',
         promptDelivery: 'submit-after-ready',
         detectedAgents: ['codex'],
-        platform: 'linux'
+        platform: 'linux',
+        agentStatusHookSettings: null
       })
     ).toEqual({
       ok: false,
@@ -103,7 +109,8 @@ describe('planSourceControlAgentActionLaunch', () => {
       commandInput: 'Fix checks',
       promptDelivery: 'draft',
       detectedAgents: ['claude'],
-      platform: 'darwin'
+      platform: 'darwin',
+      agentStatusHookSettings: null
     })
 
     expect(result.ok && result.delivery).toBe('draft-native')

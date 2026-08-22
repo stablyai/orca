@@ -170,6 +170,8 @@ function buildAiVaultResumeForWorktree(
       },
       platform,
       shell: liveShell,
+      isRemote: !isLocalSession,
+      agentStatusHookSettings: args.state.settings ?? null,
       agentArgs: resolveTuiAgentLaunchArgs(
         args.session.agent,
         args.state.settings?.agentDefaultArgs

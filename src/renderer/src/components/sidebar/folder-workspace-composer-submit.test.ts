@@ -31,7 +31,7 @@ import { decideInitialAgentTabViewMode } from '@/lib/native-chat-initial-view-mo
 import { resolveStartupLaunchDraftText } from '@/lib/worktree-startup-payload'
 import {
   getFolderWorkspaceAgentLaunchPlatform,
-  submitFolderWorkspaceCreate
+  submitFolderWorkspaceCreate as submitFolderWorkspaceCreateImpl
 } from './folder-workspace-composer-submit'
 
 function makeProjectGroup(): ProjectGroup {
@@ -66,6 +66,15 @@ function makeFolderWorkspace(overrides: Partial<FolderWorkspace> = {}): FolderWo
     updatedAt: 1,
     ...overrides
   }
+}
+
+// Why: these tests predate the hooks settings param and assert unrelated
+// behavior. One default keeps them honest without restating it 21 times; the
+// hooks decision itself is pinned in tui-agent-launch-command.codex-remote-hooks.
+function submitFolderWorkspaceCreate(
+  params: Omit<Parameters<typeof submitFolderWorkspaceCreateImpl>[0], 'agentStatusHookSettings'>
+): ReturnType<typeof submitFolderWorkspaceCreateImpl> {
+  return submitFolderWorkspaceCreateImpl({ ...params, agentStatusHookSettings: null })
 }
 
 describe('submitFolderWorkspaceCreate', () => {

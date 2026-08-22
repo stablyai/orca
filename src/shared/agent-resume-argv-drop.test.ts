@@ -13,7 +13,8 @@ function planFor(platform: NodeJS.Platform, agentArgs?: string): string {
     providerSession: CODEX_SESSION,
     cmdOverrides: {},
     platform,
-    ...(agentArgs ? { agentArgs } : {})
+    ...(agentArgs ? { agentArgs } : {}),
+    agentStatusHookSettings: null
   })
   if (!plan) {
     throw new Error('expected a codex resume plan')

@@ -130,7 +130,11 @@ describe.runIf(process.platform !== 'win32')('installManagedHooks', () => {
       const home = await createTempHome()
       await stubLoginShell(home)
 
-      await expect(installManagedHooks(options)).resolves.toEqual({ installers: 0, errors: 0 })
+      await expect(installManagedHooks(options)).resolves.toEqual({
+        installers: 0,
+        errors: 0,
+        statuses: []
+      })
 
       // Why: no agent config home, no ~/.orca install lock, and no GROK_HOME login-shell probe.
       expect(await readdir(home)).toEqual([SHELL_NAME])
@@ -150,9 +154,12 @@ describe.runIf(process.platform !== 'win32')('installManagedHooks', () => {
     const home = await createTempHome()
     await stubLoginShell(home)
 
-    await expect(installManagedHooks({ agents: ['claude'] })).resolves.toEqual({
+    // Why (#8711): the per-agent results now travel back to the client so
+    // `agent hooks status` can name what happened on this host.
+    await expect(installManagedHooks({ agents: ['claude'] })).resolves.toMatchObject({
       installers: 1,
-      errors: 0
+      errors: 0,
+      statuses: [{ agent: 'claude', state: 'installed' }]
     })
 
     expect((await readdir(home)).sort()).toEqual(['.claude', '.orca', SHELL_NAME, SHELL_RUNS_NAME])

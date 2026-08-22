@@ -23707,7 +23707,8 @@ export class OrcaRuntimeService {
       agentEnv: resolveTuiAgentLaunchEnv(agent, settings.agentDefaultEnv),
       platform: agentLaunchPlatform,
       shell: queuedShell,
-      isRemote
+      isRemote,
+      agentStatusHookSettings: settings
     })
     if (draftLaunchPlan) {
       return {
@@ -23732,6 +23733,7 @@ export class OrcaRuntimeService {
       platform: agentLaunchPlatform,
       shell: queuedShell,
       isRemote,
+      agentStatusHookSettings: settings,
       allowEmptyPromptLaunch: true
     })
     if (!startupPlan) {
@@ -23785,6 +23787,7 @@ export class OrcaRuntimeService {
       platform: agentLaunchPlatform,
       shell: queuedShell,
       isRemote,
+      agentStatusHookSettings: settings,
       allowEmptyPromptLaunch: true
     })
     if (!startupPlan) {
@@ -27614,6 +27617,7 @@ export class OrcaRuntimeService {
       platform,
       shell: queuedShell,
       isRemote,
+      agentStatusHookSettings: settings,
       allowEmptyPromptLaunch: true
     })
     if (!startupPlan) {
@@ -27758,7 +27762,8 @@ export class OrcaRuntimeService {
       sessionOptions: this.toAgentSessionOptions(request.launchPreferences),
       platform,
       shell,
-      isRemote
+      isRemote,
+      agentStatusHookSettings: settings
     })
     if (!startup) {
       throw new Error('agent_session_identity_required')
@@ -27919,7 +27924,8 @@ export class OrcaRuntimeService {
         sessionOptions: this.toAgentSessionOptions(request.launchPreferences),
         platform,
         shell,
-        isRemote
+        isRemote,
+        agentStatusHookSettings: settings
       }
       const startup =
         request.promptDelivery === 'draft'
@@ -28957,6 +28963,7 @@ export class OrcaRuntimeService {
       platform,
       shell: queuedShell,
       isRemote,
+      agentStatusHookSettings: settings,
       allowEmptyPromptLaunch: true
     })
     if (!startupPlan) {

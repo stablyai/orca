@@ -1,3 +1,4 @@
+import type { AgentStatusHookSettings } from '../../../shared/agent-status-hooks-for-agent'
 import {
   buildAgentDraftLaunchPlan,
   buildAgentStartupPlan,
@@ -43,6 +44,8 @@ export function planSourceControlAgentActionLaunch(args: {
   /** Why: SSH remotes deploy the CLI shim as plain `orca`, so the Linux-only
    * `orca-ide` rename must not be applied for remote launches. */
   isRemote?: boolean
+  /** Settings that decide Orca's managed status hooks for the launched agent (#11941). */
+  agentStatusHookSettings: AgentStatusHookSettings | null
 }): SourceControlLaunchPlanResult {
   const agent = args.agent
   if (!agent) {
@@ -110,6 +113,7 @@ export function planSourceControlAgentActionLaunch(args: {
       isRemote,
       agentArgs: args.agentArgs,
       sessionOptions: args.sessionOptions,
+      agentStatusHookSettings: args.agentStatusHookSettings,
       allowEmptyPromptLaunch: true
     })
     delivery = 'paste-submit'
@@ -122,7 +126,8 @@ export function planSourceControlAgentActionLaunch(args: {
       shell,
       isRemote,
       agentArgs: args.agentArgs,
-      sessionOptions: args.sessionOptions
+      sessionOptions: args.sessionOptions,
+      agentStatusHookSettings: args.agentStatusHookSettings
     })
     if (draftLaunchPlan) {
       startupPlan = {
@@ -150,6 +155,7 @@ export function planSourceControlAgentActionLaunch(args: {
         isRemote,
         agentArgs: args.agentArgs,
         sessionOptions: args.sessionOptions,
+        agentStatusHookSettings: args.agentStatusHookSettings,
         allowEmptyPromptLaunch: true
       })
       delivery = 'draft-paste'
@@ -164,6 +170,7 @@ export function planSourceControlAgentActionLaunch(args: {
       isRemote,
       agentArgs: args.agentArgs,
       sessionOptions: args.sessionOptions,
+      agentStatusHookSettings: args.agentStatusHookSettings,
       allowEmptyPromptLaunch: true
     })
     delivery = 'draft-paste'
@@ -177,6 +184,7 @@ export function planSourceControlAgentActionLaunch(args: {
       isRemote,
       agentArgs: args.agentArgs,
       sessionOptions: args.sessionOptions,
+      agentStatusHookSettings: args.agentStatusHookSettings,
       allowEmptyPromptLaunch: false
     })
     delivery = 'argv'

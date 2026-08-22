@@ -38,7 +38,24 @@ try {
   })
 
   const summary = await runtimes[0].installManagedHooks({ agents: ['codex', 'claude'] })
-  assert.deepEqual(summary, { installers: 2, errors: 0 })
+  assert.equal(summary.installers, 2)
+  assert.equal(summary.errors, 0)
+  // Why: #8711 made the runtime return per-agent statuses so a host reports
+  // which agent failed instead of a bare count. Sorted because install order
+  // is not the caller's agent order.
+  assert.deepEqual(
+    [...summary.statuses]
+      .sort((a, b) => a.agent.localeCompare(b.agent))
+      .map(({ agent, state, managedHooksPresent }) => ({ agent, state, managedHooksPresent })),
+    [
+      { agent: 'claude', state: 'installed', managedHooksPresent: true },
+      { agent: 'codex', state: 'installed', managedHooksPresent: true }
+    ]
+  )
+  for (const status of summary.statuses) {
+    // Each status must name a path on the host that was actually installed to.
+    assert.equal(status.configPath.startsWith(home), true, `${status.agent} configPath under home`)
+  }
 
   const codexHooks = await readFile(join(home, '.codex', 'hooks.json'), 'utf8')
   const claudeSettings = await readFile(join(home, '.claude', 'settings.json'), 'utf8')

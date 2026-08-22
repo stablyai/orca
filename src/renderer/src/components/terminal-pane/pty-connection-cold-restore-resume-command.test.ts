@@ -218,7 +218,8 @@ describe('connectPanePty', () => {
       expect(transport.connect).toHaveBeenNthCalledWith(
         2,
         expect.objectContaining({
-          command: "codex '--dangerously-bypass-approvals-and-sandbox' 'resume' 'codex-session-1'",
+          command:
+            "codex '-c' 'features.hooks=true' '--dangerously-bypass-approvals-and-sandbox' 'resume' 'codex-session-1'",
           commandDelivery: 'provider',
           startupCommandDelivery: 'shell-ready',
           env: expect.objectContaining({
@@ -231,7 +232,7 @@ describe('connectPanePty', () => {
         })
       )
       expect(transport.sendInput).not.toHaveBeenCalledWith(
-        "codex '--dangerously-bypass-approvals-and-sandbox' 'resume' 'codex-session-1'\r"
+        "codex '-c' 'features.hooks=true' '--dangerously-bypass-approvals-and-sandbox' 'resume' 'codex-session-1'\r"
       )
     } finally {
       globalThis.setTimeout = originalSetTimeout

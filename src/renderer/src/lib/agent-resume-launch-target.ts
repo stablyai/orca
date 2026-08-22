@@ -10,6 +10,9 @@ export type AgentResumeLaunchTarget = {
   platform: NodeJS.Platform
   /** undefined keeps the platform default: PowerShell on win32, POSIX elsewhere. */
   shell: AgentStartupShell | undefined
+  /** The resumed agent runs off this machine, so it needs the plain `orca` shim
+   *  and the remote Codex hooks override a fresh launch gets (#11941). */
+  isRemote: boolean
 }
 
 export type AgentResumeLaunchTargetArgs = {
@@ -47,8 +50,13 @@ export function resolveAgentResumeLaunchTarget(
   args: AgentResumeLaunchTargetArgs
 ): AgentResumeLaunchTarget {
   const platform = resolveResumeLaunchPlatform(args)
+  const parsedHost = parseExecutionHostId(args.executionHostId)
   return {
     platform,
+    // Why not the shell branch's expression below: an absent executionHostId
+    // parses to null, which that one reads as remote. A launch decision must
+    // not call an unowned local pane remote.
+    isRemote: Boolean(args.connectionId) || (parsedHost !== null && parsedHost.kind !== 'local'),
     shell: resolveLocalWindowsAgentStartupShell({
       platform,
       isRemote:

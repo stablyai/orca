@@ -56,7 +56,8 @@ export function buildOnboardingFolderAgentStartup(
       nativeChatTranscriptIsLocalReadable
     }),
     platform: getClientPlatform(),
-    allowEmptyPromptLaunch: true
+    allowEmptyPromptLaunch: true,
+    agentStatusHookSettings: settings
   })
   if (!startupPlan) {
     return undefined

@@ -88,7 +88,8 @@ describe('AI Vault OMP cold resume', () => {
       agentEnv: record.launchConfig?.agentEnv,
       agentCommand: record.launchConfig?.agentCommand,
       ompResumeFilePath: record.launchConfig?.ompResumeFilePath,
-      platform: 'linux'
+      platform: 'linux',
+      agentStatusHookSettings: null
     })
 
     expect(record).toMatchObject({

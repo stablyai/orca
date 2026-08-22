@@ -39,6 +39,7 @@ import { EMULATOR_METHODS } from './emulator'
 import { PAIRING_METHODS } from './pairing'
 import { UPDATER_METHODS } from './updater'
 import { AGENT_SESSION_METHODS } from './agent-session'
+import { AGENT_HOOK_METHODS } from './agent-hooks'
 import { ARTIFACT_METHODS } from './artifacts'
 
 // Why: a flat manifest keeps registration order explicit and provides one
@@ -52,6 +53,7 @@ export const ALL_RPC_METHODS: readonly RpcAnyMethod[] = [
   ...REPO_METHODS,
   ...WORKTREE_METHODS,
   ...AGENT_SESSION_METHODS,
+  ...AGENT_HOOK_METHODS,
   ...TERMINAL_METHODS,
   ...TERMINAL_ORPHAN_METHODS,
   ...BROWSER_CORE_METHODS,
