@@ -45,6 +45,16 @@ describe('worker-start agent resolution', () => {
     expect(result.agent).toBe('codex')
   })
 
+  it('rejects a mistyped --agent instead of falling back to the default', () => {
+    expect(() =>
+      prepareLocalWorkerStart({
+        params: { ...baseParams, agent: 'codx' },
+        createsWorktree: false,
+        runtime: fakeRuntime('gemini').runtime
+      })
+    ).toThrow(/Unknown --agent "codx"/)
+  })
+
   it('still fails when --agent is omitted and no usable default exists', () => {
     for (const { runtime } of [
       fakeRuntime(null),

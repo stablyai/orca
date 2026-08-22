@@ -142,6 +142,11 @@ function resolveWorkerStartAgent(args: {
   effort?: string
   missingAgentMessage: string
 }): { agent: TuiAgent | undefined; launch: WorkerStartLaunch } {
+  // Why: only an omitted --agent falls back to the Settings default; a mistyped
+  // id must fail rather than silently launch a different agent.
+  if (!args.terminal && args.agent && !isTuiAgent(args.agent)) {
+    throw new OrchestrationError('agent_unconfigured', `Unknown --agent "${args.agent}".`)
+  }
   const agent = args.terminal
     ? undefined
     : (parseTuiAgent(args.agent) ?? resolveDefaultWorkerAgent(args.runtime))
