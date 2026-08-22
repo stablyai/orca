@@ -638,6 +638,7 @@ jobs:
           src/main/windows/windows-host-job.win32.test.ts
           src/main/cli/wsl-cli-powershell-boundary.test.ts
           src/main/orca-profiles/profile-index-store.test.ts
+          config/scripts/generate-bundled-skill-guides.test.mjs
           src/main/runtime/repo-worktree-admin-fingerprint.test.ts
           src/main/runtime/worktree-scan-admin-fingerprint-gate.test.ts
           src/shared/secure-file-fsync-flags.test.ts
