@@ -59,15 +59,15 @@ describe('task page checks pill', () => {
       checksSummary: {
         state: 'cancelled' as const,
         total: 2,
-        passed: 1,
+        passed: 0,
         failed: 0,
         pending: 0,
-        cancelled: 1,
+        cancelled: 2,
         neutral: 0
       }
     }
 
-    expect(getChecksLabel(item)).toBe('1 cancelled')
+    expect(getChecksLabel(item)).toBe('2 cancelled')
     expect(getChecksPillTone(item)).toContain('text-muted-foreground')
     expect(getChecksPillTone(item)).not.toContain('rose')
   })
