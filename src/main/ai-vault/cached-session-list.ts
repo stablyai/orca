@@ -1,4 +1,4 @@
-import { join } from 'node:path'
+import { posix as posixPath } from 'node:path'
 import {
   resetAiVaultScannerBackgroundForTests,
   scanAiVaultSessionsInBackground
@@ -76,7 +76,10 @@ export async function listAiVaultSessions(
     signal: options.signal,
     start: async (scanSignal) => {
       const additionalCodexSessionsDirs =
-        sources.getAdditionalCodexHomePaths?.().map((homePath) => join(homePath, 'sessions')) ?? []
+        // Why: these dirs may be POSIX runtime paths (serve mode), so join with
+        // '/' — Windows fs accepts forward slashes, and platform.join would
+        // mangle remote-style paths into backslash soup.
+        sources.getAdditionalCodexHomePaths?.().map((homePath) => posixPath.join(homePath, 'sessions')) ?? []
       const result = await scanAiVaultSessionsInBackground(
         {
           limit: args?.limit,
