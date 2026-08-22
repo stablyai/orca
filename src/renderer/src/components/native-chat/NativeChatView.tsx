@@ -1,3 +1,4 @@
+/* oxlint-disable max-lines -- The resolved conversation view coordinates transcript, optimistic sends, interactive prompts, and terminal-backed input in one lifecycle. */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { useAppStore } from '../../store'
@@ -52,6 +53,8 @@ import { resolveNativeChatFileLinkContext } from './native-chat-file-link'
 import { selectNativeChatRuntimeEnvironmentId } from './native-chat-runtime-owner'
 import { useNativeChatPasteBridge } from './use-native-chat-paste-bridge'
 import { useNativeChatFileLinkClick } from './use-native-chat-file-link-click'
+import { useNativeChatTerminalAttention } from './native-chat-terminal-attention'
+import { NativeChatTerminalAttention } from './NativeChatTerminalAttention'
 import type { NativeChatResolvedViewProps, NativeChatViewProps } from './native-chat-view-types'
 
 export type { NativeChatViewProps } from './native-chat-view-types'
@@ -156,6 +159,11 @@ function NativeChatResolvedView({
     (s) => s.agentStatusByPaneKey[paneKey]?.stateStartedAt ?? null
   )
   const canSend = useNativeChatCanSend(targetPtyId)
+  const terminalAttention = useNativeChatTerminalAttention({
+    agent,
+    isVisible,
+    readTerminalScreen
+  })
   // Reuse the verified composer send path for interactive cards and composer
   // stop (Stop sends ESC, the agent-TUI interrupt key).
   const interactiveSend = useNativeChatInteractiveSend(terminalTabId, paneKey, targetPtyId, agent)
@@ -416,39 +424,44 @@ function NativeChatResolvedView({
           />
         )}
       </div>
-      {/* Live interactive prompt (question / approval) is the bottom input region
-          (mobile parity). A question card supplies its own answer input, so it
-          fully replaces the composer while active — no stray "Send a message". */}
-      <NativeChatInteractiveCard
-        paneKey={paneKey}
-        send={interactiveSend}
-        canSend={canSend}
-        messages={sessionAfterCommandBoundaries.messages}
-        transcriptSettled={session.readPhase === 'ready'}
-        onShowingQuestionChange={setQuestionActive}
-        answerInputRef={questionAnswerInputRef}
-      />
-      {/* canSend reflects the mobile presence-lock: when a mobile client holds
-          the pty, the composer shows its guarded state instead of racing the
-          mobile driver (R8). */}
-      {questionActive ? null : (
-        <NativeChatComposer
-          ref={composerRef}
-          terminalTabId={terminalTabId}
+      <NativeChatTerminalAttention
+        attention={terminalAttention}
+        onSwitchToTerminal={onSwitchToTerminal}
+      >
+        {/* Live interactive prompt (question / approval) is the bottom input region
+            (mobile parity). A question card supplies its own answer input, so it
+            fully replaces the composer while active — no stray "Send a message". */}
+        <NativeChatInteractiveCard
           paneKey={paneKey}
-          targetPtyId={targetPtyId}
-          agent={agent}
+          send={interactiveSend}
           canSend={canSend}
-          isWorking={isWorking}
-          onStop={stopAgent}
-          onOptimisticSend={onOptimisticSend}
-          onOptimisticSendCanceled={onOptimisticSendCanceled}
-          onSlashCommand={onSlashCommand}
-          onSwitchToTerminal={onSwitchToTerminal}
-          readTerminalScreen={readTerminalScreen}
-          {...launchDraftSignal}
+          messages={sessionAfterCommandBoundaries.messages}
+          transcriptSettled={session.readPhase === 'ready'}
+          onShowingQuestionChange={setQuestionActive}
+          answerInputRef={questionAnswerInputRef}
         />
-      )}
+        {/* canSend reflects the mobile presence-lock: when a mobile client holds
+            the pty, the composer shows its guarded state instead of racing the
+            mobile driver (R8). */}
+        {questionActive ? null : (
+          <NativeChatComposer
+            ref={composerRef}
+            terminalTabId={terminalTabId}
+            paneKey={paneKey}
+            targetPtyId={targetPtyId}
+            agent={agent}
+            canSend={canSend}
+            isWorking={isWorking}
+            onStop={stopAgent}
+            onOptimisticSend={onOptimisticSend}
+            onOptimisticSendCanceled={onOptimisticSendCanceled}
+            onSlashCommand={onSlashCommand}
+            onSwitchToTerminal={onSwitchToTerminal}
+            readTerminalScreen={readTerminalScreen}
+            {...launchDraftSignal}
+          />
+        )}
+      </NativeChatTerminalAttention>
       {contextMenu.menu}
     </div>
   )
