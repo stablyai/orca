@@ -1,7 +1,11 @@
 import { readdirSync, readFileSync, statSync } from 'node:fs'
 import { join, relative, resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
-import { stripComments } from '../../shared/source-scan/source-tree-scan'
+import {
+  blankStringContents,
+  blankStringContentsDesynced,
+  stripComments
+} from '../../shared/source-scan/source-tree-scan'
 
 /**
  * Every `wsl.exe` spawn must go through `runWslProcess`.
@@ -124,6 +128,43 @@ function findSpawnSites(): string[] {
 const BASHISM =
   /<\s*<\(|\[\[|\blocal\s+\w+=|\bdeclare\s+-|\bmapfile\b|set\s+-[a-z]*o[a-z]*\s+pipefail|set\s+-euo\b|read\s+(?:-\w+\s+)*-d\b|<<</
 
+/**
+ * The argument object of every `runWslProcess(` call in a file.
+ *
+ * Why per-call and not per-file: a file-wide `shell: 'bash'` check passes as
+ * soon as ANY call in the file pins bash, so an unpinned dash payload added
+ * beside a pinned one is invisible -- planted in `codex-accounts/service.ts`
+ * and the guard stayed green. That is the #14292 signature shipping again.
+ *
+ * Braces are matched on string-blanked source so a `}` inside a script literal
+ * cannot close the object early; offsets survive blanking, so the slice is
+ * taken from the real source and the payload is still readable.
+ */
+function collectRunnerCallArguments(source: string): string[] {
+  const blanked = blankStringContents(source)
+  const calls: string[] = []
+  for (const match of blanked.matchAll(/\brunWslProcess\s*\(/g)) {
+    const open = blanked.indexOf('{', match.index)
+    if (open === -1) {
+      continue
+    }
+    let depth = 0
+    for (let index = open; index < blanked.length; index += 1) {
+      const char = blanked[index]
+      if (char === '{') {
+        depth += 1
+      } else if (char === '}') {
+        depth -= 1
+        if (depth === 0) {
+          calls.push(source.slice(open, index + 1))
+          break
+        }
+      }
+    }
+  }
+  return calls
+}
+
 describe('bash-only payloads declare their interpreter', () => {
   const offenders: string[] = []
   for (const path of collectSourceFiles(SOURCE_ROOT)) {
@@ -136,11 +177,22 @@ describe('bash-only payloads declare their interpreter', () => {
     // pipefail` to explain why it was removed would otherwise flag the file,
     // and a bash script written to a guest file is not a runner payload.
     const source = stripComments(readFileSync(path, 'utf8'))
-    if (!source.includes('runWslProcess') || !BASHISM.test(source)) {
+    if (!source.includes('runWslProcess')) {
       continue
     }
-    if (!source.includes("shell: 'bash'")) {
+    // Fail closed. A desynced lexer finds zero calls, and "zero calls" is
+    // indistinguishable from "zero violations" -- this guard passed a planted
+    // dash payload for exactly that reason, because one regex literal earlier
+    // in the file had inverted the scan.
+    if (blankStringContentsDesynced(source)) {
       offenders.push(relativePath)
+      continue
+    }
+    for (const call of collectRunnerCallArguments(source)) {
+      if (BASHISM.test(call) && !call.includes("shell: 'bash'")) {
+        offenders.push(relativePath)
+        break
+      }
     }
   }
 

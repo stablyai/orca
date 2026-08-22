@@ -151,6 +151,35 @@ export function blankStringContentsDesynced(source: string): boolean {
   return blankStringContents(source, true) !== ''
 }
 
+/** After a value `/` is division; after an operator or opener it opens a regex. */
+function startsRegexLiteral(emitted: string): boolean {
+  const prev = emitted.replace(/\s+$/, '').at(-1)
+  return prev === undefined || '(,=:[!&|?{};+-*%~^<>'.includes(prev)
+}
+
+/** End index (exclusive) of the regex literal opening at `start`, or -1. */
+function findRegexLiteralEnd(source: string, start: number): number {
+  let inClass = false
+  for (let index = start + 1; index < source.length; index += 1) {
+    const char = source[index]
+    if (char === '\\') {
+      index += 1
+      continue
+    }
+    // A `/` inside `[...]` is literal, so it must not close the pattern.
+    if (char === '[') {
+      inClass = true
+    } else if (char === ']') {
+      inClass = false
+    } else if (char === '\n') {
+      return -1
+    } else if (char === '/' && !inClass) {
+      return index + 1
+    }
+  }
+  return -1
+}
+
 export function blankStringContents(source: string, reportDesync = false): string {
   let out = ''
   let index = 0
@@ -206,14 +235,23 @@ export function blankStringContents(source: string, reportDesync = false): strin
       index += 1
       continue
     }
+    // A regex literal can carry a lone apostrophe (`/'/g` in a shell quoter),
+    // which reads as a string opener and desyncs the rest of the file. The
+    // classic prev-token test disambiguates it from division: after a value a
+    // `/` divides, after an operator or opener it starts a pattern.
+    if (char === '/' && startsRegexLiteral(out)) {
+      const end = findRegexLiteralEnd(source, index)
+      if (end !== -1) {
+        out += `/${' '.repeat(end - index - 1)}`
+        index = end
+        continue
+      }
+    }
     if (char === "'" || char === '"' || char === '`') {
       quote = char
     }
     out += char
     index += 1
-  }
-  if (reportDesync) {
-    return quote !== null || templates.length > 0 ? 'desynced' : ''
   }
   if (reportDesync) {
     return quote !== null || templates.length > 0 ? 'desynced' : ''

@@ -12,10 +12,8 @@ main/automations/external-manager.ts
 main/automations/precheck-runner.ts
 main/browser/browser-cookie-import.ts
 main/claude-accounts/keychain.ts
-main/claude-accounts/service.ts
 main/cli/cli-installer.ts
 main/codex-accounts/runtime-home-service.ts
-main/codex-accounts/service.ts
 main/computer/macos-computer-use-permission-status.ts
 main/computer/macos-computer-use-permissions.ts
 main/computer/macos-native-provider-transport.ts
@@ -36,7 +34,6 @@ main/ipc/developer-permissions.ts
 main/ipc/filesystem.ts
 main/ipc/macos-keyboard-layout-snapshot.ts
 main/ipc/notification-authorization-status.ts
-main/ipc/preflight-command-exec.ts
 main/ipc/repos.ts
 main/ipc/worktree-apfs-clone.ts
 main/local-builds/local-build-candidate.ts
@@ -59,7 +56,6 @@ main/startup/appimage-cli-redirect.ts
 main/startup/ensure-virtual-display.ts
 main/startup/packaged-cli-entry-redirect.ts
 main/startup/windows-install-dir-acl-probe.ts
-main/text-generation/commit-message-text-generation.ts
 main/win32-utils.ts
 main/window/clipboard-ipc-handlers.ts
 main/workspace-space-analysis.ts
@@ -73,7 +69,6 @@ relay/fs-handler-git-fallback.ts
 relay/fs-handler-utils.ts
 relay/fs-list-files-fallback-chain.ts
 relay/git-handler.ts
-relay/preflight-handler.ts
 relay/pty-shell-utils.ts
 relay/subprocess-tree-termination.ts
 relay/windows-port-scan.ts

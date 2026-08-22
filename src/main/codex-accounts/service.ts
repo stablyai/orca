@@ -1857,20 +1857,17 @@ export class CodexAccountService {
     distro: string
     linuxPath: string
   }): Promise<void> {
-    // Why the runner's default (throw) and not allowDegradedEnvironment: without
-    // the login PATH an nvm-installed codex is invisible, and this message would
-    // turn "we could not check" into "not installed" (#9725).
-    let result: Awaited<ReturnType<typeof runWslProcess>>
-    try {
-      result = await runWslProcess({
-        distro: wslInfo.distro,
-        loginPath: 'none',
-        script: buildWslCodexAvailabilityScript(),
-        timeoutMs: WSL_CODEX_AVAILABILITY_TIMEOUT_MS
-      })
-    } catch {
-      // Why map: the runner's raw "guest environment is unavailable" would
-      // otherwise reach the account dialog verbatim.
+    // This is a PATH lookup, so it needs the login PATH: an nvm-installed codex
+    // lives nowhere else. Marking it 'none' reports a working install as absent.
+    const result = await runWslProcess({
+      distro: wslInfo.distro,
+      loginPath: 'preferred',
+      script: buildWslCodexAvailabilityScript(),
+      timeoutMs: WSL_CODEX_AVAILABILITY_TIMEOUT_MS
+    })
+    if (result.code !== 0 && !result.environmentResolved) {
+      // A miss without the login PATH is "we could not check", not "not
+      // installed" -- claiming absence here is #9725.
       throw new Error('Could not check the Codex CLI in WSL. Try again.')
     }
     if (result.code !== 0 || result.timedOut) {
