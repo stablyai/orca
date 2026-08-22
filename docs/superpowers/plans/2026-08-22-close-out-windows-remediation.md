@@ -44,7 +44,7 @@ Five things remain, in descending order of risk:
 | 2 | `test_windows` has `continue-on-error: true` | It reports and does not block, so the rot regrows — the exact failure mode the job was built to stop. |
 | 3 | The runner's result is unknown | The branch was never pushed, so the job never ran on it. A runner is **elevated**, so symlink cases that skip locally will execute there. |
 | 4 | `disposeAutoUpdaterTimers` has no production caller | A second `setupAutoUpdater` leaves the first call's timers armed — a real leak, same class as the ghost-instance bug. |
-| 5 | `tests/e2e/.cross-version-checkouts` is 65 MB | Gitignored, so harmless to the repo, but it already forced one test to exclude it. |
+| 5 | `tests/e2e/.cross-version-checkouts` is 65 MB | Gitignored, self-healing build cache with its own `CHECKOUT_FORMAT` invalidation — not disk hygiene to fix, since the harness rebuilds it to the same size on the next cross-version run. The dot-directory exclusion it needed in one test is now incidental, covered by a generic prefix rule rather than a purpose-built carve-out. See Task 6's post-execution correction. |
 
 ### Merge conflict surface (measured)
 
@@ -397,7 +397,13 @@ git commit -m "fix(updater): dispose the previous setup's timers when re-arming"
 
 **Independent of every other task. Files: none tracked.**
 
-`tests/e2e/.cross-version-checkouts` holds 65 MB of extracted Orca releases. It is gitignored (`.gitignore:155`), so this is disk hygiene, not repo hygiene — but it already forced `src/shared/wsl-exec-mode-separator.test.ts` to add it to `IGNORED_DIRECTORIES`, because scanning it reported rule violations in a released build nobody here can change.
+`tests/e2e/.cross-version-checkouts` holds 65 MB of extracted Orca releases. It is gitignored (`.gitignore:157`), so this is disk hygiene, not repo hygiene — but it already forced `src/shared/wsl-exec-mode-separator.test.ts` to add it to `IGNORED_DIRECTORIES`, because scanning it reported rule violations in a released build nobody here can change.
+
+> **Post-execution correction (Ruling 7).** The premise above is wrong, and the error is the plan author's, not the executing agent's — the task was executed faithfully and every claim in it was verified independently. Recorded here rather than rewritten away:
+>
+> 1. **This task reclaims nothing durable.** `tests/e2e/.cross-version-checkouts` is a self-healing build cache: `release-checkout.ts` owns it as the sole writer and carries its own `CHECKOUT_FORMAT`/stamp-based invalidation. Deleting it frees 65 MB for only as long as it takes the next cross-version run to rebuild it — measured at ~48.8s, back to an identical 65 MB. Net disk effect: zero. It was never disk hygiene.
+> 2. **What the task actually bought**, stated honestly: a verified regression check on `release-checkout.ts`'s cold-extraction path (Step 4 forces a genuinely cold rebuild and proves it still succeeds). That is worth having — it just isn't disk hygiene, and the task's name and framing overclaimed.
+> 3. **The `IGNORED_DIRECTORIES` justification above is stale.** By execution time, an upstream merge had already replaced that single-name carve-out with a generic `IGNORED_DIRECTORY_PREFIX = '.'` rule in `src/shared/wsl-exec-mode-separator.test.ts`, covering every dot-directory. The literal string `cross-version-checkouts` in that file survives only in an explanatory comment (now at line 25, not the `:33` `IGNORED_DIRECTORIES` entry cited above) — so the exclusion this task's directory needed is incidental to a general rule, not a carve-out purpose-built for it.
 
 Already established, so do not re-derive: the only writer is
 `tests/e2e/cross-version-wire/release-checkout.ts:14`, which owns it as a cache
