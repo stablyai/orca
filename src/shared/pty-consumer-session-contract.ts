@@ -86,6 +86,6 @@ export type PtyConsumerSessionOptions = {
     maxWindowSu: number
   }
   ownerGraceMs?: number
-  now?: () => number
+  monotonicNow?: () => number
   createLease?: () => string
 }

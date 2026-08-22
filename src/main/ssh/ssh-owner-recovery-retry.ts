@@ -1,4 +1,5 @@
 import {
+  PTY_CONSUMER_OWNER_GRACE_MS,
   PTY_CONSUMER_OWNER_HELD_ATTACHED_ERROR,
   PTY_CONSUMER_OWNER_HELD_DISCONNECTED_ERROR,
   PTY_CONSUMER_OWNER_HELD_SELF_ERROR,
@@ -8,9 +9,8 @@ import {
 
 // Why: bound polling when publication is settling or a superseded attempt is closing its transport.
 export const SSH_OWNER_RECOVERY_WAIT_MS = 3_000
-// Why separate and longer than the relay's grace floor: a disconnected incumbent releases admission
-// only after that floor elapses, so this budget must outlast it without borrowing the pending budget.
-export const SSH_OWNER_HELD_DISCONNECTED_WAIT_MS = 2_000
+// Keep a live reconnect pending until a locally closed incumbent's full grace expires.
+export const SSH_OWNER_HELD_DISCONNECTED_WAIT_MS = PTY_CONSUMER_OWNER_GRACE_MS + 2_000
 // Why short: the incumbent is this client's own half-open connection, and the relay frees it when its
 // keepalive notices — well outside any budget worth blocking a connect on. Poll briefly in case the
 // close is already in flight, then let the ordinary relay-lost backoff carry the retry.
@@ -102,11 +102,25 @@ export async function retrySshOwnerRecoveryWhileBlocked<T>(
       }
       let deadline = deadlineByReason.get(reason)
       if (deadline === undefined) {
-        deadline = Date.now() + budgetByReason[reason]
+        deadline = performance.now() + budgetByReason[reason]
         deadlineByReason.set(reason, deadline)
       }
-      const remainingMs = deadline - Date.now()
+      const remainingMs = deadline - performance.now()
       if (remainingMs <= 0) {
+        if (reason === 'disconnected-holder') {
+          try {
+            const result = await attempt()
+            if (!gate.isCurrent()) {
+              throw error
+            }
+            return result
+          } catch (probeError) {
+            if (gate.isCurrent() && retryReasonFor(probeError) === reason) {
+              gate.onRetryExhausted?.(reason)
+            }
+            throw probeError
+          }
+        }
         gate.onRetryExhausted?.(reason)
         throw error
       }

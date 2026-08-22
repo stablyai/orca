@@ -3,8 +3,10 @@ import {
   PTY_CONSUMER_OWNER_HELD_ATTACHED_ERROR,
   PTY_CONSUMER_OWNER_HELD_DISCONNECTED_ERROR,
   PTY_CONSUMER_OWNER_HELD_SELF_ERROR,
+  PTY_CONSUMER_OWNER_GRACE_MS,
   PTY_CONSUMER_OWNER_RECOVERY_PENDING_ERROR,
-  PTY_CONSUMER_OWNER_RECOVERY_SUPERSEDED_ERROR
+  PTY_CONSUMER_OWNER_RECOVERY_SUPERSEDED_ERROR,
+  PtyConsumerSession
 } from '../../shared/pty-consumer-session'
 import {
   isSshOwnerAdmissionBlocked,
@@ -137,6 +139,158 @@ describe('SSH owner recovery retry', () => {
     expect(attempt).toHaveBeenCalledTimes(7)
   })
 
+  it('reconnects on one relay channel after a local holder loses its resume proof', async () => {
+    vi.useFakeTimers()
+    const ownerSession = new PtyConsumerSession({
+      serverBuildId: 'build-a',
+      createLease: () => 'lease-a'
+    })
+    const hello = { clientInstanceId: 'client-a', requestedRole: 'session-owner' as const }
+    const incumbent = ownerSession.admit(hello, {
+      connectionId: 'relay-channel-1',
+      principal: 'desktop',
+      authenticated: true,
+      allowSessionOwner: true
+    })
+    incumbent.commitPublication()
+    ownerSession.close('relay-channel-1', 'local')
+
+    const connectionIds = new Set<string>()
+    const attempt = vi.fn(async () => {
+      const connectionId = 'relay-channel-2'
+      connectionIds.add(connectionId)
+      const admission = ownerSession.admit(hello, {
+        connectionId,
+        principal: 'desktop',
+        authenticated: true,
+        allowSessionOwner: true
+      })
+      admission.commitPublication()
+      return admission.grant
+    })
+
+    const recovery = retrySshOwnerRecoveryWhileBlocked(attempt, openGate())
+    const result = recovery.then(
+      (value) => ({ status: 'fulfilled' as const, value }),
+      (error: unknown) => ({ status: 'rejected' as const, error })
+    )
+    await vi.advanceTimersByTimeAsync(SSH_OWNER_HELD_DISCONNECTED_WAIT_MS)
+
+    await expect(result).resolves.toMatchObject({
+      status: 'fulfilled',
+      value: { resumed: false, ownerGeneration: 2 }
+    })
+    expect(connectionIds).toEqual(new Set(['relay-channel-2']))
+    expect(attempt.mock.calls.length).toBeLessThanOrEqual(130)
+    expect(SSH_OWNER_HELD_DISCONNECTED_WAIT_MS).toBe(PTY_CONSUMER_OWNER_GRACE_MS + 2_000)
+  })
+
+  it('keeps the relay grace alive across a client-only forward wall-clock step', async () => {
+    vi.useFakeTimers()
+    let relayNow = 0
+    const ownerSession = new PtyConsumerSession({
+      serverBuildId: 'build-a',
+      createLease: () => 'lease-a',
+      monotonicNow: () => relayNow
+    })
+    const hello = { clientInstanceId: 'client-a', requestedRole: 'session-owner' as const }
+    const incumbent = ownerSession.admit(hello, {
+      connectionId: 'relay-channel-1',
+      principal: 'desktop',
+      authenticated: true,
+      allowSessionOwner: true
+    })
+    incumbent.commitPublication()
+    ownerSession.close('relay-channel-1', 'local')
+
+    let attempts = 0
+    const attempt = vi.fn(async () => {
+      if (attempts++ === 0) {
+        throw publicationPendingError()
+      }
+      if (attempts === 2) {
+        await new Promise((resolve) => setTimeout(resolve, 975))
+      }
+      const admission = ownerSession.admit(hello, {
+        connectionId: 'relay-channel-2',
+        principal: 'desktop',
+        authenticated: true,
+        allowSessionOwner: true
+      })
+      admission.commitPublication()
+      return admission.grant
+    })
+    const recovery = retrySshOwnerRecoveryWhileBlocked(attempt, openGate())
+    const result = recovery.then(
+      (value) => ({ status: 'fulfilled' as const, value }),
+      (error: unknown) => ({ status: 'rejected' as const, error })
+    )
+    let settled = false
+    void result.then(() => {
+      settled = true
+    })
+
+    await vi.advanceTimersByTimeAsync(1_000)
+    relayNow = 1_000
+    vi.setSystemTime(Date.now() + 60_000)
+    await vi.advanceTimersByTimeAsync(50)
+
+    expect(settled).toBe(false)
+    expect(relayNow).toBeLessThan(PTY_CONSUMER_OWNER_GRACE_MS)
+
+    relayNow = PTY_CONSUMER_OWNER_GRACE_MS + 1
+    await vi.advanceTimersByTimeAsync(250)
+    await expect(result).resolves.toMatchObject({
+      status: 'fulfilled',
+      value: { resumed: false, ownerGeneration: 2 }
+    })
+  })
+
+  it('does not extend a retry budget after a backward wall-clock step', async () => {
+    vi.useFakeTimers()
+    const error = heldError(PTY_CONSUMER_OWNER_HELD_DISCONNECTED_ERROR)
+    const attempt = vi.fn<() => Promise<never>>().mockRejectedValue(error)
+    const recovery = retrySshOwnerRecoveryWhileBlocked(attempt, openGate())
+    const result = recovery.then(
+      () => 'fulfilled' as const,
+      () => 'rejected' as const
+    )
+
+    await vi.advanceTimersByTimeAsync(1_000)
+    vi.setSystemTime(Date.now() - 60_000)
+    await vi.advanceTimersByTimeAsync(SSH_OWNER_HELD_DISCONNECTED_WAIT_MS - 1_000)
+
+    await expect(result).resolves.toBe('rejected')
+  })
+
+  it('cancels a full-grace owner wait when the relay channel closes', async () => {
+    vi.useFakeTimers()
+    const error = heldError(PTY_CONSUMER_OWNER_HELD_DISCONNECTED_ERROR)
+    const attempt = vi.fn<() => Promise<never>>().mockRejectedValue(error)
+    let current = true
+    let close: (() => void) | undefined
+    const recovery = retrySshOwnerRecoveryWhileBlocked(attempt, {
+      isCurrent: () => current,
+      onClosed: (listener) => {
+        close = listener
+        return () => {
+          close = undefined
+        }
+      }
+    })
+    const rejection = expect(recovery).rejects.toBe(error)
+    await vi.advanceTimersByTimeAsync(1_000)
+    const attemptsBeforeClose = attempt.mock.calls.length
+
+    current = false
+    close?.()
+    await rejection
+    expect(close).toBeUndefined()
+
+    await vi.advanceTimersByTimeAsync(SSH_OWNER_HELD_DISCONNECTED_WAIT_MS)
+    expect(attempt).toHaveBeenCalledTimes(attemptsBeforeClose)
+  })
+
   it('reports each exhausted retry budget under its own reason', async () => {
     vi.useFakeTimers()
     const exhausted: string[] = []
@@ -181,8 +335,9 @@ describe('SSH owner recovery retry', () => {
         : 'recovered'
     })
 
-    const recovery = retrySshOwnerRecoveryWhileBlocked(attempt, openGate(), 30_000)
-    await vi.advanceTimersByTimeAsync(30_000)
+    const publicationBudget = SSH_OWNER_HELD_DISCONNECTED_WAIT_MS + 10_000
+    const recovery = retrySshOwnerRecoveryWhileBlocked(attempt, openGate(), publicationBudget)
+    await vi.advanceTimersByTimeAsync(publicationBudget)
 
     // Why this fails on eagerly computed deadlines: the disconnected budget would have started at
     // entry and be long gone by the time the first -32045 arrives, giving that phase zero attempts.
