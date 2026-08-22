@@ -136,6 +136,14 @@ describe('automation schedules', () => {
     )
   })
 
+  it('labels OR-matched full day coverage as daily, not by the weekday set', () => {
+    // `1-31` beside `1-5`: neither field is starred, so vixie OR matching makes the always-
+    // covering day-of-month fire every day — the label must not promise weekdays only (#15896).
+    expect(classifyAutomationCronSchedule('0 9 1-31 * 1-5').kind).toBe('daily')
+    // A starred day-of-month keeps AND matching, so the weekday set still decides.
+    expect(classifyAutomationCronSchedule('0 9 * * 1-5').kind).toBe('weekdays')
+  })
+
   it('does not label starred-but-partial day coverage as daily', () => {
     // The star drives vixie matching, but `*/2` only covers half the month — the friendly
     // label must not promise a run every day (#15896).

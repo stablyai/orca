@@ -386,12 +386,20 @@ function classifyParsedCronSchedule(rule: ParsedCron): AutomationCronScheduleCla
   }
   const minute = getSingleSetValue(rule.minutes)
   const hour = getSingleSetValue(rule.hours)
-  // Why coverage rather than the star flags (#15896): `*/2` carries a star but only covers half
-  // the month — labeling it "Daily" would promise runs the schedule never makes. The star flags
-  // drive vixie OR/AND matching; labels must describe what actually fires.
-  const unrestrictedDayOfMonth = setContainsRange(rule.daysOfMonth, 1, 31)
+  // Why coverage rather than the star flags alone (#15896): `*/2` carries a star but only
+  // covers half the month — labeling it "Daily" would promise runs the schedule never makes.
+  // The weekday dimension is read through the vixie matching mode: with a star (AND matching)
+  // the weekday set is the sole day decider, while with none (OR matching) either field fires
+  // the day — a full-coverage `1-31` beside `1-5` therefore runs daily and must not read
+  // "Weekdays".
+  const dayOfMonthCoversAll = setContainsRange(rule.daysOfMonth, 1, 31)
   const unrestrictedMonth = setContainsRange(rule.months, 1, 12)
-  const unrestrictedDayOfWeek = setContainsRange(rule.daysOfWeek, 0, 6)
+  const dayOfWeekCoversAll = setContainsRange(rule.daysOfWeek, 0, 6)
+  const eitherDayFieldStarred = !rule.dayOfMonthRestricted || !rule.dayOfWeekRestricted
+  const unrestrictedDayOfMonth = dayOfMonthCoversAll
+  const unrestrictedDayOfWeek = eitherDayFieldStarred
+    ? dayOfWeekCoversAll
+    : dayOfWeekCoversAll || dayOfMonthCoversAll
   const unrestrictedCalendar = unrestrictedDayOfMonth && unrestrictedMonth
   if (
     minute !== null &&
