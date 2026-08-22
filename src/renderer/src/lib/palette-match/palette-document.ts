@@ -40,6 +40,7 @@ export type PaletteDocument = {
   /** Visible identity fields, cached because they carry the whole-query check. */
   visibleFields: readonly PaletteIndexedField[]
   fieldsByEvidenceId: ReadonlyMap<string, readonly PaletteIndexedField[]>
+  fieldById: ReadonlyMap<string, PaletteIndexedField>
 }
 
 export type PaletteDocumentInput = {
@@ -64,6 +65,12 @@ export function buildPaletteDocument(input: PaletteDocumentInput): PaletteDocume
     if (!fields.length) {
       continue
     }
+    // Why first-wins, matching indexPaletteFields: it keeps the first entry's fields, so
+    // overwriting the unit here would pair one record's rendered text with another's
+    // match offsets — highlights landing outside the string the row actually shows.
+    if (evidenceUnits.has(entry.unit.id)) {
+      continue
+    }
     evidenceUnits.set(entry.unit.id, entry.unit)
     for (const field of fields) {
       evidenceSources.push(field)
@@ -74,7 +81,9 @@ export function buildPaletteDocument(input: PaletteDocumentInput): PaletteDocume
   const fields = indexPaletteFields([...input.visibleFields, ...evidenceSources])
   const fieldsByEvidenceId = new Map<string, PaletteIndexedField[]>()
   const visibleFields: PaletteIndexedField[] = []
+  const fieldById = new Map<string, PaletteIndexedField>()
   for (const field of fields) {
+    fieldById.set(field.id, field)
     if (!field.evidenceId) {
       visibleFields.push(field)
       continue
@@ -97,7 +106,8 @@ export function buildPaletteDocument(input: PaletteDocumentInput): PaletteDocume
     evidenceUnits,
     renderOffsetByFieldId,
     visibleFields,
-    fieldsByEvidenceId
+    fieldsByEvidenceId,
+    fieldById
   }
 }
 
@@ -119,6 +129,8 @@ export type PaletteSupportingEvidence = {
 export type PaletteDocumentRank = {
   /** 0 when a recognized exact intent (such as a task URL) produced this row. */
   exactIntent: number
+  /** 0 when query matched at least one direct field; 1 when all matched tokens are container-only. */
+  matchedDirectField: number
   /** 0 equality, 1 prefix, 2 word boundary, 3 none — whole query in visible text. */
   wholeQuery: number
   worstQuality: number
@@ -138,6 +150,7 @@ export type PaletteDocumentMatch = {
 
 const RANK_KEYS: readonly (keyof PaletteDocumentRank)[] = [
   'exactIntent',
+  'matchedDirectField',
   'wholeQuery',
   'worstQuality',
   'usesSupportingEvidence',

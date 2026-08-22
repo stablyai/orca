@@ -3,6 +3,7 @@ import type { PaneManager, ManagedPane } from '@/lib/pane-manager/pane-manager'
 import type { ManagedPaneInternal } from '@/lib/pane-manager/pane-manager-types'
 import type { IBuffer, IDisposable } from '@xterm/xterm'
 import { resolveCursorAgentImeAnchor } from '@/lib/pane-manager/terminal-ime-anchor'
+import { rendererAgentStatusObservations } from '@/lib/renderer-agent-status-observations'
 import { installTerminalImeCompositionRoute } from './terminal-ime-composition-route'
 import { detectAgentStatusFromTitle, agentTypeToIconAgent, isClaudeAgent } from '@/lib/agent-status'
 import { reportWorkerTerminalUserInput } from '@/lib/worker-terminal-takeover-report'
@@ -707,6 +708,8 @@ type PanePtyBinding = IDisposable & {
   sampleForegroundAgentOnFocus: () => void
   /** Reconfirm after direct shortcut input, which bypasses PTY onData. */
   requestWindowsShiftEnterReconfirmation: () => void
+  /** Refresh interactive redraw scheduling after captured shortcut input. */
+  markShortcutTerminalInputSent: () => void
   reconcileIfSessionDead: (liveSessionIds: Set<string>, snapshotRequestedAt?: number) => void
   reconcileIfSessionMissing: (hasPty: HasPty, livenessRequestedAt?: number) => void
 }
@@ -2131,7 +2134,10 @@ export function connectPanePty(
       userAgent: navigator.userAgent,
       connectionId: getConnectionId(deps.worktreeId) ?? null,
       cwd: deps.cwd,
-      shellOverride: tab?.shellOverride,
+      shellOverride: resolveWindowsShellOverride(
+        tab?.shellOverride,
+        state.settings?.terminalWindowsShell
+      ),
       executionHostId: getExecutionHostIdForWorktree(state, deps.worktreeId)
     })
   }
@@ -2165,6 +2171,18 @@ export function connectPanePty(
     onVisibleForegroundSettled: (outcome) => {
       visibleForegroundSamplePending = false
       visibleForegroundSampleSettled = outcome !== 'inconclusive'
+      if (outcome !== 'inconclusive') {
+        return
+      }
+      const foreground = useAppStore.getState().paneForegroundAgentByPaneKey[cacheKey]
+      if (foreground?.routingConfirmationPending !== true) {
+        return
+      }
+      useAppStore.getState().setPaneForegroundAgent(cacheKey, {
+        agent: foreground.agent,
+        routingRevoked: true,
+        shellForeground: foreground.shellForeground
+      })
     }
   })
   // Why: one command-finished policy whether the signal arrives as bytes
@@ -2238,28 +2256,37 @@ export function connectPanePty(
   }
   requestKnownWindowsShiftEnterReconfirmation = () => {
     const foreground = useAppStore.getState().paneForegroundAgentByPaneKey[cacheKey]
-    // Why: daemon reattach/launch metadata is display-only until a live
-    // provider read confirms it. Submit/interrupt/title-exit evidence must
-    // revoke that launch-only hint too, otherwise Shift+Enter can route bytes
-    // to an agent that already exited before confirmation ever ran.
+    // Why: daemon reattach/launch metadata is display-only until a live provider
+    // read confirms it, so only proven trust may be revoked-and-retained here. A
+    // pending entry must never qualify: re-arming itself would let one old read
+    // authorize CSI-u forever on a shell that emits no OSC boundary to publish over.
     if (
       !foreground?.agent ||
+      foreground.routingTrusted !== true ||
       TUI_AGENT_CONFIG[foreground.agent].windowsShiftEnterEncoding !== 'csi-u'
     ) {
       return
     }
-    // Why: cmd.exe and Git Bash have no OSC command boundaries. Keep the icon
-    // as a hint, but revoke bytes until one current provider confirmation lands.
-    useAppStore.getState().setPaneForegroundAgent(cacheKey, {
+    const revokedEntry = {
       agent: foreground.agent,
       routingRevoked: true,
       shellForeground: false
-    })
+    }
+    useAppStore.getState().setPaneForegroundAgent(cacheKey, revokedEntry)
     visibleForegroundSamplePending = false
     visibleForegroundSampleSettled = false
     // Why: hook rows can suppress display-only sampling, but cannot restore
     // byte authority after this function explicitly revoked routing trust.
     sampleVisiblePaneForegroundAgent(true)
+    // Why: cmd.exe and Git Bash have no OSC command boundaries, so retain the prior
+    // CSI-u capability across the async read rather than let the gap send Esc+CR.
+    // Only while a read is genuinely in flight — nothing else ever clears the flag.
+    if (paneForegroundAgentTracker.hasReadInFlight()) {
+      useAppStore.getState().setPaneForegroundAgent(cacheKey, {
+        ...revokedEntry,
+        routingConfirmationPending: true
+      })
+    }
   }
   const commandLifecycle = createTerminalCommandLifecycle({
     onCommandStarted: () => {
@@ -2874,7 +2901,13 @@ export function connectPanePty(
       agentType: resolveCompatibleAgentTypeForOwner(
         initialStatus.agent,
         getAuthoritativePaneAgent()
-      )
+      ),
+      // Why: Orca launched this agent, so this row predates any provider signal for the pane.
+      observation: rendererAgentStatusObservations.observe(cacheKey, {
+        origin: 'launch',
+        observedAt: Date.now(),
+        kind: 'transition'
+      })
     }
     if (paneStartup.launchConfig) {
       useAppStore
@@ -2926,7 +2959,13 @@ export function connectPanePty(
       {
         state: 'working',
         prompt: normalizedPrompt || (currentEntry?.state === 'working' ? currentEntry.prompt : ''),
-        agentType: 'command-code'
+        agentType: 'command-code',
+        // Why: Command Code has no prompt-start hook; this row is read off the pane's own output.
+        observation: rendererAgentStatusObservations.observe(cacheKey, {
+          origin: 'process',
+          observedAt: Date.now(),
+          kind: 'transition'
+        })
       },
       currentTitle,
       undefined,
@@ -2961,7 +3000,12 @@ export function connectPanePty(
         {
           state: 'done',
           prompt: currentPrompt || normalizedPrompt,
-          agentType: 'command-code'
+          agentType: 'command-code',
+          observation: rendererAgentStatusObservations.observe(cacheKey, {
+            origin: 'process',
+            observedAt: Date.now(),
+            kind: 'transition'
+          })
         },
         currentTitle,
         undefined,
@@ -3084,6 +3128,16 @@ export function connectPanePty(
     // Why: Command Code has no prompt-start hook. Seed the visible working row
     // once the PTY exists, then let real hook events refine or complete it.
     bindActivePanePty(ptyId, { seedInitialAgentStatus: true })
+    // Spend the queued command only after this pane has a bound PTY. Retired panes never reach
+    // this point, and the pending entry keeps the worktree from being force-parked during spawn.
+    // This marks spawn, not delivery: Windows may run argv-embedded commands earlier, while POSIX
+    // delivery can still be waiting for shell-ready.
+    try {
+      deps.onQueuedStartupSpawned?.()
+    } catch {
+      // Why swallowed: this callback runs inside the connect promise, so a throw would reject the
+      // spawn and strand the pane with no pty at all — a far worse failure than a stale entry.
+    }
   }
   const onPtyRebind = (ptyId: string, replacedPtyId: string): void => {
     if (!canAdoptCapturedDirectSshRetryPty(ptyId)) {
@@ -3710,6 +3764,18 @@ export function connectPanePty(
     const authoritativePaneAgent = getAuthoritativePaneAgent()
     const agentType = resolveCompatibleAgentTypeForOwner(payload.agentType, authoritativePaneAgent)
     const statusPayload = agentType === payload.agentType ? payload : { ...payload, agentType }
+    // Why: this is the remote-runtime path where the renderer, not main, parses OSC 9999 out of
+    // PTY bytes — so the renderer is the sequencing authority for these rows and says so. Kept
+    // beside statusPayload, not merged into it, so the notification/title consumers below see
+    // byte-for-byte what they see today.
+    const observedStatusPayload = {
+      ...statusPayload,
+      observation: rendererAgentStatusObservations.observe(cacheKey, {
+        origin: 'osc',
+        observedAt: Date.now(),
+        kind: 'snapshot'
+      })
+    }
     const resolvedStatusTitle = resolveAgentStatusTerminalTitle(statusPayload, title)
     const statusTitle = resolvedStatusTitle
       ? normalizeCompatibleAgentTitleForOwner(
@@ -3721,11 +3787,18 @@ export function connectPanePty(
     // status may fence the host mirror out of its store key.
     markRendererOwnedAgentStatusWrite(cacheKey)
     if (launchToken) {
-      currentState.setAgentStatus(cacheKey, statusPayload, statusTitle, undefined, routing, {
-        launchToken
-      })
+      currentState.setAgentStatus(
+        cacheKey,
+        observedStatusPayload,
+        statusTitle,
+        undefined,
+        routing,
+        {
+          launchToken
+        }
+      )
     } else {
-      currentState.setAgentStatus(cacheKey, statusPayload, statusTitle, undefined, routing)
+      currentState.setAgentStatus(cacheKey, observedStatusPayload, statusTitle, undefined, routing)
     }
     if (payload.state === 'working' && syncAgentTaskCompleteTrackingEnabled()) {
       requiresFreshWorkingForAgentTaskCompleteNotification = false
@@ -3781,15 +3854,23 @@ export function connectPanePty(
     Boolean(connectionId) && !shouldDeliverStartupViaTerminalPaste
   const hadExistingPaneTransportAtConnect = deps.paneTransportsRef.current.size > 0
   let lastTerminalInputAt = Number.NEGATIVE_INFINITY
+  // Why: separate from lastTerminalInputAt because onExit reads that one as
+  // "the user never typed into this pane" to keep a dead newborn pane mounted.
+  // Captured shortcuts must open the redraw window without arming that teardown.
+  let lastInteractiveRedrawInputAt = Number.NEGATIVE_INFINITY
   let hasReceivedPtyOutput = false
   let deferredReattachLiveData: DeferredReattachLiveDataQueue | null = null
   let reattachLiveDataDeferralDepth = 0
   let deferredReattachLiveDataOwners = new Map<number, { failed: boolean }>()
   let transportStreamGeneration = 0
-  const markTerminalInputSent = (): void => {
-    lastTerminalInputAt = performance.now()
+  const markInteractiveRedrawInput = (): void => {
+    lastInteractiveRedrawInputAt = performance.now()
     // Why: input must probe a wedged xterm even when the PTY produces no renderer output.
     requestTerminalWritePipelineProbe(pane.terminal)
+  }
+  const markTerminalInputSent = (): void => {
+    lastTerminalInputAt = performance.now()
+    markInteractiveRedrawInput()
   }
   const recordTerminalInputForHibernation = (): void => {
     useAppStore.getState().recordTerminalInput(cacheKey)
@@ -5811,10 +5892,15 @@ export function connectPanePty(
           onConnect: (): void => {
             if (isCurrent()) {
               reportRemoteRendererSerializerReady()
+              // Why: a visibility flip during a rebind can't reach the host (no bound
+              // pty id), and the transport replays the stale pause bit onto the new
+              // stream — re-derive it from live visibility once the stream is bound.
+              syncHiddenRendererPtyDelivery()
             }
           },
           onStreamRecovered: (): void => {
             if (isCurrent()) {
+              syncHiddenRendererPtyDelivery()
               markHiddenOutputRestoreNeeded()
             }
           },
@@ -6295,7 +6381,7 @@ export function connectPanePty(
         return consumeForegroundImmediateBudget(data.length)
       }
       const recentInput =
-        performance.now() - lastTerminalInputAt <= FOREGROUND_INTERACTIVE_REDRAW_WINDOW_MS
+        performance.now() - lastInteractiveRedrawInputAt <= FOREGROUND_INTERACTIVE_REDRAW_WINDOW_MS
       if (
         recentInput &&
         data.length <= FOREGROUND_INTERACTIVE_REDRAW_CHARS &&
@@ -6335,7 +6421,7 @@ export function connectPanePty(
     } {
       const rewriteOutputPrefersRenderRefresh = foregroundRewriteOutputPrefersRenderRefresh(data)
       const recentInput =
-        performance.now() - lastTerminalInputAt <= FOREGROUND_INTERACTIVE_REDRAW_WINDOW_MS
+        performance.now() - lastInteractiveRedrawInputAt <= FOREGROUND_INTERACTIVE_REDRAW_WINDOW_MS
       if (foregroundRendererRiskOutputPrefersRenderRefresh(data)) {
         return {
           refresh: true,
@@ -6465,7 +6551,7 @@ export function connectPanePty(
       // Why: recompute the latch on every synchronized START so each frame's interactivity is judged by its own open time and can't leak across a same-chunk close+open; clear only on leaving synchronized output.
       if (synchronizedForegroundOutput && synchronizedOutputStarted) {
         synchronizedForegroundFrameInteractive =
-          performance.now() - lastTerminalInputAt <=
+          performance.now() - lastInteractiveRedrawInputAt <=
           FOREGROUND_SYNCHRONIZED_FRAME_INTERACTIVE_WINDOW_MS
       } else if (!nextSynchronizedForegroundOutputActive && !synchronizedOutputEnded) {
         synchronizedForegroundFrameInteractive = false
@@ -9431,6 +9517,9 @@ export function connectPanePty(
         requestKnownWindowsShiftEnterReconfirmation()
         sampleVisiblePaneForegroundAgent()
       }, SHIFT_ENTER_RECONFIRM_IDLE_MS)
+    },
+    markShortcutTerminalInputSent() {
+      markInteractiveRedrawInput()
     },
     reconcileIfSessionDead,
     reconcileIfSessionMissing,

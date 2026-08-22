@@ -10,10 +10,13 @@ import {
   resolveWorktreeDisplayName
 } from './worktree-default-display-name'
 import { matchWorkspaceTabAgentSnippet } from './workspace-tab-agent-snippet-match'
+import { maxAgentActivityAt } from './workspace-tab-agent-metadata'
+import type { ExecutionHostId } from '../../../shared/execution-host'
 import type { MatchRange } from './palette-match/normalized-text'
 import type { PaletteDocumentRank } from './palette-match/palette-document'
 import type { PaletteResultQualityClass } from './palette-match/match-quality'
 import type { TuiAgent } from '../../../shared/tui-agent'
+import { getUnifiedTabPaletteExecutionHostId } from './unified-tab-host-ownership'
 import type {
   SearchableWorkspaceTab,
   WorkspaceTabContentType
@@ -22,6 +25,8 @@ import type {
 const NO_RANGES: readonly MatchRange[] = []
 
 export type WorkspaceTabPaletteSearchResult = {
+  /** Worktree ids collide across hosts; activation must not resolve by id alone. */
+  executionHostId?: ExecutionHostId
   tabId: string
   entityId: string
   worktreeId: string
@@ -44,6 +49,8 @@ export type WorkspaceTabPaletteSearchResult = {
   score: number
   qualityClass: PaletteResultQualityClass | null
   rank: PaletteDocumentRank | null
+  /** Most recent activity for this tab, or null when nothing is known. */
+  lastActiveAt: number | null
 }
 
 function compareText(a: string, b: string): number {
@@ -79,8 +86,23 @@ function positionScore(entry: SearchableWorkspaceTab): number {
   return entry.isCurrentWorktree ? base - 1000 : base
 }
 
+function resolveWorkspaceTabLastActiveAt(entry: SearchableWorkspaceTab): number | null {
+  // Agent activity wins when present; then explicit tab focus; otherwise fall back to worktree.
+  const candidate =
+    maxAgentActivityAt(entry.agentMetadata) ??
+    entry.tab.lastFocusedAt ??
+    (entry.worktree.lastActivityAt || null)
+  if (candidate == null) {
+    return null
+  }
+  // Never report activity older than the tab itself (e.g. a stale worktree signal).
+  return Math.max(candidate, entry.tab.createdAt)
+}
+
 function baseResult(entry: SearchableWorkspaceTab): WorkspaceTabPaletteSearchResult {
+  const executionHostId = getUnifiedTabPaletteExecutionHostId(entry.tab, entry.worktree)
   return {
+    ...(executionHostId ? { executionHostId } : {}),
     tabId: entry.tab.id,
     entityId: entry.tab.entityId,
     worktreeId: entry.worktree.id,
@@ -102,7 +124,8 @@ function baseResult(entry: SearchableWorkspaceTab): WorkspaceTabPaletteSearchRes
     isCurrentWorktree: entry.isCurrentWorktree,
     score: positionScore(entry),
     qualityClass: null,
-    rank: null
+    rank: null,
+    lastActiveAt: resolveWorkspaceTabLastActiveAt(entry)
   }
 }
 
@@ -173,8 +196,18 @@ export function searchWorkspaceTabs(
   return results.sort((a, b) =>
     a.rank && b.rank
       ? comparePaletteTabResults(
-          { rank: a.rank, positionScore: a.score, id: a.tabId },
-          { rank: b.rank, positionScore: b.score, id: b.tabId }
+          {
+            rank: a.rank,
+            positionScore: a.score,
+            id: a.tabId,
+            lastActiveAt: a.lastActiveAt ?? undefined
+          },
+          {
+            rank: b.rank,
+            positionScore: b.score,
+            id: b.tabId,
+            lastActiveAt: b.lastActiveAt ?? undefined
+          }
         )
       : compareEmptyQueryResults(a, b)
   )

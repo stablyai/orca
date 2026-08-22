@@ -63,6 +63,8 @@ function makeWorkspaceTab({
   agentSnippets?: string[]
   typeSearchAliases?: readonly string[]
 }): SearchableWorkspaceTab {
+  const aliases =
+    typeSearchAliases ?? (contentType === 'terminal' ? TERMINAL_TYPE_SEARCH_ALIASES : undefined)
   return {
     tab: makeTab(id, contentType) as SearchableWorkspaceTab['tab'],
     worktree,
@@ -74,20 +76,25 @@ function makeWorkspaceTab({
     secondaryText: secondarySearchTexts[0] ?? '',
     titleSearchText: title,
     secondarySearchTexts,
-    typeSearchAliases:
-      typeSearchAliases ?? (contentType === 'terminal' ? TERMINAL_TYPE_SEARCH_ALIASES : undefined),
+    typeSearchAliases: aliases,
     document: buildPaletteTabDocument({
       id,
       title,
       secondaryTexts: secondarySearchTexts,
-      worktreeName: worktree.displayName,
+      worktreeName: worktree.displayName ?? '',
       branch: 'main',
       repoName: 'octo/rocket',
-      typeAliases:
-        typeSearchAliases ?? (contentType === 'terminal' ? TERMINAL_TYPE_SEARCH_ALIASES : undefined)
+      typeAliases: aliases
     }),
     agentMetadata: agentSnippets.length
-      ? [{ paneKey: `${id}-pane`, textParts: [], snippetCandidates: agentSnippets }]
+      ? [
+          {
+            paneKey: `${id}-pane`,
+            textParts: [],
+            snippetCandidates: agentSnippets,
+            lastActivityAt: 0
+          }
+        ]
       : [],
     occupantAgent: null,
     isCurrentTab: false,
@@ -139,14 +146,14 @@ function makeBrowserPage({
     worktree,
     repoName: 'octo/rocket',
     worktreeSortIndex: 0,
-    isCurrentPage: false,
-    isCurrentWorktree: true,
     document: buildSearchableBrowserPageDocument({
       page,
       workspace,
       worktree,
       repoName: 'octo/rocket'
-    })
+    }),
+    isCurrentPage: false,
+    isCurrentWorktree: true
   }
 }
 

@@ -13,6 +13,7 @@ function createMockSubprocess() {
     write(_data: string) {},
     resize(_cols: number, _rows: number) {},
     kill() {},
+    terminateOwnedTree: () => 'unavailable' as const,
     forceKill() {},
     signal(_sig: string) {},
     onData(cb: (data: string) => void) {

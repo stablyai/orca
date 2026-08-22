@@ -527,11 +527,15 @@ export async function createWebRuntimeSessionBrowserTab(args: {
         if (
           state.activeBrowserTabIdByWorktree === previousState.activeBrowserTabIdByWorktree &&
           state.activeFileIdByWorktree === previousState.activeFileIdByWorktree &&
+          // Why: resolveWebSessionVisibleTabId now reads group state, so a group-only focus move
+          // must re-evaluate it.
+          state.activeGroupIdByWorktree === previousState.activeGroupIdByWorktree &&
           state.activeTabIdByWorktree === previousState.activeTabIdByWorktree &&
           state.activeTabType === previousState.activeTabType &&
           state.activeTabTypeByWorktree === previousState.activeTabTypeByWorktree &&
           state.activeWorktreeId === previousState.activeWorktreeId &&
           state.activeWorkspaceExecutionHostId === previousState.activeWorkspaceExecutionHostId &&
+          state.groupsByWorktree === previousState.groupsByWorktree &&
           state.unifiedTabsByWorktree === previousState.unifiedTabsByWorktree
         ) {
           return
@@ -844,16 +848,30 @@ export async function refreshWebRuntimeSessionTabsSnapshot(
         ...options.confirmAgentSessionHandoff
       })
     }
-    const { applyFreshWebSessionTabsSnapshot, applyWebSessionTabsStorePatch } =
-      await import('./web-session-tabs-sync')
+    const {
+      applyWebSessionTabsSnapshot,
+      applyWebSessionTabsStorePatch,
+      decideWebSessionTabsSnapshot
+    } = await import('./web-session-tabs-sync')
     if (getRuntimeEnvironmentRevision(environmentId) !== expectedEnvironmentPairingRevision) {
       return
     }
-    applyWebSessionTabsStorePatch((state) => {
-      // Why: eager refreshes can resolve after the user switched worktrees; update tabs without stealing focus.
-      const patch = applyFreshWebSessionTabsSnapshot(state, snapshot, environmentId)
-      return patch === state ? state : patch
-    }, snapshot)
+    // Why: this list is the host answering, but only the frame's own decision
+    // says whether that answer is evidence — a workspace the mirror never
+    // writes is discarded with nothing accepted behind it.
+    const decision = decideWebSessionTabsSnapshot(snapshot, environmentId)
+    const settleMirror = applyWebSessionTabsStorePatch(
+      (state) => {
+        // Why: eager refreshes can resolve after the user switched worktrees; update tabs without stealing focus.
+        const patch = decision.apply
+          ? applyWebSessionTabsSnapshot(state, snapshot, environmentId)
+          : state
+        return patch === state ? state : patch
+      },
+      { frames: [{ environmentId, worktreeId: snapshot.worktree, decision }] },
+      snapshot
+    )
+    settleMirror()
   } catch (error) {
     if (options.errorMode === 'throw') {
       throw error

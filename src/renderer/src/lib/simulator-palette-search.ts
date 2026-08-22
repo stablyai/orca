@@ -1,6 +1,8 @@
+import { getWorktreeHostIdentity } from '../../../shared/worktree/host-qualified-identity'
 import type { ExecutionHostId } from '../../../shared/execution-host'
 import type { Tab, TabGroup } from '../../../shared/tab-types'
 import type { Worktree } from '../../../shared/worktree/types'
+import { isPaletteCurrentWorktree, resolvePaletteRepoForWorktree } from './palette-repo-resolution'
 import { isClipboardTextByteLengthOverLimit } from '../../../shared/clipboard-text'
 import { compareBaseSensitivityLocaleText } from './locale-text-collators'
 import {
@@ -16,6 +18,11 @@ import {
 import type { MatchRange } from './palette-match/normalized-text'
 import type { PaletteDocument, PaletteDocumentRank } from './palette-match/palette-document'
 import type { PaletteResultQualityClass } from './palette-match/match-quality'
+import {
+  findAmbiguousWorktreeIds,
+  getUnifiedTabPaletteExecutionHostId,
+  isUnifiedTabOwnedByWorktree
+} from './unified-tab-host-ownership'
 
 const NO_RANGES: readonly MatchRange[] = []
 
@@ -52,6 +59,7 @@ export type SimulatorPaletteSearchResult = {
   score: number
   qualityClass: PaletteResultQualityClass | null
   rank: PaletteDocumentRank | null
+  lastActiveAt?: number | null
 }
 
 type SimulatorPaletteActiveTabType = 'browser' | 'editor' | 'terminal' | 'simulator'
@@ -77,12 +85,15 @@ export function isSimulatorPaletteQueryTooLarge(
 
 export type BuildSearchableSimulatorTabsOptions = {
   worktrees: readonly Worktree[]
+  ownershipWorktrees?: readonly Pick<Worktree, 'id'>[]
   repoMap: ReadonlyMap<string, { displayName?: string | null }>
+  repoMapByHostIdentity?: ReadonlyMap<string, { displayName?: string | null }>
   worktreeOrder: ReadonlyMap<string, number>
   unifiedTabsByWorktree: Record<string, readonly Tab[] | undefined>
   activeGroupIdByWorktree: Record<string, string | undefined>
   groupsByWorktree: Record<string, readonly TabGroup[] | undefined>
   activeWorktreeId: string | null
+  activeWorkspaceExecutionHostId?: ExecutionHostId | null
   activeTabType: SimulatorPaletteActiveTabType
 }
 
@@ -110,8 +121,8 @@ function compareEmptyQueryResults(
   return compareText(a.title, b.title)
 }
 
-// Why: simulator tabs follow browser-tab Cmd+J ordering — deterministic and
-// context-first until Orca tracks per-tab recency for this surface.
+// Why: empty-query simulator ordering stays deterministic and context-first;
+// lastActiveAt only breaks ties between equally-ranked query matches.
 function positionScore(entry: SearchableSimulatorTab): number {
   if (entry.isCurrentTab) {
     return entry.worktreeSortIndex * 100 - 4000
@@ -125,7 +136,7 @@ export function simulatorPaletteTabTitle(tab: Tab): string {
 
 function baseResult(entry: SearchableSimulatorTab): SimulatorPaletteSearchResult {
   return {
-    executionHostId: entry.worktree.hostId,
+    executionHostId: getUnifiedTabPaletteExecutionHostId(entry.tab, entry.worktree),
     tabId: entry.tab.id,
     worktreeId: entry.worktree.id,
     groupId: entry.tab.groupId,
@@ -145,56 +156,91 @@ function baseResult(entry: SearchableSimulatorTab): SimulatorPaletteSearchResult
     isCurrentWorktree: entry.isCurrentWorktree,
     score: positionScore(entry),
     qualityClass: null,
-    rank: null
+    rank: null,
+    // Never older than the tab itself: creation is a focus event too.
+    lastActiveAt: entry.tab.lastFocusedAt
+      ? Math.max(entry.tab.lastFocusedAt, entry.tab.createdAt)
+      : null
   }
 }
 
 function getActiveUnifiedTabId({
   worktreeId,
+  worktreeHostId,
+  worktreeRuntimeOwnerEnvironmentId,
   activeWorktreeId,
+  activeWorkspaceExecutionHostId,
   activeTabType,
-  activeGroupIdByWorktree,
-  groupsByWorktree
+  activeGroupId,
+  groups
 }: Pick<
   BuildSearchableSimulatorTabsOptions,
-  'activeGroupIdByWorktree' | 'activeTabType' | 'activeWorktreeId' | 'groupsByWorktree'
+  'activeTabType' | 'activeWorktreeId' | 'activeWorkspaceExecutionHostId'
 > & {
   worktreeId: string
+  worktreeHostId?: Worktree['hostId']
+  worktreeRuntimeOwnerEnvironmentId?: Worktree['runtimeOwnerEnvironmentId']
+  activeGroupId?: string
+  groups?: readonly TabGroup[]
 }): string | null {
-  if (activeWorktreeId !== worktreeId || activeTabType !== 'simulator') {
+  if (
+    !isPaletteCurrentWorktree(
+      {
+        id: worktreeId,
+        hostId: worktreeHostId,
+        runtimeOwnerEnvironmentId: worktreeRuntimeOwnerEnvironmentId
+      },
+      activeWorktreeId,
+      activeWorkspaceExecutionHostId
+    ) ||
+    activeTabType !== 'simulator'
+  ) {
     return null
   }
-  const activeGroupId = activeGroupIdByWorktree[worktreeId]
   const activeGroup = activeGroupId
-    ? (groupsByWorktree[worktreeId] ?? []).find((group) => group.id === activeGroupId)
+    ? groups?.find((group) => group.id === activeGroupId)
     : undefined
   return activeGroup?.activeTabId ?? null
 }
 
 export function buildSearchableSimulatorTabs({
   worktrees,
+  ownershipWorktrees,
   repoMap,
+  repoMapByHostIdentity,
   worktreeOrder,
   unifiedTabsByWorktree,
   activeGroupIdByWorktree,
   groupsByWorktree,
   activeWorktreeId,
+  activeWorkspaceExecutionHostId,
   activeTabType
 }: BuildSearchableSimulatorTabsOptions): SearchableSimulatorTab[] {
   const entries: SearchableSimulatorTab[] = []
+  const ambiguousWorktreeIds = findAmbiguousWorktreeIds(ownershipWorktrees ?? worktrees)
   for (const worktree of worktrees) {
-    const repoName = repoMap.get(worktree.repoId)?.displayName ?? ''
-    const worktreeSortIndex = worktreeOrder.get(worktree.id) ?? Number.MAX_SAFE_INTEGER
+    const repoName =
+      resolvePaletteRepoForWorktree(worktree, repoMap, repoMapByHostIdentity)?.displayName ?? ''
+    const worktreeSortIndex =
+      worktreeOrder.get(getWorktreeHostIdentity(worktree)) ??
+      worktreeOrder.get(worktree.id) ??
+      Number.MAX_SAFE_INTEGER
     const activeUnifiedTabId = getActiveUnifiedTabId({
       worktreeId: worktree.id,
+      worktreeHostId: worktree.hostId,
+      worktreeRuntimeOwnerEnvironmentId: worktree.runtimeOwnerEnvironmentId,
       activeWorktreeId,
+      activeWorkspaceExecutionHostId,
       activeTabType,
-      activeGroupIdByWorktree,
-      groupsByWorktree
+      activeGroupId: activeGroupIdByWorktree[worktree.id],
+      groups: groupsByWorktree[worktree.id]
     })
     const tabs = unifiedTabsByWorktree[worktree.id] ?? []
     for (const tab of tabs) {
-      if (tab.contentType !== 'simulator') {
+      if (
+        tab.contentType !== 'simulator' ||
+        !isUnifiedTabOwnedByWorktree(tab, worktree, ambiguousWorktreeIds)
+      ) {
         continue
       }
       entries.push({
@@ -205,7 +251,11 @@ export function buildSearchableSimulatorTabs({
         // Why: simulator tabs are unified tabs; terminal activeTabId does not
         // identify the visible emulator tab after split-group activation.
         isCurrentTab: activeUnifiedTabId === tab.id,
-        isCurrentWorktree: activeWorktreeId === worktree.id,
+        isCurrentWorktree: isPaletteCurrentWorktree(
+          worktree,
+          activeWorktreeId,
+          activeWorkspaceExecutionHostId
+        ),
         document: buildPaletteTabDocument({
           id: tab.id,
           title: simulatorPaletteTabTitle(tab),
@@ -260,8 +310,18 @@ export function searchSimulatorTabs(
   return results.sort((a, b) =>
     a.rank && b.rank
       ? comparePaletteTabResults(
-          { rank: a.rank, positionScore: a.score, id: a.tabId },
-          { rank: b.rank, positionScore: b.score, id: b.tabId }
+          {
+            rank: a.rank,
+            positionScore: a.score,
+            id: a.tabId,
+            lastActiveAt: a.lastActiveAt ?? undefined
+          },
+          {
+            rank: b.rank,
+            positionScore: b.score,
+            id: b.tabId,
+            lastActiveAt: b.lastActiveAt ?? undefined
+          }
         )
       : compareEmptyQueryResults(a, b)
   )

@@ -3398,6 +3398,8 @@ const api = {
       connectionId?: string
       excludePaths?: string[]
       requestToken?: string
+      maxResults?: number
+      searchQuery?: string
     }): Promise<string[]> => ipcRenderer.invoke('fs:listFiles', args),
     cancelListFiles: (args: { requestToken: string }): Promise<void> =>
       ipcRenderer.invoke('fs:cancelListFiles', args),
@@ -3789,6 +3791,11 @@ const api = {
       const listener = (_event: Electron.IpcRendererEvent) => callback()
       ipcRenderer.on('ui:openTasks', listener)
       return () => ipcRenderer.removeListener('ui:openTasks', listener)
+    },
+    onToggleAgentDashboard: (callback: () => void): (() => void) => {
+      const listener = (_event: Electron.IpcRendererEvent) => callback()
+      ipcRenderer.on('ui:toggleAgentDashboard', listener)
+      return () => ipcRenderer.removeListener('ui:toggleAgentDashboard', listener)
     },
     onJumpToWorktreeIndex: (callback: (index: number) => void): (() => void) => {
       const listener = (_event: Electron.IpcRendererEvent, index: number) => callback(index)

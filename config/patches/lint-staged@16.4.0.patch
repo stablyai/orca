@@ -1,0 +1,125 @@
+diff --git a/lib/gitWorkflow.js b/lib/gitWorkflow.js
+index 3a32d6a9cd65c7ecb6b3cbccfce5a15c96530435..363513128bf7302eab73ea775102bb8a633a3b8b 100644
+--- a/lib/gitWorkflow.js
++++ b/lib/gitWorkflow.js
+@@ -50,6 +50,9 @@ export const STASH = 'lint-staged automatic backup'
+ 
+ const PATCH_UNSTAGED = 'lint-staged_unstaged.patch'
+ 
++const BACKUP_REF_PREFIX = 'refs/worktree/lint-staged-backups'
++const ZERO_OID = '0000000000000000000000000000000000000000'
++
+ const GIT_DIFF_ARGS = [
+   '--binary', // support binary files
+   '--unified=0', // do not add lines around diff for consistent behaviour
+@@ -100,6 +103,8 @@ export class GitWorkflow {
+     /** @type {import('./getStagedFiles.js').StagedFile[][]} */
+     this.matchedFileChunks = matchedFileChunks
+     this.topLevelDir = topLevelDir
++    this.backupOid = null
++    this.backupRef = null
+ 
+     /**
+      * These three files hold state about an ongoing git merge
+@@ -122,6 +127,17 @@ export class GitWorkflow {
+    * Get name of backup stash
+    */
+   async getBackupStash(ctx) {
++    if (this.backupRef) {
++      const backupOid = await this.execGit(['rev-parse', '--verify', this.backupRef])
++
++      if (backupOid !== this.backupOid) {
++        ctx.errors.add(GetBackupStashError)
++        throw new Error('lint-staged automatic backup is missing!')
++      }
++
++      return this.backupRef
++    }
++
+     /** Print stash list with short hash and subject */
+     const stashes = await this.execGit(['stash', 'list', '--format="%h %s"', '-z'])
+       .then(parseGitZOutput)
+@@ -270,11 +286,14 @@ export class GitWorkflow {
+         } else {
+           /** Save stash of all changes, keeping all files as-is */
+           const stashHash = await this.execGit(['stash', 'create'])
++          this.backupOid = stashHash
++          this.backupRef = `${BACKUP_REF_PREFIX}/${crypto.randomUUID()}`
+           ctx.backupHash = await this.execGit(['rev-parse', '--short', stashHash])
+-          await this.execGit(['stash', 'store', '--quiet', '--message', STASH, ctx.backupHash])
++          await this.execGit(['update-ref', this.backupRef, this.backupOid, ZERO_OID])
++          ctx.backupRef = this.backupRef
+         }
+ 
+-        task.title = `Backed up original state in git stash (${ctx.backupHash})`
++        task.title = `Backed up original state (${ctx.backupHash})`
+         debugLog(task.title)
+       }
+     } catch (error) {
+@@ -425,7 +444,11 @@ export class GitWorkflow {
+   async cleanup(ctx) {
+     try {
+       debugLog('Dropping backup stash...')
+-      await this.execGit(['stash', 'drop', '--quiet', await this.getBackupStash(ctx)])
++      if (this.backupRef) {
++        await this.execGit(['update-ref', '-d', this.backupRef, this.backupOid])
++      } else {
++        await this.execGit(['stash', 'drop', '--quiet', await this.getBackupStash(ctx)])
++      }
+       debugLog('Done dropping backup stash!')
+     } catch (error) {
+       handleError(error, ctx)
+diff --git a/lib/index.js b/lib/index.js
+index 75eeacee48759ef90249df5524639d61bce10918..24b4852eba9b14e05e10c3df8a2b2dae75af19f3 100644
+--- a/lib/index.js
++++ b/lib/index.js
+@@ -157,7 +157,7 @@ const lintStaged = async (
+         logger.warn(PREVENTED_EMPTY_COMMIT)
+       } else if (ctx.errors.has(FailOnChangesError)) {
+         logger.warn(PREVENTED_TASK_MODIFICATIONS + '\n')
+-        logger.warn(restoreStashExample(ctx.backupHash))
++        logger.warn(restoreStashExample(ctx.backupHash, ctx.backupRef))
+       } else if (ctx.errors.has(RestoreUnstagedChangesError)) {
+         logger.warn(UNSTAGED_CHANGES_BACKUP_STASH_LOCATION)
+         logger.warn(ctx.unstagedPatch)
+@@ -168,7 +168,7 @@ const lintStaged = async (
+         logger.error(GIT_ERROR)
+         if (ctx.shouldBackup) {
+           // No sense to show this if the backup stash itself is missing.
+-          logger.error(restoreStashExample(ctx.backupHash) + '\n')
++          logger.error(restoreStashExample(ctx.backupHash, ctx.backupRef) + '\n')
+         }
+       }
+ 
+diff --git a/lib/messages.js b/lib/messages.js
+index 993f8d81cac48132b5ae2ebdc8ca452c7217caad..2dc2291bc82451eacc5babfc8ce408051e1101e3 100644
+--- a/lib/messages.js
++++ b/lib/messages.js
+@@ -66,9 +66,12 @@ export const PREVENTED_EMPTY_COMMIT = `
+   Use the --allow-empty option to continue, or check your task configuration`)}
+ `
+ 
+-export const restoreStashExample = (
+-  hash = 'h0a0s0h0'
+-) => `Any lost modifications can be restored from a git stash:
++export const restoreStashExample = (hash = 'h0a0s0h0', backupRef) =>
++  backupRef
++    ? `Any lost modifications can be restored from the worktree backup:
++
++  > git stash apply --index ${backupRef}`
++    : `Any lost modifications can be restored from a git stash:
+ 
+   > git stash list --format="%h %s"
+   ${hash} On main: lint-staged automatic backup
+diff --git a/lib/state.js b/lib/state.js
+index da30e6f639d31307ebf503691aa991bb93948f8a..4a38799fa7773a8e8629c7c3a6b72287e6b22f4b 100644
+--- a/lib/state.js
++++ b/lib/state.js
+@@ -15,6 +15,7 @@ export const getInitialState = ({
+   revert = true,
+ } = {}) => ({
+   backupHash: null,
++  backupRef: null,
+   errors: new Set([]),
+   shouldFailOnChanges: failOnChanges,
+   hasFilesToHide: null,

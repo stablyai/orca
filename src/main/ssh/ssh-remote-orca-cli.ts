@@ -1,4 +1,5 @@
 import type { CliStatusResult, RuntimeStatus } from '../../shared/runtime-types'
+import { projectRemoteAppStatus } from '../../shared/cli-app-status-projection'
 import { randomUUID } from 'node:crypto'
 import type { RuntimeOrchestrationEnvelope } from '../../shared/runtime-rpc-envelope'
 import { readOrchestrationCompatibilityEvidence } from '../../shared/orchestration-compatibility-evidence'
@@ -171,11 +172,12 @@ async function dispatchRemoteCli(
       }
       const status = response.result as RuntimeStatus
       const cliStatus: CliStatusResult = {
-        app: {
-          running: true,
-          pid: null,
-          ...(status.desktopWindowStatus ? { desktopWindowStatus: status.desktopWindowStatus } : {})
-        },
+        target: { kind: 'environment', environment: 'ssh' },
+        // Why: this answers for the Orca host the caller reached over SSH, not for the caller's
+        // machine. It used to report running:true unconditionally, which claimed a desktop app
+        // even for a headless `serve`; share the same projection the paired-server path uses so
+        // both transports answer the question the same way (STA-4792 defect 4).
+        app: projectRemoteAppStatus(status),
         runtime: {
           state: status.graphStatus === 'ready' ? 'ready' : 'graph_not_ready',
           reachable: true,

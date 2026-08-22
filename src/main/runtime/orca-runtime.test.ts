@@ -1004,6 +1004,9 @@ async function referenceStatusFrameLines(
 }
 
 const TEST_WINDOW_ID = 1
+// The inventory refresh forwards its own budget so a relay cannot outlive it (STA-517).
+// These assertions are about which provider scope was asked, so the deadline stays loose.
+const LIST_PROVIDER_DEADLINE = expect.objectContaining({ deadlineMs: expect.any(Number) })
 const TEST_REPO_ID = 'repo-1'
 const TEST_REPO_PATH = '/tmp/repo'
 const TEST_WORKTREE_PATH = '/tmp/worktree-a'
@@ -3296,11 +3299,12 @@ describe('OrcaRuntimeService', () => {
       leafId: HEADLESS_LEAF_ID,
       worktreeId: TEST_WORKTREE_ID
     })
+    // persistHostSessionBinding is no longer a per-call opt-in: createTerminal
+    // is host-initiated by construction and always persists its binding.
     expect(createTerminal).toHaveBeenCalledWith(`id:${TEST_WORKTREE_ID}`, {
       tabId,
       leafId: HEADLESS_LEAF_ID,
-      focus: false,
-      persistHostSessionBinding: true
+      focus: false
     })
   })
 
@@ -13725,8 +13729,7 @@ describe('OrcaRuntimeService', () => {
         command: 'codex',
         presentation: 'background',
         tabId,
-        leafId,
-        persistHostSessionBinding: true
+        leafId
       })
     ).rejects.toThrow('agent_session_exited_during_start')
     await expect(runtime.listTerminals(`id:${TEST_WORKTREE_ID}`)).resolves.toMatchObject({
@@ -14951,7 +14954,13 @@ describe('OrcaRuntimeService', () => {
     )
   })
 
-  it('keeps ordinary desktop background terminal persistence opt-in', async () => {
+  // Why (flipped by the aug20 "windows 2" incident): #8646 scoped the persisted
+  // binding to windowless promotion, which left a host-initiated terminal on a
+  // host running the full app with neither a persisted tab nor runtime
+  // ownership — unclassifiable, so graph sync pruned the tab off a live agent.
+  // The renderer adopts under the pre-minted tabId, so persisting early cannot
+  // fork a second tab; it only makes the host's own create durable.
+  it('persists the host session binding even when a window is attached', async () => {
     const spawn = vi.fn().mockResolvedValue({ id: 'pty-bg' })
     const runtime = new OrcaRuntimeService(store)
     const webContents = { send: vi.fn() }
@@ -14973,7 +14982,7 @@ describe('OrcaRuntimeService', () => {
     const spawnOptions = spawn.mock.calls[0]?.[0] as
       | { persistHostSessionBinding?: boolean }
       | undefined
-    expect(spawnOptions?.persistHostSessionBinding).toBeUndefined()
+    expect(spawnOptions?.persistHostSessionBinding).toBe(true)
   })
 
   it('falls back to background terminal creation for renderer-backed requests without a renderer window', async () => {
@@ -16205,11 +16214,18 @@ describe('OrcaRuntimeService', () => {
     vi.useFakeTimers()
     try {
       const runtime = new OrcaRuntimeService(store)
+      const serializeProviderBuffer = vi.fn().mockResolvedValue({
+        data: 'OpenAI Codex\r\nmodel: gpt-5.5\r\ndirectory: /repo\r\n',
+        cols: 80,
+        rows: 24,
+        seq: 1
+      })
       runtime.setPtyController({
         spawn: vi.fn().mockResolvedValue({ id: 'pty-bg' }),
         write: () => true,
         kill: () => true,
-        getForegroundProcess: async () => null
+        getForegroundProcess: async () => null,
+        serializeProviderBuffer
       })
       const { handle } = await runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`)
 
@@ -16245,6 +16261,7 @@ describe('OrcaRuntimeService', () => {
       await vi.advanceTimersByTimeAsync(2_000)
 
       await timeoutAssertion
+      expect(serializeProviderBuffer).not.toHaveBeenCalled()
     } finally {
       vi.useRealTimers()
     }
@@ -20306,7 +20323,7 @@ describe('OrcaRuntimeService', () => {
       paneKey: makePaneKey('tab-agent', HEADLESS_LEAF_ID)
     })
     expect(listProcesses).toHaveBeenCalledTimes(inventoryCount + 1)
-    expect(listProcesses).toHaveBeenLastCalledWith(null)
+    expect(listProcesses).toHaveBeenLastCalledWith(null, LIST_PROVIDER_DEADLINE)
     expect(
       (await runtime.listTerminals()).terminals.find((terminal) => terminal.ptyId === 'pty-agent')
     ).toMatchObject({
@@ -20316,7 +20333,7 @@ describe('OrcaRuntimeService', () => {
       leafId: HEADLESS_LEAF_ID
     })
     expect(listProcesses).toHaveBeenCalledTimes(inventoryCount + 2)
-    expect(listProcesses).toHaveBeenLastCalledWith(undefined)
+    expect(listProcesses).toHaveBeenLastCalledWith(undefined, LIST_PROVIDER_DEADLINE)
     await expect(
       runtime.adoptTerminalOrphans({
         worktree: `id:${TEST_WORKTREE_ID}`,
@@ -20513,7 +20530,8 @@ describe('OrcaRuntimeService', () => {
     const kill = vi.fn(() => true)
     const serializeProviderBuffer = vi.fn().mockResolvedValue({
       data: '',
-      scrollbackAnsi: 'OpenAI Codex\r\nACK\r\n',
+      scrollbackAnsi:
+        ' >_ OpenAI Codex (v0.131.0)\r\n model:       gpt-5.5 high\r\n directory:   /repo\r\n',
       cols: 80,
       rows: 24,
       seq: 100,
@@ -20595,11 +20613,36 @@ describe('OrcaRuntimeService', () => {
     expect(kill).not.toHaveBeenCalled()
     const [terminal] = (await runtime.listTerminals()).terminals
     await expect(runtime.readTerminal(terminal.handle)).resolves.toMatchObject({
-      tail: ['OpenAI Codex', 'ACK']
+      tail: [' >_ OpenAI Codex (v0.131.0)', ' model:       gpt-5.5 high', ' directory:   /repo']
     })
     expect(serializeProviderBuffer).toHaveBeenCalledWith('pty-legacy', {
       scrollbackRows: 120
     })
+    await expect(
+      runtime.waitForTerminal(terminal.handle, { condition: 'tui-idle', timeoutMs: 100 })
+    ).resolves.toMatchObject({ satisfied: true })
+    serializeProviderBuffer.mockResolvedValueOnce({
+      data: '',
+      scrollbackAnsi: 'Do you trust this workspace directory?\r\n1. Yes\r\n2. No\r\n',
+      cols: 80,
+      rows: 24,
+      seq: 101,
+      source: 'headless' as const,
+      alternateScreen: false
+    })
+    await expect(
+      runtime.waitForTerminal(terminal.handle, { condition: 'tui-idle', timeoutMs: 100 })
+    ).resolves.toMatchObject({
+      satisfied: false,
+      blockedReason: 'codex-trust-workspace'
+    })
+    serializeProviderBuffer.mockImplementationOnce(() => new Promise(() => {}))
+    await expect(
+      runtime.waitForTerminal(terminal.handle, { condition: 'tui-idle', timeoutMs: 50 })
+    ).rejects.toThrow('timeout')
+    expect(serializeProviderBuffer).toHaveBeenCalledTimes(4)
+    await expect(runtime.readTerminal(terminal.handle)).resolves.toMatchObject({ tail: [] })
+    expect(serializeProviderBuffer).toHaveBeenCalledTimes(4)
     expect(
       runtime.verifyOrchestrationCompatibilityCaller({
         terminalHandle: 'term_legacy',
@@ -21582,7 +21625,7 @@ describe('OrcaRuntimeService', () => {
     expect(getSession().sleepingAgentSessionsByPaneKey?.[workerPaneKey]).toBeUndefined()
     expect(getSession().sleepingAgentSessionsByPaneKey?.[secondWorkerPaneKey]).toBeUndefined()
     expect(listProcesses).toHaveBeenCalledTimes(3)
-    expect(listProcesses).toHaveBeenCalledWith(null)
+    expect(listProcesses).toHaveBeenCalledWith(null, LIST_PROVIDER_DEADLINE)
     expect(getSession().tabsByWorktree[TEST_WORKTREE_ID]).toEqual([
       expect.objectContaining({ id: 'legacy-worker-two', ptyId: 'pty-exited-two' })
     ])
@@ -21697,7 +21740,7 @@ describe('OrcaRuntimeService', () => {
       await vi.advanceTimersByTimeAsync(1_000)
 
       expect(listProcesses).toHaveBeenCalledTimes(4)
-      expect(listProcesses.mock.calls).toEqual([[null], [null], [null], [null]])
+      expect(listProcesses.mock.calls.map((call) => call[0])).toEqual([null, null, null, null])
       expect(hasPty).not.toHaveBeenCalled()
       expect(getSession().tabsByWorktree[TEST_WORKTREE_ID]).toEqual([
         expect.objectContaining({ id: 'legacy-worker', ptyId: 'pty-inventory-unavailable' })
@@ -21888,7 +21931,7 @@ describe('OrcaRuntimeService', () => {
       deferredDispatchIds: ['dispatch-missing', 'dispatch-ambiguous']
     })
     expect(listProcesses).toHaveBeenCalledOnce()
-    expect(listProcesses).toHaveBeenCalledWith(null)
+    expect(listProcesses).toHaveBeenCalledWith(null, LIST_PROVIDER_DEADLINE)
     for (const { name, leafId } of cases.slice(0, 2)) {
       expect(
         getSession().sleepingAgentSessionsByPaneKey?.[`legacy-${name}:${leafId}`]
@@ -21998,7 +22041,7 @@ describe('OrcaRuntimeService', () => {
     )
     expect(getSession().sleepingAgentSessionsByPaneKey?.[workerPaneKey]).toBeUndefined()
     expect(listProcesses).toHaveBeenCalledTimes(3)
-    expect(listProcesses).toHaveBeenCalledWith(null)
+    expect(listProcesses).toHaveBeenCalledWith(null, LIST_PROVIDER_DEADLINE)
     expect(revealTerminalSession).toHaveBeenCalledWith(TEST_FOLDER_WORKSPACE_KEY, {
       ptyId: 'pty-folder-legacy',
       title: 'Folder worker',
@@ -22140,7 +22183,7 @@ describe('OrcaRuntimeService', () => {
     expect(getWorkspaceSession).toHaveBeenCalledWith(`ssh:${connectionId}`)
     expect(setWorkspaceSession).toHaveBeenCalledWith(expect.any(Object), `ssh:${connectionId}`)
     expect(listProcesses).toHaveBeenCalledTimes(3)
-    expect(listProcesses).toHaveBeenCalledWith(connectionId)
+    expect(listProcesses).toHaveBeenCalledWith(connectionId, LIST_PROVIDER_DEADLINE)
     expect(sshSession.tabsByWorktree[TEST_FOLDER_WORKSPACE_KEY]).toContainEqual(
       expect.objectContaining({
         id: 'legacy-ssh-folder-worker',
@@ -22285,6 +22328,12 @@ describe('OrcaRuntimeService', () => {
         wslDistro: null
       }
     ])
+    const serializeProviderBuffer = vi.fn().mockResolvedValue(null)
+    const serializeBuffer = vi.fn().mockResolvedValue({
+      data: ' >_ OpenAI Codex (v0.131.0)\r\n model:       gpt-5.5 high\r\n directory:   /repo\r\n',
+      cols: 80,
+      rows: 24
+    })
     const runtime = new OrcaRuntimeService(
       {
         ...runtimeStore,
@@ -22318,7 +22367,10 @@ describe('OrcaRuntimeService', () => {
       kill: vi.fn(() => true),
       getForegroundProcess: async () => null,
       hasPty: (candidate) => candidate === ptyId,
-      listProcesses
+      listProcesses,
+      serializeBuffer,
+      serializeProviderBuffer,
+      hasRendererSerializer: () => true
     })
     const revealTerminalSession = vi.fn().mockImplementation(() =>
       publishLegacyWorkerReveal(runtime, {
@@ -22369,7 +22421,7 @@ describe('OrcaRuntimeService', () => {
         exitedDispatchIds: [],
         deferredDispatchIds: []
       })
-      expect(listProcesses).toHaveBeenLastCalledWith(connectionId)
+      expect(listProcesses).toHaveBeenLastCalledWith(connectionId, LIST_PROVIDER_DEADLINE)
     } finally {
       unregisterSshGitProvider(connectionId)
     }
@@ -22390,6 +22442,11 @@ describe('OrcaRuntimeService', () => {
         incarnationId
       }
     })
+    await expect(
+      runtime.waitForTerminal('term_ssh_legacy', { condition: 'tui-idle', timeoutMs: 100 })
+    ).resolves.toMatchObject({ satisfied: true })
+    expect(serializeProviderBuffer).toHaveBeenCalledOnce()
+    expect(serializeBuffer).toHaveBeenCalledOnce()
   })
 
   it('refuses a cross-distro WSL worker and adopts it after exact host ownership matches', async () => {
@@ -22455,7 +22512,9 @@ describe('OrcaRuntimeService', () => {
         }
       ]
     } as unknown as OrchestrationDb)
-    const listProcesses = vi.fn(async () => [
+    // Declares the scope parameter so mock.calls keeps it — the runtime passes a deadline
+    // alongside it, and a bare `async () =>` would type the call tuple as empty.
+    const listProcesses = vi.fn(async (_connectionId?: string | null) => [
       {
         id: 'pty-wsl-legacy',
         incarnationId,
@@ -22506,7 +22565,7 @@ describe('OrcaRuntimeService', () => {
     expect(getSession().sleepingAgentSessionsByPaneKey?.[workerPaneKey]).toBeUndefined()
     expect(revealTerminalSession).toHaveBeenCalledOnce()
     expect(listProcesses).toHaveBeenCalledTimes(5)
-    expect(listProcesses.mock.calls).toEqual([[null], [null], [null], [null], [null]])
+    expect(listProcesses.mock.calls.map((call) => call[0])).toEqual([null, null, null, null, null])
   })
 
   it('restores orphan pane and group topology without replacing a newer host-owned tab', async () => {
@@ -28730,7 +28789,6 @@ describe('OrcaRuntimeService', () => {
 
     const created = await runtime.createTerminal(`id:${TEST_WORKTREE_ID}`, {
       presentation: 'background',
-      persistHostSessionBinding: true,
       tabId,
       leafId,
       launchAgent: 'codex'
@@ -32532,6 +32590,69 @@ describe('OrcaRuntimeService', () => {
     // Not torn down by the runtime: the renderer-owned tab is left for the renderer's own close to prune.
     expect(getSession().tabsByWorktree[TEST_WORKTREE_ID]).toHaveLength(1)
     expect(getSession().terminalLayoutsByTabId['host-tab']).toBeDefined()
+  })
+
+  it('returns a delegated close outcome with no selection tombstone when the renderer owns the outcome', async () => {
+    const { runtimeStore, getSession } = makeRuntimeStoreWithWorkspaceSession(
+      makeWorkspaceSessionWithHeadlessTerminal()
+    )
+    const kill = vi.fn(() => true)
+    const closeTerminal = vi.fn()
+    const runtime = new OrcaRuntimeService(runtimeStore as never)
+    const forgetTabs = vi.spyOn(runtime['clientSessionTabSelections'], 'forgetTabs')
+    runtime.setPtyController({
+      write: () => true,
+      kill,
+      getForegroundProcess: async () => null,
+      listProcesses: async () => []
+    })
+    runtime.setNotifier({ closeTerminal } as never)
+    runtime.syncWindowGraph(1, {
+      tabs: [
+        {
+          tabId: 'host-tab',
+          worktreeId: TEST_WORKTREE_ID,
+          title: 'Pending Terminal',
+          activeLeafId: HEADLESS_LEAF_ID,
+          layout: null
+        }
+      ],
+      leaves: [],
+      mobileSessionTabs: [
+        {
+          worktree: TEST_WORKTREE_ID,
+          publicationEpoch: 'headless:pending',
+          snapshotVersion: 1,
+          activeGroupId: 'group-1',
+          activeTabId: `host-tab::${HEADLESS_LEAF_ID}`,
+          activeTabType: 'terminal',
+          tabs: [
+            {
+              type: 'terminal',
+              id: `host-tab::${HEADLESS_LEAF_ID}`,
+              parentTabId: 'host-tab',
+              leafId: HEADLESS_LEAF_ID,
+              title: 'Pending Terminal',
+              isActive: true
+            }
+          ]
+        }
+      ]
+    })
+
+    const result = await runtime.closeMobileSessionTab(
+      `id:${TEST_WORKTREE_ID}`,
+      `host-tab::${HEADLESS_LEAF_ID}`
+    )
+
+    // Why: a delegated close is handed to the renderer over a fire-and-forget
+    // notifier that may decline it, so tombstoning would hide a live tab from
+    // paired clients forever. Only a host-committed close may tombstone.
+    expect(result).toEqual({ closed: true })
+    expect(closeTerminal).toHaveBeenCalledWith('host-tab')
+    expect(forgetTabs).not.toHaveBeenCalled()
+    expect(kill).not.toHaveBeenCalled()
+    expect(getSession().tabsByWorktree[TEST_WORKTREE_ID]).toHaveLength(1)
   })
 
   it('tears down a runtime pending shell the renderer never adopted on close', async () => {

@@ -8,7 +8,7 @@ import {
 import { parsePairingCode, type PairingOffer } from '../../shared/pairing'
 import { launchOrcaApp } from './launch'
 import { getDefaultUserDataPath, readMetadata } from './metadata'
-import { getCliStatus, resolveDesktopWindowStatus } from './status'
+import { getCliStatus, projectRemoteAppStatus } from './status'
 import { sendRequest } from './transport'
 import { RuntimeClientError, RuntimeRpcFailureError, type RuntimeRpcSuccess } from './types'
 import { markEnvironmentUsed, resolveEnvironmentPairingOffer } from './environments'
@@ -159,18 +159,11 @@ export class RuntimeClient {
         id: response.id,
         ok: true,
         result: {
-          // Why: remote status proves the paired runtime is reachable, not
-          // that this client machine has a local Orca desktop process.
-          app: {
-            running: false,
-            pid: null,
-            // Why: reuse the shared resolver so remote status honors the same
-            // authoritativeWindowId fallback as local status for old runtimes.
-            ...(() => {
-              const desktopWindowStatus = resolveDesktopWindowStatus(response.result)
-              return desktopWindowStatus ? { desktopWindowStatus } : {}
-            })()
+          target: {
+            kind: 'environment',
+            environment: this.environmentSelector ?? 'pairing-code'
           },
+          app: projectRemoteAppStatus(response.result),
           runtime: {
             state: graphState === 'ready' ? 'ready' : 'graph_not_ready',
             reachable: true,

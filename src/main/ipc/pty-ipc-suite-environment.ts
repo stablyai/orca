@@ -32,8 +32,6 @@ import {
   setMigrationUnsupportedPtyMock,
   clearMigrationUnsupportedPtyMock,
   clearMigrationUnsupportedPtysForPaneKeyMock,
-  bindAgentSessionPaneMock,
-  clearAgentSessionPaneBindingsForPtyMock,
   clearPaneKeyAliasesForPtyMock,
   recordCodexPaneAccountMock,
   forgetCodexPaneAccountMock,
@@ -125,8 +123,6 @@ export function createPtyIpcSuiteEnvironment(): PtyIpcSuiteEnvironment {
     setMigrationUnsupportedPtyMock.mockReset()
     clearMigrationUnsupportedPtyMock.mockReset()
     clearMigrationUnsupportedPtysForPaneKeyMock.mockReset()
-    bindAgentSessionPaneMock.mockReset()
-    clearAgentSessionPaneBindingsForPtyMock.mockReset()
     clearPaneKeyAliasesForPtyMock.mockReset()
     recordCodexPaneAccountMock.mockReset()
     forgetCodexPaneAccountMock.mockReset()
@@ -164,7 +160,8 @@ export function createPtyIpcSuiteEnvironment(): PtyIpcSuiteEnvironment {
     // Why: wrapper roots resolve from ORCA_USER_DATA_PATH; mirror the mocked userData so ZDOTDIR/wrapper assertions match.
     process.env.ORCA_USER_DATA_PATH = '/tmp/orca-user-data'
     existsSyncMock.mockReturnValue(true)
-    statSyncMock.mockReturnValue({ isDirectory: () => true, mode: 0o755 })
+    // size: the shell wrapper writer verifies each generated file is non-empty.
+    statSyncMock.mockReturnValue({ isDirectory: () => true, mode: 0o755, size: 1 })
     readFileSyncMock.mockReturnValue('')
     openCodeBuildPtyEnvMock.mockImplementation((_ptyId: string, existingConfigDir?: string) => ({
       ORCA_OPENCODE_HOOK_PORT: '4567',

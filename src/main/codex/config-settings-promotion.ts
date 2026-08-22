@@ -1,14 +1,7 @@
-import {
-  existsSync,
-  lstatSync,
-  mkdirSync,
-  readlinkSync,
-  realpathSync,
-  statSync,
-  writeFileSync
-} from 'node:fs'
+import { mkdirSync, writeFileSync } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'
-import { readAgentStateFileSync } from '../agent-state-file-reader'
+import { observeAgentStateFile } from './codex-path-observation'
+import { resolvePromotionWriteTarget } from './config-settings-promotion-write-target'
 import { writeFileAtomically } from '../codex-accounts/fs-utils'
 import { parseWslUncPath } from '../../shared/wsl-paths'
 import { getOrcaManagedCodexHomePath, getSystemCodexHomePath } from './codex-home-paths'
@@ -112,10 +105,17 @@ function matchPromotedStructuredKey(
 // the [tui] body, and [profiles.*]/other tables are still ignored.
 function readPromotedSettingValues(configPath: string): Map<string, TopLevelSettingValue> {
   const result = new Map<string, TopLevelSettingValue>()
-  if (!existsSync(configPath)) {
+  // Why: an unreadable config held no settings only in the sense that we could
+  // not read them. Returning an empty map says the user cleared every promoted
+  // value, and the write below then acts on that.
+  const observation = observeAgentStateFile(configPath)
+  if (observation.kind === 'absent') {
     return result
   }
-  const lines = readAgentStateFileSync(configPath).split('\n')
+  if (observation.kind === 'indeterminate') {
+    throw observation.error
+  }
+  const lines = observation.value.split('\n')
   let state = createTomlLineScanState()
   let inPreamble = true
   let tuiTableSeen = false
@@ -224,8 +224,15 @@ function promoteCodexRuntimeSettingsToSystemUnsafe(
   if (resolve(runtimeTomlPath) === resolve(systemTomlPath)) {
     return emptyPromotionPlan()
   }
-  if (!existsSync(runtimeTomlPath)) {
+  const runtimeTomlObservation = observeAgentStateFile(runtimeTomlPath)
+  if (runtimeTomlObservation.kind === 'absent') {
     return emptyPromotionPlan()
+  }
+  if (runtimeTomlObservation.kind === 'indeterminate') {
+    // Why: the caller turns a throw into the existing "stall and retry" null. An
+    // empty plan here would instead let the mirror proceed against a runtime
+    // config nobody read.
+    throw runtimeTomlObservation.error
   }
   // Why: without a baseline, a stale runtime value looks like a fresh in-Codex change; skip until the mirror writes one.
   const baseline = readCodexSettingsBaseline(runtimeHomePath)
@@ -253,14 +260,27 @@ function promoteCodexRuntimeSettingsToSystemUnsafe(
   const writeTarget = resolvePromotionWriteTarget(systemTomlPath)
   // Why: a dangling symlink may target an unmade dir tree; create its real parent so the atomic temp write has a home.
   mkdirSync(dirname(writeTarget.path), { recursive: true, mode: 0o700 })
-  const targetExists = existsSync(writeTarget.path)
+  // Why: this is the user's real ~/.codex/config.toml, and `existsSync` reading
+  // `false` for a locked file sent it down the reconstruct branch below, which
+  // replaces the canonical config with settings derived from Orca's runtime
+  // copy. One read replaces the old existsSync + read pair and its TOCTOU gap.
+  // The indeterminate arm is a backstop rather than the live guard: an
+  // unreadable system config already refused in readPromotedSettingValues,
+  // because `writeTarget.path` always resolves to the same file as
+  // `systemTomlPath` (its realpath, its dangling-link target, or itself).
+  const writeTargetObservation = observeAgentStateFile(writeTarget.path)
+  if (writeTargetObservation.kind === 'indeterminate') {
+    throw writeTargetObservation.error
+  }
+  const targetExists = writeTargetObservation.kind === 'present'
   // Why: seeding a brand-new ~/.codex/config.toml from the promoted keys alone
   // would leave a skeleton the next mirror treats as authoritative, deleting
   // every other runtime setting (mcp_servers, features). With no system config
   // the runtime IS the user's config, so carry its ordinary settings across.
-  const systemContent = targetExists
-    ? readAgentStateFileSync(writeTarget.path)
-    : extractOrdinaryCodexSettings(readAgentStateFileSync(runtimeTomlPath))
+  const systemContent =
+    writeTargetObservation.kind === 'present'
+      ? writeTargetObservation.value
+      : extractOrdinaryCodexSettings(runtimeTomlObservation.value)
   const nextContent = upsertPromotedSettingsInContent(systemContent, updates)
   if (nextContent === systemContent) {
     return { conflicts, runtimeValuesToPreserve }
@@ -329,38 +349,3 @@ function emptyPromotionPlan(): CodexSettingsPromotionPlan {
 }
 
 // Why: follow an existing dotfile-manager symlink and carry its mode forward so an atomic write can't widen a 0600 config.
-function resolvePromotionWriteTarget(systemTomlPath: string): { path: string; mode: number } {
-  try {
-    const realPath = realpathSync(systemTomlPath)
-    return { path: realPath, mode: statSync(realPath).mode & 0o777 }
-  } catch {
-    // Continue below: realpath also fails for a valid dangling dotfile link.
-  }
-  try {
-    if (lstatSync(systemTomlPath).isSymbolicLink()) {
-      const targetPath = resolveDanglingSymlinkTarget(systemTomlPath)
-      return { path: targetPath, mode: 0o600 }
-    }
-  } catch {
-    // Missing non-link targets are created owner-only at the requested path.
-  }
-  return { path: systemTomlPath, mode: 0o600 }
-}
-
-function resolveDanglingSymlinkTarget(linkPath: string): string {
-  let currentPath = linkPath
-  const visited = new Set<string>()
-  while (!visited.has(currentPath)) {
-    visited.add(currentPath)
-    try {
-      if (!lstatSync(currentPath).isSymbolicLink()) {
-        return currentPath
-      }
-      currentPath = resolve(dirname(currentPath), readlinkSync(currentPath))
-    } catch {
-      return currentPath
-    }
-  }
-  // Why: replacing any link in a cycle would destroy dotfile-manager state; abort instead.
-  throw new Error(`Codex config symlink cycle at ${linkPath}`)
-}

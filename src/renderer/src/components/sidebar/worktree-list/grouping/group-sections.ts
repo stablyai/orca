@@ -8,10 +8,16 @@ import {
 } from '../../workspace-status'
 import { PROJECT_GROUP_META, PR_GROUP_META } from './group-keys'
 import type { PRGroupKey } from './group-keys'
-import { getHostWorktreeCounts, getHostWorktreeIds, getMixedHostContextLabels } from './host-labels'
+import type { NoticeHostContext } from './host-labels'
+import {
+  getLaneHostWorktreeCounts,
+  getLaneHostWorktreeIds,
+  getMixedHostContextLabels
+} from './host-labels'
 import type { OrderedGroupEntry, ProjectGroupingIndex } from './project-grouping'
 import {
   appendWorktreeRows,
+  buildFolderWorkspaceRow,
   buildImportedWorktreesCardRow,
   buildNewExternalWorktreesInboxRow,
   buildPendingCreationRow
@@ -39,6 +45,7 @@ export type SectionAppendContext = {
   newExternalWorktreesInboxByRepo: ReadonlyMap<string, NewExternalWorktreesInboxCandidate>
   pendingByRepo: ReadonlyMap<string, PendingCreationRef[]>
   mixedWorktreeHostContextLabels: Map<string, string> | undefined
+  noticeHostContextLabelByRepoId: Map<string, NoticeHostContext> | undefined
   lineageById: Record<string, WorktreeLineage>
   worktreeMap: Map<string, Worktree>
   nestLineage: boolean
@@ -71,6 +78,7 @@ export function appendOrderedGroups(
   for (const [key, group] of groupsToAppend) {
     const isCollapsed = collapsedGroups.has(key)
     const repo = group.repo
+    const folderPairs = group.folderWorkspaces ?? []
     const header =
       groupBy === 'repo'
         ? {
@@ -95,11 +103,21 @@ export function appendOrderedGroups(
                 type: 'header' as const,
                 key,
                 label: definition?.label ?? workspaceStatus,
-                count: group.items.length,
+                count: group.items.length + folderPairs.length,
                 tone: meta.tone,
                 icon: meta.icon,
-                hostWorktreeCounts: getHostWorktreeCounts(group.items, repoMap, defaultHostId),
-                hostWorktreeIds: getHostWorktreeIds(group.items, repoMap, defaultHostId),
+                hostWorktreeCounts: getLaneHostWorktreeCounts(
+                  group.items,
+                  folderPairs,
+                  repoMap,
+                  defaultHostId
+                ),
+                hostWorktreeIds: getLaneHostWorktreeIds(
+                  group.items,
+                  folderPairs,
+                  repoMap,
+                  defaultHostId
+                ),
                 worktreeIds: group.items.map((worktree) => worktree.id)
               }
             })()
@@ -110,11 +128,21 @@ export function appendOrderedGroups(
                 type: 'header' as const,
                 key,
                 label: meta.label,
-                count: group.items.length,
+                count: group.items.length + folderPairs.length,
                 tone: meta.tone,
                 icon: meta.icon,
-                hostWorktreeCounts: getHostWorktreeCounts(group.items, repoMap, defaultHostId),
-                hostWorktreeIds: getHostWorktreeIds(group.items, repoMap, defaultHostId),
+                hostWorktreeCounts: getLaneHostWorktreeCounts(
+                  group.items,
+                  folderPairs,
+                  repoMap,
+                  defaultHostId
+                ),
+                hostWorktreeIds: getLaneHostWorktreeIds(
+                  group.items,
+                  folderPairs,
+                  repoMap,
+                  defaultHostId
+                ),
                 worktreeIds: group.items.map((worktree) => worktree.id)
               }
             })()
@@ -133,13 +161,24 @@ export function appendOrderedGroups(
         for (const repoId of repoIds) {
           const candidate = importedWorktreesByRepo.get(repoId)
           if (candidate) {
-            result.push(buildImportedWorktreesCardRow(candidate, 'repo-group'))
+            result.push(
+              buildImportedWorktreesCardRow(
+                candidate,
+                'repo-group',
+                ctx.noticeHostContextLabelByRepoId?.get(repoId)
+              )
+            )
           }
         }
         for (const repoId of repoIds) {
           const candidate = newExternalWorktreesInboxByRepo.get(repoId)
           if (candidate) {
-            result.push(buildNewExternalWorktreesInboxRow(candidate))
+            result.push(
+              buildNewExternalWorktreesInboxRow(
+                candidate,
+                ctx.noticeHostContextLabelByRepoId?.get(repoId)
+              )
+            )
           }
         }
         // Why: surface in-progress creates at the top of their own repo so the
@@ -171,6 +210,9 @@ export function appendOrderedGroups(
         hostContextLabelByWorktreeIdentity,
         cyclicLineageIds
       })
+      for (const pair of folderPairs) {
+        result.push(buildFolderWorkspaceRow(pair, projectGroupDepth))
+      }
     }
   }
 }

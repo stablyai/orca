@@ -34,10 +34,13 @@ import {
   gitCredentialPromptGuardEnv
 } from '../../shared/git-credential-prompt-env'
 import { getSpawnArgsForWindows, isWindowsBatchScript, resolveWindowsCommand } from '../win32-utils'
+import { isWslDirectGitReadCommand } from './wsl-direct-git-read-commands'
 import {
+  buildWslCapturedLoginShellCommand,
+  buildWslExecArgs,
   buildWslLoginShellCommand,
-  escapeWslShCommandForWindows,
-  quotePosixShell
+  quotePosixShell,
+  type WslCapturedLoginShellCommand
 } from '../../shared/wsl-login-shell-command'
 import { UNTRANSLATED_GIT_OUTPUT_ENV } from '../../shared/git-output-locale'
 import { endSubprocessStdin } from '../../shared/subprocess-stdin-write'
@@ -74,6 +77,8 @@ type ResolvedCommand = {
   /** Non-null when the command was routed through WSL. */
   wsl: WslPathInfo | null
   wslMode: 'direct-git' | 'login-shell' | 'non-login-shell' | null
+  /** Present only when the caller opted into a fenced login-shell read. */
+  captured?: WslCapturedLoginShellCommand
 }
 
 /**
@@ -309,6 +314,7 @@ function resolveCommand(
   wslDistroOverride?: string,
   options: {
     useWslLoginShell?: boolean
+    captureLoginShellOutput?: boolean
     wslGitReadEnvironment?: WslGitReadEnvironment
     env?: NodeJS.ProcessEnv
   } = {}
@@ -362,16 +368,24 @@ function resolveCommand(
   }
 
   if (options.useWslLoginShell) {
+    // Why opt-in: the login shell is interactive for bash/zsh, so its rc output
+    // lands on stdout ahead of the payload. Callers that buffer the whole stream
+    // fence it; streaming consumers (git grep, ls-files -z) must not, because a
+    // marker would be glued onto their first record.
+    if (options.captureLoginShellOutput) {
+      const captured = buildWslCapturedLoginShellCommand(shellCmd)
+      return {
+        binary: 'wsl.exe',
+        args: buildWslExecArgs(wsl.distro, ['sh', '-lc', captured.command]),
+        cwd: undefined,
+        wsl,
+        wslMode: 'login-shell',
+        captured
+      }
+    }
     return {
       binary: 'wsl.exe',
-      args: [
-        '-d',
-        wsl.distro,
-        '--',
-        'sh',
-        '-lc',
-        escapeWslShCommandForWindows(buildWslLoginShellCommand(shellCmd))
-      ],
+      args: buildWslExecArgs(wsl.distro, ['sh', '-lc', buildWslLoginShellCommand(shellCmd)]),
       cwd: undefined,
       wsl,
       wslMode: 'login-shell'
@@ -380,7 +394,7 @@ function resolveCommand(
 
   return {
     binary: 'wsl.exe',
-    args: ['-d', wsl.distro, '--', 'bash', '-c', shellCmd],
+    args: buildWslExecArgs(wsl.distro, ['bash', '-c', shellCmd]),
     // Why: the `cd` inside bash -c handles the directory; a UNC cwd on the Node process is redundant and can break Node internals.
     cwd: undefined,
     wsl,
@@ -426,13 +440,14 @@ function wslDistroForCommand(cwd: string | undefined, override?: string): string
 function resolveGitCommand(
   args: string[],
   options: GitExecOptions,
-  forceLoginShell = false
+  forceLoginShell = false,
+  captureLoginShellOutput = false
 ): ResolvedCommand {
   if (usesHostGitForWslLinkedWorktree(options.cwd, options.wslDistro)) {
     // Why: WSL Git resolves a Windows-authored linked-worktree pointer relative to cwd.
     return { binary: 'git', args, cwd: options.cwd, wsl: null, wslMode: null }
   }
-  if (!forceLoginShell && shouldAttemptWslDirectGit(options)) {
+  if (!forceLoginShell && shouldAttemptWslDirectGit(args, options)) {
     const distro = wslDistroForCommand(options.cwd, options.wslDistro)
     const environment = distro ? peekWslGitReadEnvironment(distro) : undefined
     if (environment) {
@@ -445,13 +460,16 @@ function resolveGitCommand(
       void getWslGitReadEnvironment(distro)
     }
   }
-  return resolveGitCommandWithoutProbe(args, options)
+  return resolveGitCommandWithoutProbe(args, options, captureLoginShellOutput)
 }
 
-function shouldAttemptWslDirectGit(options: GitExecOptions): boolean {
+function shouldAttemptWslDirectGit(args: string[], options: GitExecOptions): boolean {
   return Boolean(
     process.platform === 'win32' &&
-    options.preferWslDirectGit &&
+    // Why either: callers can still opt in explicitly, but a plain read no
+    // longer has to -- it needs nothing the login shell provides, and routing
+    // it through one is what exposes callers to the shell's rc output.
+    (options.preferWslDirectGit || isWslDirectGitReadCommand(args)) &&
     !options.useConfiguredSshCommandForNetwork &&
     !Object.entries(options.env ?? {}).some(
       ([key, value]) =>
@@ -461,9 +479,14 @@ function shouldAttemptWslDirectGit(options: GitExecOptions): boolean {
   )
 }
 
-function resolveGitCommandWithoutProbe(args: string[], options: GitExecOptions): ResolvedCommand {
+function resolveGitCommandWithoutProbe(
+  args: string[],
+  options: GitExecOptions,
+  captureLoginShellOutput = false
+): ResolvedCommand {
   return resolveCommand('git', args, options.cwd, options.wslDistro, {
-    useWslLoginShell: Boolean(options.wslDistro)
+    useWslLoginShell: Boolean(options.wslDistro),
+    captureLoginShellOutput
   })
 }
 
@@ -666,6 +689,10 @@ function execFileCapture(
         args,
         {
           cwd: options.cwd,
+          // Why: git.exe is console-subsystem and Orca's main process owns no
+          // console, so every spawn without this flashes a conhost that takes
+          // foreground. Git runs on nearly every interaction (#14543).
+          windowsHide: true,
           encoding: options.encoding,
           maxBuffer: options.maxBuffer ?? DEFAULT_GIT_MAX_BUFFER,
           env: options.env
@@ -1005,7 +1032,9 @@ async function buildNetworkSshPolicyEnv(options: GitExecOptions): Promise<{
     return { env: promptEnv, mode: 'explicit-env' }
   }
 
-  const resolved = resolveGitCommand(['config', '--get', 'core.sshCommand'], options, true)
+  // Why fenced: a login-shell banner here reads as a user-configured sshCommand,
+  // which skips the BatchMode fallback below and disarms the no-prompt guard.
+  const resolved = resolveGitCommand(['config', '--get', 'core.sshCommand'], options, true, true)
   let configuredCommand = ''
   try {
     const { stdout } = await execFileCapture(resolved.binary, resolved.args, {
@@ -1016,7 +1045,8 @@ async function buildNetworkSshPolicyEnv(options: GitExecOptions): Promise<{
       env: promptEnv,
       signal: options.signal
     })
-    configuredCommand = String(stdout).trim()
+    const payload = resolved.captured?.readStdout(String(stdout)) ?? String(stdout)
+    configuredCommand = payload.trim()
   } catch {
     configuredCommand = ''
   }
@@ -1162,19 +1192,43 @@ export async function gitExecFileAsyncBuffer(
   if (isWslLinkedWorktreeGitRoutingCandidate(options.cwd, options.wslDistro)) {
     await prepareWslLinkedWorktreeGitRouting(options.cwd, options.wslDistro)
   }
-  let resolved = resolveGitCommand(args, options, true)
+  // `git show` is a read, so this normally runs with no shell at all. The fence
+  // still matters for the login-shell fallback: these are raw blob bytes going
+  // straight to the diff/blob viewer, where a banner becomes file content.
+  let resolved = resolveGitCommand(args, options, false, true)
   const environmentReady = prepareWindowsHostGitEnvironment(resolved, undefined)
   if (environmentReady) {
     await environmentReady
   }
-  resolved = resolveGitCommand(args, options, true)
+  resolved = resolveGitCommand(args, options, false, true)
   const { stdout } = (await execFileCapture(resolved.binary, resolved.args, {
     cwd: resolved.cwd,
     encoding: 'buffer',
     maxBuffer: options.maxBuffer,
     env: untranslatedGitOutputEnv()
   })) as { stdout: Buffer }
-  return { stdout }
+  return { stdout: readCapturedGitBuffer(stdout, resolved) }
+}
+
+/**
+ * Slice a fenced payload out of raw bytes.
+ *
+ * Why bytes: blob content may be binary, so decoding to a string to find the
+ * fence would corrupt it. Returns the buffer untouched when the command was not
+ * fenced or the fence is absent.
+ */
+function readCapturedGitBuffer(stdout: Buffer, resolved: ResolvedCommand): Buffer {
+  const captured = resolved.captured
+  if (!captured) {
+    return stdout
+  }
+  const beginIndex = stdout.indexOf(captured.beginMarker, 0, 'utf8')
+  if (beginIndex === -1) {
+    return stdout
+  }
+  const payloadStart = beginIndex + Buffer.byteLength(captured.beginMarker, 'utf8')
+  const endIndex = stdout.indexOf(captured.endMarker, payloadStart, 'utf8')
+  return endIndex === -1 ? stdout.subarray(payloadStart) : stdout.subarray(payloadStart, endIndex)
 }
 
 /** Result of a streamed git command; `stoppedEarly` is true when onStdout asked to stop before the child exited. */
@@ -1401,7 +1455,8 @@ export function gitExecFileSync(
       encoding: options.encoding ?? 'utf-8',
       env: untranslatedGitOutputEnv(),
       stdio: options.stdio ?? ['pipe', 'pipe', 'pipe'],
-      timeout: options.timeout ?? GIT_EXEC_SYNC_TIMEOUT_MS
+      timeout: options.timeout ?? GIT_EXEC_SYNC_TIMEOUT_MS,
+      windowsHide: true
     }) as string
   } finally {
     // Sync exec blocks the main thread for its whole duration — the cost issue #7576 flags.
@@ -1446,6 +1501,7 @@ export function gitSpawn(args: string[], options: GitSpawnOptions): ChildProcess
   const child = spawn(resolved.binary, resolved.args, {
     ...spawnOptions,
     env: untranslatedGitOutputEnv(spawnOptions.env ?? process.env),
+    windowsHide: true,
     cwd: resolved.cwd
   })
   recordSubprocessSpawn(resolved.binary, resolved.args, performance.now() - spawnStartedAt)
@@ -1934,6 +1990,7 @@ export function wslAwareSpawn(
   const spawnStartedAt = performance.now()
   const child = spawn(resolved.binary, resolved.args, {
     ...spawnOptions,
+    windowsHide: true,
     cwd: resolved.cwd
   })
   recordSubprocessSpawn(resolved.binary, resolved.args, performance.now() - spawnStartedAt)
