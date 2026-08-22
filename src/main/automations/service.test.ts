@@ -118,7 +118,11 @@ describe('AutomationService', () => {
     })
     // 'Broken cadence' sorts first, so without per-automation isolation its throw would
     // abort the tick before the healthy automation is ever evaluated.
-    vi.spyOn(store, 'listAutomations').mockReturnValue([broken, healthy])
+    const realListAutomations = store.listAutomations.bind(store)
+    vi.spyOn(store, 'listAutomations').mockImplementation(() => [
+      broken,
+      ...realListAutomations().filter((entry) => entry.id !== broken.id)
+    ])
 
     vi.setSystemTime(new Date('2026-05-13T09:01:00'))
     const send = vi.fn()
@@ -140,6 +144,11 @@ describe('AutomationService', () => {
     expect(brokenRuns).toHaveLength(1)
     expect(brokenRuns[0]?.status).toBe('dispatch_failed')
     expect(brokenRuns[0]?.error).toContain('Schedule could not be evaluated')
+
+    // The failure defers by a fixed backoff rather than re-parsing the broken rrule, so the
+    // row does not fire (and fail) again on every tick.
+    const persisted = realListAutomations().find((entry) => entry.id === broken.id)
+    expect(persisted?.nextRunAt).toBe(new Date('2026-05-13T10:01:00').getTime())
   })
 
   it('returns the persisted status for manual runs after dispatch is requested', async () => {

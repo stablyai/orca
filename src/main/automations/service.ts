@@ -211,7 +211,9 @@ export class AutomationService {
           error instanceof Error ? error.message : String(error)
         }`
       })
-      this.store.advanceAutomationNextRun(automation.id, now)
+      // Why defer over advance: advancing re-parses the rrule that just failed, which would
+      // throw inside this handler and retry the broken row every tick.
+      this.store.deferAutomationNextRunAfterScheduleError(automation.id, now)
       return
     }
     if (scheduledFor === null) {
