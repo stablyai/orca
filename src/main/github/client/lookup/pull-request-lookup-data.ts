@@ -23,6 +23,8 @@ export type PullRequestLookupData = {
   state: string
   url: string
   statusCheckRollup: unknown[]
+  /** Internal provenance: only exact `gh pr view` rollups are complete enough for presentation. */
+  statusCheckRollupComplete?: boolean
   updatedAt: string
   isDraft?: boolean
   mergeable: string
@@ -113,6 +115,7 @@ export function mapRestPullRequest(pr: RestPullRequest): PullRequestLookupData {
     state: pr.merged_at ? 'MERGED' : pr.state,
     url: pr.html_url ?? pr.url ?? '',
     statusCheckRollup: [],
+    statusCheckRollupComplete: false,
     updatedAt: pr.updated_at ?? '',
     isDraft: pr.draft,
     mergeable: mapRestPRMergeable(pr),

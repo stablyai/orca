@@ -40,7 +40,7 @@ export function assemblePRRefreshFoundOutcome(args: {
       state: mapPRState(data.state, data.isDraft),
       url: data.url,
       checksStatus: checkStatuses.status,
-      ...(checkStatuses.presentationStatus
+      ...(data.statusCheckRollupComplete === true && checkStatuses.presentationStatus
         ? { checksPresentationStatus: checkStatuses.presentationStatus }
         : {}),
       updatedAt: data.updatedAt,

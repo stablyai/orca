@@ -73,6 +73,7 @@ export async function getPRByNumber(
       {
         ...knownPullRequestData,
         ...exactData,
+        statusCheckRollupComplete: true,
         ...(knownPullRequestData?.stack ? { stack: knownPullRequestData.stack } : {})
       },
       ghOptions,
@@ -139,7 +140,10 @@ export async function lookupPRByNumber(args: {
       args.ghOptions
     )
     return {
-      data: normalizePullRequestLookupData(JSON.parse(stdout) as PullRequestLookupData),
+      data: normalizePullRequestLookupData({
+        ...(JSON.parse(stdout) as PullRequestLookupData),
+        statusCheckRollupComplete: true
+      }),
       dataRepo: null
     }
   } catch (err) {
