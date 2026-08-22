@@ -81,6 +81,12 @@ export function sendTerminalWindowTransferCommand(
   if (sender.isDestroyed()) {
     return Promise.reject(new Error('terminal_transfer_renderer_destroyed'))
   }
+  const replaced = transfer.waiters.get(command.phase)
+  if (replaced) {
+    transfer.waiters.delete(command.phase)
+    clearTimeout(replaced.timer)
+    replaced.reject(new Error('terminal_transfer_command_replaced'))
+  }
   let waiter!: TerminalWindowTransferCommandWaiter
   const response = new Promise<TerminalWindowTransferAck>((resolve, reject) => {
     waiter = {

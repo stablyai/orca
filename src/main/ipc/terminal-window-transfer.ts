@@ -1,4 +1,3 @@
-import { randomUUID } from 'node:crypto'
 import { ipcMain, screen, type BrowserWindow, type IpcMainEvent, type WebContents } from 'electron'
 import { getDefaultWorkspaceSession } from '../../shared/constants'
 import type {
@@ -20,21 +19,27 @@ import {
   waitUntilTerminalWindowCommandReady
 } from './terminal-window-transfer-command'
 import {
+  createTerminalWindowTransfer,
   finishCommittedTerminalWindowTransfer,
-  getTerminalWindowTransferSourceError,
   getTerminalWindowBounds,
   installTerminalWindowTransferAbortListeners,
   prepareTerminalWindowTargetRecord,
   removeTerminalWindowTransferAbortListeners,
-  rollbackTerminalWindowTransfer,
-  sessionHasTerminalTab,
-  sessionMatchesTerminalWindowTarget,
   isPointInsideRectangle,
   type TerminalWindowCommandReadyWaiter,
   type TerminalWindowTransfer,
   type TerminalWindowTransferOperations
 } from './terminal-window-transfer-operation'
-import { isTerminalWindowTransferSeed } from './terminal-window-transfer-seed-validation'
+import {
+  commitTerminalWindowTransferAfterSourceLoss,
+  rollbackTerminalWindowTransfer
+} from './terminal-window-transfer-recovery'
+import {
+  getTerminalWindowTransferSourceError,
+  isTerminalWindowTransferSeed,
+  sessionMatchesTerminalWindowTarget
+} from './terminal-window-transfer-seed-validation'
+import { sessionHasTerminalTransferBacking } from './terminal-window-transfer-session-patch'
 
 export const TERMINAL_WINDOW_TRANSFER_ACK_TIMEOUT_MS = 10_000
 
@@ -133,34 +138,7 @@ export class TerminalWindowTransferCoordinator {
       return { ok: false, error: sourceError }
     }
 
-    let abort!: (error: Error) => void
-    let finish!: () => void
-    const transfer: TerminalWindowTransfer = {
-      transferId: randomUUID(),
-      seed,
-      source,
-      sourceRenderer: sender,
-      target: null,
-      targetRenderer: null,
-      sourceBefore,
-      targetBefore: null,
-      createdTarget: false,
-      prepared: false,
-      handedOff: false,
-      targetImportAttempted: false,
-      sourceRemoveAttempted: false,
-      committed: false,
-      waiters: new Map(),
-      abort: (error) => abort(error),
-      aborted: new Promise<never>((_resolve, reject) => {
-        abort = reject
-      }),
-      finish: () => finish(),
-      finished: new Promise<void>((resolve) => {
-        finish = resolve
-      })
-    }
-    void transfer.aborted.catch(() => {})
+    const transfer = createTerminalWindowTransfer(seed, source, sender, sourceBefore)
     this.#transfers.set(seed.tabId, transfer)
 
     try {
@@ -174,7 +152,7 @@ export class TerminalWindowTransferCoordinator {
         const state = this.#sessions.get(target.id, seed.hostId)
         if (
           !sessionMatchesTerminalWindowTarget(state, seed) ||
-          sessionHasTerminalTab(state, seed.tabId)
+          sessionHasTerminalTransferBacking(state, seed.tabId)
         ) {
           throw new Error('terminal_transfer_target_mismatch')
         }
@@ -183,9 +161,21 @@ export class TerminalWindowTransferCoordinator {
         target = this.#createSecondaryWindow(
           getTerminalWindowBounds(point, this.#getWorkArea(point))
         )
+        transfer.target = target
         transfer.createdTarget = true
+        transfer.targetRenderer = target.webContents
         transfer.targetBefore = getDefaultWorkspaceSession()
-        transfer.disposeTargetRenderer = this.#registerRenderer(target.webContents)
+        transfer.disposeTargetRenderer = () => {
+          this.#owners.removeRenderer(transfer.targetRenderer!)
+        }
+        const dispose = this.#registerRenderer(transfer.targetRenderer)
+        transfer.disposeTargetRenderer = () => {
+          try {
+            dispose()
+          } finally {
+            this.#owners.removeRenderer(transfer.targetRenderer!)
+          }
+        }
         this.#sessions.seedWindow(
           target.id,
           new Map([
@@ -195,14 +185,22 @@ export class TerminalWindowTransferCoordinator {
         )
       }
       transfer.target = target
-      transfer.targetRenderer = target.webContents
+      transfer.targetRenderer ??= target.webContents
       installTerminalWindowTransferAbortListeners(this.#operations, transfer)
+      const targetCurrent = this.#sessions.get(target.id, seed.hostId)
+      if (
+        (!transfer.createdTarget && !sessionMatchesTerminalWindowTarget(targetCurrent, seed)) ||
+        sessionHasTerminalTransferBacking(targetCurrent, seed.tabId)
+      ) {
+        throw new Error('terminal_transfer_target_mismatch')
+      }
+      transfer.targetBefore = targetCurrent
+      transfer.prepared = true
       this.#sessions.set(
         target.id,
-        prepareTerminalWindowTargetRecord(transfer.targetBefore, seed),
+        prepareTerminalWindowTargetRecord(targetCurrent, seed),
         seed.hostId
       )
-      transfer.prepared = true
       if (transfer.createdTarget) {
         this.#loadWindow(target)
       }
@@ -228,6 +226,7 @@ export class TerminalWindowTransferCoordinator {
         phase: 'target-import',
         seed
       })
+      transfer.targetImported = true
       for (const id of seed.ptyIds) {
         sendToPtyOwner(id, 'pty:modelRestoreNeeded', { id, reason: 'delivery-heal' })
       }
@@ -252,6 +251,15 @@ export class TerminalWindowTransferCoordinator {
       )
       return { ok: true, targetWindowId: target.id }
     } catch (error) {
+      if (await commitTerminalWindowTransferAfterSourceLoss(this.#operations, transfer)) {
+        finishCommittedTerminalWindowTransfer(
+          transfer,
+          false,
+          () => false,
+          () => undefined
+        )
+        return { ok: true, targetWindowId: transfer.target!.id }
+      }
       await rollbackTerminalWindowTransfer(this.#operations, transfer)
       return { ok: false, error: error instanceof Error ? error.message : String(error) }
     } finally {

@@ -1,8 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import {
-  getTerminalWindowBounds,
-  sessionMatchesTerminalWindowTarget
-} from './terminal-window-transfer-operation'
+import { getTerminalWindowBounds } from './terminal-window-transfer-operation'
+import { sessionMatchesTerminalWindowTarget } from './terminal-window-transfer-seed-validation'
 import {
   createTerminalWindowTransferHarness as createHarness,
   FakeWindow,

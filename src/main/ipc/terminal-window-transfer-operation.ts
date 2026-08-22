@@ -1,6 +1,5 @@
+import { randomUUID } from 'node:crypto'
 import type { BrowserWindow, WebContents } from 'electron'
-import { LOCAL_EXECUTION_HOST_ID, normalizeExecutionHostId } from '../../shared/execution-host'
-import { isWorkspaceKey, worktreeWorkspaceKey } from '../../shared/workspace-scope'
 import type {
   TerminalWindowTransferAck,
   TerminalWindowTransferPhase,
@@ -8,13 +7,7 @@ import type {
 } from '../../shared/terminal-window-transfer'
 import type { WorkspaceSessionState } from '../../shared/workspace-session-state-types'
 import type { WindowSessionRegistry } from '../persistence/window-session-registry'
-import { sendToPtyOwner } from './pty'
 import type { PtyRendererOwners } from './pty-renderer-owners'
-import { sendTerminalWindowTransferCommand } from './terminal-window-transfer-command'
-import {
-  removeTransferredTerminalSession,
-  restoreTransferredTerminalSession
-} from './terminal-window-transfer-session-patch'
 
 export type TerminalWindowTransferCommandWaiter = {
   sender: WebContents
@@ -42,14 +35,18 @@ export type TerminalWindowTransfer = {
   prepared: boolean
   handedOff: boolean
   targetImportAttempted: boolean
+  targetImported: boolean
   sourceRemoveAttempted: boolean
+  sourceLost: boolean
+  targetLost: boolean
   committed: boolean
   waiters: Map<TerminalWindowTransferPhase, TerminalWindowTransferCommandWaiter>
   abort: (error: Error) => void
   aborted: Promise<never>
   finish: () => void
   finished: Promise<void>
-  fail?: () => void
+  sourceLossListener?: () => void
+  targetLossListener?: () => void
   disposeTargetRenderer?: () => void
 }
 
@@ -60,49 +57,44 @@ export type TerminalWindowTransferOperations = {
   timeoutMs: number
 }
 
-export function sessionHasTerminalTab(state: WorkspaceSessionState, tabId: string): boolean {
-  return Object.values(state.tabsByWorktree).some((tabs) => tabs.some((tab) => tab.id === tabId))
-}
-
-export function sessionHasTerminalTransferSource(
-  state: WorkspaceSessionState,
-  seed: TerminalWindowTransferSeed
-): boolean {
-  return (
-    state.tabsByWorktree[seed.worktreeId]?.some(
-      (tab) => tab.id === seed.tabId && tab.worktreeId === seed.worktreeId
-    ) === true && Boolean(state.terminalLayoutsByTabId[seed.tabId])
-  )
-}
-
-export function sessionMatchesTerminalWindowTarget(
-  state: WorkspaceSessionState,
-  seed: TerminalWindowTransferSeed
-): boolean {
-  const workspaceKey = state.activeWorkspaceKey
-    ? state.activeWorkspaceKey
-    : state.activeWorktreeId
-      ? isWorkspaceKey(state.activeWorktreeId)
-        ? state.activeWorktreeId
-        : worktreeWorkspaceKey(state.activeWorktreeId)
-      : null
-  const hostId =
-    normalizeExecutionHostId(state.activeWorkspaceExecutionHostId) ?? LOCAL_EXECUTION_HOST_ID
-  return workspaceKey === seed.canonicalWorkspaceKey && hostId === seed.hostId
-}
-
-export function getTerminalWindowTransferSourceError(
-  state: WorkspaceSessionState,
+export function createTerminalWindowTransfer(
   seed: TerminalWindowTransferSeed,
-  owns: (ptyId: string) => boolean
-): string | null {
-  if (!sessionHasTerminalTransferSource(state, seed)) {
-    return 'terminal_transfer_source_missing'
+  source: BrowserWindow,
+  sourceRenderer: WebContents,
+  sourceBefore: WorkspaceSessionState
+): TerminalWindowTransfer {
+  let abort!: (error: Error) => void
+  let finish!: () => void
+  const transfer: TerminalWindowTransfer = {
+    transferId: randomUUID(),
+    seed,
+    source,
+    sourceRenderer,
+    target: null,
+    targetRenderer: null,
+    sourceBefore,
+    targetBefore: null,
+    createdTarget: false,
+    prepared: false,
+    handedOff: false,
+    targetImportAttempted: false,
+    targetImported: false,
+    sourceRemoveAttempted: false,
+    sourceLost: false,
+    targetLost: false,
+    committed: false,
+    waiters: new Map(),
+    abort: (error) => abort(error),
+    aborted: new Promise<never>((_resolve, reject) => {
+      abort = reject
+    }),
+    finish: () => finish(),
+    finished: new Promise<void>((resolve) => {
+      finish = resolve
+    })
   }
-  if (!sessionMatchesTerminalWindowTarget(state, seed)) {
-    return 'terminal_transfer_source_mismatch'
-  }
-  return seed.ptyIds.some((id) => !owns(id)) ? 'terminal_transfer_source_not_owner' : null
+  void transfer.aborted.catch(() => {})
+  return transfer
 }
 
 export function prepareTerminalWindowTargetRecord(
@@ -144,112 +136,29 @@ export function isPointInsideRectangle(
   )
 }
 
-export async function rollbackTerminalWindowTransfer(
-  operations: TerminalWindowTransferOperations,
-  transfer: TerminalWindowTransfer
-): Promise<void> {
-  if (!transfer.prepared || transfer.committed) {
-    return
-  }
-  const { source, sourceRenderer, target, targetRenderer, seed } = transfer
-  if (transfer.handedOff && targetRenderer) {
-    try {
-      operations.handoff(seed.ptyIds, targetRenderer, sourceRenderer)
-      transfer.handedOff = false
-    } catch {
-      try {
-        await operations.owners.waitUntilDispatcherReady(sourceRenderer, operations.timeoutMs)
-        operations.handoff(seed.ptyIds, targetRenderer, sourceRenderer)
-        transfer.handedOff = false
-      } catch {
-        // Keep the PTY with its last live owner; record snapshots still prevent durable loss.
-      }
-    }
-  }
-  const commands: Promise<unknown>[] = []
-  if (transfer.targetImportAttempted && targetRenderer && !targetRenderer.isDestroyed()) {
-    commands.push(
-      sendTerminalWindowTransferCommand(
-        operations,
-        transfer,
-        targetRenderer,
-        { transferId: transfer.transferId, tabId: seed.tabId, phase: 'target-remove' },
-        true
-      ).catch(() => undefined)
-    )
-  }
-  if (transfer.sourceRemoveAttempted && !sourceRenderer.isDestroyed()) {
-    commands.push(
-      sendTerminalWindowTransferCommand(
-        operations,
-        transfer,
-        sourceRenderer,
-        { transferId: transfer.transferId, tabId: seed.tabId, phase: 'source-restore', seed },
-        true
-      ).catch(() => undefined)
-    )
-  }
-  await Promise.all(commands)
-  if (seed.ptyIds.every((id) => operations.owners.owns(id, sourceRenderer))) {
-    for (const id of seed.ptyIds) {
-      try {
-        sendToPtyOwner(id, 'pty:modelRestoreNeeded', { id, reason: 'delivery-heal' })
-      } catch {
-        // Delivery healing is best-effort after ownership is restored.
-      }
-    }
-  }
-  try {
-    operations.sessions.set(
-      source.id,
-      restoreTransferredTerminalSession(
-        operations.sessions.get(source.id, seed.hostId),
-        transfer.sourceBefore,
-        seed
-      ),
-      seed.hostId
-    )
-  } catch {
-    // Renderer compensation already ran when available; session fallback is best-effort.
-  }
-  if (target && transfer.targetBefore) {
-    try {
-      operations.sessions.set(
-        target.id,
-        removeTransferredTerminalSession(
-          operations.sessions.get(target.id, seed.hostId),
-          transfer.targetBefore,
-          seed
-        ),
-        seed.hostId
-      )
-    } catch {
-      // Preserve the original transfer error.
-    }
-  }
-  if (transfer.createdTarget && target && !target.isDestroyed()) {
-    try {
-      transfer.disposeTargetRenderer?.()
-    } catch {
-      // Target destruction remains the final cleanup attempt.
-    }
-    try {
-      target.destroy()
-    } catch {
-      // Preserve the original transfer error.
-    }
-  }
-}
-
 export function installTerminalWindowTransferAbortListeners(
   operations: TerminalWindowTransferOperations,
   transfer: TerminalWindowTransfer
 ): void {
-  const fail = (): void => {
+  const sourceLost = (): void => {
     if (transfer.committed) {
       return
     }
-    if (transfer.handedOff && transfer.targetRenderer) {
+    transfer.sourceLost = true
+    transfer.abort(new Error('terminal_transfer_source_lost'))
+  }
+  const targetLost = (): void => {
+    if (transfer.committed) {
+      return
+    }
+    transfer.targetLost = true
+    if (
+      transfer.handedOff &&
+      transfer.targetRenderer &&
+      !transfer.sourceRenderer.isDestroyed() &&
+      operations.owners.isRegistered(transfer.sourceRenderer) &&
+      operations.owners.isDispatcherReady(transfer.sourceRenderer)
+    ) {
       try {
         operations.handoff(transfer.seed.ptyIds, transfer.targetRenderer, transfer.sourceRenderer)
         transfer.handedOff = false
@@ -257,28 +166,29 @@ export function installTerminalWindowTransferAbortListeners(
         // Async rollback waits for a recovering source renderer if needed.
       }
     }
-    transfer.abort(new Error('terminal_transfer_window_lost'))
+    transfer.abort(new Error('terminal_transfer_target_lost'))
   }
-  transfer.fail = fail
-  transfer.source.once('close', fail)
-  transfer.sourceRenderer.once('render-process-gone', fail)
-  transfer.target?.once('close', fail)
-  transfer.targetRenderer?.once('render-process-gone', fail)
+  transfer.sourceLossListener = sourceLost
+  transfer.targetLossListener = targetLost
+  transfer.source.once('close', sourceLost)
+  transfer.sourceRenderer.once('render-process-gone', sourceLost)
+  transfer.target?.once('close', targetLost)
+  transfer.targetRenderer?.once('render-process-gone', targetLost)
 }
 
 export function removeTerminalWindowTransferAbortListeners(transfer: TerminalWindowTransfer): void {
-  const fail = transfer.fail
-  if (!fail) {
+  const { sourceLossListener, targetLossListener } = transfer
+  if (!sourceLossListener || !targetLossListener) {
     return
   }
   if (!transfer.source.isDestroyed()) {
-    transfer.source.removeListener('close', fail)
+    transfer.source.removeListener('close', sourceLossListener)
   }
-  transfer.sourceRenderer.removeListener('render-process-gone', fail)
+  transfer.sourceRenderer.removeListener('render-process-gone', sourceLossListener)
   if (transfer.target && !transfer.target.isDestroyed()) {
-    transfer.target.removeListener('close', fail)
+    transfer.target.removeListener('close', targetLossListener)
   }
-  transfer.targetRenderer?.removeListener('render-process-gone', fail)
+  transfer.targetRenderer?.removeListener('render-process-gone', targetLossListener)
 }
 
 export function finishCommittedTerminalWindowTransfer(

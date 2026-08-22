@@ -1,7 +1,13 @@
-import { normalizeExecutionHostId } from '../../shared/execution-host'
-import type { TerminalPaneLayoutNode } from '../../shared/terminal-tab-types'
+import { isDeepStrictEqual } from 'node:util'
+import { LOCAL_EXECUTION_HOST_ID, normalizeExecutionHostId } from '../../shared/execution-host'
+import type {
+  TerminalLayoutSnapshot,
+  TerminalPaneLayoutNode,
+  TerminalTab
+} from '../../shared/terminal-tab-types'
 import type { TerminalWindowTransferSeed } from '../../shared/terminal-window-transfer'
-import { isWorkspaceKey } from '../../shared/workspace-scope'
+import type { WorkspaceSessionState } from '../../shared/workspace-session-state-types'
+import { isWorkspaceKey, worktreeWorkspaceKey } from '../../shared/workspace-scope'
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   Boolean(value) && typeof value === 'object' && !Array.isArray(value)
@@ -101,4 +107,57 @@ export function isTerminalWindowTransferSeed(value: unknown): value is TerminalW
     typeof repo?.id === 'string' &&
     repo.id.length > 0
   )
+}
+
+export function sessionMatchesTerminalWindowTarget(
+  state: WorkspaceSessionState,
+  seed: TerminalWindowTransferSeed
+): boolean {
+  const workspaceKey = state.activeWorkspaceKey
+    ? state.activeWorkspaceKey
+    : state.activeWorktreeId
+      ? isWorkspaceKey(state.activeWorktreeId)
+        ? state.activeWorktreeId
+        : worktreeWorkspaceKey(state.activeWorktreeId)
+      : null
+  const hostId =
+    normalizeExecutionHostId(state.activeWorkspaceExecutionHostId) ?? LOCAL_EXECUTION_HOST_ID
+  return workspaceKey === seed.canonicalWorkspaceKey && hostId === seed.hostId
+}
+
+function getTerminalPtyIds(tab: TerminalTab, layout: TerminalLayoutSnapshot): string[] | null {
+  const values = [tab.ptyId, ...Object.values(layout.ptyIdsByLeafId ?? {})].filter(
+    (id): id is string => id !== null
+  )
+  return values.length > 0 && values.every((id) => id.length > 0) ? [...new Set(values)] : null
+}
+
+export function getTerminalWindowTransferSourceError(
+  state: WorkspaceSessionState,
+  seed: TerminalWindowTransferSeed,
+  owns: (ptyId: string) => boolean
+): string | null {
+  const tab = state.tabsByWorktree[seed.worktreeId]?.find(({ id }) => id === seed.tabId)
+  const layout = state.terminalLayoutsByTabId[seed.tabId]
+  if (!tab || !layout) {
+    return 'terminal_transfer_source_missing'
+  }
+  if (!sessionMatchesTerminalWindowTarget(state, seed)) {
+    return 'terminal_transfer_source_mismatch'
+  }
+  const ptyIds = getTerminalPtyIds(tab, layout)
+  const samePtys =
+    ptyIds?.length === seed.ptyIds.length && ptyIds.every((id) => seed.ptyIds.includes(id))
+  const groups = state.tabGroups?.[seed.worktreeId]
+  const group = groups?.find(({ tabOrder }) => tabOrder.includes(seed.tabId))
+  if (
+    !ptyIds ||
+    !samePtys ||
+    !isDeepStrictEqual(seed.tab, tab) ||
+    !isDeepStrictEqual(seed.layout, layout) ||
+    (groups && groups.length > 0 && !isDeepStrictEqual(seed.group, group))
+  ) {
+    return 'terminal_transfer_source_mismatch'
+  }
+  return ptyIds.some((id) => !owns(id)) ? 'terminal_transfer_source_not_owner' : null
 }

@@ -70,12 +70,19 @@ function restoreGroup(current: TabGroup | undefined, prior: TabGroup, tabId: str
     prior.tabOrder.map((id) => ({ id })),
     { id: tabId }
   ).map(({ id }) => id)
-  const recentTabIds = restoreAtPriorIndex(
-    (current.recentTabIds ?? []).map((id) => ({ id })),
-    (prior.recentTabIds ?? []).map((id) => ({ id })),
-    { id: tabId }
-  ).map(({ id }) => id)
-  return { ...current, tabOrder, recentTabIds }
+  const priorRecent = prior.recentTabIds ?? []
+  const recentTabIds = priorRecent.includes(tabId)
+    ? restoreAtPriorIndex(
+        (current.recentTabIds ?? []).map((id) => ({ id })),
+        priorRecent.map((id) => ({ id })),
+        { id: tabId }
+      ).map(({ id }) => id)
+    : (current.recentTabIds ?? []).filter((id) => id !== tabId)
+  const activeTabId =
+    current.activeTabId === tabId || prior.activeTabId === tabId
+      ? prior.activeTabId
+      : current.activeTabId
+  return { ...current, tabOrder, recentTabIds, activeTabId }
 }
 
 function appendMissingGroup(
@@ -102,9 +109,31 @@ function restoreTabKeyedRecord(
   tabId: string
 ): Record<string, string> | undefined {
   if (prior?.[tabId] === undefined) {
-    return current
+    if (!current) {
+      return undefined
+    }
+    const next = { ...current }
+    delete next[tabId]
+    return next
   }
   return { ...current, [tabId]: prior[tabId] }
+}
+
+export function sessionHasTerminalTransferBacking(
+  state: WorkspaceSessionState,
+  tabId: string
+): boolean {
+  return (
+    Object.values(state.tabsByWorktree).some((tabs) => tabs.some(({ id }) => id === tabId)) ||
+    Object.hasOwn(state.terminalLayoutsByTabId, tabId) ||
+    Object.values(state.unifiedTabs ?? {}).some((tabs) =>
+      tabs.some(({ id, entityId }) => id === tabId || entityId === tabId)
+    ) ||
+    Object.values(state.tabGroups ?? {}).some((groups) =>
+      groups.some(({ tabOrder }) => tabOrder.includes(tabId))
+    ) ||
+    Object.hasOwn(state.remoteSessionIdsByTabId ?? {}, tabId)
+  )
 }
 
 export function restoreTransferredTerminalSession(
@@ -167,10 +196,33 @@ export function removeTransferredTerminalSession(
   for (const [key, tabs] of Object.entries(next.tabsByWorktree)) {
     next.tabsByWorktree[key] = withoutTab(tabs, seed.tabId)
   }
-  delete next.terminalLayoutsByTabId[seed.tabId]
+  const priorTerminal = findTerminalTab(prior, seed.tabId)
+  if (priorTerminal) {
+    next.tabsByWorktree[priorTerminal.key] = restoreAtPriorIndex(
+      next.tabsByWorktree[priorTerminal.key] ?? [],
+      prior.tabsByWorktree[priorTerminal.key] ?? [],
+      priorTerminal.tab
+    )
+  }
+  if (Object.hasOwn(prior.terminalLayoutsByTabId, seed.tabId)) {
+    next.terminalLayoutsByTabId[seed.tabId] = structuredClone(
+      prior.terminalLayoutsByTabId[seed.tabId]!
+    )
+  } else {
+    delete next.terminalLayoutsByTabId[seed.tabId]
+  }
   for (const [key, tabs] of Object.entries(next.unifiedTabs ?? {})) {
     next.unifiedTabs![key] = tabs.filter(
       ({ id, entityId }) => id !== seed.tabId && entityId !== seed.tabId
+    )
+  }
+  const priorUnified = findUnifiedTab(prior, seed.tabId)
+  if (priorUnified) {
+    next.unifiedTabs ??= {}
+    next.unifiedTabs[priorUnified.key] = restoreAtPriorIndex(
+      next.unifiedTabs[priorUnified.key] ?? [],
+      prior.unifiedTabs?.[priorUnified.key] ?? [],
+      priorUnified.tab
     )
   }
 
@@ -180,6 +232,7 @@ export function removeTransferredTerminalSession(
   for (const [key, groups] of Object.entries(next.tabGroups ?? {})) {
     const removedGroupIds: string[] = []
     next.tabGroups![key] = groups.flatMap((group) => {
+      const priorGroup = prior.tabGroups?.[key]?.find(({ id }) => id === group.id)
       const tabOrder = group.tabOrder.filter((id) => id !== seed.tabId)
       if (tabOrder.length === 0 && !priorGroupIds.has(group.id)) {
         removedGroupIds.push(group.id)
@@ -191,7 +244,9 @@ export function removeTransferredTerminalSession(
           tabOrder,
           recentTabIds: group.recentTabIds?.filter((id) => id !== seed.tabId),
           activeTabId:
-            group.activeTabId === seed.tabId ? (tabOrder.at(-1) ?? null) : group.activeTabId
+            group.activeTabId === seed.tabId
+              ? (priorGroup?.activeTabId ?? tabOrder.at(-1) ?? null)
+              : group.activeTabId
         }
       ]
     })
@@ -207,8 +262,34 @@ export function removeTransferredTerminalSession(
       }
     }
   }
-  if (next.remoteSessionIdsByTabId) {
-    delete next.remoteSessionIdsByTabId[seed.tabId]
+  const priorGroup = findTabGroup(prior, seed.tabId)
+  if (priorGroup) {
+    next.tabGroups ??= {}
+    const groups = next.tabGroups[priorGroup.key] ?? []
+    const existing = groups.find(({ id }) => id === priorGroup.group.id)
+    next.tabGroups[priorGroup.key] = existing
+      ? groups.map((group) =>
+          group.id === existing.id ? restoreGroup(existing, priorGroup.group, seed.tabId) : group
+        )
+      : [...groups, structuredClone(priorGroup.group)]
+    next.tabGroupLayouts ??= {}
+    next.tabGroupLayouts[priorGroup.key] = appendMissingGroup(
+      next.tabGroupLayouts[priorGroup.key],
+      priorGroup.group.id
+    )
   }
+  next.remoteSessionIdsByTabId = restoreTabKeyedRecord(
+    next.remoteSessionIdsByTabId,
+    prior.remoteSessionIdsByTabId,
+    seed.tabId
+  )
   return next
 }
+
+export function removeTransferredTerminalSessionBacking(
+  current: WorkspaceSessionState,
+  seed: TerminalWindowTransferSeed
+): WorkspaceSessionState {
+  return removeTransferredTerminalSession(current, getDefaultWorkspaceSession(), seed)
+}
+import { getDefaultWorkspaceSession } from '../../shared/constants'
