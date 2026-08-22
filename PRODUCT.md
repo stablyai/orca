@@ -33,7 +33,7 @@ The orchestration layer: fan one prompt across many agents in parallel worktrees
 - 1,755 renderer components; theming is centralized via CSS variables in `src/renderer/src/assets/main.css` (~3,000 lines) consumed through Tailwind 4 `@theme inline` tokens.
 - Terminal rendering (xterm WebGL), Monaco, and git-graph colors have dedicated token groups that must stay legible in both themes.
 - Functional behavior, keyboard shortcuts, and layout mechanics must be preserved; this is a redesign, not a rearchitecture.
-- Rebrand from Orca is complete (name/identifiers); logo/icon artwork is still the incumbent's (known gap, out of scope for CSS work).
+- Rebrand from Orca is complete (name, identifiers, logo/icon artwork — all assets regenerate from `resources/logo.svg` via `config/scripts/render-brand-assets.mjs`).
 
 ## Brand Commitments
 

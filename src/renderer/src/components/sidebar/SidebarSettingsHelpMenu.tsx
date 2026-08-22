@@ -242,7 +242,7 @@ export function SidebarSettingsHelpMenu(): React.JSX.Element {
                   src={logo}
                   alt=""
                   aria-hidden="true"
-                  className="size-3.5 object-contain invert opacity-55 dark:invert-0"
+                  className="size-3.5 object-contain opacity-55"
                 />
                 {translate(
                   'auto.components.sidebar.SidebarSettingsHelpMenu.f8a2c91d4e',

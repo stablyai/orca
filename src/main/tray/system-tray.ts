@@ -43,13 +43,10 @@ let devIndicator: { label: string | null } | null = null
 
 let nativeThemeUpdatedListener: (() => void) | null = null
 
-// Why: multiple dev instances can run side by side (one per worktree); the
-// tooltip carries the worktree/branch label so hovering tells them apart.
+// Why: worktree/branch labels were dropped from the tooltip by request.
+// devIndicator still switches the dev vs prod text and tray menu header.
 function baseTooltip(): string {
-  if (!devIndicator) {
-    return 'MCode'
-  }
-  return devIndicator.label ? `MCode DEV (${devIndicator.label})` : 'MCode DEV'
+  return devIndicator ? 'MCode DEV' : 'MCode'
 }
 
 // Why: on Windows the notification area expects a 16px icon; the app icon PNG

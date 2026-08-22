@@ -8,6 +8,6 @@ export function MCodeLogoSettingsIcon({ className }: LucideProps): React.JSX.Ele
     src: logo,
     alt: '',
     'aria-hidden': true,
-    className: cn('object-contain invert dark:invert-0', className)
+    className: cn('object-contain', className)
   })
 }
