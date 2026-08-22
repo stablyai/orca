@@ -228,7 +228,7 @@ export default function OnboardingFlow({
                           // hit area makes hover/click/tooltip targeting reliable.
                           'relative h-1 rounded-full outline-none transition-all duration-300 before:absolute before:-inset-y-2 before:-inset-x-1 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-card',
                           isActive
-                            ? 'w-10 bg-foreground'
+                            ? 'w-10 bg-[var(--ai-action-accent)]'
                             : isDone
                               ? 'w-6 bg-muted-foreground/70 hover:bg-foreground/80'
                               : 'w-6 bg-muted-foreground/25 hover:bg-muted-foreground/45'
@@ -248,7 +248,7 @@ export default function OnboardingFlow({
                   </Tooltip>
                 )
               })}
-              <span className="ml-3 text-xs font-medium text-muted-foreground">
+              <span className="readout ml-3 text-xs font-medium text-muted-foreground">
                 {flow.progressStepIndex + 1}{' '}
                 {translate('auto.components.onboarding.OnboardingFlow.4db04f2f57', 'of')}{' '}
                 {flow.progressSteps.length}
@@ -256,14 +256,6 @@ export default function OnboardingFlow({
             </div>
 
             <div className="mt-8 shrink-0">
-              {stepIndex === 0 && (
-                <div className="mb-2 text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">
-                  {translate(
-                    'auto.components.onboarding.OnboardingFlow.1b5e182e9f',
-                    'Welcome to MCode'
-                  )}
-                </div>
-              )}
               <h1 className="text-[34px] font-semibold leading-[1.15] tracking-tight text-foreground">
                 {copy.title}
               </h1>

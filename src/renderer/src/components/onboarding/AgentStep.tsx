@@ -287,7 +287,7 @@ function AgentButton({
       className={cn(
         'group relative overflow-hidden rounded-xl border p-3.5 text-left transition-all',
         selected
-          ? 'border-violet-500/60 bg-violet-500/10 ring-2 ring-violet-500/30'
+          ? 'border-[var(--ai-action-accent)] bg-[color-mix(in_srgb,var(--ai-action-accent)_8%,transparent)] ring-2 ring-[color-mix(in_srgb,var(--ai-action-accent)_30%,transparent)]'
           : 'border-border bg-muted/30 hover:bg-muted/60'
       )}
       onClick={onClick}
