@@ -4607,7 +4607,7 @@ export function normalizeHookPayload(
   }
 
   const providerSessionOnly =
-    (source === 'pi' || source === 'prime-agent') &&
+    (source === 'pi' || source === 'prime-agent' || source === 'kimchi') &&
     eventName === 'session_start' &&
     providerSession !== null
   // Why: transcript session_start carries resume identity while idle; receivers discard the placeholder row.

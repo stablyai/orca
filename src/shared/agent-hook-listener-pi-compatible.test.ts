@@ -415,6 +415,50 @@ describe('shared agent-hook-listener', () => {
     expect(next?.payload.prompt).toBe('')
   })
 
+  it('clears Kimchi turn cache and emits only resume identity on session_start', () => {
+    const start = normalizeHookPayload(
+      state,
+      'kimchi',
+      {
+        paneKey: PANE_KEY,
+        payload: { hook_event_name: 'before_agent_start', prompt: 'stale turn' }
+      },
+      'production'
+    )
+    expect(start?.payload.prompt).toBe('stale turn')
+
+    const sessionStart = normalizeHookPayload(
+      state,
+      'kimchi',
+      {
+        paneKey: PANE_KEY,
+        payload: {
+          hook_event_name: 'session_start',
+          session_id: 'kimchi-session-2',
+          session_file: '/tmp/kimchi-session-2.jsonl'
+        }
+      },
+      'production'
+    )
+    expect(sessionStart).toMatchObject({
+      providerSessionOnly: true,
+      providerSession: {
+        key: 'session_id',
+        id: 'kimchi-session-2',
+        transcriptPath: '/tmp/kimchi-session-2.jsonl'
+      },
+      payload: { state: 'done', prompt: '', agentType: 'kimchi' }
+    })
+
+    const next = normalizeHookPayload(
+      state,
+      'kimchi',
+      { paneKey: PANE_KEY, payload: { hook_event_name: 'tool_call', tool_name: 'bash' } },
+      'production'
+    )
+    expect(next?.payload.prompt).toBe('')
+  })
+
   it('maps Kimchi tool_call ask_user_question to blocked with interactivePrompt', () => {
     const questions = {
       questions: [
