@@ -80,6 +80,7 @@ function PickerTrigger(props: {
             variant="ghost"
             size="xs"
             aria-label={accessibleName}
+            aria-description={props.disabledReason ?? undefined}
             className="max-w-48 text-muted-foreground"
           >
             <span className="truncate">{props.label}</span>
@@ -128,13 +129,56 @@ function DescriptorMenuRows(props: {
   }
   // Why: agent-picker opens the TUI; it is not a set of radio choices.
   if (descriptor.action?.type === 'agent-picker') {
+    const choices = descriptor.kind.type === 'select' ? descriptor.kind.choices : []
+    const choicesLabel =
+      descriptor.category === 'model'
+        ? translate('components.native-chat.composer.knownModels', 'Known models')
+        : translate('components.native-chat.composer.availableChoices', 'Available choices')
+    const choicesNote =
+      descriptor.category === 'model'
+        ? translate(
+            'components.native-chat.composer.modelAvailabilityNote',
+            'Codex decides which models your account can select. Open the agent picker to check.'
+          )
+        : null
     return (
-      <DropdownMenuItem disabled={!descriptor.settable || pending} onSelect={() => invokeAction()}>
-        {translate(
-          'components.native-chat.composer.chooseInAgentPicker',
-          'Choose in agent picker…'
-        )}
-      </DropdownMenuItem>
+      <>
+        <DropdownMenuItem
+          disabled={!descriptor.settable || pending}
+          onSelect={() => invokeAction()}
+        >
+          {translate(
+            'components.native-chat.composer.chooseInAgentPicker',
+            'Choose in agent picker…'
+          )}
+        </DropdownMenuItem>
+        {choices.length > 0 ? (
+          <>
+            <DropdownMenuSeparator />
+            <DropdownMenuLabel className="font-normal text-muted-foreground">
+              {choicesLabel}
+            </DropdownMenuLabel>
+            {choicesNote ? (
+              <div className="px-2 pb-1 text-xs text-muted-foreground">{choicesNote}</div>
+            ) : null}
+            <div role="list" aria-label={choicesLabel}>
+              {choices.map((choice) => {
+                const label = nativeChatSessionChoiceLabel(choice)
+                return (
+                  <div
+                    key={choice.value}
+                    role="listitem"
+                    aria-label={label}
+                    className="px-2 py-1 text-xs leading-5 font-medium text-muted-foreground"
+                  >
+                    <ChoiceBody label={label} description={choice.description} />
+                  </div>
+                )
+              })}
+            </div>
+          </>
+        ) : null}
+      </>
     )
   }
   // Why: absolute On/Off only when we have tracked truth. Unknown composed
@@ -226,43 +270,53 @@ function NativeChatSessionOptionPickersInner({
   const modelReason = nativeChatSessionOptionDisabledReason(model.disabledReason)
   const modelTooltip = translate('components.native-chat.composer.model', 'Model')
   const optionsTooltip = nativeChatOptionsPillTitle(options)
+  const allOptionsDisabled = options.every((descriptor) => !descriptor.settable)
   const optionsReason =
-    options.length > 0 && options.every((descriptor) => !descriptor.settable)
+    options.length > 0 && allOptionsDisabled
       ? nativeChatSessionOptionDisabledReason(options[0]?.disabledReason)
       : null
 
   return (
     <div className="flex min-w-0 items-center gap-0.5">
       {options.length > 0 ? (
-        <DropdownMenu>
-          <PickerTrigger
-            label={nativeChatOptionsPillLabel(options)}
-            tooltipLabel={optionsTooltip}
-            disabled={isWorking || pendingId !== null}
-            disabledReason={optionsReason}
-            dispatched={options.some((descriptor) => descriptor.valueSource === 'dispatched')}
-          />
-          <DropdownMenuContent align="start" side="top" collisionPadding={8} className="w-60">
-            {options.map((descriptor, index) => {
-              const reason = nativeChatSessionOptionDisabledReason(descriptor.disabledReason)
-              return (
-                <div key={descriptor.id}>
-                  {index > 0 ? <DropdownMenuSeparator /> : null}
-                  <DropdownMenuLabel>{nativeChatSessionOptionLabel(descriptor)}</DropdownMenuLabel>
-                  {reason && !descriptor.settable ? (
-                    <DropdownMenuLabel className="font-normal">{reason}</DropdownMenuLabel>
-                  ) : null}
-                  <DescriptorMenuRows
-                    descriptor={descriptor}
-                    pending={pendingId !== null}
-                    setValue={(value) => setOption(descriptor, value)}
-                    invokeAction={() => invokeAction(descriptor)}
-                  />
-                </div>
-              )
-            })}
-          </DropdownMenuContent>
-        </DropdownMenu>
+        <>
+          <DropdownMenu>
+            <PickerTrigger
+              label={nativeChatOptionsPillLabel(options)}
+              tooltipLabel={optionsTooltip}
+              disabled={isWorking || pendingId !== null || allOptionsDisabled}
+              disabledReason={optionsReason}
+              dispatched={options.some((descriptor) => descriptor.valueSource === 'dispatched')}
+            />
+            <DropdownMenuContent align="start" side="top" collisionPadding={8} className="w-60">
+              {options.map((descriptor, index) => {
+                const reason = nativeChatSessionOptionDisabledReason(descriptor.disabledReason)
+                return (
+                  <div key={descriptor.id}>
+                    {index > 0 ? <DropdownMenuSeparator /> : null}
+                    <DropdownMenuLabel>
+                      {nativeChatSessionOptionLabel(descriptor)}
+                    </DropdownMenuLabel>
+                    {reason && !descriptor.settable ? (
+                      <DropdownMenuLabel className="font-normal">{reason}</DropdownMenuLabel>
+                    ) : null}
+                    <DescriptorMenuRows
+                      descriptor={descriptor}
+                      pending={pendingId !== null}
+                      setValue={(value) => setOption(descriptor, value)}
+                      invokeAction={() => invokeAction(descriptor)}
+                    />
+                  </div>
+                )
+              })}
+            </DropdownMenuContent>
+          </DropdownMenu>
+          {optionsReason ? (
+            <span role="status" className="px-1 text-xs text-muted-foreground">
+              {optionsReason}
+            </span>
+          ) : null}
+        </>
       ) : null}
       <DropdownMenu>
         <PickerTrigger

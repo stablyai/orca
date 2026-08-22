@@ -47,6 +47,8 @@ export function nativeChatSessionOptionDisabledReason(
   // Exhaustive over SessionOptionDisabledReason: a new key is a compile error
   // here, so the localized label can never silently drift from the producer.
   switch (reason) {
+    case 'choose-model-first':
+      return translate('components.native-chat.composer.chooseModelFirst', 'Choose a model first.')
     case 'set-when-session-starts':
       return translate(
         'components.native-chat.composer.setWhenSessionStarts',

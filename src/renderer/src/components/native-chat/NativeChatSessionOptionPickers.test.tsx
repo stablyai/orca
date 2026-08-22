@@ -248,6 +248,34 @@ describe('NativeChatSessionOptionPickers', () => {
     expect(screen.getByRole('button', { name: 'Effort' }).textContent).toContain('Effort')
   })
 
+  it('keeps unresolved effort visible but non-interactive until a model is chosen', () => {
+    const setOption = vi.fn().mockResolvedValue({ snapshot: [] })
+    render(
+      <NativeChatSessionOptionPickers
+        surface={{ ...surface, setOption }}
+        snapshot={[
+          model(),
+          {
+            ...effort,
+            kind: { ...effort.kind, currentValue: undefined },
+            valueSource: 'unknown',
+            settable: false,
+            disabledReason: 'choose-model-first'
+          }
+        ]}
+        isWorking={false}
+      />
+    )
+
+    const trigger = screen.getByRole('button', { name: 'Effort' })
+    expect(trigger.parentElement?.getAttribute('data-disabled')).toBe('true')
+    expect(trigger.getAttribute('aria-description')).toBe('Choose a model first.')
+    expect(screen.getByRole('status').textContent).toBe('Choose a model first.')
+    expect(screen.getAllByText('Choose a model first.')).not.toHaveLength(0)
+    screen.getByRole('radio', { name: 'Low' }).click()
+    expect(setOption).not.toHaveBeenCalled()
+  })
+
   it('disables both picker triggers while the agent is working', () => {
     render(
       <NativeChatSessionOptionPickers surface={surface} snapshot={[model(), effort]} isWorking />
@@ -308,7 +336,7 @@ describe('NativeChatSessionOptionPickers', () => {
     expect(screen.getByText('Sent to the agent — not confirmed')).not.toBeNull()
   })
 
-  it('renders agent-picker routes as one action instead of radio choices', async () => {
+  it('shows agent-picker choices as read-only context beside the handoff action', async () => {
     const invokeAction = vi.fn().mockResolvedValue({ snapshot: [] })
     const liveSurface = { ...surface, invokeAction }
     render(
@@ -330,10 +358,18 @@ describe('NativeChatSessionOptionPickers', () => {
         isWorking={false}
       />
     )
-    expect(screen.getByRole('button', { name: 'Choose in agent picker…' })).not.toBeNull()
-    expect(screen.queryByText('GPT-5.5')).toBeNull()
-    expect(screen.queryByText('GPT-5.2 Codex')).toBeNull()
-    screen.getByRole('button', { name: 'Choose in agent picker…' }).click()
+    const action = screen.getByRole('button', { name: 'Choose in agent picker…' })
+    const heading = screen.getByText('Known models')
+    expect(action.compareDocumentPosition(heading) & Node.DOCUMENT_POSITION_FOLLOWING).not.toBe(0)
+    expect(screen.getByRole('list', { name: 'Known models' })).not.toBeNull()
+    expect(
+      screen.getByText(
+        'Codex decides which models your account can select. Open the agent picker to check.'
+      )
+    ).not.toBeNull()
+    expect(screen.getByRole('listitem', { name: 'GPT-5.5' })).not.toBeNull()
+    expect(screen.getByRole('listitem', { name: 'GPT-5.2 Codex' })).not.toBeNull()
+    action.click()
     await waitFor(() => expect(invokeAction).toHaveBeenCalledWith('model'))
   })
 

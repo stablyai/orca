@@ -125,6 +125,22 @@ function optionDescriptor(args: {
   }
 }
 
+function unresolvedModelOptionDescriptor(option: CatalogOption): SessionOptionDescriptor | null {
+  if (option.kind.type !== 'select' || option.kind.choices.length <= 1) {
+    return null
+  }
+  return {
+    id: option.id,
+    label: option.label,
+    ...(option.description ? { description: option.description } : {}),
+    ...(option.category ? { category: option.category } : {}),
+    kind: { type: 'select', choices: [...option.kind.choices] },
+    valueSource: 'unknown',
+    settable: false,
+    disabledReason: 'choose-model-first'
+  }
+}
+
 // Effort before model config before modes; anything uncategorized sorts last.
 const CATEGORY_ORDER: Record<string, number> = {
   thought_level: 0,
@@ -229,6 +245,14 @@ export function buildNativeChatSessionOptionSnapshot(args: {
     }
   ]
   if (!effectiveModelId) {
+    if (modelAction?.type === 'agent-picker') {
+      for (const option of catalog.unknownModelOptions ?? []) {
+        const descriptor = unresolvedModelOptionDescriptor(option)
+        if (descriptor) {
+          snapshot.push(descriptor)
+        }
+      }
+    }
     return snapshot
   }
   const model = models.find((candidate) => candidate.id === effectiveModelId)

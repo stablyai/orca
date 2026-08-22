@@ -16,6 +16,7 @@ export type SessionOptionValueSource = 'applied' | 'dispatched' | 'reported' | '
  *  untranslated text. */
 export type SessionOptionDisabledReason =
   | 'available-after-session-start'
+  | 'choose-model-first'
   | 'set-when-session-starts'
 
 export type SessionOptionDescriptor = {

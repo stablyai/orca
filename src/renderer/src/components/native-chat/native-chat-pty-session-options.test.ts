@@ -567,8 +567,13 @@ describe('native chat PTY session options', () => {
     const result = await surface.invokeAction('effort')
     expect(dispatch).toHaveBeenCalledWith('/model', { delivery: 'type' })
     expect(onAgentPicker).toHaveBeenCalledOnce()
-    expect(result.snapshot).toHaveLength(1)
+    expect(result.snapshot).toHaveLength(2)
     expect(result.snapshot[0]).toMatchObject({ valueSource: 'unknown' })
+    expect(result.snapshot[1]).toMatchObject({
+      id: 'effort',
+      settable: false,
+      disabledReason: 'choose-model-first'
+    })
   })
 
   it('tracks typed effort commands and downgrades typed toggles', () => {

@@ -217,11 +217,18 @@ describe('buildNativeChatSessionOptionSnapshot', () => {
       mode: 'live',
       modelLabel: 'Model'
     })
+    expect(snapshot.map((descriptor) => descriptor.id)).toEqual(['model', 'effort'])
     expect(snapshot[0]).toMatchObject({ settable: true })
     expect(snapshot[0]?.action).toEqual({ type: 'agent-picker' })
     expect(snapshot[0]?.kind).toMatchObject({
       type: 'select',
       choices: expect.arrayContaining([{ value: 'gpt-5.5', label: 'GPT-5.5' }])
+    })
+    expect(snapshot[1]).toMatchObject({
+      id: 'effort',
+      valueSource: 'unknown',
+      settable: false,
+      disabledReason: 'choose-model-first'
     })
   })
 
