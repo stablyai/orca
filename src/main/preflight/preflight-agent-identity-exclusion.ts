@@ -30,7 +30,11 @@ async function keepsDetectedAgent(id: string, probe: IdentityProbe): Promise<boo
   }
   try {
     const { stdout, stderr } = await probe(config.detectCmd, exclusion.args)
-    return !exclusion.excludePattern.test(`${stdout ?? ''}\n${stderr ?? ''}`)
+    const output = `${stdout ?? ''}\n${stderr ?? ''}`
+    if (exclusion.excludePattern.test(output)) {
+      return false
+    }
+    return exclusion.requirePattern ? exclusion.requirePattern.test(output) : true
   } catch {
     // Why: a probe that times out or exits non-zero says nothing about identity;
     // hiding a real install is worse than the collision this guards against.

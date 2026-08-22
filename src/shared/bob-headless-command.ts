@@ -1,33 +1,22 @@
 import { getCommandTokenPathBasename } from './command-token-scanner'
 import { optionName } from './print-mode-headless-command'
 
-const BOB_ONE_SHOT_PROMPT_FLAGS = new Set(['--prompt', '-p'])
-const BOB_INTERACTIVE_PROMPT_FLAGS = new Set(['--prompt-interactive', '-i'])
-
-// Why: taken from Bob Shell 1.0.6's own option table, which hides `--auth-method`,
-// `--extensions`, `--fake-responses` and `--record-responses` from `bob --help`.
-const BOB_OPTIONS_WITH_VALUE = new Set([
-  '--allowed-mcp-server-names',
-  '--allowed-tools',
-  '--approval-mode',
-  '--auth-method',
-  '--chat-mode',
-  '--delete-session',
-  '--extensions',
-  '-e',
-  '--fake-responses',
-  '--include-directories',
-  '--instance-id',
-  '--max-coins',
-  '--model',
-  '-m',
-  '--output-format',
-  '-o',
-  '--record-responses',
-  '--resume',
-  '-r',
-  '--team-id'
+// Why: taken from Bob Shell 2.0.1's `bob --help`. `chat` is the only subcommand that
+// leaves an interactive UI for Orca to host; `run` is headless, `mcp` manages config,
+// and the remaining flags print and exit.
+const BOB_INTERACTIVE_SUBCOMMANDS = new Set(['chat'])
+const BOB_ONE_SHOT_FLAGS = new Set([
+  '--prompt',
+  '-p',
+  '--list-tasks',
+  '--version',
+  '-v',
+  '--show-license',
+  '--help',
+  '-h'
 ])
+// Why: `--resume [task-id]` takes an optional value that must not read as a prompt.
+const BOB_OPTIONS_WITH_OPTIONAL_VALUE = new Set(['--resume', '-r'])
 
 const BOB_EXECUTABLE_EXTENSION_RE = /\.(?:exe|cmd|bat|ps1|js|mjs|cjs)$/i
 
@@ -45,26 +34,25 @@ function bobArgumentStartIndex(tokens: readonly string[]): number {
 export function isBobHeadlessOneShotCommand(tokens: readonly string[]): boolean {
   for (let index = bobArgumentStartIndex(tokens); index < tokens.length; index += 1) {
     const token = tokens[index]
-    // Why: `--` ends option parsing, so what follows is the positional prompt.
+    // Why: `--` ends option parsing, so what follows is a positional (one-shot) prompt.
     if (token === '--') {
       return index + 1 < tokens.length
     }
     if (!token.startsWith('-')) {
-      // Why: positional prompts run one-shot, and `mcp`/`extensions` are management
-      // subcommands - neither leaves an interactive shell for Orca to host.
-      return true
+      // Why: the first positional is the subcommand; only `chat` stays interactive.
+      return !BOB_INTERACTIVE_SUBCOMMANDS.has(token)
     }
     const name = optionName(token)
-    if (BOB_ONE_SHOT_PROMPT_FLAGS.has(name) || /^-p[^-]/.test(name)) {
+    if (BOB_ONE_SHOT_FLAGS.has(name) || /^-p[^-]/.test(name)) {
       return true
     }
-    if (BOB_INTERACTIVE_PROMPT_FLAGS.has(name) || /^-i[^-]/.test(name)) {
-      return false
-    }
-    // Why: `--flag value` consumes the next token, which is not a positional prompt.
-    if (name === token && BOB_OPTIONS_WITH_VALUE.has(name)) {
-      index += 1
+    if (name === token && BOB_OPTIONS_WITH_OPTIONAL_VALUE.has(name)) {
+      const next = tokens[index + 1]
+      if (next !== undefined && !next.startsWith('-')) {
+        index += 1
+      }
     }
   }
+  // Why: bare `bob` opens the chat UI on a TTY.
   return false
 }
