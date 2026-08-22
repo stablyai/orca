@@ -291,6 +291,21 @@ describe('createMainWindow multi-window registration', () => {
     expect(closeDashboardMock).toHaveBeenCalledOnce()
   })
 
+  it('refreshes a promoted secondary role when destroy emits only closed', () => {
+    const promotedControl = makeWindow(2)
+    browserWindowMock.mockImplementation(function () {
+      return promotedControl.instance
+    })
+    let currentRole: 'control' | 'secondary' = 'secondary'
+    getRoleMock.mockImplementation(() => currentRole)
+
+    createMainWindow(null, { deferLoad: true, orcaWindowRole: 'secondary' })
+    currentRole = 'control'
+    promotedControl.windowHandlers.get('closed')?.forEach((handler) => handler())
+
+    expect(closeDashboardMock).toHaveBeenCalledOnce()
+  })
+
   it('isolates close confirmation by sender and removes only the closed window listener', () => {
     const ipcHandlers = new Map<string, Handler[]>()
     vi.mocked(ipcMain.on).mockImplementation((channel, handler) => {

@@ -1185,6 +1185,7 @@ export function createMainWindow(
   ipcMain.on(confirmCloseChannel, onConfirmClose)
   ipcMain.on(closeRequestReceivedChannel, onCloseRequestReceived)
   mainWindow.on('closed', () => {
+    roleOnClose = orcaWindowManager.getRole(mainWindow.id) ?? roleOnClose
     // Why: the dashboard pop-out is a companion of the main window — close it
     // alongside so it never orphans as a lone window after the app window is
     // gone (e.g. on macOS where the app stays alive after the window closes).
