@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { Tab, TabGroup } from '../../../shared/tab-types'
 import type { Worktree } from '../../../shared/worktree/types'
+import { getWorktreeHostIdentity } from '../../../shared/worktree/host-qualified-identity'
 import { buildPaletteTabDocument } from './palette-match/tab-document'
 import { PALETTE_QUERY_MAX_TOKENS } from './palette-match/palette-query'
 import {
@@ -119,6 +120,79 @@ describe('simulator-palette-search lastActiveAt', () => {
 })
 
 describe('simulator-palette-search', () => {
+  it('keeps same-id simulator tabs isolated by execution host', () => {
+    const sharedId = 'repo-shared::/workspace'
+    const local = makeWorktree({ id: sharedId, hostId: 'local', displayName: 'Local workspace' })
+    const remote = makeWorktree({
+      id: sharedId,
+      hostId: 'runtime:host-b',
+      displayName: 'Remote workspace'
+    })
+    const entries = buildSearchableSimulatorTabs({
+      worktrees: [local, remote],
+      repoMap: new Map([[local.repoId, { displayName: 'repo/mobile' }]]),
+      worktreeOrder: new Map([
+        [getWorktreeHostIdentity(local), 0],
+        [getWorktreeHostIdentity(remote), 1]
+      ]),
+      unifiedTabsByWorktree: {
+        [sharedId]: [
+          makeTab({
+            id: 'sim-local',
+            worktreeId: sharedId,
+            executionHostId: 'local',
+            label: 'Local emulator'
+          }),
+          makeTab({
+            id: 'sim-remote',
+            worktreeId: sharedId,
+            executionHostId: 'runtime:host-b',
+            label: 'Remote emulator'
+          })
+        ]
+      },
+      activeGroupIdByWorktree: {},
+      groupsByWorktree: {},
+      activeWorktreeId: null,
+      activeTabType: 'terminal'
+    })
+
+    expect(entries.map((entry) => [entry.tab.id, entry.worktree.hostId])).toEqual([
+      ['sim-local', 'local'],
+      ['sim-remote', 'runtime:host-b']
+    ])
+    expect(
+      searchSimulatorTabs(entries, 'emulator').map((result) => [
+        result.tabId,
+        result.executionHostId
+      ])
+    ).toEqual([
+      ['sim-local', 'local'],
+      ['sim-remote', 'runtime:host-b']
+    ])
+  })
+
+  it('does not route one ambiguous legacy simulator bucket to both hosts', () => {
+    const sharedId = 'repo-shared::/workspace'
+    const entries = buildSearchableSimulatorTabs({
+      worktrees: [
+        makeWorktree({ id: sharedId, hostId: 'local' }),
+        makeWorktree({ id: sharedId, hostId: 'runtime:host-b' })
+      ],
+      repoMap: new Map(),
+      worktreeOrder: new Map(),
+      unifiedTabsByWorktree: {
+        [sharedId]: [makeTab({ worktreeId: sharedId })]
+      },
+      activeGroupIdByWorktree: {},
+      groupsByWorktree: {},
+      activeWorktreeId: null,
+      activeTabType: 'terminal'
+    })
+
+    expect(entries).toEqual([])
+  })
+
   it('keeps empty-query ordering deterministic and context-first', () => {
     const results = searchSimulatorTabs(
       [

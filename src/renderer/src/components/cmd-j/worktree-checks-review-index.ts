@@ -1,9 +1,8 @@
 import { resolveWorktreeBranchLabel } from '@/lib/worktree-default-display-name'
+import { resolvePaletteRepoForWorktree } from '@/lib/palette-repo-resolution'
 import { getGitHubPRCacheKey } from '@/store/slices/github-cache-key'
 import { getHostedReviewCacheKey } from '@/store/slices/hosted-review-cache-identity'
-import { getRepoHostIdentityForParts } from '@/store/slices/repo-host-identity'
 import type { AppState } from '@/store/types'
-import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
 import type { HostedReviewInfo } from '../../../../shared/hosted-review'
 import type { Repo } from '../../../../shared/repo-types'
 import type { Worktree } from '../../../../shared/worktree/types'
@@ -16,6 +15,8 @@ type WorktreeChecksReviewIndexArgs = {
   hostedReviewCache: AppState['hostedReviewCache'] | null
   settings: AppState['settings']
 }
+
+const EMPTY_REPO_MAP: ReadonlyMap<string, Repo> = new Map()
 
 export function buildWorktreeChecksReviewIndex({
   worktrees,
@@ -30,9 +31,7 @@ export function buildWorktreeChecksReviewIndex({
   }
 
   for (const worktree of worktrees) {
-    const repo = repoByHostIdentity.get(
-      getRepoHostIdentityForParts(worktree.repoId, worktree.hostId ?? LOCAL_EXECUTION_HOST_ID)
-    )
+    const repo = resolvePaletteRepoForWorktree(worktree, EMPTY_REPO_MAP, repoByHostIdentity)
     if (!repo) {
       continue
     }

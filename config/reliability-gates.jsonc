@@ -11,6 +11,306 @@
   },
   "gates": [
     {
+      "id": "cmd-j-tabs.host-qualified-candidate-ownership",
+      "title": "Cmd-J tab candidates retain execution-host ownership",
+      "maturity": "experimental",
+      "protection": "partial",
+      "owner": "renderer-workspace-tabs",
+      "layer": "renderer-state-and-navigation",
+      "surfaces": [
+        "Cmd-J browser tabs",
+        "Cmd-J simulator tabs",
+        "Cmd-J workspace tabs",
+        "paired-runtime tab mirror"
+      ],
+      "platforms": ["macos", "linux", "windows"],
+      "providers": ["local", "ssh", "remote-runtime"],
+      "coveredPlatforms": ["macos"],
+      "coveredProviders": ["local", "ssh", "remote-runtime"],
+      "coverageNotes": "Deterministic candidate-builder contracts inject local and paired-runtime worktrees with the same bare id into the real aggregated tab buckets, including folder workspaces and a paired runtime transporting an SSH-owned worktree. A mirror contract preserves distinct same-id runtime tabs. Manual local-emulator contracts retain local ownership and dedupe explicitly owned tabs before worktree hydration. A paired Electron journey verifies both visible browser rows and both visible simulator rows, then requires each selection to render its owning active tab and update backing host-qualified state.",
+      "motivatingLinks": [
+        "https://linear.app/stably/issue/STA-4965",
+        "https://github.com/stablyai/orca/pull/15371"
+      ],
+      "invariant": "Candidate identity is the tuple of execution-host identity and worktree identity: same-id sibling hosts retain separate correct browser, simulator, and workspace tabs, each tab appears exactly once, and selection activates its owning host.",
+      "oracle": "Aggregate two hosts' tabs under one intentionally colliding worktree id, stamp each unified tab with its execution host, and require exactly one candidate per owner. Repeat with an SSH physical owner transported by a paired-runtime alias. Independently require each browser and simulator Cmd-J selection to update activeWorkspaceExecutionHostId plus its owning workspace/group and render the selected tab active. Ambiguous legacy tabs without ownership fail closed.",
+      "commands": [
+        "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/cmd-j/worktree-checks-review-index.test.ts",
+        "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/WorktreeJumpPalette.test.tsx",
+        "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/lib/palette-repo-resolution.test.ts",
+        "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/lib/ensure-simulator-tab-behavior.test.ts src/renderer/src/lib/palette-repo-resolution.test.ts",
+        "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/lib/browser-palette-page-entries.test.ts src/renderer/src/lib/simulator-palette-search.test.ts",
+        "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/lib/cmd-j-host-qualified-candidate-ownership.test.ts src/renderer/src/store/slices/tabs-open-close-lifecycle.test.ts",
+        "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/lib/browser-palette-page-entries.test.ts src/renderer/src/lib/simulator-palette-search.test.ts src/renderer/src/lib/ensure-simulator-tab-behavior.test.ts src/renderer/src/store/slices/tabs-open-close-lifecycle.test.ts src/renderer/src/store/slices/tabs-pane-layout-operations.test.ts src/shared/workspace-session-schema.test.ts",
+        "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/lib/cmd-j-host-qualified-candidate-ownership.test.ts src/renderer/src/lib/palette-repo-resolution.test.ts src/renderer/src/lib/browser-palette-page-entries.test.ts src/renderer/src/lib/browser-palette-search.test.ts src/renderer/src/lib/simulator-palette-search.test.ts src/renderer/src/lib/workspace-tab-palette-search.test.ts src/renderer/src/lib/browser-page-palette-activation.test.ts src/renderer/src/lib/simulator-tab-palette-activation.test.ts src/renderer/src/lib/ensure-simulator-tab-behavior.test.ts src/renderer/src/runtime/web-session-tabs-sync-mirror-identity.test.ts src/renderer/src/store/slices/tabs-open-close-lifecycle.test.ts src/renderer/src/store/slices/tabs-pane-layout-operations.test.ts src/shared/workspace-session-schema.test.ts",
+        "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/cmd-j/worktree-checks-review-index.test.ts src/renderer/src/components/WorktreeJumpPalette.test.tsx src/renderer/src/components/tab-bar/use-open-tab-search.test.ts src/renderer/src/lib/cmd-j-host-qualified-candidate-ownership.test.ts src/renderer/src/lib/palette-repo-resolution.test.ts src/renderer/src/lib/browser-palette-page-entries.test.ts src/renderer/src/lib/browser-palette-search.test.ts src/renderer/src/lib/simulator-palette-search.test.ts src/renderer/src/lib/workspace-tab-palette-search.test.ts src/renderer/src/lib/browser-page-palette-activation.test.ts src/renderer/src/lib/simulator-tab-palette-activation.test.ts src/renderer/src/lib/ensure-simulator-tab-behavior.test.ts src/renderer/src/runtime/web-session-tabs-sync-mirror-identity.test.ts src/renderer/src/store/slices/tabs-open-close-lifecycle.test.ts src/renderer/src/store/slices/tabs-pane-layout-operations.test.ts src/shared/workspace-session-schema.test.ts",
+        "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/cmd-j/worktree-checks-review-index.test.ts src/renderer/src/components/WorktreeJumpPalette.test.tsx src/renderer/src/components/tab-bar/use-open-tab-search.test.ts src/renderer/src/lib/cmd-j-host-qualified-candidate-ownership.test.ts src/renderer/src/lib/palette-repo-resolution.test.ts src/renderer/src/lib/browser-palette-page-entries.test.ts src/renderer/src/lib/browser-palette-search.test.ts src/renderer/src/lib/simulator-palette-search.test.ts src/renderer/src/lib/workspace-tab-palette-search.test.ts src/renderer/src/lib/browser-page-palette-activation.test.ts src/renderer/src/lib/simulator-tab-palette-activation.test.ts src/renderer/src/lib/ensure-simulator-tab-behavior.test.ts src/renderer/src/lib/open-mobile-emulator-tab.test.ts src/renderer/src/runtime/web-session-tabs-sync-mirror-identity.test.ts src/renderer/src/store/slices/tabs-open-close-lifecycle.test.ts src/renderer/src/store/slices/tabs-pane-layout-operations.test.ts src/shared/workspace-session-schema.test.ts",
+        "pnpm exec playwright test tests/e2e/paired-cmd-j-host-qualified-tabs.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1",
+        "SKIP_BUILD=1 pnpm exec playwright test tests/e2e/paired-cmd-j-host-qualified-tabs.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1"
+      ],
+      "testFiles": [
+        "src/renderer/src/components/cmd-j/worktree-checks-review-index.test.ts",
+        "src/renderer/src/components/WorktreeJumpPalette.test.tsx",
+        "src/renderer/src/components/tab-bar/use-open-tab-search.test.ts",
+        "src/renderer/src/lib/cmd-j-host-qualified-candidate-ownership.test.ts",
+        "src/renderer/src/lib/palette-repo-resolution.test.ts",
+        "src/renderer/src/lib/browser-palette-page-entries.test.ts",
+        "src/renderer/src/lib/browser-palette-search.test.ts",
+        "src/renderer/src/lib/simulator-palette-search.test.ts",
+        "src/renderer/src/lib/workspace-tab-palette-search.test.ts",
+        "src/renderer/src/lib/browser-page-palette-activation.test.ts",
+        "src/renderer/src/lib/simulator-tab-palette-activation.test.ts",
+        "src/renderer/src/lib/ensure-simulator-tab-behavior.test.ts",
+        "src/renderer/src/lib/open-mobile-emulator-tab.test.ts",
+        "src/renderer/src/runtime/web-session-tabs-sync-mirror-identity.test.ts",
+        "src/renderer/src/store/slices/tabs-open-close-lifecycle.test.ts",
+        "src/renderer/src/store/slices/tabs-pane-layout-operations.test.ts",
+        "src/shared/workspace-session-schema.test.ts",
+        "tests/e2e/paired-cmd-j-host-qualified-tabs.spec.ts"
+      ],
+      "assertionRefs": [
+        {
+          "file": "src/renderer/src/components/cmd-j/worktree-checks-review-index.test.ts",
+          "assertions": [
+            "a runtime-owned SSH worktree never exposes review metadata cached for its physical host"
+          ]
+        },
+        {
+          "file": "src/renderer/src/components/WorktreeJumpPalette.test.tsx",
+          "assertions": [
+            "a runtime-owned worktree row never renders repository metadata borrowed from its physical SSH host"
+          ]
+        },
+        {
+          "file": "src/renderer/src/lib/cmd-j-host-qualified-candidate-ownership.test.ts",
+          "assertions": [
+            "browser, simulator, and workspace candidates recognize a paired-runtime alias for an SSH-owned worktree",
+            "paired-runtime aliases retain current-row state and unverifiable explicit legacy owners fail closed",
+            "host filtering and scoped open-tab search cannot hide a same-id sibling from the legacy ownership ambiguity set"
+          ]
+        },
+        {
+          "file": "src/renderer/src/store/slices/tabs-open-close-lifecycle.test.ts",
+          "assertions": [
+            "active local tab creation stamps local ownership instead of leaving a same-id row ambiguous"
+          ]
+        },
+        {
+          "file": "src/renderer/src/lib/palette-repo-resolution.test.ts",
+          "assertions": [
+            "paired SSH rows resolve display metadata through their runtime owner alias",
+            "paired SSH worktrees resolve their runtime-owned repository metadata",
+            "an unavailable explicit runtime owner never borrows physical-host or bare repository metadata",
+            "an explicit unknown owner never borrows another host's metadata"
+          ]
+        },
+        {
+          "file": "src/renderer/src/lib/ensure-simulator-tab-behavior.test.ts",
+          "assertions": [
+            "same-id folder simulator reuse selects the active owning host",
+            "inactive local simulator creation remains host-stamped amid a collision",
+            "an explicitly owned simulator is reused before its matching worktree row hydrates"
+          ]
+        },
+        {
+          "file": "src/renderer/src/lib/open-mobile-emulator-tab.test.ts",
+          "assertions": ["manual emulator launch lookup and creation stay on the local provider"]
+        },
+        {
+          "file": "src/renderer/src/lib/browser-palette-page-entries.test.ts",
+          "assertions": [
+            "same-id local and remote browser tabs appear once under their owning hosts"
+          ]
+        },
+        {
+          "file": "src/renderer/src/lib/simulator-palette-search.test.ts",
+          "assertions": [
+            "same-id local and remote simulator tabs appear once under their owning hosts"
+          ]
+        },
+        {
+          "file": "tests/e2e/paired-cmd-j-host-qualified-tabs.spec.ts",
+          "assertions": [
+            "both browser selections activate and render their owning host and workspace",
+            "both simulator selections activate and render their owning host and group"
+          ]
+        }
+      ],
+      "evidenceRuns": [
+        {
+          "date": "2026-08-20",
+          "runner": "local",
+          "platform": "macos",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/lib/cmd-j-host-qualified-candidate-ownership.test.ts src/renderer/src/store/slices/tabs-open-close-lifecycle.test.ts",
+          "result": "failed",
+          "durationSeconds": 1.8,
+          "summary": "The first review-round oracle failed 4/40: browser and simulator dropped the SSH worktree's paired-runtime-owned tab, generic workspace rows attributed the remote tab to local, and active local tab creation left ownership unstamped."
+        },
+        {
+          "date": "2026-08-20",
+          "runner": "local",
+          "platform": "macos",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/lib/browser-palette-page-entries.test.ts src/renderer/src/lib/simulator-palette-search.test.ts",
+          "result": "failed",
+          "durationSeconds": 0.5,
+          "summary": "The byte-identical oracle on affected baseline 012e9f410c failed 4 tests and passed 24: each same-id browser and simulator tab was routed through both hosts, and ambiguous unstamped rows were duplicated instead of failing closed."
+        },
+        {
+          "date": "2026-08-20",
+          "runner": "local",
+          "platform": "macos",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/lib/browser-palette-page-entries.test.ts src/renderer/src/lib/simulator-palette-search.test.ts src/renderer/src/lib/ensure-simulator-tab-behavior.test.ts src/renderer/src/store/slices/tabs-open-close-lifecycle.test.ts src/renderer/src/store/slices/tabs-pane-layout-operations.test.ts src/shared/workspace-session-schema.test.ts",
+          "result": "passed",
+          "durationSeconds": 2.3,
+          "summary": "6 test files passed, 104 tests passed on the STA-4965 candidate."
+        },
+        {
+          "date": "2026-08-20",
+          "runner": "local",
+          "platform": "macos",
+          "command": "SKIP_BUILD=1 pnpm exec playwright test tests/e2e/paired-cmd-j-host-qualified-tabs.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1",
+          "result": "passed",
+          "durationSeconds": 12.7,
+          "summary": "The paired Electron journey passed real host browser publication, same-id collision injection, separate browser/simulator Cmd-J rows, and selected-host backing-state assertions."
+        },
+        {
+          "date": "2026-08-20",
+          "runner": "local",
+          "platform": "macos",
+          "command": "pnpm exec playwright test tests/e2e/paired-cmd-j-host-qualified-tabs.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1",
+          "result": "passed",
+          "durationSeconds": 24.1,
+          "summary": "A fresh electron-vite --mode e2e build passed the paired journey: the visible Cmd-J list retained one owning browser/simulator row and each selection changed the execution host plus its owning workspace or group."
+        },
+        {
+          "date": "2026-08-20",
+          "runner": "local",
+          "platform": "macos",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/lib/browser-palette-page-entries.test.ts src/renderer/src/lib/simulator-palette-search.test.ts",
+          "result": "failed",
+          "durationSeconds": 0.5,
+          "summary": "The same oracle on fe45b73c20 with only browser-palette-page-entries.ts and simulator-palette-search.ts restored from origin/main failed the same 4 tests and passed 24; restored candidate files passed all 28."
+        },
+        {
+          "date": "2026-08-20",
+          "runner": "local",
+          "platform": "macos",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/lib/cmd-j-host-qualified-candidate-ownership.test.ts src/renderer/src/lib/palette-repo-resolution.test.ts src/renderer/src/lib/browser-palette-page-entries.test.ts src/renderer/src/lib/browser-palette-search.test.ts src/renderer/src/lib/simulator-palette-search.test.ts src/renderer/src/lib/workspace-tab-palette-search.test.ts src/renderer/src/lib/browser-page-palette-activation.test.ts src/renderer/src/lib/simulator-tab-palette-activation.test.ts src/renderer/src/lib/ensure-simulator-tab-behavior.test.ts src/renderer/src/runtime/web-session-tabs-sync-mirror-identity.test.ts src/renderer/src/store/slices/tabs-open-close-lifecycle.test.ts src/renderer/src/store/slices/tabs-pane-layout-operations.test.ts src/shared/workspace-session-schema.test.ts",
+          "result": "passed",
+          "durationSeconds": 10.5,
+          "summary": "The review-hardened candidate passed 189/189 focused contracts, including direct browser-result host fallback, SSH plus paired-runtime current-row aliases, explicit-owner fail-closed behavior, generic workspace rows, simulator reuse, local creation stamping, activation, and same-id distinct-runtime mirror preservation."
+        },
+        {
+          "date": "2026-08-20",
+          "runner": "local",
+          "platform": "macos",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/lib/ensure-simulator-tab-behavior.test.ts src/renderer/src/lib/palette-repo-resolution.test.ts",
+          "result": "failed",
+          "durationSeconds": 0.8,
+          "summary": "The final-review oracle failed 4/16 before the follow-up: same-id folder simulator reuse selected no owning tab, inactive local simulator creation was unstamped, the paired SSH/runtime alias resolved local metadata, and an explicit unknown owner fell back locally."
+        },
+        {
+          "date": "2026-08-21",
+          "runner": "local",
+          "platform": "macos",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/cmd-j/worktree-checks-review-index.test.ts src/renderer/src/components/WorktreeJumpPalette.test.tsx src/renderer/src/components/tab-bar/use-open-tab-search.test.ts src/renderer/src/lib/cmd-j-host-qualified-candidate-ownership.test.ts src/renderer/src/lib/palette-repo-resolution.test.ts src/renderer/src/lib/browser-palette-page-entries.test.ts src/renderer/src/lib/browser-palette-search.test.ts src/renderer/src/lib/simulator-palette-search.test.ts src/renderer/src/lib/workspace-tab-palette-search.test.ts src/renderer/src/lib/browser-page-palette-activation.test.ts src/renderer/src/lib/simulator-tab-palette-activation.test.ts src/renderer/src/lib/ensure-simulator-tab-behavior.test.ts src/renderer/src/runtime/web-session-tabs-sync-mirror-identity.test.ts src/renderer/src/store/slices/tabs-open-close-lifecycle.test.ts src/renderer/src/store/slices/tabs-pane-layout-operations.test.ts src/shared/workspace-session-schema.test.ts",
+          "result": "passed",
+          "durationSeconds": 24.3,
+          "summary": "The OpenCode-review-hardened candidate passed 225/225 focused contracts, including unfiltered ownership ambiguity under host filters and scoped open-tab search, review-cache ownership, rendered palette repo metadata, folder workspaces, inactive local simulator creation, paired SSH/runtime display metadata, and explicit-owner fail-closed resolution."
+        },
+        {
+          "date": "2026-08-20",
+          "runner": "local",
+          "platform": "macos",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/lib/palette-repo-resolution.test.ts",
+          "result": "failed",
+          "durationSeconds": 0.1,
+          "summary": "The final reviewer repo-label oracle failed 1/6 before the follow-up: a paired SSH worktree resolved the local bare-id repository instead of its runtime-owned repository."
+        },
+        {
+          "date": "2026-08-20",
+          "runner": "local",
+          "platform": "macos",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/lib/palette-repo-resolution.test.ts",
+          "result": "failed",
+          "durationSeconds": 0.1,
+          "summary": "The final clean-round fail-closed oracle failed 1/7 before the follow-up: an unavailable explicit runtime owner borrowed physical SSH repository metadata."
+        },
+        {
+          "date": "2026-08-20",
+          "runner": "local",
+          "platform": "macos",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/WorktreeJumpPalette.test.tsx",
+          "result": "failed",
+          "durationSeconds": 5.1,
+          "summary": "With the component's physical-host prelookup restored, the rendered palette oracle failed 1/12: the runtime-owned row displayed the physical SSH repository badge."
+        },
+        {
+          "date": "2026-08-20",
+          "runner": "local",
+          "platform": "macos",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/cmd-j/worktree-checks-review-index.test.ts",
+          "result": "failed",
+          "durationSeconds": 0.2,
+          "summary": "The final review-cache oracle failed 1/6: a runtime-owned SSH worktree exposed the physical host's cached pull request."
+        },
+        {
+          "date": "2026-08-20",
+          "runner": "local",
+          "platform": "macos",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/cmd-j/worktree-checks-review-index.test.ts",
+          "result": "failed",
+          "durationSeconds": 0.4,
+          "summary": "The exact-head clean-round oracle failed 1/6: after the host-qualified index rejected a physical SSH review, the palette document still surfaced its unqualified legacy cache entry for the runtime-owned worktree."
+        },
+        {
+          "date": "2026-08-20",
+          "runner": "local",
+          "platform": "macos",
+          "command": "pnpm exec playwright test tests/e2e/paired-cmd-j-host-qualified-tabs.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1",
+          "result": "passed",
+          "durationSeconds": 36.7,
+          "summary": "A fresh e2e-mode Electron build passed the paired journey: each remote/local browser and simulator candidate appeared exactly once, selected the owning host plus workspace or group tab, and rendered that tab active. The group active-tab oracle remains stable while asynchronous paired session mirroring updates the legacy bare-worktree activeTabType field."
+        },
+        {
+          "date": "2026-08-21",
+          "runner": "local",
+          "platform": "macos",
+          "command": "SKIP_BUILD=1 pnpm exec playwright test tests/e2e/paired-cmd-j-host-qualified-tabs.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1",
+          "result": "passed",
+          "durationSeconds": 20.6,
+          "summary": "After a fresh build exposed an unrelated mirrored terminal entering the broad backing-state diagnostic, the exact built candidate passed with that oracle scoped to the four seeded browser/simulator tabs; rendered active-tab and backing execution-host assertions remained green."
+        }
+      ],
+      "runtimeBudget": {
+        "p95Seconds": 180,
+        "scope": "focused deterministic contracts plus one paired Electron journey"
+      },
+      "flakeHistory": {
+        "status": "not-started",
+        "evidence": "The candidate contract has no timers. Initial Electron attempts exposed seeded-worktree discovery and programmatic keyboard-selection harness races before the ownership assertions; soak history is not yet available."
+      },
+      "redGreenEvidence": {
+        "status": "complete",
+        "evidence": "Byte-identical browser and simulator candidate tests failed 4/28 on affected baseline 012e9f410c, passed 28/28 on candidate fe45b73c20, failed the same 4/28 when only the two candidate filters were disabled, and returned to 28/28 after restoration. Review-round topology contracts failed 4/40 before the alias/generic/local-stamping follow-up; final-review contracts then failed 4/16 before folder/background/worktree-metadata hardening, 1/6 before paired repository-metadata hardening, 1/7 before unavailable-runtime fail-closed hardening, 1/12 with the component's physical-host bypass restored, 1/6 before review-cache ownership used the same resolver, 1/6 before the downstream document rejected a remote owner's unqualified legacy cache entry, and 1/6 when a host filter or scoped open-tab search hid the same-id sibling from legacy ambiguity detection. Manual local-provider ownership failed 1/12 before explicit host routing, and pre-hydration dedupe failed 1/13 before exact stamped-owner reuse; the combined contracts then passed 25/25 and the six-file review suite passed 73/73. The prior completed focused suite passed 225/225."
+      },
+      "performanceBudget": {
+        "required": true,
+        "evidence": "Candidate construction adds bounded in-memory ownership filtering over the already-read worktree tab bucket and introduces no polling or network work."
+      },
+      "promotionCriteria": [
+        "Collect paired Electron CI soak history without unexplained flakes.",
+        "Add a live paired-runtime-over-SSH journey when the E2E harness can provision that combined topology."
+      ],
+      "knownGaps": [
+        "Live Linux, Windows, and paired-runtime-over-SSH journeys are not collected; the SSH/runtime dual-owner topology is deterministic renderer coverage.",
+        "The paired Electron simulator path seeds renderer state because remote web clients cannot launch a native emulator.",
+        "The paired Electron journey proves a real host mirror stamp before injecting the same-id sibling state; it does not create the collision through the wire.",
+        "Mixed-version behavior is covered by optional-field parsing and fail-closed legacy ambiguity, not a live old-client/new-host matrix."
+      ],
+      "demotionRule": "Cannot promote if a same-id sibling tab duplicates, disappears, activates another host, or if ambiguous unstamped ownership is guessed."
+    },
+    {
       "id": "ephemeral-vm-runtime.rollback-readable-sidecar",
       "title": "VM lifecycle stays rollback-readable and cleanup-retryable",
       "maturity": "experimental",
