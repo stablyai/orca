@@ -1870,6 +1870,10 @@ type RuntimePtyController = {
     env?: Record<string, string>
     envToDelete?: string[]
     resumeProviderSession?: AgentProviderSessionMetadata
+    /** Set when the pane is relaunching because the user switched Codex
+     *  accounts, so the resume follows the new selection instead of the
+     *  account that owns the rollout. */
+    codexAccountSwitchRestart?: boolean
     telemetry?: WorktreeStartupLaunch['telemetry']
     connectionId?: string | null
     worktreeId?: string

@@ -1,9 +1,9 @@
-import { existsSync, mkdirSync } from 'node:fs'
-import { dirname, join, relative } from 'node:path'
+import { existsSync, lstatSync, mkdirSync, unlinkSync } from 'node:fs'
+import { dirname, isAbsolute, join, relative } from 'node:path'
 import { normalizeRuntimePathForComparison } from '../../shared/cross-platform-path'
 import { listCodexSessionRolloutFilesIncrementally } from './codex-session-file-listing'
 import type { CodexSessionBridgeIncrementalOptions } from './codex-session-file-listing'
-import { linkCodexSessionFile } from './codex-session-link'
+import { linkCodexSessionFile, tryHardlinkCodexSessionFile } from './codex-session-link'
 
 /**
  * Bridges Codex history between Orca-managed Codex homes.
@@ -79,6 +79,76 @@ export async function bridgeCodexSessionsIntoAccountHome(args: {
     }
   }
   return summary
+}
+
+/**
+ * Links one named rollout into the target home ahead of the whole-tree bridge.
+ *
+ * Why: the background bridge walks every source home and can take seconds on a
+ * large history. An account-switch restart has to resume one specific
+ * conversation immediately, so it links that rollout first and lets the sweep
+ * catch up. Returns the linked path, or null when it could not be placed.
+ */
+export function linkCodexRolloutIntoAccountHome(args: {
+  sourceCodexHomePath: string
+  targetCodexHomePath: string
+  rolloutFilePath: string
+}): string | null {
+  const sourceSessionsRoot = join(args.sourceCodexHomePath, 'sessions')
+  const targetSessionsRoot = join(args.targetCodexHomePath, 'sessions')
+  const relativePath = relative(sourceSessionsRoot, args.rolloutFilePath)
+  // Why: a rollout outside the source home's sessions tree has no place in the
+  // target tree either; refusing beats inventing a path from `..` segments.
+  if (relativePath.startsWith('..') || isAbsolute(relativePath)) {
+    return null
+  }
+  const targetFilePath = join(targetSessionsRoot, relativePath)
+  if (isCodexResumableRollout(targetFilePath)) {
+    return targetFilePath
+  }
+  // Why hardlink-only, unlike the sweep: Codex's resume picker ignores a
+  // symlinked JSONL session, so accepting the sweep's cross-volume fallback here
+  // would report a move that leaves the relaunched pane on a blank session.
+  try {
+    mkdirSync(dirname(targetFilePath), { recursive: true })
+    // Why unlink first: the sweep may already have left a symlink at this exact
+    // path, and a hardlink onto an occupied path fails EEXIST — which would make
+    // the conversation permanently unmovable rather than merely unlisted.
+    removeSymlinkAt(targetFilePath)
+  } catch (error) {
+    console.warn('[codex-account-session-bridge] Failed to prepare session path:', error)
+    return null
+  }
+  if (tryHardlinkCodexSessionFile(args.rolloutFilePath, targetFilePath)) {
+    return targetFilePath
+  }
+  // Why re-check: the background sweep walks the same tree, so it can hardlink
+  // this rollout in the gap between the unlink above and this attempt. That
+  // loses the race with EEXIST while leaving the conversation correctly listed,
+  // and answering "not moved" there would discard it for no reason.
+  return isCodexResumableRollout(targetFilePath) ? targetFilePath : null
+}
+
+/** Clears a symlink standing where a hardlink has to go; leaves real files alone. */
+function removeSymlinkAt(filePath: string): void {
+  try {
+    if (!lstatSync(filePath).isSymbolicLink()) {
+      return
+    }
+  } catch {
+    return
+  }
+  unlinkSync(filePath)
+}
+
+/** A path Codex will actually list: a real file, never a symlink to one. */
+function isCodexResumableRollout(filePath: string): boolean {
+  try {
+    const stats = lstatSync(filePath)
+    return stats.isFile() && !stats.isSymbolicLink()
+  } catch {
+    return false
+  }
 }
 
 /**

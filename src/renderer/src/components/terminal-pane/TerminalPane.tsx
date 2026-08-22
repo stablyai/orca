@@ -140,7 +140,7 @@ import {
 } from '@/lib/app-menu-selection-actions'
 import { isEditableTarget } from '@/lib/editable-target'
 import { copyTerminalSelection } from './terminal-selection-copy'
-import { CODEX_ACCOUNT_RESTART_STARTUP } from '@/lib/codex-session-restart'
+import { buildCodexAccountRestartStartup } from '@/lib/codex-account-restart-startup'
 import { WORKSPACE_FILE_PATH_MIME, WORKSPACE_FILE_PATHS_MIME } from '@/lib/workspace-file-drag'
 import { isTerminalSessionStateSaveFailure } from '../../../../shared/terminal-session-state-save-failure'
 import { isTerminalZeroDimensionsDiagnostic } from '../../../../shared/terminal-zero-dimensions-diagnostic'
@@ -1565,7 +1565,17 @@ function TerminalPane(
         tabId,
         worktreeId,
         cwd,
-        startup: CODEX_ACCOUNT_RESTART_STARTUP,
+        // Why built per pane: the relaunch has to name the session it resumes,
+        // or the pane comes back on the right account with a blank conversation.
+        startup: buildCodexAccountRestartStartup({
+          tabId,
+          leafId: pane.leafId,
+          worktreeId,
+          // Why: the resume argv is quoted for the shell that runs it, and the
+          // tab can override the machine's default (the detached driver passes
+          // this too).
+          shellOverride: terminalTab?.shellOverride
+        }),
         mountFollowsTerminalPark: false,
         paneTransportsRef,
         paneMode2031Ref,
@@ -1621,6 +1631,7 @@ function TerminalPane(
       suppressPtyExit,
       syncPanePtyLayoutBinding,
       tabId,
+      terminalTab?.shellOverride,
       updateTabPtyId,
       updateTabTitle,
       worktreeId

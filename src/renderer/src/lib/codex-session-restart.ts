@@ -26,10 +26,14 @@ import type { TuiAgent } from '../../../shared/tui-agent'
 // launch prep (project trust pre-mark) only for launchAgent 'codex', so without
 // it a restart respawn could race the account handoff and record a launch
 // account the pane does not actually read.
+// Why codexAccountSwitchRestart: without it main pins the relaunch to the home
+// that owns the resumed session, so the pane comes back on the account the user
+// just left and the switch appears to do nothing.
 export const CODEX_ACCOUNT_RESTART_STARTUP = {
   command: 'codex',
   startupCommandDelivery: 'shell-ready',
-  launchAgent: 'codex'
+  launchAgent: 'codex',
+  codexAccountSwitchRestart: true
 } as const
 
 export type CodexPaneScanResult = {

@@ -252,6 +252,8 @@ import { ManagedCodexHomeTemporarilyUnavailableError } from './codex-accounts/ho
 import { resolveHostCodexSessionSourceHome } from './codex/codex-session-source-home'
 import type { CodexSessionResumePreparation } from './codex/codex-session-resume-home'
 import { prepareCodexSessionResume } from './codex/codex-session-resume-preparation'
+import { resolveCodexAccountSwitchResumeHome } from './codex/codex-account-switch-resume-repin'
+import { transferCodexThreadGoalBetweenHomes } from './codex/codex-thread-goal-transfer'
 import { getOrcaManagedCodexHomePath, getSystemCodexHomePath } from './codex/codex-home-paths'
 import { normalizeRuntimePathForComparison } from '../shared/cross-platform-path'
 import type { AgentProviderSessionMetadata } from '../shared/agent-session-resume'
@@ -1152,11 +1154,52 @@ function prepareCodexRuntimeHomeForLaunch(
   return runtimeHomePath
 }
 
+/**
+ * Repins an account-switch restart onto the selected account, carrying the goal.
+ *
+ * Returns null when the switch has to give the conversation up: the user asked
+ * for an account, and honouring that beats keeping them on the one they left.
+ * The caller turns that into a `fresh` outcome, which drops the resume argv and
+ * tells the pane its conversation did not come along.
+ *
+ * The goal transfer runs before the pane spawns so the resumed session opens
+ * with its objective already in place; it is bounded so it cannot stall the
+ * launch, because a missing goal is a smaller loss than a terminal that hangs.
+ */
+async function moveCodexResumeToSelectedAccount(args: {
+  originHome: string
+  transcriptPath: string
+  threadId: string
+}): Promise<string | null> {
+  const move = resolveCodexAccountSwitchResumeHome({
+    originCodexHomePath: args.originHome,
+    selectedCodexHomePath: codexRuntimeHome!.getSelectedHostAccountCodexHomePath(),
+    transcriptPath: args.transcriptPath
+  })
+  if (move.outcome === 'already-there') {
+    // Why not a give-up: this pane's own account is the selected one, so its
+    // conversation was never at risk and the ordinary resume is correct.
+    return args.originHome
+  }
+  if (move.outcome === 'unmovable') {
+    return null
+  }
+  await transferCodexThreadGoalBetweenHomes({
+    threadId: args.threadId,
+    originCodexHomePath: args.originHome,
+    targetCodexHomePath: move.codexHomePath
+  })
+  return move.codexHomePath
+}
+
 async function prepareCodexSessionResumeForLaunch(args: {
   providerSession: AgentProviderSessionMetadata
   target: CodexAccountSelectionTarget
   launchEnv?: NodeJS.ProcessEnv
   workspacePath?: string
+  /** The pane is relaunching because the user switched accounts, so the resume
+   *  must follow the new selection rather than the rollout's owning account. */
+  accountSwitchRestart?: boolean
 }): Promise<CodexSessionResumePreparation | null> {
   if (args.target.runtime === 'wsl' || !codexRuntimeHome || !store) {
     return null
@@ -1177,6 +1220,9 @@ async function prepareCodexSessionResumeForLaunch(args: {
   // (#STA-4422).
   const selectedAccountCodexHome =
     codexRuntimeHome.resolveSelectedHostAccountCodexHomePathForResume()
+  // Why a closure flag: the verified-home callback is where the give-up is
+  // discovered, but only this function may turn it into a `fresh` outcome.
+  let accountSwitchGaveUpResume = false
   // Why: a `fresh` outcome must skip migration, trust and hook repair entirely — there is
   // no verified origin home to prepare, so the PTY layer drops the resume argv (#10793).
   const preparation = await prepareCodexSessionResume({
@@ -1221,7 +1267,22 @@ async function prepareCodexSessionResumeForLaunch(args: {
           error
         )
       }
-      const resumeHome = migrated.useRealCodexHome ? systemHomePath : sessionSource.homePath
+      const originHome = migrated.useRealCodexHome ? systemHomePath : sessionSource.homePath
+      const movedHome = args.accountSwitchRestart
+        ? await moveCodexResumeToSelectedAccount({
+            originHome,
+            transcriptPath: sessionSource.transcriptPath,
+            threadId: args.providerSession.id
+          })
+        : originHome
+      if (movedHome === null) {
+        // Why return early: the launch will run under the selected account and
+        // start a fresh session, so preparing the origin home's hooks here would
+        // ready a home this pane never reads.
+        accountSwitchGaveUpResume = true
+        return originHome
+      }
+      const resumeHome = movedHome
 
       if (args.workspacePath) {
         try {
@@ -1249,6 +1310,12 @@ async function prepareCodexSessionResumeForLaunch(args: {
       return resumeHome
     }
   })
+  if (accountSwitchGaveUpResume) {
+    // Why claimedCodexProvenance: the rollout is real and was verified — the
+    // account move is what it could not survive — so the pane owes the user the
+    // "your conversation did not come along" notice rather than silence.
+    return { outcome: 'fresh', claimedCodexProvenance: true }
+  }
   return preparation.outcome === 'resume'
     ? {
         ...preparation,

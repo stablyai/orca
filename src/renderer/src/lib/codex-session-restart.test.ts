@@ -31,10 +31,14 @@ describe('CODEX_ACCOUNT_RESTART_STARTUP', () => {
     // readiness gate and Codex launch prep only for launchAgent 'codex', so
     // dropping it would let a restart respawn race the account handoff and
     // record a launch account the pane does not actually read.
+    // Why codexAccountSwitchRestart is load-bearing: without it main pins the
+    // relaunch to the home owning the resumed session, so the pane comes back on
+    // the account the user just left and the switch appears to do nothing.
     expect(CODEX_ACCOUNT_RESTART_STARTUP).toEqual({
       command: 'codex',
       startupCommandDelivery: 'shell-ready',
-      launchAgent: 'codex'
+      launchAgent: 'codex',
+      codexAccountSwitchRestart: true
     })
     expect(shouldUseShellReadyStartupDelivery(CODEX_ACCOUNT_RESTART_STARTUP)).toBe(true)
   })

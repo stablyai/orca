@@ -291,4 +291,73 @@ describe('createIpcPtyTransport', () => {
     })
     expect(writeMock).not.toHaveBeenCalled()
   })
+
+  describe('codexAccountSwitchRestart', () => {
+    const spawnPayloads = (): Record<string, unknown>[] =>
+      vi.mocked(window.api.pty.spawn).mock.calls.map(([payload]) => payload)
+
+    it('carries the flag on the first fresh spawn and on no later one', async () => {
+      const { createIpcPtyTransport } = await import('./pty-transport')
+      const transport = createIpcPtyTransport({ codexAccountSwitchRestart: true })
+
+      await transport.connect({ url: '', callbacks: {} })
+      await transport.connect({ url: '', callbacks: {} })
+
+      expect(spawnPayloads()[0].codexAccountSwitchRestart).toBe(true)
+      expect(spawnPayloads()[1].codexAccountSwitchRestart).toBeUndefined()
+      transport.disconnect()
+    })
+
+    it('keeps the flag when the spawn throws, so the retry still switches account', async () => {
+      vi.mocked(window.api.pty.spawn).mockRejectedValueOnce(new Error('spawn refused'))
+      const { createIpcPtyTransport } = await import('./pty-transport')
+      const transport = createIpcPtyTransport({ codexAccountSwitchRestart: true })
+
+      await Promise.resolve(transport.connect({ url: '', callbacks: {} })).catch(() => null)
+      await transport.connect({ url: '', callbacks: {} })
+
+      // Why both: a spent flag here would relaunch the retry on the account the
+      // user just left, silently undoing the switch they asked for.
+      expect(spawnPayloads()[0].codexAccountSwitchRestart).toBe(true)
+      expect(spawnPayloads()[1].codexAccountSwitchRestart).toBe(true)
+      transport.disconnect()
+    })
+
+    it('keeps the flag when main answers with a reattach', async () => {
+      vi.mocked(window.api.pty.spawn).mockResolvedValueOnce({ id: 'pty-1', isReattach: true })
+      const { createIpcPtyTransport } = await import('./pty-transport')
+      const transport = createIpcPtyTransport({ codexAccountSwitchRestart: true })
+
+      await transport.connect({ url: '', callbacks: {} })
+      await transport.connect({ url: '', callbacks: {} })
+
+      // Why: a reattach adopts an existing shell, so main never runs the
+      // account-switch launch path and the flag has not been used yet.
+      expect(spawnPayloads()[1].codexAccountSwitchRestart).toBe(true)
+      transport.disconnect()
+    })
+
+    it('keeps the flag when the admitted id is rejected and the spawn is retired', async () => {
+      const { createIpcPtyTransport } = await import('./pty-transport')
+      const transport = createIpcPtyTransport({ codexAccountSwitchRestart: true })
+
+      await transport.connect({ url: '', callbacks: {}, admitPtyId: () => false })
+      await transport.connect({ url: '', callbacks: {} })
+
+      // Why: that spawn was killed, so the account switch never reached a shell
+      // the user can see — the next one still has to carry it.
+      expect(spawnPayloads()[1].codexAccountSwitchRestart).toBe(true)
+      transport.disconnect()
+    })
+
+    it('stays absent when the transport was not created by an account switch', async () => {
+      const { createIpcPtyTransport } = await import('./pty-transport')
+      const transport = createIpcPtyTransport({})
+
+      await transport.connect({ url: '', callbacks: {} })
+
+      expect(spawnPayloads()[0].codexAccountSwitchRestart).toBeUndefined()
+      transport.disconnect()
+    })
+  })
 })

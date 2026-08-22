@@ -846,8 +846,9 @@
         "9263e75f49": "Codex está usando la cuenta anterior.",
         "a4c8e1b2f7": "Codex sigue conectado como {{value0}}",
         "d3e8a1f4b2": "Cuenta cambiada",
-        "9375620cc3": "Reinicia esta sesión para usar {{value0}}. Se mantiene en la cuenta anterior hasta que lo hagas.",
-        "6133594b12": "Mantener cuenta anterior"
+        "6133594b12": "Mantener cuenta anterior",
+        "5c1f8ab470": "Al reiniciar esta terminal cambia a {{value0}}. Tu trabajo continúa y el nuevo uso se contabiliza en la cuenta a la que cambias.",
+        "b7d31e05a9": "Al reiniciar esta terminal cambia a {{value0}} y esta conversación no se traslada: la terminal empieza una nueva. Para conservar una conversación al cambiar, añade una cuenta de Codex aparte y cambia a ella."
       },
       "FirstLaunchBanner": {
         "b9e1b966c7": "Descartar aviso",

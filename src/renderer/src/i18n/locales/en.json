@@ -988,12 +988,13 @@
         "c72a5fb234": "Restart",
         "9263e75f49": "Codex is using the previous account",
         "d3e8a1f4b2": "Account switched",
-        "9375620cc3": "Restart this session to use {{value0}}. It stays on the previous account until you do.",
         "6133594b12": "Keep old account",
         "8f0d5c92a1": "Codex setup changed",
         "3ea91b5c07": "This Codex session is using an outdated configuration",
         "e6b7139d2a": "Restart this session to load your current Codex configuration.",
-        "7b1d20f4c8": "Keep current session"
+        "7b1d20f4c8": "Keep current session",
+        "5c1f8ab470": "Restarting this terminal switches it to {{value0}}. Your work carries over, and new usage is counted against the account you switch to.",
+        "b7d31e05a9": "Restarting this terminal switches it to {{value0}}, and this conversation will not come along — the terminal starts a new one. To carry a conversation across a switch, add a separate Codex account and switch to that instead."
       },
       "FirstLaunchBanner": {
         "b9e1b966c7": "Dismiss notice",

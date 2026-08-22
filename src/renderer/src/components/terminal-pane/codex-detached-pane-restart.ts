@@ -17,6 +17,7 @@ import { getWorktreeMapFromState } from '@/store/selectors'
 import { singlePaneLayoutSnapshot } from '@/store/slices/terminal-helpers'
 import { hasRegisteredRuntimeTerminalTab } from '@/runtime/sync-runtime-graph'
 import { CODEX_ACCOUNT_RESTART_STARTUP } from '@/lib/codex-session-restart'
+import { buildCodexAccountRestartStartup } from '@/lib/codex-account-restart-startup'
 import { isForeignMachineCodexPtyId } from '@/lib/codex-pane-selection-lane'
 import { getLocalProjectExecutionRuntimeContext } from '@/lib/local-preflight-context'
 import {
@@ -177,6 +178,8 @@ async function executeDetachedCodexPaneRestart(
     store.suppressPtyExit(ptyId)
     store.clearTabPtyId(located.tab.id, ptyId)
     store.consumeSuppressedPtyExit(ptyId)
+    // Why the bare restart here: without a layout leaf there is no pane key, so
+    // the pane's Codex session cannot be looked up and named for a resume.
     store.queueTabStartupCommand(located.tab.id, { ...CODEX_ACCOUNT_RESTART_STARTUP })
     store.clearCodexRestartNotice(ptyId)
     killReplacedCodexPanePty(ptyId)
@@ -206,16 +209,35 @@ async function executeDetachedCodexPaneRestart(
     return
   }
 
+  const restartStartup = buildCodexAccountRestartStartup({
+    tabId: tab.id,
+    leafId,
+    worktreeId,
+    ...(tab.shellOverride ? { shellOverride: tab.shellOverride } : {})
+  })
   // Hidden replacements converge on mount; provider sizing must not delay ownership transfer.
   const spawned = await window.api.pty.spawn({
     cols: 80,
     rows: 24,
     ...(cwd ? { cwd } : {}),
     cwdFallback: 'worktree',
-    env: buildPaneIdentityEnv(state, worktreeId, tab.id, leafId),
-    command: CODEX_ACCOUNT_RESTART_STARTUP.command,
+    // Why merged: the mounted lane ships the startup's env too, so dropping it
+    // here would relaunch an unmounted pane without the user's Codex env vars.
+    env: {
+      ...restartStartup.env,
+      ...buildPaneIdentityEnv(state, worktreeId, tab.id, leafId)
+    },
+    command: restartStartup.command,
     startupCommandDelivery: CODEX_ACCOUNT_RESTART_STARTUP.startupCommandDelivery,
     launchAgent: CODEX_ACCOUNT_RESTART_STARTUP.launchAgent,
+    codexAccountSwitchRestart: CODEX_ACCOUNT_RESTART_STARTUP.codexAccountSwitchRestart,
+    // Why both: main repins the launch home only for a spawn that names the
+    // session it resumes, so without this an unmounted pane's restart came back
+    // on the right account with a conversation the card had promised to keep.
+    ...(restartStartup.resumeProviderSession
+      ? { resumeProviderSession: restartStartup.resumeProviderSession }
+      : {}),
+    ...(restartStartup.launchConfig ? { launchConfig: restartStartup.launchConfig } : {}),
     worktreeId,
     tabId: tab.id,
     leafId,
