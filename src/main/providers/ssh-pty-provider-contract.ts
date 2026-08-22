@@ -1,4 +1,5 @@
 import type { PtyIncarnationId } from '../../shared/pty-incarnation'
+import type { TerminalModes } from '../../shared/terminal-modes'
 
 export type RemoteCliBridgeEnv = {
   binDir: string
@@ -30,7 +31,12 @@ export type SshPtyDataCallback = (payload: {
   sourceRejected?: boolean
   rejectedSourceRecovery?: 'confirm-existing' | 'fresh-activation' | 'reconnect-channel'
 }) => void
-export type SshPtyReplayCallback = (payload: { id: string; data: string }) => void
+export type SshPtyReplayCallback = (payload: {
+  id: string
+  data: string
+  /** Application terminal modes at the replay boundary, when the relay provides them. */
+  modes?: TerminalModes
+}) => void
 export type SshPtyExitCallback = (payload: {
   id: string
   code: number

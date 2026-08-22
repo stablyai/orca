@@ -176,10 +176,18 @@ function attachPtySecondaryPushListeners(unsubscribes: (() => void)[]): void {
   }
   unsubscribes.push(
     window.api.pty.onReplay((payload) => {
-      if (bufferPtyShutdownReplayData(payload.id, payload.data)) {
+      if (bufferPtyShutdownReplayData(payload.id, payload.data, payload.modes)) {
         return
       }
-      ptyReplayHandlers.get(payload.id)?.(payload.data)
+      const handler = ptyReplayHandlers.get(payload.id)
+      if (!handler) {
+        return
+      }
+      if (payload.modes) {
+        handler(payload.data, payload.modes)
+      } else {
+        handler(payload.data)
+      }
     })
   )
   unsubscribes.push(

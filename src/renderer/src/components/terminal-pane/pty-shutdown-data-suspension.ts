@@ -1,10 +1,11 @@
 import { clearPreHandlerPtyState, drainPreHandlerPtyData } from './pty-pre-handler-buffer'
 import type { PtyDataMeta } from './pty-dispatcher'
 import { PtyShutdownOutputQueue, type PtyShutdownOutputEvent } from './pty-shutdown-output-queue'
+import type { TerminalModes } from '../../../../shared/terminal-modes'
 
 export const ptyDataHandlers = new Map<string, (data: string, meta?: PtyDataMeta) => void>()
 export const ptyDataSidecars = new Map<string, Set<(data: string) => void>>()
-export const ptyReplayHandlers = new Map<string, (data: string) => void>()
+export const ptyReplayHandlers = new Map<string, (data: string, modes?: TerminalModes) => void>()
 export const ptyExitHandlers = new Map<string, (code: number) => void>()
 export const ptyTeardownHandlers = new Map<string, () => void>()
 export const ptyShutdownLifecycleHandlers = new Map<
@@ -15,7 +16,7 @@ export const ptyShutdownLifecycleHandlers = new Map<
 export type PtyDataHandlerShutdownSnapshot = {
   ptyId: string
   dataHandler?: (data: string, meta?: PtyDataMeta) => void
-  replayHandler?: (data: string) => void
+  replayHandler?: (data: string, modes?: TerminalModes) => void
   teardownHandler?: () => void
   commit: () => void
   rollback: () => void
@@ -26,7 +27,7 @@ type PendingPtyHandlerShutdown = {
   committed: boolean
   outputQueue: PtyShutdownOutputQueue
   dataHandler?: (data: string, meta?: PtyDataMeta) => void
-  replayHandler?: (data: string) => void
+  replayHandler?: (data: string, modes?: TerminalModes) => void
   teardownHandler?: () => void
   lifecycleHandler?: { pause: () => void; rollback: () => void; commit: () => void }
 }
@@ -89,8 +90,12 @@ export function isPtyDataHandlerShutdownPending(ptyId: string): boolean {
   return pendingPtyHandlerShutdowns.has(ptyId)
 }
 
-export function bufferPtyShutdownReplayData(ptyId: string, data: string): boolean {
-  return bufferPtyShutdownOutput(ptyId, { kind: 'replay', data })
+export function bufferPtyShutdownReplayData(
+  ptyId: string,
+  data: string,
+  modes?: TerminalModes
+): boolean {
+  return bufferPtyShutdownOutput(ptyId, { kind: 'replay', data, ...(modes ? { modes } : {}) })
 }
 
 export function bufferPtyShutdownData(ptyId: string, data: string, meta?: PtyDataMeta): boolean {
@@ -183,10 +188,14 @@ function deliverShutdownEvent(
   ptyId: string,
   event: PtyShutdownOutputEvent,
   dataHandler: (data: string, meta?: PtyDataMeta) => void,
-  replayHandler: (data: string) => void
+  replayHandler: (data: string, modes?: TerminalModes) => void
 ): void {
   if (event.kind === 'replay') {
-    replayHandler(event.data)
+    if (event.modes) {
+      replayHandler(event.data, event.modes)
+    } else {
+      replayHandler(event.data)
+    }
     return
   }
   dataHandler(event.data, event.meta)

@@ -35,6 +35,7 @@ import {
 import { createPtyInputWriteQueue } from './pty-input-write-queue'
 import type { PtyDataMeta } from './pty-dispatcher'
 import type { IpcPtyTransportOptions, PtyConnectResult, PtyTransport } from './pty-transport-types'
+import type { TerminalModes } from '../../../../shared/terminal-modes'
 import { createBellDetector } from '../../../../shared/terminal-bell-detector'
 import {
   hasTerminalDisplayContent,
@@ -656,12 +657,16 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
 
   function registerPtyDataHandler(id: string): void {
     // Why: route relay replay data through onReplayData so the replay guard stops xterm auto-replies from leaking into the shell.
-    const replayHandler = (data: string): void => {
+    const replayHandler = (data: string, modes?: TerminalModes): void => {
       if (ptyId !== id) {
         return
       }
       if (storedCallbacks.onReplayData) {
-        storedCallbacks.onReplayData(data)
+        if (modes) {
+          storedCallbacks.onReplayData(data, { modes })
+        } else {
+          storedCallbacks.onReplayData(data)
+        }
       } else {
         storedCallbacks.onData?.(data)
       }
@@ -920,6 +925,7 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
             sessionExpired: spawnResult.sessionExpired,
             coldRestore: spawnResult.coldRestore,
             replay: spawnResult.replay,
+            modes: spawnResult.modes,
             pendingEscapeTailAnsi: spawnResult.pendingEscapeTailAnsi,
             // Why: the cold-restore path re-runs the launch command, so it needs the
             // same "main declined the resume" signal the fresh-spawn path gets.

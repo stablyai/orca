@@ -1,13 +1,14 @@
 import { TERMINAL_SCROLLBACK_SESSION_BUFFER_BYTE_LIMIT } from '../../../../shared/terminal-scrollback-limits'
 import { clampUtf8Tail } from './pty-eager-buffer-clamp'
 import type { PtyDataMeta } from './pty-dispatcher'
+import type { TerminalModes } from '../../../../shared/terminal-modes'
 
 const EVENT_CHUNK_SIZE = 64
 const COMPACTION_MIN_HEAD_CHUNKS = 64
 
 export type PtyShutdownOutputEvent =
   | { kind: 'data'; data: string; meta?: PtyDataMeta }
-  | { kind: 'replay'; data: string }
+  | { kind: 'replay'; data: string; modes?: TerminalModes }
 
 type PtyShutdownOutputChunk = {
   events: (PtyShutdownOutputEvent | undefined)[]
