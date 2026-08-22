@@ -25,6 +25,7 @@ async function makeBareGitRepo(path: string): Promise<void> {
 function posixTestFilesystem(args: {
   directories: Map<string, string[]>
   gitRepos: Set<string>
+  repoManaged?: Set<string>
   files?: Map<string, string>
 }) {
   return {
@@ -43,6 +44,7 @@ function posixTestFilesystem(args: {
     joinPath: (parentPath: string, childName: string) => `${parentPath}/${childName}`,
     basename: (path: string) => path.split('/').at(-1) ?? path,
     hasGitMarker: (path: string) => args.gitRepos.has(path),
+    hasRepoMarker: (path: string) => args.repoManaged?.has(path) ?? false,
     isSelectedPathGitRepo: (path: string) => args.gitRepos.has(path)
   }
 }
@@ -367,6 +369,57 @@ describe('scanNestedRepos', () => {
 
     expect(result.repos[0].displayName).toBe('one')
     expect(result.truncated).toBe(true)
+  })
+
+  it('treats a selected directory with .repo markers as a repo-managed project', async () => {
+    const root = await tempRoot()
+    await mkdir(join(root, '.repo'), { recursive: true })
+    await writeFile(join(root, '.repo', 'manifest.xml'), '<manifest />\n')
+    await mkdir(join(root, 'frameworks', 'base'), { recursive: true })
+    await makeGitRepo(join(root, 'frameworks', 'base'))
+
+    const result = await scanNestedRepos({ path: root })
+
+    expect(result.selectedPathKind).toBe('repo_managed')
+    expect(result.repos).toEqual([])
+  })
+
+  it('does not treat an empty .repo directory as repo-managed', async () => {
+    const root = await tempRoot()
+    await mkdir(join(root, '.repo'), { recursive: true })
+    await mkdir(join(root, 'app'), { recursive: true })
+    await makeGitRepo(join(root, 'app'))
+
+    const result = await scanNestedRepos({ path: root })
+
+    expect(result.selectedPathKind).toBe('non_git_folder')
+    expect(result.repos.map((repo) => repo.displayName)).toEqual(['app'])
+  })
+
+  it('prefers a selected git repo over a nested .repo tree', async () => {
+    const root = await tempRoot()
+    await makeGitRepo(root)
+    await mkdir(join(root, '.repo'), { recursive: true })
+    await writeFile(join(root, '.repo', 'project.list'), 'frameworks/base\n')
+
+    const result = await scanNestedRepos({ path: root })
+
+    expect(result.selectedPathKind).toBe('git_repo')
+    expect(result.repos).toEqual([])
+  })
+
+  it('detects repo-managed roots through the injected filesystem', async () => {
+    const result = await scanNestedRepos({
+      path: '/aosp',
+      filesystem: posixTestFilesystem({
+        directories: new Map([['/aosp', ['.repo', 'frameworks']]]),
+        gitRepos: new Set(['/aosp/frameworks/base']),
+        repoManaged: new Set(['/aosp'])
+      })
+    })
+
+    expect(result.selectedPathKind).toBe('repo_managed')
+    expect(result.repos).toEqual([])
   })
 
   it('treats a selected git repo as the existing repo path', async () => {

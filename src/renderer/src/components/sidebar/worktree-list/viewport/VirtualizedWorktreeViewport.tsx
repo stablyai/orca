@@ -28,6 +28,7 @@ import { EMPTY_PROJECT_GROUPS, type VirtualizedWorktreeViewportProps } from './v
 import { useWorktreeDropCommitContext } from '../drag/use-drop-commit-context'
 import { buildWorktreeVirtualRowContext } from './virtual-row-context'
 import { renderWorktreeVirtualRow } from '../rows/virtual-row-dispatch'
+import { isFolderBackedProjectGroup } from '../../../../../../shared/repo-managed-project'
 
 const WORKTREE_SIDEBAR_SCROLL_STYLE: React.CSSProperties = {
   // Why: TanStack Virtual owns scroll correction; native overflow anchoring fights it and causes jumps.
@@ -73,7 +74,7 @@ export const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktr
     () =>
       new Set(
         projectGroups
-          .filter((group) => group.createdFrom === 'folder-scan')
+          .filter((group) => isFolderBackedProjectGroup(group))
           .map((group) => group.id)
       ),
     [projectGroups]

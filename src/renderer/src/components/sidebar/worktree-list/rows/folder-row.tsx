@@ -11,6 +11,7 @@ import { getWorktreeHostIdentity } from '../../../../../../shared/worktree/host-
 import type { FolderWorkspacePathStatus } from '../../../../../../shared/folder-workspace-path-status'
 import { isConfirmedStaleFolderPathStatus } from '../../../../../../shared/folder-workspace-path-status'
 import { folderWorkspaceToWorktree } from '../../../../../../shared/folder-workspace-worktree'
+import { isFolderBackedProjectGroup } from '../../../../../../shared/repo-managed-project'
 import WorktreeCard from '../../WorktreeCard'
 import type { WorktreeGroupBy } from '../grouping/row-types'
 import { getVirtualRowTransform } from '../viewport/virtual-rows'
@@ -80,7 +81,7 @@ export function renderFolderWorkspaceVirtualRow(args: {
   const { surfaceInset, cardContentIndent } = getFolderWorkspaceRowGeometry({
     experimentalNewWorktreeCardStyle: ctx.newCardStyle,
     isFolderBackedWorkspaceChild:
-      ctx.groupBy === 'repo' && row.projectGroup.createdFrom === 'folder-scan',
+      ctx.groupBy === 'repo' && isFolderBackedProjectGroup(row.projectGroup),
     isGrouped: ctx.groupBy !== 'none',
     groupDepth: row.groupDepth,
     lineageDepth: row.depth

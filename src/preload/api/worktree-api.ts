@@ -150,6 +150,15 @@ export type FolderWorkspacesApi = {
     createdWithAgent?: FolderWorkspace['createdWithAgent']
     pendingFirstAgentMessageRename?: boolean
   }) => Promise<FolderWorkspace>
+  deriveRepoManaged: (args: {
+    projectGroupId: string
+    name?: string
+    folderPath?: string | null
+    connectionId?: string | null
+    linkedTask?: FolderWorkspace['linkedTask']
+    createdWithAgent?: FolderWorkspace['createdWithAgent']
+    pendingFirstAgentMessageRename?: boolean
+  }) => Promise<FolderWorkspace>
   update: (args: {
     folderWorkspaceId: string
     updates: Partial<

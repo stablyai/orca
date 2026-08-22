@@ -89,4 +89,13 @@ describe('getFolderWorkspacePrimaryActionLabel', () => {
     expect(label).toBe('Create workspace')
     expect(label).not.toContain('Agent')
   })
+
+  it('labels repo-managed main vs derive actions', () => {
+    expect(getFolderWorkspacePrimaryActionLabel({ isRepoManaged: true, deriveRepoManaged: false })).toBe(
+      'Start on main tree'
+    )
+    expect(getFolderWorkspacePrimaryActionLabel({ isRepoManaged: true, deriveRepoManaged: true })).toBe(
+      'Derive workspace'
+    )
+  })
 })

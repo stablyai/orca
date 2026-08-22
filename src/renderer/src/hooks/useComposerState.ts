@@ -153,6 +153,10 @@ import {
   resolveFolderWorkspaceLaunchDraft,
   submitFolderWorkspaceCreate
 } from '@/components/sidebar/folder-workspace-composer-submit'
+import {
+  isRepoManagedProjectGroup,
+  resolveFolderWorkspaceCreateIntent
+} from '../../../shared/repo-managed-project'
 import { isNativeChatTranscriptLocalReadable } from '@/lib/native-chat-transcript-readability'
 import { buildExecutionHostRegistry } from '../../../shared/execution-host-registry'
 import {
@@ -317,6 +321,10 @@ export type ComposerCardProps = {
   /** Whether the selected existing local branch is reused (checked out) rather than branched from. */
   reuseSelectedBranch: boolean
   onReuseSelectedBranchChange: (next: boolean) => void
+  showRepoManagedDerive: boolean
+  deriveRepoManaged: boolean
+  onDeriveRepoManagedChange: (next: boolean) => void
+  repoManagedDeriveDisabled: boolean
   /** Whether the "create multiple" toggle shows — worktree (git) targets only; folder workspaces create-and-close. */
   showCreateMultiple: boolean
   /** When on, the modal stays open after each create and resets identity fields to allow creating several in a row. */
@@ -628,6 +636,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
       updateRepo: s.updateRepo,
       updateWorktreeMeta: s.updateWorktreeMeta,
       createFolderWorkspace: s.createFolderWorkspace,
+      deriveRepoManagedFolderWorkspace: s.deriveRepoManagedFolderWorkspace,
       setSidebarOpen: s.setSidebarOpen,
       closeModal: s.closeModal,
       openSettingsPage: s.openSettingsPage,
@@ -645,6 +654,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
     updateRepo,
     updateWorktreeMeta,
     createFolderWorkspace,
+    deriveRepoManagedFolderWorkspace,
     setSidebarOpen,
     closeModal,
     openSettingsPage,
@@ -658,6 +668,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
   const repos = useAppStore((s) => s.repos)
   const projects = useAppStore((s) => s.projects)
   const projectGroups = useAppStore((s) => s.projectGroups)
+  const folderWorkspaces = useAppStore((s) => s.folderWorkspaces)
   const projectHostSetups = useAppStore((s) => s.projectHostSetups)
   const activeRepoId = useAppStore((s) => s.activeRepoId)
   const settings = useAppStore((s) => s.settings)
@@ -1241,6 +1252,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
     policy: SetupAgentStartupPolicy
   } | null>(null)
   const [creating, setCreating] = useState(false)
+  const [deriveRepoManaged, setDeriveRepoManaged] = useState(false)
   const [createError, setCreateError] = useState<WorkspaceCreateErrorDisplay | null>(null)
   // Why: when checked, a successful create keeps the modal open and resets identity fields so the user can queue another worktree.
   const [createMultiple, setCreateMultiple] = useState(false)
@@ -3487,6 +3499,19 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
           agent && submitLinkedWorkItem
             ? resolveFolderWorkspaceLaunchDraft(submitLinkedWorkItem, note)
             : null
+        const createIntent = resolveFolderWorkspaceCreateIntent({
+          group: selectedProjectGroup,
+          folderWorkspaces,
+          deriveRepoManaged
+        })
+        if (createIntent.kind === 'activate-main' && agent) {
+          toast.info(
+            translate(
+              'auto.hooks.useComposerState.repoManagedMainAgentHint',
+              'This agent will work on the main tree. Derive a workspace to keep tasks isolated.'
+            )
+          )
+        }
         const folderWorkspaceCreated = await submitFolderWorkspaceCreate({
           projectGroup: selectedProjectGroup,
           name: smartGitHubMetadata?.workspaceName ?? name,
@@ -3522,8 +3547,15 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
           isRemote: folderTargetIsRemote,
           launchSource: telemetrySource === 'onboarding' ? 'onboarding' : 'new_workspace_composer',
           runtimeEnvironmentId: folderTargetRuntimeEnvironmentId,
+          existingWorkspace:
+            createIntent.kind === 'activate-main' ? createIntent.workspace : null,
+          deriveRepoManaged: createIntent.kind === 'derive',
           createFolderWorkspace: (input) =>
             createFolderWorkspace(input, {
+              runtimeEnvironmentId: folderTargetRuntimeEnvironmentId
+            }),
+          deriveRepoManagedFolderWorkspace: (input) =>
+            deriveRepoManagedFolderWorkspace(input, {
               runtimeEnvironmentId: folderTargetRuntimeEnvironmentId
             }),
           onOpenChange: (open) => {
@@ -3561,9 +3593,12 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
     [
       clearNewWorkspaceDraft,
       createFolderWorkspace,
+      deriveRepoManaged,
+      deriveRepoManagedFolderWorkspace,
       disabledTuiAgents,
       folderCreateDisabled,
       folderTargetConnectionId,
+      folderWorkspaces,
       folderTargetIsRemote,
       folderTargetRuntimeEnvironmentId,
       folderSourceRepos.length,
@@ -4743,6 +4778,10 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
       smartNameSelection?.kind === 'branch',
     reuseSelectedBranch,
     onReuseSelectedBranchChange: handleReuseSelectedBranchChange,
+    showRepoManagedDerive: isRepoManagedProjectGroup(selectedProjectGroup),
+    deriveRepoManaged,
+    onDeriveRepoManagedChange: setDeriveRepoManaged,
+    repoManagedDeriveDisabled: Boolean(folderTargetConnectionId),
     // Why: "create multiple" applies only to worktree (git) targets; folder-workspace keeps create-and-close.
     showCreateMultiple: !isProjectGroupTarget,
     createMultiple,

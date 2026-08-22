@@ -10,6 +10,8 @@ import { extractIpcErrorMessage } from '@/lib/ipc-error'
 import { upsertAddedRepoWithProjectHostSetup } from './add-repo-store-upsert'
 import { worktreeRefreshOptions } from './add-repo-runtime-owner'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
+import { isRepoManagedScan } from '../../../../shared/repo-managed-project'
+import { completeRepoManagedOpen } from './complete-repo-managed-open'
 
 // ── SSH host project hook ───────────────────────────────────────────
 
@@ -176,6 +178,19 @@ export function useRemoteRepo(
         return
       }
       onNestedScanResult?.(scan ?? null, attemptId)
+      if (isRepoManagedScan(scan)) {
+        setRemoteNestedScanId(null)
+        await completeRepoManagedOpen({
+          scan,
+          generation: gen,
+          currentGeneration: () => remoteGenRef.current,
+          connectionId: selectedTargetId,
+          scanId,
+          closeModal,
+          setIsAdding: setIsAddingRemote
+        })
+        return
+      }
       if (scan?.selectedPathKind === 'non_git_folder' && scan.repos.length > 0) {
         showNestedRepoReview?.(scan, trimmedRemotePath, selectedTargetId, attemptId, false, scanId)
         setRemoteNestedScanId(null)

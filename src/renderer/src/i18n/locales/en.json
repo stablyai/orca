@@ -358,6 +358,7 @@
           "8bb3ad7935": "Project added",
           "a8e4b3af5b": "Project already added",
           "6d3318e813": "Failed to import repositories",
+          "repoManagedDeriveRuntimeRequired": "Update the remote runtime to derive repo workspaces.",
           "3be0f7df04": "Cannot open folder on selected runtime",
           "15cf5319ec": "{{path}} was checked on {{hostName}}, but that host did not report a usable folder.",
           "2dcd706774": "Project also exists in another profile",
@@ -837,6 +838,7 @@
         "chooseOrAddProjectBeforeWorkspace": "Choose or add a project before creating a workspace.",
         "folderWorkspaceCreateFailedTitle": "Folder workspace creation failed",
         "folderWorkspaceCreateFailedMessage": "The folder workspace could not be created. Check the error details above, then try again.",
+        "repoManagedMainAgentHint": "This agent will work on the main tree. Derive a workspace to keep tasks isolated.",
         "setupAgentStartupPolicySaveFailed": "Failed to save setup startup behavior.",
         "5f3d2c8a1b": "Failed to resolve MR base."
       },
@@ -1445,6 +1447,9 @@
       "NewWorkspaceComposerCard": {
         "reuseExistingBranch": "Reuse branch",
         "reuseExistingBranchHint": "Check out the existing branch instead of creating a new one from it.",
+        "deriveRepoManaged": "Derive a clean workspace",
+        "deriveRepoManagedHint": "Off: work on the opened tree. On: create an isolated checkout with repo so another task cannot clobber this one.",
+        "deriveRepoManagedSshHint": "Deriving on SSH requires an Orca runtime on that host. Work on the main tree, or open this project through a remote runtime.",
         "createMultiple": "Create more",
         "cbb47ee0dc": "Only available for local Git projects.",
         "d861de981b": "Sparse checkout",
@@ -5697,9 +5702,14 @@
           "noRepos": "Add a Git project under this folder to attach GitHub or GitLab tasks.",
           "title": "Create Folder Workspace",
           "create": "Create workspace",
+          "startOnMainTree": "Start on main tree",
+          "deriveWorkspace": "Derive workspace",
           "sourceProject": "Task Source",
           "chooseSourceProject": "Choose task source",
           "createFailed": "Failed to create folder workspace."
+        },
+        "completeRepoManagedOpen": {
+          "failed": "Failed to open the repo-managed project."
         },
         "ProjectOrderManualDefaultNotice": {
           "a1f4c2d8e0": "Manual project order is now the default",

@@ -16,6 +16,8 @@ import { createNestedRepoScanId } from './add-repo-dialog-types'
 import { translate } from '@/i18n/i18n'
 import { worktreeRefreshOptions } from './add-repo-runtime-owner'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
+import { isRepoManagedScan } from '../../../../shared/repo-managed-project'
+import { completeRepoManagedOpen } from './complete-repo-managed-open'
 
 type ShowNestedRepoReview = (args: {
   scan: NestedRepoScanResult
@@ -145,6 +147,21 @@ export function useAddRepoLocalFolderFlow({
         )
         if (scan?.selectedPathKind === 'non_git_folder' && mode === 'batch') {
           return { status: 'skipped' }
+        }
+        if (isRepoManagedScan(scan)) {
+          if (mode === 'batch') {
+            return { status: 'skipped' }
+          }
+          await completeRepoManagedOpen({
+            scan,
+            generation: gen,
+            currentGeneration: () => localAddGenRef.current,
+            scanId,
+            runtimeEnvironmentId: activeRuntimeEnvironmentId,
+            closeModal,
+            setIsAdding
+          })
+          return { status: 'paused' }
         }
         if (scan?.selectedPathKind === 'non_git_folder' && scan.repos.length > 0) {
           // Why: a single-folder decision point cannot queue competing batch review states.

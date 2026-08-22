@@ -24,6 +24,40 @@ vi.mock('@/lib/telemetry', () => ({
   track: vi.fn()
 }))
 
+const { importNestedRepos, activateAndRevealFolderWorkspace } = vi.hoisted(() => ({
+  importNestedRepos: vi.fn(),
+  activateAndRevealFolderWorkspace: vi.fn()
+}))
+
+vi.mock('@/store', () => ({
+  useAppStore: Object.assign(vi.fn(), {
+    getState: () => ({
+      importNestedRepos,
+      folderWorkspaces: [
+        {
+          id: 'ws-main',
+          projectGroupId: 'group-1',
+          name: 'AOSP',
+          folderPath: '/aosp',
+          linkedTask: null,
+          comment: '',
+          isArchived: false,
+          isUnread: false,
+          isPinned: false,
+          sortOrder: 1,
+          lastActivityAt: 0,
+          createdAt: 1,
+          updatedAt: 1
+        }
+      ]
+    })
+  })
+}))
+
+vi.mock('@/lib/worktree-activation', () => ({
+  activateAndRevealFolderWorkspace
+}))
+
 function makeScan(
   path: string,
   overrides: Partial<NestedRepoScanResult> = {}
@@ -76,6 +110,26 @@ describe('useAddRepoLocalFolderFlow', () => {
           pickFolders
         }
       }
+    })
+    importNestedRepos.mockReset()
+    activateAndRevealFolderWorkspace.mockReset()
+    importNestedRepos.mockResolvedValue({
+      group: {
+        id: 'group-1',
+        name: 'AOSP',
+        parentPath: '/aosp',
+        parentGroupId: null,
+        createdFrom: 'repo-managed',
+        tabOrder: 0,
+        isCollapsed: false,
+        color: null,
+        createdAt: 1,
+        updatedAt: 1
+      },
+      projects: [{ path: '/aosp', status: 'imported' }],
+      importedCount: 1,
+      alreadyKnownCount: 0,
+      failedCount: 0
     })
     addRepoPath.mockImplementation(async (path: string) => makeRepo(path))
     fetchWorktrees.mockResolvedValue(true)
@@ -167,6 +221,46 @@ describe('useAddRepoLocalFolderFlow', () => {
     })
     expect(scanNestedRepos).toHaveBeenCalledTimes(2)
     expect(onGitRepoReady).toHaveBeenCalledWith('later', 'local_folder_picker', 'local')
+  })
+
+  it('imports a repo-managed folder as one project instead of nested review', async () => {
+    pickFolders.mockResolvedValue(['/aosp'])
+    scanNestedRepos.mockResolvedValueOnce(
+      makeScan('/aosp', { selectedPathKind: 'repo_managed', repos: [] })
+    )
+    const { useAddRepoLocalFolderFlow } = await import('./useAddRepoLocalFolderFlow')
+
+    const { handleBrowse } = useAddRepoLocalFolderFlow({
+      isOpen: true,
+      droppedLocalPath: '',
+      activeRuntimeEnvironmentId: null,
+      addRepoPath,
+      closeModal,
+      fetchWorktrees,
+      scanNestedRepos,
+      setActiveNestedScanId,
+      setNestedScanInProgress,
+      showNestedRepoReview,
+      onGitRepoReady,
+      setIsAdding,
+      setAddProjectBusyLabel
+    })
+
+    await handleBrowse()
+
+    expect(showNestedRepoReview).not.toHaveBeenCalled()
+    expect(addRepoPath).not.toHaveBeenCalled()
+    expect(importNestedRepos).toHaveBeenCalledWith(
+      expect.objectContaining({
+        parentPath: '/aosp',
+        projectPaths: [],
+        mode: 'group'
+      })
+    )
+    expect(closeModal).toHaveBeenCalled()
+    expect(activateAndRevealFolderWorkspace).toHaveBeenCalledWith('ws-main', {
+      runtimeEnvironmentId: null
+    })
   })
 
   it('still completes handoff when a later selected folder is skipped', async () => {

@@ -105,6 +105,13 @@ export const FOLDER_WORKSPACE_METHODS: RpcMethod[] = [
     })
   }),
   defineMethod({
+    name: 'folderWorkspace.deriveRepoManaged',
+    params: FolderWorkspaceCreate,
+    handler: async (params, { runtime }) => ({
+      folderWorkspace: await runtime.deriveRepoManagedFolderWorkspace(params)
+    })
+  }),
+  defineMethod({
     name: 'folderWorkspace.update',
     params: FolderWorkspaceUpdate,
     handler: async (params, { runtime }) => ({

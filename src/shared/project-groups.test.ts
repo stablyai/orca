@@ -72,6 +72,13 @@ describe('project-groups', () => {
     })
   })
 
+  it('preserves repo-managed createdFrom on reload', () => {
+    const groups = normalizeProjectGroups([
+      { id: 'aosp', name: 'AOSP', tabOrder: 1, createdFrom: 'repo-managed', parentPath: '/aosp' }
+    ])
+    expect(groups[0]?.createdFrom).toBe('repo-managed')
+  })
+
   it('preserves normalized execution ownership for persisted groups', () => {
     const groups = normalizeProjectGroups([
       { id: 'runtime', name: 'Runtime', tabOrder: 1, executionHostId: 'runtime:env-1' },

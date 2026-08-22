@@ -123,6 +123,10 @@ type NewWorkspaceComposerCardProps = {
   canReuseSelectedBranch: boolean
   reuseSelectedBranch: boolean
   onReuseSelectedBranchChange: (next: boolean) => void
+  showRepoManagedDerive?: boolean
+  deriveRepoManaged?: boolean
+  onDeriveRepoManagedChange?: (next: boolean) => void
+  repoManagedDeriveDisabled?: boolean
   /** Shows the footer "Create more" switch — worktree targets only. */
   showCreateMultiple?: boolean
   createMultiple?: boolean
@@ -338,6 +342,10 @@ export default function NewWorkspaceComposerCard({
   canReuseSelectedBranch,
   reuseSelectedBranch,
   onReuseSelectedBranchChange,
+  showRepoManagedDerive = false,
+  deriveRepoManaged = false,
+  onDeriveRepoManagedChange,
+  repoManagedDeriveDisabled = false,
   showCreateMultiple = false,
   createMultiple = false,
   onCreateMultipleChange,
@@ -892,6 +900,41 @@ export default function NewWorkspaceComposerCard({
             </div>
           </div>
         </div>
+
+        {showRepoManagedDerive ? (
+          <div className="rounded-md border border-border/60 bg-muted/25">
+            <div className="flex items-start justify-between gap-3 p-3">
+              <span className="min-w-0 space-y-1">
+                <span className="block text-xs font-medium text-foreground">
+                  {translate(
+                    'auto.components.NewWorkspaceComposerCard.deriveRepoManaged',
+                    'Derive a clean workspace'
+                  )}
+                </span>
+                <span className="block text-[11px] text-muted-foreground">
+                  {repoManagedDeriveDisabled
+                    ? translate(
+                        'auto.components.NewWorkspaceComposerCard.deriveRepoManagedSshHint',
+                        'Deriving on SSH requires an Orca runtime on that host. Work on the main tree, or open this project through a remote runtime.'
+                      )
+                    : translate(
+                        'auto.components.NewWorkspaceComposerCard.deriveRepoManagedHint',
+                        'Off: work on the opened tree. On: create an isolated checkout with repo so another task cannot clobber this one.'
+                      )}
+                </span>
+              </span>
+              <SettingsSwitch
+                checked={deriveRepoManaged}
+                disabled={creating || repoManagedDeriveDisabled}
+                onChange={() => onDeriveRepoManagedChange?.(!deriveRepoManaged)}
+                ariaLabel={translate(
+                  'auto.components.NewWorkspaceComposerCard.deriveRepoManaged',
+                  'Derive a clean workspace'
+                )}
+              />
+            </div>
+          </div>
+        ) : null}
 
         <div className="min-w-0 space-y-1" data-contextual-tour-target="workspace-creation-agent">
           <div className="flex items-center justify-between gap-2">

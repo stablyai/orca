@@ -813,6 +813,7 @@ const api = {
     list: () => ipcRenderer.invoke('folderWorkspaces:list'),
     getPathStatus: (args) => ipcRenderer.invoke('folderWorkspaces:getPathStatus', args),
     create: (args) => ipcRenderer.invoke('folderWorkspaces:create', args),
+    deriveRepoManaged: (args) => ipcRenderer.invoke('folderWorkspaces:deriveRepoManaged', args),
     update: (args) => ipcRenderer.invoke('folderWorkspaces:update', args),
     delete: (args) => ipcRenderer.invoke('folderWorkspaces:delete', args)
   } satisfies PreloadApi['folderWorkspaces'],
