@@ -25,9 +25,9 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../ui/
 import { AgentSkillSetupPanel } from './AgentSkillSetupPanel'
 import { CliRegistrationDialog } from './CliRegistrationDialog'
 import {
-  buildSkillCommandForRuntime,
   ensureWslCliAvailableForAgentSkillTerminal,
   getAgentSkillTerminalShellOverride,
+  getCliSkillSetupCommandsForRuntime,
   getSelectedAgentRuntime,
   getSkillDiscoveryTargetForRuntime,
   getWslCliDistroRequest
@@ -102,13 +102,14 @@ export function CliSection({
     discoveryTarget: cliSkillDiscoveryTarget,
     sourceKinds: GLOBAL_AGENT_SKILL_SOURCE_KINDS
   })
-  const cliSkillInstallCommand = buildSkillCommandForRuntime(
+  const {
+    installCommand: cliSkillInstallCommand,
+    updateCommand: cliSkillUpdateCommand,
+    terminalCommands: cliSkillTerminalCommands
+  } = getCliSkillSetupCommandsForRuntime(
+    agentRuntime,
     ORCA_CLI_SKILL_INSTALL_COMMAND,
-    agentRuntime
-  )
-  const cliSkillUpdateCommand = buildSkillCommandForRuntime(
-    ORCA_CLI_SKILL_UPDATE_COMMAND,
-    agentRuntime
+    ORCA_CLI_SKILL_UPDATE_COMMAND
   )
   const cliSkillTerminalShellOverride = getAgentSkillTerminalShellOverride(
     currentPlatform,
@@ -375,6 +376,7 @@ export function CliSection({
               )}
               command={cliSkillInstallCommand}
               installedCommand={cliSkillUpdateCommand}
+              terminalCommands={cliSkillTerminalCommands}
               terminalTitle="CLI skill setup"
               terminalAriaLabel="CLI skill install terminal"
               terminalWorktreeId={`settings-cli-skill-terminal-${agentRuntime.runtime}`}

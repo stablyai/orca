@@ -9,6 +9,8 @@ import { TooltipProvider } from '../ui/tooltip'
 
 const INSTALL_COMMAND = 'npx skills add https://github.com/stablyai/orca --skill orca-cli --global'
 const UPDATE_COMMAND = 'npx skills update orca-cli --global'
+const TERMINAL_INSTALL_COMMAND = `${INSTALL_COMMAND} --agent universal -y`
+const TERMINAL_UPDATE_COMMAND = `${UPDATE_COMMAND} -y`
 
 const mocks = vi.hoisted(() => ({
   clipboardWrite: vi.fn(),
@@ -367,6 +369,14 @@ describe('AgentSkillSetupPanel', () => {
     expect(mocks.toastSuccess).toHaveBeenCalledWith('Copied command.')
   })
 
+  it('uses a terminal-only install command for the inline setup attempt', async () => {
+    await renderInteractivePanel({ terminalCommands: { install: TERMINAL_INSTALL_COMMAND } })
+
+    await clickButton('Install')
+
+    expect(mocks.terminalProps.at(-1)).toMatchObject({ command: TERMINAL_INSTALL_COMMAND })
+  })
+
   it('copies the POSIX WSL command while the setup pane runs the PowerShell wrapper', async () => {
     await renderInteractivePanel({
       terminalShellOverride: 'powershell.exe',
@@ -429,6 +439,18 @@ describe('AgentSkillSetupPanel', () => {
     })
 
     expect(mocks.clipboardWrite).toHaveBeenCalledWith(UPDATE_COMMAND)
+  })
+
+  it('uses a terminal-only update command for the inline setup attempt', async () => {
+    await renderInteractivePanel({
+      installed: true,
+      installedCommand: UPDATE_COMMAND,
+      terminalCommands: { update: TERMINAL_UPDATE_COMMAND }
+    })
+
+    await clickButton('Update')
+
+    expect(mocks.terminalProps.at(-1)).toMatchObject({ command: TERMINAL_UPDATE_COMMAND })
   })
 
   it('keeps an open terminal on the command captured when it opened', async () => {

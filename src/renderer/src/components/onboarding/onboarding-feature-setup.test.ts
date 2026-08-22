@@ -5,7 +5,7 @@ import type {
   ComputerUsePermissionStatusResult
 } from '../../../../shared/computer-use-permissions-types'
 import {
-  buildAgentFeatureSkillInstallCommand,
+  buildUnattendedAgentFeatureSkillInstallCommand,
   COMPUTER_USE_SKILL_NAME,
   ORCA_CLI_SKILL_NAME,
   ORCA_LINEAR_SKILL_NAME,
@@ -29,13 +29,13 @@ import {
 } from './onboarding-feature-setup'
 import { getOnboardingFeatureSetupAgentRuntime } from './onboarding-feature-setup-runtime'
 
-const ALL_SKILL_INSTALL_COMMAND = buildAgentFeatureSkillInstallCommand([
+const ALL_SKILL_INSTALL_COMMAND = buildUnattendedAgentFeatureSkillInstallCommand([
   ORCA_CLI_SKILL_NAME,
   COMPUTER_USE_SKILL_NAME,
   ORCHESTRATION_SKILL_NAME,
   ORCA_LINEAR_SKILL_NAME
 ])
-const ORCHESTRATION_ONLY_SKILL_INSTALL_COMMAND = buildAgentFeatureSkillInstallCommand([
+const ORCHESTRATION_ONLY_SKILL_INSTALL_COMMAND = buildUnattendedAgentFeatureSkillInstallCommand([
   ORCHESTRATION_SKILL_NAME
 ])
 
@@ -125,7 +125,7 @@ describe('onboarding feature setup runner', () => {
 
     expect(text).toBe(ALL_SKILL_INSTALL_COMMAND)
     expect(text).toBe(
-      'npx skills add https://github.com/stablyai/orca --skill orca-cli --skill computer-use --skill orchestration --skill orca-linear --global'
+      'npx skills add https://github.com/stablyai/orca --skill orca-cli --skill computer-use --skill orchestration --skill orca-linear --global --agent universal -y'
     )
   })
 
