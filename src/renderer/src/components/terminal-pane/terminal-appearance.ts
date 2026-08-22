@@ -199,9 +199,8 @@ export function applyTerminalAppearance(
     if (theme && !composedTerminalThemesEqual(pane.terminal.options.theme, theme)) {
       pane.terminal.options.theme = theme
     }
-    // Gate off the configured theme background; the live OSC-11 background is deliberately preserved by the
-    // theme write above, so a TUI that repaints its background at runtime won't re-gate (known limitation).
-    // Why value-gated: writing minimumContrastRatio clears xterm's contrast cache, so skip on no-op re-applies.
+    // Runtime OSC-11 background changes do not re-gate contrast.
+    // Why value-gated: no-op writes clear xterm's contrast cache.
     const minimumContrastRatio = resolveTerminalMinimumContrastRatio(
       surfaceTheme?.background,
       appearance.mode

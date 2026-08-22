@@ -8390,7 +8390,7 @@
           "8abdab9f7c": "Restart now",
           "907131d741": "Restarting…",
           "605a35d600": "Not applied by the terminal renderer yet — xterm.js has no bold color slot. A saved value is preserved.",
-          "saveBeforeRestart": "Save the appearance draft before restarting Orca."
+          "a62a827eda": "Save the appearance draft before restarting Orca."
         },
         "UIZoomControl": {
           "c2c64b24d0": "Reset"

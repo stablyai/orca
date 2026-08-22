@@ -144,7 +144,7 @@ export function TerminalWindowSection({
                 <p className="text-xs text-muted-foreground">
                   {relaunchDisabled
                     ? translate(
-                        'auto.components.settings.TerminalWindowSection.saveBeforeRestart',
+                        'auto.components.settings.TerminalWindowSection.a62a827eda',
                         'Save the appearance draft before restarting Orca.'
                       )
                     : translate(
