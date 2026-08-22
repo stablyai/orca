@@ -312,6 +312,29 @@ describe('orchestration RPC methods', () => {
       expect(db.getActiveDispatchForTerminal('term_a')).toBeUndefined()
     })
 
+    it('accepts a completed dispatch when prompt verification races worker_done', async () => {
+      setup()
+      provideInjectIdentity()
+      const task = db.createTask({ spec: 'work' })
+      vi.spyOn(runtime, 'isTerminalRunningAgent').mockResolvedValue(true)
+      vi.spyOn(runtime, 'sendTerminalAgentPrompt').mockImplementation(async () => {
+        const dispatch = db.getDispatchContext(task.id)
+        expect(dispatch).toBeDefined()
+        db.updateTaskStatus(task.id, 'completed')
+        throw new Error('agent_prompt_stalled')
+      })
+
+      const result = (await call('orchestration.dispatch', {
+        task: task.id,
+        to: 'term_a',
+        inject: true
+      })) as { dispatch: { id: string }; injected: boolean }
+
+      expect(result.injected).toBe(true)
+      expect(db.getDispatchContextById(result.dispatch.id)?.status).toBe('completed')
+      expect(db.getTask(task.id)?.status).toBe('completed')
+    })
+
     it('uses caller-provided dev mode for injected preamble', async () => {
       setup()
       provideInjectIdentity()
