@@ -45,7 +45,7 @@ describe('project host setup projection', () => {
     path: '/Users/alice/mcode',
     displayName: 'MCode',
     addedAt: 100,
-    upstream: { owner: 'StablyAI', repo: 'MCode' }
+    upstream: { owner: 'mcode-ide', repo: 'mcode' }
   })
   const unknownSibling = repo({
     id: 'remote-repo',
@@ -53,7 +53,7 @@ describe('project host setup projection', () => {
     displayName: 'mcode',
     addedAt: 0,
     connectionId: 'gpu-vm',
-    upstream: { owner: 'stablyai', repo: 'mcode' }
+    upstream: { owner: 'mcode-ide', repo: 'mcode' }
   })
 
   it('does not wipe a persisted createdAt when a sibling repo has addedAt 0', () => {
@@ -162,14 +162,14 @@ describe('project host setup projection', () => {
         id: 'local-repo',
         path: '/Users/alice/mcode',
         displayName: 'MCode',
-        upstream: { owner: 'StablyAI', repo: 'MCode' }
+        upstream: { owner: 'mcode-ide', repo: 'mcode' }
       }),
       repo({
         id: 'remote-repo',
         path: '/home/alice/mcode',
         displayName: 'mcode',
         connectionId: 'gpu-vm',
-        upstream: { owner: 'stablyai', repo: 'mcode' }
+        upstream: { owner: 'mcode-ide', repo: 'mcode' }
       })
     ])
 
@@ -177,7 +177,7 @@ describe('project host setup projection', () => {
     expect(projection.projects[0]).toMatchObject({
       id: 'github:mcode-ide/mcode',
       sourceRepoIds: ['local-repo', 'remote-repo'],
-      providerIdentity: { provider: 'github', owner: 'StablyAI', repo: 'MCode' }
+      providerIdentity: { provider: 'github', owner: 'mcode-ide', repo: 'mcode' }
     })
     expect(getProjectHostSetupsForProject(projection.setups, 'github:mcode-ide/mcode')).toHaveLength(
       2
@@ -258,7 +258,7 @@ describe('project host setup projection', () => {
         displayName: 'MCode',
         repoIcon: {
           type: 'image',
-          src: 'https://github.com/stablyai.png?size=64',
+          src: 'https://github.com/mcode-ide.png?size=64',
           source: 'github',
           label: 'mcode-ide/mcode'
         }
@@ -270,9 +270,9 @@ describe('project host setup projection', () => {
         connectionId: 'gpu-vm',
         repoIcon: {
           type: 'image',
-          src: 'https://github.com/stablyai.png?size=64',
+          src: 'https://github.com/mcode-ide.png?size=64',
           source: 'github',
-          label: 'StablyAI/MCode'
+          label: 'mcode-ide/mcode'
         }
       })
     ])
@@ -281,7 +281,7 @@ describe('project host setup projection', () => {
     expect(projection.projects[0]).toMatchObject({
       id: 'github:mcode-ide/mcode',
       sourceRepoIds: ['local-repo', 'remote-repo'],
-      providerIdentity: { provider: 'github', owner: 'stablyai', repo: 'mcode' }
+      providerIdentity: { provider: 'github', owner: 'mcode-ide', repo: 'mcode' }
     })
     expect(getProjectHostSetupsForProject(projection.setups, 'github:mcode-ide/mcode')).toHaveLength(
       2
@@ -306,7 +306,7 @@ describe('project host setup projection', () => {
         displayName: 're-enable-webgl-for-remote-runtime-terminals',
         repoIcon: {
           type: 'image',
-          src: 'https://github.com/stablyai.png?size=64',
+          src: 'https://github.com/mcode-ide.png?size=64',
           source: 'github',
           label: 'mcode-ide/mcode'
         }
@@ -318,7 +318,7 @@ describe('project host setup projection', () => {
       id: 'github:mcode-ide/mcode',
       displayName: 'mcode',
       sourceRepoIds: ['canonical-local-repo', 'old-branch-checkout'],
-      providerIdentity: { provider: 'github', owner: 'stablyai', repo: 'mcode' }
+      providerIdentity: { provider: 'github', owner: 'mcode-ide', repo: 'mcode' }
     })
   })
 
@@ -527,7 +527,7 @@ describe('project host setup projection', () => {
       path: '/home/alice/mcode',
       displayName: 'mcode',
       connectionId: 'openclaw 2',
-      upstream: { owner: 'stablyai', repo: 'mcode' }
+      upstream: { owner: 'mcode-ide', repo: 'mcode' }
     })
     const projection = projectHostSetupProjectionFromRepos([targetRepo])
 
@@ -545,7 +545,7 @@ describe('isGitHubBackedRepo', () => {
       id: 'r',
       path: '/r',
       displayName: 'r',
-      upstream: { owner: 'stablyai', repo: 'mcode' }
+      upstream: { owner: 'mcode-ide', repo: 'mcode' }
     })
     expect(isGitHubBackedRepo(target)).toBe(true)
   })
@@ -557,7 +557,7 @@ describe('isGitHubBackedRepo', () => {
       displayName: 'r',
       repoIcon: {
         type: 'image',
-        src: 'https://github.com/stablyai.png?size=64',
+        src: 'https://github.com/mcode-ide.png?size=64',
         source: 'github',
         label: 'mcode-ide/mcode'
       }
@@ -623,7 +623,7 @@ describe('isProjectRemoteIdentityPending', () => {
     ).toBe(false)
     expect(
       isProjectRemoteIdentityPending(
-        repo({ ...base, upstream: { owner: 'stablyai', repo: 'mcode' } })
+        repo({ ...base, upstream: { owner: 'mcode-ide', repo: 'mcode' } })
       )
     ).toBe(false)
   })

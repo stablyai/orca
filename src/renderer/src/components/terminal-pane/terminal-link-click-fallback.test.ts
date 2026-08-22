@@ -527,18 +527,18 @@ describe('createFilePathLinkProvider range bounds', () => {
   it('opens a deeply wrapped absolute path from its final short continuation row', async () => {
     setPlatform('Macintosh')
     const rows = [
-      makeBufferLine('/private/tmp/or'),
-      makeBufferLine('ca-setup-e2e.hO'),
-      makeBufferLine('W01f/workspaces'),
-      makeBufferLine('/test-wt-5/mob'),
+      makeBufferLine('/private/tmp/mc'),
+      makeBufferLine('ode-setup-e2e.h'),
+      makeBufferLine('OW01f/workspace'),
+      makeBufferLine('s/test-wt-5/mob'),
       makeBufferLine('ile/packages/ex'),
-      makeBufferLine('po-two-way-aud'),
-      makeBufferLine('io/android/src/'),
-      makeBufferLine('main/java/expo'),
-      makeBufferLine('/modules/twoway'),
-      makeBufferLine('audio/ExpoTwoW'),
-      makeBufferLine('ayAudioLifeCyc'),
-      makeBufferLine('leListener.kt')
+      makeBufferLine('po-two-way-audi'),
+      makeBufferLine('o/android/src/m'),
+      makeBufferLine('ain/java/expo/m'),
+      makeBufferLine('odules/twowayau'),
+      makeBufferLine('dio/ExpoTwoWayA'),
+      makeBufferLine('udioLifeCycleLi'),
+      makeBufferLine('stener.kt')
     ]
 
     const opened = openFilePathLinkAtBufferPosition(makeBuffer(rows), { x: 4, y: 12 }, 15, {

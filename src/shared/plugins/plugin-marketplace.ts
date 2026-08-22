@@ -6,8 +6,12 @@ export const PLUGIN_MARKETPLACE_FILENAME = 'mcode-marketplace.json'
 export const PLUGIN_MARKETPLACE_ENTRY_LIMIT = 2_048
 export const PLUGIN_MARKETPLACE_CATEGORY_LIMIT = 16
 
-export const OFFICIAL_PLUGIN_PUBLISHER = 'stablyai'
-export const OFFICIAL_PLUGIN_ID_PREFIX = 'mcode-'
+export const OFFICIAL_PLUGIN_PUBLISHER = 'mcode'
+export const OFFICIAL_LEGACY_PLUGIN_PUBLISHERS: readonly string[] = ['stablyai']
+export const OFFICIAL_PLUGIN_ID_PREFIX = 'plugin-'
+// Why: the official GitHub organization for plugin sources is distinct from the
+// qualified-key publisher (mcode-ide owns the repos; keys are mcode.<id>).
+export const OFFICIAL_PLUGIN_GIT_ORG = 'mcode-ide'
 export const OFFICIAL_MARKETPLACE_OWNER = 'stablyai'
 export const OFFICIAL_MARKETPLACE_REPOSITORY = 'mcode-plugins'
 
@@ -139,7 +143,9 @@ export function isReservedPluginIdentity(pluginKey: string): boolean {
   return (
     identity !== null &&
     (identity.publisher === OFFICIAL_PLUGIN_PUBLISHER ||
-      identity.id.startsWith(OFFICIAL_PLUGIN_ID_PREFIX))
+      OFFICIAL_LEGACY_PLUGIN_PUBLISHERS.includes(identity.publisher) ||
+      identity.id.startsWith(OFFICIAL_PLUGIN_ID_PREFIX) ||
+      identity.id.startsWith('mcode-'))
   )
 }
 
@@ -151,7 +157,6 @@ export function isOfficialPluginIdentity(pluginKey: string): boolean {
     identity.id.startsWith(OFFICIAL_PLUGIN_ID_PREFIX)
   )
 }
-
 type GitRepositoryIdentity = {
   host: string
   owner: string
@@ -194,7 +199,7 @@ function repositoryIdentity(host: string, repositoryPath: string): GitRepository
 
 export function isOfficialOrganizationGitSource(url: string): boolean {
   const source = parseGitRepositoryIdentity(url)
-  return source?.host === 'github.com' && source.owner.toLowerCase() === OFFICIAL_PLUGIN_PUBLISHER
+  return source?.host === 'github.com' && source.owner.toLowerCase() === OFFICIAL_PLUGIN_GIT_ORG
 }
 
 export function isOfficialMarketplaceGitSource(url: string): boolean {

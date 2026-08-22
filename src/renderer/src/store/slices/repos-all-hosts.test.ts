@@ -201,11 +201,11 @@ function configureSharedProjectCompatibilityMocks(
       ? localRepo
       : {
           ...localRepo,
-          upstream: { owner: 'stablyai', repo: 'mcode' }
+          upstream: { owner: 'mcode-ide', repo: 'mcode' }
         }
   const remoteRepoWithIdentity: Repo = {
     ...remoteRepo,
-    upstream: { owner: 'stablyai', repo: 'mcode' }
+    upstream: { owner: 'mcode-ide', repo: 'mcode' }
   }
   const sharedLocalProject: Project = {
     id: sharedProjectId,

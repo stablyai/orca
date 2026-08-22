@@ -11,7 +11,10 @@ import {
 import { restoreScrollbackBuffers } from './layout-serialization'
 
 const LEAF_ID = '11111111-1111-4111-8111-111111111111'
-const UNCLOSED_BOLD_FIXTURE = 'MCODE-SGR-REPRO \x1b[1mBOLD-RUN-LEFT-OPEN\x1b[1;34H'
+// Why: cursor parks one cell past the bold run (col 35) — the MCode rename made
+// the fixture one char longer than the original ORCA fixture, so col 34 would
+// let follow-up plain text overwrite the marker's last character.
+const UNCLOSED_BOLD_FIXTURE = 'MCODE-SGR-REPRO \x1b[1mBOLD-RUN-LEFT-OPEN\x1b[1;35H'
 const terminals: Terminal[] = []
 
 function createTerminal(): Terminal {
@@ -131,7 +134,7 @@ describe('fresh-shell terminal restore SGR state', () => {
     ['alternate-screen TUI', POST_REPLAY_REATTACH_RESET_KEEP_MOUSE]
   ])('preserves a %s pen across daemon reattach', async (_kind, reset) => {
     const terminal = createTerminal()
-    await writeTerminal(terminal, 'MCODE-SGR-REPRO \x1b[1;34mBOLD-RUN-LEFT-OPEN\x1b[1;34H')
+    await writeTerminal(terminal, 'MCODE-SGR-REPRO \x1b[1;34mBOLD-RUN-LEFT-OPEN\x1b[1;35H')
     await writeTerminal(terminal, reset)
     await writeTerminal(terminal, 'LIVE-CONTINUATION')
 

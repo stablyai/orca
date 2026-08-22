@@ -18,7 +18,7 @@ const localRepo: Repo = {
   path: '/local/mcode',
   displayName: 'mcode',
   badgeColor: '#22c55e',
-  upstream: { owner: 'stablyai', repo: 'mcode' },
+  upstream: { owner: 'mcode-ide', repo: 'mcode' },
   addedAt: 1_700_000_000_000
 }
 
@@ -27,7 +27,7 @@ const remoteRepo: Repo = {
   path: '/srv/mcode',
   displayName: 'mcode',
   badgeColor: '#737373',
-  upstream: { owner: 'stablyai', repo: 'mcode' },
+  upstream: { owner: 'mcode-ide', repo: 'mcode' },
   addedAt: 1_700_000_001_000
 }
 
