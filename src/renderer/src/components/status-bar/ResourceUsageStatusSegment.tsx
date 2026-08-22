@@ -1,5 +1,5 @@
 /* eslint-disable max-lines -- Why: one status-bar segment co-locates sparkline, worktree tree, session list, daemon actions, and kill-confirm; see docs/resource-usage-merge-spec.md. */
-import React, { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   AlertTriangle,
   ChevronDown,
@@ -38,7 +38,6 @@ import { ORPHAN_WORKTREE_ID } from '../../../../shared/constants'
 import { getRepoExecutionHostId, parseExecutionHostId } from '../../../../shared/execution-host'
 import { mergeSnapshotAndSessions, UNATTRIBUTED_REPO_ID } from './mergeSnapshotAndSessions'
 import type {
-  Metric,
   UnifiedProjectGroup,
   UnifiedSessionRow,
   UnifiedWorktreeRow
@@ -76,153 +75,39 @@ import {
   type ResourceSessionBindingInputs
 } from './resource-session-bindings'
 import { useResourceSessionInventory } from './use-resource-session-inventory'
+import {
+  formatProcessCpuPercent,
+  formatProcessMemoryBytes
+} from '@/lib/format-process-resource-usage'
+import { sortByProcessMetric, type ProcessMetricSortOption } from '@/lib/sort-by-process-metric'
+import { LIVE_POPOVER_POLL_MS } from '@/lib/live-popover-poll-interval'
+import {
+  MetricPair,
+  ProcessMetricSortHeader,
+  ROW_TRAILING_GUTTER_CLS
+} from './process-resource-metric-columns'
+import { Sparkline } from './process-metric-sparkline'
 import { translate } from '@/i18n/i18n'
 
-const POLL_MS = 2_000
-
-type SortOption = 'memory' | 'cpu' | 'name'
-
-const METRIC_COLUMNS_CLS = 'flex items-center shrink-0 tabular-nums'
-const CPU_COLUMN_CLS = 'w-12 text-right'
-const MEM_COLUMN_CLS = 'w-16 text-right'
-// Why: every row and the header reserve this trailing gutter so CPU/Memory columns align whether or not the row has a kill-X.
-const ROW_TRAILING_GUTTER_CLS = 'w-5 shrink-0 flex items-center justify-end'
+type SortOption = ProcessMetricSortOption
 
 // ─── Formatters ─────────────────────────────────────────────────────
 
-function formatMemory(bytes: number): string {
-  if (bytes < 1024 * 1024) {
-    return `${Math.round(bytes / 1024)} KB`
-  }
-  if (bytes < 1024 * 1024 * 1024) {
-    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
-  }
-  return `${(bytes / (1024 * 1024 * 1024)).toFixed(2)} GB`
-}
-
-function formatCpu(percent: number): string {
-  return `${percent.toFixed(1)}%`
-}
-
-function formatMetricCpu(value: Metric): string {
-  return value === null ? '—' : formatCpu(value)
-}
-
-function formatMetricMemory(value: Metric): string {
-  return value === null ? '—' : formatMemory(value)
-}
-
-// ─── Sparkline ──────────────────────────────────────────────────────
-
-type SparklineProps = {
-  samples: number[]
-  width?: number
-  height?: number
-}
-
-function SparklineImpl({ samples, width = 48, height = 14 }: SparklineProps): React.JSX.Element {
-  const points = useMemo(() => {
-    const safe = Array.isArray(samples) ? samples : []
-    if (safe.length < 2) {
-      const midY = (height / 2).toFixed(1)
-      return `0,${midY} ${width},${midY}`
-    }
-
-    let min = safe[0]
-    let max = safe[0]
-    for (const v of safe) {
-      if (v < min) {
-        min = v
-      }
-      if (v > max) {
-        max = v
-      }
-    }
-    const range = max - min || 1
-    const stepX = width / (safe.length - 1)
-
-    const out: string[] = []
-    for (let i = 0; i < safe.length; i++) {
-      const x = (i * stepX).toFixed(1)
-      const y = (height - ((safe[i] - min) / range) * height).toFixed(1)
-      out.push(`${x},${y}`)
-    }
-    return out.join(' ')
-  }, [samples, width, height])
-
-  return (
-    <svg
-      width={width}
-      height={height}
-      viewBox={`0 0 ${width} ${height}`}
-      aria-hidden
-      preserveAspectRatio="none"
-    >
-      <polyline
-        points={points}
-        fill="none"
-        strokeWidth={1}
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        className="stroke-muted-foreground/70"
-      />
-    </svg>
-  )
-}
-
-const Sparkline = memo(SparklineImpl, (a, b) => {
-  if (a.width !== b.width || a.height !== b.height) {
-    return false
-  }
-  const sa = Array.isArray(a.samples) ? a.samples : []
-  const sb = Array.isArray(b.samples) ? b.samples : []
-  if (sa === sb) {
-    return true
-  }
-  if (sa.length !== sb.length) {
-    return false
-  }
-  for (let i = 0; i < sa.length; i++) {
-    if (sa[i] !== sb[i]) {
-      return false
-    }
-  }
-  return true
-})
-
-// ─── Leaf UI: metric row ────────────────────────────────────────────
-
-function MetricPair({
-  cpu,
-  memory,
-  size = 'base'
-}: {
-  cpu: Metric
-  memory: Metric
-  size?: 'base' | 'small'
-}): React.JSX.Element {
-  const textCls = size === 'small' ? 'text-[11px]' : 'text-xs'
-  const muted = cpu === null && memory === null
-  return (
-    <div
-      className={cn(
-        METRIC_COLUMNS_CLS,
-        textCls,
-        muted ? 'text-muted-foreground/50' : 'text-muted-foreground'
-      )}
-    >
-      <span className={CPU_COLUMN_CLS}>{formatMetricCpu(cpu)}</span>
-      <span className={MEM_COLUMN_CLS}>{formatMetricMemory(memory)}</span>
-    </div>
-  )
-}
+const formatMemory = formatProcessMemoryBytes
+const formatCpu = formatProcessCpuPercent
 
 function AppSubRow({ label, values }: { label: string; values: UsageValues }): React.JSX.Element {
   return (
     <div className="px-3 py-1.5 pl-6 flex items-center justify-between gap-2">
       <span className="text-[11px] text-muted-foreground truncate">{label}</span>
       <div className="flex items-center gap-2 shrink-0">
-        <MetricPair cpu={values.cpu} memory={values.memory} size="small" />
+        <MetricPair
+          cpu={values.cpu}
+          memory={values.memory}
+          uptimeSeconds={null}
+          showUptime
+          size="small"
+        />
         <span className={ROW_TRAILING_GUTTER_CLS} aria-hidden />
       </div>
     </div>
@@ -270,7 +155,7 @@ function AppSection({
           </span>
           <div className="flex items-center gap-2 shrink-0">
             <Sparkline samples={app.history} />
-            <MetricPair cpu={app.cpu} memory={app.memory} />
+            <MetricPair cpu={app.cpu} memory={app.memory} uptimeSeconds={null} showUptime />
             <span className={ROW_TRAILING_GUTTER_CLS} aria-hidden />
           </div>
         </div>
@@ -308,42 +193,33 @@ function AppSection({
 
 // ─── Sorting ────────────────────────────────────────────────────────
 
-function compareMetricDesc(a: Metric, b: Metric): number {
-  // Why: null metrics (remote rows) sort last regardless of direction so they don't pollute the "biggest consumers" view.
-  if (a === null && b === null) {
-    return 0
+/** Longest-running session's uptime in a worktree; `null` when no session has a sample. Summing ages makes no sense, so this uses max instead of sum. */
+function maxSessionUptime(sessions: readonly UnifiedSessionRow[]): number | null {
+  let max: number | null = null
+  for (const session of sessions) {
+    if (session.uptimeSeconds != null && (max === null || session.uptimeSeconds > max)) {
+      max = session.uptimeSeconds
+    }
   }
-  if (a === null) {
-    return 1
-  }
-  if (b === null) {
-    return -1
-  }
-  return b - a
+  return max
 }
 
 function sortWorktrees(list: UnifiedWorktreeRow[], sort: SortOption): UnifiedWorktreeRow[] {
-  const copy = [...list]
-  if (sort === 'memory') {
-    copy.sort((a, b) => compareMetricDesc(a.memory, b.memory))
-  } else if (sort === 'cpu') {
-    copy.sort((a, b) => compareMetricDesc(a.cpu, b.cpu))
-  } else {
-    copy.sort((a, b) => a.worktreeName.localeCompare(b.worktreeName))
-  }
-  return copy
+  return sortByProcessMetric(list, sort, {
+    name: (worktree) => worktree.worktreeName,
+    cpu: (worktree) => worktree.cpu,
+    memory: (worktree) => worktree.memory,
+    uptime: (worktree) => maxSessionUptime(worktree.sessions)
+  })
 }
 
 function sortProjectGroups(groups: UnifiedProjectGroup[], sort: SortOption): UnifiedProjectGroup[] {
-  const copy = [...groups]
-  if (sort === 'memory') {
-    copy.sort((a, b) => compareMetricDesc(a.memory, b.memory))
-  } else if (sort === 'cpu') {
-    copy.sort((a, b) => compareMetricDesc(a.cpu, b.cpu))
-  } else {
-    copy.sort((a, b) => a.repoName.localeCompare(b.repoName))
-  }
-  return copy
+  return sortByProcessMetric(groups, sort, {
+    name: (group) => group.repoName,
+    cpu: (group) => group.cpu,
+    memory: (group) => group.memory,
+    uptime: (group) => maxSessionUptime(group.worktrees.flatMap((worktree) => worktree.sessions))
+  })
 }
 
 // ─── Session row ────────────────────────────────────────────────────
@@ -397,7 +273,13 @@ export function SessionRow({
       <span className="text-[11px] text-muted-foreground truncate min-w-0 flex-1">
         {session.label}
       </span>
-      <MetricPair cpu={session.cpu} memory={session.memory} size="small" />
+      <MetricPair
+        cpu={session.cpu}
+        memory={session.memory}
+        uptimeSeconds={session.uptimeSeconds}
+        showUptime
+        size="small"
+      />
       {/* Why: kill X sits in the shared gutter for column alignment; bound rows reveal it on hover/focus, orphan rows always show it as reclaimable. */}
       <span className={ROW_TRAILING_GUTTER_CLS}>
         <button
@@ -430,7 +312,7 @@ function BrowserRow({ browser }: { browser: BrowserWorkspace }): React.JSX.Eleme
     <div className="flex items-center gap-2 pl-10 pr-3 py-1.5">
       <Globe className="size-3 shrink-0 text-muted-foreground" aria-hidden />
       <span className="min-w-0 flex-1 truncate text-[11px] text-muted-foreground">{label}</span>
-      <MetricPair cpu={null} memory={null} size="small" />
+      <MetricPair cpu={null} memory={null} uptimeSeconds={null} showUptime size="small" />
       <span className={ROW_TRAILING_GUTTER_CLS} aria-hidden />
     </div>
   )
@@ -579,7 +461,7 @@ export function WorktreeRow({
               </div>
             )}
           </div>
-          <MetricPair cpu={worktree.cpu} memory={worktree.memory} />
+          <MetricPair cpu={worktree.cpu} memory={worktree.memory} uptimeSeconds={null} showUptime />
           <span className={ROW_TRAILING_GUTTER_CLS} aria-hidden />
         </div>
       </div>
@@ -703,7 +585,12 @@ function ResourceTree({
                   )}
                 </span>
                 <div className="flex items-center gap-2 shrink-0">
-                  <MetricPair cpu={group.cpu} memory={group.memory} />
+                  <MetricPair
+                    cpu={group.cpu}
+                    memory={group.memory}
+                    uptimeSeconds={null}
+                    showUptime
+                  />
                   <span className={ROW_TRAILING_GUTTER_CLS} aria-hidden />
                 </div>
               </div>
@@ -867,7 +754,7 @@ export function ResourceUsageStatusSegment({
     // Why: only memory polls on an interval; session inventory is explicit on open/action since it's expensive with many terminals.
     const memTimer = window.setInterval(() => {
       void fetchSnapshot()
-    }, POLL_MS)
+    }, LIVE_POPOVER_POLL_MS)
     return () => {
       window.clearInterval(memTimer)
     }
@@ -1379,61 +1266,16 @@ export function ResourceUsageStatusSegment({
           className="flex h-[420px] flex-col outline-none"
         >
           {(unifiedRepos.length > 0 || resourceSnapshot) && (
-            <div className="flex items-center justify-between px-3 py-1 bg-muted/30 border-b border-border/50 text-[10px] uppercase tracking-wide shrink-0">
-              <button
-                type="button"
-                onClick={() => setSortOption('name')}
-                className={cn(
-                  'hover:text-foreground transition-colors',
-                  sortOption === 'name'
-                    ? 'font-semibold text-foreground'
-                    : 'text-muted-foreground/80'
-                )}
-                aria-pressed={sortOption === 'name'}
-              >
-                {translate(
-                  'auto.components.status.bar.ResourceUsageStatusSegment.2aa2de6cb9',
-                  'Name'
-                )}
-              </button>
-              <div className="flex items-center gap-2 shrink-0">
-                <div className={cn(METRIC_COLUMNS_CLS, 'text-[10px]')}>
-                  <button
-                    type="button"
-                    onClick={() => setSortOption('cpu')}
-                    className={cn(
-                      CPU_COLUMN_CLS,
-                      'hover:text-foreground transition-colors',
-                      sortOption === 'cpu'
-                        ? 'font-semibold text-foreground'
-                        : 'text-muted-foreground/80'
-                    )}
-                    aria-pressed={sortOption === 'cpu'}
-                  >
-                    {translate(
-                      'auto.components.status.bar.ResourceUsageStatusSegment.298f4be7f2',
-                      'CPU'
-                    )}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setSortOption('memory')}
-                    className={cn(
-                      MEM_COLUMN_CLS,
-                      'hover:text-foreground transition-colors',
-                      sortOption === 'memory'
-                        ? 'font-semibold text-foreground'
-                        : 'text-muted-foreground/80'
-                    )}
-                    aria-pressed={sortOption === 'memory'}
-                  >
-                    {memoryMetricCopy.columnLabel}
-                  </button>
-                </div>
-                {/* Why: empty trailing gutter keeps CPU/Memory header cells aligned with rows that reserve this width for the kill-X. */}
-                <span className={ROW_TRAILING_GUTTER_CLS} aria-hidden />
-              </div>
-            </div>
+            <ProcessMetricSortHeader
+              sortOption={sortOption}
+              onSortOptionChange={setSortOption}
+              memoryLabel={memoryMetricCopy.columnLabel}
+              showUptimeColumn
+              uptimeLabel={translate(
+                'components.statusBar.processResourceMetricColumns.uptime',
+                'Uptime'
+              )}
+            />
           )}
 
           <div className="flex-1 overflow-y-auto scrollbar-sleek">

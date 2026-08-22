@@ -181,6 +181,53 @@ describe('container process classification', () => {
   })
 })
 
+describe('scanWorkspacePorts process resource usage', () => {
+  afterEach(() => {
+    resetWorkspacePortScanTimeoutBackoffForTests()
+    vi.restoreAllMocks()
+    runPortScanCommandMock.mockReset()
+  })
+
+  it('attaches cpu percent and RSS in bytes from the darwin ps probe', async () => {
+    vi.spyOn(process, 'platform', 'get').mockReturnValue('darwin')
+    runPortScanCommandMock.mockImplementation(async (command: string, args: string[]) => {
+      if (command === 'lsof' && args.includes('-iTCP')) {
+        return { stdout: LSOF_LISTEN_OUTPUT, spawnMs: 5 }
+      }
+      if (command === 'lsof') {
+        return { stdout: '', spawnMs: 5 }
+      }
+      return { stdout: '123 2.5 16384 01:02:03 node server.js', spawnMs: 5 }
+    })
+
+    const scan = await scanWorkspacePorts([], urlWatcherStub())
+
+    expect(scan.ports[0]).toMatchObject({
+      pid: 123,
+      cpu: 2.5,
+      memory: 16384 * 1024,
+      uptimeSeconds: 1 * 3_600 + 2 * 60 + 3
+    })
+  })
+
+  it('tolerates a locale decimal comma in the pcpu field', async () => {
+    vi.spyOn(process, 'platform', 'get').mockReturnValue('darwin')
+    runPortScanCommandMock.mockImplementation(async (command: string, args: string[]) => {
+      if (command === 'lsof' && args.includes('-iTCP')) {
+        return { stdout: LSOF_LISTEN_OUTPUT, spawnMs: 5 }
+      }
+      if (command === 'lsof') {
+        return { stdout: '', spawnMs: 5 }
+      }
+      return { stdout: '123 2,5 16384 00:10 node server.js', spawnMs: 5 }
+    })
+
+    const scan = await scanWorkspacePorts([], urlWatcherStub())
+
+    expect(scan.ports[0]).toMatchObject({ cpu: 2.5 })
+  })
+})
+
 describe('scanWorkspacePorts attribution work', () => {
   afterEach(() => {
     resetWorkspacePortScanTimeoutBackoffForTests()
@@ -210,8 +257,8 @@ describe('scanWorkspacePorts attribution work', () => {
       if (command === 'ps') {
         return {
           stdout: [
-            '123 node /repo/service/server.js',
-            '124 node /repo/worktrees/feature/app/server.js'
+            '123 0.4 51200 00:05 node /repo/service/server.js',
+            '124 1.2 102400 00:10 node /repo/worktrees/feature/app/server.js'
           ].join('\n'),
           spawnMs: 5
         }
@@ -222,6 +269,14 @@ describe('scanWorkspacePorts attribution work', () => {
     const scan = await scanWorkspacePorts(worktrees, urlWatcherStub())
 
     expect(scan.ports.filter((port) => port.kind === 'workspace')).toHaveLength(2)
+    expect(scan.ports.find((port) => port.pid === 123)).toMatchObject({
+      cpu: 0.4,
+      memory: 51200 * 1024
+    })
+    expect(scan.ports.find((port) => port.pid === 124)).toMatchObject({
+      cpu: 1.2,
+      memory: 102400 * 1024
+    })
     const win32WorktreePathResolveCalls = win32ResolveSpy.mock.calls.filter(
       ([input]) => input === '/repo' || input === '/repo/worktrees/feature'
     )
@@ -349,7 +404,7 @@ describe('scanWorkspacePorts with delayed process creation', () => {
       if (command === 'lsof') {
         return { stdout: ['p123', 'n/repo'].join('\n'), spawnMs: 4_200 }
       }
-      return { stdout: '123 node /repo/server.js', spawnMs: 4_200 }
+      return { stdout: '123 0.8 65536 00:15 node /repo/server.js', spawnMs: 4_200 }
     })
     const watcher = urlWatcherStub()
 
@@ -447,6 +502,6 @@ function mockStalledDarwinScan(): void {
     if (command === 'lsof') {
       return { stdout: ['p123', 'n/repo'].join('\n'), spawnMs: 4_200 }
     }
-    return { stdout: '123 node /repo/server.js', spawnMs: 4_200 }
+    return { stdout: '123 0.8 65536 00:15 node /repo/server.js', spawnMs: 4_200 }
   })
 }

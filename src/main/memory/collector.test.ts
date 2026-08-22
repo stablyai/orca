@@ -147,9 +147,12 @@ describe('parseWindowsProcessOutput', () => {
   it('preserves empty CIM field positions instead of shifting CPU ticks into memory', async () => {
     const { parseWindowsProcessOutput } = await loadWindowsProcessResourceCollector()
 
-    expect(parseWindowsProcessOutput('100\t1\t\t200\t300\t638830000000000000')).toEqual([
-      { pid: 100, ppid: 1, cpu: 0, memory: 0 }
-    ])
+    const rows = parseWindowsProcessOutput('100\t1\t\t200\t300\t638830000000000000')
+
+    expect(rows).toMatchObject([{ pid: 100, ppid: 1, cpu: 0, memory: 0 }])
+    // Why: uptime is derived from Date.now() minus a fixed historical tick
+    // value, so it can only be asserted as "present", not to an exact number.
+    expect(rows[0].uptimeSeconds).toEqual(expect.any(Number))
   })
 })
 

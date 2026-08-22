@@ -50,6 +50,7 @@ function makeSession(overrides: Partial<UnifiedSessionRow>): UnifiedSessionRow {
     cpu: 1,
     memory: 100,
     hasLocalSamples: true,
+    uptimeSeconds: null,
     ...overrides
   }
 }

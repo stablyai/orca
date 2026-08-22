@@ -216,7 +216,8 @@ export function mergeSnapshotAndSessions(
           tabId,
           cpu: s.cpu,
           memory: s.memory,
-          hasLocalSamples: true
+          hasLocalSamples: true,
+          uptimeSeconds: s.uptimeSeconds ?? null
         }
       })
       repo.worktrees.push({
@@ -304,7 +305,8 @@ export function mergeSnapshotAndSessions(
       tabId,
       cpu: null,
       memory: null,
-      hasLocalSamples: false
+      hasLocalSamples: false,
+      uptimeSeconds: null
     })
   }
 

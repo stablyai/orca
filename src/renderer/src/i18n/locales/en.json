@@ -3359,7 +3359,9 @@
             "8caaa86e9a": "ports",
             "45834a9ace": "port",
             "4ae65d871a": "external",
-            "2b84c4d11f": "{{value0}} workspace · {{value1}} external"
+            "2b84c4d11f": "{{value0}} workspace · {{value1}} external",
+            "rss": "RSS",
+            "uptime": "Uptime"
           },
           "ResourceUsageStatusSegment": {
             "946d9f94d0": "Cancel",
@@ -11536,7 +11538,10 @@
             "740aca88ab": "Workspace port scan failed.",
             "5be4f7f727": "Port {{value0}} menu",
             "7550998473": "Copy",
-            "1004af16ab": "Copy {{value0}}"
+            "1004af16ab": "Copy {{value0}}",
+            "cpu": "CPU",
+            "memoryRss": "Memory (RSS)",
+            "uptime": "Uptime"
           },
           "Search": {
             "1abfb25a66": "Type to search in files",
@@ -15907,6 +15912,13 @@
     }
   },
   "components": {
+    "statusBar": {
+      "processResourceMetricColumns": {
+        "name": "Name",
+        "cpu": "CPU",
+        "uptime": "Uptime"
+      }
+    },
     "native-chat": {
       "composer": {
         "imageUnsupported": "Image paste is not supported for this agent.",

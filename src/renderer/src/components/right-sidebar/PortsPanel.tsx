@@ -37,6 +37,11 @@ import {
   browserUrlForPortForwardEntry
 } from '@/lib/workspace-port-urls'
 import { resolveLocalhostLabelRouteForPort } from '@/lib/workspace-port-localhost-label-selector'
+import {
+  formatOptionalProcessCpuPercent,
+  formatOptionalProcessMemoryBytes,
+  formatOptionalProcessUptime
+} from '@/lib/format-process-resource-usage'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import {
   Dialog,
@@ -110,6 +115,9 @@ function workspacePortAsExternal(port: WorkspacePort & { kind: 'workspace' }): W
     pid: port.pid,
     processName: port.processName,
     protocol: port.protocol,
+    cpu: port.cpu,
+    memory: port.memory,
+    uptimeSeconds: port.uptimeSeconds,
     kind: 'external'
   }
 }
@@ -598,8 +606,17 @@ function LocalPortRow({
                 <span className="text-xs font-medium text-foreground">:{port.port}</span>
                 <span className="truncate text-xs text-muted-foreground">{processLabel}</span>
               </div>
-              <div className="flex min-w-0 items-center gap-1.5 text-[11px] text-muted-foreground">
+              <div className="flex min-w-0 items-center justify-between gap-1.5 text-[11px] text-muted-foreground">
                 <span className="truncate">{address}</span>
+                {port.pid != null && (
+                  <span className="shrink-0 font-mono tabular-nums text-muted-foreground/70">
+                    {formatOptionalProcessCpuPercent(port.cpu)}
+                    {' · '}
+                    {formatOptionalProcessMemoryBytes(port.memory)}
+                    {' · '}
+                    {formatOptionalProcessUptime(port.uptimeSeconds)}
+                  </span>
+                )}
               </div>
               <div className="flex min-w-0 items-center gap-1.5 text-[10px] text-muted-foreground/70">
                 <span className="truncate">{ownerLabel}</span>
@@ -781,6 +798,18 @@ function LocalPortDetailsDialog({
               {port.pid ??
                 translate('auto.components.right.sidebar.PortsPanel.3e13cb63ee', 'Unknown')}
             </dd>
+            <dt className="text-muted-foreground">
+              {translate('auto.components.right.sidebar.PortsPanel.cpu', 'CPU')}
+            </dt>
+            <dd className="text-foreground">{formatOptionalProcessCpuPercent(port.cpu)}</dd>
+            <dt className="text-muted-foreground">
+              {translate('auto.components.right.sidebar.PortsPanel.memoryRss', 'Memory (RSS)')}
+            </dt>
+            <dd className="text-foreground">{formatOptionalProcessMemoryBytes(port.memory)}</dd>
+            <dt className="text-muted-foreground">
+              {translate('auto.components.right.sidebar.PortsPanel.uptime', 'Uptime')}
+            </dt>
+            <dd className="text-foreground">{formatOptionalProcessUptime(port.uptimeSeconds)}</dd>
             {port.kind === 'workspace' && (
               <>
                 <dt className="text-muted-foreground">

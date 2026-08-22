@@ -33,6 +33,8 @@ export type SessionMemory = UsageValues & {
   sessionId: string
   paneKey: string | null
   pid: number
+  /** Seconds since the session's root process started; undefined when unavailable. */
+  uptimeSeconds?: number
 }
 
 /** The top-level cpu/memory are the sum of sessions. */

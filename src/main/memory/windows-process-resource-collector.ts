@@ -5,6 +5,7 @@ import {
   iterateProcessOutputLines,
   PROCESS_OUTPUT_FIELD_SCAN_MAX_CHARS
 } from '../../shared/process-output-field-scanner'
+import { dotnetTicksToUnixMs } from '../../shared/ps-elapsed-time'
 
 const PROCESS_QUERY_TIMEOUT_MS = 5_000
 const PROCESS_QUERY_MAX_BUFFER = 10 * 1024 * 1024
@@ -27,6 +28,8 @@ export type WindowsProcessResourceRow = {
   cpu: number
   /** Resident memory in bytes. */
   memory: number
+  /** Seconds since the process started; undefined when unavailable (e.g. the typeperf fallback). */
+  uptimeSeconds?: number
 }
 
 type WindowsCpuTimes = {
@@ -178,22 +181,21 @@ function parseWindowsProcessSample(stdout: string): ParsedWindowsProcessSample {
     if (!Number.isSafeInteger(pid) || pid <= 0 || !Number.isSafeInteger(ppid) || ppid < 0) {
       continue
     }
+    const startTimeId = fields[5] ?? ''
+    const hasStartTime = /^\d+$/.test(startTimeId) && !/^0+$/.test(startTimeId)
     rows.push({
       pid,
       ppid,
       cpu: 0,
-      memory: Number.isFinite(memory) && memory > 0 ? memory : 0
+      memory: Number.isFinite(memory) && memory > 0 ? memory : 0,
+      uptimeSeconds: hasStartTime
+        ? Math.max(0, Math.floor((Date.now() - dotnetTicksToUnixMs(BigInt(startTimeId))) / 1000))
+        : undefined
     })
 
     const kernelTicks = parseUnsignedBigInt(fields[3])
     const userTicks = parseUnsignedBigInt(fields[4])
-    const startTimeId = fields[5] ?? ''
-    if (
-      kernelTicks !== null &&
-      userTicks !== null &&
-      /^\d+$/.test(startTimeId) &&
-      !/^0+$/.test(startTimeId)
-    ) {
+    if (kernelTicks !== null && userTicks !== null && hasStartTime) {
       cpuByPid.set(pid, { cpuTicks: kernelTicks + userTicks, startTimeId })
     }
   }
