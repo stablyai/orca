@@ -18,6 +18,14 @@ import {
   queryWindowsProcessRowsFresh,
   resetWindowsProcessRowsSnapshotForTests
 } from './windows-foreground-process-rows'
+// A real snapshot always contains the process doing the querying; the reader
+// rejects a table without it, because that is what a blocked
+// CreateToolhelp32Snapshot looks like (an empty list, not an error).
+const SELF_PROCESS_ROW = { pid: process.pid, ppid: 0, name: 'vitest.exe', commandLine: 'vitest' }
+const withSelf = <T>(rows: readonly T[]): (T | typeof SELF_PROCESS_ROW)[] => [
+  SELF_PROCESS_ROW,
+  ...rows
+]
 
 const NATIVE_ROWS = [
   {
@@ -40,7 +48,7 @@ describe('windows process rows', () => {
   beforeEach(() => {
     getAllProcessesMock.mockReset()
     getAllProcessesMock.mockImplementation((cb: (rows: unknown) => void) => {
-      cb(NATIVE_ROWS)
+      cb(withSelf(NATIVE_ROWS))
     })
     platform = Object.getOwnPropertyDescriptor(process, 'platform')
     Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
@@ -64,15 +72,16 @@ describe('windows process rows', () => {
     expect(candidates?.[0]?.pid).toBe(200)
   })
 
-  it('recovers the image path from a quoted command line', async () => {
-    // Why keep this at all: agent matching used to get ExecutablePath as its own
-    // CIM column. The command line already starts with the same path, so the
-    // column was a cost with no extra information.
-    const rows = await queryWindowsProcessRowsFresh()
-    expect(rows.find((row) => row.pid === 100)?.executablePath).toBe(
-      'C:/Windows/System32/WindowsPowerShell/v1.0/powershell.exe'
-    )
-    expect(rows.find((row) => row.pid === 200)?.executablePath).toBe('node')
+  it('rejects a snapshot that does not contain the querying process', async () => {
+    // A blocked CreateToolhelp32Snapshot returns an EMPTY list rather than an
+    // error, and "nothing is running" is a claim teardown acts on. Our own pid
+    // is unfalsifiably present in any honest snapshot.
+    getAllProcessesMock.mockImplementation((cb: (rows: unknown) => void) => {
+      cb([{ pid: 100, ppid: 50, name: 'other.exe', commandLine: 'other' }])
+    })
+    resetWindowsProcessRowsSnapshotForTests()
+
+    await expect(queryWindowsProcessRowsFresh()).rejects.toThrow(/unreadable/)
   })
 
   it('reports an unreadable table as unavailable, not as an empty machine', async () => {
@@ -97,7 +106,7 @@ describe('windows process rows', () => {
     const rows = await Promise.all(Array.from({ length: 32 }, () => queryWindowsProcessRowsFresh()))
 
     expect(scanCount()).toBe(1)
-    expect(rows[31]?.map((row) => row.pid)).toEqual([100, 200])
+    expect(rows[31]?.map((row) => row.pid)).toEqual([process.pid, 100, 200])
   })
 
   it('never answers from the TTL cache, which can predate the recycle it detects', async () => {

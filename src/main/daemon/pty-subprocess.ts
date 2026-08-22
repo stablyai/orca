@@ -61,6 +61,7 @@ import { isWindowsGitBashShellPath, resolveWindowsGitBashShellPath } from '../gi
 import { WINDOWS_GIT_BASH_SHELL } from '../../shared/windows-terminal-shell'
 import { resolveAgentForegroundProcessWithAvailability } from '../providers/agent-foreground-process'
 import { readWindowsConptyProcessIds } from '../providers/windows-conpty-process-membership'
+import { assignHostProcessToKillOnCloseJob } from '../windows/windows-pty-job'
 import {
   isAgentForegroundWrapperProcess,
   recognizeAgentProcess,
@@ -588,6 +589,13 @@ function spawnDaemonPtyWithWindowsFallback(args: {
   let reportsChildExitStatus = true
   const spawnAt = (shellPath: string, shellArgs: string[], cwd: string): pty.IPty => {
     const wrapped = wrapShellSpawnForMacosTccAttribution(shellPath, shellArgs, args.env)
+    // Why here: children inherit job membership, so the host job has to exist
+    // before the first pty -- but resolving it loads the ConPTY addon, and
+    // paying that at startup delayed the daemon's endpoint past the boot smoke
+    // test's readiness check. This path already pays ConPTY cost. Memoised.
+    if (process.platform === 'win32') {
+      assignHostProcessToKillOnCloseJob()
+    }
     const proc = pty.spawn(wrapped.file, wrapped.args, {
       name: args.env.TERM ?? 'xterm-256color',
       cols: args.cols,

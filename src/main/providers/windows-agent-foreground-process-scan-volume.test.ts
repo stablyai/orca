@@ -14,6 +14,14 @@ const getAllProcessesMock = vi.fn()
 
 import { __setWindowsProcessTreeLoaderForTests } from '../windows/windows-process-table'
 import { queryWindowsProcessDescendants } from './windows-foreground-process-rows'
+// A real snapshot always contains the process doing the querying; the reader
+// rejects a table without it, because that is what a blocked
+// CreateToolhelp32Snapshot looks like (an empty list, not an error).
+const SELF_PROCESS_ROW = { pid: process.pid, ppid: 0, name: 'vitest.exe', commandLine: 'vitest' }
+const withSelf = <T>(rows: readonly T[]): (T | typeof SELF_PROCESS_ROW)[] => [
+  SELF_PROCESS_ROW,
+  ...rows
+]
 
 const ACTIVE_POLL_INTERVAL_MS = 750
 const PANE_COUNT = 6
@@ -49,7 +57,7 @@ describe('windows agent foreground inspection process-table scan volume', () => 
   beforeEach(() => {
     getAllProcessesMock.mockReset()
     getAllProcessesMock.mockImplementation((cb: (snapshot: unknown) => void) => {
-      cb(NATIVE_ROWS)
+      cb(withSelf(NATIVE_ROWS))
     })
     platform = Object.getOwnPropertyDescriptor(process, 'platform')
     Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })

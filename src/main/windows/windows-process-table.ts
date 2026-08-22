@@ -78,6 +78,35 @@ function loadWindowsProcessTree(): WindowsProcessTreeModule | null {
   return cachedModule
 }
 
+/**
+ * Upper bound on one snapshot.
+ *
+ * Why any bound at all: the vendored reader sets a module-global
+ * `requestInProgress` and clears it only after draining its callback queue,
+ * with no try/catch. One throw or one worker that never calls back leaves it
+ * latched, every later call enqueues a callback that never fires, and the
+ * single-flight cache above then holds a promise that never settles — the
+ * process table is dead for the life of the app. The PowerShell reader this
+ * replaced self-healed in 3s because execFile owned a timeout; keep that.
+ */
+const WINDOWS_PROCESS_QUERY_TIMEOUT_MS = 3_000
+
+/**
+ * How long to stop calling the reader after it misses its deadline.
+ *
+ * Why a cooldown and not just the deadline: a timed-out call leaves its
+ * callback in the vendored module's queue, and that queue only drains when the
+ * latched request finally completes -- which, in the wedge this guards against,
+ * never happens. Retrying at the caller's poll rate would then add a closure
+ * per tick forever. One probe per cooldown bounds it.
+ */
+const WINDOWS_PROCESS_QUERY_COOLDOWN_MS = 30_000
+
+let wedgedUntilMs = 0
+// Why a generation: a request that already lost its deadline must not later
+// clear or re-arm the wedge on behalf of the request that replaced it.
+let readGeneration = 0
+
 function readNativeRows(): Promise<WindowsProcessRow[]> {
   const native = moduleLoader()
   if (!native) {
@@ -86,12 +115,58 @@ function readNativeRows(): Promise<WindowsProcessRow[]> {
     // tree dead. "Unavailable" has to stay distinguishable from "empty".
     return Promise.reject(new Error('windows process table unavailable'))
   }
+  const startedAt = Date.now()
+  if (startedAt < wedgedUntilMs) {
+    return Promise.reject(new Error('windows process table is cooling down after a timeout'))
+  }
+  if (wedgedUntilMs > 0) {
+    // Coming out of a wedge: re-arm the cooldown BEFORE probing, so exactly one
+    // caller gets through. Without this every concurrent caller passes the
+    // check above at expiry, each enqueues a callback into the still-latched
+    // native queue, and each cooldown cycle leaks another batch rather than
+    // bounding it to one probe.
+    wedgedUntilMs = startedAt + WINDOWS_PROCESS_QUERY_COOLDOWN_MS
+  }
+  const generation = ++readGeneration
+  // Why always both flags: each adds an OpenProcess per process (Memory a
+  // GetProcessMemoryInfo, CommandLine a PEB read), so asking for less would be
+  // cheaper -- 15.9ms p50 versus 30.6ms at 1050 processes. But every read shares
+  // one snapshot so a 32-wide teardown collapses into a single scan, and that
+  // snapshot has to satisfy every caller. Splitting the cache per field set
+  // would restore exactly the fan-out it exists to prevent.
   const flags = native.ProcessDataFlag.Memory | native.ProcessDataFlag.CommandLine
   return new Promise((resolve, reject) => {
+    // Hoisted so a synchronous throw from getAllProcesses can clear it. An
+    // orphaned timer would otherwise fire later and wedge a reader that had
+    // already recovered.
+    let deadline: ReturnType<typeof setTimeout> | undefined
     try {
+      deadline = setTimeout(() => {
+        if (generation === readGeneration) {
+          wedgedUntilMs = Date.now() + WINDOWS_PROCESS_QUERY_COOLDOWN_MS
+        }
+        reject(new Error('windows process table timed out'))
+      }, WINDOWS_PROCESS_QUERY_TIMEOUT_MS)
+      deadline.unref?.()
       native.getAllProcesses((processes) => {
+        clearTimeout(deadline)
+        // A callback proves the reader is answering, so stop refusing.
+        if (generation === readGeneration) {
+          wedgedUntilMs = 0
+        }
         if (!processes) {
           reject(new Error('windows process table returned no snapshot'))
+          return
+        }
+        // Why check for ourselves: the native snapshot returns an EMPTY list --
+        // not an error -- when CreateToolhelp32Snapshot fails, which is the
+        // normal outcome under an EDR hook or a restricted token. An empty
+        // table reads to callers as "nothing is running", and teardown acts on
+        // that by concluding a live PTY root is already gone. Our own pid is
+        // unfalsifiably present in any honest snapshot, so this one predicate
+        // catches empty, truncated and permission-filtered tables alike.
+        if (!processes.some((row) => row.pid === process.pid)) {
+          reject(new Error('windows process table is unreadable'))
           return
         }
         resolve(
@@ -105,6 +180,7 @@ function readNativeRows(): Promise<WindowsProcessRow[]> {
         )
       }, flags)
     } catch (error) {
+      clearTimeout(deadline)
       reject(error instanceof Error ? error : new Error(String(error)))
     }
   })
@@ -150,6 +226,7 @@ export function __setWindowsProcessTreeLoaderForTests(
 ): void {
   moduleLoader = loader ?? loadWindowsProcessTree
   cachedModule = undefined
+  wedgedUntilMs = 0
   snapshotReader.reset()
 }
 
@@ -157,4 +234,5 @@ export function __setWindowsProcessTreeLoaderForTests(
 export function resetWindowsProcessTableForTests(): void {
   snapshotReader.reset()
   cachedModule = undefined
+  wedgedUntilMs = 0
 }

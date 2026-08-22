@@ -16,6 +16,14 @@ import {
   resolveAgentForegroundProcess,
   resolveAgentForegroundProcessWithAvailability
 } from './agent-foreground-process'
+// A real snapshot always contains the process doing the querying; the reader
+// rejects a table without it, because that is what a blocked
+// CreateToolhelp32Snapshot looks like (an empty list, not an error).
+const SELF_PROCESS_ROW = { pid: process.pid, ppid: 0, name: 'vitest.exe', commandLine: 'vitest' }
+const withSelf = <T>(rows: readonly T[]): (T | typeof SELF_PROCESS_ROW)[] => [
+  SELF_PROCESS_ROW,
+  ...rows
+]
 
 // Why: the POSIX reader wraps execFile with promisify, so the mock must honor
 // the Node callback contract — invoke the last arg with (err, { stdout, stderr }).
@@ -50,7 +58,7 @@ const DEFAULT_WINDOWS_ROWS: NativeProcessRow[] = [
 
 function mockWindowsRows(rows: NativeProcessRow[] = DEFAULT_WINDOWS_ROWS): void {
   getAllProcessesMock.mockImplementation((cb: (snapshot: NativeProcessRow[]) => void) => {
-    cb(rows)
+    cb(withSelf(rows))
   })
 }
 

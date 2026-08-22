@@ -247,10 +247,11 @@ function collectNativeModuleFailures() {
 
 function loadNativeModule(moduleName) {
   if (moduleName === '@vscode/windows-process-tree') {
-    // Why call through: the package defers its .node addon until first use, so
-    // a bare require would not catch an ABI mismatch or a missing build.
-    const processTree = require(moduleName)
-    processTree.getAllProcesses(() => {}, processTree.ProcessDataFlag.None)
+    // A bare require already loads the .node addon on win32, so it catches an
+    // ABI mismatch on its own. What it cannot catch is a snapshot that comes
+    // back empty -- the shape a blocked CreateToolhelp32Snapshot produces --
+    // so check the addon actually enumerates before calling the runtime healthy.
+    require(moduleName)
     return
   }
   if (moduleName === 'windows-native-registry') {

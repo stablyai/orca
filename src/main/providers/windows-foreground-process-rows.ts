@@ -10,30 +10,9 @@ export type WindowsProcessRow = {
   ppid: number
   name: string
   command: string
-  executablePath: string
 }
 
 export type WindowsProcessCandidate = WindowsProcessRow & { depth: number }
-
-/**
- * Recover the image path from the command line.
- *
- * Why derive rather than query: a separate `ExecutablePath` column cost a
- * `Get-CimInstance` scan, and the command line already begins with the same
- * path — quoted when it contains spaces. Agent matching only uses this as extra
- * text alongside `command`, so a best-effort first token preserves it.
- */
-function executablePathFromCommand(command: string): string {
-  if (!command) {
-    return ''
-  }
-  if (command.startsWith('"')) {
-    const end = command.indexOf('"', 1)
-    return end === -1 ? '' : command.slice(1, end)
-  }
-  const space = command.indexOf(' ')
-  return space === -1 ? command : command.slice(0, space)
-}
 
 function toProcessRow(row: NativeWindowsProcessRow): WindowsProcessRow {
   return {
@@ -42,8 +21,7 @@ function toProcessRow(row: NativeWindowsProcessRow): WindowsProcessRow {
     name: row.name,
     // Why fall back to the image name: a process that denied a query handle has
     // no command line, and callers match on `command` first.
-    command: row.command || row.name,
-    executablePath: executablePathFromCommand(row.command)
+    command: row.command || row.name
   }
 }
 
