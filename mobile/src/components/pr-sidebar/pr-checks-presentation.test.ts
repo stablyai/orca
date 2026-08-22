@@ -135,6 +135,28 @@ describe('summarizePRChecks', () => {
     expect(summary).toMatchObject({ total: 3, passed: 3, outcome: 'success' })
     expect(summary.label).toBe('3 passed')
   })
+  it('presents cancellation-only checks as muted, not failing', () => {
+    const summary = summarizePRChecks([
+      check({ conclusion: 'cancelled' }),
+      check({ conclusion: 'cancelled' })
+    ])
+    expect(summary).toMatchObject({
+      total: 2,
+      failed: 0,
+      cancelled: 2,
+      outcome: 'cancelled'
+    })
+    expect(summary.label).toBe('2 cancelled')
+  })
+  it('lets genuine and action-required failures win mixed cancellation', () => {
+    const summary = summarizePRChecks([
+      check({ conclusion: 'failure' }),
+      check({ conclusion: 'action_required' }),
+      check({ conclusion: 'cancelled' })
+    ])
+    expect(summary).toMatchObject({ failed: 2, cancelled: 1, outcome: 'failure' })
+    expect(summary.label).toBe('2 failing · 1 cancelled')
+  })
 })
 
 describe('prCheckKey', () => {

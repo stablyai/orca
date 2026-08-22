@@ -3,6 +3,7 @@ import {
   AlertTriangle,
   Check,
   ChevronRight,
+  CircleMinus,
   CircleDot,
   GitPullRequest,
   MessageSquare,
@@ -93,6 +94,8 @@ function RollupIcon({ kind, color }: { kind: MobilePrChipRollup['kind']; color: 
       return <AlertTriangle size={size} color={color} strokeWidth={strokeWidth} />
     case 'failing':
       return <X size={size} color={color} strokeWidth={strokeWidth} />
+    case 'cancelled':
+      return <CircleMinus size={size} color={color} strokeWidth={strokeWidth} />
     case 'running':
       return <CircleDot size={size} color={color} strokeWidth={strokeWidth} />
     case 'passed':

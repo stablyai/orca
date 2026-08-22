@@ -18,7 +18,7 @@ function check(over: Partial<PRCheckDetail> = {}): PRCheckDetail {
 }
 
 describe('getBrokenChecks / hasBrokenChecks', () => {
-  it('selects only failure/cancelled/timed_out conclusions', () => {
+  it('selects only genuine failure and timed_out conclusions', () => {
     const checks = [
       check({ name: 'ok', conclusion: 'success' }),
       check({ name: 'fail', conclusion: 'failure' }),
@@ -27,9 +27,10 @@ describe('getBrokenChecks / hasBrokenChecks', () => {
       check({ name: 'skip', conclusion: 'skipped' }),
       check({ name: 'pending', conclusion: 'pending' })
     ]
-    expect(getBrokenChecks(checks).map((c) => c.name)).toEqual(['fail', 'cancel', 'timeout'])
+    expect(getBrokenChecks(checks).map((c) => c.name)).toEqual(['fail', 'timeout'])
     expect(hasBrokenChecks(checks)).toBe(true)
     expect(hasBrokenChecks([check({ conclusion: 'success' })])).toBe(false)
+    expect(hasBrokenChecks([check({ conclusion: 'cancelled' })])).toBe(false)
   })
 })
 
