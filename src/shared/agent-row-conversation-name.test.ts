@@ -97,6 +97,13 @@ describe('getAgentRowConversationName', () => {
     expect(
       getAgentRowConversationName(makeTab({ title: 'repos\\mcode' }), 'codex', false)
     ).toBeNull()
+    expect(
+      getAgentRowConversationName(
+        makeTab({ title: 'Administrator: C:\\Program Files\\PowerShell\\7\\pwsh.exe' }),
+        'codex',
+        false
+      )
+    ).toBeNull()
   })
 
   it('accepts multi-word titles that merely contain a slash', () => {

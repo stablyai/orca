@@ -218,6 +218,30 @@ export function findActiveVisibleTabId(
   return activeItem?.id ?? null
 }
 
+export function filterTabBarItemsForActiveView(
+  items: readonly TabBarItem[],
+  activeVisibleTabId: string | null,
+  unifiedTabByVisibleId: Map<string, Tab>
+): TabBarItem[] {
+  const activeUnifiedTab = activeVisibleTabId
+    ? unifiedTabByVisibleId.get(activeVisibleTabId)
+    : undefined
+  if (activeUnifiedTab?.contentType !== 'terminal' || activeUnifiedTab.viewMode !== 'chat') {
+    return [...items]
+  }
+
+  // Why: Chat is a workspace-level surface. Raw shells, files, and browser tabs belong to the
+  // Terminal workspace and must not leak into its session strip merely because they share a group.
+  return items.filter((item) => {
+    if (item.type !== 'terminal') {
+      return false
+    }
+    const unifiedTab =
+      unifiedTabByVisibleId.get(item.id) ?? unifiedTabByVisibleId.get(item.unifiedTabId)
+    return unifiedTab?.contentType === 'terminal' && unifiedTab.viewMode === 'chat'
+  })
+}
+
 export function buildTabStripLayoutKey(
   items: readonly TabBarItem[],
   generatedTitlesEnabled: boolean,

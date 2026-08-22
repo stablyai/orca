@@ -44,6 +44,7 @@ import {
   serializeTerminalLayout
 } from './layout-serialization'
 import { makePaneKey } from '../../../../shared/stable-pane-id'
+import { resolveNativeChatConversationTitle } from '../../../../shared/native-chat-session-title'
 import type { TerminalKittyKeyboardModeTracker } from '../../../../shared/terminal-kitty-keyboard-mode-tracker'
 import {
   applyExpandedLayoutTo,
@@ -2969,13 +2970,20 @@ function TerminalPane(
   const activePaneNumber = activePane
     ? managedPanes.findIndex((pane) => pane.id === activePane.id) + 1
     : 0
-  const activeSessionContextDetail =
-    activePaneTitle ||
-    (managedPanes.length > 1 && activePaneNumber > 0
-      ? translate('components.native-chat.toggle.paneLabel', 'Pane {{value0}}', {
-          value0: activePaneNumber
-        })
-      : terminalTab?.title?.trim() || null)
+  const activeSessionContextDetail = activePaneIsChatLeaf
+    ? activeSessionAgent && terminalTab
+      ? resolveNativeChatConversationTitle(
+          { ...terminalTab, title: activePaneTitle || terminalTab.title },
+          activeSessionAgent,
+          settings?.tabAutoGenerateTitle === true
+        )
+      : null
+    : activePaneTitle ||
+      (managedPanes.length > 1 && activePaneNumber > 0
+        ? translate('components.native-chat.toggle.paneLabel', 'Pane {{value0}}', {
+            value0: activePaneNumber
+          })
+        : terminalTab?.title?.trim() || null)
   const sessionViewInstanceId = `session-view-${tabId.replace(/[^a-zA-Z0-9_-]/g, '-')}`
   const chatPanelId = `${sessionViewInstanceId}-chat-panel`
   const terminalPanelId = `${sessionViewInstanceId}-terminal-panel`

@@ -85,7 +85,9 @@ vi.mock('@/lib/agent-catalog', () => ({
 
 vi.mock('../../../../shared/agent-title-decoration', () => ({
   stripLeadingAgentTitleDecoration: (title: string) =>
-    title.replace(/^(?:[✳✦⏲◇✋⠀-⣿]+|[.*]\s)\s*/, '').trimStart() || title
+    title.replace(/^(?:[✳✦⏲◇✋⠀-⣿]+|[.*]\s)\s*/, '').trimStart() || title,
+  stripLeadingAgentTitleDecorationOrEmpty: (title: string) =>
+    title.replace(/^(?:[✳✦⏲◇✋⠀-⣿]+|[.*]\s)\s*/, '').trimStart()
 }))
 
 vi.mock('@/lib/use-tab-agent', () => ({
@@ -320,6 +322,41 @@ describe('tab title tooltips', () => {
     expect(markup).toContain('>Claude Code</span>')
     expect(markup).not.toContain('data-shell-icon="generic"')
     expect(markup).not.toContain('>✳ Claude Code</span>')
+  })
+
+  it('uses a chat label instead of a raw shell title when an agent launch exits early', () => {
+    mockTabAgent = 'codex'
+    const markup = renderToStaticMarkup(
+      <SortableTab
+        tab={makeTerminalTab({
+          title: 'Administrator: C:\\Program Files\\PowerShell\\7\\pwsh.exe',
+          launchAgent: 'codex'
+        })}
+        unifiedTabId="terminal-1"
+        groupId="group-1"
+        tabCount={1}
+        hasTabsToRight={false}
+        hasTabsToLeft={false}
+        isActive={true}
+        isPinned={false}
+        isExpanded={false}
+        isChatView={true}
+        onActivate={vi.fn()}
+        onClose={vi.fn()}
+        onCloseOthers={vi.fn()}
+        onCloseToRight={vi.fn()}
+        onCloseToLeft={vi.fn()}
+        onSetCustomTitle={vi.fn()}
+        onSetTabColor={vi.fn()}
+        onTogglePin={vi.fn()}
+        onToggleExpand={vi.fn()}
+        dragData={makeDragData('terminal', 'terminal-1')}
+      />
+    )
+
+    expectTooltipContent(markup, 'Codex chat')
+    expect(markup).not.toContain('Administrator:')
+    expect(markup).not.toContain('pwsh.exe')
   })
 
   it('uses the browser tab fallback label from the tab prop, not the live URL', () => {
