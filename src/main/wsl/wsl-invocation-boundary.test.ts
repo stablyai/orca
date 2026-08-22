@@ -45,28 +45,19 @@ const IGNORED = new Set(['node_modules', 'dist', 'out', 'build', '.git', '__fixt
  *
  * Any identifier followed by `(` counts as an opener, and the assignment-style
  * fields are matched by name. Indirection through a variable
- * (`const f = cond ? 'wsl.exe' : x`) is still invisible; those files are listed
- * explicitly below so the gap is recorded rather than implied.
+ * (`const f = cond ? 'wsl.exe' : x`) is caught separately, by
+ * `bindsWslBinaryToASpawnedIdentifier`.
  */
 const SPAWN_OPENER = /\b[A-Za-z_$][\w$]*\s*\(\s*$|(?:program|binary|command|file|shellPath):\s*$/
 
 /*
- * Known blind spot, recorded rather than implied: these files assign
- * `'wsl.exe'` to a variable and spawn it elsewhere, which no regex over the
- * literal's neighbourhood can see. They are NOT in the allowlist, because the
- * stale-entry check would reject an entry the scanner cannot find -- so the
- * guard's count under-reports by these five, and this comment is the record.
- *
- *   main/rate-limits/claude-pty.ts
- *   main/providers/local-pty-provider.ts
- *   main/daemon/pty-subprocess.ts
- *   relay/pty-shell-launch.ts
- *   relay/pty-handler.ts
- *
- * All five are PTY-pane launches, which are out of W3's scope anyway: they go
- * through node-pty, not a child-process wrapper.
+ * The five files this comment used to list as an unscannable blind spot are
+ * now handled: three bind `wsl.exe` to a variable and spawn it, and are real
+ * allowlist entries; the other two never spawned it at all -- one compares a
+ * basename, one lists it among accepted shells. Recording a gap in prose was
+ * worse than it looked, because the count is the goalpost and it was wrong by
+ * three in the direction that hides offenders.
  */
-
 function isTestFile(path: string): boolean {
   return (
     /\.(?:test|spec)\.tsx?$/.test(path) ||
@@ -92,6 +83,46 @@ function collectSourceFiles(root: string): string[] {
   return found
 }
 
+/**
+ * `const binary = 'wsl.exe'` ... `spawn(binary)`, which no test over the
+ * literal's neighbourhood can see.
+ *
+ * Why it earns its place: the neighbourhood test was the whole guard, and a
+ * planted `const p = 'wsl.exe'; spawnProcess(p)` passed it. Five files were
+ * already known to spawn this way and were recorded in a comment instead of
+ * the allowlist, which means the count -- the actual goalpost -- was wrong by
+ * five and any NEW indirect spawner would have been invisible.
+ */
+function bindsWslBinaryToASpawnedIdentifier(source: string): boolean {
+  const bound = new Set<string>()
+  // Covers `const x = 'wsl.exe'`, a ternary picking it, and `binary: 'wsl.exe'`.
+  for (const match of source.matchAll(
+    /(?:const|let|var)\s+([A-Za-z_$][\w$]*)[^=;\n]*=[^;\n]*['"]wsl\.exe['"]/g
+  )) {
+    bound.add(match[1]!)
+  }
+  for (const match of source.matchAll(
+    /\b([A-Za-z_$][\w$]*)\s*:\s*[^,;\n]*['"]wsl\.exe['"]/g
+  )) {
+    bound.add(match[1]!)
+  }
+  for (const name of bound) {
+    const identifier = name.replace(/[$]/g, '\\$&')
+    // The identifier reaching a call opener, a spawn-style field, or the first
+    // argument of a spawn-style call.
+    if (
+      new RegExp(`\\b${identifier}\\s*\\(`).test(source) ||
+      new RegExp(`(?:program|binary|command|file|shellPath)\\s*:\\s*${identifier}\\b`).test(
+        source
+      ) ||
+      new RegExp(`\\b\\w*(?:spawn|exec|run)\\w*\\s*\\(\\s*${identifier}\\b`, 'i').test(source)
+    ) {
+      return true
+    }
+  }
+  return false
+}
+
 function findSpawnSites(): string[] {
   const offenders = new Set<string>()
   for (const path of collectSourceFiles(SOURCE_ROOT)) {
@@ -107,6 +138,9 @@ function findSpawnSites(): string[] {
       if (SPAWN_OPENER.test(preceding.replace(/\s+/g, ' ').replace(/ $/, ''))) {
         offenders.add(relativePath)
       }
+    }
+    if (bindsWslBinaryToASpawnedIdentifier(source)) {
+      offenders.add(relativePath)
     }
   }
   return [...offenders].sort()

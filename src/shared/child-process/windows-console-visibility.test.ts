@@ -74,9 +74,25 @@ function findOffenders(): string[] {
     const decommented = stripComments(file.source)
     // Resolve `import { spawn as sp }` so a renamed binding is still a spawn.
     // The previous comment claimed this; only three names were hardcoded.
-    const aliases = [...decommented.matchAll(/\b(?:spawn|spawnSync|execFile|execFileSync|exec|execSync|fork)\s+as\s+(\w+)/g)].map(
-      (match) => match[1]
-    )
+    const aliases = [
+      ...decommented.matchAll(
+        /\b(?:spawn|spawnSync|execFile|execFileSync|exec|execSync|fork)\s+as\s+(\w+)/g
+      )
+    ].map((match) => match[1]!)
+    // `const run = promisify(execFile)` mints a third name, and it can wrap a
+    // renamed binding, so this has to run after the aliases are known. A
+    // planted `promisify(renamedExecFile)` spawn passed the guard without it.
+    for (const match of decommented.matchAll(
+      /(?:const|let|var)\s+(\w+)\s*=\s*promisify\s*\(\s*(\w+)\s*\)/g
+    )) {
+      const wrapped = match[2]!
+      if (
+        aliases.includes(wrapped) ||
+        /^(?:spawn|spawnSync|execFile|execFileSync|exec|execSync|fork)$/.test(wrapped)
+      ) {
+        aliases.push(match[1]!)
+      }
+    }
     // The import test needs the module name, which blanking would erase; the
     // call scan needs parens inside strings neutralised. Two views, one file.
     if (!CHILD_PROCESS_IMPORT.test(decommented)) {
