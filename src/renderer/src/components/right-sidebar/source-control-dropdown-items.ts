@@ -13,7 +13,7 @@ import { buildHostedReviewDropdownItems } from './source-control-dropdown-review
  */
 export function resolveDropdownItems(inputs: DropdownActionInputs): DropdownEntry[] {
   const ctx = deriveDropdownActionContext(inputs)
-  const { commit, commitPush, commitSync } = buildCommitDropdownItems(ctx)
+  const { commit, commitPush, commitSync, commitAmend } = buildCommitDropdownItems(ctx)
   const { push, forcePush, pull, fastForward, sync, rebase, fetch, publish } =
     buildRemoteDropdownItems(ctx)
   const { createPR, pushCreatePR } = buildHostedReviewDropdownItems(ctx)
@@ -23,6 +23,7 @@ export function resolveDropdownItems(inputs: DropdownActionInputs): DropdownEntr
     commit,
     commitPush,
     commitSync,
+    commitAmend,
     { kind: 'separator', id: 'before-remote' },
     push,
     forcePush,

@@ -36,7 +36,8 @@ export function useSourceControlActionModel({
   isCreatingPr,
   hostedReviewReviewLabel,
   conflictOperation,
-  effectiveBaseRef
+  effectiveBaseRef,
+  hasHeadCommit
 }: {
   grouped: SourceControlEntryGroups
   commitMessage: string
@@ -62,6 +63,7 @@ export function useSourceControlActionModel({
   hostedReviewReviewLabel: string
   conflictOperation: DropdownInput['conflictOperation']
   effectiveBaseRef: string | null
+  hasHeadCommit: boolean
 }) {
   const hasUnstagedChanges = grouped.unstaged.length > 0 || grouped.untracked.length > 0
   const hasStageableChanges = useMemo(
@@ -215,7 +217,8 @@ export function useSourceControlActionModel({
           branchSummary?.status === 'ready' ? (branchSummary.commitsAhead ?? 0) : undefined,
         hasCurrentBranch: Boolean(branchName),
         canPushLinkedReviewWithoutUpstream: canUseHostedReviewPushTarget,
-        rebaseBaseRef: effectiveBaseRef
+        rebaseBaseRef: effectiveBaseRef,
+        hasHeadCommit
       }),
     [
       commitMessage,
@@ -240,7 +243,8 @@ export function useSourceControlActionModel({
       branchName,
       effectiveBaseRef,
       remoteStatusForActions,
-      unresolvedConflictCount
+      unresolvedConflictCount,
+      hasHeadCommit
     ]
   )
   return {

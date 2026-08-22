@@ -19,6 +19,7 @@ export function useSourceControlActionDispatch({
   createPrHeaderAction,
   handleAbortMerge,
   handleAbortRebase,
+  handleAmend,
   handleCommit,
   handleCreatePullRequest,
   handleStageAllPrimary,
@@ -35,6 +36,7 @@ export function useSourceControlActionDispatch({
   createPrHeaderAction: SourceControlActionModel['createPrHeaderAction']
   handleAbortMerge: SourceControlConflictAbort['handleAbortMerge']
   handleAbortRebase: SourceControlConflictAbort['handleAbortRebase']
+  handleAmend: SourceControlCommitAction['handleAmend']
   handleCommit: SourceControlCommitAction['handleCommit']
   handleCreatePullRequest: SourceControlHostedReviewCreation['handleCreatePullRequest']
   handleStageAllPrimary: SourceControlFileListing['handleStageAllPrimary']
@@ -64,6 +66,9 @@ export function useSourceControlActionDispatch({
         case 'commit_sync':
           void runCompoundCommitAction('sync')
           return
+        case 'commit_amend':
+          void handleAmend()
+          return
         case 'abort_merge':
           void handleAbortMerge()
           return
@@ -88,6 +93,7 @@ export function useSourceControlActionDispatch({
       }
     },
     [
+      handleAmend,
       handleCommit,
       handleCreatePullRequest,
       handleAbortMerge,

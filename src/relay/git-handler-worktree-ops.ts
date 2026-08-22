@@ -150,6 +150,22 @@ export async function worktreeIsCleanOp(
   return { clean, stdout: clean ? undefined : stdout }
 }
 
+// Why: surface whichever channel carries the useful message. Pre-commit/GPG
+// hook failures write to stderr; "nothing to commit, working tree clean"
+// writes to stdout. Try stderr first, fall back to stdout, then error.message.
+function gitErrorFromException(error: unknown, fallback: string): string {
+  const readField = (field: string): string | null => {
+    if (typeof error === 'object' && error && field in error) {
+      const v = (error as Record<string, unknown>)[field]
+      if (typeof v === 'string' && v.length > 0) {
+        return v
+      }
+    }
+    return null
+  }
+  return readField('stderr') ?? readField('stdout') ?? (error instanceof Error ? error.message : fallback)
+}
+
 export async function commitChangesRelay(
   git: GitExec,
   worktreePath: string,
@@ -167,23 +183,18 @@ export async function commitChangesRelay(
     await git(['commit', '-m', message], worktreePath)
     return { success: true }
   } catch (error) {
-    // Why: surface whichever channel carries the useful message. Pre-commit/GPG
-    // hook failures write to stderr; "nothing to commit, working tree clean"
-    // writes to stdout. Try stderr first, fall back to stdout, then error.message.
-    // Mirrors commitChanges in src/main/git/status.ts — keep the two paths in sync.
-    const readStringField = (field: string): string | null => {
-      if (typeof error === 'object' && error && field in error) {
-        const v = (error as Record<string, unknown>)[field]
-        if (typeof v === 'string' && v.length > 0) {
-          return v
-        }
-      }
-      return null
-    }
-    const errorMessage =
-      readStringField('stderr') ??
-      readStringField('stdout') ??
-      (error instanceof Error ? error.message : 'Commit failed')
-    return { success: false, error: errorMessage }
+    return { success: false, error: gitErrorFromException(error, 'Commit failed') }
+  }
+}
+
+export async function amendChangesRelay(
+  git: GitExec,
+  worktreePath: string
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    await git(['commit', '--amend', '--no-edit'], worktreePath)
+    return { success: true }
+  } catch (error) {
+    return { success: false, error: gitErrorFromException(error, 'Amend failed') }
   }
 }

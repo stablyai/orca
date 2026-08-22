@@ -654,6 +654,24 @@ export async function commitRuntimeGit(
   )
 }
 
+export async function amendRuntimeGit(
+  context: RuntimeGitContext
+): Promise<{ success: boolean; error?: string }> {
+  const target = getActiveRuntimeTarget(context.settings)
+  if (target.kind === 'local' || !context.worktreeId) {
+    return window.api.git.amend({
+      worktreePath: resolveLocalWorktreePath(context),
+      connectionId: context.connectionId
+    })
+  }
+  return callRuntimeRpc<{ success: boolean; error?: string }>(
+    target,
+    'git.amend',
+    { worktree: toRuntimeWorktreeSelector(context.worktreeId) },
+    { timeoutMs: 30_000 }
+  )
+}
+
 export async function generateRuntimeCommitMessage(
   context: RuntimeGitContext,
   overrides?: RuntimeGenerateCommitMessageOverrides

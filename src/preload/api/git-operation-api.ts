@@ -46,6 +46,10 @@ export type GitOperationApi = {
     message: string
     connectionId?: string
   }) => Promise<{ success: boolean; error?: string }>
+  amend: (args: {
+    worktreePath: string
+    connectionId?: string
+  }) => Promise<{ success: boolean; error?: string }>
   generateCommitMessage: (args: {
     worktreePath: string
     /** Raw (unstripped) worktree meta key; validated against worktreePath in main. */

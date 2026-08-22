@@ -34,6 +34,7 @@ import {
   bulkStageFiles,
   bulkUnstageFiles,
   commitChanges,
+  amendChanges,
   detectConflictOperation,
   discardChanges,
   getBranchCompare,
@@ -629,6 +630,20 @@ export class RuntimeGitCommands {
       return provider.commit(target.worktree.path, message)
     }
     return commitChanges(target.worktree.path, message, localGitOptionsForTarget(target))
+  }
+
+  async amendRuntimeGit(
+    worktreeSelector: string
+  ): Promise<{ success: boolean; error?: string }> {
+    const target = await this.host.resolveRuntimeGitTarget(worktreeSelector)
+    const provider = target.connectionId ? getSshGitProvider(target.connectionId) : null
+    if (target.connectionId) {
+      if (!provider) {
+        throw new Error(SSH_GIT_PROVIDER_UNAVAILABLE_MESSAGE)
+      }
+      return provider.amend(target.worktree.path)
+    }
+    return amendChanges(target.worktree.path, localGitOptionsForTarget(target))
   }
 
   async generateRuntimeCommitMessage(

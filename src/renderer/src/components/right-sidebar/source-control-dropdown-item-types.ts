@@ -14,6 +14,7 @@ export type DropdownActionKind =
   | 'commit'
   | 'commit_push'
   | 'commit_sync'
+  | 'commit_amend'
   | 'abort_merge'
   | 'abort_rebase'
   | 'create_pr'

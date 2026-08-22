@@ -7,6 +7,7 @@ import {
   GitCheckIgnored,
   GitCheckout,
   GitCommit,
+  GitAmend,
   GitCommitCompare,
   GitFilePath,
   GitForkSync,
@@ -171,6 +172,12 @@ export const GIT_METHODS: RpcMethod[] = [
     params: GitCommit,
     handler: async (params, { runtime }) =>
       runtime.commitRuntimeGit(params.worktree, params.message)
+  }),
+  defineMethod({
+    name: 'git.amend',
+    params: GitAmend,
+    handler: async (params, { runtime }) =>
+      runtime.amendRuntimeGit(params.worktree)
   }),
   ...GIT_COMMIT_MESSAGE_GENERATION_METHODS,
   defineMethod({

@@ -47,6 +47,7 @@ import {
   detectConflictOperation,
   getDiff,
   commitChanges,
+  amendChanges,
   stageFile,
   unstageFile,
   bulkStageFiles,
@@ -1453,6 +1454,29 @@ export function registerFilesystemHandlers(
         worktreePath
       )
       return commitChanges(worktreePath, args.message, gitOptions)
+    }
+  )
+
+  ipcMain.handle(
+    'git:amend',
+    async (
+      _event,
+      args: { worktreePath: string; connectionId?: string }
+    ): Promise<{ success: boolean; error?: string }> => {
+      if (args.connectionId) {
+        const provider = getSshGitProvider(args.connectionId)
+        if (!provider) {
+          throw new Error(SSH_GIT_PROVIDER_UNAVAILABLE_MESSAGE)
+        }
+        return provider.amend(args.worktreePath)
+      }
+      const worktreePath = await resolveRegisteredWorktreePath(args.worktreePath, store)
+      const gitOptions = getLocalGitOptionsForRegisteredWorktree(
+        store,
+        args.worktreePath,
+        worktreePath
+      )
+      return amendChanges(worktreePath, gitOptions)
     }
   )
 

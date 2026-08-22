@@ -18,6 +18,7 @@ function inputs(overrides: Partial<DropdownActionInputs> = {}): DropdownActionIn
     hasUnresolvedConflicts: false,
     isCommitting: false,
     isRemoteOperationActive: false,
+    hasHeadCommit: true,
     upstreamStatus: undefined,
     ...overrides
   }
@@ -37,6 +38,7 @@ describe('resolveDropdownItems', () => {
       'commit',
       'commit_push',
       'commit_sync',
+      'commit_amend',
       'separator',
       'push',
       'force_push',
@@ -61,6 +63,56 @@ describe('resolveDropdownItems', () => {
     expect(byKind.commit.disabled).toBe(true)
     expect(byKind.commit_push.disabled).toBe(true)
     expect(byKind.commit_sync.disabled).toBe(true)
+    expect(byKind.commit_amend.disabled).toBe(true)
+  })
+
+  it('enables commit_amend without a message since --no-edit reuses the last message', () => {
+    const items = resolveDropdownItems(
+      inputs({
+        stagedCount: 1,
+        hasMessage: false,
+        upstreamStatus: { hasUpstream: true, ahead: 1, behind: 0 }
+      })
+    )
+    const byKind = Object.fromEntries(
+      items.filter((e) => e.kind !== 'separator').map((e) => [e.kind, e])
+    )
+    expect(byKind.commit.disabled).toBe(true)
+    expect(byKind.commit_amend.disabled).toBe(false)
+    expect(byKind.commit_amend.title).toBe('Amend staged changes to the last commit')
+  })
+
+  it('disables commit_amend during an active merge/rebase/cherry-pick even without unresolved conflicts', () => {
+    const items = resolveDropdownItems(
+      inputs({
+        stagedCount: 1,
+        hasMessage: false,
+        conflictOperation: 'merge',
+        upstreamStatus: { hasUpstream: true, ahead: 1, behind: 0 }
+      })
+    )
+    const byKind = Object.fromEntries(
+      items.filter((e) => e.kind !== 'separator').map((e) => [e.kind, e])
+    )
+    expect(byKind.commit_amend.disabled).toBe(true)
+    expect(byKind.commit_amend.title).toBe('Resolve conflicts before amending')
+  })
+
+  it('disables commit_amend when HEAD is unborn even with staged files', () => {
+    const items = resolveDropdownItems(
+      inputs({
+        stagedCount: 1,
+        hasMessage: true,
+        hasHeadCommit: false,
+        upstreamStatus: { hasUpstream: true, ahead: 1, behind: 0 }
+      })
+    )
+    const byKind = Object.fromEntries(
+      items.filter((e) => e.kind !== 'separator').map((e) => [e.kind, e])
+    )
+    expect(byKind.commit.disabled).toBe(false)
+    expect(byKind.commit_amend.disabled).toBe(true)
+    expect(byKind.commit_amend.title).toBe('Make an initial commit before amending')
   })
 
   it('enables commit actions when staged files also have unstaged changes', () => {

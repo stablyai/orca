@@ -12258,7 +12258,8 @@
                   "226b85a3a7": "Fetch",
                   "323bb614aa": "Commit & Sync",
                   "2b8e6595fd": "Commit",
-                  "04d709801d": "Fetch from remote without merging"
+                  "04d709801d": "Fetch from remote without merging",
+                  "9c745c2ea7": "Commit & Amend Last Commit"
                 }
               },
               "primary": {

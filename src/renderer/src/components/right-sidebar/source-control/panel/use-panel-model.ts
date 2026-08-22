@@ -69,6 +69,7 @@ export function useSourceControlPanelModel() {
   const {
     handleAbortMerge,
     handleAbortRebase,
+    handleAmend,
     handleCommit,
     runCompoundCommitAction,
     runRemoteAction
@@ -99,12 +100,14 @@ export function useSourceControlPanelModel() {
     isCreatingPr,
     hostedReviewReviewLabel: hostedReviewCreateCopy.reviewLabel,
     conflictOperation,
-    effectiveBaseRef
+    effectiveBaseRef,
+    hasHeadCommit: Boolean(activeWorktree?.head?.trim())
   })
   const actionDispatch = useSourceControlActionDispatch({
     createPrHeaderAction: actionModel.createPrHeaderAction,
     handleAbortMerge,
     handleAbortRebase,
+    handleAmend,
     handleCommit,
     handleCreatePullRequest,
     handleStageAllPrimary,
