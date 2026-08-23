@@ -16,6 +16,7 @@ import {
   getTerminalMacYenSearchEntries,
   getTerminalPaneInteractionSearchEntries,
   getTerminalRenderingSearchEntries,
+  getTerminalShellHistorySearchEntry,
   getTerminalSetupScriptSearchEntries
 } from './terminal-search'
 import {
@@ -27,6 +28,7 @@ import { ManageSessionsSection } from './ManageSessionsSection'
 import { TerminalAdvancedSection } from './TerminalAdvancedSection'
 import { TerminalInteractionSection } from './TerminalInteractionSection'
 import { TerminalRenderingSection } from './TerminalRenderingSection'
+import { TerminalShellHistorySection } from './TerminalShellHistorySection'
 import { TerminalSetupScriptSection } from './TerminalSetupScriptSection'
 import { TerminalWindowsShellSection } from './TerminalWindowsShellSection'
 import { SettingsSegmentedControl, SettingsSubsectionHeader } from './SettingsFormControls'
@@ -234,6 +236,13 @@ export function TerminalPane({
         updateSettings={updateSettings}
         windowsShell={windowsShell}
         gitBashAvailable={gitBashAvailable}
+      />
+    ) : null,
+    matchesSettingsSearch(searchQuery, getTerminalShellHistorySearchEntry()) ? (
+      <TerminalShellHistorySection
+        key="shell-history"
+        settings={settings}
+        updateSettings={updateSettings}
       />
     ) : null,
     matchesSettingsSearch(searchQuery, getTerminalRenderingSearchEntries()) ? (
