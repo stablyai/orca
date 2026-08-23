@@ -1517,7 +1517,7 @@ export class RuntimeBrowserCommands {
 
   async browserProfileCreate(params: {
     label: string
-    scope: 'isolated' | 'imported'
+    scope: 'isolated' | 'imported' | 'workspace'
     userAgentMode?: BrowserSessionUserAgentMode
   }): Promise<BrowserProfileCreateResult> {
     return {

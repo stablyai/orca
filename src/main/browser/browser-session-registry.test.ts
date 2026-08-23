@@ -226,6 +226,21 @@ describe('BrowserSessionRegistry', () => {
     expect(browserSessionRegistry.isAllowedPartition(claimedPartition)).toBe(false)
   })
 
+  it('hydrates workspace-scoped profiles from persisted data', () => {
+    const hexId = '0123456789abcdef0123456789abcdef'
+    const fakeWorkspaceProfile = {
+      id: hexId,
+      scope: 'workspace' as const,
+      partition: `persist:orca-browser-session-${hexId}`,
+      label: 'my-project',
+      source: null,
+      folderPath: '/Users/dev/my-project'
+    }
+    browserSessionRegistry.hydrateFromPersisted([fakeWorkspaceProfile])
+    expect(browserSessionRegistry.getProfile(hexId)).not.toBeNull()
+    expect(browserSessionRegistry.isAllowedPartition(fakeWorkspaceProfile.partition)).toBe(true)
+  })
+
   it('sets up session policies for new partitions', () => {
     browserSessionRegistry.createProfile('isolated', 'Policy Test')
     expect(sessionFromPartitionMock).toHaveBeenCalled()
@@ -585,6 +600,85 @@ describe('BrowserSessionRegistry', () => {
       const modified = callback.mock.calls[0][0].requestHeaders
       expect(modified.Cookie).toBe('abc=123')
       expect(modified.Accept).toBe('text/html')
+    })
+  })
+
+  describe('workspace-scoped profiles', () => {
+    it('creates a workspace profile for a folder path', () => {
+      const profile = browserSessionRegistry.resolveOrCreateWorkspaceProfile('/Users/dev/my-app')
+      expect(profile).not.toBeNull()
+      expect(profile.scope).toBe('workspace')
+      expect(profile.partition).toMatch(/^persist:orca-browser-session-/)
+      expect(profile.folderPath).toBe('/Users/dev/my-app')
+    })
+
+    it('returns the same profile for the same folder path', () => {
+      const first = browserSessionRegistry.resolveOrCreateWorkspaceProfile('/Users/dev/project-a')
+      const second = browserSessionRegistry.resolveOrCreateWorkspaceProfile('/Users/dev/project-a')
+      expect(first.id).toBe(second.id)
+      expect(first.partition).toBe(second.partition)
+    })
+
+    it('returns different profiles for different folders', () => {
+      const profileA = browserSessionRegistry.resolveOrCreateWorkspaceProfile('/Users/dev/app-a')
+      const profileB = browserSessionRegistry.resolveOrCreateWorkspaceProfile('/Users/dev/app-b')
+      expect(profileA.id).not.toBe(profileB.id)
+      expect(profileA.partition).not.toBe(profileB.partition)
+    })
+
+    it('allows the workspace partition', () => {
+      const profile = browserSessionRegistry.resolveOrCreateWorkspaceProfile('/Users/dev/allowed')
+      expect(browserSessionRegistry.isAllowedPartition(profile.partition)).toBe(true)
+    })
+
+    it('finds a profile by folder path', () => {
+      browserSessionRegistry.resolveOrCreateWorkspaceProfile('/Users/dev/find-me')
+      const found = browserSessionRegistry.findProfileByFolderPath('/Users/dev/find-me')
+      expect(found).not.toBeNull()
+      expect(found!.scope).toBe('workspace')
+    })
+
+    it('returns null for unknown folder path', () => {
+      const found = browserSessionRegistry.findProfileByFolderPath('/Users/dev/nonexistent')
+      expect(found).toBeNull()
+    })
+
+    it('deletes a workspace profile', async () => {
+      const profile = browserSessionRegistry.resolveOrCreateWorkspaceProfile('/Users/dev/delete-me')
+      expect(browserSessionRegistry.isAllowedPartition(profile.partition)).toBe(true)
+      const deleted = await browserSessionRegistry.deleteProfile(profile.id)
+      expect(deleted).toBe(true)
+      expect(browserSessionRegistry.isAllowedPartition(profile.partition)).toBe(false)
+    })
+
+    it('accepts workspace scope in createProfile', () => {
+      const profile = browserSessionRegistry.createProfile('workspace', 'Manual Workspace')
+      expect(profile).not.toBeNull()
+      expect(profile!.scope).toBe('workspace')
+    })
+
+    it('uses folder basename as label', () => {
+      const profile = browserSessionRegistry.resolveOrCreateWorkspaceProfile(
+        '/Users/dev/my-cool-project'
+      )
+      expect(profile.label).toBe('my-cool-project')
+    })
+
+    it('clears storage data for a specific profile without deleting it', async () => {
+      const profile = browserSessionRegistry.resolveOrCreateWorkspaceProfile('/Users/dev/clear-storage')
+      const mockSession = sessionFromPartitionMock.mock.results.find(
+        (_, i) => sessionFromPartitionMock.mock.calls[i]?.[0] === profile.partition
+      )?.value
+      const cleared = await browserSessionRegistry.clearProfileStorage(profile.id)
+      expect(cleared).toBe(true)
+      expect(mockSession?.clearStorageData).toHaveBeenCalled()
+      expect(mockSession?.clearCache).toHaveBeenCalled()
+      expect(browserSessionRegistry.getProfile(profile.id)).not.toBeNull()
+    })
+
+    it('returns false when clearing storage for a non-existent profile', async () => {
+      const cleared = await browserSessionRegistry.clearProfileStorage('non-existent-id')
+      expect(cleared).toBe(false)
     })
   })
 })

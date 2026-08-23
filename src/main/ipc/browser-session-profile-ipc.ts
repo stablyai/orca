@@ -21,6 +21,8 @@ export function registerBrowserSessionProfileHandlers(): void {
   ipcMain.removeHandler('browser:session:deleteProfile')
   ipcMain.removeHandler('browser:session:importCookies')
   ipcMain.removeHandler('browser:session:resolvePartition')
+  ipcMain.removeHandler('browser:session:resolveWorkspaceProfile')
+  ipcMain.removeHandler('browser:session:clearProfileStorage')
 
   ipcMain.handle('browser:session:listProfiles', (event): BrowserSessionProfile[] => {
     if (!isTrustedBrowserRenderer(event.sender)) {
@@ -96,6 +98,20 @@ export function registerBrowserSessionProfileHandlers(): void {
     }
   )
 
+  ipcMain.handle(
+    'browser:session:resolveWorkspaceProfile',
+    (event, args: { folderPath: string }): BrowserSessionProfile | null => {
+      if (!isTrustedBrowserRenderer(event.sender)) {
+        return null
+      }
+      // Why: folderPath comes from the renderer; reject traversal patterns.
+      if (!args.folderPath || args.folderPath.includes('..')) {
+        return null
+      }
+      return browserSessionRegistry.resolveOrCreateWorkspaceProfile(args.folderPath)
+    }
+  )
+
   ipcMain.removeHandler('browser:session:clearDefaultCookies')
 
   ipcMain.handle('browser:session:clearDefaultCookies', async (event): Promise<boolean> => {
@@ -104,6 +120,16 @@ export function registerBrowserSessionProfileHandlers(): void {
     }
     return browserSessionRegistry.clearDefaultSessionCookies()
   })
+
+  ipcMain.handle(
+    'browser:session:clearProfileStorage',
+    async (event, args: { profileId: string }): Promise<boolean> => {
+      if (!isTrustedBrowserRenderer(event.sender)) {
+        return false
+      }
+      return browserSessionRegistry.clearProfileStorage(args.profileId)
+    }
+  )
 
   ipcMain.removeHandler('browser:session:detectBrowsers')
   ipcMain.removeHandler('browser:session:importFromBrowser')

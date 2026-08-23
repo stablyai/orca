@@ -118,6 +118,9 @@ export type BrowserApi = {
   sessionDeleteProfile: (args: { profileId: string }) => Promise<boolean>
   sessionImportCookies: (args: { profileId: string }) => Promise<BrowserCookieImportResult>
   sessionResolvePartition: (args: { profileId: string | null }) => Promise<string | null>
+  sessionResolveWorkspaceProfile: (args: {
+    folderPath: string
+  }) => Promise<BrowserSessionProfile | null>
   sessionDetectBrowsers: () => Promise<DetectedBrowserInfo[]>
   sessionImportFromBrowser: (args: {
     profileId: string
@@ -125,6 +128,7 @@ export type BrowserApi = {
     browserProfile?: string
   }) => Promise<BrowserCookieImportResult>
   sessionClearDefaultCookies: () => Promise<boolean>
+  sessionClearProfileStorage: (args: { profileId: string }) => Promise<boolean>
   notifyActiveTabChanged: (args: { browserPageId: string }) => Promise<boolean>
 }
 

@@ -1,6 +1,6 @@
 import { app, session } from 'electron'
-import { randomUUID } from 'node:crypto'
-import { join } from 'node:path'
+import { createHash, randomUUID } from 'node:crypto'
+import { join, resolve } from 'node:path'
 import { ORCA_BROWSER_PARTITION } from '../../shared/constants'
 import {
   DEFAULT_LOCAL_ORCA_PROFILE_ID,
@@ -184,7 +184,7 @@ class BrowserSessionRegistry {
   ): BrowserSessionProfile | null {
     // Why: the registry is also an IPC boundary, so runtime types alone cannot keep invalid values out of persisted metadata.
     if (
-      (scope !== 'isolated' && scope !== 'imported') ||
+      (scope !== 'isolated' && scope !== 'imported' && scope !== 'workspace') ||
       (options.userAgentMode !== undefined &&
         options.userAgentMode !== 'clean' &&
         options.userAgentMode !== 'native')
@@ -201,6 +201,46 @@ class BrowserSessionRegistry {
       label,
       source: null,
       ...(options.userAgentMode ? { userAgentMode: options.userAgentMode } : {})
+    }
+    this.profiles.set(id, profile)
+    installBrowserSessionPartitionPolicies(profile)
+    this.persistProfiles()
+    return profile
+  }
+
+  // Why: deterministic hash gives a stable profile ID for any folder path, surviving restarts and re-creation.
+  private static workspaceProfileId(folderPath: string): string {
+    return createHash('sha256').update(resolve(folderPath)).digest('hex').slice(0, 32)
+  }
+
+  findProfileByFolderPath(folderPath: string): BrowserSessionProfile | null {
+    const normalized = resolve(folderPath)
+    for (const profile of this.profiles.values()) {
+      if (profile.scope === 'workspace' && profile.folderPath === normalized) {
+        return profile
+      }
+    }
+    return null
+  }
+
+  // Why: auto-creates a workspace-scoped profile the first time a folder's browser tab is opened; subsequent calls return the same profile.
+  resolveOrCreateWorkspaceProfile(folderPath: string): BrowserSessionProfile {
+    const normalized = resolve(folderPath)
+    const existing = this.findProfileByFolderPath(normalized)
+    if (existing) {
+      return existing
+    }
+
+    const id = BrowserSessionRegistry.workspaceProfileId(normalized)
+    const partition = getOrcaProfileBrowserSessionPartition(this.activeOrcaProfileId, id)
+    const folderName = normalized.split('/').pop() ?? normalized.split('\\').pop() ?? 'Workspace'
+    const profile: BrowserSessionProfile = {
+      id,
+      scope: 'workspace',
+      partition,
+      label: folderName,
+      source: null,
+      folderPath: normalized
     }
     this.profiles.set(id, profile)
     installBrowserSessionPartitionPolicies(profile)
@@ -274,6 +314,22 @@ class BrowserSessionRegistry {
 
       const sess = session.fromPartition(this.defaultPartition)
       await sess.clearStorageData({ storages: ['cookies'] })
+      return true
+    } catch {
+      return false
+    }
+  }
+
+  // Why: clears cookies and storage data for a specific profile without deleting the profile metadata itself.
+  async clearProfileStorage(profileId: string): Promise<boolean> {
+    const profile = this.profiles.get(profileId)
+    if (!profile) {
+      return false
+    }
+    try {
+      const sess = session.fromPartition(profile.partition)
+      await sess.clearStorageData()
+      await sess.clearCache()
       return true
     } catch {
       return false

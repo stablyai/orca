@@ -3015,6 +3015,9 @@ const api = {
     sessionResolvePartition: (args: { profileId: string | null }): Promise<string | null> =>
       ipcRenderer.invoke('browser:session:resolvePartition', args),
 
+    sessionResolveWorkspaceProfile: (args: { folderPath: string }): Promise<unknown> =>
+      ipcRenderer.invoke('browser:session:resolveWorkspaceProfile', args),
+
     sessionDetectBrowsers: (): Promise<unknown[]> =>
       ipcRenderer.invoke('browser:session:detectBrowsers'),
 
@@ -3027,6 +3030,9 @@ const api = {
 
     sessionClearDefaultCookies: (): Promise<boolean> =>
       ipcRenderer.invoke('browser:session:clearDefaultCookies'),
+
+    sessionClearProfileStorage: (args: { profileId: string }): Promise<boolean> =>
+      ipcRenderer.invoke('browser:session:clearProfileStorage', args),
 
     notifyActiveTabChanged: (args: { browserPageId: string }): Promise<boolean> =>
       ipcRenderer.invoke('browser:activeTabChanged', args)

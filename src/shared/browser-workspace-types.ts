@@ -105,7 +105,7 @@ export type BrowserWorkspace = {
 
 export type BrowserTab = BrowserWorkspace
 
-export type BrowserSessionProfileScope = 'default' | 'isolated' | 'imported'
+export type BrowserSessionProfileScope = 'default' | 'isolated' | 'imported' | 'workspace'
 
 export type BrowserSessionUserAgentMode = 'clean' | 'native'
 
@@ -135,6 +135,8 @@ export type BrowserSessionProfile = {
   label: string
   source: BrowserSessionProfileSource | null
   userAgentMode?: BrowserSessionUserAgentMode
+  /** Normalized folder path for workspace-scoped profiles. */
+  folderPath?: string
 }
 
 export type BrowserCookieImportSummary = {
