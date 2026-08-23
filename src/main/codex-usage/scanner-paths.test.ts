@@ -12,6 +12,7 @@ import {
 import { tmpdir } from 'node:os'
 import type * as NodeOs from 'node:os'
 import { join } from 'node:path'
+import type * as WslModule from '../wsl'
 
 const { getPathMock, homedirMock } = vi.hoisted(() => ({
   getPathMock: vi.fn<(name: string) => string>(),
@@ -29,6 +30,17 @@ vi.mock('node:os', async () => {
   return {
     ...actual,
     homedir: homedirMock
+  }
+})
+
+// Why: listCodexSessionFiles consults running WSL distros, and a live distro
+// holding real Codex sessions would leak files into these exact-set
+// assertions; pinning the probe empty keeps the suite hermetic on any host.
+vi.mock('../wsl', async () => {
+  const actual = await vi.importActual<typeof WslModule>('../wsl')
+  return {
+    ...actual,
+    listRunningWslDistrosAsync: async () => []
   }
 })
 
