@@ -136,16 +136,13 @@ import PRFilterDropdowns, { type PRFilterChange } from '@/components/github/PRFi
 import { GitHubMarkdownComposer } from '@/components/github/GitHubMarkdownComposer'
 import { GitHubUserAvatar } from '@/components/github/github-user-avatar'
 import { buildGitHubRepoUrl, parseGitHubIssueOrPRLink } from '@/lib/github-links'
-import {
-  findGithubWorkItemWorkspaceAttachment,
-  getGithubWorkItemWorkspaceAttachmentLabel
-} from '@/lib/github-work-item-workspace-attachment'
+import { findGithubWorkItemWorkspaceAttachment } from '@/lib/github-work-item-workspace-attachment'
 import {
   buildLinearIssueWorkspaceAttachmentIndex,
-  findLinearIssueWorkspaceAttachmentInIndex,
-  getLinearIssueWorkspaceAttachmentLabel
+  findLinearIssueWorkspaceAttachmentInIndex
 } from '@/lib/linear-issue-workspace-attachment'
 import { openLinearIssueWorkspaceOrStart } from '@/lib/linear-issue-workspace-open'
+import { getWorktreeAttachmentLabel } from '@/lib/worktree-attachment-label'
 import { folderWorkspaceToWorktree } from '../../../shared/folder-workspace-worktree'
 import { activateAndRevealWorktree } from '@/lib/worktree-activation'
 import { useRepoAssigneesBySlug } from '@/hooks/useGitHubSlugMetadata'
@@ -10272,7 +10269,7 @@ export default function TaskPage(): React.JSX.Element {
                         item.number
                       )
                       const attachedWorkspaceLabel = attachedWorkspace
-                        ? getGithubWorkItemWorkspaceAttachmentLabel(attachedWorkspace)
+                        ? getWorktreeAttachmentLabel(attachedWorkspace)
                         : null
                       const prDelta = item.type === 'pr' ? formatPRDelta(item) : null
                       const githubTaskIdPill = (
@@ -11569,7 +11566,7 @@ export default function TaskPage(): React.JSX.Element {
                               issue
                             )
                             const attachedWorkspaceLabel = attachedWorkspace
-                              ? getLinearIssueWorkspaceAttachmentLabel(attachedWorkspace)
+                              ? getWorktreeAttachmentLabel(attachedWorkspace)
                               : null
                             return (
                               <div
@@ -11768,7 +11765,7 @@ export default function TaskPage(): React.JSX.Element {
                         issue
                       )
                       const attachedWorkspaceLabel = attachedWorkspace
-                        ? getLinearIssueWorkspaceAttachmentLabel(attachedWorkspace)
+                        ? getWorktreeAttachmentLabel(attachedWorkspace)
                         : null
                       return (
                         <div
