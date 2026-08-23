@@ -2937,6 +2937,8 @@ type ParkedTerminalGraphClaim = {
   remoteDesktopOwner: string | null
   remoteDesktopHostReclaimTarget: { cols: number; rows: number } | null
   remoteDesktopRegistrations: Map<string, unknown>
+  rendererRestoreTarget: { cols: number; rows: number } | null
+  deferredLayoutTarget: PtyLayoutTarget | null
 }
 
 // Why: per-PTY layout target — what the PTY *should* be at right now.
@@ -7023,7 +7025,9 @@ export class OrcaRuntimeService {
         mobileRegistrations: new Map<string, unknown>(this.mobileSubscribers.get(ptyId)),
         remoteDesktopOwner: this.remoteDesktopOwners.get(ptyId) ?? null,
         remoteDesktopHostReclaimTarget: this.remoteDesktopHostReclaimTargets.get(ptyId) ?? null,
-        remoteDesktopRegistrations: new Map<string, unknown>(this.remoteDesktopViewers.get(ptyId))
+        remoteDesktopRegistrations: new Map<string, unknown>(this.remoteDesktopViewers.get(ptyId)),
+        rendererRestoreTarget: this.lastRendererSizes.get(ptyId) ?? null,
+        deferredLayoutTarget: null
       })
       this.terminalFitOverrides.delete(ptyId)
       this.remoteDesktopOwners.delete(ptyId)
@@ -7080,6 +7084,8 @@ export class OrcaRuntimeService {
         })
       } else if (this.remoteDesktopOwners.has(ptyId)) {
         void this.applyRemoteDesktopLayout(ptyId)
+      } else if (parked.deferredLayoutTarget) {
+        void this.enqueueLayout(ptyId, parked.deferredLayoutTarget)
       }
       this.notifyRemoteTerminalViewPresenceChanged(ptyId)
     }
@@ -10908,6 +10914,18 @@ export class OrcaRuntimeService {
       parked.remoteDesktopOwner = null
       parked.remoteDesktopHostReclaimTarget = null
       parked.remoteDesktopRegistrations.clear()
+      parked.rendererRestoreTarget = null
+      parked.deferredLayoutTarget = null
+      const pendingRestore = this.pendingRestoreTimers.get(ptyId)
+      if (pendingRestore) {
+        clearTimeout(pendingRestore.timer)
+        this.pendingRestoreTimers.delete(ptyId)
+      }
+      const pendingSoftLeaver = this.pendingSoftLeavers.get(ptyId)
+      if (pendingSoftLeaver) {
+        clearTimeout(pendingSoftLeaver.timer)
+        this.pendingSoftLeavers.delete(ptyId)
+      }
     }
     if (pty) {
       if (incarnationId) {
@@ -16405,7 +16423,26 @@ export class OrcaRuntimeService {
     return true
   }
 
+  private deferParkedLayout(ptyId: string, target: PtyLayoutTarget): ApplyLayoutResult | null {
+    const parked = this.parkedTerminalGraphClaims.get(ptyId)
+    if (!parked) {
+      return null
+    }
+    parked.deferredLayoutTarget = target
+    if (target.kind === 'desktop') {
+      parked.rendererRestoreTarget = { cols: target.cols, rows: target.rows }
+    } else if (target.kind === 'phone' && parked.rendererRestoreTarget) {
+      this.lastRendererSizes.set(ptyId, parked.rendererRestoreTarget)
+    }
+    const state = this.layouts.get(ptyId) ?? { ...target, seq: 0, appliedAt: Date.now() }
+    return { ok: true, state }
+  }
+
   private enqueueLayout(ptyId: string, target: PtyLayoutTarget): Promise<ApplyLayoutResult> {
+    const deferred = this.deferParkedLayout(ptyId, target)
+    if (deferred) {
+      return Promise.resolve(deferred)
+    }
     // Why: PTY-exit short-circuit. Fresh-subscribe gate lets the very first
     // transition through even though `layouts` has no entry yet.
     if (!this.layouts.has(ptyId) && !this.isFreshSubscribe(ptyId)) {
@@ -16470,6 +16507,10 @@ export class OrcaRuntimeService {
   }
 
   private async applyLayout(ptyId: string, target: PtyLayoutTarget): Promise<ApplyLayoutResult> {
+    const deferred = this.deferParkedLayout(ptyId, target)
+    if (deferred) {
+      return deferred
+    }
     // Why: re-check pty-exit at the head of the slot — the queue may have
     // accepted this target before onPtyExit ran.
     if (!this.layouts.has(ptyId) && !this.isFreshSubscribe(ptyId)) {
