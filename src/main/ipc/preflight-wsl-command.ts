@@ -1,3 +1,4 @@
+import { buildPosixFallbackPathPrelude } from '../../shared/posix-version-manager-bin-dirs'
 import { runWslProcess } from '../wsl/wsl-runner'
 import type { WslPreflightTarget } from './preflight-wsl-agent-detection'
 
@@ -13,7 +14,10 @@ export async function runPreflightCommandInWsl(
   const result = await runWslProcess({
     distro: target.distro,
     loginPath: 'preferred',
-    script: command,
+    // Appending the version-manager dirs keeps a resolved login PATH
+    // authoritative while stopping a degraded probe from turning an installed
+    // CLI into "not installed" (#9725), the same fallback the native branch has.
+    script: `${buildPosixFallbackPathPrelude()}\n${command}`,
     timeoutMs
   })
   // runWslProcess resolves on a timeout and on a non-zero exit; the caller's

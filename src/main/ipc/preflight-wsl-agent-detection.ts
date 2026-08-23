@@ -1,9 +1,12 @@
 import path from 'node:path'
+import { POSIX_VERSION_MANAGER_BIN_DIRS } from '../../shared/posix-version-manager-bin-dirs'
 import { buildPosixCommandPathLookupScript } from '../../shared/posix-command-path-lookup'
 import { runWslProcess } from '../wsl/wsl-runner'
 
 const WSL_AGENT_DETECTION_TIMEOUT_MS = 10000
 const WSL_AGENT_DETECTION_PREFIX = '__ORCA_AGENT_PATH__'
+
+
 
 export type WslPreflightTarget = {
   distro?: string
@@ -27,6 +30,13 @@ export async function detectWslCommandsOnPath(
   const script = [
     `for cmd in ${commandList}; do`,
     lookupScript,
+    // Only when the PATH lookup missed, mirroring the native fallback, which
+    // resolves install dirs for missed commands only.
+    'if [ -z "$resolved" ]; then',
+    `  for _orca_dir in ${POSIX_VERSION_MANAGER_BIN_DIRS.join(' ')}; do`,
+    '    if [ -x "$_orca_dir/$cmd" ]; then resolved="$_orca_dir/$cmd"; break; fi',
+    '  done',
+    'fi',
     'if [ -n "$resolved" ]; then',
     `printf '${WSL_AGENT_DETECTION_PREFIX}%s\\t%s\\n' "$cmd" "$resolved";`,
     'fi',
