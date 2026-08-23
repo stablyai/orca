@@ -36,10 +36,13 @@ function toSafeDirName(id: string): string {
 }
 
 export function getOpenCodePluginSource(): string {
-  return getOpenCodeFamilyPluginSource('/hook/opencode')
+  return getOpenCodeFamilyPluginSource('/hook/opencode', { emitSessionStart: true })
 }
 
-export function getOpenCodeFamilyPluginSource(hookPathname: string): string {
+export function getOpenCodeFamilyPluginSource(
+  hookPathname: string,
+  options: { emitSessionStart: boolean }
+): string {
   // Why: the plugin posts PTY environment data from OpenCode to the shared hooks server.
   return [
     '// Why: process-lifetime guard so a recurring parse error on a malformed',
@@ -875,6 +878,20 @@ export function getOpenCodeFamilyPluginSource(hookPathname: string): string {
     '',
     '    const sessionID = event.properties?.sessionID;',
     '    const updatedPart = event.properties?.part;',
+    ...(options.emitSessionStart
+      ? [
+          '    if (event.type === "session.created") {',
+          '      const info = event.properties?.info;',
+          '      if (!info?.id || info.parentID) return;',
+          '      rememberSessionRoot(info.id, info.id);',
+          '      await enqueueLifecycle(() =>',
+          '        disposed ? undefined : post("SessionStart", { sessionID: info.id })',
+          '      );',
+          '      return;',
+          '    }',
+          ''
+        ]
+      : []),
     '    if (',
     '      event.type === "message.part.updated" &&',
     '      updatedPart?.type === "tool" &&',

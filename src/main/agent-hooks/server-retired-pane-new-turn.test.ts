@@ -19,7 +19,8 @@ beforeEach(() => {
 afterEach(() => vi.restoreAllMocks())
 
 /** Each source's own new-turn boundary, as `isNewTurnEvent` classifies it. `null` means the
- *  provider has no turn boundary at all, so a retired pane there stays retired by design. */
+ *  classifier names no boundary for that source. That is not the same as "can never revive":
+ *  mimo-code's boundary is an explicit-prompt MessagePart, which the gate handles separately. */
 const NEW_TURN_EVENT: Record<AgentHookSource, string | null> = {
   claude: 'SessionStart',
   kimi: 'UserPromptSubmit',
@@ -36,9 +37,7 @@ const NEW_TURN_EVENT: Record<AgentHookSource, string | null> = {
   copilot: 'sessionStart',
   hermes: 'pre_llm_call',
   devin: 'UserPromptSubmit',
-  // Why null for opencode today: its plugin emits no SessionStart, so it has no reachable
-  // boundary. A pending change adds one; this entry moves with that change, not before it.
-  opencode: null,
+  opencode: 'SessionStart',
   'mimo-code': null,
   'command-code': null
 }
@@ -111,10 +110,9 @@ describe("retired pane un-retires on each provider's own new-turn event", () => 
   )
 
   it('leaves the pane retired for a source with no turn boundary', () => {
-    // Why mimo-code and command-code rather than opencode: these two have no boundary event in
-    // any planned state. Opencode is deliberately excluded — its plugin emits no SessionStart on
-    // main (verified: zero occurrences in opencode/hook-service.ts), so asserting either outcome
-    // for it would pin a synthetic event, and a pending change gives it a real one.
+    // Why mimo-code and command-code: neither names a boundary through `isNewTurnEvent`, so
+    // SessionStart must not open the gate for them. Mimo-code still revives on its own
+    // explicit-prompt MessagePart — that path is covered in server-opencode-lifecycle.test.ts.
     expect(reviveRetiredPane('mimo-code', 'SessionStart')).toBe(false)
     expect(reviveRetiredPane('command-code', 'SessionStart')).toBe(false)
   })

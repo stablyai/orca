@@ -131,6 +131,22 @@ describe('OpenCode plugin lifecycle delivery', () => {
     })
   }
 
+  it('maps only root session.created to SessionStart', async () => {
+    const handler = await loadHandler()
+
+    await handler({
+      event: { type: 'session.created', properties: { info: { id: 'root' } } }
+    })
+    await handler({
+      event: {
+        type: 'session.created',
+        properties: { info: { id: 'child', parentID: 'root' } }
+      }
+    })
+
+    expect(posts).toEqual([{ hook_event_name: 'SessionStart', sessionID: 'root' }])
+  })
+
   it('preserves FIFO lifecycle order while the first session lookup is delayed', async () => {
     let releaseFirstLookup: (() => void) | undefined
     const firstLookup = new Promise<void>((resolve) => {
