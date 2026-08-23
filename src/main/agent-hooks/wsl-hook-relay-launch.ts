@@ -183,20 +183,18 @@ export async function runWslInstallProcess(
     distro,
     loginPath: 'none',
     script,
-    // The script embeds a base64 JS bundle, far past any command-line limit,
-    // and reads no stdin of its own.
-    scriptDelivery: 'stdin',
     // Declared because the payload is opaque here: it is POSIX plus a heredoc.
     shell: 'sh',
-    timeoutMs: INSTALL_TIMEOUT_MS,
-    maxOutputBytes: MAX_STARTUP_BUFFER_BYTES,
-    // The operative error ("mv: Read-only file system") lands after whatever
-    // apt and base64 already printed, so head-truncation surfaces the noise.
-    retainOutput: 'tail'
+    timeoutMs: INSTALL_TIMEOUT_MS
+    // No maxOutputBytes: the default cap holds the whole stream so the slice
+    // below can take the end of it.
   })
+  // Tail, not head: the operative error ("mv: Read-only file system") lands
+  // after whatever apt and base64 already printed.
+  const stderr = result.stderr.slice(-MAX_STARTUP_BUFFER_BYTES)
   return result.timedOut
-    ? { code: null, stderr: `${result.stderr}\ninstall timed out after ${INSTALL_TIMEOUT_MS}ms` }
-    : { code: result.code, stderr: result.stderr }
+    ? { code: null, stderr: `${stderr}\ninstall timed out after ${INSTALL_TIMEOUT_MS}ms` }
+    : { code: result.code, stderr }
 }
 
 const TRANSIENT_RETRY_LIMIT = 2

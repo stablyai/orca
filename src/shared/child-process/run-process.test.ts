@@ -174,27 +174,4 @@ describe('output truncation', () => {
     expect(result.stderr).not.toContain('FAILED')
     expect(result.stderr).toBe('n'.repeat(64))
   })
-
-  it('keeps the tail when asked, so a late failure survives', async () => {
-    // A guest install prints pages of warnings and then the one line that says
-    // why it failed. Head-truncation reports the warnings.
-    const result = await runProcess({
-      program: process.execPath,
-      args: ['-e', emit(200)],
-      maxOutputBytes: 64,
-      retainOutput: 'tail'
-    })
-    expect(result.stderr).toContain('FAILED')
-    expect(result.stderr.length).toBe(64)
-  })
-})
-
-describe('runProcessSync output retention', () => {
-  it('refuses retainOutput: tail rather than silently keeping the head', () => {
-    // The spec type is shared, so a caller can copy a runProcess spec across
-    // and lose the late half of the output it was reading for.
-    expect(() =>
-      runProcessSync({ program: process.execPath, args: ['-e', ''], retainOutput: 'tail' })
-    ).toThrow(/use runProcess/)
-  })
 })

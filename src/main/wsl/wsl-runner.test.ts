@@ -173,22 +173,6 @@ describe('scripts', () => {
     expect(runProcessMock.mock.calls.at(-1)?.[0].input).toBeUndefined()
   })
 
-  it('pipes the script only when the caller asks for stdin delivery', async () => {
-    seedWslGuestEnvironmentForTests(undefined, ENVIRONMENT)
-    const script = 'echo big'
-    await runWslProcess({
-      loginPath: 'preferred',
-      script,
-      scriptDelivery: 'stdin',
-      args: ['/tmp/root']
-    })
-    expect(runProcessMock.mock.calls.at(-1)?.[0].input).toBe(script)
-    expect(lastArgv().slice(-4)).toEqual(['sh', '-s', '--', '/tmp/root'])
-    expect(lastArgv().join(' ')).not.toContain('echo big')
-  })
-})
-
-describe('WSLENV', () => {
   it('adds every propagated key so the value actually crosses the boundary', async () => {
     // Unset, a Windows-side variable silently never reaches the guest (#12557).
     seedWslGuestEnvironmentForTests(undefined, ENVIRONMENT)

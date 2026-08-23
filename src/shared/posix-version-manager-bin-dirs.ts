@@ -15,7 +15,7 @@
  * a relative path -- except the nvm glob, where only the prefix is quoted so
  * the `*` still expands.
  */
-export const POSIX_VERSION_MANAGER_BIN_DIRS = [
+const POSIX_VERSION_MANAGER_BIN_DIRS = [
   '"$HOME/.local/bin"',
   '"$HOME/.local/share/pnpm"',
   '"$HOME/.yarn/bin"',

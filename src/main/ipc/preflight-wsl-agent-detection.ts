@@ -1,5 +1,5 @@
 import path from 'node:path'
-import { POSIX_VERSION_MANAGER_BIN_DIRS } from '../../shared/posix-version-manager-bin-dirs'
+import { buildPosixFallbackPathPrelude } from '../../shared/posix-version-manager-bin-dirs'
 import { buildPosixCommandPathLookupScript } from '../../shared/posix-command-path-lookup'
 import { runWslProcess } from '../wsl/wsl-runner'
 
@@ -26,20 +26,13 @@ export async function detectWslCommandsOnPath(
   })
   // Newlines keep the loop valid in every POSIX shell used here.
   const script = [
+    // The same fallback the preflight command runner uses: append the
+    // version-manager dirs to PATH and let the ordinary lookup find them. A
+    // second bespoke `[ -x ]` walk here duplicated the lookup script's own
+    // `! -d` guard, which is how a directory once read as an installed CLI.
+    buildPosixFallbackPathPrelude(),
     `for cmd in ${commandList}; do`,
     lookupScript,
-    // Only when the PATH lookup missed, mirroring the native fallback, which
-    // resolves install dirs for missed commands only.
-    'if [ -z "$resolved" ]; then',
-    `  for _orca_dir in ${POSIX_VERSION_MANAGER_BIN_DIRS}; do`,
-    // `! -d` because directories are mode 755 and pass -x, and preflight would
-    // then report an installed CLI that fails later with EISDIR. The PATH half
-    // of this same script already guards it, as does the native twin.
-    '    if [ -x "$_orca_dir/$cmd" ] && [ ! -d "$_orca_dir/$cmd" ]; then',
-    '      resolved="$_orca_dir/$cmd"; break',
-    '    fi',
-    '  done',
-    'fi',
     'if [ -n "$resolved" ]; then',
     `printf '${WSL_AGENT_DETECTION_PREFIX}%s\\t%s\\n' "$cmd" "$resolved";`,
     'fi',

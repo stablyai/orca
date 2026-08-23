@@ -37,13 +37,6 @@ export type ProcessSpec = {
   input?: string
   /** Cap on captured stdout/stderr; output past it is discarded. */
   maxOutputBytes?: number
-  /**
-   * Which end of an over-long stream to keep. 'head' (default) matches how the
-   * cap has always behaved; 'tail' is for output whose meaning is at the end --
-   * an install that fails after pages of warnings puts the error last, and
-   * head-truncation reports the noise instead.
-   */
-  retainOutput?: 'head' | 'tail'
   /** Kills the process when aborted; the result still reports the exit. */
   signal?: AbortSignal
 }
@@ -135,10 +128,7 @@ export function spawnProcess(spec: ProcessSpec): ChildProcess {
  * emits strings, and concatenating those as buffers throws inside a `data`
  * handler, where the rejection has nowhere to go and the caller just hangs.
  */
-function createOutputSink(
-  maxBytes: number,
-  retain: 'head' | 'tail'
-): {
+function createOutputSink(maxBytes: number): {
   write: (chunk: Buffer | string) => void
   text: () => string
 } {
@@ -147,23 +137,6 @@ function createOutputSink(
   return {
     write(raw) {
       const chunk = Buffer.isBuffer(raw) ? raw : Buffer.from(raw)
-      if (retain === 'tail') {
-        chunks.push(chunk)
-        bytes += chunk.length
-        // Drop from the front so the newest output survives.
-        while (bytes > maxBytes && chunks.length > 0) {
-          const excess = bytes - maxBytes
-          const first = chunks[0]!
-          if (first.length <= excess) {
-            chunks.shift()
-            bytes -= first.length
-          } else {
-            chunks[0] = first.subarray(excess)
-            bytes -= excess
-          }
-        }
-        return
-      }
       const remaining = maxBytes - bytes
       if (remaining <= 0) {
         return
@@ -193,9 +166,8 @@ export function runProcess(spec: ProcessSpec): Promise<ProcessResult> {
       return
     }
 
-    const retain = spec.retainOutput ?? 'head'
-    const stdout = createOutputSink(maxOutputBytes, retain)
-    const stderr = createOutputSink(maxOutputBytes, retain)
+    const stdout = createOutputSink(maxOutputBytes)
+    const stderr = createOutputSink(maxOutputBytes)
     let timedOut = false
     let settled = false
 
@@ -301,15 +273,8 @@ function terminate(child: ChildProcess, signal?: NodeJS.Signals): void {
  * Prefer `runProcess`. This exists so those callers still get the Windows
  * invariants (hidden console, correct `.cmd` argv) instead of reaching for
  * `execFileSync` and re-deciding them.
- *
- * `retainOutput: 'tail'` throws rather than being ignored: the spec type is
- * shared with runProcess, so a caller can copy one across and silently get
- * head truncation back on output whose meaning is at the end.
  */
 export function runProcessSync(spec: ProcessSpec): ProcessResult {
-  if (spec.retainOutput === 'tail') {
-    throw new Error('runProcessSync cannot retain the tail; use runProcess')
-  }
   const resolved = resolveSpawn(spec, process.platform)
   const result = nodeSpawnSync(resolved.file, [...resolved.args], {
     ...resolved.options,

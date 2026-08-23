@@ -41,24 +41,9 @@ export type WslCommand =
       args?: readonly string[]
       script?: never
       shell?: never
-      scriptDelivery?: never
     }
   | {
       script: string
-      /**
-       * How `script` reaches the shell.
-       *
-       * 'argv' (the default) passes it as an argument, which leaves the guest
-       * command's stdin alone. 'stdin' pipes it, which has no length limit but
-       * means anything the script runs that reads stdin eats the rest of the
-       * script -- and the shell then hits EOF and exits 0, so the truncation is
-       * silent. A user-authored hook running `ssh -T` is exactly that.
-       *
-       * Use 'stdin' only for a script Orca wrote, that reads no stdin, and that
-       * is too big for a command line (the hook-relay installer embeds a JS
-       * bundle).
-       */
-      scriptDelivery?: 'argv' | 'stdin'
       args?: readonly string[]
       program?: never
       /**
@@ -85,8 +70,6 @@ export type WslSpec = WslCommand & {
   env?: Readonly<Record<string, string>>
   timeoutMs?: number
   maxOutputBytes?: number
-  /** See runProcess: 'tail' keeps the end of an over-long stream. */
-  retainOutput?: 'head' | 'tail'
 }
 
 export type WslResult = {
@@ -182,10 +165,6 @@ function withGuestCwd(cwd: string | undefined, argv: readonly string[]): string[
  */
 const MAX_ARGV_SCRIPT_CHARS = 8_000
 
-function resolveScriptDelivery(spec: WslSpec & { script: string }): 'argv' | 'stdin' {
-  return spec.scriptDelivery ?? (spec.script.length > MAX_ARGV_SCRIPT_CHARS ? 'stdin' : 'argv')
-}
-
 /** `<shell> -c`/`-s` for a script, otherwise the program itself. */
 function guestCommandArgv(spec: WslSpec, delivery: 'argv' | 'stdin'): string[] {
   if (spec.script === undefined) {
@@ -245,8 +224,8 @@ export async function runWslProcess(spec: WslSpec): Promise<WslResult> {
   // distro's default PATH instead: degraded, never blocking.
   // Resolved once: argv shape and stdin payload must agree, and computing it
   // in both places invites them to drift.
-  const delivery =
-    spec.script === undefined ? 'argv' : resolveScriptDelivery({ ...spec, script: spec.script })
+  const delivery: 'argv' | 'stdin' =
+    spec.script !== undefined && spec.script.length > MAX_ARGV_SCRIPT_CHARS ? 'stdin' : 'argv'
   const argv = buildGuestArgv(environment, spec, delivery)
 
   // One budget for the whole call: the probe used to run on its own 10s timer
@@ -258,8 +237,7 @@ export async function runWslProcess(spec: WslSpec): Promise<WslResult> {
     env: buildHostEnv(spec.env),
     input: delivery === 'stdin' ? spec.script : undefined,
     timeoutMs: remainingMs,
-    maxOutputBytes: spec.maxOutputBytes,
-    retainOutput: spec.retainOutput
+    maxOutputBytes: spec.maxOutputBytes
   })
 
   return {
