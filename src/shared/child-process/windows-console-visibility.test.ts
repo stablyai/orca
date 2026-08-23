@@ -129,6 +129,17 @@ function findOffenders(): string[] {
       // guarded while still flashing a conhost -- which is exactly how
       // `execAsync('where gemini', { windowsHide: true })` got un-allowlisted.
       const called = match[0].replace(/\s*\($/, '').trim()
+      // Any `shell:` that is not literally `false` counts. `shell:
+      // process.platform === 'win32'` IS shell: true on the platform this
+      // guard is about, and only the literal was being matched.
+      // Recorded gap, not an oversight: `shell: process.platform === 'win32'`
+      // IS shell: true on the platform this guard is about, but matching any
+      // non-`false` value also flags `shell: spawnConfig.shell`
+      // (claude-accounts/service.ts:1086), a pass-through that is false in
+      // every branch. A false positive there costs an allowlist entry, which
+      // disables the guard for that whole file -- worse than the gap. No
+      // computed `shell:` exists in the tree today; if one appears, resolve it
+      // rather than widening this regex.
       const impliesShell = shellImplying.has(called) || /shell\s*:\s*true/.test(args)
       if (!/windowsHide\s*:\s*true/.test(args) || impliesShell) {
         offenders.add(file.relativePath)

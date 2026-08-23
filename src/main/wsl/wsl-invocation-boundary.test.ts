@@ -200,17 +200,23 @@ const BASHISM =
 function collectRunnerCallArguments(source: string): string[] {
   const blanked = blankStringContents(source)
   const calls: string[] = []
-  for (const match of blanked.matchAll(/\brunWslProcess\s*\(/g)) {
-    const open = blanked.indexOf('{', match.index)
-    if (open === -1) {
-      continue
-    }
+  const callees = new Set(['runWslProcess'])
+  for (const alias of source.matchAll(/\brunWslProcess\s+as\s+(\w+)/g)) {
+    callees.add(alias[1]!)
+  }
+  const callPattern = new RegExp(`\\b(?:${[...callees].join('|')})\\s*\\(`, 'g')
+  for (const match of blanked.matchAll(callPattern)) {
+    // The WHOLE argument list, not the first `{...}`: with
+    // `Object.assign({ loginPath }, { script })` the payload sits in the second
+    // literal, and stopping at the first one collected an object with no
+    // script and no bashism -- which reads exactly like a clean call.
+    const open = match.index + match[0].length - 1
     let depth = 0
     for (let index = open; index < blanked.length; index += 1) {
       const char = blanked[index]
-      if (char === '{') {
+      if (char === '(') {
         depth += 1
-      } else if (char === '}') {
+      } else if (char === ')') {
         depth -= 1
         if (depth === 0) {
           calls.push(source.slice(open, index + 1))
@@ -251,25 +257,37 @@ describe('bash-only payloads declare their interpreter', () => {
       offenders.push(relativePath)
       continue
     }
-    // An opaque payload must declare its interpreter.
+    // An opaque payload is judged by the whole file, minus anything already
+    // declared bash.
     //
-    // The real bash payloads are built in a separate function and handed over
-    // as a bare `script,` identifier, so the bashism is never inside the call
-    // and the per-call arm cannot see it. Replacing the file-wide check with
-    // the per-call one made deleting `shell: 'bash'` from skill-discovery-wsl
-    // -- `done < <(find ...)` and `read -r -d ''`, the #14292 signature --
-    // ship green. Reading through the identifier is guesswork; requiring the
-    // call to say `sh` or `bash` when the payload is not a literal is not.
-    // Visible means `script:` followed by a literal the BASHISM regex can read.
-    // Everything else -- `script,` shorthand, an identifier, a builder call --
-    // is opaque and must say which shell it wants.
-    const opaque = calls.filter(
-      (call) =>
-        /\bscript\b/.test(call) &&
-        !/\bscript\s*:\s*['"`[]/.test(call) &&
-        !/\bshell\s*:/.test(call)
-    )
-    if (opaque.length > 0) {
+    // Requiring merely that `shell:` be PRESENT was strictly weaker than the
+    // file-wide rule it replaced: `shell: 'sh'` on a bash payload shipped
+    // green, which is #14292 with extra steps. Resolving the identifier is
+    // guesswork, so instead: strip the text of every call that already names
+    // bash, and if a bashism survives anywhere in the file while a
+    // script-carrying call is not bash-pinned, flag it.
+    //
+    // Stripping the bash-pinned calls is what keeps codex-accounts/service.ts
+    // clean -- it pins bash on four inline payloads and on a `bash -lc`
+    // execFileSync, and correctly leaves its printf/mkdir calls unpinned.
+    const bashPinned = [
+      ...calls.filter((call) => call.includes("shell: 'bash'")),
+      ...[...source.matchAll(/'bash',\s*\n?\s*'-lc',[\s\S]{0,4000}?\n\s*\]/g)].map((m) => m[0])
+    ]
+    const unpinnedRegion = bashPinned.reduce((rest, text) => rest.replace(text, ''), source)
+    // A spread hides every key, `script` and `shell` alike, so it has to count
+    // as carrying a script -- otherwise `runWslProcess({ ...spec })` is a hole
+    // the file-wide arm never looks at.
+    const scriptCalls = calls.filter((call) => /\bscript\b/.test(call) || /\.\.\./.test(call))
+    // Zero collected calls is not zero risk: `Object.assign({...}, {script})`
+    // puts the payload in the second literal, and a renamed callee that the
+    // alias scan misses collects nothing at all. If the file carries a bashism
+    // and the guard cannot see any call object, that is unreadable, not clean.
+    const unreadable = calls.length === 0
+    if (
+      BASHISM.test(unpinnedRegion) &&
+      (unreadable || scriptCalls.some((call) => !call.includes("shell: 'bash'")))
+    ) {
       offenders.push(relativePath)
     }
   }
