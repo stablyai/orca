@@ -61,7 +61,11 @@ import { installPrivilegedWindowNavigationPolicy } from './privileged-window-nav
 import { isMacosTahoeOrNewer } from './macos-tahoe-release'
 import { registerPluginPanelNavigationGuard } from '../plugins/plugin-panel-navigation-guard'
 import { installWindowsPathRegistryChangeListener } from '../pty/windows-path-registry-change'
-import { clearPtyRendererCloseAuthority, stagePtyRendererCloseAuthority } from '../ipc/pty'
+import {
+  clearPtyRendererCloseAuthority,
+  isPtyRendererCloseReady,
+  stagePtyRendererCloseAuthority
+} from '../ipc/pty'
 import { orcaWindowManager, type OrcaWindowRole } from './orca-window-manager'
 
 // Why: show/restore/resume can overlap before the size nudge resets; never capture the temporary width as the next baseline.
@@ -218,6 +222,9 @@ type CreateMainWindowOptions = {
   onBeforeReload?: (options: { ignoreCache: boolean; webContentsId: number }) => void
   /** Marks the in-place recovery reload so did-finish-load's PTY orphan sweep spares live sessions until restore re-attaches (#5787). */
   onBeforeRecoveryReload?: (webContentsId: number) => void
+  fenceTerminalTransfersForWindowClose?: (windowId: number) => Promise<void>
+  hasPendingTerminalTransferForWindow?: (windowId: number) => boolean
+  releaseTerminalTransferWindowCloseFence?: (windowId: number) => void
   orcaWindowRole?: OrcaWindowRole
   initialBounds?: Electron.Rectangle
 }
@@ -999,7 +1006,9 @@ export function createMainWindow(
 
   // Intercept close so the renderer can confirm killing running-process terminals (replies window:confirm-close to proceed).
   let windowCloseConfirmed = false
+  let windowCloseRequestActive = false
   const confirmCloseChannel = 'window:confirm-close'
+  const cancelCloseChannel = 'window:cancel-close'
   const closeRequestReceivedChannel = 'window:close-request-received'
   let closeRequestSequence = 0
   let quitRendererAckRequestId: number | null = null
@@ -1035,6 +1044,14 @@ export function createMainWindow(
       clearQuitRendererAckTimer()
     }
   }
+  const releaseWindowCloseTransactionFence = (): void => {
+    windowCloseRequestActive = false
+    opts?.releaseTerminalTransferWindowCloseFence?.(mainWindow.id)
+  }
+  const endWindowCloseTransaction = (): void => {
+    releaseWindowCloseTransactionFence()
+    clearPtyRendererCloseAuthority(rendererWebContentsId)
+  }
 
   // Windows minimize-to-tray: hide instead of close when enabled; returns true when it hid so callers skip their close path.
   const hideToTrayIfEnabled = (): boolean => {
@@ -1068,6 +1085,48 @@ export function createMainWindow(
     return true
   }
 
+  const requestWindowCloseConfirmation = async (isQuitting: boolean): Promise<void> => {
+    if (mainWindow.isDestroyed() || mainWindow.webContents.isDestroyed?.() === true) {
+      endWindowCloseTransaction()
+      return
+    }
+    if (isQuitting) {
+      endWindowCloseTransaction()
+    } else {
+      if (windowCloseRequestActive) {
+        return
+      }
+      windowCloseRequestActive = true
+      try {
+        if (opts?.fenceTerminalTransfersForWindowClose) {
+          await opts.fenceTerminalTransfersForWindowClose(mainWindow.id)
+        }
+      } catch {
+        endWindowCloseTransaction()
+        return
+      }
+      if (mainWindow.isDestroyed() || mainWindow.webContents.isDestroyed?.() === true) {
+        endWindowCloseTransaction()
+        return
+      }
+    }
+    const requestId = ++closeRequestSequence
+    const ownedProviderPtyIds = isQuitting
+      ? []
+      : stagePtyRendererCloseAuthority(
+          mainWindow.webContents,
+          store ? getWindowSessionRegistry(store).getWindowTerminalPtyIds(mainWindow.id) : []
+        )
+    if (isQuitting) {
+      armQuitRendererAckTimer(requestId)
+    }
+    mainWindow.webContents.send('window:close-requested', {
+      isQuitting,
+      requestId,
+      ...(ownedProviderPtyIds.length > 0 ? { ownedProviderPtyIds } : {})
+    })
+  }
+
   mainWindow.on('close', (e) => {
     roleOnClose = orcaWindowManager.getRole(mainWindow.id) ?? roleOnClose
     // Why: Alt+F4/programmatic closes hit the native event; apply the same minimize-to-tray guard the renderer-drawn X uses.
@@ -1086,8 +1145,10 @@ export function createMainWindow(
       // allow-confirmed: renderer already replied and re-entered close().
       // bypass-gone: a gone renderer can't answer window:close-requested, so let OS close complete rather than trap a blank window.
       if (closeAction === 'allow-confirmed') {
-        clearPtyRendererCloseAuthority(mainWindow.webContents)
+        endWindowCloseTransaction()
         windowCloseConfirmed = false
+      } else {
+        endWindowCloseTransaction()
       }
       // Why: window teardown emits resize/move/unmaximize; freeze bounds persistence so they can't clobber saved size (v1.3.26-rc2).
       windowClosing = true
@@ -1098,24 +1159,10 @@ export function createMainWindow(
       return
     }
     e.preventDefault()
-    const isQuitting = opts?.getIsQuitting?.() ?? false
-    const requestId = ++closeRequestSequence
-    const ownedProviderPtyIds = stagePtyRendererCloseAuthority(
-      mainWindow.webContents,
-      store ? getWindowSessionRegistry(store).getWindowTerminalPtyIds(mainWindow.id) : []
-    )
-    if (isQuitting) {
-      armQuitRendererAckTimer(requestId)
-    }
-    // Why: renderer owns the close decision; the always-mounted App root subscription lets even pre-workspace states reply (#5144).
-    mainWindow.webContents.send('window:close-requested', {
-      isQuitting,
-      requestId,
-      ...(ownedProviderPtyIds.length > 0 ? { ownedProviderPtyIds } : {})
-    })
+    void requestWindowCloseConfirmation(opts?.getIsQuitting?.() ?? false)
   })
   mainWindow.webContents.on('will-prevent-unload', () => {
-    clearPtyRendererCloseAuthority(mainWindow.webContents)
+    endWindowCloseTransaction()
     // Why: a prevented beforeunload cancels the quit; release the bounds-persistence freeze so later resizing still saves.
     windowClosing = false
     clearQuitRendererAckTimer()
@@ -1127,12 +1174,38 @@ export function createMainWindow(
     event.sender.id === rendererWebContentsId
   const onConfirmClose = (event: Electron.IpcMainEvent): void => {
     if (!ownsSender(event)) {
+      event.returnValue = false
       return
     }
     clearQuitRendererAckTimer()
+    const isQuitting = opts?.getIsQuitting?.() ?? false
+    const canClose =
+      isQuitting ||
+      (windowCloseRequestActive &&
+        (!store || !getWindowSessionRegistry(store).hasWindowTerminalMembership(mainWindow.id)) &&
+        isPtyRendererCloseReady(mainWindow.webContents) &&
+        opts?.hasPendingTerminalTransferForWindow?.(mainWindow.id) !== true)
+    event.returnValue = canClose
+    if (!canClose) {
+      endWindowCloseTransaction()
+      return
+    }
     windowCloseConfirmed = true
     if (!mainWindow.isDestroyed()) {
       mainWindow.close()
+    }
+  }
+  const onCancelClose = (event: Electron.IpcMainEvent): void => {
+    if (!ownsSender(event)) {
+      return
+    }
+    const quitWasCanceled = opts?.getIsQuitting?.() === true
+    clearQuitRendererAckTimer()
+    endWindowCloseTransaction()
+    windowCloseConfirmed = false
+    windowClosing = false
+    if (quitWasCanceled) {
+      opts?.onQuitAborted?.()
     }
   }
   const trafficLightChannel = 'ui:sync-traffic-lights'
@@ -1181,7 +1254,7 @@ export function createMainWindow(
     if (hideToTrayIfEnabled()) {
       return
     }
-    mainWindow.webContents.send('window:close-requested', { isQuitting: false })
+    void requestWindowCloseConfirmation(false)
   }
   // Why: renderer-drawn title-bar ··· menu button replicates the Alt-key reveal autoHideMenuBar provides (Windows/Linux).
   const popupMenuChannel = 'menu:popup'
@@ -1197,7 +1270,9 @@ export function createMainWindow(
   ipcMain.on(popupMenuChannel, onPopupMenu)
 
   ipcMain.on(confirmCloseChannel, onConfirmClose)
+  ipcMain.on(cancelCloseChannel, onCancelClose)
   ipcMain.on(closeRequestReceivedChannel, onCloseRequestReceived)
+  mainWindow.webContents.on('destroyed', endWindowCloseTransaction)
   mainWindow.on('closed', () => {
     roleOnClose = orcaWindowManager.getRole(mainWindow.id) ?? roleOnClose
     // Why: the dashboard pop-out is a companion of the main window — close it
@@ -1208,6 +1283,7 @@ export function createMainWindow(
     }
     clearInitialRevealFallbackTimer()
     clearQuitRendererAckTimer()
+    endWindowCloseTransaction()
     // Why: default-deny the Cmd+B carve-out after the window is gone so a stale-true flag can't leak into later state.
     markdownEditorFocused = false
     terminalInputFocused = false
@@ -1221,6 +1297,7 @@ export function createMainWindow(
     ipcMain.removeListener(requestCloseChannel, onRequestClose)
     ipcMain.removeListener(popupMenuChannel, onPopupMenu)
     ipcMain.removeListener(confirmCloseChannel, onConfirmClose)
+    ipcMain.removeListener(cancelCloseChannel, onCancelClose)
     ipcMain.removeListener(closeRequestReceivedChannel, onCloseRequestReceived)
     ipcMain.removeListener(markdownFocusChannel, onMarkdownEditorFocused)
     ipcMain.removeListener(terminalInputFocusChannel, onTerminalInputFocused)

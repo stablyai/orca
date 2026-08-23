@@ -108,6 +108,28 @@ function makeHarness(controlWindowId = 1) {
 }
 
 describe('WindowSessionRegistry', () => {
+  it('treats an empty terminal layout key as across-host durable membership', () => {
+    const { manager, store } = makeHarness()
+    const registry = new WindowSessionRegistry(store as never, manager as never)
+    const runtime = makeSession('runtime-tab')
+    runtime.tabsByWorktree = {}
+    runtime.unifiedTabs = {}
+    runtime.terminalLayoutsByTabId = {
+      'runtime-tab': {
+        root: null,
+        activeLeafId: null,
+        expandedLeafId: null,
+        ptyIdsByLeafId: {}
+      }
+    }
+    registry.set(2, runtime, 'runtime:env')
+
+    expect(registry.hasWindowTerminalMembership(2)).toBe(true)
+
+    registry.set(2, getDefaultWorkspaceSession(), 'runtime:env')
+    expect(registry.hasWindowTerminalMembership(2)).toBe(false)
+  })
+
   it('enumerates exact terminal PTYs for one window across host records', () => {
     const { manager, store } = makeHarness()
     const registry = new WindowSessionRegistry(store as never, manager as never)

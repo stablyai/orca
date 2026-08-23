@@ -344,9 +344,10 @@ type ClosingPtyAuthorityEntry = {
   generation: number | null
   incarnationId: string | undefined
   connectionId: string | null
+  closeSubmitted: boolean
 }
 type ClosingPtyAuthority = {
-  sender: WebContents
+  sender: WeakRef<WebContents>
   entries: Map<string, ClosingPtyAuthorityEntry>
 }
 const closingPtyAuthorityByRendererId = new Map<number, ClosingPtyAuthority>()
@@ -371,27 +372,45 @@ export function stagePtyRendererCloseAuthority(
       entries.set(ptyId, {
         generation: owner?.generation ?? null,
         incarnationId,
-        connectionId: ptyOwnership.get(ptyId) ?? parsedSsh?.connectionId ?? null
+        connectionId: ptyOwnership.get(ptyId) ?? parsedSsh?.connectionId ?? null,
+        closeSubmitted: false
       })
     }
   }
-  closingPtyAuthorityByRendererId.set(sender.id, { sender, entries })
+  closingPtyAuthorityByRendererId.set(sender.id, { sender: new WeakRef(sender), entries })
   return [...entries.keys()]
 }
 
-export function clearPtyRendererCloseAuthority(sender: WebContents): void {
+export function clearPtyRendererCloseAuthority(sender: WebContents | number | undefined): void {
+  if (sender === undefined) {
+    return
+  }
+  if (typeof sender === 'number') {
+    closingPtyAuthorityByRendererId.delete(sender)
+    return
+  }
   const authority = closingPtyAuthorityByRendererId.get(sender.id)
-  if (authority?.sender === sender) {
+  if (authority?.sender.deref() === sender) {
     closingPtyAuthorityByRendererId.delete(sender.id)
   }
+}
+
+function getClosingPtyAuthorityForSender(sender: WebContents): ClosingPtyAuthority | null {
+  const authority = closingPtyAuthorityByRendererId.get(sender.id)
+  if (authority?.sender.deref() === sender) {
+    return authority
+  }
+  if (authority) {
+    closingPtyAuthorityByRendererId.delete(sender.id)
+  }
+  return null
 }
 
 function getClosingPtyAuthority(
   sender: WebContents,
   ptyId: string
 ): ClosingPtyAuthorityEntry | null {
-  const authority = closingPtyAuthorityByRendererId.get(sender.id)
-  const entry = authority?.sender === sender ? authority.entries.get(ptyId) : undefined
+  const entry = getClosingPtyAuthorityForSender(sender)?.entries.get(ptyId)
   if (!entry || ptyIncarnationById.get(ptyId) !== entry.incarnationId) {
     return null
   }
@@ -409,6 +428,24 @@ function getClosingPtyAuthority(
     return null
   }
   return entry
+}
+
+export function isPtyRendererCloseReady(sender: WebContents): boolean {
+  const authority = getClosingPtyAuthorityForSender(sender)
+  if (!authority) {
+    return false
+  }
+  const candidateIds = new Set([
+    ...ptyRendererOwners.getOwnedIds(sender).filter((ptyId) => ptyOwnership.has(ptyId)),
+    ...authority.entries.keys()
+  ])
+  for (const ptyId of candidateIds) {
+    const entry = getClosingPtyAuthority(sender, ptyId)
+    if (!entry?.closeSubmitted) {
+      return false
+    }
+  }
+  return true
 }
 const ptyIncarnationById = new Map<string, string>()
 
@@ -8105,6 +8142,9 @@ export function registerPtyHandlers(
     if (!isPtyEventFromOwner(event, args.id) && !closingAuthority) {
       throw new Error('pty_renderer_not_owner')
     }
+    if (closingAuthority) {
+      closingAuthority.closeSubmitted = true
+    }
     runtime?.markPtyStopRequested?.(args.id)
     const ownedConnectionId = ptyOwnership.get(args.id) ?? closingAuthority?.connectionId
     const parsedSshId = ownedConnectionId === undefined ? parseAppSshPtyId(args.id) : null
@@ -8158,8 +8198,8 @@ export function registerPtyHandlers(
     const ids = new Set(
       ptyRendererOwners.getOwnedIds(sender).filter((ptyId) => ptyOwnership.has(ptyId))
     )
-    const closingAuthority = closingPtyAuthorityByRendererId.get(sender.id)
-    if (closingAuthority?.sender === sender) {
+    const closingAuthority = getClosingPtyAuthorityForSender(sender)
+    if (closingAuthority) {
       for (const ptyId of closingAuthority.entries.keys()) {
         if (getClosingPtyAuthority(sender, ptyId)) {
           ids.add(ptyId)

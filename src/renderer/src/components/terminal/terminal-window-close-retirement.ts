@@ -4,7 +4,6 @@ import {
   fetchWorkspaceSessionFromHosts,
   listKnownRuntimeHostIds
 } from '@/lib/workspace-session-host-persistence'
-import { parseRemoteRuntimePtyId } from '@/runtime/runtime-terminal-stream'
 import {
   buildTerminalTabRetirementPlans,
   type TerminalTabRetirementPlan
@@ -36,11 +35,11 @@ export type WindowTerminalCloseRetirementDependencies = {
     }
   ) => void
   persistRetiredSessionTabs: (plans: readonly TerminalTabRetirementPlan[]) => Promise<void>
-  clearWindowCloseAuthority: () => Promise<void>
+  cancelWindowClose: () => void
   dispatchBeforeUnload: () => boolean
   awaitCheckpoint: () => Promise<void>
   resetCheckpointAttempt: () => void
-  confirmWindowClose: () => void
+  confirmWindowClose: () => boolean | void
 }
 
 function findSessionTerminalWorktreeId(
@@ -112,10 +111,7 @@ async function persistRetiredSessionTabs(
   await window.api.session.flush()
 }
 
-function snapshotTerminalTabIds(
-  state: WindowTerminalCloseState,
-  ownedProviderPtyIds: ReadonlySet<string> = new Set()
-): string[] {
+function snapshotTerminalTabIds(state: WindowTerminalCloseState): string[] {
   const ids = new Set(
     Object.values(state.tabsByWorktree).flatMap((tabs) => tabs.map((tab) => tab.id))
   )
@@ -126,14 +122,8 @@ function snapshotTerminalTabIds(
       }
     }
   }
-  for (const [tabId, layout] of Object.entries(state.terminalLayoutsByTabId)) {
-    if (
-      Object.values(layout.ptyIdsByLeafId ?? {}).some(
-        (ptyId) => ownedProviderPtyIds.has(ptyId) || parseRemoteRuntimePtyId(ptyId)?.handle
-      )
-    ) {
-      ids.add(tabId)
-    }
+  for (const tabId of Object.keys(state.terminalLayoutsByTabId)) {
+    ids.add(tabId)
   }
   return [...ids]
 }
@@ -188,7 +178,7 @@ function defaultDependencies(): WindowTerminalCloseRetirementDependencies {
     },
     closeTab: closeTerminalTab,
     persistRetiredSessionTabs,
-    clearWindowCloseAuthority: () => window.api.pty.clearWindowCloseAuthority(),
+    cancelWindowClose: () => window.api.ui.cancelWindowClose(),
     dispatchBeforeUnload: () =>
       window.dispatchEvent(new Event('beforeunload', { cancelable: true })),
     awaitCheckpoint: () => window.api.app.awaitBeforeUnloadCheckpoint(),
@@ -219,7 +209,7 @@ export function retireWindowTerminalTabsAndConfirmClose(
         dependencies.getState(),
         await dependencies.getWindowSessionState()
       )
-      const tabIds = snapshotTerminalTabIds(initialState, ownedProviderPtyIds)
+      const tabIds = snapshotTerminalTabIds(initialState)
       const plans = buildTerminalTabRetirementPlans(initialState, tabIds, ownedProviderPtyIds)
       if (
         tabIds.some((tabId) => {
@@ -231,7 +221,6 @@ export function retireWindowTerminalTabsAndConfirmClose(
             return !resolveTerminalWorktreeRoute(initialState, plan.worktreeId)
           }
           return (
-            plan.ptyIds.length === 0 ||
             plan.localOrSshPtyIds.some((ptyId) => !ownedProviderPtyIds.has(ptyId)) ||
             plan.runtimeTerminals.some((terminal) => !terminal.environmentId)
           )
@@ -245,7 +234,7 @@ export function retireWindowTerminalTabsAndConfirmClose(
           skipRunningProcessConfirm: true,
           precomputedRetirementPlan: plans.get(tabId)!
         })
-        if (snapshotTerminalTabIds(dependencies.getState(), ownedProviderPtyIds).includes(tabId)) {
+        if (snapshotTerminalTabIds(dependencies.getState()).includes(tabId)) {
           return 'blocked'
         }
       }
@@ -256,11 +245,14 @@ export function retireWindowTerminalTabsAndConfirmClose(
       }
       checkpointStarted = true
       await dependencies.awaitCheckpoint()
-      if (snapshotTerminalTabIds(dependencies.getState(), ownedProviderPtyIds).length > 0) {
+      if (snapshotTerminalTabIds(dependencies.getState()).length > 0) {
         dependencies.resetCheckpointAttempt()
         return 'blocked'
       }
-      dependencies.confirmWindowClose()
+      if (dependencies.confirmWindowClose() === false) {
+        dependencies.resetCheckpointAttempt()
+        return 'blocked'
+      }
       closeConfirmed = true
       return 'confirmed'
     } catch (error) {
@@ -271,7 +263,7 @@ export function retireWindowTerminalTabsAndConfirmClose(
       return 'blocked'
     } finally {
       if (!closeConfirmed) {
-        await dependencies.clearWindowCloseAuthority().catch(() => {})
+        dependencies.cancelWindowClose()
       }
     }
   }

@@ -12,7 +12,8 @@ import {
   dispatchWindowCloseRequest,
   getWindowCloseRequestHandler,
   registerWindowCloseGuard,
-  setWindowCloseRequestHandler
+  setWindowCloseRequestHandler,
+  useWindowCloseRunningProcessConfirmStore
 } from './window-close-request-coordinator'
 
 describe('window-close-request-coordinator', () => {
@@ -26,26 +27,96 @@ describe('window-close-request-coordinator', () => {
   beforeEach(() => {
     confirmWindowClose.mockClear()
     retireWindowTerminalTabsAndConfirmClose.mockClear()
-    const clearWindowCloseAuthority = vi.fn(() => Promise.resolve())
+    const cancelWindowClose = vi.fn()
+    const hasChildProcesses = vi.fn(() => Promise.resolve(false))
     // Why: dispatch falls back to the preload bridge when no rich handler is
     // registered; stub just the surface it touches.
     ;(
       globalThis as unknown as {
         window: {
           api: {
-            ui: { confirmWindowClose: () => void }
-            pty: { clearWindowCloseAuthority: () => Promise<void> }
+            ui: { cancelWindowClose: () => void; confirmWindowClose: () => boolean }
+            pty: { hasChildProcesses: (ptyId: string) => Promise<boolean> }
           }
         }
       }
     ).window = {
-      api: { ui: { confirmWindowClose }, pty: { clearWindowCloseAuthority } }
+      api: { ui: { cancelWindowClose, confirmWindowClose }, pty: { hasChildProcesses } }
     }
   })
 
   afterEach(() => {
     setWindowCloseRequestHandler(null)
     unregisterFns.splice(0).forEach((fn) => fn())
+  })
+
+  it('prompts once for a staged durable-only running PTY and cancels the main transaction', async () => {
+    vi.mocked(window.api.pty.hasChildProcesses).mockResolvedValue(true)
+
+    const close = dispatchWindowCloseRequest({
+      isQuitting: false,
+      ownedProviderPtyIds: ['durable-pty']
+    })
+    await vi.waitFor(() =>
+      expect(
+        useWindowCloseRunningProcessConfirmStore.getState().windowCloseRunningProcessConfirm
+      ).not.toBeNull()
+    )
+    await dispatchWindowCloseRequest({
+      isQuitting: false,
+      ownedProviderPtyIds: ['durable-pty']
+    })
+
+    expect(window.api.pty.hasChildProcesses).toHaveBeenCalledTimes(1)
+    useWindowCloseRunningProcessConfirmStore.getState().cancelWindowCloseRunningProcessConfirm()
+    await close
+
+    expect(window.api.ui.cancelWindowClose).toHaveBeenCalledTimes(1)
+    expect(retireWindowTerminalTabsAndConfirmClose).not.toHaveBeenCalled()
+  })
+
+  it('retires after one durable-only running-process confirmation', async () => {
+    vi.mocked(window.api.pty.hasChildProcesses).mockResolvedValue(true)
+
+    const close = dispatchWindowCloseRequest({
+      isQuitting: false,
+      ownedProviderPtyIds: ['durable-pty']
+    })
+    await vi.waitFor(() =>
+      expect(
+        useWindowCloseRunningProcessConfirmStore.getState().windowCloseRunningProcessConfirm
+      ).not.toBeNull()
+    )
+    useWindowCloseRunningProcessConfirmStore.getState().confirmWindowCloseRunningProcessConfirm()
+    await close
+
+    expect(retireWindowTerminalTabsAndConfirmClose).toHaveBeenCalledOnce()
+    expect(retireWindowTerminalTabsAndConfirmClose).toHaveBeenCalledWith(undefined, ['durable-pty'])
+  })
+
+  it('escalates a pending user prompt to App quit without killing or waiting for the dialog', async () => {
+    vi.mocked(window.api.pty.hasChildProcesses).mockResolvedValue(true)
+    const handler = vi.fn()
+    setWindowCloseRequestHandler(handler)
+    const userClose = dispatchWindowCloseRequest({
+      isQuitting: false,
+      ownedProviderPtyIds: ['durable-pty']
+    })
+    await vi.waitFor(() =>
+      expect(
+        useWindowCloseRunningProcessConfirmStore.getState().windowCloseRunningProcessConfirm
+      ).not.toBeNull()
+    )
+
+    await dispatchWindowCloseRequest({ isQuitting: true })
+    await userClose
+
+    expect(handler).toHaveBeenCalledOnce()
+    expect(handler).toHaveBeenCalledWith({ isQuitting: true })
+    expect(window.api.ui.cancelWindowClose).not.toHaveBeenCalled()
+    expect(
+      useWindowCloseRunningProcessConfirmStore.getState().windowCloseRunningProcessConfirm
+    ).toBeNull()
   })
 
   it('has no handler by default, so the App root falls back to confirming the close', () => {

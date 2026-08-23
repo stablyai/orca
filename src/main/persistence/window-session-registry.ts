@@ -96,6 +96,31 @@ export class WindowSessionRegistry {
     return [...ids]
   }
 
+  hasWindowTerminalMembership(windowId: number): boolean {
+    for (const record of this.#records.get(windowId)?.values() ?? []) {
+      if (record.retired) {
+        continue
+      }
+      if (Object.values(record.state.tabsByWorktree).some((tabs) => tabs.length > 0)) {
+        return true
+      }
+      if (
+        Object.values(record.state.unifiedTabs ?? {}).some((tabs) =>
+          tabs.some((tab) => tab.contentType === 'terminal')
+        )
+      ) {
+        return true
+      }
+      if (
+        Object.keys(record.state.terminalLayoutsByTabId).length > 0 ||
+        Object.keys(record.state.remoteSessionIdsByTabId ?? {}).length > 0
+      ) {
+        return true
+      }
+    }
+    return false
+  }
+
   set(windowId: number, state: WorkspaceSessionState, hostId?: string | null): void {
     const resolved = resolveHostId(hostId)
     this.#setRecord(windowId, state, resolved)

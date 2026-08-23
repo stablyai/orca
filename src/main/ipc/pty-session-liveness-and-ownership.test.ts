@@ -5,6 +5,7 @@ import { AGENT_SESSION_CLAIM_DIGEST_VERSION } from '../../shared/agent-session-h
 import {
   deletePtyOwnership,
   clearPtyRendererCloseAuthority,
+  isPtyRendererCloseReady,
   registerPtyHandlers,
   registerPtyRenderer,
   registerSshPtyProvider,
@@ -108,12 +109,14 @@ describe('registerPtyHandlers', () => {
     expect(handlers.get('pty:listOwnedProviderPtyIds')!(mainWindowIpcEvent, undefined)).toEqual([
       'closing-pty'
     ])
+    expect(isPtyRendererCloseReady(mainWindow.webContents as never)).toBe(false)
     await handlers.get('pty:kill')!(mainWindowIpcEvent, { id: 'closing-pty' })
 
     expect(shutdown).toHaveBeenCalledWith('closing-pty', {
       immediate: true,
       keepHistory: false
     })
+    expect(isPtyRendererCloseReady(mainWindow.webContents as never)).toBe(true)
     clearPtyRendererCloseAuthority(mainWindow.webContents as never)
   })
 

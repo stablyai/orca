@@ -32,6 +32,7 @@ import {
   type TerminalWindowTransfer,
   type TerminalWindowTransferOperations
 } from './terminal-window-transfer-operation'
+import { TerminalWindowTransferFence } from './terminal-window-transfer-fence'
 import {
   recoverTerminalTransferAfterSourceLoss,
   rollbackTerminalWindowTransfer
@@ -58,11 +59,11 @@ export class TerminalWindowTransferCoordinator {
   readonly #handoff: (ptyIds: readonly string[], from: WebContents, to: WebContents) => void
   readonly #timeoutMs: number
   readonly #transfers = new Map<string, TerminalWindowTransfer>()
+  readonly #fences = new TerminalWindowTransferFence(() => this.#transfers.values())
   readonly #operations: TerminalWindowTransferOperations
   readonly #commandReady = new Set<WebContents>()
   readonly #commandReadyWaiters = new Map<WebContents, Set<TerminalWindowCommandReadyWaiter>>()
   readonly #trackedRenderers = new Set<WebContents>()
-  #fences = { handoff: false, quit: false }
 
   constructor(options: TerminalWindowTransferCoordinatorOptions) {
     this.#createSecondaryWindow = options.createSecondaryWindow
@@ -113,7 +114,7 @@ export class TerminalWindowTransferCoordinator {
     return {
       windowId: window.id,
       role,
-      transitionFenced: this.#fences.handoff || this.#fences.quit
+      transitionFenced: this.#fences.isGloballyFenced()
     }
   }
 
@@ -122,7 +123,7 @@ export class TerminalWindowTransferCoordinator {
     if (!sender) {
       return { ok: false, error: 'untrusted_ui_renderer' }
     }
-    if (this.#fences.handoff || this.#fences.quit || this.#getIsQuitting()) {
+    if (this.#fences.isGloballyFenced() || this.#getIsQuitting()) {
       return { ok: false, error: 'window_transfer_fenced' }
     }
     if (!isTerminalWindowTransferSeed(input)) {
@@ -133,6 +134,9 @@ export class TerminalWindowTransferCoordinator {
     const source = this.#windows.getWindowForSender(sender)
     if (!source) {
       return { ok: false, error: 'untrusted_ui_renderer' }
+    }
+    if (this.#fences.isWindowFenced(source.id)) {
+      return { ok: false, error: 'window_transfer_fenced' }
     }
     if (this.#transfers.has(seed.tabId)) {
       return { ok: false, error: 'terminal_transfer_in_progress' }
@@ -156,6 +160,9 @@ export class TerminalWindowTransferCoordinator {
       }
       let target = this.#windows.getWindowAtPoint(point, source.id)
       if (target) {
+        if (this.#fences.isWindowFenced(target.id)) {
+          throw new Error('window_transfer_fenced')
+        }
         const state = this.#sessions.get(target.id, sessionPersistenceHostId)
         if (
           !sessionMatchesTerminalWindowTarget(state, seed) ||
@@ -285,29 +292,11 @@ export class TerminalWindowTransferCoordinator {
     }
   }
 
-  fenceForQuit(): Promise<void> {
-    this.#fences.quit = true
-    return this.#fenceTransfers('terminal_transfer_quit')
-  }
-
-  fenceForControlHandoff(): Promise<void> {
-    this.#fences.handoff = true
-    return this.#fenceTransfers('terminal_transfer_control_handoff')
-  }
-
-  #fenceTransfers(reason: string): Promise<void> {
-    const transfers = [...this.#transfers.values()]
-    for (const transfer of transfers) {
-      transfer.abort(new Error(reason))
-    }
-    return Promise.all(transfers.map((transfer) => transfer.finished)).then(() => undefined)
-  }
-
-  resumeAfterQuitAbort(): void {
-    this.#fences.quit = false
-  }
-
-  resumeAfterControlHandoff(): void {
-    this.#fences.handoff = false
-  }
+  readonly fenceForQuit = this.#fences.fenceForQuit
+  readonly fenceForControlHandoff = this.#fences.fenceForControlHandoff
+  readonly fenceForWindowClose = this.#fences.fenceForWindowClose
+  readonly hasPendingTransferForWindow = this.#fences.hasPendingTransferForWindow
+  readonly resumeAfterWindowClose = this.#fences.resumeAfterWindowClose
+  readonly resumeAfterQuitAbort = this.#fences.resumeAfterQuitAbort
+  readonly resumeAfterControlHandoff = this.#fences.resumeAfterControlHandoff
 }

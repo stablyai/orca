@@ -1397,6 +1397,12 @@ function openMainWindow(options: { revealOnDidFinishLoad?: boolean } = {}): Brow
   const window = createMainWindow(store, {
     getIsQuitting: () => isQuitting,
     onQuitAborted: resumeAfterQuitAbort,
+    fenceTerminalTransfersForWindowClose: (windowId) =>
+      terminalWindowTransfers?.fenceForWindowClose(windowId) ?? Promise.resolve(),
+    hasPendingTerminalTransferForWindow: (windowId) =>
+      terminalWindowTransfers?.hasPendingTransferForWindow(windowId) ?? false,
+    releaseTerminalTransferWindowCloseFence: (windowId) =>
+      terminalWindowTransfers?.resumeAfterWindowClose(windowId),
     onRendererProcessGone: (details, webContentsId) => {
       recordProcessGoneCrash(
         'renderer',
@@ -1621,6 +1627,12 @@ function openMainWindow(options: { revealOnDidFinishLoad?: boolean } = {}): Brow
       const secondary = createMainWindow(store, {
         getIsQuitting: () => isQuitting,
         onQuitAborted: resumeAfterQuitAbort,
+        fenceTerminalTransfersForWindowClose: (windowId) =>
+          terminalWindowTransfers?.fenceForWindowClose(windowId) ?? Promise.resolve(),
+        hasPendingTerminalTransferForWindow: (windowId) =>
+          terminalWindowTransfers?.hasPendingTransferForWindow(windowId) ?? false,
+        releaseTerminalTransferWindowCloseFence: (windowId) =>
+          terminalWindowTransfers?.resumeAfterWindowClose(windowId),
         onRendererUnavailable: (windowId) =>
           getWindowSessionRegistry(store!).markRendererUnavailable(windowId),
         deferLoad: true,

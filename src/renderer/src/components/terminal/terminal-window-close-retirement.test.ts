@@ -1,5 +1,4 @@
 import { describe, expect, it, vi } from 'vitest'
-import { readFileSync } from 'node:fs'
 import {
   retireWindowTerminalTabsAndConfirmClose,
   type WindowTerminalCloseRetirementDependencies
@@ -83,7 +82,7 @@ function makeDependencies(
     listOwnedProviderPtyIds: async () => [],
     closeTab: (tabId) => removeTab(state, tabId),
     persistRetiredSessionTabs: () => Promise.resolve(),
-    clearWindowCloseAuthority: () => Promise.resolve(),
+    cancelWindowClose: vi.fn(),
     dispatchBeforeUnload: () => true,
     awaitCheckpoint: () => Promise.resolve(),
     resetCheckpointAttempt: vi.fn(),
@@ -93,16 +92,6 @@ function makeDependencies(
 }
 
 describe('terminal window close retirement', () => {
-  it('wires user close through retirement while App quit keeps the detach path', () => {
-    const source = readFileSync(new URL('../Terminal.tsx', import.meta.url), 'utf8')
-
-    expect(source).toContain("from './terminal/terminal-window-close-retirement'")
-    expect(source).toContain(
-      'void retireWindowTerminalTabsAndConfirmClose(undefined, closeFencedPtyIds)'
-    )
-    expect(source).toContain('confirmNativeWindowClose(isQuitting)')
-  })
-
   it('deletes this renderer local tabs, checkpoints the final snapshot, then confirms', async () => {
     const state = makeState(
       { 'wt-secondary': [makeTab('secondary-tab', 'wt-secondary', 'secondary-pty')] },
@@ -130,7 +119,9 @@ describe('terminal window close retirement', () => {
         return true
       },
       awaitCheckpoint: () => checkpoint,
-      confirmWindowClose: () => events.push('confirm')
+      confirmWindowClose: () => {
+        events.push('confirm')
+      }
     })
 
     const close = retireWindowTerminalTabsAndConfirmClose(deps)
@@ -209,12 +200,52 @@ describe('terminal window close retirement', () => {
         events.push(`checkpoint:${durableLayoutPresent}`)
         return true
       },
-      confirmWindowClose: () => events.push('confirm')
+      confirmWindowClose: () => {
+        events.push('confirm')
+      }
     })
 
     await expect(retireWindowTerminalTabsAndConfirmClose(deps)).resolves.toBe('confirmed')
 
     expect(events).toEqual(['close:secondary-pty', 'persist:false', 'checkpoint:false', 'confirm'])
+  })
+
+  it('retires an empty durable terminal layout without inventing kill authority', async () => {
+    const state = makeState({})
+    const events: string[] = []
+    const deps = makeDependencies(state, {
+      getWindowSessionState: async () => ({
+        activeRepoId: null,
+        activeWorktreeId: null,
+        activeTabId: null,
+        tabsByWorktree: {},
+        terminalLayoutsByTabId: {
+          'empty-tab': {
+            root: null,
+            activeLeafId: null,
+            expandedLeafId: null,
+            ptyIdsByLeafId: {}
+          }
+        }
+      }),
+      closeTab: (tabId, options) => {
+        events.push(`close:${tabId}:${options.precomputedRetirementPlan.ptyIds.length}`)
+      },
+      persistRetiredSessionTabs: async (plans) => {
+        events.push(`persist:${plans.map((plan) => plan.tabId).join(',')}`)
+      },
+      dispatchBeforeUnload: () => {
+        events.push('checkpoint')
+        return true
+      },
+      confirmWindowClose: () => {
+        events.push('confirm')
+      }
+    })
+
+    await expect(retireWindowTerminalTabsAndConfirmClose(deps)).resolves.toBe('confirmed')
+
+    expect(events).toEqual(['close:empty-tab:0', 'persist:empty-tab', 'checkpoint', 'confirm'])
   })
 
   it('uses exact close-fenced PTY ids supplied by main after renderer ownership is released', async () => {
@@ -501,5 +532,24 @@ describe('terminal window close retirement', () => {
 
     await expect(close).resolves.toBe('blocked')
     expect(confirmWindowClose).not.toHaveBeenCalled()
+  })
+
+  it('resets the unload checkpoint when main blocks the final authoritative recheck', async () => {
+    const state = makeState({})
+    const resetCheckpointAttempt = vi.fn()
+    const cancelWindowClose = vi.fn()
+
+    await expect(
+      retireWindowTerminalTabsAndConfirmClose(
+        makeDependencies(state, {
+          confirmWindowClose: () => false,
+          resetCheckpointAttempt,
+          cancelWindowClose
+        })
+      )
+    ).resolves.toBe('blocked')
+
+    expect(resetCheckpointAttempt).toHaveBeenCalledOnce()
+    expect(cancelWindowClose).toHaveBeenCalledOnce()
   })
 })

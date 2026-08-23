@@ -87,6 +87,16 @@ async function closeWindow(app: ElectronApplication, windowId: number): Promise<
   await expect.poll(() => app.windows().length, { timeout: 30_000 }).toBe(1)
 }
 
+async function confirmCloseWindow(app: ElectronApplication, window: OrcaWindow): Promise<void> {
+  await app.evaluate(
+    ({ BrowserWindow }, id) => BrowserWindow.fromId(id)?.close(),
+    window.context.windowId
+  )
+  await expect(window.page.getByTestId('window-close-running-process-dialog')).toBeVisible()
+  await window.page.getByTestId('window-close-running-process-confirm').click()
+  await expect.poll(() => app.windows().length, { timeout: 30_000 }).toBe(1)
+}
+
 async function assertTerminalInput(page: Page, marker: string): Promise<void> {
   await focusActiveTerminalInput(page)
   await page.keyboard.type(`printf '${marker}\\n'`)
@@ -158,8 +168,14 @@ test('user-closing the secondary retires its PTY and leaves the control terminal
   await expect(
     secondary.page.evaluate(() => window.api.pty.listOwnedProviderPtyIds())
   ).resolves.toContain(terminal.detachedPtyId)
+  await expect(
+    secondary.page.evaluate(
+      (ptyId) => window.api.pty.hasChildProcesses(ptyId),
+      terminal.detachedPtyId
+    )
+  ).resolves.toBe(true)
 
-  await closeWindow(electronApp, secondary.context.windowId)
+  await confirmCloseWindow(electronApp, secondary)
   await expect
     .poll(
       () =>

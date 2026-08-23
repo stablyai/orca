@@ -9,6 +9,7 @@ import PinnedTabCloseDialog from './components/terminal-pane/PinnedTabCloseDialo
 import RunningTerminalCloseDialog from './components/terminal-pane/RunningTerminalCloseDialog'
 import { useTerminalWindowTransfer } from './components/terminal-pane/use-terminal-window-transfer'
 import WorktreeBaseFallbackDialog from './components/WorktreeBaseFallbackDialog'
+import WindowCloseRunningProcessDialog from './components/WindowCloseRunningProcessDialog'
 import { useUnreadDockBadge } from './hooks/useUnreadDockBadge'
 import { AppBackgroundServices } from './app-shell/AppBackgroundServices'
 import { AppRootSurfaces } from './app-shell/AppRootSurfaces'
@@ -106,6 +107,7 @@ function App(): React.JSX.Element {
       <WorktreeBaseFallbackDialog />
       <PinnedTabCloseDialog />
       <RunningTerminalCloseDialog />
+      <WindowCloseRunningProcessDialog />
       {/* Why: Electron's drag-region hit-test is DOM-order-based (ignores z-index); render last so WindowControls stay clickable. */}
       {hasCustomTitleBar && <WindowControls />}
     </div>

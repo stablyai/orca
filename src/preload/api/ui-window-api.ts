@@ -48,6 +48,7 @@ export type UiWindowApi = {
   onWindowCloseRequested: (
     callback: (data: { isQuitting: boolean; ownedProviderPtyIds?: string[] }) => void
   ) => () => void
-  confirmWindowClose: () => void
+  confirmWindowClose: () => boolean
+  cancelWindowClose: () => void
   notifyWindowRevealed: () => void
 }

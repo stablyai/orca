@@ -502,18 +502,9 @@ function Terminal(): React.JSX.Element | null {
     closeDialogDebounceTimersRef.current.add(timer)
   }, [])
 
-  // Window close confirmation, shown for local terminals with running children (SSH terminals detach/persist via the relay).
-  const [windowCloseDialogOpen, setWindowCloseDialogOpen] = useState(false)
-
   // Why: defer confirmWindowClose() while tabs are dirty — the beforeunload guard preventDefault()s, so an immediate confirm leaves the window open with no UI.
   const windowCloseAfterDirtyRef = useRef<{ isQuitting: boolean } | null>(null)
   const windowCloseRetirementPtyIdsRef = useRef<readonly string[]>([])
-
-  const cancelNativeWindowClose = useCallback(() => {
-    windowCloseRetirementPtyIdsRef.current = []
-    void window.api.pty.clearWindowCloseAuthority()
-    setWindowCloseDialogOpen(false)
-  }, [])
 
   const confirmNativeWindowClose = useCallback((isQuitting: boolean) => {
     if (!isQuitting) {
@@ -531,38 +522,7 @@ function Terminal(): React.JSX.Element | null {
     window.api.ui.confirmWindowClose()
   }, [])
 
-  const proceedToNativeWindowClose = useCallback(
-    (isQuitting: boolean) => {
-      if (!isQuitting) {
-        const state = useAppStore.getState()
-        const localPtyIds = Object.entries(state.tabsByWorktree).flatMap(
-          ([worktreeId, worktreeTabs]) => {
-            const connectionId = getConnectionId(worktreeId)
-            if (connectionId !== null) {
-              return []
-            }
-            return worktreeTabs
-              .flatMap((tab) => state.ptyIdsByTabId[tab.id] ?? [])
-              .filter((ptyId) => !isRemoteRuntimePtyId(ptyId))
-          }
-        )
-        if (localPtyIds.length > 0) {
-          void Promise.all(localPtyIds.map((id) => window.api.pty.hasChildProcesses(id))).then(
-            (results) => {
-              if (results.some(Boolean)) {
-                setWindowCloseDialogOpen(true)
-              } else {
-                confirmNativeWindowClose(isQuitting)
-              }
-            }
-          )
-          return
-        }
-      }
-      confirmNativeWindowClose(isQuitting)
-    },
-    [confirmNativeWindowClose]
-  )
+  const proceedToNativeWindowClose = confirmNativeWindowClose
 
   const waitForFileClosed = useCallback((fileId: string, timeoutMs: number): Promise<boolean> => {
     if (!useAppStore.getState().openFiles.some((f) => f.id === fileId)) {
@@ -780,7 +740,7 @@ function Terminal(): React.JSX.Element | null {
     pendingEditorCloseQueueRef.current = []
     windowCloseAfterDirtyRef.current = null
     windowCloseRetirementPtyIdsRef.current = []
-    void window.api.pty.clearWindowCloseAuthority()
+    window.api.ui.cancelWindowClose()
     setSaveDialogFileId(null)
     releaseCloseDialogGuardAfterDebounce()
   }, [releaseCloseDialogGuardAfterDebounce])
@@ -2774,47 +2734,6 @@ function Terminal(): React.JSX.Element | null {
             </Button>
             <Button type="button" size="sm" onClick={handleSaveDialogSave}>
               {translate('auto.components.Terminal.cd51e28d8b', 'Save')}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* Window close confirmation dialog */}
-      <Dialog
-        open={windowCloseDialogOpen}
-        onOpenChange={(open) => {
-          if (!open) {
-            cancelNativeWindowClose()
-          }
-        }}
-      >
-        <DialogContent className="max-w-sm" showCloseButton={false}>
-          <DialogHeader>
-            <DialogTitle className="text-sm">
-              {translate('auto.components.Terminal.2fa9c69ff3', 'Close Window?')}
-            </DialogTitle>
-            <DialogDescription className="text-xs">
-              {translate(
-                'auto.components.Terminal.7958465754',
-                'There are local terminals with running processes. Close the window anyway?'
-              )}
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter className="gap-2">
-            <Button type="button" variant="outline" size="sm" onClick={cancelNativeWindowClose}>
-              {translate('auto.components.Terminal.f82e9f02df', 'Cancel')}
-            </Button>
-            <Button
-              type="button"
-              variant="destructive"
-              size="sm"
-              autoFocus
-              onClick={() => {
-                setWindowCloseDialogOpen(false)
-                confirmNativeWindowClose(false)
-              }}
-            >
-              {translate('auto.components.Terminal.73768427cf', 'Close')}
             </Button>
           </DialogFooter>
         </DialogContent>

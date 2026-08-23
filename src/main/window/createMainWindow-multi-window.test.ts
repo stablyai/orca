@@ -323,8 +323,17 @@ describe('createMainWindow multi-window registration', () => {
         return second.instance
       })
 
-    createMainWindow(null, { deferLoad: true, orcaWindowRole: 'control' })
-    createMainWindow(null, { deferLoad: true, orcaWindowRole: 'secondary' })
+    createMainWindow(null, {
+      deferLoad: true,
+      getIsQuitting: () => true,
+      orcaWindowRole: 'control'
+    })
+    createMainWindow(null, {
+      deferLoad: true,
+      getIsQuitting: () => true,
+      orcaWindowRole: 'secondary'
+    })
+    second.windowHandlers.get('close')?.forEach((handler) => handler({ preventDefault: vi.fn() }))
     for (const handler of ipcHandlers.get('window:confirm-close') ?? []) {
       handler({ sender: second.instance.webContents })
     }

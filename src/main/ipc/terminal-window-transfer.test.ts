@@ -33,6 +33,60 @@ vi.mock('../window/createMainWindow', () => ({ loadMainWindow: vi.fn() }))
 describe('TerminalWindowTransferCoordinator', () => {
   beforeEach(() => vi.clearAllMocks())
 
+  it('fences both inbound and outbound transfers for a closing window until released', async () => {
+    const h = createHarness()
+    const { TerminalWindowTransferCoordinator } = await import('./terminal-window-transfer')
+    const coordinator = new TerminalWindowTransferCoordinator({
+      store: {} as never,
+      createSecondaryWindow: vi.fn(),
+      windows: h.windows,
+      sessions: h.sessions as never,
+      owners: h.owners,
+      getCursorPoint: () => ({ x: 700, y: 100 }),
+      timeoutMs: 10
+    })
+    const event = ipcEvent(h.source.webContents) as never
+
+    await coordinator.fenceForWindowClose(h.target.id)
+    await expect(coordinator.detach(event, seed())).resolves.toEqual({
+      ok: false,
+      error: 'window_transfer_fenced'
+    })
+
+    coordinator.resumeAfterWindowClose(h.target.id)
+    await coordinator.fenceForWindowClose(h.source.id)
+    await expect(coordinator.detach(event, seed())).resolves.toEqual({
+      ok: false,
+      error: 'window_transfer_fenced'
+    })
+  })
+
+  it('reports a matching pending transfer until the close fence settles it', async () => {
+    const h = createHarness()
+    const { TerminalWindowTransferCoordinator } = await import('./terminal-window-transfer')
+    const coordinator = new TerminalWindowTransferCoordinator({
+      store: {} as never,
+      createSecondaryWindow: vi.fn(),
+      windows: h.windows,
+      sessions: h.sessions as never,
+      owners: h.owners,
+      getCursorPoint: () => ({ x: 700, y: 100 }),
+      handoff: h.handoff,
+      timeoutMs: 100
+    })
+
+    const transfer = coordinator.detach(ipcEvent(h.source.webContents) as never, seed())
+    expect(coordinator.hasPendingTransferForWindow(h.source.id)).toBe(true)
+
+    await coordinator.fenceForWindowClose(h.source.id)
+
+    await expect(transfer).resolves.toEqual({
+      ok: false,
+      error: 'terminal_transfer_window_close'
+    })
+    expect(coordinator.hasPendingTransferForWindow(h.source.id)).toBe(false)
+  })
+
   it('reopens the transfer gate when a renderer aborts app quit', async () => {
     const h = createHarness()
     const { TerminalWindowTransferCoordinator } = await import('./terminal-window-transfer')

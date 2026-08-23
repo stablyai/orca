@@ -4445,8 +4445,11 @@ const api = {
       return () => ipcRenderer.removeListener('window:close-requested', listener)
     },
     /** Tell the main process to proceed with the window close. */
-    confirmWindowClose: (): void => {
-      ipcRenderer.send('window:confirm-close')
+    confirmWindowClose: (): boolean => {
+      return ipcRenderer.sendSync('window:confirm-close') === true
+    },
+    cancelWindowClose: (): void => {
+      ipcRenderer.send('window:cancel-close')
     },
     /** Report a genuine hidden→visible reveal so main can recover a stale (throttled) layout/compositor surface. */
     notifyWindowRevealed: (): void => {
