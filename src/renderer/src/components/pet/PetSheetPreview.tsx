@@ -3,14 +3,17 @@ import { usePrefersReducedMotion } from '@/hooks/usePrefersReducedMotion'
 import { buildSpriteAnimationCss } from './sprite-animation-css'
 import { SHEET_COLUMNS } from './pet-sheet-composer'
 
-/** Rows worth showing off in a preview, in the order they cycle. */
-const TOUR: readonly { row: number; holdMs: number }[] = [
-  { row: 0, holdMs: 1700 },
-  { row: 1, holdMs: 1500 },
-  { row: 3, holdMs: 900 },
-  { row: 4, holdMs: 700 },
-  { row: 5, holdMs: 700 },
-  { row: 6, holdMs: 1300 }
+/** Rows worth showing off in a preview, in the order they cycle.
+ *
+ *  `loop` mirrors what the overlay does with the row: getting up is one-shot
+ *  there, and looping it here would show the pet standing up over and over. */
+const TOUR: readonly { row: number; holdMs: number; loop: boolean }[] = [
+  { row: 0, holdMs: 1700, loop: true },
+  { row: 1, holdMs: 1500, loop: true },
+  { row: 3, holdMs: 900, loop: true },
+  { row: 4, holdMs: 700, loop: true },
+  { row: 5, holdMs: 700, loop: true },
+  { row: 6, holdMs: 1300, loop: false }
 ]
 
 type PetSheetPreviewProps = {
@@ -46,7 +49,7 @@ export function PetSheetPreview({
 
   // Why: a still preview under reduced motion shows the idle pose rather than
   // freezing mid-tumble on whichever row the tour happened to reach.
-  const { row } = reducedMotion ? TOUR[0] : TOUR[step]
+  const { row, loop } = reducedMotion ? TOUR[0] : TOUR[step]
   const scale = Math.min(size / frame.width, size / frame.height)
   const rowOffsetY = -(row * frame.height * scale)
   const { keyframesCss, animationCss } = buildSpriteAnimationCss({
@@ -56,7 +59,8 @@ export function PetSheetPreview({
     frameWidth: frame.width,
     scale,
     rowOffsetY,
-    frameDurationsMs: undefined
+    frameDurationsMs: undefined,
+    loop
   })
 
   return (
