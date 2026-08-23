@@ -97,12 +97,19 @@ export function usePetUrl(): ResolvedPet {
       customKind,
       customSpriteFps,
       customHasManifestSprite
-    ).then((url) => {
-      if (cancelled || pendingRef.current !== customId) {
-        return
-      }
-      setCustomUrl(url)
-    })
+    )
+      .then((url) => {
+        if (cancelled || pendingRef.current !== customId) {
+          return
+        }
+        setCustomUrl(url)
+      })
+      // Why: a freshly generated pet is never cached, so it always takes this
+      // read — an IPC rejection here would otherwise be an unhandled rejection.
+      // The overlay is already showing the bundled fallback; log and leave it.
+      .catch((error: unknown) => {
+        console.error('[pet-overlay] could not load custom pet art', error)
+      })
     return () => {
       cancelled = true
     }
