@@ -10,6 +10,7 @@ import {
   type ExecutionHostId
 } from '../../../shared/execution-host'
 import { parseWorkspaceKey } from '../../../shared/workspace-scope'
+import { getWorkspaceSessionPersistenceHostId } from '../../../shared/workspace-session-persistence-host'
 import { getRepoIdFromWorktreeId } from '../../../shared/worktree/id'
 import {
   mergeWorkspaceSessionsFromHosts,
@@ -155,7 +156,7 @@ function getFolderWorkspaceRuntimeHostId(
     : null
   const parsed = parseExecutionHostId(workspace?.executionHostId ?? group?.executionHostId)
   if (parsed) {
-    return parsed.kind === 'runtime' ? parsed.id : LOCAL_EXECUTION_HOST_ID
+    return getWorkspaceSessionPersistenceHostId(parsed.id)
   }
   if (workspace && group) {
     // Why: once the folder and group catalogs are both known, a missing runtime
@@ -208,8 +209,7 @@ export function buildHostIdByWorktreeId(state: HostPersistenceState): HostIdByWo
     if (!repoHostId) {
       return LOCAL_EXECUTION_HOST_ID
     }
-    const parsed = parseExecutionHostId(repoHostId)
-    return parsed?.kind === 'runtime' ? parsed.id : LOCAL_EXECUTION_HOST_ID
+    return getWorkspaceSessionPersistenceHostId(repoHostId)
   }
 }
 
@@ -282,14 +282,14 @@ export function persistWorkspaceSessionByHostSync(
   }
 }
 
-/** Collect non-local hosts whose window sessions may have their own partition. */
-export function listKnownSessionHostIds(
+/** Collect the distinct runtime hosts owning any persisted repo. */
+export function listKnownRuntimeHostIds(
   repos: readonly Pick<Repo, 'connectionId' | 'executionHostId'>[]
 ): ExecutionHostId[] {
   const hostIds = new Set<ExecutionHostId>()
   for (const repo of repos) {
     const parsed = parseExecutionHostId(getRepoExecutionHostId(repo))
-    if (parsed && parsed.kind !== 'local') {
+    if (parsed?.kind === 'runtime') {
       hostIds.add(parsed.id)
     }
   }
@@ -322,12 +322,12 @@ export async function fetchWorkspaceSessionWithRuntimeHostOwners(
   }
   // Why: startup can know saved runtime session hosts before their repo
   // catalogs hydrate, so include those partitions in the first read.
-  const sessionHostIds = new Set<ExecutionHostId>([
-    ...listKnownSessionHostIds(repos),
+  const runtimeHostIds = new Set<ExecutionHostId>([
+    ...listKnownRuntimeHostIds(repos),
     ...additionalRuntimeHostIds
   ])
   await Promise.all(
-    [...sessionHostIds].map(async (hostId) => {
+    [...runtimeHostIds].map(async (hostId) => {
       try {
         slices[hostId] = await api.get(hostId)
       } catch (err) {

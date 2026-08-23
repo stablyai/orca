@@ -1,3 +1,4 @@
+import { getWorkspaceSessionPersistenceHostId } from '../../shared/workspace-session-persistence-host'
 import { sendToPtyOwner } from './pty'
 import { sendTerminalWindowTransferCommand } from './terminal-window-transfer-command'
 import type {
@@ -21,6 +22,7 @@ export async function rollbackTerminalWindowTransfer(
     return
   }
   const { source, sourceRenderer, target, targetRenderer, seed } = transfer
+  const sessionPersistenceHostId = getWorkspaceSessionPersistenceHostId(seed.hostId)
   const canHandoffBack =
     !transfer.targetLost ||
     (!transfer.sourceLost &&
@@ -86,11 +88,11 @@ export async function rollbackTerminalWindowTransfer(
       operations.sessions.set(
         source.id,
         restoreTransferredTerminalSession(
-          operations.sessions.get(source.id, seed.hostId),
+          operations.sessions.get(source.id, sessionPersistenceHostId),
           transfer.sourceBefore,
           seed
         ),
-        seed.hostId
+        sessionPersistenceHostId
       )
     } catch {
       // Renderer compensation already ran when available; session fallback is best-effort.
@@ -100,11 +102,11 @@ export async function rollbackTerminalWindowTransfer(
         operations.sessions.set(
           target.id,
           removeTransferredTerminalSession(
-            operations.sessions.get(target.id, seed.hostId),
+            operations.sessions.get(target.id, sessionPersistenceHostId),
             transfer.targetBefore,
             seed
           ),
-          seed.hostId
+          sessionPersistenceHostId
         )
       } catch {
         // Preserve the original transfer error.
@@ -164,6 +166,7 @@ export async function recoverTerminalTransferAfterSourceLoss(
   transfer: TerminalWindowTransfer
 ): Promise<TerminalWindowSourceLossRecovery> {
   const { source, target, targetRenderer, seed } = transfer
+  const sessionPersistenceHostId = getWorkspaceSessionPersistenceHostId(seed.hostId)
   if (
     !transfer.sourceLost ||
     !transfer.handedOff ||
@@ -194,13 +197,13 @@ export async function recoverTerminalTransferAfterSourceLoss(
     operations.sessions.set(
       target.id,
       importTransferredTerminalSession(
-        operations.sessions.get(target.id, seed.hostId),
+        operations.sessions.get(target.id, sessionPersistenceHostId),
         transfer.targetBefore!,
         transfer.sourceBefore,
         seed,
         transfer.createdTarget
       ),
-      seed.hostId
+      sessionPersistenceHostId
     )
   } catch {
     if (!transfer.targetImported) {
@@ -211,10 +214,10 @@ export async function recoverTerminalTransferAfterSourceLoss(
     operations.sessions.set(
       source.id,
       removeTransferredTerminalSessionBacking(
-        operations.sessions.get(source.id, seed.hostId),
+        operations.sessions.get(source.id, sessionPersistenceHostId),
         seed
       ),
-      seed.hostId
+      sessionPersistenceHostId
     )
   } catch {
     // The live target remains authoritative if source cleanup persistence fails.

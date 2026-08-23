@@ -1,6 +1,12 @@
 import { Buffer } from 'node:buffer'
 import { isDeepStrictEqual } from 'node:util'
-import { LOCAL_EXECUTION_HOST_ID, normalizeExecutionHostId } from '../../shared/execution-host'
+import {
+  getRepoExecutionHostId,
+  LOCAL_EXECUTION_HOST_ID,
+  normalizeExecutionHostId,
+  parseExecutionHostId
+} from '../../shared/execution-host'
+import { parseAppSshPtyId } from '../../shared/ssh-pty-id'
 import type {
   TerminalLayoutSnapshot,
   TerminalPaneLayoutNode,
@@ -133,6 +139,7 @@ export function isTerminalWindowTransferSeed(value: unknown): value is TerminalW
   const group = seed && isRecord(seed.group) ? seed.group : null
   const repo = seed && isRecord(seed.repo) ? seed.repo : null
   const ptyIds = seed?.ptyIds
+  const host = typeof seed?.hostId === 'string' ? parseExecutionHostId(seed.hostId) : null
   return Boolean(
     seed &&
     typeof seed.tabId === 'string' &&
@@ -156,7 +163,13 @@ export function isTerminalWindowTransferSeed(value: unknown): value is TerminalW
     new Set(ptyIds).size === ptyIds.length &&
     ptyIds.every((id) => typeof id === 'string' && id.length > 0) &&
     typeof repo?.id === 'string' &&
-    repo.id.length > 0
+    repo.id.length > 0 &&
+    host &&
+    getRepoExecutionHostId(repo as TerminalWindowTransferSeed['repo']) === host.id &&
+    (host.kind !== 'ssh' ||
+      ptyIds.every(
+        (id) => typeof id === 'string' && parseAppSshPtyId(id)?.connectionId === host.targetId
+      ))
   )
 }
 

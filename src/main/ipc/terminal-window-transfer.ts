@@ -4,6 +4,7 @@ import type {
   TerminalWindowContext,
   TerminalWindowTransferResult
 } from '../../shared/terminal-window-transfer'
+import { getWorkspaceSessionPersistenceHostId } from '../../shared/workspace-session-persistence-host'
 import { getWindowSessionRegistry } from '../persistence/window-session-registry'
 import { loadMainWindow } from '../window/createMainWindow'
 import { orcaWindowManager } from '../window/orca-window-manager'
@@ -128,6 +129,7 @@ export class TerminalWindowTransferCoordinator {
       return { ok: false, error: 'invalid_terminal_transfer_seed' }
     }
     const seed = structuredClone(input)
+    const sessionPersistenceHostId = getWorkspaceSessionPersistenceHostId(seed.hostId)
     const source = this.#windows.getWindowForSender(sender)
     if (!source) {
       return { ok: false, error: 'untrusted_ui_renderer' }
@@ -135,7 +137,7 @@ export class TerminalWindowTransferCoordinator {
     if (this.#transfers.has(seed.tabId)) {
       return { ok: false, error: 'terminal_transfer_in_progress' }
     }
-    const sourceBefore = this.#sessions.get(source.id, seed.hostId)
+    const sourceBefore = this.#sessions.get(source.id, sessionPersistenceHostId)
     const sourceError = getTerminalWindowTransferSourceError(sourceBefore, seed, (id) =>
       this.#owners.owns(id, sender)
     )
@@ -154,7 +156,7 @@ export class TerminalWindowTransferCoordinator {
       }
       let target = this.#windows.getWindowAtPoint(point, source.id)
       if (target) {
-        const state = this.#sessions.get(target.id, seed.hostId)
+        const state = this.#sessions.get(target.id, sessionPersistenceHostId)
         if (
           !sessionMatchesTerminalWindowTarget(state, seed) ||
           sessionHasTerminalTransferBacking(state, seed.tabId, seed.ptyIds)
@@ -185,14 +187,14 @@ export class TerminalWindowTransferCoordinator {
           target.id,
           new Map([
             ['local', getDefaultWorkspaceSession()],
-            [seed.hostId, getDefaultWorkspaceSession()]
+            [sessionPersistenceHostId, getDefaultWorkspaceSession()]
           ])
         )
       }
       transfer.target = target
       transfer.targetRenderer ??= target.webContents
       installTerminalWindowTransferAbortListeners(this.#operations, transfer)
-      const targetCurrent = this.#sessions.get(target.id, seed.hostId)
+      const targetCurrent = this.#sessions.get(target.id, sessionPersistenceHostId)
       if (
         (!transfer.createdTarget && !sessionMatchesTerminalWindowTarget(targetCurrent, seed)) ||
         sessionHasTerminalTransferBacking(targetCurrent, seed.tabId, seed.ptyIds)
@@ -204,7 +206,7 @@ export class TerminalWindowTransferCoordinator {
       this.#sessions.set(
         target.id,
         prepareTerminalWindowTargetRecord(targetCurrent, seed),
-        seed.hostId
+        sessionPersistenceHostId
       )
       if (transfer.createdTarget) {
         this.#loadWindow(target)
