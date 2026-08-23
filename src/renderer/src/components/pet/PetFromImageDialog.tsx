@@ -1,4 +1,4 @@
-import { useEffect, useId, useRef, useState } from 'react'
+import { useId, useRef, useState } from 'react'
 import { Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
@@ -98,6 +98,22 @@ export function PetFromImageDialog({
   onOpenChange,
   onCreated
 }: PetFromImageDialogProps): React.JSX.Element {
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-[520px]">
+        {/* Why: every bit of picking state lives below content Radix unmounts
+          on close, so reopening is a fresh mount. Resetting it from an effect
+          instead would show the last picture for a frame first. */}
+        <PetFromImageForm onOpenChange={onOpenChange} onCreated={onCreated} />
+      </DialogContent>
+    </Dialog>
+  )
+}
+
+function PetFromImageForm({
+  onOpenChange,
+  onCreated
+}: Omit<PetFromImageDialogProps, 'open'>): React.JSX.Element {
   const [settings, setSettings] = useState<BuildSettings>({
     styleId: BUNDLED_PETS[0].id,
     mode: 'whole-body',
@@ -119,26 +135,6 @@ export function PetFromImageDialog({
   // the newest may paint, clear the spinner, or report a failure — an older one
   // landing last would otherwise show a sheet for settings nobody is on.
   const newestRun = useRef(0)
-
-  // Why: the owner keeps this component mounted and only flips `open`, so
-  // without this a reopen still shows the last picture, framing and verdict.
-  useEffect(() => {
-    if (!open) {
-      return
-    }
-    newestRun.current++
-    setDraft(null)
-    setSource(null)
-    setSourceUrl(null)
-    setBusy(false)
-    setError(null)
-    setSettings({
-      styleId: BUNDLED_PETS[0].id,
-      mode: 'whole-body',
-      crop: null,
-      tolerance: BACKGROUND_TOLERANCE.default
-    })
-  }, [open])
 
   const runPipeline = async (
     image: RgbaImage,
@@ -284,170 +280,168 @@ export function PetFromImageDialog({
   const activeMode = MODES.find((option) => option.id === settings.mode) ?? MODES[0]
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[520px]">
-        <DialogHeader>
-          <DialogTitle>
-            {translate('auto.components.pet.fromImage.title', 'Create a pet from an image')}
-          </DialogTitle>
-          <DialogDescription>
-            {translate(
-              'auto.components.pet.fromImage.description',
-              'Pick a picture and a style. A PNG with a transparent background works best.'
-            )}
-          </DialogDescription>
-        </DialogHeader>
+    <>
+      <DialogHeader>
+        <DialogTitle>
+          {translate('auto.components.pet.fromImage.title', 'Create a pet from an image')}
+        </DialogTitle>
+        <DialogDescription>
+          {translate(
+            'auto.components.pet.fromImage.description',
+            'Pick a picture and a style. A PNG with a transparent background works best.'
+          )}
+        </DialogDescription>
+      </DialogHeader>
 
-        <div className="flex flex-col gap-4">
-          <input
-            type="file"
-            accept="image/png,image/webp,image/jpeg,image/gif"
-            onChange={onPick}
-            aria-label={translate('auto.components.pet.fromImage.pick', 'Choose an image')}
-          />
+      <div className="flex flex-col gap-4">
+        <input
+          type="file"
+          accept="image/png,image/webp,image/jpeg,image/gif"
+          onChange={onPick}
+          aria-label={translate('auto.components.pet.fromImage.pick', 'Choose an image')}
+        />
 
-          {/* Why: both rows are one-of-N choices, so they are toggle groups —
+        {/* Why: both rows are one-of-N choices, so they are toggle groups —
             a Button whose `variant` is the only difference tells a pointer user
             what is selected and tells everyone else nothing. */}
+        <ToggleGroup
+          type="single"
+          variant="outline"
+          size="sm"
+          spacing={2}
+          value={settings.styleId}
+          // Radix clears the value when the active item is pressed again;
+          // there is no "no style", so ignore the deselect.
+          onValueChange={(styleId) => styleId && void rebuild({ styleId })}
+          aria-label={translate('auto.components.pet.fromImage.style', 'Style')}
+        >
+          {BUNDLED_PETS.map((pet) => (
+            <ToggleGroupItem key={pet.id} value={pet.id}>
+              {pet.label}
+            </ToggleGroupItem>
+          ))}
+        </ToggleGroup>
+
+        <div className="flex flex-col gap-1">
           <ToggleGroup
             type="single"
             variant="outline"
             size="sm"
             spacing={2}
-            value={settings.styleId}
-            // Radix clears the value when the active item is pressed again;
-            // there is no "no style", so ignore the deselect.
-            onValueChange={(styleId) => styleId && void rebuild({ styleId })}
-            aria-label={translate('auto.components.pet.fromImage.style', 'Style')}
+            value={settings.mode}
+            onValueChange={(mode) => mode && void rebuild({ mode: mode as PetBuildMode })}
+            aria-label={translate('auto.components.pet.fromImage.mode', 'How to build the pet')}
+            aria-describedby={modeHintId}
           >
-            {BUNDLED_PETS.map((pet) => (
-              <ToggleGroupItem key={pet.id} value={pet.id}>
-                {pet.label}
+            {MODES.map((option) => (
+              <ToggleGroupItem key={option.id} value={option.id}>
+                {option.label}
               </ToggleGroupItem>
             ))}
           </ToggleGroup>
-
-          <div className="flex flex-col gap-1">
-            <ToggleGroup
-              type="single"
-              variant="outline"
-              size="sm"
-              spacing={2}
-              value={settings.mode}
-              onValueChange={(mode) => mode && void rebuild({ mode: mode as PetBuildMode })}
-              aria-label={translate('auto.components.pet.fromImage.mode', 'How to build the pet')}
-              aria-describedby={modeHintId}
-            >
-              {MODES.map((option) => (
-                <ToggleGroupItem key={option.id} value={option.id}>
-                  {option.label}
-                </ToggleGroupItem>
-              ))}
-            </ToggleGroup>
-            {/* Why: on the page, not in a `title` — a title is invisible to
+          {/* Why: on the page, not in a `title` — a title is invisible to
               keyboard and touch, and it is the only thing that says what the
               three modes differ by. */}
-            <p id={modeHintId} className="text-xs text-muted-foreground">
-              {activeMode.hint}
-            </p>
-          </div>
+          <p id={modeHintId} className="text-xs text-muted-foreground">
+            {activeMode.hint}
+          </p>
+        </div>
 
-          {source && sourceUrl ? (
-            <div className="flex items-start gap-3">
-              <PetSourceCrop
-                sourceUrl={sourceUrl}
-                image={source}
-                crop={crop}
-                onCrop={(rect) => void rebuild({ crop: rect })}
-                box={CROP_BOX}
-                describedBy={cropHintId}
-              />
-              <div className="flex min-w-0 flex-1 flex-col gap-2">
-                <p id={cropHintId} className="text-xs text-muted-foreground">
+        {source && sourceUrl ? (
+          <div className="flex items-start gap-3">
+            <PetSourceCrop
+              sourceUrl={sourceUrl}
+              image={source}
+              crop={crop}
+              onCrop={(rect) => void rebuild({ crop: rect })}
+              box={CROP_BOX}
+              describedBy={cropHintId}
+            />
+            <div className="flex min-w-0 flex-1 flex-col gap-2">
+              <p id={cropHintId} className="text-xs text-muted-foreground">
+                {translate(
+                  'auto.components.pet.fromImage.cropHint',
+                  'Drag a box around the character if the picture has more in it. With the box focused, the arrow keys move it and Shift with them resizes it.'
+                )}
+              </p>
+              <Button
+                type="button"
+                size="sm"
+                variant="ghost"
+                disabled={!crop}
+                onClick={() => void rebuild({ crop: null })}
+              >
+                {translate('auto.components.pet.fromImage.cropReset', 'Use the whole picture')}
+              </Button>
+              <div data-tolerance={settings.tolerance} className="flex flex-col gap-1">
+                <span className="text-xs text-muted-foreground">
                   {translate(
-                    'auto.components.pet.fromImage.cropHint',
-                    'Drag a box around the character if the picture has more in it. With the box focused, the arrow keys move it and Shift with them resizes it.'
+                    'auto.components.pet.fromImage.tolerance',
+                    'How much of the background to remove'
                   )}
-                </p>
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="ghost"
-                  disabled={!crop}
-                  onClick={() => void rebuild({ crop: null })}
-                >
-                  {translate('auto.components.pet.fromImage.cropReset', 'Use the whole picture')}
-                </Button>
-                <div data-tolerance={settings.tolerance} className="flex flex-col gap-1">
-                  <span className="text-xs text-muted-foreground">
-                    {translate(
-                      'auto.components.pet.fromImage.tolerance',
-                      'How much of the background to remove'
-                    )}
-                  </span>
-                  {/* Why: the thumb tracks the drag, but the build waits for the
+                </span>
+                {/* Why: the thumb tracks the drag, but the build waits for the
                     gesture to end. Each one is a flood fill, a resample and 28
                     sheet transforms on this thread — one per pointer sample
                     stutters the very preview it is meant to show. Arrow keys
                     commit per press, so the keyboard still rebuilds at once. */}
-                  <Slider
-                    value={[settings.tolerance]}
-                    min={BACKGROUND_TOLERANCE.min}
-                    max={BACKGROUND_TOLERANCE.max}
-                    step={4}
-                    onValueChange={([tolerance]) =>
-                      setSettings((current) => ({ ...current, tolerance }))
-                    }
-                    onValueCommit={([tolerance]) => void rebuild({ tolerance })}
-                    thumbLabels={[
-                      translate(
-                        'auto.components.pet.fromImage.tolerance',
-                        'How much of the background to remove'
-                      )
-                    ]}
-                  />
-                </div>
+                <Slider
+                  value={[settings.tolerance]}
+                  min={BACKGROUND_TOLERANCE.min}
+                  max={BACKGROUND_TOLERANCE.max}
+                  step={4}
+                  onValueChange={([tolerance]) =>
+                    setSettings((current) => ({ ...current, tolerance }))
+                  }
+                  onValueCommit={([tolerance]) => void rebuild({ tolerance })}
+                  thumbLabels={[
+                    translate(
+                      'auto.components.pet.fromImage.tolerance',
+                      'How much of the background to remove'
+                    )
+                  ]}
+                />
               </div>
             </div>
-          ) : null}
-
-          <div
-            className="flex min-h-[190px] items-end justify-center rounded-md border border-border bg-accent/5 p-2"
-            data-build-mode={draft?.build.ok === true ? draft.build.mode : 'none'}
-            data-requested-mode={settings.mode}
-            data-crop={crop ? `${crop.x},${crop.y},${crop.width},${crop.height}` : 'none'}
-          >
-            {busy ? (
-              <Loader2 className="mb-16 size-5 animate-spin text-muted-foreground" aria-hidden />
-            ) : rejection ? (
-              <p className="mb-16 text-center text-xs text-destructive">{rejection}</p>
-            ) : ready && draft?.previewUrl && draft.build.ok ? (
-              <PetSheetPreview
-                sheetUrl={draft.previewUrl}
-                frame={draft.build.manifest.frame}
-                rows={SHEET_ROWS}
-                size={PREVIEW_SIZE}
-              />
-            ) : (
-              <p className="mb-16 text-xs text-muted-foreground">
-                {translate('auto.components.pet.fromImage.empty', 'No image chosen yet.')}
-              </p>
-            )}
           </div>
+        ) : null}
 
-          {degraded ? <p className="text-xs text-muted-foreground">{degraded}</p> : null}
-          {error ? <p className="text-xs text-destructive">{error}</p> : null}
+        <div
+          className="flex min-h-[190px] items-end justify-center rounded-md border border-border bg-accent/5 p-2"
+          data-build-mode={draft?.build.ok === true ? draft.build.mode : 'none'}
+          data-requested-mode={settings.mode}
+          data-crop={crop ? `${crop.x},${crop.y},${crop.width},${crop.height}` : 'none'}
+        >
+          {busy ? (
+            <Loader2 className="mb-16 size-5 animate-spin text-muted-foreground" aria-hidden />
+          ) : rejection ? (
+            <p className="mb-16 text-center text-xs text-destructive">{rejection}</p>
+          ) : ready && draft?.previewUrl && draft.build.ok ? (
+            <PetSheetPreview
+              sheetUrl={draft.previewUrl}
+              frame={draft.build.manifest.frame}
+              rows={SHEET_ROWS}
+              size={PREVIEW_SIZE}
+            />
+          ) : (
+            <p className="mb-16 text-xs text-muted-foreground">
+              {translate('auto.components.pet.fromImage.empty', 'No image chosen yet.')}
+            </p>
+          )}
         </div>
 
-        <DialogFooter>
-          <Button type="button" variant="ghost" onClick={() => onOpenChange(false)}>
-            {translate('auto.components.pet.fromImage.cancel', 'Cancel')}
-          </Button>
-          <Button type="button" disabled={!ready || busy} onClick={() => void onConfirm()}>
-            {translate('auto.components.pet.fromImage.confirm', 'Create pet')}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+        {degraded ? <p className="text-xs text-muted-foreground">{degraded}</p> : null}
+        {error ? <p className="text-xs text-destructive">{error}</p> : null}
+      </div>
+
+      <DialogFooter>
+        <Button type="button" variant="ghost" onClick={() => onOpenChange(false)}>
+          {translate('auto.components.pet.fromImage.cancel', 'Cancel')}
+        </Button>
+        <Button type="button" disabled={!ready || busy} onClick={() => void onConfirm()}>
+          {translate('auto.components.pet.fromImage.confirm', 'Create pet')}
+        </Button>
+      </DialogFooter>
+    </>
   )
 }
