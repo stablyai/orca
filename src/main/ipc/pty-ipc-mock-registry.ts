@@ -14,6 +14,7 @@ export const existsSyncMock: Mock = vi.fn()
 export const statSyncMock: Mock = vi.fn()
 export const accessSyncMock: Mock = vi.fn()
 export const mkdirSyncMock: Mock = vi.fn()
+export const mkdtempSyncMock: Mock = vi.fn()
 export const readFileSyncMock: Mock = vi.fn()
 export const writeFileSyncMock: Mock = vi.fn()
 export const chmodSyncMock: Mock = vi.fn()
@@ -82,6 +83,7 @@ export const fsModuleMock = () => ({
   statSync: statSyncMock,
   accessSync: accessSyncMock,
   mkdirSync: mkdirSyncMock,
+  mkdtempSync: mkdtempSyncMock,
   readFileSync: readFileSyncMock,
   writeFileSync: writeFileSyncMock,
   chmodSync: chmodSyncMock,
