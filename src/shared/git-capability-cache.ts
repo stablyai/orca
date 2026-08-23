@@ -4,6 +4,7 @@ export const GIT_CAPABILITY_RETRY_INTERVAL_MS = 30 * 60_000
 
 export type GitCapability =
   | 'for-each-ref-exclude'
+  | 'log-decorate-placeholder'
   | 'merge-tree-merge-base'
   | 'merge-tree-write-tree'
   | 'rev-parse-path-format'

@@ -15,6 +15,13 @@ import {
 } from './git-worktree-command-capabilities'
 import { gitCredentialPromptGuardEnv } from './git-credential-prompt-env'
 import {
+  GIT_HISTORY_COMMIT_FORMAT,
+  GIT_HISTORY_FALLBACK_COMMIT_FORMAT,
+  parseGitHistoryLog,
+  readGitHistoryDecorations
+} from './git-history-log-parser'
+import { hasUnsupportedLogDecorateEcho } from './git-log-decorate-capability'
+import {
   githubPullRequestHeadLocalRef,
   gitlabMergeRequestHeadLocalRef,
   reviewHeadRemoteRefComponent
@@ -174,6 +181,38 @@ describeBinaryCompatibility('real Git binary compatibility', () => {
         isUnsupportedMergeTreeMergeBaseError
       )
       await expect(runGit([...legacyArgs, head, head])).resolves.toBeDefined()
+    }
+  })
+
+  it('recovers commit decorations at the Git 2.43 placeholder boundary', async () => {
+    const logArgs = (format: string): string[] => [
+      'log',
+      `--format=${format}`,
+      '-z',
+      '--topo-order',
+      '--decorate=full',
+      '-n1'
+    ]
+
+    await runGit(['branch', '-f', 'compat-decorate'])
+    try {
+      const preferred = await runGit(logArgs(GIT_HISTORY_COMMIT_FORMAT))
+      expect(hasUnsupportedLogDecorateEcho(readGitHistoryDecorations(preferred.stdout))).toBe(
+        !supports(2, 43)
+      )
+      if (supports(2, 43)) {
+        expect(
+          parseGitHistoryLog(preferred.stdout)[0]?.references?.map((ref) => ref.name)
+        ).toContain('compat-decorate')
+      }
+
+      const fallback = await runGit(logArgs(GIT_HISTORY_FALLBACK_COMMIT_FORMAT))
+      expect(hasUnsupportedLogDecorateEcho(readGitHistoryDecorations(fallback.stdout))).toBe(false)
+      expect(parseGitHistoryLog(fallback.stdout)[0]?.references?.map((ref) => ref.name)).toContain(
+        'compat-decorate'
+      )
+    } finally {
+      await runGit(['branch', '-D', 'compat-decorate'])
     }
   })
 

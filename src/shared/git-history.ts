@@ -1,9 +1,13 @@
+import type { GitCapabilityCache } from './git-capability-cache'
 import {
   GIT_HISTORY_COMMIT_FORMAT,
+  GIT_HISTORY_FALLBACK_COMMIT_FORMAT,
   gitHistoryRefFromFullName,
   parseGitHistoryLog,
+  readGitHistoryDecorations,
   shortGitHash
 } from './git-history-log-parser'
+import { hasUnsupportedLogDecorateEcho } from './git-log-decorate-capability'
 import {
   GIT_HISTORY_DEFAULT_LIMIT,
   GIT_HISTORY_MAX_LIMIT,
@@ -164,10 +168,36 @@ async function resolveNamedRef(
   return revision ? gitHistoryRefFromFullName(fullName, normalized, revision) : undefined
 }
 
+async function readDecoratedLog(
+  readLog: (format: string) => Promise<string>,
+  capabilities?: GitCapabilityCache
+): Promise<string> {
+  const runPreferred = async (): Promise<string> => {
+    const stdout = await readLog(GIT_HISTORY_COMMIT_FORMAT)
+    if (!hasUnsupportedLogDecorateEcho(readGitHistoryDecorations(stdout))) {
+      return stdout
+    }
+    // Why: Git before 2.43 echoes the placeholder and exits zero, so refs need the %D format.
+    capabilities?.rememberUnsupported('log-decorate-placeholder')
+    return readLog(GIT_HISTORY_FALLBACK_COMMIT_FORMAT)
+  }
+  if (!capabilities) {
+    return runPreferred()
+  }
+  return capabilities.runWithFallback(
+    'log-decorate-placeholder',
+    runPreferred,
+    () => readLog(GIT_HISTORY_FALLBACK_COMMIT_FORMAT),
+    // Why: old Git echoes the placeholder and exits zero, so the echo above is the only rejection signal.
+    () => false
+  )
+}
+
 export async function loadGitHistoryFromExecutor(
   git: GitHistoryExecutor,
   cwd: string,
-  options: GitHistoryOptions = {}
+  options: GitHistoryOptions = {},
+  capabilities?: GitCapabilityCache
 ): Promise<GitHistoryResult> {
   const limit = clampHistoryLimit(options.limit)
   const headOid = await resolveCommit(git, cwd, 'HEAD')
@@ -206,17 +236,23 @@ export async function loadGitHistoryFromExecutor(
     }
   }
 
-  const { stdout } = await git(
-    [
-      'log',
-      `--format=${GIT_HISTORY_COMMIT_FORMAT}`,
-      '-z',
-      '--topo-order',
-      '--decorate=full',
-      `-n${limit + 1}`,
-      ...historyRevisions
-    ],
-    cwd
+  const stdout = await readDecoratedLog(
+    async (format) =>
+      (
+        await git(
+          [
+            'log',
+            `--format=${format}`,
+            '-z',
+            '--topo-order',
+            '--decorate=full',
+            `-n${limit + 1}`,
+            ...historyRevisions
+          ],
+          cwd
+        )
+      ).stdout,
+    capabilities
   )
   const parsed = parseGitHistoryLog(stdout)
   const items = parsed.slice(0, limit)
