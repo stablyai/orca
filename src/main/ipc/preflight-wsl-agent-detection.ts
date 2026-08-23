@@ -65,6 +65,24 @@ function shellQuote(value: string): string {
   return `'${value.replace(/'/g, "'\\''")}'`
 }
 
+/**
+ * A Windows binary reached through WSL interop, not a guest install.
+ *
+ * WSL appends the Windows PATH to the guest PATH by default, so on a distro
+ * with no guest `claude`, `command -v claude` happily resolves to
+ * `/mnt/c/Users/me/AppData/.../claude.exe`. That path IS POSIX-absolute, so the
+ * absolute-path check alone accepts it and preflight reports the agent as
+ * installed in the distro.
+ *
+ * This is worse than reporting it absent. Absent tells the user to install it;
+ * a false positive launches a Windows executable inside a Linux session, where
+ * it sees Windows paths, no guest $HOME, and none of the distro's config -- and
+ * the failure surfaces later, somewhere less obvious.
+ */
+function isWindowsInteropPath(resolvedPath: string): boolean {
+  return /^\/mnt\/[a-z]\//i.test(resolvedPath) || resolvedPath.toLowerCase().endsWith('.exe')
+}
+
 function parseWslDetectedCommands(stdout: string): Set<string> {
   const found = new Set<string>()
   for (const rawLine of stdout.split(/\r?\n/)) {
@@ -81,7 +99,7 @@ function parseWslDetectedCommands(stdout: string): Set<string> {
     const resolvedPath = payload.slice(separatorIndex + 1)
     // Why: a real guest executable always resolves to a POSIX-absolute path, so
     // a Windows-style C:\ path here is spoofed/non-guest output, not an install.
-    if (path.posix.isAbsolute(resolvedPath)) {
+    if (path.posix.isAbsolute(resolvedPath) && !isWindowsInteropPath(resolvedPath)) {
       found.add(command)
     }
   }
