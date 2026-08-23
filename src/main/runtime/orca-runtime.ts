@@ -12704,12 +12704,17 @@ export class OrcaRuntimeService {
     scrollbackAnsi?: string
     pendingEscapeTailAnsi?: string
   } | null> {
+    const hadHeadlessState = this.headlessTerminals.has(ptyId)
     const headlessSnapshot = await this.serializeHeadlessTerminalBuffer(ptyId, {
       ...opts,
-      includeEmpty: true
+      includeEmpty: true,
+      requireSettled: true
     })
     if (headlessSnapshot) {
       return headlessSnapshot
+    }
+    if (hadHeadlessState || this.headlessTerminals.has(ptyId)) {
+      return this.serializeProviderTerminalBuffer(ptyId, opts)
     }
     // Why: hidden-output recovery is initiated by the desktop renderer. If the
     // runtime has not built headless state yet, the mounted xterm is still the
@@ -13621,7 +13626,7 @@ export class OrcaRuntimeService {
 
   private async serializeHeadlessTerminalBuffer(
     ptyId: string,
-    opts: { scrollbackRows?: number; includeEmpty?: boolean } = {}
+    opts: { scrollbackRows?: number; includeEmpty?: boolean; requireSettled?: boolean } = {}
   ): Promise<{
     data: string
     cols: number
@@ -13643,7 +13648,26 @@ export class OrcaRuntimeService {
     if (!state) {
       return null
     }
-    await state.writeChain
+    let drainedWriteChain = state.writeChain
+    await drainedWriteChain
+    if (opts.requireSettled) {
+      let followupDrains = 0
+      while (
+        state.writeChain !== drainedWriteChain &&
+        followupDrains < HEADLESS_SNAPSHOT_FOLLOWUP_DRAIN_MAX
+      ) {
+        drainedWriteChain = state.writeChain
+        await drainedWriteChain
+        followupDrains += 1
+      }
+      // Why: a partial park snapshot outranks relay replay; fall back instead of dropping a still-queued SSH suffix.
+      if (state.writeChain !== drainedWriteChain) {
+        return null
+      }
+    }
+    if (this.headlessTerminals.get(ptyId) !== state) {
+      return null
+    }
     // Why: normal history is separated from an active alternate frame, so the
     // caller's scrollback policy can be honored without painting it into alt.
     const isAlternateScreen = state.emulator.isAlternateScreen
@@ -38641,6 +38665,7 @@ const MAX_TERMINAL_PREVIEW_CHARS = 32 * 1024
 export const AUTHORITATIVE_TERMINAL_SNAPSHOT_TIMEOUT_MS = 8_000
 const VISIBLE_TERMINAL_SNAPSHOT_TIMEOUT_MS = 750
 const VISIBLE_TERMINAL_SNAPSHOT_RETRY_MS = 1_000
+const HEADLESS_SNAPSHOT_FOLLOWUP_DRAIN_MAX = 64
 const MAX_PREVIEW_LINES = 6
 const MAX_PREVIEW_CHARS = 300
 const WORKTREE_STATUS_PRIORITY: Record<RuntimeWorktreeStatus, number> = {

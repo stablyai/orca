@@ -10643,6 +10643,104 @@ describe('OrcaRuntimeService', () => {
       expect(snapshot?.lastTitle).toBe('Codex ready')
     })
 
+    it('includes a queued SSH suffix admitted across multiple recovery drains', async () => {
+      const { runtime } = createSideEffectRuntime()
+      runtime.onPtyData('pty-1', 'seed\r\n', 100)
+      const state = (
+        runtime as unknown as {
+          headlessTerminals: Map<
+            string,
+            {
+              emulator: { write: (data: string) => Promise<void> }
+              writeChain: Promise<void>
+            }
+          >
+        }
+      ).headlessTerminals.get('pty-1')!
+      await state.writeChain
+
+      const originalWrite = state.emulator.write.bind(state.emulator)
+      let releaseBlockedWrite: () => void = () => {}
+      let markBlockedWriteStarted: () => void = () => {}
+      const blockedWriteStarted = new Promise<void>((resolve) => {
+        markBlockedWriteStarted = resolve
+      })
+      const blockedWrite = new Promise<void>((resolve) => {
+        releaseBlockedWrite = resolve
+      })
+      vi.spyOn(state.emulator, 'write').mockImplementation(async (data) => {
+        if (data === 'blocked\r\n') {
+          markBlockedWriteStarted()
+          await blockedWrite
+        }
+        await originalWrite(data)
+        if (data === 'blocked\r\n') {
+          runtime.onPtyData('pty-1', 'newer tail\r\n', 102)
+        } else if (data === 'newer tail\r\n') {
+          runtime.onPtyData('pty-1', 'newest tail\r\n', 103)
+        }
+      })
+
+      runtime.onPtyData('pty-1', 'blocked\r\n', 101)
+      const snapshotPromise = runtime.serializeHiddenOutputRecoveryBuffer('pty-1')
+      await blockedWriteStarted
+      releaseBlockedWrite()
+
+      await expect(snapshotPromise).resolves.toMatchObject({
+        data: expect.stringContaining('newest tail'),
+        seq: 'seed\r\nblocked\r\nnewer tail\r\nnewest tail\r\n'.length
+      })
+    })
+
+    it('falls back instead of returning a recovery snapshot that never stabilizes', async () => {
+      const { runtime } = createSideEffectRuntime()
+      const serializeBuffer = vi.fn().mockResolvedValue({
+        data: 'stale renderer content\r\n',
+        cols: 80,
+        rows: 24
+      })
+      const serializeProviderBuffer = vi.fn().mockResolvedValue(null)
+      runtime.onPtyData('pty-1', 'seed\r\n', 100)
+      const state = (
+        runtime as unknown as {
+          headlessTerminals: Map<
+            string,
+            {
+              emulator: { write: (data: string) => Promise<void> }
+              writeChain: Promise<void>
+            }
+          >
+        }
+      ).headlessTerminals.get('pty-1')!
+      await state.writeChain
+      runtime.setPtyController({
+        write: () => true,
+        kill: () => true,
+        getForegroundProcess: async () => null,
+        serializeBuffer,
+        serializeProviderBuffer,
+        hasRendererSerializer: () => true
+      })
+
+      const originalWrite = state.emulator.write.bind(state.emulator)
+      let queuedWrites = 0
+      vi.spyOn(state.emulator, 'write').mockImplementation(async (data) => {
+        await originalWrite(data)
+        if (queuedWrites < 66) {
+          queuedWrites += 1
+          runtime.onPtyData('pty-1', `queued-${queuedWrites}\r\n`, 100 + queuedWrites)
+        }
+      })
+
+      runtime.onPtyData('pty-1', 'queued-0\r\n', 101)
+
+      await expect(runtime.serializeHiddenOutputRecoveryBuffer('pty-1')).resolves.toBeNull()
+      expect(serializeProviderBuffer).toHaveBeenCalledOnce()
+      expect(serializeBuffer).not.toHaveBeenCalled()
+      await state.writeChain
+      expect(queuedWrites).toBe(66)
+    })
+
     it('returns a title-only replay snapshot and never historical attention', () => {
       const { runtime } = createSideEffectRuntime()
       syncSinglePty(runtime)
