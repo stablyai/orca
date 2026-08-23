@@ -12,6 +12,10 @@ import { runProcessSync } from './child-process/run-process'
  *  `ORCA_POSIX_SHELL` overrides the search, mirroring `ORCA_POWERSHELL_EXECUTABLE`. */
 
 const CANDIDATES = ['/bin/sh', 'sh'] as const
+/** Why not the 30s process default: up to five candidates are tried, and the
+ *  probe runs at `describe.skipIf` scope — during collection, which vitest's
+ *  `testTimeout` does not govern. A shell that has not answered in 2s is a "no". */
+const PROBE_TIMEOUT_MS = 2_000
 /** exec-path sits at `<root>/mingw64/libexec/git-core`, but the depth differs
  *  between Git builds and architectures, so climb rather than count. */
 const GIT_ROOT_SEARCH_DEPTH = 5
@@ -22,7 +26,10 @@ let canonical: boolean | undefined
 function runs(candidate: string): boolean {
   // A candidate that is not installed throws rather than reporting an exit; that is a "no".
   try {
-    return runProcessSync({ program: candidate, args: ['-c', 'exit 0'] }).code === 0
+    return (
+      runProcessSync({ program: candidate, args: ['-c', 'exit 0'], timeoutMs: PROBE_TIMEOUT_MS })
+        .code === 0
+    )
   } catch {
     return false
   }
@@ -37,7 +44,11 @@ function runs(candidate: string): boolean {
 function gitBundledShell(): string | null {
   let stdout: string
   try {
-    const execPath = runProcessSync({ program: 'git', args: ['--exec-path'] })
+    const execPath = runProcessSync({
+      program: 'git',
+      args: ['--exec-path'],
+      timeoutMs: PROBE_TIMEOUT_MS
+    })
     if (execPath.code !== 0) {
       return null
     }
