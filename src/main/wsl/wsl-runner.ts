@@ -170,6 +170,23 @@ function withGuestCwd(cwd: string | undefined, argv: readonly string[]): string[
   return ['sh', '-c', 'cd "$1" || exit 1; shift; exec "$@"', 'orca-wsl', cwd, ...argv]
 }
 
+/**
+ * Argv is the default, but it has a hard ceiling that stdin does not.
+ *
+ * Windows caps a command line at 32767 characters, and the distro, `--exec`,
+ * the env prefix and the args all share it. A user's `orca.yaml` hook is the
+ * one unbounded script Orca runs -- `run-both` concatenates two of them, and a
+ * vendored installer is ~15KB -- so past this size the choice is between
+ * failing to spawn at all and accepting the stdin caveat. Degrading beats
+ * failing: a large script that also reads stdin was already broken, while a
+ * large script that does not now works where it would have died.
+ */
+const MAX_ARGV_SCRIPT_CHARS = 8_000
+
+function resolveScriptDelivery(spec: WslSpec & { script: string }): 'argv' | 'stdin' {
+  return spec.scriptDelivery ?? (spec.script.length > MAX_ARGV_SCRIPT_CHARS ? 'stdin' : 'argv')
+}
+
 /** `<shell> -c`/`-s` for a script, otherwise the program itself. */
 function guestCommandArgv(spec: WslSpec): string[] {
   if (spec.script === undefined) {
@@ -177,7 +194,7 @@ function guestCommandArgv(spec: WslSpec): string[] {
   }
   const shell = spec.shell ?? 'sh'
   // `--` keeps positional args starting at $1 under both forms.
-  return spec.scriptDelivery === 'stdin'
+  return resolveScriptDelivery({ ...spec, script: spec.script }) === 'stdin'
     ? [shell, '-s', '--', ...(spec.args ?? [])]
     : [shell, '-c', spec.script, '--', ...(spec.args ?? [])]
 }
@@ -232,7 +249,10 @@ export async function runWslProcess(spec: WslSpec): Promise<WslResult> {
     program: resolveWslExecutablePath(),
     args: buildWslExecArgs(spec.distro, argv),
     env: buildHostEnv(spec.env),
-    input: spec.scriptDelivery === 'stdin' ? spec.script : undefined,
+    input:
+      spec.script !== undefined && resolveScriptDelivery({ ...spec, script: spec.script }) === 'stdin'
+        ? spec.script
+        : undefined,
     timeoutMs: remainingMs,
     maxOutputBytes: spec.maxOutputBytes,
     retainOutput: spec.retainOutput

@@ -79,11 +79,17 @@ function findOffenders(): string[] {
         /\b(?:spawn|spawnSync|execFile|execFileSync|exec|execSync|fork)\s+as\s+(\w+)/g
       )
     ].map((match) => match[1]!)
+    // Names that resolve to `exec`/`execSync`, which imply shell: true.
+    const shellImplying = new Set(['exec', 'execSync'])
+    for (const match of decommented.matchAll(/\b(exec|execSync)\s+as\s+(\w+)/g)) {
+      shellImplying.add(match[2]!)
+    }
     // `const run = promisify(execFile)` mints a third name, and it can wrap a
     // renamed binding, so this has to run after the aliases are known. A
     // planted `promisify(renamedExecFile)` spawn passed the guard without it.
     for (const match of decommented.matchAll(
-      /(?:const|let|var)\s+(\w+)\s*=\s*promisify\s*\(\s*(\w+)\s*\)/g
+      // `\w*[Pp]romisify` so `import { promisify as p }` is still seen.
+      /(?:const|let|var)\s+(\w+)\s*=\s*\w*[Pp]romisify\s*\(\s*(\w+)\s*\)/g
     )) {
       const wrapped = match[2]!
       if (
@@ -91,6 +97,9 @@ function findOffenders(): string[] {
         /^(?:spawn|spawnSync|execFile|execFileSync|exec|execSync|fork)$/.test(wrapped)
       ) {
         aliases.push(match[1]!)
+        if (shellImplying.has(wrapped)) {
+          shellImplying.add(match[1]!)
+        }
       }
     }
     // The import test needs the module name, which blanking would erase; the
@@ -115,7 +124,13 @@ function findOffenders(): string[] {
       if (/^\(\s*\w+\s*\??\s*:\s*[A-Za-z{[(]/.test(args)) {
         continue
       }
-      if (!/windowsHide\s*:\s*true/.test(args)) {
+      // `shell: true` silently makes windowsHide a no-op (run-process.ts,
+      // #14543), and `exec`/`execSync` imply it. A site can therefore read as
+      // guarded while still flashing a conhost -- which is exactly how
+      // `execAsync('where gemini', { windowsHide: true })` got un-allowlisted.
+      const called = match[0].replace(/\s*\($/, '').trim()
+      const impliesShell = shellImplying.has(called) || /shell\s*:\s*true/.test(args)
+      if (!/windowsHide\s*:\s*true/.test(args) || impliesShell) {
         offenders.add(file.relativePath)
       }
     }

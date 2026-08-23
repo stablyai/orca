@@ -108,9 +108,12 @@ function bindsWslBinaryToASpawnedIdentifier(source: string): boolean {
   )) {
     bound.add(match[1]!)
   }
-  // `this.binary = 'wsl.exe'` -- an assignment with no declarator keyword.
+  // Assignment with no declarator: `this.binary = 'wsl.exe'`, and the split
+  // form `let shellPath: string` ... `shellPath = 'wsl.exe'`, which a
+  // declarator-anchored pattern cannot see. `[^;]{0,200}?` so a wrapped
+  // right-hand side still binds.
   for (const match of source.matchAll(
-    /\bthis\.([A-Za-z_$][\w$]*)\s*=[^;\n]*['"`]wsl\.exe['"`]/g
+    /(?:\bthis\.)?([A-Za-z_$][\w$]*)\s*=[^=][^;]{0,200}?['"`]wsl\.exe['"`]/g
   )) {
     bound.add(match[1]!)
   }

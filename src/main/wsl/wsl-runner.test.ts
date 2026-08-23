@@ -151,6 +151,27 @@ describe('scripts', () => {
     expect(spec.args).toContain('ssh -T git@github.com || true\npnpm install')
   })
 
+
+  it('falls back to stdin for a script too large for a command line', async () => {
+    // A user hook is the one unbounded script here (`run-both` concatenates two
+    // orca.yaml scripts, and a vendored installer is ~15KB). Windows caps the
+    // command line at 32767, so argv would fail to spawn at all; stdin still
+    // runs it, which is the lesser loss.
+    seedWslGuestEnvironmentForTests(undefined, ENVIRONMENT)
+    const script = `echo ${'x'.repeat(9_000)}`
+    await runWslProcess({ loginPath: 'preferred', shell: 'bash', script })
+    const spec = runProcessMock.mock.calls.at(-1)?.[0]
+    expect(spec.input).toBe(script)
+    expect(lastArgv().slice(-3)).toEqual(['bash', '-s', '--'])
+  })
+
+  it('keeps an ordinary-sized script in argv', async () => {
+    seedWslGuestEnvironmentForTests(undefined, ENVIRONMENT)
+    const script = `echo ${'x'.repeat(100)}`
+    await runWslProcess({ loginPath: 'preferred', shell: 'bash', script })
+    expect(runProcessMock.mock.calls.at(-1)?.[0].input).toBeUndefined()
+  })
+
   it('pipes the script only when the caller asks for stdin delivery', async () => {
     seedWslGuestEnvironmentForTests(undefined, ENVIRONMENT)
     const script = 'echo big'
