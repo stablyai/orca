@@ -22,9 +22,8 @@ export function installMonacoViewStateTracking(params: MonacoViewStateTrackingPa
   if (pos) {
     setEditorCursorLine(filePath, pos.lineNumber)
   }
-  const cursorPositionSub = editorInstance.onDidChangeCursorSelection((e) => {
-    setEditorCursorLine(filePath, e.selection.positionLineNumber)
-    setWithLRU(editorSelectionCache, viewStateKey, [e.selection, ...e.secondarySelections])
+  const cursorPositionSub = editorInstance.onDidChangeCursorPosition((e) => {
+    setEditorCursorLine(filePath, e.position.lineNumber)
   })
 
   // Why: only the resting scroll position matters, so trailing-throttle writes (~150ms) instead of writing every 60fps frame.

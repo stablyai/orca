@@ -1,7 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { editor, ISelection } from 'monaco-editor'
 import { editorSelectionCache, scrollTopCache } from '@/lib/scroll-cache'
-import { restoreMonacoViewState, snapshotMonacoViewState } from './monaco-view-state-persistence'
+import {
+  installMonacoViewStateTracking,
+  restoreMonacoViewState,
+  snapshotMonacoViewState
+} from './monaco-view-state-persistence'
 
 const selections: readonly ISelection[] = [
   {
@@ -52,5 +56,34 @@ describe('Monaco view state persistence', () => {
     expect(setSelections).toHaveBeenCalledWith(selections)
     expect(setScrollTop).toHaveBeenCalledWith(320)
     expect(focus).toHaveBeenCalledOnce()
+  })
+
+  it('defers selection caching until the lifecycle snapshot', () => {
+    let emitCursorPosition:
+      | ((event: { position: { lineNumber: number; column: number } }) => void)
+      | undefined
+    const editorInstance = {
+      getPosition: () => ({ lineNumber: 1, column: 1 }),
+      onDidChangeCursorPosition: (
+        listener: (event: { position: { lineNumber: number; column: number } }) => void
+      ) => {
+        emitCursorPosition = listener
+        return { dispose: vi.fn() }
+      },
+      onDidScrollChange: () => ({ dispose: vi.fn() })
+    } as unknown as editor.IStandaloneCodeEditor
+    const setEditorCursorLine = vi.fn()
+
+    installMonacoViewStateTracking({
+      editorInstance,
+      filePath: 'file.ts',
+      viewStateKey: 'file.ts::tab-1',
+      scrollThrottleTimerRef: { current: null },
+      setEditorCursorLine
+    })
+    emitCursorPosition?.({ position: { lineNumber: 12, column: 3 } })
+
+    expect(setEditorCursorLine).toHaveBeenLastCalledWith('file.ts', 12)
+    expect(editorSelectionCache.size).toBe(0)
   })
 })
