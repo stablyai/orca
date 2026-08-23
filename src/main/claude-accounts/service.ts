@@ -664,13 +664,10 @@ export class ClaudeAccountService {
     }
     const created = await runWslProcess({
       distro: location.wslDistro,
-      lane: 'probe',
+      loginPath: 'none',
       shell: 'bash',
       script: 'mktemp -d "${TMPDIR:-/tmp}/orca-claude-login.XXXXXX"',
-      timeoutMs: 5000,
-      // Why degraded is allowed: mktemp is a coreutil on the default PATH, so an
-      // unprobed distro must not turn a working sign-in into a failed one.
-      allowDegradedEnvironment: true
+      timeoutMs: 5000
     })
     const linuxPath = created.stdout.replaceAll(String.fromCharCode(0), '').trim()
     if (created.code !== 0 || created.timedOut || !linuxPath.startsWith('/')) {
@@ -692,13 +689,10 @@ export class ClaudeAccountService {
       try {
         await runWslProcess({
           distro: tempConfig.wslDistro,
-          lane: 'probe',
+          loginPath: 'none',
           program: 'rm',
           args: ['-rf', '--', tempConfig.linuxPath],
-          timeoutMs: 5000,
-          // Why degraded is allowed: leaving a login temp dir behind is worse than
-          // running rm on the default PATH, and this is already best-effort.
-          allowDegradedEnvironment: true
+          timeoutMs: 5000
         })
       } catch {
         // Best-effort cleanup.
@@ -910,13 +904,10 @@ export class ClaudeAccountService {
     const requestedDistro = target.wslDistro?.trim() || undefined
     const info = await runWslProcess({
       distro: requestedDistro,
-      lane: 'probe',
+      loginPath: 'none',
       shell: 'bash',
       script: 'printf "%s\\n%s\\n" "$WSL_DISTRO_NAME" "$HOME"',
-      timeoutMs: 5000,
-      // Why degraded is allowed: both variables come from wsl.exe itself, not from
-      // the login PATH, so an unprobed distro still answers correctly here.
-      allowDegradedEnvironment: true
+      timeoutMs: 5000
     })
     const [rawDistro, rawHome] =
       info.code === 0 && !info.timedOut
@@ -934,14 +925,11 @@ export class ClaudeAccountService {
     const wslLinuxAuthPath = `${home.replace(/\/$/, '')}/.local/share/orca/claude-accounts/${accountId}/auth`
     const created = await runWslProcess({
       distro,
-      lane: 'probe',
+      loginPath: 'none',
       shell: 'bash',
       script: 'mkdir -p "$1" && printf \'%s\\n\' "$2" > "$1/.orca-managed-claude-auth"',
       args: [wslLinuxAuthPath, accountId],
-      timeoutMs: 5000,
-      // Why degraded is allowed: mkdir is a coreutil on the default PATH, and the
-      // target path was already resolved from the guest's own $HOME above.
-      allowDegradedEnvironment: true
+      timeoutMs: 5000
     })
     if (created.code !== 0 || created.timedOut) {
       throw new Error('Could not create the managed WSL Claude auth directory.')
@@ -978,7 +966,7 @@ export class ClaudeAccountService {
         try {
           const owned = await runWslProcess({
             distro: wslInfo.distro,
-            lane: 'probe',
+            loginPath: 'none',
             shell: 'bash',
             script: [
               'set -euo pipefail',
@@ -992,11 +980,7 @@ export class ClaudeAccountService {
                 : 'test -n "$(cat "$candidate_real/.orca-managed-claude-auth")"',
               'case "$candidate_real" in "$managed_root_real"/*/auth) printf "%s\\n" "$candidate_real" ;; *) exit 35 ;; esac'
             ].join('\n'),
-            timeoutMs: 5000,
-            // Why degraded is allowed: the ownership proof is the script's own
-            // marker and containment checks, not the login PATH, and refusing here
-            // would fail every managed read/write on a distro Orca could not probe.
-            allowDegradedEnvironment: true
+            timeoutMs: 5000
           })
           if (owned.code !== 0 || owned.timedOut) {
             throw new Error('Managed Claude auth directory does not exist on disk.')

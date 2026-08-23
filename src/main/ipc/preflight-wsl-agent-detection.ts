@@ -1,4 +1,5 @@
 import path from 'node:path'
+import { buildPosixFallbackPathPrelude } from '../../shared/posix-version-manager-bin-dirs'
 import { buildPosixCommandPathLookupScript } from '../../shared/posix-command-path-lookup'
 import { runWslProcess } from '../wsl/wsl-runner'
 
@@ -19,12 +20,21 @@ export async function detectWslCommandsOnPath(
   }
 
   const commandList = uniqueCommands.map(shellQuote).join(' ')
-  const lookupScript = buildPosixCommandPathLookupScript({
-    kind: 'shell-variable',
-    name: 'cmd'
-  })
+  const lookupScript = buildPosixCommandPathLookupScript(
+    { kind: 'shell-variable', name: 'cmd' },
+    // Skip Windows mounts DURING the walk, not after it: WSL appends the
+    // Windows PATH, so a Windows `claude` can shadow a real guest install, and
+    // discarding the result afterwards reports "not installed" for a user who
+    // has both -- the #9725 population the fallback dirs exist to serve.
+    { skipWindowsMountDirs: true }
+  )
   // Newlines keep the loop valid in every POSIX shell used here.
   const script = [
+    // The same fallback the preflight command runner uses: append the
+    // version-manager dirs to PATH and let the ordinary lookup find them. A
+    // second bespoke `[ -x ]` walk here duplicated the lookup script's own
+    // `! -d` guard, which is how a directory once read as an installed CLI.
+    buildPosixFallbackPathPrelude(),
     `for cmd in ${commandList}; do`,
     lookupScript,
     'if [ -n "$resolved" ]; then',
@@ -38,15 +48,10 @@ export async function detectWslCommandsOnPath(
     // with no shell in the loop, so there is no rc/motd banner to land in stdout.
     const result = await runWslProcess({
       distro: wslTarget.distro,
-      lane: 'probe',
+      loginPath: 'preferred',
       script,
-      // Why degrade rather than refuse: the Set has no room for "unverifiable",
-      // and refusing would turn a slow distro into "no agents" anyway -- via a
-      // throw instead of an empty result. Degrading at least finds anything on
-      // the default PATH. The residual gap (an nvm-only agent missed during the
-      // probe's retry window, #9725) is the pre-migration behaviour, not new,
-      // and Refresh now re-probes.
-      allowDegradedEnvironment: true,
+      // POSIX `command -v` loop; declared because the payload is opaque here.
+      shell: 'sh',
       timeoutMs: WSL_AGENT_DETECTION_TIMEOUT_MS
     })
     // runProcess resolves on a timeout and on a non-zero exit, so partial

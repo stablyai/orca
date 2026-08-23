@@ -338,3 +338,18 @@ describe('git env forces untranslated diagnostics (issue #7808)', () => {
     expect(env.LANGUAGE).toBe('en')
   })
 })
+
+describe('redirectPortedHostnameToEnv WSLENV forwarding', () => {
+  it('names GITLAB_HOST in WSLENV so it can cross into a distro', async () => {
+    // A WSL-routed glab only sees Windows variables listed in WSLENV; without
+    // the entry the ported host is silently dropped and glab talks to
+    // gitlab.com (#12557).
+    const { redirectPortedHostnameToEnv } = await import('./runner')
+    const { options } = redirectPortedHostnameToEnv(
+      ['api', '--hostname', 'gitlab.example.com:8443'],
+      { env: { PATH: '/usr/bin' } }
+    )
+    expect(options.env?.GITLAB_HOST).toBe('gitlab.example.com:8443')
+    expect((options.env?.WSLENV ?? '').split(':')).toContain('GITLAB_HOST')
+  })
+})

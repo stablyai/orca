@@ -676,9 +676,10 @@ describe('agent prompt submission runtime', () => {
     })
     const rejected = expect(submission).rejects.toThrow('request_aborted')
 
-    // Not a literal: ConPTY gets a longer pre-Enter settle, and this case only
-    // means anything once that Enter has already gone out.
+    // Why: the submit delay is 1_500 on Windows (ConPTY); a hardcoded 500 aborts before the Enter there.
     await vi.advanceTimersByTimeAsync(AGENT_PROMPT_SUBMIT_DELAY_MS)
+    // Why: pin the phase boundary so drift fails here instead of as an empty post-abort array.
+    expect(writes.filter((data) => data === '\r')).toHaveLength(1)
     controller.abort()
     await vi.runAllTimersAsync()
 

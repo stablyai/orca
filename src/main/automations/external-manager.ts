@@ -17,7 +17,7 @@ import type {
 } from '../../shared/automations-types'
 import type { SshTarget } from '../../shared/ssh-types'
 import type { Store } from '../persistence'
-import { getActiveMultiplexer } from '../ipc/ssh'
+import { getActiveMultiplexer } from '../ssh/ssh-target-registry'
 import { isRuntimeOwnedSshTarget } from '../ssh/ssh-connection-store'
 import { mapHermesJobs, mapOpenClawJobs } from './external-job-mappers'
 import {

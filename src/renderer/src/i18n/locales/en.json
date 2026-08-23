@@ -2934,6 +2934,14 @@
             "e16012e31e": "The terminal daemon that owned this session exited, so the session and its scrollback could not be recovered. Open a new terminal to continue.",
             "sessionUnavailable": "Orca couldn't reattach to this pane's terminal session on the host. Open a new terminal to continue."
           },
+          "TerminalProcessExitOverlay": {
+            "capacityTitle": "Git Bash console limit reached",
+            "capacityDetail": "Git Bash reached its 128-console limit. Close unused Git Bash terminals, then restart this terminal.",
+            "failedTitle": "Terminal exited",
+            "failedDetail": "The shell process ended with exit code {{code}}. Its output is preserved.",
+            "close": "Close",
+            "restart": "Restart"
+          },
           "TerminalPane": {
             "ac112e9036": "Remove title",
             "f984ab2a30": "Remove pane title: {{value0}}",
@@ -5337,6 +5345,8 @@
           "f94466bc39": "{{value0}} of {{value1}} contained project{{value2}} remained after deleting the group.",
           "groupDeleteFailed": "Failed to delete group",
           "groupDeleteFailedDesc": "Something went wrong while deleting the group. No projects were removed.",
+          "groupRenameFailed": "Failed to rename group",
+          "groupRenameFailedDesc": "Orca could not confirm the new name with the group's host. Recheck the group after reconnecting.",
           "failedNestWorkspace": "Failed to nest workspace",
           "sidebarRowMissing": "Target no longer exists",
           "failedUnnestWorkspace": "Failed to unnest workspace"
@@ -6242,7 +6252,9 @@
           "3f1bdf3cb4": "Environment text is too large to parse safely.",
           "codexSessionSource": "Codex home to import from",
           "codexSessionSourceInfo": "About importing Codex history",
-          "codexSessionSourceTooltip": "Orca runs Codex in an isolated home. Point this at your existing Codex home to import that session history. Empty uses ~/.codex."
+          "codexSessionSourceTooltip": "Orca runs Codex in an isolated home. Point this at your existing Codex home to import that session history. Empty uses ~/.codex.",
+          "storedDefaultUndetected": "Saved as your default, but not detected right now",
+          "noAgentsDetected": "No agents detected. If one is installed, the probe may have timed out."
         },
         "AppIconSelector": {
           "d5a112dc9b": "Next icon",
@@ -14643,7 +14655,12 @@
           "micDisconnected": "Microphone disconnected. Dictation stopped."
         },
         "DictationIndicator": {
-          "335e1bc6cb": "Stop dictation"
+          "335e1bc6cb": "Stop dictation",
+          "7f3660a7ba": "Starting mic…",
+          "f082d0cb9d": "Processing…",
+          "3de5a129e7": "Listening",
+          "4977162383": "Too loud",
+          "25f2b7a6a5": "Speaking"
         }
       },
       "dashboard": {
@@ -15018,7 +15035,13 @@
           "3e3b2c369f": "Cron expression",
           "e81a02d61b": "Enter a valid five-field cron before saving.",
           "968e66d686": "Enter a five-field cron.",
-          "cadb7b0bc9": "invalid"
+          "cadb7b0bc9": "invalid",
+          "f6ca30da23": "Valid custom cron",
+          "a226dbdd40": "Minute",
+          "ec9c1e35df": "Hour",
+          "2d82246d23": "Day",
+          "0e1de0358b": "Month",
+          "77e96bded6": "Weekday"
         },
         "AutomationDetail": {
           "007c8ad874": "Prompt",
@@ -15337,6 +15360,16 @@
                 "done": "Done",
                 "failed": "Failed"
               }
+            }
+          },
+          "schedule": {
+            "label": {
+              "086a5a9fe2": "Invalid schedule",
+              "ba20c92073": "Custom schedule",
+              "a95afb7483": "Hourly at :{{minute}}",
+              "280ccd2701": "Daily at {{time}}",
+              "3f1422adc1": "Weekdays at {{time}}",
+              "cc71e252ba": "{{day}}s at {{time}}"
             }
           }
         },

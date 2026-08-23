@@ -89,6 +89,84 @@ describe('PtyHandler', () => {
     expect(spawnOptions.env.PATH).toBe(expectedEnv.PATH)
   })
 
+  describe('half-activated conda env (#14195)', () => {
+    const CONDA_KEYS = [
+      'CONDA_SHLVL',
+      'CONDA_PREFIX',
+      'CONDA_DEFAULT_ENV',
+      'CONDA_PROMPT_MODIFIER',
+      'CONDA_EXE'
+    ] as const
+
+    const withRelayCondaEnv = async (
+      relayEnv: Partial<Record<(typeof CONDA_KEYS)[number], string>>,
+      spawnParams: Record<string, unknown>
+    ): Promise<Record<string, string>> => {
+      const saved = Object.fromEntries(CONDA_KEYS.map((key) => [key, process.env[key]]))
+      try {
+        for (const key of CONDA_KEYS) {
+          delete process.env[key]
+        }
+        Object.assign(process.env, relayEnv)
+        await dispatcher.callRequest('pty.spawn', { cols: 80, rows: 24, ...spawnParams })
+      } finally {
+        for (const key of CONDA_KEYS) {
+          const value = saved[key]
+          if (value === undefined) {
+            delete process.env[key]
+          } else {
+            process.env[key] = value
+          }
+        }
+      }
+      return (mockPtySpawn.mock.calls.at(-1)![2] as { env: Record<string, string> }).env
+    }
+
+    it('drops the sentinel the remote relay inherited without a prefix', async () => {
+      // Why the relay owns this: the execution host composes its own env, so a
+      // remote relay launched from a half-activated login shell would otherwise
+      // hand the broken pair to every SSH terminal.
+      const env = await withRelayCondaEnv(
+        {
+          CONDA_SHLVL: '1',
+          CONDA_DEFAULT_ENV: 'base',
+          CONDA_PROMPT_MODIFIER: '(base) ',
+          CONDA_EXE: '/opt/miniconda3/bin/conda'
+        },
+        {}
+      )
+
+      expect(env.CONDA_SHLVL).toBeUndefined()
+      expect(env.CONDA_DEFAULT_ENV).toBeUndefined()
+      expect(env.CONDA_PROMPT_MODIFIER).toBeUndefined()
+      expect(env.CONDA_EXE).toBe('/opt/miniconda3/bin/conda')
+    })
+
+    it('keeps activation state a client explicitly repaired', async () => {
+      const env = await withRelayCondaEnv(
+        { CONDA_SHLVL: '1', CONDA_DEFAULT_ENV: 'base' },
+        { env: { CONDA_PREFIX: '/opt/miniconda3' } }
+      )
+
+      expect(env.CONDA_PREFIX).toBe('/opt/miniconda3')
+      expect(env.CONDA_SHLVL).toBe('1')
+      expect(env.CONDA_DEFAULT_ENV).toBe('base')
+    })
+
+    it('drops the sentinel when the client deletes CONDA_PREFIX', async () => {
+      // Why: the relay's other inherited-env scrubbers run BEFORE envToDelete,
+      // so anchoring the coherence pass beside them would re-create the crash.
+      const env = await withRelayCondaEnv(
+        { CONDA_SHLVL: '1', CONDA_PREFIX: '/opt/miniconda3', CONDA_DEFAULT_ENV: 'base' },
+        { envToDelete: ['CONDA_PREFIX'] }
+      )
+
+      expect(env.CONDA_PREFIX).toBeUndefined()
+      expect(env.CONDA_SHLVL).toBeUndefined()
+      expect(env.CONDA_DEFAULT_ENV).toBeUndefined()
+    })
+  })
+
   it('does not inherit legacy attribution state from the relay process', async () => {
     const keys = ['ORCA_ENABLE_GIT_ATTRIBUTION', 'ORCA_ATTRIBUTION_SHIM_DIR', 'PATH'] as const
     const saved = Object.fromEntries(keys.map((key) => [key, process.env[key]]))

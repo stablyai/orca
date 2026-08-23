@@ -50,6 +50,7 @@ import type { TuiAgent } from '../shared/tui-agent'
 import { forceKillPosixPtyProcessGroups } from '../main/pty/posix-pty-process-groups'
 import { stripInheritedBuildModeEnv } from '../main/pty/build-mode-env'
 import { stripLegacyTerminalShimEnv } from '../main/pty/legacy-terminal-shim-dir'
+import { dropIncoherentCondaActivationEnv } from '../main/pty/conda-activation-env'
 import { dropInheritedOrcaFishHistory } from '../main/fish-history-session'
 import { dropInheritedOrcaHistFile } from '../main/worktree-history-file-path'
 import {
@@ -694,6 +695,9 @@ export class PtyHandler {
     if (!result.TERM) {
       result.TERM = 'xterm-256color'
     }
+    // Why last, not beside the scrubbers above: the relay runs those BEFORE envToDelete,
+    // so an envToDelete of CONDA_PREFIX would otherwise re-create the broken pair.
+    dropIncoherentCondaActivationEnv(result, process.platform)
     expandWindowsPathEnvironmentVariables(result)
     return result
   }

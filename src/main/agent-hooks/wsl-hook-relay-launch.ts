@@ -6,7 +6,7 @@
 import { execFile, spawn, type ChildProcessWithoutNullStreams } from 'node:child_process'
 import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { app } from 'electron'
+import { getAppEnvironment } from '../../shared/app-environment'
 
 import type { MultiplexerTransport } from '../ssh/ssh-channel-multiplexer'
 import {
@@ -43,7 +43,7 @@ export function resolveWslHookRelayBundle(): WslHookRelayBundle | null {
     candidates.push(join(process.resourcesPath, 'app.asar.unpacked', 'out', 'relay', 'wsl'))
   }
   try {
-    const appPath = app.getAppPath()
+    const appPath = getAppEnvironment().getAppPath()
     candidates.push(join(appPath, 'resources', 'relay', 'wsl'))
     candidates.push(join(appPath, 'out', 'relay', 'wsl'))
   } catch {
@@ -181,18 +181,20 @@ export async function runWslInstallProcess(
 ): Promise<{ code: number | null; stderr: string }> {
   const result = await runWslProcess({
     distro,
-    lane: 'probe',
+    loginPath: 'none',
     script,
-    timeoutMs: INSTALL_TIMEOUT_MS,
-    maxOutputBytes: MAX_STARTUP_BUFFER_BYTES,
-    // The install script only shells out to base64/mkdir/mv/chmod, all on any
-    // default PATH -- it must still run when the login-PATH probe itself is
-    // what's wedged, which is exactly the state this call recovers from.
-    allowDegradedEnvironment: true
+    // Declared because the payload is opaque here: it is POSIX plus a heredoc.
+    shell: 'sh',
+    timeoutMs: INSTALL_TIMEOUT_MS
+    // No maxOutputBytes: the default cap holds the whole stream so the slice
+    // below can take the end of it.
   })
+  // Tail, not head: the operative error ("mv: Read-only file system") lands
+  // after whatever apt and base64 already printed.
+  const stderr = result.stderr.slice(-MAX_STARTUP_BUFFER_BYTES)
   return result.timedOut
-    ? { code: null, stderr: `${result.stderr}\ninstall timed out after ${INSTALL_TIMEOUT_MS}ms` }
-    : { code: result.code, stderr: result.stderr }
+    ? { code: null, stderr: `${stderr}\ninstall timed out after ${INSTALL_TIMEOUT_MS}ms` }
+    : { code: result.code, stderr }
 }
 
 const TRANSIENT_RETRY_LIMIT = 2

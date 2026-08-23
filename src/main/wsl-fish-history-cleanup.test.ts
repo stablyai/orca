@@ -26,8 +26,7 @@ describe('deleteWslFishHistoryFile', () => {
 
     expect(run).toHaveBeenCalledWith({
       distro: 'Ubuntu Test',
-      lane: 'probe',
-      allowDegradedEnvironment: true,
+      loginPath: 'preferred',
       program: 'fish',
       args: ['--command', expect.stringContaining('orca_0123456789abcdef_history')],
       timeoutMs: 5_000
@@ -74,7 +73,10 @@ describe('deleteWslFishHistoryFile', () => {
   })
 
   it('permits a retry once a failed cleanup settles', async () => {
-    const run = vi.fn().mockRejectedValueOnce(new Error('distro offline')).mockResolvedValue(okResult)
+    const run = vi
+      .fn()
+      .mockRejectedValueOnce(new Error('distro offline'))
+      .mockResolvedValue(okResult)
     const session = 'orca_0123456789abcdef'
 
     await expect(deleteWslFishHistoryFile('Ubuntu', session, run)).rejects.toThrow('distro offline')
@@ -85,16 +87,16 @@ describe('deleteWslFishHistoryFile', () => {
   it('treats a non-zero exit as a failed cleanup even though the runner resolved', async () => {
     const run = vi.fn().mockResolvedValue({ ...okResult, code: 1 })
 
-    await expect(
-      deleteWslFishHistoryFile('Ubuntu', 'orca_0123456789abcdef', run)
-    ).rejects.toThrow('wsl fish history cleanup failed')
+    await expect(deleteWslFishHistoryFile('Ubuntu', 'orca_0123456789abcdef', run)).rejects.toThrow(
+      'wsl fish history cleanup failed'
+    )
   })
 
   it('treats a runner timeout as a failed cleanup', async () => {
     const run = vi.fn().mockResolvedValue({ ...okResult, code: null, timedOut: true })
 
-    await expect(
-      deleteWslFishHistoryFile('Ubuntu', 'orca_0123456789abcdef', run)
-    ).rejects.toThrow('wsl fish history cleanup failed')
+    await expect(deleteWslFishHistoryFile('Ubuntu', 'orca_0123456789abcdef', run)).rejects.toThrow(
+      'wsl fish history cleanup failed'
+    )
   })
 })

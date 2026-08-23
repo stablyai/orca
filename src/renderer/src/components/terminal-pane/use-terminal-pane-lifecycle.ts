@@ -26,6 +26,7 @@ import { buildTerminalKeyboardProtocolOptions } from '@/lib/pane-manager/termina
 import { resolvePaneKeyboardProtocolAgent } from './terminal-keyboard-protocol-pane-agent'
 import { useAppStore } from '@/store'
 import type { DirectSshPaneRetryAttemptId } from '@/store/slices/direct-ssh-terminal-recovery'
+import type { PaneProcessExit } from './pty-connection-types'
 import {
   createFilePathLinkProvider,
   getTerminalFileOpenHint,
@@ -292,6 +293,7 @@ type UseTerminalPaneLifecycleDeps = {
   onPtyExitRef: React.RefObject<(ptyId: string) => void>
   onAgentExitedRef: React.RefObject<(leafId: string) => void>
   onPtyErrorRef?: React.RefObject<(paneId: number, message: string) => void>
+  onPaneProcessDied?: (processExit: PaneProcessExit) => void
   onPtyRecoveryStateRef?: React.RefObject<
     (paneId: number, state: PtyTransportRecoveryState | null) => void
   >
@@ -698,6 +700,7 @@ export function useTerminalPaneLifecycle({
   onPtyExitRef,
   onAgentExitedRef,
   onPtyErrorRef,
+  onPaneProcessDied,
   onPtyRecoveryStateRef,
   clearTabPtyId,
   consumeSuppressedPtyExit,
@@ -940,6 +943,7 @@ export function useTerminalPaneLifecycle({
       onPtyExitRef,
       onAgentExitedRef,
       onPtyErrorRef,
+      onPaneProcessDied,
       onPtyRecoveryStateRef,
       clearTabPtyId,
       consumeSuppressedPtyExit,

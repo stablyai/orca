@@ -183,6 +183,13 @@ export const sshModuleMock = () => ({
   getActiveMultiplexer: getActiveMultiplexerMock
 })
 
+// Why a second builder: getActiveMultiplexer moved to ../ssh/ssh-target-registry so the
+// runtime could reach it without ipcMain. Production imports it from there now, so a
+// vi.mock('./ssh') factory alone is inert.
+export const sshTargetRegistryModuleMock = () => ({
+  getActiveMultiplexer: getActiveMultiplexerMock
+})
+
 export const hooksModuleMock = () => ({
   getEffectiveHooks: getEffectiveHooksMock,
   loadHooks: loadHooksMock,

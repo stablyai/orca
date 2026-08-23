@@ -13,14 +13,24 @@ export async function detectSkillProvidersInWsl(distro: string): Promise<string[
     // rc files never applies and an installed codex/claude reads as absent.
     result = await runWslProcess({
       distro,
-      lane: 'probe',
+      loginPath: 'preferred',
       script: DETECTION_SCRIPT,
+      // POSIX `command -v` loop; declared because the payload is opaque here.
+      shell: 'sh',
       timeoutMs: 10_000
     })
   } catch {
     throw new Error('skill-install-wsl-provider-detection-failed')
   }
   if (result.code !== 0) {
+    throw new Error('skill-install-wsl-provider-detection-failed')
+  }
+  // Unconditional, not just on an empty list: the script ends in `|| true`, so
+  // without the login PATH each lookup independently reads absent. A `claude`
+  // on the default PATH via Windows interop plus an nvm-only `codex` returns a
+  // plausible-looking `['claude']`, and the caller then skips the ~/.codex
+  // skill roots for a provider that is installed (#9725).
+  if (!result.environmentResolved) {
     throw new Error('skill-install-wsl-provider-detection-failed')
   }
   return result.stdout

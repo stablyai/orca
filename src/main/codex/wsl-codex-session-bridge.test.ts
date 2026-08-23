@@ -44,13 +44,13 @@ describe('syncWslCodexSessionsIntoManagedHome', () => {
     expect(runWslProcessMock).toHaveBeenCalledTimes(1)
     const spec = runWslProcessMock.mock.calls[0]?.[0] as {
       distro: string
-      lane: string
+      loginPath: string
       shell?: string
       script: string
       timeoutMs: number
     }
     expect(spec.distro).toBe('Ubuntu')
-    expect(spec.lane).toBe('probe')
+    expect(spec.loginPath).toBe('none')
     expect(spec.shell).toBe('bash')
     expect(spec.timeoutMs).toBe(30_000)
 
@@ -79,7 +79,9 @@ describe('syncWslCodexSessionsIntoManagedHome', () => {
   })
 
   it('parses the summary after leading stdout noise', async () => {
-    mockRunWslProcessSuccess('Welcome to Ubuntu\nprofile output\n{"scannedFiles":4,"linkedFiles":3}\n')
+    mockRunWslProcessSuccess(
+      'Welcome to Ubuntu\nprofile output\n{"scannedFiles":4,"linkedFiles":3}\n'
+    )
 
     const summary = await syncWslCodexSessionsIntoManagedHome({
       distro: 'Ubuntu',

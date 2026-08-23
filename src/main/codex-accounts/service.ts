@@ -1215,9 +1215,7 @@ export class CodexAccountService {
     const requestedDistro = target.wslDistro?.trim() || undefined
     const info = await runWslProcess({
       distro: requestedDistro,
-      lane: 'probe',
-      // Degrade rather than refuse: $HOME and $WSL_DISTRO_NAME come from wsl.exe itself, not the login PATH -- the same rationale the Claude sites use.
-      allowDegradedEnvironment: true,
+      loginPath: 'none',
       script: 'printf "%s\\n%s\\n" "$WSL_DISTRO_NAME" "$HOME"',
       shell: 'bash',
       timeoutMs: WSL_MANAGED_HOME_TIMEOUT_MS
@@ -1239,9 +1237,7 @@ export class CodexAccountService {
     const markerPath = `${wslLinuxHomePath}/.orca-managed-home`
     const created = await runWslProcess({
       distro,
-      lane: 'probe',
-      // Degrade rather than refuse: $HOME and $WSL_DISTRO_NAME come from wsl.exe itself, not the login PATH -- the same rationale the Claude sites use.
-      allowDegradedEnvironment: true,
+      loginPath: 'none',
       script: `mkdir -p ${shellQuote(wslLinuxHomePath)} && printf '%s\\n' ${shellQuote(accountId)} > ${shellQuote(markerPath)}`,
       shell: 'bash',
       timeoutMs: WSL_MANAGED_HOME_TIMEOUT_MS
@@ -1478,9 +1474,7 @@ export class CodexAccountService {
 
     const result = await runWslProcess({
       distro: wslInfo.distro,
-      lane: 'probe',
-      // Degrade rather than refuse: $HOME and $WSL_DISTRO_NAME come from wsl.exe itself, not the login PATH -- the same rationale the Claude sites use.
-      allowDegradedEnvironment: true,
+      loginPath: 'none',
       script: [
         'set -euo pipefail',
         `candidate=${shellQuote(wslInfo.linuxPath)}`,
@@ -1566,8 +1560,7 @@ export class CodexAccountService {
                 ].join('\n')
               )
             ],
-            { windowsHide: true,
-              encoding: 'utf-8', timeout: 5000 }
+            { windowsHide: true, encoding: 'utf-8', timeout: 5000 }
           ).trim()
           if (!canonicalLinuxPath) {
             throw new Error('Managed Codex home directory does not exist on disk.')
@@ -1616,9 +1609,7 @@ export class CodexAccountService {
     try {
       const result = await runWslProcess({
         distro,
-        lane: 'probe',
-        // Degrade rather than refuse: $HOME and $WSL_DISTRO_NAME come from wsl.exe itself, not the login PATH -- the same rationale the Claude sites use.
-        allowDegradedEnvironment: true,
+        loginPath: 'none',
         script: [
           'set -euo pipefail',
           `candidate=${shellQuote(linuxHomePath)}`,
@@ -1865,20 +1856,19 @@ export class CodexAccountService {
     distro: string
     linuxPath: string
   }): Promise<void> {
-    // Why the runner's default (throw) and not allowDegradedEnvironment: without
-    // the login PATH an nvm-installed codex is invisible, and this message would
-    // turn "we could not check" into "not installed" (#9725).
-    let result: Awaited<ReturnType<typeof runWslProcess>>
-    try {
-      result = await runWslProcess({
-        distro: wslInfo.distro,
-        lane: 'probe',
-        script: buildWslCodexAvailabilityScript(),
-        timeoutMs: WSL_CODEX_AVAILABILITY_TIMEOUT_MS
-      })
-    } catch {
-      // Why map: the runner's raw "guest environment is unavailable" would
-      // otherwise reach the account dialog verbatim.
+    // This is a PATH lookup, so it needs the login PATH: an nvm-installed codex
+    // lives nowhere else. Marking it 'none' reports a working install as absent.
+    const result = await runWslProcess({
+      distro: wslInfo.distro,
+      loginPath: 'preferred',
+      script: buildWslCodexAvailabilityScript(),
+      // POSIX command lookup; declared because the payload is opaque here.
+      shell: 'sh',
+      timeoutMs: WSL_CODEX_AVAILABILITY_TIMEOUT_MS
+    })
+    if (result.code !== 0 && !result.environmentResolved) {
+      // A miss without the login PATH is "we could not check", not "not
+      // installed" -- claiming absence here is #9725.
       throw new Error('Could not check the Codex CLI in WSL. Try again.')
     }
     if (result.code !== 0 || result.timedOut) {

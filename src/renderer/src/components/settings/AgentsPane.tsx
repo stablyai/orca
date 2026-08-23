@@ -661,14 +661,21 @@ type DefaultAgentPillProps = {
   active: boolean
   onClick: () => void
   children: React.ReactNode
+  title?: string
 }
 
-function DefaultAgentPill({ active, onClick, children }: DefaultAgentPillProps): React.JSX.Element {
+function DefaultAgentPill({
+  active,
+  onClick,
+  children,
+  title
+}: DefaultAgentPillProps): React.JSX.Element {
   return (
     <button
       type="button"
       onClick={onClick}
       aria-pressed={active}
+      title={title}
       className={cn(
         'inline-flex items-center gap-2 rounded-md border px-3 py-1.5 text-sm outline-none transition-colors focus-visible:ring-[3px] focus-visible:ring-ring/50',
         active
@@ -800,14 +807,26 @@ export function AgentsPane({
     (a) => detectedIds !== null && !detectedIds.has(a.id)
   )
 
-  // Why: 'blank' is an explicit no-agent preference, not an auto fallback,
-  // so the Auto pill should only light up when the default is null OR when a
-  // selected agent id is no longer detected on PATH.
-  const isAutoDefault =
-    defaultAgent === null ||
-    (defaultAgent !== 'blank' &&
-      (!detectedIds?.has(defaultAgent) || !isTuiAgentEnabled(defaultAgent, disabledAgents)))
+  // Why only `=== null`: the pill's own handler writes null, so lighting it up
+  // for a *stored* agent that merely is not detected right now made the
+  // already-checked pill destructive -- one click on it erased
+  // `defaultTuiAgent` (#15256). Detection is a transient fact; the stored value
+  // is not, and this control reports the stored value.
+  const isAutoDefault = defaultAgent === null
   const isBlankDefault = defaultAgent === 'blank'
+
+  // Why show an undetected default: when detection comes back empty there were
+  // no agent pills at all, so the stored choice was invisible AND unrecoverable
+  // -- nothing to click to put it back. Keeping it listed means a failed or
+  // slow probe cannot quietly cost the user their setting.
+  const storedDefaultAgent =
+    defaultAgent !== null && defaultAgent !== 'blank'
+      ? getAgentCatalog().find((agent) => agent.id === defaultAgent)
+      : undefined
+  const defaultAgentPills =
+    storedDefaultAgent && !enabledDetectedAgents.some((agent) => agent.id === storedDefaultAgent.id)
+      ? [...enabledDetectedAgents, storedDefaultAgent]
+      : enabledDetectedAgents
 
   return (
     <div className="space-y-8">
@@ -836,13 +855,22 @@ export function AgentsPane({
             {isBlankDefault && <Check className="size-3.5" />}
           </DefaultAgentPill>
 
-          {enabledDetectedAgents.map((agent) => {
+          {defaultAgentPills.map((agent) => {
             const isActive = defaultAgent === agent.id
+            const isUndetected = detectedIds !== null && !detectedIds.has(agent.id)
             return (
               <DefaultAgentPill
                 key={agent.id}
                 active={isActive}
                 onClick={() => setDefault(agent.id)}
+                title={
+                  isUndetected
+                    ? translate(
+                        'auto.components.settings.AgentsPane.storedDefaultUndetected',
+                        'Saved as your default, but not detected right now'
+                      )
+                    : undefined
+                }
               >
                 <AgentIcon agent={agent.id} size={14} />
                 {agent.label}
@@ -876,6 +904,33 @@ export function AgentsPane({
       <AgentCacheTimerSection settings={settings} updateSettings={updateSettings} />
 
       <AgentPermissionsSetting mode={agentPermissionMode} onChange={saveAgentPermissionMode} />
+
+      {detectedAgents.length === 0 && detectedIds !== null && !detectionFailed && (
+        <div className="flex items-center justify-between gap-3 rounded-md border border-dashed border-border/50 px-3 py-3 text-sm text-muted-foreground">
+          {/* Why here and not only inside Installed: that section renders under
+              `detectedAgents.length > 0`, so the only Refresh control vanished
+              in precisely the state that needs a retry (#15256). */}
+          <span>
+            {translate(
+              'auto.components.settings.AgentsPane.noAgentsDetected',
+              'No agents detected. If one is installed, the probe may have timed out.'
+            )}
+          </span>
+          <Button
+            type="button"
+            variant="ghost"
+            size="xs"
+            onClick={handleRefresh}
+            disabled={isRefreshing}
+            className="h-7 shrink-0 gap-1.5 text-xs"
+          >
+            <RefreshCw className={cn('size-3', isRefreshing && 'animate-spin')} />
+            {isRefreshing
+              ? translate('auto.components.settings.AgentsPane.c9b33eb5c0', 'Refreshing…')
+              : translate('auto.components.settings.AgentsPane.0d9e293a02', 'Refresh')}
+          </Button>
+        </div>
+      )}
 
       {detectedAgents.length > 0 && (
         <section className="space-y-3">

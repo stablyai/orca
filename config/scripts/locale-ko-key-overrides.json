@@ -848,6 +848,9 @@
   "auto.components.editor.CheckRunDetailsPanel.fd46a70f1a": {
     "ko": "시작됨"
   },
+  "auto.components.editor.CheckRunJobs.1c0a4d7e02": {
+    "ko": "성공"
+  },
   "auto.components.editor.CombinedDiffFileTree.d5ac717d65": {
     "ko": "commit 안 됨"
   },

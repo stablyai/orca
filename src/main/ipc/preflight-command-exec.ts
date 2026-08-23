@@ -100,7 +100,13 @@ export async function isCommandOnPath(
     const { stdout } = await execCommandInWsl(
       wslTarget,
       [
-        buildPosixCommandPathLookupScript({ kind: 'literal', value: command }),
+        // Same skip as agent detection: without it this branch answers "yes"
+        // for a Windows binary reached through interop, so preflight and the
+        // detector disagree about the same distro.
+        buildPosixCommandPathLookupScript(
+          { kind: 'literal', value: command },
+          { skipWindowsMountDirs: true }
+        ),
         'if [ -n "$resolved" ]; then',
         `printf '${WSL_COMMAND_PATH_SENTINEL}%s\\n' "$resolved"`,
         'fi'

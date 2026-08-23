@@ -43,6 +43,7 @@ import { dropInheritedOrcaHistFile } from '../worktree-history-file-path'
 import { removeAppImageRuntimeEnv } from '../pty/appimage-terminal-env'
 import { stripInheritedBuildModeEnv } from '../pty/build-mode-env'
 import { stripLegacyTerminalShimEnv } from '../pty/legacy-terminal-shim-dir'
+import { dropIncoherentCondaActivationEnv } from '../pty/conda-activation-env'
 import { resolvePathEnvKey } from '../pty/windows-environment-path'
 import { parseWslPath } from '../wsl'
 import { addWslEnvKeys } from '../wsl-env'
@@ -902,6 +903,8 @@ export async function createPtySubprocess(opts: PtySubprocessOptions): Promise<S
   promoteAgentTeamsShimPath(env, requestedPath)
   // Why: raw requested PATH promotion runs after the inherited-env scrub.
   stripLegacyTerminalShimEnv(env, process.platform)
+  // Why after every deletion pass: an envToDelete of CONDA_PREFIX must not leave the sentinel behind.
+  dropIncoherentCondaActivationEnv(env, process.platform)
 
   // Why: asar packaging can strip +x from node-pty's spawn-helper; the daemon is a separate forked process from the main-process fix.
   ensureNodePtySpawnHelperExecutable()

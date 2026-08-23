@@ -1,5 +1,9 @@
 /* eslint-disable max-lines -- Why: runtime behavior is stateful and cross-cutting, so these tests stay in one file to preserve the end-to-end invariants around handles, waits, and graph sync. */
 import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest'
+import { RuntimeBrowserCommands } from './orca-runtime-browser'
+import { setRuntimeBrowserCommandsFactory } from './runtime-browser-commands-factory'
+import { setRuntimeDesktopSurface } from './runtime-desktop-surface'
+import { installFakeAppEnvironment } from '../../../config/scripts/vitest-host-ports-setup'
 import type * as GitUsernameModule from '../git/git-username'
 import { performance } from 'node:perf_hooks'
 import { EventEmitter } from 'node:events'
@@ -132,6 +136,7 @@ import {
   setTerminalViewAttributes
 } from './terminal-view-attribute-store'
 import { clearConfiguredWorktreeSharedDirectoriesCacheForTests } from '../git/worktree-shared-directories'
+import { setWorktreeWatcherRemoval } from '../ipc/worktree-watcher-removal'
 
 const ORIGINAL_PLATFORM = process.platform
 const ORIGINAL_PLATFORM_DESCRIPTOR = Object.getOwnPropertyDescriptor(process, 'platform')
@@ -215,14 +220,17 @@ const forgetRemoteWatcherRemovalSnapshotMock = vi.hoisted(() => vi.fn())
 const scanLocalRepoWorktreesForResolutionMock = vi.hoisted(() => vi.fn())
 
 vi.mock('electron', () => electronMocks)
-vi.mock('../ipc/filesystem-watcher', () => ({
-  closeLocalWatcherForWorktreePath: closeLocalWatcherForWorktreePathMock,
-  closeRemoteWatcherForWorktreePath: closeRemoteWatcherForWorktreePathMock,
-  restoreLocalWatcherAfterFailedRemoval: restoreLocalWatcherAfterFailedRemovalMock,
-  restoreRemoteWatcherAfterFailedRemoval: restoreRemoteWatcherAfterFailedRemovalMock,
-  forgetLocalWatcherRemovalSnapshot: forgetLocalWatcherRemovalSnapshotMock,
-  forgetRemoteWatcherRemovalSnapshot: forgetRemoteWatcherRemovalSnapshotMock
-}))
+// Why install the port instead of mocking ../ipc/filesystem-watcher: the runtime calls
+// WorktreeWatcherRemoval now, so a module mock would be inert and every assertion below
+// would silently pass against the inert default. Same mocks, same expectations.
+setWorktreeWatcherRemoval({
+  closeLocal: closeLocalWatcherForWorktreePathMock,
+  closeRemote: closeRemoteWatcherForWorktreePathMock,
+  restoreLocal: restoreLocalWatcherAfterFailedRemovalMock,
+  restoreRemote: restoreRemoteWatcherAfterFailedRemovalMock,
+  forgetLocal: forgetLocalWatcherRemovalSnapshotMock,
+  forgetRemote: forgetRemoteWatcherRemovalSnapshotMock
+})
 
 const {
   MOCK_GIT_WORKTREES,
@@ -456,12 +464,12 @@ vi.mock('../providers/ssh-git-dispatch', () => ({
   unregisterSshGitProvider: unregisterSshGitProviderMock
 }))
 
-vi.mock('../ipc/ssh', () => ({
+vi.mock('../ssh/ssh-target-registry', () => ({
   getActiveMultiplexer: getActiveMultiplexerMock,
   getRegisteredSshState: () => ({ remotePlatform: 'linux' })
 }))
 
-vi.mock('../ipc/preflight', () => ({
+vi.mock('../preflight/agent-detection', () => ({
   detectInstalledAgentsWithShellPathHydration: detectInstalledAgentsWithShellPathHydrationMock,
   detectRemoteAgents: detectRemoteAgentsMock
 }))
@@ -675,8 +683,29 @@ vi.mock('../git/git-username', async () => {
 })
 
 function resetRuntimeTestMocks(): void {
+  // Why: constructing the browser commands is what pulls the Chromium cluster in, so
+  // production installs this at the Electron entry. A Node host installs none and the
+  // browser RPCs reject rather than silently succeeding.
+  setRuntimeBrowserCommandsFactory((host) => new RuntimeBrowserCommands(host))
+  // Why: the runtime's notification, window lookup and tab-create-reply channel are
+  // injected now, so the electron mock alone is inert. Back the surface with the same
+  // mocks so every existing expectation still holds.
+  setRuntimeDesktopSurface({
+    showNotification: () => true,
+    findWindowById: (id) => electronMocks.BrowserWindow.fromId(id) as never,
+    onIpc: (channel, listener) => electronMocks.ipcMain.on(channel, listener as never),
+    removeIpcListener: (channel, listener) =>
+      electronMocks.ipcMain.removeListener(channel, listener as never)
+  })
   resetPlatform()
   electronMocks.app.isPackaged = false
+  // Why here and not the electron mock: the runtime reads paths and the packaged flag
+  // through the AppEnvironment port now, so the electron mock alone is inert. Reading
+  // electronMocks.app keeps the existing per-test toggles below working unchanged.
+  installFakeAppEnvironment({
+    getPath: () => electronMocks.app.getPath(),
+    isPackaged: () => electronMocks.app.isPackaged
+  })
   clearConfiguredWorktreeSharedDirectoriesCacheForTests()
   _resetTerminalViewAttributesForTest()
   advertisedUrlWatcher.clear()

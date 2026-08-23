@@ -44,27 +44,32 @@ describe('W1: every WSL call inherits the spawn chokepoint', () => {
   it('resolves wsl.exe absolutely, never by bare name', async () => {
     // Bare-name resolution is what a Group Policy or a stripped Electron PATH
     // hijacks (#15749).
-    await runWslProcess({ lane: 'probe', distro: 'Ubuntu', program: '/bin/true' })
+    await runWslProcess({ loginPath: 'preferred', distro: 'Ubuntu', program: '/bin/true' })
     expect(spawnSpec().program).toBe('C:\\Windows\\System32\\wsl.exe')
   })
 
   it('passes argv as an array, never a command string', async () => {
     // A command string would put quoting back in the caller's hands, which is
     // the entire class W1 removed.
-    await runWslProcess({ lane: 'probe', distro: 'Ubuntu', program: '/bin/echo', args: ['a b'] })
+    await runWslProcess({
+      loginPath: 'preferred',
+      distro: 'Ubuntu',
+      program: '/bin/echo',
+      args: ['a b']
+    })
     expect(Array.isArray(spawnSpec().args)).toBe(true)
     expect(spawnSpec().args).toContain('a b')
   })
 
   it('always bounds the call', async () => {
-    await runWslProcess({ lane: 'probe', distro: 'Ubuntu', program: '/bin/true' })
+    await runWslProcess({ loginPath: 'preferred', distro: 'Ubuntu', program: '/bin/true' })
     expect(spawnSpec().timeoutMs).toBeGreaterThan(0)
   })
 })
 
 describe('W3: the five per-call decisions are made once', () => {
   it('never uses the -- separator, which expands $name host-side', async () => {
-    await runWslProcess({ lane: 'probe', distro: 'Ubuntu', script: 'echo "$HOME"' })
+    await runWslProcess({ loginPath: 'preferred', distro: 'Ubuntu', script: 'echo "$HOME"' })
     const argv = spawnSpec().args as string[]
     // Only wsl.exe's own separator matters. A later `--` belongs to `sh -s --`
     // and is the guest shell's end-of-options, so check the position rather
@@ -74,17 +79,18 @@ describe('W3: the five per-call decisions are made once', () => {
   })
 
   it('keeps a script byte-identical instead of encoding it', async () => {
-    // The base64 and eval wrappers existed because argv quoting kept breaking;
-    // stdin has no quoting boundary at all (#14292).
+    // The base64 and eval wrappers existed because a host-side shell re-parsed
+    // the quotes (#14292). --exec removes that shell, so the script crosses in
+    // argv exactly as written -- no encoding, and stdin stays the command's.
     const script = `case "$x" in a) echo 'it'\\''s fine';; esac`
-    await runWslProcess({ lane: 'probe', distro: 'Ubuntu', script })
-    expect(spawnSpec().input).toBe(script)
-    expect(JSON.stringify(spawnSpec().args)).not.toContain('case')
+    await runWslProcess({ loginPath: 'preferred', distro: 'Ubuntu', script })
+    expect(spawnSpec().args).toContain(script)
+    expect(spawnSpec().input).toBeUndefined()
   })
 
   it('propagates env only through WSLENV', async () => {
     await runWslProcess({
-      lane: 'probe',
+      loginPath: 'preferred',
       distro: 'Ubuntu',
       program: '/bin/true',
       env: { GITLAB_HOST: 'git.example.com' }
@@ -95,14 +101,14 @@ describe('W3: the five per-call decisions are made once', () => {
 
   it('runs no shell on the probe lane, so ~/.profile cannot stall it', async () => {
     // #14288: one blocking line in ~/.profile ate the whole timeout.
-    await runWslProcess({ lane: 'probe', distro: 'Ubuntu', program: 'codex' })
+    await runWslProcess({ loginPath: 'preferred', distro: 'Ubuntu', program: 'codex' })
     expect(JSON.stringify(spawnSpec().args)).not.toContain('_orca_wsl_shell')
   })
 
   it('applies the user login PATH even with no shell in the loop', async () => {
     // The other half of the same trade: nvm-installed agents must still be
     // found (#9725, #7563, #8366).
-    await runWslProcess({ lane: 'probe', distro: 'Ubuntu', program: 'codex' })
+    await runWslProcess({ loginPath: 'preferred', distro: 'Ubuntu', program: 'codex' })
     expect(spawnSpec().args).toContain('PATH=/home/u/.nvm/bin:/usr/bin')
   })
 })
@@ -118,7 +124,11 @@ describe('failure modes stay distinguishable', () => {
       stderr: '',
       timedOut: false
     })
-    const result = await runWslProcess({ lane: 'probe', distro: 'Ubuntu', program: '/bin/false' })
+    const result = await runWslProcess({
+      loginPath: 'preferred',
+      distro: 'Ubuntu',
+      program: '/bin/false'
+    })
     expect(result.code).toBe(3)
     expect(result.timedOut).toBe(false)
   })
@@ -131,11 +141,15 @@ describe('failure modes stay distinguishable', () => {
       stderr: '',
       timedOut: true
     })
-    const result = await runWslProcess({ lane: 'probe', distro: 'Ubuntu', program: '/bin/true' })
+    const result = await runWslProcess({
+      loginPath: 'preferred',
+      distro: 'Ubuntu',
+      program: '/bin/true'
+    })
     expect(result.timedOut).toBe(true)
   })
 
-  it('an unresolved login PATH refuses rather than answering wrongly', async () => {
+  it('an unresolved login PATH is reported, never fatal', async () => {
     invalidateWslGuestEnvironment(undefined, true)
     runProcessMock.mockResolvedValue({
       code: 1,
@@ -144,8 +158,12 @@ describe('failure modes stay distinguishable', () => {
       stderr: 'stopped',
       timedOut: false
     })
-    await expect(
-      runWslProcess({ lane: 'probe', distro: 'Ubuntu', program: 'codex' })
-    ).rejects.toThrow(/guest environment/)
+    // Every knob this runner used to carry existed because this case threw.
+    const result = await runWslProcess({
+      loginPath: 'preferred',
+      distro: 'Ubuntu',
+      program: 'codex'
+    })
+    expect(result.environmentResolved).toBe(false)
   })
 })

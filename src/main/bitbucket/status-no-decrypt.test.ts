@@ -19,13 +19,13 @@ vi.mock('../git/runner', () => ({ gitExecFileAsync: vi.fn() }))
 
 async function loadModules() {
   vi.resetModules()
-  vi.doMock('electron', () => ({
-    safeStorage: {
-      isEncryptionAvailable: () => true,
-      encryptString: (value: string) => Buffer.from(value),
-      decryptString: decryptSpy
-    }
-  }))
+  const { setSecretStore } = await import('../../shared/secret-store')
+  setSecretStore({
+    isEncryptionAvailable: () => true,
+    encryptString: (value) => Buffer.from(value),
+    decryptString: decryptSpy,
+    describeProtectionGap: () => null
+  })
   vi.doMock('node:os', async () => {
     const actual = await vi.importActual<typeof Os>('node:os')
     return { ...actual, homedir: () => tempHome }

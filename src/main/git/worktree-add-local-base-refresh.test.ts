@@ -347,13 +347,19 @@ describe('addWorktree', () => {
   it('skips updating the local branch when it has diverged', async () => {
     gitExecFileAsyncMock.mockResolvedValueOnce({ stdout: 'abc123\n' }) // rev-parse refs/remotes/origin/main^{commit}
     gitExecFileAsyncMock.mockRejectedValueOnce(new Error('not a fast-forward'))
+    gitExecFileAsyncMock.mockResolvedValueOnce({ stdout: 'refs/heads/main\n' }) // for-each-ref refs/heads/main (exists)
     gitExecFileAsyncMock.mockResolvedValueOnce({ stdout: '' }) // worktree add
     resolveCreationBaseConfigWrite()
     gitExecFileAsyncMock.mockRejectedValueOnce(Object.assign(new Error('key unset'), { code: 1 })) // config --get push.autoSetupRemote (unset)
     gitExecFileAsyncMock.mockResolvedValueOnce({ stdout: '' }) // config --local set push.autoSetupRemote
 
-    await addWorktree('/repo', '/repo-feature', 'feature/test', 'origin/main', true)
+    const result = await addWorktree('/repo', '/repo-feature', 'feature/test', 'origin/main', true)
 
+    expect(result.localBaseRefRefresh).toEqual({
+      status: 'skipped_not_fast_forward',
+      baseRef: 'origin/main',
+      localBranch: 'main'
+    })
     expect(gitExecFileAsyncMock.mock.calls).toEqual([
       [
         ['rev-parse', '--verify', '--quiet', 'refs/remotes/origin/main^{commit}'],
@@ -361,6 +367,10 @@ describe('addWorktree', () => {
       ],
       [
         ['rev-list', '--left-right', '--count', 'refs/heads/main...refs/remotes/origin/main'],
+        expect.objectContaining({ cwd: '/repo' })
+      ],
+      [
+        ['for-each-ref', '--count=1', '--format=%(refname)', 'refs/heads/main'],
         expect.objectContaining({ cwd: '/repo' })
       ],
       [
@@ -396,12 +406,112 @@ describe('addWorktree', () => {
     ])
   })
 
+  // #15331: evaluation runs before `-b <branch>` exists, so rev-list fails on the missing local ref.
+  it('does not warn when worktree add itself creates the local base branch', async () => {
+    gitExecFileAsyncMock
+      .mockResolvedValueOnce({ stdout: 'abc123\n' }) // rev-parse --verify --quiet refs/remotes/origin/feature-x^{commit}
+      .mockRejectedValueOnce(
+        new Error(
+          "fatal: ambiguous argument 'refs/heads/feature-x...refs/remotes/origin/feature-x': unknown revision or path not in the working tree."
+        )
+      ) // rev-list: refs/heads/feature-x does not exist yet
+      .mockResolvedValueOnce({ stdout: '' }) // for-each-ref refs/heads/feature-x (missing)
+      .mockResolvedValueOnce({ stdout: '' }) // worktree add
+      .mockResolvedValueOnce({ stdout: '' }) // config --local --replace-all branch.<branch>.base
+      .mockRejectedValueOnce(Object.assign(new Error('key unset'), { code: 1 })) // config --get push.autoSetupRemote (unset)
+      .mockResolvedValueOnce({ stdout: '' }) // config --local set push.autoSetupRemote
+
+    const result = await addWorktree(
+      '/repo',
+      '/repo-feature-x',
+      'feature-x',
+      'origin/feature-x',
+      true
+    )
+
+    expect(result.localBaseRefRefresh).toBeUndefined()
+    expect(gitExecFileAsyncMock.mock.calls.map((call) => call[0])).toContainEqual([
+      'worktree',
+      'add',
+      '--no-track',
+      '-b',
+      'feature-x',
+      '/repo-feature-x',
+      'refs/remotes/origin/feature-x'
+    ])
+    // Nothing was refreshed, so no ref mutation.
+    expect(gitExecFileAsyncMock.mock.calls.map((call) => call[0][0])).not.toContain('update-ref')
+    expect(gitExecFileAsyncMock.mock.calls.map((call) => call[0][0])).not.toContain('reset')
+  })
+
+  // #15331: same missing-local-branch class, but the new branch name differs from the base's.
+  it('does not warn when the local base branch does not exist in a fetch-only clone', async () => {
+    gitExecFileAsyncMock
+      .mockResolvedValueOnce({ stdout: 'abc123\n' }) // rev-parse --verify --quiet refs/remotes/origin/main^{commit}
+      .mockRejectedValueOnce(new Error('unknown revision refs/heads/main')) // rev-list: no local main
+      .mockResolvedValueOnce({ stdout: '' }) // for-each-ref refs/heads/main (missing)
+      .mockResolvedValueOnce({ stdout: '' }) // worktree add
+      .mockResolvedValueOnce({ stdout: '' }) // config --local --replace-all branch.<branch>.base
+      .mockRejectedValueOnce(Object.assign(new Error('key unset'), { code: 1 })) // config --get push.autoSetupRemote (unset)
+      .mockResolvedValueOnce({ stdout: '' }) // config --local set push.autoSetupRemote
+
+    const result = await addWorktree('/repo', '/repo-feature', 'my-feature', 'origin/main', true)
+
+    expect(result.localBaseRefRefresh).toBeUndefined()
+    expect(gitExecFileAsyncMock.mock.calls.map((call) => call[0])).toContainEqual([
+      'for-each-ref',
+      '--count=1',
+      '--format=%(refname)',
+      'refs/heads/main'
+    ])
+  })
+
+  // A failed probe is not proof of absence, so the warning must survive it.
+  it('keeps the warning when the local base ref probe itself fails', async () => {
+    gitExecFileAsyncMock
+      .mockResolvedValueOnce({ stdout: 'abc123\n' }) // rev-parse --verify --quiet refs/remotes/origin/main^{commit}
+      .mockRejectedValueOnce(new Error('rev-list failed')) // drift probe
+      .mockRejectedValueOnce(new Error('fatal: not a git repository')) // for-each-ref probe could not run
+      .mockResolvedValueOnce({ stdout: '' }) // worktree add
+      .mockResolvedValueOnce({ stdout: '' }) // config --local --replace-all branch.<branch>.base
+      .mockRejectedValueOnce(Object.assign(new Error('key unset'), { code: 1 })) // config --get push.autoSetupRemote (unset)
+      .mockResolvedValueOnce({ stdout: '' }) // config --local set push.autoSetupRemote
+
+    const result = await addWorktree('/repo', '/repo-feature', 'my-feature', 'origin/main', true)
+
+    expect(result.localBaseRefRefresh).toEqual({
+      status: 'skipped_not_fast_forward',
+      baseRef: 'origin/main',
+      localBranch: 'main'
+    })
+  })
+
+  it('still suggests nothing but keeps the warning when the local base ref exists and diverged', async () => {
+    gitExecFileAsyncMock
+      .mockResolvedValueOnce({ stdout: 'abc123\n' }) // rev-parse --verify --quiet refs/remotes/origin/main^{commit}
+      .mockResolvedValueOnce({ stdout: '2\t3\n' }) // rev-list: 2 local-only commits
+      .mockResolvedValueOnce({ stdout: '' }) // worktree add
+      .mockResolvedValueOnce({ stdout: '' }) // config --local --replace-all branch.<branch>.base
+      .mockRejectedValueOnce(Object.assign(new Error('key unset'), { code: 1 })) // config --get push.autoSetupRemote (unset)
+      .mockResolvedValueOnce({ stdout: '' }) // config --local set push.autoSetupRemote
+
+    const result = await addWorktree('/repo', '/repo-feature', 'main', 'origin/main', true)
+
+    // Same branch name as the base, but rev-list succeeded: real divergence must still warn.
+    expect(result.localBaseRefRefresh).toEqual({
+      status: 'skipped_not_fast_forward',
+      baseRef: 'origin/main',
+      localBranch: 'main'
+    })
+  })
+
   it('skips local base refresh when captured OIDs are no longer ancestor-safe', async () => {
     gitExecFileAsyncMock.mockResolvedValueOnce({ stdout: 'abc123\n' }) // rev-parse refs/remotes/origin/main^{commit}
     gitExecFileAsyncMock.mockResolvedValueOnce({ stdout: '0\t2\n' }) // stale rev-list result
     gitExecFileAsyncMock.mockResolvedValueOnce({ stdout: 'new-local\n' }) // rev-parse refs/heads/main^{commit}
     gitExecFileAsyncMock.mockResolvedValueOnce({ stdout: 'remote-main\n' }) // rev-parse refs/remotes/origin/main^{commit}
     gitExecFileAsyncMock.mockRejectedValueOnce(new Error('not an ancestor')) // merge-base captured OIDs
+    gitExecFileAsyncMock.mockResolvedValueOnce({ stdout: 'refs/heads/main\n' }) // for-each-ref refs/heads/main (exists)
     gitExecFileAsyncMock.mockResolvedValueOnce({ stdout: '' }) // worktree add
     resolveCreationBaseConfigWrite()
     gitExecFileAsyncMock.mockRejectedValueOnce(Object.assign(new Error('key unset'), { code: 1 })) // config --get push.autoSetupRemote (unset)
@@ -433,6 +543,10 @@ describe('addWorktree', () => {
       ],
       [
         ['merge-base', '--is-ancestor', 'new-local', 'remote-main'],
+        expect.objectContaining({ cwd: '/repo' })
+      ],
+      [
+        ['for-each-ref', '--count=1', '--format=%(refname)', 'refs/heads/main'],
         expect.objectContaining({ cwd: '/repo' })
       ],
       [

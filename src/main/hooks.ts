@@ -8,6 +8,7 @@ import { getHookRuntimeTarget, getHookWslContext } from './hook-runtime-target'
 import { getSetupEnvVars } from './setup-hook-env-vars'
 import { iterateLfScriptLines } from './setup-runner-script-text'
 import { promptGuardShellEnv } from './git/runner'
+import { dropIncoherentCondaActivationEnv } from './pty/conda-activation-env'
 import { toLinuxPath } from './wsl'
 import { runWslProcess } from './wsl/wsl-runner'
 import type { HookRuntimeTarget } from './hook-runtime-target'
@@ -145,7 +146,9 @@ export function runHook(
     for (const [key, value] of Object.entries(guardedEnv)) {
       if (
         value !== undefined &&
-        (key === 'GIT_TERMINAL_PROMPT' || key === 'GCM_INTERACTIVE' || key.startsWith('GIT_CONFIG_'))
+        (key === 'GIT_TERMINAL_PROMPT' ||
+          key === 'GCM_INTERACTIVE' ||
+          key.startsWith('GIT_CONFIG_'))
       ) {
         guestEnv[key] = value
       }
@@ -153,17 +156,12 @@ export function runHook(
 
     return runWslProcess({
       distro: wslInfo.distro ?? undefined,
-      lane: 'probe',
+      loginPath: 'preferred',
       script,
       // Why pinned: these are user-authored orca.yaml scripts and the native
       // path runs /bin/bash. Defaulting to sh would fail bash-only hooks on WSL
       // only -- a downgrade the user never asked for.
       shell: 'bash',
-      // Why degrade rather than fail: a hook is an action, not an "is this
-      // installed?" question. Before the runner it ran on the default PATH when
-      // no login shell was available; refusing would turn worktree setup into a
-      // hard failure whenever WSL is briefly slow.
-      allowDegradedEnvironment: true,
       cwd: wslInfo.linuxPath,
       env: guestEnv,
       timeoutMs: HOOK_TIMEOUT
@@ -189,6 +187,9 @@ export function runHook(
       })
   }
 
+  const shellHookEnv: NodeJS.ProcessEnv = { ...process.env, ...getSetupEnvVars(repo, cwd) }
+  dropIncoherentCondaActivationEnv(shellHookEnv)
+
   return new Promise((resolve) => {
     exec(
       script,
@@ -197,10 +198,7 @@ export function runHook(
         timeout: HOOK_TIMEOUT,
         shell: getHookShell(),
         // Why: hooks run unattended; block Git Credential Manager's interactive prompt while keeping cached auth (issue #7652).
-        env: promptGuardShellEnv({
-          ...process.env,
-          ...getSetupEnvVars(repo, cwd)
-        })
+        env: promptGuardShellEnv(shellHookEnv)
       },
       (error, stdout, stderr) => {
         if (error) {

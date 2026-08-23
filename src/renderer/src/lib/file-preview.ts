@@ -207,8 +207,11 @@ export function openFilePreviewToSide(params: {
   let targetGroupId = existingSibling
   if (!targetGroupId) {
     // Why: no split yet — create one to the right so the preview lands beside
-    // the editor. createEmptySplitGroup returns the new (empty) group id.
-    targetGroupId = state.createEmptySplitGroup(worktreeId, sourceGroupId, 'right')
+    // the editor. Remote previews stay unfocused until click, so do not activate
+    // the empty group or a host snapshot will treat it as a terminal pane.
+    targetGroupId = environmentId
+      ? state.createEmptySplitGroup(worktreeId, sourceGroupId, 'right', { activate: false })
+      : state.createEmptySplitGroup(worktreeId, sourceGroupId, 'right')
   }
   if (!targetGroupId) {
     return

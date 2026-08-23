@@ -50,11 +50,12 @@ async function runCleanup(
 ): Promise<void> {
   const result = await run({
     distro,
-    lane: 'probe',
-    // The old `--exec fish` spawn never sourced a login shell either, so a
-    // probe failure must run degraded rather than turn a working cleanup into
-    // an error.
-    allowDegradedEnvironment: true,
+    // 'preferred', not 'none': `fish` is a bare name, so it is a PATH lookup.
+    // A fish from linuxbrew or nix lives only on the login PATH, and without it
+    // this throws on a distro where the cleanup would have worked. The probe
+    // failing is still fine -- the old `--exec fish` spawn sourced no login
+    // shell either, so running on the default PATH is no worse than before.
+    loginPath: 'preferred',
     program: 'fish',
     args: ['--command', fishCleanupScript(session)],
     timeoutMs: 5_000

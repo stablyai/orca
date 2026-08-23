@@ -1,6 +1,6 @@
 import type { WslResult } from '../wsl/wsl-runner'
 import { posix as pathPosix } from 'node:path'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const runWslProcessMock = vi.hoisted(() => vi.fn())
 
@@ -19,10 +19,15 @@ function wslResult(stdout: string): WslResult {
 
 describe('WSL Claude plugin skill discovery', () => {
   beforeEach(() => runWslProcessMock.mockReset())
+  afterEach(() => vi.unstubAllEnvs())
 
   it('reads enabled plugin metadata and scans the selected install inside the distro', async () => {
     const homeDir = '/home/alice'
     const cwd = '/work/orca'
+    // Why: a Windows host's own Hermes location says nothing about the distro's,
+    // so neither variable may reach the posix scan script.
+    vi.stubEnv('HERMES_HOME', 'C:\\Users\\alice\\hermes')
+    vi.stubEnv('LOCALAPPDATA', 'C:\\Users\\alice\\AppData\\Local')
     const pluginId = 'compound-engineering@compound-engineering-plugin'
     const installPath = '/home/alice/.claude/plugins/cache/compound/3.14.3'
     const installed = JSON.stringify({
@@ -58,6 +63,8 @@ describe('WSL Claude plugin skill discovery', () => {
 
     expect(runWslProcessMock).toHaveBeenCalledTimes(2)
     const scanScript = runWslProcessMock.mock.calls[1]?.[0].script as string
+    expect(scanScript).toContain('/home/alice/.hermes/skills')
+    expect(scanScript).not.toContain('AppData')
     expect(scanScript).toContain(`${installPath}/skills`)
     expect(result.skills).toEqual([
       expect.objectContaining({

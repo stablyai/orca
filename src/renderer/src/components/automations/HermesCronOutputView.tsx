@@ -14,10 +14,8 @@ import {
 import type { LucideIcon } from 'lucide-react'
 import CommentMarkdown from '@/components/sidebar/CommentMarkdown'
 import { cn } from '@/lib/utils'
-import {
-  formatAutomationSchedule,
-  isValidAutomationSchedule
-} from '../../../../shared/automation-schedules'
+import { isValidAutomationSchedule } from '../../../../shared/automation-schedules'
+import { formatUiAutomationSchedule } from './automation-schedule-label'
 import { translate } from '@/i18n/i18n'
 import { parseHermesOutput, type ParsedHermesSection } from './hermes-cron-output-parse'
 
@@ -38,7 +36,7 @@ function getScheduleDisplay(value: string): string | null {
   if (!isValidAutomationSchedule(trimmed)) {
     return null
   }
-  return formatAutomationSchedule(trimmed)
+  return formatUiAutomationSchedule(trimmed)
 }
 
 function isScheduleMetadataLabel(label: string): boolean {

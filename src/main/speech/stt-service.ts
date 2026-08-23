@@ -3,7 +3,7 @@ timeout teardown must stay co-located so dictation lifecycle state cannot drift.
 import { Worker } from 'node:worker_threads'
 import { existsSync } from 'node:fs'
 import { join } from 'node:path'
-import { app } from 'electron'
+import { getAppEnvironment } from '../../shared/app-environment'
 import { getCatalogModel } from './model-catalog'
 import type { ModelManager } from './model-manager'
 import { OpenAiTranscriptionSession } from './openai-transcription-client'
@@ -482,7 +482,7 @@ export class SttService {
   }
 
   private getWorkerPath(): string {
-    if (app.isPackaged) {
+    if (getAppEnvironment().isPackaged()) {
       return join(process.resourcesPath, 'app.asar', 'out', 'main', 'stt-worker.js')
     }
     return join(__dirname, 'stt-worker.js')
@@ -564,7 +564,7 @@ export class SttService {
         ? 'sherpa-onnx-win-x64'
         : `sherpa-onnx-${process.platform}-${process.arch}`
 
-    if (app.isPackaged) {
+    if (getAppEnvironment().isPackaged()) {
       const resourcesNodeModule = join(process.resourcesPath, 'node_modules', nativePkg)
       if (existsSync(resourcesNodeModule)) {
         return resourcesNodeModule

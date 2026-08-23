@@ -87,6 +87,10 @@ async function probeGuestEnvironment(
   const result = await runProcess({
     program: resolveWslExecutablePath(),
     args: buildWslExecArgs(distro, ['sh', '-c', captured.command]),
+    // The runner sets this for every command it launches (#9010); the probe
+    // spawns wsl.exe itself, so without it wsl.exe's own errors arrive UTF-16LE
+    // and the NUL-separated payload below is read through NUL-riddled text.
+    env: { ...process.env, WSL_UTF8: '1' },
     timeoutMs: Math.min(PROBE_TIMEOUT_MS, budgetMs),
     maxOutputBytes: PROBE_MAX_OUTPUT_BYTES
   })

@@ -160,3 +160,18 @@ describe('a signal that is already aborted', () => {
     expect(Date.now() - startedAt).toBeLessThan(10_000)
   }, 20_000)
 })
+
+describe('output truncation', () => {
+  const emit = (bytes: number): string =>
+    `for (let i = 0; i < ${bytes}; i += 1) process.stderr.write('n'); process.stderr.write('FAILED')`
+
+  it('keeps the head by default', async () => {
+    const result = await runProcess({
+      program: process.execPath,
+      args: ['-e', emit(200)],
+      maxOutputBytes: 64
+    })
+    expect(result.stderr).not.toContain('FAILED')
+    expect(result.stderr).toBe('n'.repeat(64))
+  })
+})
