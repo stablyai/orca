@@ -114,6 +114,7 @@ export function PetFromImageDialog({
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const modeHintId = useId()
+  const cropHintId = useId()
   // Why: settings change faster than a build finishes, so runs overlap. Only
   // the newest may paint, clear the spinner, or report a failure — an older one
   // landing last would otherwise show a sheet for settings nobody is on.
@@ -359,12 +360,13 @@ export function PetFromImageDialog({
                 crop={crop}
                 onCrop={(rect) => void rebuild({ crop: rect })}
                 box={CROP_BOX}
+                describedBy={cropHintId}
               />
               <div className="flex min-w-0 flex-1 flex-col gap-2">
-                <p className="text-xs text-muted-foreground">
+                <p id={cropHintId} className="text-xs text-muted-foreground">
                   {translate(
                     'auto.components.pet.fromImage.cropHint',
-                    'Drag a box around the character if the picture has more in it.'
+                    'Drag a box around the character if the picture has more in it. With the box focused, the arrow keys move it and Shift with them resizes it.'
                   )}
                 </p>
                 <Button

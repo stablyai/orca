@@ -12829,6 +12829,9 @@
             "2528586aa7": "Claudino"
           }
         },
+        "sourceCrop": {
+          "surface": "Framing: draw the box the pet is built from"
+        },
         "fromImage": {
           "backgroundNotSeparable": "The background is too busy to separate from the character. Try a PNG with a transparent background, or a photo on a plain background.",
           "subjectNotFound": "No character was left after removing the background. Try another image, or crop it closer to the character.",
@@ -12852,7 +12855,7 @@
           "modeRiggedHint": "Finds legs in the picture so it can walk. Falls back if it cannot.",
           "modeHeadSwap": "Head only",
           "modeHeadSwapHint": "Your picture as the head on the pet body. Animates fully.",
-          "cropHint": "Drag a box around the character if the picture has more in it.",
+          "cropHint": "Drag a box around the character if the picture has more in it. With the box focused, the arrow keys move it and Shift with them resizes it.",
           "cropReset": "Use the whole picture",
           "tolerance": "How much of the background to remove",
           "artworkUnavailable": "Could not load the artwork for that style."
