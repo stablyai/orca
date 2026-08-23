@@ -1,3 +1,4 @@
+import { EventEmitter } from 'node:events'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 vi.mock('electron', async () =>
@@ -83,10 +84,10 @@ describe('createMainWindow', () => {
   })
 
   it('resets the markdown editor focus flag on renderer crash, navigation, and destroy', () => {
-    const windowHandlers: Record<string, (...args: any[]) => void> = {}
+    const webContentsEvents = new EventEmitter()
     const webContents = {
       on: vi.fn((event, handler) => {
-        windowHandlers[event] = handler
+        webContentsEvents.on(event, handler)
       }),
       setZoomLevel: vi.fn(),
       setBackgroundThrottling: vi.fn(),
@@ -134,27 +135,34 @@ describe('createMainWindow', () => {
     const assertInterceptsAfterReset = (): void => {
       webContents.send.mockClear()
       const preventDefault = vi.fn()
-      windowHandlers['before-input-event']({ preventDefault } as never, cmdBInput)
+      webContentsEvents.emit('before-input-event', { preventDefault } as never, cmdBInput)
       expect(preventDefault).toHaveBeenCalledTimes(1)
       expect(webContents.send).toHaveBeenCalledWith('ui:toggleLeftSidebar')
     }
 
     // render-process-gone
     setFocusedListener?.({ sender: webContents } as never, true)
-    windowHandlers['render-process-gone']?.()
+    webContentsEvents.emit('render-process-gone')
     assertInterceptsAfterReset()
 
     // did-start-navigation (main frame)
     setFocusedListener?.({ sender: webContents } as never, true)
-    windowHandlers['did-start-navigation']?.({} as never, 'https://example.com/', false, true)
+    webContentsEvents.emit('did-start-navigation', {} as never, 'https://example.com/', false, true)
     assertInterceptsAfterReset()
 
     // did-start-navigation (sub-frame) should NOT reset the flag
     setFocusedListener?.({ sender: webContents } as never, true)
-    windowHandlers['did-start-navigation']?.({} as never, 'https://example.com/', false, false)
+    webContentsEvents.emit(
+      'did-start-navigation',
+      {} as never,
+      'https://example.com/',
+      false,
+      false
+    )
     webContents.send.mockClear()
     const subframePreventDefault = vi.fn()
-    windowHandlers['before-input-event'](
+    webContentsEvents.emit(
+      'before-input-event',
       { preventDefault: subframePreventDefault } as never,
       cmdBInput
     )
@@ -163,7 +171,7 @@ describe('createMainWindow', () => {
 
     // destroyed
     setFocusedListener?.({ sender: webContents } as never, true)
-    windowHandlers['destroyed']?.()
+    webContentsEvents.emit('destroyed')
     assertInterceptsAfterReset()
   })
 
@@ -207,11 +215,11 @@ describe('createMainWindow', () => {
   })
 
   it('marks the owning window unavailable when renderer host evidence disappears', () => {
-    const windowHandlers: Record<string, (...args: any[]) => void> = {}
+    const webContentsEvents = new EventEmitter()
     const webContents = {
       id: 142,
       on: vi.fn((event, handler) => {
-        windowHandlers[event] = handler
+        webContentsEvents.on(event, handler)
       }),
       setZoomLevel: vi.fn(),
       setBackgroundThrottling: vi.fn(),
@@ -239,11 +247,12 @@ describe('createMainWindow', () => {
     const onRendererUnavailable = vi.fn()
 
     createMainWindow(null, { onRendererUnavailable })
-    windowHandlers['render-process-gone']?.(
+    webContentsEvents.emit(
+      'render-process-gone',
       {} as never,
       { reason: 'crashed', exitCode: 5 } as Electron.RenderProcessGoneDetails
     )
-    windowHandlers.destroyed?.()
+    webContentsEvents.emit('destroyed')
 
     expect(onRendererUnavailable).toHaveBeenCalledTimes(2)
     expect(onRendererUnavailable).toHaveBeenNthCalledWith(1, 7)
