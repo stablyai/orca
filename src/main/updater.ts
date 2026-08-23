@@ -431,7 +431,7 @@ function clearUpdateCheckTimers(): void {
 /**
  * Why: the test harness must clear these before `vi.resetModules()` — a discarded module's
  * pending real-clock timers keep firing with a closure over dead state.
- * Why `setupAutoUpdater` must not call this: the `autoUpdaterInitialized` latch (~2255) early-returns
+ * Why `setupAutoUpdater` must not call this: the `autoUpdaterInitialized` latch early-returns
  * on a second call, so disposing here would clear the first call's timers with nothing able to
  * re-arm them, silently killing background update checks after a macOS reactivation.
  */
