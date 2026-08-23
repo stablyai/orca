@@ -50,7 +50,10 @@ type WslEnvironmentProbe = (distro: string) => Promise<string>
 async function probeWslGrokHome(distro: string): Promise<string> {
   const result = await runWslProcess({
     distro,
-    loginPath: 'preferred',
+    // 'none': the script runs its own `"$login_shell" -lc`, so asking the
+    // runner to probe first buys a second login shell and spends up to half
+    // the 8s budget before the -lc that actually reads GROK_HOME starts.
+    loginPath: 'none',
     script: WSL_GROK_HOME_SCRIPT,
     timeoutMs: WSL_ENV_PROBE_TIMEOUT_MS,
     maxOutputBytes: WSL_ENV_PROBE_MAX_BYTES

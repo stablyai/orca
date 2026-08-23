@@ -67,6 +67,7 @@ describe('detectSkillProvidersInWsl', () => {
 
   it.each([
     ['reports unverifiable rather than empty', '', true],
+    ['reports unverifiable even on a partial hit', 'claude\n', true],
     ['still trusts a genuine empty result', '', false]
   ])('%s', async (_case, stdout, unresolved) => {
     // The script ends in `|| true`, so "ran without the login PATH" and "no
@@ -86,7 +87,9 @@ describe('detectSkillProvidersInWsl', () => {
         'skill-install-wsl-provider-detection-failed'
       )
     } else {
-      await expect(detectSkillProvidersInWsl('Ubuntu')).resolves.toEqual([])
+      await expect(detectSkillProvidersInWsl('Ubuntu')).resolves.toEqual(
+        stdout.trim() ? ['claude'] : []
+      )
     }
   })
 

@@ -57,7 +57,8 @@ async function executeWslSkillDiscovery(distro: string, script: string): Promise
   // dash rejects with `Syntax error: word unexpected` (#14292).
   const result = await runWslProcess({
     distro,
-    loginPath: 'preferred',
+    // 'none': find/base64/head/printf/stat over $HOME roots, no bare tool.
+    loginPath: 'none',
     script,
     shell: 'bash',
 

@@ -96,13 +96,15 @@ function collectSourceFiles(root: string): string[] {
 function bindsWslBinaryToASpawnedIdentifier(source: string): boolean {
   const bound = new Set<string>()
   // Covers `const x = 'wsl.exe'`, a ternary picking it, and `binary: 'wsl.exe'`.
+  // `const x =`, and the class-field spellings (`private readonly x =`). `[^=]`
+  // rather than `[^=;\n]` so a Prettier-wrapped ternary still binds.
   for (const match of source.matchAll(
-    /(?:const|let|var)\s+([A-Za-z_$][\w$]*)[^=;\n]*=[^;\n]*['"]wsl\.exe['"]/g
+    /(?:(?:const|let|var|readonly|private|public|protected|static)\s+)+([A-Za-z_$][\w$]*)[^=\n]*=[^;]{0,200}?['"`]wsl\.exe['"`]/g
   )) {
     bound.add(match[1]!)
   }
   for (const match of source.matchAll(
-    /\b([A-Za-z_$][\w$]*)\s*:\s*[^,;\n]*['"]wsl\.exe['"]/g
+    /\b([A-Za-z_$][\w$]*)\s*:\s*[^,;\n]*['"`]wsl\.exe['"`]/g
   )) {
     bound.add(match[1]!)
   }
@@ -112,10 +114,13 @@ function bindsWslBinaryToASpawnedIdentifier(source: string): boolean {
     // argument of a spawn-style call.
     if (
       new RegExp(`\\b${identifier}\\s*\\(`).test(source) ||
-      new RegExp(`(?:program|binary|command|file|shellPath)\\s*:\\s*${identifier}\\b`).test(
+      new RegExp(
+        `(?:program|binary|command|file|shellPath)\\s*:\\s*(?:this\\.)?${identifier}\\b`
+      ).test(source) ||
+      // `this.` so a class field reaching `spawnProcess(this.binary)` counts.
+      new RegExp(`\\b\\w*(?:spawn|exec|run)\\w*\\s*\\(\\s*(?:this\\.)?${identifier}\\b`, 'i').test(
         source
-      ) ||
-      new RegExp(`\\b\\w*(?:spawn|exec|run)\\w*\\s*\\(\\s*${identifier}\\b`, 'i').test(source)
+      )
     ) {
       return true
     }
@@ -131,7 +136,7 @@ function findSpawnSites(): string[] {
       continue
     }
     const source = readFileSync(path, 'utf8')
-    for (const match of source.matchAll(/['"]wsl\.exe['"]/g)) {
+    for (const match of source.matchAll(/['"`]wsl\.exe['"`]/g)) {
       // Collapse the preceding whitespace so a call broken across lines by the
       // formatter still reads as one opener.
       const preceding = source.slice(Math.max(0, match.index - 60), match.index)
