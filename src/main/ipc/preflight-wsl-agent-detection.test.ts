@@ -181,4 +181,34 @@ describe('the detection script itself, run by a real POSIX shell', () => {
     plant('.local/bin', 'claude')
     expect(await runScript()).not.toContain('nosuchtool')
   })
+
+  itPosix('finds a CLI when $HOME contains a space', async () => {
+    // The dir list is globbed, so an unquoted $HOME word-split into a relative
+    // path and every CLI read as absent -- the #9725 symptom, from the fix.
+    const spaced = mkdtempSync(join(tmpdir(), 'orca has space-'))
+    const previous = home
+    home = spaced
+    try {
+      plant('.nvm/versions/node/v20.1.0/bin', 'claude')
+      expect(await runScript()).toContain(`${spaced}/.nvm/versions/node/v20.1.0/bin/claude`)
+    } finally {
+      home = previous
+      rmSync(spaced, { recursive: true, force: true })
+    }
+  })
+
+  itPosix('does not report a directory as an installed CLI', async () => {
+    // Directories are mode 755 and pass -x. Preflight would say installed and
+    // the launch would fail later with EISDIR.
+    mkdirSync(join(home, '.local/bin/claude'), { recursive: true })
+    expect(await runScript()).not.toContain('__ORCA_AGENT_PATH__claude')
+  })
+
+  itPosix.each(['.volta/bin', '.asdf/shims', '.fnm/aliases/default/bin', '.local/share/mise/shims'])(
+    'covers %s, which the native fallback also probes',
+    async (dir) => {
+      plant(dir, 'claude')
+      expect(await runScript()).toContain('__ORCA_AGENT_PATH__claude')
+    }
+  )
 })

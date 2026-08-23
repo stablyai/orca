@@ -33,8 +33,13 @@ export async function detectWslCommandsOnPath(
     // Only when the PATH lookup missed, mirroring the native fallback, which
     // resolves install dirs for missed commands only.
     'if [ -z "$resolved" ]; then',
-    `  for _orca_dir in ${POSIX_VERSION_MANAGER_BIN_DIRS.join(' ')}; do`,
-    '    if [ -x "$_orca_dir/$cmd" ]; then resolved="$_orca_dir/$cmd"; break; fi',
+    `  for _orca_dir in ${POSIX_VERSION_MANAGER_BIN_DIRS}; do`,
+    // `! -d` because directories are mode 755 and pass -x, and preflight would
+    // then report an installed CLI that fails later with EISDIR. The PATH half
+    // of this same script already guards it, as does the native twin.
+    '    if [ -x "$_orca_dir/$cmd" ] && [ ! -d "$_orca_dir/$cmd" ]; then',
+    '      resolved="$_orca_dir/$cmd"; break',
+    '    fi',
     '  done',
     'fi',
     'if [ -n "$resolved" ]; then',
