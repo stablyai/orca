@@ -77,7 +77,7 @@ describe('filesystem-list-files ripgrep guidance', () => {
       'Quick Open scan too large (File listing exceeded 10000 files).'
     )
     await rejection.catch((error: Error) =>
-      expect(error.message).toContain('Install ripgrep on the host running the Quick Open scan')
+      expect(error.message).toContain('Install ripgrep on this machine')
     )
   })
 

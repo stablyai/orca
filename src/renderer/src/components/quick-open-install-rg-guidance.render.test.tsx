@@ -6,7 +6,7 @@ import { QuickOpenInstallRgGuidance } from './quick-open-install-rg-guidance'
 afterEach(cleanup)
 
 describe('QuickOpenInstallRgGuidance', () => {
-  it('says the local host, not the remote, for a local scan', () => {
+  it('says this machine, not the remote, for a local scan', () => {
     render(
       <QuickOpenInstallRgGuidance
         reason="File listing timed out"
@@ -15,7 +15,7 @@ describe('QuickOpenInstallRgGuidance', () => {
         guidance={null}
       />
     )
-    expect(screen.getByText(/on the host running the Quick Open scan/i)).toBeTruthy()
+    expect(screen.getByText(/on this machine/i)).toBeTruthy()
     expect(screen.queryByText(/on the remote/i)).toBeNull()
   })
 

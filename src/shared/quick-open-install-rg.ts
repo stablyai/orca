@@ -81,7 +81,7 @@ export async function buildInstallRgMessage(
 ): Promise<string> {
   const reason = cause instanceof Error ? cause.message : String(cause)
   const cmd = await detectInstallCommand()
-  const location = host === 'local' ? 'on the host running the Quick Open scan' : 'on the remote'
+  const location = host === 'local' ? 'on this machine' : 'on the remote'
   return (
     `Quick Open scan too large (${reason}). ` +
     `Install ripgrep ${location} to enable fast, gitignore-aware listing: ${cmd}`
