@@ -34,6 +34,7 @@ export type AgentStatusSetData = {
   turnCompletedAt?: number
   terminalHandle?: string
   launchToken?: string
+  authorityRestart?: true
   providerSession?: { key: 'session_id'; id: string }
   providerSessionOnly?: boolean
   orchestration?: {

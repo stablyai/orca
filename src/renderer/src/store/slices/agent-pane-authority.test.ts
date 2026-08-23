@@ -128,6 +128,36 @@ describe('agent pane authority', () => {
     expect(store.getState().agentStatusByPaneKey[SIBLING]).toBeUndefined()
   })
 
+  it('accepts an authoritative live restart, clears its resolved tombstone, then applies done', () => {
+    const store = createTestStore()
+    store.getState().setAgentStatus(TARGET, { state: 'working', prompt: 'old turn' })
+    store.getState().retireAgentPaneAuthority(TARGET)
+
+    store
+      .getState()
+      .setAgentStatus(
+        TARGET,
+        { state: 'working', prompt: 'OMP new turn', agentType: 'omp' },
+        undefined,
+        undefined,
+        undefined,
+        { authorityRestart: true }
+      )
+    store.getState().setAgentStatus(TARGET, {
+      state: 'done',
+      prompt: 'OMP new turn',
+      agentType: 'omp'
+    })
+
+    const state = store.getState()
+    expect(state.recentlyRetiredAgentStatusPaneKeys[TARGET]).toBeUndefined()
+    expect(state.agentStatusByPaneKey[TARGET]).toMatchObject({
+      state: 'done',
+      prompt: 'OMP new turn',
+      agentType: 'omp'
+    })
+  })
+
   it('can retire live pane authority while retaining a migration recovery fence', () => {
     const store = createTestStore()
     store.getState().setAgentStatus(TARGET, { state: 'working', prompt: 'target' })

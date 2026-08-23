@@ -132,6 +132,8 @@ export type AgentStatusMetadata = {
   providerSession?: AgentProviderSessionMetadata
   launchConfig?: SleepingAgentLaunchConfig
   launchToken?: string
+  /** A source-aware live new-turn hook may clear its pane-retirement tombstone. */
+  authorityRestart?: true
 }
 
 export type AgentStatusUpdate = {
@@ -2103,8 +2105,9 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
     setAgentStatus: (paneKey, payload, terminalTitle, timing, routing, metadata) => {
       paneKey = resolveAgentPaneAuthorityKey(paneKey)
       const updatedAt = timing?.updatedAt ?? Date.now()
+      const authoritativelyRestarted = metadata?.authorityRestart === true
       if (
-        paneKey in get().recentlyRetiredAgentStatusPaneKeys ||
+        (!authoritativelyRestarted && paneKey in get().recentlyRetiredAgentStatusPaneKeys) ||
         // Why: a closed tab is no longer a valid destination for hook replays or late status events.
         isRecentlyClosedAgentStatusTab(
           get().recentlyClosedAgentStatusTabIds,
@@ -2423,6 +2426,16 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
           nextRetentionSuppressedPaneKeys = { ...s.retentionSuppressedPaneKeys }
           delete nextRetentionSuppressedPaneKeys[paneKey]
         }
+        // Why: only a source-aware live new-turn event may undo this exact pane's
+        // retirement fence; tab-close tombstones are intentionally untouched.
+        const hasRetiredPaneTombstone =
+          authoritativelyRestarted && paneKey in s.recentlyRetiredAgentStatusPaneKeys
+        const nextRecentlyRetiredAgentStatusPaneKeys = hasRetiredPaneTombstone
+          ? { ...s.recentlyRetiredAgentStatusPaneKeys }
+          : s.recentlyRetiredAgentStatusPaneKeys
+        if (hasRetiredPaneTombstone) {
+          delete nextRecentlyRetiredAgentStatusPaneKeys[paneKey]
+        }
         // Why: pane keys are reused across turns, so a fresh live row makes any retained snapshot stale — drop it so it doesn't render beside the live row.
         const hasRetainedSnapshot = paneKey in s.retainedAgentsByPaneKey
         const nextRetainedAgents = hasRetainedSnapshot
@@ -2517,6 +2530,7 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
           agentLaunchConfigByPaneKey: nextLaunchConfigs,
           migrationUnsupportedByPtyId: migrationUnsupported.next,
           retentionSuppressedPaneKeys: nextRetentionSuppressedPaneKeys,
+          recentlyRetiredAgentStatusPaneKeys: nextRecentlyRetiredAgentStatusPaneKeys,
           agentStatusEpoch:
             retentionRelevantChange || migrationUnsupported.changed || evictedOrphans
               ? s.agentStatusEpoch + 1
