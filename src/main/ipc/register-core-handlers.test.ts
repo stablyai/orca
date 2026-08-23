@@ -666,4 +666,37 @@ describe('registerCoreHandlers', () => {
     // memory handler must not be wired up a second time on reactivation.
     expect(registerMemoryHandlersMock).not.toHaveBeenCalled()
   })
+
+  // Why a fresh module per case: `registered` is module-level, so only the
+  // first registerCoreHandlers call per registry reaches the sweep.
+  async function registerWithUI(ui: Record<string, unknown>): Promise<void> {
+    vi.resetModules()
+    const { registerCoreHandlers: register } = await import('./register-core-handlers')
+    register(
+      { marker: 'sweep-store', getUI: () => ui } as never,
+      { marker: 'runtime', getAgentBrowserBridge: () => null } as never,
+      {} as never,
+      {} as never,
+      {} as never,
+      {} as never,
+      { runtimeHomeService: {} } as never,
+      {} as never,
+      {} as never
+    )
+  }
+
+  it('does not sweep pet files when the UI state has no pet list to speak for', async () => {
+    // A corrupt state file falls back to defaults, where `customPets` is absent.
+    // Reading that as "no pets are known" deletes every pet folder older than
+    // the grace period, with no undo.
+    await registerWithUI({})
+
+    expect(sweepOrphanedPetsMock).not.toHaveBeenCalled()
+  })
+
+  it('still sweeps for a user whose pet list is genuinely empty', async () => {
+    await registerWithUI({ customPets: [] })
+
+    expect(sweepOrphanedPetsMock).toHaveBeenCalledWith([])
+  })
 })
