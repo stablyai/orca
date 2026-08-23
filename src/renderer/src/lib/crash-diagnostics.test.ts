@@ -78,6 +78,7 @@ describe('renderer crash diagnostics', () => {
       name: 'renderer_memory',
       data: {
         reason: 'startup',
+        rendererSurface: 'main',
         usedHeapMB: 32,
         totalHeapMB: 64,
         heapLimitMB: 512,
@@ -218,6 +219,145 @@ describe('renderer crash diagnostics', () => {
     expect(highwaterCalls()).toHaveLength(2)
     expect(getElementsByTagName).toHaveBeenCalledTimes(3)
     expect(querySelectorAll).toHaveBeenCalledTimes(3)
+
+    unregister()
+  })
+
+  it('emits highwater samples inside the last 20% of the heap limit', async () => {
+    // Why: the 42-crash OOM cluster dies at 90-97% of the limit. With samples
+    // only at 60/80% the nearest profile is ~60min stale and names nothing.
+    const memory = (window.performance as unknown as { memory: Record<string, number> }).memory
+    vi.stubGlobal('document', {
+      getElementsByTagName: () => ({ length: 1 }),
+      querySelectorAll: () => ({ length: 0 })
+    })
+
+    diagnostics.installRendererCrashDiagnostics()
+    const tick = setIntervalMock.mock.calls[0][0] as () => void
+    memory.usedJSHeapSize = 0.92 * memory.jsHeapSizeLimit
+    tick()
+    memory.usedJSHeapSize = 0.96 * memory.jsHeapSizeLimit
+    tick()
+
+    const thresholds = recordBreadcrumbMock.mock.calls
+      .filter((call) => (call[0] as { name: string }).name === 'renderer_memory_highwater')
+      .map((call) => (call[0] as { data: { thresholdPct: number } }).data.thresholdPct)
+    expect(thresholds).toEqual([60, 80, 90, 95])
+  })
+
+  it('carries both shipped byte contributors on the routine renderer_memory breadcrumb', async () => {
+    // Why the real registrations rather than stand-ins: the sub-A leak grows
+    // outside the zustand store, so a trend carrying only storeKB still cannot
+    // name it. F0BM6V4KEBV died at 78% of the limit, where no highwater level
+    // fires and this crumb is the only attribution there is — which is also why
+    // no document is stubbed here: 32MB of 512MB crosses nothing.
+    const { useAppStore } = await import('../store')
+    const { registerLivePaneManager, unregisterLivePaneManager } =
+      await import('./pane-manager/pane-manager-registry')
+    useAppStore.setState({ worktrees: [{ id: 'w1' }, { id: 'w2' }] } as never)
+    const paneManager = {
+      resetWebglTextureAtlases: () => undefined,
+      getPaneCount: () => 2,
+      getPanes: () =>
+        [1, 2].map((id) => ({
+          id,
+          terminal: { cols: 200, buffer: { active: { length: 5000 } } }
+        }))
+    }
+    registerLivePaneManager(paneManager)
+
+    diagnostics.installRendererCrashDiagnostics()
+
+    const routine = recordBreadcrumbMock.mock.calls.find(
+      (call) => (call[0] as { name: string }).name === 'renderer_memory'
+    )?.[0] as { data: Record<string, number> }
+    expect(routine.data['storeKB.__totalKB']).toBeGreaterThan(0)
+    // 2 panes x 5000 rows x 200 cols x 16B ~= 31MB of scrollback.
+    expect(routine.data['terminals.estBufferKB']).toBeGreaterThan(30_000)
+    expect(routine.data['terminals.estPanes']).toBe(2)
+
+    unregisterLivePaneManager(paneManager)
+  })
+
+  it('carries truncated byte attribution on the routine renderer_memory breadcrumb', async () => {
+    // Why: two isolated highwater snapshots cannot show a ramp; the 60s crumb
+    // must carry a byte TREND so a report localizes the retainer on its own.
+    const profile = await import('./renderer-memory-profile')
+    const unregister = profile.registerRendererMemoryProfileContributor(
+      'storeKB',
+      () => ({ worktrees: 120, __totalKB: 4200, tabs: 900, agents: 5, prs: 60, drafts: 2 }),
+      { trendLimit: 5 }
+    )
+
+    diagnostics.installRendererCrashDiagnostics()
+
+    const routine = recordBreadcrumbMock.mock.calls.find(
+      (call) => (call[0] as { name: string }).name === 'renderer_memory'
+    )?.[0] as { data: Record<string, unknown> }
+    expect(routine.data).toMatchObject({
+      'storeKB.__totalKB': 4200,
+      'storeKB.tabs': 900,
+      'storeKB.worktrees': 120,
+      'storeKB.prs': 60,
+      'storeKB.agents': 5
+    })
+    expect(routine.data).not.toHaveProperty('storeKB.drafts')
+
+    unregister()
+  })
+
+  it('censuses the store once on a sample that also profiles the highwater', async () => {
+    // Why: the trend and the highwater profile share one contributor. Walking the
+    // store twice is worst exactly at 90/95%, where there is no headroom for the
+    // transient allocation the census makes.
+    const memory = (window.performance as unknown as { memory: Record<string, number> }).memory
+    memory.usedJSHeapSize = 0.96 * memory.jsHeapSizeLimit
+    vi.stubGlobal('document', {
+      getElementsByTagName: () => ({ length: 1 }),
+      querySelectorAll: () => ({ length: 0 })
+    })
+    let censuses = 0
+    const profile = await import('./renderer-memory-profile')
+    const unregister = profile.registerRendererMemoryProfileContributor(
+      'storeKB',
+      () => {
+        censuses += 1
+        return { __totalKB: 4200 }
+      },
+      { trendLimit: 5 }
+    )
+
+    diagnostics.installRendererCrashDiagnostics()
+
+    expect(
+      recordBreadcrumbMock.mock.calls.filter(
+        (call) => (call[0] as { name: string }).name === 'renderer_memory_highwater'
+      )
+    ).toHaveLength(4)
+    expect(censuses).toBe(1)
+
+    unregister()
+  })
+
+  it('tags every routine renderer_memory sample with its renderer surface', async () => {
+    // Why: main and the dashboard popout push into the same 30-slot main-process
+    // ring, each with its own storeKB census. Untagged, the byte trend this crumb
+    // exists to expose interleaves two unrelated heaps into one unreadable series.
+    const profile = await import('./renderer-memory-profile')
+    const unregister = profile.registerRendererMemoryProfileContributor(
+      'storeKB',
+      () => ({ __totalKB: 12 }),
+      { trendLimit: 5 }
+    )
+
+    diagnostics.installRendererCrashDiagnostics('dashboard-popout')
+    const tick = setIntervalMock.mock.calls[0][0] as () => void
+    tick()
+
+    const surfaces = recordBreadcrumbMock.mock.calls
+      .filter((call) => (call[0] as { name: string }).name === 'renderer_memory')
+      .map((call) => (call[0] as { data: { rendererSurface?: string } }).data.rendererSurface)
+    expect(surfaces).toEqual(['dashboard-popout', 'dashboard-popout'])
 
     unregister()
   })

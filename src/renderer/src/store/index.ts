@@ -122,8 +122,12 @@ registerRendererMemoryProfileContributor('store', () =>
 
 // Why bytes too: counts miss value-weight growth (97b9e86d leaked ~700MB while
 // its biggest slice grew by 4 entries); sampled KB names what got FAT.
-registerRendererMemoryProfileContributor('storeKB', () =>
-  estimateStateCollectionKB(useAppStore.getState(), 16)
+// Why trendLimit 5: __totalKB always outranks any single slice, so 5 carries
+// the total plus the top 4 slices onto every routine renderer_memory crumb.
+registerRendererMemoryProfileContributor(
+  'storeKB',
+  () => estimateStateCollectionKB(useAppStore.getState(), 16),
+  { trendLimit: 5 }
 )
 
 export type { AppState } from './types'

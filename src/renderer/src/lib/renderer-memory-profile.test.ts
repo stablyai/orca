@@ -1,6 +1,8 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   collectRendererMemoryProfileCounts,
+  collectRendererMemoryTrendCounts,
+  createRendererMemoryCensus,
   registerRendererMemoryProfileContributor,
   summarizeStateCollectionSizes
 } from './renderer-memory-profile'
@@ -134,6 +136,115 @@ describe('collectRendererMemoryProfileCounts', () => {
     expect(contributor).not.toHaveBeenCalled()
   })
 })
+
+describe('collectRendererMemoryTrendCounts', () => {
+  it('keeps only the heaviest keys of trend-tagged contributors', () => {
+    unregisters.push(
+      registerRendererMemoryProfileContributor(
+        'storeKB',
+        () => ({ tabs: 900, __totalKB: 4200, worktrees: 120, prs: 60, agents: 5, drafts: 2 }),
+        { trendLimit: 5 }
+      )
+    )
+    register('store', () => ({ worktrees: 40 }))
+
+    expect(collectRendererMemoryTrendCounts()).toEqual({
+      'storeKB.__totalKB': 4200,
+      'storeKB.tabs': 900,
+      'storeKB.worktrees': 120,
+      'storeKB.prs': 60,
+      'storeKB.agents': 5
+    })
+  })
+
+  it('bounds the aggregate trend budget and contains throwing contributors', () => {
+    unregisters.push(
+      registerRendererMemoryProfileContributor(
+        'broken',
+        () => {
+          throw new Error('boom')
+        },
+        { trendLimit: 4 }
+      )
+    )
+    unregisters.push(
+      registerRendererMemoryProfileContributor(
+        'runaway',
+        () => Object.fromEntries(Array.from({ length: 500 }, (_, index) => [`key${index}`, index])),
+        { trendLimit: 500 }
+      )
+    )
+
+    const counts = collectRendererMemoryTrendCounts()
+    expect(counts['broken.error']).toBe(1)
+    expect(Object.keys(counts)).toHaveLength(8)
+  })
+})
+
+// A sample that crosses a threshold runs both censuses, and storeKB walks every
+// top-level store slice with a transient allocation the size of what it measures
+// — the last thing to do twice with no heap headroom left.
+describe('a census shared across one sample pass', () => {
+  it('reads each contributor once for both the trend and the profile', () => {
+    let reads = 0
+    unregisters.push(
+      registerRendererMemoryProfileContributor(
+        'storeKB',
+        () => {
+          reads += 1
+          return { __totalKB: 4200, tabs: 900 }
+        },
+        { trendLimit: 5 }
+      )
+    )
+    const census = createRendererMemoryCensus()
+
+    const trend = collectRendererMemoryTrendCounts(census)
+    const profile = collectRendererMemoryProfileCounts(census)
+
+    expect(reads).toBe(1)
+    expect(trend).toEqual({ 'storeKB.__totalKB': 4200, 'storeKB.tabs': 900 })
+    expect(profile).toEqual({ 'storeKB.__totalKB': 4200, 'storeKB.tabs': 900 })
+  })
+
+  it('keeps a fresh census per sample so the trend still moves', () => {
+    let size = 10
+    unregisters.push(
+      registerRendererMemoryProfileContributor('storeKB', () => ({ __totalKB: (size += 10) }), {
+        trendLimit: 1
+      })
+    )
+
+    expect(collectRendererMemoryTrendCounts(createRendererMemoryCensus())).toEqual({
+      'storeKB.__totalKB': 20
+    })
+    expect(collectRendererMemoryTrendCounts(createRendererMemoryCensus())).toEqual({
+      'storeKB.__totalKB': 30
+    })
+  })
+
+  it('reports a throwing contributor in both censuses without re-running it', () => {
+    let reads = 0
+    unregisters.push(
+      registerRendererMemoryProfileContributor(
+        'broken',
+        () => {
+          reads += 1
+          throw new Error('boom')
+        },
+        { trendLimit: 4 }
+      )
+    )
+    const census = createRendererMemoryCensus()
+
+    expect(collectRendererMemoryTrendCounts(census)).toEqual({ 'broken.error': 1 })
+    expect(collectRendererMemoryProfileCounts(census)).toEqual({ 'broken.error': 1 })
+    expect(reads).toBe(1)
+  })
+})
+
+// The shipped contributors are measured against MAX_PROFILE_COUNTS in
+// renderer-memory-shipped-contributors.test.ts, which registers them for real.
 
 describe('summarizeStateCollectionSizes', () => {
   it('reports the largest collections first, capped at the limit', () => {

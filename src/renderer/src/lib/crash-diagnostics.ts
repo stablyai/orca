@@ -2,20 +2,27 @@ import type {
   CrashReportBreadcrumbData,
   CrashReportDetailValue
 } from '../../../shared/crash-reporting'
+// Why the levels live in shared/: one detailed breadcrumb per (surface,
+// threshold) is retained in the main process, whose budget is derived from them.
+import {
+  RENDERER_MEMORY_HIGHWATER_RATIOS,
+  type RendererSurface
+} from '../../../shared/renderer-memory-highwater'
 import {
   getBrowserWebviewMemoryProfile,
   type BrowserWebviewMemoryProfile
 } from '../components/browser-pane/host-guest/webview-registry'
 import { recordRendererCrashBreadcrumb } from './crash-breadcrumb-recorder'
-import { collectRendererMemoryProfileCounts } from './renderer-memory-profile'
+import {
+  collectRendererMemoryProfileCounts,
+  collectRendererMemoryTrendCounts,
+  createRendererMemoryCensus,
+  type RendererMemoryCensus
+} from './renderer-memory-profile'
 
 const RENDERER_MEMORY_SAMPLE_INTERVAL_MS = 60_000
 const BYTES_PER_MEGABYTE = 1024 * 1024
 const BYTES_PER_KILOBYTE = 1024
-// Why: one detailed breadcrumb per threshold names what grew before an OOM.
-const RENDERER_MEMORY_HIGHWATER_RATIOS = [0.6, 0.8] as const
-
-type RendererSurface = 'main' | 'dashboard-popout'
 
 type BrowserPerformanceMemory = {
   usedJSHeapSize?: number
@@ -117,11 +124,17 @@ function recordRendererMemory(reason: string): void {
     return
   }
   const browserWebviews = getBrowserWebviewMemoryProfile()
+  // Why one census per sample: the highwater profile below repeats this pass's
+  // contributors, and near-OOM is the worst moment to walk the store twice.
+  const census = createRendererMemoryCensus()
 
   recordRendererCrashBreadcrumb(
     'renderer_memory',
     compactBreadcrumbData({
       reason,
+      // Why: main and the dashboard popout each sample into the same ring, so an
+      // untagged series reads as a sawtooth between two unrelated heaps.
+      rendererSurface,
       usedHeapMB: toMegabytes(memory.usedJSHeapSize),
       totalHeapMB: toMegabytes(memory.totalJSHeapSize),
       heapLimitMB: toMegabytes(memory.jsHeapSizeLimit),
@@ -129,15 +142,19 @@ function recordRendererMemory(reason: string): void {
       mallocedMB: toMegabytes(memory.mallocedBytes),
       blinkAllocatedMB: toMegabytes(memory.blinkAllocatedBytes),
       browserWebviews: browserWebviews.browserWebviewCount,
-      registeredBrowserGuests: browserWebviews.registeredBrowserGuestCount
+      registeredBrowserGuests: browserWebviews.registeredBrowserGuestCount,
+      // Why on every sample: a byte trend across the session localizes a
+      // retainer that two near-death snapshots cannot.
+      ...collectRendererMemoryTrendCounts(census)
     })
   )
-  recordRendererMemoryHighwater(memory, browserWebviews)
+  recordRendererMemoryHighwater(memory, browserWebviews, census)
 }
 
 function recordRendererMemoryHighwater(
   memory: HeapMetrics,
-  browserWebviews: BrowserWebviewMemoryProfile
+  browserWebviews: BrowserWebviewMemoryProfile,
+  census: RendererMemoryCensus
 ): void {
   const used = memory.usedJSHeapSize
   const limit = memory.jsHeapSizeLimit
@@ -170,7 +187,7 @@ function recordRendererMemoryHighwater(
     terminalElements: document.querySelectorAll('.xterm').length,
     browserWebviews: browserWebviews.browserWebviewCount,
     registeredBrowserGuests: browserWebviews.registeredBrowserGuestCount,
-    ...collectRendererMemoryProfileCounts()
+    ...collectRendererMemoryProfileCounts(census)
   })
   for (const threshold of RENDERER_MEMORY_HIGHWATER_RATIOS) {
     if (ratio < threshold || emittedHighwaterRatios.has(threshold)) {

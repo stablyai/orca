@@ -4,10 +4,12 @@ import {
   type CrashReportBreadcrumbData,
   type CrashReportBreadcrumb
 } from '../../shared/crash-reporting'
+import { MAX_RETAINED_RENDERER_MEMORY_BREADCRUMBS } from '../../shared/renderer-memory-highwater'
 
 const MAX_BREADCRUMBS = 30
-// Why: retain two thresholds for each renderer surface without growing the ring.
-const MAX_RETAINED_BREADCRUMBS = 4
+// Why derived: eviction is oldest-first, so a budget smaller than the emitted
+// (surface x threshold) profiles drops the near-death one.
+const MAX_RETAINED_BREADCRUMBS = MAX_RETAINED_RENDERER_MEMORY_BREADCRUMBS
 // Why: coalesceKey embeds an open-string agentType (length-trimmed only, never
 // enum-checked), so the key space is unbounded over a long multi-agent/SSH session.
 // Bound the coalesce map the same way ProcessGoneDedupe bounds its key map.
@@ -224,7 +226,11 @@ export function getCrashBreadcrumbSnapshot(): CrashReportBreadcrumb[] {
   resolveAllPendingCoalescedBreadcrumbs()
   // Why: long sessions must retain threshold profiles without growing the 30-entry budget.
   const retained = [...retainedBreadcrumbs.values()]
-  const recent = breadcrumbs.slice(-(MAX_BREADCRUMBS - retained.length))
+  // Why a start index rather than slice(-budget): a retained budget that ever
+  // reaches MAX_BREADCRUMBS makes the budget 0, and slice(-0) returns the whole
+  // ring. Counting forward degrades to [] with no branch to leave untested.
+  const recentBudget = MAX_BREADCRUMBS - retained.length
+  const recent = breadcrumbs.slice(Math.max(0, breadcrumbs.length - recentBudget))
   return [...retained, ...recent]
     .sort((left, right) => left.createdAt.localeCompare(right.createdAt))
     .map((breadcrumb) => ({

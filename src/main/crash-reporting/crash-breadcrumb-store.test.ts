@@ -5,6 +5,11 @@ import {
   recordCoalescedCrashBreadcrumb,
   recordCrashBreadcrumb
 } from './crash-breadcrumb-store'
+import {
+  MAX_RETAINED_RENDERER_MEMORY_BREADCRUMBS,
+  RENDERER_MEMORY_HIGHWATER_RATIOS,
+  RENDERER_MEMORY_SURFACES
+} from '../../shared/renderer-memory-highwater'
 
 afterEach(() => {
   vi.useRealTimers()
@@ -50,7 +55,8 @@ describe('crash breadcrumb store', () => {
   })
 
   it('caps retained high-water profiles', () => {
-    for (let index = 0; index < 5; index += 1) {
+    const overflow = MAX_RETAINED_RENDERER_MEMORY_BREADCRUMBS + 1
+    for (let index = 0; index < overflow; index += 1) {
       recordCrashBreadcrumb('renderer_memory_highwater', {
         rendererSurface: `surface-${index}`,
         thresholdPct: 80
@@ -59,7 +65,66 @@ describe('crash breadcrumb store', () => {
 
     expect(
       getCrashBreadcrumbSnapshot().map((breadcrumb) => breadcrumb.data?.rendererSurface)
-    ).toEqual(['surface-1', 'surface-2', 'surface-3', 'surface-4'])
+    ).toEqual(
+      Array.from(
+        { length: MAX_RETAINED_RENDERER_MEMORY_BREADCRUMBS },
+        (_, index) => `surface-${index + 1}`
+      )
+    )
+  })
+
+  // The retained key is `<surface>:<thresholdPct>`, so the budget must track
+  // thresholds x surfaces. It once lagged at 4 against 8 emitted profiles, and
+  // oldest-first eviction dropped every main-window one — including the 95%
+  // near-death profile the OOM reports exist to carry.
+  it('retains every threshold profile that both renderer surfaces can emit', () => {
+    for (const surface of RENDERER_MEMORY_SURFACES) {
+      for (const ratio of RENDERER_MEMORY_HIGHWATER_RATIOS) {
+        recordCrashBreadcrumb('renderer_memory_highwater', {
+          rendererSurface: surface,
+          thresholdPct: Math.round(ratio * 100)
+        })
+      }
+    }
+
+    const profiles = getCrashBreadcrumbSnapshot().map(
+      (breadcrumb) => `${breadcrumb.data?.rendererSurface}:${breadcrumb.data?.thresholdPct}`
+    )
+
+    expect(profiles).toHaveLength(
+      RENDERER_MEMORY_SURFACES.length * RENDERER_MEMORY_HIGHWATER_RATIOS.length
+    )
+    for (const surface of RENDERER_MEMORY_SURFACES) {
+      for (const ratio of RENDERER_MEMORY_HIGHWATER_RATIOS) {
+        expect(profiles).toContain(`${surface}:${Math.round(ratio * 100)}`)
+      }
+    }
+  })
+
+  // Retained profiles spend the ring budget rather than extending it, so the
+  // newest events lose slots one-for-one instead of the snapshot growing.
+  it('never exceeds the ring size once high-water profiles are retained', () => {
+    for (const surface of RENDERER_MEMORY_SURFACES) {
+      for (const ratio of RENDERER_MEMORY_HIGHWATER_RATIOS) {
+        recordCrashBreadcrumb('renderer_memory_highwater', {
+          rendererSurface: surface,
+          thresholdPct: Math.round(ratio * 100)
+        })
+      }
+    }
+    for (let index = 0; index < 40; index += 1) {
+      recordCrashBreadcrumb(`event_${index}`, { index })
+    }
+
+    const snapshot = getCrashBreadcrumbSnapshot()
+    expect(snapshot).toHaveLength(30)
+    expect(
+      snapshot.filter((breadcrumb) => breadcrumb.name === 'renderer_memory_highwater')
+    ).toHaveLength(MAX_RETAINED_RENDERER_MEMORY_BREADCRUMBS)
+    expect(snapshot.at(-1)?.name).toBe('event_39')
+    expect(snapshot.map((breadcrumb) => breadcrumb.name)).not.toContain(
+      `event_${39 - (30 - MAX_RETAINED_RENDERER_MEMORY_BREADCRUMBS)}`
+    )
   })
 
   it('redacts sensitive breadcrumb fields before they can be snapshotted', () => {

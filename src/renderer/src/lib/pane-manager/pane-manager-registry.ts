@@ -252,4 +252,11 @@ export function getLivePaneMemoryProfileCounts(): Record<string, number> {
 
 // Why here: contributors push in (crash-diagnostics stays a leaf); same-name
 // re-registration on dev HMR overwrites, so no disposal hook is needed.
-registerRendererMemoryProfileContributor('terminals', getLivePaneMemoryProfileCounts)
+// Why trendLimit: scrollback bytes live outside the zustand store, so storeKB
+// cannot see them and the one-shot highwater profiles sample them once — the
+// 78%-of-limit death in F0BM6V4KEBV never reached even the 90% level. The
+// census above is sample-capped arithmetic, far cheaper than the storeKB walk
+// it rides along with. 2 keys carries estBufferKB plus the pane count it scales.
+registerRendererMemoryProfileContributor('terminals', getLivePaneMemoryProfileCounts, {
+  trendLimit: 2
+})
