@@ -146,6 +146,12 @@ describe('orchestration federated worker output', () => {
       'tab_worker:bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb'
     )
     vi.spyOn(runtime, 'getTerminalProcessIncarnation').mockReturnValue('windows_runtime:pty:1')
+    vi.spyOn(runtime, 'getOrchestrationDispatchAuthority').mockReturnValue({
+      terminalHandle: 'term_windows_worker',
+      paneKey: 'tab_worker:bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',
+      processIncarnation: 'windows_runtime:pty:1',
+      hostScope: { kind: 'local', hostId: 'local' }
+    } as never)
     vi.spyOn(runtime, 'getTerminalOrchestrationCliCommand').mockReturnValue('orca')
     vi.spyOn(runtime, 'sendTerminalAgentPrompt').mockResolvedValue({
       handle: 'term_windows_worker',

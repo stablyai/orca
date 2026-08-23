@@ -142,7 +142,8 @@ export function revertWorkerTerminalReleaseToRetained(
 
 export function retainWorkerTerminalResource(
   this: OrchestrationDb,
-  dispatchId: string
+  dispatchId: string,
+  owner: 'worker' | 'remote_attachment' = 'worker'
 ):
   | { disposition: 'retained'; resource: WorkerTerminalResourceRow }
   | { disposition: 'already_released'; resource: WorkerTerminalResourceRow }
@@ -150,15 +151,27 @@ export function retainWorkerTerminalResource(
   | { disposition: 'no_owned_resource'; resource: null } {
   this.db.exec('BEGIN IMMEDIATE')
   try {
-    const dispatch = this.getDispatchContextById(dispatchId)
-    if (!dispatch) {
+    const dispatch = owner === 'worker' ? this.getDispatchContextById(dispatchId) : undefined
+    const attachment =
+      owner === 'remote_attachment' ? this.getRemoteDispatchAttachment(dispatchId) : undefined
+    if (owner === 'worker' && !dispatch) {
       throw new OrchestrationError('dispatch_not_found', `Dispatch ${dispatchId} was not found.`)
     }
-    const worker = this.getWorkerDispatch(dispatchId)
-    if (!worker && !['completed', 'failed', 'circuit_broken'].includes(dispatch.status)) {
+    if (owner === 'remote_attachment' && !attachment) {
+      throw new OrchestrationError(
+        'dispatch_not_found',
+        `Remote Dispatch ${dispatchId} was not found.`
+      )
+    }
+    const worker = owner === 'worker' ? this.getWorkerDispatch(dispatchId) : undefined
+    if (
+      owner === 'worker' &&
+      !worker &&
+      !['completed', 'failed', 'circuit_broken'].includes(dispatch!.status)
+    ) {
       throw new OrchestrationError(
         'dispatch_inactive',
-        `Dispatch ${dispatchId} is ${dispatch.status}; only a settled dispatch can retain.`
+        `Dispatch ${dispatchId} is ${dispatch!.status}; only a settled dispatch can retain.`
       )
     }
     const resource = this.getWorkerTerminalResourceByOwner(dispatchId)

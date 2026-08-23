@@ -176,6 +176,29 @@ describe('worker-stop against a terminal we lost contact with', () => {
     expect(closeTerminal).not.toHaveBeenCalled()
   })
 
+  it('rejects a legacy resource when takeover supplies an exact process incarnation', () => {
+    const dispatch = createWorker()
+    const resource = db.getWorkerTerminalResourceByOwner(dispatch.id)
+    if (!resource) {
+      throw new Error('Expected worker terminal resource')
+    }
+    ;(
+      db as unknown as {
+        db: { prepare: (sql: string) => { run: (id: string) => void } }
+      }
+    ).db
+      .prepare('UPDATE worker_terminal_resources SET process_incarnation = NULL WHERE id = ?')
+      .run(resource.id)
+
+    expect(
+      db.markWorkerTerminalUserOwned(
+        'tab_worker:bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',
+        'runtime:pty:1'
+      )
+    ).toBe(0)
+    expect(db.getWorkerTerminalResourceByOwner(dispatch.id)?.ownership_state).toBe('owned')
+  })
+
   it('does not close a legacy worker terminal without an ownership record', async () => {
     vi.spyOn(runtime, 'showTerminal').mockResolvedValue({
       handle: 'term_worker',

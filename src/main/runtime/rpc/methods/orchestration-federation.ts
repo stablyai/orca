@@ -6,6 +6,7 @@ import { assertOrchestrationWorktreeCreationSupported } from './orchestration-fo
 import {
   appendFederationSetupEffect,
   appendFederationTerminalEffects,
+  isFederationResidualEffect,
   type FederationEffect
 } from './orchestration-federation-effects'
 import type { WorkerSetupReceipt } from './orchestration-worker-topology'
@@ -194,6 +195,23 @@ export const ORCHESTRATION_FEDERATION_ATTACH_METHODS: RpcMethod[] = [
           throw new Error('Setup terminal failed to start before the gated agent launch.')
         }
         persistFederatedReadinessStage(setupStage)
+        const terminalAuthority = runtime.getOrchestrationDispatchAuthority(terminalHandle)
+        const paneKey = terminalAuthority?.paneKey
+        const processIncarnation = terminalAuthority?.processIncarnation
+        if (!paneKey || !processIncarnation) {
+          throw new Error('stable_pane_required')
+        }
+        const capability = db.prepareRemoteAttachmentAuthority({
+          dispatchId: params.dispatchId,
+          paneKey,
+          processIncarnation,
+          hostScope: JSON.stringify(terminalAuthority.hostScope),
+          worktreeId: worktree.id,
+          terminalHandle,
+          setupState: setup.state,
+          effects,
+          terminalOwnership: params.terminal ? 'external' : 'created'
+        })
         failedStage = 'agent_readiness'
         const wait = await runtime.waitForTerminal(terminalHandle, {
           condition: 'tui-idle',
@@ -210,20 +228,6 @@ export const ORCHESTRATION_FEDERATION_ATTACH_METHODS: RpcMethod[] = [
               : `Agent did not become ready (${wait.status}).`
           )
         }
-        const paneKey = runtime.getTerminalPaneKey(terminalHandle)
-        const processIncarnation = runtime.getTerminalProcessIncarnation(terminalHandle)
-        if (!paneKey || !processIncarnation) {
-          throw new Error('stable_pane_required')
-        }
-        const capability = db.prepareRemoteAttachmentAuthority({
-          dispatchId: params.dispatchId,
-          paneKey,
-          processIncarnation,
-          worktreeId: worktree.id,
-          terminalHandle,
-          setupState: setup.state,
-          effects
-        })
         failedStage = 'dispatch_input'
         await runtime.sendTerminalAgentPrompt(
           terminalHandle,
@@ -259,6 +263,33 @@ export const ORCHESTRATION_FEDERATION_ATTACH_METHODS: RpcMethod[] = [
           residualResources: []
         }
       } catch (error) {
+        const createdAgent = effects.find(
+          (effect) =>
+            effect.kind === 'terminal' &&
+            effect.role === 'agent' &&
+            effect.id === terminalHandle &&
+            effect.action === 'created'
+        )
+        if (
+          terminalHandle &&
+          worktree &&
+          createdAgent &&
+          !db.getWorkerTerminalResourceByOwner(params.dispatchId)
+        ) {
+          const closed = await runtime.closeTerminal(terminalHandle).catch(() => null)
+          if (closed?.ptyKilled) {
+            createdAgent.action = 'closed_after_failed_start'
+            db.recordRemoteAttachmentStage({
+              dispatchId: params.dispatchId,
+              stage: failedStage,
+              worktreeId: worktree.id,
+              terminalHandle,
+              setupState: setup.state,
+              effects,
+              residualResources: effects.filter(isFederationResidualEffect)
+            })
+          }
+        }
         return failFederatedAttachmentWithReceipt({
           db,
           dispatchId: params.dispatchId,

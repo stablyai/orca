@@ -1,4 +1,5 @@
 import type { AgentType, NativeChatMessage } from '../../../shared/native-chat-types'
+import type { TerminalExitCause } from '../../../shared/terminal-exit-cause'
 import type { OrcaRuntimeService } from '../orca-runtime'
 import { OrchestrationError } from './orchestration-error'
 import {
@@ -9,6 +10,7 @@ import { readWorkerTranscript } from './worker-transcript-read'
 
 // Bound the durable copy of raw terminal output; the tail end is the evidence that matters.
 const TERMINAL_ARCHIVE_MAX_CHARS = 262_144
+const TERMINAL_ARCHIVE_MAX_COMMAND_CHARS = 4_096
 
 export type WorkerTranscriptPinArchive = {
   agent: AgentType
@@ -33,6 +35,9 @@ export type WorkerTerminalTailArchive = {
   lines: string[]
   truncated: boolean
   terminalStatus: string
+  exitCode?: number | null
+  exitCause?: TerminalExitCause
+  command?: string | null
   warnings: string[]
 }
 
@@ -87,8 +92,8 @@ export async function captureWorkerOutputArchive(args: {
   }
   const redacted = redactWorkerTerminalLines(terminal.tail)
   const bounded = boundArchiveLines(redacted.lines)
-  // Why: an exited PTY zeroes its tail immediately, so an empty capture is a distinct receipt,
-  // not silent success — worker-read must be able to say why nothing is there.
+  const command = boundArchiveCommand(terminal.command)
+  // An empty capture is explicit evidence, not silent success.
   const empty = bounded.lines.every((line) => line.trim() === '')
   return {
     kind: 'terminal_tail',
@@ -97,13 +102,40 @@ export async function captureWorkerOutputArchive(args: {
       lines: bounded.lines,
       truncated: terminal.truncated || bounded.truncated,
       terminalStatus: terminal.status,
+      ...(terminal.exitCode !== undefined ? { exitCode: terminal.exitCode } : {}),
+      ...(terminal.exitCause ? { exitCause: terminal.exitCause } : {}),
+      ...('command' in command ? { command: command.command } : {}),
       warnings: empty
         ? [
             ...redacted.warnings,
+            ...command.warnings,
             'The live terminal buffer was empty at release; structured transcript output was unavailable.'
           ]
-        : redacted.warnings
+        : [...redacted.warnings, ...command.warnings]
     }
+  }
+}
+
+function boundArchiveCommand(command: string | null | undefined): {
+  command?: string | null
+  warnings: string[]
+} {
+  if (command === undefined) {
+    return { warnings: [] }
+  }
+  if (command === null) {
+    return { command: null, warnings: [] }
+  }
+  const redacted = redactWorkerTerminalLines([command])
+  const clipped = redacted.lines[0].slice(0, TERMINAL_ARCHIVE_MAX_COMMAND_CHARS)
+  return {
+    command: clipped,
+    warnings: [
+      ...redacted.warnings.map(() => 'Dispatch capability tokens were redacted from the command.'),
+      ...(clipped.length < redacted.lines[0].length
+        ? ['The archived terminal command was clipped to its size limit.']
+        : [])
+    ]
   }
 }
 

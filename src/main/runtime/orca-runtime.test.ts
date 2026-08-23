@@ -15964,7 +15964,7 @@ describe('OrcaRuntimeService', () => {
     await expect(waiting).resolves.toEqual({ exitCode: 0 })
   })
 
-  it('drops retained PTY transcript memory when a background terminal exits', async () => {
+  it('retains bounded background terminal output after exit until explicit close', async () => {
     const runtime = new OrcaRuntimeService(store)
     runtime.setPtyController({
       spawn: vi.fn().mockResolvedValue({ id: 'pty-bg' }),
@@ -15975,6 +15975,7 @@ describe('OrcaRuntimeService', () => {
     runtime.attachWindow(1)
     runtime.syncWindowGraph(1, { tabs: [], leaves: [] })
     const { handle } = await runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`)
+    runtime.noteTerminalSpawnCommand('pty-bg', 'review-command --json')
 
     runtime.onPtyData(
       'pty-bg',
@@ -15994,6 +15995,7 @@ describe('OrcaRuntimeService', () => {
           string,
           {
             tailBuffer: string[]
+            tailTranscriptBuffer: string[]
             tailPartialLine: string
             tailLinesTotal: number
             tailTruncated: boolean
@@ -16003,20 +16005,62 @@ describe('OrcaRuntimeService', () => {
       }
     ).ptysById.get('pty-bg')
     expect(pty).toMatchObject({
-      tailBuffer: [],
+      tailBuffer: expect.arrayContaining(['line-0', 'wrote /tmp/exited-result.json']),
+      tailTranscriptBuffer: expect.arrayContaining(['line-0', 'wrote /tmp/exited-result.json']),
       tailPartialLine: '',
-      tailLinesTotal: 0,
+      tailLinesTotal: 21,
       tailTruncated: false
     })
     await expect(runtime.readTerminal(handle)).resolves.toMatchObject({
       status: 'exited',
-      tail: []
+      tail: expect.arrayContaining(['line-0', 'wrote /tmp/exited-result.json']),
+      nextCursor: '21',
+      exitCode: 0,
+      command: 'review-command --json'
+    })
+    await expect(runtime.waitForTerminal(handle)).resolves.toMatchObject({
+      status: 'exited',
+      exitCode: 0
     })
     expect(
       (
         runtime as unknown as { recentPtyPathCandidatesById: Map<string, string[]> }
       ).recentPtyPathCandidatesById.has('pty-bg')
     ).toBe(false)
+
+    await runtime.closeTerminal(handle)
+    await expect(runtime.readTerminal(handle)).rejects.toThrow('terminal_handle_stale')
+  })
+
+  it('does not carry an exited transcript into a replacement PTY incarnation', async () => {
+    const runtime = new OrcaRuntimeService(store)
+    runtime.registerPty('pty-reused-tail', TEST_WORKTREE_ID, null, {
+      tabId: 'tab-reused-tail',
+      leafId: HEADLESS_LEAF_ID,
+      incarnationId: 'incarnation-old'
+    })
+    const handle = runtime.preAllocateHandleForPty('pty-reused-tail')
+    runtime.noteTerminalSpawnCommand('pty-reused-tail', 'old-command')
+    runtime.onPtyData('pty-reused-tail', 'old incarnation marker\n', 100)
+    runtime.onPtyExit('pty-reused-tail', 0, 'incarnation-old')
+
+    await expect(runtime.readTerminal(handle)).resolves.toMatchObject({
+      status: 'exited',
+      tail: ['old incarnation marker'],
+      exitCode: 0,
+      command: 'old-command'
+    })
+
+    runtime.onPtySpawned('pty-reused-tail', 'incarnation-new', { awaitsRegistration: false })
+    const replacementHandle = runtime.createPreAllocatedTerminalHandle()
+    runtime.registerPreAllocatedHandleForPty('pty-reused-tail', replacementHandle)
+    await expect(runtime.readTerminal(replacementHandle)).resolves.toMatchObject({
+      status: 'running',
+      tail: [],
+      nextCursor: '0',
+      exitCode: null,
+      command: null
+    })
   })
 
   it('bounds disconnected background PTY records and their synthetic handles', async () => {
@@ -16055,6 +16099,52 @@ describe('OrcaRuntimeService', () => {
     await expect(runtime.readTerminal(handles[0]!)).rejects.toThrow('terminal_handle_stale')
     await expect(runtime.readTerminal(handles.at(-1)!)).resolves.toMatchObject({
       status: 'exited'
+    })
+  })
+
+  it('bounds exited transcripts even while their terminal leaves remain open', async () => {
+    const runtime = new OrcaRuntimeService(store)
+    const tabs = Array.from({ length: 140 }, (_, index) => ({
+      tabId: `tab-retained-${index}`,
+      worktreeId: TEST_WORKTREE_ID,
+      title: `retained-${index}`,
+      activeLeafId: HEADLESS_LEAF_ID,
+      layout: null
+    }))
+    const leaves = Array.from({ length: 140 }, (_, index) => ({
+      tabId: `tab-retained-${index}`,
+      worktreeId: TEST_WORKTREE_ID,
+      leafId: HEADLESS_LEAF_ID,
+      paneRuntimeId: index + 1,
+      ptyId: `pty-retained-${index}`,
+      paneTitle: null
+    }))
+    runtime.attachWindow(1)
+    runtime.syncWindowGraph(1, { tabs, leaves })
+
+    const handles: string[] = []
+    for (let index = 0; index < 140; index += 1) {
+      runtime.registerPty(`pty-retained-${index}`, TEST_WORKTREE_ID)
+      handles.push(runtime.preAllocateHandleForPty(`pty-retained-${index}`))
+      runtime.onPtyData(`pty-retained-${index}`, `retained-${index}\n`, 100 + index)
+      runtime.onPtyExit(`pty-retained-${index}`, 0)
+    }
+
+    const internals = runtime as unknown as {
+      ptysById: Map<string, { tailTranscriptBuffer: string[] }>
+    }
+    expect(internals.ptysById.size).toBe(140)
+    expect(internals.ptysById.get('pty-retained-0')?.tailTranscriptBuffer).toEqual([])
+    expect(internals.ptysById.get('pty-retained-139')?.tailTranscriptBuffer).toEqual([
+      'retained-139'
+    ])
+    await expect(runtime.readTerminal(handles[0]!)).resolves.toMatchObject({
+      status: 'exited',
+      tail: []
+    })
+    await expect(runtime.readTerminal(handles.at(-1)!)).resolves.toMatchObject({
+      status: 'exited',
+      tail: ['retained-139']
     })
   })
 
@@ -31640,6 +31730,58 @@ describe('OrcaRuntimeService', () => {
     expect(getSession().tabsByWorktree[TEST_WORKTREE_ID]).toEqual([])
     expect(getSession().terminalLayoutsByTabId['host-tab']).toBeUndefined()
     expect((await runtime.listMobileSessionTabs(`id:${TEST_WORKTREE_ID}`)).tabs).toEqual([])
+  })
+
+  it('keeps a confirmed PTY stop successful when its exited headless tab is already absent', async () => {
+    const ptyId = 'headless-worker-exited-tab'
+    const { runtimeStore } = makeRuntimeStoreWithWorkspaceSession(
+      makeWorkspaceSessionWithHeadlessTerminal({
+        tabsByWorktree: {
+          [TEST_WORKTREE_ID]: [
+            {
+              id: 'host-tab',
+              ptyId,
+              worktreeId: TEST_WORKTREE_ID,
+              title: 'Headless worker',
+              customTitle: null,
+              color: null,
+              sortOrder: 0,
+              createdAt: 1
+            }
+          ]
+        },
+        terminalLayoutsByTabId: {
+          'host-tab': makeHeadlessTerminalLayout({ [HEADLESS_LEAF_ID]: ptyId })
+        }
+      })
+    )
+    let runtime!: OrcaRuntimeService
+    const kill = vi.fn((closedPtyId: string) => {
+      runtime.onPtyExit(closedPtyId, 143)
+      return true
+    })
+    runtime = new OrcaRuntimeService(runtimeStore as never)
+    runtime.setPtyController({
+      write: () => true,
+      kill,
+      getForegroundProcess: async () => null,
+      listProcesses: async () => []
+    })
+    runtime.registerPty(ptyId, TEST_WORKTREE_ID, null, {
+      tabId: 'host-tab',
+      leafId: HEADLESS_LEAF_ID
+    })
+    runtime.syncWindowGraph(0, { tabs: [], leaves: [] })
+    await runtime.listMobileSessionTabs(`id:${TEST_WORKTREE_ID}`)
+    const handle = runtime.preAllocateHandleForPty(ptyId)
+    vi.spyOn(runtime, 'closeMobileSessionTab').mockRejectedValue(new Error('tab_not_found'))
+
+    await expect(runtime.closeTerminal(handle)).resolves.toEqual({
+      handle,
+      tabId: 'host-tab',
+      ptyKilled: true
+    })
+    expect(kill).toHaveBeenCalledWith(ptyId)
   })
 
   it('keeps the renderer close transaction for an adopted runtime-owned tab', async () => {

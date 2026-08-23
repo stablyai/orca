@@ -10817,22 +10817,32 @@
       ],
       "platforms": ["macos", "linux", "windows"],
       "providers": ["local", "daemon", "ssh", "wsl", "remote-runtime"],
-      "coveredPlatforms": ["macos"],
-      "coveredProviders": ["local", "ssh"],
-      "coverageNotes": "Deterministic service tests cover release-versus-reuse ordering, transactional retain and takeover cancellation, exact host/pane/process identity, dead external/user-owned/transferred/stopped/abandoned reconciliation, conservative unknown provider and legacy metadata handling, immutable transcript and bounded terminal archives, mutation restart, reset cleanup, replay idempotency, and 50-resource accounting. A macOS Electron journey invokes the freshly compiled worker-release CLI after the worker process disappears, then independently checks released SQLite state and coordinator liveness. Injected inventories cover local and SSH provider routing; live SSH, WSL, Windows, paired-runtime, and provider-close lost-ack journeys remain explicit gaps.",
+      "coveredPlatforms": ["macos", "windows"],
+      "coveredProviders": ["local", "ssh", "wsl", "remote-runtime"],
+      "coverageNotes": "Deterministic service tests cover local and federated release-versus-reuse ordering, transactional retain and takeover cancellation, exact host/pane/process identity, immutable transcript and bounded terminal archives, restart recovery, replay idempotency, mixed-version capability fallback, and bounded accounting. The composed federation test proves that only the process-owning runtime stores the resource and archive, closes the exact terminal once, and serves the archive through the Run home. Physical headed and hidden Windows journeys pair to an isolated WSL authority; a packaged 1.4.184 journey covers safe old-host retention.",
       "motivatingLinks": [
         "https://github.com/stablyai/orca/pull/12355",
         "https://github.com/stablyai/orca/issues/13860",
+        "https://github.com/stablyai/orca/issues/15020",
         "STA-905",
-        "STA-3932"
+        "STA-3932",
+        "STA-4593"
       ],
-      "invariant": "A settled Dispatch may close only its one coordinator-created terminal lease. Explicit reuse, real user input, retain, identity or host change, ambiguity, and another resource for the same exact host/pane/process must fence closure. Once the authoritative owning provider positively excludes the resource's exact immutable process incarnation, even an external, user-owned, or transferred dead resource must converge to released without any process close. Unknown host scope, missing incarnation metadata, or unavailable inventory must remain retained. Output preservation and the requested-to-releasing transition are atomic, archives remain readable without the provider file, retries resume idempotently, and orchestration reset removes archive and authority state.",
-      "oracle": "Record release intent for a settled owner, attempt exact reuse before close, and require worker-start to fail with terminal_release_in_progress while the terminal stays open; then release the original owner exactly once. Race retain and real user input against a controlled archive promise and require no committed archive or close. For retained external, user-owned, transferred, stopped, and abandoned resources, run one fresh inventory against the exact local/WSL or SSH provider: an exact live incarnation and every unknown inventory shape stay retained, while positive absence atomically sets ownership_state and release_state to released with processAction none and zero closeTerminal calls. Change host or process identity and inject duplicate resource evidence to require retention. Freeze a structured transcript, delete its source file, and require archived worker-read to return the same bounded redacted messages. Restart a pending mutation, reset orchestration state, and create 50 resources while asserting replay convergence, zero orphan rows, two-query worker listing, and no unrelated close.",
+      "invariant": "A settled Dispatch may close only its one coordinator-created terminal lease, including when the Run home and process owner are different runtimes. Explicit reuse, real user input on the exact incarnation, retain, identity or host change, ambiguity, and another resource for the same exact host/pane/process must fence closure. The process-owning host must re-prove pane, incarnation, and persisted local/WSL/SSH scope, archive bounded output before close, and return one idempotent release receipt; an old host without the negotiated capability remains retained without a guessed local close. Once the authoritative owning provider positively excludes the resource's exact immutable process incarnation, even an external, user-owned, or transferred dead resource must converge to released without any process close. Unknown host scope, missing incarnation metadata, or unavailable inventory must remain retained. Output preservation and the requested-to-releasing transition are atomic, exited transcript memory remains globally bounded, archives remain readable without the provider file, retries resume idempotently, and orchestration reset removes archive and authority state.",
+      "oracle": "Record release intent for a settled owner, attempt exact reuse before close, and require worker-start to fail with terminal_release_in_progress while the terminal stays open; then release the original owner exactly once. Race retain and real user input against a controlled archive promise and require no committed archive or close. For retained external, user-owned, transferred, stopped, and abandoned resources, run one fresh inventory against the exact local/WSL or SSH provider: an exact live incarnation and every unknown inventory shape stay retained, while positive absence atomically sets ownership_state and release_state to released with processAction none and zero closeTerminal calls. Change host or process identity and inject duplicate resource evidence to require retention. Freeze bounded, capability-redacted output and require archived worker-read after release. Restart a pending mutation, reset orchestration state, and create 50 resources while asserting replay convergence, zero orphan rows, two-query worker listing, and no unrelated close. Across a physical Windows Run home and isolated WSL process owner, require exact pane/incarnation/capability and once-only settlement, final output and exit metadata after PTY exit, idempotent retain/release/stop, and an unrelated live PTY; without the negotiated federated-release capability require retained with no local close.",
       "commands": [
+        "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/orchestration/worker-output-archive.test.ts src/main/runtime/rpc/methods/orchestration-worker-stop-liveness-verdict.test.ts --reporter=dot",
         "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/orca-runtime-process-incarnation-liveness.test.ts src/main/runtime/rpc/methods/orchestration-worker-release.test.ts src/main/runtime/rpc/methods/orchestration-worker-release-recovery.test.ts src/main/runtime/rpc/orchestration-mutation-ledger.test.ts src/main/runtime/orchestration/worker-transcript-read.test.ts src/renderer/src/lib/worker-terminal-takeover-report.test.ts --reporter=dot",
         "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/rpc/methods/orchestration-worker-release.test.ts src/main/runtime/rpc/methods/orchestration-worker-release-recovery.test.ts src/main/runtime/rpc/orchestration-mutation-ledger.test.ts src/main/runtime/orchestration/worker-transcript-read.test.ts src/renderer/src/lib/worker-terminal-takeover-report.test.ts --reporter=dot",
         "pnpm exec vitest run --config config/vitest.config.ts tests/e2e/completed-worker-retirement-resume.unit.test.ts --reporter=verbose",
-        "pnpm run build:cli && SKIP_BUILD=1 pnpm exec playwright test tests/e2e/orchestration-worker-settlement-release-cli.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1"
+        "pnpm run build:cli && SKIP_BUILD=1 pnpm exec playwright test tests/e2e/orchestration-worker-settlement-release-cli.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1",
+        "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/rpc/methods/orchestration-federation-terminal-lifecycle.test.ts src/main/runtime/rpc/methods/orchestration-federation-agent-launch.test.ts src/main/runtime/orca-runtime.test.ts --reporter=dot",
+        "SKIP_BUILD=1 STA4593_COORDINATOR_MODE=headful STA4593_EXPECT_FEDERATED_RELEASE=1 STA4593_PAIRING_CODE_PATH=<isolated-pairing-code> pnpm exec playwright test tests/e2e/sta4593-wsl-federation-lifecycle.spec.ts --config tests/playwright.config.ts --project electron-headful --workers=1",
+        "SKIP_BUILD=1 STA4593_COORDINATOR_MODE=headless STA4593_EXPECT_FEDERATED_RELEASE=1 STA4593_PAIRING_CODE_PATH=<isolated-pairing-code> pnpm exec playwright test tests/e2e/sta4593-wsl-federation-lifecycle.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1",
+        "SKIP_BUILD=1 STA4593_COORDINATOR_MODE=headless STA4593_EXPECT_FEDERATED_RELEASE=1 STA4593_PAIRING_CODE_PATH=<latest-main-pairing-code> pnpm exec playwright test tests/e2e/sta4593-wsl-federation-lifecycle.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1",
+        "SKIP_BUILD=1 STA4593_COORDINATOR_MODE=headless STA4593_PAIRING_CODE_PATH=<latest-main-pairing-code> pnpm exec playwright test tests/e2e/sta4593-wsl-federation-lifecycle.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1",
+        "SKIP_BUILD=1 STA4593_COORDINATOR_MODE=headless STA4593_PAIRING_CODE_PATH=<reverted-current-wsl-pairing-code> pnpm exec playwright test tests/e2e/sta4593-wsl-federation-lifecycle.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1",
+        "SKIP_BUILD=1 STA4593_COORDINATOR_MODE=headless STA4593_PAIRING_CODE_PATH=<packaged-1.4.184-pairing-code> pnpm exec playwright test tests/e2e/sta4593-wsl-federation-lifecycle.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1"
       ],
       "testFiles": [
         "src/main/runtime/orca-runtime-process-incarnation-liveness.test.ts",
@@ -10840,9 +10850,15 @@
         "src/main/runtime/rpc/methods/orchestration-worker-release-recovery.test.ts",
         "src/main/runtime/rpc/orchestration-mutation-ledger.test.ts",
         "src/main/runtime/orchestration/worker-transcript-read.test.ts",
+        "src/main/runtime/orchestration/worker-output-archive.test.ts",
+        "src/main/runtime/rpc/methods/orchestration-worker-stop-liveness-verdict.test.ts",
         "src/renderer/src/lib/worker-terminal-takeover-report.test.ts",
         "tests/e2e/completed-worker-retirement-resume.unit.test.ts",
-        "tests/e2e/orchestration-worker-settlement-release-cli.spec.ts"
+        "tests/e2e/orchestration-worker-settlement-release-cli.spec.ts",
+        "src/main/runtime/rpc/methods/orchestration-federation-terminal-lifecycle.test.ts",
+        "src/main/runtime/rpc/methods/orchestration-federation-agent-launch.test.ts",
+        "src/main/runtime/orca-runtime.test.ts",
+        "tests/e2e/sta4593-wsl-federation-lifecycle.spec.ts"
       ],
       "assertionRefs": [
         {
@@ -10852,6 +10868,12 @@
             "keeps missing or malformed identity and unavailable inventory unknown",
             "does not inspect an unproven host scope",
             "uses the local provider inventory for local and WSL scopes"
+          ]
+        },
+        {
+          "file": "src/main/runtime/orchestration/worker-output-archive.test.ts",
+          "assertions": [
+            "archived commands are explicitly bounded and dispatch-capability redacted"
           ]
         },
         {
@@ -10872,19 +10894,54 @@
             "retains when the terminal host scope changed instead of closing",
             "reads an immutable transcript snapshot after the provider file disappears",
             "backfills a legacy creator plus explicit reuser as ambiguous",
+            "releases an authenticated local worker without mistaking it for a remote attachment",
             "removes terminal authority and archived output on orchestration reset"
           ]
         },
         {
           "file": "src/main/runtime/rpc/orchestration-mutation-ledger.test.ts",
-          "assertions": ["resumes a pending idempotent worker release after restart"]
+          "assertions": [
+            "resumes a pending idempotent workerRelease after restart",
+            "resumes a pending idempotent workerRetain after restart"
+          ]
         },
         {
           "file": "src/main/runtime/rpc/methods/orchestration-worker-release-recovery.test.ts",
           "assertions": [
             "finishes a requested release after restart-style interruption",
             "coalesces overlapping reconciliation passes and closes each resource once",
+            "removes a staged archive when release recovery returns to retained",
             "keeps live terminals bounded across 50 settled workers while controls survive"
+          ]
+        },
+        {
+          "file": "src/main/runtime/rpc/methods/orchestration-federation-terminal-lifecycle.test.ts",
+          "assertions": [
+            "releases and reads a settled worker through its owning server",
+            "retains a federated worker when its server lacks release support",
+            "lets retain cancel a federated release before archive commit",
+            "preserves contract migration errors instead of reporting transport loss",
+            "releases an exited worker from its retained execution-host identity"
+          ]
+        },
+        {
+          "file": "src/main/runtime/rpc/methods/orchestration-federation-agent-launch.test.ts",
+          "assertions": [
+            "a newly created agent terminal is closed or remains reported as residual when stable authority cannot be recorded"
+          ]
+        },
+        {
+          "file": "src/main/runtime/orca-runtime.test.ts",
+          "assertions": [
+            "exited transcripts remain bounded even while their terminal leaves stay open"
+          ]
+        },
+        {
+          "file": "tests/e2e/sta4593-wsl-federation-lifecycle.spec.ts",
+          "assertions": [
+            "a Windows-owned Task settles exactly once from its WSL worker capability",
+            "final stdout, stderr, exit code, command, and nonzero cursors remain readable after PTY retirement and through release archive",
+            "retain, release, and stop settle idempotently without touching the unrelated WSL control PTY"
           ]
         },
         {
@@ -10898,6 +10955,96 @@
         }
       ],
       "evidenceRuns": [
+        {
+          "date": "2026-08-20",
+          "runner": "local",
+          "platform": "windows",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/orchestration/worker-output-archive.test.ts src/main/runtime/rpc/methods/orchestration-worker-stop-liveness-verdict.test.ts --reporter=dot",
+          "result": "passed",
+          "durationSeconds": 7.81,
+          "summary": "Two focused files passed 10 tests covering bounded capability-redacted command archives and exact-incarnation stop fencing."
+        },
+        {
+          "date": "2026-08-20",
+          "runner": "local",
+          "platform": "windows",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/rpc/methods/orchestration-federation-terminal-lifecycle.test.ts src/main/runtime/rpc/methods/orchestration-federation-agent-launch.test.ts src/main/runtime/orca-runtime.test.ts --reporter=dot",
+          "result": "passed",
+          "durationSeconds": 14.95,
+          "summary": "Three focused files passed 1,194 tests covering federated terminal release and public resource shape, authority rollback, and globally bounded exited transcript retention."
+        },
+        {
+          "date": "2026-08-20",
+          "runner": "manual",
+          "platform": "windows",
+          "command": "SKIP_BUILD=1 STA4593_COORDINATOR_MODE=headless STA4593_EXPECT_FEDERATED_RELEASE=1 STA4593_PAIRING_CODE_PATH=<latest-main-pairing-code> pnpm exec playwright test tests/e2e/sta4593-wsl-federation-lifecycle.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1",
+          "result": "failed",
+          "durationSeconds": 40.5,
+          "summary": "With both Windows and WSL at latest main 012e9f410c, invariant A passed, then invariant B failed because worker-read lost the unique final stdout marker after the owning WSL PTY exited."
+        },
+        {
+          "date": "2026-08-20",
+          "runner": "manual",
+          "platform": "windows",
+          "command": "SKIP_BUILD=1 STA4593_COORDINATOR_MODE=headless STA4593_PAIRING_CODE_PATH=<latest-main-pairing-code> pnpm exec playwright test tests/e2e/sta4593-wsl-federation-lifecycle.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1",
+          "result": "failed",
+          "durationSeconds": 51,
+          "summary": "The compatibility pass independently reached invariant C on latest main: release remained retained/no_owned_resource, then stop returned stop_unknown with processAction unknown and tab_not_found despite the advertised stop-verdict capability."
+        },
+        {
+          "date": "2026-08-20",
+          "runner": "manual",
+          "platform": "windows",
+          "command": "SKIP_BUILD=1 STA4593_COORDINATOR_MODE=headful STA4593_EXPECT_FEDERATED_RELEASE=1 STA4593_PAIRING_CODE_PATH=<isolated-pairing-code> pnpm exec playwright test tests/e2e/sta4593-wsl-federation-lifecycle.spec.ts --config tests/playwright.config.ts --project electron-headful --workers=1",
+          "result": "failed",
+          "durationSeconds": 43.4,
+          "summary": "At pre-fix candidate 9303ebc1fb, the unchanged oracle passed A/B then failed C because release of the exited WSL worker returned retained/identity_unproven."
+        },
+        {
+          "date": "2026-08-20",
+          "runner": "manual",
+          "platform": "windows",
+          "command": "SKIP_BUILD=1 STA4593_COORDINATOR_MODE=headless STA4593_PAIRING_CODE_PATH=<reverted-current-wsl-pairing-code> pnpm exec playwright test tests/e2e/sta4593-wsl-federation-lifecycle.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1",
+          "result": "failed",
+          "durationSeconds": 41,
+          "summary": "With only the owning WSL runtime reverted to 3f961ddc01, the unchanged oracle passed A then failed B because authoritative worker-read no longer contained the final marker after PTY exit."
+        },
+        {
+          "date": "2026-08-20",
+          "runner": "manual",
+          "platform": "windows",
+          "command": "SKIP_BUILD=1 STA4593_COORDINATOR_MODE=headless STA4593_PAIRING_CODE_PATH=<packaged-1.4.184-pairing-code> pnpm exec playwright test tests/e2e/sta4593-wsl-federation-lifecycle.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1",
+          "result": "passed",
+          "durationSeconds": 23.6,
+          "summary": "Current Windows candidate paired to packaged WSL 1.4.184 and preserved the legacy capability shape: unsupported release stayed retained, stop stayed unknown with processAction none, and no unrelated PTY was closed."
+        },
+        {
+          "date": "2026-08-20",
+          "runner": "manual",
+          "platform": "windows",
+          "command": "SKIP_BUILD=1 STA4593_COORDINATOR_MODE=headful STA4593_EXPECT_FEDERATED_RELEASE=1 STA4593_PAIRING_CODE_PATH=<isolated-pairing-code> pnpm exec playwright test tests/e2e/sta4593-wsl-federation-lifecycle.spec.ts --config tests/playwright.config.ts --project electron-headful --workers=1",
+          "result": "passed",
+          "durationSeconds": 50.4,
+          "summary": "The exact amended Windows desktop and isolated WSL candidate passed strict A/B/C: exact remote pane/incarnation/capability and once-only settlement; retained final stdout/stderr, exit 23, command, and cursors after PTY exit and through archive; capability-driven idempotent release/stop with an unrelated PTY left live."
+        },
+        {
+          "date": "2026-08-20",
+          "runner": "manual",
+          "platform": "windows",
+          "command": "SKIP_BUILD=1 STA4593_COORDINATOR_MODE=headless STA4593_EXPECT_FEDERATED_RELEASE=1 STA4593_PAIRING_CODE_PATH=<isolated-pairing-code> pnpm exec playwright test tests/e2e/sta4593-wsl-federation-lifecycle.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1",
+          "result": "passed",
+          "durationSeconds": 52.3,
+          "summary": "The exact amended current/current A/B/C oracle passed with the Windows coordinator hidden against the isolated headless WSL authority and strict capability-driven release assertions."
+        },
+        {
+          "date": "2026-08-20",
+          "runner": "local",
+          "platform": "windows",
+          "command": "pnpm run build:cli && SKIP_BUILD=1 pnpm exec playwright test tests/e2e/orchestration-worker-settlement-release-cli.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1",
+          "result": "passed",
+          "durationSeconds": 18.5,
+          "summary": "The exact fake Codex oracle published structural idle and prompt-acceptance signals, then the compiled CLI rejected false completion, completed the exact Dispatch, and reconciled its dead retained resource without touching the coordinator terminal."
+        },
         {
           "date": "2026-08-12",
           "runner": "local",
@@ -10927,8 +11074,8 @@
         }
       ],
       "runtimeBudget": {
-        "p95Seconds": 45,
-        "scope": "deterministic runtime, SQLite, transcript, renderer-input, mutation contracts, and one compiled-CLI Electron journey"
+        "p95Seconds": 60,
+        "scope": "deterministic runtime, SQLite, transcript, renderer-input, mutation contracts, one compiled-CLI Electron journey, and each live Windows-to-WSL oracle"
       },
       "flakeHistory": {
         "status": "unknown",
@@ -10936,22 +11083,20 @@
       },
       "redGreenEvidence": {
         "status": "complete",
-        "evidence": "The byte-identical compiled-CLI Electron oracle left the dead resource external/retained on latest main 5ea7df1a5b, passed on combined candidate d697666ce8 with released/released SQLite state and processAction none, and reproduced external/retained after disabling the claimed production files at merge-base 64aec94cb2. The earlier unchanged three-case dead external/user-owned/transferred service oracle likewise failed 3/3 on main, passed 3/3 on candidate, and failed 3/3 with production restored; every run asserted durable state and zero terminal close calls."
+        "evidence": "For STA-4593, the physical Windows-to-WSL oracle passed A but failed B on latest main 012e9f410c because final output disappeared after WSL PTY exit; its independent C pass retained release and returned stop_unknown/tab_not_found. The same oracle failed B with the owning WSL runtime at 3f961ddc01, passed A/B but failed release with identity_unproven at 9303ebc1fb, and passed strict A/B/C headed and hidden on the candidate. The byte-identical compiled-CLI oracle left the dead resource external/retained on main 5ea7df1a5b, passed on the candidate with released/released SQLite state and processAction none, and reproduced external/retained after disabling the claimed production files at merge-base 64aec94cb2."
       },
       "performanceBudget": {
         "required": true,
-        "evidence": "Normal owned release performs constant-count indexed resource and identity queries plus one bounded archive capture. A retained release performs exactly one bounded inventory against its authoritative local/WSL or specific SSH provider, with no retry, polling, timer, subprocess, renderer subscription, or per-session follow-up fanout. Worker-list uses two set queries rather than one resource lookup per worker."
+        "evidence": "Normal owned release performs constant-count indexed resource and identity queries plus one bounded archive capture. Takeover checks exact pane identity first and uses a pane-leaf suffix prefilter only for reminted keys. A retained release performs exactly one bounded inventory against its persisted authoritative local/WSL or specific SSH provider, with no retry, polling, timer, subprocess, renderer subscription, or per-session follow-up fanout. Exited transcript payloads are globally capped at 128 records even when leaves stay open. Worker-list uses two set queries rather than one resource lookup per worker."
       },
       "promotionCriteria": [
         "Collect 100 consecutive focused CI passes or 14 days of soak history.",
-        "Add live headed and headless paired-runtime release/reuse journeys.",
-        "Add Docker SSH reconnect and physical Windows WSL host-scope evidence.",
+        "Add Docker SSH reconnect evidence and broader CI/soak history for the physical Windows WSL host-scope oracle.",
         "Prove provider-close lost acknowledgements converge with an exact durable close receipt."
       ],
       "knownGaps": [
         "Provider close has no durable cross-process operation receipt, so a crash after host mutation but before SQLite settlement remains release_pending until exact inventory returns.",
-        "Federated release remains explicitly unsupported and retained.",
-        "Mobile/direct remote input takeover and live Linux, Windows, WSL, SSH, headed, and headless paired-runtime release are not exercised; the current fix changes provider inventory classification and SQLite state only, not ConPTY, filesystem, update, sleep, firewall, or window lifecycle semantics."
+        "Mobile/direct remote input takeover and live Linux and SSH paired-runtime release are not exercised; the current fix changes orchestration ownership and remote release state, not ConPTY, filesystem, update, sleep, firewall, or window lifecycle semantics."
       ],
       "demotionRule": "Keep experimental or demote if release can overlap exact reuse, close a conflicting lease, lose immutable output, retain reset archives, fan out per worker, or any focused ordering test flakes without a product or harness defect."
     },

@@ -41,6 +41,12 @@ describe('federated worker agent launch', () => {
     vi.spyOn(runtime, 'getTerminalProcessIncarnation').mockReturnValue(
       'runtime_test:term_remote_worker:1'
     )
+    vi.spyOn(runtime, 'getOrchestrationDispatchAuthority').mockReturnValue({
+      terminalHandle: 'term_remote_worker',
+      paneKey: 'tab_remote:leaf_remote',
+      processIncarnation: 'runtime_test:term_remote_worker:1',
+      hostScope: { kind: 'local', hostId: 'local' }
+    } as never)
     vi.spyOn(runtime, 'getTerminalOrchestrationCliCommand').mockReturnValue('orca')
     vi.spyOn(runtime, 'sendTerminalAgentPrompt').mockResolvedValue({
       handle: 'term_remote_worker',
@@ -100,6 +106,71 @@ describe('federated worker agent launch', () => {
     expect(createTerminal).toHaveBeenCalledWith(
       'id:folder:remote-workspace',
       expect.not.objectContaining({ command: expect.anything() })
+    )
+  })
+
+  it('closes a created agent terminal when stable authority cannot be recorded', async () => {
+    db = new OrchestrationDb(':memory:')
+    const runtime = new OrcaRuntimeService()
+    runtime.setOrchestrationDb(db)
+    vi.spyOn(runtime, 'validateOrchestrationAgentLauncher').mockImplementation(() => {})
+    vi.spyOn(runtime, 'showManagedTerminalWorkspace').mockResolvedValue({
+      id: 'folder:remote-workspace'
+    } as never)
+    vi.spyOn(runtime, 'createTerminal').mockResolvedValue({
+      handle: 'term_remote_worker',
+      worktreeId: 'folder:remote-workspace',
+      title: 'worker'
+    })
+    vi.spyOn(runtime, 'getOrchestrationDispatchAuthority').mockReturnValue(null)
+    const closeTerminal = vi.spyOn(runtime, 'closeTerminal').mockResolvedValue({
+      handle: 'term_remote_worker',
+      tabId: 'tab_remote',
+      ptyKilled: true
+    })
+    const method = ORCHESTRATION_METHODS.find(
+      (candidate) => candidate.name === 'orchestration.federationAttachStart'
+    )!
+
+    const result = (await method.handler(
+      method.params!.parse({
+        dispatchId: 'ctx_missing_authority',
+        taskId: 'task_missing_authority',
+        taskSpec: 'remote worker',
+        protocolVersion: 3,
+        worktree: 'folder:remote-workspace',
+        agent: 'codex'
+      }),
+      {
+        runtime,
+        orchestrationMutation: {
+          callerFingerprint: 'home_peer',
+          requestId: 'request_missing_authority',
+          method: 'orchestration.federationAttachStart',
+          payloadHash: 'missing_authority_payload'
+        }
+      }
+    )) as { state: string; failedStage?: string; lastError?: string }
+
+    expect(result).toMatchObject({
+      state: 'failed',
+      failedStage: 'terminal_create',
+      lastError: 'stable_pane_required'
+    })
+    expect(closeTerminal).toHaveBeenCalledWith('term_remote_worker')
+    const attachment = db.getRemoteDispatchAttachment('ctx_missing_authority')!
+    expect(JSON.parse(attachment.effects)).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          kind: 'terminal',
+          role: 'agent',
+          id: 'term_remote_worker',
+          action: 'closed_after_failed_start'
+        })
+      ])
+    )
+    expect(JSON.parse(attachment.residual_resources)).not.toEqual(
+      expect.arrayContaining([expect.objectContaining({ id: 'term_remote_worker' })])
     )
   })
 })

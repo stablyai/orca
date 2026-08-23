@@ -644,6 +644,12 @@ export type RuntimeTerminalState = 'running' | 'exited' | 'unknown'
 export type RuntimeTerminalRead = {
   handle: string
   status: RuntimeTerminalState
+  /** Absent on older hosts; null while the exact process has not reported exit. */
+  exitCode?: number | null
+  /** Absent on older hosts and whenever the owning provider did not report a cause. */
+  exitCause?: TerminalExitCause
+  /** Exact spawn command when the owning runtime observed one; null when it did not. */
+  command?: string | null
   tail: string[]
   truncated: boolean
   limited?: boolean

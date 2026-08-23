@@ -1,13 +1,20 @@
 import { z } from 'zod'
-import type { WorkerTerminalListState } from '../../orchestration/worker-terminal-ownership'
+import type { RuntimeStatus } from '../../../../shared/runtime-types'
+import { ORCHESTRATION_FEDERATION_WORKER_RELEASE_RUNTIME_CAPABILITY } from '../../../../shared/protocol-version'
+import {
+  exposeWorkerTerminalResource,
+  type WorkerTerminalListState
+} from '../../orchestration/worker-terminal-ownership'
+import { OrchestrationError } from '../../orchestration/orchestration-error'
 import { defineMethod, type RpcMethod } from '../core'
 import { requiredString } from '../schemas'
 import {
   archiveSummary,
   completeWorkerTerminalRelease,
-  exposeWorkerTerminalResource,
   type WorkerReleaseReceipt
 } from './orchestration-worker-release-completion'
+import { requireHomeAttachment } from './orchestration-federation-control'
+import { resolvePinnedFederatedServer } from './orchestration-worker-observation'
 
 const WorkerDispatchParams = z.object({ dispatch: requiredString('Missing --dispatch') })
 
@@ -29,21 +36,29 @@ export const ORCHESTRATION_WORKER_RELEASE_METHODS: RpcMethod[] = [
   defineMethod({
     name: 'orchestration.workerRelease',
     params: WorkerDispatchParams,
-    handler: async (params, { runtime }): Promise<WorkerReleaseReceipt> => {
+    handler: async (
+      params,
+      { runtime, authenticatedCallerFingerprint, orchestrationMutation }
+    ): Promise<WorkerReleaseReceipt> => {
       const db = runtime.getOrchestrationDb()
-      if (db.getFederatedDispatch(params.dispatch)) {
-        // Fail closed: the worker server owns that terminal; a home-side close would be a guess.
-        return {
+      const federated = db.getFederatedDispatch(params.dispatch)
+      if (federated) {
+        return forwardFederatedWorkerMutation({
+          runtime,
+          federated,
           dispatchId: params.dispatch,
-          state: 'retained',
-          reason: 'federation_unsupported',
-          processAction: 'none',
-          archive: null,
-          recovery:
-            'Connected-server workers do not support release yet; inspect the worker server directly.'
-        }
+          method: 'orchestration.workerRelease',
+          requestId: orchestrationMutation?.requestId
+        })
       }
-      const requested = db.requestWorkerTerminalRelease(params.dispatch)
+      const remoteOwner = Boolean(db.getRemoteDispatchAttachment(params.dispatch))
+      if (remoteOwner) {
+        requireHomeAttachment(runtime, params.dispatch, authenticatedCallerFingerprint)
+      }
+      const requested = db.requestWorkerTerminalRelease(
+        params.dispatch,
+        remoteOwner ? 'remote_attachment' : 'worker'
+      )
       if (requested.disposition === 'already_released') {
         return {
           dispatchId: params.dispatch,
@@ -56,6 +71,7 @@ export const ORCHESTRATION_WORKER_RELEASE_METHODS: RpcMethod[] = [
         const resource = requested.resource
         const processIncarnation = resource?.process_incarnation
         if (
+          !remoteOwner &&
           processIncarnation &&
           (await runtime.inspectTerminalProcessIncarnationLiveness(
             processIncarnation,
@@ -89,16 +105,34 @@ export const ORCHESTRATION_WORKER_RELEASE_METHODS: RpcMethod[] = [
         runtime,
         db,
         dispatchId: params.dispatch,
-        resource: requested.resource
+        resource: requested.resource,
+        owner: remoteOwner ? 'remote_attachment' : 'worker'
       })
     }
   }),
   defineMethod({
     name: 'orchestration.workerRetain',
     params: WorkerDispatchParams,
-    handler: (params, { runtime }) => {
+    handler: async (params, { runtime, authenticatedCallerFingerprint, orchestrationMutation }) => {
       const db = runtime.getOrchestrationDb()
-      const retained = db.retainWorkerTerminalResource(params.dispatch)
+      const federated = db.getFederatedDispatch(params.dispatch)
+      if (federated) {
+        return forwardFederatedWorkerMutation({
+          runtime,
+          federated,
+          dispatchId: params.dispatch,
+          method: 'orchestration.workerRetain',
+          requestId: orchestrationMutation?.requestId
+        })
+      }
+      const remoteOwner = Boolean(db.getRemoteDispatchAttachment(params.dispatch))
+      if (remoteOwner) {
+        requireHomeAttachment(runtime, params.dispatch, authenticatedCallerFingerprint)
+      }
+      const retained = db.retainWorkerTerminalResource(
+        params.dispatch,
+        remoteOwner ? 'remote_attachment' : 'worker'
+      )
       if (retained.disposition === 'already_released') {
         return {
           dispatchId: params.dispatch,
@@ -171,8 +205,73 @@ export const ORCHESTRATION_WORKER_RELEASE_METHODS: RpcMethod[] = [
     params: z.object({ paneKey: requiredString('Missing paneKey') }),
     // Real user keystrokes durably relinquish orchestration ownership on the owning runtime, so
     // restarts, SSH drops, remote viewing, and renderer remounts cannot erase the takeover.
-    handler: (params, { runtime }) => ({
-      changed: runtime.getOrchestrationDb().markWorkerTerminalUserOwned(params.paneKey)
-    })
+    handler: (params, { runtime }) => {
+      const db = runtime.getOrchestrationDb()
+      const processIncarnation = (() => {
+        try {
+          const resolved = runtime.resolveTerminalPane(params.paneKey)
+          return runtime.getOrchestrationDispatchAuthority(resolved.handle)?.processIncarnation
+        } catch {
+          return null
+        }
+      })()
+      return { changed: db.markWorkerTerminalUserOwned(params.paneKey, processIncarnation) }
+    }
   })
 ]
+
+async function forwardFederatedWorkerMutation(args: {
+  runtime: Parameters<typeof resolvePinnedFederatedServer>[0]
+  federated: Parameters<typeof resolvePinnedFederatedServer>[1]
+  dispatchId: string
+  method: 'orchestration.workerRelease' | 'orchestration.workerRetain'
+  requestId: string | undefined
+}): Promise<WorkerReleaseReceipt> {
+  if (!args.requestId) {
+    throw new OrchestrationError(
+      'invalid_argument',
+      'Federated terminal lifecycle changes require a durable retry request.'
+    )
+  }
+  const server = resolvePinnedFederatedServer(args.runtime, args.federated)
+  try {
+    const status = (await args.runtime.callOrchestrationWorkerServer(
+      server.environmentId,
+      'status.get',
+      undefined,
+      10_000
+    )) as RuntimeStatus
+    if (
+      !status.capabilities?.includes(ORCHESTRATION_FEDERATION_WORKER_RELEASE_RUNTIME_CAPABILITY)
+    ) {
+      return {
+        dispatchId: args.dispatchId,
+        state: 'retained',
+        reason: 'federation_unsupported',
+        processAction: 'none',
+        archive: null,
+        recovery: 'The connected worker server does not support federated terminal release.'
+      }
+    }
+    return (await args.runtime.callOrchestrationWorkerServer(
+      server.environmentId,
+      args.method,
+      { dispatch: args.dispatchId },
+      30_000,
+      { orchestrationRequestId: args.requestId }
+    )) as WorkerReleaseReceipt
+  } catch (error) {
+    if (error instanceof OrchestrationError) {
+      throw error
+    }
+    const reason = error instanceof Error ? error.message : String(error)
+    return {
+      dispatchId: args.dispatchId,
+      state: 'release_pending',
+      processAction: 'none',
+      archive: null,
+      lastError: reason,
+      recovery: 'The worker server is unreachable; retry with the same request ID.'
+    }
+  }
+}

@@ -19,7 +19,6 @@ export function findTransferableWorkerTerminalResource(
   const candidates = this.db
     .prepare(
       `SELECT r.* FROM worker_terminal_resources r
-         JOIN worker_dispatches w ON w.dispatch_id = r.owner_dispatch_id
         WHERE r.process_incarnation = ? AND r.host_scope IS ?
           AND r.ownership_state != 'released'`
     )
@@ -47,7 +46,9 @@ export function findTransferableWorkerTerminalResource(
       candidate.ownership_state === 'owned' &&
       ['not_requested', 'retained'].includes(candidate.release_state) &&
       ['succeeded', 'failed', 'stopped', 'abandoned'].includes(
-        this.getWorkerDispatch(candidate.owner_dispatch_id)?.state ?? ''
+        this.getWorkerDispatch(candidate.owner_dispatch_id)?.state ??
+          this.getRemoteDispatchAttachment(candidate.owner_dispatch_id)?.state ??
+          ''
       )
   )
 }

@@ -205,6 +205,9 @@ function readArchivedTerminalTail(
     terminal: {
       handle: args.resource.terminal_handle,
       status: 'exited',
+      ...(content.exitCode !== undefined ? { exitCode: content.exitCode } : {}),
+      ...(content.exitCause ? { exitCause: content.exitCause } : {}),
+      ...(content.command !== undefined ? { command: content.command } : {}),
       tail,
       truncated: content.truncated,
       nextCursor,

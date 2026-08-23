@@ -9,7 +9,8 @@ import type { OrchestrationDb } from '../orchestration-db'
 
 export function requestWorkerTerminalRelease(
   this: OrchestrationDb,
-  dispatchId: string
+  dispatchId: string,
+  owner: 'worker' | 'remote_attachment' = 'worker'
 ):
   | { disposition: 'requested'; resource: WorkerTerminalResourceRow }
   | { disposition: 'already_released'; resource: WorkerTerminalResourceRow }
@@ -20,27 +21,36 @@ export function requestWorkerTerminalRelease(
     } {
   this.db.exec('BEGIN IMMEDIATE')
   try {
-    const dispatch = this.getDispatchContextById(dispatchId)
-    const worker = this.getWorkerDispatch(dispatchId)
-    if (!dispatch) {
+    const dispatch = owner === 'worker' ? this.getDispatchContextById(dispatchId) : undefined
+    const worker = owner === 'worker' ? this.getWorkerDispatch(dispatchId) : undefined
+    const attachment =
+      owner === 'remote_attachment' ? this.getRemoteDispatchAttachment(dispatchId) : undefined
+    if (owner === 'worker' && !dispatch) {
       throw new OrchestrationError('dispatch_not_found', `Dispatch ${dispatchId} was not found.`)
     }
-    if (!worker) {
-      if (!['completed', 'failed', 'circuit_broken'].includes(dispatch.status)) {
+    if (owner === 'remote_attachment' && !attachment) {
+      throw new OrchestrationError(
+        'dispatch_not_found',
+        `Remote Dispatch ${dispatchId} was not found.`
+      )
+    }
+    if (owner === 'worker' && !worker) {
+      if (!['completed', 'failed', 'circuit_broken'].includes(dispatch!.status)) {
         throw new OrchestrationError(
           'dispatch_inactive',
-          `Dispatch ${dispatchId} is ${dispatch.status}; only a settled dispatch can release.`
+          `Dispatch ${dispatchId} is ${dispatch!.status}; only a settled dispatch can release.`
         )
       }
       this.db.exec('COMMIT')
       return { disposition: 'retained', resource: null, reason: 'no_owned_resource' }
     }
-    if (!WORKER_SETTLED_STATES.includes(worker.state)) {
+    const ownerState = worker?.state ?? attachment?.state
+    if (!ownerState || !WORKER_SETTLED_STATES.includes(ownerState)) {
       // Why: release is post-completion cleanup only; recording intent for an unsettled or
       // uncertain worker would let recovery close a terminal the coordinator never reviewed.
       throw new OrchestrationError(
         'dispatch_inactive',
-        `Dispatch ${dispatchId} is ${worker.state}; only a settled worker can release. Use worker-stop to cancel an active worker.`
+        `Dispatch ${dispatchId} is ${ownerState ?? 'unknown'}; only a settled worker can release. Use worker-stop to cancel an active worker.`
       )
     }
     const resource = this.getWorkerTerminalResourceByOwner(dispatchId)
@@ -55,7 +65,7 @@ export function requestWorkerTerminalRelease(
       this.db.exec('COMMIT')
       return { disposition: 'already_released', resource }
     }
-    if (worker.state === 'stopped' || worker.state === 'abandoned') {
+    if (ownerState === 'stopped' || ownerState === 'abandoned') {
       this.db.exec('COMMIT')
       return { disposition: 'retained', resource, reason: 'identity_unproven' }
     }

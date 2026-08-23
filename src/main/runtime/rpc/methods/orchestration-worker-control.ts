@@ -5,6 +5,7 @@ import {
 } from '../../../../shared/orchestration-worker-output'
 import { contextOnlyAbandonWarning } from '../../orchestration/context-only-dispatch-release'
 import { OrchestrationError } from '../../orchestration/orchestration-error'
+import { exposeWorkerTerminalResource } from '../../orchestration/worker-terminal-ownership'
 import { defineMethod, type RpcMethod } from '../core'
 import { OptionalFiniteNumber, requiredString } from '../schemas'
 import {
@@ -17,7 +18,6 @@ import {
 import { readArchivedWorkerOutput } from './orchestration-worker-archive-read'
 import { readLegacyFederatedTerminal } from './orchestration-worker-legacy-federated-read'
 import { readExactWorkerOutput } from './orchestration-worker-output'
-import { exposeWorkerTerminalResource } from './orchestration-worker-release-completion'
 
 const WorkerDispatchParams = z.object({ dispatch: requiredString('Missing --dispatch') })
 const WorkerReadParams = WorkerDispatchParams.extend({
@@ -106,6 +106,7 @@ export const ORCHESTRATION_WORKER_CONTROL_METHODS: RpcMethod[] = [
           worker: exposeWorker(worker),
           server: { environmentId: server.environmentId, name: server.name },
           remoteRuntimeEpoch: remote.runtimeEpoch,
+          terminalResource: remote.terminalResource ?? null,
           terminal: remote.terminal,
           observation: {
             ...remote.observation,

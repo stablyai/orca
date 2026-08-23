@@ -118,6 +118,12 @@ describe('orchestration federation lifecycle settlement', () => {
     vi.spyOn(workerRuntime, 'getTerminalProcessIncarnation').mockReturnValue(
       'windows_runtime:pty:1'
     )
+    vi.spyOn(workerRuntime, 'getOrchestrationDispatchAuthority').mockReturnValue({
+      terminalHandle: 'term_windows_worker',
+      paneKey: 'tab_worker:bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',
+      processIncarnation: 'windows_runtime:pty:1',
+      hostScope: { kind: 'local', hostId: 'local' }
+    } as never)
     vi.spyOn(workerRuntime, 'getTerminalOrchestrationCliCommand').mockReturnValue('orca')
     vi.spyOn(workerRuntime, 'sendTerminalAgentPrompt').mockResolvedValue({
       handle: 'term_windows_worker',

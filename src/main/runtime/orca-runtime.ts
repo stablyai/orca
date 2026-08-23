@@ -10780,6 +10780,7 @@ export class OrcaRuntimeService {
     incarnationId?: PtyIncarnationId,
     options: { awaitsRegistration?: boolean } = {}
   ): void {
+    const priorExitWasUnverifiable = this.getPtyLivenessVerdict(ptyId)?.status === 'unverifiable'
     this.forgetPtyLivenessVerdict(ptyId)
     if (options.awaitsRegistration !== false) {
       // Why: surface absence cannot distinguish an in-flight admission from a completed headless lifecycle.
@@ -10788,13 +10789,28 @@ export class OrcaRuntimeService {
     this.spawnPublishedPtys.add(ptyId)
     const pty = this.getOrCreatePtyWorktreeRecord(ptyId)
     if (pty) {
+      const changedKnownIncarnation =
+        incarnationId !== undefined &&
+        pty.incarnationId !== null &&
+        incarnationId !== pty.incarnationId
+      if (!pty.connected && (changedKnownIncarnation || !priorExitWasUnverifiable)) {
+        this.resetRetainedTerminalTranscript(pty)
+        this.terminalSpawnCommandsByPtyId.delete(ptyId)
+        for (const leaf of this.getLeavesForPty(ptyId)) {
+          this.resetRetainedTerminalTranscript(leaf)
+        }
+      }
       if (incarnationId) {
         pty.incarnationId = incarnationId
       }
+      pty.lastExitCode = null
+      pty.lastExitCause = null
       pty.connected = true
       pty.disconnectedAt = null
     }
     for (const leaf of this.getLeavesForPty(ptyId)) {
+      leaf.lastExitCode = null
+      leaf.lastExitCause = null
       leaf.connected = true
       leaf.writable = this.graphStatus === 'ready'
       this.adoptPreAllocatedHandle(leaf)
@@ -15302,7 +15318,6 @@ export class OrcaRuntimeService {
     this.providerVisibleRetryAtByPtyId.delete(ptyId)
     this.agentPromptExplicitStatusFloorByPtyId.delete(ptyId)
     this.agentStatusOscProcessorsByPtyId.delete(ptyId)
-    this.terminalSpawnCommandsByPtyId.delete(ptyId)
     this.disposePtyTitleTracker(ptyId)
     this.oscTitleScanTailByPtyId.delete(ptyId)
     this.osc7ScanTailByPtyId.delete(ptyId)
@@ -15376,7 +15391,6 @@ export class OrcaRuntimeService {
       // on the dead one's idle. lastAgentStatus itself stays for `ps` display.
       pty.lastAgentStatusObservedLive = false
       this.resolvePtyExitWaiters(pty, ptyId)
-      this.pruneDisconnectedPtyTranscript(pty)
     }
     if (preservesIntentionalHandlelessSurface || preservesAbnormalSshSurface) {
       // Why: relay loss is recoverable; keep the HUB-owned pane addressable through the bounded reconnect grace.
@@ -18243,6 +18257,18 @@ export class OrcaRuntimeService {
     return `${this.runtimeId}:${record.ptyId}:${record.ptyGeneration}`
   }
 
+  getTerminalExecutionHostScope(handle: string): WorkerTerminalHostScope | null {
+    let live: ReturnType<OrcaRuntimeService['getLivePtyForHandle']>
+    try {
+      live = this.getLivePtyForHandle(handle)
+    } catch {
+      return null
+    }
+    const record = live?.record ?? this.handles.get(handle)
+    const pty = live?.pty ?? (record?.ptyId ? this.ptysById.get(record.ptyId) : undefined)
+    return pty ? this.getOrchestrationCompatibilityHostScope(pty) : null
+  }
+
   /**
    * Records that we lost contact with a PTY's owning host. Callers must never
    * read this as an exit: a detached relay PTY is designed to outlive the
@@ -18512,17 +18538,22 @@ export class OrcaRuntimeService {
     }
 
     const { leaf } = this.getLiveLeafForHandle(handle)
-    const read = readTerminalTail({
-      handle,
-      status: getTerminalState(leaf),
-      previewLines: leaf.tailBuffer,
-      completedLines: leaf.tailTranscriptBuffer,
-      partialLine: leaf.tailPartialLine,
-      completedLineCount: leaf.tailLinesTotal,
-      bufferTruncated: leaf.tailTruncated,
-      cursor: opts.cursor,
-      limit: opts.limit
-    })
+    const read = {
+      ...readTerminalTail({
+        handle,
+        status: getTerminalState(leaf),
+        previewLines: leaf.tailBuffer,
+        completedLines: leaf.tailTranscriptBuffer,
+        partialLine: leaf.tailPartialLine,
+        completedLineCount: leaf.tailLinesTotal,
+        bufferTruncated: leaf.tailTruncated,
+        cursor: opts.cursor,
+        limit: opts.limit
+      }),
+      exitCode: leaf.lastExitCode,
+      ...(leaf.lastExitCause ? { exitCause: leaf.lastExitCause } : {}),
+      command: leaf.ptyId ? (this.terminalSpawnCommandsByPtyId.get(leaf.ptyId) ?? null) : null
+    }
     if (!leaf.ptyId) {
       return { ...read, source: opts.screen ? 'screen-unavailable' : 'stream' }
     }
@@ -29871,10 +29902,17 @@ export class OrcaRuntimeService {
           try {
             await this.closeMobileSessionTab(`id:${pty.pty.worktreeId}`, tabId)
           } catch (error) {
-            if (!(error instanceof Error) || error.message !== 'workspace_session_unavailable') {
+            // Exit handling or another host-tab transaction may retire this surface first.
+            if (
+              !(error instanceof Error) ||
+              (error.message !== 'workspace_session_unavailable' &&
+                error.message !== 'tab_not_found')
+            ) {
               throw error
             }
-            this.notifier?.closeTerminal(tabId)
+            if (error.message === 'workspace_session_unavailable') {
+              this.notifier?.closeTerminal(tabId)
+            }
           }
         } else {
           this.notifier?.closeTerminal(tabId)
@@ -29916,23 +29954,23 @@ export class OrcaRuntimeService {
     ptyId: string | null,
     ptyKilled: boolean
   ): RuntimeTerminalClose {
-    if (ptyKilled || !ptyId) {
-      return { handle, tabId, ptyKilled }
-    }
-    const verdict = this.getPtyLivenessVerdict(ptyId)
-    if (verdict?.status === 'unverifiable') {
-      return {
-        handle,
-        tabId,
-        ptyKilled,
+    const verdict = ptyId ? this.getPtyLivenessVerdict(ptyId) : null
+    let result: RuntimeTerminalClose = { handle, tabId, ptyKilled }
+    if (!ptyKilled && ptyId && verdict?.status === 'unverifiable') {
+      result = {
+        ...result,
         ptyStopVerdict: 'unverifiable',
         ptyStopReason: verdict.reason
       }
+    } else if (!ptyKilled && ptyId && verdict?.status === 'live') {
+      result = { ...result, ptyStopVerdict: 'live' }
     }
-    if (verdict?.status === 'live') {
-      return { handle, tabId, ptyKilled, ptyStopVerdict: 'live' }
+    const pty = ptyId ? this.ptysById.get(ptyId) : null
+    if (pty && !pty.connected && verdict?.status !== 'unverifiable') {
+      // Explicit close ends retention after the owning host has already proven exit.
+      this.dropDisconnectedPtyRecord(pty.ptyId)
     }
-    return { handle, tabId, ptyKilled }
+    return result
   }
 
   async closeTerminalTab(handle: string): Promise<RuntimeTerminalClose> {
@@ -32869,25 +32907,56 @@ export class OrcaRuntimeService {
     return livePtyIds
   }
 
-  private pruneDisconnectedPtyTranscript(pty: RuntimePtyWorktreeRecord): void {
-    if (pty.connected) {
-      return
-    }
-    // Why: disconnected PTY records stay addressable for status/exit reads, but their transcripts must not accumulate after the process dies.
-    pty.tailBuffer = []
-    pty.tailTranscriptBuffer = []
-    pty.tailTranscriptChars = 0
-    pty.tailPartialLine = ''
-    pty.tailPendingAnsi = ''
-    pty.tailRedrawCursor = null
-    pty.tailTruncated = false
-    pty.tailLinesTotal = 0
-    pty.waitBlockedAt = null
-    // Why: tail is now empty, so clear the memoized wait scan; onPtyData must recompute from the reset tail if this record resumes output.
-    pty.tailWaitState = undefined
+  private resetRetainedTerminalTranscript(
+    terminal: Pick<
+      RuntimePtyWorktreeRecord,
+      | 'tailBuffer'
+      | 'tailTranscriptBuffer'
+      | 'tailTranscriptChars'
+      | 'tailPartialLine'
+      | 'tailPendingAnsi'
+      | 'tailRedrawCursor'
+      | 'tailTruncated'
+      | 'tailLinesTotal'
+      | 'preview'
+      | 'waitBlockedAt'
+      | 'tailWaitState'
+      | 'lastOutputAt'
+    >
+  ): void {
+    terminal.tailBuffer = []
+    terminal.tailTranscriptBuffer = []
+    terminal.tailTranscriptChars = 0
+    terminal.tailPartialLine = ''
+    terminal.tailPendingAnsi = ''
+    terminal.tailRedrawCursor = null
+    terminal.tailTruncated = false
+    terminal.tailLinesTotal = 0
+    terminal.preview = ''
+    terminal.waitBlockedAt = null
+    terminal.tailWaitState = undefined
+    terminal.lastOutputAt = null
   }
 
   private pruneDisconnectedPtyRecords(): void {
+    const transcriptRecords = [...this.ptysById.values()]
+      .filter(
+        (pty) =>
+          !pty.connected &&
+          (pty.tailTranscriptBuffer.length > 0 ||
+            pty.tailBuffer.length > 0 ||
+            pty.tailPartialLine.length > 0)
+      )
+      .sort((a, b) => (a.disconnectedAt ?? 0) - (b.disconnectedAt ?? 0))
+    const staleTranscriptCount = Math.max(0, transcriptRecords.length - DISCONNECTED_PTY_RECORD_MAX)
+    for (const stale of transcriptRecords.slice(0, staleTranscriptCount)) {
+      this.resetRetainedTerminalTranscript(stale)
+      for (const leaf of this.getLeavesForPty(stale.ptyId)) {
+        this.resetRetainedTerminalTranscript(leaf)
+      }
+      this.recentPtyOutputById.delete(stale.ptyId)
+      this.terminalSpawnCommandsByPtyId.delete(stale.ptyId)
+    }
     const retained = [...this.ptysById.values()]
       .filter((pty) => !pty.connected && !this.leafExistsForPty(pty.ptyId))
       .sort((a, b) => (a.disconnectedAt ?? 0) - (b.disconnectedAt ?? 0))
@@ -35088,17 +35157,22 @@ export class OrcaRuntimeService {
     pty: RuntimePtyWorktreeRecord,
     opts: { cursor?: number; limit?: number } = {}
   ): RuntimeTerminalRead {
-    return readTerminalTail({
-      handle,
-      status: pty.connected ? 'running' : pty.lastExitCode !== null ? 'exited' : 'unknown',
-      previewLines: pty.tailBuffer,
-      completedLines: pty.tailTranscriptBuffer,
-      partialLine: pty.tailPartialLine,
-      completedLineCount: pty.tailLinesTotal,
-      bufferTruncated: pty.tailTruncated,
-      cursor: opts.cursor,
-      limit: opts.limit
-    })
+    return {
+      ...readTerminalTail({
+        handle,
+        status: pty.connected ? 'running' : pty.lastExitCode !== null ? 'exited' : 'unknown',
+        previewLines: pty.tailBuffer,
+        completedLines: pty.tailTranscriptBuffer,
+        partialLine: pty.tailPartialLine,
+        completedLineCount: pty.tailLinesTotal,
+        bufferTruncated: pty.tailTruncated,
+        cursor: opts.cursor,
+        limit: opts.limit
+      }),
+      exitCode: pty.lastExitCode,
+      ...(pty.lastExitCause ? { exitCause: pty.lastExitCause } : {}),
+      command: this.terminalSpawnCommandsByPtyId.get(pty.ptyId) ?? null
+    }
   }
 
   private issueHandle(leaf: RuntimeLeafRecord): string {

@@ -3,9 +3,11 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { ORCHESTRATION_METHODS } from './orchestration'
+import { configureWorkerReleasePaneResolution } from './orchestration-worker-release-test-runtime'
 import type { RpcContext } from '../core'
 import { OrchestrationDb } from '../../orchestration/db'
 import { OrcaRuntimeService } from '../../orca-runtime'
+import type { OrchestrationWorkerReadTerminalResult } from '../../../../shared/orchestration-worker-output'
 
 function deferred<T>(): { promise: Promise<T>; resolve: (value: T) => void } {
   let resolve!: (value: T) => void
@@ -47,6 +49,7 @@ describe('orchestration worker release', () => {
     vi.spyOn(runtime, 'getTerminalProcessIncarnation').mockImplementation((handle) =>
       handle === 'term_worker' || handle === 'term_reminted' ? 'runtime_test:term_worker:1' : null
     )
+    configureWorkerReleasePaneResolution(runtime)
     vi.spyOn(runtime, 'getOrchestrationDispatchAuthority').mockImplementation((handle) =>
       handle === 'term_worker' || handle === 'term_reminted'
         ? ({
@@ -102,7 +105,7 @@ describe('orchestration worker release', () => {
       coordinatorHandle: 'term_coord',
       coordinatorPaneKey
     }).id
-    ctx = { runtime }
+    ctx = { runtime, authenticatedCallerFingerprint: 'local-caller' }
   }
 
   afterEach(() => {
@@ -173,7 +176,7 @@ describe('orchestration worker release', () => {
     })
   })
 
-  it('releases a succeeded worker: archives then closes exactly the agent terminal', async () => {
+  it('releases an authenticated local worker without mistaking it for a remote attachment', async () => {
     setup()
     const { dispatchId } = await startSettledWorker('succeeded')
 
@@ -193,7 +196,6 @@ describe('orchestration worker release', () => {
     const resource = db.getWorkerTerminalResourceByOwner(dispatchId)
     expect(resource?.release_state).toBe('released')
     expect(resource?.ownership_state).toBe('released')
-    // Outcome is untouched by release.
     expect(db.getWorkerDispatch(dispatchId)?.state).toBe('succeeded')
   })
 
@@ -510,7 +512,6 @@ describe('orchestration worker release', () => {
       /Output could not be preserved/
     )
     expect(runtime.closeTerminal).not.toHaveBeenCalled()
-    // Durable intent survives for recovery.
     expect(db.getWorkerTerminalResourceByOwner(dispatchId)?.release_state).toBe('requested')
   })
 
@@ -588,7 +589,10 @@ describe('orchestration worker release', () => {
       status: 'running',
       tail: ['first line', `capability dcap_${'a'.repeat(24)} leaked`, 'last line'],
       truncated: false,
-      nextCursor: '3'
+      nextCursor: '3',
+      exitCode: 23,
+      exitCause: { kind: 'exited', exitCode: 23 },
+      command: 'codex'
     })
     await call('orchestration.workerRelease', { dispatch: dispatchId })
     vi.mocked(runtime.readTerminal).mockClear()
@@ -596,8 +600,8 @@ describe('orchestration worker release', () => {
     const page1 = (await call('orchestration.workerRead', {
       dispatch: dispatchId,
       limit: 2
-    })) as { archived?: boolean; terminal: { tail: string[] }; cursor: string | null }
-    expect(page1.archived).toBe(true)
+    })) as OrchestrationWorkerReadTerminalResult
+    expect(page1).toMatchObject({ archived: true, terminal: { exitCode: 23, command: 'codex' } })
     expect(page1.terminal.tail).toEqual([
       'first line',
       'capability [dispatch capability redacted] leaked'
@@ -610,7 +614,6 @@ describe('orchestration worker release', () => {
     })) as { terminal: { tail: string[] }; cursor: string | null }
     expect(page2.terminal.tail).toEqual(['last line'])
     expect(page2.cursor).toBeNull()
-    // The live terminal is never consulted after release.
     expect(runtime.readTerminal).not.toHaveBeenCalled()
   })
 

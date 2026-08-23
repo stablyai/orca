@@ -67,12 +67,14 @@ async function reconcileRequestedWorkerTerminalReleasesOnce(
   const result = { ...emptyResult(), attempted: backlog.length }
   for (const resource of backlog) {
     try {
+      const remoteOwner = Boolean(db.getRemoteDispatchAttachment(resource.owner_dispatch_id))
       const receipt = await completeWorkerTerminalRelease({
         runtime,
         db,
         dispatchId: resource.owner_dispatch_id,
         resource,
-        mode: 'recovery'
+        mode: 'recovery',
+        owner: remoteOwner ? 'remote_attachment' : 'worker'
       })
       if (receipt.state === 'released' || receipt.state === 'already_released') {
         result.released += 1

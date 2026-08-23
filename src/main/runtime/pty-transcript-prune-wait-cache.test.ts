@@ -1,5 +1,5 @@
 /**
- * Regression: pruneDisconnectedPtyTranscript empties a disconnected PTY's
+ * Regression: resetRetainedTerminalTranscript empties a disconnected PTY's
  * retained tail. The onPtyData wait-scan memoization caches the tail's wait
  * state on the record (tailWaitState) and reuses it as the next chunk's
  * "previous" state — so the prune MUST also clear that cache, or a record that
@@ -17,10 +17,10 @@ type PtyRecord = {
 }
 type RuntimeInternals = {
   recordPtyWorktree: (p: string, w: string, s?: { connected?: boolean }) => PtyRecord
-  pruneDisconnectedPtyTranscript: (pty: PtyRecord) => void
+  resetRetainedTerminalTranscript: (pty: PtyRecord) => void
 }
 
-describe('pruneDisconnectedPtyTranscript clears the wait-scan cache', () => {
+describe('resetRetainedTerminalTranscript clears the wait-scan cache', () => {
   it('empties the tail and drops tailWaitState so resume recomputes', () => {
     const runtime = new OrcaRuntimeService()
     const internals = runtime as unknown as RuntimeInternals
@@ -35,7 +35,7 @@ describe('pruneDisconnectedPtyTranscript clears the wait-scan cache', () => {
     }
 
     pty.connected = false
-    internals.pruneDisconnectedPtyTranscript(pty)
+    internals.resetRetainedTerminalTranscript(pty)
 
     expect(pty.tailBuffer).toEqual([])
     expect(pty.tailWaitState).toBeUndefined()

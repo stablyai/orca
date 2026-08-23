@@ -2,6 +2,7 @@ import type { RuntimeTerminalInteractiveWait } from '../../../../shared/runtime-
 import type { OrcaRuntimeService } from '../../orca-runtime'
 import type { OrchestrationDb } from '../../orchestration/db'
 import { OrchestrationError } from '../../orchestration/orchestration-error'
+import type { WorkerTerminalResourceRow } from '../../orchestration/worker-terminal-ownership'
 import type {
   DispatchContextRow,
   FederatedDispatchRow,
@@ -60,6 +61,54 @@ export async function inspectWorkerTerminal(
     status: terminal.connected === false ? 'exited' : 'live',
     agentWait
   }
+}
+
+export type WorkerTerminalOwnerKind = 'worker' | 'remote_attachment'
+
+export function resolveWorkerTerminalOwner(
+  db: OrchestrationDb,
+  dispatchId: string,
+  owner: WorkerTerminalOwnerKind = 'worker'
+): { terminalHandle: string | null; createdAt: string } | null {
+  if (owner === 'remote_attachment') {
+    const attachment = db.getRemoteDispatchAttachment(dispatchId)
+    return attachment
+      ? { terminalHandle: attachment.terminal_handle, createdAt: attachment.created_at }
+      : null
+  }
+  const worker = db.getWorkerDispatch(dispatchId)
+  return worker
+    ? { terminalHandle: worker.agent_terminal_handle, createdAt: worker.created_at }
+    : null
+}
+
+export function workerTerminalLeaseIsCurrent(
+  runtime: OrcaRuntimeService,
+  db: OrchestrationDb,
+  dispatchId: string,
+  resource: WorkerTerminalResourceRow,
+  owner: WorkerTerminalOwnerKind = 'worker'
+): boolean {
+  const terminalOwner = resolveWorkerTerminalOwner(db, dispatchId, owner)
+  const authority = runtime.getOrchestrationDispatchAuthority(resource.terminal_handle)
+  const hostScope =
+    authority?.hostScope ?? runtime.getTerminalExecutionHostScope(resource.terminal_handle)
+  const identity = {
+    dispatchId,
+    paneKey: runtime.getTerminalPaneKey(resource.terminal_handle),
+    processIncarnation: runtime.getTerminalProcessIncarnation(resource.terminal_handle)
+  }
+  const processIsCurrent =
+    owner === 'remote_attachment'
+      ? db.isRemoteAttachmentProcessCurrent(identity)
+      : db.isDispatchProcessCurrent(identity)
+  return Boolean(
+    terminalOwner?.terminalHandle === resource.terminal_handle &&
+    hostScope &&
+    resource.host_scope === JSON.stringify(hostScope) &&
+    processIsCurrent &&
+    !db.workerTerminalResourceHasIdentityConflict(resource.id)
+  )
 }
 
 export function exposeContextOnlyWorker(dispatch: DispatchContextRow) {
@@ -134,10 +183,13 @@ export async function callFederatedWorkerShow(
     last_error: string | null
     worktree_id: string | null
     terminal_handle: string | null
+    pane_key?: string | null
+    process_incarnation?: string | null
     setup_state: string
     effects: unknown[]
     residualResources: unknown[]
   }
+  terminalResource?: unknown
   terminal: unknown
   observation: {
     status: string

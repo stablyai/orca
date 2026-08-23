@@ -183,15 +183,18 @@ test('compiled CLI rejects false completion then reconciles the dead retained wo
       )
     })
     .toBe(true)
-  const started = await client.call<{ effects: { kind: string; role?: string; id?: string }[] }>(
-    'orchestration.workerStart',
-    {
-      task: task.result.task.id,
-      from: coordinator.result.terminal.handle,
-      agent: 'codex',
-      timeoutMs: 15_000
-    }
-  )
+  const started = await client.call<{
+    state: string
+    failedStage?: string
+    lastError?: string
+    effects: { kind: string; role?: string; id?: string }[]
+  }>('orchestration.workerStart', {
+    task: task.result.task.id,
+    from: coordinator.result.terminal.handle,
+    agent: 'codex',
+    timeoutMs: 15_000
+  })
+  expect(started.result.state, JSON.stringify(started.result)).toBe('ready')
   const workerHandle = started.result.effects.find(
     (effect) => effect.kind === 'terminal' && effect.role === 'agent'
   )?.id
@@ -291,7 +294,7 @@ test('compiled CLI rejects false completion then reconciles the dead retained wo
     dispatch.result.dispatch!.id,
     '--json'
   ])
-  expect(released.status).toBe(0)
+  expect(released.status, released.stderr || released.stdout).toBe(0)
   expect.soft(JSON.parse(released.stdout)).toMatchObject({
     ok: true,
     result: { state: 'released', processAction: 'none' }

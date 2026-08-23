@@ -63,8 +63,10 @@ export class OrchestrationMutationExecutor {
           return { disposition: row.state, row }
         })()
       : db.beginMutationReceipt(identity)
-    const resumedPendingMutation =
-      begun.disposition === 'pending' && request.method === 'orchestration.workerRelease'
+    const resumableTerminalLifecycle =
+      request.method === 'orchestration.workerRelease' ||
+      request.method === 'orchestration.workerRetain'
+    const resumedPendingMutation = begun.disposition === 'pending' && resumableTerminalLifecycle
 
     if (begun.disposition === 'completed') {
       const active = this.inFlight.get(key)
@@ -78,7 +80,7 @@ export class OrchestrationMutationExecutor {
       if (active) {
         return attachMutationReceipt(await active, requestId, true)
       }
-      if (request.method !== 'orchestration.workerRelease') {
+      if (!resumableTerminalLifecycle) {
         const recovery = getPendingWorkerStartRecovery(request.method, begun.row.receipt)
         throw new OrchestrationError(
           'operation_unknown',
@@ -97,17 +99,26 @@ export class OrchestrationMutationExecutor {
     }
 
     const recordReceipt = (result: unknown): void => {
-      db.completeMutationReceipt({
-        ...identity,
-        receipt: JSON.stringify(attachMutationReceipt(result, requestId, resumedPendingMutation))
-      })
+      if (!isTransientWorkerLifecycleResult(request.method, result)) {
+        db.completeMutationReceipt({
+          ...identity,
+          receipt: JSON.stringify(attachMutationReceipt(result, requestId, resumedPendingMutation))
+        })
+      }
     }
     const active = Promise.resolve().then(() => invoke({ identity, recordReceipt }))
     this.inFlight.set(key, active)
     try {
       const result = await active
       const receipted = attachMutationReceipt(result, requestId, resumedPendingMutation)
-      db.completeMutationReceipt({ ...identity, receipt: JSON.stringify(receipted) })
+      if (isTransientWorkerLifecycleResult(request.method, result)) {
+        db.discardPendingMutationReceipt(callerFingerprint, requestId)
+      } else {
+        db.completeMutationReceipt({
+          ...identity,
+          receipt: JSON.stringify(receipted)
+        })
+      }
       return receipted
     } catch (error) {
       if (!(error instanceof OrchestrationError && error.code === 'operation_unknown')) {
@@ -204,4 +215,16 @@ function getPendingWorkerStartRecovery(
   } catch {
     return undefined
   }
+}
+
+function isTransientWorkerLifecycleResult(method: string, result: unknown): boolean {
+  if (
+    !['orchestration.workerRelease', 'orchestration.workerRetain'].includes(method) ||
+    !result ||
+    typeof result !== 'object'
+  ) {
+    return false
+  }
+  const state = (result as { state?: unknown }).state
+  return state === 'release_pending' || state === 'release_unknown'
 }
