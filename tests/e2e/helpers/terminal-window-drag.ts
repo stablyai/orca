@@ -53,7 +53,10 @@ export async function dragTerminalTabOutside(
   await page.mouse.down()
   await page.mouse.move(start.x + (direction === 'left' ? -20 : 20), start.y, { steps: 3 })
   await page.mouse.move(outsideX, Math.min(start.y + 20, viewport.height - 20), { steps: 10 })
-  const cursorPoint = { x: Math.round(targetPoint.x), y: Math.round(targetPoint.y) }
+  const cursorPoint = {
+    x: Math.round(targetPoint.x) || 0,
+    y: Math.round(targetPoint.y) || 0
+  }
   warpCursor(cursorPoint)
   await expect
     .poll(() => app.evaluate(({ screen }) => screen.getCursorScreenPoint()))
