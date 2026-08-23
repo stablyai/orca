@@ -1,5 +1,32 @@
 import { describe, expect, it } from 'vitest'
-import { parseCssTheme, parseJsonTheme, parseTheme } from './custom-ui-themes'
+import {
+  applyCustomUiThemeVariables,
+  clearCustomUiThemeVariables,
+  MAX_CUSTOM_UI_THEME_INPUT_LENGTH,
+  parseCssTheme,
+  parseJsonTheme,
+  parseTheme,
+  type CustomUiThemeRoot
+} from './custom-ui-themes'
+
+function createThemeRoot(): { root: CustomUiThemeRoot; values: Map<string, string> } {
+  const values = new Map<string, string>()
+  return {
+    root: {
+      style: {
+        setProperty(property: string, value: string | null): void {
+          values.set(property, value ?? '')
+        },
+        removeProperty(property: string): string {
+          const previous = values.get(property) ?? ''
+          values.delete(property)
+          return previous
+        }
+      }
+    },
+    values
+  }
+}
 
 describe('custom ui themes parser', () => {
   it('parses raw Tailwind v4 CSS string successfully', () => {
@@ -169,5 +196,62 @@ describe('custom ui themes parser', () => {
     expect(cssThemes).toHaveLength(1)
     expect(cssThemes[0]!.variables['--background']).toBe('hsl(0 0% 100%)')
     expect(cssThemes[0]!.variables['--unsafe-bg']).toBeUndefined()
+  })
+
+  it('rejects oversized theme input', () => {
+    const input = `:root { --primary: ${'x'.repeat(MAX_CUSTOM_UI_THEME_INPUT_LENGTH)}; }`
+    expect(parseTheme('Oversized', input)).toEqual([])
+  })
+
+  it('keeps unicode-only theme IDs distinct', () => {
+    const first = parseCssTheme('🌊', ':root { --primary: blue; }')[0]
+    const second = parseCssTheme('🌋', ':root { --primary: red; }')[0]
+    expect(first?.id).not.toBe(second?.id)
+  })
+})
+
+describe('custom ui theme application', () => {
+  it('applies safe variables, mirrors sidebar variables, and clears only its root', () => {
+    const first = createThemeRoot()
+    const second = createThemeRoot()
+
+    applyCustomUiThemeVariables(
+      {
+        id: 'manual:test-dark',
+        name: 'Test Dark',
+        mode: 'dark',
+        variables: {
+          '--background': 'black',
+          '--sidebar-accent': 'purple',
+          '--unsafe': 'url(https://example.com/pixel)',
+          '--escaped-unsafe': 'u\\72l(https://example.com/pixel)',
+          '--image-set-unsafe': 'image-set("https://example.com/pixel" 1x)',
+          color: 'red'
+        }
+      },
+      first.root
+    )
+    applyCustomUiThemeVariables(
+      {
+        id: 'manual:second-dark',
+        name: 'Second Dark',
+        mode: 'dark',
+        variables: { '--background': 'navy' }
+      },
+      second.root
+    )
+
+    expect(first.values).toEqual(
+      new Map([
+        ['--background', 'black'],
+        ['--sidebar-accent', 'purple'],
+        ['--worktree-sidebar-accent', 'purple']
+      ])
+    )
+    expect(second.values.get('--background')).toBe('navy')
+
+    clearCustomUiThemeVariables(first.root)
+    expect(first.values.size).toBe(0)
+    expect(second.values.get('--background')).toBe('navy')
   })
 })

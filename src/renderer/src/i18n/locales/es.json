@@ -50,6 +50,7 @@
         "themeNamePlaceholder": "Nombre del tema (ej. Claude)",
         "fallbackThemeName": "Tema personalizado",
         "importErrorDescription": "No se pudieron analizar las variables. Asegúrate de que tenga bloques :root o .dark, o coincida con el JSON de tema de Shadcn.",
+        "limitErrorDescription": "Puedes almacenar hasta {{value0}} temas personalizados.",
         "importButton": "Importar",
         "textareaPlaceholder": "Pega el código de tema CSS (salida de Tweakcn) o el JSON de tema de Shadcn..."
       }

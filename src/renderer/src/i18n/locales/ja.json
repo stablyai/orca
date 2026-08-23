@@ -50,6 +50,7 @@
         "themeNamePlaceholder": "テーマ名 (例: Claude)",
         "fallbackThemeName": "カスタムテーマ",
         "importErrorDescription": "変数を解析できませんでした。:root または .dark ブロックが含まれているか、ShadcnテーマJSONと一致していることを確認してください。",
+        "limitErrorDescription": "カスタムテーマは最大 {{value0}} 件まで保存できます。",
         "importButton": "インポート",
         "textareaPlaceholder": "CSSテーマコード（Tweakcnの出力）またはShadcnテーマのJSONを貼り付けてください..."
       }

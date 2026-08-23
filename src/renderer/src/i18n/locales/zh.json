@@ -50,6 +50,7 @@
         "themeNamePlaceholder": "主题名称 (例如 Claude)",
         "fallbackThemeName": "自定义主题",
         "importErrorDescription": "无法解析任何变量。请确保其包含 :root 或 .dark 块，或与 Shadcn 主题 JSON 匹配。",
+        "limitErrorDescription": "最多可存储 {{value0}} 个自定义主题。",
         "importButton": "导入",
         "textareaPlaceholder": "粘贴 CSS 主题代码 (Tweakcn 输出) 或 Shadcn 主题 JSON..."
       }

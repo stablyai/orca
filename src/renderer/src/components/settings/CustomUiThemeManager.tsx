@@ -1,11 +1,17 @@
 import { useRef, useState } from 'react'
 import type React from 'react'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
-import { parseTheme } from '../../../../shared/custom-ui-themes'
+import {
+  MAX_CUSTOM_UI_THEMES,
+  MAX_CUSTOM_UI_THEME_INPUT_LENGTH,
+  MAX_CUSTOM_UI_THEME_NAME_LENGTH,
+  parseTheme
+} from '../../../../shared/custom-ui-themes'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select'
 import { Input } from '../ui/input'
 import { Button } from '../ui/button'
 import { Textarea } from '../ui/textarea'
+import { Tooltip, TooltipContent, TooltipTrigger } from '../ui/tooltip'
 import { Trash2 } from 'lucide-react'
 import { SettingsRow } from './SettingsFormControls'
 import { AppearanceAdvancedDisclosure } from './AppearanceAdvancedDisclosure'
@@ -27,12 +33,11 @@ export function CustomUiThemeManager({
 
   return (
     <div className="space-y-3 py-2">
-      {/* Active Theme Selector */}
       <SettingsRow
         label={translate('settings.appearance.customUiTheme.activeLabel', 'Active Theme')}
         control={
           <Select
-            value={settings.activeUiTheme || 'default'}
+            value={settings.activeUiTheme ?? 'default'}
             onValueChange={(val) => updateSettings({ activeUiTheme: val })}
           >
             <SelectTrigger size="sm" className="min-w-[200px]">
@@ -40,12 +45,9 @@ export function CustomUiThemeManager({
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="default">
-                {translate(
-                  'settings.appearance.customUiTheme.defaultTheme',
-                  'Default'
-                )}
+                {translate('settings.appearance.customUiTheme.defaultTheme', 'Default')}
               </SelectItem>
-              {(settings.customUiThemes || []).map((t) => (
+              {(settings.customUiThemes ?? []).map((t) => (
                 <SelectItem key={t.id} value={t.id}>
                   {t.name}
                 </SelectItem>
@@ -55,53 +57,54 @@ export function CustomUiThemeManager({
         }
       />
 
-      {/* Collapsible custom themes list and import form */}
       <AppearanceAdvancedDisclosure
-        label={translate(
-          'settings.appearance.customUiTheme.customThemesList',
-          'Custom Themes'
-        )}
+        label={translate('settings.appearance.customUiTheme.customThemesList', 'Custom Themes')}
         showTopBorder={false}
         className="mt-1 pt-0"
         contentClassName="space-y-3 pt-2"
       >
-        {/* Dedicated Custom Themes Management List */}
         {settings.customUiThemes && settings.customUiThemes.length > 0 ? (
-          <div className="space-y-1 max-h-[150px] overflow-y-auto pr-1">
+          <div className="scrollbar-sleek max-h-[150px] space-y-1 overflow-y-auto pr-1">
             {settings.customUiThemes.map((t) => (
               <div
                 key={t.id}
                 className="flex items-center justify-between text-xs py-1 px-2 rounded-md hover:bg-accent/40"
               >
                 <span className="truncate pr-2">{t.name}</span>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon-xs"
-                  onClick={() => {
-                    const remaining = (settings.customUiThemes || []).filter(
-                      (theme) => theme.id !== t.id
-                    )
-                    const activeIsDeleted = settings.activeUiTheme === t.id
-                    updateSettings({
-                      activeUiTheme: activeIsDeleted ? 'default' : settings.activeUiTheme,
-                      customUiThemes: remaining
-                    })
-                  }}
-                  className="text-muted-foreground hover:text-destructive shrink-0"
-                  title={translate(
-                    'settings.appearance.customUiTheme.deleteTheme',
-                    'Delete theme'
-                  )}
-                >
-                  <Trash2 className="size-3.5" />
-                </Button>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon-xs"
+                      onClick={() => {
+                        const remaining = (settings.customUiThemes ?? []).filter(
+                          (theme) => theme.id !== t.id
+                        )
+                        const activeIsDeleted = settings.activeUiTheme === t.id
+                        updateSettings({
+                          activeUiTheme: activeIsDeleted ? 'default' : settings.activeUiTheme,
+                          customUiThemes: remaining
+                        })
+                      }}
+                      className="shrink-0 text-muted-foreground hover:text-destructive"
+                      aria-label={translate(
+                        'settings.appearance.customUiTheme.deleteTheme',
+                        'Delete theme'
+                      )}
+                    >
+                      <Trash2 className="size-3.5" />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent side="top" sideOffset={4}>
+                    {translate('settings.appearance.customUiTheme.deleteTheme', 'Delete theme')}
+                  </TooltipContent>
+                </Tooltip>
               </div>
             ))}
           </div>
         ) : null}
 
-        {/* Import New Theme Form */}
         <div
           className={cn(
             'pt-3 space-y-2',
@@ -111,10 +114,7 @@ export function CustomUiThemeManager({
           )}
         >
           <h4 className="text-xs font-semibold">
-            {translate(
-              'settings.appearance.customUiTheme.importTheme',
-              'Import Theme'
-            )}
+            {translate('settings.appearance.customUiTheme.importTheme', 'Import Theme')}
           </h4>
           <div className="flex gap-2">
             <Input
@@ -124,7 +124,8 @@ export function CustomUiThemeManager({
                 'settings.appearance.customUiTheme.themeNamePlaceholder',
                 'Theme Name (e.g. Claude)'
               )}
-              className="flex-1 h-8 text-xs bg-transparent dark:bg-input/30"
+              maxLength={MAX_CUSTOM_UI_THEME_NAME_LENGTH}
+              className="h-8 flex-1 bg-transparent text-xs dark:bg-input/30"
             />
             <Button
               type="button"
@@ -154,11 +155,21 @@ export function CustomUiThemeManager({
                   return
                 }
 
-                const prevThemes = settings.customUiThemes || []
+                const prevThemes = settings.customUiThemes ?? []
                 const filtered = prevThemes.filter(
                   (pt) => !importedThemes.some((it) => it.id === pt.id)
                 )
                 const nextThemes = [...filtered, ...importedThemes]
+                if (nextThemes.length > MAX_CUSTOM_UI_THEMES) {
+                  setImportError(
+                    translate(
+                      'settings.appearance.customUiTheme.limitErrorDescription',
+                      'You can store up to {{value0}} custom themes.',
+                      { value0: MAX_CUSTOM_UI_THEMES }
+                    )
+                  )
+                  return
+                }
 
                 const isCurrentlyDark =
                   settings.theme === 'dark' ||
@@ -182,10 +193,7 @@ export function CustomUiThemeManager({
                 }
               }}
             >
-              {translate(
-                'settings.appearance.customUiTheme.importButton',
-                'Import'
-              )}
+              {translate('settings.appearance.customUiTheme.importButton', 'Import')}
             </Button>
           </div>
           {importError ? <p className="text-xs text-destructive">{importError}</p> : null}
@@ -195,7 +203,8 @@ export function CustomUiThemeManager({
               'settings.appearance.customUiTheme.textareaPlaceholder',
               'Paste CSS theme code (Tweakcn output) or Shadcn theme JSON...'
             )}
-            className="h-16 font-mono text-xs resize-none"
+            maxLength={MAX_CUSTOM_UI_THEME_INPUT_LENGTH}
+            className="h-16 resize-none font-mono text-xs"
             onChange={() => setImportError(null)}
           />
         </div>

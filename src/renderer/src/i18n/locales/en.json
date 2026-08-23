@@ -77,6 +77,7 @@
         "themeNamePlaceholder": "Theme Name (e.g. Claude)",
         "fallbackThemeName": "Custom Theme",
         "importErrorDescription": "Could not parse any variables. Make sure it has :root or .dark blocks, or matches Shadcn theme JSON.",
+        "limitErrorDescription": "You can store up to {{value0}} custom themes.",
         "importButton": "Import",
         "textareaPlaceholder": "Paste CSS theme code (Tweakcn output) or Shadcn theme JSON..."
       }

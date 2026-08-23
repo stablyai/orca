@@ -50,6 +50,7 @@
         "themeNamePlaceholder": "테마 이름 (예: Claude)",
         "fallbackThemeName": "사용자 정의 테마",
         "importErrorDescription": "변수를 파싱할 수 없습니다. :root 또는 .dark 블록이 포함되어 있거나 Shadcn 테마 JSON과 일치하는지 확인하세요.",
+        "limitErrorDescription": "사용자 정의 테마는 최대 {{value0}}개까지 저장할 수 있습니다.",
         "importButton": "가져오기",
         "textareaPlaceholder": "CSS 테마 코드(Tweakcn 출력) 또는 Shadcn 테마 JSON을 붙여넣으세요..."
       }
