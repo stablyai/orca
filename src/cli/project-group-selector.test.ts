@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest'
 
-import type { ProjectGroup } from '../shared/types'
+import type { ProjectGroup } from '../shared/project-group-types'
 import { resolveProjectGroupFromList } from './project-group-selector'
 import { RuntimeClientError } from './runtime-client'
 
-function group(id: string, name: string): ProjectGroup {
+function group(id: string, name: string, connectionId: string | null = null): ProjectGroup {
   return {
     id,
     name,
@@ -14,6 +14,7 @@ function group(id: string, name: string): ProjectGroup {
     tabOrder: 0,
     isCollapsed: false,
     color: null,
+    connectionId,
     createdAt: 0,
     updatedAt: 0
   }
@@ -57,5 +58,14 @@ describe('resolveProjectGroupFromList', () => {
     } catch (error) {
       expect((error as RuntimeClientError).code).toBe('selector_not_found')
     }
+  })
+
+  it('limits selectors to a direct-SSH connection when supplied', () => {
+    const groups = [group('local', 'Build'), group('remote', 'Build', 'ssh-1')]
+
+    expect(resolveProjectGroupFromList(groups, 'Build', 'ssh-1').id).toBe('remote')
+    expect(() => resolveProjectGroupFromList(groups, 'id:local', 'ssh-1')).toThrowError(
+      RuntimeClientError
+    )
   })
 })

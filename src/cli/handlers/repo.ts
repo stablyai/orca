@@ -7,7 +7,11 @@ import {
   getOptionalStringFlag,
   getRequiredStringFlag
 } from '../flags'
-import { resolveProjectGroup } from '../project-group-selector'
+import {
+  assertProjectGroupMatchesRepoHost,
+  getProjectGroupConnectionScope,
+  resolveProjectGroup
+} from '../project-group-selector'
 import { resolveRepoPathArgument } from '../repo-path-arguments'
 import { RuntimeClientError } from '../runtime-client'
 
@@ -29,8 +33,9 @@ export const REPO_HANDLERS: Record<string, CommandHandler> = {
     })
     printResult(result, json, formatRepoShow)
   },
-  'repo set': async ({ flags, client, json }) => {
+  'repo set': async ({ flags, client, env, json }) => {
     const repo = getRequiredStringFlag(flags, 'repo')
+    const connectionId = getProjectGroupConnectionScope(env)
     const groupSelector = getOptionalStringFlag(flags, 'group')
     const ungroup = flags.get('ungroup') === true
     if (groupSelector !== undefined && ungroup) {
@@ -41,7 +46,12 @@ export const REPO_HANDLERS: Record<string, CommandHandler> = {
     }
     const updates: Record<string, unknown> = {}
     if (groupSelector !== undefined) {
-      updates.projectGroupId = (await resolveProjectGroup(client, groupSelector)).id
+      const group = await resolveProjectGroup(client, groupSelector, connectionId)
+      const repoResult = await client.call<{
+        repo: { connectionId?: string | null }
+      }>('repo.show', { repo, ...(connectionId === undefined ? {} : { connectionId }) })
+      assertProjectGroupMatchesRepoHost(group, repoResult.result.repo)
+      updates.projectGroupId = group.id
     }
     if (ungroup) {
       updates.projectGroupId = null
@@ -71,13 +81,18 @@ export const REPO_HANDLERS: Record<string, CommandHandler> = {
     }
     const result = await client.call<{ repo: Record<string, unknown> }>('repo.update', {
       repo,
-      updates
+      updates,
+      ...(connectionId === undefined ? {} : { connectionId })
     })
     printResult(result, json, formatRepoShow)
   },
-  'repo rm': async ({ flags, client, json }) => {
+  'repo rm': async ({ flags, client, env, json }) => {
     const repo = getRequiredStringFlag(flags, 'repo')
-    const result = await client.call<{ removed: boolean }>('repo.rm', { repo })
+    const connectionId = getProjectGroupConnectionScope(env)
+    const result = await client.call<{ removed: boolean }>('repo.rm', {
+      repo,
+      ...(connectionId === undefined ? {} : { connectionId })
+    })
     // Why: a runtime that reports removed: false must not read as success.
     if (!result.result.removed) {
       throw new RuntimeClientError('selector_not_found', `Repo ${repo} is not registered.`)

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import type { ProjectGroup } from '../shared/types'
+import type { ProjectGroup } from '../shared/project-group-types'
 import { formatProjectGroupList, formatProjectGroupShow } from './workspace-format'
 
 function projectGroup(overrides: Partial<ProjectGroup> = {}): ProjectGroup {

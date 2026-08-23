@@ -10,7 +10,8 @@ import {
 } from '../repo-visibility-projection'
 
 const RepoSelector = z.object({
-  repo: requiredString('Missing repo selector')
+  repo: requiredString('Missing repo selector'),
+  connectionId: OptionalString.nullable().optional()
 })
 
 const RepoPath = z.object({
@@ -59,6 +60,7 @@ const ProjectGroupCreate = z.object({
 
 const ProjectGroupUpdate = z.object({
   groupId: requiredString('Missing group id'),
+  connectionId: OptionalString.nullable().optional(),
   updates: z.object({
     name: OptionalString,
     isCollapsed: z.boolean().optional(),
@@ -67,9 +69,7 @@ const ProjectGroupUpdate = z.object({
   })
 })
 
-const ProjectGroupSelector = z.object({
-  groupId: requiredString('Missing group id')
-})
+const ProjectGroupSelector = ProjectGroupUpdate.pick({ groupId: true, connectionId: true })
 
 const ProjectGroupMoveProject = z.object({
   repo: requiredString('Missing repo selector'),
@@ -138,13 +138,18 @@ export const REPO_METHODS: RpcMethod[] = [
     name: 'projectGroup.update',
     params: ProjectGroupUpdate,
     handler: async (params, { runtime }) => ({
-      group: await runtime.updateProjectGroup(params.groupId, params.updates)
+      group: await (params.connectionId === undefined
+        ? runtime.updateProjectGroup(params.groupId, params.updates)
+        : runtime.updateProjectGroup(params.groupId, params.updates, params.connectionId))
     })
   }),
   defineMethod({
     name: 'projectGroup.delete',
     params: ProjectGroupSelector,
-    handler: async (params, { runtime }) => runtime.deleteProjectGroup(params.groupId)
+    handler: async (params, { runtime }) =>
+      params.connectionId === undefined
+        ? runtime.deleteProjectGroup(params.groupId)
+        : runtime.deleteProjectGroup(params.groupId, params.connectionId)
   }),
   defineMethod({
     name: 'projectGroup.moveProject',
@@ -223,7 +228,12 @@ export const REPO_METHODS: RpcMethod[] = [
     name: 'repo.show',
     params: RepoSelector,
     handler: async (params, context) => ({
-      repo: projectRepoVisibilityForClient(await context.runtime.showRepo(params.repo), context)
+      repo: projectRepoVisibilityForClient(
+        await (params.connectionId === undefined
+          ? context.runtime.showRepo(params.repo)
+          : context.runtime.showRepo(params.repo, params.connectionId)),
+        context
+      )
     })
   }),
   defineMethod({
@@ -231,10 +241,16 @@ export const REPO_METHODS: RpcMethod[] = [
     params: RepoUpdate,
     handler: async (params, context) => ({
       repo: projectRepoVisibilityForClient(
-        await context.runtime.updateRepo(
-          params.repo,
-          params.updates as Parameters<typeof context.runtime.updateRepo>[1]
-        ),
+        await (params.connectionId === undefined
+          ? context.runtime.updateRepo(
+              params.repo,
+              params.updates as Parameters<typeof context.runtime.updateRepo>[1]
+            )
+          : context.runtime.updateRepo(
+              params.repo,
+              params.updates as Parameters<typeof context.runtime.updateRepo>[1],
+              params.connectionId
+            )),
         context
       )
     })
@@ -242,7 +258,10 @@ export const REPO_METHODS: RpcMethod[] = [
   defineMethod({
     name: 'repo.rm',
     params: RepoSelector,
-    handler: async (params, { runtime }) => runtime.removeProject(params.repo)
+    handler: async (params, { runtime }) =>
+      params.connectionId === undefined
+        ? runtime.removeProject(params.repo)
+        : runtime.removeProject(params.repo, params.connectionId)
   }),
   defineMethod({
     name: 'repo.reorder',
