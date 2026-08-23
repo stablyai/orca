@@ -15,7 +15,8 @@ export const RESUMABLE_TUI_AGENTS = [
   'devin',
   'omp',
   'prime-agent',
-  'copilot'
+  'copilot',
+  'kimi'
 ] as const satisfies readonly TuiAgent[]
 
 export type ResumableTuiAgent = (typeof RESUMABLE_TUI_AGENTS)[number]
@@ -287,5 +288,8 @@ export function getAgentResumeArgv(
     // resume commands, so local and remote resumes agree on one spelling.
     case 'copilot':
       return providerSession.key === 'session_id' ? ['copilot', `--resume=${id}`] : null
+    // Why: Kimi resumes by id with --session; sessions are work-dir-scoped (enforced by callers).
+    case 'kimi':
+      return providerSession.key === 'session_id' ? ['kimi', '--session', id] : null
   }
 }
