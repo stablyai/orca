@@ -412,16 +412,42 @@ describe('createMainWindow', () => {
     consoleError.mockRestore()
   })
 
+  it('routes renderer recovery through the caller-owned load lifecycle', () => {
+    vi.useFakeTimers()
+
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const { browserWindowInstance, windowHandlers } = createRendererRecoveryWindowHarness()
+    const loadForRendererRecovery = vi.fn((_webContents: Electron.WebContents, load: () => void) =>
+      load()
+    )
+
+    createMainWindow(null, { loadForRendererRecovery })
+    windowHandlers['render-process-gone']?.(
+      {} as never,
+      { reason: 'crashed', exitCode: 5 } as Electron.RenderProcessGoneDetails
+    )
+    vi.advanceTimersByTime(250)
+
+    expect(loadForRendererRecovery).toHaveBeenCalledWith(
+      browserWindowInstance.webContents,
+      expect.any(Function)
+    )
+    expect(browserWindowInstance.loadFile).toHaveBeenCalledTimes(2)
+    consoleError.mockRestore()
+  })
+
   it('still preserves PTYs and reloads after Windows session-end', () => {
     vi.useFakeTimers()
 
     const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {})
     const { browserWindowInstance, windowHandlers } = createRendererRecoveryWindowHarness()
-    const onBeforeRecoveryReload = vi.fn()
+    const loadForRendererRecovery = vi.fn((_webContents: Electron.WebContents, load: () => void) =>
+      load()
+    )
 
     withPlatform('win32', () => {
       createMainWindow(null, {
-        onBeforeRecoveryReload,
+        loadForRendererRecovery,
         shouldRecoverRenderer: (details) =>
           shouldRecoverRendererAfterProcessGone({
             reason: details.reason,
@@ -441,7 +467,10 @@ describe('createMainWindow', () => {
     )
     vi.runAllTimers()
 
-    expect(onBeforeRecoveryReload).toHaveBeenCalledWith(143)
+    expect(loadForRendererRecovery).toHaveBeenCalledWith(
+      browserWindowInstance.webContents,
+      expect.any(Function)
+    )
     expect(browserWindowInstance.loadFile).toHaveBeenCalledTimes(2)
     consoleError.mockRestore()
   })

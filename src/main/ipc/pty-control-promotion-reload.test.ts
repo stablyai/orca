@@ -10,7 +10,10 @@ import {
 } from './pty'
 import { ptyRendererOwners } from './pty-renderer-owners'
 import { LocalPtyProvider } from '../providers/local-pty-provider'
-import { reloadPromotedControl } from '../window/promoted-control-reload'
+import {
+  loadRendererWithPtyRecovery,
+  reloadPromotedControl
+} from '../window/promoted-control-reload'
 import { createWebContentsTimedFlag } from '../window/web-contents-timed-flag'
 
 vi.mock('electron', () => import('./pty-ipc-mock-registry').then((m) => m.electronModuleMock()))
@@ -176,8 +179,9 @@ describe('control promotion PTY reload', () => {
     ptyRendererOwners.markDispatcherReady(secondary as never)
     handoffPtyRendererOwnership([result.id], mainWindow.webContents as never, secondary as never)
     secondary.on('render-process-gone', () => {
-      recoveryReloadInFlight.mark(secondary.id)
-      finishLoad(secondary)
+      loadRendererWithPtyRecovery(secondary as never, recoveryReloadInFlight, () =>
+        finishLoad(secondary)
+      )
     })
     for (const listener of activeListeners(secondary, 'render-process-gone')) {
       listener()
@@ -193,6 +197,47 @@ describe('control promotion PTY reload', () => {
     expect(mockProc.proc.write).toHaveBeenCalledWith('still-live')
 
     reload(secondary)
+    expect(kill).toHaveBeenCalledOnce()
+  })
+
+  it('sweeps a secondary local PTY on the ordinary load after crash recovery fails', async () => {
+    const mockProc = createMockProc()
+    const kill = mockProc.proc.kill
+    spawnMock.mockReturnValue(mockProc.proc)
+    const recoveryReloadInFlight = createWebContentsTimedFlag()
+    const isRecoveryReloadInFlight = (webContentsId: number): boolean =>
+      recoveryReloadInFlight.matches(webContentsId, { consume: true })
+
+    registerPtyHandlers(
+      mainWindow as never,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      { isRecoveryReloadInFlight }
+    )
+    finishLoad(mainWindow.webContents)
+    const result = (await handlers.get('pty:spawn')!(mainWindowIpcEvent, {
+      cols: 80,
+      rows: 24
+    })) as { id: string }
+    const secondary = foreignWindowIpcEvent.sender
+    registerPtyRenderer(secondary as never)
+    finishLoad(secondary)
+    ptyRendererOwners.markDispatcherReady(secondary as never)
+    handoffPtyRendererOwnership([result.id], mainWindow.webContents as never, secondary as never)
+    for (const listener of activeListeners(secondary, 'render-process-gone')) {
+      listener()
+    }
+
+    loadRendererWithPtyRecovery(secondary as never, recoveryReloadInFlight, () => {
+      for (const listener of activeListeners(secondary, 'did-fail-load')) {
+        listener({}, -2, 'failed', 'orca://renderer', true, 1, 2)
+      }
+    })
+    reload(secondary)
+
     expect(kill).toHaveBeenCalledOnce()
   })
 

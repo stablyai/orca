@@ -220,8 +220,8 @@ type CreateMainWindowOptions = {
   title?: string
   getKeybindings?: () => KeybindingOverrides | undefined
   onBeforeReload?: (options: { ignoreCache: boolean; webContentsId: number }) => void
-  /** Marks the in-place recovery reload so did-finish-load's PTY orphan sweep spares live sessions until restore re-attaches (#5787). */
-  onBeforeRecoveryReload?: (webContentsId: number) => void
+  /** Runs the in-place recovery load inside the caller's live-session protection lifecycle. */
+  loadForRendererRecovery?: (webContents: Electron.WebContents, load: () => void) => void
   fenceTerminalTransfersForWindowClose?: (windowId: number) => Promise<void>
   hasPendingTerminalTransferForWindow?: (windowId: number) => boolean
   releaseTerminalTransferWindowCloseFence?: (windowId: number) => void
@@ -678,9 +678,12 @@ export function createMainWindow(
         return
       }
       // Why: a transient renderer/Network Service loss can blank Chromium; reload the app document once to recover.
-      // Why: mark this in-place reload so the did-finish-load orphan sweep spares live PTYs until session restore (#5787).
-      opts?.onBeforeRecoveryReload?.(mainWindow.webContents.id)
-      loadMainWindow(mainWindow)
+      const load = (): void => loadMainWindow(mainWindow)
+      if (opts?.loadForRendererRecovery) {
+        opts.loadForRendererRecovery(mainWindow.webContents, load)
+      } else {
+        load()
+      }
     }, 250)
   }
   mainWindow.webContents.on('render-process-gone', (_event, details) => {

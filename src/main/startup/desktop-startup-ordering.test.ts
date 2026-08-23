@@ -192,7 +192,7 @@ describe('startup ordering', () => {
   it('wires bounded teardown state to reporting but not recovery or close behavior', () => {
     const source = readFileSync(join(process.cwd(), 'src/main/index.ts'), 'utf8')
     const scopeStart = source.indexOf('function getExpectedTeardownScope(')
-    const scopeEnd = source.indexOf('function markRecoveryReloadInFlight(', scopeStart)
+    const scopeEnd = source.indexOf('function isRecoveryReloadInFlight(', scopeStart)
     const scope = source.slice(scopeStart, scopeEnd)
     const windowStart = source.indexOf('const window = createMainWindow(store, {')
     const windowEnd = source.indexOf('onRendererRecoveryExhausted:', windowStart)
@@ -264,13 +264,22 @@ describe('startup ordering', () => {
     const secondaryEnd = source.indexOf('const secondaryId = secondary.id', secondaryStart)
     const controlOptions = source.slice(controlStart, controlEnd)
     const secondaryOptions = source.slice(secondaryStart, secondaryEnd)
+    const recoveryLoadStart = source.indexOf('const loadRendererAfterCrash = (')
+    const recoveryLoad = source.slice(recoveryLoadStart, controlStart)
+    const breadcrumb = recoveryLoad.indexOf(
+      "recordDurableCrashBreadcrumb('renderer_recovery_reload')"
+    )
+    const protectedLoad = recoveryLoad.indexOf('loadRendererWithPtyRecovery(')
 
     expect(controlStart).toBeGreaterThanOrEqual(0)
     expect(controlEnd).toBeGreaterThan(controlStart)
     expect(secondaryStart).toBeGreaterThanOrEqual(0)
     expect(secondaryEnd).toBeGreaterThan(secondaryStart)
-    expect(controlOptions).toContain('onBeforeRecoveryReload: prepareRendererRecoveryReload')
-    expect(secondaryOptions).toContain('onBeforeRecoveryReload: prepareRendererRecoveryReload')
+    expect(recoveryLoadStart).toBeGreaterThanOrEqual(0)
+    expect(breadcrumb).toBeGreaterThanOrEqual(0)
+    expect(protectedLoad).toBeGreaterThan(breadcrumb)
+    expect(controlOptions).toContain('loadForRendererRecovery: loadRendererAfterCrash')
+    expect(secondaryOptions).toContain('loadForRendererRecovery: loadRendererAfterCrash')
   })
 
   it('replaces the pending settings target before marking an untimed request', () => {

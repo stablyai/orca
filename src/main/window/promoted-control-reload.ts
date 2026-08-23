@@ -1,9 +1,10 @@
 import type { WebContents } from 'electron'
 import type { WebContentsTimedFlag } from './web-contents-timed-flag'
 
-export function reloadPromotedControl(
+export function loadRendererWithPtyRecovery(
   webContents: WebContents,
-  recoveryReloadInFlight: WebContentsTimedFlag
+  recoveryReloadInFlight: WebContentsTimedFlag,
+  load: () => void
 ): void {
   const webContentsId = webContents.id
 
@@ -41,9 +42,16 @@ export function reloadPromotedControl(
   webContents.on('destroyed', onDestroyed)
   recoveryReloadInFlight.mark(webContentsId)
   try {
-    webContents.reload()
+    load()
   } catch (error) {
     clear()
     throw error
   }
+}
+
+export function reloadPromotedControl(
+  webContents: WebContents,
+  recoveryReloadInFlight: WebContentsTimedFlag
+): void {
+  loadRendererWithPtyRecovery(webContents, recoveryReloadInFlight, () => webContents.reload())
 }

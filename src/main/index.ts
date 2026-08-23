@@ -363,7 +363,10 @@ import { LocalPtyProvider } from './providers/local-pty-provider'
 import { KeybindingService } from './keybindings/keybinding-service'
 import { applyElectronProxySettings } from './network/proxy-settings'
 import { createWebContentsTimedFlag } from './window/web-contents-timed-flag'
-import { reloadPromotedControl } from './window/promoted-control-reload'
+import {
+  loadRendererWithPtyRecovery,
+  reloadPromotedControl
+} from './window/promoted-control-reload'
 import { preserveAgentAuthBeforeRestart } from './agent-auth-restart-preservation'
 import { CliInstaller } from './cli/cli-installer'
 import { installLinuxBareOrcaDispatcher } from './cli/linux-bare-orca-dispatcher'
@@ -791,10 +794,6 @@ function getExpectedTeardownScope(
       webContentsId !== undefined && expectedRendererReload.matches(webContentsId),
     includeSystemSessionEnd
   })
-}
-
-function markRecoveryReloadInFlight(webContentsId: number, durationMs = 10_000): void {
-  recoveryReloadInFlight.mark(webContentsId, durationMs)
 }
 
 function isRecoveryReloadInFlight(webContentsId: number): boolean {
@@ -1394,10 +1393,9 @@ function openMainWindow(options: { revealOnDidFinishLoad?: boolean } = {}): Brow
     clearExpectedRendererReload()
     windowQuitLifecycle.abort()
   }
-  // Why: every window recovery reload must spare its live local PTYs until renderer ownership reattaches.
-  const prepareRendererRecoveryReload = (webContentsId: number): void => {
-    markRecoveryReloadInFlight(webContentsId)
+  const loadRendererAfterCrash = (webContents: Electron.WebContents, load: () => void): void => {
     recordDurableCrashBreadcrumb('renderer_recovery_reload')
+    loadRendererWithPtyRecovery(webContents, recoveryReloadInFlight, load)
   }
   const window = createMainWindow(store, {
     getIsQuitting: () => isQuitting,
@@ -1445,7 +1443,7 @@ function openMainWindow(options: { revealOnDidFinishLoad?: boolean } = {}): Brow
       }
       recordCrashBreadcrumb('manual_reload_requested', { ignoreCache })
     },
-    onBeforeRecoveryReload: prepareRendererRecoveryReload
+    loadForRendererRecovery: loadRendererAfterCrash
   })
   recordCrashBreadcrumb('main_window_created')
   logStartupMilestone('window-created')
@@ -1636,7 +1634,7 @@ function openMainWindow(options: { revealOnDidFinishLoad?: boolean } = {}): Brow
           terminalWindowTransfers?.resumeAfterWindowClose(windowId),
         onRendererUnavailable: (windowId) =>
           getWindowSessionRegistry(store!).markRendererUnavailable(windowId),
-        onBeforeRecoveryReload: prepareRendererRecoveryReload,
+        loadForRendererRecovery: loadRendererAfterCrash,
         deferLoad: true,
         title: devInstanceIdentity.name,
         getKeybindings: () => keybindings?.getOverrides(),
