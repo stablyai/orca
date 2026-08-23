@@ -1,5 +1,5 @@
 import { execFileSync, type ExecFileSyncOptions } from 'node:child_process'
-import { chmodSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -289,5 +289,52 @@ describe('the PATH walk, run by a real POSIX shell', () => {
     } finally {
       rmSync(root, { recursive: true, force: true })
     }
+  })
+})
+
+describe('the mount table read, counted against a real shell', () => {
+  const itPosix = process.platform === 'win32' ? it.skip : it
+
+  const runWithCountingAwk = async (commands: string[]): Promise<number> => {
+    const root = mkdtempSync(join(tmpdir(), 'orca-awk-'))
+    try {
+      const counter = join(root, 'count')
+      const bin = join(root, 'bin')
+      mkdirSync(bin, { recursive: true })
+      // A stub that records each fork, then answers as awk would on a host
+      // with no Windows mounts.
+      writeFileSync(join(bin, 'awk'), `#!/bin/sh\necho x >> ${counter}\nexit 0\n`)
+      chmodSync(join(bin, 'awk'), 0o755)
+      writeFileSync(counter, '')
+
+      runWslProcessMock.mockResolvedValue({
+        environmentResolved: true,
+        code: 0,
+        stdout: '',
+        stderr: '',
+        timedOut: false
+      })
+      await detectWslCommandsOnPath({ distro: 'Ubuntu' }, commands)
+      const script = String(runWslProcessMock.mock.calls.at(-1)?.[0].script)
+      const options: ExecFileSyncOptions = {
+        encoding: 'utf8',
+        env: { PATH: `${bin}:/usr/bin:/bin`, HOME: root }
+      }
+      execFileSync('/bin/sh', ['-c', script], options)
+      return readFileSync(counter, 'utf8').trim().split('\n').filter(Boolean).length
+    } finally {
+      rmSync(root, { recursive: true, force: true })
+    }
+  }
+
+  itPosix('reads /proc/mounts once, not once per probed command', async () => {
+    // The prelude is embedded in the lookup script, which the caller wraps in
+    // `for cmd in <every agent>`. An unconditional assignment forked awk once
+    // per CLI -- 36 of them inside the distro against a 10s budget.
+    expect(await runWithCountingAwk(['claude', 'codex', 'gemini', 'opencode'])).toBe(1)
+  })
+
+  itPosix('still reads it once when only one command is probed', async () => {
+    expect(await runWithCountingAwk(['claude'])).toBe(1)
   })
 })
