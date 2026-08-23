@@ -256,7 +256,9 @@ describe('PR workflow parallelism', () => {
     // resolution can never legitimately change anything.
     expect(dependencyInstall.run).toContain('--frozen-lockfile')
     expect(dependencyInstall.run).not.toContain('--no-frozen-lockfile')
-    expect(dependencyInstall.run).toContain('git diff --exit-code package.json pnpm-lock.yaml')
+    expect(dependencyInstall.run).toContain(
+      'git -C "$GITHUB_WORKSPACE" diff --exit-code -- package.json pnpm-lock.yaml'
+    )
     expect(dependencyInstall.run).toContain('--ignore-scripts')
     expect(dependencyInstall.run).not.toContain('--os=')
     expect(dependencyInstall.run).not.toContain('--cpu=')
