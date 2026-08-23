@@ -720,8 +720,13 @@ jobs:
             TEST_FILES="$(printf '%s\n' "$TEST_FILES" \
               'tests/e2e/pty-input-write-queue-ssh.spec.ts' \
               'tests/e2e/ssh-cold-activation-restore.spec.ts' \
+              'tests/e2e/ssh-docker-bulk-open-freeze-repro.spec.ts' \
               'tests/e2e/ssh-docker-reconnect-pane-restore.spec.ts' \
+              'tests/e2e/ssh-docker-transport-drop-recovery.spec.ts' \
+              'tests/e2e/ssh-port-forward-lifecycle.spec.ts' \
+              'tests/e2e/ssh-reconnect-tab-destruction.spec.ts' \
               'tests/e2e/ssh-startup-exec-readiness.spec.ts' \
+              'tests/e2e/ssh-terminal-parking.spec.ts' \
               'tests/e2e/ssh-terminal-window-wake-stale-grid-repro.spec.ts' | sort -u)"
           fi
           # Why: same lesson as the SSH specs above. The IME e2e suite asserts real pty bytes and

@@ -282,6 +282,12 @@ export class RelayDispatcher {
    * Whether the id still names a client. A detach notification does not always mean it stopped:
    * invalidateClient() detaches the primary without removing it, and setWrite() revives that same id.
    */
+  // Why: the pty handler pauses a pty when its output cannot be delivered, and only resumes once
+  // the backlog drains to a client. With none attached that never happens, so it needs to ask.
+  hasAttachedClients(): boolean {
+    return this.activeClients().length > 0
+  }
+
   isClientAttached(clientId: number): boolean {
     return !this.disposed && this.clients.has(clientId)
   }

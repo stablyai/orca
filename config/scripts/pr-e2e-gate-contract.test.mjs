@@ -1,4 +1,4 @@
-import { existsSync, readFileSync } from 'node:fs'
+import { existsSync, readFileSync, readdirSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { parse } from 'yaml'
@@ -149,8 +149,13 @@ describe('PR E2E gate contract', () => {
     const mappedSpecs = [
       'tests/e2e/pty-input-write-queue-ssh.spec.ts',
       'tests/e2e/ssh-cold-activation-restore.spec.ts',
+      'tests/e2e/ssh-docker-bulk-open-freeze-repro.spec.ts',
       'tests/e2e/ssh-docker-reconnect-pane-restore.spec.ts',
+      'tests/e2e/ssh-docker-transport-drop-recovery.spec.ts',
+      'tests/e2e/ssh-port-forward-lifecycle.spec.ts',
+      'tests/e2e/ssh-reconnect-tab-destruction.spec.ts',
       'tests/e2e/ssh-startup-exec-readiness.spec.ts',
+      'tests/e2e/ssh-terminal-parking.spec.ts',
       'tests/e2e/ssh-terminal-window-wake-stale-grid-repro.spec.ts'
     ]
     for (const spec of mappedSpecs) {
@@ -177,6 +182,55 @@ describe('PR E2E gate contract', () => {
       step.name.startsWith('Install native build')
     )
     expect(changedInstall.run).toContain('openssh-client')
+  })
+
+  it('accounts for every Docker-backed SSH spec, so a new one cannot go untriggered', () => {
+    // Why: the mapped list above only proves the specs it names are wired. A spec added
+    // later inherits the original hole — it self-skips without ORCA_E2E_SSH_DOCKER and
+    // runs only when someone edits it, which is exactly how four pane-restore
+    // regressions shipped. Classifying every gated spec makes a new one fail here until
+    // somebody decides where it belongs.
+    const dedicatedLaneSpecs = new Set([
+      // Runs in e2e.yml's own ssh-docker-watcher-isolation lane.
+      'tests/e2e/ssh-docker-watcher-isolation.spec.ts'
+    ])
+    const deferredSpecs = new Map([
+      // Timing-sensitive; a shared PR runner reports noise as regression.
+      ['tests/e2e/ssh-docker-relay-perf.spec.ts', 'perf lane only'],
+      // Feature-scoped: exercise a surface over SSH rather than the SSH session itself,
+      // so their own path filters are the honest trigger.
+      ['tests/e2e/ssh-ai-vault-session-history.spec.ts', 'feature-scoped'],
+      ['tests/e2e/ssh-codex-display-artifacts-repro.spec.ts', 'feature-scoped'],
+      ['tests/e2e/ssh-external-image-preview.spec.ts', 'feature-scoped'],
+      ['tests/e2e/ssh-pi-compatible-agent-title.spec.ts', 'feature-scoped'],
+      ['tests/e2e/ssh-skill-installation.spec.ts', 'feature-scoped'],
+      ['tests/e2e/terminal-retention-budget.spec.ts', 'feature-scoped']
+    ])
+
+    const gatedSpecs = readdirSync(join(projectDir, 'tests/e2e'))
+      .filter((name) => name.endsWith('.spec.ts'))
+      .map((name) => `tests/e2e/${name}`)
+      .filter((spec) =>
+        readFileSync(join(projectDir, spec), 'utf8').includes('ORCA_E2E_SSH_DOCKER')
+      )
+    expect(gatedSpecs.length).toBeGreaterThan(0)
+
+    for (const spec of gatedSpecs) {
+      const classification =
+        filterStep.run.includes(`'${spec}'`) ||
+        dedicatedLaneSpecs.has(spec) ||
+        deferredSpecs.has(spec)
+      expect(
+        classification,
+        `${spec} needs Docker but nothing triggers it on an SSH source change. Add it to the SSH mapping in pr.yml, or record it in dedicatedLaneSpecs/deferredSpecs here with a reason.`
+      ).toBe(true)
+    }
+
+    // Why: a stale exemption is the same hole wearing a reason, so both lists must
+    // still describe specs that exist and still need Docker.
+    for (const spec of [...dedicatedLaneSpecs, ...deferredSpecs.keys()]) {
+      expect(gatedSpecs, `${spec} is exempted but no longer a Docker-gated spec`).toContain(spec)
+    }
   })
 
   it('scopes the VM rollback oracle to the PR range and recipe schema authorities', () => {

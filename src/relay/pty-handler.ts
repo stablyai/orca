@@ -429,6 +429,7 @@ export class PtyHandler {
   private pausedOutputPtys = new Set<string>()
   private consumerPausedOutputPtys = new Set<string>()
   private removeLegacyCapacityListener: (() => void) | null = null
+  private removeClientDetachListener: (() => void) | null = null
   private sourcePublication: RelayPtySourcePublication | null = null
   private lastInputAtByPty = new Map<string, number>()
   private interactiveOutputCharsByPty = new Map<string, number>()
@@ -459,6 +460,38 @@ export class PtyHandler {
     this.registerHandlers()
     this.removeLegacyCapacityListener =
       this.dispatcher.onLegacyPtyCapacity?.(() => this.handleLegacyCapacity()) ?? null
+    this.removeClientDetachListener =
+      this.dispatcher.onClientDetached?.(() => this.releaseUndeliverableOutput()) ?? null
+  }
+
+  /**
+   * A departed client must not wedge the shell it was watching.
+   *
+   * Output backpressure pauses the pty itself, and it only resumes once pending bytes drain below
+   * the low watermark - which needs a client to drain to. When the transport dies mid-stream there
+   * is none, so the pty stays paused, the shell blocks on a pty nobody reads, and the bytes are
+   * never produced at all. Measured: a shell mid-burst stopped at ~SEQ-100 and the reattach replay
+   * held only 1..120, so the outage was not merely undelivered, it was never recorded.
+   *
+   * The pending queue is per-client delivery state and is unbounded, which is exactly why pausing
+   * was the safe move. With no client it is also undeliverable, so it is dropped rather than
+   * carried: `buffered` is the reattach replay source and is capacity-bounded, so draining into it
+   * keeps memory flat while preserving what a returning client needs.
+   */
+  private releaseUndeliverableOutput(): void {
+    if (this.dispatcher.hasAttachedClients?.() !== false) {
+      return
+    }
+    for (const id of Array.from(this.pausedOutputPtys)) {
+      const managed = this.ptys.get(id)
+      if (!managed || managed.disposed) {
+        continue
+      }
+      this.pendingOutputByPty.delete(id)
+      this.consumerPausedOutputPtys.delete(id)
+      this.pausedOutputPtys.delete(id)
+      managed.pty.resume()
+    }
   }
 
   setConsumerDeliveryPaused(id: string, paused: boolean): void {
@@ -2338,6 +2371,8 @@ export class PtyHandler {
     }
     this.removeLegacyCapacityListener?.()
     this.removeLegacyCapacityListener = null
+    this.removeClientDetachListener?.()
+    this.removeClientDetachListener = null
     this.agentSessionCreateOperations.clear()
     const disposePromise = this.disposePtys(options.waitForPhysicalExit !== false)
     this.disposePromise = disposePromise
