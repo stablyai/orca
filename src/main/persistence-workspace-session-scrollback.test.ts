@@ -18,6 +18,7 @@ import {
   makeSessionWithTerminalBuffers,
   makeSessionWithBrowserHistory
 } from './persistence-session-fixtures'
+import { installFakeAppEnvironment } from '../../config/scripts/vitest-host-ports-setup'
 
 // Stub the ~/.ssh/config parser so the SSH-import test drives the real Store with deterministic hosts, not the operator's actual ~/.ssh/config.
 const { loadUserSshConfigMock, sshConfigHostsToTargetsMock } = vi.hoisted(() => ({
@@ -188,6 +189,9 @@ describe('Store', () => {
     mkdirSync(profileDataDirectory, { recursive: true })
 
     vi.resetModules()
+    // Why: the legacy snapshot dir hangs off userData, which resolves through
+    // AppEnvironment — without this it points at the global fake's shared dir.
+    installFakeAppEnvironment({ getPath: () => testState.dir })
     const { Store, initDataPath } = await import('./persistence')
     initDataPath()
     const store = new Store({ dataFile: profileDataFile })
@@ -218,6 +222,9 @@ describe('Store', () => {
     writeFileSync(join(legacySnapshotDir, `${ref}.bin`), 'legacy-scrollback', 'utf-8')
 
     vi.resetModules()
+    // Why: the legacy snapshot dir hangs off userData, which resolves through
+    // AppEnvironment — without this it points at the global fake's shared dir.
+    installFakeAppEnvironment({ getPath: () => testState.dir })
     const { Store, initDataPath } = await import('./persistence')
     initDataPath()
     const store = new Store({ dataFile: profileDataFile })

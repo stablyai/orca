@@ -29,6 +29,9 @@ import { electronRuntimeBrowserCommandsFactory } from './host/electron-browser-c
 import { setRuntimeBrowserCommandsFactory } from './runtime/runtime-browser-commands-factory'
 import { electronHttpClient } from './host/electron-http-client'
 import { setMainHttpClient } from './network/http-client'
+import { electronSpeechServiceFactories } from './host/electron-speech-services'
+import { setSpeechServiceFactories } from './speech/speech-runtime-service'
+import { setWorktreeWatcherRemoval } from './ipc/worktree-watcher-removal'
 import { setSecretStore } from '../shared/secret-store'
 import { ElectronSecretStore } from './host/electron-secret-store'
 import { initSessionParseCachePersistence } from './ai-vault/session-parse-cache-persistence'
@@ -67,7 +70,7 @@ import {
   isCodexPaneHomeRouteProvenAwayFromSharedHome,
   reconcileCodexPaneAccountsWithLivePtys
 } from './codex/codex-pane-account-registry'
-import { closeAllWatchers } from './ipc/filesystem-watcher'
+import { closeAllWatchers, desktopWorktreeWatcherRemoval } from './ipc/filesystem-watcher'
 import { disposeWorktreeBaseDirectoryWatchers } from './ipc/worktree-base-directory-watcher'
 import { stopFolderRepoGitUpgradeWatch } from './ipc/folder-repo-git-upgrade'
 import { registerCoreHandlers } from './ipc/register-core-handlers'
@@ -902,6 +905,10 @@ if (hasSingleInstanceLock) {
   // falls back to the platform default, which is a real behavioural difference (proxy
   // read from the environment, Node's user agent) rather than a transparent swap.
   setMainHttpClient(electronHttpClient)
+  // Why here: constructing the speech services is what pulls Electron's streaming net
+  // request in. A host without them rejects speech calls rather than pretending.
+  setSpeechServiceFactories(electronSpeechServiceFactories)
+  setWorktreeWatcherRemoval(desktopWorktreeWatcherRemoval)
   // Why: couple to dev-parent only for electron-vite desktop runs; `orca serve`'s parent (CLI shim/background shell) isn't the intended server lifetime.
   const shouldCoupleToDevParent = is.dev && !isServeMode
   installDevParentDisconnectQuit(shouldCoupleToDevParent)

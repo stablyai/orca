@@ -14,21 +14,19 @@ import process from 'node:process'
 
 const ROOT = join(import.meta.dirname, '..', '..')
 const OUT_DIR = join(ROOT, 'out', 'orcad')
-const ENTRY = join(ROOT, 'src', 'main', 'orcad', 'orcad-entry.ts')
+const ENTRY = join(ROOT, 'src/main/orcad/main.ts')
 
 // Native addons must exist on the host; they cannot be bundled.
 // `electron` is external so a residual import fails loudly at require() time rather
 // than silently bundling the npm package's installer shim, which is what happened the
 // first time and made the bundle look clean while it was not.
-const EXTERNAL = [
-  'electron',
-  'node-pty',
-  '@parcel/watcher',
-  'better-sqlite3',
-  'keytar',
-  'fsevents',
-  'cpu-features'
-]
+// Why only these: measured, not guessed. `node-pty` is a hard `require.resolve` — orcad
+// exits at startup without it. `@parcel/watcher` is a guarded dynamic import, so the
+// server boots without it but every watch install fails. `fsevents` is macOS-only and
+// optional upstream. better-sqlite3 / keytar / cpu-features were externalized here
+// defensively and appear nowhere in the graph; listing them implied a shipping burden
+// that does not exist.
+const EXTERNAL = ['electron', 'node-pty', '@parcel/watcher', 'fsevents']
 
 /** Why: the UMD build's relative dynamic requires do not bundle. Same fix build-relay.mjs uses. */
 const jsoncParserEsm = {

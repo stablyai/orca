@@ -119,6 +119,12 @@ jobs:
       - name: Enforce runtime Electron-import ratchet
         run: pnpm run check:runtime-electron-ratchet
 
+      # Why both: the ratchet proves nothing reachable from the runtime imports electron,
+      # which is a property of the import graph. This proves the Node artifact it enables
+      # actually boots, pairs, creates a worktree and round-trips a real PTY.
+      - name: Boot orcad and round-trip a terminal
+        run: pnpm run smoke:orcad-terminal
+
       - name: Verify bundled skill guides
         run: pnpm run verify:bundled-skill-guides
 

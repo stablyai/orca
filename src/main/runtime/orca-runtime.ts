@@ -1136,14 +1136,7 @@ import {
 } from '../worktree-removal-repo-owner'
 import { prefetchWorktreeCreateBase } from '../worktree-create-base-prefetch'
 import { prepareLocalWorktreeRootForRepo } from '../worktree-root-preparation'
-import {
-  closeLocalWatcherForWorktreePath,
-  closeRemoteWatcherForWorktreePath,
-  forgetLocalWatcherRemovalSnapshot,
-  forgetRemoteWatcherRemovalSnapshot,
-  restoreLocalWatcherAfterFailedRemoval,
-  restoreRemoteWatcherAfterFailedRemoval
-} from '../ipc/filesystem-watcher'
+import { getWorktreeWatcherRemoval } from '../ipc/worktree-watcher-removal'
 import { acquireWatcherRemovalGate } from '../ipc/watcher-removal-gate'
 import {
   createWatcherRemovalDeadline,
@@ -10234,11 +10227,11 @@ export class OrcaRuntimeService {
     const results = await Promise.allSettled([
       connectionId
         ? drainBeforeWatcherRemoval(
-            closeRemoteWatcherForWorktreePath(connectionId, worktreePath),
+            getWorktreeWatcherRemoval().closeRemote(connectionId, worktreePath),
             deadline,
             `remote watcher close for ${worktreePath}`
           )
-        : closeLocalWatcherForWorktreePath(worktreePath, deadline),
+        : getWorktreeWatcherRemoval().closeLocal(worktreePath, deadline),
       drainBeforeWatcherRemoval(
         this.fileCommands.closeFileExplorerWatchersForPath(worktreePath, connectionId),
         deadline,
@@ -10260,16 +10253,16 @@ export class OrcaRuntimeService {
   ): Promise<void> => {
     await Promise.all([
       connectionId
-        ? restoreRemoteWatcherAfterFailedRemoval(connectionId, worktreePath)
-        : restoreLocalWatcherAfterFailedRemoval(worktreePath),
+        ? getWorktreeWatcherRemoval().restoreRemote(connectionId, worktreePath)
+        : getWorktreeWatcherRemoval().restoreLocal(worktreePath),
       this.fileCommands.restoreFileExplorerWatchersAfterFailedRemoval(worktreePath, connectionId)
     ])
   }
   forgetFileWatchersAfterRemoval = (worktreePath: string, connectionId?: string): void => {
     if (connectionId) {
-      forgetRemoteWatcherRemovalSnapshot(connectionId, worktreePath)
+      getWorktreeWatcherRemoval().forgetRemote(connectionId, worktreePath)
     } else {
-      forgetLocalWatcherRemovalSnapshot(worktreePath)
+      getWorktreeWatcherRemoval().forgetLocal(worktreePath)
     }
     this.fileCommands.forgetFileExplorerWatchersAfterRemoval(worktreePath, connectionId)
   }

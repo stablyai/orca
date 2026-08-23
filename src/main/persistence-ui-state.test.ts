@@ -12,6 +12,7 @@ import {
   readDataFile,
   makeRepo
 } from './persistence-test-harness'
+import { installFakeAppEnvironment } from '../../config/scripts/vitest-host-ports-setup'
 
 // Stub the ~/.ssh/config parser so the SSH-import test drives the real Store with deterministic hosts, not the operator's actual ~/.ssh/config.
 const { loadUserSshConfigMock, sshConfigHostsToTargetsMock } = vi.hoisted(() => ({
@@ -50,6 +51,9 @@ async function createStore() {
     describeUnavailable: () => null
   })
   const { Store, initDataPath } = await import('./persistence')
+  // Why here: userData resolves through AppEnvironment, and this must point at this
+  // file's temp dir rather than the global fake's shared one, after resetModules.
+  installFakeAppEnvironment({ getPath: () => testState.dir })
   initDataPath()
   return new Store()
 }

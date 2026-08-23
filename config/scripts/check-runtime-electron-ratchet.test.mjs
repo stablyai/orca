@@ -45,9 +45,12 @@ describe('the checked-in baseline', () => {
     expect(diffAgainstBaseline(current, baseline)).toEqual({ added: [], removed: [] })
   }, 120_000)
 
-  it('only lists modules under src/, so a node_modules path cannot pad the count', () => {
+  // Why an exact-empty assertion now: the reachable set reached zero, so "may only
+  // shrink" has no room left and any entry at all is a regression. This is strictly
+  // stronger than the old under-src/ check, which only stopped a node_modules path from
+  // padding a non-empty count.
+  it('stays empty, so nothing reachable from the runtime imports electron', () => {
     const baseline = readBaseline(readFileSync('config/runtime-electron-baseline.txt', 'utf8'))
-    expect(baseline.length).toBeGreaterThan(0)
-    expect(baseline.filter((entry) => !entry.startsWith('src/'))).toEqual([])
+    expect(baseline).toEqual([])
   })
 })

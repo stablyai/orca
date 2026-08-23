@@ -136,6 +136,7 @@ import {
   setTerminalViewAttributes
 } from './terminal-view-attribute-store'
 import { clearConfiguredWorktreeSharedDirectoriesCacheForTests } from '../git/worktree-shared-directories'
+import { setWorktreeWatcherRemoval } from '../ipc/worktree-watcher-removal'
 
 const ORIGINAL_PLATFORM = process.platform
 const ORIGINAL_PLATFORM_DESCRIPTOR = Object.getOwnPropertyDescriptor(process, 'platform')
@@ -219,14 +220,17 @@ const forgetRemoteWatcherRemovalSnapshotMock = vi.hoisted(() => vi.fn())
 const scanLocalRepoWorktreesForResolutionMock = vi.hoisted(() => vi.fn())
 
 vi.mock('electron', () => electronMocks)
-vi.mock('../ipc/filesystem-watcher', () => ({
-  closeLocalWatcherForWorktreePath: closeLocalWatcherForWorktreePathMock,
-  closeRemoteWatcherForWorktreePath: closeRemoteWatcherForWorktreePathMock,
-  restoreLocalWatcherAfterFailedRemoval: restoreLocalWatcherAfterFailedRemovalMock,
-  restoreRemoteWatcherAfterFailedRemoval: restoreRemoteWatcherAfterFailedRemovalMock,
-  forgetLocalWatcherRemovalSnapshot: forgetLocalWatcherRemovalSnapshotMock,
-  forgetRemoteWatcherRemovalSnapshot: forgetRemoteWatcherRemovalSnapshotMock
-}))
+// Why install the port instead of mocking ../ipc/filesystem-watcher: the runtime calls
+// WorktreeWatcherRemoval now, so a module mock would be inert and every assertion below
+// would silently pass against the inert default. Same mocks, same expectations.
+setWorktreeWatcherRemoval({
+  closeLocal: closeLocalWatcherForWorktreePathMock,
+  closeRemote: closeRemoteWatcherForWorktreePathMock,
+  restoreLocal: restoreLocalWatcherAfterFailedRemovalMock,
+  restoreRemote: restoreRemoteWatcherAfterFailedRemovalMock,
+  forgetLocal: forgetLocalWatcherRemovalSnapshotMock,
+  forgetRemote: forgetRemoteWatcherRemovalSnapshotMock
+})
 
 const {
   MOCK_GIT_WORKTREES,
