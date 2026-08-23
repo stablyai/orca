@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState, type RefObject } from 'react'
+import { useCallback, useEffect, useRef, useState, type RefObject } from 'react'
 import {
   closestCenter,
   pointerWithin,
@@ -207,11 +207,13 @@ export function useTabDragSplit({
     },
     [clearDragState, restorePreDragActivation, restoreSourceGroupAfterCrossGroupDrop]
   )
-  finishMissedDragRef.current = () => finishDrag(true)
-  teardownDragRef.current = () => {
-    invalidateDragRefs()
-    finishMissedDragRef.current = () => {}
-  }
+  useEffect(() => {
+    finishMissedDragRef.current = () => finishDrag(true)
+    teardownDragRef.current = () => {
+      invalidateDragRefs()
+      finishMissedDragRef.current = () => {}
+    }
+  }, [finishDrag, invalidateDragRefs])
 
   const onDragStart = useCallback(
     (event: DragStartEvent) => {
