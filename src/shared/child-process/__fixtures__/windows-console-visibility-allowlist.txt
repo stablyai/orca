@@ -19,7 +19,6 @@ main/computer/macos-computer-use-permissions.ts
 main/computer/macos-native-provider-transport.ts
 main/daemon/daemon-bash-wrapper-osc133-fixture.ts
 main/daemon/daemon-process-identity-query.ts
-main/daemon/daemon-process-inspection.ts
 main/daemon/daemon-process-start-time.ts
 main/emulator/android/android-command-runner.ts
 main/emulator/android/scrcpy-stream-session.ts
@@ -48,7 +47,6 @@ main/pty/posix-pty-foreground-group.ts
 main/pty/posix-pty-process-groups.ts
 main/pty/windows-environment-path.ts
 main/rate-limits/codex-fetcher.ts
-main/rate-limits/gemini-cli-oauth-extractor.ts
 main/runtime/orca-runtime-files.ts
 main/runtime/tls-certificate.ts
 main/ssh/ssh-connection.ts

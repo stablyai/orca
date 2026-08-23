@@ -86,6 +86,8 @@ export type WslSpec = WslCommand & {
   env?: Readonly<Record<string, string>>
   timeoutMs?: number
   maxOutputBytes?: number
+  /** See runProcess: 'tail' keeps the end of an over-long stream. */
+  retainOutput?: 'head' | 'tail'
 }
 
 export type WslResult = {
@@ -232,7 +234,8 @@ export async function runWslProcess(spec: WslSpec): Promise<WslResult> {
     env: buildHostEnv(spec.env),
     input: spec.scriptDelivery === 'stdin' ? spec.script : undefined,
     timeoutMs: remainingMs,
-    maxOutputBytes: spec.maxOutputBytes
+    maxOutputBytes: spec.maxOutputBytes,
+    retainOutput: spec.retainOutput
   })
 
   return {

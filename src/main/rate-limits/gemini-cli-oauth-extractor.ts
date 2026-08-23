@@ -21,7 +21,8 @@ const OAUTH2_SUBPATH = path.join('dist', 'src', 'code_assist', 'oauth2.js')
 async function resolveGeminiBinary(): Promise<string | null> {
   const whichCmd = process.platform === 'win32' ? 'where gemini' : 'which gemini'
   try {
-    const { stdout } = await execAsync(whichCmd, { encoding: 'utf-8' })
+    // `where` is console-subsystem; without this it flashes a conhost (#10488).
+    const { stdout } = await execAsync(whichCmd, { encoding: 'utf-8', windowsHide: true })
     const fromPath = stdout.trim().split(/\r?\n/)[0]
     if (fromPath && (await fileExists(fromPath))) {
       return fromPath
