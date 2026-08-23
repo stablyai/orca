@@ -54,6 +54,13 @@ afterEach(async () => {
   await rm(scratchDir, { recursive: true, force: true })
 })
 
+
+// Why fold the separator: Orca stores repo roots with forward slashes on
+// purpose (normalizeRuntimePathSeparators), and git reports its own paths that
+// way too — while path.join here yields backslashes on Windows. These cases
+// are about which repository was found, not how a path is spelled.
+const asRepoPath = (value: string): string => value.split('\\').join('/')
+
 describe('deferred worktree removal against the real Git binary', () => {
   it('clears the registration and deletes the renamed checkout in the background', async () => {
     const trashRoot = getWorktreeTrashRoot(worktreePath)
@@ -77,7 +84,7 @@ describe('deferred worktree removal against the real Git binary', () => {
 
     await removeWorktree(repoPath, worktreePath, false, { deleteBranch: false })
 
-    expect(await git(['worktree', 'list'], repoPath)).toContain(siblingPath)
+    expect(asRepoPath(await git(['worktree', 'list'], repoPath))).toContain(asRepoPath(siblingPath))
     expect(existsSync(siblingPath)).toBe(true)
   })
 
@@ -92,7 +99,7 @@ describe('deferred worktree removal against the real Git binary', () => {
 
     await expect(removeWorktree(repoPath, worktreePath, false)).rejects.toThrow()
     expect(existsSync(join(worktreePath, 'seed.txt'))).toBe(true)
-    expect(await git(['worktree', 'list'], repoPath)).toContain(worktreePath)
+    expect(asRepoPath(await git(['worktree', 'list'], repoPath))).toContain(asRepoPath(worktreePath))
     expect(existsSync(getWorktreeTrashRoot(worktreePath))).toBe(false)
   })
 

@@ -142,11 +142,14 @@ describe('RotatingLogWriter', () => {
   })
 
   it('leaves the original streams active when the log cannot be opened', () => {
-    mkdirSync(logPath)
+    // Why a missing parent and not a directory in the log's place: Windows opens a
+    // directory without complaint, so that provocation only refuses the open on POSIX.
+    // An absent parent is refused everywhere, which is what this case needs.
+    const unopenablePath = path.join(dir, 'never-created', 'relay.log')
     const stdout = vi.spyOn(process.stdout, 'write').mockReturnValue(true)
     const stderr = vi.spyOn(process.stderr, 'write').mockReturnValue(true)
     try {
-      const { writer, restore } = installRelayLogRotation(logPath)
+      const { writer, restore } = installRelayLogRotation(unopenablePath)
       expect(writer.active).toBe(false)
       process.stdout.write('stdout fallback\n')
       process.stderr.write('stderr fallback\n')

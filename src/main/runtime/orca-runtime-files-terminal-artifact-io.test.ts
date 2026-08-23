@@ -14,6 +14,7 @@ import {
 import { getSshFilesystemProvider } from '../providers/ssh-filesystem-dispatch'
 import { RUNTIME_PREVIEWABLE_BINARY_MAX_BYTES } from './orca-runtime-files'
 import type { RuntimeFileCommands } from './orca-runtime-files'
+import { canCreateFileSymlink } from '../../shared/symlink-capability'
 
 vi.mock('fs', async () => (await import('./orca-runtime-files-mock-registry')).fsModuleMock())
 vi.mock('fs/promises', async () =>
@@ -255,51 +256,57 @@ describe('RuntimeFileCommands', () => {
       ).rejects.toThrow('terminal_file_grant_stale')
     })
 
-    it('rejects retargeted symlink terminal artifact reads before returning outside content', async () => {
-      const artifactPath = await tempFile('result.json', '{"ok":true}')
-      const outsidePath = join(artifactPath, '..', 'outside.json')
-      await writeFile(outsidePath, '{"secret":true}')
-      const { commands } = createRuntimeFileCommands({ path: '/repo' })
-      resolveAuthorizedPathMock.mockImplementation(async (p: string) => p)
+    it.skipIf(!canCreateFileSymlink())(
+      'rejects retargeted symlink terminal artifact reads before returning outside content',
+      async () => {
+        const artifactPath = await tempFile('result.json', '{"ok":true}')
+        const outsidePath = join(artifactPath, '..', 'outside.json')
+        await writeFile(outsidePath, '{"secret":true}')
+        const { commands } = createRuntimeFileCommands({ path: '/repo' })
+        resolveAuthorizedPathMock.mockImplementation(async (p: string) => p)
 
-      const result = await resolveTerminalArtifactPath(commands, artifactPath)
-      const target = absoluteFileTarget(result)
-      await rm(artifactPath)
-      await symlink(outsidePath, artifactPath)
+        const result = await resolveTerminalArtifactPath(commands, artifactPath)
+        const target = absoluteFileTarget(result)
+        await rm(artifactPath)
+        await symlink(outsidePath, artifactPath)
 
-      await expect(
-        commands.readTerminalArtifactFile(
-          'id:wt-1',
-          target.grantId,
-          target.absolutePath,
-          'client-a'
-        )
-      ).rejects.toThrow('terminal_file_grant_stale')
-    })
+        await expect(
+          commands.readTerminalArtifactFile(
+            'id:wt-1',
+            target.grantId,
+            target.absolutePath,
+            'client-a'
+          )
+        ).rejects.toThrow('terminal_file_grant_stale')
+      }
+    )
 
-    it('rejects retargeted symlink terminal artifact writes before changing outside content', async () => {
-      const artifactPath = await tempFile('result.json', '{"ok":true}')
-      const outsidePath = join(artifactPath, '..', 'outside.json')
-      await writeFile(outsidePath, '{"secret":true}')
-      const { commands } = createRuntimeFileCommands({ path: '/repo' })
-      resolveAuthorizedPathMock.mockImplementation(async (p: string) => p)
+    it.skipIf(!canCreateFileSymlink())(
+      'rejects retargeted symlink terminal artifact writes before changing outside content',
+      async () => {
+        const artifactPath = await tempFile('result.json', '{"ok":true}')
+        const outsidePath = join(artifactPath, '..', 'outside.json')
+        await writeFile(outsidePath, '{"secret":true}')
+        const { commands } = createRuntimeFileCommands({ path: '/repo' })
+        resolveAuthorizedPathMock.mockImplementation(async (p: string) => p)
 
-      const result = await resolveTerminalArtifactPath(commands, artifactPath)
-      const target = absoluteFileTarget(result)
-      await rm(artifactPath)
-      await symlink(outsidePath, artifactPath)
+        const result = await resolveTerminalArtifactPath(commands, artifactPath)
+        const target = absoluteFileTarget(result)
+        await rm(artifactPath)
+        await symlink(outsidePath, artifactPath)
 
-      await expect(
-        commands.writeTerminalArtifactFile(
-          'id:wt-1',
-          target.grantId,
-          target.absolutePath,
-          '{"ok":false}',
-          'client-a'
-        )
-      ).rejects.toThrow('terminal_file_grant_stale')
-      await expect(readFile(outsidePath, 'utf8')).resolves.toBe('{"secret":true}')
-    })
+        await expect(
+          commands.writeTerminalArtifactFile(
+            'id:wt-1',
+            target.grantId,
+            target.absolutePath,
+            '{"ok":false}',
+            'client-a'
+          )
+        ).rejects.toThrow('terminal_file_grant_stale')
+        await expect(readFile(outsidePath, 'utf8')).resolves.toBe('{"secret":true}')
+      }
+    )
 
     it('does not renew stale terminal artifact grants', async () => {
       const artifactPath = await tempFile('result.json', '{"ok":true}')

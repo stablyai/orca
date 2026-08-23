@@ -9,6 +9,23 @@ import { delimiter, join } from 'node:path'
 import { _setWslCachesForTests } from '../wsl'
 import { registerPtyHandlers } from './pty'
 
+// Why captured at module load: the pty IPC suites force process.platform to darwin
+// per test, while node:path keeps the host's separators. PATH-syntax cases have to
+// run with both agreeing, so they restore the platform this process actually is.
+const HOST_PLATFORM = process.platform
+
+async function withHostPlatform<T>(run: () => Promise<T>): Promise<T> {
+  const forced = Object.getOwnPropertyDescriptor(process, 'platform')
+  Object.defineProperty(process, 'platform', { configurable: true, value: HOST_PLATFORM })
+  try {
+    return await run()
+  } finally {
+    if (forced) {
+      Object.defineProperty(process, 'platform', forced)
+    }
+  }
+}
+
 vi.mock('electron', () => import('./pty-ipc-mock-registry').then((m) => m.electronModuleMock()))
 vi.mock('fs', () => import('./pty-ipc-mock-registry').then((m) => m.fsModuleMock()))
 vi.mock('node-pty', () => import('./pty-ipc-mock-registry').then((m) => m.nodePtyModuleMock()))
@@ -520,9 +537,14 @@ describe('registerPtyHandlers', () => {
         const prev = mockedApp.isPackaged
         mockedApp.isPackaged = false
         try {
-          const env = await daemonSpawnAndGetEnv({}, undefined, undefined, {
-            PATH: `/tmp/orca-user-data/orca-terminal-attribution/posix${delimiter}/system/bin`
-          })
+          // Why the host platform: the scrub picks its PATH delimiter from process.platform
+          // while the prepend joins with node:path's, so a forced darwin on a Windows host
+          // splits the fixture on the wrong character instead of testing the scrub.
+          const env = await withHostPlatform(() =>
+            daemonSpawnAndGetEnv({}, undefined, undefined, {
+              PATH: `/tmp/orca-user-data/orca-terminal-attribution/posix${delimiter}/system/bin`
+            })
+          )
           expect(env.PATH).not.toContain('orca-terminal-attribution')
           expect(env.PATH).toContain('/system/bin')
         } finally {

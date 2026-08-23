@@ -1,0 +1,62 @@
+import { describe, expect, it } from 'vitest'
+import { sniffImageMime, signatureMatchesExtension } from './pet-image-signature'
+
+const png = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 0, 0, 0])
+const jpeg = Buffer.from([0xff, 0xd8, 0xff, 0xe0, 0, 0, 0, 0])
+const gif = Buffer.from('GIF89a\0\0', 'latin1')
+const webp = Buffer.concat([
+  Buffer.from('RIFF'),
+  Buffer.from([0, 0, 0, 0]),
+  Buffer.from('WEBPVP8 ')
+])
+const svg = Buffer.from('<?xml version="1.0"?>\n<svg xmlns="http://www.w3.org/2000/svg"/>')
+const svgBare = Buffer.from('  \n<svg viewBox="0 0 8 8"/>')
+
+describe('sniffImageMime', () => {
+  it('reads the format out of the bytes, whatever the name says', () => {
+    expect(sniffImageMime(png)).toBe('image/png')
+    expect(sniffImageMime(jpeg)).toBe('image/jpeg')
+    expect(sniffImageMime(gif)).toBe('image/gif')
+    expect(sniffImageMime(webp)).toBe('image/webp')
+    expect(sniffImageMime(svg)).toBe('image/svg+xml')
+    expect(sniffImageMime(svgBare)).toBe('image/svg+xml')
+  })
+
+  it('refuses bytes that are not an image at all', () => {
+    expect(sniffImageMime(Buffer.from('MZ\x90\0executable', 'latin1'))).toBeNull()
+    expect(sniffImageMime(Buffer.from('#!/bin/sh\nrm -rf /'))).toBeNull()
+    expect(sniffImageMime(Buffer.alloc(0))).toBeNull()
+  })
+
+  it('does not mistake a RIFF container that is not WebP', () => {
+    const wav = Buffer.concat([
+      Buffer.from('RIFF'),
+      Buffer.from([0, 0, 0, 0]),
+      Buffer.from('WAVEfmt ')
+    ])
+
+    expect(sniffImageMime(wav)).toBeNull()
+  })
+})
+
+describe('signatureMatchesExtension', () => {
+  it('accepts a file whose bytes agree with its name', () => {
+    expect(signatureMatchesExtension(png, 'image/png')).toBe(true)
+    expect(signatureMatchesExtension(webp, 'image/webp')).toBe(true)
+  })
+
+  it('treats apng as the png it actually is', () => {
+    // APNG shares the PNG signature; the animation lives in a later chunk.
+    expect(signatureMatchesExtension(png, 'image/apng')).toBe(true)
+  })
+
+  it('rejects an executable wearing a .png name', () => {
+    const disguised = Buffer.from('MZ\x90\0this is not a picture', 'latin1')
+
+    expect(signatureMatchesExtension(disguised, 'image/png')).toBe(false)
+  })
+
+  it('rejects a real image whose extension claims another format', () => {
+    expect(signatureMatchesExtension(jpeg, 'image/png')).toBe(false)
+  })
+})

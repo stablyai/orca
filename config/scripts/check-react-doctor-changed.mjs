@@ -26,7 +26,12 @@ const result = spawnSync(
     '--blocking',
     'error'
   ],
-  { stdio: 'inherit' }
+  {
+    stdio: 'inherit',
+    // Why: Node refuses to spawn a .cmd without a shell, so on Windows this
+    // gate threw EINVAL before react-doctor ever ran. See ensure-native-runtime.
+    shell: process.platform === 'win32'
+  }
 )
 
 if (result.error) {

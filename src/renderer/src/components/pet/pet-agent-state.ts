@@ -9,6 +9,10 @@ export type PetAnimationName =
   | 'jumping'
   | 'running-right'
   | 'running-left'
+  // Driven by the fall phase machine, never by agent status.
+  | 'falling'
+  | 'downed'
+  | 'rising'
 
 export type PetDragAnimation = 'running-right' | 'running-left' | null
 

@@ -51,6 +51,13 @@ import { TerminalAttachCanceledError } from './daemon-errors'
 import { WorkingDirectoryValidationAbortedError } from '../providers/working-directory-validation'
 import { useDaemonPtySubprocessEnv } from './pty-subprocess-test-harness'
 
+// Why host-shaped: the daemon preflights an explicit cwd only where its host reads the
+// path as absolute, so a POSIX-only fixture skips the Windows native-path check entirely
+// and the probe this file is about never runs.
+const DEAD_REPO_CWD =
+  process.platform === 'win32' ? 'C:\\Volumes\\dead\\repo' : '/Volumes/dead/repo'
+const MISSING_CWD = process.platform === 'win32' ? 'C:\\gone' : '/gone'
+
 describe('createPtySubprocess cwd cancellation identity', () => {
   useDaemonPtySubprocessEnv({
     spawnMock,
@@ -62,7 +69,7 @@ describe('createPtySubprocess cwd cancellation identity', () => {
 
   it('reports a canceled cwd probe as an attach cancellation, not a spawn failure', async () => {
     validateWorkingDirectoryAsyncMock.mockRejectedValue(
-      new WorkingDirectoryValidationAbortedError('/Volumes/dead/repo')
+      new WorkingDirectoryValidationAbortedError(DEAD_REPO_CWD)
     )
     const abort = new AbortController()
     abort.abort()
@@ -72,7 +79,7 @@ describe('createPtySubprocess cwd cancellation identity', () => {
         sessionId: 'canceled-cwd-session',
         cols: 80,
         rows: 24,
-        cwd: '/Volumes/dead/repo',
+        cwd: DEAD_REPO_CWD,
         cancelSignal: abort.signal
       })
     ).rejects.toThrow(TerminalAttachCanceledError)
@@ -81,7 +88,7 @@ describe('createPtySubprocess cwd cancellation identity', () => {
 
   it('leaves a genuine missing-directory failure alone', async () => {
     validateWorkingDirectoryAsyncMock.mockRejectedValue(
-      new Error('Working directory "/gone" does not exist. It may have been deleted.')
+      new Error(`Working directory "${MISSING_CWD}" does not exist. It may have been deleted.`)
     )
 
     await expect(
@@ -89,7 +96,7 @@ describe('createPtySubprocess cwd cancellation identity', () => {
         sessionId: 'missing-cwd-session',
         cols: 80,
         rows: 24,
-        cwd: '/gone'
+        cwd: MISSING_CWD
       })
     ).rejects.toThrow(/does not exist/)
   })

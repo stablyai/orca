@@ -1,6 +1,6 @@
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { join, win32 } from 'node:path'
 import { EventEmitter } from 'node:events'
 import { PassThrough } from 'node:stream'
 import { describe, expect, it, vi, beforeEach } from 'vitest'
@@ -37,8 +37,19 @@ import { getRemoteHostPlatform } from './ssh-remote-platform'
 import type { SshTarget } from '../../shared/ssh-types'
 import type { SystemSshResolvedConfig } from './ssh-control-socket'
 
+// Why built from SystemRoot rather than written out: this machine reports
+// `C:\WINDOWS` and the literal said `C:\Windows`, so the mocked existsSync never
+// matched, the resolver fell through to the real PATH, and every case measured
+// whichever ssh the host happened to ship — Git's, here.
 const SYSTEM_SSH_PATH =
-  process.platform === 'win32' ? 'C:\\Windows\\System32\\OpenSSH\\ssh.exe' : '/usr/bin/ssh'
+  process.platform === 'win32'
+    ? win32.join(
+        process.env.SystemRoot || process.env.WINDIR || 'C:\\Windows',
+        'System32',
+        'OpenSSH',
+        'ssh.exe'
+      )
+    : '/usr/bin/ssh'
 
 function decodePowerShellCommand(command: string): string {
   const encoded = command.match(/-EncodedCommand\s+(\S+)/)?.[1]
@@ -167,6 +178,11 @@ describe('spawnSystemSsh', () => {
 
   beforeEach(() => {
     existsSyncMock.mockReset()
+    // Why: a bare reset makes every candidate look absent, so the resolver falls
+    // through to whatever `ssh` the host has on PATH — `/usr/bin/ssh` on POSIX by
+    // luck, and Git's copy on Windows. Reporting the expected binary as present
+    // pins the resolution instead of reading the machine.
+    existsSyncMock.mockImplementation((candidate: string) => candidate === SYSTEM_SSH_PATH)
     spawnMock.mockReset()
 
     mockProc = {

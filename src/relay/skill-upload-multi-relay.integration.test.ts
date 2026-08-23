@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os'
 import { basename, dirname, join, resolve } from 'node:path'
 import { build } from 'esbuild'
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest'
+import { relayTestSocketPath } from './relay-test-socket-path'
 import { spawnRelay, type RelayProcess } from './subprocess-test-utils'
 
 let bundleRoot: string
@@ -90,20 +91,49 @@ function packageIdentity(bytes: Buffer, suffix: string) {
   }
 }
 
+/** Ends a relay the way both platforms support.
+ *
+ *  Why not `kill('SIGTERM')`: Windows has no signal delivery, so `kill` is a
+ *  TerminateProcess and the relay's SIGTERM handler -- the thing that disposes
+ *  its staging directory -- never runs. Closing stdin reaches the same
+ *  `shutdown()` on every host; the short idle grace is what makes it prompt. */
+async function retire(relay: RelayProcess): Promise<void> {
+  relay.proc.stdin!.end()
+  await relay.waitForExit()
+}
+
 describe('skill upload ownership across relay processes', () => {
   it('keeps each live relay upload isolated and cleans each exact owner', async () => {
     const root = await mkdtemp(join(tmpdir(), 'orca-skill-multi-relay-'))
     roots.push(root)
     const home = join(root, 'home')
-    const environment = { ...process.env, HOME: home, USERPROFILE: home }
+    // ORCA_RELAY_IDLE_GRACE_MS: an idle relay's default grace is 15 minutes, which
+    // outlives the test; `--grace-time` does not reach the idle branch.
+    const environment = {
+      ...process.env,
+      HOME: home,
+      USERPROFILE: home,
+      ORCA_RELAY_IDLE_GRACE_MS: '200'
+    }
     const first = spawnRelay(
       relayEntry,
-      ['--sock-path', join(root, 'first.sock'), '--endpoint-dir', join(root, 'first-hooks')],
+      // Why the helper: Windows relays listen on a named pipe; a .sock path is EACCES there.
+      [
+        '--sock-path',
+        relayTestSocketPath(root, 'first.sock'),
+        '--endpoint-dir',
+        join(root, 'first-hooks')
+      ],
       { env: environment }
     )
     const second = spawnRelay(
       relayEntry,
-      ['--sock-path', join(root, 'second.sock'), '--endpoint-dir', join(root, 'second-hooks')],
+      [
+        '--sock-path',
+        relayTestSocketPath(root, 'second.sock'),
+        '--endpoint-dir',
+        join(root, 'second-hooks')
+      ],
       { env: environment }
     )
     relays.push(first, second)
@@ -179,16 +209,14 @@ describe('skill upload ownership across relay processes', () => {
       path.endsWith(`${secondDisposalUpload.uploadId}.tar.gz`)
     )
 
-    first.kill('SIGTERM')
-    await first.waitForExit()
+    await retire(first)
     relays.splice(relays.indexOf(first), 1)
     expect(await readdir(uploadRoot)).toEqual([
       expect.stringMatching(new RegExp(`^owner-${second.proc.pid}-`))
     ])
     expect(await stagedArchives(uploadRoot)).toEqual([secondDisposalPath])
     await expect(readFile(secondDisposalPath!)).resolves.toEqual(secondDisposalBytes)
-    second.kill('SIGTERM')
-    await second.waitForExit()
+    await retire(second)
     relays.splice(relays.indexOf(second), 1)
     expect(await readdir(uploadRoot)).toEqual([])
   })
@@ -219,7 +247,7 @@ describe('skill upload ownership across relay processes', () => {
           owner.entry,
           [
             '--sock-path',
-            join(root, `${owner.kind}.sock`),
+            relayTestSocketPath(root, `${owner.kind}.sock`),
             '--endpoint-dir',
             join(root, `${owner.kind}-hooks`)
           ],

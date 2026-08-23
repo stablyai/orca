@@ -48,6 +48,13 @@ vi.mock('../minimax/minimax-cookie-store', () => ({
   hasMiniMaxSessionCookie: vi.fn(() => false)
 }))
 
+// Why derived rather than written as true: the service turns both off on
+// Windows on purpose — hidden PTYs are less reliable there, and it says so at
+// shouldAllowClaudePtyFallback. These cases are about which target and auth
+// preparation reach the fetch, not about that policy; pinning the POSIX value
+// made every one of them fail on Windows for a reason none of them is testing.
+const HOST_ALLOWS_CLAUDE_PTY = process.platform !== 'win32'
+
 describe('RateLimitService', () => {
   beforeEach(() => {
     resetRateLimitProviderMocks()
@@ -328,8 +335,8 @@ describe('RateLimitService', () => {
           wslLinuxConfigDir: '/home/jin/.claude',
           stripAuthEnv: true
         }),
-        allowPtyFallback: true,
-        allowUsagePanelSupplement: true,
+        allowPtyFallback: HOST_ALLOWS_CLAUDE_PTY,
+        allowUsagePanelSupplement: HOST_ALLOWS_CLAUDE_PTY,
         signal: expect.any(AbortSignal)
       })
     )
@@ -357,7 +364,7 @@ describe('RateLimitService', () => {
       expect.objectContaining({
         authPreparation: expect.objectContaining({ provenance: 'system' }),
         allowPtyFallback: false,
-        allowUsagePanelSupplement: true,
+        allowUsagePanelSupplement: HOST_ALLOWS_CLAUDE_PTY,
         signal: expect.any(AbortSignal)
       })
     )
@@ -375,7 +382,7 @@ describe('RateLimitService', () => {
       expect.objectContaining({
         authPreparation: undefined,
         allowPtyFallback: false,
-        allowUsagePanelSupplement: true,
+        allowUsagePanelSupplement: HOST_ALLOWS_CLAUDE_PTY,
         signal: expect.any(AbortSignal)
       })
     )
@@ -403,7 +410,7 @@ describe('RateLimitService', () => {
       expect.objectContaining({
         authPreparation: expect.objectContaining({ provenance: 'wsl:Ubuntu:system' }),
         allowPtyFallback: false,
-        allowUsagePanelSupplement: true,
+        allowUsagePanelSupplement: HOST_ALLOWS_CLAUDE_PTY,
         signal: expect.any(AbortSignal)
       })
     )
@@ -519,7 +526,10 @@ describe('RateLimitService', () => {
     })
 
     expect(fetchClaudeRateLimits).toHaveBeenLastCalledWith(
-      expect.objectContaining({ allowPtyFallback: true, allowUsagePanelSupplement: true })
+      expect.objectContaining({
+        allowPtyFallback: HOST_ALLOWS_CLAUDE_PTY,
+        allowUsagePanelSupplement: HOST_ALLOWS_CLAUDE_PTY
+      })
     )
 
     expect(service.getState().inactiveClaudeAccounts).not.toEqual(

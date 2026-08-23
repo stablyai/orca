@@ -35,7 +35,10 @@ describe('Monaco external-content undo history', () => {
 
     syncContentUpdate(editorInstance, 'first line\nappended', 'read-only-live-tail')
 
-    expect(model.getValue()).toBe('first line\nappended')
+    // Why normalise: a Monaco model adopts the platform's default EOL, so the
+    // value reads back CRLF on Windows. This case is about whether the append is
+    // undoable, not about which line ending the model chose.
+    expect(model.getValue().replace(/\r\n/g, '\n')).toBe('first line\nappended')
     expect(model.canUndo()).toBe(false)
   })
 

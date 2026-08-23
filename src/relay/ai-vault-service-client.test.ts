@@ -1,3 +1,4 @@
+import { basename, dirname, join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { getRemoteHostPlatform } from '../main/ssh/ssh-remote-platform'
 import {
@@ -7,6 +8,9 @@ import {
 import { RelayAiVaultServiceClient } from './ai-vault-service-client'
 import { RELAY_AI_VAULT_READY_TIMEOUT_MS } from './ai-vault-service-client-state'
 import { relayAiVaultServiceEntryPath } from './ai-vault-service-spawn'
+
+// A real volume, so the fixture root is absolute on Windows too.
+const VOLUME = process.platform === 'win32' ? 'C:\\' : '/'
 
 function createClient(
   children: AiVaultServiceTestChild[],
@@ -292,8 +296,12 @@ describe('RelayAiVaultServiceClient', () => {
   })
 
   it('resolves the sidecar beside each bundled relay', () => {
-    expect(relayAiVaultServiceEntryPath('/opt/orca/relay')).toBe(
-      '/opt/orca/relay/relay-ai-vault-service.js'
-    )
+    // Why the parts and not a literal: the entry sits beside the relay bundle on the
+    // host running it, Windows hosts included, so the separator is the runtime's own.
+    const relayDir = join(VOLUME, 'opt', 'orca', 'relay')
+    const entry = relayAiVaultServiceEntryPath(relayDir)
+
+    expect(dirname(entry)).toBe(relayDir)
+    expect(basename(entry)).toBe('relay-ai-vault-service.js')
   })
 })

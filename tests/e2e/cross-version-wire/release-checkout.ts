@@ -20,6 +20,9 @@ const CHECKOUT_FORMAT = 1
 // the shared codec. Skipping cli/relay keeps a cold CI extraction a few seconds.
 const ARCHIVE_PATHS = ['src/main', 'src/shared', 'src/preload', 'src/renderer', 'src/types']
 
+/** The uncompressed tar of those trees, with headroom — the default 1 MB truncates it. */
+const ARCHIVE_MAX_BYTES = 512 * 1024 * 1024
+
 const BASELINE_REF_ENV = 'ORCA_CROSS_VERSION_BASELINE_REF'
 const STABLE_DESKTOP_RELEASE_TAG = /^v\d+\.\d+\.\d+$/
 
@@ -209,13 +212,23 @@ export function materializeReleaseCheckout(ref: string): ReleaseCheckout {
   rmSync(staging, { recursive: true, force: true })
   mkdirSync(staging, { recursive: true })
   try {
-    // `git archive | tar -x` keeps the extraction independent of the working tree,
+    // `git archive` into `tar -x` keeps the extraction independent of the working tree,
     // so an injected violation in the working tree cannot leak into the old side.
-    execFileSync(
-      'sh',
-      ['-c', `git archive ${commit} ${ARCHIVE_PATHS.join(' ')} | tar -x -C "${staging}"`],
-      { cwd: REPO_ROOT, stdio: ['ignore', 'ignore', 'pipe'] }
-    )
+    // Why the pipe is carried in-process rather than by `sh -c`: the staging path is
+    // interpolated into the command line there, and a repo path holding a space or a
+    // backslash (every Windows checkout) is re-split by the shell before tar sees it.
+    // Extracting with `cwd` instead of `-C` keeps the path out of argv entirely.
+    const archive = execFileSync('git', ['archive', commit, ...ARCHIVE_PATHS], {
+      cwd: REPO_ROOT,
+      stdio: ['ignore', 'pipe', 'pipe'],
+      maxBuffer: ARCHIVE_MAX_BYTES
+    })
+    execFileSync('tar', ['-x'], {
+      cwd: staging,
+      input: archive,
+      stdio: ['pipe', 'ignore', 'pipe'],
+      maxBuffer: ARCHIVE_MAX_BYTES
+    })
     prepareExtractedTree(staging)
     writeFileSync(
       join(staging, 'checkout-stamp.json'),

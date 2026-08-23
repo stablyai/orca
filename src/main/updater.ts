@@ -131,6 +131,7 @@ let pendingCheckFailurePromise: Promise<void> | null = null
 let autoUpdateCheckTimer: ReturnType<typeof setTimeout> | null = null
 let nudgeCheckTimer: ReturnType<typeof setTimeout> | null = null
 let pendingQuitAndInstallTimer: ReturnType<typeof setTimeout> | null = null
+let pendingUserInitiatedCheckLaunchTimer: ReturnType<typeof setTimeout> | null = null
 let quitAndInstallInProgress = false
 // Why: the pre-install digest re-proof streams the whole package, so a second install request can
 // arrive while it runs — after the quit timer was cleared but before the handoff owns the process.
@@ -150,6 +151,8 @@ let backgroundCheckLaunchPending = false
 let backgroundCheckPromotedToUserInitiated = false
 let updateCheckStallTimer: ReturnType<typeof setTimeout> | null = null
 let updateCheckSilentSettleTimer: ReturnType<typeof setTimeout> | null = null
+// Why: tests with a fake clock advance hours in one tick; the 1s grace must be injectable to outlast that window.
+let updateCheckSilentSettleDelayMs = UPDATE_CHECK_SILENT_SETTLE_DELAY_MS
 let updateCheckAttemptSequence = 0
 let activeUpdateCheckAttemptId: number | null = null
 let activeUpdateCheckLaunchAttemptId: number | null = null
@@ -390,7 +393,8 @@ function getUpdateCheckVariant(options?: UpdateCheckOptions): UpdateCheckVariant
 
 function launchPendingUserInitiatedCheckAfterInFlight(variant: UpdateCheckVariant): void {
   pendingUserInitiatedCheckAfterInFlight = null
-  setTimeout(() => {
+  pendingUserInitiatedCheckLaunchTimer = setTimeout(() => {
+    pendingUserInitiatedCheckLaunchTimer = null
     // Why: defer one tick after electron-updater clears its in-flight promise so the queued modifier check starts fresh instead of deduping into the stable one.
     if (currentStatus.state === 'checking') {
       currentStatus = { state: 'idle' }
@@ -422,6 +426,31 @@ function clearUpdateCheckSilentSettleTimer(): void {
 function clearUpdateCheckTimers(): void {
   clearUpdateCheckStallTimer()
   clearUpdateCheckSilentSettleTimer()
+}
+
+/**
+ * Why: the test harness must clear these before `vi.resetModules()` — a discarded module's
+ * pending real-clock timers keep firing with a closure over dead state.
+ * Why `setupAutoUpdater` must not call this: the `autoUpdaterInitialized` latch early-returns
+ * on a second call, so disposing here would clear the first call's timers with nothing able to
+ * re-arm them, silently killing background update checks after a macOS reactivation.
+ */
+export function disposeAutoUpdaterTimers(): void {
+  clearUpdateCheckTimers()
+  for (const timer of [
+    autoUpdateCheckTimer,
+    nudgeCheckTimer,
+    pendingQuitAndInstallTimer,
+    pendingUserInitiatedCheckLaunchTimer
+  ]) {
+    if (timer) {
+      clearTimeout(timer)
+    }
+  }
+  autoUpdateCheckTimer = null
+  nudgeCheckTimer = null
+  pendingQuitAndInstallTimer = null
+  pendingUserInitiatedCheckLaunchTimer = null
 }
 
 function finishActiveUpdateCheckAttempt(): void {
@@ -600,7 +629,7 @@ function handleSettledUpdateCheckPromise(attemptId: number): void {
   updateCheckSilentSettleTimer = setTimeout(() => {
     updateCheckSilentSettleTimer = null
     settleSilentUpdateCheck(attemptId, getSettledCheckUserInitiated())
-  }, UPDATE_CHECK_SILENT_SETTLE_DELAY_MS)
+  }, updateCheckSilentSettleDelayMs)
 }
 
 function shouldHandleUpdaterErrorEvent(): boolean {
@@ -2169,6 +2198,7 @@ export function setupAutoUpdater(
     setDismissedUpdateNudgeId?: (id: string | null) => void
     getReleaseChannelOverride?: () => ReleaseChannel | null
     installMode?: UpdateInstallMode
+    silentSettleDelayMs?: number
   }
 ): void {
   mainWindowRef = mainWindow
@@ -2181,6 +2211,7 @@ export function setupAutoUpdater(
   _setDismissedUpdateNudgeId = opts?.setDismissedUpdateNudgeId ?? null
   getReleaseChannelOverride = opts?.getReleaseChannelOverride ?? null
   updateInstallMode = opts?.installMode ?? 'interactive'
+  updateCheckSilentSettleDelayMs = opts?.silentSettleDelayMs ?? UPDATE_CHECK_SILENT_SETTLE_DELAY_MS
   lastInstallDeferralVersion = { download: null, install: null }
 
   const serveHandoffFailure = getServeUpdateHandoffFailure()

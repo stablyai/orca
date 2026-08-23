@@ -79,7 +79,7 @@ export type UpdaterMocks = {
   startLocalBuildFeedMock: UpdaterSpy
   closeLocalBuildFeedMock: UpdaterSpy
   moduleFactories: UpdaterModuleFactories
-  resetUpdaterMocks: () => void
+  resetUpdaterMocks: () => Promise<void>
 }
 
 // Why: macOS keeps the restart advice because quitting does re-stage a Squirrel update.
@@ -225,8 +225,10 @@ export function createUpdaterMocks(): UpdaterMocks {
     localBuildFeedServer: () => ({ startLocalBuildFeed: startLocalBuildFeedMock })
   }
 
-  /** Shared `beforeEach` body: fresh module registry plus every mock back to its default. */
-  const resetUpdaterMocks = () => {
+  /** Shared `beforeEach` body: dispose the outgoing instance, fresh module registry, mocks defaulted. */
+  const resetUpdaterMocks = async () => {
+    // Why: a timer left armed by the outgoing instance fires inside a later test, against shared mocks.
+    ;(await import('./updater')).disposeAutoUpdaterTimers()
     vi.resetModules()
     autoUpdaterMock.reset()
     nativeUpdaterMock.on.mockReset()

@@ -47,6 +47,7 @@ import { registerKeybindingHandlers } from './keybindings'
 import { registerTelemetryHandlers } from './telemetry'
 import { registerShellHandlers } from './shell'
 import { registerPetHandlers } from './pet'
+import { sweepOrphanedPets } from './pet-orphan-sweep'
 import { registerPluginHandlers } from './plugins'
 import { registerUIHandlers, setTrustedUIRendererWebContentsId } from './ui'
 import { registerEmulatorFrameStreamHandlers } from './emulator-frame-stream'
@@ -196,6 +197,17 @@ export function registerCoreHandlers(
   registerBrowserHandlers()
   registerShellHandlers(store)
   registerPetHandlers()
+  // Why: removing a pet deletes its bytes, but a crash between writing a bundle
+  // and persisting the list leaves them behind with nothing pointing at them.
+  // Off the startup path, and best effort — it is housekeeping, not a boot step.
+  const knownPets = store.getUI().customPets
+  // Why not `?? []`: an absent list is "we do not know", which a corrupt state
+  // file also produces. Sweeping on that reading deletes every pet folder past
+  // the grace period with no undo. An empty array is a real answer; skip the
+  // rest, and the next launch that hydrates a list picks the orphans up.
+  if (knownPets) {
+    void sweepOrphanedPets(knownPets.map((pet) => pet.id))
+  }
   registerSessionHandlers(store)
   registerUIHandlers(store, { isDashboardPopoutRenderer })
   registerEmulatorFrameStreamHandlers()

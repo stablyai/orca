@@ -157,6 +157,11 @@ describe('PR workflow parallelism', () => {
 
   it('keeps every real-zsh test in the dedicated shell lane', () => {
     const discoveredFiles = globSync(testFilePatterns)
+      // Why fold the separator: globSync answers with the platform's, and every
+      // comparison below — the self-exclusion and the expected lane — is written
+      // with forward slashes. On Windows the self-exclusion silently missed and
+      // this file matched its own detector pattern.
+      .map((testFile) => testFile.split('\\').join('/'))
       // Why this file is excluded: it carries the detector pattern as a literal
       // and would otherwise match itself.
       .filter((testFile) => testFile !== 'config/scripts/pr-workflow-parallelism.test.mjs')

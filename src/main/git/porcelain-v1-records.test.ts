@@ -30,7 +30,11 @@ describe('parsePorcelainV1Records', () => {
     expect(parsePorcelainV1Records('')).toEqual([])
   })
 
-  it('keeps paths containing spaces and quotes intact', () => {
+  // Why a platform skip rather than a capability gate: a double quote is not a
+  // legal character in a Windows filename at all, so the file this case needs
+  // cannot be created however the process is privileged. The sibling case above
+  // still covers the raw pass-through, using a non-ASCII name that is legal here.
+  it.skipIf(process.platform === 'win32')('keeps paths containing spaces and quotes intact', () => {
     const repo = createRepo()
     writeFileSync(join(repo, 'a file "quoted".txt'), 'x')
 

@@ -49,13 +49,20 @@ import {
   syncWorktreeBaseDirectoryWatchers
 } from './worktree-base-directory-watcher'
 import { matchingWorktreeBaseRepoIds } from './worktree-base-directory-event-filter'
+import { normalizeRuntimePathForComparison } from '../../shared/cross-platform-path'
 
 type PollerCallback = (events: WorktreeBasePollEvent[]) => void
 
 const watcherCallbacks = new Map<string, PollerCallback>()
 const unsubscribeMocks = new Map<string, ReturnType<typeof vi.fn>>()
 const pollerOptions = new Map<string, WorktreeBasePollerOptions>()
-const absolutePath = (...parts: string[]): string => join(sep, ...parts)
+// Why the drive letter on Windows: `join(sep, ...)` yields `\workspace\...`,
+// which is rooted but has no volume — and Orca's runtime-path detection does not
+// count that as absolute, so it resolved the workspace dir relative to the repo
+// and keyed the poller under a path the test never asks for. A real Windows
+// workspace root always names its drive.
+const absolutePath = (...parts: string[]): string =>
+  process.platform === 'win32' ? join('C:\\', ...parts) : join(sep, ...parts)
 const WORKTREE_ROOT = absolutePath('workspace', 'worktrees')
 const PROJECT_ROOT = absolutePath('workspace', 'projects', 'project')
 const PROJECT_GIT_COMMON_DIR = join(PROJECT_ROOT, '.git')
@@ -90,8 +97,14 @@ function makeWindow(options: { destroyed?: () => boolean } = {}) {
   }
 }
 
+// Why compare the way the app does: production hands the poller a path with
+// forward slashes even on Windows, while the test names its roots with the
+// platform separator. These cases are about debouncing and notification, not
+// about which slash a path is spelled with.
+const watchKey = (path: string): string => normalizeRuntimePathForComparison(path)
+
 function emit(root: string, events: WorktreeBasePollEvent[]): void {
-  const callback = watcherCallbacks.get(root)
+  const callback = watcherCallbacks.get(watchKey(root))
   if (!callback) {
     throw new Error(`No poller callback for ${root}`)
   }
@@ -109,9 +122,9 @@ describe('worktree base directory watcher', () => {
     vi.mocked(startWorktreeBaseDirectoryPoller).mockImplementation(
       async (target, _getRepos, onEvents, options) => {
         const unsubscribe = vi.fn(async () => {})
-        watcherCallbacks.set(target.path, onEvents)
-        unsubscribeMocks.set(target.path, unsubscribe)
-        pollerOptions.set(target.path, options ?? {})
+        watcherCallbacks.set(watchKey(target.path), onEvents)
+        unsubscribeMocks.set(watchKey(target.path), unsubscribe)
+        pollerOptions.set(watchKey(target.path), options ?? {})
         return { unsubscribe }
       }
     )
@@ -225,8 +238,10 @@ describe('worktree base directory watcher', () => {
       async () => 'refs/remotes/origin/first'
     )
     await syncWorktreeBaseDirectoryWatchers(makeStore([makeRepo()]) as never, makeWindow() as never)
-    const getPaths = pollerOptions.get(PROJECT_GIT_COMMON_DIR)?.getGitStatusRefPaths
-    expect(getPaths?.()).toEqual([join(PROJECT_GIT_COMMON_DIR, 'refs/remotes/origin/first')])
+    const getPaths = pollerOptions.get(watchKey(PROJECT_GIT_COMMON_DIR))?.getGitStatusRefPaths
+    expect(getPaths?.().map(watchKey)).toEqual(
+      [join(PROJECT_GIT_COMMON_DIR, 'refs/remotes/origin/first')].map(watchKey)
+    )
 
     await setWorktreeGitStatusRefWatch(
       {
@@ -246,7 +261,9 @@ describe('worktree base directory watcher', () => {
       },
       async () => undefined
     )
-    expect(getPaths?.()).toEqual([join(PROJECT_GIT_COMMON_DIR, 'refs/remotes/origin/next')])
+    expect(getPaths?.().map(watchKey)).toEqual(
+      [join(PROJECT_GIT_COMMON_DIR, 'refs/remotes/origin/next')].map(watchKey)
+    )
 
     await setWorktreeGitStatusRefWatch(
       {
@@ -345,7 +362,9 @@ describe('worktree base directory watcher', () => {
     await setWorktreeGitStatusRefWatch(request, resolve)
 
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
-    pollerOptions.get(PROJECT_GIT_COMMON_DIR)?.onWatchError?.(new Error('watch interrupted'))
+    pollerOptions
+      .get(watchKey(PROJECT_GIT_COMMON_DIR))
+      ?.onWatchError?.(new Error('watch interrupted'))
     await setWorktreeGitStatusRefWatch(request, resolve)
     warn.mockRestore()
 
@@ -356,7 +375,7 @@ describe('worktree base directory watcher', () => {
 
   it('throttles repeated structural refreshes from watcher failures', async () => {
     await syncWorktreeBaseDirectoryWatchers(makeStore([makeRepo()]) as never, makeWindow() as never)
-    const onWatchError = pollerOptions.get(PROJECT_GIT_COMMON_DIR)?.onWatchError
+    const onWatchError = pollerOptions.get(watchKey(PROJECT_GIT_COMMON_DIR))?.onWatchError
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
 
     onWatchError?.(new Error('watch interrupted'))
@@ -376,7 +395,7 @@ describe('worktree base directory watcher', () => {
 
   it('lets a real event reset the watcher-failure refresh cooldown', async () => {
     await syncWorktreeBaseDirectoryWatchers(makeStore([makeRepo()]) as never, makeWindow() as never)
-    const onWatchError = pollerOptions.get(PROJECT_GIT_COMMON_DIR)?.onWatchError
+    const onWatchError = pollerOptions.get(watchKey(PROJECT_GIT_COMMON_DIR))?.onWatchError
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
 
     onWatchError?.(new Error('watch interrupted'))
@@ -761,8 +780,8 @@ describe('worktree base directory watcher', () => {
     repo.worktreeBasePath = otherRoot
     await syncWorktreeBaseDirectoryWatchers(store as never, makeWindow() as never)
 
-    expect(unsubscribeMocks.get(WORKTREE_ROOT)).toHaveBeenCalled()
-    expect(watcherCallbacks.has(otherRoot)).toBe(true)
+    expect(unsubscribeMocks.get(watchKey(WORKTREE_ROOT))).toHaveBeenCalled()
+    expect(watcherCallbacks.has(watchKey(otherRoot))).toBe(true)
   })
 
   it('unsubscribes a watcher that finishes installing after disposal starts', async () => {

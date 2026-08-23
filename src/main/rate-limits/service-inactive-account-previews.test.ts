@@ -55,6 +55,13 @@ vi.mock('../minimax/minimax-cookie-store', () => ({
   hasMiniMaxSessionCookie: vi.fn(() => false)
 }))
 
+// Why derived rather than written as true: the service turns these off on
+// Windows on purpose — hidden PTYs are less reliable there, and it says so at
+// shouldAllowClaudePtyFallback. These cases are about what gets fetched, not
+// about that policy, so pinning the POSIX value failed them for a reason
+// neither is testing.
+const HOST_ALLOWS_CLAUDE_PTY = process.platform !== 'win32'
+
 describe('RateLimitService', () => {
   beforeEach(() => {
     resetRateLimitProviderMocks()
@@ -206,7 +213,7 @@ describe('RateLimitService', () => {
     expect(fetchManagedAccountUsage).toHaveBeenCalledWith(
       account,
       expect.objectContaining({
-        allowUsagePanelSupplement: true,
+        allowUsagePanelSupplement: HOST_ALLOWS_CLAUDE_PTY,
         signal: expect.any(AbortSignal)
       })
     )

@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { ARTIFACT_CLI_MAX_RPC_BYTES, artifactWriteRequestByteLength } from '../../shared/artifacts'
+import { __resetSecureFileWindowsUserSidForTests } from '../../shared/secure-file'
 import {
   MAX_ARTIFACT_CREATE_INTENT_BYTES,
   MAX_PENDING_ARTIFACT_CREATES,
@@ -170,6 +171,9 @@ describe('artifact create intent store', () => {
     vi.mocked(execFileSync).mockImplementation((file) =>
       String(file).endsWith('whoami.exe') ? '"USER","S-1-5-21-1000"' : ''
     )
+    // Why: on a real Windows host the earlier cases already took the ACL path
+    // against the bare mock and cached a null SID, which suppresses PowerShell.
+    __resetSecureFileWindowsUserSidForTests()
     try {
       const userDataPath = await createUserDataPath()
       getOrCreateArtifactCreateIntent(

@@ -9,11 +9,8 @@ import {
   DaemonProtocolError
 } from './types'
 import type { DaemonEndpointIdentity } from './types'
-import {
-  armDaemonSocketCloseHandlers,
-  connectDaemonSocket,
-  waitForDaemonConnectionAttempt
-} from './daemon-client-socket-connect'
+import { armDaemonSocketCloseHandlers, connectDaemonSocket } from './daemon-client-socket-connect'
+import { DaemonConnectAttempt } from './daemon-client-connect-attempt'
 import { DaemonClientListeners } from './daemon-client-listener-registry'
 import { sameDaemonIdentity, sendDaemonHello } from './daemon-client-hello-handshake'
 import { DaemonPendingRequests } from './daemon-client-pending-requests'
@@ -50,10 +47,7 @@ export class DaemonClient {
   // event would tear down the fresh connection. Each doConnect() increments
   // the generation; handleDisconnect ignores events from old generations.
   private connectionGeneration = 0
-  // Why: multiple concurrent spawn() calls from simultaneous pane mounts
-  // all call ensureConnected(). Without a lock, each starts a separate
-  // connection attempt, overwriting sockets and triggering "Connection lost".
-  private connectingPromise: Promise<void> | null = null
+  private connectAttempt = new DaemonConnectAttempt()
   private connectionAttemptGeneration = 0
   private daemonIdentity: DaemonEndpointIdentity | null = null
   private observedAuthenticatedDisconnect = false
@@ -90,27 +84,15 @@ export class DaemonClient {
     return this.ensureConnectedWithTimeout(timeoutMs, true)
   }
 
-  private async ensureConnectedWithTimeout(
-    timeoutMs: number,
-    sharedBudget: boolean
-  ): Promise<void> {
-    if (this.connected) {
-      return
-    }
-    if (this.connectingPromise) {
+  private ensureConnectedWithTimeout(timeoutMs: number, sharedBudget: boolean): Promise<void> {
+    return this.connectAttempt.run({
+      isConnected: () => this.connected,
+      currentGeneration: () => this.connectionAttemptGeneration,
+      connect: (attemptGeneration) => this.doConnect(timeoutMs, attemptGeneration, sharedBudget),
       // Why: a normal connection may legitimately consume one timeout for each
       // socket and hello; bounded teardown calls instead keep their one shared budget.
-      const waiterTimeoutMs = sharedBudget ? timeoutMs : CONNECTION_ATTEMPT_WAIT_MS
-      return waitForDaemonConnectionAttempt(this.connectingPromise, waiterTimeoutMs)
-    }
-
-    const attemptGeneration = this.connectionAttemptGeneration
-    this.connectingPromise = this.doConnect(timeoutMs, attemptGeneration, sharedBudget)
-    try {
-      await this.connectingPromise
-    } finally {
-      this.connectingPromise = null
-    }
+      joinTimeoutMs: sharedBudget ? timeoutMs : CONNECTION_ATTEMPT_WAIT_MS
+    })
   }
 
   // Why: a missing token must not preempt the connect that proves whether the endpoint is gone.
@@ -295,6 +277,20 @@ export class DaemonClient {
     this.streamSocket?.destroy()
     this.controlSocket = null
     this.streamSocket = null
+  }
+
+  /**
+   * Retires a connect attempt that is already dialing, without disturbing a live connection.
+   *
+   * Why: an attempt started while the daemon was being replaced is dialing the retired
+   * endpoint. Left current, whoever it belongs to reports its dead-endpoint ENOENT as
+   * "the daemon is gone", and callers arriving after the replacement join it and inherit
+   * that answer instead of reaching the daemon that is now listening.
+   */
+  retireInFlightConnectAttempt(): void {
+    if (this.connectAttempt.hasInFlight()) {
+      this.connectionAttemptGeneration++
+    }
   }
 
   private assertConnectionAttemptCurrent(attemptGeneration: number, socket?: Socket): void {

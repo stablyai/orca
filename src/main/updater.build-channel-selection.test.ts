@@ -28,8 +28,8 @@ vi.mock('./local-builds/local-build-feed-server', () => moduleFactories.localBui
 const AUTO_UPDATE_CHECK_INTERVAL_MS = 24 * 60 * 60 * 1000
 
 describe('updater', () => {
-  beforeEach(() => {
-    resetUpdaterMocks()
+  beforeEach(async () => {
+    await resetUpdaterMocks()
   })
 
   it.each([

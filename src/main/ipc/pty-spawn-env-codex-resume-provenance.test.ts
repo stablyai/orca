@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
+import { join } from 'node:path'
 import { spawnMock } from './pty-ipc-mock-registry'
 import { posixOnlyIt } from './pty-ipc-test-constants'
 import { setupPtyIpcSuite } from './pty-ipc-test-harness'
@@ -55,9 +56,20 @@ describe('registerPtyHandlers', () => {
   describe('spawn environment', () => {
     describe('unverifiable Codex resume provenance', () => {
       const RESUME_SESSION_ID = '019f81b9-19a9-7651-a8d1-352d9420bd11'
-      const ORIGIN_HOME = '/managed/origin/home'
-      const OTHER_HOME = '/managed/other/home'
-      const ORIGIN_ROLLOUT = `${ORIGIN_HOME}/sessions/2026/07/20/rollout-2026-07-20T12-00-00-${RESUME_SESSION_ID}.jsonl`
+      // Why volume-qualified: the trust check joins each home with path.join, and a
+      // drive-less '/managed/...' stops reading as absolute on Windows, so the joined
+      // sessions root turns into backslashes the rollout path can no longer match.
+      const HOME_VOLUME = process.platform === 'win32' ? 'C:/' : '/'
+      const ORIGIN_HOME = join(HOME_VOLUME, 'managed', 'origin', 'home')
+      const OTHER_HOME = join(HOME_VOLUME, 'managed', 'other', 'home')
+      const ORIGIN_ROLLOUT = join(
+        ORIGIN_HOME,
+        'sessions',
+        '2026',
+        '07',
+        '20',
+        `rollout-2026-07-20T12-00-00-${RESUME_SESSION_ID}.jsonl`
+      )
 
       // Why: main's real provenance rule via the same prepareCodexSessionResume that
       // index.ts calls, so the outcome wiring is exercised rather than restated. This

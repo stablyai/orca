@@ -1,9 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { join } from 'node:path'
 import { RpcDispatcher } from '../dispatcher'
 import type { RpcRequest } from '../core'
 import { OrcaRuntimeService } from '../../orca-runtime'
 import type { AiVaultListResult, AiVaultSession } from '../../../../shared/ai-vault-types'
 import type { AiVaultScanOptions } from '../../../ai-vault/session-scanner-types'
+import type * as Wsl from '../../../wsl'
 import {
   AI_VAULT_SESSION_TITLES_RUNTIME_CAPABILITY,
   RUNTIME_CAPABILITIES
@@ -18,6 +20,14 @@ vi.mock('../../../ai-vault/session-scanner-worker-spawn', () => ({
   scanAiVaultSessionsInWorker,
   resolveAiVaultSessionTitlesInWorker,
   resetAiVaultScannerWorkerForTests: vi.fn()
+}))
+
+// Why: the scan enumerates real WSL distros on a Windows host, so an installed
+// distro would otherwise decide what this suite asserts. Pin it to none.
+vi.mock('../../../wsl', async () => ({
+  ...(await vi.importActual<typeof Wsl>('../../../wsl')),
+  listWslDistrosAsync: async () => [],
+  getWslHomeAsync: async () => null
 }))
 
 import {
@@ -362,7 +372,9 @@ describe('aiVault.listSessions handler + shared cache', () => {
     const options = scanAiVaultSessionsInWorker.mock.calls[0]?.[0] as AiVaultScanOptions
     // Why: the codex-home is sourced from the runtime, not the window-only
     // registerCoreHandlers path, so it survives in serve mode.
-    expect(options.additionalCodexSessionsDirs).toContain('/runtime/codex/home/sessions')
+    // join, not '/': these are local Codex homes, so the sessions child is
+    // spelled with the host separator.
+    expect(options.additionalCodexSessionsDirs).toContain(join('/runtime/codex/home', 'sessions'))
     expect(options.wslHomeDirs).toEqual([])
   })
 
@@ -375,6 +387,6 @@ describe('aiVault.listSessions handler + shared cache', () => {
     })
     await runtime.listAiVaultSessions({})
     const options = scanAiVaultSessionsInWorker.mock.calls[0]?.[0] as AiVaultScanOptions
-    expect(options.additionalCodexSessionsDirs).toContain('/ctor/codex/home/sessions')
+    expect(options.additionalCodexSessionsDirs).toContain(join('/ctor/codex/home', 'sessions'))
   })
 })

@@ -21,6 +21,8 @@ export type SpriteAnimationCssInput = {
   rowOffsetY: number
   // Per-frame holds in ms; uneven pacing renders when they pass validation.
   frameDurationsMs: number[] | undefined
+  // One-shot rows (getting up) must settle on their last frame, not loop back.
+  loop?: boolean
 }
 
 // Why: sprite keyframes are runtime CSS, not user-visible copy; translated CSS
@@ -32,9 +34,12 @@ export function buildSpriteAnimationCss({
   frameWidth,
   scale,
   rowOffsetY,
-  frameDurationsMs
+  frameDurationsMs,
+  loop = true
 }: SpriteAnimationCssInput): SpriteAnimationCss {
   const name = `pet-${keyframesId}`
+  // `forwards` pins the final frame; without it the row snaps back to frame 0.
+  const repeat = loop ? 'infinite' : '1 forwards'
   const durations = validFrameDurations(frameDurationsMs, frames)
   if (durations) {
     const totalMs = durations.reduce((sum, ms) => sum + ms, 0)
@@ -44,7 +49,7 @@ export function buildSpriteAnimationCss({
     if (stops) {
       return {
         keyframesCss: `@keyframes ${name} { ${stops.join(' ')} }`,
-        animationCss: `${name} ${totalMs / 1000}s step-end infinite`
+        animationCss: `${name} ${totalMs / 1000}s step-end ${repeat}`
       }
     }
   }
@@ -53,7 +58,7 @@ export function buildSpriteAnimationCss({
   const endX = -(frames * frameWidth * scale)
   return {
     keyframesCss: `@keyframes ${name} { from { background-position: 0px ${rowOffsetY}px; } to { background-position: ${endX}px ${rowOffsetY}px; } }`,
-    animationCss: `${name} ${duration}s steps(${frames}) infinite`
+    animationCss: `${name} ${duration}s steps(${frames}) ${repeat}`
   }
 }
 

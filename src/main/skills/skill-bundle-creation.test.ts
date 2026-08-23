@@ -1,4 +1,14 @@
-import { chmod, mkdir, mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises'
+import {
+  chmod,
+  mkdir,
+  mkdtemp,
+  readFile,
+  realpath,
+  rm,
+  stat,
+  symlink,
+  writeFile
+} from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
@@ -9,6 +19,7 @@ import {
 import { createSkillBundleArchive } from './skill-bundle-creation'
 import { extractSkillBundleArchive } from './skill-bundle-extraction'
 import { writeSkillTarGzip } from './skill-package-tar'
+import { canCreateFileSymlink, directoryLinkType } from '../../shared/symlink-capability'
 
 const temporaryDirectories: string[] = []
 
@@ -224,5 +235,52 @@ describe('skill bundle creation and extraction', () => {
       })
     ).rejects.toThrow('skill-bundle-skill-collision')
     await expect(readFile(archivePath)).rejects.toMatchObject({ code: 'ENOENT' })
+  })
+})
+
+// Staging copies the source's entries rather than the directory itself, so a
+// caller that reached the skill through a link — a provider junction, say — can
+// still stage it on a host that cannot recreate one. These pin the line between
+// that and dereferencing, which would change what ships.
+describe('staging and links', () => {
+  it('stages a skill reached through a linked root', async () => {
+    const root = await temporaryDirectory()
+    const real = await createSkill(root, 'linked-skill', 'Linked')
+    const viaLink = join(root, 'reached-through-here')
+    await symlink(await realpath(real), viaLink, directoryLinkType())
+
+    const created = await createSkillBundleArchive({
+      sources: [{ sourceDirectory: viaLink }],
+      archivePath: join(root, 'linked.tar.gz'),
+      packageId: 'package_linked',
+      versionId: 'version_linked',
+      bundleName: 'linked-bundle'
+    })
+
+    expect(created.manifest.skills[0].files.map((file) => file.path).sort()).toEqual([
+      'SKILL.md',
+      'notes.txt'
+    ])
+  })
+
+  it.skipIf(!canCreateFileSymlink())('never dereferences a link inside the skill', async () => {
+    // The property that matters: a link pointing outside the skill must not have
+    // its target's bytes pulled into the bundle.
+    const root = await temporaryDirectory()
+    const source = await createSkill(root, 'inner-link-skill', 'Inner')
+    const outside = join(root, 'outside-secret.txt')
+    await writeFile(outside, 'SECRET-OUTSIDE-CONTENT\n')
+    await symlink(outside, join(source, 'pointer.txt'))
+
+    const created = await createSkillBundleArchive({
+      sources: [{ sourceDirectory: source }],
+      archivePath: join(root, 'inner.tar.gz'),
+      packageId: 'package_inner',
+      versionId: 'version_inner',
+      bundleName: 'inner-bundle'
+    })
+
+    const archive = await readFile(created.archivePath)
+    expect(archive.includes(Buffer.from('SECRET-OUTSIDE-CONTENT'))).toBe(false)
   })
 })

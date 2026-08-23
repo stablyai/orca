@@ -143,7 +143,14 @@ afterEach(async () => {
   execHooks.beforeExec = undefined
   coalescerJoins.onJoin = undefined
   resetGitReadCaches()
-  await Promise.all(tempRoots.splice(0).map((root) => rm(root, { recursive: true, force: true })))
+  // Why retry: a git process this suite aborts mid-diff can still hold the
+  // directory for a moment, and Windows refuses to remove a directory in use —
+  // the cancellation case died on its own cleanup rather than on its assertion.
+  await Promise.all(
+    tempRoots
+      .splice(0)
+      .map((root) => rm(root, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 }))
+  )
 })
 
 describe('branch line total completeness', () => {

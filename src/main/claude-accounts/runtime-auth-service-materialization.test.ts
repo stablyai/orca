@@ -29,6 +29,7 @@ import {
 } from 'node:fs'
 import { join } from 'node:path'
 import type { GlobalSettings } from '../../shared/global-settings-types'
+import { canCreateFileSymlink } from '../../shared/symlink-capability'
 
 vi.mock('electron', () => createElectronMock())
 
@@ -181,7 +182,7 @@ describe('ClaudeRuntimeAuthService', () => {
     expect(readFileSync(markerPath, 'utf-8')).toBe('account-1\n')
   })
 
-  it('rejects symlinked managed credential children', async () => {
+  it.skipIf(!canCreateFileSymlink())('rejects symlinked managed credential children', async () => {
     setPlatform('linux')
     const runtimeCredentialsPath = join(testState.fakeHomeDir, '.claude', '.credentials.json')
     const systemCredentials = createClaudeCredentialsJson('system@example.com', 'system')

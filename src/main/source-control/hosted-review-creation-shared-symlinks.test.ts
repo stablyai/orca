@@ -87,6 +87,7 @@ vi.mock('../providers/ssh-git-dispatch', () => ({ getSshGitProvider: getSshGitPr
 vi.mock('./hosted-review', () => ({ getHostedReviewForBranch: getHostedReviewForBranchMock }))
 
 import { createHostedReview } from './hosted-review-creation'
+import { directoryLinkType } from '../../shared/symlink-capability'
 
 // Why: a directory-only ignore rule (`node_modules/`) never matches the
 // worktree's symlink, so Git reports it untracked. Without the exclusion the
@@ -107,7 +108,11 @@ describe('createHostedReview with shared symlinks', () => {
   beforeEach(() => {
     worktree = mkdtempSync(join(tmpdir(), 'orca-hosted-shared-'))
     mkdirSync(join(worktree, 'primary-node-modules'))
-    symlinkSync(join(worktree, 'primary-node-modules'), join(worktree, 'node_modules'), 'dir')
+    symlinkSync(
+      join(worktree, 'primary-node-modules'),
+      join(worktree, 'node_modules'),
+      directoryLinkType()
+    )
     // Default: git reports only the shared symlink as untracked.
     statusOutput = '?? node_modules\0'
 
@@ -223,7 +228,11 @@ describe('createHostedReview with shared symlinks', () => {
   it('still blocks on a tracked change at the declared shared path', async () => {
     // Both paths are declared shared and both are real symlinks, so only the
     // untracked/tracked distinction can keep this from being waved through.
-    symlinkSync(join(worktree, 'primary-node-modules'), join(worktree, 'tracked-link'), 'dir')
+    symlinkSync(
+      join(worktree, 'primary-node-modules'),
+      join(worktree, 'tracked-link'),
+      directoryLinkType()
+    )
     statusOutput = '?? node_modules\0 M tracked-link\0'
 
     await expect(createPr(['node_modules', 'tracked-link'])).resolves.toEqual(

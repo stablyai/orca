@@ -22,6 +22,7 @@ const {
   registerTerminalRenderDesyncEvidenceHandlerMock,
   registerShellHandlersMock,
   registerPetHandlersMock,
+  sweepOrphanedPetsMock,
   registerSessionHandlersMock,
   registerUIHandlersMock,
   setTrustedUIRendererWebContentsIdMock,
@@ -87,6 +88,7 @@ const {
   registerTerminalRenderDesyncEvidenceHandlerMock: vi.fn(),
   registerShellHandlersMock: vi.fn(),
   registerPetHandlersMock: vi.fn(),
+  sweepOrphanedPetsMock: vi.fn(),
   registerSessionHandlersMock: vi.fn(),
   registerUIHandlersMock: vi.fn(),
   setTrustedUIRendererWebContentsIdMock: vi.fn(),
@@ -258,6 +260,10 @@ vi.mock('./pet', () => ({
   registerPetHandlers: registerPetHandlersMock
 }))
 
+vi.mock('./pet-orphan-sweep', () => ({
+  sweepOrphanedPets: sweepOrphanedPetsMock
+}))
+
 vi.mock('./session', () => ({
   registerSessionHandlers: registerSessionHandlersMock
 }))
@@ -408,6 +414,7 @@ describe('registerCoreHandlers', () => {
     registerTerminalRenderDesyncEvidenceHandlerMock.mockReset()
     registerShellHandlersMock.mockReset()
     registerPetHandlersMock.mockReset()
+    sweepOrphanedPetsMock.mockReset()
     registerSessionHandlersMock.mockReset()
     registerUIHandlersMock.mockReset()
     setTrustedUIRendererWebContentsIdMock.mockReset()
@@ -450,7 +457,7 @@ describe('registerCoreHandlers', () => {
   })
 
   it('passes the store through to handler registrars that need it', async () => {
-    const store = { marker: 'store' }
+    const store = { marker: 'store', getUI: () => ({ customPets: [{ id: 'kept-pet' }] }) }
     const runtime = { marker: 'runtime', getAgentBrowserBridge: () => null }
     const stats = { marker: 'stats' }
     const claudeUsage = { marker: 'claudeUsage' }
@@ -507,6 +514,7 @@ describe('registerCoreHandlers', () => {
       codexAccounts.runtimeHomeService
     )
     expect(registerPetHandlersMock).toHaveBeenCalled()
+    expect(sweepOrphanedPetsMock).toHaveBeenCalledWith(['kept-pet'])
     expect(registerClaudeAccountHandlersMock).toHaveBeenCalledWith(claudeAccounts)
     expect(registerMiniMaxCredentialsHandlersMock).toHaveBeenCalledWith(rateLimits)
     expect(registerGrokAccountHandlersMock).toHaveBeenCalled()
@@ -623,7 +631,7 @@ describe('registerCoreHandlers', () => {
   it('only registers IPC handlers once but always updates web contents id', () => {
     // The first test already called registerCoreHandlers, so the module-level
     // guard is now set. beforeEach reset all mocks, so call counts are 0.
-    const store2 = { marker: 'store2' }
+    const store2 = { marker: 'store2', getUI: () => ({ customPets: [] }) }
     const runtime2 = { marker: 'runtime2', getAgentBrowserBridge: () => null }
     const stats2 = { marker: 'stats2' }
     const claudeUsage2 = { marker: 'claudeUsage2' }
@@ -657,5 +665,38 @@ describe('registerCoreHandlers', () => {
     // Why: ipcMain.handle throws on duplicate channel registration, so the
     // memory handler must not be wired up a second time on reactivation.
     expect(registerMemoryHandlersMock).not.toHaveBeenCalled()
+  })
+
+  // Why a fresh module per case: `registered` is module-level, so only the
+  // first registerCoreHandlers call per registry reaches the sweep.
+  async function registerWithUI(ui: Record<string, unknown>): Promise<void> {
+    vi.resetModules()
+    const { registerCoreHandlers: register } = await import('./register-core-handlers')
+    register(
+      { marker: 'sweep-store', getUI: () => ui } as never,
+      { marker: 'runtime', getAgentBrowserBridge: () => null } as never,
+      {} as never,
+      {} as never,
+      {} as never,
+      {} as never,
+      { runtimeHomeService: {} } as never,
+      {} as never,
+      {} as never
+    )
+  }
+
+  it('does not sweep pet files when the UI state has no pet list to speak for', async () => {
+    // A corrupt state file falls back to defaults, where `customPets` is absent.
+    // Reading that as "no pets are known" deletes every pet folder older than
+    // the grace period, with no undo.
+    await registerWithUI({})
+
+    expect(sweepOrphanedPetsMock).not.toHaveBeenCalled()
+  })
+
+  it('still sweeps for a user whose pet list is genuinely empty', async () => {
+    await registerWithUI({ customPets: [] })
+
+    expect(sweepOrphanedPetsMock).toHaveBeenCalledWith([])
   })
 })

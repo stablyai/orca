@@ -5,6 +5,7 @@ import path from 'node:path'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { SshConnection } from './ssh-connection'
 import { getRemoteHostPlatform } from './ssh-remote-platform'
+import { permissionBitsAreEnforced } from '../../shared/file-mode-capability'
 
 const execCommandMock = vi.hoisted(() => vi.fn())
 
@@ -185,32 +186,39 @@ describe('resolveRemoteNodePath', () => {
     expect(callScript.trimEnd()).toMatch(/\ntrue$/)
   })
 
-  it('expands tilde NVM_DIR assignments from shell dotfiles', async () => {
-    execCommandMock
-      .mockResolvedValueOnce('/home/u/.nvm/versions/node/v20.11.0/bin/node\n')
-      .mockResolvedValueOnce('v20.11.0\n')
+  // Why the capability and not the platform: the case builds a POSIX scenario
+  // end to end — a `#!/bin/sh` script made executable, dispatched through a
+  // PATH of '/usr/bin:/bin'. Without an enforced mode there is no exec bit and
+  // no such scenario, however the process is privileged.
+  it.skipIf(!permissionBitsAreEnforced())(
+    'expands tilde NVM_DIR assignments from shell dotfiles',
+    async () => {
+      execCommandMock
+        .mockResolvedValueOnce('/home/u/.nvm/versions/node/v20.11.0/bin/node\n')
+        .mockResolvedValueOnce('v20.11.0\n')
 
-    await resolveRemoteNodePath(conn)
+      await resolveRemoteNodePath(conn)
 
-    const callScript = execCommandMock.mock.calls[0]![1] as string
-    const home = mkdtempSync(path.join(os.tmpdir(), 'orca-nvm-probe-'))
-    try {
-      const nodePath = path.join(home, 'tilde-nvm/versions/node/v20.11.0/bin/node')
-      mkdirSync(path.dirname(nodePath), { recursive: true })
-      writeFileSync(nodePath, '#!/bin/sh\nprintf "v20.11.0\\n"\n')
-      chmodSync(nodePath, 0o755)
-      writeFileSync(path.join(home, '.zshrc'), 'export NVM_DIR=~/tilde-nvm\n')
+      const callScript = execCommandMock.mock.calls[0]![1] as string
+      const home = mkdtempSync(path.join(os.tmpdir(), 'orca-nvm-probe-'))
+      try {
+        const nodePath = path.join(home, 'tilde-nvm/versions/node/v20.11.0/bin/node')
+        mkdirSync(path.dirname(nodePath), { recursive: true })
+        writeFileSync(nodePath, '#!/bin/sh\nprintf "v20.11.0\\n"\n')
+        chmodSync(nodePath, 0o755)
+        writeFileSync(path.join(home, '.zshrc'), 'export NVM_DIR=~/tilde-nvm\n')
 
-      const output = execFileSync('/bin/sh', ['-c', callScript], {
-        encoding: 'utf8',
-        env: { HOME: home, PATH: '/usr/bin:/bin' }
-      })
+        const output = execFileSync('/bin/sh', ['-c', callScript], {
+          encoding: 'utf8',
+          env: { HOME: home, PATH: '/usr/bin:/bin' }
+        })
 
-      expect(output.split('\n')).toContain(nodePath)
-    } finally {
-      rmSync(home, { recursive: true, force: true })
+        expect(output.split('\n')).toContain(nodePath)
+      } finally {
+        rmSync(home, { recursive: true, force: true })
+      }
     }
-  })
+  )
 
   it('joins probes with newlines, not ||, so a missing dir does not mask later probes', async () => {
     execCommandMock

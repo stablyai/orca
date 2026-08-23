@@ -5,7 +5,10 @@ import { describe, expect, it } from 'vitest'
 const COMPONENT_ROOT = __dirname
 
 function componentSource(relativePath: string): string {
-  return readFileSync(join(COMPONENT_ROOT, relativePath), 'utf8')
+  // Why fold the line endings: these assertions anchor on a newline to pin two
+  // statements as adjacent, and a Windows checkout hands back CRLF — which
+  // matches nothing and reports only that the string is absent.
+  return readFileSync(join(COMPONENT_ROOT, relativePath), 'utf8').replace(/\r\n/g, '\n')
 }
 
 function joinedSource(relativePaths: string[]): string {

@@ -3,6 +3,7 @@ import type * as NodeOs from 'node:os'
 import { chmod, mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { permissionBitsAreEnforced } from '../../shared/file-mode-capability'
 
 type NodeOsModule = typeof NodeOs
 
@@ -27,6 +28,13 @@ import {
   sshGArgsForHost
 } from './ssh-g-config-resolution'
 
+// Why not a bare '/tmp/e2e-home': production joins it with the platform
+// separator, so a POSIX literal only matches the expectation on POSIX. The
+// value is synthetic either way; it just has to look like a home on this host.
+
+const FAKE_HOME = process.platform === 'win32' ? String.raw`C:\tmp\e2e-home` : '/tmp/e2e-home'
+const fakeHomeSshConfig = join(FAKE_HOME, '.ssh', 'config')
+
 describe('sshGArgsForHost', () => {
   beforeEach(() => {
     existsSyncMock.mockReset().mockReturnValue(true)
@@ -41,17 +49,17 @@ describe('sshGArgsForHost', () => {
   })
 
   it('pins the HOME config when it diverges from the passwd home', () => {
-    homedirMock.mockReturnValue('/tmp/e2e-home')
+    homedirMock.mockReturnValue(FAKE_HOME)
 
-    expect(sshGArgsForHost('prod')).toEqual(['-F', '/tmp/e2e-home/.ssh/config', '-G', '--', 'prod'])
-    expect(existsSyncMock).toHaveBeenCalledWith('/tmp/e2e-home/.ssh/config')
+    expect(sshGArgsForHost('prod')).toEqual(['-F', fakeHomeSshConfig, '-G', '--', 'prod'])
+    expect(existsSyncMock).toHaveBeenCalledWith(fakeHomeSshConfig)
   })
 
   it('falls back to passwd-home resolution when the HOME config is absent', () => {
     // Why: ssh exits 255 on a missing -F file, so a divergent HOME without a
     // config must not pin one. The picker lists nothing here, so the wider
     // passwd-home resolution never mints a target.
-    homedirMock.mockReturnValue('/tmp/e2e-home')
+    homedirMock.mockReturnValue(FAKE_HOME)
     existsSyncMock.mockReturnValue(false)
 
     expect(sshGArgsForHost('prod')).toEqual(['-G', '--', 'prod'])
@@ -66,11 +74,11 @@ describe('sshGArgsForHost', () => {
   })
 
   it('does not let a leading-dash alias become a flag', () => {
-    homedirMock.mockReturnValue('/tmp/e2e-home')
+    homedirMock.mockReturnValue(FAKE_HOME)
 
     expect(sshGArgsForHost('-oProxyCommand=touch /tmp/pwned')).toEqual([
       '-F',
-      '/tmp/e2e-home/.ssh/config',
+      fakeHomeSshConfig,
       '-G',
       '--',
       '-oProxyCommand=touch /tmp/pwned'
@@ -210,23 +218,30 @@ describe('siteConfigMayRestrictHostKeys', () => {
     await expect(siteConfigMayRestrictHostKeys([file])).resolves.toBe(true)
   })
 
-  it('keeps backslashes that are path separators rather than escapes', async () => {
-    // The Windows trap: the site config lives at C:\\ProgramData\\ssh\\ssh_config, so treating every
-    // backslash as an escape would eat the separators of any Include beneath it, resolve to nothing,
-    // and reintroduce the fail-open on the platform this matters most for. Only a backslash before
-    // whitespace escapes.
-    //
-    // Discriminating on POSIX by giving the file a literal backslash in its NAME, which is legal
-    // here: preserved, the path resolves and the directive is found; swallowed, it resolves to
-    // `winlikesite.conf`, which does not exist — and a bare `.resolves.toBe(false)` could not tell
-    // those apart, since a missing path answers false either way.
-    const literal = join(dir, 'winlike\\site.conf')
-    await writeFile(literal, 'StrictHostKeyChecking yes\n', 'utf-8')
-    const file = join(dir, 'ssh_config')
-    await writeFile(file, `Include ${literal}\n`, 'utf-8')
+  // Why a platform skip rather than a capability gate: the case turns on a
+  // backslash being legal inside a FILENAME, which is a POSIX property of the
+  // filesystem itself — on Windows it is a separator and the scenario cannot
+  // exist, however the process is privileged.
+  it.skipIf(process.platform === 'win32')(
+    'keeps backslashes that are path separators rather than escapes',
+    async () => {
+      // The Windows trap: the site config lives at C:\\ProgramData\\ssh\\ssh_config, so treating every
+      // backslash as an escape would eat the separators of any Include beneath it, resolve to nothing,
+      // and reintroduce the fail-open on the platform this matters most for. Only a backslash before
+      // whitespace escapes.
+      //
+      // Discriminating on POSIX by giving the file a literal backslash in its NAME, which is legal
+      // here: preserved, the path resolves and the directive is found; swallowed, it resolves to
+      // `winlikesite.conf`, which does not exist — and a bare `.resolves.toBe(false)` could not tell
+      // those apart, since a missing path answers false either way.
+      const literal = join(dir, 'winlike\\site.conf')
+      await writeFile(literal, 'StrictHostKeyChecking yes\n', 'utf-8')
+      const file = join(dir, 'ssh_config')
+      await writeFile(file, `Include ${literal}\n`, 'utf-8')
 
-    await expect(siteConfigMayRestrictHostKeys([file])).resolves.toBe(true)
-  })
+      await expect(siteConfigMayRestrictHostKeys([file])).resolves.toBe(true)
+    }
+  )
 
   it('stays strict when an Include quote never closes', async () => {
     const file = join(dir, 'ssh_config')
@@ -301,17 +316,24 @@ describe('siteConfigMayRestrictHostKeys', () => {
     await expect(siteConfigMayRestrictHostKeys([a])).resolves.toBe(false)
   })
 
-  it('treats an unreadable config as doubt rather than permission', async () => {
-    const file = join(dir, 'ssh_config')
-    await writeFile(file, 'Host *\n', 'utf-8')
-    await chmod(file, 0o000)
+  // Why the capability and not the platform: `chmod 000` only clears the
+  // read-only attribute on Windows and leaves the owner able to read, so the
+  // file this case depends on being unreadable simply is not. Asking directly
+  // keeps the case running anywhere the mode is actually enforced.
+  it.skipIf(!permissionBitsAreEnforced())(
+    'treats an unreadable config as doubt rather than permission',
+    async () => {
+      const file = join(dir, 'ssh_config')
+      await writeFile(file, 'Host *\n', 'utf-8')
+      await chmod(file, 0o000)
 
-    try {
-      await expect(siteConfigMayRestrictHostKeys([file])).resolves.toBe(true)
-    } finally {
-      await chmod(file, 0o600)
+      try {
+        await expect(siteConfigMayRestrictHostKeys([file])).resolves.toBe(true)
+      } finally {
+        await chmod(file, 0o600)
+      }
     }
-  })
+  )
 })
 
 /**

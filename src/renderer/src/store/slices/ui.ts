@@ -968,6 +968,12 @@ export type UISlice = {
   /** Pet overlay size in CSS pixels (square). User-adjustable so an oversized imported sprite isn't stuck on screen. */
   petSize: number
   setPetSize: (size: number) => void
+  /** Whether the pet paces its lane. */
+  petWalks: boolean
+  setPetWalks: (v: boolean) => void
+  /** Whether releasing a dragged pet drops it back to the floor. */
+  petReturnsToLane: boolean
+  setPetReturnsToLane: (v: boolean) => void
   pendingRevealWorktree: PendingSidebarWorktreeReveal | null
   pendingRevealSidebarRow: PendingSidebarRowReveal | null
   revealWorktreeInSidebar: (
@@ -2362,6 +2368,16 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
     set({ petId: id })
   },
 
+  petWalks: true,
+  setPetWalks: (v) => {
+    window.api.ui.set({ petWalks: v }).catch(console.error)
+    set({ petWalks: v })
+  },
+  petReturnsToLane: true,
+  setPetReturnsToLane: (v) => {
+    window.api.ui.set({ petReturnsToLane: v }).catch(console.error)
+    set({ petReturnsToLane: v })
+  },
   petSize: PET_SIZE_DEFAULT,
   setPetSize: (size) => {
     const clamped = clampPetSize(size)
@@ -2564,6 +2580,8 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
         // Why: default true so existing users see the pet on first enabling the flag; only an explicit Hide persists false.
         petVisible: ui.petVisible ?? ui.sidekickVisible ?? true,
         petSize: clampPetSize(ui.petSize ?? ui.sidekickSize ?? PET_SIZE_DEFAULT),
+        petWalks: ui.petWalks ?? true,
+        petReturnsToLane: ui.petReturnsToLane ?? true,
         customPets,
         // Why: fall back to default when the persisted id is unknown (e.g. custom pet removed elsewhere) so the overlay renders.
         petId: ((): string => {

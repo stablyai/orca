@@ -35,7 +35,13 @@ vi.mock('../wsl-unc-delete', () => ({
 
 import { deleteAiVaultSessionFile } from './session-delete'
 
-const HOME = join('/tmp', 'orca-ai-vault-delete-exec-fixture-home')
+// Why a drive letter on Windows: a POSIX-looking root is not absolute there,
+// so production resolve()s it onto the current volume while the mocks keep
+// keying on the raw fixture path. They stop matching, and one case skipped the
+// escape check altogether and reported a deletion it should have refused. The
+// fixture is synthetic either way; it only has to be absolute.
+const FIXTURE_VOLUME = process.platform === 'win32' ? 'C:\\' : '/'
+const HOME = join(FIXTURE_VOLUME, 'tmp', 'orca-ai-vault-delete-exec-fixture-home')
 const GEMINI_ROOT = join(HOME, '.gemini', 'tmp')
 const CLAUDE_ROOT = join(HOME, '.claude', 'projects')
 const ROVO_ROOT = join(HOME, '.rovodev', 'sessions')
@@ -124,7 +130,7 @@ describe('deleteAiVaultSessionFile', () => {
     // the real target, which the text-only root would not match. Realpath-ing
     // the root as well keeps this legit delete from a false rejection.
     const filePath = join(GEMINI_ROOT, 'project-a', 'session-1.json')
-    const realRoot = join('/real', '.gemini', 'tmp')
+    const realRoot = join(FIXTURE_VOLUME, 'real', '.gemini', 'tmp')
     const realFile = join(realRoot, 'project-a', 'session-1.json')
     lstatMock.mockResolvedValue({ isFile: () => true })
     realpathMock.mockImplementation((p: string) =>

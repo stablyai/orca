@@ -9,6 +9,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import type * as LocalPtyUtils from '../providers/local-pty-utils'
 
 const { spawnMock, isPwshAvailableMock, resolveAgentForegroundProcessMock } = vi.hoisted(() => ({
   spawnMock: vi.fn(),
@@ -38,6 +39,16 @@ vi.mock('../providers/windows-powershell-executable', () => ({
       : [WINDOWS_POWERSHELL_ABS, CMD_ABS],
   getWindowsCmdPath: () => CMD_ABS
 }))
+
+// Why stub the helper lookup: these cases fake darwin on a non-darwin checkout,
+// so production's macOS spawn-helper preflight runs for real. Whether it finds
+// one is an accident of how node-pty was installed here -- a source build (the
+// mode that carries the Windows job-object patch) deletes prebuilds/ outright.
+// Helper discovery is not what these tests are about.
+vi.mock('../providers/local-pty-utils', async (importOriginal) => {
+  const actual = await importOriginal<typeof LocalPtyUtils>()
+  return { ...actual, getNodePtySpawnHelperCandidates: () => [__filename] }
+})
 
 vi.mock('../providers/agent-foreground-process', () => ({
   resolveAgentForegroundProcessWithAvailability: async (...args: unknown[]) => {
@@ -88,12 +99,24 @@ async function readForegroundAt(
   return foreground
 }
 
+// Why a bare name: the POSIX cases drive production down a branch that resolves
+// an absolute shell against the filesystem, and none of /bin/zsh, /bin/bash or
+// /bin/sh exist on Windows. Left unpinned the outcome came from the developer's
+// own $SHELL — set by Git Bash, unset by cmd.exe and PowerShell — so the same
+// suite passed or failed by accident of what had launched it. A bare command is
+// returned untouched by `resolveUnixShellPath`, which keeps these cases about
+// scan cadence rather than about shell discovery.
+const PINNED_SHELL = 'zsh'
+
 describe('daemon pty foreground scan cadence', () => {
   let platform: PropertyDescriptor | undefined
   let previousUserDataPath: string | undefined
+  let previousShell: string | undefined
   let userDataPath: string
 
   beforeEach(() => {
+    previousShell = process.env.SHELL
+    process.env.SHELL = PINNED_SHELL
     spawnMock.mockReset()
     isPwshAvailableMock.mockReset()
     isPwshAvailableMock.mockReturnValue(false)
@@ -110,6 +133,11 @@ describe('daemon pty foreground scan cadence', () => {
     vi.useRealTimers()
     if (platform) {
       Object.defineProperty(process, 'platform', platform)
+    }
+    if (previousShell === undefined) {
+      delete process.env.SHELL
+    } else {
+      process.env.SHELL = previousShell
     }
     if (previousUserDataPath === undefined) {
       delete process.env.ORCA_USER_DATA_PATH

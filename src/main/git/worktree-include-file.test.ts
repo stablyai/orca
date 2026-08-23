@@ -4,6 +4,7 @@ import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { parseWorktreeIncludeFile, resolveWorktreeIncludePaths } from './worktree-include-file'
 import { gitExecFileAsync } from './runner'
+import { canCreateFileSymlink } from '../../shared/symlink-capability'
 
 vi.mock('./runner', () => ({
   gitExecFileAsync: vi.fn()
@@ -98,14 +99,17 @@ describe('resolveWorktreeIncludePaths', () => {
     await expect(resolveWorktreeIncludePaths(repo)).resolves.toEqual(['.env'])
   })
 
-  it('resolves a gitignored symlink entry without following it', async () => {
-    writeInclude('.env\n')
-    writeFileSync(join(repo, '.env.real'), 'A=1')
-    symlinkSync(join(repo, '.env.real'), join(repo, '.env'))
-    mockCheckIgnore(['.env'])
+  it.skipIf(!canCreateFileSymlink())(
+    'resolves a gitignored symlink entry without following it',
+    async () => {
+      writeInclude('.env\n')
+      writeFileSync(join(repo, '.env.real'), 'A=1')
+      symlinkSync(join(repo, '.env.real'), join(repo, '.env'))
+      mockCheckIgnore(['.env'])
 
-    await expect(resolveWorktreeIncludePaths(repo)).resolves.toEqual(['.env'])
-  })
+      await expect(resolveWorktreeIncludePaths(repo)).resolves.toEqual(['.env'])
+    }
+  )
 
   it('skips glob and negation entries with a warning', async () => {
     writeInclude('.env.*\n!.env.production\n.env\n')

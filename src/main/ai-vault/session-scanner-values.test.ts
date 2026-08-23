@@ -185,3 +185,27 @@ describe('AI Vault session scanner text values', () => {
     })
   })
 })
+
+// Why these run on every platform: the remote scanner feeds these helpers a
+// POSIX path and then splits the answer on '/', so a platform-native join would
+// hand it one unusable segment on Windows. The separator has to come from the
+// value, not from the host.
+describe('agent session dirs keep the separator of the value they are given', () => {
+  it('appends with forward slashes to a POSIX agent home', () => {
+    expect(normalizeAgentSessionsDir('/agents/.pi', '.pi')).toBe('/agents/.pi/agent/sessions')
+    expect(normalizePrimeAgentSessionsDir('/agents/.prime')).toBe('/agents/.prime/sessions')
+  })
+
+  it('appends with backslashes to a Windows agent home', () => {
+    expect(normalizeAgentSessionsDir(String.raw`C:\agents\.pi`, '.pi')).toBe(
+      String.raw`C:\agents\.pi\agent\sessions`
+    )
+    expect(normalizePrimeAgentSessionsDir(String.raw`C:\agents\.prime`)).toBe(
+      String.raw`C:\agents\.prime\sessions`
+    )
+  })
+
+  it('leaves a value that already ends at sessions exactly as it found it', () => {
+    expect(normalizeAgentSessionsDir('/.pi/agent/sessions', '.pi')).toBe('/.pi/agent/sessions')
+  })
+})

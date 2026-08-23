@@ -144,6 +144,10 @@ describe('createPtySubprocess', () => {
       sessionId: 'canceled-validation',
       cols: 80,
       rows: 24,
+      // Why host-shaped and explicit: the daemon only preflights a cwd its host reads as
+      // absolute, and Windows preflights explicit paths only — without one there is no
+      // async validation for cancellation to race.
+      cwd: process.platform === 'win32' ? 'C:\\canceled-validation' : '/canceled-validation',
       isCanceled: () => canceled
     })
     await vi.waitFor(() => expect(validateWorkingDirectoryMock).toHaveBeenCalled())

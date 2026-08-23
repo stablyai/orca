@@ -28,10 +28,20 @@ vi.mock('../worktree-trash', () => ({
 
 import { addWorktree, WORKTREE_ADD_TIMEOUT_MS } from './worktree'
 import { registerWorktreeSuiteHooks } from './worktree-test-harness'
+import { windowsLongPathGitArgs } from '../../shared/windows-long-path-git-args'
 
 registerWorktreeSuiteHooks()
 
 describe('addWorktree', () => {
+  // Why derive rather than spell out: the long-path prefix is Windows-only, so a
+  // literal argv can only be right on one platform.
+  const worktreeAdd = (...rest: string[]): string[] => [
+    ...windowsLongPathGitArgs('/repo'),
+    'worktree',
+    'add',
+    ...rest
+  ]
+
   const resolveCreationBaseConfigWrite = () => {
     gitExecFileAsyncMock.mockResolvedValueOnce({ stdout: '' }) // config --local --replace-all branch.<branch>.base
   }
@@ -78,15 +88,13 @@ describe('addWorktree', () => {
       [['status', '--porcelain', '--untracked-files=no'], { cwd: '/repo' }],
       [['reset', '--hard', 'remote-main'], { cwd: '/repo' }],
       [
-        [
-          'worktree',
-          'add',
+        worktreeAdd(
           '--no-track',
           '-b',
           'feature/test',
           '/repo-feature',
           'refs/remotes/origin/main'
-        ],
+        ),
         { cwd: '/repo', timeout: WORKTREE_ADD_TIMEOUT_MS }
       ],
       [
@@ -315,15 +323,9 @@ describe('addWorktree', () => {
       '--quiet',
       'refs/remotes/origin/main^{commit}'
     ])
-    expect(gitExecFileAsyncMock.mock.calls[7]?.[0]).toEqual([
-      'worktree',
-      'add',
-      '--no-track',
-      '-b',
-      'feature/test',
-      '/repo-feature',
-      'refs/remotes/origin/main'
-    ])
+    expect(gitExecFileAsyncMock.mock.calls[7]?.[0]).toEqual(
+      worktreeAdd('--no-track', '-b', 'feature/test', '/repo-feature', 'refs/remotes/origin/main')
+    )
     expect(gitExecFileAsyncMock.mock.calls[8]?.[0]).toEqual([
       'config',
       '--local',
@@ -374,15 +376,13 @@ describe('addWorktree', () => {
         expect.objectContaining({ cwd: '/repo' })
       ],
       [
-        [
-          'worktree',
-          'add',
+        worktreeAdd(
           '--no-track',
           '-b',
           'feature/test',
           '/repo-feature',
           'refs/remotes/origin/main'
-        ],
+        ),
         expect.objectContaining({ cwd: '/repo' })
       ],
       [
@@ -430,15 +430,15 @@ describe('addWorktree', () => {
     )
 
     expect(result.localBaseRefRefresh).toBeUndefined()
-    expect(gitExecFileAsyncMock.mock.calls.map((call) => call[0])).toContainEqual([
-      'worktree',
-      'add',
-      '--no-track',
-      '-b',
-      'feature-x',
-      '/repo-feature-x',
-      'refs/remotes/origin/feature-x'
-    ])
+    expect(gitExecFileAsyncMock.mock.calls.map((call) => call[0])).toContainEqual(
+      worktreeAdd(
+        '--no-track',
+        '-b',
+        'feature-x',
+        '/repo-feature-x',
+        'refs/remotes/origin/feature-x'
+      )
+    )
     // Nothing was refreshed, so no ref mutation.
     expect(gitExecFileAsyncMock.mock.calls.map((call) => call[0][0])).not.toContain('update-ref')
     expect(gitExecFileAsyncMock.mock.calls.map((call) => call[0][0])).not.toContain('reset')
@@ -550,15 +550,13 @@ describe('addWorktree', () => {
         expect.objectContaining({ cwd: '/repo' })
       ],
       [
-        [
-          'worktree',
-          'add',
+        worktreeAdd(
           '--no-track',
           '-b',
           'feature/test',
           '/repo-feature',
           'refs/remotes/origin/main'
-        ],
+        ),
         expect.objectContaining({ cwd: '/repo' })
       ],
       [

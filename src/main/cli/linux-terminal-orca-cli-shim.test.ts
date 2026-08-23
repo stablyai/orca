@@ -9,6 +9,7 @@ vi.mock('electron', () => ({
 }))
 
 import { ensureLinuxTerminalOrcaCliShimDir } from './linux-terminal-orca-cli-shim'
+import { permissionBitsAreEnforced } from '../../shared/file-mode-capability'
 
 const created: string[] = []
 
@@ -27,54 +28,64 @@ afterEach(async () => {
 })
 
 describe('ensureLinuxTerminalOrcaCliShimDir', () => {
-  it('writes an executable bare-orca shim that execs the bundled orca-ide launcher', async () => {
-    const { userDataPath, resourcesPath } = await makeFixture()
+  // Why the capability and not the platform: there is no exec bit to assert
+  // where a mode is not kept. Asked directly, so it still runs where it is.
+  it.skipIf(!permissionBitsAreEnforced())(
+    'writes an executable bare-orca shim that execs the bundled orca-ide launcher',
+    async () => {
+      const { userDataPath, resourcesPath } = await makeFixture()
 
-    const shimDir = ensureLinuxTerminalOrcaCliShimDir({
-      userDataPath,
-      resourcesPath,
-      appImagePath: null
-    })
+      const shimDir = ensureLinuxTerminalOrcaCliShimDir({
+        userDataPath,
+        resourcesPath,
+        appImagePath: null
+      })
 
-    expect(shimDir).toBe(join(userDataPath, 'linux-orca-cli-shim'))
-    const content = readFileSync(join(shimDir!, 'orca'), 'utf8')
-    // Single-quoted so a resources path with shell metacharacters can't break out.
-    expect(content).toContain(`exec '${join(resourcesPath, 'bin', 'orca-ide')}' "$@"`)
-    const mode = statSync(join(shimDir!, 'orca')).mode & 0o777
-    expect(mode & 0o111).not.toBe(0)
-  })
+      expect(shimDir).toBe(join(userDataPath, 'linux-orca-cli-shim'))
+      const content = readFileSync(join(shimDir!, 'orca'), 'utf8')
+      // Single-quoted so a resources path with shell metacharacters can't break out.
+      expect(content).toContain(`exec '${join(resourcesPath, 'bin', 'orca-ide')}' "$@"`)
+      const mode = statSync(join(shimDir!, 'orca')).mode & 0o777
+      expect(mode & 0o111).not.toBe(0)
+    }
+  )
 
-  it('memoizes per userDataPath and re-asserts the exec bit for a stale shim', async () => {
-    const { userDataPath, resourcesPath } = await makeFixture()
-    const options = { userDataPath, resourcesPath, appImagePath: null }
+  // Why the capability and not the platform: there is no exec bit to assert
+  // where a mode is not kept. Asked directly, so it still runs where it is.
+  it.skipIf(!permissionBitsAreEnforced())(
+    'memoizes per userDataPath and re-asserts the exec bit for a stale shim',
+    async () => {
+      const { userDataPath, resourcesPath } = await makeFixture()
+      const options = { userDataPath, resourcesPath, appImagePath: null }
 
-    const first = ensureLinuxTerminalOrcaCliShimDir(options)
-    expect(first).not.toBeNull()
-    const shimPath = join(first!, 'orca')
-    chmodSync(shimPath, 0o644)
+      const first = ensureLinuxTerminalOrcaCliShimDir(options)
+      expect(first).not.toBeNull()
+      const shimPath = join(first!, 'orca')
+      chmodSync(shimPath, 0o644)
 
-    // A distinct userData path is not memoized, so ensure runs again and heals
-    // the exec bit lost above only when it actually processes that path.
-    const second = ensureLinuxTerminalOrcaCliShimDir(options)
-    expect(second).toBe(first)
+      // A distinct userData path is not memoized, so ensure runs again and heals
+      // the exec bit lost above only when it actually processes that path.
+      const second = ensureLinuxTerminalOrcaCliShimDir(options)
+      expect(second).toBe(first)
 
-    const root = await mkdtemp(join(tmpdir(), 'orca-terminal-cli-shim-2-'))
-    created.push(root)
-    const otherUserData = join(root, 'user-data')
-    mkdirSync(join(otherUserData, 'linux-orca-cli-shim'), { recursive: true })
-    writeFileSync(join(otherUserData, 'linux-orca-cli-shim', 'orca'), 'stale contents', 'utf8')
-    chmodSync(join(otherUserData, 'linux-orca-cli-shim', 'orca'), 0o644)
+      const root = await mkdtemp(join(tmpdir(), 'orca-terminal-cli-shim-2-'))
+      created.push(root)
+      const otherUserData = join(root, 'user-data')
+      mkdirSync(join(otherUserData, 'linux-orca-cli-shim'), { recursive: true })
+      writeFileSync(join(otherUserData, 'linux-orca-cli-shim', 'orca'), 'stale contents', 'utf8')
+      chmodSync(join(otherUserData, 'linux-orca-cli-shim', 'orca'), 0o644)
 
-    const healed = ensureLinuxTerminalOrcaCliShimDir({
-      userDataPath: otherUserData,
-      resourcesPath,
-      appImagePath: null
-    })
-    expect(healed).not.toBeNull()
-    const healedPath = join(healed!, 'orca')
-    expect(readFileSync(healedPath, 'utf8')).toContain('orca-ide')
-    expect(statSync(healedPath).mode & 0o111).not.toBe(0)
-  })
+      const healed = ensureLinuxTerminalOrcaCliShimDir({
+        userDataPath: otherUserData,
+        resourcesPath,
+        appImagePath: null
+      })
+      expect(healed).not.toBeNull()
+      const healedPath = join(healed!, 'orca')
+      expect(readFileSync(healedPath, 'utf8')).toContain('orca-ide')
+      expect(statSync(healedPath).mode & 0o111).not.toBe(0)
+    }
+  )
 
   it('execs the stable AppImage (not the ephemeral mount) when running from an AppImage', async () => {
     const { userDataPath, resourcesPath } = await makeFixture()

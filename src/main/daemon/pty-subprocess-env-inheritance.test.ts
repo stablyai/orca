@@ -285,9 +285,14 @@ describe('createPtySubprocess', () => {
 
     const env = spawnMock.mock.calls.at(-1)?.[2].env
     expect(env.ORCA_HISTFILE).toBe(expected)
-    // The wrapping consequence: no inherited value may point a pane at Orca's
-    // ZDOTDIR that the client scoped no history for.
-    expect(env.ORCA_SHELL_FEATURES).toBe(expected === undefined ? undefined : 'history')
+    if (process.platform !== 'win32') {
+      // The wrapping consequence: no inherited value may point a pane at Orca's
+      // ZDOTDIR that the client scoped no history for. POSIX-only by design —
+      // ORCA_SHELL_FEATURES is named by createPtySubprocess's Unix launch-config
+      // branch (getShellLaunchConfig/selectShellStartupFeatures), which the win32
+      // branch does not have; the scrub asserted above is what both branches share.
+      expect(env.ORCA_SHELL_FEATURES).toBe(expected === undefined ? undefined : 'history')
+    }
   })
 
   it('does not inherit ELECTRON_RUN_AS_NODE from the daemon process env', async () => {

@@ -83,4 +83,38 @@ describe('buildSpriteAnimationCss', () => {
     expect(keyframesCss).toContain('0% { background-position: 0px -200px; }')
     expect(keyframesCss).toContain('1% { background-position: -100px -200px; }')
   })
+
+  it('plays a one-shot row once and holds its last frame', () => {
+    // Getting up must not loop back down onto the floor.
+    const { animationCss } = buildSpriteAnimationCss({
+      keyframesId: 'x',
+      frames: 4,
+      fps: 8,
+      frameWidth: 100,
+      scale: 1,
+      rowOffsetY: 0,
+      frameDurationsMs: undefined,
+      loop: false
+    })
+
+    expect(animationCss).toContain('forwards')
+    expect(animationCss).not.toContain('infinite')
+  })
+
+  it('holds the last frame of an unevenly paced one-shot row too', () => {
+    const { animationCss } = buildSpriteAnimationCss({
+      keyframesId: 'x',
+      frames: 3,
+      fps: 8,
+      frameWidth: 100,
+      scale: 1,
+      rowOffsetY: 0,
+      frameDurationsMs: [200, 300, 400],
+      loop: false
+    })
+
+    expect(animationCss).toContain('0.9s step-end')
+    expect(animationCss).toContain('forwards')
+    expect(animationCss).not.toContain('infinite')
+  })
 })

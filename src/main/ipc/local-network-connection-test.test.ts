@@ -1,3 +1,4 @@
+import { lookup } from 'node:dns'
 import { createServer } from 'node:net'
 import { describe, expect, it, vi } from 'vitest'
 import { testLocalNetworkConnection } from './local-network-connection-test'
@@ -39,13 +40,24 @@ describe('testLocalNetworkConnection', () => {
       throw new Error('Expected a TCP listener address')
     }
 
+    // Why detected: '2130706433' is the dotless decimal spelling of 127.0.0.1, a
+    // POSIX getaddrinfo extension. Where the resolver accepts it the child connects
+    // and the post-connect LAN check refuses it; Windows will not resolve it at all,
+    // so the same target is refused one layer earlier. Both refuse the target.
+    const dotlessDecimalResolves = await new Promise<boolean>((settle) => {
+      lookup('2130706433', (error) => settle(!error))
+    })
+
     try {
       await expect(
         testLocalNetworkConnection(
           { host: '2130706433', port: address.port },
           { platform: 'darwin' }
         )
-      ).resolves.toMatchObject({ ok: false, failure: 'invalid-target' })
+      ).resolves.toMatchObject({
+        ok: false,
+        failure: dotlessDecimalResolves ? 'invalid-target' : 'unresolved'
+      })
     } finally {
       await new Promise<void>((resolve) => server.close(() => resolve()))
     }

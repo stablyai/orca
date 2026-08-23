@@ -2,26 +2,19 @@ import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 
-const WORKTREE_CONTEXT_SOURCE = readFileSync(
-  join(__dirname, 'source-control/listing/use-worktree-context.ts'),
-  'utf8'
+// Why fold the line endings: the assertions below anchor on a newline to pin
+// statements as adjacent, and a Windows checkout hands back CRLF — which
+// matches nothing and reports only that the string is absent.
+const readSource = (relativePath: string): string =>
+  readFileSync(join(__dirname, relativePath), 'utf8').replace(/\r\n/g, '\n')
+
+const WORKTREE_CONTEXT_SOURCE = readSource('source-control/listing/use-worktree-context.ts')
+const PR_GENERATION_SOURCE = readSource('source-control/review/use-pull-request-generation.ts')
+const CREATE_REVIEW_COMPOSER_SOURCE = readSource(
+  'source-control/review/use-create-review-composer.ts'
 )
-const PR_GENERATION_SOURCE = readFileSync(
-  join(__dirname, 'source-control/review/use-pull-request-generation.ts'),
-  'utf8'
-)
-const CREATE_REVIEW_COMPOSER_SOURCE = readFileSync(
-  join(__dirname, 'source-control/review/use-create-review-composer.ts'),
-  'utf8'
-)
-const STATUS_REFRESH_SOURCE = readFileSync(
-  join(__dirname, 'source-control/sync/use-status-refresh.ts'),
-  'utf8'
-)
-const BASE_REF_DEFAULT_SOURCE = readFileSync(
-  join(__dirname, 'source-control/sync/use-base-ref-default.ts'),
-  'utf8'
-)
+const STATUS_REFRESH_SOURCE = readSource('source-control/sync/use-status-refresh.ts')
+const BASE_REF_DEFAULT_SOURCE = readSource('source-control/sync/use-base-ref-default.ts')
 
 function sourceBetween(source: string, startPattern: string, endPattern: string): string {
   const start = source.indexOf(startPattern)
@@ -65,10 +58,7 @@ describe('SourceControl host-context boundaries', () => {
     )
     expect(composerCall).toContain('settings: activeRepoSettings')
 
-    const hookSource = readFileSync(
-      join(__dirname, 'use-create-pull-request-field-generation.ts'),
-      'utf8'
-    )
+    const hookSource = readSource('use-create-pull-request-field-generation.ts')
     const requestContext = sourceBetween(hookSource, 'const requestContext = {', 'const seed = {')
     expect(requestContext).toContain('settings,')
     expect(requestContext).not.toContain('useAppStore.getState().settings')

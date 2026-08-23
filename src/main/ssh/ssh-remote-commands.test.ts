@@ -1,4 +1,5 @@
 import { execFileSync, spawn, spawnSync } from 'node:child_process'
+import { findPosixShell, posixShellEnvironment } from '../../shared/posix-shell'
 import {
   existsSync,
   mkdirSync,
@@ -63,10 +64,19 @@ function decodePowerShellCommand(command: string): string {
   return match ? Buffer.from(match[1], 'base64').toString('utf16le') : ''
 }
 
+function requirePosixShell(): string {
+  const shell = findPosixShell()
+  if (!shell) {
+    throw new Error('No POSIX shell is available')
+  }
+  return shell
+}
+
 function runShellCommand(command: string): Promise<string> {
   return new Promise((resolve, reject) => {
-    const child = spawn('/bin/sh', ['-c', command], {
-      stdio: ['ignore', 'pipe', 'pipe']
+    const child = spawn(requirePosixShell(), ['-c', command], {
+      stdio: ['ignore', 'pipe', 'pipe'],
+      env: posixShellEnvironment()
     })
     let stdout = ''
     let stderr = ''
@@ -286,7 +296,12 @@ describe('ssh remote command builders', () => {
       const output = await runShellCommand(listRelayBaseDirsCommand(posix, root))
       const entries = output.trim().split('\n')
 
-      expect(entries).toEqual(['relay-0.1.0+aaa', 'relay-0.1.0+bbb'])
+      // Why sorted: the command prints what `find` enumerated, and the awk filter
+      // preserves that order rather than imposing one. Enumeration order is the
+      // filesystem's business — NTFS returned these reversed — and the caller
+      // only slices the first MAX_RELAY_GC_LISTING_ENTRIES, so nothing downstream
+      // depends on it either.
+      expect([...entries].sort()).toEqual(['relay-0.1.0+aaa', 'relay-0.1.0+bbb'])
       expect(Buffer.byteLength(output)).toBeLessThan(1_024)
       expect(entries.length).toBeLessThanOrEqual(MAX_RELAY_GC_LISTING_ENTRIES)
     } finally {
@@ -519,7 +534,7 @@ describe('ssh remote command builders', () => {
         }
 
         const command = tryStealInstallLockCommand(posix, lockDir, 20 * 60)
-        const output = execFileSync('/bin/sh', ['-c', command], { encoding: 'utf8' })
+        const output = execFileSync(requirePosixShell(), ['-c', command], { encoding: 'utf8' })
 
         expect(output.trim()).toBe('OK')
         expect(existsSync(lockDir)).toBe(true)

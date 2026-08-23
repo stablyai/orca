@@ -9,6 +9,7 @@ import { stringify } from 'yaml'
 import type { LocalBuildCompatibility } from '../../shared/local-build-compatibility'
 import { loadLocalBuildCandidate } from './local-build-candidate'
 import { startLocalBuildFeed } from './local-build-feed-server'
+import { canCreateFileSymlink } from '../../shared/symlink-capability'
 
 const tempDirectories: string[] = []
 const execFileAsync = promisify(execFile)
@@ -93,7 +94,7 @@ describe('loadLocalBuildCandidate', () => {
     ).rejects.toThrow('invalid file entry')
   })
 
-  it('rejects symlinked artifacts', async () => {
+  it.skipIf(!canCreateFileSymlink())('rejects symlinked artifacts', async () => {
     const { artifactPath, directory, manifestPath } = await fixture()
     const realArtifact = join(directory, 'real.zip')
     await writeFile(realArtifact, 'signed-zip-placeholder')

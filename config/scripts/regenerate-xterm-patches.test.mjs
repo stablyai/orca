@@ -210,7 +210,11 @@ describe('round-trip stability', () => {
     await writeTree(replay, PRISTINE)
     const patchFile = path.join(root, 'round-trip.patch')
     await writeFile(patchFile, patch)
-    execFileSync('git', ['apply', '-p1', '--whitespace=nowarn', patchFile], { cwd: replay })
+    execFileSync(
+      'git',
+      ['-c', 'core.autocrlf=false', 'apply', '-p1', '--whitespace=nowarn', patchFile],
+      { cwd: replay }
+    )
 
     expect(await readFile(path.join(replay, 'lib/widget.js'), 'utf8')).toBe(
       PATCHED['lib/widget.js']
@@ -229,7 +233,11 @@ describe('round-trip stability', () => {
 
     const replay = path.join(root, 'replay')
     await writeTree(replay, PRISTINE)
-    execFileSync('git', ['apply', '-p1', '--whitespace=nowarn', patchFile], { cwd: replay })
+    execFileSync(
+      'git',
+      ['-c', 'core.autocrlf=false', 'apply', '-p1', '--whitespace=nowarn', patchFile],
+      { cwd: replay }
+    )
 
     expect(await readFile(path.join(replay, 'src/Widget.ts'), 'utf8')).toBe(
       PATCHED['src/Widget.ts']
@@ -459,5 +467,88 @@ describe('committed xterm patch artifacts', () => {
     expect(manifest.upstream.commit).toMatch(/^[0-9a-f]{40}$/)
     expect(manifest.packages.length).toBeGreaterThan(0)
     expect(() => assertBuildStepsAllowed(manifest)).not.toThrow()
+  })
+})
+
+// Windows hands this script inputs no other platform produces: git quotes any
+// path holding a backslash, and a checkout with autocrlf leaves CRLF in files
+// the script parses. Neither is the user's mistake, so neither may break it.
+describe('git-quoted diff paths', () => {
+  const QUOTED = String.raw`diff --git "a/C:\\tmp\\scratch\\pristine/lib/widget.js" "b/C:\\tmp\\scratch\\patched/lib/widget.js"
+index 00ae913..f346fbc 100644
+--- "a/C:\\tmp\\scratch\\pristine/lib/widget.js"
++++ "b/C:\\tmp\\scratch\\patched/lib/widget.js"
+@@ -1 +1 @@
+-function widget(){return 1}
++function widget(){return 2}
+`
+  const PRISTINE = String.raw`C:\tmp\scratch\pristine`
+  const PATCHED = String.raw`C:\tmp\scratch\patched`
+
+  it('strips a backslashed scratch prefix out of a quoted header', () => {
+    const out = normalizePnpmDiff(QUOTED, PRISTINE, PATCHED)
+
+    expect(out).toContain('diff --git a/lib/widget.js b/lib/widget.js')
+    expect(out).toContain('--- a/lib/widget.js')
+    expect(out).toContain('+++ b/lib/widget.js')
+  })
+
+  it('leaves no trace of the scratch directory anywhere in the patch', () => {
+    const out = normalizePnpmDiff(QUOTED, PRISTINE, PATCHED)
+
+    expect(out).not.toContain('scratch')
+    expect(out).not.toContain('"')
+  })
+
+  it('still handles the plain unquoted form other platforms produce', () => {
+    const posix = [
+      'diff --git a/tmp/scratch/pristine/lib/widget.js b/tmp/scratch/patched/lib/widget.js',
+      '--- a/tmp/scratch/pristine/lib/widget.js',
+      '+++ b/tmp/scratch/patched/lib/widget.js',
+      ''
+    ].join('\n')
+
+    expect(normalizePnpmDiff(posix, '/tmp/scratch/pristine', '/tmp/scratch/patched')).toContain(
+      'diff --git a/lib/widget.js b/lib/widget.js'
+    )
+  })
+
+  it('does not touch a quote that is part of the diff body', () => {
+    const body = [
+      'diff --git a/x.js b/x.js',
+      '@@ -1 +1 @@',
+      '-const greeting = "hello"',
+      '+const greeting = "goodbye"',
+      ''
+    ].join('\n')
+
+    expect(normalizePnpmDiff(body, '/a', '/b')).toBe(body)
+  })
+})
+
+describe('lockfile line endings', () => {
+  const HASH = 'a'.repeat(64)
+  const NEXT = 'b'.repeat(64)
+  const lockfile = (eol) =>
+    [
+      'patchedDependencies:',
+      `  '@scope/pkg@1.0.0':`,
+      `    hash: ${HASH}`,
+      '    path: p.patch',
+      ''
+    ].join(eol)
+
+  it('reads the hash from a lockfile checked out with CRLF', () => {
+    expect(readLockfilePatchHash(lockfile('\r\n'), '@scope/pkg@1.0.0')).toBe(HASH)
+  })
+
+  it('still reads the LF form', () => {
+    expect(readLockfilePatchHash(lockfile('\n'), '@scope/pkg@1.0.0')).toBe(HASH)
+  })
+
+  it('rewrites the hash without disturbing the line endings around it', () => {
+    const updated = updateLockfilePatchHash(lockfile('\r\n'), '@scope/pkg@1.0.0', NEXT)
+
+    expect(updated).toBe(lockfile('\r\n').replace(HASH, NEXT))
   })
 })

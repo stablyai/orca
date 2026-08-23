@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
+import { join } from 'node:path'
 import {
   readFileSyncMock,
   recordCodexPaneAccountMock,
@@ -240,7 +241,10 @@ describe('registerPtyHandlers', () => {
     expect(recordCodexPaneAccountMock.mock.calls).toEqual([
       ['pty-resumed', { selectionKey: 'host', accountId: 'account-a', homeRoute: 'account-home' }]
     ])
-    expect(readFileSyncMock).toHaveBeenCalledWith('/managed/origin/home/auth.json', 'utf8')
+    // Why join(): production composes the managed home with its auth file using
+    // the platform separator, which is right for a local home — the POSIX
+    // literal only matched on POSIX.
+    expect(readFileSyncMock).toHaveBeenCalledWith(join('/managed/origin/home', 'auth.json'), 'utf8')
     expect(forgetCodexPaneAccountMock).not.toHaveBeenCalled()
   })
   it('leaves a resumed Codex pane unattributed when no account owns its home', async () => {
@@ -361,7 +365,10 @@ describe('registerPtyHandlers', () => {
         { selectionKey: 'host', accountId: 'account-a', homeRoute: 'account-home' }
       ]
     ])
-    expect(readFileSyncMock).toHaveBeenCalledWith('/managed/origin/home/auth.json', 'utf8')
+    // Why join(): production composes the managed home with its auth file using
+    // the platform separator, which is right for a local home — the POSIX
+    // literal only matched on POSIX.
+    expect(readFileSyncMock).toHaveBeenCalledWith(join('/managed/origin/home', 'auth.json'), 'utf8')
     expect(forgetCodexPaneAccountMock).not.toHaveBeenCalled()
   })
   it('leaves a runtime-controller resumed Codex pane unattributed when no account owns its home', async () => {

@@ -5,6 +5,7 @@ import { join } from 'node:path'
 import type * as NodeOs from 'node:os'
 import type { GlobalSettings } from '../../shared/global-settings-types'
 import type { CodexManagedAccount } from '../../shared/managed-account-types'
+import type * as ShellStartupEnv from '../pty/shell-startup-env'
 
 const testState = { userData: '', home: '' }
 const previousEnv: Record<string, string | undefined> = {}
@@ -14,6 +15,14 @@ vi.mock('node:os', async () => {
   const actual = await vi.importActual<typeof NodeOs>('node:os')
   return { ...actual, homedir: () => testState.home }
 })
+
+// Why: the host real-home lane is gated on the POSIX shell-startup env probe,
+// which does not exist on Windows. Force the capability on so the lane rules
+// under test run on every host rather than silently taking the mirror branch.
+vi.mock('../pty/shell-startup-env', async () => ({
+  ...(await vi.importActual<typeof ShellStartupEnv>('../pty/shell-startup-env')),
+  isShellStartupEnvProbeSupported: () => true
+}))
 
 beforeEach(() => {
   vi.resetModules()

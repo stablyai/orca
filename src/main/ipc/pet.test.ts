@@ -1,4 +1,4 @@
-import { mkdtemp, mkdir, readFile, rm, writeFile } from 'node:fs/promises'
+import { mkdtemp, mkdir, readdir, readFile, rm, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -40,6 +40,7 @@ vi.mock('electron', () => ({
 
 import { registerPetHandlers } from './pet'
 import type { CustomPet } from '../../shared/pet-types'
+import { MAX_BYTES } from './pet-import-size-limits'
 
 describe('registerPetHandlers', () => {
   let tempDir: string
@@ -171,5 +172,151 @@ describe('registerPetHandlers', () => {
     await expect(getHandler('pet:importPetBundle')({ sender: {} })).rejects.toThrow(
       'declares 1 frame durations but 2 frames'
     )
+  })
+
+  const generatedManifest = {
+    spritesheetPath: 'spritesheet.webp',
+    frame: { width: 2, height: 2 },
+    fps: 8,
+    defaultAnimation: 'idle',
+    animations: { idle: { row: 0, frames: 2 }, running: { row: 1, frames: 2 } }
+  }
+
+  it('writes a generated pet as a bundle the renderer can already play', async () => {
+    const sheet = webpVp8x(4, 4)
+
+    const result = (await getHandler('pet:createGenerated')(
+      { sender: {} },
+      { sheet, manifest: generatedManifest, label: 'My dog' }
+    )) as CustomPet
+
+    expect(result).toMatchObject({
+      label: 'My dog',
+      fileName: 'spritesheet.webp',
+      mimeType: 'image/webp',
+      kind: 'bundle'
+    })
+    expect(result.sprite).toMatchObject({ frameWidth: 2, frameHeight: 2, columns: 2, rows: 2 })
+
+    const dir = join(userDataDir, 'sidekicks', 'custom', result.id)
+    await expect(readFile(join(dir, 'spritesheet.webp'))).resolves.toEqual(sheet)
+    const written = JSON.parse(await readFile(join(dir, 'pet.json'), 'utf8'))
+    expect(written.spritesheetPath).toBe('spritesheet.webp')
+  })
+
+  it('ignores a spritesheet path the renderer supplies', async () => {
+    // The renderer never chooses where bytes land; a traversal attempt is simply
+    // overwritten with the name main controls.
+    const result = (await getHandler('pet:createGenerated')(
+      { sender: {} },
+      {
+        sheet: webpVp8x(4, 4),
+        manifest: { ...generatedManifest, spritesheetPath: '../../escaped.webp' },
+        label: 'Escapee'
+      }
+    )) as CustomPet
+
+    expect(result.fileName).toBe('spritesheet.webp')
+    const written = JSON.parse(
+      await readFile(join(userDataDir, 'sidekicks', 'custom', result.id, 'pet.json'), 'utf8')
+    )
+    expect(written.spritesheetPath).toBe('spritesheet.webp')
+  })
+
+  it('refuses a sheet past the import size limit', async () => {
+    const huge = new ArrayBuffer(MAX_BYTES + 1)
+
+    await expect(
+      getHandler('pet:createGenerated')(
+        { sender: {} },
+        { sheet: huge, manifest: generatedManifest, label: 'Huge' }
+      )
+    ).rejects.toThrow(/size/i)
+  })
+
+  it('refuses a sheet that is a number, before it can be turned into 500 MB', async () => {
+    // Why a number: it survives structured clone and `new Uint8Array(n)` treats
+    // it as a length, so the size guard used to run after the allocation.
+    await expect(
+      getHandler('pet:createGenerated')(
+        { sender: {} },
+        { sheet: MAX_BYTES + 1, manifest: generatedManifest, label: 'Balloon' }
+      )
+    ).rejects.toThrow(/invalid/i)
+  })
+
+  it('refuses a payload that is not the shape the channel documents', async () => {
+    for (const request of [
+      undefined,
+      null,
+      'sheet',
+      { manifest: generatedManifest },
+      { sheet: webpVp8x(4, 4), manifest: generatedManifest, label: 7 }
+    ]) {
+      await expect(getHandler('pet:createGenerated')({ sender: {} }, request)).rejects.toThrow(
+        /invalid/i
+      )
+    }
+  })
+
+  it('refuses a manifest that would not survive the bundle importer', async () => {
+    await expect(
+      getHandler('pet:createGenerated')(
+        { sender: {} },
+        {
+          sheet: webpVp8x(4, 4),
+          manifest: { ...generatedManifest, frame: { width: 0, height: 2 } },
+          label: 'Bad'
+        }
+      )
+    ).rejects.toThrow()
+  })
+
+  it('leaves nothing on disk when the sheet does not match the manifest', async () => {
+    await expect(
+      getHandler('pet:createGenerated')(
+        { sender: {} },
+        {
+          // 5x4 is not a clean multiple of a 2x2 frame.
+          sheet: webpVp8x(5, 4),
+          manifest: generatedManifest,
+          label: 'Mismatch'
+        }
+      )
+    ).rejects.toThrow()
+
+    const customDir = join(userDataDir, 'sidekicks', 'custom')
+    const entries = await readdir(customDir).catch(() => [])
+    expect(entries).toEqual([])
+  })
+
+  it('imports an image whose bytes match its name', async () => {
+    const src = join(tempDir, 'real.png')
+    await writeFile(src, Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 1, 2, 3]))
+    showOpenDialogMock.mockResolvedValue({ canceled: false, filePaths: [src] })
+
+    const result = (await getHandler('pet:import')({ sender: {} })) as CustomPet
+
+    expect(result).toMatchObject({ label: 'real', mimeType: 'image/png', kind: 'image' })
+  })
+
+  it('refuses a file that is only named like an image', async () => {
+    // Extension-only validation let anything through under a .png name.
+    const src = join(tempDir, 'not-really.png')
+    await writeFile(src, Buffer.from('MZ   this is an executable', 'latin1'))
+    showOpenDialogMock.mockResolvedValue({ canceled: false, filePaths: [src] })
+
+    await expect(getHandler('pet:import')({ sender: {} })).rejects.toThrow(/image/i)
+  })
+
+  it('leaves nothing on disk when the bytes are refused', async () => {
+    const src = join(tempDir, 'liar.png')
+    await writeFile(src, Buffer.from('not an image at all'))
+    showOpenDialogMock.mockResolvedValue({ canceled: false, filePaths: [src] })
+
+    await expect(getHandler('pet:import')({ sender: {} })).rejects.toThrow()
+
+    const entries = await readdir(join(userDataDir, 'sidekicks', 'custom')).catch(() => [])
+    expect(entries).toEqual([])
   })
 })

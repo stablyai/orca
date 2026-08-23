@@ -26,7 +26,18 @@ function codexPathExecutionNamespace(filePath: string): string {
   return wslPath ? `wsl:${wslPath.distro.toLowerCase()}` : 'native'
 }
 
-/** Returns a pre-parse alias key only when metadata proves a shared hardlink. */
+/**
+ * Returns a pre-parse alias key only when metadata proves a shared hardlink.
+ *
+ * `ino` is only required to be an integer, not a SAFE one: a Windows file id is
+ * a 64-bit NTFS index that routinely exceeds 2^53, so `Stats.ino` arrives
+ * rounded and a safe-integer gate rejects every Windows rollout — killing
+ * dual-root dedup on that host entirely (#7521 regressed there). Both links of
+ * one file round to the same double, so the key still matches aliases; a
+ * rounded collision between two DIFFERENT files cannot merge them here because
+ * the caller's alias key also pins the rollout file name, which carries the
+ * session uuid.
+ */
 export function codexRolloutHardlinkIdentity(file: {
   dev?: number
   ino?: number
@@ -38,7 +49,7 @@ export function codexRolloutHardlinkIdentity(file: {
     typeof ino !== 'number' ||
     typeof nlink !== 'number' ||
     !Number.isSafeInteger(dev) ||
-    !Number.isSafeInteger(ino) ||
+    !Number.isInteger(ino) ||
     !Number.isSafeInteger(nlink) ||
     nlink <= 1 ||
     (dev === 0 && ino === 0)

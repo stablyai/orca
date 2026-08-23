@@ -3,6 +3,7 @@ import type { CustomPet } from '../../../../shared/pet-types'
 import { applyCodexSpriteTimingDefaults } from '../../../../shared/codex-pet-sprite-defaults'
 import { useAppStore } from '../../store'
 import { BUNDLED_PET, findBundledPet, isBundledPetId } from './pet-models'
+import type { BundledPetPoses } from './bundled-pet-pose-sprite'
 import {
   detectedSpriteCache,
   loadCustomBlobUrl,
@@ -16,7 +17,7 @@ import {
 // keep working without knowing about the cache module split.
 export { revokeCustomPetBlobUrl } from './pet-blob-cache'
 
-export type ResolvedPet =
+type ResolvedPetArt =
   | { url: string; ready: boolean; sprite: null; detected: null }
   | {
       url: string
@@ -25,6 +26,11 @@ export type ResolvedPet =
       detected: null
     }
   | { url: string; ready: boolean; sprite: null; detected: DetectedSpriteCacheEntry }
+
+/** `heldUrl` is the optional "picked up" pose. Only bundled pets can ship one —
+ *  the Codex bundle contract has no held row, so imported pets fall back to the
+ *  sway alone. */
+export type ResolvedPet = ResolvedPetArt & { heldUrl?: string; poses?: BundledPetPoses }
 
 /** Resolve the active pet to a URL the overlay can render.
  *
@@ -91,12 +97,19 @@ export function usePetUrl(): ResolvedPet {
       customKind,
       customSpriteFps,
       customHasManifestSprite
-    ).then((url) => {
-      if (cancelled || pendingRef.current !== customId) {
-        return
-      }
-      setCustomUrl(url)
-    })
+    )
+      .then((url) => {
+        if (cancelled || pendingRef.current !== customId) {
+          return
+        }
+        setCustomUrl(url)
+      })
+      // Why: a freshly generated pet is never cached, so it always takes this
+      // read — an IPC rejection here would otherwise be an unhandled rejection.
+      // The overlay is already showing the bundled fallback; log and leave it.
+      .catch((error: unknown) => {
+        console.error('[pet-overlay] could not load custom pet art', error)
+      })
     return () => {
       cancelled = true
     }
@@ -104,7 +117,14 @@ export function usePetUrl(): ResolvedPet {
 
   if (bundled) {
     const pet = findBundledPet(petId) ?? BUNDLED_PET
-    return { url: pet.url, ready: true, sprite: null, detected: null }
+    return {
+      url: pet.url,
+      ready: true,
+      sprite: null,
+      detected: null,
+      heldUrl: pet.heldUrl,
+      poses: pet.poses
+    }
   }
   if (customMeta && customUrl) {
     // Why: guard against manifest entries with zero/negative dims or fps —

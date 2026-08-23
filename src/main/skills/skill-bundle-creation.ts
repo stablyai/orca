@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto'
-import { cp, mkdir, mkdtemp, readFile, rm } from 'node:fs/promises'
+import { cp, mkdir, mkdtemp, readdir, readFile, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import {
@@ -90,12 +90,31 @@ async function stageSkill(input: {
   description: string
 }): Promise<SkillBundleEntry> {
   const stagedDirectory = join(input.skillsRoot, input.name)
-  await cp(input.source.sourceDirectory, stagedDirectory, {
-    recursive: true,
-    verbatimSymlinks: true,
-    force: false,
-    errorOnExist: true
-  })
+  // Why the entries and not the directory itself: copying the directory asks
+  // `cp` to reproduce the source root as a link when the caller reached the
+  // skill through one — a provider junction, say — and Windows refuses to
+  // create a link without Developer Mode or elevation, so staging failed
+  // outright. The root's link-ness is an artifact of how the skill was reached,
+  // not part of the skill: the staged copy is a fresh directory at a fresh path.
+  //
+  // `verbatimSymlinks` still governs everything *inside*, so a link within the
+  // tree is reproduced as a link and never dereferenced. That is the property
+  // worth keeping — it is what stops a link pointing outside the skill from
+  // pulling that content into the bundle. A skill carrying such a link still
+  // cannot be staged on an unprivileged Windows host, which is honest: we
+  // cannot reproduce it, and resolving it would change what ships.
+  //
+  // mkdir without `recursive` keeps the "must not already exist" guarantee the
+  // previous `errorOnExist` gave for the staged root.
+  await mkdir(stagedDirectory)
+  for (const entry of await readdir(input.source.sourceDirectory)) {
+    await cp(join(input.source.sourceDirectory, entry), join(stagedDirectory, entry), {
+      recursive: true,
+      verbatimSymlinks: true,
+      force: false,
+      errorOnExist: true
+    })
+  }
   const stagedObservation = await observeSkillPackage(
     stagedDirectory,
     undefined,

@@ -38,7 +38,12 @@ const child = spawn(
     '--workers=1',
     ...passthroughArgs
   ],
-  { stdio: 'inherit', env }
+  {
+    stdio: 'inherit',
+    env,
+    // Why: Node refuses to spawn a .cmd without a shell. See ensure-native-runtime.
+    shell: process.platform === 'win32'
+  }
 )
 
 child.on('exit', (code, signal) => {

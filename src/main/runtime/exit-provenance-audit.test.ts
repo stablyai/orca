@@ -16,8 +16,15 @@ const HANDLE = 'term_exit_provenance'
 const WORKTREE_ID = 'repo-audit::/tmp/audit'
 
 const directories: string[] = []
+const openDatabases: OrchestrationDb[] = []
 
 afterEach(() => {
+  // Why close before removing: POSIX unlinks a file that is still open, so the
+  // leak was invisible there. Windows refuses, and every case here died on the
+  // cleanup rather than on anything it meant to assert.
+  for (const db of openDatabases.splice(0)) {
+    db.close()
+  }
   for (const directory of directories.splice(0)) {
     rmSync(directory, { recursive: true, force: true })
   }
@@ -26,7 +33,9 @@ afterEach(() => {
 function createDb(): OrchestrationDb {
   const directory = mkdtempSync(join(tmpdir(), 'exit-provenance-'))
   directories.push(directory)
-  return new OrchestrationDb(join(directory, 'orchestration.db'))
+  const db = new OrchestrationDb(join(directory, 'orchestration.db'))
+  openDatabases.push(db)
+  return db
 }
 
 function createRuntime(db: OrchestrationDb): OrcaRuntimeService {

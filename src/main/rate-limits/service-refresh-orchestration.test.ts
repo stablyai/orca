@@ -60,6 +60,13 @@ function serviceInternals(service: RateLimitService): { fetchAll: () => Promise<
   return service as unknown as { fetchAll: () => Promise<void> }
 }
 
+// Why derived rather than written as true: the service turns these off on
+// Windows on purpose — hidden PTYs are less reliable there, and it says so at
+// shouldAllowClaudePtyFallback. These cases are about what gets fetched, not
+// about that policy, so pinning the POSIX value failed them for a reason
+// neither is testing.
+const HOST_ALLOWS_CLAUDE_PTY = process.platform !== 'win32'
+
 describe('RateLimitService', () => {
   beforeEach(() => {
     resetRateLimitProviderMocks()
@@ -388,7 +395,7 @@ describe('RateLimitService', () => {
       expect.objectContaining({
         authPreparation: undefined,
         allowPtyFallback: false,
-        allowUsagePanelSupplement: true,
+        allowUsagePanelSupplement: HOST_ALLOWS_CLAUDE_PTY,
         signal: expect.any(AbortSignal)
       })
     )

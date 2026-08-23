@@ -1,0 +1,70 @@
+import type { RgbaImage } from './pet-image-cutout'
+
+/** Canvas edge of the image pipeline.
+ *
+ *  Deliberately logic-free: everything that decides anything lives in the pure
+ *  modules so it can be tested without a rasteriser. This file only moves pixels
+ *  between a File, an `RgbaImage` and an encoded sheet. */
+
+/** Ceiling on what the pipeline will process.
+ *
+ *  Checked after `createImageBitmap` rather than before, because nothing in the
+ *  renderer reports an image's dimensions without decoding it — the decoder has
+ *  already allocated by the time we look. What the check does stop is
+ *  everything downstream: the width*height*4 RGBA copy on the JS heap and the
+ *  several O(pixels) passes the cutout and resample make over it. The file came
+ *  from the user's own picker, so this is a hang guard, not a security boundary. */
+export const MAX_SOURCE_PIXELS = 4096 * 4096
+
+export async function decodeImageFile(file: Blob): Promise<RgbaImage> {
+  const bitmap = await createImageBitmap(file)
+  try {
+    if (bitmap.width * bitmap.height > MAX_SOURCE_PIXELS) {
+      throw new Error('Image is too large to turn into a pet.')
+    }
+    const canvas = new OffscreenCanvas(bitmap.width, bitmap.height)
+    const context = canvas.getContext('2d', { willReadFrequently: true })
+    if (!context) {
+      throw new Error('Could not read the image.')
+    }
+    context.imageSmoothingEnabled = false
+    context.drawImage(bitmap, 0, 0)
+    const { data, width, height } = context.getImageData(0, 0, bitmap.width, bitmap.height)
+    return { data, width, height }
+  } finally {
+    bitmap.close()
+  }
+}
+
+function toCanvas(image: RgbaImage): OffscreenCanvas {
+  const canvas = new OffscreenCanvas(image.width, image.height)
+  const context = canvas.getContext('2d')
+  if (!context) {
+    throw new Error('Could not draw the generated sheet.')
+  }
+  // Why: `RgbaImage` allows any ArrayBufferLike, but ImageData insists on a plain
+  // ArrayBuffer. Copy rather than cast — a SharedArrayBuffer really would fail here.
+  const pixels = new Uint8ClampedArray(image.width * image.height * 4)
+  pixels.set(image.data)
+  context.putImageData(new ImageData(pixels, image.width, image.height), 0, 0)
+  return canvas
+}
+
+/** Encodes losslessly: the sheet is already quantised by the pipeline, and a
+ *  lossy pass would reintroduce the halos the cutout just removed. */
+export async function encodeSheetToWebp(sheet: RgbaImage): Promise<ArrayBuffer> {
+  const blob = await toCanvas(sheet).convertToBlob({ type: 'image/webp', quality: 1 })
+  return blob.arrayBuffer()
+}
+
+/** Any pixel buffer as a data URL — the generated sheet, or the upload the
+ *  user is framing. */
+export async function imageToDataUrl(image: RgbaImage): Promise<string> {
+  const blob = await toCanvas(image).convertToBlob({ type: 'image/webp', quality: 1 })
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onload = () => resolve(String(reader.result))
+    reader.onerror = () => reject(new Error('Could not preview the generated sheet.'))
+    reader.readAsDataURL(blob)
+  })
+}

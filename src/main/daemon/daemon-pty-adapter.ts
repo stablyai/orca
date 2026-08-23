@@ -2866,6 +2866,10 @@ export class DaemonPtyAdapter implements IPtyProvider {
     this.removeEventListener = null
     this.client.disconnect()
     const releaseAdoptionLease = await this.respawnFn!(reason)
+    // Why: anything that started dialing while the daemon was being replaced is still
+    // aimed at the endpoint that just died, so its failure must not stand in for the
+    // daemon now listening — nor fork a second respawn on top of this one.
+    this.client.retireInFlightConnectAttempt()
     if (this.respawnAdoptionClosed) {
       // Why: app teardown may win mid-respawn; a late result must not reinstall a lease nobody owns.
       releaseAdoptionLease?.()

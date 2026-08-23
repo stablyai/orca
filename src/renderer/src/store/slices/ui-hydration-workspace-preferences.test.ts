@@ -336,6 +336,28 @@ describe('createUISlice hydratePersistedUI', () => {
     expect(store.getState().browserKagiSessionLink).toBeNull()
   })
 
+  it('defaults the pet behaviour toggles on when the profile predates them', () => {
+    const store = createUIStore()
+
+    store
+      .getState()
+      .hydratePersistedUI(makePersistedUI({ petWalks: undefined, petReturnsToLane: undefined }))
+
+    expect(store.getState().petWalks).toBe(true)
+    expect(store.getState().petReturnsToLane).toBe(true)
+  })
+
+  it('hydrates the pet behaviour toggles the user turned off', () => {
+    const store = createUIStore()
+
+    store
+      .getState()
+      .hydratePersistedUI(makePersistedUI({ petWalks: false, petReturnsToLane: false }))
+
+    expect(store.getState().petWalks).toBe(false)
+    expect(store.getState().petReturnsToLane).toBe(false)
+  })
+
   it('hydrates legacy sidekick persisted keys into pet state', () => {
     const store = createUIStore()
 
