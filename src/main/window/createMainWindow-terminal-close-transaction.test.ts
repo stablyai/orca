@@ -146,6 +146,38 @@ describe('main window terminal close transaction', () => {
     ])
   })
 
+  it('ignores a stale transfer fence after cancel while a retry proceeds', async () => {
+    const { ipcHandlers, webContents, windowHandlers } = createFixture()
+    let releaseFirstFence: () => void = () => {}
+    const firstFence = new Promise<void>((resolve) => {
+      releaseFirstFence = resolve
+    })
+    const options = transactionOptions({
+      fenceTerminalTransfersForWindowClose: vi
+        .fn()
+        .mockImplementationOnce(() => firstFence)
+        .mockResolvedValue(undefined)
+    })
+    createMainWindow(null, options)
+
+    windowHandlers.close({ preventDefault: vi.fn() })
+    await vi.waitFor(() =>
+      expect(options.fenceTerminalTransfersForWindowClose).toHaveBeenCalledOnce()
+    )
+    ipcHandlers['window:cancel-close']?.({ sender: webContents })
+    ipcHandlers['window:request-close']?.({ sender: webContents })
+    await vi.waitFor(() => expect(stageCloseAuthority).toHaveBeenCalledOnce())
+
+    releaseFirstFence()
+    await firstFence
+    await Promise.resolve()
+
+    expect(stageCloseAuthority).toHaveBeenCalledOnce()
+    expect(
+      webContents.send.mock.calls.filter(([channel]) => channel === 'window:close-requested')
+    ).toHaveLength(1)
+  })
+
   it('blocks final confirmation while durable terminal membership remains', async () => {
     const { instance, ipcHandlers, webContents, windowHandlers } = createFixture()
     const store = createStore()

@@ -1007,6 +1007,7 @@ export function createMainWindow(
   // Intercept close so the renderer can confirm killing running-process terminals (replies window:confirm-close to proceed).
   let windowCloseConfirmed = false
   let windowCloseRequestActive = false
+  let windowCloseTransactionGeneration = 0
   const confirmCloseChannel = 'window:confirm-close'
   const cancelCloseChannel = 'window:cancel-close'
   const closeRequestReceivedChannel = 'window:close-request-received'
@@ -1049,6 +1050,7 @@ export function createMainWindow(
     opts?.releaseTerminalTransferWindowCloseFence?.(mainWindow.id)
   }
   const endWindowCloseTransaction = (): void => {
+    windowCloseTransactionGeneration += 1
     releaseWindowCloseTransactionFence()
     clearPtyRendererCloseAuthority(rendererWebContentsId)
   }
@@ -1097,15 +1099,25 @@ export function createMainWindow(
         return
       }
       windowCloseRequestActive = true
+      const transactionGeneration = ++windowCloseTransactionGeneration
       try {
         if (opts?.fenceTerminalTransfersForWindowClose) {
           await opts.fenceTerminalTransfersForWindowClose(mainWindow.id)
         }
       } catch {
-        endWindowCloseTransaction()
+        if (transactionGeneration === windowCloseTransactionGeneration) {
+          endWindowCloseTransaction()
+        }
         return
       }
-      if (mainWindow.isDestroyed() || mainWindow.webContents.isDestroyed?.() === true) {
+      if (transactionGeneration !== windowCloseTransactionGeneration || !windowCloseRequestActive) {
+        return
+      }
+      if (
+        mainWindow.isDestroyed() ||
+        mainWindow.webContents.isDestroyed?.() === true ||
+        opts?.getIsQuitting?.() === true
+      ) {
         endWindowCloseTransaction()
         return
       }

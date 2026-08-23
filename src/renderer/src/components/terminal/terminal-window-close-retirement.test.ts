@@ -170,6 +170,66 @@ describe('terminal window close retirement', () => {
     expect(routed).toEqual(['secondary-pty'])
   })
 
+  it('retires remote-only durable membership before checkpoint and confirmation', async () => {
+    const state = makeState({})
+    let durableSession: WorkspaceSessionState = {
+      activeRepoId: null,
+      activeWorktreeId: null,
+      activeTabId: null,
+      tabsByWorktree: {},
+      terminalLayoutsByTabId: {},
+      remoteSessionIdsByTabId: { 'remote-only-tab': 'ssh:connection-a@@pty-a' }
+    }
+    const events: string[] = []
+    const deps = makeDependencies(state, {
+      getWindowSessionState: async () => durableSession,
+      listOwnedProviderPtyIds: async () => ['ssh:connection-a@@pty-a'],
+      closeTab: (_tabId, options) => {
+        expect(options.precomputedRetirementPlan).toMatchObject({
+          ptyIds: ['ssh:connection-a@@pty-a'],
+          localOrSshPtyIds: ['ssh:connection-a@@pty-a'],
+          runtimeTerminals: [],
+          cleanupOnlyPtyIds: [],
+          unroutablePtyIds: []
+        })
+        events.push('close:ssh:connection-a@@pty-a')
+      },
+      persistRetiredSessionTabs: async (plans) => {
+        const plan = plans[0]
+        if (!plan) {
+          events.push('persist:missing')
+          return
+        }
+        durableSession = closeTerminalTabInWorkspaceSession(
+          durableSession,
+          plan.worktreeId ?? '',
+          plan.tabId
+        ).session
+        events.push(
+          `persist:${Object.hasOwn(durableSession.remoteSessionIdsByTabId ?? {}, 'remote-only-tab')}`
+        )
+      },
+      dispatchBeforeUnload: () => {
+        events.push(
+          `checkpoint:${Object.hasOwn(durableSession.remoteSessionIdsByTabId ?? {}, 'remote-only-tab')}`
+        )
+        return true
+      },
+      confirmWindowClose: () => {
+        events.push('confirm')
+      }
+    })
+
+    await expect(retireWindowTerminalTabsAndConfirmClose(deps)).resolves.toBe('confirmed')
+
+    expect(events).toEqual([
+      'close:ssh:connection-a@@pty-a',
+      'persist:false',
+      'checkpoint:false',
+      'confirm'
+    ])
+  })
+
   it('retires renderer-owned layout backing after its durable tab row is lost', async () => {
     const state = makeState({})
     const events: string[] = []

@@ -13,6 +13,7 @@ import { ORCA_RENDERER_UNLOAD_PREVENTED_EVENT } from '../../../../shared/rendere
 import { getWorkspaceSessionPersistenceHostId } from '../../../../shared/workspace-session-persistence-host'
 import { closeTerminalTabInWorkspaceSession } from '../../../../shared/workspace-session-terminal-tab-close'
 import type { WorkspaceSessionState } from '../../../../shared/workspace-session-state-types'
+import { collectWindowSessionTerminalTabIds } from '../../../../shared/window-session-terminal-membership'
 import {
   LOCAL_EXECUTION_HOST_ID,
   toRuntimeExecutionHostId,
@@ -112,20 +113,14 @@ async function persistRetiredSessionTabs(
 }
 
 function snapshotTerminalTabIds(state: WindowTerminalCloseState): string[] {
-  const ids = new Set(
-    Object.values(state.tabsByWorktree).flatMap((tabs) => tabs.map((tab) => tab.id))
-  )
-  for (const tabs of Object.values(state.unifiedTabsByWorktree)) {
-    for (const tab of tabs) {
-      if (tab.contentType === 'terminal') {
-        ids.add(tab.entityId)
-      }
-    }
-  }
-  for (const tabId of Object.keys(state.terminalLayoutsByTabId)) {
-    ids.add(tabId)
-  }
-  return [...ids]
+  return [
+    ...collectWindowSessionTerminalTabIds({
+      tabsByWorktree: state.tabsByWorktree,
+      unifiedTabs: state.unifiedTabsByWorktree,
+      terminalLayoutsByTabId: state.terminalLayoutsByTabId,
+      remoteSessionIdsByTabId: state.lastKnownRelayPtyIdByTabId
+    })
+  ]
 }
 
 function mergeWindowTerminalState(

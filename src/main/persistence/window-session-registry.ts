@@ -8,6 +8,7 @@ import type {
   WorkspaceSessionPatch,
   WorkspaceSessionState
 } from '../../shared/workspace-session-state-types'
+import { collectWindowSessionTerminalTabIds } from '../../shared/window-session-terminal-membership'
 import type { Store } from '../persistence'
 import { orcaWindowManager, type OrcaWindowManager } from '../window/orca-window-manager'
 import { mergeWindowSessions } from './window-session-merge'
@@ -101,20 +102,7 @@ export class WindowSessionRegistry {
       if (record.retired) {
         continue
       }
-      if (Object.values(record.state.tabsByWorktree).some((tabs) => tabs.length > 0)) {
-        return true
-      }
-      if (
-        Object.values(record.state.unifiedTabs ?? {}).some((tabs) =>
-          tabs.some((tab) => tab.contentType === 'terminal')
-        )
-      ) {
-        return true
-      }
-      if (
-        Object.keys(record.state.terminalLayoutsByTabId).length > 0 ||
-        Object.keys(record.state.remoteSessionIdsByTabId ?? {}).length > 0
-      ) {
+      if (collectWindowSessionTerminalTabIds(record.state).size > 0) {
         return true
       }
     }
