@@ -148,6 +148,21 @@ describe('OrcaWindowManager', () => {
     expect(manager.getControlWindow()).toBe(fallback)
   })
 
+  it('keeps fresh registrations secondary until the active transition elects them', () => {
+    const manager = new OrcaWindowManager()
+    const control = makeWindow(1, { x: 0, y: 0, width: 800, height: 600 })
+    const reopened = makeWindow(2, { x: 800, y: 0, width: 800, height: 600 })
+    manager.register(control as never, 'control')
+    const token = manager.beginControlTransition(control.id)
+
+    manager.remove(control.id)
+    manager.register(reopened as never)
+
+    expect(manager.getControlWindow()).toBeNull()
+    expect(manager.getRole(reopened.id)).toBe('secondary')
+    expect(manager.electControlDuringTransition(token!)).toBe(reopened)
+  })
+
   it('uses the lowest window id when no focus order distinguishes candidates', () => {
     const manager = new OrcaWindowManager()
     const later = makeWindow(9, { x: 0, y: 0, width: 800, height: 600 })

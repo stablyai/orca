@@ -8,7 +8,7 @@ type ControlWindowHandoffOptions = {
   onWindowClosed: () => void
   fenceAndSettleTransfers?: () => Promise<void>
   markGraphUnavailable?: (windowId: number) => void
-  attachRuntimeWindow?: (window: BrowserWindow) => void
+  attachRuntimeWindow?: (window: BrowserWindow) => boolean
   releaseTransferFence?: () => void
   onHandoff: (window: BrowserWindow) => void
   onVacated: () => void
@@ -30,7 +30,9 @@ export function bindControlWindowHandoff(
     options.markGraphUnavailable?.(controlWindow.id)
     if (promoted) {
       try {
-        options.attachRuntimeWindow?.(promoted)
+        if (options.attachRuntimeWindow?.(promoted) === false) {
+          throw new Error('runtime_authority_rejected_control')
+        }
         options.onHandoff(promoted)
         return true
       } catch {

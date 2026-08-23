@@ -1537,6 +1537,10 @@ function openMainWindow(options: { revealOnDidFinishLoad?: boolean } = {}): Brow
       ? { marketplace: pluginMarketplaceService, installer: pluginMarketplaceInstaller }
       : undefined
   )
+  if (orcaWindowManager.getRole(window.id) !== 'control') {
+    loadMainWindow(window)
+    return window
+  }
   automations.setWebContents(window.webContents)
   automations.start()
   const attachControlServices = (

@@ -25,7 +25,9 @@ export class OrcaWindowManager {
       existing.window = window
       return
     }
-    const resolvedRole = role ?? (this.getControlWindow() ? 'secondary' : 'control')
+    const resolvedRole = this.#activeControlTransition
+      ? 'secondary'
+      : (role ?? (this.getControlWindow() ? 'secondary' : 'control'))
     this.#windows.set(window.id, { window, role: resolvedRole, focusedAt: 0 })
     if (resolvedRole === 'control') {
       this.#demoteControl()

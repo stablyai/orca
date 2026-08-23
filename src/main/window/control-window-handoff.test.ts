@@ -37,7 +37,6 @@ describe('control window handoff', () => {
     const control = makeWindow(1)
     const candidate = makeWindow(2)
     manager.register(control.window as never, 'control')
-    manager.register(candidate.window as never, 'secondary')
     wireRemoval(manager, control)
     const calls: string[] = []
     let settle!: () => void
@@ -54,7 +53,10 @@ describe('control window handoff', () => {
         return transfersSettled
       },
       markGraphUnavailable: () => calls.push('graph-unavailable:1'),
-      attachRuntimeWindow: (window) => calls.push(`runtime-attached:${window.id}`),
+      attachRuntimeWindow: (window) => {
+        calls.push(`runtime-attached:${window.id}`)
+        return true
+      },
       onHandoff: (window) => calls.push(`services-attached:${window.id}`),
       releaseTransferFence: () => calls.push('release-transfers'),
       onVacated: () => calls.push('vacated')
@@ -63,6 +65,9 @@ describe('control window handoff', () => {
     control.close()
     await Promise.resolve()
     expect(calls).toEqual(['fence-transfers'])
+    manager.register(candidate.window as never)
+    expect(manager.getRole(candidate.window.id)).toBe('secondary')
+    expect(manager.getControlWindow()).toBeNull()
 
     settle()
     await vi.waitFor(() => expect(calls).toContain('release-transfers'))
@@ -184,6 +189,41 @@ describe('control window handoff', () => {
     expect(releaseTransferFence).not.toHaveBeenCalled()
   })
 
+  it('does not promote or release a fresh window when quit begins during transfer settle', async () => {
+    const manager = new OrcaWindowManager()
+    const control = makeWindow(1)
+    const reopened = makeWindow(2)
+    manager.register(control.window as never, 'control')
+    wireRemoval(manager, control)
+    let quitting = false
+    let settle!: () => void
+    const transfersSettled = new Promise<void>((resolve) => {
+      settle = resolve
+    })
+    const releaseTransferFence = vi.fn()
+    const onVacated = vi.fn()
+    bindControlWindowHandoff(control.window as never, {
+      windows: manager,
+      isCurrentControl: () => true,
+      getIsQuitting: () => quitting,
+      onWindowClosed: vi.fn(),
+      fenceAndSettleTransfers: () => transfersSettled,
+      releaseTransferFence,
+      onHandoff: vi.fn(),
+      onVacated
+    })
+
+    control.close()
+    manager.register(reopened.window as never)
+    quitting = true
+    settle()
+    await vi.waitFor(() => expect(onVacated).toHaveBeenCalledOnce())
+
+    expect(manager.getControlWindow()).toBeNull()
+    expect(manager.getRole(reopened.window.id)).toBe('secondary')
+    expect(releaseTransferFence).not.toHaveBeenCalled()
+  })
+
   it('vacates a failed promotion and keeps the replacement graph unavailable', async () => {
     const manager = new OrcaWindowManager()
     const control = makeWindow(1)
@@ -241,9 +281,7 @@ describe('control window handoff', () => {
       onWindowClosed: vi.fn(),
       fenceAndSettleTransfers: () => Promise.resolve(),
       markGraphUnavailable: vi.fn(),
-      attachRuntimeWindow: () => {
-        throw new Error('runtime attach failed')
-      },
+      attachRuntimeWindow: () => false,
       onHandoff: vi.fn(),
       onVacated
     })

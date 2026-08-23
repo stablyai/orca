@@ -176,7 +176,7 @@ function createStore(): Store & { flushPendingAsync: MockFn } {
 
 function createRuntime(): RuntimeStub {
   return {
-    attachWindow: vi.fn(),
+    attachWindow: vi.fn(() => true),
     setNotifier: vi.fn(),
     markRendererReloading: vi.fn(),
     markRendererReloadCancelled: vi.fn(),
@@ -274,6 +274,25 @@ describe('attachMainWindowServices', () => {
     )
 
     expect(onControlServicesAttached).toHaveBeenCalledOnce()
+  })
+
+  it('rejects control singleton binding when runtime authority belongs to another window', () => {
+    const runtime = createRuntime()
+    runtime.attachWindow.mockReturnValue(false)
+    const onControlServicesAttached = vi.fn()
+
+    expect(() =>
+      attachMainWindowServices(
+        createMainWindow() as never,
+        createStore(),
+        runtime as never,
+        undefined,
+        undefined,
+        { onControlServicesAttached }
+      )
+    ).toThrow('Runtime authority rejected control window 1')
+    expect(onControlServicesAttached).not.toHaveBeenCalled()
+    expect(registerPtyHandlersMock).not.toHaveBeenCalled()
   })
 
   it('reloads the app renderer through main and marks expected renderer teardown', async () => {

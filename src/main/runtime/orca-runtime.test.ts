@@ -2549,10 +2549,17 @@ describe('OrcaRuntimeService', () => {
   it('claims the first window as authoritative and ignores later windows', () => {
     const runtime = createRuntime()
 
-    runtime.attachWindow(TEST_WINDOW_ID)
-    runtime.attachWindow(2)
+    expect(runtime.attachWindow(TEST_WINDOW_ID)).toBe(true)
+    expect(runtime.attachWindow(2)).toBe(false)
 
     expect(runtime.getStatus().authoritativeWindowId).toBe(TEST_WINDOW_ID)
+    runtime.markGraphUnavailable(TEST_WINDOW_ID)
+    expect(runtime.attachWindow(2)).toBe(true)
+    runtime.syncWindowGraph(2, { tabs: [], leaves: [] })
+    runtime.markGraphUnavailable(2)
+    expect(runtime.attachWindow(3)).toBe(true)
+    runtime.syncWindowGraph(3, { tabs: [], leaves: [] })
+    expect(runtime.getStatus()).toMatchObject({ authoritativeWindowId: 3, graphStatus: 'ready' })
   })
 
   it('rejects desktop graph publication until a window is explicitly attached', () => {
@@ -2599,11 +2606,16 @@ describe('OrcaRuntimeService', () => {
         ptyId
       }))
     })
+    const terminalSizes = new Map(terminals.map(({ ptyId }) => [ptyId, { cols: 120, rows: 30 }]))
+    const resize = vi.fn((ptyId: string, cols: number, rows: number) => {
+      terminalSizes.set(ptyId, { cols, rows })
+      return true
+    })
     runtime.setPtyController({
       write: () => true,
       kill: () => true,
-      resize: () => true,
-      getSize: () => ({ cols: 120, rows: 30 }),
+      resize,
+      getSize: (ptyId) => terminalSizes.get(ptyId) ?? null,
       getForegroundProcess: async () => null
     })
     for (const terminal of terminals) {
@@ -2621,6 +2633,11 @@ describe('OrcaRuntimeService', () => {
     }
 
     runtime.syncWindowGraph(TEST_WINDOW_ID, graphFor([terminals[2]!]))
+    resize.mockClear()
+    await expect(
+      runtime.updateMobileViewport(localPtyId, 'phone-1', { cols: 55, rows: 22 })
+    ).resolves.toEqual({ updated: true, applied: false })
+    expect(resize).not.toHaveBeenCalled()
 
     for (const ptyId of [localPtyId, sshPtyId]) {
       expect(runtime.getDriver(ptyId)).toEqual({ kind: 'idle' })
@@ -2633,13 +2650,79 @@ describe('OrcaRuntimeService', () => {
     expect(runtime.getStatus().liveLeafCount).toBe(1)
 
     runtime.syncWindowGraph(TEST_WINDOW_ID, graphFor(terminals))
+    await vi.waitFor(() => expect(terminalSizes.get(localPtyId)).toEqual({ cols: 55, rows: 22 }))
 
     for (const ptyId of [localPtyId, sshPtyId, siblingPtyId]) {
       expect(runtime.getDriver(ptyId)).toEqual({ kind: 'mobile', clientId: 'phone-1' })
       expect(runtime.isRemoteDesktopViewerOwner(ptyId, 'viewer-1')).toBe(true)
       expect(runtime.getAllTerminalFitOverrides().has(ptyId)).toBe(true)
     }
+    expect(runtime.getAllTerminalFitOverrides().get(localPtyId)).toMatchObject({
+      cols: 55,
+      rows: 22
+    })
     expect(runtime.getStatus().liveLeafCount).toBe(3)
+  })
+
+  it('replays the latest parked SSH desktop viewer viewport on exact re-entry', async () => {
+    const runtime = createRuntime()
+    const ptyId = 'ssh:ssh-1@@remote-pty'
+    const graph = {
+      tabs: [
+        {
+          tabId: 'tab-ssh',
+          worktreeId: TEST_WORKTREE_ID,
+          title: 'SSH',
+          activeLeafId: 'leaf-ssh',
+          layout: null
+        }
+      ],
+      leaves: [
+        {
+          tabId: 'tab-ssh',
+          worktreeId: TEST_WORKTREE_ID,
+          leafId: 'leaf-ssh',
+          paneRuntimeId: 1,
+          ptyId
+        }
+      ]
+    }
+    let size = { cols: 120, rows: 30 }
+    const resize = vi.fn((_ptyId: string, cols: number, rows: number) => {
+      size = { cols, rows }
+      return true
+    })
+    runtime.setPtyController({
+      write: () => true,
+      kill: () => true,
+      resize,
+      getSize: () => size,
+      getForegroundProcess: async () => null
+    })
+    runtime.registerPty(ptyId, TEST_WORKTREE_ID, 'ssh-1', {
+      tabId: 'tab-ssh',
+      leafId: 'leaf-ssh',
+      incarnationId: 'ssh:v1'
+    })
+    runtime.attachWindow(TEST_WINDOW_ID)
+    runtime.syncWindowGraph(TEST_WINDOW_ID, graph)
+    await runtime.updateRemoteDesktopViewer(ptyId, 'viewer-1', 'desktop-1', 100, 30)
+
+    runtime.syncWindowGraph(TEST_WINDOW_ID, { tabs: [], leaves: [] })
+    resize.mockClear()
+    await expect(
+      runtime.updateRemoteDesktopViewer(ptyId, 'viewer-1', 'desktop-1', 80, 24)
+    ).resolves.toBe(true)
+    expect(resize).not.toHaveBeenCalled()
+    runtime.syncWindowGraph(TEST_WINDOW_ID, graph)
+
+    await vi.waitFor(() => expect(size).toEqual({ cols: 80, rows: 24 }))
+    expect(runtime.isRemoteDesktopViewerOwner(ptyId, 'viewer-1')).toBe(true)
+    expect(runtime.getAllTerminalFitOverrides().get(ptyId)).toEqual({
+      mode: 'remote-desktop-fit',
+      cols: 80,
+      rows: 24
+    })
   })
 
   it('does not restore terminal claims whose streams close while graph-parked', async () => {
@@ -2685,10 +2768,16 @@ describe('OrcaRuntimeService', () => {
     runtime.syncWindowGraph(TEST_WINDOW_ID, { tabs: [], leaves: [] })
     runtime.handleMobileUnsubscribe(ptyId, 'phone-1')
     await runtime.unregisterRemoteDesktopViewer(ptyId, 'viewer-1')
+    runtime.onPtySpawned(ptyId, 'local:v2', { awaitsRegistration: false })
+    await runtime.handleMobileSubscribe(ptyId, 'phone-2', { cols: 55, rows: 22 })
+    await runtime.updateRemoteDesktopViewer(ptyId, 'viewer-2', 'desktop-2', 90, 25)
+    runtime.handleMobileUnsubscribe(ptyId, 'phone-2')
+    await runtime.unregisterRemoteDesktopViewer(ptyId, 'viewer-2')
     runtime.syncWindowGraph(TEST_WINDOW_ID, graph)
 
     expect(runtime.getDriver(ptyId)).toEqual({ kind: 'idle' })
     expect(runtime.isRemoteDesktopViewerOwner(ptyId, 'viewer-1')).toBe(false)
+    expect(runtime.isRemoteDesktopViewerOwner(ptyId, 'viewer-2')).toBe(false)
   })
 
   it('does not restore graph-parked claims onto a replacement incarnation', async () => {
@@ -2738,6 +2827,70 @@ describe('OrcaRuntimeService', () => {
     expect(runtime.getDriver(ptyId)).toEqual({ kind: 'idle' })
     expect(runtime.isRemoteDesktopViewerOwner(ptyId, 'viewer-1')).toBe(false)
   })
+
+  it.each([
+    ['local', 'reused-pty', null],
+    ['SSH', 'ssh:ssh-1@@reused-pty', 'ssh-1']
+  ])(
+    'restores new %s subscriptions without reviving parked prior-incarnation claims',
+    async (_label, ptyId, connectionId) => {
+      const runtime = createRuntime()
+      const graph = {
+        tabs: [
+          {
+            tabId: 'tab-reused',
+            worktreeId: TEST_WORKTREE_ID,
+            title: 'Reused',
+            activeLeafId: 'leaf-reused',
+            layout: null
+          }
+        ],
+        leaves: [
+          {
+            tabId: 'tab-reused',
+            worktreeId: TEST_WORKTREE_ID,
+            leafId: 'leaf-reused',
+            paneRuntimeId: 1,
+            ptyId
+          }
+        ]
+      }
+      let size = { cols: 120, rows: 30 }
+      const resize = vi.fn((_ptyId: string, cols: number, rows: number) => {
+        size = { cols, rows }
+        return true
+      })
+      runtime.setPtyController({
+        write: () => true,
+        kill: () => true,
+        resize,
+        getSize: () => size,
+        getForegroundProcess: async () => null
+      })
+      runtime.registerPty(ptyId, TEST_WORKTREE_ID, connectionId, {
+        tabId: 'tab-reused',
+        leafId: 'leaf-reused',
+        incarnationId: 'v1'
+      })
+      runtime.attachWindow(TEST_WINDOW_ID)
+      runtime.syncWindowGraph(TEST_WINDOW_ID, graph)
+      await runtime.handleMobileSubscribe(ptyId, 'phone-v1', { cols: 45, rows: 20 })
+      await runtime.updateRemoteDesktopViewer(ptyId, 'viewer-v1', 'desktop-v1', 100, 30)
+
+      runtime.syncWindowGraph(TEST_WINDOW_ID, { tabs: [], leaves: [] })
+      runtime.onPtySpawned(ptyId, 'v2', { awaitsRegistration: false })
+      resize.mockClear()
+      await runtime.handleMobileSubscribe(ptyId, 'phone-v2', { cols: 60, rows: 25 })
+      await runtime.updateRemoteDesktopViewer(ptyId, 'viewer-v2', 'desktop-v2', 90, 25)
+      expect(resize).not.toHaveBeenCalled()
+      runtime.syncWindowGraph(TEST_WINDOW_ID, graph)
+
+      await vi.waitFor(() => expect(size).toEqual({ cols: 60, rows: 25 }))
+      expect(runtime.getDriver(ptyId)).toEqual({ kind: 'mobile', clientId: 'phone-v2' })
+      expect(runtime.isRemoteDesktopViewerOwner(ptyId, 'viewer-v2')).toBe(true)
+      expect(runtime.isRemoteDesktopViewerOwner(ptyId, 'viewer-v1')).toBe(false)
+    }
+  )
 
   it('transfers authority from the headless sentinel to the first real window', () => {
     const runtime = createRuntime()

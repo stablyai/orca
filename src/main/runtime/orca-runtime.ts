@@ -2926,6 +2926,19 @@ type TerminalFitOverride = {
   clientId: string
 }
 
+type ParkedTerminalGraphClaim = {
+  worktreeId: string
+  connectionId: string | null
+  incarnationId: string | null
+  lifecycleGeneration: number
+  mobileClaimed: boolean
+  mobileFitOverride: TerminalFitOverride | null
+  mobileRegistrations: Map<string, unknown>
+  remoteDesktopOwner: string | null
+  remoteDesktopHostReclaimTarget: { cols: number; rows: number } | null
+  remoteDesktopRegistrations: Map<string, unknown>
+}
+
 // Why: per-PTY layout target — what the PTY *should* be at right now.
 // `desktop` ⇒ runs at the desktop renderer's pane geometry; mobile passive
 // watchers (mode='desktop') still receive scrollback. `phone` ⇒ runs at
@@ -3467,19 +3480,7 @@ export class OrcaRuntimeService {
   // Why: a completed host reclaim must not consume the cache if a newer
   // viewer mutation landed while that serialized layout was in flight.
   private remoteDesktopViewerRevisions = new Map<string, number>()
-  private parkedTerminalGraphClaims = new Map<
-    string,
-    {
-      worktreeId: string
-      connectionId: string | null
-      incarnationId: string | null
-      lifecycleGeneration: number
-      mobileClaimed: boolean
-      mobileFitOverride: TerminalFitOverride | null
-      remoteDesktopOwner: string | null
-      remoteDesktopHostReclaimTarget: { cols: number; rows: number } | null
-    }
-  >()
+  private parkedTerminalGraphClaims = new Map<string, ParkedTerminalGraphClaim>()
 
   // Why: resubscribe-grace window. When the last mobile subscriber for a
   // PTY unsubscribes, we hold the driver=mobile{clientId} state and the
@@ -6642,13 +6643,13 @@ export class OrcaRuntimeService {
     return this.emulatorBridge
   }
 
-  attachWindow(windowId: number): void {
+  attachWindow(windowId: number): boolean {
     if (this.authoritativeWindowId === HEADLESS_RUNTIME_WINDOW_ID) {
       if (
         this.pendingHeadlessPromotionWindowId !== null &&
         windowId !== this.pendingHeadlessPromotionWindowId
       ) {
-        return
+        return false
       }
       // Why: promotion is a renderer reload of the same graph owner, not a new
       // runtime; stale handles must transition before the real window publishes.
@@ -6656,7 +6657,7 @@ export class OrcaRuntimeService {
       this.pendingHeadlessPromotionWindowId = windowId
       this.authoritativeWindowId = windowId
       this.beginGraphReload(windowId)
-      return
+      return true
     }
     if (this.authoritativeWindowId === null) {
       // Why: a promoted serve can close and later reopen its window while new
@@ -6664,6 +6665,7 @@ export class OrcaRuntimeService {
       this.persistWindowlessPtyBindingsForDesktopAttach()
       this.authoritativeWindowId = windowId
     }
+    return this.authoritativeWindowId === windowId
   }
 
   private persistWindowlessPtyBindingsForDesktopAttach(): void {
@@ -7018,8 +7020,10 @@ export class OrcaRuntimeService {
         lifecycleGeneration: this.getPtyLifecycleGeneration(ptyId),
         mobileClaimed: driver.kind === 'mobile',
         mobileFitOverride: this.terminalFitOverrides.get(ptyId) ?? null,
+        mobileRegistrations: new Map<string, unknown>(this.mobileSubscribers.get(ptyId)),
         remoteDesktopOwner: this.remoteDesktopOwners.get(ptyId) ?? null,
-        remoteDesktopHostReclaimTarget: this.remoteDesktopHostReclaimTargets.get(ptyId) ?? null
+        remoteDesktopHostReclaimTarget: this.remoteDesktopHostReclaimTargets.get(ptyId) ?? null,
+        remoteDesktopRegistrations: new Map<string, unknown>(this.remoteDesktopViewers.get(ptyId))
       })
       this.terminalFitOverrides.delete(ptyId)
       this.remoteDesktopOwners.delete(ptyId)
@@ -7042,8 +7046,7 @@ export class OrcaRuntimeService {
         this.getPtyLifecycleGeneration(ptyId) === parked.lifecycleGeneration
       this.parkedTerminalGraphClaims.delete(ptyId)
       if (!exactIdentity) {
-        this.mobileSubscribers.delete(ptyId)
-        this.remoteDesktopViewers.delete(ptyId)
+        this.retireParkedTerminalRegistrations(ptyId, parked)
         this.remoteDesktopViewerRevisions.delete(ptyId)
         this.notifyRemoteTerminalViewPresenceChanged(ptyId)
         continue
@@ -7067,7 +7070,39 @@ export class OrcaRuntimeService {
         }
         this.bumpRemoteDesktopViewerRevision(ptyId)
       }
+      const mobileViewport = actor ? mobile?.get(actor.clientId)?.viewport : null
+      if (actor && mobileViewport && this.getMobileDisplayMode(ptyId) !== 'desktop') {
+        const viewport = clampTerminalViewport(mobileViewport.cols, mobileViewport.rows)
+        void this.enqueueLayout(ptyId, {
+          kind: 'phone',
+          ...viewport,
+          ownerClientId: actor.clientId
+        })
+      } else if (this.remoteDesktopOwners.has(ptyId)) {
+        void this.applyRemoteDesktopLayout(ptyId)
+      }
       this.notifyRemoteTerminalViewPresenceChanged(ptyId)
+    }
+  }
+
+  private retireParkedTerminalRegistrations(ptyId: string, parked: ParkedTerminalGraphClaim): void {
+    const mobile = this.mobileSubscribers.get(ptyId)
+    for (const [clientId, registration] of parked.mobileRegistrations) {
+      if (mobile?.get(clientId) === registration) {
+        mobile?.delete(clientId)
+      }
+    }
+    if (mobile?.size === 0) {
+      this.mobileSubscribers.delete(ptyId)
+    }
+    const viewers = this.remoteDesktopViewers.get(ptyId)
+    for (const [subscriptionKey, registration] of parked.remoteDesktopRegistrations) {
+      if (viewers?.get(subscriptionKey) === registration) {
+        viewers?.delete(subscriptionKey)
+      }
+    }
+    if (viewers?.size === 0) {
+      this.remoteDesktopViewers.delete(ptyId)
     }
   }
 
@@ -10863,6 +10898,17 @@ export class OrcaRuntimeService {
     }
     this.spawnPublishedPtys.add(ptyId)
     const pty = this.getOrCreatePtyWorktreeRecord(ptyId)
+    const parked = this.parkedTerminalGraphClaims.get(ptyId)
+    if (parked && incarnationId && parked.incarnationId !== incarnationId) {
+      this.retireParkedTerminalRegistrations(ptyId, parked)
+      parked.incarnationId = incarnationId
+      parked.mobileClaimed = false
+      parked.mobileFitOverride = null
+      parked.mobileRegistrations.clear()
+      parked.remoteDesktopOwner = null
+      parked.remoteDesktopHostReclaimTarget = null
+      parked.remoteDesktopRegistrations.clear()
+    }
     if (pty) {
       if (incarnationId) {
         pty.incarnationId = incarnationId
@@ -15678,6 +15724,9 @@ export class OrcaRuntimeService {
     }
     const activity = claim ? ++this.remoteDesktopActivity : (prior?.activity ?? 0)
     viewers.set(subscriptionKey, { clientId, cols: viewport.cols, rows: viewport.rows, activity })
+    if (parked) {
+      parked.remoteDesktopRegistrations.set(subscriptionKey, viewers.get(subscriptionKey)!)
+    }
     this.bumpRemoteDesktopViewerRevision(ptyId)
     if (claim) {
       if (parked) {
@@ -15806,12 +15855,14 @@ export class OrcaRuntimeService {
     for (const [subscriptionKey, viewer] of viewers) {
       if (viewer.clientId === clientId) {
         const activity = claim ? ++this.remoteDesktopActivity : viewer.activity
-        viewers.set(subscriptionKey, {
+        const nextViewer = {
           ...viewer,
           cols: viewport.cols,
           rows: viewport.rows,
           activity
-        })
+        }
+        viewers.set(subscriptionKey, nextViewer)
+        parked?.remoteDesktopRegistrations.set(subscriptionKey, nextViewer)
         if (claim) {
           if (parked) {
             parked.remoteDesktopOwner = subscriptionKey
@@ -16646,6 +16697,7 @@ export class OrcaRuntimeService {
       }
       const parked = this.parkedTerminalGraphClaims.get(ptyId)
       if (parked) {
+        parked.mobileRegistrations.set(clientId, inner.get(clientId)!)
         parked.mobileClaimed = true
         return true
       }
@@ -16715,6 +16767,9 @@ export class OrcaRuntimeService {
         subscribedAt,
         lastActedAt: now
       })
+      this.parkedTerminalGraphClaims
+        .get(ptyId)
+        ?.mobileRegistrations.set(clientId, inner.get(clientId)!)
       return false
     }
 
@@ -16736,6 +16791,9 @@ export class OrcaRuntimeService {
         subscribedAt,
         lastActedAt: now
       })
+      this.parkedTerminalGraphClaims
+        .get(ptyId)
+        ?.mobileRegistrations.set(clientId, inner.get(clientId)!)
       return false
     }
 
@@ -16751,6 +16809,7 @@ export class OrcaRuntimeService {
 
     const parked = this.parkedTerminalGraphClaims.get(ptyId)
     if (parked) {
+      parked.mobileRegistrations.set(clientId, inner.get(clientId)!)
       parked.mobileClaimed = true
       return true
     }

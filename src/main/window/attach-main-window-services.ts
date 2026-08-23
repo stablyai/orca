@@ -112,6 +112,9 @@ export function attachMainWindowServices(
   ) => Promise<ClaudeRuntimeAuthPreparation>,
   options?: MainWindowServiceOptions
 ): void {
+  if (!runtime.attachWindow(mainWindow.id)) {
+    throw new Error(`Runtime authority rejected control window ${mainWindow.id}`)
+  }
   activeControlWindow = mainWindow
   registerAppReloadHandler(mainWindow, options?.onBeforeRendererReload)
   registerRepoHandlers(mainWindow, store)
@@ -346,7 +349,6 @@ function registerRuntimeWindowLifecycle(
 ): void {
   const notifierToken = ++runtimeNotifierTokenCounter
   activeRuntimeNotifierToken = notifierToken
-  runtime.attachWindow(mainWindow.id)
   const mainWebContents = mainWindow.webContents
   const rendererNotifications = createRuntimeRendererNotificationSender({
     isWindowDestroyed: () => mainWindow.isDestroyed(),
