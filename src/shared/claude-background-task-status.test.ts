@@ -159,38 +159,87 @@ describe('Claude background task status', () => {
     ).toBe('working')
   })
 
-  it('keeps an interrupted Stop terminal even when its task inventory is still running', () => {
+  // STA-3344: an interrupt ends the assistant turn, not a backgrounded shell or Workflow.
+  it('keeps an interrupted Stop working while its task inventory is still running', () => {
     const state = createHookListenerState()
-    const interrupted = claudeEvent(state, SOURCE_PANE, {
-      hook_event_name: 'Stop',
-      is_interrupt: true,
-      background_tasks: [RUNNING_SHELL]
-    })
 
-    expect(interrupted).toMatchObject({ state: 'done', interrupted: true })
+    expect(
+      claudeEvent(state, SOURCE_PANE, {
+        hook_event_name: 'Stop',
+        is_interrupt: true,
+        background_tasks: [RUNNING_SHELL]
+      })
+    ).toMatchObject({ state: 'working' })
+    expect(state.claudeRunningNonAgentTaskPaneKeys.has(SOURCE_PANE)).toBe(true)
     expect(
       claudeEvent(state, SOURCE_PANE, {
         hook_event_name: 'SubagentStop',
         agent_id: 'a70fdf2986e38302b',
         background_tasks: [RUNNING_SHELL]
       })
+    ).toMatchObject({ state: 'working' })
+    // Why: the drained inventory is what retires the pane — not the interrupt. The turn is still
+    // an interrupted one, so the eventual done must carry `interrupted` for downstream consumers.
+    expect(
+      claudeEvent(state, SOURCE_PANE, { hook_event_name: 'Stop', background_tasks: [] })
     ).toMatchObject({ state: 'done', interrupted: true })
+  })
+
+  // STA-3344: the roster path already ignored `interrupted`; the background-task path must agree,
+  // or a Workflow parked between agent() calls (no live child) is reported finished while running.
+  it('keeps an interrupted Stop working with a running workflow and no subagent', () => {
+    const state = createHookListenerState()
+    const withoutChild = claudeEvent(state, SOURCE_PANE, {
+      hook_event_name: 'Stop',
+      is_interrupt: true,
+      background_tasks: [{ id: 'wf_1', type: 'workflow', status: 'running' }]
+    })
+    const withChild = claudeEvent(state, TARGET_PANE, {
+      hook_event_name: 'Stop',
+      is_interrupt: true,
+      background_tasks: [
+        { id: 'sub_1', type: 'subagent', status: 'running' },
+        { id: 'wf_1', type: 'workflow', status: 'running' }
+      ]
+    })
+
+    expect(withoutChild).toMatchObject({ state: 'working' })
+    expect(withChild).toMatchObject({ state: 'working' })
+  })
+
+  it('still retires an interrupted Stop with no background task and no subagent', () => {
+    const state = createHookListenerState()
+
+    expect(
+      claudeEvent(state, SOURCE_PANE, {
+        hook_event_name: 'Stop',
+        is_interrupt: true,
+        background_tasks: []
+      })
+    ).toMatchObject({ state: 'done', interrupted: true })
+    expect(state.claudeRunningNonAgentTaskPaneKeys.has(SOURCE_PANE)).toBe(false)
+  })
+
+  // STA-3344: `interrupted` is sticky by design; it must not make the discard sticky too.
+  it('recovers to working when a later Stop still carries running background tasks', () => {
+    const state = createHookListenerState()
+    claudeEvent(state, SOURCE_PANE, {
+      hook_event_name: 'Stop',
+      is_interrupt: true,
+      background_tasks: [RUNNING_SHELL]
+    })
+
     expect(
       claudeEvent(state, SOURCE_PANE, {
         hook_event_name: 'Stop',
         background_tasks: [RUNNING_SHELL]
       })
-    ).toMatchObject({ state: 'done', interrupted: true })
-    expect(
-      claudeEvent(state, SOURCE_PANE, {
-        hook_event_name: 'SubagentStop',
-        agent_id: 'a8ab60ba5d4410c47',
-        background_tasks: [RUNNING_SHELL]
-      })
-    ).toMatchObject({ state: 'done', interrupted: true })
+    ).toMatchObject({ state: 'working' })
   })
 
-  it('keeps an interrupted Stop terminal while a session cron remains', () => {
+  // STA-3344: a session cron is registered on the session, not the turn — server.ts already
+  // refuses to infer done for a pane holding one, so the hook path must not discard it either.
+  it('keeps an interrupted Stop working while a session cron remains', () => {
     const state = createHookListenerState()
 
     expect(
@@ -199,7 +248,11 @@ describe('Claude background task status', () => {
         is_interrupt: true,
         session_crons: [{ id: 'cron-1' }]
       })
-    ).toMatchObject({ state: 'done', interrupted: true })
+    ).toMatchObject({ state: 'working' })
+    expect(state.claudeActiveSessionCronPaneKeys.has(SOURCE_PANE)).toBe(true)
+    expect(
+      claudeEvent(state, SOURCE_PANE, { hook_event_name: 'Stop', session_crons: [] })
+    ).toMatchObject({ state: 'done' })
   })
 
   it('keeps a session cron working through child lifecycle events until a drained inventory', () => {
@@ -274,7 +327,7 @@ describe('Claude background task status', () => {
     expect(legacyStopState.claudeActiveSessionCronPaneKeys.has(SOURCE_PANE)).toBe(true)
   })
 
-  it('treats an interrupted StopFailure as terminal', () => {
+  it('keeps an interrupted StopFailure working while its background shell runs', () => {
     const state = createHookListenerState()
 
     expect(
@@ -283,8 +336,15 @@ describe('Claude background task status', () => {
         is_interrupt: true,
         background_tasks: [RUNNING_SHELL]
       })
+    ).toMatchObject({ state: 'working' })
+    expect(state.claudeRunningNonAgentTaskPaneKeys.has(SOURCE_PANE)).toBe(true)
+    expect(
+      claudeEvent(state, SOURCE_PANE, {
+        hook_event_name: 'StopFailure',
+        is_interrupt: true,
+        background_tasks: []
+      })
     ).toMatchObject({ state: 'done', interrupted: true })
-    expect(state.claudeRunningNonAgentTaskPaneKeys.has(SOURCE_PANE)).toBe(false)
   })
 
   it('keeps a failed turn working while its background shell runs', () => {
@@ -341,7 +401,7 @@ describe('Claude background task status', () => {
         is_interrupt: true,
         background_tasks: [RUNNING_SHELL]
       })
-    ).toMatchObject({ state: 'done', interrupted: true })
+    ).toMatchObject({ state: 'working' })
     expect(
       claudeEvent(state, SOURCE_PANE, {
         hook_event_name: 'UserPromptSubmit',

@@ -2625,13 +2625,13 @@ function getOrCreateClaudeSubagentRoster(
   return roster
 }
 
+// Why: the inventory is the only authority here — Claude lists a background task only while it is running/pending, so a present entry is positive evidence of live work. An interrupt ends the assistant turn, not a backgrounded shell or Workflow, so it must not veto that evidence (STA-3344).
 function updateClaudeRunningNonAgentTask(
   state: HookListenerState,
   paneKey: string,
-  hasRunningNonAgentTask: boolean,
-  interrupted: boolean
+  hasRunningNonAgentTask: boolean
 ): void {
-  if (hasRunningNonAgentTask && !interrupted) {
+  if (hasRunningNonAgentTask) {
     state.claudeRunningNonAgentTaskPaneKeys.add(paneKey)
   } else {
     state.claudeRunningNonAgentTaskPaneKeys.delete(paneKey)
@@ -2647,10 +2647,10 @@ function resolveClaudePaneState(
     return lead.state
   }
   const roster = state.claudeSubagentRosterByPaneKey.get(paneKey)
+  // Why: background tasks and session crons keep the pane alive on the same terms as a working subagent — an interrupt gate here disagreed with the ungated roster check and retired live Workflows that had no child (STA-3344).
   return claudeRosterHasWorkingSubagent(roster) ||
-    (!lead.interrupted &&
-      (state.claudeRunningNonAgentTaskPaneKeys.has(paneKey) ||
-        state.claudeActiveSessionCronPaneKeys.has(paneKey)))
+    state.claudeRunningNonAgentTaskPaneKeys.has(paneKey) ||
+    state.claudeActiveSessionCronPaneKeys.has(paneKey)
     ? 'working'
     : 'done'
 }
@@ -3001,15 +3001,11 @@ function normalizeClaudeEvent(
     return null
   }
   if (backgroundTasks.present && eventAgentId === undefined) {
-    updateClaudeRunningNonAgentTask(
-      state,
-      paneKey,
-      backgroundTasks.hasRunningNonAgentTask,
-      interrupted === true
-    )
+    updateClaudeRunningNonAgentTask(state, paneKey, backgroundTasks.hasRunningNonAgentTask)
   }
   if (sessionCronInventoryPresent && eventAgentId === undefined) {
-    if (hasActiveSessionCron && interrupted !== true) {
+    // Why: a session cron is registered on the session, not the turn — interrupting the turn does not unregister it, and server.ts already refuses to infer done for a pane with one.
+    if (hasActiveSessionCron) {
       state.claudeActiveSessionCronPaneKeys.add(paneKey)
     } else {
       state.claudeActiveSessionCronPaneKeys.delete(paneKey)
@@ -3116,11 +3112,6 @@ function normalizeClaudeEvent(
           }
       : undefined
   const waitingToolUseId = eventToolUseId ?? previousLead?.waitingToolUseId
-
-  if (interrupted && eventAgentId === undefined) {
-    state.claudeRunningNonAgentTaskPaneKeys.delete(paneKey)
-    state.claudeActiveSessionCronPaneKeys.delete(paneKey)
-  }
 
   const effectiveState = resolveClaudePaneState(state, paneKey, {
     state: reportedStateName,
