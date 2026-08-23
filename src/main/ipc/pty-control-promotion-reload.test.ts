@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { spawnMock } from './pty-ipc-mock-registry'
 import { setupPtyIpcSuite } from './pty-ipc-test-harness'
 import {
+  getLocalPtyProvider,
   handoffPtyRendererOwnership,
   registerPtyHandlers,
   registerPtyRenderer,
@@ -84,10 +85,7 @@ describe('control promotion PTY reload', () => {
   const reload = (webContents: WebContentsMock): void => {
     for (const listener of activeListeners(webContents, 'did-start-navigation')) {
       ;(
-        listener as unknown as (details: {
-          isMainFrame: boolean
-          isSameDocument: boolean
-        }) => void
+        listener as unknown as (details: { isMainFrame: boolean; isSameDocument: boolean }) => void
       )({ isMainFrame: true, isSameDocument: false })
     }
     finishLoad(webContents)
@@ -142,6 +140,57 @@ describe('control promotion PTY reload', () => {
     getPtyWriteListener()(foreignWindowIpcEvent, { id: result.id, data: 'still-live' })
     expect(mockProc.proc.write).toHaveBeenCalledWith('still-live')
     expect(recoveryReloadInFlight.matches(secondary.id, { consume: true })).toBe(false)
+
+    reload(secondary)
+    expect(kill).toHaveBeenCalledOnce()
+  })
+
+  it('preserves a secondary local PTY for one crash recovery then sweeps a manual reload', async () => {
+    const mockProc = createMockProc()
+    const kill = mockProc.proc.kill
+    spawnMock.mockReturnValue(mockProc.proc)
+    const recoveryReloadInFlight = createWebContentsTimedFlag()
+    const isRecoveryReloadInFlight = (webContentsId: number): boolean =>
+      recoveryReloadInFlight.matches(webContentsId, { consume: true })
+
+    registerPtyHandlers(
+      mainWindow as never,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      { isRecoveryReloadInFlight }
+    )
+    finishLoad(mainWindow.webContents)
+    const result = (await handlers.get('pty:spawn')!(mainWindowIpcEvent, {
+      cols: 80,
+      rows: 24
+    })) as { id: string }
+    const secondary = foreignWindowIpcEvent.sender
+    registerPtyRenderer(secondary as never)
+
+    finishLoad(secondary)
+    expect(kill).not.toHaveBeenCalled()
+
+    ptyRendererOwners.markDispatcherReady(secondary as never)
+    handoffPtyRendererOwnership([result.id], mainWindow.webContents as never, secondary as never)
+    secondary.on('render-process-gone', () => {
+      recoveryReloadInFlight.mark(secondary.id)
+      finishLoad(secondary)
+    })
+    for (const listener of activeListeners(secondary, 'render-process-gone')) {
+      listener()
+    }
+
+    expect(kill).not.toHaveBeenCalled()
+    expect(ptyRendererOwners.getOwner(result.id)?.webContentsId).toBe(secondary.id)
+    await expect(getLocalPtyProvider().listProcesses()).resolves.toContainEqual(
+      expect.objectContaining({ id: result.id })
+    )
+    ptyRendererOwners.markDispatcherReady(secondary as never)
+    getPtyWriteListener()(foreignWindowIpcEvent, { id: result.id, data: 'still-live' })
+    expect(mockProc.proc.write).toHaveBeenCalledWith('still-live')
 
     reload(secondary)
     expect(kill).toHaveBeenCalledOnce()

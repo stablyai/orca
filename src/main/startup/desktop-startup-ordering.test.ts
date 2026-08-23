@@ -256,6 +256,23 @@ describe('startup ordering', () => {
     expect(reload).toBeGreaterThanOrEqual(0)
   })
 
+  it('protects PTYs during renderer crash recovery in both desktop window roles', () => {
+    const source = readFileSync(join(process.cwd(), 'src/main/index.ts'), 'utf8')
+    const controlStart = source.indexOf('const window = createMainWindow(store, {')
+    const controlEnd = source.indexOf("recordCrashBreadcrumb('main_window_created')", controlStart)
+    const secondaryStart = source.indexOf('const secondary = createMainWindow(store, {')
+    const secondaryEnd = source.indexOf('const secondaryId = secondary.id', secondaryStart)
+    const controlOptions = source.slice(controlStart, controlEnd)
+    const secondaryOptions = source.slice(secondaryStart, secondaryEnd)
+
+    expect(controlStart).toBeGreaterThanOrEqual(0)
+    expect(controlEnd).toBeGreaterThan(controlStart)
+    expect(secondaryStart).toBeGreaterThanOrEqual(0)
+    expect(secondaryEnd).toBeGreaterThan(secondaryStart)
+    expect(controlOptions).toContain('onBeforeRecoveryReload: prepareRendererRecoveryReload')
+    expect(secondaryOptions).toContain('onBeforeRecoveryReload: prepareRendererRecoveryReload')
+  })
+
   it('replaces the pending settings target before marking an untimed request', () => {
     const source = readFileSync(join(process.cwd(), 'src/main/index.ts'), 'utf8')
     const functionStart = source.indexOf('function openSettingsFromSystemMenu(): void {')

@@ -1394,6 +1394,11 @@ function openMainWindow(options: { revealOnDidFinishLoad?: boolean } = {}): Brow
     clearExpectedRendererReload()
     windowQuitLifecycle.abort()
   }
+  // Why: every window recovery reload must spare its live local PTYs until renderer ownership reattaches.
+  const prepareRendererRecoveryReload = (webContentsId: number): void => {
+    markRecoveryReloadInFlight(webContentsId)
+    recordDurableCrashBreadcrumb('renderer_recovery_reload')
+  }
   const window = createMainWindow(store, {
     getIsQuitting: () => isQuitting,
     onQuitAborted: resumeAfterQuitAbort,
@@ -1440,11 +1445,7 @@ function openMainWindow(options: { revealOnDidFinishLoad?: boolean } = {}): Brow
       }
       recordCrashBreadcrumb('manual_reload_requested', { ignoreCache })
     },
-    // Why: the recovery reload re-fires did-finish-load; flag it so the local-PTY orphan sweep skips that reload (#5787).
-    onBeforeRecoveryReload: (webContentsId) => {
-      markRecoveryReloadInFlight(webContentsId)
-      recordDurableCrashBreadcrumb('renderer_recovery_reload')
-    }
+    onBeforeRecoveryReload: prepareRendererRecoveryReload
   })
   recordCrashBreadcrumb('main_window_created')
   logStartupMilestone('window-created')
@@ -1635,6 +1636,7 @@ function openMainWindow(options: { revealOnDidFinishLoad?: boolean } = {}): Brow
           terminalWindowTransfers?.resumeAfterWindowClose(windowId),
         onRendererUnavailable: (windowId) =>
           getWindowSessionRegistry(store!).markRendererUnavailable(windowId),
+        onBeforeRecoveryReload: prepareRendererRecoveryReload,
         deferLoad: true,
         title: devInstanceIdentity.name,
         getKeybindings: () => keybindings?.getOverrides(),
