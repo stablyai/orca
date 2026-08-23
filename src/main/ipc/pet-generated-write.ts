@@ -1,6 +1,7 @@
 import { mkdir, rename, rm, writeFile } from 'node:fs/promises'
 import { randomUUID } from 'node:crypto'
 import { join } from 'node:path'
+import { z } from 'zod'
 import type { CustomPet } from '../../shared/pet-types'
 import { applyCodexPetDefaults } from './pet-bundle'
 import { PetManifestSchema } from './pet-bundle-manifest-schema'
@@ -12,6 +13,14 @@ import { getPetsDir } from './pet-storage-paths'
 const SHEET_FILE_NAME = 'spritesheet.webp'
 const SHEET_MIME = 'image/webp'
 const MAX_LABEL_LENGTH = 40
+
+/** Lives beside the writer so the runtime check and the type cannot drift; the
+ *  `pet:createGenerated` handler parses with it before anything is allocated. */
+export const GeneratedPetRequestSchema = z.object({
+  sheet: z.union([z.instanceof(ArrayBuffer), z.instanceof(Uint8Array)]),
+  manifest: z.unknown(),
+  label: z.string().optional()
+})
 
 export type GeneratedPetRequest = {
   sheet: ArrayBuffer | Uint8Array
@@ -33,10 +42,12 @@ function toBuffer(sheet: ArrayBuffer | Uint8Array): Buffer {
  *  generated pet that skipped them would be the one shape of bundle nobody had
  *  validated. */
 export async function writeGeneratedPet(request: GeneratedPetRequest): Promise<CustomPet> {
-  const bytes = toBuffer(request.sheet)
-  if (bytes.byteLength > MAX_BYTES) {
+  // Why before `toBuffer`: measuring the copy means making it first, so an
+  // oversized sheet would be allocated in main only to be rejected.
+  if (request.sheet.byteLength > MAX_BYTES) {
     throw new Error('Generated spritesheet exceeded the size limit.')
   }
+  const bytes = toBuffer(request.sheet)
 
   // Why: main owns the filename, so the caller's is replaced BEFORE validation
   // rather than after. Sanitising a path we were never going to use would only

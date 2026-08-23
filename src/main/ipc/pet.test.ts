@@ -234,6 +234,31 @@ describe('registerPetHandlers', () => {
     ).rejects.toThrow(/size/i)
   })
 
+  it('refuses a sheet that is a number, before it can be turned into 500 MB', async () => {
+    // Why a number: it survives structured clone and `new Uint8Array(n)` treats
+    // it as a length, so the size guard used to run after the allocation.
+    await expect(
+      getHandler('pet:createGenerated')(
+        { sender: {} },
+        { sheet: MAX_BYTES + 1, manifest: generatedManifest, label: 'Balloon' }
+      )
+    ).rejects.toThrow(/invalid/i)
+  })
+
+  it('refuses a payload that is not the shape the channel documents', async () => {
+    for (const request of [
+      undefined,
+      null,
+      'sheet',
+      { manifest: generatedManifest },
+      { sheet: webpVp8x(4, 4), manifest: generatedManifest, label: 7 }
+    ]) {
+      await expect(getHandler('pet:createGenerated')({ sender: {} }, request)).rejects.toThrow(
+        /invalid/i
+      )
+    }
+  })
+
   it('refuses a manifest that would not survive the bundle importer', async () => {
     await expect(
       getHandler('pet:createGenerated')(

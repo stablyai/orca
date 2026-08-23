@@ -5,7 +5,7 @@ import { basename, extname, join, normalize, sep } from 'node:path'
 import { z } from 'zod'
 import type { CustomPet } from '../../shared/pet-types'
 import { importPetBundle } from './pet-bundle-import'
-import { writeGeneratedPet, type GeneratedPetRequest } from './pet-generated-write'
+import { GeneratedPetRequestSchema, writeGeneratedPet } from './pet-generated-write'
 import { classifyFile } from './pet-image-formats'
 import { signatureMatchesExtension, SIGNATURE_BYTES } from './pet-image-signature'
 import { MAX_BYTES } from './pet-import-size-limits'
@@ -108,10 +108,15 @@ export function registerPetHandlers(): void {
     async (event): Promise<CustomPet | null> => importPetBundle(event)
   )
 
-  ipcMain.handle(
-    'pet:createGenerated',
-    async (_event, request: GeneratedPetRequest): Promise<CustomPet> => writeGeneratedPet(request)
-  )
+  ipcMain.handle('pet:createGenerated', async (_event, request: unknown): Promise<CustomPet> => {
+    // Why: renderer inputs are untrusted, and the type annotation this channel
+    // used to carry is erased at runtime — a number reached `new Uint8Array()`.
+    const parsed = GeneratedPetRequestSchema.safeParse(request)
+    if (!parsed.success) {
+      throw new Error('Invalid pet:createGenerated arguments')
+    }
+    return writeGeneratedPet(parsed.data)
+  })
 
   ipcMain.handle(
     'pet:read',
