@@ -1235,7 +1235,9 @@ export class CodexRuntimeHomeService {
           'fi'
         ].join('\n')
       ],
-      { stdio: ['ignore', 'pipe', 'pipe'], timeout: 5000 }
+      // wsl.exe is console-subsystem: without this a GUI-launched Orca flashes
+      // a conhost and steals foreground for up to the timeout (#10488).
+      { stdio: ['ignore', 'pipe', 'pipe'], timeout: 5000, windowsHide: true }
     )
   }
 

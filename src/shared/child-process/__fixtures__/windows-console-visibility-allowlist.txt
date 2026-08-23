@@ -13,7 +13,6 @@ main/automations/precheck-runner.ts
 main/browser/browser-cookie-import.ts
 main/claude-accounts/keychain.ts
 main/cli/cli-installer.ts
-main/codex-accounts/runtime-home-service.ts
 main/computer/macos-computer-use-permission-status.ts
 main/computer/macos-computer-use-permissions.ts
 main/computer/macos-native-provider-transport.ts
