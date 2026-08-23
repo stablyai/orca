@@ -95,6 +95,28 @@ import {
 } from './preflight'
 import { resetPreflightMocks, type HandlerMap } from './preflight-test-harness'
 
+// Verbatim `bob --help` stdout from bobshell 2.0.1 (commit e6a3e508).
+const BOB_SHELL_2_0_1_HELP =
+  'Usage: bob [options] [command]\n' +
+  '\n' +
+  'Bob in your terminal\n' +
+  '\n' +
+  'Options:\n' +
+  '  -v, --version              Show current version number\n' +
+  '  -p, --prompt <prompt>      Prompt to send to the agent\n' +
+  '  -r, --resume [task-id]     Open the resume picker, or resume a specific task\n' +
+  '                             id\n' +
+  "  --list-tasks [limit]       List available tasks (optional: number or 'all',\n" +
+  '                             default 20)\n' +
+  '  --show-license             Show full paths to license files for review\n' +
+  '  --accept-license           Accept the IBM license agreement and continue\n' +
+  '  -h, --help                 display help for command\n' +
+  '\n' +
+  'Commands:\n' +
+  '  chat [options]             Launch the interactive terminal UI client\n' +
+  '  run [options] [prompt...]  Execute a single task in headless mode\n' +
+  '  mcp                        Manage MCP server configurations\n'
+
 describe('preflight', () => {
   const originalPlatform = process.platform
   const handlers: HandlerMap = {}
@@ -521,6 +543,26 @@ describe('preflight', () => {
             'Usage: bob [options] [command]\n\nBob in your terminal\n\n  --accept-license  Accept the IBM license agreement and continue\n',
           stderr: ''
         }
+      }
+      throw new Error(`unexpected command ${String(command)}`)
+    })
+
+    await expect(detectInstalledAgents()).resolves.toEqual(['bob'])
+  })
+
+  it('keeps IBM Bob for the verbatim Bob Shell 2.0.1 help text', async () => {
+    // Why: both identity anchors are prose (the tagline and the --accept-license
+    // description). Pinning the real output makes a fixture refresh from a newer
+    // Bob fail in review instead of silently false-positiving on the Neovim bob.
+    execFileAsyncMock.mockImplementation(async (command, args) => {
+      if (command === 'which') {
+        if (String(args[0]) === 'bob') {
+          return { stdout: '/home/test/.local/bin/bob\n' }
+        }
+        throw new Error('not found')
+      }
+      if (command === 'bob' && String(args[0]) === '--help') {
+        return { stdout: BOB_SHELL_2_0_1_HELP, stderr: '' }
       }
       throw new Error(`unexpected command ${String(command)}`)
     })
