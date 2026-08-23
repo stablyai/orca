@@ -9,6 +9,9 @@ export type RasterTransform = {
   scaleY?: number
   translateX?: number
   translateY?: number
+  /** Half-open destination rectangle the draw may write to. Without one a
+   *  rotated pose swings out of its sprite cell and over the neighbouring one. */
+  clip?: { x0: number; y0: number; x1: number; y1: number }
 }
 
 export function blankImage(width: number, height: number): RgbaImage {
@@ -38,8 +41,14 @@ export function drawTransformed(dst: RgbaImage, src: RgbaImage, t: RasterTransfo
   const cos = Math.cos(rotate)
   const sin = Math.sin(rotate)
 
-  for (let dy = 0; dy < dst.height; dy++) {
-    for (let dx = 0; dx < dst.width; dx++) {
+  const clip = t.clip
+  const minX = Math.max(0, clip ? Math.ceil(clip.x0) : 0)
+  const minY = Math.max(0, clip ? Math.ceil(clip.y0) : 0)
+  const maxX = Math.min(dst.width, clip ? Math.ceil(clip.x1) : dst.width)
+  const maxY = Math.min(dst.height, clip ? Math.ceil(clip.y1) : dst.height)
+
+  for (let dy = minY; dy < maxY; dy++) {
+    for (let dx = minX; dx < maxX; dx++) {
       const px = dx - translateX - pivotX
       const py = dy - translateY - pivotY
       const rx = px * cos + py * sin

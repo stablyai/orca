@@ -43,7 +43,8 @@ export function composeWholeBodySheet(body: RgbaImage, rig: PetRig): RgbaImage {
       drawTransformed(sheet, body, {
         ...transform,
         translateX: (transform.translateX ?? 0) + col * fw,
-        translateY: (transform.translateY ?? 0) + Number(row) * fh
+        translateY: (transform.translateY ?? 0) + Number(row) * fh,
+        clip: cellClip(col * fw, Number(row) * fh, fw, fh)
       })
     })
   }
@@ -146,7 +147,8 @@ export function composeRiggedSheet(
   CYCLE.forEach((step, col) => {
     const ox = col * fw
     const oy = walkRow * fh - step.up * rig.walk.bobPx
-    drawTransformed(sheet, bodyWithoutLegs, { translateX: ox, translateY: oy })
+    const clip = cellClip(ox, walkRow * fh, fw, fh)
+    drawTransformed(sheet, bodyWithoutLegs, { translateX: ox, translateY: oy, clip })
     const order = step.front === 0 ? [1, 0] : [0, 1]
     for (const index of order) {
       const { leg, canvas } = pieces[index]
@@ -156,7 +158,8 @@ export function composeRiggedSheet(
         pivotY: leg.pivot[1],
         rotateDeg: inward * step.cross * rig.walk.swingDeg,
         translateX: ox + inward * (rig.walk.narrowPx + step.cross * rig.walk.crossPx),
-        translateY: oy + (index === step.front ? -step.lift * rig.walk.liftPx : 0)
+        translateY: oy + (index === step.front ? -step.lift * rig.walk.liftPx : 0),
+        clip
       })
     }
   })
@@ -177,6 +180,10 @@ export function composeHeadSwapSheet(head: RgbaImage, petBody: RgbaImage, rig: P
   // Then the upload, scaled into the slot it left behind.
   drawTransformed(merged, head, {})
   return composeWholeBodySheet(merged, rig)
+}
+
+function cellClip(x: number, y: number, w: number, h: number): RasterTransform['clip'] {
+  return { x0: x, y0: y, x1: x + w, y1: y + h }
 }
 
 function clearCell(image: RgbaImage, x0: number, y0: number, w: number, h: number): void {

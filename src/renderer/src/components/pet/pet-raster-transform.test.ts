@@ -95,4 +95,20 @@ describe('drawTransformed', () => {
       [8, 8]
     ])
   })
+
+  it('writes nothing outside a clip rectangle', () => {
+    const dst = blankImage(W, H)
+
+    drawTransformed(dst, dot(4, 2), { clip: { x0: 5, y0: 0, x1: 9, y1: 9 } })
+
+    expect(litPixels(dst)).toEqual([])
+  })
+
+  it('still draws what falls inside the clip rectangle', () => {
+    const dst = blankImage(W, H)
+
+    drawTransformed(dst, dot(4, 2), { clip: { x0: 4, y0: 2, x1: 5, y1: 3 } })
+
+    expect(litPixels(dst)).toEqual([[4, 2]])
+  })
 })
