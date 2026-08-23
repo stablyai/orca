@@ -124,6 +124,49 @@ describe('projectGroups IPC validation', () => {
     )
   })
 
+  it('imports a nested bare repository when an older relay omits repo detection', async () => {
+    mockStore.createProjectGroup.mockReturnValue({
+      id: 'group-1',
+      name: 'Platform',
+      parentPath: '/srv/platform',
+      parentGroupId: null,
+      createdFrom: 'folder-scan',
+      tabOrder: 0,
+      isCollapsed: false,
+      color: null,
+      createdAt: 1,
+      updatedAt: 1
+    })
+    mockGitProvider.isGitRepoAsync.mockResolvedValue({ isRepo: false, rootPath: null })
+    mockFilesystemProvider.stat.mockImplementation(async (path: string) => {
+      if (path === '/srv/platform/mirror.git/HEAD') {
+        return { type: 'file', size: 0, mtime: 0 }
+      }
+      if (path === '/srv/platform/mirror.git/objects' || path === '/srv/platform/mirror.git/refs') {
+        return { type: 'directory', size: 0, mtime: 0 }
+      }
+      throw new Error('not found')
+    })
+    mockFilesystemProvider.readDir.mockImplementation(async (dirPath: string) =>
+      dirPath === '/srv/platform'
+        ? [{ name: 'mirror.git', isDirectory: true, isSymlink: false }]
+        : []
+    )
+
+    const result = await handlers.get('projectGroups:importNested')!(null, {
+      parentPath: '/srv/platform',
+      groupName: 'Platform',
+      projectPaths: ['/srv/platform/mirror.git'],
+      connectionId: 'conn-1',
+      mode: 'group'
+    })
+
+    expect(result).toMatchObject({ importedCount: 1, failedCount: 0 })
+    expect(mockStore.addRepo).toHaveBeenCalledWith(
+      expect.objectContaining({ path: '/srv/platform/mirror.git', kind: 'git' })
+    )
+  })
+
   it('does not reuse a completed nested scan id for a different SSH parent path', async () => {
     const group = {
       id: 'group-1',

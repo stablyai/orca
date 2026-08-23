@@ -85,6 +85,7 @@ import {
 import { getSshGitProvider } from '../providers/ssh-git-dispatch'
 import { getSshGitCapabilityCache } from '../git/git-capability-state'
 import { getSshFilesystemProvider } from '../providers/ssh-filesystem-dispatch'
+import type { IFilesystemProvider } from '../providers/types'
 import { getSshGitUsername, resolveLocalGitUsername } from '../git/git-username'
 import { enrichRepoGitUsernames } from '../repo-git-username-enrichment'
 import { getActiveMultiplexer } from './ssh'
@@ -380,6 +381,7 @@ async function addRemoteRepoFromPath(
   }
 ): Promise<{ repo: Repo; alreadyExisted: boolean } | { error: string }> {
   const gitProvider = getSshGitProvider(args.connectionId)
+  const fsProvider = getSshFilesystemProvider(args.connectionId)
   if (!gitProvider) {
     return { error: `SSH connection "${args.connectionId}" not found or not connected` }
   }
@@ -407,6 +409,8 @@ async function addRemoteRepoFromPath(
         if (check.rootPath) {
           resolvedPath = check.rootPath
         }
+      } else if (fsProvider && (await hasRemoteBareGitMarker(fsProvider, resolvedPath))) {
+        repoKind = 'git'
       } else {
         return { error: `Not a valid git repository: ${args.remotePath}` }
       }
@@ -476,6 +480,33 @@ function getRemoteRepoFolderName(remotePath: string): string {
     return remotePath
   }
   return trimmed.split(/[\\/]/).at(-1) || remotePath
+}
+
+async function hasRemoteGitMarker(
+  fsProvider: Pick<IFilesystemProvider, 'stat'>,
+  path: string
+): Promise<boolean> {
+  try {
+    const marker = await fsProvider.stat(posix.join(path, '.git'))
+    if (marker.type === 'directory' || marker.type === 'file') {
+      return true
+    }
+  } catch {
+    // Continue to cheap bare-repository marker checks below.
+  }
+  return hasRemoteBareGitMarker(fsProvider, path)
+}
+
+async function hasRemoteBareGitMarker(
+  fsProvider: Pick<IFilesystemProvider, 'stat'>,
+  path: string
+): Promise<boolean> {
+  const [head, objects, refs] = await Promise.all([
+    fsProvider.stat(posix.join(path, 'HEAD')).catch(() => null),
+    fsProvider.stat(posix.join(path, 'objects')).catch(() => null),
+    fsProvider.stat(posix.join(path, 'refs')).catch(() => null)
+  ])
+  return head?.type === 'file' && objects?.type === 'directory' && refs?.type === 'directory'
 }
 
 async function cloneRemoteRepo(
@@ -1200,22 +1231,6 @@ async function scanNestedReposForIpc(args: {
     throw new Error('ssh_connection_unavailable')
   }
   const resolvedPath = await resolveSshProjectGroupPath(args.connectionId, args.path)
-  const hasRemoteGitMarker = async (path: string): Promise<boolean> => {
-    try {
-      const marker = await fsProvider.stat(posix.join(path, '.git'))
-      if (marker.type === 'directory' || marker.type === 'file') {
-        return true
-      }
-    } catch {
-      // Continue to cheap bare-repository marker checks below.
-    }
-    const [head, objects, refs] = await Promise.all([
-      fsProvider.stat(posix.join(path, 'HEAD')).catch(() => null),
-      fsProvider.stat(posix.join(path, 'objects')).catch(() => null),
-      fsProvider.stat(posix.join(path, 'refs')).catch(() => null)
-    ])
-    return head?.type === 'file' && objects?.type === 'directory' && refs?.type === 'directory'
-  }
   return scanNestedRepos({
     path: resolvedPath,
     options: args.options,
@@ -1231,7 +1246,7 @@ async function scanNestedReposForIpc(args: {
       readTextFile: async (filePath) => (await fsProvider.readFile(filePath)).content,
       joinPath: (parentPath, childName) => posix.join(parentPath, childName),
       basename: (path) => posix.basename(path),
-      hasGitMarker: hasRemoteGitMarker,
+      hasGitMarker: (path) => hasRemoteGitMarker(fsProvider, path),
       isSelectedPathGitRepo: async (path) => {
         try {
           const check = await gitProvider.isGitRepoAsync(path)
@@ -1241,7 +1256,7 @@ async function scanNestedReposForIpc(args: {
         } catch {
           // Fall back when the relay cannot identify the selected repository root.
         }
-        return hasRemoteGitMarker(path)
+        return hasRemoteGitMarker(fsProvider, path)
       }
     }
   })
@@ -1711,8 +1726,13 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
           let importRepoPath = repoPath
           if (args.connectionId) {
             const gitProvider = getSshGitProvider(args.connectionId)
+            const fsProvider = getSshFilesystemProvider(args.connectionId)
             const check = gitProvider ? await gitProvider.isGitRepoAsync(repoPath) : null
-            if (!gitProvider || !check?.isRepo) {
+            const hasMarker =
+              !check?.isRepo && fsProvider
+                ? await hasRemoteBareGitMarker(fsProvider, repoPath)
+                : false
+            if (!gitProvider || (!check?.isRepo && !hasMarker)) {
               results.push({
                 path: repoPath,
                 status: 'failed',

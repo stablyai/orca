@@ -134,6 +134,46 @@ describe('repos:addRemote', () => {
     expect(result).not.toHaveProperty('repo.externalWorktreeVisibility')
   })
 
+  it('adds a selected bare repository when an older relay omits repo detection', async () => {
+    mockGitProvider.isGitRepoAsync.mockResolvedValue({ isRepo: false, rootPath: null })
+    mockFilesystemProvider.stat.mockImplementation(async (path: string) => {
+      if (path === '/srv/mirror.git/HEAD') {
+        return { type: 'file', size: 0, mtime: 0 }
+      }
+      if (path === '/srv/mirror.git/objects' || path === '/srv/mirror.git/refs') {
+        return { type: 'directory', size: 0, mtime: 0 }
+      }
+      throw new Error('not found')
+    })
+
+    const result = await handlers.get('repos:addRemote')!(null, {
+      connectionId: 'conn-1',
+      remotePath: '/srv/mirror.git'
+    })
+
+    expect(result).toMatchObject({
+      repo: { path: '/srv/mirror.git', connectionId: 'conn-1', kind: 'git' }
+    })
+  })
+
+  it('rejects an invalid remote folder that only contains a .git entry', async () => {
+    mockGitProvider.isGitRepoAsync.mockResolvedValue({ isRepo: false, rootPath: null })
+    mockFilesystemProvider.stat.mockImplementation(async (path: string) => {
+      if (path === '/srv/not-a-repo/.git') {
+        return { type: 'directory', size: 0, mtime: 0 }
+      }
+      throw new Error('not found')
+    })
+
+    const result = await handlers.get('repos:addRemote')!(null, {
+      connectionId: 'conn-1',
+      remotePath: '/srv/not-a-repo'
+    })
+
+    expect(result).toEqual({ error: 'Not a valid git repository: /srv/not-a-repo' })
+    expect(mockStore.addRepo).not.toHaveBeenCalled()
+  })
+
   it('uses custom displayName when provided', async () => {
     const result = await handlers.get('repos:addRemote')!(null, {
       connectionId: 'conn-1',
