@@ -2,15 +2,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { setAppEnvironment } from '../../shared/app-environment'
 
 const { getPathMock } = vi.hoisted(() => ({
   getPathMock: vi.fn<(name: string) => string>()
-}))
-
-vi.mock('electron', () => ({
-  app: {
-    getPath: getPathMock
-  }
 }))
 
 import { MimoCodeHookService } from './hook-service'
@@ -26,6 +21,15 @@ describe('MimoCodeHookService buildPtyEnv', () => {
         return userDataDir
       }
       throw new Error(`unexpected getPath: ${name}`)
+    })
+    setAppEnvironment({
+      getPath: getPathMock,
+      getAppPath: () => process.cwd(),
+      getVersion: () => '0.0.0-test',
+      isPackaged: () => false,
+      onWillQuit: () => {},
+      exit: () => {},
+      getAppMetrics: () => []
     })
 
     mimocodeHome = mkdtempSync(join(tmpdir(), 'orca-mimocode-home-'))

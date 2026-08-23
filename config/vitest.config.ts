@@ -21,7 +21,7 @@ export default defineConfig({
     // Why: happy-dom drops MutationObserver callbacks on GC; keep them alive like a browser does.
     setupFiles: [
       resolve('config/scripts/happy-dom-mutation-observer-retention.ts'),
-      resolve('config/scripts/vitest-secret-store-setup.ts')
+      resolve('config/scripts/vitest-host-ports-setup.ts')
     ],
     include: [
       'src/**/*.test.ts',

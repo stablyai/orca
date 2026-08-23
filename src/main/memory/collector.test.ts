@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import os from 'node:os'
 import type { MemorySnapshotStore } from './collector'
+import { setAppEnvironment } from '../../shared/app-environment'
 
 type AppMetricFixture = {
   pid: number
@@ -14,12 +15,6 @@ const { appMetricsMock, runProcessMock, execMock, listRegisteredPtysMock } = vi.
   runProcessMock: vi.fn(),
   execMock: vi.fn(),
   listRegisteredPtysMock: vi.fn()
-}))
-
-vi.mock('electron', () => ({
-  app: {
-    getAppMetrics: appMetricsMock
-  }
 }))
 
 vi.mock('child_process', () => ({
@@ -38,8 +33,22 @@ vi.mock('./pty-registry', () => ({
   listRegisteredPtys: listRegisteredPtysMock
 }))
 
+function appEnvironment() {
+  return {
+    getPath: () => process.cwd(),
+    getAppPath: () => process.cwd(),
+    getVersion: () => '0.0.0-test',
+    isPackaged: () => false,
+    onWillQuit: () => {},
+    exit: () => {},
+    getAppMetrics: appMetricsMock
+  }
+}
+
 async function loadCollector() {
   vi.resetModules()
+  const { setAppEnvironment: setResetAppEnvironment } = await import('../../shared/app-environment')
+  setResetAppEnvironment(appEnvironment())
   return await import('./collector')
 }
 
@@ -240,6 +249,7 @@ describe('collectSubtree', () => {
 
 describe('collectMemorySnapshot', () => {
   beforeEach(() => {
+    setAppEnvironment(appEnvironment())
     vi.restoreAllMocks()
     appMetricsMock.mockReset()
     appMetricsMock.mockReturnValue([])

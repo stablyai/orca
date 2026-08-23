@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { join } from 'node:path'
+import { installFakeAppEnvironment } from '../../../config/scripts/vitest-host-ports-setup'
 import {
   CLIPBOARD_IMAGE_MAX_BASE64_CHARS,
   CLIPBOARD_IMAGE_MAX_PIXELS,
@@ -191,6 +192,7 @@ function shellIdListArray(childCount: number): Buffer {
 
 describe('registerClipboardHandlers', () => {
   beforeEach(() => {
+    installFakeAppEnvironment({ getPath: () => '/tmp' })
     vi.spyOn(Date, 'now').mockReturnValue(1760000000000)
     removeHandlerMock.mockReset()
     handleMock.mockReset()
