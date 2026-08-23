@@ -27,14 +27,14 @@ export function DictationIndicator() {
   const isSpeaking = isListening && dictationMeter.isSpeaking && !isClipping
   const lifecycleLabel =
     dictationState === 'starting'
-      ? translate('auto.components.dictation.DictationIndicator.starting', 'Starting mic…')
+      ? translate('auto.components.dictation.DictationIndicator.7f3660a7ba', 'Starting mic…')
       : dictationState === 'stopping'
-        ? translate('auto.components.dictation.DictationIndicator.processing', 'Processing…')
-        : translate('auto.components.dictation.DictationIndicator.listening', 'Listening')
+        ? translate('auto.components.dictation.DictationIndicator.f082d0cb9d', 'Processing…')
+        : translate('auto.components.dictation.DictationIndicator.3de5a129e7', 'Listening')
   const label = isClipping
-    ? translate('auto.components.dictation.DictationIndicator.tooLoud', 'Too loud')
+    ? translate('auto.components.dictation.DictationIndicator.4977162383', 'Too loud')
     : isSpeaking
-      ? translate('auto.components.dictation.DictationIndicator.speaking', 'Speaking')
+      ? translate('auto.components.dictation.DictationIndicator.25f2b7a6a5', 'Speaking')
       : lifecycleLabel
   const announcedLabel = isClipping ? label : lifecycleLabel
   const canStop = dictationState !== 'stopping'
@@ -50,7 +50,7 @@ export function DictationIndicator() {
       data-testid="dictation-indicator"
       className={cn(
         'fixed bottom-12 left-1/2 z-50 -translate-x-1/2 overflow-hidden',
-        'border border-border bg-popover/95 text-sm text-popover-foreground shadow-[0_10px_24px_rgba(0,0,0,0.18)] backdrop-blur',
+        'border border-border bg-popover/95 text-sm text-popover-foreground shadow-floating backdrop-blur',
         'transition-[width,border-radius,opacity] duration-200 ease-out motion-reduce:transition-none',
         transcript
           ? 'w-[min(28rem,calc(100vw-2rem))] rounded-xl'

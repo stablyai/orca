@@ -14611,11 +14611,11 @@
         },
         "DictationIndicator": {
           "335e1bc6cb": "Stop dictation",
-          "tooLoud": "Too loud",
-          "speaking": "Speaking",
-          "starting": "Starting mic…",
-          "processing": "Processing…",
-          "listening": "Listening"
+          "7f3660a7ba": "Starting mic…",
+          "f082d0cb9d": "Processing…",
+          "3de5a129e7": "Listening",
+          "4977162383": "Too loud",
+          "25f2b7a6a5": "Speaking"
         }
       },
       "dashboard": {

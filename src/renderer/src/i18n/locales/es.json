@@ -13277,7 +13277,12 @@
           "5d2c3e7ae3": "No se detectó ninguna voz."
         },
         "DictationIndicator": {
-          "335e1bc6cb": "Detener dictado"
+          "335e1bc6cb": "Detener dictado",
+          "7f3660a7ba": "Iniciando micrófono…",
+          "f082d0cb9d": "Procesando…",
+          "3de5a129e7": "Escuchando",
+          "4977162383": "Volumen demasiado alto",
+          "25f2b7a6a5": "Hablando"
         }
       },
       "dashboard": {
