@@ -177,6 +177,47 @@ describe('terminal window transfer authoritative preflight', () => {
     expectNoMutation(h)
   })
 
+  it('rejects a canonical workspace key for another worktree before mutation', async () => {
+    const h = createTerminalWindowTransferHarness()
+    const coordinator = await createCoordinator(h)
+
+    await expect(
+      coordinator.detach(ipcEvent(h.source.webContents) as never, {
+        ...terminalWindowSeed(),
+        canonicalWorkspaceKey: 'worktree:other'
+      })
+    ).resolves.toEqual({ ok: false, error: 'invalid_terminal_transfer_seed' })
+    expectNoMutation(h)
+  })
+
+  it('rejects a worktree attributed to another repo before mutation', async () => {
+    const h = createTerminalWindowTransferHarness()
+    const coordinator = await createCoordinator(h)
+
+    await expect(
+      coordinator.detach(ipcEvent(h.source.webContents) as never, {
+        ...terminalWindowSeed(),
+        repo: { ...terminalWindowSeed().repo, id: 'foreign-repo' }
+      })
+    ).resolves.toEqual({ ok: false, error: 'invalid_terminal_transfer_seed' })
+    expectNoMutation(h)
+  })
+
+  it('accepts a repo-qualified worktree identity', () => {
+    const seed = terminalWindowSeed()
+    const worktreeId = 'wt-1::/tmp/worktree'
+
+    expect(
+      isTerminalWindowTransferSeed({
+        ...seed,
+        canonicalWorkspaceKey: `worktree:${worktreeId}`,
+        worktreeId,
+        tab: { ...seed.tab, worktreeId },
+        group: { ...seed.group, worktreeId }
+      })
+    ).toBe(true)
+  })
+
   it.each([
     {
       root: null,

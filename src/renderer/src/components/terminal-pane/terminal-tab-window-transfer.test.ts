@@ -7,13 +7,21 @@ import {
   makeTabGroup,
   makeUnifiedTab,
   makeWorktree,
-  seedStore,
+  seedStore as seedStoreFixture,
   TEST_REPO
 } from '@/store/slices/store-test-helpers'
 import { folderWorkspaceKey } from '../../../../shared/workspace-scope'
 import { captureTerminalWindowTransferSeed } from './terminal-tab-window-transfer'
 
 const kill = vi.fn().mockResolvedValue(undefined)
+const TRANSFER_REPO = { ...TEST_REPO, id: 'wt-1' }
+
+function seedStore(
+  store: Parameters<typeof seedStoreFixture>[0],
+  state: Parameters<typeof seedStoreFixture>[1]
+): void {
+  seedStoreFixture(store, { repos: [TRANSFER_REPO], ...state })
+}
 
 beforeEach(() => {
   kill.mockClear()
@@ -43,12 +51,12 @@ function seedTerminal(store: ReturnType<typeof createTestStore>) {
     scrollbackRefsByLeafId: { 'leaf-1': 'scrollback-ref' }
   }
   seedStore(store, {
-    activeRepoId: TEST_REPO.id,
+    activeRepoId: TRANSFER_REPO.id,
     activeWorktreeId: 'wt-1',
     activeWorkspaceKey: 'worktree:wt-1',
     activeWorkspaceExecutionHostId: 'local',
     worktreesByRepo: {
-      [TEST_REPO.id]: [makeWorktree({ id: 'wt-1', repoId: TEST_REPO.id })]
+      [TRANSFER_REPO.id]: [makeWorktree({ id: 'wt-1', repoId: TRANSFER_REPO.id })]
     },
     tabsByWorktree: { 'wt-1': [tab] },
     unifiedTabsByWorktree: { 'wt-1': [unified] },
@@ -110,7 +118,7 @@ describe('terminal tab window transfer', () => {
     expect(captured.ok && captured.seed.tab).not.toHaveProperty('pendingActivationSpawn')
   })
 
-  it('captures an unambiguous folder workspace repo on the execution host', () => {
+  it('captures and imports an unambiguous folder workspace repo on the execution host', () => {
     const store = createTestStore()
     const folderKey = folderWorkspaceKey('folder-1')
     const repo = {
@@ -181,7 +189,8 @@ describe('terminal tab window transfer', () => {
       }
     })
 
-    expect(captureTerminalWindowTransferSeed(store.getState(), tab.id)).toMatchObject({
+    const captured = captureTerminalWindowTransferSeed(store.getState(), tab.id)
+    expect(captured).toMatchObject({
       ok: true,
       seed: {
         canonicalWorkspaceKey: folderKey,
@@ -189,6 +198,14 @@ describe('terminal tab window transfer', () => {
         repo: { id: TEST_REPO.id }
       }
     })
+    if (!captured.ok) {
+      return
+    }
+    const target = createTestStore()
+    seedStore(target, { repos: [] })
+
+    expect(target.getState().importTransferredTerminalTab(captured.seed)).toBe(true)
+    expect(target.getState().repos).toEqual([])
   })
 
   it('derives an unambiguous local workspace identity when activation fields are absent', () => {
@@ -205,7 +222,7 @@ describe('terminal tab window transfer', () => {
       seed: {
         canonicalWorkspaceKey: 'worktree:wt-1',
         hostId: 'local',
-        repo: { id: TEST_REPO.id }
+        repo: { id: TRANSFER_REPO.id }
       }
     })
   })
@@ -258,6 +275,27 @@ describe('terminal tab window transfer', () => {
     expect(target.getState()).toBe(before)
   })
 
+  it('rejects an import attributed to another repo without mutating the target', () => {
+    const source = createTestStore()
+    seedTerminal(source)
+    const captured = captureTerminalWindowTransferSeed(source.getState(), 'tab-1')
+    expect(captured.ok).toBe(true)
+    if (!captured.ok) {
+      return
+    }
+    const target = createTestStore()
+    seedStore(target, { repos: [] })
+    const before = target.getState()
+
+    expect(
+      target.getState().importTransferredTerminalTab({
+        ...captured.seed,
+        repo: { ...captured.seed.repo, id: 'foreign-repo' }
+      })
+    ).toBe(false)
+    expect(target.getState()).toBe(before)
+  })
+
   it('imports into the existing active group without stealing its editor selection', () => {
     const source = createTestStore()
     seedTerminal(source)
@@ -283,7 +321,7 @@ describe('terminal tab window transfer', () => {
       recentTabIds: [editor.id]
     })
     seedStore(target, {
-      activeRepoId: TEST_REPO.id,
+      activeRepoId: TRANSFER_REPO.id,
       activeWorktreeId: 'wt-1',
       activeWorkspaceKey: 'worktree:wt-1',
       activeWorkspaceExecutionHostId: 'local',

@@ -15,7 +15,8 @@ import type {
 import type { TerminalWindowTransferSeed } from '../../shared/terminal-window-transfer'
 import { TERMINAL_SCROLLBACK_SESSION_BUFFER_BYTE_LIMIT } from '../../shared/terminal-scrollback-limits'
 import type { WorkspaceSessionState } from '../../shared/workspace-session-state-types'
-import { isWorkspaceKey, worktreeWorkspaceKey } from '../../shared/workspace-scope'
+import { getRepoIdFromWorktreeId } from '../../shared/worktree/id'
+import { isWorkspaceKey, parseWorkspaceKey, worktreeWorkspaceKey } from '../../shared/workspace-scope'
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   Boolean(value) && typeof value === 'object' && !Array.isArray(value)
@@ -140,6 +141,16 @@ export function isTerminalWindowTransferSeed(value: unknown): value is TerminalW
   const repo = seed && isRecord(seed.repo) ? seed.repo : null
   const ptyIds = seed?.ptyIds
   const host = typeof seed?.hostId === 'string' ? parseExecutionHostId(seed.hostId) : null
+  const workspaceScope =
+    typeof seed?.canonicalWorkspaceKey === 'string'
+      ? parseWorkspaceKey(seed.canonicalWorkspaceKey)
+      : null
+  const canonicalWorkspaceKey =
+    typeof seed?.worktreeId === 'string'
+      ? isWorkspaceKey(seed.worktreeId)
+        ? seed.worktreeId
+        : worktreeWorkspaceKey(seed.worktreeId)
+      : null
   return Boolean(
     seed &&
     typeof seed.tabId === 'string' &&
@@ -148,6 +159,7 @@ export function isTerminalWindowTransferSeed(value: unknown): value is TerminalW
     normalizeExecutionHostId(seed.hostId) === seed.hostId &&
     typeof seed.canonicalWorkspaceKey === 'string' &&
     isWorkspaceKey(seed.canonicalWorkspaceKey) &&
+    seed.canonicalWorkspaceKey === canonicalWorkspaceKey &&
     typeof seed.worktreeId === 'string' &&
     seed.worktreeId.length > 0 &&
     tab?.id === seed.tabId &&
@@ -164,6 +176,9 @@ export function isTerminalWindowTransferSeed(value: unknown): value is TerminalW
     ptyIds.every((id) => typeof id === 'string' && id.length > 0) &&
     typeof repo?.id === 'string' &&
     repo.id.length > 0 &&
+    (workspaceScope?.type === 'folder' ||
+      (workspaceScope?.type === 'worktree' &&
+        getRepoIdFromWorktreeId(workspaceScope.worktreeId) === repo.id)) &&
     host &&
     getRepoExecutionHostId(repo as TerminalWindowTransferSeed['repo']) === host.id &&
     (host.kind !== 'ssh' ||

@@ -2,7 +2,12 @@ import type { AppState } from '../types'
 import type { Tab } from '../../../../shared/tab-types'
 import type { TerminalWindowTransferSeed } from '../../../../shared/terminal-window-transfer'
 import { getRepoExecutionHostId } from '../../../../shared/execution-host'
-import { isWorkspaceKey, worktreeWorkspaceKey } from '../../../../shared/workspace-scope'
+import { getRepoIdFromWorktreeId } from '../../../../shared/worktree/id'
+import {
+  isWorkspaceKey,
+  parseWorkspaceKey,
+  worktreeWorkspaceKey
+} from '../../../../shared/workspace-scope'
 import { terminalLayoutEqual } from '@/lib/terminal-layout-equality'
 
 export type TerminalTransferImportValidation = 'new' | 'existing' | 'reject'
@@ -48,12 +53,16 @@ function seedIsConsistent(seed: TerminalWindowTransferSeed): boolean {
   const canonicalWorkspaceKey = isWorkspaceKey(seed.worktreeId)
     ? seed.worktreeId
     : worktreeWorkspaceKey(seed.worktreeId)
+  const workspaceScope = parseWorkspaceKey(seed.canonicalWorkspaceKey)
   return (
     seed.tabId === seed.tab.id &&
     seed.worktreeId === seed.tab.worktreeId &&
     seed.group.worktreeId === seed.worktreeId &&
     seed.group.tabOrder.includes(seed.tabId) &&
     seed.canonicalWorkspaceKey === canonicalWorkspaceKey &&
+    (workspaceScope?.type === 'folder' ||
+      (workspaceScope?.type === 'worktree' &&
+        getRepoIdFromWorktreeId(workspaceScope.worktreeId) === seed.repo.id)) &&
     getRepoExecutionHostId(seed.repo) === seed.hostId &&
     seed.ptyIds.length > 0 &&
     new Set(seed.ptyIds).size === seed.ptyIds.length &&

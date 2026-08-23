@@ -81,7 +81,7 @@ export function terminalWindowSeed(): TerminalWindowTransferSeed {
     canonicalWorkspaceKey: 'worktree:wt-1',
     worktreeId: 'wt-1',
     repo: {
-      id: 'repo-1',
+      id: 'wt-1',
       path: '/tmp/repo-1',
       displayName: 'Repo 1',
       badgeColor: '#000000',
@@ -118,7 +118,7 @@ export function terminalWindowSession(withTab: boolean, matching = true): Worksp
   const seed = terminalWindowSeed()
   return {
     ...getDefaultWorkspaceSession(),
-    activeRepoId: 'repo-1',
+    activeRepoId: 'wt-1',
     activeWorkspaceKey: matching ? 'worktree:wt-1' : 'worktree:other',
     activeWorkspaceExecutionHostId: 'local',
     activeWorktreeId: 'wt-1',
