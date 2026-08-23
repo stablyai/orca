@@ -43,11 +43,14 @@ function noisyImage(): RgbaImage {
 
 const decoded = vi.hoisted(() => ({ current: null as RgbaImage | null }))
 const createGenerated = vi.hoisted(() => vi.fn())
+// The one await a non-head-swap build passes through, so it is where two runs
+// can overlap and finish out of order.
+const imageToDataUrl = vi.hoisted(() => vi.fn(async () => 'data:image/webp;base64,PREVIEW'))
 
 vi.mock('./pet-image-decode', () => ({
   decodeImageFile: async () => decoded.current,
   encodeSheetToWebp: async () => new ArrayBuffer(8),
-  imageToDataUrl: async () => 'data:image/webp;base64,PREVIEW'
+  imageToDataUrl
 }))
 
 vi.mock('@/i18n/i18n', () => ({ translate: (_key: string, fallback: string) => fallback }))
@@ -123,8 +126,22 @@ function bodyText(): string {
   return document.body.textContent ?? ''
 }
 
+function spinner(): Element | null {
+  return document.querySelector('.animate-spin')
+}
+
+async function clickMode(match: RegExp): Promise<void> {
+  const button = [...document.querySelectorAll('button')].find((b) =>
+    match.test(b.textContent ?? '')
+  ) as HTMLButtonElement
+  await act(async () => {
+    button.click()
+  })
+}
+
 beforeEach(() => {
   decoded.current = characterImage()
+  imageToDataUrl.mockReset().mockResolvedValue('data:image/webp;base64,PREVIEW')
   createGenerated.mockReset().mockResolvedValue({ id: 'new-pet', label: 'pet' })
   ;(window as unknown as { api: unknown }).api = { pet: { createGenerated } }
 })
@@ -339,6 +356,69 @@ describe('PetFromImageDialog', () => {
     const cleared = await pickFileWatchingValue()
 
     expect(cleared).toBe(true)
+  })
+
+  it('shows the newest build, and keeps waiting while it is still running', async () => {
+    render()
+    await pickFile()
+
+    const release: ((url: string) => void)[] = []
+    imageToDataUrl.mockImplementation(
+      () => new Promise<string>((resolve) => void release.push(resolve))
+    )
+
+    await clickMode(/walking legs/i)
+    await clickMode(/whole body/i)
+    expect(release).toHaveLength(2)
+
+    // The older run lands last. It must neither paint its sheet nor report the
+    // work as finished while the run that replaced it is still going.
+    await act(async () => {
+      release[0]('data:image/webp;base64,STALE')
+    })
+    expect(spinner()).not.toBeNull()
+
+    await act(async () => {
+      release[1]('data:image/webp;base64,NEWEST')
+    })
+    expect(spinner()).toBeNull()
+    expect(
+      (document.querySelector('[data-preview-row]') as HTMLElement).style.backgroundImage
+    ).toContain('NEWEST')
+  })
+
+  it('builds once for a slider gesture, not once per step of it', async () => {
+    render()
+    await pickFile()
+    const before = imageToDataUrl.mock.calls.length
+
+    const slider = document.querySelector('[data-slot="slider"]') as HTMLElement
+    slider.getBoundingClientRect = () =>
+      ({ left: 0, top: 0, width: 100, height: 10, right: 100, bottom: 10, x: 0, y: 0 }) as DOMRect
+    slider.setPointerCapture = () => {}
+    slider.releasePointerCapture = () => {}
+    slider.hasPointerCapture = () => true
+    const at = (type: string, x: number): PointerEvent =>
+      new PointerEvent(type, { clientX: x, clientY: 5, bubbles: true, pointerId: 1 })
+
+    await act(async () => {
+      slider.dispatchEvent(at('pointerdown', 20))
+    })
+    await act(async () => {
+      slider.dispatchEvent(at('pointermove', 40))
+      slider.dispatchEvent(at('pointermove', 60))
+      slider.dispatchEvent(at('pointermove', 80))
+    })
+    const during = imageToDataUrl.mock.calls.length - before
+    await act(async () => {
+      slider.dispatchEvent(at('pointerup', 80))
+    })
+    const total = imageToDataUrl.mock.calls.length - before
+
+    // Each build runs a flood fill, a resample and 28 sheet transforms on the
+    // renderer's own thread; a drag must not queue one per pointer sample.
+    expect(during).toBe(0)
+    expect(total).toBe(1)
   })
 
   it('says so when the style artwork cannot be fetched', async () => {

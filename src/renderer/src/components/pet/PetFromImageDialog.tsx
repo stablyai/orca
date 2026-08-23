@@ -1,4 +1,4 @@
-import { useEffect, useId, useState } from 'react'
+import { useEffect, useId, useRef, useState } from 'react'
 import { Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
@@ -114,6 +114,10 @@ export function PetFromImageDialog({
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const modeHintId = useId()
+  // Why: settings change faster than a build finishes, so runs overlap. Only
+  // the newest may paint, clear the spinner, or report a failure — an older one
+  // landing last would otherwise show a sheet for settings nobody is on.
+  const newestRun = useRef(0)
 
   // Why: the owner keeps this component mounted and only flips `open`, so
   // without this a reopen still shows the last picture, framing and verdict.
@@ -121,6 +125,7 @@ export function PetFromImageDialog({
     if (!open) {
       return
     }
+    newestRun.current++
     setDraft(null)
     setSource(null)
     setSourceUrl(null)
@@ -137,7 +142,8 @@ export function PetFromImageDialog({
   const runPipeline = async (
     image: RgbaImage,
     next: BuildSettings,
-    fileName: string
+    fileName: string,
+    run: number
   ): Promise<void> => {
     // Why: head-swap composes onto the pet's own artwork, so it has to be
     // decoded first. The other modes never touch it, so it is not loaded.
@@ -167,6 +173,9 @@ export function PetFromImageDialog({
       backgroundTolerance: next.tolerance
     })
     const previewUrl = build.ok ? await imageToDataUrl(build.sheet) : null
+    if (run !== newestRun.current) {
+      return
+    }
     setDraft({ fileName, build, previewUrl })
   }
 
@@ -179,10 +188,14 @@ export function PetFromImageDialog({
     // Why: the input keeps the chosen path, so after a failure the same file
     // fires no change event at all and the user cannot retry it.
     input.value = ''
+    const run = ++newestRun.current
     setBusy(true)
     setError(null)
     try {
       const image = await decodeImageFile(file)
+      if (run !== newestRun.current) {
+        return
+      }
       setSource(image)
       // Why: framing and tolerance describe one picture. Carrying them onto the
       // next upload would silently build it from a box drawn around something
@@ -194,14 +207,19 @@ export function PetFromImageDialog({
       }
       setSettings(fresh)
       setSourceUrl(await imageToDataUrl(image))
-      await runPipeline(image, fresh, file.name)
+      await runPipeline(image, fresh, file.name, run)
     } catch (cause) {
+      if (run !== newestRun.current) {
+        return
+      }
       setDraft(null)
       setSource(null)
       setSourceUrl(null)
       setError(cause instanceof Error ? cause.message : String(cause))
     } finally {
-      setBusy(false)
+      if (run === newestRun.current) {
+        setBusy(false)
+      }
     }
   }
 
@@ -211,14 +229,20 @@ export function PetFromImageDialog({
     if (!source || !draft) {
       return
     }
+    const run = ++newestRun.current
     setBusy(true)
     setError(null)
     try {
-      await runPipeline(source, next, draft.fileName)
+      await runPipeline(source, next, draft.fileName, run)
     } catch (cause) {
+      if (run !== newestRun.current) {
+        return
+      }
       setError(cause instanceof Error ? cause.message : String(cause))
     } finally {
-      setBusy(false)
+      if (run === newestRun.current) {
+        setBusy(false)
+      }
     }
   }
 
@@ -359,12 +383,20 @@ export function PetFromImageDialog({
                       'How much of the background to remove'
                     )}
                   </span>
+                  {/* Why: the thumb tracks the drag, but the build waits for the
+                    gesture to end. Each one is a flood fill, a resample and 28
+                    sheet transforms on this thread — one per pointer sample
+                    stutters the very preview it is meant to show. Arrow keys
+                    commit per press, so the keyboard still rebuilds at once. */}
                   <Slider
                     value={[settings.tolerance]}
                     min={BACKGROUND_TOLERANCE.min}
                     max={BACKGROUND_TOLERANCE.max}
                     step={4}
-                    onValueChange={([value]) => void rebuild({ tolerance: value })}
+                    onValueChange={([tolerance]) =>
+                      setSettings((current) => ({ ...current, tolerance }))
+                    }
+                    onValueCommit={([tolerance]) => void rebuild({ tolerance })}
                     thumbLabels={[
                       translate(
                         'auto.components.pet.fromImage.tolerance',
