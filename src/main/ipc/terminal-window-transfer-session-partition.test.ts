@@ -245,7 +245,7 @@ describe('terminal window transfer session partition', () => {
     let importAttempts = 0
     h.target.webContents.send.mockImplementation((_channel, command) => {
       if (command.phase === 'target-import' && ++importAttempts === 1) {
-        h.source.emit('close')
+        h.source.emit('closed')
       }
       queueMicrotask(() =>
         coordinator.acknowledge(ipcEvent(h.target.webContents) as never, {

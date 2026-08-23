@@ -2,6 +2,10 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { WebContents } from 'electron'
 import type { TerminalWindowTransferCoordinatorOptions } from './terminal-window-transfer-coordinator-options'
 import {
+  createTerminalWindowTransfer,
+  installTerminalWindowTransferAbortListeners
+} from './terminal-window-transfer-operation'
+import {
   createTerminalWindowTransferHarness,
   ipcEvent,
   terminalWindowSeed,
@@ -76,6 +80,38 @@ function expectCreatedTargetClean(
 describe('terminal window transfer lifecycle recovery', () => {
   beforeEach(() => vi.clearAllMocks())
 
+  it('ignores a prevented target close attempt but aborts after the window closes', () => {
+    const h = createTerminalWindowTransferHarness()
+    const transfer = createTerminalWindowTransfer(
+      terminalWindowSeed(),
+      h.source as never,
+      h.source.webContents as never,
+      terminalWindowSession(true)
+    )
+    transfer.target = h.target as never
+    transfer.targetRenderer = h.target.webContents as never
+    installTerminalWindowTransferAbortListeners(
+      {
+        sessions: h.sessions as never,
+        owners: h.owners,
+        handoff: h.handoff,
+        timeoutMs: 20
+      },
+      transfer
+    )
+    const abort = vi.spyOn(transfer, 'abort')
+
+    h.target.emit('close')
+
+    expect(abort).not.toHaveBeenCalled()
+    expect(transfer.targetLost).toBe(false)
+
+    h.target.emit('closed')
+
+    expect(abort).toHaveBeenCalledOnce()
+    expect(transfer.targetLost).toBe(true)
+  })
+
   it('cleans a created target when renderer registration throws', async () => {
     const h = createTerminalWindowTransferHarness({ createTarget: true })
     const targetRenderer = h.target.webContents as never
@@ -141,7 +177,7 @@ describe('terminal window transfer lifecycle recovery', () => {
     const coordinator = await createCoordinator(h, { createSecondaryWindow: vi.fn() })
     coordinator.getContext(ipcEvent(h.target.webContents) as never)
     h.target.webContents.send.mockImplementation((_channel, command) => {
-      h.source.emit('close')
+      h.source.emit('closed')
       queueMicrotask(() =>
         coordinator.acknowledge(ipcEvent(h.target.webContents) as never, {
           ...command,
@@ -209,9 +245,9 @@ describe('terminal window transfer lifecycle recovery', () => {
       if (command.phase === 'target-import') {
         importAttempts += 1
         if (importAttempts === 1) {
-          h.source.emit('close')
+          h.source.emit('closed')
         } else {
-          h.target.emit('close')
+          h.target.emit('closed')
         }
       }
       queueMicrotask(() =>
@@ -270,7 +306,7 @@ describe('terminal window transfer lifecycle recovery', () => {
     })
     h.target.webContents.send.mockImplementation((_channel, command) => {
       if (command.phase === 'target-import' && ++importAttempts === 1) {
-        h.source.emit('close')
+        h.source.emit('closed')
       }
       queueMicrotask(() =>
         coordinator.acknowledge(ipcEvent(h.target.webContents) as never, {
@@ -346,7 +382,7 @@ describe('terminal window transfer lifecycle recovery', () => {
     coordinator.getContext(ipcEvent(h.target.webContents) as never)
     h.target.webContents.send.mockImplementation((_channel, command) => {
       if (command.phase === 'target-import' && ++importAttempts === 1) {
-        h.source.emit('close')
+        h.source.emit('closed')
       }
       queueMicrotask(() =>
         coordinator.acknowledge(ipcEvent(h.target.webContents) as never, {
@@ -403,7 +439,7 @@ describe('terminal window transfer lifecycle recovery', () => {
     })
     h.target.webContents.send.mockImplementation((_channel, command) => {
       if (command.phase === 'target-import' && ++importAttempts === 1) {
-        h.source.emit('close')
+        h.source.emit('closed')
       }
       queueMicrotask(() =>
         coordinator.acknowledge(ipcEvent(h.target.webContents) as never, {
@@ -430,7 +466,7 @@ describe('terminal window transfer lifecycle recovery', () => {
     const h = createTerminalWindowTransferHarness()
     const coordinator = await createCoordinator(h, { createSecondaryWindow: vi.fn() })
     coordinator.getContext(ipcEvent(h.target.webContents) as never)
-    h.target.webContents.send.mockImplementation(() => h.target.emit('close'))
+    h.target.webContents.send.mockImplementation(() => h.target.emit('closed'))
 
     await expect(
       coordinator.detach(ipcEvent(h.source.webContents) as never, terminalWindowSeed())
@@ -489,7 +525,7 @@ describe('terminal window transfer lifecycle recovery', () => {
       }
     })
     coordinator.getContext(ipcEvent(h.target.webContents) as never)
-    h.target.webContents.send.mockImplementation(() => h.target.emit('close'))
+    h.target.webContents.send.mockImplementation(() => h.target.emit('closed'))
 
     await expect(
       coordinator.detach(ipcEvent(h.source.webContents) as never, terminalWindowSeed())

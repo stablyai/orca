@@ -171,9 +171,9 @@ export function installTerminalWindowTransferAbortListeners(
   }
   transfer.sourceLossListener = sourceLost
   transfer.targetLossListener = targetLost
-  transfer.source.once('close', sourceLost)
+  transfer.source.once('closed', sourceLost)
   transfer.sourceRenderer.once('render-process-gone', sourceLost)
-  transfer.target?.once('close', targetLost)
+  transfer.target?.once('closed', targetLost)
   transfer.targetRenderer?.once('render-process-gone', targetLost)
 }
 
@@ -183,11 +183,11 @@ export function removeTerminalWindowTransferAbortListeners(transfer: TerminalWin
     return
   }
   if (!transfer.source.isDestroyed()) {
-    transfer.source.removeListener('close', sourceLossListener)
+    transfer.source.removeListener('closed', sourceLossListener)
   }
   transfer.sourceRenderer.removeListener('render-process-gone', sourceLossListener)
   if (transfer.target && !transfer.target.isDestroyed()) {
-    transfer.target.removeListener('close', targetLossListener)
+    transfer.target.removeListener('closed', targetLossListener)
   }
   transfer.targetRenderer?.removeListener('render-process-gone', targetLossListener)
 }
