@@ -694,6 +694,8 @@ import { RuntimeEmulatorCommands } from './orca-runtime-emulator'
 import type { EmulatorBridge } from '../emulator/emulator-bridge'
 import { getRuntimeFileTargetExecutionHostId, RuntimeFileCommands } from './orca-runtime-files'
 import { RuntimeGitCommands } from './orca-runtime-git'
+import { RuntimePtyRegistry } from './orca-runtime-pty-registry'
+import type { RuntimePtyWorktreeRecord, TerminalHandleRecord } from './orca-runtime-pty-registry'
 import {
   activateClientSessionTabSelection,
   ClientSessionTabSelectionStore,
@@ -1466,62 +1468,6 @@ type RuntimeLeafRecord = RuntimeSyncedLeaf & {
   paneTitleUpdatedAt: number | null
 }
 
-type RuntimePtyWorktreeRecord = {
-  ptyId: string
-  incarnationId: PtyIncarnationId | null
-  worktreeId: string
-  connectionId: string | null
-  runtimeSessionOwned: boolean
-  // Why: a Windows host can own both native and WSL panes; preamble command
-  // selection must follow the pane that executes it, not process.platform.
-  isWsl: boolean | null
-  wslDistro: string | null
-  // Why: background CLI PTYs can outlive a failed renderer reveal. Preserve the
-  // spawn-time tab/pane identity so later reveals can adopt under the env key.
-  tabId: string | null
-  paneKey: string | null
-  launchConfig: SleepingAgentLaunchConfig | null
-  launchToken: string | null
-  // Why: provider PTY IDs can be reused; launch identity belongs only to the process that received the token.
-  launchIncarnationId: PtyIncarnationId | null
-  launchAgent: TuiAgent | null
-  foregroundAgent: TuiAgent | null
-  connected: boolean
-  disconnectedAt: number | null
-  lastExitCode: number | null
-  lastExitCause: TerminalExitCause | null
-  lastAgentStatus: AgentStatus | null
-  /** False until a live OSC frame sets the status; restore seeds never set it. */
-  lastAgentStatusObservedLive: boolean
-  lastAgentStatusStartedAtEpochMs: number | null
-  // A later semantic title interval cannot inherit rich fields from an earlier task.
-  lastAgentStatusRichInvalidatedAtEpochMs: number | null
-  lastOscTitle: string | null
-  lastOscTitleAt: number | null
-  // Why a second stamp: `lastOscTitleAt` is a title-observation sequence number,
-  // comparable only to other title stamps. Anything that must date a live title
-  // against an off-pane clock (hook `receivedAt`) needs wall-clock ms.
-  lastOscTitleEpochMs: number | null
-  managementTitle: string | null
-  managementTitleAt: number | null
-  controllerTitle: string | null
-  title: string | null
-  titleUpdatedAt: number | null
-  lastOutputAt: number | null
-  tailBuffer: string[]
-  tailTranscriptBuffer: string[]
-  tailTranscriptChars: number
-  tailPartialLine: string
-  tailPendingAnsi: string
-  tailRedrawCursor: RetainedTailRedrawCursor | null
-  tailTruncated: boolean
-  tailLinesTotal: number
-  preview: string
-  waitBlockedAt: number | null
-  // Why: memoized wait scan of the current retained tail (see RuntimeLeafRecord).
-  tailWaitState?: TerminalTailWaitState
-}
-
 type TerminalAgentStatusSnapshot = {
   waitText: string
   waitBlockedAt: number | null
@@ -1831,7 +1777,7 @@ type HeadlessSeedMetadata = {
   kittyKeyboardFlags?: number
 }
 
-type RuntimePtyController = {
+export type RuntimePtyController = {
   claimStablePaneCreate?(args: {
     worktreeId: string
     connectionId: string | null
@@ -2255,17 +2201,6 @@ type RuntimeNotifier = {
     resolution: { text: string; createdAt: number }
   ): void
   browserDriverChanged?(browserPageId: string, driver: RuntimeBrowserDriverState): void
-}
-
-type TerminalHandleRecord = {
-  handle: string
-  runtimeId: string
-  rendererGraphEpoch: number
-  worktreeId: string
-  tabId: string
-  leafId: string
-  ptyId: string | null
-  ptyGeneration: number
 }
 
 type PtyIncarnationHandleRecord = {
@@ -3118,7 +3053,21 @@ export class OrcaRuntimeService {
   // Why: PTY output is a per-keystroke hot path. Looking up affected leaves by
   // ptyId keeps active TUI redraws independent of the total open terminal count.
   private leavesByPtyId = new Map<string, RuntimeLeafRecord[]>()
-  private handles = new Map<string, TerminalHandleRecord>()
+  // PTY hub state lives in the registry; these stay as delegating accessors so
+  // every existing reference — in this class and in the test suite's casts —
+  // keeps resolving to the same objects. See orca-runtime-pty-registry.ts.
+  // Why lazy rather than an initialized field: a test builds the service with
+  // Object.create(prototype) + Object.assign, which runs no field initializers.
+  // An eager field would be undefined there and the accessors below would throw
+  // on the first Object.assign that lands on one of them.
+  private ptyRegistryInstance: RuntimePtyRegistry | undefined
+  private get ptyRegistry(): RuntimePtyRegistry {
+    this.ptyRegistryInstance ??= new RuntimePtyRegistry()
+    return this.ptyRegistryInstance
+  }
+  private get handles(): Map<string, TerminalHandleRecord> {
+    return this.ptyRegistry.handles
+  }
   private handleByLeafKey = new Map<string, string>()
   private handleByPtyId = new Map<string, string>()
   private handleByPtyIncarnation = new Map<string, PtyIncarnationHandleRecord>()
@@ -3130,7 +3079,12 @@ export class OrcaRuntimeService {
   private graphSyncCallbacks: (() => void)[] = []
   private waitersByHandle = new Map<string, Set<TerminalWaiter>>()
   private ptyExitListenersByPtyId = new Map<string, Set<() => void>>()
-  private ptyController: RuntimePtyController | null = null
+  private get ptyController(): RuntimePtyController | null {
+    return this.ptyRegistry.getController()
+  }
+  private set ptyController(controller: RuntimePtyController | null) {
+    this.ptyRegistry.setController(controller)
+  }
   private notifier: RuntimeNotifier | null = null
   private clientEventListeners = new Set<(event: RuntimeClientEvent) => void>()
   // Why: mobile subscribers discard terminalSideEffects; exclude them from batch delivery and production.
@@ -3271,7 +3225,9 @@ export class OrcaRuntimeService {
   // mobile client gets its own listener, and dispatchMobileNotification
   // iterates them all. Listeners are cleaned up via subscriptionCleanups.
   private notificationListeners = new Set<(event: MobileNotificationEvent) => void>()
-  private ptysById = new Map<string, RuntimePtyWorktreeRecord>()
+  private get ptysById(): Map<string, RuntimePtyWorktreeRecord> {
+    return this.ptyRegistry.ptysById
+  }
   // Why a separate map: `connected` is a wire field that any inventory gap
   // clears, so it cannot distinguish an observed exit from lost contact. This
   // records the last liveness verdict we actually earned, and outlives the pty
@@ -39301,7 +39257,7 @@ export function appendNormalizedToMultilineTailBufferUnwindowed(
   )
 }
 
-type RetainedTailRedrawCursor = {
+export type RetainedTailRedrawCursor = {
   rowFromEnd: number
   column: number
 }

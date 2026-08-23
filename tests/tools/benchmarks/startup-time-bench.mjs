@@ -39,6 +39,8 @@ import { createRequire } from 'node:module'
 import os from 'node:os'
 import { delimiter, join, resolve } from 'node:path'
 
+import { resolveBenchmarkReportPath } from './benchmark-report-path.mjs'
+
 const scriptDir = import.meta.dirname
 const repoRoot = resolve(scriptDir, '..', '..')
 const require = createRequire(import.meta.url)
@@ -50,6 +52,7 @@ function parseArgs(argv) {
     files: 28000,
     fixtureDir: null,
     exe: null,
+    output: null,
     timeoutMs: 240000,
     stateProfile: 'none',
     sessionTabs: 0,
@@ -78,6 +81,9 @@ function parseArgs(argv) {
         break
       case '--exe':
         args.exe = next()
+        break
+      case '--output':
+        args.output = next()
         break
       case '--timeout-ms':
         args.timeoutMs = Number(next())
@@ -631,10 +637,12 @@ async function main() {
     summary[name] = median(iterations.map((iteration) => iteration.phases[name]))
   }
 
-  const resultsDir = join(scriptDir, 'results')
-  mkdirSync(resultsDir, { recursive: true })
-  const stamp = new Date().toISOString().replace(/[:.]/g, '-')
-  const outPath = join(resultsDir, `startup-${args.label}-${stamp}.json`)
+  const outPath = resolveBenchmarkReportPath({
+    output: args.output,
+    scriptDir,
+    prefix: 'startup',
+    label: args.label
+  })
   writeFileSync(
     outPath,
     JSON.stringify(

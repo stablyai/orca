@@ -15,6 +15,8 @@ Use the `$electron` skill and Playwright CDP for rendered Orca UI checks. Do not
 
 NEVER add a `max-lines` disable (`eslint-disable max-lines`, `oxlint-disable max-lines`, or line-specific variants), and never add a per-file `max-lines` bump in `mobile/.oxlintrc.json`.
 
+The files already carrying one are grandfathered in `config/max-lines-baseline.txt`, **frozen at the size they had** (`max=<n>`). They may not grow either: adding lines to one fails `pnpm check:max-lines-ratchet`. Put new code in a new focused module beside the big file, or split enough out of it to land net-neutral. When you do shrink one, run `pnpm check:max-lines-ratchet --prune` to re-freeze it at the new low — the budget only ever moves down.
+
 ## File and Module Naming
 
 Never use vague names like `helpers`, `utils`, `common`, `misc`, or `shared-stuff` for files, folders, or modules. They carry zero info and tend to become dumping grounds. Name files after what they _actually_ contain — prefer the concrete domain concept (e.g. `tab-group-state.ts`, `terminal-orphan-cleanup.ts`) over the generic role (`tabs-helpers.ts`, `terminal-utils.ts`). If you find yourself reaching for `helpers`, the file probably has more than one responsibility and should be split, or there's a better name hiding in the code that describes what the functions operate on.
