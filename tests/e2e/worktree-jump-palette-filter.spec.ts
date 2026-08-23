@@ -193,6 +193,10 @@ test.describe('Worktree jump-palette filters', () => {
 
     const createDialog = orcaPage.getByRole('dialog', { name: /Create (Workspace|Worktree)/i })
     await expect(createDialog).toBeVisible()
+    // Why assert focus first: the composer auto-focuses the name field, so Escape
+    // always lands on an input the user never chose. A page-style "blur the field
+    // first" handler here would silently cost a second press.
+    await expect(createDialog.locator('[data-workspace-name-input="true"]')).toBeFocused()
     await orcaPage.keyboard.press('Escape')
     await expect(createDialog).toBeHidden()
   })
