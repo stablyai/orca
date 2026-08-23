@@ -385,7 +385,7 @@ describe('SourceControlAgentActionDialog', () => {
     expect(input.value).toBe('--verbose')
 
     act(() => {
-      resolveDetection(['gemini'])
+      resolveDetection(['gemini', 'codex'])
     })
     await flushEffects()
 
