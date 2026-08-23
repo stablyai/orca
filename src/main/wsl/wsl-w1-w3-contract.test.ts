@@ -74,12 +74,13 @@ describe('W3: the five per-call decisions are made once', () => {
   })
 
   it('keeps a script byte-identical instead of encoding it', async () => {
-    // The base64 and eval wrappers existed because argv quoting kept breaking;
-    // stdin has no quoting boundary at all (#14292).
+    // The base64 and eval wrappers existed because a host-side shell re-parsed
+    // the quotes (#14292). --exec removes that shell, so the script crosses in
+    // argv exactly as written -- no encoding, and stdin stays the command's.
     const script = `case "$x" in a) echo 'it'\\''s fine';; esac`
     await runWslProcess({ loginPath: 'preferred', distro: 'Ubuntu', script })
-    expect(spawnSpec().input).toBe(script)
-    expect(JSON.stringify(spawnSpec().args)).not.toContain('case')
+    expect(spawnSpec().args).toContain(script)
+    expect(spawnSpec().input).toBeUndefined()
   })
 
   it('propagates env only through WSLENV', async () => {

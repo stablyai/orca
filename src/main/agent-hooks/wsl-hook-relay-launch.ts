@@ -183,6 +183,9 @@ export async function runWslInstallProcess(
     distro,
     loginPath: 'none',
     script,
+    // The script embeds a base64 JS bundle, far past any command-line limit,
+    // and reads no stdin of its own.
+    scriptDelivery: 'stdin',
     timeoutMs: INSTALL_TIMEOUT_MS,
     maxOutputBytes: MAX_STARTUP_BUFFER_BYTES,
   })

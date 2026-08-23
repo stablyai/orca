@@ -37,9 +37,29 @@ export type WslLoginPath =
  * was never made explicit. `script` makes the runner supply `sh -s` itself.
  */
 export type WslCommand =
-  | { program: string; args?: readonly string[]; script?: never; shell?: never }
+  | {
+      program: string
+      args?: readonly string[]
+      script?: never
+      shell?: never
+      scriptDelivery?: never
+    }
   | {
       script: string
+      /**
+       * How `script` reaches the shell.
+       *
+       * 'argv' (the default) passes it as an argument, which leaves the guest
+       * command's stdin alone. 'stdin' pipes it, which has no length limit but
+       * means anything the script runs that reads stdin eats the rest of the
+       * script -- and the shell then hits EOF and exits 0, so the truncation is
+       * silent. A user-authored hook running `ssh -T` is exactly that.
+       *
+       * Use 'stdin' only for a script Orca wrote, that reads no stdin, and that
+       * is too big for a command line (the hook-relay installer embeds a JS
+       * bundle).
+       */
+      scriptDelivery?: 'argv' | 'stdin'
       args?: readonly string[]
       program?: never
       /**
@@ -148,11 +168,16 @@ function withGuestCwd(cwd: string | undefined, argv: readonly string[]): string[
   return ['sh', '-c', 'cd "$1" || exit 1; shift; exec "$@"', 'orca-wsl', cwd, ...argv]
 }
 
-/** `<shell> -s --` for a script on stdin, otherwise the program itself. */
+/** `<shell> -c`/`-s` for a script, otherwise the program itself. */
 function guestCommandArgv(spec: WslSpec): string[] {
-  return spec.script !== undefined
-    ? [spec.shell ?? 'sh', '-s', '--', ...(spec.args ?? [])]
-    : [spec.program, ...(spec.args ?? [])]
+  if (spec.script === undefined) {
+    return [spec.program, ...(spec.args ?? [])]
+  }
+  const shell = spec.shell ?? 'sh'
+  // `--` keeps positional args starting at $1 under both forms.
+  return spec.scriptDelivery === 'stdin'
+    ? [shell, '-s', '--', ...(spec.args ?? [])]
+    : [shell, '-c', spec.script, '--', ...(spec.args ?? [])]
 }
 
 /** Shell-free argv, with the cached environment applied when one is available. */
@@ -205,7 +230,7 @@ export async function runWslProcess(spec: WslSpec): Promise<WslResult> {
     program: resolveWslExecutablePath(),
     args: buildWslExecArgs(spec.distro, argv),
     env: buildHostEnv(spec.env),
-    input: spec.script,
+    input: spec.scriptDelivery === 'stdin' ? spec.script : undefined,
     timeoutMs: remainingMs,
     maxOutputBytes: spec.maxOutputBytes
   })

@@ -113,25 +113,56 @@ describe('probe lane', () => {
 })
 
 describe('scripts', () => {
-  it('delivers a script on stdin through sh -s, not in argv', async () => {
-    // A script on stdin has no quoting boundary for its own quotes to escape
-    // from. That is what the base64 and eval wrappers were working around
-    // (#14292), and why this is the only supported way to run one.
+  it('passes a script in argv by default, leaving the command its own stdin', async () => {
+    // A script the runner pipes cannot coexist with a command that reads stdin:
+    // the command drains the rest of the script, the shell hits EOF and exits
+    // 0, and the truncation is silent. argv has no such conflict, and --exec
+    // means no host-side shell re-parses the quotes (#14292).
     seedWslGuestEnvironmentForTests(undefined, ENVIRONMENT)
     const script = `case "$x" in a) echo 'it'\\''s fine';; esac`
     await runWslProcess({ loginPath: 'preferred', script, args: ['/tmp/root'] })
-    expect(runProcessMock.mock.calls.at(-1)?.[0].input).toBe(script)
+    expect(runProcessMock.mock.calls.at(-1)?.[0].input).toBeUndefined()
     expect(lastArgv()).toEqual([
       '--exec',
       '/usr/bin/env',
       'PATH=/home/u/.nvm/bin:/usr/bin',
       'HOME=/home/u',
       'sh',
-      '-s',
+      '-c',
+      script,
       '--',
       '/tmp/root'
     ])
-    expect(lastArgv().join(' ')).not.toContain('case')
+  })
+
+
+  it('leaves stdin free so a stdin-reading command cannot truncate the script', async () => {
+    // The regression this pins: with the script piped, `ssh -T` in a user hook
+    // drains the pipe, bash reads EOF, exits 0, and every later line of the
+    // hook silently never runs -- while the caller logs success.
+    seedWslGuestEnvironmentForTests(undefined, ENVIRONMENT)
+    await runWslProcess({
+      loginPath: 'preferred',
+      shell: 'bash',
+      script: 'ssh -T git@github.com || true\npnpm install'
+    })
+    const spec = runProcessMock.mock.calls.at(-1)?.[0]
+    expect(spec.input).toBeUndefined()
+    expect(spec.args).toContain('ssh -T git@github.com || true\npnpm install')
+  })
+
+  it('pipes the script only when the caller asks for stdin delivery', async () => {
+    seedWslGuestEnvironmentForTests(undefined, ENVIRONMENT)
+    const script = 'echo big'
+    await runWslProcess({
+      loginPath: 'preferred',
+      script,
+      scriptDelivery: 'stdin',
+      args: ['/tmp/root']
+    })
+    expect(runProcessMock.mock.calls.at(-1)?.[0].input).toBe(script)
+    expect(lastArgv().slice(-4)).toEqual(['sh', '-s', '--', '/tmp/root'])
+    expect(lastArgv().join(' ')).not.toContain('echo big')
   })
 })
 
@@ -269,11 +300,11 @@ describe('script interpreter', () => {
   })
 })
 
-describe('a script never rides the interactive lane', () => {
-  it('runs sh -s even when the distro cannot be probed', async () => {
-    // The login shell owns stdin, and the script arrives on stdin. If the shell
-    // consumed it, `sh -s` would read EOF, run nothing and exit 0 -- a silent
-    // wrong answer, worse than the degraded PATH this avoids.
+describe('a script never rides a login shell', () => {
+  it('runs the script shell-free even when the distro cannot be probed', async () => {
+    // No login shell in the way: it would own stdin and could consume it,
+    // leaving the script's shell to read EOF, run nothing and exit 0 -- a
+    // silent wrong answer, worse than the degraded PATH this avoids.
     runProcessMock.mockResolvedValue({
       environmentResolved: true,
       code: 1,
@@ -283,7 +314,7 @@ describe('a script never rides the interactive lane', () => {
       timedOut: false
     })
     await runWslProcess({ loginPath: 'preferred', script: 'echo hi' })
-    expect(lastArgv()).toEqual(['--exec', 'sh', '-s', '--'])
-    expect(runProcessMock.mock.calls.at(-1)?.[0].input).toBe('echo hi')
+    expect(lastArgv()).toEqual(['--exec', 'sh', '-c', 'echo hi', '--'])
+    expect(runProcessMock.mock.calls.at(-1)?.[0].input).toBeUndefined()
   })
 })
