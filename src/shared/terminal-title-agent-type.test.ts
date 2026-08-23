@@ -155,6 +155,15 @@ describe('resolveTerminalTitleAgentType', () => {
     )
     expect(resolveTerminalTitleAgentType('⠋ Codex: fix cursor offsets')).toBe('codex')
   })
+
+  it('resolves Cline identity titles and rejects task-text cline mentions', () => {
+    expect(resolveTerminalTitleAgentType('Cline')).toBe('cline')
+    expect(resolveTerminalTitleAgentType('Cline ready')).toBe('cline')
+    expect(resolveTerminalTitleAgentType('⠋ Cline')).toBe('cline')
+    expect(resolveExplicitTerminalTitleAgentType('Cline')).toBe('cline')
+    expect(resolveTerminalTitleAgentType('⠋ use cline for the sidebar fix')).toBe('claude')
+    expect(resolveExplicitTerminalTitleAgentType('port the cline prompt')).toBeNull()
+  })
 })
 
 // Why: this module carries its own isClaudeAgent copy parallel to agent-title-identity.ts;
@@ -165,5 +174,11 @@ describe('isClaudeAgent', () => {
     expect(isClaudeAgent('Cursor ready')).toBe(false)
     expect(isClaudeAgent('⠋ preserve cursor visibility across replays')).toBe(true)
     expect(isClaudeAgent('⠋ OpenClaude')).toBe(false)
+  })
+
+  it('excludes Cline identity titles from Claude braille ownership', () => {
+    expect(isClaudeAgent('⠋ Cline')).toBe(false)
+    expect(isClaudeAgent('Cline ready')).toBe(false)
+    expect(isClaudeAgent('⠋ use cline for the sidebar fix')).toBe(true)
   })
 })
