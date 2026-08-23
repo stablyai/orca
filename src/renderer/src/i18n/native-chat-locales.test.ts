@@ -43,6 +43,10 @@ describe('native chat locale copy', () => {
         expect(localized).not.toBe(english)
       }
       expect(search.grok).toBe('grok')
+      expect(catalog.components['native-chat'].structuredReturnToTerminalFailed.trim()).not.toBe('')
+      expect(catalog.components['native-chat'].structuredReturnToTerminalFailed).not.toBe(
+        en.components['native-chat'].structuredReturnToTerminalFailed
+      )
       const composer = catalog.components['native-chat'].composer
       for (const key of [
         'model',

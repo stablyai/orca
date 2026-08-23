@@ -10,6 +10,7 @@ import { readCodexThreadId, readCodexThreadPath } from './codex-structured-threa
 
 export type CodexOpenedThread = {
   threadId: string
+  thread?: Record<string, unknown>
   /** Rollout file Codex named, when it named one. */
   historyPath: string | null
   model?: string
@@ -22,13 +23,17 @@ function nonEmptyString(value: unknown): string | null {
 
 export async function openCodexThread(
   connection: CodexAppServerConnection,
-  launch: { cwd: string; resumeThreadId: string | null },
+  launch: { cwd: string; resumeThreadId: string | null; resumePath?: string | null },
   timeoutMs: number | undefined
 ): Promise<CodexOpenedThread> {
   const opened = await connection.request(
     launch.resumeThreadId ? 'thread/resume' : 'thread/start',
     launch.resumeThreadId
-      ? { threadId: launch.resumeThreadId, cwd: launch.cwd }
+      ? {
+          threadId: launch.resumeThreadId,
+          cwd: launch.cwd,
+          ...(launch.resumePath ? { path: launch.resumePath } : {})
+        }
       : { cwd: launch.cwd },
     { timeoutMs }
   )
@@ -40,10 +45,15 @@ export async function openCodexThread(
     throw new Error(`codex app-server resumed ${threadId} instead of ${launch.resumeThreadId}`)
   }
   const result = opened as Record<string, unknown>
+  const thread =
+    typeof result.thread === 'object' && result.thread !== null
+      ? (result.thread as Record<string, unknown>)
+      : {}
   const model = nonEmptyString(result.model)
   const effort = nonEmptyString(result.reasoningEffort)
   return {
     threadId,
+    thread,
     historyPath: readCodexThreadPath(opened),
     ...(model ? { model } : {}),
     ...(effort ? { effort } : {})

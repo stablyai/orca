@@ -73,11 +73,19 @@ export function resolveNativeChatLeafRoute(args: {
   chatLeafStillMounted: boolean
   activeLeafIsEligible: boolean
   chatLeafHasConfirmedAgentExit?: boolean
+  structuredSessionId?: string | null
 }): NativeChatLeafRoute {
+  const confirmedAgentExit = args.chatLeafHasConfirmedAgentExit && !args.structuredSessionId
   if (!args.isChatViewMode) {
     return { chatLeafId: null, exitChat: false }
   }
-  if (args.chatLeafId && args.chatLeafStillMounted && !args.chatLeafHasConfirmedAgentExit) {
+  if (args.structuredSessionId) {
+    return {
+      chatLeafId: args.chatLeafId ?? args.activeLeafId,
+      exitChat: false
+    }
+  }
+  if (args.chatLeafId && args.chatLeafStillMounted && !confirmedAgentExit) {
     // Why: agent/title evidence can disappear while local, SSH, or runtime
     // transports reconnect. A mounted owning pane is not a terminal lifecycle
     // event, so keep its chat surface until the pane itself is removed.
@@ -85,13 +93,10 @@ export function resolveNativeChatLeafRoute(args: {
   }
   // Manager hydration can briefly have no active pane; preserve the requested
   // mode until a concrete leaf exists instead of toggling it off during mount.
-  if (!args.activeLeafId && !args.chatLeafHasConfirmedAgentExit) {
+  if (!args.activeLeafId && !confirmedAgentExit) {
     return { chatLeafId: args.chatLeafId, exitChat: false }
   }
-  if (
-    args.activeLeafIsEligible &&
-    (!args.chatLeafHasConfirmedAgentExit || args.activeLeafId !== args.chatLeafId)
-  ) {
+  if (args.activeLeafIsEligible && (!confirmedAgentExit || args.activeLeafId !== args.chatLeafId)) {
     return { chatLeafId: args.activeLeafId, exitChat: false }
   }
   // Why: removing the owning leaf or confirming its agent exited must not leave

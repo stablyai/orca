@@ -4,10 +4,10 @@ import type { TerminalTab } from '../../../../shared/terminal-tab-types'
 import type { TuiAgent } from '../../../../shared/tui-agent'
 import type { OpenFile } from '../../store/slices/editor'
 import { canToggleNativeChat } from '../native-chat/native-chat-availability'
-import { resolveCommittedTitleAgentType } from '@/lib/pane-agent-evidence'
 import SortableTab from './SortableTab'
 import EditorFileTab from './EditorFileTab'
 import BrowserTab from './BrowserTab'
+import { resolveNativeChatTabAgentEvidence } from './native-chat-tab-agent-evidence'
 import type { DropIndicator } from './drop-indicator'
 import type { TabDragItemData } from '../tab-group/useTabDragSplit'
 import { getTabDragLabel, type TabBarItem } from './tab-bar-item-model'
@@ -85,9 +85,7 @@ export function renderTabBarItems({
       }
       const unifiedTabForItem = unifiedTabByVisibleId.get(item.id)
       // Carry the agent *identity* (not just "an agent exists") so the native-chat gate can reject agents like Grok.
-      const resolvedAgent =
-        resolveCommittedTitleAgentType(unifiedTabForItem?.label ?? '') ??
-        resolveCommittedTitleAgentType(terminalTab.title)
+      const resolvedAgent = resolveNativeChatTabAgentEvidence(terminalTab, unifiedTabForItem)
       // Key the live-agent lookup by the backing terminal tab id: agent-status pane keys use it, not the unified tab id.
       const detectedAgent = tabAgentTypesByTabId[terminalTab.id] ?? null
       const tabWideFallbackSafe = nativeChatTabWideFallbackUnsafeTabsById[terminalTab.id] !== true

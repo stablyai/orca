@@ -98,6 +98,80 @@ describe('registerPtyHandlers', () => {
       }
     }
   })
+  it('records route provenance when degraded daemon spawns fall back locally', async () => {
+    setLocalPtyProvider({
+      routesFreshSpawnsToLocalProvider: true,
+      spawn: vi.fn(async () => ({ id: 'pty-degraded-local' })),
+      write: vi.fn(),
+      resize: vi.fn(),
+      kill: vi.fn(),
+      shutdown: vi.fn(),
+      onData: vi.fn(() => vi.fn()),
+      onExit: vi.fn(() => vi.fn()),
+      listProcesses: vi.fn(async () => []),
+      getForegroundProcess: vi.fn(async () => null)
+    } as never)
+    const getSettings = vi.fn().mockReturnValue({ activeCodexManagedAccountId: null })
+    registerPtyHandlers(mainWindow as never, undefined, () => TEST_CODEX_HOME, getSettings as never)
+
+    await handlers.get('pty:spawn')!(null, {
+      cols: 80,
+      rows: 24,
+      launchAgent: 'codex'
+    })
+
+    expect(recordCodexPaneAccountMock).toHaveBeenCalledWith('pty-degraded-local', {
+      selectionKey: 'host',
+      accountId: null,
+      homeRoute: 'shared-home'
+    })
+  })
+  it('records degraded-local provenance through the runtime spawn controller', async () => {
+    type RuntimeSpawnController = {
+      spawn(args: Record<string, unknown>): Promise<{ id: string }>
+    }
+    setLocalPtyProvider({
+      routesFreshSpawnsToLocalProvider: true,
+      spawn: vi.fn(async () => ({ id: 'pty-runtime-degraded-local' })),
+      write: vi.fn(),
+      resize: vi.fn(),
+      kill: vi.fn(),
+      shutdown: vi.fn(),
+      onData: vi.fn(() => vi.fn()),
+      onExit: vi.fn(() => vi.fn()),
+      listProcesses: vi.fn(async () => []),
+      getForegroundProcess: vi.fn(async () => null)
+    } as never)
+    const runtime = {
+      setPtyController: vi.fn(),
+      registerPty: vi.fn(),
+      noteTerminalSpawnCommand: vi.fn(),
+      onPtySpawned: vi.fn(),
+      onPtyExit: vi.fn(),
+      onPtyData: vi.fn()
+    }
+    const getSettings = vi.fn().mockReturnValue({ activeCodexManagedAccountId: null })
+    registerPtyHandlers(
+      mainWindow as never,
+      runtime as never,
+      () => TEST_CODEX_HOME,
+      getSettings as never
+    )
+    const controller = runtime.setPtyController.mock.calls[0]?.[0] as RuntimeSpawnController
+
+    await controller.spawn({
+      cols: 80,
+      rows: 24,
+      worktreeId: 'wt-runtime',
+      launchAgent: 'codex'
+    })
+
+    expect(recordCodexPaneAccountMock).toHaveBeenCalledWith('pty-runtime-degraded-local', {
+      selectionKey: 'host',
+      accountId: null,
+      homeRoute: 'shared-home'
+    })
+  })
   it('does not guess route provenance for a pane-local environment CODEX_HOME', async () => {
     setLocalPtyProvider({
       spawn: vi.fn(async () => ({ id: 'pty-pane-env-home' })),

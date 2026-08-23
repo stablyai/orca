@@ -42,6 +42,7 @@ export type CodexJournalTranslatorDeps = {
 
 export type CodexJournalTranslator = {
   handle: (event: CodexStructuredSessionEvent) => void
+  restoreThread: (threadId: string, thread: Record<string, unknown>) => void
   flush: () => void
   dispose: () => void
 }
@@ -229,6 +230,23 @@ export function createCodexJournalTranslator(
   }
 
   return {
+    restoreThread: (threadId, thread) => {
+      const turns = Array.isArray(thread.turns) ? thread.turns : []
+      for (const rawTurn of turns) {
+        const turn = readRecord(rawTurn)
+        const turnId = readString(turn, 'id')
+        if (!turnId) {
+          continue
+        }
+        currentTurnIds.set(threadId, turnId)
+        for (const item of Array.isArray(turn.items) ? turn.items : []) {
+          handleItemEvent({ threadId, method: 'item/completed', params: { turnId, item } })
+        }
+        currentTurnIds.delete(threadId)
+        ordinals.forgetTurn(threadId, turnId)
+      }
+      streams.flush()
+    },
     handle: (event) => {
       if (event.type === 'ended') {
         streams.flush()

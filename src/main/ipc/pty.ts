@@ -1476,15 +1476,13 @@ function codexHomePathsEqual(left: string | null, right: string): boolean {
   return codexHomeSelectionsEqual(left, right)
 }
 
-// Why: CODEX_HOME is fixed in a shell's environment at spawn and the daemon
-// keeps that shell alive across app restarts, so the launch account is the only
-// way to tell later that a pane still runs Codex as the previously selected
-// account. A reattach inherits that baked environment rather than choosing one,
-// so re-recording it under the current selection would erase the very evidence
-// that the pane is stale.
+// Why: CODEX_HOME is fixed in a shell's environment at spawn, so adoption and
+// daemon reattach both need the launch account. A reattach inherits that baked
+// environment rather than choosing one, so re-recording it under the current
+// selection would erase the evidence that the pane is stale.
 function recordCodexPaneAccountForSpawn(args: {
   ptyId: string | undefined
-  isDaemonHostSpawn: boolean
+  isLocalExecutionHostSpawn: boolean
   isReattach: boolean
   pinnedByResume: boolean
   launchCodexHomePath: string | null
@@ -1492,7 +1490,7 @@ function recordCodexPaneAccountForSpawn(args: {
   target: CodexAccountSelectionTarget
   settings: GlobalSettings | undefined
 }): void {
-  if (!args.ptyId || !args.isDaemonHostSpawn || args.isReattach) {
+  if (!args.ptyId || !args.isLocalExecutionHostSpawn || args.isReattach) {
     return
   }
   const customHomeOverride = getCustomCodexHomeOverrideForLaunch(args.launchEnv)
@@ -5347,7 +5345,7 @@ export function registerPtyHandlers(
         }
         recordCodexPaneAccountForSpawn({
           ptyId: result.id,
-          isDaemonHostSpawn,
+          isLocalExecutionHostSpawn: !args.connectionId,
           isReattach: result.isReattach === true,
           pinnedByResume: codexResumeHomeSelected,
           launchCodexHomePath: selectedCodexHomePath,
@@ -6929,7 +6927,7 @@ export function registerPtyHandlers(
         })
         recordCodexPaneAccountForSpawn({
           ptyId: result.id,
-          isDaemonHostSpawn,
+          isLocalExecutionHostSpawn: !args.connectionId,
           isReattach: result.isReattach === true,
           pinnedByResume: codexResumeHomeSelected,
           launchCodexHomePath: selectedCodexHomePath,

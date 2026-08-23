@@ -327,6 +327,11 @@ export type AgentHookEventPayload = {
   source?: AgentHookSource
   /** Ephemeral Orca launch identity stamped into the PTY env for this process. */
   launchToken?: string
+  /** One-shot nonce Orca minted for a single agent invocation, stamped into that
+   *  process's env only. Unlike `launchToken` (pane-lifetime identity that
+   *  authority attestation matches against) this is per-launch and disposable, so
+   *  it can bind a specific spawn without rewriting the pane's launch identity. */
+  sessionNonce?: string
   tabId?: string
   worktreeId?: string
   /** SSH connection the event arrived on, or null for local. Only `ingestRemote` can stamp it — the loopback HTTP path has no mux identity — and receivers key off it to drop
@@ -4401,6 +4406,7 @@ export function normalizeHookPayload(
   }
   const worktreeId = readStringField(record, 'worktreeId')
   const launchToken = readStringField(record, 'launchToken')
+  const sessionNonce = readStringField(record, 'sessionNonce')
 
   const hookPayloadRecord = hookPayload as Record<string, unknown>
   if (source === 'claude') {
@@ -4604,6 +4610,7 @@ export function normalizeHookPayload(
         paneKey,
         source,
         launchToken,
+        ...(sessionNonce ? { sessionNonce } : {}),
         tabId,
         worktreeId,
         // Why: normalization is transport-agnostic — only ingestRemote knows the mux identity to stamp here.

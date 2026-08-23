@@ -49,6 +49,7 @@ export async function codexProcessIdentity(
 export function codexProviderHandleLink(input: {
   threadId: string
   resumed: boolean
+  origin?: 'adopted'
   fence: number
   linkId?: string
   observedAt: number
@@ -56,7 +57,7 @@ export function codexProviderHandleLink(input: {
   return {
     linkId: input.linkId ?? `codex-${input.fence}-${input.threadId}`.slice(0, 128),
     handle: { provider: 'codex', threadId: input.threadId },
-    origin: input.resumed ? 'resumed' : 'created',
+    origin: input.origin ?? (input.resumed ? 'resumed' : 'created'),
     mintedAtFence: input.fence,
     observedAt: input.observedAt
   }

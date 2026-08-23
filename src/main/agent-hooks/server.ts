@@ -126,6 +126,8 @@ type PersistedAgentHookEventPayload = Omit<
   | 'launchToken'
   | 'promptInteractionKey'
   | 'restoredUnconfirmed'
+  // Why: a one-shot resume nonce is meaningless after the process it named exits.
+  | 'sessionNonce'
   // Why: revision counters are in-memory and the authority id is regenerated per process, so
   // a stored observation could only rehydrate as a stale ordering claim from a dead authority.
   | 'observation'
@@ -3122,6 +3124,8 @@ export class AgentHookServer {
         promptInteractionKey: _promptInteractionKey,
         // Why: never persisted — hydrate re-stamps it, so a stored copy could only drift.
         restoredUnconfirmed: _restoredUnconfirmed,
+        // Why: a one-shot resume nonce is meaningless after the process it named exits.
+        sessionNonce: _sessionNonce,
         // Why: same — the sequencer that issued it dies with the process (see PersistedAgentHookEventPayload).
         observation: _observation,
         launchToken,

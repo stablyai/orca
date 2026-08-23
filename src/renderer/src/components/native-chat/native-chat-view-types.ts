@@ -32,6 +32,7 @@ export type NativeChatStructuredViewProps = {
   target: RuntimeClientTarget
   agent: AgentType
   allowFileUriLinks: boolean
+  onSwitchToTerminal?: () => void
 }
 
 export type NativeChatResolvedViewProps = {

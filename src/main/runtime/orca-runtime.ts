@@ -82,6 +82,12 @@ import {
 import { ensureStructuredAgentSessionHost as installStructuredAgentSessionHost } from './structured-agent-session-runtime'
 import { getStructuredAgentSessionHost } from '../native-chat/agent-session-wire/structured-agent-session-registry'
 import type { AgentSessionAttachParams } from '../native-chat/agent-session-wire/structured-agent-session-attach'
+import type { StructuredAgentSessionCaller } from '../native-chat/agent-session-wire/structured-agent-session-host-types'
+import type {
+  AgentSessionAttachResult,
+  AgentSessionMutationResult
+} from '../../shared/agent-session-wire'
+import { computeAgentSessionPayloadFingerprint } from '../../shared/agent-session-mutation-envelope'
 import {
   StructuredTuiLaunchCleanupError,
   type StructuredAgentSessionHandoffTransport,
@@ -95,7 +101,15 @@ import {
 } from '../../shared/claimed-agent-pty-owner-snapshot'
 import { codexProviderHandleLink } from '../codex/codex-structured-owner-identity'
 import {
+  beginAdoptedCodexReadinessWatch,
+  type AdoptedCodexReadinessEvent,
+  type AdoptedCodexReadinessWatch
+} from '../codex/adopted-codex-tui-readiness'
+import { AGENT_HOOK_SESSION_NONCE_ENV_VAR } from '../../shared/agent-hook-session-nonce'
+import { withInlineEnvAssignments } from '../../shared/inline-env-command-prefix'
+import {
   proveCodexTuiRollout,
+  resolveLiveCodexTuiRollout,
   resolvePinnedCodexRolloutProof
 } from '../codex/codex-tui-rollout-proof'
 import {
@@ -103,11 +117,19 @@ import {
   probeAgentSessionProcessIdentity
 } from './agent-session-process-identity-probe'
 import { waitForStructuredTuiExitProof } from './structured-tui-exit-proof'
+import { stopAdoptedCodexTui } from './adopted-codex-tui-stop'
 import { readStructuredTuiProcessIdentity } from './structured-tui-process-identity'
+import { StructuredTuiAdoptionInflight } from './structured-tui-adoption-inflight'
+import { releaseStructuredTuiAdoptionReservation } from './structured-tui-adoption-reservation-release'
 import { hasStructuredTuiIdleEvidence } from './structured-tui-idle-evidence'
 import { evaluateStructuredTuiRecoveryClaim } from './structured-tui-recovery-claim-match'
 import { getProfileUserDataPath } from '../orca-profiles/profile-storage-paths'
-import { getSystemCodexHomePath } from '../codex/codex-home-paths'
+import { getSystemCodexHomePath, resolveOrcaManagedCodexHomePath } from '../codex/codex-home-paths'
+import { getCodexPaneAccount } from '../codex/codex-pane-account-registry'
+import {
+  describeCodexPaneLaunchHomeFailure,
+  resolveCodexPaneLaunchHome
+} from '../codex/codex-pane-launch-home'
 import {
   agentSessionPtyWriteGate,
   type AgentSessionPtyWriteAdmittance
@@ -3170,6 +3192,10 @@ export class OrcaRuntimeService {
   private pendingMobileSessionPtyInventoryRefresh: Promise<Set<string> | null> | null = null
   private structuredAgentSessionTabRestorePromise: Promise<void> | null = null
   private structuredAgentSessionStartupRestorePromise: Promise<void> | null = null
+  private readonly adoptedStructuredTuiOwners = new Map<string, StructuredTuiOwner>()
+  private readonly structuredTuiAdoptionInflight = new StructuredTuiAdoptionInflight<
+    AgentSessionMutationResult<AgentSessionAttachResult>
+  >()
   private leaves = new Map<string, RuntimeLeafRecord>()
   // Why: PTY output is a per-keystroke hot path. Looking up affected leaves by
   // ptyId keeps active TUI redraws independent of the total open terminal count.
@@ -3678,6 +3704,9 @@ export class OrcaRuntimeService {
       }) => AgentHookAuthorityAttestation | null)
     | null
   private readonly retireAgentHookCompatibilityAuthorityFn: ((paneKey: string) => void) | null
+  private readonly subscribeAgentHookEventsFn:
+    | ((listener: (event: AdoptedCodexReadinessEvent) => void) => () => void)
+    | null
   private readonly canRecoverPersistentLocalPtysFn: () => boolean
   private readonly buildAgentHookPtyEnv: (() => Record<string, string>) | null
   private readonly getDesktopWindowStatusFn: () => RuntimeDesktopWindowStatus
@@ -3762,6 +3791,12 @@ export class OrcaRuntimeService {
         terminalProvenance: 'current_runtime' | 'restored'
       }) => AgentHookAuthorityAttestation | null
       retireAgentHookCompatibilityAuthority?: (paneKey: string) => void
+      /** Live tap on accepted agent hook events. The adopted-Codex return path uses
+       *  it to take the resumed CLI's own SessionStart as its readiness proof
+       *  instead of scraping the pane. */
+      subscribeAgentHookEvents?: (
+        listener: (event: AdoptedCodexReadinessEvent) => void
+      ) => () => void
       canRecoverPersistentLocalPtys?: () => boolean
       // Why: codex-home paths for the Agent Session History scan must be sourced
       // here, not via the window-only registerCoreHandlers path — that path never
@@ -3808,6 +3843,7 @@ export class OrcaRuntimeService {
       deps?.attestAgentHookCompatibilityAuthority ?? null
     this.retireAgentHookCompatibilityAuthorityFn =
       deps?.retireAgentHookCompatibilityAuthority ?? null
+    this.subscribeAgentHookEventsFn = deps?.subscribeAgentHookEvents ?? null
     this.canRecoverPersistentLocalPtysFn = deps?.canRecoverPersistentLocalPtys ?? (() => true)
     // Why: configure the shared AiVault scan cache from a serve-mode-reachable
     // seam so the aiVault.listSessions RPC includes managed-Codex + WSL sessions
@@ -10601,6 +10637,16 @@ export class OrcaRuntimeService {
     return {
       hostLabel: hostname(),
       launchTui: async ({ record, fence, spawnToken, onSpawned }) => {
+        const adoptedOwner = this.adoptedStructuredTuiOwners.get(record.sessionId)
+        if (adoptedOwner) {
+          return this.launchAdoptedStructuredTui({
+            record,
+            fence,
+            spawnToken,
+            owner: adoptedOwner,
+            onSpawned
+          })
+        }
         const head = record.providerHandleChain.at(-1)
         if (head?.handle.provider !== 'codex') {
           throw new Error('agent_session_identity_required')
@@ -10665,7 +10711,8 @@ export class OrcaRuntimeService {
               ptyId: terminal.ptyId
             },
             process: spawnedOwner.process,
-            ...(proof.transcriptPath ? { transcriptPath: proof.transcriptPath } : {})
+            ...(proof.transcriptPath ? { transcriptPath: proof.transcriptPath } : {}),
+            historySource: 'provider-resume'
           })
         } catch (error) {
           try {
@@ -10893,7 +10940,10 @@ export class OrcaRuntimeService {
       stopRecoveredOwner: (record) => this.stopStructuredSessionProcess(record),
       tuiStatus: (owner) => this.structuredTuiStatus(owner),
       closeTuiOwner: (owner) => this.closeStructuredTuiOwner(owner),
-      revealNativeSession: ({ workspaceId, sessionId }) => {
+      revealNativeSession: ({ workspaceId, sessionId, adoptedTerminal }) => {
+        if (adoptedTerminal) {
+          return
+        }
         this.publishStructuredAgentSessionTab({
           workspaceId,
           sessionId,
@@ -10977,6 +11027,10 @@ export class OrcaRuntimeService {
   private async closeStructuredTuiOwner(
     owner: StructuredTuiOwner
   ): Promise<{ transcriptPath?: string }> {
+    if (owner.adoptedTerminal) {
+      await this.closeAdoptedStructuredTuiOwner(owner)
+      return owner.transcriptPath ? { transcriptPath: owner.transcriptPath } : {}
+    }
     if (this.ptysById.get(owner.terminal.ptyId)?.connected) {
       const current = this.refreshStructuredTuiOwnerBinding(owner)
       try {
@@ -10989,6 +11043,158 @@ export class OrcaRuntimeService {
     }
     await this.waitForStructuredTuiOwnerExit(owner)
     return owner.transcriptPath ? { transcriptPath: owner.transcriptPath } : {}
+  }
+
+  private async launchAdoptedStructuredTui(input: {
+    record: AgentSessionRecord
+    fence: number
+    spawnToken: string
+    owner: StructuredTuiOwner
+    onSpawned?: (owner: StructuredTuiOwner) => Promise<void>
+  }): Promise<StructuredTuiOwner> {
+    const head = input.record.providerHandleChain.at(-1)
+    const pty = this.ptysById.get(input.owner.terminal.ptyId)
+    if (
+      head?.handle.provider !== 'codex' ||
+      !pty?.connected ||
+      pty.paneKey !== input.owner.terminal.paneKey
+    ) {
+      throw new Error('The adopted terminal is no longer available.')
+    }
+    const workspace = await this.resolveTerminalWorkspaceLaunchScope(
+      `id:${input.record.location.workspaceId}`
+    )
+    const settings = this.requireStore().getSettings()
+    const platform = this.getAgentLaunchPlatformForWorkspace(workspace)
+    const shell = resolveLocalWindowsAgentStartupShell({
+      platform,
+      isRemote: false,
+      terminalWindowsShell: settings.terminalWindowsShell
+    })
+    const startup = buildAgentResumeStartupPlan({
+      agent: 'codex',
+      providerSession: { key: 'session_id', id: head.handle.threadId },
+      cmdOverrides: settings.agentCmdOverrides ?? {},
+      agentArgs: resolveTuiAgentLaunchArgs('codex', settings.agentDefaultArgs),
+      agentEnv: resolveTuiAgentLaunchEnv('codex', settings.agentDefaultEnv),
+      sessionOptions: this.toAgentSessionOptions(input.record.options),
+      sessionOptionsOverrideAgentArgs: Boolean(input.record.options),
+      platform,
+      shell,
+      isRemote: false
+    })
+    if (!startup || !pty.paneKey) {
+      throw new Error('The adopted terminal could not resume Codex.')
+    }
+    // Why this is checked up front: the resumed Codex proves itself through its own
+    // SessionStart hook, so without the hooks there is nothing to wait for — fail
+    // now with the reason instead of after a 30s silence.
+    const subscribeAgentHookEvents = this.subscribeAgentHookEventsFn
+    if (
+      !subscribeAgentHookEvents ||
+      settings.agentStatusHooksEnabled === false ||
+      settings.disabledTuiAgents?.includes('codex') === true
+    ) {
+      throw new Error('Agent status hooks are off, so Codex cannot confirm the resumed session.')
+    }
+    // Why the watch opens before the write: a warm Codex can post SessionStart
+    // before `writeAgentSessionProof` even returns, and a proof that arrives
+    // before its listener is a proof Orca never sees.
+    const sessionNonce = randomUUID()
+    const readiness = beginAdoptedCodexReadinessWatch({
+      subscribe: subscribeAgentHookEvents,
+      target: { paneKey: pty.paneKey, threadId: head.handle.threadId, sessionNonce }
+    })
+    // Why: a throw between here and the await would otherwise leave the watch's
+    // timeout rejection unhandled.
+    void readiness.settled.catch(() => {})
+    let proved = false
+    try {
+      const resumeCommand = withInlineEnvAssignments({
+        command: startup.launchCommand,
+        env: { [AGENT_HOOK_SESSION_NONCE_ENV_VAR]: sessionNonce },
+        platform,
+        shell
+      })
+      if (
+        !this.ptyController?.writeAgentSessionProof?.(pty.ptyId, `${resumeCommand}\r`, {
+          sessionId: input.record.sessionId,
+          spawnToken: input.spawnToken
+        })
+      ) {
+        throw new Error('The adopted terminal could not resume Codex.')
+      }
+      const listing = (await this.ptyController.listProcesses?.())?.find(
+        (candidate) =>
+          candidate.id === pty.ptyId &&
+          (!pty.incarnationId || candidate.incarnationId === pty.incarnationId)
+      )
+      if (!listing?.rootProcessId) {
+        throw new Error('The adopted terminal did not publish a process identity.')
+      }
+      const process = await readStructuredTuiProcessIdentity({
+        hostId: input.record.location.executionHostId,
+        rootPid: listing.rootProcessId,
+        spawnToken: input.spawnToken,
+        agent: 'codex'
+      })
+      const owner: StructuredTuiOwner = {
+        ...input.owner,
+        process,
+        link: codexProviderHandleLink({
+          threadId: head.handle.threadId,
+          resumed: true,
+          fence: input.fence,
+          observedAt: Date.now()
+        })
+      }
+      await input.onSpawned?.(owner)
+      const transcriptPath = await this.waitForAdoptedStructuredTuiProof({
+        owner,
+        readiness,
+        threadId: head.handle.threadId,
+        codexHome: input.record.accountHome.path
+      })
+      proved = true
+      const provenOwner = { ...owner, transcriptPath }
+      this.adoptedStructuredTuiOwners.set(input.record.sessionId, provenOwner)
+      return provenOwner
+    } finally {
+      if (!proved) {
+        readiness.dispose()
+      }
+    }
+  }
+
+  // Why nothing is typed at the pane here: the old proof pasted `/status` and
+  // scraped the tail for a session id, which cannot run until Codex is already up
+  // and cannot tell a ready shell from a ready Codex. The CLI's own SessionStart
+  // hook answers both questions off-screen, so this only has to wait for it and
+  // then name the rollout the thread already owns on disk.
+  private async waitForAdoptedStructuredTuiProof(input: {
+    owner: StructuredTuiOwner
+    readiness: AdoptedCodexReadinessWatch
+    threadId: string
+    codexHome: string
+  }): Promise<string> {
+    await input.readiness.settled
+    const pty = this.ptysById.get(input.owner.terminal.ptyId)
+    if (!pty?.connected || pty.paneKey !== input.owner.terminal.paneKey) {
+      throw new Error('The adopted terminal lost its pane identity.')
+    }
+    const transcriptPath = await resolvePinnedCodexRolloutProof(input.codexHome, input.threadId)
+    if (!transcriptPath) {
+      throw new Error('The agent terminal did not prove the expected Codex rollout.')
+    }
+    return transcriptPath
+  }
+
+  private async closeAdoptedStructuredTuiOwner(owner: StructuredTuiOwner): Promise<void> {
+    const pty = this.ptysById.get(owner.terminal.ptyId)
+    if (!pty?.connected || pty.paneKey !== owner.terminal.paneKey) {
+      throw new Error('The owning agent terminal lost its pane identity.')
+    }
+    await stopAdoptedCodexTui({ identity: owner.process })
   }
 
   private refreshStructuredTuiOwnerBinding(owner: StructuredTuiOwner): StructuredTuiOwner {
@@ -11227,6 +11433,261 @@ export class OrcaRuntimeService {
     }
   }
 
+  adoptStructuredAgentSessionTerminal(
+    input: {
+      envelope: {
+        sessionId: string
+        clientOperationId: string
+        expectedRuntimeFence: null
+        payloadFingerprint: string
+      }
+      worktree: string
+      tabId: string
+      paneKey: string
+      ptyId: string
+      threadId?: string
+    },
+    caller: StructuredAgentSessionCaller
+  ): Promise<AgentSessionMutationResult<AgentSessionAttachResult>> {
+    return this.structuredTuiAdoptionInflight.run(
+      {
+        callerKey: caller.callerKey,
+        operationId: input.envelope.clientOperationId,
+        fingerprint: input.envelope.payloadFingerprint
+      },
+      () => this.adoptStructuredAgentSessionTerminalOnce(input, caller)
+    )
+  }
+
+  private async adoptStructuredAgentSessionTerminalOnce(
+    input: Parameters<OrcaRuntimeService['adoptStructuredAgentSessionTerminal']>[0],
+    caller: StructuredAgentSessionCaller
+  ): Promise<AgentSessionMutationResult<AgentSessionAttachResult>> {
+    const pty = this.ptysById.get(input.ptyId)
+    if (
+      !pty?.connected ||
+      pty.connectionId !== null ||
+      pty.wslDistro !== null ||
+      pty.tabId !== input.tabId ||
+      pty.paneKey !== input.paneKey
+    ) {
+      throw new Error('Structured Codex chat can only adopt this local terminal pane.')
+    }
+    const target = await this.resolveRuntimeFileTarget(input.worktree)
+    if (target.connectionId || target.worktree.id !== pty.worktreeId) {
+      throw new Error('Structured Codex chat is unavailable for remote terminals.')
+    }
+    const intent = await this.resolveStructuredAgentSessionAdoptionIntent({
+      envelope: input.envelope,
+      worktree: input.worktree,
+      agent: 'codex',
+      ptyId: input.ptyId
+    })
+    const listing = (await this.ptyController?.listProcesses?.())?.find(
+      (candidate) =>
+        candidate.id === pty.ptyId &&
+        (!pty.incarnationId || candidate.incarnationId === pty.incarnationId)
+    )
+    if (!listing?.rootProcessId) {
+      throw new Error('Could not prove the Codex terminal process.')
+    }
+    const rootProcessId = listing.rootProcessId
+    const sessionId = input.envelope.sessionId
+    const priorBoundSessionId = agentSessionPtyWriteGate.boundSessionId(input.ptyId)
+    if (priorBoundSessionId !== null && priorBoundSessionId !== sessionId) {
+      throw new Error('This terminal pane already belongs to another structured Codex session.')
+    }
+    const host = getStructuredAgentSessionHost()
+    if (!host) {
+      throw new Error('structured_agent_session_unsupported')
+    }
+    const launchEnv = resolveTuiAgentLaunchEnv(
+      'codex',
+      this.requireStore().getSettings().agentDefaultEnv
+    )
+    // Why the reservation comes before the proof: `admitProof` authorizes the `/status` probe only
+    // for a reservation that already names this session, `tui`, and this spawn token. Reserving
+    // afterwards left the probe unauthorized, so every adoption failed at its first keystroke.
+    const reserved = await host.reserveAdoptedTuiOwner({
+      caller,
+      sessionId,
+      clientOperationId: input.envelope.clientOperationId,
+      fingerprint: input.envelope.payloadFingerprint,
+      location: intent.location,
+      provider: intent.provider,
+      accountHome: intent.accountHome,
+      spawnToken: randomUUID(),
+      claimKeyId: this.agentSessionClaimSigner.keyId,
+      launchEnv
+    })
+    if (!reserved.ok) {
+      return reserved
+    }
+    const { fence, spawnToken } = reserved
+    agentSessionPtyWriteGate.bindPtyForAttempt(input.ptyId, sessionId, spawnToken)
+    let ownerProven = false
+    try {
+      return await this.attachAdoptedStructuredTui({
+        input,
+        caller,
+        host,
+        intent,
+        fence,
+        spawnToken,
+        rootProcessId,
+        pty,
+        onOwnerProven: (owner) => {
+          if (ownerProven) {
+            return
+          }
+          ownerProven = true
+          this.adoptedStructuredTuiOwners.set(sessionId, owner)
+          const settled = agentSessionPtyWriteGate.settlePtyAttempt(input.ptyId, spawnToken)
+          const currentPty = this.ptysById.get(input.ptyId)
+          if (
+            !settled &&
+            currentPty?.connected &&
+            currentPty.paneKey === input.paneKey &&
+            agentSessionPtyWriteGate.boundSessionId(input.ptyId) === null
+          ) {
+            agentSessionPtyWriteGate.bindPty(input.ptyId, sessionId)
+          }
+        }
+      })
+    } finally {
+      if (!ownerProven) {
+        const error = await releaseStructuredTuiAdoptionReservation(
+          () => host.releaseAdoptedTuiReservation({ sessionId, fence, spawnToken }),
+          () => agentSessionPtyWriteGate.releasePtyAttempt(input.ptyId, spawnToken)
+        )
+        if (error !== null) {
+          console.warn('[native-chat] adopted TUI reservation release failed', {
+            sessionId,
+            fence,
+            spawnToken,
+            error
+          })
+        }
+      }
+    }
+  }
+
+  private async attachAdoptedStructuredTui(args: {
+    input: Parameters<OrcaRuntimeService['adoptStructuredAgentSessionTerminal']>[0]
+    caller: StructuredAgentSessionCaller
+    host: NonNullable<ReturnType<typeof getStructuredAgentSessionHost>>
+    intent: AgentSessionAttachParams
+    fence: number
+    spawnToken: string
+    rootProcessId: number
+    pty: RuntimePtyWorktreeRecord
+    onOwnerProven: (owner: StructuredTuiOwner) => void
+  }): Promise<AgentSessionMutationResult<AgentSessionAttachResult>> {
+    const { input, caller, host, intent, fence, spawnToken, rootProcessId, pty } = args
+    const readPty = (): RuntimePtyWorktreeRecord => {
+      const current = this.ptysById.get(input.ptyId)
+      if (!current?.connected || current.paneKey !== input.paneKey) {
+        throw new Error('The Codex terminal lost its pane identity.')
+      }
+      return current
+    }
+    const readProcess = () =>
+      readStructuredTuiProcessIdentity({
+        hostId: intent.location.executionHostId,
+        rootPid: rootProcessId,
+        spawnToken,
+        agent: 'codex'
+      })
+    const process = await readProcess()
+    let threadId = input.threadId
+    const proofInput = {
+      codexHome: intent.accountHome.path,
+      kittyKeyboardFlags: this.providerModeTrackersByPtyId.get(input.ptyId)?.flags ?? 0,
+      readOutput: () => {
+        const current = readPty()
+        return {
+          text: buildTerminalWaitText(current.tailBuffer, current.tailPartialLine, current.preview),
+          lastOutputAt: current.lastOutputAt
+        }
+      },
+      write: (data: string) =>
+        this.ptyController?.writeAgentSessionProof?.(readPty().ptyId, data, {
+          sessionId: input.envelope.sessionId,
+          spawnToken
+        }) ?? false
+    }
+    let transcriptPath: string
+    if (threadId) {
+      const proof = await proveCodexTuiRollout({ ...proofInput, threadId })
+      transcriptPath = proof.transcriptPath
+    } else {
+      const proof = await resolveLiveCodexTuiRollout({
+        ...proofInput
+      })
+      threadId = proof.threadId
+      transcriptPath = proof.transcriptPath
+    }
+    const confirmedProcess = await readProcess()
+    if (
+      confirmedProcess.pid !== process.pid ||
+      confirmedProcess.processStartTimeMs !== process.processStartTimeMs
+    ) {
+      throw new Error('The Codex terminal process changed during conversation proof.')
+    }
+    const owner: StructuredTuiOwner = {
+      terminal: {
+        handle: this.issueStructuredTuiPtyHandle(pty),
+        tabId: input.tabId,
+        paneKey: input.paneKey,
+        ptyId: input.ptyId
+      },
+      process,
+      link: codexProviderHandleLink({
+        threadId,
+        resumed: false,
+        origin: 'adopted',
+        // Why not 1: a retry supersedes the previous attempt's reservation, and `proveOwner`
+        // refuses a handle link minted at any fence but the reservation's own.
+        fence,
+        observedAt: Date.now()
+      }),
+      transcriptPath,
+      historySource: 'provider-resume',
+      adoptedTerminal: true
+    }
+    const params: AgentSessionAttachParams = {
+      ...intent,
+      envelope: {
+        ...input.envelope,
+        payloadFingerprint: computeAgentSessionPayloadFingerprint({
+          method: 'agentSession.attach',
+          sessionId: input.envelope.sessionId,
+          fields: {
+            location: intent.location,
+            provider: 'codex',
+            agent: 'codex',
+            accountHome: intent.accountHome,
+            runtimeKind: 'tui',
+            providerHandle: { kind: 'codex', threadId },
+            expectedRuntimeFence: null
+          }
+        })
+      },
+      runtimeKind: 'tui',
+      providerHandle: { kind: 'codex', threadId }
+    }
+    const adopted = await host.adoptTuiOwner({
+      caller,
+      params,
+      owner,
+      onOwnerProven: () => args.onOwnerProven(owner)
+    })
+    if (adopted.ok) {
+      args.onOwnerProven(owner)
+    }
+    return adopted
+  }
+
   private async resolveStructuredAgentSessionLocation(worktreeSelector: string) {
     const target = await this.resolveRuntimeFileTarget(worktreeSelector)
     const repo = this.store?.getRepo(target.worktree.repoId)
@@ -11253,6 +11714,60 @@ export class OrcaRuntimeService {
     worktree: string
     agent: 'codex'
   }): Promise<AgentSessionAttachParams> {
+    return this.resolveStructuredAgentSessionIntent(input, ({ workspacePath, launchEnv }) => {
+      // A create has no process yet, so the current selection is what it must follow.
+      const preparedHome = this.prepareCodexStructuredLaunchFn?.({ workspacePath, launchEnv })
+      const configuredHome = launchEnv.CODEX_HOME
+      return (
+        preparedHome?.trim() ||
+        (this.prepareCodexStructuredLaunchFn ? getSystemCodexHomePath() : configuredHome?.trim()) ||
+        getSystemCodexHomePath()
+      )
+    })
+  }
+
+  /**
+   * Why adoption resolves its own intent: the pane's Codex is already running under the
+   * CODEX_HOME it was spawned with, and only that home's sessions directory can hold its
+   * rollout. Following the create intent here probed the currently selected account instead,
+   * so adopting a pane on any other account failed with no hint that the account mismatched.
+   */
+  async resolveStructuredAgentSessionAdoptionIntent(input: {
+    envelope: { sessionId: string; clientOperationId: string }
+    worktree: string
+    agent: 'codex'
+    ptyId: string
+  }): Promise<AgentSessionAttachParams> {
+    return this.resolveStructuredAgentSessionIntent(input, () =>
+      this.resolveAdoptedCodexPaneHomePath(input.ptyId)
+    )
+  }
+
+  private resolveAdoptedCodexPaneHomePath(ptyId: string): string {
+    const resolved = resolveCodexPaneLaunchHome({
+      record: getCodexPaneAccount(ptyId),
+      settings: this.requireStore().getSettings(),
+      systemCodexHomePath: getSystemCodexHomePath(),
+      sharedRuntimeCodexHomePath: resolveOrcaManagedCodexHomePath()
+    })
+    // Never fall back to the selected home: a silent wrong-home probe is what hid the mismatch.
+    if (resolved.kind !== 'attributed') {
+      throw new Error(describeCodexPaneLaunchHomeFailure(resolved))
+    }
+    return resolved.path
+  }
+
+  private async resolveStructuredAgentSessionIntent(
+    input: {
+      envelope: { sessionId: string; clientOperationId: string }
+      worktree: string
+      agent: 'codex'
+    },
+    resolveAccountHomePath: (context: {
+      workspacePath: string
+      launchEnv: NodeJS.ProcessEnv
+    }) => string
+  ): Promise<AgentSessionAttachParams> {
     const support = await this.getStructuredAgentSessionCreateSupport(input.worktree, input.agent)
     if (!support.supported) {
       throw new Error('structured_agent_session_unsupported')
@@ -11261,8 +11776,6 @@ export class OrcaRuntimeService {
     const launchEnv = resolveTuiAgentLaunchEnv('codex', settings.agentDefaultEnv)
     const location = await this.resolveStructuredAgentSessionLocation(input.worktree)
     const workspacePath = (await this.resolveRuntimeFileTarget(input.worktree)).worktree.path
-    const preparedHome = this.prepareCodexStructuredLaunchFn?.({ workspacePath, launchEnv })
-    const configuredHome = launchEnv.CODEX_HOME
     return {
       envelope: {
         sessionId: input.envelope.sessionId,
@@ -11275,12 +11788,7 @@ export class OrcaRuntimeService {
       agent: 'codex',
       accountHome: {
         variable: 'CODEX_HOME',
-        path:
-          preparedHome?.trim() ||
-          (this.prepareCodexStructuredLaunchFn
-            ? getSystemCodexHomePath()
-            : configuredHome?.trim()) ||
-          getSystemCodexHomePath()
+        path: resolveAccountHomePath({ workspacePath, launchEnv })
       },
       runtimeKind: 'native'
     }

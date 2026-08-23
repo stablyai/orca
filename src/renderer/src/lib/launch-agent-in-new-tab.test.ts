@@ -5,6 +5,7 @@ import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../shared/constants'
 const mockCreateTab = vi.fn()
 const mockQueueTabStartupCommand = vi.fn()
 const mockSetActiveTabType = vi.fn()
+const mockSetTabViewMode = vi.fn()
 const mockSetTabBarOrder = vi.fn()
 const mockSetAgentStatus = vi.fn()
 const mockPasteDraftWhenAgentReady = vi.fn()
@@ -13,6 +14,7 @@ const mockSeedNativeChatLaunchDraft = vi.fn()
 const mockMarkNativeChatLaunchPromptFailed = vi.fn()
 const mockTrack = vi.fn()
 const mockToastMessage = vi.fn()
+const mockWaitForAgentReady = vi.fn()
 
 const LEAF_ID = '11111111-1111-4111-8111-111111111111'
 
@@ -79,6 +81,7 @@ const store = {
   closeTab: vi.fn(),
   queueTabStartupCommand: mockQueueTabStartupCommand,
   setActiveTabType: mockSetActiveTabType,
+  setTabViewMode: mockSetTabViewMode,
   setTabBarOrder: mockSetTabBarOrder,
   setAgentStatus: mockSetAgentStatus,
   seedNativeChatLaunchPrompt: mockSeedNativeChatLaunchPrompt,
@@ -110,6 +113,10 @@ vi.mock('@/components/tab-bar/reconcile-order', () => ({
 
 vi.mock('@/lib/agent-paste-draft', () => ({
   pasteDraftWhenAgentReady: mockPasteDraftWhenAgentReady
+}))
+
+vi.mock('@/lib/agent-ready-wait', () => ({
+  waitForAgentReady: mockWaitForAgentReady
 }))
 
 vi.mock('@/lib/telemetry', () => ({
@@ -171,6 +178,7 @@ describe('launchAgentInNewTab', () => {
     store.ptyIdsByTabId = {}
     mockCreateTab.mockReturnValue({ id: 'tab-1' })
     mockPasteDraftWhenAgentReady.mockResolvedValue(true)
+    mockWaitForAgentReady.mockResolvedValue({ ready: true, reason: 'foreground-match' })
   })
 
   it('stamps the launched agent on the new tab for immediate provider icon bootstrap', async () => {
@@ -212,7 +220,7 @@ describe('launchAgentInNewTab', () => {
     )
   })
 
-  it('opens supported submit-after-ready launches in chat and seeds a launch prompt echo', async () => {
+  it('adopts supported Codex launches through the structured chat toggle', async () => {
     store.settings = {
       agentCmdOverrides: {},
       agentDefaultArgs: {},
@@ -231,8 +239,7 @@ describe('launchAgentInNewTab', () => {
     })
 
     expect(mockCreateTab).toHaveBeenCalledWith('wt-1', undefined, undefined, {
-      launchAgent: 'codex',
-      viewMode: 'chat'
+      launchAgent: 'codex'
     })
     expect(mockQueueTabStartupCommand).toHaveBeenCalledWith(
       'tab-1',
@@ -246,6 +253,7 @@ describe('launchAgentInNewTab', () => {
       text: 'large generated prompt',
       createdAt: expect.any(Number)
     })
+    await vi.waitFor(() => expect(mockSetTabViewMode).toHaveBeenCalledWith('tab-1', 'chat'))
   })
 
   it('opens local Grok submit-after-ready launches in native chat', async () => {
@@ -445,8 +453,9 @@ describe('launchAgentInNewTab', () => {
       'wt-1',
       undefined,
       undefined,
-      expect.objectContaining({ viewMode: 'chat' })
+      expect.not.objectContaining({ viewMode: 'chat' })
     )
+    await vi.waitFor(() => expect(mockSetTabViewMode).toHaveBeenCalledWith('tab-1', 'chat'))
   })
 
   it('preserves paired-host draft delivery and supported launch preferences', async () => {

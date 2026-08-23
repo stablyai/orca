@@ -82,6 +82,39 @@ function translatorWith(tap = recorder(), window = manualWindow()) {
 }
 
 describe('codex journal translation', () => {
+  it('projects turns restored by thread/resume into durable conversation rows', () => {
+    const { translator, tap } = translatorWith()
+
+    translator.restoreThread(THREAD_ID, {
+      turns: [
+        {
+          id: 'turn-restored',
+          items: [
+            {
+              type: 'userMessage',
+              id: 'user-restored',
+              content: [{ type: 'text', text: 'existing question' }]
+            },
+            { type: 'agentMessage', id: 'agent-restored', text: 'existing answer' }
+          ]
+        }
+      ]
+    })
+
+    expect(tap.rows.map((row) => row.body)).toEqual([
+      {
+        kind: 'message',
+        role: 'user',
+        blocks: [{ type: 'text', text: 'existing question' }]
+      },
+      {
+        kind: 'message',
+        role: 'assistant',
+        blocks: [{ type: 'text', text: 'existing answer' }]
+      }
+    ])
+  })
+
   it('durably opens and closes the primary turn cancellation lifecycle', () => {
     const tap = recorder()
     const translator = createCodexJournalTranslator({

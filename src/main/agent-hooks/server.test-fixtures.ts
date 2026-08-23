@@ -16,6 +16,7 @@ export const RUNNING_SHELL = { id: 'shell-1', type: 'shell', status: 'running' }
 export type Body = {
   paneKey: string
   launchToken?: string
+  sessionNonce?: string
   tabId?: string
   worktreeId?: string
   env?: string

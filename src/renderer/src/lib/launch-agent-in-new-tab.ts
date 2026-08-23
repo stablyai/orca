@@ -29,6 +29,8 @@ import type { LaunchSource } from '../../../shared/telemetry-events'
 import { getConnectionIdFromState } from '@/lib/connection-context'
 import { resolveInitialNativeChatSessionOptions } from '@/components/native-chat/native-chat-launch-session-options'
 import { seedNativeChatAppliedSessionOptions } from '@/components/native-chat/native-chat-session-option-cache'
+import { canUseStructuredNativeChat } from '@/lib/structured-native-chat-availability'
+import { waitForAgentReady } from '@/lib/agent-ready-wait'
 
 export type LaunchAgentInNewTabArgs = {
   agent: TuiAgent
@@ -139,6 +141,7 @@ export function launchAgentInNewTab(args: LaunchAgentInNewTabArgs): LaunchAgentI
     isFollowupPath
   })
   let promptDeliveryResult: Promise<{ delivered: boolean; failureNotified: boolean }> | undefined
+  let promptDeliveryCompletion: Promise<unknown> | undefined
 
   if (!startupPlan) {
     return null
@@ -175,10 +178,14 @@ export function launchAgentInNewTab(args: LaunchAgentInNewTabArgs): LaunchAgentI
 
   // Why: queue startup BEFORE TerminalPane mounts — it snapshots pendingStartupByTabId in useState on first render.
   // Why: followup path pastes an unsubmitted draft, so gate the initial chat view like a draft launch, not auto-submit.
+  const adoptStructuredChat =
+    agent === 'codex' &&
+    initialViewModeProps.viewMode === 'chat' &&
+    canUseStructuredNativeChat(store, worktreeId)
   const tab = store.createTab(worktreeId, groupId, undefined, {
     launchAgent: agent,
     quickCommandLabel,
-    ...initialViewModeProps
+    ...(adoptStructuredChat ? {} : initialViewModeProps)
   })
   seedNativeChatAppliedSessionOptions(tab.id, agent, startupPlan.sessionOptions)
   if (initialCwd?.trim()) {
@@ -236,6 +243,7 @@ export function launchAgentInNewTab(args: LaunchAgentInNewTabArgs): LaunchAgentI
       }
       return { delivered, failureNotified: !delivered && timeoutNotice.wasNotified() }
     })
+    promptDeliveryCompletion = deliveryPromise
     if (promptDelivery === 'submit-after-ready') {
       promptDeliveryResult = deliveryPromise
     } else {
@@ -245,6 +253,25 @@ export function launchAgentInNewTab(args: LaunchAgentInNewTabArgs): LaunchAgentI
     }
   } else if (hasPrompt) {
     onPromptDelivered?.()
+  }
+
+  if (adoptStructuredChat) {
+    void (promptDeliveryCompletion ?? Promise.resolve())
+      .catch(() => undefined)
+      .then(async () => {
+        const ready = await waitForAgentReady(tab.id, TUI_AGENT_CONFIG.codex.expectedProcess)
+        if (!ready.ready) {
+          // Why: chat adoption proves the pane's foreground process. Flipping a tab whose Codex is
+          // not up yet trades a working terminal for an adoption error; the view toggle re-runs
+          // adoption whenever the user wants it.
+          console.warn('Codex was not ready for structured chat; staying in terminal view', {
+            tabId: tab.id,
+            reason: ready.reason
+          })
+          return
+        }
+        useAppStore.getState().setTabViewMode(tab.id, 'chat')
+      })
   }
 
   // Why: without setActiveTabType('terminal') a worktree showing an editor keeps rendering it and the new tab stays hidden.

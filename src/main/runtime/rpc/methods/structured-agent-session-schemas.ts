@@ -111,6 +111,17 @@ export const CreateSupportParams = z
   })
   .strict()
 
+export const AdoptTerminalParams = z
+  .object({
+    envelope: MutationEnvelope,
+    worktree: Identifier('Invalid worktree selector'),
+    tabId: Identifier('Invalid terminal tab id'),
+    paneKey: Identifier('Invalid terminal pane key'),
+    ptyId: Identifier('Invalid PTY id'),
+    threadId: Identifier('Invalid Codex thread id').optional()
+  })
+  .strict()
+
 /** Clients may only author user turns. Accepting an assistant or tool role here
  *  would let one client write words into the agent's mouth in another's
  *  timeline, and the provider — not the client — owns those. */

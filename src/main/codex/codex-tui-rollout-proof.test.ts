@@ -6,6 +6,7 @@ import {
   codexTuiStatusProbeInput,
   parseCodexTuiStatusSessionId,
   proveCodexTuiRollout,
+  resolveLiveCodexTuiRollout,
   resolvePinnedCodexRolloutProof
 } from './codex-tui-rollout-proof'
 
@@ -121,6 +122,32 @@ describe('Codex TUI rollout proof', () => {
     expect(write.mock.calls.map(([data]) => data)).toEqual([
       '\u001b[200~/status\u001b[201~',
       '\u001b[13u',
+      '\u001b'
+    ])
+  })
+
+  it('discovers the live thread and resolves its pinned rollout', async () => {
+    let reads = 0
+    const write = vi.fn((_data: string) => true)
+    const resolveRollout = vi.fn(async () => '/pinned/sessions/rollout.jsonl')
+
+    await expect(
+      resolveLiveCodexTuiRollout({
+        codexHome: '/pinned',
+        kittyKeyboardFlags: 0,
+        readOutput: () => ({
+          text: reads++ > 0 ? `Session: ${THREAD}` : '',
+          lastOutputAt: reads > 1 ? 2 : 1
+        }),
+        write,
+        resolveRollout,
+        delay: async () => undefined
+      })
+    ).resolves.toEqual({ threadId: THREAD, transcriptPath: '/pinned/sessions/rollout.jsonl' })
+    expect(resolveRollout).toHaveBeenCalledWith('/pinned', THREAD)
+    expect(write.mock.calls.map(([data]) => data)).toEqual([
+      '\u001b[200~/status\u001b[201~',
+      '\r',
       '\u001b'
     ])
   })

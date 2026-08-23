@@ -78,11 +78,13 @@ export async function handoffStructuredSessionToNative(
     throw new Error('agent_session_operation_conflict')
   }
   deps.stopTuiHistoryCatchup?.(sessionId)
-  await deps.importTuiHistory({
-    sessionId,
-    fence: record.lease.runtimeFence,
-    ...(transcriptPath ? { transcriptPath } : {})
-  })
+  if (owner?.historySource !== 'provider-resume') {
+    await deps.importTuiHistory({
+      sessionId,
+      fence: record.lease.runtimeFence,
+      ...(transcriptPath ? { transcriptPath } : {})
+    })
+  }
   const spawnToken = randomUUID()
   record = await reserveStoredAgentSessionHandoffOwner(deps.store, {
     sessionId,
@@ -116,7 +118,8 @@ export async function handoffStructuredSessionToNative(
   context.releaseOwner(sessionId)
   deps.transport?.revealNativeSession?.({
     workspaceId: record.location.workspaceId,
-    sessionId
+    sessionId,
+    ...(owner?.adoptedTerminal ? { adoptedTerminal: true } : {})
   })
   context.setStatus(sessionId, {
     owner: 'native',

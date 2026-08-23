@@ -116,6 +116,7 @@ export class CodexStructuredSessionAdapter implements StructuredAgentSessionAdap
       const opened = await openCodexThread(connection, launch, this.deps.requestTimeoutMs)
       this.acquisitions.assertCurrent(sessionId, attempt)
       primaryThreadId = opened.threadId
+      translator?.restoreThread(opened.threadId, opened.thread ?? {})
       const process = await codexProcessIdentity(
         { ...input, pid: connection.pid },
         this.deps.readProcessStartTime

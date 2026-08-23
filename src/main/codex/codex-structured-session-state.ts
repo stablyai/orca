@@ -13,6 +13,7 @@ export type CodexStructuredLaunch = {
   cwd: string
   codexHome: string | null
   resumeThreadId: string | null
+  resumePath?: string | null
   env?: Record<string, string>
 }
 

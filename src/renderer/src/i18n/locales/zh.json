@@ -14403,6 +14403,8 @@
   },
   "components": {
     "native-chat": {
+      "structuredAdoptionFailed": "无法将此 Codex 会话切换到结构化聊天",
+      "structuredReturnToTerminalFailed": "无法将此 Codex 会话返回终端",
       "composer": {
         "imageUnsupported": "此智能体不支持粘贴图片。",
         "send": "发送",

@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import type { AgentSessionRecord } from '../../shared/agent-session-record'
 import { LOCAL_EXECUTION_HOST_ID } from '../../shared/execution-host'
 import type { AgentSessionRecordStore } from '../runtime/agent-session-record-store'
@@ -27,12 +27,14 @@ function record(overrides: Partial<AgentSessionRecord> = {}): AgentSessionRecord
 
 function resolverFor(
   value: AgentSessionRecord | null,
-  resolveWorkspacePath: (workspaceId: string) => Promise<string> = async (id) => `/repos/${id}`
+  resolveWorkspacePath: (workspaceId: string) => Promise<string> = async (id) => `/repos/${id}`,
+  resolveRollout: () => Promise<string | null> = async () => null
 ) {
   return createCodexStructuredLaunchResolver({
     store: { getRecord: () => value } as unknown as AgentSessionRecordStore,
     resolveWorkspacePath,
-    resolveCommand: () => '/usr/local/bin/codex'
+    resolveCommand: () => '/usr/local/bin/codex',
+    resolveRollout
   })
 }
 
@@ -60,6 +62,22 @@ describe('codex structured launch resolution', () => {
     )({ identity: IDENTITY })
 
     expect(launch.resumeThreadId).toBe('thread-current')
+  })
+
+  it('pins resume to the rollout file that proved the durable thread', async () => {
+    const resolveRollout = vi.fn(async () => '/home/work/.codex/sessions/rollout.jsonl')
+    const launch = await resolverFor(
+      record({
+        providerHandleChain: [
+          { handle: { provider: 'codex', threadId: 'thread-current' } }
+        ] as AgentSessionRecord['providerHandleChain']
+      }),
+      async (id) => `/repos/${id}`,
+      resolveRollout
+    )({ identity: IDENTITY })
+
+    expect(resolveRollout).toHaveBeenCalledWith('/home/work/.codex', 'thread-current')
+    expect(launch.resumePath).toBe('/home/work/.codex/sessions/rollout.jsonl')
   })
 
   it('refuses a session pinned to another host rather than starting a second writer here', async () => {

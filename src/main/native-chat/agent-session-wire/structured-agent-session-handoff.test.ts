@@ -36,34 +36,24 @@ let tuiIdle: boolean
 let tuiReadiness: 'idle' | 'exited' | null
 let importFailure: Error | null
 let nativeAcquireFailure: Error | null
-let launchTui: ReturnType<typeof vi.fn<StructuredAgentSessionHandoffTransport['launchTui']>>
-let waitForTuiExit: ReturnType<
-  typeof vi.fn<StructuredAgentSessionHandoffTransport['waitForTuiExit']>
+type TransportMock<K extends keyof StructuredAgentSessionHandoffTransport> = ReturnType<
+  typeof vi.fn<
+    Extract<NonNullable<StructuredAgentSessionHandoffTransport[K]>, (...args: never[]) => unknown>
+  >
 >
-let closeTuiOwner: ReturnType<
-  typeof vi.fn<NonNullable<StructuredAgentSessionHandoffTransport['closeTuiOwner']>>
->
-let waitForTuiIdleOrExit: ReturnType<
-  typeof vi.fn<StructuredAgentSessionHandoffTransport['waitForTuiIdleOrExit']>
->
-let reproveTuiOwner: ReturnType<
-  typeof vi.fn<StructuredAgentSessionHandoffTransport['reproveTuiOwner']>
->
-let stopFailedTuiLaunch: ReturnType<
-  typeof vi.fn<NonNullable<StructuredAgentSessionHandoffTransport['stopFailedTuiLaunch']>>
->
+let launchTui: TransportMock<'launchTui'>
+let waitForTuiExit: TransportMock<'waitForTuiExit'>
+let closeTuiOwner: TransportMock<'closeTuiOwner'>
+let waitForTuiIdleOrExit: TransportMock<'waitForTuiIdleOrExit'>
+let reproveTuiOwner: TransportMock<'reproveTuiOwner'>
+let stopFailedTuiLaunch: TransportMock<'stopFailedTuiLaunch'>
 let acquireNativeStop: ReturnType<typeof vi.fn<(turnId: string) => Promise<boolean>>>
 let acquireNativeCalls: number
-let stopRecoveredOwner: ReturnType<
-  typeof vi.fn<StructuredAgentSessionHandoffTransport['stopRecoveredOwner']>
->
+let stopRecoveredOwner: TransportMock<'stopRecoveredOwner'>
 let operations: number
-let prepareTuiHistoryCatchup: ReturnType<
-  typeof vi.fn<(sessionId: string, fence: number) => Promise<void>>
->
-let recoverTuiHistoryCatchup: ReturnType<
-  typeof vi.fn<(sessionId: string, fence: number) => Promise<void>>
->
+type HistoryCatchup = (sessionId: string, fence: number) => Promise<void>
+let prepareTuiHistoryCatchup: ReturnType<typeof vi.fn<HistoryCatchup>>
+let recoverTuiHistoryCatchup: ReturnType<typeof vi.fn<HistoryCatchup>>
 let activateTuiHistoryCatchup: ReturnType<typeof vi.fn<(sessionId: string) => Promise<void>>>
 let stopTuiHistoryCatchup: ReturnType<typeof vi.fn<(sessionId: string) => void>>
 
@@ -646,14 +636,27 @@ describe('structured session ownership handoff', () => {
 
   it('re-proves the current TUI handle before accepting its exit and importing history', async () => {
     await moveToTui()
-    const reverse = request('to-native', 'now')
-    expect(await submit(reverse)).toMatchObject({ ok: true })
+    await expectAccepted(request('to-native', 'now'))
     await vi.waitFor(() => expect(coordinator.status(SESSION).owner).toBe('native'))
 
     expect(reproveTuiOwner).toHaveBeenCalledOnce()
     expect(reproveTuiOwner.mock.invocationCallOrder[0]).toBeLessThan(
       closeTuiOwner.mock.invocationCallOrder[0] ?? Infinity
     )
+  })
+
+  it('does not acquire native ownership until TUI exit proof resolves', async () => {
+    // oxfmt-ignore
+    launchTui.mockImplementationOnce(async ({ fence, spawnToken }) => ({ ...makeTuiOwner(fence, spawnToken), historySource: 'provider-resume' }))
+    await moveToTui()
+    const exitProof = Promise.withResolvers<{ transcriptPath?: string }>()
+    closeTuiOwner.mockImplementationOnce(() => exitProof.promise)
+    await expectAccepted(request('to-native', 'now'))
+    await vi.waitFor(() => expect(closeTuiOwner).toHaveBeenCalledOnce())
+    await new Promise((resolve) => setTimeout(resolve, 20))
+    expect(acquireNativeCalls).toBe(0)
+    exitProof.resolve({})
+    await vi.waitFor(() => expect(coordinator.status(SESSION).owner).toBe('native'))
   })
 
   it('does not close or import when the current TUI handle cannot be re-proved', async () => {

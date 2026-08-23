@@ -121,6 +121,23 @@ function rejection(promise: Promise<unknown>): Promise<Error> {
 }
 
 describe('openCodexAppServerConnection', () => {
+  it('advertises the experimental API required for rollout-path resume', async () => {
+    const { child, spawnImpl, written } = stubChild()
+    answerInitialize(child)
+
+    const connection = await openCodexAppServerConnection(
+      { command: 'codex', args: ['app-server'] },
+      {},
+      spawnImpl
+    )
+
+    expect(written[0]).toMatchObject({
+      method: 'initialize',
+      params: { capabilities: { experimentalApi: true } }
+    })
+    await connection.close()
+  })
+
   it('completes the handshake and keeps the child alive across calls', async () => {
     const notifications: { method: string; params: unknown }[] = []
     const connection = await openFakeServer({

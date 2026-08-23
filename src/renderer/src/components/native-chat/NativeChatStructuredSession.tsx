@@ -28,6 +28,7 @@ export function NativeChatStructuredSession(props: {
   target: RuntimeClientTarget
   agent: AgentType
   allowFileUriLinks: boolean
+  onSwitchToTerminal?: () => void
 }): React.JSX.Element {
   const controller = useStructuredAgentSession(props)
   const [composerError, setComposerError] = useState<string | null>(null)
@@ -225,6 +226,7 @@ export function NativeChatStructuredSession(props: {
             }
           }}
           structuredTransport={structuredTransport}
+          onSwitchToTerminal={props.onSwitchToTerminal}
         />
       )}
     </div>

@@ -14383,6 +14383,8 @@
   },
   "components": {
     "native-chat": {
+      "structuredAdoptionFailed": "この Codex セッションを構造化チャットに切り替えられませんでした",
+      "structuredReturnToTerminalFailed": "この Codex セッションをターミナルに戻せませんでした",
       "composer": {
         "imageUnsupported": "この Agent では画像の貼り付けはサポートされていません。",
         "send": "送信",

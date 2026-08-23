@@ -83,6 +83,29 @@ describe('selectTabAgentTypesByTabId', () => {
     expect(projection['tab-1'] ?? null).toBeNull()
   })
 
+  it('uses the active leaf foreground process before hook status exists', () => {
+    const layouts = { 'tab-1': splitLayout('leaf-b') }
+    const foreground = {
+      'tab-1:leaf-a': { agent: 'claude' as const, shellForeground: false },
+      'tab-1:leaf-b': { agent: 'codex' as const, shellForeground: false }
+    }
+
+    expect(selectTabAgentTypesByTabId({}, layouts, foreground)).toEqual({ 'tab-1': 'codex' })
+    expect(
+      selectTabAgentTypesByTabId(
+        { 'tab-1:leaf-b': entry({ agentType: 'grok' }) },
+        layouts,
+        foreground
+      )
+    ).toEqual({ 'tab-1': 'grok' })
+    expect(
+      selectTabAgentTypesByTabId({}, layouts, {
+        ...foreground,
+        'tab-1:leaf-b': { agent: 'codex', shellForeground: true }
+      })
+    ).toEqual({})
+  })
+
   it('uses the reassigned active sibling after the prior agent leaf closes', () => {
     const statuses = {
       'tab-1:leaf-a': entry({ agentType: 'claude' }),

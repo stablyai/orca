@@ -2725,6 +2725,9 @@ void app.whenReady().then(async () => {
       agentHookServer.attestCompatibilityAuthority(candidate),
     retireAgentHookCompatibilityAuthority: (paneKey) =>
       agentHookServer.retirePaneAuthority(paneKey),
+    // Why: the adopted-Codex return path proves readiness from the resumed CLI's own
+    // SessionStart hook rather than the pane's screen, so it needs a live event tap.
+    subscribeAgentHookEvents: (listener) => agentHookServer.subscribeEnrichedStatus(listener),
     canRecoverPersistentLocalPtys: () => getDaemonProvider() !== null,
     // Why: source codex-home here (runs in window AND serve) so aiVault.listSessions includes managed-Codex sessions; registerCoreHandlers is window-only.
     getAdditionalAiVaultCodexHomePaths: () =>

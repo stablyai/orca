@@ -12,6 +12,10 @@ export type StructuredTuiOwner = {
   process: AgentSessionProcessIdentity
   link: AgentSessionProviderHandleLink
   transcriptPath?: string
+  /** Codex app-server resume, not row-by-row legacy import, restores this owner's history. */
+  historySource?: 'provider-resume'
+  /** This owner came from an existing terminal view rather than a structured-session tab. */
+  adoptedTerminal?: true
 }
 
 export class StructuredTuiLaunchCleanupError extends Error {
@@ -40,7 +44,11 @@ export type StructuredAgentSessionHandoffTransport = {
   probeRecoveredOwner?(record: AgentSessionRecord): Promise<'live' | 'dead' | 'unknown'>
   stopRecoveredOwner(record: AgentSessionRecord): Promise<void>
   closeTuiOwner?(owner: StructuredTuiOwner): Promise<{ transcriptPath?: string }>
-  revealNativeSession?(input: { workspaceId: string; sessionId: string }): void
+  revealNativeSession?(input: {
+    workspaceId: string
+    sessionId: string
+    adoptedTerminal?: true
+  }): void
   waitForTuiExit(owner: StructuredTuiOwner): Promise<{ transcriptPath?: string }>
   waitForTuiIdleOrExit(
     owner: StructuredTuiOwner,

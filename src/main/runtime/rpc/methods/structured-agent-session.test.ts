@@ -123,6 +123,7 @@ function dispatcher(): RpcDispatcher {
       accountHome: { variable: 'CODEX_HOME', path: '/host/.codex' },
       runtimeKind: 'native'
     })),
+    adoptStructuredAgentSessionTerminal: vi.fn(async () => ({ ok: true, replayed: false })),
     publishStructuredAgentSessionTab: vi.fn()
   }
   const runtime = {
@@ -191,7 +192,7 @@ describe('capability gating', () => {
     for (const method of STRUCTURED_AGENT_SESSION_METHODS) {
       expect(names).toContain(method.name)
     }
-    expect(STRUCTURED_AGENT_SESSION_METHODS).toHaveLength(13)
+    expect(STRUCTURED_AGENT_SESSION_METHODS).toHaveLength(15)
   })
 
   it('hides the surface from a declared client that did not advertise it', async () => {
@@ -261,6 +262,84 @@ describe('capability gating', () => {
 })
 
 describe('method routing', () => {
+  it('routes local terminal adoption with its verified request fingerprint', async () => {
+    const fields = {
+      worktree: 'id:workspace-1',
+      tabId: 'tab-1',
+      paneKey: 'tab-1:leaf-1',
+      ptyId: 'pty-1',
+      threadId: 'thread-1'
+    }
+    const params = {
+      envelope: envelope({
+        expectedRuntimeFence: null,
+        payloadFingerprint: computeAgentSessionPayloadFingerprint({
+          method: 'agentSession.adoptTerminal',
+          sessionId: SESSION,
+          fields
+        })
+      }),
+      ...fields
+    }
+
+    const adopted = await call('agentSession.adoptTerminal', params)
+
+    expect(adopted).toMatchObject({ ok: true, result: { ok: true } })
+    expect(runtimeCalls.adoptStructuredAgentSessionTerminal).toHaveBeenCalledWith(
+      params,
+      expect.anything()
+    )
+  })
+
+  it('allows the host to discover a terminal thread omitted by an older hook surface', async () => {
+    const fields = {
+      worktree: 'id:workspace-1',
+      tabId: 'tab-1',
+      paneKey: 'tab-1:leaf-1',
+      ptyId: 'pty-1'
+    }
+    const params = {
+      envelope: envelope({
+        expectedRuntimeFence: null,
+        payloadFingerprint: computeAgentSessionPayloadFingerprint({
+          method: 'agentSession.adoptTerminal',
+          sessionId: SESSION,
+          fields
+        })
+      }),
+      ...fields
+    }
+
+    await expect(call('agentSession.adoptTerminal', params)).resolves.toMatchObject({ ok: true })
+    expect(runtimeCalls.adoptStructuredAgentSessionTerminal).toHaveBeenCalledWith(
+      params,
+      expect.anything()
+    )
+  })
+
+  it('routes ownership handoff requests to the structured host', async () => {
+    const fields = {
+      direction: 'to-native' as const,
+      mode: 'after-turn' as const,
+      action: 'start' as const
+    }
+    const params = {
+      envelope: envelope({
+        payloadFingerprint: computeAgentSessionPayloadFingerprint({
+          method: 'agentSession.requestHandoff',
+          sessionId: SESSION,
+          fields
+        })
+      }),
+      ...fields
+    }
+
+    const handedOff = await call('agentSession.handoff', params)
+
+    expect(handedOff).toMatchObject({ ok: true, result: { ok: true } })
+    expect(hostCalls.requestHandoff).toHaveBeenCalledWith(expect.anything(), params)
+  })
+
   it('creates from mobile intent while the host resolves paths and provider identity', async () => {
     const worktree = 'id:workspace-1'
     const params = {

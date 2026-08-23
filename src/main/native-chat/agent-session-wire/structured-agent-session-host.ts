@@ -1,7 +1,6 @@
 // Structured agent-session host: where the lease, journal, and provider adapter meet.
 // Mutations share one durable admission path and serialize per session.
 
-import { randomUUID } from 'node:crypto'
 import type { AgentJournalMessageItem } from '../../../shared/agent-session-journal-types'
 import type { AgentSessionExecutionLocation } from '../../../shared/agent-session-record'
 import type {
@@ -21,11 +20,9 @@ import type {
   AgentSessionWireRefusal
 } from '../../../shared/agent-session-wire'
 import type { AgentSessionAttachParams } from './structured-agent-session-attach'
-import { performAttach } from './structured-agent-session-attach-flow'
 import {
   admitAndRunAgentSessionMutation,
-  AGENT_SESSION_NOT_ATTACHED,
-  refuseAgentSessionMutation
+  AGENT_SESSION_NOT_ATTACHED
 } from './structured-agent-session-mutation-admission'
 import { createRestartReconciler } from './structured-agent-session-restart-reconcile'
 import {
@@ -50,11 +47,24 @@ import {
 import { StructuredAgentSessionHostRuntimeState } from './structured-agent-session-host-runtime-state'
 import { listStructuredAgentSessionTabs } from './structured-agent-session-host-tabs'
 import { StructuredAgentSessionReadableRestorer } from './structured-agent-session-readable-restorer'
+import { attachStructuredAgentSession } from './structured-agent-session-attach-orchestration'
+import type { StructuredAgentSessionAttachContext } from './structured-agent-session-attach-context'
 import type {
   StructuredAgentSessionCaller,
   StructuredAgentSessionHostDeps,
   StructuredAgentSessionHostSession
 } from './structured-agent-session-host-types'
+import {
+  adoptStructuredTuiOwner,
+  type StructuredTuiAdoptionRequest
+} from './structured-agent-session-tui-adoption'
+import {
+  releaseStructuredTuiAdoptionReservation,
+  reserveStructuredTuiAdoption,
+  type StructuredTuiAdoptionReservationRelease,
+  type StructuredTuiAdoptionReservationRequest,
+  type StructuredTuiAdoptionReservationResult
+} from './structured-agent-session-tui-adoption-reservation'
 import { readStructuredAgentSessionHistoryResult } from './structured-agent-session-history-result'
 export type { StructuredAgentSessionHostDeps } from './structured-agent-session-host-types'
 
@@ -116,21 +126,18 @@ export class StructuredAgentSessionHost {
 
   hasSession = (sessionId: string): boolean => this.sessions.has(sessionId)
 
-  supportsCreate(location: AgentSessionExecutionLocation, agent: string): boolean {
-    return providerSupport.adapterSupportsCreate(this.deps.adapter, location, agent)
-  }
+  supportsCreate = (location: AgentSessionExecutionLocation, agent: string): boolean =>
+    providerSupport.adapterSupportsCreate(this.deps.adapter, location, agent)
 
   listSessionTabs() {
     return listStructuredAgentSessionTabs(this.sessions)
   }
 
-  restoreReadableSessions(): Promise<void> {
-    return this.restartRestore.run(() => this.readableRestorer.restore())
-  }
+  restoreReadableSessions = (): Promise<void> =>
+    this.restartRestore.run(() => this.readableRestorer.restore())
 
-  private serialize<T>(sessionId: string, task: () => Promise<T>): Promise<T> {
-    return this.tasks.serialize(sessionId, task)
-  }
+  private serialize = <T>(sessionId: string, task: () => Promise<T>): Promise<T> =>
+    this.tasks.serialize(sessionId, task)
 
   private restoreRenewedHandoff(sessionId: string): Promise<void> {
     return this.serialize(sessionId, async () => {
@@ -140,67 +147,58 @@ export class StructuredAgentSessionHost {
     })
   }
 
+  /** What attach needs from this host, named so its dependencies cannot grow unnoticed. */
+  private attachContext(): StructuredAgentSessionAttachContext {
+    return {
+      deps: this.deps,
+      runtimeState: this.runtimeState,
+      sessions: this.sessions,
+      subscribers: this.subscribers,
+      tasks: this.tasks,
+      reconcileLeases: (sessionId) => this.reconcileLeases(sessionId),
+      serialize: (sessionId, task) => this.serialize(sessionId, task),
+      now: () => this.now()
+    }
+  }
+
   attach(
     caller: StructuredAgentSessionCaller,
     params: AgentSessionAttachParams
   ): Promise<AgentSessionMutationResult<AgentSessionAttachResult>> {
-    const attaching = this.serialize(params.envelope.sessionId, async () => {
-      const sessionId = params.envelope.sessionId
-      const unreconciled = await this.reconcileLeases(sessionId)
-      if (unreconciled) {
-        return refuseAgentSessionMutation(unreconciled)
-      }
-      await this.runtimeState.resolveRecovery(sessionId)
-      const eventSink = this.runtimeState.eventSinkFor(sessionId)
-      const attached = await performAttach({
-        store: this.deps.store,
-        adapter: this.deps.adapter,
-        journalRoot: this.deps.journalRoot,
-        eventSink: eventSink.sink,
-        onAcquiring: () => eventSink.unbind(),
-        beforeJournalOpen: async () => {
-          eventSink.unbind()
-          await eventSink.drained()
-        },
-        authority: {
-          spawnToken: this.deps.mintSpawnToken?.() ?? randomUUID(),
-          claimKeyId: this.deps.claimKeyId,
-          handoffOperationId: params.envelope.clientOperationId,
-          probe: await this.runtimeState.probeOwner(sessionId)
-        },
-        callerKey: caller.callerKey,
-        params,
-        now: () => this.now(),
-        onAttached: (attached) => {
-          const fence = this.deps.store.getRecord(sessionId)?.lease.runtimeFence ?? 0
-          const previousFence = this.sessions.get(sessionId)?.fence
-          this.sessions.set(sessionId, { journal: attached.journal, params, fence })
-          if (attached.recovery) {
-            this.subscribers.reset(sessionId, attached.journal, attached.recovery.reset, fence)
-          } else if (previousFence !== undefined && previousFence !== fence) {
-            this.subscribers.snapshot(sessionId, attached.journal, fence)
-          } else {
-            this.subscribers.publish(sessionId, attached.journal)
-          }
-          eventSink.bind({
-            journal: attached.journal,
-            fence,
-            publish: () => this.subscribers.publish(sessionId, attached.journal)
-          })
-        }
-      })
-      if (!attached.ok && !this.sessions.has(sessionId)) {
-        eventSink.close()
-        this.runtimeState.discardEventSink(sessionId)
-      }
-      return attached
-    })
-    return this.tasks.trackAttach(attaching)
+    return attachStructuredAgentSession(this.attachContext(), caller.callerKey, params)
   }
 
-  flushStreamedEvents(sessionId: string): Promise<void> {
-    return this.runtimeState.flushEventSink(sessionId)
-  }
+  /** Reserve the lease an adopted TUI must hold before the write gate will admit its proof. */
+  reserveAdoptedTuiOwner = (
+    input: StructuredTuiAdoptionReservationRequest
+  ): Promise<StructuredTuiAdoptionReservationResult> =>
+    this.serialize(input.sessionId, () =>
+      reserveStructuredTuiAdoption({ ...input, deps: this.deps, now: this.now })
+    )
+
+  /** Hand back a reservation whose proof never landed, so the next attempt is not refused by it. */
+  releaseAdoptedTuiReservation = (input: StructuredTuiAdoptionReservationRelease): Promise<void> =>
+    this.serialize(input.sessionId, () =>
+      releaseStructuredTuiAdoptionReservation({ ...input, deps: this.deps, now: this.now })
+    )
+
+  adoptTuiOwner = (
+    input: StructuredTuiAdoptionRequest
+  ): Promise<AgentSessionMutationResult<AgentSessionAttachResult>> =>
+    this.serialize(input.params.envelope.sessionId, () =>
+      adoptStructuredTuiOwner({
+        ...input,
+        deps: this.deps,
+        now: this.now,
+        publish: (sessionId, session) => this.sessions.set(sessionId, session),
+        retain: (sessionId, owner) => this.handoffs.adoptTuiOwner(sessionId, owner),
+        snapshot: (sessionId, session) =>
+          this.subscribers.snapshot(sessionId, session.journal, session.fence)
+      })
+    )
+
+  flushStreamedEvents = (sessionId: string): Promise<void> =>
+    this.runtimeState.flushEventSink(sessionId)
 
   async flushAllStreamedEvents(): Promise<void> {
     this.runtimeState.stopLeaseRenewal()

@@ -117,6 +117,48 @@ export async function proveCodexTuiRollout(input: {
   throw new Error('The agent terminal did not prove the expected Codex rollout.')
 }
 
+export async function resolveLiveCodexTuiRollout(input: {
+  codexHome: string
+  kittyKeyboardFlags: number
+  readOutput: () => CodexTuiProofOutput
+  write: (data: string) => boolean
+  timeoutMs?: number
+  resolveRollout?: (codexHome: string, threadId: string) => Promise<string | null>
+  delay?: (ms: number) => Promise<void>
+}): Promise<{ threadId: string; transcriptPath: string }> {
+  const baselineOutputAt = input.readOutput().lastOutputAt
+  const probe = codexTuiStatusProbeInput(input.kittyKeyboardFlags)
+  if (!input.write(probe.command)) {
+    throw new Error('The agent terminal could not verify its Codex session.')
+  }
+  const delay = input.delay ?? ((ms: number) => new Promise((resolve) => setTimeout(resolve, ms)))
+  await delay(100)
+  if (!input.write(probe.submit)) {
+    throw new Error('The agent terminal could not verify its Codex session.')
+  }
+
+  const deadline = Date.now() + (input.timeoutMs ?? 15_000)
+  while (Date.now() < deadline) {
+    const output = input.readOutput()
+    if (output.lastOutputAt !== baselineOutputAt) {
+      const threadId = parseCodexTuiStatusSessionId(output.text)
+      if (threadId) {
+        const resolveRollout = input.resolveRollout ?? resolvePinnedCodexRolloutProof
+        const transcriptPath = await resolveRollout(input.codexHome, threadId)
+        if (!input.write('\u001b')) {
+          throw new Error('The agent terminal could not finish Codex session verification.')
+        }
+        if (!transcriptPath) {
+          throw new Error('Could not find the rollout for this Codex conversation.')
+        }
+        return { threadId, transcriptPath }
+      }
+    }
+    await delay(100)
+  }
+  throw new Error('The agent terminal did not publish a resumable Codex conversation.')
+}
+
 async function readCodexRolloutSessionMetaId(filePath: string): Promise<string | null> {
   // A listed rollout may vanish before it is read — Codex prunes and rewrites
   // these files. One missing file must not abort the whole scan.

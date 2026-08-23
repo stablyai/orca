@@ -527,6 +527,11 @@ function TerminalPane(
       getCachedUnifiedTerminalTabForWorktree(store.unifiedTabsByWorktree, worktreeId, tabId)
         ?.viewMode === 'chat'
   )
+  const structuredSessionId = useAppStore(
+    (store) =>
+      getCachedUnifiedTerminalTabForWorktree(store.unifiedTabsByWorktree, worktreeId, tabId)
+        ?.structuredSessionId ?? null
+  )
   const nativeChatEnabled = useAppStore((store) => store.settings?.experimentalNativeChat === true)
   const effectiveChatViewMode = nativeChatEnabled && isChatViewMode
   const unifiedTabLabel = useAppStore(
@@ -538,7 +543,11 @@ function TerminalPane(
   )
   // Carry each leaf's agent identity, not just "an agent exists", so the gate can reject unsupported agents; scoped to this tab's panes.
   const tabAgentTypeByLeaf = useAppStore((store) =>
-    selectTerminalTabAgentTypesByLeaf(store.agentStatusByPaneKey, tabId)
+    selectTerminalTabAgentTypesByLeaf(
+      store.agentStatusByPaneKey,
+      tabId,
+      store.paneForegroundAgentByPaneKey
+    )
   )
   const toggleTabViewMode = useAppStore((store) => store.toggleTabViewMode)
   const setTabViewMode = useAppStore((store) => store.setTabViewMode)
@@ -656,11 +665,18 @@ function TerminalPane(
           activeLeafId,
           chatLeafStillMounted: panes.some((pane) => pane.leafId === chatLeafId),
           activeLeafIsEligible: isChatEligibleForLeaf(activeLeafId),
-          chatLeafHasConfirmedAgentExit: true
+          chatLeafHasConfirmedAgentExit: true,
+          structuredSessionId
         })
       )
     },
-    [applyNativeChatLeafRoute, chatLeafId, isChatEligibleForLeaf, isChatViewMode]
+    [
+      applyNativeChatLeafRoute,
+      chatLeafId,
+      isChatEligibleForLeaf,
+      isChatViewMode,
+      structuredSessionId
+    ]
   )
   useEffect(() => {
     // Why: transport callbacks must observe only committed chat ownership; render work can be replayed/discarded under concurrent React.
@@ -2962,7 +2978,8 @@ function TerminalPane(
       chatLeafId,
       activeLeafId,
       chatLeafStillMounted,
-      activeLeafIsEligible: isChatEligibleForLeaf(activeLeafId)
+      activeLeafIsEligible: isChatEligibleForLeaf(activeLeafId),
+      structuredSessionId
     })
     applyNativeChatLeafRoute(route)
   }, [
@@ -2971,7 +2988,8 @@ function TerminalPane(
     activePane?.leafId,
     chatLeafStillMounted,
     applyNativeChatLeafRoute,
-    isChatEligibleForLeaf
+    isChatEligibleForLeaf,
+    structuredSessionId
   ])
   const chatPane =
     isChatViewMode && chatLeafId
@@ -3146,44 +3164,57 @@ function TerminalPane(
       {effectiveChatViewMode && chatPane?.container
         ? createPortal(
             <div className="native-chat-pane-shell absolute inset-0 z-10 flex min-h-0 min-w-0 bg-background">
-              <NativeChatView
-                terminalTabId={tabId}
-                isVisible={isRendererVisible}
-                paneKey={makePaneKey(tabId, chatPane.leafId)}
-                targetPtyId={chatPanePtyId}
-                launchAgent={chatPaneLaunchAgent}
-                resolvedAgent={chatPaneResolvedAgent}
-                onSwitchToTerminal={switchNativeChatToTerminal}
-                readTerminalScreen={readNativeChatTerminalScreen}
-                contextMenuActions={{
-                  onSplitRight: () => contextMenu.runForPane(chatPane.id, contextMenu.onSplitRight),
-                  onSplitDown: () => contextMenu.runForPane(chatPane.id, contextMenu.onSplitDown),
-                  canEqualizePaneSizes: managedPanes.length > 1 && expandedPaneId === null,
-                  onEqualizePaneSizes: () =>
-                    contextMenu.runForPane(chatPane.id, contextMenu.onEqualizePaneSizes),
-                  canExpandPane: managedPanes.length > 1,
-                  isPaneExpanded: expandedPaneId === chatPane.id,
-                  onToggleExpand: () =>
-                    contextMenu.runForPane(chatPane.id, contextMenu.onToggleExpand),
-                  canContinueAgentSessionInNewSession: canContinueAgentSessionInNewSession(
-                    resolveAgentForLeaf(chatPane.leafId)
-                  ),
-                  onContinueAgentSessionInNewSession: () =>
-                    contextMenu.runForPane(
-                      chatPane.id,
-                      contextMenu.onContinueAgentSessionInNewSession
+              {structuredSessionId ? (
+                <NativeChatView
+                  mode="structured"
+                  tabId={unifiedTabId ?? tabId}
+                  sessionId={structuredSessionId}
+                  agent="codex"
+                  target={{ kind: 'local' }}
+                  allowFileUriLinks
+                  onSwitchToTerminal={switchNativeChatToTerminal}
+                />
+              ) : (
+                <NativeChatView
+                  terminalTabId={tabId}
+                  isVisible={isRendererVisible}
+                  paneKey={makePaneKey(tabId, chatPane.leafId)}
+                  targetPtyId={chatPanePtyId}
+                  launchAgent={chatPaneLaunchAgent}
+                  resolvedAgent={chatPaneResolvedAgent}
+                  onSwitchToTerminal={switchNativeChatToTerminal}
+                  readTerminalScreen={readNativeChatTerminalScreen}
+                  contextMenuActions={{
+                    onSplitRight: () =>
+                      contextMenu.runForPane(chatPane.id, contextMenu.onSplitRight),
+                    onSplitDown: () => contextMenu.runForPane(chatPane.id, contextMenu.onSplitDown),
+                    canEqualizePaneSizes: managedPanes.length > 1 && expandedPaneId === null,
+                    onEqualizePaneSizes: () =>
+                      contextMenu.runForPane(chatPane.id, contextMenu.onEqualizePaneSizes),
+                    canExpandPane: managedPanes.length > 1,
+                    isPaneExpanded: expandedPaneId === chatPane.id,
+                    onToggleExpand: () =>
+                      contextMenu.runForPane(chatPane.id, contextMenu.onToggleExpand),
+                    canContinueAgentSessionInNewSession: canContinueAgentSessionInNewSession(
+                      resolveAgentForLeaf(chatPane.leafId)
                     ),
-                  onForkAgentSession: () =>
-                    void contextMenu.runForPane(chatPane.id, contextMenu.onForkAgentSession),
-                  onSetTitle: () => contextMenu.runForPane(chatPane.id, contextMenu.onSetTitle),
-                  onCopyTerminalId: () =>
-                    void contextMenu.runForPane(chatPane.id, contextMenu.onCopyTerminalId),
-                  onCopyPaneId: () =>
-                    void contextMenu.runForPane(chatPane.id, contextMenu.onCopyPaneId),
-                  canClosePane: managedPanes.length > 1,
-                  onClosePane: () => contextMenu.runForPane(chatPane.id, contextMenu.onClosePane)
-                }}
-              />
+                    onContinueAgentSessionInNewSession: () =>
+                      contextMenu.runForPane(
+                        chatPane.id,
+                        contextMenu.onContinueAgentSessionInNewSession
+                      ),
+                    onForkAgentSession: () =>
+                      void contextMenu.runForPane(chatPane.id, contextMenu.onForkAgentSession),
+                    onSetTitle: () => contextMenu.runForPane(chatPane.id, contextMenu.onSetTitle),
+                    onCopyTerminalId: () =>
+                      void contextMenu.runForPane(chatPane.id, contextMenu.onCopyTerminalId),
+                    onCopyPaneId: () =>
+                      void contextMenu.runForPane(chatPane.id, contextMenu.onCopyPaneId),
+                    canClosePane: managedPanes.length > 1,
+                    onClosePane: () => contextMenu.runForPane(chatPane.id, contextMenu.onClosePane)
+                  }}
+                />
+              )}
             </div>,
             chatPane.container,
             `native-chat-${tabId}-${chatPane.leafId}`

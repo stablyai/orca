@@ -73,6 +73,7 @@ import {
   snapshotCodexRuntimeHookTrustProvenance
 } from './hook-trust-promotion'
 import { grantManagedCodexHookTrust } from './codex-hook-trust-grant'
+import { AGENT_HOOK_SESSION_NONCE_ENV_VAR } from '../../shared/agent-hook-session-nonce'
 import { readCurrentCodexTrustGrantLedgerHome } from './codex-trust-grant-host'
 import {
   getCodexLedgerTrustedHash,
@@ -139,6 +140,8 @@ type MirroredRuntimeUserHookTrustEntry = {
   entry: CodexTrustEntry
   enabled: boolean
 }
+
+const CODEX_SESSION_NONCE_FORM_LINE_WINDOWS = `--data-urlencode "sessionNonce=%${AGENT_HOOK_SESSION_NONCE_ENV_VAR}%"`
 
 function getManagedScriptPath(): string {
   return getSharedManagedScriptPath(getCodexManagedScriptFileName())
@@ -772,7 +775,7 @@ function getManagedScript(target: 'local' | 'posix' = 'local'): string {
       // Why: the endpoint file holds this install's live port/token; sourcing it lets a surviving PTY reach the current server (see claude/hook-service.ts).
       'if defined ORCA_AGENT_HOOK_ENDPOINT if exist "%ORCA_AGENT_HOOK_ENDPOINT%" call "%ORCA_AGENT_HOOK_ENDPOINT%" 2>nul',
       ...buildWindowsHookEnvironmentGuardLines(),
-      buildWindowsAgentHookCurlPostCommand('codex'),
+      buildWindowsAgentHookCurlPostCommand('codex', [CODEX_SESSION_NONCE_FORM_LINE_WINDOWS]),
       'exit /b 0',
       ...buildWindowsHookStdinDrainEpilogue(),
       ''
@@ -824,6 +827,7 @@ function getManagedScript(target: 'local' | 'posix' = 'local'): string {
     '    --data-urlencode "paneKey=${ORCA_PANE_KEY}" \\',
     '    --data-urlencode "tabId=${ORCA_TAB_ID}" \\',
     '    --data-urlencode "launchToken=${ORCA_AGENT_LAUNCH_TOKEN}" \\',
+    `    --data-urlencode "sessionNonce=\${${AGENT_HOOK_SESSION_NONCE_ENV_VAR}}" \\`,
     '    --data-urlencode "worktreeId=${ORCA_WORKTREE_ID}" \\',
     '    --data-urlencode "env=${ORCA_AGENT_HOOK_ENV}" \\',
     '    --data-urlencode "version=${ORCA_AGENT_HOOK_VERSION}" \\',

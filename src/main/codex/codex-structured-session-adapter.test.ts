@@ -170,7 +170,10 @@ describe('CodexStructuredSessionAdapter.acquire', () => {
 
   it('resumes the thread the durable handle chain names, not the client one', async () => {
     const codex = fakeCodex()
-    const adapter = adapterFor(codex, { resumeThreadId: 'thread-proven' })
+    const adapter = adapterFor(codex, {
+      resumeThreadId: 'thread-proven',
+      resumePath: '/rollouts/thread-proven.jsonl'
+    })
 
     const acquisition = await adapter.acquire({
       identity: identityFor('session-1'),
@@ -180,7 +183,11 @@ describe('CodexStructuredSessionAdapter.acquire', () => {
 
     expect(codex.connections[0].calls[0]).toEqual({
       method: 'thread/resume',
-      params: { threadId: 'thread-proven', cwd: '/work/repo' }
+      params: {
+        threadId: 'thread-proven',
+        cwd: '/work/repo',
+        path: '/rollouts/thread-proven.jsonl'
+      }
     })
     expect(acquisition.link.origin).toBe('resumed')
     expect(acquisition.link.handle).toEqual({ provider: 'codex', threadId: 'thread-proven' })

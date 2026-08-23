@@ -14412,6 +14412,8 @@
   },
   "components": {
     "native-chat": {
+      "structuredAdoptionFailed": "이 Codex 세션을 구조화된 채팅으로 전환할 수 없습니다",
+      "structuredReturnToTerminalFailed": "이 Codex 세션을 터미널로 되돌릴 수 없습니다",
       "composer": {
         "imageUnsupported": "이 에이전트는 이미지 붙여넣기를 지원하지 않습니다.",
         "send": "보내기",

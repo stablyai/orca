@@ -334,7 +334,7 @@ export async function openCodexAppServerConnection(
       {
         clientInfo: { name: 'orca_desktop', title: 'Orca', version: '0.0.0' },
         capabilities: {
-          experimentalApi: false,
+          experimentalApi: true,
           requestAttestation: false,
           mcpServerOpenaiFormElicitation: false,
           extensions: {}

@@ -76,6 +76,48 @@ describe('binding lifecycle', () => {
   })
 })
 
+describe('overlapping adoption attempts on one pane', () => {
+  beforeEach(() => {
+    gate.attachRecordLookup((sessionId) => records.get(sessionId) ?? null)
+  })
+
+  it('keeps the newer attempt bound when the one it superseded gives up', () => {
+    gate.bindPtyForAttempt(PTY_ID, SESSION_ID, 'spawn-a')
+    expect(gate.bindPtyForAttempt(PTY_ID, SESSION_ID, 'spawn-b')).toBe(true)
+
+    // Both attempts carry the same session, so only the spawn token can tell this release apart.
+    expect(gate.releasePtyAttempt(PTY_ID, 'spawn-a')).toBe(false)
+    expect(gate.boundSessionId(PTY_ID)).toBe(SESSION_ID)
+    expect(gate.releasePtyAttempt(PTY_ID, 'spawn-b')).toBe(true)
+    expect(gate.boundSessionId(PTY_ID)).toBeNull()
+  })
+
+  it('leaves a settled owner pane alone when a later attempt fails', () => {
+    gate.bindPty(PTY_ID, SESSION_ID)
+
+    expect(gate.bindPtyForAttempt(PTY_ID, SESSION_ID, 'spawn-late')).toBe(false)
+    expect(gate.releasePtyAttempt(PTY_ID, 'spawn-late')).toBe(false)
+    expect(gate.boundSessionId(PTY_ID)).toBe(SESSION_ID)
+  })
+
+  it('settles a proven attempt so no later attempt can release its pane', () => {
+    gate.bindPtyForAttempt(PTY_ID, SESSION_ID, 'spawn-a')
+    expect(gate.settlePtyAttempt(PTY_ID, 'spawn-a')).toBe(true)
+
+    expect(gate.settlePtyAttempt(PTY_ID, 'spawn-a')).toBe(false)
+    expect(gate.releasePtyAttempt(PTY_ID, 'spawn-a')).toBe(false)
+    expect(gate.boundSessionId(PTY_ID)).toBe(SESSION_ID)
+  })
+
+  it('settles nothing once the pane is gone', () => {
+    gate.bindPtyForAttempt(PTY_ID, SESSION_ID, 'spawn-a')
+    gate.unbindPty(PTY_ID)
+
+    expect(gate.settlePtyAttempt(PTY_ID, 'spawn-a')).toBe(false)
+    expect(gate.boundSessionId(PTY_ID)).toBeNull()
+  })
+})
+
 describe('admission through the store', () => {
   beforeEach(() => {
     gate.attachRecordLookup((sessionId) => records.get(sessionId) ?? null)

@@ -31,8 +31,17 @@ const ADMITTED_UNBOUND: AgentSessionPtyWriteAdmission = {
   runtimeFence: null
 }
 
+/**
+ * A pane binding, plus the adoption attempt that is still proving it.
+ *
+ * `attemptToken` is null once an owner is proven — a settled binding no attempt may take away.
+ * While it is non-null the binding belongs to that one in-flight attempt, which is the only thing
+ * that tells two overlapping adoptions apart: both carry the same sessionId.
+ */
+type BoundPane = { sessionId: string; attemptToken: string | null }
+
 export class AgentSessionPtyWriteGate {
-  private readonly sessionIdByPtyId = new Map<string, string>()
+  private readonly panesByPtyId = new Map<string, BoundPane>()
   private lookup: AgentSessionRecordLookup | null = null
 
   /** Point the gate at the durable store. Until this is called nothing can be enforced. */
@@ -42,24 +51,62 @@ export class AgentSessionPtyWriteGate {
 
   detachRecordLookup(): void {
     this.lookup = null
-    this.sessionIdByPtyId.clear()
+    this.panesByPtyId.clear()
   }
 
   bindPty(ptyId: string, sessionId: string): void {
-    this.sessionIdByPtyId.set(ptyId, sessionId)
+    this.panesByPtyId.set(ptyId, { sessionId, attemptToken: null })
   }
 
   unbindPty(ptyId: string): void {
-    this.sessionIdByPtyId.delete(ptyId)
+    this.panesByPtyId.delete(ptyId)
+  }
+
+  /**
+   * Claim the pane for one adoption attempt, identified by the spawn token its reservation minted.
+   * A settled owner keeps the pane; another attempt's claim is superseded, because the newest
+   * reservation is the one the record now names. Callers must already have refused a pane bound to
+   * a different session.
+   */
+  bindPtyForAttempt(ptyId: string, sessionId: string, attemptToken: string): boolean {
+    const current = this.panesByPtyId.get(ptyId)
+    if (current && current.attemptToken === null) {
+      return false
+    }
+    this.panesByPtyId.set(ptyId, { sessionId, attemptToken })
+    return true
+  }
+
+  /** Promote this attempt's claim to a settled binding once its owner is proven. */
+  settlePtyAttempt(ptyId: string, attemptToken: string): boolean {
+    const current = this.panesByPtyId.get(ptyId)
+    if (current?.attemptToken !== attemptToken) {
+      return false
+    }
+    this.panesByPtyId.set(ptyId, { sessionId: current.sessionId, attemptToken: null })
+    return true
+  }
+
+  /**
+   * Compare-and-clear: hand the pane back only while this attempt still holds it. A losing attempt
+   * that unbinds by pty alone rips the pane out from under the attempt that superseded it, and then
+   * that one's proof is refused too — both fail where one should have won.
+   */
+  releasePtyAttempt(ptyId: string, attemptToken: string): boolean {
+    if (this.panesByPtyId.get(ptyId)?.attemptToken !== attemptToken) {
+      return false
+    }
+    this.panesByPtyId.delete(ptyId)
+    return true
   }
 
   boundSessionId(ptyId: string): string | null {
-    return this.sessionIdByPtyId.get(ptyId) ?? null
+    return this.panesByPtyId.get(ptyId)?.sessionId ?? null
   }
 
   /** False while no PTY is bound, which is every write path in today's builds. */
   get enforcing(): boolean {
-    return this.lookup !== null && this.sessionIdByPtyId.size > 0
+    return this.lookup !== null && this.panesByPtyId.size > 0
   }
 
   admit(ptyId: string): AgentSessionPtyWriteAdmission {
@@ -117,11 +164,11 @@ export class AgentSessionPtyWriteGate {
   }
 
   private binding(ptyId: string): AgentSessionPtyBinding | null {
-    const sessionId = this.sessionIdByPtyId.get(ptyId)
-    if (sessionId === undefined) {
+    const pane = this.panesByPtyId.get(ptyId)
+    if (pane === undefined) {
       return null
     }
-    return { sessionId, record: this.lookup?.(sessionId) ?? null }
+    return { sessionId: pane.sessionId, record: this.lookup?.(pane.sessionId) ?? null }
   }
 }
 
