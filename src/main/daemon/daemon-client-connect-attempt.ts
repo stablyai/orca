@@ -22,7 +22,8 @@ export class DaemonConnectAttempt {
   /**
    * Connects, or joins whoever is already connecting. A retired attempt is waited out —
    * one attempt at a time keeps the client's socket fields single-owner — and then replaced
-   * by a dial to the daemon that took its place.
+   * by a dial to the daemon that took its place. Both waits are bounded by joinTimeoutMs,
+   * so a caller with a deadline gets a timeout rather than the retired dial's own budget.
    */
   async run(args: {
     isConnected: () => boolean
@@ -39,7 +40,14 @@ export class DaemonConnectAttempt {
         if (this.attemptGeneration === args.currentGeneration()) {
           return await waitForDaemonConnectionAttempt(inFlight, args.joinTimeoutMs)
         }
-        await inFlight.catch(() => {})
+        // Why bounded, and why only the wait: unbounded, a retired attempt's own
+        // 4 x CONNECT_TIMEOUT_MS runs an ensureConnectedWithin(500) caller 20s past
+        // its deadline. Giving up on the wait keeps one attempt at a time — the
+        // retired dial still owns the socket fields; no replacement starts here.
+        await waitForDaemonConnectionAttempt(
+          inFlight.catch(() => {}),
+          args.joinTimeoutMs
+        )
         this.release(inFlight)
         continue
       }

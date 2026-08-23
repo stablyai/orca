@@ -6,7 +6,14 @@ import type { RgbaImage } from './pet-image-cutout'
  *  modules so it can be tested without a rasteriser. This file only moves pixels
  *  between a File, an `RgbaImage` and an encoded sheet. */
 
-/** Guards against a decompression bomb — a small file can declare huge dimensions. */
+/** Ceiling on what the pipeline will process.
+ *
+ *  Checked after `createImageBitmap` rather than before, because nothing in the
+ *  renderer reports an image's dimensions without decoding it — the decoder has
+ *  already allocated by the time we look. What the check does stop is
+ *  everything downstream: the width*height*4 RGBA copy on the JS heap and the
+ *  several O(pixels) passes the cutout and resample make over it. The file came
+ *  from the user's own picker, so this is a hang guard, not a security boundary. */
 export const MAX_SOURCE_PIXELS = 4096 * 4096
 
 export async function decodeImageFile(file: Blob): Promise<RgbaImage> {
