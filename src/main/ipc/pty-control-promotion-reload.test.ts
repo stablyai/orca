@@ -200,7 +200,24 @@ describe('control promotion PTY reload', () => {
     expect(kill).toHaveBeenCalledOnce()
   })
 
-  it('sweeps a secondary local PTY on the ordinary load after crash recovery fails', async () => {
+  it.each([
+    {
+      reason: 'the recovery main frame fails',
+      fail: (secondary: WebContentsMock) => {
+        for (const listener of activeListeners(secondary, 'did-fail-load')) {
+          listener({}, -2, 'failed', 'orca://renderer', true, 1, 2)
+        }
+      }
+    },
+    {
+      reason: 'the recovery renderer crashes again before a retry',
+      fail: (secondary: WebContentsMock) => {
+        for (const listener of activeListeners(secondary, 'render-process-gone')) {
+          listener()
+        }
+      }
+    }
+  ])('sweeps a secondary local PTY on the ordinary load after $reason', async ({ fail }) => {
     const mockProc = createMockProc()
     const kill = mockProc.proc.kill
     spawnMock.mockReturnValue(mockProc.proc)
@@ -231,11 +248,7 @@ describe('control promotion PTY reload', () => {
       listener()
     }
 
-    loadRendererWithPtyRecovery(secondary as never, recoveryReloadInFlight, () => {
-      for (const listener of activeListeners(secondary, 'did-fail-load')) {
-        listener({}, -2, 'failed', 'orca://renderer', true, 1, 2)
-      }
-    })
+    loadRendererWithPtyRecovery(secondary as never, recoveryReloadInFlight, () => fail(secondary))
     reload(secondary)
 
     expect(kill).toHaveBeenCalledOnce()

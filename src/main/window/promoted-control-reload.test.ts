@@ -29,6 +29,7 @@ describe('promoted control reload', () => {
     expect(webContents.listenerCount('did-finish-load')).toBe(1)
     expect(webContents.listenerCount('did-fail-load')).toBe(0)
     expect(webContents.listenerCount('destroyed')).toBe(0)
+    expect(webContents.listenerCount('render-process-gone')).toBe(0)
   })
 
   it('clears a failed main-frame reload before the next load', () => {
@@ -44,6 +45,7 @@ describe('promoted control reload', () => {
     expect(webContents.listenerCount('did-finish-load')).toBe(0)
     expect(webContents.listenerCount('did-fail-load')).toBe(0)
     expect(webContents.listenerCount('destroyed')).toBe(0)
+    expect(webContents.listenerCount('render-process-gone')).toBe(0)
   })
 
   it('clears a destroyed web contents reload', () => {
@@ -59,6 +61,7 @@ describe('promoted control reload', () => {
     expect(webContents.listenerCount('did-finish-load')).toBe(0)
     expect(webContents.listenerCount('did-fail-load')).toBe(0)
     expect(webContents.listenerCount('destroyed')).toBe(0)
+    expect(webContents.listenerCount('render-process-gone')).toBe(0)
   })
 
   it('keeps suppression after a subframe failure until the main frame finishes', () => {
@@ -77,6 +80,7 @@ describe('promoted control reload', () => {
     expect(webContents.listenerCount('did-finish-load')).toBe(1)
     expect(webContents.listenerCount('did-fail-load')).toBe(0)
     expect(webContents.listenerCount('destroyed')).toBe(0)
+    expect(webContents.listenerCount('render-process-gone')).toBe(0)
   })
 
   it('clears suppression and listeners when reload throws synchronously', () => {
@@ -95,6 +99,7 @@ describe('promoted control reload', () => {
     expect(webContents.listenerCount('did-finish-load')).toBe(0)
     expect(webContents.listenerCount('did-fail-load')).toBe(0)
     expect(webContents.listenerCount('destroyed')).toBe(0)
+    expect(webContents.listenerCount('render-process-gone')).toBe(0)
   })
 
   it('re-marks a new automatic attempt after a failed attempt clears', () => {
@@ -112,16 +117,30 @@ describe('promoted control reload', () => {
     expect(flag.matches(webContents.id, { consume: true })).toBe(true)
   })
 
-  it('clears a failed attempt without touching another web contents attempt', () => {
+  it('retires a crashed attempt without clearing a retry or another web contents attempt', () => {
     const flag = createWebContentsTimedFlag()
     const first = createWebContents(() => undefined, 17)
     const second = createWebContents(() => undefined, 18)
 
     loadRendererWithPtyRecovery(first as unknown as WebContents, flag, () => first.reload())
     loadRendererWithPtyRecovery(second as unknown as WebContents, flag, () => second.reload())
-    first.emit('destroyed')
+    const lateFirstFailure = first.listeners('did-fail-load').at(-1)!
+    first.emit('render-process-gone')
 
     expect(flag.matches(first.id, { consume: true })).toBe(false)
+    expect(first.listenerCount('did-finish-load')).toBe(0)
+    expect(first.listenerCount('did-fail-load')).toBe(0)
+    expect(first.listenerCount('destroyed')).toBe(0)
+    expect(first.listenerCount('render-process-gone')).toBe(0)
     expect(flag.matches(second.id, { consume: true })).toBe(true)
+    second.emit('did-finish-load')
+
+    const consumed: boolean[] = []
+    first.on('did-finish-load', () => consumed.push(flag.matches(first.id, { consume: true })))
+    loadRendererWithPtyRecovery(first as unknown as WebContents, flag, () => first.reload())
+    lateFirstFailure({}, -2, 'late failure', 'orca://renderer', true, 1, 2)
+    first.emit('did-finish-load')
+
+    expect(consumed).toEqual([true])
   })
 })

@@ -7,17 +7,27 @@ export function loadRendererWithPtyRecovery(
   load: () => void
 ): void {
   const webContentsId = webContents.id
+  let active = true
 
   function cleanup(): void {
     webContents.removeListener('did-finish-load', onDidFinishLoad)
     webContents.removeListener('did-fail-load', onDidFailLoad)
     webContents.removeListener('destroyed', onDestroyed)
+    webContents.removeListener('render-process-gone', onRenderProcessGone)
   }
   function clear(): void {
+    if (!active) {
+      return
+    }
+    active = false
     recoveryReloadInFlight.clear(webContentsId)
     cleanup()
   }
   function onDidFinishLoad(): void {
+    if (!active) {
+      return
+    }
+    active = false
     cleanup()
   }
   function onDidFailLoad(
@@ -36,10 +46,14 @@ export function loadRendererWithPtyRecovery(
   function onDestroyed(): void {
     clear()
   }
+  function onRenderProcessGone(): void {
+    clear()
+  }
 
   webContents.on('did-finish-load', onDidFinishLoad)
   webContents.on('did-fail-load', onDidFailLoad)
   webContents.on('destroyed', onDestroyed)
+  webContents.on('render-process-gone', onRenderProcessGone)
   recoveryReloadInFlight.mark(webContentsId)
   try {
     load()
