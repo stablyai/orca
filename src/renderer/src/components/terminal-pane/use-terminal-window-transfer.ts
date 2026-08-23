@@ -9,21 +9,41 @@ import { persistWorkspaceSessionByHost } from '@/lib/workspace-session-host-pers
 import { useAppStore } from '@/store'
 import { ensurePtyDispatcher } from './pty-dispatcher'
 
-function waitForWorkspaceSession(): Promise<void> {
+function waitForWorkspaceSession(signal?: AbortSignal): Promise<boolean> {
   const ready = (): boolean => {
     const state = useAppStore.getState()
     return state.workspaceSessionReady && state.hydrationSucceeded
   }
   if (ready()) {
-    return Promise.resolve()
+    return Promise.resolve(true)
+  }
+  if (signal?.aborted) {
+    return Promise.resolve(false)
   }
   return new Promise((resolve) => {
-    const unsubscribe = useAppStore.subscribe(() => {
+    let settled = false
+    let unsubscribe = (): void => undefined
+    const finish = (isReady: boolean): void => {
+      if (settled) {
+        return
+      }
+      settled = true
+      unsubscribe()
+      signal?.removeEventListener('abort', onAbort)
+      resolve(isReady)
+    }
+    const onAbort = (): void => finish(false)
+    unsubscribe = useAppStore.subscribe(() => {
       if (ready()) {
-        unsubscribe()
-        resolve()
+        finish(true)
       }
     })
+    signal?.addEventListener('abort', onAbort, { once: true })
+    if (signal?.aborted) {
+      finish(false)
+    } else if (ready()) {
+      finish(true)
+    }
   })
 }
 
@@ -64,6 +84,7 @@ export function useTerminalWindowTransfer(): TerminalWindowContext | null {
   const [context, setContext] = useState<TerminalWindowContext | null>(null)
 
   useEffect(() => {
+    const hydration = new AbortController()
     ensurePtyDispatcher()
     const unsubscribe = window.api.terminalWindow.onCommand((command) => {
       void executeTerminalWindowTransferCommand(command).then(
@@ -78,8 +99,19 @@ export function useTerminalWindowTransfer(): TerminalWindowContext | null {
           })
       )
     })
-    void window.api.terminalWindow.getContext().then(setContext)
-    return unsubscribe
+    void waitForWorkspaceSession(hydration.signal).then(async (ready) => {
+      if (!ready || hydration.signal.aborted) {
+        return
+      }
+      const nextContext = await window.api.terminalWindow.getContext()
+      if (!hydration.signal.aborted) {
+        setContext(nextContext)
+      }
+    })
+    return () => {
+      hydration.abort()
+      unsubscribe()
+    }
   }, [])
 
   return context

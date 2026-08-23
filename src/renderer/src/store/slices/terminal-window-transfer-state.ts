@@ -18,7 +18,7 @@ function chooseGroup(
   const groups = state.groupsByWorktree[seed.worktreeId] ?? []
   const active = groups.find(({ id }) => id === state.activeGroupIdByWorktree[seed.worktreeId])
   const seeded = groups.find(({ id }) => id === seed.group.id)
-  const existing = restoreSource ? (seeded ?? active) : (active ?? seeded)
+  const existing = restoreSource ? seeded : (active ?? seeded)
   return {
     group:
       existing ??

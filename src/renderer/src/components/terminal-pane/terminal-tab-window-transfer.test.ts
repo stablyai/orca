@@ -372,9 +372,138 @@ describe('terminal tab window transfer', () => {
     expect(kill).not.toHaveBeenCalled()
   })
 
-  it('clears renderer SSH leases, preserves agent authority, and restores the source group', () => {
+  it('collapses an emptied terminal group onto the surviving mixed-content group', () => {
+    const store = createTestStore()
+    const { tab } = seedTerminal(store)
+    const editor = makeOpenFile({ id: 'file-1', worktreeId: 'wt-1' })
+    const browser = {
+      id: 'browser-1',
+      worktreeId: 'wt-1',
+      url: 'https://example.com',
+      title: 'Example',
+      loading: false,
+      faviconUrl: null,
+      canGoBack: false,
+      canGoForward: false,
+      loadError: null,
+      createdAt: 1
+    }
+    const surfaceGroup = makeTabGroup({
+      id: 'group-2',
+      worktreeId: 'wt-1',
+      activeTabId: browser.id,
+      tabOrder: [editor.id, browser.id],
+      recentTabIds: [editor.id, browser.id]
+    })
+    seedStore(store, {
+      openFiles: [editor],
+      browserTabsByWorktree: { 'wt-1': [browser] },
+      unifiedTabsByWorktree: {
+        'wt-1': [
+          makeUnifiedTab({ id: tab.id, worktreeId: 'wt-1', groupId: 'group-1' }),
+          makeUnifiedTab({
+            id: editor.id,
+            worktreeId: 'wt-1',
+            groupId: surfaceGroup.id,
+            contentType: 'editor'
+          }),
+          makeUnifiedTab({
+            id: browser.id,
+            worktreeId: 'wt-1',
+            groupId: surfaceGroup.id,
+            contentType: 'browser'
+          })
+        ]
+      },
+      groupsByWorktree: {
+        'wt-1': [
+          makeTabGroup({
+            id: 'group-1',
+            worktreeId: 'wt-1',
+            activeTabId: tab.id,
+            tabOrder: [tab.id]
+          }),
+          surfaceGroup
+        ]
+      },
+      layoutByWorktree: {
+        'wt-1': {
+          type: 'split',
+          direction: 'horizontal',
+          first: { type: 'leaf', groupId: 'group-1' },
+          second: { type: 'leaf', groupId: surfaceGroup.id }
+        }
+      },
+      activeGroupIdByWorktree: { 'wt-1': 'group-1' },
+      activeTabId: tab.id,
+      activeTabIdByWorktree: { 'wt-1': tab.id },
+      activeTabType: 'terminal',
+      activeTabTypeByWorktree: { 'wt-1': 'terminal' },
+      recentQuickCommandIdByGroup: { 'group-1': 'quick-1', 'group-2': 'quick-2' }
+    })
+    const captured = captureTerminalWindowTransferSeed(store.getState(), tab.id)
+    expect(captured.ok).toBe(true)
+    if (!captured.ok) {
+      return
+    }
+
+    expect(store.getState().removeTransferredTerminalTab(tab.id)).toBe(true)
+    let state = store.getState()
+    expect(state.groupsByWorktree['wt-1']).toEqual([surfaceGroup])
+    expect(state.layoutByWorktree['wt-1']).toEqual({
+      type: 'leaf',
+      groupId: surfaceGroup.id
+    })
+    expect(state.activeGroupIdByWorktree['wt-1']).toBe(surfaceGroup.id)
+    expect(state.activeTabType).toBe('browser')
+    expect(state.activeBrowserTabId).toBe(browser.id)
+    expect(state.openFiles).toEqual([editor])
+    expect(state.browserTabsByWorktree['wt-1']).toEqual([browser])
+    expect(state.recentQuickCommandIdByGroup).toEqual({ 'group-2': 'quick-2' })
+
+    expect(store.getState().restoreTransferredTerminalTab(captured.seed)).toBe(true)
+    state = store.getState()
+    expect(state.groupsByWorktree['wt-1']).toEqual([
+      surfaceGroup,
+      expect.objectContaining({
+        id: 'group-1',
+        activeTabId: tab.id,
+        tabOrder: [tab.id]
+      })
+    ])
+    expect(state.layoutByWorktree['wt-1']).toEqual({
+      type: 'split',
+      direction: 'horizontal',
+      first: { type: 'leaf', groupId: surfaceGroup.id },
+      second: { type: 'leaf', groupId: 'group-1' }
+    })
+    expect(state.activeGroupIdByWorktree['wt-1']).toBe('group-1')
+    expect(state.activeTabId).toBe(tab.id)
+    expect(state.activeTabType).toBe('terminal')
+    expect(state.openFiles).toEqual([editor])
+    expect(state.browserTabsByWorktree['wt-1']).toEqual([browser])
+  })
+
+  it('clears local agent projections without retiring authority and restores the source group', () => {
     const store = createTestStore()
     const { tab, layout } = seedTerminal(store)
+    const paneKey = `${tab.id}:leaf-1`
+    const siblingPaneKey = 'tab-2:leaf-1'
+    const agentStatusDrop = vi.fn()
+    const agentStatusDropByTabPrefix = vi.fn()
+    const retireAgentPaneAuthority = vi.fn()
+    const transferAgentPaneAuthority = vi.fn()
+    globalThis.window = {
+      api: {
+        pty: { kill },
+        agentStatus: {
+          drop: agentStatusDrop,
+          dropByTabPrefix: agentStatusDropByTabPrefix,
+          retirePaneAuthority: retireAgentPaneAuthority,
+          transferPaneAuthority: transferAgentPaneAuthority
+        }
+      }
+    } as never
     const editor = makeOpenFile({ id: 'file-1', worktreeId: 'wt-1' })
     const editorTab = makeUnifiedTab({
       id: editor.id,
@@ -403,12 +532,45 @@ describe('terminal tab window transfer', () => {
       directSshPaneRetryByTabId: { [tab.id]: { attemptId: 'attempt-1' } as never },
       directSshLivePtyBindingByTabId: { [tab.id]: { ptyId: 'pty-a' } as never },
       directSshPaneRetryHistoryByTabId: { [tab.id]: { attemptedAt: [1] } as never },
-      agentStatusByPaneKey: { [`${tab.id}:leaf-1`]: { status: 'working' } as never },
-      paneForegroundAgentByPaneKey: {
-        [`${tab.id}:leaf-1`]: { agent: 'claude', shellForeground: false }
+      agentStatusByPaneKey: {
+        [paneKey]: { status: 'working' } as never,
+        [siblingPaneKey]: { status: 'working' } as never
       },
+      runtimeAgentOrchestrationByPaneKey: {
+        [paneKey]: { dispatchStatus: 'running' } as never,
+        [siblingPaneKey]: { dispatchStatus: 'running' } as never
+      },
+      retainedAgentsByPaneKey: {
+        [paneKey]: { worktreeId: 'wt-1' } as never,
+        [siblingPaneKey]: { worktreeId: 'wt-1' } as never
+      },
+      sleepingAgentSessionsByPaneKey: {
+        [paneKey]: { worktreeId: 'wt-1' } as never,
+        [siblingPaneKey]: { worktreeId: 'wt-1' } as never
+      },
+      agentLaunchConfigByPaneKey: {
+        [paneKey]: { registeredAt: 1 } as never,
+        [siblingPaneKey]: { registeredAt: 1 } as never
+      },
+      acknowledgedAgentsByPaneKey: { [paneKey]: 1, [siblingPaneKey]: 1 },
+      retentionSuppressedPaneKeys: { [paneKey]: true, [siblingPaneKey]: true },
+      recentlyRetiredAgentStatusPaneKeys: { [paneKey]: true, [siblingPaneKey]: true },
+      recentlyClosedAgentStatusTabIds: { [tab.id]: true, 'tab-2': true },
+      migrationUnsupportedByPtyId: {
+        'pty-a': { paneKey } as never,
+        'pty-sibling': { paneKey: siblingPaneKey } as never
+      },
+      paneForegroundAgentByPaneKey: {
+        [paneKey]: { agent: 'claude', shellForeground: false },
+        [siblingPaneKey]: { agent: 'claude', shellForeground: false }
+      },
+      unreadTerminalPanes: { [paneKey]: true, [siblingPaneKey]: true },
+      unreadAgentCompletionPanes: { [paneKey]: true, [siblingPaneKey]: true },
+      lastTerminalInputAtByPaneKey: { [paneKey]: 1, [siblingPaneKey]: 1 },
+      cacheTimerByKey: { [paneKey]: 1, [siblingPaneKey]: 1 },
       terminalLayoutsByTabId: { [tab.id]: layout }
     })
+    const { agentStatusEpoch, sortEpoch } = store.getState()
     const captured = captureTerminalWindowTransferSeed(store.getState(), tab.id)
     expect(captured.ok).toBe(true)
     if (!captured.ok) {
@@ -420,8 +582,30 @@ describe('terminal tab window transfer', () => {
     expect(state.directSshPaneRetryByTabId[tab.id]).toBeUndefined()
     expect(state.directSshLivePtyBindingByTabId[tab.id]).toBeUndefined()
     expect(state.directSshPaneRetryHistoryByTabId[tab.id]).toBeUndefined()
-    expect(state.agentStatusByPaneKey[`${tab.id}:leaf-1`]).toBeDefined()
-    expect(state.paneForegroundAgentByPaneKey[`${tab.id}:leaf-1`]).toBeDefined()
+    for (const projection of [
+      state.agentStatusByPaneKey,
+      state.runtimeAgentOrchestrationByPaneKey,
+      state.retainedAgentsByPaneKey,
+      state.sleepingAgentSessionsByPaneKey,
+      state.agentLaunchConfigByPaneKey,
+      state.acknowledgedAgentsByPaneKey,
+      state.retentionSuppressedPaneKeys,
+      state.recentlyRetiredAgentStatusPaneKeys,
+      state.paneForegroundAgentByPaneKey,
+      state.unreadTerminalPanes,
+      state.unreadAgentCompletionPanes,
+      state.lastTerminalInputAtByPaneKey,
+      state.cacheTimerByKey
+    ]) {
+      expect(projection[paneKey]).toBeUndefined()
+      expect(projection[siblingPaneKey]).toBeDefined()
+    }
+    expect(state.recentlyClosedAgentStatusTabIds[tab.id]).toBeUndefined()
+    expect(state.recentlyClosedAgentStatusTabIds['tab-2']).toBe(true)
+    expect(state.migrationUnsupportedByPtyId['pty-a']).toBeUndefined()
+    expect(state.migrationUnsupportedByPtyId['pty-sibling']).toBeDefined()
+    expect(state.agentStatusEpoch).toBe(agentStatusEpoch + 1)
+    expect(state.sortEpoch).toBe(sortEpoch + 1)
     expect(state.groupsByWorktree['wt-1'][0]).toMatchObject({
       activeTabId: editor.id,
       tabOrder: [editor.id]
@@ -440,6 +624,10 @@ describe('terminal tab window transfer', () => {
     expect(state.activeTabTypeByWorktree['wt-1']).toBe('terminal')
     expect(state.terminalLayoutsByTabId[tab.id]).toEqual(layout)
     expect(state.directSshPaneRetryByTabId[tab.id]).toBeUndefined()
+    expect(agentStatusDrop).not.toHaveBeenCalled()
+    expect(agentStatusDropByTabPrefix).not.toHaveBeenCalled()
+    expect(retireAgentPaneAuthority).not.toHaveBeenCalled()
+    expect(transferAgentPaneAuthority).not.toHaveBeenCalled()
     expect(kill).not.toHaveBeenCalled()
   })
 })

@@ -2,6 +2,8 @@ import type { AppState } from '../types'
 import type { Tab, TabGroup, WorkspaceVisibleTabType } from '../../../../shared/tab-types'
 import { toVisibleTabType } from '../../../../shared/tab-types'
 import { pickNextActiveTab, sanitizeRecentTabIds } from './tab-group-state'
+import { collapseGroupLayout } from './tab-group-layout-removal'
+import { buildTransferredTerminalLocalProjectionRemoval } from './terminal-window-transfer-local-projection'
 
 type RemovalResult = { ok: true; patch: Partial<AppState> | null } | { ok: false }
 
@@ -14,13 +16,9 @@ function withoutKey<T>(source: Record<string, T>, key: string): Record<string, T
   return next
 }
 
-function withoutPanePrefix<T>(source: Record<string, T>, tabId: string): Record<string, T> {
-  const entries = Object.entries(source).filter(([key]) => !key.startsWith(`${tabId}:`))
-  return entries.length === Object.keys(source).length ? source : Object.fromEntries(entries)
-}
-
 function tabScopedRemovalPatch(state: AppState, tabId: string): Partial<AppState> {
   return {
+    ...buildTransferredTerminalLocalProjectionRemoval(state, tabId),
     ptyIdsByTabId: withoutKey(state.ptyIdsByTabId, tabId),
     terminalLayoutsByTabId: withoutKey(state.terminalLayoutsByTabId, tabId),
     lastKnownRelayPtyIdByTabId: withoutKey(state.lastKnownRelayPtyIdByTabId, tabId),
@@ -40,10 +38,6 @@ function tabScopedRemovalPatch(state: AppState, tabId: string): Partial<AppState
     nativeChatLaunchPromptByTabId: withoutKey(state.nativeChatLaunchPromptByTabId, tabId),
     nativeChatLaunchDraftByTabId: withoutKey(state.nativeChatLaunchDraftByTabId, tabId),
     unreadTerminalTabs: withoutKey(state.unreadTerminalTabs, tabId),
-    unreadTerminalPanes: withoutPanePrefix(state.unreadTerminalPanes, tabId),
-    unreadAgentCompletionPanes: withoutPanePrefix(state.unreadAgentCompletionPanes, tabId),
-    lastTerminalInputAtByPaneKey: withoutPanePrefix(state.lastTerminalInputAtByPaneKey, tabId),
-    cacheTimerByKey: withoutPanePrefix(state.cacheTimerByKey, tabId),
     tabBarOrderByWorktree: Object.fromEntries(
       Object.entries(state.tabBarOrderByWorktree).map(([key, order]) => [
         key,
@@ -117,7 +111,8 @@ export function buildTransferredTerminalRemovalPatch(
   const nextUnifiedTabs = (state.unifiedTabsByWorktree[worktreeId] ?? []).filter(
     ({ id }) => !removedUnifiedIds.has(id)
   )
-  const nextGroups = (state.groupsByWorktree[worktreeId] ?? []).map((group) => {
+  const currentGroups = state.groupsByWorktree[worktreeId] ?? []
+  let nextGroups = currentGroups.map((group) => {
     const closingIds = group.tabOrder.filter((id) => removedUnifiedIds.has(id))
     if (closingIds.length === 0) {
       return group
@@ -135,15 +130,40 @@ export function buildTransferredTerminalRemovalPatch(
       recentTabIds: sanitizeRecentTabIds(group.recentTabIds, tabOrder)
     }
   })
-  const currentActiveGroupId = state.activeGroupIdByWorktree[worktreeId]
+  const emptiedGroupIds = currentGroups
+    .filter(
+      ({ tabOrder }) =>
+        tabOrder.some((id) => removedUnifiedIds.has(id)) &&
+        tabOrder.every((id) => removedUnifiedIds.has(id))
+    )
+    .map(({ id }) => id)
+  nextGroups = nextGroups.filter(({ id }) => !emptiedGroupIds.includes(id))
+  const recentQuickCommandIdByGroup = { ...state.recentQuickCommandIdByGroup }
+  for (const groupId of emptiedGroupIds) {
+    delete recentQuickCommandIdByGroup[groupId]
+  }
+  let nextLayoutByWorktree = state.layoutByWorktree
+  let nextActiveGroupIdByWorktree = state.activeGroupIdByWorktree
+  for (const groupId of emptiedGroupIds) {
+    const collapsed = collapseGroupLayout(
+      nextLayoutByWorktree,
+      nextActiveGroupIdByWorktree,
+      worktreeId,
+      groupId,
+      nextGroups[0]?.id ?? null
+    )
+    nextLayoutByWorktree = collapsed.layoutByWorktree
+    nextActiveGroupIdByWorktree = collapsed.activeGroupIdByWorktree
+  }
+  const currentActiveGroupId = nextActiveGroupIdByWorktree[worktreeId]
   const activeGroupId =
     nextGroups.find(({ id, tabOrder }) => id === currentActiveGroupId && tabOrder.length > 0)?.id ??
     nextGroups.find(({ tabOrder }) => tabOrder.length > 0)?.id ??
     nextGroups.find(({ id }) => id === currentActiveGroupId)?.id ??
     nextGroups[0]?.id
   const activeGroupIdByWorktree = activeGroupId
-    ? { ...state.activeGroupIdByWorktree, [worktreeId]: activeGroupId }
-    : withoutKey(state.activeGroupIdByWorktree, worktreeId)
+    ? { ...nextActiveGroupIdByWorktree, [worktreeId]: activeGroupId }
+    : withoutKey(nextActiveGroupIdByWorktree, worktreeId)
   const nextState = {
     ...state,
     tabsByWorktree: { ...state.tabsByWorktree, [worktreeId]: nextTabs },
@@ -152,7 +172,8 @@ export function buildTransferredTerminalRemovalPatch(
       [worktreeId]: nextUnifiedTabs
     },
     groupsByWorktree: { ...state.groupsByWorktree, [worktreeId]: nextGroups },
-    activeGroupIdByWorktree
+    activeGroupIdByWorktree,
+    layoutByWorktree: nextLayoutByWorktree
   }
   const selected = selectedSurface(
     nextState,
@@ -214,6 +235,8 @@ export function buildTransferredTerminalRemovalPatch(
       tabsByWorktree: nextState.tabsByWorktree,
       unifiedTabsByWorktree: nextState.unifiedTabsByWorktree,
       groupsByWorktree: nextState.groupsByWorktree,
+      layoutByWorktree: nextState.layoutByWorktree,
+      recentQuickCommandIdByGroup,
       activeGroupIdByWorktree,
       activeTabIdByWorktree,
       activeTabTypeByWorktree,

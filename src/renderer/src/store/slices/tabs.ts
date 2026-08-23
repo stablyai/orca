@@ -46,6 +46,9 @@ import {
   buildValidWorktreeIdsForSessionHydration,
   collectPersistedWorktreeIdsForSessionHydration
 } from './degraded-repo-worktree-validity'
+import { collapseGroupLayout } from './tab-group-layout-removal'
+export { findSiblingGroupId } from './tab-group-layout-removal'
+import { findSiblingGroupId } from './tab-group-layout-removal'
 
 export type TabSplitDirection = 'left' | 'right' | 'up' | 'down'
 
@@ -313,10 +316,6 @@ function updateSplitRatio(
   return root
 }
 
-function findFirstLeaf(root: TabGroupLayoutNode): string {
-  return root.type === 'leaf' ? root.groupId : findFirstLeaf(root.first)
-}
-
 function partitionPinnedTabOrder(tabOrder: string[], tabs: Tab[], movingTabId: string): string[] {
   const tabById = new Map(tabs.map((tab) => [tab.id, tab]))
   const withoutMoving = dedupeTabOrder(tabOrder).filter((id) => id !== movingTabId)
@@ -350,73 +349,6 @@ function canReplacePreviewContentType(
     return isReplaceablePreviewContentType(existingContentType)
   }
   return existingContentType === incomingContentType
-}
-
-export function findSiblingGroupId(root: TabGroupLayoutNode, targetGroupId: string): string | null {
-  if (root.type === 'leaf') {
-    return null
-  }
-  if (root.first.type === 'leaf' && root.first.groupId === targetGroupId) {
-    return root.second.type === 'leaf' ? root.second.groupId : findFirstLeaf(root.second)
-  }
-  if (root.second.type === 'leaf' && root.second.groupId === targetGroupId) {
-    return root.first.type === 'leaf' ? root.first.groupId : findFirstLeaf(root.first)
-  }
-  return (
-    findSiblingGroupId(root.first, targetGroupId) ?? findSiblingGroupId(root.second, targetGroupId)
-  )
-}
-
-function removeLeaf(root: TabGroupLayoutNode, targetGroupId: string): TabGroupLayoutNode | null {
-  if (root.type === 'leaf') {
-    return root.groupId === targetGroupId ? null : root
-  }
-  if (root.first.type === 'leaf' && root.first.groupId === targetGroupId) {
-    return root.second
-  }
-  if (root.second.type === 'leaf' && root.second.groupId === targetGroupId) {
-    return root.first
-  }
-  const first = removeLeaf(root.first, targetGroupId)
-  const second = removeLeaf(root.second, targetGroupId)
-  if (first === null) {
-    return second
-  }
-  if (second === null) {
-    return first
-  }
-  return { ...root, first, second }
-}
-
-function collapseGroupLayout(
-  layoutByWorktree: Record<string, TabGroupLayoutNode>,
-  activeGroupIdByWorktree: Record<string, string>,
-  worktreeId: string,
-  groupId: string,
-  fallbackGroupId?: string | null
-): {
-  layoutByWorktree: Record<string, TabGroupLayoutNode>
-  activeGroupIdByWorktree: Record<string, string>
-} {
-  const currentLayout = layoutByWorktree[worktreeId]
-  if (!currentLayout) {
-    return { layoutByWorktree, activeGroupIdByWorktree }
-  }
-  const siblingId = findSiblingGroupId(currentLayout, groupId)
-  const collapsed = removeLeaf(currentLayout, groupId)
-  const nextLayoutByWorktree = { ...layoutByWorktree }
-  if (collapsed) {
-    nextLayoutByWorktree[worktreeId] = collapsed
-  } else {
-    delete nextLayoutByWorktree[worktreeId]
-  }
-  return {
-    layoutByWorktree: nextLayoutByWorktree,
-    activeGroupIdByWorktree: {
-      ...activeGroupIdByWorktree,
-      [worktreeId]: siblingId ?? fallbackGroupId ?? activeGroupIdByWorktree[worktreeId]
-    }
-  }
 }
 
 function deriveActiveSurfaceForWorktree(

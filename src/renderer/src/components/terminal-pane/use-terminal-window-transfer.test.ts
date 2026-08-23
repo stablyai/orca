@@ -109,6 +109,72 @@ describe('executeTerminalWindowTransferCommand', () => {
     )
   })
 
+  it('advertises command readiness only after workspace hydration', async () => {
+    let state = { workspaceSessionReady: false, hydrationSucceeded: false }
+    let onStoreChange!: () => void
+    const getContext = vi.fn().mockResolvedValue({
+      windowId: 1,
+      role: 'control',
+      transitionFenced: false
+    })
+    globalThis.window.api = {
+      session: {},
+      terminalWindow: {
+        ack: vi.fn(),
+        detach: vi.fn(),
+        getContext,
+        onCommand: vi.fn(() => vi.fn())
+      }
+    } as never
+    mocks.getState.mockImplementation(() => state)
+    mocks.subscribe.mockImplementation((listener) => {
+      onStoreChange = listener
+      return vi.fn()
+    })
+
+    renderHook(() => useTerminalWindowTransfer())
+    await Promise.resolve()
+    expect(getContext).not.toHaveBeenCalled()
+
+    state = { workspaceSessionReady: true, hydrationSucceeded: true }
+    onStoreChange()
+    await waitFor(() => expect(getContext).toHaveBeenCalledOnce())
+    onStoreChange()
+    expect(getContext).toHaveBeenCalledOnce()
+  })
+
+  it('cancels deferred context readiness when unmounted before hydration', async () => {
+    let state = { workspaceSessionReady: false, hydrationSucceeded: false }
+    let onStoreChange!: () => void
+    const unsubscribeStore = vi.fn()
+    const unsubscribeCommand = vi.fn()
+    const getContext = vi.fn()
+    globalThis.window.api = {
+      session: {},
+      terminalWindow: {
+        ack: vi.fn(),
+        detach: vi.fn(),
+        getContext,
+        onCommand: vi.fn(() => unsubscribeCommand)
+      }
+    } as never
+    mocks.getState.mockImplementation(() => state)
+    mocks.subscribe.mockImplementation((listener) => {
+      onStoreChange = listener
+      return unsubscribeStore
+    })
+
+    const hook = renderHook(() => useTerminalWindowTransfer())
+    hook.unmount()
+    state = { workspaceSessionReady: true, hydrationSucceeded: true }
+    onStoreChange()
+    await Promise.resolve()
+
+    expect(getContext).not.toHaveBeenCalled()
+    expect(unsubscribeStore).toHaveBeenCalledOnce()
+    expect(unsubscribeCommand).toHaveBeenCalledOnce()
+  })
+
   it('routes restore separately from target import and persists fresh state', async () => {
     const importTransferredTerminalTab = vi.fn(() => true)
     const restoreTransferredTerminalTab = vi.fn(() => true)
