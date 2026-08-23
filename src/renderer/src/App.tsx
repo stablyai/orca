@@ -38,13 +38,13 @@ function App(): React.JSX.Element {
   const onboardingGate = useOnboardingAndFeatureTips()
   const clearUnreadDockBadge = useUnreadDockBadge()
   const terminalWindowContext = useTerminalWindowTransfer()
+  const ownsControlServices =
+    terminalWindowContext?.role === 'control' && !terminalWindowContext.transitionFenced
 
-  useAppShellServices()
+  useAppShellServices(ownsControlServices)
   useAppStartupHydration(onboardingGate.applyStartupOnboardingState)
   useAppSessionPersistence()
-  useRuntimeGraphSync(
-    terminalWindowContext?.role === 'control' && !terminalWindowContext.transitionFenced
-  )
+  useRuntimeGraphSync(ownsControlServices)
   usePersistedUIWriter()
   useDocumentAppearance()
   useWindowVisibilityEffects()

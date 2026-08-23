@@ -84,6 +84,23 @@ let tccPromptHandlerTokenCounter = 0
 let activeTccPromptHandlerToken: number | null = null
 let runtimeNotifierTokenCounter = 0
 let activeRuntimeNotifierToken: number | null = null
+let activeControlWindow: BrowserWindow | null = null
+const processGlobalStores = new WeakSet<Store>()
+
+type MainWindowServiceOptions = {
+  prepareCodexSessionResume?: PrepareCodexSessionResume
+  awaitLocalPtyStartup?: () => Promise<void>
+  awaitLocalPtyProviderStartup?: () => Promise<void>
+  onBeforeRendererReload?: (args: { webContentsId: number; ignoreCache: boolean }) => void
+  isRecoveryReloadInFlight?: (webContentsId: number) => boolean
+  onCodexHomePtySpawned?: (args: CodexHomePtySpawnedLifecycleArgs) => void
+  onPtyExit?: (id: string, exitSequence: number) => void
+  onBeforeUpdateQuit?: () => void | Promise<void>
+  updateInstallMode?: UpdateInstallMode
+  onWorktreeLifecycle?: (event: RuntimeWorktreeLifecycleEvent) => void
+  runtimeGraphCloseManagedExternally?: boolean
+  onControlServicesAttached?: () => void
+}
 
 export function attachMainWindowServices(
   mainWindow: BrowserWindow,
@@ -93,24 +110,11 @@ export function attachMainWindowServices(
   prepareClaudeAuth?: (
     target?: ClaudeAccountSelectionTarget
   ) => Promise<ClaudeRuntimeAuthPreparation>,
-  options?: {
-    prepareCodexSessionResume?: PrepareCodexSessionResume
-    awaitLocalPtyStartup?: () => Promise<void>
-    awaitLocalPtyProviderStartup?: () => Promise<void>
-    onBeforeRendererReload?: (args: { webContentsId: number; ignoreCache: boolean }) => void
-    // Why: lets the PTY orphan sweep skip the one crash-recovery reload (#5787).
-    isRecoveryReloadInFlight?: (webContentsId: number) => boolean
-    onCodexHomePtySpawned?: (args: CodexHomePtySpawnedLifecycleArgs) => void
-    onPtyExit?: (id: string, exitSequence: number) => void
-    onBeforeUpdateQuit?: () => void | Promise<void>
-    updateInstallMode?: UpdateInstallMode
-    onWorktreeLifecycle?: (event: RuntimeWorktreeLifecycleEvent) => void
-  }
+  options?: MainWindowServiceOptions
 ): void {
+  activeControlWindow = mainWindow
   registerAppReloadHandler(mainWindow, options?.onBeforeRendererReload)
   registerRepoHandlers(mainWindow, store)
-  // Why: repo IPC mutations must also invalidate paired clients' catalogs (#11994).
-  setRepoRemoteClientNotifier(runtime)
   registerWorktreeHandlers(mainWindow, store, runtime, {
     onWorktreeLifecycle: options?.onWorktreeLifecycle
   })
@@ -120,7 +124,6 @@ export function attachMainWindowServices(
   // Why: folder projects get no watch target, so an external `git init` needs its own
   // marker poll to upgrade them without a restart (#11477).
   startFolderRepoGitUpgradeWatch(store, mainWindow)
-  registerWorkspaceCleanupHandlers(store, { runtime, getLocalPtyProvider })
   registerPtyHandlers(
     mainWindow,
     runtime,
@@ -138,27 +141,7 @@ export function attachMainWindowServices(
       reuseRegisteredState: true
     }
   )
-  // Why: register after registerPtyHandlers so pty:management:* IPC re-installs on macOS re-activation (docs/daemon-staleness-ux.md §Phase 1).
-  registerDaemonManagementHandlers()
-  // Why: don't enumerate repo paths in background GC — `git worktree list` can touch protected macOS folders and trigger access prompts.
-  scheduleHistoryGc(async () => {
-    return getKnownWorktreeIdsForHistoryGc(store)
-  })
-  // Why: daemon PTYs survive renderer restarts, so at boot they're unregistered; hydrate so they aren't mislabeled REMOTE (idempotent, safe to re-run).
-  void hydrateLocalPtyRegistryAtBoot(store)
-  const localPtyStartupReady = options?.awaitLocalPtyStartup?.()
-  if (localPtyStartupReady) {
-    void localPtyStartupReady
-      .then(() => hydrateLocalPtyRegistryAtBoot(store))
-      .catch((error) => {
-        console.warn(
-          '[memory] Deferred pty-registry hydration skipped:',
-          error instanceof Error ? error.message : String(error)
-        )
-      })
-  }
-  registerSshHandlers(store, () => mainWindow, runtime)
-  registerRemoteWorkspaceHandlers(store, () => mainWindow)
+  attachProcessGlobalServicesOnce(store, runtime, options)
   registerFileDropRelay(mainWindow)
   registerTccPromptNoticeHandlers(mainWindow)
   // Why: setupAutoUpdater sync-require()s electron-updater (slow on cold Windows w/ Defender, #7225), so defer past first paint; timer fallback covers crash-looping renderers.
@@ -202,7 +185,11 @@ export function attachMainWindowServices(
   mainWindow.once('ready-to-show', () => setImmediate(setupAutoUpdaterDeferred))
   const updaterSetupFallback = setTimeout(setupAutoUpdaterDeferred, UPDATER_SETUP_FALLBACK_MS)
   updaterSetupFallback.unref?.()
-  registerRuntimeWindowLifecycle(mainWindow, runtime)
+  registerRuntimeWindowLifecycle(
+    mainWindow,
+    runtime,
+    options?.runtimeGraphCloseManagedExternally === true
+  )
 
   const allowedPermissions = new Set(['media', 'fullscreen', 'pointerLock'])
   mainWindow.webContents.session.setPermissionRequestHandler(
@@ -227,9 +214,42 @@ export function attachMainWindowServices(
   )
 
   mainWindow.on('closed', () => {
+    if (activeControlWindow === mainWindow) {
+      activeControlWindow = null
+    }
     // Why: clear main-owned guest registrations on close so stale tab→webContents ids don't leak across relaunch/hot-reload.
     browserManager.unregisterAll()
   })
+  options?.onControlServicesAttached?.()
+}
+
+function attachProcessGlobalServicesOnce(
+  store: Store,
+  runtime: OrcaRuntimeService,
+  options: MainWindowServiceOptions | undefined
+): void {
+  if (processGlobalStores.has(store)) {
+    return
+  }
+  processGlobalStores.add(store)
+  setRepoRemoteClientNotifier(runtime)
+  registerWorkspaceCleanupHandlers(store, { runtime, getLocalPtyProvider })
+  registerDaemonManagementHandlers()
+  scheduleHistoryGc(async () => getKnownWorktreeIdsForHistoryGc(store))
+  void hydrateLocalPtyRegistryAtBoot(store)
+  const localPtyStartupReady = options?.awaitLocalPtyStartup?.()
+  if (localPtyStartupReady) {
+    void localPtyStartupReady
+      .then(() => hydrateLocalPtyRegistryAtBoot(store))
+      .catch((error) => {
+        console.warn(
+          '[memory] Deferred pty-registry hydration skipped:',
+          error instanceof Error ? error.message : String(error)
+        )
+      })
+  }
+  registerSshHandlers(store, () => activeControlWindow, runtime)
+  registerRemoteWorkspaceHandlers(store, () => activeControlWindow)
 }
 
 function registerTccPromptNoticeHandlers(mainWindow: BrowserWindow): void {
@@ -321,7 +341,8 @@ function registerAppReloadHandler(
 
 function registerRuntimeWindowLifecycle(
   mainWindow: BrowserWindow,
-  runtime: OrcaRuntimeService
+  runtime: OrcaRuntimeService,
+  graphCloseManagedExternally: boolean
 ): void {
   const notifierToken = ++runtimeNotifierTokenCounter
   activeRuntimeNotifierToken = notifierToken
@@ -523,7 +544,9 @@ function registerRuntimeWindowLifecycle(
   })
   mainWindow.on('closed', () => {
     rendererNotifications.close()
-    runtime.markGraphUnavailable(mainWindow.id)
+    if (!graphCloseManagedExternally) {
+      runtime.markGraphUnavailable(mainWindow.id)
+    }
     if (activeRuntimeNotifierToken === notifierToken) {
       // Why: the notifier closes over the window; clear it in the no-window gap so the runtime can't retain destroyed graphs.
       runtime.setNotifier(null)

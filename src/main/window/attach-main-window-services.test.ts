@@ -246,6 +246,36 @@ describe('attachMainWindowServices', () => {
     expect(setRepoRemoteClientNotifierMock).toHaveBeenCalledWith(runtime)
   })
 
+  it('initializes process-global services only once across control promotion', () => {
+    const store = createStore()
+    const runtime = createRuntime()
+
+    attachMainWindowServices(createMainWindow() as never, store, runtime as never)
+    attachMainWindowServices(createMainWindow() as never, store, runtime as never)
+
+    expect(setRepoRemoteClientNotifierMock).toHaveBeenCalledTimes(1)
+    expect(hydrateLocalPtyRegistryAtBootMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('signals a fresh control binding only after runtime authority and singleton services attach', () => {
+    const runtime = createRuntime()
+    const onControlServicesAttached = vi.fn(() => {
+      expect(runtime.attachWindow).toHaveBeenCalledWith(1)
+      expect(registerPtyHandlersMock).toHaveBeenCalledOnce()
+    })
+
+    attachMainWindowServices(
+      createMainWindow() as never,
+      createStore(),
+      runtime as never,
+      undefined,
+      undefined,
+      { onControlServicesAttached }
+    )
+
+    expect(onControlServicesAttached).toHaveBeenCalledOnce()
+  })
+
   it('reloads the app renderer through main and marks expected renderer teardown', async () => {
     const onBeforeRendererReload = vi.fn()
     const mainWindow = createMainWindow()
@@ -720,6 +750,25 @@ describe('attachMainWindowServices', () => {
 
     expect(runtime.markGraphUnavailable).toHaveBeenCalledWith(1)
     expect(runtime.setNotifier).toHaveBeenCalledWith(null)
+  })
+
+  it('leaves graph teardown to the ordered control handoff', () => {
+    const mainWindow = createMainWindow()
+    const runtime = createRuntime()
+    attachMainWindowServices(
+      mainWindow as never,
+      createStore(),
+      runtime as never,
+      undefined,
+      undefined,
+      { runtimeGraphCloseManagedExternally: true }
+    )
+
+    for (const handler of getClosedHandlers(mainWindow.on)) {
+      handler()
+    }
+
+    expect(runtime.markGraphUnavailable).not.toHaveBeenCalled()
   })
 
   it('keeps a newer runtime notifier when an older window closes late', () => {

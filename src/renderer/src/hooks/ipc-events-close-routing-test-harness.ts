@@ -36,7 +36,8 @@ export async function useIpcEventsForCloseRouting({
   replyTabClose = vi.fn(),
   terminalTabCloseRequestListenerRef,
   respondTerminalTabClose = vi.fn(),
-  persistWorkspaceSession = vi.fn().mockResolvedValue(undefined)
+  persistWorkspaceSession = vi.fn().mockResolvedValue(undefined),
+  ownsControlCloseRequests = true
 }: {
   closeActiveTabListenerRef?: { current: CloseActiveTabListener | null }
   closeFloatingItemListenerRef?: { current: CloseFloatingItemListener | null }
@@ -51,6 +52,7 @@ export async function useIpcEventsForCloseRouting({
   terminalTabCloseRequestListenerRef?: { current: TerminalTabCloseRequestListener | null }
   respondTerminalTabClose?: ReturnType<typeof vi.fn>
   persistWorkspaceSession?: ReturnType<typeof vi.fn>
+  ownsControlCloseRequests?: boolean
 }): Promise<void> {
   vi.doMock('react', async () => {
     const actual = await vi.importActual<typeof ReactModule>('react')
@@ -288,5 +290,5 @@ export async function useIpcEventsForCloseRouting({
   })
 
   const { useIpcEvents: registerIpcEvents } = await import('./useIpcEvents')
-  registerIpcEvents()
+  registerIpcEvents(ownsControlCloseRequests)
 }

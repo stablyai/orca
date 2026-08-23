@@ -26,6 +26,29 @@ describe('useIpcEvents browser tab close routing', () => {
     closeTerminalTabMock.mockReset()
   })
 
+  it('does not register mobile close ownership in a secondary window', async () => {
+    const closeSessionTabListenerRef = { current: null as CloseSessionTabListener | null }
+    const sessionTabCloseRequestListenerRef = { current: null }
+    const closeTerminalListenerRef = { current: null as CloseTerminalListener | null }
+    const terminalTabCloseRequestListenerRef = {
+      current: null as TerminalTabCloseRequestListener | null
+    }
+
+    await useIpcEventsForCloseRouting({
+      closeSessionTabListenerRef,
+      sessionTabCloseRequestListenerRef,
+      closeTerminalListenerRef,
+      terminalTabCloseRequestListenerRef,
+      ownsControlCloseRequests: false,
+      getState: () => ({})
+    })
+
+    expect(closeSessionTabListenerRef.current).toBeNull()
+    expect(sessionTabCloseRequestListenerRef.current).toBeNull()
+    expect(closeTerminalListenerRef.current).toBeNull()
+    expect(terminalTabCloseRequestListenerRef.current).toBeNull()
+  })
+
   it('removes the file from openFiles when a companion closes an editor session tab', async () => {
     const closeSessionTabListenerRef: { current: CloseSessionTabListener | null } = {
       current: null

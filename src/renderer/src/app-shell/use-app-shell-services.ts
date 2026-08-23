@@ -22,7 +22,7 @@ import { useRemoteRuntimeRecoveryTriggers } from '../runtime/use-remote-runtime-
  * the component that consumes its result unmounts (right sidebar, explorer, terminal) or is
  * absent entirely on the landing path.
  */
-export function useAppShellServices(): void {
+export function useAppShellServices(ownsControlCloseRequests: boolean): void {
   const workspaceSessionReady = useAppStore((s) => s.workspaceSessionReady)
   const persistedUIReady = useAppStore((s) => s.persistedUIReady)
   const primarySelectionMiddleClickPaste = useAppStore((s) =>
@@ -32,7 +32,7 @@ export function useAppShellServices(): void {
   useRadixBodyPointerEventsRecovery()
   useWebSessionTabsSync()
   // Subscribe to IPC push events
-  useIpcEvents()
+  useIpcEvents(ownsControlCloseRequests)
   useRemoteRuntimeRecoveryTriggers()
   useAutomationDispatchEvents()
   // Why: git polling lives at App level (RightSidebar unmounts when closed, stranding stale Rebasing/Merging badges); gate on workspaceSessionReady so it doesn't compete with first paint.

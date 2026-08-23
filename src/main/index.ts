@@ -53,10 +53,8 @@ import { closeAllWatchers } from './ipc/filesystem-watcher'
 import { disposeWorktreeBaseDirectoryWatchers } from './ipc/worktree-base-directory-watcher'
 import { stopFolderRepoGitUpgradeWatch } from './ipc/folder-repo-git-upgrade'
 import { registerCoreHandlers } from './ipc/register-core-handlers'
-import {
-  registerTerminalWindowTransferHandlers,
-  type TerminalWindowTransferCoordinator
-} from './ipc/terminal-window-transfer'
+import type { TerminalWindowTransferCoordinator } from './ipc/terminal-window-transfer'
+import { registerTerminalWindowTransferHandlers } from './ipc/terminal-window-transfer-registration'
 import { getWindowSessionRegistry } from './persistence/window-session-registry'
 import { initObservability, shutdownObservability } from './observability'
 import { registerMobileHandlers } from './ipc/mobile'
@@ -1541,7 +1539,10 @@ function openMainWindow(options: { revealOnDidFinishLoad?: boolean } = {}): Brow
   )
   automations.setWebContents(window.webContents)
   automations.start()
-  const attachControlServices = (controlWindow: BrowserWindow): void => {
+  const attachControlServices = (
+    controlWindow: BrowserWindow,
+    onControlServicesAttached?: () => void
+  ): void => {
     attachMainWindowServices(
       controlWindow,
       store!,
@@ -1565,11 +1566,18 @@ function openMainWindow(options: { revealOnDidFinishLoad?: boolean } = {}): Brow
         onBeforeUpdateQuit: () =>
           preserveAgentAuthBeforeRestart({ codexRuntimeHome, claudeRuntimeAuth, store }),
         updateInstallMode: resolveUpdateInstallMode(isServeMode),
-        onWorktreeLifecycle: emitPluginWorktreeLifecycle
+        onWorktreeLifecycle: emitPluginWorktreeLifecycle,
+        runtimeGraphCloseManagedExternally: true,
+        onControlServicesAttached
       }
     )
   }
-  attachControlServices(window)
+  attachControlServices(window, () => {
+    if (terminalWindowTransfers) {
+      mainWindow = window
+      terminalWindowTransfers.resumeAfterControlHandoff()
+    }
+  })
   const bindControlWindowLifecycle = (controlWindow: BrowserWindow): void => {
     const controlWindowId = controlWindow.id
     const controlWebContentsId = controlWindow.webContents.id
@@ -1583,6 +1591,11 @@ function openMainWindow(options: { revealOnDidFinishLoad?: boolean } = {}): Brow
           getWindowSessionRegistry(store!).retire(controlWindowId, 'user-close')
         }
       },
+      fenceAndSettleTransfers: () =>
+        terminalWindowTransfers?.fenceForControlHandoff() ?? Promise.resolve(),
+      markGraphUnavailable: (windowId) => runtime!.markGraphUnavailable(windowId),
+      attachRuntimeWindow: (promoted) => runtime!.attachWindow(promoted.id),
+      releaseTransferFence: () => terminalWindowTransfers?.resumeAfterControlHandoff(),
       onHandoff: (promoted) => {
         mainWindow = promoted
         attachControlServices(promoted)

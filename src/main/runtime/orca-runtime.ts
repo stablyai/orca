@@ -6736,7 +6736,7 @@ export class OrcaRuntimeService {
       // headless authority; accepting that late healthy graph is self-healing.
       this.attachWindow(windowId)
     }
-    if (this.authoritativeWindowId === null) {
+    if (this.authoritativeWindowId === null && windowId === HEADLESS_RUNTIME_WINDOW_ID) {
       this.authoritativeWindowId = windowId
     }
     if (windowId !== this.authoritativeWindowId) {
@@ -6900,6 +6900,7 @@ export class OrcaRuntimeService {
       nextPtyIds.add(ptyId)
     }
 
+    this.releaseDetachedWindowTerminalClaims(previousLeaves, nextLeaves)
     this.leaves = nextLeaves
     this.rebuildLeafPtyIndex()
     this.reconcilePtyIncarnationHandles()
@@ -6977,6 +6978,29 @@ export class OrcaRuntimeService {
       ...(mobileSessionResyncWorktrees.size > 0
         ? { mobileSessionResyncWorktrees: [...mobileSessionResyncWorktrees] }
         : {})
+    }
+  }
+
+  private releaseDetachedWindowTerminalClaims(
+    previousLeaves: ReadonlyMap<string, RuntimeLeafRecord>,
+    nextLeaves: ReadonlyMap<string, RuntimeLeafRecord>
+  ): void {
+    const retainedPtyIds = new Set(
+      [...nextLeaves.values()].flatMap((leaf) => (leaf.ptyId ? [leaf.ptyId] : []))
+    )
+    const detachedPtyIds = new Set(
+      [...previousLeaves.values()]
+        .flatMap((leaf) => (leaf.ptyId ? [leaf.ptyId] : []))
+        .filter((ptyId) => !retainedPtyIds.has(ptyId))
+    )
+    for (const ptyId of detachedPtyIds) {
+      this.mobileSubscribers.delete(ptyId)
+      this.setDriver(ptyId, { kind: 'idle' })
+      this.remoteDesktopViewers.delete(ptyId)
+      this.remoteDesktopOwners.delete(ptyId)
+      this.remoteDesktopHostReclaimTargets.delete(ptyId)
+      this.remoteDesktopViewerRevisions.delete(ptyId)
+      this.notifyRemoteTerminalViewPresenceChanged(ptyId)
     }
   }
 

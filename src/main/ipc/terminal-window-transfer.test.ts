@@ -55,6 +55,26 @@ describe('TerminalWindowTransferCoordinator', () => {
     )
   })
 
+  it('does not reopen a quit fence when a control binding completes', async () => {
+    const h = createHarness()
+    const { TerminalWindowTransferCoordinator } = await import('./terminal-window-transfer')
+    const coordinator = new TerminalWindowTransferCoordinator({
+      store: {} as never,
+      createSecondaryWindow: vi.fn(),
+      windows: h.windows,
+      sessions: h.sessions as never,
+      owners: h.owners,
+      timeoutMs: 10
+    })
+
+    await coordinator.fenceForQuit()
+    coordinator.resumeAfterControlHandoff()
+
+    expect(coordinator.getContext(ipcEvent(h.source.webContents) as never).transitionFenced).toBe(
+      true
+    )
+  })
+
   it('fences new work, settles an active transfer, and removes loss listeners', async () => {
     const h = createHarness()
     const { TerminalWindowTransferCoordinator } = await import('./terminal-window-transfer')
@@ -80,6 +100,36 @@ describe('TerminalWindowTransferCoordinator', () => {
     expect(h.target.listenerCount('close')).toBe(0)
     expect(h.source.webContents.listenerCount('render-process-gone')).toBe(0)
     expect(h.target.webContents.listenerCount('render-process-gone')).toBe(0)
+  })
+
+  it('settles active transfers behind the control handoff fence', async () => {
+    const h = createHarness()
+    const { TerminalWindowTransferCoordinator } = await import('./terminal-window-transfer')
+    const coordinator = new TerminalWindowTransferCoordinator({
+      store: {} as never,
+      createSecondaryWindow: vi.fn(),
+      windows: h.windows,
+      sessions: h.sessions as never,
+      owners: h.owners,
+      getCursorPoint: () => ({ x: 700, y: 100 }),
+      handoff: h.handoff,
+      timeoutMs: 100
+    })
+
+    const transfer = coordinator.detach(ipcEvent(h.source.webContents) as never, seed())
+    await coordinator.fenceForControlHandoff()
+
+    await expect(transfer).resolves.toEqual({
+      ok: false,
+      error: 'terminal_transfer_control_handoff'
+    })
+    expect(coordinator.getContext(ipcEvent(h.source.webContents) as never).transitionFenced).toBe(
+      true
+    )
+    coordinator.resumeAfterControlHandoff()
+    expect(coordinator.getContext(ipcEvent(h.source.webContents) as never).transitionFenced).toBe(
+      false
+    )
   })
 
   it('matches legacy local target identity without weakening explicit host checks', () => {

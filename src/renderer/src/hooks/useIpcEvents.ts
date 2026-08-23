@@ -651,7 +651,7 @@ function getWorktreeRuntimeEnvironmentId(worktreeId: string | null | undefined):
   return getRuntimeEnvironmentIdForWorktree(useAppStore.getState(), worktreeId)
 }
 
-export function useIpcEvents(): void {
+export function useIpcEvents(ownsControlCloseRequests = true): void {
   useEffect(() => {
     const unsubs: (() => void)[] = []
     const reconnectAuthorityByTarget = new Map<string, DirectSshAuthority>()
@@ -2025,81 +2025,83 @@ export function useIpcEvents(): void {
       })
     )
 
-    unsubs.push(
-      window.api.ui.onCloseSessionTab(({ tabId, worktreeId }) => {
-        const store = useAppStore.getState()
-        const browserTarget = resolveBrowserSessionTabTarget(store, worktreeId, tabId)
-        if (browserTarget) {
+    if (ownsControlCloseRequests) {
+      unsubs.push(
+        window.api.ui.onCloseSessionTab(({ tabId, worktreeId }) => {
+          const store = useAppStore.getState()
+          const browserTarget = resolveBrowserSessionTabTarget(store, worktreeId, tabId)
+          if (browserTarget) {
+            guardPinnedTabClose({
+              isPinned: isUnifiedTabPinned(store, worktreeId, browserTarget.workspaceId),
+              tabLabel: resolvePinnedTabLabel(store, worktreeId, browserTarget.workspaceId),
+              onClose: () => useAppStore.getState().closeBrowserTab(browserTarget.workspaceId)
+            })
+            return
+          }
           guardPinnedTabClose({
-            isPinned: isUnifiedTabPinned(store, worktreeId, browserTarget.workspaceId),
-            tabLabel: resolvePinnedTabLabel(store, worktreeId, browserTarget.workspaceId),
-            onClose: () => useAppStore.getState().closeBrowserTab(browserTarget.workspaceId)
+            isPinned: isUnifiedTabPinned(store, worktreeId, tabId),
+            tabLabel: resolvePinnedTabLabel(store, worktreeId, tabId),
+            onClose: () => {
+              const currentStore = useAppStore.getState()
+              closeMobileSessionTabInStore(currentStore, worktreeId, tabId)
+            }
           })
-          return
-        }
-        guardPinnedTabClose({
-          isPinned: isUnifiedTabPinned(store, worktreeId, tabId),
-          tabLabel: resolvePinnedTabLabel(store, worktreeId, tabId),
-          onClose: () => {
-            const currentStore = useAppStore.getState()
-            closeMobileSessionTabInStore(currentStore, worktreeId, tabId)
-          }
         })
-      })
-    )
+      )
 
-    unsubs.push(
-      window.api.ui.onSessionTabCloseRequest(({ requestId, tabId, worktreeId, expiresAt }) => {
-        const store = useAppStore.getState()
-        const browserTarget = resolveBrowserSessionTabTarget(store, worktreeId, tabId)
-        let cancelConfirmation: (() => void) | undefined
-        let timeout: ReturnType<typeof setTimeout> | undefined
-        let settled = false
-        const respond = (error?: string): void => {
-          if (settled) {
-            return
-          }
-          settled = true
-          if (timeout !== undefined) {
-            clearTimeout(timeout)
-          }
-          window.api.ui.respondSessionTabClose({ requestId, ...(error ? { error } : {}) })
-        }
-        if (expiresAt !== undefined) {
-          timeout = setTimeout(
-            () => {
-              cancelConfirmation?.()
-              respond(SESSION_TAB_CLOSE_TIMEOUT_ERROR)
-            },
-            Math.max(0, expiresAt - Date.now())
-          )
-        }
-        const closeAndRespond = (): void => {
-          if (expiresAt !== undefined && Date.now() >= expiresAt) {
-            respond(SESSION_TAB_CLOSE_TIMEOUT_ERROR)
-            return
-          }
-          try {
-            if (browserTarget) {
-              useAppStore.getState().closeBrowserTab(browserTarget.workspaceId)
-              respond()
+      unsubs.push(
+        window.api.ui.onSessionTabCloseRequest(({ requestId, tabId, worktreeId, expiresAt }) => {
+          const store = useAppStore.getState()
+          const browserTarget = resolveBrowserSessionTabTarget(store, worktreeId, tabId)
+          let cancelConfirmation: (() => void) | undefined
+          let timeout: ReturnType<typeof setTimeout> | undefined
+          let settled = false
+          const respond = (error?: string): void => {
+            if (settled) {
               return
             }
-            const closed = closeMobileSessionTabInStore(useAppStore.getState(), worktreeId, tabId)
-            respond(closed ? undefined : SESSION_TAB_NOT_FOUND_ERROR)
-          } catch (error) {
-            respond(error instanceof Error ? error.message : SESSION_TAB_CLOSE_FAILED_ERROR)
+            settled = true
+            if (timeout !== undefined) {
+              clearTimeout(timeout)
+            }
+            window.api.ui.respondSessionTabClose({ requestId, ...(error ? { error } : {}) })
           }
-        }
-        const visibleId = browserTarget?.workspaceId ?? tabId
-        cancelConfirmation = guardPinnedTabClose({
-          isPinned: isUnifiedTabPinned(store, worktreeId, visibleId),
-          tabLabel: resolvePinnedTabLabel(store, worktreeId, visibleId),
-          onClose: closeAndRespond,
-          onCancel: () => respond(SESSION_TAB_CLOSE_CANCELED_ERROR)
+          if (expiresAt !== undefined) {
+            timeout = setTimeout(
+              () => {
+                cancelConfirmation?.()
+                respond(SESSION_TAB_CLOSE_TIMEOUT_ERROR)
+              },
+              Math.max(0, expiresAt - Date.now())
+            )
+          }
+          const closeAndRespond = (): void => {
+            if (expiresAt !== undefined && Date.now() >= expiresAt) {
+              respond(SESSION_TAB_CLOSE_TIMEOUT_ERROR)
+              return
+            }
+            try {
+              if (browserTarget) {
+                useAppStore.getState().closeBrowserTab(browserTarget.workspaceId)
+                respond()
+                return
+              }
+              const closed = closeMobileSessionTabInStore(useAppStore.getState(), worktreeId, tabId)
+              respond(closed ? undefined : SESSION_TAB_NOT_FOUND_ERROR)
+            } catch (error) {
+              respond(error instanceof Error ? error.message : SESSION_TAB_CLOSE_FAILED_ERROR)
+            }
+          }
+          const visibleId = browserTarget?.workspaceId ?? tabId
+          cancelConfirmation = guardPinnedTabClose({
+            isPinned: isUnifiedTabPinned(store, worktreeId, visibleId),
+            tabLabel: resolvePinnedTabLabel(store, worktreeId, visibleId),
+            onClose: closeAndRespond,
+            onCancel: () => respond(SESSION_TAB_CLOSE_CANCELED_ERROR)
+          })
         })
-      })
-    )
+      )
+    }
 
     unsubs.push(
       window.api.ui.onMoveSessionTab((move) => {
@@ -2158,53 +2160,57 @@ export function useIpcEvents(): void {
       )
     )
 
-    unsubs.push(
-      window.api.ui.onCloseTerminal(({ tabId, paneRuntimeId }) => {
-        if (paneRuntimeId != null) {
-          // Why: route pane closes via the lifecycle hook for sibling promotion (falls through to closeTab on the last pane).
-          const detail: CloseTerminalPaneDetail = { tabId, paneRuntimeId }
-          window.dispatchEvent(new CustomEvent(CLOSE_TERMINAL_PANE_EVENT, { detail }))
-        } else {
-          // Why: the CLI/RPC caller is answered immediately, so it cannot wait on a modal.
-          closeTerminalTab(tabId, { skipRunningProcessConfirm: true })
-        }
-      })
-    )
-
-    // Why: during an in-place renderer reload an older preload can linger; keep this listener additive at that seam.
-    if (window.api.ui.onTerminalTabCloseRequest) {
+    if (ownsControlCloseRequests) {
       unsubs.push(
-        window.api.ui.onTerminalTabCloseRequest(
-          ({ requestId, tabId, localPtyTeardownOwnedExternally }) => {
-            let responded = false
-            const respond = (error?: string): void => {
-              if (responded) {
-                return
-              }
-              responded = true
-              window.api.ui.respondTerminalTabClose({ requestId, ...(error ? { error } : {}) })
-            }
-            closeTerminalTab(tabId, {
-              rejectPinned: true,
-              ...(localPtyTeardownOwnedExternally ? { localPtyTeardownOwnedExternally: true } : {}),
-              onCancel: () => respond('terminal_tab_pinned'),
-              onClosed: () => {
-                void (async () => {
-                  const state = useAppStore.getState()
-                  await persistWorkspaceSessionByHost(
-                    window.api.session,
-                    buildWorkspaceSessionPayload(state),
-                    state
-                  )
-                  respond()
-                })().catch((error: unknown) => {
-                  respond(error instanceof Error ? error.message : 'terminal_tab_close_failed')
-                })
-              }
-            })
+        window.api.ui.onCloseTerminal(({ tabId, paneRuntimeId }) => {
+          if (paneRuntimeId != null) {
+            // Why: route pane closes via the lifecycle hook for sibling promotion (falls through to closeTab on the last pane).
+            const detail: CloseTerminalPaneDetail = { tabId, paneRuntimeId }
+            window.dispatchEvent(new CustomEvent(CLOSE_TERMINAL_PANE_EVENT, { detail }))
+          } else {
+            // Why: the CLI/RPC caller is answered immediately, so it cannot wait on a modal.
+            closeTerminalTab(tabId, { skipRunningProcessConfirm: true })
           }
-        )
+        })
       )
+
+      // Why: during an in-place renderer reload an older preload can linger; keep this listener additive at that seam.
+      if (window.api.ui.onTerminalTabCloseRequest) {
+        unsubs.push(
+          window.api.ui.onTerminalTabCloseRequest(
+            ({ requestId, tabId, localPtyTeardownOwnedExternally }) => {
+              let responded = false
+              const respond = (error?: string): void => {
+                if (responded) {
+                  return
+                }
+                responded = true
+                window.api.ui.respondTerminalTabClose({ requestId, ...(error ? { error } : {}) })
+              }
+              closeTerminalTab(tabId, {
+                rejectPinned: true,
+                ...(localPtyTeardownOwnedExternally
+                  ? { localPtyTeardownOwnedExternally: true }
+                  : {}),
+                onCancel: () => respond('terminal_tab_pinned'),
+                onClosed: () => {
+                  void (async () => {
+                    const state = useAppStore.getState()
+                    await persistWorkspaceSessionByHost(
+                      window.api.session,
+                      buildWorkspaceSessionPayload(state),
+                      state
+                    )
+                    respond()
+                  })().catch((error: unknown) => {
+                    respond(error instanceof Error ? error.message : 'terminal_tab_close_failed')
+                  })
+                }
+              })
+            }
+          )
+        )
+      }
     }
 
     unsubs.push(
@@ -3993,7 +3999,7 @@ export function useIpcEvents(): void {
       reconnectAuthorityByTarget.clear()
       resetAgentHookCompletionNotificationCoordinators()
     }
-  }, [])
+  }, [ownsControlCloseRequests])
 }
 
 function hasRuntimeBackedWorktreeAttribution(data: AgentStatusIpcPayload): boolean {

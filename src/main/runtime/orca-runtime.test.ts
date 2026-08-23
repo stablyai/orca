@@ -72,7 +72,8 @@ import {
   HEADLESS_RUNTIME_WINDOW_ID,
   type RuntimeMobileSessionTabsResult,
   type RuntimeSyncWindowGraph,
-  type RuntimeTerminalCreate
+  type RuntimeTerminalCreate,
+  type RuntimeTerminalDriverState
 } from '../../shared/runtime-types'
 import type { TerminalSideEffectBatch } from '../../shared/terminal-side-effect-facts'
 import type { RuntimeClientEvent } from '../../shared/runtime-client-events'
@@ -2553,6 +2554,81 @@ describe('OrcaRuntimeService', () => {
     runtime.attachWindow(2)
 
     expect(runtime.getStatus().authoritativeWindowId).toBe(TEST_WINDOW_ID)
+  })
+
+  it('rejects desktop graph publication until a window is explicitly attached', () => {
+    const runtime = createRuntime()
+
+    expect(() =>
+      runtime.syncWindowGraph(TEST_WINDOW_ID, {
+        tabs: [],
+        leaves: [],
+        rendererGeneration: 'renderer-1'
+      })
+    ).toThrow('Runtime graph publisher does not match the authoritative window')
+    expect(runtime.getStatus().authoritativeWindowId).toBeNull()
+  })
+
+  it('releases local and SSH viewer claims when their terminals leave the control graph', () => {
+    const runtime = createRuntime()
+    const localPtyId = 'local-pty'
+    const sshPtyId = 'ssh:ssh-1@@remote-pty'
+    const internals = runtime as unknown as {
+      currentDriver: Map<string, RuntimeTerminalDriverState>
+      mobileSubscribers: Map<string, Map<string, unknown>>
+      remoteDesktopOwners: Map<string, string>
+      remoteDesktopViewers: Map<string, Map<string, unknown>>
+    }
+    runtime.attachWindow(TEST_WINDOW_ID)
+    runtime.syncWindowGraph(TEST_WINDOW_ID, {
+      tabs: [
+        {
+          tabId: 'tab-local',
+          worktreeId: TEST_WORKTREE_ID,
+          title: 'Local',
+          activeLeafId: 'leaf-local',
+          layout: null
+        },
+        {
+          tabId: 'tab-ssh',
+          worktreeId: TEST_WORKTREE_ID,
+          title: 'SSH',
+          activeLeafId: 'leaf-ssh',
+          layout: null
+        }
+      ],
+      leaves: [
+        {
+          tabId: 'tab-local',
+          worktreeId: TEST_WORKTREE_ID,
+          leafId: 'leaf-local',
+          paneRuntimeId: 1,
+          ptyId: localPtyId
+        },
+        {
+          tabId: 'tab-ssh',
+          worktreeId: TEST_WORKTREE_ID,
+          leafId: 'leaf-ssh',
+          paneRuntimeId: 2,
+          ptyId: sshPtyId
+        }
+      ]
+    })
+    for (const ptyId of [localPtyId, sshPtyId]) {
+      internals.currentDriver.set(ptyId, { kind: 'mobile', clientId: 'phone-1' })
+      internals.mobileSubscribers.set(ptyId, new Map([['phone-1', {}]]))
+      internals.remoteDesktopOwners.set(ptyId, 'viewer-1')
+      internals.remoteDesktopViewers.set(ptyId, new Map([['viewer-1', {}]]))
+    }
+
+    runtime.syncWindowGraph(TEST_WINDOW_ID, { tabs: [], leaves: [] })
+
+    expect(runtime.getAllTerminalDrivers()).toEqual(new Map())
+    for (const ptyId of [localPtyId, sshPtyId]) {
+      expect(runtime.isRemoteDesktopViewerOwner(ptyId, 'viewer-1')).toBe(false)
+      expect(internals.mobileSubscribers.has(ptyId)).toBe(false)
+    }
+    expect(runtime.getStatus().liveLeafCount).toBe(0)
   })
 
   it('transfers authority from the headless sentinel to the first real window', () => {
@@ -15403,6 +15479,7 @@ describe('OrcaRuntimeService', () => {
       getForegroundProcess: async () => null
     })
     runtime.setNotifier({ revealTerminalSession } as never)
+    runtime.attachWindow(1)
     runtime.syncWindowGraph(1, { tabs: [], leaves: [] })
     runtime.registerPty(ptyId, TEST_WORKTREE_ID, null, {
       tabId,
@@ -15497,6 +15574,7 @@ describe('OrcaRuntimeService', () => {
       kill,
       getForegroundProcess: async () => null
     })
+    runtime.attachWindow(1)
     runtime.syncWindowGraph(1, { tabs: [], leaves: [] })
     runtime.registerPty(ptyId, TEST_WORKTREE_ID, null, {
       tabId,
@@ -15548,6 +15626,7 @@ describe('OrcaRuntimeService', () => {
       kill,
       getForegroundProcess: async () => null
     })
+    runtime.attachWindow(1)
     runtime.syncWindowGraph(1, { tabs: [], leaves: [] })
 
     const { handle } = await runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`)
@@ -15679,6 +15758,7 @@ describe('OrcaRuntimeService', () => {
       kill: () => true,
       getForegroundProcess: async () => null
     })
+    runtime.attachWindow(1)
     runtime.syncWindowGraph(1, { tabs: [], leaves: [] })
     runtime.registerPty(sourcePtyId, TEST_WORKTREE_ID, 'ssh-1', {
       tabId,
@@ -23320,6 +23400,7 @@ describe('OrcaRuntimeService', () => {
       tabsByWorktree: { [TEST_WORKTREE_ID]: [] }
     })
     const runtime = new OrcaRuntimeService({ ...runtimeStore, flushOrThrow: vi.fn() } as never)
+    runtime.attachWindow(1)
     runtime.syncWindowGraph(1, {
       tabs: [
         {
@@ -29310,6 +29391,7 @@ describe('OrcaRuntimeService', () => {
       getForegroundProcess: async () => null,
       listProcesses: async () => []
     })
+    runtime.attachWindow(1)
     runtime.syncWindowGraph(1, {
       tabs: [
         {
@@ -29364,6 +29446,7 @@ describe('OrcaRuntimeService', () => {
       getForegroundProcess: async () => null,
       listProcesses: async () => []
     })
+    runtime.attachWindow(1)
     runtime.syncWindowGraph(1, {
       tabs: [
         {
@@ -29444,6 +29527,7 @@ describe('OrcaRuntimeService', () => {
       getForegroundProcess: async () => null,
       listProcesses: async () => []
     })
+    runtime.attachWindow(1)
     runtime.syncWindowGraph(1, {
       tabs: [
         {
@@ -30245,6 +30329,7 @@ describe('OrcaRuntimeService', () => {
       ...store,
       getFolderWorkspaces: () => []
     } as never)
+    runtime.attachWindow(1)
 
     expect(() =>
       runtime.syncWindowGraph(1, {
@@ -30280,6 +30365,7 @@ describe('OrcaRuntimeService', () => {
       getWorkspaceSession,
       getWorkspaceSessionHostIds: () => ['local']
     } as never)
+    runtime.attachWindow(1)
 
     runtime.syncWindowGraph(1, {
       tabs: [],
@@ -30313,6 +30399,7 @@ describe('OrcaRuntimeService', () => {
       getWorkspaceSession,
       getWorkspaceSessionHostIds: () => ['local']
     } as never)
+    runtime.attachWindow(1)
 
     runtime.syncWindowGraph(1, { tabs: [], leaves: [], mobileSessionTabs: [] })
 
@@ -30331,6 +30418,7 @@ describe('OrcaRuntimeService', () => {
         tabId,
         leafId: HEADLESS_LEAF_ID
       })
+      runtime.attachWindow(1)
       runtime.syncWindowGraph(1, {
         tabs: [],
         leaves: [],
@@ -30406,6 +30494,7 @@ describe('OrcaRuntimeService', () => {
       const runtime = new OrcaRuntimeService(store)
       const ptyId = 'ssh:ssh-1@@pty-restart'
       const tabId = 'host-tab'
+      runtime.attachWindow(1)
       runtime.syncWindowGraph(1, {
         tabs: [],
         leaves: [],
@@ -30497,6 +30586,7 @@ describe('OrcaRuntimeService', () => {
       })
     )
     const runtime = new OrcaRuntimeService(runtimeStore as never)
+    runtime.attachWindow(1)
     runtime.syncWindowGraph(1, {
       tabs: [],
       leaves: [],
@@ -30555,6 +30645,7 @@ describe('OrcaRuntimeService', () => {
       getRepo: (id: string) => (id === TEST_REPO_ID ? remoteRepo : undefined),
       getWorkspaceSession
     } as never)
+    runtime.attachWindow(1)
 
     runtime.syncWindowGraph(1, { tabs: [], leaves: [], mobileSessionTabs: [] })
     expect(getWorkspaceSession).toHaveBeenCalledTimes(2)
@@ -30608,6 +30699,7 @@ describe('OrcaRuntimeService', () => {
         { id: ptyId, cwd: TEST_WORKTREE_PATH, title: 'Recovered SSH Terminal' }
       ]
     })
+    runtime.attachWindow(1)
     runtime.syncWindowGraph(1, {
       tabs: [],
       leaves: [],
@@ -30701,6 +30793,7 @@ describe('OrcaRuntimeService', () => {
         isDestroyed: () => false,
         webContents: { send: vi.fn() }
       })
+      runtime.attachWindow(1)
       const publishEmpty = (snapshotVersion: number): void => {
         runtime.syncWindowGraph(1, {
           tabs: [],
@@ -30744,6 +30837,7 @@ describe('OrcaRuntimeService', () => {
       tabId: 'host-tab',
       leafId: HEADLESS_LEAF_ID
     })
+    runtime.attachWindow(1)
     runtime.syncWindowGraph(1, {
       tabs: [],
       leaves: [],
@@ -31404,6 +31498,7 @@ describe('OrcaRuntimeService', () => {
       tabId: 'host-tab',
       leafId: HEADLESS_LEAF_ID
     })
+    runtime.attachWindow(1)
     runtime.syncWindowGraph(1, {
       tabs: [
         {
@@ -31490,6 +31585,7 @@ describe('OrcaRuntimeService', () => {
       listProcesses: async () => [{ id: servePtyId, cwd: TEST_WORKTREE_PATH, title: 'Adopted' }]
     })
     runtime.setNotifier({ closeTerminal, closeTerminalTab } as never)
+    runtime.attachWindow(1)
     runtime.syncWindowGraph(1, {
       tabs: [
         {
@@ -32300,6 +32396,7 @@ describe('OrcaRuntimeService', () => {
       getForegroundProcess: async () => null,
       listProcesses: async () => []
     })
+    runtime.attachWindow(1)
     runtime.syncWindowGraph(1, {
       tabs: [
         {
@@ -32391,6 +32488,7 @@ describe('OrcaRuntimeService', () => {
     })
     // Why: an attached renderer (closeTerminal exists) sends the close down the renderer-attached path that historically leaked serve-owned tabs.
     runtime.setNotifier({ closeTerminal } as never)
+    runtime.attachWindow(1)
     runtime.syncWindowGraph(1, {
       tabs: [
         {
@@ -32458,6 +32556,7 @@ describe('OrcaRuntimeService', () => {
     })
     runtime.setNotifier({ closeTerminal } as never)
     // Renderer graph PUBLISHES this tab -> it is renderer-owned.
+    runtime.attachWindow(1)
     runtime.syncWindowGraph(1, {
       tabs: [
         {
@@ -32549,6 +32648,7 @@ describe('OrcaRuntimeService', () => {
     })
     runtime.setNotifier({ closeTerminal } as never)
     // Pending tab in the renderer graph (PTY not bound yet) is renderer-owned, so the runtime forwards the close but must not de-persist it.
+    runtime.attachWindow(1)
     runtime.syncWindowGraph(1, {
       tabs: [
         {
@@ -32607,6 +32707,7 @@ describe('OrcaRuntimeService', () => {
       listProcesses: async () => []
     })
     runtime.setNotifier({ closeTerminal } as never)
+    runtime.attachWindow(1)
     runtime.syncWindowGraph(1, {
       tabs: [
         {
@@ -32714,6 +32815,7 @@ describe('OrcaRuntimeService', () => {
       listProcesses: async () => []
     })
     runtime.setNotifier({ closeTerminal } as never)
+    runtime.attachWindow(1)
     runtime.syncWindowGraph(1, {
       tabs: [
         {
@@ -32803,6 +32905,7 @@ describe('OrcaRuntimeService', () => {
         listProcesses
       })
       runtime.setNotifier({ closeTerminal, closeTerminalTab } as never)
+      runtime.attachWindow(1)
       runtime.syncWindowGraph(1, {
         tabs: [
           {
@@ -33086,6 +33189,7 @@ describe('OrcaRuntimeService', () => {
         listProcesses: async () => []
       })
       runtime.setNotifier({ closeTerminal } as never)
+      runtime.attachWindow(1)
       runtime.syncWindowGraph(1, {
         tabs: [
           {
@@ -33209,6 +33313,7 @@ describe('OrcaRuntimeService', () => {
         listProcesses: async () => []
       })
       runtime.setNotifier({ closeTerminal } as never)
+      runtime.attachWindow(1)
       runtime.syncWindowGraph(1, {
         tabs: [
           {

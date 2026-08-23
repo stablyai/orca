@@ -1,4 +1,4 @@
-import { ipcMain, screen, type BrowserWindow, type IpcMainEvent, type WebContents } from 'electron'
+import { screen, type BrowserWindow, type WebContents } from 'electron'
 import { getDefaultWorkspaceSession } from '../../shared/constants'
 import type {
   TerminalWindowContext,
@@ -62,6 +62,7 @@ export class TerminalWindowTransferCoordinator {
   readonly #commandReadyWaiters = new Map<WebContents, Set<TerminalWindowCommandReadyWaiter>>()
   readonly #trackedRenderers = new Set<WebContents>()
   #fenced = false
+  #quitFenced = false
 
   constructor(options: TerminalWindowTransferCoordinatorOptions) {
     this.#createSecondaryWindow = options.createSecondaryWindow
@@ -284,30 +285,31 @@ export class TerminalWindowTransferCoordinator {
   }
 
   fenceForQuit(): Promise<void> {
+    this.#quitFenced = true
+    return this.#fenceTransfers('terminal_transfer_quit')
+  }
+
+  fenceForControlHandoff(): Promise<void> {
+    return this.#fenceTransfers('terminal_transfer_control_handoff')
+  }
+
+  #fenceTransfers(reason: string): Promise<void> {
     this.#fenced = true
     const transfers = [...this.#transfers.values()]
     for (const transfer of transfers) {
-      transfer.abort(new Error('terminal_transfer_quit'))
+      transfer.abort(new Error(reason))
     }
     return Promise.all(transfers.map((transfer) => transfer.finished)).then(() => undefined)
   }
 
   resumeAfterQuitAbort(): void {
+    this.#quitFenced = false
     this.#fenced = false
   }
-}
 
-export function registerTerminalWindowTransferHandlers(
-  options: TerminalWindowTransferCoordinatorOptions
-): TerminalWindowTransferCoordinator {
-  const coordinator = new TerminalWindowTransferCoordinator(options)
-  ipcMain.removeHandler('terminalWindow:detach')
-  ipcMain.removeHandler('terminalWindow:getContext')
-  ipcMain.removeAllListeners('terminalWindow:ack')
-  ipcMain.handle('terminalWindow:detach', (event, seed) => coordinator.detach(event, seed))
-  ipcMain.handle('terminalWindow:getContext', (event) => coordinator.getContext(event))
-  ipcMain.on('terminalWindow:ack', (event: IpcMainEvent, ack: unknown) => {
-    coordinator.acknowledge(event, ack)
-  })
-  return coordinator
+  resumeAfterControlHandoff(): void {
+    if (!this.#quitFenced) {
+      this.#fenced = false
+    }
+  }
 }
