@@ -53,6 +53,7 @@ export function installTerminalTestGlobals(): void {
         setHiddenRendererPty: vi.fn(),
         setPtyDeliveryInterest: vi.fn(),
         ackColdRestore: vi.fn(),
+        ackHiddenOutputRestoreApplied: vi.fn(),
         onClearBufferRequest: vi.fn(() => vi.fn()),
         onSerializeBufferRequest: vi.fn(() => vi.fn()),
         sendSerializedBuffer: vi.fn(),

@@ -25,7 +25,7 @@ export async function waitForTabParked(
   return Date.now() - parkWaitStartedAt
 }
 
-async function createActiveTerminalTab(page: Page, worktreeId: string): Promise<string> {
+export async function createActiveTerminalTab(page: Page, worktreeId: string): Promise<string> {
   const tabId = await page.evaluate((worktreeId) => {
     const store = window.__store
     if (!store) {

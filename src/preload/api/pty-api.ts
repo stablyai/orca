@@ -76,6 +76,10 @@ export type PtyApi = {
   clearBuffer: (id: string) => void
   kill: (id: string, opts?: { keepHistory?: boolean }) => Promise<void>
   ackColdRestore: (id: string) => void
+  /** Hidden-output recovery painted main's snapshot: retires the drop latch
+   *  behind the hidden-delivery gate. Serving the snapshot is not enough — the
+   *  pane can dispose across the round trip (STA-4869). */
+  ackHiddenOutputRestoreApplied: (id: string) => void
   ackData: (id: string, charCount: number, processedChars?: number) => void
   onDeliveryResyncRequest: (callback: (payload: { requestId: number }) => void) => () => void
   respondDeliveryResync: (payload: {

@@ -1085,6 +1085,10 @@ const api = {
     ackColdRestore: (id: string): void => {
       ipcRenderer.send('pty:ackColdRestore', { id })
     },
+    /** Hidden-output recovery painted main's snapshot — retires the hidden-delivery drop latch. Fire-and-forget. */
+    ackHiddenOutputRestoreApplied: (id: string): void => {
+      ipcRenderer.send('pty:hiddenOutputRestoreApplied', { id })
+    },
     /** charCount is the legacy per-chunk delta; processedChars is the cumulative per-pty total (self-heals under lost ACKs). */
     ackData: (id: string, charCount: number, processedChars?: number): void => {
       ipcRenderer.send('pty:ackData', {

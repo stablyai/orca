@@ -3339,6 +3339,8 @@ function createPtyApi(): NonNullable<Partial<PreloadApi>['pty']> {
     clearBuffer: () => {},
     kill: () => Promise.resolve(),
     ackColdRestore: () => {},
+    // Web panes never transit main's hidden-delivery gate, so there is no drop latch to retire.
+    ackHiddenOutputRestoreApplied: () => {},
     ackData: () => {},
     onDeliveryResyncRequest: () => noopUnsubscribe,
     respondDeliveryResync: () => {},

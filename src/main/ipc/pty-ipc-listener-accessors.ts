@@ -113,6 +113,19 @@ export function createPtyIpcListenerAccessors(ctx: {
     return hiddenCall[1] as (event: unknown, args: { id: string; hidden: boolean }) => void
   }
 
+  function getPtyHiddenOutputRestoreAppliedListener(): (
+    event: unknown,
+    args: { id?: unknown }
+  ) => void {
+    const appliedCall = onMock.mock.calls.find(
+      (call: unknown[]) => call[0] === 'pty:hiddenOutputRestoreApplied'
+    )
+    if (!appliedCall) {
+      throw new Error('missing pty:hiddenOutputRestoreApplied listener')
+    }
+    return appliedCall[1] as (event: unknown, args: { id?: unknown }) => void
+  }
+
   function getPtySetDeliveryInterestListener(): (
     event: unknown,
     args: { id: string; interested: boolean }
@@ -188,6 +201,7 @@ export function createPtyIpcListenerAccessors(ctx: {
     getMainFrameNavigationListener,
     getPtyResizeListener,
     getPtySetHiddenRendererPtyListener,
+    getPtyHiddenOutputRestoreAppliedListener,
     getPtySetDeliveryInterestListener,
     DELIVERY_RESYNC_UNANSWERED_WARNING,
     countResyncUnansweredWarnings,

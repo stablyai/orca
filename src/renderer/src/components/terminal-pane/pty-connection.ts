@@ -106,6 +106,7 @@ import {
 } from './stale-document-visibility'
 import { recordTerminalFreezeBreadcrumb } from './terminal-freeze-breadcrumbs'
 import { redactPtyIdForDiagnostics } from '../../../../shared/pty-delivery-diagnostics'
+import type { PtyModelRestoreNeededEvent } from '../../../../shared/pty-model-restore-marker'
 import {
   nativeWindowsRewriteNeedsFollowupRenderRefresh,
   terminalOutputPrefersRenderRefresh,
@@ -5962,6 +5963,11 @@ export function connectPanePty(
     let hiddenOutputRestoreLegacyPtyId: string | null = null
     // Bounded remote re-arms spent instead of the loss banner (per PTY stream).
     let hiddenOutputRestoreRemoteAbandonCycles = 0
+    // Highest markerSeq main has reported for the subscribed PTY, and the gap a
+    // banner has already disclosed — main keeps its drop latch armed until the
+    // restore lands, so an unrecoverable gap re-marks on every unhide.
+    let hiddenOutputRestoreMarkerSeqHighWater: number | null = null
+    let hiddenOutputRestoreDisclosedGap: { ptyId: string; seq: number | null } | null = null
     let hiddenOutputSnapshotScrollRestore: {
       ptyId: string | null
       generation: number
@@ -6058,6 +6064,17 @@ export function connectPanePty(
         return true
       }
       return transport.getPtyId() === ptyId && typeof transport.serializeBuffer === 'function'
+    }
+
+    // Why an ack instead of retiring on the serve: main's drop latch must outlive
+    // the multi-MB serialize + IPC round trip, because the pane can dispose in it
+    // and a snapshot nobody painted heals nothing. Only PTYs whose bytes transit
+    // local main have a latch, so remote-runtime streams stay untouched (STA-4869).
+    function ackHiddenOutputRestoreApplied(ptyId: string): void {
+      if (!canUseMainBufferSnapshot(ptyId)) {
+        return
+      }
+      window.api.pty.ackHiddenOutputRestoreApplied(ptyId)
     }
 
     type HiddenOutputSnapshotResult =
@@ -6209,8 +6226,30 @@ export function connectPanePty(
     }
 
     // Why: main reports dropped renderer-bound bytes out-of-band, routed per PTY by pty-model-restore-channel.ts.
-    function handleModelRestoreNeededMarker(): void {
+    function handleModelRestoreNeededMarker(event: PtyModelRestoreNeededEvent): void {
       if (disposed) {
+        return
+      }
+      const markerSeq = typeof event.markerSeq === 'number' ? event.markerSeq : null
+      if (markerSeq !== null) {
+        hiddenOutputRestoreMarkerSeqHighWater = Math.max(
+          hiddenOutputRestoreMarkerSeqHighWater ?? markerSeq,
+          markerSeq
+        )
+      }
+      // Why: main's latch stays armed until a restore lands, so a gap it can
+      // never serve re-marks on every unhide. Once the banner has disclosed
+      // everything up to that seq, repeats describe the same gap — answering them
+      // re-banners and re-fetches per reveal. A higher seq means bytes were
+      // dropped since the disclosure, and a seq-less marker cannot be compared;
+      // both proceed, failing toward recovery (STA-4869).
+      if (
+        hiddenOutputRestoreDisclosedGap !== null &&
+        hiddenOutputRestoreDisclosedGap.ptyId === transport.getPtyId() &&
+        hiddenOutputRestoreDisclosedGap.seq !== null &&
+        markerSeq !== null &&
+        markerSeq <= hiddenOutputRestoreDisclosedGap.seq
+      ) {
         return
       }
       recordTerminalFreezeBreadcrumb('restore-marker', {
@@ -6248,6 +6287,9 @@ export function connectPanePty(
       }
       unregisterModelRestoreNeeded?.()
       unregisterModelRestoreNeeded = null
+      // Marker bookkeeping is per PTY stream, like the restore state itself.
+      hiddenOutputRestoreMarkerSeqHighWater = null
+      hiddenOutputRestoreDisclosedGap = null
       modelRestoreSubscribedPtyId = ptyId
       // Why: markers exist only for PTYs whose bytes transit local main;
       // remote-runtime transports are structurally unaffected.
@@ -7152,6 +7194,25 @@ export function connectPanePty(
       return true
     }
 
+    // Why: a loss finalized while hidden discloses nothing — the banner is
+    // swallowed and the abandon zeroes recovery, so no reveal can reach the gap.
+    // Stay armed instead; reveal spends exactly one fresh snapshot, which heals a
+    // recovered source and otherwise abandons in the foreground where the banner
+    // lands. Mirrors the hidden-pause guard after the snapshot replay (STA-4869).
+    function deferHiddenOutputRestoreLossToReveal(): boolean {
+      if (shouldWritePtyOutputForeground(deps.isVisibleRef.current)) {
+        return false
+      }
+      // A deadline armed while this pane was still foreground would survive the
+      // deferral, and Chromium throttles hidden timers to >=1s so it typically
+      // fires AFTER reveal: it passes the foreground guard, banners, and bumps the
+      // generation — discarding the reveal's fresh snapshot mid-flight. Reveal
+      // re-arms its own deadline once it has pending chunks again.
+      clearHiddenOutputRestoreForegroundDeadlineTimer()
+      hiddenOutputRestoreNeeded = true
+      return true
+    }
+
     function abandonHiddenOutputRestoreAndDrainPendingForeground(
       expectedPtyId: string,
       opts: { quiet?: boolean; rearmRemote?: boolean } = {}
@@ -7348,6 +7409,16 @@ export function connectPanePty(
       }
     }
 
+    // Precondition: every caller must already be foreground, or a background pane
+    // swallows the banner and the loss is declared to nobody. The abandon and the
+    // deferred-retry exhaustion get there via deferHiddenOutputRestoreLossToReveal
+    // and the foreground guard in scheduleHiddenOutputRestoreDeferredRetry. The
+    // restore loop's PTY-swap arm is foreground by construction: it only runs on
+    // iteration 2+, and iteration 1 returns at the hidden-pause guard after the
+    // replay. That arm also cannot reach the banner at all — it is remote-only
+    // (a local ptyId always satisfies canUseHiddenOutputSnapshot), and the
+    // clearHiddenOutputRestoreState() right before it resets the re-arm budget,
+    // so rearmRemoteHiddenOutputRestoreInsteadOfWarning always wins.
     function writeRestoreUnavailableWarning(): void {
       // The reset must parse before both the warning and any foreground drain.
       writePtyOutputToXterm(RESET_AFTER_BYTE_GAP, true)
@@ -7358,6 +7429,12 @@ export function connectPanePty(
         foreground: true,
         beforeWrite: beforeTerminalOutputWrite
       })
+      const ptyId = transport.getPtyId()
+      if (ptyId !== null) {
+        // The banner covers every byte main has reported dropped so far; markers
+        // repeating that gap are answered by this record, not by a second banner.
+        hiddenOutputRestoreDisclosedGap = { ptyId, seq: hiddenOutputRestoreMarkerSeqHighWater }
+      }
     }
 
     async function applyMainBufferSnapshot(snapshot: {
@@ -7682,9 +7759,11 @@ export function connectPanePty(
                 HIDDEN_OUTPUT_RESTORE_LOCAL_GATE_MAX_ATTEMPTS
             }
             if (budgetExhausted) {
-              abandonHiddenOutputRestoreAndDrainPendingForeground(currentPtyId, {
-                rearmRemote: false
-              })
+              if (!deferHiddenOutputRestoreLossToReveal()) {
+                abandonHiddenOutputRestoreAndDrainPendingForeground(currentPtyId, {
+                  rearmRemote: false
+                })
+              }
               return
             }
             hiddenOutputRestoreNeeded = true
@@ -7694,9 +7773,11 @@ export function connectPanePty(
             return
           }
           if (snapshotResult.kind === 'permanently-unavailable') {
-            abandonHiddenOutputRestoreAndDrainPendingForeground(currentPtyId, {
-              rearmRemote: false
-            })
+            if (!deferHiddenOutputRestoreLossToReveal()) {
+              abandonHiddenOutputRestoreAndDrainPendingForeground(currentPtyId, {
+                rearmRemote: false
+              })
+            }
             return
           }
           if (snapshotResult.kind === 'unknown-legacy-host') {
@@ -7727,6 +7808,7 @@ export function connectPanePty(
           }
           // Why: everything at/before snapshot.seq is now painted; chunks still draining from main's ACK backlog below it are duplicates to suppress.
           setRestoredSnapshotBaseline(currentPtyId, snapshot)
+          ackHiddenOutputRestoreApplied(currentPtyId)
           hiddenOutputRestoreReplayingSnapshot = null
           const needsFreshSnapshot = hiddenOutputRestoreFreshSnapshotNeeded
           hiddenOutputRestoreFreshSnapshotNeeded = false
@@ -8177,6 +8259,9 @@ export function connectPanePty(
               recordTerminalOutput(pane.terminal)
               await waitForTerminalReplayWritesParsed(pane.terminal)
               if (isCurrent()) {
+                // This repaint is a restore too: it painted main's retained bytes,
+                // so it owes the same latch retirement the recovery loop sends.
+                ackHiddenOutputRestoreApplied(ptyId)
                 manager.rebuildPaneWebgl(pane.id)
               }
             },

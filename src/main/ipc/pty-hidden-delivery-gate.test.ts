@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it } from 'vitest'
 import {
   _resetHiddenRendererPtyDeliveryGateForTest,
   clearHiddenRendererPtyDeliveryState,
+  consumeHiddenRendererPtyDropMemory,
   getHiddenRendererPtyDeliveryDebug,
   isHiddenPtyDeliveryGateEnabled,
   markHiddenRendererPty,
@@ -41,16 +42,50 @@ describe('pty hidden delivery gate', () => {
     expect(shouldDropHiddenRendererPtyData(PTY_ID, {})).toBe(true)
   })
 
-  it('requests the restore marker exactly once per drop episode, re-armed by unmark', () => {
+  it('requests the restore marker exactly once per drop episode, re-armed by the applied ack', () => {
     markHiddenRendererPty(PTY_ID)
     expect(recordHiddenRendererPtyDataDrop(PTY_ID, 10).shouldEmitRestoreMarker).toBe(true)
     expect(recordHiddenRendererPtyDataDrop(PTY_ID, 10).shouldEmitRestoreMarker).toBe(false)
 
-    // Why: unmark consumes the latch (and re-emits via its own return value);
-    // the next hidden period's first drop reports again.
+    // Why: unmark only reads the latch, so an unhide that reaches no renderer
+    // handler cannot make the next hidden period look already-reported.
     unmarkHiddenRendererPty(PTY_ID)
     markHiddenRendererPty(PTY_ID)
+    expect(recordHiddenRendererPtyDataDrop(PTY_ID, 10).shouldEmitRestoreMarker).toBe(false)
+
+    // The renderer painted the snapshot: the next episode reports again.
+    consumeHiddenRendererPtyDropMemory(PTY_ID)
     expect(recordHiddenRendererPtyDataDrop(PTY_ID, 10).shouldEmitRestoreMarker).toBe(true)
+  })
+
+  it('keeps drop memory across unhide until the renderer acks the paint (STA-4869)', () => {
+    markHiddenRendererPty(PTY_ID)
+    recordHiddenRendererPtyDataDrop(PTY_ID, 10)
+
+    // A pane retiring while hidden unhides after unregistering its marker
+    // handler; every later unhide must still be able to re-emit.
+    expect(unmarkHiddenRendererPty(PTY_ID).droppedWhileHidden).toBe(true)
+    expect(unmarkHiddenRendererPty(PTY_ID).droppedWhileHidden).toBe(true)
+
+    consumeHiddenRendererPtyDropMemory(PTY_ID)
+    expect(unmarkHiddenRendererPty(PTY_ID).droppedWhileHidden).toBe(false)
+  })
+
+  it('retires drop memory on teardown', () => {
+    markHiddenRendererPty(PTY_ID)
+    recordHiddenRendererPtyDataDrop(PTY_ID, 10)
+
+    clearHiddenRendererPtyDeliveryState(PTY_ID)
+    markHiddenRendererPty(PTY_ID)
+    expect(unmarkHiddenRendererPty(PTY_ID).droppedWhileHidden).toBe(false)
+  })
+
+  it('consuming drop memory it never had is a no-op for other PTYs', () => {
+    markHiddenRendererPty(PTY_ID)
+    recordHiddenRendererPtyDataDrop(PTY_ID, 10)
+
+    consumeHiddenRendererPtyDropMemory('pty-2')
+    expect(unmarkHiddenRendererPty(PTY_ID).droppedWhileHidden).toBe(true)
   })
 
   it('keeps drop memory when an already-dropped PTY is re-marked hidden', () => {
