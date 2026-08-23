@@ -10,7 +10,7 @@ describe('ProtectedSecretPersistence', () => {
       isEncryptionAvailable: () => cipherState.available,
       encryptString: (plaintext) => Buffer.from(`encrypted:${plaintext}`),
       decryptString: (ciphertext) => ciphertext.toString().slice('encrypted:'.length),
-      describeUnavailable: () => null
+      describeProtectionGap: () => null
     })
   })
 

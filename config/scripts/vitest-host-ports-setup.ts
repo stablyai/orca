@@ -62,6 +62,6 @@ beforeEach(() => {
       }
       return text.slice(SEAL_PREFIX.length)
     },
-    describeUnavailable: () => null
+    describeProtectionGap: () => null
   })
 })

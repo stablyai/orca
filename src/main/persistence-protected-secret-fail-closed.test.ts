@@ -54,7 +54,7 @@ async function createStore() {
       }
       return decoded.slice('enc:'.length + 36 + 1)
     },
-    describeUnavailable: () => null
+    describeProtectionGap: () => null
   })
   const { Store, initDataPath } = await import('./persistence')
   // Why here: userData resolves through AppEnvironment, and this must point at this

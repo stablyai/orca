@@ -51,7 +51,7 @@ async function createStore() {
     isEncryptionAvailable: () => cipherState.available,
     encryptString: (plaintext) => Buffer.from(`enc:${plaintext}`, 'utf-8'),
     decryptString: (ciphertext) => ciphertext.toString('utf-8').slice('enc:'.length),
-    describeUnavailable: () => null
+    describeProtectionGap: () => null
   })
   const { Store, initDataPath } = await import('./persistence')
   // Why here: userData resolves through AppEnvironment, and this must point at this

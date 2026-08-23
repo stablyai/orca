@@ -114,7 +114,7 @@ async function loadClientModule(options: SafeStorageMockOptions = {}) {
     isEncryptionAvailable: () => options.encryptionAvailable ?? false,
     encryptString: (value) => Buffer.from(value),
     decryptString: options.decryptString ?? ((value) => value.toString('utf-8')),
-    describeUnavailable: () => null
+    describeProtectionGap: () => null
   })
   vi.doMock('os', async () => {
     const actual = await vi.importActual<typeof Os>('os')

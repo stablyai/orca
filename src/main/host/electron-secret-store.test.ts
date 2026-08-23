@@ -3,7 +3,8 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 const safeStorageMock = vi.hoisted(() => ({
   isEncryptionAvailable: vi.fn(() => true),
   encryptString: vi.fn((plainText: string) => Buffer.from(`os-sealed:${plainText}`)),
-  decryptString: vi.fn((cipher: Buffer) => cipher.toString().slice('os-sealed:'.length))
+  decryptString: vi.fn((cipher: Buffer) => cipher.toString().slice('os-sealed:'.length)),
+  getSelectedStorageBackend: vi.fn(() => 'gnome_libsecret')
 }))
 
 vi.mock('electron', () => ({ safeStorage: safeStorageMock }))
@@ -14,6 +15,60 @@ describe('ElectronSecretStore', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     safeStorageMock.isEncryptionAvailable.mockReturnValue(true)
+    safeStorageMock.getSelectedStorageBackend.mockReturnValue('gnome_libsecret')
+  })
+
+  function withPlatform<T>(platform: NodeJS.Platform, run: () => T): T {
+    const original = process.platform
+    Object.defineProperty(process, 'platform', { configurable: true, value: platform })
+    try {
+      return run()
+    } finally {
+      Object.defineProperty(process, 'platform', { configurable: true, value: original })
+    }
+  }
+
+  describe('at-rest protection reporting', () => {
+    it('reports no gap when a real keyring backend is selected', () => {
+      withPlatform('linux', () => {
+        expect(new ElectronSecretStore().describeProtectionGap()).toBeNull()
+      })
+    })
+
+    it('reports a gap for the Linux basic_text backend, which protects nothing', () => {
+      safeStorageMock.getSelectedStorageBackend.mockReturnValue('basic_text')
+      withPlatform('linux', () => {
+        const gap = new ElectronSecretStore().describeProtectionGap()
+        expect(gap).toMatch(/built-in key/)
+        expect(gap).toMatch(/gnome-keyring|kwallet/)
+      })
+    })
+
+    it('keeps sealing AVAILABLE on basic_text so stored credentials still decrypt', () => {
+      // Why this matters more than the warning: flipping isEncryptionAvailable() would
+      // make decryptWithStatus() stop attempting and return every stored secret as
+      // empty. The gap is a trust signal, never a capability switch.
+      safeStorageMock.getSelectedStorageBackend.mockReturnValue('basic_text')
+      withPlatform('linux', () => {
+        const store = new ElectronSecretStore()
+        expect(store.isEncryptionAvailable()).toBe(true)
+        expect(store.decryptString(store.encryptString('linear-token'))).toBe('linear-token')
+      })
+    })
+
+    it('does not consult the backend on macOS, where basic_text does not exist', () => {
+      withPlatform('darwin', () => {
+        expect(new ElectronSecretStore().describeProtectionGap()).toBeNull()
+      })
+      expect(safeStorageMock.getSelectedStorageBackend).not.toHaveBeenCalled()
+    })
+
+    it('reports the missing-keyring gap before considering the backend', () => {
+      safeStorageMock.isEncryptionAvailable.mockReturnValue(false)
+      withPlatform('linux', () => {
+        expect(new ElectronSecretStore().describeProtectionGap()).toMatch(/keyring is unavailable/)
+      })
+    })
   })
 
   // Why this shape: the whole safety argument for the SecretStore refactor is that the
@@ -47,12 +102,12 @@ describe('ElectronSecretStore', () => {
   })
 
   it('has no reason to give while sealing works', () => {
-    expect(new ElectronSecretStore().describeUnavailable()).toBeNull()
+    expect(new ElectronSecretStore().describeProtectionGap()).toBeNull()
   })
 
   it('names the missing facility when sealing is unavailable, so the plaintext fallback is explainable', () => {
     safeStorageMock.isEncryptionAvailable.mockReturnValue(false)
-    const reason = new ElectronSecretStore().describeUnavailable()
+    const reason = new ElectronSecretStore().describeProtectionGap()
     expect(reason).toContain('unencrypted')
     if (process.platform === 'linux') {
       expect(reason).toContain('keyring')

@@ -34,6 +34,7 @@ import { setSpeechServiceFactories } from './speech/speech-runtime-service'
 import { setWorktreeWatcherRemoval } from './ipc/worktree-watcher-removal'
 import { setSecretStore } from '../shared/secret-store'
 import { ElectronSecretStore } from './host/electron-secret-store'
+import { reportSecretProtectionGap } from './host/secret-protection-report'
 import { initSessionParseCachePersistence } from './ai-vault/session-parse-cache-persistence'
 import { ensureActiveOrcaProfile, initOrcaProfilePaths } from './orca-profiles/profile-index-store'
 import { getOrcaCloudAuthConfig } from './orca-profiles/profile-cloud-auth-config'
@@ -883,6 +884,9 @@ if (hasSingleInstanceLock) {
   // the app.setName ordering the userData captures below depend on.
   setAppEnvironment(new ElectronAppEnvironment())
   setSecretStore(new ElectronSecretStore())
+  // Why right after install: this is the first moment the answer is knowable, and a
+  // silent weak backend is the gap users most need told about.
+  reportSecretProtectionGap()
   // Why at process level, not per-window: pty.ts registers against injected surfaces so
   // it can load without electron, and an Electron main process always has ipcMain —
   // whether a window exists is irrelevant. Installing this in attachMainWindowServices

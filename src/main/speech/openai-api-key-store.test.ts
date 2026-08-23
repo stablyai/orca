@@ -17,7 +17,7 @@ async function loadStoreModule() {
   const { setSecretStore } = await import('../../shared/secret-store')
   setSecretStore({
     ...safeStorageMock,
-    describeUnavailable: () => null
+    describeProtectionGap: () => null
   })
   vi.doMock('os', async () => {
     const actual = await vi.importActual<typeof Os>('os')

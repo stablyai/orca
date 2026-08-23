@@ -12,7 +12,7 @@ function fakeStore(overrides: Partial<SecretStore> = {}): SecretStore {
     isEncryptionAvailable: () => true,
     encryptString: (plainText) => Buffer.from(`sealed:${plainText}`),
     decryptString: (cipher) => cipher.toString().slice('sealed:'.length),
-    describeUnavailable: () => null,
+    describeProtectionGap: () => null,
     ...overrides
   }
 }
@@ -45,9 +45,9 @@ describe('SecretStore registry', () => {
     setSecretStore(
       fakeStore({
         isEncryptionAvailable: () => false,
-        describeUnavailable: () => 'The OS keyring is unavailable.'
+        describeProtectionGap: () => 'The OS keyring is unavailable.'
       })
     )
-    expect(getSecretStore().describeUnavailable()).toBe('The OS keyring is unavailable.')
+    expect(getSecretStore().describeProtectionGap()).toBe('The OS keyring is unavailable.')
   })
 })

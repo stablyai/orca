@@ -15,7 +15,7 @@ async function loadModule() {
     isEncryptionAvailable: () => true,
     encryptString: (value) => Buffer.from(value),
     decryptString: (value) => value.toString('utf-8'),
-    describeUnavailable: () => null
+    describeProtectionGap: () => null
   })
   vi.doMock('node:os', async () => {
     const actual = await vi.importActual<typeof Os>('node:os')

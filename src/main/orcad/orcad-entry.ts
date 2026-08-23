@@ -63,7 +63,7 @@ function createNodeAppEnvironment(): AppEnvironment {
 /**
  * Why not silently plaintext: `isEncryptionAvailable() === false` already makes every
  * caller fall back to unsealed storage, which is a security posture, not a detail.
- * `describeUnavailable()` gives the reason a client can surface.
+ * `describeProtectionGap()` gives the reason a client can surface.
  */
 function createNodeSecretStore(): SecretStore {
   return {
@@ -74,7 +74,7 @@ function createNodeSecretStore(): SecretStore {
     decryptString: () => {
       throw new Error('orcad_secret_sealing_unavailable')
     },
-    describeUnavailable: () =>
+    describeProtectionGap: () =>
       'This host has no OS keyring, so credentials are stored unencrypted. Pair from a desktop to manage secrets, or install and unlock a keyring.'
   }
 }
