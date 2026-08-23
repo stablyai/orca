@@ -477,4 +477,118 @@ describe('registerWorktreeHandlers', () => {
     })
     expect(result.localBaseRefUpdateSuggestion).toBeUndefined()
   })
+  // #15331: the pre-create merge-base probe fails when refs/heads/<branch> does not exist yet.
+  const buildMissingLocalBaseSshCase = (presence: 'absent' | 'present' | 'probe-failed') => {
+    const repo = {
+      id: 'repo-ssh',
+      path: '/remote/repo',
+      displayName: 'ssh',
+      badgeColor: '#000',
+      addedAt: 0,
+      connectionId: 'conn-1',
+      worktreeBaseRef: 'origin/main'
+    }
+    const provider = {
+      exec: vi.fn().mockImplementation(async (args: string[]) => {
+        if (args[0] === 'remote') {
+          return { stdout: 'origin\n', stderr: '' }
+        }
+        if (args[0] === 'for-each-ref' && args.at(-1) === 'refs/heads/main') {
+          if (presence === 'probe-failed') {
+            throw new Error('ssh: connection closed by remote host')
+          }
+          return { stdout: presence === 'present' ? 'refs/heads/main\n' : '', stderr: '' }
+        }
+        if (args[0] === 'rev-parse') {
+          const ref = args.at(-1) ?? ''
+          if (ref.startsWith('refs/heads/main')) {
+            return { stdout: presence === 'present' ? 'local-main\n' : '', stderr: '' }
+          }
+          // Other refs/heads probes are the new-branch conflict check; it must stay unresolvable.
+          return { stdout: ref.startsWith('refs/heads/') ? '' : 'remote-main\n', stderr: '' }
+        }
+        if (args[0] === 'merge-base') {
+          throw new Error('fatal: Not a valid object name refs/heads/main')
+        }
+        return { stdout: '', stderr: '' }
+      }),
+      fetchRemoteTrackingRef: vi.fn().mockResolvedValue(undefined),
+      addWorktree: vi.fn().mockResolvedValue(undefined),
+      listWorktrees: vi.fn().mockResolvedValue([
+        {
+          path: '/remote/repo-improve-dashboard',
+          head: 'abc123',
+          branch: 'refs/heads/improve-dashboard',
+          isBare: false,
+          isMainWorktree: false
+        }
+      ]),
+      worktreeIsClean: vi.fn().mockResolvedValue({ clean: true }),
+      refreshLocalBaseRefForWorktreeCreate: vi.fn().mockResolvedValue(undefined)
+    }
+    store.getSettings.mockReturnValue({
+      branchPrefix: 'none',
+      nestWorkspaces: false,
+      refreshLocalBaseRefOnWorktreeCreate: true,
+      workspaceDir: '/workspace'
+    })
+    store.getRepos.mockReturnValue([repo])
+    store.getRepo.mockReturnValue(repo)
+    getSshGitProviderMock.mockReturnValue(provider)
+    getActiveMultiplexerMock.mockReturnValue({
+      request: vi.fn().mockResolvedValue(undefined),
+      notify: vi.fn()
+    })
+    store.setWorktreeMeta.mockImplementation((_worktreeId, meta) => meta)
+    return provider
+  }
+
+  it('does not report an SSH local base refresh when the local base branch does not exist', async () => {
+    const provider = buildMissingLocalBaseSshCase('absent')
+
+    const result = (await handlers['worktrees:create'](null, {
+      repoId: 'repo-ssh',
+      name: 'improve-dashboard'
+    })) as CreateWorktreeResult
+
+    expect(provider.exec).toHaveBeenCalledWith(
+      ['for-each-ref', '--count=1', '--format=%(refname)', 'refs/heads/main'],
+      '/remote/repo'
+    )
+    expect(result.localBaseRefRefresh).toBeUndefined()
+    expect(provider.refreshLocalBaseRefForWorktreeCreate).not.toHaveBeenCalled()
+  })
+
+  it('keeps the SSH not-fast-forward status when the local base branch exists and diverged', async () => {
+    const provider = buildMissingLocalBaseSshCase('present')
+
+    const result = (await handlers['worktrees:create'](null, {
+      repoId: 'repo-ssh',
+      name: 'improve-dashboard'
+    })) as CreateWorktreeResult
+
+    expect(result.localBaseRefRefresh).toEqual({
+      status: 'skipped_not_fast_forward',
+      baseRef: 'origin/main',
+      localBranch: 'main'
+    })
+    expect(provider.refreshLocalBaseRefForWorktreeCreate).not.toHaveBeenCalled()
+  })
+
+  // Losing the relay mid-probe is not evidence the branch is missing.
+  it('keeps the SSH not-fast-forward status when the local base ref probe fails', async () => {
+    const provider = buildMissingLocalBaseSshCase('probe-failed')
+
+    const result = (await handlers['worktrees:create'](null, {
+      repoId: 'repo-ssh',
+      name: 'improve-dashboard'
+    })) as CreateWorktreeResult
+
+    expect(result.localBaseRefRefresh).toEqual({
+      status: 'skipped_not_fast_forward',
+      baseRef: 'origin/main',
+      localBranch: 'main'
+    })
+    expect(provider.refreshLocalBaseRefForWorktreeCreate).not.toHaveBeenCalled()
+  })
 })
