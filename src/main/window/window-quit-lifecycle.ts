@@ -5,12 +5,20 @@ type WindowQuitLifecycleOptions = {
   resumeSessions: () => void
 }
 
+type WindowQuitPersistenceStep =
+  | 'transfer-fence'
+  | 'stage-sessions'
+  | 'ssh-shutdown'
+  | 'kill-pty'
+  | 'store-flush'
+
 type WindowQuitPersistenceOptions = {
   transferFence: Promise<void>
   stageSessions: () => void
   beginSshShutdown: () => Promise<unknown>
   killAllPty: () => void
   flushStore: () => Promise<void>
+  onError: (step: WindowQuitPersistenceStep, error: unknown) => void
 }
 
 export function createWindowQuitLifecycle(options: WindowQuitLifecycleOptions): {
@@ -43,37 +51,41 @@ export async function finishWindowSessionPersistenceForQuit(
   options: WindowQuitPersistenceOptions
 ): Promise<void> {
   const errors: unknown[] = []
+  const recordFailure = (step: WindowQuitPersistenceStep, error: unknown): void => {
+    errors.push(error)
+    options.onError(step, error)
+  }
   const [transferResult] = await Promise.allSettled([options.transferFence])
   if (transferResult.status === 'rejected') {
-    errors.push(transferResult.reason)
+    recordFailure('transfer-fence', transferResult.reason)
   }
   try {
     options.stageSessions()
   } catch (error) {
-    errors.push(error)
+    recordFailure('stage-sessions', error)
   }
   let sshShutdown: Promise<unknown> = Promise.resolve()
   try {
-    sshShutdown = options.beginSshShutdown()
+    sshShutdown = options.beginSshShutdown().catch((error: unknown) => {
+      recordFailure('ssh-shutdown', error)
+    })
   } catch (error) {
-    errors.push(error)
+    recordFailure('ssh-shutdown', error)
   }
   try {
     options.killAllPty()
   } catch (error) {
-    errors.push(error)
+    recordFailure('kill-pty', error)
   }
   let storeFlush: Promise<unknown> = Promise.resolve()
   try {
-    storeFlush = options.flushStore()
+    storeFlush = options.flushStore().catch((error: unknown) => {
+      recordFailure('store-flush', error)
+    })
   } catch (error) {
-    errors.push(error)
+    recordFailure('store-flush', error)
   }
-  for (const result of await Promise.allSettled([sshShutdown, storeFlush])) {
-    if (result.status === 'rejected') {
-      errors.push(result.reason)
-    }
-  }
+  await Promise.allSettled([sshShutdown, storeFlush])
   if (errors.length > 0) {
     throw errors[0]
   }

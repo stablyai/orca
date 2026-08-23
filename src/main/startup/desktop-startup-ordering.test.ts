@@ -265,6 +265,19 @@ describe('startup ordering', () => {
     expect(storeFlush).toBeGreaterThan(killPty)
   })
 
+  it('makes every window-session persistence failure observable in the production quit path', () => {
+    const source = readFileSync(join(process.cwd(), 'src/main/index.ts'), 'utf8')
+    const willQuitStart = source.indexOf("app.on('will-quit'")
+    const windowAllClosedStart = source.indexOf("app.on('window-all-closed'", willQuitStart)
+    const willQuit = source.slice(willQuitStart, windowAllClosedStart)
+    const errorSink = willQuit.indexOf('onError: (step, error) =>')
+
+    expect(errorSink).toBeGreaterThanOrEqual(0)
+    expect(willQuit.slice(errorSink)).toContain(
+      "console.error('[shutdown] Window session persistence failed', { step, error })"
+    )
+  })
+
   it('keeps the power bridge through vetoable before-quit and disposes after commit', () => {
     const source = readFileSync(join(process.cwd(), 'src/main/index.ts'), 'utf8')
     const beforeQuitStart = source.indexOf("app.on('before-quit'")

@@ -76,7 +76,8 @@ describe('window quit lifecycle', () => {
         calls.push('flush')
         durableState = stagedState
         return Promise.resolve()
-      }
+      },
+      onError: vi.fn()
     })
 
     expect(calls).toEqual([])
@@ -106,7 +107,8 @@ describe('window quit lifecycle', () => {
       flushStore: () => {
         calls.push('flush')
         return Promise.resolve()
-      }
+      },
+      onError: vi.fn()
     })
 
     await expect(completed).rejects.toBe(stageError)
@@ -134,7 +136,8 @@ describe('window quit lifecycle', () => {
         calls.push('flush')
         durableState = stagedState
         return Promise.resolve()
-      }
+      },
+      onError: vi.fn()
     })
 
     await expect(completed).rejects.toBe(sshError)
@@ -166,7 +169,8 @@ describe('window quit lifecycle', () => {
         calls.push('flush')
         durableState = stagedState
         return Promise.resolve()
-      }
+      },
+      onError: vi.fn()
     })
 
     await expect(completed).rejects.toBe(killError)
@@ -190,7 +194,8 @@ describe('window quit lifecycle', () => {
       flushStore: () => {
         calls.push('flush')
         return Promise.reject(flushError)
-      }
+      },
+      onError: vi.fn()
     })
 
     await expect(completed).rejects.toBe(sshError)
@@ -212,10 +217,77 @@ describe('window quit lifecycle', () => {
       flushStore: () => {
         calls.push('flush')
         throw flushError
-      }
+      },
+      onError: vi.fn()
     })
 
     await expect(completed).rejects.toBe(flushError)
     expect(calls).toEqual(['stage', 'ssh-shutdown', 'kill-pty', 'flush'])
+  })
+
+  it('reports every failed persistence step to the production error sink', async () => {
+    const transferError = new Error('transfer failed')
+    const stageError = new Error('stage failed')
+    const sshError = new Error('ssh failed')
+    const killError = new Error('kill failed')
+    const flushError = new Error('flush failed')
+    const reported: [string, unknown][] = []
+    const options = {
+      transferFence: Promise.reject(transferError),
+      stageSessions: () => {
+        throw stageError
+      },
+      beginSshShutdown: () => Promise.reject(sshError),
+      killAllPty: () => {
+        throw killError
+      },
+      flushStore: () => Promise.reject(flushError),
+      onError: (step: string, error: unknown) => reported.push([step, error])
+    }
+
+    await expect(finishWindowSessionPersistenceForQuit(options)).rejects.toBe(transferError)
+    expect(reported).toHaveLength(5)
+    expect(reported).toEqual(
+      expect.arrayContaining([
+        ['transfer-fence', transferError],
+        ['stage-sessions', stageError],
+        ['ssh-shutdown', sshError],
+        ['kill-pty', killError],
+        ['store-flush', flushError]
+      ])
+    )
+  })
+
+  it('reports a settled failure while another teardown promise remains pending', async () => {
+    const sshShutdown = new Promise<void>(() => {})
+    const flushError = new Error('flush failed')
+    let rejectFlush!: (error: Error) => void
+    let markFlushStarted!: () => void
+    const flushStarted = new Promise<void>((resolve) => {
+      markFlushStarted = resolve
+    })
+    const flushStore = new Promise<void>((_resolve, reject) => {
+      rejectFlush = reject
+    })
+    const onError = vi.fn()
+
+    const completed = finishWindowSessionPersistenceForQuit({
+      transferFence: Promise.resolve(),
+      stageSessions: vi.fn(),
+      beginSshShutdown: () => sshShutdown,
+      killAllPty: vi.fn(),
+      flushStore: () => {
+        markFlushStarted()
+        return flushStore
+      },
+      onError
+    })
+
+    await flushStarted
+    rejectFlush(flushError)
+    await Promise.resolve()
+
+    expect(onError).toHaveBeenCalledWith('store-flush', flushError)
+    void completed
   })
 })

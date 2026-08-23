@@ -3469,7 +3469,10 @@ app.on('will-quit', (e) => {
     // Why immediately before store.flushAsync(): SSH shutdown updates leases synchronously.
     beginSshShutdown: () => beginSshShutdown(),
     killAllPty: () => killAllPty(),
-    flushStore: () => store?.flushAsync() ?? Promise.resolve()
+    flushStore: () => store?.flushAsync() ?? Promise.resolve(),
+    onError: (step, error) => {
+      console.error('[shutdown] Window session persistence failed', { step, error })
+    }
   })
   // Why: usage-cache writes are queued off the main thread, so a quit right after setEnabled or a
   // scan completion would drop the final snapshot. Captured before any await; joins the barrier below.
