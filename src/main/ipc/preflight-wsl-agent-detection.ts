@@ -20,10 +20,14 @@ export async function detectWslCommandsOnPath(
   }
 
   const commandList = uniqueCommands.map(shellQuote).join(' ')
-  const lookupScript = buildPosixCommandPathLookupScript({
-    kind: 'shell-variable',
-    name: 'cmd'
-  })
+  const lookupScript = buildPosixCommandPathLookupScript(
+    { kind: 'shell-variable', name: 'cmd' },
+    // Skip Windows mounts DURING the walk, not after it: WSL appends the
+    // Windows PATH, so a Windows `claude` can shadow a real guest install, and
+    // discarding the result afterwards reports "not installed" for a user who
+    // has both -- the #9725 population the fallback dirs exist to serve.
+    { skipWindowsMountDirs: true }
+  )
   // Newlines keep the loop valid in every POSIX shell used here.
   const script = [
     // The same fallback the preflight command runner uses: append the
@@ -78,6 +82,12 @@ function shellQuote(value: string): string {
  * a false positive launches a Windows executable inside a Linux session, where
  * it sees Windows paths, no guest $HOME, and none of the distro's config -- and
  * the failure surfaces later, somewhere less obvious.
+ *
+ * Secondary to `skipWindowsMountDirs`, which does the real work by skipping
+ * those PATH components mid-walk. This only catches a mount the guest does not
+ * report in /proc/mounts, and it must never be the thing that decides: dropping
+ * a resolved result here cannot resume the walk, so on its own it converts the
+ * false positive into "not installed" for a user who has both.
  */
 function isWindowsInteropPath(resolvedPath: string): boolean {
   return /^\/mnt\/[a-z]\//i.test(resolvedPath) || resolvedPath.toLowerCase().endsWith('.exe')
