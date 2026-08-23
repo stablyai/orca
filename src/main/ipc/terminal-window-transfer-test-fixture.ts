@@ -161,6 +161,7 @@ export type TerminalWindowTransferHarness = {
   records: Map<number, WorkspaceSessionState>
   sessions: {
     get: Mock<(windowId: number) => WorkspaceSessionState>
+    isWindowEmptyAcrossHosts: Mock<(windowId: number) => boolean>
     set: Mock<(windowId: number, state: WorkspaceSessionState) => void>
     seedWindow: Mock
     retire: Mock
@@ -192,6 +193,7 @@ export function createTerminalWindowTransferHarness(
   const calls: string[] = []
   const sessions = {
     get: vi.fn((windowId: number) => structuredClone(records.get(windowId)!)),
+    isWindowEmptyAcrossHosts: vi.fn(() => true),
     set: vi.fn((windowId: number, state: WorkspaceSessionState) => {
       calls.push(`set:${windowId}`)
       records.set(windowId, structuredClone(state))

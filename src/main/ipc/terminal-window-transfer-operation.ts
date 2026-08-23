@@ -214,15 +214,6 @@ export function finishCommittedTerminalWindowTransfer(
   }
 }
 
-export function terminalWindowSessionIsEmpty(state: WorkspaceSessionState): boolean {
-  return ![
-    state.unifiedTabs,
-    state.tabsByWorktree,
-    state.openFilesByWorktree,
-    state.browserTabsByWorktree
-  ].some((byWorkspace) => Object.values(byWorkspace ?? {}).some((items) => items.length > 0))
-}
-
 export function revealCreatedTerminalWindowTarget(transfer: TerminalWindowTransfer): void {
   const { target } = transfer
   if (!transfer.createdTarget || !target || target.isDestroyed()) {

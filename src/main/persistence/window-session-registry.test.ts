@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import { getDefaultWorkspaceSession } from '../../shared/constants'
+import type { ExecutionHostId } from '../../shared/execution-host'
 import type { TabGroupLayoutNode } from '../../shared/tab-types'
 import type { WorkspaceSessionState } from '../../shared/workspace-session-state-types'
 import { mergeWindowSessions } from './window-session-merge'
@@ -43,6 +44,42 @@ function makeSession(
     },
     terminalTopologyRevisionByRepoId: { 'repo-1': options.revision ?? 0 }
   }
+}
+
+function makeWindowContentSession(kind: 'tab' | 'editor' | 'browser'): WorkspaceSessionState {
+  const state = getDefaultWorkspaceSession()
+  if (kind === 'tab') {
+    state.tabsByWorktree = { 'remote-wt': [makeTab('remote-tab', 'remote-wt')] }
+  } else if (kind === 'editor') {
+    state.openFilesByWorktree = {
+      'remote-wt': [
+        {
+          filePath: '/remote/file.ts',
+          relativePath: 'file.ts',
+          worktreeId: 'remote-wt',
+          language: 'typescript'
+        }
+      ]
+    }
+  } else {
+    state.browserTabsByWorktree = {
+      'remote-wt': [
+        {
+          id: 'remote-browser',
+          worktreeId: 'remote-wt',
+          url: 'https://remote.example.com',
+          title: 'Remote',
+          loading: false,
+          faviconUrl: null,
+          canGoBack: false,
+          canGoForward: false,
+          loadError: null,
+          createdAt: 1
+        }
+      ]
+    }
+  }
+  return state
 }
 
 function layoutGroupIds(layout: TabGroupLayoutNode): string[] {
@@ -479,5 +516,77 @@ describe('WindowSessionRegistry', () => {
     expect(registry.mergeHost().tabsByWorktree['repo-1::/worktree'].map((tab) => tab.id)).toEqual([
       'tab-live'
     ])
+  })
+
+  it.each([
+    [
+      'set',
+      (registry: WindowSessionRegistry, hostId: ExecutionHostId) =>
+        registry.set(1, makeSession(`fresh-${hostId}`), hostId)
+    ],
+    [
+      'patch',
+      (registry: WindowSessionRegistry, hostId: ExecutionHostId) =>
+        registry.patch(1, { activeTabId: `fresh-${hostId}` }, hostId)
+    ],
+    [
+      'beforeunload',
+      (registry: WindowSessionRegistry, hostId: ExecutionHostId) =>
+        registry.stageBeforeUnload(1, [{ state: makeSession(`fresh-${hostId}`), hostId }])
+    ]
+  ])('recovers only the checkpointed host after renderer loss via %s', (_name, checkpointHost) => {
+    const { manager, store } = makeHarness(2)
+    const registry = new WindowSessionRegistry(store as never, manager as never)
+    registry.set(1, makeSession('local-crashed'), 'local')
+    registry.set(1, makeSession('ssh-crashed'), 'ssh:server-1')
+    registry.set(2, makeSession('local-live'), 'local')
+    registry.set(2, makeSession('ssh-live'), 'ssh:server-1')
+    registry.markRendererUnavailable(1)
+
+    checkpointHost(registry, 'local')
+    registry.retire(1, 'user-close')
+
+    expect(
+      registry.mergeHost('local').tabsByWorktree['repo-1::/worktree'].map((tab) => tab.id)
+    ).toEqual(['local-live'])
+    expect(
+      registry.mergeHost('ssh:server-1').tabsByWorktree['repo-1::/worktree'].map((tab) => tab.id)
+    ).toEqual(['ssh-live', 'ssh-crashed'])
+
+    checkpointHost(registry, 'ssh:server-1')
+    registry.retire(1, 'user-close')
+
+    expect(
+      registry.mergeHost('ssh:server-1').tabsByWorktree['repo-1::/worktree'].map((tab) => tab.id)
+    ).toEqual(['ssh-live'])
+  })
+
+  it.each(['tab', 'editor', 'browser'] as const)(
+    'requires every host record to be empty before reporting an empty window with remote %s content',
+    (kind) => {
+      const { manager, store } = makeHarness()
+      const registry = new WindowSessionRegistry(store as never, manager as never)
+      registry.set(1, getDefaultWorkspaceSession(), 'local')
+      registry.set(1, makeWindowContentSession(kind), 'ssh:server-1')
+
+      expect(registry.isWindowEmptyAcrossHosts(1)).toBe(false)
+
+      registry.set(1, getDefaultWorkspaceSession(), 'ssh:server-1')
+      expect(registry.isWindowEmptyAcrossHosts(1)).toBe(true)
+    }
+  )
+
+  it('does not report exact emptiness while any host record remains unavailable', () => {
+    const { manager, store } = makeHarness()
+    const registry = new WindowSessionRegistry(store as never, manager as never)
+    registry.set(1, getDefaultWorkspaceSession(), 'local')
+    registry.set(1, getDefaultWorkspaceSession(), 'ssh:server-1')
+    registry.markRendererUnavailable(1)
+
+    registry.set(1, getDefaultWorkspaceSession(), 'local')
+    expect(registry.isWindowEmptyAcrossHosts(1)).toBe(false)
+
+    registry.set(1, getDefaultWorkspaceSession(), 'ssh:server-1')
+    expect(registry.isWindowEmptyAcrossHosts(1)).toBe(true)
   })
 })

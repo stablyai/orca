@@ -440,7 +440,7 @@ describe('terminal window transfer lifecycle recovery', () => {
     expect(h.records.get(h.target.id)).toEqual(terminalWindowSession(false))
   })
 
-  it('does not empty-close a secondary when new content arrives after its empty ACK', async () => {
+  it('does not empty-close a secondary when another host gains content after its empty ACK', async () => {
     const h = createTerminalWindowTransferHarness()
     h.windows.remove(h.source.id)
     h.windows.remove(h.target.id)
@@ -463,15 +463,15 @@ describe('terminal window transfer lifecycle recovery', () => {
           ok: true,
           empty: true
         })
-        const concurrent = terminalWindowSession(true)
-        concurrent.tabsByWorktree['wt-1']![0]!.id = 'concurrent-tab'
-        h.records.set(h.source.id, concurrent)
+        h.records.set(h.source.id, terminalWindowSession(false))
+        h.sessions.isWindowEmptyAcrossHosts.mockReturnValue(false)
       })
     })
 
     await expect(
       coordinator.detach(ipcEvent(h.source.webContents) as never, terminalWindowSeed())
     ).resolves.toEqual({ ok: true, targetWindowId: h.target.id })
+    expect(h.sessions.isWindowEmptyAcrossHosts).toHaveBeenCalledWith(h.source.id)
     expect(h.source.close).not.toHaveBeenCalled()
     expect(h.sessions.retire).not.toHaveBeenCalledWith(h.source.id, 'empty-close')
   })

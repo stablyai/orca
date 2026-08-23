@@ -20,6 +20,7 @@ export type HostSessionSnapshot = {
 type RecordEntry = {
   state: WorkspaceSessionState
   retired: boolean
+  rendererUnavailable: boolean
 }
 
 type SessionWindowManager = Pick<OrcaWindowManager, 'getControlWindow'> &
@@ -33,9 +34,17 @@ function cloneSession(state: WorkspaceSessionState): WorkspaceSessionState {
   return structuredClone(state)
 }
 
+function sessionHasWindowContent(state: WorkspaceSessionState): boolean {
+  return [
+    state.unifiedTabs,
+    state.tabsByWorktree,
+    state.openFilesByWorktree,
+    state.browserTabsByWorktree
+  ].some((byWorkspace) => Object.values(byWorkspace ?? {}).some((items) => items.length > 0))
+}
+
 export class WindowSessionRegistry {
   readonly #records = new Map<number, Map<ExecutionHostId, RecordEntry>>()
-  readonly #rendererUnavailableWindows = new Set<number>()
   readonly #store: Store
   readonly #windows: SessionWindowManager
   #quitFrozen = false
@@ -80,7 +89,7 @@ export class WindowSessionRegistry {
   }
 
   retire(windowId: number, _mode: 'user-close' | 'empty-close'): void {
-    if (this.#quitFrozen || this.#rendererUnavailableWindows.has(windowId)) {
+    if (this.#quitFrozen) {
       return
     }
     const records = this.#records.get(windowId)
@@ -88,6 +97,9 @@ export class WindowSessionRegistry {
       return
     }
     for (const [hostId, record] of records) {
+      if (record.rendererUnavailable) {
+        continue
+      }
       record.retired = true
       this.#persistHost(hostId)
     }
@@ -102,7 +114,21 @@ export class WindowSessionRegistry {
   }
 
   markRendererUnavailable(windowId: number): void {
-    this.#rendererUnavailableWindows.add(windowId)
+    for (const record of this.#records.get(windowId)?.values() ?? []) {
+      record.rendererUnavailable = true
+    }
+  }
+
+  isWindowEmptyAcrossHosts(windowId: number): boolean {
+    const records = [...(this.#records.get(windowId)?.values() ?? [])].filter(
+      (record) => !record.retired
+    )
+    return (
+      records.length > 0 &&
+      records.every(
+        (record) => !record.rendererUnavailable && !sessionHasWindowContent(record.state)
+      )
+    )
   }
 
   stageBeforeUnload(windowId: number, sessions: readonly HostSessionSnapshot[]): void {
@@ -156,9 +182,8 @@ export class WindowSessionRegistry {
   }
 
   #setRecord(windowId: number, state: WorkspaceSessionState, hostId: ExecutionHostId): void {
-    this.#rendererUnavailableWindows.delete(windowId)
     const byHost = this.#records.get(windowId) ?? new Map<ExecutionHostId, RecordEntry>()
-    byHost.set(hostId, { state: cloneSession(state), retired: false })
+    byHost.set(hostId, { state: cloneSession(state), retired: false, rendererUnavailable: false })
     this.#records.set(windowId, byHost)
   }
 

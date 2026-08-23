@@ -25,7 +25,6 @@ import {
   installTerminalWindowTransferAbortListeners,
   prepareTerminalWindowTargetRecord,
   revealCreatedTerminalWindowTarget,
-  terminalWindowSessionIsEmpty,
   removeTerminalWindowTransferAbortListeners,
   isPointInsideRectangle,
   type TerminalWindowCommandReadyWaiter,
@@ -253,7 +252,7 @@ export class TerminalWindowTransferCoordinator {
         transfer,
         sourceAck.empty === true,
         () => this.#windows.getRole(source.id) === 'secondary',
-        () => terminalWindowSessionIsEmpty(this.#sessions.get(source.id, seed.hostId)),
+        () => this.#sessions.isWindowEmptyAcrossHosts(source.id),
         () => this.#sessions.retire(source.id, 'empty-close')
       )
       return { ok: true, targetWindowId: target.id }
