@@ -26,7 +26,7 @@ describe('deleteWslFishHistoryFile', () => {
 
     expect(run).toHaveBeenCalledWith({
       distro: 'Ubuntu Test',
-      loginPath: 'none',
+      loginPath: 'preferred',
       program: 'fish',
       args: ['--command', expect.stringContaining('orca_0123456789abcdef_history')],
       timeoutMs: 5_000

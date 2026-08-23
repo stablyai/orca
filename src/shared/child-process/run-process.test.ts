@@ -189,7 +189,7 @@ describe('output truncation', () => {
   })
 })
 
-describe('runProcessSync', () => {
+describe('runProcessSync output retention', () => {
   it('refuses retainOutput: tail rather than silently keeping the head', () => {
     // The spec type is shared, so a caller can copy a runProcess spec across
     // and lose the late half of the output it was reading for.

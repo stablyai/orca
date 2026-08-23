@@ -307,7 +307,7 @@ describe('bash-only payloads declare their interpreter', () => {
     // pattern removes only the first match, so two identically-written pinned
     // calls would leave one behind, and a body that also occurs earlier as a
     // substring would blank the wrong region.
-    const pinnedRanges: Array<[number, number]> = [
+    const pinnedRanges: [number, number][] = [
       ...calls.filter(({ text }) => text.includes("shell: 'bash'")).map(({ start, end }): [number, number] => [start, end]),
       ...[...source.matchAll(/'bash',\s*\n?\s*'-lc',[\s\S]{0,4000}?\n\s*\]/g)].map(
         (m): [number, number] => [m.index, m.index + m[0].length]

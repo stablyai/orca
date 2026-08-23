@@ -82,15 +82,13 @@ describe('detectSkillProvidersInWsl', () => {
       timedOut: false
     })
 
-    if (unresolved) {
-      await expect(detectSkillProvidersInWsl('Ubuntu')).rejects.toThrow(
-        'skill-install-wsl-provider-detection-failed'
-      )
-    } else {
-      await expect(detectSkillProvidersInWsl('Ubuntu')).resolves.toEqual(
-        stdout.trim() ? ['claude'] : []
-      )
-    }
+    await (unresolved
+      ? expect(detectSkillProvidersInWsl('Ubuntu')).rejects.toThrow(
+          'skill-install-wsl-provider-detection-failed'
+        )
+      : expect(detectSkillProvidersInWsl('Ubuntu')).resolves.toEqual(
+          stdout.trim() ? ['claude'] : []
+        ))
   })
 
   it('rejects when wsl.exe cannot be started', async () => {
