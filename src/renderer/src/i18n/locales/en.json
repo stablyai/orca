@@ -6240,7 +6240,9 @@
           "3f1bdf3cb4": "Environment text is too large to parse safely.",
           "codexSessionSource": "Codex home to import from",
           "codexSessionSourceInfo": "About importing Codex history",
-          "codexSessionSourceTooltip": "Orca runs Codex in an isolated home. Point this at your existing Codex home to import that session history. Empty uses ~/.codex."
+          "codexSessionSourceTooltip": "Orca runs Codex in an isolated home. Point this at your existing Codex home to import that session history. Empty uses ~/.codex.",
+          "storedDefaultUndetected": "Saved as your default, but not detected right now",
+          "noAgentsDetected": "No agents detected. If one is installed, the probe may have timed out."
         },
         "AppIconSelector": {
           "d5a112dc9b": "Next icon",
