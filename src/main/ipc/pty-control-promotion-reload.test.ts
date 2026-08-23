@@ -9,6 +9,8 @@ import {
 } from './pty'
 import { ptyRendererOwners } from './pty-renderer-owners'
 import { LocalPtyProvider } from '../providers/local-pty-provider'
+import { reloadPromotedControl } from '../window/promoted-control-reload'
+import { createWebContentsTimedFlag } from '../window/web-contents-timed-flag'
 
 vi.mock('electron', () => import('./pty-ipc-mock-registry').then((m) => m.electronModuleMock()))
 vi.mock('fs', () => import('./pty-ipc-mock-registry').then((m) => m.fsModuleMock()))
@@ -64,8 +66,9 @@ describe('control promotion PTY reload', () => {
     getPtyWriteListener
   } = setupPtyIpcSuite()
   type WebContentsMock = typeof mainWindow.webContents
+  type Listener = (...args: unknown[]) => void
 
-  const activeListeners = (webContents: WebContentsMock, eventName: string): (() => void)[] => {
+  const activeListeners = (webContents: WebContentsMock, eventName: string): Listener[] => {
     const removed = new Set(
       webContents.removeListener.mock.calls
         .filter(([event]) => event === eventName)
@@ -73,7 +76,7 @@ describe('control promotion PTY reload', () => {
     )
     return webContents.on.mock.calls
       .filter(([event, listener]) => event === eventName && !removed.has(listener))
-      .map(([, listener]) => listener as () => void)
+      .map(([, listener]) => listener as Listener)
   }
   const finishLoad = (webContents: WebContentsMock): void => {
     activeListeners(webContents, 'did-finish-load').forEach((listener) => listener())
@@ -94,16 +97,10 @@ describe('control promotion PTY reload', () => {
     const mockProc = createMockProc()
     const kill = mockProc.proc.kill
     spawnMock.mockReturnValue(mockProc.proc)
-    let promotionReloadId: number | null = null
-    const consumedPromotionReloads: number[] = []
-    const isRecoveryReloadInFlight = (webContentsId: number): boolean => {
-      if (promotionReloadId !== webContentsId) {
-        return false
-      }
-      promotionReloadId = null
-      consumedPromotionReloads.push(webContentsId)
-      return true
-    }
+    const recoveryReloadInFlight = createWebContentsTimedFlag()
+    const isRecoveryReloadInFlight = vi.fn((webContentsId: number) =>
+      recoveryReloadInFlight.matches(webContentsId, { consume: true })
+    )
 
     registerPtyHandlers(
       mainWindow as never,
@@ -112,7 +109,7 @@ describe('control promotion PTY reload', () => {
       undefined,
       undefined,
       undefined,
-      { isRecoveryReloadInFlight, reuseRegisteredState: true }
+      { isRecoveryReloadInFlight }
     )
     finishLoad(mainWindow.webContents)
     const result = (await handlers.get('pty:spawn')!(mainWindowIpcEvent, {
@@ -134,17 +131,67 @@ describe('control promotion PTY reload', () => {
       { isRecoveryReloadInFlight, reuseRegisteredState: true }
     )
 
-    promotionReloadId = secondary.id
-    reload(secondary)
+    const promotedWebContents = Object.assign(secondary, {
+      reload: vi.fn(() => reload(secondary))
+    })
+    reloadPromotedControl(promotedWebContents as never, recoveryReloadInFlight)
 
     expect(kill).not.toHaveBeenCalled()
     expect(ptyRendererOwners.getOwner(result.id)?.webContentsId).toBe(secondary.id)
     ptyRendererOwners.markDispatcherReady(secondary as never)
     getPtyWriteListener()(foreignWindowIpcEvent, { id: result.id, data: 'still-live' })
     expect(mockProc.proc.write).toHaveBeenCalledWith('still-live')
-    expect(consumedPromotionReloads).toEqual([secondary.id])
+    expect(recoveryReloadInFlight.matches(secondary.id, { consume: true })).toBe(false)
 
     reload(secondary)
+    expect(kill).toHaveBeenCalledOnce()
+  })
+
+  it('sweeps the handed-off PTY on the ordinary load after promotion reload fails', async () => {
+    const mockProc = createMockProc()
+    const kill = mockProc.proc.kill
+    spawnMock.mockReturnValue(mockProc.proc)
+    const recoveryReloadInFlight = createWebContentsTimedFlag()
+    const isRecoveryReloadInFlight = (webContentsId: number): boolean =>
+      recoveryReloadInFlight.matches(webContentsId, { consume: true })
+
+    registerPtyHandlers(
+      mainWindow as never,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      { isRecoveryReloadInFlight }
+    )
+    finishLoad(mainWindow.webContents)
+    const result = (await handlers.get('pty:spawn')!(mainWindowIpcEvent, {
+      cols: 80,
+      rows: 24
+    })) as { id: string }
+    const secondary = foreignWindowIpcEvent.sender
+    registerPtyRenderer(secondary as never)
+    finishLoad(secondary)
+    ptyRendererOwners.markDispatcherReady(secondary as never)
+    handoffPtyRendererOwnership([result.id], mainWindow.webContents as never, secondary as never)
+    registerPtyHandlers(
+      { ...mainWindow, webContents: secondary } as never,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      { isRecoveryReloadInFlight, reuseRegisteredState: true }
+    )
+    const promotedWebContents = Object.assign(secondary, { reload: vi.fn() })
+
+    reloadPromotedControl(promotedWebContents as never, recoveryReloadInFlight)
+    for (const listener of activeListeners(secondary, 'did-fail-load')) {
+      listener({}, -2, 'failed', 'orca://renderer', true, 1, 2)
+    }
+
+    reload(secondary)
+
     expect(kill).toHaveBeenCalledOnce()
   })
 

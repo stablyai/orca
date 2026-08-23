@@ -362,6 +362,8 @@ import {
 import { LocalPtyProvider } from './providers/local-pty-provider'
 import { KeybindingService } from './keybindings/keybinding-service'
 import { applyElectronProxySettings } from './network/proxy-settings'
+import { createWebContentsTimedFlag } from './window/web-contents-timed-flag'
+import { reloadPromotedControl } from './window/promoted-control-reload'
 import { preserveAgentAuthBeforeRestart } from './agent-auth-restart-preservation'
 import { CliInstaller } from './cli/cli-installer'
 import { installLinuxBareOrcaDispatcher } from './cli/linux-bare-orca-dispatcher'
@@ -768,38 +770,6 @@ function settleServeDesktopActivation(): void {
   settleServeDesktopActivationGate(desktopActivationGate, {
     hasPersistentPtyProvider: !(getLocalPtyProvider() instanceof LocalPtyProvider)
   })
-}
-
-// Why: webContents-scoped auto-expiring flag so an intent can't leak to a later renderer load; `consume` clears on match for one-shot signals.
-function createWebContentsTimedFlag(defaultDurationMs = 10_000): {
-  mark: (webContentsId: number, durationMs?: number) => void
-  clear: (webContentsId?: number) => void
-  matches: (webContentsId: number, options?: { consume?: boolean }) => boolean
-} {
-  let state: { webContentsId: number; until: number } | null = null
-  return {
-    mark(webContentsId, durationMs = defaultDurationMs) {
-      state = { webContentsId, until: Date.now() + durationMs }
-    },
-    clear(webContentsId) {
-      if (webContentsId === undefined || state?.webContentsId === webContentsId) {
-        state = null
-      }
-    },
-    matches(webContentsId, options) {
-      if (!state || Date.now() > state.until) {
-        state = null
-        return false
-      }
-      if (state.webContentsId !== webContentsId) {
-        return false
-      }
-      if (options?.consume) {
-        state = null
-      }
-      return true
-    }
-  }
 }
 
 function markExpectedRendererReload(webContentsId: number, durationMs = 10_000): void {
@@ -1631,14 +1601,7 @@ function openMainWindow(options: { revealOnDidFinishLoad?: boolean } = {}): Brow
         promoted.on('minimize', stopSyntheticTitleSpinnerTimer)
         promoted.on('show', notifyMainWindowBecameVisible)
         promoted.on('restore', notifyMainWindowBecameVisible)
-        const promotedWebContentsId = promoted.webContents.id
-        markRecoveryReloadInFlight(promotedWebContentsId)
-        try {
-          promoted.webContents.reload()
-        } catch (error) {
-          recoveryReloadInFlight.clear(promotedWebContentsId)
-          throw error
-        }
+        reloadPromotedControl(promoted.webContents, recoveryReloadInFlight)
       },
       onVacated: () => {
         mainWindow = null
