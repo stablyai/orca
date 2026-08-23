@@ -70,14 +70,17 @@ export type WslSpec = WslCommand & {
 
 export type WslResult = {
   /**
-   * False when the login PATH could not be established, so the call ran on the
-   * distro's default PATH. A caller deciding "is this tool installed?" must
-   * report unverifiable rather than absent -- an nvm-installed binary is
-   * invisible without the login PATH, which is #9725 exactly.
+   * False when `loginPath: 'preferred'` could not establish the login PATH, so
+   * the call ran on the distro's default PATH. A caller deciding "is this tool
+   * installed?" must then report unverifiable rather than absent -- an
+   * nvm-installed binary is invisible without it, which is #9725 exactly.
+   *
+   * Always true under `loginPath: 'none'`, because such a command asked for no
+   * PATH and cannot be let down by one. A PATH lookup marked 'none' therefore
+   * gets no protection from this field; the value has to be right.
    */
   environmentResolved: boolean
   code: number | null
-  /** Payload only — on the interactive lane the rc banner is removed by the fence. */
   stdout: string
   stderr: string
   timedOut: boolean
@@ -178,13 +181,7 @@ export async function runWslProcess(spec: WslSpec): Promise<WslResult> {
   }
   const deadline = Date.now() + (spec.timeoutMs ?? DEFAULT_WSL_TIMEOUT_MS)
 
-  // Why both lanes when there is a script: a script never runs under the login
-  // shell (see below), so on the interactive lane it would otherwise get no
-  // login PATH at all -- strictly less than the probe lane, for a caller that
-  // explicitly asked for the user's terminal PATH.
   const wantsEnvironment = spec.loginPath === 'preferred'
-  // Leave the command at least a third of the budget: a probe that eats it all
-  // turns a healthy command into a spurious timeout.
   // Cap the probe at half the budget and at 4s: a 5s caller was giving the
   // probe 3333ms and its own command 1667ms, tighter than the 5s it had before
   // the runner existed, which is how a cold distro read as "not installed".
