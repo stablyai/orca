@@ -50,7 +50,6 @@ function PetStatusSegmentInner(): React.JSX.Element {
   const label = petVisible ? activeLabel : `${activeLabel} hidden`
 
   const handleImport = async (): Promise<void> => {
-    console.log('[pet-overlay] upload: click')
     if (!window.api?.pet?.import) {
       console.warn('[pet-overlay] upload: window.api.pet.import missing — restart Orca')
       toast.error(
@@ -63,7 +62,6 @@ function PetStatusSegmentInner(): React.JSX.Element {
     }
     try {
       const model = await window.api.pet.import()
-      console.log('[pet-overlay] upload: result', model)
       if (!model) {
         return
       }
