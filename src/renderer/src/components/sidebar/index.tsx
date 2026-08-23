@@ -16,6 +16,7 @@ import { useWorkspaceBoardPanel } from './useWorkspaceBoardPanel'
 import { resolveLeftSidebarStyleVariables } from '@/lib/left-sidebar-appearance'
 import { useSystemPrefersDark } from '@/components/terminal-pane/use-system-prefers-dark'
 import { lazyWithRetry } from '@/lib/lazy-with-retry'
+import { StandaloneTerminalSidebarSection } from './StandaloneTerminalSidebarSection'
 
 const WorktreeMetaDialog = lazyWithRetry(() => import('./WorktreeMetaDialog'))
 const RemoveFolderDialog = lazyWithRetry(() => import('./RemoveFolderDialog'))
@@ -34,11 +35,15 @@ export const WORKTREE_SIDEBAR_RESIZE_HANDLE_LINE_CLASS_NAME =
   'h-full w-px bg-transparent transition-colors group-hover:bg-ring/50 group-active:bg-ring'
 
 type SidebarProps = {
+  onActivateStandaloneTerminal: (tabId: string) => void
+  onCreateStandaloneTerminal: () => void
   worktreeScrollOffsetRef: React.MutableRefObject<number>
   worktreeScrollAnchorRef: React.MutableRefObject<VirtualizedScrollAnchor>
 }
 
 function Sidebar({
+  onActivateStandaloneTerminal,
+  onCreateStandaloneTerminal,
   worktreeScrollOffsetRef,
   worktreeScrollAnchorRef
 }: SidebarProps): React.JSX.Element {
@@ -52,6 +57,7 @@ function Sidebar({
   const activeModal = useAppStore((s) => s.activeModal)
   const statusBarVisible = useAppStore((s) => s.statusBarVisible)
   const systemPrefersDark = useSystemPrefersDark()
+  const [collapseAllProjectsRequest, setCollapseAllProjectsRequest] = React.useState(0)
   const leftSidebarStyle = useMemo(
     () => resolveLeftSidebarStyleVariables(settings, systemPrefersDark),
     [settings, systemPrefersDark]
@@ -115,15 +121,24 @@ function Sidebar({
           <>
             {/* Fixed controls */}
             <SidebarNav />
-            <SidebarHeader onWorkspaceBoardMenuOpenChange={setWorkspaceBoardMenuOpen} />
+            <SidebarHeader
+              onCollapseAllProjects={() => setCollapseAllProjectsRequest((request) => request + 1)}
+              onWorkspaceBoardMenuOpenChange={setWorkspaceBoardMenuOpen}
+            />
 
             <WorktreeList
+              collapseAllProjectsRequest={collapseAllProjectsRequest}
               scrollOffsetRef={worktreeScrollOffsetRef}
               scrollAnchorRef={worktreeScrollAnchorRef}
               workspaceBoardOpen={workspaceBoardOpen}
               onWorkspaceBoardDragPreviewStart={previewWorkspaceBoardFromDrag}
               onWorkspaceBoardDragPreviewCommit={solidifyWorkspaceBoardFromDrag}
               onWorkspaceBoardDragPreviewCancel={cancelWorkspaceBoardDragPreview}
+            />
+
+            <StandaloneTerminalSidebarSection
+              onActivateTerminal={onActivateStandaloneTerminal}
+              onCreateTerminal={onCreateStandaloneTerminal}
             />
 
             <div className="relative shrink-0">

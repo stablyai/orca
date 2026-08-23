@@ -138,7 +138,8 @@
       "064bd07810": "返回",
       "ce37cf5279": "切换侧边栏 ({{value0}})",
       "e4b9e7dff7": "切换侧边栏",
-      "pluginCommandFailed": "无法运行插件命令。"
+      "pluginCommandFailed": "无法运行插件命令。",
+      "standaloneTerminalHomeResolutionFailed": "无法确定主目录，因此无法打开终端。"
     },
     "web": {
       "WebConnect": {
@@ -4286,7 +4287,9 @@
           "5c9c7c16aa": "添加项目以创建工作区",
           "ca6f729da2": "新工作区 ({{value0}})",
           "a30e34eb5c": "关闭工作区板",
-          "25a95899c9": "添加项目"
+          "25a95899c9": "添加项目",
+          "collapseAllProjects": "折叠所有项目",
+          "collapseAllWorkspaces": "折叠所有工作区"
         },
         "SidebarNav": {
           "80611a8b10": "搜索",
@@ -5166,6 +5169,14 @@
           "3b7ea51793": "清除搜索",
           "7f1c2e94a5": "搜索文本过长 — 看板未被筛选",
           "9a4d0f6b21": "过长"
+        },
+        "StandaloneTerminalSidebarSection": {
+          "terminalNumber": "终端 {{number}}",
+          "newTerminal": "新建终端",
+          "terminals": "终端",
+          "terminalList": "终端列表",
+          "renameTerminal": "重命名终端",
+          "renameNamedTerminal": "重命名 {{name}}"
         }
       },
       "shared": {

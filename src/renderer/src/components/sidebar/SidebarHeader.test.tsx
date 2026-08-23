@@ -12,6 +12,7 @@ const mocks = vi.hoisted(() => ({
 }))
 
 type MockState = {
+  folderWorkspaces: { id: string }[]
   repos: { id: string }[]
   groupBy: string
   openModal: (modal: string, data?: unknown) => void
@@ -48,9 +49,28 @@ function newWorkspaceButton(): HTMLButtonElement {
   return button
 }
 
+function collapseAllProjectsButton(): HTMLButtonElement {
+  const button = container.querySelector<HTMLButtonElement>('[aria-label="Collapse all projects"]')
+  if (!button) {
+    throw new Error('Collapse all projects button not rendered')
+  }
+  return button
+}
+
+function renderHeader(onCollapseAllProjects = vi.fn()): void {
+  act(() => {
+    root.render(
+      <SidebarHeader
+        onCollapseAllProjects={onCollapseAllProjects}
+        onWorkspaceBoardMenuOpenChange={vi.fn()}
+      />
+    )
+  })
+}
+
 beforeEach(() => {
   mocks.openWorkspaceCreationComposerWithTourHandoff.mockClear()
-  mockState = { repos: [], groupBy: 'repo', openModal: vi.fn() }
+  mockState = { folderWorkspaces: [], repos: [], groupBy: 'repo', openModal: vi.fn() }
   container = document.createElement('div')
   document.body.append(container)
   root = createRoot(container)
@@ -63,9 +83,7 @@ afterEach(() => {
 
 describe('SidebarHeader', () => {
   it('keeps New workspace clickable with zero projects, since the composer adds the first one', () => {
-    act(() => {
-      root.render(<SidebarHeader onWorkspaceBoardMenuOpenChange={vi.fn()} />)
-    })
+    renderHeader()
 
     const button = newWorkspaceButton()
     expect(button.disabled).toBe(false)
@@ -79,9 +97,7 @@ describe('SidebarHeader', () => {
 
   it('opens the composer the same way once projects exist', () => {
     mockState.repos = [{ id: 'repo-a' }]
-    act(() => {
-      root.render(<SidebarHeader onWorkspaceBoardMenuOpenChange={vi.fn()} />)
-    })
+    renderHeader()
 
     act(() => {
       newWorkspaceButton().click()
@@ -89,5 +105,17 @@ describe('SidebarHeader', () => {
 
     expect(newWorkspaceButton().disabled).toBe(false)
     expect(mocks.openWorkspaceCreationComposerWithTourHandoff).toHaveBeenCalledTimes(1)
+  })
+
+  it('collapses all projects from the control beside the section title', () => {
+    mockState.repos = [{ id: 'repo-a' }]
+    const onCollapseAllProjects = vi.fn()
+    renderHeader(onCollapseAllProjects)
+
+    act(() => {
+      collapseAllProjectsButton().click()
+    })
+
+    expect(onCollapseAllProjects).toHaveBeenCalledOnce()
   })
 })

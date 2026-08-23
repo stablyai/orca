@@ -4,12 +4,18 @@ import {
   requestFloatingTerminalOpenMaximized
 } from '@/lib/floating-terminal'
 import { createFloatingWorkspaceTourInteractionSnapshot } from '@/lib/floating-workspace-tour-interaction-snapshot'
+import { focusTerminalTabSurface } from '@/lib/focus-terminal-tab-surface'
+import {
+  activateStandaloneTerminalState,
+  createStandaloneTerminalAtHome
+} from '@/lib/standalone-terminal-workspace-actions'
 import {
   persistFloatingTerminalPanelOpen,
   readPersistedFloatingTerminalPanelViewState
 } from '../components/floating-terminal/floating-terminal-panel-view-state'
 import { useAppStore } from '../store'
 import { selectFloatingVisibleTabCount } from '../store/selectors'
+import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../shared/constants'
 
 export type FloatingWorkspacePanelState = ReturnType<typeof useFloatingWorkspacePanel>
 
@@ -39,6 +45,7 @@ export function useFloatingWorkspacePanel() {
   )
   const statusBarVisible = useAppStore((s) => s.statusBarVisible)
   const visibleTabCount = useAppStore(selectFloatingVisibleTabCount)
+  const activeWorktreeId = useAppStore((s) => s.activeWorktreeId)
 
   // Why: floating workspace is a transient overlay; hotkey minimize returns focus to the surface the user came from.
   const returnFocusRef = useRef<HTMLElement | null>(null)
@@ -111,6 +118,19 @@ export function useFloatingWorkspacePanel() {
     setOpenWithFocus(true)
   }, [setOpenWithFocus])
 
+  const activateStandaloneTerminal = useCallback(
+    (tabId: string): void => {
+      setOpenWithFocus(false)
+      activateStandaloneTerminalState(tabId)
+      window.requestAnimationFrame(() => focusTerminalTabSurface(tabId))
+    },
+    [setOpenWithFocus]
+  )
+
+  const createStandaloneTerminal = useCallback(async (): Promise<void> => {
+    await createStandaloneTerminalAtHome(activateStandaloneTerminal)
+  }, [activateStandaloneTerminal])
+
   useEffect(() => {
     const toggleFloatingTerminal = (): void => {
       if (enabled) {
@@ -131,13 +151,17 @@ export function useFloatingWorkspacePanel() {
   }, [settingsHydrated, enabled, setOpenWithFocus])
 
   return {
+    activateStandaloneTerminal,
     cancelReturnFocusFrame,
+    createStandaloneTerminal,
     enabled,
     open,
     openMaximized,
     setOpenWithFocus,
     // Why: once the floating workspace owns tabs, keep it mounted while closed so hidden terminal/browser/editor panes retain local state.
-    shouldMountPanel: enabled && (open || visibleTabCount > 0),
+    shouldMountPanel:
+      enabled &&
+      (open || (activeWorktreeId !== FLOATING_TERMINAL_WORKTREE_ID && visibleTabCount > 0)),
     showToggleButton: enabled && (triggerLocation === 'floating-button' || !statusBarVisible),
     tourInteractionSnapshotRef,
     visibleTabCount

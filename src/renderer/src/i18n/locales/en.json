@@ -205,7 +205,8 @@
       "064bd07810": "Go back",
       "ce37cf5279": "Toggle sidebar ({{value0}})",
       "e4b9e7dff7": "Toggle sidebar",
-      "pluginCommandFailed": "Could not run the plugin command."
+      "pluginCommandFailed": "Could not run the plugin command.",
+      "standaloneTerminalHomeResolutionFailed": "Could not open the terminal because the home directory could not be resolved."
     },
     "web": {
       "WebConnect": {
@@ -4989,7 +4990,9 @@
           "49f62c5665": "Workspace board",
           "5c9c7c16aa": "Add a project to create workspaces",
           "ca6f729da2": "New workspace ({{value0}})",
-          "a30e34eb5c": "Close workspace board"
+          "a30e34eb5c": "Close workspace board",
+          "collapseAllProjects": "Collapse all projects",
+          "collapseAllWorkspaces": "Collapse all workspaces"
         },
         "SidebarNav": {
           "80611a8b10": "Search",
@@ -5885,6 +5888,14 @@
           "connectName": "Connect to SSH host {{value0}}",
           "authFailedTooltip": "{{value0}} · authentication failed",
           "failedTooltip": "{{value0}} · connection failed"
+        },
+        "StandaloneTerminalSidebarSection": {
+          "terminalNumber": "Terminal {{number}}",
+          "newTerminal": "New terminal",
+          "terminals": "Terminals",
+          "terminalList": "Terminal list",
+          "renameTerminal": "Rename terminal",
+          "renameNamedTerminal": "Rename {{name}}"
         },
         "preserved": {
           "branch": {

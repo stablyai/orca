@@ -138,7 +138,8 @@
       "064bd07810": "Volver",
       "ce37cf5279": "Alternar barra lateral ({{value0}})",
       "e4b9e7dff7": "Alternar barra lateral",
-      "pluginCommandFailed": "No se pudo ejecutar el comando del plugin."
+      "pluginCommandFailed": "No se pudo ejecutar el comando del plugin.",
+      "standaloneTerminalHomeResolutionFailed": "No se pudo abrir la terminal porque no se pudo determinar el directorio de inicio."
     },
     "web": {
       "WebConnect": {
@@ -4293,7 +4294,9 @@
           "5c9c7c16aa": "Agregar un proyecto para crear espacios de trabajo",
           "ca6f729da2": "Nuevo espacio de trabajo ({{value0}})",
           "a30e34eb5c": "Cerrar tablero del espacio de trabajo",
-          "25a95899c9": "Agregar proyecto"
+          "25a95899c9": "Agregar proyecto",
+          "collapseAllProjects": "Contraer todos los proyectos",
+          "collapseAllWorkspaces": "Contraer todos los espacios de trabajo"
         },
         "SidebarNav": {
           "80611a8b10": "Buscar",
@@ -5154,6 +5157,14 @@
           "3b7ea51793": "Borrar búsqueda",
           "7f1c2e94a5": "El texto de búsqueda es demasiado largo: el tablero no está filtrado",
           "9a4d0f6b21": "Demasiado largo"
+        },
+        "StandaloneTerminalSidebarSection": {
+          "terminalNumber": "Terminal {{number}}",
+          "newTerminal": "Nueva terminal",
+          "terminals": "Terminales",
+          "terminalList": "Lista de terminales",
+          "renameTerminal": "Cambiar nombre de la terminal",
+          "renameNamedTerminal": "Cambiar nombre de {{name}}"
         }
       },
       "shared": {

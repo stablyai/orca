@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo } from 'react'
+import React, { useCallback, useEffect, useMemo, useRef } from 'react'
 import { useAppStore } from '@/store'
 import { useShallow } from 'zustand/react/shallow'
 import {
@@ -35,9 +35,11 @@ import { useSidebarWorktreeSelection } from './worktree-list/navigation/use-sele
 import { useSidebarWorktreeSortOrder } from './worktree-list/listing/use-sort-order'
 import { useVisibleSidebarWorktrees } from './worktree-list/listing/use-visible-worktrees'
 import { useWorktreeStatusMutations } from './worktree-list/drag/use-status-mutations'
+import { getCollapsibleSidebarGroupKeys } from './sidebar-group-collapse'
 import { shouldFiltersHideAllRows } from './sidebar-empty-state-gate'
 
 type WorktreeListProps = {
+  collapseAllProjectsRequest?: number
   scrollOffsetRef: React.MutableRefObject<number>
   scrollAnchorRef: React.MutableRefObject<VirtualizedScrollAnchor>
   workspaceBoardOpen?: boolean
@@ -47,6 +49,7 @@ type WorktreeListProps = {
 }
 
 const WorktreeList = React.memo(function WorktreeList({
+  collapseAllProjectsRequest = 0,
   scrollOffsetRef,
   scrollAnchorRef,
   workspaceBoardOpen = false,
@@ -84,6 +87,8 @@ const WorktreeList = React.memo(function WorktreeList({
   const clearPendingRevealSidebarRow = useAppStore((s) => s.clearPendingRevealSidebarRow)
   const collapsedGroups = useAppStore((s) => s.collapsedGroups)
   const toggleGroup = useAppStore((s) => s.toggleCollapsedGroup)
+  const collapseGroups = useAppStore((s) => s.collapseGroups)
+  const handledCollapseAllProjectsRequestRef = useRef(0)
   const projectGroups = useAppStore((s) => s.projectGroups ?? EMPTY_PROJECT_GROUPS)
   const folderWorkspaces = useAppStore((s) => s.folderWorkspaces)
   const settings = useAppStore((s) => s.settings)
@@ -169,6 +174,13 @@ const WorktreeList = React.memo(function WorktreeList({
     visibleWorkspaceHostIds: filterState.visibleWorkspaceHostIds,
     workspaceHostScope: filterState.workspaceHostScope
   })
+  useEffect(() => {
+    if (collapseAllProjectsRequest <= handledCollapseAllProjectsRequestRef.current) {
+      return
+    }
+    handledCollapseAllProjectsRequestRef.current = collapseAllProjectsRequest
+    collapseGroups(getCollapsibleSidebarGroupKeys(rowModel.sectionRows))
+  }, [collapseAllProjectsRequest, collapseGroups, rowModel.sectionRows])
   const selection = useSidebarWorktreeSelection({
     sectionRows: rowModel.sectionRows,
     pinnedDisplayPolicy

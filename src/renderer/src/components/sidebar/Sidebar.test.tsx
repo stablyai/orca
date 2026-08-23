@@ -51,6 +51,10 @@ vi.mock('./WorktreeList', () => ({
   default: () => <div data-testid="worktree-list" />
 }))
 
+vi.mock('./StandaloneTerminalSidebarSection', () => ({
+  StandaloneTerminalSidebarSection: () => <div data-testid="standalone-terminal-section" />
+}))
+
 vi.mock('./SidebarToolbar', () => ({
   default: () => <div data-testid="sidebar-toolbar" />
 }))
@@ -112,13 +116,23 @@ function setSidebarState(settings: GlobalSettings, statusBarVisible = true): voi
 
 function renderSidebar(): string {
   return renderToStaticMarkup(
-    <Sidebar worktreeScrollOffsetRef={{ current: 0 }} worktreeScrollAnchorRef={{ current: null }} />
+    <Sidebar
+      onActivateStandaloneTerminal={vi.fn()}
+      onCreateStandaloneTerminal={vi.fn()}
+      worktreeScrollOffsetRef={{ current: 0 }}
+      worktreeScrollAnchorRef={{ current: null }}
+    />
   )
 }
 
 function sidebarElement(): ReactNode {
   return (
-    <Sidebar worktreeScrollOffsetRef={{ current: 0 }} worktreeScrollAnchorRef={{ current: null }} />
+    <Sidebar
+      onActivateStandaloneTerminal={vi.fn()}
+      onCreateStandaloneTerminal={vi.fn()}
+      worktreeScrollOffsetRef={{ current: 0 }}
+      worktreeScrollAnchorRef={{ current: null }}
+    />
   )
 }
 

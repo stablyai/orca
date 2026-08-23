@@ -32,9 +32,11 @@ type WorktreeSidebarScrollRefs = {
 }
 
 function WorktreeSidebar({
+  floatingWorkspace,
   layout,
   scrollRefs
 }: {
+  floatingWorkspace: FloatingWorkspacePanelState
   layout: AppChromeLayout
   scrollRefs: WorktreeSidebarScrollRefs
 }): React.JSX.Element {
@@ -57,6 +59,8 @@ function WorktreeSidebar({
       }
     >
       <Sidebar
+        onActivateStandaloneTerminal={floatingWorkspace.activateStandaloneTerminal}
+        onCreateStandaloneTerminal={floatingWorkspace.createStandaloneTerminal}
         worktreeScrollOffsetRef={scrollRefs.scrollOffsetRef}
         worktreeScrollAnchorRef={scrollRefs.scrollAnchorRef}
       />
@@ -147,11 +151,19 @@ export function AppWorkspaceShell(props: {
                   </div>
                   {/* Why: flex-1/min-h-0 slot needed under the fixed 36px header, else the sidebar collapses to content height and loses its scroll viewport. */}
                   <div className="flex min-h-0 flex-1">
-                    <WorktreeSidebar layout={layout} scrollRefs={sidebarScrollRefs} />
+                    <WorktreeSidebar
+                      floatingWorkspace={floatingWorkspace}
+                      layout={layout}
+                      scrollRefs={sidebarScrollRefs}
+                    />
                   </div>
                 </div>
               ) : (
-                <WorktreeSidebar layout={layout} scrollRefs={sidebarScrollRefs} />
+                <WorktreeSidebar
+                  floatingWorkspace={floatingWorkspace}
+                  layout={layout}
+                  scrollRefs={sidebarScrollRefs}
+                />
               )
             ) : null}
             <div className="flex flex-col flex-1 min-w-0 min-h-0 overflow-hidden">
@@ -194,7 +206,7 @@ export function AppWorkspaceShell(props: {
                             'Terminal, browser, or editor rendering failed in this workspace. Retry to remount it.'
                           )}
                         >
-                          <Terminal />
+                          <Terminal excludeFloatingWorkspace={floatingWorkspace.shouldMountPanel} />
                         </RecoverableRenderErrorBoundary>
                       </Suspense>
                     </TerminalWorkbenchContainer>

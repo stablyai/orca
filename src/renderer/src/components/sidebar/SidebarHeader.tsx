@@ -1,5 +1,5 @@
 import React from 'react'
-import { FolderPlus, Plus } from 'lucide-react'
+import { FolderPlus, ListCollapse, Plus } from 'lucide-react'
 import { useAppStore } from '@/store'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
@@ -9,16 +9,31 @@ import { openWorkspaceCreationComposerWithTourHandoff } from '../contextual-tour
 import { translate } from '@/i18n/i18n'
 
 type SidebarHeaderProps = {
+  onCollapseAllProjects: () => void
   onWorkspaceBoardMenuOpenChange: (open: boolean) => void
 }
 
 const SidebarHeader = React.memo(function SidebarHeader({
+  onCollapseAllProjects,
   onWorkspaceBoardMenuOpenChange
 }: SidebarHeaderProps) {
   const openModal = useAppStore((s) => s.openModal)
   const newWorktreeShortcutLabel = useShortcutLabel('workspace.create')
   const groupBy = useAppStore((s) => s.groupBy)
+  const canCollapseProjects = useAppStore(
+    (s) => s.repos.length > 0 || s.folderWorkspaces.length > 0
+  )
   const sidebarTitle = groupBy === 'repo' ? 'Projects' : 'Workspaces'
+  const collapseAllLabel =
+    groupBy === 'repo'
+      ? translate(
+          'auto.components.sidebar.SidebarHeader.collapseAllProjects',
+          'Collapse all projects'
+        )
+      : translate(
+          'auto.components.sidebar.SidebarHeader.collapseAllWorkspaces',
+          'Collapse all workspaces'
+        )
 
   return (
     <div className="mt-2 flex h-8 items-center justify-between px-2 gap-2">
@@ -29,6 +44,23 @@ const SidebarHeader = React.memo(function SidebarHeader({
         >
           {sidebarTitle}
         </span>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              variant="ghost"
+              size="icon-xs"
+              className="text-muted-foreground"
+              aria-label={collapseAllLabel}
+              disabled={!canCollapseProjects}
+              onClick={onCollapseAllProjects}
+            >
+              <ListCollapse className="size-3.5" />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent side="bottom" sideOffset={6}>
+            {collapseAllLabel}
+          </TooltipContent>
+        </Tooltip>
       </div>
       <div className="flex items-center gap-1.5 shrink-0">
         <SidebarWorkspaceOptionsMenu
