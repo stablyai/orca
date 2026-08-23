@@ -108,6 +108,21 @@ function bindsWslBinaryToASpawnedIdentifier(source: string): boolean {
   )) {
     bound.add(match[1]!)
   }
+  // `this.binary = 'wsl.exe'` -- an assignment with no declarator keyword.
+  for (const match of source.matchAll(
+    /\bthis\.([A-Za-z_$][\w$]*)\s*=[^;\n]*['"`]wsl\.exe['"`]/g
+  )) {
+    bound.add(match[1]!)
+  }
+  // A helper that hands back the binary is a spawn site one hop away, and the
+  // hop is untrackable by regex -- but only when this file also spawns
+  // something. Returning the name as terminal metadata is not a spawn.
+  if (
+    /\breturn\s+['"`]wsl\.exe['"`]/.test(source) &&
+    /\b\w*(?:spawn|exec)\w*\s*\(/i.test(source)
+  ) {
+    return true
+  }
   for (const name of bound) {
     const identifier = name.replace(/[$]/g, '\\$&')
     // The identifier reaching a call opener, a spawn-style field, or the first
