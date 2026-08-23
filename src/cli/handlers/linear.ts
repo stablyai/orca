@@ -65,6 +65,7 @@ import {
   printLinearSearchWarnings
 } from '../linear-format'
 import { runLinearListIssues } from './linear-list-issues'
+import { LINEAR_CYCLE_COMMANDS } from './linear-cycle'
 import { linearRelationWriteHandler } from './linear-relation-write'
 import { runLinearSaveIssue } from './linear-save-issue'
 
@@ -72,6 +73,7 @@ const ISSUE_CONTEXT_TIMEOUT_MS = 120_000
 const LINEAR_WRITE_TIMEOUT_MS = 75_000
 
 export const LINEAR_HANDLERS: Record<string, CommandHandler> = {
+  ...LINEAR_CYCLE_COMMANDS,
   'linear save-issue': runLinearSaveIssue,
   'linear list-issues': runLinearListIssues,
   'linear relation add': linearRelationWriteHandler('add'),

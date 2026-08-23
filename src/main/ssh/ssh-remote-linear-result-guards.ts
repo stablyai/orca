@@ -12,6 +12,7 @@ import type {
   LinearSearchResult,
   LinearStatusSetResult,
   LinearTeamLabelsResult,
+  LinearTeamCyclesResult,
   LinearTeamListResult,
   LinearTeamMembersResult,
   LinearTeamStatesResult
@@ -93,6 +94,21 @@ export function isLinearTeamStatesResult(result: unknown): result is LinearTeamS
 
 export function isLinearTeamLabelsResult(result: unknown): result is LinearTeamLabelsResult {
   return isRecord(result) && isRecord(result.team) && Array.isArray(result.labels)
+}
+
+export function isLinearTeamCyclesResult(result: unknown): result is LinearTeamCyclesResult {
+  return (
+    isRecord(result) &&
+    isRecord(result.team) &&
+    Array.isArray(result.cycles) &&
+    result.cycles.every(
+      (cycle) =>
+        isRecord(cycle) &&
+        typeof cycle.id === 'string' &&
+        typeof cycle.number === 'number' &&
+        typeof cycle.isActive === 'boolean'
+    )
+  )
 }
 
 export function isLinearStatusSetResult(result: unknown): result is LinearStatusSetResult {

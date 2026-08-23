@@ -7,6 +7,7 @@ import {
 import type { RpcDispatcher } from '../runtime/rpc/dispatcher'
 import type { RpcResponse } from '../runtime/rpc/core'
 import { RemoteCliArgumentError, type ParsedRemoteCli } from './ssh-remote-cli-argument-error'
+import { dispatchRemoteLinearTeamCycles } from './ssh-remote-linear-cycle-read'
 import { dispatchRemoteLinearListIssues } from './ssh-remote-linear-list-issues'
 
 import {
@@ -82,6 +83,9 @@ export async function tryDispatchRemoteLinearReadCli(
       ['linear', 'team', 'labels'],
       'linear.agentTeamLabels'
     )
+  }
+  if (isRemoteCommand(parsed, 'linear', 'team', 'cycles')) {
+    return await dispatchRemoteLinearTeamCycles(dispatcher, parsed)
   }
   if (isRemoteCommand(parsed, 'linear', 'project', 'list')) {
     validateLinearRemoteArgs(parsed, {

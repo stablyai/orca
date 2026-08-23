@@ -188,6 +188,22 @@ export async function tryDispatchRemoteLinearWriteCli(
       dueDate: null
     })
   }
+  if (isRemoteCommand(parsed, 'linear', 'cycle', 'set')) {
+    validateLinearRemoteArgs(parsed, LINEAR_TASK_SET_FLAGS, ['linear', 'cycle', 'set'], 1, 'id')
+    return await call(dispatcher, 'linear.issueUpdateTask', {
+      ...buildRemoteTargetRequest(parsed, env, 3),
+      operation: 'cycle',
+      cycleInput: requiredString(parsed.flags, 'to')
+    })
+  }
+  if (isRemoteCommand(parsed, 'linear', 'cycle', 'clear')) {
+    validateLinearRemoteArgs(parsed, LINEAR_TASK_CLEAR_FLAGS, ['linear', 'cycle', 'clear'], 1, 'id')
+    return await call(dispatcher, 'linear.issueUpdateTask', {
+      ...buildRemoteTargetRequest(parsed, env, 3),
+      operation: 'cycle',
+      cycleInput: null
+    })
+  }
   for (const mode of ['add', 'remove', 'set'] as const) {
     if (isRemoteCommand(parsed, 'linear', 'label', mode)) {
       validateLinearRemoteArgs(parsed, LINEAR_LABEL_FLAGS, ['linear', 'label', mode], 1, 'id')

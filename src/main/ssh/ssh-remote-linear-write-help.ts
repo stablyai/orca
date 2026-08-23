@@ -51,6 +51,12 @@ export function getRemoteLinearWriteHelp(parsed: ParsedRemoteCli): string | null
   if (matchesRemoteCommand(path, 'linear', 'due-date', 'clear')) {
     return LINEAR_DUE_DATE_CLEAR_HELP
   }
+  if (matchesRemoteCommand(path, 'linear', 'cycle', 'set')) {
+    return LINEAR_CYCLE_SET_HELP
+  }
+  if (matchesRemoteCommand(path, 'linear', 'cycle', 'clear')) {
+    return LINEAR_CYCLE_CLEAR_HELP
+  }
   if (matchesRemoteCommand(path, 'linear', 'label', 'add')) {
     return LINEAR_LABEL_ADD_HELP
   }
@@ -85,6 +91,8 @@ const LINEAR_ESTIMATE_SET_HELP = `orca linear estimate set\n\nUsage: orca linear
 const LINEAR_ESTIMATE_CLEAR_HELP = `orca linear estimate clear\n\nUsage: orca linear estimate clear [<id>] [--current] [--workspace <id>] [--json]\n\nClear a Linear issue estimate`
 const LINEAR_DUE_DATE_SET_HELP = `orca linear due-date set\n\nUsage: orca linear due-date set [<id>] [--current] --to <yyyy-mm-dd> [--workspace <id>] [--json]\n\nSet a Linear issue due date`
 const LINEAR_DUE_DATE_CLEAR_HELP = `orca linear due-date clear\n\nUsage: orca linear due-date clear [<id>] [--current] [--workspace <id>] [--json]\n\nClear a Linear issue due date`
+const LINEAR_CYCLE_SET_HELP = `orca linear cycle set\n\nUsage: orca linear cycle set [<id>] [--current] --to current|<cycleId-or-exact-name> [--workspace <id>] [--json]\n\nSet a Linear issue cycle`
+const LINEAR_CYCLE_CLEAR_HELP = `orca linear cycle clear\n\nUsage: orca linear cycle clear [<id>] [--current] [--workspace <id>] [--json]\n\nClear a Linear issue cycle`
 const LINEAR_LABEL_ADD_HELP = `orca linear label add\n\nUsage: orca linear label add [<id>] [--current] --label <labelId-or-exact-name>... [--workspace <id>] [--json]\n\nAdd labels to a Linear issue`
 const LINEAR_LABEL_REMOVE_HELP = `orca linear label remove\n\nUsage: orca linear label remove [<id>] [--current] --label <labelId-or-exact-name>... [--workspace <id>] [--json]\n\nRemove labels from a Linear issue`
 const LINEAR_LABEL_SET_HELP = `orca linear label set\n\nUsage: orca linear label set [<id>] [--current] --label <labelId-or-exact-name>... [--workspace <id>] [--json]\n\nReplace labels on a Linear issue`

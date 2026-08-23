@@ -9,6 +9,7 @@ import type {
   LinearSearchResult,
   LinearTeamListResult,
   LinearTeamLabelsResult,
+  LinearTeamCyclesResult,
   LinearTeamMembersResult,
   LinearTeamStatesResult,
   LinearStatusSetResult,
@@ -37,6 +38,7 @@ import {
   isLinearTaskUpdateResult,
   isLinearRelationWriteResult,
   isLinearTeamLabelsResult,
+  isLinearTeamCyclesResult,
   isLinearTeamListResult,
   isLinearTeamMembersResult,
   isLinearTeamStatesResult
@@ -94,6 +96,9 @@ export function formatRemoteLinearCli(result: unknown): { stdout: string; stderr
   if (isLinearTeamLabelsResult(result)) {
     return { stdout: `${formatLinearTeamLabels(result)}\n`, stderr: '' }
   }
+  if (isLinearTeamCyclesResult(result)) {
+    return { stdout: `${formatLinearTeamCycles(result)}\n`, stderr: '' }
+  }
   if (isLinearStatusSetResult(result)) {
     return { stdout: `${formatLinearStatusSet(result)}\n`, stderr: '' }
   }
@@ -125,7 +130,8 @@ function formatLinearIssue(result: LinearIssueContextResult): string {
     `URL: ${issue.url}`,
     `State: ${issue.state?.name ?? 'unknown'}`,
     `Assignee: ${issue.assignee?.displayName ?? 'unassigned'}`,
-    `Project: ${issue.project?.name ?? 'none'}`
+    `Project: ${issue.project?.name ?? 'none'}`,
+    `Cycle: ${issue.cycle?.name ?? 'none'}`
   ]
   lines.push(`Priority: ${formatPriority(issue.priority)}`)
   lines.push(`Estimate: ${issue.estimate ?? 'none'}`)
@@ -210,6 +216,18 @@ function formatLinearTeamLabels(result: LinearTeamLabelsResult): string {
     return `No Linear labels found for ${result.team.key}.`
   }
   return result.labels.map((label) => `${label.name.padEnd(24)} ${label.id}`).join('\n')
+}
+
+function formatLinearTeamCycles(result: LinearTeamCyclesResult): string {
+  if (result.cycles.length === 0) {
+    return `No Linear cycles found for ${result.team.key}.`
+  }
+  return result.cycles
+    .map((cycle) => {
+      const active = cycle.isActive ? 'current' : cycle.isFuture ? 'future' : 'past'
+      return `${String(cycle.number).padEnd(6)} ${(cycle.name ?? '').padEnd(24)} ${active.padEnd(8)} ${cycle.id}`
+    })
+    .join('\n')
 }
 
 function formatLinearStatusSet(result: LinearStatusSetResult): string {

@@ -417,6 +417,7 @@ import type {
   LinearIssueRelationWriteResult,
   LinearSaveIssueRequest,
   LinearSaveIssueResult,
+  LinearTeamCyclesResult,
   LinearTeamLabelsResult,
   LinearTeamListResult,
   LinearTeamMembersResult,
@@ -874,11 +875,16 @@ import {
 import {
   connect as connectLinear,
   disconnect as disconnectLinear,
+  getClients as getLinearClients,
   getStatus as getLinearStatus,
   isAuthError as isLinearAuthError,
   selectWorkspace as selectLinearWorkspace,
   testConnection as testLinearConnection
 } from '../linear/client'
+import {
+  listTeamCyclesForAgent as listLinearTeamCyclesForAgent,
+  matchTeamCycles as matchLinearTeamCycles
+} from '../linear/cycles'
 import {
   addIssueComment as addLinearIssueComment,
   addIssueCommentForAgent as addLinearIssueCommentForAgent,
@@ -35816,6 +35822,32 @@ export class OrcaRuntimeService {
     }
   }
 
+  async linearTeamCyclesForAgents(params: {
+    teamInput: string
+    workspaceId?: string
+    currentOnly?: boolean
+  }): Promise<LinearTeamCyclesResult> {
+    const team = await this.resolveLinearTeamInput(params.teamInput, params.workspaceId)
+    try {
+      const entry = getLinearClients(team.workspaceId)[0]
+      if (!entry) {
+        throw linearError('linear_not_connected', 'Linear is not connected.')
+      }
+      const cycles = await listLinearTeamCyclesForAgent(entry, team.id, params.currentOnly === true)
+      return {
+        team: this.linearTeamSummary(team),
+        cycles,
+        meta: {
+          workspaceId: team.workspaceId,
+          returned: cycles.length,
+          currentOnly: params.currentOnly === true
+        }
+      }
+    } catch (error) {
+      throw this.mapLinearReadFailure(error)
+    }
+  }
+
   async linearProjectListForAgents(params: {
     query?: string
     limit?: number
@@ -36651,6 +36683,7 @@ export class OrcaRuntimeService {
       estimate?: number | null
       dueDate?: string | null
       labelIds?: string[]
+      cycleId?: string | null
     }
     labels?: { id: string; name: string }[]
   } | null> {
@@ -36700,6 +36733,43 @@ export class OrcaRuntimeService {
         fields: { labelIds: nextIds },
         labels: labelsForIds(nextIds, [...(current.labels ?? []), ...labels])
       }
+    }
+    if (params.operation === 'cycle') {
+      if (params.cycleInput === undefined) {
+        throw linearError('linear_invalid_cycle', 'Pass a cycle or clear the cycle.')
+      }
+      if (params.cycleInput === null) {
+        return { fields: { cycleId: null } }
+      }
+      const currentOnly = params.cycleInput.toLowerCase() === 'current'
+      const entry = getLinearClients(workspaceId)[0]
+      if (!entry) {
+        throw linearError('linear_not_connected', 'Linear is not connected.')
+      }
+      const cycles = await listLinearTeamCyclesForAgent(entry, current.team.id, currentOnly)
+      const matches = matchLinearTeamCycles(cycles, params.cycleInput)
+      if (matches.length !== 1) {
+        throw linearError(
+          'linear_invalid_cycle',
+          matches.length === 0
+            ? `No Linear cycle exactly matched "${params.cycleInput}".`
+            : `Multiple Linear cycles exactly matched "${params.cycleInput}".`,
+          {
+            cycles: cycles.map(({ id, number, name, startsAt, endsAt, isActive }) => ({
+              id,
+              number,
+              name,
+              startsAt,
+              endsAt,
+              isActive
+            })),
+            nextSteps: [
+              `Run \`orca linear team cycles --team ${current.team.key} --workspace ${workspaceId} --json\` and retry by id.`
+            ]
+          }
+        )
+      }
+      return { fields: { cycleId: matches[0].id } }
     }
     return null
   }
@@ -37163,6 +37233,7 @@ export class OrcaRuntimeService {
         estimate?: number | null
         dueDate?: string | null
         labelIds?: string[]
+        cycleId?: string | null
       }
     }
   ): boolean {
@@ -37181,6 +37252,9 @@ export class OrcaRuntimeService {
     if (operation === 'labels') {
       const recordLabelIds = record.labelIds ?? record.labels?.map((label) => label.id) ?? []
       return sameStringSet(recordLabelIds, update.fields.labelIds ?? [])
+    }
+    if (operation === 'cycle') {
+      return (record.cycle?.id ?? null) === update.fields.cycleId
     }
     return false
   }
@@ -37210,7 +37284,8 @@ export class OrcaRuntimeService {
       priority: record.priority ?? null,
       estimate: record.estimate ?? null,
       dueDate: record.dueDate ?? null,
-      labels: record.labels ?? []
+      labels: record.labels ?? [],
+      cycle: record.cycle ?? null
     }
   }
 

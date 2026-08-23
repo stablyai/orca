@@ -49,6 +49,7 @@ describe('Linear agent access RPC methods', () => {
       linearTeamMembersForAgents: vi.fn().mockResolvedValue({ ok: true }),
       linearTeamStatesForAgents: vi.fn().mockResolvedValue({ ok: true }),
       linearTeamLabelsForAgents: vi.fn().mockResolvedValue({ ok: true }),
+      linearTeamCyclesForAgents: vi.fn().mockResolvedValue({ ok: true }),
       linearIssueListForAgents: vi.fn().mockResolvedValue({ ok: true }),
       linearProjectListForAgents: vi.fn().mockResolvedValue({ ok: true }),
       linearIssueUpdateTask: vi.fn().mockResolvedValue({ ok: true }),
@@ -77,6 +78,13 @@ describe('Linear agent access RPC methods', () => {
     )
     const teamLabelsResponse = await dispatcher.dispatch(
       makeRequest('linear.agentTeamLabels', { teamInput: 'ENG', workspaceId: 'workspace-1' })
+    )
+    const teamCyclesResponse = await dispatcher.dispatch(
+      makeRequest('linear.agentTeamCycles', {
+        teamInput: 'ENG',
+        workspaceId: 'workspace-1',
+        currentOnly: true
+      })
     )
     const issueListResponse = await dispatcher.dispatch(
       makeRequest('linear.agentIssueList', {
@@ -156,6 +164,7 @@ describe('Linear agent access RPC methods', () => {
     expect(teamMembersResponse.ok).toBe(true)
     expect(teamStatesResponse.ok).toBe(true)
     expect(teamLabelsResponse.ok).toBe(true)
+    expect(teamCyclesResponse.ok).toBe(true)
     expect(issueListResponse.ok).toBe(true)
     expect(projectListResponse.ok).toBe(true)
     expect(taskUpdateResponse.ok).toBe(true)
@@ -181,6 +190,11 @@ describe('Linear agent access RPC methods', () => {
     expect(runtime.linearTeamLabelsForAgents).toHaveBeenCalledWith({
       teamInput: 'ENG',
       workspaceId: 'workspace-1'
+    })
+    expect(runtime.linearTeamCyclesForAgents).toHaveBeenCalledWith({
+      teamInput: 'ENG',
+      workspaceId: 'workspace-1',
+      currentOnly: true
     })
     expect(runtime.linearIssueListForAgents).toHaveBeenCalledWith({
       filter: 'open',

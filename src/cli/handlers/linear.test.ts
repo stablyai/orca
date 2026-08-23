@@ -33,6 +33,7 @@ vi.mock('../runtime-client', async () => {
 
 import { main } from '../index'
 import { okFixture, queueFixtures } from '../test-fixtures'
+import { LINEAR_ISSUE_CYCLE_RUNTIME_CAPABILITY } from '../../shared/protocol-version'
 
 describe('orca linear CLI handlers', () => {
   const originalEnv = { ...process.env }
@@ -259,6 +260,30 @@ describe('orca linear CLI handlers', () => {
     })
   })
 
+  it('discovers the current cycle for one Linear team', async () => {
+    queueFixtures(
+      callMock,
+      okFixture('req_status', { capabilities: [LINEAR_ISSUE_CYCLE_RUNTIME_CAPABILITY] }),
+      okFixture('req_cycles', {
+        team: { id: 'team-1', key: 'ENG', name: 'Engineering' },
+        cycles: [],
+        meta: { workspaceId: 'workspace-1', returned: 0, currentOnly: true }
+      })
+    )
+
+    await main(
+      ['linear', 'team', 'cycles', '--team', 'ENG', '--current', '--workspace', 'workspace-1'],
+      '/tmp/repo'
+    )
+
+    expect(callMock).toHaveBeenNthCalledWith(1, 'status.get')
+    expect(callMock).toHaveBeenNthCalledWith(2, 'linear.agentTeamCycles', {
+      teamInput: 'ENG',
+      workspaceId: 'workspace-1',
+      currentOnly: true
+    })
+  })
+
   it('keeps boolean flags between Linear and search from consuming the subcommand', async () => {
     queueFixtures(
       callMock,
@@ -312,6 +337,42 @@ describe('orca linear CLI handlers', () => {
       }),
       { timeoutMs: 75_000 }
     )
+  })
+
+  it('maps current-cycle assignment and explicit cycle clearing', async () => {
+    queueFixtures(
+      callMock,
+      okFixture('req_status_set', { capabilities: [LINEAR_ISSUE_CYCLE_RUNTIME_CAPABILITY] }),
+      okFixture('req_cycle_set', taskUpdateResult('cycle')),
+      okFixture('req_status_clear', { capabilities: [LINEAR_ISSUE_CYCLE_RUNTIME_CAPABILITY] }),
+      okFixture('req_cycle_clear', taskUpdateResult('cycle'))
+    )
+
+    await main(['linear', 'cycle', 'set', 'ENG-123', '--to', 'current', '--json'], '/tmp/repo')
+    await main(['linear', 'cycle', 'clear', 'ENG-123', '--json'], '/tmp/repo')
+
+    expect(callMock).toHaveBeenNthCalledWith(
+      2,
+      'linear.issueUpdateTask',
+      expect.objectContaining({ operation: 'cycle', cycleInput: 'current' }),
+      { timeoutMs: 75_000 }
+    )
+    expect(callMock).toHaveBeenNthCalledWith(
+      4,
+      'linear.issueUpdateTask',
+      expect.objectContaining({ operation: 'cycle', cycleInput: null }),
+      { timeoutMs: 75_000 }
+    )
+  })
+
+  it('rejects cycle writes before dispatch when the runtime is too old', async () => {
+    queueFixtures(callMock, okFixture('req_status', { capabilities: [] }))
+
+    await main(['linear', 'cycle', 'set', 'ENG-123', '--to', 'current', '--json'], '/tmp/repo')
+
+    expect(callMock).toHaveBeenCalledTimes(1)
+    expect(callMock).toHaveBeenCalledWith('status.get')
+    expect(vi.mocked(console.log).mock.calls[0][0]).toContain('incompatible_runtime')
   })
 
   it('maps relation writes to the current-issue perspective', async () => {

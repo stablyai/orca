@@ -23,6 +23,7 @@ export const LINEAR_ERROR_CODES = [
   'linear_invalid_label',
   'linear_invalid_parent',
   'linear_invalid_project',
+  'linear_invalid_cycle',
   'linear_team_required',
   'linear_invalid_url',
   'linear_body_too_large',
@@ -90,11 +91,12 @@ export type {
   LinearUserSummary,
   LinearWorkspaceCandidate,
   LinearWriteIssueRef,
-  LinearIssueTaskUpdateResult,
   LinearSaveIssueResult
 } from './agent-result-types'
+export type { LinearCycleSummary, LinearTeamCyclesResult } from './cycle-types'
 export type { LinearIssueActivityEntry, LinearIssueActivityValue } from './issue-activity'
 export type { LinearInlineMedia } from './inline-media'
+export type { LinearIssueTaskUpdateResult } from './issue-task-update-types'
 export type { LinearMcpIssueListRequest, LinearMcpIssueListResult } from './mcp-issue-list'
 export type {
   LinearIssueRelationship,
@@ -129,7 +131,7 @@ export type LinearStatusSetRequest = LinearWriteTargetRequest & {
 }
 
 export type LinearIssueTaskUpdateRequest = LinearWriteTargetRequest & {
-  operation: 'assignee' | 'priority' | 'estimate' | 'dueDate' | 'labels'
+  operation: 'assignee' | 'priority' | 'estimate' | 'dueDate' | 'labels' | 'cycle'
   assigneeId?: string | null
   assigneeMe?: boolean
   priority?: number
@@ -137,6 +139,7 @@ export type LinearIssueTaskUpdateRequest = LinearWriteTargetRequest & {
   dueDate?: string | null
   labelMode?: 'add' | 'remove' | 'set'
   labels?: string[]
+  cycleInput?: string | null
 }
 
 export type LinearCommentAddRequest = LinearWriteTargetRequest & {

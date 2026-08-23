@@ -39,4 +39,5 @@ export type LinearIssueUpdate = {
   labelIds?: string[]
   projectId?: string | null
   parentId?: string | null
+  cycleId?: string | null
 }
