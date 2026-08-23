@@ -37,10 +37,6 @@ vi.mock('./runtime-client', () => {
 import { main } from './index'
 import { okFixture, queueFixtures } from './test-fixtures'
 
-// Why: the server's Fill schema uses requiredStringAllowingEmpty and Select accepts any
-// string value, empty included. Filling a field with '' clears it and selecting an
-// <option value=""> is a real operation, so `--value ""` must reach the RPC rather than
-// being rejected as missing.
 describe('orca cli browser fill/select preserve an empty value', () => {
   beforeEach(() => {
     callMock.mockReset()

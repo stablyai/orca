@@ -51,8 +51,7 @@ export const BROWSER_INTERACT_HANDLERS: Record<string, CommandHandler> = {
   },
   fill: async ({ flags, client, cwd, json }) => {
     const element = getRequiredStringFlag(flags, 'element')
-    // Why: the server's Fill schema uses requiredStringAllowingEmpty for value, so
-    // `--value ""` must reach it — filling a field with '' clears it, distinct from missing.
+    // The Fill schema accepts '' (clears the field), so don't treat it as missing.
     const value = getRequiredStringFlagAllowingEmpty(flags, 'value')
     const target = await getBrowserCommandTarget(flags, cwd, client)
     const result = await client.call<BrowserFillResult>('browser.fill', {
@@ -70,8 +69,7 @@ export const BROWSER_INTERACT_HANDLERS: Record<string, CommandHandler> = {
   },
   select: async ({ flags, client, cwd, json }) => {
     const element = getRequiredStringFlag(flags, 'element')
-    // Why: the server's Select schema accepts any string value, so `--value ""` must reach
-    // it — selecting an <option value=""> (a common placeholder option) is a real operation.
+    // The Select schema accepts '' (an <option value=""> placeholder), so don't treat it as missing.
     const value = getRequiredStringFlagAllowingEmpty(flags, 'value')
     const target = await getBrowserCommandTarget(flags, cwd, client)
     const result = await client.call<BrowserSelectResult>('browser.select', {
