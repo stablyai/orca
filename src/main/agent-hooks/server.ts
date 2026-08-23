@@ -1123,7 +1123,13 @@ export class AgentHookServer {
 
   private getAgentStatusDisposition(
     paneKey: string,
-    event?: { hookEventName?: string; isReplay?: boolean }
+    event?: {
+      source?: AgentHookSource
+      /** Raw wire value, so the gate can tell "field absent" from "field present but unknown". */
+      rawSource?: unknown
+      hookEventName?: string
+      isReplay?: boolean
+    }
   ): 'accept' | 'restart' | 'suppress' {
     const ownerPaneKey = this.resolvePaneKeyAlias(paneKey)
     const paneRetired =
@@ -1137,12 +1143,28 @@ export class AgentHookServer {
       return 'accept'
     }
     // Why: command completion retires launch authority but leaves its shell pane reusable.
-    // A live SessionStart proves a new agent process owns the retired pane just like a
+    // A live new-turn event proves a new agent process owns the retired pane just like a
     // fresh prompt does — without it, a session resumed in a reused pane stays rowless (STA-3386).
-    if (
-      (event?.hookEventName === 'UserPromptSubmit' || event?.hookEventName === 'SessionStart') &&
-      event.isReplay !== true
-    ) {
+    // Why the classifier, not literals: only 5 of 18 sources name their boundary
+    // `UserPromptSubmit`/`SessionStart`; the rest stayed retired forever.
+    // Why four branches: `source` collapses to undefined when an older relay omits the field,
+    // when a newer host sends an unknown string, and when the wire value is malformed. Only an
+    // unknown string is valid future-provider evidence. Unreachable from the local path, which
+    // 404s an unresolvable source.
+    const isNewTurn =
+      event?.source !== undefined
+        ? isNewTurnEvent(event.source, event.hookEventName)
+        : typeof event?.rawSource === 'string' && event.rawSource.trim().length > 0
+          ? // Why fail OPEN for an unknown provider: its boundary event is unknowable here, and
+            // the costs are asymmetric — a stranded pane is invisible and permanent with no user
+            // recovery, while a spurious revive decays after AGENT_STATUS_STALE_AFTER_MS.
+            true
+          : event?.rawSource === undefined
+            ? // Why literals here: an older relay omits `source` entirely. Legacy shim only — it
+              // cannot revive a provider whose boundary event is named anything else.
+              event?.hookEventName === 'UserPromptSubmit' || event?.hookEventName === 'SessionStart'
+            : false
+    if (isNewTurn && event?.isReplay !== true) {
       this.closedAgentStatusPaneKeys.delete(paneKey)
       this.closedAgentStatusPaneKeys.delete(ownerPaneKey)
       return 'restart'
@@ -2249,6 +2271,8 @@ export class AgentHookServer {
         ? envelope.compactTrigger
         : undefined
     const statusDisposition = this.getAgentStatusDisposition(paneKey, {
+      source,
+      rawSource: envelope.source,
       hookEventName,
       isReplay: envelope.isReplay === true
     })
@@ -2467,6 +2491,7 @@ export class AgentHookServer {
         const normalized = this.normalizeLocalHookPayload(source, aliasedBody)
         const statusDisposition = normalized.event
           ? this.getAgentStatusDisposition(normalized.event.paneKey, {
+              source,
               hookEventName: normalized.event.hookEventName,
               isReplay: normalized.event.isReplay
             })
