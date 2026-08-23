@@ -56,9 +56,9 @@ export function AutomationPromptDisclosure({ prompt }: { prompt: string }): Reac
           <Button
             ref={toggleRef}
             type="button"
-            variant="link"
+            variant="ghost"
             size="xs"
-            className="h-auto shrink-0 p-0 text-xs font-normal text-muted-foreground no-underline hover:text-foreground hover:no-underline"
+            className="-mr-2 text-muted-foreground hover:text-foreground"
             aria-expanded={expanded}
             aria-controls={contentId}
             onClick={toggleExpanded}

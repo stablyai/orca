@@ -111,6 +111,9 @@ describe('AutomationPromptDisclosure', () => {
     expect(content).toHaveClass('line-clamp-4', 'select-text', '[overflow-wrap:anywhere]')
     expect(toggle).toHaveAttribute('aria-expanded', 'false')
     expect(toggle).toHaveAttribute('aria-controls', content.id)
+    expect(toggle).toHaveAttribute('data-variant', 'ghost')
+    expect(toggle).toHaveAttribute('data-size', 'xs')
+    expect(toggle).not.toHaveClass('h-auto', 'p-0')
 
     await user.tab()
     expect(toggle).toHaveFocus()
