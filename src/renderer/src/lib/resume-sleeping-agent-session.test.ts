@@ -542,7 +542,16 @@ describe('resumeSleepingAgentSessionsForWorktree', () => {
     expect(startup?.command).toBe(
       "codex --profile captured '--model' 'gpt-5' '--reasoning-effort' 'high' 'resume' 'sess-1'"
     )
-    expect(startup?.env).toEqual({ CODEX_PROFILE: 'captured' })
+    // STA-3487 stamps the resumed agent's own launch token into env; the captured
+    // profile must still win over the changed setting, and the token must be the
+    // one queued alongside it so hook authority binds to this launch.
+    expect(startup?.env?.CODEX_PROFILE).toBe('captured')
+    expect(startup?.env?.ORCA_AGENT_LAUNCH_TOKEN).toBe(startup?.launchToken)
+    expect(startup?.launchToken).toBeTruthy()
+    expect(Object.keys(startup?.env ?? {}).sort()).toEqual([
+      'CODEX_PROFILE',
+      'ORCA_AGENT_LAUNCH_TOKEN'
+    ])
     expect(startup?.command).not.toContain('changed')
     expect(startup?.launchConfig).toEqual(record.launchConfig)
     expect(startup?.resumeProviderSession).toEqual(record.providerSession)

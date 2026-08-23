@@ -75,4 +75,70 @@ describe('queued startup command retention', () => {
 
     expect(store.getState().pendingStartupByTabId[siblingId]).toEqual({ command: 'echo theirs' })
   })
+
+  it('stamps a bare cursor-agent startup with a launch token so the pane env can carry it', () => {
+    const store = createTestStore()
+    const tabId = seedWorktreeWithTab(store)
+    store.getState().queueTabStartupCommand(tabId, { command: 'cursor-agent' })
+
+    const queued = store.getState().pendingStartupByTabId[tabId]
+    expect(queued?.launchAgent).toBe('cursor')
+    expect(queued?.launchConfig).toEqual({
+      agentCommand: 'cursor-agent',
+      agentArgs: '',
+      agentEnv: {}
+    })
+    expect(queued?.launchToken).toEqual(expect.stringMatching(/^[0-9a-f-]{36}$/i))
+    expect(queued?.env?.ORCA_AGENT_LAUNCH_TOKEN).toBe(queued?.launchToken)
+  })
+
+  it('does not mint a token for an unrecognized command even when launchConfig is present', () => {
+    const store = createTestStore()
+    const tabId = seedWorktreeWithTab(store)
+    store.getState().queueTabStartupCommand(tabId, {
+      command: 'echo hi',
+      launchConfig: { agentArgs: '', agentEnv: {} }
+    })
+
+    const queued = store.getState().pendingStartupByTabId[tabId]
+    expect(queued?.launchToken).toBeUndefined()
+    expect(queued?.env?.ORCA_AGENT_LAUNCH_TOKEN).toBeUndefined()
+    expect(queued?.command).toBe('echo hi')
+  })
+
+  it('overwrites a captured ORCA_AGENT_LAUNCH_TOKEN when resume-shaped startup is queued', () => {
+    const store = createTestStore()
+    const tabId = seedWorktreeWithTab(store)
+    store.getState().queueTabStartupCommand(tabId, {
+      command: 'codex resume sess-1',
+      launchAgent: 'codex',
+      launchConfig: {
+        agentCommand: 'codex',
+        agentArgs: '',
+        agentEnv: { CODEX_PROFILE: 'captured', ORCA_AGENT_LAUNCH_TOKEN: 'stale-persisted-token' }
+      },
+      env: { CODEX_PROFILE: 'captured', ORCA_AGENT_LAUNCH_TOKEN: 'stale-persisted-token' }
+    })
+
+    const queued = store.getState().pendingStartupByTabId[tabId]
+    expect(queued?.env?.CODEX_PROFILE).toBe('captured')
+    expect(queued?.launchToken).toEqual(expect.stringMatching(/^[0-9a-f-]{36}$/i))
+    expect(queued?.launchToken).not.toBe('stale-persisted-token')
+    expect(queued?.env?.ORCA_AGENT_LAUNCH_TOKEN).toBe(queued?.launchToken)
+  })
+
+  it('mints a distinct launch token per tab so a sibling cannot inherit authority', () => {
+    const store = createTestStore()
+    const tabId = seedWorktreeWithTab(store)
+    const siblingId = store.getState().createTab(WORKTREE_ID).id
+    store.getState().queueTabStartupCommand(tabId, { command: 'cursor-agent' })
+    store.getState().queueTabStartupCommand(siblingId, { command: 'cursor-agent' })
+
+    const queued = store.getState().pendingStartupByTabId[tabId]
+    const sibling = store.getState().pendingStartupByTabId[siblingId]
+    expect(queued?.launchToken).toEqual(expect.stringMatching(/^[0-9a-f-]{36}$/i))
+    expect(sibling?.launchToken).toEqual(expect.stringMatching(/^[0-9a-f-]{36}$/i))
+    expect(queued?.launchToken).not.toBe(sibling?.launchToken)
+    expect(queued?.env?.ORCA_AGENT_LAUNCH_TOKEN).not.toBe(sibling?.env?.ORCA_AGENT_LAUNCH_TOKEN)
+  })
 })

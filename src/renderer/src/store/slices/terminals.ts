@@ -110,6 +110,7 @@ import { parseRemoteRuntimePtyId, toRemoteRuntimePtyId } from '@/runtime/runtime
 import { toRuntimeWorktreeSelector } from '@/runtime/runtime-worktree-selector'
 import { requestRemoteWorktreeSleep } from '@/runtime/remote-worktree-sleep'
 import { createBrowserUuid } from '@/lib/browser-uuid'
+import { attachQueuedAgentLaunchAuthority } from '../../../../shared/queued-agent-launch-authority'
 import { getFolderWorkspaceConnectionId } from '@/lib/folder-workspace-connection'
 import {
   clearDirectSshTerminalBindings,
@@ -3668,17 +3669,15 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
   },
 
   queueTabStartupCommand: (tabId, startup) => {
-    // Why: launchToken is only meaningful for tracked launch-config reuse; plain startup commands must not mint a synthetic token.
-    const launchToken = startup.launchConfig
-      ? (startup.launchToken ?? createBrowserUuid())
-      : undefined
+    // Why: launchToken is only meaningful for tracked TUI-agent launches; plain
+    // shell commands must not mint a synthetic token a later typed agent could inherit.
+    // attachQueuedAgentLaunchAuthority is the sole mint — a leftover launchConfig
+    // fallback would stamp a token without injecting ORCA_AGENT_LAUNCH_TOKEN.
+    const authorized = attachQueuedAgentLaunchAuthority(startup)
     set((s) => ({
       pendingStartupByTabId: {
         ...s.pendingStartupByTabId,
-        [tabId]: {
-          ...startup,
-          ...(launchToken ? { launchToken } : {})
-        }
+        [tabId]: { ...authorized }
       }
     }))
   },
