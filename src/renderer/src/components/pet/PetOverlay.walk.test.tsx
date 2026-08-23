@@ -72,6 +72,16 @@ function stepFrame(timestamp: number): void {
   })
 }
 
+/** Paces the lane for `throughMs` in frames the walk will actually integrate.
+ *
+ *  Why not one long frame: `usePetWalkLane` clamps a frame to 50ms, so a single
+ *  1000ms step advances the pet 1.8px rather than the 36px it reads as. */
+function stepWalkFrames(throughMs: number): void {
+  for (let timestamp = 0; timestamp <= throughMs; timestamp += 50) {
+    stepFrame(timestamp)
+  }
+}
+
 function renderOverlay(): HTMLElement {
   container = document.createElement('div')
   document.body.appendChild(container)
@@ -125,8 +135,7 @@ describe('PetOverlay bottom lane', () => {
     window.localStorage.setItem('pet-overlay-position', JSON.stringify({ x: 300, y: 564 }))
 
     const box = renderOverlay()
-    stepFrame(0)
-    stepFrame(1000)
+    stepWalkFrames(1000)
 
     expect(Number.parseFloat(box.style.left)).toBeCloseTo(300 + PET_WALK_SPEED_PX_PER_SEC, 5)
     expect(box.style.top).toBe('564px')
@@ -154,8 +163,9 @@ describe('PetOverlay bottom lane', () => {
     expect(facing().dataset.petFacing).toBe('right')
     expect(facing().style.transform).toBe('')
 
-    stepFrame(0)
-    stepFrame(1000)
+    // Stops at the turn: 600ms covers the 20px to the edge, and anything past
+    // it is the pet already walking back.
+    stepWalkFrames(600)
 
     // 1200 viewport - 180 pet
     expect(box.style.left).toBe('1020px')
@@ -488,8 +498,7 @@ describe('PetOverlay bottom lane', () => {
     firePointer(grab, 'pointermove', 350, 200)
     firePointer(grab, 'pointerup', 350, 200)
 
-    stepFrame(0)
-    stepFrame(1000)
+    stepWalkFrames(1000)
 
     expect(box.style.top).toBe('164px')
     expect(Number.parseFloat(box.style.left)).toBeCloseTo(300 + PET_WALK_SPEED_PX_PER_SEC, 5)
