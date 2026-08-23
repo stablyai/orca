@@ -14610,7 +14610,12 @@
           "micDisconnected": "Microphone disconnected. Dictation stopped."
         },
         "DictationIndicator": {
-          "335e1bc6cb": "Stop dictation"
+          "335e1bc6cb": "Stop dictation",
+          "tooLoud": "Too loud",
+          "speaking": "Speaking",
+          "starting": "Starting mic…",
+          "processing": "Processing…",
+          "listening": "Listening"
         }
       },
       "dashboard": {
