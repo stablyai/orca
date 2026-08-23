@@ -25,11 +25,18 @@ export function buildPosixCommandPathLookupScript(
   options: PosixCommandPathLookupOptions = {}
 ): string {
   const commandAssignment = buildCommandAssignment(target)
-  // `-t drvfs` is what WSL mounts a Windows drive as, wherever the automount
-  // root is; 9p/virtiofs cover the WSL2 shapes. Read once, outside the loop.
+  // `drvfs` is what WSL mounts a Windows drive as, wherever the automount root
+  // is; 9p/virtiofs cover the WSL2 shapes.
+  //
+  // `${x+set}` so the table is read once per SHELL, not once per lookup: the
+  // caller embeds this script inside `for cmd in <every agent>`, so an
+  // unconditional assignment forked awk once per probed CLI -- 36 of them
+  // against a 10s budget. The variable outlives the iteration, so the second
+  // pass finds it set. Deliberately not `[ -n ... ]`: a host with no Windows
+  // mounts yields the empty string, which must still count as read.
   const mountPrelude = options.skipWindowsMountDirs
     ? [
-        '_orca_win_mounts=$(awk \'$3 == "drvfs" || $3 == "9p" || $3 == "virtiofs" { print $2 }\' /proc/mounts 2>/dev/null)'
+        '[ "${_orca_win_mounts+set}" = set ] || _orca_win_mounts=$(awk \'$3 == "drvfs" || $3 == "9p" || $3 == "virtiofs" { print $2 }\' /proc/mounts 2>/dev/null)'
       ]
     : []
   const skipMountComponent = options.skipWindowsMountDirs
