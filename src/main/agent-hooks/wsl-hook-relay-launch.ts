@@ -186,6 +186,8 @@ export async function runWslInstallProcess(
     // The script embeds a base64 JS bundle, far past any command-line limit,
     // and reads no stdin of its own.
     scriptDelivery: 'stdin',
+    // Declared because the payload is opaque here: it is POSIX plus a heredoc.
+    shell: 'sh',
     timeoutMs: INSTALL_TIMEOUT_MS,
     maxOutputBytes: MAX_STARTUP_BUFFER_BYTES,
     // The operative error ("mv: Read-only file system") lands after whatever

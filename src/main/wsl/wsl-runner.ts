@@ -31,10 +31,9 @@ export type WslLoginPath =
 /**
  * What to run: a single binary, or a script.
  *
- * Why a union rather than an optional `script`: a script has to arrive on
- * stdin, which means the program must be a shell reading stdin. Left to the
- * caller that is a footgun — and the wrappers this replaces exist because it
- * was never made explicit. `script` makes the runner supply `sh -s` itself.
+ * Why a union rather than an optional `script`: a script needs a shell to run
+ * it, and picking one per call site is how the wrappers this replaces drifted
+ * apart. `script` makes the runner supply the shell, and `shell` says which.
  */
 export type WslCommand =
   | {

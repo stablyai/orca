@@ -215,6 +215,8 @@ export class WslSkillInstallFilesystem implements SkillInstallFilesystem {
       distro: this.distro,
       loginPath: 'none',
       script,
+      // POSIX file operations; declared because the payload is opaque here.
+      shell: 'sh',
       args,
       timeoutMs: GUEST_COMMAND_TIMEOUT_MS,
       maxOutputBytes: GUEST_COMMAND_MAX_OUTPUT_BYTES

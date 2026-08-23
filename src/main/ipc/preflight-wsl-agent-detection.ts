@@ -50,6 +50,8 @@ export async function detectWslCommandsOnPath(
       distro: wslTarget.distro,
       loginPath: 'preferred',
       script,
+      // POSIX `command -v` loop; declared because the payload is opaque here.
+      shell: 'sh',
       timeoutMs: WSL_AGENT_DETECTION_TIMEOUT_MS
     })
     // runProcess resolves on a timeout and on a non-zero exit, so partial

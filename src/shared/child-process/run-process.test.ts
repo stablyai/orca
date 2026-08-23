@@ -188,3 +188,13 @@ describe('output truncation', () => {
     expect(result.stderr.length).toBe(64)
   })
 })
+
+describe('runProcessSync', () => {
+  it('refuses retainOutput: tail rather than silently keeping the head', () => {
+    // The spec type is shared, so a caller can copy a runProcess spec across
+    // and lose the late half of the output it was reading for.
+    expect(() =>
+      runProcessSync({ program: process.execPath, args: ['-e', ''], retainOutput: 'tail' })
+    ).toThrow(/use runProcess/)
+  })
+})

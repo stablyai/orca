@@ -15,6 +15,8 @@ export async function detectSkillProvidersInWsl(distro: string): Promise<string[
       distro,
       loginPath: 'preferred',
       script: DETECTION_SCRIPT,
+      // POSIX `command -v` loop; declared because the payload is opaque here.
+      shell: 'sh',
       timeoutMs: 10_000
     })
   } catch {

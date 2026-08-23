@@ -463,6 +463,9 @@ async function runWslCommand(distro: string, command: string): Promise<string> {
     distro,
     loginPath: 'preferred',
     script: command,
+    // Declared, not assumed: the payload is opaque here, so the guard cannot
+    // check it for bashisms. These are POSIX (`-eu`, `case`), hence sh.
+    shell: 'sh',
     timeoutMs: WSL_COMMAND_TIMEOUT_MS
   })
   // Timeout first: it is the more specific diagnosis, and a timed-out run also

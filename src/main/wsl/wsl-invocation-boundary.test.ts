@@ -245,11 +245,32 @@ describe('bash-only payloads declare their interpreter', () => {
       offenders.push(relativePath)
       continue
     }
-    for (const call of collectRunnerCallArguments(source)) {
-      if (BASHISM.test(call) && !call.includes("shell: 'bash'")) {
-        offenders.push(relativePath)
-        break
-      }
+    const calls = collectRunnerCallArguments(source)
+    // Per-call: an unpinned payload sitting beside a pinned one.
+    if (calls.some((call) => BASHISM.test(call) && !call.includes("shell: 'bash'"))) {
+      offenders.push(relativePath)
+      continue
+    }
+    // An opaque payload must declare its interpreter.
+    //
+    // The real bash payloads are built in a separate function and handed over
+    // as a bare `script,` identifier, so the bashism is never inside the call
+    // and the per-call arm cannot see it. Replacing the file-wide check with
+    // the per-call one made deleting `shell: 'bash'` from skill-discovery-wsl
+    // -- `done < <(find ...)` and `read -r -d ''`, the #14292 signature --
+    // ship green. Reading through the identifier is guesswork; requiring the
+    // call to say `sh` or `bash` when the payload is not a literal is not.
+    // Visible means `script:` followed by a literal the BASHISM regex can read.
+    // Everything else -- `script,` shorthand, an identifier, a builder call --
+    // is opaque and must say which shell it wants.
+    const opaque = calls.filter(
+      (call) =>
+        /\bscript\b/.test(call) &&
+        !/\bscript\s*:\s*['"`[]/.test(call) &&
+        !/\bshell\s*:/.test(call)
+    )
+    if (opaque.length > 0) {
+      offenders.push(relativePath)
     }
   }
 

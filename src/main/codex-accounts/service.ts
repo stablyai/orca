@@ -1863,6 +1863,8 @@ export class CodexAccountService {
       distro: wslInfo.distro,
       loginPath: 'preferred',
       script: buildWslCodexAvailabilityScript(),
+      // POSIX command lookup; declared because the payload is opaque here.
+      shell: 'sh',
       timeoutMs: WSL_CODEX_AVAILABILITY_TIMEOUT_MS
     })
     if (result.code !== 0 && !result.environmentResolved) {

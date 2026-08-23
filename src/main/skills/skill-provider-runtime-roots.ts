@@ -55,6 +55,8 @@ async function probeWslGrokHome(distro: string): Promise<string> {
     // the 8s budget before the -lc that actually reads GROK_HOME starts.
     loginPath: 'none',
     script: WSL_GROK_HOME_SCRIPT,
+    // POSIX (`case`, `exec`); declared because the payload is opaque here.
+    shell: 'sh',
     timeoutMs: WSL_ENV_PROBE_TIMEOUT_MS,
     maxOutputBytes: WSL_ENV_PROBE_MAX_BYTES
   })
