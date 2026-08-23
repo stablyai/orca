@@ -8,8 +8,32 @@ const WIDE_LAYOUT_HYSTERESIS = 24
 // in both dimensions so phone rotation does not switch UI classes.
 const TABLET_LAYOUT_MIN_SHORT_SIDE = 600
 
+// Material window-size classes; resizing a freeform window across a breakpoint
+// must not toggle the sidebar on every pixel, so leaving a class costs the margin.
+const WINDOW_CLASS_MEDIUM_MIN_WIDTH = 600
+const WINDOW_CLASS_EXPANDED_MIN_WIDTH = 840
+const WINDOW_CLASS_HYSTERESIS = 24
+
 const CONTENT_MAX_WIDTH = 720
 const MODAL_MAX_WIDTH = 480
+
+export type WindowClass = 'compact' | 'medium' | 'expanded'
+
+const WINDOW_CLASS_ORDER: WindowClass[] = ['compact', 'medium', 'expanded']
+
+function resolveWindowClass(width: number, previous?: WindowClass): WindowClass {
+  const previousIndex = previous ? WINDOW_CLASS_ORDER.indexOf(previous) : -1
+  const threshold = (breakpoint: number, classIndex: number) =>
+    previousIndex < 0
+      ? breakpoint
+      : previousIndex >= classIndex
+        ? breakpoint - WINDOW_CLASS_HYSTERESIS
+        : breakpoint + WINDOW_CLASS_HYSTERESIS
+  if (width >= threshold(WINDOW_CLASS_EXPANDED_MIN_WIDTH, 2)) {
+    return 'expanded'
+  }
+  return width >= threshold(WINDOW_CLASS_MEDIUM_MIN_WIDTH, 1) ? 'medium' : 'compact'
+}
 
 export type ResponsiveLayoutMetrics = {
   width: number
@@ -19,7 +43,7 @@ export type ResponsiveLayoutMetrics = {
   isWideLayout: boolean
   /** Tablet-class canvas (both dimensions large); false in narrow splits. */
   isTabletLayout: boolean
-  windowClass: 'compact' | 'medium' | 'expanded'
+  windowClass: WindowClass
   /** Max width for primary scrollable content on wide layouts. */
   contentMaxWidth: number
   /** Max width for centered sheets/dialogs on wide layouts. */
@@ -40,7 +64,7 @@ export function getResponsiveLayoutMetrics(
       : WIDE_LAYOUT_MIN_WIDTH + WIDE_LAYOUT_HYSTERESIS
     : WIDE_LAYOUT_MIN_WIDTH
   const isWideLayout = width >= wideThreshold && isTabletLayout
-  const windowClass = width < 600 ? 'compact' : width < 840 ? 'medium' : 'expanded'
+  const windowClass = resolveWindowClass(width, previous?.windowClass)
 
   return {
     width,

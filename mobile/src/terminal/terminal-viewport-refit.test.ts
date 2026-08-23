@@ -56,6 +56,36 @@ describe('terminal viewport refit', () => {
     expect(textScaleEffect).toContain('textScale')
   })
 
+  it('flushes a refit deferred behind the IME when a hardware keyboard is detected', () => {
+    // Why: notifyHardwareKeyboard used to clear keyboardVisible directly and
+    // strand `pending`; the later IME-hide event then matched state and never
+    // refit. Routing through the reducer as keyboard-visibility(false) flushes.
+    const start = hookSource.indexOf('const notifyHardwareKeyboard = useCallback(')
+    expect(start).toBeGreaterThanOrEqual(0)
+    expect(hookSource.slice(start, start + 300)).toContain(
+      "notifyFrameHeightEvent({ type: 'keyboard-visibility', visible: false })"
+    )
+
+    let state: TerminalFrameHeightRefitState = {
+      frameHeight: 600,
+      keyboardVisible: false,
+      pending: false
+    }
+    const dispatch = (event: TerminalFrameHeightRefitEvent) => {
+      const transition = reduceTerminalFrameHeightRefit(state, event)
+      state = transition.state
+      return transition.shouldRefit
+    }
+    expect(dispatch({ type: 'keyboard-visibility', visible: true })).toBe(false)
+    expect(dispatch({ type: 'frame-height', height: 540 })).toBe(false)
+    expect(state.pending).toBe(true)
+    // Hardware keyboard signal arrives as keyboard-visibility(false): flush now.
+    expect(dispatch({ type: 'keyboard-visibility', visible: false })).toBe(true)
+    expect(state).toEqual({ frameHeight: 540, keyboardVisible: false, pending: false })
+    // The trailing IME-hide is a no-op instead of a stranded pending refit.
+    expect(dispatch({ type: 'keyboard-visibility', visible: false })).toBe(false)
+  })
+
   it('coalesces keyboard-visible frame-height churn into one refit after close', () => {
     let state: TerminalFrameHeightRefitState = {
       frameHeight: 600,

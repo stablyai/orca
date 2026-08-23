@@ -1,6 +1,4 @@
-const fs = require('node:fs')
-const path = require('node:path')
-const { withAndroidManifest, withDangerousMod, withMainActivity } = require('expo/config-plugins')
+const { withAndroidManifest, withMainActivity } = require('expo/config-plugins')
 const { AndroidConfig } = require('expo/config-plugins')
 
 const CONFIG_CHANGES = [
@@ -138,30 +136,7 @@ function withActivityDisplayMetrics(config) {
   })
 }
 
-function withDesktopUnspecifiedOrientation(config) {
-  return withDangerousMod(config, [
-    'android',
-    async (cfg) => {
-      const packageName = cfg.android?.package
-      if (!packageName) {
-        throw new Error('android.package is required for the desktop orientation hook')
-      }
-      const mainActivityPath = path.join(
-        cfg.modRequest.platformProjectRoot,
-        'app',
-        'src',
-        'main',
-        'java',
-        ...packageName.split('.'),
-        'MainActivity.kt'
-      )
-      let source = await fs.promises.readFile(mainActivityPath, 'utf8')
-      if (source.includes('ORCA_DESKTOP_ORIENTATION')) {
-        return cfg
-      }
-      source = source.replace(
-        'super.onCreate(null)',
-        `super.onCreate(null)
+const DESKTOP_ORIENTATION_SNIPPET = `super.onCreate(null)
     // ORCA_DESKTOP_ORIENTATION
     val configuration = resources.configuration
     val samsungDesktopMode = try {
@@ -171,11 +146,25 @@ function withDesktopUnspecifiedOrientation(config) {
         android.content.res.Configuration.UI_MODE_TYPE_DESK || samsungDesktopMode) {
       requestedOrientation = android.content.pm.ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
     }`
-      )
-      await fs.promises.writeFile(mainActivityPath, source)
-      return cfg
+
+function applyDesktopUnspecifiedOrientation(source) {
+  if (source.includes('ORCA_DESKTOP_ORIENTATION')) {
+    return source
+  }
+  if (!source.includes('super.onCreate(null)')) {
+    throw new Error('MainActivity.kt is missing the expected super.onCreate(null) call')
+  }
+  return source.replace('super.onCreate(null)', DESKTOP_ORIENTATION_SNIPPET)
+}
+
+function withDesktopUnspecifiedOrientation(config) {
+  return withMainActivity(config, (cfg) => {
+    if (cfg.modResults.language !== 'kt') {
+      throw new Error('Android desktop orientation hook requires a Kotlin MainActivity')
     }
-  ])
+    cfg.modResults.contents = applyDesktopUnspecifiedOrientation(cfg.modResults.contents)
+    return cfg
+  })
 }
 
 module.exports = function withAndroidDesktopMode(config, options = {}) {
@@ -194,4 +183,5 @@ module.exports = function withAndroidDesktopMode(config, options = {}) {
 
 module.exports.applyAndroidDesktopModeManifest = applyAndroidDesktopModeManifest
 module.exports.applyActivityDisplayMetrics = applyActivityDisplayMetrics
+module.exports.applyDesktopUnspecifiedOrientation = applyDesktopUnspecifiedOrientation
 module.exports.CONFIG_CHANGES = CONFIG_CHANGES

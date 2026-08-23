@@ -49,4 +49,21 @@ describe('responsive layout metrics', () => {
     expect(getResponsiveLayoutMetrics(690, 700, wide).isWideLayout).toBe(true)
     expect(getResponsiveLayoutMetrics(675, 700, wide).isWideLayout).toBe(false)
   })
+
+  it('keeps window class stable while resizing around the 600 and 840 dp breakpoints', () => {
+    const medium = getResponsiveLayoutMetrics(700, 600)
+    expect(medium.windowClass).toBe('medium')
+    expect(getResponsiveLayoutMetrics(590, 600, medium).windowClass).toBe('medium')
+    expect(getResponsiveLayoutMetrics(575, 600, medium).windowClass).toBe('compact')
+    expect(getResponsiveLayoutMetrics(850, 600, medium).windowClass).toBe('medium')
+    expect(getResponsiveLayoutMetrics(864, 600, medium).windowClass).toBe('expanded')
+
+    const compact = getResponsiveLayoutMetrics(500, 600)
+    expect(getResponsiveLayoutMetrics(610, 600, compact).windowClass).toBe('compact')
+    expect(getResponsiveLayoutMetrics(624, 600, compact).windowClass).toBe('medium')
+
+    const expanded = getResponsiveLayoutMetrics(1000, 600)
+    expect(getResponsiveLayoutMetrics(830, 600, expanded).windowClass).toBe('expanded')
+    expect(getResponsiveLayoutMetrics(815, 600, expanded).windowClass).toBe('medium')
+  })
 })

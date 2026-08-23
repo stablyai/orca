@@ -2,8 +2,12 @@ import { describe, expect, it } from 'vitest'
 import { readFileSync } from 'node:fs'
 import desktopModePlugin from './android-desktop-mode.js'
 
-const { applyActivityDisplayMetrics, applyAndroidDesktopModeManifest, CONFIG_CHANGES } =
-  desktopModePlugin
+const {
+  applyActivityDisplayMetrics,
+  applyAndroidDesktopModeManifest,
+  applyDesktopUnspecifiedOrientation,
+  CONFIG_CHANGES
+} = desktopModePlugin
 
 const MAIN_ACTIVITY = `package com.stably.orca.mobile
 
@@ -95,5 +99,29 @@ describe('android desktop mode plugin', () => {
     expect(configurationHandler.indexOf('super.onConfigurationChanged(newConfig)')).toBeLessThan(
       configurationHandler.indexOf('applyActivityDisplayMetrics()')
     )
+  })
+
+  it('adds the desktop orientation hook idempotently after the activity metrics hook', () => {
+    const metrics = applyActivityDisplayMetrics(MAIN_ACTIVITY)
+    const once = applyDesktopUnspecifiedOrientation(metrics)
+    const twice = applyDesktopUnspecifiedOrientation(once)
+
+    expect(twice).toBe(once)
+    expect(once.match(/ORCA_DESKTOP_ORIENTATION/g)).toHaveLength(1)
+    expect(once.indexOf('applyActivityDisplayMetrics()')).toBeLessThan(
+      once.indexOf('super.onCreate(null)')
+    )
+    expect(once.indexOf('super.onCreate(null)')).toBeLessThan(
+      once.indexOf('SCREEN_ORIENTATION_UNSPECIFIED')
+    )
+  })
+
+  it('fails loudly when the onCreate anchor is missing', () => {
+    const noAnchor = MAIN_ACTIVITY.replace(
+      'super.onCreate(null)',
+      'super.onCreate(savedInstanceState)'
+    )
+    expect(() => applyDesktopUnspecifiedOrientation(noAnchor)).toThrow(/super\.onCreate\(null\)/)
+    expect(() => applyActivityDisplayMetrics(noAnchor)).toThrow(/super\.onCreate\(null\)/)
   })
 })

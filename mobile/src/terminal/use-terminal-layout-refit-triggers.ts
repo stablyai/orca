@@ -48,6 +48,7 @@ export function useTerminalLayoutRefitTriggers({
       previous.width,
       windowWidth
     )
+    // Why: a height-only change while the IME is up is the keyboard itself; width changes always refit.
     if (previous.width === windowWidth && frameHeightStateRef.current.keyboardVisible) {
       return
     }
@@ -95,9 +96,11 @@ export function useTerminalLayoutRefitTriggers({
     (visible: boolean) => notifyFrameHeightEvent({ type: 'keyboard-visibility', visible }),
     [notifyFrameHeightEvent]
   )
-  const notifyHardwareKeyboard = useCallback(() => {
-    frameHeightStateRef.current = { ...frameHeightStateRef.current, keyboardVisible: false }
-  }, [frameHeightStateRef])
+  // Why: a hardware keyboard means no IME is covering the PTY; route through the reducer so a refit deferred while the IME was up flushes now.
+  const notifyHardwareKeyboard = useCallback(
+    () => notifyFrameHeightEvent({ type: 'keyboard-visibility', visible: false }),
+    [notifyFrameHeightEvent]
+  )
   const notifyWebViewViewport = useCallback(
     (width: number, height: number) => {
       webViewViewportRef.current = { width, height }

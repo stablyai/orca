@@ -34,6 +34,9 @@ this.getHeight = getViewportHeight;
   return {
     applyFitScale,
     fireDprChange: () => mediaListener(),
+    setDpr: (value: number) => {
+      context.window.devicePixelRatio = value
+    },
     getHeight: (context as { getHeight: () => number }).getHeight,
     getWidth: (context as { getWidth: () => number }).getWidth,
     notify,
@@ -51,10 +54,11 @@ describe('terminal WebView viewport bridge', () => {
 
   it('re-fits and reports viewport state when DPR changes', () => {
     const harness = createViewportHarness()
+    harness.setDpr(2)
     harness.fireDprChange()
     expect(harness.applyFitScale).toHaveBeenCalledWith('dpr')
     expect(harness.notify).toHaveBeenCalledWith(
-      expect.objectContaining({ type: 'viewport-changed', dpr: 1 })
+      expect.objectContaining({ type: 'viewport-changed', dpr: 2 })
     )
   })
 })
