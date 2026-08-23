@@ -133,24 +133,21 @@ describe('detectWslCommandsOnPath', () => {
   })
 })
 
-it.each([
-  ['a /mnt interop path', '/mnt/c/Users/me/AppData/Local/claude.exe'],
-  ['an uppercase drive', '/MNT/D/tools/claude.EXE'],
-  ['a .exe anywhere', '/opt/weird/claude.exe']
-])('does not count %s as installed in the distro', async (_case, resolved) => {
-  // WSL appends the Windows PATH to the guest PATH, so `command -v claude`
-  // resolves to the Windows binary on a distro with no guest install. That
-  // path is POSIX-absolute, so the absolute check alone accepted it and
-  // preflight reported the agent installed -- then launching it ran a
-  // Windows exe inside a Linux session with no guest $HOME.
+it('does not veto a guest binary on an ordinary Linux mount under /mnt', async () => {
+  // The walk skips PATH components the guest reports as Windows drives. A name
+  // rule on top of that could only do harm: /mnt/d can be an ext4 volume, and
+  // vetoing a path the walk deliberately kept turns the false positive back
+  // into the #9725 false negative.
   runWslProcessMock.mockResolvedValue({
     environmentResolved: true,
     code: 0,
-    stdout: `__ORCA_AGENT_PATH__claude\t${resolved}\n`,
+    stdout: '__ORCA_AGENT_PATH__claude\t/mnt/d/tools/claude\n',
     stderr: '',
     timedOut: false
   })
-  expect(await detectWslCommandsOnPath({ distro: 'Ubuntu' }, ['claude'])).toEqual(new Set())
+  await expect(detectWslCommandsOnPath({ distro: 'Ubuntu' }, ['claude'])).resolves.toEqual(
+    new Set(['claude'])
+  )
 })
 
 it('still counts a genuine guest install', async () => {
