@@ -8955,6 +8955,10 @@
         "shortcutDefinitionCatalog": {
           "missionControlConflict": "已被调度中心拦截。在此重新映射，或在系统设置中更改。"
         },
+        "TerminalShellHistorySection": {
+          "title": "Shell 历史记录",
+          "description": "选择新的终端会话使用工作区专属历史记录还是 Shell 的常规历史记录。"
+        },
         "shortcuts": {
           "search": {
             "ca6a0c2df7": "捷径",
@@ -9269,6 +9273,26 @@
               "7c7056940a": "shell",
               "713c4a2f92": "为 Windows 上的新终端窗格选择默认 Shell。",
               "13715f9d23": "默认 Shell"
+            }
+          },
+          "history": {
+            "scopeTitle": "按工作区隔离 Shell 历史记录",
+            "scopeDescription": "在工作区之间隔离通过上箭头键调出的历史记录、反向搜索和 Shell 自动建议。更改将应用于新的终端会话。",
+            "search": {
+              "shell": "Shell",
+              "history": "历史记录",
+              "workspace": "工作区",
+              "worktree": "工作树",
+              "reverseSearch": "反向搜索",
+              "autosuggestions": "自动建议",
+              "shared": "共享",
+              "isolated": "隔离",
+              "arrowUp": "上箭头键",
+              "ctrlR": "Ctrl+R",
+              "histfile": "HISTFILE",
+              "zsh": "zsh",
+              "bash": "bash",
+              "fish": "fish"
             }
           }
         },

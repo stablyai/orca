@@ -31,6 +31,7 @@ import {
   getTerminalSetupScriptSearchEntries,
   getTerminalWindowSearchEntries
 } from './terminal-window-setup-search'
+import { getTerminalShellHistorySearchEntry } from './terminal-shell-history-search'
 import { createLocalizedCatalog } from '@/i18n/localized-catalog'
 
 export {
@@ -61,6 +62,7 @@ export {
   getTerminalWindowSearchEntries,
   getTerminalSetupScriptSearchEntries
 } from './terminal-window-setup-search'
+export { getTerminalShellHistorySearchEntry } from './terminal-shell-history-search'
 
 type TerminalAppearanceSearchOptions = {
   showWarpImport?: boolean
@@ -107,6 +109,7 @@ export function getTerminalPaneSearchEntries(platform: {
   // platform-only controls out of other platforms' search results prevents
   // users from landing on an option the UI intentionally hides.
   return [
+    getTerminalShellHistorySearchEntry(),
     ...getTerminalRenderingSearchEntries(),
     ...getTerminalPaneInteractionSearchEntries(),
     ...(isWindowsTerminalHost

@@ -8912,6 +8912,10 @@
         "shortcutDefinitionCatalog": {
           "missionControlConflict": "Mission Control에 의해 차단되었습니다. 여기에서 다시 매핑하거나 시스템 설정에서 변경하세요."
         },
+        "TerminalShellHistorySection": {
+          "title": "셸 기록",
+          "description": "새 터미널 세션에서 워크스페이스 전용 기록과 셸의 일반 기록 중 무엇을 사용할지 선택합니다."
+        },
         "shortcuts": {
           "search": {
             "ca6a0c2df7": "단축키",
@@ -9226,6 +9230,26 @@
               "7c7056940a": "셸",
               "713c4a2f92": "Windows의 새 terminal 패널에 대한 기본 셸을 선택합니다.",
               "13715f9d23": "기본 셸"
+            }
+          },
+          "history": {
+            "scopeTitle": "워크스페이스별로 셸 기록 분리",
+            "scopeDescription": "위쪽 화살표로 불러오는 기록, 역방향 검색, 셸 자동 제안을 워크스페이스 간에 분리합니다. 변경 사항은 새 터미널 세션부터 적용됩니다.",
+            "search": {
+              "shell": "셸",
+              "history": "기록",
+              "workspace": "워크스페이스",
+              "worktree": "워크트리",
+              "reverseSearch": "역방향 검색",
+              "autosuggestions": "자동 제안",
+              "shared": "공유",
+              "isolated": "분리",
+              "arrowUp": "위쪽 화살표",
+              "ctrlR": "Ctrl+R",
+              "histfile": "HISTFILE",
+              "zsh": "zsh",
+              "bash": "bash",
+              "fish": "fish"
             }
           }
         },
