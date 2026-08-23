@@ -1,6 +1,7 @@
-import { chmodSync, mkdtempSync, rmSync, statSync, writeFileSync } from 'node:fs'
+import { chmodSync, mkdtempSync, statSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { removeProbeScratchDirectory } from './probe-scratch-directory'
 
 /** Whether a POSIX permission mode means anything on this host.
  *
@@ -28,7 +29,7 @@ export function permissionBitsAreEnforced(): boolean {
     enforced = false
   } finally {
     if (directory) {
-      rmSync(directory, { recursive: true, force: true })
+      removeProbeScratchDirectory(directory)
     }
   }
   return enforced

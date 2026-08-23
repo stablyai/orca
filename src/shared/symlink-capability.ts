@@ -1,6 +1,7 @@
-import { mkdtempSync, rmSync, symlinkSync } from 'node:fs'
+import { mkdtempSync, symlinkSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { removeProbeScratchDirectory } from './probe-scratch-directory'
 
 /** Whether this process may create symbolic links, asked by trying.
  *
@@ -36,7 +37,7 @@ function probe(kind: LinkKind): boolean {
     return false
   } finally {
     if (directory) {
-      rmSync(directory, { recursive: true, force: true })
+      removeProbeScratchDirectory(directory)
     }
   }
 }

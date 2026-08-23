@@ -1,7 +1,9 @@
 import { mkdtempSync, readdirSync, rmSync, symlinkSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterAll, describe, expect, it } from 'vitest'
+import { afterAll, afterEach, describe, expect, it, vi } from 'vitest'
+import type * as NodeFs from 'node:fs'
+import type * as SymlinkCapability from './symlink-capability'
 import {
   canCreateDirectorySymlink,
   canCreateFileSymlink,
@@ -81,6 +83,63 @@ describe('directoryLinkType', () => {
     expect(() =>
       symlinkSync(directory, join(directory, 'linked'), directoryLinkType())
     ).not.toThrow()
+  })
+})
+
+describe('symlink capability when the scratch directory will not delete', () => {
+  const leaked: string[] = []
+
+  afterEach(() => {
+    vi.doUnmock('node:fs')
+    vi.resetModules()
+    // The probe's own cleanup was mocked away, so it is this suite's job.
+    for (const directory of leaked.splice(0)) {
+      rmSync(directory, { recursive: true, force: true, maxRetries: 3, retryDelay: 50 })
+    }
+  })
+
+  /** A fresh copy of the module whose `rmSync` always fails, as Windows'
+   *  `fixWinEPERMSync` path does on a junction pointing at its own directory. */
+  async function withUndeletableScratch(): Promise<{
+    module: typeof SymlinkCapability
+    probes: () => number
+  }> {
+    vi.resetModules()
+    const real = await vi.importActual<typeof NodeFs>('node:fs')
+    let probes = 0
+    vi.doMock('node:fs', () => {
+      const mocked = {
+        ...real,
+        mkdtempSync: (prefix: string) => {
+          probes += 1
+          const directory = real.mkdtempSync(prefix)
+          leaked.push(directory)
+          return directory
+        },
+        rmSync: () => {
+          throw Object.assign(new Error('EPERM: operation not permitted'), { code: 'EPERM' })
+        }
+      }
+      return { ...mocked, default: mocked }
+    })
+    return { module: await import('./symlink-capability'), probes: () => probes }
+  }
+
+  it('still answers, because a throw here fails test-file collection outright', async () => {
+    const { module } = await withUndeletableScratch()
+
+    expect(() => module.canCreateFileSymlink()).not.toThrow()
+    expect(typeof module.canCreateFileSymlink()).toBe('boolean')
+  })
+
+  it('memoises that answer instead of re-probing on every caller', async () => {
+    const { module, probes } = await withUndeletableScratch()
+
+    module.canCreateFileSymlink()
+    module.canCreateFileSymlink()
+    module.canCreateFileSymlink()
+
+    expect(probes()).toBe(1)
   })
 })
 
