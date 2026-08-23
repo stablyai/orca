@@ -20,10 +20,14 @@ export async function detectWslCommandsOnPath(
   }
 
   const commandList = uniqueCommands.map(shellQuote).join(' ')
-  const lookupScript = buildPosixCommandPathLookupScript({
-    kind: 'shell-variable',
-    name: 'cmd'
-  })
+  const lookupScript = buildPosixCommandPathLookupScript(
+    { kind: 'shell-variable', name: 'cmd' },
+    // Skip Windows mounts DURING the walk, not after it: WSL appends the
+    // Windows PATH, so a Windows `claude` can shadow a real guest install, and
+    // discarding the result afterwards reports "not installed" for a user who
+    // has both -- the #9725 population the fallback dirs exist to serve.
+    { skipWindowsMountDirs: true }
+  )
   // Newlines keep the loop valid in every POSIX shell used here.
   const script = [
     // The same fallback the preflight command runner uses: append the

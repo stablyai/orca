@@ -56,10 +56,11 @@ describe('detectWslCommandsOnPath', () => {
     await detectWslCommandsOnPath({ distro: 'Ubuntu' }, ['claude', 'codex'])
 
     const { script } = lastSpec()
-    const lookupScript = buildPosixCommandPathLookupScript({
-      kind: 'shell-variable',
-      name: 'cmd'
-    })
+    const lookupScript = buildPosixCommandPathLookupScript(
+      { kind: 'shell-variable', name: 'cmd' },
+      // The WSL probe opts into skipping Windows mounts mid-walk.
+      { skipWindowsMountDirs: true }
+    )
     expect(script).toContain(lookupScript)
     expect(script).not.toContain('type -P')
   })
@@ -130,6 +131,36 @@ describe('detectWslCommandsOnPath', () => {
     expect(found).toEqual(new Set())
     expect(runWslProcessMock).not.toHaveBeenCalled()
   })
+})
+
+it('does not veto a guest binary on an ordinary Linux mount under /mnt', async () => {
+  // The walk skips PATH components the guest reports as Windows drives. A name
+  // rule on top of that could only do harm: /mnt/d can be an ext4 volume, and
+  // vetoing a path the walk deliberately kept turns the false positive back
+  // into the #9725 false negative.
+  runWslProcessMock.mockResolvedValue({
+    environmentResolved: true,
+    code: 0,
+    stdout: '__ORCA_AGENT_PATH__claude\t/mnt/d/tools/claude\n',
+    stderr: '',
+    timedOut: false
+  })
+  await expect(detectWslCommandsOnPath({ distro: 'Ubuntu' }, ['claude'])).resolves.toEqual(
+    new Set(['claude'])
+  )
+})
+
+it('still counts a genuine guest install', async () => {
+  runWslProcessMock.mockResolvedValue({
+    environmentResolved: true,
+    code: 0,
+    stdout: '__ORCA_AGENT_PATH__claude\t/home/alice/.nvm/versions/node/v20.1.0/bin/claude\n',
+    stderr: '',
+    timedOut: false
+  })
+  expect(await detectWslCommandsOnPath({ distro: 'Ubuntu' }, ['claude'])).toEqual(
+    new Set(['claude'])
+  )
 })
 
 describe('the detection script itself, run by a real POSIX shell', () => {
@@ -218,5 +249,45 @@ describe('the detection script itself, run by a real POSIX shell', () => {
   ])('covers %s, which the native fallback also probes', async (dir) => {
     plant(dir, 'orca-fake-cli')
     expect(await runScript()).toContain('__ORCA_AGENT_PATH__orca-fake-cli')
+  })
+})
+
+describe('the PATH walk, run by a real POSIX shell', () => {
+  const itPosix = process.platform === 'win32' ? it.skip : it
+
+  itPosix('finds the guest install behind a Windows binary that shadows it', async () => {
+    // WSL appends the Windows PATH, so a Windows `claude` sits ahead of an
+    // nvm one. Rejecting the resolved path afterwards cannot resume the walk,
+    // so it reports "not installed" for a user who has both -- turning the
+    // false positive into the #9725 false negative. Skipping the component
+    // mid-walk is what actually finds the guest binary.
+    const root = mkdtempSync(join(tmpdir(), 'orca-walk-'))
+    try {
+      const win = join(root, 'winmnt/c/npm')
+      const nvm = join(root, 'home/.nvm/bin')
+      for (const [dir, body] of [
+        [win, 'win'],
+        [nvm, 'guest']
+      ] as const) {
+        mkdirSync(dir, { recursive: true })
+        writeFileSync(join(dir, 'claude'), `#!/bin/sh\necho ${body}\n`)
+        chmodSync(join(dir, 'claude'), 0o755)
+      }
+      const script = buildPosixCommandPathLookupScript(
+        { kind: 'literal', value: 'claude' },
+        { skipWindowsMountDirs: true }
+        // Stand in for /proc/mounts, which a test host does not have.
+      ).replace(/_orca_win_mounts=\$\([^)]*\)/, `_orca_win_mounts=${join(root, 'winmnt')}`)
+      const options: ExecFileSyncOptions = {
+        encoding: 'utf8',
+        env: { PATH: `${win}:${nvm}:/usr/bin:/bin` }
+      }
+      const out = String(
+        execFileSync('/bin/sh', ['-c', `${script}\nprintf %s "$resolved"`], options)
+      )
+      expect(out).toBe(join(nvm, 'claude'))
+    } finally {
+      rmSync(root, { recursive: true, force: true })
+    }
   })
 })
