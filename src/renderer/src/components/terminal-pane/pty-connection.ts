@@ -59,7 +59,11 @@ import {
   shouldReconcileMissingSession,
   type HasPty
 } from './terminal-dead-session-reconcile'
-import type { PtyConnectionDeps } from './pty-connection-types'
+import type { PtyConnectionDeps, PtyPaneStartup } from './pty-connection-types'
+import {
+  createGitBashConsoleCapacityDetector,
+  type GitBashConsoleCapacityDetector
+} from './git-bash-console-capacity'
 import type { SessionRestoredBannerReason } from './session-restored-banner-pane-state'
 import {
   consumeCommittedPtyShutdownExit,
@@ -2659,7 +2663,11 @@ export function connectPanePty(
       })
     return claimKey
   }
-  const onExit = (ptyId: string, opts: { preserveRendererBinding?: boolean } = {}): void => {
+  const onExit = (
+    ptyId: string,
+    exitCode = 0,
+    opts: { preserveRendererBinding?: boolean } = {}
+  ): void => {
     if (handledExitPtyId === ptyId) {
       return
     }
@@ -2667,7 +2675,7 @@ export function connectPanePty(
       // Why: the transport emits exit once; replay it only after a verified commit so rollback keeps renderer state retryable.
       deferPtyShutdownExit(ptyId, (settlement) => {
         if (settlement === 'committed') {
-          onExit(ptyId, { preserveRendererBinding: true })
+          onExit(ptyId, exitCode, { preserveRendererBinding: true })
         }
       })
       return
@@ -2681,6 +2689,7 @@ export function connectPanePty(
       // Why: an old transport can deliver a late exit after this pane has
       // rebound to a replacement PTY; only clear ownership for the exited id.
       handledExitPtyId = ptyId
+      processExitStateByPtyId.delete(ptyId)
       if (!preserveRendererBinding) {
         deps.clearTabPtyId(deps.tabId, ptyId)
       }
@@ -2689,6 +2698,8 @@ export function connectPanePty(
       return
     }
     handledExitPtyId = ptyId
+    const processExitState = processExitStateByPtyId.get(ptyId) ?? currentProcessExitState
+    processExitStateByPtyId.delete(ptyId)
     agentCompletionCoordinator.dispose()
     dropSideEffectFactConsumer()
     // Why: main clears gate state on PTY exit too; this only resets the
@@ -2765,6 +2776,17 @@ export function connectPanePty(
       return
     }
     manager.setPaneGpuRendering(pane.id, true)
+    const failedLocalProcess = !connectionId && runtimeEnvironmentId === null && exitCode !== 0
+    if (failedLocalProcess && deps.onPaneProcessDied) {
+      const gitBashConsoleCapacityFailure = processExitState.detector.detected()
+      deps.onPaneProcessDied({
+        paneId: pane.id,
+        exitCode,
+        startup: gitBashConsoleCapacityFailure ? processExitState.startup : null,
+        reason: gitBashConsoleCapacityFailure ? 'git-bash-console-capacity' : 'process-failed'
+      })
+      return
+    }
     const panes = manager.getPanes()
     if (panes.length <= 1) {
       // Why: a worktree's sole newborn terminal can die on shell startup — e.g.
@@ -3030,6 +3052,25 @@ export function connectPanePty(
   }
 
   const observeTerminalGitHubPRLink = createTerminalGitHubPRLinkDetector()
+  type ProcessExitState = {
+    startup: PtyPaneStartup
+    detector: GitBashConsoleCapacityDetector
+  }
+  const createProcessExitState = (startup: PtyPaneStartup): ProcessExitState => ({
+    startup,
+    detector: createGitBashConsoleCapacityDetector()
+  })
+  let currentProcessExitState = createProcessExitState(paneStartup)
+  const processExitStateByPtyId = new Map<string, ProcessExitState>()
+  const bindProcessExitState = (ptyId: string, replacedPtyId?: string): void => {
+    const state =
+      (replacedPtyId ? processExitStateByPtyId.get(replacedPtyId) : undefined) ??
+      currentProcessExitState
+    processExitStateByPtyId.set(ptyId, state)
+    if (replacedPtyId && replacedPtyId !== ptyId) {
+      processExitStateByPtyId.delete(replacedPtyId)
+    }
+  }
   const reportPanePtyVisibility = (ptyId: string | null | undefined, visible: boolean): void => {
     if (!ptyId || isRemoteRuntimePtyId(ptyId)) {
       // Why: remote-runtime PTYs use a relay path outside main's local
@@ -3047,6 +3088,7 @@ export function connectPanePty(
       sampleVisibleForegroundAgent?: boolean
     } = {}
   ): void => {
+    bindProcessExitState(ptyId, options.replacePtyId)
     if (activePanePtyBinding && activePanePtyBinding !== ptyId) {
       reportPanePtyVisibility(activePanePtyBinding, false)
     }
@@ -5205,6 +5247,20 @@ export function connectPanePty(
               : {})
           }
         : undefined
+    const toProcessExitStartup = (
+      startup: PendingStartupCommand | ColdRestoreAgentResumeStartup | null
+    ): PtyPaneStartup =>
+      startup && 'launchConfig' in startup && 'agent' in startup
+        ? {
+            command: startup.command,
+            env: startup.env,
+            launchConfig: startup.launchConfig,
+            resumeProviderSession: startup.resumeProviderSession,
+            launchToken: startup.launchToken,
+            launchAgent: startup.agent,
+            showSessionRestoredBanner: true
+          }
+        : startup
     const startFreshColdRestoreAgentResume = (
       startup: ColdRestoreAgentResumeStartup | null = buildColdRestoreAgentResumeStartup(),
       options: FreshSpawnOptions = {}
@@ -5368,7 +5424,11 @@ export function connectPanePty(
         : window.api.pty.declarePendingPaneSerializer(cacheKey).catch(() => null)
 
       transportConnectInFlightSince = Date.now()
-      const outputCallbacks = captureTransportOutputCallbacks(reportError)
+      const effectiveStartup = startupOverride === undefined ? paneStartup : startupOverride
+      const outputCallbacks = captureTransportOutputCallbacks(
+        reportError,
+        toProcessExitStartup(coldRestoreOverride ?? effectiveStartup)
+      )
       const spawnedRaw = transport.connect({
         url: '',
         cols,
@@ -5873,7 +5933,10 @@ export function connectPanePty(
       scheduleReplayDataDrain()
     }
 
-    const captureTransportOutputCallbacks = (onError: (message: string) => void) => {
+    const captureTransportOutputCallbacks = (
+      onError: (message: string) => void,
+      startup: PtyPaneStartup
+    ) => {
       // Why: a new stream generation cannot inherit an old replay's pending
       // destination-grid fit or keep its live-data waiter open.
       pendingHiddenSnapshotFit?.cancel()
@@ -5881,6 +5944,8 @@ export function connectPanePty(
       pendingReattachFit?.cancel()
       pendingReattachFit = null
       const generation = (transportStreamGeneration += 1)
+      const processExitState = createProcessExitState(startup)
+      currentProcessExitState = processExitState
       const isCurrent = (): boolean => !disposed && generation === transportStreamGeneration
       return {
         generation,
@@ -5907,6 +5972,7 @@ export function connectPanePty(
           },
           onData: (data: string, meta?: PtyDataMeta): void => {
             if (isCurrent()) {
+              processExitState.detector.observe(data)
               dataCallback(data, meta, generation)
             }
           },
@@ -8312,6 +8378,7 @@ export function connectPanePty(
         })
         return false
       }
+      bindProcessExitState(ptyId)
       setPanePtyFitBinding(ptyId)
       reportPanePtyVisibility(ptyId, deps.isVisibleRef.current)
       registerSideEffectFactConsumerForPty(ptyId)
@@ -8722,7 +8789,7 @@ export function connectPanePty(
         authoritativeReattachGeneration += 1
         clearPaneMode2031State()
         clearHiddenOutputRestoreState()
-        const outputCallbacks = captureTransportOutputCallbacks(reportError)
+        const outputCallbacks = captureTransportOutputCallbacks(reportError, null)
         transport.attach({
           existingPtyId: ptyId,
           callbacks: outputCallbacks.callbacks
@@ -8905,16 +8972,19 @@ export function connectPanePty(
             const coldRestoreStartup = buildColdRestoreAgentResumeStartup()
             clearPaneMode2031State()
             clearHiddenOutputRestoreState()
-            const outputCallbacks = captureTransportOutputCallbacks((message) => {
-              if (isSshSessionExpiredError(message)) {
-                expiredReattachError = true
-                return
-              }
-              if (!isCapturedDirectSshReattachCurrent(pendingSessionId)) {
-                return
-              }
-              reportError(message)
-            })
+            const outputCallbacks = captureTransportOutputCallbacks(
+              (message) => {
+                if (isSshSessionExpiredError(message)) {
+                  expiredReattachError = true
+                  return
+                }
+                if (!isCapturedDirectSshReattachCurrent(pendingSessionId)) {
+                  return
+                }
+                reportError(message)
+              },
+              toProcessExitStartup(coldRestoreStartup ?? paneStartup)
+            )
             beginReattachLiveDataDeferral(outputCallbacks.generation)
             transportConnectInFlightSince = Date.now()
             const reattachPromise = transport.connect({
@@ -9152,16 +9222,19 @@ export function connectPanePty(
 
       let expiredReattachError = false
       const coldRestoreStartup = buildColdRestoreAgentResumeStartup()
-      const outputCallbacks = captureTransportOutputCallbacks((message) => {
-        if (isSshSessionExpiredError(message)) {
-          expiredReattachError = true
-          return
-        }
-        if (!isCapturedDirectSshReattachCurrent(deferredReattachSessionId)) {
-          return
-        }
-        reportError(message)
-      })
+      const outputCallbacks = captureTransportOutputCallbacks(
+        (message) => {
+          if (isSshSessionExpiredError(message)) {
+            expiredReattachError = true
+            return
+          }
+          if (!isCapturedDirectSshReattachCurrent(deferredReattachSessionId)) {
+            return
+          }
+          reportError(message)
+        },
+        toProcessExitStartup(coldRestoreStartup ?? paneStartup)
+      )
       beginReattachLiveDataDeferral(outputCallbacks.generation)
       transportConnectInFlightSince = Date.now()
       const reattachPromise = transport.connect({
@@ -9303,7 +9376,7 @@ export function connectPanePty(
         try {
           clearPaneMode2031State()
           clearHiddenOutputRestoreState()
-          const outputCallbacks = captureTransportOutputCallbacks(reportError)
+          const outputCallbacks = captureTransportOutputCallbacks(reportError, null)
           transport.attach({
             existingPtyId: attachPtyId,
             cols,
@@ -9358,7 +9431,7 @@ export function connectPanePty(
             }
             clearPaneMode2031State()
             clearHiddenOutputRestoreState()
-            const outputCallbacks = captureTransportOutputCallbacks(reportError)
+            const outputCallbacks = captureTransportOutputCallbacks(reportError, null)
             transport.attach({
               existingPtyId: spawnedPtyId,
               cols,

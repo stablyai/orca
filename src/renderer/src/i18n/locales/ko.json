@@ -2742,6 +2742,14 @@
             "5c8ce20be6": "문제가 계속되면",
             "cc6d997c65": "오래된 데몬 상태를 지우려면 여기에서 terminal 데몬을 다시 시작하세요."
           },
+          "TerminalProcessExitOverlay": {
+            "capacityTitle": "Git Bash 콘솔 한도에 도달했습니다",
+            "capacityDetail": "Git Bash가 128개 콘솔 한도에 도달했습니다. 사용하지 않는 Git Bash 터미널을 닫은 후 이 터미널을 다시 시작하세요.",
+            "failedTitle": "터미널이 종료되었습니다",
+            "failedDetail": "셸 프로세스가 종료 코드 {{code}}로 끝났습니다. 출력은 보존됩니다.",
+            "close": "닫기",
+            "restart": "다시 시작"
+          },
           "TerminalPane": {
             "ac112e9036": "제목 삭제",
             "f984ab2a30": "창 제목 제거: {{value0}}",

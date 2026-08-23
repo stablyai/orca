@@ -2934,6 +2934,14 @@
             "e16012e31e": "The terminal daemon that owned this session exited, so the session and its scrollback could not be recovered. Open a new terminal to continue.",
             "sessionUnavailable": "Orca couldn't reattach to this pane's terminal session on the host. Open a new terminal to continue."
           },
+          "TerminalProcessExitOverlay": {
+            "capacityTitle": "Git Bash console limit reached",
+            "capacityDetail": "Git Bash reached its 128-console limit. Close unused Git Bash terminals, then restart this terminal.",
+            "failedTitle": "Terminal exited",
+            "failedDetail": "The shell process ended with exit code {{code}}. Its output is preserved.",
+            "close": "Close",
+            "restart": "Restart"
+          },
           "TerminalPane": {
             "ac112e9036": "Remove title",
             "f984ab2a30": "Remove pane title: {{value0}}",
