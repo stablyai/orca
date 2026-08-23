@@ -120,6 +120,37 @@ describe('terminal tab retirement store boundary', () => {
     expect(capturedPanesByTabId.has('tab-1')).toBe(false)
   })
 
+  it('tears down provider-owned rowless layout backing with a precomputed plan', async () => {
+    const store = createRetirementStore()
+    seedStore(store, {
+      tabsByWorktree: {},
+      terminalLayoutsByTabId: {
+        'rowless-tab': {
+          root: { type: 'leaf', leafId: 'leaf-1' },
+          activeLeafId: 'leaf-1',
+          expandedLeafId: null,
+          ptyIdsByLeafId: { 'leaf-1': 'owned-pty' }
+        }
+      }
+    })
+
+    store.getState().closeTab('rowless-tab', {
+      precomputedRetirementPlan: {
+        tabId: 'rowless-tab',
+        worktreeId: null,
+        ptyIds: ['owned-pty'],
+        localOrSshPtyIds: ['owned-pty'],
+        runtimeTerminals: [],
+        cleanupOnlyPtyIds: [],
+        sharedPtyIds: [],
+        unroutablePtyIds: []
+      }
+    })
+    await vi.waitFor(() => expect(mockKill).toHaveBeenCalledWith('owned-pty'))
+
+    expect(store.getState().terminalLayoutsByTabId['rowless-tab']).toBeUndefined()
+  })
+
   it('routes runtime handles to runtime close and preserves shared PTYs', async () => {
     const store = createRetirementStore()
     seedStore(store, {

@@ -60,6 +60,28 @@ describe('native preload destructive app actions', () => {
     return exposeInMainWorld.mock.calls.find(([name]) => name === 'api')?.[1] as PreloadApi
   }
 
+  it('forwards exact close-fenced PTY ids from main to the renderer close coordinator', async () => {
+    const api = await loadApi()
+    const callback = vi.fn()
+    api.ui.onWindowCloseRequested(callback)
+    const listener = on.mock.calls.find(([channel]) => channel === 'window:close-requested')?.[1]
+
+    listener?.(
+      {},
+      {
+        isQuitting: false,
+        requestId: 7,
+        ownedProviderPtyIds: ['secondary-pty', 42]
+      }
+    )
+
+    expect(callback).toHaveBeenCalledWith({
+      isQuitting: false,
+      ownedProviderPtyIds: ['secondary-pty']
+    })
+    expect(send).toHaveBeenCalledWith('window:close-request-received', 7)
+  })
+
   for (const action of ['reload', 'relaunch'] as const) {
     it(`prepares and awaits durability before ${action}`, async () => {
       const api = await loadApi()
@@ -91,6 +113,15 @@ describe('native preload destructive app actions', () => {
       expect(aborted).toHaveBeenCalledTimes(1)
     })
   }
+
+  it('exposes the durable checkpoint join for confirmed user window close', async () => {
+    const api = await loadApi()
+    invoke.mockResolvedValue({ ok: true })
+
+    await api.app.awaitBeforeUnloadCheckpoint()
+
+    expect(invoke).toHaveBeenCalledExactlyOnceWith('app:await-before-unload-checkpoint')
+  })
 
   it('preserves both macOS keyboard preload adapters', async () => {
     const api = await loadApi()

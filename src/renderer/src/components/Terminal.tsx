@@ -142,7 +142,10 @@ import {
 } from './terminal-pane/terminal-parked-tab-watchers'
 import { isMainTerminalSideEffectAuthorityForPty } from './terminal-pane/terminal-side-effect-facts-handler'
 import { appendUniqueOpenFileIds } from './terminal/unsaved-close-queue'
-import { setWindowCloseRequestHandler } from './window-close-request-coordinator'
+import {
+  setWindowCloseRequestHandler,
+  type WindowCloseRequest
+} from './window-close-request-coordinator'
 import {
   findActivityTerminalPortal,
   useActivityTerminalPortals,
@@ -181,6 +184,7 @@ import { showTerminalShortcutCaptureNotification } from '@/lib/terminal-shortcut
 import { useContextualTour } from './contextual-tours/use-contextual-tour'
 import { openTabBarEntry, type TabCreateEntryArgs } from './tab-bar/tab-create-entry-action'
 import { closeTerminalTab } from './terminal/terminal-tab-actions'
+import { retireWindowTerminalTabsAndConfirmClose } from './terminal/terminal-window-close-retirement'
 import { translate } from '@/i18n/i18n'
 import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
 import { getResolvedExecutionHostIdForWorktree } from '@/lib/resolved-worktree-execution-host'
@@ -503,8 +507,21 @@ function Terminal(): React.JSX.Element | null {
 
   // Why: defer confirmWindowClose() while tabs are dirty — the beforeunload guard preventDefault()s, so an immediate confirm leaves the window open with no UI.
   const windowCloseAfterDirtyRef = useRef<{ isQuitting: boolean } | null>(null)
+  const windowCloseRetirementPtyIdsRef = useRef<readonly string[]>([])
 
-  const confirmNativeWindowClose = useCallback(() => {
+  const cancelNativeWindowClose = useCallback(() => {
+    windowCloseRetirementPtyIdsRef.current = []
+    void window.api.pty.clearWindowCloseAuthority()
+    setWindowCloseDialogOpen(false)
+  }, [])
+
+  const confirmNativeWindowClose = useCallback((isQuitting: boolean) => {
+    if (!isQuitting) {
+      const closeFencedPtyIds = windowCloseRetirementPtyIdsRef.current
+      windowCloseRetirementPtyIdsRef.current = []
+      void retireWindowTerminalTabsAndConfirmClose(undefined, closeFencedPtyIds)
+      return
+    }
     // Why: capture only after every close guard has committed. A canceled child-
     // process prompt must not consume App's synthetic/native unload guard.
     const accepted = window.dispatchEvent(new Event('beforeunload', { cancelable: true }))
@@ -535,14 +552,14 @@ function Terminal(): React.JSX.Element | null {
               if (results.some(Boolean)) {
                 setWindowCloseDialogOpen(true)
               } else {
-                confirmNativeWindowClose()
+                confirmNativeWindowClose(isQuitting)
               }
             }
           )
           return
         }
       }
-      confirmNativeWindowClose()
+      confirmNativeWindowClose(isQuitting)
     },
     [confirmNativeWindowClose]
   )
@@ -762,6 +779,8 @@ function Terminal(): React.JSX.Element | null {
     isClosingRef.current = true
     pendingEditorCloseQueueRef.current = []
     windowCloseAfterDirtyRef.current = null
+    windowCloseRetirementPtyIdsRef.current = []
+    void window.api.pty.clearWindowCloseAuthority()
     setSaveDialogFileId(null)
     releaseCloseDialogGuardAfterDebounce()
   }, [releaseCloseDialogGuardAfterDebounce])
@@ -2356,7 +2375,8 @@ function Terminal(): React.JSX.Element | null {
   // Handle main-process window close requests: only dirty editor files block close (terminal sessions detach via daemon/SSH).
   // Why: register into the coordinator, not IPC directly, so quits on the Terminal-less landing page are still handled (#5144).
   useEffect(() => {
-    setWindowCloseRequestHandler(({ isQuitting }) => {
+    setWindowCloseRequestHandler((request: WindowCloseRequest) => {
+      const { isQuitting } = request
       if (isIntentionalAppRestartInProgress()) {
         window.api.ui.confirmWindowClose()
         return
@@ -2366,6 +2386,7 @@ function Terminal(): React.JSX.Element | null {
       if (windowCloseAfterDirtyRef.current) {
         return
       }
+      windowCloseRetirementPtyIdsRef.current = request.ownedProviderPtyIds ?? []
 
       const dirtyFiles = useAppStore.getState().openFiles.filter((f) => f.isDirty)
       if (dirtyFiles.length > 0) {
@@ -2763,7 +2784,7 @@ function Terminal(): React.JSX.Element | null {
         open={windowCloseDialogOpen}
         onOpenChange={(open) => {
           if (!open) {
-            setWindowCloseDialogOpen(false)
+            cancelNativeWindowClose()
           }
         }}
       >
@@ -2780,12 +2801,7 @@ function Terminal(): React.JSX.Element | null {
             </DialogDescription>
           </DialogHeader>
           <DialogFooter className="gap-2">
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={() => setWindowCloseDialogOpen(false)}
-            >
+            <Button type="button" variant="outline" size="sm" onClick={cancelNativeWindowClose}>
               {translate('auto.components.Terminal.f82e9f02df', 'Cancel')}
             </Button>
             <Button
@@ -2795,7 +2811,7 @@ function Terminal(): React.JSX.Element | null {
               autoFocus
               onClick={() => {
                 setWindowCloseDialogOpen(false)
-                confirmNativeWindowClose()
+                confirmNativeWindowClose(false)
               }}
             >
               {translate('auto.components.Terminal.73768427cf', 'Close')}

@@ -340,6 +340,76 @@ const SYNTHETIC_KILL_EXIT_DUPLICATE_WINDOW_MS = 30_000
 const PRODUCER_FLOW_CONTROL_ENABLED = true
 // Why: post-spawn write/resize/kill calls carry only the PTY ID; map it to its connectionId so ops route to the right provider.
 const ptyOwnership = new Map<string, string | null>()
+type ClosingPtyAuthorityEntry = {
+  generation: number | null
+  incarnationId: string | undefined
+  connectionId: string | null
+}
+type ClosingPtyAuthority = {
+  sender: WebContents
+  entries: Map<string, ClosingPtyAuthorityEntry>
+}
+const closingPtyAuthorityByRendererId = new Map<number, ClosingPtyAuthority>()
+
+export function stagePtyRendererCloseAuthority(
+  sender: WebContents,
+  candidatePtyIds: readonly string[] = []
+): string[] {
+  const entries = new Map<string, ClosingPtyAuthorityEntry>()
+  if (ptyRendererOwners.isRegistered(sender)) {
+    const ptyIds = new Set([...ptyRendererOwners.getOwnedIds(sender), ...candidatePtyIds])
+    for (const ptyId of ptyIds) {
+      const owner = ptyRendererOwners.getOwner(ptyId)
+      const incarnationId = ptyIncarnationById.get(ptyId)
+      const parsedSsh = parseAppSshPtyId(ptyId)
+      if (
+        (owner && owner.webContentsId !== sender.id) ||
+        (!ptyOwnership.has(ptyId) && !parsedSsh)
+      ) {
+        continue
+      }
+      entries.set(ptyId, {
+        generation: owner?.generation ?? null,
+        incarnationId,
+        connectionId: ptyOwnership.get(ptyId) ?? parsedSsh?.connectionId ?? null
+      })
+    }
+  }
+  closingPtyAuthorityByRendererId.set(sender.id, { sender, entries })
+  return [...entries.keys()]
+}
+
+export function clearPtyRendererCloseAuthority(sender: WebContents): void {
+  const authority = closingPtyAuthorityByRendererId.get(sender.id)
+  if (authority?.sender === sender) {
+    closingPtyAuthorityByRendererId.delete(sender.id)
+  }
+}
+
+function getClosingPtyAuthority(
+  sender: WebContents,
+  ptyId: string
+): ClosingPtyAuthorityEntry | null {
+  const authority = closingPtyAuthorityByRendererId.get(sender.id)
+  const entry = authority?.sender === sender ? authority.entries.get(ptyId) : undefined
+  if (!entry || ptyIncarnationById.get(ptyId) !== entry.incarnationId) {
+    return null
+  }
+  const currentOwner = ptyRendererOwners.getOwner(ptyId)
+  if (
+    currentOwner &&
+    (entry.generation === null ||
+      currentOwner.webContentsId !== sender.id ||
+      currentOwner.generation !== entry.generation)
+  ) {
+    return null
+  }
+  const currentConnectionId = ptyOwnership.get(ptyId)
+  if (currentConnectionId !== undefined && currentConnectionId !== entry.connectionId) {
+    return null
+  }
+  return entry
+}
 const ptyIncarnationById = new Map<string, string>()
 
 export function isCurrentPtyExit(payload: { id: string; incarnationId?: string }): boolean {
@@ -2580,6 +2650,8 @@ export function registerPtyHandlers(
   // Remove prior handlers so re-registration (e.g. macOS re-activate creating a new window) doesn't double-register.
   ipcMain.removeHandler('pty:spawn')
   ipcMain.removeHandler('pty:kill')
+  ipcMain.removeHandler('pty:clearWindowCloseAuthority')
+  ipcMain.removeHandler('pty:listOwnedProviderPtyIds')
   ipcMain.removeHandler('pty:listSessions')
   ipcMain.removeHandler('pty:hasPty')
   ipcMain.removeHandler('pty:hasChildProcesses')
@@ -8028,11 +8100,13 @@ export function registerPtyHandlers(
       // Why: runtime terminal handles belong to terminal.close; unowned PTY routing could target the local provider.
       throw new Error('Invalid PTY provider id')
     }
-    if (!isPtyEventFromOwner(event, args.id)) {
+    const sender = getCurrentPtyEventSender(event)
+    const closingAuthority = sender ? getClosingPtyAuthority(sender, args.id) : null
+    if (!isPtyEventFromOwner(event, args.id) && !closingAuthority) {
       throw new Error('pty_renderer_not_owner')
     }
     runtime?.markPtyStopRequested?.(args.id)
-    const ownedConnectionId = ptyOwnership.get(args.id)
+    const ownedConnectionId = ptyOwnership.get(args.id) ?? closingAuthority?.connectionId
     const parsedSshId = ownedConnectionId === undefined ? parseAppSshPtyId(args.id) : null
     const connectionId = ownedConnectionId ?? parsedSshId?.connectionId
     // Why: wait for daemon startup before selecting the local provider, else a fallback shutdown falsely succeeds and orphans a restored daemon PTY (#7742).
@@ -8073,6 +8147,32 @@ export function registerPtyHandlers(
       runtime?.onPtyExit(args.id, -1, incarnationId)
       rememberSyntheticKillExit(args.id)
       sendPtyExitToRenderer({ id: args.id, code: -1 })
+    }
+  })
+
+  ipcMain.handle('pty:listOwnedProviderPtyIds', (event): string[] => {
+    const sender = getCurrentPtyEventSender(event)
+    if (!sender) {
+      return []
+    }
+    const ids = new Set(
+      ptyRendererOwners.getOwnedIds(sender).filter((ptyId) => ptyOwnership.has(ptyId))
+    )
+    const closingAuthority = closingPtyAuthorityByRendererId.get(sender.id)
+    if (closingAuthority?.sender === sender) {
+      for (const ptyId of closingAuthority.entries.keys()) {
+        if (getClosingPtyAuthority(sender, ptyId)) {
+          ids.add(ptyId)
+        }
+      }
+    }
+    return [...ids]
+  })
+
+  ipcMain.handle('pty:clearWindowCloseAuthority', (event): void => {
+    const sender = getCurrentPtyEventSender(event)
+    if (sender) {
+      clearPtyRendererCloseAuthority(sender)
     }
   })
 

@@ -115,6 +115,8 @@ export type PtyApi = {
   getCwd: (id: string) => Promise<string>
   getSize: (id: string) => Promise<{ cols: number; rows: number } | null>
   listSessions: () => Promise<PtyListedSession[]>
+  listOwnedProviderPtyIds: () => Promise<string[]>
+  clearWindowCloseAuthority: () => Promise<void>
   getAuthoritativeBufferSnapshotCapabilities?: (
     ids: string[]
   ) => Promise<{ id: string; authoritative: boolean | null }[]>

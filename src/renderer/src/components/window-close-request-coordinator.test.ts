@@ -1,4 +1,13 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+
+const { retireWindowTerminalTabsAndConfirmClose } = vi.hoisted(() => ({
+  retireWindowTerminalTabsAndConfirmClose: vi.fn(() => Promise.resolve('confirmed'))
+}))
+
+vi.mock('./terminal/terminal-window-close-retirement', () => ({
+  retireWindowTerminalTabsAndConfirmClose
+}))
+
 import {
   dispatchWindowCloseRequest,
   getWindowCloseRequestHandler,
@@ -16,11 +25,22 @@ describe('window-close-request-coordinator', () => {
 
   beforeEach(() => {
     confirmWindowClose.mockClear()
+    retireWindowTerminalTabsAndConfirmClose.mockClear()
+    const clearWindowCloseAuthority = vi.fn(() => Promise.resolve())
     // Why: dispatch falls back to the preload bridge when no rich handler is
     // registered; stub just the surface it touches.
     ;(
-      globalThis as unknown as { window: { api: { ui: { confirmWindowClose: () => void } } } }
-    ).window = { api: { ui: { confirmWindowClose } } }
+      globalThis as unknown as {
+        window: {
+          api: {
+            ui: { confirmWindowClose: () => void }
+            pty: { clearWindowCloseAuthority: () => Promise<void> }
+          }
+        }
+      }
+    ).window = {
+      api: { ui: { confirmWindowClose }, pty: { clearWindowCloseAuthority } }
+    }
   })
 
   afterEach(() => {
@@ -53,13 +73,31 @@ describe('window-close-request-coordinator', () => {
     expect(confirmWindowClose).toHaveBeenCalledTimes(1)
   })
 
+  it('retires durable window terminals before a user close without a rich handler', async () => {
+    await dispatchWindowCloseRequest({
+      isQuitting: false,
+      ownedProviderPtyIds: ['secondary-pty']
+    })
+
+    expect(retireWindowTerminalTabsAndConfirmClose).toHaveBeenCalledWith(undefined, [
+      'secondary-pty'
+    ])
+    expect(confirmWindowClose).not.toHaveBeenCalled()
+  })
+
   it('delegates to the rich handler and does NOT confirm directly when one is registered', async () => {
     const handler = vi.fn()
     setWindowCloseRequestHandler(handler)
 
-    await dispatchWindowCloseRequest({ isQuitting: false })
+    await dispatchWindowCloseRequest({
+      isQuitting: false,
+      ownedProviderPtyIds: ['secondary-pty']
+    })
 
-    expect(handler).toHaveBeenCalledWith({ isQuitting: false })
+    expect(handler).toHaveBeenCalledWith({
+      isQuitting: false,
+      ownedProviderPtyIds: ['secondary-pty']
+    })
     // Why: confirmation is the rich handler's responsibility (after save dialogs
     // / running-process checks) — dispatch must not short-circuit it.
     expect(confirmWindowClose).not.toHaveBeenCalled()

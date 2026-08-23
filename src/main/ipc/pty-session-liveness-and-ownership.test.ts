@@ -3,12 +3,18 @@ import { onMock } from './pty-ipc-mock-registry'
 import { setupPtyIpcSuite } from './pty-ipc-test-harness'
 import { AGENT_SESSION_CLAIM_DIGEST_VERSION } from '../../shared/agent-session-host-authority'
 import {
+  deletePtyOwnership,
+  clearPtyRendererCloseAuthority,
   registerPtyHandlers,
+  registerPtyRenderer,
   registerSshPtyProvider,
   setPtyOwnership,
   setLocalPtyProvider,
+  stagePtyRendererCloseAuthority,
+  restorePtyIncarnation,
   unregisterSshPtyProvider
 } from './pty'
+import { ptyRendererOwners } from './pty-renderer-owners'
 
 vi.mock('electron', () => import('./pty-ipc-mock-registry').then((m) => m.electronModuleMock()))
 vi.mock('fs', () => import('./pty-ipc-mock-registry').then((m) => m.fsModuleMock()))
@@ -55,7 +61,76 @@ vi.mock('../codex/codex-state-db-backfill-recovery', () =>
 )
 
 describe('registerPtyHandlers', () => {
-  const { handlers, mainWindow, mainWindowIpcEvent, claimMainRendererPty } = setupPtyIpcSuite()
+  const {
+    handlers,
+    mainWindow,
+    mainWindowIpcEvent,
+    foreignWindowIpcEvent,
+    claimMainRendererPty,
+    installDaemonTestProvider
+  } = setupPtyIpcSuite()
+
+  it('lists only provider-backed PTYs owned by the requesting renderer', () => {
+    registerPtyHandlers(mainWindow as never)
+    registerPtyRenderer(foreignWindowIpcEvent.sender as never)
+    for (const ptyId of ['main-pty', 'other-window-pty']) {
+      setPtyOwnership(ptyId, null)
+    }
+    claimMainRendererPty('main-pty')
+    claimMainRendererPty('renderer-only-id')
+    ptyRendererOwners.claim('other-window-pty', foreignWindowIpcEvent.sender as never)
+
+    expect(handlers.get('pty:listOwnedProviderPtyIds')!(mainWindowIpcEvent, undefined)).toEqual([
+      'main-pty'
+    ])
+    expect(handlers.get('pty:listOwnedProviderPtyIds')!(foreignWindowIpcEvent, undefined)).toEqual([
+      'other-window-pty'
+    ])
+
+    deletePtyOwnership('main-pty')
+    deletePtyOwnership('other-window-pty')
+  })
+
+  it('preserves exact close-fenced authority after live renderer ownership is released', async () => {
+    const shutdown = vi.fn(async () => undefined)
+    installDaemonTestProvider({ shutdown })
+    registerPtyHandlers(mainWindow as never)
+    setPtyOwnership('closing-pty', null)
+    claimMainRendererPty('closing-pty')
+    ptyRendererOwners.release('closing-pty')
+    expect(
+      stagePtyRendererCloseAuthority(mainWindow.webContents as never, [
+        'closing-pty',
+        'not-a-provider-pty'
+      ])
+    ).toEqual(['closing-pty'])
+
+    expect(handlers.get('pty:listOwnedProviderPtyIds')!(mainWindowIpcEvent, undefined)).toEqual([
+      'closing-pty'
+    ])
+    await handlers.get('pty:kill')!(mainWindowIpcEvent, { id: 'closing-pty' })
+
+    expect(shutdown).toHaveBeenCalledWith('closing-pty', {
+      immediate: true,
+      keepHistory: false
+    })
+    clearPtyRendererCloseAuthority(mainWindow.webContents as never)
+  })
+
+  it('rejects a close-fenced PTY id after its incarnation is reused', () => {
+    registerPtyHandlers(mainWindow as never)
+    setPtyOwnership('reused-pty', null)
+    restorePtyIncarnation('reused-pty', 'old-incarnation')
+    claimMainRendererPty('reused-pty')
+    stagePtyRendererCloseAuthority(mainWindow.webContents as never)
+    ptyRendererOwners.release('reused-pty')
+    restorePtyIncarnation('reused-pty', 'new-incarnation')
+
+    expect(handlers.get('pty:listOwnedProviderPtyIds')!(mainWindowIpcEvent, undefined)).toEqual([])
+
+    clearPtyRendererCloseAuthority(mainWindow.webContents as never)
+    deletePtyOwnership('reused-pty')
+  })
 
   it('never answers liveness for a paired-runtime handle from the local registry', async () => {
     const hasPty = vi.fn(() => false)

@@ -72,6 +72,48 @@ function findUnifiedTerminalTabs(
   )
 }
 
+function closeRowlessTerminalBacking(
+  session: WorkspaceSessionState,
+  tabId: string
+): WorkspaceSessionTerminalTabCloseResult | null {
+  if (
+    !Object.hasOwn(session.terminalLayoutsByTabId, tabId) &&
+    !Object.hasOwn(session.remoteSessionIdsByTabId ?? {}, tabId)
+  ) {
+    return null
+  }
+  const otherTabIds = new Set(Object.keys(session.terminalLayoutsByTabId))
+  for (const tabs of Object.values(session.tabsByWorktree)) {
+    for (const tab of tabs) {
+      otherTabIds.add(tab.id)
+    }
+  }
+  otherTabIds.delete(tabId)
+  const otherPtyIds = new Set<string>()
+  for (const otherTabId of otherTabIds) {
+    for (const ptyId of collectTabPtyIds(session, otherTabId)) {
+      otherPtyIds.add(ptyId)
+    }
+  }
+  const ptyIdsToKill = [...collectTabPtyIds(session, tabId)].filter(
+    (ptyId) => !otherPtyIds.has(ptyId)
+  )
+  const next: WorkspaceSessionState = {
+    ...session,
+    terminalLayoutsByTabId: { ...session.terminalLayoutsByTabId },
+    remoteSessionIdsByTabId: { ...session.remoteSessionIdsByTabId },
+    sleepingAgentSessionsByPaneKey: { ...session.sleepingAgentSessionsByPaneKey }
+  }
+  delete next.terminalLayoutsByTabId[tabId]
+  delete next.remoteSessionIdsByTabId![tabId]
+  for (const [paneKey, record] of Object.entries(next.sleepingAgentSessionsByPaneKey ?? {})) {
+    if (paneKey.startsWith(`${tabId}:`) || record.tabId === tabId) {
+      delete next.sleepingAgentSessionsByPaneKey![paneKey]
+    }
+  }
+  return { session: next, ptyIdsToKill, closed: true, pinned: false }
+}
+
 function deriveActiveSurface(
   session: WorkspaceSessionState,
   worktreeId: string,
@@ -156,7 +198,14 @@ export function closeTerminalTabInWorkspaceSession(
   const terminalRow = session.tabsByWorktree[worktreeId]?.find((tab) => tab.id === tabId)
   const unifiedTerminalTabs = findUnifiedTerminalTabs(session, worktreeId, tabId)
   if (!terminalRow && unifiedTerminalTabs.length === 0) {
-    return { session, ptyIdsToKill: [], closed: false, pinned: false }
+    return (
+      closeRowlessTerminalBacking(session, tabId) ?? {
+        session,
+        ptyIdsToKill: [],
+        closed: false,
+        pinned: false
+      }
+    )
   }
   if (terminalRow?.isPinned || unifiedTerminalTabs.some((tab) => tab.isPinned)) {
     return { session, ptyIdsToKill: [], closed: false, pinned: true }

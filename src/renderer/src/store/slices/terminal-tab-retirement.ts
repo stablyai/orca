@@ -143,7 +143,8 @@ export function buildTerminalTabRetirementPlan(
 
 export function buildTerminalTabRetirementPlans(
   state: TerminalTabRetirementState,
-  tabIds: readonly string[]
+  tabIds: readonly string[],
+  authoritativeLocalOrSshPtyIds: ReadonlySet<string> = new Set()
 ): Map<string, TerminalTabRetirementPlan> {
   const targetIds = [...new Set(tabIds)]
   const targetIdSet = new Set(targetIds)
@@ -205,7 +206,10 @@ export function buildTerminalTabRetirementPlans(
         })
       } else if (ptyId.startsWith('remote:')) {
         unroutablePtyIds.push(ptyId)
-      } else if (providerOwnership.kind !== 'local-or-ssh') {
+      } else if (
+        providerOwnership.kind !== 'local-or-ssh' &&
+        !authoritativeLocalOrSshPtyIds.has(ptyId)
+      ) {
         // Why: HUB-native wake hints are not paired-client PTY ids; wait for pane resolution instead of killing the same-looking local id.
         unroutablePtyIds.push(ptyId)
       } else {

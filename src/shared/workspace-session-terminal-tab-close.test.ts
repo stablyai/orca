@@ -204,6 +204,23 @@ describe('closeTerminalTabInWorkspaceSession', () => {
     expect(result).toEqual({ session: current, ptyIdsToKill: [], closed: false, pinned: true })
   })
 
+  it('retires durable layout backing when the terminal row was already lost', () => {
+    const current = session({
+      activeWorktreeId: null,
+      activeTabId: null,
+      tabsByWorktree: {},
+      unifiedTabs: {},
+      remoteSessionIdsByTabId: { 'terminal-1': 'pty-relay' }
+    })
+
+    const result = closeTerminalTabInWorkspaceSession(current, '', 'terminal-1')
+
+    expect(result).toMatchObject({ closed: true, pinned: false })
+    expect(result.ptyIdsToKill.sort()).toEqual(['pty-left', 'pty-relay', 'pty-right'])
+    expect(result.session.terminalLayoutsByTabId).toEqual({})
+    expect(result.session.remoteSessionIdsByTabId).toEqual({})
+  })
+
   it('has no bounded replay window after more than 32 closes', () => {
     let current = getDefaultWorkspaceSession()
     for (let index = 0; index < 40; index += 1) {

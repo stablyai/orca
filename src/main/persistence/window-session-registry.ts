@@ -71,6 +71,31 @@ export class WindowSessionRegistry {
     return cloneSession(initial)
   }
 
+  getWindowTerminalPtyIds(windowId: number): string[] {
+    const ids = new Set<string>()
+    for (const record of this.#records.get(windowId)?.values() ?? []) {
+      if (record.retired) {
+        continue
+      }
+      for (const tabs of Object.values(record.state.tabsByWorktree)) {
+        for (const tab of tabs) {
+          if (tab.ptyId) {
+            ids.add(tab.ptyId)
+          }
+        }
+      }
+      for (const layout of Object.values(record.state.terminalLayoutsByTabId)) {
+        for (const ptyId of Object.values(layout.ptyIdsByLeafId ?? {})) {
+          ids.add(ptyId)
+        }
+      }
+      for (const ptyId of Object.values(record.state.remoteSessionIdsByTabId ?? {})) {
+        ids.add(ptyId)
+      }
+    }
+    return [...ids]
+  }
+
   set(windowId: number, state: WorkspaceSessionState, hostId?: string | null): void {
     const resolved = resolveHostId(hostId)
     this.#setRecord(windowId, state, resolved)

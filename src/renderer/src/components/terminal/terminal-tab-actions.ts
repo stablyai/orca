@@ -131,7 +131,19 @@ export function closeTerminalTab(
   }
 
   const runtimeEnvironmentId = worktreeRoute.runtimeEnvironmentId
-  if (runtimeEnvironmentId && isWebRuntimeSessionActive(runtimeEnvironmentId)) {
+  const precomputedRuntimeOwnerMatches =
+    !options?.precomputedRetirementPlan ||
+    (options.precomputedRetirementPlan.localOrSshPtyIds.length === 0 &&
+      options.precomputedRetirementPlan.unroutablePtyIds.length === 0 &&
+      options.precomputedRetirementPlan.runtimeTerminals.length > 0 &&
+      options.precomputedRetirementPlan.runtimeTerminals.every(
+        (terminal) => (terminal.environmentId ?? runtimeEnvironmentId) === runtimeEnvironmentId
+      ))
+  if (
+    precomputedRuntimeOwnerMatches &&
+    runtimeEnvironmentId &&
+    isWebRuntimeSessionActive(runtimeEnvironmentId)
+  ) {
     if (options?.reason === 'pty-exit') {
       // Why: stream exit is not host-tab closure; the HUB snapshot decides whether reconnect restores or removes this tab.
       return

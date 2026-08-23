@@ -115,19 +115,61 @@ test('detaches a live terminal through the hidden CDP renderer', async ({
   await expect.poll(() => getTerminalContent(secondary.page), { timeout: 15_000 }).toContain(marker)
 })
 
-test('closing the secondary leaves the control terminal live @headful', async ({
+test('user-closing the secondary retires its PTY and leaves the control terminal live @headful', async ({
   electronApp,
   orcaPage
 }) => {
   test.skip(process.platform !== 'darwin', 'live cursor warp uses macOS CoreGraphics')
   const terminal = await prepareTerminalPair(orcaPage)
+  const streamingMarker = `__SECONDARY_STREAM__${Date.now()}`
+  await execInTerminal(
+    orcaPage,
+    terminal.detachedPtyId,
+    `node -e "setInterval(() => console.log('${streamingMarker}'), 100)"`
+  )
+  await waitForTerminalOutput(orcaPage, streamingMarker, 15_000)
   const { control, secondary } = await detachTerminalPair(
     electronApp,
     orcaPage,
     terminal.detachedTabId
   )
+  await expect
+    .poll(
+      () =>
+        secondary.page.evaluate(
+          async (ptyId) => (await window.api.pty.inspectProcess(ptyId)).foregroundProcess,
+          terminal.detachedPtyId
+        ),
+      { timeout: 20_000 }
+    )
+    .toBe('node')
+  const durablePtyIds = await secondary.page.evaluate(async () => {
+    const session = await window.api.session.get()
+    return [
+      ...Object.values(session.tabsByWorktree).flatMap((tabs) =>
+        tabs.flatMap((tab) => (tab.ptyId ? [tab.ptyId] : []))
+      ),
+      ...Object.values(session.terminalLayoutsByTabId).flatMap((layout) =>
+        Object.values(layout.ptyIdsByLeafId ?? {})
+      )
+    ]
+  })
+  expect(durablePtyIds).toContain(terminal.detachedPtyId)
+  await expect(
+    secondary.page.evaluate(() => window.api.pty.listOwnedProviderPtyIds())
+  ).resolves.toContain(terminal.detachedPtyId)
 
   await closeWindow(electronApp, secondary.context.windowId)
+  await expect
+    .poll(
+      () =>
+        control.page.evaluate(async (ptyId) => {
+          const sessions = await window.api.pty.listSessions()
+          return sessions.some((session) => session.id === ptyId)
+        }, terminal.detachedPtyId),
+      { timeout: 30_000 }
+    )
+    .toBe(false)
   await clickTerminalTab(control.page, terminal.baseTabId)
   expect(await waitForActivePanePtyId(control.page, 30_000)).toBe(terminal.basePtyId)
   await assertTerminalInput(control.page, `__SECONDARY_FIRST__${Date.now()}`)

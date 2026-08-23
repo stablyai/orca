@@ -566,6 +566,7 @@ const api = {
         throw new Error('Failed to stage renderer state before unload.')
       }
     },
+    awaitBeforeUnloadCheckpoint,
     awaitFirstWindowStartupServices: (): Promise<void> =>
       ipcRenderer.invoke('app:awaitFirstWindowStartupServices'),
     recoverLegacyWorkerTerminalsForRendererStartup: (): Promise<void> =>
@@ -1144,6 +1145,10 @@ const api = {
       ipcRenderer.invoke('pty:kill', { id, keepHistory: opts?.keepHistory ?? false }),
 
     listSessions: (): Promise<PtyListedSession[]> => ipcRenderer.invoke('pty:listSessions'),
+    listOwnedProviderPtyIds: (): Promise<string[]> =>
+      ipcRenderer.invoke('pty:listOwnedProviderPtyIds'),
+    clearWindowCloseAuthority: (): Promise<void> =>
+      ipcRenderer.invoke('pty:clearWindowCloseAuthority'),
     getAuthoritativeBufferSnapshotCapabilities: (
       ids: string[]
     ): Promise<{ id: string; authoritative: boolean | null }[]> =>
@@ -4419,14 +4424,22 @@ const api = {
     },
     /** Fired by main when the user tries to close the window; renderer confirms running
      *  terminals then calls confirmWindowClose(). isQuitting (Cmd+Q / app.quit) skips that dialog. */
-    onWindowCloseRequested: (callback: (data: { isQuitting: boolean }) => void): (() => void) => {
+    onWindowCloseRequested: (
+      callback: (data: { isQuitting: boolean; ownedProviderPtyIds?: string[] }) => void
+    ): (() => void) => {
       const listener = (
         _event: Electron.IpcRendererEvent,
-        data: { isQuitting: boolean; requestId?: number }
+        data: { isQuitting: boolean; requestId?: number; ownedProviderPtyIds?: unknown[] }
       ): void => {
         // Why: main cannot reach will-quit while a frozen renderer owns the window close handshake.
         ipcRenderer.send('window:close-request-received', data?.requestId)
-        callback({ isQuitting: data?.isQuitting ?? false })
+        const ownedProviderPtyIds = data?.ownedProviderPtyIds?.filter(
+          (ptyId): ptyId is string => typeof ptyId === 'string'
+        )
+        callback({
+          isQuitting: data?.isQuitting ?? false,
+          ...(ownedProviderPtyIds ? { ownedProviderPtyIds } : {})
+        })
       }
       ipcRenderer.on('window:close-requested', listener)
       return () => ipcRenderer.removeListener('window:close-requested', listener)

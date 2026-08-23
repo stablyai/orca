@@ -12,6 +12,7 @@ import {
 import { join } from 'node:path'
 import { is } from '@electron-toolkit/utils'
 import type { Store } from '../persistence'
+import { getWindowSessionRegistry } from '../persistence/window-session-registry'
 import { getAppIconPath } from '../app-icon'
 import { browserManager } from '../browser/browser-manager'
 import { browserSessionRegistry } from '../browser/browser-session-registry'
@@ -60,6 +61,7 @@ import { installPrivilegedWindowNavigationPolicy } from './privileged-window-nav
 import { isMacosTahoeOrNewer } from './macos-tahoe-release'
 import { registerPluginPanelNavigationGuard } from '../plugins/plugin-panel-navigation-guard'
 import { installWindowsPathRegistryChangeListener } from '../pty/windows-path-registry-change'
+import { clearPtyRendererCloseAuthority, stagePtyRendererCloseAuthority } from '../ipc/pty'
 import { orcaWindowManager, type OrcaWindowRole } from './orca-window-manager'
 
 // Why: show/restore/resume can overlap before the size nudge resets; never capture the temporary width as the next baseline.
@@ -1084,6 +1086,7 @@ export function createMainWindow(
       // allow-confirmed: renderer already replied and re-entered close().
       // bypass-gone: a gone renderer can't answer window:close-requested, so let OS close complete rather than trap a blank window.
       if (closeAction === 'allow-confirmed') {
+        clearPtyRendererCloseAuthority(mainWindow.webContents)
         windowCloseConfirmed = false
       }
       // Why: window teardown emits resize/move/unmaximize; freeze bounds persistence so they can't clobber saved size (v1.3.26-rc2).
@@ -1097,16 +1100,22 @@ export function createMainWindow(
     e.preventDefault()
     const isQuitting = opts?.getIsQuitting?.() ?? false
     const requestId = ++closeRequestSequence
+    const ownedProviderPtyIds = stagePtyRendererCloseAuthority(
+      mainWindow.webContents,
+      store ? getWindowSessionRegistry(store).getWindowTerminalPtyIds(mainWindow.id) : []
+    )
     if (isQuitting) {
       armQuitRendererAckTimer(requestId)
     }
     // Why: renderer owns the close decision; the always-mounted App root subscription lets even pre-workspace states reply (#5144).
     mainWindow.webContents.send('window:close-requested', {
       isQuitting,
-      requestId
+      requestId,
+      ...(ownedProviderPtyIds.length > 0 ? { ownedProviderPtyIds } : {})
     })
   })
   mainWindow.webContents.on('will-prevent-unload', () => {
+    clearPtyRendererCloseAuthority(mainWindow.webContents)
     // Why: a prevented beforeunload cancels the quit; release the bounds-persistence freeze so later resizing still saves.
     windowClosing = false
     clearQuitRendererAckTimer()

@@ -9,7 +9,14 @@
 // Git AI Author prompt editors) register a guard so quitting prompts the user to
 // save/discard instead of being silently vetoed by a beforeunload handler.
 
-export type WindowCloseRequestHandler = (data: { isQuitting: boolean }) => void
+import { retireWindowTerminalTabsAndConfirmClose } from './terminal/terminal-window-close-retirement'
+
+export type WindowCloseRequest = {
+  isQuitting: boolean
+  ownedProviderPtyIds?: string[]
+}
+
+export type WindowCloseRequestHandler = (data: WindowCloseRequest) => void
 
 /** Returns true to allow the close to proceed, false to cancel it (e.g. the user
  *  picked "Cancel" in an unsaved-changes prompt). */
@@ -48,18 +55,17 @@ async function runWindowCloseGuards(): Promise<boolean> {
   return true
 }
 
-/** Route a main-process close request: run pre-close guards first (cancel if any
- *  vetoes), then delegate to Terminal's rich handler when mounted, else confirm
- *  directly. Why confirm directly: with no workbench mounted there are no
- *  terminals or editor tabs to protect, so blocking would just deadlock the
- *  window (#5144). */
-export async function dispatchWindowCloseRequest(data: { isQuitting: boolean }): Promise<void> {
+/** Route a main-process close request through guards and the mounted workbench.
+ *  A detached window can retain durable terminal membership after its store is
+ *  empty, so its no-workbench user-close path still runs terminal retirement. */
+export async function dispatchWindowCloseRequest(data: WindowCloseRequest): Promise<void> {
   if (closeInFlight) {
     return
   }
   closeInFlight = true
   try {
     if (!(await runWindowCloseGuards())) {
+      void window.api.pty.clearWindowCloseAuthority()
       return
     }
   } finally {
@@ -67,6 +73,10 @@ export async function dispatchWindowCloseRequest(data: { isQuitting: boolean }):
   }
   if (activeHandler) {
     activeHandler(data)
+    return
+  }
+  if (!data.isQuitting) {
+    await retireWindowTerminalTabsAndConfirmClose(undefined, data.ownedProviderPtyIds)
     return
   }
   window.api.ui.confirmWindowClose()

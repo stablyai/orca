@@ -327,6 +327,27 @@ describe('terminal tab retirement planning', () => {
       expect(plan.unroutablePtyIds).toEqual(['pty-ghost'])
     })
 
+    it('routes a rowless PTY only with main renderer-owner authority', () => {
+      const state = makeState({
+        ptyIdsByTabId: {},
+        terminalLayoutsByTabId: {
+          'tab-1': {
+            root: { type: 'leaf', leafId: 'leaf-1' },
+            activeLeafId: 'leaf-1',
+            expandedLeafId: null,
+            ptyIdsByLeafId: { 'leaf-1': 'pty-owned' }
+          }
+        }
+      })
+
+      const plan = buildTerminalTabRetirementPlans(state, ['tab-1'], new Set(['pty-owned'])).get(
+        'tab-1'
+      )!
+
+      expect(plan.localOrSshPtyIds).toEqual(['pty-owned'])
+      expect(plan.unroutablePtyIds).toEqual([])
+    })
+
     it('never kills an unknown worktree PTY when every owner catalog is absent', () => {
       // Why: spawn falls back to the focused runtime (local when none) while catalogs load, but
       // teardown taking that fail-open would kill an unidentified PTY on a guess.

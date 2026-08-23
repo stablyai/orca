@@ -108,6 +108,21 @@ function makeHarness(controlWindowId = 1) {
 }
 
 describe('WindowSessionRegistry', () => {
+  it('enumerates exact terminal PTYs for one window across host records', () => {
+    const { manager, store } = makeHarness()
+    const registry = new WindowSessionRegistry(store as never, manager as never)
+    const local = makeSession('local-tab')
+    const runtime = makeSession('runtime-tab')
+    runtime.remoteSessionIdsByTabId = { 'runtime-tab': 'remote:env@@handle' }
+    registry.set(2, local, 'local')
+    registry.set(2, runtime, 'runtime:env')
+    registry.set(1, makeSession('control-tab'), 'local')
+
+    expect(new Set(registry.getWindowTerminalPtyIds(2))).toEqual(
+      new Set(['pty-local-tab', 'pty-runtime-tab', 'remote:env@@handle'])
+    )
+  })
+
   it('does not expose mutable references from window records', () => {
     const control = makeSession('tab-control')
     const secondary = makeSession('tab-secondary')
