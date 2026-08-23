@@ -6,7 +6,7 @@ import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Tab, TabGroup, TabGroupLayoutNode } from '../../../../shared/tab-types'
 import { useAppStore } from '../../store'
-import { TEST_REPO } from '../../store/slices/store-test-helpers'
+import { makeWorktree, TEST_REPO } from '../../store/slices/store-test-helpers'
 import type { TabDragItemData } from './useTabDragSplit'
 import { shouldActivateTabDragFromDistanceSample } from './tab-drag-pointer-sensor'
 import {
@@ -121,6 +121,9 @@ beforeEach(() => {
   } as never
   useAppStore.setState({
     repos: [TEST_REPO],
+    worktreesByRepo: {
+      [TEST_REPO.id]: [makeWorktree({ id: WT, repoId: TEST_REPO.id })]
+    },
     activeRepoId: TEST_REPO.id,
     activeWorktreeId: WT,
     activeWorkspaceKey: 'worktree:wt-1',

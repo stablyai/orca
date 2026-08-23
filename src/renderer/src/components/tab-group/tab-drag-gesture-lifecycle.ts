@@ -6,11 +6,11 @@ import { installTabDragMissedEndListeners } from './tab-drag-missed-end-listener
  *  passthrough plus the window-level fallback for a missed drag end. Both refs
  *  are injected so this stays independent of the drag state machine. */
 export function useTabDragGestureLifecycle({
-  clearDragStateRef,
+  finishMissedDragRef,
   dragOutsideWindowRef,
   tabDragActiveRef
 }: {
-  clearDragStateRef: RefObject<() => void>
+  finishMissedDragRef: RefObject<() => void>
   dragOutsideWindowRef: RefObject<boolean>
   tabDragActiveRef: RefObject<boolean>
 }): {
@@ -38,12 +38,12 @@ export function useTabDragGestureLifecycle({
     releaseMissedEndFallbackRef.current = installTabDragMissedEndListeners(
       () => {
         if (tabDragActiveRef.current) {
-          clearDragStateRef.current()
+          finishMissedDragRef.current()
         }
       },
       () => dragOutsideWindowRef.current
     )
-  }, [clearDragStateRef, dragOutsideWindowRef, releaseMissedEndFallback, tabDragActiveRef])
+  }, [dragOutsideWindowRef, finishMissedDragRef, releaseMissedEndFallback, tabDragActiveRef])
 
   const acquireWebviewDragPassthrough = useCallback(() => {
     // Why: dnd-kit tab drags are pointer-driven, so the native drag listeners

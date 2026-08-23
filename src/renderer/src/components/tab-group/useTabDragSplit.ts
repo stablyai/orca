@@ -107,9 +107,11 @@ export function useTabDragSplit({
   const [activeDrag, setActiveDrag] = useState<TabDragItemData | null>(null)
   const preDragActivationSnapshotRef = useRef<TabDragActivationSnapshot | null>(null)
   const tabDragActiveRef = useRef(false)
+  const dragGenerationRef = useRef(0)
+  const pendingDragEndGenerationRef = useRef<number | null>(null)
   const dragOutsideWindowRef = useRef(false)
   const dragGeometryRef = useRef<TabGroupPanelGeometrySnapshot | null>(null)
-  const clearDragStateRef = useRef<() => void>(() => {})
+  const finishMissedDragRef = useRef<() => void>(() => {})
   const tabInsertion = useHoveredTabInsertion(isTabDragData, getDragPointer)
   const {
     acquireWebviewDragPassthrough,
@@ -118,8 +120,8 @@ export function useTabDragSplit({
     releaseWebviewDragPassthrough,
     setDragRootNode
   } = useTabDragGestureLifecycle({
-    clearDragStateRef,
     dragOutsideWindowRef,
+    finishMissedDragRef,
     tabDragActiveRef
   })
   const {
@@ -145,6 +147,8 @@ export function useTabDragSplit({
   const sensors = useSensors(pointerSensor)
 
   const clearDragState = useCallback(() => {
+    dragGenerationRef.current += 1
+    pendingDragEndGenerationRef.current = null
     tabDragActiveRef.current = false
     dragOutsideWindowRef.current = false
     releaseWebviewDragPassthrough()
@@ -160,7 +164,6 @@ export function useTabDragSplit({
     releaseWebviewDragPassthrough,
     tabInsertion
   ])
-  clearDragStateRef.current = clearDragState
 
   const restorePreDragActivation = useCallback(() => {
     const snapshot = preDragActivationSnapshotRef.current
@@ -197,15 +200,18 @@ export function useTabDragSplit({
     },
     [clearDragState, restorePreDragActivation, restoreSourceGroupAfterCrossGroupDrop]
   )
+  finishMissedDragRef.current = () => finishDrag(true)
 
   const onDragStart = useCallback(
     (event: DragStartEvent) => {
       const dragData = event.active.data.current
-      if (!isTabDragData(dragData) || dragData.worktreeId !== worktreeId) {
-        clearDragState()
+      if (!enabled || !isTabDragData(dragData) || dragData.worktreeId !== worktreeId) {
+        finishDrag(true)
         return
       }
 
+      dragGenerationRef.current += 1
+      pendingDragEndGenerationRef.current = null
       setActiveDrag(dragData)
       tabDragActiveRef.current = true
       dragOutsideWindowRef.current = false
@@ -214,7 +220,7 @@ export function useTabDragSplit({
       preDragActivationSnapshotRef.current = captureTabDragActivationSnapshot(worktreeId)
       acquireWebviewDragPassthrough()
     },
-    [acquireWebviewDragPassthrough, clearDragState, installMissedEndFallback, worktreeId]
+    [acquireWebviewDragPassthrough, enabled, finishDrag, installMissedEndFallback, worktreeId]
   )
 
   const onDragMove = useCallback(
@@ -233,6 +239,14 @@ export function useTabDragSplit({
 
   const onDragEnd = useCallback(
     (event: DragEndEvent) => {
+      if (!tabDragActiveRef.current) {
+        return
+      }
+      const dragGeneration = dragGenerationRef.current
+      if (pendingDragEndGenerationRef.current === dragGeneration) {
+        return
+      }
+      pendingDragEndGenerationRef.current = dragGeneration
       releaseMissedEndFallback()
       commitTabDragDrop({
         event,
@@ -240,7 +254,11 @@ export function useTabDragSplit({
         dragGeometryRef,
         dropUnifiedTab,
         reorderUnifiedTabs,
-        finishDrag
+        finishDrag: (restoreSnapshot, activeData) => {
+          if (dragGenerationRef.current === dragGeneration) {
+            finishDrag(restoreSnapshot, activeData)
+          }
+        }
       })
     },
     [

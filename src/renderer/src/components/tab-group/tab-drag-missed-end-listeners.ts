@@ -7,24 +7,26 @@ export function installTabDragMissedEndListeners(
 ): () => void {
   let cleanupTimer: number | null = null
 
-  const clearIfDndMissedEnd = (): void => {
+  const clearIfDndMissedEnd = (ignoreCleanup: () => boolean = () => false): void => {
     if (cleanupTimer !== null) {
       window.clearTimeout(cleanupTimer)
     }
     cleanupTimer = window.setTimeout(() => {
       cleanupTimer = null
-      onMissedEnd()
+      if (!ignoreCleanup()) {
+        onMissedEnd()
+      }
     }, 0)
   }
 
   const clearOnWindowTransition = (): void => {
-    if (!ignoreWindowTransition()) {
-      clearIfDndMissedEnd()
-    }
+    clearIfDndMissedEnd(ignoreWindowTransition)
   }
 
-  window.addEventListener('pointerup', clearIfDndMissedEnd)
-  window.addEventListener('pointercancel', clearIfDndMissedEnd)
+  const clearOnPointerEnd = (): void => clearIfDndMissedEnd()
+
+  window.addEventListener('pointerup', clearOnPointerEnd)
+  window.addEventListener('pointercancel', clearOnPointerEnd)
   window.addEventListener('blur', clearOnWindowTransition)
   window.addEventListener('focus', clearOnWindowTransition)
 
@@ -32,8 +34,8 @@ export function installTabDragMissedEndListeners(
     if (cleanupTimer !== null) {
       window.clearTimeout(cleanupTimer)
     }
-    window.removeEventListener('pointerup', clearIfDndMissedEnd)
-    window.removeEventListener('pointercancel', clearIfDndMissedEnd)
+    window.removeEventListener('pointerup', clearOnPointerEnd)
+    window.removeEventListener('pointercancel', clearOnPointerEnd)
     window.removeEventListener('blur', clearOnWindowTransition)
     window.removeEventListener('focus', clearOnWindowTransition)
   }

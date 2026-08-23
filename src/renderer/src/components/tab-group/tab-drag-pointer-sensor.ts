@@ -7,6 +7,7 @@ import type {
   SensorInstance,
   SensorProps
 } from '@dnd-kit/core'
+import { isDragPointerOutsideViewport } from './tab-drag-pointer'
 
 type PointerCoordinates = { x: number; y: number }
 
@@ -142,6 +143,7 @@ export class TabDragPointerSensor implements SensorInstance {
   private activated = false
   private readonly document: Document
   private readonly initialCoordinates: PointerCoordinates
+  private currentCoordinates: PointerCoordinates
   private readonly pointerDownTime = performance.now()
   private readonly props: SensorProps<PointerSensorOptions>
   private readonly documentListeners = new ListenerBag()
@@ -154,11 +156,13 @@ export class TabDragPointerSensor implements SensorInstance {
     this.props = props
     this.document = getOwnerDocument(props.event.target)
     this.initialCoordinates = getPointerCoordinates(props.event) ?? DEFAULT_COORDINATES
+    this.currentCoordinates = this.initialCoordinates
     this.handleStart = this.handleStart.bind(this)
     this.handleMove = this.handleMove.bind(this)
     this.handleEnd = this.handleEnd.bind(this)
     this.handleCancel = this.handleCancel.bind(this)
     this.handleKeydown = this.handleKeydown.bind(this)
+    this.handleWindowFocus = this.handleWindowFocus.bind(this)
     this.removeTextSelection = this.removeTextSelection.bind(this)
     this.attach()
   }
@@ -174,7 +178,7 @@ export class TabDragPointerSensor implements SensorInstance {
     this.windowListeners.add(win, 'dragstart', preventDefault)
     this.windowListeners.add(win, 'visibilitychange', this.handleCancel)
     this.windowListeners.add(win, 'contextmenu', preventDefault)
-    this.windowListeners.add(win, 'focus', this.handleCancel)
+    this.windowListeners.add(win, 'focus', this.handleWindowFocus)
     this.documentListeners.add(this.document, 'keydown', this.handleKeydown)
 
     if (!activationConstraint) {
@@ -233,6 +237,7 @@ export class TabDragPointerSensor implements SensorInstance {
     if (!coordinates) {
       return
     }
+    this.currentCoordinates = coordinates
     const delta = subtractCoordinates(this.initialCoordinates, coordinates)
 
     if (!this.activated && activationConstraint) {
@@ -294,6 +299,12 @@ export class TabDragPointerSensor implements SensorInstance {
 
   private handleKeydown(event: KeyboardEvent): void {
     if (event.code === 'Escape') {
+      this.handleCancel()
+    }
+  }
+
+  private handleWindowFocus(): void {
+    if (!isDragPointerOutsideViewport(this.currentCoordinates)) {
       this.handleCancel()
     }
   }
