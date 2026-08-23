@@ -21,6 +21,7 @@ import type {
 } from '../shared/workspace-space-types'
 import { compactWorkspaceSpaceItems } from '../shared/workspace-space-compaction'
 import { mapWithConcurrency } from '../shared/map-with-concurrency'
+import { escapeRegex } from '../shared/string-utils'
 import {
   scanWorkspaceSpaceEntryTree,
   type WorkspaceSpaceEntryScan
@@ -167,13 +168,9 @@ function joinFilesystemPath(parent: string, child: string): string {
   return looksLikeWindowsPath(parent) ? win32.join(parent, child) : posix.join(parent, child)
 }
 
-function escapeRegExp(value: string): string {
-  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-}
-
 function normalizeLocalDuPath(pathValue: string): string {
   const separator = platform === 'win32' ? '\\' : '/'
-  const trimmed = pathValue.replace(new RegExp(`${escapeRegExp(separator)}+$`), '')
+  const trimmed = pathValue.replace(new RegExp(`${escapeRegex(separator)}+$`), '')
   return trimmed.length > 0 ? trimmed : pathValue
 }
 
