@@ -259,6 +259,37 @@ describe('bash-only payloads declare their interpreter', () => {
       offenders.push(relativePath)
       continue
     }
+    // Anything that is not a plain object literal is judged unreadable, and an
+    // unreadable call must pin bash.
+    //
+    // Six review rounds of widening this regex produced more evasions -- a
+    // ternary with one pinned branch, an `as` assertion carrying the pin,
+    // `Object.assign` -- because a regex cannot tell which object a key
+    // belongs to. So stop guessing: a ternary, a spread or an assertion makes
+    // the call opaque, and opacity requires the pin rather than excusing it.
+    //
+    // A nested CALL is deliberately not exotic: `script: \`x ${shellQuote(p)}\``
+    // is the ordinary way every payload here is built, and flagging it would
+    // demand `shell: 'bash'` on POSIX payloads that must not have it.
+    // A ternary only makes the call opaque when it CHOOSES the spec, i.e. it
+    // sits before the first `{`. One inside the object picks a script line and
+    // is both common and harmless (claude-accounts/service.ts:977).
+    const isExotic = (text: string): boolean => {
+      const body = text.replace(/^\(/, '')
+      const firstBrace = body.indexOf('{')
+      const prefix = firstBrace === -1 ? body : body.slice(0, firstBrace)
+      return /\?[^.:]|\.\.\./.test(prefix) || /\bas\s+[A-Za-z{]/.test(body)
+    }
+    // No `includes("shell: 'bash'")` escape here: in `cond ? {pinned} : {not}`
+    // the pin belongs to one branch and the substring test cannot tell which,
+    // so a pinned branch excused an unpinned one. An exotic call therefore
+    // cannot be excused -- write it as a plain object literal instead.
+    if (
+      calls.some(({ text }) => isExotic(text)) && BASHISM.test(source)
+    ) {
+      offenders.push(relativePath)
+      continue
+    }
     // An opaque payload is judged by the whole file, minus anything already
     // declared bash.
     //
