@@ -87,6 +87,49 @@ describe('runHook', () => {
     }
   })
 
+  it('does not run setup scripts with a half-activated conda env', async () => {
+    // Why: setup scripts source conda exactly like a shell rc does, so the
+    // orphaned CONDA_SHLVL sentinel surfaces as an opaque hook failure (#14195).
+    let capturedEnv: Record<string, string> | undefined
+    execMock.mockImplementation((_script, options, callback) => {
+      capturedEnv = (options as { env: Record<string, string> }).env
+      callback?.(null, '', '')
+      return {} as never
+    })
+
+    const fs = await import('node:fs')
+    vi.mocked(fs.existsSync).mockReturnValue(true)
+    vi.mocked(fs.readFileSync).mockReturnValue('scripts:\n  setup: |\n    echo hello\n')
+
+    const saved = {
+      CONDA_SHLVL: process.env.CONDA_SHLVL,
+      CONDA_PREFIX: process.env.CONDA_PREFIX,
+      CONDA_DEFAULT_ENV: process.env.CONDA_DEFAULT_ENV,
+      CONDA_EXE: process.env.CONDA_EXE
+    }
+    delete process.env.CONDA_PREFIX
+    process.env.CONDA_SHLVL = '1'
+    process.env.CONDA_DEFAULT_ENV = 'base'
+    process.env.CONDA_EXE = '/opt/miniconda3/bin/conda'
+
+    try {
+      const { runHook } = await import('./hooks')
+      await runHook('setup', '/repo/worktree', makeRepo())
+    } finally {
+      for (const [key, value] of Object.entries(saved)) {
+        if (value === undefined) {
+          delete process.env[key]
+        } else {
+          process.env[key] = value
+        }
+      }
+    }
+
+    expect(capturedEnv?.CONDA_SHLVL).toBeUndefined()
+    expect(capturedEnv?.CONDA_DEFAULT_ENV).toBeUndefined()
+    expect(capturedEnv?.CONDA_EXE).toBe('/opt/miniconda3/bin/conda')
+  })
+
   it('keeps bash as the hook shell on non-Windows platforms', async () => {
     execMock.mockImplementation((_script, _options, callback) => {
       callback?.(null, '', '')

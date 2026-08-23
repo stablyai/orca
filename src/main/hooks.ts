@@ -8,6 +8,7 @@ import { getHookRuntimeTarget, getHookWslContext } from './hook-runtime-target'
 import { getSetupEnvVars } from './setup-hook-env-vars'
 import { iterateLfScriptLines } from './setup-runner-script-text'
 import { promptGuardShellEnv } from './git/runner'
+import { dropIncoherentCondaActivationEnv } from './pty/conda-activation-env'
 import { toLinuxPath } from './wsl'
 import { runWslProcess } from './wsl/wsl-runner'
 import type { HookRuntimeTarget } from './hook-runtime-target'
@@ -186,6 +187,9 @@ export function runHook(
       })
   }
 
+  const shellHookEnv: NodeJS.ProcessEnv = { ...process.env, ...getSetupEnvVars(repo, cwd) }
+  dropIncoherentCondaActivationEnv(shellHookEnv)
+
   return new Promise((resolve) => {
     exec(
       script,
@@ -194,10 +198,7 @@ export function runHook(
         timeout: HOOK_TIMEOUT,
         shell: getHookShell(),
         // Why: hooks run unattended; block Git Credential Manager's interactive prompt while keeping cached auth (issue #7652).
-        env: promptGuardShellEnv({
-          ...process.env,
-          ...getSetupEnvVars(repo, cwd)
-        })
+        env: promptGuardShellEnv(shellHookEnv)
       },
       (error, stdout, stderr) => {
         if (error) {
