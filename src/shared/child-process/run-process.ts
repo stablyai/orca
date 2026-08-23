@@ -39,6 +39,8 @@ export type ProcessSpec = {
   maxOutputBytes?: number
   /** Kills the process when aborted; the result still reports the exit. */
   signal?: AbortSignal
+  /** Interactive children can inherit the caller's terminal; collectors keep the default pipes. */
+  stdio?: 'inherit'
 }
 
 export type ProcessResult = {
@@ -81,7 +83,7 @@ export function resolveSpawn(spec: ProcessSpec, platform: NodeJS.Platform): Reso
   const base: NodeSpawnOptions = {
     cwd: spec.cwd,
     env: spec.env,
-    stdio: ['pipe', 'pipe', 'pipe'],
+    stdio: spec.stdio ?? ['pipe', 'pipe', 'pipe'],
     // Why unconditional: Orca's main process is GUI-subsystem and owns no
     // console, so every console-subsystem child it starts gets a fresh visible
     // conhost that takes foreground — keystrokes typed into an Orca terminal at

@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
+import type * as Fs from 'node:fs'
 import {
   wslUncDirectoryExistsAsyncMock,
   trackMock,
@@ -9,7 +10,10 @@ import { makePaneKey } from '../../shared/stable-pane-id'
 import { registerPtyHandlers, getPtyIdForPaneKey, setLocalPtyProvider } from './pty'
 
 vi.mock('electron', () => import('./pty-ipc-mock-registry').then((m) => m.electronModuleMock()))
-vi.mock('fs', () => import('./pty-ipc-mock-registry').then((m) => m.fsModuleMock()))
+vi.mock('fs', async (importOriginal) => ({
+  ...(await importOriginal<typeof Fs>()),
+  ...(await import('./pty-ipc-mock-registry')).fsModuleMock()
+}))
 vi.mock('node-pty', () => import('./pty-ipc-mock-registry').then((m) => m.nodePtyModuleMock()))
 vi.mock('node:child_process', async (importOriginal) =>
   (await import('./pty-ipc-mock-registry')).childProcessModuleMock(await importOriginal())
@@ -291,7 +295,13 @@ describe('registerPtyHandlers', () => {
     'adopts a completed runtime-owned pane before replacement launch preflight ($label)',
     async ({ worktreeId, cwd, paneAccountAtStart, expectedHomeRouteAtStart }) => {
       type StableAdoption = {
-        result: { id: string; incarnationId?: string; isReattach?: boolean }
+        result: {
+          id: string
+          incarnationId?: string
+          isReattach?: boolean
+          shellPath?: string
+          wslDistro?: string | null
+        }
         owner: { handle?: string; tabId: string; leafId: string; ptyId: string }
         materialized?: true
       } | null
@@ -331,6 +341,8 @@ describe('registerPtyHandlers', () => {
             return {
               id: 'pty-live-owner',
               incarnationId: 'inc-live-owner',
+              shellPath: 'powershell.exe',
+              wslDistro: null,
               isReattach: true,
               snapshot: 'original-live-output',
               providerSequence: { value: 20, generation: 'continued' as const }
@@ -564,6 +576,8 @@ describe('registerPtyHandlers', () => {
       })
       expect(claimedResult).toMatchObject({
         id: 'pty-live-owner',
+        shellPath: 'powershell.exe',
+        wslDistro: null,
         stablePaneOwner: { handle: 'term-live-owner', tabId, leafId }
       })
       expect(providerSpawn).toHaveBeenCalledTimes(3)

@@ -157,13 +157,17 @@ describe('orca cli worktree awareness', () => {
           ORCA_PANE_KEY: 'tab-1:11111111-1111-4111-8111-111111111111'
         })
       })
-      expect(spawnMock).toHaveBeenCalledWith('claude', ['--teammate-mode', 'auto'], {
-        stdio: 'inherit',
-        env: expect.objectContaining({
-          CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS: '1',
-          TMUX_PANE: '%1'
+      expect(spawnMock).toHaveBeenCalledWith(
+        'claude',
+        ['--teammate-mode', 'auto'],
+        expect.objectContaining({
+          stdio: 'inherit',
+          env: expect.objectContaining({
+            CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS: '1',
+            TMUX_PANE: '%1'
+          })
         })
-      })
+      )
     }
   )
 
@@ -193,13 +197,13 @@ describe('orca cli worktree awareness', () => {
       expect(spawnMock).toHaveBeenCalledWith(
         'claude',
         ['--teammate-mode', 'auto', '--resume', 'session-1', '--model', 'sonnet', 'review this'],
-        {
+        expect.objectContaining({
           stdio: 'inherit',
           env: expect.objectContaining({
             CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS: '1',
             TMUX_PANE: '%1'
           })
-        }
+        })
       )
     }
   )

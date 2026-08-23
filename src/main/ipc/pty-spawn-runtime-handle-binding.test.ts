@@ -8,7 +8,10 @@ import { OrcaRuntimeService } from '../runtime/orca-runtime'
 import { registerPtyHandlers, registerSshPtyProvider } from './pty'
 
 vi.mock('electron', () => import('./pty-ipc-mock-registry').then((m) => m.electronModuleMock()))
-vi.mock('fs', () => import('./pty-ipc-mock-registry').then((m) => m.fsModuleMock()))
+vi.mock('fs', async (importOriginal) => ({
+  ...(await importOriginal()),
+  ...(await import('./pty-ipc-mock-registry')).fsModuleMock()
+}))
 vi.mock('node-pty', () => import('./pty-ipc-mock-registry').then((m) => m.nodePtyModuleMock()))
 vi.mock('node:child_process', async (importOriginal) =>
   (await import('./pty-ipc-mock-registry')).childProcessModuleMock(await importOriginal())
@@ -52,7 +55,8 @@ vi.mock('../codex/codex-state-db-backfill-recovery', () =>
 )
 
 describe('registerPtyHandlers', () => {
-  const { handlers, mainWindow, mainWindowIpcEvent } = setupPtyIpcSuite()
+  const { handlers, mainWindow, mainWindowIpcEvent, installObservableDaemonTestProvider } =
+    setupPtyIpcSuite()
 
   it('injects ORCA_TERMINAL_HANDLE for non-local PTY providers', async () => {
     const spawn = vi.fn(async () => ({ id: 'remote-pty' }))
@@ -111,6 +115,7 @@ describe('registerPtyHandlers', () => {
       setPtyController: vi.fn(),
       createPreAllocatedTerminalHandle: vi.fn(() => 'term_agent_teams'),
       prepareClaudeAgentTeamsLeaderForHandle: vi.fn(async () => ({
+        mode: 'native' as const,
         env: {
           CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS: '1',
           PATH: `/tmp/fresh-agent-teams${delimiter}/usr/bin`,
@@ -166,7 +171,12 @@ describe('registerPtyHandlers', () => {
       baseEnv: expect.objectContaining({
         CLAUDE_PROFILE: 'captured',
         ORCA_AGENT_TEAMS_TEAM_ID: 'team-stale'
-      })
+      }),
+      pendingShellAuthority: {
+        executionPlatform: process.platform,
+        isRemote: false,
+        shellOverride: undefined
+      }
     })
     expect(spawnOptions.env).toMatchObject({
       CLAUDE_PROFILE: 'captured',
@@ -190,6 +200,99 @@ describe('registerPtyHandlers', () => {
       expect.any(String),
       'term_agent_teams'
     )
+  })
+  it('sanitizes captured native Agent Teams env when pre-spawn authority is insufficient', async () => {
+    const leafId = '22222222-2222-4222-8222-222222222222'
+    const runtime = {
+      setPtyController: vi.fn(),
+      createPreAllocatedTerminalHandle: vi.fn(() => 'term_agent_teams_fallback'),
+      prepareClaudeAgentTeamsLeaderForHandle: vi.fn(async () => ({
+        mode: 'in-process' as const,
+        env: { CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS: '1' }
+      })),
+      registerPreAllocatedHandleForPty: vi.fn(),
+      registerPty: vi.fn(),
+      getDriver: vi.fn(() => ({ kind: 'host' })),
+      onPtySpawned: vi.fn(),
+      onPtyExit: vi.fn(),
+      onPtyData: vi.fn()
+    }
+
+    registerPtyHandlers(mainWindow as never, runtime as never)
+    const result = (await handlers.get('pty:spawn')!(mainWindowIpcEvent, {
+      cols: 80,
+      rows: 24,
+      cwd: '/repo',
+      command: 'claude --teammate-mode auto --resume claude-session',
+      tabId: 'tab-2',
+      leafId,
+      worktreeId: 'wt-1',
+      env: {
+        ORCA_PANE_KEY: `tab-2:${leafId}`,
+        ORCA_AGENT_TEAMS_TEAM_ID: 'team-stale',
+        ORCA_AGENT_TEAMS_TOKEN: 'stale-token',
+        TMUX: '/tmp/orca-claude-agent-teams/team-stale,0,1',
+        TERM_PROGRAM: 'Orca'
+      },
+      launchConfig: {
+        agentCommand: 'claude --teammate-mode auto',
+        agentArgs: '',
+        agentEnv: { ORCA_AGENT_TEAMS_TEAM_ID: 'team-stale' }
+      },
+      launchAgent: 'claude'
+    })) as { launchConfig?: { agentCommand: string; agentEnv: Record<string, string> } }
+
+    const spawnOptions = spawnMock.mock.calls.at(-1)?.[2] as { env: Record<string, string> }
+    expect(spawnOptions.env).toMatchObject({ CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS: '1' })
+    expect(spawnOptions.env).not.toHaveProperty('ORCA_AGENT_TEAMS_TEAM_ID')
+    expect(spawnOptions.env).not.toHaveProperty('TMUX')
+    expect(spawnOptions.env).not.toHaveProperty('TERM_PROGRAM')
+    expect(result.launchConfig).toMatchObject({
+      agentCommand: 'claude --teammate-mode in-process',
+      agentEnv: { CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS: '1' }
+    })
+  })
+  it('discards a prepared native team when worktree spawn acquisition fails', async () => {
+    const leafId = '99999999-9999-4999-8999-999999999999'
+    const runtime = {
+      setPtyController: vi.fn(),
+      createPreAllocatedTerminalHandle: vi.fn(() => 'term_agent_teams'),
+      prepareClaudeAgentTeamsLeaderForHandle: vi.fn(async () => ({
+        mode: 'native' as const,
+        env: {
+          CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS: '1',
+          ORCA_AGENT_TEAMS_TEAM_ID: 'team-prepared'
+        }
+      })),
+      acquireWorktreeTerminalSpawn: vi.fn(async () => {
+        throw new Error('spawn acquisition failed')
+      }),
+      discardClaudeAgentTeamsLeaderForHandle: vi.fn(),
+      registerPreAllocatedHandleForPty: vi.fn(),
+      registerPty: vi.fn(),
+      getDriver: vi.fn(() => ({ kind: 'host' })),
+      onPtySpawned: vi.fn(),
+      onPtyExit: vi.fn(),
+      onPtyData: vi.fn()
+    }
+
+    handlers.clear()
+    registerPtyHandlers(mainWindow as never, runtime as never)
+    await expect(
+      handlers.get('pty:spawn')!(mainWindowIpcEvent, {
+        cols: 80,
+        rows: 24,
+        cwd: '/repo',
+        command: 'claude --teammate-mode auto',
+        tabId: 'tab-prepared',
+        leafId,
+        worktreeId: 'wt-1',
+        env: { ORCA_PANE_KEY: `tab-prepared:${leafId}` }
+      })
+    ).rejects.toThrow('spawn acquisition failed')
+
+    expect(runtime.discardClaudeAgentTeamsLeaderForHandle).toHaveBeenCalledWith('term_agent_teams')
+    expect(spawnMock).not.toHaveBeenCalled()
   })
   it('threads the validated pane identity into registerPty for a renderer PTY spawn (#7587)', async () => {
     const leafId = '88888888-8888-4888-8888-888888888888'
@@ -369,6 +472,7 @@ describe('registerPtyHandlers', () => {
       setPtyController: vi.fn(),
       createPreAllocatedTerminalHandle: vi.fn(() => 'term_agent_teams'),
       prepareClaudeAgentTeamsLeaderForHandle: vi.fn(async () => ({
+        mode: 'native' as const,
         env: {
           CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS: '1',
           ORCA_AGENT_TEAMS_TEAM_ID: 'team-fresh',
@@ -407,7 +511,12 @@ describe('registerPtyHandlers', () => {
 
     expect(runtime.prepareClaudeAgentTeamsLeaderForHandle).toHaveBeenCalledWith({
       handle: 'term_agent_teams',
-      baseEnv: expect.any(Object)
+      baseEnv: expect.any(Object),
+      pendingShellAuthority: {
+        executionPlatform: process.platform,
+        isRemote: false,
+        shellOverride: undefined
+      }
     })
   })
   it('does not echo launch config for provider reattach results', async () => {
@@ -499,5 +608,90 @@ describe('registerPtyHandlers', () => {
     expect(mainWindow.webContents.send).toHaveBeenCalledWith('pty:spawned', {
       id: spawned.id
     })
+  })
+
+  it('retires a fresh local PTY when cancellation wins after provider spawn', async () => {
+    type RuntimeSpawnController = {
+      spawn(args: {
+        cols: number
+        rows: number
+        worktreeId: string
+        signal: AbortSignal
+      }): Promise<{ id: string }>
+    }
+    let controller: RuntimeSpawnController | null = null
+    const provider = installObservableDaemonTestProvider()
+    const abort = new AbortController()
+    provider.spawn.mockImplementationOnce(async () => {
+      abort.abort()
+      return { id: 'fresh-canceled', shellPath: 'powershell.exe' }
+    })
+    const runtime = {
+      setPtyController: vi.fn((value) => {
+        controller = value
+      }),
+      registerPreAllocatedHandleForPty: vi.fn(),
+      registerPty: vi.fn(),
+      noteTerminalSpawnCommand: vi.fn()
+    }
+
+    registerPtyHandlers(mainWindow as never, runtime as never)
+    expect(controller).not.toBeNull()
+    await expect(
+      (controller as unknown as RuntimeSpawnController).spawn({
+        cols: 80,
+        rows: 24,
+        worktreeId: 'wt-1',
+        signal: abort.signal
+      })
+    ).rejects.toThrow('client_disconnected')
+    expect(provider.shutdown).toHaveBeenCalledWith('fresh-canceled', { immediate: true })
+    expect(runtime.registerPty).not.toHaveBeenCalled()
+  })
+
+  it('keeps rejected daemon ownership unverifiable when shutdown loses contact', async () => {
+    type RuntimeSpawnController = {
+      spawn(args: {
+        cols: number
+        rows: number
+        worktreeId: string
+        signal: AbortSignal
+      }): Promise<{ id: string }>
+    }
+    let controller: RuntimeSpawnController | null = null
+    const provider = installObservableDaemonTestProvider()
+    const abort = new AbortController()
+    provider.spawn.mockImplementationOnce(async () => {
+      abort.abort()
+      return { id: 'fresh-unverifiable', shellPath: 'powershell.exe' }
+    })
+    provider.shutdown.mockRejectedValueOnce(new Error('Connection lost'))
+    const runtime = {
+      setPtyController: vi.fn((value) => {
+        controller = value
+      }),
+      registerPreAllocatedHandleForPty: vi.fn(),
+      registerPty: vi.fn(),
+      noteTerminalSpawnCommand: vi.fn(),
+      markPtyLivenessUnverifiable: vi.fn(),
+      onPtyExit: vi.fn()
+    }
+
+    registerPtyHandlers(mainWindow as never, runtime as never)
+    await expect(
+      (controller as unknown as RuntimeSpawnController).spawn({
+        cols: 80,
+        rows: 24,
+        worktreeId: 'wt-1',
+        signal: abort.signal
+      })
+    ).rejects.toThrow('client_disconnected')
+
+    expect(runtime.markPtyLivenessUnverifiable).toHaveBeenCalledWith(
+      'fresh-unverifiable',
+      'rejected_spawn_stop_unconfirmed'
+    )
+    provider.emitExit('fresh-unverifiable')
+    expect(runtime.onPtyExit).toHaveBeenCalledWith('fresh-unverifiable', 0, undefined, undefined)
   })
 })

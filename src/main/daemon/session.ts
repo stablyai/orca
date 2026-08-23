@@ -124,6 +124,10 @@ export class Session {
     return this.subprocess.pid
   }
 
+  get shellPath(): string | undefined {
+    return this.subprocess.shellPath
+  }
+
   /** Terminate this session's pty job object. `unavailable` is not proof of death. */
   terminateOwnedTree(): JobTerminationOutcome {
     return this.subprocess.terminateOwnedTree()

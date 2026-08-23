@@ -8,6 +8,26 @@ export type BuiltInWindowsTerminalShell =
   | 'wsl.exe'
   | typeof WINDOWS_GIT_BASH_SHELL
 
+type WindowsShellAttempt = { shellPath: string }
+
+export function enforceRequiredWindowsPowerShellAttempts<T extends WindowsShellAttempt>(args: {
+  requiredShell?: 'powershell'
+  resolvedShellPath: string
+  fallbackAttempts: T[]
+}): T[] {
+  if (args.requiredShell !== 'powershell') {
+    return args.fallbackAttempts
+  }
+  const isPowerShell = (shellPath: string): boolean => {
+    const basename = shellPath.replaceAll('\\', '/').split('/').pop()?.toLowerCase()
+    return basename === 'powershell.exe' || basename === 'pwsh.exe'
+  }
+  if (!isPowerShell(args.resolvedShellPath)) {
+    throw new Error('required_shell_unavailable')
+  }
+  return args.fallbackAttempts.filter((attempt) => isPowerShell(attempt.shellPath))
+}
+
 /**
  * Classifies a configured `terminalWindowsShell` value into the startup-shell
  * family used to quote queued commands. Git Bash / wsl.exe run a POSIX shell;
@@ -53,4 +73,22 @@ export function resolveLocalWindowsAgentStartupShell(args: {
     return undefined
   }
   return resolveWindowsShellStartupFamily(args.terminalWindowsShell)
+}
+
+export function resolveLocalWindowsAgentTeamsPowerShell(args: {
+  platform: NodeJS.Platform
+  isRemote: boolean
+  terminalWindowsShell?: string | null
+}): string | undefined {
+  if (args.platform !== 'win32' || args.isRemote) {
+    return undefined
+  }
+  const trimmed = args.terminalWindowsShell?.trim() || 'powershell.exe'
+  const basename = trimmed.replaceAll('\\', '/').split('/').pop()?.toLowerCase()
+  return basename === 'powershell.exe' ||
+    basename === 'powershell' ||
+    basename === 'pwsh.exe' ||
+    basename === 'pwsh'
+    ? trimmed
+    : undefined
 }

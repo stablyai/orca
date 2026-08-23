@@ -59,7 +59,10 @@ import {
   seedPowerlevel10kWizardEnv
 } from '../pty/powerlevel10k-wizard-env'
 import { isWindowsGitBashShellPath, resolveWindowsGitBashShellPath } from '../git-bash'
-import { WINDOWS_GIT_BASH_SHELL } from '../../shared/windows-terminal-shell'
+import {
+  enforceRequiredWindowsPowerShellAttempts,
+  WINDOWS_GIT_BASH_SHELL
+} from '../../shared/windows-terminal-shell'
 import { resolveAgentForegroundProcessWithAvailability } from '../providers/agent-foreground-process'
 import { readWindowsConptyProcessIds } from '../providers/windows-conpty-process-membership'
 import { assignHostProcessToKillOnCloseJob, terminatePtyJob } from '../windows/windows-pty-job'
@@ -86,6 +89,7 @@ import {
 } from '../../shared/windows-environment-expansion'
 import { forceKillPosixPtyProcessGroups } from '../pty/posix-pty-process-groups'
 import { readPtySlavePath } from '../../shared/pty-slave-line-discipline-echo'
+import { deleteEnvironmentKeys, findEnvironmentKey } from '../../shared/environment-key-deletion'
 
 const PANE_IDENTITY_ENV_KEYS = [
   'ORCA_PANE_KEY',
@@ -138,6 +142,7 @@ export type PtySubprocessOptions = {
    *  Overrides env.COMSPEC / env.SHELL resolution inside the daemon so a user
    *  who picks "New WSL terminal" from the "+" menu actually gets WSL. */
   shellOverride?: string
+  requiredShell?: 'powershell'
   terminalWindowsWslDistro?: string | null
   terminalWindowsPowerShellImplementation?: 'auto' | 'powershell.exe' | 'pwsh.exe'
   isCanceled?: () => boolean
@@ -153,15 +158,22 @@ function deleteRequestedDaemonEnvKeys(
   // Why: the persistent daemon's inherited env can differ from Electron's.
   // Compare ownership here so real-home routing neither leaks an Orca overlay
   // nor deletes a user-owned CODEX_HOME chosen by the daemon's host context.
+  const orcaHomeKey = findEnvironmentKey(env, 'ORCA_CODEX_HOME')
+  const codexHomeKey = findEnvironmentKey(env, 'CODEX_HOME')
+  const deletesOrcaHome =
+    keys?.some((key) =>
+      process.platform === 'win32'
+        ? key.toLowerCase() === 'orca_codex_home'
+        : key === 'ORCA_CODEX_HOME'
+    ) === true
   const deleteOrcaOwnedCodexHome =
-    keys?.includes('ORCA_CODEX_HOME') === true &&
-    env.ORCA_CODEX_HOME !== undefined &&
-    env.CODEX_HOME === env.ORCA_CODEX_HOME
-  for (const key of keys ?? []) {
-    delete env[key]
-  }
+    deletesOrcaHome &&
+    orcaHomeKey !== undefined &&
+    codexHomeKey !== undefined &&
+    env[codexHomeKey] === env[orcaHomeKey]
+  deleteEnvironmentKeys(env, keys)
   if (deleteOrcaOwnedCodexHome) {
-    delete env.CODEX_HOME
+    deleteEnvironmentKeys(env, ['CODEX_HOME'])
   }
 }
 
@@ -761,6 +773,11 @@ export async function createPtySubprocess(opts: PtySubprocessOptions): Promise<S
       defaultCwd: getDefaultCwd(),
       wslContext: resolvedWslContext,
       startupCommand: opts.command
+    })
+    windowsFallbackAttempts = enforceRequiredWindowsPowerShellAttempts({
+      requiredShell: opts.requiredShell,
+      resolvedShellPath: shellPath,
+      fallbackAttempts: windowsFallbackAttempts
     })
     const primaryAttempt = windowsFallbackAttempts[0]
     if (primaryAttempt) {

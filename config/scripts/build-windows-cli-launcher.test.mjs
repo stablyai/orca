@@ -127,6 +127,98 @@ describe('Windows CLI launcher', () => {
     }
   })
 
+  itWindows('forwards tmux shim argv without cmd.exe reparsing', () => {
+    const root = mkdtempSync(join(tmpdir(), 'orca tmux launcher '))
+    try {
+      const shimPath = join(root, 'tmux.exe')
+      const cliPath = join(root, 'capture-argv.cjs')
+      const shimBin = join(root, 'orca-dev.cmd')
+      writeFileSync(
+        cliPath,
+        'process.stdout.write(JSON.stringify(process.argv.slice(2)))\n',
+        'utf8'
+      )
+      writeFileSync(shimBin, '@echo off\r\n', 'utf8')
+      const build = spawnSync(
+        process.execPath,
+        ['config/scripts/build-windows-cli-launcher.mjs', '--output', shimPath],
+        { cwd: projectRoot, encoding: 'utf8' }
+      )
+      expect(build.status, `${build.stdout}\n${build.stderr}`).toBe(0)
+
+      const paneCommand =
+        "cd 'E:\\repo with space' && env CLAUDECODE=1 'C:\\tools\\claude.exe' --agent-name Nova"
+      const launch = spawnSync(shimPath, ['respawn-pane', '-k', '-t', '%2', '--', paneCommand], {
+        encoding: 'utf8',
+        env: {
+          ...process.env,
+          ORCA_AGENT_TEAMS_SHIM_BIN: shimBin,
+          ORCA_AGENT_TEAMS_SHIM_EXECUTABLE: process.execPath,
+          ORCA_AGENT_TEAMS_SHIM_CLI_ENTRY: cliPath
+        }
+      })
+
+      expect(launch.status, launch.stderr).toBe(0)
+      expect(JSON.parse(launch.stdout)).toEqual([
+        'agent-teams-tmux',
+        'respawn-pane',
+        '-k',
+        '-t',
+        '%2',
+        '--',
+        paneCommand
+      ])
+    } finally {
+      removeFixtureTree(root)
+    }
+  })
+
+  itWindows('forwards packaged tmux shim argv through the qualified Orca executable', () => {
+    const appRoot = mkdtempSync(join(tmpdir(), 'orca packaged tmux launcher '))
+    try {
+      const resourcesPath = join(appRoot, 'resources')
+      const launcherPath = join(resourcesPath, 'bin', 'orca.exe')
+      const cliPath = join(resourcesPath, 'app.asar.unpacked', 'out', 'cli', 'index.js')
+      const shimPath = join(appRoot, 'agent-teams-bin', 'tmux.exe')
+      mkdirSync(dirname(launcherPath), { recursive: true })
+      mkdirSync(dirname(cliPath), { recursive: true })
+      mkdirSync(dirname(shimPath), { recursive: true })
+      copyFileSync(process.execPath, join(appRoot, 'Orca.exe'))
+      writeFileSync(
+        cliPath,
+        'process.stdout.write(JSON.stringify(process.argv.slice(2)))\n',
+        'utf8'
+      )
+      const build = spawnSync(
+        process.execPath,
+        ['config/scripts/build-windows-cli-launcher.mjs', '--output', launcherPath],
+        { cwd: projectRoot, encoding: 'utf8' }
+      )
+      expect(build.status, `${build.stdout}\n${build.stderr}`).toBe(0)
+      copyFileSync(launcherPath, shimPath)
+
+      const paneCommand =
+        "cd 'E:\\repo with space' && env CLAUDECODE=1 'C:\\tools\\claude.exe' --agent-name Nova"
+      const launch = spawnSync(shimPath, ['respawn-pane', '-k', '-t', '%2', '--', paneCommand], {
+        encoding: 'utf8',
+        env: { ...process.env, ORCA_AGENT_TEAMS_SHIM_BIN: launcherPath }
+      })
+
+      expect(launch.status, launch.stderr).toBe(0)
+      expect(JSON.parse(launch.stdout)).toEqual([
+        'agent-teams-tmux',
+        'respawn-pane',
+        '-k',
+        '-t',
+        '%2',
+        '--',
+        paneCommand
+      ])
+    } finally {
+      removeFixtureTree(appRoot)
+    }
+  })
+
   itWindows('survives an inherited environment block containing PATH and Path', () => {
     const appRoot = mkdtempSync(join(tmpdir(), 'orca duplicate path launcher '))
     try {

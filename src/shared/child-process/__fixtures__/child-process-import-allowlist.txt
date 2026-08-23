@@ -9,7 +9,6 @@
 # Migrating a file means replacing its spawn/execFile calls with
 # runProcess/spawnProcess and deleting its line here.
 src/cli/handlers/account.ts
-src/cli/handlers/core.ts
 src/cli/handlers/interactive-login-interruption.ts
 src/cli/handlers/skills.ts
 src/cli/runtime/launch.ts

@@ -24,6 +24,7 @@ export type CreateOrAttachOptions = {
   attachOnly?: boolean
   /** Explicit shell the renderer asked for, forwarded to the subprocess. */
   shellOverride?: string
+  requiredShell?: 'powershell'
   terminalWindowsWslDistro?: string | null
   terminalWindowsPowerShellImplementation?: 'auto' | 'powershell.exe' | 'pwsh.exe'
   shellReadySupported?: boolean
@@ -47,6 +48,8 @@ export type CreateOrAttachResult = {
   isNew: boolean
   snapshot: TerminalSnapshot | null
   pid: number | null
+  /** Optional additive wire field for the process owner's winning shell. */
+  shellPath?: string
   shellState: ShellReadyState
   historySeeded?: boolean
   launchAgent?: TuiAgent

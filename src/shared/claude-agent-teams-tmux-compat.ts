@@ -1,5 +1,3 @@
-export type ClaudeAgentTeamsMode = 'off' | 'in-process' | 'native-panes-shim'
-
 export type ParsedTmuxCommand = {
   command: string
   args: string[]
@@ -164,30 +162,4 @@ function tmuxSpecialKeyText(token: string): string | null {
     default:
       return null
   }
-}
-
-export function isDirectClaudeCommand(command: string | undefined): boolean {
-  const trimmed = command?.trim() ?? ''
-  if (!trimmed) {
-    return false
-  }
-  if (/[;&|<>`]/.test(trimmed)) {
-    return false
-  }
-  const first = trimmed.match(/^\S+/)?.[0] ?? ''
-  return first === 'claude' || first.endsWith('/claude')
-}
-
-export function addClaudeTeammateModeAuto(command: string): string {
-  if (/(^|\s)--teammate-mode(?:\s|=|$)/.test(command)) {
-    return command
-  }
-  return command.replace(/^(\S+)/, '$1 --teammate-mode auto')
-}
-
-export function addClaudeTeammateModeInProcess(command: string): string {
-  if (/(^|\s)--teammate-mode(?:\s|=|$)/.test(command)) {
-    return command
-  }
-  return command.replace(/^(\S+)/, '$1 --teammate-mode in-process')
 }

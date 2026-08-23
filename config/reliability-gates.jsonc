@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "updatedAt": "2026-08-20",
+  "updatedAt": "2026-08-23",
   "policy": {
     "maturityLevels": ["experimental", "soak", "blocking", "accepted-gap", "deprecated"],
     "blockingPromotion": {
@@ -14089,6 +14089,275 @@
         "The legacy remote-uploads root is intentionally not reclaimed while a mixed-version relay may still own bytes there; eventual legacy-root retirement requires a separate compatibility decision."
       ],
       "demotionRule": "Demote if one live owner can remove another owner's bytes, cleanup exceeds 64 inspected entries per attempt, a lifecycle path retains its exact owned archive after settlement, or the process oracle flakes without an identified harness or product defect."
+    },
+    {
+      "id": "agent-session.native-pane-launch",
+      "title": "Native teammate panes launch on their execution host without shell reinterpretation",
+      "maturity": "experimental",
+      "protection": "partial",
+      "owner": "agent-session",
+      "layer": "main-provider-contract",
+      "surfaces": ["Claude Agent Teams", "terminal split", "native Windows ConPTY"],
+      "platforms": ["macos", "linux", "windows"],
+      "providers": ["local", "daemon", "ssh", "wsl", "remote-runtime"],
+      "coveredPlatforms": ["windows"],
+      "coveredProviders": ["local", "daemon"],
+      "coverageNotes": "Physical Windows 2 evidence covers native PowerShell and ConPTY through a fresh daemon with a visible leader/teammate split plus independent terminal-read markers. Deterministic contracts cover daemon create/attach shell publication, protocol-v37 required-shell forwarding, legacy-daemon fail-closed behavior, one shared PTY-owner PowerShell rule, post-publication launcher selection, executable-shim and teammate .cmd argv fidelity, structured cwd/env/argv delivery, quote- and terminator-aware teammate-mode normalization, all case-folded Windows shim authority cleanup, pre-spawn and cmd/WSL/SSH/Git-Bash in-process fallback, local-to-SSH route fencing, confirmed or unverifiable fresh-PTY cancellation cleanup, stable and canonical adoption metadata suppression, service-owned synchronous pane admission with compensated refusal, nested and virtual-parent split authority, serialized exit cleanup, and concurrent shim installation. macOS/Linux retain their existing POSIX path. WSL, SSH, paired remote, Git Bash, cmd native panes, and packaged blank-TUI behavior are not claimed.",
+      "motivatingLinks": [
+        "https://linear.app/stably/issue/STA-5021",
+        "https://linear.app/stably/issue/STA-4868",
+        "https://github.com/stablyai/orca/issues/15751",
+        "https://github.com/stablyai/orca/issues/15503"
+      ],
+      "invariant": "Native mode requires published local PowerShell authority, and every native teammate spawn must carry a PowerShell-required, no-cmd-fallback constraint to the PTY owner before command delivery. A supported split reaches that owner as executable argv, cwd, and env. One serialized mutation owns each pane generation, and a disposed, already-exited, or superseded pane cannot be published. Unproved topologies degrade in-process.",
+      "oracle": "Run Claude Code's exact tmux split/respawn callback through the authenticated dispatcher and require structured argv/cwd/env plus requiredShell at the private split and PTY-owner boundaries, real .cmd argv fidelity, and provider-bound PowerShell at ConPTY spawn. Independently require visible teammate output and terminal readback. Composed fault injection rejects both PowerShell candidates before cmd receives any teammate command, rejects legacy daemon protocol, publishes cmd or missing legacy authority into runtime, normalizes cross-field flags without touching quoted or post-terminator text, removes every case-folded shim authority, rebounds local routing to SSH before delivery, cancels after a fresh provider spawn with both confirmed and contact-lost shutdowns, races leader exit between split return and publication, adopts stable and canonical owners, and creates a nested split.",
+      "commands": [
+        "pnpm exec vitest run --config config/vitest.config.ts src/shared/claude-agent-teams-pane-launch.test.ts src/shared/claude-agent-teams-environment.test.ts src/shared/claude-agent-teams-tmux-compat.test.ts src/main/runtime/claude-agent-teams-service.test.ts src/main/runtime/claude-agent-teams-shim-env.test.ts src/main/runtime/orca-runtime-terminal-split-authority.test.ts src/main/ipc/pty-spawn-runtime-handle-binding.test.ts src/main/ipc/pty-pane-materialization-race.test.ts src/main/ipc/preflight-agent-detection.test.ts src/main/ipc/tui-agent-detection-commands.test.ts src/main/providers/local-pty-provider-windows-shell-launch.test.ts src/main/daemon/daemon-create-or-attach-result.test.ts src/main/daemon/daemon-server.test.ts src/main/daemon/terminal-host.test.ts src/cli/handlers/core.test.ts src/shared/child-process/run-process.test.ts src/shared/agent-kind.test.ts src/shared/windows-terminal-shell.test.ts --maxWorkers=1",
+        "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/orca-runtime.test.ts --maxWorkers=1",
+        "pnpm exec vitest run --config config/vitest.config.ts src/main/providers/local-pty-provider-spawn-env.test.ts src/main/daemon/daemon-pty-adapter.test.ts src/main/daemon/daemon-protocol-version.test.ts --maxWorkers=1",
+        "pnpm exec vitest run --config config/vitest.config.ts src/main/daemon/pty-subprocess.test.ts --maxWorkers=1",
+        "pnpm exec vitest run --config config/vitest.config.ts src/main/daemon/pty-subprocess-env-inheritance.test.ts --maxWorkers=1",
+        "pnpm exec vitest run --config config/vitest.config.ts config/scripts/build-windows-cli-launcher.test.mjs --maxWorkers=1",
+        "fresh profile v13, CDP 9491, protocol-v37 daemon, exact WinProbe Agent Teams prompt",
+        "fresh profile v14, CDP 9492, protocol-v37 daemon, exact WinProbe prompt, daemon shellPath publication temporarily disabled"
+      ],
+      "testFiles": [
+        "src/shared/claude-agent-teams-pane-launch.test.ts",
+        "src/shared/claude-agent-teams-environment.test.ts",
+        "src/shared/claude-agent-teams-tmux-compat.test.ts",
+        "src/main/runtime/claude-agent-teams-service.test.ts",
+        "src/main/runtime/claude-agent-teams-shim-env.test.ts",
+        "src/main/runtime/orca-runtime-terminal-split-authority.test.ts",
+        "src/main/ipc/pty-spawn-runtime-handle-binding.test.ts",
+        "src/main/ipc/pty-pane-materialization-race.test.ts",
+        "src/main/ipc/preflight-agent-detection.test.ts",
+        "src/main/ipc/tui-agent-detection-commands.test.ts",
+        "src/main/providers/local-pty-provider-windows-shell-launch.test.ts",
+        "src/main/providers/local-pty-provider-spawn-env.test.ts",
+        "src/main/daemon/daemon-create-or-attach-result.test.ts",
+        "src/main/daemon/daemon-pty-adapter.test.ts",
+        "src/main/daemon/pty-subprocess.test.ts",
+        "src/main/daemon/pty-subprocess-env-inheritance.test.ts",
+        "src/main/daemon/daemon-protocol-version.test.ts",
+        "src/main/daemon/daemon-server.test.ts",
+        "src/main/daemon/terminal-host.test.ts",
+        "src/main/runtime/orca-runtime.test.ts",
+        "src/cli/handlers/core.test.ts",
+        "src/shared/child-process/run-process.test.ts",
+        "src/shared/agent-kind.test.ts",
+        "src/shared/windows-terminal-shell.test.ts",
+        "config/scripts/build-windows-cli-launcher.test.mjs"
+      ],
+      "assertionRefs": [
+        {
+          "file": "src/main/runtime/orca-runtime.test.ts",
+          "assertions": [
+            "leader preparation waits for the exact registered pane handle",
+            "direct Windows Claude stays in-process until actual shell publication",
+            "Windows cmd launch persists the resolved in-process fallback",
+            "host-created leaders bind provider-reported PowerShell before their first split",
+            "provider-reported cmd and missing legacy shell authority late-bind the launcher to in-process mode",
+            "leader exit during asynchronous shim preparation prevents native team publication",
+            "stable-owner adoption retires the team bound to the superseded pane",
+            "canonical-owner adoption suppresses prepared native launch metadata and tokens",
+            "unconfirmed SSH loss preserves authority until the execution host confirms exit"
+          ]
+        },
+        {
+          "file": "src/main/daemon/daemon-create-or-attach-result.test.ts",
+          "assertions": [
+            "fresh and attached daemon sessions publish the process owner's exact shell across the wire"
+          ]
+        },
+        {
+          "file": "src/main/providers/local-pty-provider-windows-shell-launch.test.ts",
+          "assertions": [
+            "ordinary PowerShell spawn failures may fall through to cmd and publish cmd as the winning shell",
+            "PowerShell-required teammate spawns fail before cmd can receive the startup command"
+          ]
+        },
+        {
+          "file": "src/main/daemon/daemon-pty-adapter.test.ts",
+          "assertions": [
+            "protocol-v37 adapters forward requiredShell to the execution host",
+            "legacy daemon protocols reject PowerShell-required spawns instead of dropping the constraint",
+            "a contact-lost rejected-spawn stop retries through daemon-owner recovery"
+          ]
+        },
+        {
+          "file": "src/main/daemon/pty-subprocess.test.ts",
+          "assertions": ["daemon-owned PowerShell-required spawns never attempt cmd fallback"]
+        },
+        {
+          "file": "src/shared/child-process/run-process.test.ts",
+          "assertions": [
+            "a real Windows .cmd preserves spaces and shell metacharacters as structured argv"
+          ]
+        },
+        {
+          "file": "src/main/runtime/claude-agent-teams-service.test.ts",
+          "assertions": [
+            "Claude 2.1.241 respawn delivers exact argv, cwd, and env at the dispatcher",
+            "invalid callbacks preserve the holding pane",
+            "leader teardown fences pending close and split operations",
+            "exit-before-publication and exit-during-respawn remain serialized without ghost panes",
+            "teammate liveness is admitted synchronously by the service and refused commits receive awaited stop compensation",
+            "virtual holding panes retain their logical split parent across respawn"
+          ]
+        },
+        {
+          "file": "src/cli/handlers/core.test.ts",
+          "assertions": [
+            "an in-process launch decision strips inherited native team state and forces in-process mode",
+            "duplicate and dangling teammate-mode options collapse to one authoritative in-process flag",
+            "a Windows CLI fails closed when an older runtime omits mode and returns legacy native env"
+          ]
+        },
+        {
+          "file": "src/main/ipc/pty-pane-materialization-race.test.ts",
+          "assertions": [
+            "materialized stable-pane adoption preserves exact shellPath and explicit native wslDistro proof"
+          ]
+        },
+        {
+          "file": "src/main/runtime/claude-agent-teams-shim-env.test.ts",
+          "assertions": [
+            "pre-spawn Windows planning stays in-process while the explicit launcher selects native mode after PowerShell publication",
+            "cmd, WSL, SSH, and Git Bash remain in-process",
+            "concurrent shim installation has one bounded owner",
+            "versioned shim selection and installation use the same launcher bytes"
+          ]
+        },
+        {
+          "file": "src/shared/claude-agent-teams-environment.test.ts",
+          "assertions": [
+            "every case-folded Windows shim authority and equivalent PATH entry is removed after mixed-version merges"
+          ]
+        },
+        {
+          "file": "src/shared/claude-agent-teams-tmux-compat.test.ts",
+          "assertions": [
+            "cross-field teammate-mode options normalize to one authoritative value without rewriting quoted or post-terminator text"
+          ]
+        },
+        {
+          "file": "src/main/runtime/orca-runtime-terminal-split-authority.test.ts",
+          "assertions": [
+            "a local source rebound to SSH is rejected before remote spawn or command delivery"
+          ]
+        },
+        {
+          "file": "src/main/ipc/pty-spawn-runtime-handle-binding.test.ts",
+          "assertions": [
+            "a fresh local PTY is shut down when cancellation wins after provider spawn",
+            "a contact-lost daemon stop remains unverifiable and retains exit reconciliation state"
+          ]
+        },
+        {
+          "file": "src/main/providers/local-pty-provider-spawn-env.test.ts",
+          "assertions": [
+            "requested Windows environment keys are deleted case-insensitively after owner hooks"
+          ]
+        },
+        {
+          "file": "src/shared/windows-terminal-shell.test.ts",
+          "assertions": [
+            "the shared required-PowerShell rule removes every non-PowerShell fallback and fails closed"
+          ]
+        },
+        {
+          "file": "config/scripts/build-windows-cli-launcher.test.mjs",
+          "assertions": [
+            "development and packaged tmux.exe launches preserve pane argv without cmd.exe"
+          ]
+        }
+      ],
+      "evidenceRuns": [
+        {
+          "date": "2026-08-23",
+          "runner": "local",
+          "platform": "windows",
+          "result": "passed",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/shared/claude-agent-teams-pane-launch.test.ts src/shared/claude-agent-teams-environment.test.ts src/shared/claude-agent-teams-tmux-compat.test.ts src/main/runtime/claude-agent-teams-service.test.ts src/main/runtime/claude-agent-teams-shim-env.test.ts src/main/runtime/orca-runtime-terminal-split-authority.test.ts src/main/ipc/pty-spawn-runtime-handle-binding.test.ts src/main/ipc/pty-pane-materialization-race.test.ts src/main/ipc/preflight-agent-detection.test.ts src/main/ipc/tui-agent-detection-commands.test.ts src/main/providers/local-pty-provider-windows-shell-launch.test.ts src/main/daemon/daemon-create-or-attach-result.test.ts src/main/daemon/daemon-server.test.ts src/main/daemon/terminal-host.test.ts src/cli/handlers/core.test.ts src/shared/child-process/run-process.test.ts src/shared/agent-kind.test.ts src/shared/windows-terminal-shell.test.ts --maxWorkers=1",
+          "durationSeconds": 16.69,
+          "summary": "Eighteen focused files passed 237 tests with one non-applicable case skipped, including post-publication shell selection, quote/terminator/cross-field flag normalization, all case-folded native-state sanitization, real teammate .cmd argv, local-to-SSH fencing, confirmed and unverifiable cancellation cleanup, stable and canonical adoption, compensated service-owned pane admission, nested and virtual-parent splits, same-byte versioned shim installation, serialized exit races, and dead-ancestor respawn."
+        },
+        {
+          "date": "2026-08-23",
+          "runner": "local",
+          "platform": "windows",
+          "result": "passed",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/orca-runtime.test.ts --maxWorkers=1",
+          "durationSeconds": 19.85,
+          "summary": "The complete runtime integration file passed all 1,198 tests on rebased origin/main, including leader registration, pre-spawn configured-shell rejection, provider-reported cmd and missing-authority fallback, leader-exit revalidation, stable and canonical owner adoption cleanup, renderer-backed retirement contracts, and the upstream restored-worker status change."
+        },
+        {
+          "date": "2026-08-23",
+          "runner": "local",
+          "platform": "windows",
+          "result": "passed",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/main/providers/local-pty-provider-spawn-env.test.ts src/main/daemon/daemon-pty-adapter.test.ts src/main/daemon/daemon-protocol-version.test.ts --maxWorkers=1",
+          "durationSeconds": 3.36,
+          "summary": "Three PTY-owner and daemon-protocol files passed 70 tests with two non-applicable cases skipped; local owner cleanup, daemon-owned stop recovery, protocol-v37 requiredShell forwarding, and legacy fail-closed behavior remained green."
+        },
+        {
+          "date": "2026-08-23",
+          "runner": "local",
+          "platform": "windows",
+          "result": "passed",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts config/scripts/build-windows-cli-launcher.test.mjs --maxWorkers=1",
+          "durationSeconds": 3.06,
+          "summary": "Four native launcher tests passed; two non-applicable compiler/runtime cases skipped."
+        },
+        {
+          "date": "2026-08-23",
+          "runner": "manual",
+          "platform": "windows",
+          "result": "passed",
+          "command": "fresh profile v13, CDP 9491, protocol-v37 daemon, exact WinProbe Agent Teams prompt",
+          "durationSeconds": 300,
+          "summary": "The restored candidate produced two visible panes. Leader term_9e94e2cc-c7d2-48d0-98a1-8d14e6a63166 read back ORCA_NATIVE_V13_FINAL_OK_LEADER and teammate term_ac653139-6b0f-4385-af31-f1b86d7161f1 independently read back ORCA_NATIVE_V13_FINAL_OK_TEAMMATE. Process inspection found separate leader and WinProbe Claude processes, two PowerShell PTY owners, two OpenConsole ConPTY hosts under fresh daemon 115080, topology revision 0 to 1, and zero renderer console errors."
+        },
+        {
+          "date": "2026-08-23",
+          "runner": "manual",
+          "platform": "windows",
+          "result": "passed",
+          "command": "fresh profile v14, CDP 9492, protocol-v37 daemon, exact WinProbe prompt, daemon shellPath publication temporarily disabled",
+          "durationSeconds": 345,
+          "summary": "The identical launch degraded before command delivery to Claude --teammate-mode in-process. One visible pane, one PowerShell PTY owner, one OpenConsole ConPTY host, and one listed PTY remained; no teammate PTY or second visible pane appeared and the renderer reported zero console errors. The candidate source was restored immediately after capture."
+        }
+      ],
+      "runtimeBudget": {
+        "p95Seconds": 20,
+        "scope": "focused parser, dispatcher, lifecycle, topology, private split, CLI, and native launcher contracts"
+      },
+      "flakeHistory": {
+        "status": "not-started",
+        "evidence": "New deterministic gate; CI soak history has not started."
+      },
+      "redGreenEvidence": {
+        "status": "complete",
+        "evidence": "origin/main fails the native Windows direct-spawn and visible teammate marker oracles. On the restored candidate, fresh profile v13 and a fresh protocol-v37 daemon produced two visible panes whose independent readbacks contained ORCA_NATIVE_V13_FINAL_OK_LEADER and ORCA_NATIVE_V13_FINAL_OK_TEAMMATE; process inspection found separate leader and WinProbe Claude processes, two PowerShell PTY owners, and two OpenConsole ConPTY hosts. With daemon shellPath publication disabled at the narrow wire owner, fresh profile v14 ran the identical launch as --teammate-mode in-process and retained one PTY/PowerShell/OpenConsole owner with no teammate pane. Focused reversions prove that dropping requiredShell lets local or daemon ownership attempt cmd, dropping protocol forwarding loses the constraint, regex or per-field mode rewriting corrupts quoted/post-terminator text or leaves a cross-field override, first-match environment cleanup leaves a mixed-version shim executable on PATH, separate shim reads can install bytes that do not match the selected version, local-to-SSH rebinding can cross the execution boundary, unconfirmed cancellation cleanup erases a potentially live daemon PTY, dispatcher-owned admission leaks a refused split, and skipped liveness/adoption checks publish or retain stale teams. Restoring the candidate makes every oracle pass; protocol v37 forwards the constraint and older daemons fail closed with required_shell_unavailable."
+      },
+      "performanceBudget": {
+        "required": true,
+        "evidence": "One shim materialization promise is retained only while installation is active; team commands serialize per active team and release their tail on settlement. The change adds no polling, timer, recurring subprocess, renderer work, public RPC, stream opcode, recurring global scan, or unbounded queue."
+      },
+      "promotionCriteria": [
+        "Collect 100 consecutive focused CI passes or 14 days without an unexplained flake.",
+        "Add clean packaged Windows and folder-workspace journeys.",
+        "Keep native PowerShell, topology fallback, lifecycle fencing, and red/green/revert oracles green."
+      ],
+      "knownGaps": [
+        "WSL is deliberately unsupported and has no host/guest shim proof.",
+        "SSH, paired remote, Git Bash, and cmd native teammate panes are not supported by this gate.",
+        "The visible journey used a development build; packaged blank-TUI behavior remains separate and unproved.",
+        "Linear issue contents were unavailable because this environment is not connected to Linear.",
+        "Older daemon versions omit the optional shellPath field; the launcher treats missing authority as in-process and cannot create native teammate panes until the host updates.",
+        "Older daemon protocols cannot carry requiredShell and reject native teammate spawn with required_shell_unavailable; clients must update the execution host for native mode."
+      ],
+      "demotionRule": "Demote if native pane launch bypasses execution-host shell ownership, a disposed team can publish a pane, concurrent callbacks retain an untracked PTY, the focused gate flakes without a product or harness defect, or WSL/SSH is inferred from native Windows evidence."
     }
   ]
 }

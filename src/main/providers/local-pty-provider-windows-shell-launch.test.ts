@@ -159,6 +159,59 @@ describe('LocalPtyProvider', () => {
   })
 
   describe('spawn', () => {
+    it('reports cmd.exe when both PowerShell attempts fall back', async () => {
+      Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
+      spawnMock.mockImplementation((shellPath: string) => {
+        if (shellPath !== CMD_ABS) {
+          throw new Error(`cannot spawn ${shellPath}`)
+        }
+        return mockProc
+      })
+
+      const command = 'orca.cmd claude-teams --teammate-mode auto'
+      const result = await provider.spawn({
+        cols: 80,
+        rows: 24,
+        cwd: 'C:\\Users\\jin\\repo',
+        shellOverride: 'pwsh.exe',
+        command,
+        env: { TMUX: '/tmp/orca/team,0,1' }
+      })
+
+      expect(spawnMock.mock.calls.map((call) => call[0])).toEqual([
+        PWSH7_ABS,
+        WINDOWS_POWERSHELL_ABS,
+        CMD_ABS
+      ])
+      expect(result.shellPath).toBe(CMD_ABS)
+      expect(spawnMock.mock.calls[2]?.[1].join(' ')).toContain(command)
+      expect(spawnMock.mock.calls[2]?.[2].env.TMUX).toBe('/tmp/orca/team,0,1')
+    })
+
+    it('never delivers a PowerShell-required command to cmd.exe', async () => {
+      Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
+      const initialSpawnCalls = spawnMock.mock.calls.length
+      spawnMock.mockImplementation((shellPath: string) => {
+        throw new Error(`cannot spawn ${shellPath}`)
+      })
+
+      const command = "& 'C:\\tools\\claude.exe' '--agent-name' 'Nova'"
+      await expect(
+        provider.spawn({
+          cols: 80,
+          rows: 24,
+          cwd: 'C:\\Users\\jin\\repo',
+          shellOverride: 'pwsh.exe',
+          requiredShell: 'powershell',
+          command
+        })
+      ).rejects.toThrow('Failed to spawn shell')
+
+      const requiredSpawnCalls = spawnMock.mock.calls.slice(initialSpawnCalls)
+      expect(requiredSpawnCalls.map((call) => call[0])).toEqual([PWSH7_ABS, WINDOWS_POWERSHELL_ABS])
+      expect(requiredSpawnCalls.some((call) => call[0] === CMD_ABS)).toBe(false)
+    })
+
     it('does not pass a Windows Codex home into WSL terminals', async () => {
       Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
       provider.configure({

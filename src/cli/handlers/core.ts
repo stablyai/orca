@@ -1,8 +1,11 @@
-import { spawn } from 'node:child_process'
 import type { CommandHandler } from '../dispatch'
 import { formatCliStatus, formatStatus, printResult } from '../format'
 import { RuntimeClientError, serveOrcaApp } from '../runtime-client'
 import { stripElectronRunAsNode } from '../runtime/launch'
+import { spawnProcess } from '../../shared/child-process/run-process'
+import { resolveClaudeCommand } from '../../shared/node-cli-command-resolution'
+import { stripNativeAgentTeamsEnv } from '../../shared/claude-agent-teams-environment'
+import { normalizeClaudeTeammateModeArgs } from '../../shared/claude-agent-teams-mode'
 
 function envRecord(): Record<string, string> {
   // Why: the `orca` launcher runs Orca's Electron binary as Node, so this CLI
@@ -15,19 +18,18 @@ function envRecord(): Record<string, string> {
   )
 }
 
-function withTeammateModeAuto(args: string[]): string[] {
-  for (let index = 0; index < args.length; index += 1) {
-    const arg = args[index]
-    if (arg === '--teammate-mode' || arg.startsWith('--teammate-mode=')) {
-      return args
-    }
-  }
-  return ['--teammate-mode', 'auto', ...args]
-}
-
-async function runClaudeAgentTeams(env: Record<string, string>, args: string[]): Promise<number> {
+async function runClaudeAgentTeams(
+  env: Record<string, string>,
+  args: string[],
+  mode: 'native' | 'in-process'
+): Promise<number> {
   return await new Promise((resolve, reject) => {
-    const child = spawn('claude', withTeammateModeAuto(args), {
+    const child = spawnProcess({
+      program: resolveClaudeCommand({ pathEnv: env.PATH ?? env.Path }),
+      args:
+        mode === 'in-process'
+          ? normalizeClaudeTeammateModeArgs(args, 'in-process', 'in-process')
+          : normalizeClaudeTeammateModeArgs(args, 'auto'),
       stdio: 'inherit',
       env
     })
@@ -59,12 +61,6 @@ function getOptionalServePort(flags: Map<string, string | boolean>): string | nu
 
 export const CORE_HANDLERS: Record<string, CommandHandler> = {
   'claude-teams': async ({ client, rawArgs }) => {
-    if (process.platform === 'win32') {
-      throw new RuntimeClientError(
-        'unsupported_platform',
-        'Claude Agent Teams native panes are not supported on Windows.'
-      )
-    }
     const paneKey = process.env.ORCA_PANE_KEY
     if (!paneKey) {
       throw new RuntimeClientError(
@@ -72,19 +68,28 @@ export const CORE_HANDLERS: Record<string, CommandHandler> = {
         'orca claude-teams must be run inside an Orca terminal.'
       )
     }
-    const response = await client.call<{ launch: { env: Record<string, string> } }>(
-      'agentTeams.prepareLaunch',
-      {
-        paneKey,
-        env: envRecord()
-      }
-    )
+    const response = await client.call<{
+      launch: { env: Record<string, string>; mode?: 'native' | 'in-process' }
+    }>('agentTeams.prepareLaunch', {
+      paneKey,
+      env: envRecord()
+    })
+    const mode =
+      response.result.launch.mode ?? (process.platform === 'win32' ? 'in-process' : 'native')
+    const parentEnv = envRecord()
+    const combinedEnv = {
+      ...parentEnv,
+      ...response.result.launch.env
+    }
     process.exitCode = await runClaudeAgentTeams(
       {
-        ...envRecord(),
-        ...response.result.launch.env
+        ...(mode === 'in-process'
+          ? stripNativeAgentTeamsEnv(combinedEnv, process.platform)
+          : combinedEnv),
+        ...(mode === 'in-process' ? { TERM: 'xterm-256color' } : {})
       },
-      rawArgs ?? []
+      rawArgs ?? [],
+      mode
     )
   },
   open: async ({ client, json }) => {

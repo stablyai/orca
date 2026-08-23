@@ -58,7 +58,10 @@ import {
   resolveGitBashPath,
   resolveWindowsGitBashShellPath
 } from '../git-bash'
-import { WINDOWS_GIT_BASH_SHELL } from '../../shared/windows-terminal-shell'
+import {
+  enforceRequiredWindowsPowerShellAttempts,
+  WINDOWS_GIT_BASH_SHELL
+} from '../../shared/windows-terminal-shell'
 import { resolveAgentForegroundProcessWithAvailability } from './agent-foreground-process'
 import { resolveStableForegroundProcess } from './stable-foreground-process'
 import { getAgentForegroundContextPaths } from './agent-foreground-context-paths'
@@ -92,6 +95,7 @@ import {
   expandWindowsPathEnvironmentVariables
 } from '../../shared/windows-environment-expansion'
 import { resolveProcessExitCause, type TerminalExitCause } from '../../shared/terminal-exit-cause'
+import { deleteEnvironmentKeys } from '../../shared/environment-key-deletion'
 
 const PANE_IDENTITY_ENV_KEYS = [
   'ORCA_PANE_KEY',
@@ -118,6 +122,7 @@ type PendingLocalPtySpawn = {
 }
 const pendingLocalPtySpawns = new Map<string, Set<PendingLocalPtySpawn>>()
 const ptyShellName = new Map<string, string>()
+const ptyShellPath = new Map<string, string>()
 const ptyAgentForegroundContextPaths = new Map<string, string[]>()
 // Why: remember the last recognized agent foreground so a degraded scan doesn't report the shell and look like an exit.
 const ptyLastRecognizedForeground = new Map<string, string>()
@@ -278,6 +283,7 @@ function clearPtyState(id: string): void {
   ptyIncarnations.delete(id)
   ptyAgentSessionIds.delete(id)
   ptyShellName.delete(id)
+  ptyShellPath.delete(id)
   ptyAgentForegroundContextPaths.delete(id)
   ptyLastRecognizedForeground.delete(id)
   ptyTerminalHandle.delete(id)
@@ -426,6 +432,7 @@ function reattachLocalPty(id: string, cols: number, rows: number): PtySpawnResul
   return {
     id,
     pid: existing.pid,
+    ...(ptyShellPath.has(id) ? { shellPath: ptyShellPath.get(id) } : {}),
     ...(ptyWslDistroById.has(id) ? { wslDistro: ptyWslDistroById.get(id) ?? null } : {}),
     isReattach: true
   }
@@ -668,6 +675,11 @@ export class LocalPtyProvider implements IPtyProvider {
         wslContext: launchWslContext,
         startupCommand: args.command
       })
+      windowsFallbackAttempts = enforceRequiredWindowsPowerShellAttempts({
+        requiredShell: args.requiredShell,
+        resolvedShellPath: shellPath,
+        fallbackAttempts: windowsFallbackAttempts
+      })
       const primaryAttempt = windowsFallbackAttempts[0]
       if (primaryAttempt) {
         shellPath = primaryAttempt.shellPath
@@ -714,9 +726,7 @@ export class LocalPtyProvider implements IPtyProvider {
     removeUnspecifiedPaneIdentityEnv(spawnEnv, args.env)
     removeAppImageRuntimeEnv(spawnEnv)
     removeInheritedNoColor(spawnEnv)
-    for (const key of args.envToDelete ?? []) {
-      delete spawnEnv[key]
-    }
+    deleteEnvironmentKeys(spawnEnv, args.envToDelete)
     if (args.env?.TERM) {
       spawnEnv.TERM = args.env.TERM
     }
@@ -746,9 +756,7 @@ export class LocalPtyProvider implements IPtyProvider {
         })
       : spawnEnv
     // Why: app-level env hooks can re-add scrubbed vars; delete last so shims like Claude Agent Teams keep their PATH.
-    for (const key of args.envToDelete ?? []) {
-      delete finalEnv[key]
-    }
+    deleteEnvironmentKeys(finalEnv, args.envToDelete)
     if (args.env?.TERM) {
       finalEnv.TERM = args.env.TERM
     }
@@ -966,6 +974,7 @@ export class LocalPtyProvider implements IPtyProvider {
       ptyAgentSessionIds.add(id)
     }
     ptyShellName.set(id, getSpawnedShellName(shellPath))
+    ptyShellPath.set(id, shellPath)
     if (finalEnv.ORCA_TERMINAL_HANDLE) {
       ptyTerminalHandle.set(id, finalEnv.ORCA_TERMINAL_HANDLE)
     }
@@ -1180,6 +1189,7 @@ export class LocalPtyProvider implements IPtyProvider {
       id,
       incarnationId,
       pid,
+      shellPath,
       ...(spawnedWslDistro !== undefined ? { wslDistro: spawnedWslDistro } : {})
     }
   }

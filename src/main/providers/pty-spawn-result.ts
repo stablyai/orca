@@ -21,6 +21,8 @@ export type PtySpawnResult = {
    *  local providers read it from node-pty. Null when the underlying
    *  provider could not publish a pid (e.g., race during spawn). */
   pid?: number | null
+  /** Exact shell executable the process owner spawned after any fallback. */
+  shellPath?: string
   /** Minimal allowlisted launch ownership returned by daemon reattach. */
   launchAgent?: TuiAgent
   /** Local WSL context: null is native; undefined is unavailable/legacy. */

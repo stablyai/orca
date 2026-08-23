@@ -9,7 +9,18 @@ internal static class OrcaCliLauncher
     {
         try
         {
-            string launcherDirectory = Path.GetDirectoryName(typeof(OrcaCliLauncher).Assembly.Location);
+            string launcherPath = typeof(OrcaCliLauncher).Assembly.Location;
+            bool isTmuxShim = String.Equals(
+                Path.GetFileNameWithoutExtension(launcherPath),
+                "tmux",
+                StringComparison.OrdinalIgnoreCase
+            );
+            string launcherDirectory = Path.GetDirectoryName(launcherPath);
+            if (launcherDirectory == null)
+            {
+                Console.Error.WriteLine("Unable to resolve the Orca launcher directory");
+                return 127;
+            }
             string resourcesDirectory = Directory.GetParent(launcherDirectory).FullName;
             string appDirectory = Directory.GetParent(resourcesDirectory).FullName;
             string electronPath = Path.Combine(appDirectory, "Orca.exe");
@@ -20,25 +31,19 @@ internal static class OrcaCliLauncher
                 "cli",
                 "index.js"
             );
-
-            if (!File.Exists(electronPath))
+            if (!isTmuxShim && !File.Exists(electronPath))
             {
                 Console.Error.WriteLine("Unable to locate Orca.exe next to \"{0}\"", resourcesDirectory);
                 return 1;
             }
 
-            if (!File.Exists(cliPath))
+            if (!isTmuxShim && !File.Exists(cliPath))
             {
                 Console.Error.WriteLine("Unable to locate the Orca CLI entrypoint at \"{0}\"", cliPath);
                 return 1;
             }
 
-            ProcessStartInfo startInfo = new ProcessStartInfo
-            {
-                FileName = electronPath,
-                Arguments = BuildArguments(cliPath, args),
-                UseShellExecute = false
-            };
+            ProcessStartInfo startInfo = BuildStartInfo(electronPath, cliPath, args, isTmuxShim);
 
             // Why: launching without cmd.exe preserves embedded newlines while matching the
             // packaged batch launcher's Electron-as-Node environment contract.
@@ -67,6 +72,80 @@ internal static class OrcaCliLauncher
         }
     }
 
+    private static ProcessStartInfo BuildStartInfo(
+        string electronPath,
+        string cliPath,
+        string[] args,
+        bool isTmuxShim
+    )
+    {
+        string devExecutable = Environment.GetEnvironmentVariable(
+            "ORCA_AGENT_TEAMS_SHIM_EXECUTABLE"
+        );
+        string devCliPath = Environment.GetEnvironmentVariable("ORCA_AGENT_TEAMS_SHIM_CLI_ENTRY");
+        if (isTmuxShim && IsFullyQualifiedPath(devExecutable) && IsFullyQualifiedPath(devCliPath))
+        {
+            return new ProcessStartInfo
+            {
+                FileName = devExecutable,
+                Arguments = BuildArguments(devCliPath, PrependTmuxShimCommand(args)),
+                UseShellExecute = false
+            };
+        }
+        if (isTmuxShim)
+        {
+            string shimBin = Environment.GetEnvironmentVariable("ORCA_AGENT_TEAMS_SHIM_BIN");
+            if (!IsFullyQualifiedPath(shimBin) || !File.Exists(shimBin))
+            {
+                throw new InvalidOperationException(
+                    "ORCA_AGENT_TEAMS_SHIM_BIN must name an absolute executable"
+                );
+            }
+            return new ProcessStartInfo
+            {
+                FileName = shimBin,
+                Arguments = BuildArguments(PrependTmuxShimCommand(args)),
+                UseShellExecute = false
+            };
+        }
+        return new ProcessStartInfo
+        {
+            FileName = electronPath,
+            Arguments = BuildArguments(cliPath, args),
+            UseShellExecute = false
+        };
+    }
+
+    private static bool IsFullyQualifiedPath(string path)
+    {
+        if (String.IsNullOrEmpty(path))
+        {
+            return false;
+        }
+        if (path.Length >= 2 && IsDirectorySeparator(path[0]) && IsDirectorySeparator(path[1]))
+        {
+            return true;
+        }
+        return path.Length >= 3
+            && Char.IsLetter(path[0])
+            && path[1] == ':'
+            && IsDirectorySeparator(path[2]);
+    }
+
+    private static bool IsDirectorySeparator(char character)
+    {
+        return character == Path.DirectorySeparatorChar
+            || character == Path.AltDirectorySeparatorChar;
+    }
+
+    private static string[] PrependTmuxShimCommand(string[] args)
+    {
+        string[] forwarded = new string[args.Length + 1];
+        forwarded[0] = "agent-teams-tmux";
+        args.CopyTo(forwarded, 1);
+        return forwarded;
+    }
+
     private static void MoveEnvironmentVariable(string sourceName, string targetName)
     {
         string value = Environment.GetEnvironmentVariable(sourceName);
@@ -81,6 +160,20 @@ internal static class OrcaCliLauncher
         foreach (string arg in args)
         {
             commandLine.Append(' ');
+            commandLine.Append(QuoteArgument(arg));
+        }
+        return commandLine.ToString();
+    }
+
+    private static string BuildArguments(string[] args)
+    {
+        StringBuilder commandLine = new StringBuilder();
+        foreach (string arg in args)
+        {
+            if (commandLine.Length > 0)
+            {
+                commandLine.Append(' ');
+            }
             commandLine.Append(QuoteArgument(arg));
         }
         return commandLine.ToString();

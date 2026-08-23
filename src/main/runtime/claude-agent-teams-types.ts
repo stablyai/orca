@@ -6,6 +6,8 @@ import type {
   RuntimeTerminalShow,
   RuntimeTerminalSplit
 } from '../../shared/runtime-types'
+import type { AgentStartupShell } from '../../shared/tui-agent-startup-shell'
+import type { ClaudeAgentTeamsPaneSpawn } from '../../shared/claude-agent-teams-pane-launch'
 
 export type AgentTeamsTmuxCompatRequest = {
   teamId: string
@@ -30,12 +32,17 @@ export type AgentTeamsLaunchEnv = {
 }
 
 export type AgentTeamsTerminalApi = {
+  /** Service-owned synchronous commit fence; dispatchers never publish before it succeeds. */
+  admitTerminal?(handle: string): void
   splitTerminal(
     handle: string,
     opts: {
       direction?: 'horizontal' | 'vertical'
       command?: string
+      cwd?: string
       env?: Record<string, string>
+      agentTeamsProcess?: ClaudeAgentTeamsPaneSpawn['process']
+      signal?: AbortSignal
       envToDelete?: string[]
       activate?: boolean
     }
@@ -52,17 +59,17 @@ export type AgentTeamsTerminalApi = {
 
 export type TeamPane = {
   fakePaneId: string
-  handle: string
+  handle: string | null
   index: number
-  // Why: Claude Code splits a holding pane (`-- cat`) then `respawn-pane`s it
-  // with the real teammate command. We remember how the pane was first split so
-  // respawn can recreate it in the same slot while preserving its fake pane id.
+  // Why: Claude's holding `cat` pane stays virtual until respawn supplies the real process.
   splitFromPane?: string
   splitDirection?: 'horizontal' | 'vertical'
   respawnBlockedReason?: string
 }
 
 export type AgentTeam = {
+  active: boolean
+  abortController: AbortController
   teamId: string
   token: string
   leaderPane: string
@@ -71,6 +78,7 @@ export type AgentTeam = {
   windowIndex: string
   tmuxValue: string
   baseEnv: Record<string, string>
+  paneShell: AgentStartupShell
   panes: Map<string, TeamPane>
   paneOrder: string[]
   nextPaneNumber: number

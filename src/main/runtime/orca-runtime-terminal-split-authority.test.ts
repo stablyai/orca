@@ -1,10 +1,12 @@
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { getDefaultWorkspaceSession } from '../../shared/constants'
+import type { FolderWorkspace } from '../../shared/folder-workspace-types'
 import type { RuntimeMobileSessionTabsSnapshot } from '../../shared/runtime-types'
 import type { TerminalLayoutSnapshot } from '../../shared/terminal-tab-types'
 import type { WorkspaceSessionState } from '../../shared/workspace-session-state-types'
 import { makePaneKey } from '../../shared/stable-pane-id'
 import { OrcaRuntimeService } from './orca-runtime'
+import { OrchestrationDb } from './orchestration/db'
 
 const REPO_ID = 'repo-1'
 const WORKTREE_ID = `${REPO_ID}::/workspace`
@@ -12,6 +14,13 @@ const TAB_ID = 'tab-remote'
 const SOURCE_LEAF_ID = '11111111-1111-4111-8111-111111111111'
 const SOURCE_PTY_ID = 'pty-source'
 const SPLIT_PTY_ID = 'pty-split'
+const databases: OrchestrationDb[] = []
+
+afterEach(() => {
+  for (const database of databases.splice(0)) {
+    database.close()
+  }
+})
 
 function sourceLayout(): TerminalLayoutSnapshot {
   return {
@@ -77,7 +86,10 @@ function createHarness(
     deferReveal?: boolean
     deferSpawn?: boolean
     includePairedSnapshot?: boolean
+    folderWorkspace?: FolderWorkspace
     rendererMounted?: boolean
+    sourceShellOverride?: string
+    terminalWindowsShell?: string
     sourceIncarnationId?: string
     stopAndWaitResult?: boolean
   } = {}
@@ -95,6 +107,7 @@ function createHarness(
     ...(connectionId ? { connectionId } : {})
   }
   const store = {
+    getSettings: () => ({ terminalWindowsShell: options.terminalWindowsShell ?? 'powershell.exe' }),
     getRepos: () => [repo],
     getRepo: (id: string) => (id === REPO_ID ? repo : undefined),
     getWorkspaceSession: (hostId?: string) => {
@@ -114,7 +127,12 @@ function createHarness(
             resolveSpawn = resolve
           })
       )
-    : vi.fn(async () => ({ id: SPLIT_PTY_ID }))
+    : vi.fn(async () => ({
+        id: SPLIT_PTY_ID,
+        ...(process.platform === 'win32'
+          ? { shellPath: options.sourceShellOverride ?? 'powershell.exe' }
+          : {})
+      }))
   const kill = vi.fn(() => true)
   const retireRejectedPty = vi.fn()
   const stopAndWait = vi.fn(async () => options.stopAndWaitResult ?? true)
@@ -128,13 +146,16 @@ function createHarness(
       )
     : vi.fn().mockRejectedValue(new Error(`Terminal tab ${TAB_ID} not found`))
   const runtime = new OrcaRuntimeService(store as never)
+  const database = new OrchestrationDb(':memory:')
+  databases.push(database)
+  runtime.setOrchestrationDb(database)
   Object.assign(runtime, {
     resolveTerminalWorkspaceLaunchScope: vi.fn(async () => ({
       id: WORKTREE_ID,
-      path: '/workspace',
+      path: options.folderWorkspace?.folderPath ?? '/workspace',
       connectionId,
-      repo,
-      folderWorkspace: null
+      repo: options.folderWorkspace ? null : repo,
+      folderWorkspace: options.folderWorkspace ?? null
     }))
   })
   runtime.setPtyController({
@@ -177,6 +198,11 @@ function createHarness(
     tabId: TAB_ID,
     leafId: SOURCE_LEAF_ID,
     ...(options.sourceIncarnationId ? { incarnationId: options.sourceIncarnationId } : {})
+  })
+  runtime.notePtyAgentTeamsShellAuthority(SOURCE_PTY_ID, {
+    executionPlatform: connectionId ? 'linux' : process.platform,
+    isRemote: Boolean(connectionId),
+    shellOverride: connectionId ? undefined : (options.sourceShellOverride ?? 'powershell.exe')
   })
   const internals = runtime as unknown as {
     issuePtyHandle: (pty: unknown) => string
@@ -247,6 +273,269 @@ describe('remote runtime terminal split authority', () => {
       )
     expect(siblingSurfaces).toHaveLength(2)
     expect(siblingSurfaces.every((tab) => tab.parentLayout?.root?.type === 'split')).toBe(true)
+  })
+
+  it.skipIf(process.platform !== 'win32')(
+    'delivers structured argv and cwd through the split PTY owner',
+    async () => {
+      const harness = createHarness()
+
+      await harness.runtime.splitTerminal(harness.handle, {
+        direction: 'vertical',
+        cwd: 'C:\\repo with space',
+        env: { CLAUDECODE: '1' },
+        agentTeamsProcess: {
+          argv: ['C:\\tools\\claude.exe', '--agent-name', 'Nova'],
+          holding: false
+        }
+      })
+
+      expect(harness.spawn).toHaveBeenCalledWith(
+        expect.objectContaining({
+          command: "& 'C:\\tools\\claude.exe' '--agent-name' 'Nova'",
+          cwd: 'C:\\repo with space',
+          env: expect.objectContaining({ CLAUDECODE: '1' }),
+          shellOverride: expect.any(String),
+          requiredShell: 'powershell'
+        })
+      )
+    }
+  )
+
+  it.skipIf(process.platform !== 'win32')(
+    'routes a renderer-backed Agent Teams handle through the split PTY owner',
+    async () => {
+      const harness = createHarness(true, { rendererMounted: true })
+      const runtime = harness.runtime as unknown as {
+        getTerminalHandleForPaneKey: (paneKey: string) => string | null
+        waitForNewLeafInTab: () => Promise<string>
+      }
+      const rendererHandle = runtime.getTerminalHandleForPaneKey(
+        makePaneKey(TAB_ID, SOURCE_LEAF_ID)
+      )!
+      const rendererSplit = vi
+        .spyOn(runtime, 'waitForNewLeafInTab')
+        .mockRejectedValue(new Error('renderer split path'))
+
+      await harness.runtime.splitTerminal(rendererHandle, {
+        direction: 'vertical',
+        cwd: 'C:\\repo with space',
+        env: { CLAUDECODE: '1' },
+        agentTeamsProcess: {
+          argv: ['C:\\tools\\claude.exe', '--agent-name', 'Nova'],
+          holding: false
+        }
+      })
+
+      expect(rendererSplit).not.toHaveBeenCalled()
+      expect(harness.spawn).toHaveBeenCalledWith(
+        expect.objectContaining({
+          command: "& 'C:\\tools\\claude.exe' '--agent-name' 'Nova'",
+          cwd: 'C:\\repo with space',
+          env: expect.objectContaining({ CLAUDECODE: '1' })
+        })
+      )
+    }
+  )
+
+  it.skipIf(process.platform !== 'win32')(
+    'propagates actual PowerShell authority to nested teammate splits',
+    async () => {
+      const harness = createHarness()
+      harness.spawn
+        .mockResolvedValueOnce({ id: SPLIT_PTY_ID, shellPath: 'powershell.exe' } as never)
+        .mockResolvedValueOnce({ id: 'pty-grandchild', shellPath: 'powershell.exe' } as never)
+
+      const child = await harness.runtime.splitTerminal(harness.handle, {
+        agentTeamsProcess: {
+          argv: ['C:\\tools\\claude.exe', '--agent-name', 'Child'],
+          holding: false
+        }
+      })
+      await harness.runtime.splitTerminal(child.handle, {
+        agentTeamsProcess: {
+          argv: ['C:\\tools\\claude.exe', '--agent-name', 'Grandchild'],
+          holding: false
+        }
+      })
+
+      expect(harness.spawn).toHaveBeenCalledTimes(2)
+      expect(harness.spawn).toHaveBeenNthCalledWith(
+        2,
+        expect.objectContaining({
+          command: "& 'C:\\tools\\claude.exe' '--agent-name' 'Grandchild'",
+          shellOverride: 'powershell.exe'
+        })
+      )
+    }
+  )
+
+  it.skipIf(process.platform !== 'win32')(
+    'retires a teammate split when the owner cannot prove PowerShell',
+    async () => {
+      for (const shellPath of ['C:\\Windows\\System32\\cmd.exe', undefined]) {
+        const harness = createHarness(true, { stopAndWaitResult: true })
+        harness.spawn.mockResolvedValueOnce({ id: SPLIT_PTY_ID, shellPath } as never)
+
+        await expect(
+          harness.runtime.splitTerminal(harness.handle, {
+            agentTeamsProcess: {
+              argv: ['C:\\tools\\claude.exe', '--agent-name', 'Rejected'],
+              holding: false
+            }
+          })
+        ).rejects.toThrow('Claude Agent Teams native panes require local PowerShell')
+
+        expect(harness.stopAndWait).toHaveBeenCalledWith(
+          SPLIT_PTY_ID,
+          expect.objectContaining({ deadlineMs: expect.any(Number) })
+        )
+        expect(harness.retireRejectedPty).toHaveBeenCalledWith(SPLIT_PTY_ID, true)
+      }
+    }
+  )
+
+  it.skipIf(process.platform !== 'win32')(
+    'delivers a structured launch for a folder workspace without a repo',
+    async () => {
+      const folderWorkspace: FolderWorkspace = {
+        id: 'folder-1',
+        projectGroupId: 'project-1',
+        name: 'Folder workspace',
+        folderPath: 'C:\\folder workspace',
+        linkedTask: null,
+        comment: '',
+        isArchived: false,
+        isUnread: false,
+        isPinned: false,
+        sortOrder: 0,
+        lastActivityAt: 1,
+        createdAt: 1,
+        updatedAt: 1
+      }
+      const harness = createHarness(true, { folderWorkspace })
+
+      await harness.runtime.splitTerminal(harness.handle, {
+        direction: 'vertical',
+        agentTeamsProcess: {
+          argv: ['C:\\tools\\claude.exe', '--agent-name', 'Nova'],
+          holding: false
+        }
+      })
+
+      expect(harness.spawn).toHaveBeenCalledWith(
+        expect.objectContaining({
+          cwd: folderWorkspace.folderPath,
+          env: expect.objectContaining({
+            ORCA_WORKSPACE_ID: WORKTREE_ID,
+            ORCA_PROJECT_GROUP_ID: folderWorkspace.projectGroupId,
+            ORCA_WORKSPACE_ROOT: folderWorkspace.folderPath
+          })
+        })
+      )
+    }
+  )
+
+  it.skipIf(process.platform !== 'win32')(
+    'uses the source PTY PowerShell override instead of the global default',
+    async () => {
+      const harness = createHarness(true, {
+        sourceShellOverride: 'pwsh.exe',
+        terminalWindowsShell: 'cmd.exe'
+      })
+
+      await harness.runtime.splitTerminal(harness.handle, {
+        agentTeamsProcess: { argv: ['C:\\tools\\claude.exe'], holding: false }
+      })
+
+      expect(harness.spawn).toHaveBeenCalledWith(
+        expect.objectContaining({ shellOverride: 'pwsh.exe' })
+      )
+    }
+  )
+
+  it.skipIf(process.platform !== 'win32')(
+    'rejects a local teammate split if workspace routing is rebound to SSH',
+    async () => {
+      const harness = createHarness()
+      Object.assign(harness.runtime, {
+        resolveTerminalWorkspaceLaunchScope: vi.fn(async () => ({
+          id: WORKTREE_ID,
+          path: 'C:\\workspace',
+          connectionId: 'ssh-rebound',
+          repo: { id: REPO_ID, path: 'C:\\workspace', connectionId: 'ssh-rebound' },
+          folderWorkspace: null
+        }))
+      })
+
+      await expect(
+        harness.runtime.splitTerminal(harness.handle, {
+          agentTeamsProcess: {
+            argv: ['C:\\tools\\claude.exe', '--agent-name', 'NeverRemote'],
+            holding: false
+          }
+        })
+      ).rejects.toThrow('require local PowerShell')
+      expect(harness.spawn).not.toHaveBeenCalled()
+    }
+  )
+
+  it.skipIf(process.platform !== 'win32')(
+    'rejects an unproved custom source shell even under a PowerShell default',
+    async () => {
+      const harness = createHarness(true, { sourceShellOverride: 'C:\\tools\\nu.exe' })
+
+      await expect(
+        harness.runtime.splitTerminal(harness.handle, {
+          agentTeamsProcess: { argv: ['C:\\tools\\claude.exe'], holding: false }
+        })
+      ).rejects.toThrow('require local PowerShell')
+      expect(harness.spawn).not.toHaveBeenCalled()
+    }
+  )
+
+  it('aborts a team split before it can publish after spawn settles', async () => {
+    const harness = createHarness(true, { deferSpawn: true })
+    const controller = new AbortController()
+    const splitting = harness.runtime.splitTerminal(harness.handle, {
+      command: 'echo late',
+      signal: controller.signal
+    })
+    await vi.waitFor(() => expect(harness.spawn).toHaveBeenCalledOnce())
+    controller.abort()
+    harness.resolveSpawn()
+
+    await expect(splitting).rejects.toThrow()
+    expect(harness.revealTerminalSession).not.toHaveBeenCalled()
+    expect(harness.retireRejectedPty).toHaveBeenCalled()
+  })
+
+  it('retires a renderer-backed leader team when its PTY exits naturally', () => {
+    const harness = createHarness(true, { rendererMounted: true })
+    const teams = (
+      harness.runtime as unknown as {
+        claudeAgentTeams: {
+          createLaunchEnv(args: {
+            leaderHandle: string
+            baseEnv: Record<string, string>
+            shimDir: string
+            shimBin: string
+          }): unknown
+          getActiveTeamCount(): number
+        }
+      }
+    ).claudeAgentTeams
+    teams.createLaunchEnv({
+      leaderHandle: harness.handle,
+      baseEnv: {},
+      shimDir: 'C:\\shim',
+      shimBin: 'C:\\orca.exe'
+    })
+    expect(teams.getActiveTeamCount()).toBe(1)
+
+    harness.runtime.onPtyExit(SOURCE_PTY_ID, 0)
+
+    expect(teams.getActiveTeamCount()).toBe(0)
   })
 
   it('rejects an unowned split source before spawning a PTY', async () => {

@@ -246,7 +246,7 @@ describe('preflight', () => {
       throw new Error('not found')
     })
 
-    await expect(detectInstalledAgents()).resolves.toEqual(['claude'])
+    await expect(detectInstalledAgents()).resolves.toEqual(['claude', 'claude-agent-teams'])
   })
 
   it('detects agents via the install-dir resolver when which fails (stripped GUI PATH)', async () => {

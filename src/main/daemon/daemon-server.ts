@@ -6,6 +6,7 @@ import { writeFileSync, chmodSync, unlinkSync } from 'node:fs'
 import { StringDecoder } from 'node:string_decoder'
 import { encodeNdjson, createNdjsonParser } from './ndjson'
 import { TerminalHost } from './terminal-host'
+import { toDaemonCreateOrAttachResult } from './daemon-create-or-attach-result'
 import { DaemonStreamDataBatcher } from './daemon-stream-data-batcher'
 import {
   BackgroundTransientFactRelay,
@@ -86,6 +87,7 @@ export type DaemonServerOptions = {
     env?: Record<string, string>
     command?: string
     shellOverride?: string
+    requiredShell?: 'powershell'
     isCanceled?: () => boolean
     // Async production spawns and sync test stubs share this boundary.
   }) => SubprocessHandle | Promise<SubprocessHandle>
@@ -1136,6 +1138,7 @@ export class DaemonServer {
             // Why: RPC payloads are untrusted JSON; persist only the allowlisted routing enum, never arbitrary identity.
             ...(isTuiAgent(p.launchAgent) ? { launchAgent: p.launchAgent } : {}),
             shellOverride: p.shellOverride,
+            ...(p.requiredShell === 'powershell' ? { requiredShell: 'powershell' } : {}),
             terminalWindowsWslDistro: p.terminalWindowsWslDistro,
             terminalWindowsPowerShellImplementation: p.terminalWindowsPowerShellImplementation,
             shellReadySupported: p.shellReadySupported,
@@ -1229,17 +1232,7 @@ export class DaemonServer {
           sessionId: routedSessionId,
           pid: result.pid
         })
-        return {
-          isNew: result.isNew,
-          snapshot: result.snapshot,
-          pid: result.pid,
-          shellState: result.shellState,
-          incarnationId: result.incarnationId,
-          ...(result.launchAgent ? { launchAgent: result.launchAgent } : {}),
-          wslDistro: result.wslDistro,
-          ...(result.historySeeded !== undefined ? { historySeeded: result.historySeeded } : {}),
-          ...(result.agentSessionEnsure ? { agentSessionEnsure: result.agentSessionEnsure } : {})
-        }
+        return toDaemonCreateOrAttachResult(result)
       }
 
       case 'cancelCreateOrAttach':

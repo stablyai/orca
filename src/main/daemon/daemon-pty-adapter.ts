@@ -40,6 +40,7 @@ import {
 import {
   GET_SIZE_PROTOCOL_VERSION,
   HISTORY_SEED_TRANSFER_PROTOCOL_VERSION,
+  REQUIRED_SHELL_DAEMON_PROTOCOL_VERSION,
   SNAPSHOT_SERIALIZER_FIDELITY_DAEMON_PROTOCOL_VERSION,
   STABLE_PANE_ATTACH_ONLY_DAEMON_PROTOCOL_VERSION
 } from './daemon-protocol-version'
@@ -510,6 +511,9 @@ export class DaemonPtyAdapter implements IPtyProvider {
     operation: PendingDaemonSpawnOperation,
     historyRecovery: HistoryRecoveryContext
   ): Promise<PtySpawnResult> {
+    if (opts.requiredShell && this.protocolVersion < REQUIRED_SHELL_DAEMON_PROTOCOL_VERSION) {
+      throw new Error('required_shell_unavailable')
+    }
     if (
       opts.agentSessionEnsure &&
       this.protocolVersion < AGENT_SESSION_CLAIM_DAEMON_PROTOCOL_VERSION
@@ -648,6 +652,7 @@ export class DaemonPtyAdapter implements IPtyProvider {
         ...(attachOnly && !emulateLegacyAttachOnly ? { attachOnly: true } : {}),
         // Why: without forwarding the override, the daemon falls back to cmd.exe/PowerShell, ignoring the shell the renderer chose; this matches LocalPtyProvider.
         shellOverride: attachOnly ? undefined : opts.shellOverride,
+        requiredShell: attachOnly ? undefined : opts.requiredShell,
         terminalWindowsWslDistro: attachOnly ? undefined : opts.terminalWindowsWslDistro,
         terminalWindowsPowerShellImplementation: attachOnly
           ? undefined
@@ -785,8 +790,13 @@ export class DaemonPtyAdapter implements IPtyProvider {
     } else if (providerWslDistro === null || result.isNew) {
       this.wslDistrosBySessionId.delete(sessionId)
     }
-    const launchIdentity = (): { launchAgent?: NonNullable<typeof result.launchAgent> } =>
-      result.launchAgent ? { launchAgent: result.launchAgent } : {}
+    const launchIdentity = (): {
+      launchAgent?: NonNullable<typeof result.launchAgent>
+      shellPath?: string
+    } => ({
+      ...(result.launchAgent ? { launchAgent: result.launchAgent } : {}),
+      ...(result.shellPath ? { shellPath: result.shellPath } : {})
+    })
 
     if (effectiveCwd) {
       this.initialCwds.set(sessionId, effectiveCwd)
@@ -1214,7 +1224,9 @@ export class DaemonPtyAdapter implements IPtyProvider {
     if (opts.keepHistory && this.disconnectOnlyPromise) {
       throw new Error('Cannot keep history after daemon disconnect has started')
     }
-    const shutdown = this.withHistorySpawnLock(id, () => this.shutdownWithHistoryLock(id, opts))
+    const shutdown = this.withHistorySpawnLock(id, () =>
+      this.withDaemonRetry(() => this.shutdownWithHistoryLock(id, opts))
+    )
     if (!opts.keepHistory) {
       await shutdown
       return

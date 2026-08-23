@@ -336,6 +336,34 @@ describe('LocalPtyProvider', () => {
       expect(spawnCall[2].env.ORCA_STALE_TEST_ENV).toBeUndefined()
     })
 
+    it('deletes requested Windows env keys case-insensitively after owner hooks', async () => {
+      const platform = Object.getOwnPropertyDescriptor(process, 'platform')
+      Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
+      provider.configure({
+        buildSpawnEnv: (_id, env) => {
+          env.oRcA_aGeNt_TeAmS_tOkEn = 'hook-stale'
+          return env
+        }
+      })
+      try {
+        await provider.spawn({
+          cols: 80,
+          rows: 24,
+          env: { OrCa_AgEnT_TeAmS_TeAm_Id: 'input-stale' },
+          envToDelete: ['ORCA_AGENT_TEAMS_TEAM_ID', 'ORCA_AGENT_TEAMS_TOKEN']
+        })
+      } finally {
+        if (platform) {
+          Object.defineProperty(process, 'platform', platform)
+        }
+      }
+
+      const env = spawnMock.mock.calls.at(-1)?.[2].env as Record<string, string>
+      expect(
+        Object.keys(env).some((key) => key.toLowerCase().startsWith('orca_agent_teams_'))
+      ).toBe(false)
+    })
+
     it('does not re-promote a legacy attribution path for Agent Teams', async () => {
       await provider.spawn({
         cols: 80,

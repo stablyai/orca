@@ -64,6 +64,7 @@ import {
   resolveWorktreeScanCacheTtlMs,
   type RuntimeTerminalAgentStatusEvent
 } from './orca-runtime'
+import type { ClaudeAgentTeamsShimTarget } from './claude-agent-teams-shim-env'
 import { RUNTIME_GRAPH_RELOAD_TIMEOUT_MS } from './runtime-graph-reload-lifecycle'
 import {
   appendRecentPtyPathCandidates,
@@ -14643,6 +14644,66 @@ describe('OrcaRuntimeService', () => {
     expect(normalAgent.env?.TMUX).toBeUndefined()
   })
 
+  it('waits for the exact Agent Teams leader pane registration', async () => {
+    const runtime = new OrcaRuntimeService(store)
+    const prepareForHandle = vi
+      .spyOn(runtime, 'prepareClaudeAgentTeamsLeaderForHandle')
+      .mockResolvedValue({ env: { ORCA_AGENT_TEAMS_TEAM_ID: 'team-race' }, mode: 'native' })
+    const tabId = 'tab-agent-teams-race'
+    const leafId = '11111111-1111-4111-8111-111111111111'
+    const paneKey = `${tabId}:${leafId}`
+    const preparing = runtime.prepareClaudeAgentTeamsLeader({ paneKey })
+
+    await Promise.resolve()
+    expect(prepareForHandle).not.toHaveBeenCalled()
+    runtime.registerPty('pty-unrelated', TEST_WORKTREE_ID, null, {
+      tabId,
+      leafId: '22222222-2222-4222-8222-222222222222'
+    })
+    expect(prepareForHandle).not.toHaveBeenCalled()
+
+    const handle = runtime.createPreAllocatedTerminalHandle()
+    runtime.registerPreAllocatedHandleForPty('pty-agent-teams-leader', handle)
+    runtime.registerPty('pty-agent-teams-leader', TEST_WORKTREE_ID, null, { tabId, leafId })
+
+    await expect(preparing).resolves.toEqual({
+      env: { ORCA_AGENT_TEAMS_TEAM_ID: 'team-race' },
+      mode: 'native'
+    })
+    expect(prepareForHandle).toHaveBeenCalledWith({ handle, baseEnv: undefined })
+  })
+
+  it('waits past a disconnected predecessor for the replacement leader pane', async () => {
+    const runtime = new OrcaRuntimeService(store)
+    const prepareForHandle = vi
+      .spyOn(runtime, 'prepareClaudeAgentTeamsLeaderForHandle')
+      .mockResolvedValue({ env: { ORCA_AGENT_TEAMS_TEAM_ID: 'team-replacement' }, mode: 'native' })
+    const tabId = 'tab-agent-teams-replacement'
+    const leafId = '33333333-3333-4333-8333-333333333333'
+    const paneKey = `${tabId}:${leafId}`
+    const oldHandle = runtime.createPreAllocatedTerminalHandle()
+    runtime.registerPreAllocatedHandleForPty('pty-old-leader', oldHandle)
+    runtime.registerPty('pty-old-leader', TEST_WORKTREE_ID, null, { tabId, leafId })
+    runtime.onPtyExit('pty-old-leader', 0)
+
+    const preparing = runtime.prepareClaudeAgentTeamsLeader({ paneKey })
+    await Promise.resolve()
+    expect(prepareForHandle).not.toHaveBeenCalled()
+
+    const replacementHandle = runtime.createPreAllocatedTerminalHandle()
+    runtime.registerPreAllocatedHandleForPty('pty-replacement-leader', replacementHandle)
+    runtime.registerPty('pty-replacement-leader', TEST_WORKTREE_ID, null, { tabId, leafId })
+
+    await expect(preparing).resolves.toEqual({
+      env: { ORCA_AGENT_TEAMS_TEAM_ID: 'team-replacement' },
+      mode: 'native'
+    })
+    expect(prepareForHandle).toHaveBeenCalledWith({
+      handle: replacementHandle,
+      baseEnv: undefined
+    })
+  })
+
   it('reveals Claude Agent Teams launches with the rewritten launch config', async () => {
     const spawn = vi.fn().mockResolvedValue({ id: 'pty-bg' })
     const revealTerminalSession = vi.fn().mockResolvedValue({ tabId: 'tab-bg' })
@@ -14708,6 +14769,431 @@ describe('OrcaRuntimeService', () => {
       activate: false,
       tabId: spawnedEnv.ORCA_TAB_ID,
       leafId: spawnedLeafId
+    })
+  })
+
+  it('persists the resolved in-process fallback for Windows cmd panes', async () => {
+    setPlatform('win32')
+    const spawn = vi.fn().mockResolvedValue({ id: 'pty-bg' })
+    const revealTerminalSession = vi.fn().mockResolvedValue({ tabId: 'tab-bg' })
+    const runtimeStore = {
+      ...store,
+      getSettings: () => ({
+        ...store.getSettings(),
+        claudeAgentTeamsMode: 'native-panes-shim' as const,
+        terminalWindowsShell: 'cmd.exe' as const
+      })
+    }
+    const runtime = new OrcaRuntimeService(runtimeStore)
+    runtime.setPtyController({
+      spawn,
+      write: () => true,
+      kill: () => true,
+      getForegroundProcess: async () => null
+    })
+    runtime.setNotifier({
+      worktreesChanged: vi.fn(),
+      reposChanged: vi.fn(),
+      activateWorktree: vi.fn(),
+      createTerminal: vi.fn(),
+      revealTerminalSession,
+      splitTerminal: vi.fn(),
+      renameTerminal: vi.fn(),
+      focusTerminal: vi.fn(),
+      closeTerminal: vi.fn(),
+      sleepWorktree: vi.fn(),
+      terminalFitOverrideChanged: vi.fn(),
+      terminalDriverChanged: vi.fn()
+    })
+    runtime.attachWindow(1)
+    runtime.syncWindowGraph(1, { tabs: [], leaves: [] })
+
+    await runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`, {
+      command: 'claude',
+      launchAgent: 'claude',
+      launchConfig: { agentCommand: 'claude', agentArgs: '', agentEnv: {} }
+    })
+
+    expect(spawn).toHaveBeenCalledWith(
+      expect.objectContaining({ command: 'claude --teammate-mode in-process' })
+    )
+    expect(revealTerminalSession).toHaveBeenCalledWith(
+      TEST_WORKTREE_ID,
+      expect.objectContaining({
+        launchConfig: expect.objectContaining({
+          agentCommand: 'claude --teammate-mode in-process'
+        })
+      })
+    )
+  })
+
+  it('keeps direct Windows Claude in-process until the spawned shell is authoritative', async () => {
+    setPlatform('win32')
+    vi.stubEnv('ORCA_DEV_REPO_ROOT', process.cwd())
+    vi.stubEnv('ORCA_AGENT_TEAMS_SHIM_BIN', join(process.cwd(), 'out', 'bin', 'orca-dev.cmd'))
+    onTestFinished(() => {
+      vi.unstubAllEnvs()
+    })
+    const spawn = vi
+      .fn()
+      .mockResolvedValue({ id: 'pty-fallback', shellPath: 'C:\\Windows\\System32\\cmd.exe' })
+    const runtimeStore = {
+      ...store,
+      getSettings: () => ({
+        ...store.getSettings(),
+        claudeAgentTeamsMode: 'native-panes-shim' as const,
+        terminalWindowsShell: 'C:\\PowerShell\\pwsh.exe' as const
+      })
+    }
+    const runtime = new OrcaRuntimeService(runtimeStore)
+    runtime.setPtyController({
+      spawn,
+      write: () => true,
+      kill: () => true,
+      getForegroundProcess: async () => null
+    })
+
+    await runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`, {
+      command: 'claude',
+      launchAgent: 'claude',
+      launchConfig: { agentCommand: 'claude', agentArgs: '', agentEnv: {} }
+    })
+
+    expect(spawn).toHaveBeenCalledWith(
+      expect.objectContaining({
+        command: 'claude --teammate-mode in-process',
+        env: expect.not.objectContaining({ ORCA_AGENT_TEAMS_TEAM_ID: expect.any(String) })
+      })
+    )
+  })
+
+  it('sanitizes captured native Windows Agent Teams state across spawn and reveal', async () => {
+    setPlatform('win32')
+    const spawn = vi.fn().mockResolvedValue({
+      id: 'pty-captured-native',
+      shellPath: 'C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe'
+    })
+    const revealTerminalSession = vi.fn().mockResolvedValue({ tabId: 'tab-captured-native' })
+    const runtime = new OrcaRuntimeService(store)
+    runtime.setPtyController({
+      spawn,
+      write: () => true,
+      kill: () => true,
+      getForegroundProcess: async () => null
+    })
+    runtime.setNotifier({
+      worktreesChanged: vi.fn(),
+      reposChanged: vi.fn(),
+      activateWorktree: vi.fn(),
+      createTerminal: vi.fn(),
+      revealTerminalSession,
+      splitTerminal: vi.fn(),
+      renameTerminal: vi.fn(),
+      focusTerminal: vi.fn(),
+      closeTerminal: vi.fn(),
+      sleepWorktree: vi.fn(),
+      terminalFitOverrideChanged: vi.fn(),
+      terminalDriverChanged: vi.fn()
+    })
+    runtime.attachWindow(1)
+    runtime.syncWindowGraph(1, { tabs: [], leaves: [] })
+    const staleEnv = {
+      CLAUDE_PROFILE: 'preserved',
+      tMuX: '/tmp/orca/stale,0,1',
+      Tmux_Pane: '%1',
+      OrCa_AgEnT_TeAmS_TeAm_Id: 'stale-team',
+      orca_agent_teams_token: 'stale-token',
+      orca_agent_teams_shim_dir: 'c:\\stale-shim',
+      ORCA_AGENT_TEAMS_SHIM_BIN: 'C:\\stale-shim\\orca.cmd',
+      Path: 'C:\\STALE-SHIM\\;C:\\Windows\\System32'
+    }
+
+    await runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`, {
+      command: 'claude --teammate-mode auto --resume captured-session --teammate-mode=auto',
+      env: staleEnv,
+      launchAgent: 'claude',
+      launchConfig: {
+        agentCommand: 'claude --teammate-mode auto --teammate-mode=auto',
+        agentArgs: '--teammate-mode auto --resume captured-session --teammate-mode=auto',
+        agentEnv: staleEnv
+      }
+    })
+
+    const spawnOptions = spawn.mock.calls[0]?.[0]
+    expect(spawnOptions.command).toBe('claude --teammate-mode in-process --resume captured-session')
+    expect(spawnOptions.env).toMatchObject({
+      CLAUDE_PROFILE: 'preserved',
+      CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS: '1'
+    })
+    expect(spawnOptions.envToDelete).toEqual(
+      expect.arrayContaining([
+        'TMUX',
+        'TMUX_PANE',
+        'ORCA_AGENT_TEAMS_TEAM_ID',
+        'ORCA_AGENT_TEAMS_TOKEN',
+        'ORCA_AGENT_TEAMS_SHIM_DIR'
+      ])
+    )
+    expect(Object.values(spawnOptions.env)).not.toContain('C:\\stale-shim')
+    expect(
+      Object.values(spawnOptions.env as Record<string, string>).some((value) =>
+        value.includes('C:\\stale-shim')
+      )
+    ).toBe(false)
+    expect(revealTerminalSession).toHaveBeenCalledWith(
+      TEST_WORKTREE_ID,
+      expect.objectContaining({
+        launchConfig: {
+          agentCommand: 'claude --teammate-mode in-process',
+          agentArgs: '--resume captured-session',
+          agentEnv: {
+            CLAUDE_PROFILE: 'preserved',
+            CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS: '1',
+            Path: 'C:\\Windows\\System32'
+          }
+        }
+      })
+    )
+  })
+
+  it('does not treat a configured Windows shell as published spawn authority', async () => {
+    setPlatform('win32')
+    const runtime = new OrcaRuntimeService(store)
+    const handle = runtime.createPreAllocatedTerminalHandle()
+
+    await expect(
+      runtime.prepareClaudeAgentTeamsLeaderForHandle({
+        handle,
+        pendingShellAuthority: {
+          executionPlatform: 'win32',
+          isRemote: false,
+          shellOverride: 'C:\\PowerShell\\pwsh.exe'
+        }
+      })
+    ).resolves.toEqual({
+      env: { CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS: '1' },
+      mode: 'in-process'
+    })
+  })
+
+  it('revalidates leader liveness after asynchronous shim preparation', async () => {
+    setPlatform('win32')
+    let resolveTarget!: (target: ClaudeAgentTeamsShimTarget | null) => void
+    const targetPromise = new Promise<ClaudeAgentTeamsShimTarget | null>((resolve) => {
+      resolveTarget = resolve
+    })
+    const prepareTarget = vi.fn(() => targetPromise)
+    const spawn = vi
+      .fn()
+      .mockResolvedValue({ id: 'pty-shim-race', shellPath: 'C:\\PowerShell\\pwsh.exe' })
+    const runtime = new OrcaRuntimeService(store, undefined, {
+      prepareClaudeAgentTeamsShimTarget: prepareTarget
+    })
+    runtime.setPtyController({
+      spawn,
+      write: () => true,
+      kill: () => true,
+      getForegroundProcess: async () => null
+    })
+    const leader = await runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`, {
+      presentation: 'background'
+    })
+
+    const pending = runtime.prepareClaudeAgentTeamsLeaderForHandle({ handle: leader.handle })
+    await vi.waitFor(() => expect(prepareTarget).toHaveBeenCalledOnce())
+    runtime.onPtyExit('pty-shim-race', 0)
+    resolveTarget({
+      shimDir: 'C:\\shim',
+      shimBin: 'C:\\orca.exe',
+      env: {}
+    })
+
+    await expect(pending).rejects.toThrow('claude_agent_teams_requires_orca_terminal')
+  })
+
+  it('discards a prepared native team when spawn adopts another stable owner', async () => {
+    setPlatform('linux')
+    const canonicalHandle = `term_${randomUUID()}`
+    const spawn = vi.fn().mockImplementation(async (args) => ({
+      id: 'pty-stable-winner',
+      stablePaneOwner: {
+        handle: canonicalHandle,
+        tabId: args.tabId,
+        leafId: args.leafId
+      }
+    }))
+    const runtimeStore = {
+      ...store,
+      getSettings: () => ({
+        ...store.getSettings(),
+        claudeAgentTeamsMode: 'native-panes-shim' as const
+      })
+    }
+    const runtime = new OrcaRuntimeService(runtimeStore, undefined, {
+      prepareClaudeAgentTeamsShimTarget: async () => ({
+        shimDir: '/tmp/shim',
+        shimBin: '/opt/orca/bin/orca-ide',
+        env: {}
+      })
+    })
+    runtime.setPtyController({
+      spawn,
+      write: () => true,
+      kill: () => true,
+      getForegroundProcess: async () => null
+    })
+
+    await runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`, {
+      command: 'claude',
+      launchAgent: 'claude',
+      launchConfig: { agentCommand: 'claude', agentArgs: '', agentEnv: {} }
+    })
+
+    const env = spawn.mock.calls[0]?.[0].env
+    await expect(
+      runtime.handleAgentTeamsTmuxCompat({
+        teamId: env.ORCA_AGENT_TEAMS_TEAM_ID,
+        token: env.ORCA_AGENT_TEAMS_TOKEN,
+        envPane: env.TMUX_PANE,
+        argv: ['display-message', '-p', '#{pane_id}']
+      })
+    ).resolves.toMatchObject({ exitCode: 1 })
+  })
+
+  it('discards native launch metadata when a canonical agent owner is adopted', async () => {
+    setPlatform('linux')
+    const spawn = vi.fn().mockImplementation(async (args) => ({
+      id: 'pty-canonical-agent-owner',
+      agentSessionEnsure: {
+        disposition: 'adopted' as const,
+        owner: {
+          claim: args.agentSessionEnsure.claim,
+          generation: 'canonical-generation',
+          phase: 'live' as const,
+          ptyId: 'pty-canonical-agent-owner',
+          surface: args.agentSessionEnsure.surface
+        }
+      }
+    }))
+    const revealTerminalSession = vi.fn().mockResolvedValue({ tabId: 'canonical-tab' })
+    const runtimeStore = {
+      ...store,
+      getSettings: () => ({
+        ...store.getSettings(),
+        claudeAgentTeamsMode: 'native-panes-shim' as const
+      })
+    }
+    const runtime = new OrcaRuntimeService(runtimeStore, undefined, {
+      prepareClaudeAgentTeamsShimTarget: async () => ({
+        shimDir: '/tmp/shim',
+        shimBin: '/opt/orca/bin/orca-ide',
+        env: {}
+      })
+    })
+    runtime.setPtyController({
+      spawn,
+      write: () => true,
+      kill: () => true,
+      getForegroundProcess: async () => null
+    })
+    runtime.setNotifier({ revealTerminalSession } as never)
+
+    const created = await runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`, {
+      command: 'claude',
+      title: 'Replacement title',
+      launchAgent: 'claude',
+      launchConfig: { agentCommand: 'claude', agentArgs: '', agentEnv: {} },
+      agentSessionClaim: {
+        digestVersion: 1,
+        keyId: 'test-key',
+        identityDigest: 'a'.repeat(43),
+        worktreeScopeDigest: 'b'.repeat(43),
+        agent: 'claude'
+      }
+    })
+
+    expect(created.isReattach).toBe(true)
+    const launchEnv = spawn.mock.calls[0]?.[0].env
+    await expect(
+      runtime.handleAgentTeamsTmuxCompat({
+        teamId: launchEnv.ORCA_AGENT_TEAMS_TEAM_ID,
+        token: launchEnv.ORCA_AGENT_TEAMS_TOKEN,
+        envPane: launchEnv.TMUX_PANE,
+        argv: ['display-message', '-p', '#{pane_id}']
+      })
+    ).resolves.toMatchObject({ exitCode: 1 })
+    const reveal = revealTerminalSession.mock.calls[0]?.[1]
+    expect(reveal).not.toHaveProperty('launchConfig')
+    expect(reveal).not.toHaveProperty('launchToken')
+    expect(reveal).not.toHaveProperty('launchAgent')
+    expect(reveal.title).toBeNull()
+  })
+
+  it('binds a host-created Windows leader to its provider-reported PowerShell', async () => {
+    setPlatform('win32')
+    const spawn = vi
+      .fn()
+      .mockResolvedValueOnce({ id: 'pty-leader', shellPath: 'C:\\PowerShell\\pwsh.exe' })
+      .mockResolvedValueOnce({ id: 'pty-child', shellPath: 'C:\\PowerShell\\pwsh.exe' })
+    const runtime = new OrcaRuntimeService(store)
+    runtime.setPtyController({
+      spawn,
+      write: () => true,
+      kill: () => true,
+      getForegroundProcess: async () => null
+    })
+
+    const leader = await runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`, {
+      presentation: 'background'
+    })
+    await runtime.splitTerminal(leader.handle, {
+      agentTeamsProcess: { argv: ['C:\\tools\\claude.exe', '--agent-name', 'Nova'], holding: false }
+    })
+
+    expect(spawn).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({
+        command: "& 'C:\\tools\\claude.exe' '--agent-name' 'Nova'",
+        shellOverride: 'C:\\PowerShell\\pwsh.exe',
+        requiredShell: 'powershell'
+      })
+    )
+  })
+
+  it.each([
+    { label: 'cmd fallback', shellPath: 'C:\\Windows\\System32\\cmd.exe' },
+    { label: 'legacy owner without shell publication', shellPath: undefined }
+  ])('late-binds $label to in-process Agent Teams', async ({ shellPath }) => {
+    setPlatform('win32')
+    const spawn = vi.fn().mockResolvedValue({ id: 'pty-fallback', shellPath })
+    const runtimeStore = {
+      ...store,
+      getSettings: () => ({
+        ...store.getSettings(),
+        claudeAgentTeamsMode: 'native-panes-shim' as const,
+        terminalWindowsShell: 'powershell.exe' as const
+      })
+    }
+    const runtime = new OrcaRuntimeService(runtimeStore)
+    runtime.setPtyController({
+      spawn,
+      write: () => true,
+      kill: () => true,
+      getForegroundProcess: async () => null
+    })
+
+    const leader = await runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`, {
+      presentation: 'background'
+    })
+    if (!leader.paneKey) {
+      throw new Error('Expected a registered leader pane')
+    }
+    const launch = await runtime.prepareClaudeAgentTeamsLeader({ paneKey: leader.paneKey })
+
+    expect(spawn).toHaveBeenCalledWith(expect.objectContaining({ worktreeId: TEST_WORKTREE_ID }))
+    expect(launch).toEqual({
+      env: { CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS: '1' },
+      mode: 'in-process'
     })
   })
 
@@ -30521,6 +31007,13 @@ describe('OrcaRuntimeService', () => {
         tabId,
         leafId: HEADLESS_LEAF_ID
       })
+      runtime.notePtyAgentTeamsShellAuthority(ptyId, {
+        executionPlatform: 'linux',
+        isRemote: true
+      })
+      const agentTeamsAuthority = (
+        runtime as unknown as { agentTeamsShellAuthorityByPtyId: Map<string, unknown> }
+      ).agentTeamsShellAuthorityByPtyId
       runtime.syncWindowGraph(1, {
         tabs: [],
         leaves: [],
@@ -30547,6 +31040,7 @@ describe('OrcaRuntimeService', () => {
         ]
       })
       runtime.onPtyExit(ptyId, -1)
+      expect(agentTeamsAuthority.has(ptyId)).toBe(true)
 
       runtime.syncWindowGraph(1, {
         tabs: [],
@@ -30584,6 +31078,8 @@ describe('OrcaRuntimeService', () => {
         ]
       })
       expect((await runtime.listMobileSessionTabs(`id:${TEST_WORKTREE_ID}`)).tabs).toEqual([])
+      runtime.onPtyExit(ptyId, -1, undefined, { hostExitConfirmed: true })
+      expect(agentTeamsAuthority.has(ptyId)).toBe(false)
     } finally {
       vi.useRealTimers()
     }

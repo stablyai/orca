@@ -1,4 +1,7 @@
 import { describe, expect, it } from 'vitest'
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { resolveSpawn, runProcess, runProcessSync } from './run-process'
 import { WINDOWS_ARGUMENT_CORPUS } from './__fixtures__/windows-argument-corpus'
 
@@ -93,6 +96,25 @@ describe('runProcessSync', () => {
     })
     expect(result.stdout).toBe('hi')
     expect(result.code).toBe(3)
+  })
+})
+
+describe.skipIf(process.platform !== 'win32')('Windows batch execution', () => {
+  it('preserves structured argv through a real .cmd process', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'orca-run-process-cmd-'))
+    const script = join(dir, 'claude test.cmd')
+    writeFileSync(
+      script,
+      `@echo off\r\n"${process.execPath}" -e "process.stdout.write(JSON.stringify(process.argv.slice(1)))" %*\r\n`
+    )
+    const args = ['space value', 'ampersand&value', 'caret^value', 'percent%value', 'bang!value']
+    try {
+      const result = await runProcess({ program: script, args })
+      expect(result.code).toBe(0)
+      expect(JSON.parse(result.stdout)).toEqual(args)
+    } finally {
+      rmSync(dir, { recursive: true, force: true })
+    }
   })
 })
 

@@ -77,6 +77,7 @@ export type CreateOrAttachRequest = {
      *  instead of defaulting to COMSPEC (which is always cmd.exe on Windows)
      *  or the hard-coded powershell.exe fallback. */
     shellOverride?: string
+    requiredShell?: 'powershell'
     /** Preferred WSL distro for generic `wsl.exe` launches. */
     terminalWindowsWslDistro?: string | null
     /** Why: the UI keeps PowerShell as one shell family, but the runtime may

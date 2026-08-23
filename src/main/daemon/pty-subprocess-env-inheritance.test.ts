@@ -583,6 +583,33 @@ describe('createPtySubprocess', () => {
     expect(lastCall[2].env.TERM_PROGRAM).toBeUndefined()
   })
 
+  it('deletes requested Windows env keys case-insensitively at the daemon owner', async () => {
+    spawnMock.mockReturnValue(mockPtyProcess())
+    const platform = Object.getOwnPropertyDescriptor(process, 'platform')
+    Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
+    try {
+      await createPtySubprocess({
+        sessionId: 'mixed-case-delete',
+        cols: 80,
+        rows: 24,
+        env: {
+          OrCa_AgEnT_TeAmS_TeAm_Id: 'stale-team',
+          oRcA_aGeNt_TeAmS_tOkEn: 'stale-token'
+        },
+        envToDelete: ['ORCA_AGENT_TEAMS_TEAM_ID', 'ORCA_AGENT_TEAMS_TOKEN']
+      })
+    } finally {
+      if (platform) {
+        Object.defineProperty(process, 'platform', platform)
+      }
+    }
+
+    const env = spawnMock.mock.calls.at(-1)?.[2].env as Record<string, string>
+    expect(Object.keys(env).some((key) => key.toLowerCase().startsWith('orca_agent_teams_'))).toBe(
+      false
+    )
+  })
+
   it('collapses its own env merge onto the requested Windows `Path` spelling', async () => {
     const proc = mockPtyProcess()
     spawnMock.mockReturnValue(proc)

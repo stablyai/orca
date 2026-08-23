@@ -1,13 +1,19 @@
 import { describe, expect, it } from 'vitest'
 import {
-  addClaudeTeammateModeAuto,
-  isDirectClaudeCommand,
   parseTmuxArgs,
   renderTmuxFormat,
   splitTmuxCommand,
   tmuxSendKeysText,
   tmuxValue
 } from './claude-agent-teams-tmux-compat'
+import {
+  addClaudeTeammateModeAuto,
+  isDirectClaudeCommand,
+  normalizeClaudeTeammateModeArgs,
+  normalizeClaudeTeammateModeLaunchConfig,
+  setClaudeTeammateMode,
+  stripClaudeTeammateMode
+} from './claude-agent-teams-mode'
 
 describe('claude agent teams tmux compat primitives', () => {
   it('parses clustered tmux flags and keeps split size out of positional command text', () => {
@@ -57,7 +63,63 @@ describe('claude agent teams tmux compat primitives', () => {
       "claude --teammate-mode auto 'fix it'"
     )
     expect(addClaudeTeammateModeAuto('claude --teammate-mode in-process')).toBe(
-      'claude --teammate-mode in-process'
+      'claude --teammate-mode auto'
     )
+  })
+
+  it('collapses duplicate and dangling teammate-mode options at the launch boundary', () => {
+    expect(
+      normalizeClaudeTeammateModeArgs(
+        [
+          '--teammate-mode',
+          'auto',
+          '--resume',
+          'session-1',
+          '--teammate-mode=in-process',
+          '--teammate-mode',
+          '--',
+          '--teammate-mode',
+          'auto'
+        ],
+        'auto',
+        'in-process'
+      )
+    ).toEqual([
+      '--teammate-mode',
+      'in-process',
+      '--resume',
+      'session-1',
+      '--',
+      '--teammate-mode',
+      'auto'
+    ])
+    expect(
+      setClaudeTeammateMode(
+        'claude --teammate-mode auto --resume session --teammate-mode=in-process',
+        'in-process'
+      )
+    ).toBe('claude --teammate-mode in-process --resume session')
+    expect(stripClaudeTeammateMode('--teammate-mode auto --resume session')).toBe(
+      '--resume session'
+    )
+    expect(setClaudeTeammateMode('claude -- --teammate-mode auto', 'in-process')).toBe(
+      'claude --teammate-mode in-process -- --teammate-mode auto'
+    )
+  })
+
+  it('normalizes the launch config once without treating prompt text as options', () => {
+    expect(
+      normalizeClaudeTeammateModeLaunchConfig(
+        {
+          agentCommand: 'claude --teammate-mode auto "say --teammate-mode auto"',
+          agentArgs: '--teammate-mode=auto --resume session -- --teammate-mode auto'
+        },
+        'in-process',
+        'powershell'
+      )
+    ).toEqual({
+      agentCommand: 'claude --teammate-mode in-process "say --teammate-mode auto"',
+      agentArgs: '--resume session -- --teammate-mode auto'
+    })
   })
 })

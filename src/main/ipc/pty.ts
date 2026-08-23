@@ -241,6 +241,15 @@ import { getSshFilesystemProvider } from '../providers/ssh-filesystem-dispatch'
 import { resolveLocalProjectRuntimeForWorktreeId } from '../local-project-runtime-resolution'
 import { isPtyIncarnationId } from '../../shared/pty-incarnation'
 import type { PtyListedSession } from '../../shared/pty-listed-session'
+import {
+  normalizeClaudeTeammateModeLaunchConfig,
+  setClaudeTeammateMode
+} from '../../shared/claude-agent-teams-mode'
+import {
+  NATIVE_AGENT_TEAMS_ENV_KEYS,
+  stripNativeAgentTeamsEnv
+} from '../../shared/claude-agent-teams-environment'
+import { resolveLocalWindowsAgentTeamsPowerShell } from '../../shared/windows-terminal-shell'
 
 // ─── Provider Registry ──────────────────────────────────────────────
 // Routes PTY operations by connectionId (null = local provider).
@@ -956,6 +965,25 @@ async function spawnForStablePane(
   const result = await args.provider.spawn(args.spawnOptions)
   args.onFreshSpawn?.(result)
   return { result, owner: null }
+}
+
+async function retireRejectedFreshLocalSpawn(
+  provider: IPtyProvider,
+  result: PtySpawnResult | null,
+  connectionId: string | null | undefined,
+  adoptedExistingOwner: boolean
+): Promise<string | null> {
+  if (!result || result.isReattach === true || connectionId || adoptedExistingOwner) {
+    return null
+  }
+  try {
+    await provider.shutdown(result.id, { immediate: true })
+    clearProviderPtyState(result.id)
+    return null
+  } catch (error) {
+    console.warn('[pty] failed to retire rejected fresh local PTY:', error)
+    return result.id
+  }
 }
 
 function settlePendingPaneSerializer(paneKey: string, gen: number): boolean {
@@ -4567,8 +4595,11 @@ export function registerPtyHandlers(
           ...(preAdoptedStablePane.result.incarnationId
             ? { incarnationId: preAdoptedStablePane.result.incarnationId }
             : {}),
-          ...(typeof preAdoptedStablePane.result.wslDistro === 'string'
+          ...(preAdoptedStablePane.result.wslDistro !== undefined
             ? { wslDistro: preAdoptedStablePane.result.wslDistro }
+            : {}),
+          ...(preAdoptedStablePane.result.shellPath !== undefined
+            ? { shellPath: preAdoptedStablePane.result.shellPath }
             : {}),
           stablePaneOwner: {
             handle,
@@ -4617,7 +4648,7 @@ export function registerPtyHandlers(
       const terminalRuntimeOptions =
         process.platform === 'win32' && !args.connectionId
           ? resolveLocalWindowsTerminalRuntimeOptions({
-              requestedShellOverride: undefined,
+              requestedShellOverride: args.shellOverride,
               settings: getSettings?.(),
               projectRuntime: resolveLocalProjectRuntimeForWorktreeId(store, args.worktreeId),
               fallbackHostShell: process.env.COMSPEC || 'powershell.exe'
@@ -4928,6 +4959,7 @@ export function registerPtyHandlers(
       }
       if (process.platform === 'win32' && !args.connectionId) {
         spawnOptions.shellOverride = terminalRuntimeOptions.shellOverride
+        spawnOptions.requiredShell = args.requiredShell
         spawnOptions.terminalWindowsWslDistro = expectedWslDistro
         spawnOptions.terminalWindowsPowerShellImplementation = getSettings
           ? (getSettings()?.terminalWindowsPowerShellImplementation ?? 'auto')
@@ -5165,6 +5197,7 @@ export function registerPtyHandlers(
             assertSpawnReplyWasLive(result)
           }
           rejectedRegistrationCandidate ??= result
+          assertClientStillConnected()
           if (pendingRegistrationPtyId !== result.id) {
             if (pendingRegistrationPtyId) {
               runtime?.cancelPendingPtyRegistration?.(pendingRegistrationPtyId)
@@ -5199,7 +5232,23 @@ export function registerPtyHandlers(
                 : result.wslDistro
           )
         } catch (err) {
+          const unverifiedRejectedPtyId = await retireRejectedFreshLocalSpawn(
+            provider,
+            rejectedRegistrationCandidate,
+            args.connectionId,
+            Boolean(
+              stablePaneOwner ||
+              rejectedRegistrationCandidate?.agentSessionEnsure?.disposition === 'adopted'
+            )
+          )
+          if (unverifiedRejectedPtyId) {
+            runtime?.markPtyLivenessUnverifiable?.(
+              unverifiedRejectedPtyId,
+              'rejected_spawn_stop_unconfirmed'
+            )
+          }
           if (
+            !unverifiedRejectedPtyId &&
             (isNewDaemonSession || preparedProvisionalExecutionContext) &&
             effectiveSessionAppId
           ) {
@@ -5214,7 +5263,7 @@ export function registerPtyHandlers(
               rejectedRegistrationCandidate.incarnationId
             )
           }
-          if (pendingRegistrationPtyId) {
+          if (pendingRegistrationPtyId && !unverifiedRejectedPtyId) {
             runtime?.cancelPendingPtyRegistration?.(
               pendingRegistrationPtyId,
               rejectedRegistrationCandidate?.incarnationId
@@ -5245,7 +5294,7 @@ export function registerPtyHandlers(
               store?.markSshRemotePtyLease(args.connectionId, effectiveSessionRelayId, 'expired')
             }
           }
-          if (isNewDaemonSession && sessionId !== undefined) {
+          if (!unverifiedRejectedPtyId && isNewDaemonSession && sessionId !== undefined) {
             clearProviderPtyState(sessionId)
           }
           throw spawnError
@@ -5416,6 +5465,15 @@ export function registerPtyHandlers(
               ? shouldSkipCodexHomeEnvForWindowsShell(daemonShellOverride, cwd)
               : undefined
           )
+          runtime?.notePtyAgentTeamsShellAuthority?.(result.id, {
+            executionPlatform: (
+              result.wslDistro === undefined ? expectedWslDistro : result.wslDistro
+            )
+              ? 'linux'
+              : process.platform,
+            isRemote: Boolean(args.connectionId),
+            shellOverride: result.shellPath
+          })
         } else {
           // Why: non-worktree PTYs have no later surface-registration phase to clear admission intent.
           runtime?.cancelPendingPtyRegistration?.(result.id, result.incarnationId)
@@ -5484,6 +5542,8 @@ export function registerPtyHandlers(
         const response = {
           id: result.id,
           ...(result.incarnationId ? { incarnationId: result.incarnationId } : {}),
+          ...(result.wslDistro ? { wslDistro: result.wslDistro } : {}),
+          ...(result.shellPath ? { shellPath: result.shellPath } : {}),
           ...(stablePaneOwner && (stablePaneOwner.handle || args.preAllocatedHandle)
             ? {
                 stablePaneOwner: {
@@ -6158,6 +6218,8 @@ export function registerPtyHandlers(
       let snapshotKittyFlagsCoverReconciledSeq = true
       let preparedProvisionalExecutionContext = false
       let releaseWorktreeSpawn: (() => void) | undefined
+      let preparedNativeAgentTeamsLeaderHandle: string | null = null
+      let nativeAgentTeamsLeaderCommitted = false
       try {
         if (!earlyStablePaneOwner) {
           await assertFolderWorkspacePtyPathUsable(args.worktreeId)
@@ -6382,6 +6444,8 @@ export function registerPtyHandlers(
             launchConfig: args.launchConfig
           })
         let effectiveLaunchConfig = args.launchConfig
+        let launchCommandOverride: string | undefined
+        let agentTeamsEnvToDelete: string[] | undefined
         const shouldPreAllocateTerminalHandle =
           runtime !== undefined &&
           ((!(provider instanceof LocalPtyProvider) &&
@@ -6391,21 +6455,61 @@ export function registerPtyHandlers(
           ? (preAdoptedStablePane?.owner.handle ?? runtime.createPreAllocatedTerminalHandle())
           : null
         if (shouldRefreshAgentTeamsEnv && preAllocatedHandle) {
-          // Why: Agent Teams ids/tokens are process-local, so the team env must be regenerated for the new leader PTY.
-          const prepared = await runtime.prepareClaudeAgentTeamsLeaderForHandle({
-            handle: preAllocatedHandle,
-            baseEnv: baseEnv ?? {}
+          const executionPlatform = expectedWslDistro ? 'linux' : process.platform
+          const pendingPowerShell = resolveLocalWindowsAgentTeamsPowerShell({
+            platform: executionPlatform,
+            isRemote: Boolean(args.connectionId),
+            terminalWindowsShell: terminalRuntimeOptions.shellOverride
           })
-          baseEnv = {
-            ...baseEnv,
-            ...prepared.env
+          const nativePanesSupported =
+            process.platform !== 'win32' ||
+            (executionPlatform === 'win32' && !args.connectionId && Boolean(pendingPowerShell))
+          let preparedNative = false
+          if (nativePanesSupported) {
+            // Why: Agent Teams ids/tokens are process-local, so the team env must be regenerated for the new leader PTY.
+            const prepared = await runtime.prepareClaudeAgentTeamsLeaderForHandle({
+              handle: preAllocatedHandle,
+              baseEnv: baseEnv ?? {},
+              pendingShellAuthority: {
+                executionPlatform,
+                isRemote: Boolean(args.connectionId),
+                shellOverride: terminalRuntimeOptions.shellOverride
+              }
+            })
+            if (prepared.mode === 'native') {
+              preparedNative = true
+              preparedNativeAgentTeamsLeaderHandle = preAllocatedHandle
+              baseEnv = { ...baseEnv, ...prepared.env }
+              agentTeamsEnvToDelete = ['TERM_PROGRAM']
+              if (args.launchConfig) {
+                effectiveLaunchConfig = {
+                  ...args.launchConfig,
+                  agentEnv: { ...args.launchConfig.agentEnv, ...prepared.env }
+                }
+              }
+            }
           }
-          if (args.launchConfig) {
-            effectiveLaunchConfig = {
-              ...args.launchConfig,
-              agentEnv: {
-                ...args.launchConfig.agentEnv,
-                ...prepared.env
+          if (!preparedNative) {
+            const launchConfigShell =
+              executionPlatform === 'win32' ? (pendingPowerShell ? 'powershell' : 'cmd') : 'posix'
+            baseEnv = stripNativeAgentTeamsEnv(baseEnv ?? {}, process.platform)
+            baseEnv.CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS = '1'
+            launchCommandOverride = args.command
+              ? setClaudeTeammateMode(args.command, 'in-process', launchConfigShell)
+              : undefined
+            agentTeamsEnvToDelete = [...NATIVE_AGENT_TEAMS_ENV_KEYS, 'TERM_PROGRAM']
+            if (args.launchConfig) {
+              effectiveLaunchConfig = {
+                ...normalizeClaudeTeammateModeLaunchConfig(
+                  args.launchConfig,
+                  'in-process',
+                  launchConfigShell,
+                  launchCommandOverride
+                ),
+                agentEnv: {
+                  ...stripNativeAgentTeamsEnv(args.launchConfig.agentEnv, process.platform),
+                  CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS: '1'
+                }
               }
             }
           }
@@ -6413,7 +6517,6 @@ export function registerPtyHandlers(
         const requestedAgentTeamsPath = baseEnv?.ORCA_AGENT_TEAMS_TEAM_ID
           ? baseEnv[resolvePathEnvKey(baseEnv, process.platform)]
           : undefined
-        const agentTeamsEnvToDelete = shouldRefreshAgentTeamsEnv ? ['TERM_PROGRAM'] : undefined
         if (baseEnv && stablePaneKey) {
           baseEnv.ORCA_PANE_KEY = stablePaneKey
           if (typeof args.tabId === 'string') {
@@ -6458,9 +6561,10 @@ export function registerPtyHandlers(
               launchEnv: baseEnv,
               workspacePath: cwd
             })
+        const requestedLaunchCommand = launchCommandOverride ?? args.command
         const codexResumeLaunch = codexResumePreparation
-          ? await resolveCodexResumeLaunch(args.command, codexResumePreparation)
-          : noCodexResumeLaunch(preAdoptedStablePane ? undefined : args.command)
+          ? await resolveCodexResumeLaunch(requestedLaunchCommand, codexResumePreparation)
+          : noCodexResumeLaunch(preAdoptedStablePane ? undefined : requestedLaunchCommand)
         const codexResumeHome = codexResumeLaunch.codexResumeHome
         const launchCommand = codexResumeLaunch.command
         baseEnv = stripSequencedStartupResumeArgv(baseEnv, codexResumeLaunch)
@@ -6807,7 +6911,23 @@ export function registerPtyHandlers(
           )
           spawnTiming.mark('provider_spawn')
         } catch (err) {
-          if ((isMintedSessionId || preparedProvisionalExecutionContext) && effectiveSessionAppId) {
+          const unverifiedRejectedPtyId = await retireRejectedFreshLocalSpawn(
+            provider,
+            rejectedRegistrationCandidate,
+            args.connectionId,
+            Boolean(stablePaneOwner)
+          )
+          if (unverifiedRejectedPtyId) {
+            runtime?.markPtyLivenessUnverifiable?.(
+              unverifiedRejectedPtyId,
+              'rejected_spawn_stop_unconfirmed'
+            )
+          }
+          if (
+            !unverifiedRejectedPtyId &&
+            (isMintedSessionId || preparedProvisionalExecutionContext) &&
+            effectiveSessionAppId
+          ) {
             runtime?.preparePtyExecutionContext?.(effectiveSessionAppId, null, {
               resetIncarnation: true
             })
@@ -6823,7 +6943,7 @@ export function registerPtyHandlers(
               rejectedRegistrationCandidate.incarnationId
             )
           }
-          if (pendingRegistrationPtyId) {
+          if (pendingRegistrationPtyId && !unverifiedRejectedPtyId) {
             runtime?.cancelPendingPtyRegistration?.(
               pendingRegistrationPtyId,
               rejectedRegistrationCandidate?.incarnationId
@@ -6856,7 +6976,7 @@ export function registerPtyHandlers(
             }
           }
           // Why: provider state buildPtyHostEnv materialized for this minted id leaks if spawn failed.
-          if (isMintedSessionId && effectiveSessionId !== undefined) {
+          if (!unverifiedRejectedPtyId && isMintedSessionId && effectiveSessionId !== undefined) {
             clearProviderPtyState(effectiveSessionId)
           }
           // Why: telemetry-plan.md§agent_error — attribute the error to the renderer-threaded agent_kind, else sniff the command for `claude`; raw messages are dropped at the validator boundary.
@@ -7090,6 +7210,16 @@ export function registerPtyHandlers(
               ? shouldSkipCodexHomeEnvForWindowsShell(effectiveShellOverride, cwd)
               : undefined
           )
+          runtime?.notePtyAgentTeamsShellAuthority?.(result.id, {
+            executionPlatform: (
+              result.wslDistro === undefined ? expectedWslDistro : result.wslDistro
+            )
+              ? 'linux'
+              : process.platform,
+            isRemote: Boolean(args.connectionId),
+            shellOverride: result.shellPath
+          })
+          nativeAgentTeamsLeaderCommitted = true
           pendingRegistrationPtyId = null
         } else if (pendingRegistrationPtyId) {
           runtime?.cancelPendingPtyRegistration?.(pendingRegistrationPtyId, result.incarnationId)
@@ -7226,6 +7356,9 @@ export function registerPtyHandlers(
         rejectPaneSpawnReservation(paneSpawnReservationKey, paneSpawnReservation, err)
         throw err
       } finally {
+        if (preparedNativeAgentTeamsLeaderHandle && !nativeAgentTeamsLeaderCommitted) {
+          runtime?.discardClaudeAgentTeamsLeaderForHandle(preparedNativeAgentTeamsLeaderHandle)
+        }
         releaseWorktreeSpawn?.()
         finishTerminalInstall()
       }

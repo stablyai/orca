@@ -6,6 +6,10 @@ import { TUI_AGENT_CONFIG } from './tui-agent-config'
 import type { TuiAgent } from './tui-agent'
 
 describe('tuiAgentToAgentKind', () => {
+  it('supports native Windows Claude panes while leaving WSL unsupported', () => {
+    expect(TUI_AGENT_CONFIG['claude-agent-teams'].detectUnsupportedRuntimes).toEqual(['wsl'])
+  })
+
   it('maps every shipped TuiAgent to a concrete telemetry kind', () => {
     const agents = Object.keys(TUI_AGENT_CONFIG) as TuiAgent[]
 

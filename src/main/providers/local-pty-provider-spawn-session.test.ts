@@ -172,6 +172,7 @@ describe('LocalPtyProvider', () => {
       expect(second).toEqual({
         id: 'serve-session-1',
         pid: 12345,
+        shellPath: first.shellPath,
         isReattach: true
       })
       expect(mockProc.resize).toHaveBeenCalledWith(120, 40)

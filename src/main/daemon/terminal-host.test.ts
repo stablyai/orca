@@ -76,7 +76,9 @@ describe('TerminalHost', () => {
     Object.defineProperty(process, 'platform', { configurable: true, value: 'linux' })
     killWithDescendantSweepMock.mockReset()
     spawnFn = vi.fn(() => {
-      const sub = createMockSubprocess() as ReturnType<typeof createMockSubprocess> & {
+      const sub = createMockSubprocess({ shellPath: '/bin/bash' }) as ReturnType<
+        typeof createMockSubprocess
+      > & {
         _onDataCb: ((data: string) => void) | null
         _onExitCb: ((code: number) => void) | null
       }
@@ -107,6 +109,7 @@ describe('TerminalHost', () => {
 
       expect(result.isNew).toBe(true)
       expect(result.pid).toBe(99999)
+      expect(result.shellPath).toBe('/bin/bash')
       expect(spawnFn).toHaveBeenCalledOnce()
     })
 
@@ -126,6 +129,7 @@ describe('TerminalHost', () => {
       })
 
       expect(result.isNew).toBe(false)
+      expect(result.shellPath).toBe('/bin/bash')
       // Should not spawn a second subprocess
       expect(spawnFn).toHaveBeenCalledOnce()
     })

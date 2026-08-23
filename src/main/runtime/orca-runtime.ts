@@ -547,6 +547,11 @@ import {
   buildAgentResumeStartupPlan,
   buildAgentStartupPlan
 } from '../../shared/tui-agent-startup'
+import { resolveStartupShell, type AgentStartupShell } from '../../shared/tui-agent-startup-shell'
+import {
+  buildClaudeAgentTeamsPowerShellCommand,
+  type ClaudeAgentTeamsPaneSpawn
+} from '../../shared/claude-agent-teams-pane-launch'
 import { repoIsRemote } from '../../shared/agent-launch-remote'
 import {
   isAgentForegroundWrapperProcess,
@@ -562,7 +567,10 @@ import {
   resolveTuiAgentLaunchArgs,
   resolveTuiAgentLaunchEnv
 } from '../../shared/tui-agent-launch-defaults'
-import { resolveLocalWindowsAgentStartupShell } from '../../shared/windows-terminal-shell'
+import {
+  resolveLocalWindowsAgentStartupShell,
+  resolveLocalWindowsAgentTeamsPowerShell
+} from '../../shared/windows-terminal-shell'
 import {
   getTuiAgentLaunchCommand,
   isTuiAgent,
@@ -721,14 +729,16 @@ import type {
 } from './claude-agent-teams-service'
 import {
   buildClaudeAgentTeamsLaunchPlan,
-  ensureClaudeAgentTeamsShimDir,
-  resolveClaudeAgentTeamsShimBin
+  prepareClaudeAgentTeamsShimTarget
 } from './claude-agent-teams-shim-env'
 import {
-  addClaudeTeammateModeAuto,
-  addClaudeTeammateModeInProcess,
+  normalizeClaudeTeammateModeLaunchConfig,
   type ClaudeAgentTeamsMode
-} from '../../shared/claude-agent-teams-tmux-compat'
+} from '../../shared/claude-agent-teams-mode'
+import {
+  NATIVE_AGENT_TEAMS_ENV_KEYS,
+  stripNativeAgentTeamsEnv
+} from '../../shared/claude-agent-teams-environment'
 import { joinWorktreeRelativePath } from './runtime-relative-paths'
 import { collectMemorySnapshot } from '../memory/collector'
 import type { BrowserWindow } from 'electron'
@@ -1522,6 +1532,13 @@ type RuntimePtyWorktreeRecord = {
   tailWaitState?: TerminalTailWaitState
 }
 
+type AgentTeamsPtyShellAuthority = {
+  executionPlatform: NodeJS.Platform
+  isRemote: boolean
+  paneShell: AgentStartupShell
+  shellOverride?: string
+}
+
 type TerminalAgentStatusSnapshot = {
   waitText: string
   waitBlockedAt: number | null
@@ -1579,10 +1596,9 @@ type TerminalCreateOptions = {
 }
 
 function mergeTerminalEnvDeletionKeys(
-  first: readonly string[] | undefined,
-  second: readonly string[] | undefined
+  ...groups: (readonly string[] | undefined)[]
 ): string[] | undefined {
-  const merged = [...new Set([...(first ?? []), ...(second ?? [])])]
+  const merged = [...new Set(groups.flatMap((group) => group ?? []))]
   return merged.length > 0 ? merged : undefined
 }
 
@@ -1694,10 +1710,13 @@ function inferCapturedClaudeAgentTeamsMode(
   const capturedCommand = launchConfig?.agentCommand?.trim() || command?.trim() || ''
   const capturedArgs = launchConfig?.agentArgs?.trim() ?? ''
   const capturedLaunch = `${capturedCommand} ${capturedArgs}`.trim()
+  if (/(^|\s)--teammate-mode(?:=|\s+)in-process(?:\s|$)/.test(capturedLaunch)) {
+    return 'in-process'
+  }
   if (/(^|\s)--teammate-mode(?:=|\s+)auto(?:\s|$)/.test(capturedLaunch)) {
     return 'native-panes-shim'
   }
-  if (/(^|\s)--teammate-mode(?:=|\s+)in-process(?:\s|$)/.test(capturedLaunch)) {
+  if (/(^|\s)--teammate-mode(?:\s|$)/.test(capturedLaunch)) {
     return 'in-process'
   }
   if (launchConfig && /(^|\s)--resume(?:\s|=|$)/.test(command?.trim() ?? '')) {
@@ -1863,6 +1882,8 @@ type RuntimePtyController = {
     rows: number
     cwd?: string
     command?: string
+    shellOverride?: string
+    requiredShell?: 'powershell'
     launchAgent?: TuiAgent
     commandDelivery?: 'renderer' | 'provider'
     startupCommandDelivery?: WorktreeStartupLaunch['startupCommandDelivery']
@@ -1901,7 +1922,8 @@ type RuntimePtyController = {
   }): Promise<{
     id: string
     incarnationId?: PtyIncarnationId
-    wslDistro?: string
+    wslDistro?: string | null
+    shellPath?: string
     stablePaneOwner?: { handle: string; tabId: string; leafId: string }
     agentSessionEnsure?: AgentSessionClaimedSpawnResult
   }>
@@ -2155,6 +2177,7 @@ type RuntimeNotifier = {
       command?: string
       cwd?: string
       env?: Record<string, string>
+      agentTeamsProcess?: ClaudeAgentTeamsPaneSpawn['process']
       title?: string
       presentation?: RuntimeTerminalPresentation
     }
@@ -3132,6 +3155,7 @@ export class OrcaRuntimeService {
   private handleByLeafKey = new Map<string, string>()
   private handleByPtyId = new Map<string, string>()
   private handleByPtyIncarnation = new Map<string, PtyIncarnationHandleRecord>()
+  private agentTeamsShellAuthorityByPtyId = new Map<string, AgentTeamsPtyShellAuthority>()
   private readonly mailPointerRepointScheduler = new MailPointerRepointScheduler((handle) =>
     this.repointPendingMessagesForHandle(handle)
   )
@@ -3676,6 +3700,7 @@ export class OrcaRuntimeService {
   private readonly skillInstallOperations = new Map<string, AbortController>()
   private readonly skillInstallProgress = new Map<string, SkillBundleInstallProgress>()
   private readonly claudeAgentTeams = new ClaudeAgentTeamsService()
+  private readonly prepareAgentTeamsShimTarget: typeof prepareClaudeAgentTeamsShimTarget
   private mobileDictation: {
     id: string
     owner: string
@@ -3727,9 +3752,12 @@ export class OrcaRuntimeService {
       agentSessionClaimSigner?: AgentSessionClaimSigner
       orchestrationEnvironmentTransport?: OrchestrationEnvironmentTransport
       skillTransactionRecovery?: Promise<unknown>
+      prepareClaudeAgentTeamsShimTarget?: typeof prepareClaudeAgentTeamsShimTarget
     }
   ) {
     this.store = store
+    this.prepareAgentTeamsShimTarget =
+      deps?.prepareClaudeAgentTeamsShimTarget ?? prepareClaudeAgentTeamsShimTarget
     // Why: per-device tab selections must survive host restarts, or every phone snaps back to the first tab on return.
     const persistedClientTabSelections = store?.getMobileClientTabSelections?.()
     if (persistedClientTabSelections) {
@@ -10862,6 +10890,59 @@ export class OrcaRuntimeService {
     if (binding && paneKey) {
       this.ensurePtyBackedMobileSurfaceForRendererTab(worktreeId, binding.tabId)
     }
+    for (const callback of [...this.graphSyncCallbacks]) {
+      callback()
+    }
+  }
+
+  notePtyAgentTeamsShellAuthority(
+    ptyId: string,
+    args: {
+      executionPlatform: NodeJS.Platform
+      isRemote: boolean
+      shellOverride?: string | null
+    }
+  ): void {
+    if (args.executionPlatform === 'win32' && !args.isRemote && !args.shellOverride?.trim()) {
+      this.agentTeamsShellAuthorityByPtyId.delete(ptyId)
+      this.removeAgentTeamsForPtyId(ptyId)
+      return
+    }
+    const powerShell = resolveLocalWindowsAgentTeamsPowerShell({
+      platform: args.executionPlatform,
+      isRemote: args.isRemote,
+      terminalWindowsShell: args.shellOverride
+    })
+    if (args.executionPlatform === 'win32' && !args.isRemote && !powerShell) {
+      this.removeAgentTeamsForPtyId(ptyId)
+    }
+    this.agentTeamsShellAuthorityByPtyId.set(ptyId, {
+      executionPlatform: args.executionPlatform,
+      isRemote: args.isRemote,
+      paneShell: powerShell
+        ? 'powershell'
+        : resolveStartupShell(
+            args.executionPlatform,
+            resolveLocalWindowsAgentStartupShell({
+              platform: args.executionPlatform,
+              isRemote: args.isRemote,
+              terminalWindowsShell: args.shellOverride
+            })
+          ),
+      ...(powerShell ? { shellOverride: powerShell } : {})
+    })
+  }
+
+  discardClaudeAgentTeamsLeaderForHandle(handle: string): void {
+    this.claudeAgentTeams.removeTeamForLeaderHandle(handle)
+  }
+
+  private removeAgentTeamsForPtyId(ptyId: string): void {
+    for (const [handle, record] of this.handles) {
+      if (record.ptyId === ptyId) {
+        this.claudeAgentTeams.removeTeamForLeaderHandle(handle)
+      }
+    }
   }
 
   assertPtyRegistrationAllowed(ptyId: string, incarnationId?: PtyIncarnationId): void {
@@ -15314,9 +15395,25 @@ export class OrcaRuntimeService {
     // process died, renderer reload) must release its team + nested panes map.
     // Previously only explicit closeTerminal evicted it, so natural exits leaked
     // one team per never-reused teamId for the runtime's lifetime.
-    const exitedTeamLeaderHandle = this.handleByPtyId.get(ptyId)
-    if (exitedTeamLeaderHandle) {
-      this.claudeAgentTeams.removeTeamForLeaderHandle(exitedTeamLeaderHandle)
+    if (!preservesAbnormalSshSurface) {
+      const exitedTeamHandles = new Set<string>()
+      const directHandle = this.handleByPtyId.get(ptyId)
+      const incarnationHandle = this.handleByPtyIncarnation.get(ptyId)?.handle
+      if (directHandle) {
+        exitedTeamHandles.add(directHandle)
+      }
+      if (incarnationHandle) {
+        exitedTeamHandles.add(incarnationHandle)
+      }
+      for (const [handle, record] of this.handles) {
+        if (record.ptyId === ptyId) {
+          exitedTeamHandles.add(handle)
+        }
+      }
+      for (const handle of exitedTeamHandles) {
+        this.claudeAgentTeams.onTerminalExited(handle)
+      }
+      this.agentTeamsShellAuthorityByPtyId.delete(ptyId)
     }
     // Layout state machine: clear `layouts` and `layoutQueues`. Any
     // already-queued applyLayout work for this ptyId will run, but every
@@ -28150,6 +28247,7 @@ export class OrcaRuntimeService {
           ...launchOpts.env,
           ...(launchToken ? { ORCA_AGENT_LAUNCH_TOKEN: launchToken } : {})
         }
+        const preparedAgentTeamsHandle = preAllocatedHandle
         const claudeAgentTeamsSourceCommand =
           launchOpts.claudeAgentTeamsSourceCommand?.trim() ||
           launchOpts.command?.trim() ||
@@ -28160,6 +28258,26 @@ export class OrcaRuntimeService {
           claudeAgentTeamsSourceCommand,
           claudeAgentTeamsMode
         )
+        const agentTeamsExecutionPlatform = this.getAgentLaunchPlatformForWorkspace(workspace)
+        const agentTeamsIsRemote = workspace.repo
+          ? repoIsRemote(workspace.repo)
+          : Boolean(workspace.connectionId)
+        const configuredAgentTeamsShell = this.store?.getSettings?.().terminalWindowsShell
+        const exactAgentTeamsPowerShell = resolveLocalWindowsAgentTeamsPowerShell({
+          platform: agentTeamsExecutionPlatform,
+          isRemote: agentTeamsIsRemote,
+          terminalWindowsShell: configuredAgentTeamsShell
+        })
+        const agentTeamsPaneShell =
+          agentTeamsExecutionPlatform === 'win32'
+            ? exactAgentTeamsPowerShell
+              ? 'powershell'
+              : 'cmd'
+            : resolveLocalWindowsAgentStartupShell({
+                platform: agentTeamsExecutionPlatform,
+                isRemote: agentTeamsIsRemote,
+                terminalWindowsShell: configuredAgentTeamsShell
+              })
         let agentTeamsPlan: Awaited<ReturnType<typeof buildClaudeAgentTeamsLaunchPlan>> | undefined
         try {
           agentTeamsPlan = adoptedBeforeLaunch
@@ -28167,19 +28285,25 @@ export class OrcaRuntimeService {
             : await buildClaudeAgentTeamsLaunchPlan({
                 command: claudeAgentTeamsSourceCommand,
                 mode: effectiveClaudeAgentTeamsMode,
+                paneShell: agentTeamsPaneShell,
+                executionPlatform: agentTeamsExecutionPlatform,
+                isRemote: agentTeamsIsRemote,
                 baseEnv: {
                   ...process.env,
                   ...baseEnv
                 },
-                createTeamEnv: (shimDir, shimBin) =>
+                prepareShimTarget: this.prepareAgentTeamsShimTarget,
+                createTeamEnv: (shimDir, shimBin, shimEnv) =>
                   this.claudeAgentTeams.createLaunchEnv({
-                    leaderHandle: preAllocatedHandle,
+                    leaderHandle: preparedAgentTeamsHandle,
                     baseEnv: {
                       ...process.env,
                       ...baseEnv
                     },
                     shimDir,
-                    shimBin
+                    shimBin,
+                    shimEnv,
+                    paneShell: resolveStartupShell(agentTeamsExecutionPlatform, agentTeamsPaneShell)
                   }).env
               })
         } catch (error) {
@@ -28196,36 +28320,64 @@ export class OrcaRuntimeService {
         const effectiveLaunchConfig =
           launchOpts.launchConfig && agentTeamsPlan
             ? {
-                ...launchOpts.launchConfig,
-                agentCommand: launchOpts.launchConfig.agentCommand
-                  ? effectiveClaudeAgentTeamsMode === 'in-process' || process.platform === 'win32'
-                    ? addClaudeTeammateModeInProcess(launchOpts.launchConfig.agentCommand)
-                    : addClaudeTeammateModeAuto(launchOpts.launchConfig.agentCommand)
-                  : agentTeamsPlan.command,
-                agentEnv: {
-                  ...launchOpts.launchConfig.agentEnv,
-                  ...agentTeamsPlan.env
-                }
+                ...normalizeClaudeTeammateModeLaunchConfig(
+                  launchOpts.launchConfig,
+                  agentTeamsPlan.mode === 'in-process' ? 'in-process' : 'auto',
+                  resolveStartupShell(agentTeamsExecutionPlatform, agentTeamsPaneShell),
+                  agentTeamsPlan.command
+                ),
+                agentEnv:
+                  agentTeamsPlan.mode === 'in-process'
+                    ? {
+                        ...stripNativeAgentTeamsEnv(
+                          launchOpts.launchConfig.agentEnv,
+                          agentTeamsExecutionPlatform
+                        ),
+                        ...agentTeamsPlan.env
+                      }
+                    : {
+                        ...launchOpts.launchConfig.agentEnv,
+                        ...agentTeamsPlan.env
+                      }
               }
             : launchOpts.launchConfig
+        const discardPreparedAgentTeamsLeader = (): void => {
+          if (agentTeamsPlan?.env.ORCA_AGENT_TEAMS_TEAM_ID) {
+            this.claudeAgentTeams.removeTeamForLeaderHandle(preparedAgentTeamsHandle)
+          }
+        }
         // Why: setup/agent sequencing wraps the PTY launch in a wait shell before
         // Claude Agent Teams runs. Preserve the direct Claude command separately
         // so the wrapper can exec the teammate-mode variant after setup completes.
-        const env = this.buildTerminalWorkspaceEnv(
-          workspace,
-          {
-            ...baseEnv,
-            ...(sequencedStartupCommand
-              ? { [SETUP_AGENT_SEQUENCE_STARTUP_COMMAND_ENV]: sequencedStartupCommand }
-              : {})
-          },
-          paneKey,
-          tabId,
-          agentTeamsPlan?.env
-        )
+        const agentTeamsBaseEnv =
+          agentTeamsPlan?.mode === 'in-process'
+            ? stripNativeAgentTeamsEnv(
+                agentTeamsIsRemote ? baseEnv : { ...process.env, ...baseEnv },
+                agentTeamsExecutionPlatform
+              )
+            : baseEnv
+        let env: Record<string, string>
+        try {
+          env = this.buildTerminalWorkspaceEnv(
+            workspace,
+            {
+              ...agentTeamsBaseEnv,
+              ...(sequencedStartupCommand
+                ? { [SETUP_AGENT_SEQUENCE_STARTUP_COMMAND_ENV]: sequencedStartupCommand }
+                : {})
+            },
+            paneKey,
+            tabId,
+            agentTeamsPlan?.env
+          )
+        } catch (error) {
+          discardPreparedAgentTeamsLeader()
+          throw error
+        }
         const terminalColorQueryReplies =
           launchOpts.terminalColorQueryReplies ?? getTerminalViewColorQueryReplyColors()
         if (launchOpts.signal?.aborted) {
+          discardPreparedAgentTeamsLeader()
           throw new Error('client_disconnected')
         }
         let result: Awaited<ReturnType<NonNullable<RuntimePtyController['spawn']>>>
@@ -28243,7 +28395,8 @@ export class OrcaRuntimeService {
             env,
             envToDelete: mergeTerminalEnvDeletionKeys(
               launchOpts.envToDelete,
-              agentTeamsPlan?.envToDelete
+              agentTeamsPlan?.envToDelete,
+              agentTeamsPlan?.mode === 'in-process' ? NATIVE_AGENT_TEAMS_ENV_KEYS : undefined
             ),
             resumeProviderSession: launchOpts.resumeProviderSession,
             telemetry: launchOpts.telemetry,
@@ -28281,13 +28434,18 @@ export class OrcaRuntimeService {
             // and prunes the tab out from under a running agent.
             persistHostSessionBinding: true
           })
+        } catch (error) {
+          discardPreparedAgentTeamsLeader()
+          throw error
         } finally {
           releaseStablePaneCreate?.()
         }
         if (!result.stablePaneOwner) {
           reportPtySpawnCommitted()
         }
-        const adoptedStablePane = Boolean(result.stablePaneOwner)
+        const adoptedExistingOwner = Boolean(
+          result.stablePaneOwner || result.agentSessionEnsure?.disposition === 'adopted'
+        )
         if (result.agentSessionEnsure) {
           const canonicalSurface = result.agentSessionEnsure.owner.surface
           preAllocatedHandle = canonicalSurface.terminalHandle
@@ -28300,9 +28458,17 @@ export class OrcaRuntimeService {
           leafId = result.stablePaneOwner.leafId
           paneKey = makePaneKey(tabId, leafId)
         }
+        if (
+          agentTeamsPlan?.mode === 'native' &&
+          (adoptedExistingOwner || preAllocatedHandle !== preparedAgentTeamsHandle)
+        ) {
+          discardPreparedAgentTeamsLeader()
+          agentTeamsPlan = undefined
+        }
         try {
           this.assertPtyDidNotExitBeforeRegistration(result.id, result.incarnationId)
         } catch (error) {
+          discardPreparedAgentTeamsLeader()
           if (error instanceof Error && error.message === 'agent_session_exited_during_start') {
             this.releaseRejectedPtyRegistrationFence(result.id, result.incarnationId)
           }
@@ -28317,12 +28483,17 @@ export class OrcaRuntimeService {
           leafId,
           ...(result.incarnationId ? { incarnationId: result.incarnationId } : {})
         })
+        this.notePtyAgentTeamsShellAuthority(result.id, {
+          executionPlatform: result.wslDistro ? 'linux' : agentTeamsExecutionPlatform,
+          isRemote: agentTeamsIsRemote,
+          shellOverride: result.shellPath
+        })
         const pty = this.getOrCreatePtyWorktreeRecord(result.id)
         if (pty) {
           // Released again by releaseRuntimeSessionOwnershipForRendererRetiredTabs
           // once the renderer de-persists the tab, i.e. when the user closes it.
           pty.runtimeSessionOwned = true
-          if (!adoptedStablePane) {
+          if (!adoptedExistingOwner) {
             if (launchOpts.title) {
               const observedAt = this.nextTitleObservationSequence()
               pty.title = launchOpts.title
@@ -28343,7 +28514,7 @@ export class OrcaRuntimeService {
           pty.paneKey = paneKey
         }
         const handle = pty ? this.issuePtyHandle(pty) : preAllocatedHandle
-        if (pty && !adoptedStablePane && launchOpts.deferMobileSessionPublish !== true) {
+        if (pty && !adoptedExistingOwner && launchOpts.deferMobileSessionPublish !== true) {
           this.publishPtyBackedMobileSessionTerminal(workspace.id, pty, {
             tabId,
             leafId,
@@ -28366,11 +28537,15 @@ export class OrcaRuntimeService {
             // already baked into the PTY env — keeps paneKey hook attribution intact.
             await this.notifier.revealTerminalSession(workspace.id, {
               ptyId: result.id,
-              title: launchOpts.title ?? null,
+              title: adoptedExistingOwner ? (pty?.title ?? null) : (launchOpts.title ?? null),
               ...(cwd !== workspace.path ? { cwd } : {}),
-              ...(effectiveLaunchConfig ? { launchConfig: effectiveLaunchConfig } : {}),
-              ...(launchToken ? { launchToken } : {}),
-              ...(launchOpts.launchAgent ? { launchAgent: launchOpts.launchAgent } : {}),
+              ...(!adoptedExistingOwner && effectiveLaunchConfig
+                ? { launchConfig: effectiveLaunchConfig }
+                : {}),
+              ...(!adoptedExistingOwner && launchToken ? { launchToken } : {}),
+              ...(!adoptedExistingOwner && launchOpts.launchAgent
+                ? { launchAgent: launchOpts.launchAgent }
+                : {}),
               ...(launchOpts.viewMode ? { viewMode: launchOpts.viewMode } : {}),
               activate: presentation === 'focused',
               ...(presentation ? { presentation } : {}),
@@ -28398,7 +28573,7 @@ export class OrcaRuntimeService {
           ...(result.agentSessionEnsure
             ? { agentSessionDisposition: result.agentSessionEnsure.disposition }
             : {}),
-          ...(adoptedStablePane ? { isReattach: true as const } : {}),
+          ...(adoptedExistingOwner ? { isReattach: true as const } : {}),
           ...(warning ? { warning } : {})
         }
       } finally {
@@ -28665,6 +28840,7 @@ export class OrcaRuntimeService {
       command?: string
       cwd?: string
       env?: Record<string, string>
+      agentTeamsProcess?: ClaudeAgentTeamsPaneSpawn['process']
       envToDelete?: string[]
       startupCommandDelivery?: WorktreeStartupLaunch['startupCommandDelivery']
       agent?: TuiAgent
@@ -29960,7 +30136,10 @@ export class OrcaRuntimeService {
     opts: {
       direction?: 'horizontal' | 'vertical'
       command?: string
+      cwd?: string
       env?: Record<string, string>
+      agentTeamsProcess?: ClaudeAgentTeamsPaneSpawn['process']
+      signal?: AbortSignal
       envToDelete?: string[]
       activate?: boolean
       // Why: same split as createTerminal — adopt the pane without revealing its
@@ -29975,6 +30154,13 @@ export class OrcaRuntimeService {
     }
     this.assertGraphReady()
     const { leaf } = this.getLiveLeafForHandle(handle)
+    if (opts.agentTeamsProcess) {
+      const rendererPty = leaf.ptyId ? this.ptysById.get(leaf.ptyId) : undefined
+      if (!rendererPty?.connected) {
+        throw new Error('terminal_exited')
+      }
+      return await this.splitPtyBackedTerminal(rendererPty, opts)
+    }
     const direction = opts.direction ?? 'horizontal'
 
     // Snapshot current leaf keys so the post-split graph-sync delta reveals the new pane.
@@ -30000,7 +30186,10 @@ export class OrcaRuntimeService {
     opts: {
       direction?: 'horizontal' | 'vertical'
       command?: string
+      cwd?: string
       env?: Record<string, string>
+      agentTeamsProcess?: ClaudeAgentTeamsPaneSpawn['process']
+      signal?: AbortSignal
       envToDelete?: string[]
       activate?: boolean
       // Why: same split as createTerminal — adopt the pane without revealing its
@@ -30009,6 +30198,7 @@ export class OrcaRuntimeService {
       telemetrySource?: TerminalPaneSplitSource
     } = {}
   ): Promise<RuntimeTerminalSplit> {
+    opts.signal?.throwIfAborted()
     if (!this.ptyController?.spawn) {
       throw new Error('runtime_unavailable')
     }
@@ -30022,6 +30212,26 @@ export class OrcaRuntimeService {
     }
     const direction = opts.direction ?? 'horizontal'
     const workspace = await this.resolveTerminalWorkspaceLaunchScope(`id:${pty.worktreeId}`)
+    const sourceShellAuthority = this.agentTeamsShellAuthorityByPtyId.get(pty.ptyId)
+    let splitCommand = opts.command
+    let splitShellOverride: string | undefined
+    if (opts.agentTeamsProcess) {
+      if (
+        pty.connectionId !== null ||
+        workspace.connectionId !== null ||
+        workspace.id !== pty.worktreeId ||
+        sourceShellAuthority?.executionPlatform !== 'win32' ||
+        sourceShellAuthority.isRemote ||
+        sourceShellAuthority.paneShell !== 'powershell' ||
+        !sourceShellAuthority.shellOverride
+      ) {
+        throw new Error('Claude Agent Teams native panes require local PowerShell')
+      }
+      splitCommand = opts.agentTeamsProcess.holding
+        ? 'Wait-Event'
+        : buildClaudeAgentTeamsPowerShellCommand(opts.agentTeamsProcess.argv)
+      splitShellOverride = sourceShellAuthority.shellOverride
+    }
     const sourceAuthority = this.resolveTerminalSplitSourceAuthority(
       workspace.id,
       parentTabId,
@@ -30039,9 +30249,11 @@ export class OrcaRuntimeService {
     const result = await this.ptyController.spawn({
       cols: 120,
       rows: 40,
-      cwd: workspace.path,
-      command: opts.command,
+      cwd: opts.cwd ?? workspace.path,
+      command: splitCommand,
       commandDelivery: 'provider',
+      ...(splitShellOverride ? { shellOverride: splitShellOverride } : {}),
+      ...(opts.agentTeamsProcess ? { requiredShell: 'powershell' as const } : {}),
       env: this.buildTerminalWorkspaceEnv(workspace, opts.env ?? {}, paneKey, parentTabId),
       envToDelete: opts.envToDelete,
       connectionId: workspace.connectionId,
@@ -30050,6 +30262,7 @@ export class OrcaRuntimeService {
       tabId: parentTabId,
       leafId,
       persistHostSessionBinding: true,
+      signal: opts.signal,
       ...(sourceAuthority.persisted
         ? {
             expectedSourceBinding: {
@@ -30069,11 +30282,31 @@ export class OrcaRuntimeService {
           }
         : {})
     })
+    if (opts.agentTeamsProcess) {
+      const actualPowerShell = result.shellPath?.trim()
+        ? resolveLocalWindowsAgentTeamsPowerShell({
+            platform: result.wslDistro ? 'linux' : sourceShellAuthority!.executionPlatform,
+            isRemote: sourceShellAuthority!.isRemote,
+            terminalWindowsShell: result.shellPath
+          })
+        : undefined
+      if (!actualPowerShell) {
+        await this.retireRejectedTerminalSplit(result.id)
+        throw new Error('Claude Agent Teams native panes require local PowerShell')
+      }
+    }
     this.registerPreAllocatedHandleForPty(result.id, preAllocatedHandle)
     if (result.wslDistro) {
       this.preparePtyExecutionContext(result.id, result.wslDistro)
     }
     this.registerPty(result.id, workspace.id, workspace.connectionId)
+    if (sourceShellAuthority) {
+      this.notePtyAgentTeamsShellAuthority(result.id, {
+        executionPlatform: result.wslDistro ? 'linux' : sourceShellAuthority.executionPlatform,
+        isRemote: sourceShellAuthority.isRemote,
+        shellOverride: result.shellPath
+      })
+    }
     const createdPty = this.getOrCreatePtyWorktreeRecord(result.id)
     if (createdPty) {
       createdPty.tabId = parentTabId
@@ -30100,7 +30333,9 @@ export class OrcaRuntimeService {
     }
 
     try {
+      opts.signal?.throwIfAborted()
       const revalidateSourceAuthority = (): void => {
+        opts.signal?.throwIfAborted()
         const current = this.resolveTerminalSplitSourceAuthority(
           workspace.id,
           parentTabId,
@@ -30125,6 +30360,7 @@ export class OrcaRuntimeService {
         revalidateSourceAuthority()
       }
       if (createdPty) {
+        opts.signal?.throwIfAborted()
         const persisted = this.persistHeadlessTerminalSplit({
           worktreeId: workspace.id,
           tabId: parentTabId,
@@ -30146,27 +30382,7 @@ export class OrcaRuntimeService {
       }
     } catch (error) {
       this.setPairedRendererSessionOwnership(result.id, false)
-      let stopped = false
-      try {
-        stopped =
-          (await this.ptyController.stopAndWait?.(result.id, {
-            deadlineMs: Date.now() + REJECTED_SPLIT_PTY_STOP_TIMEOUT_MS
-          })) ?? false
-      } catch {
-        // Best-effort fallback below preserves the original split authority error.
-      }
-      if (!stopped) {
-        try {
-          this.ptyController.kill(result.id)
-        } catch {
-          // Best-effort cleanup; retirement below still runs and the original error still throws.
-        }
-      }
-      try {
-        this.ptyController.retireRejectedPty?.(result.id, stopped)
-      } catch {
-        // Best-effort cleanup; preserve the original split authority error.
-      }
+      await this.retireRejectedTerminalSplit(result.id)
       throw error
     }
     const committedSourceAuthority = sourceAuthority.persisted
@@ -30183,6 +30399,30 @@ export class OrcaRuntimeService {
     }
 
     return { handle: this.issuePtyHandle(createdPty ?? pty), tabId: parentTabId, paneRuntimeId: -1 }
+  }
+
+  private async retireRejectedTerminalSplit(ptyId: string): Promise<void> {
+    let stopped = false
+    try {
+      stopped =
+        (await this.ptyController?.stopAndWait?.(ptyId, {
+          deadlineMs: Date.now() + REJECTED_SPLIT_PTY_STOP_TIMEOUT_MS
+        })) ?? false
+    } catch {
+      // Best-effort fallback below preserves the original split error.
+    }
+    if (!stopped) {
+      try {
+        this.ptyController?.kill(ptyId)
+      } catch {
+        // Retirement below remains authoritative for the rejected pane.
+      }
+    }
+    try {
+      this.ptyController?.retireRejectedPty?.(ptyId, stopped)
+    } catch {
+      // Preserve the original split error.
+    }
   }
 
   private resolveTerminalSplitSourceAuthority(
@@ -30278,11 +30518,10 @@ export class OrcaRuntimeService {
   async prepareClaudeAgentTeamsLeader(args: {
     paneKey: string
     baseEnv?: Record<string, string>
-  }): Promise<{ env: Record<string, string> }> {
-    const handle = this.getTerminalHandleForPaneKey(args.paneKey)
-    if (!handle) {
+  }): Promise<{ env: Record<string, string>; mode: 'native' | 'in-process' }> {
+    const handle = await this.waitForTerminalHandleForPaneKey(args.paneKey).catch(() => {
       throw new Error('claude_agent_teams_requires_orca_terminal')
-    }
+    })
     return await this.prepareClaudeAgentTeamsLeaderForHandle({
       handle,
       baseEnv: args.baseEnv
@@ -30292,18 +30531,111 @@ export class OrcaRuntimeService {
   async prepareClaudeAgentTeamsLeaderForHandle(args: {
     handle: string
     baseEnv?: Record<string, string>
-  }): Promise<{ env: Record<string, string> }> {
+    pendingShellAuthority?: {
+      executionPlatform: NodeJS.Platform
+      isRemote: boolean
+      shellOverride?: string | null
+    }
+  }): Promise<{ env: Record<string, string>; mode: 'native' | 'in-process' }> {
     const baseEnv = {
       ...process.env,
       ...args.baseEnv
     }
-    const shimDir = await ensureClaudeAgentTeamsShimDir()
-    const shimBin = resolveClaudeAgentTeamsShimBin(baseEnv)
-    return this.claudeAgentTeams.createLaunchEnv({
+    const record = this.handles.get(args.handle)
+    const pty =
+      record?.runtimeId === this.runtimeId && record.ptyId
+        ? this.ptysById.get(record.ptyId)
+        : undefined
+    if (!pty?.connected && !args.pendingShellAuthority) {
+      throw new Error('claude_agent_teams_requires_orca_terminal')
+    }
+    const shellAuthority = pty ? this.agentTeamsShellAuthorityByPtyId.get(pty.ptyId) : undefined
+    const pendingPowerShell = args.pendingShellAuthority
+      ? resolveLocalWindowsAgentTeamsPowerShell({
+          platform: args.pendingShellAuthority.executionPlatform,
+          isRemote: args.pendingShellAuthority.isRemote,
+          terminalWindowsShell: args.pendingShellAuthority.shellOverride
+        })
+      : undefined
+    const executionPlatform =
+      shellAuthority?.executionPlatform ?? args.pendingShellAuthority?.executionPlatform ?? 'aix'
+    const isRemote = shellAuthority?.isRemote ?? args.pendingShellAuthority?.isRemote ?? true
+    const paneShell = shellAuthority?.paneShell ?? (pendingPowerShell ? 'powershell' : undefined)
+    const hasPublishedWindowsShellAuthority = Boolean(pty?.connected && shellAuthority)
+    if (
+      process.platform === 'win32' &&
+      (!hasPublishedWindowsShellAuthority ||
+        executionPlatform !== 'win32' ||
+        isRemote ||
+        paneShell !== 'powershell')
+    ) {
+      return {
+        env: { CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS: '1' },
+        mode: 'in-process'
+      }
+    }
+    const target = await this.prepareAgentTeamsShimTarget(baseEnv)
+    if (!target) {
+      return {
+        env: { CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS: '1' },
+        mode: 'in-process'
+      }
+    }
+    if (
+      pty &&
+      (this.handles.get(args.handle) !== record ||
+        this.ptysById.get(pty.ptyId) !== pty ||
+        !pty.connected ||
+        this.agentTeamsShellAuthorityByPtyId.get(pty.ptyId) !== shellAuthority)
+    ) {
+      throw new Error('claude_agent_teams_requires_orca_terminal')
+    }
+    const launch = this.claudeAgentTeams.createLaunchEnv({
       leaderHandle: args.handle,
       baseEnv,
-      shimDir,
-      shimBin
+      shimDir: target.shimDir,
+      shimBin: target.shimBin,
+      shimEnv: target.env,
+      paneShell: resolveStartupShell(executionPlatform, paneShell)
+    })
+    return { env: launch.env, mode: 'native' }
+  }
+
+  private waitForTerminalHandleForPaneKey(paneKey: string, timeoutMs = 10_000): Promise<string> {
+    const getConnectedHandle = (): string | null => {
+      const handle = this.getTerminalHandleForPaneKey(paneKey)
+      const record = handle ? this.handles.get(handle) : undefined
+      const pty = record?.ptyId ? this.ptysById.get(record.ptyId) : undefined
+      return pty?.connected ? handle : null
+    }
+    const existing = getConnectedHandle()
+    if (existing) {
+      return Promise.resolve(existing)
+    }
+
+    return new Promise<string>((resolve, reject) => {
+      let timer: ReturnType<typeof setTimeout>
+      const cleanup = (): void => {
+        clearTimeout(timer)
+        const index = this.graphSyncCallbacks.indexOf(check)
+        if (index !== -1) {
+          this.graphSyncCallbacks.splice(index, 1)
+        }
+      }
+      const check = (): void => {
+        const handle = getConnectedHandle()
+        if (!handle) {
+          return
+        }
+        cleanup()
+        resolve(handle)
+      }
+      timer = setTimeout(() => {
+        cleanup()
+        reject(new Error('Timed out waiting for terminal pane registration'))
+      }, timeoutMs)
+      this.graphSyncCallbacks.push(check)
+      check()
     })
   }
 
@@ -32925,6 +33257,7 @@ export class OrcaRuntimeService {
     this.terminalCwdByPtyId.delete(ptyId)
     this.terminalFileUriHostnameByPtyId.delete(ptyId)
     this.wslDistroByPtyId.delete(ptyId)
+    this.agentTeamsShellAuthorityByPtyId.delete(ptyId)
     this.clearAgentRowSnapshotsForPty(ptyId)
     const handle = this.handleByPtyId.get(ptyId)
     if (handle) {
@@ -35600,9 +35933,10 @@ export class OrcaRuntimeService {
    *  later transition. A provider screen that is still working when this fires
    *  resolves through the poll, not here. */
   private startTuiIdleVisibleReadProbe(waiter: TerminalWaiter, waiterTimeoutMs: number): void {
+    // Leave time for provider retirement before the waiter itself rejects.
     const snapshotTimeoutMs = Math.min(
       VISIBLE_TERMINAL_SNAPSHOT_TIMEOUT_MS,
-      Math.max(0, waiterTimeoutMs - 1)
+      Math.max(0, Math.floor(waiterTimeoutMs / 2))
     )
     void withTimeout(
       this.readTerminal(

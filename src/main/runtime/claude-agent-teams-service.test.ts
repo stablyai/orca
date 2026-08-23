@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import { ClaudeAgentTeamsService, type AgentTeamsTerminalApi } from './claude-agent-teams-service'
 
-function createServiceWithLeader(): {
+function createServiceWithLeader(paneShell: 'posix' | 'powershell' = 'posix'): {
   service: ClaudeAgentTeamsService
   teamId: string
   token: string
@@ -14,7 +14,8 @@ function createServiceWithLeader(): {
     leaderHandle: 'leader-handle',
     baseEnv: { PATH: '/usr/bin' },
     shimDir: '/tmp/orca-shim',
-    shimBin: '/usr/bin/orca'
+    shimBin: '/usr/bin/orca',
+    paneShell
   })
   expect(launch.env.ORCA_AGENT_TEAMS_SHIM_DIR).toBe('/tmp/orca-shim')
   const splitCalls: { handle: string; direction?: string; command?: string; envPane?: string }[] =
@@ -185,6 +186,355 @@ describe('ClaudeAgentTeamsService', () => {
       request(['list-panes', '-t', 'orca:0', '-F', '#{pane_id}'])
     ).resolves.toMatchObject({ stdout: '%1\n%2\n' })
 
+    await request(['kill-pane', '-t', '%2'])
+    expect(api.closeTerminal).toHaveBeenLastCalledWith('teammate-2')
+  })
+
+  it('uses a started ancestor when virtual holding panes respawn out of order', async () => {
+    const { service, teamId, token, leaderPane, api, splitCalls } =
+      createServiceWithLeader('powershell')
+    const request = (argv: string[]) =>
+      service.handleTmuxCompat({ teamId, token, envPane: leaderPane, argv }, api)
+
+    await request(['split-window', '-t', leaderPane, '-h', '-P', '-F', '#{pane_id}', '--', 'cat'])
+    await request(['split-window', '-t', leaderPane, '-h', '-P', '-F', '#{pane_id}', '--', 'cat'])
+    await expect(
+      request(['respawn-pane', '-k', '-t', '%3', '--', 'claude --agent-id second'])
+    ).resolves.toMatchObject({ ok: true })
+    await expect(
+      request(['respawn-pane', '-k', '-t', '%2', '--', 'claude --agent-id first'])
+    ).resolves.toMatchObject({ ok: true })
+
+    expect(splitCalls.map((call) => call.handle)).toEqual(['leader-handle', 'leader-handle'])
+  })
+
+  it('preserves the logical main-vertical parent while holding panes are virtual', async () => {
+    const { service, teamId, token, leaderPane, api, splitCalls } =
+      createServiceWithLeader('powershell')
+    const request = (argv: string[]) =>
+      service.handleTmuxCompat({ teamId, token, envPane: leaderPane, argv }, api)
+
+    await request(['split-window', '-t', leaderPane, '-h', '-P', '-F', '#{pane_id}', '--', 'cat'])
+    await request(['select-layout', '-t', 'orca:0', 'main-vertical'])
+    await request(['split-window', '-t', leaderPane, '-h', '-P', '-F', '#{pane_id}', '--', 'cat'])
+    await request(['respawn-pane', '-k', '-t', '%2', '--', 'claude --agent-id first'])
+    await request(['respawn-pane', '-k', '-t', '%3', '--', 'claude --agent-id second'])
+
+    expect(splitCalls.map((call) => [call.handle, call.direction])).toEqual([
+      ['leader-handle', 'vertical'],
+      ['teammate-1', 'horizontal']
+    ])
+  })
+
+  it('falls back to the leader when a virtual pane ancestor has exited', async () => {
+    const { service, teamId, token, leaderPane, api, splitCalls } =
+      createServiceWithLeader('powershell')
+    const request = (argv: string[]) =>
+      service.handleTmuxCompat({ teamId, token, envPane: leaderPane, argv }, api)
+
+    await request([
+      'split-window',
+      '-t',
+      leaderPane,
+      '-h',
+      '-P',
+      '-F',
+      '#{pane_id}',
+      '--',
+      'claude'
+    ])
+    await request(['select-layout', '-t', 'orca:0', 'main-vertical'])
+    await request(['split-window', '-t', leaderPane, '-h', '-P', '-F', '#{pane_id}', '--', 'cat'])
+    service.onTerminalExited('teammate-1')
+
+    await expect(
+      request(['respawn-pane', '-k', '-t', '%3', '--', 'claude --agent-id replacement'])
+    ).resolves.toMatchObject({ ok: true })
+    expect(splitCalls.map((call) => call.handle)).toEqual(['leader-handle', 'leader-handle'])
+  })
+
+  it('delivers Claude teammate cwd and env through the native PowerShell split owner', async () => {
+    const service = new ClaudeAgentTeamsService()
+    const launch = service.createLaunchEnv({
+      leaderHandle: 'leader-handle',
+      baseEnv: { Path: 'C:\\Windows\\System32', CLAUDECODE: 'inherited' },
+      shimDir: 'C:\\orca-shim',
+      shimBin: 'C:\\orca.exe',
+      shimEnv: {
+        ORCA_AGENT_TEAMS_SHIM_EXECUTABLE: 'C:\\node.exe',
+        ORCA_AGENT_TEAMS_SHIM_CLI_ENTRY: 'C:\\repo\\out\\cli\\index.js'
+      },
+      paneShell: 'powershell'
+    })
+    const splitTerminal = vi.fn(async () => ({
+      handle: 'teammate-1',
+      tabId: 'tab-1',
+      paneRuntimeId: -1
+    }))
+    const api = { ...createServiceWithLeader().api, splitTerminal }
+    const command =
+      "cd 'E:\\repo' && env CLAUDECODE=1 CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1 " +
+      "ANTHROPIC_BASE_URL=http://relay.example:31416 'C:\\tools\\claude.exe' " +
+      '--agent-id WinProbe@session-1 --agent-name WinProbe --team-name session-1 ' +
+      '--agent-color blue --parent-session-id parent-1 --agent-type general-purpose ' +
+      "--dangerously-skip-permissions --model 'opus[1m]'"
+
+    await service.handleTmuxCompat(
+      {
+        teamId: launch.teamId,
+        token: launch.token,
+        envPane: launch.leaderPane,
+        argv: ['split-window', '-t', launch.leaderPane, '-P', '-F', '#{pane_id}', '--', 'cat']
+      },
+      api
+    )
+    await service.handleTmuxCompat(
+      {
+        teamId: launch.teamId,
+        token: launch.token,
+        envPane: launch.leaderPane,
+        argv: ['-S', '/tmp/orca/team', 'respawn-pane', '-k', '-t', '%2', '--', command]
+      },
+      api
+    )
+
+    expect(splitTerminal).toHaveBeenCalledWith(
+      'leader-handle',
+      expect.objectContaining({
+        command: undefined,
+        cwd: 'E:\\repo',
+        env: expect.objectContaining({
+          ANTHROPIC_BASE_URL: 'http://relay.example:31416',
+          CLAUDECODE: '1',
+          CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS: '1',
+          ORCA_AGENT_TEAMS_SHIM_CLI_ENTRY: 'C:\\repo\\out\\cli\\index.js',
+          ORCA_AGENT_TEAMS_SHIM_EXECUTABLE: 'C:\\node.exe',
+          TMUX_PANE: '%2'
+        }),
+        agentTeamsProcess: {
+          argv: [
+            'C:\\tools\\claude.exe',
+            '--agent-id',
+            'WinProbe@session-1',
+            '--agent-name',
+            'WinProbe',
+            '--team-name',
+            'session-1',
+            '--agent-color',
+            'blue',
+            '--parent-session-id',
+            'parent-1',
+            '--agent-type',
+            'general-purpose',
+            '--dangerously-skip-permissions',
+            '--model',
+            'opus[1m]'
+          ],
+          holding: false
+        }
+      })
+    )
+    expect(splitTerminal).toHaveBeenCalledTimes(1)
+    expect(api.closeTerminal).not.toHaveBeenCalled()
+  })
+
+  it('validates a respawn before closing its holding pane', async () => {
+    const service = new ClaudeAgentTeamsService()
+    const launch = service.createLaunchEnv({
+      leaderHandle: 'leader-handle',
+      baseEnv: { Path: 'C:\\Windows\\System32' },
+      shimDir: 'C:\\orca-shim',
+      shimBin: 'C:\\orca.exe',
+      paneShell: 'powershell'
+    })
+    const { api } = createServiceWithLeader()
+    const request = (argv: string[]) =>
+      service.handleTmuxCompat(
+        { teamId: launch.teamId, token: launch.token, envPane: launch.leaderPane, argv },
+        api
+      )
+
+    await request(['split-window', '-t', launch.leaderPane, '-P', '-F', '#{pane_id}', '--', 'cat'])
+    vi.mocked(api.closeTerminal).mockClear()
+    vi.mocked(api.splitTerminal).mockClear()
+
+    await expect(
+      request(['respawn-pane', '-k', '-t', '%2', '--', 'claude | tee log'])
+    ).resolves.toMatchObject({ ok: false, exitCode: 1 })
+    expect(api.closeTerminal).not.toHaveBeenCalled()
+    expect(api.splitTerminal).not.toHaveBeenCalled()
+    await expect(request(['list-panes', '-F', '#{pane_id}'])).resolves.toMatchObject({
+      stdout: '%1\n%2\n'
+    })
+  })
+
+  it('fences an in-flight respawn when its leader is removed', async () => {
+    const { service, teamId, token, leaderPane, api } = createServiceWithLeader()
+    const request = (argv: string[]) =>
+      service.handleTmuxCompat({ teamId, token, envPane: leaderPane, argv }, api)
+    await request(['split-window', '-t', leaderPane, '-P', '-F', '#{pane_id}', '--', 'cat'])
+    let releaseClose!: () => void
+    vi.mocked(api.closeTerminal).mockImplementationOnce(
+      (handle) =>
+        new Promise((resolve) => {
+          releaseClose = () => resolve({ handle, tabId: 'tab-1', ptyKilled: true })
+        })
+    )
+    vi.mocked(api.splitTerminal).mockClear()
+
+    const respawn = request(['respawn-pane', '-k', '-t', '%2', '--', 'claude --agent-id a'])
+    await vi.waitFor(() => expect(api.closeTerminal).toHaveBeenCalledOnce())
+    service.removeTeamForLeaderHandle('leader-handle')
+    releaseClose()
+
+    await expect(respawn).resolves.toMatchObject({ ok: false, exitCode: 1 })
+    expect(api.splitTerminal).not.toHaveBeenCalled()
+    expect(service.getActiveTeamCount()).toBe(0)
+  })
+
+  it('retires a split that finishes after its leader is removed', async () => {
+    const { service, teamId, token, leaderPane, api } = createServiceWithLeader()
+    let releaseSplit!: () => void
+    vi.mocked(api.splitTerminal).mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          releaseSplit = () => resolve({ handle: 'late-pane', tabId: 'tab-1', paneRuntimeId: -1 })
+        })
+    )
+    const split = service.handleTmuxCompat(
+      {
+        teamId,
+        token,
+        envPane: leaderPane,
+        argv: ['split-window', '-t', leaderPane, '--', 'cat']
+      },
+      api
+    )
+    await vi.waitFor(() => expect(api.splitTerminal).toHaveBeenCalledOnce())
+    service.removeTeamForLeaderHandle('leader-handle')
+    releaseSplit()
+
+    await expect(split).resolves.toMatchObject({ ok: false, exitCode: 1 })
+    expect(api.closeTerminal).toHaveBeenCalledWith('late-pane')
+    expect(service.getActiveTeamCount()).toBe(0)
+  })
+
+  it('leaves unconfirmed late-split liveness with the terminal owner', async () => {
+    const { service, teamId, token, leaderPane, api } = createServiceWithLeader()
+    let releaseSplit!: () => void
+    vi.mocked(api.splitTerminal).mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          releaseSplit = () => resolve({ handle: 'late-live', tabId: 'tab-1', paneRuntimeId: -1 })
+        })
+    )
+    vi.mocked(api.closeTerminal).mockResolvedValueOnce({
+      handle: 'late-live',
+      tabId: 'tab-1',
+      ptyKilled: false,
+      ptyStopVerdict: 'unverifiable'
+    })
+    const split = service.handleTmuxCompat(
+      {
+        teamId,
+        token,
+        envPane: leaderPane,
+        argv: ['split-window', '-t', leaderPane, '--', 'claude --agent-id late']
+      },
+      api
+    )
+    await vi.waitFor(() => expect(api.splitTerminal).toHaveBeenCalledOnce())
+    service.removeTeamForLeaderHandle('leader-handle')
+    releaseSplit()
+
+    await expect(split).resolves.toMatchObject({ ok: false, exitCode: 1 })
+    service.onTerminalExited('late-live')
+    expect(service.getActiveTeamCount()).toBe(0)
+  })
+
+  it('removes a teammate pane after its authoritative terminal exit', async () => {
+    const { service, teamId, token, leaderPane, api } = createServiceWithLeader()
+    const request = (argv: string[], envPane = leaderPane) =>
+      service.handleTmuxCompat({ teamId, token, envPane, argv }, api)
+
+    await request([
+      'split-window',
+      '-t',
+      leaderPane,
+      '-h',
+      '-P',
+      '-F',
+      '#{pane_id}',
+      '--',
+      'claude --agent-id child'
+    ])
+    service.onTerminalExited('teammate-1')
+
+    await expect(request(['list-panes', '-F', '#{pane_id}'])).resolves.toMatchObject({
+      stdout: '%1\n'
+    })
+  })
+
+  it('does not publish a teammate that exits before split registration', async () => {
+    const { service, teamId, token, leaderPane, api } = createServiceWithLeader()
+    vi.mocked(api.splitTerminal).mockImplementationOnce(async () => {
+      service.onTerminalExited('fast-exit')
+      return { handle: 'fast-exit', tabId: 'tab-1', paneRuntimeId: -1 }
+    })
+    const request = (argv: string[]) =>
+      service.handleTmuxCompat({ teamId, token, envPane: leaderPane, argv }, api)
+
+    await expect(
+      request(['split-window', '-t', leaderPane, '-P', '-F', '#{pane_id}', '--', 'claude'])
+    ).resolves.toMatchObject({ ok: false, exitCode: 1 })
+    expect(api.closeTerminal).toHaveBeenCalledWith('fast-exit')
+    await expect(request(['list-panes', '-F', '#{pane_id}'])).resolves.toMatchObject({
+      stdout: '%1\n'
+    })
+  })
+
+  it('admits teammate liveness synchronously at pane publication', async () => {
+    const { service, teamId, token, leaderPane, api } = createServiceWithLeader()
+    let observedHandle = false
+    vi.mocked(api.splitTerminal).mockImplementationOnce(async () => ({
+      get handle() {
+        if (!observedHandle) {
+          observedHandle = true
+          service.onTerminalExited('commit-exit')
+        }
+        return 'commit-exit'
+      },
+      tabId: 'tab-1',
+      paneRuntimeId: -1
+    }))
+    const request = (argv: string[]) =>
+      service.handleTmuxCompat({ teamId, token, envPane: leaderPane, argv }, api)
+
+    await expect(
+      request(['split-window', '-t', leaderPane, '-P', '-F', '#{pane_id}', '--', 'claude'])
+    ).resolves.toMatchObject({ ok: false, exitCode: 1 })
+    expect(api.closeTerminal).toHaveBeenCalledWith('commit-exit')
+    await expect(request(['list-panes', '-F', '#{pane_id}'])).resolves.toMatchObject({
+      stdout: '%1\n'
+    })
+  })
+
+  it('keeps a replacement registered when the old pane exits during respawn', async () => {
+    const { service, teamId, token, leaderPane, api } = createServiceWithLeader()
+    const request = (argv: string[]) =>
+      service.handleTmuxCompat({ teamId, token, envPane: leaderPane, argv }, api)
+    await request(['split-window', '-t', leaderPane, '-P', '-F', '#{pane_id}', '--', 'cat'])
+    vi.mocked(api.closeTerminal).mockImplementationOnce(async (handle) => {
+      service.onTerminalExited(handle)
+      return { handle, tabId: 'tab-1', ptyKilled: true }
+    })
+
+    await expect(
+      request(['respawn-pane', '-k', '-t', '%2', '--', 'claude --agent-id replacement'])
+    ).resolves.toMatchObject({ ok: true })
+    await expect(request(['list-panes', '-F', '#{pane_id}'])).resolves.toMatchObject({
+      stdout: '%1\n%2\n'
+    })
     await request(['kill-pane', '-t', '%2'])
     expect(api.closeTerminal).toHaveBeenLastCalledWith('teammate-2')
   })

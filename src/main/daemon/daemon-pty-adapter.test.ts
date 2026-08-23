@@ -67,6 +67,7 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
     cwd?: string
     env?: Record<string, string>
     command?: string
+    requiredShell?: 'powershell'
   } | null
   let daemonLogEvents: string[]
 
@@ -113,6 +114,35 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
       expect(result.id).toBeDefined()
       expect(typeof result.id).toBe('string')
       expect(result.providerSequence).toEqual({ value: 0, generation: 'reset' })
+    })
+
+    it('forwards PowerShell-required spawns and rejects legacy daemon owners', async () => {
+      await adapter.spawn({
+        sessionId: 'agent-team-child',
+        cols: 80,
+        rows: 24,
+        shellOverride: 'pwsh.exe',
+        requiredShell: 'powershell',
+        command: "& 'C:\\tools\\claude.exe' '--agent-name' 'Nova'"
+      })
+      expect(lastSpawnOpts).toMatchObject({
+        shellOverride: 'pwsh.exe',
+        requiredShell: 'powershell'
+      })
+
+      const legacy = new DaemonPtyAdapter({ socketPath, tokenPath, protocolVersion: 36 })
+      try {
+        await expect(
+          legacy.spawn({
+            sessionId: 'legacy-agent-team-child',
+            cols: 80,
+            rows: 24,
+            requiredShell: 'powershell'
+          })
+        ).rejects.toThrow('required_shell_unavailable')
+      } finally {
+        legacy.dispose()
+      }
     })
 
     it('carries classified startup spans from the daemon source to the adapter', async () => {
@@ -567,6 +597,25 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
   })
 
   describe('shutdown', () => {
+    it('retries a contact-lost stop through daemon-owner recovery', async () => {
+      const shutdownWithHistoryLock = vi
+        .fn()
+        .mockRejectedValueOnce(new Error('Connection lost'))
+        .mockResolvedValueOnce(undefined)
+      const respawn = vi.fn(async () => undefined)
+      const internals = adapter as unknown as {
+        shutdownWithHistoryLock: typeof shutdownWithHistoryLock
+        respawnFn: typeof respawn
+      }
+      internals.shutdownWithHistoryLock = shutdownWithHistoryLock
+      internals.respawnFn = respawn
+
+      await adapter.shutdown('rejected-provisional', { immediate: true })
+
+      expect(respawn).toHaveBeenCalledWith('daemon_died')
+      expect(shutdownWithHistoryLock).toHaveBeenCalledTimes(2)
+    })
+
     it('kills the session', async () => {
       const { id } = await adapter.spawn({ cols: 80, rows: 24 })
       await adapter.shutdown(id, { immediate: false })

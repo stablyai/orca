@@ -330,6 +330,35 @@ describe('createPtySubprocess', () => {
     )
   })
 
+  it('never delivers a PowerShell-required command to daemon cmd.exe fallback', async () => {
+    spawnMock.mockImplementation((shellPath: string) => {
+      throw new Error(`cannot spawn ${shellPath}`)
+    })
+    const platform = Object.getOwnPropertyDescriptor(process, 'platform')
+    Object.defineProperty(process, 'platform', { value: 'win32' })
+
+    try {
+      await expect(
+        createPtySubprocess({
+          sessionId: 'agent-team-child',
+          cols: 80,
+          rows: 24,
+          cwd: 'C:\\repo',
+          shellOverride: 'pwsh.exe',
+          requiredShell: 'powershell',
+          command: "& 'C:\\tools\\claude.exe' '--agent-name' 'Nova'"
+        })
+      ).rejects.toThrow(`cannot spawn ${PWSH7_ABS}`)
+    } finally {
+      if (platform) {
+        Object.defineProperty(process, 'platform', platform)
+      }
+    }
+
+    expect(spawnMock.mock.calls.map((call) => call[0])).toEqual([PWSH7_ABS, WINDOWS_POWERSHELL_ABS])
+    expect(spawnMock.mock.calls.some((call) => call[0] === CMD_ABS)).toBe(false)
+  })
+
   it('suppresses the first-run Powerlevel10k wizard for daemon terminals', async () => {
     const proc = mockPtyProcess()
     spawnMock.mockReturnValue(proc)
