@@ -1,12 +1,15 @@
 import React from 'react'
-import { Check, PackageOpen, Trash2, Upload } from 'lucide-react'
+import { PackageOpen, Trash2, Upload } from 'lucide-react'
 import { toast } from 'sonner'
 import {
   DropdownMenu,
+  DropdownMenuCheckboxItem,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuLabel,
   DropdownMenuPortal,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
   DropdownMenuSeparator,
   DropdownMenuSub,
   DropdownMenuSubContent,
@@ -81,6 +84,13 @@ function PetStatusSegmentInner(): React.JSX.Element {
             )
       )
     }
+  }
+
+  const choosePet = (id: string): void => {
+    if (!petVisible) {
+      setPetVisible(true)
+    }
+    setPetId(id)
   }
 
   const handleGeneratedPet = (model: Parameters<typeof addCustomPet>[0]): void => {
@@ -164,32 +174,25 @@ function PetStatusSegmentInner(): React.JSX.Element {
           </DropdownMenuItem>
           <DropdownMenuSeparator />
           {/* Why: checked items rather than a toggling label — both settings are
-            on by default, so the tick shows the current state at a glance. */}
-          <DropdownMenuItem
-            onSelect={(event) => {
-              event.preventDefault()
-              setPetWalks(!petWalks)
-            }}
+            on by default, so the state shows at a glance. The primitive carries
+            aria-checked; a hand-drawn tick announces nothing. */}
+          <DropdownMenuCheckboxItem
+            checked={petWalks}
+            onCheckedChange={setPetWalks}
+            onSelect={(event) => event.preventDefault()}
           >
-            <span className="flex w-4 items-center justify-center">
-              {petWalks ? <Check className="size-3.5" aria-hidden /> : null}
-            </span>
             {translate('auto.components.status.bar.PetStatusSegment.petWalks', 'Walk around')}
-          </DropdownMenuItem>
-          <DropdownMenuItem
-            onSelect={(event) => {
-              event.preventDefault()
-              setPetReturnsToLane(!petReturnsToLane)
-            }}
+          </DropdownMenuCheckboxItem>
+          <DropdownMenuCheckboxItem
+            checked={petReturnsToLane}
+            onCheckedChange={setPetReturnsToLane}
+            onSelect={(event) => event.preventDefault()}
           >
-            <span className="flex w-4 items-center justify-center">
-              {petReturnsToLane ? <Check className="size-3.5" aria-hidden /> : null}
-            </span>
             {translate(
               'auto.components.status.bar.PetStatusSegment.petReturnsToLane',
               'Drop to the floor when released'
             )}
-          </DropdownMenuItem>
+          </DropdownMenuCheckboxItem>
           <DropdownMenuSeparator />
           {/* Why: in-menu range so users can resize the overlay without leaving
             the dropdown — pet sprites can import larger than the default 180px
@@ -234,62 +237,22 @@ function PetStatusSegmentInner(): React.JSX.Element {
               BrowserToolbarMenu/BrowserProfileRow. */}
             <DropdownMenuPortal>
               <DropdownMenuSubContent className="min-w-[220px]">
-                {BUNDLED_PETS.map((pet) => {
-                  const selected = pet.id === petId
-                  return (
-                    <DropdownMenuItem
-                      key={pet.id}
-                      onSelect={() => {
-                        if (!petVisible) {
-                          setPetVisible(true)
-                        }
-                        setPetId(pet.id)
-                      }}
-                    >
-                      <span className="flex w-4 items-center justify-center">
-                        {selected ? <Check className="size-3.5" aria-hidden /> : null}
-                      </span>
+                {/* Why: one radio group over both lists — picking a pet is a
+                  single choice, so the primitive should say so rather than a
+                  tick drawn per row. */}
+                <DropdownMenuRadioGroup value={petId} onValueChange={choosePet}>
+                  {BUNDLED_PETS.map((pet) => (
+                    <DropdownMenuRadioItem key={pet.id} value={pet.id}>
                       {pet.label}
-                    </DropdownMenuItem>
-                  )
-                })}
-                {customPets.length > 0 ? <DropdownMenuSeparator /> : null}
-                {customPets.map((model) => {
-                  const selected = model.id === petId
-                  return (
-                    <DropdownMenuItem
-                      key={model.id}
-                      className="group"
-                      onSelect={() => {
-                        if (!petVisible) {
-                          setPetVisible(true)
-                        }
-                        setPetId(model.id)
-                      }}
-                    >
-                      <span className="flex w-4 items-center justify-center">
-                        {selected ? <Check className="size-3.5" aria-hidden /> : null}
-                      </span>
+                    </DropdownMenuRadioItem>
+                  ))}
+                  {customPets.length > 0 ? <DropdownMenuSeparator /> : null}
+                  {customPets.map((model) => (
+                    <DropdownMenuRadioItem key={model.id} value={model.id}>
                       <span className="flex-1 truncate">{model.label}</span>
-                      <button
-                        type="button"
-                        className="ml-2 flex size-5 items-center justify-center rounded text-muted-foreground hover:bg-destructive/15 hover:text-destructive"
-                        aria-label={translate(
-                          'auto.components.status.bar.PetStatusSegment.3668339495',
-                          'Remove {{value0}}',
-                          { value0: model.label }
-                        )}
-                        onClick={(event) => {
-                          event.stopPropagation()
-                          event.preventDefault()
-                          removeCustomPet(model.id)
-                        }}
-                      >
-                        <Trash2 className="size-3" aria-hidden />
-                      </button>
-                    </DropdownMenuItem>
-                  )
-                })}
+                    </DropdownMenuRadioItem>
+                  ))}
+                </DropdownMenuRadioGroup>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem
                   onSelect={() => {
@@ -320,6 +283,39 @@ function PetStatusSegmentInner(): React.JSX.Element {
               </DropdownMenuSubContent>
             </DropdownMenuPortal>
           </DropdownMenuSub>
+          {/* Why: removal is its own entry rather than a trash button riding the
+            row it removes — a button inside a role="menuitem" is invalid, and
+            the arrow keys that drive the menu never reach it. */}
+          {customPets.length > 0 ? (
+            <DropdownMenuSub>
+              <DropdownMenuSubTrigger>
+                {translate(
+                  'auto.components.status.bar.PetStatusSegment.removeAPet',
+                  'Remove a pet'
+                )}
+              </DropdownMenuSubTrigger>
+              <DropdownMenuPortal>
+                <DropdownMenuSubContent className="min-w-[220px]">
+                  {customPets.map((model) => (
+                    <DropdownMenuItem
+                      key={model.id}
+                      variant="destructive"
+                      onSelect={() => removeCustomPet(model.id)}
+                    >
+                      <Trash2 className="size-3.5" aria-hidden />
+                      <span className="flex-1 truncate">
+                        {translate(
+                          'auto.components.status.bar.PetStatusSegment.3668339495',
+                          'Remove {{value0}}',
+                          { value0: model.label }
+                        )}
+                      </span>
+                    </DropdownMenuItem>
+                  ))}
+                </DropdownMenuSubContent>
+              </DropdownMenuPortal>
+            </DropdownMenuSub>
+          ) : null}
           <DropdownMenuSeparator />
           <DropdownMenuItem
             onSelect={() => {

@@ -56,7 +56,11 @@ function render(): void {
 }
 
 function menuItems(): HTMLElement[] {
-  return [...document.querySelectorAll('[role="menuitem"]')] as HTMLElement[]
+  return [
+    ...document.querySelectorAll(
+      '[role="menuitem"], [role="menuitemcheckbox"], [role="menuitemradio"]'
+    )
+  ] as HTMLElement[]
 }
 
 function openMenu(): void {
@@ -81,6 +85,7 @@ function selectItem(match: RegExp): void {
 beforeEach(() => {
   storeMock.state.petWalks = true
   storeMock.state.petReturnsToLane = true
+  storeMock.state.customPets = []
 })
 
 afterEach(() => {
@@ -123,5 +128,36 @@ describe('PetStatusSegment', () => {
 
     expect(storeMock.state.setPetWalks).toHaveBeenCalledWith(false)
     expect(menuItems().length).toBeGreaterThan(0)
+  })
+
+  it('states the toggles as checked, rather than drawing a tick nothing announces', () => {
+    storeMock.state.petReturnsToLane = false
+    render()
+    openMenu()
+
+    const walk = menuItems().find((el) => /walk around/i.test(el.textContent ?? ''))
+    const lane = menuItems().find((el) => /drop to the floor/i.test(el.textContent ?? ''))
+
+    expect(walk?.getAttribute('role')).toBe('menuitemcheckbox')
+    expect(walk?.getAttribute('aria-checked')).toBe('true')
+    expect(lane?.getAttribute('aria-checked')).toBe('false')
+  })
+
+  it('gives removing a custom pet a menu item of its own', () => {
+    // Why: the remove control used to be a <button> inside a role="menuitem" —
+    // invalid, and unreachable by the arrow keys that drive a menu.
+    storeMock.state.customPets = [{ id: 'custom-1', label: 'Mine' }]
+    render()
+    openMenu()
+
+    expect(menuItems().some((el) => /remove a pet/i.test(el.textContent ?? ''))).toBe(true)
+    expect(document.querySelector('[role^="menuitem"] button')).toBeNull()
+  })
+
+  it('offers no removal entry when there is nothing custom to remove', () => {
+    render()
+    openMenu()
+
+    expect(menuItems().some((el) => /remove a pet/i.test(el.textContent ?? ''))).toBe(false)
   })
 })

@@ -3345,7 +3345,8 @@
             "1fbc51cc77": "Hide pet",
             "petWalks": "Walk around",
             "petReturnsToLane": "Drop to the floor when released",
-            "createFromImage": "Create pet from image…"
+            "createFromImage": "Create pet from image…",
+            "removeAPet": "Remove a pet"
           },
           "PortsStatusSegment": {
             "4ebf90c12e": "No external ports detected",
