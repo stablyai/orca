@@ -27,6 +27,11 @@ const AUDITED_GLOBAL_FETCH_LINES = new Map<string, number>([
   ['main/runtime/relay/relay-region-preference.ts', 3],
   ['main/source-control/hosted-review-api-request.ts', 1],
   ['main/speech/openai-transcription-client.ts', 1],
+  // Main HTTP port: one type declaration plus the Node fallback call. The fallback
+  // returns the Response to its caller without inspecting it, so the consume/cancel
+  // obligation stays with the caller — unchanged from when those callers used
+  // Electron's net directly.
+  ['main/network/http-client.ts', 2],
   // fetch appears only inside injected-page script source strings, not as a
   // call this process makes
   ['main/amp/agent-status-plugin-source.ts', 1],

@@ -1789,9 +1789,10 @@ function extractAmpToolFields(
 
 /**
  * Retires any cached tool fields. PermissionRequest is the only OpenCode-family event that
- * carries them, and isNewTurnEvent is false for this family, so nothing else ever resets the
- * cache — without an explicit retire, resolveToolState inherits one answered permission onto
- * every later frame in the pane and the row reads a resolved command as the live tool.
+ * carries them, and the only isNewTurnEvent boundary this family has is opencode's
+ * SessionStart — which a resumed session never re-emits — so nothing else resets the cache
+ * mid-session. Without an explicit retire, resolveToolState inherits one answered permission
+ * onto every later frame in the pane and the row reads a resolved command as the live tool.
  */
 const OPENCODE_TOOL_FIELDS_RETIRED: ToolSnapshot = {
   hasToolUpdate: true,
@@ -2495,6 +2496,7 @@ export function isNewTurnEvent(source: AgentHookSource, eventName: unknown): boo
     case 'amp':
       return eventName === 'agent.start'
     case 'opencode':
+      return eventName === 'SessionStart'
     case 'mimo-code':
       return false
     case 'cursor':
@@ -3899,14 +3901,19 @@ function normalizeOpenCodeFamilyEvent(
   paneKey: string,
   hookPayload: Record<string, unknown>
 ): ParsedAgentStatusPayload | null {
+  const resetsTurn =
+    isNewTurnEvent(source, eventName) ||
+    (eventName === 'MessagePart' && hookPayload.role === 'user')
   const stateName =
     eventName === 'SessionBusy' || eventName === 'MessagePart'
       ? 'working'
       : eventName === 'SessionIdle'
         ? 'done'
-        : eventName === 'PermissionRequest' || eventName === 'AskUserQuestion'
-          ? 'waiting'
-          : null
+        : source === 'opencode' && eventName === 'SessionStart'
+          ? 'done'
+          : eventName === 'PermissionRequest' || eventName === 'AskUserQuestion'
+            ? 'waiting'
+            : null
 
   if (!stateName) {
     return null
@@ -3916,19 +3923,20 @@ function normalizeOpenCodeFamilyEvent(
     state,
     paneKey,
     extractToolFields(source, eventName, hookPayload),
-    { resetOnNewTurn: isNewTurnEvent(source, eventName) }
+    { resetOnNewTurn: resetsTurn }
   )
 
   return normalizeAgentStatusPayload({
     state: stateName,
     prompt: resolvePrompt(state, paneKey, promptText, {
-      resetOnNewTurn: isNewTurnEvent(source, eventName)
+      resetOnNewTurn: resetsTurn
     }),
     agentType: source,
     toolName: snapshot.toolName,
     toolInput: snapshot.toolInput,
     interactivePrompt: snapshot.interactivePrompt,
-    lastAssistantMessage: snapshot.lastAssistantMessage
+    lastAssistantMessage: snapshot.lastAssistantMessage,
+    sessionBoundary: source === 'opencode' && eventName === 'SessionStart' ? true : undefined
   })
 }
 

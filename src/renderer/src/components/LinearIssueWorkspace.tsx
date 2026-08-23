@@ -46,11 +46,9 @@ import { Sheet, SheetContent, SheetDescription, SheetTitle } from '@/components/
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { createBrowserUuid } from '@/lib/browser-uuid'
 import { buildLinearIssueContextSnapshot } from '@/lib/linear-issue-context-snapshot'
-import {
-  findLinearIssueWorkspaceAttachment,
-  getLinearIssueWorkspaceAttachmentLabel
-} from '@/lib/linear-issue-workspace-attachment'
+import { findLinearIssueWorkspaceAttachment } from '@/lib/linear-issue-workspace-attachment'
 import { openLinearIssueWorkspaceOrStart } from '@/lib/linear-issue-workspace-open'
+import { getWorktreeAttachmentLabel } from '@/lib/worktree-attachment-label'
 import { folderWorkspaceToWorktree } from '../../../shared/folder-workspace-worktree'
 import { buildContainedLinkedContextBlock } from '@/lib/linked-work-item-context'
 import { useMountedRef } from '@/hooks/useMountedRef'
@@ -674,7 +672,7 @@ export default function LinearIssueWorkspace({
     [attachmentWorkspaces, displayed]
   )
   const attachedWorkspaceLabel = attachedWorkspace
-    ? getLinearIssueWorkspaceAttachmentLabel(attachedWorkspace)
+    ? getWorktreeAttachmentLabel(attachedWorkspace)
     : null
 
   const handleUseIssue = useCallback((): void => {

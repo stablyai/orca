@@ -26,6 +26,7 @@ import { buildTerminalKeyboardProtocolOptions } from '@/lib/pane-manager/termina
 import { resolvePaneKeyboardProtocolAgent } from './terminal-keyboard-protocol-pane-agent'
 import { useAppStore } from '@/store'
 import type { DirectSshPaneRetryAttemptId } from '@/store/slices/direct-ssh-terminal-recovery'
+import type { PaneProcessExit } from './pty-connection-types'
 import {
   createFilePathLinkProvider,
   getTerminalFileOpenHint,
@@ -292,6 +293,7 @@ type UseTerminalPaneLifecycleDeps = {
   onPtyExitRef: React.RefObject<(ptyId: string) => void>
   onAgentExitedRef: React.RefObject<(leafId: string) => void>
   onPtyErrorRef?: React.RefObject<(paneId: number, message: string) => void>
+  onPaneProcessDied?: (processExit: PaneProcessExit) => void
   onPtyRecoveryStateRef?: React.RefObject<
     (paneId: number, state: PtyTransportRecoveryState | null) => void
   >
@@ -478,6 +480,55 @@ function resolveTerminalHomePathFromEnv(env: Record<string, string> | undefined)
   return homeDrive && homePath ? `${homeDrive}${homePath}` : null
 }
 
+/**
+ * Whether this pane's startup is the tab's queued command rather than a payload a split borrowed.
+ *
+ * Why reference identity and not truthiness: setup/issue splits assign their own one-shot object to
+ * the same `deps.startup` field, so "has a startup" would let a split pane spend a command it never
+ * runs — and a split's payload can be structurally identical to the queued one (STA-4876).
+ */
+export function paneOwnsQueuedStartup(
+  paneStartup: object | null | undefined,
+  queuedStartup: object | null | undefined
+): boolean {
+  return queuedStartup != null && paneStartup === queuedStartup
+}
+
+/**
+ * The callback that spends the tab's queued startup command, or `undefined` when this pane does
+ * not own it.
+ *
+ * Why one-shot: `onPtySpawn` fires on every fresh spawn a pane makes — hibernation wake, the
+ * respawn ladder — but only the first carried the queued command. A command queued onto the tab
+ * afterwards belongs to that later launch, and spending it here would drop it undelivered.
+ *
+ * Why `isStillQueued` on top of that guard: the replacement can also arrive before this pane's very
+ * first spawn, so the slot is only spent while it still holds the command this pane launched.
+ */
+export function createQueuedStartupConsumer(
+  paneStartup: object | null | undefined,
+  queuedStartup: object | null | undefined,
+  consume: () => void,
+  isStillQueued: () => boolean
+): (() => void) | undefined {
+  if (!paneOwnsQueuedStartup(paneStartup, queuedStartup)) {
+    return undefined
+  }
+  let spent = false
+  return () => {
+    if (spent) {
+      return
+    }
+    // Why spent regardless: this pane's launch is its one chance at the slot; a later spawn of the
+    // same pane must not spend whatever command took its place.
+    spent = true
+    if (!isStillQueued()) {
+      return
+    }
+    consume()
+  }
+}
+
 /** Scopes `deps.startup` to a single call of `splitPane()`, clearing it in `finally` so later splits do not replay the payload. */
 export function splitPaneWithOneShotStartup<TPane>(
   deps: SplitWithStartupDeps,
@@ -649,6 +700,7 @@ export function useTerminalPaneLifecycle({
   onPtyExitRef,
   onAgentExitedRef,
   onPtyErrorRef,
+  onPaneProcessDied,
   onPtyRecoveryStateRef,
   clearTabPtyId,
   consumeSuppressedPtyExit,
@@ -891,6 +943,7 @@ export function useTerminalPaneLifecycle({
       onPtyExitRef,
       onAgentExitedRef,
       onPtyErrorRef,
+      onPaneProcessDied,
       onPtyRecoveryStateRef,
       clearTabPtyId,
       consumeSuppressedPtyExit,
@@ -1295,8 +1348,18 @@ export function useTerminalPaneLifecycle({
           }
         }
         applyAppearance(manager)
+        const onQueuedStartupSpawned = createQueuedStartupConsumer(
+          ptyDeps.startup,
+          startupWithSetupSplitWait,
+          () => useAppStore.getState().consumeTabStartupCommand(tabId),
+          // Why `startup` and not startupWithSetupSplitWait: setup-split hands the pane a copy, so only
+          // the raw prop still matches the object the store holds. Read and consume run in one
+          // synchronous step, so nothing can queue in between.
+          () => useAppStore.getState().pendingStartupByTabId[tabId] === startup
+        )
         const panePtyBinding = connectPanePty(pane, manager, {
           ...ptyDeps,
+          ...(onQueuedStartupSpawned ? { onQueuedStartupSpawned } : {}),
           // Why: spread order matters — spawnHints.cwd (source pane) must override ptyDeps.cwd (worktree root) so splits boot in the live cwd.
           ...(spawnHints?.cwd ? { cwd: spawnHints.cwd } : {}),
           restoredPtyIdByLeafId: spawnHints?.ptyId

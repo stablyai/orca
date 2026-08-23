@@ -403,9 +403,13 @@ describe('orca root help', () => {
 
     const listIssuesHelp = String(logSpy.mock.calls[0][0])
     expect(listIssuesHelp).toContain(
-      '--cursor <cursor>      Opaque cursor returned by a previous list-issues page'
+      '--cursor <cursor>      Opaque cursor from a previous list-issues page; issued cursors bind the workspace, raw Linear cursors need --workspace'
     )
     expect(listIssuesHelp).toContain('--workspace <id|all>  Connected Linear workspace id, or all')
+    expect(listIssuesHelp).toContain('0=none, 1=urgent, 2=high, 3=medium, 4=low')
+    expect(listIssuesHelp).toContain(
+      '--limit <n>            Max issues to return; omit to return every match'
+    )
     expect(listIssuesHelp).not.toContain('Line cursor from a previous read')
     expect(callMock).not.toHaveBeenCalled()
   })

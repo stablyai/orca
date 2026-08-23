@@ -34,6 +34,7 @@ import type { UpdateStatus } from '../../../shared/update-status-types'
 import type { RateLimitState } from '../../../shared/rate-limit-types'
 import type { DirectSshAuthority, SshConnectionState } from '../../../shared/ssh-types'
 import {
+  LOCAL_EXECUTION_HOST_ID,
   toRuntimeExecutionHostId,
   toSshExecutionHostId,
   type ExecutionHostId
@@ -507,6 +508,39 @@ export function openNewWorkspaceFromShortcut(
     return
   }
   state.openModal('new-workspace-composer', buildNewWorkspaceShortcutModalData(state))
+}
+
+export function toggleAgentDashboardFromShortcut(
+  state: Pick<
+    AppState,
+    | 'activeView'
+    | 'settings'
+    | 'agentDashboardDrawerOpen'
+    | 'setSidebarOpen'
+    | 'setAgentDashboardDrawerOpen'
+  >,
+  openPopout: () => void
+): void {
+  // Why: mirror the sidebar entry's gate — the chord must stay inert while the
+  // experiment is off, so a stale binding cannot open a hidden surface.
+  if (
+    state.activeView === 'settings' ||
+    state.settings?.experimentalAgentDashboardPopout !== true
+  ) {
+    return
+  }
+  if (state.settings.experimentalAgentDashboardMode === 'popout') {
+    openPopout()
+    return
+  }
+  const nextOpen = !state.agentDashboardDrawerOpen
+  // Why: the drawer lives beside the sidebar and self-closes when the sidebar
+  // collapses, so opening it has to reveal the sidebar first. Closing must not,
+  // or dismissing the drawer would force the sidebar back open.
+  if (nextOpen) {
+    state.setSidebarOpen(true)
+  }
+  state.setAgentDashboardDrawerOpen(nextOpen)
 }
 
 export function resolveBrowserSessionTabTarget(
@@ -1419,6 +1453,16 @@ export function useIpcEvents(): void {
           }
           store.setSidebarOpen(true)
           window.dispatchEvent(new CustomEvent(TOGGLE_WORKSPACE_BOARD_EVENT))
+        })
+      )
+    }
+
+    if (window.api.ui.onToggleAgentDashboard) {
+      unsubs.push(
+        window.api.ui.onToggleAgentDashboard(() => {
+          toggleAgentDashboardFromShortcut(useAppStore.getState(), () => {
+            void window.api.dashboard.openPopout()
+          })
         })
       )
     }
@@ -2364,7 +2408,10 @@ export function useIpcEvents(): void {
           rememberPrelaunchedSimulatorSession(worktreeId, info)
           return
         }
-        ensureSimulatorTab(worktreeId, { surfacePane: false })
+        ensureSimulatorTab(worktreeId, {
+          surfacePane: false,
+          executionHostId: LOCAL_EXECUTION_HOST_ID
+        })
         // Why: watcher may detect a helper while a simulator tab is already mounted; push stream info so the pane updates without re-attach.
         window.setTimeout(() => {
           window.dispatchEvent(
@@ -2383,7 +2430,10 @@ export function useIpcEvents(): void {
       if (isRuntimeEnvironmentActive()) {
         return
       }
-      ensureSimulatorTab(worktreeId, { surfacePane: true })
+      ensureSimulatorTab(worktreeId, {
+        surfacePane: true,
+        executionHostId: LOCAL_EXECUTION_HOST_ID
+      })
     })
     if (unsubscribeEmulatorPaneFocus) {
       unsubs.push(unsubscribeEmulatorPaneFocus)

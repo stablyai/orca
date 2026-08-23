@@ -239,9 +239,9 @@ describe('OpenCode-family permission request status', () => {
   })
 
   it.each(SOURCES)('does not carry an answered permission into a later turn for %s', (source) => {
-    // Why: isNewTurnEvent is false for this family, so nothing else ever resets the cached
-    // tool. Without an explicit retire, one permission pins its command to every later
-    // working frame in the pane — the exact stale-tool-line the row gate guards against.
+    // Why: no isNewTurnEvent boundary fires mid-session for this family, so nothing else
+    // resets the cached tool. Without an explicit retire, one permission pins its command to
+    // every later working frame in the pane — the exact stale-tool-line the row gate guards against.
     permissionEvent(source, BASH_PERMISSION)
     lifecycleEvent(source, 'SessionBusy')
     lifecycleEvent(source, 'SessionIdle')

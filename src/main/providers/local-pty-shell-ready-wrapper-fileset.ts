@@ -5,21 +5,15 @@
  */
 import { ZSH_WRAPPER_DIR_MARKER_CONTENT, ZSH_WRAPPER_DIR_MARKER_FILE } from '../shell-templates'
 import type { ShellWrapperFile } from '../shell-wrapper-file-writer'
-import {
-  buildZshStartupWrapperFiles,
-  type ZshStartupWrapperSpec
-} from '../zsh-startup-wrapper-builder'
+import { buildZshStartupHook, type ZshStartupHookSpec } from '../zsh-startup-wrapper-builder'
 import { getBashShellReadyRcfileContent } from './local-pty-shell-ready-bash-rcfile'
 import { SHELL_READY_MARKER_ESCAPED } from './local-pty-shell-ready-marker'
 
-export function getLocalZshWrapperSpec(zshDir: string): ZshStartupWrapperSpec {
+export function getLocalZshWrapperSpec(): ZshStartupHookSpec {
   return {
     headerLabel: 'Orca zsh shell-ready wrapper',
-    zshDir,
-    zshenvStrategy: 'discover-user-zdotdir',
     readyMarkerEscaped: SHELL_READY_MARKER_ESCAPED,
     osc133CommandMarkers: true,
-    skipUserZshrcWhenHomeIsWrapperDir: true,
     overlayRestoreComment:
       "# Why: ~/.zshrc can export the user's default OpenCode config after spawn.",
     restores: {
@@ -36,14 +30,13 @@ export function getLocalZshWrapperSpec(zshDir: string): ZshStartupWrapperSpec {
 // config builds the matching values the same way (local-pty-shell-ready.ts).
 // path.join would emit backslashes on Windows, where a shell literal reads them
 // as escapes -- and would desync the written path from the launched one.
+// Why only .zshenv: the hook hands ZDOTDIR back on its first lines, so zsh reads
+// .zprofile, .zshrc and .zlogin from the user's own directory. Nothing Orca
+// writes is read after this file.
 export function buildLocalShellReadyWrapperFiles(root: string): readonly ShellWrapperFile[] {
   const zshDir = `${root}/zsh`
-  const zsh = buildZshStartupWrapperFiles(getLocalZshWrapperSpec(zshDir))
   return [
-    [`${zshDir}/.zshenv`, zsh.zshenv],
-    [`${zshDir}/.zprofile`, zsh.zprofile],
-    [`${zshDir}/.zshrc`, zsh.zshrc],
-    [`${zshDir}/.zlogin`, zsh.zlogin],
+    [`${zshDir}/.zshenv`, buildZshStartupHook(getLocalZshWrapperSpec())],
     [`${zshDir}/${ZSH_WRAPPER_DIR_MARKER_FILE}`, ZSH_WRAPPER_DIR_MARKER_CONTENT],
     [`${root}/bash/rcfile`, getBashShellReadyRcfileContent()]
   ]

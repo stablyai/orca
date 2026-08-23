@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "updatedAt": "2026-08-18",
+  "updatedAt": "2026-08-20",
   "policy": {
     "maturityLevels": ["experimental", "soak", "blocking", "accepted-gap", "deprecated"],
     "blockingPromotion": {
@@ -10,6 +10,306 @@
     }
   },
   "gates": [
+    {
+      "id": "cmd-j-tabs.host-qualified-candidate-ownership",
+      "title": "Cmd-J tab candidates retain execution-host ownership",
+      "maturity": "experimental",
+      "protection": "partial",
+      "owner": "renderer-workspace-tabs",
+      "layer": "renderer-state-and-navigation",
+      "surfaces": [
+        "Cmd-J browser tabs",
+        "Cmd-J simulator tabs",
+        "Cmd-J workspace tabs",
+        "paired-runtime tab mirror"
+      ],
+      "platforms": ["macos", "linux", "windows"],
+      "providers": ["local", "ssh", "remote-runtime"],
+      "coveredPlatforms": ["macos"],
+      "coveredProviders": ["local", "ssh", "remote-runtime"],
+      "coverageNotes": "Deterministic candidate-builder contracts inject local and paired-runtime worktrees with the same bare id into the real aggregated tab buckets, including folder workspaces and a paired runtime transporting an SSH-owned worktree. A mirror contract preserves distinct same-id runtime tabs. Manual local-emulator contracts retain local ownership and dedupe explicitly owned tabs before worktree hydration. A paired Electron journey verifies both visible browser rows and both visible simulator rows, then requires each selection to render its owning active tab and update backing host-qualified state.",
+      "motivatingLinks": [
+        "https://linear.app/stably/issue/STA-4965",
+        "https://github.com/stablyai/orca/pull/15371"
+      ],
+      "invariant": "Candidate identity is the tuple of execution-host identity and worktree identity: same-id sibling hosts retain separate correct browser, simulator, and workspace tabs, each tab appears exactly once, and selection activates its owning host.",
+      "oracle": "Aggregate two hosts' tabs under one intentionally colliding worktree id, stamp each unified tab with its execution host, and require exactly one candidate per owner. Repeat with an SSH physical owner transported by a paired-runtime alias. Independently require each browser and simulator Cmd-J selection to update activeWorkspaceExecutionHostId plus its owning workspace/group and render the selected tab active. Ambiguous legacy tabs without ownership fail closed.",
+      "commands": [
+        "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/cmd-j/worktree-checks-review-index.test.ts",
+        "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/WorktreeJumpPalette.test.tsx",
+        "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/lib/palette-repo-resolution.test.ts",
+        "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/lib/ensure-simulator-tab-behavior.test.ts src/renderer/src/lib/palette-repo-resolution.test.ts",
+        "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/lib/browser-palette-page-entries.test.ts src/renderer/src/lib/simulator-palette-search.test.ts",
+        "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/lib/cmd-j-host-qualified-candidate-ownership.test.ts src/renderer/src/store/slices/tabs-open-close-lifecycle.test.ts",
+        "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/lib/browser-palette-page-entries.test.ts src/renderer/src/lib/simulator-palette-search.test.ts src/renderer/src/lib/ensure-simulator-tab-behavior.test.ts src/renderer/src/store/slices/tabs-open-close-lifecycle.test.ts src/renderer/src/store/slices/tabs-pane-layout-operations.test.ts src/shared/workspace-session-schema.test.ts",
+        "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/lib/cmd-j-host-qualified-candidate-ownership.test.ts src/renderer/src/lib/palette-repo-resolution.test.ts src/renderer/src/lib/browser-palette-page-entries.test.ts src/renderer/src/lib/browser-palette-search.test.ts src/renderer/src/lib/simulator-palette-search.test.ts src/renderer/src/lib/workspace-tab-palette-search.test.ts src/renderer/src/lib/browser-page-palette-activation.test.ts src/renderer/src/lib/simulator-tab-palette-activation.test.ts src/renderer/src/lib/ensure-simulator-tab-behavior.test.ts src/renderer/src/runtime/web-session-tabs-sync-mirror-identity.test.ts src/renderer/src/store/slices/tabs-open-close-lifecycle.test.ts src/renderer/src/store/slices/tabs-pane-layout-operations.test.ts src/shared/workspace-session-schema.test.ts",
+        "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/cmd-j/worktree-checks-review-index.test.ts src/renderer/src/components/WorktreeJumpPalette.test.tsx src/renderer/src/components/tab-bar/use-open-tab-search.test.ts src/renderer/src/lib/cmd-j-host-qualified-candidate-ownership.test.ts src/renderer/src/lib/palette-repo-resolution.test.ts src/renderer/src/lib/browser-palette-page-entries.test.ts src/renderer/src/lib/browser-palette-search.test.ts src/renderer/src/lib/simulator-palette-search.test.ts src/renderer/src/lib/workspace-tab-palette-search.test.ts src/renderer/src/lib/browser-page-palette-activation.test.ts src/renderer/src/lib/simulator-tab-palette-activation.test.ts src/renderer/src/lib/ensure-simulator-tab-behavior.test.ts src/renderer/src/runtime/web-session-tabs-sync-mirror-identity.test.ts src/renderer/src/store/slices/tabs-open-close-lifecycle.test.ts src/renderer/src/store/slices/tabs-pane-layout-operations.test.ts src/shared/workspace-session-schema.test.ts",
+        "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/cmd-j/worktree-checks-review-index.test.ts src/renderer/src/components/WorktreeJumpPalette.test.tsx src/renderer/src/components/tab-bar/use-open-tab-search.test.ts src/renderer/src/lib/cmd-j-host-qualified-candidate-ownership.test.ts src/renderer/src/lib/palette-repo-resolution.test.ts src/renderer/src/lib/browser-palette-page-entries.test.ts src/renderer/src/lib/browser-palette-search.test.ts src/renderer/src/lib/simulator-palette-search.test.ts src/renderer/src/lib/workspace-tab-palette-search.test.ts src/renderer/src/lib/browser-page-palette-activation.test.ts src/renderer/src/lib/simulator-tab-palette-activation.test.ts src/renderer/src/lib/ensure-simulator-tab-behavior.test.ts src/renderer/src/lib/open-mobile-emulator-tab.test.ts src/renderer/src/runtime/web-session-tabs-sync-mirror-identity.test.ts src/renderer/src/store/slices/tabs-open-close-lifecycle.test.ts src/renderer/src/store/slices/tabs-pane-layout-operations.test.ts src/shared/workspace-session-schema.test.ts",
+        "pnpm exec playwright test tests/e2e/paired-cmd-j-host-qualified-tabs.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1",
+        "SKIP_BUILD=1 pnpm exec playwright test tests/e2e/paired-cmd-j-host-qualified-tabs.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1"
+      ],
+      "testFiles": [
+        "src/renderer/src/components/cmd-j/worktree-checks-review-index.test.ts",
+        "src/renderer/src/components/WorktreeJumpPalette.test.tsx",
+        "src/renderer/src/components/tab-bar/use-open-tab-search.test.ts",
+        "src/renderer/src/lib/cmd-j-host-qualified-candidate-ownership.test.ts",
+        "src/renderer/src/lib/palette-repo-resolution.test.ts",
+        "src/renderer/src/lib/browser-palette-page-entries.test.ts",
+        "src/renderer/src/lib/browser-palette-search.test.ts",
+        "src/renderer/src/lib/simulator-palette-search.test.ts",
+        "src/renderer/src/lib/workspace-tab-palette-search.test.ts",
+        "src/renderer/src/lib/browser-page-palette-activation.test.ts",
+        "src/renderer/src/lib/simulator-tab-palette-activation.test.ts",
+        "src/renderer/src/lib/ensure-simulator-tab-behavior.test.ts",
+        "src/renderer/src/lib/open-mobile-emulator-tab.test.ts",
+        "src/renderer/src/runtime/web-session-tabs-sync-mirror-identity.test.ts",
+        "src/renderer/src/store/slices/tabs-open-close-lifecycle.test.ts",
+        "src/renderer/src/store/slices/tabs-pane-layout-operations.test.ts",
+        "src/shared/workspace-session-schema.test.ts",
+        "tests/e2e/paired-cmd-j-host-qualified-tabs.spec.ts"
+      ],
+      "assertionRefs": [
+        {
+          "file": "src/renderer/src/components/cmd-j/worktree-checks-review-index.test.ts",
+          "assertions": [
+            "a runtime-owned SSH worktree never exposes review metadata cached for its physical host"
+          ]
+        },
+        {
+          "file": "src/renderer/src/components/WorktreeJumpPalette.test.tsx",
+          "assertions": [
+            "a runtime-owned worktree row never renders repository metadata borrowed from its physical SSH host"
+          ]
+        },
+        {
+          "file": "src/renderer/src/lib/cmd-j-host-qualified-candidate-ownership.test.ts",
+          "assertions": [
+            "browser, simulator, and workspace candidates recognize a paired-runtime alias for an SSH-owned worktree",
+            "paired-runtime aliases retain current-row state and unverifiable explicit legacy owners fail closed",
+            "host filtering and scoped open-tab search cannot hide a same-id sibling from the legacy ownership ambiguity set"
+          ]
+        },
+        {
+          "file": "src/renderer/src/store/slices/tabs-open-close-lifecycle.test.ts",
+          "assertions": [
+            "active local tab creation stamps local ownership instead of leaving a same-id row ambiguous"
+          ]
+        },
+        {
+          "file": "src/renderer/src/lib/palette-repo-resolution.test.ts",
+          "assertions": [
+            "paired SSH rows resolve display metadata through their runtime owner alias",
+            "paired SSH worktrees resolve their runtime-owned repository metadata",
+            "an unavailable explicit runtime owner never borrows physical-host or bare repository metadata",
+            "an explicit unknown owner never borrows another host's metadata"
+          ]
+        },
+        {
+          "file": "src/renderer/src/lib/ensure-simulator-tab-behavior.test.ts",
+          "assertions": [
+            "same-id folder simulator reuse selects the active owning host",
+            "inactive local simulator creation remains host-stamped amid a collision",
+            "an explicitly owned simulator is reused before its matching worktree row hydrates"
+          ]
+        },
+        {
+          "file": "src/renderer/src/lib/open-mobile-emulator-tab.test.ts",
+          "assertions": ["manual emulator launch lookup and creation stay on the local provider"]
+        },
+        {
+          "file": "src/renderer/src/lib/browser-palette-page-entries.test.ts",
+          "assertions": [
+            "same-id local and remote browser tabs appear once under their owning hosts"
+          ]
+        },
+        {
+          "file": "src/renderer/src/lib/simulator-palette-search.test.ts",
+          "assertions": [
+            "same-id local and remote simulator tabs appear once under their owning hosts"
+          ]
+        },
+        {
+          "file": "tests/e2e/paired-cmd-j-host-qualified-tabs.spec.ts",
+          "assertions": [
+            "both browser selections activate and render their owning host and workspace",
+            "both simulator selections activate and render their owning host and group"
+          ]
+        }
+      ],
+      "evidenceRuns": [
+        {
+          "date": "2026-08-20",
+          "runner": "local",
+          "platform": "macos",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/lib/cmd-j-host-qualified-candidate-ownership.test.ts src/renderer/src/store/slices/tabs-open-close-lifecycle.test.ts",
+          "result": "failed",
+          "durationSeconds": 1.8,
+          "summary": "The first review-round oracle failed 4/40: browser and simulator dropped the SSH worktree's paired-runtime-owned tab, generic workspace rows attributed the remote tab to local, and active local tab creation left ownership unstamped."
+        },
+        {
+          "date": "2026-08-20",
+          "runner": "local",
+          "platform": "macos",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/lib/browser-palette-page-entries.test.ts src/renderer/src/lib/simulator-palette-search.test.ts",
+          "result": "failed",
+          "durationSeconds": 0.5,
+          "summary": "The byte-identical oracle on affected baseline 012e9f410c failed 4 tests and passed 24: each same-id browser and simulator tab was routed through both hosts, and ambiguous unstamped rows were duplicated instead of failing closed."
+        },
+        {
+          "date": "2026-08-20",
+          "runner": "local",
+          "platform": "macos",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/lib/browser-palette-page-entries.test.ts src/renderer/src/lib/simulator-palette-search.test.ts src/renderer/src/lib/ensure-simulator-tab-behavior.test.ts src/renderer/src/store/slices/tabs-open-close-lifecycle.test.ts src/renderer/src/store/slices/tabs-pane-layout-operations.test.ts src/shared/workspace-session-schema.test.ts",
+          "result": "passed",
+          "durationSeconds": 2.3,
+          "summary": "6 test files passed, 104 tests passed on the STA-4965 candidate."
+        },
+        {
+          "date": "2026-08-20",
+          "runner": "local",
+          "platform": "macos",
+          "command": "SKIP_BUILD=1 pnpm exec playwright test tests/e2e/paired-cmd-j-host-qualified-tabs.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1",
+          "result": "passed",
+          "durationSeconds": 12.7,
+          "summary": "The paired Electron journey passed real host browser publication, same-id collision injection, separate browser/simulator Cmd-J rows, and selected-host backing-state assertions."
+        },
+        {
+          "date": "2026-08-20",
+          "runner": "local",
+          "platform": "macos",
+          "command": "pnpm exec playwright test tests/e2e/paired-cmd-j-host-qualified-tabs.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1",
+          "result": "passed",
+          "durationSeconds": 24.1,
+          "summary": "A fresh electron-vite --mode e2e build passed the paired journey: the visible Cmd-J list retained one owning browser/simulator row and each selection changed the execution host plus its owning workspace or group."
+        },
+        {
+          "date": "2026-08-20",
+          "runner": "local",
+          "platform": "macos",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/lib/browser-palette-page-entries.test.ts src/renderer/src/lib/simulator-palette-search.test.ts",
+          "result": "failed",
+          "durationSeconds": 0.5,
+          "summary": "The same oracle on fe45b73c20 with only browser-palette-page-entries.ts and simulator-palette-search.ts restored from origin/main failed the same 4 tests and passed 24; restored candidate files passed all 28."
+        },
+        {
+          "date": "2026-08-20",
+          "runner": "local",
+          "platform": "macos",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/lib/cmd-j-host-qualified-candidate-ownership.test.ts src/renderer/src/lib/palette-repo-resolution.test.ts src/renderer/src/lib/browser-palette-page-entries.test.ts src/renderer/src/lib/browser-palette-search.test.ts src/renderer/src/lib/simulator-palette-search.test.ts src/renderer/src/lib/workspace-tab-palette-search.test.ts src/renderer/src/lib/browser-page-palette-activation.test.ts src/renderer/src/lib/simulator-tab-palette-activation.test.ts src/renderer/src/lib/ensure-simulator-tab-behavior.test.ts src/renderer/src/runtime/web-session-tabs-sync-mirror-identity.test.ts src/renderer/src/store/slices/tabs-open-close-lifecycle.test.ts src/renderer/src/store/slices/tabs-pane-layout-operations.test.ts src/shared/workspace-session-schema.test.ts",
+          "result": "passed",
+          "durationSeconds": 10.5,
+          "summary": "The review-hardened candidate passed 189/189 focused contracts, including direct browser-result host fallback, SSH plus paired-runtime current-row aliases, explicit-owner fail-closed behavior, generic workspace rows, simulator reuse, local creation stamping, activation, and same-id distinct-runtime mirror preservation."
+        },
+        {
+          "date": "2026-08-20",
+          "runner": "local",
+          "platform": "macos",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/lib/ensure-simulator-tab-behavior.test.ts src/renderer/src/lib/palette-repo-resolution.test.ts",
+          "result": "failed",
+          "durationSeconds": 0.8,
+          "summary": "The final-review oracle failed 4/16 before the follow-up: same-id folder simulator reuse selected no owning tab, inactive local simulator creation was unstamped, the paired SSH/runtime alias resolved local metadata, and an explicit unknown owner fell back locally."
+        },
+        {
+          "date": "2026-08-21",
+          "runner": "local",
+          "platform": "macos",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/cmd-j/worktree-checks-review-index.test.ts src/renderer/src/components/WorktreeJumpPalette.test.tsx src/renderer/src/components/tab-bar/use-open-tab-search.test.ts src/renderer/src/lib/cmd-j-host-qualified-candidate-ownership.test.ts src/renderer/src/lib/palette-repo-resolution.test.ts src/renderer/src/lib/browser-palette-page-entries.test.ts src/renderer/src/lib/browser-palette-search.test.ts src/renderer/src/lib/simulator-palette-search.test.ts src/renderer/src/lib/workspace-tab-palette-search.test.ts src/renderer/src/lib/browser-page-palette-activation.test.ts src/renderer/src/lib/simulator-tab-palette-activation.test.ts src/renderer/src/lib/ensure-simulator-tab-behavior.test.ts src/renderer/src/runtime/web-session-tabs-sync-mirror-identity.test.ts src/renderer/src/store/slices/tabs-open-close-lifecycle.test.ts src/renderer/src/store/slices/tabs-pane-layout-operations.test.ts src/shared/workspace-session-schema.test.ts",
+          "result": "passed",
+          "durationSeconds": 24.3,
+          "summary": "The OpenCode-review-hardened candidate passed 225/225 focused contracts, including unfiltered ownership ambiguity under host filters and scoped open-tab search, review-cache ownership, rendered palette repo metadata, folder workspaces, inactive local simulator creation, paired SSH/runtime display metadata, and explicit-owner fail-closed resolution."
+        },
+        {
+          "date": "2026-08-20",
+          "runner": "local",
+          "platform": "macos",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/lib/palette-repo-resolution.test.ts",
+          "result": "failed",
+          "durationSeconds": 0.1,
+          "summary": "The final reviewer repo-label oracle failed 1/6 before the follow-up: a paired SSH worktree resolved the local bare-id repository instead of its runtime-owned repository."
+        },
+        {
+          "date": "2026-08-20",
+          "runner": "local",
+          "platform": "macos",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/lib/palette-repo-resolution.test.ts",
+          "result": "failed",
+          "durationSeconds": 0.1,
+          "summary": "The final clean-round fail-closed oracle failed 1/7 before the follow-up: an unavailable explicit runtime owner borrowed physical SSH repository metadata."
+        },
+        {
+          "date": "2026-08-20",
+          "runner": "local",
+          "platform": "macos",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/WorktreeJumpPalette.test.tsx",
+          "result": "failed",
+          "durationSeconds": 5.1,
+          "summary": "With the component's physical-host prelookup restored, the rendered palette oracle failed 1/12: the runtime-owned row displayed the physical SSH repository badge."
+        },
+        {
+          "date": "2026-08-20",
+          "runner": "local",
+          "platform": "macos",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/cmd-j/worktree-checks-review-index.test.ts",
+          "result": "failed",
+          "durationSeconds": 0.2,
+          "summary": "The final review-cache oracle failed 1/6: a runtime-owned SSH worktree exposed the physical host's cached pull request."
+        },
+        {
+          "date": "2026-08-20",
+          "runner": "local",
+          "platform": "macos",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/cmd-j/worktree-checks-review-index.test.ts",
+          "result": "failed",
+          "durationSeconds": 0.4,
+          "summary": "The exact-head clean-round oracle failed 1/6: after the host-qualified index rejected a physical SSH review, the palette document still surfaced its unqualified legacy cache entry for the runtime-owned worktree."
+        },
+        {
+          "date": "2026-08-20",
+          "runner": "local",
+          "platform": "macos",
+          "command": "pnpm exec playwright test tests/e2e/paired-cmd-j-host-qualified-tabs.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1",
+          "result": "passed",
+          "durationSeconds": 36.7,
+          "summary": "A fresh e2e-mode Electron build passed the paired journey: each remote/local browser and simulator candidate appeared exactly once, selected the owning host plus workspace or group tab, and rendered that tab active. The group active-tab oracle remains stable while asynchronous paired session mirroring updates the legacy bare-worktree activeTabType field."
+        },
+        {
+          "date": "2026-08-21",
+          "runner": "local",
+          "platform": "macos",
+          "command": "SKIP_BUILD=1 pnpm exec playwright test tests/e2e/paired-cmd-j-host-qualified-tabs.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1",
+          "result": "passed",
+          "durationSeconds": 20.6,
+          "summary": "After a fresh build exposed an unrelated mirrored terminal entering the broad backing-state diagnostic, the exact built candidate passed with that oracle scoped to the four seeded browser/simulator tabs; rendered active-tab and backing execution-host assertions remained green."
+        }
+      ],
+      "runtimeBudget": {
+        "p95Seconds": 180,
+        "scope": "focused deterministic contracts plus one paired Electron journey"
+      },
+      "flakeHistory": {
+        "status": "not-started",
+        "evidence": "The candidate contract has no timers. Initial Electron attempts exposed seeded-worktree discovery and programmatic keyboard-selection harness races before the ownership assertions; soak history is not yet available."
+      },
+      "redGreenEvidence": {
+        "status": "complete",
+        "evidence": "Byte-identical browser and simulator candidate tests failed 4/28 on affected baseline 012e9f410c, passed 28/28 on candidate fe45b73c20, failed the same 4/28 when only the two candidate filters were disabled, and returned to 28/28 after restoration. Review-round topology contracts failed 4/40 before the alias/generic/local-stamping follow-up; final-review contracts then failed 4/16 before folder/background/worktree-metadata hardening, 1/6 before paired repository-metadata hardening, 1/7 before unavailable-runtime fail-closed hardening, 1/12 with the component's physical-host bypass restored, 1/6 before review-cache ownership used the same resolver, 1/6 before the downstream document rejected a remote owner's unqualified legacy cache entry, and 1/6 when a host filter or scoped open-tab search hid the same-id sibling from legacy ambiguity detection. Manual local-provider ownership failed 1/12 before explicit host routing, and pre-hydration dedupe failed 1/13 before exact stamped-owner reuse; the combined contracts then passed 25/25 and the six-file review suite passed 73/73. The prior completed focused suite passed 225/225."
+      },
+      "performanceBudget": {
+        "required": true,
+        "evidence": "Candidate construction adds bounded in-memory ownership filtering over the already-read worktree tab bucket and introduces no polling or network work."
+      },
+      "promotionCriteria": [
+        "Collect paired Electron CI soak history without unexplained flakes.",
+        "Add a live paired-runtime-over-SSH journey when the E2E harness can provision that combined topology."
+      ],
+      "knownGaps": [
+        "Live Linux, Windows, and paired-runtime-over-SSH journeys are not collected; the SSH/runtime dual-owner topology is deterministic renderer coverage.",
+        "The paired Electron simulator path seeds renderer state because remote web clients cannot launch a native emulator.",
+        "The paired Electron journey proves a real host mirror stamp before injecting the same-id sibling state; it does not create the collision through the wire.",
+        "Mixed-version behavior is covered by optional-field parsing and fail-closed legacy ambiguity, not a live old-client/new-host matrix."
+      ],
+      "demotionRule": "Cannot promote if a same-id sibling tab duplicates, disappears, activates another host, or if ambiguous unstamped ownership is guessed."
+    },
     {
       "id": "ephemeral-vm-runtime.rollback-readable-sidecar",
       "title": "VM lifecycle stays rollback-readable and cleanup-retryable",
@@ -3380,7 +3680,7 @@
       "providers": ["local", "daemon", "ssh", "runtime"],
       "coveredPlatforms": ["macos"],
       "coveredProviders": ["local", "daemon", "ssh", "runtime"],
-      "coverageNotes": "Live macOS Electron tests prove exact local PTY disappearance after parked-tab close and detached-pgid descendant death after agent close. Deterministic tests cover final-pane CLI close durability, persisted-empty restart suppression, same-incarnation handle continuity, replacement and hard graph-loss stale fencing, preallocated-handle supersession, daemon and SSH routing, local/daemon pending-snapshot ownership across natural exit, stale-root descendant-signal suppression, graceful-to-immediate kill upgrades, duplicate-kill completion sharing, locale-stable bounded/fresh/coalesced process-table reads, deadline-safe successor scans, cycle-safe linear descendant traversal, target-only escalation indexing, 32-wide bulk teardown, source-scan timestamp identity, same-second PID ambiguity, ordinary runtime close ownership, unified-only hydration, split ownership, pane detach transfer, restart alias hydration, and late-hook suppression; live Linux, Windows, WSL, SSH, and remote-runtime process evidence remains pending.",
+      "coverageNotes": "Live macOS Electron tests prove exact local PTY disappearance after parked-tab close and detached-pgid descendant death after agent close. Deterministic tests cover final-pane CLI close durability, persisted-empty restart suppression, same-incarnation handle continuity, replacement and hard graph-loss stale fencing, preallocated-handle supersession, daemon and SSH routing, local/daemon pending-snapshot ownership across natural exit, stale-root descendant-signal suppression, graceful-to-immediate kill upgrades, duplicate-kill completion sharing, locale-stable bounded/fresh/coalesced process-table reads, deadline-safe successor scans, cycle-safe linear descendant traversal, target-only escalation indexing, 32-wide bulk teardown, source-scan timestamp identity, same-second PID ambiguity, ordinary runtime close ownership, unified-only hydration, split ownership, pane detach transfer, restart alias hydration, and late-hook suppression; live Linux, Windows, WSL, SSH, and remote-runtime process evidence remains pending. A paired macOS Electron journey (real attached-window desktop host plus a separate real paired desktop client, isolated profiles) covers the inverse authority direction for host-created terminals: a renderer graph sync must not retire a tab that `orca terminal create` made. That claim now covers BOTH shapes, including the incident shape the real CLI produces - a repo's FIRST host-created terminal, since src/cli/handlers/terminal.ts sends no clientMutationId - each asserted by its own test. An earlier reading of this gate called a preceding host-created terminal and a `clientMutationId` protective; main-process instrumentation refuted that. The renderer's stale session write deleted the host tab from persistence in every variant, and only the delete's timing relative to the measured sync differed, so those rows were false negatives of a single-sync oracle. The defect was in persistence: persistPtyBinding did not raise the repo's terminal topology fence for the first host-admitted tab, leaving the renderer's pre-create tab list free to replay over it. Elapsed time and paired-client mirroring never decided anything. A windowless `orca serve` parity arm runs the identical oracle and passes on both the merge-base and the branch, confirming that topology does not exhibit the defect (the gate it turns on is window-conditioned) and that making the host binding unconditional did not regress it. All of this is macOS-local only. The reported incident occurred on a physical Windows host; we did not run against one. The claim that the mechanism is platform-independent rests on the authoritative-window gate and publication-epoch inheritance being OS-agnostic, not on Windows evidence, so no ConPTY, Windows window-lifecycle, update, or sleep behavior is covered here.",
       "motivatingLinks": [
         "https://github.com/stablyai/orca/pull/8628",
         "https://github.com/stablyai/orca/pull/8706",
@@ -3395,7 +3695,9 @@
         "pnpm exec vitest run --config config/vitest.config.ts src/main/pty-descendant-termination.test.ts src/main/daemon/session.test.ts src/main/daemon/terminal-host.test.ts src/main/providers/local-pty-provider-shutdown.test.ts src/main/runtime/worktree-teardown.test.ts",
         "pnpm run test:e2e -- tests/e2e/terminal-tab-close-restart-persistence.spec.ts --workers=1",
         "pnpm run test:e2e -- tests/e2e/terminal-parked-close-retirement.spec.ts --workers=1",
-        "pnpm run test:e2e -- tests/e2e/agent-descendant-process-kill.spec.ts --workers=1"
+        "pnpm run test:e2e -- tests/e2e/agent-descendant-process-kill.spec.ts --workers=1",
+        "pnpm run test:e2e -- tests/e2e/paired-cli-terminal-graph-sync-tab-retention.spec.ts --workers=1",
+        "pnpm run test:e2e -- tests/e2e/headless-serve-cli-terminal-retention-parity.spec.ts --workers=1"
       ],
       "testFiles": [
         "src/main/runtime/orca-runtime-terminal-close-continuity.test.ts",
@@ -3422,7 +3724,9 @@
         "src/renderer/src/components/shared/kill-all-terminal-surfaces.test.ts",
         "tests/e2e/terminal-tab-close-restart-persistence.spec.ts",
         "tests/e2e/terminal-parked-close-retirement.spec.ts",
-        "tests/e2e/agent-descendant-process-kill.spec.ts"
+        "tests/e2e/agent-descendant-process-kill.spec.ts",
+        "tests/e2e/paired-cli-terminal-graph-sync-tab-retention.spec.ts",
+        "tests/e2e/headless-serve-cli-terminal-retention-parity.spec.ts"
       ],
       "assertionRefs": [
         {
@@ -3466,6 +3770,25 @@
           "assertions": [
             "a long-lived exact PTY remains alive after its terminal view is parked",
             "closing the parked tab removes the exact PTY from the provider inventory and the visible tab model"
+          ]
+        },
+        {
+          "file": "tests/e2e/paired-cli-terminal-graph-sync-tab-retention.spec.ts",
+          "assertions": [
+            "an attached-window desktop host publishes the CLI-created terminal under the renderer publication epoch it inherits, proving the vulnerable classification path was taken rather than a headless or serve/SSH-shaped one",
+            "with an earlier host-created terminal already present, a renderer graph sync leaves the `terminal.create` tab in the host session inventory still naming its original daemon PTY",
+            "the original fixture process answers a write through that handle with its own pid and a single READY line, so a respawned replacement cannot pass as a survivor",
+            "the paired client applied that same sync and kept the tab with no replacement or resume tab appended",
+            "an unrelated workspace keeps its own CLI terminal and PTY, and the client raises no direct local connection attempt or uncaught renderer error"
+          ]
+        },
+        {
+          "file": "tests/e2e/headless-serve-cli-terminal-retention-parity.spec.ts",
+          "assertions": [
+            "a windowless serve host publishes host-created terminals under a headless epoch, never a renderer one, which is why it cannot reach the window-conditioned prune the desktop arm reproduces",
+            "a later CLI dispatch leaves the earlier host-created terminal in the serve-host inventory still bound to its original PTY",
+            "both original fixture processes answer writes through their own handles after the later dispatch",
+            "the paired client mirrors exactly those two tabs with no replacement or resume tab appended, no direct local connection attempt, and no uncaught renderer error"
           ]
         },
         {
@@ -3607,9 +3930,12 @@
         "Daemon owner leases and durable retry inventory remain follow-up hardening.",
         "Windows ConPTY, SSH-hosted PTYs, app-quit killAll, and daemon dispose retain foreground-tree-only teardown.",
         "A process born in the capture second is SIGTERMed but not SIGKILLed because ps cannot prove its recycled-PID identity.",
-        "A descendant orphaned before or during root ownership loss requires the separate crash-orphan sweep and is not recovered from a stale kill-time snapshot."
+        "A descendant orphaned before or during root ownership loss requires the separate crash-orphan sweep and is not recovered from a stale kill-time snapshot.",
+        "recordTerminalSurfaceRetirement advances the INCOMING session's terminal topology revision, so a tombstoned close whose write carries a revision at or below the store's own is rebased away instead of persisting. Pre-existing for every repo already past revision 0 and unchanged by the host-admitted membership fix, which only makes more repos reach that state sooner; the authoritative close path (persistTerminalSurfaceRetirements) computes from the store's session and is unaffected. Known, unaddressed, and deliberately out of scope here: the safe correction is per-tab rather than per-worktree rebase arbitration, because raising the incoming revision wholesale would re-open the host-tab loss whenever a close coincides with a host create.",
+        "The SSH relay reattach binding (src/main/ssh/ssh-relay-session.ts persistPtyBinding) is NOT flagged host-admitted, so a lease rebind that has to mint a missing tab raises no fence. It rebinds an existing lease rather than admitting a new surface, so it is believed not to need one, but that was not established either way. Known, unaddressed, and deliberately out of scope here.",
+        "The host-created retention journey is macOS-local; the reported incident was on a physical Windows host, which we did not run against."
       ],
-      "demotionRule": "Keep experimental or demote to protection none if exact PTY disappearance flakes, a sibling/detached pane is retired, or late hooks can recreate closed authority."
+      "demotionRule": "Keep experimental or demote to protection none if exact PTY disappearance flakes, a sibling/detached pane is retired, late hooks can recreate closed authority, or a renderer graph sync retires a host-created tab that no explicit close retired."
     },
     {
       "id": "terminal-session.daemon-generation-reconnect-safety",
@@ -11057,7 +11383,7 @@
     },
     {
       "id": "terminal-input.cooked-reply-queue",
-      "title": "Cooked-echo-safe terminal reply backlog stays bounded without evicting ordinary input",
+      "title": "Terminal query replies stay atomic and bounded without evicting ordinary input",
       "maturity": "experimental",
       "protection": "partial",
       "owner": "terminal-runtime",
@@ -11066,6 +11392,7 @@
         "desktop terminal input",
         "OSC 10/11 replies",
         "mode-2031 replies",
+        "DA1 and CPR replies",
         "local PTY",
         "daemon and SSH PTYs"
       ],
@@ -11073,15 +11400,17 @@
       "providers": ["local", "daemon", "ssh"],
       "coveredPlatforms": ["macos"],
       "coveredProviders": ["local", "ssh"],
-      "coverageNotes": "Deterministic renderer and IPC-transport tests prove count and text ceilings, oldest-reply shedding, explicit query-reply source routing, ordinary-input preservation, one-reply-per-write delivery, real xterm OSC reply generation, drain-failure containment, and clear/reuse generation fencing. Live macOS Electron tests cover local PTY OSC replies and interactive typing; a macOS-hosted Docker OpenSSH test proves a real Linux SSH process receives xterm's OSC reply through the same queue. No live daemon, WSL, physical Linux/Windows client, or mixed-version run is registered.",
+      "coverageNotes": "Deterministic renderer and IPC-transport tests prove count and text ceilings, oldest-reply shedding, explicit query-reply source routing, ordinary-input preservation, one-reply-per-write delivery for OSC, DA1, and CPR replies, real xterm OSC reply generation, drain-failure containment, and clear/reuse generation fencing. Remote-runtime tests preserve separate query-reply writes across pending input, async validation, and viewport-claim buffering. Host-contract tests prove a later DA1/CPR reply cannot overtake a deferred OSC reply, including a coalesced legacy-client payload. Live macOS Electron tests cover local PTY OSC replies and interactive typing; a macOS-hosted Docker OpenSSH test proves an upstream-node-pty Linux relay keeps OSC/DA1 replies out of the next fish child's stdin. No live daemon, paired-runtime, WSL, physical Linux/Windows client, or binary mixed-version run is registered.",
       "motivatingLinks": [
         "https://github.com/stablyai/orca/issues/13137",
-        "https://github.com/stablyai/orca/issues/7329"
+        "https://github.com/stablyai/orca/issues/7329",
+        "https://github.com/stablyai/orca/issues/13892"
       ],
-      "invariant": "The desktop PTY input queue retains at most 64 explicitly sourced pending cooked-echo-safe replies and 4096 UTF-16 code units. Overflow removes the oldest pending query-reply entries, never ordinary input or reply-shaped bytes from the ordinary path, so later user input has a finite reply backlog; every retained reply reaches the established provider path as one atomic write. Drain failures settle without an unhandled rejection and cannot clear a newer queue generation.",
-      "oracle": "Synchronously enqueue 10,000 cooked-echo-safe query replies before the scheduled drain and assert that only the initial immediate reply and newest 64 pending replies are written, each as one provider write, before a trailing keystroke. Repeat behind 10,000 ordinary inputs and through the real IPC transport, requiring ordinary and reply-shaped ordinary-path bytes to survive while only the newest 64 explicit replies remain. Exercise the text ceiling, real xterm OSC 10/11 generation, provider-write failure, rejected yield, and clear/reuse generation fencing.",
+      "invariant": "The desktop PTY input queue retains at most 64 explicitly sourced pending terminal query replies and 4096 UTF-16 code units. Every retained reply reaches the provider as one atomic write, and the host writes each reply the moment it accepts it, so replies reach the PTY in the order they were produced with no queue that could reorder them. A reply's own echo is contained on the output side by projecting its known echo shapes; the ESC-initial verbatim shape is matched only when complete, never held as a partial, so a query torn at its own ESC is still answered. Overflow removes only the oldest query replies, never ordinary input except the documented modified-F3/CPR byte collision, and drain failures cannot clear a newer queue generation.",
+      "oracle": "Synchronously enqueue separate 10,000-entry OSC and DA1 reply floods before the scheduled drain and assert that only the initial immediate reply and newest 64 pending replies are written, each as one provider write, before a trailing keystroke. At the host boundary, defer an OSC reply and assert that separate or legacy-coalesced DA1/CPR replies flush after it in observed query order. At the remote-runtime boundary, preserve separate writes around pending ordinary input, async validation, and viewport-claim buffering. Repeat behind 10,000 ordinary inputs and exercise the text ceiling, real xterm generation, provider-write failure, rejected yield, and clear/reuse generation fencing.",
       "commands": [
         "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/terminal-pane/pty-input-write-queue.test.ts src/renderer/src/components/terminal-pane/pty-transport-input-write.test.ts src/shared/terminal-query-reply.test.ts src/shared/pty-startup-ingress-live-query-reply.test.ts",
+        "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/terminal-pane/remote-runtime-pty-batching.test.ts src/renderer/src/components/terminal-pane/remote-runtime-pty-query-reply-immediate.test.ts src/renderer/src/components/terminal-pane/remote-runtime-pty-transport-input-coalescing.test.ts",
         "pnpm exec playwright test tests/e2e/terminal-osc-color-queries.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1",
         "pnpm exec playwright test tests/e2e/terminal-typing-latency.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1",
         "ORCA_E2E_SSH_DOCKER=1 pnpm exec playwright test tests/e2e/pty-input-write-queue-ssh.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1"
@@ -11089,6 +11418,9 @@
       "testFiles": [
         "src/renderer/src/components/terminal-pane/pty-input-write-queue.test.ts",
         "src/renderer/src/components/terminal-pane/pty-transport-input-write.test.ts",
+        "src/renderer/src/components/terminal-pane/remote-runtime-pty-batching.test.ts",
+        "src/renderer/src/components/terminal-pane/remote-runtime-pty-query-reply-immediate.test.ts",
+        "src/renderer/src/components/terminal-pane/remote-runtime-pty-transport-input-coalescing.test.ts",
         "src/shared/terminal-query-reply.test.ts",
         "src/shared/pty-startup-ingress-live-query-reply.test.ts",
         "tests/e2e/terminal-osc-color-queries.spec.ts",
@@ -11104,7 +11436,7 @@
             "reply-shaped bytes from the ordinary input path never enter the shed-able reply budget",
             "reply count and text overflow remove only the oldest pending replies",
             "real xterm OSC 10/11 query handlers remain subject to the same retention ceiling",
-            "retained cooked-echo-safe replies stay one provider write each",
+            "retained OSC, DA1, and CPR replies stay one provider write each and both OSC and DA1 floods remain bounded",
             "provider-write and yield failures settle without unhandled rejection, repeated same-generation admission, or stale-generation clearing",
             "clear releases saturated reply accounting and fences in-flight validation before later input"
           ]
@@ -11117,9 +11449,28 @@
           ]
         },
         {
+          "file": "src/renderer/src/components/terminal-pane/remote-runtime-pty-batching.test.ts",
+          "assertions": [
+            "a validation barrier runs after earlier deferred input and before later input"
+          ]
+        },
+        {
+          "file": "src/renderer/src/components/terminal-pane/remote-runtime-pty-query-reply-immediate.test.ts",
+          "assertions": [
+            "pending ordinary input and asynchronously validated paste stay ahead of but separate from an immediate query reply"
+          ]
+        },
+        {
+          "file": "src/renderer/src/components/terminal-pane/remote-runtime-pty-transport-input-coalescing.test.ts",
+          "assertions": [
+            "viewport-claim buffering replays ordinary input, a query reply, and later ordinary input as three ordered stream frames",
+            "a 10,000-reply viewport-claim flood retains and replays only the newest 64 query replies"
+          ]
+        },
+        {
           "file": "src/shared/terminal-query-reply.test.ts",
           "assertions": [
-            "only complete cooked-echo-risk replies are classified and consecutive replies extract losslessly"
+            "only complete query replies are classified and consecutive mixed reply kinds extract losslessly"
           ]
         },
         {
@@ -11143,7 +11494,8 @@
         {
           "file": "tests/e2e/pty-input-write-queue-ssh.spec.ts",
           "assertions": [
-            "a real Linux SSH process emits an OSC query and receives xterm's synthetic reply through the live PTY queue"
+            "a real Linux SSH process emits an OSC query and receives xterm's synthetic reply through the live PTY queue",
+            "an upstream-node-pty Linux relay has no echoState export and keeps OSC/DA1 reply bytes out of the next fish child stdin"
           ]
         }
       ],
@@ -11183,6 +11535,15 @@
           "result": "passed",
           "durationSeconds": 36.8,
           "summary": "A real Linux process behind Docker OpenSSH emitted an OSC 10 query and observed xterm's synthetic RGB reply after it traversed the live renderer queue, Electron IPC, SSH provider, and relay PTY."
+        },
+        {
+          "date": "2026-08-14",
+          "runner": "local",
+          "platform": "macos",
+          "command": "ORCA_E2E_SSH_DOCKER=1 pnpm exec playwright test tests/e2e/pty-input-write-queue-ssh.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1",
+          "result": "passed",
+          "durationSeconds": 36.9,
+          "summary": "Run with SKIP_BUILD=1 against the existing e2e bundle. Both Docker OpenSSH Electron tests passed: the live OSC query returned its RGB reply, and an upstream-node-pty Linux ARM64 relay without echoState kept OSC/DA1 bytes out of the next fish 4.8.1 child's stdin."
         }
       ],
       "runtimeBudget": {
@@ -11191,7 +11552,7 @@
       },
       "flakeHistory": {
         "status": "unknown",
-        "evidence": "Ten consecutive local unit-gate runs passed 1,380 tests in 29.57 seconds total with no fixed timing sleeps. The exact Docker SSH OSC oracle passed three consecutive runs before extraction into its dedicated spec and then passed the registered dedicated command once. CI and the normal soak window are not yet available."
+        "evidence": "Ten consecutive local unit-gate runs passed 1,380 tests in 29.57 seconds total with no fixed timing sleeps. The exact Docker SSH OSC oracle passed three consecutive runs before extraction and then passed both registered full-spec runs. The upstream-node-pty fish handoff oracle passed three local runs, including the final post-rebase run. CI and the normal soak window are not yet available."
       },
       "redGreenEvidence": {
         "status": "partial",
@@ -11199,7 +11560,7 @@
       },
       "performanceBudget": {
         "required": true,
-        "evidence": "Pending cooked replies are capped at 64 and 4096 UTF-16 code units. Explicit source routing and separate sequence-merged FIFOs keep ordinary input out of the fixed-size reply store; oldest-reply eviction uses an amortized O(1) head advance without scanning ordinary input, consumed prefixes compact at a fixed threshold, and drain coalescing reads the stored classification without repeated reply-regex scans. A synchronous flood forwards only the immediate first and newest 64 replies before the trailing key. Ten complete gate runs, including two 10,000-entry flood shapes each, finished in 29.57 seconds with zero failures. The change adds no polling, timers, listeners, subprocesses, or network retries."
+        "evidence": "Pending query replies are capped at 64 and 4096 UTF-16 code units. Explicit source routing and separate sequence-merged FIFOs keep ordinary input out of the fixed-size reply store; oldest-reply eviction uses an amortized O(1) head advance without scanning ordinary input, consumed prefixes compact at a fixed threshold, and drain coalescing reads the stored classification without repeated reply-regex scans. Separate synchronous OSC and DA1 floods forward only the immediate first and newest 64 replies before the trailing key, and the remote-runtime viewport-claim buffer likewise retains only the newest 64 query segments while coalescing adjacent ordinary input. The sync ECHO probe removes an `stty` subprocess from the common quiet-query path and the fallback adds no polling beyond the existing bounded ECHO probe."
       },
       "promotionCriteria": [
         "Run the gate on Windows and Linux CI.",
@@ -11208,10 +11569,9 @@
         "Accumulate the normal soak window with zero unexplained flakes."
       ],
       "knownGaps": [
-        "No live daemon, WSL, physical Linux/Windows client, mixed-version, or network-fault run is registered.",
-        "The remote-runtime transport has a separate immediate-input queue and is unaffected by this gate.",
+        "No live daemon, paired-runtime, WSL, physical Linux/Windows client, mixed-version, or network-fault run is registered.",
         "Ordinary-input queue growth predates this change and is outside this reply-only gate.",
-        "Reply overload intentionally sheds the oldest synthetic replies; live application behavior under a pathological query flood is not measured."
+        "Reply overload intentionally sheds the oldest synthetic replies; the modified-F3/CPR byte collision shares that budget, and live application behavior under a pathological query flood is not measured."
       ],
       "demotionRule": "Keep experimental or revert if ordinary input is evicted, pending replies exceed either ceiling, retained replies are coalesced, a trailing key sits behind more than the bounded reply window, or the gate develops unexplained flakes."
     },
@@ -13591,6 +13951,144 @@
         "The reverted-source failure is established from the old process-wide call path but was not executed."
       ],
       "demotionRule": "Demote if unrelated reattach joins a stalled session tail, overlay or periodic work exceeds its admission bound, a deadline cancels durable work, final checkpoints defer, or failures and deadline fallbacks lose their diagnostic breadcrumbs."
+    },
+    {
+      "id": "skill-upload.cross-process-staging-ownership",
+      "title": "Concurrent runtime and relay uploads retain exact staging ownership",
+      "maturity": "experimental",
+      "protection": "partial",
+      "owner": "skill-upload-session-service",
+      "layer": "host-filesystem-lifecycle",
+      "surfaces": [
+        "paired-runtime skill upload",
+        "SSH relay skill upload",
+        "upload cancellation",
+        "process restart and disposal"
+      ],
+      "platforms": ["macos", "linux", "windows"],
+      "providers": ["orca-server", "ssh"],
+      "coveredPlatforms": ["macos"],
+      "coveredProviders": ["ssh"],
+      "coverageNotes": "Two independent services share one parent under controlled ordering, four real crash boundaries run in child processes, and two bundled relays share one isolated home through distinct socket and hook endpoints. A current relay also shares that home safely with the originating relay in both launch orders. Graceful relay and desktop-runtime disposal join service cleanup. Linux, Windows, and paired headed/headless runtime process evidence remain uncollected; the change is host-local and changes no wire payload.",
+      "motivatingLinks": [
+        "https://linear.app/stably/issue/STA-4967",
+        "https://github.com/stablyai/orca/pull/14934"
+      ],
+      "invariant": "Initialization, cleanup, or disposal by one service process can never remove bytes owned by a still-live upload in another process. Each service owns one atomic PID-and-UUID namespace, serializes begin admission at four active sessions, and retains the package-size limit. Abandoned owner cleanup inspects at most 64 entries per attempt, and success, failure, cancellation, restart, and disposal release only their exact owned paths.",
+      "oracle": "Begin and partially append upload A, then begin and append upload B from an independent service or relay sharing the same parent. Require two exact PID-and-UUID owner directories, two upload-ID archives, and byte-for-byte survival of both. Cancel B then A and require archive counts 1 then 0. Stage two more live uploads, terminate relay A, and require relay B's exact owner, archive, and bytes to survive before B terminates and the root becomes empty. Kill real child owners at begun, partial, uploaded, and committed boundaries and require a fresh owner to remove only exited-process staging and complete its own transfer. Seed 65 exited owners, require one attempt to remove exactly 64 and reject before adding bytes, then require retry to drain the final stale owner and begin normally.",
+      "commands": [
+        "pnpm exec vitest run --config config/vitest.config.ts src/main/skills/skill-upload-session-service.test.ts --reporter=verbose",
+        "ORCA_REAL_PROCESS_SKILL_TEST=1 pnpm exec vitest run --config config/vitest.config.ts src/main/skills/skill-upload-process-restart.integration.test.ts src/main/skills/skill-upload-process-restart-child.test.ts --pool=forks --maxWorkers=1 --no-file-parallelism --reporter=verbose",
+        "pnpm exec vitest run --config config/vitest.config.ts src/relay/skill-upload-multi-relay.integration.test.ts --pool=forks --maxWorkers=1 --no-file-parallelism --reporter=verbose",
+        "ORCA_REAL_PROCESS_SKILL_TEST=1 pnpm exec vitest run --config config/vitest.config.ts src/main/skills/skill-upload-session-service.test.ts src/main/skills/skill-upload-process-restart.integration.test.ts src/main/skills/skill-upload-process-restart-child.test.ts src/relay/skill-upload-multi-relay.integration.test.ts --pool=forks --maxWorkers=1 --no-file-parallelism --reporter=verbose",
+        "ORCA_SKILL_UPLOAD_LEGACY_RELAY_ENTRY=<fa9b20cb4163-relay.js> pnpm exec vitest run --config config/vitest.config.ts src/relay/skill-upload-multi-relay.integration.test.ts --pool=forks --maxWorkers=1 --no-file-parallelism --reporter=verbose",
+        "ORCA_SKILL_UPLOAD_RELAY_ENTRY=<fa9b20cb4163-relay.js;sha256=4db8609c4e1772f1efa9b0c0cf6affa8f64ff9ebc8e2b6f9e71678992ccdcf1a> pnpm exec vitest run --config config/vitest.config.ts src/relay/skill-upload-multi-relay.integration.test.ts --pool=forks --maxWorkers=1 --no-file-parallelism --reporter=verbose",
+        "ORCA_SKILL_UPLOAD_RELAY_ENTRY=<012e9f410c-fix-reverted-relay.js;sha256=ca03bf47d93828ec30473391b542d945df887b7881cce3df17e95d90226e34fb> pnpm exec vitest run --config config/vitest.config.ts src/relay/skill-upload-multi-relay.integration.test.ts --pool=forks --maxWorkers=1 --no-file-parallelism --reporter=verbose"
+      ],
+      "testFiles": [
+        "src/main/skills/skill-upload-session-service.test.ts",
+        "src/main/skills/skill-upload-process-restart.integration.test.ts",
+        "src/main/skills/skill-upload-process-restart-child.test.ts",
+        "src/relay/skill-upload-multi-relay.integration.test.ts"
+      ],
+      "assertionRefs": [
+        {
+          "file": "src/main/skills/skill-upload-session-service.test.ts",
+          "assertions": [
+            "a second service preserves the first service's exact file and bytes",
+            "five concurrent begins admit exactly four sessions and disposal removes them",
+            "disposal waits for an initializing begin and leaves no owner",
+            "concurrent disposal callers join the same exact cleanup promise",
+            "archive hashing failure releases the session and rejects later appends",
+            "symlink or junction staging roots are rejected before cleanup or admission",
+            "failed archive removal remains owned and counts toward the four-path bound",
+            "cancellation and disposal reduce exact archive and owner counts",
+            "one abandoned-owner sweep removes at most 64 entries and retry completes"
+          ]
+        },
+        {
+          "file": "src/main/skills/skill-upload-process-restart.integration.test.ts",
+          "assertions": [
+            "begun, partial, uploaded, and committed crash residue is reclaimed",
+            "the replacement transfer completes and leaves no owner directory"
+          ]
+        },
+        {
+          "file": "src/relay/skill-upload-multi-relay.integration.test.ts",
+          "assertions": [
+            "two bundled relay PIDs retain separate archives under one account home",
+            "current and originating relay bundles retain separate archives in both launch orders",
+            "relay cancellation and live-upload graceful shutdown clean only the exact owner"
+          ]
+        }
+      ],
+      "evidenceRuns": [
+        {
+          "date": "2026-08-20",
+          "runner": "local",
+          "platform": "macos",
+          "result": "passed",
+          "command": "ORCA_REAL_PROCESS_SKILL_TEST=1 pnpm exec vitest run --config config/vitest.config.ts src/main/skills/skill-upload-session-service.test.ts src/main/skills/skill-upload-process-restart.integration.test.ts src/main/skills/skill-upload-process-restart-child.test.ts src/relay/skill-upload-multi-relay.integration.test.ts --pool=forks --maxWorkers=1 --no-file-parallelism --reporter=verbose",
+          "durationSeconds": 5.95,
+          "summary": "Fifteen service tests, four crash-boundary cases, and one two-current-relay topology passed; the child fixture and two explicitly separate mixed-version cases skipped."
+        },
+        {
+          "date": "2026-08-20",
+          "runner": "local",
+          "platform": "macos",
+          "result": "passed",
+          "command": "ORCA_SKILL_UPLOAD_LEGACY_RELAY_ENTRY=<fa9b20cb4163-relay.js> pnpm exec vitest run --config config/vitest.config.ts src/relay/skill-upload-multi-relay.integration.test.ts --pool=forks --maxWorkers=1 --no-file-parallelism --reporter=verbose",
+          "durationSeconds": 0.9,
+          "summary": "The current/current case and both originating/current mixed-version launch orders passed with exact per-root archive bytes."
+        },
+        {
+          "date": "2026-08-20",
+          "runner": "local",
+          "platform": "macos",
+          "result": "failed",
+          "command": "ORCA_SKILL_UPLOAD_RELAY_ENTRY=<fa9b20cb4163-relay.js;sha256=4db8609c4e1772f1efa9b0c0cf6affa8f64ff9ebc8e2b6f9e71678992ccdcf1a> pnpm exec vitest run --config config/vitest.config.ts src/relay/skill-upload-multi-relay.integration.test.ts --pool=forks --maxWorkers=1 --no-file-parallelism --reporter=verbose",
+          "durationSeconds": 0.4,
+          "summary": "Expected red: zero PID/UUID owner directories and one archive were observed where two each were required; relay A's exact first five bytes were missing."
+        },
+        {
+          "date": "2026-08-20",
+          "runner": "local",
+          "platform": "macos",
+          "result": "failed",
+          "command": "ORCA_SKILL_UPLOAD_RELAY_ENTRY=<012e9f410c-fix-reverted-relay.js;sha256=ca03bf47d93828ec30473391b542d945df887b7881cce3df17e95d90226e34fb> pnpm exec vitest run --config config/vitest.config.ts src/relay/skill-upload-multi-relay.integration.test.ts --pool=forks --maxWorkers=1 --no-file-parallelism --reporter=verbose",
+          "durationSeconds": 0.4,
+          "summary": "Expected red: zero PID/UUID owner directories and one archive were observed where two each were required; relay A's exact first five bytes were missing."
+        }
+      ],
+      "runtimeBudget": {
+        "p95Seconds": 15,
+        "scope": "focused service, four child-process restarts, and two bundled relays"
+      },
+      "flakeHistory": {
+        "status": "not-started",
+        "evidence": "The barriers are request acknowledgements, filesystem state, and process exit; CI and soak history have not started."
+      },
+      "redGreenEvidence": {
+        "status": "complete",
+        "evidence": "The byte-identical two-relay oracle failed at the exact two-owner count on originating merge fa9b20cb4163 and latest-main/reverted source 012e9f410c76, each observing one shared-root entry after relay B began. The candidate passed with two owner directories, two archives, A-byte survival, 1-to-0 cancellation cleanup, and 1-to-0 owner disposal cleanup."
+      },
+      "performanceBudget": {
+        "required": true,
+        "evidence": "Initialization scans at most 64 direct parent entries, creates one owner directory per live service, retains the existing four active sessions and package-size caps, and adds no polling, timer, subprocess, wire field, renderer work, or provider fanout. An over-budget parent rejects before creating new staged bytes."
+      },
+      "promotionCriteria": [
+        "Collect 100 consecutive focused CI passes or 14 days without an unexplained flake.",
+        "Run the same two-owner relay topology on Linux and Windows.",
+        "Run paired headed and headless runtime uploads under one OS account.",
+        "Keep exact owner/file counts, byte survival, bounded sweep, and all four crash boundaries green."
+      ],
+      "knownGaps": [
+        "The live two-relay and crash evidence was collected on macOS; Linux and Windows process/filesystem behavior remains CI coverage.",
+        "The service is shared by paired runtimes, but separate headed and headless paired-runtime process journeys were not run.",
+        "PID reuse is handled conservatively: an abandoned namespace whose PID is currently occupied is preserved until a later process generation rather than risking deletion of live bytes.",
+        "The legacy remote-uploads root is intentionally not reclaimed while a mixed-version relay may still own bytes there; eventual legacy-root retirement requires a separate compatibility decision."
+      ],
+      "demotionRule": "Demote if one live owner can remove another owner's bytes, cleanup exceeds 64 inspected entries per attempt, a lifecycle path retains its exact owned archive after settlement, or the process oracle flakes without an identified harness or product defect."
     }
   ]
 }

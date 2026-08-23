@@ -111,6 +111,10 @@ export type RpcClient = {
   getReconnectAttempt: () => number
   // Last 'connected' timestamp (ms epoch); null = never connected. Lets the UI tell "never reachable" from "transient blip".
   getLastConnectedAt: () => number | null
+  // Wall-clock stamp of the last inbound frame on the current session, or null when the
+  // transport can't vouch for one. Optional so older/foreign RpcClient shapes stay valid;
+  // callers must treat absent/null as "unknown" and fall back to a safe bound.
+  getLastInboundAt?: () => number | null
   onStateChange: (listener: (state: ConnectionState) => void) => () => void
   // Why: app-resume hook — iOS/Android can kill the TCP path while backgrounded; call on AppState 'active' to recover.
   // The reason routes relay handling (probe vs replace); the direct socket probes regardless.
@@ -1148,6 +1152,10 @@ export function connect(
 
     getLastConnectedAt(): number | null {
       return lastConnectedAt
+    },
+
+    getLastInboundAt(): number | null {
+      return livenessWatchdog.getLastInboundAt() || null
     },
 
     onStateChange(listener: (state: ConnectionState) => void): () => void {

@@ -30,6 +30,19 @@ import type { TerminalTab } from '../../../../shared/terminal-tab-types'
 export const TERMINAL_HIDDEN_WORKTREE_RETENTION_LIMIT = 4
 export const TERMINAL_HIDDEN_WORKTREE_RETENTION_TTL_MS = 15 * 60_000
 
+type TerminalWorktreeParkingTab = Pick<TerminalTab, 'id' | 'ptyId' | 'pendingActivationSpawn'>
+
+export function getTerminalWorktreeParkingInputsKey(
+  tabsByWorktree: Readonly<Record<string, readonly TerminalWorktreeParkingTab[]>>
+): string {
+  return JSON.stringify(
+    Object.entries(tabsByWorktree).map(([worktreeId, tabs]) => [
+      worktreeId,
+      tabs.map((tab) => [tab.id, tab.ptyId, tab.pendingActivationSpawn])
+    ])
+  )
+}
+
 export function hasPendingRetentionSpawnWork(
   tab: Pick<TerminalTab, 'id' | 'ptyId' | 'pendingActivationSpawn'>,
   pendingStartupByTabId: Readonly<Record<string, unknown>>

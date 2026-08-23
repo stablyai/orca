@@ -756,7 +756,7 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
       unregisterPtyHandlers(id)
       storedCallbacks.onExit?.(code)
       storedCallbacks.onDisconnect?.()
-      onPtyExit?.(id)
+      onPtyExit?.(id, code)
     }
     ptyExitHandlers.set(id, exitHandler)
     ownedExitHandlers.set(id, exitHandler)

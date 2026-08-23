@@ -160,10 +160,10 @@ function syncSystemConfigIntoManagedCodexHomeUnsafe(
 ): CodexConfigMirrorResult {
   const systemConfigPath = join(systemHomePath, 'config.toml')
   const runtimeConfigPath = join(runtimeHomePath, 'config.toml')
-  // Why: `existsSync` answered `false` for a locked file exactly as for an absent
-  // one, so a held handle on the RUNTIME config read as "no runtime config yet"
-  // and the fresh-mirror branch below overwrote it wholesale. Neither side may
-  // be acted on unless it was actually observed.
+  // Why: `existsSync` collapses an indeterminate probe into the same `false` as
+  // absence, so a transiently unavailable RUNTIME config could reach the fresh
+  // mirror after the path recovered. Neither side may be acted on unless it was
+  // actually observed.
   const systemConfigObservation = observeAgentStateFile(systemConfigPath)
   if (systemConfigObservation.kind === 'indeterminate') {
     return { status: 'refused-indeterminate', error: systemConfigObservation.error }

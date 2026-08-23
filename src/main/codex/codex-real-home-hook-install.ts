@@ -274,7 +274,12 @@ function sweepRealHomeCodexHook(): RealHomeCodexHookLane {
   // Why: single read — the pre-write generation guard must compare against
   // the exact bytes this sweep's parse came from.
   const { raw: previousRaw, config } = readHooksJsonWithRaw(hooksJsonPath)
-  if (!config?.hooks || previousRaw === null) {
+  if (!config) {
+    // Why: a failed or malformed read proves no cleanup; keep the managed lane
+    // until a later pass can inspect and remove the real-home entry.
+    return 'unavailable'
+  }
+  if (!config.hooks || previousRaw === null) {
     return 'removed'
   }
   const isManagedCommand = createManagedCommandMatcher(getCodexManagedScriptFileName())

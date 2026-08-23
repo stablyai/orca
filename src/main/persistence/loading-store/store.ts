@@ -3230,6 +3230,8 @@ export class Store {
       startupCwd?: string
       expectedBinding?: { ptyId: string; incarnationId?: string }
       expectedSourceBinding?: PtyBindingSourceExpectation
+      /** Set by host-initiated creates, which have no renderer session writer behind them. */
+      hostAdmittedMembership?: boolean
     },
     hostId?: string | null
   ): boolean {
@@ -3281,13 +3283,18 @@ export class Store {
       args.expectedBinding !== undefined &&
       args.incarnationId !== args.expectedBinding.incarnationId
     let terminalMembershipChanged = false
+    let hostAdmittedTabCreated = false
     const advanceTopologyFence = (): void => {
       const repoId = getRepoIdFromWorktreeId(bindingWorktreeId)
       const currentRevision = session.terminalTopologyRevisionByRepoId?.[repoId] ?? 0
-      const establishesSplitAuthority = args.expectedSourceBinding !== undefined
+      // Why: a split, or a host-admitted tab the renderer has never seen, is itself
+      // the authority — with no fence the renderer's pre-create tab list replays
+      // over it and the tab is lost even on the repo's first such change.
+      const establishesMembershipAuthority =
+        args.expectedSourceBinding !== undefined || hostAdmittedTabCreated
       if (
         !reconciledIncarnation &&
-        (!terminalMembershipChanged || (currentRevision <= 0 && !establishesSplitAuthority))
+        (!terminalMembershipChanged || (currentRevision <= 0 && !establishesMembershipAuthority))
       ) {
         return
       }
@@ -3325,6 +3332,7 @@ export class Store {
       tab.ptyId = args.ptyId
     } else {
       terminalMembershipChanged = true
+      hostAdmittedTabCreated = args.hostAdmittedMembership === true
       // Why: pty:spawn can beat the debounced writer; persist a minimal tab so hydration won't prune the binding as orphaned.
       const nextTabs = [
         ...(tabs ?? []),

@@ -200,6 +200,38 @@ describeBinaryCompatibility('real Git binary compatibility', () => {
     })
   })
 
+  it('supports isolated worktree backup refs', async () => {
+    const worktree = 'compat-lint-staged'
+    const backupRef = 'refs/worktree/lint-staged-backups/compat'
+    await runGit(['worktree', 'add', '-b', 'compat-lint-staged', worktree])
+    await writeFile(join(repoPath, worktree, 'tracked.txt'), 'staged\n')
+    await runGit(['-C', worktree, 'add', 'tracked.txt'])
+    await writeFile(join(repoPath, worktree, 'tracked.txt'), 'staged\nunstaged\n')
+
+    const backupOid = (await runGit(['-C', worktree, 'stash', 'create'])).stdout.trim()
+    await runGit([
+      '-C',
+      worktree,
+      'update-ref',
+      backupRef,
+      backupOid,
+      '0000000000000000000000000000000000000000'
+    ])
+    await expect(
+      runGit(['-C', worktree, 'rev-parse', '--verify', backupRef])
+    ).resolves.toMatchObject({ stdout: `${backupOid}\n` })
+    await expect(runGit(['rev-parse', '--verify', backupRef])).rejects.toBeDefined()
+
+    await runGit(['-C', worktree, 'reset', '--hard', 'HEAD'])
+    await expect(
+      runGit(['-C', worktree, 'stash', 'apply', '--quiet', '--index', backupRef])
+    ).resolves.toBeDefined()
+    await expect(runGit(['-C', worktree, 'status', '--short'])).resolves.toMatchObject({
+      stdout: 'MM tracked.txt\n'
+    })
+    await runGit(['-C', worktree, 'update-ref', '-d', backupRef, backupOid])
+  })
+
   it('degrades indexed credential config safely at the Git 2.31 boundary', async () => {
     const guardEnv = gitCredentialPromptGuardEnv({}, 'linux')
     await expect(runGit(['status', '--short'], guardEnv)).resolves.toBeDefined()

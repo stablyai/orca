@@ -19,10 +19,8 @@ import type {
   RuntimeTerminalResolvePane,
   RuntimeTerminalSend
 } from '../../../../shared/runtime-types'
-import {
-  AGENT_SESSION_OMP_RESUME_PATH_RUNTIME_CAPABILITY,
-  TERMINAL_CREATE_IDEMPOTENCY_RUNTIME_CAPABILITY
-} from '../../../../shared/protocol-version'
+import { TERMINAL_CREATE_IDEMPOTENCY_RUNTIME_CAPABILITY } from '../../../../shared/protocol-version'
+import { agentResumeHostAuthorityCapability } from '../../runtime/agent-resume-host-authority-capability'
 import {
   isTerminalInputTooLargeWithDeferredMeasurement,
   iterateTerminalInputChunks
@@ -86,6 +84,7 @@ import { getRuntimeEnvironmentRevision } from '@/runtime/runtime-environment-rev
 
 const REMOTE_TERMINAL_INPUT_FLUSH_MS = 8
 const REMOTE_TERMINAL_VIEWPORT_FLUSH_MS = 33
+const REMOTE_RUNTIME_MAX_PENDING_QUERY_REPLIES = 64
 const HOST_SESSION_ATTACH_POLL_MS = 150
 const HOST_SESSION_REPLACEMENT_POLL_MAX_MS = 1_000
 const HOST_SESSION_ATTACH_TIMEOUT_MS = 15_000
@@ -266,7 +265,8 @@ export function createRemoteRuntimePtyTransport(
   })
   let lastRecoveryStateKey = ''
   let pendingViewportClaim = false
-  let pendingClaimInput = ''
+  let pendingClaimInput: { text: string; queryReply: boolean }[] = []
+  let pendingClaimQueryReplyCount = 0
   let terminalCreateRetryWait: {
     timer: ReturnType<typeof setTimeout>
     resolve: (continueRetrying: boolean) => void
@@ -346,11 +346,36 @@ export function createRemoteRuntimePtyTransport(
   const viewportClaimReadyWaiters = new Set<(ready: boolean) => void>()
   const clearPendingViewportClaim = (): void => {
     pendingViewportClaim = false
-    pendingClaimInput = ''
+    pendingClaimInput = []
+    pendingClaimQueryReplyCount = 0
     for (const resolve of viewportClaimReadyWaiters) {
       resolve(false)
     }
     viewportClaimReadyWaiters.clear()
+  }
+  const queuePendingClaimInput = (text: string, queryReply: boolean): void => {
+    if (queryReply && pendingClaimQueryReplyCount >= REMOTE_RUNTIME_MAX_PENDING_QUERY_REPLIES) {
+      const oldestReply = pendingClaimInput.findIndex((segment) => segment.queryReply)
+      if (oldestReply !== -1) {
+        pendingClaimInput.splice(oldestReply, 1)
+        pendingClaimQueryReplyCount -= 1
+        const left = pendingClaimInput[oldestReply - 1]
+        const right = pendingClaimInput[oldestReply]
+        if (left && right && !left.queryReply && !right.queryReply) {
+          left.text += right.text
+          pendingClaimInput.splice(oldestReply, 1)
+        }
+      }
+    }
+    const tail = pendingClaimInput.at(-1)
+    if (!queryReply && tail && !tail.queryReply) {
+      tail.text += text
+      return
+    }
+    pendingClaimInput.push({ text, queryReply })
+    if (queryReply) {
+      pendingClaimQueryReplyCount += 1
+    }
   }
   // Why: tab/leaf ids are shared by paired viewers; the instance suffix keeps one viewer's refresh off peer records.
   const clientId = `desktop:${tabId ?? 'tab'}:${leafId ?? 'leaf'}:${createBrowserUuid()}`
@@ -1257,20 +1282,20 @@ export function createRemoteRuntimePtyTransport(
     }
   }
 
-  const inputBatcher = createRemoteRuntimePtyTextBatcher(REMOTE_TERMINAL_INPUT_FLUSH_MS, (text) => {
+  const sendUnacknowledgedInput = (text: string, queryReply = false): boolean => {
     const targetHandle = handle
     const targetLifecycleEpoch = lifecycleEpoch
     if (!connected || !targetHandle || recoveryBlocksIo()) {
-      return
+      return false
     }
     const stream = getCurrentMultiplexedStream(targetHandle)
     if (stream?.sendInput(text)) {
-      return
+      return true
     }
     if (pendingViewportClaim) {
       // Why: a claim during subscribe/reconnect has no stream record yet; hold its input so the stream emits claim+input in one order.
-      pendingClaimInput += text
-      return
+      queuePendingClaimInput(text, queryReply)
+      return true
     }
     void callRuntime<{ send: RuntimeTerminalSend }>('terminal.send', {
       terminal: targetHandle,
@@ -1298,7 +1323,13 @@ export function createRemoteRuntimePtyTransport(
           handleRemoteTerminalError(error)
         }
       })
-  })
+    return true
+  }
+
+  const inputBatcher = createRemoteRuntimePtyTextBatcher(
+    REMOTE_TERMINAL_INPUT_FLUSH_MS,
+    sendUnacknowledgedInput
+  )
 
   function sendViewportUpdate(cols: number, rows: number, claim = false): void {
     const targetHandle = handle
@@ -1924,9 +1955,10 @@ export function createRemoteRuntimePtyTransport(
       nextStream.claimViewport(desiredViewport.cols, desiredViewport.rows)
       pendingViewportClaim = false
       const queuedInput = pendingClaimInput
-      pendingClaimInput = ''
-      if (queuedInput) {
-        nextStream.sendInput(queuedInput)
+      pendingClaimInput = []
+      pendingClaimQueryReplyCount = 0
+      for (const segment of queuedInput) {
+        nextStream.sendInput(segment.text)
       }
       for (const resolve of viewportClaimReadyWaiters) {
         resolve(true)
@@ -2070,14 +2102,17 @@ export function createRemoteRuntimePtyTransport(
             createEnvironmentId,
             connectLifecycleEpoch
           )
+        const resumeHostAuthorityCapability = resumeProviderSessionToSend
+          ? agentResumeHostAuthorityCapability(launchAgentToSend)
+          : undefined
         const created = launchAgentToSend
           ? agentSessionRequiresHostAuthorityReplay
             ? await hostAuthorityCreate()
             : await runRemoteAgentSessionLaunch<RemoteAgentSessionLaunchResult | null>({
                 environmentId: createEnvironmentId,
                 hostAuthority: hostAuthorityCreate,
-                ...(resumeProviderSessionToSend && launchAgentToSend === 'omp'
-                  ? { hostAuthorityCapability: AGENT_SESSION_OMP_RESUME_PATH_RUNTIME_CAPABILITY }
+                ...(resumeHostAuthorityCapability
+                  ? { hostAuthorityCapability: resumeHostAuthorityCapability }
                   : {}),
                 legacy: legacyCreate
               })
@@ -2345,39 +2380,37 @@ export function createRemoteRuntimePtyTransport(
     // Why: query replies (CPR/DSR/DA/OSC) are read in raw mode with a short timeout; the 8ms debounce would miss it and echo the reply onto the prompt (#7329).
     sendInputImmediate(data: string): boolean {
       const targetHandle = handle
+      const targetLifecycleEpoch = lifecycleEpoch
       if (!connected || !targetHandle || recoveryBlocksIo()) {
         return false
       }
       if (!data) {
         return true
       }
-      // Why: earlier input may still be in async byte-length validation (in validationTail, not takePending); route the reply through the ordered queue so it can't jump ahead and reorder bytes.
+      // Why: wait behind async validation, but keep the reply as its own host-classifiable write.
       if (inputBatcher.hasPendingValidation()) {
-        const accepted = inputBatcher.push(data)
-        inputBatcher.flush()
-        return accepted
+        inputBatcher.enqueueAfterValidation(() => {
+          if (
+            !connected ||
+            lifecycleEpoch !== targetLifecycleEpoch ||
+            handle !== targetHandle ||
+            recoveryBlocksIo()
+          ) {
+            return
+          }
+          const pending = inputBatcher.takePending()
+          if (pending) {
+            sendUnacknowledgedInput(pending)
+          }
+          sendUnacknowledgedInput(data, true)
+        })
+        return true
       }
       const pending = inputBatcher.takePending()
-      const text = `${pending}${data}`
-      const stream = getCurrentMultiplexedStream(targetHandle)
-      if (stream?.sendInput(text)) {
-        return true
+      if (pending && !sendUnacknowledgedInput(pending)) {
+        return false
       }
-      if (pendingViewportClaim) {
-        pendingClaimInput += text
-        return true
-      }
-      void callRuntime('terminal.send', {
-        terminal: targetHandle,
-        text,
-        client: { id: clientId, type: 'desktop' },
-        ...(desiredViewport ? { viewport: desiredViewport, claimViewport: true as const } : {})
-      }).catch((error) => {
-        if (handle === targetHandle) {
-          handleRemoteTerminalError(error)
-        }
-      })
-      return true
+      return sendUnacknowledgedInput(data, true)
     },
 
     sendInputAccepted: sendInputAcceptedToRuntime,

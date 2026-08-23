@@ -5,6 +5,7 @@ import { getWorktreeHostIdentity } from '../../../../../../shared/worktree/host-
 import { isValidResolvedWorktreeLineageEdge } from '../../../../../../shared/resolved-worktree-lineage'
 import { getProjectedWorktreeLineage } from '../../worktree-lineage-projection'
 import { getWorktreeLineageGroupKey } from './group-keys'
+import type { NoticeHostContext } from './host-labels'
 import type { RenderableFolderWorkspace } from './folder-workspace-lanes'
 import type {
   FolderWorkspaceRow,
@@ -32,25 +33,33 @@ export function buildPendingCreationRow(
 
 export function buildImportedWorktreesCardRow(
   candidate: ImportedWorktreesCardCandidate,
-  placement: ImportedWorktreesCardRow['placement']
+  placement: ImportedWorktreesCardRow['placement'],
+  hostContext?: NoticeHostContext
 ): ImportedWorktreesCardRow {
   return {
     type: 'imported-worktrees-card',
     key: `imported-worktrees-card:${placement}:${candidate.repo.id}`,
     repo: candidate.repo,
     hiddenWorktrees: candidate.hiddenWorktrees,
-    placement
+    placement,
+    ...(hostContext
+      ? { hostContextLabel: hostContext.label, hostContextHostId: hostContext.hostId }
+      : {})
   }
 }
 
 export function buildNewExternalWorktreesInboxRow(
-  candidate: NewExternalWorktreesInboxCandidate
+  candidate: NewExternalWorktreesInboxCandidate,
+  hostContext?: NoticeHostContext
 ): NewExternalWorktreesInboxRow {
   return {
     type: 'new-external-worktrees-inbox',
     key: `new-external-worktrees-inbox:${candidate.repo.id}`,
     repo: candidate.repo,
-    inboxWorktrees: candidate.inboxWorktrees
+    inboxWorktrees: candidate.inboxWorktrees,
+    ...(hostContext
+      ? { hostContextLabel: hostContext.label, hostContextHostId: hostContext.hostId }
+      : {})
   }
 }
 
