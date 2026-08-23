@@ -10906,26 +10906,11 @@ export class OrcaRuntimeService {
     const pty = this.getOrCreatePtyWorktreeRecord(ptyId)
     const parked = this.parkedTerminalGraphClaims.get(ptyId)
     if (parked && incarnationId && parked.incarnationId !== incarnationId) {
-      this.retireParkedTerminalRegistrations(ptyId, parked)
-      parked.incarnationId = incarnationId
-      parked.mobileClaimed = false
-      parked.mobileFitOverride = null
-      parked.mobileRegistrations.clear()
-      parked.remoteDesktopOwner = null
-      parked.remoteDesktopHostReclaimTarget = null
-      parked.remoteDesktopRegistrations.clear()
-      parked.rendererRestoreTarget = null
-      parked.deferredLayoutTarget = null
-      const pendingRestore = this.pendingRestoreTimers.get(ptyId)
-      if (pendingRestore) {
-        clearTimeout(pendingRestore.timer)
-        this.pendingRestoreTimers.delete(ptyId)
-      }
-      const pendingSoftLeaver = this.pendingSoftLeavers.get(ptyId)
-      if (pendingSoftLeaver) {
-        clearTimeout(pendingSoftLeaver.timer)
-        this.pendingSoftLeavers.delete(ptyId)
-      }
+      this.replaceParkedTerminalClaimGeneration(ptyId, parked, {
+        worktreeId: pty?.worktreeId ?? parked.worktreeId,
+        connectionId: pty?.connectionId ?? parked.connectionId,
+        incarnationId
+      })
     }
     if (pty) {
       if (incarnationId) {
@@ -10956,6 +10941,14 @@ export class OrcaRuntimeService {
     this.assertPtyDidNotExitBeforeRegistration(ptyId, binding?.incarnationId)
     this.forgetPtyLivenessVerdict(ptyId)
     this.spawnPublishedPtys.add(ptyId)
+    const parked = this.parkedTerminalGraphClaims.get(ptyId)
+    if (parked && binding?.incarnationId && parked.incarnationId !== binding.incarnationId) {
+      this.replaceParkedTerminalClaimGeneration(ptyId, parked, {
+        worktreeId,
+        connectionId,
+        incarnationId: binding.incarnationId
+      })
+    }
     // Why: record the renderer pane identity at spawn time so a stalled graph
     // sync can't hide that a live PTY already backs a pending mobile create.
     const paneKey =
@@ -11001,6 +10994,40 @@ export class OrcaRuntimeService {
     // mobile create's tab is live; publish its surface main-side (#7587).
     if (binding && paneKey) {
       this.ensurePtyBackedMobileSurfaceForRendererTab(worktreeId, binding.tabId)
+    }
+  }
+
+  private replaceParkedTerminalClaimGeneration(
+    ptyId: string,
+    parked: ParkedTerminalGraphClaim,
+    identity: {
+      worktreeId: string
+      connectionId: string | null
+      incarnationId: PtyIncarnationId
+    }
+  ): void {
+    this.retireParkedTerminalRegistrations(ptyId, parked)
+    parked.worktreeId = identity.worktreeId
+    parked.connectionId = identity.connectionId
+    parked.incarnationId = identity.incarnationId
+    parked.lifecycleGeneration = this.getPtyLifecycleGeneration(ptyId)
+    parked.mobileClaimed = false
+    parked.mobileFitOverride = null
+    parked.mobileRegistrations.clear()
+    parked.remoteDesktopOwner = null
+    parked.remoteDesktopHostReclaimTarget = null
+    parked.remoteDesktopRegistrations.clear()
+    parked.rendererRestoreTarget = null
+    parked.deferredLayoutTarget = null
+    const pendingRestore = this.pendingRestoreTimers.get(ptyId)
+    if (pendingRestore) {
+      clearTimeout(pendingRestore.timer)
+      this.pendingRestoreTimers.delete(ptyId)
+    }
+    const pendingSoftLeaver = this.pendingSoftLeavers.get(ptyId)
+    if (pendingSoftLeaver) {
+      clearTimeout(pendingSoftLeaver.timer)
+      this.pendingSoftLeavers.delete(ptyId)
     }
   }
 

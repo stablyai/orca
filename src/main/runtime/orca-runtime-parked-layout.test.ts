@@ -275,4 +275,80 @@ describe('parked terminal layout serialization', () => {
     expect(resizes).toEqual([])
     expect(ptySizes.get('pty-1')).toEqual({ cols: 132, rows: 36 })
   })
+
+  it.each([
+    ['local', 'reused-pty', null],
+    ['SSH', 'ssh:ssh-1@@reused-pty', 'ssh-1']
+  ])(
+    'keeps new %s subscriptions across provider reset and repeated v2 registration',
+    async (_label, ptyId, connectionId) => {
+      const { runtime, ptySizes, resizes } = createRuntime(ptyId, { cols: 120, rows: 30 })
+      const sync = (incarnationId: string, visible: boolean) =>
+        syncTerminalGraph(runtime, { ptyId, incarnationId, connectionId, visible })
+      sync('v1', true)
+      await runtime.handleMobileSubscribe(ptyId, 'phone-v1', { cols: 45, rows: 20 })
+      await runtime.updateRemoteDesktopViewer(ptyId, 'viewer-v1', 'desktop-v1', 100, 25)
+      sync('v1', false)
+
+      runtime.synchronizePtyOutputSequenceFromProvider(
+        ptyId,
+        { value: 0, generation: 'reset' },
+        runtime.getPtyOutputSequence(ptyId)
+      )
+      runtime.registerPty(ptyId, WORKTREE_ID, connectionId, {
+        tabId: 'tab-1',
+        leafId: 'leaf-1',
+        incarnationId: 'v2'
+      })
+      await runtime.handleMobileSubscribe(ptyId, 'phone-v2', { cols: 60, rows: 25 })
+      await runtime.updateRemoteDesktopViewer(ptyId, 'viewer-v2', 'desktop-v2', 90, 24)
+      runtime.registerPty(ptyId, WORKTREE_ID, connectionId, {
+        tabId: 'tab-1',
+        leafId: 'leaf-1',
+        incarnationId: 'v2'
+      })
+      resizes.length = 0
+
+      sync('v2', true)
+      await vi.waitFor(() => expect(ptySizes.get(ptyId)).toEqual({ cols: 60, rows: 25 }))
+      expect(runtime.getDriver(ptyId)).toEqual({ kind: 'mobile', clientId: 'phone-v2' })
+      expect(runtime.isRemoteDesktopViewerOwner(ptyId, 'viewer-v2')).toBe(true)
+      expect(runtime.isRemoteDesktopViewerOwner(ptyId, 'viewer-v1')).toBe(false)
+      expect(resizes).toContainEqual({ ptyId, cols: 60, rows: 25 })
+    }
+  )
+
+  it('keeps v2 idle when its replacement streams close before graph reentry', async () => {
+    const ptyId = 'reused-pty'
+    const { runtime, resizes } = createRuntime(ptyId, { cols: 120, rows: 30 })
+    const sync = (incarnationId: string, visible: boolean) =>
+      syncTerminalGraph(runtime, { ptyId, incarnationId, visible })
+    sync('v1', true)
+    await runtime.handleMobileSubscribe(ptyId, 'phone-v1', { cols: 45, rows: 20 })
+    await runtime.updateRemoteDesktopViewer(ptyId, 'viewer-v1', 'desktop-v1', 100, 25)
+    sync('v1', false)
+
+    runtime.synchronizePtyOutputSequenceFromProvider(
+      ptyId,
+      { value: 0, generation: 'reset' },
+      runtime.getPtyOutputSequence(ptyId)
+    )
+    runtime.registerPty(ptyId, WORKTREE_ID, null, {
+      tabId: 'tab-1',
+      leafId: 'leaf-1',
+      incarnationId: 'v2'
+    })
+    await runtime.handleMobileSubscribe(ptyId, 'phone-v2', { cols: 60, rows: 25 })
+    await runtime.updateRemoteDesktopViewer(ptyId, 'viewer-v2', 'desktop-v2', 90, 24)
+    runtime.handleMobileUnsubscribe(ptyId, 'phone-v2')
+    await runtime.unregisterRemoteDesktopViewer(ptyId, 'viewer-v2')
+    resizes.length = 0
+
+    sync('v2', true)
+    await vi.advanceTimersByTimeAsync(0)
+    expect(runtime.getDriver(ptyId)).toEqual({ kind: 'idle' })
+    expect(runtime.isMobileSubscriberActive(ptyId)).toBe(false)
+    expect(runtime.isRemoteDesktopViewerOwner(ptyId, 'viewer-v2')).toBe(false)
+    expect(resizes).toEqual([])
+  })
 })
