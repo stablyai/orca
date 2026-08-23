@@ -36622,7 +36622,8 @@ describe('OrcaRuntimeService', () => {
       const [terminal] = (await runtime.listTerminals()).terminals
       const waitPromise = runtime.waitForTerminal(terminal.handle, {
         condition: 'tui-idle',
-        timeoutMs: 1_000
+        timeoutMs: 1_000,
+        superviseCommandExit: true
       })
       const timeoutAssertion = expect(waitPromise).rejects.toThrow('timeout')
 
@@ -36632,6 +36633,210 @@ describe('OrcaRuntimeService', () => {
     } finally {
       vi.useRealTimers()
     }
+  })
+
+  it('fails tui-idle immediately when the launched command exits zero', async () => {
+    const runtime = new OrcaRuntimeService(store)
+
+    runtime.attachWindow(1)
+    runtime.syncWindowGraph(1, {
+      tabs: [
+        {
+          tabId: 'tab-1',
+          worktreeId: 'repo-1::/tmp/worktree-a',
+          title: 'OpenCode',
+          activeLeafId: 'pane:1',
+          layout: null
+        }
+      ],
+      leaves: [
+        {
+          tabId: 'tab-1',
+          worktreeId: 'repo-1::/tmp/worktree-a',
+          leafId: 'pane:1',
+          paneRuntimeId: 1,
+          ptyId: 'pty-1'
+        }
+      ]
+    })
+    const [terminal] = (await runtime.listTerminals()).terminals
+    const wait = runtime.waitForTerminal(terminal.handle, {
+      condition: 'tui-idle',
+      timeoutMs: 60_000,
+      superviseCommandExit: true
+    })
+
+    runtime.onPtyData(
+      'pty-1',
+      '\x1b]133;C\x07OpenCode startup failed\n\x1b]133;D;0\x07',
+      Date.now()
+    )
+    runtime.onPtyData('pty-1', '\x1b]0;✳ Late readiness\x07', Date.now())
+
+    await expect(wait).resolves.toMatchObject({
+      satisfied: false,
+      status: 'exited',
+      exitCode: 0
+    })
+    await expect(runtime.readTerminal(terminal.handle)).resolves.toMatchObject({
+      tail: expect.arrayContaining([expect.stringContaining('OpenCode startup failed')])
+    })
+  })
+
+  it('replays a pre-wait command exit and preserves its nonzero code', async () => {
+    const runtime = new OrcaRuntimeService(store)
+
+    runtime.attachWindow(1)
+    runtime.syncWindowGraph(1, {
+      tabs: [
+        {
+          tabId: 'tab-1',
+          worktreeId: 'repo-1::/tmp/worktree-a',
+          title: 'Agent',
+          activeLeafId: 'pane:1',
+          layout: null
+        }
+      ],
+      leaves: [
+        {
+          tabId: 'tab-1',
+          worktreeId: 'repo-1::/tmp/worktree-a',
+          leafId: 'pane:1',
+          paneRuntimeId: 1,
+          ptyId: 'pty-1'
+        }
+      ]
+    })
+    runtime.onPtyData('pty-1', '\x1b]133;C\x07failed\x1b]133;D;23\x07', Date.now())
+    const [terminal] = (await runtime.listTerminals()).terminals
+
+    await expect(
+      runtime.waitForTerminal(terminal.handle, {
+        condition: 'tui-idle',
+        timeoutMs: 60_000,
+        superviseCommandExit: true
+      })
+    ).resolves.toMatchObject({ satisfied: false, status: 'exited', exitCode: 23 })
+  })
+
+  it('does not supervise command completion for an ordinary tui-idle wait', async () => {
+    const runtime = new OrcaRuntimeService(store)
+
+    runtime.attachWindow(1)
+    runtime.syncWindowGraph(1, {
+      tabs: [
+        {
+          tabId: 'tab-1',
+          worktreeId: 'repo-1::/tmp/worktree-a',
+          title: 'Agent',
+          activeLeafId: 'pane:1',
+          layout: null
+        }
+      ],
+      leaves: [
+        {
+          tabId: 'tab-1',
+          worktreeId: 'repo-1::/tmp/worktree-a',
+          leafId: 'pane:1',
+          paneRuntimeId: 1,
+          ptyId: 'pty-1'
+        }
+      ]
+    })
+    const [terminal] = (await runtime.listTerminals()).terminals
+    const wait = runtime.waitForTerminal(terminal.handle, {
+      condition: 'tui-idle',
+      timeoutMs: 60_000
+    })
+
+    runtime.onPtyData('pty-1', '\x1b]133;C\x07failed\x1b]133;D;1\x07', Date.now())
+    runtime.onPtyData('pty-1', '\x1b]0;✳ Ready\x07', Date.now())
+
+    await expect(wait).resolves.toMatchObject({
+      satisfied: true,
+      status: 'running',
+      exitCode: null
+    })
+  })
+
+  it('lets readiness win once when command completion follows it', async () => {
+    const runtime = new OrcaRuntimeService(store)
+
+    runtime.attachWindow(1)
+    runtime.syncWindowGraph(1, {
+      tabs: [
+        {
+          tabId: 'tab-1',
+          worktreeId: 'repo-1::/tmp/worktree-a',
+          title: 'Agent',
+          activeLeafId: 'pane:1',
+          layout: null
+        }
+      ],
+      leaves: [
+        {
+          tabId: 'tab-1',
+          worktreeId: 'repo-1::/tmp/worktree-a',
+          leafId: 'pane:1',
+          paneRuntimeId: 1,
+          ptyId: 'pty-1'
+        }
+      ]
+    })
+    const [terminal] = (await runtime.listTerminals()).terminals
+    const wait = runtime.waitForTerminal(terminal.handle, {
+      condition: 'tui-idle',
+      timeoutMs: 60_000,
+      superviseCommandExit: true
+    })
+
+    runtime.onPtyData('pty-1', '\x1b]133;C\x07\x1b]0;✳ Ready\x07', Date.now())
+    runtime.onPtyData('pty-1', '\x1b]133;D;7\x07', Date.now())
+
+    await expect(wait).resolves.toMatchObject({
+      satisfied: true,
+      status: 'running',
+      exitCode: null
+    })
+  })
+
+  it('returns a zero PTY exit as failed readiness instead of waiting for timeout', async () => {
+    const runtime = new OrcaRuntimeService(store)
+
+    runtime.attachWindow(1)
+    runtime.syncWindowGraph(1, {
+      tabs: [
+        {
+          tabId: 'tab-1',
+          worktreeId: 'repo-1::/tmp/worktree-a',
+          title: 'Agent',
+          activeLeafId: 'pane:1',
+          layout: null
+        }
+      ],
+      leaves: [
+        {
+          tabId: 'tab-1',
+          worktreeId: 'repo-1::/tmp/worktree-a',
+          leafId: 'pane:1',
+          paneRuntimeId: 1,
+          ptyId: 'pty-1'
+        }
+      ]
+    })
+    const [terminal] = (await runtime.listTerminals()).terminals
+    const wait = runtime.waitForTerminal(terminal.handle, {
+      condition: 'tui-idle',
+      timeoutMs: 60_000
+    })
+
+    runtime.onPtyExit('pty-1', 0)
+
+    await expect(wait).resolves.toMatchObject({
+      satisfied: false,
+      status: 'exited',
+      exitCode: 0
+    })
   })
 
   it('tui-idle resolves on agent working→idle OSC title transition', async () => {

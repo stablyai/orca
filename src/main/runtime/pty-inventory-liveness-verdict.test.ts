@@ -71,6 +71,55 @@ describe('inventory sweep liveness verdicts', () => {
     })
   })
 
+  it('resolves SSH disconnect waiters as unverifiable instead of exited', async () => {
+    const runtime = makeRuntimeMissingFromInventory(() => null)
+    runtime.syncWindowGraph(1, {
+      tabs: [
+        {
+          tabId: 'tab-remote',
+          worktreeId: WORKTREE_ID,
+          title: 'Remote agent',
+          activeLeafId: 'pane:1',
+          layout: null
+        }
+      ],
+      leaves: [
+        {
+          tabId: 'tab-remote',
+          worktreeId: WORKTREE_ID,
+          leafId: 'pane:1',
+          paneRuntimeId: 1,
+          ptyId: REMOTE_PTY_ID
+        }
+      ]
+    })
+    const [terminal] = (await runtime.listTerminals()).terminals
+    const exitWait = runtime.waitForTerminal(terminal.handle, {
+      condition: 'exit',
+      timeoutMs: 60_000
+    })
+    const readinessWait = runtime.waitForTerminal(terminal.handle, {
+      condition: 'tui-idle',
+      timeoutMs: 60_000
+    })
+
+    runtime.onPtyExit(REMOTE_PTY_ID, -1)
+
+    await expect(exitWait).resolves.toMatchObject({
+      satisfied: false,
+      status: 'unknown',
+      exitCode: null
+    })
+    await expect(readinessWait).resolves.toMatchObject({
+      satisfied: false,
+      status: 'unknown',
+      exitCode: null
+    })
+    await expect(
+      runtime.waitForTerminal(terminal.handle, { condition: 'exit', timeoutMs: 60_000 })
+    ).resolves.toMatchObject({ satisfied: false, status: 'unknown', exitCode: null })
+  })
+
   it('preserves a more specific lost-contact reason across an abnormal SSH exit', () => {
     const runtime = makeRuntimeMissingFromInventory(() => null)
     runtime.markPtyLivenessUnverifiable(REMOTE_PTY_ID, 'inventory transport failed')

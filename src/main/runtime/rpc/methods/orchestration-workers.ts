@@ -20,6 +20,7 @@ import {
 } from './orchestration-worker-setup-gate'
 import { failWorkerStartWithReceipt } from './orchestration-worker-start-receipt'
 import { prepareLocalWorkerStart } from './orchestration-worker-start-validation'
+import { getAgentReadinessFailure } from './orchestration-agent-readiness'
 
 export const ORCHESTRATION_WORKER_START_METHODS: RpcMethod[] = [
   defineMethod({
@@ -196,18 +197,23 @@ export const ORCHESTRATION_WORKER_START_METHODS: RpcMethod[] = [
         failedStage = 'agent_readiness'
         const wait = await runtime.waitForTerminal(terminalHandle, {
           condition: 'tui-idle',
-          timeoutMs: params.timeoutMs ?? 60_000
+          timeoutMs: params.timeoutMs ?? 60_000,
+          superviseCommandExit: true
         })
         persistWorkerSetupWaitOutcome({ ...setupStage, wait })
-        if (!wait.satisfied) {
+        let readinessFailure = getAgentReadinessFailure(wait)
+        if (readinessFailure) {
+          const diagnostic = await runtime
+            .readTerminal(terminalHandle, { limit: 20 })
+            .catch(() => null)
+          readinessFailure = getAgentReadinessFailure(wait, diagnostic?.tail) ?? readinessFailure
           if (setupReceipt.state === 'failed') {
             failedStage = 'setup_wait'
           }
-          throw new Error(
-            wait.blockedReason
-              ? `Agent startup blocked: ${wait.blockedReason}`
-              : `Agent did not become ready (${wait.status}).`
-          )
+          if (wait.status === 'unknown') {
+            throw new OrchestrationError('operation_unknown', readinessFailure)
+          }
+          throw new Error(readinessFailure)
         }
         const terminalAuthority = requireWorkerAuthority(runtime, terminalHandle)
         const capability = db.prepareStartingWorkerAuthority({

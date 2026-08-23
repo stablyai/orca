@@ -368,6 +368,90 @@ describe('orchestration RPC methods', () => {
       expect(runtime.sendTerminalAgentPrompt).not.toHaveBeenCalled()
     })
 
+    it.each(['codex', 'opencode'] as const)(
+      'fails %s startup when its process exits zero before readiness',
+      async (agent) => {
+        setup()
+        mockCurrentWorkerStart()
+        vi.mocked(runtime.waitForTerminal).mockResolvedValueOnce({
+          handle: 'term_worker',
+          condition: 'tui-idle',
+          satisfied: false,
+          status: 'exited',
+          exitCode: 0
+        })
+        const task = db.createTask({ spec: 'worker exits during startup' })
+
+        const result = (await call('orchestration.workerStart', {
+          task: task.id,
+          from: 'term_coord',
+          agent
+        })) as { state: string; failedStage: string; lastError: string }
+
+        expect(result).toMatchObject({
+          state: 'failed',
+          failedStage: 'agent_readiness',
+          lastError: 'Agent process exited before becoming ready with code 0.'
+        })
+        expect(runtime.sendTerminalAgentPrompt).not.toHaveBeenCalled()
+      }
+    )
+
+    it('returns redacted terminal diagnostics when agent startup exits early', async () => {
+      setup()
+      mockCurrentWorkerStart()
+      vi.mocked(runtime.waitForTerminal).mockResolvedValueOnce({
+        handle: 'term_worker',
+        condition: 'tui-idle',
+        satisfied: false,
+        status: 'exited',
+        exitCode: 1
+      })
+      vi.spyOn(runtime, 'readTerminal').mockResolvedValue({
+        handle: 'term_worker',
+        status: 'exited',
+        tail: ['OpenCode startup failed: api_key=provider-secret'],
+        truncated: false,
+        nextCursor: null
+      })
+      const task = db.createTask({ spec: 'capture startup diagnostic' })
+
+      const result = (await call('orchestration.workerStart', {
+        task: task.id,
+        from: 'term_coord',
+        agent: 'opencode'
+      })) as { lastError: string }
+
+      expect(result.lastError).toContain('Diagnostic output:\nOpenCode startup failed:')
+      expect(result.lastError).not.toContain('provider-secret')
+      expect(runtime.readTerminal).toHaveBeenCalledWith('term_worker', { limit: 20 })
+    })
+
+    it('keeps an unverifiable readiness loss as outcome unknown', async () => {
+      setup()
+      mockCurrentWorkerStart()
+      vi.mocked(runtime.waitForTerminal).mockResolvedValueOnce({
+        handle: 'term_worker',
+        condition: 'tui-idle',
+        satisfied: false,
+        status: 'unknown',
+        exitCode: null
+      })
+      const task = db.createTask({ spec: 'worker contact is lost during startup' })
+
+      const result = (await call('orchestration.workerStart', {
+        task: task.id,
+        from: 'term_coord',
+        agent: 'codex'
+      })) as { state: string; lastError: string }
+
+      expect(result).toMatchObject({
+        state: 'outcome_unknown',
+        lastError: 'Agent did not become ready (unknown).'
+      })
+      expect(runtime.sendTerminalAgentPrompt).not.toHaveBeenCalled()
+    })
+
     it('returns a no-effect failure when terminal creation fails', async () => {
       setup()
       mockCurrentWorkerStart()
