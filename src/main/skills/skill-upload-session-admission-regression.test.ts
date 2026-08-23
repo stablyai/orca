@@ -43,7 +43,7 @@ async function stagedArchiveCount(uploads: string): Promise<number> {
 }
 
 describe('SkillUploadSessionService admission regressions', () => {
-  it('does not publish a session after disposal starts during pruning', async () => {
+  it('does not return a session after disposal starts during pruning', async () => {
     vi.useFakeTimers()
     vi.setSystemTime(new Date('2026-08-23T00:00:00Z'))
     const root = await mkdtemp(join(tmpdir(), 'orca-skill-upload-admission-'))
@@ -51,6 +51,12 @@ describe('SkillUploadSessionService admission regressions', () => {
     const uploads = join(root, 'uploads')
     const service = new SkillUploadSessionService(uploads, { idleMs: 10 })
     await service.begin({ package: identity(Buffer.from('expired')) })
+    vi.setSystemTime(new Date('2026-08-23T00:00:00.005Z'))
+    const activeRequest = {
+      package: identity(Buffer.from('active')),
+      transferId: 'active-transfer'
+    }
+    await service.begin(activeRequest)
     vi.setSystemTime(new Date('2026-08-23T00:00:00.011Z'))
 
     const retainedPaths = retainedPathCleanup(service)
@@ -69,7 +75,7 @@ describe('SkillUploadSessionService admission regressions', () => {
       await removeFailedCleanup(path)
     })
 
-    const begin = service.begin({ package: identity(Buffer.from('closing')) })
+    const begin = service.begin(activeRequest)
     await cleanupStarted
     const disposal = service.dispose()
     releaseCleanup()

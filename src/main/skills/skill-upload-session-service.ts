@@ -43,8 +43,8 @@ export class SkillUploadSessionService {
     const leaveOperation = await this.operations.enterBegin(() => this.assertAvailable())
     try {
       await this.initialize()
-      this.assertAvailable()
       await this.prune()
+      this.assertAvailable()
       const existing = request.transferId
         ? [...this.sessions.values()].find((session) => session.transferId === request.transferId)
         : undefined
