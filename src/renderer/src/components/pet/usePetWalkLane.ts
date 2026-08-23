@@ -6,6 +6,9 @@ import {
   type PetWalkDirection
 } from './pet-walk-lane'
 
+/** Longest frame the walk will integrate; matches `usePetFallToLane`. */
+const MAX_FRAME_MS = 50
+
 type PetWalkLaneOptions = {
   /** False while dragging, hidden, or under reduced motion — the pet holds still. */
   active: boolean
@@ -49,7 +52,9 @@ export function usePetWalkLane({
         const next = advancePetWalk(
           { x: readXRef.current(), direction: directionRef.current },
           {
-            deltaMs: timestamp - previousTimestamp,
+            // Why: a long frame (backgrounded window) would otherwise integrate
+            // one huge step and teleport the pet across the lane.
+            deltaMs: Math.min(timestamp - previousTimestamp, MAX_FRAME_MS),
             speedPxPerSec: PET_WALK_SPEED_PX_PER_SEC,
             ...petWalkBounds(window.innerWidth, sizeRef.current)
           }
