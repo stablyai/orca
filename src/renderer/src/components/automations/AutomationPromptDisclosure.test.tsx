@@ -150,6 +150,19 @@ describe('AutomationPromptDisclosure', () => {
     expect(screen.getByRole('button', { name: 'Show more' })).toBeVisible()
   })
 
+  it('moves focus to the fully visible prompt when resizing removes the disclosure', () => {
+    promptNaturalHeight = 180
+    render(<AutomationPromptDisclosure prompt="Synthetic prompt that fits after widening." />)
+    const content = screen.getByText('Synthetic prompt that fits after widening.')
+    screen.getByRole('button', { name: 'Show more' }).focus()
+
+    promptNaturalHeight = 60
+    act(() => resizeCallback?.([], {} as ResizeObserver))
+
+    expect(screen.queryByRole('button', { name: 'Show more' })).not.toBeInTheDocument()
+    expect(content).toHaveFocus()
+  })
+
   it('preserves expansion and focus across unrelated automation updates', async () => {
     promptNaturalHeight = 240
     const user = userEvent.setup()

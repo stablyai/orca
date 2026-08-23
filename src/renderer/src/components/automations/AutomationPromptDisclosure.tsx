@@ -6,12 +6,16 @@ import { translate } from '@/i18n/i18n'
 export function AutomationPromptDisclosure({ prompt }: { prompt: string }): React.JSX.Element {
   const contentId = useId()
   const expandedRef = useRef(false)
+  const toggleRef = useRef<HTMLButtonElement>(null)
   const [promptElement, setPromptElement] = useState<HTMLParagraphElement | null>(null)
   const [expanded, setExpanded] = useState(false)
   const [overflows, setOverflows] = useState(false)
 
   const measureOverflow = useCallback((element: HTMLParagraphElement) => {
     const nextOverflows = element.scrollHeight > element.clientHeight + 1
+    if (!nextOverflows && document.activeElement === toggleRef.current) {
+      element.focus({ preventScroll: true })
+    }
     setOverflows((current) => (current === nextOverflows ? current : nextOverflows))
   }, [])
 
@@ -50,6 +54,7 @@ export function AutomationPromptDisclosure({ prompt }: { prompt: string }): Reac
         </div>
         {overflows || expanded ? (
           <Button
+            ref={toggleRef}
             type="button"
             variant="link"
             size="xs"
@@ -78,6 +83,7 @@ export function AutomationPromptDisclosure({ prompt }: { prompt: string }): Reac
           <p
             ref={setPromptElement}
             id={contentId}
+            tabIndex={-1}
             className={cn(
               'mt-1 select-text whitespace-pre-wrap text-sm text-foreground [overflow-wrap:anywhere]',
               !expanded && 'line-clamp-4'
