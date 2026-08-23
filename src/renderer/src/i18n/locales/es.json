@@ -9244,7 +9244,7 @@
           },
           "history": {
             "scopeTitle": "Limitar el historial del shell a cada espacio de trabajo",
-            "scopeDescription": "Aísla entre espacios de trabajo los resultados de Flecha arriba, la búsqueda inversa y las sugerencias automáticas del shell. Los cambios se aplican a las nuevas sesiones de terminal.",
+            "scopeDescription": "Aísla entre espacios de trabajo las entradas de historial al pulsar Flecha arriba, la búsqueda inversa y las sugerencias automáticas del shell. Los cambios se aplican a las nuevas sesiones de terminal.",
             "search": {
               "shell": "shell",
               "history": "historial",
