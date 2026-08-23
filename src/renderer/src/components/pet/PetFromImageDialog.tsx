@@ -1,4 +1,4 @@
-import { useId, useRef, useState } from 'react'
+import { useEffect, useId, useState } from 'react'
 import { Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
@@ -105,19 +105,40 @@ export function PetFromImageDialog({
     tolerance: BACKGROUND_TOLERANCE.default
   })
   const [draft, setDraft] = useState<Draft | null>(null)
+  // Why: state, not a ref — the crop surface is sized from it during render,
+  // and a ref read there is a value React never promised had been committed.
+  // Keeping it also lets a setting change re-run the pipeline without asking
+  // the user to pick the same file again.
+  const [source, setSource] = useState<RgbaImage | null>(null)
   const [sourceUrl, setSourceUrl] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const modeHintId = useId()
-  // Why: kept so changing a setting re-runs the pipeline without asking the
-  // user to pick the same file again.
-  const sourceRef = useRef<RgbaImage | null>(null)
 
-  const runPipeline = async (next: BuildSettings, fileName: string): Promise<void> => {
-    const source = sourceRef.current
-    if (!source) {
+  // Why: the owner keeps this component mounted and only flips `open`, so
+  // without this a reopen still shows the last picture, framing and verdict.
+  useEffect(() => {
+    if (!open) {
       return
     }
+    setDraft(null)
+    setSource(null)
+    setSourceUrl(null)
+    setBusy(false)
+    setError(null)
+    setSettings({
+      styleId: BUNDLED_PETS[0].id,
+      mode: 'whole-body',
+      crop: null,
+      tolerance: BACKGROUND_TOLERANCE.default
+    })
+  }, [open])
+
+  const runPipeline = async (
+    image: RgbaImage,
+    next: BuildSettings,
+    fileName: string
+  ): Promise<void> => {
     // Why: head-swap composes onto the pet's own artwork, so it has to be
     // decoded first. The other modes never touch it, so it is not loaded.
     let petBody: RgbaImage | null = null
@@ -139,7 +160,7 @@ export function PetFromImageDialog({
         petBody = await decodeImageFile(await response.blob())
       }
     }
-    const build = buildPetFromImage(source, next.styleId, {
+    const build = buildPetFromImage(image, next.styleId, {
       mode: next.mode,
       petBody,
       crop: next.crop ?? undefined,
@@ -150,15 +171,19 @@ export function PetFromImageDialog({
   }
 
   const onPick = async (event: React.ChangeEvent<HTMLInputElement>): Promise<void> => {
-    const file = event.target.files?.[0]
+    const input = event.target
+    const file = input.files?.[0]
     if (!file) {
       return
     }
+    // Why: the input keeps the chosen path, so after a failure the same file
+    // fires no change event at all and the user cannot retry it.
+    input.value = ''
     setBusy(true)
     setError(null)
     try {
-      const source = await decodeImageFile(file)
-      sourceRef.current = source
+      const image = await decodeImageFile(file)
+      setSource(image)
       // Why: framing and tolerance describe one picture. Carrying them onto the
       // next upload would silently build it from a box drawn around something
       // that is no longer there.
@@ -168,10 +193,11 @@ export function PetFromImageDialog({
         tolerance: BACKGROUND_TOLERANCE.default
       }
       setSettings(fresh)
-      setSourceUrl(await imageToDataUrl(source))
-      await runPipeline(fresh, file.name)
+      setSourceUrl(await imageToDataUrl(image))
+      await runPipeline(image, fresh, file.name)
     } catch (cause) {
       setDraft(null)
+      setSource(null)
       setSourceUrl(null)
       setError(cause instanceof Error ? cause.message : String(cause))
     } finally {
@@ -182,13 +208,13 @@ export function PetFromImageDialog({
   const rebuild = async (patch: Partial<BuildSettings>): Promise<void> => {
     const next = { ...settings, ...patch }
     setSettings(next)
-    if (!draft) {
+    if (!source || !draft) {
       return
     }
     setBusy(true)
     setError(null)
     try {
-      await runPipeline(next, draft.fileName)
+      await runPipeline(source, next, draft.fileName)
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : String(cause))
     } finally {
@@ -301,11 +327,11 @@ export function PetFromImageDialog({
             </p>
           </div>
 
-          {sourceRef.current && sourceUrl ? (
+          {source && sourceUrl ? (
             <div className="flex items-start gap-3">
               <PetSourceCrop
                 sourceUrl={sourceUrl}
-                image={sourceRef.current}
+                image={source}
                 crop={crop}
                 onCrop={(rect) => void rebuild({ crop: rect })}
                 box={CROP_BOX}

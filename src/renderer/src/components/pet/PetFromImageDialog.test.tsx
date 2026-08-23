@@ -61,6 +61,12 @@ function render(props: Partial<React.ComponentProps<typeof PetFromImageDialog>> 
   container = document.createElement('div')
   document.body.appendChild(container)
   root = createRoot(container)
+  rerender(props)
+}
+
+/** Re-renders into the same root, so component state survives the way it does
+ *  in the app — the dialog's owner keeps it mounted and only flips `open`. */
+function rerender(props: Partial<React.ComponentProps<typeof PetFromImageDialog>> = {}): void {
   act(() => {
     root?.render(
       <PetFromImageDialog open onOpenChange={() => {}} onCreated={() => {}} {...props} />
@@ -77,6 +83,21 @@ async function pickFile(): Promise<void> {
   await act(async () => {
     input.dispatchEvent(new Event('change', { bubbles: true }))
   })
+}
+
+/** Picks a file, reporting whether the handler cleared the input afterwards. */
+async function pickFileWatchingValue(): Promise<boolean> {
+  const input = document.querySelector('input[type="file"]') as HTMLInputElement
+  let cleared = false
+  Object.defineProperty(input, 'value', {
+    get: () => '',
+    set: (next: string) => {
+      cleared = next === ''
+    },
+    configurable: true
+  })
+  await pickFile()
+  return cleared
 }
 
 /** Drags a marquee across the crop surface, in surface-local coordinates. */
@@ -292,6 +313,32 @@ describe('PetFromImageDialog', () => {
     expect(document.querySelector('[data-tolerance]')?.getAttribute('data-tolerance')).not.toBe(
       before
     )
+  })
+
+  it('starts empty when it is opened again', async () => {
+    // Why: the owner keeps this component mounted and only flips `open`, so
+    // without a reset the next open still shows the last picture and verdict.
+    render()
+    await pickFile()
+    expect(document.querySelector('[data-preview-row]')).not.toBeNull()
+
+    rerender({ open: false })
+    rerender({ open: true })
+
+    expect(document.querySelector('[data-preview-row]')).toBeNull()
+    expect(document.querySelector('[data-crop-surface]')).toBeNull()
+    expect(bodyText()).toContain('No image chosen yet')
+  })
+
+  it('lets the same file be chosen again after it was refused', async () => {
+    // Why: a file input holds its path, so re-picking the same file fires no
+    // change event at all unless the value is cleared.
+    decoded.current = noisyImage()
+    render()
+
+    const cleared = await pickFileWatchingValue()
+
+    expect(cleared).toBe(true)
   })
 
   it('says so when the style artwork cannot be fetched', async () => {
