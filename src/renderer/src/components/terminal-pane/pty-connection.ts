@@ -6396,6 +6396,10 @@ export function connectPanePty(
       } else if (releaseHiddenDeliveryClaim) {
         releaseHiddenDeliveryClaim()
         releaseHiddenDeliveryClaim = null
+        // Why: unhide must latch restore locally. Waiting for main's one-shot
+        // marker races light-tab reveal, which no-ops when restore isn't needed
+        // yet, then live TUI frames never paint the gated-stale alt-screen.
+        markHiddenOutputRestoreNeeded()
       } else if (isFirstSyncForPty) {
         // Why: clear unconditionally on first sync — a stale main-side hidden bit can survive a renderer reload for daemon-backed PTYs that keep their session id.
         declareRendererPtyDeliveryVisible(ptyId)

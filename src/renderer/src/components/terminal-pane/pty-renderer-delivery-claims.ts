@@ -7,6 +7,7 @@ type VisibilityClaim = { ptyId: string; visible: boolean }
 
 const visibilityClaimsByOwner = new Map<object, VisibilityClaim>()
 const visibleClaimCounts = new Map<string, number>()
+const lastPublishedHiddenGate = new Map<string, boolean>()
 
 function sendHiddenState(ptyId: string, hidden: boolean): void {
   recordTerminalFreezeBreadcrumb(hidden ? 'renderer-gate-mark' : 'renderer-gate-unmark', {
@@ -15,20 +16,38 @@ function sendHiddenState(ptyId: string, hidden: boolean): void {
   ;(globalThis as { window?: Window }).window?.api?.pty?.setHiddenRendererPty?.(ptyId, hidden)
 }
 
+function shouldGateHiddenRendererPty(ptyId: string): boolean {
+  return (hiddenClaimCounts.get(ptyId) ?? 0) > 0 && (visibleClaimCounts.get(ptyId) ?? 0) === 0
+}
+
+function publishHiddenRendererGate(ptyId: string): void {
+  const hidden = shouldGateHiddenRendererPty(ptyId)
+  if (lastPublishedHiddenGate.get(ptyId) === hidden) {
+    return
+  }
+  if (lastPublishedHiddenGate.get(ptyId) === undefined && !hidden) {
+    lastPublishedHiddenGate.set(ptyId, false)
+    return
+  }
+  lastPublishedHiddenGate.set(ptyId, hidden)
+  sendHiddenState(ptyId, hidden)
+  if (!hidden && !hiddenClaimCounts.has(ptyId) && !visibleClaimCounts.has(ptyId)) {
+    lastPublishedHiddenGate.delete(ptyId)
+  }
+}
+
 function sendVisibility(ptyId: string, visible: boolean): void {
   ;(globalThis as { window?: Window }).window?.api?.pty?.setRendererPtyVisible?.(ptyId, visible)
 }
 
 /**
  * Holds a hidden-delivery claim until the returned release function runs.
- * Main sees only the first-acquire/last-release transitions for each PTY.
+ * Main stays gated only while some hidden owner exists and no visible owner does.
  */
 export function acquireHiddenRendererPtyDeliveryClaim(ptyId: string): () => void {
   const nextCount = (hiddenClaimCounts.get(ptyId) ?? 0) + 1
   hiddenClaimCounts.set(ptyId, nextCount)
-  if (nextCount === 1) {
-    sendHiddenState(ptyId, true)
-  }
+  publishHiddenRendererGate(ptyId)
 
   let released = false
   return () => {
@@ -39,19 +58,22 @@ export function acquireHiddenRendererPtyDeliveryClaim(ptyId: string): () => void
     const currentCount = hiddenClaimCounts.get(ptyId) ?? 0
     if (currentCount <= 1) {
       hiddenClaimCounts.delete(ptyId)
-      sendHiddenState(ptyId, false)
+      publishHiddenRendererGate(ptyId)
       return
     }
     hiddenClaimCounts.set(ptyId, currentCount - 1)
+    publishHiddenRendererGate(ptyId)
   }
 }
 
 /** Clears stale main state for a visible PTY without overriding another live
  * hidden owner that is still completing a pane-to-watcher handoff. */
 export function declareRendererPtyDeliveryVisible(ptyId: string): void {
-  if (!hiddenClaimCounts.has(ptyId)) {
-    sendHiddenState(ptyId, false)
+  if (shouldGateHiddenRendererPty(ptyId)) {
+    return
   }
+  lastPublishedHiddenGate.set(ptyId, false)
+  sendHiddenState(ptyId, false)
 }
 
 function removeVisibleClaim(claim: VisibilityClaim): boolean {
@@ -86,6 +108,9 @@ export function setRendererPtyVisibilityClaim(
     if (becameHidden && previous.ptyId !== ptyId) {
       sendVisibility(previous.ptyId, false)
     }
+    if (previous.ptyId !== ptyId) {
+      publishHiddenRendererGate(previous.ptyId)
+    }
   }
 
   visibilityClaimsByOwner.set(owner, { ptyId, visible })
@@ -95,12 +120,14 @@ export function setRendererPtyVisibilityClaim(
     if (nextCount === 1) {
       sendVisibility(ptyId, true)
     }
+    publishHiddenRendererGate(ptyId)
     return
   }
 
   if (!visibleClaimCounts.has(ptyId)) {
     sendVisibility(ptyId, false)
   }
+  publishHiddenRendererGate(ptyId)
 }
 
 export function releaseRendererPtyVisibilityClaim(owner: object): void {
@@ -112,6 +139,7 @@ export function releaseRendererPtyVisibilityClaim(owner: object): void {
   if (removeVisibleClaim(previous)) {
     sendVisibility(previous.ptyId, false)
   }
+  publishHiddenRendererGate(previous.ptyId)
 }
 
 /** Test seam: renderer reload naturally clears these module-scoped claims. */
@@ -119,4 +147,5 @@ export function _resetPtyRendererDeliveryClaimsForTest(): void {
   hiddenClaimCounts.clear()
   visibilityClaimsByOwner.clear()
   visibleClaimCounts.clear()
+  lastPublishedHiddenGate.clear()
 }
