@@ -197,9 +197,11 @@ const BASHISM =
  * cannot close the object early; offsets survive blanking, so the slice is
  * taken from the real source and the payload is still readable.
  */
-function collectRunnerCallArguments(source: string): string[] {
+type CallRange = { text: string; start: number; end: number }
+
+function collectRunnerCallArguments(source: string): CallRange[] {
   const blanked = blankStringContents(source)
-  const calls: string[] = []
+  const calls: CallRange[] = []
   const callees = new Set(['runWslProcess'])
   for (const alias of source.matchAll(/\brunWslProcess\s+as\s+(\w+)/g)) {
     callees.add(alias[1]!)
@@ -219,7 +221,7 @@ function collectRunnerCallArguments(source: string): string[] {
       } else if (char === ')') {
         depth -= 1
         if (depth === 0) {
-          calls.push(source.slice(open, index + 1))
+          calls.push({ text: source.slice(open, index + 1), start: open, end: index + 1 })
           break
         }
       }
@@ -253,7 +255,7 @@ describe('bash-only payloads declare their interpreter', () => {
     }
     const calls = collectRunnerCallArguments(source)
     // Per-call: an unpinned payload sitting beside a pinned one.
-    if (calls.some((call) => BASHISM.test(call) && !call.includes("shell: 'bash'"))) {
+    if (calls.some(({ text }) => BASHISM.test(text) && !text.includes("shell: 'bash'"))) {
       offenders.push(relativePath)
       continue
     }
@@ -270,15 +272,29 @@ describe('bash-only payloads declare their interpreter', () => {
     // Stripping the bash-pinned calls is what keeps codex-accounts/service.ts
     // clean -- it pins bash on four inline payloads and on a `bash -lc`
     // execFileSync, and correctly leaves its printf/mkdir calls unpinned.
-    const bashPinned = [
-      ...calls.filter((call) => call.includes("shell: 'bash'")),
-      ...[...source.matchAll(/'bash',\s*\n?\s*'-lc',[\s\S]{0,4000}?\n\s*\]/g)].map((m) => m[0])
+    // Masked by POSITION, not by String.replace: replace() with a string
+    // pattern removes only the first match, so two identically-written pinned
+    // calls would leave one behind, and a body that also occurs earlier as a
+    // substring would blank the wrong region.
+    const pinnedRanges: Array<[number, number]> = [
+      ...calls.filter(({ text }) => text.includes("shell: 'bash'")).map(({ start, end }): [number, number] => [start, end]),
+      ...[...source.matchAll(/'bash',\s*\n?\s*'-lc',[\s\S]{0,4000}?\n\s*\]/g)].map(
+        (m): [number, number] => [m.index, m.index + m[0].length]
+      )
     ]
-    const unpinnedRegion = bashPinned.reduce((rest, text) => rest.replace(text, ''), source)
+    const masked = source.split('')
+    for (const [from, to] of pinnedRanges) {
+      for (let index = from; index < to; index += 1) {
+        masked[index] = ' '
+      }
+    }
+    const unpinnedRegion = masked.join('')
     // A spread hides every key, `script` and `shell` alike, so it has to count
     // as carrying a script -- otherwise `runWslProcess({ ...spec })` is a hole
     // the file-wide arm never looks at.
-    const scriptCalls = calls.filter((call) => /\bscript\b/.test(call) || /\.\.\./.test(call))
+    const scriptCalls = calls.filter(
+      ({ text }) => /\bscript\b/.test(text) || /\.\.\./.test(text)
+    )
     // Zero collected calls is not zero risk: `Object.assign({...}, {script})`
     // puts the payload in the second literal, and a renamed callee that the
     // alias scan misses collects nothing at all. If the file carries a bashism
@@ -286,7 +302,7 @@ describe('bash-only payloads declare their interpreter', () => {
     const unreadable = calls.length === 0
     if (
       BASHISM.test(unpinnedRegion) &&
-      (unreadable || scriptCalls.some((call) => !call.includes("shell: 'bash'")))
+      (unreadable || scriptCalls.some(({ text }) => !text.includes("shell: 'bash'")))
     ) {
       offenders.push(relativePath)
     }
