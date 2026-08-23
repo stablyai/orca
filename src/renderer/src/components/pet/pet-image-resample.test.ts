@@ -102,6 +102,24 @@ describe('resampleSubject', () => {
     expect(out.data[3]).toBe(0)
   })
 
+  it('keeps a soft cutout edge instead of hardening it to opaque', () => {
+    const { image, mask } = source()
+    // A feathered left column of the subject: still above the mask threshold,
+    // so it is drawn — the alpha is the whole point of a hand-made cutout.
+    for (let y = BOUNDS.y0; y <= BOUNDS.y1; y++) {
+      image.data[(y * SRC_W + BOUNDS.x0) * 4 + 3] = 160
+    }
+
+    const out = resampleSubject(image, mask, BOUNDS, target)
+    const box = opaqueBounds(out)
+    const alphas = new Set<number>()
+    for (let y = box.y0; y <= box.y1; y++) {
+      alphas.add(out.data[(y * out.width + box.x0) * 4 + 3])
+    }
+
+    expect([...alphas]).toEqual([160])
+  })
+
   it('never lets the subject grow past the headroom above the floor', () => {
     const { image, mask } = source()
     // A floor near the top leaves almost no room; the subject must shrink.

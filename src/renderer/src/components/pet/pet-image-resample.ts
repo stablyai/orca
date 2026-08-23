@@ -67,7 +67,10 @@ export function resampleSubject(
       out[ti] = image.data[si]
       out[ti + 1] = image.data[si + 1]
       out[ti + 2] = image.data[si + 2]
-      out[ti + 3] = 255
+      // Why not 255: an upload that arrived with its own alpha was cut out by
+      // someone with more to work with than a corner fill, and hardening its
+      // feathered edge is the one thing that makes it look pasted on.
+      out[ti + 3] = image.data[si + 3]
     }
   }
 
