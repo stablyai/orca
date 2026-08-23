@@ -1801,14 +1801,6 @@ type ProviderBufferAcquisition = {
   timedOut: boolean
 }
 
-type ProviderBufferWait = {
-  timeoutMs?: number
-  retireOnTimeout?: boolean
-  // Why: hands back the exact acquisition this caller joined, so it can retire that one later
-  // instead of guessing which acquisition the map still holds by then.
-  onAcquisition?: (ptyId: string, acquisition: ProviderBufferAcquisition) => void
-}
-
 type RuntimeTerminalBufferSnapshot = {
   data: string
   /** Live state that can be restored without an alternate-screen frame. */
@@ -2995,6 +2987,19 @@ export type RuntimeRendererReloadFence = Readonly<{
   revision: number
   recovery: 'renderer' | 'headless' | 'reloading'
 }>
+
+/** How a caller wants the provider-held screen fetched when the runtime has no
+ *  bytes of its own. `visibleScreenOnly` narrows the result to the current grid:
+ *  scrollback can still hold a ready banner a working agent printed minutes ago,
+ *  which is history, not evidence of what the agent is doing now. */
+type ProviderSnapshotReadOptions = {
+  timeoutMs?: number
+  retireOnTimeout?: boolean
+  visibleScreenOnly?: boolean
+  // Why: hands back the exact acquisition this caller joined, so it can retire that one later
+  // instead of guessing which acquisition the map still holds by then.
+  onAcquisition?: (ptyId: string, acquisition: ProviderBufferAcquisition) => void
+}
 
 export class OrcaRuntimeService {
   private readonly runtimeId = randomUUID()
@@ -13242,11 +13247,18 @@ export class OrcaRuntimeService {
   private async serializeProviderTerminalBuffer(
     ptyId: string,
     opts: { scrollbackRows?: number } = {},
-    wait: ProviderBufferWait = {}
+    wait: ProviderSnapshotReadOptions = {}
   ): Promise<PtyProviderBufferSnapshot | null> {
     const generation = this.getPtyLifecycleGeneration(ptyId)
     const scrollbackRows = Math.max(0, Math.floor(opts.scrollbackRows ?? 0))
     let acquisition = this.providerBufferAcquisitionsByPtyId.get(ptyId)
+    // Why before the re-acquire branch: an unresponsive provider is a property of
+    // the process, not of the row count one caller asked for. Checking retirement
+    // only after re-acquiring let a wider request replace the retired entry and
+    // hang again; the hung call's own settle still clears it and allows recovery.
+    if (acquisition?.generation === generation && acquisition.timedOut) {
+      return null
+    }
     if (
       !acquisition ||
       acquisition.generation !== generation ||
@@ -13352,7 +13364,7 @@ export class OrcaRuntimeService {
     ptyId: string,
     read: RuntimeTerminalRead,
     opts: { cursor?: number; limit?: number } = {},
-    providerWait: ProviderBufferWait = {}
+    providerSnapshot: ProviderSnapshotReadOptions = {}
   ): Promise<RuntimeTerminalRead> {
     if (typeof opts.cursor === 'number') {
       return read
@@ -13370,7 +13382,7 @@ export class OrcaRuntimeService {
       const providerLines = await this.readProviderTerminalTailLines(
         ptyId,
         opts.limit,
-        providerWait
+        providerSnapshot
       )
       if (providerLines.length > 0) {
         return buildVisibleSnapshotReadFallback(read, providerLines, opts.limit)
@@ -13410,16 +13422,30 @@ export class OrcaRuntimeService {
   private async readProviderTerminalTailLines(
     ptyId: string,
     limit: number | undefined,
-    wait: ProviderBufferWait = {}
+    snapshotOptions: ProviderSnapshotReadOptions = {}
   ): Promise<string[]> {
+    const generation = this.getPtyLifecycleGeneration(ptyId)
     const lineLimit = terminalReadLimit(limit, DEFAULT_TERMINAL_READ_LIMIT)
     const snapshot = await this.serializeProviderTerminalBuffer(
       ptyId,
-      { scrollbackRows: lineLimit },
-      wait
+      { scrollbackRows: snapshotOptions.visibleScreenOnly ? 0 : lineLimit },
+      snapshotOptions
     )
-    const data = snapshot ? `${snapshot.scrollbackAnsi ?? ''}${snapshot.data}` : ''
-    if (!snapshot || data.length === 0) {
+    if (!snapshot) {
+      return []
+    }
+    // Why: a cached acquisition can carry scrollback this caller did not ask for,
+    // so visible-only reads parse the grid itself rather than trusting the request.
+    if (snapshotOptions.visibleScreenOnly) {
+      const lines = await this.parseVisibleSnapshotLines(snapshot)
+      // Live bytes ordered after the provider frame make that frame stale.
+      return this.getPtyLifecycleGeneration(ptyId) === generation &&
+        this.getPtyOutputSequence(ptyId) <= snapshot.seq
+        ? lines
+        : []
+    }
+    const data = `${snapshot.scrollbackAnsi ?? ''}${snapshot.data}`
+    if (data.length === 0) {
       return []
     }
     const emulator = new HeadlessEmulator({
@@ -13429,7 +13455,11 @@ export class OrcaRuntimeService {
     })
     try {
       await emulator.write(data)
-      return visibleNonBlankTerminalLines(emulator.getBufferTailLines(lineLimit))
+      const lines = visibleNonBlankTerminalLines(emulator.getBufferTailLines(lineLimit))
+      return this.getPtyLifecycleGeneration(ptyId) === generation &&
+        this.getPtyOutputSequence(ptyId) <= snapshot.seq
+        ? lines
+        : []
     } finally {
       emulator.dispose()
     }
@@ -13505,7 +13535,10 @@ export class OrcaRuntimeService {
       }
     }
     const lines = await this.parseVisibleSnapshotLines(snapshot)
-    if (this.getPtyLifecycleGeneration(ptyId) !== generation) {
+    if (
+      this.getPtyLifecycleGeneration(ptyId) !== generation ||
+      this.getPtyOutputSequence(ptyId) > snapshot.seq
+    ) {
       return null
     }
     const visibleState: RuntimeVisibleTerminalState = {
@@ -13514,9 +13547,7 @@ export class OrcaRuntimeService {
       sequence: snapshot.seq,
       generation
     }
-    if (this.getPtyOutputSequence(ptyId) <= snapshot.seq) {
-      this.providerVisibleStateByPtyId.set(ptyId, visibleState)
-    }
+    this.providerVisibleStateByPtyId.set(ptyId, visibleState)
     return visibleState
   }
 
@@ -18473,14 +18504,14 @@ export class OrcaRuntimeService {
   async readTerminal(
     handle: string,
     opts: { cursor?: number; limit?: number; screen?: boolean } = {},
-    providerWait: ProviderBufferWait = {}
+    providerSnapshot: ProviderSnapshotReadOptions = {}
   ): Promise<RuntimeTerminalRead> {
     const pty = this.getLivePtyForHandle(handle)
     if (pty) {
       const read = this.readPtyTerminal(handle, pty.pty, opts)
       const visibleRead = opts.screen
         ? await this.readRenderedScreen(pty.pty.ptyId, read, opts)
-        : await this.withVisibleSnapshotFallback(pty.pty.ptyId, read, opts, providerWait)
+        : await this.withVisibleSnapshotFallback(pty.pty.ptyId, read, opts, providerSnapshot)
       this.assertLiveTerminalHandleTargetsPty(handle, pty.pty.ptyId)
       return labelTerminalReadSource(visibleRead)
     }
@@ -18502,7 +18533,7 @@ export class OrcaRuntimeService {
     }
     const visibleRead = opts.screen
       ? await this.readRenderedScreen(leaf.ptyId, read, opts)
-      : await this.withVisibleSnapshotFallback(leaf.ptyId, read, opts, providerWait)
+      : await this.withVisibleSnapshotFallback(leaf.ptyId, read, opts, providerSnapshot)
     this.assertLiveTerminalHandleTargetsPty(handle, leaf.ptyId)
     return labelTerminalReadSource(visibleRead)
   }
@@ -35572,6 +35603,11 @@ export class OrcaRuntimeService {
     }
   }
 
+  /** One bounded look at the provider's screen for an adopted PTY whose retained
+   *  readiness metadata was lost. Deliberately single-shot: it answers "is the
+   *  screen already showing a settled prompt", and the poll above owns every
+   *  later transition. A provider screen that is still working when this fires
+   *  resolves through the poll, not here. */
   private startTuiIdleVisibleReadProbe(waiter: TerminalWaiter, waiterTimeoutMs: number): void {
     const snapshotTimeoutMs = Math.min(
       VISIBLE_TERMINAL_SNAPSHOT_TIMEOUT_MS,
@@ -35584,6 +35620,9 @@ export class OrcaRuntimeService {
         {
           timeoutMs: snapshotTimeoutMs,
           retireOnTimeout: true,
+          // Why: the ready banner stays in scrollback for the whole session, so
+          // classifying history would call a working agent idle (#15569 review).
+          visibleScreenOnly: true,
           onAcquisition: (ptyId, acquisition) => {
             waiter.probedAcquisition = { ptyId, acquisition }
           }
@@ -35605,29 +35644,33 @@ export class OrcaRuntimeService {
         if (!blockedReason && !isKnownReadyPromptPreview(snapshotText)) {
           return
         }
+        // Why resolve before clearing: a stale handle throws while locating the
+        // record, and a cleared interval would leave the waiter with no poll and
+        // no probe — able to end only in timeout.
+        const result = this.buildTuiIdleProbeResult(waiter.handle, blockedReason)
         if (waiter.pollInterval) {
           clearInterval(waiter.pollInterval)
           waiter.pollInterval = null
         }
-        const pty = this.getLivePtyForHandle(waiter.handle)
-        if (pty) {
-          this.resolveWaiter(
-            waiter,
-            blockedReason
-              ? buildPtyTerminalWaitBlockedResult(waiter.handle, 'tui-idle', pty.pty, blockedReason)
-              : buildPtyTerminalWaitResult(waiter.handle, 'tui-idle', pty.pty)
-          )
-          return
-        }
-        const { leaf } = this.getLiveLeafForHandle(waiter.handle)
-        this.resolveWaiter(
-          waiter,
-          blockedReason
-            ? buildTerminalWaitBlockedResult(waiter.handle, 'tui-idle', leaf, blockedReason)
-            : buildTerminalWaitResult(waiter.handle, 'tui-idle', leaf)
-        )
+        this.resolveWaiter(waiter, result)
       })
       .catch(() => {})
+  }
+
+  private buildTuiIdleProbeResult(
+    handle: string,
+    blockedReason: RuntimeTerminalWaitBlockedReason | null
+  ): RuntimeTerminalWait {
+    const pty = this.getLivePtyForHandle(handle)
+    if (pty) {
+      return blockedReason
+        ? buildPtyTerminalWaitBlockedResult(handle, 'tui-idle', pty.pty, blockedReason)
+        : buildPtyTerminalWaitResult(handle, 'tui-idle', pty.pty)
+    }
+    const { leaf } = this.getLiveLeafForHandle(handle)
+    return blockedReason
+      ? buildTerminalWaitBlockedResult(handle, 'tui-idle', leaf, blockedReason)
+      : buildTerminalWaitResult(handle, 'tui-idle', leaf)
   }
 
   private getAdoptedPtyExplicitIdleStatus(pty: RuntimePtyWorktreeRecord): AgentStatus | null {

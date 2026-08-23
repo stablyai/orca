@@ -36,13 +36,11 @@ if (args.includes('app-server')) {
 append({ event: 'spawn', args })
 process.stdout.write('\\u001b]0;Codex Ready\\u0007OpenAI Codex\\nmodel: e2e\\ndirectory: e2e\\n')
 ${FAKE_AGENT_PASTE_END_SCANNER_SOURCE}
-let pasteEnded = false
 process.stdin.on('data', (chunk) => {
   const input = chunk.toString()
   const pasteEndScan = scanFakeAgentPasteEnd(fakeAgentPasteEndTail, input)
   fakeAgentPasteEndTail = pasteEndScan.tail
-  if (pasteEndScan.ended) {
-    pasteEnded = true
+  if (pasteEndScan.pasteEndOffset !== null) {
     process.stdout.write('\\x1b[?25h')
   }
   append({ event: 'input', input })
@@ -50,10 +48,12 @@ process.stdin.on('data', (chunk) => {
     append({ event: 'normal-exit' })
     process.exit(0)
   }
-  if (pasteEnded && input.includes('\\r')) {
-    process.stdout.write('\\u001b]0;Codex Working\\u0007ACK\\n')
+  fakeAgentMaybeAck(pasteEndScan, input, (mode) => {
+    append({ event: 'ack', mode })
+    const message = mode === 'bracketed' ? 'ACK' : 'PASTE_PROTOCOL_ERROR'
+    process.stdout.write('\\u001b]0;Codex Working\\u0007' + message + '\\n')
     setTimeout(() => process.stdout.write('\\u001b]0;Codex Ready\\u0007'), 10)
-  }
+  })
 })
 process.stdin.setRawMode?.(true)
 process.stdin.resume()
@@ -79,9 +79,10 @@ export const completedWorkerLaunchEnv = {
 
 export type LifecycleEvent = {
   pid: number
-  event: 'spawn' | 'input' | 'normal-exit'
+  event: 'spawn' | 'input' | 'ack' | 'normal-exit'
   args?: string[]
   input?: string
+  mode?: 'bracketed' | 'unbracketed'
 }
 
 export type TerminalIdentity = Pick<
