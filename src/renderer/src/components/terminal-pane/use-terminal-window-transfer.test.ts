@@ -2,6 +2,7 @@
 
 import { renderHook, waitFor } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { createTestStore, seedStore } from '@/store/slices/store-test-helpers'
 
 const mocks = vi.hoisted(() => ({
   getState: vi.fn(),
@@ -283,40 +284,126 @@ describe('executeTerminalWindowTransferCommand', () => {
     expect(unsubscribe).toHaveBeenCalledOnce()
   })
 
-  it('rolls back an import exactly when durable flush rejects, then accepts its inverse', async () => {
-    const beforeFields = {
-      tabsByWorktree: {},
-      unifiedTabsByWorktree: {},
-      groupsByWorktree: {},
-      terminalLayoutsByTabId: {},
-      ptyIdsByTabId: {},
-      lastKnownRelayPtyIdByTabId: {}
-    }
+  it('reports fresh content added while persistence is pending as nonempty', async () => {
+    let resolvePersist!: () => void
     let state: Record<string, unknown>
+    const concurrentTab = { id: 'tab-concurrent' }
+    const concurrentFile = { id: 'file-concurrent', worktreeId: 'wt-1' }
+    const concurrentBrowser = { id: 'browser-concurrent' }
+    const removeTransferredTerminalTab = vi.fn(() => {
+      state = {
+        ...state,
+        tabsByWorktree: { 'wt-1': [] },
+        unifiedTabsByWorktree: {},
+        openFiles: [],
+        browserTabsByWorktree: {}
+      }
+      return true
+    })
+    state = {
+      workspaceSessionReady: true,
+      hydrationSucceeded: true,
+      importTransferredTerminalTab: vi.fn(() => true),
+      restoreTransferredTerminalTab: vi.fn(() => true),
+      removeTransferredTerminalTab,
+      tabsByWorktree: { 'wt-1': [{ id: 'tab-1' }] },
+      unifiedTabsByWorktree: {},
+      openFiles: [],
+      browserTabsByWorktree: {}
+    }
+    mocks.getState.mockImplementation(() => state)
+    mocks.persist.mockReturnValueOnce(new Promise<void>((resolve) => (resolvePersist = resolve)))
+
+    const result = executeTerminalWindowTransferCommand({
+      transferId: 'transfer-fresh-empty',
+      tabId: 'tab-1',
+      phase: 'source-remove'
+    })
+    await waitFor(() => expect(mocks.persist).toHaveBeenCalledOnce())
+    state = {
+      ...state,
+      tabsByWorktree: { 'wt-1': [concurrentTab] },
+      openFiles: [concurrentFile],
+      browserTabsByWorktree: { 'wt-1': [concurrentBrowser] }
+    }
+    resolvePersist()
+
+    await expect(result).resolves.toMatchObject({ empty: false })
+    expect(state.tabsByWorktree).toEqual({ 'wt-1': [concurrentTab] })
+    expect(state.openFiles).toEqual([concurrentFile])
+    expect(state.browserTabsByWorktree).toEqual({ 'wt-1': [concurrentBrowser] })
+    expect(mocks.build).toHaveBeenCalledWith(
+      expect.objectContaining({ tabsByWorktree: { 'wt-1': [] }, openFiles: [] })
+    )
+  })
+
+  it('rolls back an import exactly when durable flush rejects, then accepts its inverse', async () => {
+    const store = createTestStore()
     const actions = {
       workspaceSessionReady: true,
       hydrationSucceeded: true,
       importTransferredTerminalTab: vi.fn(() => {
-        state = {
-          ...state,
+        store.setState({
           tabsByWorktree: { 'wt-1': [{ id: 'tab-1' }] },
-          unifiedTabsByWorktree: { 'wt-1': [{ id: 'tab-1' }] },
-          groupsByWorktree: { 'wt-1': [{ id: 'group-1', tabOrder: ['tab-1'] }] },
+          unifiedTabsByWorktree: {
+            'wt-1': [
+              {
+                id: 'tab-1',
+                entityId: 'tab-1',
+                contentType: 'terminal',
+                worktreeId: 'wt-1',
+                groupId: 'group-1'
+              }
+            ]
+          },
+          groupsByWorktree: {
+            'wt-1': [
+              {
+                id: 'group-1',
+                worktreeId: 'wt-1',
+                tabOrder: ['tab-1'],
+                activeTabId: 'tab-1'
+              }
+            ]
+          },
+          layoutByWorktree: { 'wt-1': { type: 'leaf', groupId: 'group-1' } },
+          tabBarOrderByWorktree: { 'wt-1': ['tab-1'] },
           terminalLayoutsByTabId: { 'tab-1': { root: null } },
           ptyIdsByTabId: { 'tab-1': ['pty-1'] },
           lastKnownRelayPtyIdByTabId: { 'tab-1': 'pty-1' }
-        }
+        } as never)
         return true
       }),
       restoreTransferredTerminalTab: vi.fn(() => true),
       removeTransferredTerminalTab: vi.fn(() => true)
     }
-    state = { ...actions, ...beforeFields, openFiles: [], browserTabsByWorktree: {} }
-    mocks.getState.mockImplementation(() => state)
-    mocks.setState.mockImplementation((updater) => {
-      const patch = typeof updater === 'function' ? updater(state) : updater
-      state = { ...state, ...patch }
+    seedStore(store, {
+      ...actions,
+      tabsByWorktree: {},
+      unifiedTabsByWorktree: {},
+      groupsByWorktree: {},
+      layoutByWorktree: {},
+      tabBarOrderByWorktree: {},
+      terminalLayoutsByTabId: {},
+      ptyIdsByTabId: {},
+      lastKnownRelayPtyIdByTabId: {},
+      openFiles: [],
+      browserTabsByWorktree: {}
     })
+    const beforeFields = Object.fromEntries(
+      [
+        'tabsByWorktree',
+        'unifiedTabsByWorktree',
+        'groupsByWorktree',
+        'layoutByWorktree',
+        'tabBarOrderByWorktree',
+        'terminalLayoutsByTabId',
+        'ptyIdsByTabId',
+        'lastKnownRelayPtyIdByTabId'
+      ].map((field) => [field, store.getState()[field as keyof ReturnType<typeof store.getState>]])
+    )
+    mocks.getState.mockImplementation(store.getState)
+    mocks.setState.mockImplementation(store.setState)
     mocks.persist.mockRejectedValueOnce(new Error('flush failed')).mockResolvedValueOnce(undefined)
     const seed = { tabId: 'tab-1' } as never
 
@@ -329,7 +416,9 @@ describe('executeTerminalWindowTransferCommand', () => {
       })
     ).rejects.toThrow('flush failed')
     for (const [field, value] of Object.entries(beforeFields)) {
-      expect(state[field]).toBe(value)
+      expect(store.getState()[field as keyof ReturnType<typeof store.getState>], field).toEqual(
+        value
+      )
     }
 
     await executeTerminalWindowTransferCommand({
@@ -342,10 +431,39 @@ describe('executeTerminalWindowTransferCommand', () => {
   })
 
   it('rolls back every source removal projection when durable set rejects', async () => {
+    const sourceTab = { id: 'tab-1', worktreeId: 'wt-1' }
+    const sourceUnified = {
+      id: 'tab-1',
+      entityId: 'tab-1',
+      contentType: 'terminal',
+      worktreeId: 'wt-1',
+      groupId: 'group-1'
+    }
+    const sourceGroup = {
+      id: 'group-1',
+      worktreeId: 'wt-1',
+      tabOrder: ['tab-1'],
+      activeTabId: 'tab-1'
+    }
+    const concurrentTab = { id: 'tab-concurrent', worktreeId: 'wt-1' }
+    const concurrentUnified = {
+      id: 'editor-concurrent',
+      entityId: 'editor-concurrent',
+      contentType: 'editor',
+      worktreeId: 'wt-1',
+      groupId: 'group-concurrent'
+    }
+    const concurrentGroup = {
+      id: 'group-concurrent',
+      worktreeId: 'wt-1',
+      tabOrder: ['editor-concurrent'],
+      activeTabId: 'editor-concurrent'
+    }
     const beforeFields = {
-      tabsByWorktree: { 'wt-1': [{ id: 'tab-1' }] },
-      unifiedTabsByWorktree: { 'wt-1': [{ id: 'tab-1' }] },
-      groupsByWorktree: { 'wt-1': [{ id: 'group-1', tabOrder: ['tab-1'] }] },
+      tabsByWorktree: { 'wt-1': [sourceTab] },
+      unifiedTabsByWorktree: { 'wt-1': [sourceUnified] },
+      groupsByWorktree: { 'wt-1': [sourceGroup] },
+      tabBarOrderByWorktree: { 'wt-1': ['tab-1'] },
       layoutByWorktree: { 'wt-1': { type: 'leaf', groupId: 'group-1' } },
       activeGroupIdByWorktree: { 'wt-1': 'group-1' },
       activeTabIdByWorktree: { 'wt-1': 'tab-1' },
@@ -384,6 +502,7 @@ describe('executeTerminalWindowTransferCommand', () => {
           tabsByWorktree: { 'wt-1': [] },
           unifiedTabsByWorktree: { 'wt-1': [] },
           groupsByWorktree: {},
+          tabBarOrderByWorktree: { 'wt-1': [] },
           layoutByWorktree: {},
           activeGroupIdByWorktree: {},
           activeTabIdByWorktree: { 'wt-1': null },
@@ -419,7 +538,32 @@ describe('executeTerminalWindowTransferCommand', () => {
       const patch = typeof updater === 'function' ? updater(state) : updater
       state = { ...state, ...patch }
     })
-    mocks.persist.mockRejectedValueOnce(new Error('set failed')).mockResolvedValueOnce(undefined)
+    mocks.persist
+      .mockImplementationOnce(async () => {
+        state = {
+          ...state,
+          tabsByWorktree: { 'wt-1': [concurrentTab] },
+          unifiedTabsByWorktree: { 'wt-1': [concurrentUnified] },
+          groupsByWorktree: { 'wt-1': [concurrentGroup] },
+          tabBarOrderByWorktree: { 'wt-1': [concurrentTab.id] },
+          layoutByWorktree: {
+            'wt-1': { type: 'leaf', groupId: concurrentGroup.id }
+          },
+          activeGroupIdByWorktree: { 'wt-1': concurrentGroup.id },
+          activeTabIdByWorktree: { 'wt-1': concurrentTab.id },
+          activeTabTypeByWorktree: { 'wt-1': 'editor' },
+          activeTabId: concurrentTab.id,
+          activeTabType: 'editor',
+          directSshLivePtyBindingByTabId: {
+            'tab-concurrent': { ptyId: 'pty-concurrent' }
+          },
+          agentStatusByPaneKey: {
+            'tab-concurrent:leaf-1': { state: 'working' }
+          }
+        }
+        throw new Error('set failed')
+      })
+      .mockResolvedValueOnce(undefined)
 
     await expect(
       executeTerminalWindowTransferCommand({
@@ -428,9 +572,52 @@ describe('executeTerminalWindowTransferCommand', () => {
         phase: 'source-remove'
       })
     ).rejects.toThrow('set failed')
+    const concurrentFields = new Set([
+      'tabsByWorktree',
+      'unifiedTabsByWorktree',
+      'groupsByWorktree',
+      'tabBarOrderByWorktree',
+      'layoutByWorktree',
+      'activeGroupIdByWorktree',
+      'activeTabIdByWorktree',
+      'activeTabTypeByWorktree',
+      'activeTabId',
+      'activeTabType',
+      'directSshLivePtyBindingByTabId',
+      'agentStatusByPaneKey'
+    ])
     for (const [field, value] of Object.entries(beforeFields)) {
-      expect(state[field]).toBe(value)
+      if (concurrentFields.has(field)) {
+        continue
+      }
+      expect(state[field]).toEqual(value)
     }
+    expect(state.tabsByWorktree).toEqual({ 'wt-1': [sourceTab, concurrentTab] })
+    expect(state.unifiedTabsByWorktree).toEqual({
+      'wt-1': [sourceUnified, concurrentUnified]
+    })
+    expect(state.groupsByWorktree).toEqual({ 'wt-1': [sourceGroup, concurrentGroup] })
+    expect(state.tabBarOrderByWorktree).toEqual({
+      'wt-1': ['tab-1', concurrentTab.id]
+    })
+    expect(state.layoutByWorktree).toEqual({
+      'wt-1': {
+        type: 'split',
+        direction: 'horizontal',
+        first: { type: 'leaf', groupId: concurrentGroup.id },
+        second: { type: 'leaf', groupId: sourceGroup.id }
+      }
+    })
+    expect(state.activeGroupIdByWorktree).toEqual({ 'wt-1': concurrentGroup.id })
+    expect(state.activeTabId).toBe(concurrentTab.id)
+    expect(state.directSshLivePtyBindingByTabId).toEqual({
+      'tab-1': { ptyId: 'pty-1' },
+      'tab-concurrent': { ptyId: 'pty-concurrent' }
+    })
+    expect(state.agentStatusByPaneKey).toEqual({
+      'tab-1:leaf-1': { state: 'working' },
+      'tab-concurrent:leaf-1': { state: 'working' }
+    })
 
     await executeTerminalWindowTransferCommand({
       transferId: 'transfer-source-compensate',
@@ -443,32 +630,71 @@ describe('executeTerminalWindowTransferCommand', () => {
   })
 
   it('does not roll back a transfer field changed concurrently after the action', async () => {
-    const beforeTabs = {}
-    const afterTabs = { 'wt-1': [{ id: 'tab-1' }] }
-    const concurrentTabs = { 'wt-1': [{ id: 'tab-concurrent' }] }
-    let state: Record<string, unknown>
+    const transferredTab = { id: 'tab-1', worktreeId: 'wt-1' }
+    const transferredUnified = {
+      id: 'tab-1',
+      entityId: 'tab-1',
+      contentType: 'terminal',
+      worktreeId: 'wt-1',
+      groupId: 'group-1'
+    }
+    const concurrentTab = { id: 'tab-concurrent', worktreeId: 'wt-1' }
+    const concurrentUnified = {
+      id: 'editor-concurrent',
+      entityId: 'editor-concurrent',
+      contentType: 'editor',
+      worktreeId: 'wt-1',
+      groupId: 'group-1'
+    }
+    const store = createTestStore()
     const importTransferredTerminalTab = vi.fn(() => {
-      state = { ...state, tabsByWorktree: afterTabs }
+      store.setState({
+        tabsByWorktree: { 'wt-1': [transferredTab] },
+        unifiedTabsByWorktree: { 'wt-1': [transferredUnified] },
+        groupsByWorktree: {
+          'wt-1': [{ id: 'group-1', tabOrder: ['tab-1'], activeTabId: 'tab-1' }]
+        },
+        directSshLivePtyBindingByTabId: { 'tab-1': { ptyId: 'pty-1' } },
+        agentStatusByPaneKey: { 'tab-1:leaf-1': { state: 'working' } }
+      } as never)
       return true
     })
-    state = {
+    seedStore(store, {
       workspaceSessionReady: true,
       hydrationSucceeded: true,
       importTransferredTerminalTab,
-      restoreTransferredTerminalTab: vi.fn(() => true),
-      removeTransferredTerminalTab: vi.fn(() => true),
-      tabsByWorktree: beforeTabs,
+      tabsByWorktree: {},
       unifiedTabsByWorktree: {},
+      groupsByWorktree: {},
+      directSshLivePtyBindingByTabId: {},
+      agentStatusByPaneKey: {},
       openFiles: [],
       browserTabsByWorktree: {}
-    }
-    mocks.getState.mockImplementation(() => state)
-    mocks.setState.mockImplementation((updater) => {
-      const patch = typeof updater === 'function' ? updater(state) : updater
-      state = { ...state, ...patch }
     })
+    mocks.getState.mockImplementation(store.getState)
+    mocks.setState.mockImplementation(store.setState)
     mocks.persist.mockImplementationOnce(async () => {
-      state = { ...state, tabsByWorktree: concurrentTabs }
+      store.setState({
+        tabsByWorktree: { 'wt-1': [transferredTab, concurrentTab] },
+        unifiedTabsByWorktree: { 'wt-1': [transferredUnified, concurrentUnified] },
+        groupsByWorktree: {
+          'wt-1': [
+            {
+              id: 'group-1',
+              tabOrder: ['tab-1', concurrentUnified.id],
+              activeTabId: concurrentUnified.id
+            }
+          ]
+        },
+        directSshLivePtyBindingByTabId: {
+          'tab-1': { ptyId: 'pty-1' },
+          'tab-concurrent': { ptyId: 'pty-concurrent' }
+        },
+        agentStatusByPaneKey: {
+          'tab-1:leaf-1': { state: 'working' },
+          'tab-concurrent:leaf-1': { state: 'working' }
+        }
+      } as never)
       throw new Error('disk full')
     })
 
@@ -481,6 +707,24 @@ describe('executeTerminalWindowTransferCommand', () => {
       })
     ).rejects.toThrow('disk full')
 
-    expect(state.tabsByWorktree).toBe(concurrentTabs)
+    const state = store.getState()
+    expect(state.tabsByWorktree).toEqual({ 'wt-1': [concurrentTab] })
+    expect(state.unifiedTabsByWorktree).toEqual({ 'wt-1': [concurrentUnified] })
+    expect(state.groupsByWorktree).toEqual({
+      'wt-1': [
+        {
+          id: 'group-1',
+          tabOrder: [concurrentUnified.id],
+          activeTabId: concurrentUnified.id,
+          recentTabIds: []
+        }
+      ]
+    })
+    expect(state.directSshLivePtyBindingByTabId).toEqual({
+      'tab-concurrent': { ptyId: 'pty-concurrent' }
+    })
+    expect(state.agentStatusByPaneKey).toEqual({
+      'tab-concurrent:leaf-1': { state: 'working' }
+    })
   })
 })

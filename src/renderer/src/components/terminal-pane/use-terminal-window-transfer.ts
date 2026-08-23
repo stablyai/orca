@@ -8,16 +8,16 @@ import { buildWorkspaceSessionPayload } from '@/lib/workspace-session'
 import { persistWorkspaceSessionByHost } from '@/lib/workspace-session-host-persistence'
 import { useAppStore } from '@/store'
 import type { AppState } from '@/store'
+import { buildTerminalWindowTransferFailureRollbackPatch } from '@/store/slices/terminal-window-transfer-command-rollback'
 import { ensurePtyDispatcher } from './pty-dispatcher'
 
-function rollbackTransferMutation(before: AppState, after: AppState): void {
+function rollbackTransferMutation(
+  before: AppState,
+  after: AppState,
+  command: TerminalWindowTransferCommand
+): void {
   useAppStore.setState((current) => {
-    const patch: Record<string, unknown> = {}
-    for (const key of Object.keys(after) as (keyof AppState)[]) {
-      if (!Object.is(before[key], after[key]) && Object.is(current[key], after[key])) {
-        patch[key] = before[key]
-      }
-    }
+    const patch = buildTerminalWindowTransferFailureRollbackPatch(before, after, current, command)
     return Object.keys(patch).length > 0 ? (patch as Partial<AppState>) : current
   })
 }
@@ -95,15 +95,16 @@ export async function executeTerminalWindowTransferCommand(
       after
     )
   } catch (error) {
-    rollbackTransferMutation(before, after)
+    rollbackTransferMutation(before, after, command)
     throw error
   }
+  const committed = useAppStore.getState()
   return {
     transferId: command.transferId,
     tabId: command.tabId,
     phase: command.phase,
     ok: true,
-    empty: transferWindowIsEmpty(after)
+    empty: transferWindowIsEmpty(committed)
   }
 }
 
