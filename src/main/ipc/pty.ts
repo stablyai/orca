@@ -4444,11 +4444,12 @@ export function registerPtyHandlers(
 
   // Why: only in-process PTYs can be orphan-swept; every renderer load protects PTYs owned by all other windows.
   handlePtyRendererDidFinishLoad = (webContents) => {
+    const suppressOrphanSweep = options?.isRecoveryReloadInFlight?.(webContents.id) === true
     if (!(localProvider instanceof LocalPtyProvider)) {
       return
     }
     const generation = localProvider.advanceGeneration()
-    if (options?.isRecoveryReloadInFlight?.(webContents.id)) {
+    if (suppressOrphanSweep) {
       return
     }
     localProvider.killOrphanedPtys(
