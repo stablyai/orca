@@ -40,4 +40,12 @@ describe('synthetic agent titles', () => {
     expect(getSyntheticAgentTerminalTitle('pi', 'waiting')).toBe('Pi - action required')
     expect(shouldDriveSyntheticAgentTitleFromHook('pi', 'working')).toBe(true)
   })
+
+  it('provides Prime Agent titles within the pi-compatible identity group', () => {
+    expect(getSyntheticAgentTerminalTitle('prime-agent', 'done')).toBe('Prime Agent ready')
+    expect(getSyntheticAgentTerminalTitle('prime-agent', 'waiting')).toBe(
+      'Prime Agent - action required'
+    )
+    expect(shouldDriveSyntheticAgentTitleFromHook('prime-agent', 'working')).toBe(true)
+  })
 })

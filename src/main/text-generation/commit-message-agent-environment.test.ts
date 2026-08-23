@@ -24,6 +24,8 @@ afterEach(() => {
   }
 })
 
+/** Create an isolated fake home (Linux) for shell-startup hydration tests,
+ *  registered for cleanup after the suite. */
 function makeHome(): string {
   Object.defineProperty(process, 'platform', { configurable: true, value: 'linux' })
   const dir = mkdtempSync(join(tmpdir(), 'orca-commit-env-'))
@@ -32,6 +34,7 @@ function makeHome(): string {
   process.env.SHELL = '/bin/zsh'
   delete process.env.ORCA_OPENCODE_SOURCE_CONFIG_DIR
   delete process.env.ORCA_PI_SOURCE_AGENT_DIR
+  delete process.env.ORCA_PRIME_AGENT_SOURCE_AGENT_DIR
   return dir
 }
 
@@ -76,6 +79,38 @@ describe('prepareLocalCommitMessageAgentEnv', () => {
       ok: true,
       env: expect.objectContaining({
         PI_CODING_AGENT_DIR: `${home}/.config/pi-agent`
+      })
+    })
+  })
+
+  it('hydrates the Prime Agent dir from its own env var for headless generation', async () => {
+    const home = makeHome()
+    delete process.env.PRIME_AGENT_CODING_AGENT_DIR
+    writeFileSync(
+      join(home, '.zshrc'),
+      'export PRIME_AGENT_CODING_AGENT_DIR="$HOME/.config/prime-agent"\n'
+    )
+
+    const result = await prepareLocalCommitMessageAgentEnv('prime-agent', undefined)
+
+    expect(result).toEqual({
+      ok: true,
+      env: expect.objectContaining({
+        PRIME_AGENT_CODING_AGENT_DIR: `${home}/.config/prime-agent`
+      })
+    })
+  })
+
+  it('prefers the original Prime Agent root over inherited PTY overlays', async () => {
+    process.env.PRIME_AGENT_CODING_AGENT_DIR = '/tmp/orca-prime-overlay'
+    process.env.ORCA_PRIME_AGENT_SOURCE_AGENT_DIR = '/Users/tester/.prime/agent'
+
+    const result = await prepareLocalCommitMessageAgentEnv('prime-agent', undefined)
+
+    expect(result).toEqual({
+      ok: true,
+      env: expect.objectContaining({
+        PRIME_AGENT_CODING_AGENT_DIR: '/Users/tester/.prime/agent'
       })
     })
   })

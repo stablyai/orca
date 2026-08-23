@@ -1,5 +1,6 @@
 import type { AgentStatusState, AgentType } from './agent-status-types'
 
+/** Labels and title-driving flags used to synthesize a terminal title for an agent. */
 export type SyntheticAgentTitleProfile = {
   workingLabel: string
   permissionLabel: string
@@ -9,6 +10,7 @@ export type SyntheticAgentTitleProfile = {
   synthesizeWorkingTitle?: boolean
 }
 
+/** Title profiles keyed by agent type; unknown types synthesize no titles. */
 export const SYNTHETIC_AGENT_TITLE_PROFILES: Record<string, SyntheticAgentTitleProfile> = {
   codex: {
     workingLabel: 'Codex',
@@ -36,6 +38,12 @@ export const SYNTHETIC_AGENT_TITLE_PROFILES: Record<string, SyntheticAgentTitleP
     idleLabel: 'Pi ready',
     titleIdentityGroup: 'pi-compatible'
   },
+  'prime-agent': {
+    workingLabel: 'Prime Agent',
+    permissionLabel: 'Prime Agent - action required',
+    idleLabel: 'Prime Agent ready',
+    titleIdentityGroup: 'pi-compatible'
+  },
   omp: {
     workingLabel: 'OMP',
     permissionLabel: 'OMP - action required',
@@ -59,6 +67,8 @@ export const SYNTHETIC_AGENT_TITLE_PROFILES: Record<string, SyntheticAgentTitleP
   }
 }
 
+/** Resolves the synthetic title profile for an agent type, or null when the
+ *  agent type is missing or has no profile (no synthesized titles). */
 export function getSyntheticAgentTitleProfile(
   agentType: AgentType | null | undefined
 ): SyntheticAgentTitleProfile | null {
@@ -68,6 +78,13 @@ export function getSyntheticAgentTitleProfile(
   return SYNTHETIC_AGENT_TITLE_PROFILES[agentType] ?? null
 }
 
+/** Returns the terminal title to synthesize for an agent state, or null when
+ *  the agent owns its native titles (OpenCode session titles), is actively
+ *  working (Codex spinner), or has no profile.
+ *  @param agentType - The agent whose terminal title should be synthesized.
+ *  @param state - The agent status state driving the synthesized title.
+ *  @returns The synthesized title, or null when the agent/state should not get
+ *    a synthesized title. */
 export function getSyntheticAgentTerminalTitle(
   agentType: AgentType | null | undefined,
   state: AgentStatusState
@@ -79,6 +96,12 @@ export function getSyntheticAgentTerminalTitle(
   return state === 'blocked' || state === 'waiting' ? profile.permissionLabel : profile.idleLabel
 }
 
+/** Whether hook status updates should drive the synthesized terminal title
+ *  for the given agent state. False for agents that own native title behavior
+ *  (OpenCode, or Codex while the native spinner runs).
+ *  @param agentType - The agent whose title hook handling is queried.
+ *  @param state - The agent status state being evaluated.
+ *  @returns True when the hook should drive the synthesized title. */
 export function shouldDriveSyntheticAgentTitleFromHook(
   agentType: AgentType | null | undefined,
   state: AgentStatusState
