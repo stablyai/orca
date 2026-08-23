@@ -6,7 +6,7 @@
 import { execFile, spawn, type ChildProcessWithoutNullStreams } from 'node:child_process'
 import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { app } from 'electron'
+import { getAppEnvironment } from '../../shared/app-environment'
 
 import type { MultiplexerTransport } from '../ssh/ssh-channel-multiplexer'
 import {
@@ -43,7 +43,7 @@ export function resolveWslHookRelayBundle(): WslHookRelayBundle | null {
     candidates.push(join(process.resourcesPath, 'app.asar.unpacked', 'out', 'relay', 'wsl'))
   }
   try {
-    const appPath = app.getAppPath()
+    const appPath = getAppEnvironment().getAppPath()
     candidates.push(join(appPath, 'resources', 'relay', 'wsl'))
     candidates.push(join(appPath, 'out', 'relay', 'wsl'))
   } catch {

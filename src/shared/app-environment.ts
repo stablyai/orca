@@ -68,6 +68,14 @@ export function setAppEnvironment(environment: AppEnvironment): void {
   slot()[SLOT] = environment
 }
 
+/**
+ * Whether an environment is installed. For callers that must work in BOTH the desktop
+ * and a plain-Node fork — those legitimately have no app root and want null, not a throw.
+ */
+export function hasAppEnvironment(): boolean {
+  return read() !== null
+}
+
 export function getAppEnvironment(): AppEnvironment {
   const current = read()
   if (!current) {

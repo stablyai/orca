@@ -30,6 +30,7 @@
     "check:reliability-gates": "node config/scripts/check-reliability-gates.mjs",
     "check:max-lines-ratchet": "node config/scripts/check-max-lines-ratchet.mjs",
     "check:runtime-electron-ratchet": "node config/scripts/check-runtime-electron-ratchet.mjs",
+    "smoke:serve-terminal": "node config/scripts/runtime-serve-terminal-smoke.mjs",
     "check:feature-wall-assets": "node config/scripts/check-feature-wall-assets.mjs",
     "generate:bundled-skill-guides": "node config/scripts/generate-bundled-skill-guides.mjs --write",
     "verify:bundled-skill-guides": "node config/scripts/generate-bundled-skill-guides.mjs --check",

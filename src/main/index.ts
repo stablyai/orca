@@ -2,7 +2,16 @@
 import { existsSync, statSync } from 'node:fs'
 import { isAbsolute, join } from 'node:path'
 import os from 'node:os'
-import { app, BrowserWindow, dialog, ipcMain, nativeTheme, powerMonitor, type Tray } from 'electron'
+import {
+  app,
+  BrowserWindow,
+  dialog,
+  ipcMain,
+  nativeTheme,
+  powerMonitor,
+  type Tray,
+  session
+} from 'electron'
 import { initTccPromptNotice, stopTccPromptNotice } from './macos-tcc-prompt-notice'
 import { electronApp, is } from '@electron-toolkit/utils'
 import {
@@ -13,6 +22,13 @@ import {
 } from './persistence'
 import { setAppEnvironment } from '../shared/app-environment'
 import { ElectronAppEnvironment } from './host/electron-app-environment'
+import { setPtyHostBindings } from './ipc/pty-host-bindings'
+import { electronRuntimeDesktopSurface } from './host/electron-runtime-desktop-surface'
+import { setRuntimeDesktopSurface } from './runtime/runtime-desktop-surface'
+import { electronRuntimeBrowserCommandsFactory } from './host/electron-browser-commands'
+import { setRuntimeBrowserCommandsFactory } from './runtime/runtime-browser-commands-factory'
+import { electronHttpClient } from './host/electron-http-client'
+import { setMainHttpClient } from './network/http-client'
 import { setSecretStore } from '../shared/secret-store'
 import { ElectronSecretStore } from './host/electron-secret-store'
 import { initSessionParseCachePersistence } from './ai-vault/session-parse-cache-persistence'
@@ -354,7 +370,10 @@ import {
 } from '../shared/runtime-types'
 import { LocalPtyProvider } from './providers/local-pty-provider'
 import { KeybindingService } from './keybindings/keybinding-service'
-import { applyElectronProxySettings } from './network/proxy-settings'
+import {
+  applyElectronProxySettings,
+  setDefaultProxySessionResolver
+} from './network/proxy-settings'
 import { preserveAgentAuthBeforeRestart } from './agent-auth-restart-preservation'
 import { CliInstaller } from './cli/cli-installer'
 import { installLinuxBareOrcaDispatcher } from './cli/linux-bare-orca-dispatcher'
@@ -861,6 +880,28 @@ if (hasSingleInstanceLock) {
   // the app.setName ordering the userData captures below depend on.
   setAppEnvironment(new ElectronAppEnvironment())
   setSecretStore(new ElectronSecretStore())
+  // Why at process level, not per-window: pty.ts registers against injected surfaces so
+  // it can load without electron, and an Electron main process always has ipcMain —
+  // whether a window exists is irrelevant. Installing this in attachMainWindowServices
+  // meant `orca serve` registered its PTY handlers against no-ops before any window
+  // attached, so a paired desktop owner never received them.
+  setPtyHostBindings({ ipc: ipcMain, power: powerMonitor })
+  // Why also at process level: the runtime's notification, window-lookup and
+  // tab-create-reply channel are desktop-only. A Node host installs none and the
+  // runtime routes notifications to paired clients instead.
+  setRuntimeDesktopSurface(electronRuntimeDesktopSurface)
+  // Why here: constructing RuntimeBrowserCommands is what pulls the Chromium browser
+  // cluster into the graph. The desktop installs it; a Node host installs none and every
+  // browser RPC rejects, which capability filtering already tells clients about.
+  setRuntimeBrowserCommandsFactory(electronRuntimeBrowserCommandsFactory)
+  // Why here: proxy-settings only needed electron for `session.defaultSession`. The
+  // desktop supplies it; a Node host has no Chromium proxy config to consult, so the
+  // environment variables are the whole answer there.
+  setDefaultProxySessionResolver(() => session.defaultSession)
+  // Why here: integrations use Chromium's network stack on the desktop. A Node host
+  // falls back to the platform default, which is a real behavioural difference (proxy
+  // read from the environment, Node's user agent) rather than a transparent swap.
+  setMainHttpClient(electronHttpClient)
   // Why: couple to dev-parent only for electron-vite desktop runs; `orca serve`'s parent (CLI shim/background shell) isn't the intended server lifetime.
   const shouldCoupleToDevParent = is.dev && !isServeMode
   installDevParentDisconnectQuit(shouldCoupleToDevParent)
