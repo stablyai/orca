@@ -15784,8 +15784,10 @@ export class OrcaRuntimeService {
   claimRemoteDesktopHost(ptyId: string, cols: number, rows: number): Promise<boolean> {
     const parked = this.parkedTerminalGraphClaims.get(ptyId)
     if (parked) {
+      const viewport = clampTerminalViewport(cols, rows)
       parked.remoteDesktopOwner = null
-      parked.remoteDesktopHostReclaimTarget = clampTerminalViewport(cols, rows)
+      parked.remoteDesktopHostReclaimTarget = viewport
+      this.deferParkedLayout(ptyId, { kind: 'desktop', ...viewport })
       return Promise.resolve(true)
     }
     if (!this.remoteDesktopOwners.has(ptyId)) {
@@ -15814,11 +15816,24 @@ export class OrcaRuntimeService {
     if (!viewers) {
       return Promise.resolve(false)
     }
+    const parked = this.parkedTerminalGraphClaims.get(ptyId)
     let changed = false
     let removedOwner = false
     for (const subscriptionKey of subscriptionKeys) {
-      removedOwner = this.remoteDesktopOwners.get(ptyId) === subscriptionKey || removedOwner
+      const registration = viewers.get(subscriptionKey)
+      const removedParkedOwner =
+        registration !== undefined &&
+        parked != null &&
+        parked.remoteDesktopOwner === subscriptionKey &&
+        parked.remoteDesktopRegistrations.get(subscriptionKey) === registration
+      removedOwner =
+        this.remoteDesktopOwners.get(ptyId) === subscriptionKey ||
+        removedParkedOwner ||
+        removedOwner
       changed = viewers.delete(subscriptionKey) || changed
+      if (parked && parked.remoteDesktopRegistrations.get(subscriptionKey) === registration) {
+        parked.remoteDesktopRegistrations.delete(subscriptionKey)
+      }
     }
     if (!changed) {
       return Promise.resolve(false)
@@ -15829,17 +15844,31 @@ export class OrcaRuntimeService {
     if (removedOwner) {
       let fallback: { key: string; activity: number } | null = null
       for (const [key, viewer] of viewers) {
+        if (parked && parked.remoteDesktopRegistrations.get(key) !== viewer) {
+          continue
+        }
         if (viewer.activity > 0 && (!fallback || viewer.activity > fallback.activity)) {
           fallback = { key, activity: viewer.activity }
         }
       }
-      if (fallback) {
+      if (parked) {
+        parked.remoteDesktopOwner = fallback?.key ?? null
+        if (!fallback && parked.remoteDesktopHostReclaimTarget) {
+          this.deferParkedLayout(ptyId, {
+            kind: 'desktop',
+            ...parked.remoteDesktopHostReclaimTarget
+          })
+        }
+      } else if (fallback) {
         this.remoteDesktopOwners.set(ptyId, fallback.key)
       } else {
         this.remoteDesktopOwners.delete(ptyId)
       }
     }
     this.bumpRemoteDesktopViewerRevision(ptyId)
+    if (parked) {
+      return Promise.resolve(true)
+    }
     return removedOwner ? this.applyRemoteDesktopLayout(ptyId) : Promise.resolve(true)
   }
 
