@@ -43,6 +43,11 @@ import type { PtyBufferSnapshot, PtyConnectResult, PtyReplayDataMeta } from './p
 import type { IpcPtyTransportOptions, PtyTransportRecoveryState } from './pty-transport-types'
 import { createIpcPtyTransport } from './pty-transport'
 import { createRemoteRuntimePtyTransport } from './remote-runtime-pty-transport'
+import { getLatestWebSessionTabsPublicationEpoch } from '@/runtime/web-session-tabs-sync'
+import {
+  RUNTIME_SNAPSHOT_SPAWN_POLL_MS,
+  shouldDeferRuntimePaneSpawn
+} from './runtime-pane-spawn-gate'
 import { toAgentLaunchPreferences } from '@/runtime/agent-session-create-operation'
 import { createUnresolvedOwnerPtyTransport } from './unresolved-owner-pty-transport'
 import { resolveTerminalWorktreeRoute } from '@/lib/terminal-worktree-route'
@@ -1133,6 +1138,14 @@ export function connectPanePty(
   const structuralReplayCoordinator = createTerminalStructuralReplayCoordinator(pane.terminal)
   let connectFrame: number | null = null
   let connectFallbackTimer: ReturnType<typeof setTimeout> | null = null
+  // Why (#15622): a restored PTY-less row on a paired-runtime worktree must not
+  // spawn a remote shell on mount; the first accepted session.tabs snapshot
+  // either attaches this pane to the host's existing PTY (the connect path then
+  // reattaches) or drops the stale row. Poll with a timer — hidden tabs get no
+  // animation frames — and bound the wait so an unreachable runtime still
+  // gets a pane.
+  let runtimeSnapshotWaitTimer: ReturnType<typeof setTimeout> | null = null
+  let runtimeSnapshotWaitStartedAt: number | null = null
   let startupGridSettleHandle: TerminalStartupGridSettleHandle | null = null
   let startupGridSettledForConnect = false
   let connectStarted = false
@@ -4803,10 +4816,32 @@ export function connectPanePty(
         clearTimeout(connectFallbackTimer)
         connectFallbackTimer = null
       }
+      if (runtimeSnapshotWaitTimer !== null) {
+        clearTimeout(runtimeSnapshotWaitTimer)
+        runtimeSnapshotWaitTimer = null
+      }
       settleStartupGridBeforeConnect(() => {
         startupGridSettledForConnect = true
         runDeferredConnect()
       })
+      return
+    }
+    const spawnGate = shouldDeferRuntimePaneSpawn({
+      runtimeEnvironmentId,
+      hasPtyBinding: (useAppStore.getState().ptyIdsByTabId[deps.tabId] ?? []).length > 0,
+      hasRestoredPtyHandle: restoredPtyIdForTransport !== null,
+      snapshotAccepted:
+        runtimeEnvironmentId !== null &&
+        getLatestWebSessionTabsPublicationEpoch(runtimeEnvironmentId, deps.worktreeId) !== null,
+      waitStartedAt: runtimeSnapshotWaitStartedAt,
+      now: Date.now()
+    })
+    runtimeSnapshotWaitStartedAt = spawnGate.waitStartedAt
+    if (spawnGate.defer) {
+      runtimeSnapshotWaitTimer = setTimeout(() => {
+        runtimeSnapshotWaitTimer = null
+        runDeferredConnect()
+      }, RUNTIME_SNAPSHOT_SPAWN_POLL_MS)
       return
     }
     connectStarted = true
@@ -9721,6 +9756,10 @@ export function connectPanePty(
       if (connectFallbackTimer !== null) {
         clearTimeout(connectFallbackTimer)
         connectFallbackTimer = null
+      }
+      if (runtimeSnapshotWaitTimer !== null) {
+        clearTimeout(runtimeSnapshotWaitTimer)
+        runtimeSnapshotWaitTimer = null
       }
       imeCompositionRouteDisposable.dispose()
       onDataDisposable.dispose()
