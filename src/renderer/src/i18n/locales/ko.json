@@ -1917,7 +1917,12 @@
         "jiraLinkSourceUnavailable": "Couldn’t link this Jira issue. Reconnect Jira or pick the matching site, then try again.",
         "loadPageUnreachable": "{{value0}} 페이지는 GitHub 검색이 반환할 수 있는 범위를 벗어났습니다.",
         "loadPageFailed": "GitHub에서 {{value0}} 페이지를 불러오지 못했습니다.",
-        "loadPageNoMoreResults": "{{value0}} 페이지에 더 이상 결과가 없습니다."
+        "loadPageNoMoreResults": "{{value0}} 페이지에 더 이상 결과가 없습니다.",
+        "1852574621": "완료됨",
+        "f2b37f54a3": "생성됨",
+        "linearIssuePreset": "Linear 이슈 사전 설정",
+        "jiraIssuePreset": "Jira 이슈 사전 설정",
+        "gitlabItemFilter": "GitLab 항목 필터"
       },
       "Terminal": {
         "73768427cf": "닫기",
@@ -2245,13 +2250,7 @@
           "01f3f3d161": "작성자",
           "13b3ac0a84": "상태",
           "79c54552f7": "필터",
-          "8a2ffbf9b3": "{{value0}} 필터 제거",
           "19bb6f115f": "리뷰 완료"
-        },
-        "PRFilterPickers": {
-          "fdf387297c": "지우기 (",
-          "472c12ae03": "지우기",
-          "2d1f58eda6": "사용"
         },
         "PRFilterSections": {
           "a00830d3f7": "사용자 없음",
@@ -2259,8 +2258,6 @@
           "94b42b0edf": "리뷰 요청됨",
           "de26e2eb06": "라벨 없음",
           "458ea3602b": "작성자 없음",
-          "b69fa4fa20": "뒤로",
-          "30ebb6ca44": "모든 필터 지우기",
           "8177eda37e": "필터",
           "ea3416d646": "담당자",
           "b1d9fdea08": "라벨",
@@ -14205,6 +14202,26 @@
               "searchProjects": "프로젝트 검색...",
               "noMatches": "검색과 일치하는 프로젝트가 없습니다.",
               "chooseSource": "작업 소스 선택"
+            }
+          }
+        },
+        "filter": {
+          "pickers": {
+            "96cc85e839": "불러오는 중…",
+            "2c3b81720a": "검색 텍스트가 너무 큽니다.",
+            "96b30a41bc": "Enter 키를 누르면 입력한 값을 사용합니다.",
+            "8776bc66db": "일치하는 항목이 없습니다",
+            "783279c991": "사용",
+            "d58aef2697": "지우기",
+            "f7690f6c74": "지우기 ({{value0}})"
+          },
+          "pill": {
+            "6b2c72c3ca": "{{value0}} 필터 제거"
+          },
+          "section": {
+            "menu": {
+              "5a186cbca7": "모든 필터 지우기",
+              "615d9351d4": "뒤로"
             }
           }
         }

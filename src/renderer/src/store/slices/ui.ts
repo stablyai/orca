@@ -1412,11 +1412,11 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
           { sourceContext }
         )
       } else {
-        // Why: TaskPage no longer exposes Linear preset filters; keep prefetch aligned with the default unsearched issue list.
+        // Why: warm prefetch must match the preset TaskPage's resume effect mounts with, otherwise the cache key misses the page's actual fetch.
         state.prefetchLinearIssues(
           {
             kind: 'list',
-            filter: 'all',
+            filter: resume?.linearPreset ?? 'all',
             limit: LINEAR_TASK_PREFETCH_LIMIT
           },
           { sourceContext }

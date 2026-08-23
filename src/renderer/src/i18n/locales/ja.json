@@ -1915,7 +1915,12 @@
         "jiraLinkSourceUnavailable": "この Jira Issue をリンクできませんでした。Jira に再接続するか該当するサイトを選択してから、もう一度お試しください。",
         "loadPageUnreachable": "ページ {{value0}} は GitHub 検索が返せる範囲を超えています。",
         "loadPageFailed": "GitHub からページ {{value0}} を読み込めませんでした。",
-        "loadPageNoMoreResults": "ページ {{value0}} にはこれ以上結果がありません。"
+        "loadPageNoMoreResults": "ページ {{value0}} にはこれ以上結果がありません。",
+        "1852574621": "完了",
+        "f2b37f54a3": "作成済み",
+        "linearIssuePreset": "Linear Issue プリセット",
+        "jiraIssuePreset": "Jira Issue プリセット",
+        "gitlabItemFilter": "GitLab アイテムフィルター"
       },
       "Terminal": {
         "73768427cf": "閉じる",
@@ -2243,13 +2248,7 @@
           "01f3f3d161": "著者",
           "13b3ac0a84": "状態",
           "79c54552f7": "フィルター",
-          "8a2ffbf9b3": "{{value0}} フィルターを解除",
           "19bb6f115f": "reviewed-by"
-        },
-        "PRFilterPickers": {
-          "fdf387297c": "クリア （",
-          "472c12ae03": "クリア",
-          "2d1f58eda6": "使用"
         },
         "PRFilterSections": {
           "a00830d3f7": "ユーザーがいません",
@@ -2257,8 +2256,6 @@
           "94b42b0edf": "レビュー依頼済み",
           "de26e2eb06": "ラベルなし",
           "458ea3602b": "著者がいません",
-          "b69fa4fa20": "戻る",
-          "30ebb6ca44": "すべてのフィルターをクリア",
           "8177eda37e": "フィルター",
           "ea3416d646": "担当者",
           "b1d9fdea08": "ラベル",
@@ -14176,6 +14173,26 @@
               "searchProjects": "プロジェクトを検索…",
               "noMatches": "検索条件に一致するプロジェクトはありません。",
               "chooseSource": "タスクソースを選択"
+            }
+          }
+        },
+        "filter": {
+          "pickers": {
+            "96cc85e839": "読み込み中…",
+            "2c3b81720a": "検索テキストが大きすぎます。",
+            "96b30a41bc": "Enter キーを押すと入力した値を使用します。",
+            "8776bc66db": "一致する項目はありません",
+            "783279c991": "使用",
+            "d58aef2697": "クリア",
+            "f7690f6c74": "クリア（{{value0}}）"
+          },
+          "pill": {
+            "6b2c72c3ca": "{{value0}} フィルターを削除します"
+          },
+          "section": {
+            "menu": {
+              "5a186cbca7": "すべてのフィルターをクリア",
+              "615d9351d4": "戻る"
             }
           }
         }

@@ -270,6 +270,28 @@ describe('createUISlice settings navigation', () => {
     )
   })
 
+  it('warms the persisted Linear preset so the page fetch hits the prefetched cache key', () => {
+    const store = createUIStore()
+    const prefetchLinearIssues = vi.fn()
+
+    store.setState({
+      settings: {
+        visibleTaskProviders: ['linear'],
+        defaultTaskSource: 'linear'
+      } as unknown as AppState['settings'],
+      linearStatus: { connected: true } as AppState['linearStatus'],
+      taskResumeState: { linearPreset: 'completed' },
+      prefetchLinearIssues
+    } as unknown as Partial<AppState>)
+
+    store.getState().openTaskPage({ taskSource: 'linear' })
+
+    expect(prefetchLinearIssues).toHaveBeenCalledWith(
+      { kind: 'list', filter: 'completed', limit: expect.any(Number) },
+      { sourceContext: null }
+    )
+  })
+
   it('returns to the tasks page after visiting settings from an in-progress draft', () => {
     const store = createUIStore()
 

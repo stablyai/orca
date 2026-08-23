@@ -40,6 +40,29 @@ describe('task-page-linear-issue-request', () => {
     ).toEqual(filter)
   })
 
+  it('carries the selected preset into list read args and defaults to all', () => {
+    expect(
+      buildLinearIssueListReadArgs({
+        filter: 'completed',
+        limit: 36,
+        attributeFilter: filter,
+        searchActive: false
+      }).filter
+    ).toBe('completed')
+    expect(
+      buildLinearIssueListReadArgs({ limit: 36, attributeFilter: filter, searchActive: false })
+        .filter
+    ).toBe('all')
+  })
+
+  it('separates presets in the cache signature so switching one refetches', () => {
+    const base = { workspaceId: 'ws-1', limit: 36, attributeFilter: filter }
+    const assigned = buildLinearIssueListRequestSignature({ ...base, filter: 'assigned' })
+    const created = buildLinearIssueListRequestSignature({ ...base, filter: 'created' })
+    expect(assigned).toContain('local::ws-1::list::assigned::36::')
+    expect(assigned).not.toEqual(created)
+  })
+
   it('includes source scope and canonical signature in the request identity', () => {
     const signature = buildLinearIssueListRequestSignature({
       workspaceId: 'ws-1',

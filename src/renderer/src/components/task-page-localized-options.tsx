@@ -16,7 +16,7 @@ import {
 } from '../../../shared/linear/issue-view-resume-state'
 import { getTaskPresetQuery } from '../../../shared/task-preset-query'
 import type { TaskProvider } from '../../../shared/task-providers'
-import type { TaskViewPresetId } from '../../../shared/ui-chrome-types'
+import type { TaskResumeState, TaskViewPresetId } from '../../../shared/ui-chrome-types'
 
 export type GitLabTaskFilter = 'opened' | 'merged' | 'closed' | 'all'
 export type GitLabIssueFilter = 'opened' | 'assigned-to-me'
@@ -38,6 +38,9 @@ export type SourceOption = {
 
 export type JiraPresetId = 'assigned' | 'reported' | 'all' | 'done'
 export type JiraPreset = { id: JiraPresetId; label: string }
+
+export type LinearPresetId = NonNullable<TaskResumeState['linearPreset']>
+export type LinearPreset = { id: LinearPresetId; label: string }
 
 export type GitHubModeButton = { id: GitHubTaskKind | 'project'; label: string }
 
@@ -139,6 +142,13 @@ export const getJiraPresets = createLocalizedCatalog((): JiraPreset[] => [
   { id: 'reported', label: translate('auto.components.TaskPage.bd9965df51', 'Reported') },
   { id: 'all', label: translate('auto.components.TaskPage.4b6e40e42c', 'All Open') },
   { id: 'done', label: translate('auto.components.TaskPage.18451e99df', 'Done') }
+])
+
+export const getLinearPresets = createLocalizedCatalog((): LinearPreset[] => [
+  { id: 'assigned', label: translate('auto.components.TaskPage.1301d376f1', 'Assigned') },
+  { id: 'created', label: translate('auto.components.TaskPage.f2b37f54a3', 'Created') },
+  { id: 'all', label: translate('auto.components.TaskPage.c2268a9982', 'All') },
+  { id: 'completed', label: translate('auto.components.TaskPage.1852574621', 'Completed') }
 ])
 
 export const getGitHubModeButtons = createLocalizedCatalog((): GitHubModeButton[] => [

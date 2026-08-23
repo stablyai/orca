@@ -1750,6 +1750,7 @@
         "73dfd4eb8d": "Don't ask again"
       },
       "TaskPage": {
+        "1852574621": "Completed",
         "513cddfa7a": "Verifying…",
         "ff69a30681": "Cancel",
         "2abe22ef76": "Your token is encrypted via the OS keychain and stored locally.",
@@ -2078,7 +2079,11 @@
         "linearModeHasWorktreeTooltip": "Linear tickets linked to an Orca workspace",
         "linearEmptyHasWorktree": "No Linear tickets are linked to an Orca workspace yet. Start work from a Linear issue to see it here.",
         "linearOpenAttachedWorkspace": "Open workspace attached to {{value0}}",
-        "linearWorktreesColumn": "Workspaces"
+        "linearWorktreesColumn": "Workspaces",
+        "linearIssuePreset": "Linear issue preset",
+        "jiraIssuePreset": "Jira issue preset",
+        "gitlabItemFilter": "GitLab item filter",
+        "f2b37f54a3": "Created"
       },
       "Terminal": {
         "73768427cf": "Close",
@@ -2409,13 +2414,7 @@
           "01f3f3d161": "Author",
           "13b3ac0a84": "Status",
           "79c54552f7": "Filters",
-          "8a2ffbf9b3": "Remove {{value0}} filter",
           "19bb6f115f": "reviewed-by"
-        },
-        "PRFilterPickers": {
-          "fdf387297c": "Clear (",
-          "472c12ae03": "Clear",
-          "2d1f58eda6": "Use"
         },
         "PRFilterSections": {
           "a00830d3f7": "No users",
@@ -2423,8 +2422,6 @@
           "94b42b0edf": "Review requested",
           "de26e2eb06": "No labels",
           "458ea3602b": "No authors",
-          "b69fa4fa20": "Back",
-          "30ebb6ca44": "Clear all filters",
           "8177eda37e": "Filter",
           "ea3416d646": "Assignee",
           "b1d9fdea08": "Label",
@@ -15599,6 +15596,26 @@
               "searchProjects": "Search projects...",
               "noMatches": "No projects match your search.",
               "chooseSource": "Choose task source"
+            }
+          }
+        },
+        "filter": {
+          "pickers": {
+            "96cc85e839": "Loading…",
+            "2c3b81720a": "Search text is too large.",
+            "96b30a41bc": "Press Enter to use the typed value.",
+            "8776bc66db": "No matches",
+            "783279c991": "Use",
+            "d58aef2697": "Clear",
+            "f7690f6c74": "Clear ({{value0}})"
+          },
+          "pill": {
+            "6b2c72c3ca": "Remove {{value0}} filter"
+          },
+          "section": {
+            "menu": {
+              "5a186cbca7": "Clear all filters",
+              "615d9351d4": "Back"
             }
           }
         }

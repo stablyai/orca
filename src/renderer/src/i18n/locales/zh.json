@@ -1915,7 +1915,12 @@
         "jiraLinkSourceUnavailable": "无法关联此 Jira 议题。请重新连接 Jira 或选择匹配的站点，然后重试。",
         "loadPageUnreachable": "第 {{value0}} 页超出了 GitHub 搜索可返回的范围。",
         "loadPageFailed": "无法从 GitHub 加载第 {{value0}} 页。",
-        "loadPageNoMoreResults": "第 {{value0}} 页没有更多结果。"
+        "loadPageNoMoreResults": "第 {{value0}} 页没有更多结果。",
+        "1852574621": "已完成",
+        "f2b37f54a3": "已创建",
+        "linearIssuePreset": "Linear 议题预设",
+        "jiraIssuePreset": "Jira 议题预设",
+        "gitlabItemFilter": "GitLab 条目筛选条件"
       },
       "Terminal": {
         "73768427cf": "关闭",
@@ -2243,13 +2248,7 @@
           "01f3f3d161": "作者",
           "13b3ac0a84": "状态",
           "79c54552f7": "筛选条件",
-          "8a2ffbf9b3": "删除 {{value0}} 筛选条件",
           "19bb6f115f": "已审查"
-        },
-        "PRFilterPickers": {
-          "fdf387297c": "清除 （",
-          "472c12ae03": "清除",
-          "2d1f58eda6": "使用"
         },
         "PRFilterSections": {
           "a00830d3f7": "没有用户",
@@ -2257,8 +2256,6 @@
           "94b42b0edf": "已请求评审",
           "de26e2eb06": "无标签",
           "458ea3602b": "没有作者",
-          "b69fa4fa20": "返回",
-          "30ebb6ca44": "清除所有筛选条件",
           "8177eda37e": "筛选",
           "ea3416d646": "负责人",
           "b1d9fdea08": "标签",
@@ -14196,6 +14193,26 @@
               "searchProjects": "搜索项目...",
               "noMatches": "没有匹配搜索的项目。",
               "chooseSource": "选择任务来源"
+            }
+          }
+        },
+        "filter": {
+          "pickers": {
+            "96cc85e839": "加载中…",
+            "2c3b81720a": "搜索文本过大。",
+            "96b30a41bc": "按 Enter 键使用输入的值。",
+            "8776bc66db": "没有匹配项",
+            "783279c991": "使用",
+            "d58aef2697": "清除",
+            "f7690f6c74": "清除（{{value0}}）"
+          },
+          "pill": {
+            "6b2c72c3ca": "删除 {{value0}} 筛选条件"
+          },
+          "section": {
+            "menu": {
+              "5a186cbca7": "清除所有筛选条件",
+              "615d9351d4": "返回"
             }
           }
         }
