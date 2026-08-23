@@ -1,31 +1,10 @@
 import { existsSync, mkdirSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import type * as osModule from 'node:os'
 import { join, sep } from 'node:path'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { installFakeAppEnvironment } from '../../../config/scripts/vitest-host-ports-setup'
 
 const userDataDir = mkdtempSync(join(tmpdir(), 'orca-pi-overlay-path-userdata-'))
-
-const homedirOverride = vi.hoisted(() => ({ current: '' as string }))
-
-vi.mock('os', async (importOriginal) => {
-  const actual = await importOriginal<typeof osModule>()
-  return {
-    ...actual,
-    homedir: () => homedirOverride.current || actual.homedir()
-  }
-})
-
-vi.mock('electron', () => ({
-  app: {
-    getPath: (name: string) => {
-      if (name === 'userData') {
-        return userDataDir
-      }
-      throw new Error(`unexpected app.getPath(${name})`)
-    }
-  }
-}))
 
 import { PiTitlebarExtensionService } from './titlebar-extension-service'
 
@@ -49,6 +28,17 @@ function legacyOverlayPath(kind: 'pi' | 'omp', ptyId: string): string {
 }
 
 describe('PiTitlebarExtensionService legacy overlay paths', () => {
+  beforeEach(() => {
+    installFakeAppEnvironment({
+      getPath: (name) => {
+        if (name === 'userData') {
+          return userDataDir
+        }
+        throw new Error(`unexpected app.getPath(${name})`)
+      }
+    })
+  })
+
   afterEach(() => {
     rmSync(join(userDataDir, 'pi-agent-overlays'), { recursive: true, force: true })
     rmSync(join(userDataDir, 'omp-agent-overlays'), { recursive: true, force: true })
@@ -89,7 +79,7 @@ describe('PiTitlebarExtensionService legacy overlay paths', () => {
     const fakeHome = mkdtempSync(join(tmpdir(), 'orca-kimchi-overlay-path-home-'))
     const svc = new PiTitlebarExtensionService()
 
-    homedirOverride.current = fakeHome
+    vi.stubEnv('HOME', fakeHome)
     try {
       const env = svc.buildPtyEnv(PATH_SHAPED_PTY_ID, undefined, 'kimchi')
 
@@ -100,7 +90,7 @@ describe('PiTitlebarExtensionService legacy overlay paths', () => {
       expect(existsSync(join(harnessDir, 'extensions', 'orca-agent-status.ts'))).toBe(true)
       expect(existsSync(join(harnessDir, 'agent'))).toBe(false)
     } finally {
-      homedirOverride.current = ''
+      vi.unstubAllEnvs()
       rmSync(fakeHome, { recursive: true, force: true })
     }
   })

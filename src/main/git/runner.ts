@@ -689,6 +689,10 @@ function execFileCapture(
         args,
         {
           cwd: options.cwd,
+          // Why: git.exe is console-subsystem and Orca's main process owns no
+          // console, so every spawn without this flashes a conhost that takes
+          // foreground. Git runs on nearly every interaction (#14543).
+          windowsHide: true,
           encoding: options.encoding,
           maxBuffer: options.maxBuffer ?? DEFAULT_GIT_MAX_BUFFER,
           env: options.env
@@ -1451,7 +1455,8 @@ export function gitExecFileSync(
       encoding: options.encoding ?? 'utf-8',
       env: untranslatedGitOutputEnv(),
       stdio: options.stdio ?? ['pipe', 'pipe', 'pipe'],
-      timeout: options.timeout ?? GIT_EXEC_SYNC_TIMEOUT_MS
+      timeout: options.timeout ?? GIT_EXEC_SYNC_TIMEOUT_MS,
+      windowsHide: true
     }) as string
   } finally {
     // Sync exec blocks the main thread for its whole duration — the cost issue #7576 flags.
@@ -1496,6 +1501,7 @@ export function gitSpawn(args: string[], options: GitSpawnOptions): ChildProcess
   const child = spawn(resolved.binary, resolved.args, {
     ...spawnOptions,
     env: untranslatedGitOutputEnv(spawnOptions.env ?? process.env),
+    windowsHide: true,
     cwd: resolved.cwd
   })
   recordSubprocessSpawn(resolved.binary, resolved.args, performance.now() - spawnStartedAt)
@@ -1902,9 +1908,17 @@ export function redirectPortedHostnameToEnv(
   if (!/^[^/\s]+:\d+$/.test(host)) {
     return { args, options }
   }
+  // Why WSLENV: a glab routed into a distro only sees Windows-side variables
+  // named in WSLENV, so without this the ported host silently never crosses and
+  // glab talks to gitlab.com instead (#12557). Credit: #12558.
+  const env: NodeJS.ProcessEnv = { ...(options.env ?? process.env), GITLAB_HOST: host }
+  // Unguarded by platform on purpose: WSLENV is meaningless outside Windows, so
+  // the extra key is inert there, and gating it would need the test to know the
+  // platform for no behavioural gain.
+  addWslEnvKeys(env, ['GITLAB_HOST'])
   return {
     args: [...args.slice(0, i), ...args.slice(i + 2)],
-    options: { ...options, env: { ...(options.env ?? process.env), GITLAB_HOST: host } }
+    options: { ...options, env }
   }
 }
 
@@ -1984,6 +1998,7 @@ export function wslAwareSpawn(
   const spawnStartedAt = performance.now()
   const child = spawn(resolved.binary, resolved.args, {
     ...spawnOptions,
+    windowsHide: true,
     cwd: resolved.cwd
   })
   recordSubprocessSpawn(resolved.binary, resolved.args, performance.now() - spawnStartedAt)

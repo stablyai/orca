@@ -44,6 +44,7 @@ import { removeInheritedNoColor } from '../pty/terminal-color-env'
 import { removeAppImageRuntimeEnv } from '../pty/appimage-terminal-env'
 import { stripInheritedBuildModeEnv } from '../pty/build-mode-env'
 import { stripLegacyTerminalShimEnv } from '../pty/legacy-terminal-shim-dir'
+import { dropIncoherentCondaActivationEnv } from '../pty/conda-activation-env'
 import { SessionNotFoundError } from '../daemon/daemon-errors'
 import { resolvePathEnvKey } from '../pty/windows-environment-path'
 import { isHostCodexHomeForWsl, isWslCodexHomeForHost } from '../pty/codex-home-wsl-env'
@@ -64,6 +65,7 @@ import { getAgentForegroundContextPaths } from './agent-foreground-context-paths
 import { recognizeAgentProcessFromCommandLine } from '../../shared/agent-process-recognition'
 import { killWithDescendantSweep } from '../pty-descendant-termination'
 import { readWindowsConptyProcessIds } from './windows-conpty-process-membership'
+import { terminatePtyJob } from '../windows/windows-pty-job'
 import { canConfirmAgentFromConsolePresence } from './windows-console-foreground'
 import { forceKillPosixPtyProcessGroups } from '../pty/posix-pty-process-groups'
 import { shouldUseShellReadyStartupDelivery } from '../../shared/codex-startup-delivery'
@@ -834,6 +836,8 @@ export class LocalPtyProvider implements IPtyProvider {
     )
     // Why: raw requested PATH promotion runs after the host-env scrub.
     stripLegacyTerminalShimEnv(finalEnv, process.platform)
+    // Why after every deletion pass: an envToDelete of CONDA_PREFIX must not leave the sentinel behind.
+    dropIncoherentCondaActivationEnv(finalEnv, process.platform)
 
     // Why: worktree-scoped HISTFILE — without it worktrees share one global history (terminal-history-scope-design §7–§10).
     const worktreeId = args.worktreeId
@@ -1283,7 +1287,8 @@ export class LocalPtyProvider implements IPtyProvider {
       // identity probe returns `own` so agent/MCP orphans cannot hold the worktree cwd
       // (#10004). `unknown`/`foreign`/`absent` skip taskkill and rely on root close alone.
       await killWithDescendantSweep(proc.pid, signalRoot, {
-        ownsRoot: () => ptyProcesses.get(id) === proc
+        ownsRoot: () => ptyProcesses.get(id) === proc,
+        terminateOwnedTree: () => terminatePtyJob(proc)
       })
     } else if (process.platform === 'win32' && operation.immediate) {
       // Why: a plain shell's ConPTY teardown doesn't reap orphaned children (useConptyDll
@@ -1291,7 +1296,8 @@ export class LocalPtyProvider implements IPtyProvider {
       // holds the worktree cwd. Tree kill runs only when the OS identity probe returns `own`;
       // otherwise root close alone, and detached children may block physical stop (#10004).
       await killWithDescendantSweep(proc.pid, signalRoot, {
-        ownsRoot: () => ptyProcesses.get(id) === proc
+        ownsRoot: () => ptyProcesses.get(id) === proc,
+        terminateOwnedTree: () => terminatePtyJob(proc)
       })
     } else {
       signalRoot()

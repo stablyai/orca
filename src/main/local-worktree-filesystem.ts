@@ -1,4 +1,4 @@
-import { execFile } from 'node:child_process'
+import { runProcess } from '../shared/child-process/run-process'
 import { lstat, readFile } from 'node:fs/promises'
 import { buildWslExecArgs, quotePosixShell } from '../shared/wsl-login-shell-command'
 import { removeHostTree } from './host-tree-removal'
@@ -16,39 +16,12 @@ type LocalWorktreePathAccess = {
   readPath: ReadPath
 }
 
-type ExecFileTextResult = {
-  stdout: string
-  stderr: string
-}
-
 const WSL_FILE_OPERATION_TIMEOUT_MS = 30_000
+/** The stat probe's explicit "missing path" branch. */
+const WSL_MISSING_PATH_EXIT_CODE = 2
 
 function shouldUseWslFilesystem(options: LocalWorktreeFilesystemOptions): boolean {
   return process.platform === 'win32' && !!options.wslDistro?.trim()
-}
-
-function execFileText(
-  file: string,
-  args: string[],
-  options: { timeout: number }
-): Promise<ExecFileTextResult> {
-  return new Promise((resolve, reject) => {
-    execFile(
-      file,
-      args,
-      { encoding: 'utf8', timeout: options.timeout },
-      (error, stdout, stderr) => {
-        if (error) {
-          reject(error)
-          return
-        }
-        resolve({
-          stdout: typeof stdout === 'string' ? stdout : String(stdout ?? ''),
-          stderr: typeof stderr === 'string' ? stderr : String(stderr ?? '')
-        })
-      }
-    )
-  })
 }
 
 /**
@@ -59,20 +32,29 @@ function execFileText(
  * output to the stdout these callers parse -- the banner problem -- so the fix is
  * to not start one rather than to fence what it prints.
  */
-function runWslCommand(distro: string, command: string): Promise<ExecFileTextResult> {
-  return execFileText('wsl.exe', buildWslExecArgs(distro, ['sh', '-c', command]), {
-    timeout: WSL_FILE_OPERATION_TIMEOUT_MS
+async function runWslCommand(distro: string, command: string): Promise<string> {
+  const result = await runProcess({
+    program: 'wsl.exe',
+    args: buildWslExecArgs(distro, ['sh', '-c', command]),
+    timeoutMs: WSL_FILE_OPERATION_TIMEOUT_MS
   })
+  if (result.timedOut) {
+    throw new Error(`WSL filesystem command timed out after ${WSL_FILE_OPERATION_TIMEOUT_MS}ms`)
+  }
+  if (result.code !== 0) {
+    throw Object.assign(new Error(result.stderr.trim() || `wsl.exe exited ${result.code}`), {
+      exitCode: result.code
+    })
+  }
+  return result.stdout
 }
 
 function isWslMissingPathError(error: unknown): boolean {
-  // Why: the WSL stat probe exits 2 for its explicit "missing path" branch;
-  // normalize that shell-specific result so callers can handle it like fs.lstat.
-  const code =
-    error && typeof error === 'object' && 'code' in error
-      ? String((error as NodeJS.ErrnoException).code)
-      : ''
-  return code === '2'
+  return (
+    typeof error === 'object' &&
+    error !== null &&
+    (error as { exitCode?: unknown }).exitCode === WSL_MISSING_PATH_EXIT_CODE
+  )
 }
 
 export function toLocalWorktreeRuntimePath(
@@ -96,7 +78,7 @@ export function getLocalWorktreePathAccess(
   return {
     statPath: async (path) => {
       const target = quotePosixShell(toLinuxPath(path))
-      const { stdout } = await runWslCommand(
+      const stdout = await runWslCommand(
         distro,
         [
           `target=${target}`,
@@ -112,7 +94,7 @@ export function getLocalWorktreePathAccess(
     },
     readPath: async (path) => {
       const target = quotePosixShell(toLinuxPath(path))
-      const { stdout } = await runWslCommand(distro, `cat -- ${target}`)
+      const stdout = await runWslCommand(distro, `cat -- ${target}`)
       return stdout
     }
   }

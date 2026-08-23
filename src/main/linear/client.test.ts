@@ -90,13 +90,13 @@ async function loadClientModule(options: SafeStorageMockOptions = {}) {
       })
     })
   })
-  vi.doMock('electron', () => ({
-    safeStorage: {
-      isEncryptionAvailable: () => options.encryptionAvailable ?? false,
-      encryptString: (value: string) => Buffer.from(value),
-      decryptString: options.decryptString ?? ((value: Buffer) => value.toString('utf-8'))
-    }
-  }))
+  const { setSecretStore } = await import('../../shared/secret-store')
+  setSecretStore({
+    isEncryptionAvailable: () => options.encryptionAvailable ?? false,
+    encryptString: (value) => Buffer.from(value),
+    decryptString: options.decryptString ?? ((value) => value.toString('utf-8')),
+    describeProtectionGap: () => null
+  })
   vi.doMock('os', async () => {
     const actual = await vi.importActual<typeof Os>('os')
     return { ...actual, homedir: () => tempHome }

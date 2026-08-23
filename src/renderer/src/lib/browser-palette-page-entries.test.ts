@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import type { BrowserPage, BrowserWorkspace } from '../../../shared/browser-workspace-types'
 import type { Tab } from '../../../shared/tab-types'
 import type { Worktree } from '../../../shared/worktree/types'
+import { getWorktreeHostIdentity } from '../../../shared/worktree/host-qualified-identity'
 import { buildSearchableBrowserPages } from './browser-palette-page-entries'
 import { searchBrowserPages } from './browser-palette-search'
 
@@ -129,6 +130,107 @@ function buildFixture(
 }
 
 describe('buildSearchableBrowserPages', () => {
+  it('treats an unstamped legacy worktree as local when its tab is stamped', () => {
+    expect(
+      buildFixture({
+        worktrees: [worktreeA],
+        unifiedTabsByWorktree: {
+          'wt-1': [browserUnifiedTab('tab-local', 'ws-1', 'wt-1', 'local')]
+        }
+      }).map((entry) => entry.workspace.id)
+    ).toEqual(['ws-1', 'ws-1', 'ws-2'])
+  })
+
+  it('keeps same-id browser tabs isolated by execution host', () => {
+    const sharedId = 'repo-shared::/workspace'
+    const local = makeWorktree({ id: sharedId, hostId: 'local', displayName: 'Local workspace' })
+    const remote = makeWorktree({
+      id: sharedId,
+      hostId: 'runtime:host-b',
+      displayName: 'Remote workspace'
+    })
+    const localWorkspace = makeWorkspace({
+      id: 'ws-local',
+      worktreeId: sharedId,
+      activePageId: 'page-local'
+    })
+    const remoteWorkspace = makeWorkspace({
+      id: 'ws-remote',
+      worktreeId: sharedId,
+      activePageId: 'page-remote'
+    })
+    const entries = buildSearchableBrowserPages({
+      worktrees: [local, remote],
+      repoMap,
+      worktreeOrder: new Map([
+        [getWorktreeHostIdentity(local), 0],
+        [getWorktreeHostIdentity(remote), 1]
+      ]),
+      browserTabsByWorktree: {
+        [sharedId]: [localWorkspace, remoteWorkspace]
+      },
+      browserPagesByWorkspace: {
+        'ws-local': [
+          makePage({
+            id: 'page-local',
+            workspaceId: 'ws-local',
+            worktreeId: sharedId,
+            title: 'Local docs'
+          })
+        ],
+        'ws-remote': [
+          makePage({
+            id: 'page-remote',
+            workspaceId: 'ws-remote',
+            worktreeId: sharedId,
+            title: 'Remote docs'
+          })
+        ]
+      },
+      unifiedTabsByWorktree: {
+        [sharedId]: [
+          browserUnifiedTab('tab-local', 'ws-local', sharedId, 'local'),
+          browserUnifiedTab('tab-remote', 'ws-remote', sharedId, 'runtime:host-b')
+        ]
+      },
+      activeBrowserTabId: null,
+      activeWorktreeId: null,
+      activeTabType: 'terminal'
+    })
+
+    expect(entries.map((entry) => [entry.page.id, entry.worktree.hostId])).toEqual([
+      ['page-local', 'local'],
+      ['page-remote', 'runtime:host-b']
+    ])
+    expect(
+      searchBrowserPages(entries, 'docs').map((result) => [result.pageId, result.executionHostId])
+    ).toEqual([
+      ['page-local', 'local'],
+      ['page-remote', 'runtime:host-b']
+    ])
+  })
+
+  it('does not route one ambiguous legacy browser bucket to both hosts', () => {
+    const sharedId = 'repo-shared::/workspace'
+    const workspace = makeWorkspace({ worktreeId: sharedId })
+
+    expect(
+      buildSearchableBrowserPages({
+        worktrees: [
+          makeWorktree({ id: sharedId, hostId: 'local' }),
+          makeWorktree({ id: sharedId, hostId: 'runtime:host-b' })
+        ],
+        repoMap,
+        worktreeOrder,
+        browserTabsByWorktree: { [sharedId]: [workspace] },
+        browserPagesByWorkspace: { [workspace.id]: [makePage({ worktreeId: sharedId })] },
+        activeBrowserTabId: null,
+        activeWorktreeId: null,
+        activeTabType: 'terminal'
+      })
+    ).toEqual([])
+  })
+
   it('builds one entry per page across every workspace in a worktree', () => {
     const entries = buildFixture()
 
@@ -248,3 +350,24 @@ describe('buildSearchableBrowserPages', () => {
     expect(results[0].isCurrentPage).toBe(true)
   })
 })
+
+function browserUnifiedTab(
+  id: string,
+  entityId: string,
+  worktreeId: string,
+  executionHostId?: Tab['executionHostId']
+): Tab {
+  return {
+    id,
+    entityId,
+    groupId: `group-${id}`,
+    worktreeId,
+    ...(executionHostId ? { executionHostId } : {}),
+    contentType: 'browser',
+    label: entityId,
+    customLabel: null,
+    color: null,
+    sortOrder: 0,
+    createdAt: 0
+  }
+}

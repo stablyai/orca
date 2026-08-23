@@ -1318,6 +1318,11 @@ async function main(): Promise<void> {
     void ptyHandler
       .dispose()
       .then(async () => {
+        await _skillInstallHandler.dispose().catch((error) => {
+          relayLogLine(
+            `[relay] Skill upload cleanup failed: ${error instanceof Error ? error.message : String(error)}`
+          )
+        })
         await aiVaultService?.dispose().catch((error) => {
           relayLogLine(
             `[relay] AI Vault sidecar shutdown failed: ${error instanceof Error ? error.message : String(error)}`

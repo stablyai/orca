@@ -103,6 +103,8 @@ docs/**
 !docs/reference/headless-linux-server.md
 !docs/reference/linux-glibc-compatibility.md
 !docs/reference/relay-grace-time-reconfiguration.md
+!docs/reference/windows-process-enumeration.md
+!docs/reference/wsl-runner-verification.md
 !docs/reference/remote-wire-compatibility.md
 !docs/reference/renderer-agent-status-performance.md
 !docs/reference/ssh-execution-boundary.md

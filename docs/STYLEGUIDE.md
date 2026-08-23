@@ -102,7 +102,7 @@ Orca uses shadows sparingly. Three levels in practice:
 
 1. **Inset hairline** — `border` + `border` token. The default. Almost everything sits at this level.
 2. **Subtle lift** — `shadow-xs` + a single-token border. Outline buttons, embedded cards.
-3. **Floating** — `0 10px 24px rgba(0, 0, 0, 0.18)`. Popovers, popups that escape the editor surface. Reserved.
+3. **Floating** — `shadow-floating` (`0 10px 24px rgba(0, 0, 0, 0.18)`). Popovers, popups that escape the editor surface. Reserved.
 
 Don't add a fourth level. If something needs more emphasis than "floating," you're probably reaching for the focus `ring` instead.
 

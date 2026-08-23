@@ -2,10 +2,8 @@ import type {
   ExternalAutomationJob,
   ExternalAutomationManager
 } from '../../../../shared/automations-types'
-import {
-  formatAutomationSchedule,
-  isValidAutomationCronSchedule
-} from '../../../../shared/automation-schedules'
+import { isValidAutomationCronSchedule } from '../../../../shared/automation-schedules'
+import { formatUiAutomationSchedule } from './automation-schedule-label'
 import { translate } from '@/i18n/i18n'
 
 export type ExternalAutomationScheduleDisplay = {
@@ -30,7 +28,7 @@ export function getExternalAutomationScheduleDisplay(
 
   for (const candidate of candidateSchedules) {
     if (candidate && isValidAutomationCronSchedule(candidate)) {
-      return { label: formatAutomationSchedule(candidate) }
+      return { label: formatUiAutomationSchedule(candidate) }
     }
   }
 

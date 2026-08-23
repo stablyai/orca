@@ -258,6 +258,7 @@ describe('parseWorkspaceSession', () => {
             entityId: 'tab1',
             groupId: 'group1',
             worktreeId: 'wt',
+            executionHostId: 'runtime:host-b',
             contentType: 'terminal',
             label: 'Claude working',
             generatedLabel: 'Refactor auth',
@@ -281,6 +282,7 @@ describe('parseWorkspaceSession', () => {
       expect(result.value.tabsByWorktree.wt[0].aiVaultTitle?.title).toBe('Provider thread name')
       expect(result.value.unifiedTabs?.wt[0].generatedLabel).toBe('Refactor auth')
       expect(result.value.unifiedTabs?.wt[0].aiVaultTitle?.title).toBe('Provider thread name')
+      expect(result.value.unifiedTabs?.wt[0].executionHostId).toBe('runtime:host-b')
     }
   })
 

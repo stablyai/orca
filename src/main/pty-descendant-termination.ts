@@ -1,4 +1,5 @@
 import { execFile } from 'node:child_process'
+import type { JobTerminationOutcome } from './windows/windows-pty-job'
 import { terminateWindowsProcessTree, type WindowsTreeKiller } from './windows-process-tree-kill'
 import {
   verifyWindowsTreeKillTarget,
@@ -228,6 +229,11 @@ export async function captureDescendantSnapshot(
 type KillSweepDeps = SnapshotDeps &
   TerminateDeps & {
     ownsRoot?: () => boolean
+    /**
+     * Terminate the PTY's job object. Returns `unavailable` when this tree has
+     * no job, which is not permission to assume it is gone.
+     */
+    terminateOwnedTree?: () => JobTerminationOutcome
     /** Injectable Windows tree killer (defaults to taskkill /T /F). */
     killWindowsTree?: WindowsTreeKiller
     /** Injectable Windows root-identity probe (defaults to a live process query). */
@@ -237,9 +243,11 @@ type KillSweepDeps = SnapshotDeps &
 /**
  * Standard agent-session kill sequencing.
  * - POSIX: snapshot the descendant tree, signal members, then killRoot.
- * - Windows: taskkill /T /F walks the ConPTY tree only when the identity probe
- *   returns `own` (and ownsRoot still holds). `unknown`/`foreign`/`absent` skip
- *   tree kill; killRoot always runs. Detached children may survive probe failure.
+ * - Windows: terminate the PTY's job object, which is exact and needs no
+ *   identity probe. Only when this build has no job does it fall back to the
+ *   old scheme — a process-table scrape gating `taskkill /T /F` on a
+ *   parent-pid walk, which refuses whenever it cannot prove ownership and so
+ *   leaves the tree running (#9045, #10475).
  * Callers must not signal the root before this runs on POSIX — a dead root's
  * descendants reparent to pid 1 and become unfindable. Snapshot failure
  * degrades to killRoot alone on POSIX.
@@ -253,6 +261,12 @@ export async function killWithDescendantSweep(
   if (platform === 'win32') {
     try {
       if ((deps.ownsRoot?.() ?? true) && Number.isInteger(rootPid) && rootPid > 0) {
+        // Why first: the job names the tree Orca created, so it is immune to the
+        // pid recycling the probe below exists to guard against, and it reaches
+        // descendants that reparented away from the shell.
+        if (deps.terminateOwnedTree?.() === 'terminated') {
+          return
+        }
         // Why: ownsRoot() is JS state only, and node-pty's ConPTY exit watcher closes
         // the last shell handle before it queues the JS exit callback — Windows may
         // already have recycled this PID while the map still looks live. taskkill /T /F

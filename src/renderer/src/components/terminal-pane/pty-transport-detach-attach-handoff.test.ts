@@ -165,7 +165,7 @@ describe('createIpcPtyTransport', () => {
 
     onExit?.({ id: 'pty-detached', code: 0 })
 
-    expect(onPtyExit).toHaveBeenCalledWith('pty-detached')
+    expect(onPtyExit).toHaveBeenCalledWith('pty-detached', 0)
     expect(transport.getPtyId()).toBeNull()
   })
 

@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import os from 'node:os'
 import type { MemorySnapshotStore } from './collector'
+import { setAppEnvironment } from '../../shared/app-environment'
 
 type AppMetricFixture = {
   pid: number
@@ -9,36 +10,45 @@ type AppMetricFixture = {
   memory: { workingSetSize: number }
 }
 
-const { appMetricsMock, execFileMock, execMock, listRegisteredPtysMock } = vi.hoisted(() => ({
+const { appMetricsMock, runProcessMock, execMock, listRegisteredPtysMock } = vi.hoisted(() => ({
   appMetricsMock: vi.fn<() => AppMetricFixture[]>(() => []),
-  execFileMock: vi.fn(),
+  runProcessMock: vi.fn(),
   execMock: vi.fn(),
   listRegisteredPtysMock: vi.fn()
 }))
 
-vi.mock('electron', () => ({
-  app: {
-    getAppMetrics: appMetricsMock
-  }
-}))
-
 vi.mock('child_process', () => ({
   exec: (cmd: string, opts: unknown, cb: (err: Error | null, out: { stdout: string }) => void) =>
-    execMock(cmd, opts, cb),
-  execFile: (
-    file: string,
-    args: string[],
-    opts: unknown,
-    cb: (err: Error | null, stdout: string, stderr: string) => void
-  ) => execFileMock(file, args, opts, cb)
+    execMock(cmd, opts, cb)
+}))
+
+// Why mock the chokepoint for the Windows sweep: maxBuffer, timeout and the
+// hidden console are its contract now, so the assertions below are about which
+// query runs, not how a process is started.
+vi.mock('../../shared/child-process/run-process', () => ({
+  runProcess: (spec: { program: string; args?: string[] }) => runProcessMock(spec)
 }))
 
 vi.mock('./pty-registry', () => ({
   listRegisteredPtys: listRegisteredPtysMock
 }))
 
+function appEnvironment() {
+  return {
+    getPath: () => process.cwd(),
+    getAppPath: () => process.cwd(),
+    getVersion: () => '0.0.0-test',
+    isPackaged: () => false,
+    onWillQuit: () => {},
+    exit: () => {},
+    getAppMetrics: appMetricsMock
+  }
+}
+
 async function loadCollector() {
   vi.resetModules()
+  const { setAppEnvironment: setResetAppEnvironment } = await import('../../shared/app-environment')
+  setResetAppEnvironment(appEnvironment())
   return await import('./collector')
 }
 
@@ -239,10 +249,11 @@ describe('collectSubtree', () => {
 
 describe('collectMemorySnapshot', () => {
   beforeEach(() => {
+    setAppEnvironment(appEnvironment())
     vi.restoreAllMocks()
     appMetricsMock.mockReset()
     appMetricsMock.mockReturnValue([])
-    execFileMock.mockReset()
+    runProcessMock.mockReset()
     execMock.mockReset()
     listRegisteredPtysMock.mockReset()
     listRegisteredPtysMock.mockReturnValue([])
@@ -250,13 +261,18 @@ describe('collectMemorySnapshot', () => {
 
   function mockPsResponse(stdout: string) {
     execMock.mockImplementation((_cmd, _opts, cb) => cb(null, { stdout, stderr: '' }))
-    execFileMock.mockImplementation((file, _args, _opts, cb) => {
-      const output =
-        file === 'typeperf.exe'
-          ? psFixtureToTypeperfOutput(stdout)
-          : psFixtureToWindowsProcessOutput(stdout)
-      cb(null, output, '')
-    })
+    runProcessMock.mockImplementation((spec: { program: string }) =>
+      Promise.resolve({
+        code: 0,
+        signal: null,
+        stdout:
+          spec.program === 'typeperf.exe'
+            ? psFixtureToTypeperfOutput(stdout)
+            : psFixtureToWindowsProcessOutput(stdout),
+        stderr: '',
+        timedOut: false
+      })
+    )
   }
 
   function psFixtureToWindowsProcessOutput(stdout: string): string {
@@ -314,7 +330,7 @@ describe('collectMemorySnapshot', () => {
 
   function expectProcessSweepCount(count: number): void {
     if (os.platform() === 'win32') {
-      expect(execFileMock).toHaveBeenCalledTimes(count)
+      expect(runProcessMock).toHaveBeenCalledTimes(count)
       return
     }
     expect(execMock).toHaveBeenCalledTimes(count)
@@ -328,18 +344,14 @@ describe('collectMemorySnapshot', () => {
     await collectMemorySnapshot(emptyStore)
 
     expect(execMock).not.toHaveBeenCalled()
-    expect(execFileMock).toHaveBeenCalledTimes(1)
-    const [file, args] = execFileMock.mock.calls[0]
-    expect(file).toBe('powershell.exe')
-    expect(args.join(' ')).toContain('Get-CimInstance Win32_Process')
-    expect(args.join(' ')).toContain('KernelModeTime')
-    expect(args.join(' ')).toContain('UserModeTime')
-    expect(args.join(' ')).toContain('CreationDate')
-    expect(execFileMock.mock.calls[0][2]).toMatchObject({
-      maxBuffer: 10 * 1024 * 1024,
-      timeout: 5_000,
-      windowsHide: true
-    })
+    expect(runProcessMock).toHaveBeenCalledTimes(1)
+    const spec = runProcessMock.mock.calls[0][0]
+    expect(spec.program).toBe('powershell.exe')
+    expect(spec.args.join(' ')).toContain('Get-CimInstance Win32_Process')
+    expect(spec.args.join(' ')).toContain('KernelModeTime')
+    expect(spec.args.join(' ')).toContain('UserModeTime')
+    expect(spec.args.join(' ')).toContain('CreationDate')
+    expect(spec).toMatchObject({ maxOutputBytes: 10 * 1024 * 1024, timeoutMs: 5_000 })
   })
 
   it('attributes Windows process CPU from cumulative time deltas between sweeps', async () => {
@@ -349,8 +361,14 @@ describe('collectMemorySnapshot', () => {
       '10\t1\t1048576\t10000000\t0\t638830000000000000',
       '10\t1\t1048576\t30000000\t0\t638830000000000000'
     ]
-    execFileMock.mockImplementation((_file, _args, _opts, cb) =>
-      cb(null, cpuOutputs.shift() ?? '', '')
+    runProcessMock.mockImplementation(() =>
+      Promise.resolve({
+        code: 0,
+        signal: null,
+        stdout: cpuOutputs.shift() ?? '',
+        stderr: '',
+        timedOut: false
+      })
     )
     listRegisteredPtysMock.mockReturnValue([
       {
@@ -368,7 +386,7 @@ describe('collectMemorySnapshot', () => {
 
     expect(first.worktrees[0].sessions[0].cpu).toBe(0)
     expect(second.worktrees[0].sessions[0].cpu).toBe(100)
-    expect(execFileMock.mock.calls.map(([file]) => file)).toEqual([
+    expect(runProcessMock.mock.calls.map(([spec]) => spec.program)).toEqual([
       'powershell.exe',
       'powershell.exe'
     ])
@@ -381,8 +399,14 @@ describe('collectMemorySnapshot', () => {
       '10\t1\t1048576\t10000000\t0\t638830000000000000',
       '10\t1\t1048576\t30000000\t0\t638830000000000001'
     ]
-    execFileMock.mockImplementation((_file, _args, _opts, cb) =>
-      cb(null, cpuOutputs.shift() ?? '', '')
+    runProcessMock.mockImplementation(() =>
+      Promise.resolve({
+        code: 0,
+        signal: null,
+        stdout: cpuOutputs.shift() ?? '',
+        stderr: '',
+        timedOut: false
+      })
     )
     listRegisteredPtysMock.mockReturnValue([
       {
@@ -408,8 +432,14 @@ describe('collectMemorySnapshot', () => {
       '10\t1\t1048576\t90071992547409920\t0\t638830000000000000',
       '10\t1\t1048576\t90071992567409920\t0\t638830000000000000'
     ]
-    execFileMock.mockImplementation((_file, _args, _opts, cb) =>
-      cb(null, cpuOutputs.shift() ?? '', '')
+    runProcessMock.mockImplementation(() =>
+      Promise.resolve({
+        code: 0,
+        signal: null,
+        stdout: cpuOutputs.shift() ?? '',
+        stderr: '',
+        timedOut: false
+      })
     )
     listRegisteredPtysMock.mockReturnValue([
       {
@@ -439,8 +469,14 @@ describe('collectMemorySnapshot', () => {
       '10\t1\t1048576\t1000000\t0\t638830000000000000',
       '10\t1\t1048576\t20000000\t0\t638830000000000000'
     ]
-    execFileMock.mockImplementation((_file, _args, _opts, cb) =>
-      cb(null, cpuOutputs.shift() ?? '', '')
+    runProcessMock.mockImplementation(() =>
+      Promise.resolve({
+        code: 0,
+        signal: null,
+        stdout: cpuOutputs.shift() ?? '',
+        stderr: '',
+        timedOut: false
+      })
     )
     listRegisteredPtysMock.mockReturnValue([
       {
@@ -469,8 +505,14 @@ describe('collectMemorySnapshot', () => {
       '10\t1\t1048576\t0\t0\t638830000000000000',
       '10\t1\t1048576\t1000000000\t0\t638830000000000000'
     ]
-    execFileMock.mockImplementation((_file, _args, _opts, cb) =>
-      cb(null, cpuOutputs.shift() ?? '', '')
+    runProcessMock.mockImplementation(() =>
+      Promise.resolve({
+        code: 0,
+        signal: null,
+        stdout: cpuOutputs.shift() ?? '',
+        stderr: '',
+        timedOut: false
+      })
     )
     listRegisteredPtysMock.mockReturnValue([
       {
@@ -496,8 +538,14 @@ describe('collectMemorySnapshot', () => {
       '10\t1\t1048576\t0\t0\t638830000000000000',
       '10\t1\t1048576\t100000000\t0\t638830000000000000'
     ]
-    execFileMock.mockImplementation((_file, _args, _opts, cb) =>
-      cb(null, cpuOutputs.shift() ?? '', '')
+    runProcessMock.mockImplementation(() =>
+      Promise.resolve({
+        code: 0,
+        signal: null,
+        stdout: cpuOutputs.shift() ?? '',
+        stderr: '',
+        timedOut: false
+      })
     )
     listRegisteredPtysMock.mockReturnValue([
       {
@@ -518,8 +566,14 @@ describe('collectMemorySnapshot', () => {
 
   it('preserves Windows process memory when CPU counters are unavailable', async () => {
     vi.spyOn(os, 'platform').mockReturnValue('win32')
-    execFileMock.mockImplementation((_file, _args, _opts, cb) =>
-      cb(null, '10\t1\t1048576\t\t\t638830000000000000', '')
+    runProcessMock.mockImplementation(() =>
+      Promise.resolve({
+        code: 0,
+        signal: null,
+        stdout: '10\t1\t1048576\t\t\t638830000000000000',
+        stderr: '',
+        timedOut: false
+      })
     )
     listRegisteredPtysMock.mockReturnValue([
       {
@@ -539,13 +593,19 @@ describe('collectMemorySnapshot', () => {
 
   it('uses Typeperf during the CIM retry cooldown', async () => {
     vi.spyOn(os, 'platform').mockReturnValue('win32')
-    execFileMock.mockImplementation((file, _args, _opts, cb) => {
-      if (file === 'powershell.exe') {
-        cb(new Error('CIM unavailable'), '', '')
-        return
-      }
-      cb(null, psFixtureToTypeperfOutput('10 1 0 1024'), '')
-    })
+    runProcessMock.mockImplementation((spec: { program: string }) =>
+      Promise.resolve(
+        spec.program === 'powershell.exe'
+          ? { code: 1, signal: null, stdout: '', stderr: 'CIM unavailable', timedOut: false }
+          : {
+              code: 0,
+              signal: null,
+              stdout: psFixtureToTypeperfOutput('10 1 0 1024'),
+              stderr: '',
+              timedOut: false
+            }
+      )
+    )
     listRegisteredPtysMock.mockReturnValue([
       {
         ptyId: 'cim-pty',
@@ -560,13 +620,13 @@ describe('collectMemorySnapshot', () => {
     const first = await collectMemorySnapshot(emptyStore)
     const second = await collectMemorySnapshot(emptyStore)
 
-    expect(execFileMock).toHaveBeenCalledTimes(3)
-    expect(execFileMock.mock.calls.map(([file]) => file)).toEqual([
+    expect(runProcessMock).toHaveBeenCalledTimes(3)
+    expect(runProcessMock.mock.calls.map(([spec]) => spec.program)).toEqual([
       'powershell.exe',
       'typeperf.exe',
       'typeperf.exe'
     ])
-    expect(execFileMock.mock.calls[1][2]).toMatchObject({ windowsHide: true, timeout: 5_000 })
+    expect(runProcessMock.mock.calls[1][0]).toMatchObject({ timeoutMs: 5_000 })
     expect(first.worktrees[0].memory).toBe(1048576)
     expect(second.worktrees[0].memory).toBe(1048576)
   })
@@ -584,17 +644,28 @@ describe('collectMemorySnapshot', () => {
       '10\t1\t1048576\t30000000\t0\t638830000000000000'
     ]
     let cimCalls = 0
-    execFileMock.mockImplementation((file, _args, _opts, cb) => {
-      if (file === 'typeperf.exe') {
-        cb(null, psFixtureToTypeperfOutput('10 1 0 1024'), '')
-        return
+    runProcessMock.mockImplementation((spec: { program: string }) => {
+      if (spec.program === 'typeperf.exe') {
+        return Promise.resolve({
+          code: 0,
+          signal: null,
+          stdout: psFixtureToTypeperfOutput('10 1 0 1024'),
+          stderr: '',
+          timedOut: false
+        })
       }
       cimCalls += 1
-      if (cimCalls === 1) {
-        cb(new Error('transient CIM failure'), '', '')
-        return
-      }
-      cb(null, cimOutputs.shift() ?? '', '')
+      return Promise.resolve(
+        cimCalls === 1
+          ? { code: 1, signal: null, stdout: '', stderr: 'transient CIM failure', timedOut: false }
+          : {
+              code: 0,
+              signal: null,
+              stdout: cimOutputs.shift() ?? '',
+              stderr: '',
+              timedOut: false
+            }
+      )
     })
     listRegisteredPtysMock.mockReturnValue([
       {
@@ -612,7 +683,7 @@ describe('collectMemorySnapshot', () => {
     const warming = await collectMemorySnapshot(emptyStore)
     const recovered = await collectMemorySnapshot(emptyStore)
 
-    expect(execFileMock.mock.calls.map(([file]) => file)).toEqual([
+    expect(runProcessMock.mock.calls.map(([spec]) => spec.program)).toEqual([
       'powershell.exe',
       'typeperf.exe',
       'typeperf.exe',
@@ -775,8 +846,14 @@ describe('collectMemorySnapshot', () => {
     execMock.mockImplementation((_cmd, _opts, cb) =>
       cb(new Error('process enumeration failed'), { stdout: '' })
     )
-    execFileMock.mockImplementation((_file, _args, _opts, cb) =>
-      cb(new Error('process enumeration failed'), '', '')
+    runProcessMock.mockImplementation(() =>
+      Promise.resolve({
+        code: 1,
+        signal: null,
+        stdout: '',
+        stderr: 'process enumeration failed',
+        timedOut: false
+      })
     )
     listRegisteredPtysMock.mockReturnValue([])
 

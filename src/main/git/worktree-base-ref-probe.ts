@@ -37,3 +37,32 @@ export async function hasWorktreeBaseCommitRef(
 ): Promise<boolean> {
   return (await resolveWorktreeBaseCommitOid(repoPath, qualifiedRef, options)) !== null
 }
+
+export type WorktreeBaseRefPresence = 'present' | 'absent' | 'unknown'
+
+/**
+ * Distinguish "the ref does not exist" from "the probe itself failed".
+ *
+ * Why for-each-ref: it exits 0 whether or not the pattern matches, so an empty result
+ * proves absence while a rejection still means the probe never ran (broken repo, dead
+ * SSH transport). `rev-parse --verify --quiet` exits 1 for both, and reading that as
+ * "absent" would silently drop warnings the caller must still surface.
+ *
+ * Executor-injected so the SSH path can route the same argv through the relay.
+ */
+export async function probeWorktreeBaseRefPresence(
+  runGit: (args: string[]) => Promise<{ stdout: string }>,
+  qualifiedRef: string
+): Promise<WorktreeBaseRefPresence> {
+  try {
+    const { stdout } = await runGit([
+      'for-each-ref',
+      '--count=1',
+      '--format=%(refname)',
+      qualifiedRef
+    ])
+    return stdout.trim() === qualifiedRef ? 'present' : 'absent'
+  } catch {
+    return 'unknown'
+  }
+}

@@ -20,6 +20,7 @@ import {
   type NormalizedClaudeAccountSelectionTarget
 } from '../claude-accounts/runtime-selection'
 import { fetchGeminiRateLimits } from './gemini-usage-fetcher'
+import { deriveAntigravityRateLimits } from './antigravity-usage-mirror'
 import { fetchKimiRateLimits } from './kimi-fetcher'
 import type { KimiHomeResolution } from '../kimi/kimi-runtime-home'
 import { fetchGrokRateLimits } from './grok-fetcher'
@@ -1766,11 +1767,8 @@ export class RateLimitService {
             status: 'error'
           } satisfies ProviderRateLimits)
 
-    // Why: Antigravity shares Gemini credentials today; mirror the Gemini snapshot so its status-bar UI gets a real lifecycle instead of null.
-    const antigravity: ProviderRateLimits = {
-      ...gemini,
-      provider: 'antigravity'
-    }
+    // Why: Antigravity can only borrow a *successful* Gemini read; a Gemini failure is not an Antigravity failure.
+    const antigravity = deriveAntigravityRateLimits(gemini)
 
     const opencodeGo =
       opencodeGoResult.status === 'fulfilled'

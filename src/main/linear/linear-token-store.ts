@@ -1,4 +1,4 @@
-import { safeStorage } from 'electron'
+import { getSecretStore } from '../../shared/secret-store'
 import { existsSync, readFileSync, unlinkSync, writeFileSync } from 'node:fs'
 import {
   LEGACY_WORKSPACE_ID,
@@ -33,13 +33,13 @@ import {
 import type { LinearWorkspace } from '../../shared/linear/workspace-types'
 
 function writeEncryptedToken(path: string, apiKey: string): void {
-  if (safeStorage.isEncryptionAvailable()) {
-    const encrypted = safeStorage.encryptString(apiKey)
+  if (getSecretStore().isEncryptionAvailable()) {
+    const encrypted = getSecretStore().encryptString(apiKey)
     writeFileSync(path, encrypted, { mode: 0o600 })
     return
   }
 
-  console.warn('[linear] safeStorage encryption unavailable — storing token in plaintext')
+  console.warn('[linear] secret encryption unavailable — storing token in plaintext')
   writeFileSync(path, apiKey, { encoding: 'utf-8', mode: 0o600 })
 }
 

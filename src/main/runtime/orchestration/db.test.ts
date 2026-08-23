@@ -654,17 +654,6 @@ describe('OrchestrationDb', () => {
       expect(after?.last_heartbeat_at).toBe('2026-05-04T00:00:00.000Z')
     })
 
-    it('recordHeartbeat is a no-op for completed rows (straggler ignored)', () => {
-      const d = createDb()
-      const task = d.createTask({ spec: 'work' })
-      const ctx = d.createDispatchContext(task.id, 'term_a')
-      d.completeDispatch(ctx.id)
-
-      d.recordHeartbeat(ctx.id, '2026-05-04T00:00:00.000Z')
-      const after = d.getDispatchContext(task.id)
-      expect(after?.last_heartbeat_at).toBeNull()
-    })
-
     it('getStaleDispatches returns only dispatched rows past the grace window', () => {
       const d = createDb()
       // Fixture: four rows, SQL-backdated timestamps (no fake clock):

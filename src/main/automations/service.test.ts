@@ -5,6 +5,7 @@ import { tmpdir } from 'node:os'
 import type { Repo } from '../../shared/repo-types'
 import { toRuntimeExecutionHostId } from '../../shared/execution-host'
 import { AutomationService } from './service'
+import { installFakeAppEnvironment } from '../../../config/scripts/vitest-host-ports-setup'
 
 const testState = { dir: '' }
 
@@ -21,6 +22,8 @@ vi.mock('electron', () => ({
 
 async function createStore() {
   vi.resetModules()
+  // Why: userData resolves through AppEnvironment; point it at this file's temp dir.
+  installFakeAppEnvironment({ getPath: () => testState.dir })
   const { Store, initDataPath } = await import('../persistence')
   initDataPath()
   return new Store()

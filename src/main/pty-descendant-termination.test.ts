@@ -393,6 +393,50 @@ describe('killWithDescendantSweep', () => {
     expect(sendSignal).not.toHaveBeenCalled()
   })
 
+  it('on Windows terminates the owning job instead of probing and taskkilling', async () => {
+    // The job names the tree Orca created, so there is nothing to prove: no
+    // process-table scrape, no parent-pid walk, no pid-recycle guess.
+    const events: string[] = []
+    const terminateOwnedTree = vi.fn(() => {
+      events.push('job-kill')
+      return 'terminated' as const
+    })
+    const killWindowsTree = vi.fn(async () => {})
+    const verifyTreeKillTarget = vi.fn(async () => 'own' as const)
+    const killRoot = vi.fn(() => events.push('root-kill'))
+
+    await killWithDescendantSweep(4242, killRoot, {
+      platform: 'win32',
+      terminateOwnedTree,
+      killWindowsTree,
+      verifyTreeKillTarget
+    })
+
+    expect(terminateOwnedTree).toHaveBeenCalledOnce()
+    expect(verifyTreeKillTarget).not.toHaveBeenCalled()
+    expect(killWindowsTree).not.toHaveBeenCalled()
+    // killRoot still runs: the job kills processes, the handle still needs closing.
+    expect(events).toEqual(['job-kill', 'root-kill'])
+  })
+
+  it('on Windows falls back to the probe when the pty has no job', async () => {
+    // A pty started before this build, or one the OS refused to assign, has no
+    // job. `unavailable` must not be read as "already dead".
+    const terminateOwnedTree = vi.fn(() => 'unavailable' as const)
+    const killWindowsTree = vi.fn(async () => {})
+    const killRoot = vi.fn()
+
+    await killWithDescendantSweep(4242, killRoot, {
+      platform: 'win32',
+      terminateOwnedTree,
+      killWindowsTree,
+      verifyTreeKillTarget: async () => 'own'
+    })
+
+    expect(killWindowsTree).toHaveBeenCalledWith(4242)
+    expect(killRoot).toHaveBeenCalledOnce()
+  })
+
   it('on Windows taskkills the process tree before killRoot (#10004)', async () => {
     const events: string[] = []
     const killWindowsTree = vi.fn(async () => {

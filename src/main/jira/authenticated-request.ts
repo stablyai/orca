@@ -1,5 +1,5 @@
-import { net, session } from 'electron'
 import { ensureElectronProxyFromEnvironment } from '../network/proxy-settings'
+import { getMainHttpClient } from '../network/http-client'
 import { withSpan } from '../observability/tracer'
 import type { JiraAuthType, JiraSite } from '../../shared/jira-types'
 
@@ -58,8 +58,10 @@ async function jiraFetch(url: string, init: RequestInit): Promise<Response> {
     'jira.request',
     async (span) => {
       span.setAttribute('jira.siteUrl', new URL(url).origin)
+      const httpClient = getMainHttpClient()
+      const proxySession = httpClient.proxySession()
       await ensureElectronProxyFromEnvironment({
-        proxySession: session.defaultSession,
+        ...(proxySession ? { proxySession } : {}),
         probeUrl: url
       }).catch((error) => {
         span.addEvent('jira.proxySetupFailed', {
@@ -68,9 +70,10 @@ async function jiraFetch(url: string, init: RequestInit): Promise<Response> {
         })
       })
       try {
-        // Why: Electron's network stack follows Chromium proxy/session state,
-        // avoiding undici's stale keep-alive sockets after VPN path changes.
-        return await net.fetch(url, init)
+        // Why the port: on the desktop this is Electron's net.fetch, which follows
+        // Chromium proxy/session state and avoids undici's stale keep-alive sockets
+        // after VPN path changes. A host without Chromium gets Node's fetch instead.
+        return await httpClient.fetch(url, init)
       } catch (error) {
         span.setAttribute(
           'jira.transportErrorName',

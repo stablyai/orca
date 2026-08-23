@@ -16,7 +16,7 @@ const {
   listRegisteredRemovedSshTargetLabelsMock: vi.fn()
 }))
 
-vi.mock('../../../ipc/ssh', () => ({
+vi.mock('../../../ssh/ssh-target-registry', () => ({
   connectRegisteredSshTarget: connectRegisteredSshTargetMock,
   getRegisteredSshState: getRegisteredSshStateMock,
   listRegisteredSshTargets: listRegisteredSshTargetsMock,

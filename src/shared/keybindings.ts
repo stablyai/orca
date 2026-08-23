@@ -40,6 +40,7 @@ export type KeybindingActionId =
   | 'workspace.selectByIndex'
   | 'voice.dictation'
   | 'view.tasks'
+  | 'dashboard.toggle'
   | 'sidebar.left.toggle'
   | 'sidebar.right.toggle'
   | 'sidebar.explorer.toggle'
@@ -313,6 +314,28 @@ export const KEYBINDING_DEFINITIONS: readonly KeybindingDefinition[] = [
       'close'
     ],
     // Why: configurable but unbound by default, to not take a global chord from terminal/browser/editor users.
+    defaultBindings: platformBindings([]),
+    allowInTerminal: true
+  },
+  {
+    id: 'dashboard.toggle',
+    title: 'Toggle Agent Dashboard',
+    group: 'Global',
+    scope: 'global',
+    searchKeywords: [
+      'shortcut',
+      'global',
+      'agent',
+      'agents',
+      'dashboard',
+      'kanban',
+      'board',
+      'toggle',
+      'open',
+      'close'
+    ],
+    // Why: configurable but unbound by default, matching workspace.openBoard — an
+    // experimental surface must not claim a global chord from terminal users.
     defaultBindings: platformBindings([]),
     allowInTerminal: true
   },

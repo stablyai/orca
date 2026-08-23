@@ -21,7 +21,8 @@ const mocks = vi.hoisted(() => ({
   moveUnifiedTabToGroup: vi.fn(),
   setRemoteBrowserPageHandle: vi.fn(),
   focusBrowserTabInWorktree: vi.fn(),
-  applyFreshWebSessionTabsSnapshot: vi.fn(),
+  applyWebSessionTabsSnapshot: vi.fn(),
+  decideWebSessionTabsSnapshot: vi.fn(() => ({ apply: true, settlesHostMirror: true })),
   acceptReplayedWebSessionTabsSnapshot: vi.fn(),
   resolveHostSessionTabIdForWebSessionTab: vi.fn(),
   trackTerminalPaneSplit: vi.fn(),
@@ -41,9 +42,13 @@ vi.mock('../store', () => ({
 
 vi.mock('./web-session-tabs-sync', () => ({
   acceptReplayedWebSessionTabsSnapshot: mocks.acceptReplayedWebSessionTabsSnapshot,
-  applyFreshWebSessionTabsSnapshot: mocks.applyFreshWebSessionTabsSnapshot,
-  applyWebSessionTabsStorePatch: (buildPatch: (state: unknown) => unknown) =>
-    mocks.setState(buildPatch),
+  applyWebSessionTabsSnapshot: mocks.applyWebSessionTabsSnapshot,
+  decideWebSessionTabsSnapshot: mocks.decideWebSessionTabsSnapshot,
+  applyWebSessionTabsStorePatch: (buildPatch: (state: unknown) => unknown) => {
+    mocks.setState(buildPatch)
+    // The production caller invokes the returned settle receipt.
+    return () => {}
+  },
   resolveHostSessionTabIdForWebSessionTab: mocks.resolveHostSessionTabIdForWebSessionTab
 }))
 
@@ -86,7 +91,7 @@ describe('web runtime session tab actions', () => {
         activeWorktreeId: WORKTREE_ID
       })
     })
-    mocks.applyFreshWebSessionTabsSnapshot.mockReturnValue({ state: 'after' })
+    mocks.applyWebSessionTabsSnapshot.mockReturnValue({ state: 'after' })
   })
 
   afterEach(() => {
@@ -166,7 +171,7 @@ describe('web runtime session tab actions', () => {
       },
       timeoutMs: 15_000
     })
-    expect(mocks.applyFreshWebSessionTabsSnapshot).toHaveBeenCalled()
+    expect(mocks.applyWebSessionTabsSnapshot).toHaveBeenCalled()
   })
 
   it('supersedes browser focus intent when a terminal is activated next', async () => {
@@ -362,7 +367,7 @@ describe('web runtime session tab actions', () => {
       WORKTREE_ID
     )
     expect(mocks.acceptReplayedWebSessionTabsSnapshot.mock.invocationCallOrder[0]).toBeLessThan(
-      mocks.applyFreshWebSessionTabsSnapshot.mock.invocationCallOrder[0]!
+      mocks.applyWebSessionTabsSnapshot.mock.invocationCallOrder[0]!
     )
   })
 

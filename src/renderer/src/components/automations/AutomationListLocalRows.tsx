@@ -20,7 +20,7 @@ import { AgentIcon } from '@/lib/agent-catalog'
 import { cn } from '@/lib/utils'
 import type { Automation, AutomationRun } from '../../../../shared/automations-types'
 import { getAutomationRunRepoId } from '../../../../shared/automation-run-identity'
-import { formatAutomationSchedule } from '../../../../shared/automation-schedules'
+import { formatUiAutomationSchedule } from './automation-schedule-label'
 import {
   getExecutionHostLabel,
   getLocalExecutionHostLabel,
@@ -107,7 +107,7 @@ export function AutomationListLocalRows({
         const projectLabel =
           automationRepo?.displayName ??
           translate('auto.components.automations.AutomationsPage.13118faadf', 'Unknown project')
-        const scheduleLabel = formatAutomationSchedule(automation.rrule)
+        const scheduleLabel = formatUiAutomationSchedule(automation.rrule)
         const nextRunLabel = automation.enabled
           ? formatAutomationDateTimeWithRelative(automation.nextRunAt, relativeNow)
           : translate('auto.components.automations.AutomationsPage.paused', 'Paused')

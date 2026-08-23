@@ -53,6 +53,7 @@ type WorkspaceTabPaletteActiveTabType = 'browser' | 'editor' | 'terminal' | 'sim
 
 export type BuildSearchableWorkspaceTabsOptions = WorkspaceTabAgentMetadataState & {
   worktrees: readonly Worktree[]
+  ownershipWorktrees?: readonly Pick<Worktree, 'id'>[]
   repoMap: ReadonlyMap<string, { displayName?: string | null }>
   repoMapByHostIdentity?: ReadonlyMap<string, { displayName?: string | null }>
   worktreeOrder: ReadonlyMap<string, number>

@@ -6,7 +6,7 @@
 import { execFile, spawn, type ChildProcessWithoutNullStreams } from 'node:child_process'
 import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { app } from 'electron'
+import { getAppEnvironment } from '../../shared/app-environment'
 
 import type { MultiplexerTransport } from '../ssh/ssh-channel-multiplexer'
 import {
@@ -16,6 +16,7 @@ import {
   type WslRelayStartupFailure
 } from './wsl-hook-relay-sentinel'
 import { addOrcaWslInteropEnv } from '../pty/wsl-orca-env'
+import { runWslProcess } from '../wsl/wsl-runner'
 import {
   WSL_HOOK_RELAY_BUNDLE_NAME,
   WSL_HOOK_RELAY_DIR,
@@ -42,7 +43,7 @@ export function resolveWslHookRelayBundle(): WslHookRelayBundle | null {
     candidates.push(join(process.resourcesPath, 'app.asar.unpacked', 'out', 'relay', 'wsl'))
   }
   try {
-    const appPath = app.getAppPath()
+    const appPath = getAppEnvironment().getAppPath()
     candidates.push(join(appPath, 'resources', 'relay', 'wsl'))
     candidates.push(join(appPath, 'out', 'relay', 'wsl'))
   } catch {
@@ -171,56 +172,29 @@ export function isWslDistroRunning(distro: string): Promise<boolean> {
   })
 }
 
-export function runWslInstallProcess(
+export async function runWslInstallProcess(
   distro: string,
   script: string,
-  env: NodeJS.ProcessEnv
+  // Unused: the install script embeds its own version/paths and reads
+  // nothing from the crossed guest environment.
+  _env: NodeJS.ProcessEnv
 ): Promise<{ code: number | null; stderr: string }> {
-  return new Promise((resolve, reject) => {
-    // Why: --exec skips the default login shell; the script rides stdin so
-    // no quoting crosses the wsl.exe boundary at all.
-    const child = spawn('wsl.exe', ['-d', distro, '--exec', 'sh', '-s'], {
-      env,
-      stdio: ['pipe', 'pipe', 'pipe'],
-      windowsHide: true
-    })
-    let stderr = ''
-    let settled = false
-    // Why: a wedged wsl.exe here would otherwise pin the manager's state at
-    // 'starting' forever — the one unbounded await on the ensure path.
-    const timeout = setTimeout(() => {
-      if (!settled) {
-        settled = true
-        child.kill()
-        resolve({
-          code: null,
-          stderr: `${stderr}\ninstall timed out after ${INSTALL_TIMEOUT_MS}ms`
-        })
-      }
-    }, INSTALL_TIMEOUT_MS)
-    child.stderr.on('data', (d: Buffer) => {
-      stderr = (stderr + decodeWslText(d.toString('utf8'))).slice(-MAX_STARTUP_BUFFER_BYTES)
-    })
-    child.on('error', (err) => {
-      if (!settled) {
-        settled = true
-        clearTimeout(timeout)
-        reject(err)
-      }
-    })
-    child.on('close', (code) => {
-      if (!settled) {
-        settled = true
-        clearTimeout(timeout)
-        resolve({ code, stderr })
-      }
-    })
-    child.stdin.on('error', () => {
-      // Guest exited before consuming stdin — surfaced via close/code.
-    })
-    child.stdin.write(script)
-    child.stdin.end()
+  const result = await runWslProcess({
+    distro,
+    loginPath: 'none',
+    script,
+    // Declared because the payload is opaque here: it is POSIX plus a heredoc.
+    shell: 'sh',
+    timeoutMs: INSTALL_TIMEOUT_MS
+    // No maxOutputBytes: the default cap holds the whole stream so the slice
+    // below can take the end of it.
   })
+  // Tail, not head: the operative error ("mv: Read-only file system") lands
+  // after whatever apt and base64 already printed.
+  const stderr = result.stderr.slice(-MAX_STARTUP_BUFFER_BYTES)
+  return result.timedOut
+    ? { code: null, stderr: `${stderr}\ninstall timed out after ${INSTALL_TIMEOUT_MS}ms` }
+    : { code: result.code, stderr }
 }
 
 const TRANSIENT_RETRY_LIMIT = 2

@@ -37,7 +37,11 @@ function App(): React.JSX.Element {
   const onboardingGate = useOnboardingAndFeatureTips()
   const clearUnreadDockBadge = useUnreadDockBadge()
 
-  useAppShellServices()
+  // Why enabled && open: the overlay only renders while the feature is on, and its panel is
+  // aria-hidden while closed — so that pair is what "on screen" means for the floating workspace.
+  useAppShellServices({
+    floatingPanelVisible: floatingWorkspace.enabled && floatingWorkspace.open
+  })
   useAppStartupHydration(onboardingGate.applyStartupOnboardingState)
   useAppSessionPersistence()
   useRuntimeGraphSync()

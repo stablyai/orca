@@ -12,18 +12,25 @@ import {
 } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { setAppEnvironment } from '../../shared/app-environment'
 
 const { getPathMock } = vi.hoisted(() => ({
   getPathMock: vi.fn<(name: string) => string>()
 }))
 
-vi.mock('electron', () => ({
-  app: {
-    getPath: getPathMock
-  }
-}))
-
 import { OpenCodeHookService, _internals } from './hook-service'
+
+beforeEach(() => {
+  setAppEnvironment({
+    getPath: getPathMock,
+    getAppPath: () => process.cwd(),
+    getVersion: () => '0.0.0-test',
+    isPackaged: () => false,
+    onWillQuit: () => {},
+    exit: () => {},
+    getAppMetrics: () => []
+  })
+})
 
 const { isUsableId, toSafeDirName } = _internals
 

@@ -14,6 +14,7 @@ import {
   frontmatterBlock,
   normalizeMarkdown,
   parseFrontmatter,
+  toPosixRelativePath,
   verifyArtifacts,
   writeArtifacts
 } from './generate-bundled-skill-guides.mjs'
@@ -230,6 +231,20 @@ describe('bundled skill guide generator', () => {
 
     await writeFile(path.join(root, 'skills', 'computer-use', 'SKILL.md'), 'stale\n')
     await expect(verifyArtifacts(artifacts, root)).rejects.toThrow('skills/computer-use/SKILL.md')
+  })
+
+  // Why: the stale-artifact assertions above only hit the Windows separator when the host is
+  // Windows; injecting path.win32 makes the Linux/macOS shards catch the regression too.
+  it('formats contributor-facing paths with forward slashes on every platform', () => {
+    expect(
+      toPosixRelativePath('C:\\repo', 'C:\\repo\\src\\cli\\bundled-skill-guides.ts', path.win32)
+    ).toBe('src/cli/bundled-skill-guides.ts')
+    expect(
+      toPosixRelativePath('C:\\repo', 'C:\\repo\\skills\\computer-use\\SKILL.md', path.win32)
+    ).toBe('skills/computer-use/SKILL.md')
+    expect(toPosixRelativePath('/repo', '/repo/skills/computer-use/SKILL.md', path.posix)).toBe(
+      'skills/computer-use/SKILL.md'
+    )
   })
 
   it('rejects mismatched source names and ambiguous aliases', async () => {

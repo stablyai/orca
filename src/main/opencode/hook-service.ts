@@ -1,5 +1,5 @@
 /* eslint-disable max-lines -- Why: holds an inline JS plugin source emitted as one file; splitting across TS modules would scatter tightly coupled string-template logic. */
-import { app } from 'electron'
+import { getAppEnvironment } from '../../shared/app-environment'
 import { join } from 'node:path'
 import {
   existsSync,
@@ -1096,7 +1096,7 @@ export class OpenCodeHookService {
   }
 
   private getOverlayRoot(): string {
-    return join(app.getPath('userData'), OPENCODE_OVERLAY_DIR)
+    return join(getAppEnvironment().getPath('userData'), OPENCODE_OVERLAY_DIR)
   }
 
   private getSourceOverlayDir(sourceConfigDir: string): string {
@@ -1104,7 +1104,11 @@ export class OpenCodeHookService {
   }
 
   private getSharedConfigDir(): string {
-    return join(app.getPath('userData'), OPENCODE_LEGACY_HOOKS_DIR, OPENCODE_SHARED_CONFIG_DIR)
+    return join(
+      getAppEnvironment().getPath('userData'),
+      OPENCODE_LEGACY_HOOKS_DIR,
+      OPENCODE_SHARED_CONFIG_DIR
+    )
   }
 
   private readOverlayManifest(overlayDir: string): OpenCodeOverlayManifest {

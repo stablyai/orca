@@ -57,6 +57,23 @@ describe('TabsSlice', () => {
       expect(tab.label).toBe('main.ts')
     })
 
+    it('stamps tabs with the active execution host', () => {
+      store.setState({
+        activeWorktreeId: WT,
+        activeWorkspaceExecutionHostId: 'runtime:host-b'
+      })
+
+      expect(store.getState().createUnifiedTab(WT, 'simulator').executionHostId).toBe(
+        'runtime:host-b'
+      )
+    })
+
+    it('stamps active local tabs when the local host field is null', () => {
+      store.setState({ activeWorktreeId: WT, activeWorkspaceExecutionHostId: null })
+
+      expect(store.getState().createUnifiedTab(WT, 'browser').executionHostId).toBe('local')
+    })
+
     it('activates the newly created tab', () => {
       const tab1 = store.getState().createUnifiedTab(WT, 'terminal')
       const tab2 = store.getState().createUnifiedTab(WT, 'terminal')

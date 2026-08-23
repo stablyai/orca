@@ -4,7 +4,7 @@ import {
   getRegisteredSshState,
   listRegisteredRemovedSshTargetLabels,
   listRegisteredSshTargets
-} from '../../../ipc/ssh'
+} from '../../../ssh/ssh-target-registry'
 import { defineMethod, type RpcMethod } from '../core'
 import { getPublicSshError, getPublicSshState } from '../../public-ssh-state'
 
