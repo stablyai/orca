@@ -222,6 +222,32 @@ type AgentPromptSentDedupeEntry = {
   promptInteractionKey?: string
 }
 
+/** Turn identity of a row a transient connection clear deleted, kept only until the
+ *  pane's next status so a reconnect replay of that same turn can reclaim it. */
+type ClearedStatusTiming = {
+  connectionId: string
+  state: ParsedAgentStatusPayload['state']
+  agentType: ParsedAgentStatusPayload['agentType']
+  prompt: string
+  stateStartedAt: number
+}
+
+/** True when a replay re-delivers the exact turn a disconnect clear removed. A replay
+ *  carrying anything else is news this client missed and must keep live timing. */
+function replayReclaimsClearedTurn(
+  cleared: ClearedStatusTiming | undefined,
+  payload: AgentHookEventPayload
+): cleared is ClearedStatusTiming {
+  return (
+    cleared !== undefined &&
+    payload.isReplay === true &&
+    cleared.connectionId === payload.connectionId &&
+    cleared.state === payload.payload.state &&
+    cleared.agentType === payload.payload.agentType &&
+    cleared.prompt === payload.payload.prompt
+  )
+}
+
 function agentTypeToPromptSentAgentKind(agentType: AgentType | undefined): AgentKind {
   const normalized = agentType?.trim().toLowerCase()
   if (!normalized || normalized === 'unknown') {
@@ -742,6 +768,9 @@ export class AgentHookServer {
   private closedAgentStatusTabIds = new Set<string>()
   private closedAgentStatusPaneKeys = new Set<string>()
   private connectionTimestampWatermarkById = new Map<string, number>()
+  // Why: a transient disconnect clear deletes the row the reconnect replay is about to
+  // re-deliver; keep its turn identity so the replay is recognized as the same turn (STA-3524).
+  private clearedStatusTimingByPaneKey = new Map<string, ClearedStatusTiming>()
   // Why: skip disk writes when the JSON exactly matches the last write; guards against re-firing trailing timers when nothing changed.
   private lastWrittenJson: string | null = null
   // Why: main is the pane authority for local/WSL/SSH panes — hook HTTP, relay, and its own
@@ -1208,12 +1237,23 @@ export class AgentHookServer {
         previousPromptInteractionKey: previous.promptInteractionKey,
         incomingPromptInteractionKey: payload.promptInteractionKey
       })
+    // Why: the pane's next status supersedes the clear either way — reclaimed below or
+    // outdated by a live event — so the tombstone is one-shot.
+    const cleared = this.clearedStatusTimingByPaneKey.get(payload.paneKey)
+    this.clearedStatusTimingByPaneKey.delete(payload.paneKey)
+    // Why: a disconnect clear removed `previous`, so a reconnect replay of that same turn
+    // would otherwise mint a new stateStartedAt — re-firing the task-complete notification
+    // the user already got, since completion dedupe keys on it (STA-3524).
+    const reclaimedStateStartedAt =
+      !previous && replayReclaimsClearedTurn(cleared, payload) ? cleared.stateStartedAt : undefined
     const stateStartedAt =
       previous && previous.payload.state === payload.payload.state && !commandCodeNewTurn
         ? previous.stateStartedAt
-        : now
+        : (reclaimedStateStartedAt ?? now)
     return {
       ...payload,
+      // Why: receivedAt must stay live — it has to sort after the clear watermark or the
+      // renderer drops the replayed row as a resurrected pre-disconnect status.
       receivedAt: now,
       stateStartedAt
     }
@@ -2564,6 +2604,7 @@ export class AgentHookServer {
     this.closedAgentStatusPaneKeys.clear()
     this.retiredPaneFencesByKey.clear()
     this.connectionTimestampWatermarkById.clear()
+    this.clearedStatusTimingByPaneKey.clear()
     this.legacyPaneKeyAliases.clear()
     clearAllListenerCaches(this.state)
     this.notifyStatusChangeListeners()
@@ -2612,6 +2653,13 @@ export class AgentHookServer {
       const deleted = this.deleteStatusEntry(paneKey, { preserveAuthority: true })
       if (deleted) {
         statusChanged = true
+        this.clearedStatusTimingByPaneKey.set(paneKey, {
+          connectionId: normalizedConnectionId,
+          state: deleted.payload.state,
+          agentType: deleted.payload.agentType,
+          prompt: deleted.payload.prompt,
+          stateStartedAt: deleted.stateStartedAt
+        })
         if (deleted.payload.agentType === 'codex') {
           // Why: a replacement remote process may reuse the pane; don't merge it with the lost connection's children.
           this.state.codexSubagentRosterByPaneKey.delete(paneKey)
@@ -2658,6 +2706,9 @@ export class AgentHookServer {
     if (!options?.preserveAuthority) {
       this.hydratedLaunchTokenHashByPaneKey.delete(resolvedPaneKey)
       this.persistedAuthorityCommitmentsByPaneKey.delete(resolvedPaneKey)
+      // Why: only a transient disconnect expects a replay to reclaim the turn; real
+      // teardown must not leave a tombstone a reused pane could match against.
+      this.clearedStatusTimingByPaneKey.delete(resolvedPaneKey)
     }
     this.clearAssistantMessageRetry(resolvedPaneKey)
     this.clearCodexSubagentPoll(resolvedPaneKey)
@@ -2739,6 +2790,7 @@ export class AgentHookServer {
       this.runtimeObservedStatusPaneKeys.delete(paneKey)
       this.currentAuthorityObservations.delete(paneKey)
       this.promptSentDedupeByPaneKey.delete(paneKey)
+      this.clearedStatusTimingByPaneKey.delete(paneKey)
     }
     if (aliasChanged) {
       this.notifyPaneKeyAliasPersistenceListener()
@@ -2760,6 +2812,7 @@ export class AgentHookServer {
     this.activeHookTurnCompletedAtByPaneKey.delete(resolvedPaneKey)
     this.currentAuthorityObservations.delete(resolvedPaneKey)
     this.promptSentDedupeByPaneKey.delete(resolvedPaneKey)
+    this.clearedStatusTimingByPaneKey.delete(resolvedPaneKey)
     let clearedAlias = false
     for (const [legacyPaneKey, stablePaneKey] of this.legacyPaneKeyAliases) {
       if (stablePaneKey.stablePaneKey === resolvedPaneKey) {
@@ -2770,6 +2823,7 @@ export class AgentHookServer {
         this.activeHookTurnCompletedAtByPaneKey.delete(legacyPaneKey)
         this.currentAuthorityObservations.delete(legacyPaneKey)
         this.promptSentDedupeByPaneKey.delete(legacyPaneKey)
+        this.clearedStatusTimingByPaneKey.delete(legacyPaneKey)
         clearedAlias = true
       }
     }
