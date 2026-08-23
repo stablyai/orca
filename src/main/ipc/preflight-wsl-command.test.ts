@@ -55,12 +55,16 @@ describe('the PATH fallback, run by a real POSIX shell', () => {
   itPosix('finds an nvm-installed CLI a degraded probe would have missed', async () => {
     // #9725: the caller turns a throw into "not installed", so a degraded probe
     // told the user to install a CLI their own terminal already runs.
+    //
+    // A fabricated name, not `gh`: CI has a real /usr/bin/gh, and the fallback
+    // APPENDS, so the PATH lookup correctly found the real one and the planted
+    // stub was never reached. The test was asserting the host, not the code.
     const home = mkdtempSync(join(tmpdir(), 'orca-wsl-cmd-'))
     try {
       const bin = join(home, '.nvm/versions/node/v20.1.0/bin')
       mkdirSync(bin, { recursive: true })
-      writeFileSync(join(bin, 'gh'), '#!/bin/sh\necho gh-ok\n')
-      chmodSync(join(bin, 'gh'), 0o755)
+      writeFileSync(join(bin, 'orca-fake-cli'), '#!/bin/sh\necho cli-ok\n')
+      chmodSync(join(bin, 'orca-fake-cli'), 0o755)
 
       runWslProcessMock.mockResolvedValue({
         environmentResolved: false,
@@ -69,14 +73,14 @@ describe('the PATH fallback, run by a real POSIX shell', () => {
         stderr: '',
         timedOut: false
       })
-      await runPreflightCommandInWsl({ distro: 'Ubuntu' }, 'command -v gh', 5000)
+      await runPreflightCommandInWsl({ distro: 'Ubuntu' }, 'command -v orca-fake-cli', 5000)
       const script = String(runWslProcessMock.mock.calls.at(-1)?.[0].script)
       const options: ExecFileSyncOptions = {
         encoding: 'utf8',
         env: { HOME: home, PATH: '/usr/bin:/bin' }
       }
       expect(String(execFileSync('/bin/sh', ['-c', script], options))).toContain(
-        '.nvm/versions/node/v20.1.0/bin/gh'
+        '.nvm/versions/node/v20.1.0/bin/orca-fake-cli'
       )
     } finally {
       rmSync(home, { recursive: true, force: true })
@@ -92,8 +96,8 @@ describe('the PATH fallback, run by a real POSIX shell', () => {
         [real, 'current']
       ] as const) {
         mkdirSync(dir, { recursive: true })
-        writeFileSync(join(dir, 'gh'), `#!/bin/sh\necho ${body}\n`)
-        chmodSync(join(dir, 'gh'), 0o755)
+        writeFileSync(join(dir, 'orca-fake-cli'), `#!/bin/sh\necho ${body}\n`)
+        chmodSync(join(dir, 'orca-fake-cli'), 0o755)
       }
       runWslProcessMock.mockResolvedValue({
         environmentResolved: true,
@@ -102,7 +106,7 @@ describe('the PATH fallback, run by a real POSIX shell', () => {
         stderr: '',
         timedOut: false
       })
-      await runPreflightCommandInWsl({ distro: 'Ubuntu' }, 'gh', 5000)
+      await runPreflightCommandInWsl({ distro: 'Ubuntu' }, 'orca-fake-cli', 5000)
       const script = String(runWslProcessMock.mock.calls.at(-1)?.[0].script)
       const options: ExecFileSyncOptions = {
         encoding: 'utf8',

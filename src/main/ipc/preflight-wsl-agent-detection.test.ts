@@ -160,7 +160,7 @@ describe('the detection script itself, run by a real POSIX shell', () => {
       stderr: '',
       timedOut: false
     })
-    await detectWslCommandsOnPath({ distro: 'Ubuntu' }, ['claude', 'nosuchtool'])
+    await detectWslCommandsOnPath({ distro: 'Ubuntu' }, ['orca-fake-cli', 'nosuchtool'])
     const script = String(runWslProcessMock.mock.calls.at(-1)?.[0].script)
     const options: ExecFileSyncOptions = {
       encoding: 'utf8',
@@ -172,19 +172,19 @@ describe('the detection script itself, run by a real POSIX shell', () => {
   itPosix('finds an nvm-installed binary the login PATH would have shown', async () => {
     // #9725: without the login PATH this resolves to nothing and preflight
     // reports a working install as "not installed".
-    plant('.nvm/versions/node/v20.1.0/bin', 'claude')
+    plant('.nvm/versions/node/v20.1.0/bin', 'orca-fake-cli')
     const out = await runScript()
-    expect(out).toContain('__ORCA_AGENT_PATH__claude')
-    expect(out).toContain('.nvm/versions/node/v20.1.0/bin/claude')
+    expect(out).toContain('__ORCA_AGENT_PATH__orca-fake-cli')
+    expect(out).toContain('.nvm/versions/node/v20.1.0/bin/orca-fake-cli')
   })
 
   itPosix('finds a ~/.local/bin install', async () => {
-    plant('.local/bin', 'claude')
-    expect(await runScript()).toContain('__ORCA_AGENT_PATH__claude')
+    plant('.local/bin', 'orca-fake-cli')
+    expect(await runScript()).toContain('__ORCA_AGENT_PATH__orca-fake-cli')
   })
 
   itPosix('still reports nothing for a command that is genuinely absent', async () => {
-    plant('.local/bin', 'claude')
+    plant('.local/bin', 'orca-fake-cli')
     expect(await runScript()).not.toContain('nosuchtool')
   })
 
@@ -195,8 +195,8 @@ describe('the detection script itself, run by a real POSIX shell', () => {
     const previous = home
     home = spaced
     try {
-      plant('.nvm/versions/node/v20.1.0/bin', 'claude')
-      expect(await runScript()).toContain(`${spaced}/.nvm/versions/node/v20.1.0/bin/claude`)
+      plant('.nvm/versions/node/v20.1.0/bin', 'orca-fake-cli')
+      expect(await runScript()).toContain(`${spaced}/.nvm/versions/node/v20.1.0/bin/orca-fake-cli`)
     } finally {
       home = previous
       rmSync(spaced, { recursive: true, force: true })
@@ -206,8 +206,8 @@ describe('the detection script itself, run by a real POSIX shell', () => {
   itPosix('does not report a directory as an installed CLI', async () => {
     // Directories are mode 755 and pass -x. Preflight would say installed and
     // the launch would fail later with EISDIR.
-    mkdirSync(join(home, '.local/bin/claude'), { recursive: true })
-    expect(await runScript()).not.toContain('__ORCA_AGENT_PATH__claude')
+    mkdirSync(join(home, '.local/bin/orca-fake-cli'), { recursive: true })
+    expect(await runScript()).not.toContain('__ORCA_AGENT_PATH__orca-fake-cli')
   })
 
   itPosix.each([
@@ -216,7 +216,7 @@ describe('the detection script itself, run by a real POSIX shell', () => {
     '.fnm/aliases/default/bin',
     '.local/share/mise/shims'
   ])('covers %s, which the native fallback also probes', async (dir) => {
-    plant(dir, 'claude')
-    expect(await runScript()).toContain('__ORCA_AGENT_PATH__claude')
+    plant(dir, 'orca-fake-cli')
+    expect(await runScript()).toContain('__ORCA_AGENT_PATH__orca-fake-cli')
   })
 })
