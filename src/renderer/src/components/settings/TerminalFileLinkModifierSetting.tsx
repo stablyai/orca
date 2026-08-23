@@ -3,6 +3,7 @@ import { SearchableSetting } from './SearchableSetting'
 import { SettingsSwitchRow } from './SettingsFormControls'
 import {
   getTerminalFileLinkModifierDescription,
+  getTerminalFileLinkModifierSearchKeywords,
   getTerminalFileLinkModifierTitle
 } from './terminal-file-link-modifier-copy'
 
@@ -24,18 +25,7 @@ export function TerminalFileLinkModifierSetting({
     <SearchableSetting
       title={title}
       description={description}
-      keywords={[
-        'terminal',
-        'file',
-        'link',
-        'shift',
-        'modifier',
-        'invert',
-        'swap',
-        'default app',
-        'finder',
-        isMac ? 'cmd' : 'ctrl'
-      ]}
+      keywords={getTerminalFileLinkModifierSearchKeywords({ isMac })}
     >
       <SettingsSwitchRow
         label={title}

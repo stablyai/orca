@@ -2,6 +2,11 @@ import { describe, expect, it } from 'vitest'
 
 import { getTerminalPaneInteractionSearchEntries } from './terminal-pane-appearance-search'
 import {
+  getTerminalFileLinkModifierDescription,
+  getTerminalFileLinkModifierSearchKeywords,
+  getTerminalFileLinkModifierTitle
+} from './terminal-file-link-modifier-copy'
+import {
   getTerminalLinkActionSearchKeywords,
   getTerminalLinkActionsDescription,
   getTerminalLinkActionsTitle
@@ -19,8 +24,12 @@ describe('terminal link actions copy', () => {
   })
 
   it('indexes both platform chords so either spelling finds the row', () => {
-    expect(getTerminalLinkActionSearchKeywords({ isMac: true })).toContain('cmd')
-    expect(getTerminalLinkActionSearchKeywords({ isMac: false })).toContain('ctrl')
+    expect(getTerminalLinkActionSearchKeywords({ isMac: true })).toEqual(
+      expect.arrayContaining(['cmd', 'ctrl'])
+    )
+    expect(getTerminalLinkActionSearchKeywords({ isMac: false })).toEqual(
+      expect.arrayContaining(['cmd', 'ctrl'])
+    )
   })
 
   // Why: the row moved out of the Browser pane, so its search entry has to live in
@@ -31,5 +40,24 @@ describe('terminal link actions copy', () => {
     )
     expect(entry).toBeDefined()
     expect(entry?.keywords).toContain('terminal')
+  })
+})
+
+describe('terminal file-link modifier copy', () => {
+  it('uses platform-specific shortcut copy', () => {
+    expect(getTerminalFileLinkModifierDescription({ isMac: true })).toContain('⇧⌘+click')
+    expect(getTerminalFileLinkModifierDescription({ isMac: false })).toContain('Shift+Ctrl+click')
+  })
+
+  it('indexes the visible row terms and both platform modifiers', () => {
+    const keywords = getTerminalFileLinkModifierSearchKeywords({ isMac: true })
+    expect(keywords).toEqual(
+      expect.arrayContaining(['invert', 'swap', 'default app', 'finder', 'cmd', 'ctrl'])
+    )
+
+    const entry = getTerminalPaneInteractionSearchEntries().find(
+      (candidate) => candidate.title === getTerminalFileLinkModifierTitle()
+    )
+    expect(entry?.keywords).toEqual(expect.arrayContaining(keywords))
   })
 })

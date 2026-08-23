@@ -1,4 +1,5 @@
 import { translate } from '@/i18n/i18n'
+import { translateSearchKeyword } from './settings-search-keywords'
 
 /**
  * Title and description are kept out of the component so the settings-search index
@@ -20,4 +21,20 @@ export function getTerminalFileLinkModifierDescription({ isMac }: { isMac: boole
     '{{modifier}}+click opens a terminal file link in Orca and {{chord}}+click uses your default app. When enabled, the two swap.',
     { chord, modifier }
   )
+}
+
+export function getTerminalFileLinkModifierSearchKeywords(platform: { isMac: boolean }): string[] {
+  return [
+    ...translateSearchKeyword('auto.components.settings.terminal.search.39ea7c0d28', 'terminal'),
+    ...translateSearchKeyword('auto.components.settings.terminal.search.file', 'file'),
+    ...translateSearchKeyword('auto.components.settings.terminal.search.link', 'link'),
+    ...translateSearchKeyword('auto.components.settings.terminal.search.shift', 'shift'),
+    ...translateSearchKeyword('auto.components.settings.terminal.search.modifier', 'modifier'),
+    'invert',
+    'swap',
+    'default app',
+    'finder',
+    platform.isMac ? 'cmd' : 'ctrl',
+    platform.isMac ? 'ctrl' : 'cmd'
+  ]
 }

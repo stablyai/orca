@@ -49,6 +49,7 @@ export function getTerminalLinkActionSearchKeywords(platform: { isMac: boolean }
       'auto.components.settings.browser.search.terminalLinkActions.disable',
       'disable'
     ),
-    platform.isMac ? 'cmd' : 'ctrl'
+    platform.isMac ? 'cmd' : 'ctrl',
+    platform.isMac ? 'ctrl' : 'cmd'
   ]
 }
