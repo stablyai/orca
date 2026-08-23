@@ -76,6 +76,15 @@ function renderDragHook(enabled = true): ReturnType<typeof useTabDragSplit> {
   return result
 }
 
+function unmountLatestDragHook(): void {
+  const entry = mounted.pop()
+  if (!entry) {
+    throw new Error('drag hook was not mounted')
+  }
+  act(() => entry.root.unmount())
+  entry.container.remove()
+}
+
 function setActiveTab(tabId: string): void {
   useAppStore.setState((state) => ({
     groupsByWorktree: {
@@ -162,6 +171,25 @@ describe('useTabDragSplit window detach lifecycle', () => {
 
     act(() => drag.onDragCancel())
     expect(useAppStore.getState().groupsByWorktree[WT][0].activeTabId).toBe('tab-2')
+  })
+
+  it('invalidates a pending detach when the hook unmounts before remount activation', async () => {
+    const pendingDetach = deferred<{ ok: false; error: string }>()
+    detachTerminalWindow.mockReturnValueOnce(pendingDetach.promise)
+    const oldDrag = renderDragHook()
+    const event = dragEvent(makeDragData())
+
+    act(() => oldDrag.onDragStart(event as never))
+    act(() => setActiveTab('tab-2'))
+    act(() => oldDrag.onDragEnd(event as never))
+    unmountLatestDragHook()
+
+    const remountedDrag = renderDragHook()
+    act(() => setActiveTab('tab-3'))
+    await act(async () => pendingDetach.resolve({ ok: false, error: 'failed' }))
+
+    expect(useAppStore.getState().groupsByWorktree[WT][0].activeTabId).toBe('tab-3')
+    expect(remountedDrag.isTabDragActiveRef.current).toBe(false)
   })
 
   it('starts only one detach for repeated drag-end delivery', async () => {

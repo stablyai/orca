@@ -1,4 +1,4 @@
-import { useCallback, useRef, type RefObject } from 'react'
+import { useCallback, useEffect, useRef, type RefObject } from 'react'
 import { acquireWebviewsDragPassthrough } from '../browser-pane/host-guest/webview-registry'
 import { installTabDragMissedEndListeners } from './tab-drag-missed-end-listeners'
 
@@ -8,11 +8,13 @@ import { installTabDragMissedEndListeners } from './tab-drag-missed-end-listener
 export function useTabDragGestureLifecycle({
   finishMissedDragRef,
   dragOutsideWindowRef,
-  tabDragActiveRef
+  tabDragActiveRef,
+  teardownDragRef
 }: {
   finishMissedDragRef: RefObject<() => void>
   dragOutsideWindowRef: RefObject<boolean>
   tabDragActiveRef: RefObject<boolean>
+  teardownDragRef: RefObject<() => void>
 }): {
   acquireWebviewDragPassthrough: () => void
   installMissedEndFallback: () => void
@@ -52,6 +54,14 @@ export function useTabDragGestureLifecycle({
     releaseWebviewDragPassthroughRef.current = acquireWebviewsDragPassthrough()
   }, [releaseWebviewDragPassthrough])
 
+  const teardownDragGesture = useCallback(() => {
+    teardownDragRef.current()
+    releaseWebviewDragPassthrough()
+    releaseMissedEndFallback()
+  }, [releaseMissedEndFallback, releaseWebviewDragPassthrough, teardownDragRef])
+
+  useEffect(() => teardownDragGesture, [teardownDragGesture])
+
   const setDragRootNode = useCallback(
     (node: HTMLDivElement | null): void => {
       if (node) {
@@ -60,10 +70,9 @@ export function useTabDragGestureLifecycle({
       // Why: this root owns the dnd-kit gesture that temporarily puts browser
       // webviews in pointer passthrough and installs global fallback listeners,
       // so root teardown must release both.
-      releaseWebviewDragPassthrough()
-      releaseMissedEndFallback()
+      teardownDragGesture()
     },
-    [releaseMissedEndFallback, releaseWebviewDragPassthrough]
+    [teardownDragGesture]
   )
 
   return {
