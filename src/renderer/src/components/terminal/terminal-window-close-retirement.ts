@@ -250,6 +250,8 @@ export function retireWindowTerminalTabsAndConfirmClose(
           return 'blocked'
         }
       }
+      // Why: this async IPC barrier prevents sync confirm from overtaking the preceding PTY kill invokes.
+      await dependencies.listOwnedProviderPtyIds()
       await dependencies.persistRetiredSessionTabs([...plans.values()])
       if (!dependencies.dispatchBeforeUnload()) {
         dependencies.resetCheckpointAttempt()

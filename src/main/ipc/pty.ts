@@ -440,7 +440,10 @@ export function isPtyRendererCloseReady(sender: WebContents): boolean {
     ...authority.entries.keys()
   ])
   for (const ptyId of candidateIds) {
-    const entry = getClosingPtyAuthority(sender, ptyId)
+    // Why: provider teardown erases live identity; only then may the submitted staged entry prove readiness.
+    const entry =
+      getClosingPtyAuthority(sender, ptyId) ??
+      (!ptyOwnership.has(ptyId) ? authority.entries.get(ptyId) : undefined)
     if (!entry?.closeSubmitted) {
       return false
     }

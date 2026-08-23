@@ -94,6 +94,36 @@ function makeDependencies(
 }
 
 describe('terminal window close retirement', () => {
+  it('orders the PTY close IPC barrier before persistence and confirmation', async () => {
+    const state = makeState({ 'wt-1': [makeTab('tab-1', 'wt-1', 'pty-1')] })
+    const events: string[] = []
+    const listOwnedProviderPtyIds = vi.fn(async () => {
+      events.push('list-owned')
+      return []
+    })
+
+    await expect(
+      retireWindowTerminalTabsAndConfirmClose(
+        makeDependencies(state, {
+          listOwnedProviderPtyIds,
+          closeTab: (tabId) => {
+            events.push('close-tab')
+            removeTab(state, tabId)
+          },
+          persistRetiredSessionTabs: async () => {
+            events.push('persist')
+          },
+          confirmWindowClose: () => {
+            events.push('confirm')
+          }
+        })
+      )
+    ).resolves.toBe('confirmed')
+
+    expect(listOwnedProviderPtyIds).toHaveBeenCalledTimes(2)
+    expect(events).toEqual(['list-owned', 'close-tab', 'list-owned', 'persist', 'confirm'])
+  })
+
   it('deletes this renderer local tabs, checkpoints the final snapshot, then confirms', async () => {
     const state = makeState(
       { 'wt-secondary': [makeTab('secondary-tab', 'wt-secondary', 'secondary-pty')] },

@@ -79,6 +79,16 @@ async function detachTerminalPair(app: ElectronApplication, page: Page, tabId: s
   if (!control || !secondary) {
     throw new Error('detached Orca window roles missing')
   }
+  await expect
+    .poll(
+      () =>
+        app.evaluate(
+          ({ BrowserWindow }, windowId) => BrowserWindow.fromId(windowId)?.isVisible() ?? false,
+          secondary.context.windowId
+        ),
+      { timeout: 30_000 }
+    )
+    .toBe(true)
   return { control, secondary }
 }
 

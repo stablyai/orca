@@ -120,6 +120,27 @@ describe('registerPtyHandlers', () => {
     clearPtyRendererCloseAuthority(mainWindow.webContents as never)
   })
 
+  it('accepts a submitted retired PTY without authorizing a reused incarnation', async () => {
+    installDaemonTestProvider({ shutdown: vi.fn(async () => undefined) })
+    registerPtyHandlers(mainWindow as never)
+    setPtyOwnership('retired-pty', null)
+    restorePtyIncarnation('retired-pty', 'old-incarnation')
+    claimMainRendererPty('retired-pty')
+    stagePtyRendererCloseAuthority(mainWindow.webContents as never)
+
+    expect(isPtyRendererCloseReady(mainWindow.webContents as never)).toBe(false)
+    await handlers.get('pty:kill')!(mainWindowIpcEvent, { id: 'retired-pty' })
+    expect(isPtyRendererCloseReady(mainWindow.webContents as never)).toBe(true)
+
+    setPtyOwnership('retired-pty', null)
+    restorePtyIncarnation('retired-pty', 'new-incarnation')
+    expect(isPtyRendererCloseReady(mainWindow.webContents as never)).toBe(false)
+
+    clearPtyRendererCloseAuthority(mainWindow.webContents as never)
+    deletePtyOwnership('retired-pty')
+    ptyRendererOwners.release('retired-pty')
+  })
+
   it('rejects a close-fenced PTY id after its incarnation is reused', () => {
     registerPtyHandlers(mainWindow as never)
     setPtyOwnership('reused-pty', null)
