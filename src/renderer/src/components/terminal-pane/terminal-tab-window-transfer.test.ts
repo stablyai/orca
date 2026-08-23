@@ -234,7 +234,7 @@ describe('terminal tab window transfer', () => {
     expect(store.getState()).toBe(before)
   })
 
-  it('rejects colliding target backing without mutating it', () => {
+  it('accepts an unchanged source replay and rejects colliding target backing', () => {
     const source = createTestStore()
     seedTerminal(source)
     const captured = captureTerminalWindowTransferSeed(source.getState(), 'tab-1')
@@ -242,6 +242,9 @@ describe('terminal tab window transfer', () => {
     if (!captured.ok) {
       return
     }
+    const unchangedSource = source.getState()
+    expect(source.getState().restoreTransferredTerminalTab(captured.seed)).toBe(true)
+    expect(source.getState()).toBe(unchangedSource)
     const target = createTestStore()
     seedTerminal(target)
     target.setState({
@@ -329,6 +332,86 @@ describe('terminal tab window transfer', () => {
     expect(target.getState().terminalLayoutsByTabId['tab-1']).toEqual(captured.seed.layout)
   })
 
+  it('accepts an import replay after dynamic tab and layout presentation changes', () => {
+    const source = createTestStore()
+    seedTerminal(source)
+    const captured = captureTerminalWindowTransferSeed(source.getState(), 'tab-1')
+    expect(captured.ok).toBe(true)
+    if (!captured.ok) {
+      return
+    }
+    const target = createTestStore()
+    seedStore(target, { repos: [] })
+    expect(target.getState().importTransferredTerminalTab(captured.seed)).toBe(true)
+    const imported = target.getState()
+    target.setState({
+      tabsByWorktree: {
+        'wt-1': [
+          {
+            ...imported.tabsByWorktree['wt-1'][0],
+            title: 'Live title',
+            generatedTitle: 'Generated live title',
+            color: '#0f0'
+          }
+        ]
+      },
+      unifiedTabsByWorktree: {
+        'wt-1': [
+          {
+            ...imported.unifiedTabsByWorktree['wt-1'][0],
+            label: 'Live title',
+            generatedLabel: 'Generated live title',
+            isPreview: false,
+            lastFocusedAt: 99
+          }
+        ]
+      },
+      terminalLayoutsByTabId: {
+        'tab-1': {
+          ...imported.terminalLayoutsByTabId['tab-1'],
+          buffersByLeafId: { 'leaf-1': 'live-buffer' },
+          scrollbackRefsByLeafId: { 'leaf-1': 'live-scrollback' }
+        }
+      },
+      lastKnownRelayPtyIdByTabId: { 'tab-1': 'pty-b' }
+    })
+    const beforeReplay = target.getState()
+
+    expect(target.getState().importTransferredTerminalTab(captured.seed)).toBe(true)
+    expect(target.getState()).toBe(beforeReplay)
+
+    const liveTab = target.getState().tabsByWorktree['wt-1'][0]
+    target.setState({ tabsByWorktree: { 'wt-1': [{ ...liveTab, ptyId: 'foreign-pty' }] } })
+    expect(target.getState().importTransferredTerminalTab(captured.seed)).toBe(false)
+    target.setState({
+      tabsByWorktree: {
+        'wt-1': [{ ...liveTab, worktreeId: 'other-worktree' }]
+      }
+    })
+    expect(target.getState().importTransferredTerminalTab(captured.seed)).toBe(false)
+  })
+
+  it('rejects an import when the target workspace has duplicate group ids', () => {
+    const source = createTestStore()
+    seedTerminal(source)
+    const captured = captureTerminalWindowTransferSeed(source.getState(), 'tab-1')
+    expect(captured.ok).toBe(true)
+    if (!captured.ok) {
+      return
+    }
+    const target = createTestStore()
+    const first = makeTabGroup({ id: 'duplicate', worktreeId: 'wt-1' })
+    const second = makeTabGroup({ id: 'duplicate', worktreeId: 'wt-1' })
+    seedStore(target, {
+      groupsByWorktree: { 'wt-1': [first, second] },
+      activeGroupIdByWorktree: { 'wt-1': 'duplicate' }
+    })
+    const before = target.getState()
+
+    expect(target.getState().importTransferredTerminalTab(captured.seed)).toBe(false)
+    expect(target.getState()).toBe(before)
+  })
+
   it('imports and removes a transfer idempotently without killing its PTYs', () => {
     const source = createTestStore()
     seedTerminal(source)
@@ -370,6 +453,87 @@ describe('terminal tab window transfer', () => {
     expect(clearPaneForegroundAgentByTabPrefix).not.toHaveBeenCalled()
     expect(subscriber).toHaveBeenCalledOnce()
     expect(kill).not.toHaveBeenCalled()
+  })
+
+  it('removes residual tab-scoped backing once and makes a repeated remove a true no-op', () => {
+    const store = createTestStore()
+    const paneKey = 'tab-1:leaf-1'
+    seedStore(store, {
+      lastKnownRelayPtyIdByTabId: { 'tab-1': 'pty-1' },
+      directSshPaneRetryByTabId: { 'tab-1': { attemptId: 'attempt-1' } as never },
+      agentStatusByPaneKey: { [paneKey]: { state: 'working' } as never },
+      cacheTimerByKey: { [paneKey]: 1 }
+    })
+    const subscriber = vi.fn()
+    const unsubscribe = store.subscribe(subscriber)
+
+    expect(store.getState().removeTransferredTerminalTab('tab-1')).toBe(true)
+    const afterFirst = store.getState()
+    expect(afterFirst.lastKnownRelayPtyIdByTabId['tab-1']).toBeUndefined()
+    expect(afterFirst.directSshPaneRetryByTabId['tab-1']).toBeUndefined()
+    expect(afterFirst.agentStatusByPaneKey[paneKey]).toBeUndefined()
+    expect(afterFirst.cacheTimerByKey[paneKey]).toBeUndefined()
+
+    expect(store.getState().removeTransferredTerminalTab('tab-1')).toBe(true)
+    unsubscribe()
+    expect(store.getState()).toBe(afterFirst)
+    expect(subscriber).toHaveBeenCalledOnce()
+  })
+
+  it('removes group-only terminal membership and collapses its layout leaf', () => {
+    const store = createTestStore()
+    const editor = makeOpenFile({ id: 'file-1', worktreeId: 'wt-1' })
+    const editorGroup = makeTabGroup({
+      id: 'group-2',
+      worktreeId: 'wt-1',
+      activeTabId: editor.id,
+      tabOrder: [editor.id]
+    })
+    seedStore(store, {
+      openFiles: [editor],
+      unifiedTabsByWorktree: {
+        'wt-1': [
+          makeUnifiedTab({
+            id: editor.id,
+            entityId: editor.id,
+            worktreeId: 'wt-1',
+            groupId: editorGroup.id,
+            contentType: 'editor'
+          })
+        ]
+      },
+      groupsByWorktree: {
+        'wt-1': [
+          makeTabGroup({
+            id: 'group-1',
+            worktreeId: 'wt-1',
+            activeTabId: 'tab-1',
+            tabOrder: ['tab-1']
+          }),
+          editorGroup
+        ]
+      },
+      layoutByWorktree: {
+        'wt-1': {
+          type: 'split',
+          direction: 'horizontal',
+          first: { type: 'leaf', groupId: 'group-1' },
+          second: { type: 'leaf', groupId: editorGroup.id }
+        }
+      },
+      activeWorktreeId: 'wt-1',
+      activeGroupIdByWorktree: { 'wt-1': 'group-1' },
+      activeTabId: 'tab-1',
+      activeTabIdByWorktree: { 'wt-1': 'tab-1' }
+    })
+
+    expect(store.getState().removeTransferredTerminalTab('tab-1')).toBe(true)
+    const state = store.getState()
+    expect(state.groupsByWorktree['wt-1']).toEqual([editorGroup])
+    expect(state.layoutByWorktree['wt-1']).toEqual({ type: 'leaf', groupId: editorGroup.id })
+    expect(state.activeGroupIdByWorktree['wt-1']).toBe(editorGroup.id)
+    expect(state.activeTabType).toBe('editor')
+    expect(state.activeFileId).toBe(editor.id)
   })
 
   it('collapses an emptied terminal group onto the surviving mixed-content group', () => {

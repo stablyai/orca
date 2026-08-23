@@ -466,6 +466,30 @@ describe('buildHostIdByWorktreeId nested ownership', () => {
 })
 
 describe('persistWorkspaceSessionByHost', () => {
+  it('propagates both set and flush durability failures', async () => {
+    for (const failure of ['set', 'flush'] as const) {
+      const error = new Error(`${failure} failed`)
+      const set = vi
+        .fn()
+        .mockImplementation(() =>
+          failure === 'set' ? Promise.reject(error) : Promise.resolve(undefined)
+        )
+      const flush = vi
+        .fn()
+        .mockImplementation(() =>
+          failure === 'flush' ? Promise.reject(error) : Promise.resolve(undefined)
+        )
+
+      await expect(
+        persistWorkspaceSessionByHost(
+          { get: vi.fn(), set, patch: vi.fn(), flush, setSync: vi.fn() },
+          getDefaultWorkspaceSession(),
+          { repos: [], worktreesByRepo: {} }
+        )
+      ).rejects.toBe(error)
+    }
+  })
+
   it('awaits every host write before crossing the durable flush boundary', async () => {
     const localWorktreeId = 'local-repo::/src/local'
     const remoteWorktreeId = 'remote-repo::/srv/remote'

@@ -5,13 +5,14 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const mocks = vi.hoisted(() => ({
   getState: vi.fn(),
+  setState: vi.fn(),
   subscribe: vi.fn(),
   persist: vi.fn().mockResolvedValue(undefined),
   build: vi.fn(() => ({ session: true }))
 }))
 
 vi.mock('@/store', () => ({
-  useAppStore: { getState: mocks.getState, subscribe: mocks.subscribe }
+  useAppStore: { getState: mocks.getState, setState: mocks.setState, subscribe: mocks.subscribe }
 }))
 vi.mock('@/lib/workspace-session', () => ({ buildWorkspaceSessionPayload: mocks.build }))
 vi.mock('@/lib/workspace-session-host-persistence', () => ({
@@ -68,6 +69,34 @@ describe('executeTerminalWindowTransferCommand', () => {
     })
     expect(importTransferredTerminalTab).toHaveBeenCalledWith(seed)
     expect(mocks.persist).toHaveBeenCalledOnce()
+  })
+
+  it.each([
+    ['unified terminal', { unifiedTabsByWorktree: { 'wt-1': [{ id: 'tab-1' }] } }],
+    ['legacy terminal', { tabsByWorktree: { 'wt-1': [{ id: 'tab-1' }] } }],
+    ['editor', { openFiles: [{ id: 'file-1' }] }],
+    ['browser', { browserTabsByWorktree: { 'wt-1': [{ id: 'browser-1' }] } }]
+  ])('reports a window with %s backing as nonempty', async (_label, backing) => {
+    mocks.getState.mockReturnValue({
+      workspaceSessionReady: true,
+      hydrationSucceeded: true,
+      importTransferredTerminalTab: vi.fn(() => true),
+      restoreTransferredTerminalTab: vi.fn(() => true),
+      removeTransferredTerminalTab: vi.fn(() => true),
+      tabsByWorktree: {},
+      unifiedTabsByWorktree: {},
+      openFiles: [],
+      browserTabsByWorktree: {},
+      ...backing
+    })
+
+    await expect(
+      executeTerminalWindowTransferCommand({
+        transferId: 'transfer-empty',
+        tabId: 'removed-tab',
+        phase: 'target-remove'
+      })
+    ).resolves.toMatchObject({ empty: false })
   })
 
   it('copies the transfer ID into rejected command ACKs', async () => {
@@ -254,27 +283,41 @@ describe('executeTerminalWindowTransferCommand', () => {
     expect(unsubscribe).toHaveBeenCalledOnce()
   })
 
-  it('leaves failed persistence compensable by the inverse command', async () => {
-    let imported = false
-    const state = {
+  it('rolls back an import exactly when durable flush rejects, then accepts its inverse', async () => {
+    const beforeFields = {
+      tabsByWorktree: {},
+      unifiedTabsByWorktree: {},
+      groupsByWorktree: {},
+      terminalLayoutsByTabId: {},
+      ptyIdsByTabId: {},
+      lastKnownRelayPtyIdByTabId: {}
+    }
+    let state: Record<string, unknown>
+    const actions = {
       workspaceSessionReady: true,
       hydrationSucceeded: true,
       importTransferredTerminalTab: vi.fn(() => {
-        imported = true
+        state = {
+          ...state,
+          tabsByWorktree: { 'wt-1': [{ id: 'tab-1' }] },
+          unifiedTabsByWorktree: { 'wt-1': [{ id: 'tab-1' }] },
+          groupsByWorktree: { 'wt-1': [{ id: 'group-1', tabOrder: ['tab-1'] }] },
+          terminalLayoutsByTabId: { 'tab-1': { root: null } },
+          ptyIdsByTabId: { 'tab-1': ['pty-1'] },
+          lastKnownRelayPtyIdByTabId: { 'tab-1': 'pty-1' }
+        }
         return true
       }),
-      restoreTransferredTerminalTab: vi.fn(() => {
-        imported = true
-        return true
-      }),
-      removeTransferredTerminalTab: vi.fn(() => {
-        imported = false
-        return true
-      }),
-      unifiedTabsByWorktree: {}
+      restoreTransferredTerminalTab: vi.fn(() => true),
+      removeTransferredTerminalTab: vi.fn(() => true)
     }
-    mocks.getState.mockReturnValue(state)
-    mocks.persist.mockRejectedValueOnce(new Error('disk full')).mockResolvedValueOnce(undefined)
+    state = { ...actions, ...beforeFields, openFiles: [], browserTabsByWorktree: {} }
+    mocks.getState.mockImplementation(() => state)
+    mocks.setState.mockImplementation((updater) => {
+      const patch = typeof updater === 'function' ? updater(state) : updater
+      state = { ...state, ...patch }
+    })
+    mocks.persist.mockRejectedValueOnce(new Error('flush failed')).mockResolvedValueOnce(undefined)
     const seed = { tabId: 'tab-1' } as never
 
     await expect(
@@ -284,35 +327,99 @@ describe('executeTerminalWindowTransferCommand', () => {
         phase: 'target-import',
         seed
       })
-    ).rejects.toThrow('disk full')
-    expect(imported).toBe(true)
+    ).rejects.toThrow('flush failed')
+    for (const [field, value] of Object.entries(beforeFields)) {
+      expect(state[field]).toBe(value)
+    }
 
     await executeTerminalWindowTransferCommand({
       transferId: 'transfer-compensate',
       tabId: 'tab-1',
       phase: 'target-remove'
     })
-    expect(imported).toBe(false)
+    expect(actions.removeTransferredTerminalTab).toHaveBeenCalledOnce()
+    expect(mocks.persist).toHaveBeenCalledTimes(2)
   })
 
-  it('restores a source after its remove persistence fails', async () => {
-    let present = true
-    const state = {
+  it('rolls back every source removal projection when durable set rejects', async () => {
+    const beforeFields = {
+      tabsByWorktree: { 'wt-1': [{ id: 'tab-1' }] },
+      unifiedTabsByWorktree: { 'wt-1': [{ id: 'tab-1' }] },
+      groupsByWorktree: { 'wt-1': [{ id: 'group-1', tabOrder: ['tab-1'] }] },
+      layoutByWorktree: { 'wt-1': { type: 'leaf', groupId: 'group-1' } },
+      activeGroupIdByWorktree: { 'wt-1': 'group-1' },
+      activeTabIdByWorktree: { 'wt-1': 'tab-1' },
+      activeTabTypeByWorktree: { 'wt-1': 'terminal' },
+      activeTabId: 'tab-1',
+      activeTabType: 'terminal',
+      agentStatusByPaneKey: { 'tab-1:leaf-1': { state: 'working' } },
+      runtimeAgentOrchestrationByPaneKey: { 'tab-1:leaf-1': { dispatchStatus: 'running' } },
+      retainedAgentsByPaneKey: { 'tab-1:leaf-1': { state: 'done' } },
+      sleepingAgentSessionsByPaneKey: { 'tab-1:leaf-1': { state: 'working' } },
+      agentLaunchConfigByPaneKey: { 'tab-1:leaf-1': { registeredAt: 1 } },
+      acknowledgedAgentsByPaneKey: { 'tab-1:leaf-1': 1 },
+      paneForegroundAgentByPaneKey: { 'tab-1:leaf-1': { agent: 'claude' } },
+      retentionSuppressedPaneKeys: { 'tab-1:leaf-1': true },
+      unreadTerminalPanes: { 'tab-1:leaf-1': true },
+      unreadAgentCompletionPanes: { 'tab-1:leaf-1': true },
+      lastTerminalInputAtByPaneKey: { 'tab-1:leaf-1': 1 },
+      cacheTimerByKey: { 'tab-1:leaf-1': 1 },
+      migrationUnsupportedByPtyId: { 'pty-1': { paneKey: 'tab-1:leaf-1' } },
+      ptyIdsByTabId: { 'tab-1': ['pty-1'] },
+      terminalLayoutsByTabId: { 'tab-1': { root: null } },
+      lastKnownRelayPtyIdByTabId: { 'tab-1': 'pty-1' },
+      directSshPaneRetryByTabId: { 'tab-1': { attemptId: 'attempt-1' } },
+      directSshLivePtyBindingByTabId: { 'tab-1': { ptyId: 'pty-1' } },
+      directSshPaneRetryHistoryByTabId: { 'tab-1': { attemptedAt: [1] } }
+    }
+    let state: Record<string, unknown>
+    const actions = {
       workspaceSessionReady: true,
       hydrationSucceeded: true,
       importTransferredTerminalTab: vi.fn(() => true),
-      restoreTransferredTerminalTab: vi.fn(() => {
-        present = true
-        return true
-      }),
+      restoreTransferredTerminalTab: vi.fn(() => true),
       removeTransferredTerminalTab: vi.fn(() => {
-        present = false
+        state = {
+          ...state,
+          tabsByWorktree: { 'wt-1': [] },
+          unifiedTabsByWorktree: { 'wt-1': [] },
+          groupsByWorktree: {},
+          layoutByWorktree: {},
+          activeGroupIdByWorktree: {},
+          activeTabIdByWorktree: { 'wt-1': null },
+          activeTabTypeByWorktree: { 'wt-1': 'editor' },
+          activeTabId: null,
+          activeTabType: 'editor',
+          agentStatusByPaneKey: {},
+          runtimeAgentOrchestrationByPaneKey: {},
+          retainedAgentsByPaneKey: {},
+          sleepingAgentSessionsByPaneKey: {},
+          agentLaunchConfigByPaneKey: {},
+          acknowledgedAgentsByPaneKey: {},
+          paneForegroundAgentByPaneKey: {},
+          retentionSuppressedPaneKeys: {},
+          unreadTerminalPanes: {},
+          unreadAgentCompletionPanes: {},
+          lastTerminalInputAtByPaneKey: {},
+          cacheTimerByKey: {},
+          migrationUnsupportedByPtyId: {},
+          ptyIdsByTabId: {},
+          terminalLayoutsByTabId: {},
+          lastKnownRelayPtyIdByTabId: {},
+          directSshPaneRetryByTabId: {},
+          directSshLivePtyBindingByTabId: {},
+          directSshPaneRetryHistoryByTabId: {}
+        }
         return true
-      }),
-      unifiedTabsByWorktree: {}
+      })
     }
-    mocks.getState.mockReturnValue(state)
-    mocks.persist.mockRejectedValueOnce(new Error('disk full')).mockResolvedValueOnce(undefined)
+    state = { ...actions, ...beforeFields, openFiles: [], browserTabsByWorktree: {} }
+    mocks.getState.mockImplementation(() => state)
+    mocks.setState.mockImplementation((updater) => {
+      const patch = typeof updater === 'function' ? updater(state) : updater
+      state = { ...state, ...patch }
+    })
+    mocks.persist.mockRejectedValueOnce(new Error('set failed')).mockResolvedValueOnce(undefined)
 
     await expect(
       executeTerminalWindowTransferCommand({
@@ -320,8 +427,10 @@ describe('executeTerminalWindowTransferCommand', () => {
         tabId: 'tab-1',
         phase: 'source-remove'
       })
-    ).rejects.toThrow('disk full')
-    expect(present).toBe(false)
+    ).rejects.toThrow('set failed')
+    for (const [field, value] of Object.entries(beforeFields)) {
+      expect(state[field]).toBe(value)
+    }
 
     await executeTerminalWindowTransferCommand({
       transferId: 'transfer-source-compensate',
@@ -329,6 +438,49 @@ describe('executeTerminalWindowTransferCommand', () => {
       phase: 'source-restore',
       seed: { tabId: 'tab-1' } as never
     })
-    expect(present).toBe(true)
+    expect(actions.restoreTransferredTerminalTab).toHaveBeenCalledOnce()
+    expect(mocks.persist).toHaveBeenCalledTimes(2)
+  })
+
+  it('does not roll back a transfer field changed concurrently after the action', async () => {
+    const beforeTabs = {}
+    const afterTabs = { 'wt-1': [{ id: 'tab-1' }] }
+    const concurrentTabs = { 'wt-1': [{ id: 'tab-concurrent' }] }
+    let state: Record<string, unknown>
+    const importTransferredTerminalTab = vi.fn(() => {
+      state = { ...state, tabsByWorktree: afterTabs }
+      return true
+    })
+    state = {
+      workspaceSessionReady: true,
+      hydrationSucceeded: true,
+      importTransferredTerminalTab,
+      restoreTransferredTerminalTab: vi.fn(() => true),
+      removeTransferredTerminalTab: vi.fn(() => true),
+      tabsByWorktree: beforeTabs,
+      unifiedTabsByWorktree: {},
+      openFiles: [],
+      browserTabsByWorktree: {}
+    }
+    mocks.getState.mockImplementation(() => state)
+    mocks.setState.mockImplementation((updater) => {
+      const patch = typeof updater === 'function' ? updater(state) : updater
+      state = { ...state, ...patch }
+    })
+    mocks.persist.mockImplementationOnce(async () => {
+      state = { ...state, tabsByWorktree: concurrentTabs }
+      throw new Error('disk full')
+    })
+
+    await expect(
+      executeTerminalWindowTransferCommand({
+        transferId: 'transfer-concurrent',
+        tabId: 'tab-1',
+        phase: 'target-import',
+        seed: { tabId: 'tab-1' } as never
+      })
+    ).rejects.toThrow('disk full')
+
+    expect(state.tabsByWorktree).toBe(concurrentTabs)
   })
 })

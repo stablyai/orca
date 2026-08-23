@@ -7,7 +7,29 @@ import type {
 import { buildWorkspaceSessionPayload } from '@/lib/workspace-session'
 import { persistWorkspaceSessionByHost } from '@/lib/workspace-session-host-persistence'
 import { useAppStore } from '@/store'
+import type { AppState } from '@/store'
 import { ensurePtyDispatcher } from './pty-dispatcher'
+
+function rollbackTransferMutation(before: AppState, after: AppState): void {
+  useAppStore.setState((current) => {
+    const patch: Record<string, unknown> = {}
+    for (const key of Object.keys(after) as (keyof AppState)[]) {
+      if (!Object.is(before[key], after[key]) && Object.is(current[key], after[key])) {
+        patch[key] = before[key]
+      }
+    }
+    return Object.keys(patch).length > 0 ? (patch as Partial<AppState>) : current
+  })
+}
+
+function transferWindowIsEmpty(state: AppState): boolean {
+  return !(
+    Object.values(state.unifiedTabsByWorktree).some((tabs) => tabs.length > 0) ||
+    Object.values(state.tabsByWorktree).some((tabs) => tabs.length > 0) ||
+    state.openFiles.length > 0 ||
+    Object.values(state.browserTabsByWorktree).some((tabs) => tabs.length > 0)
+  )
+}
 
 function waitForWorkspaceSession(signal?: AbortSignal): Promise<boolean> {
   const ready = (): boolean => {
@@ -51,32 +73,37 @@ export async function executeTerminalWindowTransferCommand(
   command: TerminalWindowTransferCommand
 ): Promise<TerminalWindowTransferAck> {
   await waitForWorkspaceSession()
-  const state = useAppStore.getState()
+  const before = useAppStore.getState()
   const needsSeed = command.phase === 'target-import' || command.phase === 'source-restore'
   if (needsSeed && !command.seed) {
     throw new Error('terminal_transfer_seed_missing')
   }
   const ok =
     command.phase === 'target-import'
-      ? state.importTransferredTerminalTab(command.seed!)
+      ? before.importTransferredTerminalTab(command.seed!)
       : command.phase === 'source-restore'
-        ? state.restoreTransferredTerminalTab(command.seed!)
-        : state.removeTransferredTerminalTab(command.tabId)
+        ? before.restoreTransferredTerminalTab(command.seed!)
+        : before.removeTransferredTerminalTab(command.tabId)
   if (!ok) {
     throw new Error(`terminal_transfer_${command.phase}_rejected`)
   }
-  const fresh = useAppStore.getState()
-  await persistWorkspaceSessionByHost(
-    window.api.session,
-    buildWorkspaceSessionPayload(fresh),
-    fresh
-  )
+  const after = useAppStore.getState()
+  try {
+    await persistWorkspaceSessionByHost(
+      window.api.session,
+      buildWorkspaceSessionPayload(after),
+      after
+    )
+  } catch (error) {
+    rollbackTransferMutation(before, after)
+    throw error
+  }
   return {
     transferId: command.transferId,
     tabId: command.tabId,
     phase: command.phase,
     ok: true,
-    empty: Object.values(fresh.unifiedTabsByWorktree).every((tabs) => tabs.length === 0)
+    empty: transferWindowIsEmpty(after)
   }
 }
 

@@ -12,7 +12,9 @@ function unique(values: readonly (string | null | undefined)[]): string[] {
 }
 
 function sameSet(left: readonly string[], right: readonly string[]): boolean {
-  return left.length === right.length && left.every((value) => right.includes(value))
+  const leftSet = new Set(left)
+  const rightSet = new Set(right)
+  return leftSet.size === rightSet.size && [...leftSet].every((value) => rightSet.has(value))
 }
 
 function jsonEqual(left: unknown, right: unknown): boolean {
@@ -87,6 +89,20 @@ function hasForeignPtyBacking(state: AppState, seed: TerminalWindowTransferSeed)
   )
 }
 
+function targetGroupSelectionIsUnambiguous(
+  state: AppState,
+  seed: TerminalWindowTransferSeed
+): boolean {
+  const groups = state.groupsByWorktree[seed.worktreeId] ?? []
+  if (new Set(groups.map(({ id }) => id)).size !== groups.length) {
+    return false
+  }
+  const activeGroupId = state.activeGroupIdByWorktree[seed.worktreeId]
+  const chosen =
+    groups.find(({ id }) => id === activeGroupId) ?? groups.find(({ id }) => id === seed.group.id)
+  return !chosen || chosen.worktreeId === seed.worktreeId
+}
+
 export function buildTransferredUnifiedTab(
   seed: TerminalWindowTransferSeed,
   groupId: string,
@@ -119,29 +135,37 @@ function importedBackingMatches(state: AppState, seed: TerminalWindowTransferSee
   const unified = Object.values(state.unifiedTabsByWorktree)
     .flat()
     .filter(({ id, entityId }) => id === seed.tabId || entityId === seed.tabId)
-  const primaryPtyId = seed.tab.ptyId ?? seed.ptyIds[0]
+  const layout = state.terminalLayoutsByTabId[seed.tabId]
+  const terminalTab = terminalTabs[0]
+  const unifiedTab = unified[0]
+  const lastKnownPtyId = state.lastKnownRelayPtyIdByTabId[seed.tabId]
+  const directSshPtyId = state.directSshLivePtyBindingByTabId[seed.tabId]?.ptyId
   if (
     terminalTabs.length !== 1 ||
-    !jsonEqual(terminalTabs[0], seed.tab) ||
-    !terminalLayoutEqual(state.terminalLayoutsByTabId[seed.tabId], seed.layout) ||
+    terminalTab.id !== seed.tabId ||
+    terminalTab.worktreeId !== seed.worktreeId ||
+    terminalTab.ptyId !== seed.tab.ptyId ||
+    !layout ||
+    !jsonEqual(layout.ptyIdsByLeafId ?? {}, seed.layout.ptyIdsByLeafId ?? {}) ||
     !sameSet(state.ptyIdsByTabId[seed.tabId] ?? [], seed.ptyIds) ||
     unified.length !== 1 ||
-    unified[0].contentType !== 'terminal' ||
-    unified[0].id !== seed.tabId ||
-    unified[0].entityId !== seed.tabId ||
-    unified[0].worktreeId !== seed.worktreeId ||
-    state.lastKnownRelayPtyIdByTabId[seed.tabId] !== primaryPtyId ||
-    !jsonEqual(
-      unified[0],
-      buildTransferredUnifiedTab(seed, unified[0].groupId, unified[0].sortOrder)
-    )
+    unifiedTab.contentType !== 'terminal' ||
+    unifiedTab.id !== seed.tabId ||
+    unifiedTab.entityId !== seed.tabId ||
+    unifiedTab.worktreeId !== seed.worktreeId ||
+    Boolean(lastKnownPtyId && !seed.ptyIds.includes(lastKnownPtyId)) ||
+    Boolean(directSshPtyId && !seed.ptyIds.includes(directSshPtyId))
   ) {
     return false
   }
-  const memberships = (state.groupsByWorktree[seed.worktreeId] ?? []).filter((group) =>
-    group.tabOrder.includes(seed.tabId)
+  const memberships = (state.groupsByWorktree[seed.worktreeId] ?? []).flatMap((group) =>
+    group.tabOrder.filter((id) => id === seed.tabId).map(() => group)
   )
-  return memberships.length === 1 && memberships[0].id === unified[0].groupId
+  return (
+    memberships.length === 1 &&
+    memberships[0].id === unifiedTab.groupId &&
+    memberships[0].worktreeId === seed.worktreeId
+  )
 }
 
 function hasMismatchedTabIdentityBacking(
@@ -150,7 +174,6 @@ function hasMismatchedTabIdentityBacking(
 ): boolean {
   const stagedLayout = state.terminalLayoutsByTabId[seed.tabId]
   const stagedPtyIds = state.ptyIdsByTabId[seed.tabId]
-  const primaryPtyId = seed.tab.ptyId ?? seed.ptyIds[0]
   return (
     Object.values(state.unifiedTabsByWorktree)
       .flat()
@@ -166,7 +189,7 @@ function hasMismatchedTabIdentityBacking(
     Boolean(stagedPtyIds && !sameSet(stagedPtyIds, seed.ptyIds)) ||
     Boolean(
       state.lastKnownRelayPtyIdByTabId[seed.tabId] &&
-      state.lastKnownRelayPtyIdByTabId[seed.tabId] !== primaryPtyId
+      !seed.ptyIds.includes(state.lastKnownRelayPtyIdByTabId[seed.tabId])
     ) ||
     Object.hasOwn(state.directSshPaneRetryByTabId, seed.tabId) ||
     Object.hasOwn(state.directSshLivePtyBindingByTabId, seed.tabId)
@@ -177,7 +200,11 @@ export function validateTransferredTerminalImport(
   state: AppState,
   seed: TerminalWindowTransferSeed
 ): TerminalTransferImportValidation {
-  if (!seedIsConsistent(seed) || hasForeignPtyBacking(state, seed)) {
+  if (
+    !seedIsConsistent(seed) ||
+    hasForeignPtyBacking(state, seed) ||
+    !targetGroupSelectionIsUnambiguous(state, seed)
+  ) {
     return 'reject'
   }
   const hasTerminalTab = Object.values(state.tabsByWorktree)

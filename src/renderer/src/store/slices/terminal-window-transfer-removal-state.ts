@@ -16,8 +16,28 @@ function withoutKey<T>(source: Record<string, T>, key: string): Record<string, T
   return next
 }
 
+function withoutTabFromOrders(
+  source: AppState['tabBarOrderByWorktree'],
+  tabId: string
+): AppState['tabBarOrderByWorktree'] {
+  if (!Object.values(source).some((order) => order.includes(tabId))) {
+    return source
+  }
+  return Object.fromEntries(
+    Object.entries(source).map(([key, order]) => [key, order.filter((id) => id !== tabId)])
+  )
+}
+
+function changedFields(state: AppState, candidate: Partial<AppState>): Partial<AppState> {
+  return Object.fromEntries(
+    (Object.entries(candidate) as [keyof AppState, AppState[keyof AppState]][]).filter(
+      ([key, value]) => !Object.is(state[key], value)
+    )
+  ) as Partial<AppState>
+}
+
 function tabScopedRemovalPatch(state: AppState, tabId: string): Partial<AppState> {
-  return {
+  return changedFields(state, {
     ...buildTransferredTerminalLocalProjectionRemoval(state, tabId),
     ptyIdsByTabId: withoutKey(state.ptyIdsByTabId, tabId),
     terminalLayoutsByTabId: withoutKey(state.terminalLayoutsByTabId, tabId),
@@ -38,13 +58,8 @@ function tabScopedRemovalPatch(state: AppState, tabId: string): Partial<AppState
     nativeChatLaunchPromptByTabId: withoutKey(state.nativeChatLaunchPromptByTabId, tabId),
     nativeChatLaunchDraftByTabId: withoutKey(state.nativeChatLaunchDraftByTabId, tabId),
     unreadTerminalTabs: withoutKey(state.unreadTerminalTabs, tabId),
-    tabBarOrderByWorktree: Object.fromEntries(
-      Object.entries(state.tabBarOrderByWorktree).map(([key, order]) => [
-        key,
-        order.filter((id) => id !== tabId)
-      ])
-    )
-  }
+    tabBarOrderByWorktree: withoutTabFromOrders(state.tabBarOrderByWorktree, tabId)
+  })
 }
 
 function selectedSurface(
@@ -77,6 +92,7 @@ export function buildTransferredTerminalRemovalPatch(
   state: AppState,
   tabId: string
 ): RemovalResult {
+  const tabPatch = tabScopedRemovalPatch(state, tabId)
   const ownerWorktreeIds = new Set<string>()
   for (const [worktreeId, tabs] of Object.entries(state.tabsByWorktree)) {
     if (tabs.some(({ id }) => id === tabId)) {
@@ -88,15 +104,13 @@ export function buildTransferredTerminalRemovalPatch(
       ownerWorktreeIds.add(worktreeId)
     }
   }
-  const hasBacking =
-    ownerWorktreeIds.size > 0 ||
-    Object.hasOwn(state.terminalLayoutsByTabId, tabId) ||
-    Object.hasOwn(state.ptyIdsByTabId, tabId)
-  if (!hasBacking) {
-    return { ok: true, patch: null }
+  for (const [worktreeId, groups] of Object.entries(state.groupsByWorktree)) {
+    if (groups.some(({ tabOrder }) => tabOrder.includes(tabId))) {
+      ownerWorktreeIds.add(worktreeId)
+    }
   }
   if (ownerWorktreeIds.size === 0) {
-    return { ok: true, patch: tabScopedRemovalPatch(state, tabId) }
+    return { ok: true, patch: Object.keys(tabPatch).length > 0 ? tabPatch : null }
   }
   if (ownerWorktreeIds.size !== 1) {
     return { ok: false }
@@ -108,17 +122,21 @@ export function buildTransferredTerminalRemovalPatch(
       .filter((tab) => tab.contentType === 'terminal' && tab.entityId === tabId)
       .map(({ id }) => id)
   )
+  const removedGroupTabIds = new Set(removedUnifiedIds)
+  if ((state.groupsByWorktree[worktreeId] ?? []).some(({ tabOrder }) => tabOrder.includes(tabId))) {
+    removedGroupTabIds.add(tabId)
+  }
   const nextUnifiedTabs = (state.unifiedTabsByWorktree[worktreeId] ?? []).filter(
     ({ id }) => !removedUnifiedIds.has(id)
   )
   const currentGroups = state.groupsByWorktree[worktreeId] ?? []
   let nextGroups = currentGroups.map((group) => {
-    const closingIds = group.tabOrder.filter((id) => removedUnifiedIds.has(id))
+    const closingIds = group.tabOrder.filter((id) => removedGroupTabIds.has(id))
     if (closingIds.length === 0) {
       return group
     }
-    const tabOrder = group.tabOrder.filter((id) => !removedUnifiedIds.has(id))
-    const closingActive = Boolean(group.activeTabId && removedUnifiedIds.has(group.activeTabId))
+    const tabOrder = group.tabOrder.filter((id) => !removedGroupTabIds.has(id))
+    const closingActive = Boolean(group.activeTabId && removedGroupTabIds.has(group.activeTabId))
     const activeTabId = closingActive
       ? pickNextActiveTab(group.tabOrder, group.recentTabIds, group.activeTabId!)
       : group.activeTabId
@@ -133,14 +151,17 @@ export function buildTransferredTerminalRemovalPatch(
   const emptiedGroupIds = currentGroups
     .filter(
       ({ tabOrder }) =>
-        tabOrder.some((id) => removedUnifiedIds.has(id)) &&
-        tabOrder.every((id) => removedUnifiedIds.has(id))
+        tabOrder.some((id) => removedGroupTabIds.has(id)) &&
+        tabOrder.every((id) => removedGroupTabIds.has(id))
     )
     .map(({ id }) => id)
   nextGroups = nextGroups.filter(({ id }) => !emptiedGroupIds.includes(id))
-  const recentQuickCommandIdByGroup = { ...state.recentQuickCommandIdByGroup }
-  for (const groupId of emptiedGroupIds) {
-    delete recentQuickCommandIdByGroup[groupId]
+  let recentQuickCommandIdByGroup = state.recentQuickCommandIdByGroup
+  if (emptiedGroupIds.some((groupId) => Object.hasOwn(recentQuickCommandIdByGroup, groupId))) {
+    recentQuickCommandIdByGroup = { ...recentQuickCommandIdByGroup }
+    for (const groupId of emptiedGroupIds) {
+      delete recentQuickCommandIdByGroup[groupId]
+    }
   }
   let nextLayoutByWorktree = state.layoutByWorktree
   let nextActiveGroupIdByWorktree = state.activeGroupIdByWorktree
@@ -231,7 +252,7 @@ export function buildTransferredTerminalRemovalPatch(
   return {
     ok: true,
     patch: {
-      ...tabScopedRemovalPatch(state, tabId),
+      ...tabPatch,
       tabsByWorktree: nextState.tabsByWorktree,
       unifiedTabsByWorktree: nextState.unifiedTabsByWorktree,
       groupsByWorktree: nextState.groupsByWorktree,
