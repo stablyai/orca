@@ -251,13 +251,18 @@ describe('startup ordering', () => {
     const willQuit = source.slice(willQuitStart, windowAllClosedStart)
     const lifecycleBegin = beforeQuit.indexOf('windowQuitLifecycle.begin()')
     const relayFence = beforeQuit.indexOf('desktopRelayService?.fenceAndCloseNow()')
+    const transferFence = willQuit.indexOf('terminalWindowQuitFence')
     const stageSessions = willQuit.indexOf('stageAllKnownHostsBeforeQuit()')
+    const sshShutdown = willQuit.indexOf('beginSshShutdown()')
+    const killPty = willQuit.indexOf('killAllPty()')
     const storeFlush = willQuit.indexOf('store?.flushAsync()')
 
     expect(lifecycleBegin).toBeGreaterThanOrEqual(0)
     expect(relayFence).toBeGreaterThan(lifecycleBegin)
-    expect(stageSessions).toBeGreaterThanOrEqual(0)
-    expect(storeFlush).toBeGreaterThan(stageSessions)
+    expect(stageSessions).toBeGreaterThan(transferFence)
+    expect(sshShutdown).toBeGreaterThan(stageSessions)
+    expect(killPty).toBeGreaterThan(sshShutdown)
+    expect(storeFlush).toBeGreaterThan(killPty)
   })
 
   it('keeps the power bridge through vetoable before-quit and disposes after commit', () => {

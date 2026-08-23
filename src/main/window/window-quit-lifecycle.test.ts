@@ -1,5 +1,8 @@
 import { describe, expect, it, vi } from 'vitest'
-import { createWindowQuitLifecycle } from './window-quit-lifecycle'
+import {
+  createWindowQuitLifecycle,
+  finishWindowSessionPersistenceForQuit
+} from './window-quit-lifecycle'
 
 describe('window quit lifecycle', () => {
   it('fences transfers before freezing session retirement and later side effects', () => {
@@ -46,5 +49,67 @@ describe('window quit lifecycle', () => {
     lifecycle.begin()
     expect(fenceTransfers).toHaveBeenCalledTimes(2)
     expect(freezeSessions).toHaveBeenCalledTimes(2)
+  })
+
+  it('stages and flushes the rollback snapshot only after the transfer fence settles', async () => {
+    let settleTransfer!: () => void
+    const transferFence = new Promise<void>((resolve) => {
+      settleTransfer = resolve
+    })
+    const calls: string[] = []
+    let sessionState = 'before-rollback'
+    let stagedState = ''
+    let durableState = ''
+
+    const completed = finishWindowSessionPersistenceForQuit({
+      transferFence,
+      stageSessions: () => {
+        calls.push('stage')
+        stagedState = sessionState
+      },
+      beginSshShutdown: () => {
+        calls.push('ssh-shutdown')
+        return Promise.resolve()
+      },
+      killAllPty: () => calls.push('kill-pty'),
+      flushStore: () => {
+        calls.push('flush')
+        durableState = stagedState
+        return Promise.resolve()
+      }
+    })
+
+    expect(calls).toEqual([])
+    sessionState = 'after-rollback'
+    settleTransfer()
+    await completed
+
+    expect(calls).toEqual(['stage', 'ssh-shutdown', 'kill-pty', 'flush'])
+    expect(durableState).toBe('after-rollback')
+  })
+
+  it('continues shutdown and reports a synchronous staging failure', async () => {
+    const calls: string[] = []
+    const stageError = new Error('stage failed')
+
+    const completed = finishWindowSessionPersistenceForQuit({
+      transferFence: Promise.resolve(),
+      stageSessions: () => {
+        calls.push('stage')
+        throw stageError
+      },
+      beginSshShutdown: () => {
+        calls.push('ssh-shutdown')
+        return Promise.resolve()
+      },
+      killAllPty: () => calls.push('kill-pty'),
+      flushStore: () => {
+        calls.push('flush')
+        return Promise.resolve()
+      }
+    })
+
+    await expect(completed).rejects.toBe(stageError)
+    expect(calls).toEqual(['stage', 'ssh-shutdown', 'kill-pty', 'flush'])
   })
 })

@@ -216,7 +216,10 @@ import {
 } from './window/attach-main-window-services'
 import { createMainWindow, loadMainWindow } from './window/createMainWindow'
 import { orcaWindowManager } from './window/orca-window-manager'
-import { createWindowQuitLifecycle } from './window/window-quit-lifecycle'
+import {
+  createWindowQuitLifecycle,
+  finishWindowSessionPersistenceForQuit
+} from './window/window-quit-lifecycle'
 import { bindControlWindowHandoff } from './window/control-window-handoff'
 import {
   getDashboardPopoutWindow,
@@ -3455,15 +3458,19 @@ app.on('will-quit', (e) => {
   runtime?.getOffscreenBrowserBackend()?.destroyAll?.()
   browserManager.setBrowserGuestStateChangedListener(null)
   const emulatorShutdown = runtime?.getEmulatorBridge()?.destroyAllSessions() ?? Promise.resolve()
-  if (store) {
-    getWindowSessionRegistry(store).stageAllKnownHostsBeforeQuit()
-  }
-  // Why immediately before store.flushAsync() with no await in between: beginSshShutdown() marks every
-  // active SSH lease detached in memory synchronously, and that flush is what persists it.
-  const sshShutdown = beginSshShutdown()
-  killAllPty()
   const watcherShutdown = shutdownWatchersOnce()
-  const storeFlush = store?.flushAsync() ?? Promise.resolve()
+  const windowSessionPersistence = finishWindowSessionPersistenceForQuit({
+    transferFence: terminalWindowQuitFence,
+    stageSessions: () => {
+      if (store) {
+        getWindowSessionRegistry(store).stageAllKnownHostsBeforeQuit()
+      }
+    },
+    // Why immediately before store.flushAsync(): SSH shutdown updates leases synchronously.
+    beginSshShutdown: () => beginSshShutdown(),
+    killAllPty: () => killAllPty(),
+    flushStore: () => store?.flushAsync() ?? Promise.resolve()
+  })
   // Why: usage-cache writes are queued off the main thread, so a quit right after setEnabled or a
   // scan completion would drop the final snapshot. Captured before any await; joins the barrier below.
   const usageCacheFlush = Promise.all([
@@ -3500,18 +3507,16 @@ app.on('will-quit', (e) => {
   // Losing at most the last debounce interval beats a quit that never completes, and the
   // temp+rename swap means a write cut short by the deadline leaves the old file intact.
   settleTeardownWithinDeadline([
-    { name: 'terminal-window-transfers', promise: terminalWindowQuitFence },
+    { name: 'window-session-persistence', promise: windowSessionPersistence },
     { name: 'daemon', promise: daemonTeardown },
     { name: 'runtime-rpc', promise: rpcStopAndClear },
     { name: 'watchers', promise: watcherShutdown },
     { name: 'emulator', promise: emulatorShutdown },
-    { name: 'ssh', promise: sshShutdown },
     { name: 'plugin-hosts', promise: pluginHostShutdown },
     { name: 'skill-uploads', promise: skillUploadShutdown },
     { name: 'codex-backfill-recovery', promise: codexBackfillRecoveryShutdown },
     { name: 'usage-cache', promise: usageCacheFlush },
-    { name: 'stats', promise: statsFlush },
-    { name: 'state', promise: storeFlush }
+    { name: 'stats', promise: statsFlush }
   ])
     .then((pendingTeardowns) => {
       if (pendingTeardowns.length > 0) {
