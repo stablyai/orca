@@ -15,7 +15,6 @@ function createSubscription() {
   const dataListeners = new Set<(payload: { id: string; data: string }) => void>()
   const replayListeners = new Set<(payload: { id: string; data: string }) => void>()
   const exitListeners = new Set<(payload: { id: string; code: number }) => void>()
-  const livePtyIds = new Set<string>()
   const recordExit = vi.fn()
   const toAppPtyId = vi.fn((id: string) => `ssh:conn@@${id}`)
   const resolvePtyIncarnation = vi.fn((id: string) => `incarnation:${id}`)
@@ -26,10 +25,10 @@ function createSubscription() {
     dataListeners: dataListeners as never,
     replayListeners: replayListeners as never,
     exitListeners: exitListeners as never,
-    livePtyIds,
     recordExit,
     providerGeneration: 7,
     resolvePtyIncarnation,
+    resolvePtyExitIncarnation: resolvePtyIncarnation,
     peekPtyIncarnation: () => undefined
   })
 
@@ -48,9 +47,9 @@ function createSubscription() {
     dataListeners,
     replayListeners,
     exitListeners,
-    livePtyIds,
     recordExit,
     resolvePtyIncarnation,
+    acceptExit: subscription.acceptExit,
     installReceivingActivation: subscription.installReceivingActivation
   }
 }
@@ -84,14 +83,13 @@ describe('subscribeSshPtyNotifications', () => {
   })
 
   it('routes pty.data after validating the string id', () => {
-    const { handler, toAppPtyId, dataListeners, livePtyIds } = createSubscription()
+    const { handler, toAppPtyId, dataListeners } = createSubscription()
     const onData = vi.fn()
     dataListeners.add(onData)
 
     handler('pty.data', { id: 'pty-1', data: 'hello', rawLength: 5, seq: 9 })
 
     expect(toAppPtyId).toHaveBeenCalledWith('pty-1')
-    expect(livePtyIds.has('ssh:conn@@pty-1')).toBe(true)
     expect(onData).toHaveBeenCalledWith({
       id: 'ssh:conn@@pty-1',
       data: 'hello',
@@ -102,11 +100,10 @@ describe('subscribeSshPtyNotifications', () => {
     })
   })
 
-  it('records pty.exit with the validated relay id', () => {
-    const { handler, exitListeners, livePtyIds, recordExit } = createSubscription()
+  it('publishes pty.exit and leaves owner validation to recordExit', () => {
+    const { handler, exitListeners, recordExit } = createSubscription()
     const onExit = vi.fn()
     exitListeners.add(onExit)
-    livePtyIds.add('ssh:conn@@pty-1')
 
     handler('pty.exit', {
       id: 'pty-1',
@@ -114,8 +111,7 @@ describe('subscribeSshPtyNotifications', () => {
       incarnationId: 'incarnation-1'
     })
 
-    expect(recordExit).toHaveBeenCalledWith('pty-1', 'incarnation-1')
-    expect(livePtyIds.has('ssh:conn@@pty-1')).toBe(false)
+    expect(recordExit).toHaveBeenCalledWith('pty-1', 'incarnation-1', expect.any(Function))
     expect(onExit).toHaveBeenCalledWith({
       id: 'ssh:conn@@pty-1',
       code: 0,
@@ -130,14 +126,12 @@ describe('subscribeSshPtyNotifications', () => {
       handler,
       mux,
       dataListeners,
-      livePtyIds,
       toAppPtyId,
       resolvePtyIncarnation,
       installReceivingActivation
     } = createSubscription()
     const onData = vi.fn()
     dataListeners.add(onData)
-    livePtyIds.add('ssh:conn@@unrelated')
     installReceivingActivation(
       'pty-1',
       sourceActivation({ checkpointSourceEndSu: 10, recoveryEndSu: 14 })
@@ -155,7 +149,6 @@ describe('subscribeSshPtyNotifications', () => {
     })
     const acceptedSource = onData.mock.calls[0]?.[0].source
     expect(Object.isFrozen(acceptedSource)).toBe(true)
-    const liveBeforeMalformed = new Set(livePtyIds)
     toAppPtyId.mockClear()
     resolvePtyIncarnation.mockClear()
     handler('pty.data', {
@@ -181,7 +174,6 @@ describe('subscribeSshPtyNotifications', () => {
       }
     })
     expect(onData).toHaveBeenCalledTimes(1)
-    expect(livePtyIds).toEqual(liveBeforeMalformed)
     expect(toAppPtyId).not.toHaveBeenCalled()
     expect(resolvePtyIncarnation).not.toHaveBeenCalled()
     expect(mux.request).toHaveBeenCalledWith('pty.cancelDelivery', {
@@ -226,14 +218,12 @@ describe('subscribeSshPtyNotifications', () => {
       handler,
       mux,
       dataListeners,
-      livePtyIds,
       toAppPtyId,
       resolvePtyIncarnation,
       installReceivingActivation
     } = createSubscription()
     const onData = vi.fn()
     dataListeners.add(onData)
-    livePtyIds.add('ssh:conn@@unrelated')
     installReceivingActivation(
       'pty-1',
       sourceActivation({
@@ -254,7 +244,6 @@ describe('subscribeSshPtyNotifications', () => {
       sourceEndSu: 3,
       sourceLengthSu: 3
     })
-    const liveBeforeStale = new Set(livePtyIds)
     toAppPtyId.mockClear()
     resolvePtyIncarnation.mockClear()
 
@@ -270,7 +259,6 @@ describe('subscribeSshPtyNotifications', () => {
     })
 
     expect(onData).toHaveBeenCalledTimes(1)
-    expect(livePtyIds).toEqual(liveBeforeStale)
     expect(toAppPtyId).not.toHaveBeenCalled()
     expect(resolvePtyIncarnation).not.toHaveBeenCalled()
     expect(mux.request).toHaveBeenCalledWith('pty.cancelDelivery', {
@@ -398,7 +386,6 @@ describe('subscribeSshPtyNotifications', () => {
         handler,
         mux,
         dataListeners,
-        livePtyIds,
         toAppPtyId,
         resolvePtyIncarnation,
         installReceivingActivation
@@ -422,7 +409,6 @@ describe('subscribeSshPtyNotifications', () => {
         ownerGeneration: 3,
         sourceEndSu: 3
       })
-      const liveBeforeInvalid = new Set(livePtyIds)
       toAppPtyId.mockClear()
       resolvePtyIncarnation.mockClear()
 
@@ -444,7 +430,6 @@ describe('subscribeSshPtyNotifications', () => {
       })
 
       expect(onData.mock.calls.map((call) => call[0].data)).toEqual(['one', 'two'])
-      expect(livePtyIds).toEqual(liveBeforeInvalid)
       expect(toAppPtyId).toHaveBeenCalledTimes(1)
       expect(resolvePtyIncarnation).not.toHaveBeenCalled()
       expect(mux.request).toHaveBeenCalledWith('pty.cancelDelivery', {
@@ -457,11 +442,9 @@ describe('subscribeSshPtyNotifications', () => {
   )
 
   it('does not cancel an incomplete malformed identity or mutate provider state', () => {
-    const { handler, mux, dataListeners, livePtyIds, toAppPtyId, resolvePtyIncarnation } =
-      createSubscription()
+    const { handler, mux, dataListeners, toAppPtyId, resolvePtyIncarnation } = createSubscription()
     const onData = vi.fn()
     dataListeners.add(onData)
-    livePtyIds.add('ssh:conn@@unrelated')
 
     handler('pty.data', {
       id: 'pty-1',
@@ -474,7 +457,6 @@ describe('subscribeSshPtyNotifications', () => {
     })
 
     expect(onData).not.toHaveBeenCalled()
-    expect(livePtyIds).toEqual(new Set(['ssh:conn@@unrelated']))
     expect(toAppPtyId).not.toHaveBeenCalled()
     expect(resolvePtyIncarnation).not.toHaveBeenCalled()
     expect(mux.request).not.toHaveBeenCalled()
@@ -511,7 +493,7 @@ describe('subscribeSshPtyNotifications', () => {
   })
 
   it('routes held and later recovery frames only to the private sink until commit', () => {
-    const { handler, dataListeners, livePtyIds, installReceivingActivation } = createSubscription()
+    const { handler, dataListeners, installReceivingActivation } = createSubscription()
     const onData = vi.fn()
     const onRecoveryData = vi.fn()
     dataListeners.add(onData)
@@ -538,7 +520,6 @@ describe('subscribeSshPtyNotifications', () => {
 
     expect(onRecoveryData.mock.calls.map(([payload]) => payload.data)).toEqual(['held', 'next'])
     expect(onData).not.toHaveBeenCalled()
-    expect(livePtyIds).not.toContain('ssh:conn@@pty-1')
 
     recoveryLease.commit()
     expect(onData).not.toHaveBeenCalled()
@@ -546,11 +527,10 @@ describe('subscribeSshPtyNotifications', () => {
 
     expect(onRecoveryData).toHaveBeenCalledTimes(2)
     expect(onData).toHaveBeenCalledWith(expect.objectContaining({ data: 'live' }))
-    expect(livePtyIds).toContain('ssh:conn@@pty-1')
   })
 
-  it('retires an exited private recovery when its activation commits', () => {
-    const { handler, mux, dataListeners, livePtyIds, installReceivingActivation } =
+  it('retires an owner-accepted exit private recovery when its activation commits', () => {
+    const { handler, mux, dataListeners, acceptExit, installReceivingActivation } =
       createSubscription()
     const onData = vi.fn()
     const onRecoveryData = vi.fn()
@@ -569,6 +549,7 @@ describe('subscribeSshPtyNotifications', () => {
     const recoveryLease = lease.transferToRecovery(onRecoveryData)
 
     handler('pty.exit', { id: 'pty-1', code: 0, incarnationId: 'incarnation-1' })
+    acceptExit('pty-1')
     recoveryLease.commit()
     handler('pty.data', {
       id: 'pty-1',
@@ -583,7 +564,6 @@ describe('subscribeSshPtyNotifications', () => {
 
     expect(onRecoveryData).toHaveBeenCalledOnce()
     expect(onData).not.toHaveBeenCalled()
-    expect(livePtyIds).not.toContain('ssh:conn@@pty-1')
     expect(mux.request).toHaveBeenCalledWith(
       'pty.cancelDelivery',
       expect.objectContaining({ id: 'pty-1', deliveryToken: 'token-1' })
@@ -680,8 +660,7 @@ describe('subscribeSshPtyNotifications', () => {
   })
 
   it('drops provisional frames and settles cancellation before rollback completes', async () => {
-    const { handler, mux, dataListeners, livePtyIds, installReceivingActivation } =
-      createSubscription()
+    const { handler, mux, dataListeners, installReceivingActivation } = createSubscription()
     const onData = vi.fn()
     dataListeners.add(onData)
     const lease = installReceivingActivation(
@@ -702,7 +681,6 @@ describe('subscribeSshPtyNotifications', () => {
     await expect(lease.rollback()).resolves.toBe(true)
 
     expect(onData).not.toHaveBeenCalled()
-    expect(livePtyIds).not.toContain('ssh:conn@@pty-1')
     expect(mux.request).toHaveBeenCalledWith('pty.cancelDelivery', {
       id: 'pty-1',
       clientGeneration: 2,
@@ -820,7 +798,6 @@ describe('subscribeSshPtyNotifications', () => {
       dataListeners,
       replayListeners,
       exitListeners,
-      livePtyIds,
       recordExit,
       resolvePtyIncarnation
     } = createSubscription()
@@ -830,7 +807,6 @@ describe('subscribeSshPtyNotifications', () => {
     dataListeners.add(onData)
     replayListeners.add(onReplay)
     exitListeners.add(onExit)
-    livePtyIds.add('ssh:conn@@unrelated')
 
     for (const method of [
       'pty.recoveryData',
@@ -853,7 +829,6 @@ describe('subscribeSshPtyNotifications', () => {
     expect(onData).not.toHaveBeenCalled()
     expect(onReplay).not.toHaveBeenCalled()
     expect(onExit).not.toHaveBeenCalled()
-    expect(livePtyIds).toEqual(new Set(['ssh:conn@@unrelated']))
     expect(mux.request).not.toHaveBeenCalled()
   })
 })

@@ -28,8 +28,11 @@ export class SshPtyProviderOutputState {
     args: {
       mux: SshChannelMultiplexer
       toAppPtyId: (id: string) => string
-      livePtyIds: Set<string>
-      recordExit: (relayPtyId: string, incarnationId: unknown) => void
+      recordExit: (
+        relayPtyId: string,
+        incarnationId: unknown,
+        publish?: () => void
+      ) => boolean | void
     }
   ) {
     this.subscription = subscribeSshPtyNotifications({
@@ -41,12 +44,10 @@ export class SshPtyProviderOutputState {
       providerGeneration,
       resolvePtyIncarnation: (relayPtyId, incarnationId) =>
         this.resolvePtyIncarnation(relayPtyId, incarnationId),
+      resolvePtyExitIncarnation: (relayPtyId, incarnationId) =>
+        this.resolvePtyExitIncarnation(relayPtyId, incarnationId),
       peekPtyIncarnation: (relayPtyId) => this.incarnationByRelayPtyId.get(relayPtyId),
-      recordExit: (relayPtyId, incarnationId) => {
-        args.recordExit(relayPtyId, incarnationId)
-        this.incarnationByRelayPtyId.delete(relayPtyId)
-        this.pausedRelayPtyIds.delete(relayPtyId)
-      }
+      recordExit: args.recordExit
     })
   }
 
@@ -128,6 +129,18 @@ export class SshPtyProviderOutputState {
     }
   }
 
+  acceptPtyIncarnation(relayPtyId: string, incarnationId: unknown): void {
+    if (typeof incarnationId === 'string' && incarnationId.length > 0) {
+      this.incarnationByRelayPtyId.set(relayPtyId, incarnationId)
+    }
+  }
+
+  acceptExit(relayPtyId: string): void {
+    this.subscription?.acceptExit(relayPtyId)
+    this.incarnationByRelayPtyId.delete(relayPtyId)
+    this.pausedRelayPtyIds.delete(relayPtyId)
+  }
+
   private resolvePtyIncarnation(relayPtyId: string, incarnationId: unknown): string {
     this.rememberPtyIncarnation(relayPtyId, incarnationId)
     let resolved = this.incarnationByRelayPtyId.get(relayPtyId)
@@ -136,6 +149,16 @@ export class SshPtyProviderOutputState {
       this.incarnationByRelayPtyId.set(relayPtyId, resolved)
     }
     return resolved
+  }
+
+  private resolvePtyExitIncarnation(relayPtyId: string, incarnationId: unknown): string {
+    if (typeof incarnationId === 'string' && incarnationId.length > 0) {
+      return incarnationId
+    }
+    return (
+      this.incarnationByRelayPtyId.get(relayPtyId) ??
+      `legacy:${this.providerGeneration}:${this.legacyIncarnationSerial++}:${relayPtyId}`
+    )
   }
 
   private resumePausedDeliveries(): void {

@@ -284,6 +284,7 @@ describe('SSH IPC handlers', () => {
           code: number
           providerGeneration: number
           ptyIncarnation: string
+          incarnationId: string
         }) => void)
       | undefined
     const onDetectedPorts = mockPortScannerCallbacks.get('ssh-1') as
@@ -314,7 +315,8 @@ describe('SSH IPC handlers', () => {
       id: 'remote-pty',
       code: 9,
       providerGeneration: mockPtyProvider.providerGeneration,
-      ptyIncarnation: 'ipc-test-pty'
+      ptyIncarnation: 'ipc-test-pty',
+      incarnationId: 'ipc-test-incarnation'
     })
     onDetectedPorts?.(
       'ssh-1',

@@ -71,6 +71,7 @@ describe('SSH IPC handlers', () => {
           code: number
           providerGeneration: number
           ptyIncarnation: string
+          incarnationId: string
         }) => void)
       | undefined
 
@@ -85,7 +86,8 @@ describe('SSH IPC handlers', () => {
       id: 'remote-pty',
       code: 7,
       providerGeneration: mockPtyProvider.providerGeneration,
-      ptyIncarnation: 'ipc-test-pty'
+      ptyIncarnation: 'ipc-test-pty',
+      incarnationId: 'ipc-test-incarnation'
     })
 
     expect(mockAcceptSshPtyOutputData).toHaveBeenCalledWith({

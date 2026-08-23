@@ -89,6 +89,8 @@ export type PtyConnectResult = {
   snapshotSeq?: number
   isAlternateScreen?: boolean
   sessionExpired?: boolean
+  /** Output delivery failed without evidence that the remote PTY exited. */
+  deliveryUnresumable?: true
   coldRestore?: { scrollback: string; cwd: string; cols?: number; rows?: number }
   replay?: string
   startupCwdFallback?: { kind: 'worktree'; cwd: string }

@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { SshPtyDataCallback } from '../providers/ssh-pty-provider-contract'
-import type { SshPtyProvider } from '../providers/ssh-pty-provider'
+import { SshPtyProvider } from '../providers/ssh-pty-provider'
 import type { SshChannelMultiplexer } from './ssh-channel-multiplexer'
 import type { SshPtyConsumerSessionState } from './ssh-pty-consumer-session'
 import { SshRelaySession } from './ssh-relay-session'
@@ -111,6 +111,20 @@ function prepareSession() {
     outputFlowControl: { version: 1, windowSu: 64 }
   }
   return { deps, internals, mux, session }
+}
+
+// Why a real provider instead of `{ hasPty }`: recovery turns on the tri-state liveness verdict, and
+// a double that only answers hasPty reads `unverifiable` and `exited` alike — the one distinction
+// this path must not collapse.
+function livenessProvider(): SshPtyProvider {
+  const mux = {
+    request: vi.fn().mockResolvedValue(undefined),
+    notify: vi.fn(),
+    onNotification: vi.fn().mockReturnValue(vi.fn()),
+    dispose: vi.fn(),
+    isDisposed: vi.fn().mockReturnValue(false)
+  }
+  return new SshPtyProvider('target-1', mux as never, undefined, 23)
 }
 
 describe('SshRelaySession rejected PTY delivery recovery', () => {
@@ -364,7 +378,9 @@ describe('SshRelaySession rejected PTY delivery recovery', () => {
     const { internals, mux, session } = prepareSession()
     const reattach = vi.fn().mockResolvedValue(false)
     internals.reattachRejectedPty = reattach
-    getSshPtyProviderMock.mockReturnValue({ hasPty: () => true } as unknown as SshPtyProvider)
+    const provider = livenessProvider()
+    provider.acceptLivePty('ssh:target-1@@pty-bad')
+    getSshPtyProviderMock.mockReturnValue(provider)
     const onTerminalError = vi.fn()
     session.setOnTerminalRelayError(onTerminalError)
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
@@ -385,13 +401,47 @@ describe('SshRelaySession rejected PTY delivery recovery', () => {
     expect(acceptOutputDataMock).not.toHaveBeenCalled()
   })
 
+  // Why unverifiable must keep recovering: a reattach that cannot reach the host proves nothing
+  // about the remote process, only that this client cannot resume its output. Abandoning recovery
+  // there drops the pane's output silently while the agent keeps running on the host.
+  it('keeps recovering when a failed reattach leaves the rejected PTY unverifiable', async () => {
+    const { internals, mux, session } = prepareSession()
+    const provider = livenessProvider()
+    provider.acceptLivePty('ssh:target-1@@pty-bad')
+    getSshPtyProviderMock.mockReturnValue(provider)
+    // Why: this is what handlePtyReattachFailure records for every non-notFound attach failure.
+    const reattach = vi.fn(async () => {
+      provider.acceptUnverifiablePty('ssh:target-1@@pty-bad')
+      return false
+    })
+    internals.reattachRejectedPty = reattach
+    const onTerminalError = vi.fn()
+    session.setOnTerminalRelayError(onTerminalError)
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+
+    await internals.acceptPtyData(rejectedPayload())
+    await vi.waitFor(() => expect(mux.dispose).toHaveBeenCalledOnce(), { timeout: 2000 })
+
+    expect(reattach).toHaveBeenCalledTimes(2)
+    expect(mux.dispose).toHaveBeenCalledWith('connection_lost')
+    expect(warn).toHaveBeenCalledWith(
+      expect.stringContaining('PTY pty-bad delivery recovery exhausted')
+    )
+    expect(onTerminalError).not.toHaveBeenCalled()
+    // Why: nothing here is evidence the remote process died, so it must stay unverifiable.
+    await expect(provider.probePtyLiveness('ssh:target-1@@pty-bad')).resolves.toBeNull()
+  })
+
   it('stops without an error when the rejected PTY exited during recovery', async () => {
     const { internals, mux, session } = prepareSession()
     const reattach = vi.fn().mockResolvedValue(false)
     internals.reattachRejectedPty = reattach
     // Why: reattachKnownPty resolves without claiming the lease when the PTY exits mid-attach, so a
-    // plain "not recovered" is indistinguishable from a failure until liveness is checked.
-    getSshPtyProviderMock.mockReturnValue({ hasPty: () => false } as unknown as SshPtyProvider)
+    // plain "not recovered" is indistinguishable from a failure until liveness is checked. Only a
+    // host-confirmed exit stops recovery here, so the provider must carry that exact verdict.
+    const provider = livenessProvider()
+    provider.acceptExitedPty('ssh:target-1@@pty-bad')
+    getSshPtyProviderMock.mockReturnValue(provider)
     const onTerminalError = vi.fn()
     session.setOnTerminalRelayError(onTerminalError)
 
@@ -408,7 +458,11 @@ describe('SshRelaySession rejected PTY delivery recovery', () => {
   // starts rejecting across every PTY at once would otherwise open one attach round trip per PTY.
   it('caps concurrent targeted reattaches and coalesces repeats for one PTY', async () => {
     const { internals } = prepareSession()
-    getSshPtyProviderMock.mockReturnValue({ hasPty: () => true } as unknown as SshPtyProvider)
+    const provider = livenessProvider()
+    for (let index = 0; index < 20; index++) {
+      provider.acceptLivePty(`ssh:target-1@@pty-${index}`)
+    }
+    getSshPtyProviderMock.mockReturnValue(provider)
     vi.spyOn(console, 'warn').mockImplementation(() => {})
     const release: (() => void)[] = []
     let active = 0
@@ -455,7 +509,9 @@ describe('SshRelaySession rejected PTY delivery recovery', () => {
     const { internals, mux, session } = prepareSession()
     const reattach = vi.fn().mockResolvedValue(true)
     internals.reattachRejectedPty = reattach
-    getSshPtyProviderMock.mockReturnValue({ hasPty: () => true } as unknown as SshPtyProvider)
+    const provider = livenessProvider()
+    provider.acceptLivePty('ssh:target-1@@pty-bad')
+    getSshPtyProviderMock.mockReturnValue(provider)
     const onTerminalError = vi.fn()
     session.setOnTerminalRelayError(onTerminalError)
 

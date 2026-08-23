@@ -76,6 +76,9 @@ vi.mock('../providers/ssh-pty-provider', () => ({
       return () => {}
     })
     attachForReconnect = attachForReconnectMock
+    acceptLivePty = vi.fn()
+    acceptUnverifiablePty = vi.fn()
+    acceptAmbiguousExitPty = vi.fn((id: string) => this.acceptUnverifiablePty(id))
     setPtyDeliveryPauseAdapter = vi.fn()
     dispose = ptyProviderDisposeMock
   }
@@ -281,6 +284,44 @@ describe('SshRelaySession recovery race fencing', () => {
     expect(recoveryActivationLease.commit).toHaveBeenCalledOnce()
     expect(recoveryActivationLease.retire).not.toHaveBeenCalled()
     expect(muxRequestMock).not.toHaveBeenCalledWith('pty.cancelDelivery', expect.anything())
+    expect(setPtyOwnership).not.toHaveBeenCalled()
+    expect(deps.mockStore.markSshRemotePtyLeasesAttachedAsync).not.toHaveBeenCalled()
+  })
+
+  it('keeps a legacy exit during source recovery unverifiable', async () => {
+    const targetId = 'legacy-exit-during-recovery'
+    const { session, deps } = await prepareRecovery(targetId)
+    const recoveryActivationLease = { commit: vi.fn(), retire: vi.fn() }
+    const sourceActivationLease = {
+      commit: vi.fn(),
+      rollback: vi.fn(async () => true),
+      transferToRecovery: vi.fn(() => {
+        queueMicrotask(() => {
+          ptyExitHandlerRef.current?.({
+            id: `ssh:${targetId}@@pty-1`,
+            code: 0,
+            providerGeneration: 23,
+            ptyIncarnation: 'incarnation-1'
+          })
+        })
+        return recoveryActivationLease
+      })
+    }
+    attachForReconnectMock.mockResolvedValue({
+      incarnationId: 'incarnation-1',
+      sourceRecovery: pendingRecovery(4),
+      sourceActivationLease
+    })
+
+    await session.reconnect(deps.mockConn)
+    const provider = vi.mocked(registerSshPtyProvider).mock.calls.at(-1)?.[1] as unknown as {
+      acceptAmbiguousExitPty: ReturnType<typeof vi.fn>
+    }
+
+    expect(provider.acceptAmbiguousExitPty).toHaveBeenCalledWith(`ssh:${targetId}@@pty-1`)
+    expect(acceptOutputExitMock).not.toHaveBeenCalled()
+    expect(recoveryActivationLease.commit).not.toHaveBeenCalled()
+    expect(recoveryActivationLease.retire).toHaveBeenCalledOnce()
     expect(setPtyOwnership).not.toHaveBeenCalled()
     expect(deps.mockStore.markSshRemotePtyLeasesAttachedAsync).not.toHaveBeenCalled()
   })
@@ -693,7 +734,6 @@ describe('SshRelaySession recovery race fencing', () => {
       return { incarnationId: 'incarnation-1', sourceRecovery: pendingRecovery(4) }
     })
     await session.reconnect(deps.mockConn)
-    expect(acceptOutputDataMock).toHaveBeenCalledOnce()
 
     // The pre-migration identity is gone from the intake, so only the checkpoint
     // recorded after recovery can answer the next reconnect.
@@ -704,12 +744,15 @@ describe('SshRelaySession recovery race fencing', () => {
     })
     await session.reconnect(deps.mockConn)
 
-    expect(attachForReconnectMock).toHaveBeenCalledTimes(2)
     expect(attachForReconnectMock.mock.calls.at(-1)?.[2]).toMatchObject({
       status: 'checkpoint',
       deliveryToken: 'new-token',
       acceptedSourceEndSu: 8
     })
+    const provider = vi.mocked(registerSshPtyProvider).mock.calls.at(-1)?.[1] as unknown as {
+      acceptLivePty: ReturnType<typeof vi.fn>
+    }
+    expect(provider.acceptLivePty).toHaveBeenCalledExactlyOnceWith(`ssh:${targetId}@@pty-1`)
   })
 
   it('keeps a stale overlapping recovery from canceling or mutating its replacement', async () => {

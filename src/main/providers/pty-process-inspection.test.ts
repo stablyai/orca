@@ -28,6 +28,21 @@ describe('PTY provider process inspection', () => {
     expect(inspectProcess).toHaveBeenCalledExactlyOnceWith('pty-1')
   })
 
+  it('continues remote inspection when liveness is unverifiable', async () => {
+    const inspection = { foregroundProcess: 'codex', hasChildProcesses: true }
+    const inspectProcess = vi.fn().mockResolvedValue(inspection)
+    const provider = {
+      hasPty: vi.fn(() => false),
+      probePtyLiveness: vi.fn().mockResolvedValue(null),
+      inspectProcess
+    } as unknown as IPtyProvider
+
+    await expect(inspectPtyProviderProcess(provider, 'pty-unverifiable')).resolves.toEqual(
+      inspection
+    )
+    expect(inspectProcess).toHaveBeenCalledExactlyOnceWith('pty-unverifiable')
+  })
+
   it('returns unavailable to the renderer when a stale PTY is gone', async () => {
     const provider = {
       hasPty: vi.fn(() => false)

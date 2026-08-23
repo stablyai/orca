@@ -49,6 +49,7 @@ export type SshPtyProviderMock = {
   onData: Mock
   onExit: Mock
   onReplay: Mock
+  acceptAmbiguousExitPty: Mock
   attach: Mock
   attachForReconnect: Mock
   shutdown: Mock

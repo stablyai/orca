@@ -282,6 +282,77 @@ describe('connectPanePty', () => {
     )
   })
 
+  it('does not replace a live SSH session when only output delivery cannot resume', async () => {
+    const { connectPanePty } = await import('./pty-connection')
+    const restoredPtyId = toAppSshPtyId('target-a', 'pty-live')
+    const transport = createMockTransport()
+    transport.connect.mockImplementationOnce(async (options) => {
+      options.callbacks?.onError?.(`SSH_PTY_RESTORE_REQUIRED: ${restoredPtyId}`)
+      return { id: restoredPtyId, deliveryUnresumable: true }
+    })
+    transportFactoryQueue.push(transport)
+    const pendingRetry = {
+      attemptId: 'attempt-delivery-unresumable',
+      authority: {
+        targetId: 'target-a',
+        providerEpoch: 'epoch-1',
+        connectionGeneration: 3
+      },
+      tabGeneration: 7,
+      startedAt: 1
+    }
+    const settleDirectSshPaneRetry = vi.fn()
+    const deps = createDeps()
+    mockStoreState = {
+      ...mockStoreState,
+      tabsByWorktree: {
+        'wt-1': [{ id: 'tab-1', ptyId: restoredPtyId, generation: 7 }]
+      },
+      ptyIdsByTabId: { 'tab-1': [restoredPtyId] },
+      repos: [{ id: 'repo1', connectionId: 'target-a', displayName: 'orca' }],
+      sshConnectionStates: new Map([
+        [
+          'target-a',
+          {
+            targetId: 'target-a',
+            status: 'connected',
+            providerEpoch: 'epoch-1',
+            connectionGeneration: 3
+          }
+        ]
+      ]),
+      directSshPaneRetryByTabId: { 'tab-1': pendingRetry },
+      settleDirectSshPaneRetry
+    }
+
+    connectPanePty(
+      createPane(1) as never,
+      createManager(1) as never,
+      createDeps({
+        ...deps,
+        restoredLeafId: LEAF_1,
+        restoredPtyIdByLeafId: { [LEAF_1]: restoredPtyId }
+      }) as never
+    )
+    await flushAsyncTicks(12)
+
+    expect(transport.connect).toHaveBeenCalledTimes(1)
+    expect(deps.clearExitedPanePtyLayoutBinding).not.toHaveBeenCalled()
+    expect(deps.clearTabPtyId).not.toHaveBeenCalled()
+    expect(deps.updateTabPtyId).not.toHaveBeenCalled()
+    expect(deps.onPtyErrorRef.current).toHaveBeenCalledWith(
+      1,
+      `SSH_PTY_RESTORE_REQUIRED: ${restoredPtyId}`
+    )
+    expect(settleDirectSshPaneRetry).toHaveBeenCalledExactlyOnceWith({
+      status: 'failed',
+      tabId: 'tab-1',
+      attemptId: pendingRetry.attemptId,
+      authority: pendingRetry.authority,
+      tabGeneration: pendingRetry.tabGeneration
+    })
+  })
+
   it('rejects expired reattach state after its direct SSH retry lease is revoked', async () => {
     const { connectPanePty } = await import('./pty-connection')
     const restoredPtyId = toAppSshPtyId('target-a', 'pty-stale-reattach')

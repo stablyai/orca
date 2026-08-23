@@ -14,7 +14,10 @@ export async function inspectPtyProviderProcess(
   provider: IPtyProvider,
   ptyId: string
 ): Promise<PtyProcessInspection> {
-  if (provider.hasPty?.(ptyId) === false) {
+  const liveness = provider.probePtyLiveness
+    ? await provider.probePtyLiveness(ptyId)
+    : provider.hasPty?.(ptyId)
+  if (liveness === false) {
     throw new Error('terminal_gone')
   }
   const inspectProcess = (provider as CompletionSensitivePtyProvider).inspectProcess

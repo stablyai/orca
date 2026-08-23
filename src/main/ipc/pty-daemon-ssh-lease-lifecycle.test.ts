@@ -3,6 +3,8 @@ import { openCodeClearPtyMock, piClearPtyMock } from './pty-ipc-mock-registry'
 import { setupPtyIpcSuite } from './pty-ipc-test-harness'
 import {
   SSH_PTY_IDENTITY_MISMATCH_ERROR,
+  SSH_PTY_LIVENESS_UNVERIFIABLE_ERROR,
+  SSH_PTY_RESTORE_REQUIRED_ERROR,
   SSH_SESSION_EXPIRED_ERROR
 } from '../providers/ssh-pty-errors'
 import {
@@ -130,6 +132,160 @@ describe('registerPtyHandlers', () => {
             data: 'echo still-owned'
           })
           expect(remoteWrite).toHaveBeenCalledWith(scopedPtyId, 'echo still-owned')
+        } finally {
+          deletePtyOwnership(scopedPtyId)
+        }
+      })
+      // Why: a relay that cannot resume delivery has not observed the PTY exit, so the lease must
+      // stay reattachable — `reattachKnownPtys` drops only 'terminated'/'expired' leases.
+      it('keeps a remote lease reattachable when exit is not observed', async () => {
+        const scopedPtyId = 'ssh:ssh-1@@remote-pty'
+        const remoteWrite = vi.fn()
+        const sshSpawn = vi
+          .fn()
+          .mockRejectedValueOnce(new Error(`${SSH_PTY_RESTORE_REQUIRED_ERROR}: remote-pty`))
+          .mockRejectedValueOnce(new Error(`${SSH_PTY_LIVENESS_UNVERIFIABLE_ERROR}: remote-pty`))
+        const store = {
+          markSshRemotePtyLease: vi.fn()
+        }
+        registerSshPtyProvider('ssh-1', {
+          spawn: sshSpawn,
+          write: remoteWrite,
+          resize: vi.fn(),
+          shutdown: vi.fn(),
+          sendSignal: vi.fn(),
+          getCwd: vi.fn(),
+          getInitialCwd: vi.fn(),
+          clearBuffer: vi.fn(),
+          acknowledgeDataEvent: vi.fn(),
+          hasChildProcesses: vi.fn(),
+          getForegroundProcess: vi.fn(),
+          serialize: vi.fn(),
+          revive: vi.fn(),
+          onData: vi.fn(() => () => {}),
+          onReplay: vi.fn(() => () => {}),
+          onExit: vi.fn(() => () => {}),
+          listProcesses: vi.fn(async () => []),
+          attach: vi.fn(),
+          getDefaultShell: vi.fn(),
+          getProfiles: vi.fn()
+        } as never)
+        setPtyOwnership(scopedPtyId, 'ssh-1')
+        handlers.clear()
+        registerPtyHandlers(
+          mainWindow as never,
+          undefined,
+          undefined,
+          undefined,
+          undefined,
+          store as never
+        )
+
+        try {
+          await expect(
+            handlers.get('pty:spawn')!(null, {
+              cols: 80,
+              rows: 24,
+              env: {},
+              connectionId: 'ssh-1',
+              sessionId: scopedPtyId
+            })
+          ).rejects.toThrow(SSH_PTY_RESTORE_REQUIRED_ERROR)
+
+          expect(store.markSshRemotePtyLease).not.toHaveBeenCalledWith(
+            'ssh-1',
+            'remote-pty',
+            'expired'
+          )
+          expect(store.markSshRemotePtyLease).toHaveBeenCalledWith(
+            'ssh-1',
+            'remote-pty',
+            'detached'
+          )
+          expect(openCodeClearPtyMock).not.toHaveBeenCalledWith(scopedPtyId)
+          getPtyWriteListener()(mainWindowIpcEvent, {
+            id: scopedPtyId,
+            data: 'echo still-owned'
+          })
+          expect(remoteWrite).toHaveBeenCalledWith(scopedPtyId, 'echo still-owned')
+
+          store.markSshRemotePtyLease.mockClear()
+          await expect(
+            handlers.get('pty:spawn')!(null, {
+              cols: 80,
+              rows: 24,
+              env: {},
+              connectionId: 'ssh-1',
+              sessionId: scopedPtyId
+            })
+          ).rejects.toThrow(SSH_PTY_LIVENESS_UNVERIFIABLE_ERROR)
+          expect(store.markSshRemotePtyLease).not.toHaveBeenCalledWith(
+            'ssh-1',
+            'remote-pty',
+            'expired'
+          )
+          expect(store.markSshRemotePtyLease).toHaveBeenCalledWith(
+            'ssh-1',
+            'remote-pty',
+            'detached'
+          )
+        } finally {
+          deletePtyOwnership(scopedPtyId)
+        }
+      })
+      it('expires a remote lease when the relay reports exited', async () => {
+        const scopedPtyId = 'ssh:ssh-1@@remote-pty'
+        const sshSpawn = vi.fn(async () => {
+          throw new Error(`${SSH_SESSION_EXPIRED_ERROR}: remote-pty`)
+        })
+        const store = {
+          markSshRemotePtyLease: vi.fn()
+        }
+        registerSshPtyProvider('ssh-1', {
+          spawn: sshSpawn,
+          write: vi.fn(),
+          resize: vi.fn(),
+          shutdown: vi.fn(),
+          sendSignal: vi.fn(),
+          getCwd: vi.fn(),
+          getInitialCwd: vi.fn(),
+          clearBuffer: vi.fn(),
+          acknowledgeDataEvent: vi.fn(),
+          hasChildProcesses: vi.fn(),
+          getForegroundProcess: vi.fn(),
+          serialize: vi.fn(),
+          revive: vi.fn(),
+          onData: vi.fn(() => () => {}),
+          onReplay: vi.fn(() => () => {}),
+          onExit: vi.fn(() => () => {}),
+          listProcesses: vi.fn(async () => []),
+          attach: vi.fn(),
+          getDefaultShell: vi.fn(),
+          getProfiles: vi.fn()
+        } as never)
+        setPtyOwnership(scopedPtyId, 'ssh-1')
+        handlers.clear()
+        registerPtyHandlers(
+          mainWindow as never,
+          undefined,
+          undefined,
+          undefined,
+          undefined,
+          store as never
+        )
+
+        try {
+          await expect(
+            handlers.get('pty:spawn')!(null, {
+              cols: 80,
+              rows: 24,
+              env: {},
+              connectionId: 'ssh-1',
+              sessionId: scopedPtyId
+            })
+          ).rejects.toThrow(SSH_SESSION_EXPIRED_ERROR)
+
+          expect(store.markSshRemotePtyLease).toHaveBeenCalledWith('ssh-1', 'remote-pty', 'expired')
         } finally {
           deletePtyOwnership(scopedPtyId)
         }

@@ -54,6 +54,7 @@ export function createSshIpcMocks(): SshIpcMocks {
       onData: vi.fn(),
       onExit: vi.fn(),
       onReplay: vi.fn(),
+      acceptAmbiguousExitPty: vi.fn(),
       attach: vi.fn(),
       attachForReconnect: vi.fn().mockResolvedValue({}),
       shutdown: vi.fn(),

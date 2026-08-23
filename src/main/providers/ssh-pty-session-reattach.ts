@@ -2,8 +2,13 @@ import type { SshChannelMultiplexer } from '../ssh/ssh-channel-multiplexer'
 import { isPtyIncarnationId, type PtyIncarnationId } from '../../shared/pty-incarnation'
 import {
   SSH_PTY_IDENTITY_MISMATCH_ERROR,
+  SSH_PTY_LIVENESS_UNVERIFIABLE_ERROR,
+  SSH_PTY_RESTORE_REQUIRED_ERROR,
   SSH_SESSION_EXPIRED_ERROR,
+  isSshPtyExitedEvidenceError,
   isSshPtyIdentityMismatchError,
+  isSshPtyLivenessUnverifiableError,
+  isSshPtyRestoreRequiredError,
   isSshPtyNotFoundError
 } from './ssh-pty-errors'
 import { toAppSshPtyId, toRelaySshPtyId } from './ssh-pty-id'
@@ -18,6 +23,8 @@ import {
   type PtySourceReceivingActivation
 } from '../../shared/pty-source-receiving-activation'
 import type { SshPtyReceivingActivationLease } from './ssh-pty-notification-routing'
+import type { SshPtyLiveEvidence, SshPtyLiveEvidenceWindow } from './ssh-pty-liveness-state'
+import { parseSshPtySourceRecoveryResult } from './ssh-pty-source-recovery-result'
 
 export type SshPtyAttachResult = {
   replay?: string
@@ -52,7 +59,7 @@ export function parseSshPtyAttachResult(value: unknown): SshPtyAttachResult {
     // Why: a present-but-invalid identity cannot safely fence delayed exits from a reused relay id.
     throw new Error('Invalid SSH PTY attach incarnation')
   }
-  const sourceRecovery = parseSourceRecoveryResult(result.sourceRecovery)
+  const sourceRecovery = parseSshPtySourceRecoveryResult(result.sourceRecovery)
   const sourceActivation = parsePtySourceReceivingActivation(result.sourceActivation)
   const activation =
     sourceActivation ?? (sourceRecovery?.status === 'pending' ? sourceRecovery : undefined)
@@ -93,7 +100,10 @@ export async function requestSshPtyAttach(args: {
   try {
     const rawResult = await args.mux.request('pty.attach', args.params, {
       ...(args.timeoutMs === undefined ? {} : { timeoutMs: args.timeoutMs }),
-      beforeResolve: (value) => installFromResult(parseSshPtyAttachResult(value))
+      beforeResolve: (value) => {
+        const result = parseSshPtyAttachResult(value)
+        installFromResult(result)
+      }
     })
     const result = parseSshPtyAttachResult(rawResult)
     installFromResult(result)
@@ -109,50 +119,6 @@ export async function requestSshPtyAttach(args: {
     activationLease?.rollback()
     throw error
   }
-}
-
-function parseSourceRecoveryResult(value: unknown): PtySourceRecoveryResult | undefined {
-  if (value === undefined) {
-    return undefined
-  }
-  if (typeof value !== 'object' || value === null || Array.isArray(value)) {
-    throw new Error('Invalid SSH PTY source recovery response')
-  }
-  const input = value as Record<string, unknown>
-  if (input.status === 'restoreRequired' && typeof input.reason === 'string') {
-    return Object.freeze({ status: 'restoreRequired', reason: input.reason })
-  }
-  if (
-    input.status !== 'pending' ||
-    typeof input.deliveryToken !== 'string' ||
-    input.deliveryToken.length === 0 ||
-    typeof input.ptyIncarnation !== 'string' ||
-    input.ptyIncarnation.length === 0 ||
-    !positiveInteger(input.clientGeneration) ||
-    !positiveInteger(input.ownerGeneration) ||
-    !nonNegativeInteger(input.checkpointSourceEndSu) ||
-    !nonNegativeInteger(input.recoveryEndSu) ||
-    Number(input.recoveryEndSu) < Number(input.checkpointSourceEndSu)
-  ) {
-    throw new Error('Invalid SSH PTY source recovery response')
-  }
-  return Object.freeze({
-    status: 'pending',
-    deliveryToken: input.deliveryToken,
-    ptyIncarnation: input.ptyIncarnation,
-    clientGeneration: Number(input.clientGeneration),
-    ownerGeneration: Number(input.ownerGeneration),
-    checkpointSourceEndSu: Number(input.checkpointSourceEndSu),
-    recoveryEndSu: Number(input.recoveryEndSu)
-  })
-}
-
-function positiveInteger(value: unknown): boolean {
-  return Number.isSafeInteger(value) && Number(value) > 0
-}
-
-function nonNegativeInteger(value: unknown): boolean {
-  return Number.isSafeInteger(value) && Number(value) >= 0
 }
 
 function sameSourceActivation(
@@ -239,18 +205,20 @@ export async function reattachSshPtySessionWithExitFence(
     exitRaceTracker: SshPtySpawnExitRaceTracker
   }
 ): Promise<SshPtyReattachResult> {
-  const operation = args.exitRaceTracker.begin()
+  const operation = args.exitRaceTracker.begin(toRelaySshPtyId(args.connectionId, args.sessionId))
   let result: SshPtyReattachResult | undefined
   try {
     result = await reattachSshPtySession(args)
     const relayPtyId = toRelaySshPtyId(args.connectionId, result.id)
-    if (
-      args.exitRaceTracker.didMatchingExitArrive(operation, {
-        id: relayPtyId,
-        incarnationId: result.incarnationId
-      })
-    ) {
+    const exitOutcome = args.exitRaceTracker.classifyPendingExit(operation, {
+      id: relayPtyId,
+      incarnationId: result.incarnationId
+    })
+    if (exitOutcome === 'exited') {
       throw new Error('agent_session_exited_during_start')
+    }
+    if (exitOutcome === 'unverifiable') {
+      throw new Error(`${SSH_PTY_LIVENESS_UNVERIFIABLE_ERROR}: ${relayPtyId}`)
     }
     return result
   } catch (error) {
@@ -261,38 +229,79 @@ export async function reattachSshPtySessionWithExitFence(
   }
 }
 
-/**
- * The full reattach path a spawn takes when it carries a sessionId: fence the
- * exit race, reject a session the relay can no longer restore, and commit or
- * roll back the source-activation lease.
- *
- * Lives here rather than in SshPtyProvider.spawn so the lease's commit and
- * rollback stay in one place — a caller that only wrapped the fence could
- * return without committing and silently leak the activation.
- */
 export async function reattachSshPtySessionForSpawn(
   args: Parameters<typeof reattachSshPtySessionWithExitFence>[0] & {
-    acceptLivePty: (relayPtyId: string) => void
+    beginLivePtyEvidenceWindow: () => SshPtyLiveEvidenceWindow
+    closeLivePtyEvidenceWindow: (window: SshPtyLiveEvidenceWindow) => void
+    beginLivePtyEvidence: (appPtyId: string, window: SshPtyLiveEvidenceWindow) => SshPtyLiveEvidence
+    settleLivePtyEvidence: (
+      appPtyId: string,
+      evidence: SshPtyLiveEvidence,
+      acceptLive: boolean
+    ) => void
+    acceptUnverifiablePty: (relayPtyId: string) => void
+    acceptAmbiguousExitPty: (relayPtyId: string) => void
+    acceptExitedPty: (relayPtyId: string) => void
   }
 ): Promise<PtySpawnResult> {
+  // Why: the exit fence closes with each attach attempt, so a host exit landing between them is
+  // published against no operation. One window spans every attempt, and promoteLive is the only
+  // way out of this function to `live` — no path can erase that tombstone without consulting it.
+  const evidenceWindow = args.beginLivePtyEvidenceWindow()
+  const promoteLive = (appPtyId: string): void => {
+    args.settleLivePtyEvidence(appPtyId, args.beginLivePtyEvidence(appPtyId, evidenceWindow), true)
+  }
   let result: SshPtyReattachResult | undefined
   try {
     result = await reattachSshPtySessionWithExitFence(args)
     if (result.sourceRecovery?.status === 'restoreRequired') {
-      throw new Error(
-        `${SSH_SESSION_EXPIRED_ERROR}: ${toRelaySshPtyId(args.connectionId, result.id)}`
-      )
+      // Why: restoreRequired retired only the delivery record; a fresh attach targets the live PTY.
+      const unresumable = result
+      result = undefined
+      if (
+        unresumable.sourceActivationLease &&
+        !(await unresumable.sourceActivationLease.rollback())
+      ) {
+        // Why: the attach answered with an incarnation, so the PTY is live; only its delivery
+        // is stuck, and an unproven cancellation just blocks the second attach.
+        promoteLive(unresumable.id)
+        throw new Error(
+          `${SSH_PTY_RESTORE_REQUIRED_ERROR}: ${toRelaySshPtyId(args.connectionId, unresumable.id)}`
+        )
+      }
+      result = await reattachSshPtySessionWithExitFence(args)
+      if (result.sourceRecovery?.status === 'restoreRequired') {
+        promoteLive(result.id)
+        throw new Error(
+          `${SSH_PTY_RESTORE_REQUIRED_ERROR}: ${toRelaySshPtyId(args.connectionId, result.id)}`
+        )
+      }
     }
-    args.acceptLivePty(result.id)
+    promoteLive(result.id)
     result.sourceActivationLease?.commit()
-    const {
-      sourceActivationLease: _lease,
-      sourceRecovery: _sourceRecovery,
-      ...spawnResult
-    } = result
+    const { sourceActivationLease: _lease, sourceRecovery: _recovery, ...spawnResult } = result
     return spawnResult
   } catch (error) {
-    result?.sourceActivationLease?.rollback()
+    await result?.sourceActivationLease?.rollback()
+    if (isSshPtyExitedEvidenceError(error)) {
+      args.acceptExitedPty(result?.id ?? toAppSshPtyId(args.connectionId, args.sessionId))
+    } else if (!isSshPtyIdentityMismatchError(error) && !isSshPtyRestoreRequiredError(error)) {
+      const id = result?.id ?? toAppSshPtyId(args.connectionId, args.sessionId)
+      const ambiguousExit = isSshPtyLivenessUnverifiableError(error)
+      if (ambiguousExit) {
+        args.acceptAmbiguousExitPty(id)
+      } else {
+        args.acceptUnverifiablePty(id)
+      }
+      if (!ambiguousExit) {
+        throw new Error(
+          `${SSH_PTY_LIVENESS_UNVERIFIABLE_ERROR}: ${toRelaySshPtyId(args.connectionId, id)}`,
+          { cause: error }
+        )
+      }
+    }
     throw error
+  } finally {
+    args.closeLivePtyEvidenceWindow(evidenceWindow)
   }
 }

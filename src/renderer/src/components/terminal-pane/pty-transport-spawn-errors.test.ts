@@ -192,6 +192,55 @@ describe('createIpcPtyTransport', () => {
     })
   })
 
+  it('keeps the SSH binding when output delivery cannot resume', async () => {
+    const { createIpcPtyTransport } = await import('./pty-transport')
+    const spawnMock = vi
+      .fn()
+      .mockRejectedValueOnce(new Error('SSH_PTY_RESTORE_REQUIRED: ssh:ssh-1@@pty-live'))
+      .mockRejectedValueOnce(new Error('SSH_PTY_LIVENESS_UNVERIFIABLE: ssh:ssh-1@@pty-live'))
+    ;(globalThis as { window: typeof window }).window = {
+      ...originalWindow,
+      api: {
+        ...originalWindow?.api,
+        pty: {
+          ...originalWindow?.api?.pty,
+          spawn: spawnMock,
+          write: vi.fn(),
+          resize: vi.fn(),
+          kill: vi.fn(),
+          onData: vi.fn(() => () => {}),
+          onReplay: vi.fn(() => () => {}),
+          onExit: vi.fn(() => () => {})
+        }
+      }
+    } as unknown as typeof window
+
+    const onError = vi.fn()
+    const transport = createIpcPtyTransport({ connectionId: 'ssh-1' })
+    const result = await transport.connect({
+      url: '',
+      sessionId: 'ssh:ssh-1@@pty-live',
+      callbacks: { onError }
+    })
+
+    expect(onError).toHaveBeenCalledWith('SSH_PTY_RESTORE_REQUIRED: ssh:ssh-1@@pty-live')
+    expect(result).toEqual({
+      id: 'ssh:ssh-1@@pty-live',
+      deliveryUnresumable: true
+    })
+
+    const unverifiableResult = await transport.connect({
+      url: '',
+      sessionId: 'ssh:ssh-1@@pty-live',
+      callbacks: { onError }
+    })
+    expect(onError).toHaveBeenCalledWith('SSH_PTY_LIVENESS_UNVERIFIABLE: ssh:ssh-1@@pty-live')
+    expect(unverifiableResult).toEqual({
+      id: 'ssh:ssh-1@@pty-live',
+      deliveryUnresumable: true
+    })
+  })
+
   it('surfaces terminal session state save failures without the Electron IPC wrapper', async () => {
     const { createIpcPtyTransport } = await import('./pty-transport')
     const wrappedMessage = `Error invoking remote method 'pty:spawn': Error: ${createTerminalSessionStateSaveFailureMessage()}`

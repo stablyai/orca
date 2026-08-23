@@ -8214,6 +8214,11 @@ export function connectPanePty(
         // Why: an obsolete reattach must stop consuming frames without killing the durable PTY a newer lease may adopt.
         return false
       }
+      if (connectResult?.deliveryUnresumable) {
+        // Why: replacing a live PTY after output recovery fails would duplicate the remote agent.
+        settleDirectSshPaneRetryAttempt(directSshRetryAttempt, 'failed')
+        return false
+      }
       const ptyId =
         connectResult?.id ?? (typeof result === 'string' ? result : transport.getPtyId())
       if (!ptyId) {

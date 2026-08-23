@@ -11,7 +11,6 @@ import type {
 } from './ssh-pty-provider-contract'
 import { SshPtyProviderOutputState } from './ssh-pty-provider-output-state'
 import { spawnFreshSshPty } from './ssh-agent-session-create-operation'
-import { mapSshPtyProcessList } from './ssh-agent-session-process-list'
 import {
   requestSshPtyAttach,
   reattachSshPtySessionForSpawn,
@@ -23,17 +22,18 @@ import { SshPtySpawnExitRaceTracker } from './ssh-pty-spawn-exit-race'
 import { SshAgentSessionCapabilities } from './ssh-agent-session-capabilities'
 import type { PtyProcessInspection } from './pty-process-inspection'
 import { writeToSshPty, writeToSshPtyWithSettlement } from './ssh-pty-write'
-
-// Why: sequential relay teardown calls share one absolute budget; convert to the mux-relative timeout only at dispatch.
-function relayTimeoutOptions(deadlineMs: number | undefined): { timeoutMs: number } | undefined {
-  return deadlineMs === undefined ? undefined : { timeoutMs: Math.max(1, deadlineMs - Date.now()) }
-}
+import { SshPtyLivenessState } from './ssh-pty-liveness-state'
+import type { SshPtyLiveEvidence } from './ssh-pty-liveness-state'
+import { listSshPtyProcessesWithLiveEvidence } from './ssh-pty-process-list-liveness'
+import { attachSshPtyWithLiveEvidence } from './ssh-pty-attach-liveness'
+import { shutdownSshPty } from './ssh-pty-shutdown'
+import { requestSshPtyDefaultShell, requestSshPtyProfiles } from './ssh-pty-shell-metadata'
 
 /** Remote PTY provider that proxies IPtyProvider operations through the relay. */
 export class SshPtyProvider implements IPtyProvider {
   private mux: SshChannelMultiplexer
   private connectionId: string
-  private livePtyIds = new Set<string>()
+  private readonly livenessState: SshPtyLivenessState
   readonly getAppliedSize: NonNullable<IPtyProvider['getAppliedSize']>
   private readonly agentSessionCapabilities: SshAgentSessionCapabilities
   private spawnExitRaces = new SshPtySpawnExitRaceTracker()
@@ -52,20 +52,19 @@ export class SshPtyProvider implements IPtyProvider {
     this.mux = mux
     this.agentSessionCapabilities = new SshAgentSessionCapabilities(mux)
     this.getAppliedSize = createSshPtyAppliedSizeReader(mux, connectionId)
+    this.livenessState = new SshPtyLivenessState(this.toAppPtyId)
 
     this.outputState = new SshPtyProviderOutputState(providerGeneration, {
       mux,
       toAppPtyId: (id) => this.toAppPtyId(id),
-      livePtyIds: this.livePtyIds,
-      recordExit: (relayPtyId, incarnationId) => {
-        this.spawnExitRaces.recordExit(relayPtyId, incarnationId)
-      }
+      recordExit: (relayPtyId, incarnationId, publish) =>
+        this.spawnExitRaces.recordExit(relayPtyId, incarnationId, publish)
     })
   }
 
   dispose(): void {
     this.outputState.dispose()
-    this.livePtyIds.clear()
+    this.livenessState.clear()
   }
 
   getConnectionId = (): string => this.connectionId
@@ -99,8 +98,16 @@ export class SshPtyProvider implements IPtyProvider {
         installSourceActivation: (relayPtyId, activation) =>
           this.outputState.installReceivingActivation(relayPtyId, activation),
         rememberPtyIncarnation: (relayPtyId, incarnationId) =>
-          this.outputState.rememberPtyIncarnation(relayPtyId, incarnationId),
-        acceptLivePty: (relayPtyId) => this.livePtyIds.add(relayPtyId)
+          this.outputState.acceptPtyIncarnation(relayPtyId, incarnationId),
+        beginLivePtyEvidenceWindow: () => this.livenessState.beginLiveEvidenceWindow(),
+        closeLivePtyEvidenceWindow: (window) => this.livenessState.closeLiveEvidenceWindow(window),
+        beginLivePtyEvidence: (appPtyId, window) =>
+          this.livenessState.beginLiveEvidence(appPtyId, window),
+        settleLivePtyEvidence: (appPtyId, evidence, acceptLive) =>
+          this.settleLivePtyEvidence(appPtyId, evidence, acceptLive),
+        acceptUnverifiablePty: (relayPtyId) => this.acceptUnverifiablePty(relayPtyId),
+        acceptAmbiguousExitPty: (relayPtyId) => this.acceptAmbiguousExitPty(relayPtyId),
+        acceptExitedPty: (relayPtyId) => this.acceptExitedPty(relayPtyId)
       })
     }
 
@@ -127,7 +134,8 @@ export class SshPtyProvider implements IPtyProvider {
         this.outputState.installReceivingActivation(id, activation),
       rememberPtyIncarnation: (id, incarnation) =>
         this.outputState.rememberPtyIncarnation(id, incarnation),
-      acceptLivePty: (id) => this.livePtyIds.add(id),
+      acceptLivePty: (id) => this.acceptLivePty(id),
+      acceptAmbiguousExitPty: (id) => this.acceptAmbiguousExitPty(id),
       toAppPtyId: this.toAppPtyId
     })
   }
@@ -152,15 +160,15 @@ export class SshPtyProvider implements IPtyProvider {
 
   async attach(id: string): Promise<void> {
     const relayPtyId = this.toRelayPtyId(id)
-    await requestSshPtyAttach({
+    await attachSshPtyWithLiveEvidence({
       mux: this.mux,
+      appPtyId: id,
       relayPtyId,
-      params: { id: relayPtyId },
-      commitSourceActivation: true,
       installSourceActivation: (ptyId, activation) =>
         this.outputState.installReceivingActivation(ptyId, activation),
       rememberPtyIncarnation: (ptyId, incarnationId) =>
-        this.outputState.rememberPtyIncarnation(ptyId, incarnationId)
+        this.outputState.acceptPtyIncarnation(ptyId, incarnationId),
+      livenessState: this.livenessState
     })
   }
 
@@ -181,7 +189,7 @@ export class SshPtyProvider implements IPtyProvider {
       ...(expected?.tabId ? { expectedTabId: expected.tabId } : {})
     }
     const relayPtyId = this.toRelayPtyId(id)
-    return await requestSshPtyAttach({
+    const result = await requestSshPtyAttach({
       mux: this.mux,
       relayPtyId,
       params,
@@ -189,8 +197,9 @@ export class SshPtyProvider implements IPtyProvider {
       installSourceActivation: (ptyId, activation) =>
         this.outputState.installReceivingActivation(ptyId, activation),
       rememberPtyIncarnation: (ptyId, incarnationId) =>
-        this.outputState.rememberPtyIncarnation(ptyId, incarnationId)
+        this.outputState.acceptPtyIncarnation(ptyId, incarnationId)
     })
+    return result
   }
 
   write(id: string, data: string): boolean {
@@ -209,16 +218,8 @@ export class SshPtyProvider implements IPtyProvider {
     id: string,
     opts: { immediate?: boolean; keepHistory?: boolean; deadlineMs?: number }
   ): Promise<void> {
-    await this.mux.request(
-      'pty.shutdown',
-      {
-        id: this.toRelayPtyId(id),
-        immediate: opts.immediate ?? false,
-        keepHistory: opts.keepHistory ?? false
-      },
-      relayTimeoutOptions(opts.deadlineMs)
-    )
-    this.livePtyIds.delete(id)
+    await shutdownSshPty(this.mux, this.toRelayPtyId(id), opts)
+    this.acceptExitedPty(id)
   }
 
   async sendSignal(id: string, signal: string): Promise<void> {
@@ -278,31 +279,54 @@ export class SshPtyProvider implements IPtyProvider {
   }
 
   async listProcesses(opts?: { deadlineMs?: number }): Promise<PtyProcessInfo[]> {
-    const result = await this.mux.request(
-      'pty.listProcesses',
-      undefined,
-      relayTimeoutOptions(opts?.deadlineMs)
-    )
-    const processes = mapSshPtyProcessList(result as PtyProcessInfo[], (id) => this.toAppPtyId(id))
-    for (const process of processes) {
-      this.livePtyIds.add(process.id)
-      const relayPtyId = this.toRelayPtyId(process.id)
-      this.outputState.rememberPtyIncarnation(relayPtyId, process.incarnationId)
-    }
-    return processes
+    return await listSshPtyProcessesWithLiveEvidence({
+      mux: this.mux,
+      deadlineMs: opts?.deadlineMs,
+      toAppPtyId: this.toAppPtyId,
+      toRelayPtyId: this.toRelayPtyId,
+      livenessState: this.livenessState,
+      rememberPtyIncarnation: (id, incarnationId) =>
+        this.outputState.rememberPtyIncarnation(id, incarnationId)
+    })
   }
 
-  hasPty = (id: string): boolean => this.livePtyIds.has(id)
+  // Why: unverifiable is not live; callers needing all three verdicts use probePtyLiveness.
+  hasPty = (id: string): boolean => this.livenessState.livePtyIds.has(id)
 
-  async getDefaultShell(): Promise<string> {
-    const result = await this.mux.request('pty.getDefaultShell')
-    return result as string
+  probePtyLiveness = async (id: string): Promise<boolean | null> => this.livenessState.probe(id)
+
+  acceptLivePty(id: string): void {
+    this.livenessState.acceptLive(id)
   }
 
-  async getProfiles(): Promise<{ name: string; path: string }[]> {
-    const result = await this.mux.request('pty.getProfiles')
-    return result as { name: string; path: string }[]
+  beginLivePtyEvidence(id: string): SshPtyLiveEvidence {
+    return this.livenessState.beginLiveEvidence(id)
   }
+
+  settleLivePtyEvidence(id: string, evidence: SshPtyLiveEvidence, acceptLive: boolean): void {
+    this.livenessState.settleLiveEvidence(id, evidence, acceptLive)
+  }
+
+  acceptUnverifiablePty(id: string): void {
+    this.livenessState.acceptUnverifiable(id)
+  }
+
+  acceptAmbiguousExitPty(id: string): void {
+    this.livenessState.acceptUnverifiableExit(id)
+  }
+
+  acceptExitedPtyLiveness(id: string): void {
+    this.livenessState.acceptExited(id)
+  }
+
+  acceptExitedPty(id: string): void {
+    this.outputState.acceptExit(this.toRelayPtyId(id))
+    this.acceptExitedPtyLiveness(id)
+  }
+
+  getDefaultShell = (): Promise<string> => requestSshPtyDefaultShell(this.mux)
+
+  getProfiles = (): Promise<{ name: string; path: string }[]> => requestSshPtyProfiles(this.mux)
 
   onData = (callback: SshPtyDataCallback): (() => void) => this.outputState.onData(callback)
   onRejectedData = (callback: SshPtyDataCallback): (() => void) =>

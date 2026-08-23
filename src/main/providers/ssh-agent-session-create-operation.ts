@@ -4,6 +4,7 @@ import { isPtyIncarnationId } from '../../shared/pty-incarnation'
 import type { PtySpawnResult } from './pty-spawn-result'
 import type { PtySpawnOptions } from './types'
 import type { SshPtySpawnExitRaceTracker } from './ssh-pty-spawn-exit-race'
+import { SSH_PTY_LIVENESS_UNVERIFIABLE_ERROR } from './ssh-pty-errors'
 import type { SshPtyReceivingActivationLease } from './ssh-pty-notification-routing'
 import {
   parsePtySourceReceivingActivation,
@@ -86,6 +87,7 @@ export async function spawnFreshSshPty(args: {
   ) => SshPtyReceivingActivationLease
   rememberPtyIncarnation: (relayPtyId: string, incarnationId: unknown) => void
   acceptLivePty: (appPtyId: string) => void
+  acceptAmbiguousExitPty: (appPtyId: string) => void
   toAppPtyId: (relayPtyId: string) => string
 }): Promise<PtySpawnResult> {
   const operation = args.exitRaceTracker.begin()
@@ -97,15 +99,27 @@ export async function spawnFreshSshPty(args: {
       signal: args.options.signal,
       params: args.params,
       beforeResolve: (value) => {
-        sourceActivationLease = installSpawnSourceActivation(value, args.installSourceActivation)
+        const prepared = parseSshPtySpawnResult(value)
+        if (typeof prepared.id === 'string' && prepared.id.length > 0) {
+          args.exitRaceTracker.bind(operation, prepared.id)
+        }
+        sourceActivationLease = installSpawnSourceActivation(prepared, args.installSourceActivation)
       }
     })
     if (args.options.agentSessionCreateOperationId) {
       assertSshAgentSessionCreateResult(result)
     }
     const spawnResult = parseSshPtySpawnResult(result)
-    if (args.exitRaceTracker.didMatchingExitArrive(operation, spawnResult)) {
+    const exitOutcome = args.exitRaceTracker.classifyPendingExit(operation, spawnResult)
+    if (exitOutcome === 'exited') {
       throw Object.assign(new Error('agent_session_exited_during_start'), {
+        agentSessionOperationOutcome: 'unknown' as const
+      })
+    }
+    if (exitOutcome === 'unverifiable') {
+      const id = args.toAppPtyId(spawnResult.id)
+      args.acceptAmbiguousExitPty(id)
+      throw Object.assign(new Error(`${SSH_PTY_LIVENESS_UNVERIFIABLE_ERROR}: ${spawnResult.id}`), {
         agentSessionOperationOutcome: 'unknown' as const
       })
     }

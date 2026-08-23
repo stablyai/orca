@@ -180,6 +180,11 @@ type PendingPtyReattach = {
   activated: boolean
 }
 
+type PendingPtyExitOutcome =
+  | { status: 'exited'; exit: SshPtyExitPayload }
+  | { status: 'unverifiable' }
+  | null
+
 type RemoteCliBridgeEnv = {
   remoteHome: string
   binDir: string
@@ -1781,6 +1786,11 @@ export class SshRelaySession {
         return
       }
       if (!isCurrentPtyExit(payload)) {
+        // Why: an exit we cannot attribute to the recorded incarnation is not proof THIS PTY died.
+        // A relay that never sends incarnations records none, so its exits still deliver.
+        if (!payload.incarnationId) {
+          ptyProvider.acceptAmbiguousExitPty(payload.id)
+        }
         return
       }
       void this.acceptPtyExit(payload).catch(() => {})
@@ -1837,7 +1847,12 @@ export class SshRelaySession {
       })
     }
     const rawLength = payload.sequenceChars ?? payload.data.length
-    return acceptSshPtyOutputData({
+    const evidenceProvider = getSshPtyProvider(this.targetId) as SshPtyProvider | undefined
+    const liveEvidence =
+      evidenceProvider?.providerGeneration === payload.providerGeneration
+        ? evidenceProvider.beginLivePtyEvidence(payload.id)
+        : undefined
+    const intake = acceptSshPtyOutputData({
       id: payload.id,
       data: payload.data,
       providerGeneration: payload.providerGeneration,
@@ -1847,6 +1862,25 @@ export class SshRelaySession {
       ...(typeof payload.seq === 'number' ? { sequence: payload.seq } : {}),
       ...(source ? { source } : {})
     })
+    return intake.then(
+      (receipt) => {
+        if (liveEvidence) {
+          const provider = getSshPtyProvider(this.targetId) as SshPtyProvider | undefined
+          evidenceProvider?.settleLivePtyEvidence(
+            payload.id,
+            liveEvidence,
+            provider === evidenceProvider && !this.pendingPtyReattaches.has(payload.id)
+          )
+        }
+        return receipt
+      },
+      (error) => {
+        if (liveEvidence) {
+          evidenceProvider?.settleLivePtyEvidence(payload.id, liveEvidence, false)
+        }
+        throw error
+      }
+    )
   }
 
   private recoverRejectedPtyDelivery(
@@ -1924,14 +1958,14 @@ export class SshRelaySession {
             attempt.attempts = 0
             return
           }
-          this.retryRejectedPtyDelivery(payload, source, appPtyId)
+          void this.retryRejectedPtyDelivery(payload, source, appPtyId)
         },
         (error: unknown) => {
           console.warn(`[ssh-relay-session] PTY ${relayPtyId} targeted delivery recovery failed`, {
             providerGeneration,
             error: error instanceof Error ? error.message : String(error)
           })
-          this.retryRejectedPtyDelivery(payload, source, appPtyId)
+          void this.retryRejectedPtyDelivery(payload, source, appPtyId)
         }
       )
   }
@@ -1939,14 +1973,35 @@ export class SshRelaySession {
   // Why liveness is checked before retrying: reattachKnownPty resolves without claiming the lease
   // when the PTY exited mid-attach, which is indistinguishable from a failed reattach at the call
   // site. Retrying that race twice would drop the relay channel over an ordinary PTY exit.
-  private retryRejectedPtyDelivery(
+  // Why the tri-state verdict and not hasPty: hasPty reads false for `unverifiable` too, and an
+  // unverifiable PTY is precisely the one this retry exists for — a reattach that could not reach
+  // the host is not evidence the pane died. Abandoning it there would drop the pane's output
+  // silently while the remote process keeps running.
+  private async retryRejectedPtyDelivery(
     payload: SshPtyDataPayload,
     source: SshPtyDataPayload['source'],
     appPtyId: string
-  ): void {
+  ): Promise<void> {
+    const mux = this.mux
+    const providerGeneration = this.activePtyProviderGeneration
     const ptyProvider = getSshPtyProvider(this.targetId) as SshPtyProvider | undefined
-    if (!ptyProvider || typeof ptyProvider.hasPty !== 'function' || !ptyProvider.hasPty(appPtyId)) {
+    if (!ptyProvider || typeof ptyProvider.probePtyLiveness !== 'function') {
       this.rejectedPtyRecoveryAttempts.delete(appPtyId)
+      return
+    }
+    const verdict = await ptyProvider.probePtyLiveness(appPtyId).catch(() => null)
+    if (verdict === false) {
+      this.rejectedPtyRecoveryAttempts.delete(appPtyId)
+      return
+    }
+    // Why re-checked after the probe: teardown clears this retry set, and a timer armed afterwards
+    // would outlive the channel it was recovering.
+    if (
+      !mux ||
+      this.mux !== mux ||
+      mux.isDisposed() ||
+      this.activePtyProviderGeneration !== providerGeneration
+    ) {
       return
     }
     const timer = setTimeout(() => {
@@ -2202,6 +2257,13 @@ export class SshRelaySession {
   }
 
   private async acceptPtyExit(payload: SshPtyExitPayload): Promise<void> {
+    if (!isCurrentPtyExit(payload)) {
+      return
+    }
+    const evidenceProvider = getSshPtyProvider(this.targetId) as SshPtyProvider | undefined
+    if (evidenceProvider?.providerGeneration === payload.providerGeneration) {
+      evidenceProvider.acceptExitedPtyLiveness(payload.id)
+    }
     await acceptSshPtyOutputExit({
       id: payload.id,
       code: payload.code,
@@ -2209,6 +2271,10 @@ export class SshRelaySession {
       ptyIncarnation: payload.ptyIncarnation
     })
     if (isCurrentPtyExit(payload)) {
+      const provider = getSshPtyProvider(this.targetId) as SshPtyProvider | undefined
+      if (provider?.providerGeneration === payload.providerGeneration) {
+        provider.acceptExitedPty(payload.id)
+      }
       this.retireExitedPty(payload, true)
     }
   }
@@ -2341,6 +2407,7 @@ export class SshRelaySession {
       targetedDeliveryRecovery
     } = args
     const appPtyId = toAppSshPtyId(this.targetId, ptyId)
+    const acceptAmbiguousExit = (): void => ptyProvider.acceptAmbiguousExitPty?.(appPtyId)
     const pendingReattach: PendingPtyReattach = {
       mux,
       providerGeneration,
@@ -2372,18 +2439,17 @@ export class SshRelaySession {
       if (!shouldContinue()) {
         return
       }
-      const exitDuringAttach = pendingReattach.exits.find(
-        (exit) =>
-          !exit.incarnationId ||
-          !attachResult.incarnationId ||
-          exit.incarnationId === attachResult.incarnationId
-      )
-      if (exitDuringAttach && !recoveryRequest) {
+      const exitDuringAttach = this.classifyPendingExit(pendingReattach, attachResult.incarnationId)
+      if (exitDuringAttach?.status === 'unverifiable') {
+        acceptAmbiguousExit()
+        return
+      }
+      if (exitDuringAttach?.status === 'exited' && !recoveryRequest) {
         if (attachResult.incarnationId) {
           restorePtyIncarnation(appPtyId, attachResult.incarnationId)
           this.runtime?.acceptPtyIncarnationForExit(appPtyId, attachResult.incarnationId)
         }
-        await this.acceptPtyExit(exitDuringAttach)
+        await this.acceptPtyExit(exitDuringAttach.exit)
         return
       }
       const existingDeliveryConfirmed =
@@ -2426,10 +2492,7 @@ export class SshRelaySession {
           }
         )
         if (!recovered) {
-          const recoveryExit = this.findExactPendingExit(
-            pendingReattach,
-            attachResult.incarnationId
-          )
+          const recoveryExit = this.classifyPendingExit(pendingReattach, attachResult.incarnationId)
           if (
             recoveryExit &&
             shouldContinue() &&
@@ -2447,18 +2510,32 @@ export class SshRelaySession {
                 )
               }
             }
-            this.preparePtyIncarnationForExit(appPtyId, attachResult.incarnationId)
-            await this.acceptPtyExit(recoveryExit)
+            if (recoveryExit.status === 'unverifiable') {
+              acceptAmbiguousExit()
+            } else {
+              this.preparePtyIncarnationForExit(appPtyId, attachResult.incarnationId)
+              await this.acceptPtyExit(recoveryExit.exit)
+            }
+          } else if (
+            attachResult.sourceRecovery?.status === 'restoreRequired' &&
+            shouldContinue() &&
+            this.ownsPtyRecoveryAttempt(appPtyId, pendingReattach)
+          ) {
+            ptyProvider.acceptLivePty?.(appPtyId)
           }
           return
         }
-        const recoveryExit = this.findExactPendingExit(pendingReattach, attachResult.incarnationId)
-        if (recoveryExit) {
+        const recoveryExit = this.classifyPendingExit(pendingReattach, attachResult.incarnationId)
+        if (recoveryExit?.status === 'unverifiable') {
+          acceptAmbiguousExit()
+          return
+        }
+        if (recoveryExit?.status === 'exited') {
           this.preparePtyIncarnationForExit(appPtyId, attachResult.incarnationId)
           pendingReattach.activated = true
           recoveryActivationLease?.commit()
           recoveryActivationLease = undefined
-          await this.acceptPtyExit(recoveryExit)
+          await this.acceptPtyExit(recoveryExit.exit)
           return
         }
       }
@@ -2474,10 +2551,6 @@ export class SshRelaySession {
           activeLeaseByPtyId.get(ptyId)
         )
       }
-      attachedLeaseIds.add(ptyId)
-      pendingReattach.activated = true
-      recoveryActivationLease?.commit()
-      recoveryActivationLease = undefined
       if (targetedDeliveryRecovery) {
         if (targetedDeliveryRecovery === 'fresh-activation') {
           this.retiredSourceDeliveries.activate(ptyId)
@@ -2488,17 +2561,30 @@ export class SshRelaySession {
         while (pendingReattach.queuedData.length > 0) {
           await this.acceptPtyData(pendingReattach.queuedData.shift()!)
         }
-        pendingReattach.livePassthrough = true
       }
-      const exitAfterActivation = pendingReattach.exits.find(
-        (exit) =>
-          !exit.incarnationId ||
-          !attachResult.incarnationId ||
-          exit.incarnationId === attachResult.incarnationId
+      const exitAfterActivation = this.classifyPendingExit(
+        pendingReattach,
+        attachResult.incarnationId
       )
-      if (exitAfterActivation) {
-        await this.acceptPtyExit(exitAfterActivation)
+      if (exitAfterActivation?.status === 'unverifiable') {
+        acceptAmbiguousExit()
         return
+      }
+      pendingReattach.activated = true
+      if (exitAfterActivation?.status === 'exited') {
+        recoveryActivationLease?.commit()
+        recoveryActivationLease = undefined
+        await this.acceptPtyExit(exitAfterActivation.exit)
+        return
+      }
+      ptyProvider.acceptLivePty?.(appPtyId)
+      attachedLeaseIds.add(ptyId)
+      recoveryActivationLease?.commit()
+      recoveryActivationLease = undefined
+      // Why not a plain assignment: on the plain-reconnect path finishSourceRecovery has already
+      // opened live passthrough, and closing it here would quarantine output nothing drains.
+      if (targetedDeliveryRecovery !== undefined) {
+        pendingReattach.livePassthrough = true
       }
       if (!recoveryRequest && !targetedDeliveryRecovery) {
         this.forwardReattachReplay(appPtyId, attachResult.replay ?? '')
@@ -2512,7 +2598,7 @@ export class SshRelaySession {
       if (!shouldContinue()) {
         return
       }
-      this.handlePtyReattachFailure(ptyId, appPtyId, pendingReattach, error)
+      this.handlePtyReattachFailure(ptyProvider, ptyId, appPtyId, pendingReattach, error)
     } finally {
       recoveryActivationLease?.retire()
       sourceActivationLease?.rollback()
@@ -2523,18 +2609,21 @@ export class SshRelaySession {
     }
   }
 
-  private findExactPendingExit(
+  private classifyPendingExit(
     pending: PendingPtyReattach,
     ptyIncarnation: string | undefined
-  ): SshPtyExitPayload | undefined {
-    if (!ptyIncarnation) {
-      return undefined
-    }
-    return pending.exits.find(
-      (exit) =>
-        exit.providerGeneration === pending.providerGeneration &&
-        exit.ptyIncarnation === ptyIncarnation
+  ): PendingPtyExitOutcome {
+    const exits = pending.exits.filter(
+      (exit) => exit.providerGeneration === pending.providerGeneration
     )
+    if (!ptyIncarnation) {
+      return exits.length > 0 ? { status: 'unverifiable' } : null
+    }
+    const exact = exits.find((exit) => exit.incarnationId === ptyIncarnation)
+    if (exact) {
+      return { status: 'exited', exit: exact }
+    }
+    return exits.some((exit) => !exit.incarnationId) ? { status: 'unverifiable' } : null
   }
 
   private preparePtyIncarnationForExit(appPtyId: string, ptyIncarnation: string | undefined): void {
@@ -2652,12 +2741,14 @@ export class SshRelaySession {
   }
 
   private handlePtyReattachFailure(
+    ptyProvider: SshPtyProvider,
     ptyId: string,
     appPtyId: string,
     pending: PendingPtyReattach,
     error: unknown
   ): void {
     if (!isSshPtyNotFoundError(error)) {
+      ptyProvider.acceptUnverifiablePty?.(appPtyId)
       pending.restoreRequired = 'reattachAttemptsExhausted'
       this.wakeRecovery(pending)
       console.warn(
@@ -2675,6 +2766,7 @@ export class SshRelaySession {
       )
       return
     }
+    ptyProvider.acceptExitedPty?.(appPtyId)
     console.warn(
       `[ssh-relay-session] Dropping stale PTY ${ptyId} for ${this.targetId} after relay reattach failed: ${
         error instanceof Error ? error.message : String(error)
@@ -2803,8 +2895,8 @@ export class SshRelaySession {
       this.routeQuarantinedReattachData(pending, payload)
     }
     await this.waitForRecoveryFence(pending, shouldContinue)
-    const exactExit = this.findExactPendingExit(pending, acceptedRecovery.ptyIncarnation)
-    const complete = pending.recoveryComplete ?? (exactExit ? acceptedRecovery : undefined)
+    const pendingExit = this.classifyPendingExit(pending, acceptedRecovery.ptyIncarnation)
+    const complete = pending.recoveryComplete ?? (pendingExit ? acceptedRecovery : undefined)
     if (
       !shouldContinue() ||
       pending.restoreRequired ||
@@ -2890,7 +2982,7 @@ export class SshRelaySession {
       shouldContinue() &&
       !pending.recoveryComplete &&
       !pending.restoreRequired &&
-      !this.findExactPendingExit(pending, pending.recovery?.ptyIncarnation) &&
+      !this.classifyPendingExit(pending, pending.recovery?.ptyIncarnation) &&
       Date.now() < deadline
     ) {
       await new Promise<void>((resolve) => {
@@ -2912,7 +3004,7 @@ export class SshRelaySession {
     if (
       !pending.recoveryComplete &&
       !pending.restoreRequired &&
-      !this.findExactPendingExit(pending, pending.recovery?.ptyIncarnation)
+      !this.classifyPendingExit(pending, pending.recovery?.ptyIncarnation)
     ) {
       pending.restoreRequired = 'recoveryFenceTimeout'
     }

@@ -38,6 +38,14 @@ const UNREATTACHABLE_SESSION_PATTERNS = UNREATTACHABLE_SESSION_SOURCES.map(
 const UNREATTACHABLE_SESSION_REPLACE_PATTERNS = UNREATTACHABLE_SESSION_SOURCES.map(
   (source) => new RegExp(source, 'g')
 )
+// The SSH provider could not resume this pane's output delivery. The remote shell is untouched, so
+// this copy must not imply the session was lost — replace-only, so the /g lastIndex hazard is moot.
+const UNRESUMABLE_DELIVERY_SOURCE = 'SSH_PTY_RESTORE_REQUIRED:[ \\t]*\\S*'
+const UNRESUMABLE_DELIVERY_PATTERN = new RegExp(UNRESUMABLE_DELIVERY_SOURCE)
+const UNRESUMABLE_DELIVERY_REPLACE_PATTERN = new RegExp(UNRESUMABLE_DELIVERY_SOURCE, 'g')
+const UNVERIFIABLE_LIVENESS_SOURCE = 'SSH_PTY_LIVENESS_UNVERIFIABLE:[ \\t]*\\S*'
+const UNVERIFIABLE_LIVENESS_PATTERN = new RegExp(UNVERIFIABLE_LIVENESS_SOURCE)
+const UNVERIFIABLE_LIVENESS_REPLACE_PATTERN = new RegExp(UNVERIFIABLE_LIVENESS_SOURCE, 'g')
 
 function isSshError(error: string): boolean {
   return isSshReconnectOwnedTerminalError(error)
@@ -75,6 +83,8 @@ export function isExplainedTerminalError(error: string): boolean {
       (line) =>
         TERMINAL_HOST_GONE_PATTERN.test(line) ||
         LEGACY_TERMINAL_HOST_GONE_PATTERN.test(line) ||
+        UNRESUMABLE_DELIVERY_PATTERN.test(line) ||
+        UNVERIFIABLE_LIVENESS_PATTERN.test(line) ||
         UNREATTACHABLE_SESSION_PATTERNS.some((pattern) => pattern.test(line))
     )
 }
@@ -103,6 +113,18 @@ export function humanizeTerminalError(error: string): string {
       )
     )
   }
+  humanized = humanized.replace(UNRESUMABLE_DELIVERY_REPLACE_PATTERN, () =>
+    translate(
+      'auto.components.terminal.pane.TerminalErrorToast.sessionOutputUnresumable',
+      "Orca couldn't resume this pane's output from the host. The terminal session is live — reopen this pane to reconnect to it."
+    )
+  )
+  humanized = humanized.replace(UNVERIFIABLE_LIVENESS_REPLACE_PATTERN, () =>
+    translate(
+      'auto.components.terminal.pane.TerminalErrorToast.sessionLivenessUnverifiable',
+      "Orca lost contact while reopening this pane's output. The terminal session is unverifiable, so Orca left it untouched. Reopen this pane to retry."
+    )
+  )
   humanized = humanizeUnreattachableSession(humanized)
   if (!isExplainedTerminalError(humanized)) {
     return humanized
