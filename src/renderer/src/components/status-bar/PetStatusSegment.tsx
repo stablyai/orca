@@ -16,6 +16,7 @@ import {
   DropdownMenuSubTrigger,
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
+import { Slider } from '@/components/ui/slider'
 import { useAppStore } from '../../store'
 import { PetFromImageDialog } from '../pet/PetFromImageDialog'
 import { BUNDLED_PET, BUNDLED_PETS, findBundledPet, isBundledPetId } from '../pet/pet-models'
@@ -194,7 +195,7 @@ function PetStatusSegmentInner(): React.JSX.Element {
             )}
           </DropdownMenuCheckboxItem>
           <DropdownMenuSeparator />
-          {/* Why: in-menu range so users can resize the overlay without leaving
+          {/* Why: in-menu slider so users can resize the overlay without leaving
             the dropdown — pet sprites can import larger than the default 180px
             box and visually overwhelm the viewport. preventDefault on pointer
             events stops Radix from closing the menu while the user drags. */}
@@ -213,18 +214,15 @@ function PetStatusSegmentInner(): React.JSX.Element {
                 {translate('auto.components.status.bar.PetStatusSegment.c6aa805b1b', 'px')}
               </span>
             </div>
-            <input
-              type="range"
+            <Slider
+              value={[petSize]}
               min={PET_SIZE_MIN}
               max={PET_SIZE_MAX}
               step={10}
-              value={petSize}
-              onChange={(e) => setPetSize(Number(e.target.value))}
-              className="w-full"
-              aria-label={translate(
-                'auto.components.status.bar.PetStatusSegment.b75484a01a',
-                'Pet size'
-              )}
+              onValueChange={([value]) => setPetSize(value)}
+              thumbLabels={[
+                translate('auto.components.status.bar.PetStatusSegment.b75484a01a', 'Pet size')
+              ]}
             />
           </div>
           <DropdownMenuSub>

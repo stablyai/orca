@@ -86,6 +86,8 @@ beforeEach(() => {
   storeMock.state.petWalks = true
   storeMock.state.petReturnsToLane = true
   storeMock.state.customPets = []
+  storeMock.state.petSize = 180
+  ;(storeMock.state.setPetSize as ReturnType<typeof vi.fn>).mockClear()
 })
 
 afterEach(() => {
@@ -152,6 +154,21 @@ describe('PetStatusSegment', () => {
 
     expect(menuItems().some((el) => /remove a pet/i.test(el.textContent ?? ''))).toBe(true)
     expect(document.querySelector('[role^="menuitem"] button')).toBeNull()
+  })
+
+  it('resizes the pet with the design-system slider, as the image dialog does', () => {
+    render()
+    openMenu()
+
+    const thumb = document.querySelector('[data-slot="slider-thumb"]') as HTMLElement
+    expect(thumb).not.toBeNull()
+    act(() => {
+      thumb.focus()
+      thumb.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true }))
+    })
+
+    expect(storeMock.state.setPetSize).toHaveBeenCalledWith(190)
+    expect(menuItems().length).toBeGreaterThan(0)
   })
 
   it('offers no removal entry when there is nothing custom to remove', () => {
