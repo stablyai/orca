@@ -1,6 +1,6 @@
 import type { MutableRefObject } from 'react'
 import type { editor } from 'monaco-editor'
-import { scrollTopCache, cursorPositionCache, setWithLRU } from '@/lib/scroll-cache'
+import { editorSelectionCache, scrollTopCache, setWithLRU } from '@/lib/scroll-cache'
 
 type MonacoViewStateTrackingParams = {
   editorInstance: editor.IStandaloneCodeEditor
@@ -22,12 +22,9 @@ export function installMonacoViewStateTracking(params: MonacoViewStateTrackingPa
   if (pos) {
     setEditorCursorLine(filePath, pos.lineNumber)
   }
-  const cursorPositionSub = editorInstance.onDidChangeCursorPosition((e) => {
-    setEditorCursorLine(filePath, e.position.lineNumber)
-    setWithLRU(cursorPositionCache, viewStateKey, {
-      lineNumber: e.position.lineNumber,
-      column: e.position.column
-    })
+  const cursorPositionSub = editorInstance.onDidChangeCursorSelection((e) => {
+    setEditorCursorLine(filePath, e.selection.positionLineNumber)
+    setWithLRU(editorSelectionCache, viewStateKey, [e.selection, ...e.secondarySelections])
   })
 
   // Why: only the resting scroll position matters, so trailing-throttle writes (~150ms) instead of writing every 60fps frame.
@@ -48,13 +45,13 @@ export function restoreMonacoViewState(
   editorInstance: editor.IStandaloneCodeEditor,
   viewStateKey: string
 ): void {
-  const savedCursor = cursorPositionCache.get(viewStateKey)
+  const savedSelections = editorSelectionCache.get(viewStateKey)
   const savedScrollTop = scrollTopCache.get(viewStateKey)
-  if (savedScrollTop !== undefined || savedCursor) {
+  if (savedScrollTop !== undefined || savedSelections) {
     // Why: Monaco renders synchronously so one RAF suffices; focus inside it to avoid a scroll-0 flash before restore.
     requestAnimationFrame(() => {
-      if (savedCursor) {
-        editorInstance.setPosition(savedCursor)
+      if (savedSelections) {
+        editorInstance.setSelections(savedSelections)
       }
       if (savedScrollTop !== undefined) {
         editorInstance.setScrollTop(savedScrollTop)
@@ -74,12 +71,9 @@ export function snapshotMonacoViewState(
   const ed = editorRef.current
   if (ed) {
     setWithLRU(scrollTopCache, viewStateKey, ed.getScrollTop())
-    const pos = ed.getPosition()
-    if (pos) {
-      setWithLRU(cursorPositionCache, viewStateKey, {
-        lineNumber: pos.lineNumber,
-        column: pos.column
-      })
+    const selections = ed.getSelections()
+    if (selections) {
+      setWithLRU(editorSelectionCache, viewStateKey, selections)
     }
   }
 }
