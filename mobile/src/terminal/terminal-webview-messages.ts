@@ -18,10 +18,11 @@ export type TerminalWebViewCommand =
       preserveScroll?: boolean
     }
   | { type: 'set-font-scale'; id?: number; fontScale: number }
+  | { type: 'set-viewport'; id?: number; width: number; height: number; dpr: number }
   | { type: 'resize'; id?: number; cols: number; rows: number }
   | { type: 'reflow'; id?: number; cols: number; rows: number }
   | { type: 'clear'; id?: number }
-  | { type: 'measure'; id?: number; containerHeight?: number }
+  | { type: 'measure'; id?: number; containerHeight?: number; containerWidth?: number }
   | { type: 'reset-zoom'; id?: number }
   | { type: 'cancel-select'; id?: number }
   | { type: 'do-select-all'; id?: number }

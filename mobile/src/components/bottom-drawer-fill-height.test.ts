@@ -13,6 +13,19 @@ describe('resolveBottomDrawerFillHeight', () => {
     ).toBe(844 - 54 - 16)
   })
 
+  it('sizes from a freeform window instead of the taller display', () => {
+    const displayHeight = 1080
+    const windowHeight = 600
+    const height = resolveBottomDrawerFillHeight({
+      screenHeight: windowHeight,
+      topInset: 0,
+      keyboardInset: 0,
+      topGap: 16
+    })
+    expect(height).toBe(windowHeight - 16)
+    expect(height).toBeLessThan(displayHeight)
+  })
+
   it('shrinks by the keyboard inset so the sheet top stays under the status bar', () => {
     expect(
       resolveBottomDrawerFillHeight({

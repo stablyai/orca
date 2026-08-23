@@ -28,6 +28,7 @@ type TerminalPaneViewProps = {
   onFileTap: (handle: string, pathText: string, line: number | null, column: number | null) => void
   onOpenUrl: (handle: string, url: string) => void
   onTextScaleChange: (scale: number) => void
+  onViewportChanged: (handle: string, width: number, height: number, dpr: number) => void
 }
 
 export function TerminalPaneView({
@@ -49,7 +50,8 @@ export function TerminalPaneView({
   onTerminalTap,
   onFileTap,
   onOpenUrl,
-  onTextScaleChange
+  onTextScaleChange,
+  onViewportChanged
 }: TerminalPaneViewProps) {
   const setRef = useCallback(
     (ref: TerminalWebViewHandle | null) => {
@@ -87,6 +89,7 @@ export function TerminalPaneView({
         onFileTap={(pathText, line, column) => onFileTap(handle, pathText, line, column)}
         onOpenUrl={(url) => onOpenUrl(handle, url)}
         onTextScaleChange={onTextScaleChange}
+        onViewportChanged={(width, height, dpr) => onViewportChanged(handle, width, height, dpr)}
       />
     </View>
   )

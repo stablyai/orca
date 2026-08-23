@@ -60,6 +60,14 @@ output = terminalFontFamily;
 }
 
 describe('TerminalWebView text zoom', () => {
+  it('lets the RN refit own grid resizing after a text-scale change', () => {
+    const start = terminalHtmlSource.indexOf('  function applyTextScale(scale)')
+    const end = terminalHtmlSource.indexOf('  var panX =', start)
+    const applyTextScale = terminalHtmlSource.slice(start, end)
+    expect(applyTextScale).toContain("applyFitScale('text-scale')")
+    expect(applyTextScale).not.toContain('term.resize(')
+  })
+
   it('pins textZoom to 100 so Android system font scale cannot inflate glyphs past xterm cell metrics', () => {
     const start = terminalWebViewSource.indexOf('<WebView')
     expect(start).toBeGreaterThanOrEqual(0)

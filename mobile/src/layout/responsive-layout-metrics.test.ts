@@ -36,4 +36,17 @@ describe('responsive layout metrics', () => {
       horizontalPadding: spacing.lg
     })
   })
+
+  it('classifies freeform desktop windows by their bounds', () => {
+    expect(getResponsiveLayoutMetrics(800, 600).windowClass).toBe('medium')
+    expect(getResponsiveLayoutMetrics(1024, 768).windowClass).toBe('expanded')
+    expect(getResponsiveLayoutMetrics(1280, 720).windowClass).toBe('expanded')
+    expect(getResponsiveLayoutMetrics(1920 / 1.5, 1080 / 1.5).windowClass).toBe('expanded')
+  })
+
+  it('keeps wide layout stable while resizing around the breakpoint', () => {
+    const wide = getResponsiveLayoutMetrics(760, 700)
+    expect(getResponsiveLayoutMetrics(690, 700, wide).isWideLayout).toBe(true)
+    expect(getResponsiveLayoutMetrics(675, 700, wide).isWideLayout).toBe(false)
+  })
 })

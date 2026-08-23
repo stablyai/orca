@@ -2,7 +2,6 @@ import { type ReactNode, useCallback, useEffect, useRef, useState } from 'react'
 import {
   View,
   Pressable,
-  useWindowDimensions,
   ScrollView,
   Keyboard,
   BackHandler,
@@ -28,6 +27,7 @@ import { BOTTOM_DRAWER_HIDE_DURATION_MS } from './bottom-drawer-constants'
 import { bottomDrawerStyles as styles } from './bottom-drawer-styles'
 import { useInsideBottomDrawerModalHost } from './bottom-drawer-modal-host'
 import { useResponsiveLayout } from '../layout/responsive-layout'
+import { useWindowBounds } from '../layout/window-bounds'
 
 const DISMISS_THRESHOLD = 80
 const SPRING_CONFIG = { damping: 28, stiffness: 400 }
@@ -73,7 +73,7 @@ export function MountedBottomDrawer({
   // reanimated translate) so height shrinks as the sheet lifts and the top
   // edge stays under the status bar.
   const [keyboardInset, setKeyboardInset] = useState(0)
-  const { height: screenHeight } = useWindowDimensions()
+  const { height: screenHeight } = useWindowBounds()
   const insets = useSafeAreaInsets()
   // Why: on wide/tablet canvases a full-width sheet looks stretched; cap it and
   // center it horizontally. Vertical bottom-anchoring (and all the drag/keyboard

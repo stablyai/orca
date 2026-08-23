@@ -1,7 +1,6 @@
 import { useRef, useCallback, forwardRef, useImperativeHandle, useEffect, useMemo } from 'react'
-import { Platform, View } from 'react-native'
+import { View } from 'react-native'
 import { WebView, type WebViewMessageEvent } from 'react-native-webview'
-import type { TerminalOscLinkRange } from '../../../src/shared/terminal-osc-link-ranges'
 import type { TerminalWebViewHandle, TerminalWebViewProps } from './terminal-webview-contract'
 import {
   TerminalWebViewEngineErrorOverlay,
@@ -15,6 +14,7 @@ import { createTerminalWebViewPendingMessages } from './terminal-webview-pending
 import { dispatchTerminalWebViewNotification } from './terminal-webview-notification-dispatch'
 import { routeTerminalQueryReply } from './terminal-webview-query-reply-routing'
 import { createTerminalWriteCoalescer } from './terminal-write-coalescer'
+import { createTerminalWebViewHandle } from './terminal-webview-handle'
 
 type Props = TerminalWebViewProps
 
@@ -38,7 +38,8 @@ export const TerminalWebView = forwardRef<TerminalWebViewHandle, Props>(function
     onTerminalTap,
     onFileTap,
     onOpenUrl,
-    onTextScaleChange
+    onTextScaleChange,
+    onViewportChanged
   },
   ref
 ) {
@@ -171,7 +172,8 @@ export const TerminalWebView = forwardRef<TerminalWebViewHandle, Props>(function
           onTerminalTap,
           onFileTap,
           onOpenUrl,
-          onTextScaleChange
+          onTextScaleChange,
+          onViewportChanged
         })
       }
     },
@@ -189,7 +191,8 @@ export const TerminalWebView = forwardRef<TerminalWebViewHandle, Props>(function
       onTerminalTap,
       onFileTap,
       onOpenUrl,
-      onTextScaleChange
+      onTextScaleChange,
+      onViewportChanged
     ]
   )
 
@@ -232,134 +235,20 @@ export const TerminalWebView = forwardRef<TerminalWebViewHandle, Props>(function
 
   useImperativeHandle(
     ref,
-    () => ({
-      prepareForForegroundRecovery() {
-        if (Platform.OS !== 'ios') {
-          return
-        }
-        // Why: direct ping is the only command allowed through while readiness is
-        // invalid; init/write commands queue until this exact document answers.
-        isWebReadyRef.current = false
-        armWebReadyWatchdog()
-        pendingPingIdRef.current = sendToWebView({ type: 'ping' })
-      },
-      write(data: string) {
-        writeCoalescer.write(data)
-      },
-      init(
-        cols: number,
-        rows: number,
-        initialData?: string,
-        preserveScroll?: boolean,
-        oscLinks?: TerminalOscLinkRange[]
-      ) {
-        // Why: arm a fresh ready promise BEFORE posting init. The WebView
-        // resolves it via the 'ready' notify at the end of its rAF chain.
-        // Resolve any prior in-flight ready first so awaiters from the
-        // previous generation don't sit on the 3s setTimeout fallback —
-        // each leaked timer + closure pinned an awaiting measure caller
-        // for the full 3s under rapid re-init (orientation change,
-        // multiple resubscribes), delaying cold-start fit chains.
-        const priorResolve = readyResolveRef.current
-        if (priorResolve) {
-          readyResolveRef.current = null
-          readyPromiseRef.current = null
-          priorResolve()
-        }
-        readyPromiseRef.current = new Promise<void>((resolve) => {
-          readyResolveRef.current = resolve
-        })
-        // Why: pending chunks are pre-snapshot data; the init snapshot supersedes
-        // them, and writing them after init would corrupt the fresh buffer.
-        writeCoalescer.clear()
-        postMessage({
-          type: 'init',
-          cols,
-          rows,
-          initialData,
-          oscLinks,
-          terminalTheme,
-          fontScale: textScale,
-          preserveScroll
-        })
-      },
-      resize(cols: number, rows: number) {
-        // Why: resize/reflow must observe all prior writes or bytes reorder.
-        writeCoalescer.flushNow()
-        postMessage({ type: 'resize', cols, rows })
-      },
-      reflow(cols: number, rows: number) {
-        writeCoalescer.flushNow()
-        postMessage({ type: 'reflow', cols, rows })
-      },
-      clear() {
-        writeCoalescer.clear()
-        postMessage({ type: 'clear' })
-      },
-      measureFitDimensions(
-        containerHeight?: number
-      ): Promise<{ cols: number; rows: number } | null> {
-        if (!isWebReadyRef.current) {
-          return Promise.resolve(null)
-        }
-        return new Promise((resolve) => {
-          measureResolveRef.current?.(null)
-          let timeout: ReturnType<typeof setTimeout> | null = null
-          const finish = (result: { cols: number; rows: number } | null) => {
-            if (timeout) {
-              clearTimeout(timeout)
-              timeout = null
-            }
-            if (measureResolveRef.current === finish) {
-              measureResolveRef.current = null
-            }
-            resolve(result)
-          }
-          measureResolveRef.current = finish
-          sendToWebView({ type: 'measure', containerHeight })
-          // Why: if the WebView doesn't respond within 2s (e.g., xterm
-          // failed to load), resolve null so the caller can disable
-          // Fit to Phone rather than hanging indefinitely.
-          timeout = setTimeout(() => {
-            if (measureResolveRef.current === finish) {
-              finish(null)
-            }
-          }, 2000)
-        })
-      },
-      resetZoom() {
-        postMessage({ type: 'reset-zoom' })
-      },
-      cancelSelect() {
-        postMessage({ type: 'cancel-select' })
-      },
-      doSelectAll() {
-        postMessage({ type: 'do-select-all' })
-      },
-      async awaitReady(): Promise<void> {
-        // Why: returns the in-flight ready promise (set by init); resolves
-        // immediately if no init is pending. Capped at 3s so a stuck
-        // WebView doesn't hang the caller.
-        const p = readyPromiseRef.current
-        if (!p) {
-          return
-        }
-        await new Promise<void>((resolve) => {
-          let settled = false
-          const timeout = setTimeout(() => {
-            settled = true
-            resolve()
-          }, 3000)
-          void p.finally(() => {
-            if (!settled) {
-              clearTimeout(timeout)
-              settled = true
-              resolve()
-            }
-          })
-        })
-      }
-    }),
+    () =>
+      createTerminalWebViewHandle({
+        armWebReadyWatchdog,
+        isWebReadyRef,
+        measureResolveRef,
+        pendingPingIdRef,
+        postMessage,
+        readyPromiseRef,
+        readyResolveRef,
+        sendToWebView,
+        terminalTheme,
+        textScale,
+        writeCoalescer
+      }),
     [armWebReadyWatchdog, postMessage, sendToWebView, terminalTheme, textScale, writeCoalescer]
   )
 

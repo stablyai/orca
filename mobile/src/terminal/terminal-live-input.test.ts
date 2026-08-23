@@ -214,6 +214,21 @@ describe('terminal live input', () => {
     expect(refocus).not.toHaveBeenCalled()
   })
 
+  it('keeps hardware-keyboard focus without blur/refocus churn', () => {
+    const input = createFocusTarget(() => true)
+    const refocus = vi.fn()
+
+    focusTerminalLiveInputTarget(input, {
+      hardwareKeyboard: true,
+      keyboardHeight: 0,
+      refocus
+    })
+
+    expect(input.blur).not.toHaveBeenCalled()
+    expect(input.focus).toHaveBeenCalledTimes(1)
+    expect(refocus).not.toHaveBeenCalled()
+  })
+
   it('focuses the capture input directly when it is not already focused', () => {
     const input = createFocusTarget(() => false)
     const refocus = vi.fn()

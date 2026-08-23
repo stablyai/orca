@@ -5,6 +5,7 @@ import { describe, expect, it } from 'vitest'
 // TerminalWebView.tsx. Concatenate both so assertions resolve regardless of file.
 const source =
   readFileSync(new URL('./TerminalWebView.tsx', import.meta.url), 'utf8') +
+  readFileSync(new URL('./terminal-webview-handle.ts', import.meta.url), 'utf8') +
   readFileSync(new URL('./terminal-webview-pending-messages.ts', import.meta.url), 'utf8') +
   readFileSync(new URL('./terminal-webview-url-tap.ts', import.meta.url), 'utf8') +
   readFileSync(new URL('./terminal-webview-tap-dispatch-injected.ts', import.meta.url), 'utf8') +
@@ -130,13 +131,12 @@ describe('TerminalWebView scroll routing', () => {
   })
 
   it('clears WebView await timers when the real response wins', () => {
-    const measureBlock = sliceBetween('measureFitDimensions(', 'resetZoom()')
+    const measureBlock = sliceBetween('measureFitDimensions(', 'resetZoom:')
     expect(measureBlock).toContain('clearTimeout(timeout)')
     expect(measureBlock).toContain('measureResolveRef.current === finish')
 
-    const readyBlock = sliceBetween('async awaitReady()', '})')
-    expect(readyBlock).toContain('clearTimeout(timeout)')
-    expect(readyBlock).toContain('void p.finally')
+    expect(source).toContain('async awaitReady()')
+    expect(source).toContain('void pending.finally')
   })
 
   it('hides xterm scrollbars and drives the mobile scroll indicator from committed rows', () => {

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef } from 'react'
-import { View, StyleSheet } from 'react-native'
+import { StyleSheet } from 'react-native'
 import { Stack, useRouter } from 'expo-router'
 import { StatusBar } from 'expo-status-bar'
 import * as SplashScreen from 'expo-splash-screen'
@@ -13,6 +13,7 @@ import { useOpenNotificationRoute } from '../src/notifications/use-open-notifica
 import { loadHostCatalog } from '../src/transport/host-store'
 import { extractPairingCodeFromUrl } from '../src/transport/pairing'
 import { recoverMobileRelayPairing } from '../src/transport/mobile-relay-pairing-recovery'
+import { WindowBoundsProvider } from '../src/layout/window-bounds'
 
 // Why: keeps the native splash screen visible until the React tree is mounted
 // and ready to render. Without this the user sees a blank white/black frame
@@ -159,7 +160,7 @@ export default function RootLayout() {
 
   return (
     <RpcClientProvider>
-      <View style={styles.root} onLayout={onNavigatorLayout}>
+      <WindowBoundsProvider style={styles.root} onLayout={onNavigatorLayout}>
         <StatusBar style="light" />
         <Stack
           screenOptions={{
@@ -200,7 +201,7 @@ export default function RootLayout() {
           <Stack.Screen name="about" options={{ headerShown: false }} />
           <Stack.Screen name="h" options={{ headerShown: false }} />
         </Stack>
-      </View>
+      </WindowBoundsProvider>
     </RpcClientProvider>
   )
 }

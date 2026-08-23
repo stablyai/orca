@@ -7,7 +7,9 @@ import {
   TERMINAL_WRITE_FLUSH_WINDOW_MS
 } from './terminal-write-coalescer'
 
-const webViewSource = readFileSync(new URL('./TerminalWebView.tsx', import.meta.url), 'utf8')
+const webViewSource =
+  readFileSync(new URL('./TerminalWebView.tsx', import.meta.url), 'utf8') +
+  readFileSync(new URL('./terminal-webview-handle.ts', import.meta.url), 'utf8')
 
 // Simulates TerminalWebView's postMessage: ready → deliver, not ready → queue.
 // There is no React render harness in the node environment, so the boundary

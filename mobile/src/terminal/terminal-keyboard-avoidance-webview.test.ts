@@ -198,13 +198,9 @@ describe('terminal keyboard-avoidance WebView metrics', () => {
     const resizeEnd = terminalHtmlSource.indexOf('\n  // reflow()', resizeStart)
     const clearStart = terminalHtmlSource.indexOf("} else if (msg.type === 'clear') {")
     const clearEnd = terminalHtmlSource.indexOf("} else if (msg.type === 'measure')", clearStart)
-    const textScaleStart = terminalHtmlSource.indexOf('  function applyTextScale(scale)')
-    const textScaleEnd = terminalHtmlSource.indexOf('\n  var panX', textScaleStart)
-
     for (const block of [
       terminalHtmlSource.slice(resizeStart, resizeEnd),
       terminalHtmlSource.slice(clearStart, clearEnd),
-      terminalHtmlSource.slice(textScaleStart, textScaleEnd),
       reflowSource
     ]) {
       expect(block.indexOf('emitKeyboardAvoidanceMetrics()')).toBeGreaterThan(

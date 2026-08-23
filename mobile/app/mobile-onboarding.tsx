@@ -1,12 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import {
-  AccessibilityInfo,
-  Animated,
-  BackHandler,
-  Text,
-  useWindowDimensions,
-  View
-} from 'react-native'
+import { AccessibilityInfo, Animated, BackHandler, Text, View } from 'react-native'
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { OrcaLogo } from '../src/components/OrcaLogo'
@@ -23,6 +16,7 @@ import {
   type MobileSessionView
 } from '../src/storage/session-view-preferences'
 import { savePushNotificationsEnabled } from '../src/storage/preferences'
+import { useWindowBounds } from '../src/layout/window-bounds'
 
 const SLIDE_DURATION_MS = 280
 
@@ -52,7 +46,7 @@ function MobileOnboardingFlow({
 }) {
   const router = useRouter()
   const steps = useMemo(() => parseMobileOnboardingSteps(rawSteps), [rawSteps])
-  const { width } = useWindowDimensions()
+  const { width } = useWindowBounds()
   const [activeIndex, setActiveIndex] = useState(0)
   const [busyChoice, setBusyChoice] = useState<MobileOnboardingBusyChoice>(null)
   const [error, setError] = useState<string | null>(null)

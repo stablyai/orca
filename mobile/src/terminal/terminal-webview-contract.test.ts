@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest'
 
-import { parseTerminalKeyboardAvoidanceMetrics } from './terminal-webview-contract'
+import {
+  parseTerminalKeyboardAvoidanceMetrics,
+  type TerminalWebViewHandle
+} from './terminal-webview-contract'
 
 describe('parseTerminalKeyboardAvoidanceMetrics', () => {
   it('parses a full payload', () => {
@@ -48,5 +51,21 @@ describe('parseTerminalKeyboardAvoidanceMetrics', () => {
         rows: -1
       })
     ).toEqual({ cursorY: 0, contentBottomRow: 0, rows: 0, altScreen: false })
+  })
+})
+
+describe('TerminalWebViewHandle viewport contract', () => {
+  it('accepts measured width and forwards explicit viewport bounds', async () => {
+    const viewportMethods = {
+      measureFitDimensions: async (height?: number, width?: number) =>
+        height && width ? { cols: width, rows: height } : null,
+      setViewport: (_width: number, _height: number) => {}
+    } satisfies Pick<TerminalWebViewHandle, 'measureFitDimensions' | 'setViewport'>
+
+    await expect(viewportMethods.measureFitDimensions(600, 800)).resolves.toEqual({
+      cols: 800,
+      rows: 600
+    })
+    expect(() => viewportMethods.setViewport(800, 600)).not.toThrow()
   })
 })

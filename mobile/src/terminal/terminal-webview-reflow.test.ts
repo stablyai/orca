@@ -10,7 +10,9 @@ const reflowSource = readFileSync(
   'utf8'
 )
 const htmlSource = readFileSync(new URL('./terminal-webview-html.ts', import.meta.url), 'utf8')
-const handleSource = readFileSync(new URL('./TerminalWebView.tsx', import.meta.url), 'utf8')
+const handleSource =
+  readFileSync(new URL('./TerminalWebView.tsx', import.meta.url), 'utf8') +
+  readFileSync(new URL('./terminal-webview-handle.ts', import.meta.url), 'utf8')
 
 function reflowFnBody(): string {
   const start = reflowSource.indexOf('function reflow(cols, rows) {')
@@ -51,7 +53,7 @@ describe('terminal WebView reflow', () => {
 
   it('does not locally resize hidden WebViews to a one-column grid', () => {
     expect(htmlSource).toContain('var MIN_FIT_COLS = 20;')
-    expect(htmlSource).toContain('if (cols < MIN_FIT_COLS) return;')
+    expect(htmlSource).toContain('if (cols < MIN_FIT_COLS) {')
     expect(htmlSource).toContain("flog('measure-skip-small-width'")
     expect(htmlSource).toContain("notify({ type: 'measure-result', cols: null, rows: null });")
   })

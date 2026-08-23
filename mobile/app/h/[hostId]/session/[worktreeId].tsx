@@ -133,6 +133,9 @@ import { isTerminalSendRpcAccepted } from '../../../../src/terminal/terminal-sen
 import { sendMobileTerminalQueryReply } from '../../../../src/terminal/mobile-terminal-query-reply'
 import { TERMINAL_QUERY_REPLY_INPUT_RUNTIME_CAPABILITY } from '../../../../../src/shared/protocol-version'
 import { useTerminalLiveInputCommit } from '../../../../src/terminal/use-terminal-live-input-commit'
+import { useHardwareKeyboardAttached } from '../../../../src/platform/hardware-keyboard'
+import { resolveSessionBackPress } from '../../../../src/session/session-back-press'
+import { useTerminalFrameLayout } from '../../../../src/session/use-terminal-frame-layout'
 import { resolveMobileTerminalInputGate } from '../../../../src/terminal/terminal-input-connection-gate'
 import {
   buildTerminalSendParams,
@@ -897,6 +900,8 @@ export default function SessionScreen() {
   )
   // Why: Expo SDK 55 edge-to-edge doesn't resize the window on IME open, so track keyboard height ourselves and lift the input without resizing the desktop PTY.
   const [keyboardHeight, setKeyboardHeight] = useState(0)
+  const { hardwareKeyboard, notifyHardwareKeyEvent, notifyImeShown, notifyImeHidden } =
+    useHardwareKeyboardAttached()
   // Why: server-authoritative display mode per terminal, populated from subscribe responses.
   const [terminalModes, setTerminalModes] = useState<Map<string, MobileDisplayMode>>(new Map())
   const [terminalKeyboardMetrics, setTerminalKeyboardMetrics] = useState<
@@ -977,6 +982,7 @@ export default function SessionScreen() {
   const sendingRef = useRef(false)
   // Why: exact terminal-frame height for measureFitDimensions; window.innerHeight can overstate the visible area.
   const terminalFrameHeightRef = useRef<number>(0)
+  const terminalFrameWidthRef = useRef<number>(0)
   // Why: sidebar resizes change the terminal frame width without a window-dim change; track it so the refit hook re-fits (see terminal-viewport-refit.ts).
   const [terminalFrameWidth, setTerminalFrameWidth] = useState(0)
   const activeSessionTab = sessionTabs.find((tab) => tab.id === activeSessionTabId) ?? null
@@ -997,7 +1003,8 @@ export default function SessionScreen() {
     liveInputTerminalHandles,
     liveInputTerminalHandlesRef,
     sendLiveTerminalInputRef,
-    setLiveInputCapture
+    setLiveInputCapture,
+    onKeyPressObserved: notifyHardwareKeyEvent
   })
   const { canCompose, canSend } = resolveMobileTerminalInputGate({
     connState,
@@ -1010,6 +1017,7 @@ export default function SessionScreen() {
     canSend,
     inputRef: liveInputRef,
     keyboardHeight,
+    hardwareKeyboard,
     lifecycleIdentity: client,
     lifecycleKey: JSON.stringify([hostId, worktreeId, connState]),
     liveInputEnabled,
@@ -1322,7 +1330,8 @@ export default function SessionScreen() {
         return
       }
       const dims = await getTerminalRef(handle)?.measureFitDimensions(
-        terminalFrameHeightRef.current || undefined
+        terminalFrameHeightRef.current || undefined,
+        terminalFrameWidthRef.current || undefined
       )
       terminalDiagnosticsRef.current.viewportMeasured(handle, dims, terminalFrameHeightRef.current)
       if (dims) {
@@ -2204,11 +2213,20 @@ export default function SessionScreen() {
 
   useEffect(() => {
     const subscription = BackHandler.addEventListener('hardwareBackPress', () => {
+      if (
+        resolveSessionBackPress({
+          liveInputFocused: liveInputRef.current?.isFocused() === true,
+          hardwareKeyboard
+        }) === 'send-escape'
+      ) {
+        handleLiveInputKeyPress({ nativeEvent: { key: 'Escape' } })
+        return true
+      }
       requestLeaveSession()
       return true
     })
     return () => subscription.remove()
-  }, [requestLeaveSession])
+  }, [handleLiveInputKeyPress, hardwareKeyboard, requestLeaveSession])
 
   const discardMarkdownLocalContent = useCallback(
     (tab: Extract<MobileSessionTab, { type: 'markdown' }>) => {
@@ -2559,7 +2577,12 @@ export default function SessionScreen() {
   }, [connState, scheduleDelayedAction, subscribeToTerminal, unsubscribeTerminal])
 
   // Why: non-subscribe layout refits (tab strip, fold, rotation) live in a dedicated hook — see terminal-viewport-refit.ts.
-  const { notifyTerminalFrameHeight, notifyKeyboardVisibility } = useTerminalViewportRefit({
+  const {
+    notifyTerminalFrameHeight,
+    notifyKeyboardVisibility,
+    notifyHardwareKeyboard,
+    notifyWebViewViewport
+  } = useTerminalViewportRefit({
     activeHandleRef,
     terminalRefs,
     terminalFrameHeightRef,
@@ -2580,10 +2603,13 @@ export default function SessionScreen() {
   useEffect(() => {
     const onShow = (e: KeyboardEvent) => {
       notifyKeyboardVisibility(true)
-      setKeyboardHeight(e.endCoordinates?.height ?? 0)
+      const height = e.endCoordinates?.height ?? 0
+      notifyImeShown(height)
+      setKeyboardHeight(height)
     }
     const onHide = () => {
       notifyKeyboardVisibility(false)
+      notifyImeHidden()
       setKeyboardHeight(0)
     }
     const showEvent = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow'
@@ -2594,7 +2620,22 @@ export default function SessionScreen() {
       showSub.remove()
       hideSub.remove()
     }
-  }, [notifyKeyboardVisibility])
+  }, [notifyImeHidden, notifyImeShown, notifyKeyboardVisibility])
+
+  useEffect(() => {
+    if (hardwareKeyboard) {
+      notifyHardwareKeyboard()
+    }
+  }, [hardwareKeyboard, notifyHardwareKeyboard])
+
+  const handleTerminalFrameLayout = useTerminalFrameLayout({
+    terminalRefs,
+    heightRef: terminalFrameHeightRef,
+    widthRef: terminalFrameWidthRef,
+    onHeightChange: notifyTerminalFrameHeight,
+    onWidthChange: (width) =>
+      setTerminalFrameWidth((current) => (current === width ? current : width))
+  })
 
   const scrollActiveTabIntoView = useCallback((tabId: string | null, animated: boolean) => {
     if (!tabId) {
@@ -2953,6 +2994,9 @@ export default function SessionScreen() {
     terminalDiagnosticsRef.current.webViewRef(handle, ref != null)
     if (ref) {
       terminalRefs.current.set(handle, ref)
+      if (terminalFrameWidthRef.current > 0 && terminalFrameHeightRef.current > 0) {
+        ref.setViewport(terminalFrameWidthRef.current, terminalFrameHeightRef.current)
+      }
     } else {
       terminalRefs.current.delete(handle)
       terminalGestureInputBucketsRef.current.delete(handle)
@@ -4268,7 +4312,7 @@ export default function SessionScreen() {
 
   // Why: iOS keyboard height includes the home-indicator inset; Android IME height does not.
   const keyboardLift =
-    keyboardHeight > 0
+    !hardwareKeyboard && keyboardHeight > 0
       ? Platform.OS === 'ios'
         ? Math.max(0, keyboardHeight - insets.bottom)
         : keyboardHeight
@@ -4717,17 +4761,7 @@ export default function SessionScreen() {
                 )}
               </View>
             ) : (
-              <View
-                style={styles.terminalFrame}
-                onLayout={(e) => {
-                  terminalFrameHeightRef.current = e.nativeEvent.layout.height
-                  // Why: notify height imperatively so dock settling re-fits the PTY without rerendering SessionScreen.
-                  const nextWidth = Math.round(e.nativeEvent.layout.width)
-                  const nextHeight = Math.round(e.nativeEvent.layout.height)
-                  setTerminalFrameWidth((prev) => (prev === nextWidth ? prev : nextWidth))
-                  notifyTerminalFrameHeight(nextHeight)
-                }}
-              >
+              <View style={styles.terminalFrame} onLayout={handleTerminalFrameLayout}>
                 {terminals.map((terminal) => (
                   <TerminalPaneView
                     key={terminal.handle}
@@ -4752,6 +4786,11 @@ export default function SessionScreen() {
                     onTerminalInput={handleTerminalInput}
                     onTerminalQueryReply={handleTerminalQueryReply}
                     onTerminalTap={handleTerminalTap}
+                    onViewportChanged={(handle, width, height) => {
+                      if (handle === activeHandleRef.current) {
+                        notifyWebViewViewport(width, height)
+                      }
+                    }}
                     onFileTap={handleFileTap}
                     onOpenUrl={handleTerminalOpenUrl}
                   />

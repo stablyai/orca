@@ -61,6 +61,7 @@ export type TerminalSelectionEvents = {
   // Why: pinch-to-zoom in the terminal snaps to a text-size preset and reports it
   // here so the app persists it and keeps Settings + other panes in sync.
   onTextScaleChange?: (scale: number) => void
+  onViewportChanged?: (width: number, height: number, dpr: number) => void
 }
 
 export type TerminalWebViewProps = {
@@ -91,7 +92,11 @@ export type TerminalWebViewHandle = {
   // latest output. No-op on the alternate screen.
   reflow: (cols: number, rows: number) => void
   clear: () => void
-  measureFitDimensions: (containerHeight?: number) => Promise<{ cols: number; rows: number } | null>
+  measureFitDimensions: (
+    containerHeight?: number,
+    containerWidth?: number
+  ) => Promise<{ cols: number; rows: number } | null>
+  setViewport: (width: number, height: number) => void
   resetZoom: () => void
   cancelSelect: () => void
   doSelectAll: () => void

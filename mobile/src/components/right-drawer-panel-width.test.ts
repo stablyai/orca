@@ -14,6 +14,14 @@ describe('resolveRightDrawerPanelWidth', () => {
     expect(resolveRightDrawerPanelWidth(400, false, undefined)).toBe(400 - NARROW_BACKDROP_GUTTER)
   })
 
+  it('sizes from a freeform window instead of the wider display', () => {
+    const displayWidth = 1920
+    const windowWidth = 800
+    const width = resolveRightDrawerPanelWidth(windowWidth, false, undefined)
+    expect(width).toBe(windowWidth - NARROW_BACKDROP_GUTTER)
+    expect(width).toBeLessThan(displayWidth)
+  })
+
   it('honors an explicit widthPx but never exceeds the window width', () => {
     expect(resolveRightDrawerPanelWidth(1024, true, 320)).toBe(320)
     expect(resolveRightDrawerPanelWidth(280, false, 320)).toBe(280)

@@ -200,6 +200,26 @@ Read on every request, so behaviour can be flipped mid-session without a restart
 2. In Orca, go to Settings > Mobile and scan the QR code with this app
 3. The QR encodes the connection endpoint, device token, and TLS fingerprint
 
+## Samsung DeX / desktop mode
+
+Manifest changes require a native Android rebuild; Expo Go cannot validate them.
+
+```bash
+pnpm exec expo prebuild --platform android --clean
+cd android
+./gradlew assembleDebug
+```
+
+Use the manual DeX, multi-window, hardware-keyboard, and DPI checklist in
+[`docs/dex-mode-layout-design.md`](docs/dex-mode-layout-design.md#62-manual-dex-checklist).
+The native Activity display-metrics hook works around
+[React Native #55659](https://github.com/facebook/react-native/issues/55659), which otherwise uses
+the phone display's density for windows on a DeX monitor. A density-only change at identical pixel
+bounds may wait for the next geometry-driven layout; DeX enter, exit, resize, and maximize also
+change the window bounds.
+RN Android does not deliver every arrow/Ctrl/F-key event; the terminal accessory row remains the
+fallback until the planned native hardware-key module lands.
+
 ## Project Structure
 
 ```

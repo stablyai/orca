@@ -15,6 +15,7 @@ import { TERMINAL_WEBGL_RECOVERY_JS } from './terminal-webview-webgl-recovery-in
 import { TERMINAL_MOUSE_CLICK_DRAG_JS } from './terminal-webview-mouse-click-drag-injected'
 import { TERMINAL_MOUSE_REPORT_CELL_JS } from './terminal-webview-mouse-report-cell-injected'
 import { TERMINAL_WHEEL_SCROLL_JS } from './terminal-webview-wheel-scroll-injected'
+import { TERMINAL_VIEWPORT_JS } from './terminal-webview-viewport-injected'
 
 const DEFAULT_TERMINAL_THEME: RuntimeMobileTerminalTheme['theme'] = {
   background: colors.terminalBg,
@@ -268,11 +269,8 @@ window.onerror = function(msg) {
   // fall to a non-monospace face; lead with the ui-monospace generic to avoid that.
   var TERMINAL_FONT_FALLBACKS = '"Menlo", "Monaco", "Cascadia Mono", "Consolas", "DejaVu Sans Mono", "Liberation Mono", "Symbols Nerd Font Mono", monospace';
   var terminalFontFamily = (isIOSWebView() ? 'ui-monospace, ' : '"SF Mono", ') + TERMINAL_FONT_FALLBACKS;
-  // Why: change the real font size, then resize the grid to fit the viewport at
-  // the new cell metrics so the text shows at its true size immediately. RN's
-  // refit (measure → updateViewport) then makes the server reflow the PTY to the
-  // same column count so the shell rewraps. cell metrics update on the frame
-  // after fontSize changes, so the resize/fit is deferred one rAF.
+  // Why: RN owns PTY sizing; changing only the font avoids a transient local
+  // grid that disagrees with the server while the refit is in flight.
   function applyTextScale(scale) {
     currentTextScale = scale;
     if (!term) return;
@@ -281,15 +279,6 @@ window.onerror = function(msg) {
     term.options.fontSize = px;
     requestAnimationFrame(function() {
       if (!term) return;
-      var cellW = getCellWidth();
-      var cellH = getCellHeight();
-      if (cellW > 0 && cellH > 0) {
-        var cols = Math.floor(window.innerWidth / cellW);
-        if (cols < MIN_FIT_COLS) return;
-        var rows = Math.max(8, Math.floor(window.innerHeight / cellH));
-        term.resize(cols, rows);
-        emitKeyboardAvoidanceMetrics();
-      }
       applyFitScale('text-scale');
     });
   }
@@ -318,6 +307,7 @@ window.onerror = function(msg) {
   // once when the first live data chunk arrives so a wider line that pushes
   // scrollWidth past the previously-measured value gets re-scaled to fit.
   var firstDataPending = false;
+  ${TERMINAL_VIEWPORT_JS}
 
   // Diagnostic logger — bridges WebView console.log to RN via postMessage.
   // Tag with [fit] so it's easy to filter in the Expo/Metro logs.
@@ -355,7 +345,7 @@ window.onerror = function(msg) {
     var cellW = getCellWidth();
     var termWidth = cellW > 0 ? cellW * term.cols : (term.element ? term.element.scrollWidth : 0);
     if (termWidth <= 0) return 1;
-    var vpWidth = window.innerWidth;
+    var vpWidth = getViewportWidth();
     return Math.min(1, vpWidth / termWidth);
   }
 
@@ -375,7 +365,7 @@ window.onerror = function(msg) {
       scrollIndicator.classList.remove('visible');
       return;
     }
-    var trackHeight = Math.max(0, window.innerHeight - 8);
+    var trackHeight = Math.max(0, getViewportHeight() - 8);
     var totalRows = maxViewportY + (term.rows || 0);
     if (trackHeight <= 0 || totalRows <= 0) return;
     var thumbHeight = Math.max(24, trackHeight * (term.rows || 0) / totalRows);
@@ -411,8 +401,8 @@ ${TERMINAL_WEBVIEW_THEME_JS}
     var ts = getTotalScale();
     var cw = term.element.scrollWidth * ts;
     var ch = term.element.scrollHeight * ts;
-    var vpW = window.innerWidth;
-    var vpH = window.innerHeight;
+    var vpW = getViewportWidth();
+    var vpH = getViewportHeight();
     if (cw > vpW) {
       panX = Math.min(0, Math.max(vpW - cw, panX));
     } else {
@@ -497,7 +487,7 @@ ${TERMINAL_WEBVIEW_THEME_JS}
 
     var cellW = getCellWidth();
     var sw = term.element.scrollWidth;
-    var vpW = window.innerWidth;
+    var vpW = getViewportWidth();
     var expectedW = cellW * term.cols;
     var suspect =
       currentScale === 1 && term.cols > 0 && expectedW > vpW + 1; // expected wider than viewport but no zoom
@@ -860,7 +850,7 @@ ${TERMINAL_WEBGL_RECOVERY_JS}
     reportEngineError('terminal runtime error', err || msg);
   };
 
-  function measureFitDimensions(containerHeightPx, retriesLeft) {
+  function measureFitDimensions(containerHeightPx, containerWidthPx, retriesLeft) {
     if (typeof retriesLeft !== 'number') retriesLeft = 30;
     // Why: init and measure are posted back-to-back from React, but
     // init has an async rAF chain. A measure that runs synchronously
@@ -879,7 +869,7 @@ ${TERMINAL_WEBGL_RECOVERY_JS}
     if (notReady || cellWidth <= 0 || cellHeight <= 0) {
       if (retriesLeft > 0) {
         requestAnimationFrame(function() {
-          measureFitDimensions(containerHeightPx, retriesLeft - 1);
+          measureFitDimensions(containerHeightPx, containerWidthPx, retriesLeft - 1);
         });
         return;
       }
@@ -892,15 +882,24 @@ ${TERMINAL_WEBGL_RECOVERY_JS}
       notify({ type: 'measure-result', cols: null, rows: null });
       return;
     }
-    var vpWidth = window.innerWidth;
+    if (typeof containerWidthPx === 'number' && containerWidthPx > 0 &&
+        Math.abs(containerWidthPx - window.innerWidth) > 1 && retriesLeft > 0) {
+      requestAnimationFrame(function() {
+        measureFitDimensions(containerHeightPx, containerWidthPx, retriesLeft - 1);
+      });
+      return;
+    }
+    var vpWidth = (typeof containerWidthPx === 'number' && containerWidthPx > 0)
+      ? containerWidthPx
+      : getViewportWidth();
     // Why: prefer the container height passed from React Native over
-    // window.innerHeight. The RN layout system knows the exact pixel
+    // the WebView viewport. The RN layout system knows the exact pixel
     // height of the terminal frame after the accessory/input bars are
     // subtracted, whereas innerHeight can overstate the visible area
     // due to layout timing or safe-area insets.
     var vpHeight = (typeof containerHeightPx === 'number' && containerHeightPx > 0)
       ? containerHeightPx
-      : window.innerHeight;
+      : getViewportHeight();
     var cols = Math.floor(vpWidth / cellWidth);
     if (cols < MIN_FIT_COLS) {
       flog('measure-skip-small-width', {
@@ -942,6 +941,8 @@ ${TERMINAL_WEBGL_RECOVERY_JS}
         panY = 0;
         applyTextScale(msg.fontScale);
       }
+    } else if (msg.type === 'set-viewport') {
+      setRnViewport(msg.width, msg.height, msg.dpr);
     } else if (msg.type === 'resize') {
       resize(msg.cols, msg.rows);
     } else if (msg.type === 'reflow') { reflow(msg.cols, msg.rows);
@@ -969,7 +970,7 @@ ${TERMINAL_WEBGL_RECOVERY_JS}
         cancelSelect();
       }
     } else if (msg.type === 'measure') {
-      measureFitDimensions(msg.containerHeight);
+      measureFitDimensions(msg.containerHeight, msg.containerWidth);
     } else if (msg.type === 'reset-zoom') {
       applyFitScale('reset-zoom-msg');
     } else if (msg.type === 'set-theme') {
@@ -1520,8 +1521,8 @@ ${TERMINAL_WEBGL_RECOVERY_JS}
     handleStart.style.top = sPx.y + 'px';
     handleEnd.style.left = ePx.x + 'px';
     handleEnd.style.top = (ePx.y + cellH) + 'px';
-    var startVisible = sPx.y >= 0 && sPx.y <= window.innerHeight;
-    var endVisible = ePx.y >= 0 && ePx.y <= window.innerHeight;
+    var startVisible = sPx.y >= 0 && sPx.y <= getViewportHeight();
+    var endVisible = ePx.y >= 0 && ePx.y <= getViewportHeight();
     handleStart.style.visibility = startVisible ? 'visible' : 'hidden';
     handleEnd.style.visibility = endVisible ? 'visible' : 'hidden';
     var menuCenterX, menuY, vTransform, marginTop;
@@ -1529,14 +1530,14 @@ ${TERMINAL_WEBGL_RECOVERY_JS}
       menuCenterX = sPx.x; menuY = sPx.y;
       vTransform = 'translateY(-100%)';
       marginTop = '-12px';
-    } else if (endVisible && ePx.y + cellH + 56 < window.innerHeight) {
+    } else if (endVisible && ePx.y + cellH + 56 < getViewportHeight()) {
       menuCenterX = ePx.x; menuY = ePx.y + cellH;
       vTransform = 'translateY(0)';
       marginTop = '12px';
     } else {
       // selection covers full viewport — pin to visible center
-      menuCenterX = window.innerWidth / 2;
-      menuY = window.innerHeight / 2;
+      menuCenterX = getViewportWidth() / 2;
+      menuY = getViewportHeight() / 2;
       vTransform = 'translateY(-50%)';
       marginTop = '0';
     }
@@ -1550,7 +1551,7 @@ ${TERMINAL_WEBGL_RECOVERY_JS}
     var EDGE_MARGIN = 8;
     var menuW = selMenu.offsetWidth || 0;
     var minLeft = EDGE_MARGIN;
-    var maxLeft = Math.max(EDGE_MARGIN, window.innerWidth - menuW - EDGE_MARGIN);
+    var maxLeft = Math.max(EDGE_MARGIN, getViewportWidth() - menuW - EDGE_MARGIN);
     var desiredLeft = menuCenterX - menuW / 2;
     var clampedLeft = Math.max(minLeft, Math.min(maxLeft, desiredLeft));
     selMenu.style.left = clampedLeft + 'px';
@@ -1609,7 +1610,7 @@ ${TERMINAL_WEBGL_RECOVERY_JS}
     if (!syncSelectionHandleToViewportPoint(handle, clientX, clientY)) return;
     repositionOverlay();
     if (clientY < EDGE_SCROLL_PX) startEdgeScroll(-1);
-    else if (clientY > window.innerHeight - EDGE_SCROLL_PX) startEdgeScroll(1);
+    else if (clientY > getViewportHeight() - EDGE_SCROLL_PX) startEdgeScroll(1);
     else stopEdgeScroll();
   }
 
@@ -1745,7 +1746,7 @@ ${TERMINAL_WEBGL_RECOVERY_JS}
         // scroll so scrollback stays reachable at any text size; calling the
         // never-defined contentWiderThanViewport() here threw and killed all
         // single-finger scrolling, scrollback included.
-        if (term.element && term.element.scrollWidth * getTotalScale() > window.innerWidth + 1) {
+        if (term.element && term.element.scrollWidth * getTotalScale() > getViewportWidth() + 1) {
           panX += x - ts.lastX;
           clampPan();
           updateTransform();
@@ -1869,6 +1870,7 @@ ${TERMINAL_WEBGL_RECOVERY_JS}
     repositionOverlay();
     clampPan();
     updateTransform();
+    notifyViewportChanged();
   });
 
   if (window.Terminal) {

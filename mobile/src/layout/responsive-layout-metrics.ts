@@ -2,6 +2,7 @@ import { spacing } from '../theme/mobile-theme'
 
 // Use actual window size so narrow iPad splits keep phone-like layouts.
 const WIDE_LAYOUT_MIN_WIDTH = 700
+const WIDE_LAYOUT_HYSTERESIS = 24
 
 // Why: width alone catches landscape phones; capped tablet layouts need room
 // in both dimensions so phone rotation does not switch UI classes.
@@ -18,6 +19,7 @@ export type ResponsiveLayoutMetrics = {
   isWideLayout: boolean
   /** Tablet-class canvas (both dimensions large); false in narrow splits. */
   isTabletLayout: boolean
+  windowClass: 'compact' | 'medium' | 'expanded'
   /** Max width for primary scrollable content on wide layouts. */
   contentMaxWidth: number
   /** Max width for centered sheets/dialogs on wide layouts. */
@@ -26,9 +28,19 @@ export type ResponsiveLayoutMetrics = {
   horizontalPadding: number
 }
 
-export function getResponsiveLayoutMetrics(width: number, height: number): ResponsiveLayoutMetrics {
+export function getResponsiveLayoutMetrics(
+  width: number,
+  height: number,
+  previous?: ResponsiveLayoutMetrics
+): ResponsiveLayoutMetrics {
   const isTabletLayout = Math.min(width, height) >= TABLET_LAYOUT_MIN_SHORT_SIDE
-  const isWideLayout = width >= WIDE_LAYOUT_MIN_WIDTH && isTabletLayout
+  const wideThreshold = previous
+    ? previous.isWideLayout
+      ? WIDE_LAYOUT_MIN_WIDTH - WIDE_LAYOUT_HYSTERESIS
+      : WIDE_LAYOUT_MIN_WIDTH + WIDE_LAYOUT_HYSTERESIS
+    : WIDE_LAYOUT_MIN_WIDTH
+  const isWideLayout = width >= wideThreshold && isTabletLayout
+  const windowClass = width < 600 ? 'compact' : width < 840 ? 'medium' : 'expanded'
 
   return {
     width,
@@ -36,6 +48,7 @@ export function getResponsiveLayoutMetrics(width: number, height: number): Respo
     isLandscape: width > height,
     isWideLayout,
     isTabletLayout,
+    windowClass,
     contentMaxWidth: CONTENT_MAX_WIDTH,
     modalMaxWidth: MODAL_MAX_WIDTH,
     // Roomier gutters once content is capped so it isn't glued to the edges.

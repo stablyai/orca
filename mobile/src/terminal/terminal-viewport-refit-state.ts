@@ -102,3 +102,21 @@ export function isTerminalViewportRefitTargetCurrent(
     state.currentRef === state.expectedRef
   )
 }
+
+export function areTerminalViewportWidthsAligned(
+  nativeWidth: number,
+  webViewWidth: number | null
+): boolean {
+  return nativeWidth <= 0 || webViewWidth === null || Math.abs(nativeWidth - webViewWidth) <= 1
+}
+
+export function resetTerminalKeyboardVisibilityForWidthChange(
+  state: TerminalFrameHeightRefitState,
+  previousWidth: number,
+  nextWidth: number
+): TerminalFrameHeightRefitState {
+  if (previousWidth <= 0 || Math.abs(nextWidth - previousWidth) / previousWidth <= 0.1) {
+    return state
+  }
+  return { ...state, keyboardVisible: false }
+}
