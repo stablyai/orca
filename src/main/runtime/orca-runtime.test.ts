@@ -2302,6 +2302,20 @@ describe('OrcaRuntimeService', () => {
     expect(capabilities).toContain('browser.headless.v1')
     expect(capabilities).toContain('browser.certificate-trust.v1')
   })
+  it('pins a browser page for the reclaimer while the bridge holds an in-flight command', () => {
+    // Why (STA-4341): the offscreen backend's isPagePinned option is wired to
+    // this method; if it silently returns false, the reclaimer parks a page
+    // mid-command with every layer's own tests still green.
+    const runtime = createRuntime()
+    expect(runtime.isBrowserPagePinned('page-1')).toBe(false)
+    runtime.setAgentBrowserBridge({
+      hasInFlightCommand: vi.fn((browserPageId: string) => browserPageId === 'page-1')
+    } as never)
+
+    expect(runtime.isBrowserPagePinned('page-1')).toBe(true)
+    expect(runtime.isBrowserPagePinned('page-2')).toBe(false)
+  })
+
   it('surfaces live offscreen load failures in headless browser snapshots', () => {
     const runtime = createRuntime()
     runtime.setOffscreenBrowserBackend({ createTab: vi.fn(), closeTab: vi.fn() })

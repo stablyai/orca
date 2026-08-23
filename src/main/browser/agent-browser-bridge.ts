@@ -575,6 +575,8 @@ export class AgentBrowserBridge {
   private readonly sessions = new Map<string, SessionState>()
   private readonly commandQueues = new Map<string, QueuedCommand[]>()
   private readonly processingQueues = new Set<string>()
+  /** Pages with a command claimed but not finished, counted for re-entrancy. */
+  private readonly inFlightCommandsByPageId = new Map<string, number>()
   // Why: screenshot prep mutates shared paintability across tabs; serialize globally so concurrent captures don't blank each other.
   private screenshotTurn: Promise<void> = Promise.resolve()
   private readonly agentBrowserBin: string
@@ -707,6 +709,49 @@ export class AgentBrowserBridge {
   }
 
   // ── Worktree-scoped tab queries ──
+
+  // Why (STA-4341): the headless reclaimer must never park a page that is
+  // mid-command. processingQueues only covers execution — a command is claimed
+  // from the moment its target resolves, which matters because ensureSession
+  // can spend up to EXEC_TIMEOUT_MS closing a stale helper session first, far
+  // longer than the reclaim grace window.
+  hasInFlightCommand(browserPageId: string): boolean {
+    return (
+      this.inFlightCommandsByPageId.has(browserPageId) ||
+      this.processingQueues.has(`orca-tab-${browserPageId}`)
+    )
+  }
+
+  private retainInFlightCommand(browserPageId: string): void {
+    this.inFlightCommandsByPageId.set(
+      browserPageId,
+      (this.inFlightCommandsByPageId.get(browserPageId) ?? 0) + 1
+    )
+  }
+
+  private releaseInFlightCommand(browserPageId: string): void {
+    const remaining = (this.inFlightCommandsByPageId.get(browserPageId) ?? 1) - 1
+    if (remaining > 0) {
+      this.inFlightCommandsByPageId.set(browserPageId, remaining)
+    } else {
+      this.inFlightCommandsByPageId.delete(browserPageId)
+    }
+  }
+
+  // Why (STA-4341): parking has to record whether the page was the active tab
+  // so the session snapshot can keep saying so. Read the active pointers
+  // directly — resolveActiveTab() would reassign them as a side effect.
+  isActiveBrowserPage(browserPageId: string, worktreeId?: string): boolean {
+    const webContentsId = this.browserManager.getGuestWebContentsId(browserPageId)
+    if (webContentsId == null) {
+      return false
+    }
+    const owningWorktreeId = worktreeId ?? this.browserManager.getWorktreeIdForTab(browserPageId)
+    const active =
+      (owningWorktreeId && this.activeWebContentsPerWorktree.get(owningWorktreeId)) ??
+      this.activeWebContentsId
+    return active === webContentsId
+  }
 
   getRegisteredTabs(worktreeId?: string): Map<string, number> {
     const all = this.browserManager.getWebContentsIdByTabId()
@@ -2067,6 +2112,20 @@ export class AgentBrowserBridge {
     options: EnqueueTargetedCommandOptions = {}
   ): Promise<T> {
     const target = this.resolveCommandTarget(worktreeId, browserPageId, options.requireScopedTarget)
+    this.retainInFlightCommand(target.browserPageId)
+    try {
+      return await this.runTargetedCommand(worktreeId, target, execute, options)
+    } finally {
+      this.releaseInFlightCommand(target.browserPageId)
+    }
+  }
+
+  private async runTargetedCommand<T>(
+    worktreeId: string | undefined,
+    target: ResolvedBrowserCommandTarget,
+    execute: (sessionName: string, target: ResolvedBrowserCommandTarget) => Promise<T>,
+    options: EnqueueTargetedCommandOptions
+  ): Promise<T> {
     const sessionName = `orca-tab-${target.browserPageId}`
 
     if (options.ensureSession !== false) {

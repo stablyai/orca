@@ -183,7 +183,9 @@ async function readPairingOffer(app: ElectronApplication): Promise<RuntimeDeskto
   })
 }
 
-export async function launchHeadlessPairedRuntimeHost(): Promise<HeadlessPairedRuntimeHost> {
+export async function launchHeadlessPairedRuntimeHost(
+  options: { extraEnv?: Record<string, string> } = {}
+): Promise<HeadlessPairedRuntimeHost> {
   const userDataDir = mkdtempSync(path.join(os.tmpdir(), 'orca-e2e-headless-paired-'))
   let app: ElectronApplication | undefined
   try {
@@ -200,7 +202,7 @@ export async function launchHeadlessPairedRuntimeHost(): Promise<HeadlessPairedR
         ORCA_E2E_ENFORCE_SINGLE_INSTANCE_LOCK: '1',
         ORCA_E2E_HEADLESS: '1'
       },
-      extraEnv: {},
+      extraEnv: options.extraEnv ?? {},
       userDataDir
     })
     const mainPath = path.join(process.cwd(), 'out', 'main', 'index.js')

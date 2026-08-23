@@ -1472,6 +1472,20 @@ export class BrowserManager {
       : (this.loadErrorsByGuestId.get(webContentsId) ?? null)
   }
 
+  // Why (STA-4341): unregisterGuest cancels a tab's in-flight downloads, so a
+  // reclaimer must not take a page that is still writing one. Mirrors the
+  // desktop guest budget's veto (browser-page-download-activity.ts) exactly,
+  // including its unbounded nature: a download is treated as work in progress
+  // for as long as it stays active.
+  hasActiveBrowserPageDownload(browserPageId: string): boolean {
+    for (const download of this.downloadsById.values()) {
+      if (download.browserTabId === browserPageId && !download.terminalEvent) {
+        return true
+      }
+    }
+    return false
+  }
+
   getBrowserPageCertificateFailure(browserPageId: string): BrowserCertificateFailure | null {
     return this.certificateTrustController?.getFailure(browserPageId) ?? null
   }

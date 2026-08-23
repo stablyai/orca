@@ -858,6 +858,7 @@ describe('RuntimeBrowserCommands headless offscreen routing', () => {
     const keyboardInsertText = vi.fn().mockResolvedValue({ inserted: true })
     const bridge = {
       getRegisteredTabs: vi.fn(() => new Map([['page-1', 100]])),
+      getActivePageId: vi.fn(() => 'page-1'),
       keyboardInsertText
     } as unknown as AgentBrowserBridge
     const commands = new RuntimeBrowserCommands(

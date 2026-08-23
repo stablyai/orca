@@ -34,7 +34,11 @@ export function formatTabListWithProfiles(
     .map((t) => {
       const marker = t.active ? '* ' : '  '
       const profile = showProfile ? `  [${t.profileLabel ?? t.profileId ?? 'Unknown'}]` : ''
-      return `${marker}[${t.index}] ${t.browserPageId}  ${t.title} — ${t.url}${profile}`
+      // Why (STA-4341): a parked tab is still open and still operable — the
+      // next command targeting it wakes it — but its renderer has been
+      // reclaimed, so in-page JavaScript state did not survive.
+      const parked = t.parked ? '  (parked)' : ''
+      return `${marker}[${t.index}] ${t.browserPageId}  ${t.title} — ${t.url}${profile}${parked}`
     })
     .join('\n')
 }

@@ -274,6 +274,53 @@ sudo systemctl daemon-reload
 sudo systemctl enable --now orca-xvfb.service orca-serve.service
 ```
 
+## Browser Tab Renderer Reclamation
+
+Each browser page on a headless server is backed by its own hidden Electron
+window, so it costs a renderer process — several hundred MB, plus continuous
+CPU if the page animates. Agents open pages far more readily than they close
+them, so the server reclaims those renderers itself rather than relying on the
+agent to tidy up.
+
+An open page whose renderer has been reclaimed is **parked**: the page keeps
+its id, address, worktree and profile, `orca tab list` still shows it (marked
+`(parked)`, and `parked: true` under `--json`), and the next command that
+targets it transparently rebuilds the renderer and reloads the address. Waking is bounded: it waits briefly for the
+reload and then returns with the page operable and still navigating, so a slow
+site cannot stall the request that woke it. What a
+park does _not_ preserve is in-page JavaScript state — cookies and local
+storage live in the profile partition and survive, but an unsubmitted form or
+an SPA's in-memory state does not. A page is never parked while a paired
+client is streaming it, while a command against it is in flight, while its
+initial load is still running, while it is waiting on a certificate decision,
+or while a wake is still rebuilding it. An active download vetoes the park
+decision — parking cancels downloads — but a download that begins during the
+teardown itself is still cancelled, exactly as if the tab had been closed at
+that instant. A stream ending counts as use, so a viewer who closes the pane gets
+the full idle window before the page parks, even if they only watched. A navigation that has still not finished by the load timeout is
+deliberately reclaimable — otherwise one stalled page per create could hold a
+renderer forever, which is the failure this exists to prevent; waking it simply
+retries the address. Parking never closes a page: the page stays open until
+something closes it, exactly as on the desktop.
+
+What stays resident is the same budget the desktop app applies to its own
+browser guests (`src/shared/browser-retention-budget.ts`): keep the most
+recently used, never evict something in use. The desktop learns a working set
+went cold when you switch worktrees; a headless host has no such event, so it
+configures the same budget with an idle window and schedules itself a one-shot
+check for the moment its answer could next change. A server with nothing
+resident holds no timer at all.
+
+| Variable                               | Default  | Meaning                                                            |
+| -------------------------------------- | -------- | ------------------------------------------------------------------ |
+| `ORCA_HEADLESS_BROWSER_RESIDENT_LIMIT` | `4`      | Renderers kept resident. Least-recently-used pages park past this. |
+| `ORCA_HEADLESS_BROWSER_PARK_IDLE_MS`   | `300000` | A page parks after this long untouched, even under the cap.        |
+| `ORCA_HEADLESS_BROWSER_PARK_GRACE_MS`  | `30000`  | A page is never parked this soon after its last command.           |
+
+Raise the limit on a host with memory to spare, or set both the limit and the
+idle window very high to keep every page resident — at the cost this
+reclamation exists to avoid.
+
 ## CLI Install Note
 
 On a headless host, you do not need to open the desktop UI just to run the

@@ -60,6 +60,7 @@ import { BrowserError } from '../browser/cdp-bridge'
 import { startBrowserScreencast } from '../browser/browser-screencast-stream'
 import type { BrowserScreencastSession } from '../browser/browser-screencast-stream-types'
 import { browserSessionRegistry } from '../browser/browser-session-registry'
+import { mergeParkedBrowserTabs } from '../browser/headless-browser-tab-listing'
 import {
   detectInstalledBrowsers,
   importCookiesFromBrowser,
@@ -74,6 +75,11 @@ import { sendRemoteBrowserScreencastFrame } from './remote-browser-screencast-fr
 export type BrowserCommandTargetParams = {
   worktree?: string
   page?: string
+}
+
+type BrowserWorktreeResolutionOptions = {
+  /** Whether an implicit target may wake a parked headless page. */
+  wakeParkedPage?: boolean
 }
 
 type ResolvedBrowserCommandTarget = {
@@ -175,6 +181,12 @@ export class RuntimeBrowserCommands {
     return bridge
   }
 
+  // Why (STA-4341): a page a paired client is streaming must never be parked —
+  // the reclaimer would black out a pane the user is actively looking at.
+  isBrowserPageStreamed(browserPageId: string): boolean {
+    return this.activeScreencastPageIds.has(browserPageId)
+  }
+
   private hasLiveRegisteredBrowserTab(
     bridge: AgentBrowserBridge,
     worktreeId: string | undefined
@@ -202,13 +214,16 @@ export class RuntimeBrowserCommands {
   }
 
   // Why: the CLI sends selectors (e.g. "path:/...") but the bridge keys tabs by "repoId::path"; resolve to that store-compatible id.
-  private async resolveBrowserWorktreeId(selector?: string): Promise<string | undefined> {
+  private async resolveBrowserWorktreeId(
+    selector?: string,
+    options: BrowserWorktreeResolutionOptions = {}
+  ): Promise<string | undefined> {
     if (!selector) {
       // Why: after restart, webviews mount only when the pane is visible; activate the view so persisted tabs become operable via registerGuest.
       const bridge = this.host.getAgentBrowserBridge()
       if (bridge && !this.hasLiveRegisteredBrowserTab(bridge, undefined)) {
         try {
-          await this.ensureBrowserWorktreeActive(undefined)
+          await this.ensureBrowserWorktreeActive(undefined, options)
         } catch {
           // Window may not exist yet (e.g. during startup or in tests)
         }
@@ -221,7 +236,7 @@ export class RuntimeBrowserCommands {
     const bridge = this.host.getAgentBrowserBridge()
     if (bridge && !this.hasLiveRegisteredBrowserTab(bridge, worktreeId)) {
       try {
-        await this.ensureBrowserWorktreeActive(worktreeId)
+        await this.ensureBrowserWorktreeActive(worktreeId, options)
       } catch {
         // Fall through with the validated worktree id so routing stays scoped to the caller's explicit selector.
       }
@@ -235,16 +250,25 @@ export class RuntimeBrowserCommands {
     const browserPageId =
       typeof params.page === 'string' && params.page.length > 0 ? params.page : undefined
     if (!browserPageId) {
-      return {
-        worktreeId: await this.resolveBrowserWorktreeId(params.worktree)
-      }
+      const worktreeId = await this.resolveBrowserWorktreeId(params.worktree)
+      // Why (STA-4341): an implicit target still counts as using its page, or a
+      // steady stream of `--page`-less commands would let the reclaim clock run
+      // out under the very agent that is driving the tab.
+      await this.markHeadlessBrowserPageUsed(
+        this.host.getAgentBrowserBridge()?.getActivePageId(worktreeId) ?? undefined
+      )
+      return { worktreeId }
     }
 
     const worktreeId = params.worktree
       ? (await this.host.resolveWorktreeSelector(params.worktree)).id
       : undefined
+    // Why (STA-4341): a headless page's renderer may have been reclaimed, or be
+    // mid-reclaim right now. Asking the backend first both wakes it and
+    // serialises against that teardown; it is a no-op for a resident page.
+    const woken = await this.markHeadlessBrowserPageUsed(browserPageId)
     const bridge = this.host.getAgentBrowserBridge()
-    if (bridge && !this.hasLiveRegisteredBrowserPage(bridge, worktreeId, browserPageId)) {
+    if (!woken && bridge && !this.hasLiveRegisteredBrowserPage(bridge, worktreeId, browserPageId)) {
       try {
         await this.ensureBrowserPageActive(worktreeId, browserPageId)
       } catch {
@@ -256,6 +280,13 @@ export class RuntimeBrowserCommands {
       worktreeId,
       browserPageId
     }
+  }
+
+  private async markHeadlessBrowserPageUsed(browserPageId: string | undefined): Promise<boolean> {
+    if (!browserPageId || this.host.getAvailableAuthoritativeWindow()) {
+      return false
+    }
+    return (await this.host.getOffscreenBrowserBackend()?.wakeTab?.(browserPageId)) === true
   }
 
   private resolveBrowserPageWebContents(
@@ -286,7 +317,21 @@ export class RuntimeBrowserCommands {
   }
 
   // Why: background-mount the worktree via a hidden visibility lease so the webview guest can register without stealing the user's visible pane.
-  private async ensureBrowserWorktreeActive(worktreeId: string | undefined): Promise<void> {
+  private async ensureBrowserWorktreeActive(
+    worktreeId: string | undefined,
+    options: BrowserWorktreeResolutionOptions = {}
+  ): Promise<void> {
+    // Why: on headless serve an implicit target (no --page) must still find a
+    // page when every page in the worktree is parked; wake the most recently
+    // used one rather than every one, so reclamation is not undone wholesale.
+    // Read-only callers opt out — listing tabs must never cost a renderer.
+    if (options.wakeParkedPage !== false && !this.host.getAvailableAuthoritativeWindow()) {
+      const offscreen = this.host.getOffscreenBrowserBackend()
+      const parkedPageId = offscreen?.getParkedPageIdForImplicitTarget?.(worktreeId)
+      if (parkedPageId && (await offscreen?.wakeTab?.(parkedPageId))) {
+        return
+      }
+    }
     const win = this.host.getAuthoritativeWindow()
     win.webContents.send('browser:activateView', worktreeId ? { worktreeId } : {})
     // Why: the pane is operable only after the webview mounts and calls registerGuest; wait on that IPC rather than a flaky fixed sleep.
@@ -533,6 +578,12 @@ export class RuntimeBrowserCommands {
     let stoppingPromise: Promise<void> | null = null
     const clearPageGate = (): void => {
       this.activeScreencastPageIds.delete(browserPageId)
+      // Why (STA-4341): the stream pin kept this page resident while a client
+      // watched without issuing commands, so its activity stamp can be
+      // arbitrarily stale the instant the pin lifts — stale enough to park it
+      // on the next 30s recheck. Viewing counts as use: restamp so the idle
+      // window runs from when the viewer left, not from their last command.
+      void this.markHeadlessBrowserPageUsed(browserPageId).catch(() => {})
       if (this.activeScreencastsByPageId.get(browserPageId) === activeRecord) {
         this.activeScreencastsByPageId.delete(browserPageId)
       }
@@ -593,11 +644,106 @@ export class RuntimeBrowserCommands {
   }
 
   async browserTabList(params: { worktree?: string }): Promise<BrowserTabListResult> {
-    const worktreeId = await this.resolveBrowserWorktreeId(params.worktree)
-    const result = this.requireAgentBrowserBridge().tabList(worktreeId)
-    return {
-      tabs: result.tabs.map((tab) => this.enrichBrowserTabInfo(tab))
+    const worktreeId = await this.resolveBrowserWorktreeId(params.worktree, {
+      wakeParkedPage: false
+    })
+    return { tabs: this.listBrowserTabsIncludingParked(worktreeId) }
+  }
+
+  // Why (STA-4341): a parked page is open — it just has no renderer right now.
+  // Dropping it from the listing would tell an agent its tab is gone and push
+  // it into opening yet another one, which is the leak this fixes. Every
+  // index-addressed command resolves through this same list so `tab list`
+  // indices and `--index` never disagree.
+  /** Headless serve with the parked-aware, creation-ordered listing. */
+  private isHeadlessOffscreenListing(): boolean {
+    return (
+      this.host.getOffscreenBrowserBackend()?.listOpenPageIds !== undefined &&
+      !this.host.getAvailableAuthoritativeWindow()
+    )
+  }
+
+  /** The page's position in the creation-ordered listing; null on desktop. */
+  private headlessListedTabIndex(
+    worktreeId: string | undefined,
+    browserPageId: string
+  ): number | null {
+    if (!this.isHeadlessOffscreenListing()) {
+      return null
     }
+    const index = this.listBrowserTabsIncludingParked(worktreeId).findIndex(
+      (tab) => tab.browserPageId === browserPageId
+    )
+    return index === -1 ? null : index
+  }
+
+  private listBrowserTabsIncludingParked(
+    worktreeId: string | undefined
+  ): BrowserTabListResult['tabs'] {
+    const offscreen = this.host.getOffscreenBrowserBackend()
+    const merged = mergeParkedBrowserTabs(
+      this.requireAgentBrowserBridge().tabList(worktreeId).tabs,
+      offscreen?.listParkedPages?.(worktreeId) ?? [],
+      offscreen?.listOpenPageIds?.(worktreeId)
+    )
+    return merged.map((tab) =>
+      tab.parked
+        ? {
+            ...tab,
+            profileLabel:
+              browserSessionRegistry.getProfile(tab.profileId ?? 'default')?.label ??
+              browserSessionRegistry.getDefaultProfile().label
+          }
+        : this.enrichBrowserTabInfo(tab)
+    )
+  }
+
+  /**
+   * Resolve an `--index` against the listing the caller saw, waking the target.
+   * Returns null on desktop, where there are no parked pages and the bridge's
+   * own index handling still applies.
+   */
+  private async resolveIndexedParkedAwarePageId(
+    worktreeId: string | undefined,
+    index: number,
+    options: { wake?: boolean } = {}
+  ): Promise<string | null> {
+    const offscreen = this.host.getOffscreenBrowserBackend()
+    if (!offscreen?.listParkedPages || this.host.getAvailableAuthoritativeWindow()) {
+      return null
+    }
+    const tabs = this.listBrowserTabsIncludingParked(worktreeId)
+    const chosen = tabs[index]
+    if (!chosen) {
+      throw new BrowserError(
+        'browser_tab_not_found',
+        `Tab index ${index} out of range (0-${tabs.length - 1})`
+      )
+    }
+    // Why: waking also restarts the reclaim clock, so selecting a resident page
+    // counts as using it rather than leaving it up for eviction. A close opts
+    // out — rebuilding a renderer only to destroy it is pure churn, and a wake
+    // that fails would turn a reclaimable page into an unclosable one.
+    if (options.wake !== false) {
+      await offscreen.wakeTab?.(chosen.browserPageId)
+    }
+    return chosen.browserPageId
+  }
+
+  // Why: index resolution must not run behind resolveBrowserCommandTarget's
+  // implicit wake, which reorders the listing. Headless only — desktop keeps the
+  // bridge's own index handling untouched.
+  private async resolveIndexedTargetBeforeWake(
+    params: { index?: number } & BrowserCommandTargetParams
+  ): Promise<ResolvedBrowserCommandTarget | null> {
+    if (params.index === undefined || params.page || this.host.getAvailableAuthoritativeWindow()) {
+      return null
+    }
+    const worktreeId = await this.resolveBrowserWorktreeId(params.worktree, {
+      wakeParkedPage: false
+    })
+    const browserPageId = await this.resolveIndexedParkedAwarePageId(worktreeId, params.index)
+    return browserPageId ? { worktreeId, browserPageId } : null
   }
 
   async browserProceedCertificate(
@@ -621,6 +767,10 @@ export class RuntimeBrowserCommands {
     if (!browserPageId) {
       throw new BrowserError('browser_no_tab', 'No browser tab open in this worktree')
     }
+    // Why (STA-4341): this names a page like any other page-targeting command,
+    // so it has to count as using it. Without this an agent could poll `tab
+    // current` continuously and still have that very page reclaimed under it.
+    await this.markHeadlessBrowserPageUsed(browserPageId)
     return { tab: this.describeBrowserTab(browserPageId, worktreeId) }
   }
 
@@ -630,9 +780,25 @@ export class RuntimeBrowserCommands {
       focus?: boolean
     } & BrowserCommandTargetParams
   ): Promise<BrowserTabSwitchResult> {
-    const target = await this.resolveBrowserCommandTarget(params)
     const bridge = this.requireAgentBrowserBridge()
-    const result = await bridge.tabSwitch(params.index, target.worktreeId, target.browserPageId)
+    // Why (STA-4341): an implicit target wakes the most recently used parked
+    // page, which makes it live and moves it to the front of the listing. Resolve
+    // the index against the listing the caller actually read — before any wake —
+    // or `tab switch --index 0` selects a different tab than the one it showed.
+    const indexed = await this.resolveIndexedTargetBeforeWake(params)
+    const target = indexed ?? (await this.resolveBrowserCommandTarget(params))
+    const switched = await bridge.tabSwitch(
+      indexed ? undefined : params.index,
+      target.worktreeId,
+      target.browserPageId
+    )
+    // Why (STA-4341): the bridge computes `switched` over its registration
+    // order, which any park+wake permutes. Report the target's position in the
+    // creation-ordered listing instead — the same number `tab list` prints and
+    // `--index` resolves against — or a caller chaining the reported number
+    // into `--index` addresses a different tab than the one it switched to.
+    const listedIndex = this.headlessListedTabIndex(target.worktreeId, switched.browserPageId)
+    const result = listedIndex === null ? switched : { ...switched, switched: listedIndex }
     if (params.focus) {
       // Why: scope focus to the tab's owning worktree; the renderer never yanks the user across worktrees on this signal (see focusBrowserTabInWorktree).
       const worktreeId =
@@ -1613,18 +1779,25 @@ export class RuntimeBrowserCommands {
       ? params.worktree
         ? (await this.host.resolveWorktreeSelector(params.worktree)).id
         : undefined
-      : await this.resolveBrowserWorktreeId(params.worktree)
+      : await this.resolveBrowserWorktreeId(params.worktree, { wakeParkedPage: false })
 
     let tabId: string | null = null
     if (typeof params.page === 'string' && params.page.length > 0) {
       tabId = params.page
     } else if (params.index !== undefined) {
-      const tabs = bridge.getRegisteredTabs(worktreeId)
-      const entries = [...tabs.entries()]
-      if (params.index < 0 || params.index >= entries.length) {
-        throw new Error(`Tab index ${params.index} out of range (0-${entries.length - 1})`)
+      // Why (STA-4341): a headless listing includes parked pages, so an index
+      // must be resolved against that same listing or `tab close --index` can
+      // destroy a different tab than the one the caller read.
+      tabId = await this.resolveIndexedParkedAwarePageId(worktreeId, params.index, {
+        wake: false
+      })
+      if (tabId === null) {
+        const entries = [...bridge.getRegisteredTabs(worktreeId).entries()]
+        if (params.index < 0 || params.index >= entries.length) {
+          throw new Error(`Tab index ${params.index} out of range (0-${entries.length - 1})`)
+        }
+        tabId = entries[params.index][0]
       }
-      tabId = entries[params.index][0]
     } else {
       // Why: try the bridge first; fall back to the renderer for tabs whose webview hasn't mounted yet (e.g. just created).
       const tabs = bridge.getRegisteredTabs(worktreeId)
@@ -1640,11 +1813,20 @@ export class RuntimeBrowserCommands {
     const offscreen = authoritativeWindow ? null : this.host.getOffscreenBrowserBackend()
     if (offscreen) {
       // Why: resolve the active page for implicit close so we don't report success while closing nothing.
-      const resolvedTabId = tabId ?? bridge.getActivePageId(worktreeId)
+      const resolvedTabId =
+        tabId ??
+        bridge.getActivePageId(worktreeId) ??
+        offscreen.getParkedPageIdForImplicitTarget?.(worktreeId) ??
+        null
       if (!resolvedTabId) {
         return { closed: false }
       }
-      if (explicitPage && !bridge.getRegisteredTabs(worktreeId).has(resolvedTabId)) {
+      // Why (STA-4341): a parked page is still open, so closing one must not
+      // report "not found" — and must not wake a renderer just to destroy it.
+      const isParked = (offscreen.listParkedPages?.(worktreeId) ?? []).some(
+        (page) => page.browserPageId === resolvedTabId
+      )
+      if (explicitPage && !isParked && !bridge.getRegisteredTabs(worktreeId).has(resolvedTabId)) {
         const scope = worktreeId ? ' in this worktree' : ''
         throw new BrowserError(
           'browser_tab_not_found',
@@ -1715,17 +1897,30 @@ export class RuntimeBrowserCommands {
     explicitWorktreeId?: string
   ): BrowserTabListResult['tabs'][number] {
     const worktreeId = explicitWorktreeId ?? browserManager.getWorktreeIdForTab(browserPageId)
-    const tab = this.requireAgentBrowserBridge()
-      .tabList(worktreeId)
-      .tabs.find((entry) => entry.browserPageId === browserPageId)
-    if (!tab) {
-      const scope = worktreeId ? ' in this worktree' : ''
-      throw new BrowserError(
-        'browser_tab_not_found',
-        `Browser page ${browserPageId} was not found${scope}`
+    // Why (STA-4341): the bridge numbers tabs by registration order, which any
+    // park+wake permutes. Every index a headless caller sees must come from the
+    // creation-ordered listing `tab list` prints, or `tab show`/`tab current`
+    // report a number that names a different tab in that listing.
+    if (this.isHeadlessOffscreenListing()) {
+      const tab = this.listBrowserTabsIncludingParked(worktreeId).find(
+        (entry) => entry.browserPageId === browserPageId
       )
+      if (tab) {
+        return tab
+      }
+    } else {
+      const tab = this.requireAgentBrowserBridge()
+        .tabList(worktreeId)
+        .tabs.find((entry) => entry.browserPageId === browserPageId)
+      if (tab) {
+        return this.enrichBrowserTabInfo(tab)
+      }
     }
-    return this.enrichBrowserTabInfo(tab)
+    const scope = worktreeId ? ' in this worktree' : ''
+    throw new BrowserError(
+      'browser_tab_not_found',
+      `Browser page ${browserPageId} was not found${scope}`
+    )
   }
 
   // Why: headless serve path — the offscreen backend registers synchronously, so there is no webview-mount wait.

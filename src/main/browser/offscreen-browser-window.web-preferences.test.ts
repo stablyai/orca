@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
 
-const OFFSCREEN_BACKEND_SOURCE = resolve(__dirname, 'offscreen-browser-backend.ts')
+const OFFSCREEN_WINDOW_SOURCE = resolve(__dirname, 'offscreen-browser-window.ts')
 
 function sourceBetween(source: string, start: string, end: string): string {
   const startIndex = source.indexOf(start)
@@ -14,9 +14,9 @@ function sourceBetween(source: string, start: string, end: string): string {
   return source.slice(startIndex, endIndex)
 }
 
-describe('OffscreenBrowserBackend web preferences', () => {
+describe('offscreen browser window web preferences', () => {
   it('uses the shared browser guest fullscreen policy', () => {
-    const source = readFileSync(OFFSCREEN_BACKEND_SOURCE, 'utf8')
+    const source = readFileSync(OFFSCREEN_WINDOW_SOURCE, 'utf8')
     const webPreferencesBlock = sourceBetween(source, 'webPreferences: {', 'partition,')
 
     expect(source).toContain(

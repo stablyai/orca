@@ -3172,7 +3172,13 @@ void app.whenReady().then(async () => {
     await runtime.reconcileLegacyWorkerTerminals()
     // Why: headless servers can't mount <webview> panes; use offscreen WebContents, gated on a real display so browser.headless.v1 stays honest.
     if (headlessBrowserDisplayAvailable) {
-      runtime.setOffscreenBrowserBackend(new OffscreenBrowserBackend(browserManager))
+      runtime.setOffscreenBrowserBackend(
+        new OffscreenBrowserBackend(browserManager, {
+          getAgentBrowserBridge: () => runtime?.getAgentBrowserBridge() ?? null,
+          isPagePinned: (browserPageId) => runtime?.isBrowserPagePinned(browserPageId) === true,
+          onPagesChanged: (worktreeId) => runtime?.notifyHeadlessBrowserPagesChanged(worktreeId)
+        })
+      )
     }
     // Why: headless servers have no renderer graph publisher; publish an explicit empty graph so status clients see a ready server.
     runtime.syncWindowGraph(HEADLESS_RUNTIME_WINDOW_ID, { tabs: [], leaves: [] })

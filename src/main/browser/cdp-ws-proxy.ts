@@ -105,7 +105,13 @@ export class CdpWsProxy {
   }
 
   async stop(): Promise<void> {
-    this.debuggerChannel.detachDebugger()
+    try {
+      this.debuggerChannel.detachDebugger()
+    } catch {
+      // Why: detaching touches the WebContents, which may already be destroyed
+      // (renderer crash, headless park). The listening socket below must close
+      // regardless, or the port outlives the page it served.
+    }
     this.closeClient()
     if (this.wss) {
       this.wss.close()

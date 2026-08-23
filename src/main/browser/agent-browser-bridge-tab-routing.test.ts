@@ -106,6 +106,34 @@ describe('AgentBrowserBridge', () => {
     expect(b.getActiveWebContentsId()).toBe(1)
   })
 
+  // ── Active-page queries ──
+
+  it('answers isActiveBrowserPage from the pointers without reassigning them', () => {
+    const tabs = new Map([
+      ['page-a', 1],
+      ['page-b', 2]
+    ])
+    const worktrees = new Map([
+      ['page-a', 'wt-1'],
+      ['page-b', 'wt-1']
+    ])
+    const b = new AgentBrowserBridge(
+      mockBrowserManager(tabs, worktrees, {
+        getGuestWebContentsId: vi.fn((browserPageId: string) => tabs.get(browserPageId) ?? null)
+      })
+    )
+    b.setActiveTab(1, 'wt-1')
+
+    expect(b.isActiveBrowserPage('page-a', 'wt-1')).toBe(true)
+    expect(b.isActiveBrowserPage('page-b', 'wt-1')).toBe(false)
+    // Why: parkPage omits the worktree when the record has none; the owning
+    // worktree must come from the manager, not default to the global pointer.
+    expect(b.isActiveBrowserPage('page-a')).toBe(true)
+    expect(b.isActiveBrowserPage('missing', 'wt-1')).toBe(false)
+    // Asking must not move the pointer the way resolveActiveTab() would.
+    expect(b.getActiveWebContentsId()).toBe(1)
+  })
+
   // ── Worktree filtering ──
 
   describe('worktree filtering', () => {
