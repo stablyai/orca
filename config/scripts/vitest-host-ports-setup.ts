@@ -19,7 +19,14 @@ import { setSecretStore } from '../../src/shared/secret-store'
 const userData = mkdtempSync(join(tmpdir(), 'orca-vitest-userdata-'))
 
 afterAll(() => {
-  rmSync(userData, { recursive: true, force: true })
+  // Best effort: a suite that leaves a handle open here -- an OrchestrationDb is the
+  // common one -- makes this EPERM on Windows, where an open file cannot be unlinked.
+  // Scratch cleanup under tmpdir must not be able to fail a suite that passed.
+  try {
+    rmSync(userData, { recursive: true, force: true, maxRetries: 2, retryDelay: 25 })
+  } catch {
+    // The OS reclaims tmpdir.
+  }
 })
 
 // Deliberately not a plaintext passthrough: encryptString must return something a

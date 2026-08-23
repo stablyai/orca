@@ -28,10 +28,20 @@ vi.mock('../worktree-trash', () => ({
 
 import { addWorktree } from './worktree'
 import { registerWorktreeSuiteHooks } from './worktree-test-harness'
+import { windowsLongPathGitArgs } from '../../shared/windows-long-path-git-args'
 
 registerWorktreeSuiteHooks()
 
 describe('addWorktree', () => {
+  // Why derive rather than spell out: the long-path prefix is Windows-only, so a
+  // literal argv can only be right on one platform.
+  const worktreeAdd = (...rest: string[]): string[] => [
+    ...windowsLongPathGitArgs('/repo'),
+    'worktree',
+    'add',
+    ...rest
+  ]
+
   beforeEach(() => {
     gitExecFileAsyncMock.mockReset()
     gitExecFileSyncMock.mockReset()
@@ -91,15 +101,7 @@ describe('addWorktree', () => {
     expect(gitExecFileAsyncMock.mock.calls.map(([args]) => args)).toEqual([
       ['rev-parse', '--verify', '--quiet', 'refs/remotes/origin/main^{commit}'],
       ['rev-list', '--left-right', '--count', 'refs/heads/main...refs/remotes/origin/main'],
-      [
-        'worktree',
-        'add',
-        '--no-track',
-        '-b',
-        'feature/test',
-        '/repo-feature',
-        'refs/remotes/origin/main'
-      ],
+      worktreeAdd('--no-track', '-b', 'feature/test', '/repo-feature', 'refs/remotes/origin/main'),
       [
         'config',
         '--local',
