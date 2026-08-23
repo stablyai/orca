@@ -4,6 +4,7 @@ import path from 'node:path'
 import React, { type ReactNode, useState, act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { fireEvent } from '@testing-library/react'
 import { getDefaultSettings } from '../../../../shared/constants'
 import type { SourceControlActionRecipe } from '../../../../shared/source-control-ai-actions'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
@@ -356,5 +357,38 @@ describe('SourceControlAgentActionDialog', () => {
     expect(container.querySelector('[data-agent-value]')?.getAttribute('data-agent-value')).toBe(
       'gemini'
     )
+  })
+
+  it('does not overwrite user-edited agentArgs during deferred detection', async () => {
+    let resolveDetection: (value: TuiAgent[]) => void = () => {}
+    const detectionPromise = new Promise<TuiAgent[]>((resolve) => {
+      resolveDetection = resolve
+    })
+    mocks.ensureDetectedAgents.mockReturnValue(detectionPromise)
+    mocks.ensureRemoteDetectedAgents.mockReturnValue(detectionPromise)
+
+    resetStore(settingsWithGlobalRecipe(null))
+
+    renderControlledDialog({
+      savedAgentId: 'gemini',
+      savedAgentArgs: null
+    })
+
+    await vi.waitFor(() => expect(container.textContent).toContain('Launch agent'))
+    const input = container.querySelector('#source-control-agent-cli-args') as HTMLInputElement
+    expect(input).not.toBeNull()
+    expect(input.value).toBe('--yolo')
+
+    act(() => {
+      fireEvent.change(input, { target: { value: '--verbose' } })
+    })
+    expect(input.value).toBe('--verbose')
+
+    act(() => {
+      resolveDetection(['gemini'])
+    })
+    await flushEffects()
+
+    expect(input.value).toBe('--verbose')
   })
 })
