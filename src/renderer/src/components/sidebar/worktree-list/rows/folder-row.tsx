@@ -12,6 +12,7 @@ import type { FolderWorkspacePathStatus } from '../../../../../../shared/folder-
 import { isConfirmedStaleFolderPathStatus } from '../../../../../../shared/folder-workspace-path-status'
 import { folderWorkspaceToWorktree } from '../../../../../../shared/folder-workspace-worktree'
 import WorktreeCard from '../../WorktreeCard'
+import { WorkspaceShortcutIndexBadge } from '../../WorkspaceShortcutIndexBadge'
 import type { WorktreeGroupBy } from '../grouping/row-types'
 import { getVirtualRowTransform } from '../viewport/virtual-rows'
 import { getFolderWorkspaceRowGeometry } from './indentation'
@@ -27,6 +28,7 @@ export type FolderWorkspaceRowContext = {
   activeWorktreeId: string | null
   currentWorktreeId: string | null
   selectedWorktreeIds: ReadonlySet<string>
+  workspaceShortcutIndexByRowKey: ReadonlyMap<string, number>
   repoMap: Map<string, Repo>
   worktreeMap: Map<string, Worktree>
   worktreeLineageById: Record<string, WorktreeLineage>
@@ -58,6 +60,7 @@ export function renderFolderWorkspaceVirtualRow(args: {
   measureVirtualRowElement: (element: HTMLDivElement | null) => void
 }): React.JSX.Element {
   const { ctx, row, vItem } = args
+  const workspaceShortcutIndex = ctx.workspaceShortcutIndexByRowKey.get(row.key)
   const folderWorktree = folderWorkspaceToWorktree(row.folderWorkspace)
   const folderWorktreeIdentity = getWorktreeHostIdentity(folderWorktree)
   const pathStatus = ctx.getCachedFolderWorkspacePathStatus({
@@ -123,7 +126,10 @@ export function renderFolderWorkspaceVirtualRow(args: {
           onContextMenuSelect={ctx.onContextMenuSelect}
           statusPrDisplay={folderPrDisplay}
         />
-        <div className="pointer-events-auto absolute right-3 top-1.5">
+        <div className="pointer-events-auto absolute right-3 top-1.5 flex items-center gap-1">
+          {workspaceShortcutIndex ? (
+            <WorkspaceShortcutIndexBadge index={workspaceShortcutIndex} />
+          ) : null}
           <FolderPathStatusIndicator status={pathStatus} />
         </div>
       </div>
