@@ -135,7 +135,7 @@ export function useSourceControlAgentActionDialog({
         detectedAgents: nextAgents,
         disabledAgents
       })
-      const finalAgent = fallbackAgent
+      const finalAgent = fallbackAgent ?? savedAgentId ?? null
       setSelectedAgent(finalAgent)
       if (savedAgentArgs === null || savedAgentArgs === undefined) {
         setAgentArgs(
@@ -156,9 +156,19 @@ export function useSourceControlAgentActionDialog({
     savedAgentArgs,
     savedCommandInputTemplate,
     repoId,
-    settings?.defaultTuiAgent,
-    settings?.agentDefaultArgs
+    settings?.defaultTuiAgent
   ])
+
+  useEffect(() => {
+    if (!open) return
+    if (savedAgentArgs === null || savedAgentArgs === undefined) {
+      if (selectedAgent) {
+        setAgentArgs(resolveTuiAgentLaunchArgs(selectedAgent, settings?.agentDefaultArgs))
+      } else {
+        setAgentArgs('')
+      }
+    }
+  }, [open, selectedAgent, savedAgentArgs, settings?.agentDefaultArgs])
 
   const closeDialog = useCallback(() => onOpenChange(false), [onOpenChange])
 

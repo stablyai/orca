@@ -312,6 +312,8 @@ describe('SourceControlAgentActionDialog', () => {
   })
 
   it('falls back to default agent arguments (like --yolo for gemini) when savedAgentArgs is null', async () => {
+    mocks.ensureDetectedAgents.mockResolvedValue(['gemini'])
+    mocks.ensureRemoteDetectedAgents.mockResolvedValue(['gemini'])
     resetStore(
       settingsWithGlobalRecipe({
         agentId: 'gemini',
