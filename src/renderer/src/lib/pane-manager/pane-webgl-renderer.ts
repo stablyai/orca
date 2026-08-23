@@ -46,6 +46,45 @@ export function clearTerminalWebglAttachBackoff(pane: ManagedPaneInternal): void
   pane.webglAttachFailedSinceRecovery = false
 }
 
+// Repeated losses pin only the affected pane to DOM until this rolling window decays.
+const CONTEXT_LOSS_PIN_THRESHOLD = 3
+const CONTEXT_LOSS_PIN_WINDOW_MS = 30 * 60_000
+
+function contextLossesInsideWindow(pane: ManagedPaneInternal, nowMs: number): number[] {
+  return (pane.webglContextLossAtMs ?? []).filter((at) => {
+    const elapsedMs = nowMs - at
+    return elapsedMs >= 0 && elapsedMs < CONTEXT_LOSS_PIN_WINDOW_MS
+  })
+}
+
+/** Record a loss and diagnose the threshold transition. */
+export function recordTerminalWebglContextLoss(
+  pane: ManagedPaneInternal,
+  nowMs: number = Date.now()
+): void {
+  const losses = contextLossesInsideWindow(pane, nowMs)
+  const wasPinned = losses.length >= CONTEXT_LOSS_PIN_THRESHOLD
+  if (losses.length < CONTEXT_LOSS_PIN_THRESHOLD) {
+    losses.push(nowMs)
+  }
+  pane.webglContextLossAtMs = losses
+  if (!wasPinned && losses.length === CONTEXT_LOSS_PIN_THRESHOLD) {
+    recordTerminalWebglDiagnostic('webgl-context-loss-pinned-dom', {
+      paneId: pane.id,
+      lossesInWindow: losses.length,
+      windowMs: CONTEXT_LOSS_PIN_WINDOW_MS
+    })
+  }
+}
+
+/** Whether resume must retain this pane's DOM fallback. */
+export function isTerminalWebglRetryPinnedAfterContextLosses(
+  pane: ManagedPaneInternal,
+  nowMs: number = Date.now()
+): boolean {
+  return contextLossesInsideWindow(pane, nowMs).length >= CONTEXT_LOSS_PIN_THRESHOLD
+}
+
 export function shouldUseTerminalWebgl(pane: ManagedPaneInternal): boolean {
   if (pane.terminalGpuAcceleration === 'on') {
     return true
@@ -265,7 +304,10 @@ export function attachWebgl(pane: ManagedPaneInternal): void {
       // Why: Chromium starts reclaiming terminal contexts under pressure.
       // Recreating WebGL for this pane can loop context loss and leave xterm
       // visually blank, so keep the pane on the DOM renderer until the next
-      // rendering resume (worktree foreground / window wake) retries it.
+      // rendering resume (worktree foreground / window wake) retries it. The
+      // loss record bounds those retries: past the threshold the resume
+      // boundary stops re-arming WebGL for this pane (issue #12452).
+      recordTerminalWebglContextLoss(pane)
       pane.webglDisabledAfterContextLoss = true
       disposeWebgl(pane, { refreshDimensions: true })
     })

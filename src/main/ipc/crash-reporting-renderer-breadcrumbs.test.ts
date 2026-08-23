@@ -336,6 +336,61 @@ describe('renderer breadcrumb IPC routing', () => {
     ])
   })
 
+  it('coalesces pane-recovery declines across tabs without merging outcomes', () => {
+    emitRendererBreadcrumb({
+      name: 'terminal_pane_recovery_declined',
+      data: { tabId: 'tab-1', reason: 'replay-wedged', declinedBy: 'cooldown' }
+    })
+    emitRendererBreadcrumb({
+      name: 'terminal_pane_recovery_declined',
+      data: { tabId: 'tab-2', reason: 'replay-wedged', declinedBy: 'cooldown' }
+    })
+    emitRendererBreadcrumb({
+      name: 'terminal_pane_recovery_declined',
+      data: { tabId: 'tab-3', reason: 'replay-wedged', declinedBy: 'window-cap' }
+    })
+
+    expect(recordCrashBreadcrumbMock).not.toHaveBeenCalled()
+    expect(
+      recordCoalescedCrashBreadcrumbMock.mock.calls.map(
+        (call) => (call[0] as { coalesceKey: string }).coalesceKey
+      )
+    ).toEqual([
+      'terminal_pane_recovery_declined:replay-wedged:cooldown',
+      'terminal_pane_recovery_declined:replay-wedged:cooldown',
+      'terminal_pane_recovery_declined:replay-wedged:window-cap'
+    ])
+  })
+
+  it('coalesces stale recovery requests by finite failure shape', () => {
+    emitRendererBreadcrumb({
+      name: 'terminal_pane_recovery_stale_request',
+      data: {
+        tabId: 'tab-1',
+        reason: 'input-undeliverable',
+        staleGeneration: false,
+        staleInstance: true
+      }
+    })
+    emitRendererBreadcrumb({
+      name: 'terminal_pane_recovery_stale_request',
+      data: {
+        tabId: 'tab-2',
+        reason: 'input-undeliverable',
+        staleGeneration: false,
+        staleInstance: true
+      }
+    })
+
+    expect(recordCrashBreadcrumbMock).not.toHaveBeenCalled()
+    expect(recordCoalescedCrashBreadcrumbMock).toHaveBeenCalledTimes(2)
+    for (const call of recordCoalescedCrashBreadcrumbMock.mock.calls) {
+      expect(call[0]).toMatchObject({
+        coalesceKey: 'terminal_pane_recovery_stale_request:input-undeliverable:false:true'
+      })
+    }
+  })
+
   // Why: the renderer guard is once per tab-id/verdict, so one stale worktree
   // map can emit enough crumbs to evict the pre-crash trail.
   it('coalesces duplicate-tab-owner notices across tabs', () => {

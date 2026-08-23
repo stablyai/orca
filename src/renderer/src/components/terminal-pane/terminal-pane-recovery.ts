@@ -85,7 +85,7 @@ type RecoveryBudget =
 
 function recoveryBudget(tabId: string, now: number): RecoveryBudget {
   const timestamps = recoveryTimestampsByTabId.get(tabId) ?? []
-  const recent = timestamps.filter((t) => now - t < RECOVERY_WINDOW_MS)
+  const recent = timestamps.filter((t) => now >= t && now - t < RECOVERY_WINDOW_MS)
   if (recent.length !== timestamps.length) {
     recoveryTimestampsByTabId.set(tabId, recent)
   }
@@ -196,12 +196,33 @@ function cancelPendingRecoveryRetry(tabId: string): void {
  * that probe — see the reason's declaration. Nothing here destroys a session
  * either way: a remount rebuilds the renderer over the PTY it already had.
  */
+/** Record why no live pane can act on this recovery request. */
+function recordStaleRecoveryRequest(request: RecoveryRequest): void {
+  recordRendererCrashBreadcrumb('terminal_pane_recovery_stale_request', {
+    tabId: request.tabId,
+    reason: request.reason,
+    staleGeneration:
+      request.terminalRecoveryGeneration !== undefined &&
+      request.terminalRecoveryGeneration !== captureTerminalPaneRecoveryGeneration(request.tabId),
+    staleInstance:
+      request.terminalRecoveryInstanceId !== undefined &&
+      !activeTerminalRecoveryInstanceIds.has(request.terminalRecoveryInstanceId)
+  })
+}
+
 export async function requestTerminalPaneRecovery(request: RecoveryRequest): Promise<boolean> {
   if (!isCurrentTerminalRecoveryRequest(request)) {
+    recordStaleRecoveryRequest(request)
     return false
   }
   const budget = recoveryBudget(request.tabId, Date.now())
   if (!budget.allowed) {
+    recordRendererCrashBreadcrumb('terminal_pane_recovery_declined', {
+      tabId: request.tabId,
+      reason: request.reason,
+      declinedBy: budget.declinedBy,
+      retryInMs: Math.round(budget.retryInMs)
+    })
     if (
       budget.declinedBy === 'window-cap' ||
       (budget.declinedBy === 'cooldown' && request.terminalRecoveryGeneration !== undefined)
@@ -235,10 +256,17 @@ export async function requestTerminalPaneRecovery(request: RecoveryRequest): Pro
     // Re-check the budget across the await: a concurrent detector may have
     // already consumed it for this tab.
     if (!isCurrentTerminalRecoveryRequest(request)) {
+      recordStaleRecoveryRequest(request)
       return false
     }
     const recheck = recoveryBudget(request.tabId, Date.now())
     if (!recheck.allowed) {
+      recordRendererCrashBreadcrumb('terminal_pane_recovery_declined', {
+        tabId: request.tabId,
+        reason: request.reason,
+        declinedBy: recheck.declinedBy,
+        retryInMs: Math.round(recheck.retryInMs)
+      })
       if (
         recheck.declinedBy === 'window-cap' ||
         (recheck.declinedBy === 'cooldown' && request.terminalRecoveryGeneration !== undefined)

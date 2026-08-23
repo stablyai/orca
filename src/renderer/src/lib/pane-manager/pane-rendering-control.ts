@@ -4,6 +4,7 @@ import {
   attachWebgl,
   clearTerminalWebglAttachBackoff,
   disposeWebgl,
+  isTerminalWebglRetryPinnedAfterContextLosses,
   isPaneWebglContextLost,
   markComplexScriptOutput,
   resetWebglTextureAtlas
@@ -83,12 +84,16 @@ export function resumePaneRendering(
     clearTerminalWebglAttachBackoff(pane)
     const rebuildDeferred = pane.webglRebuildDeferred === true
     pane.webglAttachmentDeferred = false
-    pane.webglDisabledAfterContextLoss = false
+    const retryPinned = isTerminalWebglRetryPinnedAfterContextLosses(pane)
+    // Frequent resumes must not re-arm a pane whose context remains unstable.
+    if (!retryPinned) {
+      pane.webglDisabledAfterContextLoss = false
+    }
     pane.webglRebuildDeferred = false
     if (pane.webglAddon && isPaneWebglContextLost(pane)) {
       disposeWebgl(pane)
     }
-    if (rebuildDeferred && pane.webglAddon) {
+    if (!retryPinned && rebuildDeferred && pane.webglAddon) {
       rebuildAttachedWebgl(pane)
       continue
     }

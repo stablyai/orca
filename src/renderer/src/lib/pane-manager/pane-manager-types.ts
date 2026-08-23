@@ -148,6 +148,8 @@ export type ManagedPaneInternal = {
   // pane on the DOM renderer until the next recovery boundary. Optional so
   // absent means "never failed"; only the attach failure path sets it.
   webglAttachFailedSinceRecovery?: boolean
+  // Rolling per-pane loss history used to bound WebGL retry churn.
+  webglContextLossAtMs?: number[]
   // Why: expose complex-output diagnostics without changing renderer choice;
   // auto renderer fallback is reserved for platform or WebGL failures.
   hasComplexScriptOutput: boolean
