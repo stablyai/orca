@@ -45,25 +45,23 @@ function environmentWithoutShellOnPath(): NodeJS.ProcessEnv {
   return { ...environment, PATH: pathWithoutShell((process.env.PATH ?? '').split(delimiter)) }
 }
 
-describe('findPosixShell', () => {
-  it('returns a shell that can actually run a command', () => {
-    const shell = findPosixShell()
-    if (!shell) {
-      return
-    }
+/** Resolved at collection so a host with no shell skips these cases loudly, rather
+ *  than running them to a bare `return` and reporting a pass that asserted nothing.
+ *  `shellPath` is only ever '' in the runs those guards already skipped. */
+const shell = findPosixShell()
+const shellPath = shell ?? ''
+const itWithShell = it.runIf(shell !== null)
 
-    expect(spawnSync(shell, ['-c', 'exit 0'], { stdio: 'ignore' }).status).toBe(0)
+describe('findPosixShell', () => {
+  itWithShell('returns a shell that can actually run a command', () => {
+    expect(spawnSync(shellPath, ['-c', 'exit 0'], { stdio: 'ignore' }).status).toBe(0)
   })
 
   it('answers the same way every time, so a suite cannot half-skip', () => {
     expect(findPosixShell()).toBe(findPosixShell())
   })
 
-  it('finds one on every platform that ships /bin/sh', () => {
-    if (process.platform === 'win32') {
-      return
-    }
-
+  it.skipIf(process.platform === 'win32')('finds one on every platform that ships /bin/sh', () => {
     expect(findPosixShell()).toBe('/bin/sh')
   })
 
@@ -144,13 +142,8 @@ describe('findPosixShell', () => {
 })
 
 describe('posixShellEnvironment', () => {
-  it('reaches the utilities a generated script actually calls', () => {
-    const shell = findPosixShell()
-    if (!shell) {
-      return
-    }
-
-    const probe = spawnSync(shell, ['-c', `printf 'a b\\n' | awk '{print $2}'`], {
+  itWithShell('reaches the utilities a generated script actually calls', () => {
+    const probe = spawnSync(shellPath, ['-c', `printf 'a b\\n' | awk '{print $2}'`], {
       encoding: 'utf8',
       env: posixShellEnvironment()
     })
@@ -158,22 +151,21 @@ describe('posixShellEnvironment', () => {
     expect(probe.stdout.trim()).toBe('b')
   })
 
-  it('puts those utilities ahead of the same-named Windows ones', () => {
-    const shell = findPosixShell()
-    if (!shell || !isAbsolute(shell)) {
-      return
+  // A bare `sh` off PATH gives the environment no directory to prepend.
+  it.runIf(shell !== null && isAbsolute(shell))(
+    'puts those utilities ahead of the same-named Windows ones',
+    () => {
+      // Why `find` specifically: Windows ships its own find.exe in System32, and
+      // it is not remotely the same program. A script that reaches it fails
+      // strangely — "File not found - relay-*" — rather than loudly.
+      const resolvedFind = spawnSync(shellPath, ['-c', 'command -v find'], {
+        encoding: 'utf8',
+        env: posixShellEnvironment()
+      })
+
+      expect(resolvedFind.stdout.trim().toLowerCase()).not.toContain('system32')
     }
-
-    // Why `find` specifically: Windows ships its own find.exe in System32, and
-    // it is not remotely the same program. A script that reaches it fails
-    // strangely — "File not found - relay-*" — rather than loudly.
-    const resolvedFind = spawnSync(shell, ['-c', 'command -v find'], {
-      encoding: 'utf8',
-      env: posixShellEnvironment()
-    })
-
-    expect(resolvedFind.stdout.trim().toLowerCase()).not.toContain('system32')
-  })
+  )
 
   it('leaves the caller’s own environment untouched', () => {
     const before = process.env.PATH
@@ -196,11 +188,7 @@ describe('hasPosixShellAtCanonicalPath', () => {
     )
   })
 
-  it('is true wherever the platform ships one', () => {
-    if (process.platform === 'win32') {
-      return
-    }
-
+  it.skipIf(process.platform === 'win32')('is true wherever the platform ships one', () => {
     expect(hasPosixShellAtCanonicalPath()).toBe(true)
   })
 })

@@ -53,14 +53,13 @@ describe('symlink capability', () => {
     expect(canCreateDirectorySymlink()).toBe(canCreateDirectorySymlink())
   })
 
-  it('always permits both on a platform with no privilege model for links', () => {
-    if (process.platform === 'win32') {
-      return
+  it.skipIf(process.platform === 'win32')(
+    'always permits both on a platform with no privilege model for links',
+    () => {
+      expect(canCreateFileSymlink()).toBe(true)
+      expect(canCreateDirectorySymlink()).toBe(true)
     }
-
-    expect(canCreateFileSymlink()).toBe(true)
-    expect(canCreateDirectorySymlink()).toBe(true)
-  })
+  )
 
   it('leaves no probe artifacts behind in the temp directory it used', () => {
     // Why: the probe runs once per process, but a leaked scratch dir per worker

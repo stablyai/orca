@@ -32,13 +32,12 @@ describe('permissionBitsAreEnforced', () => {
     expect(permissionBitsAreEnforced()).toBe(permissionBitsAreEnforced())
   })
 
-  it('is true wherever the platform has a real permission model', () => {
-    if (process.platform === 'win32') {
-      return
+  it.skipIf(process.platform === 'win32')(
+    'is true wherever the platform has a real permission model',
+    () => {
+      expect(permissionBitsAreEnforced()).toBe(true)
     }
-
-    expect(permissionBitsAreEnforced()).toBe(true)
-  })
+  )
 
   it('leaves no probe directories behind', () => {
     permissionBitsAreEnforced()
