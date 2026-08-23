@@ -202,13 +202,15 @@ describe('a rendered composition tail keeps its cells’ styling', () => {
     expect(tail.children).toHaveLength(0)
   })
 
-  it('still drops trailing blanks, so the tail covers the columns it always did', async () => {
+  it('keeps a run of spaces inside the tail without padding it out to the row width', async () => {
     const rig = openTerminal()
-    // Erase to end of row: every cell after the text is blank with no styling of its own.
-    await rig.write('안녕하세요\x1b[6D')
+    // Two spaces inside the text and nothing written past it. The tail has to keep the inner run —
+    // the view is nowrap, which would collapse it — while the trimmed end column keeps the row's
+    // remaining untouched cells out, so this lands on four characters and not eighty.
+    await rig.write('a  b\x1b[4D')
 
-    rig.compose('가')
+    rig.compose('ㄱ')
 
-    expect(tailOf(rig.compositionView).textContent).toBe('하세요')
+    expect(tailOf(rig.compositionView).textContent).toBe('a  b')
   })
 })
