@@ -19,6 +19,8 @@ import type {
   ListDesktopLineageForHostArgs
 } from '../../shared/host-lineage-contract'
 import type { FolderWorkspace } from '../../shared/folder-workspace-types'
+import type { RepoCliProbe } from '../../shared/repo-managed-cli'
+import type { RepoManagedDeriveProgress } from '../../shared/repo-managed-derive-progress'
 import type {
   WorktreeBaseStatusEvent,
   WorktreeRemoteBranchConflictEvent
@@ -159,6 +161,9 @@ export type FolderWorkspacesApi = {
     createdWithAgent?: FolderWorkspace['createdWithAgent']
     pendingFirstAgentMessageRename?: boolean
   }) => Promise<FolderWorkspace>
+  probeRepoCli: (args?: { mainPath?: string }) => Promise<RepoCliProbe>
+  installRepoCli: () => Promise<RepoCliProbe>
+  onDeriveProgress: (callback: (progress: RepoManagedDeriveProgress) => void) => () => void
   update: (args: {
     folderWorkspaceId: string
     updates: Partial<

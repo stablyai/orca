@@ -7,6 +7,7 @@ import { z } from 'zod'
 import type { Store } from '../persistence'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 import type { FolderWorkspace } from '../../shared/folder-workspace-types'
+import type { RepoCliProbe } from '../../shared/repo-managed-cli'
 import type {
   NestedRepoScanResult,
   ProjectGroup,
@@ -63,6 +64,8 @@ import type { ClaimedCloneTarget } from '../git/repo-clone-path'
 import { scanNestedRepos } from '../project-groups/nested-repo-discovery'
 import { importRepoManagedProject } from '../project-groups/repo-managed-import'
 import { deriveRepoManagedFolderWorkspace } from '../project-groups/repo-managed-derive'
+import { repoManagedDeriveProgress } from '../../shared/repo-managed-derive-progress'
+import { installRepoCli, probeRepoCli } from '../project-groups/repo-managed-cli'
 import { REPO_MANAGED_MARKERS, REPO_METADATA_DIR } from '../../shared/repo-managed-project'
 import {
   createNestedProjectGroupResolver,
@@ -1246,7 +1249,11 @@ async function scanNestedReposForIpc(args: {
         for (const markerName of REPO_MANAGED_MARKERS) {
           try {
             const marker = await fsProvider.stat(posix.join(path, REPO_METADATA_DIR, markerName))
-            if (marker.type === 'file' || marker.type === 'directory' || marker.type === 'symlink') {
+            if (
+              marker.type === 'file' ||
+              marker.type === 'directory' ||
+              marker.type === 'symlink'
+            ) {
               return true
             }
           } catch {
@@ -1330,6 +1337,8 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
   ipcMain.removeHandler('folderWorkspaces:list')
   ipcMain.removeHandler('folderWorkspaces:create')
   ipcMain.removeHandler('folderWorkspaces:deriveRepoManaged')
+  ipcMain.removeHandler('folderWorkspaces:probeRepoCli')
+  ipcMain.removeHandler('folderWorkspaces:installRepoCli')
   ipcMain.removeHandler('folderWorkspaces:update')
   ipcMain.removeHandler('folderWorkspaces:delete')
   ipcMain.removeHandler('folderWorkspaces:getPathStatus')
@@ -1557,7 +1566,7 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
 
   ipcMain.handle(
     'folderWorkspaces:deriveRepoManaged',
-    async (_event, rawArgs: unknown): Promise<FolderWorkspace> => {
+    async (event, rawArgs: unknown): Promise<FolderWorkspace> => {
       const args = parseProjectGroupIpcArgs(
         FolderWorkspaceCreateArgs,
         rawArgs,
@@ -1571,12 +1580,31 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
         linkedTask: args.linkedTask,
         linkedTaskSourceContext: args.linkedTaskSourceContext,
         createdWithAgent: args.createdWithAgent,
-        pendingFirstAgentMessageRename: args.pendingFirstAgentMessageRename
+        pendingFirstAgentMessageRename: args.pendingFirstAgentMessageRename,
+        onPhase: (phase) => {
+          event.sender.send('folderWorkspaces:deriveProgress', repoManagedDeriveProgress(phase))
+        }
       })
       notifyReposChanged(mainWindow)
       return workspace
     }
   )
+
+  ipcMain.handle(
+    'folderWorkspaces:probeRepoCli',
+    async (_event, rawArgs: unknown): Promise<RepoCliProbe> => {
+      const args = parseProjectGroupIpcArgs(
+        z.object({
+          mainPath: z.string().optional()
+        }),
+        rawArgs ?? {},
+        'invalid_repo_cli_probe_args'
+      )
+      return probeRepoCli({ mainPath: args.mainPath })
+    }
+  )
+
+  ipcMain.handle('folderWorkspaces:installRepoCli', async () => installRepoCli())
 
   ipcMain.handle(
     'folderWorkspaces:update',

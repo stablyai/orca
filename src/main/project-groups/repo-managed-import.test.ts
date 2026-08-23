@@ -94,4 +94,37 @@ describe('importRepoManagedProject', () => {
     expect(store.getProjectGroups()).toHaveLength(1)
     expect(store.getFolderWorkspaces()).toHaveLength(1)
   })
+
+  it('reuses an existing group and creates the missing main workspace', () => {
+    const store = makeStore()
+    const group = store.createProjectGroup({
+      name: 'AOSP',
+      parentPath: '/src/aosp',
+      parentGroupId: null,
+      createdFrom: 'repo-managed'
+    })
+
+    const result = importRepoManagedProject({ store, parentPath: '/src/aosp' })
+
+    expect(result.group?.id).toBe(group.id)
+    expect(result.importedCount).toBe(1)
+    expect(result.alreadyKnownCount).toBe(0)
+    expect(store.getFolderWorkspaces()).toEqual([
+      expect.objectContaining({ projectGroupId: group.id, folderPath: '/src/aosp' })
+    ])
+  })
+
+  it('does not reuse a group on a different connection', () => {
+    const store = makeStore()
+    importRepoManagedProject({ store, parentPath: '/src/aosp' })
+    const remote = importRepoManagedProject({
+      store,
+      parentPath: '/src/aosp',
+      connectionId: 'ssh-1'
+    })
+
+    expect(store.getProjectGroups()).toHaveLength(2)
+    expect(remote.group?.connectionId).toBe('ssh-1')
+    expect(remote.importedCount).toBe(1)
+  })
 })

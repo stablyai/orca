@@ -4,6 +4,7 @@ import { toast } from 'sonner'
 import type { AppState } from '../types'
 import type { SshRepoReadoption } from '../../../../shared/ssh-types'
 import type { FolderWorkspace } from '../../../../shared/folder-workspace-types'
+import type { RepoManagedDeriveProgress } from '../../../../shared/repo-managed-derive-progress'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import type {
   NestedRepoScanResult,
@@ -1611,7 +1612,10 @@ function getRuntimeTargetCachePrefix(
   return target.kind === 'local' ? 'local' : `environment:${target.environmentId}`
 }
 
-type FolderWorkspacePathStatusRouteOptions = { runtimeEnvironmentId?: string | null }
+type FolderWorkspacePathStatusRouteOptions = {
+  runtimeEnvironmentId?: string | null
+  onProgress?: (progress: RepoManagedDeriveProgress) => void
+}
 type AddRepoPathRouteOptions = { runtimeEnvironmentId?: string | null }
 type RuntimeCatalogFetchOptions = { runtimeEnvironmentId?: string | null }
 
@@ -2897,17 +2901,25 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
           )
         )
       }
-      const workspace =
-        target.kind === 'local'
-          ? await window.api.folderWorkspaces.deriveRepoManaged(args)
-          : (
-              await callRuntimeRpc<{ folderWorkspace: FolderWorkspace }>(
-                target,
-                'folderWorkspace.deriveRepoManaged',
-                args,
-                { timeoutMs: 60 * 60 * 1000 }
-              )
-            ).folderWorkspace
+      const unsubscribeProgress = window.api.folderWorkspaces.onDeriveProgress?.((progress) => {
+        options?.onProgress?.(progress)
+      })
+      let workspace: FolderWorkspace
+      try {
+        workspace =
+          target.kind === 'local'
+            ? await window.api.folderWorkspaces.deriveRepoManaged(args)
+            : (
+                await callRuntimeRpc<{ folderWorkspace: FolderWorkspace }>(
+                  target,
+                  'folderWorkspace.deriveRepoManaged',
+                  args,
+                  { timeoutMs: 60 * 60 * 1000 }
+                )
+              ).folderWorkspace
+      } finally {
+        unsubscribeProgress?.()
+      }
       const ownedWorkspace = folderWorkspaceWithFetchedOwner(workspace, target, get().projectGroups)
       set((s) => ({
         folderWorkspaces: [ownedWorkspace, ...s.folderWorkspaces],

@@ -61,6 +61,8 @@ describe('repo-managed project identity', () => {
     const derived = workspace({ id: 'ws-2', folderPath: '/orca/workspaces/task-a' })
     expect(findMainFolderWorkspace([derived, workspace()], group)?.id).toBe('ws-1')
     expect(findMainFolderWorkspace([derived], group)).toBeUndefined()
+    expect(findMainFolderWorkspace([workspace()], { ...group, parentPath: null })).toBeUndefined()
+    expect(findMainFolderWorkspace([workspace()], { ...group, parentPath: '   ' })).toBeUndefined()
   })
 
   it('resolves create intent for main vs derive vs ordinary folder groups', () => {

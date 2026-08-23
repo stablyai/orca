@@ -1,4 +1,3 @@
-import { basename } from 'node:path'
 import { join as joinPath } from 'node:path'
 import { REPO_METADATA_DIR } from '../../shared/repo-managed-project'
 
@@ -16,7 +15,7 @@ export type RepoManagedGitReader = {
 }
 
 export type RepoManagedPathReader = {
-  join: (parent: string, child: string) => string
+  join: (...parts: string[]) => string
   basename: (path: string) => string
   realpath?: (path: string) => Promise<string>
   exists: (path: string) => Promise<boolean>
@@ -27,6 +26,18 @@ const DEFAULT_MANIFEST_FILE = 'default.xml'
 function trimGitOutput(value: string | null | undefined): string | null {
   const trimmed = value?.trim() ?? ''
   return trimmed.length > 0 ? trimmed : null
+}
+
+/**
+ * `.repo/manifest.xml` is usually a symlink into `.repo/manifests/<file>`.
+ * `repo init -m` looks for that name inside the cloned manifests checkout,
+ * so a regular file named `manifest.xml` must still init as `default.xml`.
+ */
+export function resolveRepoManagedManifestFile(
+  resolvedPathBasename: string | null | undefined
+): string {
+  const name = resolvedPathBasename?.trim() || DEFAULT_MANIFEST_FILE
+  return name === 'manifest.xml' ? DEFAULT_MANIFEST_FILE : name
 }
 
 export function getRepoManagedManifestsGitDir(
@@ -57,7 +68,9 @@ export async function readRepoManagedCheckoutIdentity(args: {
   let manifestFile = DEFAULT_MANIFEST_FILE
   if (args.paths.realpath) {
     try {
-      manifestFile = args.paths.basename(await args.paths.realpath(manifestXml)) || DEFAULT_MANIFEST_FILE
+      manifestFile = resolveRepoManagedManifestFile(
+        args.paths.basename(await args.paths.realpath(manifestXml))
+      )
     } catch {
       manifestFile = DEFAULT_MANIFEST_FILE
     }
@@ -94,5 +107,121 @@ export function buildRepoInitArgs(args: {
 }
 
 export function buildRepoSyncArgs(): string[] {
-  return ['sync', '--local-only', '--current-branch', '--fail-fast']
+  return ['sync', '--local-only', '--no-manifest-update', '--fail-fast']
+}
+
+export function getRepoManagedProjectsGitDir(
+  rootPath: string,
+  relPath: string,
+  join: RepoManagedPathReader['join'] = joinPath
+): string {
+  return join(rootPath, REPO_METADATA_DIR, 'projects', `${relPath}.git`)
+}
+
+export function parseRepoProjectList(content: string): string[] {
+  const paths: string[] = []
+  for (const line of content.split(/\r?\n/)) {
+    const trimmed = line.trim()
+    if (!trimmed || trimmed.startsWith('#')) {
+      continue
+    }
+    paths.push(trimmed)
+  }
+  return paths
+}
+
+export function parseGitDirPointer(
+  content: string,
+  worktreePath: string,
+  join: RepoManagedPathReader['join'] = joinPath
+): string | null {
+  const match = /^gitdir:\s*(.+)$/m.exec(content)
+  const pointer = match?.[1]?.trim()
+  if (!pointer) {
+    return null
+  }
+  return pointer.startsWith('/') || /^[A-Za-z]:[\\/]/.test(pointer)
+    ? pointer
+    : join(worktreePath, pointer)
+}
+
+export type RepoManagedSourceGitProbe = {
+  join: RepoManagedPathReader['join']
+  isDirectory: (path: string) => boolean | Promise<boolean>
+  isFile: (path: string) => boolean | Promise<boolean>
+  readTextFile: (path: string) => Promise<string>
+}
+
+export async function resolveRepoManagedSourceGitDir(args: {
+  mainPath: string
+  relPath: string
+  paths: RepoManagedSourceGitProbe
+}): Promise<string | null> {
+  const join = args.paths.join
+  const farm = getRepoManagedProjectsGitDir(args.mainPath, args.relPath, join)
+  if (await args.paths.isDirectory(farm)) {
+    return farm
+  }
+  const worktree = join(args.mainPath, args.relPath)
+  const gitPath = join(worktree, '.git')
+  if (await args.paths.isDirectory(gitPath)) {
+    return gitPath
+  }
+  if (!(await args.paths.isFile(gitPath))) {
+    return null
+  }
+  let pointer: string | null = null
+  try {
+    pointer = parseGitDirPointer(await args.paths.readTextFile(gitPath), worktree, join)
+  } catch {
+    return null
+  }
+  if (!pointer || !(await args.paths.isDirectory(pointer))) {
+    return null
+  }
+  return pointer
+}
+
+export function buildRepoProjectSeedCloneArgs(sourceGitDir: string, destGitDir: string): string[] {
+  return ['clone', '--bare', '--reference', sourceGitDir, sourceGitDir, destGitDir]
+}
+
+export function buildOriginHeadFetchArgs(destGitDir: string, sourceGitDir: string): string[] {
+  return [
+    '--git-dir',
+    destGitDir,
+    'fetch',
+    '--no-tags',
+    sourceGitDir,
+    '+refs/heads/*:refs/remotes/origin/*'
+  ]
+}
+
+export function buildOriginHeadUpdateRefArgs(destGitDir: string, branch: string): string[] {
+  return [
+    '--git-dir',
+    destGitDir,
+    'update-ref',
+    `refs/remotes/origin/${branch}`,
+    `refs/heads/${branch}`
+  ]
+}
+
+/**
+ * `git clone --bare` leaves `core.bare=true` and no fetch refspec.
+ * Google repo attaches a worktree via `.git` symlink/gitfile and maps
+ * `revision=main` through `remote.origin.fetch` in `ToLocal()`.
+ */
+export function buildSeedGitDirConfigArgs(destGitDir: string, sourceGitDir: string): string[][] {
+  return [
+    ['--git-dir', destGitDir, 'config', 'core.bare', 'false'],
+    ['--git-dir', destGitDir, 'config', 'remote.origin.url', sourceGitDir],
+    [
+      '--git-dir',
+      destGitDir,
+      'config',
+      'remote.origin.fetch',
+      '+refs/heads/*:refs/remotes/origin/*'
+    ]
+  ]
 }

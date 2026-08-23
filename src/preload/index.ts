@@ -102,6 +102,7 @@ import type { PersistedUIState } from '../shared/persisted-ui-state-types'
 import type { CustomPet } from '../shared/pet-types'
 import type { MemorySnapshot } from '../shared/process-stats-types'
 import type { NestedRepoScanResult } from '../shared/project-group-types'
+import type { RepoManagedDeriveProgress } from '../shared/repo-managed-derive-progress'
 import type { BaseRefDefaultResult, BaseRefSearchResult } from '../shared/repo-types'
 import type { TuiAgent } from '../shared/tui-agent'
 import type { FloatingTerminalCwdRequest } from '../shared/ui-chrome-types'
@@ -814,6 +815,14 @@ const api = {
     getPathStatus: (args) => ipcRenderer.invoke('folderWorkspaces:getPathStatus', args),
     create: (args) => ipcRenderer.invoke('folderWorkspaces:create', args),
     deriveRepoManaged: (args) => ipcRenderer.invoke('folderWorkspaces:deriveRepoManaged', args),
+    probeRepoCli: (args) => ipcRenderer.invoke('folderWorkspaces:probeRepoCli', args ?? {}),
+    installRepoCli: () => ipcRenderer.invoke('folderWorkspaces:installRepoCli'),
+    onDeriveProgress: (callback) => {
+      const listener = (_event: Electron.IpcRendererEvent, progress: RepoManagedDeriveProgress) =>
+        callback(progress)
+      ipcRenderer.on('folderWorkspaces:deriveProgress', listener)
+      return () => ipcRenderer.removeListener('folderWorkspaces:deriveProgress', listener)
+    },
     update: (args) => ipcRenderer.invoke('folderWorkspaces:update', args),
     delete: (args) => ipcRenderer.invoke('folderWorkspaces:delete', args)
   } satisfies PreloadApi['folderWorkspaces'],

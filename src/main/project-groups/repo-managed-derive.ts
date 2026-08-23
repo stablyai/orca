@@ -9,26 +9,27 @@ import { runProcess } from '../../shared/child-process/run-process'
 import { parseWslPath } from '../wsl'
 import { buildWslExecArgs } from '../../shared/wsl-login-shell-command'
 import { gitExecFileAsync } from '../git/runner'
-import {
-  computeWorktreePathAsync,
-  sanitizeWorktreeName
-} from '../ipc/worktree-logic'
+import { computeWorktreePathAsync, sanitizeWorktreeName } from '../ipc/worktree-logic'
 import {
   buildRepoInitArgs,
   buildRepoSyncArgs,
-  getRepoManagedManifestsGitDir,
-  getRepoManagedRepoToolPath,
   readRepoManagedCheckoutIdentity,
   type RepoManagedCheckoutIdentity
 } from './repo-managed-checkout'
+import { resolveRepoProgram } from './repo-managed-cli'
+import {
+  REPO_MANAGED_LOCAL_OBJECTS_MISSING,
+  seedDerivedRepoProjectGitDirs
+} from './repo-managed-seed'
+import type { RepoManagedDerivePhase } from '../../shared/repo-managed-derive-progress'
+export type { RepoManagedDerivePhase } from '../../shared/repo-managed-derive-progress'
+export { REPO_MANAGED_LOCAL_OBJECTS_MISSING, seedDerivedRepoProjectGitDirs }
 
 export const REPO_MANAGED_DERIVE_SSH_UNSUPPORTED =
   'Deriving a repo workspace on SSH requires an Orca runtime on that host.'
 export const REPO_TOOL_MISSING =
-  'The repo tool was not found. Install Google repo, or open a checkout that contains .repo/repo.'
+  'The repo CLI was not found. Install it from the workspace composer, or open a checkout that contains .repo/repo.'
 export const REPO_MANAGED_GROUP_REQUIRED = 'Selected project is not a repo-managed checkout.'
-
-export type RepoManagedDerivePhase = 'preparing' | 'init' | 'sync' | 'register'
 
 const REPO_COMMAND_TIMEOUT_MS = 60 * 60 * 1000
 
@@ -96,16 +97,7 @@ export async function defaultRepoCommandRunner(args: {
   return { code: result.code, stdout: result.stdout, stderr: result.stderr }
 }
 
-async function resolveRepoProgram(mainPath: string): Promise<string> {
-  const bundled = getRepoManagedRepoToolPath(mainPath)
-  if (await pathExists(bundled)) {
-    return bundled
-  }
-  return 'repo'
-}
-
 async function readIdentityFromCheckout(mainPath: string): Promise<RepoManagedCheckoutIdentity> {
-  const manifestsGitDir = getRepoManagedManifestsGitDir(mainPath)
   const git = {
     configGet: async (gitDir: string, key: string): Promise<string | null> => {
       try {
@@ -157,27 +149,31 @@ export async function materializeRepoManagedCheckout(args: {
     throw new Error(`Derive destination already exists: ${args.destPath}`)
   }
   const identity = await readIdentityFromCheckout(args.mainPath)
-  const program = await resolveRepoProgram(args.mainPath)
+  const runCommand = args.runCommand ?? defaultRepoCommandRunner
+  const program = await resolveRepoProgram({
+    mainPath: args.mainPath,
+    exists: pathExists,
+    runCommand: (cmd) =>
+      runCommand({
+        program: cmd.program,
+        args: cmd.args,
+        cwd: cmd.cwd ?? args.mainPath,
+        signal: args.signal
+      })
+  })
   if (program === 'repo') {
-    const probe = await args.runCommand?.({
+    const probe = await runCommand({
       program,
       args: ['--version'],
       cwd: args.mainPath,
       signal: args.signal
-    }) ??
-      (await defaultRepoCommandRunner({
-        program,
-        args: ['--version'],
-        cwd: args.mainPath,
-        signal: args.signal
-      }))
+    })
     if (probe.code !== 0) {
       throw new Error(REPO_TOOL_MISSING)
     }
   }
   await mkdir(args.destPath, { recursive: true })
   let materialized = false
-  const runCommand = args.runCommand ?? defaultRepoCommandRunner
   try {
     args.onPhase?.('init')
     const initResult = await runCommand({
@@ -189,6 +185,11 @@ export async function materializeRepoManagedCheckout(args: {
     if (initResult.code !== 0) {
       throw new Error(formatRepoCommandFailure('init', initResult.stderr, initResult.stdout))
     }
+    args.onPhase?.('seed')
+    await seedDerivedRepoProjectGitDirs({
+      mainPath: args.mainPath,
+      destPath: args.destPath
+    })
     args.onPhase?.('sync')
     const syncResult = await runCommand({
       program,

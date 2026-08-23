@@ -384,6 +384,19 @@ describe('scanNestedRepos', () => {
     expect(result.repos).toEqual([])
   })
 
+  it('treats a tree with only .repo/project.list as repo-managed', async () => {
+    const root = await tempRoot()
+    await mkdir(join(root, '.repo'), { recursive: true })
+    await writeFile(join(root, '.repo', 'project.list'), 'bionic\n')
+    await mkdir(join(root, 'bionic'), { recursive: true })
+    await makeGitRepo(join(root, 'bionic'))
+
+    const result = await scanNestedRepos({ path: root })
+
+    expect(result.selectedPathKind).toBe('repo_managed')
+    expect(result.repos).toEqual([])
+  })
+
   it('does not treat an empty .repo directory as repo-managed', async () => {
     const root = await tempRoot()
     await mkdir(join(root, '.repo'), { recursive: true })

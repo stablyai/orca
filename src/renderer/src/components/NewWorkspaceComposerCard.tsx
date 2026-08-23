@@ -64,6 +64,9 @@ import type { WorkspaceCreateErrorDisplay } from '@/lib/workspace-create-error-f
 import type { SshConnectionStatus } from '../../../shared/ssh-types'
 import type { TaskSourceContext } from '../../../shared/task-source-context'
 import type { RuntimeStatus } from '../../../shared/runtime-types'
+import type { RepoCliProbe } from '../../../shared/repo-managed-cli'
+import type { RepoManagedDeriveProgress } from '../../../shared/repo-managed-derive-progress'
+import { Progress } from '@/components/ui/progress'
 import { unwrapRuntimeRpcResult } from '@/runtime/runtime-rpc-client'
 import { translate } from '@/i18n/i18n'
 import { withUiConnectTimeout } from '@/ssh/ssh-connect-ui-timeout'
@@ -127,6 +130,10 @@ type NewWorkspaceComposerCardProps = {
   deriveRepoManaged?: boolean
   onDeriveRepoManagedChange?: (next: boolean) => void
   repoManagedDeriveDisabled?: boolean
+  repoCliProbe?: RepoCliProbe | null
+  repoCliInstalling?: boolean
+  onInstallRepoCli?: () => Promise<void>
+  deriveProgress?: RepoManagedDeriveProgress | null
   /** Shows the footer "Create more" switch — worktree targets only. */
   showCreateMultiple?: boolean
   createMultiple?: boolean
@@ -346,6 +353,10 @@ export default function NewWorkspaceComposerCard({
   deriveRepoManaged = false,
   onDeriveRepoManagedChange,
   repoManagedDeriveDisabled = false,
+  repoCliProbe = null,
+  repoCliInstalling = false,
+  onInstallRepoCli,
+  deriveProgress = null,
   showCreateMultiple = false,
   createMultiple = false,
   onCreateMultipleChange,
@@ -933,6 +944,52 @@ export default function NewWorkspaceComposerCard({
                 )}
               />
             </div>
+            {!repoManagedDeriveDisabled && repoCliProbe && !repoCliProbe.available ? (
+              <div className="flex items-start justify-between gap-3 border-t border-border/60 px-3 py-2.5">
+                <span className="min-w-0 text-[11px] text-muted-foreground">
+                  {!repoCliProbe.pythonAvailable
+                    ? translate(
+                        'auto.components.NewWorkspaceComposerCard.deriveRepoManagedPythonMissing',
+                        'Python 3 is required to run the Google repo CLI.'
+                      )
+                    : repoCliInstalling
+                      ? translate(
+                          'auto.components.NewWorkspaceComposerCard.deriveRepoManagedInstalling',
+                          'Installing the official repo launcher into ~/.orca/bin…'
+                        )
+                      : translate(
+                          'auto.components.NewWorkspaceComposerCard.deriveRepoManagedInstallHint',
+                          'Derive needs the Google repo CLI. Orca can install the official launcher into ~/.orca/bin.'
+                        )}
+                </span>
+                {repoCliProbe.pythonAvailable ? (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="shrink-0 text-xs"
+                    disabled={creating || repoCliInstalling}
+                    onClick={() => void onInstallRepoCli?.()}
+                  >
+                    {repoCliInstalling ? <LoaderCircle className="size-3.5 animate-spin" /> : null}
+                    {translate(
+                      'auto.components.NewWorkspaceComposerCard.deriveRepoManagedInstallAction',
+                      'Install repo CLI'
+                    )}
+                  </Button>
+                ) : null}
+              </div>
+            ) : null}
+            {!repoManagedDeriveDisabled &&
+            repoCliProbe?.available &&
+            repoCliProbe.source === 'orca' ? (
+              <p className="border-t border-border/60 px-3 py-2 text-[11px] text-muted-foreground">
+                {translate(
+                  'auto.components.NewWorkspaceComposerCard.deriveRepoManagedInstalled',
+                  'Using the repo CLI Orca installed in ~/.orca/bin.'
+                )}
+              </p>
+            ) : null}
           </div>
         ) : null}
 
@@ -1265,6 +1322,43 @@ export default function NewWorkspaceComposerCard({
           ) : (
             createError.message
           )}
+        </div>
+      ) : null}
+
+      {creating && deriveProgress ? (
+        <div className="space-y-1.5" aria-live="polite">
+          <div className="flex items-center justify-between gap-2 text-[11px] text-muted-foreground">
+            <span>
+              {deriveProgress.phase === 'preparing'
+                ? translate(
+                    'auto.components.NewWorkspaceComposerCard.derivePhasePreparing',
+                    'Preparing derive…'
+                  )
+                : deriveProgress.phase === 'init'
+                  ? translate(
+                      'auto.components.NewWorkspaceComposerCard.derivePhaseInit',
+                      'Initializing repo checkout…'
+                    )
+                  : deriveProgress.phase === 'seed'
+                    ? translate(
+                        'auto.components.NewWorkspaceComposerCard.derivePhaseSeed',
+                        'Copying local git objects…'
+                      )
+                    : deriveProgress.phase === 'sync'
+                      ? translate(
+                          'auto.components.NewWorkspaceComposerCard.derivePhaseSync',
+                          'Checking out projects…'
+                        )
+                      : translate(
+                          'auto.components.NewWorkspaceComposerCard.derivePhaseRegister',
+                          'Registering workspace…'
+                        )}
+            </span>
+            <span>
+              {deriveProgress.step}/{deriveProgress.total}
+            </span>
+          </div>
+          <Progress value={deriveProgress.percent} />
         </div>
       ) : null}
 
