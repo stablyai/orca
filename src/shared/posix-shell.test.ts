@@ -1,25 +1,48 @@
 import { spawnSync } from 'node:child_process'
-import { existsSync } from 'node:fs'
-import { delimiter, isAbsolute, join } from 'node:path'
+import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { delimiter, dirname, isAbsolute, join } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { describe, expect, it } from 'vitest'
 import { findPosixShell, hasPosixShellAtCanonicalPath, posixShellEnvironment } from './posix-shell'
+
+function holdsShell(directory: string): boolean {
+  return existsSync(join(directory, 'sh.exe')) || existsSync(join(directory, 'sh'))
+}
+
+/** The given PATH with every shell removed — and nothing else.
+ *
+ *  Dropping the whole directory is too blunt: Git for Windows' `bin` holds
+ *  git.exe beside sh.exe, so a plain filter takes git too and the search under
+ *  test has nothing left to ask. The sibling `cmd` is that same git without a
+ *  shell, which is the layout this case is simulating in the first place. */
+function pathWithoutShell(entries: readonly string[]): string {
+  const kept: string[] = []
+  for (const entry of entries) {
+    if (!entry) {
+      continue
+    }
+    if (!holdsShell(entry)) {
+      kept.push(entry)
+      continue
+    }
+    const shellFreeGit = join(dirname(entry), 'cmd')
+    if (existsSync(join(shellFreeGit, 'git.exe')) && !holdsShell(shellFreeGit)) {
+      kept.push(shellFreeGit)
+    }
+  }
+  return kept.join(delimiter)
+}
 
 /** A copy of the environment with every PATH entry holding a shell removed.
  *
  *  Windows env keys are case-insensitive, so `Path` has to go too — leaving it
  *  behind would hand the child the original list under the other spelling. */
 function environmentWithoutShellOnPath(): NodeJS.ProcessEnv {
-  const stripped = (process.env.PATH ?? '')
-    .split(delimiter)
-    .filter(
-      (entry) => entry && !existsSync(join(entry, 'sh.exe')) && !existsSync(join(entry, 'sh'))
-    )
-    .join(delimiter)
   const environment = Object.fromEntries(
     Object.entries(process.env).filter(([name]) => !/^path$/i.test(name))
   )
-  return { ...environment, PATH: stripped }
+  return { ...environment, PATH: pathWithoutShell((process.env.PATH ?? '').split(delimiter)) }
 }
 
 describe('findPosixShell', () => {
@@ -53,6 +76,11 @@ describe('findPosixShell', () => {
     const environment = environmentWithoutShellOnPath()
     const onPath = spawnSync('sh', ['-c', 'exit 0'], { env: environment, stdio: 'ignore' })
     expect((onPath.error as NodeJS.ErrnoException | undefined)?.code).toBe('ENOENT')
+    if (spawnSync('git', ['--version'], { env: environment, stdio: 'ignore' }).error) {
+      // The search's last resort is asking git where it lives, and this host
+      // has no git reachable with every shell taken off PATH.
+      return
+    }
 
     // Why a child process: the search caches its answer for the life of a
     // process, so the stripped PATH only means anything to a fresh one.
@@ -69,8 +97,18 @@ describe('findPosixShell', () => {
            resolve(specifier, context, next) {
              try {
                return next(specifier, context)
-             } catch {
-               return next(specifier + '.ts', context)
+             } catch (error) {
+               // Only an unresolved specifier earns the retry, and a genuinely
+               // missing module is reported under the name the source wrote --
+               // not under a '.ts' path nobody ever meant to create.
+               if (error?.code !== 'ERR_MODULE_NOT_FOUND') {
+                 throw error
+               }
+               try {
+                 return next(specifier + '.ts', context)
+               } catch {
+                 throw error
+               }
              }
            }
          })
@@ -82,6 +120,26 @@ describe('findPosixShell', () => {
 
     expect(probe.stdout.trim(), probe.stderr).not.toBe('')
     expect(spawnSync(probe.stdout.trim(), ['-c', 'exit 0'], { stdio: 'ignore' }).status).toBe(0)
+  })
+
+  it('takes the shell off PATH without taking git with it', () => {
+    // Git for Windows' `bin` holds git.exe and sh.exe together, so filtering the
+    // directory out drops git as well and the case above has nothing left to
+    // ask -- on a machine where both the shell and git are perfectly healthy.
+    const root = mkdtempSync(join(tmpdir(), 'orca-posix-shell-path-'))
+    try {
+      const bin = join(root, 'bin')
+      const cmd = join(root, 'cmd')
+      mkdirSync(bin)
+      mkdirSync(cmd)
+      for (const file of [join(bin, 'git.exe'), join(bin, 'sh.exe'), join(cmd, 'git.exe')]) {
+        writeFileSync(file, '')
+      }
+
+      expect(pathWithoutShell([bin]).split(delimiter)).toEqual([cmd])
+    } finally {
+      rmSync(root, { recursive: true, force: true, maxRetries: 3, retryDelay: 50 })
+    }
   })
 })
 
