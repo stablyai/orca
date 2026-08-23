@@ -1,12 +1,17 @@
 import { describe, expect, it } from 'vitest'
+import type { FolderWorkspace } from '../../../../shared/folder-workspace-types'
+import type { ProjectGroup } from '../../../../shared/project-group-types'
+import type { Repo } from '../../../../shared/repo-types'
 import type { Worktree } from '../../../../shared/worktree/types'
 import {
   buildProjectNavigationOrder,
+  buildSidebarProjectNavigationOrder,
   getActiveProjectKey,
   resolveTopLevelProjectGroupId,
   selectProjectNavigationTarget,
   type ProjectNavigationInputs
 } from './project-navigation'
+import type { HostSectionRow } from './host-section-rows'
 
 function wt(id: string, lastActivityAt = 0, displayName = id): Worktree {
   return { id, displayName, lastActivityAt } as unknown as Worktree
@@ -193,5 +198,89 @@ describe('resolveTopLevelProjectGroupId', () => {
       ['b', 'a']
     ])
     expect(resolveTopLevelProjectGroupId('a', parents)).toBe('b')
+  })
+})
+
+describe('buildSidebarProjectNavigationOrder', () => {
+  const header = (key: string): HostSectionRow => ({
+    type: 'header',
+    key,
+    label: key,
+    count: 1,
+    tone: '',
+    projectGroupDepth: 0
+  })
+
+  const build = (overrides: {
+    rows: HostSectionRow[]
+    worktrees?: Worktree[]
+    folderWorkspaces?: FolderWorkspace[]
+    repoMap?: Map<string, Repo>
+    projectGroups?: ProjectGroup[]
+  }) =>
+    buildSidebarProjectNavigationOrder({
+      rows: overrides.rows,
+      groupBy: 'repo',
+      worktrees: overrides.worktrees ?? [],
+      folderWorkspaces: overrides.folderWorkspaces ?? [],
+      repoMap: overrides.repoMap ?? new Map(),
+      prCache: null,
+      workspaceStatuses: [],
+      settings: null,
+      projectGroups: overrides.projectGroups ?? []
+    })
+
+  it('uses rendered header order instead of worktree input order', () => {
+    const repoA = { id: 'a', displayName: 'A' } as Repo
+    const repoB = { id: 'b', displayName: 'B' } as Repo
+    const worktreeA = { ...wt('a1'), repoId: 'a' }
+    const worktreeB = { ...wt('b1'), repoId: 'b' }
+    const order = build({
+      rows: [header('repo:b'), header('repo:a')],
+      worktrees: [worktreeA, worktreeB],
+      repoMap: new Map([
+        ['a', repoA],
+        ['b', repoB]
+      ])
+    })
+
+    expect(order.orderedProjectKeys).toEqual(['repo:b', 'repo:a'])
+  })
+
+  it('treats an orphaned visible child group as top-level under host filtering', () => {
+    const child = {
+      id: 'child',
+      name: 'Child',
+      tabOrder: 0,
+      parentGroupId: 'hidden'
+    } as ProjectGroup
+    const repo = { id: 'repo', displayName: 'Repo', projectGroupId: child.id } as Repo
+    const order = build({
+      rows: [header('project-group:child')],
+      worktrees: [{ ...wt('worktree'), repoId: repo.id }],
+      repoMap: new Map([[repo.id, repo]]),
+      projectGroups: [child]
+    })
+
+    expect(order.orderedProjectKeys).toEqual(['project-group:child'])
+  })
+
+  it('keeps folder-workspace-only projects navigable', () => {
+    const group = { id: 'group', name: 'Group', tabOrder: 0 } as ProjectGroup
+    const folderWorkspace = {
+      id: 'folder-id',
+      projectGroupId: group.id,
+      name: 'Folder',
+      folderPath: 'C:\\workspace',
+      lastActivityAt: 0,
+      createdAt: 0
+    } as FolderWorkspace
+    const order = build({
+      rows: [header('project-group:group')],
+      folderWorkspaces: [folderWorkspace],
+      projectGroups: [group]
+    })
+
+    expect(order.worktreesByProjectKey.get('project-group:group')?.[0]?.id).toBe('folder:folder-id')
   })
 })

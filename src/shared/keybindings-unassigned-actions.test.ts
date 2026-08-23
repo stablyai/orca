@@ -223,6 +223,14 @@ describe('keybindings', () => {
         'project.navigateNext': ['Mod+Alt+P']
       })
     ).toBe(true)
+    expect(
+      keybindingMatchesAction(
+        'project.navigateNext',
+        { ...binding, control: true, meta: false },
+        'win32',
+        { 'project.navigateNext': ['Mod+Alt+P'] }
+      )
+    ).toBe(true)
 
     const next = getKeybindingDefinition('project.navigateNext')
     expect(next?.title).toBe('Next project')

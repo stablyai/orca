@@ -16,13 +16,7 @@ import type { ProjectGroupingModel } from './worktree-list/grouping/project-grou
 import type { WorktreeGroupBy } from './worktree-list/grouping/row-types'
 import { getGroupKeysForWorktree } from './worktree-list/grouping/worktree-group-keys'
 
-/**
- * Walk a project group to its outermost in-map ancestor (the top-level project).
- * `parentGroupIdById` maps each known group id to its parent (null for roots).
- * Returns the top-level group id, or null when the starting group is unknown.
- * Mirrors getGroupKeysForWorktree's ancestor walk so a folder workspace and a
- * worktree in the same top-level group collapse to the same cycle stop.
- */
+/** Matches folder workspaces to the same visible top-level group as worktrees. */
 export function resolveTopLevelProjectGroupId(
   projectGroupId: string,
   parentGroupIdById: ReadonlyMap<string, string | null>
@@ -41,11 +35,7 @@ export function resolveTopLevelProjectGroupId(
 export type ProjectNavigationDirection = 'up' | 'down'
 
 export type ProjectNavigationEntry = {
-  /**
-   * A navigable sidebar member. Folder workspaces are passed as their
-   * `folderWorkspaceToWorktree` form, so worktrees and folder workspaces share
-   * one recency/activation id (the value `activeWorktreeId` also holds).
-   */
+  /** Folder workspaces use their worktree-shaped recency and activation identity. */
   worktree: Worktree
   /** Top-level project key, or null to skip an ungroupable member. */
   projectKey: string | null
@@ -60,13 +50,7 @@ export type ProjectNavigationOrder = {
   projectKeyByWorktreeIdentity: Map<string, string>
 }
 
-/**
- * Collapse ordered sidebar members into their top-level projects. The caller
- * passes entries in sidebar order (pinned duplicates already removed so the
- * cycle order follows the visible section headers) with each member's
- * pre-resolved top-level project key. Order is first-appearance; members with
- * no project key are skipped. Pure so the derivation stays unit-testable.
- */
+/** Groups navigable members while preserving visible project order. */
 export function buildProjectNavigationOrder(
   entries: readonly ProjectNavigationEntry[],
   preferredProjectKeys?: readonly string[]
@@ -179,14 +163,7 @@ export type ProjectNavigationInputs = {
   direction: ProjectNavigationDirection
 }
 
-/**
- * Pick which worktree to activate when cycling to the next/previous project.
- * Cycles top-level projects in sidebar order with wrap-around, then within the
- * target project selects the most-recently-focused worktree (same recency rule
- * as Cmd+J's empty-query ordering). Pure on purpose: the caller precomputes the
- * project structures so this branching stays unit-testable.
- * Returns the target worktree id, or null when there is nothing to navigate to.
- */
+/** Selects the target project's most recently focused workspace with wraparound. */
 export function selectProjectNavigationTarget(inputs: ProjectNavigationInputs): Worktree | null {
   const {
     orderedProjectKeys,
@@ -203,8 +180,7 @@ export function selectProjectNavigationTarget(inputs: ProjectNavigationInputs): 
   }
 
   const currentIndex = activeProjectKey != null ? orderedProjectKeys.indexOf(activeProjectKey) : -1
-  // Why: no active project (or it's off the current list) means the first press
-  // should land on a real project — the near end for the chosen direction.
+  // An off-list active project starts at the near end for the chosen direction.
   const targetIndex =
     currentIndex === -1
       ? direction === 'down'
@@ -225,9 +201,7 @@ export function selectProjectNavigationTarget(inputs: ProjectNavigationInputs): 
     activeWorkspaceExecutionHostId,
     lastVisitedAtByWorktreeId
   })
-  // switchableWorktreesForRows excludes the active worktree; for a different
-  // target project it isn't a member so every worktree survives. The fallback
-  // covers the single-project wrap where the active worktree is the only member.
+  // The fallback covers a single-project wrap with only the active workspace.
   return switchableWorktreesForRows[0] ?? projectWorktrees[0] ?? null
 }
 

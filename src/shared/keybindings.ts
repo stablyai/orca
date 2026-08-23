@@ -264,8 +264,7 @@ export const KEYBINDING_DEFINITIONS: readonly KeybindingDefinition[] = [
     group: 'Global',
     scope: 'global',
     searchKeywords: ['shortcut', 'global', 'project', 'repo', 'project group', 'next', 'switch'],
-    // Why: ship unbound — every natural chord is already taken (Cmd+1-9,
-    // Cmd+Shift+Up/Down, Cmd/Ctrl+Shift+Left/Right), so users bind it in Settings.
+    // Existing project/worktree chords leave no conflict-free default.
     defaultBindings: platformBindings([])
   },
   {
@@ -273,8 +272,16 @@ export const KEYBINDING_DEFINITIONS: readonly KeybindingDefinition[] = [
     title: 'Previous project',
     group: 'Global',
     scope: 'global',
-    searchKeywords: ['shortcut', 'global', 'project', 'repo', 'project group', 'previous', 'switch'],
-    // Why: ship unbound for the same reason as project.navigateNext.
+    searchKeywords: [
+      'shortcut',
+      'global',
+      'project',
+      'repo',
+      'project group',
+      'previous',
+      'switch'
+    ],
+    // Existing project/worktree chords leave no conflict-free default.
     defaultBindings: platformBindings([])
   },
   {
