@@ -1281,7 +1281,8 @@ function openSettingsFromSystemMenu(): void {
 
   // Why: no signal proves the renderer listener is attached — push, and also leave a one-shot intent the unmounted renderer pulls at mount.
   targetWindow.webContents.send('ui:openSettings')
-  // Why: untimed — any TTL can be outrun by a slow cold start; id-scoping + consume-on-read still prevent leaking to a later renderer.
+  // Why: untimed — any TTL can be outrun by a slow cold start; replace the prior target so a destroyed renderer cannot linger forever.
+  pendingOpenSettings.clear()
   pendingOpenSettings.mark(targetWindow.webContents.id, Number.POSITIVE_INFINITY)
 }
 

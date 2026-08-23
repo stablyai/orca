@@ -53,4 +53,15 @@ describe('web contents timed flag', () => {
     expect(flag.matches(11)).toBe(true)
     expect(flag.matches(22)).toBe(false)
   })
+
+  it('clears an unconsumed infinite target for latest-only callers', () => {
+    const flag = createWebContentsTimedFlag()
+
+    flag.mark(11, Number.POSITIVE_INFINITY)
+    flag.clear()
+    flag.mark(22, Number.POSITIVE_INFINITY)
+
+    expect(flag.matches(11)).toBe(false)
+    expect(flag.matches(22)).toBe(true)
+  })
 })

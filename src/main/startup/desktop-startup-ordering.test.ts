@@ -256,6 +256,22 @@ describe('startup ordering', () => {
     expect(reload).toBeGreaterThanOrEqual(0)
   })
 
+  it('replaces the pending settings target before marking an untimed request', () => {
+    const source = readFileSync(join(process.cwd(), 'src/main/index.ts'), 'utf8')
+    const functionStart = source.indexOf('function openSettingsFromSystemMenu(): void {')
+    const functionEnd = source.indexOf('function quitFromSystemTray()', functionStart)
+    const body = source.slice(functionStart, functionEnd)
+    const clear = body.indexOf('pendingOpenSettings.clear()')
+    const mark = body.indexOf(
+      'pendingOpenSettings.mark(targetWindow.webContents.id, Number.POSITIVE_INFINITY)'
+    )
+
+    expect(functionStart).toBeGreaterThanOrEqual(0)
+    expect(functionEnd).toBeGreaterThan(functionStart)
+    expect(clear).toBeGreaterThanOrEqual(0)
+    expect(mark).toBeGreaterThan(clear)
+  })
+
   it('uses the tested quit lifecycle before side effects and stages merged hosts before flush', () => {
     const source = readFileSync(join(process.cwd(), 'src/main/index.ts'), 'utf8')
     const beforeQuitStart = source.indexOf("app.on('before-quit'")
