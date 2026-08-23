@@ -54,7 +54,13 @@ export function runSettingsSectionLeaveConfirmation(
   sectionId: string,
   confirmations: SettingsSectionLeaveConfirmations
 ): Promise<boolean> {
-  return sectionId === 'appearance' ? confirmations.appearance() : confirmations.sourceControl()
+  if (sectionId === 'appearance') {
+    return confirmations.appearance()
+  }
+  if (sectionId === 'git') {
+    return confirmations.sourceControl()
+  }
+  return Promise.resolve(true)
 }
 
 export function releaseSettledSettingsNavGuard(

@@ -43,6 +43,36 @@ describe('settings section navigation', () => {
     expect(discardAppearance).not.toHaveBeenCalled()
   })
 
+  it('settles only Source Control when navigating away from Git', async () => {
+    const confirmAppearance = vi.fn().mockResolvedValue(true)
+    const confirmSourceControl = vi.fn().mockResolvedValue(false)
+
+    await expect(
+      runSettingsSectionLeaveConfirmation('git', {
+        appearance: confirmAppearance,
+        sourceControl: confirmSourceControl
+      })
+    ).resolves.toBe(false)
+
+    expect(confirmAppearance).not.toHaveBeenCalled()
+    expect(confirmSourceControl).toHaveBeenCalledOnce()
+  })
+
+  it('does not settle unrelated sections', async () => {
+    const confirmAppearance = vi.fn().mockResolvedValue(false)
+    const confirmSourceControl = vi.fn().mockResolvedValue(false)
+
+    await expect(
+      runSettingsSectionLeaveConfirmation('general', {
+        appearance: confirmAppearance,
+        sourceControl: confirmSourceControl
+      })
+    ).resolves.toBe(true)
+
+    expect(confirmAppearance).not.toHaveBeenCalled()
+    expect(confirmSourceControl).not.toHaveBeenCalled()
+  })
+
   it('pins dirty Appearance and Git sections when search has no matches', () => {
     const git = { id: 'git' }
     const appearance = { id: 'appearance' }
