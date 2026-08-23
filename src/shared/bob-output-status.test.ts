@@ -117,6 +117,19 @@ describe('createBobOutputStatusDetector', () => {
     expect(onWorking).toHaveBeenCalledTimes(1)
   })
 
+  it('reads a frame holding both the spinner and the idle composer as working', () => {
+    // Why: Bob repaints the composer placeholder in the same frame as the
+    // spinner, so the idle branch is only correct because the active check runs
+    // first; this pins that ordering.
+    const { instance, onWorking, onDone } = detector()
+    instance.observe(IDLE_COMPOSER)
+    expect(instance.observe(PROMPT_ECHO + SPINNER_FRAME + IDLE_COMPOSER)).toBe(true)
+    expect(onWorking).toHaveBeenCalledWith(
+      'Run the shell command then reply with exactly: FINISHED'
+    )
+    expect(onDone).not.toHaveBeenCalled()
+  })
+
   it('does not re-fire working on carried-over text', () => {
     const { instance, onWorking } = detector({ startupCommand: 'bob chat' })
     instance.observe(SPINNER_FRAME)
