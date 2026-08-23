@@ -68,9 +68,7 @@ jobs:
         run: |
           xvfb-run --auto-servernum env SKIP_BUILD=1 ORCA_E2E_FORWARD_APP_LOGS=1 pnpm run test:e2e -- tests/e2e/golden-core-flows.spec.ts
           xvfb-run --auto-servernum env SKIP_BUILD=1 ORCA_E2E_FORWARD_APP_LOGS=1 pnpm run --if-present test:e2e:workspace-session-golden
-          if [ -f tests/e2e/golden-fresh-profile-terminal.spec.ts ]; then
-            xvfb-run --auto-servernum env SKIP_BUILD=1 ORCA_E2E_FORWARD_APP_LOGS=1 pnpm run test:e2e -- tests/e2e/golden-fresh-profile-terminal.spec.ts tests/e2e/golden-shell-command.spec.ts
-          fi
+          xvfb-run --auto-servernum env SKIP_BUILD=1 ORCA_E2E_FORWARD_APP_LOGS=1 pnpm run --if-present test:e2e:fresh-terminal-golden
           xvfb-run --auto-servernum env SKIP_BUILD=1 ORCA_E2E_FORWARD_APP_LOGS=1 pnpm run test:e2e:terminal-rendering-golden
           xvfb-run --auto-servernum env SKIP_BUILD=1 ORCA_E2E_FORWARD_APP_LOGS=1 pnpm run --if-present test:e2e:posix-profile-index-golden
           xvfb-run --auto-servernum env SKIP_BUILD=1 ORCA_E2E_FORWARD_APP_LOGS=1 pnpm run --if-present test:e2e:agent-tui-golden
@@ -81,9 +79,7 @@ jobs:
         run: |
           env SKIP_BUILD=1 ORCA_E2E_FORWARD_APP_LOGS=1 pnpm run test:e2e -- tests/e2e/golden-core-flows.spec.ts
           env SKIP_BUILD=1 ORCA_E2E_FORWARD_APP_LOGS=1 pnpm run --if-present test:e2e:workspace-session-golden
-          if [ -f tests/e2e/golden-fresh-profile-terminal.spec.ts ]; then
-            env SKIP_BUILD=1 ORCA_E2E_FORWARD_APP_LOGS=1 pnpm run test:e2e -- tests/e2e/golden-fresh-profile-terminal.spec.ts tests/e2e/golden-shell-command.spec.ts
-          fi
+          env SKIP_BUILD=1 ORCA_E2E_FORWARD_APP_LOGS=1 pnpm run --if-present test:e2e:fresh-terminal-golden
           env SKIP_BUILD=1 ORCA_E2E_FORWARD_APP_LOGS=1 pnpm run test:e2e:terminal-rendering-golden
           env SKIP_BUILD=1 ORCA_E2E_FORWARD_APP_LOGS=1 pnpm run --if-present test:e2e:posix-profile-index-golden
           env SKIP_BUILD=1 ORCA_E2E_FORWARD_APP_LOGS=1 pnpm run --if-present test:e2e:agent-tui-golden
@@ -97,9 +93,7 @@ jobs:
           $env:ORCA_E2E_FORWARD_APP_LOGS = '1'
           pnpm run --if-present test:e2e:workspace-session-golden
           pnpm run --if-present test:e2e:windows-fresh-startup-golden
-          if (Test-Path tests/e2e/golden-fresh-profile-terminal.spec.ts) {
-            pnpm run test:e2e -- tests/e2e/golden-fresh-profile-terminal.spec.ts tests/e2e/golden-shell-command.spec.ts
-          }
+          pnpm run --if-present test:e2e:fresh-terminal-golden
           pnpm run --if-present test:e2e:source-control-golden
 
       - name: Upload Playwright traces
