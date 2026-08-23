@@ -419,4 +419,11 @@ describe('isShellProcess', () => {
     expect(isShellProcess('gemini')).toBe(false)
     expect(isShellProcess('cursor-agent')).toBe(false)
   })
+
+  it('treats non-standard interactive shells as shell foreground', () => {
+    expect(isShellProcess('ksh')).toBe(true)
+    expect(isShellProcess('dash')).toBe(true)
+    expect(isShellProcess('fish')).toBe(true)
+    expect(isShellProcess('/usr/bin/ksh')).toBe(true)
+  })
 })

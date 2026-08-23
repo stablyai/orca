@@ -3,13 +3,14 @@
 import { act, createElement } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { buildTitleDerivedAgentRows } from '@/components/sidebar/worktree-title-derived-agent-rows'
 import { useAppStore } from '@/store'
 import type {
   ResumableTuiAgent,
   SleepingAgentSessionRecord
 } from '../../../shared/agent-session-resume'
 import { makePaneKey } from '../../../shared/stable-pane-id'
-import type { TerminalTab } from '../../../shared/terminal-tab-types'
+import type { TerminalLayoutSnapshot, TerminalTab } from '../../../shared/terminal-tab-types'
 import type { TuiAgent } from '../../../shared/tui-agent'
 import { resolveTabAgentFromSignals, useTabAgent } from './use-tab-agent'
 
@@ -40,6 +41,13 @@ async function renderHookProbe(tab: TerminalTab): Promise<Root> {
   })
   await flushHookEffects()
   return root
+}
+
+async function rerenderHookProbe(root: Root, tab: TerminalTab): Promise<void> {
+  await act(async () => {
+    root.render(createElement(HookProbe, { tab }))
+  })
+  await flushHookEffects()
 }
 
 function sleepingRecord(paneKey: string, agent: ResumableTuiAgent): SleepingAgentSessionRecord {
@@ -110,6 +118,122 @@ describe('resolveTabAgentFromSignals sleeping-session precedence', () => {
       })
     ).toBe('codex')
   })
+
+  it('retires a leftover sleeping identity once the local pane returns to a shell', () => {
+    // Why: confirmed-shell / shell-title exit already clears launch identity;
+    // sleeping occupancy must not refill the tab icon after /exit.
+    expect(
+      resolveTabAgentFromSignals({
+        hasObservedAgentSignal: true,
+        isRemote: false,
+        title: 'zsh',
+        hookAgent: null,
+        sleepingSessionAgent: 'codex',
+        launchAgent: 'codex'
+      })
+    ).toBeNull()
+  })
+
+  it('keeps sleeping occupancy while a restore shell is foreground before the agent relaunches', () => {
+    // Why: processProvesShell is a replacement-shell fact, not /exit. A
+    // stale launchAgent must not win during the restore-from-sleep window.
+    expect(
+      resolveTabAgentFromSignals({
+        hasObservedAgentSignal: false,
+        isRemote: false,
+        title: 'Terminal 1',
+        hookAgent: null,
+        processAgent: null,
+        processShellForeground: true,
+        sleepingSessionAgent: 'claude',
+        launchAgent: 'codex'
+      })
+    ).toBe('claude')
+  })
+
+  it('keeps sleeping occupancy on a stuck agent title while a restore shell is foreground', () => {
+    expect(
+      resolveTabAgentFromSignals({
+        hasObservedAgentSignal: true,
+        isRemote: false,
+        title: '✳ Codex',
+        hookAgent: null,
+        processAgent: null,
+        processShellForeground: true,
+        sleepingSessionAgent: 'codex',
+        launchAgent: 'codex'
+      })
+    ).toBe('codex')
+  })
+
+  it('keeps the icon when a launched agent only changes its conversation title', () => {
+    // Why: #15665 — conversation names are not exit evidence.
+    expect(
+      resolveTabAgentFromSignals({
+        hasObservedAgentSignal: true,
+        isRemote: false,
+        title: 'Explain GitHub issue simply',
+        hookAgent: null,
+        sleepingSessionAgent: 'codex',
+        launchAgent: 'codex'
+      })
+    ).toBe('codex')
+  })
+
+  it.each(['ksh', 'dash', 'fish'] as const)(
+    'retires sleeping identity when the pane returns to %s',
+    (shell) => {
+      expect(
+        resolveTabAgentFromSignals({
+          hasObservedAgentSignal: true,
+          isRemote: false,
+          title: shell,
+          hookAgent: null,
+          sleepingSessionAgent: 'codex',
+          launchAgent: 'codex'
+        })
+      ).toBeNull()
+    }
+  )
+
+  it('retires the tab icon and the title-derived sidebar row together at a shell title', () => {
+    const layout: TerminalLayoutSnapshot = {
+      root: { type: 'leaf', leafId: LEAF_ID },
+      activeLeafId: LEAF_ID,
+      expandedLeafId: null
+    }
+    const tab: TerminalTab = {
+      id: 'tab-1',
+      ptyId: 'pty-1',
+      worktreeId: 'wt-1',
+      title: 'zsh',
+      customTitle: null,
+      color: null,
+      sortOrder: 0,
+      createdAt: 1,
+      launchAgent: 'codex'
+    }
+    expect(
+      resolveTabAgentFromSignals({
+        hasObservedAgentSignal: true,
+        isRemote: false,
+        title: tab.title,
+        defaultTitle: tab.defaultTitle,
+        hookAgent: null,
+        sleepingSessionAgent: 'codex',
+        launchAgent: tab.launchAgent
+      })
+    ).toBeNull()
+    expect(
+      buildTitleDerivedAgentRows({
+        tabs: [tab],
+        ptyIdsByTabId: { 'tab-1': ['pty-1'] },
+        terminalLayoutsByTabId: { 'tab-1': layout },
+        seenPaneKeys: new Set(),
+        now: 1
+      })
+    ).toEqual([])
+  })
 })
 
 describe('useTabAgent sleeping-session', () => {
@@ -179,5 +303,60 @@ describe('useTabAgent sleeping-session', () => {
 
     expect(latestHookAgent).toBe('claude')
     expect(getForegroundProcess).not.toHaveBeenCalled()
+  })
+
+  it('keeps the tab icon when a restore shell is foreground and sleeping occupancy remains', async () => {
+    const paneKey = makePaneKey('tab-1', LEAF_ID)
+    useAppStore.setState({
+      terminalLayoutsByTabId: {
+        'tab-1': {
+          root: { type: 'leaf', leafId: LEAF_ID },
+          activeLeafId: LEAF_ID,
+          expandedLeafId: null,
+          ptyIdsByLeafId: { [LEAF_ID]: 'pty-1' }
+        }
+      },
+      agentStatusByPaneKey: {},
+      sleepingAgentSessionsByPaneKey: { [paneKey]: sleepingRecord(paneKey, 'claude') },
+      paneForegroundAgentByPaneKey: {
+        [paneKey]: { agent: null, shellForeground: true }
+      }
+    })
+
+    await renderHookProbe({ ...baseTab, title: '✳ Codex' })
+    expect(latestHookAgent).toBe('claude')
+  })
+
+  it('retires the tab icon when a sleeping session remains after confirmed shell foreground', async () => {
+    const paneKey = makePaneKey('tab-1', LEAF_ID)
+    useAppStore.setState({
+      terminalLayoutsByTabId: {
+        'tab-1': {
+          root: { type: 'leaf', leafId: LEAF_ID },
+          activeLeafId: LEAF_ID,
+          expandedLeafId: null,
+          ptyIdsByLeafId: { [LEAF_ID]: 'pty-1' }
+        }
+      },
+      agentStatusByPaneKey: {},
+      paneForegroundAgentByPaneKey: {
+        [paneKey]: { agent: 'codex', shellForeground: false }
+      }
+    })
+
+    const root = await renderHookProbe({ ...baseTab, title: '✳ Codex' })
+    expect(latestHookAgent).toBe('codex')
+
+    await act(async () => {
+      useAppStore.setState({
+        sleepingAgentSessionsByPaneKey: { [paneKey]: sleepingRecord(paneKey, 'codex') },
+        paneForegroundAgentByPaneKey: {
+          [paneKey]: { agent: null, shellForeground: true }
+        }
+      })
+    })
+    await rerenderHookProbe(root, { ...baseTab, title: 'zsh' })
+
+    expect(latestHookAgent).toBeNull()
   })
 })

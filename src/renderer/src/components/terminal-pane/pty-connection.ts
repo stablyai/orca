@@ -2146,15 +2146,34 @@ export function connectPanePty(
       executionHostId: getExecutionHostIdForWorktree(state, deps.worktreeId)
     })
   }
+  // Why: restore/hibernation can confirm a replacement shell before resume
+  // consumes the sleeping record; only an agent actually seen on this PTY
+  // generation may retire leftover occupancy at /exit.
+  let paneSawForegroundAgent = false
   const paneForegroundAgentTracker = createPaneForegroundAgentTracker({
     getPtyId: () => transport.getPtyId(),
     isTrackablePtyId: isForegroundTrackingAllowed,
     readForegroundProcess: (id) => window.api.pty.getForegroundProcess(id),
     confirmForegroundProcess: (id) => window.api.pty.confirmForegroundProcess(id),
-    publish: (entry) => useAppStore.getState().setPaneForegroundAgent(cacheKey, entry),
+    publish: (entry) => {
+      if (entry.agent) {
+        paneSawForegroundAgent = true
+      }
+      useAppStore.getState().setPaneForegroundAgent(cacheKey, entry)
+    },
     hasKnownAgentIdentity: paneHasKnownAgentIdentity,
     onConfirmedShellForeground: (reason) => {
-      clearStaleAgentTabTitleOnConfirmedShell()
+      const state = useAppStore.getState()
+      const ptyId = transport.getPtyId()
+      const hibernationKillInFlight = ptyId != null && state.suppressedPtyExitIds[ptyId] === true
+      if (paneSawForegroundAgent && !hibernationKillInFlight) {
+        // Why: confirmed shell already clears titles and launch routing; a leftover
+        // pane sleeping record would keep painting the exited agent on the tab.
+        // Restore shells must not wipe occupancy or the persisted agent title
+        // before resume consumes the sleeping record.
+        state.clearSleepingAgentSession(cacheKey)
+        clearStaleAgentTabTitleOnConfirmedShell()
+      }
       // Why: a hard-killed agent leaves mouse/focus/kitty modes armed, and the
       // surviving shell then receives pointer moves as typed SGR reports; the
       // replay guard keeps xterm's auto-replies from leaking to the shell.
@@ -2725,6 +2744,7 @@ export function connectPanePty(
     // entry so the hover UI only shows what is running *now*.
     useAppStore.getState().removeAgentStatus(cacheKey)
     useAppStore.getState().clearPaneForegroundAgent(cacheKey)
+    paneSawForegroundAgent = false
     // The runtime graph is the CLI's source for live terminal bindings, so
     // we must republish when a pane loses its PTY instead of waiting for a
     // broader layout change that may never happen.
