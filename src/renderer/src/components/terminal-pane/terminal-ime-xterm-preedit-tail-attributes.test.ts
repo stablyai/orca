@@ -204,13 +204,16 @@ describe('a rendered composition tail keeps its cells’ styling', () => {
 
   it('keeps a run of spaces inside the tail without padding it out to the row width', async () => {
     const rig = openTerminal()
-    // Two spaces inside the text and nothing written past it. The tail has to keep the inner run —
-    // the view is nowrap, which would collapse it — while the trimmed end column keeps the row's
-    // remaining untouched cells out, so this lands on four characters and not eighty.
+    // Two spaces inside the text and nothing written past it. The trimmed end column keeps the
+    // row's remaining untouched cells out, so the text lands on four characters and not eighty.
     await rig.write('a  b\x1b[4D')
 
     rig.compose('ㄱ')
 
-    expect(tailOf(rig.compositionView).textContent).toBe('a  b')
+    const tail = tailOf(rig.compositionView)
+    expect(tail.textContent).toBe('a  b')
+    // Asserted on the style, not the text: the view is nowrap, and collapsing the run would move
+    // every following glyph a cell left while `textContent` still read `a  b`.
+    expect(tail.style.whiteSpace).toBe('pre')
   })
 })
