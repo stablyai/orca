@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react'
+import { useId, useRef, useState } from 'react'
 import { Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
@@ -10,6 +10,7 @@ import {
   DialogTitle
 } from '@/components/ui/dialog'
 import { Slider } from '@/components/ui/slider'
+import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import { translate } from '@/i18n/i18n'
 import type { CustomPet } from '../../../../shared/pet-types'
 import { BUNDLED_PETS } from './pet-models'
@@ -107,6 +108,7 @@ export function PetFromImageDialog({
   const [sourceUrl, setSourceUrl] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const modeHintId = useId()
   // Why: kept so changing a setting re-runs the pipeline without asking the
   // user to pick the same file again.
   const sourceRef = useRef<RgbaImage | null>(null)
@@ -228,6 +230,7 @@ export function PetFromImageDialog({
         )
       : null
   const crop = settings.crop
+  const activeMode = MODES.find((option) => option.id === settings.mode) ?? MODES[0]
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -252,33 +255,50 @@ export function PetFromImageDialog({
             aria-label={translate('auto.components.pet.fromImage.pick', 'Choose an image')}
           />
 
-          <div className="flex items-center gap-2">
+          {/* Why: both rows are one-of-N choices, so they are toggle groups —
+            a Button whose `variant` is the only difference tells a pointer user
+            what is selected and tells everyone else nothing. */}
+          <ToggleGroup
+            type="single"
+            variant="outline"
+            size="sm"
+            spacing={2}
+            value={settings.styleId}
+            // Radix clears the value when the active item is pressed again;
+            // there is no "no style", so ignore the deselect.
+            onValueChange={(styleId) => styleId && void rebuild({ styleId })}
+            aria-label={translate('auto.components.pet.fromImage.style', 'Style')}
+          >
             {BUNDLED_PETS.map((pet) => (
-              <Button
-                key={pet.id}
-                type="button"
-                size="sm"
-                variant={pet.id === settings.styleId ? 'default' : 'outline'}
-                onClick={() => void rebuild({ styleId: pet.id })}
-              >
+              <ToggleGroupItem key={pet.id} value={pet.id}>
                 {pet.label}
-              </Button>
+              </ToggleGroupItem>
             ))}
-          </div>
+          </ToggleGroup>
 
-          <div className="flex flex-wrap items-center gap-2">
-            {MODES.map((option) => (
-              <Button
-                key={option.id}
-                type="button"
-                size="sm"
-                variant={option.id === settings.mode ? 'secondary' : 'ghost'}
-                title={option.hint}
-                onClick={() => void rebuild({ mode: option.id })}
-              >
-                {option.label}
-              </Button>
-            ))}
+          <div className="flex flex-col gap-1">
+            <ToggleGroup
+              type="single"
+              variant="outline"
+              size="sm"
+              spacing={2}
+              value={settings.mode}
+              onValueChange={(mode) => mode && void rebuild({ mode: mode as PetBuildMode })}
+              aria-label={translate('auto.components.pet.fromImage.mode', 'How to build the pet')}
+              aria-describedby={modeHintId}
+            >
+              {MODES.map((option) => (
+                <ToggleGroupItem key={option.id} value={option.id}>
+                  {option.label}
+                </ToggleGroupItem>
+              ))}
+            </ToggleGroup>
+            {/* Why: on the page, not in a `title` — a title is invisible to
+              keyboard and touch, and it is the only thing that says what the
+              three modes differ by. */}
+            <p id={modeHintId} className="text-xs text-muted-foreground">
+              {activeMode.hint}
+            </p>
           </div>
 
           {sourceRef.current && sourceUrl ? (

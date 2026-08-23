@@ -183,6 +183,33 @@ describe('PetFromImageDialog', () => {
     expect(text).toContain('head only')
   })
 
+  it('says which way of building is chosen, in a way that is not just a colour', async () => {
+    render()
+    await pickFile()
+
+    const modes = [...document.querySelectorAll('button')].filter((b) =>
+      /whole body|walking legs|head only/i.test(b.textContent ?? '')
+    )
+    expect(modes).toHaveLength(3)
+    // A single choice over a known set: the toggle group renders radios, so the
+    // selection is a state anything can read, not a button variant.
+    expect(modes.map((b) => b.getAttribute('role'))).toEqual(['radio', 'radio', 'radio'])
+    expect(modes.map((b) => b.getAttribute('aria-checked'))).toEqual(['true', 'false', 'false'])
+  })
+
+  it('explains a build mode on the page rather than in a title nobody can reach', async () => {
+    render()
+    await pickFile()
+
+    // Why: `title` is invisible to keyboard and touch, and STYLEGUIDE lists it
+    // under "Don't use" — the explanation has to be in the document.
+    const modes = [...document.querySelectorAll('button')].filter((b) =>
+      /whole body|walking legs|head only/i.test(b.textContent ?? '')
+    )
+    expect(modes.some((b) => b.hasAttribute('title'))).toBe(false)
+    expect(bodyText()).toContain('It glides rather than walks')
+  })
+
   it('says so when the walking rig could not be found, rather than pretending', async () => {
     // A pillar has no legs to rig; the build degrades and must admit it.
     const pillar = blankImage(60, 90)
