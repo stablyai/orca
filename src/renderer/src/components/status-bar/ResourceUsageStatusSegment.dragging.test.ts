@@ -49,12 +49,25 @@ describe('ResourceUsageStatusSegment dragging', () => {
     expect(reset).toContain('setFloatingPosition(null)')
 
     expect(closeStart).toBeGreaterThanOrEqual(0)
-    expect(close).not.toContain('resetFloatingPosition()')
+    expect(close).toContain('if (nextOpen)')
+    expect(close).toContain('resetFloatingPosition()')
+    expect(close).toContain('} else {')
     expect(close).toContain('cancelFloatingDrag()')
     expect(exitStart).toBeGreaterThanOrEqual(0)
+    expect(exit).toContain("event.animationName !== 'exit'")
     expect(exit).toContain("event.currentTarget.dataset.state !== 'closed'")
     expect(exit).toContain('resetFloatingPosition()')
     expect(source).toContain('onAnimationEnd={handleFloatingExitAnimationEnd}')
+    expect(source).toContain(
+      "addEventListener('animationcancel', handleFloatingExitAnimationCancel)"
+    )
+    expect(source).toContain(
+      "removeEventListener('animationcancel', handleFloatingExitAnimationCancel)"
+    )
+    expect(source).toContain(
+      "translate: 'var(--resource-manager-x, 0px) var(--resource-manager-y, 0px)'"
+    )
+    expect(source).not.toContain("transform: 'translate(var(--resource-manager-x")
     expect(source).not.toContain('setOpen(false)')
     expect(source).toContain('setResourceManagerOpen(nextOpen)')
   })

@@ -1035,22 +1035,57 @@ export function ResourceUsageStatusSegment({
 
   const setResourceManagerOpen = useCallback(
     (nextOpen: boolean): void => {
-      if (!nextOpen) {
+      if (nextOpen) {
+        resetFloatingPosition()
+      } else {
         cancelFloatingDrag()
       }
       setOpen(nextOpen)
     },
-    [cancelFloatingDrag]
+    [cancelFloatingDrag, resetFloatingPosition]
   )
 
   const handleFloatingExitAnimationEnd = useCallback(
     (event: React.AnimationEvent<HTMLDivElement>): void => {
-      if (event.target !== event.currentTarget || event.currentTarget.dataset.state !== 'closed') {
+      if (
+        event.target !== event.currentTarget ||
+        event.animationName !== 'exit' ||
+        event.currentTarget.dataset.state !== 'closed'
+      ) {
         return
       }
       resetFloatingPosition()
     },
     [resetFloatingPosition]
+  )
+
+  const handleFloatingExitAnimationCancel = useCallback(
+    (event: AnimationEvent): void => {
+      const panel = event.currentTarget as HTMLDivElement
+      if (
+        event.target !== panel ||
+        event.animationName !== 'exit' ||
+        panel.dataset.state !== 'closed'
+      ) {
+        return
+      }
+      resetFloatingPosition()
+    },
+    [resetFloatingPosition]
+  )
+
+  const setFloatingPanelElement = useCallback(
+    (node: HTMLDivElement | null): void => {
+      const previous = floatingPanelRef.current
+      if (previous) {
+        previous.removeEventListener('animationcancel', handleFloatingExitAnimationCancel)
+      }
+      floatingPanelRef.current = node
+      if (node) {
+        node.addEventListener('animationcancel', handleFloatingExitAnimationCancel)
+      }
+    },
+    [handleFloatingExitAnimationCancel]
   )
 
   useEffect(() => {
@@ -1462,14 +1497,14 @@ export function ResourceUsageStatusSegment({
       </Tooltip>
 
       <PopoverContent
-        ref={floatingPanelRef}
+        ref={setFloatingPanelElement}
         side="top"
         align="end"
         sideOffset={8}
         {...STATUS_BAR_CONTEXT_MENU_EXEMPT_PROPS}
         className="w-[26rem] max-w-[calc(100vw-2rem)] p-0"
         style={{
-          transform: 'translate(var(--resource-manager-x, 0px), var(--resource-manager-y, 0px))'
+          translate: 'var(--resource-manager-x, 0px) var(--resource-manager-y, 0px)'
         }}
         onAnimationEnd={handleFloatingExitAnimationEnd}
         onOpenAutoFocus={(event) => event.preventDefault()}
