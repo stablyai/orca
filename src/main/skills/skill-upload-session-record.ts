@@ -17,6 +17,25 @@ export type SkillUploadSessionRecord = {
   committed: boolean
 }
 
+export function createSkillUploadSessionRecord(
+  id: string,
+  path: string,
+  request: SkillUploadBeginRequest,
+  handle: FileHandle
+): SkillUploadSessionRecord {
+  return {
+    id,
+    path,
+    package: request.package,
+    transferId: request.transferId ?? null,
+    handle,
+    idleTimer: null,
+    bytesReceived: 0,
+    touchedAt: Date.now(),
+    committed: false
+  }
+}
+
 export function skillUploadBeginResult(session: SkillUploadSessionRecord): SkillUploadBeginResult {
   return {
     uploadId: session.id,
