@@ -37,8 +37,6 @@ import {
   useLinearAgentSkillSetupReminderToast
 } from './linear-agent-skill-setup-reminder-toast'
 import {
-  getCurrentPlatform,
-  getLinearPromptAgentRuntime,
   getLinearPromptSetupCheckIdentity,
   getLinearPromptSkillDiscoveryTarget,
   getLinearPromptTerminalShellOverride,
@@ -47,6 +45,7 @@ import {
   type LinearAgentSkillPromptSettings
 } from './linear-agent-skill-runtime'
 import { translate } from '@/i18n/i18n'
+import { useLinearSkillCommandRuntime } from './use-linear-skill-command-runtime'
 
 const LinearAgentSkillSetupDialog = lazyWithRetry(() => import('./LinearAgentSkillSetupDialog'), {
   reloadKey: 'linear-agent-skill-setup-dialog'
@@ -76,18 +75,20 @@ export function LinearAgentSkillSetupPrompt({
   surface = 'inline',
   settings,
   projectRuntime,
-  currentPlatform = getCurrentPlatform(),
+  currentPlatform,
   className
 }: LinearAgentSkillSetupPromptProps): React.JSX.Element | null {
+  const { agentRuntime, executionHostPlatform } = useLinearSkillCommandRuntime({
+    currentPlatform,
+    projectRuntime,
+    remote,
+    settings
+  })
   const [cliStatus, setCliStatus] = useState<CliInstallStatus | null>(null)
   const [cliLoading, setCliLoading] = useState(linked)
   const [setupDialogOpen, setSetupDialogOpen] = useState(false)
   const [setupCheckResult, setSetupCheckResult] = useState<SetupCheckResult>('idle')
   const [activeSetupCheckIdentity, setActiveSetupCheckIdentity] = useState<string | null>(null)
-  const agentRuntime = useMemo(
-    () => getLinearPromptAgentRuntime(settings, currentPlatform, remote, projectRuntime),
-    [currentPlatform, projectRuntime, remote, settings]
-  )
   const setupCheckIdentity = useMemo(
     () =>
       getLinearPromptSetupCheckIdentity({
@@ -134,7 +135,7 @@ export function LinearAgentSkillSetupPrompt({
     [agentRuntime, skill.installed, skill.skills]
   )
   const terminalShellOverride = getLinearPromptTerminalShellOverride(
-    currentPlatform,
+    executionHostPlatform,
     settings,
     agentRuntime
   )

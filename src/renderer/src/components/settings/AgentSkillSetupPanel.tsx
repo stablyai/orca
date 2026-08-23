@@ -1,14 +1,13 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { Copy, Loader2, RefreshCw, Terminal } from 'lucide-react'
+import { Loader2, RefreshCw, Terminal } from 'lucide-react'
 import { toast } from 'sonner'
 import { IntegrationStatusPill } from '../integration-status-pill'
 import { SkillFreshnessStatusPill } from '../skills/SkillFreshnessStatusPill'
-import { OnboardingInlineCommandTerminal } from '../onboarding/OnboardingInlineCommandTerminal'
 import { AgentSkillSetupFailureNotice } from './AgentSkillSetupFailureNotice'
 import { createTerminalSnapshot, type SkillTerminalSnapshot } from './agent-skill-terminal-snapshot'
 import type { AgentSkillSetupPanelProps } from './agent-skill-setup-panel-props'
 import { Button } from '../ui/button'
-import { Tooltip, TooltipContent, TooltipTrigger } from '../ui/tooltip'
+import { AgentSkillSetupCommandTerminal } from './AgentSkillSetupCommandTerminal'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import {
   recheckSurfacesAfterAgentSkillTerminal,
@@ -75,12 +74,13 @@ export function AgentSkillSetupPanel({
     [getPrerequisiteStatus]
   )
   const activeCommand = installed ? (installedCommand ?? command) : command
+  const runtimeOwnershipUnresolved = runtime?.runtimeOwnershipResolved === false
   // Why: the inline terminal auto-inserts when its command changes, so keep the
   // already-open terminal pinned to the command and runtime selected at click.
   const openTerminalCommand = terminalSnapshot?.copiedCommand ?? activeCommand
 
   const openSetupTerminal = (): void => {
-    if (terminalOpening || setupAttemptRunning) {
+    if (terminalOpening || setupAttemptRunning || runtimeOwnershipUnresolved) {
       return
     }
     const nextSnapshot = createTerminalSnapshot(activeCommand, shellOverride, runtime)
@@ -208,7 +208,9 @@ export function AgentSkillSetupPanel({
           variant={installVariant}
           size="sm"
           onClick={openSetupTerminal}
-          disabled={terminalOpen || installDisabled || terminalOpening}
+          disabled={
+            terminalOpen || installDisabled || terminalOpening || runtimeOwnershipUnresolved
+          }
         >
           {terminalOpening ? (
             <Loader2 className="size-3.5 animate-spin" />
@@ -239,7 +241,10 @@ export function AgentSkillSetupPanel({
           }}
           disabled={
             setupCommandFailedCode !== null
-              ? installDisabled || terminalOpening || setupAttemptRunning
+              ? installDisabled ||
+                terminalOpening ||
+                setupAttemptRunning ||
+                runtimeOwnershipUnresolved
               : loading
           }
         >
@@ -353,60 +358,19 @@ export function AgentSkillSetupPanel({
         ) : null}
       </div>
       {terminalOpen && terminalSnapshot ? (
-        <div
-          className={cn(
-            'min-w-0 max-w-full overflow-hidden',
-            variant === 'card' ? 'px-5 pb-5' : 'mt-2'
-          )}
-        >
-          <div className="flex min-w-0 max-w-full items-center gap-2 overflow-hidden rounded-md border border-border bg-muted/35 px-3 py-2">
-            <code className="scrollbar-sleek min-w-0 flex-1 overflow-x-auto whitespace-nowrap font-mono text-xs text-muted-foreground">
-              {openTerminalCommand}
-            </code>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon-sm"
-                  className="shrink-0"
-                  aria-label={translate(
-                    'auto.components.settings.AgentSkillSetupPanel.copyCommandAria',
-                    'Copy command'
-                  )}
-                  onClick={() => void copyActiveCommand()}
-                >
-                  <Copy className="size-4" />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent side="top" sideOffset={4}>
-                {translate(
-                  'auto.components.settings.AgentSkillSetupPanel.ed197f59a2',
-                  'Copy command'
-                )}
-              </TooltipContent>
-            </Tooltip>
-          </div>
-          <OnboardingInlineCommandTerminal
-            key={terminalAttempt}
-            worktreeId={terminalWorktreeId}
-            command={openTerminalCommand}
-            prepareCommandForShell={terminalSnapshot.prepareCommandForShell}
-            title={terminalTitle}
-            description={translate(
-              'auto.components.settings.AgentSkillSetupPanel.runCommandDescription',
-              'Press Enter to run the command.'
-            )}
-            ariaLabel={terminalAriaLabel}
-            terminalHeightPx={terminalHeightPx}
-            shellOverride={terminalSnapshot.shellOverride}
-            terminalTopMarginPx={8}
-            descriptionPaddingClassName="px-4 py-2"
-            autoScrollIntoView={false}
-            onTerminalExit={handleTerminalExit}
-            onCommandFinished={handleSetupCommandFinished}
-          />
-        </div>
+        <AgentSkillSetupCommandTerminal
+          command={openTerminalCommand}
+          onCommandFinished={handleSetupCommandFinished}
+          onCopy={() => void copyActiveCommand()}
+          onTerminalExit={handleTerminalExit}
+          snapshot={terminalSnapshot}
+          terminalAriaLabel={terminalAriaLabel}
+          terminalAttempt={terminalAttempt}
+          terminalHeightPx={terminalHeightPx}
+          terminalTitle={terminalTitle}
+          terminalWorktreeId={terminalWorktreeId}
+          variant={variant}
+        />
       ) : null}
     </div>
   )

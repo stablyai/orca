@@ -9,6 +9,7 @@ import {
 } from '@/components/settings/CliSkillRuntimeSetup'
 import { ORCA_CLI_ORCHESTRATION_SKILL_INSTALL_COMMAND } from '@/lib/agent-feature-install-commands'
 import { useActiveProjectSkillRuntime } from '@/hooks/useActiveProjectSkillRuntime'
+import { getHostFallbackAgentSkillRuntime } from '@/lib/project-skill-runtime'
 import { translate } from '@/i18n/i18n'
 
 export function CliSkillSetupTerminal(): React.JSX.Element {
@@ -17,13 +18,23 @@ export function CliSkillSetupTerminal(): React.JSX.Element {
   // drop back to the host runtime. This terminal auto-pastes with no install
   // gate, and repair-required only happens on Windows, so it still needs the
   // npx preflight.
+  const terminalRuntime = activeSkillRuntime.installDisabledReason
+    ? getHostFallbackAgentSkillRuntime(activeSkillRuntime.agentRuntime)
+    : activeSkillRuntime.agentRuntime
+  if (terminalRuntime?.runtimeOwnershipResolved === false) {
+    return (
+      <p className="text-[12px] leading-snug text-muted-foreground">
+        {translate(
+          'auto.components.feature.tips.CliSkillSetupTerminal.preparingRuntime',
+          'Preparing setup terminal.'
+        )}
+      </p>
+    )
+  }
   const skillCommand = buildSkillCommandForRuntime(
     ORCA_CLI_ORCHESTRATION_SKILL_INSTALL_COMMAND,
-    activeSkillRuntime.installDisabledReason ? undefined : activeSkillRuntime.agentRuntime
+    terminalRuntime
   )
-  const terminalRuntime = activeSkillRuntime.installDisabledReason
-    ? undefined
-    : activeSkillRuntime.agentRuntime
   const prepareCommandForShell = (command: string, effectiveShell: string | undefined): string =>
     buildSkillSetupTerminalCommand(command, effectiveShell, terminalRuntime)
   const handleCopySkillCommand = async (): Promise<void> => {
@@ -98,6 +109,7 @@ export function CliSkillSetupTerminal(): React.JSX.Element {
         worktreeId="feature-tip-cli-skills-terminal"
         shellOverride={activeSkillRuntime.terminalShellOverride}
         forceHostRuntime={Boolean(activeSkillRuntime.installDisabledReason)}
+        runtimeEnvironmentId={terminalRuntime?.runtimeEnvironmentId}
       />
     </div>
   )

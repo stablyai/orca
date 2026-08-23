@@ -6,6 +6,10 @@ import type { DiscoveredSkill } from '../../../../shared/skills'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { TooltipProvider } from '../ui/tooltip'
 import { LinearAgentSkillInstallCta } from './linear-agent-skill-install-cta'
+import type {
+  LocalAgentRuntime,
+  buildSkillCommandForRuntime as BuildSkillCommandForRuntime
+} from './CliSkillRuntimeSetup'
 
 const mocks = vi.hoisted(() => ({
   skillState: {
@@ -18,7 +22,25 @@ const mocks = vi.hoisted(() => ({
   useInstalledAgentSkillNames: vi.fn(),
   clipboardWrite: vi.fn(async () => {}),
   toastSuccess: vi.fn(),
-  toastError: vi.fn()
+  toastError: vi.fn(),
+  viewerPlatform: 'linux' as NodeJS.Platform,
+  activeSkillRuntime: {
+    executionHostPlatform: 'linux' as NodeJS.Platform | undefined,
+    agentRuntime: {
+      runtime: 'host' as const,
+      hostPlatform: 'linux' as NodeJS.Platform | undefined,
+      terminalWindowsShell: undefined as string | null | undefined,
+      label: 'This device'
+    }
+  },
+  commandRuntimes: [] as (
+    | { hostPlatform?: NodeJS.Platform; terminalWindowsShell?: string | null }
+    | undefined
+  )[]
+}))
+
+vi.mock('@/hooks/useActiveProjectSkillRuntime', () => ({
+  useActiveProjectSkillRuntime: () => mocks.activeSkillRuntime
 }))
 
 vi.mock('@/hooks/useInstalledAgentSkills', async (importOriginal) => ({
@@ -26,9 +48,18 @@ vi.mock('@/hooks/useInstalledAgentSkills', async (importOriginal) => ({
   useInstalledAgentSkillNames: mocks.useInstalledAgentSkillNames
 }))
 
-vi.mock('./CliSkillRuntimeSetup', () => ({
-  buildSkillCommandForRuntime: (command: string) => command
-}))
+vi.mock('./CliSkillRuntimeSetup', async (importOriginal) => {
+  const actual = await importOriginal<{
+    buildSkillCommandForRuntime: typeof BuildSkillCommandForRuntime
+  }>()
+  return {
+    ...actual,
+    buildSkillCommandForRuntime: (command: string, runtime?: LocalAgentRuntime) => {
+      mocks.commandRuntimes.push(runtime)
+      return actual.buildSkillCommandForRuntime(command, runtime)
+    }
+  }
+})
 
 vi.mock('sonner', () => ({
   toast: { success: mocks.toastSuccess, error: mocks.toastError }
@@ -88,9 +119,17 @@ describe('LinearAgentSkillInstallCta', () => {
     mocks.clipboardWrite.mockClear()
     mocks.toastSuccess.mockClear()
     mocks.toastError.mockClear()
+    mocks.commandRuntimes.length = 0
+    mocks.viewerPlatform = 'linux'
+    mocks.activeSkillRuntime.executionHostPlatform = 'linux'
+    mocks.activeSkillRuntime.agentRuntime.hostPlatform = 'linux'
+    mocks.activeSkillRuntime.agentRuntime.terminalWindowsShell = undefined
     Object.defineProperty(window, 'api', {
       configurable: true,
-      value: { ui: { writeClipboardText: mocks.clipboardWrite } }
+      value: {
+        platform: { get: () => ({ platform: mocks.viewerPlatform }) },
+        ui: { writeClipboardText: mocks.clipboardWrite }
+      }
     })
   })
 
@@ -104,6 +143,7 @@ describe('LinearAgentSkillInstallCta', () => {
     container?.remove()
     container = null
     Reflect.deleteProperty(window, 'api')
+    delete (window as unknown as { __ORCA_WEB_CLIENT__?: boolean }).__ORCA_WEB_CLIENT__
   })
 
   it('shows the install command and explanation when the skill is missing', async () => {
@@ -118,6 +158,74 @@ describe('LinearAgentSkillInstallCta', () => {
     expect(rendered.textContent).toContain(
       'npx skills add https://github.com/stablyai/orca --skill orca-linear --global'
     )
+  })
+
+  it('uses paired host platform rather than viewer platform', async () => {
+    mocks.viewerPlatform = 'win32'
+    ;(window as unknown as { __ORCA_WEB_CLIENT__?: boolean }).__ORCA_WEB_CLIENT__ = true
+    await renderCta()
+
+    expect(mocks.commandRuntimes.at(-1)).toMatchObject({ hostPlatform: 'linux' })
+  })
+
+  it('uses saved runtime platform rather than viewer platform', async () => {
+    mocks.viewerPlatform = 'win32'
+    await renderCta({
+      settings: { activeRuntimeEnvironmentId: 'linux-host', terminalWindowsShell: '' }
+    })
+
+    expect(mocks.commandRuntimes.at(-1)).toMatchObject({ hostPlatform: 'linux' })
+  })
+
+  it('uses saved Windows host shell truth instead of the viewer shell', async () => {
+    mocks.viewerPlatform = 'win32'
+    mocks.activeSkillRuntime.executionHostPlatform = 'win32'
+    mocks.activeSkillRuntime.agentRuntime.hostPlatform = 'win32'
+    mocks.activeSkillRuntime.agentRuntime.terminalWindowsShell = 'git-bash'
+
+    const rendered = await renderCta({
+      settings: {
+        activeRuntimeEnvironmentId: 'windows-host',
+        terminalWindowsShell: 'powershell.exe'
+      }
+    })
+
+    expect(rendered.textContent).toContain('npx skills add')
+    expect(rendered.textContent).not.toContain('cmd.exe')
+    expect(mocks.commandRuntimes.at(-1)).toMatchObject({ terminalWindowsShell: 'git-bash' })
+  })
+
+  it('keeps old Windows host shell truth neutral', async () => {
+    mocks.viewerPlatform = 'win32'
+    mocks.activeSkillRuntime.executionHostPlatform = 'win32'
+    mocks.activeSkillRuntime.agentRuntime.hostPlatform = 'win32'
+    mocks.activeSkillRuntime.agentRuntime.terminalWindowsShell = undefined
+
+    const rendered = await renderCta({
+      settings: {
+        activeRuntimeEnvironmentId: 'windows-host',
+        terminalWindowsShell: 'powershell.exe'
+      }
+    })
+
+    expect(rendered.textContent).toContain('npx skills add')
+    expect(rendered.textContent).not.toContain('cmd.exe')
+  })
+
+  it('wraps for the saved Windows host PowerShell despite viewer Git Bash', async () => {
+    mocks.viewerPlatform = 'win32'
+    mocks.activeSkillRuntime.executionHostPlatform = 'win32'
+    mocks.activeSkillRuntime.agentRuntime.hostPlatform = 'win32'
+    mocks.activeSkillRuntime.agentRuntime.terminalWindowsShell = 'powershell.exe'
+
+    const rendered = await renderCta({
+      settings: {
+        activeRuntimeEnvironmentId: 'windows-host',
+        terminalWindowsShell: 'git-bash'
+      }
+    })
+
+    expect(rendered.textContent).toContain('cmd.exe /d /s /c')
   })
 
   it('copies the install command to the clipboard', async () => {

@@ -5,7 +5,14 @@ import { FeatureSetupInlineTerminal } from './FeatureSetupInlineTerminal'
 
 const mocks = vi.hoisted(() => ({
   runtime: {
-    agentRuntime: { runtime: 'wsl' as const, wslDistro: 'Ubuntu', label: 'WSL Ubuntu' },
+    agentRuntime: {
+      runtime: 'wsl' as const,
+      wslDistro: 'Ubuntu',
+      hostPlatform: 'win32' as const,
+      runtimeEnvironmentId: null,
+      runtimeOwnershipResolved: true,
+      label: 'WSL Ubuntu'
+    },
     installDisabledReason: null as string | null,
     terminalShellOverride: 'powershell.exe'
   },
@@ -21,6 +28,7 @@ const mocks = vi.hoisted(() => ({
     command: string
     forceHostRuntime?: boolean
     prepareCommandForShell?: (command: string, shellOverride?: string) => string
+    runtimeEnvironmentId?: string | null
     shellOverride?: string
   } | null
 }))
@@ -39,6 +47,7 @@ vi.mock('./OnboardingInlineCommandTerminal', () => ({
     command: string
     forceHostRuntime?: boolean
     prepareCommandForShell?: (command: string, shellOverride?: string) => string
+    runtimeEnvironmentId?: string | null
     shellOverride?: string
   }) => {
     mocks.terminalProps = props
@@ -56,6 +65,7 @@ const SELECTION = {
 describe('FeatureSetupInlineTerminal', () => {
   beforeEach(() => {
     mocks.runtime.installDisabledReason = null
+    mocks.runtime.agentRuntime.runtimeOwnershipResolved = true
     mocks.terminalProps = null
     mocks.buildCommand.mockClear()
     mocks.buildSetupCommand.mockClear()
@@ -69,11 +79,15 @@ describe('FeatureSetupInlineTerminal', () => {
     expect(mocks.buildCommand).toHaveBeenCalledWith('npx skills add orchestration', {
       runtime: 'wsl',
       wslDistro: 'Ubuntu',
+      hostPlatform: 'win32',
+      runtimeEnvironmentId: null,
+      runtimeOwnershipResolved: true,
       label: 'WSL Ubuntu'
     })
     expect(mocks.terminalProps).toMatchObject({
       command: 'wsl:npx skills add orchestration',
       forceHostRuntime: false,
+      runtimeEnvironmentId: null,
       shellOverride: 'powershell.exe'
     })
     expect(
@@ -88,10 +102,17 @@ describe('FeatureSetupInlineTerminal', () => {
       <FeatureSetupInlineTerminal command="npx skills add orchestration" selection={SELECTION} />
     )
 
-    expect(mocks.buildCommand).toHaveBeenCalledWith('npx skills add orchestration', undefined)
+    expect(mocks.buildCommand).toHaveBeenCalledWith('npx skills add orchestration', {
+      runtime: 'host',
+      hostPlatform: 'win32',
+      runtimeEnvironmentId: null,
+      runtimeOwnershipResolved: true,
+      label: 'Windows'
+    })
     expect(mocks.terminalProps).toMatchObject({
       command: 'host:npx skills add orchestration',
       forceHostRuntime: true,
+      runtimeEnvironmentId: null,
       shellOverride: 'powershell.exe'
     })
     expect(
@@ -104,7 +125,7 @@ describe('FeatureSetupInlineTerminal', () => {
       <FeatureSetupInlineTerminal
         command="npx skills add orchestration"
         runtimeContext={{
-          agentRuntime: { runtime: 'host', label: 'Windows' },
+          agentRuntime: { runtime: 'host', runtimeEnvironmentId: 'hub-a', label: 'Windows' },
           installDisabledReason: null,
           terminalShellOverride: 'cmd.exe'
         }}
@@ -114,14 +135,27 @@ describe('FeatureSetupInlineTerminal', () => {
 
     expect(mocks.buildCommand).toHaveBeenCalledWith('npx skills add orchestration', {
       runtime: 'host',
+      runtimeEnvironmentId: 'hub-a',
       label: 'Windows'
     })
     expect(mocks.terminalProps).toMatchObject({
       command: 'host:npx skills add orchestration',
+      runtimeEnvironmentId: 'hub-a',
       shellOverride: 'cmd.exe'
     })
     expect(
       mocks.terminalProps?.prepareCommandForShell?.('host:npx skills add orchestration', 'cmd.exe')
     ).toBe('host-cmd.exe:host:npx skills add orchestration')
+  })
+
+  it('does not mount a terminal while runtime ownership is unresolved', () => {
+    mocks.runtime.agentRuntime.runtimeOwnershipResolved = false
+
+    const rendered = render(
+      <FeatureSetupInlineTerminal command="npx skills add orchestration" selection={SELECTION} />
+    )
+
+    expect(rendered.getByText('Preparing setup terminal.')).toBeTruthy()
+    expect(mocks.terminalProps).toBeNull()
   })
 })

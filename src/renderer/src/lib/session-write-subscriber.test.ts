@@ -308,7 +308,7 @@ describe('createSessionWriteSubscriber', () => {
     cleanup()
   })
 
-  it('ignores pendingActivationSpawn-only changes', () => {
+  it('ignores transient terminal-spawn-only changes', () => {
     const persist = vi.fn<(payload: WorkspaceSessionWrite) => void>()
     const cleanup = createSessionWriteSubscriber({ store: useAppStore, persist })
 
@@ -325,7 +325,8 @@ describe('createSessionWriteSubscriber', () => {
         'wt-1': [
           {
             ...useAppStore.getState().tabsByWorktree['wt-1'][0],
-            pendingActivationSpawn: true
+            pendingActivationSpawn: true,
+            runtimeEnvironmentId: 'runtime-a'
           }
         ]
       }

@@ -16,29 +16,45 @@ export type LinearAgentSkillPromptSettings = Pick<
 >
 
 export function getCurrentPlatform(): NodeJS.Platform {
-  if (navigator.userAgent.includes('Windows')) {
-    return 'win32'
-  }
-  return navigator.userAgent.includes('Linux') ? 'linux' : 'darwin'
+  const platform = window.api?.platform?.get?.()?.platform
+  return platform === 'win32' || platform === 'linux' ? platform : 'darwin'
+}
+
+export function resolveLinearSkillCommandPlatform(args: {
+  explicitPlatform?: NodeJS.Platform
+  executionHostPlatform?: NodeJS.Platform
+  remote: boolean
+  webClient: boolean
+  viewerPlatform: NodeJS.Platform
+}): NodeJS.Platform | undefined {
+  return (
+    args.explicitPlatform ??
+    (args.remote || args.webClient ? args.executionHostPlatform : args.viewerPlatform)
+  )
 }
 
 export function getLinearPromptAgentRuntime(
   settings: LinearAgentSkillPromptSettings | null | undefined,
-  currentPlatform: NodeJS.Platform,
+  currentPlatform: NodeJS.Platform | undefined,
   remote: boolean,
-  projectRuntime?: ProjectExecutionRuntimeResolution
+  projectRuntime?: ProjectExecutionRuntimeResolution,
+  executionHostRuntime?: LocalAgentRuntime
 ): LocalAgentRuntime {
+  const resolvedProjectRuntime = getProjectAgentRuntime(projectRuntime, currentPlatform)
+  if (resolvedProjectRuntime) {
+    return resolvedProjectRuntime
+  }
+  if (executionHostRuntime) {
+    return executionHostRuntime
+  }
   if (remote) {
     // Why: this prompt opens a local terminal; remote environments need their
     // own setup even when local agent discovery prefers WSL.
     return {
       runtime: 'host',
+      hostPlatform: currentPlatform,
       label: currentPlatform === 'win32' ? 'Windows' : 'This device'
     }
-  }
-  const resolvedProjectRuntime = getProjectAgentRuntime(projectRuntime, currentPlatform)
-  if (resolvedProjectRuntime) {
-    return resolvedProjectRuntime
   }
   const selectedRuntime = settings?.localAgentRuntime ?? 'host'
   if (currentPlatform === 'win32' && selectedRuntime === 'wsl') {
@@ -46,6 +62,7 @@ export function getLinearPromptAgentRuntime(
     return {
       runtime: 'wsl',
       wslDistro: selectedDistro,
+      hostPlatform: 'win32',
       label: selectedDistro
         ? `WSL ${selectedDistro}`
         : translate('auto.components.sidebar.LinearAgentSkillSetupPrompt.wslLabel', 'WSL default')
@@ -53,13 +70,14 @@ export function getLinearPromptAgentRuntime(
   }
   return {
     runtime: 'host',
+    hostPlatform: currentPlatform,
     label: currentPlatform === 'win32' ? 'Windows' : 'This device'
   }
 }
 
 function getProjectAgentRuntime(
   projectRuntime: ProjectExecutionRuntimeResolution | undefined,
-  currentPlatform: NodeJS.Platform
+  currentPlatform: NodeJS.Platform | undefined
 ): LocalAgentRuntime | null {
   if (!projectRuntime) {
     return null
@@ -74,6 +92,7 @@ function getProjectAgentRuntime(
   }
   return {
     runtime: 'host',
+    hostPlatform: currentPlatform,
     label: currentPlatform === 'win32' ? 'Windows' : 'This device'
   }
 }
@@ -82,6 +101,7 @@ function getWslAgentRuntime(distro: string | null): LocalAgentRuntime {
   return {
     runtime: 'wsl',
     wslDistro: distro,
+    hostPlatform: 'win32',
     label: distro
       ? `WSL ${distro}`
       : translate('auto.components.sidebar.LinearAgentSkillSetupPrompt.wslLabel', 'WSL default')
@@ -89,10 +109,13 @@ function getWslAgentRuntime(distro: string | null): LocalAgentRuntime {
 }
 
 export function getLinearPromptTerminalShellOverride(
-  currentPlatform: NodeJS.Platform,
+  currentPlatform: NodeJS.Platform | undefined,
   settings: LinearAgentSkillPromptSettings | null | undefined,
   runtime: LocalAgentRuntime
 ): string | undefined {
+  if (!currentPlatform) {
+    return undefined
+  }
   return getProjectAgentSkillTerminalShellOverride(currentPlatform, settings, runtime)
 }
 
@@ -106,6 +129,7 @@ export function getLinearPromptSetupCheckIdentity(args: {
     remote: args.remote,
     runtime: args.runtime.runtime,
     wslDistro: args.runtime.wslDistro ?? null,
+    hostPlatform: args.runtime.hostPlatform ?? null,
     projectRuntime: getProjectRuntimeIdentity(args.projectRuntime),
     activeRuntimeEnvironmentId: args.activeRuntimeEnvironmentId ?? null
   })

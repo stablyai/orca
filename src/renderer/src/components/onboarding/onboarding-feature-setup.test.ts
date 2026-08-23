@@ -150,10 +150,21 @@ describe('onboarding feature setup runner', () => {
   it('falls back to the host when the selected runtime needs repair', () => {
     expect(
       getOnboardingFeatureSetupAgentRuntime({
-        agentRuntime: { runtime: 'wsl', wslDistro: 'Missing', label: 'WSL Missing' },
+        agentRuntime: {
+          runtime: 'wsl',
+          wslDistro: 'Missing',
+          hostPlatform: 'win32',
+          label: 'WSL Missing'
+        },
         installDisabledReason: 'The selected WSL distro is unavailable.'
       })
-    ).toBeUndefined()
+    ).toEqual({
+      runtime: 'host',
+      hostPlatform: 'win32',
+      runtimeEnvironmentId: null,
+      runtimeOwnershipResolved: true,
+      label: 'Windows'
+    })
   })
 
   it('uses the WSL CLI APIs for the selected distro', async () => {
@@ -186,12 +197,18 @@ describe('onboarding feature setup runner', () => {
       { browserUse: false, computerUse: false, orchestration: true, linearTickets: false },
       deps,
       {
-        agentRuntime: { runtime: 'wsl', wslDistro: 'Missing', label: 'WSL Missing' },
+        agentRuntime: {
+          runtime: 'wsl',
+          wslDistro: 'Missing',
+          hostPlatform: 'win32',
+          label: 'WSL Missing'
+        },
         installDisabledReason: 'The selected WSL distro is unavailable.'
       }
     )
 
-    expect(deps.clipboardWrites).toEqual([ORCHESTRATION_ONLY_SKILL_INSTALL_COMMAND])
+    expect(deps.clipboardWrites).toHaveLength(1)
+    expect(deps.clipboardWrites[0]).toMatch(/^cmd\.exe \/d \/s \/c /)
   })
 
   it('builds privacy-safe telemetry payloads for selected feature setup items', () => {

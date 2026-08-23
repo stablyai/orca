@@ -225,13 +225,14 @@ export function buildPersistedBrowserPagesByWorkspace(
 export function buildSanitizedTabsByWorktree(
   tabsByWorktree: WorkspaceSessionSnapshot['tabsByWorktree']
 ): WorkspaceSessionState['tabsByWorktree'] {
-  // Why: strip transient pendingActivationSpawn — session:set persists without Zod re-parse, so a stale flag would drop the first PTY spawn on restart.
+  // Why: session:set persists without Zod re-parse; transient spawn authority must not survive restart.
   return Object.fromEntries(
     Object.entries(tabsByWorktree).map(([worktreeId, tabs]) => [
       worktreeId,
       tabs.map((tab) => {
-        const { pendingActivationSpawn: _unused, ...rest } = tab
-        void _unused
+        const { pendingActivationSpawn: _pending, runtimeEnvironmentId: _runtime, ...rest } = tab
+        void _pending
+        void _runtime
         return rest
       })
     ])

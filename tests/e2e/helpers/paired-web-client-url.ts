@@ -1,7 +1,9 @@
 export type PairedWebClientOptions = {
   disableRemoteTerminalStallRecovery?: boolean
+  show?: boolean
   terminalParkingDelayMs?: number
   terminalRetentionLimit?: number
+  userAgent?: string
   waitForWorkspace?: boolean
 }
 

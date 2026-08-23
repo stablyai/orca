@@ -74,12 +74,24 @@ export function FeatureSetupInlineTerminal({
     [selectionTelemetry]
   )
 
+  if (agentRuntime?.runtimeOwnershipResolved === false) {
+    return (
+      <p className="text-[12px] leading-snug text-muted-foreground">
+        {translate(
+          'auto.components.onboarding.FeatureSetupInlineTerminal.preparingRuntime',
+          'Preparing setup terminal.'
+        )}
+      </p>
+    )
+  }
+
   return (
     <OnboardingInlineCommandTerminal
       command={copiedCommand}
       prepareCommandForShell={prepareCommandForShell}
       shellOverride={setupRuntime.terminalShellOverride}
       forceHostRuntime={Boolean(setupRuntime.installDisabledReason)}
+      runtimeEnvironmentId={agentRuntime?.runtimeEnvironmentId}
       title={translate(
         'auto.components.onboarding.FeatureSetupInlineTerminal.c767ab7061',
         'Skill setup'

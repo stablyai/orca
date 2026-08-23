@@ -3,6 +3,7 @@ import { cn } from '@/lib/utils'
 import { useAppStore } from '@/store'
 import { ORCA_CLI_SKILL_INSTALL_COMMAND } from '@/lib/agent-feature-install-commands'
 import { useActiveProjectSkillRuntime } from '@/hooks/useActiveProjectSkillRuntime'
+import { getHostFallbackAgentSkillRuntime } from '@/lib/project-skill-runtime'
 import {
   AGENT_SKILL_CLI_PREREQUISITE_NOTICE,
   ensureOrcaCliAvailableForAgentSkillTerminal
@@ -30,9 +31,16 @@ export function MobileEmulatorAgentSetupGuideSteps({
 }: MobileEmulatorAgentSetupGuideStepsProps): React.JSX.Element {
   const recordFeatureInteraction = useAppStore((s) => s.recordFeatureInteraction)
   const activeSkillRuntime = useActiveProjectSkillRuntime()
-  // Why: skill detection here scans the local host only, so keep building host
-  // commands; routing them to a WSL runtime would install where we never look.
-  const skillInstallCommand = buildSkillCommandForRuntime(ORCA_CLI_SKILL_INSTALL_COMMAND)
+  // Why: detection scans the host rather than WSL, but a focused remote host
+  // still owns the terminal command platform.
+  const commandRuntime =
+    activeSkillRuntime.agentRuntime?.runtime === 'wsl'
+      ? getHostFallbackAgentSkillRuntime(activeSkillRuntime.agentRuntime)
+      : activeSkillRuntime.agentRuntime
+  const skillInstallCommand = buildSkillCommandForRuntime(
+    ORCA_CLI_SKILL_INSTALL_COMMAND,
+    commandRuntime
+  )
   const terminalWorktreeId = `mobile-emulator-${worktreeId}-orca-cli-skill-terminal`
   const showSkillPreInstallNotice = shouldShowMobileEmulatorSkillPreInstallNotice({
     cliEnabled: setup.cliEnabled,
@@ -166,6 +174,7 @@ export function MobileEmulatorAgentSetupGuideSteps({
             )}
             terminalWorktreeId={terminalWorktreeId}
             terminalShellOverride={activeSkillRuntime.terminalShellOverride}
+            terminalRuntime={commandRuntime}
             installed={setup.cliSkillInstalled}
             loading={setup.cliSkillLoading || setup.setupRechecking}
             error={setup.cliSkillError}

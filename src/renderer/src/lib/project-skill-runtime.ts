@@ -7,6 +7,10 @@ import { translate } from '@/i18n/i18n'
 export type ProjectAgentSkillRuntime = {
   runtime: 'host' | 'wsl'
   wslDistro?: string | null
+  hostPlatform?: NodeJS.Platform
+  terminalWindowsShell?: string | null
+  runtimeEnvironmentId?: string | null
+  runtimeOwnershipResolved?: boolean
   label: string
 }
 
@@ -34,8 +38,46 @@ export function getProjectAgentSkillRuntime(
 
   return {
     runtime: 'host',
+    hostPlatform: currentPlatform,
+    runtimeEnvironmentId: null,
+    runtimeOwnershipResolved: true,
     label: currentPlatform === 'win32' ? 'Windows' : 'This device'
   }
+}
+
+export function getHostAgentSkillRuntime(
+  hostPlatform?: NodeJS.Platform,
+  terminalWindowsShell?: string | null,
+  runtimeEnvironmentId?: string | null
+): ProjectAgentSkillRuntime {
+  return {
+    runtime: 'host',
+    hostPlatform,
+    ...(terminalWindowsShell !== undefined ? { terminalWindowsShell } : {}),
+    ...(runtimeEnvironmentId !== undefined ? { runtimeEnvironmentId } : {}),
+    runtimeOwnershipResolved: runtimeEnvironmentId !== undefined,
+    label: hostPlatform === 'win32' ? 'Windows' : 'This device'
+  }
+}
+
+export function getHostFallbackAgentSkillRuntime(
+  runtime?: ProjectAgentSkillRuntime
+): ProjectAgentSkillRuntime {
+  const hostPlatform = runtime?.hostPlatform ?? (runtime?.runtime === 'wsl' ? 'win32' : undefined)
+  const runtimeEnvironmentId =
+    runtime?.runtimeEnvironmentId !== undefined
+      ? runtime.runtimeEnvironmentId
+      : runtime?.runtime === 'wsl'
+        ? null
+        : undefined
+  const fallback = getHostAgentSkillRuntime(
+    hostPlatform,
+    runtime?.terminalWindowsShell,
+    runtimeEnvironmentId
+  )
+  return runtime && 'terminalWindowsShell' in runtime
+    ? { ...fallback, terminalWindowsShell: runtime.terminalWindowsShell }
+    : fallback
 }
 
 export function getProjectAgentSkillTerminalShellOverride(
@@ -51,7 +93,11 @@ export function getProjectAgentSkillTerminalShellOverride(
   }
   // Why: generated skill commands are PowerShell/cmd syntax, so a POSIX-family
   // Windows shell (wsl.exe, Git Bash) would mangle the wrapper we hand it.
-  return resolveWindowsShellStartupFamily(settings?.terminalWindowsShell) === 'posix'
+  const terminalWindowsShell =
+    runtime && 'terminalWindowsShell' in runtime
+      ? runtime.terminalWindowsShell
+      : settings?.terminalWindowsShell
+  return resolveWindowsShellStartupFamily(terminalWindowsShell) === 'posix'
     ? 'powershell.exe'
     : undefined
 }
@@ -86,6 +132,9 @@ function getWslAgentSkillRuntime(distro: string | null): ProjectAgentSkillRuntim
   return {
     runtime: 'wsl',
     wslDistro: distro,
+    hostPlatform: 'win32',
+    runtimeEnvironmentId: null,
+    runtimeOwnershipResolved: true,
     label: distro
       ? `WSL ${distro}`
       : translate('auto.lib.projectSkillRuntime.wslDefault', 'WSL default')

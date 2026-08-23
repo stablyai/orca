@@ -9,6 +9,7 @@ import {
   getLocalProjectExecutionRuntimeContext
 } from '@/lib/local-preflight-context'
 import {
+  getHostAgentSkillRuntime,
   getProjectAgentSkillRuntime,
   getProjectAgentSkillTerminalShellOverride,
   getProjectSkillDiscoveryTarget,
@@ -16,7 +17,9 @@ import {
   type ProjectAgentSkillRuntime
 } from '@/lib/project-skill-runtime'
 import { useWindowsTerminalCapabilities } from '@/lib/windows-terminal-capabilities'
+import { isWebClientLocation } from '@/lib/web-client-location'
 import { useAppStore } from '@/store'
+import { useWindowsTerminalCapabilityOwnerKey } from './useWindowsTerminalCapabilityOwnerKey'
 
 type ActiveProjectSkillRuntime = {
   projectRuntime?: ProjectExecutionRuntimeResolution
@@ -25,12 +28,8 @@ type ActiveProjectSkillRuntime = {
   terminalShellOverride?: string
   installDisabledReason: string | null
   canUseLocalSkillFreshness: boolean
+  executionHostPlatform?: NodeJS.Platform
 }
-
-const EMPTY_ACTIVE_PROJECT_SKILL_RUNTIME: ActiveProjectSkillRuntime = Object.freeze({
-  installDisabledReason: null,
-  canUseLocalSkillFreshness: false
-})
 
 export function shouldUseLocalSkillFreshness(
   runtimeTarget: RuntimeClientTarget | null,
@@ -41,6 +40,24 @@ export function shouldUseLocalSkillFreshness(
 
 export function hasLocalSkillRuntimeAuthority(runtimeTarget: RuntimeClientTarget | null): boolean {
   return runtimeTarget?.kind === 'local'
+}
+
+export function resolveSkillExecutionHostPlatform(args: {
+  viewerPlatform: NodeJS.Platform
+  runtimeTarget: RuntimeClientTarget | null
+  executionHostPlatform?: NodeJS.Platform
+  isWebClient: boolean
+}): NodeJS.Platform | undefined {
+  if (!args.runtimeTarget) {
+    return undefined
+  }
+  if (args.runtimeTarget?.kind === 'environment') {
+    return args.executionHostPlatform
+  }
+  if (args.isWebClient) {
+    return args.executionHostPlatform
+  }
+  return args.viewerPlatform
 }
 
 // Why: on Windows the runtime resolution is rebuilt from scratch on every
@@ -75,9 +92,38 @@ export function useActiveProjectSkillRuntime(): ActiveProjectSkillRuntime {
       worktreesByRepo: state.worktreesByRepo
     }))
   )
-  const currentPlatform = getCurrentPlatform()
-  const windowsCapabilities = useWindowsTerminalCapabilities(currentPlatform === 'win32')
   const runtimeTarget = useActiveSkillDiscoveryRuntimeTarget()
+  const viewerPlatform = getCurrentPlatform()
+  const isWebClient = isWebClientLocation()
+  const executionHostEnvironmentId = useAppStore((state) =>
+    runtimeTarget?.kind === 'environment'
+      ? runtimeTarget.environmentId
+      : isWebClient && runtimeTarget?.kind === 'local'
+        ? state.runtimeEnvironments[0]?.id
+        : undefined
+  )
+  const executionHostStatus = useAppStore((state) =>
+    executionHostEnvironmentId
+      ? state.runtimeStatusByEnvironmentId.get(executionHostEnvironmentId)?.status
+      : undefined
+  )
+  const executionHostPlatform = executionHostStatus?.hostPlatform
+  const currentPlatform = resolveSkillExecutionHostPlatform({
+    viewerPlatform,
+    runtimeTarget,
+    executionHostPlatform,
+    isWebClient
+  })
+  const windowsCapabilityOwnerKey = useWindowsTerminalCapabilityOwnerKey(
+    runtimeTarget?.kind === 'environment' ? runtimeTarget.environmentId : undefined
+  )
+  const hasProjectRuntimeAuthority = !isWebClient && hasLocalSkillRuntimeAuthority(runtimeTarget)
+  const windowsCapabilities = useWindowsTerminalCapabilities(
+    currentPlatform === 'win32' && hasProjectRuntimeAuthority,
+    false,
+    windowsCapabilityOwnerKey,
+    isWebClient ? { kind: 'local' } : (runtimeTarget ?? { kind: 'local' })
+  )
 
   const resolved = useMemo(() => {
     const wslContext = {
@@ -85,38 +131,54 @@ export function useActiveProjectSkillRuntime(): ActiveProjectSkillRuntime {
       availableWslDistros: windowsCapabilities.isLoading ? null : windowsCapabilities.wslDistros
     }
     const projectRuntime =
-      getLocalProjectExecutionRuntimeContext(
-        runtimeState,
-        undefined,
-        currentPlatform,
-        wslContext
-      ) ??
-      // Global WSL is the only no-project default that changes the install target (#12103).
-      (hasLocalSkillRuntimeAuthority(runtimeTarget)
-        ? wslOnly(
-            getGlobalWindowsExecutionRuntimeContext(
-              runtimeState,
-              undefined,
-              currentPlatform,
-              wslContext
-            )
-          )
-        : undefined)
-    if (!projectRuntime) {
+      currentPlatform && hasProjectRuntimeAuthority
+        ? (getLocalProjectExecutionRuntimeContext(
+            runtimeState,
+            undefined,
+            currentPlatform,
+            wslContext
+          ) ??
+          // Global WSL is the only no-project default that changes the install target (#12103).
+          (hasProjectRuntimeAuthority
+            ? wslOnly(
+                getGlobalWindowsExecutionRuntimeContext(
+                  runtimeState,
+                  undefined,
+                  currentPlatform,
+                  wslContext
+                )
+              )
+            : undefined))
+        : undefined
+    if (!projectRuntime || !currentPlatform) {
       // Why: buildSkillCommandForRuntime still builds a Windows host command
       // without a project runtime, so the terminal has to match that shell.
-      const terminalShellOverride = hasLocalSkillRuntimeAuthority(runtimeTarget)
-        ? getProjectAgentSkillTerminalShellOverride(
-            currentPlatform,
-            runtimeState.settings,
-            undefined
-          )
-        : undefined
+      const terminalShellOverride =
+        currentPlatform && hasProjectRuntimeAuthority
+          ? getProjectAgentSkillTerminalShellOverride(
+              currentPlatform,
+              runtimeState.settings,
+              undefined
+            )
+          : undefined
       const canUseLocalSkillFreshness = shouldUseLocalSkillFreshness(runtimeTarget)
-      if (!terminalShellOverride && !canUseLocalSkillFreshness) {
-        return EMPTY_ACTIVE_PROJECT_SKILL_RUNTIME
+      return {
+        installDisabledReason: null,
+        agentRuntime:
+          runtimeTarget?.kind !== 'local' || isWebClient
+            ? {
+                ...getHostAgentSkillRuntime(
+                  currentPlatform,
+                  executionHostStatus?.terminalWindowsShell,
+                  executionHostEnvironmentId
+                ),
+                terminalWindowsShell: executionHostStatus?.terminalWindowsShell
+              }
+            : getHostAgentSkillRuntime(currentPlatform, undefined, null),
+        terminalShellOverride,
+        canUseLocalSkillFreshness,
+        executionHostPlatform: currentPlatform
       }
-      return { installDisabledReason: null, terminalShellOverride, canUseLocalSkillFreshness }
     }
 
     const agentRuntime = getProjectAgentSkillRuntime(projectRuntime, currentPlatform)
@@ -130,9 +192,19 @@ export function useActiveProjectSkillRuntime(): ActiveProjectSkillRuntime {
         agentRuntime
       ),
       installDisabledReason: getProjectSkillInstallDisabledReason(projectRuntime),
-      canUseLocalSkillFreshness: shouldUseLocalSkillFreshness(runtimeTarget, agentRuntime)
+      canUseLocalSkillFreshness: shouldUseLocalSkillFreshness(runtimeTarget, agentRuntime),
+      executionHostPlatform: currentPlatform
     }
-  }, [currentPlatform, runtimeState, runtimeTarget, windowsCapabilities])
+  }, [
+    currentPlatform,
+    executionHostStatus?.terminalWindowsShell,
+    executionHostEnvironmentId,
+    hasProjectRuntimeAuthority,
+    isWebClient,
+    runtimeState,
+    runtimeTarget,
+    windowsCapabilities
+  ])
 
   // Content-equal runtimes keep one reference so effect keys do not thrash.
   // Adjust during render (not a ref write) when serialized identity changes.

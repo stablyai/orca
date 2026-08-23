@@ -9,6 +9,7 @@ import {
   updateAutoSaveDelayDraftState
 } from './GeneralPane'
 import { matchesSettingsSearch } from './settings-search'
+import { canUseViewerWindowsRuntimeSettings } from '@/lib/execution-host-command-platform'
 
 describe('GeneralPane auto-save delay drafts', () => {
   it('keeps a committed draft tied to the current persisted source while settings save is pending', () => {
@@ -71,6 +72,13 @@ describe('GeneralPane desktop platform detection', () => {
       'darwin'
     )
     expect(getDesktopPlatformFromUserAgent('Mozilla/5.0 (X11; Linux x86_64)')).toBe('other')
+  })
+})
+
+describe('General CLI platform ownership', () => {
+  it('suppresses viewer-owned Windows runtime settings only in paired web', () => {
+    expect(canUseViewerWindowsRuntimeSettings(true, true)).toBe(false)
+    expect(canUseViewerWindowsRuntimeSettings(false, true)).toBe(true)
   })
 })
 

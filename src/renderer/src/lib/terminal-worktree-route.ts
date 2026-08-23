@@ -74,6 +74,9 @@ export function resolveTerminalHostOwnership(
   // the active runtime — so a remote skill install lands on that runtime — falling back to local
   // when none is focused, instead of failing them closed.
   if (isEphemeralSetupTerminalWorktreeId(worktreeId)) {
+    if (state.runtimeEnvironmentCatalogSettled === false) {
+      return UNRESOLVED_TERMINAL_HOST
+    }
     return resolveFloatingScopeOwnership(
       state,
       worktreeId,
@@ -132,8 +135,12 @@ function resolveFloatingScopeOwnership(
 
 export function resolveTerminalWorktreeRoute(
   state: AppState,
-  worktreeId: string | null | undefined
+  worktreeId: string | null | undefined,
+  runtimeEnvironmentId?: string | null
 ): TerminalWorktreeRoute | null {
+  if (runtimeEnvironmentId !== undefined) {
+    return { runtimeEnvironmentId: runtimeEnvironmentId?.trim() || null }
+  }
   const ownership = resolveTerminalHostOwnership(state, worktreeId, 'spawn')
   return ownership.kind === 'unresolved'
     ? null

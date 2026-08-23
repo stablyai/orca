@@ -17,9 +17,15 @@ function worktreePathFromId(worktreeId: string): string | null {
 }
 
 function tabToRemote(tab: TerminalTab, worktreePath: string): RemoteWorkspaceTerminalTab {
-  const { worktreeId: _worktreeId, pendingActivationSpawn: _pendingActivationSpawn, ...rest } = tab
+  const {
+    worktreeId: _worktreeId,
+    pendingActivationSpawn: _pendingActivationSpawn,
+    runtimeEnvironmentId: _runtimeEnvironmentId,
+    ...rest
+  } = tab
   void _worktreeId
   void _pendingActivationSpawn
+  void _runtimeEnvironmentId
   return { ...rest, worktreePath }
 }
 

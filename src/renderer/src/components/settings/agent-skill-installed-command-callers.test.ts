@@ -85,9 +85,10 @@ const updateCapableCallers = new Map<string, readonly string[]>([
       'ORCA_CLI_SKILL_UPDATE_COMMAND',
       'installedCommand={cliSkillUpdateCommand}',
       'terminalShellOverride={activeSkillRuntime.terminalShellOverride}',
-      // Detection here scans the local host only, so the command must stay host-built.
-      'buildSkillCommandForRuntime(ORCA_CLI_SKILL_INSTALL_COMMAND)',
-      'buildSkillCommandForRuntime(ORCA_CLI_SKILL_UPDATE_COMMAND)'
+      'terminalRuntime={commandRuntime}',
+      'getHostFallbackAgentSkillRuntime(activeSkillRuntime.agentRuntime)',
+      'ORCA_CLI_SKILL_INSTALL_COMMAND,',
+      'ORCA_CLI_SKILL_UPDATE_COMMAND,'
     ]
   ]
 ])
@@ -96,10 +97,11 @@ const installOnlyCallers = new Map<string, readonly string[]>([
   [
     'src/renderer/src/components/emulator-pane/MobileEmulatorAgentSetupGuideSteps.tsx',
     [
-      // Detection here scans the local host only, so the command must stay host-built.
-      'buildSkillCommandForRuntime(ORCA_CLI_SKILL_INSTALL_COMMAND)',
+      'getHostFallbackAgentSkillRuntime(activeSkillRuntime.agentRuntime)',
+      'ORCA_CLI_SKILL_INSTALL_COMMAND,',
       'command={skillInstallCommand}',
       'terminalShellOverride={activeSkillRuntime.terminalShellOverride}',
+      'terminalRuntime={commandRuntime}',
       'showInstallWhenInstalled={!setup.cliSkillInstalled}'
     ]
   ]
@@ -179,9 +181,7 @@ describe('AgentSkillSetupPanel installed-command call sites', () => {
     expect(source).not.toContain('command={ORCA_CLI_ORCHESTRATION_SKILL_INSTALL_COMMAND}')
     // This terminal auto-pastes with no install gate, so a repair-required runtime
     // must fall back to the host rather than skip the Windows npx preflight.
-    expect(source).toContain(
-      'activeSkillRuntime.installDisabledReason ? undefined : activeSkillRuntime.agentRuntime'
-    )
+    expect(source).toContain('getHostFallbackAgentSkillRuntime(activeSkillRuntime.agentRuntime)')
   })
 
   it('keeps client freshness behind resolved local runtime authority', () => {

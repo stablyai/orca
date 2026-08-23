@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { ProjectExecutionRuntimeResolution } from '../../../shared/project-execution-runtime'
 import {
+  getHostFallbackAgentSkillRuntime,
   getProjectAgentSkillRuntime,
   getProjectAgentSkillTerminalShellOverride,
   getProjectSkillDiscoveryTarget,
@@ -42,6 +43,18 @@ const repairRuntime: ProjectExecutionRuntimeResolution = {
 }
 
 describe('project skill runtime helpers', () => {
+  it('keeps a legacy WSL runtime on its intrinsic Windows parent host', () => {
+    expect(
+      getHostFallbackAgentSkillRuntime({ runtime: 'wsl', wslDistro: 'Ubuntu', label: 'WSL' })
+    ).toEqual({
+      runtime: 'host',
+      hostPlatform: 'win32',
+      runtimeEnvironmentId: null,
+      runtimeOwnershipResolved: true,
+      label: 'Windows'
+    })
+  })
+
   it('passes the resolved project runtime through the discovery target', () => {
     expect(getProjectSkillDiscoveryTarget(wslRuntime)).toEqual({ projectRuntime: wslRuntime })
     expect(getProjectSkillDiscoveryTarget(undefined)).toBeUndefined()
@@ -50,11 +63,17 @@ describe('project skill runtime helpers', () => {
   it('maps resolved host and WSL project runtimes into setup runtimes', () => {
     expect(getProjectAgentSkillRuntime(hostRuntime, 'win32')).toEqual({
       runtime: 'host',
+      hostPlatform: 'win32',
+      runtimeEnvironmentId: null,
+      runtimeOwnershipResolved: true,
       label: 'Windows'
     })
     expect(getProjectAgentSkillRuntime(wslRuntime, 'win32')).toEqual({
       runtime: 'wsl',
       wslDistro: 'Ubuntu-24.04',
+      hostPlatform: 'win32',
+      runtimeEnvironmentId: null,
+      runtimeOwnershipResolved: true,
       label: 'WSL Ubuntu-24.04'
     })
   })
@@ -63,6 +82,9 @@ describe('project skill runtime helpers', () => {
     expect(getProjectAgentSkillRuntime(repairRuntime, 'win32')).toEqual({
       runtime: 'wsl',
       wslDistro: 'Missing',
+      hostPlatform: 'win32',
+      runtimeEnvironmentId: null,
+      runtimeOwnershipResolved: true,
       label: 'WSL Missing'
     })
     expect(getProjectSkillInstallDisabledReason(repairRuntime)).toContain('unavailable')
@@ -101,5 +123,29 @@ describe('project skill runtime helpers', () => {
         getProjectAgentSkillRuntime(hostRuntime, 'win32')
       )
     ).toBeUndefined()
+  })
+
+  it('uses execution-host shell metadata before viewer settings', () => {
+    expect(
+      getProjectAgentSkillTerminalShellOverride(
+        'win32',
+        { terminalWindowsShell: 'powershell.exe' },
+        {
+          runtime: 'host',
+          hostPlatform: 'win32',
+          terminalWindowsShell: 'git-bash',
+          label: 'Windows'
+        }
+      )
+    ).toBe('powershell.exe')
+    for (const terminalWindowsShell of ['powershell.exe', undefined]) {
+      expect(
+        getProjectAgentSkillTerminalShellOverride(
+          'win32',
+          { terminalWindowsShell: 'git-bash' },
+          { runtime: 'host', hostPlatform: 'win32', terminalWindowsShell, label: 'Windows' }
+        )
+      ).toBeUndefined()
+    }
   })
 })

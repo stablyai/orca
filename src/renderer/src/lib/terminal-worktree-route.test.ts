@@ -19,6 +19,7 @@ function localState(overrides: Partial<AppState> = {}): AppState {
     worktreesByRepo: { 'repo-1': [{ id: 'repo-1::/w', repoId: 'repo-1', hostId: 'local' }] },
     runtimeEnvironments: [],
     runtimeEnvironmentCatalogHydrated: true,
+    runtimeEnvironmentCatalogSettled: true,
     removedRuntimeEnvironmentIds: new Set<string>(),
     ...overrides
   } as unknown as AppState
@@ -46,6 +47,30 @@ describe('resolveTerminalWorktreeRoute', () => {
     } as unknown as Partial<AppState>)
     expect(resolveTerminalWorktreeRoute(state, EPHEMERAL_ID)).toEqual({
       runtimeEnvironmentId: 'hub-a'
+    })
+  })
+
+  it('keeps ephemeral setup ownership unresolved until the runtime catalog settles', () => {
+    const state = localState({
+      settings: { activeRuntimeEnvironmentId: 'hub-a' },
+      runtimeEnvironments: [{ id: 'hub-a' }],
+      runtimeEnvironmentCatalogSettled: false
+    } as unknown as Partial<AppState>)
+
+    expect(resolveTerminalWorktreeRoute(state, EPHEMERAL_ID)).toBeNull()
+  })
+
+  it('keeps an explicitly pinned setup runtime after focus changes', () => {
+    const state = localState({
+      settings: { activeRuntimeEnvironmentId: 'hub-b' },
+      runtimeEnvironments: [{ id: 'hub-a' }, { id: 'hub-b' }]
+    } as unknown as Partial<AppState>)
+
+    expect(resolveTerminalWorktreeRoute(state, EPHEMERAL_ID, 'hub-a')).toEqual({
+      runtimeEnvironmentId: 'hub-a'
+    })
+    expect(resolveTerminalWorktreeRoute(state, EPHEMERAL_ID, null)).toEqual({
+      runtimeEnvironmentId: null
     })
   })
 

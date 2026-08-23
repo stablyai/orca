@@ -30,49 +30,30 @@ import {
   getAgentSkillTerminalShellOverride,
   getSelectedAgentRuntime,
   getSkillDiscoveryTargetForRuntime,
-  getWslCliDistroRequest
+  getWslCliDistroRequest,
+  type LocalAgentRuntime
 } from './CliSkillRuntimeSetup'
 import { WslCliRegistration } from './WslCliRegistration'
 import { useLocalCliSkillFreshnessName } from './use-local-cli-skill-freshness-name'
 import { translate } from '@/i18n/i18n'
+import {
+  getCliFallbackCommandName,
+  getCliInstallDescription,
+  getCliRevealLabel
+} from './cli-registration-platform-copy'
 
 type CliSectionProps = {
-  currentPlatform: string
+  currentPlatform?: NodeJS.Platform
+  executionHostRuntime?: LocalAgentRuntime
   settings: GlobalSettings
   wslSupportedPlatform?: boolean
   wslAvailable?: boolean
   wslCapabilitiesLoading?: boolean
 }
 
-function getRevealLabel(platform: string): string {
-  if (platform === 'darwin') {
-    return 'Show in Finder'
-  }
-  if (platform === 'win32') {
-    return 'Show in Explorer'
-  }
-  return 'Show in File Manager'
-}
-
-function getInstallDescription(platform: string): string {
-  if (platform === 'darwin') {
-    return 'Register `orca` in /usr/local/bin.'
-  }
-  if (platform === 'linux') {
-    return 'Register `orca-ide` in ~/.local/bin.'
-  }
-  if (platform === 'win32') {
-    return 'Register `orca` in your user PATH.'
-  }
-  return 'CLI registration is not yet available on this platform.'
-}
-
-function getFallbackCommandName(platform: string): string {
-  return platform === 'linux' ? 'orca-ide' : 'orca'
-}
-
 export function CliSection({
   currentPlatform,
+  executionHostRuntime,
   settings,
   wslSupportedPlatform = false,
   wslAvailable = false,
@@ -85,8 +66,22 @@ export function CliSection({
   const mountedRef = useMountedRef()
   const agentRuntime = useMemo(
     () =>
-      getSelectedAgentRuntime(settings, wslSupportedPlatform, wslAvailable, wslCapabilitiesLoading),
-    [settings, wslAvailable, wslCapabilitiesLoading, wslSupportedPlatform]
+      executionHostRuntime ??
+      getSelectedAgentRuntime(
+        settings,
+        wslSupportedPlatform,
+        wslAvailable,
+        wslCapabilitiesLoading,
+        currentPlatform ?? null
+      ),
+    [
+      currentPlatform,
+      executionHostRuntime,
+      settings,
+      wslAvailable,
+      wslCapabilitiesLoading,
+      wslSupportedPlatform
+    ]
   )
   const cliSkillFreshnessName = useLocalCliSkillFreshnessName(agentRuntime)
   const cliSkillDiscoveryTarget = useMemo(
@@ -111,7 +106,7 @@ export function CliSection({
     agentRuntime
   )
   const cliSkillTerminalShellOverride = getAgentSkillTerminalShellOverride(
-    currentPlatform,
+    agentRuntime.hostPlatform,
     settings,
     agentRuntime
   )
@@ -162,8 +157,8 @@ export function CliSection({
   const isEnabled = status?.state === 'installed' && !pathStatusUnknown
   const isSupported = status?.supported ?? false
   const isBrowserManaged = status?.unsupportedReason === 'launch_mode_unavailable'
-  const revealLabel = getRevealLabel(currentPlatform)
-  const commandName = status?.commandName ?? getFallbackCommandName(currentPlatform)
+  const revealLabel = getCliRevealLabel(currentPlatform)
+  const commandName = status?.commandName ?? getCliFallbackCommandName(currentPlatform)
   const canRevealCommandPath =
     status?.commandPath != null && ['installed', 'stale', 'conflict'].includes(status.state)
 
@@ -263,7 +258,7 @@ export function CliSection({
                     'auto.components.settings.CliSection.d363e5929b',
                     'Checking CLI registration…'
                   )
-                : (status?.detail ?? getInstallDescription(currentPlatform))}
+                : (status?.detail ?? getCliInstallDescription(currentPlatform))}
             </p>
           </div>
           <div className="flex items-center gap-2">
@@ -400,7 +395,9 @@ export function CliSection({
         ) : null}
       </div>
 
-      <WslCliRegistration currentPlatform={currentPlatform} />
+      {wslSupportedPlatform ? (
+        <WslCliRegistration currentPlatform={currentPlatform ?? 'other'} />
+      ) : null}
 
       <CliRegistrationDialog
         busyAction={busyAction}

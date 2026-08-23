@@ -3,6 +3,8 @@ import { buildSkillSetupTerminalCommand } from './CliSkillRuntimeSetup'
 
 export type SkillTerminalSnapshot = {
   copiedCommand: string
+  forceHostRuntime: boolean
+  runtimeEnvironmentId?: string | null
   prepareCommandForShell: (command: string, effectiveShell: string | undefined) => string
   shellOverride: string | undefined
 }
@@ -15,6 +17,10 @@ export function createTerminalSnapshot(
   const pinnedRuntime = runtime ? { ...runtime } : undefined
   return {
     copiedCommand,
+    forceHostRuntime: pinnedRuntime?.runtime === 'host',
+    ...(pinnedRuntime?.runtimeEnvironmentId !== undefined
+      ? { runtimeEnvironmentId: pinnedRuntime.runtimeEnvironmentId }
+      : {}),
     prepareCommandForShell: (command, effectiveShell) =>
       buildSkillSetupTerminalCommand(command, effectiveShell, pinnedRuntime),
     shellOverride

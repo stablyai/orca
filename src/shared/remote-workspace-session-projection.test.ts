@@ -22,7 +22,8 @@ describe('remote workspace session projection', () => {
             customTitle: null,
             color: null,
             sortOrder: 0,
-            createdAt: 1
+            createdAt: 1,
+            runtimeEnvironmentId: 'runtime-a'
           }
         ],
         'repo-local::/tmp/local': [
@@ -61,6 +62,7 @@ describe('remote workspace session projection', () => {
       id: 'tab-1',
       worktreePath: '/srv/app'
     })
+    expect('runtimeEnvironmentId' in projected.tabsByWorktreePath['/srv/app'][0]).toBe(false)
     expect(projected.terminalLayoutsByTabId).toEqual({
       'tab-1': { root: null, activeLeafId: null, expandedLeafId: null }
     })

@@ -32,6 +32,7 @@ type OnboardingInlineCommandTerminalProps = {
   worktreeId?: string
   shellOverride?: string
   forceHostRuntime?: boolean
+  runtimeEnvironmentId?: string | null
   onOpened?: () => void
   onInteracted?: (method: 'keyboard' | 'pointer', event?: KeyboardEvent<HTMLElement>) => void
   onTerminalExit?: () => void
@@ -56,6 +57,7 @@ export function OnboardingInlineCommandTerminal({
   worktreeId: worktreeIdProp = ONBOARDING_INLINE_TERMINAL_WORKTREE_ID,
   shellOverride,
   forceHostRuntime = false,
+  runtimeEnvironmentId,
   onOpened,
   onInteracted,
   onTerminalExit,
@@ -129,7 +131,8 @@ export function OnboardingInlineCommandTerminal({
     const tab = createTab(worktreeId, undefined, shellOverride, {
       activate: false,
       recordInteraction: false,
-      forceHostRuntime
+      forceHostRuntime,
+      ...(runtimeEnvironmentId !== undefined ? { runtimeEnvironmentId } : {})
     })
     setActiveTabForWorktree(worktreeId, tab.id)
     setTabCustomTitle(tab.id, title, { recordInteraction: false })
@@ -143,6 +146,7 @@ export function OnboardingInlineCommandTerminal({
     closeTab,
     createTab,
     forceHostRuntime,
+    runtimeEnvironmentId,
     setActiveTabForWorktree,
     setTabCustomTitle,
     shellOverride,

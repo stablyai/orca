@@ -3535,7 +3535,11 @@ export function connectPanePty(
   // shared terminal router scopes them to their floating owner (local for the floating terminal,
   // the active runtime for setup terminals so remote skill installs land there) and returns null
   // only for a genuinely unknown/stale worktree that must fail closed (#9994).
-  const terminalWorktreeRoute = resolveTerminalWorktreeRoute(state, deps.worktreeId)
+  const terminalWorktreeRoute = resolveTerminalWorktreeRoute(
+    state,
+    deps.worktreeId,
+    tab && 'runtimeEnvironmentId' in tab ? tab.runtimeEnvironmentId : undefined
+  )
   const explicitRuntimeEnvironmentId = terminalWorktreeRoute?.runtimeEnvironmentId ?? null
   // Why: paired-web worktrees retain HUB execution identity; their runtime-scoped mirrored pane is the session-level transport owner.
   const mirroredRuntimeOwners = new Set(

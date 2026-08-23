@@ -24,6 +24,7 @@ import { SettingsSubsectionHeader, SettingsSwitchRow } from './SettingsFormContr
 import { translate } from '@/i18n/i18n'
 import { DefaultWindowsProjectRuntimeSetting } from './DefaultWindowsProjectRuntimeSetting'
 import { getActiveRuntimeTarget } from '@/runtime/runtime-rpc-client'
+import type { LocalAgentRuntime } from './CliSkillRuntimeSetup'
 
 export {
   createAutoSaveDelayDraftState,
@@ -87,6 +88,8 @@ type GeneralPaneProps = {
   wslAvailable?: boolean
   wslDistros?: string[]
   wslCapabilitiesLoading?: boolean
+  viewerPlatform: NodeJS.Platform
+  executionHostRuntime?: LocalAgentRuntime
 }
 
 export function GeneralPane({
@@ -98,7 +101,9 @@ export function GeneralPane({
   wslSupportedPlatform,
   wslAvailable,
   wslDistros = EMPTY_WSL_DISTROS,
-  wslCapabilitiesLoading
+  wslCapabilitiesLoading,
+  viewerPlatform,
+  executionHostRuntime
 }: GeneralPaneProps): React.JSX.Element {
   const searchQuery = useAppStore((s) => s.settingsSearchQuery)
   const sourceDefaultsSupportedRuntimeEnvironmentId = useAppStore(
@@ -208,7 +213,8 @@ export function GeneralPane({
     matchesSettingsSearch(searchQuery, getGeneralCliSearchEntries()) ? (
       <CliSection
         key="cli"
-        currentPlatform={getDesktopPlatformFromUserAgent(navigator.userAgent)}
+        currentPlatform={viewerPlatform}
+        executionHostRuntime={executionHostRuntime}
         settings={settings}
         wslSupportedPlatform={wslSupportedPlatform}
         wslAvailable={wslAvailable}

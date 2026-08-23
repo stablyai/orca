@@ -699,4 +699,43 @@ describe('setActiveWorktree', () => {
       })
     }
   })
+
+  it('does not stamp viewer Windows shells onto pinned paired-runtime tabs', () => {
+    const originalNavigator = globalThis.navigator
+    Object.defineProperty(globalThis, 'navigator', {
+      value: { userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)' },
+      configurable: true
+    })
+    try {
+      const store = createTestStore()
+      const wt = 'repo1::/path/wt1'
+      seedStore(store, {
+        settings: { ...getDefaultSettings('/tmp'), terminalWindowsShell: 'wsl.exe' },
+        worktreesByRepo: {
+          repo1: [makeWorktree({ id: wt, repoId: 'repo1', path: '/path/wt1' })]
+        },
+        runtimeStatusByEnvironmentId: new Map([
+          ['linux-host', { status: { hostPlatform: 'linux' }, checkedAt: 1 }],
+          ['legacy-host', { status: {}, checkedAt: 1 }]
+        ]) as ReturnType<typeof store.getState>['runtimeStatusByEnvironmentId']
+      })
+
+      const linuxTab = store
+        .getState()
+        .createTab(wt, undefined, undefined, { runtimeEnvironmentId: 'linux-host' })
+      const legacyTab = store
+        .getState()
+        .createTab(wt, undefined, 'powershell.exe', { runtimeEnvironmentId: 'legacy-host' })
+
+      expect(linuxTab).toMatchObject({ runtimeEnvironmentId: 'linux-host' })
+      expect(linuxTab.shellOverride).toBeUndefined()
+      expect(legacyTab).toMatchObject({ runtimeEnvironmentId: 'legacy-host' })
+      expect(legacyTab.shellOverride).toBeUndefined()
+    } finally {
+      Object.defineProperty(globalThis, 'navigator', {
+        value: originalNavigator,
+        configurable: true
+      })
+    }
+  })
 })

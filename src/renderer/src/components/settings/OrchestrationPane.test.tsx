@@ -19,6 +19,21 @@ const mocks = vi.hoisted(() => ({
   skillInstalled: true
 }))
 
+vi.mock('@/hooks/useActiveProjectSkillRuntime', () => ({
+  useActiveProjectSkillRuntime: () => ({
+    agentRuntime: {
+      hostPlatform: 'win32',
+      label: 'Windows',
+      runtime: 'host',
+      runtimeEnvironmentId: null,
+      runtimeOwnershipResolved: true
+    },
+    canUseLocalSkillFreshness: true,
+    executionHostPlatform: 'win32',
+    installDisabledReason: null
+  })
+}))
+
 vi.mock('./AgentSkillSetupPanel', () => ({
   AgentSkillSetupPanel: (
     props: Record<string, unknown> & { actionHint?: ReactNode; footer?: ReactNode }

@@ -12,10 +12,17 @@ import { CliSection } from './CliSection'
 
 const capturedPanel = vi.hoisted(() => ({
   canUseLocalSkillFreshness: true,
+  wslRegistrationPlatforms: [] as string[],
   props: null as null | {
     command: string
     installedCommand: string
-    terminalRuntime?: { runtime: 'host' | 'wsl'; wslDistro?: string | null; label: string }
+    terminalRuntime?: {
+      runtime: 'host' | 'wsl'
+      wslDistro?: string | null
+      hostPlatform?: NodeJS.Platform
+      terminalWindowsShell?: string | null
+      label: string
+    }
     freshnessSkillName?: string
     getPrerequisiteStatus: () => Promise<unknown>
     onBeforeOpenTerminal: () => Promise<void>
@@ -47,6 +54,7 @@ capturedPanel.useInstalledAgentSkill.mockReturnValue({
 afterEach(() => {
   cleanup()
   capturedPanel.canUseLocalSkillFreshness = true
+  capturedPanel.wslRegistrationPlatforms.length = 0
   toastError.mockReset()
   vi.unstubAllGlobals()
 })
@@ -71,7 +79,8 @@ vi.mock('./CliRegistrationDialog', () => ({
 }))
 
 vi.mock('./WslCliRegistration', () => ({
-  WslCliRegistration: function WslCliRegistration() {
+  WslCliRegistration: function WslCliRegistration(props: { currentPlatform: string }) {
+    capturedPanel.wslRegistrationPlatforms.push(props.currentPlatform)
     return null
   }
 }))
@@ -81,6 +90,14 @@ describe('CliSection project runtime defaults', () => {
     const settings = getDefaultSettings('/tmp')
     renderToStaticMarkup(<CliSection currentPlatform="darwin" settings={settings} />)
     expect(capturedPanel.props?.freshnessSkillName).toBe('orca-cli')
+    expect(capturedPanel.props?.terminalRuntime).toMatchObject({
+      runtime: 'host',
+      hostPlatform: 'darwin'
+    })
+
+    renderToStaticMarkup(<CliSection settings={settings} />)
+    expect(capturedPanel.props?.terminalRuntime?.hostPlatform).toBeUndefined()
+    expect(capturedPanel.props?.command).toBe(ORCA_CLI_SKILL_INSTALL_COMMAND)
 
     capturedPanel.canUseLocalSkillFreshness = false
     renderToStaticMarkup(<CliSection currentPlatform="darwin" settings={settings} />)
@@ -145,10 +162,61 @@ describe('CliSection project runtime defaults', () => {
     expect(capturedPanel.props?.terminalRuntime).toEqual({
       runtime: 'wsl',
       wslDistro: 'Ubuntu',
+      hostPlatform: 'win32',
       label: 'WSL Ubuntu'
     })
     expect(getWslInstallStatus).toHaveBeenCalledWith({ distro: 'Ubuntu' })
     expect(getWslInstallStatus).toHaveBeenCalledTimes(2)
+  })
+
+  it('keeps registration viewer-owned and skill commands execution-host-owned', () => {
+    const settings = { ...getDefaultSettings('/tmp'), terminalWindowsShell: 'powershell.exe' }
+    renderToStaticMarkup(
+      <CliSection
+        currentPlatform="linux"
+        settings={settings}
+        executionHostRuntime={{
+          runtime: 'host',
+          hostPlatform: 'win32',
+          terminalWindowsShell: 'git-bash',
+          label: 'Windows'
+        }}
+      />
+    )
+    expect(capturedPanel.props?.command).toBe(ORCA_CLI_SKILL_INSTALL_COMMAND)
+    expect(capturedPanel.props?.terminalRuntime).toMatchObject({
+      hostPlatform: 'win32',
+      terminalWindowsShell: 'git-bash'
+    })
+    expect(capturedPanel.wslRegistrationPlatforms).toEqual([])
+
+    renderToStaticMarkup(
+      <CliSection
+        currentPlatform="win32"
+        settings={settings}
+        wslSupportedPlatform
+        executionHostRuntime={{ runtime: 'host', hostPlatform: 'linux', label: 'This device' }}
+      />
+    )
+    expect(capturedPanel.wslRegistrationPlatforms).toContain('win32')
+
+    for (const terminalWindowsShell of ['powershell.exe', undefined]) {
+      renderToStaticMarkup(
+        <CliSection
+          currentPlatform="linux"
+          settings={{ ...settings, terminalWindowsShell: 'git-bash' }}
+          executionHostRuntime={{
+            runtime: 'host',
+            hostPlatform: 'win32',
+            terminalWindowsShell,
+            label: 'Windows'
+          }}
+        />
+      )
+      expect(capturedPanel.props?.command?.startsWith('cmd.exe')).toBe(
+        terminalWindowsShell === 'powershell.exe'
+      )
+    }
   })
 
   it('renders an inline unknown PATH state without offering a mutation', async () => {

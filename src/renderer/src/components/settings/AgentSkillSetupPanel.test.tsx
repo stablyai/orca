@@ -6,6 +6,7 @@ import { renderToStaticMarkup } from 'react-dom/server'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { AgentSkillSetupPanel } from './AgentSkillSetupPanel'
 import { TooltipProvider } from '../ui/tooltip'
+import { useAppStore } from '@/store'
 
 const INSTALL_COMMAND = 'npx skills add https://github.com/stablyai/orca --skill orca-cli --global'
 const UPDATE_COMMAND = 'npx skills update orca-cli --global'
@@ -16,6 +17,8 @@ const mocks = vi.hoisted(() => ({
     command: string
     description: string
     shellOverride?: string
+    forceHostRuntime?: boolean
+    runtimeEnvironmentId?: string | null
     prepareCommandForShell?: (command: string, shellOverride?: string) => string
     onTerminalExit?: () => void
     onCommandFinished?: (bestEffortExitCode: number | null) => void
@@ -49,6 +52,8 @@ vi.mock('../onboarding/OnboardingInlineCommandTerminal', () => ({
     command: string
     description: string
     shellOverride?: string
+    forceHostRuntime?: boolean
+    runtimeEnvironmentId?: string | null
     prepareCommandForShell?: (command: string, shellOverride?: string) => string
     onTerminalExit?: () => void
     onCommandFinished?: (bestEffortExitCode: number | null) => void
@@ -167,6 +172,11 @@ describe('AgentSkillSetupPanel', () => {
     mocks.freshnessRefresh.mockReset()
     mocks.freshnessRefresh.mockResolvedValue(undefined)
     mocks.terminalInstanceCount = 0
+    useAppStore.setState({
+      settings: { activeRuntimeEnvironmentId: null } as never,
+      runtimeEnvironments: [],
+      runtimeEnvironmentCatalogSettled: true
+    })
     Object.defineProperty(window, 'api', {
       configurable: true,
       value: {
@@ -462,13 +472,75 @@ describe('AgentSkillSetupPanel', () => {
     )
 
     await rerenderInteractivePanel({
-      terminalRuntime: { runtime: 'host', label: 'Windows' }
+      terminalRuntime: { runtime: 'host', hostPlatform: 'win32', label: 'Windows' }
     })
 
     expect(mocks.terminalProps.at(-1)).toMatchObject({
       command: openedCommand,
+      forceHostRuntime: false,
       shellOverride: 'powershell.exe'
     })
+  })
+
+  it('pins host terminal ownership when the terminal opens', async () => {
+    await renderInteractivePanel({
+      terminalRuntime: { runtime: 'host', hostPlatform: 'win32', label: 'Windows' }
+    })
+    await clickButton('Install')
+
+    expect(mocks.terminalProps.at(-1)?.forceHostRuntime).toBe(true)
+
+    await rerenderInteractivePanel({
+      terminalRuntime: { runtime: 'wsl', wslDistro: 'Ubuntu', label: 'WSL Ubuntu' }
+    })
+
+    expect(mocks.terminalProps.at(-1)?.forceHostRuntime).toBe(true)
+  })
+
+  it('pins the exact runtime owner while setup preflight is pending', async () => {
+    let resolvePreflight: (() => void) | undefined
+    const preflight = new Promise<void>((resolve) => {
+      resolvePreflight = resolve
+    })
+    await renderInteractivePanel({
+      terminalRuntime: {
+        runtime: 'host',
+        hostPlatform: 'linux',
+        runtimeEnvironmentId: 'linux-host',
+        label: 'This device'
+      },
+      onBeforeOpenTerminal: () => preflight
+    })
+
+    await clickButton('Install')
+    useAppStore.setState({
+      settings: { activeRuntimeEnvironmentId: 'windows-host' } as never,
+      runtimeEnvironments: [{ id: 'windows-host' }] as never
+    })
+    await act(async () => {
+      resolvePreflight?.()
+      await preflight
+    })
+
+    expect(mocks.terminalProps.at(-1)?.runtimeEnvironmentId).toBe('linux-host')
+  })
+
+  it('does not start setup while runtime ownership is unresolved', async () => {
+    const onBeforeOpenTerminal = vi.fn()
+    await renderInteractivePanel({
+      terminalRuntime: {
+        runtime: 'host',
+        runtimeOwnershipResolved: false,
+        label: 'This device'
+      },
+      onBeforeOpenTerminal
+    })
+
+    expect(findButton('Install').disabled).toBe(true)
+    await clickButton('Install')
+
+    expect(onBeforeOpenTerminal).not.toHaveBeenCalled()
+    expect(mocks.terminalProps).toHaveLength(0)
   })
 
   it('captures the current runtime when retrying a failed command', async () => {
@@ -500,7 +572,7 @@ describe('AgentSkillSetupPanel', () => {
     })
     await rerenderInteractivePanel({
       terminalShellOverride: 'powershell.exe',
-      terminalRuntime: { runtime: 'host', label: 'Windows' }
+      terminalRuntime: { runtime: 'host', hostPlatform: 'win32', label: 'Windows' }
     })
 
     await clickButton('Retry')

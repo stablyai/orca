@@ -21,7 +21,20 @@ const mocks = vi.hoisted(() => ({
   },
   useInstalledAgentSkillNames: vi.fn(),
   getCliStatus: vi.fn(),
-  panelProps: [] as Record<string, unknown>[]
+  panelProps: [] as Record<string, unknown>[],
+  activeSkillRuntime: {
+    executionHostPlatform: 'linux' as NodeJS.Platform | undefined,
+    agentRuntime: {
+      runtime: 'host' as const,
+      hostPlatform: 'linux' as NodeJS.Platform | undefined,
+      terminalWindowsShell: undefined as string | null | undefined,
+      label: 'This device'
+    }
+  }
+}))
+
+vi.mock('@/hooks/useActiveProjectSkillRuntime', () => ({
+  useActiveProjectSkillRuntime: () => mocks.activeSkillRuntime
 }))
 
 vi.mock('@/hooks/useInstalledAgentSkills', async (importOriginal) => ({
@@ -122,9 +135,15 @@ describe('LinearAgentSkillSetupPrompt update command', () => {
     mocks.getCliStatus.mockReset()
     mocks.getCliStatus.mockResolvedValue(cliStatus())
     mocks.panelProps.length = 0
+    mocks.activeSkillRuntime.executionHostPlatform = 'linux'
+    mocks.activeSkillRuntime.agentRuntime.hostPlatform = 'linux'
+    mocks.activeSkillRuntime.agentRuntime.terminalWindowsShell = undefined
     Object.defineProperty(window, 'api', {
       configurable: true,
-      value: { cli: { getInstallStatus: mocks.getCliStatus } }
+      value: {
+        cli: { getInstallStatus: mocks.getCliStatus },
+        platform: { get: () => ({ platform: 'win32' }) }
+      }
     })
     Object.defineProperty(window, 'localStorage', {
       configurable: true,
@@ -178,5 +197,20 @@ describe('LinearAgentSkillSetupPrompt update command', () => {
     expect(mocks.panelProps.at(-1)).toEqual(
       expect.objectContaining({ installedCommand: 'npx skills update orca-linear --global' })
     )
+  })
+
+  it('uses the paired execution-host platform for the setup terminal', async () => {
+    ;(window as unknown as { __ORCA_WEB_CLIENT__?: boolean }).__ORCA_WEB_CLIENT__ = true
+
+    await renderPrompt()
+
+    expect(mocks.panelProps.at(-1)?.terminalRuntime).toEqual(
+      expect.objectContaining({
+        hostPlatform: 'linux',
+        runtime: 'host',
+        terminalWindowsShell: undefined
+      })
+    )
+    delete (window as unknown as { __ORCA_WEB_CLIENT__?: boolean }).__ORCA_WEB_CLIENT__
   })
 })

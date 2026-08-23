@@ -28,5 +28,6 @@ export type WorktreeRuntimeOwnerState = {
   activeWorkspaceExecutionHostId?: ExecutionHostId | null
   runtimeEnvironments?: readonly { id: string }[]
   runtimeEnvironmentCatalogHydrated?: boolean
+  runtimeEnvironmentCatalogSettled?: boolean
   removedRuntimeEnvironmentIds?: ReadonlySet<string>
 }

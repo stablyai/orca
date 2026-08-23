@@ -11,7 +11,7 @@ import {
 import { PASTE_TERMINAL_TEXT_EVENT, type PasteTerminalTextDetail } from '@/constants/terminal'
 
 const mocks = vi.hoisted(() => ({
-  createTab: vi.fn(() => ({ id: 'tab-1', shellOverride: 'wsl.exe' })),
+  createTab: vi.fn((..._args: unknown[]) => ({ id: 'tab-1', shellOverride: 'wsl.exe' })),
   closeTab: vi.fn(),
   setActiveTabForWorktree: vi.fn(),
   setTabCustomTitle: vi.fn()
@@ -116,6 +116,7 @@ describe('OnboardingInlineCommandTerminal command-finished forwarding', () => {
           <OnboardingInlineCommandTerminal
             command="npx skills add orchestration"
             forceHostRuntime
+            runtimeEnvironmentId="linux-host"
             prepareCommandForShell={prepareCommandForShell}
             shellOverride="powershell.exe"
             title="Skill setup"
@@ -137,7 +138,10 @@ describe('OnboardingInlineCommandTerminal command-finished forwarding', () => {
         'ephemeral-setup-terminal:onboarding-inline-terminal',
         undefined,
         'powershell.exe',
-        expect.objectContaining({ forceHostRuntime: true })
+        expect.objectContaining({
+          forceHostRuntime: true,
+          runtimeEnvironmentId: 'linux-host'
+        })
       )
       expect(pasted).toContainEqual({
         tabId: 'tab-1',
@@ -169,6 +173,7 @@ describe('OnboardingInlineCommandTerminal command-finished forwarding', () => {
       )
     })
     await act(async () => {})
+    expect(mocks.createTab.mock.calls.at(-1)?.[3]).not.toHaveProperty('runtimeEnvironmentId')
 
     await act(async () => {
       dispatchCommandFinished('some-other-worktree', 1)

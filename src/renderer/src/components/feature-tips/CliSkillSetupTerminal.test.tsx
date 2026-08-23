@@ -7,11 +7,19 @@ import { CliSkillSetupTerminal } from './CliSkillSetupTerminal'
 
 const mocks = vi.hoisted(() => ({
   runtime: {
-    agentRuntime: { runtime: 'wsl' as const, wslDistro: 'Missing', label: 'WSL Missing' },
-    installDisabledReason: 'The selected WSL distro is unavailable.',
+    agentRuntime: {
+      runtime: 'wsl' as const,
+      wslDistro: 'Missing',
+      hostPlatform: 'win32' as const,
+      runtimeEnvironmentId: 'hub-a',
+      runtimeOwnershipResolved: true,
+      label: 'WSL Missing'
+    },
+    installDisabledReason: 'The selected WSL distro is unavailable.' as string | null,
     terminalShellOverride: 'powershell.exe'
   },
-  terminalCommand: ''
+  terminalCommand: '',
+  runtimeEnvironmentId: undefined as string | null | undefined
 }))
 
 vi.mock('@/hooks/useActiveProjectSkillRuntime', () => ({
@@ -22,13 +30,16 @@ vi.mock('@/components/onboarding/OnboardingInlineCommandTerminal', () => ({
   OnboardingInlineCommandTerminal: ({
     command,
     prepareCommandForShell,
+    runtimeEnvironmentId,
     shellOverride
   }: {
     command: string
     prepareCommandForShell?: (command: string, shellOverride?: string) => string
+    runtimeEnvironmentId?: string | null
     shellOverride?: string
   }) => {
     mocks.terminalCommand = prepareCommandForShell?.(command, shellOverride) ?? command
+    mocks.runtimeEnvironmentId = runtimeEnvironmentId
     return null
   }
 }))
@@ -36,10 +47,13 @@ vi.mock('@/components/onboarding/OnboardingInlineCommandTerminal', () => ({
 describe('CliSkillSetupTerminal', () => {
   beforeEach(() => {
     mocks.terminalCommand = ''
+    mocks.runtimeEnvironmentId = undefined
+    mocks.runtime.installDisabledReason = 'The selected WSL distro is unavailable.'
+    mocks.runtime.agentRuntime.runtimeOwnershipResolved = true
     Object.defineProperty(window, 'api', {
       configurable: true,
       value: {
-        platform: { get: () => ({ platform: 'win32' }) }
+        platform: { get: () => ({ platform: 'darwin' }) }
       }
     })
   })
@@ -58,5 +72,20 @@ describe('CliSkillSetupTerminal', () => {
 
     expect(mocks.terminalCommand).toMatch(/^cmd\.exe \/d \/s \/c /)
     expect(mocks.terminalCommand).not.toContain('wsl.exe')
+    expect(mocks.runtimeEnvironmentId).toBe('hub-a')
+  })
+
+  it('does not mount a terminal while runtime ownership is unresolved', () => {
+    mocks.runtime.installDisabledReason = null
+    mocks.runtime.agentRuntime.runtimeOwnershipResolved = false
+
+    const rendered = render(
+      <TooltipProvider>
+        <CliSkillSetupTerminal />
+      </TooltipProvider>
+    )
+
+    expect(rendered.getByText('Preparing setup terminal.')).toBeTruthy()
+    expect(mocks.terminalCommand).toBe('')
   })
 })

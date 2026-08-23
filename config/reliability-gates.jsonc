@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "updatedAt": "2026-08-20",
+  "updatedAt": "2026-08-23",
   "policy": {
     "maturityLevels": ["experimental", "soak", "blocking", "accepted-gap", "deprecated"],
     "blockingPromotion": {
@@ -5075,7 +5075,7 @@
           "platform": "macos",
           "command": "ORCA_E2E_WEB_CLIENT=1 SKIP_BUILD=1 pnpm exec playwright test tests/e2e/remote-agent-session-focus-authority.spec.ts --config tests/playwright.config.ts --project electron-headful --workers=1",
           "result": "passed",
-          "durationSeconds": 5.8,
+          "durationSeconds": 5.92,
           "summary": "After fresh Electron E2E and exposed-store web builds, the isolated headed desktop host plus separate paired web client passed fresh/resume activate true/false, exact non-tail legacy placement in host/mirror/DOM, host focus isolation, requester-only exact focus, writable agent and unrelated shell markers, unrelated survival, and terminal/tab/PTY/process cleanup."
         },
         {
@@ -14089,6 +14089,255 @@
         "The legacy remote-uploads root is intentionally not reclaimed while a mixed-version relay may still own bytes there; eventual legacy-root retirement requires a separate compatibility decision."
       ],
       "demotionRule": "Demote if one live owner can remove another owner's bytes, cleanup exceeds 64 inspected entries per attempt, a lifecycle path retains its exact owned archive after settlement, or the process oracle flakes without an identified harness or product defect."
+    },
+    {
+      "id": "skill-setup.execution-host-platform",
+      "title": "Skill setup commands follow execution-host platform authority",
+      "maturity": "experimental",
+      "protection": "partial",
+      "owner": "renderer-skill-runtime",
+      "layer": "renderer-runtime-authority",
+      "surfaces": [
+        "skill install and update command builders",
+        "skill setup terminal",
+        "paired web settings dialog",
+        "saved remote runtime environments"
+      ],
+      "platforms": ["macos", "linux", "windows"],
+      "providers": ["local", "remote-runtime"],
+      "coveredPlatforms": ["macos", "linux"],
+      "coveredProviders": ["local", "remote-runtime"],
+      "coverageNotes": "Renderer contracts simulate mismatched viewer and host platforms, exact remote-environment selection, unresolved-catalog execution gating, local desktop behavior, paired-web suppression of viewer-owned Windows runtime settings, WSL repair fallback, execution-host Windows shell metadata, click-time terminal ownership, paired-runtime tab shell isolation, General, Linear, mobile-emulator, onboarding, and feature-tip command propagation, disconnected status, and a legacy host with no published platform. A Windows-user-agent web viewer paired to a real Linux Orca host passes the same visible command oracle with both headed desktop-server and headless serve topologies. Physical Windows-host and mixed-version binary journeys remain uncollected.",
+      "motivatingLinks": [
+        "https://linear.app/stably/issue/STA-3279",
+        "https://github.com/stablyai/orca/issues/12252"
+      ],
+      "invariant": "For a terminal owned by runtime R, skill command, setup-shell selection, preflight, and spawn use R's published host metadata and exact owner identity; changing only the viewer user agent or focus cannot change them. Unresolved ownership stays non-executable, and unavailable host platform stays neutral instead of borrowing viewer truth. Viewer-local keyboard and UI platform behavior remains viewer-owned.",
+      "oracle": "Pair a Windows-user-agent web viewer to a Linux Orca host, independently require both host RPC status and the consumed renderer mirror to publish linux, open the real Orchestration settings copy dialog, and require the visible install command to remain the bare POSIX npx command rather than a cmd.exe wrapper. Open its real setup terminal and separately require the tab to pin that Linux environment with no Windows shell override. Repeat against headed desktop-server and headless serve hosts. Renderer contracts separately pin exact environment selection, reject setup preflight and terminal creation while ownership is unresolved without borrowing the first saved web environment, preserve legacy omitted routing, and cover Windows-host inversion, paired-web suppression of viewer-owned WSL defaults, execution-host shell metadata, WSL repair fallback, General and Linear propagation, local desktop behavior, and platform-neutral disconnected and legacy states.",
+      "commands": [
+        "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/settings/CliSection.test.tsx src/renderer/src/components/settings/GeneralPane.test.ts src/renderer/src/components/settings/GeneralPane.cli-platform.test.tsx src/renderer/src/hooks/useActiveProjectSkillRuntime.test.tsx src/renderer/src/lib/project-skill-runtime.test.ts src/renderer/src/components/settings/CliSkillRuntimeSetup.test.tsx src/renderer/src/components/settings/AgentSkillSetupPanel.test.tsx src/renderer/src/components/settings/agent-skill-installed-command-callers.test.ts src/renderer/src/components/settings/MobileEmulatorAgentControlRow.test.tsx src/renderer/src/components/onboarding/onboarding-feature-setup.test.ts src/renderer/src/components/onboarding/FeatureSetupInlineTerminal.test.tsx src/renderer/src/components/onboarding/OnboardingInlineCommandTerminal.command-finished.test.tsx src/renderer/src/components/feature-wall/skill-setup-runtime-authority.test.tsx src/renderer/src/lib/terminal-worktree-route.test.ts src/renderer/src/store/slices/store-active-worktree-terminal-creation.test.ts src/renderer/src/lib/session-write-subscriber.test.ts src/renderer/src/lib/workspace-session-patch.test.ts src/shared/remote-workspace-session-projection.test.ts src/renderer/src/components/feature-tips/CliSkillSetupTerminal.test.tsx src/renderer/src/components/sidebar/linear-agent-skill-runtime.shell-override.test.ts src/renderer/src/components/sidebar/LinearAgentSkillSetupPrompt.test.tsx src/renderer/src/components/sidebar/LinearAgentSkillSetupPrompt.update-command.test.tsx src/renderer/src/components/sidebar/LinearAgentSkillSetupPrompt.reminder-toast.test.tsx src/renderer/src/components/settings/linear-agent-skill-install-cta.test.tsx",
+        "ORCA_E2E_WEB_CLIENT=1 pnpm exec playwright test tests/e2e/paired-web-skill-command-host-platform.spec.ts --config tests/playwright.config.ts --project electron-headful --workers=1 --reporter=line && ORCA_E2E_WEB_CLIENT=1 pnpm exec playwright test tests/e2e/paired-web-skill-command-host-platform.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1 --reporter=line",
+        "docker exec sta3279-linux-e2e bash -lc \"cd /workspace && xvfb-run --auto-servernum env SKIP_BUILD=1 ORCA_E2E_FORWARD_APP_LOGS=0 ORCA_E2E_WEB_CLIENT=1 pnpm exec playwright test tests/e2e/paired-web-skill-command-host-platform.spec.ts --config tests/playwright.config.ts --project electron-headful --workers=1 --reporter=line && xvfb-run --auto-servernum env SKIP_BUILD=1 ORCA_E2E_FORWARD_APP_LOGS=0 ORCA_E2E_WEB_CLIENT=1 pnpm exec playwright test tests/e2e/paired-web-skill-command-host-platform.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1 --reporter=line\""
+      ],
+      "testFiles": [
+        "src/renderer/src/hooks/useActiveProjectSkillRuntime.test.tsx",
+        "src/renderer/src/lib/project-skill-runtime.test.ts",
+        "src/renderer/src/components/settings/CliSkillRuntimeSetup.test.tsx",
+        "src/renderer/src/components/settings/AgentSkillSetupPanel.test.tsx",
+        "src/renderer/src/components/onboarding/OnboardingInlineCommandTerminal.command-finished.test.tsx",
+        "src/renderer/src/lib/terminal-worktree-route.test.ts",
+        "src/renderer/src/store/slices/store-active-worktree-terminal-creation.test.ts",
+        "src/renderer/src/lib/session-write-subscriber.test.ts",
+        "src/renderer/src/lib/workspace-session-patch.test.ts",
+        "src/shared/remote-workspace-session-projection.test.ts",
+        "src/renderer/src/components/settings/CliSection.test.tsx",
+        "src/renderer/src/components/settings/GeneralPane.test.ts",
+        "src/renderer/src/components/settings/GeneralPane.cli-platform.test.tsx",
+        "src/renderer/src/components/settings/agent-skill-installed-command-callers.test.ts",
+        "src/renderer/src/components/settings/MobileEmulatorAgentControlRow.test.tsx",
+        "src/renderer/src/components/onboarding/onboarding-feature-setup.test.ts",
+        "src/renderer/src/components/onboarding/FeatureSetupInlineTerminal.test.tsx",
+        "src/renderer/src/components/feature-wall/skill-setup-runtime-authority.test.tsx",
+        "src/renderer/src/components/feature-tips/CliSkillSetupTerminal.test.tsx",
+        "src/renderer/src/components/sidebar/linear-agent-skill-runtime.shell-override.test.ts",
+        "src/renderer/src/components/sidebar/LinearAgentSkillSetupPrompt.test.tsx",
+        "src/renderer/src/components/sidebar/LinearAgentSkillSetupPrompt.update-command.test.tsx",
+        "src/renderer/src/components/sidebar/LinearAgentSkillSetupPrompt.reminder-toast.test.tsx",
+        "src/renderer/src/components/settings/linear-agent-skill-install-cta.test.tsx",
+        "tests/e2e/paired-web-skill-command-host-platform.spec.ts"
+      ],
+      "assertionRefs": [
+        {
+          "file": "src/renderer/src/hooks/useActiveProjectSkillRuntime.test.tsx",
+          "assertions": [
+            "paired web and saved remote runtimes prefer the exact host status platform over viewer platform",
+            "an unresolved paired web target does not borrow the first saved runtime's owner or platform",
+            "local desktop retains viewer-platform behavior while loading, disconnected, and old hosts remain platform-neutral",
+            "non-Windows execution hosts do not trigger the Windows setup-shell override",
+            "paired web does not borrow viewer-owned WSL or shell defaults"
+          ]
+        },
+        {
+          "file": "src/renderer/src/components/settings/CliSection.test.tsx",
+          "assertions": [
+            "General CLI carries its execution-host platform into host and WSL terminal runtimes",
+            "unknown execution-host platform emits a neutral install command"
+          ]
+        },
+        {
+          "file": "src/renderer/src/components/settings/GeneralPane.test.ts",
+          "assertions": [
+            "General settings retains viewer-local platform classification outside paired web"
+          ]
+        },
+        {
+          "file": "src/renderer/src/components/settings/GeneralPane.cli-platform.test.tsx",
+          "assertions": [
+            "GeneralPane keeps registration UI viewer-owned while passing complete execution-host runtime authority to skill setup"
+          ]
+        },
+        {
+          "file": "src/renderer/src/lib/project-skill-runtime.test.ts",
+          "assertions": [
+            "host runtime metadata carries the resolved execution-host platform"
+          ]
+        },
+        {
+          "file": "src/renderer/src/components/settings/CliSkillRuntimeSetup.test.tsx",
+          "assertions": [
+            "skill command and setup-terminal builders prefer runtime hostPlatform",
+            "authoritative Windows hosts and WSL runtimes retain their required Windows command behavior",
+            "copied Windows commands prefer execution-host terminalWindowsShell and stay neutral when old hosts omit it"
+          ]
+        },
+        {
+          "file": "src/renderer/src/components/settings/AgentSkillSetupPanel.test.tsx",
+          "assertions": [
+            "WSL runtimes without optional host metadata retain their intrinsic Windows-parent shell contract",
+            "click-time runtime snapshots keep command preparation and exact execution-host ownership pinned together across asynchronous preflight",
+            "unresolved runtime ownership cannot start setup or collapse into a focused or local owner"
+          ]
+        },
+        {
+          "file": "src/renderer/src/components/onboarding/OnboardingInlineCommandTerminal.command-finished.test.tsx",
+          "assertions": [
+            "the exact snapshotted runtime environment id reaches terminal creation with host-runtime routing"
+          ]
+        },
+        {
+          "file": "src/renderer/src/lib/terminal-worktree-route.test.ts",
+          "assertions": [
+            "an explicit setup-terminal owner outranks later runtime focus changes, including a pinned local owner"
+          ]
+        },
+        {
+          "file": "src/renderer/src/store/slices/store-active-worktree-terminal-creation.test.ts",
+          "assertions": [
+            "pinned paired-runtime terminals never inherit viewer Windows shell settings, including legacy hosts with unknown platform"
+          ]
+        },
+        {
+          "file": "src/renderer/src/lib/session-write-subscriber.test.ts",
+          "assertions": [
+            "transient runtime spawn ownership does not trigger durable session writes"
+          ]
+        },
+        {
+          "file": "src/renderer/src/lib/workspace-session-patch.test.ts",
+          "assertions": [
+            "runtime spawn ownership is stripped from persisted terminal tabs"
+          ]
+        },
+        {
+          "file": "src/shared/remote-workspace-session-projection.test.ts",
+          "assertions": [
+            "runtime spawn ownership is not published in remote workspace session content"
+          ]
+        },
+        {
+          "file": "src/renderer/src/components/settings/agent-skill-installed-command-callers.test.ts",
+          "assertions": [
+            "repair-required feature-tip setup retains host fallback command construction",
+            "host-only mobile emulator setup callers still carry the focused execution-host platform"
+          ]
+        },
+        {
+          "file": "src/renderer/src/components/settings/MobileEmulatorAgentControlRow.test.tsx",
+          "assertions": [
+            "mobile emulator host-only setup distinguishes Windows and Linux execution-host commands"
+          ]
+        },
+        {
+          "file": "src/renderer/src/components/onboarding/onboarding-feature-setup.test.ts",
+          "assertions": [
+            "WSL repair fallback retains the authoritative Windows parent for copied commands"
+          ]
+        },
+        {
+          "file": "src/renderer/src/components/onboarding/FeatureSetupInlineTerminal.test.tsx",
+          "assertions": [
+            "feature-wall setup passes the captured execution-host environment into terminal spawn"
+          ]
+        },
+        {
+          "file": "src/renderer/src/components/feature-wall/skill-setup-runtime-authority.test.tsx",
+          "assertions": [
+            "feature-wall actions cannot run host-scoped setup before runtime ownership resolves",
+            "settled local and paired owners enable setup with null and exact environment identity"
+          ]
+        },
+        {
+          "file": "src/renderer/src/components/feature-tips/CliSkillSetupTerminal.test.tsx",
+          "assertions": [
+            "feature-tip repair fallback keeps command platform and terminal spawn on the same execution host"
+          ]
+        },
+        {
+          "file": "src/renderer/src/components/sidebar/linear-agent-skill-runtime.shell-override.test.ts",
+          "assertions": [
+            "Linear command runtimes carry the selected execution platform for host and WSL targets",
+            "paired web and saved runtimes use execution-host truth while local Linear UI remains viewer-owned",
+            "an explicit project WSL target outranks ambient execution-host metadata"
+          ]
+        },
+        {
+          "file": "tests/e2e/paired-web-skill-command-host-platform.spec.ts",
+          "assertions": [
+            "direct host RPC status and the renderer's consumed mirror report Linux while the viewer reports Windows",
+            "the real visible copy dialog uses the Linux host command in headed and headless paired topologies",
+            "the real setup terminal pins the Linux environment without inheriting a viewer Windows shell"
+          ]
+        }
+      ],
+      "evidenceRuns": [
+        {
+          "date": "2026-08-23",
+          "runner": "local",
+          "platform": "macos",
+          "result": "passed",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/settings/CliSection.test.tsx src/renderer/src/components/settings/GeneralPane.test.ts src/renderer/src/components/settings/GeneralPane.cli-platform.test.tsx src/renderer/src/hooks/useActiveProjectSkillRuntime.test.tsx src/renderer/src/lib/project-skill-runtime.test.ts src/renderer/src/components/settings/CliSkillRuntimeSetup.test.tsx src/renderer/src/components/settings/AgentSkillSetupPanel.test.tsx src/renderer/src/components/settings/agent-skill-installed-command-callers.test.ts src/renderer/src/components/settings/MobileEmulatorAgentControlRow.test.tsx src/renderer/src/components/onboarding/onboarding-feature-setup.test.ts src/renderer/src/components/onboarding/FeatureSetupInlineTerminal.test.tsx src/renderer/src/components/onboarding/OnboardingInlineCommandTerminal.command-finished.test.tsx src/renderer/src/components/feature-wall/skill-setup-runtime-authority.test.tsx src/renderer/src/lib/terminal-worktree-route.test.ts src/renderer/src/store/slices/store-active-worktree-terminal-creation.test.ts src/renderer/src/lib/session-write-subscriber.test.ts src/renderer/src/lib/workspace-session-patch.test.ts src/shared/remote-workspace-session-projection.test.ts src/renderer/src/components/feature-tips/CliSkillSetupTerminal.test.tsx src/renderer/src/components/sidebar/linear-agent-skill-runtime.shell-override.test.ts src/renderer/src/components/sidebar/LinearAgentSkillSetupPrompt.test.tsx src/renderer/src/components/sidebar/LinearAgentSkillSetupPrompt.update-command.test.tsx src/renderer/src/components/sidebar/LinearAgentSkillSetupPrompt.reminder-toast.test.tsx src/renderer/src/components/settings/linear-agent-skill-install-cta.test.tsx",
+          "durationSeconds": 5.8,
+          "summary": "Twenty-four focused files passed 269 tests covering host/viewer inversion, exact environment selection, unresolved-catalog execution and prerequisite-mutation gating, neutral unavailable and ambiguous ownership, General, Linear, mobile emulator, onboarding, feature wall, and feature-tip propagation, command construction and caller ratchets, click-time exact terminal ownership across preflight, paired-runtime tab shell isolation, transient-owner persistence and publication exclusion, setup-shell behavior, paired-web suppression of viewer-owned Windows runtime settings, execution-host shell authority including legacy host neutrality, legacy WSL precedence and repair fallback, and local desktop preservation."
+        },
+        {
+          "date": "2026-08-23",
+          "runner": "local",
+          "platform": "linux",
+          "result": "passed",
+          "command": "docker exec sta3279-linux-e2e bash -lc \"cd /workspace && xvfb-run --auto-servernum env SKIP_BUILD=1 ORCA_E2E_FORWARD_APP_LOGS=0 ORCA_E2E_WEB_CLIENT=1 pnpm exec playwright test tests/e2e/paired-web-skill-command-host-platform.spec.ts --config tests/playwright.config.ts --project electron-headful --workers=1 --reporter=line && xvfb-run --auto-servernum env SKIP_BUILD=1 ORCA_E2E_FORWARD_APP_LOGS=0 ORCA_E2E_WEB_CLIENT=1 pnpm exec playwright test tests/e2e/paired-web-skill-command-host-platform.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1 --reporter=line\"",
+          "durationSeconds": 34.9,
+          "summary": "Both strengthened live paired Linux-host journeys passed after a bounded mirrored-status readiness barrier: headed desktop-server in 15.4 seconds and headless serve in 19.5 seconds. Host RPC status and the renderer mirror reported linux while the Windows-UA viewer reported win32, the visible Orchestration dialog showed the bare npx install command, and the real setup-terminal tab was pinned to the Linux runtime without a viewer Windows shell override."
+        }
+      ],
+      "runtimeBudget": {
+        "p95Seconds": 45,
+        "scope": "focused renderer contracts plus sequential headed and headless paired web journeys"
+      },
+      "flakeHistory": {
+        "status": "not-started",
+        "evidence": "The unit contracts and live journeys use status and UI readiness barriers rather than timing as the oracle; CI and soak history have not started."
+      },
+      "redGreenEvidence": {
+        "status": "complete",
+        "evidence": "The identical strengthened headed and headless projects were rebuilt against origin/main product sources while retaining only the candidate test harness. Both reported hostPlatform linux but failed at the visible command oracle with the Windows viewer's cmd.exe wrapper before terminal creation. Rebuilding the same projects from the candidate product sources passed both the visible POSIX command and exact setup-terminal owner/shell assertions. Because origin/main is the candidate with the complete product fix disabled, this is also the revert control."
+      },
+      "performanceBudget": {
+        "required": true,
+        "evidence": "The hook selects scalars from the already-mirrored runtimeStatusByEnvironmentId map and adds no platform RPC, polling, timer, subprocess, whole-map subscription, or remote fanout. A Linux paired host causes no Windows probe. Existing Windows capability discovery remains gated to a proven Windows execution platform with local project authority; paired web does not probe viewer-local WSL capabilities."
+      },
+      "promotionCriteria": [
+        "Collect 100 consecutive focused CI passes or 14 days without an unexplained flake.",
+        "Run a physical Windows execution host with a non-Windows viewer and retain the inverse command oracle.",
+        "Exercise an old viewer against a new host and a new viewer against an old host binary.",
+        "Keep the no-extra-platform-RPC and no-Linux-host-Windows-probe budget plus local desktop viewer behavior green."
+      ],
+      "knownGaps": [
+        "The live cross-OS topology used a Linux container for the paired Orca host; physical Windows-host inversion remains uncollected.",
+        "Legacy omission is covered as a renderer contract, but mixed-version packaged binaries were not paired live.",
+        "The live journey exercises Orchestration copy UI; setup-terminal, WSL, and General CLI boundaries are deterministic renderer contracts rather than separate live journeys.",
+        "Viewer-local shortcut and feedback platform consumers intentionally remain UA-owned."
+      ],
+      "demotionRule": "Demote if viewer UA can alter an execution-host skill command, exact runtime selection borrows another host's platform or capability cache, unavailable host truth becomes viewer truth, WSL loses its Windows parent, or the boundary adds redundant runtime-status RPC or Windows capability fanout."
     }
   ]
 }

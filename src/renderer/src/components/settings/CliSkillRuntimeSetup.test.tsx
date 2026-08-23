@@ -229,7 +229,26 @@ describe('CliSkillRuntimeSetup runtime helpers', () => {
     ).toBe('npx skills update orchestration --global')
   })
 
-  it('skips the Windows preflight while a remote runtime environment is focused', () => {
+  it('uses the selected host platform instead of the viewer platform', () => {
+    const installCommand = buildAgentFeatureSkillInstallCommand(['orchestration'])
+
+    expect(
+      buildSkillCommandForRuntime(installCommand, {
+        runtime: 'host',
+        hostPlatform: 'linux',
+        label: 'This device'
+      })
+    ).toBe(installCommand)
+    expect(
+      buildSkillCommandForRuntime(installCommand, {
+        runtime: 'host',
+        hostPlatform: 'win32',
+        label: 'Windows'
+      })
+    ).toBe(`${windowsNpxPreflightPrefix}${windowsNpxGuidance}) else (${installCommand})"`)
+  })
+
+  it('keeps the Windows preflight for an authoritative remote Windows host', () => {
     const installCommand = buildAgentFeatureSkillInstallCommand(['orchestration'])
     const windowsHost = { runtime: 'host', label: 'Windows' } as const
     const previous = useAppStore.getState()
@@ -239,14 +258,17 @@ describe('CliSkillRuntimeSetup runtime helpers', () => {
     })
 
     try {
-      // Setup terminals can spawn on the focused runtime, so cmd.exe may not exist there.
-      expect(buildSkillCommandForRuntime(installCommand, windowsHost, 'win32')).toBe(installCommand)
+      expect(buildSkillCommandForRuntime(installCommand, windowsHost, 'win32')).toBe(
+        `${windowsNpxPreflightPrefix}${windowsNpxGuidance}) else (${installCommand})"`
+      )
 
-      // Extra saved environments must not reintroduce the wrapper either.
+      // Extra saved environments cannot override the selected host's platform.
       useAppStore.setState({
         runtimeEnvironments: [{ id: 'remote-linux' }, { id: 'other' }] as never
       })
-      expect(buildSkillCommandForRuntime(installCommand, windowsHost, 'win32')).toBe(installCommand)
+      expect(buildSkillCommandForRuntime(installCommand, windowsHost, 'win32')).toBe(
+        `${windowsNpxPreflightPrefix}${windowsNpxGuidance}) else (${installCommand})"`
+      )
     } finally {
       useAppStore.setState({
         settings: previous.settings,
@@ -328,17 +350,20 @@ describe('CliSkillRuntimeSetup runtime helpers', () => {
   })
 
   it('adapts bare WSL setup commands to the shell that Orca created', () => {
-    const runtime = { runtime: 'wsl', wslDistro: 'Ubuntu', label: 'WSL Ubuntu' } as const
+    const runtime = {
+      runtime: 'wsl',
+      wslDistro: 'Ubuntu',
+      hostPlatform: 'win32',
+      label: 'WSL Ubuntu'
+    } as const
     const skillCommand = 'npx skills add orchestration --global'
-    const copiedCommand = buildSkillCommandForRuntime(skillCommand, runtime, 'win32')
+    const copiedCommand = buildSkillCommandForRuntime(skillCommand, runtime)
 
     expect(copiedCommand).toBe(skillCommand)
-    expect(
-      buildSkillSetupTerminalCommand(copiedCommand, 'powershell.exe', runtime, 'win32')
-    ).toContain("wsl.exe -d 'Ubuntu'")
-    expect(buildSkillSetupTerminalCommand(copiedCommand, 'wsl.exe', runtime, 'win32')).toBe(
-      skillCommand
+    expect(buildSkillSetupTerminalCommand(copiedCommand, 'powershell.exe', runtime)).toContain(
+      "wsl.exe -d 'Ubuntu'"
     )
+    expect(buildSkillSetupTerminalCommand(copiedCommand, 'wsl.exe', runtime)).toBe(skillCommand)
     expect(
       buildSkillSetupTerminalCommand(
         'npx skills add orchestration --global',
@@ -354,6 +379,7 @@ describe('CliSkillRuntimeSetup runtime helpers', () => {
     const runtime = {
       runtime: 'wsl',
       wslDistro: 'Ubuntu',
+      hostPlatform: 'win32',
       label: 'WSL Ubuntu'
     } as const
     const copiedCommand = buildSkillCommandForRuntime(skillCommand, runtime)
@@ -367,6 +393,58 @@ describe('CliSkillRuntimeSetup runtime helpers', () => {
     expect(buildSkillSetupTerminalCommand(powershellCommand, 'wsl.exe', runtime, 'win32')).toBe(
       buildWslLoginShellCommand(skillCommand)
     )
+  })
+
+  it('uses runtime metadata for setup-terminal host platform selection', () => {
+    const installCommand = buildAgentFeatureSkillInstallCommand(['orchestration'])
+    const windowsHost = {
+      runtime: 'host',
+      hostPlatform: 'win32',
+      label: 'Windows'
+    } as const
+
+    expect(buildSkillSetupTerminalCommand(installCommand, 'powershell.exe', windowsHost)).toBe(
+      `${windowsNpxPreflightPrefix}${windowsNpxGuidance}) else (${installCommand})"`
+    )
+    expect(
+      buildSkillSetupTerminalCommand(installCommand, 'powershell.exe', {
+        runtime: 'host',
+        hostPlatform: 'linux',
+        label: 'Linux'
+      })
+    ).toBe(installCommand)
+  })
+
+  it('keeps an unknown remote host command platform-neutral', () => {
+    const installCommand = buildAgentFeatureSkillInstallCommand(['orchestration'])
+    expect(
+      buildSkillCommandForRuntime(installCommand, { runtime: 'host', label: 'Remote host' })
+    ).toBe(installCommand)
+  })
+
+  it('uses the execution host shell instead of the viewer shell', () => {
+    const installCommand = buildAgentFeatureSkillInstallCommand(['orchestration'])
+    const previous = useAppStore.getState().settings
+    useAppStore.setState({ settings: { ...previous!, terminalWindowsShell: 'git-bash' } })
+    expect(
+      buildSkillCommandForRuntime(installCommand, {
+        runtime: 'host',
+        hostPlatform: 'win32',
+        terminalWindowsShell: 'powershell.exe',
+        label: 'Windows'
+      })
+    ).toContain('cmd.exe /d /s /c')
+
+    useAppStore.setState({ settings: { ...previous!, terminalWindowsShell: 'powershell.exe' } })
+    expect(
+      buildSkillCommandForRuntime(installCommand, {
+        runtime: 'host',
+        hostPlatform: 'win32',
+        terminalWindowsShell: 'git-bash',
+        label: 'Windows'
+      })
+    ).toBe(installCommand)
+    useAppStore.setState({ settings: previous })
   })
 
   it('keeps the bare reinstall rewrite for POSIX-family Windows skill updates', () => {
@@ -476,6 +554,29 @@ describe('CliSkillRuntimeSetup runtime helpers', () => {
         true,
         false
       )
-    ).toEqual({ runtime: 'wsl', wslDistro: 'Ubuntu', label: 'WSL Ubuntu' })
+    ).toEqual({
+      runtime: 'wsl',
+      wslDistro: 'Ubuntu',
+      hostPlatform: 'win32',
+      label: 'WSL Ubuntu'
+    })
+  })
+
+  it('carries the General CLI execution-host platform into host command selection', () => {
+    const settings = {
+      ...getDefaultSettings('/tmp'),
+      localWindowsRuntimeDefault: { kind: 'windows-host' as const }
+    }
+    expect(getSelectedAgentRuntime(settings, false, false, false, 'linux')).toMatchObject({
+      runtime: 'host',
+      hostPlatform: 'linux'
+    })
+    expect(getSelectedAgentRuntime(settings, true, true, false, 'win32')).toMatchObject({
+      runtime: 'host',
+      hostPlatform: 'win32'
+    })
+    expect(
+      getSelectedAgentRuntime(settings, false, false, false, null).hostPlatform
+    ).toBeUndefined()
   })
 })

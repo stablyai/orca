@@ -24,6 +24,10 @@ import { translate } from '@/i18n/i18n'
 export type LocalAgentRuntime = {
   runtime: 'host' | 'wsl'
   wslDistro?: string | null
+  hostPlatform?: NodeJS.Platform
+  terminalWindowsShell?: string | null
+  runtimeEnvironmentId?: string | null
+  runtimeOwnershipResolved?: boolean
   label: string
 }
 
@@ -32,15 +36,16 @@ const LOCAL_HOST_AGENT_RUNTIME: LocalAgentRuntime = {
   label: ''
 }
 
-export function getHostRuntimeLabel(): string {
-  return navigator.userAgent.includes('Windows') ? 'Windows' : 'This device'
+export function getHostRuntimeLabel(hostPlatform?: NodeJS.Platform): string {
+  return hostPlatform === 'win32' ? 'Windows' : 'This device'
 }
 
 export function getSelectedAgentRuntime(
   settings: GlobalSettings,
   wslSupportedPlatform: boolean,
   wslAvailable: boolean,
-  wslCapabilitiesLoading: boolean
+  wslCapabilitiesLoading: boolean,
+  hostPlatform: NodeJS.Platform | null = getSkillCommandPlatform()
 ): LocalAgentRuntime {
   const defaultRuntime = normalizeGlobalWindowsRuntimeDefault(
     settings.localWindowsRuntimeDefault ??
@@ -53,12 +58,17 @@ export function getSelectedAgentRuntime(
     return {
       runtime: 'wsl',
       wslDistro: selectedDistro,
+      hostPlatform: 'win32',
       label: selectedDistro
         ? `WSL ${selectedDistro}`
         : translate('auto.components.settings.CliSkillRuntimeSetup.c47127f222', 'WSL default')
     }
   }
-  return { runtime: 'host', label: getHostRuntimeLabel() }
+  return {
+    runtime: 'host',
+    hostPlatform: hostPlatform ?? undefined,
+    label: getHostRuntimeLabel(hostPlatform ?? undefined)
+  }
 }
 
 function encodeWslLoginShellScript(command: string): string {
@@ -81,7 +91,7 @@ export function getWslCliDistroRequest(
 export function buildSkillCommandForRuntime(
   command: string,
   runtime?: LocalAgentRuntime,
-  currentPlatform = getSkillCommandPlatform()
+  currentPlatform = getRuntimeHostPlatform(runtime)
 ): string {
   const resolvedRuntime = runtime ?? LOCAL_HOST_AGENT_RUNTIME
   const normalizedCommand = normalizeWindowsSkillUpdateCommand(
@@ -93,7 +103,8 @@ export function buildSkillCommandForRuntime(
     return wrapWindowsSkillCommandWithNpxPrerequisite(
       normalizedCommand,
       currentPlatform,
-      'copied-command'
+      'copied-command',
+      resolvedRuntime
     )
   }
   return normalizedCommand
@@ -102,7 +113,7 @@ export function buildSkillCommandForRuntime(
 function normalizeWindowsSkillUpdateCommand(
   command: string,
   runtime: LocalAgentRuntime,
-  currentPlatform: NodeJS.Platform
+  currentPlatform: NodeJS.Platform | undefined
 ): string {
   if (runtime.runtime === 'wsl' || currentPlatform !== 'win32') {
     return command
@@ -135,7 +146,7 @@ export function buildSkillSetupTerminalCommand(
   copiedCommand: string,
   effectiveShell: string | undefined,
   runtime?: LocalAgentRuntime,
-  currentPlatform = getSkillCommandPlatform()
+  currentPlatform = getRuntimeHostPlatform(runtime)
 ): string {
   // Why: the created tab is authoritative when project runtime replaces the requested shell.
   const wslNative = isWslShellName(effectiveShell)
@@ -153,7 +164,8 @@ export function buildSkillSetupTerminalCommand(
   return wrapWindowsSkillCommandWithNpxPrerequisite(
     copiedCommand,
     currentPlatform,
-    'orca-setup-terminal'
+    'orca-setup-terminal',
+    runtime ?? LOCAL_HOST_AGENT_RUNTIME
   )
 }
 
@@ -212,21 +224,26 @@ function isSetupTerminalForcedToPowerShell(terminalShellOverride: string | undef
   )
 }
 
+function getRuntimeHostPlatform(runtime?: LocalAgentRuntime): NodeJS.Platform | undefined {
+  if (!runtime) {
+    return getSkillCommandPlatform()
+  }
+  return runtime.hostPlatform ?? (runtime.runtime === 'wsl' ? 'win32' : undefined)
+}
+
 function wrapWindowsSkillCommandWithNpxPrerequisite(
   command: string,
-  currentPlatform: NodeJS.Platform,
-  target: SkillCommandTarget
+  currentPlatform: NodeJS.Platform | undefined,
+  target: SkillCommandTarget,
+  runtime: LocalAgentRuntime
 ): string {
   const trimmedCommand = command.trim()
   if (
     currentPlatform !== 'win32' ||
-    // Why: skill setup terminals spawn on the focused runtime environment, so a
-    // Windows client must not hand a cmd.exe command to a remote host.
-    isRemoteRuntimeEnvironmentFocused() ||
     // Why: the copied command lands in the user's configured shell, and MSYS
     // shells rewrite cmd.exe's leading /d /s /c switches into drive paths,
     // starting an interactive cmd session instead of running the payload.
-    (target === 'copied-command' && isPosixFamilyWindowsShellConfigured()) ||
+    (target === 'copied-command' && isPosixFamilyWindowsShellConfigured(runtime)) ||
     !/^npx\s+skills\s+(?:add|update)\b/i.test(trimmedCommand)
   ) {
     return command
@@ -240,18 +257,15 @@ function wrapWindowsSkillCommandWithNpxPrerequisite(
   return `cmd.exe /d /s /c "where.exe npx >nul 2>nul & if errorlevel 1 (${missingNpxGuidance}) else (${trimmedCommand})"`
 }
 
-function isPosixFamilyWindowsShellConfigured(): boolean {
+function isPosixFamilyWindowsShellConfigured(runtime: LocalAgentRuntime): boolean {
+  if ('terminalWindowsShell' in runtime) {
+    return runtime.terminalWindowsShell === undefined
+      ? true
+      : ['posix', 'unix'].includes(resolveWindowsShellStartupFamily(runtime.terminalWindowsShell))
+  }
   return ['posix', 'unix'].includes(
     resolveWindowsShellStartupFamily(useAppStore.getState().settings?.terminalWindowsShell)
   )
-}
-
-function isRemoteRuntimeEnvironmentFocused(): boolean {
-  // Why: the terminal router also weighs how many environments are saved, but
-  // that slice has no subscriber here. Read only the focused id, which every
-  // caller re-renders on: it over-skips rather than ever handing a cmd.exe
-  // command to a remote shell.
-  return Boolean(useAppStore.getState().settings?.activeRuntimeEnvironmentId?.trim())
 }
 
 function getSkillCommandPlatform(): NodeJS.Platform {
@@ -287,15 +301,14 @@ export function getSkillDiscoveryTargetForRuntime(
 }
 
 export function getAgentSkillTerminalShellOverride(
-  currentPlatform: string,
+  currentPlatform: NodeJS.Platform | undefined,
   settings: GlobalSettings,
   runtime: LocalAgentRuntime
 ): string | undefined {
-  return getProjectAgentSkillTerminalShellOverride(
-    currentPlatform as NodeJS.Platform,
-    settings,
-    runtime
-  )
+  if (!currentPlatform) {
+    return undefined
+  }
+  return getProjectAgentSkillTerminalShellOverride(currentPlatform, settings, runtime)
 }
 
 export async function ensureWslCliAvailableForAgentSkillTerminal(

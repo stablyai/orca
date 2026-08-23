@@ -38,6 +38,7 @@ import {
   parseExecutionHostId
 } from '../../../../shared/execution-host'
 import { GeneralPane } from './GeneralPane'
+import { canUseViewerWindowsRuntimeSettings } from '@/lib/execution-host-command-platform'
 import { BrowserPane } from './BrowserPane'
 import { AppearancePane } from './AppearancePane'
 import { InputPane } from './InputPane'
@@ -1254,7 +1255,10 @@ function Settings(): React.JSX.Element {
                     <AgentsPane
                       settings={settings}
                       updateSettings={updateSettings}
-                      wslSupportedPlatform={localWslSupportedPlatform}
+                      wslSupportedPlatform={canUseViewerWindowsRuntimeSettings(
+                        isWebClient,
+                        localWslSupportedPlatform
+                      )}
                       wslAvailable={localWindowsRuntimeCapabilities.wslAvailable}
                       wslDistros={localWindowsRuntimeCapabilities.wslDistros}
                       wslCapabilitiesLoading={localWindowsRuntimeCapabilities.isLoading}
@@ -1396,10 +1400,15 @@ function Settings(): React.JSX.Element {
                       updateSettingsOrThrow={updateSettingsOrThrow}
                       fontSuggestions={terminalFontSuggestions}
                       onRequestFontSuggestions={requestFontSuggestions}
-                      wslSupportedPlatform={localWslSupportedPlatform}
+                      wslSupportedPlatform={canUseViewerWindowsRuntimeSettings(
+                        isWebClient,
+                        localWslSupportedPlatform
+                      )}
                       wslAvailable={localWindowsRuntimeCapabilities.wslAvailable}
                       wslDistros={localWindowsRuntimeCapabilities.wslDistros}
                       wslCapabilitiesLoading={localWindowsRuntimeCapabilities.isLoading}
+                      viewerPlatform={isWindows ? 'win32' : isMac ? 'darwin' : 'linux'}
+                      executionHostRuntime={activeSkillRuntime.agentRuntime}
                     />
                   ) : null}
                 </SettingsSection>

@@ -15,6 +15,7 @@ import { e2eConfig } from '@/lib/e2e-config'
 import { showOrcaCliRegistrationPromptToast } from '@/lib/agent-skill-cli-prerequisite'
 import type { ProjectAgentSkillRuntime } from '@/lib/project-skill-runtime'
 import type { OnboardingFeatureSetupRuntimeContext } from './onboarding-feature-setup-runtime'
+import { getOnboardingFeatureSetupAgentRuntime } from './onboarding-feature-setup-runtime'
 import {
   buildSkillCommandForRuntime,
   getWslCliDistroRequest
@@ -213,9 +214,9 @@ export async function runOnboardingFeatureSetup(
   explicitDeps?: OnboardingFeatureSetupDeps,
   runtimeContext?: OnboardingFeatureSetupRuntimeContext
 ): Promise<OnboardingFeatureSetupResult> {
-  const agentRuntime = runtimeContext?.installDisabledReason
-    ? undefined
-    : runtimeContext?.agentRuntime
+  const agentRuntime = runtimeContext
+    ? getOnboardingFeatureSetupAgentRuntime(runtimeContext)
+    : undefined
   const deps = explicitDeps ?? createOnboardingFeatureSetupDeps(agentRuntime)
   const selectedIds = selectedOnboardingFeatureSetupIds(selection)
   const warnings: OnboardingFeatureSetupWarning[] = []

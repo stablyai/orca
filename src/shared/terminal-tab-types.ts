@@ -34,6 +34,8 @@ export type TerminalTab = {
   shellOverride?: string
   /** Keeps an ephemeral host fallback out of the active project's runtime. */
   forceHostRuntime?: boolean
+  /** Transient: pins an ephemeral spawn to the setup owner; never persist or publish. */
+  runtimeEnvironmentId?: string | null
   /** Why: explorer-created terminals can start below the workspace root while
    *  still belonging to that workspace for tab/session ownership. */
   startupCwd?: string

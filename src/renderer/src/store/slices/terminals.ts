@@ -631,6 +631,7 @@ export type TerminalSlice = {
       viewMode?: Tab['viewMode']
       startupCwd?: string
       forceHostRuntime?: boolean
+      runtimeEnvironmentId?: string | null
     }
   ) => TerminalTab
   openNewTerminalTabInActiveWorkspace: (groupId: string) => Promise<void>
@@ -1329,20 +1330,25 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
       const quickCommandLabel = options?.quickCommandLabel?.trim()
       const startupCwd = options?.startupCwd
       const remoteConnectionId = getRemoteConnectionIdForWorktree(s, worktreeId)
-      const isRemoteWorktree = Boolean(remoteConnectionId)
+      const pinnedRuntimeEnvironmentId = options?.runtimeEnvironmentId ?? null
+      const isRemoteExecutionOwner = Boolean(remoteConnectionId || pinnedRuntimeEnvironmentId)
       const isWslWorktree = worktreeUsesWslPath(s, worktreeId)
+      const remotePlatform = remoteConnectionId
+        ? ((s.sshConnectionStates.get(remoteConnectionId)
+            ?.remotePlatform as NodeJS.Platform | null) ?? null)
+        : pinnedRuntimeEnvironmentId
+          ? (s.runtimeStatusByEnvironmentId.get(pinnedRuntimeEnvironmentId)?.status?.hostPlatform ??
+            null)
+          : null
       const createdShellOverride = resolveCreatedTabShellOverride(
         shellOverride,
         s.settings?.terminalWindowsShell,
-        // Why: SSH PTYs ignore local Windows shell selection; a local shell icon would mislabel a remote terminal.
-        isRemoteWorktree,
-        remoteConnectionId
-          ? ((s.sshConnectionStates.get(remoteConnectionId)
-              ?.remotePlatform as NodeJS.Platform | null) ?? null)
-          : null,
+        // Why: SSH and paired PTYs ignore viewer Windows shell selection.
+        isRemoteExecutionOwner,
+        remotePlatform,
         // Why: new terminals enter the worktree's repo-scoped WSL distro even when the global Windows shell is PowerShell/cmd.exe.
         isWslWorktree,
-        isRemoteWorktree || options?.forceHostRuntime
+        isRemoteExecutionOwner || options?.forceHostRuntime
           ? undefined
           : getLocalProjectExecutionRuntimeContext(s, worktreeId)
       )
@@ -1362,6 +1368,9 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
         ...(createdShellOverride !== undefined ? { shellOverride: createdShellOverride } : {}),
         ...(startupCwd && startupCwd.length > 0 ? { startupCwd } : {}),
         ...(options?.forceHostRuntime ? { forceHostRuntime: true } : {}),
+        ...(options && 'runtimeEnvironmentId' in options
+          ? { runtimeEnvironmentId: options.runtimeEnvironmentId ?? null }
+          : {}),
         ...(options?.launchAgent ? { launchAgent: options.launchAgent } : {}),
         // Why: mark click-caused (not work-caused) spawns so updateTabPtyId skips the activity/sortEpoch bump that would reorder Recent/Smart on click.
         ...(options?.pendingActivationSpawn ? { pendingActivationSpawn: true } : {})

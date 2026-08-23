@@ -99,9 +99,11 @@ function BrowserSkillInstallButton(): React.JSX.Element {
   )
   const [busy, setBusy] = useState(false)
   const activeSkillRuntime = useActiveProjectSkillRuntime()
+  const runtimeOwnershipUnresolved =
+    activeSkillRuntime.agentRuntime?.runtimeOwnershipResolved === false
 
   const handleInstall = useCallback(async () => {
-    if (busy || command !== null) {
+    if (busy || command !== null || runtimeOwnershipUnresolved) {
       return
     }
     setBusy(true)
@@ -159,7 +161,7 @@ function BrowserSkillInstallButton(): React.JSX.Element {
     } finally {
       setBusy(false)
     }
-  }, [activeSkillRuntime, busy, command, recordFeatureInteraction])
+  }, [activeSkillRuntime, busy, command, recordFeatureInteraction, runtimeOwnershipUnresolved])
 
   if (command) {
     return (
@@ -177,7 +179,7 @@ function BrowserSkillInstallButton(): React.JSX.Element {
       size="sm"
       variant="outline"
       className="w-fit gap-2"
-      disabled={busy}
+      disabled={busy || runtimeOwnershipUnresolved}
       onClick={() => void handleInstall()}
     >
       {busy ? <Loader2 className="size-3.5 animate-spin" /> : <Terminal className="size-3.5" />}

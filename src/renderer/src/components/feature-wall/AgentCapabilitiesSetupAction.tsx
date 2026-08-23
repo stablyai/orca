@@ -44,6 +44,8 @@ export function AgentCapabilitiesSetupAction(props: {
   const [setupBusyLabel, setSetupBusyLabel] = useState<string | null>(null)
   const recordFeatureInteraction = useAppStore((s) => s.recordFeatureInteraction)
   const activeSkillRuntime = useActiveProjectSkillRuntime()
+  const runtimeOwnershipUnresolved =
+    activeSkillRuntime.agentRuntime?.runtimeOwnershipResolved === false
   useEffect(() => {
     onBrowserUseSkillInstalledChange(readiness.browserUseSkillInstalled)
   }, [onBrowserUseSkillInstalledChange, readiness.browserUseSkillInstalled])
@@ -65,7 +67,7 @@ export function AgentCapabilitiesSetupAction(props: {
     setFeatureSetup(value)
   }, [])
   const handleStartFeatureSetup = useCallback(async (): Promise<void> => {
-    if (setupBusyLabel !== null || featureSetupCommand !== null) {
+    if (setupBusyLabel !== null || featureSetupCommand !== null || runtimeOwnershipUnresolved) {
       return
     }
     setSetupBusyLabel('Setting up capabilities...')
@@ -127,6 +129,7 @@ export function AgentCapabilitiesSetupAction(props: {
     featureSetup,
     featureSetupCommand,
     recordFeatureInteraction,
+    runtimeOwnershipUnresolved,
     setupBusyLabel
   ])
 
@@ -138,6 +141,7 @@ export function AgentCapabilitiesSetupAction(props: {
         featureSetupCommand={featureSetupCommand}
         featureSetupCommandSelection={featureSetupCommandSelection}
         featureSetupRuntime={featureSetupRuntime}
+        runtimeOwnershipUnresolved={runtimeOwnershipUnresolved}
         setupBusyLabel={setupBusyLabel}
         onStartFeatureSetup={() => void handleStartFeatureSetup()}
         installStatus={capabilitySetupStatus.installStatus}
@@ -210,6 +214,7 @@ function AgentCapabilitySetupControls(props: {
   featureSetupCommand: string | null
   featureSetupCommandSelection: OnboardingFeatureSetupSelection | null
   featureSetupRuntime: OnboardingFeatureSetupRuntimeContext | null
+  runtimeOwnershipUnresolved: boolean
   setupBusyLabel: string | null
   onStartFeatureSetup: () => void
   installStatus: Record<OnboardingFeatureSetupId, AgentCapabilityInstallStatus>
@@ -231,7 +236,11 @@ function AgentCapabilitySetupControls(props: {
             type="button"
             variant="default"
             className="shrink-0"
-            disabled={!hasSelectedFeatures || Boolean(props.setupBusyLabel)}
+            disabled={
+              !hasSelectedFeatures ||
+              Boolean(props.setupBusyLabel) ||
+              props.runtimeOwnershipUnresolved
+            }
             onClick={props.onStartFeatureSetup}
           >
             {props.setupBusyLabel ? (

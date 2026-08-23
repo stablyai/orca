@@ -50,7 +50,12 @@ const mocks = vi.hoisted(() => ({
   getWslCliStatus: vi.fn(),
   ensureCli: vi.fn(async () => null as CliInstallStatus | null),
   ensureWslCli: vi.fn(async () => null as CliInstallStatus | null),
-  panelProps: [] as Record<string, unknown>[]
+  panelProps: [] as Record<string, unknown>[],
+  activeSkillRuntime: { executionHostPlatform: 'linux' as NodeJS.Platform | undefined }
+}))
+
+vi.mock('@/hooks/useActiveProjectSkillRuntime', () => ({
+  useActiveProjectSkillRuntime: () => mocks.activeSkillRuntime
 }))
 
 vi.mock('@/hooks/useInstalledAgentSkills', async (importOriginal) => ({
@@ -66,10 +71,7 @@ vi.mock('@/lib/agent-skill-cli-prerequisite', () => ({
 }))
 
 vi.mock('../settings/CliSkillRuntimeSetup', () => ({
-  buildSkillCommandForRuntime: (
-    command: string,
-    _runtime: { runtime: string; wslDistro?: string | null }
-  ) => command,
+  buildSkillCommandForRuntime: (command: string) => command,
   ensureWslCliAvailableForAgentSkillTerminal: mocks.ensureWslCli,
   getWslCliDistroRequest: (runtime?: { runtime: string; wslDistro?: string | null }) =>
     runtime?.runtime === 'wsl' && runtime.wslDistro?.trim()
@@ -211,8 +213,7 @@ describe('LinearAgentSkillSetupPrompt', () => {
     mocks.getWslCliStatus.mockResolvedValue(
       cliStatus({ state: 'not_installed', pathConfigured: false })
     )
-    mocks.ensureCli.mockClear()
-    mocks.ensureWslCli.mockClear()
+    ;[mocks.ensureCli, mocks.ensureWslCli].forEach((ensureCli) => ensureCli.mockClear())
     mocks.panelProps.length = 0
     installLocalStorageShim()
     window.localStorage.clear()
@@ -916,7 +917,6 @@ describe('LinearAgentSkillSetupPrompt', () => {
   it('permanently dismisses the modal-only prompt when requested', async () => {
     await renderPrompt({ linked: true, remote: false, surface: 'modal' })
 
-    // Why: permanent dismiss is now an EyeOff icon button (aria-label, no text).
     const dismissButton = document.body.querySelector<HTMLButtonElement>(
       'button[aria-label="Don\'t show again"]'
     )
