@@ -4,9 +4,9 @@ import type { RpcClient } from './rpc-client'
 import { isRpcDeliveryUnknown, markRpcDeliveryUnknown } from './rpc-delivery-ambiguity'
 import {
   createStableLogicalRpcClient,
-  LogicalClientCutoverError,
   type MobileConnectionPath
 } from './stable-logical-rpc-client'
+import { LogicalClientCutoverError } from './logical-client-cutover-error'
 
 class FakeSession implements RpcClient {
   readonly sendRequest =
@@ -17,6 +17,8 @@ class FakeSession implements RpcClient {
   readonly updateTerminalSubscriptionViewport =
     vi.fn<RpcClient['updateTerminalSubscriptionViewport']>()
   readonly notifyForeground = vi.fn()
+  readonly restartAfterStructuredBackground = vi.fn()
+  readonly confirmStructuredStreamLongevity = vi.fn()
   readonly close = vi.fn()
   private state: ConnectionState
   private readonly stateListeners = new Set<(state: ConnectionState) => void>()
@@ -67,6 +69,17 @@ function deferred<T>() {
 }
 
 describe('stable logical RPC client', () => {
+  it('forwards structured reconnect lifecycle signals to the active session', () => {
+    const session = new FakeSession('connected')
+    const client = createStableLogicalRpcClient(session, 'relay')
+
+    client.restartAfterStructuredBackground?.()
+    client.confirmStructuredStreamLongevity?.()
+
+    expect(session.restartAfterStructuredBackground).toHaveBeenCalledOnce()
+    expect(session.confirmStructuredStreamLongevity).toHaveBeenCalledOnce()
+  })
+
   it('advertises source-default support on worktree catalog requests', async () => {
     const session = new FakeSession('connected')
     session.sendRequest.mockResolvedValue(success([]))

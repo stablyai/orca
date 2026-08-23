@@ -6,7 +6,7 @@ import {
   createShedSubagentsField
 } from '../shared/agent-hook-relay'
 import type { AgentHookRelayEnvelope } from '../shared/agent-hook-relay'
-import type { AgentSubagentSnapshot } from '../shared/agent-status-types'
+import type { AgentSubagentSnapshot } from '../shared/agent-subagent-snapshot'
 
 type BoundedClient = {
   frames: Buffer[]

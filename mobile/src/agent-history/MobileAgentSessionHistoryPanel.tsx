@@ -10,6 +10,7 @@ import type { RpcClient } from '../transport/rpc-client'
 import { readMobileRuntimeHostPlatform } from '../transport/mobile-runtime-host-platform'
 import { getWorktreeLabel } from '../session/worktree-label'
 import {
+  activateStructuredAiVaultSession,
   buildMobileAiVaultResumeLaunch,
   createMobileAiVaultResumeMutationRegistry,
   readMobileRuntimeTerminalWindowsShell,
@@ -154,16 +155,19 @@ export function MobileAgentSessionHistoryPanel({
         triggerError()
         return
       }
-      if (!session.sessionId) {
-        setResumeMessage('This session is missing a resume id.')
-        triggerError()
-        return
-      }
-
       resumeLaunchInFlightRef.current = true
       setResumingSessionId(session.id)
       setResumeMessage(null)
       try {
+        const structuredWorkspaceId = await activateStructuredAiVaultSession(client, session)
+        if (structuredWorkspaceId) {
+          router.push(
+            `/h/${encodeURIComponent(hostId)}/session/${encodeURIComponent(structuredWorkspaceId)}` as Parameters<
+              typeof router.push
+            >[0]
+          )
+          return
+        }
         const {
           repos,
           folderWorkspaces,

@@ -158,7 +158,7 @@ import {
 } from '@/runtime/web-runtime-session'
 import { openMobileEmulatorTab } from '@/lib/open-mobile-emulator-tab'
 import { launchAgentInNewTab } from '@/lib/launch-agent-in-new-tab'
-import { resumeSleepingAgentSessionsForWorktree } from '@/lib/resume-sleeping-agent-session'
+import { gateWorktreeAgentActivation } from '@/lib/worktree-agent-activation-gate'
 import { listBoundAgentTabActions, resolveDefaultAgentForNewTab } from '@/lib/agent-tab-shortcuts'
 import { terminalProviderHasAuthoritativeSnapshot } from './terminal/terminal-provider-snapshot-capability'
 import { useTerminalProviderSnapshotCapability } from './terminal/use-terminal-provider-snapshot-capability'
@@ -356,6 +356,7 @@ function Terminal(): React.JSX.Element | null {
   const consumeSuppressedPtyExit = useAppStore((s) => s.consumeSuppressedPtyExit)
   const expandedPaneByTabId = useAppStore((s) => s.expandedPaneByTabId)
   const workspaceSessionReady = useAppStore((s) => s.workspaceSessionReady)
+  const terminalStartupRestorationReady = useAppStore((s) => s.terminalStartupRestorationReady)
   const hydrationSucceeded = useAppStore((s) => s.hydrationSucceeded)
   const startupWorktreeRefreshCompleted = useAppStore((s) => s.startupWorktreeRefreshCompleted)
   const openFiles = useAppStore((s) => s.openFiles)
@@ -1495,49 +1496,57 @@ function Terminal(): React.JSX.Element | null {
   ])
   // Why: on host unmount no reconciliation effect runs again, so dispose every remaining parked watcher.
   useEffect(() => () => disposeAllParkedTerminalWatchers(), [])
-  // Auto-create first tab when worktree activates
+  const startupActivationGateWorktreeIdsRef = useRef(new Set<string>())
+  // Why (main): a missing row means never initialized, an explicit empty row means the user
+  // closed the last terminal — so the gate must not re-seed one in the second case.
   const activeWorktreeHasTerminalState = activeWorktreeId
     ? Object.hasOwn(tabsByWorktree, activeWorktreeId)
     : false
   useEffect(() => {
-    if (!workspaceSessionReady) {
-      return
-    }
-    if (!activeWorktreeId) {
+    if (
+      !workspaceSessionReady ||
+      !terminalStartupRestorationReady ||
+      !hydrationSucceeded ||
+      !activeWorktreeId
+    ) {
       return
     }
     // Why: host session-tabs are authoritative in the paired web client; a local fallback races the host's initial terminal and duplicates tabs.
     if (isWebRuntimeSessionActive(getActiveWorktreeRuntimeEnvironmentId(activeWorktreeId))) {
       return
     }
-
-    // Why: give a newly activated worktree a focusable surface when nothing renders, without recreating one after the user closes the last visible tab.
-    const { renderableTabCount } = reconcileWorktreeTabModel(activeWorktreeId)
-    if (!shouldAutoCreateInitialTerminal(renderableTabCount, activeWorktreeHasTerminalState)) {
+    if (startupActivationGateWorktreeIdsRef.current.has(activeWorktreeId)) {
       return
     }
-    // Why: tag this never-visited-worktree tab so its PTY spawn doesn't count as activity and reshuffle the sidebar (explicit New Tab still bumps).
-    createTab(activeWorktreeId, undefined, undefined, { pendingActivationSpawn: true })
+    startupActivationGateWorktreeIdsRef.current.add(activeWorktreeId)
+    let cancelled = false
+    void gateWorktreeAgentActivation(activeWorktreeId).then((outcome) => {
+      if (
+        cancelled ||
+        outcome !== 'empty' ||
+        useAppStore.getState().activeWorktreeId !== activeWorktreeId
+      ) {
+        return
+      }
+      // Why: the activation gate reconciles durable/live agent state first; only an actually empty, never-visited workspace receives a default shell.
+      const { renderableTabCount } = reconcileWorktreeTabModel(activeWorktreeId)
+      if (shouldAutoCreateInitialTerminal(renderableTabCount, activeWorktreeHasTerminalState)) {
+        // Why: tag this never-visited-worktree tab so its PTY spawn doesn't count as activity and reshuffle the sidebar (explicit New Tab still bumps).
+        createTab(activeWorktreeId, undefined, undefined, { pendingActivationSpawn: true })
+      }
+    })
+    return () => {
+      cancelled = true
+    }
   }, [
-    workspaceSessionReady,
     activeWorktreeId,
     activeWorktreeHasTerminalState,
     createTab,
-    reconcileWorktreeTabModel
+    hydrationSucceeded,
+    reconcileWorktreeTabModel,
+    terminalStartupRestorationReady,
+    workspaceSessionReady
   ])
-
-  const startupResumeWorktreeIdsRef = useRef(new Set<string>())
-  useEffect(() => {
-    if (!workspaceSessionReady || !hydrationSucceeded || !activeWorktreeId) {
-      return
-    }
-    if (startupResumeWorktreeIdsRef.current.has(activeWorktreeId)) {
-      return
-    }
-    startupResumeWorktreeIdsRef.current.add(activeWorktreeId)
-    // Why: startup hydration restores the worktree without activateAndRevealWorktree, so orphaned live/quit records need a terminal-surface pass after cold restore.
-    resumeSleepingAgentSessionsForWorktree(activeWorktreeId)
-  }, [activeWorktreeId, hydrationSucceeded, workspaceSessionReady])
 
   const handleNewTab = useCallback(
     (shellOverride?: string) => {

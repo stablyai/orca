@@ -32,7 +32,17 @@ vi.mock('@/components/ui/tooltip', () => ({
 vi.mock('@/components/ui/dropdown-menu', () => {
   const React = require('react') as typeof ReactModule
   return {
-    DropdownMenu: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
+    DropdownMenu: ({
+      children,
+      defaultOpen
+    }: {
+      children: React.ReactNode
+      defaultOpen?: boolean
+    }) => (
+      <div data-testid="dropdown-root" data-open={defaultOpen ? 'true' : 'false'}>
+        {children}
+      </div>
+    ),
     DropdownMenuTrigger: ({
       children,
       disabled
@@ -188,6 +198,41 @@ const fast: SessionOptionDescriptor = {
 afterEach(() => cleanup())
 
 describe('NativeChatSessionOptionPickers', () => {
+  it('opens the native picker requested by a structured slash command', async () => {
+    const { rerender } = render(
+      <NativeChatSessionOptionPickers
+        surface={surface}
+        snapshot={[model(), effort]}
+        isWorking={false}
+        pickerRequest={null}
+      />
+    )
+
+    rerender(
+      <NativeChatSessionOptionPickers
+        surface={surface}
+        snapshot={[model(), effort]}
+        isWorking={false}
+        pickerRequest={{ id: 'model', sequence: 1 }}
+      />
+    )
+    await waitFor(() =>
+      expect(screen.getAllByTestId('dropdown-root')[1]?.getAttribute('data-open')).toBe('true')
+    )
+
+    rerender(
+      <NativeChatSessionOptionPickers
+        surface={surface}
+        snapshot={[model(), effort]}
+        isWorking={false}
+        pickerRequest={{ id: 'effort', sequence: 2 }}
+      />
+    )
+    await waitFor(() =>
+      expect(screen.getAllByTestId('dropdown-root')[0]?.getAttribute('data-open')).toBe('true')
+    )
+  })
+
   it('prefers collision-aware upward placement for model and option menus', () => {
     render(
       <NativeChatSessionOptionPickers

@@ -14,6 +14,7 @@ import {
   acceptReplayedWebSessionTabsSnapshot,
   applyFreshWebSessionTabsSnapshot,
   applyWebSessionTabsSnapshot,
+  resolveHostSessionTabIdForWebSessionTab,
   shouldApplyWebSessionTabsSnapshot,
   type WebSessionTabsSyncState
 } from './web-session-tabs-sync'
@@ -40,6 +41,91 @@ vi.mock('@/hooks/agent-hook-completion-notifications', () => ({
 }))
 describe('applyWebSessionTabsSnapshot', () => {
   beforeEach(resetWebSessionTabsSyncTestState)
+
+  it('projects structured agent sessions as native unified tabs', () => {
+    const agentTab = {
+      type: 'agent-session' as const,
+      id: 'agent-session:session-1',
+      title: 'Codex Chat',
+      sessionId: 'session-1',
+      agent: 'codex' as const,
+      isActive: true
+    }
+    const patch = applyWebSessionTabsSnapshot(
+      makeState(),
+      makeSnapshot([agentTab], {
+        activeTabId: agentTab.id,
+        activeTabType: 'agent-session',
+        tabGroups: [
+          {
+            id: 'host-group-1',
+            activeTabId: agentTab.id,
+            tabOrder: [agentTab.id]
+          }
+        ]
+      }),
+      ENV,
+      NOW
+    )
+
+    expect(patch.unifiedTabsByWorktree?.[WT]).toEqual([
+      expect.objectContaining({
+        id: 'structured-agent-session-session-1',
+        entityId: 'session-1',
+        contentType: 'agent-session',
+        agentSessionAgent: 'codex'
+      })
+    ])
+    expect(patch.activeTabTypeByWorktree?.[WT]).toBe('agent-session')
+    expect(
+      resolveHostSessionTabIdForWebSessionTab(
+        { ...makeState(), ...patch },
+        { environmentId: ENV, worktreeId: WT, tabId: 'structured-agent-session-session-1' }
+      )
+    ).toBe(agentTab.id)
+  })
+
+  it('removes a restored structured tab when the host publishes no structured sessions', () => {
+    const structuredTab: Tab = {
+      id: 'structured-agent-session-session-1',
+      entityId: 'session-1',
+      groupId: 'host-group-1',
+      worktreeId: WT,
+      contentType: 'agent-session',
+      agentSessionAgent: 'codex',
+      label: 'Codex Chat',
+      customLabel: null,
+      color: null,
+      sortOrder: 0,
+      createdAt: NOW
+    }
+    const patch = applyWebSessionTabsSnapshot(
+      makeState({
+        activeTabId: structuredTab.id,
+        activeTabIdByWorktree: { [WT]: structuredTab.id },
+        activeTabType: 'agent-session',
+        activeTabTypeByWorktree: { [WT]: 'agent-session' },
+        unifiedTabsByWorktree: { [WT]: [structuredTab] },
+        tabBarOrderByWorktree: { [WT]: [structuredTab.id] },
+        groupsByWorktree: {
+          [WT]: [
+            {
+              id: 'host-group-1',
+              worktreeId: WT,
+              activeTabId: structuredTab.id,
+              tabOrder: [structuredTab.id]
+            }
+          ]
+        }
+      }),
+      makeSnapshot([], { activeTabType: null }),
+      ENV,
+      NOW
+    )
+
+    expect(patch.unifiedTabsByWorktree?.[WT]).toBeUndefined()
+    expect(patch.activeTabTypeByWorktree?.[WT]).toBe('terminal')
+  })
 
   it('ignores stale or duplicate same-epoch snapshots after a newer version was applied', () => {
     const state = makeState()

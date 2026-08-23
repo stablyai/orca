@@ -19,7 +19,8 @@ import { isNearBottom, shouldShowJumpToLatest, type ScrollGeometry } from './nat
 import { isNativeChatPastedImagePath } from './native-chat-image-paste'
 import { NativeChatToolRun } from './NativeChatToolRun'
 import { NativeChatCopyButton } from './NativeChatCopyButton'
-import { NATIVE_CHAT_STREAMING_ID } from '../../../../shared/native-chat-streaming'
+import { shouldShowNativeChatTypingIndicator } from './native-chat-typing-indicator'
+import { nativeChatProviderFrameSummary } from '../../../../shared/native-chat-provider-frame-summary'
 
 function geometryOf(el: HTMLElement): ScrollGeometry {
   return { scrollTop: el.scrollTop, scrollHeight: el.scrollHeight, clientHeight: el.clientHeight }
@@ -119,6 +120,34 @@ function TypingIndicatorRow(): React.JSX.Element {
   )
 }
 
+export function ProviderFrameRow({ block }: { block: NativeChatBlock }): React.JSX.Element | null {
+  if (block.type !== 'text' || !block.providerFrame) {
+    return null
+  }
+  const frame = block.providerFrame
+  return (
+    <details className="group text-xs text-muted-foreground">
+      <summary className="flex cursor-pointer list-none items-center gap-2 rounded-md px-2 py-1 font-mono hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+        <span className="transition-transform group-open:rotate-90">›</span>
+        <span className="font-medium text-foreground">{frame.provider}</span>
+        <span className="truncate">{nativeChatProviderFrameSummary(block)}</span>
+        {frame.payload.truncated ? (
+          <span>
+            ·{' '}
+            {translate('components.native-chat.providerFrame.byteLength', '{{value0}} bytes', {
+              value0: frame.payload.byteLength
+            })}
+          </span>
+        ) : null}
+      </summary>
+      <pre className="scrollbar-sleek mt-1 max-h-64 overflow-auto whitespace-pre-wrap rounded-md border border-border bg-muted p-2 font-mono text-xs text-foreground">
+        {frame.payload.head}
+        {frame.payload.truncated ? '\n…' : ''}
+      </pre>
+    </details>
+  )
+}
+
 /** One message: its prose first, then a collapsible run folding all of the
  *  turn's tool activity. Monochrome per STYLEGUIDE: user prompts read as a
  *  lifted card, assistant prose as body copy, reasoning de-emphasized. */
@@ -145,6 +174,7 @@ function MessageRow({
   const isUser = message.role === 'user'
   const isReasoning = message.role === 'reasoning'
   const isSystem = message.role === 'system'
+  const providerFrame = message.blocks.find((block) => block.type === 'text' && block.providerFrame)
 
   const scrollToTop = useCallback(() => {
     if (rowRef.current) {
@@ -157,6 +187,14 @@ function MessageRow({
   // After all hooks, so hook order stays unconditional.
   if (markdown.length === 0 && !hasImages && tools.length === 0) {
     return null
+  }
+
+  if (providerFrame) {
+    return (
+      <div ref={rowRef}>
+        <ProviderFrameRow block={providerFrame} />
+      </div>
+    )
   }
 
   if (isUser) {
@@ -274,8 +312,7 @@ export function NativeChatMessageList({
     () => foldToolMessages(orderNativeChatMessages(stripNoiseMessages(session.messages))),
     [session.messages]
   )
-  const showTypingIndicator =
-    isWorking && !messages.some((message) => message.id === NATIVE_CHAT_STREAMING_ID)
+  const showTypingIndicator = shouldShowNativeChatTypingIndicator({ messages, isWorking })
 
   // When an older page prepends, the scroll content grows above the viewport.
   // Capture the pre-render scroll height so the layout effect can restore the

@@ -5,7 +5,7 @@ import {
   seedClaudeSubagentRosterFromSnapshots,
   type HookListenerState
 } from './agent-hook-listener'
-import { AGENT_STATUS_MAX_SUBAGENTS } from './agent-status-types'
+import { AGENT_STATUS_MAX_SUBAGENTS } from './agent-subagent-snapshot'
 import { makePaneKey } from './stable-pane-id'
 
 const LEAF_ID = '22222222-2222-4222-8222-222222222222'

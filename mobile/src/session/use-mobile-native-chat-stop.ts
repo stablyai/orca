@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, type MutableRefObject } from 'react'
 import type { RpcClient } from '../transport/rpc-client'
 import { isRpcDeliveryUnknown } from '../transport/rpc-delivery-ambiguity'
-import { isLogicalClientCutoverError } from '../transport/stable-logical-rpc-client'
+import { isLogicalClientCutoverError } from '../transport/logical-client-cutover-error'
 import { isTerminalSendRpcAccepted } from '../terminal/terminal-send-rpc-response'
 import { openMobileNativeChatSendBudget } from './mobile-native-chat-send'
 

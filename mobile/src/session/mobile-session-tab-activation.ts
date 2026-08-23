@@ -1,6 +1,6 @@
 import type { TabActivationIntent } from '../../../src/shared/tab-activation-intent'
 import type { RpcClient } from '../transport/rpc-client'
-import { LogicalClientCutoverError } from '../transport/stable-logical-rpc-client'
+import { LogicalClientCutoverError } from '../transport/logical-client-cutover-error'
 import type { RpcResponse } from '../transport/types'
 import {
   getMobileTerminalDiagnosticErrorName,

@@ -1,5 +1,5 @@
 import type { BrowserTab as BrowserTabState } from '../../../../shared/browser-workspace-types'
-import type { WorkspaceVisibleTabType } from '../../../../shared/tab-types'
+import type { Tab, WorkspaceVisibleTabType } from '../../../../shared/tab-types'
 import type { TerminalTab } from '../../../../shared/terminal-tab-types'
 import type { OpenFile } from '../../store/slices/editor'
 import type { HoveredTabInsertion } from '../tab-group/useTabDragSplit'
@@ -32,6 +32,7 @@ export type TabBarProps = {
   onTogglePaneExpand: (tabId: string) => void
   editorFiles?: (OpenFile & { tabId?: string })[]
   browserTabs?: (BrowserTabState & { tabId?: string })[]
+  agentSessionTabs?: (Tab & { contentType: 'agent-session' })[]
   activeFileId?: string | null
   activeBrowserTabId?: string | null
   activeSimulatorTabId?: string | null
@@ -39,6 +40,7 @@ export type TabBarProps = {
   onActivateFile?: (fileId: string) => void
   onCloseFile?: (fileId: string) => void
   onActivateBrowserTab?: (tabId: string) => void
+  onActivateAgentSession?: (tabId: string) => void
   onCloseBrowserTab?: (tabId: string) => void
   onDuplicateBrowserTab?: (tabId: string) => void
   onCloseAllFiles?: () => void

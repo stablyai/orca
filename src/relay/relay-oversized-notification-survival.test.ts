@@ -10,12 +10,8 @@ import { MAX_BATCHED_WATCHER_EVENTS } from '../main/ipc/filesystem-watcher-event
 import { emitRelayWatcherEvents } from './relay-watcher-event-emitter'
 import { publishAgentHookEnvelope } from './agent-hook-envelope-publication'
 import type { WatcherProcessEvent } from '../main/ipc/parcel-watcher-process'
-import {
-  AGENT_STATUS_ASSISTANT_MESSAGE_MAX_LENGTH,
-  AGENT_STATUS_INTERACTIVE_PROMPT_MAX_LENGTH,
-  AGENT_STATUS_MAX_SUBAGENTS,
-  normalizeAgentStatusPayload
-} from '../shared/agent-status-types'
+import { AGENT_STATUS_ASSISTANT_MESSAGE_MAX_LENGTH, AGENT_STATUS_INTERACTIVE_PROMPT_MAX_LENGTH, normalizeAgentStatusPayload } from '../shared/agent-status-types'
+import { AGENT_STATUS_MAX_SUBAGENTS } from '../shared/agent-subagent-snapshot'
 
 // The relay runs on the REMOTE host, so the stream default is that host's Node major.
 const NODE22_HWM = 64 * 1024 // Node >= 22 default

@@ -1,6 +1,6 @@
 import type { RuntimeSpeechSetupState } from '../../../src/shared/runtime-types'
 import type { RpcClient } from '../transport/rpc-client'
-import { LogicalClientCutoverError } from '../transport/stable-logical-rpc-client'
+import { LogicalClientCutoverError } from '../transport/logical-client-cutover-error'
 import type { RpcSuccess } from '../transport/types'
 
 export type MobileSpeechSetup = RuntimeSpeechSetupState

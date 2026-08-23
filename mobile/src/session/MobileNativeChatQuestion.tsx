@@ -7,13 +7,18 @@ import { formatQuestionAnswer, type MobileChatQuestion } from './mobile-native-c
 type Props = {
   question: MobileChatQuestion
   onAnswer: (text: string) => Promise<boolean>
+  allowFreeText?: boolean
 }
 
 /** Renders an agent's choice prompt as a tappable card. Single-select answers
  *  on tap; multi-select toggles then Submits; an always-present text entry lets
  *  the user answer freely (the escape hatch) when the heuristic misreads the
  *  options or none apply. */
-export function MobileNativeChatQuestion({ question, onAnswer }: Props): React.JSX.Element {
+export function MobileNativeChatQuestion({
+  question,
+  onAnswer,
+  allowFreeText = true
+}: Props): React.JSX.Element {
   const [selected, setSelected] = useState<string[]>([])
   const [freeText, setFreeText] = useState('')
   const [sending, setSending] = useState(false)
@@ -124,35 +129,37 @@ export function MobileNativeChatQuestion({ question, onAnswer }: Props): React.J
         </Pressable>
       ) : null}
 
-      <View style={styles.freeTextRow}>
-        <TextInput
-          style={styles.freeInput}
-          value={freeText}
-          onChangeText={setFreeText}
-          placeholder={hasOptions ? 'Or type a reply…' : 'Type your reply…'}
-          placeholderTextColor={colors.textMuted}
-          selectionColor={colors.accentBlue}
-          onSubmitEditing={submitFreeText}
-          returnKeyType="send"
-          multiline
-        />
-        <Pressable
-          accessibilityLabel="Send reply"
-          style={({ pressed }) => [
-            styles.freeSend,
-            !canSendFreeText && styles.freeSendDisabled,
-            pressed && canSendFreeText && styles.pressed
-          ]}
-          onPress={submitFreeText}
-          disabled={!canSendFreeText}
-        >
-          <ArrowUp
-            size={18}
-            color={canSendFreeText ? colors.bgBase : colors.textMuted}
-            strokeWidth={2.6}
+      {allowFreeText ? (
+        <View style={styles.freeTextRow}>
+          <TextInput
+            style={styles.freeInput}
+            value={freeText}
+            onChangeText={setFreeText}
+            placeholder={hasOptions ? 'Or type a reply…' : 'Type your reply…'}
+            placeholderTextColor={colors.textMuted}
+            selectionColor={colors.accentBlue}
+            onSubmitEditing={submitFreeText}
+            returnKeyType="send"
+            multiline
           />
-        </Pressable>
-      </View>
+          <Pressable
+            accessibilityLabel="Send reply"
+            style={({ pressed }) => [
+              styles.freeSend,
+              !canSendFreeText && styles.freeSendDisabled,
+              pressed && canSendFreeText && styles.pressed
+            ]}
+            onPress={submitFreeText}
+            disabled={!canSendFreeText}
+          >
+            <ArrowUp
+              size={18}
+              color={canSendFreeText ? colors.bgBase : colors.textMuted}
+              strokeWidth={2.6}
+            />
+          </Pressable>
+        </View>
+      ) : null}
     </View>
   )
 }

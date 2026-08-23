@@ -9,7 +9,7 @@ import {
   type HookListenerState
 } from './agent-hook-listener'
 import { clearGrokSessionPathLookupCacheForTests } from './grok-session-paths'
-import { AGENT_STATUS_MAX_SUBAGENTS } from './agent-status-types'
+import { AGENT_STATUS_MAX_SUBAGENTS } from './agent-subagent-snapshot'
 import { makePaneKey } from './stable-pane-id'
 import { PANE_KEY } from './agent-hook-listener-test-harness'
 

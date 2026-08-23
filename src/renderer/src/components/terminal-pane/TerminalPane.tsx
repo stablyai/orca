@@ -743,12 +743,19 @@ function TerminalPane(
   const [sessionRestoredBannerPaneIds, setSessionRestoredBannerPaneIds] = useState<
     Map<number, SessionRestoredBannerReason>
   >(() => new Map())
+  const consumeTabStartupCommand = useAppStore((store) => store.consumeTabStartupCommand)
   const [setupSplit] = useState(() => useAppStore.getState().pendingSetupSplitByTabId[tabId])
   const consumeTabSetupSplit = useAppStore((store) => store.consumeTabSetupSplit)
   const [issueCommandSplit] = useState(
     () => useAppStore.getState().pendingIssueCommandSplitByTabId[tabId]
   )
   const consumeTabIssueCommandSplit = useAppStore((store) => store.consumeTabIssueCommandSplit)
+  const settleTabStartupCommand = useCallback(() => {
+    if (startup) {
+      consumeTabStartupCommand(tabId, startup)
+    }
+  }, [consumeTabStartupCommand, startup, tabId])
+
   useLayoutEffect(() => {
     if (isVisible && shouldMeasureHiddenStartup) {
       // Why: hidden startup measurement is first-launch only; keeping it past first visibility would let inactive tabs refit and SIGWINCH.
@@ -1400,6 +1407,7 @@ function TerminalPane(
     setCacheTimerStartedAt,
     syncPanePtyLayoutBinding,
     clearExitedPanePtyLayoutBinding,
+    onStartupBound: settleTabStartupCommand,
     setTabPaneExpanded,
     setTabCanExpandPane,
     setExpandedPane,
@@ -3137,7 +3145,7 @@ function TerminalPane(
       />
       {effectiveChatViewMode && chatPane?.container
         ? createPortal(
-            <div className="absolute inset-0 z-10 flex min-h-0 min-w-0 bg-background">
+            <div className="native-chat-pane-shell absolute inset-0 z-10 flex min-h-0 min-w-0 bg-background">
               <NativeChatView
                 terminalTabId={tabId}
                 isVisible={isRendererVisible}

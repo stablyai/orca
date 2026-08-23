@@ -1,5 +1,5 @@
 import type { RpcClient } from '../transport/rpc-client'
-import { isLogicalClientCutoverError } from '../transport/stable-logical-rpc-client'
+import { isLogicalClientCutoverError } from '../transport/logical-client-cutover-error'
 import type { RpcFailure, RpcSuccess } from '../transport/types'
 
 export const MOBILE_CLIPBOARD_IMAGE_MAX_BASE64_CHARS = 24 * 1024 * 1024

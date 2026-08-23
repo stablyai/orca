@@ -37,11 +37,6 @@ export const mobileSessionCommandInputStyles = StyleSheet.create({
     fontSize: typography.bodySize,
     marginBottom: spacing.lg
   },
-  createError: {
-    color: colors.statusRed,
-    fontSize: 13,
-    marginBottom: spacing.sm
-  },
   emptyActions: {
     flexDirection: 'row',
     flexWrap: 'wrap',

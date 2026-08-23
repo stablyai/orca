@@ -18,10 +18,8 @@ import type { MobileE2EEOutboundMemoryBudget } from './mobile-e2ee-outbound-memo
 import { MobileE2EEDesktopOutboundOwner } from './mobile-e2ee-desktop-outbound-owner'
 import { parseRuntimeClientCapabilities } from './runtime-client-capabilities'
 import type { RuntimeCapability } from '../../../shared/protocol-version'
-import type { EventProps } from '../../../shared/telemetry-events'
-import { track } from '../../telemetry/client'
-
-type OutboundBudgetEmitter = EventProps<'remote_outbound_budget_close'>['emitter']
+import { parseMobileE2EEV2ClientCapabilities } from './mobile-e2ee-v2-client-capabilities'
+import { trackRemoteOutboundBudgetClose } from './remote-outbound-budget-close'
 
 const HANDSHAKE_TIMEOUT_MS = 10_000
 const MAX_CONSECUTIVE_DECRYPT_FAILURES = 5
@@ -287,14 +285,22 @@ export class E2EEChannel {
       onDecryptSuccess: () => (this.consecutiveFailures = 0),
       onAuth: (plaintext) => this.handleAuth(plaintext),
       onBinary: (plaintext) => this.binaryMessageHandler?.(plaintext),
-      onText: (plaintext) =>
-        this.messageHandler?.(
-          plaintext,
-          (response) => this.enqueueV2({ kind: 'text', plaintext: response }),
-          (response) => this.enqueueV2({ kind: 'binary', plaintext: response })
-        ),
+      onText: (plaintext) => this.handleV2Text(plaintext),
       onProtocolError: () => this.onError(4001, 'Invalid binary message before authentication')
     })
+  }
+
+  private handleV2Text(plaintext: string): void {
+    const capabilities = parseMobileE2EEV2ClientCapabilities(plaintext)
+    if (capabilities) {
+      this.clientCapabilities = capabilities
+      return
+    }
+    this.messageHandler?.(
+      plaintext,
+      (response) => this.enqueueV2({ kind: 'text', plaintext: response }),
+      (response) => this.enqueueV2({ kind: 'binary', plaintext: response })
+    )
   }
 
   private enqueueV2(item: V2OutboundItem): boolean {
@@ -310,12 +316,8 @@ export class E2EEChannel {
 
   // Why: this close kills the whole remote session. `size` means a producer emitted something
   // too big and should fall to zero once producers cap themselves; `queue` means a backed-up link.
-  private closeForOutboundBudget(emitter: OutboundBudgetEmitter): void {
-    try {
-      track('remote_outbound_budget_close', { emitter })
-    } catch {
-      // Telemetry is best-effort; closing the unsafe socket remains authoritative.
-    }
+  private closeForOutboundBudget(emitter: 'size' | 'queue'): void {
+    trackRemoteOutboundBudgetClose(emitter)
     this.onError(1013, 'Outbound reply buffer overflow')
   }
 

@@ -132,6 +132,23 @@ describe('resolveNativeChatSkillDiscoveryCwd', () => {
     ).toBe('/repo/worktree')
   })
 
+  it('returns the owning worktree path for a structured session tab', () => {
+    expect(
+      resolveNativeChatSkillDiscoveryCwd(
+        {
+          tabsByWorktree: {},
+          unifiedTabsByWorktree: {
+            'repo-1::/repo/worktree': [{ id: 'structured-tab-1' }]
+          },
+          worktreesByRepo: {
+            'repo-1': [{ id: 'repo-1::/repo/worktree', path: '/repo/worktree' }]
+          }
+        },
+        'structured-tab-1'
+      )
+    ).toBe('/repo/worktree')
+  })
+
   it('returns null when the tab has no known worktree owner', () => {
     expect(
       resolveNativeChatSkillDiscoveryCwd({ tabsByWorktree: {}, worktreesByRepo: {} }, 'tab-1')

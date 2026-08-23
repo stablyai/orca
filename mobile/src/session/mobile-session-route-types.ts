@@ -9,7 +9,7 @@ import type { TerminalRecord } from './mobile-terminal-records'
 
 export type Terminal = TerminalRecord
 
-export type MobileSessionTabType = 'terminal' | 'markdown' | 'file' | 'browser'
+export type MobileSessionTabType = 'terminal' | 'markdown' | 'file' | 'browser' | 'agent-session'
 
 export type MobileSessionTab =
   | {
@@ -39,6 +39,14 @@ export type MobileSessionTab =
       isDirty: boolean
       isActive: boolean
       documentVersion: string
+    }
+  | {
+      type: 'agent-session'
+      id: string
+      title: string
+      sessionId: string
+      agent: 'codex'
+      isActive: boolean
     }
   | {
       type: 'file'

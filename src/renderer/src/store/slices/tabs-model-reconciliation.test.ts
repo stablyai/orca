@@ -266,6 +266,83 @@ describe('TabsSlice', () => {
       })
     })
 
+    it('keeps a structured session activation target during worktree reconciliation', () => {
+      const groupId = 'g-structured'
+      store.setState({
+        unifiedTabsByWorktree: {
+          [WT]: [
+            {
+              id: 'terminal-1',
+              entityId: 'terminal-1',
+              groupId,
+              worktreeId: WT,
+              contentType: 'terminal',
+              label: 'Terminal 1',
+              customLabel: null,
+              color: null,
+              sortOrder: 0,
+              createdAt: 1
+            },
+            {
+              id: 'structured-session-1',
+              entityId: 'session-1',
+              groupId,
+              worktreeId: WT,
+              contentType: 'agent-session',
+              label: 'Codex Chat',
+              customLabel: null,
+              color: null,
+              sortOrder: 1,
+              createdAt: 2,
+              agentSessionAgent: 'codex'
+            }
+          ]
+        },
+        groupsByWorktree: {
+          [WT]: [
+            {
+              id: groupId,
+              worktreeId: WT,
+              activeTabId: 'structured-session-1',
+              tabOrder: ['terminal-1', 'structured-session-1']
+            }
+          ]
+        },
+        activeGroupIdByWorktree: { [WT]: groupId },
+        tabsByWorktree: {
+          [WT]: [
+            {
+              id: 'terminal-1',
+              ptyId: 'pty-1',
+              worktreeId: WT,
+              title: 'Terminal 1',
+              customTitle: null,
+              color: null,
+              sortOrder: 0,
+              createdAt: 1
+            }
+          ]
+        },
+        ptyIdsByTabId: { 'terminal-1': ['pty-1'] }
+      })
+
+      const result = store.getState().reconcileWorktreeTabModel(WT)
+      const state = store.getState()
+
+      expect(result).toEqual({
+        renderableTabCount: 2,
+        activeRenderableTabId: 'structured-session-1'
+      })
+      expect(state.unifiedTabsByWorktree[WT].map((tab) => tab.id)).toEqual([
+        'terminal-1',
+        'structured-session-1'
+      ])
+      expect(state.groupsByWorktree[WT][0]).toMatchObject({
+        activeTabId: 'structured-session-1',
+        tabOrder: ['terminal-1', 'structured-session-1']
+      })
+    })
+
     it('collapses empty split groups when reconciliation drops a stale tab', () => {
       const terminalGroupId = 'g-terminal'
       const staleGroupId = 'g-stale'

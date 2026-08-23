@@ -8,7 +8,7 @@ import {
   saveMobileClipboardImageAsTempFile
 } from './mobile-clipboard-image'
 import type { RpcClient } from '../transport/rpc-client'
-import { LogicalClientCutoverError } from '../transport/stable-logical-rpc-client'
+import { LogicalClientCutoverError } from '../transport/logical-client-cutover-error'
 import type { RpcFailure, RpcResponse, RpcSuccess } from '../transport/types'
 
 function ok(id: string, result: unknown): RpcSuccess {

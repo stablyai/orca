@@ -26,6 +26,13 @@ export class RelayRecoveryFailureCount {
     this.update(0)
   }
 
+  /** A structured reconnect signal recomputes the streak rather than adding to it: a stream that
+   *  proved long-lived retires it, a background restart floors it at one. Routed through `update`
+   *  so the recovery-attempt reporter sees the change. */
+  recomputeTo(count: number): void {
+    this.update(Math.max(0, count))
+  }
+
   private update(count: number): void {
     if (this.count === count) {
       return

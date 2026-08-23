@@ -1,6 +1,6 @@
 import type { RpcClient } from './rpc-client'
 import type { RpcSuccess } from './types'
-import { isLogicalClientCutoverError } from './stable-logical-rpc-client'
+import { isLogicalClientCutoverError } from './logical-client-cutover-error'
 
 // Why: a relay→direct cutover or request timeout can reject an in-flight
 // status.get without ever changing connState, so a one-shot probe would latch

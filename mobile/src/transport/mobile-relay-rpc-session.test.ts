@@ -140,6 +140,27 @@ describe('mobile relay RPC session', () => {
     expect(fakes.sendText).not.toHaveBeenCalled()
   })
 
+  it('tears down for a structured background restart and reports its retry signal', async () => {
+    const { session } = await authenticateSession()
+    const states: string[] = []
+    session.onStateChange((state) => states.push(state))
+
+    session.confirmStructuredStreamLongevity?.()
+    session.restartAfterStructuredBackground?.()
+
+    expect(fakes.close).toHaveBeenCalledOnce()
+    expect(states).toEqual(['disconnected'])
+    expect(session.getFailure()?.message).toBe('structured session background reconnect')
+    expect(session.consumeStructuredReconnectSignal()).toEqual({
+      backgroundRestart: true,
+      streamLongevityConfirmed: true
+    })
+    expect(session.consumeStructuredReconnectSignal()).toEqual({
+      backgroundRestart: false,
+      streamLongevityConfirmed: false
+    })
+  })
+
   it('routes terminal and browser binary streams after confirmation', async () => {
     const { session } = await authenticateSession()
     const terminalListener = vi.fn()

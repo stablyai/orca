@@ -566,6 +566,9 @@ type ColdRestoreAgentResumeStartup = PendingStartupCommand & {
   agent: ResumableTuiAgent
   resumeProviderSession: AgentProviderSessionMetadata
   launchConfig: NonNullable<ReturnType<typeof buildAgentResumeStartupPlan>>['launchConfig']
+  startupCommandDelivery: NonNullable<
+    ReturnType<typeof buildAgentResumeStartupPlan>
+  >['startupCommandDelivery']
   launchToken: string
   useLiveEntry: boolean
   hasSleepingRecord: boolean
@@ -1217,6 +1220,7 @@ export function connectPanePty(
   // mutation does not propagate back.
   const paneStartup = deps.startup ?? null
   deps.startup = undefined
+  let startupPtyBound = false
 
   // Why: paneKey crosses PTY env, hook IPC, retained rows, and reload/replay.
   // Use the stable layout leaf UUID, not the renderer-local numeric pane id.
@@ -3123,6 +3127,10 @@ export function connectPanePty(
       } else {
         deps.updateTabPtyId(deps.tabId, ptyId)
       }
+    }
+    if (paneStartup && !startupPtyBound) {
+      startupPtyBound = true
+      deps.onStartupBound?.()
     }
     if (options.seedInitialAgentStatus) {
       applyInitialAgentStatus()
@@ -5206,6 +5214,7 @@ export function connectPanePty(
           ORCA_AGENT_LAUNCH_TOKEN: coldRestoreLaunchToken
         },
         launchConfig: startupPlan.launchConfig,
+        startupCommandDelivery: startupPlan.startupCommandDelivery,
         resumeProviderSession: providerSession,
         launchToken: coldRestoreLaunchToken,
         useLiveEntry: Boolean(useLiveEntry),
@@ -5437,9 +5446,11 @@ export function connectPanePty(
         ...(connectionId && startupOverride?.command && !shouldDeliverStartupViaTerminalPaste
           ? { commandDelivery: 'provider' as const }
           : {}),
-        ...(connectionId && startupOverride?.command
-          ? { startupCommandDelivery: 'shell-ready' as const }
-          : {}),
+        ...(coldRestoreOverride?.startupCommandDelivery
+          ? { startupCommandDelivery: coldRestoreOverride.startupCommandDelivery }
+          : connectionId && startupOverride?.command
+            ? { startupCommandDelivery: 'shell-ready' as const }
+            : {}),
         ...(startupOverride?.env
           ? { env: mergeStartupEnvWithPaneIdentity(startupOverride.env) }
           : {}),
@@ -8778,6 +8789,15 @@ export function connectPanePty(
       if (!isCurrentReattachPayload() || !reattachPayloadApplied) {
         return false
       }
+      if (connectResult?.isReattach && resumeComesFromPassiveHibernation && coldRestoreStartup) {
+        applyColdRestoreAgentResumeStartup(coldRestoreStartup)
+        await waitForTerminalOutputParsed(pane.terminal)
+        if (!(await runTerminalPasteStartupCommand(coldRestoreStartup.command))) {
+          return false
+        }
+        showSessionRestoredBanner()
+        clearSleepingRecordAfterColdRestoreSpawn(coldRestoreStartup)
+      }
       scheduleReattachIdleAgentCursorReset()
 
       scheduleRuntimeGraphSync()
@@ -9006,6 +9026,9 @@ export function connectPanePty(
                 ? { launchToken: coldRestoreStartup.launchToken }
                 : {}),
               ...(coldRestoreStartup?.agent ? { launchAgent: coldRestoreStartup.agent } : {}),
+              ...(coldRestoreStartup?.startupCommandDelivery
+                ? { startupCommandDelivery: coldRestoreStartup.startupCommandDelivery }
+                : {}),
               ...(shouldDeclareHiddenAtSpawn() ? { initiallyHidden: true } : {}),
               ...(directSshRetryAttempt ? { admitPtyId: claimCapturedDirectSshRetryPty } : {}),
               callbacks: outputCallbacks.callbacks
@@ -9254,6 +9277,9 @@ export function connectPanePty(
           : {}),
         ...(coldRestoreStartup?.launchToken ? { launchToken: coldRestoreStartup.launchToken } : {}),
         ...(coldRestoreStartup?.agent ? { launchAgent: coldRestoreStartup.agent } : {}),
+        ...(coldRestoreStartup?.startupCommandDelivery
+          ? { startupCommandDelivery: coldRestoreStartup.startupCommandDelivery }
+          : {}),
         ...(shouldDeclareHiddenAtSpawn() ? { initiallyHidden: true } : {}),
         ...(directSshRetryAttempt ? { admitPtyId: claimCapturedDirectSshRetryPty } : {}),
         callbacks: outputCallbacks.callbacks

@@ -27,6 +27,10 @@ import {
   browserWorkspaceSchema
 } from './workspace-session-browser-schema'
 import { sleepingAgentSessionsByPaneKeySchema } from './workspace-session-sleeping-agents'
+import {
+  tabContentTypeSchema,
+  workspaceVisibleTabTypeSchema
+} from './workspace-session-tab-type-schema'
 import { salvagedField, salvagedOptional, salvagingArray, salvagingRecord } from './zod-salvage'
 
 // ─── Terminal pane layout (recursive) ───────────────────────────────
@@ -108,18 +112,6 @@ const terminalTabSchema = z.object({
 
 // ─── Unified tab model ──────────────────────────────────────────────
 
-const tabContentTypeSchema = z.enum([
-  'terminal',
-  'editor',
-  'diff',
-  'conflict-review',
-  'check-details',
-  'browser',
-  'simulator'
-])
-
-const workspaceVisibleTabTypeSchema = z.enum(['terminal', 'editor', 'browser', 'simulator'])
-
 const executionHostIdSchema = z.custom<ExecutionHostId>(
   (value) => typeof value === 'string' && Boolean(parseExecutionHostId(value))
 )
@@ -131,6 +123,7 @@ const tabSchema = z.object({
   worktreeId: z.string(),
   executionHostId: executionHostIdSchema.optional(),
   contentType: tabContentTypeSchema,
+  agentSessionAgent: z.enum(['codex', 'claude']).optional().catch(undefined),
   label: z.string(),
   generatedLabel: z.string().nullable().optional(),
   aiVaultTitle: z

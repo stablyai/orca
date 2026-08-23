@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { RpcClient } from '../transport/rpc-client'
-import { LogicalClientCutoverError } from '../transport/stable-logical-rpc-client'
+import { LogicalClientCutoverError } from '../transport/logical-client-cutover-error'
 import { readNewWorktreeRuntimeCapabilities } from './worktree-create-capability'
 
 function statusClient(outcomes: Array<'cutover' | 'error' | string[]>): RpcClient {

@@ -95,10 +95,29 @@ negotiated capabilities differ from the contract. Adding an optional field keeps
 green (Rule 1); making a client depend on that field turns the new-client/old-host
 pairing red.
 
-The harness covers the terminal stream only. It does **not** cover the session-tab
-sync channel, agent-session publications, file or Git RPCs, mobile/E2EE framing, or
-the relay transport. A change on those paths still needs its own reasoning against
-the three rules above.
+`tests/e2e/cross-version-wire/cross-version-agent-session-wire.unit.test.ts` pairs the
+same two builds over the structured `agentSession.*` surface. Because a released build
+cannot name a capability string its own source never contains, the old side's advertised
+list and registered method names are read from the extracted checkout rather than
+hand-written. It covers the three skews that surface can fail on:
+
+- an old client — advertising only what the baseline build defines — is told the whole
+  surface does not exist and reaches no host method;
+- a new client against the old dispatcher gets `method_not_found` on every method, and
+  can see the absence during negotiation instead of by calling;
+- a cursor survives a host restart: the client's fence is refused as stale with the live
+  one attached, and resuming from the held cursor replays only what it missed.
+
+Run it with:
+
+```bash
+pnpm exec vitest run --config config/vitest.config.ts tests/e2e/cross-version-wire/cross-version-agent-session-wire.unit.test.ts
+```
+
+The harness covers the terminal stream and the structured agent-session surface. It does
+**not** cover the session-tab sync channel, legacy agent-session publications, file or Git
+RPCs, mobile/E2EE framing, or the relay transport. A change on those paths still needs its
+own reasoning against the three rules above.
 
 ## Worked example: `agentWait` on terminal and worker reads
 

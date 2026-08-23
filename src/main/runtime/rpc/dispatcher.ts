@@ -12,7 +12,6 @@ import {
 import type { FeatureInteractionId } from '../../../shared/feature-interactions'
 import { isOrchestrationMutation } from '../../../shared/orchestration-rpc-contract'
 import { errorResponse, successResponse } from './errors'
-import { ALL_RPC_METHODS } from './methods'
 import { emulatorProbe, emulatorProbeError } from '../../emulator/emulator-probe'
 import type { OrcaRuntimeService } from '../orca-runtime'
 import {
@@ -26,7 +25,7 @@ import { OrchestrationLegacyCompatibility } from './orchestration-legacy-compati
 import type { RpcDispatchStreamingOptions } from './dispatcher-stream-options'
 import { invalidArgumentResponse, mapDispatcherError } from './dispatcher-error-response'
 
-export type DispatcherOptions = { runtime: OrcaRuntimeService; methods?: readonly RpcAnyMethod[] }
+export type DispatcherOptions = { runtime: OrcaRuntimeService; methods: readonly RpcAnyMethod[] }
 
 export class RpcDispatcher {
   private readonly runtime: OrcaRuntimeService
@@ -34,7 +33,7 @@ export class RpcDispatcher {
   private readonly orchestrationMutations: OrchestrationMutationExecutor
   private readonly legacyOrchestration: OrchestrationLegacyCompatibility
 
-  constructor({ runtime, methods = ALL_RPC_METHODS }: DispatcherOptions) {
+  constructor({ runtime, methods }: DispatcherOptions) {
     this.runtime = runtime
     this.registry = buildRegistry(methods)
     this.orchestrationMutations = getOrchestrationMutationExecutor(runtime)
@@ -43,7 +42,10 @@ export class RpcDispatcher {
 
   async dispatch(
     request: RpcRequest,
-    options?: { signal?: AbortSignal; authenticatedCallerFingerprint?: string }
+    options?: Pick<
+      RpcDispatchStreamingOptions,
+      'signal' | 'clientId' | 'clientKind' | 'clientCapabilities' | 'authenticatedCallerFingerprint'
+    >
   ): Promise<RpcResponse> {
     const meta = this.meta()
     const method = this.registry.get(request.method)
@@ -103,6 +105,9 @@ export class RpcDispatcher {
           runtime: this.runtime,
           signal: options?.signal,
           requestId: request.id,
+          clientId: options?.clientId,
+          clientKind: options?.clientKind,
+          clientCapabilities: options?.clientCapabilities,
           orchestrationCapability: request.orchestrationCapability,
           authenticatedCallerFingerprint:
             mutation?.identity.callerFingerprint ?? authenticatedCallerFingerprint,

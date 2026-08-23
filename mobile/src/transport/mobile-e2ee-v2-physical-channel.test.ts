@@ -118,6 +118,33 @@ describe('mobile E2EE v2 physical channel', () => {
 
     expect(JSON.parse(ctx.sent[0] as string)).toEqual(ctx.session.hello)
     expect(typeof ctx.sent[1]).toBe('string')
+    const auth = openMobileE2EEV2Frame({
+      frame: Buffer.from(ctx.sent[1] as string, 'base64'),
+      key: ctx.schedule.mobileToDesktopKey,
+      sessionId: ctx.schedule.sessionId,
+      direction: 'mobile-to-desktop',
+      payloadKind: 'text',
+      expectedCounter: 0n
+    })
+    expect(JSON.parse(new TextDecoder().decode(auth))).toEqual({
+      type: 'e2ee_auth',
+      v: 2,
+      transcriptHashB64: ctx.session.transcriptHashB64,
+      deviceToken: 'valid-token'
+    })
+    const capabilities = openMobileE2EEV2Frame({
+      frame: Buffer.from(ctx.sent[2] as string, 'base64'),
+      key: ctx.schedule.mobileToDesktopKey,
+      sessionId: ctx.schedule.sessionId,
+      direction: 'mobile-to-desktop',
+      payloadKind: 'text',
+      expectedCounter: 1n
+    })
+    expect(JSON.parse(new TextDecoder().decode(capabilities!))).toEqual({
+      type: 'e2ee_client_capabilities',
+      v: 1,
+      clientCapabilities: ['agent-session.structured.v1']
+    })
     expect(ctx.onAuthenticated).toHaveBeenCalledOnce()
     expect(ctx.onError).not.toHaveBeenCalled()
   })
@@ -166,30 +193,30 @@ describe('mobile E2EE v2 physical channel', () => {
     ctx.socket.bufferedAmount = 9 * 1024 * 1024
     expect(ctx.channel.sendText('one')).toBe(true)
     expect(ctx.channel.sendBinary(new Uint8Array([2]))).toBe(true)
-    expect(ctx.sent).toHaveLength(2)
+    expect(ctx.sent).toHaveLength(3)
 
     ctx.socket.bufferedAmount = 0
     vi.runOnlyPendingTimers()
-    expect(typeof ctx.sent[2]).toBe('string')
-    expect(ctx.sent[3]).toBeInstanceOf(Uint8Array)
+    expect(typeof ctx.sent[3]).toBe('string')
+    expect(ctx.sent[4]).toBeInstanceOf(Uint8Array)
     expect(
       openMobileE2EEV2Frame({
-        frame: Buffer.from(ctx.sent[2] as string, 'base64'),
+        frame: Buffer.from(ctx.sent[3] as string, 'base64'),
         key: ctx.schedule.mobileToDesktopKey,
         sessionId: ctx.schedule.sessionId,
         direction: 'mobile-to-desktop',
         payloadKind: 'text',
-        expectedCounter: 1n
+        expectedCounter: 2n
       })
     ).toEqual(new TextEncoder().encode('one'))
     expect(
       openMobileE2EEV2Frame({
-        frame: ctx.sent[3] as Uint8Array,
+        frame: ctx.sent[4] as Uint8Array,
         key: ctx.schedule.mobileToDesktopKey,
         sessionId: ctx.schedule.sessionId,
         direction: 'mobile-to-desktop',
         payloadKind: 'binary',
-        expectedCounter: 2n
+        expectedCounter: 3n
       })
     ).toEqual(new Uint8Array([2]))
   })

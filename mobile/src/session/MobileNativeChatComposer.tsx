@@ -11,6 +11,7 @@ import {
 import { ArrowUp, ImagePlus, Mic, Square, X } from 'lucide-react-native'
 import { colors, radii, spacing, typography } from '../theme/mobile-theme'
 import { getVerifiedNativeChatCommands } from '../../../src/shared/native-chat-agent-profiles'
+import type { SlashCommandSuggestion } from '../../../src/shared/native-chat-slash-commands'
 import {
   applyAutocomplete,
   detectAutocompleteTrigger,
@@ -38,6 +39,7 @@ type Props = {
   onSend: (text: string) => Promise<boolean>
   /** Active tab's agent — the slash autocomplete serves its command catalog. */
   agent?: string | null
+  slashCommands?: readonly SlashCommandSuggestion[]
   /** Model/session-option pickers shown in the composer action row; null when
    *  the agent has no session-option catalog. */
   sessionOptions?: MobileNativeChatSessionOptionPickersProps | null
@@ -64,6 +66,7 @@ export function MobileNativeChatComposer({
   onChangeText,
   onSend,
   agent,
+  slashCommands,
   sessionOptions,
   onAttachImage,
   attachments = NO_ATTACHMENTS,
@@ -105,7 +108,7 @@ export function MobileNativeChatComposer({
       return []
     }
     if (trigger.kind === 'slash') {
-      const commands = agent ? getVerifiedNativeChatCommands(agent) : []
+      const commands = slashCommands ?? (agent ? getVerifiedNativeChatCommands(agent) : [])
       // Why: Codex's catalog is 45 commands and this list is a plain ScrollView
       // (~5 rows visible), so an uncapped `/` would mount every row and
       // re-reconcile them on each streaming tick right above the transcript.
@@ -118,7 +121,7 @@ export function MobileNativeChatComposer({
       kind: 'file' as const,
       path
     }))
-  }, [trigger, filePaths, agent])
+  }, [trigger, filePaths, agent, slashCommands])
 
   useEffect(() => {
     if (trigger?.kind === 'file') {

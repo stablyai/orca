@@ -13,6 +13,7 @@ import {
   type RuntimeMetadataOwnershipWatch
 } from './runtime-metadata-ownership-watch'
 import { RpcDispatcher } from './rpc/dispatcher'
+import { ALL_RPC_METHODS } from './rpc/methods'
 import type { RpcRequest, RpcResponse } from './rpc/core'
 import { errorResponse } from './rpc/errors'
 import { fingerprintAuthenticatedPairingCredential } from './rpc/orchestration-mutation-executor'
@@ -187,6 +188,17 @@ const MOBILE_RPC_METHOD_ALLOWLIST = new Set([
   'aiVault.listSessions',
   'aiVault.resolveSessionTitles',
   'aiVault.prepareSessionResume',
+  'agentSession.create',
+  'agentSession.createSupport',
+  'agentSession.cancel',
+  'agentSession.history',
+  'agentSession.options',
+  'agentSession.respondToApproval',
+  'agentSession.respondToQuestion',
+  'agentSession.send',
+  'agentSession.setOption',
+  'agentSession.subscribe',
+  'agentSession.unsubscribe',
   'browser.back',
   'browser.dialogAccept',
   'browser.dialogDismiss',
@@ -552,7 +564,7 @@ export class OrcaRuntimeRpcServer {
     metadataOwnershipPollMs = RUNTIME_METADATA_OWNERSHIP_POLL_MS
   }: OrcaRuntimeRpcServerOptions) {
     this.runtime = runtime
-    this.dispatcher = new RpcDispatcher({ runtime })
+    this.dispatcher = new RpcDispatcher({ runtime, methods: ALL_RPC_METHODS })
     this.userDataPath = userDataPath
     this.pid = pid
     this.platform = platform

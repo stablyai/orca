@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { AGENT_STATUS_MAX_SUBAGENTS } from './agent-status-types'
+import { AGENT_STATUS_MAX_SUBAGENTS } from './agent-subagent-snapshot'
 import { readClaudeBackgroundAgentTasks } from './claude-background-task-inventory'
 import {
   claudeRosterHasRuntimeWorkingSubagent,

@@ -30,6 +30,7 @@ export async function prepareMobileAiVaultSessionResume(
     'aiVault.prepareSessionResume',
     {
       agent: session.agent,
+      sessionId: session.sessionId,
       filePath: session.filePath,
       codexHome: session.codexHome,
       executionHostId: session.executionHostId

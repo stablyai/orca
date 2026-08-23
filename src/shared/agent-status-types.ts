@@ -15,6 +15,8 @@ import { assertJsonTextStructureWithinLimits } from './json-text-structure-limit
 
 export { AGENT_STATUS_MAX_FIELD_LENGTH } from './agent-status-field-normalization'
 
+import { AGENT_STATUS_MAX_SUBAGENTS, type AgentSubagentSnapshot } from './agent-subagent-snapshot'
+
 export const AGENT_STATUS_STATES = ['working', 'blocked', 'waiting', 'done'] as const
 export type AgentStatusState = (typeof AGENT_STATUS_STATES)[number]
 // Why: agent types aren't a fixed set (custom agents exist); any non-empty string is
@@ -75,22 +77,6 @@ export type AgentStatusOrchestrationContext = {
   orchestrationRunId?: string
 }
 
-export type AgentSubagentState = 'working' | 'blocked' | 'waiting' | 'idle'
-
-/** A live in-process child of the pane's provider session. Rendered as an
- *  indented child row with no PTY of its own. */
-export type AgentSubagentSnapshot = {
-  /** Provider-assigned lifecycle id. */
-  id: string
-  agentType?: string
-  /** Provider model used by this child, when exposed by its lifecycle event. */
-  model?: string
-  description?: string
-  state: AgentSubagentState
-  /** Timestamp (ms) when this subagent was first observed. */
-  startedAt: number
-}
-
 export type AgentStatusEntry = {
   state: AgentStatusState
   /** The user's most recent prompt. Cached across the turn — later tool-use events
@@ -146,6 +132,8 @@ export type AgentStatusEntry = {
   /** Provider-owned conversation/session id captured from hook payloads.
    *  Used only for exact CLI resume; Orca terminal ids are not agent-session ids. */
   providerSession?: AgentProviderSessionMetadata
+  /** False when the status belongs to a non-terminal owner that restores itself. */
+  terminalResumeEligible?: false
   /** Live-only Command Code turn boundary key; not persisted to last-status.json. */
   promptInteractionKey?: string
   /** True for a nonterminal state hydrated from last-status.json with no live hook since:
@@ -300,9 +288,6 @@ const VALID_STATES: ReadonlySet<string> = new Set<string>(AGENT_STATUS_STATES)
 export const AGENT_TYPE_MAX_LENGTH = 40
 export const AGENT_MODEL_MAX_LENGTH = 120
 
-/** Maximum subagent child rows carried per status entry. Bounds per-pane cache
- *  and IPC fanout against a runaway spawner. */
-export const AGENT_STATUS_MAX_SUBAGENTS = 32
 export const AGENT_STATUS_JSON_STRUCTURE_LIMITS = {
   structuralTokens: 4096,
   nestingDepth: 16
@@ -355,35 +340,6 @@ function normalizeSubagentsField(value: unknown): AgentSubagentSnapshot[] | unde
     }
   }
   return normalized.length > 0 ? normalized : undefined
-}
-
-/** Structural equality for subagent lists so stores can reuse the previous
- *  array reference (and skip fanout) when nothing actually changed. */
-export function agentSubagentsEqual(
-  a: AgentSubagentSnapshot[] | undefined,
-  b: AgentSubagentSnapshot[] | undefined
-): boolean {
-  if (a === b) {
-    return true
-  }
-  if (!a || !b || a.length !== b.length) {
-    return !a && !b
-  }
-  for (let i = 0; i < a.length; i++) {
-    const x = a[i]
-    const y = b[i]
-    if (
-      x.id !== y.id ||
-      x.state !== y.state ||
-      x.startedAt !== y.startedAt ||
-      x.agentType !== y.agentType ||
-      x.model !== y.model ||
-      x.description !== y.description
-    ) {
-      return false
-    }
-  }
-  return true
 }
 
 /**

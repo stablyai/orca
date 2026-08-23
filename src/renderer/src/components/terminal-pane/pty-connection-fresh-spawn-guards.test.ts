@@ -454,4 +454,32 @@ describe('connectPanePty', () => {
     sendTerminalInputThroughPane(pane, 'echo hi\r')
     expect(transport.sendInput).toHaveBeenCalledWith('echo hi\r')
   })
+
+  it('settles a queued startup only after the pane binds its spawned PTY', async () => {
+    const { connectPanePty } = await import('./pty-connection')
+    const transport = createMockTransport('pty-resume')
+    transportFactoryQueue.push(transport)
+    const onStartupBound = vi.fn()
+    const startup = {
+      command: "codex 'resume' 'codex-session-1'",
+      resumeProviderSession: { key: 'session_id', id: 'codex-session-1' } as const
+    }
+
+    connectPanePty(
+      createPane(1) as never,
+      createManager(1) as never,
+      createDeps({ startup, onStartupBound }) as never
+    )
+
+    expect(onStartupBound).not.toHaveBeenCalled()
+    expect(createdTransportOptions[0]).toMatchObject(startup)
+
+    const onPtySpawn = createdTransportOptions[0]?.onPtySpawn as
+      | ((ptyId: string) => void)
+      | undefined
+    onPtySpawn?.('pty-resume')
+    onPtySpawn?.('pty-resume')
+
+    expect(onStartupBound).toHaveBeenCalledTimes(1)
+  })
 })

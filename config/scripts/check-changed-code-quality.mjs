@@ -15,7 +15,13 @@ export const OXLINT_SCANS = [
   },
   {
     label: 'type-aware code quality',
-    args: ['--type-aware', '--config', 'config/oxlint-code-quality-type-aware.json']
+    args: ['--type-aware', '--config', 'config/oxlint-code-quality-type-aware.json'],
+    // Why: type-aware rules need the types to RESOLVE, and mobile's live only in
+    // mobile/node_modules. Linting them under the root config turns every such import into an
+    // `error` type, which `no-redundant-type-constituents` then reports as a real finding. The
+    // package script scopes this scan to `src config tests` for the same reason; the changed-file
+    // gate has to agree with it or it invents findings the repo cannot reproduce.
+    excludes: (file) => file === 'mobile' || file.startsWith('mobile/')
   },
   {
     label: 'React Doctor',
@@ -195,7 +201,12 @@ export function main(
 
   let failures = 0
   for (const scan of OXLINT_SCANS) {
-    const diagnostics = runOxlintScan(root, scan, files).filter((diagnostic) =>
+    const scanned = scan.excludes ? files.filter((file) => !scan.excludes(file)) : files
+    if (scanned.length === 0) {
+      console.log(`${scan.label}: 0 new finding(s) across 0 changed file(s).`)
+      continue
+    }
+    const diagnostics = runOxlintScan(root, scan, scanned).filter((diagnostic) =>
       diagnosticTouchesAddedLines(diagnostic, rangesByFile, root)
     )
     for (const diagnostic of diagnostics) {
@@ -203,7 +214,7 @@ export function main(
     }
     failures += diagnostics.length
     console.log(
-      `${scan.label}: ${diagnostics.length} new finding(s) across ${files.length} changed file(s).`
+      `${scan.label}: ${diagnostics.length} new finding(s) across ${scanned.length} changed file(s).`
     )
   }
 

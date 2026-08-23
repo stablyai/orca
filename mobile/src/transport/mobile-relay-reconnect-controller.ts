@@ -7,6 +7,7 @@ import type { MobileRelayRpcSession } from './mobile-relay-rpc-session'
 import { MobileE2EEAuthenticationError } from './mobile-e2ee-v2-physical-channel'
 import { RelayOuterError } from './mobile-relay-e2ee-link'
 import { RELAY_STABLE_CONNECTION_MS, RelayRetryDelays } from './mobile-relay-retry-delays'
+import { relayStructuredFailures } from './mobile-relay-structured-reconnect'
 import { RelayCredentialEligibility } from './relay-credential-eligibility'
 import { RelayPairingRejectionLatch } from './relay-pairing-rejection-latch'
 import { RelayRecoveryFailureCount } from './relay-recovery-failure-count'
@@ -206,6 +207,9 @@ export class RelayReconnectController {
       return
     }
     const failure = this.activeSession?.getFailure()
+    this.failureCount.recomputeTo(
+      relayStructuredFailures(this.failureCount.current(), this.activeSession)
+    )
     this.activeSession = null
     if (failure) {
       // Why: active relay closes need the same cooldown as failed replacement dials.

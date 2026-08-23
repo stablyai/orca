@@ -1,7 +1,7 @@
 import { setCachedWorktrees } from '../cache/worktree-cache'
 import { sendSingleFlightRequest } from '../transport/request-single-flight'
 import type { RpcClient } from '../transport/rpc-client'
-import { isLogicalClientCutoverError } from '../transport/stable-logical-rpc-client'
+import { isLogicalClientCutoverError } from '../transport/logical-client-cutover-error'
 import {
   markHomeWorktreeCatalogUnavailable,
   type HomeWorktreeSummary,

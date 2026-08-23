@@ -24,7 +24,8 @@
 
 import { createHash } from 'node:crypto'
 
-import type { AgentSubagentSnapshot, ParsedAgentStatusPayload } from './agent-status-types'
+import type { ParsedAgentStatusPayload } from './agent-status-types'
+import type { AgentSubagentSnapshot } from './agent-subagent-snapshot'
 import type { AgentProviderSessionMetadata } from './agent-session-resume'
 import type { AgentHookTarget } from './agent-hook-types'
 

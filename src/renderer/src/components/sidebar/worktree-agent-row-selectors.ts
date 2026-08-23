@@ -28,7 +28,9 @@ type WorktreeAgentRowsState = Pick<
   | 'migrationUnsupportedByPtyId'
   | 'retainedAgentsByPaneKey'
   | 'tabsByWorktree'
->
+> & {
+  unifiedTabsByWorktree?: AppState['unifiedTabsByWorktree']
+}
 
 type TabWorktreeIndexCache = {
   tabsByWorktree: WorktreeAgentRowsState['tabsByWorktree']
@@ -82,18 +84,38 @@ function getTabIdToWorktreeId(
   return tabIdToWorktreeId
 }
 
+function getLiveTabIdToWorktreeId(
+  tabsByWorktree: WorktreeAgentRowsState['tabsByWorktree'],
+  unifiedTabsByWorktree: WorktreeAgentRowsState['unifiedTabsByWorktree']
+): Map<string, string> {
+  const tabIdToWorktreeId = new Map(getTabIdToWorktreeId(tabsByWorktree))
+  for (const [worktreeId, tabs] of Object.entries(unifiedTabsByWorktree ?? {})) {
+    for (const tab of tabs) {
+      if (tab.contentType === 'agent-session') {
+        tabIdToWorktreeId.set(tab.id, worktreeId)
+      }
+    }
+  }
+  return tabIdToWorktreeId
+}
+
 function getLiveEntriesByWorktree(state: WorktreeAgentRowsState): Map<string, AgentStatusEntry[]> {
   const agentStatusByPaneKey = state.agentStatusByPaneKey ?? EMPTY_RECORD
   const tabsByWorktree = state.tabsByWorktree ?? EMPTY_RECORD
+  const unifiedTabsByWorktree = state.unifiedTabsByWorktree
   if (
     liveEntriesByWorktreeCache?.tabsByWorktree === tabsByWorktree &&
+    liveEntriesByWorktreeCache.unifiedTabsByWorktree === unifiedTabsByWorktree &&
     liveEntriesByWorktreeCache.agentStatusByPaneKey === agentStatusByPaneKey
   ) {
     return liveEntriesByWorktreeCache.entriesByWorktree
   }
 
-  const tabIdToWorktreeId = getTabIdToWorktreeId(tabsByWorktree)
-  if (liveEntriesByWorktreeCache?.tabsByWorktree === tabsByWorktree) {
+  const tabIdToWorktreeId = getLiveTabIdToWorktreeId(tabsByWorktree, unifiedTabsByWorktree)
+  if (
+    liveEntriesByWorktreeCache?.tabsByWorktree === tabsByWorktree &&
+    liveEntriesByWorktreeCache.unifiedTabsByWorktree === unifiedTabsByWorktree
+  ) {
     const patched = patchLiveEntriesByWorktree(
       liveEntriesByWorktreeCache,
       agentStatusByPaneKey,
@@ -102,6 +124,7 @@ function getLiveEntriesByWorktree(state: WorktreeAgentRowsState): Map<string, Ag
     if (patched) {
       liveEntriesByWorktreeCache = {
         tabsByWorktree,
+        unifiedTabsByWorktree,
         agentStatusByPaneKey,
         entriesByWorktree: patched
       }
@@ -128,6 +151,7 @@ function getLiveEntriesByWorktree(state: WorktreeAgentRowsState): Map<string, Ag
   }
   liveEntriesByWorktreeCache = {
     tabsByWorktree,
+    unifiedTabsByWorktree,
     agentStatusByPaneKey,
     entriesByWorktree
   }

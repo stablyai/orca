@@ -51,4 +51,19 @@ describe('changed-code quality line matching', () => {
     expect(scan.args).not.toContain('--config')
     expect(scan.args).not.toContain('--disable-nested-config')
   })
+
+  // Why: the type-aware scan DOES pin the root config, and mobile's types resolve only from
+  // mobile/node_modules. Linting mobile under the root config makes every such import an `error`
+  // type, which no-redundant-type-constituents reports as a real finding — findings the package
+  // script cannot reproduce, because it scopes this scan to `src config tests`.
+  it('keeps the type-aware scan off mobile, whose types the root config cannot resolve', () => {
+    const scan = OXLINT_SCANS.find((candidate) => candidate.label === 'type-aware code quality')
+
+    expect(scan.args).toContain('--type-aware')
+    expect(scan.excludes('mobile/src/session/use-mobile-structured-attachments.test.ts')).toBe(true)
+    expect(scan.excludes('mobile')).toBe(true)
+    expect(scan.excludes('src/main/runtime/orca-runtime.ts')).toBe(false)
+    // A path that merely starts with the same letters is not inside the package.
+    expect(scan.excludes('mobile-shim/src/a.ts')).toBe(false)
+  })
 })

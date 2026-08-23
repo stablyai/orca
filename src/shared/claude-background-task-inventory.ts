@@ -1,4 +1,4 @@
-import { AGENT_STATUS_MAX_SUBAGENTS } from './agent-status-types'
+import { AGENT_STATUS_MAX_SUBAGENTS } from './agent-subagent-snapshot'
 
 const CLAUDE_TERMINAL_BACKGROUND_TASK_STATUSES = new Set([
   'idle',

@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { ActivityIndicator, Keyboard, Pressable, StyleSheet, Text, View } from 'react-native'
 import { ChevronLeft, X } from 'lucide-react-native'
 import { BottomDrawer } from '../components/BottomDrawer'
@@ -44,11 +44,22 @@ export function MobileNativeChatSessionOptionPickers({
   const { snapshot, pendingId } = controller
   const model = snapshot.find((descriptor) => descriptor.category === 'model')
   const options = sortNativeChatSessionOptions(snapshot)
+  const activeDescriptor = snapshot.find((descriptor) => descriptor.id === openDescriptorId)
+
+  useEffect(() => {
+    const request = controller.pickerRequest
+    if (!request || !snapshot.some((descriptor) => descriptor.id === request.id)) {
+      return
+    }
+    Keyboard.dismiss()
+    setOpenDescriptorId(request.id)
+    controller.dismissPickerRequest?.(request.token)
+  }, [controller, snapshot])
+
   if (!model) {
     return null
   }
   const disabled = isWorking || pendingId !== null || sendInFlight
-  const activeDescriptor = snapshot.find((descriptor) => descriptor.id === openDescriptorId)
   const modelView = activeDescriptor?.id === model.id
   const modelLabel = mobileModelPillLabel(model)
   const optionsLabel = options.length > 0 ? mobileOptionsPillLabel(options) : null

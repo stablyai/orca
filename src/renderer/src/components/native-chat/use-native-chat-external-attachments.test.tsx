@@ -13,6 +13,8 @@ vi.mock('@/store', () => ({
 }))
 
 vi.mock('./native-chat-attachment-upload', () => ({
+  nativeChatLocalAttachmentUnsupportedNotice: () =>
+    'Local attachments are not available for remote sessions.',
   resolveNativeChatAttachmentOwner: mocks.resolveNativeChatAttachmentOwner,
   uploadNativeChatAttachmentPaths: mocks.uploadNativeChatAttachmentPaths,
   nativeChatWorktreeNotReadyNotice: () => 'Worktree not ready — try again in a moment.'
@@ -134,6 +136,20 @@ describe('useNativeChatExternalAttachments', () => {
       probe.latest().attachExternalPaths(['/local/a.txt'])
     })
     expect(setNotice).toHaveBeenCalledWith('Worktree not ready — try again in a moment.')
+    expect(attachResolvedPaths).not.toHaveBeenCalled()
+  })
+
+  it('does not attach client-local paths to a remote runtime', async () => {
+    mocks.resolveNativeChatAttachmentOwner.mockReturnValue({ kind: 'runtime' })
+    const attachResolvedPaths = vi.fn()
+    const setNotice = vi.fn()
+    const probe = await renderProbe({ attachResolvedPaths, setNotice })
+    await act(async () => {
+      probe.latest().attachExternalPaths(['/local/a.txt'])
+    })
+    expect(setNotice).toHaveBeenCalledWith(
+      'Local attachments are not available for remote sessions.'
+    )
     expect(attachResolvedPaths).not.toHaveBeenCalled()
   })
 

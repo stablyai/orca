@@ -38,6 +38,8 @@ export type AppApi = {
   /** Resolves when the daemon PTY provider and hook receiver have either
    *  started or failed open for the first BrowserWindow. */
   awaitFirstWindowStartupServices: () => Promise<void>
+  /** Inventories retained PTYs and restores durable structured ownership before renderer adoption. */
+  prepareTerminalStartupRestoration: () => Promise<void>
   /** Reconciles legacy worker authority around persisted terminal reconnect. */
   recoverLegacyWorkerTerminalsForRendererStartup: () => Promise<void>
   /** Emits a startup benchmark marker when ORCA_STARTUP_DIAGNOSTICS is enabled. */

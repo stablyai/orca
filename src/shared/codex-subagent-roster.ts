@@ -1,10 +1,5 @@
-import {
-  AGENT_MODEL_MAX_LENGTH,
-  AGENT_STATUS_MAX_SUBAGENTS,
-  AGENT_STATUS_TOOL_INPUT_MAX_LENGTH,
-  AGENT_TYPE_MAX_LENGTH,
-  type AgentSubagentSnapshot
-} from './agent-status-types'
+import { AGENT_MODEL_MAX_LENGTH, AGENT_STATUS_TOOL_INPUT_MAX_LENGTH, AGENT_TYPE_MAX_LENGTH } from './agent-status-types'
+import { AGENT_STATUS_MAX_SUBAGENTS, type AgentSubagentSnapshot } from './agent-subagent-snapshot'
 import { normalizeOptionalField } from './agent-status-field-normalization'
 
 const CODEX_SUBAGENT_ID_MAX_LENGTH = 64

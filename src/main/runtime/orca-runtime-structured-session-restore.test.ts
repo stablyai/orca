@@ -1,0 +1,156 @@
+import { afterEach, describe, expect, it, vi } from 'vitest'
+import { setStructuredAgentSessionHost } from '../native-chat/agent-session-wire/structured-agent-session-registry'
+import { OrcaRuntimeService } from './orca-runtime'
+
+afterEach(() => setStructuredAgentSessionHost(null))
+
+describe('structured session cold restoration', () => {
+  it('loads records, inventories PTYs, restores ownership, then projects tabs exactly once', async () => {
+    const runtime = new OrcaRuntimeService()
+    const hydrate = vi.fn()
+    const refresh = vi.fn(async () => new Set<string>())
+    const ensureHost = vi.fn(async () => undefined)
+    const restoreReadableSessions = vi.fn(async () => undefined)
+    const internal = runtime as unknown as {
+      getKnownWorkspaceSessionWorktreeIds(): Set<string>
+      hydrateHeadlessMobileSessionTabsFromWorkspaceSession(
+        worktreeId?: string,
+        options?: { allowAttachedWindow?: boolean; onlyRuntimeOwnedTerminals?: boolean }
+      ): Set<string>
+      refreshMobileSessionPtyRecords(): Promise<Set<string> | null>
+      ensureStructuredAgentSessionHost(): Promise<void>
+    }
+    internal.getKnownWorkspaceSessionWorktreeIds = () => new Set(['workspace-1'])
+    internal.hydrateHeadlessMobileSessionTabsFromWorkspaceSession = hydrate
+    internal.refreshMobileSessionPtyRecords = refresh
+    internal.ensureStructuredAgentSessionHost = ensureHost
+    setStructuredAgentSessionHost({
+      restoreReadableSessions,
+      listSessionTabs: () => []
+    } as never)
+
+    const first = runtime.restoreStructuredAgentSessionTabs()
+    const second = runtime.restoreStructuredAgentSessionTabs()
+    expect(second).toBe(first)
+    await Promise.all([first, second])
+
+    expect(hydrate).toHaveBeenCalledWith('workspace-1', {
+      allowAttachedWindow: true,
+      onlyRuntimeOwnedTerminals: true
+    })
+    expect(hydrate).toHaveBeenCalledWith()
+    expect(refresh).toHaveBeenCalledOnce()
+    expect(restoreReadableSessions).toHaveBeenCalledOnce()
+    expect(ensureHost).toHaveBeenCalledOnce()
+    expect(ensureHost.mock.invocationCallOrder[0]).toBeLessThan(
+      refresh.mock.invocationCallOrder[0] ?? Infinity
+    )
+    expect(refresh.mock.invocationCallOrder[0]).toBeLessThan(
+      restoreReadableSessions.mock.invocationCallOrder[0] ?? Infinity
+    )
+    expect(restoreReadableSessions.mock.invocationCallOrder[0]).toBeLessThan(
+      hydrate.mock.invocationCallOrder[0] ?? Infinity
+    )
+  })
+
+  it('normalizes a restored tab id and removes it when closed', async () => {
+    const runtime = new OrcaRuntimeService()
+    const internal = runtime as unknown as {
+      getKnownWorkspaceSessionWorktreeIds(): Set<string>
+      hydrateHeadlessMobileSessionTabsFromWorkspaceSession(): Set<string>
+      refreshMobileSessionPtyRecords(): Promise<Set<string> | null>
+      ensureStructuredAgentSessionHost(): Promise<void>
+    }
+    internal.getKnownWorkspaceSessionWorktreeIds = () => new Set()
+    internal.hydrateHeadlessMobileSessionTabsFromWorkspaceSession = () => new Set()
+    internal.refreshMobileSessionPtyRecords = async () => new Set()
+    internal.ensureStructuredAgentSessionHost = async () => undefined
+    setStructuredAgentSessionHost({
+      restoreReadableSessions: async () => undefined,
+      listSessionTabs: () => [
+        {
+          sessionId: 'agent-session:agent-session:restored-session',
+          workspaceId: 'workspace-1',
+          agent: 'codex'
+        }
+      ]
+    } as never)
+    runtime.syncWindowGraph(1, {
+      tabs: [],
+      leaves: [],
+      mobileSessionTabs: [
+        {
+          worktree: 'workspace-1',
+          publicationEpoch: 'renderer-restored',
+          snapshotVersion: 1,
+          activeGroupId: 'group-1',
+          activeTabId: 'terminal-tab::leaf-1',
+          activeTabType: 'terminal',
+          tabGroups: [{ id: 'group-1', activeTabId: 'terminal-tab', tabOrder: ['terminal-tab'] }],
+          tabs: [
+            {
+              type: 'terminal',
+              id: 'terminal-tab::leaf-1',
+              parentTabId: 'terminal-tab',
+              leafId: 'leaf-1',
+              title: 'Terminal',
+              isActive: true
+            },
+            {
+              type: 'terminal',
+              id: 'terminal-tab::leaf-2',
+              parentTabId: 'terminal-tab',
+              leafId: 'leaf-2',
+              title: 'Terminal',
+              isActive: false
+            }
+          ]
+        }
+      ]
+    })
+
+    await runtime.restoreStructuredAgentSessionTabs()
+
+    const restored = await runtime.listMobileSessionTabs('id:workspace-1')
+    expect(restored.tabs).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          type: 'terminal',
+          id: 'terminal-tab::leaf-1'
+        }),
+        expect.objectContaining({
+          type: 'terminal',
+          id: 'terminal-tab::leaf-2'
+        }),
+        expect.objectContaining({
+          type: 'agent-session',
+          id: 'agent-session:restored-session',
+          sessionId: 'restored-session'
+        })
+      ])
+    )
+    expect(restored.tabs).not.toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          type: 'agent-session',
+          id: 'agent-session:agent-session:restored-session'
+        })
+      ])
+    )
+    expect(restored.tabGroups?.[0]?.tabOrder).toEqual([
+      'terminal-tab',
+      'agent-session:restored-session'
+    ])
+
+    await runtime.closeMobileSessionTab('id:workspace-1', 'agent-session:restored-session', {
+      reason: 'user'
+    })
+
+    const closed = await runtime.listMobileSessionTabs('id:workspace-1')
+    expect(closed.tabs.map((tab) => tab.id)).toEqual([
+      'terminal-tab::leaf-1',
+      'terminal-tab::leaf-2'
+    ])
+    expect(closed.tabGroups?.[0]?.tabOrder).toEqual(['terminal-tab'])
+  })
+})

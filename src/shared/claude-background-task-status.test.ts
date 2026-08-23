@@ -9,7 +9,7 @@ import {
   seedClaudeSubagentRosterFromSnapshots,
   type HookListenerState
 } from './agent-hook-listener'
-import { AGENT_STATUS_MAX_SUBAGENTS } from './agent-status-types'
+import { AGENT_STATUS_MAX_SUBAGENTS } from './agent-subagent-snapshot'
 import { readClaudeBackgroundAgentTasks } from './claude-background-task-inventory'
 import { makePaneKey } from './stable-pane-id'
 

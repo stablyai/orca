@@ -19,6 +19,7 @@ describe('prepareAiVaultSessionForResume', () => {
     expect(prepared.codexHome).toBeNull()
     expect(prepareSessionResume).toHaveBeenCalledWith({
       agent: 'codex',
+      sessionId: legacy.sessionId,
       filePath: legacy.filePath,
       codexHome: legacy.codexHome,
       executionHostId: 'local'
@@ -55,6 +56,7 @@ describe('prepareAiVaultSessionForResume', () => {
     expect(prepared.codexHome).toBe('/tmp/orca/codex-accounts/account-2/home')
     expect(prepareSessionResume).toHaveBeenCalledWith({
       agent: 'codex',
+      sessionId: current.sessionId,
       filePath: current.filePath,
       codexHome: current.codexHome,
       executionHostId: 'local'

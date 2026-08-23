@@ -1,10 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import { createHostConnectRefetchGate } from '../transport/host-connect-refetch-gate'
 import type { RpcClient } from '../transport/rpc-client'
-import {
-  createStableLogicalRpcClient,
-  LogicalClientCutoverError
-} from '../transport/stable-logical-rpc-client'
+import { createStableLogicalRpcClient } from '../transport/stable-logical-rpc-client'
+import { LogicalClientCutoverError } from '../transport/logical-client-cutover-error'
 import type { ConnectionState, RpcResponse } from '../transport/types'
 import { fetchHomeHostWorktreeInfo } from './home-host-worktree-fetch'
 import type { HostWorktreeInfo } from './home-worktree-info'

@@ -389,6 +389,12 @@
 
 [data-sonner-toaster] {
   font-family: var(--font-sans);
+  z-index: 40 !important;
+}
+
+/* Keep interruption controls above unrelated updater/onboarding chrome. */
+.native-chat-pane-shell:has([data-native-chat-working='true']) {
+  z-index: 50;
 }
 
 [data-sonner-toaster] [data-sonner-toast][data-styled='true'] {

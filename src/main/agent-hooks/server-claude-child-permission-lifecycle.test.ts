@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { AGENT_STATUS_MAX_SUBAGENTS } from '../../shared/agent-status-types'
+import { AGENT_STATUS_MAX_SUBAGENTS } from '../../shared/agent-subagent-snapshot'
 import { AgentHookServer, _internals } from './server'
 import { buildBody, PANE } from './server.test-fixtures'
 

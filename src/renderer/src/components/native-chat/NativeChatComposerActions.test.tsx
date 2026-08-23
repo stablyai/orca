@@ -59,4 +59,31 @@ describe('NativeChatComposerActions', () => {
     const dictation = screen.getByRole('button', { name: 'Start dictation' })
     expect(pickers.nextElementSibling).toBe(dictation)
   })
+
+  it('marks the streaming Stop control as the critical hit target', () => {
+    render(
+      <NativeChatComposerActions
+        attachDisabled={false}
+        dictationDisabled={false}
+        sendDisabled={false}
+        isWorking
+        isDictating={false}
+        isDictationHoldMode={false}
+        onAttach={vi.fn()}
+        onDictationToggle={vi.fn()}
+        onDictationHoldStart={vi.fn()}
+        onDictationHoldEnd={vi.fn()}
+        onSend={vi.fn()}
+        onStop={vi.fn()}
+        sessionOptionsSurface={null}
+        sessionOptionsSnapshot={[]}
+      />
+    )
+
+    expect(
+      screen
+        .getByRole('button', { name: 'Stop the agent' })
+        .getAttribute('data-native-chat-critical-action')
+    ).toBe('stop')
+  })
 })

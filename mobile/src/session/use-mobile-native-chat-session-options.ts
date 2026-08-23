@@ -39,6 +39,9 @@ export type MobileNativeChatSessionOptionsController = {
   invokeAction: (id: string) => Promise<boolean>
   /** Track a slash command the user typed themselves (e.g. `/model sonnet`). */
   recordCommand: (command: string) => void
+  /** Structured commands can ask the existing picker to open without forging a TUI action. */
+  pickerRequest?: { id: string; token: number } | null
+  dismissPickerRequest?: (token: number) => void
 }
 
 type PendingOperation = { id: string; token: number }

@@ -1,4 +1,4 @@
-import { AGENT_STATUS_MAX_SUBAGENTS, type AgentSubagentSnapshot } from './agent-status-types'
+import { AGENT_STATUS_MAX_SUBAGENTS, type AgentSubagentSnapshot } from './agent-subagent-snapshot'
 import type { ClaudeBackgroundAgentTask } from './claude-background-task-inventory'
 
 /** Mirrors the wire-normalization id cap in agent-status-types. Enforced at

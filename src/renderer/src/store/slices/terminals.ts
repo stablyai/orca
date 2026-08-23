@@ -51,7 +51,11 @@ import type { AiVaultSessionTitle } from '../../../../shared/ai-vault-session-ti
 import { scheduleRuntimeGraphSync } from '@/runtime/sync-runtime-graph'
 import { terminalLayoutEqual } from '@/lib/terminal-layout-equality'
 import { sweepRetiredTerminalTabState } from './retired-terminal-tab-state-sweep'
-import { clearTransientTerminalState, emptyLayoutSnapshot } from './terminal-helpers'
+import {
+  clearTransientTerminalState,
+  emptyLayoutSnapshot,
+  singlePaneLayoutSnapshot
+} from './terminal-helpers'
 import {
   collectReleasedLeafIds,
   hydrateWorkspaceTerminalRows,
@@ -489,6 +493,40 @@ export type AutomaticAgentResumeClaim = {
   providerSession: AgentProviderSessionMetadata
 }
 
+type TabStartupCommand = {
+  command: string
+  /** Renderer-delivered startup input for callers needing xterm paste semantics before the submit Enter. */
+  delivery?: 'terminal-paste'
+  startupCommandDelivery?: StartupCommandDelivery
+  env?: Record<string, string>
+  envToDelete?: string[]
+  launchConfig?: SleepingAgentLaunchConfig
+  resumeProviderSession?: AgentProviderSessionMetadata
+  launchToken?: string
+  launchAgent?: TuiAgent
+  /** Explicit CLI override for host-owned agent launches; omission uses host settings. */
+  agentArgsOverride?: string | null
+  draftPrompt?: string
+  sessionOptions?: Record<string, SessionOptionValue>
+  /** Initial prompt-start status for agents that lack native prompt hooks. */
+  initialAgentStatus?: { agent: TuiAgent; prompt: string }
+  /** Show the restored-session banner when this startup command mounts. */
+  showSessionRestoredBanner?: boolean
+  /** Telemetry for the `agent_started` event; threaded to the pty:spawn handler so it fires only after spawn confirms, not on click-intent. */
+  telemetry?: AgentStartedTelemetry
+}
+
+function normalizeTabStartupCommand(startup: TabStartupCommand): TabStartupCommand {
+  // Why: launchToken is only meaningful for tracked launch-config reuse; plain startup commands must not mint a synthetic token.
+  const launchToken = startup.launchConfig
+    ? (startup.launchToken ?? createBrowserUuid())
+    : undefined
+  return {
+    ...startup,
+    ...(launchToken ? { launchToken } : {})
+  }
+}
+
 export type CodexRestartNotice = {
   previousAccountLabel: string
   nextAccountLabel: string
@@ -555,31 +593,7 @@ export type TerminalSlice = {
     resolution: Pick<NativeChatLaunchDraft, 'createdAt' | 'text'>
   ) => void
   clearNativeChatLaunchDraft: (tabId: string) => void
-  pendingStartupByTabId: Record<
-    string,
-    {
-      command: string
-      /** Renderer-delivered startup input for callers needing xterm paste semantics before the submit Enter. */
-      delivery?: 'terminal-paste'
-      startupCommandDelivery?: StartupCommandDelivery
-      env?: Record<string, string>
-      envToDelete?: string[]
-      launchConfig?: SleepingAgentLaunchConfig
-      resumeProviderSession?: AgentProviderSessionMetadata
-      launchToken?: string
-      launchAgent?: TuiAgent
-      /** Explicit CLI override for host-owned agent launches; omission uses host settings. */
-      agentArgsOverride?: string | null
-      draftPrompt?: string
-      sessionOptions?: Record<string, SessionOptionValue>
-      /** Initial prompt-start status for agents that lack native prompt hooks. */
-      initialAgentStatus?: { agent: TuiAgent; prompt: string }
-      /** Show the restored-session banner when this startup command mounts. */
-      showSessionRestoredBanner?: boolean
-      /** Telemetry for the `agent_started` event; threaded to the pty:spawn handler so it fires only after spawn confirms, not on click-intent. */
-      telemetry?: AgentStartedTelemetry
-    }
-  >
+  pendingStartupByTabId: Record<string, TabStartupCommand>
   pendingInitialCwdByTabId: Record<string, string>
   /** Queued setup-split requests; TerminalPane splits and runs the command in a new pane so the main terminal stays immediately interactive. */
   pendingSetupSplitByTabId: Record<
@@ -590,6 +604,9 @@ export type TerminalSlice = {
   pendingIssueCommandSplitByTabId: Record<string, { command: string; env?: Record<string, string> }>
   tabBarOrderByWorktree: Record<string, string[]>
   workspaceSessionReady: boolean
+  /** True after main ownership restoration, renderer PTY adoption, and structured-tab projection settle. */
+  terminalStartupRestorationReady: boolean
+  setTerminalStartupRestorationReady: (value: boolean) => void
   restoredRuntimeHostIdByWorkspaceSessionKey: Record<string, ExecutionHostId>
   defaultTerminalTabsAppliedByWorktreeId: Record<string, true>
   markDefaultTerminalTabsApplied: (worktreeId: string) => void
@@ -620,6 +637,12 @@ export type TerminalSlice = {
     options?: {
       pendingActivationSpawn?: boolean
       initialPtyId?: string
+      /** Stable leaf identity for adopting an already-live pane without changing its pane key. */
+      initialLeafId?: string
+      /** Published atomically with the tab so its first mount cannot spawn a bare shell. */
+      pendingStartup?: TabStartupCommand
+      /** Published atomically with pendingStartup for automatic resume ownership. */
+      automaticResumeClaim?: AutomaticAgentResumeClaim
       activate?: boolean
       recordInteraction?: boolean
       /** Pre-allocated tab id (main mints it for CLI/runtime PTYs with a baked pane key); minted fresh on omit or cross-worktree collision. */
@@ -738,45 +761,13 @@ export type TerminalSlice = {
     sourceTabId: string
     targetTabId: string
   }) => void
-  queueTabStartupCommand: (
-    tabId: string,
-    startup: {
-      command: string
-      delivery?: 'terminal-paste'
-      startupCommandDelivery?: StartupCommandDelivery
-      env?: Record<string, string>
-      envToDelete?: string[]
-      launchConfig?: SleepingAgentLaunchConfig
-      resumeProviderSession?: AgentProviderSessionMetadata
-      launchToken?: string
-      launchAgent?: TuiAgent
-      agentArgsOverride?: string | null
-      draftPrompt?: string
-      sessionOptions?: Record<string, SessionOptionValue>
-      initialAgentStatus?: { agent: TuiAgent; prompt: string }
-      showSessionRestoredBanner?: boolean
-      telemetry?: AgentStartedTelemetry
-    }
-  ) => void
+  queueTabStartupCommand: (tabId: string, startup: TabStartupCommand) => void
   queueTabInitialCwd: (tabId: string, cwd: string) => void
   consumeTabInitialCwd: (tabId: string) => string | null
-  consumeTabStartupCommand: (tabId: string) => {
-    command: string
-    delivery?: 'terminal-paste'
-    startupCommandDelivery?: StartupCommandDelivery
-    env?: Record<string, string>
-    envToDelete?: string[]
-    launchConfig?: SleepingAgentLaunchConfig
-    resumeProviderSession?: AgentProviderSessionMetadata
-    launchToken?: string
-    launchAgent?: TuiAgent
-    agentArgsOverride?: string | null
-    draftPrompt?: string
-    sessionOptions?: Record<string, SessionOptionValue>
-    initialAgentStatus?: { agent: TuiAgent; prompt: string }
-    showSessionRestoredBanner?: boolean
-    telemetry?: AgentStartedTelemetry
-  } | null
+  consumeTabStartupCommand: (
+    tabId: string,
+    expected?: TabStartupCommand
+  ) => TabStartupCommand | null
   queueTabSetupSplit: (
     tabId: string,
     startup: { command: string; env?: Record<string, string>; direction: SetupSplitDirection }
@@ -1068,6 +1059,10 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
   nativeChatLaunchDraftByTabId: {},
   tabBarOrderByWorktree: {},
   workspaceSessionReady: false,
+  terminalStartupRestorationReady: false,
+  setTerminalStartupRestorationReady: (value) => {
+    set({ terminalStartupRestorationReady: value })
+  },
   restoredRuntimeHostIdByWorkspaceSessionKey: {},
   defaultTerminalTabsAppliedByWorktreeId: {},
   markDefaultTerminalTabsApplied: (worktreeId) =>
@@ -1323,6 +1318,15 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
         )
       }
       const id = hintedId !== undefined && !idCollides ? hintedId : createBrowserUuid()
+      const requestedInitialLeafId =
+        options?.initialLeafId && isTerminalLeafId(options.initialLeafId)
+          ? options.initialLeafId
+          : undefined
+      // Why: startup delivery is pane-owned; pin its first leaf so an aborted/remounted renderer retries against the same spawn reservation.
+      const initialLeafId =
+        options?.initialPtyId || options?.pendingStartup
+          ? (requestedInitialLeafId ?? createBrowserUuid())
+          : undefined
       const shouldActivate = options?.activate !== false
       const nextOrdinal = getNextTerminalOrdinal(existing)
       const defaultTitle = `Terminal ${nextOrdinal}`
@@ -1484,9 +1488,23 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
           ...orphanCleanupPatch.ptyIdsByTabId,
           [tab.id]: options?.initialPtyId ? [options.initialPtyId] : []
         },
+        pendingStartupByTabId: options?.pendingStartup
+          ? {
+              ...orphanCleanupPatch.pendingStartupByTabId,
+              [tab.id]: normalizeTabStartupCommand(options.pendingStartup)
+            }
+          : orphanCleanupPatch.pendingStartupByTabId,
+        automaticAgentResumeClaimsByTabId: options?.automaticResumeClaim
+          ? {
+              ...orphanCleanupPatch.automaticAgentResumeClaimsByTabId,
+              [tab.id]: options.automaticResumeClaim
+            }
+          : orphanCleanupPatch.automaticAgentResumeClaimsByTabId,
         terminalLayoutsByTabId: {
           ...orphanCleanupPatch.terminalLayoutsByTabId,
-          [tab.id]: emptyLayoutSnapshot()
+          [tab.id]: initialLeafId
+            ? singlePaneLayoutSnapshot(initialLeafId, options?.initialPtyId)
+            : emptyLayoutSnapshot()
         }
       }
     })
@@ -3668,17 +3686,10 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
   },
 
   queueTabStartupCommand: (tabId, startup) => {
-    // Why: launchToken is only meaningful for tracked launch-config reuse; plain startup commands must not mint a synthetic token.
-    const launchToken = startup.launchConfig
-      ? (startup.launchToken ?? createBrowserUuid())
-      : undefined
     set((s) => ({
       pendingStartupByTabId: {
         ...s.pendingStartupByTabId,
-        [tabId]: {
-          ...startup,
-          ...(launchToken ? { launchToken } : {})
-        }
+        [tabId]: normalizeTabStartupCommand(startup)
       }
     }))
   },
@@ -3705,13 +3716,16 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
     return pending
   },
 
-  consumeTabStartupCommand: (tabId) => {
+  consumeTabStartupCommand: (tabId, expected) => {
     const pending = get().pendingStartupByTabId[tabId]
-    if (!pending) {
+    if (!pending || (expected && pending !== expected)) {
       return null
     }
 
     set((s) => {
+      if (s.pendingStartupByTabId[tabId] !== pending) {
+        return {}
+      }
       const next = { ...s.pendingStartupByTabId }
       delete next[tabId]
       return { pendingStartupByTabId: next }

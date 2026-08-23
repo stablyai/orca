@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { startRuntimeCapabilityProbe } from './runtime-capability-probe'
-import { LogicalClientCutoverError } from './stable-logical-rpc-client'
+import { LogicalClientCutoverError } from './logical-client-cutover-error'
 import type { RpcClient } from './rpc-client'
 import type { RpcResponse } from './types'
 

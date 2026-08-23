@@ -15,6 +15,7 @@ import {
   type ProcessTableCapture,
   type ProcessTableRow
 } from './pty-descendant-termination'
+import { terminateDescendantSnapshotAndWait } from './pty-descendant-exit-verification'
 
 const CAPTURED_AT_MS = Date.parse('Tue Jul 14 12:00:00 2026')
 
@@ -296,6 +297,49 @@ describe('terminateDescendantSnapshot', () => {
     await vi.advanceTimersByTimeAsync(DESCENDANT_KILL_GRACE_MS + DESCENDANT_SNAPSHOT_TIMEOUT_MS)
     expect(sendSignal).not.toHaveBeenCalled()
     expect(vi.getTimerCount()).toBe(0)
+  })
+})
+
+describe('terminateDescendantSnapshotAndWait', () => {
+  beforeEach(() => {
+    vi.useFakeTimers()
+  })
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
+  it('escalates an identity-matched survivor and verifies its exit', async () => {
+    const survivor = row(20, 10, 20)
+    const sendSignal = vi.fn()
+    const readTable = vi
+      .fn()
+      .mockResolvedValueOnce(tableCapture([survivor]))
+      .mockResolvedValueOnce(tableCapture([]))
+
+    const pending = terminateDescendantSnapshotAndWait(snapshot([survivor]), {
+      sendSignal,
+      readTable,
+      graceMs: 0,
+      verifyMs: 200
+    })
+    await vi.advanceTimersByTimeAsync(50)
+
+    await expect(pending).resolves.toBe(true)
+    expect(sendSignal.mock.calls).toEqual([
+      [20, 'SIGTERM'],
+      [20, 'SIGKILL']
+    ])
+  })
+
+  it('does not claim exit when the verification table is unavailable', async () => {
+    const sendSignal = vi.fn()
+    const result = await terminateDescendantSnapshotAndWait(snapshot([row(20, 10, 20)]), {
+      sendSignal,
+      readTable: vi.fn().mockRejectedValue(new Error('ps exploded'))
+    })
+
+    expect(result).toBe(false)
+    expect(sendSignal).toHaveBeenCalledWith(20, 'SIGTERM')
   })
 })
 
