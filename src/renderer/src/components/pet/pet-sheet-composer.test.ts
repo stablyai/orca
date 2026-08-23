@@ -270,6 +270,24 @@ describe('composeHeadSwapSheet', () => {
     expect(placed.y1).toBe(hy1 - 1)
   })
 
+  it('erases only the rectangle the upload fills, leaving the pet at the margins', () => {
+    const [hx0, hy0, hx1, hy1] = rig.head
+    const frame = merged()
+    const placed = uploadBounds(frame)!
+
+    let holes = 0
+    for (let y = hy0; y < hy1; y++) {
+      for (let x = hx0; x < hx1; x++) {
+        const inside = x >= placed.x0 && x <= placed.x1 && y >= placed.y0 && y <= placed.y1
+        if (!inside && frame.data[(y * frame.width + x) * 4 + 3] < 128) {
+          holes++
+        }
+      }
+    }
+
+    expect(holes).toBe(0)
+  })
+
   it('still shows the pet everywhere the upload is not', () => {
     const [hx0, , hx1, hy1] = rig.head
     const frame = merged()

@@ -181,25 +181,29 @@ export function composeRiggedSheet(
 export function composeHeadSwapSheet(head: RgbaImage, petBody: RgbaImage, rig: PetRig): RgbaImage {
   const [hx0, hy0, hx1, hy1] = rig.head
   const merged = blankImage(rig.frame.width, rig.frame.height)
-  // The pet's body first, with its own head erased.
   drawTransformed(merged, petBody, {})
-  clearCell(merged, hx0, hy0, hx1 - hx0, hy1 - hy0)
-  // Then the upload, scaled into the slot it left behind.
   const bounds = subjectBounds(head)
   if (bounds) {
     const sourceWidth = bounds.x1 - bounds.x0 + 1
     const sourceHeight = bounds.y1 - bounds.y0 + 1
     const scale = Math.min((hx1 - hx0) / sourceWidth, (hy1 - hy0) / sourceHeight)
+    const width = Math.round(sourceWidth * scale)
+    const height = Math.round(sourceHeight * scale)
     // Why bottom-anchored and centred: the slot's floor is where a head meets a
     // neck, so that edge has to line up; nothing makes either side of it special.
+    const x0 = hx0 + Math.round((hx1 - hx0 - width) / 2)
+    const y0 = hy1 - height
+    // Why this rectangle and not the whole slot: an upload never matches the
+    // slot's aspect ratio, so erasing the margins bites a hole around the face.
+    clearCell(merged, x0, y0, width, height)
     drawTransformed(merged, head, {
       pivotX: bounds.x0,
-      pivotY: bounds.y1 + 1,
+      pivotY: bounds.y0,
       scaleX: scale,
       scaleY: scale,
-      translateX: hx0 + (hx1 - hx0 - sourceWidth * scale) / 2 - bounds.x0,
-      translateY: hy1 - (bounds.y1 + 1),
-      clip: cellClip(hx0, hy0, hx1 - hx0, hy1 - hy0)
+      translateX: x0 - bounds.x0,
+      translateY: y0 - bounds.y0,
+      clip: cellClip(x0, y0, width, height)
     })
   }
   return composeWholeBodySheet(merged, rig)
