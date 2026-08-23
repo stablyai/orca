@@ -14,6 +14,7 @@ import {
   scheduleWorktreeTrashDeletion
 } from '../worktree-trash'
 import { parseWslPath } from '../wsl'
+import { windowsLongPathGitArgs } from '../../shared/windows-long-path-git-args'
 import type {
   LocalBaseRefRefreshResult,
   LocalBaseRefUpdateSuggestion
@@ -985,7 +986,8 @@ async function performAddWorktree(
 ): Promise<AddWorktreeResult> {
   let localBaseRefRefresh: LocalBaseRefRefreshResult | undefined
   let localBaseRefUpdateSuggestion: LocalBaseRefUpdateSuggestion | undefined
-  const args = ['worktree', 'add']
+  // Why: enable long paths for this Windows checkout without changing user Git config.
+  const args = [...windowsLongPathGitArgs(repoPath), 'worktree', 'add']
   let effectiveBase: string | undefined
   if (noCheckout) {
     args.push('--no-checkout')
@@ -1091,15 +1093,21 @@ export async function addSparseWorktree(
       options
     )
     created = true
+    // Why: `worktree add --no-checkout` writes no files, so these are the calls that
+    // actually materialize the deep path and need the long-path escape hatch.
+    const longPathArgs = windowsLongPathGitArgs(worktreePath)
     await gitExecFileAsync(
       ['sparse-checkout', 'init', '--cone'],
       gitExecOptions(worktreePath, options)
     )
     await gitExecFileAsync(
-      ['sparse-checkout', 'set', '--', ...directories],
+      [...longPathArgs, 'sparse-checkout', 'set', '--', ...directories],
       gitExecOptions(worktreePath, options)
     )
-    await gitExecFileAsync(['checkout', branch], gitExecOptions(worktreePath, options))
+    await gitExecFileAsync(
+      [...longPathArgs, 'checkout', branch],
+      gitExecOptions(worktreePath, options)
+    )
     return addResult
   } catch (error) {
     const wrapped: SparseWorktreeCreateError =
