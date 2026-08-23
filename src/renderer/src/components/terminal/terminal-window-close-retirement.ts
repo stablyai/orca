@@ -212,20 +212,19 @@ export function retireWindowTerminalTabsAndConfirmClose(
       const tabIds = snapshotTerminalTabIds(initialState)
       const plans = buildTerminalTabRetirementPlans(initialState, tabIds, ownedProviderPtyIds)
       for (const [tabId, plan] of plans) {
-        // Why: rowless durable layouts retain membership, not authority to guess an execution host.
+        const cleanupOnlyPtyIds = plan.unroutablePtyIds.filter(
+          (ptyId) => !ownedProviderPtyIds.has(ptyId)
+        )
         if (
+          cleanupOnlyPtyIds.length > 0 &&
           plan.worktreeId === null &&
-          Object.hasOwn(initialState.terminalLayoutsByTabId, tabId) &&
-          plan.ptyIds.every((ptyId) => !ownedProviderPtyIds.has(ptyId))
+          Object.hasOwn(initialState.terminalLayoutsByTabId, tabId)
         ) {
-          const sharedPtyIds = new Set(plan.sharedPtyIds)
+          const movedPtyIds = new Set(cleanupOnlyPtyIds)
           plans.set(tabId, {
             ...plan,
-            ptyIds: [],
-            localOrSshPtyIds: [],
-            runtimeTerminals: [],
-            cleanupOnlyPtyIds: plan.ptyIds.filter((ptyId) => !sharedPtyIds.has(ptyId)),
-            unroutablePtyIds: []
+            cleanupOnlyPtyIds: [...new Set([...plan.cleanupOnlyPtyIds, ...cleanupOnlyPtyIds])],
+            unroutablePtyIds: plan.unroutablePtyIds.filter((ptyId) => !movedPtyIds.has(ptyId))
           })
         }
       }

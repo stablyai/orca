@@ -273,7 +273,7 @@ describe('terminal window close retirement', () => {
         expect(options.precomputedRetirementPlan).toMatchObject({
           tabId: 'ghost-tab',
           worktreeId: null,
-          ptyIds: [],
+          ptyIds: ['pty-ghost'],
           localOrSshPtyIds: [],
           runtimeTerminals: [],
           cleanupOnlyPtyIds: ['pty-ghost'],
@@ -306,6 +306,84 @@ describe('terminal window close retirement', () => {
     await expect(retireWindowTerminalTabsAndConfirmClose(deps)).resolves.toBe('confirmed')
 
     expect(events).toEqual(['close', 'persist:false', 'checkpoint:false:false', 'confirm'])
+  })
+
+  it('preserves an exact runtime close for rowless durable backing', async () => {
+    const state = makeState(
+      {},
+      {
+        terminalLayoutsByTabId: {
+          'runtime-tab': {
+            root: { type: 'leaf', leafId: 'leaf-runtime' },
+            activeLeafId: 'leaf-runtime',
+            expandedLeafId: null,
+            ptyIdsByLeafId: { 'leaf-runtime': 'remote:environment-a@@handle-a' }
+          }
+        }
+      }
+    )
+    const runtimeCloses: unknown[] = []
+
+    await expect(
+      retireWindowTerminalTabsAndConfirmClose(
+        makeDependencies(state, {
+          closeTab: (tabId, options) => {
+            runtimeCloses.push(...options.precomputedRetirementPlan.runtimeTerminals)
+            delete state.terminalLayoutsByTabId[tabId]
+          }
+        })
+      )
+    ).resolves.toBe('confirmed')
+
+    expect(runtimeCloses).toEqual([
+      {
+        ptyId: 'remote:environment-a@@handle-a',
+        environmentId: 'environment-a',
+        handle: 'handle-a'
+      }
+    ])
+  })
+
+  it('routes an owned rowless PTY while cleaning only its ownerless ghost sibling', async () => {
+    const state = makeState(
+      {},
+      {
+        terminalLayoutsByTabId: {
+          'mixed-tab': {
+            root: { type: 'leaf', leafId: 'leaf-owned' },
+            activeLeafId: 'leaf-owned',
+            expandedLeafId: null,
+            ptyIdsByLeafId: {
+              'leaf-owned': 'pty-owned',
+              'leaf-ghost': 'pty-ghost'
+            }
+          }
+        }
+      }
+    )
+    const submitted: unknown[] = []
+
+    await expect(
+      retireWindowTerminalTabsAndConfirmClose(
+        makeDependencies(state, {
+          listOwnedProviderPtyIds: async () => ['pty-owned'],
+          closeTab: (tabId, options) => {
+            submitted.push(options.precomputedRetirementPlan)
+            delete state.terminalLayoutsByTabId[tabId]
+          }
+        })
+      )
+    ).resolves.toBe('confirmed')
+
+    expect(submitted).toEqual([
+      expect.objectContaining({
+        ptyIds: ['pty-owned', 'pty-ghost'],
+        localOrSshPtyIds: ['pty-owned'],
+        runtimeTerminals: [],
+        cleanupOnlyPtyIds: ['pty-ghost'],
+        unroutablePtyIds: []
+      })
+    ])
   })
 
   it('keeps a rowless provider candidate blocked when its route is invalid', async () => {
