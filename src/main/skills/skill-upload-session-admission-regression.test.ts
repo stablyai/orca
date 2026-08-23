@@ -1,5 +1,6 @@
 import { createHash } from 'node:crypto'
 import { mkdtemp, readdir, rm } from 'node:fs/promises'
+import type * as NodeFsPromises from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -7,12 +8,36 @@ import { SkillUploadSessionService } from './skill-upload-session-service'
 
 const roots: string[] = []
 
+const openGate = vi.hoisted(() => ({
+  release: null as Promise<void> | null,
+  started: null as (() => void) | null
+}))
+
+vi.mock('node:fs/promises', async (importOriginal) => {
+  const actual = await importOriginal<typeof NodeFsPromises>()
+  return {
+    ...actual,
+    open: async (path: string, flags: string, mode?: number) => {
+      const handle = await actual.open(path, flags, mode)
+      if (openGate.release) {
+        const release = openGate.release
+        openGate.release = null
+        openGate.started?.()
+        await release
+      }
+      return handle
+    }
+  }
+})
+
 type RetainedPathCleanup = {
   removeFailedCleanup(path: string): Promise<void>
 }
 
 afterEach(async () => {
   vi.useRealTimers()
+  openGate.release = null
+  openGate.started = null
   await Promise.all(roots.splice(0).map((root) => rm(root, { recursive: true, force: true })))
 })
 
@@ -122,5 +147,34 @@ describe('SkillUploadSessionService admission regressions', () => {
     ).resolves.toMatchObject({ acknowledgedOffset: 0 })
     expect(await stagedArchiveCount(uploads)).toBe(1)
     await service.dispose()
+  })
+
+  it('removes an unpublished archive when disposal starts during open', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'orca-skill-upload-admission-'))
+    roots.push(root)
+    const uploads = join(root, 'uploads')
+    const service = new SkillUploadSessionService(uploads)
+    let releaseOpen!: () => void
+    openGate.release = new Promise<void>((resolve) => {
+      releaseOpen = resolve
+    })
+    let markOpenStarted!: () => void
+    const openStarted = new Promise<void>((resolve) => {
+      markOpenStarted = resolve
+    })
+    openGate.started = markOpenStarted
+
+    const begin = service.begin({ package: identity(Buffer.from('opened-during-disposal')) })
+    await openStarted
+    const disposal = service.dispose()
+    releaseOpen()
+    const [beginResult] = await Promise.allSettled([begin])
+    await disposal
+
+    expect(beginResult).toMatchObject({
+      status: 'rejected',
+      reason: expect.objectContaining({ message: 'skill-upload-service-disposed' })
+    })
+    expect(await stagedArchiveCount(uploads)).toBe(0)
   })
 })
