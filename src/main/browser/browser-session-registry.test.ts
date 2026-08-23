@@ -651,10 +651,9 @@ describe('BrowserSessionRegistry', () => {
       expect(browserSessionRegistry.isAllowedPartition(profile.partition)).toBe(false)
     })
 
-    it('accepts workspace scope in createProfile', () => {
-      const profile = browserSessionRegistry.createProfile('workspace', 'Manual Workspace')
-      expect(profile).not.toBeNull()
-      expect(profile!.scope).toBe('workspace')
+    it('rejects creating a workspace profile via generic createProfile', () => {
+      const profile = browserSessionRegistry.createProfile('workspace' as never, 'Manual Workspace')
+      expect(profile).toBeNull()
     })
 
     it('uses folder basename as label', () => {

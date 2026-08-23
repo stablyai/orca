@@ -1,6 +1,6 @@
 import { app, session } from 'electron'
 import { createHash, randomUUID } from 'node:crypto'
-import { join, resolve } from 'node:path'
+import { basename, join, resolve } from 'node:path'
 import { ORCA_BROWSER_PARTITION } from '../../shared/constants'
 import {
   DEFAULT_LOCAL_ORCA_PROFILE_ID,
@@ -183,8 +183,9 @@ class BrowserSessionRegistry {
     options: BrowserSessionProfileCreateOptions = {}
   ): BrowserSessionProfile | null {
     // Why: the registry is also an IPC boundary, so runtime types alone cannot keep invalid values out of persisted metadata.
+    // Why: workspace profiles must only be created through resolveOrCreateWorkspaceProfile with deterministic IDs and folderPath.
     if (
-      (scope !== 'isolated' && scope !== 'imported' && scope !== 'workspace') ||
+      (scope !== 'isolated' && scope !== 'imported') ||
       (options.userAgentMode !== undefined &&
         options.userAgentMode !== 'clean' &&
         options.userAgentMode !== 'native')
@@ -233,7 +234,7 @@ class BrowserSessionRegistry {
 
     const id = BrowserSessionRegistry.workspaceProfileId(normalized)
     const partition = getOrcaProfileBrowserSessionPartition(this.activeOrcaProfileId, id)
-    const folderName = normalized.split('/').pop() ?? normalized.split('\\').pop() ?? 'Workspace'
+    const folderName = basename(normalized) || 'Workspace'
     const profile: BrowserSessionProfile = {
       id,
       scope: 'workspace',
