@@ -52,6 +52,8 @@ import {
   nonInteractiveGitEnv
 } from '../git/runner'
 import { isAbsolute, join, posix } from 'node:path'
+import { convertLocalFolderToGit } from '../git/convert-local-folder-to-git'
+import { convertRemoteFolderToGit } from '../git/convert-remote-folder-to-git'
 import {
   cleanupClaimedCloneTarget,
   claimCloneTarget,
@@ -303,23 +305,42 @@ async function addLocalRepoFromPath(
 
   const resolvedPath = repoKind === 'git' ? getGitRepoRoot(path) : path
   const pathKey = normalizeRuntimePathForComparison(path)
-  const existing = store
-    .getRepos()
-    .find((repo) => !repo.connectionId && normalizeRuntimePathForComparison(repo.path) === pathKey)
-  if (existing) {
-    return { repo: existing, alreadyExisted: true }
+  const resolvedPathKey = normalizeRuntimePathForComparison(resolvedPath)
+  const repos = store.getRepos()
+  const existingAtResolvedPath = repos.find(
+    (repo) => !repo.connectionId && normalizeRuntimePathForComparison(repo.path) === resolvedPathKey
+  )
+  // Why: selecting a nested folder in a Git repository must resolve to the
+  // canonical root before a same-path folder record can be upgraded.
+  if (repoKind === 'git' && resolvedPathKey !== pathKey && existingAtResolvedPath) {
+    return { repo: existingAtResolvedPath, alreadyExisted: true }
   }
 
-  const resolvedPathKey = normalizeRuntimePathForComparison(resolvedPath)
-  if (resolvedPathKey !== pathKey) {
-    const existingAfterRootResolve = store
-      .getRepos()
-      .find(
-        (repo) =>
-          !repo.connectionId && normalizeRuntimePathForComparison(repo.path) === resolvedPathKey
+  const existing = repos.find(
+    (repo) => !repo.connectionId && normalizeRuntimePathForComparison(repo.path) === pathKey
+  )
+  if (existing) {
+    if (repoKind === 'git' && resolvedPathKey === pathKey && isFolderRepo(existing)) {
+      const detected = await detectRepoIconAndUpstream({ repoPath: resolvedPath, kind: 'git' })
+      const updated = store.updateRepo(
+        existing.id,
+        {
+          kind: 'git',
+          ...detected,
+          externalWorktreeVisibility: 'hide',
+          projectHostSetupMethod: existing.projectHostSetupMethod ?? 'imported-existing-folder'
+        },
+        getRepoExecutionHostId(existing)
       )
-    if (existingAfterRootResolve) {
-      return { repo: existingAfterRootResolve, alreadyExisted: true }
+      if (updated) {
+        // Why: conversion retains the tracked folder's identity while enabling
+        // the worktree root required by Git projects.
+        await prepareLocalWorktreeRootForRepo(store, updated)
+        return { repo: updated, alreadyExisted: true }
+      }
+    }
+    if (resolvedPathKey === pathKey) {
+      return { repo: existing, alreadyExisted: true }
     }
   }
 
@@ -369,6 +390,22 @@ async function addLocalRepoFromPath(
   return { repo, alreadyExisted: false }
 }
 
+async function convertLocalFolderToGitRepo(
+  store: Store,
+  path: string
+): Promise<{ repo: Repo } | { error: string }> {
+  const conversion = await convertLocalFolderToGit(path)
+  if (!conversion.ok) {
+    return { error: conversion.error }
+  }
+  const result = await addLocalRepoFromPath(store, path, 'git')
+  if ('error' in result) {
+    return result
+  }
+  emitRepoAdded('folder_picker', result.alreadyExisted, true)
+  return { repo: result.repo }
+}
+
 async function addRemoteRepoFromPath(
   store: Store,
   args: {
@@ -395,7 +432,7 @@ async function addRemoteRepoFromPath(
         normalizeRuntimePathForComparison(repo.path) ===
           normalizeRuntimePathForComparison(resolvedPath)
     )
-  if (existing) {
+  if (existing && (args.kind === 'folder' || !isFolderRepo(existing))) {
     return { repo: existing, alreadyExisted: true }
   }
 
@@ -427,6 +464,32 @@ async function addRemoteRepoFromPath(
           normalizeRuntimePathForComparison(resolvedPath)
     )
   if (existingAfterRootResolve) {
+    if (repoKind === 'git' && isFolderRepo(existingAfterRootResolve)) {
+      const detected = await detectRepoIconAndUpstream({
+        repoPath: resolvedPath,
+        kind: 'git',
+        connectionId: args.connectionId
+      })
+      const updated = store.updateRepo(
+        existingAfterRootResolve.id,
+        {
+          kind: 'git',
+          ...detected,
+          externalWorktreeVisibility: 'hide',
+          projectHostSetupMethod:
+            args.setupMethod ??
+            existingAfterRootResolve.projectHostSetupMethod ??
+            'imported-existing-folder'
+        },
+        getRepoExecutionHostId(existingAfterRootResolve)
+      )
+      if (updated) {
+        getActiveMultiplexer(args.connectionId)?.notify('session.registerRoot', {
+          rootPath: resolvedPath
+        })
+        return { repo: updated, alreadyExisted: true }
+      }
+    }
     return { repo: existingAfterRootResolve, alreadyExisted: true }
   }
 
@@ -726,6 +789,44 @@ async function createRemoteRepo(
     return result
   }
   emitRepoAdded('folder_picker', result.alreadyExisted)
+  return { repo: result.repo }
+}
+
+async function convertRemoteFolderToGitRepo(
+  store: Store,
+  args: { connectionId: string; remotePath: string }
+): Promise<{ repo: Repo } | { error: string }> {
+  const gitProvider = getSshGitProvider(args.connectionId)
+  const fsProvider = getSshFilesystemProvider(args.connectionId)
+  if (!gitProvider || !fsProvider) {
+    return { error: `SSH connection "${args.connectionId}" not found or not connected` }
+  }
+  const host = gitProvider.getHostPlatform?.()
+  if (!host) {
+    return {
+      error: 'SSH host platform is unavailable. Reconnect the SSH target before converting.'
+    }
+  }
+  const resolvedPath = await resolveRemoteHomePath(args.connectionId, args.remotePath ?? '')
+  const conversion = await convertRemoteFolderToGit({
+    connectionId: args.connectionId,
+    path: resolvedPath,
+    host,
+    gitProvider,
+    fsProvider
+  })
+  if (!conversion.ok) {
+    return { error: conversion.error }
+  }
+  const result = await addRemoteRepoFromPath(store, {
+    connectionId: args.connectionId,
+    remotePath: conversion.repoPath,
+    kind: 'git'
+  })
+  if ('error' in result) {
+    return result
+  }
+  emitRepoAdded('folder_picker', result.alreadyExisted, true)
   return { repo: result.repo }
 }
 
@@ -1321,6 +1422,8 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
   ipcMain.removeHandler('repos:searchBaseRefs')
   ipcMain.removeHandler('repos:searchBaseRefDetails')
   ipcMain.removeHandler('repos:addRemote')
+  ipcMain.removeHandler('repos:convertToGit')
+  ipcMain.removeHandler('repos:convertRemoteToGit')
   ipcMain.removeHandler('repos:create')
   ipcMain.removeHandler('repos:createRemote')
   ipcMain.removeHandler('sparsePresets:list')
@@ -1857,6 +1960,37 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
       notifyReposChanged(mainWindow)
       emitRepoAdded('folder_picker', result.alreadyExisted, result.repo.kind === 'git')
       return { repo: result.repo }
+    }
+  )
+
+  // Converts an existing non-git folder into a git repo in place, then registers
+  // it as a full git project — the in-dialog alternative to "Open as Folder"
+  // (orca#3839). emitRepoAdded is handled inside the convert helpers.
+  ipcMain.handle(
+    'repos:convertToGit',
+    async (_event, args: { path: string }): Promise<{ repo: Repo } | { error: string }> => {
+      const result = await convertLocalFolderToGitRepo(store, args.path)
+      if ('error' in result) {
+        return result
+      }
+      invalidateAuthorizedRootsCache()
+      notifyReposChanged(mainWindow)
+      return result
+    }
+  )
+
+  ipcMain.handle(
+    'repos:convertRemoteToGit',
+    async (
+      _event,
+      args: { connectionId: string; remotePath: string }
+    ): Promise<{ repo: Repo } | { error: string }> => {
+      const result = await convertRemoteFolderToGitRepo(store, args)
+      if ('error' in result) {
+        return result
+      }
+      notifyReposChanged(mainWindow)
+      return result
     }
   )
 

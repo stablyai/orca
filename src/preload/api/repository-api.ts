@@ -96,6 +96,12 @@ export type RepositoryApi = {
     name: string
     kind: 'git' | 'folder'
   }) => Promise<{ repo: Repo } | { error: string }>
+  // Why: error union matches the IPC handler's return shape; renderer callers branch on `'error' in result`.
+  convertToGit: (args: { path: string }) => Promise<{ repo: Repo } | { error: string }>
+  convertRemoteToGit: (args: {
+    connectionId: string
+    remotePath: string
+  }) => Promise<{ repo: Repo } | { error: string }>
   isGitAvailable: () => Promise<boolean>
   getDefaultCreateProjectParent: () => Promise<string>
   onCloneProgress: (callback: (data: { phase: string; percent: number }) => void) => () => void

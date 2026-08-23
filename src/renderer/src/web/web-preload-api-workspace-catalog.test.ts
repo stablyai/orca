@@ -83,6 +83,57 @@ describe('web repos preload API', () => {
     ])
   })
 
+  it('attributes converted repos to the paired runtime and allows the longer conversion timeout', async () => {
+    const runtimeCalls: { method: string; params: unknown; options: unknown }[] = []
+    vi.doMock('./web-runtime-client', () => ({
+      WebRuntimeClient: class {
+        call(
+          method: string,
+          params?: unknown,
+          options?: unknown
+        ): Promise<RuntimeRpcResponse<unknown>> {
+          runtimeCalls.push({ method, params, options })
+          return Promise.resolve({
+            id: method,
+            ok: true,
+            result: {
+              repo: {
+                id: 'repo-1',
+                path: '/srv/non-git',
+                displayName: 'non-git',
+                badgeColor: '#000',
+                addedAt: 1,
+                kind: 'git',
+                executionHostId: 'local'
+              }
+            },
+            _meta: { runtimeId: 'runtime-1' }
+          })
+        }
+
+        close(): void {}
+      }
+    }))
+
+    const globals = installBrowserGlobals('Linux')
+    writeStoredRuntimeEnvironment(globals.storage, 'web-server-a')
+    const { installWebPreloadApi } = await import('./web-preload-api')
+    installWebPreloadApi()
+
+    await expect(
+      globals.window.api.repos.convertToGit({ path: '/srv/non-git' })
+    ).resolves.toMatchObject({
+      repo: { id: 'repo-1', executionHostId: 'runtime:web-server-a' }
+    })
+    expect(runtimeCalls).toEqual([
+      {
+        method: 'repo.convertToGit',
+        params: { path: '/srv/non-git' },
+        options: { timeoutMs: 60_000 }
+      }
+    ])
+  })
+
   it('does not reassign an in-flight catalog when the browser pairs to another server', async () => {
     let resolveCatalog!: (response: RuntimeRpcResponse<unknown>) => void
     const pendingCatalog = new Promise<RuntimeRpcResponse<unknown>>((resolve) => {

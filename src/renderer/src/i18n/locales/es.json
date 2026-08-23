@@ -277,7 +277,9 @@
           "3be0f7df04": "No se puede abrir la carpeta en el host seleccionado",
           "15cf5319ec": "{{path}} se verificó en {{hostName}}, pero ese host no reportó ninguna carpeta utilizable.",
           "2dcd706774": "El proyecto también existe en otro perfil",
-          "presenceProfileOverflow": "{{names}} +{{count}} más"
+          "presenceProfileOverflow": "{{names}} +{{count}} más",
+          "24424c2102": "Converted to a Git repository",
+          "e6c1e9dba0": "Failed to convert folder to a Git repository"
         },
         "settings": {
           "e12dab333b": "No se pudo cambiar de servidor",
@@ -4159,7 +4161,11 @@
           "c49fb13492": "No se pudo agregar la carpeta en este host",
           "9a766f33ac": "Esta ruta se verificó en el host SSH.",
           "79fd02cf5f": "Esta ruta se verificó en {{hostName}}.",
-          "8851b77327": "Esta ruta se verificó localmente."
+          "8851b77327": "Esta ruta se verificó localmente.",
+          "15b3ae7310": "This folder isn't a Git repository",
+          "eb079b3809": "Convert to Git Repository",
+          "1d9e5c8007": "Convert it to a Git repository to use worktrees, source control, and code reviews. Or open it as a plain folder with just the editor, terminal, and search.",
+          "2bef0e9e6d": "Converting runs git init, adds a .gitignore if one is missing, and makes an initial commit. Your existing files aren't changed."
         },
         "OrcaYamlTrustDialog": {
           "f3e2b868fb": "Ejecutar hooks",

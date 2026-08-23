@@ -277,7 +277,9 @@
           "3be0f7df04": "无法在所选运行时打开文件夹",
           "15cf5319ec": "已在 {{hostName}} 上检查 {{path}}，但该主机未报告可用文件夹。",
           "2dcd706774": "该项目也存在于另一个配置文件中",
-          "presenceProfileOverflow": "{{names}} 及另外 {{count}} 个"
+          "presenceProfileOverflow": "{{names}} 及另外 {{count}} 个",
+          "24424c2102": "Converted to a Git repository",
+          "e6c1e9dba0": "Failed to convert folder to a Git repository"
         },
         "settings": {
           "e12dab333b": "切换服务器失败",
@@ -4152,7 +4154,11 @@
           "c49fb13492": "添加远程文件夹失败",
           "9a766f33ac": "已在 SSH 主机上检查此路径。",
           "79fd02cf5f": "已在 {{hostName}} 上检查此路径。",
-          "8851b77327": "已在本机检查此路径。"
+          "8851b77327": "已在本机检查此路径。",
+          "15b3ae7310": "This folder isn't a Git repository",
+          "eb079b3809": "Convert to Git Repository",
+          "1d9e5c8007": "Convert it to a Git repository to use worktrees, source control, and code reviews. Or open it as a plain folder with just the editor, terminal, and search.",
+          "2bef0e9e6d": "Converting runs git init, adds a .gitignore if one is missing, and makes an initial commit. Your existing files aren't changed."
         },
         "OrcaYamlTrustDialog": {
           "f3e2b868fb": "运行钩子",

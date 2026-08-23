@@ -1,4 +1,5 @@
-import React, { useCallback } from 'react'
+import React, { useCallback, useState } from 'react'
+import { Loader2 } from 'lucide-react'
 import { toast } from 'sonner'
 import {
   Dialog,
@@ -24,6 +25,8 @@ const NonGitFolderDialog = React.memo(function NonGitFolderDialog() {
   const closeModal = useAppStore((s) => s.closeModal)
   const addNonGitFolder = useAppStore((s) => s.addNonGitFolder)
   const runtimeEnvironments = useAppStore((s) => s.runtimeEnvironments)
+  const convertNonGitFolderToGit = useAppStore((s) => s.convertNonGitFolderToGit)
+  const [isConverting, setIsConverting] = useState(false)
 
   const isOpen = activeModal === 'confirm-non-git-folder'
   const folderPath = typeof modalData.folderPath === 'string' ? modalData.folderPath : ''
@@ -117,26 +120,67 @@ const NonGitFolderDialog = React.memo(function NonGitFolderDialog() {
     closeModal()
   }, [addNonGitFolder, closeModal, folderPath, connectionId, runtimeEnvironmentId])
 
+  const handleConvert = useCallback(() => {
+    if (!folderPath) {
+      return
+    }
+    setIsConverting(true)
+    void (async () => {
+      try {
+        const repo = await convertNonGitFolderToGit({
+          path: folderPath,
+          ...(connectionId ? { connectionId } : {}),
+          runtimeEnvironmentId: runtimeEnvironmentId || null
+        })
+        if (repo) {
+          const ownerOptions = worktreeRefreshOptions(runtimeEnvironmentId || null, connectionId)
+          await useAppStore.getState().fetchWorktrees(repo.id, ownerOptions)
+          const mainWorktree = useAppStore
+            .getState()
+            .worktreesByRepo[repo.id]?.find(
+              (worktree) => worktree.hostId === ownerOptions.executionHostId
+            )
+          if (mainWorktree) {
+            // Why: conversion should visibly replace the folder workflow without
+            // requiring a remove/re-import cycle or a manual sidebar refresh.
+            activateAndRevealWorktree(mainWorktree.id, {
+              sidebarRevealBehavior: 'auto',
+              executionHostId: ownerOptions.executionHostId
+            })
+          }
+          closeModal()
+        }
+      } finally {
+        setIsConverting(false)
+      }
+    })()
+  }, [convertNonGitFolderToGit, closeModal, folderPath, connectionId, runtimeEnvironmentId])
+
   const handleOpenChange = useCallback(
     (open: boolean) => {
-      if (!open) {
+      // Don't let the dialog be dismissed mid-conversion — git is mutating the
+      // folder and a half-closed UI would hide the outcome.
+      if (!open && !isConverting) {
         closeModal()
       }
     },
-    [closeModal]
+    [closeModal, isConverting]
   )
 
   return (
     <Dialog open={isOpen} onOpenChange={handleOpenChange}>
-      <DialogContent className="max-w-sm sm:max-w-sm" showCloseButton={false}>
+      <DialogContent className="max-w-md">
         <DialogHeader>
           <DialogTitle className="text-sm">
-            {translate('auto.components.sidebar.NonGitFolderDialog.e52454b7f6', 'Open as Folder')}
+            {translate(
+              'auto.components.sidebar.NonGitFolderDialog.15b3ae7310',
+              "This folder isn't a Git repository"
+            )}
           </DialogTitle>
           <DialogDescription className="text-xs">
             {translate(
-              'auto.components.sidebar.NonGitFolderDialog.8fba4b8cbb',
-              "This folder isn't a Git repository. You'll have the editor, terminal, and search, but Git-based features won't be available."
+              'auto.components.sidebar.NonGitFolderDialog.1d9e5c8007',
+              'Convert it to a Git repository to use worktrees, source control, and code reviews. Or open it as a plain folder with just the editor, terminal, and search.'
             )}
             <span className="mt-2 block">{checkedHostDescription}</span>
           </DialogDescription>
@@ -148,12 +192,23 @@ const NonGitFolderDialog = React.memo(function NonGitFolderDialog() {
           </div>
         )}
 
+        <p className="text-xs text-muted-foreground">
+          {translate(
+            'auto.components.sidebar.NonGitFolderDialog.2bef0e9e6d',
+            "Converting runs git init, adds a .gitignore if one is missing, and makes an initial commit. Your existing files aren't changed."
+          )}
+        </p>
+
         <DialogFooter>
-          <Button variant="outline" onClick={() => handleOpenChange(false)}>
-            {translate('auto.components.sidebar.NonGitFolderDialog.05b33a17a9', 'Cancel')}
-          </Button>
-          <Button onClick={handleConfirm}>
+          <Button variant="outline" onClick={handleConfirm} disabled={isConverting}>
             {translate('auto.components.sidebar.NonGitFolderDialog.e52454b7f6', 'Open as Folder')}
+          </Button>
+          <Button onClick={handleConvert} disabled={isConverting}>
+            {isConverting && <Loader2 className="size-4 animate-spin" />}
+            {translate(
+              'auto.components.sidebar.NonGitFolderDialog.eb079b3809',
+              'Convert to Git Repository'
+            )}
           </Button>
         </DialogFooter>
       </DialogContent>

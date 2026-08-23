@@ -1764,6 +1764,20 @@ function createReposApi(): NonNullable<Partial<PreloadApi>['repos']> {
       )
       return withRuntimeRepoMutationOwner(owned.result, owned.hostId)
     },
+    convertToGit: async ({ path }) => {
+      invalidateRuntimeWorktreeCaches()
+      const owned = await callRuntimeResultWithOwner<{ repo: Repo } | { error: string }>(
+        'repo.convertToGit',
+        { path },
+        60_000
+      )
+      return withRuntimeRepoMutationOwner(owned.result, owned.hostId)
+    },
+    convertRemoteToGit: async () => {
+      // Why: SSH relay conversion is owned by the desktop main process; paired
+      // web clients cannot run that local SSH IPC path.
+      throw new Error('Converting SSH-host folders is unavailable in paired web clients.')
+    },
     isGitAvailable: async () =>
       (await callRuntimeResult<{ available: boolean }>('repo.gitAvailable')).available,
     getDefaultCreateProjectParent: async () => {

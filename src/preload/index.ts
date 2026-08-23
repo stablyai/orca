@@ -710,6 +710,10 @@ const api = {
 
     create: (args) => ipcRenderer.invoke('repos:create', args),
 
+    convertToGit: (args) => ipcRenderer.invoke('repos:convertToGit', args),
+
+    convertRemoteToGit: (args) => ipcRenderer.invoke('repos:convertRemoteToGit', args),
+
     isGitAvailable: (): Promise<boolean> => ipcRenderer.invoke('repos:isGitAvailable'),
 
     getDefaultCreateProjectParent: (): Promise<string> =>

@@ -127,6 +127,7 @@ import { dirname, isAbsolute, join, resolve } from 'node:path'
 import { mkdir, readFile, readdir, rm, stat } from 'node:fs/promises'
 import { resolveWorktreeCreateBase } from '../worktree-create-base'
 import { resolveWorktreeAddBaseRef } from '../../shared/worktree/base-ref'
+import { convertLocalFolderToGit } from '../git/convert-local-folder-to-git'
 import { OrchestrationDb } from './orchestration/db'
 import type { DispatchStatus } from './orchestration/types'
 import { reconcileRequestedWorkerTerminalReleases } from './orchestration/worker-terminal-release-reconciliation'
@@ -21112,6 +21113,28 @@ export class OrcaRuntimeService {
       return runtimeRepoMatchesExecutionHost(repo, executionHostId)
     })
     if (existing) {
+      if (kind === 'git' && isFolderRepo(existing)) {
+        const detected = await detectRepoIconAndUpstream({ repoPath: path, kind: 'git' })
+        const updated = this.store.updateRepo(
+          existing.id,
+          {
+            kind: 'git',
+            ...detected,
+            externalWorktreeVisibility: 'hide',
+            projectHostSetupMethod: existing.projectHostSetupMethod ?? 'imported-existing-folder'
+          },
+          getRepoExecutionHostId(existing)
+        )
+        if (!updated) {
+          throw new Error(`Project disappeared before it could be converted to Git: ${existing.id}`)
+        }
+        await prepareLocalWorktreeRootForRepo(this.store, updated)
+        invalidateAuthorizedRootsCache()
+        this.invalidateResolvedWorktreeCache()
+        this.invalidateWorktreeScanCacheForRepo(updated.id)
+        this.notifyReposChanged()
+        return updated
+      }
       // Only a runtime host backfills a legacy unstamped repo. An unstamped repo is
       // indistinguishable from a genuine local repo (both have null executionHostId and
       // connectionId), so we never stamp local/ssh onto it — that would re-attribute a
@@ -21142,7 +21165,13 @@ export class OrcaRuntimeService {
       ...detected,
       addedAt: Date.now(),
       kind,
-      ...(kind === 'git' ? { externalWorktreeVisibilityLegacy: false } : {})
+      ...(kind === 'git'
+        ? {
+            externalWorktreeVisibility: 'hide' as const,
+            externalWorktreeVisibilityLegacy: false,
+            projectHostSetupMethod: 'imported-existing-folder' as const
+          }
+        : {})
     }
     this.store.addRepo(repo)
     await prepareLocalWorktreeRootForRepo(this.store, repo)
@@ -21267,6 +21296,19 @@ export class OrcaRuntimeService {
     this.invalidateWorktreeScanCacheForRepo(repo.id)
     this.notifyReposChanged()
     return { repo: this.store.getRepo(repo.id) ?? repo }
+  }
+
+  async convertRepoToGit(path: string): Promise<{ repo: Repo } | { error: string }> {
+    if (!this.store) {
+      throw new Error('runtime_unavailable')
+    }
+    const conversion = await convertLocalFolderToGit(path)
+    if (!conversion.ok) {
+      return { error: conversion.error }
+    }
+
+    const repo = await this.addRepo(path, 'git')
+    return { repo }
   }
 
   async cloneRepo(

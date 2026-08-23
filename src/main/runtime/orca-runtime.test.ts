@@ -7977,6 +7977,34 @@ describe('OrcaRuntimeService', () => {
     expect(prepareLocalWorktreeRootForRepoMock).toHaveBeenCalledWith(runtimeStore, repo)
   })
 
+  it('fails a folder-to-git upgrade when the repo disappears during detection', async () => {
+    const tempRoot = await mkdtemp(join(tmpdir(), 'orca-runtime-folder-upgrade-race-'))
+    execFileSync('git', ['init', tempRoot], { stdio: 'ignore' })
+    const existing = {
+      id: 'runtime-folder-upgrade-race',
+      path: tempRoot,
+      displayName: 'folder',
+      badgeColor: 'blue',
+      addedAt: 1,
+      kind: 'folder' as const
+    }
+    const runtimeStore = {
+      ...store,
+      getRepos: () => [existing],
+      updateRepo: vi.fn(() => null)
+    }
+    const runtime = new OrcaRuntimeService(runtimeStore as never)
+
+    try {
+      await expect(runtime.addRepo(tempRoot, 'git')).rejects.toThrow(
+        `Project disappeared before it could be converted to Git: ${existing.id}`
+      )
+      expect(prepareLocalWorktreeRootForRepoMock).not.toHaveBeenCalled()
+    } finally {
+      await rm(tempRoot, { recursive: true, force: true })
+    }
+  })
+
   it('sets up an existing folder on a fresh runtime after importing the repo project', async () => {
     const tempRoot = await mkdtemp(join(tmpdir(), 'orca-runtime-project-setup-'))
     const repos: Record<string, unknown>[] = []

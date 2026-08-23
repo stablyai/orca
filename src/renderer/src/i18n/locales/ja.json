@@ -277,7 +277,9 @@
           "3be0f7df04": "選択したランタイムでフォルダーを開けません",
           "15cf5319ec": "{{path}} は {{hostName}} でチェックされましたが、そのホストは使用可能なフォルダーを報告しませんでした。",
           "2dcd706774": "プロジェクトは別のプロファイルにも存在します",
-          "presenceProfileOverflow": "{{names}} 他 {{count}} 件"
+          "presenceProfileOverflow": "{{names}} 他 {{count}} 件",
+          "24424c2102": "Converted to a Git repository",
+          "e6c1e9dba0": "Failed to convert folder to a Git repository"
         },
         "settings": {
           "e12dab333b": "サーバーの切り替えに失敗しました",
@@ -4140,7 +4142,11 @@
           "c49fb13492": "このホスト上でのフォルダーの追加に失敗しました",
           "9a766f33ac": "このパスは SSH ホストでチェックされました。",
           "79fd02cf5f": "このパスは {{hostName}} でチェックされました。",
-          "8851b77327": "このパスはローカルでチェックされました。"
+          "8851b77327": "このパスはローカルでチェックされました。",
+          "15b3ae7310": "This folder isn't a Git repository",
+          "eb079b3809": "Convert to Git Repository",
+          "1d9e5c8007": "Convert it to a Git repository to use worktrees, source control, and code reviews. Or open it as a plain folder with just the editor, terminal, and search.",
+          "2bef0e9e6d": "Converting runs git init, adds a .gitignore if one is missing, and makes an initial commit. Your existing files aren't changed."
         },
         "OrcaYamlTrustDialog": {
           "f3e2b868fb": "フックを実行する",
