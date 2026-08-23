@@ -112,4 +112,110 @@ describe('window quit lifecycle', () => {
     await expect(completed).rejects.toBe(stageError)
     expect(calls).toEqual(['stage', 'ssh-shutdown', 'kill-pty', 'flush'])
   })
+
+  it('continues kill and flush after synchronous SSH shutdown failure', async () => {
+    const calls: string[] = []
+    const sshError = new Error('ssh failed')
+    let stagedState = ''
+    let durableState = ''
+
+    const completed = finishWindowSessionPersistenceForQuit({
+      transferFence: Promise.resolve(),
+      stageSessions: () => {
+        calls.push('stage')
+        stagedState = 'rollback-snapshot'
+      },
+      beginSshShutdown: () => {
+        calls.push('ssh-shutdown')
+        throw sshError
+      },
+      killAllPty: () => calls.push('kill-pty'),
+      flushStore: () => {
+        calls.push('flush')
+        durableState = stagedState
+        return Promise.resolve()
+      }
+    })
+
+    await expect(completed).rejects.toBe(sshError)
+    expect(calls).toEqual(['stage', 'ssh-shutdown', 'kill-pty', 'flush'])
+    expect(durableState).toBe('rollback-snapshot')
+  })
+
+  it('continues flush after synchronous PTY kill failure', async () => {
+    const calls: string[] = []
+    const killError = new Error('kill failed')
+    let stagedState = ''
+    let durableState = ''
+
+    const completed = finishWindowSessionPersistenceForQuit({
+      transferFence: Promise.resolve(),
+      stageSessions: () => {
+        calls.push('stage')
+        stagedState = 'rollback-snapshot'
+      },
+      beginSshShutdown: () => {
+        calls.push('ssh-shutdown')
+        return Promise.resolve()
+      },
+      killAllPty: () => {
+        calls.push('kill-pty')
+        throw killError
+      },
+      flushStore: () => {
+        calls.push('flush')
+        durableState = stagedState
+        return Promise.resolve()
+      }
+    })
+
+    await expect(completed).rejects.toBe(killError)
+    expect(calls).toEqual(['stage', 'ssh-shutdown', 'kill-pty', 'flush'])
+    expect(durableState).toBe('rollback-snapshot')
+  })
+
+  it('reports the first rejected teardown promise after all returned promises settle', async () => {
+    const sshError = new Error('ssh rejected')
+    const flushError = new Error('flush rejected')
+    const calls: string[] = []
+
+    const completed = finishWindowSessionPersistenceForQuit({
+      transferFence: Promise.resolve(),
+      stageSessions: () => calls.push('stage'),
+      beginSshShutdown: () => {
+        calls.push('ssh-shutdown')
+        return Promise.reject(sshError)
+      },
+      killAllPty: () => calls.push('kill-pty'),
+      flushStore: () => {
+        calls.push('flush')
+        return Promise.reject(flushError)
+      }
+    })
+
+    await expect(completed).rejects.toBe(sshError)
+    expect(calls).toEqual(['stage', 'ssh-shutdown', 'kill-pty', 'flush'])
+  })
+
+  it('reports a synchronous store flush failure after prior teardown steps run once', async () => {
+    const flushError = new Error('flush failed')
+    const calls: string[] = []
+
+    const completed = finishWindowSessionPersistenceForQuit({
+      transferFence: Promise.resolve(),
+      stageSessions: () => calls.push('stage'),
+      beginSshShutdown: () => {
+        calls.push('ssh-shutdown')
+        return Promise.resolve()
+      },
+      killAllPty: () => calls.push('kill-pty'),
+      flushStore: () => {
+        calls.push('flush')
+        throw flushError
+      }
+    })
+
+    await expect(completed).rejects.toBe(flushError)
+    expect(calls).toEqual(['stage', 'ssh-shutdown', 'kill-pty', 'flush'])
+  })
 })

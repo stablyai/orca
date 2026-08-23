@@ -42,18 +42,39 @@ export function createWindowQuitLifecycle(options: WindowQuitLifecycleOptions): 
 export async function finishWindowSessionPersistenceForQuit(
   options: WindowQuitPersistenceOptions
 ): Promise<void> {
-  await Promise.allSettled([options.transferFence])
-  let stageError: unknown
+  const errors: unknown[] = []
+  const [transferResult] = await Promise.allSettled([options.transferFence])
+  if (transferResult.status === 'rejected') {
+    errors.push(transferResult.reason)
+  }
   try {
     options.stageSessions()
   } catch (error) {
-    stageError = error
+    errors.push(error)
   }
-  const sshShutdown = options.beginSshShutdown()
-  options.killAllPty()
-  const storeFlush = options.flushStore()
-  await Promise.allSettled([sshShutdown, storeFlush])
-  if (stageError) {
-    throw stageError
+  let sshShutdown: Promise<unknown> = Promise.resolve()
+  try {
+    sshShutdown = options.beginSshShutdown()
+  } catch (error) {
+    errors.push(error)
+  }
+  try {
+    options.killAllPty()
+  } catch (error) {
+    errors.push(error)
+  }
+  let storeFlush: Promise<unknown> = Promise.resolve()
+  try {
+    storeFlush = options.flushStore()
+  } catch (error) {
+    errors.push(error)
+  }
+  for (const result of await Promise.allSettled([sshShutdown, storeFlush])) {
+    if (result.status === 'rejected') {
+      errors.push(result.reason)
+    }
+  }
+  if (errors.length > 0) {
+    throw errors[0]
   }
 }
