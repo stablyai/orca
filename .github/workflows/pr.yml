@@ -469,15 +469,15 @@ jobs:
   # files, so no Windows regression in the other six thousand was ever visible
   # here — every one of them was merged green.
   #
-  # Why continue-on-error: the suite does not pass on Windows yet. Blocking now
-  # would stop every PR on failures none of them caused. The value today is that
-  # the list is on screen; when it reaches zero this flag comes off and the job
-  # becomes a real gate.
+  # Why continue-on-error is still set even though the failure list reached zero
+  # and config/windows-suite-baseline.json is now {}: that zero was measured on a
+  # developer machine. This branch's workflow runs are still awaiting maintainer
+  # approval, so nobody has read the runner's own results yet — and the runner is
+  # elevated, so the ~61 symlink cases that skip locally will execute there for
+  # the first time. The flag comes off once a green run on the runner exists.
   #
-  # Why no baseline comparison: config/windows-suite-baseline.json is measured
-  # on a developer machine, and a runner differs in ways that move the numbers —
-  # it is elevated, so symlink cases that skip locally run here. That baseline is
-  # for local iteration; this job reports what the runner itself sees.
+  # Why no baseline comparison: the baseline is for local iteration and cannot
+  # account for that elevation difference; this job reports what the runner sees.
   test_windows:
     name: tests windows ${{ matrix.shard }}/${{ matrix.shard_total }}
     needs: [code_paths]
