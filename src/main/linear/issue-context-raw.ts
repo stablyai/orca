@@ -22,6 +22,7 @@ export type RawIssue = {
   branchName?: string | null
   createdAt?: string | null
   updatedAt?: string | null
+  sortOrder?: number | null
   state?: RawNamedEntity | null
   team?: (RawNamedEntity & { key?: string | null }) | null
   project?: RawNamedEntity | null
@@ -121,6 +122,7 @@ export const ISSUE_FIELDS = `
   branchName
   createdAt
   updatedAt
+  sortOrder
   state { id name type color }
   team { id name key color }
   project { id name color }
@@ -239,7 +241,8 @@ export function mapIssue(issue: RawIssue): LinearIssueSummary {
     dueDate: issue.dueDate,
     branchName: issue.branchName,
     createdAt: issue.createdAt,
-    updatedAt: issue.updatedAt
+    updatedAt: issue.updatedAt,
+    sortOrder: issue.sortOrder
   }
 }
 
@@ -259,7 +262,8 @@ export function pickSearchIssue(
     priorityLabel: issue.priorityLabel,
     estimate: issue.estimate,
     dueDate: issue.dueDate,
-    updatedAt: issue.updatedAt
+    updatedAt: issue.updatedAt,
+    sortOrder: issue.sortOrder
   }
 }
 

@@ -63,9 +63,23 @@ const LIST_ISSUES_QUERY = `
 export async function listMcpIssues(
   request: LinearMcpIssueListRequest
 ): Promise<LinearMcpIssueListResult> {
+  if (request.orderBy === 'sortOrder' && request.cursor) {
+    throw linearError(
+      'linear_invalid_order',
+      'Manual issue ordering cannot start from a pagination cursor.',
+      { nextSteps: ['Remove --cursor so Orca can rank the complete filtered issue list.'] }
+    )
+  }
   const pagination = resolveIssueListCursor(request)
   const limit = resolveLimit(request.limit)
   const orderBy = request.orderBy ?? 'updatedAt'
+  if (orderBy === 'sortOrder' && pagination.workspaceId === 'all') {
+    throw linearError(
+      'linear_invalid_order',
+      'Linear manual issue order cannot be compared across workspaces.',
+      { nextSteps: ['Select one workspace before requesting manual issue order.'] }
+    )
+  }
   const { entries, failures: entryFailures } = getIssueListEntries(pagination.workspaceId)
   if (entries.length === 0) {
     if (entryFailures[0]) {
@@ -82,11 +96,12 @@ export async function listMcpIssues(
   }
   // One deadline for the whole call, so fanning out over many workspaces cannot multiply it.
   const deadline = Date.now() + LIST_ISSUES_READ_BUDGET_MS
+  const readLimit = orderBy === 'sortOrder' ? null : limit
   const { pages, failures } = await readIssueListWorkspaces(
     entries,
     pagedRequest,
-    { limit, deadline },
-    orderBy,
+    { limit: readLimit, deadline },
+    orderBy === 'sortOrder' ? 'updatedAt' : orderBy,
     entryFailures
   )
   const issues = pages.flatMap((page) => page.issues)
@@ -105,7 +120,11 @@ export async function listMcpIssues(
       limit,
       returned: issues.length,
       hasMore,
-      ...(hasMore && workspaceId !== 'all' && pages.length === 1 && pages[0].nextCursor
+      ...(orderBy !== 'sortOrder' &&
+      hasMore &&
+      workspaceId !== 'all' &&
+      pages.length === 1 &&
+      pages[0].nextCursor
         ? { nextCursor: encodeIssueListCursor(workspaceId, pages[0].nextCursor) }
         : {}),
       orderBy,
@@ -226,7 +245,20 @@ function resolveLimit(limit: number | undefined): number | null {
 function compareIssues(
   left: LinearMcpIssueListResult['issues'][number],
   right: LinearMcpIssueListResult['issues'][number],
-  orderBy: 'createdAt' | 'updatedAt'
+  orderBy: 'createdAt' | 'updatedAt' | 'sortOrder'
 ): number {
+  if (orderBy === 'sortOrder') {
+    const leftRank = finiteRank(left.sortOrder)
+    const rightRank = finiteRank(right.sortOrder)
+    return (
+      leftRank - rightRank ||
+      left.workspace.id.localeCompare(right.workspace.id) ||
+      left.identifier.localeCompare(right.identifier)
+    )
+  }
   return (right[orderBy] ?? '').localeCompare(left[orderBy] ?? '')
+}
+
+function finiteRank(value: number | null | undefined): number {
+  return typeof value === 'number' && Number.isFinite(value) ? value : Number.POSITIVE_INFINITY
 }

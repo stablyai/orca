@@ -21,6 +21,14 @@ export async function dispatchRemoteLinearListIssues(
     throw new RemoteCliArgumentError('invalid_argument', '--priority must be between 0 and 4')
   }
   const limit = optionalPositiveInteger(parsed.flags, 'limit')
+  const cursor = optionalString(parsed.flags, 'cursor')
+  const issueOrder = orderBy(parsed.flags)
+  if (issueOrder === 'sortOrder' && cursor) {
+    throw new RemoteCliArgumentError(
+      'invalid_argument',
+      '--cursor cannot be used with --order-by sortOrder'
+    )
+  }
   const request: LinearMcpIssueListRequest = {
     team: optionalString(parsed.flags, 'team'),
     cycle: optionalString(parsed.flags, 'cycle'),
@@ -28,8 +36,8 @@ export async function dispatchRemoteLinearListIssues(
     limit,
     query: optionalString(parsed.flags, 'query'),
     state: optionalString(parsed.flags, 'state'),
-    cursor: optionalString(parsed.flags, 'cursor'),
-    orderBy: orderBy(parsed.flags),
+    cursor,
+    orderBy: issueOrder,
     project: optionalString(parsed.flags, 'project'),
     release: optionalString(parsed.flags, 'release'),
     assignee: optionalString(parsed.flags, 'assignee'),
@@ -83,8 +91,16 @@ function optionalPositiveInteger(
 
 function orderBy(flags: Map<string, string | boolean>): LinearMcpIssueListRequest['orderBy'] {
   const value = optionalString(flags, 'order-by')
-  if (value === undefined || value === 'createdAt' || value === 'updatedAt') {
+  if (
+    value === undefined ||
+    value === 'createdAt' ||
+    value === 'updatedAt' ||
+    value === 'sortOrder'
+  ) {
     return value
   }
-  throw new RemoteCliArgumentError('invalid_argument', '--order-by must be createdAt or updatedAt')
+  throw new RemoteCliArgumentError(
+    'invalid_argument',
+    '--order-by must be createdAt, updatedAt, or sortOrder'
+  )
 }

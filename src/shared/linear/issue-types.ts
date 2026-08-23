@@ -32,6 +32,7 @@ export type LinearIssue = {
   priority: number
   dueDate?: string | null
   updatedAt: string
+  sortOrder?: number | null
 }
 
 export type LinearIssueChildSummary = {

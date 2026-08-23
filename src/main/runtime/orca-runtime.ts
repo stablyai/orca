@@ -35830,6 +35830,12 @@ export class OrcaRuntimeService {
         ...(project.url ? { url: project.url } : {}),
         ...(project.workspaceId ? { workspaceId: project.workspaceId } : {}),
         ...(project.workspaceName ? { workspaceName: project.workspaceName } : {}),
+        ...(project.priority !== undefined ? { priority: project.priority } : {}),
+        ...(project.priorityLabel !== undefined ? { priorityLabel: project.priorityLabel } : {}),
+        ...(project.sortOrder !== undefined ? { sortOrder: project.sortOrder } : {}),
+        ...(project.prioritySortOrder !== undefined
+          ? { prioritySortOrder: project.prioritySortOrder }
+          : {}),
         ...(project.teams ? { teams: project.teams } : {})
       }))
       const workspaceErrors = (result.errors ?? []).map((error) => ({
@@ -35886,6 +35892,7 @@ export class OrcaRuntimeService {
           estimate: issue.estimate,
           dueDate: issue.dueDate,
           updatedAt: issue.updatedAt,
+          sortOrder: issue.sortOrder,
           priorityLabel: linearPriorityLabel(issue.priority),
           workspace: {
             id: issue.workspaceId ?? workspaceId ?? '',

@@ -44,6 +44,7 @@ function rawIssue(id: string) {
     url: `https://linear.app/${id}`,
     priority: 0,
     updatedAt: '2026-01-01T00:00:00.000Z',
+    sortOrder: 42,
     labelIds: [],
     state: { name: 'Todo', type: 'unstarted', color: '#888888' },
     team: { id: 'team-1', name: 'Team', key: 'TM' },
@@ -216,8 +217,9 @@ describe('Linear project queries', () => {
 
     refreshRequest.resolve(projectIssuesResponse('LIN-FRESH'))
     await expect(refreshPromise).resolves.toMatchObject({
-      items: [{ id: 'LIN-FRESH' }]
+      items: [{ id: 'LIN-FRESH', sortOrder: 42 }]
     })
+    expect(rawRequest.mock.calls[1]?.[0]).toContain('sortOrder')
 
     staleRequest.resolve(projectIssuesResponse('LIN-STALE'))
     await expect(stalePromise).resolves.toMatchObject({
@@ -337,6 +339,8 @@ describe('Linear project queries', () => {
             description: 'Summary',
             content: 'Brief',
             priority: 2,
+            sortOrder: 12.5,
+            prioritySortOrder: 3.5,
             targetDate: '2026-08-01',
             teams: { nodes: [{ id: 'team-1', name: 'Team', key: 'TM' }] }
           }
@@ -370,6 +374,8 @@ describe('Linear project queries', () => {
         description: 'Summary',
         content: 'Brief',
         priority: 2,
+        sortOrder: 12.5,
+        prioritySortOrder: 3.5,
         targetDate: '2026-08-01',
         teams: [{ id: 'team-1', name: 'Team', key: 'TM' }]
       }
@@ -465,8 +471,9 @@ describe('Linear project queries', () => {
 
     refreshRequest.resolve(customViewIssuesResponse('ISSUE-FRESH'))
     await expect(refreshPromise).resolves.toMatchObject({
-      items: [{ id: 'ISSUE-FRESH' }]
+      items: [{ id: 'ISSUE-FRESH', sortOrder: 42 }]
     })
+    expect(rawRequest.mock.calls[1]?.[0]).toContain('sortOrder')
 
     staleRequest.resolve(customViewIssuesResponse('ISSUE-STALE'))
     await expect(stalePromise).resolves.toMatchObject({

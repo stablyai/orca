@@ -1,4 +1,4 @@
-import type { LinearProjectListResult } from './agent-result-types'
+import type { LinearProjectListResult } from './project-types'
 import { appendLinearListTruncation } from './list-truncation-format'
 
 // Why: non-JSON project output aligns ids with the existing compact Linear tables.

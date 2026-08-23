@@ -185,6 +185,8 @@ function isLinearProjectListProject(project: unknown): boolean {
     typeof project.name === 'string' &&
     (project.workspaceId === undefined || typeof project.workspaceId === 'string') &&
     (project.workspaceName === undefined || typeof project.workspaceName === 'string') &&
+    (project.sortOrder == null || typeof project.sortOrder === 'number') &&
+    (project.prioritySortOrder == null || typeof project.prioritySortOrder === 'number') &&
     (project.teams === undefined ||
       (Array.isArray(project.teams) && project.teams.every(isLinearProjectTeam)))
   )

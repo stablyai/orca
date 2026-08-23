@@ -48,6 +48,10 @@ function issueNode(id: string, identifier: string, updatedAt: string, priority?:
   }
 }
 
+function rankedIssueNode(id: string, identifier: string, sortOrder: number) {
+  return { ...issueNode(id, identifier, '2026-07-01T00:00:00.000Z'), sortOrder }
+}
+
 function pageResponse(
   nodes: ReturnType<typeof issueNode>[],
   hasNextPage: boolean,
@@ -113,6 +117,55 @@ describe('list-issues pagination contract', () => {
 
     expect(result.issues).toHaveLength(1)
     expect(result.truncated).toBe(false)
+  })
+
+  it('reads every provider page before applying manual issue order and limit', async () => {
+    rawRequest
+      .mockResolvedValueOnce(
+        pageResponse(
+          [rankedIssueNode('issue-1', 'ENG-1', 30), rankedIssueNode('issue-2', 'ENG-2', 20)],
+          true,
+          'rank-page-2'
+        )
+      )
+      .mockResolvedValueOnce(
+        pageResponse(
+          [rankedIssueNode('issue-3', 'ENG-3', 10), rankedIssueNode('issue-4', 'ENG-4', 40)],
+          false
+        )
+      )
+    const { listMcpIssues } = await import('./mcp-issue-list')
+
+    const result = await listMcpIssues({ limit: 2, orderBy: 'sortOrder' })
+
+    expect(result.issues.map((issue) => issue.identifier)).toEqual(['ENG-3', 'ENG-2'])
+    expect(result.issues.map((issue) => issue.sortOrder)).toEqual([10, 20])
+    expect(result.meta).toMatchObject({ orderBy: 'sortOrder', hasMore: true, returned: 2 })
+    expect(result.meta.nextCursor).toBeUndefined()
+    expect(rawRequest).toHaveBeenCalledTimes(2)
+    expect(rawRequest.mock.calls[0]?.[1]).toMatchObject({ first: 250, orderBy: 'updatedAt' })
+    expect(rawRequest.mock.calls[1]?.[1]).toMatchObject({ after: 'rank-page-2' })
+  })
+
+  it('rejects a cursor that would omit earlier issues from manual ordering', async () => {
+    const { listMcpIssues } = await import('./mcp-issue-list')
+
+    await expect(listMcpIssues({ cursor: 'next', orderBy: 'sortOrder' })).rejects.toMatchObject({
+      code: 'linear_invalid_order'
+    })
+  })
+
+  it('rejects manual ordering across workspaces because ranks are workspace-local', async () => {
+    const { listMcpIssues } = await import('./mcp-issue-list')
+
+    await expect(listMcpIssues({ workspaceId: 'all', orderBy: 'sortOrder' })).rejects.toMatchObject(
+      {
+        code: 'linear_invalid_order',
+        data: { nextSteps: ['Select one workspace before requesting manual issue order.'] }
+      }
+    )
+    expect(getClients).not.toHaveBeenCalled()
+    expect(rawRequest).not.toHaveBeenCalled()
   })
 
   it('replays an issued cursor without --workspace', async () => {

@@ -18,6 +18,7 @@ export const LINEAR_ERROR_CODES = [
   'linear_issue_not_found',
   'linear_workspace_ambiguous',
   'linear_invalid_workspace',
+  'linear_invalid_order',
   'linear_invalid_state',
   'linear_invalid_assignee',
   'linear_invalid_label',
@@ -75,7 +76,6 @@ export type {
   LinearIssueCommentNode,
   LinearIssueContextResult,
   LinearIssueListResult,
-  LinearProjectListResult,
   LinearIssueRelation,
   LinearIssueSummary,
   LinearNamedEntity,
@@ -95,6 +95,7 @@ export type {
 } from './agent-result-types'
 export type { LinearIssueActivityEntry, LinearIssueActivityValue } from './issue-activity'
 export type { LinearInlineMedia } from './inline-media'
+export type { LinearAgentProjectSummary, LinearProjectListResult } from './project-types'
 export type { LinearMcpIssueListRequest, LinearMcpIssueListResult } from './mcp-issue-list'
 export type {
   LinearIssueRelationship,

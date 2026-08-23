@@ -1,3 +1,5 @@
+import type { LinearWorkspaceReadError } from './agent-result-types'
+
 export type LinearProjectSummary = {
   id: string
   slugId?: string
@@ -13,6 +15,8 @@ export type LinearProjectSummary = {
   health?: string | null
   priority?: number | null
   priorityLabel?: string | null
+  sortOrder?: number | null
+  prioritySortOrder?: number | null
   lead?: LinearProjectMemberSummary
   members?: LinearProjectMemberSummary[]
   teams?: {
@@ -104,4 +108,31 @@ export type LinearCustomViewSummary = {
   creator?: LinearProjectMemberSummary
   createdAt?: string
   updatedAt?: string
+}
+
+export type LinearAgentProjectSummary = {
+  id: string
+  name: string
+  url?: string
+  workspaceId?: string
+  workspaceName?: string
+  priority?: number | null
+  priorityLabel?: string | null
+  sortOrder?: number | null
+  prioritySortOrder?: number | null
+  teams?: { id: string; name: string; key?: string }[]
+}
+
+export type LinearProjectListResult = {
+  projects: LinearAgentProjectSummary[]
+  truncated?: boolean
+  meta: {
+    query?: string
+    workspaceId?: (string & {}) | 'all'
+    limit: number
+    returned: number
+    hasMore: boolean
+    partial: boolean
+    workspaceErrors: LinearWorkspaceReadError[]
+  }
 }

@@ -28,6 +28,7 @@ export type LinearIssueSummary = {
   branchName?: string | null
   createdAt?: string | null
   updatedAt?: string | null
+  sortOrder?: number | null
 }
 
 export type LinearNamedEntity = {
@@ -136,6 +137,7 @@ export type LinearSearchIssueSummary = Pick<
   | 'estimate'
   | 'dueDate'
   | 'updatedAt'
+  | 'sortOrder'
 > & {
   workspace: {
     id: string
@@ -216,33 +218,6 @@ export type LinearIssueListResult = {
     filter: LinearIssueListFilter
     workspaceId?: (string & {}) | 'all'
     team?: LinearTeamSummary
-    limit: number
-    returned: number
-    hasMore: boolean
-    partial: boolean
-    workspaceErrors: LinearWorkspaceReadError[]
-  }
-}
-
-export type LinearAgentProjectSummary = {
-  id: string
-  name: string
-  url?: string
-  workspaceId?: string
-  workspaceName?: string
-  teams?: {
-    id: string
-    name: string
-    key?: string
-  }[]
-}
-
-export type LinearProjectListResult = {
-  projects: LinearAgentProjectSummary[]
-  truncated?: boolean
-  meta: {
-    query?: string
-    workspaceId?: (string & {}) | 'all'
     limit: number
     returned: number
     hasMore: boolean

@@ -70,7 +70,7 @@ Do not use `orca linear attach` to read screenshots. That command creates link a
 ```bash
 orca linear save-issue [<id>] [--current] [--team <key|id>] [--title <title>] [--description <text> | --body-file <path|->] [--state <state>] [--assignee me|<user>|null] [--priority none|low|medium|high|urgent] [--estimate <number>|null] [--due-date <yyyy-mm-dd>|null] [--label <label>]... [--project <project>|null] [--parent-id <issue>|null] [--write-id <uuid>] [--workspace <id>] [--json]
 orca linear issue [<id>] [--current] [--comments] [--children] [--depth <n>] [--attachments] [--relations] [--activity] [--full] [--workspace <id>] [--json]
-orca linear list-issues [--team <team>] [--cycle <cycle>] [--label <label>] [--limit <n>] [--query <text>] [--state <state>] [--cursor <cursor>] [--order-by createdAt|updatedAt] [--project <project>] [--release <release>] [--assignee <user|me|null>] [--delegate <user|me|null>] [--parent-id <issue|null>] [--priority <0-4>] [--created-at <datetime|duration>] [--updated-at <datetime|duration>] [--include-archived] [--workspace <id>|all] [--json]
+orca linear list-issues [--team <team>] [--cycle <cycle>] [--label <label>] [--limit <n>] [--query <text>] [--state <state>] [--cursor <cursor>] [--order-by createdAt|updatedAt|sortOrder] [--project <project>] [--release <release>] [--assignee <user|me|null>] [--delegate <user|me|null>] [--parent-id <issue|null>] [--priority <0-4>] [--created-at <datetime|duration>] [--updated-at <datetime|duration>] [--include-archived] [--workspace <id>|all] [--json]
 orca linear relation add [<id>] [--current] --related <issue> --type blocks|blocked-by|related|duplicate-of [--workspace <id>] [--json]
 orca linear relation remove [<id>] [--current] --related <issue> --type blocks|blocked-by|related|duplicate-of [--workspace <id>] [--json]
 orca linear search <query> [--limit <n>] [--workspace <id>|all] [--json]
@@ -123,6 +123,8 @@ orca linear list --filter open --team <key-or-id> --workspace <workspaceId> --js
 ```
 
 Use `list-issues` when MCP-compatible filters or cursor pagination are needed. Omitting `--limit` returns every match (`result.meta.limit` is `null`), so filter before listing a large workspace; `--limit <n>` caps the read. `--json` sets `result.truncated` (and `result.meta.hasMore`) when a cap held results back; human output prints `truncated: showing N`. Check `truncated` before reporting a count, then page with `--cursor` until `truncated` is false. Issued `--cursor` values bind the workspace; `--workspace all` cannot page; a raw Linear cursor still needs a concrete `--workspace`. Replay `--cursor` against the same Orca runtime that issued it. `--priority` is `0=none`, `1=urgent`, `2=high`, `3=medium`, `4=low`; JSON includes `priorityLabel` on each issue (CLI setter vocabulary). `orca linear search`, `orca linear list`, and `orca linear project list` still cap at their own `--limit` and set `result.truncated` when the cap is hit. Project JSON `priorityLabel` stays Linear's title-case provider string.
+
+For Linear's manual queue order, use `--order-by sortOrder` with one workspace. Linear issue ranks are not comparable across workspaces, so `--workspace all` is rejected. Orca reads every matching provider page before it sorts and applies `--limit`; narrow large queues with team, state, project, or other filters. Do not pass `--cursor` with manual ordering. Check `result.truncated`: a read-budget stop means the returned manual order is partial and has no continuation cursor. Issue JSON includes `sortOrder`. Project-list JSON includes `sortOrder` and `prioritySortOrder` for cross-project ranking.
 
 Prefer `label add` and `label remove` for incremental edits. `label set` replaces the full label set and should be used only when deliberate cleanup is intended.
 
@@ -195,6 +197,7 @@ Check the current state, and only rerun the status command if the issue is still
 
 - `linear_issue_required`: pass an issue id or `--current`.
 - `linear_invalid_state`: inspect `error.data.states`; choose only a deterministic valid state.
+- `linear_invalid_order`: remove `--cursor` before requesting manual issue order.
 - `linear_write_unconfirmed`: follow the pinned `--write-id` retry rules above.
 - `linear_invalid_workspace`: rerun with the workspace id returned by search or issue context.
 - `linear_body_too_large`: shorten the comment/body and retry once.

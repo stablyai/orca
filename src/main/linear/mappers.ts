@@ -112,6 +112,7 @@ export async function mapLinearIssue(
     estimate: issue.estimate ?? null,
     priority: issue.priority,
     dueDate: 'dueDate' in issue ? ((issue.dueDate as string | null | undefined) ?? null) : null,
-    updatedAt: issue.updatedAt.toISOString()
+    updatedAt: issue.updatedAt.toISOString(),
+    sortOrder: issue.sortOrder
   }
 }

@@ -33,6 +33,7 @@ vi.mock('../runtime-client', async () => {
 
 import { main } from '../index'
 import { okFixture, queueFixtures } from '../test-fixtures'
+import { LINEAR_MANUAL_ISSUE_ORDER_RUNTIME_CAPABILITY } from '../../shared/protocol-version'
 
 describe('orca linear CLI handlers', () => {
   const originalEnv = { ...process.env }
@@ -114,6 +115,50 @@ describe('orca linear CLI handlers', () => {
         orderBy: 'createdAt',
         includeArchived: true
       })
+    )
+  })
+
+  it('accepts manual Linear issue ordering', async () => {
+    queueFixtures(
+      callMock,
+      okFixture('req_status', {
+        capabilities: [LINEAR_MANUAL_ISSUE_ORDER_RUNTIME_CAPABILITY]
+      }),
+      okFixture('req_ranked_list', issueResult())
+    )
+
+    await main(
+      ['linear', 'list-issues', '--state', 'backlog', '--order-by', 'sortOrder', '--json'],
+      '/tmp/repo'
+    )
+
+    expect(callMock).toHaveBeenNthCalledWith(1, 'status.get')
+    expect(callMock).toHaveBeenNthCalledWith(
+      2,
+      'linear.mcpListIssues',
+      expect.objectContaining({ state: 'backlog', orderBy: 'sortOrder' })
+    )
+  })
+
+  it('rejects manual ordering when the runtime does not advertise support', async () => {
+    queueFixtures(callMock, okFixture('req_status', { capabilities: [] }))
+
+    await main(['linear', 'list-issues', '--order-by', 'sortOrder', '--json'], '/tmp/repo')
+
+    expect(callMock).toHaveBeenCalledTimes(1)
+    expect(callMock).toHaveBeenCalledWith('status.get')
+    expect(vi.mocked(console.log).mock.calls[0][0]).toContain('incompatible_runtime')
+  })
+
+  it('rejects cursor pagination with manual ordering before dispatch', async () => {
+    await main(
+      ['linear', 'list-issues', '--order-by', 'sortOrder', '--cursor', 'next-page'],
+      '/tmp/repo'
+    )
+
+    expect(callMock).not.toHaveBeenCalled()
+    expect(vi.mocked(console.error).mock.calls[0][0]).toContain(
+      '--cursor cannot be used with --order-by sortOrder'
     )
   })
 

@@ -40,6 +40,7 @@ type LinearIssueNode = {
   estimate?: number | null
   priority: number
   updatedAt: string
+  sortOrder?: number | null
   labelIds?: string[] | null
   state?: {
     name?: string | null
@@ -146,6 +147,7 @@ const LINEAR_ISSUE_NODE_FIELDS = `
   priority
   estimate
   updatedAt
+  sortOrder
   labelIds
   state {
     name
@@ -424,6 +426,7 @@ function mapRawIssueForWorkspace(
     priority: issue.priority,
     dueDate: issue.dueDate ?? null,
     updatedAt: issue.updatedAt,
+    sortOrder: issue.sortOrder ?? null,
     workspaceId: entry.workspace.id,
     workspaceName: entry.workspace.organizationName
   }

@@ -79,4 +79,37 @@ describe('SSH Linear MCP-compatible issue listing', () => {
     })
     expect(dispatch).not.toHaveBeenCalled()
   })
+
+  it('passes manual ordering through the execution host', async () => {
+    const dispatch = vi.fn().mockResolvedValue({ id: 'response-1', ok: true, result: {} })
+    const dispatcher = { dispatch } as unknown as RpcDispatcher
+
+    await dispatchRemoteLinearListIssues(dispatcher, {
+      commandPath: ['linear', 'list-issues'],
+      flags: new Map([['order-by', 'sortOrder']])
+    })
+
+    expect(dispatch).toHaveBeenCalledWith(
+      expect.objectContaining({
+        method: 'linear.mcpListIssues',
+        params: expect.objectContaining({ orderBy: 'sortOrder' })
+      })
+    )
+  })
+
+  it('rejects cursor pagination with manual ordering', async () => {
+    const dispatch = vi.fn()
+    const dispatcher = { dispatch } as unknown as RpcDispatcher
+
+    await expect(
+      dispatchRemoteLinearListIssues(dispatcher, {
+        commandPath: ['linear', 'list-issues'],
+        flags: new Map([
+          ['order-by', 'sortOrder'],
+          ['cursor', 'next-page']
+        ])
+      })
+    ).rejects.toMatchObject({ code: 'invalid_argument' })
+    expect(dispatch).not.toHaveBeenCalled()
+  })
 })

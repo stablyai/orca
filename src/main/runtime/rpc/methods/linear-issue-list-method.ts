@@ -22,7 +22,7 @@ const McpListIssues = z
     query: OptionalString,
     state: OptionalString,
     cursor: OptionalString,
-    orderBy: z.enum(['createdAt', 'updatedAt']).optional(),
+    orderBy: z.enum(['createdAt', 'updatedAt', 'sortOrder']).optional(),
     project: OptionalString,
     release: OptionalString,
     assignee: OptionalString,

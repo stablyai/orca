@@ -9,7 +9,7 @@ export type LinearMcpIssueListRequest = {
   query?: string
   state?: string
   cursor?: string
-  orderBy?: 'createdAt' | 'updatedAt'
+  orderBy?: 'createdAt' | 'updatedAt' | 'sortOrder'
   project?: string
   release?: string
   assignee?: string
@@ -33,7 +33,7 @@ export type LinearMcpIssueListResult = {
     returned: number
     hasMore: boolean
     nextCursor?: string
-    orderBy: 'createdAt' | 'updatedAt'
+    orderBy: 'createdAt' | 'updatedAt' | 'sortOrder'
     workspaceId?: (string & {}) | 'all'
     partial: boolean
     workspaceErrors: {

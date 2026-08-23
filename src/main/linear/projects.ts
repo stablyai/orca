@@ -52,6 +52,8 @@ type LinearProjectNode = {
   health?: string | null
   priority?: number | null
   priorityLabel?: string | null
+  sortOrder?: number | null
+  prioritySortOrder?: number | null
   progress?: number | null
   scope?: number | null
   issueCountHistory?: number[] | null
@@ -105,6 +107,7 @@ type LinearIssueNode = {
   estimate?: number | null
   priority: number
   updatedAt: string
+  sortOrder?: number | null
   labelIds?: string[] | null
   state?: {
     name?: string | null
@@ -196,6 +199,8 @@ const ORCA_PROJECT_FIELDS = `
   health
   priority
   priorityLabel
+  sortOrder
+  prioritySortOrder
   progress
   scope
   issueCountHistory
@@ -283,6 +288,7 @@ const ORCA_ISSUE_FIELDS = `
   priority
   estimate
   updatedAt
+  sortOrder
   labelIds
   state {
     name
@@ -624,6 +630,8 @@ function mapProjectForWorkspace(
     health: project.health ?? null,
     priority: project.priority ?? null,
     priorityLabel: project.priorityLabel ?? null,
+    sortOrder: project.sortOrder ?? null,
+    prioritySortOrder: project.prioritySortOrder ?? null,
     lead: mapUser(project.lead),
     members: project.members?.nodes
       ?.map(mapUser)
@@ -714,6 +722,7 @@ function mapIssueForWorkspace(
     estimate: issue.estimate ?? null,
     priority: issue.priority,
     updatedAt: issue.updatedAt,
+    sortOrder: issue.sortOrder ?? null,
     workspaceId: entry.workspace.id,
     workspaceName: entry.workspace.organizationName
   }
