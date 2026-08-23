@@ -3,6 +3,8 @@ import {
   retireWindowTerminalTabsAndConfirmClose,
   type WindowTerminalCloseRetirementDependencies
 } from './terminal-window-close-retirement'
+import { closeTerminalTabInWorkspaceSession } from '../../../../shared/workspace-session-terminal-tab-close'
+import type { WorkspaceSessionState } from '../../../../shared/workspace-session-state-types'
 
 type TestState = ReturnType<WindowTerminalCloseRetirementDependencies['getState']>
 
@@ -246,6 +248,102 @@ describe('terminal window close retirement', () => {
     await expect(retireWindowTerminalTabsAndConfirmClose(deps)).resolves.toBe('confirmed')
 
     expect(events).toEqual(['close:empty-tab:0', 'persist:empty-tab', 'checkpoint', 'confirm'])
+  })
+
+  it('cleans a durable layout-only ghost without sending provider teardown', async () => {
+    const ghostLayout = {
+      root: { type: 'leaf' as const, leafId: 'leaf-ghost' },
+      activeLeafId: 'leaf-ghost',
+      expandedLeafId: null,
+      ptyIdsByLeafId: { 'leaf-ghost': 'pty-ghost' }
+    }
+    const state = makeState({}, { terminalLayoutsByTabId: { 'ghost-tab': ghostLayout } })
+    let durableSession: WorkspaceSessionState = {
+      activeRepoId: null,
+      activeWorktreeId: null,
+      activeTabId: null,
+      tabsByWorktree: {},
+      unifiedTabs: {},
+      terminalLayoutsByTabId: { 'ghost-tab': ghostLayout }
+    }
+    const events: string[] = []
+    const deps = makeDependencies(state, {
+      getWindowSessionState: async () => durableSession,
+      closeTab: (tabId, options) => {
+        expect(options.precomputedRetirementPlan).toMatchObject({
+          tabId: 'ghost-tab',
+          worktreeId: null,
+          ptyIds: [],
+          localOrSshPtyIds: [],
+          runtimeTerminals: [],
+          cleanupOnlyPtyIds: ['pty-ghost'],
+          sharedPtyIds: [],
+          unroutablePtyIds: []
+        })
+        delete state.terminalLayoutsByTabId[tabId]
+        events.push('close')
+      },
+      persistRetiredSessionTabs: async (plans) => {
+        expect(plans).toHaveLength(1)
+        durableSession = closeTerminalTabInWorkspaceSession(
+          durableSession,
+          plans[0].worktreeId ?? '',
+          plans[0].tabId
+        ).session
+        events.push(`persist:${Object.hasOwn(durableSession.terminalLayoutsByTabId, 'ghost-tab')}`)
+      },
+      dispatchBeforeUnload: () => {
+        events.push(
+          `checkpoint:${Object.hasOwn(state.terminalLayoutsByTabId, 'ghost-tab')}:${Object.hasOwn(durableSession.terminalLayoutsByTabId, 'ghost-tab')}`
+        )
+        return true
+      },
+      confirmWindowClose: () => {
+        events.push('confirm')
+      }
+    })
+
+    await expect(retireWindowTerminalTabsAndConfirmClose(deps)).resolves.toBe('confirmed')
+
+    expect(events).toEqual(['close', 'persist:false', 'checkpoint:false:false', 'confirm'])
+  })
+
+  it('keeps a rowless provider candidate blocked when its route is invalid', async () => {
+    const state = makeState(
+      {},
+      {
+        terminalLayoutsByTabId: {
+          'ghost-tab': {
+            root: { type: 'leaf', leafId: 'leaf-ghost' },
+            activeLeafId: 'leaf-ghost',
+            expandedLeafId: null,
+            ptyIdsByLeafId: { 'leaf-ghost': 'remote:' }
+          }
+        }
+      }
+    )
+    const closeTab = vi.fn()
+    const persistRetiredSessionTabs = vi.fn()
+    const dispatchBeforeUnload = vi.fn(() => true)
+    const confirmWindowClose = vi.fn()
+
+    await expect(
+      retireWindowTerminalTabsAndConfirmClose(
+        makeDependencies(state, {
+          listOwnedProviderPtyIds: async () => ['remote:'],
+          closeTab,
+          persistRetiredSessionTabs,
+          dispatchBeforeUnload,
+          confirmWindowClose
+        })
+      )
+    ).resolves.toBe('blocked')
+
+    expect(state.terminalLayoutsByTabId['ghost-tab']).toBeDefined()
+    expect(closeTab).not.toHaveBeenCalled()
+    expect(persistRetiredSessionTabs).not.toHaveBeenCalled()
+    expect(dispatchBeforeUnload).not.toHaveBeenCalled()
+    expect(confirmWindowClose).not.toHaveBeenCalled()
   })
 
   it('uses exact close-fenced PTY ids supplied by main after renderer ownership is released', async () => {
