@@ -326,3 +326,21 @@ describe('a script never rides a login shell', () => {
     expect(runProcessMock.mock.calls.at(-1)?.[0].input).toBeUndefined()
   })
 })
+
+describe('WSLENV', () => {
+  it('never forwards a path-shaped variable', async () => {
+    // wsl.exe translates path-shaped variables between Windows and Linux form,
+    // so naming PATH in WSLENV replaces the guest's own PATH with a translated
+    // Windows one. Silent, and fatal to every lookup that follows.
+    seedWslGuestEnvironmentForTests(undefined, ENVIRONMENT)
+    await runWslProcess({
+      loginPath: 'none',
+      program: '/bin/true',
+      env: { PATH: 'C:\\bin', HOME: 'C:\\home', GITLAB_HOST: 'git.example.com' }
+    })
+    const wslenv = String(runProcessMock.mock.calls.at(-1)?.[0].env.WSLENV ?? '')
+    expect(wslenv.split(':')).toContain('GITLAB_HOST')
+    expect(wslenv.split(':')).not.toContain('PATH')
+    expect(wslenv.split(':')).not.toContain('HOME')
+  })
+})

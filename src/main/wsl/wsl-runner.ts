@@ -126,8 +126,15 @@ function assertNotShellString(program: string): void {
  */
 function buildHostEnv(env: WslSpec['env']): NodeJS.ProcessEnv {
   const merged: NodeJS.ProcessEnv = { ...process.env, ...env, WSL_UTF8: '1' }
-  if (env && Object.keys(env).length > 0) {
-    addWslEnvKeys(merged, Object.keys(env))
+  // Never name a path-shaped variable in WSLENV. wsl.exe translates those
+  // between Windows and Linux form, so forwarding PATH replaces the guest's
+  // own PATH with a translated Windows one -- silently, and this runner exists
+  // to make that class of mistake impossible rather than to document it.
+  const crossable = Object.keys(env ?? {}).filter(
+    (key) => !['PATH', 'HOME', 'TMP', 'TEMP'].includes(key)
+  )
+  if (crossable.length > 0) {
+    addWslEnvKeys(merged, crossable)
   }
   return merged
 }
