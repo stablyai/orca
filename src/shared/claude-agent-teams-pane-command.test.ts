@@ -51,6 +51,24 @@ describe('retargetClaudeAgentTeamsPaneCommand', () => {
     ).toBe("Set-Location '/it''s here'; & 'claude'")
   })
 
+  it('keeps operator characters that sh only ever saw inside quotes', () => {
+    expect(
+      retargetClaudeAgentTeamsPaneCommand(
+        "cd '/repo' && env A='x|y' claude --prompt 'a|b' --filter 'c;d' --to '>e'",
+        'powershell'
+      )
+    ).toBe(
+      "Set-Location '/repo'; $env:A = 'x|y'; " +
+        "& 'claude' '--prompt' 'a|b' '--filter' 'c;d' '--to' '>e'"
+    )
+  })
+
+  it('declines a substitution the rewrite would flatten into a literal', () => {
+    expect(
+      retargetClaudeAgentTeamsPaneCommand("cd '/repo' && claude $(id -un)", 'powershell')
+    ).toBeNull()
+  })
+
   it('declines a command carrying an operator it does not model', () => {
     expect(
       retargetClaudeAgentTeamsPaneCommand("cd '/repo' && claude | tee log", 'powershell')

@@ -7,7 +7,6 @@ import {
 } from './tui-agent-startup-shell'
 
 const ENV_ASSIGNMENT = /^[A-Za-z_][A-Za-z0-9_]*=/
-const SH_OPERATOR = /[;&|<>]/
 
 /**
  * Claude Code holds a placeholder pane open with `cat` until `respawn-pane`
@@ -59,30 +58,44 @@ export function retargetClaudeAgentTeamsPaneCommand(
   if (!parsed.ok) {
     return null
   }
-  const tokens = [...parsed.tokens]
+  // Why carry the spans: once tokenized, a quoted `|` inside an argument and a
+  // bare pipe operator are the same string. divergesFromShell is the only record
+  // of which one sh saw, so rejecting on the token VALUE would refuse a perfectly
+  // ordinary `--prompt 'a|b'`.
+  const tokens = parsed.tokens.map((value, index) => ({
+    value,
+    diverges: parsed.spans[index]?.divergesFromShell ?? true
+  }))
+  const isCdChain = tokens.length > 3 && tokens[0]!.value === 'cd' && tokens[2]!.value === '&&'
+  // Why: `&&` after a `cd` is the one operator this rewrite models. Any other
+  // diverging token — a bare operator, a substitution, a line continuation —
+  // means sh would run something the rewrite does not express, and PowerShell
+  // would read it differently again.
+  if (tokens.some((token, index) => token.diverges && !(isCdChain && index === 2))) {
+    return null
+  }
   let directory: string | null = null
-  if (tokens.length > 3 && tokens[0] === 'cd' && tokens[2] === '&&') {
-    directory = tokens[1]!
+  if (isCdChain) {
+    directory = tokens[1]!.value
     tokens.splice(0, 3)
   }
   const assignments: { name: string; value: string }[] = []
-  if (tokens[0] === 'env') {
+  if (tokens[0]?.value === 'env') {
     tokens.shift()
-    while (tokens[0] !== undefined && ENV_ASSIGNMENT.test(tokens[0])) {
-      const pair = tokens.shift()!
+    while (tokens[0] !== undefined && ENV_ASSIGNMENT.test(tokens[0].value)) {
+      const pair = tokens.shift()!.value
       const separator = pair.indexOf('=')
       assignments.push({ name: pair.slice(0, separator), value: pair.slice(separator + 1) })
     }
   }
-  // Why: a surviving operator means sh would run something this rewrite does not
-  // model, and PowerShell would read it differently again.
-  if (tokens.length === 0 || tokens.some((token) => SH_OPERATOR.test(token))) {
+  if (tokens.length === 0) {
     return null
   }
+  const argv = tokens.map((token) => token.value)
   const body =
-    tokens.length === 1 && tokens[0] === 'cat'
+    argv.length === 1 && argv[0] === 'cat'
       ? POWERSHELL_HOLDING_COMMAND
-      : buildShellCommandFromArgv(tokens, shell)
+      : buildShellCommandFromArgv(argv, shell)
   return [
     ...(directory === null ? [] : [`Set-Location ${quoteStartupArg(directory, shell)}`]),
     ...assignments.map((each) => `$env:${each.name} = ${quoteStartupArg(each.value, shell)}`),
