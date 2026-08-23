@@ -35,6 +35,7 @@ export function bindControlWindowHandoff(
         return true
       } catch {
         options.markGraphUnavailable?.(promoted.id)
+        options.windows.revokeControl(promoted.id)
       }
     }
     return false

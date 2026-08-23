@@ -61,8 +61,7 @@ export class TerminalWindowTransferCoordinator {
   readonly #commandReady = new Set<WebContents>()
   readonly #commandReadyWaiters = new Map<WebContents, Set<TerminalWindowCommandReadyWaiter>>()
   readonly #trackedRenderers = new Set<WebContents>()
-  #fenced = false
-  #quitFenced = false
+  #fences = { handoff: false, quit: false }
 
   constructor(options: TerminalWindowTransferCoordinatorOptions) {
     this.#createSecondaryWindow = options.createSecondaryWindow
@@ -110,7 +109,11 @@ export class TerminalWindowTransferCoordinator {
       this.#trackedRenderers,
       sender
     )
-    return { windowId: window.id, role, transitionFenced: this.#fenced }
+    return {
+      windowId: window.id,
+      role,
+      transitionFenced: this.#fences.handoff || this.#fences.quit
+    }
   }
 
   async detach(event: RendererIpcEvent, input: unknown): Promise<TerminalWindowTransferResult> {
@@ -118,7 +121,7 @@ export class TerminalWindowTransferCoordinator {
     if (!sender) {
       return { ok: false, error: 'untrusted_ui_renderer' }
     }
-    if (this.#fenced || this.#getIsQuitting()) {
+    if (this.#fences.handoff || this.#fences.quit || this.#getIsQuitting()) {
       return { ok: false, error: 'window_transfer_fenced' }
     }
     if (!isTerminalWindowTransferSeed(input)) {
@@ -285,16 +288,16 @@ export class TerminalWindowTransferCoordinator {
   }
 
   fenceForQuit(): Promise<void> {
-    this.#quitFenced = true
+    this.#fences.quit = true
     return this.#fenceTransfers('terminal_transfer_quit')
   }
 
   fenceForControlHandoff(): Promise<void> {
+    this.#fences.handoff = true
     return this.#fenceTransfers('terminal_transfer_control_handoff')
   }
 
   #fenceTransfers(reason: string): Promise<void> {
-    this.#fenced = true
     const transfers = [...this.#transfers.values()]
     for (const transfer of transfers) {
       transfer.abort(new Error(reason))
@@ -303,13 +306,10 @@ export class TerminalWindowTransferCoordinator {
   }
 
   resumeAfterQuitAbort(): void {
-    this.#quitFenced = false
-    this.#fenced = false
+    this.#fences.quit = false
   }
 
   resumeAfterControlHandoff(): void {
-    if (!this.#quitFenced) {
-      this.#fenced = false
-    }
+    this.#fences.handoff = false
   }
 }

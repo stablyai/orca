@@ -75,6 +75,54 @@ describe('TerminalWindowTransferCoordinator', () => {
     )
   })
 
+  it('keeps a handoff fence when quit is aborted', async () => {
+    const h = createHarness()
+    const { TerminalWindowTransferCoordinator } = await import('./terminal-window-transfer')
+    const coordinator = new TerminalWindowTransferCoordinator({
+      store: {} as never,
+      createSecondaryWindow: vi.fn(),
+      windows: h.windows,
+      sessions: h.sessions as never,
+      owners: h.owners,
+      timeoutMs: 10
+    })
+    const event = ipcEvent(h.source.webContents) as never
+
+    await coordinator.fenceForControlHandoff()
+    await coordinator.fenceForQuit()
+    coordinator.resumeAfterQuitAbort()
+
+    expect(coordinator.getContext(event).transitionFenced).toBe(true)
+    await expect(coordinator.detach(event, {})).resolves.toEqual({
+      ok: false,
+      error: 'window_transfer_fenced'
+    })
+    coordinator.resumeAfterControlHandoff()
+    expect(coordinator.getContext(event).transitionFenced).toBe(false)
+  })
+
+  it('keeps a quit fence when control handoff completes', async () => {
+    const h = createHarness()
+    const { TerminalWindowTransferCoordinator } = await import('./terminal-window-transfer')
+    const coordinator = new TerminalWindowTransferCoordinator({
+      store: {} as never,
+      createSecondaryWindow: vi.fn(),
+      windows: h.windows,
+      sessions: h.sessions as never,
+      owners: h.owners,
+      timeoutMs: 10
+    })
+    const event = ipcEvent(h.source.webContents) as never
+
+    await coordinator.fenceForQuit()
+    await coordinator.fenceForControlHandoff()
+    coordinator.resumeAfterControlHandoff()
+
+    expect(coordinator.getContext(event).transitionFenced).toBe(true)
+    coordinator.resumeAfterQuitAbort()
+    expect(coordinator.getContext(event).transitionFenced).toBe(false)
+  })
+
   it('fences new work, settles an active transfer, and removes loss listeners', async () => {
     const h = createHarness()
     const { TerminalWindowTransferCoordinator } = await import('./terminal-window-transfer')

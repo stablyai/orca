@@ -2916,6 +2916,16 @@ export type MobileNotificationEvent =
 //      `clientId` is the most recent mobile actor for this PTY.
 export type DriverState = RuntimeTerminalDriverState
 
+type TerminalFitOverride = {
+  mode: 'mobile-fit'
+  cols: number
+  rows: number
+  previousCols: number | null
+  previousRows: number | null
+  updatedAt: number
+  clientId: string
+}
+
 // Why: per-PTY layout target — what the PTY *should* be at right now.
 // `desktop` ⇒ runs at the desktop renderer's pane geometry; mobile passive
 // watchers (mode='desktop') still receive scrollback. `phone` ⇒ runs at
@@ -3365,18 +3375,7 @@ export class OrcaRuntimeService {
   // Why: mobile-fit overrides are keyed by ptyId (not terminal handle) because
   // handles can be reissued while the PTY identity is stable. In-memory only —
   // a stale phone override should not survive an app restart.
-  private terminalFitOverrides = new Map<
-    string,
-    {
-      mode: 'mobile-fit'
-      cols: number
-      rows: number
-      previousCols: number | null
-      previousRows: number | null
-      updatedAt: number
-      clientId: string
-    }
-  >()
+  private terminalFitOverrides = new Map<string, TerminalFitOverride>()
 
   // Why: server-authoritative display mode per terminal. 'auto' (default)
   // means phone-fit when mobile subscribes, desktop otherwise. 'desktop'
@@ -3468,6 +3467,19 @@ export class OrcaRuntimeService {
   // Why: a completed host reclaim must not consume the cache if a newer
   // viewer mutation landed while that serialized layout was in flight.
   private remoteDesktopViewerRevisions = new Map<string, number>()
+  private parkedTerminalGraphClaims = new Map<
+    string,
+    {
+      worktreeId: string
+      connectionId: string | null
+      incarnationId: string | null
+      lifecycleGeneration: number
+      mobileClaimed: boolean
+      mobileFitOverride: TerminalFitOverride | null
+      remoteDesktopOwner: string | null
+      remoteDesktopHostReclaimTarget: { cols: number; rows: number } | null
+    }
+  >()
 
   // Why: resubscribe-grace window. When the last mobile subscriber for a
   // PTY unsubscribes, we hold the driver=mobile{clientId} state and the
@@ -6900,7 +6912,7 @@ export class OrcaRuntimeService {
       nextPtyIds.add(ptyId)
     }
 
-    this.releaseDetachedWindowTerminalClaims(previousLeaves, nextLeaves)
+    this.reconcileWindowTerminalClaims(previousLeaves, nextLeaves)
     this.leaves = nextLeaves
     this.rebuildLeafPtyIndex()
     this.reconcilePtyIncarnationHandles()
@@ -6981,25 +6993,80 @@ export class OrcaRuntimeService {
     }
   }
 
-  private releaseDetachedWindowTerminalClaims(
+  private reconcileWindowTerminalClaims(
     previousLeaves: ReadonlyMap<string, RuntimeLeafRecord>,
     nextLeaves: ReadonlyMap<string, RuntimeLeafRecord>
   ): void {
-    const retainedPtyIds = new Set(
-      [...nextLeaves.values()].flatMap((leaf) => (leaf.ptyId ? [leaf.ptyId] : []))
-    )
-    const detachedPtyIds = new Set(
-      [...previousLeaves.values()]
-        .flatMap((leaf) => (leaf.ptyId ? [leaf.ptyId] : []))
-        .filter((ptyId) => !retainedPtyIds.has(ptyId))
-    )
-    for (const ptyId of detachedPtyIds) {
-      this.mobileSubscribers.delete(ptyId)
+    const nextLeafByPtyId = new Map<string, RuntimeLeafRecord>()
+    for (const leaf of nextLeaves.values()) {
+      if (leaf.ptyId) {
+        nextLeafByPtyId.set(leaf.ptyId, leaf)
+      }
+    }
+    for (const leaf of previousLeaves.values()) {
+      const ptyId = leaf.ptyId
+      if (!ptyId || nextLeafByPtyId.has(ptyId)) {
+        continue
+      }
+      const pty = this.ptysById.get(ptyId)
+      const driver = this.getDriver(ptyId)
       this.setDriver(ptyId, { kind: 'idle' })
-      this.remoteDesktopViewers.delete(ptyId)
+      this.parkedTerminalGraphClaims.set(ptyId, {
+        worktreeId: leaf.worktreeId,
+        connectionId: pty?.connectionId ?? null,
+        incarnationId: pty?.incarnationId ?? null,
+        lifecycleGeneration: this.getPtyLifecycleGeneration(ptyId),
+        mobileClaimed: driver.kind === 'mobile',
+        mobileFitOverride: this.terminalFitOverrides.get(ptyId) ?? null,
+        remoteDesktopOwner: this.remoteDesktopOwners.get(ptyId) ?? null,
+        remoteDesktopHostReclaimTarget: this.remoteDesktopHostReclaimTargets.get(ptyId) ?? null
+      })
+      this.terminalFitOverrides.delete(ptyId)
       this.remoteDesktopOwners.delete(ptyId)
       this.remoteDesktopHostReclaimTargets.delete(ptyId)
       this.remoteDesktopViewerRevisions.delete(ptyId)
+      this.notifyRemoteTerminalViewPresenceChanged(ptyId)
+    }
+    for (const [ptyId, leaf] of nextLeafByPtyId) {
+      const parked = this.parkedTerminalGraphClaims.get(ptyId)
+      if (!parked) {
+        continue
+      }
+      const pty = this.ptysById.get(ptyId)
+      const exactIdentity =
+        pty?.connected === true &&
+        leaf.worktreeId === parked.worktreeId &&
+        pty.worktreeId === parked.worktreeId &&
+        pty.connectionId === parked.connectionId &&
+        (pty.incarnationId ?? null) === parked.incarnationId &&
+        this.getPtyLifecycleGeneration(ptyId) === parked.lifecycleGeneration
+      this.parkedTerminalGraphClaims.delete(ptyId)
+      if (!exactIdentity) {
+        this.mobileSubscribers.delete(ptyId)
+        this.remoteDesktopViewers.delete(ptyId)
+        this.remoteDesktopViewerRevisions.delete(ptyId)
+        this.notifyRemoteTerminalViewPresenceChanged(ptyId)
+        continue
+      }
+      const mobile = this.mobileSubscribers.get(ptyId)
+      const actor = parked.mobileClaimed && mobile ? this.pickMostRecentActor(mobile) : null
+      if (actor) {
+        this.setDriver(ptyId, { kind: 'mobile', clientId: actor.clientId })
+        if (parked.mobileFitOverride) {
+          this.terminalFitOverrides.set(ptyId, {
+            ...parked.mobileFitOverride,
+            clientId: actor.clientId
+          })
+        }
+      }
+      const viewers = this.remoteDesktopViewers.get(ptyId)
+      if (parked.remoteDesktopOwner && viewers?.has(parked.remoteDesktopOwner)) {
+        this.remoteDesktopOwners.set(ptyId, parked.remoteDesktopOwner)
+        if (parked.remoteDesktopHostReclaimTarget) {
+          this.remoteDesktopHostReclaimTargets.set(ptyId, parked.remoteDesktopHostReclaimTarget)
+        }
+        this.bumpRemoteDesktopViewerRevision(ptyId)
+      }
       this.notifyRemoteTerminalViewPresenceChanged(ptyId)
     }
   }
@@ -12571,6 +12638,9 @@ export class OrcaRuntimeService {
   }
 
   hasRemoteTerminalViewSubscriber(ptyId: string): boolean {
+    if (this.parkedTerminalGraphClaims.has(ptyId)) {
+      return false
+    }
     if ((this.remoteTerminalViewSubscriberCounts.get(ptyId) ?? 0) > 0) {
       return true
     }
@@ -15268,6 +15338,7 @@ export class OrcaRuntimeService {
       (intentionalStopIncarnation === null || intentionalStopIncarnation === incarnationId)
     advertisedUrlWatcher.unbindPty(ptyId)
     // Clean up new mobile state for this PTY
+    this.parkedTerminalGraphClaims.delete(ptyId)
     this.mobileSubscribers.delete(ptyId)
     this.remoteTerminalViewSubscriberCounts.delete(ptyId)
     this.rawTerminalViewSubscriberCounts.delete(ptyId)
@@ -15413,6 +15484,11 @@ export class OrcaRuntimeService {
   }
 
   private setDriver(ptyId: string, next: DriverState): void {
+    const parked = this.parkedTerminalGraphClaims.get(ptyId)
+    if (parked) {
+      parked.mobileClaimed = next.kind === 'mobile'
+      return
+    }
     const prev = this.getDriver(ptyId)
     if (prev.kind === next.kind) {
       if (prev.kind === 'mobile' && next.kind === 'mobile' && prev.clientId === next.clientId) {
@@ -15475,6 +15551,9 @@ export class OrcaRuntimeService {
   }
 
   private hasRemoteDesktopViewers(ptyId: string): boolean {
+    if (this.parkedTerminalGraphClaims.has(ptyId)) {
+      return false
+    }
     const viewers = this.remoteDesktopViewers.get(ptyId)
     return viewers !== undefined && viewers.size > 0
   }
@@ -15570,7 +15649,8 @@ export class OrcaRuntimeService {
     claim = true
   ): Promise<boolean> {
     const viewport = clampTerminalViewport(cols, rows)
-    if (claim) {
+    const parked = this.parkedTerminalGraphClaims.get(ptyId)
+    if (claim && !parked) {
       this.ensureRemoteDesktopHostReclaimTarget(ptyId)
     }
     let viewers = this.remoteDesktopViewers.get(ptyId)
@@ -15600,6 +15680,10 @@ export class OrcaRuntimeService {
     viewers.set(subscriptionKey, { clientId, cols: viewport.cols, rows: viewport.rows, activity })
     this.bumpRemoteDesktopViewerRevision(ptyId)
     if (claim) {
+      if (parked) {
+        parked.remoteDesktopOwner = subscriptionKey
+        return true
+      }
       this.remoteDesktopOwners.set(ptyId, subscriptionKey)
       return this.applyRemoteDesktopLayout(ptyId)
     }
@@ -15610,6 +15694,12 @@ export class OrcaRuntimeService {
     const viewer = this.remoteDesktopViewers.get(ptyId)?.get(subscriptionKey)
     if (!viewer) {
       return Promise.resolve(false)
+    }
+    const parked = this.parkedTerminalGraphClaims.get(ptyId)
+    if (parked) {
+      viewer.activity = ++this.remoteDesktopActivity
+      parked.remoteDesktopOwner = subscriptionKey
+      return Promise.resolve(true)
     }
     if (this.remoteDesktopOwners.get(ptyId) === subscriptionKey) {
       const size = this.getTerminalSize(ptyId)
@@ -15625,6 +15715,12 @@ export class OrcaRuntimeService {
   }
 
   claimRemoteDesktopHost(ptyId: string, cols: number, rows: number): Promise<boolean> {
+    const parked = this.parkedTerminalGraphClaims.get(ptyId)
+    if (parked) {
+      parked.remoteDesktopOwner = null
+      parked.remoteDesktopHostReclaimTarget = clampTerminalViewport(cols, rows)
+      return Promise.resolve(true)
+    }
     if (!this.remoteDesktopOwners.has(ptyId)) {
       // Why: disconnect can remove the owner before its queued host resize
       // lands. A host input in that window must join the reclaim, not pass it.
@@ -15700,7 +15796,8 @@ export class OrcaRuntimeService {
       return Promise.resolve(false)
     }
     const viewport = clampTerminalViewport(cols, rows)
-    if (claim) {
+    const parked = this.parkedTerminalGraphClaims.get(ptyId)
+    if (claim && !parked) {
       // Why: terminal.send may be the first activity while the stream is only
       // passively registered. Snapshot host truth before this refresh owns it.
       this.ensureRemoteDesktopHostReclaimTarget(ptyId)
@@ -15716,7 +15813,11 @@ export class OrcaRuntimeService {
           activity
         })
         if (claim) {
-          this.remoteDesktopOwners.set(ptyId, subscriptionKey)
+          if (parked) {
+            parked.remoteDesktopOwner = subscriptionKey
+          } else {
+            this.remoteDesktopOwners.set(ptyId, subscriptionKey)
+          }
         }
         changed = true
       }
@@ -15725,6 +15826,9 @@ export class OrcaRuntimeService {
       return Promise.resolve(false)
     }
     this.bumpRemoteDesktopViewerRevision(ptyId)
+    if (parked) {
+      return Promise.resolve(true)
+    }
     return this.remoteDesktopOwners.has(ptyId)
       ? this.applyRemoteDesktopLayout(ptyId)
       : Promise.resolve(true)
@@ -15864,6 +15968,11 @@ export class OrcaRuntimeService {
     if (sub) {
       sub.lastActedAt = Date.now()
     }
+    const parked = this.parkedTerminalGraphClaims.get(ptyId)
+    if (parked) {
+      parked.mobileClaimed = true
+      return
+    }
     const prev = previousFloor ?? this.getDriver(ptyId)
     const currentMode = this.mobileDisplayModes.get(ptyId)
     // Why: a deliberate mobile action implies mobile is resuming control.
@@ -15906,6 +16015,9 @@ export class OrcaRuntimeService {
     }
     sub.viewport = viewport
     sub.lastActedAt = Date.now()
+    if (this.parkedTerminalGraphClaims.has(ptyId)) {
+      return { updated: true, applied: false }
+    }
 
     const mode = this.getMobileDisplayMode(ptyId)
     if (mode === 'desktop') {
@@ -16176,7 +16288,7 @@ export class OrcaRuntimeService {
   // applyLayout is the SOLE writer of:
   //   - this.layouts
   //   - this.terminalFitOverrides (except the sanctioned dead-pty cleanups in
-  //     onPtyExit and reclaimTerminalForDesktop's orphan branch, which delete)
+  //     onPtyExit, graph claim parking, and reclaimTerminalForDesktop's orphan branch)
   //   - this.ptyController.resize (i.e. the actual PTY dims)
   //
   // Every trigger that wants to change PTY dims or flip mode goes through
@@ -16444,6 +16556,9 @@ export class OrcaRuntimeService {
   }
 
   isMobileSubscriberActive(ptyId: string): boolean {
+    if (this.parkedTerminalGraphClaims.has(ptyId)) {
+      return false
+    }
     const inner = this.mobileSubscribers.get(ptyId)
     return inner !== undefined && inner.size > 0
   }
@@ -16528,6 +16643,11 @@ export class OrcaRuntimeService {
       })
       if (!viewport) {
         return false
+      }
+      const parked = this.parkedTerminalGraphClaims.get(ptyId)
+      if (parked) {
+        parked.mobileClaimed = true
+        return true
       }
       this.setDriver(ptyId, { kind: 'mobile', clientId })
       if (mode !== 'desktop') {
@@ -16628,6 +16748,12 @@ export class OrcaRuntimeService {
       subscribedAt,
       lastActedAt: now
     })
+
+    const parked = this.parkedTerminalGraphClaims.get(ptyId)
+    if (parked) {
+      parked.mobileClaimed = true
+      return true
+    }
 
     // Subscribe-fresh with auto/phone counts as "take the floor".
     this.setDriver(ptyId, { kind: 'mobile', clientId })
@@ -16827,6 +16953,11 @@ export class OrcaRuntimeService {
     const inner = this.mobileSubscribers.get(ptyId)
     const subscriber = inner ? this.pickMostRecentActor(inner) : null
     const subscriberRecord = subscriber && inner ? inner.get(subscriber.clientId) : null
+    const parked = this.parkedTerminalGraphClaims.get(ptyId)
+    if (parked) {
+      parked.mobileClaimed = mode !== 'desktop' && subscriber !== null
+      return true
+    }
 
     if (mode === 'desktop') {
       // Reset wasResizedToPhone on every fitted subscriber so a future

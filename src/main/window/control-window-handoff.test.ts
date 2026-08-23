@@ -216,6 +216,14 @@ describe('control window handoff', () => {
     expect(markGraphUnavailable).toHaveBeenCalledTimes(2)
     expect(onVacated).toHaveBeenCalledOnce()
     expect(releaseTransferFence).not.toHaveBeenCalled()
+    expect(manager.getControlWindow()).toBeNull()
+    expect(manager.getRole(candidate.window.id)).toBe('secondary')
+    const reopened = makeWindow(3)
+    manager.register(reopened.window as never)
+    expect(manager.getRole(reopened.window.id)).toBe('control')
+    expect(manager.getControlWindow()).toBe(reopened.window)
+    manager.remove(candidate.window.id)
+    expect(manager.getControlWindow()).toBe(reopened.window)
   })
 
   it('vacates when runtime authority cannot attach to the promotion', async () => {
@@ -245,5 +253,7 @@ describe('control window handoff', () => {
     await Promise.resolve()
 
     expect(onVacated).toHaveBeenCalledOnce()
+    expect(manager.getControlWindow()).toBeNull()
+    expect(manager.getRole(candidate.window.id)).toBe('secondary')
   })
 })

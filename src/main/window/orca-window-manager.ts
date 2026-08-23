@@ -154,6 +154,21 @@ export class OrcaWindowManager {
     return true
   }
 
+  revokeControl(windowId: number): boolean {
+    if (this.#controlWindowId !== windowId) {
+      return false
+    }
+    const entry = this.#windows.get(windowId)
+    if (entry) {
+      entry.role = 'secondary'
+    }
+    this.#controlWindowId = null
+    if (this.#activeControlTransition?.expectedWindowId === windowId) {
+      this.#activeControlTransition = null
+    }
+    return true
+  }
+
   isTrustedSender(sender: WebContents): boolean {
     return (
       !sender.isDestroyed() &&

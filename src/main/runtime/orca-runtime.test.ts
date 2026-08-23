@@ -72,8 +72,7 @@ import {
   HEADLESS_RUNTIME_WINDOW_ID,
   type RuntimeMobileSessionTabsResult,
   type RuntimeSyncWindowGraph,
-  type RuntimeTerminalCreate,
-  type RuntimeTerminalDriverState
+  type RuntimeTerminalCreate
 } from '../../shared/runtime-types'
 import type { TerminalSideEffectBatch } from '../../shared/terminal-side-effect-facts'
 import type { RuntimeClientEvent } from '../../shared/runtime-client-events'
@@ -2569,18 +2568,84 @@ describe('OrcaRuntimeService', () => {
     expect(runtime.getStatus().authoritativeWindowId).toBeNull()
   })
 
-  it('releases local and SSH viewer claims when their terminals leave the control graph', () => {
+  it('parks and restores exact local and SSH terminal claims across graph re-entry', async () => {
     const runtime = createRuntime()
     const localPtyId = 'local-pty'
     const sshPtyId = 'ssh:ssh-1@@remote-pty'
-    const internals = runtime as unknown as {
-      currentDriver: Map<string, RuntimeTerminalDriverState>
-      mobileSubscribers: Map<string, Map<string, unknown>>
-      remoteDesktopOwners: Map<string, string>
-      remoteDesktopViewers: Map<string, Map<string, unknown>>
+    const siblingPtyId = 'ssh:ssh-2@@sibling-pty'
+    const terminals = [
+      { ptyId: localPtyId, tabId: 'tab-local', leafId: 'leaf-local', connectionId: null },
+      { ptyId: sshPtyId, tabId: 'tab-ssh', leafId: 'leaf-ssh', connectionId: 'ssh-1' },
+      {
+        ptyId: siblingPtyId,
+        tabId: 'tab-sibling',
+        leafId: 'leaf-sibling',
+        connectionId: 'ssh-2'
+      }
+    ]
+    const graphFor = (selected: typeof terminals) => ({
+      tabs: selected.map(({ tabId, leafId }) => ({
+        tabId,
+        worktreeId: TEST_WORKTREE_ID,
+        title: tabId,
+        activeLeafId: leafId,
+        layout: null
+      })),
+      leaves: selected.map(({ ptyId, tabId, leafId }, paneRuntimeId) => ({
+        tabId,
+        worktreeId: TEST_WORKTREE_ID,
+        leafId,
+        paneRuntimeId,
+        ptyId
+      }))
+    })
+    runtime.setPtyController({
+      write: () => true,
+      kill: () => true,
+      resize: () => true,
+      getSize: () => ({ cols: 120, rows: 30 }),
+      getForegroundProcess: async () => null
+    })
+    for (const terminal of terminals) {
+      runtime.registerPty(terminal.ptyId, TEST_WORKTREE_ID, terminal.connectionId, {
+        tabId: terminal.tabId,
+        leafId: terminal.leafId,
+        incarnationId: `${terminal.ptyId}:v1`
+      })
     }
     runtime.attachWindow(TEST_WINDOW_ID)
-    runtime.syncWindowGraph(TEST_WINDOW_ID, {
+    runtime.syncWindowGraph(TEST_WINDOW_ID, graphFor(terminals))
+    for (const { ptyId } of terminals) {
+      await runtime.handleMobileSubscribe(ptyId, 'phone-1', { cols: 45, rows: 20 })
+      await runtime.updateRemoteDesktopViewer(ptyId, 'viewer-1', 'desktop-1', 100, 30)
+    }
+
+    runtime.syncWindowGraph(TEST_WINDOW_ID, graphFor([terminals[2]!]))
+
+    for (const ptyId of [localPtyId, sshPtyId]) {
+      expect(runtime.getDriver(ptyId)).toEqual({ kind: 'idle' })
+      expect(runtime.isRemoteDesktopViewerOwner(ptyId, 'viewer-1')).toBe(false)
+      expect(runtime.getAllTerminalFitOverrides().has(ptyId)).toBe(false)
+    }
+    expect(runtime.getDriver(siblingPtyId)).toEqual({ kind: 'mobile', clientId: 'phone-1' })
+    expect(runtime.isRemoteDesktopViewerOwner(siblingPtyId, 'viewer-1')).toBe(true)
+    expect(runtime.getAllTerminalFitOverrides().has(siblingPtyId)).toBe(true)
+    expect(runtime.getStatus().liveLeafCount).toBe(1)
+
+    runtime.syncWindowGraph(TEST_WINDOW_ID, graphFor(terminals))
+
+    for (const ptyId of [localPtyId, sshPtyId, siblingPtyId]) {
+      expect(runtime.getDriver(ptyId)).toEqual({ kind: 'mobile', clientId: 'phone-1' })
+      expect(runtime.isRemoteDesktopViewerOwner(ptyId, 'viewer-1')).toBe(true)
+      expect(runtime.getAllTerminalFitOverrides().has(ptyId)).toBe(true)
+    }
+    expect(runtime.getStatus().liveLeafCount).toBe(3)
+  })
+
+  it('does not restore terminal claims whose streams close while graph-parked', async () => {
+    const runtime = createRuntime()
+    const ptyId = 'local-pty'
+    const graph = {
       tabs: [
         {
           tabId: 'tab-local',
@@ -2588,7 +2653,49 @@ describe('OrcaRuntimeService', () => {
           title: 'Local',
           activeLeafId: 'leaf-local',
           layout: null
-        },
+        }
+      ],
+      leaves: [
+        {
+          tabId: 'tab-local',
+          worktreeId: TEST_WORKTREE_ID,
+          leafId: 'leaf-local',
+          paneRuntimeId: 1,
+          ptyId
+        }
+      ]
+    }
+    runtime.setPtyController({
+      write: () => true,
+      kill: () => true,
+      resize: () => true,
+      getSize: () => ({ cols: 120, rows: 30 }),
+      getForegroundProcess: async () => null
+    })
+    runtime.registerPty(ptyId, TEST_WORKTREE_ID, null, {
+      tabId: 'tab-local',
+      leafId: 'leaf-local',
+      incarnationId: 'local:v1'
+    })
+    runtime.attachWindow(TEST_WINDOW_ID)
+    runtime.syncWindowGraph(TEST_WINDOW_ID, graph)
+    await runtime.handleMobileSubscribe(ptyId, 'phone-1', { cols: 45, rows: 20 })
+    await runtime.updateRemoteDesktopViewer(ptyId, 'viewer-1', 'desktop-1', 100, 30)
+
+    runtime.syncWindowGraph(TEST_WINDOW_ID, { tabs: [], leaves: [] })
+    runtime.handleMobileUnsubscribe(ptyId, 'phone-1')
+    await runtime.unregisterRemoteDesktopViewer(ptyId, 'viewer-1')
+    runtime.syncWindowGraph(TEST_WINDOW_ID, graph)
+
+    expect(runtime.getDriver(ptyId)).toEqual({ kind: 'idle' })
+    expect(runtime.isRemoteDesktopViewerOwner(ptyId, 'viewer-1')).toBe(false)
+  })
+
+  it('does not restore graph-parked claims onto a replacement incarnation', async () => {
+    const runtime = createRuntime()
+    const ptyId = 'ssh:ssh-1@@remote-pty'
+    const graph = {
+      tabs: [
         {
           tabId: 'tab-ssh',
           worktreeId: TEST_WORKTREE_ID,
@@ -2599,36 +2706,37 @@ describe('OrcaRuntimeService', () => {
       ],
       leaves: [
         {
-          tabId: 'tab-local',
-          worktreeId: TEST_WORKTREE_ID,
-          leafId: 'leaf-local',
-          paneRuntimeId: 1,
-          ptyId: localPtyId
-        },
-        {
           tabId: 'tab-ssh',
           worktreeId: TEST_WORKTREE_ID,
           leafId: 'leaf-ssh',
-          paneRuntimeId: 2,
-          ptyId: sshPtyId
+          paneRuntimeId: 1,
+          ptyId
         }
       ]
-    })
-    for (const ptyId of [localPtyId, sshPtyId]) {
-      internals.currentDriver.set(ptyId, { kind: 'mobile', clientId: 'phone-1' })
-      internals.mobileSubscribers.set(ptyId, new Map([['phone-1', {}]]))
-      internals.remoteDesktopOwners.set(ptyId, 'viewer-1')
-      internals.remoteDesktopViewers.set(ptyId, new Map([['viewer-1', {}]]))
     }
+    runtime.setPtyController({
+      write: () => true,
+      kill: () => true,
+      resize: () => true,
+      getSize: () => ({ cols: 120, rows: 30 }),
+      getForegroundProcess: async () => null
+    })
+    runtime.registerPty(ptyId, TEST_WORKTREE_ID, 'ssh-1', {
+      tabId: 'tab-ssh',
+      leafId: 'leaf-ssh',
+      incarnationId: 'ssh:v1'
+    })
+    runtime.attachWindow(TEST_WINDOW_ID)
+    runtime.syncWindowGraph(TEST_WINDOW_ID, graph)
+    await runtime.handleMobileSubscribe(ptyId, 'phone-1', { cols: 45, rows: 20 })
+    await runtime.updateRemoteDesktopViewer(ptyId, 'viewer-1', 'desktop-1', 100, 30)
 
     runtime.syncWindowGraph(TEST_WINDOW_ID, { tabs: [], leaves: [] })
+    runtime.onPtySpawned(ptyId, 'ssh:v2', { awaitsRegistration: false })
+    runtime.syncWindowGraph(TEST_WINDOW_ID, graph)
 
-    expect(runtime.getAllTerminalDrivers()).toEqual(new Map())
-    for (const ptyId of [localPtyId, sshPtyId]) {
-      expect(runtime.isRemoteDesktopViewerOwner(ptyId, 'viewer-1')).toBe(false)
-      expect(internals.mobileSubscribers.has(ptyId)).toBe(false)
-    }
-    expect(runtime.getStatus().liveLeafCount).toBe(0)
+    expect(runtime.getDriver(ptyId)).toEqual({ kind: 'idle' })
+    expect(runtime.isRemoteDesktopViewerOwner(ptyId, 'viewer-1')).toBe(false)
   })
 
   it('transfers authority from the headless sentinel to the first real window', () => {
