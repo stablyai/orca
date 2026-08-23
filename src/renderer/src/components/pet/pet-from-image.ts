@@ -10,6 +10,7 @@ import {
   SHEET_COLUMNS
 } from './pet-sheet-composer'
 import { detectLegs } from './pet-rig-detection'
+import { keyMagenta } from './pet-magenta-key'
 import type { PetAnimationName } from './pet-agent-state'
 
 /** Manifest fields a generated pet writes, matching what the bundle importer
@@ -85,7 +86,10 @@ const ANIMATION_ROW: Record<PetAnimationName, number> = {
 /** Turns an uploaded image into a pet in one of the bundled aesthetics.
  *
  *  Deterministic end to end — same image and style give the same bytes — so the
- *  preview the user approves is exactly what gets written. */
+ *  preview the user approves is exactly what gets written. Part of holding that
+ *  promise is `keyMagenta` below: a generated pet is saved as a bundle, and
+ *  every bundle is chroma-keyed at load, so the pass has to happen here too or
+ *  the preview shows pinks the overlay will never render. */
 export function buildPetFromImage(
   image: RgbaImage,
   styleId: string,
@@ -136,6 +140,10 @@ export function buildPetFromImage(
   } else {
     sheet = composeWholeBodySheet(body, rig)
   }
+
+  // Why last, and on the composed sheet: nothing may reintroduce the key colour
+  // afterwards. The pass is idempotent, so the loader repeating it is a no-op.
+  keyMagenta(sheet.data)
 
   return {
     ok: true,

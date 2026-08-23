@@ -6,6 +6,7 @@ import { SHEET_COLUMNS, SHEET_ROWS } from './pet-sheet-composer'
 import { BUNDLED_PET_RIGS } from './pet-rigs'
 import { GREMLIN_PET_ID, DEFAULT_PET_ID } from './pet-models'
 import { BACKGROUND_TOLERANCE, type RgbaImage } from './pet-image-cutout'
+import { magentaScore } from './pet-magenta-key'
 
 /** A character on transparent background: head over a wider body. */
 function uploadedCharacter(width = 60, height = 90): RgbaImage {
@@ -26,6 +27,21 @@ function uploadedCharacter(width = 60, height = 90): RgbaImage {
     for (let x = 16; x < 44; x++) {
       paint(x, y)
     }
+  }
+  return img
+}
+
+/** The same character in a pink the magenta chroma-key scores against. Load-time
+ *  keying runs on every bundle, so the build has to account for it. */
+function hotPinkCharacter(width = 60, height = 90): RgbaImage {
+  const img = uploadedCharacter(width, height)
+  for (let i = 0; i < img.data.length; i += 4) {
+    if (img.data[i + 3] === 0) {
+      continue
+    }
+    img.data[i] = 230
+    img.data[i + 1] = 60
+    img.data[i + 2] = 200
   }
   return img
 }
@@ -167,6 +183,30 @@ describe('buildPetFromImage', () => {
     expect(animations['running-left'].row).toBe(animations.running.row)
     expect(animations['running-right'].row).toBe(animations.running.row)
     expect(animations.review.row).toBe(animations.waiting.row)
+  })
+
+  it('keys the magenta the loader will key, so the preview is the saved pet', () => {
+    const result = buildPetFromImage(hotPinkCharacter(), GREMLIN_PET_ID)
+
+    expect(result.ok).toBe(true)
+    if (!result.ok) {
+      return
+    }
+    const { data } = result.sheet
+    let opaque = 0
+    let stillKeyable = 0
+    for (let i = 0; i < data.length; i += 4) {
+      if (data[i + 3] === 0) {
+        continue
+      }
+      opaque++
+      if (magentaScore(data[i], data[i + 1], data[i + 2]) > 0) {
+        stillKeyable++
+      }
+    }
+    // The subject has to survive at all, or the assertion below is vacuous.
+    expect(opaque).toBeGreaterThan(0)
+    expect(stillKeyable).toBe(0)
   })
 
   it('refuses a photo whose background could not be separated', () => {
