@@ -1,95 +1,32 @@
-import { execFileSync } from 'node:child_process'
-import type { ElectronApplication, Page } from '@stablyai/playwright-test'
+import type { Page } from '@stablyai/playwright-test'
 import { test, expect } from './helpers/orca-app'
-import { ensureTerminalVisible, waitForActiveWorktree, waitForSessionReady } from './helpers/store'
 import {
+  ensureTerminalVisible,
+  switchToOtherWorktree,
+  switchToWorktree,
+  waitForActiveWorktree,
+  waitForSessionReady
+} from './helpers/store'
+import {
+  execInTerminal,
   focusActiveTerminalInput,
   getTerminalContent,
-  waitForActivePanePtyId
+  waitForActivePanePtyId,
+  waitForTerminalOutput
 } from './helpers/terminal'
+import {
+  clickTerminalTab,
+  dragTerminalTabOutside,
+  getTerminalTabSnapshot,
+  persistActiveWorkspaceIdentity,
+  positionSourceWindowForDetach,
+  positionWindowsForReturn
+} from './helpers/terminal-window-drag'
 
-type Point = { x: number; y: number }
-
-function warpCursor(point: Point): void {
-  execFileSync('/usr/bin/swift', [
-    '-e',
-    `import CoreGraphics\nCGWarpMouseCursorPosition(CGPoint(x: ${Math.round(point.x)}, y: ${Math.round(point.y)}))`
-  ])
-}
-
-async function dragTabOutside(
-  app: ElectronApplication,
-  page: Page,
-  tabId: string,
-  targetPoint: Point,
-  direction: 'left' | 'right'
-): Promise<void> {
-  await page.bringToFront()
-  const tab = page.locator(`[data-testid="sortable-tab"][data-tab-id="${tabId}"]`).first()
-  await expect(tab).toBeVisible()
-  const initialBox = await tab.boundingBox()
-  if (!initialBox) {
-    throw new Error('terminal tab has no bounding box')
-  }
-  const position = {
-    x: Math.min(30, initialBox.width / 2),
-    y: initialBox.height / 2
-  }
-  await tab.hover({ position })
-  const box = await tab.boundingBox()
-  if (!box) {
-    throw new Error('terminal tab disappeared after hover')
-  }
-  const viewport = await page.evaluate(() => ({
-    width: window.innerWidth,
-    height: window.innerHeight
-  }))
-  const start = { x: box.x + position.x, y: box.y + position.y }
-  const outsideX = direction === 'left' ? -80 : viewport.width + 80
-
-  expect(
-    await page.evaluate(
-      (point) =>
-        document
-          .elementFromPoint(point.x, point.y)
-          ?.closest('[data-testid="sortable-tab"]')
-          ?.getAttribute('data-tab-id') ?? null,
-      start
-    )
-  ).toBe(tabId)
-
-  await page.mouse.move(start.x, start.y)
-  await page.mouse.down()
-  await page.mouse.move(start.x + (direction === 'left' ? -20 : 20), start.y, { steps: 3 })
-  await page.mouse.move(outsideX, Math.min(start.y + 20, viewport.height - 20), { steps: 10 })
-  warpCursor(targetPoint)
-  await expect
-    .poll(() => app.evaluate(({ screen }) => screen.getCursorScreenPoint()))
-    .toEqual(targetPoint)
-  await page.mouse.up()
-}
-
-async function getTabSnapshot(page: Page, tabId: string) {
-  return page.evaluate((id) => {
-    const state = window.__store?.getState()
-    if (!state) {
-      return null
-    }
-    const tab = Object.values(state.tabsByWorktree)
-      .flat()
-      .find((candidate) => candidate.id === id)
-    const layout = state.terminalLayoutsByTabId[id]
-    return {
-      exists: Boolean(tab),
-      ptyIds: [
-        ...new Set([
-          ...Object.values(layout?.ptyIdsByLeafId ?? {}),
-          ...(state.ptyIdsByTabId[id] ?? []),
-          ...(tab?.ptyId ? [tab.ptyId] : [])
-        ])
-      ].filter(Boolean)
-    }
-  }, tabId)
+async function streamIndex(page: Page, token: string): Promise<number> {
+  const content = await getTerminalContent(page, 40_000)
+  const matches = [...content.matchAll(new RegExp(`__STREAM_${token}__:(\\d+)`, 'g'))]
+  return matches.length === 0 ? -1 : Number(matches.at(-1)![1])
 }
 
 test.describe.configure({ mode: 'serial' })
@@ -100,7 +37,7 @@ test('detaches and reattaches one live terminal tab without replacing its PTY @h
 }) => {
   test.skip(process.platform !== 'darwin', 'live cursor warp uses macOS CoreGraphics')
   await waitForSessionReady(orcaPage)
-  await waitForActiveWorktree(orcaPage)
+  const sourceWorktreeId = await waitForActiveWorktree(orcaPage)
   await ensureTerminalVisible(orcaPage)
   const tabId = await orcaPage.evaluate(() => {
     const state = window.__store?.getState()
@@ -121,31 +58,24 @@ test('detaches and reattaches one live terminal tab without replacing its PTY @h
   const originalPtyId = await waitForActivePanePtyId(orcaPage, 30_000)
 
   const token = `detach_${Date.now()}`
-  await focusActiveTerminalInput(orcaPage)
-  await orcaPage.keyboard.type(`export ORCA_DETACH_TOKEN=${token}`)
-  await orcaPage.keyboard.press('Enter')
+  const beforeDetachMarker = `__BEFORE_DETACH__:${token}`
+  await execInTerminal(
+    orcaPage,
+    originalPtyId,
+    `export ORCA_DETACH_TOKEN=${token}; printf '__BEFORE_DETACH__:%s\\n' "$ORCA_DETACH_TOKEN"; i=0; while [ "$i" -lt 200 ]; do printf '__STREAM_${token}__:%s\\n' "$i"; i=$((i+1)); sleep 0.2; done & export ORCA_DETACH_STREAM_PID=$!`
+  )
+  await waitForTerminalOutput(orcaPage, beforeDetachMarker, 15_000, 40_000)
+  await expect
+    .poll(() => streamIndex(orcaPage, token), { timeout: 15_000 })
+    .toBeGreaterThanOrEqual(1)
+  const streamIndexBeforeDetach = await streamIndex(orcaPage, token)
 
-  const firstGeometry = await electronApp.evaluate(
-    ({ BrowserWindow, screen }, sourceId) => {
-      const source = BrowserWindow.fromId(sourceId)
-      if (!source) {
-        throw new Error('control window missing')
-      }
-      const area = screen.getPrimaryDisplay().workArea
-      source.setBounds({
-        x: area.x + 20,
-        y: area.y + 20,
-        width: Math.min(760, Math.floor(area.width * 0.55)),
-        height: Math.min(700, area.height - 40)
-      })
-      return {
-        targetPoint: { x: area.x + area.width - 30, y: area.y + Math.min(300, area.height - 30) }
-      }
-    },
+  const targetPoint = await positionSourceWindowForDetach(
+    electronApp,
     (await orcaPage.evaluate(() => window.api.terminalWindow.getContext())).windowId
   )
 
-  await dragTabOutside(electronApp, orcaPage, tabId!, firstGeometry.targetPoint, 'right')
+  await dragTerminalTabOutside(electronApp, orcaPage, tabId!, targetPoint, 'right')
   await expect.poll(() => electronApp.windows().length, { timeout: 30_000 }).toBe(2)
 
   const windows = await Promise.all(
@@ -159,14 +89,19 @@ test('detaches and reattaches one live terminal tab without replacing its PTY @h
   const secondary = windows.find(({ context }) => context.role === 'secondary')
   expect(control).toBeTruthy()
   expect(secondary).toBeTruthy()
-  await expect.poll(() => getTabSnapshot(control!.page, tabId!)).toMatchObject({ exists: false })
   await expect
-    .poll(() => getTabSnapshot(secondary!.page, tabId!))
+    .poll(() => getTerminalTabSnapshot(control!.page, tabId!))
+    .toMatchObject({ exists: false })
+  await expect
+    .poll(() => getTerminalTabSnapshot(secondary!.page, tabId!))
     .toMatchObject({
       exists: true,
       ptyIds: expect.arrayContaining([originalPtyId])
     })
   expect(await waitForActivePanePtyId(secondary!.page, 30_000)).toBe(originalPtyId)
+  await expect
+    .poll(() => streamIndex(secondary!.page, token), { timeout: 15_000 })
+    .toBeGreaterThan(streamIndexBeforeDetach)
   await secondary!.page.evaluate(() => {
     const state = window.__store?.getState()
     state?.setSidebarOpen(false)
@@ -181,33 +116,44 @@ test('detaches and reattaches one live terminal tab without replacing its PTY @h
     .poll(() => getTerminalContent(secondary!.page), { timeout: 15_000 })
     .toContain(afterDetachMarker)
 
-  const backGeometry = await electronApp.evaluate(
-    ({ BrowserWindow, screen }, ids) => {
-      const controlWindow = BrowserWindow.fromId(ids.control)
-      const secondaryWindow = BrowserWindow.fromId(ids.secondary)
-      if (!controlWindow || !secondaryWindow) {
-        throw new Error('transfer windows missing')
-      }
-      const area = screen.getPrimaryDisplay().workArea
-      const width = Math.floor((area.width - 80) / 2)
-      const height = Math.min(700, area.height - 40)
-      controlWindow.setBounds({ x: area.x + 20, y: area.y + 20, width, height })
-      secondaryWindow.setBounds({ x: area.x + width + 60, y: area.y + 20, width, height })
-      const bounds = controlWindow.getBounds()
-      return { targetPoint: { x: bounds.x + bounds.width / 2, y: bounds.y + bounds.height / 2 } }
-    },
-    { control: control!.context.windowId, secondary: secondary!.context.windowId }
-  )
+  const returnPoint = await positionWindowsForReturn(electronApp, {
+    control: control!.context.windowId,
+    secondary: secondary!.context.windowId
+  })
 
-  await dragTabOutside(electronApp, secondary!.page, tabId!, backGeometry.targetPoint, 'left')
+  const mismatchedWorktreeId = await switchToOtherWorktree(control!.page, sourceWorktreeId)
+  expect(mismatchedWorktreeId).not.toBeNull()
+  await persistActiveWorkspaceIdentity(control!.page)
+  await dragTerminalTabOutside(electronApp, secondary!.page, tabId!, returnPoint, 'left')
+  await expect.poll(() => electronApp.windows().length).toBe(2)
+  await expect(
+    secondary!.page.locator(`[data-testid="sortable-tab"][data-tab-id="${tabId}"]`).first()
+  ).toBeVisible()
+  const rollbackMarker = `__ROLLBACK__:${token}`
+  await execInTerminal(
+    secondary!.page,
+    originalPtyId,
+    `printf '__ROLLBACK__:%s\\n' "$ORCA_DETACH_TOKEN"`
+  )
+  await expect
+    .poll(() => getTerminalContent(secondary!.page), { timeout: 15_000 })
+    .toContain(rollbackMarker)
+
+  await switchToWorktree(control!.page, sourceWorktreeId)
+  await persistActiveWorkspaceIdentity(control!.page)
+  await dragTerminalTabOutside(electronApp, secondary!.page, tabId!, returnPoint, 'left')
   await expect.poll(() => electronApp.windows().length, { timeout: 30_000 }).toBe(1)
   await expect
-    .poll(() => getTabSnapshot(control!.page, tabId!))
+    .poll(() => getTerminalTabSnapshot(control!.page, tabId!))
     .toMatchObject({
       exists: true,
       ptyIds: expect.arrayContaining([originalPtyId])
     })
+  await clickTerminalTab(control!.page, tabId!)
   expect(await waitForActivePanePtyId(control!.page, 30_000)).toBe(originalPtyId)
+  await expect
+    .poll(() => getTerminalContent(control!.page, 40_000), { timeout: 15_000 })
+    .toContain(beforeDetachMarker)
 
   const afterReturnMarker = `__AFTER_RETURN__:${token}`
   await focusActiveTerminalInput(control!.page)
@@ -218,6 +164,14 @@ test('detaches and reattaches one live terminal tab without replacing its PTY @h
     .toContain(afterReturnMarker)
 
   console.log(
-    JSON.stringify({ tabId, ptyId: originalPtyId, token, afterDetachMarker, afterReturnMarker })
+    JSON.stringify({
+      tabId,
+      ptyId: originalPtyId,
+      token,
+      beforeDetachMarker,
+      afterDetachMarker,
+      rollbackMarker,
+      afterReturnMarker
+    })
   )
 })
