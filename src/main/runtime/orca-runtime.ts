@@ -35612,6 +35612,10 @@ export class OrcaRuntimeService {
       VISIBLE_TERMINAL_SNAPSHOT_TIMEOUT_MS,
       Math.max(0, probeTimeoutMs - settleMarginMs)
     )
+    // Node clamps sub-millisecond timers to 1ms, so no distinct retirement deadline exists.
+    if (providerTimeoutMs < 1) {
+      return
+    }
     // Retire the provider before the detached probe and waiter can settle.
     void withTimeout(
       this.readTerminal(
