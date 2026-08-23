@@ -301,11 +301,10 @@ function terminate(child: ChildProcess, signal?: NodeJS.Signals): void {
  * Prefer `runProcess`. This exists so those callers still get the Windows
  * invariants (hidden console, correct `.cmd` argv) instead of reaching for
  * `execFileSync` and re-deciding them.
- */
-/**
- * Why it throws rather than ignoring: the spec type is shared with runProcess,
- * so a caller can copy one across and silently get head truncation back on
- * output whose meaning is at the end.
+ *
+ * `retainOutput: 'tail'` throws rather than being ignored: the spec type is
+ * shared with runProcess, so a caller can copy one across and silently get
+ * head truncation back on output whose meaning is at the end.
  */
 export function runProcessSync(spec: ProcessSpec): ProcessResult {
   if (spec.retainOutput === 'tail') {

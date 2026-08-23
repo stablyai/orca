@@ -192,7 +192,7 @@ export async function runWslInstallProcess(
     maxOutputBytes: MAX_STARTUP_BUFFER_BYTES,
     // The operative error ("mv: Read-only file system") lands after whatever
     // apt and base64 already printed, so head-truncation surfaces the noise.
-    retainOutput: 'tail',
+    retainOutput: 'tail'
   })
   return result.timedOut
     ? { code: null, stderr: `${result.stderr}\ninstall timed out after ${INSTALL_TIMEOUT_MS}ms` }

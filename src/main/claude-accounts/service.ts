@@ -667,7 +667,7 @@ export class ClaudeAccountService {
       loginPath: 'none',
       shell: 'bash',
       script: 'mktemp -d "${TMPDIR:-/tmp}/orca-claude-login.XXXXXX"',
-      timeoutMs: 5000,
+      timeoutMs: 5000
     })
     const linuxPath = created.stdout.replaceAll(String.fromCharCode(0), '').trim()
     if (created.code !== 0 || created.timedOut || !linuxPath.startsWith('/')) {
@@ -692,7 +692,7 @@ export class ClaudeAccountService {
           loginPath: 'none',
           program: 'rm',
           args: ['-rf', '--', tempConfig.linuxPath],
-          timeoutMs: 5000,
+          timeoutMs: 5000
         })
       } catch {
         // Best-effort cleanup.
@@ -907,7 +907,7 @@ export class ClaudeAccountService {
       loginPath: 'none',
       shell: 'bash',
       script: 'printf "%s\\n%s\\n" "$WSL_DISTRO_NAME" "$HOME"',
-      timeoutMs: 5000,
+      timeoutMs: 5000
     })
     const [rawDistro, rawHome] =
       info.code === 0 && !info.timedOut
@@ -929,7 +929,7 @@ export class ClaudeAccountService {
       shell: 'bash',
       script: 'mkdir -p "$1" && printf \'%s\\n\' "$2" > "$1/.orca-managed-claude-auth"',
       args: [wslLinuxAuthPath, accountId],
-      timeoutMs: 5000,
+      timeoutMs: 5000
     })
     if (created.code !== 0 || created.timedOut) {
       throw new Error('Could not create the managed WSL Claude auth directory.')
@@ -980,7 +980,7 @@ export class ClaudeAccountService {
                 : 'test -n "$(cat "$candidate_real/.orca-managed-claude-auth")"',
               'case "$candidate_real" in "$managed_root_real"/*/auth) printf "%s\\n" "$candidate_real" ;; *) exit 35 ;; esac'
             ].join('\n'),
-            timeoutMs: 5000,
+            timeoutMs: 5000
           })
           if (owned.code !== 0 || owned.timedOut) {
             throw new Error('Managed Claude auth directory does not exist on disk.')

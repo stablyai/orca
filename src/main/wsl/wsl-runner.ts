@@ -187,20 +187,24 @@ function resolveScriptDelivery(spec: WslSpec & { script: string }): 'argv' | 'st
 }
 
 /** `<shell> -c`/`-s` for a script, otherwise the program itself. */
-function guestCommandArgv(spec: WslSpec): string[] {
+function guestCommandArgv(spec: WslSpec, delivery: 'argv' | 'stdin'): string[] {
   if (spec.script === undefined) {
     return [spec.program, ...(spec.args ?? [])]
   }
   const shell = spec.shell ?? 'sh'
   // `--` keeps positional args starting at $1 under both forms.
-  return resolveScriptDelivery({ ...spec, script: spec.script }) === 'stdin'
+  return delivery === 'stdin'
     ? [shell, '-s', '--', ...(spec.args ?? [])]
     : [shell, '-c', spec.script, '--', ...(spec.args ?? [])]
 }
 
 /** Shell-free argv, with the cached environment applied when one is available. */
-function buildGuestArgv(environment: WslGuestEnvironment | null, spec: WslSpec): string[] {
-  const command = guestCommandArgv(spec)
+function buildGuestArgv(
+  environment: WslGuestEnvironment | null,
+  spec: WslSpec,
+  delivery: 'argv' | 'stdin'
+): string[] {
+  const command = guestCommandArgv(spec, delivery)
   const argv = environment
     ? [environment.envBinary, `PATH=${environment.path}`, `HOME=${environment.home}`, ...command]
     : command
@@ -239,7 +243,11 @@ export async function runWslProcess(spec: WslSpec): Promise<WslResult> {
   // the probe most often fails *because* the distro is slow, so the fallback
   // would hit the hazard exactly when it is worst. Run shell-free with the
   // distro's default PATH instead: degraded, never blocking.
-  const argv = buildGuestArgv(environment, spec)
+  // Resolved once: argv shape and stdin payload must agree, and computing it
+  // in both places invites them to drift.
+  const delivery =
+    spec.script === undefined ? 'argv' : resolveScriptDelivery({ ...spec, script: spec.script })
+  const argv = buildGuestArgv(environment, spec, delivery)
 
   // One budget for the whole call: the probe used to run on its own 10s timer
   // ahead of the timed leg, so a 5s caller could wait 15s.
@@ -248,10 +256,7 @@ export async function runWslProcess(spec: WslSpec): Promise<WslResult> {
     program: resolveWslExecutablePath(),
     args: buildWslExecArgs(spec.distro, argv),
     env: buildHostEnv(spec.env),
-    input:
-      spec.script !== undefined && resolveScriptDelivery({ ...spec, script: spec.script }) === 'stdin'
-        ? spec.script
-        : undefined,
+    input: delivery === 'stdin' ? spec.script : undefined,
     timeoutMs: remainingMs,
     maxOutputBytes: spec.maxOutputBytes,
     retainOutput: spec.retainOutput

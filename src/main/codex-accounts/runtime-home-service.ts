@@ -1246,7 +1246,6 @@ export class CodexRuntimeHomeService {
     return index > 0 ? value.slice(0, index) : '/'
   }
 
-
   private joinWslPath(basePath: string, ...segments: string[]): string {
     return parseWslUncPath(basePath)
       ? pathWin32.join(basePath, ...segments)

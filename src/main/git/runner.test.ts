@@ -353,4 +353,3 @@ describe('redirectPortedHostnameToEnv WSLENV forwarding', () => {
     expect((options.env?.WSLENV ?? '').split(':')).toContain('GITLAB_HOST')
   })
 })
-

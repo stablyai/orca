@@ -51,7 +51,12 @@ describe('W1: every WSL call inherits the spawn chokepoint', () => {
   it('passes argv as an array, never a command string', async () => {
     // A command string would put quoting back in the caller's hands, which is
     // the entire class W1 removed.
-    await runWslProcess({ loginPath: 'preferred', distro: 'Ubuntu', program: '/bin/echo', args: ['a b'] })
+    await runWslProcess({
+      loginPath: 'preferred',
+      distro: 'Ubuntu',
+      program: '/bin/echo',
+      args: ['a b']
+    })
     expect(Array.isArray(spawnSpec().args)).toBe(true)
     expect(spawnSpec().args).toContain('a b')
   })
@@ -119,7 +124,11 @@ describe('failure modes stay distinguishable', () => {
       stderr: '',
       timedOut: false
     })
-    const result = await runWslProcess({ loginPath: 'preferred', distro: 'Ubuntu', program: '/bin/false' })
+    const result = await runWslProcess({
+      loginPath: 'preferred',
+      distro: 'Ubuntu',
+      program: '/bin/false'
+    })
     expect(result.code).toBe(3)
     expect(result.timedOut).toBe(false)
   })
@@ -132,7 +141,11 @@ describe('failure modes stay distinguishable', () => {
       stderr: '',
       timedOut: true
     })
-    const result = await runWslProcess({ loginPath: 'preferred', distro: 'Ubuntu', program: '/bin/true' })
+    const result = await runWslProcess({
+      loginPath: 'preferred',
+      distro: 'Ubuntu',
+      program: '/bin/true'
+    })
     expect(result.timedOut).toBe(true)
   })
 

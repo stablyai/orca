@@ -31,7 +31,10 @@ export type ScannedFile = { path: string; relativePath: string; source: string }
  * Dot-directories are skipped: they hold generated and vendored trees (the
  * cross-version e2e checkouts among them), which are not ours to fix.
  */
-export function scanSourceTree(root: string, options: { includeTests?: boolean } = {}): ScannedFile[] {
+export function scanSourceTree(
+  root: string,
+  options: { includeTests?: boolean } = {}
+): ScannedFile[] {
   const found: ScannedFile[] = []
   const visit = (directory: string): void => {
     for (const entry of readdirSync(directory)) {

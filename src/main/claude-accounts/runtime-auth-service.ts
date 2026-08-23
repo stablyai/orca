@@ -1100,7 +1100,7 @@ export class ClaudeRuntimeAuthService {
               `test "$(cat "$candidate_real/.orca-managed-claude-auth")" = ${shellQuote(account.id)}`,
               'case "$candidate_real" in "$managed_root_real"/*/auth) printf "%s\\n" "$candidate_real" ;; *) exit 35 ;; esac'
             ].join('\n'),
-            timeoutMs: 5000,
+            timeoutMs: 5000
           })
           if (owned.timedOut) {
             throw new Error(OWNERSHIP_PROBE_TIMEOUT)

@@ -276,7 +276,13 @@ describe('preflight', () => {
     })
     runWslProcessMock.mockImplementation(async ({ script }: { script: string }) => {
       if (script.includes('gh') && script.includes('--version')) {
-        return { environmentResolved: true, code: 0, stdout: 'gh version 2.0.0\n', stderr: '', timedOut: false }
+        return {
+          environmentResolved: true,
+          code: 0,
+          stdout: 'gh version 2.0.0\n',
+          stderr: '',
+          timedOut: false
+        }
       }
       if (script.includes('gh') && script.includes('auth status')) {
         return {

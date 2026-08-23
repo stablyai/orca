@@ -46,9 +46,6 @@ const SOURCE_ROOT = resolve(__dirname, '../..')
  */
 const OWNER_FILE = 'shared/child-process/run-process.ts'
 
-
-
-
 /** The call's argument text, brace-matched so a nested options literal stays whole. */
 function readCallArguments(source: string, openParenIndex: number): string {
   let depth = 0

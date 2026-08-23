@@ -43,11 +43,10 @@ describeOnWsl('runWslProcess against a real distro', () => {
   }, 120_000)
 
   it('probe lane survives a ~/.profile that blocks for a minute', async () => {
-    // The blocking profile makes the probe time out, so the lane degrades --
-    // that is the point: the call must still answer inside its own budget
-    // rather than inheriting the 60s stall. This is #14288 against a real
-    // distro, and it needs allowDegradedEnvironment because the runner
-    // otherwise refuses an unresolved PATH.
+    // The blocking profile makes the probe time out -- that is the point: the
+    // call must still answer inside its own budget rather than inheriting the
+    // 60s stall. This is #14288 against a real distro, and it relies on a
+    // failed probe being non-fatal.
     const started = Date.now()
     const result = await runWslProcess({
       loginPath: 'preferred',
@@ -67,7 +66,7 @@ describeOnWsl('runWslProcess against a real distro', () => {
       loginPath: 'preferred',
       distro: DISTRO,
       program: '/bin/true',
-      timeoutMs: 15_000,
+      timeoutMs: 15_000
     })
     expect(Date.now() - started).toBeLessThan(5_000)
   }, 30_000)

@@ -103,9 +103,7 @@ function bindsWslBinaryToASpawnedIdentifier(source: string): boolean {
   )) {
     bound.add(match[1]!)
   }
-  for (const match of source.matchAll(
-    /\b([A-Za-z_$][\w$]*)\s*:\s*[^,;\n]*['"`]wsl\.exe['"`]/g
-  )) {
+  for (const match of source.matchAll(/\b([A-Za-z_$][\w$]*)\s*:\s*[^,;\n]*['"`]wsl\.exe['"`]/g)) {
     bound.add(match[1]!)
   }
   // Assignment with no declarator: `this.binary = 'wsl.exe'`, and the split
@@ -120,10 +118,7 @@ function bindsWslBinaryToASpawnedIdentifier(source: string): boolean {
   // A helper that hands back the binary is a spawn site one hop away, and the
   // hop is untrackable by regex -- but only when this file also spawns
   // something. Returning the name as terminal metadata is not a spawn.
-  if (
-    /\breturn\s+['"`]wsl\.exe['"`]/.test(source) &&
-    /\b\w*(?:spawn|exec)\w*\s*\(/i.test(source)
-  ) {
+  if (/\breturn\s+['"`]wsl\.exe['"`]/.test(source) && /\b\w*(?:spawn|exec)\w*\s*\(/i.test(source)) {
     return true
   }
   for (const name of bound) {
@@ -284,9 +279,7 @@ describe('bash-only payloads declare their interpreter', () => {
     // the pin belongs to one branch and the substring test cannot tell which,
     // so a pinned branch excused an unpinned one. An exotic call therefore
     // cannot be excused -- write it as a plain object literal instead.
-    if (
-      calls.some(({ text }) => isExotic(text)) && BASHISM.test(source)
-    ) {
+    if (calls.some(({ text }) => isExotic(text)) && BASHISM.test(source)) {
       offenders.push(relativePath)
       continue
     }
@@ -308,7 +301,9 @@ describe('bash-only payloads declare their interpreter', () => {
     // calls would leave one behind, and a body that also occurs earlier as a
     // substring would blank the wrong region.
     const pinnedRanges: [number, number][] = [
-      ...calls.filter(({ text }) => text.includes("shell: 'bash'")).map(({ start, end }): [number, number] => [start, end]),
+      ...calls
+        .filter(({ text }) => text.includes("shell: 'bash'"))
+        .map(({ start, end }): [number, number] => [start, end]),
       ...[...source.matchAll(/'bash',\s*\n?\s*'-lc',[\s\S]{0,4000}?\n\s*\]/g)].map(
         (m): [number, number] => [m.index, m.index + m[0].length]
       )
@@ -323,9 +318,7 @@ describe('bash-only payloads declare their interpreter', () => {
     // A spread hides every key, `script` and `shell` alike, so it has to count
     // as carrying a script -- otherwise `runWslProcess({ ...spec })` is a hole
     // the file-wide arm never looks at.
-    const scriptCalls = calls.filter(
-      ({ text }) => /\bscript\b/.test(text) || /\.\.\./.test(text)
-    )
+    const scriptCalls = calls.filter(({ text }) => /\bscript\b/.test(text) || /\.\.\./.test(text))
     // Zero collected calls is not zero risk: `Object.assign({...}, {script})`
     // puts the payload in the second literal, and a renamed callee that the
     // alias scan misses collects nothing at all. If the file carries a bashism
@@ -346,7 +339,6 @@ describe('bash-only payloads declare their interpreter', () => {
 
 describe('wsl.exe is spawned through one runner', () => {
   const offenders = findSpawnSites()
-
 
   it('still detects a known spawn shape', () => {
     // Why name a specific file rather than assert a total: `offenders.length +

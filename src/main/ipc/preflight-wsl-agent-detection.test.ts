@@ -21,7 +21,13 @@ function lastSpec(): RunWslProcessSpec {
 describe('detectWslCommandsOnPath', () => {
   beforeEach(() => {
     runWslProcessMock.mockReset()
-    runWslProcessMock.mockResolvedValue({ environmentResolved: true, code: 0, stdout: '', stderr: '', timedOut: false })
+    runWslProcessMock.mockResolvedValue({
+      environmentResolved: true,
+      code: 0,
+      stdout: '',
+      stderr: '',
+      timedOut: false
+    })
   })
 
   afterEach(() => {
@@ -204,11 +210,13 @@ describe('the detection script itself, run by a real POSIX shell', () => {
     expect(await runScript()).not.toContain('__ORCA_AGENT_PATH__claude')
   })
 
-  itPosix.each(['.volta/bin', '.asdf/shims', '.fnm/aliases/default/bin', '.local/share/mise/shims'])(
-    'covers %s, which the native fallback also probes',
-    async (dir) => {
-      plant(dir, 'claude')
-      expect(await runScript()).toContain('__ORCA_AGENT_PATH__claude')
-    }
-  )
+  itPosix.each([
+    '.volta/bin',
+    '.asdf/shims',
+    '.fnm/aliases/default/bin',
+    '.local/share/mise/shims'
+  ])('covers %s, which the native fallback also probes', async (dir) => {
+    plant(dir, 'claude')
+    expect(await runScript()).toContain('__ORCA_AGENT_PATH__claude')
+  })
 })

@@ -1912,6 +1912,9 @@ export function redirectPortedHostnameToEnv(
   // named in WSLENV, so without this the ported host silently never crosses and
   // glab talks to gitlab.com instead (#12557). Credit: #12558.
   const env: NodeJS.ProcessEnv = { ...(options.env ?? process.env), GITLAB_HOST: host }
+  // Unguarded by platform on purpose: WSLENV is meaningless outside Windows, so
+  // the extra key is inert there, and gating it would need the test to know the
+  // platform for no behavioural gain.
   addWslEnvKeys(env, ['GITLAB_HOST'])
   return {
     args: [...args.slice(0, i), ...args.slice(i + 2)],

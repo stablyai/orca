@@ -135,13 +135,31 @@ describe('preflight', () => {
 
       const target = String(args[0])
       if (target === 'claude') {
-        return { environmentResolved: true, code: 0, stdout: '/Users/test/.local/bin/claude\n', stderr: '', timedOut: false }
+        return {
+          environmentResolved: true,
+          code: 0,
+          stdout: '/Users/test/.local/bin/claude\n',
+          stderr: '',
+          timedOut: false
+        }
       }
       if (target === 'continue') {
-        return { environmentResolved: true, code: 0, stdout: 'continue: shell built-in command\n', stderr: '', timedOut: false }
+        return {
+          environmentResolved: true,
+          code: 0,
+          stdout: 'continue: shell built-in command\n',
+          stderr: '',
+          timedOut: false
+        }
       }
       if (target === 'cursor-agent') {
-        return { environmentResolved: true, code: 0, stdout: '/Users/test/.local/bin/cursor-agent\n', stderr: '', timedOut: false }
+        return {
+          environmentResolved: true,
+          code: 0,
+          stdout: '/Users/test/.local/bin/cursor-agent\n',
+          stderr: '',
+          timedOut: false
+        }
       }
       throw new Error('not found')
     })
@@ -155,7 +173,13 @@ describe('preflight', () => {
         throw new Error(`unexpected command ${String(command)}`)
       }
       if (String(args[0]) === 'orca') {
-        return { environmentResolved: true, code: 0, stdout: '/Applications/Orca.app/Contents/MacOS/orca\n', stderr: '', timedOut: false }
+        return {
+          environmentResolved: true,
+          code: 0,
+          stdout: '/Applications/Orca.app/Contents/MacOS/orca\n',
+          stderr: '',
+          timedOut: false
+        }
       }
       throw new Error('not found')
     })
@@ -169,10 +193,22 @@ describe('preflight', () => {
         throw new Error(`unexpected command ${String(command)}`)
       }
       if (String(args[0]) === 'claude') {
-        return { environmentResolved: true, code: 0, stdout: '/Users/test/.local/bin/claude\n', stderr: '', timedOut: false }
+        return {
+          environmentResolved: true,
+          code: 0,
+          stdout: '/Users/test/.local/bin/claude\n',
+          stderr: '',
+          timedOut: false
+        }
       }
       if (String(args[0]) === 'orca') {
-        return { environmentResolved: true, code: 0, stdout: '/Applications/Orca.app/Contents/MacOS/orca\n', stderr: '', timedOut: false }
+        return {
+          environmentResolved: true,
+          code: 0,
+          stdout: '/Applications/Orca.app/Contents/MacOS/orca\n',
+          stderr: '',
+          timedOut: false
+        }
       }
       throw new Error('not found')
     })
@@ -190,10 +226,22 @@ describe('preflight', () => {
         throw new Error(`unexpected command ${String(command)}`)
       }
       if (String(args[0]) === 'claude') {
-        return { environmentResolved: true, code: 0, stdout: '/mock/windows/npm/claude.cmd\n', stderr: '', timedOut: false }
+        return {
+          environmentResolved: true,
+          code: 0,
+          stdout: '/mock/windows/npm/claude.cmd\n',
+          stderr: '',
+          timedOut: false
+        }
       }
       if (String(args[0]) === 'orca') {
-        return { environmentResolved: true, code: 0, stdout: '/mock/windows/programs/orca.cmd\n', stderr: '', timedOut: false }
+        return {
+          environmentResolved: true,
+          code: 0,
+          stdout: '/mock/windows/programs/orca.cmd\n',
+          stderr: '',
+          timedOut: false
+        }
       }
       throw new Error('not found')
     })
@@ -239,7 +287,13 @@ describe('preflight', () => {
         throw new Error(`unexpected command ${String(command)}`)
       }
       if (String(args[0]) === 'claude') {
-        return { environmentResolved: true, code: 0, stdout: '/Users/test/.local/bin/claude\n', stderr: '', timedOut: false }
+        return {
+          environmentResolved: true,
+          code: 0,
+          stdout: '/Users/test/.local/bin/claude\n',
+          stderr: '',
+          timedOut: false
+        }
       }
       throw new Error('not found')
     })
@@ -273,10 +327,22 @@ describe('preflight', () => {
         throw new Error(`unexpected command ${String(command)}`)
       }
       if (String(args[0]) === 'openclaude') {
-        return { environmentResolved: true, code: 0, stdout: '/Users/test/.local/bin/openclaude\n', stderr: '', timedOut: false }
+        return {
+          environmentResolved: true,
+          code: 0,
+          stdout: '/Users/test/.local/bin/openclaude\n',
+          stderr: '',
+          timedOut: false
+        }
       }
       if (String(args[0]) === 'cursor-agent') {
-        return { environmentResolved: true, code: 0, stdout: '/Users/test/.local/bin/cursor-agent\n', stderr: '', timedOut: false }
+        return {
+          environmentResolved: true,
+          code: 0,
+          stdout: '/Users/test/.local/bin/cursor-agent\n',
+          stderr: '',
+          timedOut: false
+        }
       }
       throw new Error('not found')
     })
@@ -303,7 +369,13 @@ describe('preflight', () => {
         throw new Error(`unexpected command ${String(command)}`)
       }
       if (String(args[0]) === 'codex' && process.env.PATH?.startsWith('/home/test/.local/bin')) {
-        return { environmentResolved: true, code: 0, stdout: '/home/test/.local/bin/codex\n', stderr: '', timedOut: false }
+        return {
+          environmentResolved: true,
+          code: 0,
+          stdout: '/home/test/.local/bin/codex\n',
+          stderr: '',
+          timedOut: false
+        }
       }
       throw new Error('not found')
     })
@@ -328,7 +400,13 @@ describe('preflight', () => {
     })
     runWslProcessMock.mockImplementation(async ({ script }: { script: string }) => {
       if (script.includes("'claude'")) {
-        return { environmentResolved: true, code: 0, stdout: '__ORCA_AGENT_PATH__claude\t/home/test/.local/bin/claude\n', stderr: '', timedOut: false }
+        return {
+          environmentResolved: true,
+          code: 0,
+          stdout: '__ORCA_AGENT_PATH__claude\t/home/test/.local/bin/claude\n',
+          stderr: '',
+          timedOut: false
+        }
       }
       throw new Error('not found')
     })
@@ -349,7 +427,13 @@ describe('preflight', () => {
       expect(script).not.toContain("'orca-dev'")
       expect(script).not.toContain("'orca-ide'")
       if (script.includes("'claude'")) {
-        return { environmentResolved: true, code: 0, stdout: '__ORCA_AGENT_PATH__claude\t/home/test/.local/bin/claude\n', stderr: '', timedOut: false }
+        return {
+          environmentResolved: true,
+          code: 0,
+          stdout: '__ORCA_AGENT_PATH__claude\t/home/test/.local/bin/claude\n',
+          stderr: '',
+          timedOut: false
+        }
       }
       throw new Error('not found')
     })
@@ -363,7 +447,13 @@ describe('preflight', () => {
         throw new Error(`unexpected command ${String(command)}`)
       }
       if (String(args[0]) === 'vibe') {
-        return { environmentResolved: true, code: 0, stdout: '/home/test/.local/bin/vibe\n', stderr: '', timedOut: false }
+        return {
+          environmentResolved: true,
+          code: 0,
+          stdout: '/home/test/.local/bin/vibe\n',
+          stderr: '',
+          timedOut: false
+        }
       }
       throw new Error('not found')
     })
@@ -392,7 +482,13 @@ describe('preflight', () => {
     })
     runWslProcessMock.mockImplementation(async ({ script }: { script: string }) => {
       if (script.includes("'claude'")) {
-        return { environmentResolved: true, code: 0, stdout: '__ORCA_AGENT_PATH__claude\t/home/test/.local/bin/claude\n', stderr: '', timedOut: false }
+        return {
+          environmentResolved: true,
+          code: 0,
+          stdout: '__ORCA_AGENT_PATH__claude\t/home/test/.local/bin/claude\n',
+          stderr: '',
+          timedOut: false
+        }
       }
       throw new Error('not found')
     })

@@ -36,12 +36,12 @@ describe('stripComments', () => {
   })
 
   it('is not derailed by a quote inside a regex literal', () => {
-    const source = ["const re = /['\"]/", '/* spawn(bad) */', 'spawn(good)'].join('\n')
+    const source = ['const re = /[\'"]/', '/* spawn(bad) */', 'spawn(good)'].join('\n')
     expect(stripComments(source)).not.toContain('bad')
   })
 
   it('handles an escaped quote inside a string', () => {
-    const source = ['const s = \'it\\\'s\'', '/* spawn(bad) */'].join('\n')
+    const source = ["const s = 'it\\'s'", '/* spawn(bad) */'].join('\n')
     expect(stripComments(source)).not.toContain('bad')
   })
 })
@@ -83,7 +83,8 @@ describe('regex literals', () => {
     // The real shape, from a shell quoter: the `'` inside /'/g read as a string
     // opener and desynced every later line, so a scan of the file silently
     // found nothing and its guard reported clean.
-    const source = "const q = (v: string): string => `'${v.replace(/'/g, \"x\")}'`\nspawn('wsl.exe')\n"
+    const source =
+      "const q = (v: string): string => `'${v.replace(/'/g, \"x\")}'`\nspawn('wsl.exe')\n"
     expect(blankStringContents(source, true)).not.toBe('desynced')
     expect(blankStringContents(source)).toContain('spawn(')
   })
@@ -98,11 +99,18 @@ describe('regex literals', () => {
     expect(blankStringContents(source)).toContain('banner with a renderer')
   })
 
-
   it.each([
-    ['postfix decrement', "const half = n-- / 2; execFile(bin, args, { cwd: '/usr/bin' })", 'execFile(bin, args'],
+    [
+      'postfix decrement',
+      "const half = n-- / 2; execFile(bin, args, { cwd: '/usr/bin' })",
+      'execFile(bin, args'
+    ],
     ['non-null assertion', 'const b = done! / total!\nexecFile(y)\n', 'execFile(y)'],
-    ['JSX self-close', 'const a = c ? <A size={14} /> : <B size={14} />\nexecFile(x)\n', 'execFile(x)']
+    [
+      'JSX self-close',
+      'const a = c ? <A size={14} /> : <B size={14} />\nexecFile(x)\n',
+      'execFile(x)'
+    ]
   ])('reads %s as division, not a pattern', (_case, source, survives) => {
     // Blanking live code is the dangerous direction: the swallowed span took a
     // whole execFile call with it and left no desync behind, so the guard saw

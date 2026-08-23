@@ -54,16 +54,19 @@ afterEach(() => {
 })
 
 describe('separator', () => {
-  it.each([['none'], ['preferred']] as const)('uses --exec and never -- with loginPath %s', async (lane) => {
-    // Why this is pinned on both lanes: under `--`, wsl.exe expands $name in
-    // every forwarded argument before the guest runs -- even with no shell in
-    // the command -- so a script means something other than what it says
-    // (#12964). No escaping on our side is a reliable substitute.
-    seedWslGuestEnvironmentForTests(undefined, ENVIRONMENT)
-    await runWslProcess({ loginPath: lane, program: '/usr/bin/git', args: ['status'] })
-    expect(lastArgv()).toContain('--exec')
-    expect(lastArgv()).not.toContain('--')
-  })
+  it.each([['none'], ['preferred']] as const)(
+    'uses --exec and never -- with loginPath %s',
+    async (lane) => {
+      // Why this is pinned on both lanes: under `--`, wsl.exe expands $name in
+      // every forwarded argument before the guest runs -- even with no shell in
+      // the command -- so a script means something other than what it says
+      // (#12964). No escaping on our side is a reliable substitute.
+      seedWslGuestEnvironmentForTests(undefined, ENVIRONMENT)
+      await runWslProcess({ loginPath: lane, program: '/usr/bin/git', args: ['status'] })
+      expect(lastArgv()).toContain('--exec')
+      expect(lastArgv()).not.toContain('--')
+    }
+  )
 
   it('passes the distro before --exec', async () => {
     seedWslGuestEnvironmentForTests('Ubuntu', ENVIRONMENT)
@@ -135,7 +138,6 @@ describe('scripts', () => {
     ])
   })
 
-
   it('leaves stdin free so a stdin-reading command cannot truncate the script', async () => {
     // The regression this pins: with the script piped, `ssh -T` in a user hook
     // drains the pipe, bash reads EOF, exits 0, and every later line of the
@@ -150,7 +152,6 @@ describe('scripts', () => {
     expect(spec.input).toBeUndefined()
     expect(spec.args).toContain('ssh -T git@github.com || true\npnpm install')
   })
-
 
   it('falls back to stdin for a script too large for a command line', async () => {
     // A user hook is the one unbounded script here (`run-both` concatenates two
@@ -231,9 +232,9 @@ describe('guest cwd', () => {
     // A Windows path here means a mistake further up; converting it silently
     // hides that.
     seedWslGuestEnvironmentForTests(undefined, ENVIRONMENT)
-    await expect(runWslProcess({ loginPath: 'preferred', program: '/bin/true', cwd })).rejects.toThrow(
-      /guest path/
-    )
+    await expect(
+      runWslProcess({ loginPath: 'preferred', program: '/bin/true', cwd })
+    ).rejects.toThrow(/guest path/)
   })
 })
 
@@ -241,7 +242,9 @@ describe('program is a binary, not a shell string', () => {
   it.each([['sh -c echo hi'], ['a; b'], ['a | b'], ['a && b'], ['echo $HOME'], ['a > b']])(
     'rejects %s',
     async (program) => {
-      await expect(runWslProcess({ loginPath: 'preferred', program })).rejects.toThrow(/single binary/)
+      await expect(runWslProcess({ loginPath: 'preferred', program })).rejects.toThrow(
+        /single binary/
+      )
     }
   )
 
@@ -289,12 +292,12 @@ describe('the probe never starves the command', () => {
     // ~1667ms -- less than the 5s it had before the runner existed, which is
     // how a cold distro came back as "not installed".
     // No seed: the probe must actually run, or this measures the command leg
-    // and passes for any split. allowDegradedEnvironment keeps the call alive
-    // once the probe fails.
+    // and passes for any split. A failed probe is non-fatal now, so the call
+    // still reaches its command.
     await runWslProcess({
       loginPath: 'preferred',
       program: '/bin/true',
-      timeoutMs,
+      timeoutMs
     })
     const probeMs = runProcessMock.mock.calls[0]?.[0].timeoutMs as number
     expect(probeMs).toBeLessThanOrEqual(timeoutMs - floor)
