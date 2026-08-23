@@ -2260,6 +2260,11 @@ export function getDigitIndexModifierChords(
       continue
     }
     const chord = platformModifiers(parsed, platform)
+    // Why: canonicalizeDigitIndexBinding accepts a bare "1", so a hand-edited file can reach here
+    // with no modifier at all. An empty chord would arm on every ordinary keystroke.
+    if (!chord.meta && !chord.control && !chord.alt && !chord.shift) {
+      continue
+    }
     if (!chords.some((existing) => keybindingModifierChordsEqual(existing, chord))) {
       chords.push(chord)
     }
