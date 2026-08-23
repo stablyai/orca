@@ -1,7 +1,12 @@
 import type { AppState } from '@/store'
 import type { TerminalWindowTransferSeed } from '../../../../shared/terminal-window-transfer'
 import { getRepoExecutionHostId } from '../../../../shared/execution-host'
-import { isWorkspaceKey, worktreeWorkspaceKey } from '../../../../shared/workspace-scope'
+import {
+  isWorkspaceKey,
+  parseWorkspaceKey,
+  worktreeWorkspaceKey
+} from '../../../../shared/workspace-scope'
+import { getFolderWorkspaceCandidateRepos } from '@/lib/folder-workspace-connection'
 import { getResolvedExecutionHostIdForWorktree } from '@/lib/resolved-worktree-execution-host'
 
 export type TerminalWindowTransferCaptureResult =
@@ -16,6 +21,7 @@ export type TerminalWindowTransferCaptureResult =
         | 'terminal_workspace_identity_missing'
         | 'terminal_repo_not_found'
         | 'terminal_pty_not_found'
+        | 'terminal_pty_mismatch'
     }
 
 export function captureTerminalWindowTransferSeed(
@@ -40,47 +46,55 @@ export function captureTerminalWindowTransferSeed(
         (candidate) => candidate.id === unified.groupId
       )
     : undefined
-  if (!group) {
+  if (!group || group.worktreeId !== tab.worktreeId || !group.tabOrder.includes(tabId)) {
     return { ok: false, error: 'terminal_group_not_found' }
   }
   const layout = state.terminalLayoutsByTabId[tabId]
   if (!layout) {
     return { ok: false, error: 'terminal_layout_not_found' }
   }
-  const canonicalWorkspaceKey =
-    state.activeWorkspaceKey ??
-    (isWorkspaceKey(tab.worktreeId) ? tab.worktreeId : worktreeWorkspaceKey(tab.worktreeId))
+  const canonicalWorkspaceKey = isWorkspaceKey(tab.worktreeId)
+    ? tab.worktreeId
+    : worktreeWorkspaceKey(tab.worktreeId)
+  if (state.activeWorkspaceKey && state.activeWorkspaceKey !== canonicalWorkspaceKey) {
+    return { ok: false, error: 'terminal_workspace_identity_missing' }
+  }
   const hostId =
     state.activeWorkspaceExecutionHostId ??
     getResolvedExecutionHostIdForWorktree(state, tab.worktreeId)
   if (!hostId) {
     return { ok: false, error: 'terminal_workspace_identity_missing' }
   }
-  const activeRepo = state.activeRepoId
-    ? state.repos.find(
-        (candidate) =>
-          candidate.id === state.activeRepoId && getRepoExecutionHostId(candidate) === hostId
-      )
-    : undefined
-  const worktree = activeRepo ? null : state.getKnownWorktreeById(tab.worktreeId, hostId)
-  const repoCandidates = worktree ? state.repos.filter(({ id }) => id === worktree.repoId) : []
-  const repo =
-    activeRepo ??
-    repoCandidates.find((candidate) => getRepoExecutionHostId(candidate) === hostId) ??
-    (repoCandidates.length === 1 ? repoCandidates[0] : undefined)
+  const scope = parseWorkspaceKey(canonicalWorkspaceKey)
+  const worktree =
+    scope?.type === 'folder' ? null : state.getKnownWorktreeById(tab.worktreeId, hostId)
+  const repoCandidates = (
+    scope?.type === 'folder'
+      ? getFolderWorkspaceCandidateRepos(state, scope.folderWorkspaceId)
+      : worktree
+        ? state.repos.filter(({ id }) => id === worktree.repoId)
+        : []
+  ).filter((candidate) => getRepoExecutionHostId(candidate) === hostId)
+  const activeRepo = repoCandidates.find(({ id }) => id === state.activeRepoId)
+  const repo = activeRepo ?? (repoCandidates.length === 1 ? repoCandidates[0] : undefined)
   if (!repo) {
     return { ok: false, error: 'terminal_repo_not_found' }
   }
-  const ptyIds = [
-    ...new Set([
-      ...Object.values(layout.ptyIdsByLeafId ?? {}),
-      ...(state.ptyIdsByTabId[tabId] ?? []),
-      ...(tab.ptyId ? [tab.ptyId] : [])
-    ])
-  ].filter(Boolean)
+  const ptyIds = [...new Set([tab.ptyId, ...Object.values(layout.ptyIdsByLeafId ?? {})])].filter(
+    (ptyId): ptyId is string => Boolean(ptyId)
+  )
   if (ptyIds.length === 0) {
     return { ok: false, error: 'terminal_pty_not_found' }
   }
+  const rendererPtyIds = [...new Set(state.ptyIdsByTabId[tabId] ?? [])]
+  if (
+    rendererPtyIds.length !== ptyIds.length ||
+    rendererPtyIds.some((ptyId) => !ptyIds.includes(ptyId))
+  ) {
+    return { ok: false, error: 'terminal_pty_mismatch' }
+  }
+  const { pendingActivationSpawn: _pendingActivationSpawn, ...persistedTab } = tab
+  void _pendingActivationSpawn
   return {
     ok: true,
     seed: structuredClone({
@@ -90,7 +104,7 @@ export function captureTerminalWindowTransferSeed(
       repo,
       worktreeId: tab.worktreeId,
       group,
-      tab,
+      tab: persistedTab,
       layout,
       ptyIds
     })

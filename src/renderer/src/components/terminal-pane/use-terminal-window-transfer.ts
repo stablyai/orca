@@ -36,9 +36,12 @@ export async function executeTerminalWindowTransferCommand(
   if (needsSeed && !command.seed) {
     throw new Error('terminal_transfer_seed_missing')
   }
-  const ok = needsSeed
-    ? state.importTransferredTerminalTab(command.seed!)
-    : state.removeTransferredTerminalTab(command.tabId)
+  const ok =
+    command.phase === 'target-import'
+      ? state.importTransferredTerminalTab(command.seed!)
+      : command.phase === 'source-restore'
+        ? state.restoreTransferredTerminalTab(command.seed!)
+        : state.removeTransferredTerminalTab(command.tabId)
   if (!ok) {
     throw new Error(`terminal_transfer_${command.phase}_rejected`)
   }
