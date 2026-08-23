@@ -242,6 +242,23 @@ describe('startup ordering', () => {
     expect(source.match(/onQuitAborted: resumeAfterQuitAbort/g)).toHaveLength(2)
   })
 
+  it('marks and clears the promoted control reload PTY preservation intent', () => {
+    const source = readFileSync(join(process.cwd(), 'src/main/index.ts'), 'utf8')
+    const handoffStart = source.indexOf('onHandoff: (promoted) => {')
+    const handoffEnd = source.indexOf('onVacated:', handoffStart)
+    const handoff = source.slice(handoffStart, handoffEnd)
+    const mark = handoff.indexOf('markRecoveryReloadInFlight(promotedWebContentsId)')
+    const reload = handoff.indexOf('promoted.webContents.reload()')
+
+    expect(handoffStart).toBeGreaterThanOrEqual(0)
+    expect(handoffEnd).toBeGreaterThan(handoffStart)
+    expect(mark).toBeGreaterThanOrEqual(0)
+    expect(reload).toBeGreaterThan(mark)
+    expect(handoff.slice(reload)).toContain(
+      'recoveryReloadInFlight.clear(promotedWebContentsId)'
+    )
+  })
+
   it('uses the tested quit lifecycle before side effects and stages merged hosts before flush', () => {
     const source = readFileSync(join(process.cwd(), 'src/main/index.ts'), 'utf8')
     const beforeQuitStart = source.indexOf("app.on('before-quit'")

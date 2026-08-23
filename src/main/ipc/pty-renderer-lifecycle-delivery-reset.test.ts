@@ -321,6 +321,94 @@ describe('registerPtyHandlers', () => {
     expect(ptyRendererOwners.getOwner(first.id)?.webContentsId).toBe(mainWindow.webContents.id)
   })
 
+  it('preserves a promoted local PTY for one reload then sweeps the next manual reload', async () => {
+    const mockProc = createMockProc()
+    const kill = mockProc.proc.kill
+    spawnMock.mockReturnValue(mockProc.proc)
+    let promotionReloadId: number | null = null
+    const consumedPromotionReloads: number[] = []
+    const isRecoveryReloadInFlight = (webContentsId: number): boolean => {
+      if (promotionReloadId !== webContentsId) {
+        return false
+      }
+      promotionReloadId = null
+      consumedPromotionReloads.push(webContentsId)
+      return true
+    }
+    const activeListeners = (
+      webContents: typeof mainWindow.webContents,
+      eventName: string
+    ): (() => void)[] => {
+      const removed = new Set(
+        webContents.removeListener.mock.calls
+          .filter(([event]) => event === eventName)
+          .map(([, listener]) => listener)
+      )
+      return webContents.on.mock.calls
+        .filter(([event, listener]) => event === eventName && !removed.has(listener))
+        .map(([, listener]) => listener as () => void)
+    }
+    const finishLoad = (webContents: typeof mainWindow.webContents): void => {
+      for (const listener of activeListeners(webContents, 'did-finish-load')) {
+        listener()
+      }
+    }
+    const reload = (webContents: typeof mainWindow.webContents): void => {
+      for (const listener of activeListeners(webContents, 'did-start-navigation')) {
+        ;(
+          listener as unknown as (details: {
+            isMainFrame: boolean
+            isSameDocument: boolean
+          }) => void
+        )({ isMainFrame: true, isSameDocument: false })
+      }
+      finishLoad(webContents)
+    }
+
+    registerPtyHandlers(
+      mainWindow as never,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      { isRecoveryReloadInFlight, reuseRegisteredState: true }
+    )
+    finishLoad(mainWindow.webContents)
+    const result = (await handlers.get('pty:spawn')!(mainWindowIpcEvent, {
+      cols: 80,
+      rows: 24
+    })) as { id: string }
+    const secondary = foreignWindowIpcEvent.sender
+    registerPtyRenderer(secondary as never)
+    finishLoad(secondary)
+    ptyRendererOwners.markDispatcherReady(secondary as never)
+    handoffPtyRendererOwnership([result.id], mainWindow.webContents as never, secondary as never)
+    registerPtyHandlers(
+      { ...mainWindow, webContents: secondary } as never,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      { isRecoveryReloadInFlight, reuseRegisteredState: true }
+    )
+
+    promotionReloadId = secondary.id
+    reload(secondary)
+
+    expect(kill).not.toHaveBeenCalled()
+    expect(ptyRendererOwners.getOwner(result.id)?.webContentsId).toBe(secondary.id)
+    ptyRendererOwners.markDispatcherReady(secondary as never)
+    getPtyWriteListener()(foreignWindowIpcEvent, { id: result.id, data: 'still-live' })
+    expect(mockProc.proc.write).toHaveBeenCalledWith('still-live')
+    expect(consumedPromotionReloads).toEqual([secondary.id])
+
+    reload(secondary)
+
+    expect(kill).toHaveBeenCalledOnce()
+  })
+
   it('installs one lifecycle reset when an existing secondary becomes control', async () => {
     const mockProc = createMockProc()
     spawnMock.mockReturnValue(mockProc.proc)

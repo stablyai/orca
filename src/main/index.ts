@@ -1631,7 +1631,14 @@ function openMainWindow(options: { revealOnDidFinishLoad?: boolean } = {}): Brow
         promoted.on('minimize', stopSyntheticTitleSpinnerTimer)
         promoted.on('show', notifyMainWindowBecameVisible)
         promoted.on('restore', notifyMainWindowBecameVisible)
-        promoted.webContents.reload()
+        const promotedWebContentsId = promoted.webContents.id
+        markRecoveryReloadInFlight(promotedWebContentsId)
+        try {
+          promoted.webContents.reload()
+        } catch (error) {
+          recoveryReloadInFlight.clear(promotedWebContentsId)
+          throw error
+        }
       },
       onVacated: () => {
         mainWindow = null
