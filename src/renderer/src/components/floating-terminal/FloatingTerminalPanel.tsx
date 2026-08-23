@@ -1916,13 +1916,15 @@ export function FloatingTerminalPanel({
                         // atlas to corrupt) while hidden, and the resume on
                         // reopen rebuilds the renderer from scratch.
                         isVisible={isActive && open}
-                        onPtyExit={(ptyId) => {
+                        onPtyExit={(ptyId, ptyExitOptions) => {
                           if (shouldDeferParkedPtyExitTabClose(tab.id, ptyId)) {
                             return
                           }
                           closeTerminalTab(tab.id, {
                             reason: 'pty-exit',
-                            lifecyclePtyId: ptyId
+                            lifecyclePtyId: ptyId,
+                            // Why: a reconciled session loss stays resumable; a process that exited on its own took its session with it.
+                            retireSleepingAgentSessions: ptyExitOptions?.sessionLost !== true
                           })
                         }}
                         onCloseTab={() => closeFloatingItemConfirmed(tab.id)}

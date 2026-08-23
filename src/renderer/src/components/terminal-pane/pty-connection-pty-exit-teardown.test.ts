@@ -384,7 +384,7 @@ describe('connectPanePty', () => {
     sendTerminalInputThroughPane(pane, 'exit\r')
     onPtyExit?.('tab-pty')
 
-    expect(deps.onPtyExitRef.current).toHaveBeenCalledWith('tab-pty')
+    expect(deps.onPtyExitRef.current).toHaveBeenCalledWith('tab-pty', { sessionLost: false })
     expect(manager.closePane).not.toHaveBeenCalled()
   })
 
@@ -403,7 +403,7 @@ describe('connectPanePty', () => {
     // No onPtySpawn call: simulates a reattach to a persisted session.
     onPtyExit?.('tab-pty')
 
-    expect(deps.onPtyExitRef.current).toHaveBeenCalledWith('tab-pty')
+    expect(deps.onPtyExitRef.current).toHaveBeenCalledWith('tab-pty', { sessionLost: false })
     expect(manager.closePane).not.toHaveBeenCalled()
   })
 
@@ -438,7 +438,7 @@ describe('connectPanePty', () => {
       'terminal-reconnected',
       'terminal-old'
     )
-    expect(deps.onPtyExitRef.current).toHaveBeenCalledWith('terminal-reconnected')
+    expect(deps.onPtyExitRef.current).toHaveBeenCalledWith('terminal-reconnected', { sessionLost: false })
     expect(manager.closePane).not.toHaveBeenCalled()
   })
 

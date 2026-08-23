@@ -2658,7 +2658,10 @@ export function connectPanePty(
       })
     return claimKey
   }
-  const onExit = (ptyId: string, opts: { preserveRendererBinding?: boolean } = {}): void => {
+  const onExit = (
+    ptyId: string,
+    opts: { preserveRendererBinding?: boolean; sessionLost?: boolean } = {}
+  ): void => {
     if (handledExitPtyId === ptyId) {
       return
     }
@@ -2666,7 +2669,7 @@ export function connectPanePty(
       // Why: the transport emits exit once; replay it only after a verified commit so rollback keeps renderer state retryable.
       deferPtyShutdownExit(ptyId, (settlement) => {
         if (settlement === 'committed') {
-          onExit(ptyId, { preserveRendererBinding: true })
+          onExit(ptyId, { preserveRendererBinding: true, sessionLost: opts.sessionLost })
         }
       })
       return
@@ -2780,7 +2783,7 @@ export function connectPanePty(
       if (spawnedFreshPtyId === ptyId && !Number.isFinite(lastTerminalInputAt)) {
         return
       }
-      deps.onPtyExitRef.current(ptyId)
+      deps.onPtyExitRef.current(ptyId, { sessionLost: opts.sessionLost === true })
       return
     }
     if (
@@ -9393,7 +9396,7 @@ export function connectPanePty(
     ) {
       return
     }
-    onExit(currentPtyId)
+    onExit(currentPtyId, { sessionLost: true })
   }
 
   const reconcileIfSessionMissing = (
@@ -9437,7 +9440,7 @@ export function connectPanePty(
         ) {
           return
         }
-        onExit(currentPtyId)
+        onExit(currentPtyId, { sessionLost: true })
       })
       .catch(() => {})
   }

@@ -11,6 +11,7 @@ export function closeLocalTerminalTabState(
     captureRecentlyClosed?: boolean
     remoteCloseOwnedByHost?: boolean
     localPtyTeardownOwnedExternally?: boolean
+    retireSleepingAgentSessions?: boolean
     precomputedRetirementPlan?: TerminalTabRetirementPlan
   }
 ): void {
@@ -24,6 +25,7 @@ export function closeLocalTerminalTabState(
       options?.captureRecentlyClosed !== undefined ||
       options?.remoteCloseOwnedByHost ||
       options?.localPtyTeardownOwnedExternally ||
+      options?.retireSleepingAgentSessions ||
       options?.precomputedRetirementPlan
     ) {
       state.closeTab(terminalTabId, options)

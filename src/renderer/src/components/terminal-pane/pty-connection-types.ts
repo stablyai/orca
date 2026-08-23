@@ -13,9 +13,11 @@ import type {
   SleepingAgentLaunchConfig
 } from '../../../../shared/agent-session-resume'
 import type { TerminalKittyKeyboardModeTracker } from '../../../../shared/terminal-kitty-keyboard-mode-tracker'
-import type { PtyTransportRecoveryState } from './pty-transport-types'
+import type { PtyExitOptions, PtyTransportRecoveryState } from './pty-transport-types'
 import type { SessionOptionValue } from '../../../../shared/native-chat-session-options'
 import type { DirectSshPaneRetryAttemptId } from '@/store/slices/direct-ssh-terminal-recovery'
+
+export type { PtyExitOptions }
 
 export type PtyConnectionDeps = {
   tabId: string
@@ -63,7 +65,7 @@ export type PtyConnectionDeps = {
   restoredViewportBlankingPanesRef?: RestoredViewportBlankingPanesRef
   isActiveRef: React.RefObject<boolean>
   isVisibleRef: React.RefObject<boolean>
-  onPtyExitRef: React.RefObject<(ptyId: string) => void>
+  onPtyExitRef: React.RefObject<(ptyId: string, opts?: PtyExitOptions) => void>
   onAgentExitedRef: React.RefObject<(leafId: string) => void>
   onPtyErrorRef?: React.RefObject<(paneId: number, message: string) => void>
   onPtyRecoveryStateRef?: React.RefObject<

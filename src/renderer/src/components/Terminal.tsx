@@ -1808,7 +1808,7 @@ function Terminal(): React.JSX.Element | null {
   )
 
   const handlePtyExit = useCallback(
-    (tabId: string, ptyId: string) => {
+    (tabId: string, ptyId: string, opts?: { sessionLost?: boolean }) => {
       if (consumeSuppressedPtyExit(ptyId)) {
         return
       }
@@ -1816,7 +1816,13 @@ function Terminal(): React.JSX.Element | null {
       if (shouldDeferParkedPtyExitTabClose(tabId, ptyId)) {
         return
       }
-      closeTerminalTab(tabId, { reason: 'pty-exit', lifecyclePtyId: ptyId })
+      closeTerminalTab(tabId, {
+        reason: 'pty-exit',
+        lifecyclePtyId: ptyId,
+        // Why: a reconciled session loss stays resumable, but a process that exited on its own took
+        // its session with it — keep its resume record and activation respawns the closed tab.
+        retireSleepingAgentSessions: opts?.sessionLost !== true
+      })
     },
     [consumeSuppressedPtyExit]
   )
@@ -2644,7 +2650,7 @@ function Terminal(): React.JSX.Element | null {
                             isWorktreeActive={isVisible || isActivityPortalTab}
                             // Why: isolate the portaled Activity leaf so split siblings stay hidden; workspace renders pass null.
                             isolatedPaneKey={activityTerminalPortal?.paneKey ?? null}
-                            onPtyExit={(ptyId) => handlePtyExit(tab.id, ptyId)}
+                            onPtyExit={(ptyId, opts) => handlePtyExit(tab.id, ptyId, opts)}
                             onCloseTab={() => handleCloseTab(tab.id)}
                           />
                         )

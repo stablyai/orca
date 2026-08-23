@@ -51,6 +51,8 @@ export function closeTerminalTab(
     skipRunningProcessConfirm?: boolean
     captureRecentlyClosed?: boolean
     localPtyTeardownOwnedExternally?: boolean
+    /** Retire the tab's agent resume records; set when the exit ended the session for good. */
+    retireSleepingAgentSessions?: boolean
     precomputedRetirementPlan?: TerminalTabRetirementPlan
     precomputedCloseState?: PrecomputedTerminalCloseState
     onClosed?: () => void
@@ -171,6 +173,7 @@ export function closeTerminalTab(
       ...(options?.localPtyTeardownOwnedExternally
         ? { localPtyTeardownOwnedExternally: true }
         : {}),
+      ...(options?.retireSleepingAgentSessions ? { retireSleepingAgentSessions: true } : {}),
       ...(options?.precomputedRetirementPlan
         ? { precomputedRetirementPlan: options.precomputedRetirementPlan }
         : {})
@@ -207,6 +210,7 @@ export function closeTerminalTab(
       ...(options?.localPtyTeardownOwnedExternally
         ? { localPtyTeardownOwnedExternally: true }
         : {}),
+      ...(options?.retireSleepingAgentSessions ? { retireSleepingAgentSessions: true } : {}),
       ...(options?.precomputedRetirementPlan
         ? { precomputedRetirementPlan: options.precomputedRetirementPlan }
         : {})
@@ -249,6 +253,7 @@ export function closeTerminalTab(
       ? { captureRecentlyClosed: options.captureRecentlyClosed }
       : {}),
     ...(options?.localPtyTeardownOwnedExternally ? { localPtyTeardownOwnedExternally: true } : {}),
+    ...(options?.retireSleepingAgentSessions ? { retireSleepingAgentSessions: true } : {}),
     ...(options?.precomputedRetirementPlan
       ? { precomputedRetirementPlan: options.precomputedRetirementPlan }
       : {})

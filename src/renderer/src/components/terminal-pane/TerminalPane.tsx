@@ -248,6 +248,7 @@ import {
 } from './regular-terminal-focus-ownership'
 import { useTerminalQuickCommandHosts } from '@/hooks/use-terminal-quick-command-hosts'
 import { refreshTerminalImeInputContext } from './terminal-ime-input-context-refresh'
+import type { PtyExitOptions } from './pty-connection-types'
 
 type TerminalPaneProps = {
   tabId: string
@@ -260,7 +261,7 @@ type TerminalPaneProps = {
   isolatedPaneKey?: string | null
   // Why: ephemeral one-off command terminals don't need the header's prominent split affordance (split shortcuts still work).
   showSplitButton?: boolean
-  onPtyExit: (ptyId: string) => void
+  onPtyExit: (ptyId: string, opts?: PtyExitOptions) => void
   onCloseTab: () => void
 }
 

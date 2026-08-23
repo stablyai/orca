@@ -731,6 +731,31 @@ describe('closeTerminalTab', () => {
     expect(closeTab).toHaveBeenCalledWith('tab-1', { reason: 'pty-exit' })
   })
 
+  it('threads resume-record retirement through to closeTab', () => {
+    const closeTab = vi.fn()
+    getStateMock.mockReturnValue({
+      settings: { activeRuntimeEnvironmentId: null },
+      tabsByWorktree: {
+        'wt-1': [{ id: 'tab-1' }, { id: 'tab-2' }]
+      },
+      unifiedTabsByWorktree: {},
+      activeWorktreeId: 'wt-1',
+      activeTabId: 'tab-2',
+      openFiles: [],
+      browserTabsByWorktree: {},
+      closeTab,
+      setActiveTab: vi.fn()
+    })
+
+    // Why: a shell that exited on its own ends the session, so its resume record must go with the tab.
+    closeTerminalTab('tab-1', { reason: 'pty-exit', retireSleepingAgentSessions: true })
+
+    expect(closeTab).toHaveBeenCalledWith('tab-1', {
+      reason: 'pty-exit',
+      retireSleepingAgentSessions: true
+    })
+  })
+
   it('threads parked-exit history suppression through to closeTab', () => {
     const closeTab = vi.fn()
     getStateMock.mockReturnValue({
