@@ -147,10 +147,26 @@ describe('buildPetFromImage', () => {
       'falling',
       'idle',
       'jumping',
+      'review',
       'rising',
       'running',
+      'running-left',
+      'running-right',
       'waiting'
     ])
+  })
+
+  it('aliases the drag and review names onto the rows a bundled pet uses', () => {
+    const result = buildPetFromImage(uploadedCharacter(), GREMLIN_PET_ID)
+
+    expect(result.ok).toBe(true)
+    if (!result.ok) {
+      return
+    }
+    const animations = result.manifest.animations
+    expect(animations['running-left'].row).toBe(animations.running.row)
+    expect(animations['running-right'].row).toBe(animations.running.row)
+    expect(animations.review.row).toBe(animations.waiting.row)
   })
 
   it('refuses a photo whose background could not be separated', () => {

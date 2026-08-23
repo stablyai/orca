@@ -10,6 +10,7 @@ import {
   SHEET_COLUMNS
 } from './pet-sheet-composer'
 import { detectLegs } from './pet-rig-detection'
+import type { PetAnimationName } from './pet-agent-state'
 
 /** Manifest fields a generated pet writes, matching what the bundle importer
  *  already validates so a generated pet and an imported one are the same thing. */
@@ -63,7 +64,23 @@ export type BuildPetResult =
   | { ok: false; reason: BuildPetFailure }
 
 const SHEET_FPS = 8
-const ROW_ORDER = ['idle', 'running', 'waiting', 'jumping', 'falling', 'downed', 'rising'] as const
+
+/** Row indices must match `pet-sheet-composer.ts`; the aliases must match the
+ *  `POSE` map in `bundled-pet-pose-sprite.ts`. Typed against `PetAnimationName`
+ *  so a new state cannot ship without a row — an undeclared name falls back to
+ *  the default row and reads as a pet stuck idling. */
+const ANIMATION_ROW: Record<PetAnimationName, number> = {
+  idle: 0,
+  running: 1,
+  'running-left': 1,
+  'running-right': 1,
+  waiting: 2,
+  review: 2,
+  jumping: 3,
+  falling: 4,
+  downed: 5,
+  rising: 6
+}
 
 /** Turns an uploaded image into a pet in one of the bundled aesthetics.
  *
@@ -131,7 +148,7 @@ export function buildPetFromImage(
       fps: SHEET_FPS,
       defaultAnimation: 'idle',
       animations: Object.fromEntries(
-        ROW_ORDER.map((name, row) => [name, { row, frames: SHEET_COLUMNS }])
+        Object.entries(ANIMATION_ROW).map(([name, row]) => [name, { row, frames: SHEET_COLUMNS }])
       )
     }
   }
