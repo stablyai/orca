@@ -95,7 +95,9 @@ export async function executeTerminalWindowTransferCommand(
       after
     )
   } catch (error) {
-    rollbackTransferMutation(before, after, command)
+    if (command.phase === 'target-import' || command.phase === 'source-remove') {
+      rollbackTransferMutation(before, after, command)
+    }
     throw error
   }
   const committed = useAppStore.getState()

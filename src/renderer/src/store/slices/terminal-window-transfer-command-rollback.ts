@@ -6,10 +6,8 @@ import {
   restoreTransferSelectors,
   type TransferRollbackPatch
 } from './terminal-window-transfer-projection-rollback'
-import {
-  buildTransferredTerminalRemovalRollbackPatch,
-  transferredTerminalWorktreeIds
-} from './terminal-window-transfer-removal-rollback'
+import { buildTransferredTerminalRemovalRollbackPatch } from './terminal-window-transfer-removal-rollback'
+import { transferredTerminalWorktreeIds } from './terminal-window-transfer-worktree-scope'
 
 function buildImportRollback(
   before: AppState,
@@ -17,11 +15,27 @@ function buildImportRollback(
   current: AppState,
   command: TerminalWindowTransferCommand
 ): Partial<AppState> {
-  const removal = buildTransferredTerminalRemovalPatch(current, command.tabId)
-  if (!removal.ok) {
+  const changed = (Object.keys(after) as (keyof AppState)[]).some(
+    (field) => !Object.is(before[field], after[field])
+  )
+  if (!changed) {
     return {}
   }
-  const patch = { ...removal.patch } as TransferRollbackPatch
+  const afterRemoval = buildTransferredTerminalRemovalPatch(after, command.tabId)
+  const currentRemoval = buildTransferredTerminalRemovalPatch(current, command.tabId)
+  if (!afterRemoval.ok || !currentRemoval.ok) {
+    return {}
+  }
+  const removedAfter = { ...after, ...afterRemoval.patch }
+  const removedCurrent = { ...current, ...currentRemoval.patch }
+  const restored = buildTransferredTerminalRemovalRollbackPatch(
+    before,
+    removedAfter,
+    removedCurrent,
+    command.tabId,
+    current
+  )
+  const patch = { ...currentRemoval.patch, ...restored } as TransferRollbackPatch
   const worktreeIds = transferredTerminalWorktreeIds(after, command.tabId)
   for (const field of [
     'tabsByWorktree',

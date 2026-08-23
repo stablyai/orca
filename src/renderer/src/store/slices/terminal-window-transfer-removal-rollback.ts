@@ -6,6 +6,7 @@ import {
   restoreTransferSelectors,
   type TransferRollbackPatch
 } from './terminal-window-transfer-projection-rollback'
+import { transferredTerminalWorktreeIds } from './terminal-window-transfer-worktree-scope'
 
 type Entity = { id: string }
 
@@ -30,39 +31,6 @@ function restoreItems<T extends Entity>(
     next.splice(Math.min(index, next.length), 0, item)
   }
   return next
-}
-
-export function transferredTerminalWorktreeIds(
-  state: AppState,
-  tabId: string,
-  ...additionalStates: AppState[]
-): Set<string> {
-  const worktreeIds = new Set<string>()
-  for (const candidate of [state, ...additionalStates]) {
-    for (const [worktreeId, tabs] of Object.entries(candidate.tabsByWorktree)) {
-      if (tabs.some(({ id }) => id === tabId)) {
-        worktreeIds.add(worktreeId)
-      }
-    }
-    for (const [worktreeId, tabs] of Object.entries(candidate.unifiedTabsByWorktree)) {
-      if (
-        tabs.some(({ entityId, contentType }) => entityId === tabId && contentType === 'terminal')
-      ) {
-        worktreeIds.add(worktreeId)
-      }
-    }
-    for (const [worktreeId, groups] of Object.entries(candidate.groupsByWorktree)) {
-      if (groups.some(({ tabOrder }) => tabOrder.includes(tabId))) {
-        worktreeIds.add(worktreeId)
-      }
-    }
-    for (const [worktreeId, tabOrder] of Object.entries(candidate.tabBarOrderByWorktree)) {
-      if (tabOrder.includes(tabId)) {
-        worktreeIds.add(worktreeId)
-      }
-    }
-  }
-  return worktreeIds
 }
 
 function restoreWorkspaceTabs(
@@ -197,15 +165,21 @@ function restoreGroupsAndLayout(
   after: AppState,
   current: AppState,
   worktreeIds: ReadonlySet<string>,
-  memberIds: Set<string>
+  memberIds: Set<string>,
+  scopeState?: AppState
 ): Set<string> {
   let groupsByWorktree = current.groupsByWorktree
   let layoutByWorktree = current.layoutByWorktree
   const groupIds = new Set<string>()
   for (const worktreeId of worktreeIds) {
     const beforeGroups = before.groupsByWorktree[worktreeId] ?? []
-    const sourceGroups = beforeGroups.filter(({ tabOrder }) =>
-      tabOrder.some((id) => memberIds.has(id))
+    const scopedGroupIds = new Set(
+      (scopeState?.groupsByWorktree[worktreeId] ?? [])
+        .filter(({ tabOrder }) => tabOrder.some((id) => memberIds.has(id)))
+        .map(({ id }) => id)
+    )
+    const sourceGroups = beforeGroups.filter(
+      ({ id, tabOrder }) => scopedGroupIds.has(id) || tabOrder.some((tabId) => memberIds.has(tabId))
     )
     let currentGroups = current.groupsByWorktree[worktreeId] ?? []
     for (const sourceGroup of sourceGroups) {
@@ -239,7 +213,15 @@ function restoreGroupsAndLayout(
     if (!beforeLayout) {
       continue
     }
-    if (Object.is(currentLayout, after.layoutByWorktree[worktreeId])) {
+    const scopedLayout = scopeState?.layoutByWorktree[worktreeId]
+    if (
+      scopedLayout &&
+      sourceGroups.some(
+        ({ id }) => layoutContains(beforeLayout, id) && layoutContains(scopedLayout, id)
+      )
+    ) {
+      currentLayout = scopedLayout
+    } else if (Object.is(currentLayout, after.layoutByWorktree[worktreeId])) {
       currentLayout = beforeLayout
     } else {
       for (const { id } of sourceGroups) {
@@ -273,12 +255,21 @@ export function buildTransferredTerminalRemovalRollbackPatch(
   before: AppState,
   after: AppState,
   current: AppState,
-  tabId: string
+  tabId: string,
+  scopeState?: AppState
 ): Partial<AppState> {
   const patch: TransferRollbackPatch = {}
   const worktreeIds = transferredTerminalWorktreeIds(before, tabId, after, current)
   const memberIds = restoreWorkspaceTabs(patch, before, after, current, tabId, worktreeIds)
-  const groupIds = restoreGroupsAndLayout(patch, before, after, current, worktreeIds, memberIds)
+  const groupIds = restoreGroupsAndLayout(
+    patch,
+    before,
+    after,
+    current,
+    worktreeIds,
+    memberIds,
+    scopeState
+  )
   restoreTabBarOrder(patch, before, after, current, tabId, worktreeIds)
   restoreTransferLocalProjections(patch, before, after, current, tabId)
   restoreTransferRecordKeys(patch, before, after, current, 'recentQuickCommandIdByGroup', groupIds)

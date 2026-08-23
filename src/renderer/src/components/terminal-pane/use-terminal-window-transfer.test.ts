@@ -629,46 +629,43 @@ describe('executeTerminalWindowTransferCommand', () => {
     expect(mocks.persist).toHaveBeenCalledTimes(2)
   })
 
-  it.each(['source-remove', 'target-remove'] as const)(
-    'restores a tab-bar-only residual after failed %s persistence',
-    async (phase) => {
-      const store = createTestStore()
-      const concurrentTabId = 'tab-concurrent'
-      const removeTransferredTerminalTab = vi.fn(() => {
-        store.setState({ tabBarOrderByWorktree: { 'wt-1': [] } })
-        return true
-      })
-      seedStore(store, {
-        workspaceSessionReady: true,
-        hydrationSucceeded: true,
-        removeTransferredTerminalTab,
-        tabsByWorktree: {},
-        unifiedTabsByWorktree: {},
-        groupsByWorktree: {},
-        tabBarOrderByWorktree: { 'wt-1': ['tab-1'] },
-        openFiles: [],
-        browserTabsByWorktree: {}
-      })
-      mocks.getState.mockImplementation(store.getState)
-      mocks.setState.mockImplementation(store.setState)
-      mocks.persist.mockImplementationOnce(async () => {
-        store.setState({ tabBarOrderByWorktree: { 'wt-1': [concurrentTabId] } })
-        throw new Error('persist failed')
-      })
+  it('restores a tab-bar-only residual after failed source removal persistence', async () => {
+    const store = createTestStore()
+    const concurrentTabId = 'tab-concurrent'
+    const removeTransferredTerminalTab = vi.fn(() => {
+      store.setState({ tabBarOrderByWorktree: { 'wt-1': [] } })
+      return true
+    })
+    seedStore(store, {
+      workspaceSessionReady: true,
+      hydrationSucceeded: true,
+      removeTransferredTerminalTab,
+      tabsByWorktree: {},
+      unifiedTabsByWorktree: {},
+      groupsByWorktree: {},
+      tabBarOrderByWorktree: { 'wt-1': ['tab-1'] },
+      openFiles: [],
+      browserTabsByWorktree: {}
+    })
+    mocks.getState.mockImplementation(store.getState)
+    mocks.setState.mockImplementation(store.setState)
+    mocks.persist.mockImplementationOnce(async () => {
+      store.setState({ tabBarOrderByWorktree: { 'wt-1': [concurrentTabId] } })
+      throw new Error('persist failed')
+    })
 
-      await expect(
-        executeTerminalWindowTransferCommand({
-          transferId: `transfer-tab-bar-${phase}`,
-          tabId: 'tab-1',
-          phase
-        })
-      ).rejects.toThrow('persist failed')
-
-      expect(store.getState().tabBarOrderByWorktree).toEqual({
-        'wt-1': ['tab-1', concurrentTabId]
+    await expect(
+      executeTerminalWindowTransferCommand({
+        transferId: 'transfer-tab-bar-source-remove',
+        tabId: 'tab-1',
+        phase: 'source-remove'
       })
-    }
-  )
+    ).rejects.toThrow('persist failed')
+
+    expect(store.getState().tabBarOrderByWorktree).toEqual({
+      'wt-1': ['tab-1', concurrentTabId]
+    })
+  })
 
   it('does not roll back a transfer field changed concurrently after the action', async () => {
     const transferredTab = { id: 'tab-1', worktreeId: 'wt-1' }
