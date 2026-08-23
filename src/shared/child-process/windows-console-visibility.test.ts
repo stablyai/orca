@@ -46,9 +46,6 @@ const SOURCE_ROOT = resolve(__dirname, '../..')
  */
 const OWNER_FILE = 'shared/child-process/run-process.ts'
 
-
-
-
 /** The call's argument text, brace-matched so a nested options literal stays whole. */
 function readCallArguments(source: string, openParenIndex: number): string {
   let depth = 0
@@ -74,9 +71,34 @@ function findOffenders(): string[] {
     const decommented = stripComments(file.source)
     // Resolve `import { spawn as sp }` so a renamed binding is still a spawn.
     // The previous comment claimed this; only three names were hardcoded.
-    const aliases = [...decommented.matchAll(/\b(?:spawn|spawnSync|execFile|execFileSync|exec|execSync|fork)\s+as\s+(\w+)/g)].map(
-      (match) => match[1]
-    )
+    const aliases = [
+      ...decommented.matchAll(
+        /\b(?:spawn|spawnSync|execFile|execFileSync|exec|execSync|fork)\s+as\s+(\w+)/g
+      )
+    ].map((match) => match[1]!)
+    // Names that resolve to `exec`/`execSync`, which imply shell: true.
+    const shellImplying = new Set(['exec', 'execSync'])
+    for (const match of decommented.matchAll(/\b(exec|execSync)\s+as\s+(\w+)/g)) {
+      shellImplying.add(match[2]!)
+    }
+    // `const run = promisify(execFile)` mints a third name, and it can wrap a
+    // renamed binding, so this has to run after the aliases are known. A
+    // planted `promisify(renamedExecFile)` spawn passed the guard without it.
+    for (const match of decommented.matchAll(
+      // `\w*[Pp]romisify` so `import { promisify as p }` is still seen.
+      /(?:const|let|var)\s+(\w+)\s*=\s*\w*[Pp]romisify\s*\(\s*(\w+)\s*\)/g
+    )) {
+      const wrapped = match[2]!
+      if (
+        aliases.includes(wrapped) ||
+        /^(?:spawn|spawnSync|execFile|execFileSync|exec|execSync|fork)$/.test(wrapped)
+      ) {
+        aliases.push(match[1]!)
+        if (shellImplying.has(wrapped)) {
+          shellImplying.add(match[1]!)
+        }
+      }
+    }
     // The import test needs the module name, which blanking would erase; the
     // call scan needs parens inside strings neutralised. Two views, one file.
     if (!CHILD_PROCESS_IMPORT.test(decommented)) {
@@ -99,7 +121,24 @@ function findOffenders(): string[] {
       if (/^\(\s*\w+\s*\??\s*:\s*[A-Za-z{[(]/.test(args)) {
         continue
       }
-      if (!/windowsHide\s*:\s*true/.test(args)) {
+      // `shell: true` silently makes windowsHide a no-op (run-process.ts,
+      // #14543), and `exec`/`execSync` imply it. A site can therefore read as
+      // guarded while still flashing a conhost -- which is exactly how
+      // `execAsync('where gemini', { windowsHide: true })` got un-allowlisted.
+      const called = match[0].replace(/\s*\($/, '').trim()
+      // Any `shell:` that is not literally `false` counts. `shell:
+      // process.platform === 'win32'` IS shell: true on the platform this
+      // guard is about, and only the literal was being matched.
+      // Recorded gap, not an oversight: `shell: process.platform === 'win32'`
+      // IS shell: true on the platform this guard is about, but matching any
+      // non-`false` value also flags `shell: spawnConfig.shell`
+      // (claude-accounts/service.ts:1086), a pass-through that is false in
+      // every branch. A false positive there costs an allowlist entry, which
+      // disables the guard for that whole file -- worse than the gap. No
+      // computed `shell:` exists in the tree today; if one appears, resolve it
+      // rather than widening this regex.
+      const impliesShell = shellImplying.has(called) || /shell\s*:\s*true/.test(args)
+      if (!/windowsHide\s*:\s*true/.test(args) || impliesShell) {
         offenders.add(file.relativePath)
       }
     }

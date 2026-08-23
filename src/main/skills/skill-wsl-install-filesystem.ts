@@ -213,10 +213,10 @@ export class WslSkillInstallFilesystem implements SkillInstallFilesystem {
   private async runOutput(script: string, args: string[]): Promise<string> {
     const result = await runWslProcess({
       distro: this.distro,
-      lane: 'probe',
-      // Degrade rather than refuse: mkdir/mv/chmod on the default PATH; no login shell before.
-      allowDegradedEnvironment: true,
+      loginPath: 'none',
       script,
+      // POSIX file operations; declared because the payload is opaque here.
+      shell: 'sh',
       args,
       timeoutMs: GUEST_COMMAND_TIMEOUT_MS,
       maxOutputBytes: GUEST_COMMAND_MAX_OUTPUT_BYTES

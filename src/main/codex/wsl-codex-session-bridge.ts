@@ -56,7 +56,7 @@ export async function syncWslCodexSessionsIntoManagedHome(
 
   const result = await runWslProcess({
     distro: target.distro,
-    lane: 'probe',
+    loginPath: 'none',
     script: buildWslCodexSessionBridgeShellCommand(paths),
     // Process substitution and `read -d` are bash-only; dash rejects both.
     shell: 'bash',

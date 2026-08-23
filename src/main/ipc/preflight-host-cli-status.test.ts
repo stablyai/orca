@@ -276,7 +276,13 @@ describe('preflight', () => {
     })
     runWslProcessMock.mockImplementation(async ({ script }: { script: string }) => {
       if (script.includes('gh') && script.includes('--version')) {
-        return { environmentResolved: true, code: 0, stdout: 'gh version 2.0.0\n', stderr: '', timedOut: false }
+        return {
+          environmentResolved: true,
+          code: 0,
+          stdout: 'gh version 2.0.0\n',
+          stderr: '',
+          timedOut: false
+        }
       }
       if (script.includes('gh') && script.includes('auth status')) {
         return {
@@ -296,14 +302,14 @@ describe('preflight', () => {
     expect(runWslProcessMock).toHaveBeenCalledWith(
       expect.objectContaining({
         distro: 'Ubuntu',
-        lane: 'probe',
+        loginPath: 'preferred',
         script: expect.stringMatching(/gh[\s\S]*--version/)
       })
     )
     expect(runWslProcessMock).toHaveBeenCalledWith(
       expect.objectContaining({
         distro: 'Ubuntu',
-        lane: 'probe',
+        loginPath: 'preferred',
         script: expect.stringMatching(/gh[\s\S]*auth status/)
       })
     )

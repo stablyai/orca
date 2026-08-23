@@ -459,21 +459,26 @@ export class WslCliInstaller {
 async function runWslCommand(distro: string, command: string): Promise<string> {
   // Why the probe lane fixes #14288: the prior login shell (`bash -lc`) sourced
   // ~/.profile, so one blocking line there ate the whole 10s timeout.
-  let result: Awaited<ReturnType<typeof runWslProcess>>
-  try {
-    result = await runWslProcess({
-      distro,
-      lane: 'probe',
-      script: command,
-      timeoutMs: WSL_COMMAND_TIMEOUT_MS
-    })
-  } catch {
-    // Why map: the runner's raw "guest environment is unavailable" otherwise
-    // reaches Settings verbatim through ipc/cli.ts -> toast.error.
-    throw new Error('Could not reach the WSL distro. Try again.')
-  }
+  const result = await runWslProcess({
+    distro,
+    loginPath: 'preferred',
+    script: command,
+    // Declared, not assumed: the payload is opaque here, so the guard cannot
+    // check it for bashisms. These are POSIX (`-eu`, `case`), hence sh.
+    shell: 'sh',
+    timeoutMs: WSL_COMMAND_TIMEOUT_MS
+  })
+  // Timeout first: it is the more specific diagnosis, and a timed-out run also
+  // leaves the environment unresolved, so the order decides which one shows.
   if (result.timedOut) {
     throw new Error(`WSL command timed out after ${WSL_COMMAND_TIMEOUT_MS}ms.`)
+  }
+  // Every command here reads the login PATH -- the `case ":$PATH:"` probe most
+  // of all. Without it that probe answers from the distro default PATH, which
+  // never has ~/.local/bin, and Settings states as fact that the CLI is not on
+  // PATH while the user's own terminal finds it. Unverifiable, not negative.
+  if (!result.environmentResolved) {
+    throw new Error('Could not reach the WSL distro. Try again.')
   }
   if (result.code !== 0) {
     throw new Error(result.stderr.trim() || `WSL command failed with exit code ${result.code}.`)

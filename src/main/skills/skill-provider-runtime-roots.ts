@@ -50,10 +50,13 @@ type WslEnvironmentProbe = (distro: string) => Promise<string>
 async function probeWslGrokHome(distro: string): Promise<string> {
   const result = await runWslProcess({
     distro,
-    lane: 'probe',
-    // Degrade rather than refuse: reads $HOME, which wsl.exe supplies without a login shell.
-    allowDegradedEnvironment: true,
+    // 'none': the script runs its own `"$login_shell" -lc`, so asking the
+    // runner to probe first buys a second login shell and spends up to half
+    // the 8s budget before the -lc that actually reads GROK_HOME starts.
+    loginPath: 'none',
     script: WSL_GROK_HOME_SCRIPT,
+    // POSIX (`case`, `exec`); declared because the payload is opaque here.
+    shell: 'sh',
     timeoutMs: WSL_ENV_PROBE_TIMEOUT_MS,
     maxOutputBytes: WSL_ENV_PROBE_MAX_BYTES
   })

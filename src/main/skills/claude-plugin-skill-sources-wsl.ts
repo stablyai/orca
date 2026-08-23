@@ -61,9 +61,9 @@ async function executeWslMetadataRead(distro: string, script: string): Promise<s
   // quietly change its interpreter.
   const result = await runWslProcess({
     distro,
-    lane: 'probe',
-    // Degrade rather than refuse: a metadata read; no login PATH involved.
-    allowDegradedEnvironment: true,
+    // 'none': base64/printf/stat over $HOME paths. The probe would spend up
+    // to 4s of a 5s budget before the read of a file up to 4MB begins.
+    loginPath: 'none',
     script,
     shell: 'bash',
 

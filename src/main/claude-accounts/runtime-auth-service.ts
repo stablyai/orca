@@ -1088,7 +1088,7 @@ export class ClaudeRuntimeAuthService {
         try {
           const owned = await runWslProcess({
             distro: wslInfo.distro,
-            lane: 'probe',
+            loginPath: 'none',
             shell: 'bash',
             script: [
               'set -euo pipefail',
@@ -1100,12 +1100,7 @@ export class ClaudeRuntimeAuthService {
               `test "$(cat "$candidate_real/.orca-managed-claude-auth")" = ${shellQuote(account.id)}`,
               'case "$candidate_real" in "$managed_root_real"/*/auth) printf "%s\\n" "$candidate_real" ;; *) exit 35 ;; esac'
             ].join('\n'),
-            timeoutMs: 5000,
-            // Why degraded is allowed: a failed answer here disowns the account and
-            // clears the user's selection, so a slow distro probe must not decide
-            // ownership. The script reads only $HOME and coreutils, both of which
-            // wsl.exe supplies without the login PATH.
-            allowDegradedEnvironment: true
+            timeoutMs: 5000
           })
           if (owned.timedOut) {
             throw new Error(OWNERSHIP_PROBE_TIMEOUT)

@@ -141,7 +141,13 @@ describe('runHook', () => {
   it('runs WSL hooks through runWslProcess and translates env paths to Linux', async () => {
     execMock.mockReset()
     runWslProcessMock.mockReset()
-    runWslProcessMock.mockResolvedValue({ environmentResolved: true, code: 0, stdout: '', stderr: '', timedOut: false })
+    runWslProcessMock.mockResolvedValue({
+      environmentResolved: true,
+      code: 0,
+      stdout: '',
+      stderr: '',
+      timedOut: false
+    })
 
     const fs = await import('node:fs')
     vi.mocked(fs.existsSync).mockReturnValue(true)
@@ -164,7 +170,7 @@ describe('runHook', () => {
       expect(runWslProcessMock).toHaveBeenCalledWith(
         expect.objectContaining({
           distro: 'Ubuntu',
-          lane: 'probe',
+          loginPath: 'preferred',
           script: 'echo hello',
           cwd: '/home/jin/feature',
           // #7652 regression: the unattended WSL hook branch must carry the
@@ -191,7 +197,13 @@ describe('runHook', () => {
   it('runs Windows-path hooks through WSL when the project runtime targets WSL', async () => {
     execMock.mockReset()
     runWslProcessMock.mockReset()
-    runWslProcessMock.mockResolvedValue({ environmentResolved: true, code: 0, stdout: '', stderr: '', timedOut: false })
+    runWslProcessMock.mockResolvedValue({
+      environmentResolved: true,
+      code: 0,
+      stdout: '',
+      stderr: '',
+      timedOut: false
+    })
 
     const fs = await import('node:fs')
     vi.mocked(fs.existsSync).mockReturnValue(true)
@@ -220,7 +232,7 @@ describe('runHook', () => {
       expect(runWslProcessMock).toHaveBeenCalledWith(
         expect.objectContaining({
           distro: 'Ubuntu',
-          lane: 'probe',
+          loginPath: 'preferred',
           script: 'echo hello',
           cwd: '/mnt/c/Users/jinwo/git/orca-feature',
           env: expect.objectContaining({
@@ -296,7 +308,13 @@ describe('runHook', () => {
     // mocked runWslProcess -- there is nothing left in hooks.ts to advance.
     execMock.mockReset()
     runWslProcessMock.mockReset()
-    runWslProcessMock.mockResolvedValue({ environmentResolved: true, code: null, stdout: '', stderr: '', timedOut: true })
+    runWslProcessMock.mockResolvedValue({
+      environmentResolved: true,
+      code: null,
+      stdout: '',
+      stderr: '',
+      timedOut: true
+    })
 
     const fs = await import('node:fs')
     vi.mocked(fs.existsSync).mockReturnValue(true)

@@ -1235,7 +1235,9 @@ export class CodexRuntimeHomeService {
           'fi'
         ].join('\n')
       ],
-      { stdio: ['ignore', 'pipe', 'pipe'], timeout: 5000 }
+      // wsl.exe is console-subsystem: without this a GUI-launched Orca flashes
+      // a conhost and steals foreground for up to the timeout (#10488).
+      { stdio: ['ignore', 'pipe', 'pipe'], timeout: 5000, windowsHide: true }
     )
   }
 
@@ -1243,7 +1245,6 @@ export class CodexRuntimeHomeService {
     const index = value.lastIndexOf('/')
     return index > 0 ? value.slice(0, index) : '/'
   }
-
 
   private joinWslPath(basePath: string, ...segments: string[]): string {
     return parseWslUncPath(basePath)
