@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
+  composeHeadSwapSheet,
   composeRiggedSheet,
   composeWholeBodySheet,
   SHEET_COLUMNS,
@@ -179,5 +180,104 @@ describe('composeRiggedSheet', () => {
         )
       }
     }
+  })
+})
+
+/** The pet's own artwork: a solid slab covering the head slot and well past it. */
+function petArtwork(): RgbaImage {
+  const img = blankImage(rig.frame.width, rig.frame.height)
+  for (let y = 20; y < 300; y++) {
+    for (let x = 60; x < 210; x++) {
+      const i = (y * img.width + x) * 4
+      img.data[i] = 200
+      img.data[i + 1] = 60
+      img.data[i + 2] = 60
+      img.data[i + 3] = 255
+    }
+  }
+  return img
+}
+
+/** What `resampleSubject` hands the composer: a tall subject standing on the
+ *  floor line, filling the frame rather than the head slot. */
+function upload(): RgbaImage {
+  const img = blankImage(rig.frame.width, rig.frame.height)
+  for (let y = 100; y < 300; y++) {
+    for (let x = 81; x < 171; x++) {
+      const i = (y * img.width + x) * 4
+      img.data[i] = 60
+      img.data[i + 1] = 60
+      img.data[i + 2] = 200
+      img.data[i + 3] = 255
+    }
+  }
+  return img
+}
+
+/** Bounds of the upload's own colour, so its placement can be measured apart
+ *  from the pet it was dropped onto. */
+function uploadBounds(img: RgbaImage): { x0: number; y0: number; x1: number; y1: number } | null {
+  let x0 = img.width
+  let y0 = img.height
+  let x1 = -1
+  let y1 = -1
+  for (let y = 0; y < img.height; y++) {
+    for (let x = 0; x < img.width; x++) {
+      const i = (y * img.width + x) * 4
+      if (img.data[i + 3] < 128 || img.data[i + 2] <= img.data[i]) {
+        continue
+      }
+      x0 = Math.min(x0, x)
+      y0 = Math.min(y0, y)
+      x1 = Math.max(x1, x)
+      y1 = Math.max(y1, y)
+    }
+  }
+  return x1 < 0 ? null : { x0, y0, x1, y1 }
+}
+
+describe('composeHeadSwapSheet', () => {
+  // The idle row's first frame is an untransformed pose, so it is the merged
+  // body verbatim.
+  const merged = (): RgbaImage => cell(composeHeadSwapSheet(upload(), petArtwork(), rig), 0, 0)
+
+  it('puts the upload inside the head slot rather than over the whole pet', () => {
+    const [hx0, hy0, hx1, hy1] = rig.head
+
+    const placed = uploadBounds(merged())
+
+    expect(placed).not.toBeNull()
+    expect(placed?.x0).toBeGreaterThanOrEqual(hx0)
+    expect(placed?.y0).toBeGreaterThanOrEqual(hy0)
+    expect(placed?.x1).toBeLessThan(hx1)
+    expect(placed?.y1).toBeLessThan(hy1)
+  })
+
+  it('preserves the upload’s aspect ratio while filling the slot’s tighter axis', () => {
+    const [hx0, , hx1, hy1] = rig.head
+    const slotWidth = hx1 - hx0
+    const source = uploadBounds(upload())!
+    const sourceRatio = (source.x1 - source.x0 + 1) / (source.y1 - source.y0 + 1)
+
+    const placed = uploadBounds(merged())!
+    const width = placed.x1 - placed.x0 + 1
+    const height = placed.y1 - placed.y0 + 1
+
+    expect(width / height).toBeCloseTo(sourceRatio, 1)
+    // Taller than the slot is wide, so height is the binding axis and the upload
+    // rests on the slot's floor — where a head meets a neck.
+    expect(width).toBeLessThan(slotWidth)
+    expect(placed.y1).toBe(hy1 - 1)
+  })
+
+  it('still shows the pet everywhere the upload is not', () => {
+    const [hx0, , hx1, hy1] = rig.head
+    const frame = merged()
+
+    // A pixel well outside the slot belongs to the pet, in the pet's colour.
+    const i = ((hy1 + 40) * frame.width + (hx0 + 20)) * 4
+    expect(frame.data[i + 3]).toBe(255)
+    expect(frame.data[i]).toBeGreaterThan(frame.data[i + 2])
+    expect(hx1).toBeGreaterThan(hx0)
   })
 })

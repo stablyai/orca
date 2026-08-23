@@ -99,23 +99,30 @@ function poseRows(
   }
 }
 
-function subjectHalfWidth(body: RgbaImage): number {
-  let minX = body.width
-  let maxX = -1
-  for (let y = 0; y < body.height; y++) {
-    for (let x = 0; x < body.width; x++) {
-      if (body.data[(y * body.width + x) * 4 + 3] < 128) {
+type SubjectBounds = { x0: number; y0: number; x1: number; y1: number }
+
+function subjectBounds(image: RgbaImage): SubjectBounds | null {
+  let x0 = image.width
+  let y0 = image.height
+  let x1 = -1
+  let y1 = -1
+  for (let y = 0; y < image.height; y++) {
+    for (let x = 0; x < image.width; x++) {
+      if (image.data[(y * image.width + x) * 4 + 3] < 128) {
         continue
       }
-      if (x < minX) {
-        minX = x
-      }
-      if (x > maxX) {
-        maxX = x
-      }
+      x0 = Math.min(x0, x)
+      y0 = Math.min(y0, y)
+      x1 = Math.max(x1, x)
+      y1 = Math.max(y1, y)
     }
   }
-  return maxX < 0 ? body.width / 2 : (maxX - minX + 1) / 2
+  return x1 < 0 ? null : { x0, y0, x1, y1 }
+}
+
+function subjectHalfWidth(body: RgbaImage): number {
+  const bounds = subjectBounds(body)
+  return bounds ? (bounds.x1 - bounds.x0 + 1) / 2 : body.width / 2
 }
 
 /** Builds the sheet with the legs swung, using a rig detected in the upload.
@@ -178,7 +185,23 @@ export function composeHeadSwapSheet(head: RgbaImage, petBody: RgbaImage, rig: P
   drawTransformed(merged, petBody, {})
   clearCell(merged, hx0, hy0, hx1 - hx0, hy1 - hy0)
   // Then the upload, scaled into the slot it left behind.
-  drawTransformed(merged, head, {})
+  const bounds = subjectBounds(head)
+  if (bounds) {
+    const sourceWidth = bounds.x1 - bounds.x0 + 1
+    const sourceHeight = bounds.y1 - bounds.y0 + 1
+    const scale = Math.min((hx1 - hx0) / sourceWidth, (hy1 - hy0) / sourceHeight)
+    // Why bottom-anchored and centred: the slot's floor is where a head meets a
+    // neck, so that edge has to line up; nothing makes either side of it special.
+    drawTransformed(merged, head, {
+      pivotX: bounds.x0,
+      pivotY: bounds.y1 + 1,
+      scaleX: scale,
+      scaleY: scale,
+      translateX: hx0 + (hx1 - hx0 - sourceWidth * scale) / 2 - bounds.x0,
+      translateY: hy1 - (bounds.y1 + 1),
+      clip: cellClip(hx0, hy0, hx1 - hx0, hy1 - hy0)
+    })
+  }
   return composeWholeBodySheet(merged, rig)
 }
 
