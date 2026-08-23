@@ -19,6 +19,7 @@ import { isEphemeralSetupTerminalWorktreeId } from '../../../../shared/ephemeral
 import { TERMINAL_PAIRED_PARKING_RUNTIME_CAPABILITY } from '../../../../shared/protocol-version'
 import { TerminalKittyKeyboardModeTracker } from '../../../../shared/terminal-kitty-keyboard-mode-tracker'
 import { parseTerminalKittyKeyboardFlags } from '../../../../shared/terminal-kitty-keyboard-flags'
+import { restoredSnapshotPaintsPrintableContent } from './restored-snapshot-coverage'
 import { isRuntimeOwnedSshTargetId, parseExecutionHostId } from '../../../../shared/execution-host'
 import { createTerminalZeroDimensionsMessage } from '../../../../shared/terminal-zero-dimensions-diagnostic'
 import { isWorktreeRemovalFenceError } from '../../../../shared/worktree/removal-fence-error'
@@ -5982,6 +5983,7 @@ export function connectPanePty(
     let hiddenOutputRestoreReplayingSnapshot: {
       seq?: number
       pendingDeliveryStartSeq?: number
+      paintsContent?: boolean
     } | null = null
     let hiddenOutputRestoreFloodRepaintTimer: ReturnType<typeof setTimeout> | null = null
     let cancelHiddenOutputRestoreFloodRepaintPark: (() => void) | null = null
@@ -6001,9 +6003,16 @@ export function connectPanePty(
 
     function setRestoredSnapshotBaseline(
       ptyId: string,
-      snapshot: { seq?: number; pendingDeliveryStartSeq?: number }
+      snapshot: { seq?: number; pendingDeliveryStartSeq?: number },
+      paintsContent: boolean
     ): void {
       if (typeof snapshot.seq !== 'number') {
+        clearRestoredSnapshotBaseline()
+        return
+      }
+      // Why: arming drops the redelivery permanently, so the snapshot's painted
+      // content must be able to back the seq it claims; a blank image cannot (STA-5179).
+      if (snapshot.seq > 0 && !paintsContent) {
         clearRestoredSnapshotBaseline()
         return
       }
@@ -7220,7 +7229,11 @@ export function connectPanePty(
         pendingData += sliced ?? chunk.data
       }
       if (replayingSnapshot && replayedSeq !== null) {
-        setRestoredSnapshotBaseline(expectedPtyId, replayingSnapshot)
+        setRestoredSnapshotBaseline(
+          expectedPtyId,
+          replayingSnapshot,
+          replayingSnapshot.paintsContent === true
+        )
         for (const chunk of pendingChunks) {
           if (typeof chunk.seq === 'number' && restoredSnapshotExpectedStartSeq !== null) {
             restoredSnapshotExpectedStartSeq = Math.max(restoredSnapshotExpectedStartSeq, chunk.seq)
@@ -7403,6 +7416,7 @@ export function connectPanePty(
             if (typeof snapshot.seq === 'number') {
               hiddenOutputRestoreReplayingSnapshot = {
                 seq: snapshot.seq,
+                paintsContent: restoredSnapshotPaintsPrintableContent(snapshot),
                 ...(typeof snapshot.pendingDeliveryStartSeq === 'number'
                   ? { pendingDeliveryStartSeq: snapshot.pendingDeliveryStartSeq }
                   : {})
@@ -7726,7 +7740,11 @@ export function connectPanePty(
             return
           }
           // Why: everything at/before snapshot.seq is now painted; chunks still draining from main's ACK backlog below it are duplicates to suppress.
-          setRestoredSnapshotBaseline(currentPtyId, snapshot)
+          setRestoredSnapshotBaseline(
+            currentPtyId,
+            snapshot,
+            restoredSnapshotPaintsPrintableContent(snapshot)
+          )
           hiddenOutputRestoreReplayingSnapshot = null
           const needsFreshSnapshot = hiddenOutputRestoreFreshSnapshotNeeded
           hiddenOutputRestoreFreshSnapshotNeeded = false
@@ -8537,7 +8555,11 @@ export function connectPanePty(
               writeReplayData(modelSnapshot.pendingEscapeTailAnsi)
             }
             // Why: main sampled its delivery backlog with the snapshot; the baseline drops/slices deferred and live chunks the snapshot already covers.
-            setRestoredSnapshotBaseline(ptyId, modelSnapshot)
+            setRestoredSnapshotBaseline(
+              ptyId,
+              modelSnapshot,
+              restoredSnapshotPaintsPrintableContent(modelSnapshot)
+            )
             recordRendererOrderedSeq(modelSnapshot)
             sendFocusedReattachFocusInAfterReplay(ptyId, attemptGeneration)
             if (connectResult?.coldRestore && !isRemoteRuntimePtyId(ptyId)) {
