@@ -169,8 +169,14 @@ function withGuestCwd(cwd: string | undefined, argv: readonly string[]): string[
  * failing to spawn at all and accepting the stdin caveat. Degrading beats
  * failing: a large script that also reads stdin was already broken, while a
  * large script that does not now works where it would have died.
+ *
+ * Measured on the WHOLE command line, not on the script alone. A login PATH is
+ * itself a few KB and is spliced in as `PATH=...`, so a script-only threshold
+ * produced a perverse band: with a long enough PATH, a 7,999-char hook went to
+ * argv and failed to spawn while the same hook at 8,001 chars flipped to stdin
+ * and ran. Size decided how a hook behaved, in the wrong direction.
  */
-const MAX_ARGV_SCRIPT_CHARS = 8_000
+const MAX_COMMAND_LINE_CHARS = 30_000
 
 /** `<shell> -c`/`-s` for a script, otherwise the program itself. */
 function guestCommandArgv(spec: WslSpec, delivery: 'argv' | 'stdin'): string[] {
@@ -182,6 +188,19 @@ function guestCommandArgv(spec: WslSpec, delivery: 'argv' | 'stdin'): string[] {
   return delivery === 'stdin'
     ? [shell, '-s', '--', ...(spec.args ?? [])]
     : [shell, '-c', spec.script, '--', ...(spec.args ?? [])]
+}
+
+/**
+ * What `CreateProcess` will count.
+ *
+ * libuv escapes every `"` and doubles a backslash run before a quote, so a
+ * quote-dense script costs more than its length. Charging one extra character
+ * per `"` or `\\` keeps the estimate on the safe side of the cap; an earlier
+ * version claimed to over-count and in fact under-counted, which put a
+ * quote-heavy ~26KB script on argv and over the real limit.
+ */
+function commandLineLength(args: readonly string[]): number {
+  return args.reduce((total, arg) => total + arg.length + 3 + (arg.match(/["\\]/g)?.length ?? 0), 0)
 }
 
 /** Shell-free argv, with the cached environment applied when one is available. */
@@ -229,11 +248,18 @@ export async function runWslProcess(spec: WslSpec): Promise<WslResult> {
   // the probe most often fails *because* the distro is slow, so the fallback
   // would hit the hazard exactly when it is worst. Run shell-free with the
   // distro's default PATH instead: degraded, never blocking.
-  // Resolved once: argv shape and stdin payload must agree, and computing it
-  // in both places invites them to drift.
+  // Build the argv form first and measure it: the env prefix is part of the
+  // budget, so only the finished line can say whether argv fits. Resolved once
+  // here because the argv shape and the stdin payload must agree.
+  const argvForm = buildGuestArgv(environment, spec, 'argv')
+  // Measure what is actually spawned: `wsl.exe` and `-d <distro> --exec` are
+  // prepended after this point and are part of the same budget.
+  const fullLine = [resolveWslExecutablePath(), ...buildWslExecArgs(spec.distro, argvForm)]
   const delivery: 'argv' | 'stdin' =
-    spec.script !== undefined && spec.script.length > MAX_ARGV_SCRIPT_CHARS ? 'stdin' : 'argv'
-  const argv = buildGuestArgv(environment, spec, delivery)
+    spec.script !== undefined && commandLineLength(fullLine) > MAX_COMMAND_LINE_CHARS
+      ? 'stdin'
+      : 'argv'
+  const argv = delivery === 'argv' ? argvForm : buildGuestArgv(environment, spec, 'stdin')
 
   // One budget for the whole call: the probe used to run on its own 10s timer
   // ahead of the timed leg, so a 5s caller could wait 15s.

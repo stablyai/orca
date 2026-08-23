@@ -159,11 +159,40 @@ describe('scripts', () => {
     // command line at 32767, so argv would fail to spawn at all; stdin still
     // runs it, which is the lesser loss.
     seedWslGuestEnvironmentForTests(undefined, ENVIRONMENT)
-    const script = `echo ${'x'.repeat(9_000)}`
+    const script = `echo ${'x'.repeat(31_000)}`
     await runWslProcess({ loginPath: 'preferred', shell: 'bash', script })
     const spec = runProcessMock.mock.calls.at(-1)?.[0]
     expect(spec.input).toBe(script)
     expect(lastArgv().slice(-3)).toEqual(['bash', '-s', '--'])
+  })
+
+  it('flips to stdin when the login PATH, not the script, is what overflows', async () => {
+    // The perverse band a script-only threshold created: with a long enough
+    // PATH spliced in as `PATH=...`, a 7,999-char hook went to argv and failed
+    // to spawn, while the SAME hook at 8,001 chars flipped to stdin and ran.
+    // Size decided how a hook behaved, in the wrong direction.
+    seedWslGuestEnvironmentForTests(undefined, {
+      ...ENVIRONMENT,
+      path: '/opt/x/bin:'.repeat(2_500)
+    })
+    // Deliberately UNDER any script-only threshold: 7k of script with 27k of
+    // PATH overflows the line, and the old rule sent exactly this to argv.
+    const script = `echo ${'x'.repeat(7_000)}`
+    expect(script.length).toBeLessThan(8_000)
+    await runWslProcess({ loginPath: 'preferred', shell: 'bash', script })
+    const spec = runProcessMock.mock.calls.at(-1)?.[0]
+    expect(spec.input).toBe(script)
+    expect(spec.args.join(' ')).not.toContain(script)
+  })
+
+  it('charges quoting, so a quote-dense script cannot slip over the real cap', async () => {
+    // libuv escapes every `"` and doubles backslash runs, so a script's cost is
+    // more than its length. Counting length alone put a quote-heavy ~26KB
+    // script on argv and over the 32767 ceiling.
+    seedWslGuestEnvironmentForTests(undefined, ENVIRONMENT)
+    const script = '"'.repeat(26_000)
+    await runWslProcess({ loginPath: 'preferred', shell: 'bash', script })
+    expect(runProcessMock.mock.calls.at(-1)?.[0].input).toBe(script)
   })
 
   it('keeps an ordinary-sized script in argv', async () => {
