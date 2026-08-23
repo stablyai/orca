@@ -206,6 +206,50 @@ describe('createMainWindow', () => {
     expect(onRendererProcessGone).toHaveBeenCalledWith(details, 142)
   })
 
+  it('marks the owning window unavailable when renderer host evidence disappears', () => {
+    const windowHandlers: Record<string, (...args: any[]) => void> = {}
+    const webContents = {
+      id: 142,
+      on: vi.fn((event, handler) => {
+        windowHandlers[event] = handler
+      }),
+      setZoomLevel: vi.fn(),
+      setBackgroundThrottling: vi.fn(),
+      invalidate: vi.fn(),
+      setWindowOpenHandler: vi.fn(),
+      send: vi.fn()
+    }
+    const browserWindowInstance = {
+      id: 7,
+      webContents,
+      on: vi.fn(),
+      isDestroyed: vi.fn(() => false),
+      isMaximized: vi.fn(() => true),
+      isFullScreen: vi.fn(() => false),
+      getSize: vi.fn(() => [1200, 800]),
+      setSize: vi.fn(),
+      maximize: vi.fn(),
+      show: vi.fn(),
+      loadFile: vi.fn(),
+      loadURL: vi.fn()
+    }
+    browserWindowMock.mockImplementation(function () {
+      return browserWindowInstance
+    })
+    const onRendererUnavailable = vi.fn()
+
+    createMainWindow(null, { onRendererUnavailable })
+    windowHandlers['render-process-gone']?.(
+      {} as never,
+      { reason: 'crashed', exitCode: 5 } as Electron.RenderProcessGoneDetails
+    )
+    windowHandlers.destroyed?.()
+
+    expect(onRendererUnavailable).toHaveBeenCalledTimes(2)
+    expect(onRendererUnavailable).toHaveBeenNthCalledWith(1, 7)
+    expect(onRendererUnavailable).toHaveBeenNthCalledWith(2, 7)
+  })
+
   it('passes the renderer webContents id through crash recording and recovery callbacks', () => {
     vi.useFakeTimers()
 

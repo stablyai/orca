@@ -282,14 +282,14 @@ export function persistWorkspaceSessionByHostSync(
   }
 }
 
-/** Collect the distinct runtime hosts owning any persisted repo. */
-export function listKnownRuntimeHostIds(
+/** Collect non-local hosts whose window sessions may have their own partition. */
+export function listKnownSessionHostIds(
   repos: readonly Pick<Repo, 'connectionId' | 'executionHostId'>[]
 ): ExecutionHostId[] {
   const hostIds = new Set<ExecutionHostId>()
   for (const repo of repos) {
     const parsed = parseExecutionHostId(getRepoExecutionHostId(repo))
-    if (parsed?.kind === 'runtime') {
+    if (parsed && parsed.kind !== 'local') {
       hostIds.add(parsed.id)
     }
   }
@@ -322,12 +322,12 @@ export async function fetchWorkspaceSessionWithRuntimeHostOwners(
   }
   // Why: startup can know saved runtime session hosts before their repo
   // catalogs hydrate, so include those partitions in the first read.
-  const runtimeHostIds = new Set<ExecutionHostId>([
-    ...listKnownRuntimeHostIds(repos),
+  const sessionHostIds = new Set<ExecutionHostId>([
+    ...listKnownSessionHostIds(repos),
     ...additionalRuntimeHostIds
   ])
   await Promise.all(
-    [...runtimeHostIds].map(async (hostId) => {
+    [...sessionHostIds].map(async (hostId) => {
       try {
         slices[hostId] = await api.get(hostId)
       } catch (err) {

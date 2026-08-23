@@ -242,6 +242,24 @@ describe('startup ordering', () => {
     expect(source.match(/onQuitAborted: resumeAfterQuitAbort/g)).toHaveLength(2)
   })
 
+  it('uses the tested quit lifecycle before side effects and stages merged hosts before flush', () => {
+    const source = readFileSync(join(process.cwd(), 'src/main/index.ts'), 'utf8')
+    const beforeQuitStart = source.indexOf("app.on('before-quit'")
+    const willQuitStart = source.indexOf("app.on('will-quit'", beforeQuitStart)
+    const windowAllClosedStart = source.indexOf("app.on('window-all-closed'", willQuitStart)
+    const beforeQuit = source.slice(beforeQuitStart, willQuitStart)
+    const willQuit = source.slice(willQuitStart, windowAllClosedStart)
+    const lifecycleBegin = beforeQuit.indexOf('windowQuitLifecycle.begin()')
+    const relayFence = beforeQuit.indexOf('desktopRelayService?.fenceAndCloseNow()')
+    const stageSessions = willQuit.indexOf('stageAllKnownHostsBeforeQuit()')
+    const storeFlush = willQuit.indexOf('store?.flushAsync()')
+
+    expect(lifecycleBegin).toBeGreaterThanOrEqual(0)
+    expect(relayFence).toBeGreaterThan(lifecycleBegin)
+    expect(stageSessions).toBeGreaterThanOrEqual(0)
+    expect(storeFlush).toBeGreaterThan(stageSessions)
+  })
+
   it('keeps the power bridge through vetoable before-quit and disposes after commit', () => {
     const source = readFileSync(join(process.cwd(), 'src/main/index.ts'), 'utf8')
     const beforeQuitStart = source.indexOf("app.on('before-quit'")

@@ -440,6 +440,42 @@ describe('terminal window transfer lifecycle recovery', () => {
     expect(h.records.get(h.target.id)).toEqual(terminalWindowSession(false))
   })
 
+  it('does not empty-close a secondary when new content arrives after its empty ACK', async () => {
+    const h = createTerminalWindowTransferHarness()
+    h.windows.remove(h.source.id)
+    h.windows.remove(h.target.id)
+    h.windows.register(h.target as never, 'control')
+    h.windows.register(h.source as never, 'secondary')
+    const coordinator = await createCoordinator(h, { createSecondaryWindow: vi.fn() })
+    coordinator.getContext(ipcEvent(h.target.webContents) as never)
+    h.target.webContents.send.mockImplementation((_channel, command) => {
+      queueMicrotask(() =>
+        coordinator.acknowledge(ipcEvent(h.target.webContents) as never, {
+          ...command,
+          ok: true
+        })
+      )
+    })
+    h.source.webContents.send.mockImplementation((_channel, command) => {
+      queueMicrotask(() => {
+        coordinator.acknowledge(ipcEvent(h.source.webContents) as never, {
+          ...command,
+          ok: true,
+          empty: true
+        })
+        const concurrent = terminalWindowSession(true)
+        concurrent.tabsByWorktree['wt-1']![0]!.id = 'concurrent-tab'
+        h.records.set(h.source.id, concurrent)
+      })
+    })
+
+    await expect(
+      coordinator.detach(ipcEvent(h.source.webContents) as never, terminalWindowSeed())
+    ).resolves.toEqual({ ok: true, targetWindowId: h.target.id })
+    expect(h.source.close).not.toHaveBeenCalled()
+    expect(h.sessions.retire).not.toHaveBeenCalledWith(h.source.id, 'empty-close')
+  })
+
   it('keeps source durable backing if target loss cannot hand ownership back', async () => {
     const h = createTerminalWindowTransferHarness()
     let handoffCount = 0

@@ -196,12 +196,13 @@ export function finishCommittedTerminalWindowTransfer(
   transfer: TerminalWindowTransfer,
   sourceEmpty: boolean,
   isSourceSecondary: () => boolean,
+  isSourceStillEmpty: () => boolean,
   retireSource: () => void
 ): void {
   const { source } = transfer
   revealCreatedTerminalWindowTarget(transfer)
   try {
-    if (sourceEmpty && isSourceSecondary()) {
+    if (sourceEmpty && isSourceSecondary() && isSourceStillEmpty()) {
       try {
         retireSource()
       } finally {
@@ -211,6 +212,15 @@ export function finishCommittedTerminalWindowTransfer(
   } catch {
     // Empty-window cleanup follows the committed transaction.
   }
+}
+
+export function terminalWindowSessionIsEmpty(state: WorkspaceSessionState): boolean {
+  return ![
+    state.unifiedTabs,
+    state.tabsByWorktree,
+    state.openFilesByWorktree,
+    state.browserTabsByWorktree
+  ].some((byWorkspace) => Object.values(byWorkspace ?? {}).some((items) => items.length > 0))
 }
 
 export function revealCreatedTerminalWindowTarget(transfer: TerminalWindowTransfer): void {

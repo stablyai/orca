@@ -57,6 +57,7 @@ function makeHarness(controlWindowId = 1) {
     getWorkspaceSession: vi.fn(
       (hostId?: string | null) => sessions.get(hostId ?? 'local') ?? getDefaultWorkspaceSession()
     ),
+    getWorkspaceSessionHostIds: vi.fn(() => [...sessions.keys()]),
     setWorkspaceSession: vi.fn((state: WorkspaceSessionState, hostId?: string | null) => {
       sessions.set(hostId ?? 'local', structuredClone(state))
     }),
@@ -420,5 +421,63 @@ describe('WindowSessionRegistry', () => {
     expect(staged.tabsByWorktree['repo-1::/worktree'].map((tab: { id: string }) => tab.id)).toEqual(
       ['tab-1', 'tab-2']
     )
+  })
+
+  it('stages every known host with the latest merged window records before quit', () => {
+    const { manager, store } = makeHarness()
+    store.getWorkspaceSessionHostIds.mockReturnValue(['local', 'ssh:server-1', 'runtime:folder'])
+    const registry = new WindowSessionRegistry(store as never, manager as never)
+    registry.set(1, makeSession('local-control'), 'local')
+    registry.set(2, makeSession('local-secondary'), 'local')
+    registry.set(2, makeSession('ssh-secondary'), 'ssh:server-1')
+    registry.set(1, makeSession('folder-control'), 'runtime:folder')
+    store.stageWorkspaceSessionBeforeUnload.mockClear()
+
+    registry.stageAllKnownHostsBeforeQuit()
+
+    const staged = new Map(
+      store.stageWorkspaceSessionBeforeUnload.mock.calls.map(([state, hostId]) => [hostId, state])
+    )
+    expect([...staged.keys()]).toEqual(['local', 'ssh:server-1', 'runtime:folder'])
+    expect(staged.get('local').tabsByWorktree['repo-1::/worktree'].map((tab) => tab.id)).toEqual([
+      'local-control',
+      'local-secondary'
+    ])
+    expect(staged.get('ssh:server-1').activeTabId).toBe('ssh-secondary')
+    expect(staged.get('runtime:folder').activeTabId).toBe('folder-control')
+  })
+
+  it('keeps the last verified snapshot when renderer loss is followed by window close', () => {
+    const { manager, store } = makeHarness(2)
+    const registry = new WindowSessionRegistry(store as never, manager as never)
+    registry.set(1, makeSession('tab-crashed', { scrollbackRef: 'scrollback/crashed' }))
+    registry.set(2, makeSession('tab-live'))
+
+    registry.markRendererUnavailable(1)
+    registry.retire(1, 'user-close')
+
+    const merged = registry.mergeHost()
+    expect(merged.tabsByWorktree['repo-1::/worktree'].map((tab) => tab.id)).toEqual([
+      'tab-live',
+      'tab-crashed'
+    ])
+    expect(
+      merged.terminalLayoutsByTabId['tab-crashed']?.scrollbackRefsByLeafId?.['leaf-tab-crashed']
+    ).toBe('scrollback/crashed')
+  })
+
+  it('retires normally after a recovered renderer publishes a fresh snapshot', () => {
+    const { manager, store } = makeHarness(2)
+    const registry = new WindowSessionRegistry(store as never, manager as never)
+    registry.set(1, makeSession('tab-before-crash'))
+    registry.set(2, makeSession('tab-live'))
+    registry.markRendererUnavailable(1)
+
+    registry.stageBeforeUnload(1, [{ state: makeSession('tab-recovered') }])
+    registry.retire(1, 'user-close')
+
+    expect(registry.mergeHost().tabsByWorktree['repo-1::/worktree'].map((tab) => tab.id)).toEqual([
+      'tab-live'
+    ])
   })
 })

@@ -49,6 +49,55 @@ describe('fetchWorkspaceSessionFromHosts', () => {
     expect(session.tabsByWorktree[worktreeId]).toEqual(remoteSession.tabsByWorktree[worktreeId])
   })
 
+  it('hydrates a detached SSH partition without letting the local copy replace its identity', async () => {
+    const worktreeId = 'ssh-repo::/srv/ssh-wt'
+    const local = {
+      ...getDefaultWorkspaceSession(),
+      tabsByWorktree: {
+        [worktreeId]: [
+          {
+            id: 'stale-local-tab',
+            ptyId: 'local-pty',
+            worktreeId,
+            title: 'Stale local',
+            customTitle: null,
+            color: null,
+            sortOrder: 0,
+            createdAt: 1
+          }
+        ]
+      },
+      remoteSessionIdsByTabId: { 'ssh-tab': 'local-identity' }
+    }
+    const ssh = {
+      ...getDefaultWorkspaceSession(),
+      tabsByWorktree: {
+        [worktreeId]: [
+          {
+            id: 'ssh-tab',
+            ptyId: 'ssh:box@@pty-1',
+            worktreeId,
+            title: 'SSH',
+            customTitle: null,
+            color: null,
+            sortOrder: 0,
+            createdAt: 2
+          }
+        ]
+      },
+      remoteSessionIdsByTabId: { 'ssh-tab': 'ssh:box@@session-1' }
+    }
+    const get = vi.fn(async (hostId?: string) => (hostId === 'ssh:box' ? ssh : local))
+
+    const read = await fetchWorkspaceSessionWithRuntimeHostOwners({ get }, [
+      { connectionId: 'box', executionHostId: 'ssh:box' }
+    ])
+
+    expect(get).toHaveBeenCalledWith('ssh:box')
+    expect(read.session.tabsByWorktree[worktreeId].map((tab) => tab.id)).toEqual(['ssh-tab'])
+    expect(read.session.remoteSessionIdsByTabId?.['ssh-tab']).toBe('ssh:box@@session-1')
+  })
+
   it('returns runtime owners for worktrees loaded from runtime host partitions', async () => {
     const worktreeId = 'remote-repo::/srv/remote-wt'
     const get = vi.fn(async (hostId?: string): Promise<WorkspaceSessionState> => {

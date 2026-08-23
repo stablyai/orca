@@ -216,6 +216,7 @@ import {
 } from './window/attach-main-window-services'
 import { createMainWindow, loadMainWindow } from './window/createMainWindow'
 import { orcaWindowManager } from './window/orca-window-manager'
+import { createWindowQuitLifecycle } from './window/window-quit-lifecycle'
 import { bindControlWindowHandoff } from './window/control-window-handoff'
 import {
   getDashboardPopoutWindow,
@@ -401,6 +402,20 @@ let pluginKillListService: PluginKillListService | null = null
 let pluginMarketplaceService: PluginMarketplaceService | null = null
 let pluginMarketplaceInstaller: PluginMarketplaceInstaller | null = null
 let keybindings: KeybindingService | null = null
+const windowQuitLifecycle = createWindowQuitLifecycle({
+  fenceTransfers: () => terminalWindowTransfers?.fenceForQuit() ?? Promise.resolve(),
+  freezeSessions: () => {
+    if (store) {
+      getWindowSessionRegistry(store).freezeForQuit()
+    }
+  },
+  resumeTransfers: () => terminalWindowTransfers?.resumeAfterQuitAbort(),
+  resumeSessions: () => {
+    if (store) {
+      getWindowSessionRegistry(store).resumeAfterQuitAbort()
+    }
+  }
+})
 
 function emitPluginWorktreeLifecycle(event: RuntimeWorktreeLifecycleEvent): void {
   pluginService?.emitEvent(
@@ -1403,8 +1418,7 @@ function openMainWindow(options: { revealOnDidFinishLoad?: boolean } = {}): Brow
   const resumeAfterQuitAbort = (): void => {
     isQuitting = false
     clearExpectedRendererReload()
-    getWindowSessionRegistry(store!).resumeAfterQuitAbort()
-    terminalWindowTransfers?.resumeAfterQuitAbort()
+    windowQuitLifecycle.abort()
   }
   const window = createMainWindow(store, {
     getIsQuitting: () => isQuitting,
@@ -1421,6 +1435,8 @@ function openMainWindow(options: { revealOnDidFinishLoad?: boolean } = {}): Brow
         webContentsId
       )
     },
+    onRendererUnavailable: (windowId) =>
+      getWindowSessionRegistry(store!).markRendererUnavailable(windowId),
     shouldRecoverRenderer: (details, webContentsId) =>
       shouldRecoverRendererAfterProcessGone({
         reason: details.reason,
@@ -1631,6 +1647,8 @@ function openMainWindow(options: { revealOnDidFinishLoad?: boolean } = {}): Brow
       const secondary = createMainWindow(store, {
         getIsQuitting: () => isQuitting,
         onQuitAborted: resumeAfterQuitAbort,
+        onRendererUnavailable: (windowId) =>
+          getWindowSessionRegistry(store!).markRendererUnavailable(windowId),
         deferLoad: true,
         title: devInstanceIdentity.name,
         getKeybindings: () => keybindings?.getOverrides(),
@@ -3361,16 +3379,16 @@ void app.whenReady().then(async () => {
 process.once('exit', stopTccPromptNotice)
 
 app.on('before-quit', () => {
+  if (windowQuitLifecycle.isActive()) {
+    return
+  }
+  terminalWindowQuitFence = windowQuitLifecycle.begin()
   if (isQuittingForUpdate()) {
     recordUpdaterLifecycle('before_quit_allowed', undefined, {
       message: 'before-quit allowed for update install'
     })
   }
   isQuitting = true
-  if (store) {
-    getWindowSessionRegistry(store).freezeForQuit()
-  }
-  terminalWindowQuitFence = terminalWindowTransfers?.fenceForQuit() ?? Promise.resolve()
   desktopRelayService?.fenceAndCloseNow()
   runtimeRpc?.setMobileRelayPairingProvider(null)
   unsubscribeAgentAwakeStatusChanges?.()
@@ -3437,6 +3455,9 @@ app.on('will-quit', (e) => {
   runtime?.getOffscreenBrowserBackend()?.destroyAll?.()
   browserManager.setBrowserGuestStateChangedListener(null)
   const emulatorShutdown = runtime?.getEmulatorBridge()?.destroyAllSessions() ?? Promise.resolve()
+  if (store) {
+    getWindowSessionRegistry(store).stageAllKnownHostsBeforeQuit()
+  }
   // Why immediately before store.flushAsync() with no await in between: beginSshShutdown() marks every
   // active SSH lease detached in memory synchronously, and that flush is what persists it.
   const sshShutdown = beginSshShutdown()

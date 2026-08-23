@@ -195,6 +195,7 @@ type CreateMainWindowOptions = {
     details: Electron.RenderProcessGoneDetails,
     webContentsId: number
   ) => void
+  onRendererUnavailable?: (windowId: number) => void
   /** Returns true when Orca should reload after renderer loss; update-relaunch/quit tear down children intentionally, so don't fight shutdown. */
   shouldRecoverRenderer?: (
     details: Electron.RenderProcessGoneDetails,
@@ -681,6 +682,7 @@ export function createMainWindow(
     resetShortcutRecorderFocus()
     // Why: macOS reports BrowserWindow teardown as renderer killed/SIGKILL after close — window noise, not a crash.
     if (!windowClosing) {
+      opts?.onRendererUnavailable?.(mainWindow.id)
       // Why: the recorder owns crash classification; filtering here made expected-teardown evidence unreachable.
       opts?.onRendererProcessGone?.(details, rendererWebContentsId)
     }
@@ -694,6 +696,9 @@ export function createMainWindow(
     resetTerminalInputFocus()
     resetFloatingTerminalInputFocus()
     resetShortcutRecorderFocus()
+    if (!windowClosing) {
+      opts?.onRendererUnavailable?.(mainWindow.id)
+    }
   })
   mainWindow.webContents.on('did-start-navigation', (_e, _url, _isInPlace, isMainFrame) => {
     if (isMainFrame) {

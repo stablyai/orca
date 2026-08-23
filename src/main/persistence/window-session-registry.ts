@@ -35,6 +35,7 @@ function cloneSession(state: WorkspaceSessionState): WorkspaceSessionState {
 
 export class WindowSessionRegistry {
   readonly #records = new Map<number, Map<ExecutionHostId, RecordEntry>>()
+  readonly #rendererUnavailableWindows = new Set<number>()
   readonly #store: Store
   readonly #windows: SessionWindowManager
   #quitFrozen = false
@@ -79,7 +80,7 @@ export class WindowSessionRegistry {
   }
 
   retire(windowId: number, _mode: 'user-close' | 'empty-close'): void {
-    if (this.#quitFrozen) {
+    if (this.#quitFrozen || this.#rendererUnavailableWindows.has(windowId)) {
       return
     }
     const records = this.#records.get(windowId)
@@ -100,6 +101,10 @@ export class WindowSessionRegistry {
     this.#quitFrozen = false
   }
 
+  markRendererUnavailable(windowId: number): void {
+    this.#rendererUnavailableWindows.add(windowId)
+  }
+
   stageBeforeUnload(windowId: number, sessions: readonly HostSessionSnapshot[]): void {
     const touchedHosts = new Set<ExecutionHostId>()
     for (const { state, hostId } of sessions) {
@@ -108,6 +113,18 @@ export class WindowSessionRegistry {
       touchedHosts.add(resolved)
     }
     for (const hostId of touchedHosts) {
+      this.#store.stageWorkspaceSessionBeforeUnload(this.mergeHost(hostId), hostId)
+    }
+  }
+
+  stageAllKnownHostsBeforeQuit(): void {
+    const hostIds = new Set<ExecutionHostId>(this.#store.getWorkspaceSessionHostIds())
+    for (const byHost of this.#records.values()) {
+      for (const hostId of byHost.keys()) {
+        hostIds.add(hostId)
+      }
+    }
+    for (const hostId of hostIds) {
       this.#store.stageWorkspaceSessionBeforeUnload(this.mergeHost(hostId), hostId)
     }
   }
@@ -139,6 +156,7 @@ export class WindowSessionRegistry {
   }
 
   #setRecord(windowId: number, state: WorkspaceSessionState, hostId: ExecutionHostId): void {
+    this.#rendererUnavailableWindows.delete(windowId)
     const byHost = this.#records.get(windowId) ?? new Map<ExecutionHostId, RecordEntry>()
     byHost.set(hostId, { state: cloneSession(state), retired: false })
     this.#records.set(windowId, byHost)
