@@ -27,6 +27,8 @@ const RESUME_HOST_AUTHORITY_CAPABILITY_BY_AGENT = {
   // Ungated on purpose: prime-agent's host-side status hooks and its enum entry both shipped in
   // a1f61ef, so no host emits a prime-agent provider session without also accepting the member.
   'prime-agent': undefined,
+  // Ungated to match how main shipped copilot resume; gating it is its own change.
+  copilot: undefined,
   omp: AGENT_SESSION_OMP_RESUME_PATH_RUNTIME_CAPABILITY,
   kimi: AGENT_SESSION_KIMI_RESUME_RUNTIME_CAPABILITY
 } satisfies Record<ResumableTuiAgent, RuntimeCapability | undefined>
