@@ -191,13 +191,16 @@ function guestCommandArgv(spec: WslSpec, delivery: 'argv' | 'stdin'): string[] {
 }
 
 /**
- * What `CreateProcess` will count, near enough to decide on.
+ * What `CreateProcess` will count.
  *
- * Node quotes an argument containing a space or a quote, so this over-counts
- * slightly rather than under-counting -- the safe direction for a cap.
+ * libuv escapes every `"` and doubles a backslash run before a quote, so a
+ * quote-dense script costs more than its length. Charging one extra character
+ * per `"` or `\\` keeps the estimate on the safe side of the cap; an earlier
+ * version claimed to over-count and in fact under-counted, which put a
+ * quote-heavy ~26KB script on argv and over the real limit.
  */
 function commandLineLength(args: readonly string[]): number {
-  return args.reduce((total, arg) => total + arg.length + 3, 0)
+  return args.reduce((total, arg) => total + arg.length + 3 + (arg.match(/["\\]/g)?.length ?? 0), 0)
 }
 
 /** Shell-free argv, with the cached environment applied when one is available. */
@@ -249,8 +252,11 @@ export async function runWslProcess(spec: WslSpec): Promise<WslResult> {
   // budget, so only the finished line can say whether argv fits. Resolved once
   // here because the argv shape and the stdin payload must agree.
   const argvForm = buildGuestArgv(environment, spec, 'argv')
+  // Measure what is actually spawned: `wsl.exe` and `-d <distro> --exec` are
+  // prepended after this point and are part of the same budget.
+  const fullLine = [resolveWslExecutablePath(), ...buildWslExecArgs(spec.distro, argvForm)]
   const delivery: 'argv' | 'stdin' =
-    spec.script !== undefined && commandLineLength(argvForm) > MAX_COMMAND_LINE_CHARS
+    spec.script !== undefined && commandLineLength(fullLine) > MAX_COMMAND_LINE_CHARS
       ? 'stdin'
       : 'argv'
   const argv = delivery === 'argv' ? argvForm : buildGuestArgv(environment, spec, 'stdin')

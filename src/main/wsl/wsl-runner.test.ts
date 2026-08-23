@@ -185,6 +185,16 @@ describe('scripts', () => {
     expect(spec.args.join(' ')).not.toContain(script)
   })
 
+  it('charges quoting, so a quote-dense script cannot slip over the real cap', async () => {
+    // libuv escapes every `"` and doubles backslash runs, so a script's cost is
+    // more than its length. Counting length alone put a quote-heavy ~26KB
+    // script on argv and over the 32767 ceiling.
+    seedWslGuestEnvironmentForTests(undefined, ENVIRONMENT)
+    const script = '"'.repeat(26_000)
+    await runWslProcess({ loginPath: 'preferred', shell: 'bash', script })
+    expect(runProcessMock.mock.calls.at(-1)?.[0].input).toBe(script)
+  })
+
   it('keeps an ordinary-sized script in argv', async () => {
     seedWslGuestEnvironmentForTests(undefined, ENVIRONMENT)
     const script = `echo ${'x'.repeat(100)}`
