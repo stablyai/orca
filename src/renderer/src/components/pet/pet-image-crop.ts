@@ -3,9 +3,6 @@ import type { RgbaImage } from './pet-image-cutout'
 /** A rectangle in source-image pixels. */
 export type CropRect = { x: number; y: number; width: number; height: number }
 
-/** The whole image, expressed as a rectangle nothing can fall outside of. */
-export const FULL_CROP: CropRect = { x: 0, y: 0, width: Infinity, height: Infinity }
-
 /** Snaps a rectangle to whole pixels inside the image, keeping at least one. */
 export function clampCropRect(rect: CropRect, width: number, height: number): CropRect {
   const x = Math.min(Math.max(0, Math.round(rect.x)), Math.max(0, width - 1))

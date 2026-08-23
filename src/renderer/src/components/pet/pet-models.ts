@@ -8,8 +8,9 @@ import opencodeHeldUrl from '../../../../../resources/opencode-held.webp?url'
 import gremlinHeldUrl from '../../../../../resources/gremlin-held.webp?url'
 import { translate } from '@/i18n/i18n'
 import type { BundledPetPoses } from './bundled-pet-pose-sprite'
-// Pose sheets: four frames per row over four rows (idle, running, waiting,
-// jumping), every pose derived from the pet's own artwork.
+// Pose sheets: four frames per row over seven rows (idle, running, waiting,
+// jumping, falling, downed, rising), every pose derived from the pet's own
+// artwork. `bundled-pet-pose-sprite.ts` owns which row each state maps to.
 import claudePosesUrl from '../../../../../resources/claude-poses.webp?url'
 import opencodePosesUrl from '../../../../../resources/opencode-poses.webp?url'
 import gremlinPosesUrl from '../../../../../resources/gremlin-poses.webp?url'

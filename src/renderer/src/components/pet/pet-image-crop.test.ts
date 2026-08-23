@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { clampCropRect, cropImage, FULL_CROP } from './pet-image-crop'
+import { clampCropRect, cropImage } from './pet-image-crop'
 import { blankImage } from './pet-raster-transform'
 import type { RgbaImage } from './pet-image-cutout'
 
@@ -32,7 +32,7 @@ describe('cropImage', () => {
   it('returns the image itself when the rectangle covers everything', () => {
     const img = coordinateImage(6, 6)
 
-    expect(cropImage(img, FULL_CROP)).toBe(img)
+    expect(cropImage(img, { x: 0, y: 0, width: Infinity, height: Infinity })).toBe(img)
   })
 
   it('does not read past the edge when the rectangle overhangs', () => {
