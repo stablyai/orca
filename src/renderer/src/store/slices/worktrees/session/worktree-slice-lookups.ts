@@ -30,6 +30,7 @@ export function createRemountTerminalTabForRecovery(
         }
         const tab = tabs[index]
         const nextTabs = tabs.slice()
+        const pendingStartup = s.pendingStartupByTabId[tabId]
         nextTabs[index] = {
           ...tab,
           // Why: bump generation to remount a pane whose renderer died while its PTY stayed alive, so it reattaches, not spawns.
@@ -44,7 +45,17 @@ export function createRemountTerminalTabForRecovery(
           tabsByWorktree: {
             ...s.tabsByWorktree,
             [worktreeId]: nextTabs
-          }
+          },
+          ...(pendingStartup
+            ? {
+                // Why: a remounted pane must own a distinct one-shot startup record so a stale
+                // pane cannot consume the successor's command during teardown.
+                pendingStartupByTabId: {
+                  ...s.pendingStartupByTabId,
+                  [tabId]: { ...pendingStartup }
+                }
+              }
+            : {})
         }
       }
       return {}

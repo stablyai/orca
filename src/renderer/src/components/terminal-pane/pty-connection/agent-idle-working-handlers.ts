@@ -151,9 +151,14 @@ export function installAgentIdleWorkingHandlers(session: ConnectPanePtySession):
           : undefined
     return attempt
   })()
-  session.pendingSpawnKey = session.directSshRetryAttempt
-    ? JSON.stringify([session.cacheKey, session.directSshRetryAttempt.attemptId])
-    : session.cacheKey
+  // Generation is part of ownership: a recovery remount must not join a spawn
+  // started by the pane instance it replaced, while StrictMode remounts keep
+  // the same generation and may still share their in-flight spawn.
+  session.pendingSpawnKey = JSON.stringify([
+    session.cacheKey,
+    session.tabGeneration,
+    session.directSshRetryAttempt?.attemptId ?? null
+  ])
   session.capturedDirectSshRetryPtyAccepted = false
   session.directSshPaneRetrySettlementCancelled = false
   session.directSshPaneRetrySettlementTimers = new Set<ReturnType<typeof setTimeout>>()

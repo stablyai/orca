@@ -3,7 +3,11 @@ import { useAppStore } from '@/store'
 import { isWebTerminalSurfaceTabId } from '@/runtime/web-terminal-surface-id'
 import { getEagerPtyBufferHandle } from '../pty-dispatcher'
 
-import { pendingSpawnByPaneKey, recordPtyConnectDiagnostic } from './pty-connect-limits'
+import {
+  pendingSpawnByPaneKey,
+  pendingSpawnGenerationByPaneKey,
+  recordPtyConnectDiagnostic
+} from './pty-connect-limits'
 import {
   isRemoteRuntimePtyId,
   canRestorePairedParkedTerminal,
@@ -158,6 +162,13 @@ export function runDeferredSessionReattachChoice(session: ConnectPanePtySession)
     session.allowInitialIdleCacheSeed = false
     const pendingSpawn = pendingSpawnByPaneKey.get(session.pendingSpawnKey)
     if (pendingSpawn) {
+      const pendingGeneration = pendingSpawnGenerationByPaneKey.get(session.pendingSpawnKey)
+      if (pendingGeneration !== undefined && pendingGeneration !== session.tabGeneration) {
+        recordPtyConnectDiagnostic(`pane=${session.pane.id} -> STALE PENDING SPAWN`)
+        session.startFreshSpawn()
+        scheduleRuntimeGraphSync()
+        return
+      }
       recordPtyConnectDiagnostic(`pane=${session.pane.id} -> PENDING SPAWN`)
       session.armDirectSshPaneRetryTimeout(pendingSpawn, session.directSshRetryAttempt)
       void pendingSpawn

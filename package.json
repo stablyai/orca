@@ -115,6 +115,7 @@
     "test:e2e:source-control-scale": "pnpm run ensure:electron-runtime && npx playwright test tests/e2e/source-control-large-file-count.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1",
     "win-update-e2e": "node tests/tools/win-update-e2e/run.mjs",
     "win-crash-survival-e2e": "node tests/tools/win-crash-survival-e2e/run.mjs",
+    "smoke:windows-pty-native-capability": "node tests/tools/windows-pty-native-capability-smoke/run.mjs",
     "test:e2e:ssh-codex-artifacts-repro": "node config/scripts/run-ssh-codex-artifacts-repro-e2e.mjs",
     "test:e2e:headful": "pnpm run ensure:electron-runtime && npx playwright test --config tests/playwright.config.ts --project electron-headful",
     "test:e2e:terminal-ime-native": "node config/scripts/run-terminal-ibus-hangul-e2e.mjs",

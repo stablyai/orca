@@ -649,6 +649,8 @@ export type TerminalSlice = {
   setTabBarOrder: (worktreeId: string, order: string[]) => void
   setActiveTab: (tabId: string) => void
   setActiveTabForWorktree: (worktreeId: string, tabId: string) => void
+  /** Resolve the canonical legacy terminal-tab owner key for renderer lifecycle guards. */
+  getTerminalTabOwnerWorktreeId?: (tabId: string) => string | null
   updateTabTitle: (tabId: string, title: string) => void
   updateTabTitles: (updates: readonly TerminalTabTitleUpdate[]) => void
   setAiVaultTabTitle: (tabId: string, aiVaultTitle: AiVaultSessionTitle | null) => void
@@ -1497,6 +1499,9 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
     }
     return tab
   },
+
+  getTerminalTabOwnerWorktreeId: (tabId) =>
+    getTerminalTabOwnerWorktreeId(get().tabsByWorktree, tabId),
 
   openNewTerminalTabInActiveWorkspace: async (groupId) => {
     const state = get()
