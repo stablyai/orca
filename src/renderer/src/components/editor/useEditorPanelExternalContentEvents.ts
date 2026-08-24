@@ -150,7 +150,9 @@ export function useEditorPanelExternalContentEvents({
         if (!existing || existing.kind !== 'text') {
           return prev
         }
-        return { ...prev, [file.id]: { ...existing, modifiedContent: detail.content } }
+        // Why: the saved bytes replace any load-failure message, so drop the flag that holds the pane read-only.
+        const { loadError: _loadError, ...rest } = existing
+        return { ...prev, [file.id]: { ...rest, modifiedContent: detail.content } }
       })
     }
     window.addEventListener(ORCA_EDITOR_FILE_SAVED_EVENT, handler as EventListener)

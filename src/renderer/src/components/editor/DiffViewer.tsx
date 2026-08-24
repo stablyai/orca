@@ -16,11 +16,11 @@ import {
 import { applyDiffEditorLineNumberOptions } from './diff-editor-line-number-options'
 import type { DiffComment } from '../../../../shared/diff-comment-types'
 import { isDiffComment } from '@/lib/diff-comment-compat'
-import { installEditorSaveShortcut, installMonacoEditorFindShortcut } from './editor-shortcuts'
 import { diffEditorScrollbarOptions } from './diff-editor-scrollbar-options'
 import { LargeDiffFallback } from './LargeDiffFallback'
 import { getLargeDiffRenderLimit } from './large-diff-render-limit'
 import { useDiffViewerLargeDiffLifecycle } from './useDiffViewerLargeDiffLifecycle'
+import { useDiffViewerEditingWiring } from './useDiffViewerEditingWiring'
 import { getDiffViewerLargeDiffSaveAction } from './diff-viewer-large-diff-save-action'
 import type { DiffViewerProps } from './diff-viewer-props'
 import { buildDiffEditorWordWrapOptions } from './diff-editor-word-wrap-options'
@@ -266,11 +266,13 @@ export default function DiffViewer({
     }
   }
 
-  // Keep refs to latest callbacks so the mounted editor always calls current versions
-  const onSaveRef = useRef(onSave)
-  onSaveRef.current = onSave
-  const onContentChangeRef = useRef(onContentChange)
-  onContentChangeRef.current = onContentChange
+  useDiffViewerEditingWiring({
+    editable: editable === true,
+    modifiedEditor,
+    diffEditorRef,
+    onContentChange,
+    onSave
+  })
 
   const { setupCopy, toastNode } = useContextualCopySetup()
 
@@ -307,28 +309,9 @@ export default function DiffViewer({
       }
       // Auto-scroll to first diff lives in a separate effect below so it sequences after the decorator's view zones land.
 
+      // Why: focus only at mount. useDiffViewerEditingWiring re-installs on an editability flip, but
+      // that flip is unattended (a recovered diff refetch), so focus must not be yanked from elsewhere.
       if (editable) {
-        const cleanupSaveShortcut = installEditorSaveShortcut(
-          modifiedEditor.getContainerDomNode(),
-          () => {
-            onSaveRef.current?.(modifiedEditor.getValue())
-          }
-        )
-        const cleanupOriginalFindShortcut = installMonacoEditorFindShortcut(originalEditor)
-        const cleanupModifiedFindShortcut = installMonacoEditorFindShortcut(modifiedEditor)
-
-        // Track changes
-        const modelContentSub = modifiedEditor.onDidChangeModelContent(() => {
-          onContentChangeRef.current?.(modifiedEditor.getValue())
-        })
-        modifiedEditor.onDidDispose(() => {
-          // Why: this diff instance owns both panes' shortcut bridges + the model sub, so dispose them with it.
-          cleanupSaveShortcut()
-          cleanupOriginalFindShortcut()
-          cleanupModifiedFindShortcut()
-          modelContentSub.dispose()
-        })
-
         modifiedEditor.focus()
       } else {
         diffEditor.focus()

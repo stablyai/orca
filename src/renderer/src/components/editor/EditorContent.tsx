@@ -14,7 +14,7 @@ import {
   getNextConflictNavigationIndex
 } from './ConflictComponents'
 import type { MarkdownViewMode, OpenFile, PendingEditorReveal } from '@/store/slices/editor'
-import type { GitDiffResult } from '../../../../shared/git-diff-compare-types'
+import type { DiffContent } from './editor-panel-content-types'
 import type { GitStatusEntry } from '../../../../shared/git-status-types'
 import { getMarkdownRenderMode } from './markdown-render-mode'
 import { getMarkdownRichModeUnsupportedMessage } from './markdown-rich-mode'
@@ -147,7 +147,7 @@ export function EditorContent({
   activeFile: OpenFile
   viewStateScopeId: string
   fileContents: Record<string, FileContent>
-  diffContents: Record<string, GitDiffResult>
+  diffContents: Record<string, DiffContent>
   editBuffers: Record<string, string>
   openFiles: OpenFile[]
   worktreeEntries: GitStatusEntry[]
@@ -895,6 +895,10 @@ export function EditorContent({
     modifiedDiffBuffer === undefined &&
     dc.modifiedContent.length === 0
   )
+  // Why: a load-failure body is a message, not file content — keep it read-only so no draft is
+  // minted and no save writes it over the file. An existing draft is the user's own text, and it
+  // is what renders here, so it stays editable and saveable.
+  const diffEditable = isEditable && (dc.loadError !== true || modifiedDiffBuffer !== undefined)
   // Why: shared by both diff sub-branches (preview and source) so preview mode surfaces the external change too.
   const diffExternalChangeBanner =
     activeFile.externalMutation === 'changed' ? (
@@ -952,10 +956,10 @@ export function EditorContent({
       filePath={activeFile.filePath}
       relativePath={activeFile.relativePath}
       sideBySide={sideBySide}
-      editable={isEditable}
+      editable={diffEditable}
       worktreeId={activeFile.worktreeId}
-      onContentChange={isEditable ? handleContentChange : undefined}
-      onSave={isEditable ? (isMarkdown ? md.mdSave : handleSave) : undefined}
+      onContentChange={diffEditable ? handleContentChange : undefined}
+      onSave={diffEditable ? (isMarkdown ? md.mdSave : handleSave) : undefined}
     />
   )
   // Why: editable diffs get the changed-on-disk banner; its reload refetches the diff body, not plain file content.

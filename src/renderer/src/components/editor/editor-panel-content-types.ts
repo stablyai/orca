@@ -32,6 +32,8 @@ export type FileContent = {
 export type DiffContent = GitDiffResult & {
   /** Superseded by an external change; still rendered until the lazy reload lands. */
   isStale?: boolean
+  /** The body is a load-failure message, not file content — saving it would overwrite the file. */
+  loadError?: boolean
 }
 
 export type InFlightContentRead<T> = {

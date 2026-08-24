@@ -4,7 +4,10 @@ import { act, useLayoutEffect, useRef, useState } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { OpenFile } from '@/store/slices/editor'
-import { ORCA_EDITOR_EXTERNAL_FILE_CHANGE_EVENT } from './editor-autosave'
+import {
+  ORCA_EDITOR_EXTERNAL_FILE_CHANGE_EVENT,
+  ORCA_EDITOR_FILE_SAVED_EVENT
+} from './editor-autosave'
 import type { DiffContent, FileContent } from './editor-panel-content-types'
 import { useEditorPanelExternalContentEvents } from './useEditorPanelExternalContentEvents'
 
@@ -20,15 +23,26 @@ type ProbeProps = {
   calls: ProbeCalls
   isVisible: boolean
   openFiles: OpenFile[]
+  initialDiffContents?: Record<string, DiffContent>
 }
 
-function ExternalContentProbe({ activeFileId, calls, isVisible, openFiles }: ProbeProps): null {
+const EMPTY_DIFF_CONTENTS: Record<string, DiffContent> = {}
+let latestDiffContents: Record<string, DiffContent> = {}
+
+function ExternalContentProbe({
+  activeFileId,
+  calls,
+  isVisible,
+  openFiles,
+  initialDiffContents = EMPTY_DIFF_CONTENTS
+}: ProbeProps): null {
   const activeContentFileIdRef = useRef(activeFileId)
   const isVisibleRef = useRef(isVisible)
   const openFilesRef = useRef(openFiles)
   const editorViewModeRef = useRef({})
   const [, setFileContents] = useState<Record<string, FileContent>>({})
-  const [, setDiffContents] = useState<Record<string, DiffContent>>({})
+  const [diffContents, setDiffContents] = useState<Record<string, DiffContent>>(initialDiffContents)
+  latestDiffContents = diffContents
 
   useLayoutEffect(() => {
     activeContentFileIdRef.current = activeFileId
@@ -238,5 +252,41 @@ describe('useEditorPanelExternalContentEvents', () => {
     const previewOptions = previewCalls.loadFile.mock.calls[0]?.[4]
     expect(sourceOptions?.externalEventGeneration).toBeTypeOf('number')
     expect(previewOptions?.externalEventGeneration).toBe(sourceOptions?.externalEventGeneration)
+  })
+
+  it('clears the diff load-error flag once a save replaces the body with real content', () => {
+    // Why: keeping the flag would hold the pane read-only while it shows valid on-disk content.
+    const diffFile = makeFile('diff', { mode: 'diff', diffSource: 'unstaged' })
+
+    act(() => {
+      root.render(
+        <ExternalContentProbe
+          activeFileId={diffFile.id}
+          calls={makeCalls()}
+          isVisible
+          openFiles={[diffFile]}
+          initialDiffContents={{
+            [diffFile.id]: {
+              kind: 'text',
+              originalContent: '',
+              modifiedContent: 'Error loading diff: RuntimeRpcCallError: too large',
+              originalIsBinary: false,
+              modifiedIsBinary: false,
+              loadError: true
+            }
+          }}
+        />
+      )
+    })
+    act(() => {
+      window.dispatchEvent(
+        new CustomEvent(ORCA_EDITOR_FILE_SAVED_EVENT, {
+          detail: { fileId: diffFile.id, content: 'export const a = 1\n' }
+        })
+      )
+    })
+
+    expect(latestDiffContents[diffFile.id]?.modifiedContent).toBe('export const a = 1\n')
+    expect(latestDiffContents[diffFile.id]?.loadError).toBeUndefined()
   })
 })
