@@ -5,6 +5,7 @@ import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { UsageScanWorktreeRef } from './usage-provider-contract'
 import { UsageProviderStoreLifecycle } from './usage-provider-store-lifecycle'
+import { resolveUsageSourceCacheFile } from './usage-provider-source-cache'
 
 const { writeProbe } = vi.hoisted(() => ({
   writeProbe: {
@@ -173,6 +174,64 @@ describe('UsageProviderStoreLifecycle', () => {
     expect(scan).not.toHaveBeenCalled()
   })
 
+  it('loads partitioned source state only when a scan needs it', async () => {
+    const cacheFile = join(tempDirectory, 'usage-0.json')
+    writeFileSync(
+      cacheFile,
+      JSON.stringify(
+        makeState({
+          worktreeFingerprint: EMPTY_WORKTREE_FINGERPRINT,
+          sessions: [{ id: 'session' }],
+          scanState: { enabled: true, lastScanCompletedAt: NOW - 1 }
+        })
+      )
+    )
+    writeFileSync(
+      resolveUsageSourceCacheFile(cacheFile),
+      JSON.stringify({
+        schemaVersion: 1,
+        worktreeFingerprint: EMPTY_WORKTREE_FINGERPRINT,
+        processedSources: [{ id: 'cold-source' }]
+      })
+    )
+    const store = createStore(cacheFile)
+
+    expect(store.getState()).toMatchObject({
+      processedSources: [],
+      sessions: [{ id: 'session' }]
+    })
+    await store.refresh()
+    expect(scan).not.toHaveBeenCalled()
+
+    await store.refresh(true)
+    expect(scan).toHaveBeenCalledWith([], [{ id: 'cold-source' }])
+    expect(store.getState().processedSources).toEqual([])
+  })
+
+  it('migrates a legacy combined cache without losing its source ledger', async () => {
+    const cacheFile = join(tempDirectory, 'usage-0.json')
+    writeFileSync(
+      cacheFile,
+      JSON.stringify(
+        makeState({
+          worktreeFingerprint: EMPTY_WORKTREE_FINGERPRINT,
+          processedSources: [{ id: 'legacy-source' }],
+          scanState: { enabled: true, lastScanCompletedAt: NOW - 1 }
+        })
+      )
+    )
+
+    const store = createStore(cacheFile)
+    await store.flush()
+
+    expect(JSON.parse(readFileSync(cacheFile, 'utf-8')).processedSources).toEqual([])
+    expect(
+      JSON.parse(readFileSync(resolveUsageSourceCacheFile(cacheFile), 'utf-8')).processedSources
+    ).toEqual([{ id: 'legacy-source' }])
+    await store.refresh(true)
+    expect(scan).toHaveBeenCalledWith([], [{ id: 'legacy-source' }])
+  })
+
   it('invalidates prior sources on fingerprint changes and reuses them for forced scans', async () => {
     const store = createStore()
     const refreshedSources = [{ id: 'refreshed' }]
@@ -229,8 +288,13 @@ describe('UsageProviderStoreLifecycle', () => {
       lastScanCompletedAt: NOW,
       hasAnyTestData: true
     })
-    expect(writeProbe.opens).toBe(1)
-    expect(store.getState().processedSources).toEqual([{ id: 'source' }])
+    expect(writeProbe.opens).toBe(2)
+    expect(store.getState().processedSources).toEqual([])
+    expect(
+      JSON.parse(
+        readFileSync(resolveUsageSourceCacheFile(join(tempDirectory, 'usage-0.json')), 'utf-8')
+      ).processedSources
+    ).toEqual([{ id: 'source' }])
   })
 
   it('vetoes a superseded generation before rename', async () => {
