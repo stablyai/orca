@@ -1589,6 +1589,12 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
             'folderWorkspaces:deriveProgress',
             repoManagedDeriveProgress('seed', progress)
           )
+        },
+        onSyncProgress: (progress) => {
+          event.sender.send(
+            'folderWorkspaces:deriveProgress',
+            repoManagedDeriveProgress('sync', progress)
+          )
         }
       })
       notifyReposChanged(mainWindow)

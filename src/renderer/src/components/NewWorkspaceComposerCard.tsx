@@ -1355,10 +1355,20 @@ export default function NewWorkspaceComposerCard({
                           'Copying local git objects…'
                         )
                     : deriveProgress.phase === 'sync'
-                      ? translate(
-                          'auto.components.NewWorkspaceComposerCard.derivePhaseSync',
-                          'Checking out projects…'
-                        )
+                      ? deriveProgress.totalProjects
+                        ? translate(
+                            'auto.components.NewWorkspaceComposerCard.derivePhaseSyncProject',
+                            'Checking out projects… {{value0}}/{{value1}} · {{value2}}',
+                            {
+                              value0: deriveProgress.processedProjects ?? 0,
+                              value1: deriveProgress.totalProjects,
+                              value2: deriveProgress.currentProject ?? ''
+                            }
+                          )
+                        : translate(
+                            'auto.components.NewWorkspaceComposerCard.derivePhaseSync',
+                            'Checking out projects…'
+                          )
                       : translate(
                           'auto.components.NewWorkspaceComposerCard.derivePhaseRegister',
                           'Registering workspace…'

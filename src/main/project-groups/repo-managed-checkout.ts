@@ -119,7 +119,7 @@ export function buildRepoInitArgs(args: {
 }
 
 export function buildRepoSyncArgs(): string[] {
-  return ['sync', '--local-only', '--no-manifest-update', '--verbose', '-j1']
+  return ['sync', '--local-only', '--no-manifest-update', '--verbose', '-j8']
 }
 
 export function getRepoManagedProjectsGitDir(

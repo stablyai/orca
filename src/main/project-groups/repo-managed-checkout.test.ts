@@ -69,7 +69,7 @@ describe('repo-managed checkout identity', () => {
       '--local-only',
       '--no-manifest-update',
       '--verbose',
-      '-j1'
+      '-j8'
     ])
   })
 

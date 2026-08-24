@@ -118,7 +118,7 @@ describe('materializeRepoManagedCheckout', () => {
       '--local-only',
       '--no-manifest-update',
       '--verbose',
-      '-j1'
+      '-j8'
     ])
     expect(phases).toEqual(['preparing', 'init', 'seed', 'sync'])
     await expect(stat(destPath)).resolves.toBeTruthy()

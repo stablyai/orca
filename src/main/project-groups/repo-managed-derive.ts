@@ -1,4 +1,4 @@
-import { access, mkdir, realpath, rm, stat } from 'node:fs/promises'
+import { access, mkdir, realpath } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { basename, join } from 'node:path'
 import { constants as fsConstants } from 'node:fs'
@@ -23,25 +23,25 @@ import {
   seedDerivedRepoProjectGitDirs,
   type RepoManagedSeedProgress
 } from './repo-managed-seed'
+import { createRepoSyncProgressParser } from './repo-sync-progress'
+import { removeDerivedRepoPath } from './repo-managed-cleanup'
 import type { RepoManagedDerivePhase } from '../../shared/repo-managed-derive-progress'
 export type { RepoManagedDerivePhase } from '../../shared/repo-managed-derive-progress'
 export { REPO_MANAGED_LOCAL_OBJECTS_MISSING, seedDerivedRepoProjectGitDirs }
-
 export const REPO_MANAGED_DERIVE_SSH_UNSUPPORTED =
   'Deriving a repo workspace on SSH requires an Orca runtime on that host.'
 export const REPO_TOOL_MISSING =
   'The repo CLI was not found. Install it from the workspace composer, or open a checkout that contains .repo/repo.'
 export const REPO_MANAGED_GROUP_REQUIRED = 'Selected project is not a repo-managed checkout.'
-
 const REPO_COMMAND_TIMEOUT_MS = 60 * 60 * 1000
-
 export type RepoManagedCommandRunner = (args: {
   program: string
   args: readonly string[]
   cwd: string
   signal?: AbortSignal
+  onStdout?: (chunk: string) => void
+  onStderr?: (chunk: string) => void
 }) => Promise<{ code: number | null; stdout: string; stderr: string }>
-
 export type RepoManagedDeriveStore = {
   getSettings: () => { nestWorkspaces: boolean; workspaceDir: string }
   getProjectGroups: () => ProjectGroup[]
@@ -57,7 +57,6 @@ export type RepoManagedDeriveStore = {
     creatorProvenance?: FolderWorkspace['creatorProvenance']
   }) => FolderWorkspace
 }
-
 async function pathExists(path: string): Promise<boolean> {
   try {
     await access(path, fsConstants.F_OK)
@@ -66,24 +65,27 @@ async function pathExists(path: string): Promise<boolean> {
     return false
   }
 }
-
 function formatRepoCommandFailure(action: string, stderr: string, stdout: string): string {
   const detail = [stderr.trim(), stdout.trim()].filter(Boolean).join('\n').slice(0, 4000)
   return detail ? `repo ${action} failed:\n${detail}` : `repo ${action} failed`
 }
-
 export async function defaultRepoCommandRunner(args: {
   program: string
   args: readonly string[]
   cwd: string
   signal?: AbortSignal
+  onStdout?: (chunk: string) => void
+  onStderr?: (chunk: string) => void
 }): Promise<{ code: number | null; stdout: string; stderr: string }> {
   const wsl = parseWslPath(args.cwd)
   if (wsl) {
+    const isSync = args.args[0] === 'sync'
     const linuxCwd = wsl.linuxPath
+    const argv = [toLinuxPath(args.program), ...args.args]
+    const invocation = argv.map(quotePosixShell).join(' ')
     const command = [
       `cd ${quotePosixShell(linuxCwd)}`,
-      `exec ${[toLinuxPath(args.program), ...args.args].map(quotePosixShell).join(' ')}`
+      isSync ? `exec script -qefc ${quotePosixShell(invocation)} /dev/null` : `exec ${invocation}`
     ].join('\n')
     const result = await runProcess({
       program: 'wsl.exe',
@@ -91,7 +93,9 @@ export async function defaultRepoCommandRunner(args: {
       input: command,
       cwd: undefined,
       timeoutMs: REPO_COMMAND_TIMEOUT_MS,
-      signal: args.signal
+      signal: args.signal,
+      onStdout: args.onStdout,
+      onStderr: args.onStderr
     })
     return { code: result.code, stdout: result.stdout, stderr: result.stderr }
   }
@@ -100,11 +104,12 @@ export async function defaultRepoCommandRunner(args: {
     args: args.args,
     cwd: args.cwd,
     timeoutMs: REPO_COMMAND_TIMEOUT_MS,
-    signal: args.signal
+    signal: args.signal,
+    onStdout: args.onStdout,
+    onStderr: args.onStderr
   })
   return { code: result.code, stdout: result.stdout, stderr: result.stderr }
 }
-
 async function readIdentityFromCheckout(mainPath: string): Promise<RepoManagedCheckoutIdentity> {
   const git = {
     configGet: async (gitDir: string, key: string): Promise<string | null> => {
@@ -141,25 +146,13 @@ async function readIdentityFromCheckout(mainPath: string): Promise<RepoManagedCh
   })
 }
 
-async function removeDerivedPath(path: string): Promise<void> {
-  const wsl = parseWslPath(path)
-  if (!wsl) {
-    await rm(path, { recursive: true, force: true })
-    return
-  }
-  await runProcess({
-    program: 'wsl.exe',
-    args: buildWslExecArgs(wsl.distro, ['/bin/rm', '-rf', '--', wsl.linuxPath]),
-    timeoutMs: 120_000
-  })
-}
-
 export async function materializeRepoManagedCheckout(args: {
   mainPath: string
   destPath: string
   signal?: AbortSignal
   onPhase?: (phase: RepoManagedDerivePhase) => void
   onSeedProgress?: (progress: RepoManagedSeedProgress) => void
+  onSyncProgress?: (progress: RepoManagedSeedProgress) => void
   runCommand?: RepoManagedCommandRunner
 }): Promise<void> {
   args.onPhase?.('preparing')
@@ -217,11 +210,14 @@ export async function materializeRepoManagedCheckout(args: {
       onProgress: args.onSeedProgress
     })
     args.onPhase?.('sync')
+    const parseSyncProgress = createRepoSyncProgressParser(args.onSyncProgress)
     const syncResult = await runCommand({
       program,
       args: buildRepoSyncArgs(),
       cwd: args.destPath,
-      signal: args.signal
+      signal: args.signal,
+      onStdout: parseSyncProgress,
+      onStderr: parseSyncProgress
     })
     if (syncResult.code !== 0) {
       throw new Error(formatRepoCommandFailure('sync', syncResult.stderr, syncResult.stdout))
@@ -229,7 +225,7 @@ export async function materializeRepoManagedCheckout(args: {
     materialized = true
   } finally {
     if (!materialized) {
-      await removeDerivedPath(args.destPath).catch(() => {})
+      await removeDerivedRepoPath(args.destPath).catch(() => {})
     }
   }
 }
@@ -249,7 +245,6 @@ function normalizeRepoInitArgsForWsl(
     return arg
   })
 }
-
 export async function deriveRepoManagedFolderWorkspace(args: {
   store: RepoManagedDeriveStore
   projectGroupId: string
@@ -262,6 +257,7 @@ export async function deriveRepoManagedFolderWorkspace(args: {
   signal?: AbortSignal
   onPhase?: (phase: RepoManagedDerivePhase) => void
   onSeedProgress?: (progress: RepoManagedSeedProgress) => void
+  onSyncProgress?: (progress: RepoManagedSeedProgress) => void
   runCommand?: RepoManagedCommandRunner
 }): Promise<FolderWorkspace> {
   const group = args.store.getProjectGroups().find((entry) => entry.id === args.projectGroupId)
@@ -284,12 +280,11 @@ export async function deriveRepoManagedFolderWorkspace(args: {
     signal: args.signal,
     onPhase: args.onPhase,
     onSeedProgress: args.onSeedProgress,
+    onSyncProgress: args.onSyncProgress,
     runCommand: args.runCommand
   })
   args.onPhase?.('register')
-  try {
-    await stat(destPath)
-  } catch {
+  if (!(await pathExists(destPath))) {
     throw new Error(`Derived repo workspace was not created: ${destPath}`)
   }
   return args.store.createFolderWorkspace({
