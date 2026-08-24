@@ -4,7 +4,7 @@ import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
-import { TerminalShellHistorySection } from './TerminalShellHistorySection'
+import { TerminalShellHistorySetting } from './TerminalShellHistorySetting'
 
 vi.mock('@/i18n/i18n', () => ({
   i18n: { language: 'en' },
@@ -16,7 +16,7 @@ vi.mock('../../store', () => ({
     selector({ settingsSearchQuery: '' })
 }))
 
-describe('TerminalShellHistorySection', () => {
+describe('TerminalShellHistorySetting', () => {
   let container: HTMLDivElement
   let root: Root
 
@@ -32,13 +32,13 @@ describe('TerminalShellHistorySection', () => {
     document.body.replaceChildren()
   })
 
-  function renderSection(
+  function renderSetting(
     terminalScopeHistoryByWorktree: boolean,
     updateSettings = vi.fn()
   ): HTMLButtonElement {
     act(() => {
       root.render(
-        <TerminalShellHistorySection
+        <TerminalShellHistorySetting
           settings={{ terminalScopeHistoryByWorktree } as GlobalSettings}
           updateSettings={updateSettings}
         />
@@ -54,7 +54,7 @@ describe('TerminalShellHistorySection', () => {
   }
 
   it('shows the existing enabled setting and the new-session boundary', () => {
-    const toggle = renderSection(true)
+    const toggle = renderSetting(true)
 
     expect(toggle.getAttribute('aria-checked')).toBe('true')
     expect(container.textContent).toContain('Changes apply to new terminal sessions.')
@@ -62,7 +62,7 @@ describe('TerminalShellHistorySection', () => {
 
   it('persists the opt-out without changing any other setting', () => {
     const updateSettings = vi.fn()
-    const toggle = renderSection(true, updateSettings)
+    const toggle = renderSetting(true, updateSettings)
 
     act(() => toggle.click())
 

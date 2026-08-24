@@ -8922,10 +8922,6 @@
         "shortcutDefinitionCatalog": {
           "missionControlConflict": "Bloqueado por Mission Control. Reasigna aquí o cámbialo en Ajustes del Sistema."
         },
-        "TerminalShellHistorySection": {
-          "title": "Historial del shell",
-          "description": "Elige si las nuevas sesiones de terminal usan un historial exclusivo del espacio de trabajo o el historial habitual del shell."
-        },
         "shortcuts": {
           "search": {
             "ca6a0c2df7": "atajo",

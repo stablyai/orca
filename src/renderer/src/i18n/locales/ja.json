@@ -8944,10 +8944,6 @@
         "shortcutDefinitionCatalog": {
           "missionControlConflict": "Mission Control によってブロックされています。ここで再割り当てするか、システム設定で変更してください。"
         },
-        "TerminalShellHistorySection": {
-          "title": "シェル履歴",
-          "description": "新しいターミナルセッションで、ワークスペース専用の履歴とシェルの通常の履歴のどちらを使用するかを選択します。"
-        },
         "shortcuts": {
           "search": {
             "ca6a0c2df7": "ショートカット",

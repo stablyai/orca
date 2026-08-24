@@ -4,10 +4,10 @@ import { matchesSettingsSearch } from './settings-search'
 import { getTerminalShellHistorySearchEntry } from './terminal-shell-history-search'
 
 const LOCALIZED_HISTORY = [
-  ['es', 'Limitar el historial del shell a cada espacio de trabajo', 'Historial del shell'],
-  ['ja', 'ワークスペースごとにシェル履歴を分離', 'シェル履歴'],
-  ['ko', '워크스페이스별로 셸 기록 분리', '셸 기록'],
-  ['zh', '按工作区隔离 Shell 历史记录', 'Shell 历史记录']
+  ['es', 'Limitar el historial del shell a cada espacio de trabajo'],
+  ['ja', 'ワークスペースごとにシェル履歴を分離'],
+  ['ko', '워크스페이스별로 셸 기록 분리'],
+  ['zh', '按工作区隔离 Shell 历史记录']
 ] as const
 
 describe('terminal shell history localization', () => {
@@ -15,17 +15,11 @@ describe('terminal shell history localization', () => {
     await i18n.changeLanguage('en')
   })
 
-  it.each(LOCALIZED_HISTORY)(
-    'localizes the control and section in %s',
-    async (locale, controlTitle, sectionTitle) => {
-      await i18n.changeLanguage(locale)
+  it.each(LOCALIZED_HISTORY)('localizes the control in %s', async (locale, controlTitle) => {
+    await i18n.changeLanguage(locale)
 
-      expect(getTerminalShellHistorySearchEntry().title).toBe(controlTitle)
-      expect(i18n.t('auto.components.settings.TerminalShellHistorySection.title')).toBe(
-        sectionTitle
-      )
-    }
-  )
+    expect(getTerminalShellHistorySearchEntry().title).toBe(controlTitle)
+  })
 
   it.each([
     ['es', 'búsqueda inversa'],

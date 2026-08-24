@@ -8912,10 +8912,6 @@
         "shortcutDefinitionCatalog": {
           "missionControlConflict": "Mission Control에 의해 차단되었습니다. 여기에서 다시 매핑하거나 시스템 설정에서 변경하세요."
         },
-        "TerminalShellHistorySection": {
-          "title": "셸 기록",
-          "description": "새 터미널 세션에서 워크스페이스 전용 기록과 셸의 일반 기록 중 무엇을 사용할지 선택합니다."
-        },
         "shortcuts": {
           "search": {
             "ca6a0c2df7": "단축키",
