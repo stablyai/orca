@@ -6,6 +6,11 @@ import { mapGraphQLReactionGroups, type GitHubGraphQLReactionGroup } from '../..
 import { noteRepositoryRateLimitSpend, repositoryRateLimitGuard } from '../../rate-limit'
 import { assertRateLimitBudget } from './../lookup/pr-lookup-rate-limit'
 import { REVIEW_THREADS_QUERY } from './pr-review-threads-query'
+import {
+  fetchRemainingReviewThreadPages,
+  threadCommentsToPRComments,
+  type GQLThreadConnection
+} from './pr-review-thread-collector'
 /**
  * Get all comments on a PR — both top-level conversation comments and inline
  * review comments (including suggestions). Uses GraphQL for review threads
@@ -84,42 +89,27 @@ export async function getPRComments(
       }
       let issueComments: PRComment[] = []
       if (issueResult.status === 'fulfilled') {
-        issueComments = (JSON.parse(issueResult.value.stdout) as RESTComment[]).map(
-          (c): PRComment => ({
-            id: c.id,
-            author: c.user?.login ?? 'ghost',
-            authorAvatarUrl: c.user?.avatar_url ?? '',
-            body: c.body ?? '',
-            createdAt: c.created_at,
-            url: c.html_url,
-            isBot: c.user?.type === 'Bot'
-          })
-        )
+        // Why: match the allSettled posture — a malformed payload must only blank its own source.
+        try {
+          issueComments = (JSON.parse(issueResult.value.stdout) as RESTComment[]).map(
+            (c): PRComment => ({
+              id: c.id,
+              author: c.user?.login ?? 'ghost',
+              authorAvatarUrl: c.user?.avatar_url ?? '',
+              body: c.body ?? '',
+              createdAt: c.created_at,
+              url: c.html_url,
+              isBot: c.user?.type === 'Bot'
+            })
+          )
+        } catch (err) {
+          console.warn('Failed to parse issue comments:', err)
+        }
       } else {
         console.warn('Failed to fetch issue comments:', issueResult.reason)
       }
 
       // Parse review threads (GraphQL)
-      type GQLThread = {
-        id: string
-        isResolved: boolean
-        line: number | null
-        startLine: number | null
-        originalLine: number | null
-        originalStartLine: number | null
-        comments: {
-          nodes: {
-            id: string
-            databaseId: number
-            author: { __typename?: string; login: string; avatarUrl: string } | null
-            body: string
-            createdAt: string
-            url: string
-            path: string
-            reactionGroups?: GitHubGraphQLReactionGroup[] | null
-          }[]
-        }
-      }
       type GQLIssueComment = {
         id: string
         databaseId: number
@@ -131,18 +121,27 @@ export async function getPRComments(
       }
       let graphQLReviewSummaries: PRComment[] | undefined
       const reviewComments: PRComment[] = []
-      if (threadsResult.status === 'fulfilled' && threadsResult.value) {
-        const threadsData = JSON.parse(threadsResult.value.stdout) as {
-          data?: {
-            repository?: {
-              pullRequest?: {
-                reviewThreads?: { nodes?: GQLThread[] | null } | null
-                comments?: { nodes?: GQLIssueComment[] | null } | null
-                reviews?: { nodes?: GQLIssueComment[] | null } | null
-              } | null
+      type GQLThreadsPayload = {
+        data?: {
+          repository?: {
+            pullRequest?: {
+              reviewThreads?: GQLThreadConnection | null
+              comments?: { nodes?: GQLIssueComment[] | null } | null
+              reviews?: { nodes?: GQLIssueComment[] | null } | null
             } | null
           } | null
+        } | null
+      }
+      let threadsData: GQLThreadsPayload | null = null
+      if (threadsResult.status === 'fulfilled' && threadsResult.value) {
+        // Why: match the allSettled posture — a malformed payload must only blank its own source.
+        try {
+          threadsData = JSON.parse(threadsResult.value.stdout) as GQLThreadsPayload
+        } catch (err) {
+          console.warn('Failed to parse review threads:', err)
         }
+      }
+      if (threadsData) {
         // Why: graphql can exit 0 with data.repository null plus an errors array (scopes, field-level denial);
         // dereferencing it would throw and drop the REST halves fetched alongside it.
         const pullRequest = threadsData.data?.repository?.pullRequest
@@ -184,29 +183,17 @@ export async function getPRComments(
               )
           : undefined
 
-        const threads = pullRequest?.reviewThreads?.nodes ?? []
-        for (const thread of threads) {
-          for (const c of thread.comments.nodes) {
-            reviewComments.push({
-              id: c.databaseId,
-              author: c.author?.login ?? 'ghost',
-              authorAvatarUrl: c.author?.avatarUrl ?? '',
-              body: c.body ?? '',
-              createdAt: c.createdAt,
-              url: c.url,
-              isBot: c.author?.__typename === 'Bot',
-              reactionSubjectId: c.id,
-              reactions: mapGraphQLReactionGroups(c.reactionGroups),
-              path: c.path,
-              threadId: thread.id,
-              isResolved: thread.isResolved,
-              isOutdated: thread.line == null,
-              // Why: GitHub nulls line/startLine when the commented code is outdated (e.g. force-push); originalLine preserves the original numbers.
-              line: thread.line ?? thread.originalLine ?? undefined,
-              startLine: thread.startLine ?? thread.originalStartLine ?? undefined
-            })
-          }
+        for (const thread of pullRequest?.reviewThreads?.nodes ?? []) {
+          reviewComments.push(...threadCommentsToPRComments(thread))
         }
+        reviewComments.push(
+          ...(await fetchRemainingReviewThreadPages({
+            ownerRepo,
+            ghOptions,
+            prNumber,
+            pageInfo: pullRequest?.reviewThreads?.pageInfo
+          }))
+        )
       } else {
         if (threadsResult.status === 'rejected') {
           console.warn('Failed to fetch review threads:', threadsResult.reason)
@@ -226,19 +213,24 @@ export async function getPRComments(
       if (graphQLReviewSummaries) {
         reviewSummaries = graphQLReviewSummaries
       } else if (reviewsResult.status === 'fulfilled') {
-        reviewSummaries = (JSON.parse(reviewsResult.value.stdout) as RESTReview[])
-          .filter((r) => r.body?.trim())
-          .map(
-            (r): PRComment => ({
-              id: r.id,
-              author: r.user?.login ?? 'ghost',
-              authorAvatarUrl: r.user?.avatar_url ?? '',
-              body: r.body,
-              createdAt: r.submitted_at,
-              url: r.html_url,
-              isBot: r.user?.type === 'Bot'
-            })
-          )
+        // Why: match the allSettled posture — a malformed payload must only blank its own source.
+        try {
+          reviewSummaries = (JSON.parse(reviewsResult.value.stdout) as RESTReview[])
+            .filter((r) => r.body?.trim())
+            .map(
+              (r): PRComment => ({
+                id: r.id,
+                author: r.user?.login ?? 'ghost',
+                authorAvatarUrl: r.user?.avatar_url ?? '',
+                body: r.body,
+                createdAt: r.submitted_at,
+                url: r.html_url,
+                isBot: r.user?.type === 'Bot'
+              })
+            )
+        } catch (err) {
+          console.warn('Failed to parse review summaries:', err)
+        }
       } else {
         console.warn('Failed to fetch review summaries:', reviewsResult.reason)
       }

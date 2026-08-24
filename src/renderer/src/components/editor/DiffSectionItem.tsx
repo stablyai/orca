@@ -7,6 +7,7 @@ import { useAppStore } from '@/store'
 import { computeDiffEditorFontSize, resolveEditorFontFamily } from '@/lib/editor-font-zoom'
 import { selectWorktreeDiffComments } from '@/store/worktree-diff-comments-selector'
 import { useDiffCommentDecorator } from '../diff-comments/useDiffCommentDecorator'
+import { enrichInlineCommentsWithSuggestionTargets } from './diff-section-review-threads'
 import {
   getDiffCommentPopoverLeft,
   getDiffCommentPopoverTop
@@ -44,6 +45,7 @@ export function DiffSectionItem({
   addLineCommentLabel,
   addLineCommentPlaceholder,
   inlineComments,
+  reviewThreadMarkerLines,
   getCommentableLineNumbers,
   setSectionHeights,
   setSections,
@@ -107,11 +109,24 @@ export function DiffSectionItem({
     return diffComments.some((c) => c.id === scrollToDiffCommentId) ? scrollToDiffCommentId : null
   }, [scrollToDiffCommentId, diffComments])
 
+  const enrichedInlineComments = useMemo(
+    () => enrichInlineCommentsWithSuggestionTargets(inlineComments, section),
+    [inlineComments, section]
+  )
+  // Why: merge instead of replace — local worktree surfaces overlay PR threads on top of the user's own notes.
+  const decoratorComments = useMemo(() => {
+    const base = worktreeId ? diffComments : []
+    if (!enrichedInlineComments || enrichedInlineComments.length === 0) {
+      return base
+    }
+    return base.length === 0 ? enrichedInlineComments : [...enrichedInlineComments, ...base]
+  }, [diffComments, enrichedInlineComments, worktreeId])
+
   useDiffCommentDecorator({
     editor: hasLineCommentAction ? modifiedEditor : null,
     filePath: section.path,
     worktreeId: worktreeId ?? '',
-    comments: inlineComments ?? (worktreeId ? diffComments : []),
+    comments: decoratorComments,
     commentableLineNumbers: getCommentableLineNumbers?.(section),
     addButtonLabel: addLineCommentLabel,
     onAddCommentClick: ({ lineNumber, startLine, top }) =>
@@ -130,6 +145,7 @@ export function DiffSectionItem({
       }
     },
     onUpdateComment: worktreeId ? (id, body) => updateDiffComment(worktreeId, id, body) : undefined,
+    reviewThreadMarkerLines: reviewThreadMarkerLines?.(section),
     pendingScrollCommentId: pendingScrollForThisSection,
     onPendingScrollConsumed: () => setScrollToDiffCommentId(null)
   })

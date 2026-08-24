@@ -19,3 +19,24 @@ export function getCommentBodyLayoutLineCount(body: string): number {
   }
   return lineCount
 }
+
+// Why: each reply adds its own meta row and spacing on top of its body lines.
+const REVIEW_THREAD_REPLY_CHROME_LINES = 2
+
+export function getReviewThreadLayoutLineCount(comment: {
+  body: string
+  reviewThread?: { isResolved: boolean; replies: readonly { body: string }[] }
+}): number {
+  const thread = comment.reviewThread
+  if (!thread) {
+    return getCommentBodyLayoutLineCount(comment.body)
+  }
+  if (thread.isResolved) {
+    return 1
+  }
+  let lineCount = getCommentBodyLayoutLineCount(comment.body)
+  for (const reply of thread.replies) {
+    lineCount += getCommentBodyLayoutLineCount(reply.body) + REVIEW_THREAD_REPLY_CHROME_LINES
+  }
+  return lineCount
+}

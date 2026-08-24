@@ -1,5 +1,6 @@
 import type React from 'react'
 import { ChevronDown, Folder, FolderOpen } from 'lucide-react'
+import { ReviewThreadBadge } from '@/components/diff-comments/review-thread-badge'
 import { STATUS_COLORS, STATUS_LABELS } from '@/components/right-sidebar/status-display'
 import type { SourceControlTreeNode } from '@/components/right-sidebar/source-control-tree'
 import { getFileTypeIcon } from '@/lib/file-type-icons'
@@ -36,7 +37,8 @@ export function CombinedDiffFileTreeRow({
   sectionIndexByKey,
   isCollapsed,
   onToggleDirectory,
-  onNavigate
+  onNavigate,
+  reviewThreadCountByPath
 }: {
   node: CombinedDiffTreeNode
   mode: CombinedDiffFileTreeMode
@@ -46,6 +48,8 @@ export function CombinedDiffFileTreeRow({
   isCollapsed: boolean
   onToggleDirectory: (key: string) => void
   onNavigate: (entry: CombinedDiffFileTreeEntry) => void
+  /** Review-thread counts of the linked/viewed PR, keyed by file path. */
+  reviewThreadCountByPath?: ReadonlyMap<string, number>
 }): React.JSX.Element {
   if (node.type === 'directory') {
     return (
@@ -90,6 +94,7 @@ export function CombinedDiffFileTreeRow({
   const dirPath = parentDir === '.' ? '' : parentDir
   const status = node.entry.status as GitFileStatus
   const disabled = !sectionIndexByKey.has(sectionKey)
+  const reviewThreadCount = reviewThreadCountByPath?.get(node.entry.path) ?? 0
 
   return (
     <button
@@ -121,6 +126,7 @@ export function CombinedDiffFileTreeRow({
         <span className="text-foreground">{fileName}</span>
         {dirPath && <span className="ml-1.5 text-[11px] text-muted-foreground">{dirPath}</span>}
       </span>
+      <ReviewThreadBadge count={reviewThreadCount} />
       <span
         className="w-4 shrink-0 text-center text-[10px] font-bold"
         style={{ color: STATUS_COLORS[status] }}

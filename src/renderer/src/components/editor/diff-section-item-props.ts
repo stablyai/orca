@@ -30,6 +30,8 @@ export type DiffSectionItemProps = {
   addLineCommentLabel?: string
   addLineCommentPlaceholder?: string
   inlineComments?: readonly DecoratedDiffComment[]
+  /** Lines whose review threads are hidden; shown as gutter markers. */
+  reviewThreadMarkerLines?: (section: DiffSection) => readonly number[] | undefined
   getCommentableLineNumbers?: (section: DiffSection) => readonly number[] | undefined
   setSectionHeights: Dispatch<SetStateAction<Record<number, number>>>
   setSections: Dispatch<SetStateAction<DiffSection[]>>

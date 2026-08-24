@@ -2,7 +2,8 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   COMMENT_BODY_LAYOUT_MAX_LINES,
   COMMENT_BODY_LINE_COUNT_SCAN_CODE_UNITS,
-  getCommentBodyLayoutLineCount
+  getCommentBodyLayoutLineCount,
+  getReviewThreadLayoutLineCount
 } from './comment-body-line-count'
 
 afterEach(() => {
@@ -36,5 +37,33 @@ describe('comment body layout line count', () => {
 
     expect(split).not.toHaveBeenCalled()
     expect(charCodeAt.mock.calls.length).toBe(COMMENT_BODY_LINE_COUNT_SCAN_CODE_UNITS)
+  })
+})
+
+describe('getReviewThreadLayoutLineCount', () => {
+  it('estimates thread height from root plus replies', () => {
+    const root = 'line1\nline2'
+    const single = getCommentBodyLayoutLineCount(root)
+    const total = getReviewThreadLayoutLineCount({
+      body: root,
+      reviewThread: {
+        isResolved: false,
+        replies: [{ body: 'a\nb\nc' }, { body: 'd' }]
+      }
+    })
+    expect(total).toBeGreaterThan(single + 4)
+  })
+
+  it('estimates collapsed resolved threads as a single row', () => {
+    const total = getReviewThreadLayoutLineCount({
+      body: 'x\n'.repeat(30),
+      reviewThread: { isResolved: true, replies: [] }
+    })
+    expect(total).toBeLessThanOrEqual(2)
+  })
+
+  it('falls back to the plain body estimate without thread data', () => {
+    const body = 'one\ntwo\nthree'
+    expect(getReviewThreadLayoutLineCount({ body })).toBe(getCommentBodyLayoutLineCount(body))
   })
 })

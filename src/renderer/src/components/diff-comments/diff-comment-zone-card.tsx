@@ -5,6 +5,7 @@ import { formatDiffComments } from '@/lib/diff-comments-format'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import type { DiffCommentDeliverySnapshot } from '@/store/slices/diffComments'
 import { DiffCommentCard } from './DiffCommentCard'
+import { ReviewThreadCard } from './ReviewThreadCard'
 import type { DecoratedDiffComment } from './decorated-diff-comment'
 import { NotesSendMenu, type NotesSendMenuScope } from '../editor/NotesSendMenu'
 import { translate } from '@/i18n/i18n'
@@ -22,6 +23,12 @@ export function getRenderSignature(
     url: comment.url ?? null,
     canDelete: comment.canDelete ?? null,
     canEdit: comment.canEdit ?? null,
+    lineNumber: comment.lineNumber,
+    startLine: comment.startLine ?? null,
+    reactions: comment.reactions ?? null,
+    isPendingReview: comment.isPendingReview ?? null,
+    suggestionTargetLines: comment.suggestionTargetLines ?? null,
+    reviewThread: comment.reviewThread ?? null,
     sendPrompt: formatCommentPrompt ? formatCommentPrompt(comment) : null
   })
 }
@@ -72,6 +79,15 @@ export function renderDiffCommentZoneCard(
     clearDeliveredDiffComments
   }: DiffCommentZoneCardContext
 ): void {
+  if (comment.reviewThread) {
+    root.render(
+      // View zones are separate React roots outside the app root, so App.tsx context providers don't reach them.
+      <TooltipProvider delayDuration={400}>
+        <ReviewThreadCard comment={comment} onContentResize={() => resizeZone(comment.id)} />
+      </TooltipProvider>
+    )
+    return
+  }
   root.render(
     // View zones are separate React roots outside the app root, so App.tsx context providers don't reach them.
     <TooltipProvider delayDuration={400}>

@@ -14,6 +14,8 @@ export type DiffViewerProps = {
   // Why: optional because DiffViewer is also used by GitHubItemDialog for PR
   // review, where there is no local worktree to attach comments to.
   worktreeId?: string
+  /** Overlay read-only review threads of the worktree's linked PR (branch diffs only). */
+  showLinkedPRReviewThreads?: boolean
   onAddLineComment?: (args: {
     lineNumber: number
     startLine?: number

@@ -49,6 +49,14 @@ import { Check, Copy, MessageSquare, PanelLeftOpen, Sparkles, Trash2, WrapText }
 import { toast } from 'sonner'
 import { DiffSectionItem } from './DiffSectionItem'
 import { DiffNotesSendMenu } from './DiffNotesSendMenu'
+import { OutdatedThreadsGroup } from '../diff-comments/outdated-threads-group'
+import type { DecoratedDiffComment } from '../diff-comments/decorated-diff-comment'
+import { anchorLocalThreadsForFile } from '../github/local-pr-thread-anchoring'
+import { useLocalPRReviewThreads } from '../github/use-local-pr-review-threads'
+import {
+  setReviewThreadsVisible,
+  useReviewThreadsVisible
+} from '../diff-comments/review-thread-visibility'
 import {
   CombinedDiffFileTree,
   createCombinedDiffSectionIndexMap,
@@ -416,6 +424,62 @@ export default function CombinedDiffViewer({
   const isBranchMode = file.diffSource === 'combined-branch'
   const isCommitMode = file.diffSource === 'combined-commit'
   const isAllMode = file.diffSource === 'combined-all'
+
+  const linkedPRThreads = useLocalPRReviewThreads(file.worktreeId, isBranchMode)
+  const reviewThreadsVisible = useReviewThreadsVisible()
+  const prThreadsBySection = useMemo(() => {
+    const inline = new Map<string, DecoratedDiffComment[]>()
+    const outdated = new Map<string, DecoratedDiffComment[]>()
+    // Why: marker arrays must be reference-stable — a fresh .map() per render would
+    // recreate Monaco decorations on every scroll-driven re-render while hidden.
+    const markerLines = new Map<string, number[]>()
+    const { comments, prNumber, repoId, prHeadSha } = linkedPRThreads
+    if (!isBranchMode || prNumber === null || !repoId || comments.length === 0) {
+      return { inline, outdated, markerLines }
+    }
+    const headMatchesPrHead = !!prHeadSha && branchSummary?.headOid === prHeadSha
+    for (const section of sections) {
+      const anchored = anchorLocalThreadsForFile({
+        comments,
+        path: section.path,
+        repoId,
+        prNumber,
+        worktreeId: file.worktreeId,
+        context: {
+          // Why: a still-loading section has no content to anchor against yet.
+          modifiedContent: section.loading ? null : section.modifiedContent,
+          headMatchesPrHead
+        }
+      })
+      if (anchored.inline.length > 0) {
+        inline.set(section.path, anchored.inline)
+        markerLines.set(
+          section.path,
+          anchored.inline.map((thread) => thread.lineNumber)
+        )
+      }
+      if (anchored.outdated.length > 0) {
+        outdated.set(section.path, anchored.outdated)
+      }
+    }
+    return { inline, outdated, markerLines }
+  }, [branchSummary?.headOid, file.worktreeId, isBranchMode, linkedPRThreads, sections])
+  const reviewThreadCountByPath = useMemo(() => {
+    const counts = new Map<string, number>()
+    for (const [path, threads] of prThreadsBySection.inline) {
+      counts.set(path, threads.length)
+    }
+    for (const [path, threads] of prThreadsBySection.outdated) {
+      counts.set(path, (counts.get(path) ?? 0) + threads.length)
+    }
+    return counts
+  }, [prThreadsBySection])
+  const hasReviewThreads = reviewThreadCountByPath.size > 0
+  const getReviewThreadMarkerLines = useCallback(
+    (section: DiffSection) =>
+      reviewThreadsVisible ? undefined : prThreadsBySection.markerLines.get(section.path),
+    [prThreadsBySection.markerLines, reviewThreadsVisible]
+  )
   const branchCompare =
     file.branchCompare?.baseOid && file.branchCompare.headOid && file.branchCompare.mergeBase
       ? file.branchCompare
@@ -1976,6 +2040,24 @@ export default function CombinedDiffViewer({
                     )}
               </button>
             )}
+            {hasReviewThreads ? (
+              <Button
+                variant="ghost"
+                size="xs"
+                className="h-auto px-0 text-left text-xs font-normal text-muted-foreground transition-colors hover:bg-transparent hover:text-foreground"
+                onClick={() => setReviewThreadsVisible(!reviewThreadsVisible)}
+              >
+                {reviewThreadsVisible
+                  ? translate(
+                      'auto.components.diff.comments.reviewThreads.hideAction',
+                      'Hide comments'
+                    )
+                  : translate(
+                      'auto.components.diff.comments.reviewThreads.showAction',
+                      'Show comments'
+                    )}
+              </Button>
+            ) : null}
             <button
               className="w-20 text-left text-xs text-muted-foreground hover:text-foreground transition-colors"
               onClick={() => setAllSectionsCollapsed(!allSectionsCollapsed)}
@@ -2021,6 +2103,7 @@ export default function CombinedDiffViewer({
             collapsed={fileTreeCollapsed}
             onCollapsedChange={setFileTreeCollapsed}
             onNavigate={handleTreeNavigate}
+            reviewThreadCountByPath={reviewThreadCountByPath}
           />
           <div className="relative min-w-0 flex-1">
             <div
@@ -2048,8 +2131,19 @@ export default function CombinedDiffViewer({
                       // Why: position via top, not transform, so sticky file headers don't jump (transform creates a containing block).
                       style={{ top: `${virtualItem.start}px` }}
                     >
+                      {reviewThreadsVisible ? (
+                        <OutdatedThreadsGroup
+                          threads={prThreadsBySection.outdated.get(section.path) ?? []}
+                        />
+                      ) : null}
                       <DiffSectionItem
                         section={section}
+                        inlineComments={
+                          reviewThreadsVisible
+                            ? prThreadsBySection.inline.get(section.path)
+                            : undefined
+                        }
+                        reviewThreadMarkerLines={getReviewThreadMarkerLines}
                         index={virtualItem.index}
                         isBranchMode={isBranchMode}
                         sideBySide={sideBySide}
