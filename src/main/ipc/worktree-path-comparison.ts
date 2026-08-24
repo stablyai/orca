@@ -99,8 +99,19 @@ function looksLikePosixAbsolutePath(pathValue: string): boolean {
   return pathValue.startsWith('/') && !pathValue.startsWith('//')
 }
 
+/** `\\\\wsl$\\<distro>` / `\\\\wsl.localhost\\<distro>` prefix of an already win32-normalized path. */
+const WSL_UNC_COMPARISON_PREFIX = /^\\\\(wsl\.localhost|wsl\$)\\([^\\]+)(\\[\s\S]*)?$/i
+
 function normalizeWindowsWorktreePathForComparison(pathValue: string): string {
-  return win32.normalize(win32.resolve(pathValue)).toLowerCase()
+  const normalized = win32.normalize(win32.resolve(pathValue))
+  const wslUnc = normalized.match(WSL_UNC_COMPARISON_PREFIX)
+  if (!wslUnc) {
+    return normalized.toLowerCase()
+  }
+  // Why: the WSL UNC aliases front a case-SENSITIVE Linux filesystem, so folding the
+  // whole path merges two real worktrees that differ only by case and drops one row.
+  // Only the alias and distro fold, matching the UNC server/share rule.
+  return `\\\\${wslUnc[1].toLowerCase()}\\${wslUnc[2].toLowerCase()}${wslUnc[3] ?? ''}`
 }
 
 function normalizePosixWorktreePathForComparison(

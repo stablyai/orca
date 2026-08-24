@@ -44,6 +44,27 @@ describe('dedupeWorktreesByPath', () => {
     }
   )
 
+  it.each<NodeJS.Platform>(['darwin', 'linux', 'win32'])(
+    'keeps case-different WSL UNC worktrees on %s while folding alias and distro case',
+    (platform) => {
+      const worktrees = [
+        { id: 'wsl-upper', path: String.raw`\\wsl$\Ubuntu\home\dev\wt\Feature` },
+        { id: 'wsl-lower', path: String.raw`\\wsl$\Ubuntu\home\dev\wt\feature` },
+        { id: 'wsl-alias-case-duplicate', path: '//WSL$/ubuntu/home/dev/wt/./Feature' },
+        { id: 'wsl-localhost', path: String.raw`\\wsl.localhost\Ubuntu\home\dev\wt\Feature` }
+      ]
+
+      expect(dedupeWorktreesByPath(worktrees, platform).map((entry) => entry.id)).toEqual([
+        'wsl-upper',
+        'wsl-lower',
+        'wsl-localhost'
+      ])
+      expect(dedupeWorktreesByPath(worktrees, platform)).toEqual(
+        dedupeWithComparator(worktrees, platform)
+      )
+    }
+  )
+
   it('reads each path once for a large unique list', () => {
     let pathReads = 0
     const worktrees = Array.from({ length: 1_000 }, (_, index) => ({

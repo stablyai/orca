@@ -1058,6 +1058,10 @@ import {
 } from '../../shared/constants'
 import { pruneLineageForMissingRepoWorktrees } from '../worktree-lineage-pruning'
 import {
+  collapsePathEqualWorktreeRows,
+  resolveRepoWorktreePathPlatform
+} from './path-equal-worktree-row-collapse'
+import {
   createWorktreeCopiedPaths,
   createWorktreeLinkedPaths,
   createWorktreeSharedPaths,
@@ -23385,13 +23389,18 @@ export class OrcaRuntimeService {
   ): Promise<DetectedWorktreeListResult> {
     return this.listDetectedWorktreesForResolvedRepo(
       await this.resolveRepoSelectorForConnection(repoSelector, connectionId),
-      sourceDefaultsSupported
+      sourceDefaultsSupported,
+      true
     )
   }
 
   private async listDetectedWorktreesForResolvedRepo(
     repo: Repo,
-    sourceDefaultsSupported = true
+    sourceDefaultsSupported: boolean,
+    // Why required, not defaulted: any caller that reasons about ABSENCE (the terminal sweep, a future
+    // orphan reaper) must pass false — a spelling the collapse drops still names a live directory, and
+    // killing its PTYs is final. A default would make that mistake compile.
+    collapsePathEqualRows: boolean
   ): Promise<DetectedWorktreeListResult> {
     const store = this.requireStore()
     const settings = store.getSettings()
@@ -23432,8 +23441,11 @@ export class OrcaRuntimeService {
     } catch {
       scan = { ok: false, worktrees: [] }
     }
+    const pathPlatform = resolveRepoWorktreePathPlatform(repo)
     if (scan.ok) {
-      pruneLineageForMissingRepoWorktrees(store, repo, scan.worktrees)
+      // Why raw rows: a spelling the collapse drops still names a live directory, so pruning
+      // against the collapsed set would read it as a deleted worktree.
+      pruneLineageForMissingRepoWorktrees(store, repo, scan.worktrees, pathPlatform)
     }
     const worktreeVisibilitySourceMatcher = createWorktreeVisibilitySourceMatcher(
       [repo.path, ...scan.worktrees.map((worktree) => worktree.path)],
@@ -23443,7 +23455,14 @@ export class OrcaRuntimeService {
     const expectedHostId = getRepoExecutionHostId(repo)
     const repoOwnerCount = store.getRepos().filter((candidate) => candidate.id === repo.id).length
     const metaById = store.getAllWorktreeMeta()
-    const detected = scan.worktrees.map((gitWorktree) => {
+    const rows = collapsePathEqualRows
+      ? collapsePathEqualWorktreeRows(scan.worktrees, {
+          repoPath: repo.path,
+          hasStoredMeta: (worktreePath) => metaById[`${repo.id}::${worktreePath}`] !== undefined,
+          platform: pathPlatform
+        })
+      : scan.worktrees
+    const detected = rows.map((gitWorktree) => {
       const worktreeId = `${repo.id}::${gitWorktree.path}`
       const meta = getRepoOwnedWorktreeMeta(repo, worktreeId, metaById, repoOwnerCount)
       const worktree = {
@@ -23483,7 +23502,7 @@ export class OrcaRuntimeService {
     // Why: rescanning by `id:` would re-resolve the already-resolved repo, and a
     // duplicate id across hosts makes that second lookup throw selector_ambiguous
     // even though the caller's selector was unique — losing the sweep entirely.
-    const detected = await this.listDetectedWorktreesForResolvedRepo(repo)
+    const detected = await this.listDetectedWorktreesForResolvedRepo(repo, true, false)
     if (!detected.authoritative) {
       return { stoppedWorktreeIds: [] }
     }

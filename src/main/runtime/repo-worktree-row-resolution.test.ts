@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { ExecutionHostId } from '../../shared/execution-host'
 import type { Repo } from '../../shared/repo-types'
+import type { WorktreeLineage } from '../../shared/worktree/lineage-types'
 import type { WorktreeMeta } from '../../shared/worktree/meta-types'
 import type { GitWorktreeInfo, Worktree } from '../../shared/worktree/types'
 import type { Store } from '../persistence'
@@ -35,16 +36,35 @@ function gitWorktree(path: string): GitWorktreeInfo {
   }
 }
 
-function createDeps(repos: Repo[]): RepoWorktreeRowDeps & {
+/**
+ * Lineage removal is opt-in: a store without `removeWorktreeLineage` makes
+ * `pruneLineageForMissingRepoWorktrees` no-op, which is what the non-lineage cases here want.
+ */
+function createDeps(
+  repos: Repo[],
+  worktreeLineageById?: Record<string, WorktreeLineage>
+): RepoWorktreeRowDeps & {
   metaById: Record<string, WorktreeMeta>
+  removeWorktreeLineage: ReturnType<typeof vi.fn>
   scanRepo: ReturnType<typeof vi.fn<RepoWorktreeRowDeps['scanRepo']>>
   listFolderWorkspaces: ReturnType<typeof vi.fn<RepoWorktreeRowDeps['listFolderWorkspaces']>>
 } {
   const metaById: Record<string, WorktreeMeta> = {}
+  const removeWorktreeLineage = vi.fn((worktreeId: string) => {
+    delete worktreeLineageById?.[worktreeId]
+  })
   const store = {
     getRepos: () => repos,
     getAllWorktreeMeta: () => metaById,
-    getAllWorktreeLineage: () => ({}),
+    getWorktreeMeta: (worktreeId: string) => metaById[worktreeId],
+    getAllWorktreeLineage: () => worktreeLineageById ?? {},
+    ...(worktreeLineageById
+      ? {
+          getAllWorkspaceLineage: () => ({}),
+          removeWorktreeLineage,
+          removeWorkspaceLineage: vi.fn()
+        }
+      : {}),
     getProjects: () => [],
     getSettings: () => ({}),
     setWorktreeMeta: (worktreeId: string, updates: Partial<WorktreeMeta>) => {
@@ -58,8 +78,118 @@ function createDeps(repos: Repo[]): RepoWorktreeRowDeps & {
     worktrees: [gitWorktree(owner.id === 'unrelated' ? '/unrelated/worktree' : '/same/worktree')]
   }))
   const listFolderWorkspaces = vi.fn<RepoWorktreeRowDeps['listFolderWorkspaces']>(() => [])
-  return { store, metaById, scanRepo, listFolderWorkspaces }
+  return { store, metaById, removeWorktreeLineage, scanRepo, listFolderWorkspaces }
 }
+
+function scanRow(path: string, overrides: Partial<GitWorktreeInfo> = {}): GitWorktreeInfo {
+  return {
+    path,
+    head: 'abc123',
+    branch: 'refs/heads/feature',
+    isBare: false,
+    isMainWorktree: false,
+    ...overrides
+  }
+}
+
+describe('path-equal worktree row collapse', () => {
+  it('collapses onto the repo path spelling and adopts the peer branch', async () => {
+    const owner = repo('repo', '/home/me/repo')
+    const deps = createDeps([owner])
+    deps.scanRepo.mockResolvedValueOnce({
+      ok: true,
+      worktrees: [
+        scanRow('/home/me/repo', { head: '', branch: '', isMainWorktree: true }),
+        scanRow('/home/me/./repo', { branch: 'refs/heads/master', isMainWorktree: true })
+      ]
+    })
+
+    const rows = await resolveRepoWorktreeRows(deps, owner, deps.metaById, new Map())
+
+    expect(rows).toHaveLength(1)
+    expect(rows[0]).toMatchObject({
+      id: 'repo::/home/me/repo',
+      path: '/home/me/repo',
+      head: 'abc123',
+      branch: 'refs/heads/master',
+      isMainWorktree: true
+    })
+  })
+
+  it('keeps the spelling that already owns worktree metadata', async () => {
+    const owner = repo('repo', '/home/me/repo')
+    const deps = createDeps([owner])
+    deps.metaById['repo::/home/me/wt/feature'] = {
+      instanceId: 'stable-instance',
+      comment: 'carried over'
+    } as WorktreeMeta
+    deps.scanRepo.mockResolvedValueOnce({
+      ok: true,
+      worktrees: [scanRow('/home/me/wt/./feature'), scanRow('/home/me/wt/feature')]
+    })
+
+    const rows = await resolveRepoWorktreeRows(deps, owner, deps.metaById, new Map())
+
+    expect(rows).toHaveLength(1)
+    expect(rows[0]).toMatchObject({
+      id: 'repo::/home/me/wt/feature',
+      path: '/home/me/wt/feature',
+      comment: 'carried over'
+    })
+    expect(deps.metaById['repo::/home/me/wt/./feature']).toBeUndefined()
+    expect(deps.metaById['repo::/home/me/wt/feature'].instanceId).toBe('stable-instance')
+  })
+
+  it('never prunes lineage for a spelling the collapse dropped', async () => {
+    const owner = repo('repo', '/home/me/repo')
+    const childId = 'repo::/home/me/wt/./feature'
+    const worktreeLineageById: Record<string, WorktreeLineage> = {}
+    const deps = createDeps([owner], worktreeLineageById)
+    worktreeLineageById[childId] = {
+      worktreeId: childId,
+      worktreeInstanceId: 'child-instance',
+      parentWorktreeId: 'repo::/home/me/repo',
+      parentWorktreeInstanceId: 'parent-instance',
+      origin: 'manual',
+      capture: { source: 'manual-action', confidence: 'explicit' },
+      createdAt: 1
+    }
+    deps.scanRepo.mockResolvedValueOnce({
+      ok: true,
+      worktrees: [
+        scanRow('/home/me/repo', { isMainWorktree: true }),
+        scanRow('/home/me/wt/feature'),
+        scanRow('/home/me/wt/./feature')
+      ]
+    })
+
+    await resolveRepoWorktreeRows(deps, owner, deps.metaById, new Map())
+
+    expect(deps.removeWorktreeLineage).not.toHaveBeenCalled()
+    expect(worktreeLineageById[childId]).toBeDefined()
+  })
+
+  it('preserves git row order when a worktree has no branch', async () => {
+    const owner = repo('repo', '/home/me/repo')
+    const deps = createDeps([owner])
+    deps.scanRepo.mockResolvedValueOnce({
+      ok: true,
+      worktrees: [
+        scanRow('/home/me/repo', { branch: '', isMainWorktree: true }),
+        scanRow('/home/me/wt/detached', { branch: '' }),
+        scanRow('/home/me/wt/feature')
+      ]
+    })
+
+    const rows = await resolveRepoWorktreeRows(deps, owner, deps.metaById, new Map())
+
+    expect(rows.map((row) => row.path)).toEqual([
+      '/home/me/repo',
+      '/home/me/wt/detached',
+      '/home/me/wt/feature'
+    ])
+  })
+})
 
 describe('host-qualified scoped worktree resolution', () => {
   it('scans only the selected local or SSH owner when repo ids and paths collide', async () => {

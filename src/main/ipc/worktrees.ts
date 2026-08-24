@@ -4,6 +4,7 @@ import { readFile, stat } from 'node:fs/promises'
 import { randomUUID } from 'node:crypto'
 import type { Store } from '../persistence'
 import { pruneLineageForMissingRepoWorktrees } from '../worktree-lineage-pruning'
+import { resolveRepoWorktreePathPlatform } from '../runtime/path-equal-worktree-row-collapse'
 import { isFolderRepo } from '../../shared/repo-kind'
 import { readBranchRenameFailureOutputForDisplay } from '../agent-hooks/branch-rename-failure-output'
 import { parseWorkspaceKey } from '../../shared/workspace-scope'
@@ -1303,7 +1304,12 @@ async function listDetectedWorktreesForCapturedRepo(
     }
     if (freshScan) {
       rememberLocalWorktreeRoots(store, repo, gitWorktrees)
-      pruneLineageForMissingRepoWorktrees(store, repo, gitWorktrees)
+      pruneLineageForMissingRepoWorktrees(
+        store,
+        repo,
+        gitWorktrees,
+        resolveRepoWorktreePathPlatform(repo)
+      )
     }
     loggedWorktreeListFailures.delete(`${repo.id}:${repo.path}`)
     return {
@@ -1921,7 +1927,12 @@ export function registerWorktreeHandlers(
         }
         if (freshScan) {
           rememberLocalWorktreeRoots(store, repo, gitWorktrees)
-          pruneLineageForMissingRepoWorktrees(store, repo, gitWorktrees)
+          pruneLineageForMissingRepoWorktrees(
+            store,
+            repo,
+            gitWorktrees,
+            resolveRepoWorktreePathPlatform(repo)
+          )
         }
         loggedWorktreeListFailures.delete(`${repo.id}:${repo.path}`)
         return buildDetectedGitWorktrees(store, repo, gitWorktrees)
@@ -1993,7 +2004,12 @@ export function registerWorktreeHandlers(
       }
       if (freshScan) {
         rememberLocalWorktreeRoots(store, repo, gitWorktrees)
-        pruneLineageForMissingRepoWorktrees(store, repo, gitWorktrees)
+        pruneLineageForMissingRepoWorktrees(
+          store,
+          repo,
+          gitWorktrees,
+          resolveRepoWorktreePathPlatform(repo)
+        )
       }
       loggedWorktreeListFailures.delete(`${repo.id}:${repo.path}`)
       return buildDetectedGitWorktrees(store, repo, gitWorktrees)

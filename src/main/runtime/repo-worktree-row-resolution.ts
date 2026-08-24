@@ -13,6 +13,10 @@ import { areWorktreePathsEqual, mergeWorktree } from '../ipc/worktree-logic'
 import { pruneLineageForMissingRepoWorktrees } from '../worktree-lineage-pruning'
 import { getRepoOwnedWorktreeMeta } from '../worktree-metadata-ownership'
 import { resolveLocalProjectRuntimesForRepos } from '../project-runtime-git-options'
+import {
+  collapsePathEqualWorktreeRows,
+  resolveRepoWorktreePathPlatform
+} from './path-equal-worktree-row-collapse'
 import type { RuntimeWorktreeScanResult } from './repo-worktree-resolution-scan'
 
 /**
@@ -121,10 +125,16 @@ export async function resolveRepoWorktreeRows(
     RESOLVED_WORKTREE_REPO_TIMEOUT_MS,
     null
   )) ?? { ok: false, worktrees: listStoredWorktreeRowsForRepo(store, repo, repoOwnerCount) }
-  const gitWorktrees = scan.worktrees
+  const pathPlatform = resolveRepoWorktreePathPlatform(repo)
+  // Why: prune against the raw rows so a spelling the collapse drops is never mistaken for a deleted worktree.
   if (scan.ok) {
-    pruneLineageForMissingRepoWorktrees(store, repo, gitWorktrees)
+    pruneLineageForMissingRepoWorktrees(store, repo, scan.worktrees, pathPlatform)
   }
+  const gitWorktrees = collapsePathEqualWorktreeRows(scan.worktrees, {
+    repoPath: repo.path,
+    hasStoredMeta: (worktreePath) => metaById[`${repo.id}::${worktreePath}`] !== undefined,
+    platform: pathPlatform
+  })
   const expectedHostId = getRepoExecutionHostId(repo)
   return gitWorktrees.map((gitWorktree) => {
     const worktreeId = `${repo.id}::${gitWorktree.path}`

@@ -4,6 +4,8 @@ import type { WorkspaceLineage, WorktreeLineage } from '../shared/worktree/linea
 import type { GitWorktreeInfo } from '../shared/worktree/types'
 import { getRepoExecutionHostId } from '../shared/execution-host'
 import { isWorkspaceKey, parseWorkspaceKey, worktreeWorkspaceKey } from '../shared/workspace-scope'
+import { splitWorktreeId } from '../shared/worktree/id'
+import { worktreePathComparisonKey } from './ipc/worktree-path-comparison'
 import type { Store } from './persistence'
 
 function worktreeIdBelongsToRepo(worktreeId: string, repoPrefix: string): boolean {
@@ -37,7 +39,10 @@ function hasStoredRepoLineage(
 export function pruneLineageForMissingRepoWorktrees(
   store: Store,
   repo: Repo,
-  gitWorktrees: GitWorktreeInfo[]
+  gitWorktrees: GitWorktreeInfo[],
+  // Why required: rows can come from an SSH or WSL host, and silently defaulting to the desktop's
+  // rules would apply macOS `/private/tmp` remapping to a remote host's paths.
+  platform: NodeJS.Platform
 ): void {
   if (
     typeof store.getAllWorktreeLineage !== 'function' ||
@@ -56,6 +61,22 @@ export function pruneLineageForMissingRepoWorktrees(
     return
   }
   const liveIds = new Set(gitWorktrees.map((worktree) => `${repo.id}::${worktree.path}`))
+  const livePathKeys = new Set(
+    gitWorktrees.map((worktree) => worktreePathComparisonKey(worktree.path, platform))
+  )
+  // Why: lineage is keyed on a stored spelling, so a live worktree reported under another spelling of
+  // the same directory must never look "proven missing" — that deletion is irreversible.
+  const isLive = (worktreeId: string): boolean => {
+    if (liveIds.has(worktreeId)) {
+      return true
+    }
+    // Why not `...ForFilesystem`: folder-workspace instances legitimately share a directory, so their
+    // id suffix must keep them distinct here.
+    const worktreePath = splitWorktreeId(worktreeId)?.worktreePath
+    return worktreePath
+      ? livePathKeys.has(worktreePathComparisonKey(worktreePath, platform))
+      : false
+  }
   const expectedHostId = getRepoExecutionHostId(repo)
   const repoOwners = store.getRepos().filter((candidate) => candidate.id === repo.id)
   const canMutateWorktree = (worktreeId: string): boolean => {
@@ -68,7 +89,7 @@ export function pruneLineageForMissingRepoWorktrees(
       childScope?.type === 'worktree' &&
       worktreeIdBelongsToRepo(childScope.worktreeId, repoPrefix) &&
       canMutateWorktree(childScope.worktreeId) &&
-      !liveIds.has(childScope.worktreeId) &&
+      !isLive(childScope.worktreeId) &&
       isWorkspaceKey(childWorkspaceKey)
     ) {
       store.removeWorkspaceLineage?.(childWorkspaceKey)
@@ -78,7 +99,7 @@ export function pruneLineageForMissingRepoWorktrees(
     if (
       worktreeIdBelongsToRepo(childId, repoPrefix) &&
       canMutateWorktree(childId) &&
-      !liveIds.has(childId)
+      !isLive(childId)
     ) {
       // Why: a proven-missing path must not transfer its lineage to a future checkout at that path.
       store.removeWorktreeLineage(childId)
@@ -87,7 +108,7 @@ export function pruneLineageForMissingRepoWorktrees(
     if (
       worktreeIdBelongsToRepo(lineage.parentWorktreeId, repoPrefix) &&
       canMutateWorktree(lineage.parentWorktreeId) &&
-      !liveIds.has(lineage.parentWorktreeId)
+      !isLive(lineage.parentWorktreeId)
     ) {
       const parentMeta = store.getWorktreeMeta(lineage.parentWorktreeId)
       if (!parentMeta || parentMeta.instanceId === lineage.parentWorktreeInstanceId) {

@@ -41407,6 +41407,68 @@ describe('OrcaRuntimeService', () => {
     expect(removeWorktreeLineage).not.toHaveBeenCalled()
   })
 
+  it('collapses path-equal rows in the detected worktree list', async () => {
+    vi.mocked(listWorktrees).mockResolvedValue([
+      {
+        path: TEST_WORKTREE_PATH,
+        head: 'abc',
+        branch: '',
+        isBare: false,
+        isMainWorktree: false
+      },
+      {
+        path: '/tmp/./worktree-a',
+        head: 'abc',
+        branch: 'feature/foo',
+        isBare: false,
+        isMainWorktree: false
+      }
+    ])
+    const runtime = new OrcaRuntimeService(store as never)
+
+    const result = await runtime.listDetectedManagedWorktrees(`id:${TEST_REPO_ID}`)
+
+    expect(result.worktrees.map((worktree) => worktree.id)).toEqual([TEST_WORKTREE_ID])
+    expect(result.worktrees[0]?.branch).toBe('feature/foo')
+  })
+
+  it('keeps terminals for a path-equal spelling the detected-list collapse drops', async () => {
+    const dotSpellingId = `${TEST_REPO_ID}::/tmp/./worktree-a`
+    const localProvider = {
+      listProcesses: vi.fn(async () => [
+        { id: `${dotSpellingId}@@session`, cwd: '/tmp/./worktree-a', title: 'shell' }
+      ]),
+      shutdown: vi.fn(async () => {})
+    }
+    vi.mocked(listWorktrees).mockResolvedValue([
+      {
+        path: TEST_WORKTREE_PATH,
+        head: 'abc',
+        branch: 'feature/foo',
+        isBare: false,
+        isMainWorktree: false
+      },
+      {
+        path: '/tmp/./worktree-a',
+        head: 'abc',
+        branch: 'feature/foo',
+        isBare: false,
+        isMainWorktree: false
+      }
+    ])
+    const runtime = new OrcaRuntimeService(store as never, undefined, {
+      getLocalProvider: () => localProvider as never
+    })
+
+    const result = await runtime.teardownMissingManagedWorktreeTerminals(`id:${TEST_REPO_ID}`, [
+      TEST_WORKTREE_ID,
+      dotSpellingId
+    ])
+
+    expect(result).toEqual({ stoppedWorktreeIds: [] })
+    expect(localProvider.shutdown).not.toHaveBeenCalled()
+  })
+
   it('revalidates missing worktrees before stopping their local provider sessions', async () => {
     const deletedId = `${TEST_REPO_ID}::/tmp/deleted`
     const survivingId = `${TEST_REPO_ID}::/tmp/surviving`
