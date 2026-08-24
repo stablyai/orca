@@ -15008,6 +15008,10 @@
           "0e1de0358b": "Month",
           "77e96bded6": "Weekday"
         },
+        "AutomationPromptDisclosure": {
+          "showLess": "Show less",
+          "showMore": "Show more"
+        },
         "AutomationDetail": {
           "007c8ad874": "Prompt",
           "a1d52c2189": "Usage coverage",

@@ -13612,6 +13612,10 @@
           "0e1de0358b": "月",
           "77e96bded6": "曜日"
         },
+        "AutomationPromptDisclosure": {
+          "showLess": "折りたたむ",
+          "showMore": "さらに表示"
+        },
         "AutomationDetail": {
           "007c8ad874": "プロンプト",
           "a1d52c2189": "使用範囲",

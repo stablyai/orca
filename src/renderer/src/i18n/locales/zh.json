@@ -13632,6 +13632,10 @@
           "0e1de0358b": "月",
           "77e96bded6": "星期"
         },
+        "AutomationPromptDisclosure": {
+          "showLess": "收起",
+          "showMore": "显示更多"
+        },
         "AutomationDetail": {
           "007c8ad874": "提示词",
           "a1d52c2189": "使用范围",

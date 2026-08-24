@@ -13641,6 +13641,10 @@
           "0e1de0358b": "월",
           "77e96bded6": "요일"
         },
+        "AutomationPromptDisclosure": {
+          "showLess": "접기",
+          "showMore": "더 보기"
+        },
         "AutomationDetail": {
           "007c8ad874": "프롬프트",
           "a1d52c2189": "사용 범위",

@@ -13612,6 +13612,10 @@
           "0e1de0358b": "Mes",
           "77e96bded6": "Día de la semana"
         },
+        "AutomationPromptDisclosure": {
+          "showLess": "Mostrar menos",
+          "showMore": "Mostrar más"
+        },
         "AutomationDetail": {
           "007c8ad874": "Inmediato",
           "a1d52c2189": "Cobertura de uso",
