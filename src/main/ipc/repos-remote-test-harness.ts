@@ -25,7 +25,8 @@ export type ReposIpcMocks = {
     | 'updateProjectGroup'
     | 'deleteProjectGroup'
     | 'moveProjectToGroup'
-    | 'getSshTarget',
+    | 'getSshTarget'
+    | 'getAllWorktreeMeta',
     ReposIpcSpy
   > & { updateRepo: Mock<(repoId: string, updates: Record<string, unknown>) => unknown> }
   mockGitProvider: Record<
@@ -62,7 +63,8 @@ export function createReposIpcMocks(): ReposIpcMocks {
       updateProjectGroup: vi.fn(),
       deleteProjectGroup: vi.fn(),
       moveProjectToGroup: vi.fn(),
-      getSshTarget: vi.fn()
+      getSshTarget: vi.fn(),
+      getAllWorktreeMeta: vi.fn().mockReturnValue({})
     },
     mockGitProvider: {
       isGitRepo: vi.fn().mockReturnValue(true),

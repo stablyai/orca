@@ -517,6 +517,70 @@ describe('repos:addRemote', () => {
     expect(mockStore.addRepo).not.toHaveBeenCalled()
   })
 
+  it('promotes a tracked SSH folder when the same path is re-added as git', async () => {
+    const folderRepo = {
+      id: 'ssh-folder-id',
+      path: '/home/user/project',
+      connectionId: 'conn-1',
+      displayName: 'project',
+      badgeColor: '#fff',
+      addedAt: 1000,
+      kind: 'folder' as const
+    }
+    mockStore.getRepos.mockReturnValue([folderRepo])
+    mockStore.getRepo.mockImplementation((id: string) =>
+      id === folderRepo.id ? folderRepo : undefined
+    )
+    mockStore.updateRepo.mockImplementation((_id: string, updates: Record<string, unknown>) => ({
+      ...folderRepo,
+      ...updates
+    }))
+    mockStore.getAllWorktreeMeta.mockReturnValue({})
+    mockGitProvider.isGitRepoAsync.mockResolvedValueOnce({
+      isRepo: true,
+      rootPath: '/home/user/project'
+    })
+
+    const result = await handlers.get('repos:addRemote')!(null, {
+      connectionId: 'conn-1',
+      remotePath: '/home/user/project',
+      kind: 'git'
+    })
+
+    expect(result).toEqual({
+      repo: expect.objectContaining({ id: folderRepo.id, kind: 'git' })
+    })
+    expect(mockStore.updateRepo).toHaveBeenCalledWith(
+      folderRepo.id,
+      expect.objectContaining({ kind: 'git' })
+    )
+    expect(mockStore.addRepo).not.toHaveBeenCalled()
+  })
+
+  it('returns an existing SSH folder unchanged when it is still not a git repo', async () => {
+    const folderRepo = {
+      id: 'ssh-folder-id',
+      path: '/home/user/notes',
+      connectionId: 'conn-1',
+      displayName: 'notes',
+      badgeColor: '#fff',
+      addedAt: 1000,
+      kind: 'folder' as const
+    }
+    mockStore.getRepos.mockReturnValue([folderRepo])
+    mockGitProvider.isGitRepoAsync.mockResolvedValueOnce({ isRepo: false, rootPath: null })
+
+    const result = await handlers.get('repos:addRemote')!(null, {
+      connectionId: 'conn-1',
+      remotePath: '/home/user/notes',
+      kind: 'git'
+    })
+
+    expect(result).toEqual({ repo: folderRepo })
+    expect(mockStore.updateRepo).not.toHaveBeenCalled()
+    expect(mockStore.addRepo).not.toHaveBeenCalled()
+  })
+
   it('returns existing repo if same connectionId and path already added', async () => {
     const existing = {
       id: 'existing-id',

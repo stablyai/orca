@@ -1,17 +1,19 @@
 import { stat } from 'node:fs/promises'
-import { realpathSync } from 'node:fs'
 import { join } from 'node:path'
 import type { BrowserWindow } from 'electron'
 import type { Repo } from '../../shared/repo-types'
 import type { Store } from '../persistence'
 import { getRepoExecutionHostId, LOCAL_EXECUTION_HOST_ID } from '../../shared/execution-host'
 import { isFolderRepo } from '../../shared/repo-kind'
-import { FOLDER_WORKSPACE_INSTANCE_SEPARATOR } from '../../shared/worktree/id'
 import { normalizeRuntimePathForComparison } from '../../shared/cross-platform-path'
 import { isWslUncPath } from '../../shared/wsl-paths'
-import { getGitRepoRoot, isGitRepo } from '../git/repo'
-import { prepareLocalWorktreeRootForRepo } from '../worktree-root-preparation'
-import { invalidateAuthorizedRootsCache } from './registered-worktree-roots-cache'
+import {
+  folderRepoHasExtraWorkspaces,
+  promoteFolderRepoToGit,
+  readRemoteGitMarkerSignature,
+  resolveLocalFolderGitUpgrade,
+  resolveRemoteFolderGitUpgrade
+} from '../folder-repo-git-promotion'
 import { notifyReposChanged } from './repos'
 import { notifyWorktreesChanged } from './worktree-remote'
 import { setFolderRepoGitUpgradeWakeListener } from './folder-repo-git-upgrade-wake'
@@ -45,10 +47,10 @@ let activeWatch: UpgradeWatch | null = null
 // A rejected marker must not respawn git every tick forever.
 const rejectedMarkers = new Map<string, string>()
 
-// Why: `git init` on an SSH host or behind a WSL UNC root is not observable with a
-// local stat, and those roots are exactly the ones the base watcher already refuses
-// to poll natively. Desktop-local folder projects are the reported case (#11477).
-function isUpgradeCandidate(repo: Repo): boolean {
+// Why: a local `stat` cannot observe `git init` on an SSH host, a WSL UNC root, or a
+// runtime-owned filesystem. Desktop-local folder projects are the cheap-stat case
+// (#11477); SSH folders are probed on the execution host instead of guessed locally.
+function isLocalFilesystemCandidate(repo: Repo): boolean {
   return (
     isFolderRepo(repo) &&
     !repo.connectionId &&
@@ -57,22 +59,20 @@ function isUpgradeCandidate(repo: Repo): boolean {
   )
 }
 
-/**
- * A folder project's extra workspaces are `worktreeMeta` rows keyed
- * `repoId::path::workspace:<uuid>`, and only the folder branch of the worktree listing
- * knows those keys exist. Flipping `kind` moves the repo onto the git branch, which lists
- * `git worktree list` (one path) and prunes every lineage id under the repo that is not in
- * it — so those workspaces vanish from the sidebar and their lineage is deleted. Migrating
- * them belongs to the listing code that owns both shapes, not to this watch, so refuse the
- * upgrade instead of destroying them. Such a project keeps working exactly as it does today.
- */
-function hasExtraFolderWorkspaces(store: Store, repo: Repo): boolean {
-  const prefix = `${repo.id}::${repo.path}${FOLDER_WORKSPACE_INSTANCE_SEPARATOR}`
-  return Object.keys(store.getAllWorktreeMeta()).some((key) => key.startsWith(prefix))
+function isSshCandidate(repo: Repo): boolean {
+  return isFolderRepo(repo) && Boolean(repo.connectionId)
 }
 
-/** Identity of the `.git` entry, or null when there is none. */
-async function readGitMarkerSignature(repoPath: string): Promise<string | null> {
+function isUpgradeCandidate(repo: Repo): boolean {
+  return isLocalFilesystemCandidate(repo) || isSshCandidate(repo)
+}
+
+function candidateKey(repo: Repo): string {
+  return `${repo.connectionId ?? 'local'}\0${normalizeRuntimePathForComparison(repo.path)}`
+}
+
+/** Identity of the local `.git` entry, or null when there is none. */
+async function readLocalGitMarkerSignature(repoPath: string): Promise<string | null> {
   try {
     const marker = await stat(join(repoPath, '.git'))
     return `${marker.mtimeMs}:${marker.ctimeMs}:${marker.ino}`
@@ -81,68 +81,58 @@ async function readGitMarkerSignature(repoPath: string): Promise<string | null> 
   }
 }
 
-function resolveRealPath(pathValue: string): string {
-  try {
-    return realpathSync(pathValue)
-  } catch {
-    return pathValue
-  }
-}
-
-/**
- * Git's verdict on the folder, or null when it must stay a folder project.
- *
- * Two comparisons, deliberately at different strictness:
- * - Refuse unless the folder *is* the work-tree root. `.git` existing proves nothing —
- *   git accepts any path inside a work tree, so a stray marker in a subdirectory of
- *   another repo would otherwise flip a project whose path is not a repo root.
- * - Only hide external worktrees when the stored spelling also matches. Add Project
- *   stores the root as `rev-parse --show-toplevel` spells it while a folder project keeps
- *   the path the user picked; when a symlinked parent makes those differ, the root reads
- *   as an *external* worktree, and hiding those would hide the project's only workspace.
- */
-function resolveUpgrade(repoPath: string): { externalWorktreeVisibility?: 'hide' } | null {
-  if (!isGitRepo(repoPath)) {
-    return null
-  }
-  const gitRoot = getGitRepoRoot(repoPath)
-  if (resolveRealPath(gitRoot) !== resolveRealPath(repoPath)) {
-    return null
-  }
-  return normalizeRuntimePathForComparison(gitRoot) === normalizeRuntimePathForComparison(repoPath)
-    ? { externalWorktreeVisibility: 'hide' }
-    : {}
-}
-
 type UpgradeResult = 'upgraded' | 'blocked' | 'rejected'
 
-async function upgradeFolderRepo(watch: UpgradeWatch, repoId: string): Promise<UpgradeResult> {
-  // Re-read after the marker stat: the repo can be removed or already upgraded mid-tick.
-  const current = watch.store.getRepo(repoId)
-  if (!current || !isUpgradeCandidate(current)) {
-    return 'blocked'
-  }
-  if (hasExtraFolderWorkspaces(watch.store, current)) {
-    return 'blocked'
-  }
-  const updates = resolveUpgrade(current.path)
-  if (!updates) {
-    return 'rejected'
-  }
-  const upgraded = watch.store.updateRepo(repoId, { kind: 'git', ...updates })
-  if (!upgraded) {
-    return 'upgraded'
-  }
-  // Adding a git project prepares its worktree root; an upgrade has to do the same.
-  await prepareLocalWorktreeRootForRepo(watch.store, upgraded)
-  invalidateAuthorizedRootsCache()
+function notifyPromotion(watch: UpgradeWatch, repoId: string): void {
   if (watch.disposed) {
-    return 'upgraded'
+    return
   }
   // Why: reuse the repo-mutation notifier so paired clients refetch too (#11994) and
   // the repo picks up the base/common-dir watchers it was skipped for as a folder.
   notifyReposChanged(watch.mainWindow)
   notifyWorktreesChanged(watch.mainWindow, repoId)
+}
+
+async function upgradeLocalFolderRepo(watch: UpgradeWatch, repo: Repo): Promise<UpgradeResult> {
+  const current = watch.store.getRepo(repo.id)
+  if (!current || !isLocalFilesystemCandidate(current)) {
+    return 'blocked'
+  }
+  if (folderRepoHasExtraWorkspaces(watch.store, current)) {
+    return 'blocked'
+  }
+  const updates = resolveLocalFolderGitUpgrade(current.path)
+  if (!updates) {
+    return 'rejected'
+  }
+  const upgraded = await promoteFolderRepoToGit(watch.store, current.id, updates)
+  if (!upgraded) {
+    return 'upgraded'
+  }
+  notifyPromotion(watch, current.id)
+  return 'upgraded'
+}
+
+async function upgradeSshFolderRepo(watch: UpgradeWatch, repo: Repo): Promise<UpgradeResult> {
+  const current = watch.store.getRepo(repo.id)
+  if (!current || !isSshCandidate(current)) {
+    return 'blocked'
+  }
+  if (folderRepoHasExtraWorkspaces(watch.store, current)) {
+    return 'blocked'
+  }
+  const probe = await resolveRemoteFolderGitUpgrade(current)
+  if (probe.status === 'unverifiable') {
+    return 'blocked'
+  }
+  if (probe.status === 'rejected') {
+    return 'rejected'
+  }
+  const upgraded = await promoteFolderRepoToGit(watch.store, current.id, probe.updates)
+  if (!upgraded) {
+    return 'upgraded'
+  }
+  notifyPromotion(watch, current.id)
   return 'upgraded'
 }
 
@@ -159,13 +149,23 @@ async function pollOnce(watch: UpgradeWatch): Promise<void> {
     if (watch.disposed) {
       return
     }
-    const key = normalizeRuntimePathForComparison(repo.path)
+    const key = candidateKey(repo)
     liveKeys.add(key)
-    const signature = await readGitMarkerSignature(repo.path)
+    if (isSshCandidate(repo)) {
+      const marker = await readRemoteGitMarkerSignature(repo)
+      if (marker.status !== 'present' || rejectedMarkers.get(key) === marker.signature) {
+        continue
+      }
+      if ((await upgradeSshFolderRepo(watch, repo)) === 'rejected') {
+        rejectedMarkers.set(key, marker.signature)
+      }
+      continue
+    }
+    const signature = await readLocalGitMarkerSignature(repo.path)
     if (signature === null || rejectedMarkers.get(key) === signature) {
       continue
     }
-    if ((await upgradeFolderRepo(watch, repo.id)) === 'rejected') {
+    if ((await upgradeLocalFolderRepo(watch, repo)) === 'rejected') {
       rejectedMarkers.set(key, signature)
     }
   }
@@ -218,6 +218,8 @@ async function runTick(watch: UpgradeWatch): Promise<void> {
 /**
  * Polls `<repo>/.git` for every local folder project and upgrades it to a git repo
  * once an external `git init` lands, so git affordances appear without a restart.
+ * SSH folders are probed on the execution host (`fs.stat` then `git.isGitRepo`); a
+ * missing provider or thrown probe is unverifiable, never "not a repo".
  * Idempotent: a re-attached main window replaces the one the running watch holds.
  * Parks while the window is hidden — one stat per folder project per tick, never a
  * directory listing.

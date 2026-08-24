@@ -113,6 +113,7 @@ import {
 } from '../git/runner'
 import { runWithGitReadCacheInvalidation } from '../git/status'
 import { wakeFolderRepoGitUpgradeWatch } from '../ipc/folder-repo-git-upgrade-wake'
+import { tryPromoteLocalFolderRepoToGit } from '../folder-repo-git-promotion'
 import {
   cleanupClaimedCloneTarget,
   claimCloneTarget,
@@ -21151,19 +21152,32 @@ export class OrcaRuntimeService {
       // connectionId), so we never stamp local/ssh onto it — that would re-attribute a
       // real local project to the wrong host. Runtime is the only host that lost its
       // identity to the pre-#7018 path-only import and needs the backfill.
+      let current = existing
       if (
         existing.executionHostId == null &&
         parseExecutionHostId(executionHostId)?.kind === 'runtime'
       ) {
-        const adopted =
+        current =
           this.store.updateRepo(existing.id, { executionHostId }) ??
           ({ ...existing, executionHostId } as Repo)
-        this.invalidateResolvedWorktreeCache()
-        this.invalidateWorktreeScanCacheForRepo(existing.id)
-        this.notifyReposChanged()
-        return adopted
       }
-      return existing
+      if (kind === 'git' && isFolderRepo(current)) {
+        const promoted = await tryPromoteLocalFolderRepoToGit(this.store, current, {
+          projectHostSetupMethod: current.projectHostSetupMethod ?? 'imported-existing-folder'
+        })
+        if (promoted) {
+          current = promoted
+        }
+      }
+      if (current !== existing) {
+        this.invalidateResolvedWorktreeCache()
+        this.invalidateWorktreeScanCacheForRepo(current.id)
+        this.notifyReposChanged()
+        if (!isFolderRepo(current)) {
+          this.notifyWorktreesChanged(current.id)
+        }
+      }
+      return current
     }
 
     const detected = await detectRepoIconAndUpstream({ repoPath: path, kind })

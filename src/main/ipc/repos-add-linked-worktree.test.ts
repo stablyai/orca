@@ -28,7 +28,8 @@ const {
     addRepo: vi.fn(),
     removeProject: vi.fn(),
     getRepo: vi.fn(),
-    updateRepo: vi.fn()
+    updateRepo: vi.fn(),
+    getAllWorktreeMeta: vi.fn().mockReturnValue({})
   },
   isGitRepoMock: vi.fn().mockReturnValue(true),
   getGitRepoRootMock: vi.fn(),
@@ -105,6 +106,9 @@ describe('repos:add with git worktrees', () => {
     removeHandlerMock.mockReset()
     mockStore.getRepos.mockReset().mockReturnValue([])
     mockStore.addRepo.mockReset()
+    mockStore.getRepo.mockReset()
+    mockStore.updateRepo.mockReset()
+    mockStore.getAllWorktreeMeta.mockReset().mockReturnValue({})
     isGitRepoMock.mockReset().mockReturnValue(true)
     // A linked worktree is its own toplevel — this is exactly why path dedupe alone misses it.
     getGitRepoRootMock.mockReset().mockImplementation((path: string) => path)
@@ -144,6 +148,47 @@ describe('repos:add with git worktrees', () => {
 
     expect(mockStore.addRepo).toHaveBeenCalledTimes(1)
     expect(result).toEqual({ repo: expect.objectContaining({ path: '/Users/dev/projects/other' }) })
+  })
+
+  it('promotes a tracked folder when the same path is re-added as git', async () => {
+    const folderRepo = {
+      ...trackedMainRepo(),
+      id: 'folder-repo-id',
+      path: '/Users/dev/projects/promoted',
+      kind: 'folder',
+      projectHostSetupMethod: 'cloned'
+    } as Repo
+    mockStore.getRepos.mockReturnValue([folderRepo])
+    mockStore.getRepo.mockImplementation((id: string) =>
+      id === folderRepo.id ? folderRepo : undefined
+    )
+    mockStore.updateRepo.mockImplementation((_id: string, updates: Partial<Repo>) => ({
+      ...folderRepo,
+      ...updates
+    }))
+
+    const result = await callAdd({ path: folderRepo.path, kind: 'git' })
+
+    expect(isGitRepoMock).toHaveBeenCalledWith(folderRepo.path)
+    expect(result).toEqual({
+      repo: expect.objectContaining({ id: folderRepo.id, kind: 'git' })
+    })
+    expect(mockStore.updateRepo).toHaveBeenCalledWith(
+      folderRepo.id,
+      expect.objectContaining({ kind: 'git' })
+    )
+    expect(mockStore.addRepo).not.toHaveBeenCalled()
+  })
+
+  it('leaves an already-git repo unchanged when the same path is re-added', async () => {
+    const gitRepo = trackedMainRepo()
+    mockStore.getRepos.mockReturnValue([gitRepo])
+
+    const result = await callAdd({ path: gitRepo.path, kind: 'git' })
+
+    expect(result).toEqual({ repo: gitRepo })
+    expect(mockStore.updateRepo).not.toHaveBeenCalled()
+    expect(mockStore.addRepo).not.toHaveBeenCalled()
   })
 
   it('does not consult worktree detection for folder projects', async () => {

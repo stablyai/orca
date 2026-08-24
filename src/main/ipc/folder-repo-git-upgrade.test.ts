@@ -10,13 +10,16 @@ import type { Repo } from '../../shared/repo-types'
 
 // Why: the watch must stay one stat per folder project per tick — counting the real
 // calls is what keeps a directory-listing fan-out from creeping back in.
-const { statCalls, readdirSpy, gitProbes } = vi.hoisted(() => ({
-  statCalls: [] as string[],
-  readdirSpy: vi.fn(),
-  // Why: the rejected-marker cache exists to stop git respawning every tick; counting the
-  // real probes is the only way that guarantee stays true.
-  gitProbes: [] as string[]
-}))
+const { statCalls, readdirSpy, gitProbes, getSshGitProviderMock, getSshFilesystemProviderMock } =
+  vi.hoisted(() => ({
+    statCalls: [] as string[],
+    readdirSpy: vi.fn(),
+    // Why: the rejected-marker cache exists to stop git respawning every tick; counting the
+    // real probes is the only way that guarantee stays true.
+    gitProbes: [] as string[],
+    getSshGitProviderMock: vi.fn(),
+    getSshFilesystemProviderMock: vi.fn()
+  }))
 
 vi.mock('../git/repo', async (importOriginal) => {
   const actual = await importOriginal<typeof GitRepo>()
@@ -55,6 +58,12 @@ vi.mock('./registered-worktree-roots-cache', () => ({
 }))
 vi.mock('../worktree-root-preparation', () => ({
   prepareLocalWorktreeRootForRepo: vi.fn(async () => {})
+}))
+vi.mock('../providers/ssh-git-dispatch', () => ({
+  getSshGitProvider: (connectionId: string) => getSshGitProviderMock(connectionId)
+}))
+vi.mock('../providers/ssh-filesystem-dispatch', () => ({
+  getSshFilesystemProvider: (connectionId: string) => getSshFilesystemProviderMock(connectionId)
 }))
 
 import { notifyWorktreesChanged } from './worktree-remote'
@@ -145,6 +154,8 @@ describe('folder repo git upgrade watch', () => {
     await symlink(root, symlinkedRoot, 'dir')
     statCalls.length = 0
     gitProbes.length = 0
+    getSshGitProviderMock.mockReset()
+    getSshFilesystemProviderMock.mockReset()
   })
 
   afterEach(async () => {
@@ -423,6 +434,65 @@ describe('folder repo git upgrade watch', () => {
     await tick(3)
 
     expect(store.updateRepo).toHaveBeenCalledTimes(1)
+  })
+
+  it('upgrades an SSH folder repo once the remote host reports a git root', async () => {
+    const remotePath = '/home/user/project'
+    const store = makeStore([
+      makeRepo({ id: 'ssh-folder', path: remotePath, connectionId: 'conn-1' })
+    ])
+    const isGitRepoAsync = vi.fn().mockResolvedValue({ isRepo: true, rootPath: remotePath })
+    getSshGitProviderMock.mockReturnValue({
+      getHostPlatform: () => ({
+        relayPlatform: 'linux-x64',
+        os: 'linux',
+        arch: 'x64',
+        pathFlavor: 'posix',
+        commandDialect: 'posix',
+        pathSeparator: '/',
+        pathDelimiter: ':'
+      }),
+      isGitRepoAsync
+    })
+    getSshFilesystemProviderMock.mockReturnValue({
+      stat: vi.fn().mockResolvedValue({
+        type: 'directory',
+        mtime: 1,
+        mtimeMs: 1,
+        ino: 42,
+        size: 0
+      })
+    })
+
+    startFolderRepoGitUpgradeWatch(store as never, makeWindow() as never, {
+      pollIntervalMs: POLL_MS,
+      idlePollIntervalMs: IDLE_POLL_MS
+    })
+    await tick()
+
+    expect(store.updateRepo).toHaveBeenCalledWith(
+      'ssh-folder',
+      expect.objectContaining({ kind: 'git' })
+    )
+    expect(isGitRepoAsync).toHaveBeenCalledWith(remotePath)
+    expect(statCalls).toHaveLength(0)
+  })
+
+  it('does not treat an SSH disconnect as evidence the folder is not a repo', async () => {
+    const remotePath = '/home/user/project'
+    const store = makeStore([
+      makeRepo({ id: 'ssh-folder', path: remotePath, connectionId: 'conn-1' })
+    ])
+    getSshGitProviderMock.mockReturnValue(undefined)
+    getSshFilesystemProviderMock.mockReturnValue(undefined)
+
+    startFolderRepoGitUpgradeWatch(store as never, makeWindow() as never, {
+      pollIntervalMs: POLL_MS,
+      idlePollIntervalMs: IDLE_POLL_MS
+    })
+    await tick(2)
+
+    expect(store.updateRepo).not.toHaveBeenCalled()
   })
 
   it('skips remote and WSL folder repos a local stat cannot answer for', async () => {

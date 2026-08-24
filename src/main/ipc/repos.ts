@@ -92,6 +92,11 @@ import { normalizeSparseDirectories } from './sparse-checkout-directories'
 import { track } from '../telemetry/client'
 import { scheduleCurrentWorktreeBaseDirectoryWatcherSync } from './worktree-base-directory-watcher'
 import { wakeFolderRepoGitUpgradeWatch } from './folder-repo-git-upgrade-wake'
+import {
+  tryPromoteLocalFolderRepoToGit,
+  tryPromoteRemoteFolderRepoToGit
+} from '../folder-repo-git-promotion'
+import { notifyWorktreesChanged } from './worktree-remote'
 import { getCohortAtEmit } from '../telemetry/cohort-classifier'
 import type { RepoMethod } from '../../shared/telemetry-events'
 import type {
@@ -292,7 +297,7 @@ async function addLocalRepoFromPath(
   store: Store,
   path: string,
   kind: 'git' | 'folder' = 'git'
-): Promise<{ repo: Repo; alreadyExisted: boolean } | { error: string }> {
+): Promise<{ repo: Repo; alreadyExisted: boolean; promoted?: boolean } | { error: string }> {
   const repoKind = kind === 'folder' ? 'folder' : 'git'
   if (repoKind === 'git') {
     await awaitWindowsHostGitEnvironmentReady({ cwd: path })
@@ -307,6 +312,14 @@ async function addLocalRepoFromPath(
     .getRepos()
     .find((repo) => !repo.connectionId && normalizeRuntimePathForComparison(repo.path) === pathKey)
   if (existing) {
+    if (repoKind === 'git' && isFolderRepo(existing)) {
+      const promoted = await tryPromoteLocalFolderRepoToGit(store, existing, {
+        projectHostSetupMethod: existing.projectHostSetupMethod ?? 'imported-existing-folder'
+      })
+      if (promoted) {
+        return { repo: promoted, alreadyExisted: true, promoted: true }
+      }
+    }
     return { repo: existing, alreadyExisted: true }
   }
 
@@ -378,7 +391,7 @@ async function addRemoteRepoFromPath(
     kind?: 'git' | 'folder'
     setupMethod?: Repo['projectHostSetupMethod']
   }
-): Promise<{ repo: Repo; alreadyExisted: boolean } | { error: string }> {
+): Promise<{ repo: Repo; alreadyExisted: boolean; promoted?: boolean } | { error: string }> {
   const gitProvider = getSshGitProvider(args.connectionId)
   if (!gitProvider) {
     return { error: `SSH connection "${args.connectionId}" not found or not connected` }
@@ -396,6 +409,15 @@ async function addRemoteRepoFromPath(
           normalizeRuntimePathForComparison(resolvedPath)
     )
   if (existing) {
+    if (repoKind === 'git' && isFolderRepo(existing)) {
+      const promoted = await tryPromoteRemoteFolderRepoToGit(store, existing, {
+        projectHostSetupMethod:
+          existing.projectHostSetupMethod ?? args.setupMethod ?? 'imported-existing-folder'
+      })
+      if (promoted) {
+        return { repo: promoted, alreadyExisted: true, promoted: true }
+      }
+    }
     return { repo: existing, alreadyExisted: true }
   }
 
@@ -1834,6 +1856,9 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
       }
       invalidateAuthorizedRootsCache()
       notifyReposChanged(mainWindow)
+      if (result.promoted) {
+        notifyWorktreesChanged(mainWindow, result.repo.id)
+      }
       emitRepoAdded('folder_picker', result.alreadyExisted, result.repo.kind === 'git')
       return { repo: result.repo }
     }
@@ -1855,6 +1880,9 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
         return result
       }
       notifyReposChanged(mainWindow)
+      if (result.promoted) {
+        notifyWorktreesChanged(mainWindow, result.repo.id)
+      }
       emitRepoAdded('folder_picker', result.alreadyExisted, result.repo.kind === 'git')
       return { repo: result.repo }
     }
