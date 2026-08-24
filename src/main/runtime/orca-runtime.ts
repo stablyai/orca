@@ -1447,6 +1447,8 @@ type RuntimeLeafRecord = RuntimeSyncedLeaf & {
   tailLinesTotal: number
   preview: string
   waitBlockedAt: number | null
+  /** Current actionable blocked-dialog reason, null when the pane is not blocked (#15597). */
+  waitBlockedReason: RuntimeTerminalWaitBlockedReason | null
   // Why: memoized wait scan of the current retained tail so the next PTY chunk
   // reuses it as its "previous" state instead of rebuilding + rescanning the
   // full tail. See computeTerminalTailWaitState.
@@ -1518,6 +1520,8 @@ type RuntimePtyWorktreeRecord = {
   tailLinesTotal: number
   preview: string
   waitBlockedAt: number | null
+  /** Mirrors the leaf field for the pty-copy branch of leaf tail refresh (#15597). */
+  waitBlockedReason: RuntimeTerminalWaitBlockedReason | null
   // Why: memoized wait scan of the current retained tail (see RuntimeLeafRecord).
   tailWaitState?: TerminalTailWaitState
 }
@@ -6263,6 +6267,25 @@ export class OrcaRuntimeService {
       }))
   }
 
+  /**
+   * Announce a pane's blocking-startup-dialog state to paired clients (#15597).
+   * The native chat view cannot see pre-transcript dialogs on its own — the
+   * agent transcript starts at the first turn — so the runtime is the only side
+   * that knows the pane is waiting on e.g. an update prompt.
+   */
+  private emitTerminalWaitBlockedChanged(
+    leaf: RuntimeLeafRecord,
+    reason: RuntimeTerminalWaitBlockedReason | null
+  ): void {
+    this.emitClientEvent({
+      type: 'terminalWaitBlockedChanged',
+      worktreeId: leaf.worktreeId,
+      tabId: leaf.tabId,
+      leafId: leaf.leafId,
+      reason
+    })
+  }
+
   private emitClientEvent(event: RuntimeClientEvent): void {
     // Why: filter inside live-Set delivery so a listener removed mid-fan-out
     // receives nothing and each paired client gets one semantic title frame.
@@ -6830,6 +6853,7 @@ export class OrcaRuntimeService {
         tailLinesTotal: tailSource?.tailLinesTotal ?? 0,
         preview: tailSource?.preview ?? '',
         waitBlockedAt: tailSource?.waitBlockedAt ?? null,
+        waitBlockedReason: tailSource?.waitBlockedReason ?? null,
         lastAgentStatus: tailSource?.lastAgentStatus ?? null,
         lastAgentStatusObservedLive: tailSource?.lastAgentStatusObservedLive ?? false,
         lastOscTitle: tailSource?.lastOscTitle ?? null,
@@ -11161,6 +11185,7 @@ export class OrcaRuntimeService {
         leaf.tailLinesTotal = pty.tailLinesTotal
         leaf.preview = pty.preview
         leaf.waitBlockedAt = pty.waitBlockedAt
+        leaf.waitBlockedReason = pty.waitBlockedReason
         // Why undefined on this branch: the PTY record's wait scan is throttled
         // (scheduleWaitBlockedCheck), so pty.tailWaitState is never populated;
         // copying it here intentionally invalidates the leaf cache and the
@@ -11192,6 +11217,11 @@ export class OrcaRuntimeService {
         )
         if (tailGainedNewerBlockedReason(previousWaitState, nextWaitState, normalized.text)) {
           leaf.waitBlockedAt = at
+        }
+        const nextWaitBlockedReason = nextWaitState.signal?.reason ?? null
+        if (leaf.waitBlockedReason !== nextWaitBlockedReason) {
+          leaf.waitBlockedReason = nextWaitBlockedReason
+          this.emitTerminalWaitBlockedChanged(leaf, nextWaitBlockedReason)
         }
         leaf.tailWaitState = nextWaitState
         leaf.tailBuffer = nextTail.lines
@@ -11346,6 +11376,7 @@ export class OrcaRuntimeService {
       pty.waitBlockedAt = at
       this.recordAgentPromptPermissionObservation(ptyId)
     }
+    pty.waitBlockedReason = nextWaitState.signal?.reason ?? null
     state.lastAt = at
     state.lastWaitState = nextWaitState
     state.appended = ''
@@ -11944,6 +11975,7 @@ export class OrcaRuntimeService {
       pty.managementTitle = null
       pty.managementTitleAt = null
       pty.waitBlockedAt = null
+      pty.waitBlockedReason = null
       pty.tailWaitState = undefined
     }
     for (const leaf of this.getLeavesForPty(ptyId)) {
@@ -32424,7 +32456,8 @@ export class OrcaRuntimeService {
         tailTruncated: false,
         tailLinesTotal: 0,
         preview: state.preview ?? '',
-        waitBlockedAt: null
+        waitBlockedAt: null,
+        waitBlockedReason: null
       }
       if (state.title) {
         this.setPtyManagementTitleFromObservedTitle(pty, state.title, titleObservedAt ?? 0)

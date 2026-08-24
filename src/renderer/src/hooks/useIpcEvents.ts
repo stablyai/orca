@@ -96,6 +96,7 @@ import { attachMobileMarkdownBridge } from '@/runtime/mobile-markdown-bridge'
 import { closeMobileSessionTabInStore } from '@/runtime/mobile-session-tab-close'
 import { createWorktreeChangeRefreshQueue } from './worktree-change-refresh-queue'
 import { subscribeRuntimeClientEvents } from '@/runtime/runtime-client-events'
+import { applyTerminalWaitBlockedChanged } from '@/runtime/terminal-wait-blocked-store'
 import { applyNativeChatLaunchDraftResolved } from '@/runtime/native-chat-launch-draft-runtime-resolution'
 import { toRemoteRuntimePtyId } from '@/runtime/runtime-terminal-stream'
 import { dispatchTerminalSideEffectBatch } from '@/components/terminal-pane/terminal-side-effect-facts-handler'
@@ -1047,6 +1048,10 @@ export function useIpcEvents(): void {
             executionHostId: toRuntimeExecutionHostId(environmentId)
           })
         )
+        return
+      }
+      if (event.type === 'terminalWaitBlockedChanged') {
+        applyTerminalWaitBlockedChanged(event)
         return
       }
       if (event.type === 'linearLinkedIssueUpdated') {

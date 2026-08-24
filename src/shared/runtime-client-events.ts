@@ -6,7 +6,10 @@ import type {
 } from './worktree/launch-types'
 import type { SshConnectionState } from './ssh-types'
 import type { TerminalSideEffectBatch } from './terminal-side-effect-facts'
-import type { RuntimeNativeChatLaunchDraftResolution } from './runtime-types'
+import type {
+  RuntimeNativeChatLaunchDraftResolution,
+  RuntimeTerminalWaitBlockedReason
+} from './runtime-types'
 
 export type RuntimeClientEvent =
   | { type: 'reposChanged' }
@@ -24,6 +27,17 @@ export type RuntimeClientEvent =
       phase: 'started' | 'committed' | 'cancelled' | 'woken'
       ptyIds: string[]
       terminalHandles: string[]
+    }
+  | {
+      /** Why (#15597): the native chat view reads only the agent transcript, which has
+       *  nothing before the first turn — so a blocking startup dialog (update prompt,
+       *  trust prompt) is invisible there unless the runtime announces it. Emitted on
+       *  reason transitions, null meaning the pane is no longer blocked. */
+      type: 'terminalWaitBlockedChanged'
+      worktreeId: string
+      tabId: string
+      leafId: string
+      reason: RuntimeTerminalWaitBlockedReason | null
     }
   | {
       type: 'linearLinkedIssueUpdated'
