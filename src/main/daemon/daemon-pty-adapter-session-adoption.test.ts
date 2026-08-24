@@ -283,6 +283,41 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
         ensureConnected.mockRestore()
       }
     })
+
+    it('does not retry a raced-out v30 attach when its single retire attempt fails', async () => {
+      const ensureConnected = vi
+        .spyOn(DaemonClient.prototype, 'ensureConnected')
+        .mockResolvedValue()
+      const request = vi
+        .spyOn(DaemonClient.prototype, 'request')
+        .mockResolvedValueOnce({
+          isNew: true,
+          snapshot: null,
+          pid: 4321,
+          shellState: 'unsupported',
+          incarnationId: 'legacy-orphan-incarnation'
+        })
+        .mockRejectedValueOnce(new Error('Connection lost'))
+      const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+      const legacy = new DaemonPtyAdapter({ socketPath, tokenPath, protocolVersion: 30 })
+      try {
+        await expect(
+          legacy.spawn({
+            cols: 80,
+            rows: 24,
+            sessionId: 'orphaned-legacy-session',
+            attachOnly: true
+          })
+        ).rejects.toThrow('Session not found: orphaned-legacy-session')
+        expect(request.mock.calls.filter((call) => call[0] === 'createOrAttach')).toHaveLength(1)
+        expect(request.mock.calls.filter((call) => call[0] === 'kill')).toHaveLength(1)
+      } finally {
+        legacy.dispose()
+        errorSpy.mockRestore()
+        request.mockRestore()
+        ensureConnected.mockRestore()
+      }
+    })
   })
 
   describe('attach', () => {
@@ -403,21 +438,21 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
           }
           throw new Error('kill transport lost')
         })
-      const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+      const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
       const legacy = new DaemonPtyAdapter({ socketPath, tokenPath, protocolVersion: 30 })
       try {
         await expect(legacy.attach('orphaned-legacy-session')).rejects.toThrow(
           'Session not found: orphaned-legacy-session'
         )
 
-        // The orphaned replacement is at least diagnosable.
-        expect(warnSpy).toHaveBeenCalledWith(
-          '[daemon] attach-only retire of accidental legacy spawn failed',
-          expect.objectContaining({ sessionId: 'orphaned-legacy-session' })
+        expect(requestSpy.mock.calls.filter((call) => call[0] === 'kill')).toHaveLength(1)
+        expect(errorSpy).toHaveBeenCalledWith(
+          '[daemon] attach-only retire of accidental legacy spawn failed; orphan may remain',
+          { protocolVersion: 30, killErrorClass: 'unknown' }
         )
       } finally {
         legacy.dispose()
-        warnSpy.mockRestore()
+        errorSpy.mockRestore()
         requestSpy.mockRestore()
         ensureConnectedSpy.mockRestore()
       }

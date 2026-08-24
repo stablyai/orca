@@ -3,6 +3,11 @@ import { basename } from 'node:path'
 import { existsSync, readFileSync } from 'node:fs'
 import { readFile } from 'node:fs/promises'
 import { DaemonClient } from './client'
+import {
+  classifyAttachOnlyKillError,
+  trackAttachOnlyOrphanRisk
+} from './daemon-attach-only-orphan-event'
+import { retireAccidentalAttachOnlySpawn } from './daemon-attach-only-retire'
 import { DAEMON_ENDPOINT_LOST_MESSAGE } from './daemon-endpoint-ownership'
 import { getMacDaemonSystemResolverHealth } from './daemon-health'
 import { getMacDaemonTccAttributionHealth } from './daemon-tcc-attribution'
@@ -759,8 +764,7 @@ export class DaemonPtyAdapter implements IPtyProvider {
     let result = await createOrAttach(historySeedSegments)
     if (emulateLegacyAttachOnly && result.isNew) {
       operation.ignoreNextExit = true
-      await this.client.request('kill', { sessionId: requestedSessionId, immediate: true })
-      throw new SessionNotFoundError(requestedSessionId)
+      await this.refuseAccidentalAttachOnlySpawn(requestedSessionId)
     }
     await adoptSpawnResultSession(result)
     // Both ids: adoptSpawnResultSession may have rewritten sessionId to the claim owner.
@@ -1045,6 +1049,26 @@ export class DaemonPtyAdapter implements IPtyProvider {
     return result.exitedBeforeSpawnReply === true
   }
 
+  private async refuseAccidentalAttachOnlySpawn(id: string): Promise<never> {
+    const retire = await retireAccidentalAttachOnlySpawn({
+      kill: async () => {
+        await this.client.request('kill', { sessionId: id, immediate: true })
+      }
+    })
+    if (!retire.ok) {
+      const killErrorClass = classifyAttachOnlyKillError(retire.error)
+      console.error(
+        '[daemon] attach-only retire of accidental legacy spawn failed; orphan may remain',
+        { protocolVersion: this.protocolVersion, killErrorClass }
+      )
+      trackAttachOnlyOrphanRisk({
+        protocolVersion: this.protocolVersion,
+        killErrorClass
+      })
+    }
+    throw new SessionNotFoundError(id)
+  }
+
   async attach(id: string): Promise<Pick<PtySpawnResult, 'providerSequence'> | void> {
     await this.ensureConnected()
     if (!this.canDelegateBackgroundToDaemon) {
@@ -1065,16 +1089,7 @@ export class DaemonPtyAdapter implements IPtyProvider {
       attachOnly: true
     })
     if (result.isNew) {
-      // Why: a pre-v31 daemon ignores attachOnly; retire its accidental spawn
-      // instead of publishing a fresh shell as an attach.
-      await this.client.request('kill', { sessionId: id, immediate: true }).catch((error) => {
-        // Why surface, not swallow: a failed retire leaves an untracked orphan shell.
-        console.warn('[daemon] attach-only retire of accidental legacy spawn failed', {
-          sessionId: id,
-          error
-        })
-      })
-      throw new SessionNotFoundError(id)
+      await this.refuseAccidentalAttachOnlySpawn(id)
     }
     this.clearSessionAwaitingDaemonRecovery(id)
     const providerSequence = providerSequenceFromCreateOrAttach(result)
