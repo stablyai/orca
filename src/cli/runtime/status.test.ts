@@ -1,4 +1,4 @@
-import { mkdtempSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { createServer, type Socket } from 'node:net'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -117,6 +117,104 @@ describe('CLI bootstrap diagnostics', () => {
     ).toBe('unverifiable')
     expect(classifyProcess(42, () => undefined)).toBe('live')
   })
+
+  it.runIf(process.platform === 'win32')(
+    'query-backs the GUI profile from a Medium-integrity-compatible Windows shell without rerouting',
+    async () => {
+      const root = mkdtempSync(join(tmpdir(), 'orca-profile-routing-'))
+      const brokerProfile = join(root, 'orca-codex-rpc-broker')
+      const guiProfile = join(root, 'orca')
+      const endpoint = `\\\\.\\pipe\\orca-profile-routing-${process.pid}-${Date.now()}`
+      mkdirSync(brokerProfile)
+      mkdirSync(guiProfile)
+      const originalAppData = process.env.APPDATA
+      const originalUserDataPath = process.env.ORCA_USER_DATA_PATH
+      process.env.APPDATA = root
+      process.env.ORCA_USER_DATA_PATH = brokerProfile
+
+      writeFileSync(
+        getRuntimeMetadataPath(brokerProfile),
+        JSON.stringify({
+          runtimeId: 'runtime-broker-stale',
+          pid: 2147483647,
+          transports: [{ kind: 'named-pipe', endpoint: `${endpoint}-stale` }],
+          authToken: 'test-token',
+          startedAt: Date.now() - 1_000
+        })
+      )
+      writeFileSync(
+        getRuntimeMetadataPath(guiProfile),
+        JSON.stringify({
+          runtimeId: 'runtime-gui-live',
+          pid: process.pid,
+          transports: [{ kind: 'named-pipe', endpoint }],
+          authToken: 'test-token',
+          startedAt: Date.now()
+        })
+      )
+      const server = createServer((socket) => {
+        sockets.add(socket)
+        socket.once('close', () => sockets.delete(socket))
+        socket.once('data', (data) => {
+          const request = JSON.parse(String(data).trim()) as { id: string }
+          socket.write(
+            `${JSON.stringify({
+              id: request.id,
+              ok: true,
+              result: {
+                runtimeId: 'runtime-gui-live',
+                rendererGraphEpoch: 1,
+                graphStatus: 'ready',
+                authoritativeWindowId: 1,
+                desktopWindowStatus: 'available',
+                liveTabCount: 0,
+                liveLeafCount: 0
+              },
+              _meta: { runtimeId: 'runtime-gui-live' }
+            })}\n`
+          )
+        })
+      })
+      servers.add(server)
+      await new Promise<void>((resolve) => server.listen(endpoint, resolve))
+
+      try {
+        const status = await getCliStatus(brokerProfile)
+
+        expect(status.result.runtime).toMatchObject({
+          reachable: false,
+          runtimeId: null,
+          profileRouting: {
+            effectiveProfile: brokerProfile,
+            profileSource: 'env',
+            guiProfileCandidate: guiProfile,
+            metadataRuntimeId: 'runtime-broker-stale',
+            responseRuntimeId: null,
+            guiMetadataRuntimeId: 'runtime-gui-live',
+            guiResponseRuntimeId: 'runtime-gui-live',
+            profileMatch: false,
+            routingVerdict: {
+              effective: 'broker_profile_stale',
+              gui: 'gui_profile_ready',
+              relationship: 'profile_mismatch'
+            }
+          }
+        })
+      } finally {
+        if (originalAppData === undefined) {
+          delete process.env.APPDATA
+        } else {
+          process.env.APPDATA = originalAppData
+        }
+        if (originalUserDataPath === undefined) {
+          delete process.env.ORCA_USER_DATA_PATH
+        } else {
+          process.env.ORCA_USER_DATA_PATH = originalUserDataPath
+        }
+        rmSync(root, { recursive: true, force: true })
+      }
+    }
+  )
 })
 
 describe('projectRemoteAppStatus', () => {

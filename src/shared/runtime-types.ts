@@ -187,6 +187,21 @@ export type CliStatusResult = {
     remoteUpdateSupport?: RemoteServerUpdateSupport
     capabilities?: RuntimeCapability[]
     degradations?: RuntimeDegradation[]
+    profileRouting?: {
+      effectiveProfile: string
+      profileSource: 'env' | 'default' | 'explicit'
+      guiProfileCandidate: string | null
+      metadataRuntimeId: string | null
+      responseRuntimeId: string | null
+      guiMetadataRuntimeId: string | null
+      guiResponseRuntimeId: string | null
+      profileMatch: boolean | null
+      routingVerdict: {
+        effective: 'broker_profile_stale' | 'profile_ready' | 'profile_unreachable'
+        gui: 'gui_profile_ready' | 'gui_profile_unreachable' | 'gui_profile_missing'
+        relationship: 'profile_match' | 'profile_mismatch' | 'profile_candidate_unavailable'
+      }
+    }
     bootstrap?: {
       observedAt: string
       userDataPath: string

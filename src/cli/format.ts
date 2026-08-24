@@ -218,6 +218,14 @@ export function formatCliStatus(status: CliStatusResult): string {
           ...status.runtime.bootstrap.recovery.map((step) => `recovery: ${step}`)
         ]
       : []),
+    ...(status.runtime.profileRouting
+      ? [
+          `effectiveProfile: ${status.runtime.profileRouting.effectiveProfile}`,
+          `guiProfileCandidate: ${status.runtime.profileRouting.guiProfileCandidate ?? 'unavailable'}`,
+          `profileMatch: ${status.runtime.profileRouting.profileMatch ?? 'unknown'}`,
+          `routingVerdict: ${Object.values(status.runtime.profileRouting.routingVerdict).join(',')}`
+        ]
+      : []),
     `graphState: ${status.graph.state}`
   ].join('\n')
 }
