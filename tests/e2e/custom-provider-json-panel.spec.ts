@@ -54,10 +54,13 @@ test('the JSON panel stays in sync with the form in both directions', async ({ o
   await expect(orcaPage.locator('#cp-limit-path')).toHaveValue('c.d', { timeout: 5_000 })
 
   // 3. Invalid JSON syntax shows an error and does not corrupt the form.
+  // Why: scoped to the red error paragraph, not just /JSON/i — the "Config
+  // JSON" field label itself matches that pattern and is present from the
+  // moment the dialog opens, so a looser locator would pass without ever
+  // proving the error actually rendered.
   await jsonBox.fill('{ not valid json')
-  await orcaPage
-    .getByText(/Unexpected|Expected|JSON/i)
-    .first()
-    .waitFor({ timeout: 5_000 })
+  await expect(
+    orcaPage.locator('p.text-red-400').filter({ hasText: /Unexpected|Expected/i })
+  ).toBeVisible({ timeout: 5_000 })
   await expect(orcaPage.locator('#cp-name')).toHaveValue('Sync Test')
 })

@@ -156,13 +156,18 @@ export function registerSettingsHandlers(
     if ('customProviderAccounts' in args) {
       // Why: this is the real trust boundary for a field the poll loop resolves
       // secrets against — the renderer's own draft validation is a UX nicety,
-      // not enforcement. Reject the whole update on any invalid entry (bad
-      // https:// scheme, duplicate id/name, missing mapping-mode fields) rather
-      // than persisting a partially-trusted array.
+      // not enforcement. Drop the field on any invalid entry (bad https://
+      // scheme, duplicate id/name, missing mapping-mode fields) rather than
+      // persisting a partially-trusted array; the rest of this settings:set
+      // update still applies.
       const parsed = CustomProviderAccountList.safeParse(args.customProviderAccounts)
       if (parsed.success) {
         sanitizedArgs.customProviderAccounts = parsed.data
       } else {
+        console.warn(
+          '[settings] rejected invalid customProviderAccounts update:',
+          parsed.error.issues
+        )
         delete sanitizedArgs.customProviderAccounts
       }
     }
