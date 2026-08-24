@@ -170,7 +170,10 @@ export const CORE_COMMAND_SPECS: CommandSpec[] = [
     summary: 'Remove a worktree from Orca and git',
     usage: 'orca worktree rm --worktree <selector> [--force] [--run-hooks] [--json]',
     allowedFlags: [...GLOBAL_FLAGS, 'worktree', 'force', 'run-hooks'],
-    notes: ['Repo-defined orca.yaml archive hooks are skipped unless --run-hooks is passed.']
+    notes: [
+      'Repo-defined orca.yaml archive hooks are skipped unless --run-hooks is passed.',
+      'For Git worktrees, removal also attempts to delete the checked-out local branch, with or without --force. Orca retains branches it knows predated the worktree and any branch whose changes it cannot prove are already merged.'
+    ]
   },
   {
     path: ['worktree', 'ps'],
