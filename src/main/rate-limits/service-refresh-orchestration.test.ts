@@ -8,6 +8,8 @@ import { fetchKimiRateLimits } from './kimi-fetcher'
 import { fetchMiniMaxRateLimits } from './minimax-fetcher'
 import { fetchGrokRateLimits } from './grok-fetcher'
 import { readGrokAuthSession } from './grok-auth'
+import { fetchCursorRateLimits } from './cursor-fetcher'
+import { readCursorAuthSession } from './cursor-auth'
 import { fetchOpenCodeGoRateLimits } from './opencode-go-usage-fetcher'
 import {
   deferred,
@@ -52,6 +54,14 @@ vi.mock('./grok-auth', () => ({
   readGrokAuthSession: vi.fn(() => ({ status: 'missing' }))
 }))
 
+vi.mock('./cursor-fetcher', () => ({
+  fetchCursorRateLimits: vi.fn()
+}))
+
+vi.mock('./cursor-auth', () => ({
+  readCursorAuthSession: vi.fn(() => ({ status: 'missing' }))
+}))
+
 vi.mock('../minimax/minimax-cookie-store', () => ({
   hasMiniMaxSessionCookie: vi.fn(() => false)
 }))
@@ -86,6 +96,57 @@ describe('RateLimitService', () => {
     expect(readGrokAuthSession).not.toHaveBeenCalled()
   })
 
+  it('does not reread Cursor auth when callers read state snapshots', () => {
+    vi.mocked(readCursorAuthSession).mockReturnValue({
+      status: 'ok',
+      session: {
+        accessToken: 'token',
+        userId: 'user-1',
+        email: null,
+        expiresAtMs: null
+      }
+    })
+    const service = new RateLimitService()
+    vi.mocked(readCursorAuthSession).mockClear()
+
+    expect(service.getState().cursorAuthConfigured).toBe(true)
+    service.getState()
+
+    expect(readCursorAuthSession).not.toHaveBeenCalled()
+  })
+
+  it('refreshes Cursor without refreshing other providers', async () => {
+    const authReadResult = {
+      status: 'ok' as const,
+      session: {
+        accessToken: 'token',
+        userId: 'user-1',
+        email: 'dev@example.com',
+        expiresAtMs: null
+      }
+    }
+    vi.mocked(readCursorAuthSession).mockReturnValue(authReadResult)
+    vi.mocked(fetchCursorRateLimits).mockResolvedValueOnce(okProvider('cursor', 60))
+    const service = new RateLimitService()
+
+    await service.refreshCursor()
+
+    expect(fetchCursorRateLimits).toHaveBeenCalledTimes(1)
+    expect(fetchCursorRateLimits).toHaveBeenCalledWith({
+      authReadResult,
+      signal: expect.any(AbortSignal)
+    })
+    expect(fetchClaudeRateLimits).not.toHaveBeenCalled()
+    expect(fetchCodexRateLimits).not.toHaveBeenCalled()
+    expect(fetchGeminiRateLimits).not.toHaveBeenCalled()
+    expect(fetchOpenCodeGoRateLimits).not.toHaveBeenCalled()
+    expect(fetchKimiRateLimits).not.toHaveBeenCalled()
+    expect(fetchMiniMaxRateLimits).not.toHaveBeenCalled()
+    expect(fetchGrokRateLimits).not.toHaveBeenCalled()
+    expect(service.getState().cursorAuthConfigured).toBe(true)
+    expect(service.getState().cursor?.status).toBe('ok')
+  })
+
   it('refreshes Grok without refreshing other providers', async () => {
     const authReadResult = {
       status: 'ok' as const,
@@ -115,6 +176,7 @@ describe('RateLimitService', () => {
     expect(fetchOpenCodeGoRateLimits).not.toHaveBeenCalled()
     expect(fetchKimiRateLimits).not.toHaveBeenCalled()
     expect(fetchMiniMaxRateLimits).not.toHaveBeenCalled()
+    expect(fetchCursorRateLimits).not.toHaveBeenCalled()
     expect(service.getState().grokAuthConfigured).toBe(true)
     expect(service.getState().grok?.status).toBe('ok')
   })

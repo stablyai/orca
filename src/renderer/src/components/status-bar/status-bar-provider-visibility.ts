@@ -14,9 +14,10 @@ export type UsageProviderSettings = Pick<
   // requires geminiCliOAuthEnabled — the snapshot mirrors the Gemini fetch,
   // which never yields data while that opt-in is off.
   antigravityUsageConfigured: boolean
-  // Why: MiniMax/Grok sign-in live on disk, not in settings; main sets these each poll.
+  // Why: MiniMax/Grok/Cursor sign-in live on disk, not in settings; main sets these each poll.
   minimaxCookieConfigured: boolean
   grokAuthConfigured: boolean
+  cursorAuthConfigured: boolean
 }
 
 type UsageProviderSnapshots = {
@@ -28,6 +29,7 @@ type UsageProviderSnapshots = {
   antigravity: ProviderRateLimits | null | undefined
   minimax: ProviderRateLimits | null | undefined
   grok: ProviderRateLimits | null | undefined
+  cursor: ProviderRateLimits | null | undefined
 }
 
 type UsageProviderId = ProviderRateLimits['provider']
@@ -77,7 +79,8 @@ export function hasUsageProviderSettings(
     // Antigravity's durable signal requires geminiCliOAuthEnabled, so it is
     // already covered by the gemini term above.
     settings?.minimaxCookieConfigured === true ||
-    settings?.grokAuthConfigured === true
+    settings?.grokAuthConfigured === true ||
+    settings?.cursorAuthConfigured === true
   )
 }
 
@@ -111,6 +114,9 @@ export function hasUsageProviderSettingsForProvider(
   }
   if (providerId === 'grok') {
     return settings.grokAuthConfigured === true
+  }
+  if (providerId === 'cursor') {
+    return settings.cursorAuthConfigured === true
   }
   return false
 }
@@ -165,7 +171,8 @@ export function isUsageEmptyState(
     isProviderSnapshotPending(providers.kimi) ||
     antigravitySnapshotPending ||
     isProviderSnapshotPending(providers.minimax) ||
-    isProviderSnapshotPending(providers.grok)
+    isProviderSnapshotPending(providers.grok) ||
+    isProviderSnapshotPending(providers.cursor)
   ) {
     return false
   }
@@ -178,6 +185,7 @@ export function isUsageEmptyState(
     !isProviderConfigured(providers.kimi) &&
     !isProviderConfigured(providers.antigravity) &&
     !isProviderConfigured(providers.minimax) &&
-    !isProviderConfigured(providers.grok)
+    !isProviderConfigured(providers.grok) &&
+    !isProviderConfigured(providers.cursor)
   )
 }

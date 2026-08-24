@@ -54,6 +54,7 @@ export type ProviderRateLimits = {
     | 'kimi'
     | 'minimax'
     | 'grok'
+    | 'cursor'
     | 'antigravity'
   /** 5-hour session window, null if not available. */
   session: RateLimitWindow | null
@@ -61,9 +62,9 @@ export type ProviderRateLimits = {
   weekly: RateLimitWindow | null
   /** Claude Fable 7-day weekly window, null if not available. */
   fableWeekly?: RateLimitWindow | null
-  /** 30-day monthly window (OpenCode Go, Grok unified billing), null if not available. */
+  /** 30-day monthly window (OpenCode Go, Grok, Cursor plan total), null if not available. */
   monthly?: RateLimitWindow | null
-  /** Named per-model buckets (Gemini only). */
+  /** Named buckets (Gemini model lanes, Cursor Auto/API). */
   buckets?: RateLimitBucket[]
   /** Available earned Codex rate-limit reset credits, if reported. */
   rateLimitResetCredits?: {
@@ -115,6 +116,14 @@ export type GrokAccountStatus = {
   error: string | null
 }
 
+export type CursorAccountStatus = {
+  signedIn: boolean
+  email: string | null
+  userId: string | null
+  tokenFresh: boolean
+  error: string | null
+}
+
 export type RateLimitState = {
   claude: ProviderRateLimits | null
   codex: ProviderRateLimits | null
@@ -124,6 +133,7 @@ export type RateLimitState = {
   antigravity: ProviderRateLimits | null
   minimax: ProviderRateLimits | null
   grok: ProviderRateLimits | null
+  cursor: ProviderRateLimits | null
   /**
    * True when a MiniMax session cookie is persisted on disk. The cookie lives
    * outside GlobalSettings, so this flag is the durable signal that the
@@ -133,6 +143,8 @@ export type RateLimitState = {
   minimaxCookieConfigured: boolean
   /** True when main finds a Grok CLI session file (~/.grok/auth.json or GROK_HOME). */
   grokAuthConfigured: boolean
+  /** True when main finds a Cursor IDE sign-in token in global state. */
+  cursorAuthConfigured: boolean
   claudeTarget: RateLimitRuntimeTarget
   codexTarget: RateLimitRuntimeTarget
   inactiveClaudeAccounts: InactiveAccountUsage[]

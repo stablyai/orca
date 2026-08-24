@@ -48,11 +48,13 @@ import {
   getAccountsGeminiSearchEntries,
   getAccountsLocationSearchEntries,
   getAccountsGrokSearchEntries,
+  getAccountsCursorSearchEntries,
   getAccountsMiniMaxSearchEntries,
   getAccountsOpencodeSearchEntries,
   getAccountsPaneSearchEntries
 } from './accounts-search'
 import { GrokAccountsSection } from './GrokAccountsSection'
+import { CursorAccountsSection } from './CursorAccountsSection'
 import { getRemoteAccountsPaneScope } from './provider-account-scope'
 import { ProviderHostScopeControl } from './ProviderHostScopeControl'
 import { SearchableSetting } from './SearchableSetting'
@@ -1985,6 +1987,9 @@ export function AccountsPane({
     ) : null,
     matchesSettingsSearch(searchQuery, getAccountsGrokSearchEntries()) ? (
       <GrokAccountsSection key="grok" />
+    ) : null,
+    matchesSettingsSearch(searchQuery, getAccountsCursorSearchEntries()) ? (
+      <CursorAccountsSection key="cursor" />
     ) : null
   ].filter(Boolean)
 

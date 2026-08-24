@@ -182,6 +182,32 @@ describe('ProviderSegment monthly window', () => {
     expect(markup).toContain('30% used Fable')
     expect(markup).not.toContain('40% used')
   })
+
+  it('renders Cursor Auto and API in verbose mode', async () => {
+    const { ProviderSegment } = await import('./StatusBar')
+    const limits: ProviderRateLimits = {
+      provider: 'cursor',
+      session: null,
+      weekly: null,
+      monthly: windowOf(42, 43_200),
+      buckets: [
+        { name: 'Auto', ...windowOf(45, 43_200) },
+        { name: 'API', ...windowOf(30, 43_200) }
+      ],
+      updatedAt: Date.now(),
+      error: null,
+      status: 'ok'
+    }
+
+    const markup = renderToStaticMarkup(
+      <ProviderSegment p={limits} compact={false} display="used" mode="verbose" />
+    )
+
+    expect(markup).toContain('Auto')
+    expect(markup).toContain('45% used')
+    expect(markup).toContain('API')
+    expect(markup).toContain('30% used')
+  })
 })
 
 describe('undefined provider window safety (crash d2c1da69 / bb74236c)', () => {

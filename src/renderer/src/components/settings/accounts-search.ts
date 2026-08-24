@@ -212,6 +212,26 @@ export const getAccountsGrokSearchEntries = createLocalizedCatalog(() => [
   }
 ])
 
+export const getAccountsCursorSearchEntries = createLocalizedCatalog(() => [
+  {
+    title: translate('auto.components.settings.accounts.search.a5b9d3f2c8', 'Cursor Usage'),
+    description: translate(
+      'auto.components.settings.accounts.search.b4a8c2e1d7',
+      'Sign-in via Cursor IDE for plan usage tracking.'
+    ),
+    keywords: [
+      ...translateSearchKeyword('auto.components.settings.accounts.search.c3b7f1e0c6', 'cursor'),
+      ...translateSearchKeyword('auto.components.settings.accounts.search.d2a6e9d8b5', 'ide'),
+      ...translateSearchKeyword('auto.components.settings.accounts.search.e1f5d8c7a4', 'login'),
+      ...translateSearchKeyword(
+        'auto.components.settings.accounts.search.e949b08ffb',
+        'rate limit'
+      ),
+      ...translateSearchKeyword('auto.components.settings.accounts.search.86edc96bc9', 'status bar')
+    ]
+  }
+])
+
 export const getAccountsPaneSearchEntries = createLocalizedCatalog((): SettingsSearchEntry[] => [
   ...getAccountsLocationSearchEntries(),
   ...getAccountsClaudeSearchEntries(),
@@ -219,5 +239,6 @@ export const getAccountsPaneSearchEntries = createLocalizedCatalog((): SettingsS
   ...getAccountsGeminiSearchEntries(),
   ...getAccountsOpencodeSearchEntries(),
   ...getAccountsMiniMaxSearchEntries(),
-  ...getAccountsGrokSearchEntries()
+  ...getAccountsGrokSearchEntries(),
+  ...getAccountsCursorSearchEntries()
 ])

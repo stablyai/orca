@@ -96,6 +96,9 @@ export function ProviderIcon({ provider }: { provider: string }): React.JSX.Elem
   if (provider === 'grok') {
     return <AgentIcon agent="grok" size={13} />
   }
+  if (provider === 'cursor') {
+    return <AgentIcon agent="cursor" size={13} />
+  }
   return <ClaudeIcon size={13} />
 }
 
@@ -142,14 +145,23 @@ export function getWindowSections(
   p: ProviderRateLimits
 ): { label: string; window: RateLimitWindow | null }[] {
   if (p.buckets?.length) {
-    const bucketSections = p.buckets.map((b) => ({ label: b.name, window: b as RateLimitWindow }))
-    return [
-      ...bucketSections,
-      {
+    const sections: { label: string; window: RateLimitWindow | null }[] = p.buckets.map((b) => ({
+      label: b.name,
+      window: b as RateLimitWindow
+    }))
+    if (p.weekly) {
+      sections.push({
         label: translate('auto.components.status.bar.tooltip.252c096536', 'Weekly'),
         window: p.weekly
-      }
-    ]
+      })
+    }
+    if (p.monthly !== undefined && p.monthly !== null) {
+      sections.push({
+        label: translate('auto.components.status.bar.tooltip.7f7f208060', 'Monthly'),
+        window: p.monthly
+      })
+    }
+    return sections
   }
   const sections: { label: string; window: RateLimitWindow | null }[] = [
     {
