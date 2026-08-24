@@ -5,6 +5,7 @@ import {
   AGENT_TYPE_MAX_LENGTH
 } from './agent-status-types'
 import {
+  codexRosterEffectiveState,
   codexRosterToSnapshots,
   finishCodexSubagent,
   setCodexSubagentModel,
@@ -111,5 +112,18 @@ describe('Codex subagent roster', () => {
 
       expect(roster.get('child-1')?.model).toHaveLength(AGENT_MODEL_MAX_LENGTH)
     })
+  })
+
+  it('does not keep a completed lead working for a parked child', () => {
+    const roster: CodexSubagentRoster = new Map()
+
+    upsertCodexSubagent(roster, 'child-1', { state: 'idle' }, 10)
+    expect(codexRosterEffectiveState(roster, 'done')).toBe('done')
+
+    upsertCodexSubagent(roster, 'child-1', { state: 'working' }, 10)
+    expect(codexRosterEffectiveState(roster, 'done')).toBe('working')
+
+    upsertCodexSubagent(roster, 'child-1', { state: 'waiting' }, 10)
+    expect(codexRosterEffectiveState(roster, 'done')).toBe('waiting')
   })
 })

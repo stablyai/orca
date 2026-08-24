@@ -15,7 +15,7 @@ type TrackedCodexSubagent = {
   agentType?: string
   description?: string
   model?: string
-  state: 'working' | 'waiting'
+  state: 'working' | 'waiting' | 'idle'
   startedAt: number
 }
 
@@ -26,7 +26,7 @@ export function upsertCodexSubagent(
     agentType?: string
     description?: string
     model?: string
-    state: 'working' | 'waiting'
+    state: 'working' | 'waiting' | 'idle'
   },
   now: number
 ): void {
@@ -88,7 +88,7 @@ export function seedCodexSubagentRoster(
   snapshots: readonly AgentSubagentSnapshot[]
 ): void {
   for (const snapshot of snapshots) {
-    if (snapshot.state !== 'working' && snapshot.state !== 'waiting') {
+    if (snapshot.state !== 'working' && snapshot.state !== 'waiting' && snapshot.state !== 'idle') {
       continue
     }
     upsertCodexSubagent(
@@ -130,10 +130,12 @@ export function codexRosterEffectiveState(
   if (!roster || roster.size === 0) {
     return leadState
   }
+  let hasWorkingChild = false
   for (const tracked of roster.values()) {
     if (tracked.state === 'waiting') {
       return 'waiting'
     }
+    hasWorkingChild ||= tracked.state === 'working'
   }
-  return leadState === 'done' ? 'working' : leadState
+  return leadState === 'done' && hasWorkingChild ? 'working' : leadState
 }

@@ -1,5 +1,6 @@
 import type { DashboardAgentRow } from '@/components/dashboard/useDashboardData'
-import type { AgentStatusEntry } from '../../../../shared/agent-status-types'
+import type { AgentStatusEntry, AgentType } from '../../../../shared/agent-status-types'
+import { resolveCompatibleAgentTypeForOwner } from '../../../../shared/agent-title-owner'
 import type { TerminalTab } from '../../../../shared/terminal-tab-types'
 
 /** Row-identity key for an in-process subagent child row. The NUL separator
@@ -8,6 +9,13 @@ import type { TerminalTab } from '../../../../shared/terminal-tab-types'
  *  `orchestration.parentPaneKey` instead. */
 function subagentRowKey(parentPaneKey: string, subagentId: string): string {
   return `${parentPaneKey}\u0000subagent:${subagentId}`
+}
+
+function resolveSubagentProvider(parentEntry: AgentStatusEntry, tab: TerminalTab): AgentType {
+  const entryAgentType = resolveCompatibleAgentTypeForOwner(parentEntry.agentType, tab.launchAgent)
+  return entryAgentType && entryAgentType !== 'unknown'
+    ? entryAgentType
+    : (tab.launchAgent ?? entryAgentType ?? 'unknown')
 }
 
 /**
@@ -28,6 +36,7 @@ export function buildSubagentChildRows(args: {
   if (!subagents || subagents.length === 0) {
     return []
   }
+  const provider = resolveSubagentProvider(args.parentEntry, args.tab)
   return subagents.map((subagent) => {
     const activeState = args.parentIsFresh && subagent.state !== 'idle' ? subagent.state : undefined
     const state = activeState ?? 'idle'
@@ -42,6 +51,7 @@ export function buildSubagentChildRows(args: {
       model: subagent.model,
       paneKey,
       worktreeId: args.parentEntry.worktreeId,
+      connectionId: args.parentEntry.connectionId,
       tabId: args.parentEntry.tabId,
       stateHistory: [],
       orchestration: {
@@ -59,6 +69,11 @@ export function buildSubagentChildRows(args: {
       rowSource: 'subagent' as const,
       state,
       activationPaneKey: args.parentEntry.paneKey,
+      subagentSession: {
+        id: subagent.id,
+        provider,
+        parentPaneKey: args.parentEntry.paneKey
+      },
       startedAt
     }
   })

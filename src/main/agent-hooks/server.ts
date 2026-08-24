@@ -15,6 +15,7 @@ import {
   clearClaudeAnsweredQuestionWait,
   createHookListenerState,
   getEndpointFileName,
+  hasCodexParentTranscript,
   hasCodexTranscriptSubagents,
   hasPendingAgentResultText,
   HOOK_REQUEST_SLOWLORIS_MS,
@@ -28,6 +29,7 @@ import {
   normalizeHookPayload,
   parseFormEncodedBody,
   readRequestBody,
+  refreshCodexSubagentTranscriptStatus,
   reapRestoredClaudeSubagentsForDeadPane,
   reconcileRemoteCodexState,
   resolveCachedClaudeCompactOwnership,
@@ -98,6 +100,11 @@ import {
   type AgentProviderSessionMetadata
 } from '../../shared/agent-session-resume'
 import { isCommandCodeNewTurnWhileWorking } from '../../shared/command-code-turn-boundary'
+import {
+  advanceCodexSubagentPollPlan,
+  INITIAL_CODEX_SUBAGENT_POLL_PLAN,
+  type CodexSubagentPollPlan
+} from './codex-subagent-poll-policy'
 
 export type { AgentHookSource }
 
@@ -190,7 +197,6 @@ type RetiredPaneFence = {
 const LAST_STATUS_FILE_NAME = 'last-status.json'
 const ASSISTANT_MESSAGE_RETRY_ATTEMPTS = 5
 const ASSISTANT_MESSAGE_RETRY_MS = 50
-const CODEX_SUBAGENT_POLL_MS = 1_000
 const INTERRUPTED_DONE_LATE_WORKING_SUPPRESSION_MS = 15_000
 
 // Why: starts at 2 — pre-merge v1 lacked receivedAt/stateStartedAt (never shipped); a mismatched version hydrates empty (treated as corrupt).
@@ -1601,15 +1607,15 @@ export class AgentHookServer {
 
   private scheduleCodexSubagentPoll(
     source: AgentHookSource,
-    body: unknown,
-    original: EnrichedAgentHookEventPayload
+    original: EnrichedAgentHookEventPayload,
+    plan: CodexSubagentPollPlan = INITIAL_CODEX_SUBAGENT_POLL_PLAN
   ): void {
     // Why: a nested non-codex CLI inherits ORCA_PANE_KEY, so clearing here would silently end a live codex poll.
     if (source !== 'codex') {
       return
     }
     this.clearCodexSubagentPoll(original.paneKey)
-    if (!hasCodexTranscriptSubagents(this.state, original.paneKey)) {
+    if (!hasCodexParentTranscript(this.state, original.paneKey)) {
       return
     }
     const timer = setTimeout(() => {
@@ -1618,15 +1624,29 @@ export class AgentHookServer {
       if (!this.server || current !== original) {
         return
       }
-      const normalized = normalizeHookPayload(this.state, source, body, this.env)
-      if (!normalized) {
+      const payload = refreshCodexSubagentTranscriptStatus(this.state, original.paneKey)
+      if (!payload) {
         return
       }
       const subagentsChanged =
-        JSON.stringify(normalized.payload.subagents) !== JSON.stringify(original.payload.subagents)
-      const next = subagentsChanged ? this.applyNormalizedStatus(normalized) : original
-      this.scheduleCodexSubagentPoll(source, body, next)
-    }, CODEX_SUBAGENT_POLL_MS)
+        JSON.stringify(payload.subagents) !== JSON.stringify(original.payload.subagents)
+      const next = subagentsChanged
+        ? this.applyNormalizedStatus({
+            paneKey: original.paneKey,
+            launchToken: original.launchToken,
+            tabId: original.tabId,
+            worktreeId: original.worktreeId,
+            connectionId: original.connectionId,
+            providerSession: original.providerSession,
+            payload
+          })
+        : original
+      // Why: inactive empty rosters only need late-rollout grace; the next Codex hook restores active polling.
+      const quiet =
+        !hasCodexTranscriptSubagents(this.state, original.paneKey) &&
+        (payload.state !== 'working' || original.hookEventName === 'SessionStart')
+      this.scheduleCodexSubagentPoll(source, next, advanceCodexSubagentPollPlan(plan, quiet))
+    }, plan.delayMs)
     this.codexSubagentPollTimers.set(original.paneKey, timer)
     if (typeof timer.unref === 'function') {
       timer.unref()
@@ -2566,7 +2586,7 @@ export class AgentHookServer {
           this.recordCurrentAuthorityObservation(event)
           const enriched = this.applyNormalizedStatus(event, normalized.onAccepted)
           this.scheduleAssistantMessageRetry(source, aliasedBody, enriched)
-          this.scheduleCodexSubagentPoll(source, aliasedBody, enriched)
+          this.scheduleCodexSubagentPoll(source, enriched)
         }
 
         res.writeHead(204)

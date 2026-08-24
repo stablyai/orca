@@ -26,6 +26,9 @@ import { DEFAULT_AGENT_ACTIVITY_DISPLAY_MODE } from '../../../../shared/constant
 import { revealElementInScrollContainer } from './worktree-sidebar-reveal'
 import { useWorktreeAgentExpansionState } from './worktree-card-agents-expansion-state'
 import { translate } from '@/i18n/i18n'
+import { createCodexSubagentProgressTarget } from './codex-subagent-progress-target'
+import { selectCodexSubagentProgressHostAuthority } from './codex-subagent-progress-host-authority'
+import { useCodexSubagentProgressPaneKey } from './codex-subagent-progress-selection'
 
 export const SUPPRESS_WORKTREE_LIST_SCROLL_ADJUSTMENT_EVENT =
   'orca-suppress-worktree-list-scroll-adjustment'
@@ -80,6 +83,7 @@ const WorktreeCardAgentsBody = React.memo(function WorktreeCardAgentsBody({
     useAppStore((s) => s.agentActivityDisplayMode) ?? DEFAULT_AGENT_ACTIVITY_DISPLAY_MODE
   const dropAgentStatus = useAppStore((s) => s.dropAgentStatus)
   const dismissRetainedAgent = useAppStore((s) => s.dismissRetainedAgent)
+  const openModal = useAppStore((s) => s.openModal)
   const { targetMode: agentSendPopoverTargetMode, agentStatusEpoch } = useAppStore(
     useShallow((s) => selectSendTargetControlInputs(s, worktreeId))
   )
@@ -87,6 +91,7 @@ const WorktreeCardAgentsBody = React.memo(function WorktreeCardAgentsBody({
   const sendTargetInputs = useAppStore(useShallow((s) => selectSendTargetInputs(s, worktreeId)))
   const sendPromptToSidebarAgentTarget = useAppStore((s) => s.sendPromptToSidebarAgentTarget)
   const focusedAgentPaneKey = useFocusedAgentPaneKey(worktreeId)
+  const selectedSubagentPaneKey = useCodexSubagentProgressPaneKey(worktreeId)
   const compactAgentListRootRef = useRef<HTMLDivElement | null>(null)
 
   // Why: derive per-agent unvisited flags from the ack map so rows bold on first appearance and mute once the tab is visited.
@@ -184,9 +189,25 @@ const WorktreeCardAgentsBody = React.memo(function WorktreeCardAgentsBody({
     },
     [worktreeId]
   )
-  const handleActivateRetainedAgent = useCallback(() => {
-    // Why: hibernation-retained rows are passive completion evidence; activating would resume sleeping sessions, so the row is inert.
-  }, [])
+  // Why: hibernation-retained rows are passive completion evidence; activating would resume sleeping sessions, so the row is inert.
+  const handleActivateRetainedAgent = useCallback(() => undefined, [])
+  const handleOpenCodexSubagentProgress = useCallback(
+    (agent: DashboardAgentRowData) => {
+      const hostAuthority = selectCodexSubagentProgressHostAuthority(useAppStore.getState(), {
+        worktreeId,
+        parentPaneKey: agent.subagentSession?.parentPaneKey ?? agent.paneKey,
+        tabPtyId: agent.tab.ptyId,
+        connectionId: agent.entry.connectionId
+      })
+      const target = createCodexSubagentProgressTarget(agent, worktreeId, hostAuthority)
+      if (!target) {
+        handleActivateAgentTab(agent.tab.id, agent.activationPaneKey ?? agent.paneKey)
+        return
+      }
+      openModal('codex-subagent-progress', target)
+    },
+    [handleActivateAgentTab, openModal, worktreeId]
+  )
 
   // Why: one 30s tick per non-empty inline list; zero-agent cards never mount this (see WorktreeCardAgents), so idle worktrees pay no timer cost.
   const now = useNow(30_000)
@@ -226,9 +247,7 @@ const WorktreeCardAgentsBody = React.memo(function WorktreeCardAgentsBody({
     [toggleLineageParentState]
   )
 
-  const stopBubble = useCallback((e: React.MouseEvent) => {
-    e.stopPropagation()
-  }, [])
+  const stopBubble = useCallback((e: React.MouseEvent) => e.stopPropagation(), [])
 
   // Why: root leaf siblings reserve a leading spacer when any root has a chevron, keeping the state-dot column aligned (descendants already indent).
   const anyRootHasChildren = rootAgents.some(
@@ -262,7 +281,11 @@ const WorktreeCardAgentsBody = React.memo(function WorktreeCardAgentsBody({
           agent={agent}
           onDismiss={handleDismissAgent}
           onActivate={
-            agent.rowSource === 'retained' ? handleActivateRetainedAgent : handleActivateAgentTab
+            agent.rowSource === 'retained'
+              ? handleActivateRetainedAgent
+              : agent.subagentSession?.provider === 'codex'
+                ? () => handleOpenCodexSubagentProgress(agent)
+                : handleActivateAgentTab
           }
           now={now}
           // Why: bold the row until the user visits its tab (useAutoAckViewedAgent auto-acks on focus, muting it).
@@ -279,7 +302,8 @@ const WorktreeCardAgentsBody = React.memo(function WorktreeCardAgentsBody({
           }
           // Why: keep leaf rows aligned with parent rows — see anyRootHasChildren above.
           reserveDisclosureGutter={isRootAgent && anyRootHasChildren && !hasChildAgents}
-          isFocusedPane={agent.paneKey === focusedAgentPaneKey}
+          isFocusedPane={selectedSubagentPaneKey === null && agent.paneKey === focusedAgentPaneKey}
+          isCurrentAgent={agent.paneKey === selectedSubagentPaneKey}
           sendTargetStatus={sendTarget?.status}
           sendTargetDisabledReason={sendTarget?.disabledReason}
           onSendTargetClick={isAgentSendTargetModeActive ? handleSendTargetClick : undefined}
@@ -323,7 +347,11 @@ const WorktreeCardAgentsBody = React.memo(function WorktreeCardAgentsBody({
           agent={agent}
           now={now}
           onActivate={
-            agent.rowSource === 'retained' ? handleActivateRetainedAgent : handleActivateAgentTab
+            agent.rowSource === 'retained'
+              ? handleActivateRetainedAgent
+              : agent.subagentSession?.provider === 'codex'
+                ? () => handleOpenCodexSubagentProgress(agent)
+                : handleActivateAgentTab
           }
           sendTargetStatus={sendTarget?.status}
           sendTargetDisabledReason={sendTarget?.disabledReason}
@@ -334,7 +362,8 @@ const WorktreeCardAgentsBody = React.memo(function WorktreeCardAgentsBody({
             hasChildAgents ? () => toggleLineageParent(agent.paneKey) : undefined
           }
           reserveDisclosureGutter={isRootAgent && anyRootHasChildren && !hasChildAgents}
-          isFocusedPane={agent.paneKey === focusedAgentPaneKey}
+          isFocusedPane={selectedSubagentPaneKey === null && agent.paneKey === focusedAgentPaneKey}
+          isCurrentAgent={agent.paneKey === selectedSubagentPaneKey}
           cacheTimerActive={cacheTimerActive}
         />
         {hasChildAgents ? (
