@@ -1,4 +1,5 @@
 import type { ExecutionHostId } from '../execution-host'
+import { parseExecutionHostId } from '../execution-host'
 import type { Worktree } from './types'
 
 /**
@@ -36,6 +37,23 @@ export function composeWorktreeHostIdentity(
   worktreeId: string
 ): string {
   return `${hostId ?? ''}${HOST_SEPARATOR}${worktreeId}`
+}
+
+/**
+ * The host back out of an identity, when the identity names one.
+ *
+ * An empty prefix (`|<worktreeId>`) stays undefined rather than defaulting to
+ * `local`: an unqualified row may be on any host, and callers use this to pick
+ * the host a destructive action runs against.
+ */
+export function getExecutionHostIdFromWorktreeHostIdentity(
+  identity: string
+): ExecutionHostId | undefined {
+  const separatorIndex = identity.indexOf(HOST_SEPARATOR)
+  if (separatorIndex <= 0) {
+    return undefined
+  }
+  return parseExecutionHostId(identity.slice(0, separatorIndex))?.id
 }
 
 /**

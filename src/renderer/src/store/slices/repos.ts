@@ -112,6 +112,7 @@ import { getEnvironmentSshStateGeneration } from './runtime-environment-ssh'
 import { getRuntimeEnvironmentConnectionGeneration } from './runtime-status'
 import {
   findFolderWorkspaceOwner,
+  getExecutionHostIdForFolderWorkspace,
   getRuntimeEnvironmentIdForFolderWorkspace
 } from '@/lib/folder-workspace-runtime-owner'
 import {
@@ -1908,7 +1909,10 @@ export type RepoSlice = {
     updates: FolderWorkspaceUpdates,
     options?: { executionHostId?: ExecutionHostId }
   ) => Promise<boolean>
-  deleteFolderWorkspace: (folderWorkspaceId: string) => Promise<boolean>
+  deleteFolderWorkspace: (
+    folderWorkspaceId: string,
+    options?: { executionHostId?: ExecutionHostId }
+  ) => Promise<boolean>
   // options.hostId targets a specific host's row + RPC target when the id exists on multiple hosts; else the group's own host owns the call.
   updateProjectGroup: (
     groupId: string,
@@ -2980,12 +2984,22 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
     }
   },
 
-  deleteFolderWorkspace: async (folderWorkspaceId) => {
+  deleteFolderWorkspace: async (folderWorkspaceId, options) => {
     const state = get()
-    if (!findFolderWorkspaceOwner(state, folderWorkspaceId)) {
+    const executionHostId = options?.executionHostId
+    if (!findFolderWorkspaceOwner(state, folderWorkspaceId, executionHostId)) {
       return false
     }
-    const runtimeEnvironmentId = getRuntimeEnvironmentIdForFolderWorkspace(state, folderWorkspaceId)
+    const ownerHostId = getExecutionHostIdForFolderWorkspace(
+      state,
+      folderWorkspaceId,
+      executionHostId
+    )
+    const runtimeEnvironmentId = getRuntimeEnvironmentIdForFolderWorkspace(
+      state,
+      folderWorkspaceId,
+      executionHostId
+    )
     try {
       // Why: deletion targets the folder's owner; focus may be on a different host.
       const target = getActiveRuntimeTarget({ activeRuntimeEnvironmentId: runtimeEnvironmentId })
@@ -3006,11 +3020,15 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
       const workspaceKey = folderWorkspaceKey(folderWorkspaceId)
       set((s) => ({
         folderWorkspaces: s.folderWorkspaces.filter(
-          (workspace) => workspace.id !== folderWorkspaceId
+          (workspace) =>
+            workspace.id !== folderWorkspaceId ||
+            getFolderWorkspaceHostId(workspace, s.projectGroups) !== ownerHostId
         ),
         folderWorkspacePathStatuses: {}
       }))
-      get().purgeWorktreeTerminalState([workspaceKey])
+      if (!get().folderWorkspaces.some((workspace) => workspace.id === folderWorkspaceId)) {
+        get().purgeWorktreeTerminalState([workspaceKey])
+      }
       return true
     } catch (err) {
       console.error('Failed to delete folder workspace:', err)

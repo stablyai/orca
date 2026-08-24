@@ -8,6 +8,7 @@ import {
   DropdownMenuRadioGroup,
   DropdownMenuRadioItem,
   DropdownMenuSeparator,
+  DropdownMenuShortcut,
   DropdownMenuSub,
   DropdownMenuSubContent,
   DropdownMenuSubTrigger,
@@ -68,6 +69,7 @@ import { translate } from '@/i18n/i18n'
 import { unnestWorktrees } from './worktree-unnest'
 import { parseWorkspaceKey, worktreeWorkspaceKey } from '../../../../shared/workspace-scope'
 import { getDeleteStateForWorktreeHost } from './worktree-delete-state-host-match'
+import { useOptionalShortcutLabel } from '@/hooks/useShortcutLabel'
 
 type Props = {
   worktree: Worktree
@@ -337,6 +339,7 @@ const WorktreeContextMenu = React.memo(function WorktreeContextMenu({
   const deleteState = useAppStore((s) =>
     getDeleteStateForWorktreeHost(worktree, s.deleteStateByWorktreeId)
   )
+  const deleteShortcut = useOptionalShortcutLabel('workspace.delete')
   const [menuOpen, setMenuOpen] = useState(false)
   // Why: the Developer submenu is a power-user affordance, so it is revealed by
   // holding Option/Alt at right-click — captured at open time (like the Help
@@ -1086,6 +1089,9 @@ const WorktreeContextMenu = React.memo(function WorktreeContextMenu({
                           'auto.components.sidebar.WorktreeContextMenu.f4475537d8',
                           'Delete'
                         )}
+            {!isMultiContext && !removesProject && deleteShortcut ? (
+              <DropdownMenuShortcut>{deleteShortcut}</DropdownMenuShortcut>
+            ) : null}
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
