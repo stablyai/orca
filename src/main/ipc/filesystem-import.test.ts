@@ -514,11 +514,12 @@ describe('fs:importExternalPaths', () => {
         status: 'staged',
         name: 'logo.png',
         kind: 'file',
-        entries: [{ relativePath: '', kind: 'file', contentBase64: 'cG5n' }]
+        entries: [{ relativePath: '', kind: 'file', byteLength: 4 }]
       }
     ])
     expect(copyFileMock).not.toHaveBeenCalled()
-    expect(readFileHandleMock).toHaveBeenCalled()
+    // Why: bodies stream at upload time, so staging must never read the file.
+    expect(readFileHandleMock).not.toHaveBeenCalled()
     expect(closeMock).toHaveBeenCalled()
   })
 
@@ -597,7 +598,7 @@ describe('fs:importExternalPaths', () => {
         entries: [
           { relativePath: '', kind: 'directory' },
           { relativePath: '..assets', kind: 'directory' },
-          { relativePath: '..assets/icon.txt', kind: 'file', contentBase64: 'aWNvbg==' }
+          { relativePath: '..assets/icon.txt', kind: 'file', byteLength: 4 }
         ]
       }
     ])
@@ -637,14 +638,15 @@ describe('fs:importExternalPaths', () => {
     expect(openMock).not.toHaveBeenCalled()
   })
 
-  it('checks runtime upload directory byte budget before reading a file that exceeds the total cap', async () => {
+  it('checks runtime upload directory byte budget before opening a file that exceeds the total cap', async () => {
     const sourcePath = '/tmp/dropped/project'
     const resolvedPath = path.resolve(sourcePath)
     const filePaths = ['one.bin', 'two.bin', 'three.bin', 'four.bin', 'overflow.bin'].map((name) =>
       path.join(resolvedPath, name)
     )
     const mib = 1024 * 1024
-    const regularSize = 25 * mib
+    // Four files exactly fill the 8 GB total ceiling; the fifth pushes past it.
+    const regularSize = 2 * 1024 * mib
     const overflowSize = Number(mib)
     const readFileMock = vi.fn().mockResolvedValue(Buffer.from('chunk'))
 
@@ -702,11 +704,9 @@ describe('fs:importExternalPaths', () => {
       sourcePaths: [sourcePath]
     })) as { sources: { status: string; reason?: string }[] }
 
-    expect(result.sources[0]).toMatchObject({
-      status: 'failed',
-      reason: 'Remote import is too large'
-    })
-    expect(readFileMock).toHaveBeenCalledTimes(4)
+    expect(result.sources[0]).toMatchObject({ status: 'failed' })
+    expect(result.sources[0]?.reason).toContain('total remote import limit')
+    expect(readFileMock).not.toHaveBeenCalled()
     expect(openMock).not.toHaveBeenCalledWith(filePaths.at(-1), expect.anything())
   })
 

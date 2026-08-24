@@ -48,4 +48,6 @@ export type StagedExternalImportSource =
 
 export type StagedExternalImportEntry =
   | { relativePath: string; kind: 'directory' }
-  | { relativePath: string; kind: 'file'; contentBase64: string }
+  // Why: file bodies are streamed in slices at upload time, so staging carries
+  // only the size the uploader reports and validates against.
+  | { relativePath: string; kind: 'file'; byteLength: number }

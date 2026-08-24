@@ -3440,7 +3440,7 @@ const api = {
             kind: 'file' | 'directory'
             entries: (
               | { relativePath: string; kind: 'directory' }
-              | { relativePath: string; kind: 'file'; contentBase64: string }
+              | { relativePath: string; kind: 'file'; byteLength: number }
             )[]
           }
         | {
@@ -3455,6 +3455,33 @@ const api = {
           }
       )[]
     }> => ipcRenderer.invoke('fs:stageExternalPathsForRuntimeUpload', args),
+    uploadExternalFileToRuntime: (
+      args: {
+        environmentId: string
+        sourceRootPath: string
+        entryRelativePath: string
+        worktree: string
+        relativePath: string
+        expectedByteLength?: number
+        uploadId?: string
+        expectedEnvironmentPairingRevision?: number
+      } & SshMutationExpectation
+    ): Promise<{ byteLength: number }> =>
+      ipcRenderer.invoke('fs:uploadExternalFileToRuntime', args),
+    onUploadProgress: (
+      callback: (progress: { uploadId: string; sentBytes: number; totalBytes: number }) => void
+    ): (() => void) => {
+      const listener = (
+        _event: Electron.IpcRendererEvent,
+        data: { uploadId: string; sentBytes: number; totalBytes: number }
+      ) => callback(data)
+      ipcRenderer.on('fs:uploadProgress', listener)
+      return () => ipcRenderer.removeListener('fs:uploadProgress', listener)
+    },
+    cancelRuntimeUpload: (args: { uploadId: string }): Promise<void> =>
+      ipcRenderer.invoke('fs:cancelRuntimeUpload', args),
+    releaseRuntimeUpload: (args: { uploadId: string }): Promise<void> =>
+      ipcRenderer.invoke('fs:releaseRuntimeUpload', args),
     resolveDroppedPathsForAgent: (
       args: {
         paths: string[]

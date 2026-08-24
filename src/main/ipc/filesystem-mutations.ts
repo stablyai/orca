@@ -1,4 +1,4 @@
-import { ipcMain } from 'electron'
+import { app, ipcMain } from 'electron'
 import { constants } from 'node:fs'
 import { copyFile, mkdir, writeFile } from 'node:fs/promises'
 import { basename, dirname } from 'node:path'
@@ -19,6 +19,16 @@ import type {
 } from './filesystem-import-result-types'
 import { importOneSource } from './filesystem-import-local'
 import { stageOneSourceForRuntimeUpload } from './filesystem-runtime-upload-staging'
+import { streamExternalFileToRuntime } from './runtime-upload-file-stream'
+import {
+  RUNTIME_UPLOAD_PROGRESS_CHANNEL,
+  throttleRuntimeUploadProgress
+} from './runtime-upload-progress'
+import {
+  cancelRuntimeUpload,
+  forgetRuntimeUploadCancellation,
+  registerCancellableUpload
+} from './runtime-upload-cancellation'
 
 /**
  * IPC handlers for file/folder creation and renaming.
@@ -202,6 +212,72 @@ export function registerFilesystemMutationHandlers(store: Store): void {
       return { sources }
     }
   )
+
+  // Why: the file handle and the runtime socket both live in main, so the byte
+  // pump runs here. The renderer keeps deconflict/commit/rollback orchestration
+  // and never sees file contents.
+  ipcMain.handle(
+    'fs:uploadExternalFileToRuntime',
+    async (
+      event,
+      args: {
+        environmentId: string
+        sourceRootPath: string
+        entryRelativePath: string
+        worktree: string
+        relativePath: string
+        expectedByteLength?: number
+        uploadId?: string
+        expectedEnvironmentPairingRevision?: number
+      } & SshMutationExpectation
+    ): Promise<{ byteLength: number }> => {
+      const uploadId = args.uploadId
+      // Why: replies to the frame that asked, so a second window's drop cannot
+      // move this one's progress bar.
+      const emit = uploadId
+        ? throttleRuntimeUploadProgress((progress) => {
+            if (!event.sender.isDestroyed()) {
+              event.sender.send(RUNTIME_UPLOAD_PROGRESS_CHANNEL, progress)
+            }
+          })
+        : null
+      const cancellation = uploadId ? registerCancellableUpload(uploadId) : null
+      try {
+        return await streamExternalFileToRuntime({
+          userDataPath: app.getPath('userData'),
+          environmentId: args.environmentId,
+          sourceRootPath: args.sourceRootPath,
+          entryRelativePath: args.entryRelativePath,
+          expectedByteLength: args.expectedByteLength,
+          worktree: args.worktree,
+          relativePath: args.relativePath,
+          expectedExecutionHostId: args.expectedExecutionHostId,
+          expectedSshTargetId: args.expectedSshTargetId,
+          expectedSshConnectionGeneration: args.expectedSshConnectionGeneration,
+          expectedEnvironmentPairingRevision: args.expectedEnvironmentPairingRevision,
+          signal: cancellation?.signal,
+          onProgress:
+            emit && uploadId
+              ? ({ sentBytes, totalBytes }) => emit({ uploadId, sentBytes, totalBytes })
+              : undefined
+        })
+      } finally {
+        cancellation?.release()
+      }
+    }
+  )
+
+  // Why: the drop UI cancels a whole dropped source, so the id it sends is the
+  // one every file of that source streams under.
+  ipcMain.handle('fs:cancelRuntimeUpload', (_event, args: { uploadId: string }): void => {
+    cancelRuntimeUpload(args.uploadId)
+  })
+
+  // Why: ids are minted per drop, but a cancel recorded for one must not outlive
+  // it and abort a later upload that happens to reuse the id.
+  ipcMain.handle('fs:releaseRuntimeUpload', (_event, args: { uploadId: string }): void => {
+    forgetRuntimeUploadCancellation(args.uploadId)
+  })
 
   // Why: terminal drag-and-drop resolver. Local worktrees pass paths through
   // unchanged (reference-in-place; preserves zero-latency drop). SSH worktrees

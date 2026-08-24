@@ -159,7 +159,7 @@ export type FilesystemApi = {
             kind: 'file' | 'directory'
             entries: (
               | { relativePath: string; kind: 'directory' }
-              | { relativePath: string; kind: 'file'; contentBase64: string }
+              | { relativePath: string; kind: 'file'; byteLength: number }
             )[]
           }
         | {
@@ -174,6 +174,23 @@ export type FilesystemApi = {
           }
       )[]
     }>
+    uploadExternalFileToRuntime: (
+      args: {
+        environmentId: string
+        sourceRootPath: string
+        entryRelativePath: string
+        worktree: string
+        relativePath: string
+        expectedByteLength?: number
+        uploadId?: string
+        expectedEnvironmentPairingRevision?: number
+      } & SshMutationExpectation
+    ) => Promise<{ byteLength: number }>
+    onUploadProgress: (
+      callback: (progress: { uploadId: string; sentBytes: number; totalBytes: number }) => void
+    ) => () => void
+    cancelRuntimeUpload: (args: { uploadId: string }) => Promise<void>
+    releaseRuntimeUpload: (args: { uploadId: string }) => Promise<void>
     resolveDroppedPathsForAgent: (
       args: {
         paths: string[]
