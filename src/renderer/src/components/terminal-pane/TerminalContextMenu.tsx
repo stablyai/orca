@@ -71,6 +71,8 @@ type TerminalContextMenuProps = {
   onClearPaneTitle: () => void
   canClearPaneTitle: boolean
   onCopyTerminalId: () => void
+  canCopyAgentSessionId: boolean
+  onCopyAgentSessionId: () => void
   onCopyPaneId: () => void
 }
 
@@ -110,6 +112,8 @@ export default function TerminalContextMenu({
   onClearPaneTitle,
   canClearPaneTitle,
   onCopyTerminalId,
+  canCopyAgentSessionId,
+  onCopyAgentSessionId,
   onCopyPaneId
 }: TerminalContextMenuProps): React.JSX.Element {
   // Why: one primary binding prevents Windows/Linux shortcut labels from forcing row wraps.
@@ -299,6 +303,15 @@ export default function TerminalContextMenu({
             {showClearPaneTitleShortcut ? (
               <DropdownMenuShortcut>{shortcuts.clearPaneTitle}</DropdownMenuShortcut>
             ) : null}
+          </DropdownMenuItem>
+        ) : null}
+        {canCopyAgentSessionId ? (
+          <DropdownMenuItem onSelect={onCopyAgentSessionId}>
+            <Copy />
+            {translate(
+              'auto.components.terminal.pane.TerminalContextMenu.copySessionId',
+              'Copy Session ID'
+            )}
           </DropdownMenuItem>
         ) : null}
         <DropdownMenuItem onSelect={onCopyTerminalId}>

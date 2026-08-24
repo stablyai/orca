@@ -3,7 +3,9 @@ import type { ManagedPane } from '@/lib/pane-manager/pane-manager'
 import { makePaneKey } from '../../../../shared/stable-pane-id'
 import { translate } from '@/i18n/i18n'
 import { copyTerminalHandleForPane } from './terminal-handle-copy'
+import { copyPaneAgentSessionId } from './terminal-agent-session-id-copy'
 import { runCopyPaneId, runTerminalCopy } from './terminal-copy-rejection-guards'
+import { useAppStore } from '@/store'
 
 export const copyTerminalPaneMenuSelection = async (pane: ManagedPane | null): Promise<void> => {
   if (!pane) {
@@ -82,4 +84,44 @@ export const copyTerminalPaneMenuTerminalId = async (
   } finally {
     pane.terminal.focus()
   }
+}
+
+// Why: the provider session id is what resumes the exact conversation in the
+// agent's own CLI; Orca terminal/pane ids cannot address it (issue #16261).
+export const copyTerminalPaneMenuAgentSessionId = async (
+  pane: ManagedPane | null,
+  tabId: string
+): Promise<void> => {
+  if (!pane) {
+    return
+  }
+  const outcome = await copyPaneAgentSessionId({
+    agentStatusByPaneKey: useAppStore.getState().agentStatusByPaneKey,
+    tabId,
+    leafId: pane.leafId,
+    writeClipboardText: window.api.ui.writeTerminalClipboardText
+  })
+  if (outcome === 'copied') {
+    toast.success(
+      translate(
+        'auto.components.terminal.pane.use.terminal.pane.context.menu.session.id.copied',
+        'Session ID copied'
+      )
+    )
+  } else if (outcome === 'unavailable') {
+    toast.error(
+      translate(
+        'auto.components.terminal.pane.use.terminal.pane.context.menu.session.id.unavailable',
+        'No agent session ID reported for this terminal yet'
+      )
+    )
+  } else {
+    toast.error(
+      translate(
+        'auto.components.terminal.pane.use.terminal.pane.context.menu.session.id.copy.failed',
+        'Unable to copy session ID'
+      )
+    )
+  }
+  pane.terminal.focus()
 }
