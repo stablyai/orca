@@ -642,6 +642,7 @@ jobs:
       - name: Test Windows-specific boundaries
         run: >-
           pnpm exec vitest run --config config/vitest.config.ts
+          config/scripts/rebuild-native-deps.test.mjs
           src/main/providers/windows-conpty-wide-char-duplication.node-pty.test.ts
           src/main/providers/pty-repaint-wide-char-buffer.node-pty.test.ts
           src/shared/child-process/windows-command-line.win32.test.ts
