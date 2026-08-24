@@ -151,7 +151,13 @@ describe('orchestration skill guidance', () => {
       'never base it on the current feature branch unless the user explicitly asks'
     )
     expect(skill).toContain(
-      'orca worktree create --name <task-name> --no-parent --agent codex --prompt'
+      'orca worktree create --name <task-name> --no-parent --agent <agent> --prompt'
+    )
+    expect(fullHandoffs).toContain(
+      'Direct `worktree create` and `terminal create` handoffs do not use `worker-start`, so Settings > Orchestration worker defaults are not injected'
+    )
+    expect(fullHandoffs).toContain(
+      "pass the user's requested agent explicitly, or ask when none is specified."
     )
     expect(fullHandoffs).toContain(
       'Before creating a new worktree from an active feature branch, decide and state whether the desired Orca lineage is child or top-level'
@@ -358,10 +364,16 @@ describe('orchestration skill guidance', () => {
       "Specify these flags only when the user requests that choice or the task requires a specific agent's unique capability."
     )
     expect(workerLoop).toContain(
-      "A coordinator's quality judgment—results seem shallow, a deeper second pass or retry seems useful, or a stronger model seems preferable—is not permission to override the user's defaults"
+      'Quality, depth, thoroughness, or meticulousness language is not a request for a specific agent, model, or effort; treat it as one only when the user names an agent, model, or effort level.'
     )
     expect(workerLoop).toContain(
-      'if a stronger model is genuinely needed, ask the user through `ask` or a decision gate'
+      "A coordinator's quality judgment—results seem shallow, a deeper second pass or retry seems useful, or a stronger model seems preferable—is never permission to override the user's defaults, including for a deep second pass, retry, or verification; if a stronger model or effort is genuinely needed, ask the user through `ask` or a decision gate."
+    )
+    expect(workerLoop).toContain(
+      'If worker-start fails with `agent_unconfigured`, no default worker agent is configured: retry that launch with an explicit `--agent` and tell the user to set a default worker agent in Settings > Orchestration.'
+    )
+    expect(workerLoop).toContain(
+      'This is missing-configuration recovery, not permission to override defaults.'
     )
     expect(workerLoop).toContain(
       'Mixing agents counts as an exception only when the user requests multiple agents or the task specifies them; do not mix agents for coordinator-chosen diversity.'
@@ -472,7 +484,7 @@ describe('orchestration skill guidance', () => {
     const messaging = getSection(skill, 'Messaging')
     const workerTerminals = getSection(skill, 'Worker Terminals')
     const agentFirstExample = workerTerminals.match(
-      /```bash\norca worktree create --name <task-name> --agent codex --setup run --json\n[\s\S]*?```/
+      /```bash\norca worktree create --name <task-name> --agent <agent> --setup run --json\n[\s\S]*?```/
     )?.[0]
 
     expect(workerTerminals).toContain('For an allowed new worktree, use agent-first:')
@@ -481,6 +493,15 @@ describe('orchestration skill guidance', () => {
       'repo setup and default-terminal settings may add intentional tabs or splits'
     )
     expect(workerTerminals).toContain('without configured default tabs')
+    expect(workerTerminals).toContain(
+      'orca terminal create --worktree active --title <task-name> --command "<agent>" --json'
+    )
+    expect(workerTerminals).toContain(
+      'orca worktree create --name <task-name> --agent <agent> --setup run --json'
+    )
+    expect(workerTerminals).toContain(
+      'orca terminal create --worktree <selector> --command "<agent>" --json'
+    )
     expect(workerTerminals).toContain(
       'only after `terminal list` or `terminal show` confirms it is an unused shell'
     )
