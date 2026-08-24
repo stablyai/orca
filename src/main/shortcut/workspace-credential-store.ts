@@ -144,19 +144,22 @@ export function writeWorkspaceFile(file: ShortcutWorkspaceFile): void {
         ? file.selectedWorkspaceId
         : activeWorkspaceId
 
-  cachedWorkspaceFile = {
+  const nextFile: ShortcutWorkspaceFile = {
     version: 1,
     activeWorkspaceId,
     selectedWorkspaceId,
     workspaces
   }
-  workspaceFileLoaded = true
   // Why: a crash mid-write would leave invalid JSON, dropping every stored
   // connection while the token files stay orphaned; rename keeps it all-or-nothing.
+  // The cache updates only after the write lands so a failed persist never
+  // leaves this process reading state that disappears on restart.
   writeCredentialFileAtomic(
     getWorkspaceFilePath(),
-    Buffer.from(JSON.stringify(cachedWorkspaceFile, null, 2), 'utf-8')
+    Buffer.from(JSON.stringify(nextFile, null, 2), 'utf-8')
   )
+  cachedWorkspaceFile = nextFile
+  workspaceFileLoaded = true
 }
 
 export function readToken(workspaceId: string): string | null {
