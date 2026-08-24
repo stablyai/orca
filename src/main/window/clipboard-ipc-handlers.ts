@@ -31,6 +31,11 @@ import {
   type ClipboardFileResult
 } from './clipboard-file-copy'
 import {
+  readClipboardFilePaths,
+  runClipboardCommandCapture,
+  type ClipboardFileReadDeps
+} from './clipboard-file-read'
+import {
   cleanupExpiredRemoteClipboardFiles,
   scheduleLegacyRemoteClipboardFileCleanup,
   writeRemoteFileToClipboard
@@ -84,6 +89,7 @@ export function registerClipboardHandlers(store: Store): void {
   ipcMain.removeHandler('clipboard:writeSelectionText')
   ipcMain.removeHandler('clipboard:writeImage')
   ipcMain.removeHandler('clipboard:writeFile')
+  ipcMain.removeHandler('clipboard:readFilePaths')
   ipcMain.removeHandler('clipboard:saveImageAsTempFile')
 
   void cleanupExpiredRemoteClipboardFiles()
@@ -160,6 +166,14 @@ export function registerClipboardHandlers(store: Store): void {
       return writeFileToClipboard(request.filePath, deps)
     }
   )
+  // Why: a file OS-copied in Finder/Explorer/a file manager should paste its
+  // full path into a terminal (like a drop), not the display name the OS
+  // synthesizes as clipboard text. Target-host resolution happens in the
+  // renderer's existing file-drop pipeline.
+  ipcMain.handle('clipboard:readFilePaths', (event): Promise<string[]> => {
+    assertTrustedClipboardSender(event)
+    return readClipboardFilePaths(makeClipboardFileReadDeps())
+  })
   ipcMain.handle('clipboard:writeText', async (event, text: string) => {
     assertTrustedClipboardTextSender(event)
     return clipboard.writeText(await assertClipboardTextWriteWithinLimitWithYield(text))
@@ -240,6 +254,16 @@ function makeClipboardFileDeps(
     resolveFilePath,
     writeBuffer: (format, buffer) => clipboard.writeBuffer(format, buffer),
     runCommand
+  }
+}
+
+function makeClipboardFileReadDeps(): ClipboardFileReadDeps {
+  return {
+    platform: process.platform,
+    desktop: process.env.XDG_CURRENT_DESKTOP,
+    readFormat: (format) => clipboard.read(format),
+    readBuffer: (format) => clipboard.readBuffer(format),
+    runCommand: runClipboardCommandCapture
   }
 }
 

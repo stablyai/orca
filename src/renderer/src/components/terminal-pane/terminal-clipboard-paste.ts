@@ -14,6 +14,8 @@ type SaveClipboardImageAsTempFile = (args?: {
 
 type PasteTerminalClipboardDeps = {
   readClipboardText: (options?: ReadClipboardTextOptions) => Promise<string>
+  readClipboardFilePaths: () => Promise<string[]>
+  pasteFilePaths: (filePaths: string[]) => boolean | void | Promise<boolean | void>
   saveClipboardImageAsTempFile: SaveClipboardImageAsTempFile
   pasteText: (
     text: string,
@@ -24,15 +26,18 @@ type PasteTerminalClipboardDeps = {
   forceBracketedMultilineTextPaste?: boolean
   protectedMultilineTextPasteOptions?: TerminalPasteTextOptions
   onTextPasteError?: (error: unknown) => void
+  onFilePasteError?: (error: unknown) => void
   onImagePasteError?: (error: unknown) => void
 }
 
 export type TerminalClipboardPasteResult =
-  | { status: 'pasted'; kind: 'image-path' | 'text' }
+  | { status: 'pasted'; kind: 'image-path' | 'text' | 'file-path' }
   | {
       status: 'skipped'
       reason:
         | 'empty'
+        | 'file-paste-failed'
+        | 'file-paste-rejected'
         | 'image-paste-failed'
         | 'image-paste-rejected'
         | 'text-paste-failed'
@@ -42,6 +47,8 @@ export type TerminalClipboardPasteResult =
 
 export async function pasteTerminalClipboard({
   readClipboardText,
+  readClipboardFilePaths,
+  pasteFilePaths,
   saveClipboardImageAsTempFile,
   pasteText,
   connectionId,
@@ -49,8 +56,29 @@ export async function pasteTerminalClipboard({
   forceBracketedMultilineTextPaste = false,
   protectedMultilineTextPasteOptions,
   onTextPasteError,
+  onFilePasteError,
   onImagePasteError
 }: PasteTerminalClipboardDeps): Promise<TerminalClipboardPasteResult> {
+  // Why: OS-copied files expose bare display names as text, so resolve file references first.
+  let filePaths: string[] = []
+  try {
+    filePaths = await readClipboardFilePaths()
+  } catch {
+    // Best-effort: a failed file-reference read must not block text/image paste.
+  }
+  if (filePaths.length > 0) {
+    try {
+      const result = await pasteFilePaths(filePaths)
+      if (result === false) {
+        return { status: 'skipped', reason: 'file-paste-rejected' }
+      }
+      return { status: 'pasted', kind: 'file-path' }
+    } catch (error) {
+      onFilePasteError?.(error)
+      return { status: 'skipped', reason: 'file-paste-failed' }
+    }
+  }
+
   let text = ''
   try {
     text = await readClipboardText({ maxBytes: TERMINAL_PASTE_MAX_BYTES })

@@ -183,6 +183,7 @@ import {
 } from '@/components/terminal-quick-commands/TerminalQuickCommandDialog'
 import { keybindingMatchesAction } from '../../../../shared/keybindings'
 import { pasteTerminalClipboard } from './terminal-clipboard-paste'
+import { pasteTerminalClipboardFilePaths } from './terminal-clipboard-file-paste'
 import {
   firesNativePasteEvent,
   getClipboardEventText,
@@ -2047,6 +2048,17 @@ function TerminalPane(
       const activeElementAtDispatch = document.activeElement
       void pasteTerminalClipboard({
         readClipboardText,
+        readClipboardFilePaths: window.api.ui.readClipboardFilePaths,
+        pasteFilePaths: (paths) =>
+          pasteTerminalClipboardFilePaths({
+            manager: managerRef.current,
+            pane,
+            paneTransports: paneTransportsRef.current,
+            paths,
+            tabId,
+            worktreeId,
+            cwd: paneCwdRef.current.get(pane.id)?.cwd ?? cwd
+          }),
         saveClipboardImageAsTempFile: window.api.ui.saveClipboardImageAsTempFile,
         connectionId,
         runtimeEnvironmentId,
@@ -2194,6 +2206,17 @@ function TerminalPane(
       )
       void pasteTerminalClipboard({
         readClipboardText: window.api.ui.readClipboardText,
+        readClipboardFilePaths: window.api.ui.readClipboardFilePaths,
+        pasteFilePaths: (paths) =>
+          pasteTerminalClipboardFilePaths({
+            manager: managerRef.current,
+            pane,
+            paneTransports: paneTransportsRef.current,
+            paths,
+            tabId,
+            worktreeId,
+            cwd: paneCwdRef.current.get(pane.id)?.cwd ?? cwd
+          }),
         saveClipboardImageAsTempFile: window.api.ui.saveClipboardImageAsTempFile,
         connectionId,
         runtimeEnvironmentId,
@@ -2255,7 +2278,7 @@ function TerminalPane(
       window.removeEventListener(APP_MENU_PASTE_EVENT, onAppMenuPaste)
       window.removeEventListener(APP_MENU_SELECTION_ACTION_EVENT, onAppMenuSelectionAction)
     }
-  }, [isActive, worktreeId, keybindings, forceBracketedMultilineTextPaste, tabId])
+  }, [cwd, isActive, worktreeId, keybindings, forceBracketedMultilineTextPaste, tabId])
 
   // Dismiss the pane's attention indicator on click (ghostty "show until interact"); pointerdown covers the mouse path onData doesn't.
   // NOT gated on isActive: clicking a visible-but-inactive split pane must clear the worktree dot before focusGroup re-renders it active.

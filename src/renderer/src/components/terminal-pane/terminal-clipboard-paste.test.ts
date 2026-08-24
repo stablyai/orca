@@ -6,18 +6,24 @@ import {
   pasteTerminalText
 } from './terminal-bracketed-paste'
 
+// Defaults so tests only spell out the clipboard branch they exercise.
+const noClipboardFilePaths = (): (() => Promise<string[]>) => vi.fn().mockResolvedValue([])
+const noClipboardFilePaste = (): ((paths: string[]) => void) => vi.fn()
+
 describe('terminal clipboard paste', () => {
   it('forces bracketed paste for generated image-only clipboard paths', async () => {
     const pasteText = vi.fn()
 
     await pasteTerminalClipboard({
       readClipboardText: vi.fn().mockResolvedValue(''),
+      readClipboardFilePaths: noClipboardFilePaths(),
       saveClipboardImageAsTempFile: vi
         .fn()
         .mockResolvedValue(
           '/var/folders/3l/b7w02vh17tg5r5s3nhhdf3kh0000gn/T/orca-paste-1760000000000-id.png'
         ),
-      pasteText
+      pasteText,
+      pasteFilePaths: noClipboardFilePaste()
     })
 
     expect(pasteText).toHaveBeenCalledWith(
@@ -42,10 +48,12 @@ describe('terminal clipboard paste', () => {
 
     await pasteTerminalClipboard({
       readClipboardText: vi.fn().mockResolvedValue(''),
+      readClipboardFilePaths: noClipboardFilePaths(),
       saveClipboardImageAsTempFile: vi
         .fn()
         .mockResolvedValue('/tmp/orca-paste-1760000000000-id.png'),
-      pasteText: (text, options) => pasteTerminalText(terminal, text, options)
+      pasteText: (text, options) => pasteTerminalText(terminal, text, options),
+      pasteFilePaths: noClipboardFilePaste()
     })
 
     expect(terminal.input).toHaveBeenCalledWith(
@@ -71,10 +79,12 @@ describe('terminal clipboard paste', () => {
 
     await pasteTerminalClipboard({
       readClipboardText: vi.fn().mockResolvedValue(''),
+      readClipboardFilePaths: noClipboardFilePaths(),
       saveClipboardImageAsTempFile: vi
         .fn()
         .mockResolvedValue('/tmp/orca-paste-1760000000000-id.png'),
-      pasteText: (text, options) => pasteTerminalText(terminal, text, options)
+      pasteText: (text, options) => pasteTerminalText(terminal, text, options),
+      pasteFilePaths: noClipboardFilePaste()
     })
 
     expect(terminal.input).toHaveBeenCalledWith(
@@ -93,9 +103,11 @@ describe('terminal clipboard paste', () => {
 
     await pasteTerminalClipboard({
       readClipboardText: vi.fn().mockResolvedValue(''),
+      readClipboardFilePaths: noClipboardFilePaths(),
       saveClipboardImageAsTempFile,
       connectionId: 'ssh-1',
-      pasteText
+      pasteText,
+      pasteFilePaths: noClipboardFilePaste()
     })
 
     expect(saveClipboardImageAsTempFile).toHaveBeenCalledWith({
@@ -116,9 +128,11 @@ describe('terminal clipboard paste', () => {
 
     await pasteTerminalClipboard({
       readClipboardText: vi.fn().mockResolvedValue(''),
+      readClipboardFilePaths: noClipboardFilePaths(),
       saveClipboardImageAsTempFile,
       runtimeEnvironmentId: 'remote-host-1',
-      pasteText
+      pasteText,
+      pasteFilePaths: noClipboardFilePaste()
     })
 
     expect(saveClipboardImageAsTempFile).toHaveBeenCalledWith({
@@ -136,10 +150,12 @@ describe('terminal clipboard paste', () => {
 
     await pasteTerminalClipboard({
       readClipboardText: vi.fn().mockResolvedValue(''),
+      readClipboardFilePaths: noClipboardFilePaths(),
       saveClipboardImageAsTempFile: vi
         .fn()
         .mockResolvedValue('/tmp/orca-paste-1760000000000-id.png'),
-      pasteText
+      pasteText,
+      pasteFilePaths: noClipboardFilePaste()
     })
 
     expect(pasteText).toHaveBeenCalledWith('/tmp/orca-paste-1760000000000-id.png', {
@@ -156,8 +172,10 @@ describe('terminal clipboard paste', () => {
 
     await pasteTerminalClipboard({
       readClipboardText: vi.fn().mockRejectedValue(new Error('No text clipboard permission')),
+      readClipboardFilePaths: noClipboardFilePaths(),
       saveClipboardImageAsTempFile,
-      pasteText
+      pasteText,
+      pasteFilePaths: noClipboardFilePaste()
     })
 
     expect(saveClipboardImageAsTempFile).toHaveBeenCalledWith({
@@ -177,8 +195,10 @@ describe('terminal clipboard paste', () => {
 
     await pasteTerminalClipboard({
       readClipboardText,
+      readClipboardFilePaths: noClipboardFilePaths(),
       saveClipboardImageAsTempFile,
-      pasteText
+      pasteText,
+      pasteFilePaths: noClipboardFilePaste()
     })
 
     expect(pasteText).toHaveBeenCalledWith('hello')
@@ -193,11 +213,13 @@ describe('terminal clipboard paste', () => {
 
     const result = await pasteTerminalClipboard({
       readClipboardText: vi.fn().mockResolvedValue('hello'),
+      readClipboardFilePaths: noClipboardFilePaths(),
       saveClipboardImageAsTempFile,
       pasteText: vi.fn(() => {
         throw pasteError
       }),
-      onTextPasteError
+      onTextPasteError,
+      pasteFilePaths: noClipboardFilePaste()
     })
 
     expect(onTextPasteError).toHaveBeenCalledWith(pasteError)
@@ -211,9 +233,11 @@ describe('terminal clipboard paste', () => {
 
     const result = await pasteTerminalClipboard({
       readClipboardText: vi.fn().mockResolvedValue('hello'),
+      readClipboardFilePaths: noClipboardFilePaths(),
       saveClipboardImageAsTempFile,
       pasteText: vi.fn().mockResolvedValue(false),
-      onTextPasteError
+      onTextPasteError,
+      pasteFilePaths: noClipboardFilePaste()
     })
 
     expect(onTextPasteError).not.toHaveBeenCalled()
@@ -230,9 +254,11 @@ describe('terminal clipboard paste', () => {
       readClipboardText: vi
         .fn()
         .mockRejectedValue(new Error('Clipboard text is too large for this paste target.')),
+      readClipboardFilePaths: noClipboardFilePaths(),
       saveClipboardImageAsTempFile,
       pasteText,
-      onTextPasteError
+      onTextPasteError,
+      pasteFilePaths: noClipboardFilePaste()
     })
 
     expect(onTextPasteError).toHaveBeenCalledWith(
@@ -249,11 +275,13 @@ describe('terminal clipboard paste', () => {
     const onImagePasteError = vi.fn()
     const result = await pasteTerminalClipboard({
       readClipboardText: vi.fn().mockResolvedValue(''),
+      readClipboardFilePaths: noClipboardFilePaths(),
       saveClipboardImageAsTempFile: vi
         .fn()
         .mockResolvedValue('/tmp/orca-paste-1760000000000-id.png'),
       pasteText: vi.fn().mockResolvedValue(false),
-      onImagePasteError
+      onImagePasteError,
+      pasteFilePaths: noClipboardFilePaste()
     })
 
     expect(onImagePasteError).not.toHaveBeenCalled()
@@ -266,9 +294,11 @@ describe('terminal clipboard paste', () => {
     const onImagePasteError = vi.fn()
     const result = await pasteTerminalClipboard({
       readClipboardText: vi.fn().mockResolvedValue(''),
+      readClipboardFilePaths: noClipboardFilePaths(),
       saveClipboardImageAsTempFile: vi.fn().mockRejectedValue(imageError),
       pasteText,
-      onImagePasteError
+      onImagePasteError,
+      pasteFilePaths: noClipboardFilePaste()
     })
 
     expect(pasteText).not.toHaveBeenCalled()
@@ -282,9 +312,11 @@ describe('terminal clipboard paste', () => {
 
     await pasteTerminalClipboard({
       readClipboardText: vi.fn().mockResolvedValue('line one\nline two'),
+      readClipboardFilePaths: noClipboardFilePaths(),
       saveClipboardImageAsTempFile,
       pasteText,
-      forceBracketedMultilineTextPaste: true
+      forceBracketedMultilineTextPaste: true,
+      pasteFilePaths: noClipboardFilePaste()
     })
 
     expect(pasteText).toHaveBeenCalledWith('line one\nline two', {
@@ -298,9 +330,11 @@ describe('terminal clipboard paste', () => {
 
     await pasteTerminalClipboard({
       readClipboardText: vi.fn().mockResolvedValue('line one\nline two'),
+      readClipboardFilePaths: noClipboardFilePaths(),
       saveClipboardImageAsTempFile: vi.fn(),
       pasteText,
-      forceBracketedMultilineTextPaste: true
+      forceBracketedMultilineTextPaste: true,
+      pasteFilePaths: noClipboardFilePaste()
     })
 
     expect(pasteText).toHaveBeenCalledWith('line one\nline two', {
@@ -313,6 +347,8 @@ describe('terminal clipboard paste', () => {
 
     await pasteTerminalClipboard({
       readClipboardText: vi.fn().mockResolvedValue('\nline two'),
+      readClipboardFilePaths: noClipboardFilePaths(),
+      pasteFilePaths: noClipboardFilePaste(),
       saveClipboardImageAsTempFile: vi.fn(),
       pasteText,
       protectedMultilineTextPasteOptions: { windowsInputRecordNewline: 'alt-enter' }
@@ -329,9 +365,11 @@ describe('terminal clipboard paste', () => {
 
     await pasteTerminalClipboard({
       readClipboardText: vi.fn().mockResolvedValue('hello'),
+      readClipboardFilePaths: noClipboardFilePaths(),
       saveClipboardImageAsTempFile,
       pasteText,
-      forceBracketedMultilineTextPaste: true
+      forceBracketedMultilineTextPaste: true,
+      pasteFilePaths: noClipboardFilePaste()
     })
 
     expect(pasteText).toHaveBeenCalledWith('hello', {
@@ -348,9 +386,11 @@ describe('terminal clipboard paste', () => {
     try {
       await pasteTerminalClipboard({
         readClipboardText: vi.fn().mockResolvedValue('x'.repeat(64)),
+        readClipboardFilePaths: noClipboardFilePaths(),
         saveClipboardImageAsTempFile,
         pasteText,
-        forceBracketedMultilineTextPaste: true
+        forceBracketedMultilineTextPaste: true,
+        pasteFilePaths: noClipboardFilePaste()
       })
 
       expect(codePointAtSpy).not.toHaveBeenCalled()
@@ -380,12 +420,103 @@ describe('terminal clipboard paste', () => {
 
     await pasteTerminalClipboard({
       readClipboardText: vi.fn().mockResolvedValue('a69ce28e1d092e0c8825cd1a109ac36409962bc1'),
+      readClipboardFilePaths: noClipboardFilePaths(),
       saveClipboardImageAsTempFile,
-      pasteText: (text, options) => pasteTerminalText(terminal, text, options)
+      pasteText: (text, options) => pasteTerminalText(terminal, text, options),
+      pasteFilePaths: noClipboardFilePaste()
     })
 
     expect(terminal.paste).toHaveBeenCalledWith('a69ce28e1d092e0c8825cd1a109ac36409962bc1')
     expect(observedIgnoreBracketedPasteMode).toEqual([true])
     expect(saveClipboardImageAsTempFile).not.toHaveBeenCalled()
+  })
+
+  it('routes OS-copied file paths before synthesized clipboard text', async () => {
+    const pasteText = vi.fn()
+    const pasteFilePaths = vi.fn()
+    const saveClipboardImageAsTempFile = vi.fn()
+    // macOS also puts the file's display name on the clipboard as text; the
+    // file-path branch must win so the full path is pasted, not the bare name.
+    const readClipboardText = vi.fn().mockResolvedValue('a file.txt')
+
+    const result = await pasteTerminalClipboard({
+      readClipboardText,
+      readClipboardFilePaths: vi
+        .fn()
+        .mockResolvedValue(['/Users/me/a file.txt', '/Users/me/second.txt']),
+      saveClipboardImageAsTempFile,
+      pasteText,
+      pasteFilePaths
+    })
+
+    expect(pasteFilePaths).toHaveBeenCalledWith(['/Users/me/a file.txt', '/Users/me/second.txt'])
+    expect(pasteText).not.toHaveBeenCalled()
+    expect(readClipboardText).not.toHaveBeenCalled()
+    expect(saveClipboardImageAsTempFile).not.toHaveBeenCalled()
+    expect(result).toEqual({ status: 'pasted', kind: 'file-path' })
+  })
+
+  it('falls back to text/image paste when no OS file is on the clipboard', async () => {
+    const pasteText = vi.fn()
+    const readClipboardFilePaths = vi.fn().mockResolvedValue([])
+
+    const result = await pasteTerminalClipboard({
+      readClipboardText: vi.fn().mockResolvedValue('hello'),
+      readClipboardFilePaths,
+      pasteFilePaths: noClipboardFilePaste(),
+      saveClipboardImageAsTempFile: vi.fn(),
+      pasteText
+    })
+
+    expect(readClipboardFilePaths).toHaveBeenCalledTimes(1)
+    expect(pasteText).toHaveBeenCalledWith('hello')
+    expect(result).toEqual({ status: 'pasted', kind: 'text' })
+  })
+
+  it('ignores copied-file read failures and keeps normal text paste', async () => {
+    const pasteText = vi.fn()
+
+    const result = await pasteTerminalClipboard({
+      readClipboardText: vi.fn().mockResolvedValue('hello'),
+      readClipboardFilePaths: vi.fn().mockRejectedValue(new Error('clipboard read failed')),
+      pasteFilePaths: noClipboardFilePaste(),
+      saveClipboardImageAsTempFile: vi.fn(),
+      pasteText
+    })
+
+    expect(pasteText).toHaveBeenCalledWith('hello')
+    expect(result).toEqual({ status: 'pasted', kind: 'text' })
+  })
+
+  it('reports rejected copied-file pastes without falling through to text', async () => {
+    const readClipboardText = vi.fn().mockResolvedValue('a file.txt')
+
+    const result = await pasteTerminalClipboard({
+      readClipboardText,
+      readClipboardFilePaths: vi.fn().mockResolvedValue(['/Users/me/a file.txt']),
+      pasteFilePaths: vi.fn().mockResolvedValue(false),
+      saveClipboardImageAsTempFile: vi.fn(),
+      pasteText: vi.fn()
+    })
+
+    expect(readClipboardText).not.toHaveBeenCalled()
+    expect(result).toEqual({ status: 'skipped', reason: 'file-paste-rejected' })
+  })
+
+  it('reports copied-file paste failures separately from text failures', async () => {
+    const pasteError = new Error('upload failed')
+    const onFilePasteError = vi.fn()
+
+    const result = await pasteTerminalClipboard({
+      readClipboardText: vi.fn(),
+      readClipboardFilePaths: vi.fn().mockResolvedValue(['/Users/me/a.txt']),
+      pasteFilePaths: vi.fn().mockRejectedValue(pasteError),
+      saveClipboardImageAsTempFile: vi.fn(),
+      pasteText: vi.fn(),
+      onFilePasteError
+    })
+
+    expect(onFilePasteError).toHaveBeenCalledWith(pasteError)
+    expect(result).toEqual({ status: 'skipped', reason: 'file-paste-failed' })
   })
 })

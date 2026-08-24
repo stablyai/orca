@@ -115,8 +115,10 @@ export function useTerminalPaneContextMenu({
       {
         managerRef,
         paneTransportsRef,
+        paneCwdRef,
         tabId,
         worktreeId,
+        fallbackCwd,
         forceBracketedMultilineTextPaste,
         onPasteError
       },
