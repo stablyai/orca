@@ -579,6 +579,15 @@ function getActiveRuntimeEnvironmentId(): string | null {
   return useAppStore.getState().settings?.activeRuntimeEnvironmentId?.trim() || null
 }
 
+function getPrioritizedRuntimeProjectRefreshEnvironmentId(): string | null {
+  const state = useAppStore.getState()
+  return (
+    getRuntimeEnvironmentIdForWorktree(state, state.activeWorktreeId) ??
+    state.settings?.activeRuntimeEnvironmentId?.trim() ??
+    null
+  )
+}
+
 function getRuntimeClientEventEnvironmentIds(): string[] {
   const state = useAppStore.getState()
   const ids = new Set<string>()
@@ -976,6 +985,9 @@ export function useIpcEvents(): void {
     }
 
     const runtimeProjectRefreshScheduler = createRuntimeProjectRefreshScheduler({
+      isEnvironmentDesired: (environmentId) =>
+        getRuntimeClientEventEnvironmentIds().includes(environmentId),
+      getPrioritizedEnvironmentId: getPrioritizedRuntimeProjectRefreshEnvironmentId,
       refresh: async (environmentId) => {
         // Why: project events can reveal target CRUD, but known target states already arrive by push.
         void refreshRuntimeEnvironmentSshTargetMetadata(environmentId).catch(() => {})
@@ -1109,7 +1121,15 @@ export function useIpcEvents(): void {
     let reachableRuntimeEnvironmentKey = buildRuntimeClientEventEnvironmentKey(
       reachableRuntimeEnvironmentIds
     )
-    const unsubscribeRuntimeEnvironmentStore = useAppStore.subscribe(() => {
+    const unsubscribeRuntimeEnvironmentStore = useAppStore.subscribe((state, previousState) => {
+      if (
+        state.activeWorktreeId !== previousState.activeWorktreeId ||
+        state.activeWorkspaceExecutionHostId !== previousState.activeWorkspaceExecutionHostId ||
+        state.settings?.activeRuntimeEnvironmentId !==
+          previousState.settings?.activeRuntimeEnvironmentId
+      ) {
+        runtimeProjectRefreshScheduler.reprioritize()
+      }
       const nextEnvironmentIds = getRuntimeClientEventEnvironmentIds()
       const nextKey = buildRuntimeClientEventEnvironmentKey(nextEnvironmentIds)
       const nextReachableEnvironmentIds = getReachableRuntimeEnvironmentIds()
