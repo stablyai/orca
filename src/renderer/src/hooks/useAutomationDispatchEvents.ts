@@ -119,10 +119,10 @@ export function useAutomationDispatchEvents(): void {
           terminalOwnership = null
           ownership?.release()
         }
-        const finalizeTerminalOwnership = (): boolean => {
+        const finalizeTerminalOwnership = async (): Promise<boolean> => {
           const ownership = terminalOwnership
           terminalOwnership = null
-          return ownership?.finalize() ?? false
+          return (await ownership?.finalize()) ?? false
         }
 
         if (!repo) {
@@ -365,7 +365,7 @@ export function useAutomationDispatchEvents(): void {
               releaseTerminalOwnership()
               throw error
             }
-            if (finalizeTerminalOwnership()) {
+            if (await finalizeTerminalOwnership()) {
               await clearRetiredRunTerminalIdentity()
             }
           }
@@ -407,7 +407,7 @@ export function useAutomationDispatchEvents(): void {
               throw error
             }
             if (code === 0) {
-              if (finalizeTerminalOwnership()) {
+              if (await finalizeTerminalOwnership()) {
                 await clearRetiredRunTerminalIdentity()
               }
             } else {

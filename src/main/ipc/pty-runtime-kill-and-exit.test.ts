@@ -163,6 +163,13 @@ describe('registerPtyHandlers', () => {
     deletePtyOwnership('missing-pty')
   })
   it('rethrows non-not-found local provider shutdown failures', async () => {
+    const runtime = {
+      setPtyController: vi.fn(),
+      markPtyStopRequested: vi.fn(),
+      markPtyHistoryPreservingStopRequested: vi.fn(() => 1),
+      preservePtyHistoryThroughLateExit: vi.fn(),
+      clearPtyHistoryPreservingStopRequested: vi.fn()
+    }
     setLocalPtyProvider({
       spawn: vi.fn(),
       write: vi.fn(),
@@ -186,11 +193,14 @@ describe('registerPtyHandlers', () => {
       getProfiles: vi.fn()
     } as never)
     handlers.clear()
-    registerPtyHandlers(mainWindow as never)
+    registerPtyHandlers(mainWindow as never, runtime as never)
 
-    await expect(handlers.get('pty:kill')!(null, { id: 'local-pty' })).rejects.toThrow(
-      'daemon unavailable'
-    )
+    await expect(
+      handlers.get('pty:kill')!(null, { id: 'local-pty', keepHistory: true })
+    ).rejects.toThrow('daemon unavailable')
+    expect(runtime.markPtyHistoryPreservingStopRequested).toHaveBeenCalledWith('local-pty')
+    expect(runtime.preservePtyHistoryThroughLateExit).toHaveBeenCalledWith('local-pty', 1)
+    expect(runtime.clearPtyHistoryPreservingStopRequested).not.toHaveBeenCalled()
   })
   it('rejects runtime terminal IDs before unowned local provider routing', async () => {
     const shutdown = vi.spyOn(getLocalPtyProvider(), 'shutdown')
@@ -206,7 +216,9 @@ describe('registerPtyHandlers', () => {
     const shutdown = vi.fn(async () => undefined)
     const runtime = {
       setPtyController: vi.fn(),
-      onPtyExit: vi.fn()
+      onPtyExit: vi.fn(),
+      markPtyHistoryPreservingStopRequested: vi.fn(() => 1),
+      clearPtyHistoryPreservingStopRequested: vi.fn()
     }
     setLocalPtyProvider({
       spawn: vi.fn(),
@@ -240,6 +252,14 @@ describe('registerPtyHandlers', () => {
       keepHistory: true
     })
     expect(runtime.onPtyExit).toHaveBeenCalledWith('local-pty', -1, undefined)
+    expect(runtime.markPtyHistoryPreservingStopRequested).toHaveBeenCalledWith('local-pty')
+    expect(runtime.clearPtyHistoryPreservingStopRequested).toHaveBeenCalledWith('local-pty', 1)
+    expect(runtime.markPtyHistoryPreservingStopRequested.mock.invocationCallOrder[0]).toBeLessThan(
+      runtime.onPtyExit.mock.invocationCallOrder[0]!
+    )
+    expect(runtime.onPtyExit.mock.invocationCallOrder[0]).toBeLessThan(
+      runtime.clearPtyHistoryPreservingStopRequested.mock.invocationCallOrder[0]!
+    )
     expect(mainWindow.webContents.send).toHaveBeenCalledWith('pty:exit', {
       id: 'local-pty',
       code: -1
@@ -336,6 +356,95 @@ describe('registerPtyHandlers', () => {
     expect(mainWindow.webContents.send.mock.calls.filter((call) => call[0] === 'pty:exit')).toEqual(
       [['pty:exit', { id: 'local-pty', code: -1 }]]
     )
+  })
+  it('does not let a delayed kill clear a same-id legacy replacement', async () => {
+    const shutdown = makeDeferred()
+    const daemon = installObservableDaemonTestProvider()
+    daemon.spawn.mockImplementation(async (options: { sessionId?: string }) => ({
+      id: options.sessionId ?? 'daemon-pty'
+    }))
+    daemon.shutdown.mockImplementation(() => shutdown.promise)
+    const runtime = {
+      setPtyController: vi.fn(),
+      markPtyStopRequested: vi.fn(() => 42),
+      clearPtyStopRequested: vi.fn()
+    }
+    handlers.clear()
+    registerPtyHandlers(mainWindow as never)
+
+    const spawnArgs = { cols: 80, rows: 24, sessionId: 'reused-pty' }
+    await handlers.get('pty:spawn')!(null, spawnArgs)
+    handlers.clear()
+    registerPtyHandlers(mainWindow as never, runtime as never)
+    const pendingKill = handlers.get('pty:kill')!(null, { id: 'reused-pty' }) as Promise<void>
+    await vi.waitFor(() => expect(daemon.shutdown).toHaveBeenCalledOnce())
+    handlers.clear()
+    registerPtyHandlers(mainWindow as never)
+    await handlers.get('pty:spawn')!(null, spawnArgs)
+
+    shutdown.resolve()
+    await pendingKill
+
+    expect(
+      mainWindow.webContents.send.mock.calls.filter(
+        (call) => call[0] === 'pty:exit' && call[1]?.id === 'reused-pty'
+      )
+    ).toEqual([])
+    expect(runtime.clearPtyStopRequested).toHaveBeenCalledWith('reused-pty', 42)
+  })
+  it('fences a delayed kill from a same-id legacy SSH reattachment', async () => {
+    const shutdown = makeDeferred()
+    const runtime = {
+      setPtyController: vi.fn(),
+      markPtyStopRequested: vi.fn(() => 43),
+      clearPtyStopRequested: vi.fn(),
+      onPtyExit: vi.fn()
+    }
+    registerSshPtyProvider('ssh-legacy', {
+      shutdown: vi.fn(() => shutdown.promise),
+      onExit: vi.fn(() => () => {})
+    } as never)
+    setPtyOwnership('legacy-pty', 'ssh-legacy')
+    handlers.clear()
+    registerPtyHandlers(mainWindow as never, runtime as never)
+
+    const pendingKill = handlers.get('pty:kill')!(null, { id: 'legacy-pty' }) as Promise<void>
+    setPtyOwnership('legacy-pty', 'ssh-legacy')
+    shutdown.resolve()
+    await pendingKill
+
+    expect(runtime.onPtyExit).not.toHaveBeenCalled()
+    expect(runtime.clearPtyStopRequested).toHaveBeenCalledWith('legacy-pty', 43)
+    expect(
+      mainWindow.webContents.send.mock.calls.filter(
+        (call) => call[0] === 'pty:exit' && call[1]?.id === 'legacy-pty'
+      )
+    ).toEqual([])
+    deletePtyOwnership('legacy-pty')
+  })
+  it('retains an SSH history lease after a synthetic exit until the host exit arrives', async () => {
+    const runtime = {
+      setPtyController: vi.fn(),
+      markPtyHistoryPreservingStopRequested: vi.fn(() => 1),
+      preservePtyHistoryThroughLateExit: vi.fn(),
+      clearPtyHistoryPreservingStopRequested: vi.fn(),
+      markPtyStopRequested: vi.fn(),
+      onPtyExit: vi.fn()
+    }
+    registerSshPtyProvider('ssh-history', {
+      shutdown: vi.fn(async () => undefined),
+      onExit: vi.fn(() => () => {})
+    } as never)
+    setPtyOwnership('ssh-history-pty', 'ssh-history')
+    handlers.clear()
+    registerPtyHandlers(mainWindow as never, runtime as never)
+
+    await handlers.get('pty:kill')!(null, { id: 'ssh-history-pty', keepHistory: true })
+
+    expect(runtime.onPtyExit).toHaveBeenCalledWith('ssh-history-pty', -1, undefined)
+    expect(runtime.preservePtyHistoryThroughLateExit).toHaveBeenCalledWith('ssh-history-pty', 1)
+    expect(runtime.clearPtyHistoryPreservingStopRequested).not.toHaveBeenCalled()
+    deletePtyOwnership('ssh-history-pty')
   })
   it('waits for the desktop startup barrier before renderer local spawns resolve the provider', async () => {
     const barrier = makeDeferred()

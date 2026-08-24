@@ -470,6 +470,100 @@ describe('OrcaRuntimeService terminal surface retirement', () => {
     })
   })
 
+  it('preserves a surface while its history-preserving stop is in flight', async () => {
+    const session = makePersistedSplitSession()
+    const setWorkspaceSession = vi.fn()
+    const runtime = new OrcaRuntimeService(
+      runtimeStore({
+        getWorkspaceSession: () => session,
+        setWorkspaceSession,
+        flushOrThrow: vi.fn()
+      })
+    )
+    runtime.attachWindow(1)
+    syncSplit(runtime)
+    runtime.registerPty('pty-left', WORKTREE_ID, null, {
+      tabId: 'tab',
+      leafId: 'left',
+      incarnationId: 'incarnation-left'
+    })
+
+    const stopRequestId = runtime.markPtyHistoryPreservingStopRequested('pty-left')
+    runtime.onPtyExit('pty-left', 0, 'incarnation-left')
+    runtime.clearPtyHistoryPreservingStopRequested('pty-left', stopRequestId)
+
+    expect((await runtime.listMobileSessionTabs(`id:${WORKTREE_ID}`)).tabs).toEqual([
+      expect.objectContaining({ id: 'tab::left' }),
+      expect.objectContaining({ id: 'tab::right' })
+    ])
+    expect(setWorkspaceSession).not.toHaveBeenCalled()
+  })
+
+  it('preserves a surface until every overlapping history-preserving stop finishes', async () => {
+    const session = makePersistedSplitSession()
+    const setWorkspaceSession = vi.fn()
+    const runtime = new OrcaRuntimeService(
+      runtimeStore({
+        getWorkspaceSession: () => session,
+        setWorkspaceSession,
+        flushOrThrow: vi.fn()
+      })
+    )
+    runtime.attachWindow(1)
+    syncSplit(runtime)
+    runtime.registerPty('pty-left', WORKTREE_ID, null, {
+      tabId: 'tab',
+      leafId: 'left',
+      incarnationId: 'incarnation-left'
+    })
+
+    const firstStopRequestId = runtime.markPtyHistoryPreservingStopRequested('pty-left')
+    const secondStopRequestId = runtime.markPtyHistoryPreservingStopRequested('pty-left')
+    runtime.clearPtyHistoryPreservingStopRequested('pty-left', firstStopRequestId)
+    runtime.onPtyExit('pty-left', 0, 'incarnation-left')
+    runtime.clearPtyHistoryPreservingStopRequested('pty-left', secondStopRequestId)
+
+    expect((await runtime.listMobileSessionTabs(`id:${WORKTREE_ID}`)).tabs).toEqual([
+      expect.objectContaining({ id: 'tab::left' }),
+      expect.objectContaining({ id: 'tab::right' })
+    ])
+    expect(setWorkspaceSession).not.toHaveBeenCalled()
+  })
+
+  it('consumes a failed stop lease when its late exit arrives', async () => {
+    const session = makePersistedSplitSession()
+    const runtime = new OrcaRuntimeService(
+      runtimeStore({
+        getWorkspaceSession: () => session,
+        setWorkspaceSession: vi.fn(),
+        flushOrThrow: vi.fn()
+      })
+    )
+    runtime.attachWindow(1)
+    syncSplit(runtime)
+    runtime.registerPty('pty-left', WORKTREE_ID, null, {
+      tabId: 'tab',
+      leafId: 'left',
+      incarnationId: 'incarnation-left'
+    })
+
+    const stopRequestId = runtime.markPtyHistoryPreservingStopRequested('pty-left')
+    runtime.preservePtyHistoryThroughLateExit('pty-left', stopRequestId)
+    runtime.onPtyExit('pty-left', 0, 'incarnation-left')
+
+    expect((await runtime.listMobileSessionTabs(`id:${WORKTREE_ID}`)).tabs).toEqual([
+      expect.objectContaining({ id: 'tab::left' }),
+      expect.objectContaining({ id: 'tab::right' })
+    ])
+
+    runtime.onPtyExit('pty-left', 0, 'incarnation-left')
+    expect(
+      (await runtime.listMobileSessionTabs(`id:${WORKTREE_ID}`)).tabs.find(
+        (tab) => tab.id === 'tab::left'
+      )
+    ).toBeUndefined()
+  })
+
   it('ignores a delayed exit from an older incarnation of a reused PTY id', async () => {
     const setWorkspaceSession = vi.fn()
     const runtime = new OrcaRuntimeService(

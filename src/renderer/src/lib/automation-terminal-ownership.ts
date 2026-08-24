@@ -11,7 +11,7 @@ export type AutomationTerminalOwnershipStore = {
 }
 
 export type AutomationTerminalOwnership = {
-  finalize: () => boolean
+  finalize: () => Promise<boolean>
   release: () => void
 }
 
@@ -104,7 +104,7 @@ export function createAutomationTerminalOwnership(
 
   return {
     release,
-    finalize: () => {
+    finalize: async () => {
       if (consumed) {
         return false
       }
@@ -121,13 +121,22 @@ export function createAutomationTerminalOwnership(
         return false
       }
       try {
-        // Why: closeTab centrally owns provider shutdown and pane removal; a
-        // direct kill here would create a second teardown authority.
-        state.closeTab(args.tabId, { recordInteraction: false, reason: 'cleanup' })
+        const parsedPane = parsePaneKey(args.paneKey)
+        if (!parsedPane) {
+          return false
+        }
+        // Why: hibernation owns exact PTY shutdown and durable provider-session
+        // capture while preserving the automation tab for later activation.
+        await state.shutdownCompletedAgentPaneForHibernation(args.worktreeId, {
+          paneKey: args.paneKey,
+          tabId: args.tabId,
+          leafId: parsedPane.leafId,
+          ptyId: args.ptyId
+        })
       } catch (error) {
-        // Why: a throwing close leaves the terminal alive; report not-closed so
+        // Why: a failed hibernation leaves the terminal alive; report not-retired so
         // the run keeps its (still-valid) terminal identity and no stale clear runs.
-        console.error('[automations] Failed to close owned automation terminal:', error)
+        console.error('[automations] Failed to hibernate owned automation terminal:', error)
         return false
       }
       return true

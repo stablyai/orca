@@ -248,6 +248,13 @@ import type { PtyListedSession } from '../../shared/pty-listed-session'
 let localProvider: IPtyProvider = new LocalPtyProvider()
 const sshProviders = new Map<string, IPtyProvider>()
 const sshProvidersByGeneration = new Map<number, IPtyProvider>()
+// Why: legacy providers omit incarnation IDs, so delayed teardown needs a local replacement fence.
+const ptyAdmissionGenerationById = new Map<string, number>()
+let nextPtyAdmissionGeneration = 1
+
+function recordPtyAdmission(id: string): void {
+  ptyAdmissionGenerationById.set(id, nextPtyAdmissionGeneration++)
+}
 
 type RegisteredPtyProvider = {
   provider: IPtyProvider
@@ -2112,6 +2119,7 @@ export function clearProviderPtyState(
   id: string,
   opts: { preserveAgentSessionOwners?: boolean } = {}
 ): void {
+  ptyAdmissionGenerationById.delete(id)
   if (!opts.preserveAgentSessionOwners) {
     agentSessionOwners.release(id)
     // Why: the launch-account record outlives the app, so only a real teardown
@@ -2187,9 +2195,11 @@ export function clearProviderPtyState(
 
 export function deletePtyOwnership(id: string): void {
   ptyOwnership.delete(id)
+  ptyAdmissionGenerationById.delete(id)
 }
 
 export function setPtyOwnership(id: string, connectionId: string | null): void {
+  recordPtyAdmission(id)
   ptyOwnership.set(id, connectionId)
 }
 
@@ -4032,7 +4042,8 @@ export function registerPtyHandlers(
   async function shutdownProviderAndDetectExit(
     provider: IPtyProvider,
     id: string,
-    opts: { immediate?: boolean; keepHistory?: boolean; deadlineMs?: number }
+    opts: { immediate?: boolean; keepHistory?: boolean; deadlineMs?: number },
+    onExitObserved?: () => void
   ): Promise<boolean> {
     let providerExitObserved = false
     const expectedIncarnationId = ptyIncarnationById.get(id)
@@ -4042,6 +4053,7 @@ export function registerPtyHandlers(
         (!expectedIncarnationId || payload.incarnationId === expectedIncarnationId)
       ) {
         providerExitObserved = true
+        onExitObserved?.()
       }
     })
     try {
@@ -5274,6 +5286,7 @@ export function registerPtyHandlers(
         }
         if (result.agentSessionEnsure?.disposition === 'adopted') {
           const owner = result.agentSessionEnsure.owner
+          recordPtyAdmission(result.id)
           ptyOwnership.set(result.id, args.connectionId ?? ptyOwnership.get(result.id) ?? null)
           runtime?.registerPreAllocatedHandleForPty(result.id, owner.surface.terminalHandle)
           if (result.incarnationId) {
@@ -5301,6 +5314,7 @@ export function registerPtyHandlers(
             agentSessionEnsure: result.agentSessionEnsure
           }
         }
+        recordPtyAdmission(result.id)
         ptyOwnership.set(result.id, args.connectionId ?? null)
         if (result.incarnationId) {
           ptyIncarnationById.set(result.id, result.incarnationId)
@@ -6915,6 +6929,7 @@ export function registerPtyHandlers(
           target: codexSelectionTarget,
           settings: getSettings?.()
         })
+        recordPtyAdmission(result.id)
         ptyOwnership.set(result.id, args.connectionId ?? null)
         if (result.incarnationId) {
           ptyIncarnationById.set(result.id, result.incarnationId)
@@ -7728,48 +7743,93 @@ export function registerPtyHandlers(
       // Why: runtime terminal handles belong to terminal.close; unowned PTY routing could target the local provider.
       throw new Error('Invalid PTY provider id')
     }
-    runtime?.markPtyStopRequested?.(args.id)
-    const ownedConnectionId = ptyOwnership.get(args.id)
-    const parsedSshId = ownedConnectionId === undefined ? parseAppSshPtyId(args.id) : null
-    const connectionId = ownedConnectionId ?? parsedSshId?.connectionId
-    // Why: wait for daemon startup before selecting the local provider, else a fallback shutdown falsely succeeds and orphans a restored daemon PTY (#7742).
-    const startupPromise = getLocalPtyProviderStartupPromise(connectionId)
-    if (startupPromise) {
-      await startupPromise
-    }
-    const provider = connectionId ? sshProviders.get(connectionId) : tryGetProviderForPty(args.id)
-    if (!provider && connectionId) {
-      // Why: detached SSH PTYs intentionally keep ownership after their
-      // provider is unregistered; hydrated app-scoped ids can also arrive
-      // before ownership is rebuilt. Tombstone instead of falling back local.
-      const incarnationId = finishPtyShutdown(args.id, connectionId, store)
-      runtime?.markPtyLivenessUnverifiable?.(args.id, SSH_PROVIDER_UNREGISTERED_REASON)
-      runtime?.onPtyExit(args.id, -1, incarnationId)
-      rememberSyntheticKillExit(args.id)
-      sendPtyExitToRenderer({ id: args.id, code: -1 })
-      return
-    }
-    const shutdownProvider = provider ?? getProviderForPty(args.id)
-    let providerExitObserved = false
+    const expectedIncarnationId = ptyIncarnationById.get(args.id)
+    const expectedAdmissionGeneration = ptyAdmissionGenerationById.get(args.id)
+    const stopRequestId = runtime?.markPtyStopRequested?.(args.id)
+    const ptyIdentityChanged = (): boolean =>
+      ptyIncarnationById.get(args.id) !== expectedIncarnationId ||
+      ptyAdmissionGenerationById.get(args.id) !== expectedAdmissionGeneration
+    let historyPreservingStopId = args.keepHistory
+      ? runtime?.markPtyHistoryPreservingStopRequested(args.id)
+      : undefined
     try {
-      providerExitObserved = await shutdownProviderAndDetectExit(shutdownProvider, args.id, {
-        immediate: true,
-        keepHistory: args.keepHistory ?? false
-      })
-    } catch (err) {
-      if (!isPtyAlreadyGoneError(err)) {
-        // Why: a failed shutdown can leave the process alive (SSH relay grace window / local daemon); keep ownership/lease state so the user can retry.
-        throw err
+      const ownedConnectionId = ptyOwnership.get(args.id)
+      const parsedSshId = ownedConnectionId === undefined ? parseAppSshPtyId(args.id) : null
+      const connectionId = ownedConnectionId ?? parsedSshId?.connectionId
+      // Why: wait for daemon startup before selecting the local provider, else a fallback shutdown falsely succeeds and orphans a restored daemon PTY (#7742).
+      const startupPromise = getLocalPtyProviderStartupPromise(connectionId)
+      if (startupPromise) {
+        await startupPromise
       }
-      /* session already dead — cleanup below handles the rest */
-    }
-    // Why: some shutdown paths do not emit onExit through the provider listener.
-    // Explicit cleanup is idempotent and covers already-dead PTYs.
-    const incarnationId = finishPtyShutdown(args.id, connectionId, store)
-    if (!providerExitObserved) {
-      runtime?.onPtyExit(args.id, -1, incarnationId)
-      rememberSyntheticKillExit(args.id)
-      sendPtyExitToRenderer({ id: args.id, code: -1 })
+      const provider = connectionId ? sshProviders.get(connectionId) : tryGetProviderForPty(args.id)
+      if (!provider && connectionId) {
+        // Why: detached SSH PTYs intentionally keep ownership after their
+        // provider is unregistered; hydrated app-scoped ids can also arrive
+        // before ownership is rebuilt. Tombstone instead of falling back local.
+        if (ptyIdentityChanged()) {
+          if (stopRequestId !== undefined) {
+            runtime?.clearPtyStopRequested(args.id, stopRequestId)
+          }
+          return
+        }
+        const incarnationId = finishPtyShutdown(args.id, connectionId, store)
+        runtime?.markPtyLivenessUnverifiable?.(args.id, SSH_PROVIDER_UNREGISTERED_REASON)
+        runtime?.onPtyExit(args.id, -1, incarnationId)
+        rememberSyntheticKillExit(args.id)
+        sendPtyExitToRenderer({ id: args.id, code: -1 })
+        if (historyPreservingStopId !== undefined) {
+          runtime?.preservePtyHistoryThroughLateExit(args.id, historyPreservingStopId)
+          historyPreservingStopId = undefined
+        }
+        return
+      }
+      const shutdownProvider = provider ?? getProviderForPty(args.id)
+      let providerExitObserved = false
+      try {
+        providerExitObserved = await shutdownProviderAndDetectExit(
+          shutdownProvider,
+          args.id,
+          {
+            immediate: true,
+            keepHistory: args.keepHistory ?? false
+          },
+          () => {
+            providerExitObserved = true
+          }
+        )
+      } catch (err) {
+        if (!isPtyAlreadyGoneError(err)) {
+          // Why: a failed shutdown can leave the process alive (SSH relay grace window / local daemon); keep ownership/lease state so the user can retry.
+          if (historyPreservingStopId !== undefined && !providerExitObserved) {
+            runtime?.preservePtyHistoryThroughLateExit(args.id, historyPreservingStopId)
+            historyPreservingStopId = undefined
+          }
+          throw err
+        }
+        /* session already dead — cleanup below handles the rest */
+      }
+      // Why: some shutdown paths do not emit onExit through the provider listener.
+      // Explicit cleanup is idempotent and covers already-dead PTYs.
+      if (ptyIdentityChanged()) {
+        if (stopRequestId !== undefined) {
+          runtime?.clearPtyStopRequested(args.id, stopRequestId)
+        }
+        return
+      }
+      const incarnationId = finishPtyShutdown(args.id, connectionId, store)
+      if (!providerExitObserved) {
+        runtime?.onPtyExit(args.id, -1, incarnationId)
+        rememberSyntheticKillExit(args.id)
+        sendPtyExitToRenderer({ id: args.id, code: -1 })
+        if (connectionId && historyPreservingStopId !== undefined) {
+          runtime?.preservePtyHistoryThroughLateExit(args.id, historyPreservingStopId)
+          historyPreservingStopId = undefined
+        }
+      }
+    } finally {
+      if (historyPreservingStopId !== undefined) {
+        runtime?.clearPtyHistoryPreservingStopRequested(args.id, historyPreservingStopId)
+      }
     }
   })
 

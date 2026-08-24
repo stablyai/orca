@@ -204,6 +204,23 @@ describe('STA-4603/STA-4536 exit provenance', () => {
     })
   })
 
+  it('clears only the matching stop request for overlapping stops', () => {
+    const db = createDb()
+    const runtime = createRuntime(db)
+    const firstRequest = runtime.markPtyStopRequested(PTY_ID)
+    const secondRequest = runtime.markPtyStopRequested(PTY_ID)
+
+    runtime.clearPtyStopRequested(PTY_ID, firstRequest)
+    expect(runtime.isPtyStopRequested(PTY_ID)).toBe(true)
+
+    runtime.clearPtyStopRequested(PTY_ID, secondRequest)
+    expect(runtime.isPtyStopRequested(PTY_ID)).toBe(false)
+
+    const ctx = dispatchOnHandle(db, 'replacement crashes naturally')
+    runtime.onPtyExit(PTY_ID, 0, undefined, { cause: { kind: 'signaled', signal: 9 } })
+    expect(observe(db, ctx.id).termination_reason).toBe('signaled')
+  })
+
   it('does not file an unconfirmed stop as a completed operator close', () => {
     const db = createDb()
     const runtime = createRuntime(db)

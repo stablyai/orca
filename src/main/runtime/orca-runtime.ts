@@ -3102,9 +3102,12 @@ export class OrcaRuntimeService {
   // Why: provider exit can beat surface registration; that exact dead incarnation must never publish.
   private earlyExitedPtyIncarnations = new Map<string, PtyIncarnationId | null>()
   private pendingPtyRegistrationIncarnations = new Map<string, PtyIncarnationId | null>()
-  // Why: exact-stop is the current sleep transaction boundary; its exit must
-  // leave the renderer's intentional sleeping surface available for wake.
-  private intentionalHandlelessPtyStops = new Map<string, string | null>()
+  // Why: every overlapping hibernation owns its lease until its stop settles.
+  private intentionalHandlelessPtyStops = new Map<
+    string,
+    Map<number, { incarnationId: string | null; awaitsLateExit: boolean }>
+  >()
+  private nextIntentionalHandlelessPtyStopId = 1
   // Why: coalesces title/status-driven session.tabs emits so spinner churn
   // doesn't fan out (and per-client JSON.stringify) a snapshot several times a
   // second. Emit reads the latest snapshot, so only the freshest version ships.
@@ -3172,10 +3175,11 @@ export class OrcaRuntimeService {
   private ptyForegroundAgentRefreshes = new Map<string, PtyForegroundAgentRefresh>()
   private ptyForegroundProcessReads = new Map<string, PtyForegroundProcessReadEntry>()
   private ptyDelayedForegroundSnapshotTitleObservations = new Map<string, number>()
-  // Why a set and not a timer: the intent is retired by the exit it explains, or
+  // Why request IDs and not a timer: the intent is retired by the exit it explains, or
   // by the next lifecycle generation on that id (advancePtyLifecycleGeneration),
   // so a stop that never produced an exit cannot outlive its process.
-  private readonly stopRequestedPtyIds = new Set<string>()
+  private readonly stopRequestedPtyIds = new Map<string, Set<number>>()
+  private nextPtyStopRequestId = 1
   private _orchestrationDb: OrchestrationDb | null = null
   private messageWaitersByHandle = new Map<string, Set<MessageWaiter>>()
   private readonly orchestrationMailboxOwner = new OrchestrationMailboxOwner({
@@ -15275,10 +15279,27 @@ export class OrcaRuntimeService {
         exitIncarnationId ?? pendingIncarnation ?? pty?.incarnationId ?? null
       )
     }
-    const intentionalStopIncarnation = this.intentionalHandlelessPtyStops.get(ptyId)
+    const intentionalStops = this.intentionalHandlelessPtyStops.get(ptyId)
     const preservesIntentionalHandlelessSurface =
-      this.intentionalHandlelessPtyStops.has(ptyId) &&
-      (intentionalStopIncarnation === null || intentionalStopIncarnation === incarnationId)
+      intentionalStops !== undefined &&
+      [...intentionalStops.values()].some(
+        (intentionalStop) =>
+          intentionalStop.incarnationId === null || intentionalStop.incarnationId === incarnationId
+      )
+    if (intentionalStops) {
+      for (const [requestId, intentionalStop] of intentionalStops) {
+        if (
+          intentionalStop.awaitsLateExit &&
+          (intentionalStop.incarnationId === null ||
+            intentionalStop.incarnationId === incarnationId)
+        ) {
+          intentionalStops.delete(requestId)
+        }
+      }
+      if (intentionalStops.size === 0) {
+        this.intentionalHandlelessPtyStops.delete(ptyId)
+      }
+    }
     advertisedUrlWatcher.unbindPty(ptyId)
     // Clean up new mobile state for this PTY
     this.mobileSubscribers.delete(ptyId)
@@ -18265,8 +18286,51 @@ export class OrcaRuntimeService {
    * separates "the operator closed it" from "the agent died", so it is recorded
    * where it is known rather than reconstructed afterwards (STA-4603).
    */
-  markPtyStopRequested(ptyId: string): void {
-    this.stopRequestedPtyIds.add(ptyId)
+  markPtyStopRequested(ptyId: string): number {
+    const requestId = this.nextPtyStopRequestId++
+    const requests = this.stopRequestedPtyIds.get(ptyId) ?? new Set()
+    requests.add(requestId)
+    this.stopRequestedPtyIds.set(ptyId, requests)
+    return requestId
+  }
+
+  clearPtyStopRequested(ptyId: string, requestId: number): void {
+    const requests = this.stopRequestedPtyIds.get(ptyId)
+    if (!requests) {
+      return
+    }
+    requests.delete(requestId)
+    if (requests.size === 0) {
+      this.stopRequestedPtyIds.delete(ptyId)
+    }
+  }
+
+  markPtyHistoryPreservingStopRequested(ptyId: string): number {
+    const incarnationId = this.ptysById.get(ptyId)?.incarnationId ?? null
+    const requestId = this.nextIntentionalHandlelessPtyStopId
+    this.nextIntentionalHandlelessPtyStopId += 1
+    const requests = this.intentionalHandlelessPtyStops.get(ptyId) ?? new Map()
+    requests.set(requestId, { incarnationId, awaitsLateExit: false })
+    this.intentionalHandlelessPtyStops.set(ptyId, requests)
+    return requestId
+  }
+
+  preservePtyHistoryThroughLateExit(ptyId: string, requestId: number): void {
+    const request = this.intentionalHandlelessPtyStops.get(ptyId)?.get(requestId)
+    if (request) {
+      request.awaitsLateExit = true
+    }
+  }
+
+  clearPtyHistoryPreservingStopRequested(ptyId: string, requestId: number): void {
+    const requests = this.intentionalHandlelessPtyStops.get(ptyId)
+    if (!requests) {
+      return
+    }
+    requests.delete(requestId)
+    if (requests.size === 0) {
+      this.intentionalHandlelessPtyStops.delete(ptyId)
+    }
   }
 
   isPtyStopRequested(ptyId: string): boolean {
@@ -30841,18 +30905,17 @@ export class OrcaRuntimeService {
 
     const stoppedPtyIds: string[] = []
     for (const ptyId of [...expected].sort()) {
-      if (opts.keepHistory) {
-        this.intentionalHandlelessPtyStops.set(
-          ptyId,
-          this.ptysById.get(ptyId)?.incarnationId ?? null
-        )
-      }
+      const historyPreservingStopId = opts.keepHistory
+        ? this.markPtyHistoryPreservingStopRequested(ptyId)
+        : null
       try {
         if (!(await this.ptyController.stopAndWait(ptyId, { keepHistory: opts.keepHistory }))) {
           throw Object.assign(new Error('terminal_exact_stop_failed'), { ptyId })
         }
       } finally {
-        this.intentionalHandlelessPtyStops.delete(ptyId)
+        if (historyPreservingStopId !== null) {
+          this.clearPtyHistoryPreservingStopRequested(ptyId, historyPreservingStopId)
+        }
       }
       stoppedPtyIds.push(ptyId)
     }
