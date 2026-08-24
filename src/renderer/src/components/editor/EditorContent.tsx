@@ -30,6 +30,8 @@ import { getDiffContentSignature } from './diff-content-signature'
 import { translate } from '@/i18n/i18n'
 import { CheckRunDetailsPanel } from './CheckRunDetailsPanel'
 import { ExternalFileChangeBanner } from './ExternalFileChangeBanner'
+import { SubagentRawTranscriptBar, SubagentTranscriptViewer } from './SubagentTranscriptViewer'
+import { isSubagentLogPath } from './subagent-transcript-parser'
 
 const MonacoEditor = lazy(() => import('./MonacoEditor'))
 const DiffViewer = lazy(() => import('./DiffViewer'))
@@ -198,6 +200,15 @@ export function EditorContent({
   const [conflictNavigationIndexByFile, setConflictNavigationIndexByFile] = React.useState<
     Record<string, number>
   >({})
+  const [subagentRawModeByFileId, setSubagentRawModeByFileId] = React.useState<
+    Record<string, boolean>
+  >({})
+  const toggleSubagentRawMode = (fileId: string): void => {
+    setSubagentRawModeByFileId((prev) => ({
+      ...prev,
+      [fileId]: !prev[fileId]
+    }))
+  }
   const md = useMarkdownDocuments(activeFile, isMarkdown, mdViewMode, handleSave)
   const activeConflictEntry =
     worktreeEntries.find((entry) => entry.path === activeFile.relativePath) ?? null
@@ -837,6 +848,23 @@ export function EditorContent({
               onDirtyStateHint={handleDirtyStateHint}
               onSave={handleSave}
             />
+          ) : isSubagentLogPath(activeFile.filePath) ? (
+            subagentRawModeByFileId[activeFile.id] ? (
+              <div className="flex h-full min-h-0 flex-col">
+                <SubagentRawTranscriptBar
+                  filePath={activeFile.filePath}
+                  onToggleRawMode={() => toggleSubagentRawMode(activeFile.id)}
+                />
+                <div className="min-h-0 flex-1 h-full">{renderMonacoEditor(fc)}</div>
+              </div>
+            ) : (
+              <SubagentTranscriptViewer
+                key={activeFile.id}
+                content={editBuffers[activeFile.id] ?? fc.content}
+                filePath={activeFile.filePath}
+                onToggleRawMode={() => toggleSubagentRawMode(activeFile.id)}
+              />
+            )
           ) : (
             renderMonacoEditor(fc)
           )}
