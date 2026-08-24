@@ -132,6 +132,16 @@ function makeStore(repos: Repo[] = [REPO], allMeta: Record<string, WorktreeMeta>
   } as unknown as Store
 }
 
+/** `repo-1::/repo-old` is in the shared fixture map, so pinning it needs a getWorktreeMeta override. */
+function makePinnedStore(): Store {
+  const pinned = makeWorktreeMeta({ isPinned: true, lastActivityAt: NOW - 40 * DAY_MS })
+  return {
+    ...makeStore(),
+    getWorktreeMeta: (worktreeId: string) =>
+      worktreeId === 'repo-1::/repo-old' ? pinned : META_BY_WORKTREE_ID[worktreeId]
+  } as Store
+}
+
 describe('workspace cleanup broad scan opt-in', () => {
   beforeEach(() => {
     vi.useFakeTimers()
@@ -228,6 +238,34 @@ describe('workspace cleanup broad scan opt-in', () => {
         })
       ])
     )
+  })
+
+  it('skips git for a pinned workspace on a broad scan, which is the cost saving', async () => {
+    const store = makePinnedStore()
+
+    await scanWorkspaceCleanup(store, { includeAllWorkspaces: true })
+
+    expect(getStatusMock).not.toHaveBeenCalledWith(
+      expect.stringContaining('/repo-old'),
+      expect.anything()
+    )
+  })
+
+  it('reads git for a pinned workspace on a targeted preflight, which decides force-removal', async () => {
+    // Why this matters: `pinned` is not a queue blocker, so a pinned idle workspace is
+    // hand-selectable today, and removal forces whenever git is unknown. Skipping the
+    // forced read meant it could be force-deleted with no evidence ever obtained.
+    const worktreeId = 'repo-1::/repo-old'
+
+    const result = await scanWorkspaceCleanup(makePinnedStore(), { worktreeIds: [worktreeId] })
+
+    expect(getStatusMock).toHaveBeenCalledWith(
+      expect.stringContaining('/repo-old'),
+      expect.anything()
+    )
+    const pinned = result.candidates.find((candidate) => candidate.worktreeId === worktreeId)
+    expect(pinned?.blockers).toContain('pinned')
+    expect(pinned?.git.checkedAt).not.toBeNull()
   })
 
   it('keeps the legacy suggestion-only projection when the flag is absent', async () => {
