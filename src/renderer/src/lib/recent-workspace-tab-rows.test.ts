@@ -328,6 +328,29 @@ describe('resolveRecentWorkspaceTabStatus', () => {
     ).toBe('working')
   })
 
+  it('preserves monitoring unless another pane is actively working', () => {
+    const monitoring = row('monitoring')
+    const monitoringEntry = entry('monitoring', 'working', NOW, {
+      workingMode: 'monitoring'
+    })
+
+    expect(resolveRecentWorkspaceTabStatus(monitoring, sources([monitoringEntry]), NOW)).toBe(
+      'monitoring'
+    )
+    expect(
+      resolveRecentWorkspaceTabStatus(
+        monitoring,
+        sources([
+          monitoringEntry,
+          entry('monitoring', 'working', NOW, {
+            paneKey: 'monitoring:22222222-3333-4444-8555-666666666666'
+          })
+        ]),
+        NOW
+      )
+    ).toBe('working')
+  })
+
   it('falls back to live-pty presence for idle rows', () => {
     const live = row('live')
 

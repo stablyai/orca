@@ -37,9 +37,13 @@ function getCompactAgentPrimary(
   return prompt || agentStateLabel(getAgentDotState(agent))
 }
 
-function getCompactAgentSecondary(agent: DashboardAgentRowData): string {
+export function getCompactAgentSecondary(agent: DashboardAgentRowData): string {
   if (agent.entry.interrupted === true) {
     return 'Interrupted by user'
+  }
+  // Why: the lead turn is over in monitoring, so its last tool line is stale; name the state instead.
+  if (agent.state === 'working' && agent.entry.workingMode === 'monitoring') {
+    return agentStateLabel('monitoring')
   }
   const toolPreview = formatAgentToolPreview(agent.entry, agent.state)
   if (toolPreview) {
@@ -119,6 +123,11 @@ export const CompactAgentRow = React.memo(function CompactAgentRow({
   const primary = getCompactAgentPrimary(agent, conversationName)
   const isLineageChild = agent.lineage?.depth === 1
   const secondary = getCompactAgentSecondary(agent)
+  // Why: sidebar truncation must preserve the passive-vs-active distinction.
+  const leadingText = dotState === 'monitoring' ? secondary : primary
+  const trailingText =
+    dotState === 'monitoring' ? (primary === secondary ? '' : primary) : secondary
+  const rowTitle = `${leadingText}${trailingText ? ` - ${trailingText}` : ''}`
   const model = agent.entry.model?.trim() ?? ''
   const shortTime = getCompactAgentTime(agent, now)
   const cacheTimer = usePromptCacheCountdownForPane(agent.paneKey, cacheTimerActive)
@@ -201,12 +210,12 @@ export const CompactAgentRow = React.memo(function CompactAgentRow({
         {/* Why: the selected-row fill is strong enough to wash out the dimmed
             prompt/secondary text, so lift both toward full foreground when focused. */}
         <span className={isFocusedPane ? 'text-foreground' : 'text-muted-foreground/90'}>
-          {primary}
+          {leadingText}
         </span>
-        {secondary && (
+        {trailingText && (
           <span className={isFocusedPane ? 'text-foreground/70' : 'text-muted-foreground/65'}>
             {' '}
-            - {secondary}
+            - {trailingText}
           </span>
         )}
       </span>
@@ -269,7 +278,7 @@ export const CompactAgentRow = React.memo(function CompactAgentRow({
       role={agent.lineage ? 'treeitem' : undefined}
       aria-level={agent.lineage ? agent.lineage.depth + 1 : undefined}
       aria-expanded={hasChildDisclosure ? childAgentsExpanded : undefined}
-      title={sendTargetDisabledReason ?? `${primary}${secondary ? ` - ${secondary}` : ''}`}
+      title={sendTargetDisabledReason ?? rowTitle}
     >
       {rowBody}
     </div>

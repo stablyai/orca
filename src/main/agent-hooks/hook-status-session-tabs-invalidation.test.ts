@@ -38,6 +38,7 @@ describe('createHookStatusSessionTabsInvalidator', () => {
 
   it.each([
     ['state', { state: 'waiting' as const }],
+    ['workingMode', { workingMode: 'monitoring' as const }],
     ['prompt', { prompt: 'ship it' }],
     ['agentType', { agentType: 'codex' }],
     ['toolName', { toolName: 'Bash' }],

@@ -55,6 +55,7 @@ import {
   type AgentStatusOrchestrationContext,
   type AgentStatusEntry
 } from '../../shared/agent-status-types'
+import { terminalStatusPayloadMatchesHook } from '../../shared/agent-terminal-status-equivalence'
 import { indexAgentStatusRowsByPaneKey } from '../agent-hooks/agent-status-pane-index'
 import type { AgentHookAuthorityAttestation } from '../agent-hooks/server'
 import type {
@@ -1750,6 +1751,32 @@ type RuntimeAgentRowSnapshot = {
   // When the current payload.state was first observed for this pane (ms).
   stateStartedAt: number
   updatedAt: number
+}
+
+type RuntimeWorkingTerminalEvidence = {
+  paneKey: string | null
+  ptyId: string | null
+  tabId: string | null
+}
+
+type RuntimeWorktreeAgentSource = {
+  paneKey: string
+  ptyId?: string
+  tabId?: string
+  worktreeId?: string
+  connectionId: string | null
+  payload: ParsedAgentStatusPayload
+  state: ParsedAgentStatusPayload['state']
+  workingMode?: ParsedAgentStatusPayload['workingMode']
+  agentType: string | null
+  prompt: string
+  lastAssistantMessage: string | null
+  toolName: string | null
+  toolInput: string | null
+  interrupted: boolean
+  stateStartedAt: number
+  updatedAt: number
+  restoredUnconfirmed?: boolean
 }
 
 /** A hook row narrowed to what `session.tabs` publishes, shaped like the retained OSC
@@ -12160,6 +12187,7 @@ export class OrcaRuntimeService {
     return (
       !previous ||
       previous.payload.state !== payload.state ||
+      previous.payload.workingMode !== payload.workingMode ||
       previous.payload.prompt !== payload.prompt ||
       (previous.payload.agentType ?? null) !== (payload.agentType ?? null) ||
       (previous.payload.toolName ?? null) !== (payload.toolName ?? null) ||
@@ -20020,6 +20048,7 @@ export class OrcaRuntimeService {
     const repoById = new Map((this.store?.getRepos() ?? []).map((repo) => [repo.id, repo]))
     const platformByRepoId = resolvedWorktreeSnapshot.platformByRepoId
     const summaries = new Map<string, RuntimeWorktreePsSummary>()
+    const workingTerminalEvidenceByWorktreeId = new Map<string, RuntimeWorkingTerminalEvidence[]>()
 
     // Why: the GitHub cache is keyed by `repoPath::branch` (no refs/heads/ prefix),
     // matching how the renderer's fetchPRForBranch stores entries. We look up cached
@@ -20203,10 +20232,15 @@ export class OrcaRuntimeService {
       summary.liveTerminalCount += 1
       summary.hasAttachedPty = true
       summary.lastOutputAt = maxTimestamp(summary.lastOutputAt, leaf.lastOutputAt)
-      summary.status = mergeWorktreeStatus(
-        summary.status,
-        getLeafWorktreeStatus(leaf, this.tabs.get(leaf.tabId)?.title ?? null)
-      )
+      const leafStatus = getLeafWorktreeStatus(leaf, this.tabs.get(leaf.tabId)?.title ?? null)
+      if (leafStatus === 'working') {
+        addRuntimeWorkingTerminalEvidence(workingTerminalEvidenceByWorktreeId, summary.worktreeId, {
+          paneKey: this.makeRuntimePaneKey(leaf),
+          ptyId: leaf.ptyId,
+          tabId: leaf.tabId
+        })
+      }
+      mergeWorktreeSummaryStatus(summary, leafStatus)
       if (
         leaf.preview &&
         (summary.preview.length === 0 || (leaf.lastOutputAt ?? -1) >= (previousLastOutputAt ?? -1))
@@ -20268,10 +20302,15 @@ export class OrcaRuntimeService {
       summary.hasAttachedPty = true
       summary.hasHostSidebarActivity = true
       summary.lastOutputAt = maxTimestamp(summary.lastOutputAt, pty.lastOutputAt)
-      summary.status = mergeWorktreeStatus(
-        summary.status,
-        getSavedTabWorktreeStatus(owner.title, true)
-      )
+      const ptyStatus = getSavedTabWorktreeStatus(owner.title, true)
+      if (ptyStatus === 'working') {
+        addRuntimeWorkingTerminalEvidence(workingTerminalEvidenceByWorktreeId, summary.worktreeId, {
+          paneKey: pty.paneKey,
+          ptyId: pty.ptyId,
+          tabId: pty.tabId ?? persistedTabId ?? null
+        })
+      }
+      mergeWorktreeSummaryStatus(summary, ptyStatus)
       if (
         pty.preview &&
         (summary.preview.length === 0 || (pty.lastOutputAt ?? -1) >= (previousLastOutputAt ?? -1))
@@ -20372,7 +20411,8 @@ export class OrcaRuntimeService {
       runtimeWorktreeSummaryPathIndex,
       missingRuntimeWorktreeIds,
       mirroredWorktreeIdByTabId,
-      connectedPtyEvidence
+      connectedPtyEvidence,
+      workingTerminalEvidenceByWorktreeId
     )
 
     const sorted = [...summaries.values()].sort(compareWorktreePs)
@@ -20396,30 +20436,17 @@ export class OrcaRuntimeService {
       tabIds: ReadonlySet<string>
       paneKeys: ReadonlySet<string>
       ptyIds: ReadonlySet<string>
-    }
+    },
+    workingTerminalEvidenceByWorktreeId: ReadonlyMap<
+      string,
+      readonly RuntimeWorkingTerminalEvidence[]
+    >
   ): void {
     // Why: most agents report via hooks (agent-hooks/server), not OSC, so the
     // hook snapshot is the primary source — same one the desktop sidebar reads.
     // OSC-only entries (no hook) are merged in as a fallback, keyed by paneKey.
-    const rowSources = new Map<
-      string,
-      {
-        paneKey: string
-        ptyId?: string
-        tabId?: string
-        worktreeId?: string
-        connectionId: string | null
-        state: ParsedAgentStatusPayload['state']
-        agentType: string | null
-        prompt: string
-        lastAssistantMessage: string | null
-        toolName: string | null
-        toolInput: string | null
-        interrupted: boolean
-        stateStartedAt: number
-        updatedAt: number
-      }
-    >()
+    const rowSources = new Map<string, RuntimeWorktreeAgentSource>()
+    const now = Date.now()
     for (const snapshot of this.latestAgentStatusByPaneKey.values()) {
       const { payload } = snapshot
       rowSources.set(snapshot.paneKey, {
@@ -20428,7 +20455,9 @@ export class OrcaRuntimeService {
         tabId: snapshot.tabId,
         worktreeId: snapshot.worktreeId,
         connectionId: snapshot.connectionId,
+        payload,
         state: payload.state,
+        ...(payload.workingMode ? { workingMode: payload.workingMode } : {}),
         agentType: payload.agentType ?? null,
         prompt: payload.prompt,
         lastAssistantMessage: payload.lastAssistantMessage ?? null,
@@ -20445,9 +20474,22 @@ export class OrcaRuntimeService {
         continue
       }
       const existing = rowSources.get(entry.paneKey)
+      const hookPayload = pickParsedAgentStatusPayload(entry)
       // Why: hook rows win ties, but an older cached hook must not replace a
       // fresh OSC status and make a running mobile workspace look inactive.
       if (existing && existing.updatedAt > entry.receivedAt) {
+        if (
+          entry.workingMode === 'monitoring' &&
+          // restoredUnconfirmed rows already `continue` above.
+          now - entry.receivedAt <= AGENT_STATUS_STALE_AFTER_MS &&
+          terminalStatusPayloadMatchesHook(hookPayload, existing.payload)
+        ) {
+          // Why: older OSC reporters cannot express hook-authoritative monitoring mode.
+          existing.workingMode = 'monitoring'
+          if (existing.payload.workingMode === undefined) {
+            existing.payload = { ...existing.payload, workingMode: 'monitoring' }
+          }
+        }
         continue
       }
       rowSources.set(entry.paneKey, {
@@ -20458,7 +20500,9 @@ export class OrcaRuntimeService {
         tabId: entry.tabId,
         worktreeId: entry.worktreeId,
         connectionId: entry.connectionId,
+        payload: hookPayload,
         state: entry.state,
+        ...(entry.workingMode ? { workingMode: entry.workingMode } : {}),
         agentType: entry.agentType ?? null,
         prompt: entry.prompt,
         lastAssistantMessage: entry.lastAssistantMessage ?? null,
@@ -20474,7 +20518,6 @@ export class OrcaRuntimeService {
     }
     const orchestrationByPaneKey = this.buildAgentOrchestrationByPaneKey()
     const rowsByWorktree = new Map<string, RuntimeWorktreeAgentRow[]>()
-    const now = Date.now()
     for (const src of rowSources.values()) {
       // Why: hooks retain launch-time attribution across automatic workspace
       // renames; the tab's current mirrored owner is authoritative when present.
@@ -20521,6 +20564,7 @@ export class OrcaRuntimeService {
         paneKey: src.paneKey,
         parentPaneKey: orchestrationByPaneKey?.[src.paneKey]?.parentPaneKey ?? null,
         state: src.state,
+        ...(src.workingMode ? { workingMode: src.workingMode } : {}),
         agentType: src.agentType,
         prompt: src.prompt,
         taskTitle,
@@ -20547,6 +20591,8 @@ export class OrcaRuntimeService {
       const summary = summaries.get(worktreeId)
       if (summary) {
         summary.agents = rows
+        let hasForegroundWorkingAgent = false
+        const monitoringSources: RuntimeWorktreeAgentSource[] = []
         for (const row of rows) {
           if (!isFreshNonDoneAgentStatus(row, now)) {
             continue
@@ -20554,9 +20600,31 @@ export class OrcaRuntimeService {
           // Why: worktree.ps is mobile's host-sidebar parity source, so a live
           // agent must survive the same temporary PTY gaps as desktop.
           summary.hasHostSidebarActivity = true
-          summary.status = mergeWorktreeStatus(
-            summary.status,
-            row.state === 'working' ? 'working' : 'permission'
+          if (row.state === 'working') {
+            if (row.workingMode === 'monitoring') {
+              const source = rowSources.get(row.paneKey)
+              if (source) {
+                monitoringSources.push(source)
+              }
+            } else {
+              hasForegroundWorkingAgent = true
+            }
+          } else {
+            mergeWorktreeSummaryStatus(summary, 'permission')
+          }
+        }
+        if (hasForegroundWorkingAgent || monitoringSources.length > 0) {
+          const hasIndependentWorkingTerminal = (
+            workingTerminalEvidenceByWorktreeId.get(worktreeId) ?? []
+          ).some((evidence) =>
+            monitoringSources.every(
+              (source) => !runtimeWorkingTerminalEvidenceMatchesSource(evidence, source)
+            )
+          )
+          mergeWorktreeSummaryStatus(
+            summary,
+            'working',
+            hasForegroundWorkingAgent || hasIndependentWorkingTerminal ? undefined : 'monitoring'
           )
         }
       }
@@ -40979,11 +41047,58 @@ function mapExplicitAgentStateToRuntimeTerminalStatus(
   }
 }
 
-function mergeWorktreeStatus(
-  current: RuntimeWorktreeStatus,
-  next: RuntimeWorktreeStatus
-): RuntimeWorktreeStatus {
-  return WORKTREE_STATUS_PRIORITY[next] > WORKTREE_STATUS_PRIORITY[current] ? next : current
+function addRuntimeWorkingTerminalEvidence(
+  evidenceByWorktreeId: Map<string, RuntimeWorkingTerminalEvidence[]>,
+  worktreeId: string,
+  evidence: RuntimeWorkingTerminalEvidence
+): void {
+  const existing = evidenceByWorktreeId.get(worktreeId)
+  if (existing) {
+    existing.push(evidence)
+  } else {
+    evidenceByWorktreeId.set(worktreeId, [evidence])
+  }
+}
+
+function runtimeWorkingTerminalEvidenceMatchesSource(
+  evidence: RuntimeWorkingTerminalEvidence,
+  source: RuntimeWorktreeAgentSource
+): boolean {
+  if (evidence.paneKey) {
+    return (
+      evidence.paneKey === source.paneKey ||
+      Boolean(evidence.ptyId && source.ptyId && evidence.ptyId === source.ptyId)
+    )
+  }
+  if (evidence.ptyId && source.ptyId) {
+    return evidence.ptyId === source.ptyId
+  }
+  return Boolean(evidence.tabId && evidence.tabId === source.tabId)
+}
+
+function mergeWorktreeSummaryStatus(
+  summary: RuntimeWorktreePsSummary,
+  next: RuntimeWorktreeStatus,
+  nextWorkingMode?: RuntimeWorktreePsSummary['workingMode']
+): void {
+  const currentPriority = WORKTREE_STATUS_PRIORITY[summary.status]
+  const nextPriority = WORKTREE_STATUS_PRIORITY[next]
+  if (nextPriority > currentPriority) {
+    summary.status = next
+    if (next === 'working' && nextWorkingMode === 'monitoring') {
+      summary.workingMode = 'monitoring'
+    } else {
+      delete summary.workingMode
+    }
+    return
+  }
+  if (nextPriority === currentPriority && next === 'working') {
+    if (nextWorkingMode === 'monitoring') {
+      summary.workingMode = 'monitoring'
+    } else {
+      delete summary.workingMode
+    }
+  }
 }
 
 function normalizeTerminalChunk(

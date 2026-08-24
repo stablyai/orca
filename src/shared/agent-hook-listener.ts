@@ -22,6 +22,7 @@ import {
   normalizeAgentStatusPayload,
   type AgentStatusState,
   type AgentSubagentSnapshot,
+  type AgentWorkingMode,
   type ParsedAgentStatusPayload
 } from './agent-status-types'
 import { normalizeOptionalField } from './agent-status-field-normalization'
@@ -2629,21 +2630,31 @@ function updateClaudeRunningNonAgentTask(
   }
 }
 
-function resolveClaudePaneState(
+type ClaudePaneStatusResolution = {
+  stateName: AgentStatusState
+  workingMode?: AgentWorkingMode
+}
+
+function resolveClaudePaneStatus(
   state: HookListenerState,
   paneKey: string,
   lead: Pick<ClaudeLeadTurnState, 'state' | 'interrupted'>
-): AgentStatusState {
+): ClaudePaneStatusResolution {
   if (lead.state !== 'done') {
-    return lead.state
+    return { stateName: lead.state }
   }
   const roster = state.claudeSubagentRosterByPaneKey.get(paneKey)
-  return claudeRosterHasWorkingSubagent(roster) ||
-    (!lead.interrupted &&
-      (state.claudeRunningNonAgentTaskPaneKeys.has(paneKey) ||
-        state.claudeActiveSessionCronPaneKeys.has(paneKey)))
-    ? 'working'
-    : 'done'
+  if (claudeRosterHasWorkingSubagent(roster)) {
+    return { stateName: 'working' }
+  }
+  if (
+    !lead.interrupted &&
+    (state.claudeRunningNonAgentTaskPaneKeys.has(paneKey) ||
+      state.claudeActiveSessionCronPaneKeys.has(paneKey))
+  ) {
+    return { stateName: 'working', workingMode: 'monitoring' }
+  }
+  return { stateName: 'done' }
 }
 
 /** SubagentStart/Stop/TeammateIdle update the roster and re-emit the lead's last known state with the fresh child list, so the sidebar reflects spawn/finish even when a background child outlives the lead turn with no other hook traffic. */
@@ -2840,7 +2851,9 @@ function clearClaudePendingWaitForAgent(
 export function clearClaudeAnsweredQuestionWait(
   state: HookListenerState,
   paneKey: string
-): Pick<ClaudeLeadTurnState, 'state' | 'interrupted' | 'turnCompletedAt'> {
+): Pick<ClaudeLeadTurnState, 'state' | 'interrupted' | 'turnCompletedAt'> & {
+  workingMode?: AgentWorkingMode
+} {
   const lead = state.claudeLeadStateByPaneKey.get(paneKey)
   const restored =
     lead?.state === 'waiting'
@@ -2854,11 +2867,12 @@ export function clearClaudeAnsweredQuestionWait(
       ? { lastAssistantMessage: previousTool.lastAssistantMessage }
       : {}
   )
-  const effectiveState = resolveClaudePaneState(state, paneKey, restored)
-  return effectiveState === restored.state
+  const resolved = resolveClaudePaneStatus(state, paneKey, restored)
+  return resolved.stateName === restored.state && resolved.workingMode === undefined
     ? restored
     : {
-        state: effectiveState,
+        state: resolved.stateName,
+        ...(resolved.workingMode ? { workingMode: resolved.workingMode } : {}),
         ...(restored.interrupted ? { interrupted: true as const } : {}),
         ...(restored.turnCompletedAt !== undefined
           ? { turnCompletedAt: restored.turnCompletedAt }
@@ -2892,7 +2906,7 @@ function buildClaudeCachedLeadStatusPayload(
     }
   }
   return buildClaudeStatusPayload(state, eventName, '', paneKey, hookPayload, {
-    stateName: resolveClaudePaneState(state, paneKey, {
+    ...resolveClaudePaneStatus(state, paneKey, {
       state: leadState,
       interrupted: lead?.interrupted
     }),
@@ -3145,7 +3159,7 @@ function normalizeClaudeEvent(
     const restored = lead.stateBeforeWait ?? { state: 'working' as const }
     state.claudeLeadStateByPaneKey.set(paneKey, restored)
     return buildClaudeStatusPayload(state, eventName, promptText, paneKey, hookPayload, {
-      stateName: resolveClaudePaneState(state, paneKey, restored),
+      ...resolveClaudePaneStatus(state, paneKey, restored),
       updateToolSnapshot: true,
       interrupted: restored.interrupted,
       turnCompletedAt: restored.turnCompletedAt
@@ -3210,16 +3224,19 @@ function normalizeClaudeEvent(
     }
   }
 
-  const effectiveState = resolveClaudePaneState(state, paneKey, {
+  const resolvedStatus = resolveClaudePaneStatus(state, paneKey, {
     state: reportedStateName,
     interrupted
   })
+  // Why: #15202's compact-completion guard reads the resolved state; this branch replaced the
+  // resolver with one that also reports workingMode, so bridge rather than resolve twice.
+  const effectiveState = resolvedStatus.stateName
   // Why: the lead already ended — the pane stays `working` only because background inventory is still registered. `stateStartedAt` is pinned for that whole run, so this end time is the per-turn identity and the later all-clear's pair key.
   const turnCompletedAt =
     eventAgentId === undefined &&
     isTurnBoundary &&
     reportedStateName === 'done' &&
-    effectiveState === 'working' &&
+    resolvedStatus.stateName === 'working' &&
     interrupted !== true
       ? Date.now()
       : undefined
@@ -3237,7 +3254,7 @@ function normalizeClaudeEvent(
   if (
     isTurnBoundary &&
     eventAgentId === undefined &&
-    effectiveState === 'working' &&
+    resolvedStatus.stateName === 'working' &&
     claudeRosterHasRestoredSnapshotSubagent(effectiveRoster) &&
     !claudeRosterHasRuntimeWorkingSubagent(effectiveRoster) &&
     !state.claudeRunningNonAgentTaskPaneKeys.has(paneKey) &&
@@ -3257,7 +3274,7 @@ function normalizeClaudeEvent(
   }
 
   return buildClaudeStatusPayload(state, eventName, promptText, paneKey, hookPayload, {
-    stateName: effectiveState,
+    ...resolvedStatus,
     updateToolSnapshot: true,
     interrupted,
     // Why: a finished compact is a session-shaped boundary, not a completed turn. Without this the
@@ -3276,6 +3293,7 @@ function buildClaudeStatusPayload(
   hookPayload: Record<string, unknown>,
   options: {
     stateName: AgentStatusState
+    workingMode?: AgentWorkingMode
     updateToolSnapshot: boolean
     interrupted?: boolean
     sessionBoundary?: boolean
@@ -3293,6 +3311,7 @@ function buildClaudeStatusPayload(
   // The normalizer clamps `interrupted` to done payloads, so a gated 'working' emit drops it; claudeLeadStateByPaneKey preserves it for the eventual done.
   return normalizeAgentStatusPayload({
     state: options.stateName,
+    workingMode: options.workingMode,
     // Why: only lead-origin events may reset the prompt cache; a child-driven refresh must not blank the lead's prompt label.
     prompt: resolvePrompt(state, paneKey, promptText, {
       resetOnNewTurn: options.updateToolSnapshot && isNewTurnEvent('claude', eventName)

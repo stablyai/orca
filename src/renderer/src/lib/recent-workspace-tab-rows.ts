@@ -91,14 +91,24 @@ export function resolveRecentWorkspaceTabStatus(
   paneSources: TabPaneInputSources,
   now: number
 ): WorktreeStatus {
-  const attention = resolveRecentWorkspaceTabAttention(row, paneSources, now)
+  if (!row.terminalTab) {
+    return 'inactive'
+  }
+  const panes = collectTabPaneInputs(row.terminalTab, row.worktreeLastActivityAt, paneSources, now)
+  const attention = resolveAttention(panes, now)
   const explicit = STATUS_BY_ATTENTION_CLASS[attention.cls]
+  if (explicit === 'working') {
+    const hasForegroundWork = panes.some(
+      (pane) =>
+        resolveAttention([pane], now).cls === 3 &&
+        (pane.kind === 'title' || pane.entry.workingMode !== 'monitoring')
+    )
+    return hasForegroundWork ? 'working' : 'monitoring'
+  }
   if (explicit) {
     return explicit
   }
-  return row.terminalTab && tabHasLivePty(paneSources.ptyIdsByTabId, row.terminalTab.id)
-    ? 'active'
-    : 'inactive'
+  return tabHasLivePty(paneSources.ptyIdsByTabId, row.terminalTab.id) ? 'active' : 'inactive'
 }
 
 /**

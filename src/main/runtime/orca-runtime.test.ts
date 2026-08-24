@@ -37718,6 +37718,261 @@ describe('OrcaRuntimeService', () => {
     expect(summary).toMatchObject({ hasHostSidebarActivity: true, status: 'working' })
   })
 
+  it('projects monitoring for folder workspaces without assuming a git worktree', async () => {
+    const now = Date.now()
+    const folderWorkspace = makeFolderWorkspace({ name: 'GG' })
+    const projectGroup = makeFolderProjectGroup({ name: 'Store' })
+    const runtime = new OrcaRuntimeService(
+      createFolderWorkspaceRuntimeStore(folderWorkspace, projectGroup) as never,
+      undefined,
+      {
+        getAgentStatusSnapshot: () => [
+          {
+            paneKey: 'folder-pane',
+            worktreeId: TEST_FOLDER_WORKSPACE_KEY,
+            state: 'working',
+            workingMode: 'monitoring',
+            prompt: 'watch tests',
+            agentType: 'claude',
+            connectionId: null,
+            receivedAt: now,
+            stateStartedAt: now - 100
+          }
+        ]
+      }
+    )
+
+    const { worktrees } = await runtime.getWorktreePs()
+    const summary = worktrees.find((worktree) => worktree.worktreeId === TEST_FOLDER_WORKSPACE_KEY)
+
+    expect(summary).toMatchObject({
+      workspaceKind: 'folder-workspace',
+      status: 'working',
+      workingMode: 'monitoring'
+    })
+  })
+  it('projects monitoring over a title-derived working status', async () => {
+    const now = Date.now()
+    const runtime = new OrcaRuntimeService(store, undefined, {
+      getAgentStatusSnapshot: () => [
+        {
+          paneKey: 'tab-1:1',
+          worktreeId: TEST_WORKTREE_ID,
+          tabId: 'tab-1',
+          state: 'working',
+          workingMode: 'monitoring',
+          prompt: 'watch tests',
+          agentType: 'claude',
+          connectionId: null,
+          receivedAt: now,
+          stateStartedAt: now - 100
+        }
+      ]
+    })
+    syncSinglePty(runtime, 'pty-1', { paneTitle: 'claude working' })
+
+    const { worktrees } = await runtime.getWorktreePs()
+    const summary = worktrees.find((worktree) => worktree.worktreeId === TEST_WORKTREE_ID)
+
+    expect(summary).toMatchObject({ status: 'working', workingMode: 'monitoring' })
+  })
+  it('keeps hook monitoring mode when a newer mode-less OSC row reports the same work', async () => {
+    const now = Date.now()
+    const runtime = new OrcaRuntimeService(store, undefined, {
+      getAgentStatusSnapshot: () => [
+        {
+          paneKey: 'tab-1:1',
+          worktreeId: TEST_WORKTREE_ID,
+          tabId: 'tab-1',
+          state: 'working',
+          workingMode: 'monitoring',
+          prompt: 'watch tests',
+          agentType: 'claude',
+          connectionId: null,
+          receivedAt: now - 100,
+          stateStartedAt: now - 200
+        }
+      ]
+    })
+    syncSinglePty(runtime)
+    runtime.onPtyData(
+      'pty-1',
+      '\x1b]9999;{"state":"working","prompt":"watch tests","agentType":"claude"}\x07',
+      1
+    )
+
+    const { worktrees } = await runtime.getWorktreePs()
+    const summary = worktrees.find((worktree) => worktree.worktreeId === TEST_WORKTREE_ID)
+
+    expect(summary).toMatchObject({ status: 'working', workingMode: 'monitoring' })
+    expect(summary?.agents).toEqual([
+      expect.objectContaining({
+        state: 'working',
+        workingMode: 'monitoring',
+        prompt: 'watch tests'
+      })
+    ])
+  })
+  it('does not carry hook monitoring mode into a newer OSC turn', async () => {
+    const now = Date.now()
+    const runtime = new OrcaRuntimeService(store, undefined, {
+      getAgentStatusSnapshot: () => [
+        {
+          paneKey: 'tab-1:1',
+          worktreeId: TEST_WORKTREE_ID,
+          tabId: 'tab-1',
+          state: 'working',
+          workingMode: 'monitoring',
+          prompt: 'watch tests',
+          agentType: 'claude',
+          connectionId: null,
+          receivedAt: now - 100,
+          stateStartedAt: now - 200
+        }
+      ]
+    })
+    syncSinglePty(runtime)
+    runtime.onPtyData(
+      'pty-1',
+      '\x1b]9999;{"state":"working","prompt":"fix tests","agentType":"claude"}\x07',
+      1
+    )
+
+    const { worktrees } = await runtime.getWorktreePs()
+    const summary = worktrees.find((worktree) => worktree.worktreeId === TEST_WORKTREE_ID)
+
+    expect(summary).toMatchObject({ status: 'working' })
+    expect(summary).not.toHaveProperty('workingMode')
+    expect(summary?.agents).toEqual([
+      expect.objectContaining({ state: 'working', prompt: 'fix tests' })
+    ])
+  })
+  it('keeps title-only foreground work ahead of monitoring in another pane', async () => {
+    const now = Date.now()
+    const monitoringLeafId = '33333333-3333-4333-8333-333333333333'
+    const foregroundLeafId = '44444444-4444-4444-8444-444444444444'
+    const runtime = new OrcaRuntimeService(store, undefined, {
+      getAgentStatusSnapshot: () => [
+        {
+          paneKey: `monitoring-tab:${monitoringLeafId}`,
+          worktreeId: TEST_WORKTREE_ID,
+          tabId: 'monitoring-tab',
+          state: 'working',
+          workingMode: 'monitoring',
+          prompt: 'watch tests',
+          agentType: 'claude',
+          connectionId: null,
+          receivedAt: now,
+          stateStartedAt: now - 100
+        }
+      ]
+    })
+    runtime.attachWindow(1)
+    runtime.syncWindowGraph(1, {
+      tabs: [
+        {
+          tabId: 'monitoring-tab',
+          worktreeId: TEST_WORKTREE_ID,
+          title: 'Claude',
+          activeLeafId: monitoringLeafId,
+          layout: null
+        },
+        {
+          tabId: 'foreground-tab',
+          worktreeId: TEST_WORKTREE_ID,
+          title: 'Claude',
+          activeLeafId: foregroundLeafId,
+          layout: null
+        }
+      ],
+      leaves: [
+        {
+          tabId: 'monitoring-tab',
+          worktreeId: TEST_WORKTREE_ID,
+          leafId: monitoringLeafId,
+          paneRuntimeId: 1,
+          ptyId: 'monitoring-pty',
+          paneTitle: 'claude'
+        },
+        {
+          tabId: 'foreground-tab',
+          worktreeId: TEST_WORKTREE_ID,
+          leafId: foregroundLeafId,
+          paneRuntimeId: 2,
+          ptyId: 'foreground-pty',
+          paneTitle: 'claude working'
+        }
+      ]
+    })
+
+    const { worktrees } = await runtime.getWorktreePs()
+    const summary = worktrees.find((worktree) => worktree.worktreeId === TEST_WORKTREE_ID)
+
+    expect(summary).toMatchObject({ status: 'working' })
+    expect(summary).not.toHaveProperty('workingMode')
+    expect(summary?.agents).toEqual([
+      expect.objectContaining({ paneKey: `monitoring-tab:${monitoringLeafId}` })
+    ])
+  })
+  it('keeps title-only foreground work ahead of monitoring in another split pane', async () => {
+    const now = Date.now()
+    const tabId = 'split-tab'
+    const monitoringLeafId = '33333333-3333-4333-8333-333333333333'
+    const foregroundLeafId = '44444444-4444-4444-8444-444444444444'
+    const runtime = new OrcaRuntimeService(store, undefined, {
+      getAgentStatusSnapshot: () => [
+        {
+          paneKey: `${tabId}:${monitoringLeafId}`,
+          worktreeId: TEST_WORKTREE_ID,
+          tabId,
+          state: 'working',
+          workingMode: 'monitoring',
+          prompt: 'watch tests',
+          agentType: 'claude',
+          connectionId: null,
+          receivedAt: now,
+          stateStartedAt: now - 100
+        }
+      ]
+    })
+    runtime.attachWindow(1)
+    runtime.syncWindowGraph(1, {
+      tabs: [
+        {
+          tabId,
+          worktreeId: TEST_WORKTREE_ID,
+          title: 'Claude',
+          activeLeafId: monitoringLeafId,
+          layout: null
+        }
+      ],
+      leaves: [
+        {
+          tabId,
+          worktreeId: TEST_WORKTREE_ID,
+          leafId: monitoringLeafId,
+          paneRuntimeId: 1,
+          ptyId: 'monitoring-pty',
+          paneTitle: 'claude'
+        },
+        {
+          tabId,
+          worktreeId: TEST_WORKTREE_ID,
+          leafId: foregroundLeafId,
+          paneRuntimeId: 2,
+          ptyId: 'foreground-pty',
+          paneTitle: 'claude working'
+        }
+      ]
+    })
+
+    const { worktrees } = await runtime.getWorktreePs()
+    const summary = worktrees.find((worktree) => worktree.worktreeId === TEST_WORKTREE_ID)
+
+    expect(summary).toMatchObject({ status: 'working' })
+    expect(summary).not.toHaveProperty('workingMode')
+  })
+
   it('suppresses restored-unconfirmed hook rows from worktree.ps', async () => {
     const leafId = '33333333-3333-4333-8333-333333333333'
     const now = Date.now()

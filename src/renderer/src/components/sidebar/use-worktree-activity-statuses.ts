@@ -33,6 +33,7 @@ export function selectWorktreeActivityStatuses(
     const {
       hasPermission,
       hasLiveWorking,
+      hasLiveMonitoring,
       hasLiveDone,
       hasRetainedDone,
       agentStatusPaneIdsByTabId
@@ -48,6 +49,7 @@ export function selectWorktreeActivityStatuses(
         terminalLayoutRootsByTabId: selectTerminalLayoutRootsForWorktree(statusInputs, worktreeId),
         hasPermission,
         hasLiveWorking,
+        hasLiveMonitoring,
         hasLiveDone,
         hasRetainedDone
       })

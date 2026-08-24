@@ -3,6 +3,7 @@ import type {
   AgentStatusEntry,
   AgentStatusOrchestrationContext,
   AgentStatusState,
+  AgentWorkingMode,
   AgentType
 } from './agent-status-types'
 import type {
@@ -812,6 +813,7 @@ export type RuntimeWorktreeAgentRow = {
   /** paneKey of the orchestration parent, or null for a root agent. */
   parentPaneKey: string | null
   state: AgentStatusState
+  workingMode?: AgentWorkingMode
   agentType: AgentType | null
   /** Raw hook-reported prompt. Display surfaces can prefer displayName. */
   prompt: string
@@ -871,6 +873,8 @@ export type RuntimeWorktreePsSummary = {
   lastOutputAt: number | null
   preview: string
   status: RuntimeWorktreeStatus
+  /** Optional discriminator for a working workspace; older clients fall back to ordinary working. */
+  workingMode?: AgentWorkingMode
   /** Live agents in this worktree, newest-state-first. Empty for shell-only
    *  worktrees. Mirrors desktop's inline agent list (WorktreeCardAgents). */
   agents: RuntimeWorktreeAgentRow[]

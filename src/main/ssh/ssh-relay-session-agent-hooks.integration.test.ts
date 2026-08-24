@@ -50,6 +50,7 @@ type CapturedStatus = {
   connectionId: string | null
   payload: {
     state: string
+    workingMode?: 'monitoring'
     prompt: string
     agentType?: string
     toolName?: string
@@ -184,6 +185,7 @@ function captureAgentStatuses(events: CapturedStatus[]): void {
       connectionId: event.connectionId,
       payload: {
         state: event.payload.state,
+        ...(event.payload.workingMode ? { workingMode: event.payload.workingMode } : {}),
         prompt: event.payload.prompt,
         agentType: event.payload.agentType,
         toolName: event.payload.toolName
@@ -295,6 +297,42 @@ describe('SshRelaySession agent hooks over a fake relay transport', () => {
         agentType: 'codex',
         toolName: undefined
       }
+    })
+  })
+
+  it('preserves Claude monitoring mode across the SSH relay boundary', async () => {
+    relay = createFakeRelay()
+    vi.mocked(deployAndLaunchRelay).mockResolvedValue({
+      transport: relay.transport,
+      serverBuildId: 'test-relay-build',
+      platform: 'linux-x64'
+    })
+    const events: CapturedStatus[] = []
+    captureAgentStatuses(events)
+    session = createSession('conn-monitoring')
+    await session.establish({} as SshConnection)
+
+    relay.notifyAgentHook(
+      makeEnvelope({
+        source: 'claude',
+        claudeRunningNonAgentTask: true,
+        payload: {
+          state: 'working',
+          workingMode: 'monitoring',
+          prompt: 'watch the build',
+          agentType: 'claude'
+        }
+      })
+    )
+
+    await waitForStatusCount(events, 1)
+    expect(events[0]).toMatchObject({
+      connectionId: 'conn-monitoring',
+      payload: { state: 'working', workingMode: 'monitoring', agentType: 'claude' }
+    })
+    expect(agentHookServer.getStatusSnapshot()[0]).toMatchObject({
+      state: 'working',
+      workingMode: 'monitoring'
     })
   })
 

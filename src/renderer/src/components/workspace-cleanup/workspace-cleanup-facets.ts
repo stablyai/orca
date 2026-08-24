@@ -145,7 +145,9 @@ export function buildWorkspaceCleanupFacets(
     isPinned: worktree?.isPinned ?? candidate.blockers.includes('pinned'),
     isUnread: worktree?.isUnread ?? false,
     hasComment,
-    agentState: sources.liveAgentStatusByWorktreeId?.get(candidate.worktreeId) ?? 'idle',
+    agentState: toWorkspaceCleanupAgentState(
+      sources.liveAgentStatusByWorktreeId?.get(candidate.worktreeId)
+    ),
     retainedDoneAgentCount: candidate.localContext.retainedDoneAgentCount,
     gitState: getWorkspaceCleanupGitState(candidate),
     upstreamAhead: toFiniteOrNull(candidate.git.upstreamAhead),
@@ -172,6 +174,17 @@ export function buildWorkspaceCleanupFacetList(
 
 export function countWorkspaceCleanupMeasuredRows(rows: readonly WorkspaceCleanupFacets[]): number {
   return rows.reduce((count, row) => count + (row.sizeBytes === null ? 0 : 1), 0)
+}
+
+// Why: monitoring is still registered background work, so it filters as active — offering
+// such a workspace as idle would invite cleaning up a running dev server (#10997).
+function toWorkspaceCleanupAgentState(
+  status: LiveAgentWorktreeStatus | undefined
+): WorkspaceCleanupAgentState {
+  if (status === undefined) {
+    return 'idle'
+  }
+  return status === 'monitoring' ? 'working' : status
 }
 
 function getLocalContextCount(candidate: WorkspaceCleanupCandidate): number {

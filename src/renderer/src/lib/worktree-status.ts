@@ -11,7 +11,13 @@ import type {
 import type { TuiAgent } from '../../../shared/tui-agent'
 import type { LiveAgentWorktreeStatus } from './worktree-activity-state'
 
-export type WorktreeStatus = 'active' | 'working' | 'permission' | 'done' | 'inactive'
+export type WorktreeStatus =
+  | 'active'
+  | 'working'
+  | 'monitoring'
+  | 'permission'
+  | 'done'
+  | 'inactive'
 
 type WorktreeStatusHeuristicOptions = {
   liveAgentStatus?: LiveAgentWorktreeStatus
@@ -23,6 +29,7 @@ type WorktreeStatusHeuristicOptions = {
 const STATUS_LABELS: Record<WorktreeStatus, string> = {
   active: 'Active',
   working: 'Working',
+  monitoring: 'Monitoring background tasks',
   permission: 'Needs permission',
   done: 'Done',
   inactive: 'Inactive'
@@ -47,6 +54,9 @@ export function getWorktreeStatus(
   }
   if (options.liveAgentStatus === 'working' || hasStatus('working')) {
     return 'working'
+  }
+  if (options.liveAgentStatus === 'monitoring') {
+    return 'monitoring'
   }
   if (liveTabs.length > 0 || browserTabs.length > 0) {
     // Why: browser-only worktrees (no PTY) are still active from the user's point of view.
@@ -132,6 +142,7 @@ export function resolveWorktreeStatus(args: {
   terminalLayoutRootsByTabId?: Record<string, TerminalPaneLayoutNode | null | undefined>
   hasPermission: boolean
   hasLiveWorking: boolean
+  hasLiveMonitoring?: boolean
   hasLiveDone: boolean
   hasRetainedDone: boolean
 }): WorktreeStatus {
@@ -156,6 +167,9 @@ export function resolveWorktreeStatus(args: {
   // Why: restored cards get the hook snapshot before panes mount; trust the explicit working row so they stay yellow on restart.
   if (args.hasLiveWorking || heuristic === 'working') {
     return 'working'
+  }
+  if (args.hasLiveMonitoring || heuristic === 'monitoring') {
+    return 'monitoring'
   }
   if (args.hasLiveDone || args.hasRetainedDone) {
     return 'done'

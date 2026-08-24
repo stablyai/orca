@@ -62,6 +62,28 @@ describe('resolveTerminalTabActivityStatus', () => {
     ).toBe('working')
   })
 
+  it('reports monitoring without hiding active or actionable siblings', () => {
+    const monitoring = entry(FIRST_LEAF_ID, 'working', { workingMode: 'monitoring' })
+    const working = entry(SECOND_LEAF_ID, 'working')
+    expect(
+      resolveTerminalTabActivityStatus({
+        tab: TAB,
+        agentStatusByPaneKey: { [monitoring.paneKey]: monitoring },
+        ptyIdsByTabId: LIVE_PTY
+      })
+    ).toBe('monitoring')
+    expect(
+      resolveTerminalTabActivityStatus({
+        tab: TAB,
+        agentStatusByPaneKey: {
+          [monitoring.paneKey]: monitoring,
+          [working.paneKey]: working
+        },
+        ptyIdsByTabId: LIVE_PTY
+      })
+    ).toBe('working')
+  })
+
   it('lets a needs-input pane outrank a working sibling', () => {
     const working = entry(FIRST_LEAF_ID, 'working')
     const waiting = entry(SECOND_LEAF_ID, 'waiting')
@@ -246,6 +268,9 @@ describe('resolveTerminalTabAttentionBadge', () => {
     expect(resolveTerminalTabAttentionBadge({ status: 'permission', hasUnread: true })).toBe(
       'permission'
     )
+    expect(resolveTerminalTabAttentionBadge({ status: 'monitoring', hasUnread: true })).toBe(
+      'monitoring'
+    )
     expect(resolveTerminalTabAttentionBadge({ status: 'done', hasUnread: true })).toBe('unread')
     expect(resolveTerminalTabAttentionBadge({ status: 'done', hasUnread: false })).toBe('done')
     expect(resolveTerminalTabAttentionBadge({ status: 'active', hasUnread: false })).toBeNull()
@@ -274,6 +299,7 @@ describe('terminalTabHasUnreadActivity', () => {
 describe('terminalTabActivityToAgentDotState', () => {
   it('maps glyph statuses and drops quiet ones', () => {
     expect(terminalTabActivityToAgentDotState('working')).toBe('working')
+    expect(terminalTabActivityToAgentDotState('monitoring')).toBe('monitoring')
     expect(terminalTabActivityToAgentDotState('permission')).toBe('permission')
     expect(terminalTabActivityToAgentDotState('done')).toBe('done')
     expect(terminalTabActivityToAgentDotState('active')).toBeNull()
