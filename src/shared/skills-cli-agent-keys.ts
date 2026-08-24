@@ -23,6 +23,8 @@ export const SKILLS_CLI_AGENT_KEY_BY_TUI_AGENT = {
   pi: 'pi',
   omp: null,
   'prime-agent': null,
+  // Why: the skills CLI has no gjc key; Gajae Code reads its own .gjc roots plus shared .agents/skills.
+  gjc: null,
   gemini: 'gemini-cli',
   antigravity: 'antigravity',
   aider: null,

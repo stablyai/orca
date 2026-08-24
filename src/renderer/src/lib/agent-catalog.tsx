@@ -135,6 +135,13 @@ export const getAgentCatalog = createLocalizedCatalog((): AgentCatalogEntry[] =>
     homepageUrl: 'https://github.com/PrimeIntellect-ai/prime-agent'
   },
   {
+    id: 'gjc',
+    label: translate('auto.lib.agent.catalog.c851f042e2', 'Gajae Code'),
+    cmd: 'gjc',
+    faviconDomain: 'gajae-code.com',
+    homepageUrl: 'https://gajae-code.com'
+  },
+  {
     id: 'gemini',
     label: translate('auto.lib.agent.catalog.12e6baa4f7', 'Gemini'),
     cmd: 'gemini',

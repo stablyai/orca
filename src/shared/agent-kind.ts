@@ -24,6 +24,7 @@ const TUI_AGENT_KIND_BY_AGENT = {
   pi: 'pi',
   omp: 'omp',
   'prime-agent': 'prime-agent',
+  gjc: 'gjc',
   gemini: 'gemini',
   antigravity: 'antigravity',
   aider: 'aider',
