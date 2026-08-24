@@ -8,6 +8,9 @@ import { isPathInsideOrEqual } from '../shared/cross-platform-path'
 import type { RuntimeClient } from './runtime-client'
 import { RuntimeClientError } from './runtime/types'
 import { getOptionalStringFlag, getRequiredStringFlag } from './flags'
+import { resolveTerminalSelector } from './terminal-selector'
+
+export { resolveTerminalSelector } from './terminal-selector'
 
 export type BrowserCliTarget = {
   worktree?: string
@@ -152,7 +155,7 @@ export async function getTerminalHandle(
 ): Promise<string> {
   const explicit = getOptionalStringFlag(flags, 'terminal')
   if (explicit) {
-    return explicit
+    return resolveTerminalSelector(explicit, client)
   }
   const worktree = await getBrowserWorktreeSelector(flags, cwd, client)
   const response = await client.call<{ handle: string }>('terminal.resolveActive', { worktree })

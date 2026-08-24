@@ -2,6 +2,8 @@ import type { CommandSpec } from '../args'
 import { GLOBAL_FLAGS } from '../args'
 import { SERVE_COMMAND_SPECS } from './serve'
 
+const TERMINAL_SELECTOR_USAGE = '[--terminal <handle> | --terminal pty:<ptyId>]'
+
 export const CORE_COMMAND_SPECS: CommandSpec[] = [
   {
     path: ['open'],
@@ -188,20 +190,23 @@ export const CORE_COMMAND_SPECS: CommandSpec[] = [
       'orca terminal list [--worktree <selector>] [--limit <n>] [--include-visual-layouts] [--json]',
     allowedFlags: [...GLOBAL_FLAGS, 'worktree', 'limit', 'include-visual-layouts'],
     notes: [
-      'JSON omits visualLayouts by default; pass --include-visual-layouts when machine-readable tab and pane topology is required.'
+      'JSON omits visualLayouts by default; pass --include-visual-layouts when machine-readable tab and pane topology is required.',
+      'Prefer ptyId from the list when addressing a terminal across restarts; use --terminal pty:<ptyId> with any terminal command that accepts --terminal (handles rotate; ptyId is stable).'
     ]
   },
   {
     path: ['terminal', 'show'],
     summary: 'Show terminal metadata and preview',
-    usage: 'orca terminal show [--terminal <handle>] [--json]',
-    allowedFlags: [...GLOBAL_FLAGS, 'terminal']
+    usage: `orca terminal show ${TERMINAL_SELECTOR_USAGE} [--json]`,
+    allowedFlags: [...GLOBAL_FLAGS, 'terminal'],
+    notes: [
+      '--terminal accepts a runtime handle or pty:<ptyId> from terminal list (ptyId survives restarts; handles do not).'
+    ]
   },
   {
     path: ['terminal', 'read'],
     summary: 'Read bounded terminal output',
-    usage:
-      'orca terminal read [--terminal <handle>] [--cursor <n>] [--limit <n>] [--screen] [--json]',
+    usage: `orca terminal read ${TERMINAL_SELECTOR_USAGE} [--cursor <n>] [--limit <n>] [--screen] [--json]`,
     allowedFlags: [...GLOBAL_FLAGS, 'terminal', 'cursor', 'limit', 'screen'],
     notes: [
       'Omit --terminal to target the active terminal in the current worktree.',
@@ -222,15 +227,13 @@ export const CORE_COMMAND_SPECS: CommandSpec[] = [
   {
     path: ['terminal', 'send'],
     summary: 'Send input to a live terminal',
-    usage:
-      'orca terminal send [--terminal <handle>] [--text <text>] [--enter] [--interrupt] [--json]',
+    usage: `orca terminal send ${TERMINAL_SELECTOR_USAGE} [--text <text>] [--enter] [--interrupt] [--json]`,
     allowedFlags: [...GLOBAL_FLAGS, 'terminal', 'text', 'enter', 'interrupt']
   },
   {
     path: ['terminal', 'wait'],
     summary: 'Wait for a terminal condition',
-    usage:
-      'orca terminal wait [--terminal <handle>] --for exit|tui-idle [--timeout-ms <ms>] [--json]',
+    usage: `orca terminal wait ${TERMINAL_SELECTOR_USAGE} --for exit|tui-idle [--timeout-ms <ms>] [--json]`,
     allowedFlags: [...GLOBAL_FLAGS, 'terminal', 'for', 'timeout-ms']
   },
   {
@@ -262,14 +265,14 @@ export const CORE_COMMAND_SPECS: CommandSpec[] = [
     // alias rather than a duplicate spec + handler registration.
     aliases: [['terminal', 'focus']],
     summary: 'Switch to a terminal tab in the UI',
-    usage: 'orca terminal switch [--terminal <handle>] [--json]',
+    usage: `orca terminal switch ${TERMINAL_SELECTOR_USAGE} [--json]`,
     allowedFlags: [...GLOBAL_FLAGS, 'terminal'],
     examples: ['orca terminal switch --terminal term_abc123']
   },
   {
     path: ['terminal', 'close'],
     summary: 'Close a terminal pane/session, or its whole tab with --tab',
-    usage: 'orca terminal close [--terminal <handle>] [--tab] [--json]',
+    usage: `orca terminal close ${TERMINAL_SELECTOR_USAGE} [--tab] [--json]`,
     allowedFlags: [...GLOBAL_FLAGS, 'terminal', 'tab'],
     notes: [
       'Without --tab, preserves the existing pane/session close behavior. With --tab, waits until the whole tab is durably removed.'
@@ -282,7 +285,7 @@ export const CORE_COMMAND_SPECS: CommandSpec[] = [
   {
     path: ['terminal', 'rename'],
     summary: 'Set or clear the title of a terminal tab',
-    usage: 'orca terminal rename [--terminal <handle>] [--title <text>] [--json]',
+    usage: `orca terminal rename ${TERMINAL_SELECTOR_USAGE} [--title <text>] [--json]`,
     allowedFlags: [...GLOBAL_FLAGS, 'terminal', 'title'],
     notes: ['Omit --title or pass an empty string to reset to the auto-generated title.'],
     examples: [
@@ -293,8 +296,7 @@ export const CORE_COMMAND_SPECS: CommandSpec[] = [
   {
     path: ['terminal', 'split'],
     summary: 'Split an existing terminal pane',
-    usage:
-      'orca terminal split [--terminal <handle>] [--direction horizontal|vertical] [--command <text>] [--json]',
+    usage: `orca terminal split ${TERMINAL_SELECTOR_USAGE} [--direction horizontal|vertical] [--command <text>] [--json]`,
     allowedFlags: [...GLOBAL_FLAGS, 'terminal', 'direction', 'command'],
     examples: [
       'orca terminal split --terminal term_abc123 --direction horizontal --json',

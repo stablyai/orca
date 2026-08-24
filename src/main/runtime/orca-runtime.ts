@@ -17227,6 +17227,7 @@ export class OrcaRuntimeService {
     worktreeSelector?: string,
     limit = DEFAULT_TERMINAL_LIST_LIMIT,
     opts: {
+      ptyId?: string
       handles?: readonly string[]
       requireFreshPtyLiveness?: boolean
       includeVisualLayouts?: boolean
@@ -17350,9 +17351,11 @@ export class OrcaRuntimeService {
     }
 
     const requestedHandles = opts.handles ? new Set(opts.handles) : null
-    const matchingTerminals = requestedHandles
-      ? terminals.filter((terminal) => requestedHandles.has(terminal.handle))
-      : terminals
+    const matchingTerminals = terminals.filter(
+      (terminal) =>
+        (!requestedHandles || requestedHandles.has(terminal.handle)) &&
+        (!opts.ptyId || terminal.ptyId === opts.ptyId)
+    )
     const listedTerminals = matchingTerminals.slice(0, limit)
     // Why: undefined (pre-flag client) must still get layouts; only an explicit
     // `false` opts out.
