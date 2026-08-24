@@ -494,6 +494,7 @@ describe('listCodexSessionFiles', () => {
     writeFileSync(originalPath, copiedPrefix, 'utf-8')
 
     const first = await scanCodexUsageFiles([], [])
+    expect(first.sourceProjectionChanged).toBe(true)
     expect(
       first.dailyAggregates.reduce((total, aggregate) => total + aggregate.totalTokens, 0)
     ).toBe(15)
@@ -503,6 +504,7 @@ describe('listCodexSessionFiles', () => {
     writeFileSync(forkPath, `${copiedPrefix}${usageRecord('2026-05-26T12:02:00.000Z', 7, 22)}`)
 
     const second = await scanCodexUsageFiles([], first.processedFiles)
+    expect(second.sourceProjectionChanged).toBe(true)
     expect(
       second.dailyAggregates.reduce((total, aggregate) => total + aggregate.totalTokens, 0)
     ).toBe(22)
@@ -510,6 +512,7 @@ describe('listCodexSessionFiles', () => {
 
     // Rescanning with the full cache stays stable.
     const third = await scanCodexUsageFiles([], second.processedFiles)
+    expect(third.sourceProjectionChanged).toBe(false)
     expect(
       third.dailyAggregates.reduce((total, aggregate) => total + aggregate.totalTokens, 0)
     ).toBe(22)

@@ -46,6 +46,7 @@ export async function scanClaudeUsageFiles(
   processedFiles: ClaudeUsagePersistedFile[]
   sessions: ClaudeUsageSession[]
   dailyAggregates: ClaudeUsageDailyAggregate[]
+  sourceProjectionChanged: boolean
 }> {
   const files = await listClaudeTranscriptFiles()
   const previousByPath = new Map(previousProcessedFiles.map((file) => [file.path, file]))
@@ -172,6 +173,8 @@ export async function scanClaudeUsageFiles(
       left.day === right.day
         ? left.projectLabel.localeCompare(right.projectLabel)
         : left.day.localeCompare(right.day)
-    )
+    ),
+    sourceProjectionChanged:
+      previousProcessedFiles.length !== files.length || pathsToParse.length > 0
   }
 }

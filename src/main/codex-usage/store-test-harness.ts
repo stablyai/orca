@@ -11,7 +11,8 @@ export function createEmptyScanResult() {
   return {
     processedFiles: [],
     sessions: [],
-    dailyAggregates: []
+    dailyAggregates: [],
+    sourceProjectionChanged: false
   }
 }
 

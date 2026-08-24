@@ -101,6 +101,7 @@ export async function scanOpenCodeUsageDatabases(
   processedDatabases: OpenCodeUsagePersistedDatabase[]
   sessions: OpenCodeUsageSession[]
   dailyAggregates: OpenCodeUsageDailyAggregate[]
+  sourceProjectionChanged: boolean
 }> {
   const dbPaths = await listOpenCodeDatabases()
   const previousByPath = new Map(
@@ -215,6 +216,8 @@ export async function scanOpenCodeUsageDatabases(
   return {
     processedDatabases,
     sessions: finalizeSessions(sessionsById),
-    dailyAggregates: sortDailyAggregates(dailyByKey)
+    dailyAggregates: sortDailyAggregates(dailyByKey),
+    sourceProjectionChanged:
+      previousProcessedDatabases.length !== dbPaths.length || orderedPathsToParse.length > 0
   }
 }

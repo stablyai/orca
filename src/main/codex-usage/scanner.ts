@@ -125,6 +125,7 @@ export async function scanCodexUsageFiles(
   processedFiles: CodexUsagePersistedFile[]
   sessions: CodexUsageSession[]
   dailyAggregates: CodexUsageDailyAggregate[]
+  sourceProjectionChanged: boolean
 }> {
   const files = await listCodexSessionFiles()
   const previousByPath = new Map(previousProcessedFiles.map((file) => [file.path, file]))
@@ -224,6 +225,8 @@ export async function scanCodexUsageFiles(
   return {
     processedFiles,
     sessions: finalizeSessions(sessionsById),
-    dailyAggregates: sortDailyAggregates(dailyByKey)
+    dailyAggregates: sortDailyAggregates(dailyByKey),
+    sourceProjectionChanged:
+      previousProcessedFiles.length !== files.length || pathsToParse.length > 0
   }
 }

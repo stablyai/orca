@@ -27,6 +27,8 @@ export type UsageScanResult<TSourceKey extends string, TSource, TSession, TDaily
 > & {
   sessions: readonly TSession[]
   dailyAggregates: readonly TDaily[]
+  /** False only when every source projection was reused unchanged. */
+  sourceProjectionChanged?: boolean
 }
 
 export type UsageProvider<TSourceKey extends string, TSource, TSession, TDaily> = {
