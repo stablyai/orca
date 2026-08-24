@@ -1257,10 +1257,24 @@ export type RemoteTrackingBase = {
   base: string
 }
 
+// Why: user-defined custom-provider usage is desktop-only by design — a
+// paired/remote/mobile client must not be able to read it.
+export type RemoteAccountsRateLimitState = Omit<RateLimitState, 'customProviderUsage'>
+
+// Why: every RateLimitState-shaped value that crosses the accounts.* RPC
+// boundary (the initial accounts.list/subscribe snapshot, the ongoing
+// subscribe push on every state change, and consumeCodexResetCredit's
+// snapshot) must go through this same strip — see RemoteAccountsRateLimitState.
+function stripCustomProviderUsageForRemote(state: RateLimitState): RemoteAccountsRateLimitState {
+  const { customProviderUsage: _customProviderUsage, ...remoteState } = state
+  void _customProviderUsage
+  return remoteState
+}
+
 export type AccountsSnapshot = {
   claude: ClaudeRateLimitAccountsState
   codex: CodexRateLimitAccountsState
-  rateLimits: RateLimitState
+  rateLimits: RemoteAccountsRateLimitState
 }
 
 export type CodexRateLimitResetRpcResult = {
@@ -1358,6 +1372,7 @@ type RuntimeStore = {
     compactWorktreeCards?: GlobalSettings['compactWorktreeCards']
     minimaxGroupId?: GlobalSettings['minimaxGroupId']
     minimaxUsageModels?: GlobalSettings['minimaxUsageModels']
+    customProviderAccounts?: GlobalSettings['customProviderAccounts']
     prBotAuthorOverrides?: GlobalSettings['prBotAuthorOverrides']
     artifactSharingEnabled?: GlobalSettings['artifactSharingEnabled']
     agentSkillSharingEnabled?: GlobalSettings['agentSkillSharingEnabled']
@@ -14803,7 +14818,7 @@ export class OrcaRuntimeService {
     return {
       claude: claudeAccounts.listAccounts(),
       codex: codexAccounts.listAccounts(),
-      rateLimits: rateLimits.getState()
+      rateLimits: stripCustomProviderUsageForRemote(rateLimits.getState())
     }
   }
 
@@ -14815,7 +14830,11 @@ export class OrcaRuntimeService {
   async refreshAccountsForMobile(): Promise<void> {
     const { rateLimits } = this.requireAccountServices()
     await Promise.allSettled([
-      rateLimits.refresh(),
+      // Why: a paired/remote/mobile-triggered refresh must never be the
+      // proximate cause of the host resolving a custom provider's tokenEnvVar
+      // secret and hitting its configured endpoint — see
+      // RemoteAccountsRateLimitState.
+      rateLimits.refresh({ skipCustomProviders: true }),
       rateLimits.fetchInactiveClaudeAccountsOnOpen(),
       rateLimits.fetchInactiveCodexAccountsOnOpen()
     ])
@@ -14826,7 +14845,7 @@ export class OrcaRuntimeService {
   async refreshAccountsForMobileSubscriber(): Promise<void> {
     const { rateLimits } = this.requireAccountServices()
     await Promise.allSettled([
-      rateLimits.refreshIfStale(),
+      rateLimits.refreshIfStale({ skipCustomProviders: true }),
       rateLimits.fetchInactiveClaudeAccountsOnOpen(),
       rateLimits.fetchInactiveCodexAccountsOnOpen()
     ])
@@ -14858,7 +14877,7 @@ export class OrcaRuntimeService {
     const snapshot = {
       claude: claudeAccounts.listAccounts(),
       codex: result.codex,
-      rateLimits: result.rateLimits
+      rateLimits: stripCustomProviderUsageForRemote(result.rateLimits)
     }
     if ('status' in result) {
       return {
@@ -14919,7 +14938,7 @@ export class OrcaRuntimeService {
       listener({
         claude: services.claudeAccounts.listAccounts(),
         codex: services.codexAccounts.listAccounts(),
-        rateLimits
+        rateLimits: stripCustomProviderUsageForRemote(rateLimits)
       })
     })
   }

@@ -53,6 +53,7 @@ import {
   getAccountsPaneSearchEntries
 } from './accounts-search'
 import { GrokAccountsSection } from './GrokAccountsSection'
+import { CustomProviderAccountsSection } from './CustomProviderAccountsSection'
 import { getRemoteAccountsPaneScope } from './provider-account-scope'
 import { ProviderHostScopeControl } from './ProviderHostScopeControl'
 import { SearchableSetting } from './SearchableSetting'
@@ -1985,7 +1986,8 @@ export function AccountsPane({
     ) : null,
     matchesSettingsSearch(searchQuery, getAccountsGrokSearchEntries()) ? (
       <GrokAccountsSection key="grok" />
-    ) : null
+    ) : null,
+    <CustomProviderAccountsSection key="custom-providers" />
   ].filter(Boolean)
 
   return (

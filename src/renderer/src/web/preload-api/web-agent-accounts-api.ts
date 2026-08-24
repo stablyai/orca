@@ -12,6 +12,21 @@ export function createMiniMaxCredentialsApi(): NonNullable<
   }
 }
 
+export function createCustomProviderAccountsApi(): NonNullable<
+  Partial<PreloadApi>['customProviderAccounts']
+> {
+  const notConfigured = { configured: false }
+  const unsupportedError = new Error(
+    'Custom provider token storage is only available in the desktop app.'
+  )
+  return {
+    getTokenStatus: () => Promise.resolve(notConfigured),
+    saveToken: () => Promise.reject(unsupportedError),
+    clearToken: () => Promise.resolve(notConfigured),
+    testDraft: () => Promise.reject(unsupportedError)
+  }
+}
+
 export function createGrokAccountsApi(): NonNullable<Partial<PreloadApi>['grokAccounts']> {
   const unsigned = {
     signedIn: false,

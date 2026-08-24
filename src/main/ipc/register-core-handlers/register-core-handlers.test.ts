@@ -65,7 +65,8 @@ const {
   registerLocalhostWorktreeLabelHandlersMock,
   registerNativeChatHandlersMock,
   registerEmulatorFrameStreamHandlersMock,
-  registerEmulatorVideoStreamHandlersMock
+  registerEmulatorVideoStreamHandlersMock,
+  registerCustomProviderAccountHandlersMock
 } = vi.hoisted(() => ({
   getPathMock: vi.fn(() => '/test/user-data'),
   listEnvironmentsMock: vi.fn(() => []),
@@ -131,7 +132,8 @@ const {
   registerLocalhostWorktreeLabelHandlersMock: vi.fn(),
   registerNativeChatHandlersMock: vi.fn(),
   registerEmulatorFrameStreamHandlersMock: vi.fn(),
-  registerEmulatorVideoStreamHandlersMock: vi.fn()
+  registerEmulatorVideoStreamHandlersMock: vi.fn(),
+  registerCustomProviderAccountHandlersMock: vi.fn()
 }))
 
 vi.mock('electron', () => ({
@@ -182,6 +184,10 @@ vi.mock('../preflight', () => ({
 
 vi.mock('../usage-provider-handlers', () => ({
   registerUsageProviderHandlers: registerUsageProviderHandlersMock
+}))
+
+vi.mock('../custom-provider-accounts', () => ({
+  registerCustomProviderAccountHandlers: registerCustomProviderAccountHandlersMock
 }))
 
 vi.mock('../github', () => ({
@@ -454,6 +460,7 @@ describe('registerCoreHandlers', () => {
     registerNativeChatHandlersMock.mockReset()
     registerEmulatorFrameStreamHandlersMock.mockReset()
     registerEmulatorVideoStreamHandlersMock.mockReset()
+    registerCustomProviderAccountHandlersMock.mockReset()
   })
 
   it('passes the store through to handler registrars that need it', async () => {
@@ -502,6 +509,7 @@ describe('registerCoreHandlers', () => {
       codexUsage,
       openCodeUsage
     })
+    expect(registerCustomProviderAccountHandlersMock).toHaveBeenCalledWith(rateLimits)
     expect(registerAppHandlersMock).toHaveBeenCalledWith(store, { onBeforeRelaunch })
     expect(registerCodexAccountHandlersMock).toHaveBeenCalledWith(
       codexAccounts,

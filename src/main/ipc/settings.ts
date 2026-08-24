@@ -34,6 +34,7 @@ import {
   computerAwakeSettingsForMode,
   normalizeComputerAwakeMode
 } from '../../shared/computer-awake-mode'
+import { CustomProviderAccountList } from '../custom-providers/custom-provider-account-schema'
 
 // Why: the whitelist is the source-of-truth for which keys we emit on. Casting
 // to a Set once at module load lets the IPC handler's per-key membership
@@ -151,6 +152,19 @@ export function registerSettingsHandlers(
     if ('httpProxyUrl' in args) {
       const proxyUrl = normalizeProxyUrl(args.httpProxyUrl)
       sanitizedArgs.httpProxyUrl = proxyUrl.ok ? proxyUrl.value : ''
+    }
+    if ('customProviderAccounts' in args) {
+      // Why: this is the real trust boundary for a field the poll loop resolves
+      // secrets against — the renderer's own draft validation is a UX nicety,
+      // not enforcement. Reject the whole update on any invalid entry (bad
+      // https:// scheme, duplicate id/name, missing mapping-mode fields) rather
+      // than persisting a partially-trusted array.
+      const parsed = CustomProviderAccountList.safeParse(args.customProviderAccounts)
+      if (parsed.success) {
+        sanitizedArgs.customProviderAccounts = parsed.data
+      } else {
+        delete sanitizedArgs.customProviderAccounts
+      }
     }
     if ('httpProxyBypassRules' in args) {
       sanitizedArgs.httpProxyBypassRules = normalizeProxyBypassRules(args.httpProxyBypassRules)

@@ -11343,6 +11343,88 @@
         },
         "shortcutDefinitionCatalog": {
           "missionControlConflict": "Blocked by Mission Control. Remap here or change it in System Settings."
+        },
+        "CustomProviderAccountCard": {
+          "disabled": "Disabled",
+          "editAria": "Edit",
+          "error": "Error",
+          "fetching": "Fetching…",
+          "pending": "Not fetched yet",
+          "removeAria": "Remove",
+          "staleSuffix": "{{value0}} (stale)",
+          "toggleAria": "Enable {{value0}}"
+        },
+        "CustomProviderAccountForm": {
+          "addAccount": "Add Account",
+          "addPath": "Add another",
+          "addTitle": "Add custom provider",
+          "cancel": "Cancel",
+          "description": "Point Orca at an internal usage-tracking endpoint. No credentials leave this device except to the URL you enter.",
+          "editTitle": "Edit custom provider",
+          "icon": "Icon",
+          "limitPath": "Limit path",
+          "limitPathPlaceholder": "totalDailyLimit",
+          "mappingMode": "Response mapping",
+          "name": "Name",
+          "namePlaceholder": "Internal Gateway",
+          "percentMode": "Percent field (0-100)",
+          "percentPath": "Percent path",
+          "percentPathPlaceholder": "usage.percent",
+          "saveChanges": "Save Changes",
+          "test": "Test & Preview",
+          "testFailed": "Test failed",
+          "testOk": "Success — {{value0}}%",
+          "testRequired": "A successful test is required before saving.",
+          "token": "Bearer token",
+          "tokenEditPlaceholder": "Leave blank to keep the existing token",
+          "tokenEnvVar": "Token env var (optional)",
+          "tokenEnvVarHelp": "If this environment variable has a value on this machine, it is used instead of the Bearer token above — re-checked on every refresh.",
+          "tokenEnvVarPlaceholder": "MY_INTERNAL_API_KEY",
+          "tokenPlaceholder": "Bearer …",
+          "url": "Usage URL",
+          "urlHelp": "Supports {yyyy}/{mm}/{dd} placeholders, replaced with today’s UTC date on every call.",
+          "urlPlaceholder": "https://internal.example.com/usage?year={yyyy}&month={mm}&day={dd}",
+          "usedLimitMode": "Used / limit fields",
+          "usedPathPlaceholder": "summary.totalInputTokens",
+          "usedPaths": "Used-value paths (summed)"
+        },
+        "CustomProviderAccountsSection": {
+          "add": "Add Provider",
+          "added": "Provider added",
+          "description": "Add an internal usage-tracking endpoint to show its usage in the status bar.",
+          "empty": "No custom providers configured.",
+          "removeFailed": "Failed to remove provider",
+          "removed": "Provider removed",
+          "saveFailed": "Failed to save provider",
+          "title": "Custom Providers",
+          "updated": "Provider updated"
+        },
+        "CustomProviderJsonPanel": {
+          "help": "Stays in sync with the fields above in both directions. The token is never shown here.",
+          "title": "Config JSON"
+        },
+        "customProviderDraft": {
+          "duplicateName": "An account named \"{{value0}}\" already exists.",
+          "limitPathRequired": "Limit path is required.",
+          "nameRequired": "Name is required.",
+          "percentPathRequired": "Percent path is required.",
+          "urlMustBeHttps": "Usage URL must start with https://.",
+          "usedPathRequired": "At least one used-value path is required."
+        },
+        "customProviderIconOptions": {
+          "boxes": "Boxes",
+          "cloud": "Cloud",
+          "globe": "Globe",
+          "server": "Server",
+          "shield": "Shield",
+          "sparkles": "Sparkles",
+          "zap": "Zap"
+        },
+        "customProviderJsonView": {
+          "invalidMappingMode": "\"mappingMode\" must be \"percent\" or \"used-limit\".",
+          "invalidUsedPaths": "\"usedPaths\" must be an array of strings.",
+          "mustBeObject": "Must be a JSON object.",
+          "mustBeString": "\"{{value0}}\" must be a string."
         }
       },
       "right": {

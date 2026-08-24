@@ -225,6 +225,7 @@ import {
 } from './startup/serve-desktop-activation'
 import { RateLimitService } from './rate-limits/service'
 import { readMiniMaxSessionCookie } from './minimax/minimax-cookie-store'
+import { readCustomProviderToken } from './custom-providers/custom-provider-token-store'
 import { getInitialClaudeRateLimitTarget } from './rate-limits/claude-rate-limit-target'
 import { getInitialCodexRateLimitTarget } from './rate-limits/codex-rate-limit-target'
 import { getKimiRuntimeTarget, resolveKimiHome } from './kimi/kimi-runtime-home'
@@ -2624,6 +2625,8 @@ void app.whenReady().then(async () => {
     }
   })
   rateLimits.setGeminiCliOAuthEnabledResolver(() => store!.getSettings().geminiCliOAuthEnabled)
+  rateLimits.setCustomProviderConfigResolver(() => store!.getSettings().customProviderAccounts)
+  rateLimits.setCustomProviderTokenResolver((accountId) => readCustomProviderToken(accountId))
   rateLimits.setNetworkProxySettingsResolver(() => store!.getSettings())
   keybindings = new KeybindingService({
     homePath: app.getPath('home'),
