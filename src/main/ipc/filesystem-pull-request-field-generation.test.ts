@@ -133,7 +133,8 @@ describe('registerFilesystemHandlers', () => {
       const worktreeId = 'repo-1::/remote/repo'
       getSshGitProviderMock.mockReturnValue({
         exec: vi.fn(),
-        executeCommitMessagePlan: vi.fn()
+        executeCommitMessagePlan: vi.fn(),
+        getHostPlatform: vi.fn(() => null)
       })
       const linkedStore = {
         ...store,

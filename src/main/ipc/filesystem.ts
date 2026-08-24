@@ -1519,6 +1519,7 @@ export function registerFilesystemHandlers(
         return generateCommitMessageFromContext(context, resolvedSettings.params, {
           kind: 'remote',
           cwd: args.worktreePath,
+          platform: provider.getHostPlatform()?.os ?? null,
           execute: (plan, cwd, timeoutMs, operation) =>
             provider.executeCommitMessagePlan(plan, cwd, timeoutMs, operation),
           missingBinaryLocation: 'remote PATH'
@@ -1602,7 +1603,8 @@ export function registerFilesystemHandlers(
           agentId as TuiAgent,
           args.worktreePath,
           (plan, cwd, timeoutMs) => provider.executeCommitMessagePlan(plan, cwd, timeoutMs),
-          agentCommandOverride
+          agentCommandOverride,
+          provider.getHostPlatform()?.os ?? null
         )
       }
       let localRuntimeTarget: CommitMessageAgentRuntimeTarget = { runtime: 'host' }
@@ -1732,6 +1734,7 @@ export function registerFilesystemHandlers(
         return generatePullRequestFieldsFromContext(context, resolvedSettings.params, {
           kind: 'remote',
           cwd: args.worktreePath,
+          platform: provider.getHostPlatform()?.os ?? null,
           execute: (plan, cwd, timeoutMs, operation) =>
             provider.executeCommitMessagePlan(plan, cwd, timeoutMs, operation),
           missingBinaryLocation: 'remote PATH'

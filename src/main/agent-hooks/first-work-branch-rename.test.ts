@@ -515,7 +515,8 @@ describe('maybeAutoRenameBranchOnFirstWork', () => {
     const provider = {
       exec: vi.fn(gitResponder({ currentBranch: 'remote-user/Nautilus', hasUpstream: false })),
       renameCurrentBranch: vi.fn(async () => undefined),
-      executeCommitMessagePlan: vi.fn()
+      executeCommitMessagePlan: vi.fn(),
+      getHostPlatform: vi.fn(() => null)
     }
     getSshGitProviderMock.mockReturnValue(provider as never)
     const repo = { id: REPO_ID, path: '/repo', connectionId: 'ssh-1' } as unknown as Repo
@@ -543,7 +544,8 @@ describe('maybeAutoRenameBranchOnFirstWork', () => {
     const provider = {
       exec: vi.fn(gitResponder({ currentBranch: 'you/Nautilus', hasUpstream: false })),
       renameCurrentBranch: vi.fn(async () => undefined),
-      executeCommitMessagePlan: vi.fn()
+      executeCommitMessagePlan: vi.fn(),
+      getHostPlatform: vi.fn(() => null)
     }
     getSshGitProviderMock.mockReturnValueOnce(undefined).mockReturnValue(provider as never)
     const repo = { id: REPO_ID, path: '/repo', connectionId: 'ssh-1' } as unknown as Repo

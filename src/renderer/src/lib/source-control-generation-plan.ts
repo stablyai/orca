@@ -88,8 +88,11 @@ export function planSourceControlTextGeneration(
     ok: true,
     commandLabel: [planned.plan.binary, ...planned.plan.args].join(' '),
     delivery,
+    // Why: a recipe is repo- or global-scoped and can run on hosts with
+    // different path rules, so this preview cannot pick one host's backslash
+    // handling. It always shows POSIX; a Windows target keeps `\` literal.
     caveat:
-      'This checks Orca’s planner only. It does not invoke the CLI, prove PATH or binary availability, or reproduce main-process Windows .cmd resolution.'
+      'This checks Orca’s planner only. It does not invoke the CLI, prove PATH or binary availability, reproduce main-process Windows .cmd resolution, or apply the literal-backslash rules a Windows target uses.'
   }
 }
 

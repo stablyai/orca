@@ -43,6 +43,34 @@ describe('generateCommitMessageFromContext', () => {
     })
   })
 
+  it.each([
+    { platform: 'win32' as const, binary: 'C:\\Tools\\agent.exe' },
+    // The same template on a POSIX remote keeps POSIX escaping, so `\T` is eaten.
+    { platform: 'linux' as const, binary: 'C:Toolsagent.exe' },
+    { platform: null, binary: 'C:Toolsagent.exe' }
+  ])(
+    'plans a $platform remote command override with the right backslash rules',
+    async ({ platform, binary }) => {
+      let plannedBinary: string | null = null
+      await generateCommitMessageFromContext(
+        { branch: 'main', stagedSummary: 'M\tREADME.md', stagedPatch: '+hello' },
+        { agentId: 'custom', model: '', customAgentCommand: 'C:\\Tools\\agent.exe --write' },
+        {
+          kind: 'remote',
+          cwd: 'C:/repo',
+          platform,
+          missingBinaryLocation: 'remote PATH',
+          execute: async (plan) => {
+            plannedBinary = plan.binary
+            return { stdout: 'Add note.\n', stderr: '', exitCode: 0, timedOut: false }
+          }
+        }
+      )
+
+      expect(plannedBinary).toBe(binary)
+    }
+  )
+
   it('reports a remote transport timeout without claiming the agent is unreachable', async () => {
     const transportTimeout = Object.assign(
       new Error('Request "agent.execNonInteractive" timed out after 65000ms'),

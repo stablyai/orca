@@ -29,10 +29,25 @@ describe('commandBackslashMode', () => {
     expect(commandBackslashMode({ ...LOCAL, wslDistro: 'Ubuntu' }, 'win32')).toBe('escape')
   })
 
-  it('keeps POSIX escaping for a remote target, whose platform we cannot see', () => {
+  it('keeps POSIX escaping for a remote target whose platform is not known yet', () => {
     // A Windows client driving a Linux host is the case this protects.
     expect(commandBackslashMode(REMOTE, 'win32')).toBe('escape')
+    expect(commandBackslashMode({ ...REMOTE, platform: null }, 'win32')).toBe('escape')
   })
+
+  it('reads backslashes literally for a remote host the relay reported as win32', () => {
+    // The client platform must not matter — only the host that runs the command.
+    for (const clientPlatform of ['darwin', 'linux', 'win32'] as const) {
+      expect(commandBackslashMode({ ...REMOTE, platform: 'win32' }, clientPlatform)).toBe('literal')
+    }
+  })
+
+  it.each(['linux', 'darwin'] as const)(
+    'keeps POSIX escaping for a %s remote even from a Windows client',
+    (remotePlatform) => {
+      expect(commandBackslashMode({ ...REMOTE, platform: remotePlatform }, 'win32')).toBe('escape')
+    }
+  )
 
   it('defaults to this process platform when none is given', () => {
     const expected = process.platform === 'win32' ? 'literal' : 'escape'

@@ -1108,11 +1108,9 @@ export class SshRelaySession {
     )
     registerSshFilesystemProvider(this.targetId, fsProvider)
 
-    const gitProvider = new SshGitProvider(
-      this.targetId,
-      mux,
-      this.remoteCliBridgeEnv?.hostPlatform ?? null
-    )
+    // Why: same fallback as the filesystem provider — an incomplete bridge env
+    // must not hide a known win32 host from the git/command-override path.
+    const gitProvider = new SshGitProvider(this.targetId, mux, hostPlatform ?? null)
     registerSshGitProvider(this.targetId, gitProvider)
 
     this.wireUpPtyEvents(ptyProvider, mux, providerGeneration)

@@ -422,3 +422,63 @@ describe('Windows command overrides keep native path separators (#11375)', () =>
     expect(plan.ok && plan.args).toEqual(['-Command', 'write a commit message'])
   })
 })
+
+describe('literal mode still unescapes \\" so existing recipes keep their inner quotes', () => {
+  it('reads \\" inside double quotes as a literal quote, not as the closing delimiter', () => {
+    const r = tokenizeCustomCommandTemplate('claude --msg "she said \\"hi\\""', 'literal')
+
+    expect(r).toEqual({
+      ok: true,
+      tokens: ['claude', '--msg', 'she said "hi"'],
+      spans: expect.any(Array)
+    })
+  })
+
+  it('matches the POSIX default for a template that only escapes quotes', () => {
+    const source = 'agent --json "{\\"k\\":\\"v\\"}"'
+
+    expect(tokenizeCustomCommandTemplate(source, 'literal')).toEqual(
+      tokenizeCustomCommandTemplate(source)
+    )
+  })
+
+  it('reads an unquoted \\" as a literal quote rather than opening a quoted region', () => {
+    const r = tokenizeCustomCommandTemplate('agent --msg=\\"hi\\" --flag', 'literal')
+
+    expect(r.ok && r.tokens).toEqual(['agent', '--msg="hi"', '--flag'])
+  })
+
+  it('leaves a path separator literal even when the same token carries an escaped quote', () => {
+    const r = tokenizeCustomCommandTemplate('"C:\\tools\\a.exe" --msg "say \\"hi\\""', 'literal')
+
+    expect(r.ok && r.tokens).toEqual(['C:\\tools\\a.exe', '--msg', 'say "hi"'])
+  })
+
+  it('halves an even backslash run before a quote so a quoted path can end in a separator', () => {
+    // `"C:\dir\\"` is the CommandLineToArgvW spelling for a trailing separator.
+    const r = tokenizeCustomCommandTemplate('agent "C:\\dir\\\\" --flag', 'literal')
+
+    expect(r.ok && r.tokens).toEqual(['agent', 'C:\\dir\\', '--flag'])
+  })
+
+  it('keeps an odd backslash run before a quote as separators plus a literal quote', () => {
+    const r = tokenizeCustomCommandTemplate('agent "a\\\\\\"b"', 'literal')
+
+    expect(r.ok && r.tokens).toEqual(['agent', 'a\\"b'])
+  })
+
+  it('leaves a backslash run alone when no quote follows it', () => {
+    const r = tokenizeCustomCommandTemplate('agent C:\\\\server\\share\\x.exe', 'literal')
+
+    expect(r.ok && r.tokens).toEqual(['agent', 'C:\\\\server\\share\\x.exe'])
+  })
+
+  it("unescapes only the double quote, so `\\'` keeps the backslash and still opens a group", () => {
+    // Why: `'` groups in both modes. Letting a preceding `\` cancel that would
+    // put backslash back in the business of escaping, which is what literal
+    // mode exists to stop — so `\` stays a byte and `'` keeps its usual job.
+    const r = tokenizeCustomCommandTemplate("agent \\'hi\\' --flag", 'literal')
+
+    expect(r.ok && r.tokens).toEqual(['agent', '\\hi\\', '--flag'])
+  })
+})

@@ -8,13 +8,19 @@ import {
 import { SSH_RELAY_CONFIGURE_GRACE_TIME_METHOD } from '../../shared/ssh-types'
 import { createMockDeps, mockDeploySuccess } from './ssh-relay-session-test-fixtures'
 
-const { acceptOutputDataMock, muxRequestMock, openConsumerSessionMock, pauseAdapterMock } =
-  vi.hoisted(() => ({
-    acceptOutputDataMock: vi.fn().mockResolvedValue(undefined),
-    muxRequestMock: vi.fn(),
-    openConsumerSessionMock: vi.fn(),
-    pauseAdapterMock: vi.fn()
-  }))
+const {
+  acceptOutputDataMock,
+  muxRequestMock,
+  openConsumerSessionMock,
+  pauseAdapterMock,
+  gitProviderConstructorArgs
+} = vi.hoisted(() => ({
+  acceptOutputDataMock: vi.fn().mockResolvedValue(undefined),
+  muxRequestMock: vi.fn(),
+  openConsumerSessionMock: vi.fn(),
+  pauseAdapterMock: vi.fn(),
+  gitProviderConstructorArgs: [] as unknown[][]
+}))
 
 vi.mock('./ssh-relay-deploy', () => ({
   deployAndLaunchRelay: vi.fn()
@@ -83,7 +89,11 @@ vi.mock('../providers/ssh-filesystem-provider', () => ({
 }))
 
 vi.mock('../providers/ssh-git-provider', () => ({
-  SshGitProvider: class MockSshGitProvider {}
+  SshGitProvider: class MockSshGitProvider {
+    constructor(...args: unknown[]) {
+      gitProviderConstructorArgs.push(args)
+    }
+  }
 }))
 
 vi.mock('../ipc/pty', () => ({
@@ -133,6 +143,7 @@ const { registerSshGitProvider, unregisterSshGitProvider } =
 describe('SshRelaySession', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    gitProviderConstructorArgs.length = 0
     openConsumerSessionMock.mockImplementation(async (_mux, options) => ({
       mode: 'legacy-fallback',
       clientInstanceId: options.clientInstanceId,
@@ -263,6 +274,28 @@ describe('SshRelaySession', () => {
     } finally {
       warn.mockRestore()
     }
+  })
+
+  // Why: the git provider is what tells command-override planning to read `\` as
+  // a path separator on a Windows remote (#11375). An incomplete CLI bridge env
+  // must not hide a host platform the relay already reported.
+  it('gives the git provider the host platform even without a full CLI bridge env', async () => {
+    const { mockStore, mockPortForward, getMainWindow } = createMockDeps()
+    const mockConn = { writeFile: vi.fn().mockResolvedValue(undefined) } as unknown as SshConnection
+    vi.mocked(deployAndLaunchRelay).mockResolvedValueOnce({
+      transport: { write: vi.fn(), onData: vi.fn(), onClose: vi.fn() },
+      platform: 'win32-x64',
+      hostPlatform: getRemoteHostPlatform('win32-x64'),
+      remoteHome: 'C:/Users/me',
+      remoteRelayDir: 'C:/Users/me/.orca-remote/relay-v1',
+      // No nodePath, so remoteCliBridgeEnv stays null.
+      sockPath: '\\\\.\\pipe\\orca-relay-123'
+    } as never)
+    const session = new SshRelaySession('target-1', getMainWindow, mockStore, mockPortForward)
+
+    await session.establish(mockConn)
+
+    expect(gitProviderConstructorArgs.at(-1)?.[2]).toMatchObject({ os: 'win32' })
   })
 
   it('does not run POSIX managed hook installers on Windows remotes', async () => {

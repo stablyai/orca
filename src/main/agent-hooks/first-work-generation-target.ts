@@ -17,6 +17,7 @@ export async function resolveGenerationTarget(
     return {
       kind: 'remote',
       cwd: worktreePath,
+      platform: provider.getHostPlatform()?.os ?? null,
       execute: (plan, cwd, timeoutMs, operation) =>
         provider.executeCommitMessagePlan(plan, cwd, timeoutMs, operation),
       missingBinaryLocation: 'remote PATH'

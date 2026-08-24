@@ -603,7 +603,8 @@ describe('RuntimeGitCommands', () => {
     })
     const provider = {
       getStagedCommitContext: vi.fn().mockResolvedValue(context),
-      executeCommitMessagePlan: vi.fn()
+      executeCommitMessagePlan: vi.fn(),
+      getHostPlatform: vi.fn(() => null)
     }
     mocks.getSshGitProvider.mockReturnValue(provider)
     const commands = new RuntimeGitCommands({
@@ -672,7 +673,8 @@ describe('RuntimeGitCommands', () => {
     mocks.generateCommitMessageFromContext.mockResolvedValue({ success: true, message: 'docs' })
     mocks.getSshGitProvider.mockReturnValue({
       getStagedCommitContext: vi.fn().mockResolvedValue(context),
-      executeCommitMessagePlan: vi.fn()
+      executeCommitMessagePlan: vi.fn(),
+      getHostPlatform: vi.fn(() => null)
     })
     const commands = new RuntimeGitCommands({
       resolveRuntimeGitTarget: async () => ({
@@ -827,7 +829,8 @@ describe('RuntimeGitCommands', () => {
     mocks.generatePullRequestFieldsFromContext.mockResolvedValue({ success: true, fields: {} })
     mocks.getSshGitProvider.mockReturnValue({
       exec: vi.fn(),
-      executeCommitMessagePlan: vi.fn()
+      executeCommitMessagePlan: vi.fn(),
+      getHostPlatform: vi.fn(() => null)
     })
 
     for (const connectionId of [undefined, 'conn-1']) {

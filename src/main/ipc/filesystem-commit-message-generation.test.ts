@@ -371,7 +371,8 @@ describe('registerFilesystemHandlers', () => {
     resolveCommitMessageSettingsMock.mockReturnValue({ ok: true, params })
     getSshGitProviderMock.mockReturnValue({
       getStagedCommitContext: vi.fn().mockResolvedValue(context),
-      executeCommitMessagePlan: vi.fn()
+      executeCommitMessagePlan: vi.fn(),
+      getHostPlatform: vi.fn(() => null)
     })
     generateCommitMessageFromContextMock.mockResolvedValue({ success: true, message: 'Add file' })
     const linkedStore = {
@@ -482,7 +483,8 @@ describe('registerFilesystemHandlers', () => {
     resolveCommitMessageSettingsMock.mockReturnValue({ ok: true, params })
     getSshGitProviderMock.mockReturnValue({
       getStagedCommitContext: vi.fn().mockResolvedValue(context),
-      executeCommitMessagePlan
+      executeCommitMessagePlan,
+      getHostPlatform: vi.fn(() => null)
     })
     generateCommitMessageFromContextMock.mockResolvedValue({
       success: true,

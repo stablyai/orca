@@ -282,7 +282,10 @@ describe('registerFilesystemHandlers', () => {
       defaultModelId: 'auto'
     })
     const executeCommitMessagePlan = vi.fn()
-    getSshGitProviderMock.mockReturnValue({ executeCommitMessagePlan })
+    getSshGitProviderMock.mockReturnValue({
+      executeCommitMessagePlan,
+      getHostPlatform: vi.fn(() => ({ os: 'win32' }))
+    })
     const storeWithOverride = {
       ...store,
       getSettings: () => ({
@@ -303,7 +306,9 @@ describe('registerFilesystemHandlers', () => {
       'cursor',
       '/remote/repo',
       expect.any(Function),
-      'npx cursor-agent'
+      'npx cursor-agent',
+      // The remote OS reaches planning, so a win32 host reads `\` as a path separator.
+      'win32'
     )
     const execute = discoverCommitMessageModelsRemoteMock.mock.calls[0]?.[2] as (
       plan: unknown,

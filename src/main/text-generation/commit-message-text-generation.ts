@@ -66,6 +66,7 @@ import { withMacTailscaleDnsHint } from '../network/macos-tailscale-dns-diagnost
 import { wslAwareSpawn } from '../git/runner'
 import { terminateWindowsProcessTree } from '../windows-process-tree-kill'
 import { isSshMuxRequestTimeoutError } from '../ssh/ssh-channel-multiplexer'
+import type { RemoteOperatingSystem } from '../ssh/ssh-remote-platform'
 
 const GENERATION_TIMEOUT_MS = 60_000
 const MAX_AGENT_OUTPUT_BYTES = 4 * 1024 * 1024
@@ -111,6 +112,9 @@ export type CommitMessageGenerationTarget =
   | {
       kind: 'remote'
       cwd: string
+      /** OS the relay reported for this host. Null until it is known, which keeps
+       *  `\` POSIX-escaped rather than guessing at the remote's path rules. */
+      platform?: RemoteOperatingSystem | null
       execute: (
         plan: CommitMessagePlan,
         cwd: string,
@@ -517,7 +521,8 @@ export async function discoverCommitMessageModelsRemote(
     cwd: string,
     timeoutMs: number
   ) => Promise<RemoteCommitMessageExecResult>,
-  agentCommandOverride?: string
+  agentCommandOverride?: string,
+  remotePlatform?: RemoteOperatingSystem | null
 ): Promise<DiscoverCommitMessageModelsResult> {
   const spec = getAgentModelProbeSpec(agentId)
   if (!spec) {
@@ -526,7 +531,11 @@ export async function discoverCommitMessageModelsRemote(
   if (spec.modelSource === 'static' || !spec.modelDiscovery) {
     return toModelDiscoveryCapability(spec)
   }
-  const planned = planModelDiscovery(spec, agentCommandOverride)
+  const planned = planModelDiscovery(
+    spec,
+    agentCommandOverride,
+    remotePlatform === 'win32' ? 'literal' : 'escape'
+  )
   if (!planned.ok) {
     return { success: false, error: planned.error }
   }
@@ -836,16 +845,18 @@ function runLocalPlan(
 /**
  * How the user's command override should read `\`.
  *
- * `'literal'` only when the command provably runs on native Windows: a LOCAL
- * target, on win32, with no WSL distro. A WSL target runs a Linux binary inside
- * the distro, and a remote target runs on a host whose platform this process
- * cannot see — POSIX escaping stays the default for both.
+ * `'literal'` only when the command provably runs on native Windows: a local
+ * target on win32 with no WSL distro, or a remote target the relay has reported
+ * as win32. A WSL target runs a Linux binary inside the distro, and a remote
+ * host of unknown platform keeps POSIX escaping rather than guessing.
  */
 export function commandBackslashMode(
   target: CommitMessageGenerationTarget,
   platform: NodeJS.Platform = process.platform
 ): CommandTemplateBackslash {
-  return platform === 'win32' && target.kind === 'local' && !target.wslDistro ? 'literal' : 'escape'
+  const targetPlatform: NodeJS.Platform | null | undefined =
+    target.kind === 'remote' ? target.platform : target.wslDistro ? 'linux' : platform
+  return targetPlatform === 'win32' ? 'literal' : 'escape'
 }
 
 type LocalGenerationTarget = Extract<CommitMessageGenerationTarget, { kind: 'local' }>
