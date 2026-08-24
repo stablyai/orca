@@ -3,10 +3,11 @@ import type { RateLimitState } from '../../shared/rate-limit-types'
 import type { RateLimitService } from './service'
 import { getInitialClaudeRateLimitTarget } from './claude-rate-limit-target'
 import { getInitialCodexRateLimitTarget } from './codex-rate-limit-target'
+import { getGrokRuntimeTarget } from '../grok/grok-runtime-home'
 
 type AccountRuntimeRateLimitService = Pick<
   RateLimitService,
-  'getState' | 'refreshClaudeForTarget' | 'refreshCodexForTarget'
+  'getState' | 'refreshClaudeForTarget' | 'refreshCodexForTarget' | 'refreshGrokForTarget'
 >
 
 type RuntimeTarget = {
@@ -14,6 +15,7 @@ type RuntimeTarget = {
   wslDistro?: string | null
 }
 
+/** Build a settings listener that refreshes providers when their local runtime changes. */
 export function createAccountRuntimeTargetSettingsSync(
   rateLimits: AccountRuntimeRateLimitService,
   initialSettings: GlobalSettings,
@@ -29,8 +31,9 @@ export function createAccountRuntimeTargetSettingsSync(
     const nextSettingsTargets = getSettingsTargets(settings, platform)
     const claudePolicyChanged = !isSameTarget(settingsTargets.claude, nextSettingsTargets.claude)
     const codexPolicyChanged = !isSameTarget(settingsTargets.codex, nextSettingsTargets.codex)
+    const grokPolicyChanged = !isSameTarget(settingsTargets.grok, nextSettingsTargets.grok)
     settingsTargets = nextSettingsTargets
-    if (!claudePolicyChanged && !codexPolicyChanged) {
+    if (!claudePolicyChanged && !codexPolicyChanged && !grokPolicyChanged) {
       return
     }
 
@@ -42,18 +45,24 @@ export function createAccountRuntimeTargetSettingsSync(
     if (codexPolicyChanged && !isSameTarget(current.codexTarget, nextSettingsTargets.codex)) {
       refreshes.push(rateLimits.refreshCodexForTarget(nextSettingsTargets.codex))
     }
+    if (grokPolicyChanged) {
+      refreshes.push(rateLimits.refreshGrokForTarget(nextSettingsTargets.grok))
+    }
 
     await Promise.all(refreshes)
   }
 }
 
+/** Resolve effective local-account targets for every runtime-aware provider. */
 function getSettingsTargets(settings: GlobalSettings, platform: NodeJS.Platform) {
   return {
     claude: getInitialClaudeRateLimitTarget(settings, platform),
-    codex: getInitialCodexRateLimitTarget(settings, platform)
+    codex: getInitialCodexRateLimitTarget(settings, platform),
+    grok: getGrokRuntimeTarget(settings, platform)
   }
 }
 
+/** Detect settings patches that can change an effective local-account target. */
 function containsAccountRuntimeTargetUpdate(updates: Partial<GlobalSettings>): boolean {
   return (
     'localAccountRuntime' in updates ||
@@ -62,6 +71,7 @@ function containsAccountRuntimeTargetUpdate(updates: Partial<GlobalSettings>): b
   )
 }
 
+/** Compare normalized host or WSL target identity. */
 function isSameTarget(current: RuntimeTarget, next: RuntimeTarget): boolean {
   return (
     (current.runtime ?? 'host') === (next.runtime ?? 'host') &&

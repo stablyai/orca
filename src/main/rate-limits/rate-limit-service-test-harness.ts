@@ -107,7 +107,7 @@ export function resetRateLimitProviderMocks(): void {
     status: 'unavailable'
   })
   vi.mocked(hasMiniMaxSessionCookie).mockReturnValue(false)
-  vi.mocked(readGrokAuthSession).mockReturnValue({ status: 'missing' })
+  vi.mocked(readGrokAuthSession).mockResolvedValue({ status: 'missing' })
 }
 
 type RateLimitWindow = Parameters<RateLimitService['attach']>[0]

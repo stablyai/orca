@@ -242,7 +242,8 @@ async function fetchMonthlyUsageFallback(
 export async function fetchGrokRateLimits(
   options: { signal?: AbortSignal; authReadResult?: GrokAuthReadResult } = {}
 ): Promise<ProviderRateLimits> {
-  const readResult = options.authReadResult ?? readGrokAuthSession()
+  const readResult =
+    options.authReadResult ?? (await readGrokAuthSession({ signal: options.signal }))
   if (readResult.status === 'missing') {
     return result('unavailable', 'Not signed in to Grok — run grok login')
   }

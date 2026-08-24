@@ -11,12 +11,13 @@ function createServiceTargets(
   return {
     getState: vi.fn(() => state),
     refreshClaudeForTarget: vi.fn(async () => state),
-    refreshCodexForTarget: vi.fn(async () => state)
+    refreshCodexForTarget: vi.fn(async () => state),
+    refreshGrokForTarget: vi.fn(async () => state)
   }
 }
 
 describe('createAccountRuntimeTargetSettingsSync', () => {
-  it('retargets only Claude and Codex when auto changes to WSL', async () => {
+  it('retargets Claude, Codex, and Grok when auto changes to WSL', async () => {
     const service = createServiceTargets(
       { runtime: 'host', wslDistro: null },
       { runtime: 'host', wslDistro: null }
@@ -42,6 +43,7 @@ describe('createAccountRuntimeTargetSettingsSync', () => {
     expect(service.refreshClaudeForTarget).toHaveBeenCalledWith(expectedTarget)
     expect(service.refreshCodexForTarget).toHaveBeenCalledOnce()
     expect(service.refreshCodexForTarget).toHaveBeenCalledWith(expectedTarget)
+    expect(service.refreshGrokForTarget).toHaveBeenCalledWith(expectedTarget)
   })
 
   it('does no work for unrelated settings updates', async () => {
@@ -57,6 +59,7 @@ describe('createAccountRuntimeTargetSettingsSync', () => {
     expect(service.getState).not.toHaveBeenCalled()
     expect(service.refreshClaudeForTarget).not.toHaveBeenCalled()
     expect(service.refreshCodexForTarget).not.toHaveBeenCalled()
+    expect(service.refreshGrokForTarget).not.toHaveBeenCalled()
   })
 
   it('preserves a manual runtime when the settings-derived policy does not change', async () => {
@@ -82,6 +85,7 @@ describe('createAccountRuntimeTargetSettingsSync', () => {
     expect(service.getState).not.toHaveBeenCalled()
     expect(service.refreshClaudeForTarget).not.toHaveBeenCalled()
     expect(service.refreshCodexForTarget).not.toHaveBeenCalled()
+    expect(service.refreshGrokForTarget).not.toHaveBeenCalled()
   })
 
   it('refreshes only the provider whose current target differs', async () => {
@@ -104,5 +108,9 @@ describe('createAccountRuntimeTargetSettingsSync', () => {
     expect(service.refreshClaudeForTarget).not.toHaveBeenCalled()
     expect(service.refreshCodexForTarget).toHaveBeenCalledOnce()
     expect(service.refreshCodexForTarget).toHaveBeenCalledWith({ runtime: 'host' })
+    expect(service.refreshGrokForTarget).toHaveBeenCalledWith({
+      runtime: 'host',
+      wslDistro: null
+    })
   })
 })

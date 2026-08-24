@@ -42,7 +42,8 @@ vi.mock('./grok-fetcher', () => ({
 }))
 
 vi.mock('./grok-auth', () => ({
-  readGrokAuthSession: vi.fn(() => ({ status: 'missing' }))
+  isGrokAccessTokenFresh: vi.fn(() => true),
+  readGrokAuthSession: vi.fn(async () => ({ status: 'missing' }))
 }))
 
 vi.mock('../minimax/minimax-cookie-store', () => ({

@@ -1,22 +1,14 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { getGrokAccountStatus } from './status'
-import { isGrokAccessTokenFresh, readGrokAuthSession } from '../rate-limits/grok-auth'
+import { isGrokAccessTokenFresh } from '../rate-limits/grok-auth'
 
 vi.mock('../rate-limits/grok-auth', () => ({
-  isGrokAccessTokenFresh: vi.fn(),
-  readGrokAuthSession: vi.fn()
+  isGrokAccessTokenFresh: vi.fn()
 }))
 
 describe('getGrokAccountStatus', () => {
-  beforeEach(() => {
-    vi.clearAllMocks()
-    vi.mocked(isGrokAccessTokenFresh).mockReturnValue(true)
-  })
-
   it('reports unsigned status when the Grok auth file is missing', () => {
-    vi.mocked(readGrokAuthSession).mockReturnValue({ status: 'missing' })
-
-    expect(getGrokAccountStatus()).toEqual({
+    expect(getGrokAccountStatus({ status: 'missing' })).toEqual({
       signedIn: false,
       email: null,
       teamId: null,
@@ -26,12 +18,12 @@ describe('getGrokAccountStatus', () => {
   })
 
   it('reports auth read errors without exposing token fields', () => {
-    vi.mocked(readGrokAuthSession).mockReturnValue({
-      status: 'error',
-      error: 'Grok auth file is invalid'
-    })
-
-    expect(getGrokAccountStatus()).toEqual({
+    expect(
+      getGrokAccountStatus({
+        status: 'error',
+        error: 'Grok auth file is invalid'
+      })
+    ).toEqual({
       signedIn: false,
       email: null,
       teamId: null,
@@ -41,7 +33,8 @@ describe('getGrokAccountStatus', () => {
   })
 
   it('returns non-secret signed-in metadata and freshness', () => {
-    vi.mocked(readGrokAuthSession).mockReturnValue({
+    vi.mocked(isGrokAccessTokenFresh).mockReturnValue(false)
+    const status = getGrokAccountStatus({
       status: 'ok',
       session: {
         accessToken: 'secret-token',
@@ -52,9 +45,6 @@ describe('getGrokAccountStatus', () => {
         oidcClientId: 'client-1'
       }
     })
-    vi.mocked(isGrokAccessTokenFresh).mockReturnValue(false)
-
-    const status = getGrokAccountStatus()
 
     expect(status).toEqual({
       signedIn: true,
