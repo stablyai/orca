@@ -87,7 +87,7 @@ function plannedPaneKeys(input: AgentHibernationPlannerSnapshot): string[] {
 }
 
 describe('agent sleep planner', () => {
-  it('selects nothing when disabled, active, or foreground', () => {
+  it('selects nothing when disabled or foreground', () => {
     expect(
       plannedWorktrees(
         snapshot({
@@ -98,7 +98,6 @@ describe('agent sleep planner', () => {
         })
       )
     ).toEqual([])
-    expect(plannedWorktrees(snapshot({ activeWorktreeId: 'wt-bg' }))).toEqual([])
     expect(plannedWorktrees(snapshot({ foregroundTerminalTabIds: ['tab-1'] }))).toEqual([])
   })
 
@@ -369,6 +368,7 @@ describe('agent sleep planner', () => {
     expect(
       plannedPaneKeys(
         snapshot({
+          activeWorktreeId: 'wt-bg',
           foregroundTerminalTabIds: ['tab-1'],
           foregroundTerminalLastSeenAtByTabId: {
             'tab-1': NOW

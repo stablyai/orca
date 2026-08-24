@@ -263,7 +263,7 @@ export function planAgentHibernationCandidates(
   const agentEntriesByTabId = getAgentEntriesByTabId(snapshot.agentStatusByPaneKey)
   const candidates: AgentHibernationCandidate[] = []
   for (const [worktreeId, tabs] of Object.entries(snapshot.tabsByWorktree)) {
-    if (!worktreeId || worktreeId === snapshot.activeWorktreeId || tabs.length === 0) {
+    if (!worktreeId || tabs.length === 0) {
       continue
     }
     if (
