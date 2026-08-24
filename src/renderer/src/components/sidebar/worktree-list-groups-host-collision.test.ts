@@ -72,12 +72,12 @@ describe('sidebar rows for a workspace id owned by two hosts', () => {
     expect(new Set(rowKeys).size).toBe(rowKeys.length)
   })
 
-  it('labels each row with the host it lives on', () => {
+  it('labels only the non-local row while preserving host-qualified identity', () => {
     const labels = buildCollidingRows()
       .filter((row) => row.type === 'item')
       .map((row) => row.hostContextLabel)
 
-    expect(labels).toEqual([getExecutionHostLabel('local'), getExecutionHostLabel('ssh:build-box')])
+    expect(labels).toEqual([undefined, getExecutionHostLabel('ssh:build-box')])
   })
 
   it('counts the two hosts separately in the group header', () => {

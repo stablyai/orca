@@ -64,4 +64,17 @@ describe('worktree card property options', () => {
 
     expect(options.find((option) => option.id === 'branch')?.label).toBe('Branch / folder path')
   })
+
+  it('offers the identity properties in both card styles', () => {
+    for (const options of [
+      getWorktreeCardPropertyOptions(),
+      getWorktreeCardPropertyOptions({ newCardStyle: true })
+    ]) {
+      const byId = new Map(options.map((option) => [option.id, option]))
+      expect(byId.get('project-name')?.properties).toEqual(['project-name'])
+      expect(byId.get('host-name')?.properties).toEqual(['host-name'])
+      expect(options.map((option) => option.label)).toContain('Project Name')
+      expect(options.map((option) => option.label)).toContain('Remote Hostname')
+    }
+  })
 })

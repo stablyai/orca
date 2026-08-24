@@ -18,6 +18,9 @@ export const DEFAULT_WORKTREE_CARD_PROPERTIES: WorktreeCardProperty[] = [
   'cli',
   'comment',
   'ports',
+  // Identity stays visible in ungrouped lists; project grouping supplies its own label.
+  'project-name',
+  'host-name',
   // Why: agent activity is the primary reason users opt into the feature, so
   // the Default mode keeps it inline on each card while Compact removes the
   // extra row.
@@ -55,6 +58,8 @@ export const WORKTREE_CARD_PROPERTIES = [
   'cli',
   'comment',
   'ports',
+  'project-name',
+  'host-name',
   'inline-agents'
 ] as const satisfies readonly WorktreeCardProperty[]
 

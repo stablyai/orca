@@ -27,6 +27,7 @@ export function emitPinnedGroup(
   worktreeMap: Map<string, Worktree>,
   nestLineage: boolean,
   cyclicLineageIds: ReadonlySet<string>,
+  hostContextLabelByWorktreeIdentity?: ReadonlyMap<string, string>,
   noticeHostContextLabelByRepoId?: ReadonlyMap<string, NoticeHostContext>
 ): void {
   if (pinnedSectionWorktrees.length === 0) {
@@ -81,6 +82,7 @@ export function emitPinnedGroup(
     collapsedGroups,
     groupDepth: 0,
     sectionKey: PINNED_GROUP_KEY,
+    hostContextLabelByWorktreeIdentity,
     cyclicLineageIds
   })
   if (!allowImportedFallback) {

@@ -18,6 +18,7 @@ export function buildWorktreeCardPresentation(card: WorktreeCardController) {
     repo,
     inPinnedSection,
     hideRepoBadge,
+    projectContextLabel,
     hostContextLabel,
     affiliateListMode,
     flushSurface,
@@ -71,11 +72,22 @@ export function buildWorktreeCardPresentation(card: WorktreeCardController) {
   const showPinnedRepoIcon = inPinnedSection && !!repo
   // Why: new card style retired the Compact/Detailed switch; repo identity uses the compact chip, not a lower pill.
   const showRepoIdentityInTitle = newCardStyle || compactCards
+  const showProjectName = cardProps.includes('project-name')
+  const showHostName = cardProps.includes('host-name')
+  const showPinnedRepoLabel = showPinnedRepoIcon && showProjectName
+  const showProjectContextBadge = showProjectName && !hideRepoBadge && !!projectContextLabel
+  const showProjectContextInTitle = showProjectContextBadge && showRepoIdentityInTitle
+  const showProjectContextInMetaRow = showProjectContextBadge && !showRepoIdentityInTitle
   const showInlineRepoBadge =
-    showRepoIdentityInTitle && !!repo && !hideRepoBadge && !isFolder && !showPinnedRepoIcon
+    showProjectName &&
+    showRepoIdentityInTitle &&
+    !!repo &&
+    !hideRepoBadge &&
+    !isFolder &&
+    !showPinnedRepoIcon
   const showRepoBadgeInMetaRow =
-    !showRepoIdentityInTitle && !!repo && !hideRepoBadge && !showPinnedRepoIcon
-  const showHostContextBadge = !compactCards && !!hostContextLabel
+    showProjectName && !showRepoIdentityInTitle && !!repo && !hideRepoBadge && !showPinnedRepoIcon
+  const showHostContextBadge = showHostName && !!hostContextLabel
   const showDetachedHeadInMetaRow = !compactCards && !isFolder && detachedHeadDisplay !== null
   const showBranch =
     !isFolder &&
@@ -95,7 +107,7 @@ export function buildWorktreeCardPresentation(card: WorktreeCardController) {
   // Why: grouped views can hide the repo badge; don't reserve a blank metadata lane unless there's real content.
   const hasDetailedMetaRowContent = Boolean(
     (showRepoBadgeInMetaRow && repo) ||
-    showHostContextBadge ||
+    showProjectContextInMetaRow ||
     folderMetaRowContent ||
     showBranch ||
     showIdentityInNewCard ||
@@ -258,6 +270,9 @@ export function buildWorktreeCardPresentation(card: WorktreeCardController) {
 
   return {
     showPinnedRepoIcon,
+    showPinnedRepoLabel,
+    showProjectContextInTitle,
+    showProjectContextInMetaRow,
     showInlineRepoBadge,
     showRepoBadgeInMetaRow,
     showHostContextBadge,

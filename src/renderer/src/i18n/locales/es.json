@@ -4421,6 +4421,8 @@
           "65a9820bd1": "Estados de Agents",
           "219ebf1961": "Nombre de rama",
           "folderPathIdentity": "Rama / ruta de carpeta",
+          "projectName": "Nombre del proyecto",
+          "remoteHostname": "Nombre de host remoto",
           "cli": "Orca CLI"
         },
         "SshTargetRow": {

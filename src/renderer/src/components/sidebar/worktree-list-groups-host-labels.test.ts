@@ -150,7 +150,7 @@ describe('buildRows with pinned worktrees', () => {
 
     expect(rows).toMatchObject([
       { type: 'header', key: 'project:github:stablyai/orca', label: 'Orca', count: 2 },
-      { type: 'item', worktree: { id: worktree.id }, hostContextLabel: LOCAL_HOST_LABEL },
+      { type: 'item', worktree: { id: worktree.id } },
       { type: 'item', worktree: { id: runtimeWorktree.id }, hostContextLabel: 'dev box' }
     ])
   })
@@ -257,6 +257,65 @@ describe('buildRows with pinned worktrees', () => {
         expect(row.hostContextLabel).toBeUndefined()
       }
     }
+  })
+
+  it('shows a saved host label for a single-host remote project', () => {
+    const rows = buildRows(
+      'repo',
+      [remoteWorktree],
+      new Map([[remoteRepo.id, remoteRepo]]),
+      null,
+      new Set(),
+      undefined,
+      undefined,
+      undefined,
+      {},
+      new Map([[remoteWorktree.id, remoteWorktree]]),
+      false,
+      undefined,
+      [],
+      new Set(),
+      new Map(),
+      new Map(),
+      [],
+      undefined,
+      [],
+      new Map([['ssh:gpu-vm', 'build server']])
+    )
+
+    expect(rows.filter((row) => row.type === 'item')).toMatchObject([
+      { worktree: { id: remoteWorktree.id }, hostContextLabel: 'build server' }
+    ])
+  })
+
+  it('keeps non-local host identity on pinned rows', () => {
+    const pinnedRemote = { ...remoteWorktree, isPinned: true }
+    const rows = buildRows(
+      'none',
+      [pinnedRemote],
+      new Map([[remoteRepo.id, remoteRepo]]),
+      null,
+      new Set(),
+      undefined,
+      undefined,
+      undefined,
+      {},
+      new Map([[pinnedRemote.id, pinnedRemote]]),
+      false,
+      undefined,
+      [],
+      new Set(),
+      new Map(),
+      new Map(),
+      [],
+      undefined,
+      [],
+      new Map([['ssh:gpu-vm', 'build server']])
+    )
+
+    expect(rows.filter((row) => row.type === 'item')).toMatchObject([
+      { worktree: { id: pinnedRemote.id }, hostContextLabel: 'build server' }
+    ])
   })
 
   it('keeps same-named repos separate without project setup identity', () => {

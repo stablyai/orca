@@ -2,7 +2,11 @@ import React, { useCallback, useEffect, useState } from 'react'
 
 import { DEFAULT_AGENT_ACTIVITY_DISPLAY_MODE } from '../../../../shared/constants'
 import {
+  getExecutionHostLabel,
+  getSettingsFocusedExecutionHostId,
+  getWorktreeExecutionHostId,
   isRuntimeOwnedSshTargetId,
+  LOCAL_EXECUTION_HOST_ID,
   parseExecutionHostId,
   toRuntimeExecutionHostId
 } from '../../../../shared/execution-host'
@@ -21,8 +25,9 @@ import { getDeleteStateForWorktreeHost } from './worktree-delete-state-host-matc
 
 export function useWorktreeCardFoundation({
   worktree,
-  repo
-}: Pick<WorktreeCardProps, 'worktree' | 'repo'>) {
+  repo,
+  hostContextLabel
+}: Pick<WorktreeCardProps, 'worktree' | 'repo' | 'hostContextLabel'>) {
   const openModal = useAppStore((s) => s.openModal)
   const openTaskPage = useAppStore((s) => s.openTaskPage)
   const openAutomationsPage = useAppStore((s) => s.openAutomationsPage)
@@ -34,6 +39,12 @@ export function useWorktreeCardFoundation({
   const setRenamingWorktreeId = useAppStore((s) => s.setRenamingWorktreeId)
   const fetchHostedReviewForBranch = useAppStore((s) => s.fetchHostedReviewForBranch)
   const settings = useAppStore((s) => s.settings)
+  const executionHostId = getWorktreeExecutionHostId(
+    worktree,
+    repo,
+    getSettingsFocusedExecutionHostId(settings)
+  )
+  const parsedExecutionHost = parseExecutionHostId(executionHostId)
   const fetchIssue = useAppStore((s) => s.fetchIssue)
   const fetchLinearIssue = useAppStore((s) => s.fetchLinearIssue)
   const cardProps = useAppStore((s) => s.worktreeCardProperties)
@@ -190,6 +201,25 @@ export function useWorktreeCardFoundation({
       ? selectRuntimeAwareSshTargetLabel(s, sshOwnerEnvironmentId, repo.connectionId)
       : ''
   )
+  const hostContextSshTargetLabel = useAppStore((s) =>
+    parsedExecutionHost?.kind === 'ssh'
+      ? selectRuntimeAwareSshTargetLabel(s, null, parsedExecutionHost.targetId)
+      : ''
+  )
+  const resolvedHostContextLabel =
+    hostContextLabel ??
+    (executionHostId === LOCAL_EXECUTION_HOST_ID
+      ? undefined
+      : (getHostDisplayLabelOverrides(settings).get(executionHostId) ??
+        (parsedExecutionHost?.kind === 'runtime'
+          ? runtimeEnvironmentName
+          : parsedExecutionHost?.kind === 'ssh' &&
+              repo?.connectionId === parsedExecutionHost.targetId
+            ? sshTargetLabel
+            : parsedExecutionHost?.kind === 'ssh'
+              ? hostContextSshTargetLabel
+              : null) ??
+        getExecutionHostLabel(executionHostId)))
 
   return {
     openModal,
@@ -227,6 +257,7 @@ export function useWorktreeCardFoundation({
     setTitleRenaming,
     showRenameErrorDialog,
     setShowRenameErrorDialog,
-    sshTargetLabel
+    sshTargetLabel,
+    hostContextLabel: resolvedHostContextLabel
   }
 }

@@ -112,6 +112,11 @@ export function renderFolderWorkspaceVirtualRow(args: {
         <WorktreeCard
           worktree={folderWorktree}
           repo={undefined}
+          projectContextLabel={
+            row.folderWorkspace.isPinned || ctx.groupBy !== 'repo'
+              ? row.projectGroup.name
+              : undefined
+          }
           isActive={ctx.activeWorktreeId === folderWorktree.id}
           isCurrentWorktree={ctx.currentWorktreeId === folderWorktree.id}
           contentIndent={cardContentIndent}

@@ -10,6 +10,7 @@ import { TruncatedSidebarLabel } from './truncated-sidebar-label'
 import { getDirectoryName } from './worktree-card-model'
 import type { WorktreeCardPresentation } from './worktree-card-presentation'
 import type { WorktreeCardController } from './use-worktree-card-controller'
+import { WorktreeCardProjectLabel } from './worktree-card-project-label'
 
 export function WorktreeCardMetaRow({
   card,
@@ -21,7 +22,6 @@ export function WorktreeCardMetaRow({
   const {
     worktree,
     repo,
-    hostContextLabel,
     identityDisplay,
     isFolder,
     newCardStyle,
@@ -33,7 +33,7 @@ export function WorktreeCardMetaRow({
   } = card
   const {
     showRepoBadgeInMetaRow,
-    showHostContextBadge,
+    showProjectContextInMetaRow,
     showIdentityInNewCard,
     hasHoverDetails,
     showBranch,
@@ -55,13 +55,8 @@ export function WorktreeCardMetaRow({
           </div>
         )}
 
-        {showHostContextBadge && (
-          <Badge
-            variant="secondary"
-            className="h-[16px] max-w-[7rem] shrink-0 rounded border border-border bg-accent px-1.5 text-[10px] font-medium leading-none text-muted-foreground dark:bg-accent/80 dark:border-border/50"
-          >
-            <span className="truncate">{hostContextLabel}</span>
-          </Badge>
+        {showProjectContextInMetaRow && (
+          <WorktreeCardProjectLabel label={card.projectContextLabel!} />
         )}
 
         {showIdentityInNewCard ? (

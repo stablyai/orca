@@ -1334,6 +1334,8 @@ export class Store {
               parsed.ui?._expandedWorktreeCardPropertiesDefaulted === true
             const jiraIssueCardPropDefaulted =
               parsed.ui?._jiraIssueWorktreeCardPropertyDefaulted === true
+            const identityCardPropsDefaulted =
+              parsed.ui?._identityWorktreeCardPropertiesDefaulted === true
             const hadExperimentOn = readDeprecatedExperimentFlag(parsed)
             const deliberateUncheck =
               hadExperimentOn &&
@@ -1377,7 +1379,10 @@ export class Store {
                 jiraIssueCardPropDefaulted || expandedCandidate.includes('jira-issue')
                   ? expandedCandidate
                   : [...expandedCandidate, 'jira-issue' as const]
-              const normalized = normalizeWorktreeCardProperties(jiraCandidate)
+              const identityCandidate = identityCardPropsDefaulted
+                ? jiraCandidate
+                : [...jiraCandidate, 'project-name' as const, 'host-name' as const]
+              const normalized = normalizeWorktreeCardProperties(identityCandidate)
               const changed =
                 normalized.length !== rawCardProps.length ||
                 normalized.some((property, index) => property !== rawCardProps[index])
@@ -1387,7 +1392,8 @@ export class Store {
               migratedCardProps !== undefined ||
               !inlineAgentsMigrated ||
               !expandedCardPropsMigrated ||
-              !jiraIssueCardPropDefaulted
+              !jiraIssueCardPropDefaulted ||
+              !identityCardPropsDefaulted
             ) {
               this.loadNeedsSave = true
             }
@@ -1473,7 +1479,8 @@ export class Store {
               _inlineAgentsDefaultedForExperiment: true,
               _inlineAgentsDefaultedForAllUsers: true,
               _expandedWorktreeCardPropertiesDefaulted: true,
-              _jiraIssueWorktreeCardPropertyDefaulted: true
+              _jiraIssueWorktreeCardPropertyDefaulted: true,
+              _identityWorktreeCardPropertiesDefaulted: true
             }
           })(),
           // Why: volatile schema; zod-validate workspaceSession at read so a bad payload falls to defaults, not a renderer crash.

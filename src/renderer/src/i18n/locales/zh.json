@@ -4414,6 +4414,8 @@
           "219ebf1961": "分支名称",
           "automation": "自动化",
           "folderPathIdentity": "分支 / 文件夹路径",
+          "projectName": "项目名称",
+          "remoteHostname": "远程主机名",
           "cli": "Orca CLI"
         },
         "SshTargetRow": {

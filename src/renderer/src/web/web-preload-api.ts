@@ -32,6 +32,7 @@ import type {
 } from '../../../shared/global-settings-types'
 import type { OnboardingState } from '../../../shared/onboarding-state-types'
 import type { PersistedUIState } from '../../../shared/persisted-ui-state-types'
+import { WORKTREE_CARD_IDENTITY_PROPERTIES_RUNTIME_CAPABILITY } from '../../../shared/protocol-version'
 import {
   omitPairingLocalUiFields,
   type PairedUiState,
@@ -108,6 +109,7 @@ import {
 import { normalizeWorktreeVisibilityDefaults } from '../../../shared/external-worktree-visibility'
 import type { RateLimitState } from '../../../shared/rate-limit-types'
 import type { RuntimeStatus, RuntimeSyncWindowGraph } from '../../../shared/runtime-types'
+import type { WorktreeCardProperty } from '../../../shared/ui-chrome-types'
 import { assertFileMutationOwnershipCapability } from '../../../shared/file-mutation-ownership'
 import {
   findKeybindingConflicts,
@@ -168,6 +170,7 @@ import { mergeWorkspaceCleanupUIState } from '../../../shared/workspace-cleanup-
 
 const SETTINGS_STORAGE_KEY = 'orca.web.settings.v1'
 const UI_STORAGE_KEY = 'orca.web.ui.v1'
+const PENDING_IDENTITY_CARD_PROPERTIES_STORAGE_KEY = 'orca.web.pendingIdentityCardProperties.v1'
 const SESSION_STORAGE_KEY = 'orca.web.workspaceSession.v1'
 const ONBOARDING_STORAGE_KEY = 'orca.web.onboarding.v1'
 const GITHUB_CACHE_STORAGE_KEY = 'orca.web.githubCache.v1'
@@ -2704,21 +2707,48 @@ function createHooksApi(): NonNullable<Partial<PreloadApi>['hooks']> {
 
 function createWebUiApi(): NonNullable<Partial<PreloadApi>['ui']> {
   let zoomLevel = readLocalWebUIState().uiZoomLevel
+  let supportsIdentityCardProperties: boolean | undefined
+  type UiRpcResult = { ui: PairedUiState; capabilities?: readonly string[] }
+  const recordUiCapabilities = (result: UiRpcResult): boolean => {
+    supportsIdentityCardProperties =
+      result.capabilities?.includes(WORKTREE_CARD_IDENTITY_PROPERTIES_RUNTIME_CAPABILITY) === true
+    return supportsIdentityCardProperties
+  }
   return {
     get: async () => {
       try {
-        const result = await callRuntimeResult<{ ui: PairedUiState }>('ui.get', undefined, 15_000)
+        const result = await callRuntimeResult<UiRpcResult>('ui.get', undefined, 15_000)
+        const supportsIdentityProperties = recordUiCapabilities(result)
         const local = readLocalWebUIState()
+        const pendingIdentityProperties = readJson<PendingIdentityCardProperties | null>(
+          PENDING_IDENTITY_CARD_PROPERTIES_STORAGE_KEY,
+          null
+        )
+        let incoming = result.ui
+        if (supportsIdentityProperties && pendingIdentityProperties) {
+          const synced = await callRuntimeResult<UiRpcResult>(
+            'ui.set',
+            {
+              worktreeCardProperties: mergeIdentityCardProperties(
+                result.ui.worktreeCardProperties ?? local.worktreeCardProperties,
+                pendingIdentityProperties.properties
+              )
+            },
+            15_000
+          )
+          incoming = synced.ui
+          window.localStorage.removeItem(PENDING_IDENTITY_CARD_PROPERTIES_STORAGE_KEY)
+        }
         const next = {
-          ...mergeHostWebUIState(local, result.ui),
-          osc52ClipboardDefaultOnNoticePending: mergeOsc52ClipboardNoticePending(local, result.ui),
+          ...mergeHostWebUIState(local, incoming, !supportsIdentityProperties),
+          osc52ClipboardDefaultOnNoticePending: mergeOsc52ClipboardNoticePending(local, incoming),
           featureInteractions: mergeFeatureInteractionState(
             local.featureInteractions,
-            result.ui.featureInteractions
+            incoming.featureInteractions
           ),
           contextualToursSeenIds: mergeContextualTourSeenIds(
             local.contextualToursSeenIds,
-            result.ui.contextualToursSeenIds
+            incoming.contextualToursSeenIds
           )
         }
         writeJson(UI_STORAGE_KEY, next)
@@ -2734,9 +2764,35 @@ function createWebUiApi(): NonNullable<Partial<PreloadApi>['ui']> {
       zoomLevel = next.uiZoomLevel
       // Why strip here too when the host also strips: an old host predating that strip would
       // otherwise persist this browser's runtime:web-* keys over the desktop profile's order.
-      const hostUpdates = omitPairingLocalUiFields(updates)
+      const hostUpdates = omitPairingLocalUiFields(updates) as Partial<PersistedUIState>
+      if (hostUpdates.worktreeCardProperties && supportsIdentityCardProperties !== true) {
+        writeJson<PendingIdentityCardProperties>(PENDING_IDENTITY_CARD_PROPERTIES_STORAGE_KEY, {
+          properties: getIdentityCardProperties(hostUpdates.worktreeCardProperties)
+        })
+        hostUpdates.worktreeCardProperties = hostUpdates.worktreeCardProperties.filter(
+          (property) => !IDENTITY_CARD_PROPERTY_SET.has(property)
+        )
+      }
       try {
-        await callRuntimeResult('ui.set', hostUpdates, 15_000)
+        const result = await callRuntimeResult<UiRpcResult>('ui.set', hostUpdates, 15_000)
+        const hostSupportsIdentityProperties = recordUiCapabilities(result)
+        const pendingIdentityProperties = readJson<PendingIdentityCardProperties | null>(
+          PENDING_IDENTITY_CARD_PROPERTIES_STORAGE_KEY,
+          null
+        )
+        if (hostSupportsIdentityProperties && pendingIdentityProperties) {
+          await callRuntimeResult(
+            'ui.set',
+            {
+              worktreeCardProperties: mergeIdentityCardProperties(
+                result.ui.worktreeCardProperties ?? next.worktreeCardProperties,
+                pendingIdentityProperties.properties
+              )
+            },
+            15_000
+          )
+          window.localStorage.removeItem(PENDING_IDENTITY_CARD_PROPERTIES_STORAGE_KEY)
+        }
       } catch {
         // Why: unpaired/offline web clients still need local UI persistence.
       }
@@ -2756,14 +2812,15 @@ function createWebUiApi(): NonNullable<Partial<PreloadApi>['ui']> {
       })
       writeJson(UI_STORAGE_KEY, optimistic)
       try {
-        const result = await callRuntimeResult<{ ui: PairedUiState }>(
+        const result = await callRuntimeResult<UiRpcResult>(
           'ui.recordFeatureInteraction',
           id,
           15_000
         )
+        const supportsIdentityProperties = recordUiCapabilities(result)
         const local = readLocalWebUIState()
         const next = {
-          ...mergeHostWebUIState(local, result.ui),
+          ...mergeHostWebUIState(local, result.ui, !supportsIdentityProperties),
           osc52ClipboardDefaultOnNoticePending: mergeOsc52ClipboardNoticePending(local, result.ui),
           featureInteractions: mergeFeatureInteractionState(
             local.featureInteractions,
@@ -4168,10 +4225,40 @@ function mergeWebUIState(
   }
 }
 
+const IDENTITY_CARD_PROPERTIES = [
+  'project-name',
+  'host-name'
+] as const satisfies readonly WorktreeCardProperty[]
+const IDENTITY_CARD_PROPERTY_SET = new Set<WorktreeCardProperty>(IDENTITY_CARD_PROPERTIES)
+type IdentityCardProperty = (typeof IDENTITY_CARD_PROPERTIES)[number]
+type PendingIdentityCardProperties = { properties: IdentityCardProperty[] }
+
+function getIdentityCardProperties(
+  properties: readonly WorktreeCardProperty[]
+): IdentityCardProperty[] {
+  return properties.filter((property): property is IdentityCardProperty =>
+    IDENTITY_CARD_PROPERTY_SET.has(property)
+  )
+}
+
+function mergeIdentityCardProperties(
+  hostProperties: readonly WorktreeCardProperty[],
+  identityProperties: readonly IdentityCardProperty[]
+): WorktreeCardProperty[] {
+  return normalizeWorktreeCardProperties([
+    ...hostProperties.filter((property) => !IDENTITY_CARD_PROPERTY_SET.has(property)),
+    ...identityProperties
+  ])
+}
+
 // Why pin instead of trusting the host's strip: an old host still returns these fields, and for a
 // profile a pre-fix drag poisoned they echo back the same runtime:web-* keys this browser minted,
 // which then match its own repos and beat every newer drag.
-function mergeHostWebUIState(local: PersistedUIState, incoming: PairedUiState): PersistedUIState {
+function mergeHostWebUIState(
+  local: PersistedUIState,
+  incoming: PairedUiState,
+  preserveLocalIdentityCardProperties = false
+): PersistedUIState {
   // Why `satisfies Record<...>` rather than a `Pick<...>` annotation: every member is optional in
   // PersistedUIState, so Pick would accept a literal that silently skipped a newly added member.
   const pinned = {
@@ -4179,7 +4266,16 @@ function mergeHostWebUIState(local: PersistedUIState, incoming: PairedUiState): 
     manualRepoOrder: local.manualRepoOrder,
     workspaceHostOrder: local.workspaceHostOrder
   } satisfies Record<PairingLocalUiField, unknown> & Partial<PersistedUIState>
-  return { ...mergeWebUIState(local, incoming), ...pinned }
+  const projectedIncoming = preserveLocalIdentityCardProperties
+    ? {
+        ...incoming,
+        worktreeCardProperties: mergeIdentityCardProperties(
+          incoming.worktreeCardProperties ?? local.worktreeCardProperties,
+          getIdentityCardProperties(local.worktreeCardProperties)
+        )
+      }
+    : incoming
+  return { ...mergeWebUIState(local, projectedIncoming), ...pinned }
 }
 
 function mergeFeatureInteractionState(

@@ -14,27 +14,38 @@ import type { WorktreeCardPresentation } from './worktree-card-presentation'
 import { WorktreeCardSshHostControl } from './WorktreeCardSshHostControl'
 import { WorktreeTitleInlineRename } from './WorktreeTitleInlineRename'
 import type { WorktreeCardController } from './use-worktree-card-controller'
+import { WorktreeCardProjectLabel } from './worktree-card-project-label'
 
 // Why: pinned repo icon and compact inline badge share this chip shell so both repo cues read as the same affordance.
 function RepoIdentityChip({
   repo,
+  showLabel = false,
   children
 }: {
   repo: Repo
+  showLabel?: boolean
   children: React.ReactNode
 }): React.JSX.Element {
   return (
     <Tooltip>
       <TooltipTrigger asChild>
         <span
-          className="inline-flex size-4 shrink-0 items-center justify-center rounded-[4px] border border-worktree-sidebar-border bg-worktree-sidebar-accent/55"
+          className={cn(
+            'inline-flex h-4 shrink-0 items-center justify-center rounded-[4px] border border-worktree-sidebar-border bg-worktree-sidebar-accent/55',
+            showLabel ? 'max-w-[7rem] gap-1 px-1' : 'size-4'
+          )}
           aria-label={translate(
             'auto.components.sidebar.WorktreeCard.35ccfe2475',
             'Project {{value0}}',
             { value0: repo.displayName }
           )}
         >
-          {children}
+          <span className="flex size-3 shrink-0 items-center justify-center">{children}</span>
+          {showLabel && (
+            <span className="min-w-0 truncate text-[10px] font-semibold leading-none text-muted-foreground lowercase">
+              {repo.displayName}
+            </span>
+          )}
         </span>
       </TooltipTrigger>
       <TooltipContent side="right" sideOffset={8}>
@@ -80,7 +91,10 @@ export function WorktreeCardHeader({
   } = card
   const {
     showPinnedRepoIcon,
+    showPinnedRepoLabel,
+    showProjectContextInTitle,
     showInlineRepoBadge,
+    showHostContextBadge,
     showHeaderActions,
     showTitleRowPrimary,
     showDeleteQuickAction,
@@ -93,7 +107,7 @@ export function WorktreeCardHeader({
     <div className="flex min-w-0 items-center justify-between gap-2">
       <div className="flex min-w-0 flex-1 items-center gap-1.5">
         {showPinnedRepoIcon && (
-          <RepoIdentityChip repo={repo!}>
+          <RepoIdentityChip repo={repo!} showLabel={showPinnedRepoLabel}>
             <RepoIconGlyph
               repoIcon={repo!.repoIcon}
               color={resolveRepoHeaderColor(repo!.badgeColor)}
@@ -156,7 +170,7 @@ export function WorktreeCardHeader({
         )}
 
         {showInlineRepoBadge && (
-          <RepoIdentityChip repo={repo!}>
+          <RepoIdentityChip repo={repo!} showLabel>
             <RepoIconGlyph
               repoIcon={repo!.repoIcon}
               color={resolveRepoHeaderColor(repo!.badgeColor)}
@@ -164,6 +178,10 @@ export function WorktreeCardHeader({
               iconClassName="size-3"
             />
           </RepoIdentityChip>
+        )}
+
+        {showProjectContextInTitle && (
+          <WorktreeCardProjectLabel label={card.projectContextLabel!} />
         )}
 
         {/* Why: unread alert lives in the left status lane; title-row contrast comes from weight and dimmed read titles. */}
@@ -229,6 +247,22 @@ export function WorktreeCardHeader({
                 'auto.components.sidebar.WorktreeCard.0777de5970',
                 'Primary worktree (original clone directory)'
               )}
+            </TooltipContent>
+          </Tooltip>
+        )}
+
+        {showHostContextBadge && (
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Badge
+                variant="secondary"
+                className="h-[16px] max-w-[7rem] shrink-0 rounded border border-border bg-accent px-1.5 text-[10px] font-medium leading-none text-muted-foreground dark:bg-accent/80 dark:border-border/50"
+              >
+                <span className="truncate">{card.hostContextLabel}</span>
+              </Badge>
+            </TooltipTrigger>
+            <TooltipContent side="right" sideOffset={8}>
+              {card.hostContextLabel}
             </TooltipContent>
           </Tooltip>
         )}

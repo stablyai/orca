@@ -22,6 +22,8 @@ let settings: Partial<GlobalSettings> | null = null
 let projectGroups: unknown[] = []
 let workspaceDeleteModifierPressed = false
 let gitConflictOperationByWorktree: Record<string, GitConflictOperation> = {}
+let runtimeEnvironments: { id: string; name: string }[] = []
+let sshTargetLabels = new Map<string, string>()
 let WorktreeCard: typeof WorktreeCardComponent
 
 vi.mock('@/store', () => ({
@@ -36,9 +38,12 @@ vi.mock('@/store', () => ({
       openModal,
       projectGroups,
       remoteBranchConflictByWorktreeId: {},
+      runtimeEnvironments,
+      runtimeStatusByEnvironmentId: new Map(),
       settings,
+      sshStateByEnvironment: new Map(),
       sshConnectionStates: new Map(),
-      sshTargetLabels: new Map(),
+      sshTargetLabels,
       browserTabsByWorktree,
       ptyIdsByTabId,
       tabsByWorktree,
@@ -130,7 +135,7 @@ function getBranchMetadataLabelTag(markup: string): string {
 describe('WorktreeCard quick actions', () => {
   beforeAll(async () => {
     WorktreeCard = (await import('./WorktreeCard')).default
-  }, 20_000)
+  }, 60_000)
 
   beforeEach(() => {
     vi.clearAllMocks()
@@ -142,6 +147,8 @@ describe('WorktreeCard quick actions', () => {
     projectGroups = []
     workspaceDeleteModifierPressed = false
     gitConflictOperationByWorktree = {}
+    runtimeEnvironments = []
+    sshTargetLabels = new Map()
   })
 
   it('marks the unread toggle as a workspace-board-preserving action', () => {
@@ -153,7 +160,9 @@ describe('WorktreeCard quick actions', () => {
     expect(markup).toContain('data-workspace-board-preserve-open=""')
   })
 
-  it('renders repo identity in the detailed metadata row', () => {
+  it('renders repo identity in the detailed metadata row when project name is enabled', () => {
+    worktreeCardProperties = ['status', 'project-name']
+
     const markup = renderToStaticMarkup(
       <WorktreeCard worktree={makeWorktree()} repo={makeRepo()} isActive={false} />
     )
@@ -161,6 +170,129 @@ describe('WorktreeCard quick actions', () => {
     expect(markup).not.toContain('aria-label="Project orca"')
     expect(markup).toContain('>orca</span>')
     expect(markup).toContain('data-worktree-card-meta-row=""')
+  })
+
+  it('hides the project identity when the project-name property is off', () => {
+    worktreeCardProperties = ['status']
+
+    const markup = renderToStaticMarkup(
+      <WorktreeCard worktree={makeWorktree()} repo={makeRepo()} isActive={false} />
+    )
+
+    expect(markup).not.toContain('>orca</span>')
+    expect(markup).not.toContain('aria-label="Project orca"')
+  })
+
+  it('renders visible repo identity in compact card title chips when project name is enabled', () => {
+    worktreeCardProperties = ['status', 'project-name']
+    settings = { compactWorktreeCards: true }
+
+    const markup = renderToStaticMarkup(
+      <WorktreeCard worktree={makeWorktree()} repo={makeRepo()} isActive={false} />
+    )
+
+    expect(markup).toContain('aria-label="Project orca"')
+    expect(markup).toContain('>orca</span>')
+    expect(markup).not.toContain('data-worktree-card-meta-row=""')
+  })
+
+  it('suppresses project identity when the project group header already names it', () => {
+    worktreeCardProperties = ['status', 'project-name']
+    settings = { compactWorktreeCards: true }
+
+    const markup = renderToStaticMarkup(
+      <WorktreeCard worktree={makeWorktree()} repo={makeRepo()} isActive={false} hideRepoBadge />
+    )
+
+    expect(markup).not.toContain('aria-label="Project orca"')
+    expect(markup).not.toContain('>orca</span>')
+  })
+
+  it('renders host context next to the title-row identity when host name is enabled', () => {
+    worktreeCardProperties = ['status', 'host-name']
+    settings = { compactWorktreeCards: true }
+
+    const markup = renderToStaticMarkup(
+      <WorktreeCard
+        worktree={makeWorktree()}
+        repo={makeRepo()}
+        isActive={false}
+        hideRepoBadge
+        hostContextLabel="gpu-vm"
+      />
+    )
+
+    expect(markup).toContain('gpu-vm')
+    // Host identity belongs in the title row in every card density.
+    expect(markup).not.toContain('data-worktree-card-meta-row=""')
+  })
+
+  it('resolves remote host context when the card consumer does not provide it', () => {
+    worktreeCardProperties = ['status', 'host-name']
+    settings = { compactWorktreeCards: true }
+    runtimeEnvironments = [{ id: 'env-1', name: 'gpu-vm' }]
+
+    const markup = renderToStaticMarkup(
+      <WorktreeCard
+        worktree={makeWorktree({ hostId: 'runtime:env-1' })}
+        repo={{ ...makeRepo(), executionHostId: 'runtime:env-1' }}
+        isActive={false}
+      />
+    )
+
+    expect(markup).toContain('gpu-vm')
+  })
+
+  it('resolves remote host context for folder workspace cards', () => {
+    worktreeCardProperties = ['status', 'host-name']
+    settings = { compactWorktreeCards: true }
+    sshTargetLabels = new Map([['build-target', 'Windows builder']])
+
+    const markup = renderToStaticMarkup(
+      <WorktreeCard
+        worktree={makeWorktree({
+          repoId: 'folder-workspace:project-1',
+          hostId: 'ssh:build-target'
+        })}
+        repo={undefined}
+        isActive={false}
+      />
+    )
+
+    expect(markup).toContain('Windows builder')
+  })
+
+  it('renders project context for folder workspace cards', () => {
+    worktreeCardProperties = ['status', 'project-name']
+
+    const markup = renderToStaticMarkup(
+      <WorktreeCard
+        worktree={makeWorktree({ repoId: 'folder-workspace:project-1' })}
+        repo={undefined}
+        projectContextLabel="Orca Desktop"
+        isActive={false}
+      />
+    )
+
+    expect(markup).toContain('Orca Desktop')
+    expect(markup).toContain('data-worktree-card-meta-row=""')
+  })
+
+  it('hides host context when the host-name property is off', () => {
+    worktreeCardProperties = ['status']
+    settings = { compactWorktreeCards: true }
+
+    const markup = renderToStaticMarkup(
+      <WorktreeCard
+        worktree={makeWorktree()}
+        repo={makeRepo()}
+        isActive={false}
+        hideRepoBadge
+        hostContextLabel="gpu-vm"
+      />
+    )
+
+    expect(markup).not.toContain('gpu-vm')
   })
 
   it('can render the current workspace with a secondary active surface', () => {

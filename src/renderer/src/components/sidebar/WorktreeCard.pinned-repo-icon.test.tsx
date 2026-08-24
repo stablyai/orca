@@ -1,10 +1,11 @@
 import { renderToStaticMarkup } from 'react-dom/server'
 import type { ReactNode } from 'react'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import type { Repo } from '../../../../shared/repo-types'
 import type { WorktreeCardProperty } from '../../../../shared/ui-chrome-types'
 import type { Worktree } from '../../../../shared/worktree/types'
+import type WorktreeCardComponent from './WorktreeCard'
 
 const fetchHostedReviewForBranch = vi.fn()
 const fetchIssue = vi.fn()
@@ -14,7 +15,7 @@ const updateWorktreeMeta = vi.fn()
 
 let worktreeCardProperties: WorktreeCardProperty[] = []
 let settings: Partial<GlobalSettings> | null = null
-const WORKTREE_CARD_IMPORT_TIMEOUT_MS = 15_000
+let WorktreeCard: typeof WorktreeCardComponent
 
 vi.mock('@/store', () => ({
   useAppStore: (selector: (state: unknown) => unknown) =>
@@ -105,72 +106,69 @@ function makeWorktree(overrides: Partial<Worktree> = {}): Worktree {
 }
 
 describe('WorktreeCard pinned repo icon', () => {
+  beforeAll(async () => {
+    WorktreeCard = (await import('./WorktreeCard')).default
+  }, 60_000)
+
   beforeEach(() => {
     vi.clearAllMocks()
     worktreeCardProperties = []
     settings = null
   })
 
-  it(
-    'shows the configured repo icon for pinned cards even when the repo badge is hidden',
-    async () => {
-      const { default: WorktreeCard } = await import('./WorktreeCard')
+  it('shows the configured repo icon for pinned cards even when the repo badge is hidden', () => {
+    worktreeCardProperties = ['project-name']
+    const markup = renderToStaticMarkup(
+      <WorktreeCard
+        worktree={makeWorktree()}
+        repo={makeRepo()}
+        isActive={false}
+        inPinnedSection
+        // grouped-by-repo hides the normal badge; the pinned icon must still show
+        hideRepoBadge
+      />
+    )
 
-      const markup = renderToStaticMarkup(
-        <WorktreeCard
-          worktree={makeWorktree()}
-          repo={makeRepo()}
-          isActive={false}
-          inPinnedSection
-          // grouped-by-repo hides the normal badge; the pinned icon must still show
-          hideRepoBadge
-        />
-      )
+    expect(markup).toContain('🦊')
+    expect(markup).toContain('Project orca')
+    expect(markup).toContain('>orca</span>')
+  })
 
-      expect(markup).toContain('🦊')
-      expect(markup).toContain('Project orca')
-    },
-    WORKTREE_CARD_IMPORT_TIMEOUT_MS
-  )
+  it('keeps the pinned repo icon compact when project name is disabled', () => {
+    const markup = renderToStaticMarkup(
+      <WorktreeCard worktree={makeWorktree()} repo={makeRepo()} isActive={false} inPinnedSection />
+    )
 
-  it(
-    'does not render the leading pinned repo icon for non-pinned cards',
-    async () => {
-      const { default: WorktreeCard } = await import('./WorktreeCard')
+    expect(markup).toContain('🦊')
+    expect(markup).not.toContain('>orca</span>')
+  })
 
-      const markup = renderToStaticMarkup(
-        <WorktreeCard
-          worktree={makeWorktree({ isPinned: false })}
-          repo={makeRepo()}
-          isActive={false}
-        />
-      )
+  it('does not render the leading pinned repo icon for non-pinned cards', () => {
+    const markup = renderToStaticMarkup(
+      <WorktreeCard
+        worktree={makeWorktree({ isPinned: false })}
+        repo={makeRepo()}
+        isActive={false}
+      />
+    )
 
-      expect(markup).not.toContain('🦊')
-      expect(markup).not.toContain('Project orca')
-    },
-    WORKTREE_CARD_IMPORT_TIMEOUT_MS
-  )
+    expect(markup).not.toContain('🦊')
+    expect(markup).not.toContain('Project orca')
+  })
 
-  it(
-    'uses the pinned-style repo icon in new card style instead of a metadata-row badge',
-    async () => {
-      settings = { compactWorktreeCards: false, experimentalNewWorktreeCardStyle: true }
-      worktreeCardProperties = ['status']
-      const { default: WorktreeCard } = await import('./WorktreeCard')
+  it('uses the pinned-style repo icon in new card style when project name is enabled', () => {
+    settings = { compactWorktreeCards: false, experimentalNewWorktreeCardStyle: true }
+    worktreeCardProperties = ['status', 'project-name']
+    const markup = renderToStaticMarkup(
+      <WorktreeCard
+        worktree={makeWorktree({ isPinned: false })}
+        repo={makeRepo()}
+        isActive={false}
+      />
+    )
 
-      const markup = renderToStaticMarkup(
-        <WorktreeCard
-          worktree={makeWorktree({ isPinned: false })}
-          repo={makeRepo()}
-          isActive={false}
-        />
-      )
-
-      expect(markup).toContain('🦊')
-      expect(markup).toContain('Project orca')
-      expect(markup).not.toContain('data-worktree-card-meta-row=""')
-    },
-    WORKTREE_CARD_IMPORT_TIMEOUT_MS
-  )
+    expect(markup).toContain('🦊')
+    expect(markup).toContain('Project orca')
+    expect(markup).not.toContain('data-worktree-card-meta-row=""')
+  })
 })

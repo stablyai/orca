@@ -1,5 +1,8 @@
 import { omitPairingLocalUiFields } from '../../../../shared/pairing-local-ui-fields'
 import type { PersistedUIState } from '../../../../shared/persisted-ui-state-types'
+import { WORKTREE_CARD_IDENTITY_PROPERTIES_RUNTIME_CAPABILITY } from '../../../../shared/protocol-version'
+import { normalizeWorktreeCardProperties } from '../../../../shared/worktree/card-properties'
+import type { WorktreeCardProperty } from '../../../../shared/ui-chrome-types'
 import { defineMethod, type RpcMethod } from '../core'
 import {
   FeatureInteractionIdParam,
@@ -11,6 +14,33 @@ import {
 // the typecheck graph so drift fails the build instead of a paired client.
 
 import { TerminalQuickCommandsUpdate } from './terminal-quick-command-rpc-schema'
+
+const IDENTITY_WORKTREE_CARD_PROPERTIES = new Set<WorktreeCardProperty>([
+  'project-name',
+  'host-name'
+])
+
+function supportsIdentityWorktreeCardProperties(clientCapabilities: readonly string[] | undefined) {
+  return (
+    clientCapabilities === undefined ||
+    clientCapabilities.includes(WORKTREE_CARD_IDENTITY_PROPERTIES_RUNTIME_CAPABILITY)
+  )
+}
+
+function projectUiStateForClient(
+  ui: PersistedUIState,
+  clientCapabilities: readonly string[] | undefined
+) {
+  const pairedUi = omitPairingLocalUiFields(ui)
+  return supportsIdentityWorktreeCardProperties(clientCapabilities)
+    ? pairedUi
+    : {
+        ...pairedUi,
+        worktreeCardProperties: pairedUi.worktreeCardProperties.filter(
+          (property) => !IDENTITY_WORKTREE_CARD_PROPERTIES.has(property)
+        )
+      }
+}
 
 export const CLIENT_UI_METHODS: RpcMethod[] = [
   defineMethod({
@@ -51,18 +81,37 @@ export const CLIENT_UI_METHODS: RpcMethod[] = [
   defineMethod({
     name: 'ui.get',
     params: null,
-    handler: (_params, { runtime }) => ({ ui: omitPairingLocalUiFields(runtime.getUIState()) })
+    handler: (_params, { runtime, clientCapabilities }) => ({
+      ui: projectUiStateForClient(runtime.getUIState(), clientCapabilities),
+      capabilities: [WORKTREE_CARD_IDENTITY_PROPERTIES_RUNTIME_CAPABILITY]
+    })
   }),
   defineMethod({
     name: 'ui.set',
     params: UiUpdate,
     // Why the fields are dropped here rather than removed from the schema: UiUpdate is strict, so
     // an unlisted key would make the dispatcher reject an old client's ENTIRE payload.
-    handler: (params, { runtime }) => ({
-      ui: omitPairingLocalUiFields(
-        runtime.updateUIState(omitPairingLocalUiFields(params) as Partial<PersistedUIState>)
-      )
-    })
+    handler: (params, { runtime, clientCapabilities }) => {
+      const pairedUpdates = omitPairingLocalUiFields(params) as Partial<PersistedUIState>
+      if (
+        pairedUpdates.worktreeCardProperties &&
+        !supportsIdentityWorktreeCardProperties(clientCapabilities)
+      ) {
+        const retainedIdentityProperties = runtime
+          .getUIState()
+          .worktreeCardProperties.filter((property) =>
+            IDENTITY_WORKTREE_CARD_PROPERTIES.has(property)
+          )
+        pairedUpdates.worktreeCardProperties = normalizeWorktreeCardProperties([
+          ...pairedUpdates.worktreeCardProperties,
+          ...retainedIdentityProperties
+        ])
+      }
+      return {
+        ui: projectUiStateForClient(runtime.updateUIState(pairedUpdates), clientCapabilities),
+        capabilities: [WORKTREE_CARD_IDENTITY_PROPERTIES_RUNTIME_CAPABILITY]
+      }
+    }
   }),
   defineMethod({
     name: 'ui.recordFeatureInteraction',
