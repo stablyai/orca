@@ -324,6 +324,31 @@ describe('fetchViaPty', () => {
     })
   })
 
+  it('captures a provider-reported Claude package label from the usage header', async () => {
+    const term = makeMockTerm()
+    spawnMock.mockReturnValue(term)
+
+    const resultPromise = fetchViaPty()
+
+    await vi.advanceTimersByTimeAsync(2_000)
+    term.emitData(`
+      Claude Max 20x
+
+      Plan usage limits
+      Current session
+      18% used
+      Current week (all models)
+      42% used
+    `)
+    await vi.advanceTimersByTimeAsync(2_000)
+
+    await expect(resultPromise).resolves.toMatchObject({
+      provider: 'claude',
+      status: 'ok',
+      planType: 'Max 20x'
+    })
+  })
+
   it('parses generic weekly and Fable weekly limits as separate windows', async () => {
     const term = makeMockTerm()
     spawnMock.mockReturnValue(term)

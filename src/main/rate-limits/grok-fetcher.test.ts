@@ -83,6 +83,7 @@ describe('fetchGrokRateLimits', () => {
 
     const result = await fetchGrokRateLimits()
     expect(result.status).toBe('ok')
+    expect(result.planType).toBe('SuperGrok')
     expect(result.weekly?.usedPercent).toBe(42)
     expect(result.weekly?.windowMinutes).toBe(10_080)
     expect(result.usageMetadata?.source).toBe('oauth')

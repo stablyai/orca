@@ -17,6 +17,7 @@ import {
   type UsagePercentageDisplay
 } from '../../../../shared/usage-percentage-display'
 import { formatUsagePercentageLabel } from './usage-percentage-label'
+import { formatPlanLabel } from './usage-roster-formatting'
 
 // Re-exported from its shared home so status-bar callers keep a single import.
 export { clampUsedPercent }
@@ -265,6 +266,7 @@ export function ProviderPanel({
   }
 
   const name = getProviderDisplayName(p.provider)
+  const plan = formatPlanLabel(p.planType)
 
   if (p.status === 'unavailable') {
     return (
@@ -272,6 +274,7 @@ export function ProviderPanel({
         <div className={`flex items-center gap-1.5 font-medium ${textClass}`}>
           <ProviderIcon provider={p.provider} />
           {name}
+          {plan ? <span className={`font-normal ${mutedClass}`}> · {plan}</span> : null}
         </div>
         <div className={mutedClass}>
           {p.error ?? translate('auto.components.status.bar.tooltip.1292d4f2ee', 'Unavailable')}
@@ -286,6 +289,7 @@ export function ProviderPanel({
         <div className={`flex items-center gap-1.5 font-medium ${textClass}`}>
           <ProviderIcon provider={p.provider} />
           {name}
+          {plan ? <span className={`font-normal ${mutedClass}`}> · {plan}</span> : null}
         </div>
         <div className="mt-2">
           <ErrorMessage
@@ -314,6 +318,7 @@ export function ProviderPanel({
         <div className={`flex items-center gap-1.5 text-[13px] font-medium ${textClass}`}>
           <ProviderIcon provider={p.provider} />
           {name}
+          {plan ? <span className={`font-normal ${mutedClass}`}> · {plan}</span> : null}
         </div>
         <div className={faintClass}>{updatedAgo}</div>
         {resetCreditCount !== null && resetCreditCount !== undefined ? (

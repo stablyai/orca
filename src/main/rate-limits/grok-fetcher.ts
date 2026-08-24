@@ -173,6 +173,7 @@ function billingUsageResult(
     session: null,
     weekly: windows.weekly ?? null,
     ...(windows.monthly ? { monthly: windows.monthly } : {}),
+    ...(tier ? { planType: tier } : {}),
     updatedAt: Date.now(),
     error: null,
     status: 'ok',

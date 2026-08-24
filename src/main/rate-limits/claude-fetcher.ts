@@ -296,6 +296,13 @@ type OAuthUsageResponse = {
   fable_seven_day?: OAuthUsageWindow
   seven_day_fable?: OAuthUsageWindow
   limits?: OAuthUsageLimit[] | null
+  // These fields are not present in every response, but newer Claude usage
+  // payloads may include the active subscription label. Keep them optional so
+  // the UI can show it when the server exposes it without guessing a tier.
+  plan_type?: string
+  planType?: string
+  subscription_tier?: string
+  subscriptionTier?: string
 }
 
 type ClaudeUsageAttemptState = {
@@ -334,6 +341,13 @@ function mapFableWeeklyWindow(data: OAuthUsageResponse): RateLimitWindow | null 
     mapClaudeUsageWindow(data.fable_seven_day, 10080) ??
     mapClaudeUsageWindow(data.seven_day_fable, 10080)
   )
+}
+
+function mapClaudePlanType(data: OAuthUsageResponse): string | null {
+  const candidate =
+    data.plan_type ?? data.planType ?? data.subscription_tier ?? data.subscriptionTier
+  const trimmed = candidate?.trim()
+  return trimmed || null
 }
 
 async function fetchViaOAuth(token: string, signal?: AbortSignal): Promise<ProviderRateLimits> {
@@ -376,6 +390,7 @@ async function fetchViaOAuth(token: string, signal?: AbortSignal): Promise<Provi
       session: mapClaudeUsageWindow(data.five_hour, 300),
       weekly: mapClaudeUsageWindow(data.seven_day, 10080),
       fableWeekly: mapFableWeeklyWindow(data),
+      planType: mapClaudePlanType(data),
       updatedAt: Date.now(),
       error: null,
       status: 'ok'
@@ -517,7 +532,8 @@ function mergeClaudeUsageWindows(
     ...primary,
     session: primary.session ?? supplement.session,
     weekly: primary.weekly ?? supplement.weekly,
-    fableWeekly: primary.fableWeekly ?? supplement.fableWeekly ?? null
+    fableWeekly: primary.fableWeekly ?? supplement.fableWeekly ?? null,
+    planType: primary.planType ?? supplement.planType ?? null
   }
 }
 
