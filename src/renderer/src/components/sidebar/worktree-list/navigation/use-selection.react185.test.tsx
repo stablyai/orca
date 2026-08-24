@@ -140,13 +140,25 @@ describe('useSidebarWorktreeSelection cannot trigger React #185 loop', () => {
     }
     expect(latestSelection!.selectedWorktreeIds.size).toBe(0)
 
-    // 7. Stress test: rapid outside clicks and filtering cycles while actively selecting
-    for (let i = 0; i < 50; i += 1) {
-      act(() => {
-        document.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true }))
-      })
-    }
+    // 7. Functional guard test: select a worktree, then dispatch rapid pointerdown burst in a single act
+    // before React cleans up the listener, ensuring functional guards (prev => prev.size === 0 ? prev : new Set())
+    // bail out of redundant state updates and prevent render cascades.
+    act(() => {
+      latestSelection!.selectForContextMenu({} as React.MouseEvent<HTMLElement>, wt2)
+    })
+    expect(latestSelection!.selectedWorktreeIds.size).toBe(1)
 
+    const rendersBeforeBurst = renderCount
+    act(() => {
+      for (let i = 0; i < 50; i += 1) {
+        document.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true }))
+      }
+    })
+    expect(latestSelection!.selectedWorktreeIds.size).toBe(0)
+    // Functional guard prevents 50 separate re-renders; settles in at most 2 commits
+    expect(renderCount - rendersBeforeBurst).toBeLessThanOrEqual(2)
+
+    // 8. Active selection pruning during rapid filtering cycles
     for (let i = 0; i < 20; i += 1) {
       const selectedWorktree = i % 2 === 0 ? wt2 : wt1
       act(() => {
