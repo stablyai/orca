@@ -2,18 +2,13 @@ import { mkdirSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from 'node
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { installFakeAppEnvironment } from '../../config/scripts/vitest-host-ports-setup'
 
 let userDataDir: string
 
 const { removeHostTreeMock, deleteWslFishHistoryFileMock } = vi.hoisted(() => ({
   removeHostTreeMock: vi.fn<(dir: string) => Promise<void>>(),
   deleteWslFishHistoryFileMock: vi.fn<(distro: string, session: string) => Promise<void>>()
-}))
-
-vi.mock('electron', () => ({
-  app: {
-    getPath: () => userDataDir
-  }
 }))
 
 vi.mock('./host-tree-removal', () => ({
@@ -40,6 +35,7 @@ import {
 describe('tombstoned history removal retries', () => {
   beforeEach(() => {
     userDataDir = mkdtempSync(join(tmpdir(), 'orca-history-retry-'))
+    installFakeAppEnvironment({ getPath: () => userDataDir })
     removeHostTreeMock.mockReset()
     deleteWslFishHistoryFileMock.mockReset()
     deleteWslFishHistoryFileMock.mockResolvedValue(undefined)

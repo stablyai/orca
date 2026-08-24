@@ -136,16 +136,13 @@ import PRFilterDropdowns, { type PRFilterChange } from '@/components/github/PRFi
 import { GitHubMarkdownComposer } from '@/components/github/GitHubMarkdownComposer'
 import { GitHubUserAvatar } from '@/components/github/github-user-avatar'
 import { buildGitHubRepoUrl, parseGitHubIssueOrPRLink } from '@/lib/github-links'
-import {
-  findGithubWorkItemWorkspaceAttachment,
-  getGithubWorkItemWorkspaceAttachmentLabel
-} from '@/lib/github-work-item-workspace-attachment'
+import { findGithubWorkItemWorkspaceAttachment } from '@/lib/github-work-item-workspace-attachment'
 import {
   buildLinearIssueWorkspaceAttachmentIndex,
-  findLinearIssueWorkspaceAttachmentInIndex,
-  getLinearIssueWorkspaceAttachmentLabel
+  findLinearIssueWorkspaceAttachmentInIndex
 } from '@/lib/linear-issue-workspace-attachment'
 import { openLinearIssueWorkspaceOrStart } from '@/lib/linear-issue-workspace-open'
+import { getWorktreeAttachmentLabel } from '@/lib/worktree-attachment-label'
 import { folderWorkspaceToWorktree } from '../../../shared/folder-workspace-worktree'
 import { activateAndRevealWorktree } from '@/lib/worktree-activation'
 import { useRepoAssigneesBySlug } from '@/hooks/useGitHubSlugMetadata'
@@ -1438,25 +1435,14 @@ function ReviewChipAvatar({
 }
 
 function GitHubAssigneeAvatar({ assignee }: { assignee: GitHubAssignableUser }): React.JSX.Element {
-  if (assignee.avatarUrl) {
-    return (
-      <img
-        src={assignee.avatarUrl}
-        alt={assignee.login}
-        loading="lazy"
-        decoding="async"
-        title={assignee.name ? `${assignee.name} (${assignee.login})` : assignee.login}
-        className="size-5 rounded-full border border-border/40 bg-muted object-cover"
-      />
-    )
-  }
   return (
-    <span
-      title={assignee.login}
-      className="inline-flex size-5 items-center justify-center rounded-full border border-border/40 bg-muted text-[10px] font-medium text-muted-foreground"
-    >
-      {assignee.login.slice(0, 1).toUpperCase()}
-    </span>
+    <GitHubUserAvatar
+      login={assignee.login}
+      name={assignee.name}
+      avatarUrl={assignee.avatarUrl}
+      title={assignee.name ? `${assignee.name} (${assignee.login})` : assignee.login}
+      className="size-5"
+    />
   )
 }
 
@@ -1896,13 +1882,12 @@ function GHAssigneesCell({
                     <Check className="size-3" />
                   ) : null}
                 </span>
-                {user.avatarUrl ? (
-                  <img src={user.avatarUrl} alt="" className="size-5 shrink-0 rounded-full" />
-                ) : (
-                  <span className="flex size-5 shrink-0 items-center justify-center rounded-full bg-muted text-[10px] font-medium text-muted-foreground">
-                    {user.login.slice(0, 1).toUpperCase()}
-                  </span>
-                )}
+                <GitHubUserAvatar
+                  login={user.login}
+                  name={user.name}
+                  avatarUrl={user.avatarUrl}
+                  className="size-5"
+                />
                 <span className="min-w-0 flex-1">
                   <span className="block truncate">{user.login}</span>
                   {user.name ? (
@@ -2388,13 +2373,12 @@ function PRReviewCell({
         <span className="flex size-4 shrink-0 items-center justify-center text-foreground">
           {selected ? <Check className="size-3.5" /> : null}
         </span>
-        {reviewer.avatarUrl ? (
-          <img src={reviewer.avatarUrl} alt="" className="size-5 shrink-0 rounded-full" />
-        ) : (
-          <span className="flex size-5 shrink-0 items-center justify-center rounded-full bg-muted text-[10px] font-medium text-muted-foreground">
-            {reviewer.login.slice(0, 1).toUpperCase()}
-          </span>
-        )}
+        <GitHubUserAvatar
+          login={reviewer.login}
+          name={reviewer.name}
+          avatarUrl={reviewer.avatarUrl}
+          className="size-5"
+        />
         <span className="min-w-0 flex-1">
           <span className="block truncate">
             <span className="font-semibold text-foreground">{reviewer.login}</span>
@@ -10285,7 +10269,7 @@ export default function TaskPage(): React.JSX.Element {
                         item.number
                       )
                       const attachedWorkspaceLabel = attachedWorkspace
-                        ? getGithubWorkItemWorkspaceAttachmentLabel(attachedWorkspace)
+                        ? getWorktreeAttachmentLabel(attachedWorkspace)
                         : null
                       const prDelta = item.type === 'pr' ? formatPRDelta(item) : null
                       const githubTaskIdPill = (
@@ -11582,7 +11566,7 @@ export default function TaskPage(): React.JSX.Element {
                               issue
                             )
                             const attachedWorkspaceLabel = attachedWorkspace
-                              ? getLinearIssueWorkspaceAttachmentLabel(attachedWorkspace)
+                              ? getWorktreeAttachmentLabel(attachedWorkspace)
                               : null
                             return (
                               <div
@@ -11781,7 +11765,7 @@ export default function TaskPage(): React.JSX.Element {
                         issue
                       )
                       const attachedWorkspaceLabel = attachedWorkspace
-                        ? getLinearIssueWorkspaceAttachmentLabel(attachedWorkspace)
+                        ? getWorktreeAttachmentLabel(attachedWorkspace)
                         : null
                       return (
                         <div

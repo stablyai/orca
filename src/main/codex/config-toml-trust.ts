@@ -12,6 +12,7 @@ import {
 import { basename, dirname, join, posix as pathPosix, win32 as pathWin32 } from 'node:path'
 import { createHash, randomUUID } from 'node:crypto'
 import { renameFileWithWindowsRetry } from '../codex-accounts/fs-utils'
+import { observe } from './codex-path-observation'
 import { foldWslUncPathCaseInsensitiveParts } from '../../shared/wsl-paths'
 import { writeRollingFileBackup } from '../rolling-file-backup'
 import {
@@ -337,7 +338,15 @@ export function upsertHookTrustEntries(
   configPath: string,
   entries: readonly CodexTrustEntry[]
 ): void {
-  const existing = existsSync(configPath) ? readTomlFile(configPath) : ''
+  // Why: `existsSync` collapses an indeterminate probe into the same `false` as
+  // absence. If the path recovers before the write, rebuilding from '' replaces
+  // the user's model, provider, MCP servers, approvals and comments with a
+  // trust-only stub. Only a definitive absence may seed from empty.
+  const observation = observe(() => readTomlFile(configPath))
+  if (observation.kind === 'indeterminate') {
+    throw observation.error
+  }
+  const existing = observation.kind === 'present' ? observation.value : ''
   const updated = upsertHookTrustEntriesInContent(existing, entries)
   if (updated === existing) {
     return
@@ -372,7 +381,11 @@ export function upsertProjectTrustLevel(
   projectPath: string,
   trustLevel: CodexProjectTrustLevel
 ): void {
-  const existing = existsSync(configPath) ? readTomlFile(configPath) : ''
+  const observation = observe(() => readTomlFile(configPath))
+  if (observation.kind === 'indeterminate') {
+    throw observation.error
+  }
+  const existing = observation.kind === 'present' ? observation.value : ''
   const updated = upsertProjectTrustLevelInContent(existing, projectPath, trustLevel)
   if (updated === existing) {
     return

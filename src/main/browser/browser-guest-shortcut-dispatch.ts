@@ -180,6 +180,8 @@ export function forwardGuestShortcutInput(
     renderer.send('ui:openWorkspaceBoard')
   } else if (action?.type === 'openTasks') {
     renderer.send('ui:openTasks')
+  } else if (action?.type === 'toggleAgentDashboard') {
+    renderer.send('ui:toggleAgentDashboard')
   } else if (action?.type === 'openSettings') {
     renderer.send('ui:openSettings')
   } else if (action?.type === 'forceReload') {

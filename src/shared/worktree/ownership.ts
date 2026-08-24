@@ -1,12 +1,10 @@
+import { normalizeRuntimePathForComparison, relativePathInsideRoot } from '../cross-platform-path'
+import { parseWslUncPath } from '../wsl-paths'
 import {
-  isRuntimePathAbsolute,
-  isWindowsAbsolutePathLike,
-  normalizeRuntimePathForComparison,
-  normalizeRuntimePathSeparators,
-  relativePathInsideRoot,
-  resolveRuntimePath
-} from '../cross-platform-path'
-import { parseWslUncPath, resolveWslRepoWorktreeBasePath } from '../wsl-paths'
+  isRuntimePathAbsoluteForRepo,
+  resolveConfiguredWorktreeBasePaths,
+  resolveWorkspaceLayoutPath
+} from './configured-worktree-base-path'
 import {
   isAgentScratchWorktreePath,
   type AgentScratchWorktreePathMatcher
@@ -36,12 +34,8 @@ export function buildKnownOrcaWorkspaceLayouts(
   repo?: Pick<Repo, 'path' | 'connectionId' | 'worktreeBasePath'>
 ): OrcaWorkspaceLayout[] {
   const layouts: OrcaWorkspaceLayout[] = []
-  const repoBasePath = getRepoWorktreeBasePath(repo)
-  if (repo && repoBasePath) {
-    layouts.push({
-      path: resolveWorkspaceLayoutPath(repo.path, repoBasePath),
-      nestWorkspaces: settings.nestWorkspaces
-    })
+  for (const basePath of resolveConfiguredWorktreeBasePaths(repo)) {
+    layouts.push({ path: basePath, nestWorkspaces: settings.nestWorkspaces })
   }
   if (settings.workspaceDir && shouldIncludeWorkspaceLayout(repo, settings.workspaceDir)) {
     layouts.push({
@@ -86,32 +80,6 @@ function appendWorkspaceLayouts(
   }
 }
 
-function getRepoWorktreeBasePath(
-  repo: Pick<Repo, 'path' | 'worktreeBasePath'> | undefined
-): string | undefined {
-  const trimmed = repo?.worktreeBasePath?.trim()
-  if (!repo || !trimmed) {
-    return undefined
-  }
-  // Why: creation resolves Linux base paths of WSL repos to their UNC form,
-  // so ownership layouts must match or those worktrees would never classify.
-  return resolveWslRepoWorktreeBasePath(repo.path, trimmed)
-}
-
-function resolveWorkspaceLayoutPath(repoPath: string, layoutPath: string): string {
-  return isRuntimePathAbsoluteForRepo(repoPath, layoutPath)
-    ? normalizeRuntimePathSeparators(layoutPath)
-    : resolveRuntimePath(repoPath, layoutPath)
-}
-
-function isRuntimePathAbsoluteForRepo(repoPath: string, layoutPath: string): boolean {
-  const pathFlavor =
-    isWindowsAbsolutePathLike(repoPath) || isWindowsAbsolutePathLike(layoutPath)
-      ? 'windows'
-      : 'posix'
-  return isRuntimePathAbsolute(layoutPath, pathFlavor)
-}
-
 function shouldIncludeWorkspaceLayout(
   repo: Pick<Repo, 'path' | 'connectionId'> | undefined,
   layoutPath: string
@@ -154,13 +122,27 @@ export function classifyWorktreeOwnership(args: {
   }
 
   // Why: sub-agent scratch worktrees (e.g. .claude/worktrees) are tool
-  // plumbing, not workspaces; classify before layout heuristics (#9388).
+  // plumbing, not workspaces; classify before layout heuristics (#9388). Both
+  // matchers exempt a base this project explicitly configured (#15232).
   if (
     args.worktreeVisibilitySourceMatcher?.(args.worktree.path)?.kind === 'built-in' ||
     (args.agentScratchWorktreePathMatcher?.(args.worktree.path) ??
-      isAgentScratchWorktreePath(args.repo.path, args.worktree.path))
+      isAgentScratchWorktreePath(
+        args.repo.path,
+        args.worktree.path,
+        resolveConfiguredWorktreeBasePaths(args.repo)
+      ))
   ) {
     return 'agent-scratch'
+  }
+
+  if (
+    resolveConfiguredWorktreeBasePaths(args.repo).some(
+      (basePath) => relativePathInsideRoot(basePath, args.worktree.path) !== null
+    )
+  ) {
+    // Why: an explicit project base is trusted even when global workspace nesting is flat.
+    return 'external'
   }
 
   if (isUnderFlatOrUntrustedOrcaRoot(args.worktree.path, args.knownOrcaLayouts)) {
@@ -193,7 +175,8 @@ export function toDetectedWorktree(args: {
     args.worktreeVisibilitySourceMatcher ??
     createWorktreeVisibilitySourceMatcher(
       [args.repo.path],
-      resolveCustomWorktreeVisibilitySources(args.repo, args.settings.worktreeVisibilityDefaults)
+      resolveCustomWorktreeVisibilitySources(args.repo, args.settings.worktreeVisibilityDefaults),
+      resolveConfiguredWorktreeBasePaths(args.repo)
     )
   const visibilitySource = sourceMatcher(args.worktree.path)
   const ownership = classifyWorktreeOwnership({

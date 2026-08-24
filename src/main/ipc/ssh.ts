@@ -9,7 +9,6 @@ import {
 } from '../ssh/ssh-config-host-picker'
 import type { SshConnection, SshConnectionCallbacks } from '../ssh/ssh-connection'
 import { SshConnectionManager } from '../ssh/ssh-connection-manager'
-import type { SshChannelMultiplexer } from '../ssh/ssh-channel-multiplexer'
 import { SshRelaySession, type SshRelayAiVaultHostInfo } from '../ssh/ssh-relay-session'
 import type {
   SshAiVaultRelayListParams,
@@ -30,6 +29,29 @@ import type {
 import { SSH_TERMINATE_RECONNECT_REQUIRED } from '../../shared/constants'
 import { quitTeardownStartGate } from '../quit-teardown-start-gate'
 import { isRuntimeOwnedSshTargetId } from '../../shared/execution-host'
+import {
+  getSshTargetRegistryStore,
+  setSshActiveMultiplexerResolver,
+  setSshTargetRegistryHandlers,
+  setSshTargetRegistryStore
+} from '../ssh/ssh-target-registry'
+
+// Why at module scope: this resolver is pure state lookup with no handler lifecycle, so
+// installing it on import keeps it correct even before registerSshHandlers runs.
+setSshActiveMultiplexerResolver(
+  (connectionId) => activeSessions.get(connectionId)?.getMux() ?? undefined
+)
+
+// Why re-exported: the registry moved to ../ssh/ssh-target-registry so the runtime can
+// read it without pulling ipcMain in, but many existing importers reference these from
+// here. Re-exporting keeps them working without a repo-wide rename.
+export {
+  connectRegisteredSshTarget,
+  getActiveMultiplexer,
+  getRegisteredSshState,
+  listRegisteredRemovedSshTargetLabels,
+  listRegisteredSshTargets
+} from '../ssh/ssh-target-registry'
 import { isAuthError } from '../ssh/ssh-connection-utils'
 import { createCancelledConnectAttemptError } from '../ssh/ssh-connect-attempt-cancellation'
 import { forceStopRelayForTarget } from '../ssh/ssh-relay-reset'
@@ -62,11 +84,8 @@ import {
   rotateSshProviderAuthority
 } from '../ssh/ssh-provider-authority'
 
-let sshStore: SshConnectionStore | null = null
 let connectionManager: SshConnectionManager | null = null
 let portForwardManager: SshPortForwardManager | null = null
-let registeredConnectSshTarget: ((targetId: string) => Promise<SshConnectionState>) | null = null
-let registeredGetSshState: ((targetId: string) => SshConnectionState | undefined) | null = null
 let persistedStore: Store | null = null
 let advertisedUrlWatcherUnsubscribe: (() => void) | null = null
 let powerMonitorUnsubscribe: (() => void) | null = null
@@ -103,27 +122,6 @@ function getCurrentMainWindow(): BrowserWindow | null {
   return currentGetMainWindow()
 }
 
-export async function connectRegisteredSshTarget(targetId: string): Promise<SshConnectionState> {
-  if (!registeredConnectSshTarget) {
-    throw new Error('ssh_handlers_not_registered')
-  }
-  return registeredConnectSshTarget(targetId)
-}
-
-export function getRegisteredSshState(targetId: string): SshConnectionState | undefined {
-  return registeredGetSshState?.(targetId)
-}
-
-/** Public targets for runtime RPC clients — same list the desktop renderer gets. */
-export function listRegisteredSshTargets(): SshTarget[] {
-  return sshStore?.listTargets() ?? []
-}
-
-/** Removed-target id → last known label, for ghost-host display on paired clients. */
-export function listRegisteredRemovedSshTargetLabels(): Record<string, string> {
-  return sshStore?.listRemovedTargetLabels() ?? {}
-}
-
 export async function disconnectRegisteredSshTarget(targetId: string): Promise<void> {
   invalidateConnectAttempt(targetId)
   await runTargetLifecycle(targetId, () =>
@@ -132,10 +130,10 @@ export async function disconnectRegisteredSshTarget(targetId: string): Promise<v
 }
 
 export async function removeRegisteredSshTarget(targetId: string): Promise<void> {
-  if (!sshStore) {
+  const store = getSshTargetRegistryStore()
+  if (!store) {
     return
   }
-  const store = sshStore
   invalidateConnectAttempt(targetId)
   await runTargetLifecycle(targetId, async () => {
     try {
@@ -528,7 +526,9 @@ function persistPortForwards(targetId: string): void {
     remotePort: f.remotePort,
     label: f.label
   }))
-  sshStore!.updateTarget(targetId, { portForwards: saved.length > 0 ? saved : undefined })
+  getSshTargetRegistryStore()!.updateTarget(targetId, {
+    portForwards: saved.length > 0 ? saved : undefined
+  })
 }
 
 // Why: keep forwards that failed to restore in the persisted list so they retry on next reconnect instead of being silently dropped.
@@ -536,7 +536,7 @@ function persistPortForwardsWithUnrestored(targetId: string): void {
   const active = portForwardManager!.listForwards(targetId)
   const activeKeys = new Set(active.map((f) => `${f.localPort}:${f.remoteHost}:${f.remotePort}`))
 
-  const existing = sshStore!.getTarget(targetId)?.portForwards ?? []
+  const existing = getSshTargetRegistryStore()!.getTarget(targetId)?.portForwards ?? []
   const unrestored = existing.filter(
     (pf) => !activeKeys.has(`${pf.localPort}:${pf.remoteHost}:${pf.remotePort}`)
   )
@@ -550,14 +550,16 @@ function persistPortForwardsWithUnrestored(targetId: string): void {
     })),
     ...unrestored
   ]
-  sshStore!.updateTarget(targetId, { portForwards: saved.length > 0 ? saved : undefined })
+  getSshTargetRegistryStore()!.updateTarget(targetId, {
+    portForwards: saved.length > 0 ? saved : undefined
+  })
 }
 
 async function restorePortForwards(
   targetId: string,
   getMainWindow: () => BrowserWindow | null
 ): Promise<void> {
-  const target = sshStore!.getTarget(targetId)
+  const target = getSshTargetRegistryStore()!.getTarget(targetId)
   if (!target?.portForwards?.length) {
     return
   }
@@ -765,7 +767,7 @@ function createSshConnectionCallbacks(): SshConnectionCallbacks {
       }
       // Why: allow reconnect from both 'ready' and 'reconnecting'; without the latter, a failed relay deploy would permanently brick the session.
       if (shouldReconnectRelay) {
-        const target = sshStore?.getTarget(targetId)
+        const target = getSshTargetRegistryStore()?.getTarget(targetId)
         const conn = connectionManager?.getConnection(targetId)
         if (conn) {
           void session.reconnect(conn, relayGracePeriodForTarget(target))
@@ -804,7 +806,7 @@ function configureRelaySessionCallbacks(session: SshRelaySession): void {
     if (!c) {
       return
     }
-    const t = sshStore?.getTarget(tid)
+    const t = getSshTargetRegistryStore()?.getTarget(tid)
 
     // Why: bounded exponential backoff — without it, a remote bug that closes every fresh --connect channel becomes an infinite relay-deploy loop.
     const state = relayLostBackoff.get(tid) ?? {
@@ -963,7 +965,7 @@ export function registerSshHandlers(
 
   currentGetMainWindow = getMainWindow
   currentRuntime = runtime
-  sshStore = new SshConnectionStore(store)
+  setSshTargetRegistryStore(new SshConnectionStore(store))
   persistedStore = store
   registerAdvertisedUrlRefresh(getCurrentMainWindow)
 
@@ -997,11 +999,12 @@ export function registerSshHandlers(
 
   // Why: add/import can re-adopt workspaces orphaned on a removed target id (see ssh-target-readoption); the renderer must refresh its repo list to surface them.
   function takeRepoReadoptions(): SshRepoReadoption[] {
-    if (!sshStore || sshStore.lastRepoReadoptions.length === 0) {
+    const store = getSshTargetRegistryStore()
+    if (!store || store.lastRepoReadoptions.length === 0) {
       return []
     }
-    const repoReadoptions = sshStore.lastRepoReadoptions
-    sshStore.lastRepoReadoptions = []
+    const repoReadoptions = store.lastRepoReadoptions
+    store.lastRepoReadoptions = []
     for (const targetId of new Set(
       repoReadoptions.flatMap(({ oldTargetId, newTargetId }) => [oldTargetId, newTargetId])
     )) {
@@ -1015,15 +1018,15 @@ export function registerSshHandlers(
   }
 
   ipcMain.handle('ssh:listTargets', () => {
-    return sshStore!.listTargets()
+    return getSshTargetRegistryStore()!.listTargets()
   })
 
   ipcMain.handle('ssh:listRemovedTargetLabels', () => {
-    return sshStore!.listRemovedTargetLabels()
+    return getSshTargetRegistryStore()!.listRemovedTargetLabels()
   })
 
   ipcMain.handle('ssh:addTarget', (_event, args: { target: Omit<SshTarget, 'id'> }) => {
-    const target = sshStore!.addTarget(args.target)
+    const target = getSshTargetRegistryStore()!.addTarget(args.target)
     // Why: re-adding a removed host can re-adopt orphaned workspaces; refresh the renderer's repo list so they move back onto the live host.
     const repoReadoptions = takeRepoReadoptions()
     return { target, repoReadoptions }
@@ -1032,7 +1035,7 @@ export function registerSshHandlers(
   ipcMain.handle(
     'ssh:updateTarget',
     (_event, args: { id: string; updates: Partial<Omit<SshTarget, 'id'>> }) => {
-      return sshStore!.updateTarget(args.id, args.updates)
+      return getSshTargetRegistryStore()!.updateTarget(args.id, args.updates)
     }
   )
 
@@ -1041,7 +1044,7 @@ export function registerSshHandlers(
   })
 
   ipcMain.handle('ssh:importConfig', (_event, args?: { reAdopt?: boolean }) => {
-    const targets = sshStore!.importFromSshConfig(args)
+    const targets = getSshTargetRegistryStore()!.importFromSshConfig(args)
     const repoReadoptions = takeRepoReadoptions()
     return { targets, repoReadoptions }
   })
@@ -1050,9 +1053,9 @@ export function registerSshHandlers(
   // mutate the target store (bulk sync stays on Settings → Import).
   ipcMain.handle('ssh:listConfigHosts', (_event, args?: SshConfigHostListArgs) => {
     return listUserSshConfigHostSummaries(
-      sshStore!.listTargets(),
+      getSshTargetRegistryStore()!.listTargets(),
       args?.query,
-      sshStore!.listSuppressedSshConfigAliases(),
+      getSshTargetRegistryStore()!.listSuppressedSshConfigAliases(),
       { refresh: args?.refresh === true }
     )
   })
@@ -1115,8 +1118,10 @@ export function registerSshHandlers(
     }
   }
 
-  registeredConnectSshTarget = connectTarget
-  registeredGetSshState = (targetId: string) => getPublicSshState(targetId)
+  setSshTargetRegistryHandlers({
+    connect: connectTarget,
+    getState: (targetId: string) => getPublicSshState(targetId)
+  })
 
   ipcMain.handle('ssh:connect', async (_event, args: { targetId: string }) => {
     return connectTarget(args.targetId)
@@ -1126,7 +1131,7 @@ export function registerSshHandlers(
     targetId: string,
     replacePendingTransport = false
   ): Promise<SshConnectionState> {
-    const target = sshStore!.getTarget(targetId)
+    const target = getSshTargetRegistryStore()!.getTarget(targetId)
     if (!target) {
       throw new Error(`SSH target "${targetId}" not found`)
     }
@@ -1284,7 +1289,9 @@ export function registerSshHandlers(
     // Why: persist whether this connect needed a credential so startup can partition targets into eager vs deferred without re-probing keys.
     const requiredPassphrase = credentialRequestedForTarget.has(targetId)
     credentialRequestedForTarget.delete(targetId)
-    sshStore!.updateTarget(targetId, { lastRequiredPassphrase: requiredPassphrase })
+    getSshTargetRegistryStore()!.updateTarget(targetId, {
+      lastRequiredPassphrase: requiredPassphrase
+    })
 
     return getPublicSshState(targetId)!
   }
@@ -1416,7 +1423,7 @@ export function registerSshHandlers(
       return existingReset
     }
 
-    const target = sshStore!.getTarget(args.targetId)
+    const target = getSshTargetRegistryStore()!.getTarget(args.targetId)
     if (!target) {
       throw new Error(`SSH target "${args.targetId}" not found`)
     }
@@ -1441,7 +1448,7 @@ export function registerSshHandlers(
 
   // Why: auto-connect callers need to know whether connecting will prompt; true when the last connect required a credential and no live conn has it cached.
   ipcMain.handle('ssh:needsPassphrasePrompt', (_event, args: { targetId: string }) => {
-    const target = sshStore!.getTarget(args.targetId)
+    const target = getSshTargetRegistryStore()!.getTarget(args.targetId)
     if (!target?.lastRequiredPassphrase) {
       return false
     }
@@ -1450,7 +1457,7 @@ export function registerSshHandlers(
   })
 
   ipcMain.handle('ssh:testConnection', async (_event, args: { targetId: string }) => {
-    const target = sshStore!.getTarget(args.targetId)
+    const target = getSshTargetRegistryStore()!.getTarget(args.targetId)
     if (!target) {
       throw new Error(`SSH target "${args.targetId}" not found`)
     }
@@ -1601,7 +1608,7 @@ export function registerSshHandlers(
     return enrichDetected(args.targetId, ports)
   })
 
-  return { connectionManager, sshStore }
+  return { connectionManager, sshStore: getSshTargetRegistryStore() as SshConnectionStore }
 }
 
 export function getSshConnectionManager(): SshConnectionManager | null {
@@ -1788,18 +1795,13 @@ export async function resetSshHandlerStateForTests(): Promise<void> {
   portForwardManager?.dispose()
   connectionManager = null
   portForwardManager = null
-  sshStore = null
+  setSshTargetRegistryStore(null)
   persistedStore = null
-  registeredConnectSshTarget = null
-  registeredGetSshState = null
+  setSshTargetRegistryHandlers({ connect: null, getState: null })
   currentGetMainWindow = () => null
   currentRuntime = undefined
 }
 
 export function getSshConnectionStore(): SshConnectionStore | null {
-  return sshStore
-}
-
-export function getActiveMultiplexer(connectionId: string): SshChannelMultiplexer | undefined {
-  return activeSessions.get(connectionId)?.getMux() ?? undefined
+  return getSshTargetRegistryStore()
 }

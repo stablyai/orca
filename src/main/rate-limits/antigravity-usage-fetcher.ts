@@ -4,7 +4,7 @@ import { app } from 'electron'
 import type { ProviderRateLimits } from '../../shared/rate-limit-types'
 import {
   findNewestAntigravityCliLogNames,
-  readAntigravityLogTail
+  readAntigravityLogExcerpt
 } from './antigravity-log-discovery'
 import {
   fetchAntigravityQuotaEndpoint,
@@ -52,7 +52,7 @@ async function fetchFromCliLogs(homePath: string, signal: AbortSignal): Promise<
     signal.throwIfAborted()
     let log: string
     try {
-      log = await readAntigravityLogTail(join(logDirectory, logName), signal)
+      log = await readAntigravityLogExcerpt(join(logDirectory, logName), signal)
     } catch {
       signal.throwIfAborted()
       // Why: AGY rotates logs between directory listing and reading; one
@@ -106,7 +106,7 @@ async function fetchFromDesktopApp(
   let port: number | null
   try {
     const logPath = getAntigravityLanguageServerLogPath(platform, homePath, appDataPath)
-    port = parseAntigravityLanguageServerPort(await readAntigravityLogTail(logPath, signal))
+    port = parseAntigravityLanguageServerPort(await readAntigravityLogExcerpt(logPath, signal))
   } catch {
     signal.throwIfAborted()
     return { discovered: false, answered: false, limits: null }

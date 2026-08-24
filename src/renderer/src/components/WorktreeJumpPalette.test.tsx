@@ -424,6 +424,23 @@ describe('WorktreeJumpPalette', () => {
     ).toContain('SSH workspace')
   })
 
+  it('does not badge a runtime-owned row with its physical SSH repo', async () => {
+    const worktree = makeWorktree('runtime-repo', 'Runtime workspace', {
+      hostId: 'ssh:box',
+      runtimeOwnerEnvironmentId: 'missing-runtime'
+    })
+
+    await renderPalette({
+      repos: [{ ...makeRepo(), displayName: 'Physical SSH repo', executionHostId: 'ssh:box' }],
+      worktreesByRepo: { 'repo-1': [worktree] },
+      showSleepingWorkspaces: true
+    })
+
+    const row = testContainer.querySelector('[data-command-item="worktree:runtime-repo"]')
+    expect(row?.textContent).toContain('Runtime workspace')
+    expect(row?.textContent).not.toContain('Physical SSH repo')
+  })
+
   it('replaces a completed emoji shortcode in the search query', async () => {
     await renderPalette({ worktreesByRepo: { 'repo-1': [] } })
     const input = testContainer.querySelector<HTMLInputElement>('[data-command-input="true"]')

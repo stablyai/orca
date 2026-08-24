@@ -1,4 +1,5 @@
 import { existsSync } from 'node:fs'
+import { getAppEnvironment, hasAppEnvironment } from '../../shared/app-environment'
 import { join } from 'node:path'
 import { Worker } from 'node:worker_threads'
 import {
@@ -16,9 +17,9 @@ import {
 // the duplicated ~150 lines are cheaper than a premature shared abstraction, so
 // a third adopter should extract one.
 //
-// This module contains the literal text require('electron'), so it must never
-// become reachable from a plain-Node fork entry (build-plugins/
-// plain-node-entry-guard.ts fails the build on that text, try/catch or not).
+// This module used to contain the literal text require('electron'), which fails the
+// plain-Node entry guard even inside a try/catch. It reads the AppEnvironment port
+// instead, so it is now safe to reach from a fork entry.
 
 // Why: the worker's own loop absorbs the spawn stall, so the client only needs
 // a backstop for a wedged thread. Kept at 30s because a scan sits on the
@@ -324,14 +325,8 @@ export function resolveWorkerEntryPath(layout: WorkerEntryLayout): string {
 }
 
 function currentWorkerEntryLayout(): WorkerEntryLayout {
-  let app: { isPackaged: boolean } | null = null
-  try {
-    app = require('electron').app ?? null
-  } catch {
-    app = null
-  }
   return {
-    isPackaged: app?.isPackaged === true,
+    isPackaged: hasAppEnvironment() && getAppEnvironment().isPackaged(),
     resourcesPath: process.resourcesPath,
     moduleDir: __dirname
   }

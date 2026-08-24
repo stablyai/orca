@@ -429,6 +429,23 @@ describe('SidebarNav', () => {
     expect(mocks.updateSettings).toHaveBeenCalledWith({ showMobileButton: false })
   })
 
+  it('places the worktree palette search above the sidebar nav rows', async () => {
+    const container = await renderSidebarNav()
+    const nav = container.querySelector('[data-contextual-tour-target="sidebar-navigation"]')
+    const searchButton = container.querySelector<HTMLButtonElement>(
+      'button[aria-label="Search worktrees and browser tabs"]'
+    )
+    const tasksButton = getButtonByText(container, 'Tasks')
+
+    expect(nav?.firstElementChild).toBe(searchButton)
+    if (!searchButton) {
+      throw new Error('worktree palette search button not rendered')
+    }
+    expect(
+      searchButton.compareDocumentPosition(tasksButton) & Node.DOCUMENT_POSITION_FOLLOWING
+    ).toBeTruthy()
+  })
+
   it('hides the worktree palette shortcut until the search field is hovered or focused', async () => {
     const container = await renderSidebarNav()
 
@@ -439,8 +456,8 @@ describe('SidebarNav', () => {
 
     const shortcuts = searchButton?.querySelector('span.hidden')
     expect(shortcuts?.className).toContain('hidden')
-    expect(shortcuts?.className).toContain('group-hover:inline-flex')
-    expect(shortcuts?.className).toContain('group-focus-within:inline-flex')
+    expect(shortcuts?.className).toContain('group-hover:flex')
+    expect(shortcuts?.className).toContain('group-focus-within:flex')
     expect(shortcuts?.textContent).toContain('⌘')
     expect(shortcuts?.textContent).toContain('J')
     expect(searchButton?.querySelector('kbd')).toBeNull()

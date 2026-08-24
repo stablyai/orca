@@ -11,8 +11,10 @@ describe('PTY startup barrier ordering', () => {
     const runtimeSpawnStart = source.indexOf('spawn: async (args) => {')
     const runtimeSpawnEnd = source.indexOf('      write:', runtimeSpawnStart)
     const runtimeSpawn = source.slice(runtimeSpawnStart, runtimeSpawnEnd)
-    const rendererSpawnStart = source.indexOf("ipcMain.handle(\n    'pty:spawn'")
-    const rendererSpawnEnd = source.indexOf("ipcMain.handle(\n    'pty:kill'", rendererSpawnStart)
+    // Why `ipc.` and not `ipcMain.`: the module registers against an injected surface now
+    // (pty-host-bindings) so it can run without electron. The ordering this asserts is unchanged.
+    const rendererSpawnStart = source.indexOf("ipc.handle(\n    'pty:spawn'")
+    const rendererSpawnEnd = source.indexOf("ipc.handle(\n    'pty:kill'", rendererSpawnStart)
     const rendererSpawn = source.slice(rendererSpawnStart, rendererSpawnEnd)
 
     for (const spawnBlock of [runtimeSpawn, rendererSpawn]) {

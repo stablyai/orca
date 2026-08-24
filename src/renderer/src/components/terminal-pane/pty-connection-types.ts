@@ -17,36 +17,45 @@ import type { PtyTransportRecoveryState } from './pty-transport-types'
 import type { SessionOptionValue } from '../../../../shared/native-chat-session-options'
 import type { DirectSshPaneRetryAttemptId } from '@/store/slices/direct-ssh-terminal-recovery'
 
+export type PtyPaneStartup = {
+  command: string
+  /** Renderer-delivered startup input for callers that need xterm paste
+   *  semantics before the submit Enter. */
+  delivery?: 'terminal-paste'
+  startupCommandDelivery?: StartupCommandDelivery
+  env?: Record<string, string>
+  envToDelete?: string[]
+  launchConfig?: SleepingAgentLaunchConfig
+  resumeProviderSession?: AgentProviderSessionMetadata
+  launchToken?: string
+  launchAgent?: TuiAgent
+  /** Explicit CLI override for host-owned agent launches; omission uses host settings. */
+  agentArgsOverride?: string | null
+  draftPrompt?: string
+  sessionOptions?: Record<string, SessionOptionValue>
+  /** Telemetry payload for `agent_started`. Forwarded to `pty:spawn`
+   *  so main fires the event only after the spawn succeeds. */
+  telemetry?: EventProps<'agent_started'>
+  /** Initial prompt-start status for agents that lack native prompt hooks. */
+  initialAgentStatus?: { agent: TuiAgent; prompt: string }
+  /** Show the restored-session banner when this startup command mounts. */
+  showSessionRestoredBanner?: boolean
+  /** Initial startup may be paired with a setup split that changes its grid. */
+  waitForSetupSplitDirection?: SetupSplitDirection
+} | null
+
+export type PaneProcessExit = {
+  paneId: number
+  exitCode: number
+  reason: 'git-bash-console-capacity' | 'process-failed'
+  startup: PtyPaneStartup
+}
+
 export type PtyConnectionDeps = {
   tabId: string
   worktreeId: string
   cwd?: string
-  startup?: {
-    command: string
-    /** Renderer-delivered startup input for callers that need xterm paste
-     *  semantics before the submit Enter. */
-    delivery?: 'terminal-paste'
-    startupCommandDelivery?: StartupCommandDelivery
-    env?: Record<string, string>
-    envToDelete?: string[]
-    launchConfig?: SleepingAgentLaunchConfig
-    resumeProviderSession?: AgentProviderSessionMetadata
-    launchToken?: string
-    launchAgent?: TuiAgent
-    /** Explicit CLI override for host-owned agent launches; omission uses host settings. */
-    agentArgsOverride?: string | null
-    draftPrompt?: string
-    sessionOptions?: Record<string, SessionOptionValue>
-    /** Telemetry payload for `agent_started`. Forwarded to `pty:spawn`
-     *  so main fires the event only after the spawn succeeds. */
-    telemetry?: EventProps<'agent_started'>
-    /** Initial prompt-start status for agents that lack native prompt hooks. */
-    initialAgentStatus?: { agent: TuiAgent; prompt: string }
-    /** Show the restored-session banner when this startup command mounts. */
-    showSessionRestoredBanner?: boolean
-    /** Initial startup may be paired with a setup split that changes its grid. */
-    waitForSetupSplitDirection?: SetupSplitDirection
-  } | null
+  startup?: PtyPaneStartup
   restoredLeafId?: string | null
   restoredPtyIdByLeafId?: Record<string, string>
   /** Park intent sampled at render time, before the host disposes the tab's
@@ -66,6 +75,7 @@ export type PtyConnectionDeps = {
   onPtyExitRef: React.RefObject<(ptyId: string) => void>
   onAgentExitedRef: React.RefObject<(leafId: string) => void>
   onPtyErrorRef?: React.RefObject<(paneId: number, message: string) => void>
+  onPaneProcessDied?: (processExit: PaneProcessExit) => void
   onPtyRecoveryStateRef?: React.RefObject<
     (paneId: number, state: PtyTransportRecoveryState | null) => void
   >

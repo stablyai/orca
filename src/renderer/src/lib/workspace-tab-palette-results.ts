@@ -16,6 +16,7 @@ import type { MatchRange } from './palette-match/normalized-text'
 import type { PaletteDocumentRank } from './palette-match/palette-document'
 import type { PaletteResultQualityClass } from './palette-match/match-quality'
 import type { TuiAgent } from '../../../shared/tui-agent'
+import { getUnifiedTabPaletteExecutionHostId } from './unified-tab-host-ownership'
 import type {
   SearchableWorkspaceTab,
   WorkspaceTabContentType
@@ -99,8 +100,9 @@ function resolveWorkspaceTabLastActiveAt(entry: SearchableWorkspaceTab): number 
 }
 
 function baseResult(entry: SearchableWorkspaceTab): WorkspaceTabPaletteSearchResult {
+  const executionHostId = getUnifiedTabPaletteExecutionHostId(entry.tab, entry.worktree)
   return {
-    ...(entry.worktree.hostId ? { executionHostId: entry.worktree.hostId } : {}),
+    ...(executionHostId ? { executionHostId } : {}),
     tabId: entry.tab.id,
     entityId: entry.tab.entityId,
     worktreeId: entry.worktree.id,

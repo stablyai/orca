@@ -1,5 +1,7 @@
 import type { TerminalExitCause } from '../../shared/terminal-exit-cause'
 
+import type { JobTerminationOutcome } from '../windows/windows-pty-job'
+
 export type SubprocessHandle = {
   pid: number
   /** Live foreground process name of the PTY (node-pty's `.process`), e.g.
@@ -28,6 +30,12 @@ export type SubprocessHandle = {
   clear?(): void
   kill(): void
   forceKill(): void
+  /**
+   * Terminate this pty's job object, covering descendants that detached or
+   * reparented. `unavailable` when the pty has no job -- never a false
+   * `terminated`, so callers must fall back rather than assume the tree is gone.
+   */
+  terminateOwnedTree(): JobTerminationOutcome
   signal(sig: string): void
   onData(cb: (data: string) => void): void
   onExit(cb: (code: number, cause?: TerminalExitCause) => void): void

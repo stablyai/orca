@@ -34,9 +34,9 @@ function readableLog(contents: string): unknown {
   const bytes = Buffer.from(contents)
   return {
     stat: vi.fn(async () => ({ isFile: () => true, size: bytes.length })),
-    read: vi.fn(async (buffer: Buffer) => {
-      bytes.copy(buffer)
-      return { buffer, bytesRead: bytes.length }
+    read: vi.fn(async (buffer: Buffer, offset: number, length: number, position: number) => {
+      const bytesRead = bytes.copy(buffer, offset, position, position + length)
+      return { buffer, bytesRead }
     }),
     close: vi.fn(async () => undefined)
   }

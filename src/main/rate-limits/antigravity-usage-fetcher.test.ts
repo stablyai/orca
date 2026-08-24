@@ -30,61 +30,73 @@ const quotaSummary = {
 }
 
 describe('Antigravity language-server discovery', () => {
-  it('falls past a newer stale log to the live CLI quota service', async () => {
-    const homePath = await mkdtemp(join(tmpdir(), 'orca-antigravity-cli-'))
-    const logDirectory = getAntigravityCliLogDirectory(homePath)
-    let requestBody = ''
-    const server = createServer((request, response) => {
-      request.on('data', (chunk: Buffer) => {
-        requestBody += chunk.toString('utf8')
-      })
-      request.on('end', () => {
-        response.writeHead(200, { 'content-type': 'application/json' })
-        response.end(JSON.stringify(quotaSummary))
-      })
-    })
-    await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve))
-    const address = server.address()
-    if (!address || typeof address === 'string') {
-      throw new Error('Expected a TCP listener')
+  it.each([
+    {
+      announcementPosition: 'beginning',
+      makeLog: (announcement: string) => `${announcement}\n${'long log data\n'.repeat(25_000)}`
+    },
+    {
+      announcementPosition: 'end',
+      makeLog: (announcement: string) => `${'long log data\n'.repeat(25_000)}${announcement}`
     }
-
-    try {
-      await mkdir(logDirectory, { recursive: true })
-      await writeFile(
-        join(logDirectory, 'cli-20260714_123131.log'),
-        'Language server listening on random port at 1 for HTTP'
-      )
-      await writeFile(
-        join(logDirectory, 'cli-20260714_103225.log'),
-        `${'old log data\n'.repeat(12_000)}Language server listening on random port at ${address.port} for HTTP`
-      )
-
-      const result = await fetchAntigravityRateLimits({
-        homePath,
-        appDataPath: join(homePath, 'app-data')
+  ])(
+    'falls past a newer stale log when the live listener announcement is at the $announcementPosition of a long log',
+    async ({ makeLog }) => {
+      const homePath = await mkdtemp(join(tmpdir(), 'orca-antigravity-cli-'))
+      const logDirectory = getAntigravityCliLogDirectory(homePath)
+      let requestBody = ''
+      const server = createServer((request, response) => {
+        request.on('data', (chunk: Buffer) => {
+          requestBody += chunk.toString('utf8')
+        })
+        request.on('end', () => {
+          response.writeHead(200, { 'content-type': 'application/json' })
+          response.end(JSON.stringify(quotaSummary))
+        })
       })
+      await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve))
+      const address = server.address()
+      if (!address || typeof address === 'string') {
+        throw new Error('Expected a TCP listener')
+      }
 
-      expect(requestBody).toBe('{}')
-      expect(result).toMatchObject({
-        provider: 'antigravity',
-        session: { usedPercent: 4 },
-        weekly: { usedPercent: 8 },
-        status: 'ok',
-        usageMetadata: {
-          source: 'live-session',
-          credentialSource: 'agy-local-service',
-          authProvenance: 'antigravity'
-        }
-      })
-      expect(result.buckets).toHaveLength(4)
-    } finally {
-      await new Promise<void>((resolve, reject) => {
-        server.close((error) => (error ? reject(error) : resolve()))
-      })
-      await rm(homePath, { recursive: true, force: true })
+      try {
+        await mkdir(logDirectory, { recursive: true })
+        await writeFile(
+          join(logDirectory, 'cli-20260714_123131.log'),
+          'Language server listening on random port at 1 for HTTP'
+        )
+        await writeFile(
+          join(logDirectory, 'cli-20260714_103225.log'),
+          makeLog(`Language server listening on random port at ${address.port} for HTTP`)
+        )
+
+        const result = await fetchAntigravityRateLimits({
+          homePath,
+          appDataPath: join(homePath, 'app-data')
+        })
+
+        expect(requestBody).toBe('{}')
+        expect(result).toMatchObject({
+          provider: 'antigravity',
+          session: { usedPercent: 4 },
+          weekly: { usedPercent: 8 },
+          status: 'ok',
+          usageMetadata: {
+            source: 'live-session',
+            credentialSource: 'agy-local-service',
+            authProvenance: 'antigravity'
+          }
+        })
+        expect(result.buckets).toHaveLength(4)
+      } finally {
+        await new Promise<void>((resolve, reject) => {
+          server.close((error) => (error ? reject(error) : resolve()))
+        })
+        await rm(homePath, { recursive: true, force: true })
+      }
     }
-  })
+  )
 
   it.each([
     { responseName: 'not-signed-in error', statusCode: 500, body: 'not signed in' },

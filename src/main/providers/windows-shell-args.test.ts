@@ -390,7 +390,7 @@ describe('resolveWindowsShellLaunchArgs', () => {
     const zshEnv = readFileSync(join(getShellReadyWrapperRoot(), 'zsh', '.zshenv'), 'utf8')
     for (const wrapperFile of [bashRcfile, zshEnv]) {
       expect(wrapperFile).toContain('command omp --extension "${ORCA_OMP_STATUS_EXTENSION}" "$@"')
-      expect(wrapperFile).toContain('omp() { __orca_omp "$@"; }')
+      expect(wrapperFile).toContain('function omp { __orca_omp "$@"; }')
       expect(wrapperFile).not.toContain('prime-agent()')
       expect(wrapperFile).not.toContain('__orca_prime_agent')
       expect(wrapperFile).not.toContain('ORCA_PRIME_AGENT_STATUS_EXTENSION')

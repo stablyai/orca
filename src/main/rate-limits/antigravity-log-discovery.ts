@@ -2,7 +2,8 @@ import type { Dir } from 'node:fs'
 import { open, opendir, type FileHandle } from 'node:fs/promises'
 
 const CLI_LOG_LIMIT = 12
-const LOG_TAIL_LIMIT_BYTES = 128 * 1024
+const LOG_SECTION_LIMIT_BYTES = 128 * 1024
+const LOG_READ_LIMIT_BYTES = LOG_SECTION_LIMIT_BYTES * 2
 
 /** Races filesystem work because Node's promise APIs do not accept AbortSignal. */
 function awaitWithAbort<T>(operation: Promise<T>, signal: AbortSignal): Promise<T> {
@@ -97,8 +98,30 @@ export async function findNewestAntigravityCliLogNames(
   }
 }
 
-/** Bounds and cancels discovery reads so stale logs cannot exhaust the fetch budget. */
-export async function readAntigravityLogTail(
+/** Fills a bounded section despite short filesystem reads. */
+async function readLogSection(
+  handle: FileHandle,
+  position: number,
+  byteLength: number,
+  signal: AbortSignal
+): Promise<Buffer> {
+  const buffer = Buffer.allocUnsafe(byteLength)
+  let totalBytesRead = 0
+  while (totalBytesRead < byteLength) {
+    const { bytesRead } = await awaitWithAbort(
+      handle.read(buffer, totalBytesRead, byteLength - totalBytesRead, position + totalBytesRead),
+      signal
+    )
+    if (bytesRead === 0) {
+      break
+    }
+    totalBytesRead += bytesRead
+  }
+  return buffer.subarray(0, totalBytesRead)
+}
+
+/** Reads bounded head and tail sections because listener announcements occur at startup. */
+export async function readAntigravityLogExcerpt(
   filePath: string,
   signal: AbortSignal
 ): Promise<string> {
@@ -112,17 +135,20 @@ export async function readAntigravityLogTail(
     if (!stats.isFile()) {
       throw new Error('Antigravity log target is not a file')
     }
-    const byteLength = Math.min(stats.size, LOG_TAIL_LIMIT_BYTES)
-    if (byteLength === 0) {
+    if (stats.size === 0) {
       return ''
     }
-    const buffer = Buffer.allocUnsafe(byteLength)
-    const { bytesRead } = await awaitWithAbort(
-      handle.read(buffer, 0, byteLength, stats.size - byteLength),
+    if (stats.size <= LOG_READ_LIMIT_BYTES) {
+      return (await readLogSection(handle, 0, stats.size, signal)).toString('utf8')
+    }
+    const head = await readLogSection(handle, 0, LOG_SECTION_LIMIT_BYTES, signal)
+    const tail = await readLogSection(
+      handle,
+      stats.size - LOG_SECTION_LIMIT_BYTES,
+      LOG_SECTION_LIMIT_BYTES,
       signal
     )
-    signal.throwIfAborted()
-    return buffer.subarray(0, bytesRead).toString('utf8')
+    return `${head.toString('utf8')}\n${tail.toString('utf8')}`
   } finally {
     await closeWithAbort(handle.close(), signal)
   }
