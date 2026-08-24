@@ -11,12 +11,14 @@ import {
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { WorktreeOpenInMenuItems } from '@/components/sidebar/WorktreeOpenInMenu'
 import { translate } from '@/i18n/i18n'
+import type { ExecutionHostId } from '../../../../shared/execution-host'
 import { cn } from '@/lib/utils'
 
 type FileExplorerToolbarProps = {
   repoName: string
   worktreePath: string
   connectionId?: string | null
+  executionHostId?: ExecutionHostId
   refresh: {
     isRefreshing: boolean
     showRefreshSpinner: boolean
@@ -36,6 +38,7 @@ export function FileExplorerToolbar({
   repoName,
   worktreePath,
   connectionId,
+  executionHostId,
   refresh,
   canRefresh,
   canCollapseAll,
@@ -173,7 +176,11 @@ export function FileExplorerToolbar({
           <WorktreeOpenInMenuItems
             worktreePath={worktreePath}
             connectionId={connectionId}
-            labelPrefix="Open in "
+            executionHostId={executionHostId}
+            labelPrefix={`${translate(
+              'auto.components.sidebar.WorktreeOpenInMenu.8009ab69a6',
+              'Open in'
+            )} `}
           />
         </DropdownMenuContent>
       </DropdownMenu>

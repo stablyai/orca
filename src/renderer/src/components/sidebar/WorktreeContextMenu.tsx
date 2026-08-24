@@ -34,6 +34,8 @@ import { useAppStore } from '@/store'
 import type { AppState } from '@/store/types'
 import { useAllWorktrees, useRepoById, useRepoMap, useWorktreeMap } from '@/store/selectors'
 import { cn } from '@/lib/utils'
+import { getExecutionHostIdForWorktree } from '@/lib/worktree-runtime-owner'
+import { parseExecutionHostId, type ExecutionHostId } from '../../../../shared/execution-host'
 import type { Repo } from '../../../../shared/repo-types'
 import type {
   WorkspaceStatus,
@@ -110,6 +112,13 @@ const EMPTY_CYCLIC_LINEAGE_IDS: ReadonlySet<string> = new Set()
 // data. Extracted as a pure function so the stable-reference contract is unit-testable.
 export function selectMenuScopedMap<T>(menuOpen: boolean, live: T, empty: T): T {
   return menuOpen ? live : empty
+}
+
+export function resolveContextWorktreeExecutionHostId(
+  worktree: Pick<Worktree, 'hostId'>,
+  fallback: ExecutionHostId
+): ExecutionHostId {
+  return worktree.hostId ?? fallback
 }
 
 // Why: the Developer submenu is hidden by default and revealed only by holding
@@ -334,6 +343,10 @@ const WorktreeContextMenu = React.memo(function WorktreeContextMenu({
   const createProjectGroup = useAppStore((s) => s.createProjectGroup)
   const moveProjectToGroup = useAppStore((s) => s.moveProjectToGroup)
   const repo = useRepoById(worktree.repoId)
+  const fallbackExecutionHostId = useAppStore((s) => getExecutionHostIdForWorktree(s, worktree.id))
+  const executionHostId = resolveContextWorktreeExecutionHostId(worktree, fallbackExecutionHostId)
+  const executionHost = parseExecutionHostId(executionHostId)
+  const openInConnectionId = executionHost?.kind === 'ssh' ? executionHost.targetId : null
   const deleteState = useAppStore((s) =>
     getDeleteStateForWorktreeHost(worktree, s.deleteStateByWorktreeId)
   )
@@ -886,7 +899,8 @@ const WorktreeContextMenu = React.memo(function WorktreeContextMenu({
             <>
               <WorktreeOpenInSubMenu
                 worktreePath={worktree.path}
-                connectionId={repo?.connectionId ?? null}
+                connectionId={openInConnectionId}
+                executionHostId={executionHostId}
                 disabled={isDeleting}
               />
               <DropdownMenuItem onSelect={handleCopyPath} disabled={isDeleting}>

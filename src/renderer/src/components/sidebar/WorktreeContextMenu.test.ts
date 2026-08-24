@@ -11,6 +11,7 @@ import {
   hasWorktreeParentLink,
   isWorktreeParentPickerDisabled,
   planWorkspaceStatusAssignment,
+  resolveContextWorktreeExecutionHostId,
   selectMenuScopedMap,
   shouldRevealWorktreeDeveloperMenu
 } from './WorktreeContextMenu'
@@ -38,6 +39,21 @@ describe('shouldRevealWorktreeDeveloperMenu', () => {
     expect(
       shouldRevealWorktreeDeveloperMenu({ developerMenuRevealed: true, isMultiContext: true })
     ).toBe(false)
+  })
+})
+
+describe('resolveContextWorktreeExecutionHostId', () => {
+  it('keeps the clicked row host when the same worktree id is active on another host', () => {
+    expect(
+      resolveContextWorktreeExecutionHostId({ hostId: 'runtime:runtime-1' }, 'ssh:ssh-2')
+    ).toBe('runtime:runtime-1')
+    expect(resolveContextWorktreeExecutionHostId({ hostId: 'local' }, 'runtime:runtime-1')).toBe(
+      'local'
+    )
+  })
+
+  it('uses indexed ownership for legacy rows without a host stamp', () => {
+    expect(resolveContextWorktreeExecutionHostId({}, 'ssh:ssh-1')).toBe('ssh:ssh-1')
   })
 })
 

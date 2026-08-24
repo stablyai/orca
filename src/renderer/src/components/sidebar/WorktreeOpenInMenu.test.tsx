@@ -153,6 +153,37 @@ describe('WorktreeOpenInMenu', () => {
     expect(openInExternalEditorMock).not.toHaveBeenCalled()
   })
 
+  it.each(['runtime:runtime-1', 'ssh:ssh-1'] as const)(
+    'blocks remote file-manager actions without an ambient Runtime: %s',
+    async (executionHostId) => {
+      await openWorktreePath({
+        target: 'file-manager',
+        worktreePath: '/srv/remote-workspace',
+        connectionId: null,
+        executionHostId
+      })
+
+      expect(openInFileManagerMock).not.toHaveBeenCalled()
+      expect(toastErrorMock).toHaveBeenCalledWith(
+        'Opening remote paths in the local OS is not available.'
+      )
+    }
+  )
+
+  it('honors explicit local ownership while an ambient Runtime is active', async () => {
+    mockState.settings = { activeRuntimeEnvironmentId: 'runtime-1', openInApplications: [] }
+
+    await openWorktreePath({
+      target: 'file-manager',
+      worktreePath: '/tmp/workspace',
+      connectionId: null,
+      executionHostId: 'local'
+    })
+
+    expect(openInFileManagerMock).toHaveBeenCalledWith('/tmp/workspace', 'local')
+    expect(toastErrorMock).not.toHaveBeenCalled()
+  })
+
   it('shows an actionable toast when the host launcher fails', async () => {
     openInExternalEditorMock.mockResolvedValueOnce({ ok: false, reason: 'launch-failed' })
 
@@ -227,11 +258,98 @@ describe('WorktreeOpenInMenu', () => {
     )
   })
 
-  it('enables only VS Code-compatible launchers for SSH paths', () => {
+  it('enables VS Code, Cursor, and Zed for a runtime-owned worktree', () => {
+    const entries = getWorktreeOpenInEntries(
+      [
+        { id: 'vscode', label: 'VS Code', command: 'code' },
+        { id: 'zed', label: 'Zed', command: 'zed' },
+        { id: 'cursor', label: 'Cursor', command: 'cursor' }
+      ],
+      'Finder'
+    )
+
+    expect(
+      getOpenInEntryAvailability(entries[0], mockState.settings, null, 'runtime:runtime-1')
+    ).toEqual({ disabled: false, metadata: 'Remote SSH' })
+    expect(
+      getOpenInEntryAvailability(entries[1], mockState.settings, null, 'runtime:runtime-1')
+    ).toEqual({ disabled: false, metadata: 'Remote SSH' })
+    expect(
+      getOpenInEntryAvailability(entries[2], mockState.settings, null, 'runtime:runtime-1')
+    ).toEqual({ disabled: false, metadata: 'Remote SSH' })
+  })
+
+  it('forwards runtime worktree ownership to main IPC', async () => {
+    await openWorktreePath({
+      target: 'external-editor',
+      worktreePath: '/srv/Ada Project',
+      connectionId: null,
+      executionHostId: 'runtime:runtime-1',
+      command: 'zed'
+    })
+
+    expect(openInExternalEditorMock).toHaveBeenCalledWith({
+      path: '/srv/Ada Project',
+      command: 'zed',
+      connectionId: null,
+      executionHostId: 'runtime:runtime-1'
+    })
+  })
+
+  it('uses remote-neutral copy for an unsupported Runtime launcher', async () => {
+    await openWorktreePath({
+      target: 'external-editor',
+      worktreePath: '/srv/project',
+      connectionId: null,
+      executionHostId: 'runtime:runtime-1',
+      command: 'subl'
+    })
+
+    expect(openInExternalEditorMock).not.toHaveBeenCalled()
+    expect(toastErrorMock).toHaveBeenCalledWith('This app cannot open remote workspaces.', {
+      description: 'Choose an editor with remote workspace support or use the app locally.'
+    })
+  })
+
+  it('enables file-manager entries for explicit local ownership under an ambient Runtime', () => {
+    mockState.settings = { activeRuntimeEnvironmentId: 'runtime-1', openInApplications: [] }
+    const entries = getWorktreeOpenInEntries([], 'File Manager')
+
+    expect(getOpenInEntryAvailability(entries[0], mockState.settings, null, 'local')).toEqual({
+      disabled: false
+    })
+  })
+
+  it('disables file-manager entries for Runtime-owned worktrees without an ambient Runtime', () => {
+    const entries = getWorktreeOpenInEntries([], 'File Manager')
+
+    expect(
+      getOpenInEntryAvailability(entries[0], mockState.settings, null, 'runtime:runtime-1')
+    ).toEqual({ disabled: true, metadata: 'Local only' })
+  })
+
+  it('uses editor-neutral recovery copy when a Runtime Zed launch fails', async () => {
+    openInExternalEditorMock.mockResolvedValueOnce({ ok: false, reason: 'launch-failed' })
+
+    await openWorktreePath({
+      target: 'external-editor',
+      worktreePath: '/srv/project',
+      connectionId: null,
+      executionHostId: 'runtime:runtime-1',
+      command: 'zed'
+    })
+
+    expect(toastErrorMock).toHaveBeenCalledWith('Could not open the remote workspace.', {
+      description: 'Check the editor command configured on this machine.'
+    })
+  })
+
+  it('enables VS Code, Cursor, and Zed for SSH paths', () => {
     const entries = getWorktreeOpenInEntries(
       [
         { id: 'renamed', label: 'My Remote Editor', command: 'code-insiders' },
-        { id: 'fake', label: 'VS Code', command: 'cursor' },
+        { id: 'cursor', label: 'Cursor', command: 'cursor' },
+        { id: 'zed', label: 'Zed', command: 'zed' },
         { id: 'compound', label: 'VS Code Reuse', command: 'code --reuse-window' }
       ],
       'Finder'
@@ -242,14 +360,18 @@ describe('WorktreeOpenInMenu', () => {
       metadata: 'Remote SSH'
     })
     expect(getOpenInEntryAvailability(entries[1], mockState.settings, 'ssh-1')).toEqual({
-      disabled: true,
-      metadata: 'Local only'
+      disabled: false,
+      metadata: 'Remote SSH'
     })
     expect(getOpenInEntryAvailability(entries[2], mockState.settings, 'ssh-1')).toEqual({
+      disabled: false,
+      metadata: 'Remote SSH'
+    })
+    expect(getOpenInEntryAvailability(entries[3], mockState.settings, 'ssh-1')).toEqual({
       disabled: true,
       metadata: 'Local only'
     })
-    expect(getOpenInEntryAvailability(entries[3], mockState.settings, 'ssh-1')).toEqual({
+    expect(getOpenInEntryAvailability(entries[4], mockState.settings, 'ssh-1')).toEqual({
       disabled: true,
       metadata: 'Local only'
     })
@@ -270,17 +392,17 @@ describe('WorktreeOpenInMenu', () => {
     })
   })
 
-  it('blocks SSH local-only launchers before IPC with actionable copy', async () => {
+  it('blocks SSH compound launchers before IPC with actionable copy', async () => {
     await openWorktreePath({
       target: 'external-editor',
       worktreePath: '/home/ada/project',
       connectionId: 'ssh-1',
-      command: 'cursor'
+      command: 'code --reuse-window'
     })
 
     expect(openInExternalEditorMock).not.toHaveBeenCalled()
-    expect(toastErrorMock).toHaveBeenCalledWith('This app cannot open SSH workspaces.', {
-      description: 'Choose VS Code or use the app locally.'
+    expect(toastErrorMock).toHaveBeenCalledWith('This app cannot open remote workspaces.', {
+      description: 'Choose an editor with remote workspace support or use the app locally.'
     })
   })
 

@@ -27,6 +27,8 @@ import { useFileExplorerNameFilter } from './use-file-explorer-name-filter'
 import { useFileExplorerTreePaneState } from './use-file-explorer-tree-pane-state'
 import { translate } from '@/i18n/i18n'
 import type { RightSidebarExplorerView } from '../../../../shared/ui-chrome-types'
+import { parseExecutionHostId } from '../../../../shared/execution-host'
+import { getExecutionHostIdForWorktree } from '@/lib/worktree-runtime-owner'
 
 function FileExplorerFiles(): React.JSX.Element {
   const explorerView = useAppStore((s) => s.rightSidebarExplorerView)
@@ -35,6 +37,9 @@ function FileExplorerFiles(): React.JSX.Element {
   const searchPanel = useFileSearchPanel(explorerView)
   const activeWorktreeId = useAppStore((s) => s.activeWorktreeId)
   const activeWorktree = useActiveWorktree()
+  const executionHostId = useAppStore((s) => getExecutionHostIdForWorktree(s, activeWorktreeId))
+  const executionHost = parseExecutionHostId(executionHostId)
+  const openInConnectionId = executionHost?.kind === 'ssh' ? executionHost.targetId : null
   const activeRepo = useRepoById(activeWorktree?.repoId ?? null)
   const expandedDirs = useAppStore((s) => s.expandedDirs)
   const collapseAllDirs = useAppStore((s) => s.collapseAllDirs)
@@ -208,7 +213,8 @@ function FileExplorerFiles(): React.JSX.Element {
         <FileExplorerToolbar
           repoName={repoName}
           worktreePath={worktreePath}
-          connectionId={activeRepo?.connectionId ?? null}
+          connectionId={openInConnectionId}
+          executionHostId={executionHostId}
           refresh={manualRefresh}
           canRefresh={isFilesViewActive}
           canCollapseAll={canCollapseAll}

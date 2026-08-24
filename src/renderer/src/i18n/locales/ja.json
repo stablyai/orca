@@ -4655,12 +4655,12 @@
           "sshTargetInvalidDetail": "SSH ホストを編集するか再接続してから、もう一度お試しください。",
           "sshAliasRequired": "VS Code には、このホストの SSH 設定エイリアスが必要です。",
           "sshAliasRequiredDetail": "ローカルの SSH 設定に {{host}}:{{port}} の Host エイリアスを追加し、ワークスペースを再接続してから、もう一度お試しください。",
-          "remoteEditorUnsupported": "このアプリは SSH ワークスペースを開けません。",
-          "remoteEditorUnsupportedDetail": "VS Code を選択するか、このアプリをローカルで使用してください。",
+          "remoteEditorUnsupported": "このアプリはリモートワークスペースを開けません。",
+          "remoteEditorUnsupportedDetail": "リモートワークスペースに対応したエディターを選択するか、アプリをローカルで使用してください。",
           "remotePathInvalid": "このパスは SSH ホストでは無効です。",
           "remotePathInvalidDetail": "ワークスペースを更新してから、もう一度お試しください。",
-          "remoteLaunchFailed": "VS Code でパスを開けませんでした。",
-          "remoteLaunchFailedDetail": "このマシンに設定されている VS Code のコマンドを確認してください。"
+          "remoteLaunchFailed": "リモートワークスペースを開けませんでした。",
+          "remoteLaunchFailedDetail": "このマシンに設定されているエディターコマンドを確認してください。"
         },
         "WorktreeTitleInlineRename": {
           "2f42ae024f": "未読:",

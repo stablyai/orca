@@ -1,6 +1,5 @@
 import React, { useCallback } from 'react'
 import { ExternalLink, FolderOpen } from 'lucide-react'
-import { toast } from 'sonner'
 import {
   DropdownMenuItem,
   DropdownMenuSeparator,
@@ -14,7 +13,8 @@ import { getLocalFileManagerLabel } from '@/lib/local-file-manager-label'
 import { OpenInApplicationIcon } from '@/lib/open-in-app-catalog'
 import { getExternalEditorOpenCapability } from '@/lib/external-editor-open-capability'
 import { NO_OPEN_IN_APPLICATIONS } from '@/lib/open-in-application-selection'
-import type { ShellOpenExternalEditorResult } from '../../../../shared/shell-open-types'
+import { showWorktreeOpenFailureToast } from './worktree-open-failure-toast'
+import { parseExecutionHostId, type ExecutionHostId } from '../../../../shared/execution-host'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import type { OpenInApplication } from '../../../../shared/ui-chrome-types'
 import { translate } from '@/i18n/i18n'
@@ -24,6 +24,7 @@ export { getLocalFileManagerLabel } from '@/lib/local-file-manager-label'
 type WorktreeOpenInMenuItemsProps = {
   worktreePath: string
   connectionId?: string | null
+  executionHostId?: ExecutionHostId
   disabled?: boolean
   labelPrefix?: string
 }
@@ -53,10 +54,11 @@ export function getWorktreeOpenInEntries(
 export function getOpenInEntryAvailability(
   entry: OpenInMenuEntry,
   settings: Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> | null | undefined,
-  connectionId?: string | null
+  connectionId?: string | null,
+  executionHostId?: ExecutionHostId
 ): { disabled: boolean; metadata?: string } {
   if (entry.target === 'file-manager') {
-    const disabled = isLocalPathOpenBlocked(settings, { connectionId })
+    const disabled = isFileManagerOpenBlocked(settings, connectionId, executionHostId)
     return disabled
       ? {
           disabled: true,
@@ -66,7 +68,8 @@ export function getOpenInEntryAvailability(
   }
   const capability = getExternalEditorOpenCapability(settings, {
     connectionId,
-    command: entry.command
+    command: entry.command,
+    executionHostId
   })
   if (!capability.allowed) {
     return {
@@ -80,152 +83,6 @@ export function getOpenInEntryAvailability(
         metadata: translate('auto.components.sidebar.WorktreeOpenInMenu.remoteSsh', 'Remote SSH')
       }
     : { disabled: false }
-}
-
-function showOpenFailureToast(
-  result: Exclude<ShellOpenExternalEditorResult, { ok: true }>,
-  remote: boolean
-): void {
-  if (result.reason === 'remote-runtime-unsupported') {
-    toast.error(
-      translate(
-        'auto.components.sidebar.WorktreeOpenInMenu.remoteRuntimeUnsupported',
-        'Opening this path in a local app is not available.'
-      ),
-      {
-        description: translate(
-          'auto.components.sidebar.WorktreeOpenInMenu.remoteRuntimeUnsupportedDetail',
-          'Switch to a local or SSH workspace, then try again.'
-        )
-      }
-    )
-    return
-  }
-  if (result.reason === 'ssh-target-not-found') {
-    toast.error(
-      translate(
-        'auto.components.sidebar.WorktreeOpenInMenu.sshTargetNotFound',
-        'SSH host is no longer available.'
-      ),
-      {
-        description: translate(
-          'auto.components.sidebar.WorktreeOpenInMenu.sshTargetNotFoundDetail',
-          'Refresh workspaces or reconnect the host, then try again.'
-        )
-      }
-    )
-    return
-  }
-  if (result.reason === 'ssh-target-invalid') {
-    toast.error(
-      translate(
-        'auto.components.sidebar.WorktreeOpenInMenu.sshTargetInvalid',
-        'SSH host configuration is incomplete.'
-      ),
-      {
-        description: translate(
-          'auto.components.sidebar.WorktreeOpenInMenu.sshTargetInvalidDetail',
-          'Edit or reconnect the SSH host, then try again.'
-        )
-      }
-    )
-    return
-  }
-  if (result.reason === 'ssh-alias-required') {
-    toast.error(
-      translate(
-        'auto.components.sidebar.WorktreeOpenInMenu.sshAliasRequired',
-        'VS Code needs an SSH config alias for this host.'
-      ),
-      {
-        description: translate(
-          'auto.components.sidebar.WorktreeOpenInMenu.sshAliasRequiredDetail',
-          'Add a Host alias for {{host}}:{{port}} to your local SSH config, reconnect the workspace, then try again.',
-          { host: result.host, port: result.port }
-        )
-      }
-    )
-    return
-  }
-  if (result.reason === 'remote-editor-unsupported') {
-    toast.error(
-      translate(
-        'auto.components.sidebar.WorktreeOpenInMenu.remoteEditorUnsupported',
-        'This app cannot open SSH workspaces.'
-      ),
-      {
-        description: translate(
-          'auto.components.sidebar.WorktreeOpenInMenu.remoteEditorUnsupportedDetail',
-          'Choose VS Code or use the app locally.'
-        )
-      }
-    )
-    return
-  }
-  if (result.reason === 'not-absolute') {
-    toast.error(
-      remote
-        ? translate(
-            'auto.components.sidebar.WorktreeOpenInMenu.remotePathInvalid',
-            'Path is not valid for the SSH host.'
-          )
-        : translate(
-            'auto.components.sidebar.WorktreeOpenInMenu.f387af445b',
-            'Workspace path is not a valid local path.'
-          ),
-      remote
-        ? {
-            description: translate(
-              'auto.components.sidebar.WorktreeOpenInMenu.remotePathInvalidDetail',
-              'Refresh the workspace before trying again.'
-            )
-          }
-        : undefined
-    )
-    return
-  }
-  if (result.reason === 'not-found') {
-    toast.error(
-      translate(
-        'auto.components.sidebar.WorktreeOpenInMenu.3921d3d9a5',
-        'Workspace folder was not found.'
-      ),
-      {
-        description: translate(
-          'auto.components.sidebar.WorktreeOpenInMenu.0bed8727db',
-          'It may have been moved or deleted. Refresh workspaces or remove it from Orca.'
-        )
-      }
-    )
-    return
-  }
-  if (remote) {
-    toast.error(
-      translate(
-        'auto.components.sidebar.WorktreeOpenInMenu.remoteLaunchFailed',
-        'Could not open the path in VS Code.'
-      ),
-      {
-        description: translate(
-          'auto.components.sidebar.WorktreeOpenInMenu.remoteLaunchFailedDetail',
-          'Check the VS Code command configured on this machine.'
-        )
-      }
-    )
-    return
-  }
-  toast.error(
-    translate(
-      'auto.components.sidebar.WorktreeOpenInMenu.9a5381eb09',
-      'Could not open workspace folder.'
-    ),
-    {
-      description: translate(
-        'auto.components.sidebar.WorktreeOpenInMenu.bd0e8159f8',
-        'Check the editor command or file manager configuration on this machine.'
-      )
-    }
-  )
 }
 
 function stopMenuPropagation(event: React.SyntheticEvent): void {
@@ -242,28 +99,45 @@ export function openOpenInAppsSettings(): void {
   store.openSettingsPage()
 }
 
+function isFileManagerOpenBlocked(
+  settings: Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> | null | undefined,
+  connectionId?: string | null,
+  executionHostId?: ExecutionHostId
+): boolean {
+  const hasExplicitExecutionHost = executionHostId !== undefined
+  const executionHost = parseExecutionHostId(executionHostId)
+  if (hasExplicitExecutionHost) {
+    return executionHost?.kind !== 'local' || Boolean(connectionId?.trim())
+  }
+  return isLocalPathOpenBlocked(settings, { connectionId })
+}
+
 export async function openWorktreePath(args: {
   target: 'file-manager' | 'external-editor'
   worktreePath: string
   connectionId?: string | null
+  executionHostId?: ExecutionHostId
   command?: string
 }): Promise<void> {
   const settings = useAppStore.getState().settings
+  const executionHost = parseExecutionHostId(args.executionHostId)
+  const remoteExecutionHost = executionHost?.kind === 'ssh' || executionHost?.kind === 'runtime'
   if (args.target === 'file-manager') {
-    if (isLocalPathOpenBlocked(settings, { connectionId: args.connectionId ?? null })) {
+    if (isFileManagerOpenBlocked(settings, args.connectionId, args.executionHostId)) {
       showLocalPathOpenBlockedToast()
       return
     }
   } else {
     const capability = getExternalEditorOpenCapability(settings, {
       connectionId: args.connectionId,
-      command: args.command
+      command: args.command,
+      executionHostId: args.executionHostId
     })
     if (!capability.allowed) {
       if (capability.reason === 'remote-runtime') {
-        showOpenFailureToast({ ok: false, reason: 'remote-runtime-unsupported' }, false)
+        showWorktreeOpenFailureToast({ ok: false, reason: 'remote-runtime-unsupported' }, false)
       } else {
-        showOpenFailureToast({ ok: false, reason: 'remote-editor-unsupported' }, true)
+        showWorktreeOpenFailureToast({ ok: false, reason: 'remote-editor-unsupported' }, true)
       }
       return
     }
@@ -271,39 +145,52 @@ export async function openWorktreePath(args: {
 
   const result =
     args.target === 'file-manager'
-      ? await window.api.shell.openInFileManager(args.worktreePath)
+      ? await window.api.shell.openInFileManager(args.worktreePath, args.executionHostId)
       : await window.api.shell.openInExternalEditor({
           path: args.worktreePath,
           command: args.command,
-          connectionId: args.connectionId
+          connectionId: args.connectionId,
+          executionHostId: args.executionHostId
         })
   if (!result.ok) {
-    showOpenFailureToast(result, Boolean(args.connectionId?.trim()))
+    showWorktreeOpenFailureToast(result, remoteExecutionHost || Boolean(args.connectionId?.trim()))
   }
 }
 
 function useOpenInWorktreePath({
   worktreePath,
-  connectionId
+  connectionId,
+  executionHostId
 }: WorktreeOpenInMenuItemsProps): (
   target: 'file-manager' | 'external-editor',
   command?: string
 ) => Promise<void> {
   return useCallback(
     async (target, command) => {
-      await openWorktreePath({ target, worktreePath, connectionId, command })
+      await openWorktreePath({
+        target,
+        worktreePath,
+        connectionId,
+        executionHostId,
+        command
+      })
     },
-    [connectionId, worktreePath]
+    [connectionId, executionHostId, worktreePath]
   )
 }
 
 export function WorktreeOpenInMenuItems({
   worktreePath,
   connectionId,
+  executionHostId,
   disabled,
   labelPrefix = ''
 }: WorktreeOpenInMenuItemsProps): React.JSX.Element {
-  const openInWorktreePath = useOpenInWorktreePath({ worktreePath, connectionId })
+  const openInWorktreePath = useOpenInWorktreePath({
+    worktreePath,
+    connectionId,
+    executionHostId
+  })
   const openInApplications = useAppStore(
     (s) => s.settings?.openInApplications ?? NO_OPEN_IN_APPLICATIONS
   )
@@ -314,7 +201,12 @@ export function WorktreeOpenInMenuItems({
   return (
     <>
       {entries.map((entry) => {
-        const availability = getOpenInEntryAvailability(entry, settings, connectionId)
+        const availability = getOpenInEntryAvailability(
+          entry,
+          settings,
+          connectionId,
+          executionHostId
+        )
         return (
           <DropdownMenuItem
             key={entry.id}
@@ -350,6 +242,7 @@ export function WorktreeOpenInMenuItems({
 export function WorktreeOpenInSubMenu({
   worktreePath,
   connectionId,
+  executionHostId,
   disabled
 }: WorktreeOpenInMenuItemsProps): React.JSX.Element {
   return (
@@ -366,6 +259,7 @@ export function WorktreeOpenInSubMenu({
         <WorktreeOpenInMenuItems
           worktreePath={worktreePath}
           connectionId={connectionId}
+          executionHostId={executionHostId}
           disabled={disabled}
         />
         <DropdownMenuSeparator />

@@ -555,7 +555,16 @@ describe('registerCoreHandlers', () => {
     expect(registerNativeChatHandlersMock).toHaveBeenCalled()
     expect(registerCliHandlersMock).toHaveBeenCalled()
     expect(registerPreflightHandlersMock).toHaveBeenCalled()
-    expect(registerShellHandlersMock).toHaveBeenCalledWith(store)
+    const runtimeEnvironment = { id: 'env-123' } as never
+    listEnvironmentsMock.mockReturnValue([runtimeEnvironment])
+    expect(registerShellHandlersMock).toHaveBeenCalledWith(store, {
+      resolveRuntimeEnvironment: expect.any(Function)
+    })
+    const shellOptions = registerShellHandlersMock.mock.calls[0]?.[1] as {
+      resolveRuntimeEnvironment: (environmentId: string) => unknown
+    }
+    expect(shellOptions.resolveRuntimeEnvironment('env-123')).toBe(runtimeEnvironment)
+    expect(listEnvironmentsMock).toHaveBeenCalledWith('/test/user-data')
     expect(registerClipboardHandlersMock).toHaveBeenCalledWith(store)
     expect(registerUpdaterHandlersMock).toHaveBeenCalled()
     expect(setTrustedBrowserRendererWebContentsIdMock).toHaveBeenCalledWith(null)

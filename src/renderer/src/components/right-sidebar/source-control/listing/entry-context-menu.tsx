@@ -15,6 +15,8 @@ import { OpenInApplicationIcon } from '@/lib/open-in-app-catalog'
 import { translate } from '@/i18n/i18n'
 import { getLocalFileManagerLabel } from '@/lib/local-file-manager-label'
 import { NO_OPEN_IN_APPLICATIONS } from '@/lib/open-in-application-selection'
+import { getExecutionHostIdForWorktree } from '@/lib/worktree-runtime-owner'
+import { parseExecutionHostId } from '../../../../../../shared/execution-host'
 import {
   getOpenInEntryAvailability,
   getWorktreeOpenInEntries,
@@ -43,6 +45,14 @@ export function SourceControlEntryContextMenu({
   onOpenChange,
   children
 }: SourceControlEntryContextMenuProps): React.JSX.Element {
+  const executionHostId = useAppStore((s) => getExecutionHostIdForWorktree(s, currentWorktreeId))
+  const executionHost = parseExecutionHostId(executionHostId)
+  const openInConnectionId =
+    executionHost?.kind === 'ssh'
+      ? executionHost.targetId
+      : executionHostId === undefined
+        ? connectionId
+        : null
   const openInApplications = useAppStore(
     (s) => s.settings?.openInApplications ?? NO_OPEN_IN_APPLICATIONS
   )
@@ -82,11 +92,12 @@ export function SourceControlEntryContextMenu({
       void openWorktreePath({
         target,
         worktreePath: absolutePath,
-        connectionId,
+        connectionId: openInConnectionId,
+        executionHostId,
         command
       })
     },
-    [absolutePath, connectionId]
+    [absolutePath, executionHostId, openInConnectionId]
   )
 
   return (
@@ -120,7 +131,12 @@ export function SourceControlEntryContextMenu({
           </ContextMenuSubTrigger>
           <ContextMenuSubContent className="w-52">
             {openInEntries.map((entry) => {
-              const availability = getOpenInEntryAvailability(entry, settings, connectionId)
+              const availability = getOpenInEntryAvailability(
+                entry,
+                settings,
+                openInConnectionId,
+                executionHostId
+              )
               return (
                 <ContextMenuItem
                   key={entry.id}

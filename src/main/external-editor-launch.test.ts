@@ -10,9 +10,12 @@ vi.mock('./codex-cli/command', () => ({
 
 import { getCmdExePath } from './win32-utils'
 import {
+  resolveCursorRemoteSshLaunchSpec,
   resolveExternalEditorLaunchSpec,
   resolveVsCodeRemoteSshLaunchSpec
 } from './external-editor-launch'
+import { resolveZedRemoteSshLaunchSpec } from './zed-remote-ssh-launch'
+import { isZedRemoteSshCommand } from '../shared/zed-remote-ssh-launcher'
 
 describe('resolveExternalEditorLaunchSpec', () => {
   beforeEach(() => {
@@ -494,6 +497,147 @@ describe('resolveVsCodeRemoteSshLaunchSpec', () => {
     (command) => {
       expect(
         resolveVsCodeRemoteSshLaunchSpec(command, '/srv/project', 'builder', {
+          platform: 'linux'
+        })
+      ).toBeNull()
+    }
+  )
+})
+
+describe('resolveCursorRemoteSshLaunchSpec', () => {
+  beforeEach(() => {
+    resolveCliCommandMock.mockReset()
+    resolveCliCommandMock.mockImplementation((command: string) => command)
+  })
+
+  it('builds exact Remote-SSH arguments for Cursor', () => {
+    expect(
+      resolveCursorRemoteSshLaunchSpec('cursor', '/home/Ada Lovelace/project', 'builder', {
+        platform: 'linux'
+      })
+    ).toEqual({
+      kind: 'executable',
+      hideWindowsConsole: true,
+      spawnCmd: 'cursor',
+      spawnArgs: ['--remote', 'ssh-remote+builder', '/home/Ada Lovelace/project']
+    })
+  })
+
+  it('supports a direct Windows Cursor launcher', () => {
+    const command = 'C:\\Program Files\\Cursor\\Cursor.exe'
+    expect(
+      resolveCursorRemoteSshLaunchSpec(command, '/srv/project', 'builder', {
+        platform: 'win32'
+      })
+    ).toMatchObject({
+      spawnCmd: command,
+      spawnArgs: ['--remote', 'ssh-remote+builder', '/srv/project']
+    })
+  })
+
+  it('recognizes a simple CLI name resolved to a Windows shim', () => {
+    resolveCliCommandMock.mockReturnValueOnce('C:\\Tools\\cursor.cmd')
+    expect(
+      resolveCursorRemoteSshLaunchSpec('cursor', '/srv/project', 'builder', {
+        platform: 'win32'
+      })
+    ).toMatchObject({ spawnCmd: 'C:\\Tools\\cursor.cmd' })
+  })
+
+  it.each(['code', 'zed', 'cursor.bat', 'tools/cursor', 'cursor --new-window', 'open -a "Cursor"'])(
+    'rejects unsupported and compound SSH commands: %s',
+    (command) => {
+      expect(
+        resolveCursorRemoteSshLaunchSpec(command, '/srv/project', 'builder', {
+          platform: 'linux'
+        })
+      ).toBeNull()
+    }
+  )
+})
+
+describe('resolveZedRemoteSshLaunchSpec', () => {
+  beforeEach(() => {
+    resolveCliCommandMock.mockReset()
+    resolveCliCommandMock.mockImplementation((command: string) => command)
+  })
+
+  it('builds an encoded SSH URI for POSIX runtime paths', () => {
+    expect(
+      resolveZedRemoteSshLaunchSpec('zed', '/srv/Ada Project/\u6587\u6863', 'builder', {
+        platform: 'linux'
+      })
+    ).toEqual({
+      kind: 'executable',
+      hideWindowsConsole: true,
+      spawnCmd: 'zed',
+      spawnArgs: ['--new', 'ssh://builder/srv/Ada%20Project/%E6%96%87%E6%A1%A3']
+    })
+  })
+
+  it('supports a direct Windows Zed launcher', () => {
+    const command = 'C:\\Users\\Ada\\Zed\\bin\\zed.exe'
+    expect(
+      resolveZedRemoteSshLaunchSpec(command, '/srv/project', 'builder', {
+        platform: 'win32'
+      })
+    ).toMatchObject({
+      spawnCmd: command,
+      spawnArgs: ['--new', 'ssh://builder/srv/project']
+    })
+  })
+
+  it('supports a quoted Windows Zed launcher with arguments', () => {
+    const command = '"C:\\Program Files\\Zed\\zed.exe" --remote'
+    expect(isZedRemoteSshCommand(command)).toBe(true)
+    expect(
+      resolveZedRemoteSshLaunchSpec(command, '/srv/project', 'builder', {
+        platform: 'win32'
+      })
+    ).toMatchObject({
+      spawnCmd: 'C:\\Program Files\\Zed\\zed.exe',
+      spawnArgs: ['--new', 'ssh://builder/srv/project']
+    })
+  })
+
+  it('supports a quoted Unix Zed launcher with arguments', () => {
+    const command = '"/opt/Zed/zed" --remote'
+    expect(isZedRemoteSshCommand(command)).toBe(true)
+    expect(
+      resolveZedRemoteSshLaunchSpec(command, '/srv/project', 'builder', {
+        platform: 'linux',
+        fileExists: (candidate) => candidate === '/opt/Zed/zed'
+      })
+    ).toMatchObject({
+      spawnCmd: '/opt/Zed/zed',
+      spawnArgs: ['--new', 'ssh://builder/srv/project']
+    })
+  })
+
+  it('brackets an IPv6 SSH host without encoding the username separator', () => {
+    expect(
+      resolveZedRemoteSshLaunchSpec('zed', '/srv/project', 'ada@2001:db8::1', {
+        platform: 'linux'
+      })?.spawnArgs
+    ).toEqual(['--new', 'ssh://ada@[2001:db8::1]/srv/project'])
+  })
+
+  it.each(['ada@host@other', 'builder%host'])(
+    'rejects ambiguous or malformed SSH URI authorities: %s',
+    (authority) => {
+      expect(
+        resolveZedRemoteSshLaunchSpec('zed', '/srv/project', authority, {
+          platform: 'linux'
+        })
+      ).toBeNull()
+    }
+  )
+
+  it.each(['cursor', 'code', 'zed --new'])(
+    'rejects unsupported and compound SSH commands: %s',
+    (command) => {
+      expect(
+        resolveZedRemoteSshLaunchSpec(command, '/srv/project', 'builder', {
           platform: 'linux'
         })
       ).toBeNull()

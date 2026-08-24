@@ -6,6 +6,11 @@ import { SourceControlEntryContextMenu } from './source-control/listing/entry-co
 type ItemProps = { onSelect?: () => void; children?: React.ReactNode }
 
 const items = vi.hoisted(() => ({ list: [] as ItemProps[] }))
+const openInMocks = vi.hoisted(() => ({
+  executionHostId: 'local' as 'local' | `ssh:${string}` | `runtime:${string}`,
+  getOpenInEntryAvailability: vi.fn(() => ({ disabled: false })),
+  openWorktreePath: vi.fn()
+}))
 
 vi.mock('@/components/ui/context-menu', async () => {
   const React_ = await import('react')
@@ -45,14 +50,28 @@ vi.mock('@/lib/open-in-app-catalog', () => ({
 }))
 
 vi.mock('@/components/sidebar/WorktreeOpenInMenu', () => ({
-  getWorktreeOpenInEntries: () => [],
+  getOpenInEntryAvailability: openInMocks.getOpenInEntryAvailability,
+  getWorktreeOpenInEntries: () => [
+    { id: 'vscode', label: 'VS Code', target: 'external-editor', command: 'code' }
+  ],
   openOpenInAppsSettings: vi.fn(),
-  openWorktreePath: vi.fn()
+  openWorktreePath: openInMocks.openWorktreePath
+}))
+
+vi.mock('@/lib/worktree-runtime-owner', () => ({
+  getExecutionHostIdForWorktree: () => openInMocks.executionHostId
 }))
 
 function childrenText(children: React.ReactNode): string {
   return React.Children.toArray(children)
-    .filter((child): child is string => typeof child === 'string')
+    .map((child) => {
+      if (typeof child === 'string') {
+        return child
+      }
+      return React.isValidElement<{ children?: React.ReactNode }>(child)
+        ? childrenText(child.props.children)
+        : ''
+    })
     .join('')
 }
 
@@ -61,6 +80,9 @@ describe('SourceControlEntryContextMenu', () => {
 
   beforeEach(() => {
     items.list = []
+    openInMocks.executionHostId = 'local'
+    openInMocks.getOpenInEntryAvailability.mockClear()
+    openInMocks.openWorktreePath.mockReset()
     writeClipboardText.mockReset()
     vi.stubGlobal('window', {
       api: { ui: { writeClipboardText } }
@@ -90,5 +112,102 @@ describe('SourceControlEntryContextMenu', () => {
     expect(copyRelativePathItem).toBeDefined()
     copyRelativePathItem?.onSelect?.()
     expect(writeClipboardText).toHaveBeenCalledWith('src/example.ts')
+  })
+
+  it('opens runtime-owned paths with the worktree execution host', () => {
+    openInMocks.executionHostId = 'runtime:devbox'
+
+    renderToStaticMarkup(
+      <SourceControlEntryContextMenu
+        currentWorktreeId="worktree-1"
+        absolutePath="/workspaces/project/src/example.ts"
+        relativePath="src/example.ts"
+        onRevealInExplorer={vi.fn()}
+      >
+        <div />
+      </SourceControlEntryContextMenu>
+    )
+
+    const vscodeItem = items.list.find((item) => childrenText(item.children) === 'VS Code')
+
+    expect(vscodeItem).toBeDefined()
+    expect(openInMocks.getOpenInEntryAvailability).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 'vscode' }),
+      expect.anything(),
+      null,
+      'runtime:devbox'
+    )
+    vscodeItem?.onSelect?.()
+    expect(openInMocks.openWorktreePath).toHaveBeenCalledWith({
+      target: 'external-editor',
+      worktreePath: '/workspaces/project/src/example.ts',
+      connectionId: null,
+      executionHostId: 'runtime:devbox',
+      command: 'code'
+    })
+  })
+
+  it('drops the repository SSH connection for an explicitly local worktree', () => {
+    renderToStaticMarkup(
+      <SourceControlEntryContextMenu
+        currentWorktreeId="worktree-1"
+        absolutePath="/repo/src/example.ts"
+        relativePath="src/example.ts"
+        connectionId="repo-ssh"
+        onRevealInExplorer={vi.fn()}
+      >
+        <div />
+      </SourceControlEntryContextMenu>
+    )
+
+    const vscodeItem = items.list.find((item) => childrenText(item.children) === 'VS Code')
+
+    expect(openInMocks.getOpenInEntryAvailability).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 'vscode' }),
+      expect.anything(),
+      null,
+      'local'
+    )
+    vscodeItem?.onSelect?.()
+    expect(openInMocks.openWorktreePath).toHaveBeenCalledWith({
+      target: 'external-editor',
+      worktreePath: '/repo/src/example.ts',
+      connectionId: null,
+      executionHostId: 'local',
+      command: 'code'
+    })
+  })
+
+  it('uses the worktree SSH target instead of the repository connection', () => {
+    openInMocks.executionHostId = 'ssh:worktree-ssh'
+
+    renderToStaticMarkup(
+      <SourceControlEntryContextMenu
+        currentWorktreeId="worktree-1"
+        absolutePath="/repo/src/example.ts"
+        relativePath="src/example.ts"
+        connectionId="repo-ssh"
+        onRevealInExplorer={vi.fn()}
+      >
+        <div />
+      </SourceControlEntryContextMenu>
+    )
+
+    const vscodeItem = items.list.find((item) => childrenText(item.children) === 'VS Code')
+
+    expect(openInMocks.getOpenInEntryAvailability).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 'vscode' }),
+      expect.anything(),
+      'worktree-ssh',
+      'ssh:worktree-ssh'
+    )
+    vscodeItem?.onSelect?.()
+    expect(openInMocks.openWorktreePath).toHaveBeenCalledWith({
+      target: 'external-editor',
+      worktreePath: '/repo/src/example.ts',
+      connectionId: 'worktree-ssh',
+      executionHostId: 'ssh:worktree-ssh',
+      command: 'code'
+    })
   })
 })

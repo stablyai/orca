@@ -1,7 +1,10 @@
+import type { ExecutionHostId } from './execution-host'
+
 export type ShellOpenExternalEditorRequest = {
   path: string
   command?: string
   connectionId?: string | null
+  executionHostId?: ExecutionHostId
 }
 
 export type ShellOpenPathFailureReason =
@@ -13,6 +16,7 @@ export type ShellOpenPathFailureReason =
   | 'ssh-target-invalid'
   | 'ssh-alias-required'
   | 'remote-editor-unsupported'
+  | 'runtime-ssh-target-required'
 
 export type ShellOpenLocalPathFailureReason = Extract<
   ShellOpenPathFailureReason,

@@ -4667,12 +4667,12 @@
           "sshTargetInvalidDetail": "请编辑或重新连接 SSH 主机，然后重试。",
           "sshAliasRequired": "VS Code 需要此主机的 SSH 配置别名。",
           "sshAliasRequiredDetail": "请在本地 SSH 配置中为 {{host}}:{{port}} 添加 Host 别名，重新连接工作区，然后重试。",
-          "remoteEditorUnsupported": "此应用无法打开 SSH 工作区。",
-          "remoteEditorUnsupportedDetail": "请选择 VS Code 或在本地使用该应用。",
+          "remoteEditorUnsupported": "此应用无法打开远程工作区。",
+          "remoteEditorUnsupportedDetail": "请选择支持远程工作区的编辑器，或在本地使用此应用。",
           "remotePathInvalid": "路径对此 SSH 主机无效。",
           "remotePathInvalidDetail": "请先刷新工作区，再重试。",
-          "remoteLaunchFailed": "无法在 VS Code 中打开此路径。",
-          "remoteLaunchFailedDetail": "请检查此机器上配置的 VS Code 命令。"
+          "remoteLaunchFailed": "无法打开远程工作区。",
+          "remoteLaunchFailedDetail": "请检查此机器上配置的编辑器命令。"
         },
         "WorktreeTitleInlineRename": {
           "2f42ae024f": "未读：",

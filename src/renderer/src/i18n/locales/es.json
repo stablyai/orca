@@ -4674,12 +4674,12 @@
           "sshTargetInvalidDetail": "Edit or reconnect the SSH host, then try again.",
           "sshAliasRequired": "VS Code needs an SSH config alias for this host.",
           "sshAliasRequiredDetail": "Add a Host alias for {{host}}:{{port}} to your local SSH config, reconnect the workspace, then try again.",
-          "remoteEditorUnsupported": "This app cannot open SSH workspaces.",
-          "remoteEditorUnsupportedDetail": "Choose VS Code or use the app locally.",
+          "remoteEditorUnsupported": "Esta aplicación no puede abrir espacios de trabajo remotos.",
+          "remoteEditorUnsupportedDetail": "Elige un editor compatible con espacios de trabajo remotos o usa la aplicación localmente.",
           "remotePathInvalid": "Path is not valid for the SSH host.",
           "remotePathInvalidDetail": "Refresh the workspace before trying again.",
-          "remoteLaunchFailed": "Could not open the path in VS Code.",
-          "remoteLaunchFailedDetail": "Check the VS Code command configured on this machine."
+          "remoteLaunchFailed": "No se pudo abrir el espacio de trabajo remoto.",
+          "remoteLaunchFailedDetail": "Comprueba el comando del editor configurado en este equipo."
         },
         "WorktreeTitleInlineRename": {
           "2f42ae024f": "No leído:",

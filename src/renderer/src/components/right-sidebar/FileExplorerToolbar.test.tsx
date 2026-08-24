@@ -305,6 +305,17 @@ describe('FileExplorerToolbar', () => {
     expect(openInItems.props.labelPrefix).toBe('Open in ')
   })
 
+  it('forwards worktree execution ownership to Open In actions', () => {
+    const element = makeToolbar({
+      connectionId: 'runtime-transport',
+      executionHostId: 'runtime:runtime-1'
+    })
+
+    const openInItems = findOpenInMenuItems(element)
+    expect(openInItems.props.connectionId).toBe('runtime-transport')
+    expect(openInItems.props.executionHostId).toBe('runtime:runtime-1')
+  })
+
   it('keeps the overflow menu as the last toolbar button', () => {
     const element = makeToolbar()
 

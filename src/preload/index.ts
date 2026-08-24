@@ -2547,8 +2547,11 @@ const api = {
   shell: {
     openPath: (path: string): Promise<void> => ipcRenderer.invoke('shell:openPath', path),
 
-    openInFileManager: (path: string): Promise<ShellOpenLocalPathResult> =>
-      ipcRenderer.invoke('shell:openInFileManager', path),
+    openInFileManager: (
+      path: string,
+      executionHostId?: ExecutionHostId
+    ): Promise<ShellOpenLocalPathResult> =>
+      ipcRenderer.invoke('shell:openInFileManager', path, executionHostId),
 
     openInExternalEditor: (
       request: ShellOpenExternalEditorRequest

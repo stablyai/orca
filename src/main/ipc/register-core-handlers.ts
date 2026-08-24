@@ -23,6 +23,7 @@ import { registerMemoryHandlers } from './memory'
 import { registerRateLimitHandlers } from './rate-limits'
 import { registerRuntimeHandlers } from './runtime'
 import { registerRuntimeEnvironmentHandlers } from './runtime-environments'
+import { listEnvironments } from '../../shared/runtime-environment-store'
 import { registerEphemeralVmHandlers } from './ephemeral-vm'
 import { registerAiVaultHandlers } from './ai-vault'
 import { registerNativeChatHandlers } from './native-chat'
@@ -194,7 +195,12 @@ export function registerCoreHandlers(
     onBeforeSignOut: lifecycleOptions.onBeforeOrcaProfileSignOut
   })
   registerBrowserHandlers()
-  registerShellHandlers(store)
+  registerShellHandlers(store, {
+    resolveRuntimeEnvironment: (environmentId) =>
+      listEnvironments(app.getPath('userData')).find(
+        (environment) => environment.id === environmentId
+      )
+  })
   registerPetHandlers()
   registerSessionHandlers(store)
   registerUIHandlers(store, { isDashboardPopoutRenderer })

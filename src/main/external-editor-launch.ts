@@ -1,6 +1,10 @@
 import { spawn } from 'node:child_process'
 import { existsSync } from 'node:fs'
 import { posix, win32 } from 'node:path'
+import {
+  isCursorLauncherExecutable,
+  isCursorRemoteSshCommand
+} from '../shared/cursor-remote-ssh-launcher'
 import { parseWslUncPath } from '../shared/wsl-paths'
 import { isVsCodeLauncherExecutable } from '../shared/vscode-remote-ssh-launcher'
 import { resolveCliCommand } from './codex-cli/command'
@@ -63,7 +67,7 @@ function isWindowsExecutablePath(command: string): boolean {
   return win32.isAbsolute(command) && /\.(?:cmd|exe|bat|com)$/i.test(command)
 }
 
-function isDirectExecutablePath(
+export function isDirectExecutablePath(
   command: string,
   platform: NodeJS.Platform,
   fileExists: (path: string) => boolean
@@ -114,7 +118,7 @@ function buildExecutableArgs(
   return [pathValue]
 }
 
-function isCompoundShellCommand(command: string): boolean {
+export function isCompoundShellCommand(command: string): boolean {
   return /\s/.test(command)
 }
 
@@ -215,10 +219,11 @@ export function resolveExternalEditorLaunchSpec(
   )
 }
 
-export function resolveVsCodeRemoteSshLaunchSpec(
+function resolveRemoteSshLaunchSpec(
   command: string | undefined,
   pathValue: string,
   authority: string,
+  isSupportedLauncher: (command: string) => boolean,
   options: { platform?: NodeJS.Platform; fileExists?: (path: string) => boolean } = {}
 ): ExternalEditorLaunchSpec | null {
   const platform = options.platform ?? process.platform
@@ -235,7 +240,7 @@ export function resolveVsCodeRemoteSshLaunchSpec(
     editorCommand = resolveCliCommand(trimmed, { platform })
   }
 
-  if (!isVsCodeLauncherExecutable(editorCommand)) {
+  if (!isSupportedLauncher(editorCommand)) {
     return null
   }
   return {
@@ -244,6 +249,39 @@ export function resolveVsCodeRemoteSshLaunchSpec(
     spawnCmd: editorCommand,
     spawnArgs: ['--remote', `ssh-remote+${authority}`, pathValue]
   }
+}
+
+export function resolveVsCodeRemoteSshLaunchSpec(
+  command: string | undefined,
+  pathValue: string,
+  authority: string,
+  options: { platform?: NodeJS.Platform; fileExists?: (path: string) => boolean } = {}
+): ExternalEditorLaunchSpec | null {
+  return resolveRemoteSshLaunchSpec(
+    command,
+    pathValue,
+    authority,
+    isVsCodeLauncherExecutable,
+    options
+  )
+}
+
+export function resolveCursorRemoteSshLaunchSpec(
+  command: string | undefined,
+  pathValue: string,
+  authority: string,
+  options: { platform?: NodeJS.Platform; fileExists?: (path: string) => boolean } = {}
+): ExternalEditorLaunchSpec | null {
+  if (!isCursorRemoteSshCommand(command)) {
+    return null
+  }
+  return resolveRemoteSshLaunchSpec(
+    command,
+    pathValue,
+    authority,
+    isCursorLauncherExecutable,
+    options
+  )
 }
 
 function resolveExternalEditorSpawn(launchSpec: ExternalEditorLaunchSpec): {

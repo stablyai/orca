@@ -1,3 +1,4 @@
+import type { ExecutionHostId } from '../../shared/execution-host'
 import type {
   ShellOpenExternalEditorRequest,
   ShellOpenExternalEditorResult,
@@ -12,7 +13,10 @@ export type {
 
 export type ShellApi = {
   openPath: (path: string) => Promise<void>
-  openInFileManager: (path: string) => Promise<ShellOpenLocalPathResult>
+  openInFileManager: (
+    path: string,
+    executionHostId?: ExecutionHostId
+  ) => Promise<ShellOpenLocalPathResult>
   openInExternalEditor: (
     request: ShellOpenExternalEditorRequest
   ) => Promise<ShellOpenExternalEditorResult>

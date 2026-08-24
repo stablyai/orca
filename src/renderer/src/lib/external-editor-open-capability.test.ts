@@ -20,13 +20,16 @@ describe('getExternalEditorOpenCapability', () => {
     ).toEqual({ allowed: true, remote: true })
   })
 
-  it('rejects non-VS Code and compound commands for SSH paths', () => {
+  it.each(['cursor', 'zed'])('allows %s for SSH paths', (command) => {
     expect(
       getExternalEditorOpenCapability(
         { activeRuntimeEnvironmentId: null },
-        { connectionId: 'ssh-1', command: 'cursor' }
+        { connectionId: 'ssh-1', command }
       )
-    ).toEqual({ allowed: false, reason: 'local-only-editor' })
+    ).toEqual({ allowed: true, remote: true })
+  })
+
+  it('rejects compound commands for SSH paths', () => {
     expect(
       getExternalEditorOpenCapability(
         { activeRuntimeEnvironmentId: null },
@@ -35,7 +38,40 @@ describe('getExternalEditorOpenCapability', () => {
     ).toEqual({ allowed: false, reason: 'local-only-editor' })
   })
 
-  it('rejects every local-app launch while a remote runtime is active', () => {
+  it.each(['code', 'code-insiders', 'cursor', 'zed'])(
+    'allows the remote-capable launcher %s for a runtime-owned worktree',
+    (command) => {
+      expect(
+        getExternalEditorOpenCapability(
+          { activeRuntimeEnvironmentId: null },
+          { executionHostId: 'runtime:runtime-1', command }
+        )
+      ).toEqual({ allowed: true, remote: true })
+    }
+  )
+
+  it.each(['code --reuse-window', 'zed --new'])(
+    'rejects the unsupported runtime launcher %s',
+    (command) => {
+      expect(
+        getExternalEditorOpenCapability(
+          { activeRuntimeEnvironmentId: null },
+          { executionHostId: 'runtime:runtime-1', command }
+        )
+      ).toEqual({ allowed: false, reason: 'local-only-editor' })
+    }
+  )
+
+  it('keeps explicit local ownership local while another runtime is active', () => {
+    expect(
+      getExternalEditorOpenCapability(
+        { activeRuntimeEnvironmentId: 'runtime-1' },
+        { executionHostId: 'local', command: 'cursor' }
+      )
+    ).toEqual({ allowed: true, remote: false })
+  })
+
+  it('rejects legacy requests without host provenance while a remote runtime is active', () => {
     expect(
       getExternalEditorOpenCapability(
         { activeRuntimeEnvironmentId: 'runtime-1' },

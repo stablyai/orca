@@ -248,6 +248,27 @@ describe('registerShellHandlers', () => {
       expect(showItemInFolderMock).toHaveBeenCalledWith(normalize(workspacePath))
     })
 
+    it('honors explicit local ownership while a Runtime is active', async () => {
+      settings.activeRuntimeEnvironmentId = 'runtime-1'
+      const workspacePath = resolve('workspace')
+      const handler = getHandler('shell:openInFileManager')
+
+      await expect(handler({}, workspacePath, 'local')).resolves.toEqual({ ok: true })
+      expect(statMock).toHaveBeenCalledWith(normalize(workspacePath))
+      expect(showItemInFolderMock).toHaveBeenCalledWith(normalize(workspacePath))
+    })
+
+    it('rejects explicit remote ownership without local validation', async () => {
+      const handler = getHandler('shell:openInFileManager')
+
+      await expect(handler({}, '/srv/workspace', 'runtime:runtime-1')).resolves.toEqual({
+        ok: false,
+        reason: 'remote-runtime-unsupported'
+      })
+      expect(statMock).not.toHaveBeenCalled()
+      expect(showItemInFolderMock).not.toHaveBeenCalled()
+    })
+
     it('opens existing absolute paths in the OS file manager', async () => {
       const workspacePath = resolve('workspace')
       const handler = getHandler('shell:openInFileManager')
@@ -561,6 +582,15 @@ describe('registerShellHandlers', () => {
       await expect(
         handler({}, { path: '/srv/project', command: 'code', connectionId: 'ssh-1' })
       ).resolves.toEqual({ ok: false, reason: 'remote-runtime-unsupported' })
+
+      const runtimeOwnedTargetId = 'runtime-ssh-runtime-2'
+      sshTargets.set(
+        runtimeOwnedTargetId,
+        createSshTarget({ id: runtimeOwnedTargetId, owner: undefined })
+      )
+      await expect(
+        handler({}, { path: '/srv/project', command: 'code', connectionId: runtimeOwnedTargetId })
+      ).resolves.toEqual({ ok: false, reason: 'remote-runtime-unsupported' })
       expect(spawnMock).not.toHaveBeenCalled()
     })
 
@@ -670,18 +700,52 @@ describe('registerShellHandlers', () => {
       expect(spawnMock).not.toHaveBeenCalled()
     })
 
-    it.each(['cursor', 'zed', 'code --reuse-window'])(
-      'rejects the unsupported SSH launcher %s',
-      async (command) => {
-        sshTargets.set('ssh-1', createSshTarget())
-        const handler = getHandler('shell:openInExternalEditor')
+    it('opens a Cursor SSH workspace through Remote-SSH', async () => {
+      sshTargets.set('ssh-1', createSshTarget())
+      resolveCliCommandMock.mockReturnValueOnce('C:\\Tools\\cursor.cmd')
+      const handler = getHandler('shell:openInExternalEditor')
 
-        await expect(
-          handler({}, { path: '/srv/project', command, connectionId: 'ssh-1' })
-        ).resolves.toEqual({ ok: false, reason: 'remote-editor-unsupported' })
-        expect(spawnMock).not.toHaveBeenCalled()
-      }
-    )
+      await expect(
+        handler({}, { path: '/srv/project', command: 'cursor', connectionId: 'ssh-1' })
+      ).resolves.toEqual({ ok: true })
+      expect(getSpawnArgsForWindowsMock).toHaveBeenCalledWith(
+        'C:\\Tools\\cursor.cmd',
+        ['--remote', 'ssh-remote+builder', '/srv/project'],
+        { detachedGui: false }
+      )
+    })
+
+    it('opens a Zed SSH workspace with an encoded SSH URI', async () => {
+      sshTargets.set('ssh-1', createSshTarget())
+      resolveCliCommandMock.mockReturnValueOnce('C:\\Tools\\zed.exe')
+      const handler = getHandler('shell:openInExternalEditor')
+
+      await expect(
+        handler(
+          {},
+          {
+            path: '/srv/Ada Project/\u6587\u6863',
+            command: 'zed',
+            connectionId: 'ssh-1'
+          }
+        )
+      ).resolves.toEqual({ ok: true })
+      expect(getSpawnArgsForWindowsMock).toHaveBeenCalledWith(
+        'C:\\Tools\\zed.exe',
+        ['--new', 'ssh://builder/srv/Ada%20Project/%E6%96%87%E6%A1%A3'],
+        { detachedGui: false }
+      )
+    })
+
+    it('rejects an unsupported SSH compound launcher', async () => {
+      sshTargets.set('ssh-1', createSshTarget())
+      const handler = getHandler('shell:openInExternalEditor')
+
+      await expect(
+        handler({}, { path: '/srv/project', command: 'code --reuse-window', connectionId: 'ssh-1' })
+      ).resolves.toEqual({ ok: false, reason: 'remote-editor-unsupported' })
+      expect(spawnMock).not.toHaveBeenCalled()
+    })
 
     it('maps unsafe Windows batch arguments to a closed launch failure', async () => {
       sshTargets.set('ssh-1', createSshTarget())

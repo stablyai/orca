@@ -4657,12 +4657,12 @@
           "sshTargetInvalidDetail": "Edit or reconnect the SSH host, then try again.",
           "sshAliasRequired": "VS Code needs an SSH config alias for this host.",
           "sshAliasRequiredDetail": "Add a Host alias for {{host}}:{{port}} to your local SSH config, reconnect the workspace, then try again.",
-          "remoteEditorUnsupported": "This app cannot open SSH workspaces.",
-          "remoteEditorUnsupportedDetail": "Choose VS Code or use the app locally.",
+          "remoteEditorUnsupported": "이 앱은 원격 워크스페이스를 열 수 없습니다.",
+          "remoteEditorUnsupportedDetail": "원격 워크스페이스를 지원하는 편집기를 선택하거나 앱을 로컬에서 사용하세요.",
           "remotePathInvalid": "Path is not valid for the SSH host.",
           "remotePathInvalidDetail": "Refresh the workspace before trying again.",
-          "remoteLaunchFailed": "Could not open the path in VS Code.",
-          "remoteLaunchFailedDetail": "Check the VS Code command configured on this machine."
+          "remoteLaunchFailed": "원격 워크스페이스를 열 수 없습니다.",
+          "remoteLaunchFailedDetail": "이 머신에 구성된 편집기 명령을 확인하세요."
         },
         "WorktreeTitleInlineRename": {
           "2f42ae024f": "읽지 않음:",

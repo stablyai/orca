@@ -2,20 +2,33 @@ import { ipcMain, shell, dialog } from 'electron'
 import { constants, copyFile, readFile, stat } from 'node:fs/promises'
 import { basename, extname, isAbsolute, normalize, posix, win32 } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { isCursorRemoteSshCommand } from '../../shared/cursor-remote-ssh-launcher'
+import { isZedRemoteSshCommand } from '../../shared/zed-remote-ssh-launcher'
 import type {
   ShellOpenExternalEditorRequest,
   ShellOpenExternalEditorResult,
   ShellOpenLocalPathResult
 } from '../../shared/shell-open-types'
 import { MAX_REPO_ICON_UPLOAD_BYTES } from '../../shared/repo-icon'
+import {
+  isRuntimeOwnedSshTargetId,
+  parseExecutionHostId,
+  type ExecutionHostId
+} from '../../shared/execution-host'
 import type { Store } from '../persistence'
 import {
   EXTERNAL_EDITOR_CLI_COMMAND,
   launchExternalEditor,
+  resolveCursorRemoteSshLaunchSpec,
   resolveExternalEditorLaunchSpec,
   resolveVsCodeRemoteSshLaunchSpec
 } from '../external-editor-launch'
 import { resolveVsCodeSshAuthority } from '../ssh/vscode-ssh-authority'
+import { resolveZedRemoteSshLaunchSpec } from '../zed-remote-ssh-launch'
+import {
+  openRuntimePathInExternalEditor,
+  type RuntimeExternalEditorDependencies as ShellHandlerOptions
+} from './runtime-external-editor'
 
 export { EXTERNAL_EDITOR_CLI_COMMAND }
 
@@ -51,9 +64,15 @@ function hasActiveRuntime(store: Store): boolean {
 
 async function openInFileManager(
   store: Store,
-  pathValue: string
+  pathValue: string,
+  executionHostId?: ExecutionHostId
 ): Promise<ShellOpenLocalPathResult> {
-  if (hasActiveRuntime(store)) {
+  const hasExplicitExecutionHost = executionHostId !== undefined
+  const executionHost = parseExecutionHostId(executionHostId)
+  if (
+    (hasExplicitExecutionHost && executionHost?.kind !== 'local') ||
+    (!hasExplicitExecutionHost && hasActiveRuntime(store))
+  ) {
     return { ok: false, reason: 'remote-runtime-unsupported' }
   }
   const target = await validateLocalPathTarget(pathValue)
@@ -61,8 +80,7 @@ async function openInFileManager(
     return target
   }
   try {
-    // Why: the file-manager action uses reveal semantics, matching the
-    // previous sidebar behavior while still validating the path per click.
+    // Why: preserve reveal semantics while validating the path per click.
     shell.showItemInFolder(target.path)
     return { ok: true }
   } catch {
@@ -72,19 +90,37 @@ async function openInFileManager(
 
 async function openInExternalEditor(
   store: Store,
-  request: ShellOpenExternalEditorRequest
+  request: ShellOpenExternalEditorRequest,
+  options: ShellHandlerOptions
 ): Promise<ShellOpenExternalEditorResult> {
-  if (hasActiveRuntime(store)) {
+  const hasExplicitExecutionHost = request.executionHostId !== undefined
+  const executionHost = parseExecutionHostId(request.executionHostId)
+  if (hasExplicitExecutionHost && !executionHost) {
+    return { ok: false, reason: 'remote-runtime-unsupported' }
+  }
+  if (executionHost?.kind === 'runtime') {
+    return openRuntimePathInExternalEditor(store, request, options)
+  }
+  if (!hasExplicitExecutionHost && hasActiveRuntime(store)) {
     return { ok: false, reason: 'remote-runtime-unsupported' }
   }
 
-  const connectionId = request.connectionId?.trim()
+  let connectionId = request.connectionId?.trim()
+  if (executionHost?.kind === 'ssh') {
+    if (connectionId && connectionId !== executionHost.targetId) {
+      return { ok: false, reason: 'ssh-target-not-found' }
+    }
+    connectionId = executionHost.targetId
+  } else if (executionHost?.kind === 'local' && connectionId) {
+    return { ok: false, reason: 'ssh-target-not-found' }
+  }
+
   if (connectionId) {
     const sshTarget = store.getSshTarget(connectionId)
     if (!sshTarget) {
       return { ok: false, reason: 'ssh-target-not-found' }
     }
-    if (sshTarget.owner?.type === 'on-demand-runtime') {
+    if (sshTarget.owner?.type === 'on-demand-runtime' || isRuntimeOwnedSshTargetId(sshTarget.id)) {
       return { ok: false, reason: 'remote-runtime-unsupported' }
     }
     if (!posix.isAbsolute(request.path) && !win32.isAbsolute(request.path)) {
@@ -94,11 +130,11 @@ async function openInExternalEditor(
     if (!authority.ok) {
       return authority
     }
-    const launchSpec = resolveVsCodeRemoteSshLaunchSpec(
-      request.command,
-      request.path,
-      authority.authority
-    )
+    const launchSpec = isZedRemoteSshCommand(request.command)
+      ? resolveZedRemoteSshLaunchSpec(request.command, request.path, authority.authority)
+      : isCursorRemoteSshCommand(request.command)
+        ? resolveCursorRemoteSshLaunchSpec(request.command, request.path, authority.authority)
+        : resolveVsCodeRemoteSshLaunchSpec(request.command, request.path, authority.authority)
     if (!launchSpec) {
       return { ok: false, reason: 'remote-editor-unsupported' }
     }
@@ -135,7 +171,7 @@ async function openWithSystemDefault(pathValue: string): Promise<boolean> {
   }
 }
 
-export function registerShellHandlers(store: Store): void {
+export function registerShellHandlers(store: Store, options: ShellHandlerOptions = {}): void {
   ipcMain.handle('shell:openPath', async (_event, path: string): Promise<void> => {
     // Why: keep the legacy fire-and-forget renderer contract while reusing the
     // same absolute/existing path validation as the explicit file-manager API.
@@ -144,13 +180,14 @@ export function registerShellHandlers(store: Store): void {
 
   ipcMain.handle(
     'shell:openInFileManager',
-    (_event, path: string): Promise<ShellOpenLocalPathResult> => openInFileManager(store, path)
+    (_event, path: string, executionHostId?: ExecutionHostId): Promise<ShellOpenLocalPathResult> =>
+      openInFileManager(store, path, executionHostId)
   )
 
   ipcMain.handle(
     'shell:openInExternalEditor',
     (_event, request: ShellOpenExternalEditorRequest): Promise<ShellOpenExternalEditorResult> =>
-      openInExternalEditor(store, request)
+      openInExternalEditor(store, request, options)
   )
 
   ipcMain.handle('shell:openUrl', (_event, rawUrl: string) => {

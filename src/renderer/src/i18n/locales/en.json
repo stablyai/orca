@@ -5380,12 +5380,12 @@
           "sshTargetInvalidDetail": "Edit or reconnect the SSH host, then try again.",
           "sshAliasRequired": "VS Code needs an SSH config alias for this host.",
           "sshAliasRequiredDetail": "Add a Host alias for {{host}}:{{port}} to your local SSH config, reconnect the workspace, then try again.",
-          "remoteEditorUnsupported": "This app cannot open SSH workspaces.",
-          "remoteEditorUnsupportedDetail": "Choose VS Code or use the app locally.",
+          "remoteEditorUnsupported": "This app cannot open remote workspaces.",
+          "remoteEditorUnsupportedDetail": "Choose an editor with remote workspace support or use the app locally.",
           "remotePathInvalid": "Path is not valid for the SSH host.",
           "remotePathInvalidDetail": "Refresh the workspace before trying again.",
-          "remoteLaunchFailed": "Could not open the path in VS Code.",
-          "remoteLaunchFailedDetail": "Check the VS Code command configured on this machine.",
+          "remoteLaunchFailed": "Could not open the remote workspace.",
+          "remoteLaunchFailedDetail": "Check the editor command configured on this machine.",
           "1417fd8380": "Customize apps...",
           "8009ab69a6": "Open in",
           "bd0e8159f8": "Check the editor command or file manager configuration on this machine.",
@@ -5393,7 +5393,9 @@
           "0bed8727db": "It may have been moved or deleted. Refresh workspaces or remove it from Orca.",
           "3921d3d9a5": "Workspace folder was not found.",
           "f387af445b": "Workspace path is not a valid local path.",
-          "3ec372b664": "file-manager"
+          "3ec372b664": "file-manager",
+          "runtimeSshTargetRequired": "A matching SSH host is required.",
+          "runtimeSshTargetRequiredDetail": "Add exactly one SSH host matching this Orca server, then try again."
         },
         "WorktreeTitleInlineRename": {
           "2f42ae024f": "Unread:",
