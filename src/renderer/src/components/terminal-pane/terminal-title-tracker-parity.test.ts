@@ -119,6 +119,16 @@ describe('main title tracker parity with the renderer transport processor', () =
     expect(kinds.indexOf('became-working')).toBeLessThan(kinds.indexOf('became-idle'))
   })
 
+  it('derives working and idle facts from static OMP WSL titles', () => {
+    const chunk = `${ESC}]0;zsh | π : cwd${BEL}response text\r\n` + `${ESC}]0;zsh | π > cwd${BEL}`
+    feedBoth(paths, chunk)
+
+    expect(paths.main.events).toEqual(paths.renderer.events)
+    const kinds = paths.main.events.map((event) => event.kind)
+    expect(kinds).toContain('became-working')
+    expect(kinds.indexOf('became-working')).toBeLessThan(kinds.indexOf('became-idle'))
+  })
+
   it('derives identical facts from BEL- and ST-terminated titles', () => {
     feedBoth(paths, `${ESC}]2;Codex working${ST}body bytes`)
     feedBoth(paths, `${ESC}]0;Codex done${BEL}`)

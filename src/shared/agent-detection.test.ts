@@ -167,6 +167,19 @@ describe('Pi-compatible title detection', () => {
     expect(detectAgentStatusFromTitle(title)).toBe(expectedStatus)
   })
 
+  it.each([
+    ['π : my-project', 'working'],
+    ['π > my-project', 'idle'],
+    ['π ! my-project', 'permission'],
+    // The no-space legacy title is OMP's disabled state, not a working delimiter.
+    ['π: my-project', 'idle'],
+    ['zsh | π : wrapped-project', 'working'],
+    ['zsh | tmux | π > wrapped-project', 'idle'],
+    ['zsh | π ! wrapped-project', 'permission']
+  ] as const)('classifies native OMP title %s', (title, expectedStatus) => {
+    expect(detectAgentStatusFromTitle(title)).toBe(expectedStatus)
+  })
+
   it('re-detects status after display-title normalization for Pi idle frames', () => {
     expect(normalizeTerminalTitle('π - my-project')).toBe('Pi')
     expect(detectAgentStatusFromTitle(normalizeTerminalTitle('π - my-project'))).toBe('idle')

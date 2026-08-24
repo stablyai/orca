@@ -25,7 +25,10 @@ import {
 } from './agent-title-core'
 import type { AgentStatus } from './agent-title-core'
 import { isOpenCodeNativeTitle } from './opencode-terminal-title'
-import { getPiCompatibleSyntheticAgentStatus } from './pi-compatible-synthetic-title'
+import {
+  getPiCompatibleNativeTitleStatus,
+  getPiCompatibleSyntheticAgentStatus
+} from './pi-compatible-synthetic-title'
 import { isGrokRotatingWorkingTitle } from './terminal-title-agent-type'
 
 /**
@@ -174,6 +177,11 @@ export function detectAgentStatusFromTitle(title: string): AgentStatus | null {
   }
   if (title.includes(GEMINI_IDLE)) {
     return 'idle'
+  }
+
+  const piCompatibleNativeStatus = getPiCompatibleNativeTitleStatus(title)
+  if (piCompatibleNativeStatus) {
+    return piCompatibleNativeStatus
   }
 
   // Why: resolve synthetic Pi/OMP permission/idle labels before the broader
