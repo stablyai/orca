@@ -1,4 +1,5 @@
 import type { AiVaultScanIssue } from '../../shared/ai-vault-types'
+import type { NativeChatMessage } from '../../shared/native-chat-types'
 import type { SessionFileCandidate } from './session-scanner-types'
 
 // Why: request/response shapes shared by the worker entry and the main-thread
@@ -20,7 +21,21 @@ export type OpenCodeSqliteParseRequest = {
   platform: NodeJS.Platform
 }
 
-export type OpenCodeSqliteWorkerRequest = OpenCodeSqliteListRequest | OpenCodeSqliteParseRequest
+export type OpenCodeSqliteTranscriptRequest = {
+  id: number
+  kind: 'transcript'
+  dbPath: string
+  sessionId: string
+  offset?: number
+  endOffset?: number
+  beforeOffset?: number
+  limit: number
+}
+
+export type OpenCodeSqliteWorkerRequest =
+  | OpenCodeSqliteListRequest
+  | OpenCodeSqliteParseRequest
+  | OpenCodeSqliteTranscriptRequest
 
 // The list leg returns candidates plus the issues it accumulated; the worker
 // mutates a local array and hands it back so the caller can merge it into the
@@ -28,6 +43,14 @@ export type OpenCodeSqliteWorkerRequest = OpenCodeSqliteListRequest | OpenCodeSq
 export type OpenCodeSqliteListValue = {
   candidates: SessionFileCandidate[]
   issues: AiVaultScanIssue[]
+}
+
+export type OpenCodeSqliteTranscriptValue = {
+  messages: NativeChatMessage[]
+  nextOffset: number
+  beforeOffset: number
+  limited: boolean
+  warnings: string[]
 }
 
 export type OpenCodeSqliteWorkerResponse =

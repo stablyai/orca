@@ -30,7 +30,7 @@ export type PreambleParams = {
   }
   // Why: prompt-returning agents should idle after worker_done, while bare
   // shells have no agent prompt for Orca to reuse.
-  workerKind?: 'prompt-returning-agent' | 'bare-shell'
+  workerKind?: 'prompt-returning-agent' | 'one-shot-agent' | 'bare-shell'
 }
 
 // Why: 5 minutes is frequent enough that the coordinator's stale-heartbeat
@@ -165,6 +165,20 @@ completion and expects no further output.
 Exit the shell after completion. Bare-shell workers have no idle agent
 prompt for Orca to reuse; if the coordinator has more for you it will
 dispatch or prompt another worker with a fresh TASK block.`
+  }
+
+  if (workerKind === 'one-shot-agent') {
+    return `=== AFTER YOU SEND worker_done ===
+
+worker_done ends your turn for this task. Your dispatched work is complete:
+stop and take no further actions — do NOT start new or unrelated work,
+do NOT run a sleep/poll loop, and do NOT keep calling
+\`${cli} orchestration check\`. The coordinator has already recorded your
+completion and expects no further output.
+
+End the turn normally. This one-shot agent process may exit after completion;
+if the coordinator has more work it will launch a fresh worker with a new
+preamble + TASK block.`
   }
 
   return `=== AFTER YOU SEND worker_done ===

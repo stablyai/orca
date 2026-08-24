@@ -752,6 +752,17 @@ describe('subscribeNativeChatTranscript (resolve-poll for a not-yet-created file
     expect(getActiveNativeChatWatcherCount()).toBe(before)
   })
 
+  it('does not start a ZCode SQLite poll for a blank session id', async () => {
+    const sub = await subscribeNativeChatTranscript({
+      agent: 'zcode',
+      sessionId: '   ',
+      onAppend: () => {}
+    })
+
+    expect(sub.watching).toBe(false)
+    sub.unsubscribe()
+  })
+
   it('unsubscribing during the poll phase leaves no watcher or timer alive', async () => {
     const filePath = await pendingFilePath()
     const before = getActiveNativeChatWatcherCount()

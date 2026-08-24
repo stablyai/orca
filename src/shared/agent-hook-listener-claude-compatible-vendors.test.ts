@@ -117,6 +117,15 @@ describe('shared agent-hook-listener', () => {
   })
 
   it('normalizes ZCode Claude-compatible lifecycle events as zcode status', () => {
+    const started = normalizeHookPayload(
+      state,
+      'zcode',
+      {
+        paneKey: PANE_KEY,
+        payload: { hook_event_name: 'SessionStart', session_id: 'zcode-session-1' }
+      },
+      'production'
+    )
     const submitted = normalizeHookPayload(
       state,
       'zcode',
@@ -164,6 +173,11 @@ describe('shared agent-hook-listener', () => {
       'production'
     )
 
+    expect(started).toMatchObject({
+      providerSessionOnly: true,
+      providerSession: { key: 'session_id', id: 'zcode-session-1' },
+      payload: { agentType: 'zcode', state: 'done', prompt: '' }
+    })
     expect(submitted?.payload).toMatchObject({
       agentType: 'zcode',
       state: 'working',

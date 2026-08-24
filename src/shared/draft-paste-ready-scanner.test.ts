@@ -13,6 +13,40 @@ const GROK_ALT_SCREEN_LEAVE = '\x1b[?1049l\x1b[?25h'
 const GROK_COMPOSER_FRAME = '\x1b[38;2;80;80;88m│\x1b[38;2;200;200;200m❯ \x1b[0m'
 
 describe('createDraftPasteReadyScanner', () => {
+  describe('zcode-composer-prompt', () => {
+    it('ignores a shell cursor and waits for the focused ZCode composer', () => {
+      const scanner = createDraftPasteReadyScanner('zcode-composer-prompt')
+      expect(scanner.observe('\x1b[?2004h\x1b[?25h')).toEqual({
+        ready: false,
+        armQuietTimer: false
+      })
+      expect(scanner.observe('\x1b[?20')).toEqual({ ready: false, armQuietTimer: false })
+      expect(scanner.observe('26h\x1b[?25l')).toEqual({ ready: false, armQuietTimer: false })
+      expect(scanner.observe('\x1b[?2026l\x1b[?25h')).toEqual({
+        ready: true,
+        armQuietTimer: false
+      })
+    })
+
+    it('rejects cursor output until bracketed paste and a complete render frame finish', () => {
+      const withoutPaste = createDraftPasteReadyScanner('zcode-composer-prompt')
+      expect(withoutPaste.observe('\x1b[?2026h\x1b[?2026l\x1b[?25h')).toEqual({
+        ready: false,
+        armQuietTimer: false
+      })
+
+      const insideFrame = createDraftPasteReadyScanner('zcode-composer-prompt')
+      expect(insideFrame.observe('\x1b[?2004h\x1b[?2026h\x1b[?25h')).toEqual({
+        ready: false,
+        armQuietTimer: false
+      })
+      expect(insideFrame.observe('\x1b[?2026l\x1b[?25h')).toEqual({
+        ready: true,
+        armQuietTimer: false
+      })
+    })
+  })
+
   describe('render-cursor-after-bracketed-paste (opencode / mimo-code)', () => {
     it('is ready when show-cursor renders after bracketed paste in one chunk', () => {
       const scanner = createDraftPasteReadyScanner('render-cursor-after-bracketed-paste')

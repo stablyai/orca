@@ -232,6 +232,11 @@ describe('agent process recognition', () => {
         String.raw`node C:\Users\dev\AppData\Roaming\npm\node_modules\@google\gemini-cli\bundle\gemini.mjs`
       )
     ).toEqual({ agent: 'gemini', processName: 'gemini' })
+    expect(
+      recognizeAgentProcessFromCommandLine(
+        'node /Users/dev/.nvm/versions/node/lib/node_modules/zcode-app-cli/bin/zcode.js --mode yolo'
+      )
+    ).toEqual({ agent: 'zcode', processName: 'zcode-cli' })
   })
 
   it.each(['earendil-works', 'mariozechner'])('recognizes the @%s Pi npm entrypoint', (scope) => {

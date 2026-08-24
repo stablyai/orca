@@ -13,6 +13,7 @@ export type AgentPromptInjectionMode =
 export type DraftPasteReadySignal =
   | 'render-quiet-after-bracketed-paste'
   | 'codex-composer-prompt'
+  | 'zcode-composer-prompt'
   | 'render-cursor-after-bracketed-paste'
   | 'grok-composer-prompt'
 

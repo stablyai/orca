@@ -2,6 +2,7 @@ import { parentPort } from 'node:worker_threads'
 import type { AiVaultScanIssue } from '../../shared/ai-vault-types'
 import { listOpenCodeSqliteSessions } from './session-scanner-opencode-sqlite-list'
 import { parseOpenCodeSqliteSession } from './session-scanner-opencode-sqlite'
+import { readZcodeSqliteTranscript } from './zcode-sqlite-transcript'
 import type {
   OpenCodeSqliteWorkerRequest,
   OpenCodeSqliteWorkerResponse
@@ -29,6 +30,9 @@ async function handleRequest(
         issues
       })
       return { id: request.id, ok: true, value: { candidates, issues } }
+    }
+    if (request.kind === 'transcript') {
+      return { id: request.id, ok: true, value: readZcodeSqliteTranscript(request) }
     }
     const session = await parseOpenCodeSqliteSession({
       dbPath: request.dbPath,

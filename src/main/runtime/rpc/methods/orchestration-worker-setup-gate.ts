@@ -1,14 +1,32 @@
 import type { OrchestrationDb } from '../../orchestration/db'
 import {
-  applyWaitForSetupOutcome,
+  residualWorkerEffects,
   type WorkerEffect,
   type WorkerSetupReceipt
 } from './orchestration-worker-topology'
 
-function residualWorkerEffects(effects: WorkerEffect[]): WorkerEffect[] {
-  return effects.filter(
-    (effect) => effect.action?.startsWith('created') || effect.action === 'reused_agent_terminal'
-  )
+// Why: callers must not persist a settled stage unless the receipt actually
+// reached a terminal setup state, so the helper reports whether it applied one.
+export function applyWaitForSetupOutcome(
+  receipt: WorkerSetupReceipt,
+  effects: WorkerEffect[],
+  wait: { satisfied: boolean; status: string }
+): boolean {
+  if (receipt.startupPolicy !== 'wait-for-setup' || receipt.state !== 'running') {
+    return false
+  }
+  if (wait.satisfied) {
+    receipt.state = 'succeeded'
+  } else if (wait.status === 'exited') {
+    receipt.state = 'failed'
+  } else {
+    return false
+  }
+  const setupEffect = effects.find((effect) => effect.kind === 'setup')
+  if (setupEffect) {
+    setupEffect.state = receipt.state
+  }
+  return true
 }
 
 type WorkerSetupStageArgs = {
@@ -51,8 +69,7 @@ export function persistGatedSetupSpawnFailure(args: WorkerSetupStageArgs): boole
 export function persistWorkerSetupWaitOutcome(
   args: WorkerSetupStageArgs & { wait: { satisfied: boolean; status: string } }
 ): void {
-  applyWaitForSetupOutcome(args.setup, args.effects, args.wait)
-  if (args.setup.startupPolicy !== 'wait-for-setup') {
+  if (!applyWaitForSetupOutcome(args.setup, args.effects, args.wait)) {
     return
   }
   args.db.recordWorkerStage({

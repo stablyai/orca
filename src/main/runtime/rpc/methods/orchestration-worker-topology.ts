@@ -37,6 +37,31 @@ export type WorkerSetupReceipt = {
     | 'not_applicable'
 }
 
+export function residualWorkerEffects(effects: WorkerEffect[]): WorkerEffect[] {
+  return effects.filter(
+    (effect) => effect.action?.startsWith('created') || effect.action === 'reused_agent_terminal'
+  )
+}
+
+async function launchInteractiveAgent(
+  runtime: OrcaRuntimeService,
+  terminalHandle: string,
+  agent: TuiAgent,
+  command: string
+): Promise<void> {
+  const shellReady = await runtime.waitForTerminal(terminalHandle, {
+    condition: 'tui-idle',
+    timeoutMs: 30_000
+  })
+  if (!shellReady.satisfied) {
+    throw new Error('interactive_agent_shell_not_ready')
+  }
+  await runtime.sendTerminal(terminalHandle, { text: command, enter: true })
+  if (!(await runtime.waitForTerminalAgentProcess(terminalHandle, agent, 30_000))) {
+    throw new Error('interactive_agent_start_failed')
+  }
+}
+
 export function requireWorkerAuthority(runtime: OrcaRuntimeService, terminalHandle: string) {
   const authority = runtime.getOrchestrationDispatchAuthority(terminalHandle)
   const paneKey = authority?.paneKey ?? runtime.getTerminalPaneKey(terminalHandle)
@@ -55,23 +80,41 @@ export function requireWorkerAuthority(runtime: OrcaRuntimeService, terminalHand
 
 export async function createExistingWorktreeWorkerTerminal(args: {
   runtime: OrcaRuntimeService
+  db: OrchestrationDb
+  dispatchId: string
   worktreeId: string
   agent: TuiAgent
   launchPreferences?: AgentLaunchPreferences
   taskId: string
+  promptDelivery: 'agent-input' | 'startup-command'
+  interactiveAgentCommand?: string
   effects: WorkerEffect[]
-}): Promise<{ handle: string; warning?: string }> {
-  const terminal = await args.runtime.createTerminal(`id:${args.worktreeId}`, {
-    // Why: the agent id is not a shell command — `cursor` resolves to the Cursor
-    // desktop app while its CLI is `cursor-agent`. Let the runtime build the
-    // configured launcher instead of executing the raw id.
-    startupAgent: args.agent,
-    ...(args.launchPreferences ? { launchPreferences: args.launchPreferences } : {}),
-    title: `worker-${args.taskId}`,
-    // Why: dispatching a worker is background work; it must not pull the sidebar
-    // to the worker's workspace while the user is reading somewhere else.
-    surfaceOwner: false
-  })
+}): Promise<{
+  handle: string
+  warning?: string
+  promptDelivery: 'agent-input' | 'startup-command'
+}> {
+  const startupCommandPrompt = args.promptDelivery === 'startup-command'
+  const terminal =
+    startupCommandPrompt || args.interactiveAgentCommand
+      ? await args.runtime.createDeferredAgentTerminal(`id:${args.worktreeId}`, {
+          agent: args.agent,
+          ...(args.interactiveAgentCommand ? { bareShell: true } : {}),
+          ...(args.launchPreferences ? { launchPreferences: args.launchPreferences } : {}),
+          title: `worker-${args.taskId}`,
+          surfaceOwner: false
+        })
+      : await args.runtime.createTerminal(`id:${args.worktreeId}`, {
+          // Why: the agent id is not a shell command — `cursor` resolves to the Cursor
+          // desktop app while its CLI is `cursor-agent`. Let the runtime build the
+          // configured launcher instead of executing the raw id.
+          startupAgent: args.agent,
+          ...(args.launchPreferences ? { launchPreferences: args.launchPreferences } : {}),
+          title: `worker-${args.taskId}`,
+          // Why: dispatching a worker is background work; it must not pull the sidebar
+          // to the worker's workspace while the user is reading somewhere else.
+          surfaceOwner: false
+        })
   args.effects.push({
     kind: 'terminal',
     role: 'agent',
@@ -80,27 +123,29 @@ export async function createExistingWorktreeWorkerTerminal(args: {
     surface: terminal.surface,
     warning: terminal.warning
   })
-  return { handle: terminal.handle, warning: terminal.warning }
-}
-
-export function applyWaitForSetupOutcome(
-  receipt: WorkerSetupReceipt,
-  effects: WorkerEffect[],
-  wait: { satisfied: boolean; status: string }
-): void {
-  if (receipt.startupPolicy !== 'wait-for-setup' || receipt.state !== 'running') {
-    return
+  args.db.recordWorkerStage({
+    dispatchId: args.dispatchId,
+    stage: 'terminal_created',
+    worktreeId: args.worktreeId,
+    terminalHandle: terminal.handle,
+    effects: args.effects,
+    residualResources: residualWorkerEffects(args.effects)
+  })
+  if (args.interactiveAgentCommand) {
+    // The visible background-terminal path can adopt a shell before its startup
+    // command is delivered. Explicit injection makes the supervised launch
+    // observable and keeps the later Dispatch prompt inside the ZCode TUI.
+    await launchInteractiveAgent(
+      args.runtime,
+      terminal.handle,
+      args.agent,
+      args.interactiveAgentCommand
+    )
   }
-  if (wait.satisfied) {
-    receipt.state = 'succeeded'
-  } else if (wait.status === 'exited') {
-    receipt.state = 'failed'
-  } else {
-    return
-  }
-  const setupEffect = effects.find((effect) => effect.kind === 'setup')
-  if (setupEffect) {
-    setupEffect.state = receipt.state
+  return {
+    handle: terminal.handle,
+    warning: terminal.warning,
+    promptDelivery: startupCommandPrompt ? 'startup-command' : 'agent-input'
   }
 }
 
@@ -121,6 +166,8 @@ export async function createWorkerWorktree(args: {
   }
   agent: TuiAgent
   launchPreferences?: AgentLaunchPreferences
+  promptDelivery: 'agent-input' | 'startup-command'
+  interactiveAgentCommand?: string
   effects: WorkerEffect[]
 }): Promise<{
   worktree: Awaited<ReturnType<OrcaRuntimeService['showManagedWorktree']>>
@@ -143,6 +190,10 @@ export async function createWorkerWorktree(args: {
     observeSetupCompletion: true,
     createdWithAgent: args.agent,
     startupAgent: args.agent,
+    ...(args.promptDelivery === 'startup-command' || args.interactiveAgentCommand
+      ? { deferStartupAgent: true }
+      : {}),
+    ...(args.interactiveAgentCommand ? { bareDeferredAgentShell: true } : {}),
     ...(args.launchPreferences ? { startupLaunchPreferences: args.launchPreferences } : {}),
     activate: false,
     lineage: {
@@ -175,12 +226,29 @@ export async function createWorkerWorktree(args: {
   if (!terminalHandle) {
     throw new Error(created.warning ?? 'Agent-first worktree creation returned no terminal.')
   }
+  effects.push({
+    kind: 'terminal',
+    role: 'agent',
+    action: 'reused_agent_terminal',
+    id: terminalHandle
+  })
+  db.recordWorkerStage({
+    dispatchId,
+    stage: 'terminal_created',
+    worktreeId: created.worktree.id,
+    terminalHandle,
+    effects,
+    residualResources: residualWorkerEffects(effects)
+  })
+  if (args.interactiveAgentCommand) {
+    await launchInteractiveAgent(runtime, terminalHandle, args.agent, args.interactiveAgentCommand)
+  }
   const listed = await runtime.listTerminals(`id:${created.worktree.id}`, undefined, {
     includeVisualLayouts: false
   })
   const setupTerminalHandle = created.setupReceipt?.terminalHandle
   for (const terminal of listed.terminals) {
-    effects.push({
+    const terminalEffect = {
       kind: 'terminal',
       role:
         terminal.handle === terminalHandle
@@ -192,7 +260,15 @@ export async function createWorkerWorktree(args: {
       id: terminal.handle,
       tabId: terminal.tabId,
       leafId: terminal.leafId
-    })
+    } satisfies WorkerEffect
+    const existingEffect = effects.find(
+      (effect) => effect.kind === 'terminal' && effect.id === terminal.handle
+    )
+    if (existingEffect) {
+      Object.assign(existingEffect, terminalEffect)
+    } else {
+      effects.push(terminalEffect)
+    }
   }
   const setupTerminal = effects.find(
     (effect) => effect.kind === 'terminal' && effect.role === 'setup'
@@ -213,70 +289,4 @@ export async function createWorkerWorktree(args: {
     terminalHandle,
     setupReceipt
   }
-}
-
-export function monitorWorkerSetup(args: {
-  runtime: OrcaRuntimeService
-  db: OrchestrationDb
-  runId: string
-  dispatchId: string
-  setupReceipt: WorkerSetupReceipt
-  effects: WorkerEffect[]
-}): void {
-  const setupTerminal = args.effects.find(
-    (effect) => effect.kind === 'terminal' && effect.role === 'setup' && effect.id
-  )
-  if (
-    !setupTerminal?.id ||
-    args.setupReceipt.startupPolicy !== 'start-immediately' ||
-    args.setupReceipt.state !== 'running'
-  ) {
-    return
-  }
-  // Why: setup is intentionally non-gating, but command completion remains durable evidence.
-  void args.runtime
-    .waitForSetupTerminalCompletion(setupTerminal.id)
-    .then((completion) => {
-      const setupState = completion.exitCode === 0 ? 'succeeded' : 'failed'
-      const evidence = args.db.updateWorkerSetupEvidence({
-        dispatchId: args.dispatchId,
-        setupState,
-        effects: args.effects.map((effect) =>
-          effect.kind === 'setup' ? { ...effect, state: setupState } : effect
-        )
-      })
-      if (!evidence.changed) {
-        return
-      }
-      const message = args.db.insertMessage({
-        runId: args.runId,
-        from: `dispatch:${args.dispatchId}`,
-        to: `run:${args.runId}`,
-        subject: `Setup ${setupState} for worker ${args.dispatchId}`,
-        type: 'status',
-        priority: setupState === 'failed' ? 'high' : 'normal',
-        payload: JSON.stringify({
-          dispatchId: args.dispatchId,
-          setupState,
-          terminalHandle: setupTerminal.id
-        })
-      })
-      args.runtime.notifyMessageArrived(message.to_handle, message.type)
-    })
-    .catch(() => undefined)
-}
-
-export function isUnknownWorkerStartOutcome(error: unknown, stage: string): boolean {
-  const code =
-    error && typeof error === 'object' && typeof (error as { code?: unknown }).code === 'string'
-      ? (error as { code: string }).code
-      : ''
-  if (code === 'operation_unknown') {
-    return true
-  }
-  if (stage !== 'worktree_create') {
-    return false
-  }
-  const message = error instanceof Error ? error.message : String(error)
-  return /connection|disconnect|timed?\s*out|runtime changed|outcome unknown/i.test(message)
 }

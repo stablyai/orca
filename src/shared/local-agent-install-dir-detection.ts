@@ -9,7 +9,15 @@ export function detectCommandsInInstallDirs(commands: readonly string[]): Set<st
   try {
     const resolvedCommands = resolveCliCommands(commands)
     return new Set(
-      commands.filter((command) => path.isAbsolute(resolvedCommands.get(command) ?? command))
+      commands.filter((command) => {
+        // Absolute probes are checked directly by isCommandOnPath before this
+        // fallback runs. Treating the unresolved probe itself as a successful
+        // install-dir resolution would report every absolute alias as installed.
+        if (path.isAbsolute(command)) {
+          return false
+        }
+        return path.isAbsolute(resolvedCommands.get(command) ?? command)
+      })
     )
   } catch {
     return new Set()

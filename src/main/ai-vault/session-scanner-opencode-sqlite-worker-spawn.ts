@@ -2,6 +2,7 @@ import { existsSync } from 'node:fs'
 import { join } from 'node:path'
 import { Worker } from 'node:worker_threads'
 import type { AiVaultScanIssue, AiVaultSession } from '../../shared/ai-vault-types'
+import type { OpenCodeSqliteTranscriptValue } from './session-scanner-opencode-sqlite-worker-protocol'
 import type { SessionFileCandidate } from './session-scanner-types'
 import { OpenCodeSqliteWorkerClient } from './session-scanner-opencode-sqlite-worker-client'
 
@@ -69,4 +70,15 @@ export function parseOpenCodeSqliteSessionViaWorker(args: {
   platform: NodeJS.Platform
 }): Promise<AiVaultSession | null> {
   return getSharedClient().parse(args)
+}
+
+export function readZcodeSqliteTranscriptViaWorker(args: {
+  dbPath: string
+  sessionId: string
+  offset?: number
+  endOffset?: number
+  beforeOffset?: number
+  limit: number
+}): Promise<OpenCodeSqliteTranscriptValue> {
+  return getSharedClient().transcript(args)
 }

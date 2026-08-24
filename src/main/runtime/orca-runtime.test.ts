@@ -1532,6 +1532,7 @@ async function createExplicitAgentStatusHarness(options: {
     ptyId: string
   ) => Promise<{ foregroundProcess: string | null; hasChildProcesses: boolean; unavailable?: true }>
   confirmForegroundProcess?: (ptyId: string) => Promise<string | null>
+  hasChildProcesses?: (ptyId: string) => Promise<boolean>
   title?: string
 }): Promise<{
   runtime: OrcaRuntimeService
@@ -1561,7 +1562,8 @@ async function createExplicitAgentStatusHarness(options: {
     kill: () => true,
     getForegroundProcess: options.getForegroundProcess,
     inspectProcess: options.inspectProcess,
-    confirmForegroundProcess: options.confirmForegroundProcess
+    confirmForegroundProcess: options.confirmForegroundProcess,
+    hasChildProcesses: options.hasChildProcesses
   })
   runtime.attachWindow(1)
   const syncPty = (ptyId: string | null): void => {
@@ -12867,7 +12869,8 @@ describe('OrcaRuntimeService', () => {
     )
     const { runtime, handle } = await createExplicitAgentStatusHarness({
       getForegroundProcess,
-      confirmForegroundProcess
+      confirmForegroundProcess,
+      hasChildProcesses: async () => false
     })
 
     await expect(runtime.getTerminalAgentStatus(handle)).resolves.toMatchObject({
@@ -12928,6 +12931,35 @@ describe('OrcaRuntimeService', () => {
     })
     expect(getForegroundProcess).toHaveBeenCalledOnce()
     expect(confirmForegroundProcess).not.toHaveBeenCalled()
+  })
+
+  it('confirms a wrapper agent after cached startup process detection misses it', async () => {
+    const getForegroundProcess = vi.fn(async () => 'zsh')
+    const confirmForegroundProcess = vi.fn(async () => 'zcode-cli')
+    const { runtime, handle } = await createExplicitAgentStatusHarness({
+      getForegroundProcess,
+      confirmForegroundProcess,
+      hasChildProcesses: async () => false
+    })
+
+    const detected = await runtime.waitForTerminalAgentProcess(handle, 'zcode', 1)
+    expect(getForegroundProcess).toHaveBeenCalled()
+    expect(confirmForegroundProcess).toHaveBeenCalledOnce()
+    expect(confirmForegroundProcess).toHaveBeenCalledWith('pty-1')
+    expect(detected).toBe(true)
+  })
+
+  it('waits for agent input readiness through the renderer leaf before the live PTY is registered', async () => {
+    const { runtime, handle } = await createExplicitAgentStatusHarness({
+      getForegroundProcess: async () => 'zcode-cli',
+      hasChildProcesses: async () => false
+    })
+
+    const ready = runtime.waitForTerminalAgentInputReady(handle, 'zcode')
+    runtime.onPtyData('pty-1', '\x1b[?2004h\x1b[?2026h', Date.now())
+    runtime.onPtyData('pty-1', '\x1b[?2026l\x1b[?25h', Date.now())
+
+    await expect(ready).resolves.toBe(true)
   })
 
   it('skips both foreground reads when current title evidence blocks explicit hook state', async () => {

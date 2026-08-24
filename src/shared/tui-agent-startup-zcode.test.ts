@@ -23,6 +23,18 @@ describe('ZCode startup plans', () => {
     expect(plan?.launchCommand).toBe("zcode '--mode' 'yolo' --prompt 'fix the tests'")
   })
 
+  it('respects manual permission settings instead of forcing yolo mode', () => {
+    const plan = buildAgentStartupPlan({
+      agent: 'zcode',
+      prompt: 'fix the tests',
+      cmdOverrides: {},
+      agentArgs: '',
+      platform: 'linux'
+    })
+
+    expect(plan?.launchCommand).toBe("zcode --prompt 'fix the tests'")
+  })
+
   it('preserves multiline prompts as one shell argument', () => {
     const prompt = "Review this branch\nif (ready) { run it }\nDon't split this."
     const plan = buildAgentStartupPlan({

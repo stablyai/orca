@@ -67,7 +67,24 @@ describe('orchestration new-worktree workers', () => {
       new Promise(() => undefined)
     )
     vi.spyOn(runtime, 'getTerminalOrchestrationCliCommand').mockReturnValue('orca')
+    vi.spyOn(runtime, 'resolveOrchestrationPromptDelivery').mockResolvedValue('agent-input')
+    vi.spyOn(runtime, 'resolveOrchestrationInteractiveAgentCommand').mockImplementation(
+      async (agent) => (agent === 'zcode' ? 'command zcode --mode yolo' : undefined)
+    )
+    vi.spyOn(runtime, 'sendTerminal').mockResolvedValue({
+      handle: 'term_worker',
+      accepted: true,
+      bytesWritten: 1
+    })
+    vi.spyOn(runtime, 'waitForTerminalAgentProcess').mockResolvedValue(true)
+    vi.spyOn(runtime, 'waitForTerminalAgentInputReady').mockResolvedValue(true)
+    vi.spyOn(runtime, 'waitForTerminalProviderSession').mockResolvedValue(true)
     vi.spyOn(runtime, 'sendTerminalAgentPrompt').mockResolvedValue({
+      handle: 'term_worker',
+      accepted: true,
+      bytesWritten: 1
+    })
+    vi.spyOn(runtime, 'sendTerminalAgentStartupPrompt').mockResolvedValue({
       handle: 'term_worker',
       accepted: true,
       bytesWritten: 1
@@ -163,6 +180,7 @@ describe('orchestration new-worktree workers', () => {
       ])
     )
     expect(runtime.createTerminal).not.toHaveBeenCalled()
+    expect(runtime.waitForTerminalAgentProcess).not.toHaveBeenCalled()
   })
 
   it('passes launch preferences into agent-first worktree creation', async () => {
@@ -186,6 +204,78 @@ describe('orchestration new-worktree workers', () => {
         effective: { agent: 'codex', model: 'custom-codex-model', effort: 'high' }
       }
     })
+  })
+
+  it('starts an interactive ZCode worktree before injecting the Dispatch preamble', async () => {
+    mockCreatedWorktree()
+
+    const { result } = await startWorker({ agent: 'zcode' })
+
+    expect(result).toMatchObject({ state: 'ready' })
+    expect(runtime.createManagedWorktree).toHaveBeenCalledWith(
+      expect.objectContaining({
+        createdWithAgent: 'zcode',
+        startupAgent: 'zcode',
+        deferStartupAgent: true,
+        bareDeferredAgentShell: true
+      })
+    )
+    expect(runtime.sendTerminal).toHaveBeenCalledWith('term_worker', {
+      text: 'command zcode --mode yolo',
+      enter: true
+    })
+    expect(runtime.waitForTerminalAgentInputReady).toHaveBeenCalledWith('term_worker', 'zcode')
+    expect(runtime.waitForTerminalProviderSession).toHaveBeenCalledWith(
+      'term_worker',
+      'zcode',
+      expect.any(Number),
+      10_000
+    )
+    expect(runtime.sendTerminalAgentPrompt).toHaveBeenCalledWith(
+      'term_worker',
+      expect.stringContaining('--dispatch-capability dcap_')
+    )
+    expect(runtime.sendTerminalAgentStartupPrompt).not.toHaveBeenCalled()
+  })
+
+  it('keeps an accepted interactive ZCode dispatch ready when session reporting is delayed', async () => {
+    vi.mocked(runtime.waitForTerminalProviderSession).mockResolvedValueOnce(false)
+    mockCreatedWorktree()
+
+    const { result, task } = await startWorker({ agent: 'zcode' })
+
+    expect(result).toMatchObject({
+      state: 'ready',
+      warning: expect.stringContaining('provider session was not reported')
+    })
+    expect(runtime.sendTerminalAgentPrompt).toHaveBeenCalledWith(
+      'term_worker',
+      expect.stringContaining('--dispatch-capability dcap_')
+    )
+    expect(db.getTask(task.id)?.status).toBe('dispatched')
+  })
+
+  it('defers ZCode startup when only the one-shot runtime is available', async () => {
+    vi.mocked(runtime.resolveOrchestrationPromptDelivery).mockResolvedValueOnce('startup-command')
+    mockCreatedWorktree()
+
+    const { result } = await startWorker({ agent: 'zcode' })
+
+    expect(result).toMatchObject({ state: 'ready' })
+    expect(runtime.createManagedWorktree).toHaveBeenCalledWith(
+      expect.objectContaining({
+        startupAgent: 'zcode',
+        createdWithAgent: 'zcode',
+        deferStartupAgent: true
+      })
+    )
+    expect(runtime.sendTerminalAgentStartupPrompt).toHaveBeenCalledWith(
+      'term_worker',
+      'zcode',
+      expect.stringContaining('--dispatch-capability dcap_'),
+      undefined
+    )
+    expect(runtime.sendTerminalAgentPrompt).not.toHaveBeenCalled()
   })
 
   it('rejects a new worktree for a folder project before creating effects', async () => {
