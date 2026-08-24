@@ -494,6 +494,49 @@ describe('buildMobileSessionTabSnapshots', () => {
     })
   })
 
+  it('publishes the tri-state Vault title precedence to paired clients', () => {
+    const leafId = '11111111-1111-4111-8111-111111111111'
+    const tab = {
+      id: 'term-1',
+      worktreeId: 'wt-1',
+      title: 'Claude working',
+      generatedTitle: 'Pull again',
+      customTitle: null,
+      ptyId: 'pty-1',
+      color: null,
+      sortOrder: 0,
+      createdAt: 1
+    }
+    const base = makeState({
+      settings: { ...getDefaultSettings('/tmp'), tabAutoGenerateTitle: true },
+      tabBarOrderByWorktree: { 'wt-1': ['term-1'] },
+      tabsByWorktree: { 'wt-1': [tab] } as unknown as AppState['tabsByWorktree'],
+      terminalLayoutsByTabId: {
+        'term-1': {
+          root: { type: 'leaf', leafId },
+          activeLeafId: leafId,
+          expandedLeafId: null,
+          ptyIdsByLeafId: { [leafId]: 'pty-1' }
+        }
+      } as AppState['terminalLayoutsByTabId']
+    })
+    const publishedTitle = (
+      aiVaultTitle?: AppState['tabsByWorktree'][string][number]['aiVaultTitle']
+    ) =>
+      buildMobileSessionTabSnapshots({
+        ...base,
+        tabsByWorktree: {
+          'wt-1': [{ ...tab, ...(aiVaultTitle !== undefined ? { aiVaultTitle } : {}) }]
+        } as AppState['tabsByWorktree']
+      })[0]?.tabs[0]?.title
+
+    expect(publishedTitle()).toBe('Pull again')
+    expect(publishedTitle(null)).toBe('Claude working')
+    expect(publishedTitle({ agent: 'claude', sessionId: 'session-1', title: 'Housekeeping' })).toBe(
+      'Housekeeping'
+    )
+  })
+
   it('publishes quick command labels to mobile snapshots before generated titles', () => {
     const leafId = '11111111-1111-4111-8111-111111111111'
     const state = makeState({

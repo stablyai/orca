@@ -87,9 +87,9 @@ function hydrateUnifiedFormat(
         .map((tab) => [tab.id, tab.quickCommandLabel!.trim()])
     )
     const aiVaultTitleByTerminalId = new Map(
-      (session.tabsByWorktree[worktreeId] ?? [])
-        .filter((tab) => tab.aiVaultTitle)
-        .map((tab) => [tab.id, tab.aiVaultTitle!])
+      (session.tabsByWorktree[worktreeId] ?? []).flatMap((tab) =>
+        tab.aiVaultTitle !== undefined ? [[tab.id, tab.aiVaultTitle] as const] : []
+      )
     )
     const hydratedTabs = [...tabs]
       .map((tab) => ({
@@ -104,11 +104,15 @@ function hydrateUnifiedFormat(
           ? tab.quickCommandLabel.trim()
           : quickCommandLabelByTerminalId.get(tab.entityId)
         const generatedLabel = generatedTitleByTerminalId.get(tab.entityId)
-        const aiVaultTitle = tab.aiVaultTitle ?? aiVaultTitleByTerminalId.get(tab.entityId)
+        const terminalAiVaultTitle = aiVaultTitleByTerminalId.get(tab.entityId)
+        const aiVaultTitle =
+          tab.aiVaultTitle === null || terminalAiVaultTitle === null
+            ? null
+            : (tab.aiVaultTitle ?? terminalAiVaultTitle)
         return {
           ...tab,
           ...(quickCommandLabel ? { quickCommandLabel } : {}),
-          ...(aiVaultTitle ? { aiVaultTitle } : {}),
+          ...(aiVaultTitle !== undefined ? { aiVaultTitle } : {}),
           ...(!tab.generatedLabel?.trim() && generatedLabel ? { generatedLabel } : {})
         }
       })
@@ -238,6 +242,7 @@ function hydrateLegacyFormat(
         label: tt.title,
         ...(tt.quickCommandLabel?.trim() ? { quickCommandLabel: tt.quickCommandLabel.trim() } : {}),
         ...(tt.generatedTitle?.trim() ? { generatedLabel: tt.generatedTitle.trim() } : {}),
+        ...(tt.aiVaultTitle !== undefined ? { aiVaultTitle: tt.aiVaultTitle } : {}),
         customLabel: tt.customTitle,
         color: tt.color,
         sortOrder: tt.sortOrder,

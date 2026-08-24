@@ -37,6 +37,45 @@ describe('getAgentRowConversationName', () => {
     expect(getAgentRowConversationName(tab, 'claude', false)).toBe('Investigate replay bug')
   })
 
+  it('uses the live AI Vault session name ahead of a first-prompt generated title', () => {
+    const tab = makeTab({
+      aiVaultTitle: {
+        agent: 'claude',
+        sessionId: 'claude-session-2',
+        title: 'Housekeeping'
+      },
+      generatedTitle: 'pull again',
+      title: '✳ pull again'
+    })
+    expect(getAgentRowConversationName(tab, 'claude', true)).toBe('Housekeeping')
+    expect(getAgentRowConversationName(tab, 'claude', true, null)).toBe('Housekeeping')
+  })
+
+  it('follows a later AI Vault rename instead of keeping the first prompt', () => {
+    const tab = makeTab({
+      aiVaultTitle: {
+        agent: 'claude',
+        sessionId: 'claude-session-1',
+        title: 'Orca stats and usage with WSL environments'
+      },
+      generatedTitle: 'pull again',
+      title: '◑ Housekeeping'
+    })
+    expect(getAgentRowConversationName(tab, 'claude', true)).toBe(
+      'Orca stats and usage with WSL environments'
+    )
+  })
+
+  it('does not restore a generated name while the AI Vault title is explicitly cleared', () => {
+    const tab = makeTab({
+      aiVaultTitle: null,
+      generatedTitle: 'Pull again',
+      title: '✳ Housekeeping'
+    })
+    expect(getAgentRowConversationName(tab, 'claude', true)).toBe('Housekeeping')
+    expect(getAgentRowConversationName(tab, 'claude', true, null)).toBeNull()
+  })
+
   it('names a split pane from its own live title, not the tab title', () => {
     // Why: the tab title is the FOCUSED pane's, so the sibling must not read it.
     const tab = makeTab({ title: '\u2733 Linear work log' })

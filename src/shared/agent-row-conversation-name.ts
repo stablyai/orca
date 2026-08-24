@@ -1,10 +1,10 @@
 // Resolves the stable "conversation name" an agent row can show instead of the
 // live last-message preview. Sources, in the same precedence the tab bar uses
 // (tab-title-resolution.ts): manual rename → quick-command label → OpenCode's
-// semantic session title → Orca's generated title → the agent-set live title.
-// Live titles are accepted only when they carry a real name — pure status,
-// identity-echo, and spinner/cwd titles yield null so callers keep the
-// last-message label.
+// semantic session title → AI Vault session name → Orca's generated title →
+// the agent-set live title. Live titles are accepted only when they carry a
+// real name — pure status, identity-echo, and spinner/cwd titles yield null so
+// callers keep the last-message label.
 import type { AgentType } from './agent-status-types'
 import { isClaudeManagementTitle } from './agent-title-core'
 import { stripLeadingAgentTitleDecorationOrEmpty } from './agent-title-decoration'
@@ -15,7 +15,7 @@ import type { TerminalTab } from './terminal-tab-types'
 
 export type ConversationNameTab = Pick<
   TerminalTab,
-  'customTitle' | 'quickCommandLabel' | 'generatedTitle' | 'title' | 'defaultTitle'
+  'customTitle' | 'quickCommandLabel' | 'aiVaultTitle' | 'generatedTitle' | 'title' | 'defaultTitle'
 >
 
 // Why: synthetic status titles ("Codex ready", "Cursor - action required") are
@@ -134,7 +134,12 @@ export function getAgentRowConversationName(
   if (isMeaningfulOpenCodeTerminalTitle(liveTitle)) {
     return liveTitle
   }
-  const generatedTitle = generatedTitlesEnabled ? tab.generatedTitle?.trim() : ''
+  const aiVaultTitle = tab.aiVaultTitle?.title.trim()
+  if (aiVaultTitle) {
+    return aiVaultTitle
+  }
+  const generatedTitle =
+    generatedTitlesEnabled && tab.aiVaultTitle !== null ? tab.generatedTitle?.trim() : ''
   if (generatedTitle) {
     return generatedTitle
   }

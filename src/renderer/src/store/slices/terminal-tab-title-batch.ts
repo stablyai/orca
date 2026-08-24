@@ -228,6 +228,10 @@ export function applyGeneratedTabTitleUpdates(
     ) {
       continue
     }
+    // Why: /clear writes aiVaultTitle null and drops generatedTitle; a later ping still carries the previous prompt.
+    if (currentTab.aiVaultTitle === null && options?.replaceExistingGeneratedTitle !== true) {
+      continue
+    }
     const existingGeneratedTitle = currentTab.generatedTitle?.trim()
     if (existingGeneratedTitle && options?.replaceExistingGeneratedTitle !== true) {
       continue

@@ -18,7 +18,7 @@ type CanonicalTerminals = {
   /** PTYs already claimed by canonical rows that survive hydration, keyed to their claimant. */
   tabIdByPtyId: Map<string, string>
   quickCommandLabelByTabId: Map<string, string>
-  aiVaultTitleByTabId: Map<string, AiVaultSessionTitle>
+  aiVaultTitleByTabId: Map<string, AiVaultSessionTitle | null>
 }
 
 export type HydrateWorkspaceTerminalRowsOptions = {
@@ -146,7 +146,9 @@ function readCanonicalTerminals(
       )
     ),
     aiVaultTitleByTabId: new Map(
-      canonicalTabs.flatMap((tab) => (tab.aiVaultTitle ? [[tab.entityId, tab.aiVaultTitle]] : []))
+      canonicalTabs.flatMap((tab) =>
+        tab.aiVaultTitle !== undefined ? [[tab.entityId, tab.aiVaultTitle] as const] : []
+      )
     )
   }
 }
@@ -202,11 +204,15 @@ function restoreCanonicalMetadata(
 ): TerminalTab {
   const quickCommandLabel =
     row.quickCommandLabel?.trim() || canonical.quickCommandLabelByTabId.get(row.id)
-  const aiVaultTitle = row.aiVaultTitle ?? canonical.aiVaultTitleByTabId.get(row.id)
+  const canonicalAiVaultTitle = canonical.aiVaultTitleByTabId.get(row.id)
+  const aiVaultTitle =
+    row.aiVaultTitle === null || canonicalAiVaultTitle === null
+      ? null
+      : (row.aiVaultTitle ?? canonicalAiVaultTitle)
   return {
     ...clearTransientTerminalState(row, index),
     ...(quickCommandLabel ? { quickCommandLabel } : {}),
-    ...(aiVaultTitle ? { aiVaultTitle } : {}),
+    ...(aiVaultTitle !== undefined ? { aiVaultTitle } : {}),
     sortOrder: index,
     // Why: suppress restored mounts so only real activity updates Recent.
     pendingActivationSpawn: true

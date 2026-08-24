@@ -5,8 +5,54 @@ import type { WorkspaceSessionState } from '../../../../shared/workspace-session
 import { getDefaultWorkspaceSession } from '../../../../shared/constants'
 import { buildWorkspaceSessionPayload } from '@/lib/workspace-session'
 import { createTestStore, makeLayout, makeTab, makeWorktree, seedStore } from './store-test-helpers'
+import { hydrateWorkspaceTerminalRows } from './terminal-session-row-hydration'
 
 describe('hydrateWorkspaceSession canonical terminal rows', () => {
+  it('keeps an explicit clear when canonical and legacy Vault metadata disagree', () => {
+    const worktreeId = 'repo1::/wt-1'
+    const staleTitle = {
+      agent: 'claude' as const,
+      sessionId: 'claude-session-1',
+      title: 'Stale name'
+    }
+    const row = makeTab({ id: 'terminal-1', worktreeId, aiVaultTitle: null })
+    const session = {
+      ...getDefaultWorkspaceSession(),
+      tabsByWorktree: { [worktreeId]: [row] },
+      unifiedTabs: {
+        [worktreeId]: [
+          {
+            id: 'unified-1',
+            entityId: row.id,
+            groupId: 'group-1',
+            worktreeId,
+            contentType: 'terminal' as const,
+            label: row.title,
+            aiVaultTitle: staleTitle,
+            customLabel: null,
+            color: null,
+            sortOrder: 0,
+            createdAt: 1
+          }
+        ]
+      }
+    }
+
+    expect(hydrateWorkspaceTerminalRows(session, worktreeId, [row]).rows[0].aiVaultTitle).toBeNull()
+    expect(
+      hydrateWorkspaceTerminalRows(
+        {
+          ...session,
+          unifiedTabs: {
+            [worktreeId]: [{ ...session.unifiedTabs[worktreeId][0], aiVaultTitle: null }]
+          }
+        },
+        worktreeId,
+        [{ ...row, aiVaultTitle: staleTitle }]
+      ).rows[0].aiVaultTitle
+    ).toBeNull()
+  })
+
   it('drops only legacy rows that duplicate canonical PTY ownership', () => {
     const store = createTestStore()
     const worktreeId = 'repo1::/wt-1'

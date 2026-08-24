@@ -24,6 +24,22 @@ export type AiVaultSessionTitlesResult = {
   titles: AiVaultSessionTitle[]
 }
 
+export function aiVaultSessionTitlesEqual(
+  left: AiVaultSessionTitle | null | undefined,
+  right: AiVaultSessionTitle | null | undefined
+): boolean {
+  if (left === right) {
+    return true
+  }
+  return (
+    left != null &&
+    right != null &&
+    left.agent === right.agent &&
+    left.sessionId === right.sessionId &&
+    left.title === right.title
+  )
+}
+
 export function isAiVaultTitleAgent(
   agent: string | null | undefined
 ): agent is AiVaultSessionTitle['agent'] {

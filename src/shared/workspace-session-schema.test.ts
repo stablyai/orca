@@ -14,6 +14,64 @@ describe('parseWorkspaceSession', () => {
     expect(result.ok).toBe(true)
   })
 
+  it('preserves absent, cleared, and resolved Vault titles on both tab representations', () => {
+    const title = { agent: 'claude' as const, sessionId: 'session-1', title: 'Housekeeping' }
+    for (const aiVaultTitle of [undefined, null, title]) {
+      const optionalTitle = aiVaultTitle === undefined ? {} : { aiVaultTitle }
+      const result = parseWorkspaceSession({
+        activeRepoId: null,
+        activeWorktreeId: 'wt',
+        activeTabId: 'terminal-1',
+        tabsByWorktree: {
+          wt: [
+            {
+              id: 'terminal-1',
+              ptyId: null,
+              worktreeId: 'wt',
+              title: 'Claude working',
+              customTitle: null,
+              color: null,
+              sortOrder: 0,
+              createdAt: 1,
+              ...optionalTitle
+            }
+          ]
+        },
+        terminalLayoutsByTabId: {},
+        unifiedTabs: {
+          wt: [
+            {
+              id: 'unified-1',
+              entityId: 'terminal-1',
+              groupId: 'group-1',
+              worktreeId: 'wt',
+              contentType: 'terminal',
+              label: 'Claude working',
+              customLabel: null,
+              color: null,
+              sortOrder: 0,
+              createdAt: 1,
+              ...optionalTitle
+            }
+          ]
+        }
+      })
+
+      expect(result.ok).toBe(true)
+      if (result.ok) {
+        const terminal = result.value.tabsByWorktree.wt[0]
+        const unified = result.value.unifiedTabs?.wt[0]
+        if (aiVaultTitle === undefined) {
+          expect(terminal).not.toHaveProperty('aiVaultTitle')
+          expect(unified).not.toHaveProperty('aiVaultTitle')
+        } else {
+          expect(terminal.aiVaultTitle).toEqual(aiVaultTitle)
+          expect(unified?.aiVaultTitle).toEqual(aiVaultTitle)
+        }
+      }
+    }
+  })
+
   it('preserves external SSH file ownership across session parsing', () => {
     const result = parseWorkspaceSession({
       activeRepoId: null,

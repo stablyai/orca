@@ -16,7 +16,7 @@ export function resolveTerminalTabTitle(
     tab.quickCommandLabel?.trim() ||
     (isMeaningfulOpenCodeTerminalTitle(liveTitle) ? liveTitle : '') ||
     tab.aiVaultTitle?.title.trim() ||
-    (generatedTitlesEnabled ? tab.generatedTitle?.trim() : '') ||
+    (generatedTitlesEnabled && tab.aiVaultTitle !== null ? tab.generatedTitle?.trim() : '') ||
     liveTitle ||
     fallback
   )
@@ -35,7 +35,7 @@ export function resolveUnifiedTabLabel(
     tab?.quickCommandLabel?.trim() ||
     (isMeaningfulOpenCodeTerminalTitle(liveLabel) ? liveLabel : '') ||
     tab?.aiVaultTitle?.title.trim() ||
-    (generatedTitlesEnabled ? tab?.generatedLabel?.trim() : '') ||
+    (generatedTitlesEnabled && tab?.aiVaultTitle !== null ? tab?.generatedLabel?.trim() : '') ||
     liveLabel ||
     fallback
   )

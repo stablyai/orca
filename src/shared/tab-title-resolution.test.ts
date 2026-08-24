@@ -90,6 +90,49 @@ describe('tab title resolution', () => {
     ).toBe('Repair provider-native tab titles')
   })
 
+  it('keeps a Claude session name ahead of the first-prompt generated title', () => {
+    expect(
+      resolveTerminalTabTitle(
+        {
+          customTitle: null,
+          aiVaultTitle: {
+            agent: 'claude',
+            sessionId: 'claude-session-2',
+            title: 'Housekeeping'
+          },
+          generatedTitle: 'pull again',
+          title: '✳ pull again'
+        },
+        true
+      )
+    ).toBe('Housekeeping')
+  })
+
+  it('treats an explicit Vault clear as suppressing only the generated fallback', () => {
+    expect(
+      resolveTerminalTabTitle(
+        {
+          customTitle: null,
+          aiVaultTitle: null,
+          generatedTitle: 'Pull again',
+          title: 'Claude working'
+        },
+        true
+      )
+    ).toBe('Claude working')
+    expect(
+      resolveUnifiedTabLabel(
+        {
+          customLabel: null,
+          aiVaultTitle: null,
+          generatedLabel: 'Pull again',
+          label: 'Claude working'
+        },
+        true
+      )
+    ).toBe('Claude working')
+  })
+
   it('keeps manual and quick-command labels ahead of AI Vault titles', () => {
     const aiVaultTitle = {
       agent: 'claude' as const,

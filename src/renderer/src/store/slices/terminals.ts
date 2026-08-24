@@ -47,7 +47,10 @@ import type { SessionOptionValue } from '../../../../shared/native-chat-session-
 import { resolveLocalWindowsTerminalShellOverrideForTab } from '../../../../shared/local-windows-terminal-runtime'
 import { WINDOWS_GIT_BASH_SHELL } from '../../../../shared/windows-terminal-shell'
 import type { AgentStartedTelemetry } from '../../lib/worktree-startup-payload'
-import type { AiVaultSessionTitle } from '../../../../shared/ai-vault-session-title'
+import {
+  aiVaultSessionTitlesEqual,
+  type AiVaultSessionTitle
+} from '../../../../shared/ai-vault-session-title'
 import { scheduleRuntimeGraphSync } from '@/runtime/sync-runtime-graph'
 import { terminalLayoutEqual } from '@/lib/terminal-layout-equality'
 import { sweepRetiredTerminalTabState } from './retired-terminal-tab-state-sweep'
@@ -1992,17 +1995,35 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
       }
       const tabs = s.tabsByWorktree[ownerWorktreeId] ?? []
       const current = tabs.find((tab) => tab.id === tabId)
-      const sameTitle =
-        current?.aiVaultTitle?.agent === aiVaultTitle?.agent &&
-        current?.aiVaultTitle?.sessionId === aiVaultTitle?.sessionId &&
-        current?.aiVaultTitle?.title === aiVaultTitle?.title
+      const sameTitle = aiVaultSessionTitlesEqual(current?.aiVaultTitle, aiVaultTitle)
       if (!current || sameTitle) {
         return s
       }
-      const ownerTabs = tabs.map((tab) => (tab.id === tabId ? { ...tab, aiVaultTitle } : tab))
+      // Why: wipe only when a previously bound vault session unbinds or changes.
+      // First bind (undefined → session) is the same conversation; ranking already
+      // prefers vault, and clearing would re-open write-once first-prompt generation.
+      const previous = current.aiVaultTitle
+      const sessionChanged =
+        previous != null &&
+        (previous.agent !== aiVaultTitle?.agent || previous.sessionId !== aiVaultTitle?.sessionId)
+      const ownerTabs = tabs.map((tab) =>
+        tab.id === tabId
+          ? {
+              ...tab,
+              aiVaultTitle,
+              ...(sessionChanged ? { generatedTitle: undefined } : {})
+            }
+          : tab
+      )
       const unifiedTabs = s.unifiedTabsByWorktree[ownerWorktreeId] ?? []
       const nextUnifiedTabs = unifiedTabs.map((tab) =>
-        tab.contentType === 'terminal' && tab.entityId === tabId ? { ...tab, aiVaultTitle } : tab
+        tab.contentType === 'terminal' && tab.entityId === tabId
+          ? {
+              ...tab,
+              aiVaultTitle,
+              ...(sessionChanged ? { generatedLabel: undefined } : {})
+            }
+          : tab
       )
       scheduleRuntimeGraphSync()
       return {
@@ -2029,6 +2050,10 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
     const tabs = state.tabsByWorktree[ownerWorktreeId] ?? []
     const currentTab = tabs.find((tab) => tab.id === tabId)
     if (!currentTab || currentTab.customTitle?.trim() || currentTab.quickCommandLabel?.trim()) {
+      return
+    }
+    // Why: /clear writes aiVaultTitle null and drops generatedTitle; a later ping still carries the previous prompt.
+    if (currentTab.aiVaultTitle === null && options?.replaceExistingGeneratedTitle !== true) {
       return
     }
     const existingGeneratedTitle = currentTab.generatedTitle?.trim()

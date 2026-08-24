@@ -435,7 +435,7 @@ function getTabIdFromPaneKey(paneKey: string): string | null {
   return paneKey.slice(0, separator)
 }
 
-/** True when auto-title generation would no-op without replace (custom/quick/generated). */
+/** True when auto-title generation would no-op without replace (custom/quick/generated, or a /clear vault gap). */
 function agentStatusTabAlreadyHasProtectedOrGeneratedTitle(
   state: AppState,
   tabId: string | null,
@@ -448,7 +448,10 @@ function agentStatusTabAlreadyHasProtectedOrGeneratedTitle(
   if (ownerTabs) {
     const tab = ownerTabs.find((candidate) => candidate.id === tabId)
     return Boolean(
-      tab?.customTitle?.trim() || tab?.quickCommandLabel?.trim() || tab?.generatedTitle?.trim()
+      tab?.customTitle?.trim() ||
+      tab?.quickCommandLabel?.trim() ||
+      tab?.generatedTitle?.trim() ||
+      tab?.aiVaultTitle === null
     )
   }
   for (const tabs of Object.values(state.tabsByWorktree)) {
@@ -457,7 +460,10 @@ function agentStatusTabAlreadyHasProtectedOrGeneratedTitle(
       continue
     }
     return Boolean(
-      tab.customTitle?.trim() || tab.quickCommandLabel?.trim() || tab.generatedTitle?.trim()
+      tab.customTitle?.trim() ||
+      tab.quickCommandLabel?.trim() ||
+      tab.generatedTitle?.trim() ||
+      tab.aiVaultTitle === null
     )
   }
   return false

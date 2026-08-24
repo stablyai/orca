@@ -108,6 +108,35 @@ describe('TabsSlice', () => {
       expect(result.renderableTabCount).toBe(1)
     })
 
+    it('keeps an explicit Vault clear while promoting a reconnecting legacy terminal', () => {
+      store.setState({
+        tabsByWorktree: {
+          [WT]: [
+            {
+              id: 'reconnecting-terminal',
+              ptyId: null,
+              worktreeId: WT,
+              title: 'claude',
+              aiVaultTitle: null,
+              customTitle: null,
+              color: null,
+              sortOrder: 0,
+              createdAt: 1
+            }
+          ]
+        },
+        ptyIdsByTabId: { 'reconnecting-terminal': [] },
+        pendingReconnectPtyIdByTabId: { 'reconnecting-terminal': 'session-live' },
+        unifiedTabsByWorktree: { [WT]: [] },
+        groupsByWorktree: {},
+        activeGroupIdByWorktree: {}
+      })
+
+      store.getState().reconcileWorktreeTabModel(WT)
+
+      expect(store.getState().unifiedTabsByWorktree[WT][0]?.aiVaultTitle).toBeNull()
+    })
+
     // A session mirrored from a runtime host used to append a fresh leaf for a
     // group the layout already held, so returning to a split workspace showed the
     // same tab strip in several columns. Reconciliation collapses the repeats.
