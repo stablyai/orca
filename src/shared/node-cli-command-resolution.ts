@@ -118,6 +118,18 @@ function getBaseVersionManagerDirectories(platform: NodeJS.Platform, homePath: s
   return directories
 }
 
+// Why: Homebrew installs agent CLIs (e.g. the claude-code cask) outside every
+// version-manager directory, and GUI/headless launches may lack brew on PATH.
+function getHomebrewBinDirectories(platform: NodeJS.Platform, homePath: string): string[] {
+  if (platform === 'darwin') {
+    return ['/opt/homebrew/bin', '/usr/local/bin']
+  }
+  if (platform === 'linux') {
+    return ['/home/linuxbrew/.linuxbrew/bin', join(homePath, '.linuxbrew', 'bin')]
+  }
+  return []
+}
+
 function getNvmVersionDirectories(homePath: string): string[] {
   const nvmVersionsDir = join(homePath, '.nvm', 'versions', 'node')
   if (!existsSync(nvmVersionsDir)) {
@@ -166,14 +178,15 @@ export function resolveCliCommand(
     getNvmVersionDirectories(homePath),
     executableNames
   )
-  const versionManagerCandidate =
+  const installCandidate =
     nvmCandidate ??
     findFirstExecutable(
       platform,
       getBaseVersionManagerDirectories(platform, homePath),
       executableNames
-    )
-  return versionManagerCandidate ?? commandName
+    ) ??
+    findFirstExecutable(platform, getHomebrewBinDirectories(platform, homePath), executableNames)
+  return installCandidate ?? commandName
 }
 
 export function resolveCliCommands(
@@ -186,7 +199,8 @@ export function resolveCliCommands(
   const homePath = options.homePath ?? homedir()
   const installDirectories = [
     ...getNvmVersionDirectories(homePath),
-    ...getBaseVersionManagerDirectories(platform, homePath)
+    ...getBaseVersionManagerDirectories(platform, homePath),
+    ...getHomebrewBinDirectories(platform, homePath)
   ]
   const resolved = new Map<string, string>()
 
