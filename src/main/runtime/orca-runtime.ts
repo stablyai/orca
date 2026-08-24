@@ -35600,23 +35600,36 @@ export class OrcaRuntimeService {
    *  later transition. A provider screen that is still working when this fires
    *  resolves through the poll, not here. */
   private startTuiIdleVisibleReadProbe(waiter: TerminalWaiter, waiterTimeoutMs: number): void {
-    const snapshotTimeoutMs = Math.min(
-      VISIBLE_TERMINAL_SNAPSHOT_TIMEOUT_MS,
-      Math.max(0, waiterTimeoutMs - 1)
+    const settleMarginMs = Math.min(
+      TUI_IDLE_VISIBLE_PROBE_SETTLE_MARGIN_MS,
+      Math.max(1, Math.floor(waiterTimeoutMs / 3))
     )
+    const probeTimeoutMs = Math.min(
+      VISIBLE_TERMINAL_SNAPSHOT_TIMEOUT_MS + settleMarginMs,
+      Math.max(0, waiterTimeoutMs - settleMarginMs)
+    )
+    const providerTimeoutMs = Math.min(
+      VISIBLE_TERMINAL_SNAPSHOT_TIMEOUT_MS,
+      Math.max(0, probeTimeoutMs - settleMarginMs)
+    )
+    // Node clamps sub-millisecond timers to 1ms, so no distinct retirement deadline exists.
+    if (providerTimeoutMs < 1) {
+      return
+    }
+    // Retire the provider before the detached probe and waiter can settle.
     void withTimeout(
       this.readTerminal(
         waiter.handle,
         {},
         {
-          timeoutMs: snapshotTimeoutMs,
+          timeoutMs: providerTimeoutMs,
           retireOnTimeout: true,
           // Why: the ready banner stays in scrollback for the whole session, so
           // classifying history would call a working agent idle (#15569 review).
           visibleScreenOnly: true
         }
       ),
-      snapshotTimeoutMs,
+      probeTimeoutMs,
       null
     )
       .then((read) => {
@@ -38641,6 +38654,7 @@ const MAX_TERMINAL_PREVIEW_CHARS = 32 * 1024
 export const AUTHORITATIVE_TERMINAL_SNAPSHOT_TIMEOUT_MS = 8_000
 const VISIBLE_TERMINAL_SNAPSHOT_TIMEOUT_MS = 750
 const VISIBLE_TERMINAL_SNAPSHOT_RETRY_MS = 1_000
+const TUI_IDLE_VISIBLE_PROBE_SETTLE_MARGIN_MS = 10
 const MAX_PREVIEW_LINES = 6
 const MAX_PREVIEW_CHARS = 300
 const WORKTREE_STATUS_PRIORITY: Record<RuntimeWorktreeStatus, number> = {
