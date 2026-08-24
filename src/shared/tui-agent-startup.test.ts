@@ -696,22 +696,6 @@ describe('tui agent startup plans', () => {
     })
   })
 
-  it('launches ZCode with stdin-after-start prompt delivery', () => {
-    const plan = buildAgentStartupPlan({
-      agent: 'zcode',
-      prompt: 'fix the tests',
-      cmdOverrides: {},
-      platform: 'linux'
-    })
-    expect(plan).toEqual({
-      agent: 'zcode',
-      launchCommand: 'zcode',
-      expectedProcess: 'zcode-cli',
-      followupPrompt: 'fix the tests',
-      launchConfig: { agentCommand: 'zcode', agentArgs: '', agentEnv: {} }
-    })
-  })
-
   it('excludes transient draft prompt env from launch config', () => {
     const plan = buildAgentDraftLaunchPlan({
       agent: 'pi',

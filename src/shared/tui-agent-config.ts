@@ -1,5 +1,6 @@
 import type { TuiAgent } from './tui-agent'
 import { getOrcaCliCommandNameForPlatform } from './orca-cli-command-name'
+import { ZCODE_TUI_AGENT_CONFIG } from './tui-agent-config-zcode'
 
 export type AgentPromptInjectionMode =
   | 'argv'
@@ -286,13 +287,7 @@ const TUI_AGENT_CONFIG_SOURCE: Record<TuiAgent, TuiAgentConfigSource> = {
     // Why: `devin -- <prompt>` auto-submits immediately (docs.devin.ai/cli), so start the REPL with no argv prompt.
     promptInjectionMode: 'stdin-after-start'
   },
-  zcode: {
-    detectCmd: 'zcode',
-    launchCmd: 'zcode',
-    // Why: both the Desktop-bundled runtime and the compatible terminal client set this process title.
-    expectedProcess: 'zcode-cli',
-    promptInjectionMode: 'stdin-after-start'
-  }
+  zcode: ZCODE_TUI_AGENT_CONFIG
 }
 
 export const TUI_AGENT_CONFIG: Record<TuiAgent, TuiAgentConfig> = Object.fromEntries(
