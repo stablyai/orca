@@ -88,12 +88,20 @@ export function createRuntime(db: OrchestrationDb): MailboxNotificationHarness {
         ? { paneKey, source: 'current_hook' }
         : null
   })
-  const write = vi.fn(() => true)
+  const write = vi.fn((ptyId: string, data: string) => {
+    if (data.includes('\x1b[201~')) {
+      runtime.onPtyData(ptyId, '\x1b[?25h', Date.now())
+    }
+    if (data === '\r') {
+      runtime.onPtyData(ptyId, '\x1b]0;Codex working\x07', Date.now())
+    }
+    return true
+  })
   runtime.setOrchestrationDb(db)
   runtime.setPtyController({
     write,
     kill: vi.fn(),
-    getForegroundProcess: async () => null
+    getForegroundProcess: async () => 'codex'
   })
   runtime.registerPty(PTY_ID, WORKTREE_ID, null, {
     tabId: TAB_ID,
@@ -186,7 +194,9 @@ export async function driveToLiveIdle(runtime: OrcaRuntimeService): Promise<void
   await runtime.listTerminals()
   runtime.onPtyData(PTY_ID, '\x1b]0;Codex working\x07', 1)
   runtime.onPtyData(PTY_ID, '\x1b]0;Codex done\x07', 2)
-  await Promise.resolve()
+  for (let turn = 0; turn < 20; turn += 1) {
+    await Promise.resolve()
+  }
 }
 
 export function pointerCount(write: ReturnType<typeof vi.fn>): number {

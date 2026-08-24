@@ -16,6 +16,23 @@ export function migrate(this: OrchestrationDb): void {
   try {
     applySchemaMigrationsV2ToV12.call(this, current)
     applySchemaMigrationsV13ToV29.call(this, current)
+    if (current < 30) {
+      if (!this.hasColumn('messages', 'delivery_state')) {
+        this.db.exec(`ALTER TABLE messages ADD COLUMN delivery_state TEXT NOT NULL DEFAULT 'none'`)
+      }
+      this.db.exec(`
+        UPDATE messages
+        SET delivery_state = CASE
+          WHEN delivered_at IS NULL THEN 'none'
+          ELSE 'delivered'
+        END
+        WHERE delivery_state = 'none' AND delivered_at IS NOT NULL
+      `)
+      this.db.exec(`
+        CREATE INDEX IF NOT EXISTS idx_messages_delivery_state
+          ON messages(to_handle, read, delivery_state, sequence)
+      `)
+    }
     this.db.pragma(`user_version = ${SCHEMA_VERSION}`)
     this.db.exec('COMMIT')
   } catch (err) {

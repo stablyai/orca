@@ -11,6 +11,7 @@ export type AgentPromptActivity = Readonly<{
 type AgentPromptVerificationOptions = {
   baseline: AgentPromptActivity
   readActivity: () => AgentPromptActivity
+  assertActive?: () => void
   signal?: AbortSignal
 }
 
@@ -18,11 +19,14 @@ export async function verifyAgentPromptSubmission(
   options: AgentPromptVerificationOptions
 ): Promise<void> {
   throwIfAgentPromptAborted(options.signal)
+  options.assertActive?.()
   assertPromptNotBlocked(options.baseline, options.baseline)
 
   const deadline = Date.now() + AGENT_PROMPT_EFFECT_TIMEOUT_MS
   while (Date.now() < deadline) {
+    options.assertActive?.()
     const current = options.readActivity()
+    options.assertActive?.()
     assertSamePromptGeneration(options.baseline, current)
     assertPromptNotBlocked(options.baseline, current)
     if (agentPromptLifecycleChanged(options.baseline, current)) {
@@ -32,6 +36,7 @@ export async function verifyAgentPromptSubmission(
   }
 
   const current = options.readActivity()
+  options.assertActive?.()
   assertSamePromptGeneration(options.baseline, current)
   assertPromptNotBlocked(options.baseline, current)
   if (agentPromptLifecycleChanged(options.baseline, current)) {

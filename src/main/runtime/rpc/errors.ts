@@ -56,6 +56,7 @@ const RUNTIME_PASSTHROUGH_CODES: ReadonlySet<string> = new Set([
   'selector_ambiguous',
   'terminal_handle_stale',
   'terminal_not_writable',
+  'terminal_input_busy',
   'terminal_exited',
   'terminal_gone',
   'terminal_tab_close_timeout',

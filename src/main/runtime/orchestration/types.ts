@@ -17,6 +17,8 @@ export type MessagePriority = 'normal' | 'high' | 'urgent'
 
 export type MessageDeliveryContract = 'legacy_direct' | 'current_delivery' | 'audit_only'
 
+export type MessageDeliveryState = 'none' | 'staged' | 'delivered' | 'unknown'
+
 export type TaskStatus = 'pending' | 'ready' | 'dispatched' | 'completed' | 'failed' | 'blocked'
 
 export type DispatchStatus = 'pending' | 'dispatched' | 'completed' | 'failed' | 'circuit_broken'
@@ -240,6 +242,7 @@ export type MessageRow = {
   sequence: number
   created_at: string
   delivered_at: string | null
+  delivery_state?: MessageDeliveryState
   sender_pane_key: string | null
 }
 

@@ -293,9 +293,9 @@ describe('orchestration notification mailbox consistency', () => {
     expect(pointerCount(first.write)).toBe(1)
 
     const runB = createBoundRun(firstDb, 'Run B')
-    await vi.advanceTimersByTimeAsync(500)
+    await vi.advanceTimersByTimeAsync(1_500)
     expect(first.write.mock.calls.filter(([, payload]) => payload === '\r')).toHaveLength(0)
-    expect(firstDb.getMessageById(message.id)?.delivered_at).toBeNull()
+    expect(firstDb.getMessageById(message.id)?.delivered_at).toEqual(expect.any(String))
     firstDb.close()
 
     const restartedDb = new OrchestrationDb(dbPath)
@@ -308,7 +308,7 @@ describe('orchestration notification mailbox consistency', () => {
     expect(checked).toMatchObject({ runId: runB.id, deliveryId: null, count: 0, messages: [] })
     expect(restartedDb.getMessageById(message.id)).toMatchObject({
       read: 0,
-      delivered_at: null
+      delivered_at: expect.any(String)
     })
     restartedDb.close()
   })
@@ -348,7 +348,7 @@ describe('orchestration notification mailbox consistency', () => {
     insertDirectRunMessage(db, runA.id, 'Run A completion')
 
     await driveToLiveIdle(harness.runtime)
-    await vi.advanceTimersByTimeAsync(500)
+    await vi.advanceTimersByTimeAsync(1_500)
     expect(harness.write).toHaveBeenCalledWith(
       PTY_ID,
       expect.stringContaining(`orchestration check --run ${runA.id}`)
@@ -386,7 +386,7 @@ describe('orchestration notification mailbox consistency', () => {
     db.close()
   })
 
-  it('releases a staged pointer when its Run moves to another live pane', async () => {
+  it('does not transfer a pointer after its Run moves post-mutation', async () => {
     vi.useFakeTimers()
     const db = createDatabase('orca-mailbox-live-rebind-')
     const harness = createRuntime(db)
@@ -404,19 +404,19 @@ describe('orchestration notification mailbox consistency', () => {
     })
     harness.runtime.onPtyData(SECOND_PTY_ID, '\x1b]0;Codex working\x07', 1)
     harness.runtime.onPtyData(SECOND_PTY_ID, '\x1b]0;Codex done\x07', 2)
-    await vi.advanceTimersByTimeAsync(500)
+    await vi.advanceTimersByTimeAsync(1_500)
 
     expect(
       harness.write.mock.calls.filter(
         ([ptyId, payload]) =>
           ptyId === SECOND_PTY_ID && String(payload).includes('orca orchestration check')
       )
-    ).toHaveLength(1)
+    ).toHaveLength(0)
     expect(
       harness.write.mock.calls.filter(([ptyId, payload]) => ptyId === PTY_ID && payload === '\r')
     ).toHaveLength(0)
 
-    await vi.advanceTimersByTimeAsync(500)
+    await vi.advanceTimersByTimeAsync(1_500)
     const checked = await checkBoundMailbox(harness.runtime, {
       terminal: SECOND_TERMINAL_HANDLE,
       paneKey: SECOND_PANE_KEY,
@@ -453,14 +453,24 @@ describe('orchestration notification mailbox consistency', () => {
       )
     ).toHaveLength(0)
 
-    await vi.advanceTimersByTimeAsync(500)
+    await vi.advanceTimersByTimeAsync(1_500)
+    expect(
+      harness.write.mock.calls.filter(
+        ([ptyId, payload]) =>
+          ptyId === PTY_ID && String(payload).includes('orca orchestration check')
+      )
+    ).toHaveLength(1)
+    harness.runtime.onPtyData(PTY_ID, '\x1b]0;Codex done\x07', 3)
+    for (let turn = 0; turn < 20; turn += 1) {
+      await Promise.resolve()
+    }
     expect(
       harness.write.mock.calls.filter(
         ([ptyId, payload]) =>
           ptyId === PTY_ID && String(payload).includes('orca orchestration check')
       )
     ).toHaveLength(2)
-    await vi.advanceTimersByTimeAsync(500)
+    await vi.advanceTimersByTimeAsync(1_500)
 
     const checked = await checkBoundMailbox(harness.runtime)
     expect(checked).toMatchObject({ runId: run.id, count: 2 })
@@ -480,7 +490,7 @@ describe('orchestration notification mailbox consistency', () => {
     await driveToLiveIdle(harness.runtime)
     expect(pointerCount(harness.write)).toBe(1)
     harness.runtime.onPtyData(PTY_ID, '\x1b]0;Codex working\x07', 3)
-    await vi.advanceTimersByTimeAsync(500)
+    await vi.advanceTimersByTimeAsync(1_500)
 
     expect(harness.write.mock.calls.filter(([, payload]) => payload === '\r')).toHaveLength(0)
     expect(db.getMessageById(message.id)?.delivered_at).toEqual(expect.any(String))
@@ -502,7 +512,7 @@ describe('orchestration notification mailbox consistency', () => {
     const checked = await checkBoundMailbox(harness.runtime)
     expect(checked).toMatchObject({ runId: run.id, count: 1 })
 
-    await vi.advanceTimersByTimeAsync(500)
+    await vi.advanceTimersByTimeAsync(1_500)
     const redrive = vi.spyOn(harness.runtime, 'deliverPendingMessagesForHandle')
     harness.runtime.onPtyExit(PTY_ID, 0)
     await Promise.resolve()

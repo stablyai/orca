@@ -1,41 +1,26 @@
 import { isCursorAgentTitle } from '../../../shared/agent-detection'
-import { ORCHESTRATION_DELIVERY_BATCH_LIMIT, type OrchestrationDb } from './db'
+import { ORCHESTRATION_DELIVERY_BATCH_LIMIT } from './db'
 import { formatMessagePointer } from './formatter'
-import type { OrchestrationMailboxDeliveryTarget } from './mailbox-delivery-target'
+import type { PointerDeliveryDependencies } from './mailbox-pointer-delivery-contract'
 import {
   hasUnfilteredOrchestrationWaiter,
   messageTypeHasOrchestrationWaiter,
-  shouldReleaseOrchestrationPointer,
   type OrchestrationMessageWaiter
 } from './mailbox-pointer-eligibility'
-import type { OrchestrationMailboxLeaf, OrchestrationMailboxOwner } from './mailbox-owner'
+import type { OrchestrationMailboxLeaf } from './mailbox-owner'
 import {
   OrchestrationMailboxPointerState,
   type OrchestrationMailboxDeliveryFlight
 } from './mailbox-pointer-state'
-import { submitOrchestrationMailboxPointer } from './mailbox-pointer-submit'
-
+import { redriveMailboxPointer } from './mailbox-pointer-redrive'
+import {
+  assertMailboxPointerDeliveryCurrent,
+  markMailboxDeliveryDelivered
+} from './mailbox-pointer-delivery-validation'
 export type { OrchestrationMessageWaiter } from './mailbox-pointer-eligibility'
-
-type PointerDeliveryDependencies<TWaiter extends OrchestrationMessageWaiter> = {
-  mailboxOwner: OrchestrationMailboxOwner
-  deliveryTarget: OrchestrationMailboxDeliveryTarget
-  getDb: () => OrchestrationDb | null
-  getLeaf: (leafKey: string) => OrchestrationMailboxLeaf | undefined
-  getLeafKey: (tabId: string, leafId: string) => string
-  getLiveLeafForHandle: (handle: string) => OrchestrationMailboxLeaf
-  getMessageWaiters: (mailboxHandle: string) => ReadonlySet<TWaiter> | undefined
-  getTabTitle: (tabId: string) => string | null | undefined
-  getTerminalHandleForLeafKey: (leafKey: string) => string | undefined
-  isLeafPtyProvenAbsent: (ptyId: string) => Promise<boolean>
-  redriveMailbox: (mailboxHandle: string, reservedTypes?: ReadonlySet<string>) => void
-  writePty: (ptyId: string, data: string) => boolean | Promise<boolean>
-}
-
 export class OrchestrationMailboxPointerDelivery<TWaiter extends OrchestrationMessageWaiter> {
   private readonly state = new OrchestrationMailboxPointerState()
   constructor(private readonly deps: PointerDeliveryDependencies<TWaiter>) {}
-
   deliverForHandle(handle: string, reservedTypes?: ReadonlySet<string>): void {
     const terminalHandle = this.deps.deliveryTarget.resolveTerminalHandle(handle)
     if (!terminalHandle) {
@@ -50,11 +35,8 @@ export class OrchestrationMailboxPointerDelivery<TWaiter extends OrchestrationMe
       if (mailboxHandle) {
         this.deliver(leaf, { mailboxHandle, reservedTypes })
       }
-    } catch {
-      // Persisted mail remains available to explicit check or a later idle edge.
-    }
+    } catch {}
   }
-
   deliver(
     leaf: OrchestrationMailboxLeaf,
     options: {
@@ -63,12 +45,10 @@ export class OrchestrationMailboxPointerDelivery<TWaiter extends OrchestrationMe
       skipAbsenceProbe?: boolean
     }
   ): void {
+    const terminalHandle = this.deps.getTerminalHandleForLeaf(leaf)
     const db = this.deps.getDb()
     const mailboxHandle = options.mailboxHandle
-    if (!db || !mailboxHandle.startsWith('run:')) {
-      return
-    }
-    if (!this.deps.getTerminalHandleForLeafKey(this.leafKey(leaf))) {
+    if (!db || !mailboxHandle.startsWith('run:') || !terminalHandle) {
       return
     }
     if (db.hasOutstandingRunDelivery?.(mailboxHandle.slice('run:'.length))) {
@@ -79,10 +59,9 @@ export class OrchestrationMailboxPointerDelivery<TWaiter extends OrchestrationMe
       return
     }
     if (this.state.hasActiveWatermark(mailboxHandle)) {
-      this.parkRedelivery(mailboxHandle, options.reservedTypes)
+      this.state.parkRedelivery(mailboxHandle, options.reservedTypes)
       return
     }
-
     const waiters = this.deps.getMessageWaiters(mailboxHandle)
     if (hasUnfilteredOrchestrationWaiter(waiters)) {
       return
@@ -116,7 +95,7 @@ export class OrchestrationMailboxPointerDelivery<TWaiter extends OrchestrationMe
         mailboxHandle,
         newestSequence,
         leaf.ptyId,
-        this.leafKey(leaf)
+        this.deps.getLeafKey(leaf.tabId, leaf.leafId)
       )
     ) {
       return
@@ -132,32 +111,21 @@ export class OrchestrationMailboxPointerDelivery<TWaiter extends OrchestrationMe
     ) {
       return
     }
-    this.stagePointer(leaf, mailboxHandle, unread, newestSequence)
+    this.stagePointer(leaf, terminalHandle, mailboxHandle, unread, newestSequence)
   }
-
-  parkRedelivery(mailboxHandle: string, reservedTypes?: ReadonlySet<string>): void {
-    this.state.parkRedelivery(mailboxHandle, reservedTypes)
-  }
-
   retirePty(ptyId: string): void {
     const { flight, releasedMailboxes } = this.state.retirePty(ptyId)
-    if (flight?.enterTimer != null) {
-      clearTimeout(flight.enterTimer)
-    }
-    if (flight?.stagedMessageIds.length) {
-      this.deps.getDb()?.markAsUndelivered(flight.stagedMessageIds)
-    }
+    flight?.abortController.abort()
     for (const mailboxHandle of releasedMailboxes) {
       this.redrive(mailboxHandle, true)
     }
   }
-
   private redeliverAfterProbe(
     leaf: OrchestrationMailboxLeaf,
     ptyId: string,
     mailboxHandle: string
   ): void {
-    const currentLeaf = this.deps.getLeaf(this.leafKey(leaf))
+    const currentLeaf = this.deps.getLeaf(this.deps.getLeafKey(leaf.tabId, leaf.leafId))
     if (
       currentLeaf?.ptyId === ptyId &&
       currentLeaf.lastAgentStatus === 'idle' &&
@@ -166,9 +134,9 @@ export class OrchestrationMailboxPointerDelivery<TWaiter extends OrchestrationMe
       this.deliver(currentLeaf, { mailboxHandle, skipAbsenceProbe: true })
     }
   }
-
   private stagePointer(
     leaf: OrchestrationMailboxLeaf,
+    terminalHandle: string,
     mailboxHandle: string,
     unread: readonly { id: string; type: string; sequence: number }[],
     newestSequence: number
@@ -178,70 +146,58 @@ export class OrchestrationMailboxPointerDelivery<TWaiter extends OrchestrationMe
       return
     }
     const flight = this.state.beginFlight(ptyId)
-    const writeResult = this.deps.writePty(
-      ptyId,
-      formatMessagePointer(unread.length, mailboxHandle)
-    )
-    if (typeof writeResult === 'boolean') {
-      this.finishPointerWrite(
-        leaf,
-        mailboxHandle,
-        unread,
-        newestSequence,
-        ptyId,
-        flight,
-        writeResult
-      )
-      return
-    }
-    void writeResult
-      .then(
-        (accepted) =>
-          this.finishPointerWrite(
+    void this.deps
+      .sendPrompt(terminalHandle, formatMessagePointer(unread.length, mailboxHandle), {
+        signal: flight.abortController.signal,
+        beforeWrite: () =>
+          assertMailboxPointerDeliveryCurrent(
+            this.deps,
+            this.state,
+            leaf,
+            mailboxHandle,
+            unread,
+            ptyId,
+            flight
+          ),
+        beforeAttempt: () =>
+          this.stagePromptDeliveryAttempt(
             leaf,
             mailboxHandle,
             unread,
             newestSequence,
             ptyId,
-            flight,
-            accepted
-          ),
-        () =>
-          this.finishPointerWrite(leaf, mailboxHandle, unread, newestSequence, ptyId, flight, false)
+            flight
+          )
+      })
+      .then((outcome) =>
+        this.finishPromptDelivery(leaf, mailboxHandle, newestSequence, ptyId, flight, outcome)
+      )
+      .catch(() =>
+        this.finishPromptDelivery(leaf, mailboxHandle, newestSequence, ptyId, flight, 'rejected')
       )
       .catch(() => undefined)
   }
-
-  private finishPointerWrite(
+  private finishPromptDelivery(
     leaf: OrchestrationMailboxLeaf,
     mailboxHandle: string,
-    unread: readonly { id: string; type: string; sequence: number }[],
     newestSequence: number,
     ptyId: string,
     flight: OrchestrationMailboxDeliveryFlight,
-    accepted: boolean
+    outcome: 'delivered' | 'unknown' | 'rejected'
   ): void {
-    let delayedSettle = false
     try {
-      if (!accepted || !this.state.isCurrentFlight(ptyId, flight)) {
+      if (!flight.mutated || !this.state.isCurrentFlight(ptyId, flight)) {
         return
       }
-      const db = this.deps.getDb()
-      if (
-        !db ||
-        shouldReleaseOrchestrationPointer(
-          db,
-          mailboxHandle,
-          unread,
-          this.deps.getMessageWaiters(mailboxHandle)
-        )
-      ) {
-        return
+      const messageIds = flight.messageIds
+      if (outcome === 'delivered' && messageIds.length > 0) {
+        const db = this.deps.getDb()
+        if (db?.markAsDelivered && !flight.usedLegacyDeliveredTransition) {
+          markMailboxDeliveryDelivered(db, messageIds, flight.usedLegacyDeliveredTransition)
+        }
       }
-      flight.stagedMessageIds = unread.map((message) => message.id)
-      db.markAsDelivered(flight.stagedMessageIds)
-      this.state.setWatermark(mailboxHandle, newestSequence, ptyId, this.leafKey(leaf))
       if (
+        outcome === 'delivered' &&
         [leaf.lastOscTitle, leaf.paneTitle, this.deps.getTabTitle(leaf.tabId)].some(
           isCursorAgentTitle
         )
@@ -250,67 +206,95 @@ export class OrchestrationMailboxPointerDelivery<TWaiter extends OrchestrationMe
         this.redrive(mailboxHandle)
         return
       }
-      flight.enterTimer = setTimeout(
-        () =>
-          submitOrchestrationMailboxPointer(
-            {
-              mailboxOwner: this.deps.mailboxOwner,
-              state: this.state,
-              getDb: this.deps.getDb,
-              getLeaf: this.deps.getLeaf,
-              getLeafKey: this.deps.getLeafKey,
-              getMessageWaiters: this.deps.getMessageWaiters,
-              isLeafPtyProvenAbsent: this.deps.isLeafPtyProvenAbsent,
-              writePty: this.deps.writePty,
-              settle: (settledPtyId, settledFlight) => this.settle(settledPtyId, settledFlight),
-              redrive: (redriveMailbox, force) => this.redrive(redriveMailbox, force)
-            },
-            { leaf, mailboxHandle, messages: unread, newestSequence, ptyId, flight }
-          ),
-        500
-      )
-      delayedSettle = true
+      if (outcome !== 'delivered' && messageIds.length > 0) {
+        const db = this.deps.getDb()
+        if (outcome === 'rejected') {
+          db?.markAsUndelivered?.(messageIds)
+        } else {
+          ;(db?.markAsDeliveryUnknown ?? db?.markAsDelivered)?.call(db, messageIds)
+        }
+      }
+      const released =
+        outcome === 'unknown'
+          ? this.state.deactivateWatermark(mailboxHandle, newestSequence, ptyId)
+          : this.state.clearWatermark(mailboxHandle, newestSequence, ptyId)
+      if (released && outcome !== 'unknown') {
+        this.redrive(mailboxHandle)
+      }
     } finally {
-      if (!delayedSettle) {
-        this.settle(ptyId, flight)
+      this.settle(ptyId, flight)
+      if (flight.redriveMailbox) {
+        this.redrive(flight.redriveMailbox, true)
       }
     }
   }
-
+  private stagePromptDeliveryAttempt(
+    leaf: OrchestrationMailboxLeaf,
+    mailboxHandle: string,
+    unread: readonly { id: string; type: string; sequence: number }[],
+    newestSequence: number,
+    ptyId: string,
+    flight: OrchestrationMailboxDeliveryFlight
+  ): void {
+    const db = this.deps.getDb()
+    if (!db) {
+      throw new Error('orchestration_db_unavailable')
+    }
+    const stage = db.markAsDeliveryStaged ?? db.markAsDelivered
+    flight.usedLegacyDeliveredTransition = !db.markAsDeliveryStaged
+    stage.call(
+      db,
+      unread.map((message) => message.id)
+    )
+    flight.messageIds = unread.map((message) => message.id)
+    this.state.setWatermark(
+      mailboxHandle,
+      newestSequence,
+      ptyId,
+      this.deps.getLeafKey(leaf.tabId, leaf.leafId)
+    )
+    flight.mutated = true
+    if (!this.state.isCurrentFlight(ptyId, flight)) {
+      this.state.deactivateWatermark(mailboxHandle, newestSequence, ptyId)
+    }
+    assertMailboxPointerDeliveryCurrent(
+      this.deps,
+      this.state,
+      leaf,
+      mailboxHandle,
+      unread,
+      ptyId,
+      flight
+    )
+    if (
+      [leaf.lastOscTitle, leaf.paneTitle, this.deps.getTabTitle(leaf.tabId)].some(
+        isCursorAgentTitle
+      )
+    ) {
+      flight.abortController.abort()
+    }
+  }
   private settle(ptyId: string, flight: OrchestrationMailboxDeliveryFlight): void {
     const parked = this.state.settleFlight(ptyId, flight)
     if (!parked) {
       return
     }
     for (const [mailboxHandle, delivery] of parked) {
-      const currentLeaf = this.deps.getLeaf(this.leafKey(delivery.leaf))
+      const currentLeaf = this.deps.getLeaf(
+        this.deps.getLeafKey(delivery.leaf.tabId, delivery.leaf.leafId)
+      )
       if (
         currentLeaf?.ptyId !== ptyId ||
         this.deps.mailboxOwner.resolve(currentLeaf, mailboxHandle) !== mailboxHandle
       ) {
-        this.parkRedelivery(mailboxHandle, delivery.reservedTypes)
+        this.state.parkRedelivery(mailboxHandle, delivery.reservedTypes)
         this.redrive(mailboxHandle)
       } else {
         this.deliver(currentLeaf, { mailboxHandle, reservedTypes: delivery.reservedTypes })
       }
     }
   }
-
   private redrive(mailboxHandle: string, force = false): void {
-    const parkedTypes = this.state.takeRedelivery(mailboxHandle, force)
-    if (parkedTypes === undefined) {
-      return
-    }
-    queueMicrotask(() => {
-      try {
-        this.deps.redriveMailbox(mailboxHandle, parkedTypes ?? undefined)
-      } catch {
-        // Durable mail remains available to explicit check or a later idle edge.
-      }
-    })
-  }
-
-  private leafKey(leaf: OrchestrationMailboxLeaf): string {
-    return this.deps.getLeafKey(leaf.tabId, leaf.leafId)
+    redriveMailboxPointer(this.state, this.deps, mailboxHandle, force)
   }
 }

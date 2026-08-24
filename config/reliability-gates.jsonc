@@ -9739,14 +9739,15 @@
       "providers": ["local", "daemon", "ssh", "remote-runtime"],
       "coveredPlatforms": ["macos", "windows"],
       "coveredProviders": ["local"],
-      "coverageNotes": "Source-built macOS and physical Windows Electron journeys cover the public CLI through RPC, runtime identity, real PTY/ConPTY writes, and a delayed fake Codex composer. Focused units cover CLI intent, fresh Claude/Codex foreground identity, framing bytes, stale-agent shell fallback, and exact legacy behavior for every other configured agent. SSH, daemon, and remote-runtime remain explicit gaps.",
+      "coverageNotes": "Prior source-built macOS and physical Windows Electron journeys cover the public CLI through RPC, runtime identity, real PTY/ConPTY writes, and a delayed fake Codex composer. Current deterministic tests cover fresh OpenCode readiness, initial and pre-submit foreground authority, legacy inspection fallback, lifecycle-only acknowledgement, provider-boundary input arbitration, admitted-user paste closure, generation-neutral large renderer input, bounded query-reply deferral, startup and mailbox prompt ownership, queued retry exclusion, and local/federated unknown-outcome ownership. The legacy Electron fixture no longer identifies its fake foreground process and is an explicit harness gap; live SSH, daemon, and remote-runtime remain unproved.",
       "motivatingLinks": [
         "https://linear.app/stably/issue/STA-4328",
         "https://github.com/stablyai/orca/issues/14525"
       ],
-      "invariant": "A public CLI send containing non-empty text plus Enter and no interrupt identifies agent-prompt intent. The owning runtime uses bracketed-paste and settled submit only when a fresh foreground-process read positively identifies the exact target as Claude or Codex on a desktop call; every other agent, stale agent metadata over a shell, text-only input, bare Enter, interrupts, mobile input, query replies, and older clients keep the direct terminal contract.",
-      "oracle": "Launch a bare fake Codex through the real Electron PTY and delay its composer render for 1,200 ms, beyond the legacy generic 500 ms gap. Send a 557-byte prompt with the public CLI and require the marker, zero premature Enter, no rescue Enter, and one submission. POSIX child stdin must retain one bracketed-paste frame; Windows ConPTY consumes that control frame, so runtime tests require the frame at the PTY write boundary while the Windows child requires the exact prompt. The same harness against the installed pre-fix runtime must record one premature Enter and require one bare rescue Enter. Focused units require CLI intent only for text plus Enter, settlement only for freshly identified Claude/Codex, the legacy platform delay for every other configured agent, stale Codex launch identity over a shell to fall back, no wrapper polling, and byte-for-byte direct delivery for non-targets.",
+      "invariant": "A public CLI send containing non-empty text plus Enter and no interrupt identifies agent-prompt intent. The provider PTY-input owner grants one generation-aware prompt transaction across renderer, RPC/mobile, orchestration, startup, and internal writers. Admitted user input has priority: it safely closes an open prompt or automation paste, invalidates the unacknowledged prompt, and proceeds without declaring the provider unavailable; unversioned large renderer input cannot stale-invalidate the owner. Complete query replies are deferred only until the paste frame closes, with overflow preempting while preserving reply order. The runtime revalidates the foreground target before at most one Enter, and only fresh lifecycle evidence acknowledges delivery. Any unacknowledged post-byte failure is operation_unknown, and orchestration retains the exact terminal in start_unknown rather than transferring or retrying it.",
+      "oracle": "Withhold OpenCode readiness beyond the old 500 ms deadline, emit a stale pre-attempt marker and then one split fresh marker, and require zero premature Enter plus one lifecycle-acknowledged Enter. A swallowed Enter followed by autonomous redraw output must remain operation_unknown. Missing readiness emits no Enter but remains operation_unknown because paste bytes reached the composer. Current foreground identity must override stale launch metadata, a switch to shell before submit must emit no Enter, and unavailable legacy inspection must retain bounded metadata fallback. Manual input must close an open paste, cancel prompt authority, and proceed without WriteUnavailable recovery; query replies must be delivered after the paste frame. Partial-paste, post-paste, and post-Enter generation reset must remain unknown; an unknown attempt must prevent already-queued prompt delivery. Local and federated receipts persist operation_unknown as start_unknown, and the exact local terminal is not transferable.",
       "commands": [
+        "pnpm exec vitest run --config config/vitest.config.ts src/cli/handlers/terminal.test.ts src/main/pty-input-transaction.test.ts src/main/ipc/pty-write-ipc-validation.test.ts src/main/runtime/rpc/terminal-agent-prompt-send.test.ts src/main/runtime/rpc/terminal-send.test.ts src/main/runtime/rpc/terminal-multiplex-input-write-rejection.test.ts src/main/runtime/orca-runtime.test.ts src/main/runtime/agent-prompt-delivery-state-machine.test.ts src/main/runtime/agent-prompt-delivery-outcome.test.ts src/main/runtime/agent-prompt-submission-runtime.test.ts src/main/runtime/agent-prompt-submission-verification.test.ts src/main/runtime/terminal-send-stale-leaf-liveness.test.ts src/main/runtime/orchestration-mailbox-notification-consistency.test.ts src/main/runtime/orchestration-mailbox-transport-settlement.test.ts src/main/runtime/orchestration/mailbox-pointer-state.test.ts src/main/runtime/rpc/methods/orchestration-composed-workers.test.ts src/main/runtime/rpc/methods/orchestration-federation-start-receipt.test.ts src/shared/agent-prompt-injection.test.ts",
         "pnpm exec vitest run --config config/vitest.config.ts src/cli/handlers/terminal.test.ts src/main/runtime/rpc/terminal-agent-prompt-send.test.ts src/main/runtime/rpc/terminal-send.test.ts src/main/runtime/orca-runtime.test.ts src/shared/agent-prompt-injection.test.ts",
         "pnpm run build:cli && pnpm exec playwright test tests/e2e/terminal-send-agent-prompt-submit.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1",
         "pnpm.cmd exec playwright test tests/e2e/terminal-send-agent-prompt-submit.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1",
@@ -9757,6 +9758,19 @@
         "src/main/runtime/rpc/terminal-agent-prompt-send.test.ts",
         "src/main/runtime/rpc/terminal-send.test.ts",
         "src/main/runtime/orca-runtime.test.ts",
+        "src/main/pty-input-transaction.test.ts",
+        "src/main/ipc/pty-write-ipc-validation.test.ts",
+        "src/main/runtime/agent-prompt-delivery-state-machine.test.ts",
+        "src/main/runtime/agent-prompt-delivery-outcome.test.ts",
+        "src/main/runtime/agent-prompt-submission-runtime.test.ts",
+        "src/main/runtime/agent-prompt-submission-verification.test.ts",
+        "src/main/runtime/terminal-send-stale-leaf-liveness.test.ts",
+        "src/main/runtime/orchestration-mailbox-notification-consistency.test.ts",
+        "src/main/runtime/orchestration-mailbox-transport-settlement.test.ts",
+        "src/main/runtime/orchestration/mailbox-pointer-state.test.ts",
+        "src/main/runtime/rpc/terminal-multiplex-input-write-rejection.test.ts",
+        "src/main/runtime/rpc/methods/orchestration-composed-workers.test.ts",
+        "src/main/runtime/rpc/methods/orchestration-federation-start-receipt.test.ts",
         "src/shared/agent-prompt-injection.test.ts",
         "tests/e2e/terminal-send-agent-prompt-submit.spec.ts",
         "tests/tools/repro-terminal-send-submit.mjs"
@@ -9772,18 +9786,60 @@
         {
           "file": "src/main/runtime/rpc/terminal-agent-prompt-send.test.ts",
           "assertions": [
-            "a freshly proven Claude or Codex desktop target uses settled prompt delivery",
+            "a freshly proven Claude, Codex, or OpenCode desktop target uses settled prompt delivery",
             "a non-target agent or shell preserves the existing direct send"
           ]
         },
         {
           "file": "src/main/runtime/orca-runtime.test.ts",
           "assertions": [
-            "Claude and Codex wait for marker-gated composer quiescence before submit",
+            "Claude, Codex, and OpenCode wait for marker-gated composer quiescence before submit",
+            "OpenCode readiness timeout fails without Enter",
             "every other configured TUI agent retains the legacy platform delay",
             "a speculative CLI prompt check does not poll wrapper foregrounds",
             "the PTY write boundary retains bracketed framing and one delayed submit"
           ]
+        },
+        {
+          "file": "src/main/runtime/agent-prompt-delivery-state-machine.test.ts",
+          "assertions": [
+            "stale and split OpenCode markers cannot authorize a premature Enter",
+            "a swallowed Enter plus redraw remains operation_unknown",
+            "current foreground identity owns readiness policy",
+            "generation reset after partial paste, complete paste, or Enter remains operation_unknown",
+            "manual input cancels unacknowledged delivery while query replies remain outside the paste frame",
+            "foreground target changes before submit emit no Enter while unavailable legacy inspection retains fallback",
+            "an unknown attempt prevents already-queued automated prompt delivery"
+          ]
+        },
+        {
+          "file": "src/main/ipc/pty-write-ipc-validation.test.ts",
+          "assertions": [
+            "renderer input closes and cancels an unacknowledged prompt transaction without provider recovery",
+            "a large renderer write uses generation-neutral admission and closes the prompt before its first chunk",
+            "terminal query replies remain deliverable after the prompt paste frame"
+          ]
+        },
+        {
+          "file": "src/main/runtime/terminal-send-stale-leaf-liveness.test.ts",
+          "assertions": ["restored leaf-only OpenCode uses fresh readiness instead of fixed delay"]
+        },
+        {
+          "file": "src/main/runtime/agent-prompt-submission-verification.test.ts",
+          "assertions": [
+            "only a fresh lifecycle transition acknowledges submission",
+            "generation replacement and permission transitions fail closed"
+          ]
+        },
+        {
+          "file": "src/main/runtime/rpc/methods/orchestration-composed-workers.test.ts",
+          "assertions": [
+            "operation_unknown persists as start_unknown and blocks exact terminal transfer"
+          ]
+        },
+        {
+          "file": "src/main/runtime/rpc/methods/orchestration-federation-start-receipt.test.ts",
+          "assertions": ["remote operation_unknown persists as start_unknown"]
         },
         {
           "file": "tests/e2e/terminal-send-agent-prompt-submit.spec.ts",
@@ -9842,19 +9898,21 @@
       },
       "redGreenEvidence": {
         "status": "partial",
-        "evidence": "The fake-composer oracle was red against the installed pre-fix runtime with prematureEnters=1 and rescueSent=true. It also caught a source-built late-identity race with a complete paste frame but one premature Enter before the render gate began resolving foreground identity. The final candidate is green on macOS and Windows with prematureEnters=0 and rescueSent=false."
+        "evidence": "The exact deterministic state-machine test against origin/main ab3b1d07 is red at the old 500 ms boundary: OpenCode receives Enter before fresh readiness, and eight of nine candidate assertions fail. The provider-owner rework is locally green in focused tests, including transport-attempt ambiguity, post-byte ownership fencing, admitted-user paste closure, generation-neutral large renderer input, automation framing, and released open-paste retention; final full-gate and fix-disabled evidence is pending. Historical macOS/Windows Electron results apply to the earlier Claude/Codex gate, not this candidate."
       },
       "performanceBudget": {
         "required": true,
-        "evidence": "Only a CLI request with non-empty text plus Enter and no interrupt adds a bounded fresh foreground read and one non-retrying liveness check. Positively identified Claude and Codex reuse the O(prompt bytes) chunked prompt sender plus one PTY-local listener until post-marker quiescence or the bounded fallback. Every other agent and shell retains the existing direct-send path. Text-only, bare Enter, interrupt, mobile, renderer stream input, and query replies add no work."
+        "evidence": "Agent prompts remain O(prompt bytes), add two targeted foreground-process reads, one PTY-local readiness listener, bounded timers, and the existing 50 ms lifecycle verification poll. The provider arbiter uses O(1) per-PTY ownership lookup; compatible interactive writers share ownership, prompt delivery is exclusive, and query-reply deferral is capped at 64 entries and 4096 code units. Transactions, listeners, and timers are disposed on success, rejection, user preemption, cancellation, and generation replacement. No provider listing, subprocess, scan, or renderer polling is added."
       },
       "promotionCriteria": [
         "Collect live Codex and Claude CLI sends on representative slow systems.",
         "Retain mixed-version evidence that old hosts strip the optional intent and new hosts accept old clients without a protocol bump."
       ],
       "knownGaps": [
-        "Live SSH/daemon/remote-runtime evidence is not yet attached.",
-        "Only Claude and Codex opt into settlement; every other agent retains the legacy behavior until independently validated.",
+        "No live OpenCode, Windows ConPTY, Linux PTY, SSH, daemon, or remote-runtime journey has exercised this candidate.",
+        "Only Claude, Codex, and OpenCode opt into settlement; every other agent retains the legacy behavior until independently validated.",
+        "A local command that produces output without a lifecycle transition remains explicitly operation_unknown; PTY redraw output is insufficient proof of prompt consumption.",
+        "The current terminal-send Electron fixture is red before the product oracle because its fake agent no longer satisfies fresh foreground identity; current candidate evidence is deterministic runtime plus orchestration topology E2E.",
         "A new CLI talking to an old host safely loses the optional field and therefore keeps the old timing behavior until the host updates.",
         "The E2E fake agent models the submission race without requiring external agent authentication; live account-backed agents are covered separately."
       ],
@@ -9878,21 +9936,39 @@
       "providers": ["local", "daemon", "ssh", "remote-runtime"],
       "coveredPlatforms": ["macos"],
       "coveredProviders": ["local"],
-      "coverageNotes": "Local macOS evidence covers the runtime PTY write contract, live Codex orchestration, a dev-runtime CLI repro, and Claude and Codex composer traces. The render gate stays on the PTY-owning runtime, so paired and SSH callers use the same provider write/output path without a wire change. SSH, daemon, remote-runtime, Linux, and Windows live journeys remain gaps.",
+      "coverageNotes": "Local macOS evidence covers the provider-boundary PTY input transaction, runtime write contract, deterministic tracked and leaf-only OpenCode readiness, final foreground revalidation, strict acknowledgement, user/query arbitration, startup and mailbox prompt migration, queued retry exclusion, and local/federated unknown-outcome ownership. The state machine uses the existing operation_unknown/start_unknown contract without a wire change. Live SSH, daemon, remote-runtime, Linux, and Windows journeys remain gaps.",
       "motivatingLinks": [
         "https://github.com/stablyai/orca/issues/7226",
         "https://github.com/stablyai/orca/issues/13821",
-        "https://github.com/stablyai/orca/issues/14347"
+        "https://github.com/stablyai/orca/issues/14347",
+        "https://linear.app/stably/issue/STA-4495",
+        "https://linear.app/stably/issue/STA-5122",
+        "https://linear.app/stably/issue/STA-5150"
       ],
-      "invariant": "Injected orchestration task prompts for recognized agent CLIs must send the prompt body inside one bracketed-paste frame, sanitize embedded ESC bytes, preserve chunk boundaries without losing the frame, and submit exactly once only after the agent can accept Enter. Claude and Codex must emit a post-paste composer marker and then settle, or reach the bounded fallback first; every other agent retains the platform delay.",
-      "oracle": "Runtime tests assert the exact PTY write sequence, failure cleanup, Claude/Codex marker-gated multi-frame renders, and the legacy platform delay for every other configured agent. The candidate resets settlement on later frames, gives a late marker a fresh bounded window, and still submits once at the hard deadline if output never settles. Orchestration tests assert dispatch/coordinator use the agent prompt path; the live CLI harness covers long Codex-like framing.",
+      "invariant": "Injected orchestration prompts, startup follow-ups, and mailbox pointers use one exclusive PTY prompt transaction: one sanitized bracketed-paste frame, current-provider readiness, pre-submit foreground and ownership revalidation, at most one Enter, and strict lifecycle acknowledgement. Admitted user input safely preempts an unacknowledged prompt after closing its frame; internal automation cannot preempt it; query replies cannot splice into its paste frame. Once any prompt byte is attempted at the provider transport, every later outcome remains operation_unknown and cannot transfer or retry; pre-attempt ownership changes may still redrive. Local and federated worker starts retain the exact terminal in start_unknown. Mailbox delivery durably stages immediately before its first provider write, so persistence failure emits no input and any later rejection or timeout suppresses automatic replay. Provider transport publication is not execution-host receipt; no host acknowledgement or new wire contract is claimed.",
+      "oracle": "The deterministic OpenCode oracle withholds readiness beyond the old delay, ignores a stale marker, emits a split fresh marker, and requires zero premature Enter plus one lifecycle-acknowledged Enter. Independent negative signals require operation_unknown for missing readiness, swallowed Enter plus redraw, foreground change, user preemption, and generation reset after any prompt byte. Query replies are held until the paste frame closes, and a restored leaf-only session uses the same readiness policy. An unknown attempt cancels already-queued prompt authority. Local and federated receipts persist start_unknown; mailbox ownership/status changes prevent Enter, durable staging failure prevents the first provider write, and a rejected or timed-out attempted pointer is not replayed after restart or followed by newer automation.",
       "commands": [
+        "pnpm exec vitest run --config config/vitest.config.ts src/shared/agent-prompt-injection.test.ts src/main/pty-input-transaction.test.ts src/main/ipc/pty-write-ipc-validation.test.ts src/main/runtime/orca-runtime.test.ts src/main/runtime/agent-prompt-delivery-state-machine.test.ts src/main/runtime/agent-prompt-delivery-outcome.test.ts src/main/runtime/agent-prompt-submission-runtime.test.ts src/main/runtime/agent-prompt-submission-verification.test.ts src/main/runtime/terminal-send-stale-leaf-liveness.test.ts src/main/runtime/orchestration-mailbox-notification-consistency.test.ts src/main/runtime/orchestration-mailbox-transport-settlement.test.ts src/main/runtime/orchestration/mailbox-pointer-state.test.ts src/main/runtime/rpc/terminal-multiplex-input-write-rejection.test.ts src/main/runtime/rpc/methods/orchestration-composed-workers.test.ts src/main/runtime/rpc/methods/orchestration-federation-start-receipt.test.ts src/main/runtime/rpc/methods/orchestration-tasks-dispatch.test.ts src/main/runtime/orchestration/coordinator.test.ts",
         "pnpm exec vitest run --config config/vitest.config.ts src/shared/agent-prompt-injection.test.ts src/main/runtime/orca-runtime.test.ts src/main/runtime/rpc/methods/orchestration-tasks-dispatch.test.ts src/main/runtime/orchestration/coordinator.test.ts",
+        "pnpm exec vitest run --config config/vitest.config.ts src/cli/handlers/terminal.test.ts src/main/pty-input-transaction.test.ts src/main/ipc/pty-write-ipc-validation.test.ts src/main/runtime/rpc/terminal-agent-prompt-send.test.ts src/main/runtime/rpc/terminal-send.test.ts src/main/runtime/rpc/terminal-multiplex-input-write-rejection.test.ts src/main/runtime/orca-runtime.test.ts src/main/runtime/agent-prompt-delivery-state-machine.test.ts src/main/runtime/agent-prompt-delivery-outcome.test.ts src/main/runtime/agent-prompt-submission-runtime.test.ts src/main/runtime/agent-prompt-submission-verification.test.ts src/main/runtime/terminal-send-stale-leaf-liveness.test.ts src/main/runtime/orchestration-mailbox-notification-consistency.test.ts src/main/runtime/orchestration-mailbox-transport-settlement.test.ts src/main/runtime/orchestration/mailbox-pointer-state.test.ts src/main/runtime/rpc/methods/orchestration-composed-workers.test.ts src/main/runtime/rpc/methods/orchestration-federation-start-receipt.test.ts src/shared/agent-prompt-injection.test.ts",
         "node tests/tools/repro-orchestration-long-prompt.mjs --cli out/bin/orca-dev --mode codex-like --size-kb 32 --timeout-ms 20000"
       ],
       "testFiles": [
         "src/shared/agent-prompt-injection.test.ts",
         "src/main/runtime/orca-runtime.test.ts",
+        "src/main/pty-input-transaction.test.ts",
+        "src/main/ipc/pty-write-ipc-validation.test.ts",
+        "src/main/runtime/agent-prompt-delivery-state-machine.test.ts",
+        "src/main/runtime/agent-prompt-delivery-outcome.test.ts",
+        "src/main/runtime/agent-prompt-submission-runtime.test.ts",
+        "src/main/runtime/agent-prompt-submission-verification.test.ts",
+        "src/main/runtime/terminal-send-stale-leaf-liveness.test.ts",
+        "src/main/runtime/orchestration-mailbox-notification-consistency.test.ts",
+        "src/main/runtime/orchestration-mailbox-transport-settlement.test.ts",
+        "src/main/runtime/orchestration/mailbox-pointer-state.test.ts",
+        "src/main/runtime/rpc/terminal-multiplex-input-write-rejection.test.ts",
+        "src/main/runtime/rpc/methods/orchestration-composed-workers.test.ts",
+        "src/main/runtime/rpc/methods/orchestration-federation-start-receipt.test.ts",
         "src/main/runtime/rpc/methods/orchestration-tasks-dispatch.test.ts",
         "src/main/runtime/orchestration/coordinator.test.ts",
         "tests/tools/repro-orchestration-long-prompt.mjs"
@@ -9911,7 +9987,7 @@
           "file": "src/main/runtime/orca-runtime.test.ts",
           "assertions": [
             "runtime writes bracketed paste before a delayed submit",
-            "Claude and Codex ignore unrelated and split pre-marker output, then wait for render quiescence before one submit",
+            "Claude, Codex, and OpenCode ignore unrelated and split pre-marker output, then wait for render quiescence before one submit",
             "every other configured TUI agent retains the platform delay",
             "a late Codex marker receives a fresh settlement window before one submit",
             "a silent Claude composer reaches one bounded fallback submit",
@@ -9919,6 +9995,50 @@
             "large prompt frames are chunked and reconstructed before submit",
             "partial prompt write failure closes the paste frame and does not submit"
           ]
+        },
+        {
+          "file": "src/main/runtime/agent-prompt-delivery-state-machine.test.ts",
+          "assertions": [
+            "OpenCode emits no Enter at the old fixed deadline",
+            "one fresh split readiness marker authorizes one Enter",
+            "redraw output after a swallowed Enter remains unknown",
+            "current foreground policy overrides stale launch metadata",
+            "post-mutation generation replacement and pre-submit foreground changes remain unknown",
+            "manual input preempts safely and query replies cannot splice into paste",
+            "unknown delivery revokes queued automated prompt authority"
+          ]
+        },
+        {
+          "file": "src/main/pty-input-transaction.test.ts",
+          "assertions": [
+            "interactive input closes the paste, invalidates prompt authority, and proceeds",
+            "bounded query replies flush after paste and generation replacement fences stale tokens"
+          ]
+        },
+        {
+          "file": "src/main/ipc/pty-write-ipc-validation.test.ts",
+          "assertions": ["real renderer IPC and runtime writes share one input owner"]
+        },
+        {
+          "file": "src/main/runtime/orchestration-mailbox-transport-settlement.test.ts",
+          "assertions": [
+            "a mutated but lifecycle-unacknowledged mailbox prompt is not replayed after restart"
+          ]
+        },
+        {
+          "file": "src/main/runtime/agent-prompt-submission-verification.test.ts",
+          "assertions": [
+            "only lifecycle evidence acknowledges",
+            "permission and PTY-generation changes reject"
+          ]
+        },
+        {
+          "file": "src/main/runtime/rpc/methods/orchestration-composed-workers.test.ts",
+          "assertions": ["local ambiguous input retains terminal ownership and is not transferable"]
+        },
+        {
+          "file": "src/main/runtime/rpc/methods/orchestration-federation-start-receipt.test.ts",
+          "assertions": ["federated ambiguous input persists as start_unknown"]
         },
         {
           "file": "src/main/runtime/rpc/methods/orchestration-tasks-dispatch.test.ts",
@@ -9945,6 +10065,15 @@
         }
       ],
       "evidenceRuns": [
+        {
+          "date": "2026-08-23",
+          "runner": "local",
+          "platform": "macos",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/cli/handlers/terminal.test.ts src/main/pty-input-transaction.test.ts src/main/ipc/pty-write-ipc-validation.test.ts src/main/runtime/rpc/terminal-agent-prompt-send.test.ts src/main/runtime/rpc/terminal-send.test.ts src/main/runtime/rpc/terminal-multiplex-input-write-rejection.test.ts src/main/runtime/orca-runtime.test.ts src/main/runtime/agent-prompt-delivery-state-machine.test.ts src/main/runtime/agent-prompt-delivery-outcome.test.ts src/main/runtime/agent-prompt-submission-runtime.test.ts src/main/runtime/agent-prompt-submission-verification.test.ts src/main/runtime/terminal-send-stale-leaf-liveness.test.ts src/main/runtime/orchestration-mailbox-notification-consistency.test.ts src/main/runtime/orchestration-mailbox-transport-settlement.test.ts src/main/runtime/orchestration/mailbox-pointer-state.test.ts src/main/runtime/rpc/methods/orchestration-composed-workers.test.ts src/main/runtime/rpc/methods/orchestration-federation-start-receipt.test.ts src/shared/agent-prompt-injection.test.ts",
+          "result": "passed",
+          "durationSeconds": 15,
+          "summary": "Eighteen state-machine, PTY owner, IPC, runtime, RPC, orchestration, and mailbox files passed 1,393 tests with one skip. Durable pre-attempt staging, inactive unknown-watermark fencing, readiness, foreground revalidation, input arbitration, and local/federated unknown ownership all passed."
+        },
         {
           "date": "2026-08-14",
           "runner": "local",
@@ -10001,11 +10130,11 @@
       },
       "redGreenEvidence": {
         "status": "partial",
-        "evidence": "The original Claude-shaped oracle fails on unmodified main and passes with the render gate. The hardened multi-frame oracle then fails on the first-marker candidate, which submits at 751 ms during an intermediate frame, and passes when the gate requires post-marker quiescence. Codex used the legacy platform delay before this candidate; the late-marker oracle proves the original deadline would pre-empt slow-host settlement without re-arming. The earlier live harness also reproduced the unsafe raw multiline contract before its framing fix. Intentional-break evidence remains local rather than a separate CI job."
+        "evidence": "The exact OpenCode state-machine test fails on origin/main ab3b1d07 with Enter present at the old 500 ms deadline. The rebased provider-owner candidate is green in focused tests. Disabling readiness rejection or post-mutation operation_unknown wrapping makes the same oracle red; a final full candidate/fix-disabled run is pending. Earlier Claude/Codex framing and quiescence evidence remains historical context."
       },
       "performanceBudget": {
         "required": true,
-        "evidence": "Agent prompt dispatch remains O(prompt bytes) with existing 16KB chunking. Claude and Codex add one PTY-local output listener until 1.5 seconds of post-marker output quiescence or the bounded fallback; each later frame resets one quiet timer. Other agents retain the platform delay. No polling, provider listing, subprocess churn, hidden-pane wakeups, renderer work, or wire traffic is added."
+        "evidence": "Agent prompt dispatch remains O(prompt bytes) with existing 16KB chunking. Claude, Codex, and OpenCode add initial and pre-submit foreground reads plus one PTY-local listener until quiescence or the bounded readiness deadline; submission verification keeps the existing bounded lifecycle poll. The provider owner adds O(1) per-PTY lookup and bounds deferred query replies to 64 entries and 4096 code units without polling. All transactions, timers, and listeners are disposed on every settlement path. No provider listing, repeated subprocess, hidden-pane wakeup, renderer work, scan, or wire traffic is added."
       },
       "promotionCriteria": [
         "Run the live harness in soak with a self-starting dev runtime or provider-contract fixture.",
@@ -10015,6 +10144,8 @@
       "knownGaps": [
         "Live harness command currently expects an already-running dev runtime and generated out/bin/orca-dev wrapper.",
         "No Windows ConPTY, Linux PTY, SSH, daemon, or remote-runtime live evidence yet.",
+        "Local agent commands without lifecycle hooks remain outcome_unknown even when visible output suggests they ran; accepting redraw bytes would reintroduce silent false success.",
+        "The legacy terminal-send Electron fixture currently fails its fake foreground identity precondition and is not candidate evidence.",
         "Push-on-idle orchestration message banners remain outside this dispatch-prompt gate."
       ],
       "demotionRule": "Demote or quarantine if the live harness flakes without a product bug or harness bug filed to the terminal-input owner."
@@ -10033,7 +10164,7 @@
         "orchestration check and acknowledgment",
         "outstanding Run Deliveries",
         "runtime restart and durable pointer cursors",
-        "pointer transport settlement"
+        "pointer provider-attempt ambiguity"
       ],
       "platforms": ["macos", "linux", "windows"],
       "providers": ["local", "daemon", "ssh", "wsl", "remote-runtime"],
@@ -10046,7 +10177,7 @@
         "internal incident evidence: improve-vps-setup, 2026-08-10"
       ],
       "invariant": "Each message has one stable row ID and authoritative recipient; coordinator-addressed current-delivery inserts are atomically owned by run:<id>. Pointer staging may set delivered_at but never consumes mail. Each Run consumer generation has at most one outstanding Delivery with a fixed ID and fixed message IDs; ordinary checks replay it until an explicit matching acknowledgment marks exactly those rows read. Rebinding fences the old generation, notification types/counts correspond to unread rows retrievable under the same authority, and federation replay imports each stable message identity once without re-waking an already-read duplicate.",
-      "oracle": "Seed status, dispatch, and worker_done rows across direct-handle and canonical Run recipients in an isolated DB. Compare pointer count, RPC and built-CLI check output, direct SQLite rows, unread/peek/all/type filters, concurrent pollers, fixed Delivery IDs, explicit acknowledgment, restart, filtered check --wait, and coordinator remint. Route a 125-row old-handle backlog, inject a commit without notification, and require startup repair. Exercise duplicate Run/Dispatch owners, stale panes, 50-row pages, cancellation, lifecycle fencing, and absent PTYs. Drop a federation ACK, reconnect/restart v1/v2 peers, and require stable import plus no duplicate read-row wake. Hold a healthy SSH write past five seconds but below the 60-second settlement deadline, then separately exceed the bound and require retryable undelivered state.",
+      "oracle": "Seed status, dispatch, and worker_done rows across direct-handle and canonical Run recipients in an isolated DB. Compare pointer count, RPC and built-CLI check output, direct SQLite rows, unread/peek/all/type filters, concurrent pollers, fixed Delivery IDs, explicit acknowledgment, restart, filtered check --wait, and coordinator remint. Route a 125-row old-handle backlog, inject a commit without notification, and require startup repair. Exercise duplicate Run/Dispatch owners, stale panes, 50-row pages, cancellation, lifecycle fencing, and absent PTYs. Drop a federation ACK, reconnect/restart v1/v2 peers, and require stable import plus no duplicate read-row wake. Durably stage before the first provider write, fail closed before input if persistence fails, and treat SSH/daemon settlement timeout or rejection as delivery-unknown with no automated replay.",
       "commands": [
         "pnpm run build:cli && pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/orchestration-message-delivery-identity.test.ts --reporter=dot --testTimeout=5000",
         "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/orchestration-mailbox-routing-races.test.ts src/main/runtime/orchestration-mailbox-notification-consistency.test.ts src/main/runtime/orchestration-mailbox-detached-routing.test.ts src/main/runtime/orchestration-mailbox-transport-settlement.test.ts src/main/runtime/orchestration/run-coordinator-handle-migration.test.ts src/main/runtime/orchestration/orchestration-run-delivery-db.test.ts src/main/runtime/orchestration/orchestration-worker-dispatch-db.test.ts src/main/runtime/orchestration/formatter.test.ts src/main/providers/ssh-pty-provider.test.ts src/main/providers/ssh-pty-write.test.ts src/main/daemon/client.test.ts src/main/daemon/daemon-pty-router.test.ts src/main/daemon/degraded-daemon-pty-provider.test.ts",
@@ -10104,7 +10235,7 @@
             "an explicit check releases its staged pointer reservation without redrive",
             "accepted pointer text is durably deduplicated before delayed Enter and provider Enter refusal",
             "a known PTY exit releases staged rows for the replacement process",
-            "a staged pointer follows its Run to a new live pane without cross-PTY duplication",
+            "a pre-mutation staged pointer may follow its Run to a new live pane without cross-PTY duplication",
             "equivalent panes serialize one mailbox while newer mail arrives during Enter delay",
             "same-Run direct mail is delivered and acknowledged through the bound Run",
             "a submitted actionable pointer is durably deduplicated across restart without marking mail read",
@@ -10155,7 +10286,8 @@
         {
           "file": "src/main/runtime/orchestration-mailbox-transport-settlement.test.ts",
           "assertions": [
-            "a rejected pointer transport stays undelivered and becomes restart-retryable"
+            "a provider transport attempt is durably ambiguous before input and cannot replay after rejection or timeout",
+            "durable staging failure prevents the first provider write"
           ]
         },
         {
@@ -10186,6 +10318,15 @@
         }
       ],
       "evidenceRuns": [
+        {
+          "date": "2026-08-23",
+          "runner": "local",
+          "platform": "macos",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/orchestration-mailbox-routing-races.test.ts src/main/runtime/orchestration-mailbox-notification-consistency.test.ts src/main/runtime/orchestration-mailbox-detached-routing.test.ts src/main/runtime/orchestration-mailbox-transport-settlement.test.ts src/main/runtime/orchestration/run-coordinator-handle-migration.test.ts src/main/runtime/orchestration/orchestration-run-delivery-db.test.ts src/main/runtime/orchestration/orchestration-worker-dispatch-db.test.ts src/main/runtime/orchestration/formatter.test.ts src/main/providers/ssh-pty-provider.test.ts src/main/providers/ssh-pty-write.test.ts src/main/daemon/client.test.ts src/main/daemon/daemon-pty-router.test.ts src/main/daemon/degraded-daemon-pty-provider.test.ts",
+          "result": "passed",
+          "durationSeconds": 5.72,
+          "summary": "Thirteen mailbox, database, daemon, and SSH files passed 225 tests. Provider rejection/timeout remains conservatively ambiguous after durable staging, while staging failure prevents the first write."
+        },
         {
           "date": "2026-08-13",
           "runner": "local",

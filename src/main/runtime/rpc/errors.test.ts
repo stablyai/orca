@@ -5,6 +5,7 @@ import {
   ARTIFACT_SHARING_DISABLED_MESSAGE,
   ArtifactSharingDisabledError
 } from '../../../shared/artifact-sharing-gate'
+import { AgentPromptDeliveryUnknownError } from '../agent-prompt-delivery-outcome'
 
 class LineageError extends Error {
   code = 'LINEAGE_PARENT_NOT_FOUND'
@@ -45,15 +46,33 @@ describe('mapRuntimeError', () => {
     }
   )
 
-  it.each(['agent_prompt_blocked', 'agent_prompt_stalled', 'request_aborted'])(
-    'preserves the agent prompt failure %s',
-    (code) => {
-      expect(mapRuntimeError('req_1', { runtimeId: 'runtime-1' }, new Error(code))).toMatchObject({
-        ok: false,
-        error: { code, message: code }
-      })
-    }
-  )
+  it.each([
+    'agent_prompt_blocked',
+    'agent_prompt_stalled',
+    'terminal_input_busy',
+    'request_aborted'
+  ])('preserves the agent prompt failure %s', (code) => {
+    expect(mapRuntimeError('req_1', { runtimeId: 'runtime-1' }, new Error(code))).toMatchObject({
+      ok: false,
+      error: { code, message: code }
+    })
+  })
+
+  it('preserves agent prompt outcome uncertainty across RPC', () => {
+    expect(
+      mapRuntimeError(
+        'req_1',
+        { runtimeId: 'runtime-1' },
+        new AgentPromptDeliveryUnknownError('agent_prompt_not_ready')
+      )
+    ).toMatchObject({
+      ok: false,
+      error: {
+        code: 'operation_unknown',
+        data: { operation: 'agent_prompt_delivery', reason: 'agent_prompt_not_ready' }
+      }
+    })
+  })
 
   it.each([
     'remote_update_manual_required',

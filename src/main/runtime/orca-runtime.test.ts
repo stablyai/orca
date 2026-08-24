@@ -974,6 +974,24 @@ function syncSinglePty(
   })
 }
 
+async function flushAgentPromptStart(): Promise<void> {
+  for (let turn = 0; turn < 20; turn += 1) {
+    await Promise.resolve()
+  }
+}
+
+function makePromptAwareWrite(runtime: OrcaRuntimeService) {
+  return vi.fn((ptyId: string, data: string) => {
+    if (data.includes('\x1b[201~')) {
+      runtime.onPtyData(ptyId, '\x1b[?25h', Date.now())
+    }
+    if (data === '\r') {
+      runtime.onPtyData(ptyId, '\x1b]0;Codex working\x07', Date.now())
+    }
+    return true
+  })
+}
+
 function makeDeferred(): { promise: Promise<void>; resolve: () => void } {
   let resolve!: () => void
   const promise = new Promise<void>((next) => {
@@ -16943,7 +16961,7 @@ describe('OrcaRuntimeService', () => {
     }
   })
 
-  it.each(['claude', 'codex'] as const)(
+  it.each(['claude', 'codex', 'opencode'] as const)(
     'waits for %s composer output frames to settle before one submit',
     async (agent) => {
       vi.useFakeTimers()
@@ -17019,7 +17037,7 @@ describe('OrcaRuntimeService', () => {
 
   it.each(
     (Object.keys(TUI_AGENT_CONFIG) as TuiAgent[]).filter(
-      (agent) => agent !== 'claude' && agent !== 'codex'
+      (agent) => agent !== 'claude' && agent !== 'codex' && agent !== 'opencode'
     )
   )('preserves the legacy fixed submit delay for %s', async (agent) => {
     vi.useFakeTimers()
@@ -20060,7 +20078,7 @@ describe('OrcaRuntimeService', () => {
     try {
       const runtime = new OrcaRuntimeService(store)
       const db = new InMemoryOrchestrationMessages()
-      const write = vi.fn().mockReturnValue(true)
+      const write = makePromptAwareWrite(runtime)
       setInMemoryOrchestrationMessages(runtime, db)
       runtime.setPtyController({
         write,
@@ -20077,12 +20095,13 @@ describe('OrcaRuntimeService', () => {
       db.insertMessage({ from: 'term_sender', to: terminal.handle, subject: 'hello' })
 
       runtime.deliverPendingMessagesForHandle(terminal.handle)
+      await flushAgentPromptStart()
 
       expect(write).toHaveBeenCalledWith(
         'pty-1',
         expect.stringContaining('You have 1 orchestration message')
       )
-      await vi.advanceTimersByTimeAsync(500)
+      await vi.advanceTimersByTimeAsync(1_500)
       expect(write).toHaveBeenCalledWith('pty-1', '\r')
 
       const unread = db.getUnreadMessages(mailbox)
@@ -20100,7 +20119,7 @@ describe('OrcaRuntimeService', () => {
     try {
       const runtime = new OrcaRuntimeService(store)
       const db = new InMemoryOrchestrationMessages()
-      const write = vi.fn().mockReturnValue(true)
+      const write = makePromptAwareWrite(runtime)
       setInMemoryOrchestrationMessages(runtime, db)
       runtime.setPtyController({
         write,
@@ -20121,12 +20140,13 @@ describe('OrcaRuntimeService', () => {
       })
 
       runtime.deliverPendingMessagesForHandle(terminal.handle)
+      await flushAgentPromptStart()
 
       expect(write).toHaveBeenCalledWith(
         'pty-1',
         expect.stringContaining('You have 1 orchestration message')
       )
-      await vi.advanceTimersByTimeAsync(500)
+      await vi.advanceTimersByTimeAsync(1_500)
       const submitWrites = write.mock.calls.filter(
         ([ptyId, text]) => ptyId === 'pty-1' && text === '\r'
       )
@@ -20147,7 +20167,7 @@ describe('OrcaRuntimeService', () => {
     try {
       const runtime = new OrcaRuntimeService(store)
       const db = new InMemoryOrchestrationMessages()
-      const write = vi.fn().mockReturnValue(true)
+      const write = makePromptAwareWrite(runtime)
       setInMemoryOrchestrationMessages(runtime, db)
       runtime.setPtyController({
         write,
@@ -20163,6 +20183,7 @@ describe('OrcaRuntimeService', () => {
       db.insertMessage({ from: 'term_sender', to: terminal.handle, subject: 'hello cursor' })
 
       runtime.deliverPendingMessagesForHandle(terminal.handle)
+      await flushAgentPromptStart()
 
       expect(write).toHaveBeenCalledWith(
         'pty-1',
@@ -20189,7 +20210,7 @@ describe('OrcaRuntimeService', () => {
     try {
       const runtime = new OrcaRuntimeService(store)
       const db = new InMemoryOrchestrationMessages()
-      const write = vi.fn().mockReturnValue(true)
+      const write = makePromptAwareWrite(runtime)
       setInMemoryOrchestrationMessages(runtime, db)
       runtime.setPtyController({
         write,
@@ -24393,7 +24414,7 @@ describe('OrcaRuntimeService', () => {
     expect(getForegroundProcess).toHaveBeenCalledTimes(1)
   })
 
-  it.each(['claude', 'codex'] as const)(
+  it.each(['claude', 'codex', 'opencode'] as const)(
     'authorizes settled CLI prompts only after positive %s foreground identity',
     async (agent) => {
       const runtime = new OrcaRuntimeService(store)
@@ -35467,7 +35488,7 @@ describe('OrcaRuntimeService', () => {
     try {
       const runtime = new OrcaRuntimeService(store)
       const db = new InMemoryOrchestrationMessages()
-      const write = vi.fn().mockReturnValue(true)
+      const write = makePromptAwareWrite(runtime)
       setInMemoryOrchestrationMessages(runtime, db)
       runtime.setPtyController({
         write,
@@ -35492,13 +35513,13 @@ describe('OrcaRuntimeService', () => {
       runtime.notifyMessageArrived(terminal.handle, 'status')
 
       // The push is deferred one microtask so it lands behind any resolved check.
-      await Promise.resolve()
+      await flushAgentPromptStart()
       expect(write).toHaveBeenCalledWith(
         'pty-1',
         expect.stringContaining('You have 1 orchestration message')
       )
       expect(write).not.toHaveBeenCalledWith('pty-1', expect.stringContaining('after wait'))
-      await vi.advanceTimersByTimeAsync(500)
+      await vi.advanceTimersByTimeAsync(1_500)
       expect(write).toHaveBeenCalledWith('pty-1', '\r')
       expect(message.delivered_at).toEqual(expect.any(String))
       db.close()
@@ -35512,7 +35533,7 @@ describe('OrcaRuntimeService', () => {
     try {
       const runtime = new OrcaRuntimeService(store)
       const db = new InMemoryOrchestrationMessages()
-      const write = vi.fn().mockReturnValue(true)
+      const write = makePromptAwareWrite(runtime)
       setInMemoryOrchestrationMessages(runtime, db)
       runtime.setPtyController({
         write,
@@ -35541,15 +35562,18 @@ describe('OrcaRuntimeService', () => {
       expect(write).not.toHaveBeenCalled()
 
       runtime.onPtyData('pty-1', '\x1b]0;Codex done\x07', 101)
+      await flushAgentPromptStart()
       expect(write).toHaveBeenCalledWith(
         'pty-1',
-        '\nYou have 1 orchestration message. Run `orca orchestration check --run run_mailbox`.\n'
+        expect.stringContaining(
+          'You have 1 orchestration message. Run `orca orchestration check --run run_mailbox`.'
+        )
       )
       expect(write).not.toHaveBeenCalledWith(
         'pty-1',
         expect.stringContaining('private worker report')
       )
-      await vi.advanceTimersByTimeAsync(500)
+      await vi.advanceTimersByTimeAsync(1_500)
       expect(write).toHaveBeenCalledWith('pty-1', '\r')
       expect(message.delivered_at).toEqual(expect.any(String))
 
@@ -35573,7 +35597,7 @@ describe('OrcaRuntimeService', () => {
     try {
       const runtime = new OrcaRuntimeService(store)
       const db = new InMemoryOrchestrationMessages()
-      const write = vi.fn().mockReturnValue(true)
+      const write = makePromptAwareWrite(runtime)
       setInMemoryOrchestrationMessages(runtime, db)
       runtime.setPtyController({
         write,
@@ -35614,7 +35638,7 @@ describe('OrcaRuntimeService', () => {
         type: 'status'
       })
       runtime.deliverPendingMessagesForHandle('run:run_stale_waiter', new Set(['worker_done']))
-      await vi.advanceTimersByTimeAsync(500)
+      await flushAgentPromptStart()
 
       const pointers = () =>
         write.mock.calls.filter(
@@ -35625,6 +35649,8 @@ describe('OrcaRuntimeService', () => {
       expect(pointers()[0]?.[1]).toContain('You have 1 orchestration message')
 
       await vi.advanceTimersByTimeAsync(1_500)
+      runtime.onPtyData('pty-1', '\x1b]0;Codex done\x07', 102)
+      await flushAgentPromptStart()
       expect(pointers()).toHaveLength(2)
       expect(pointers()[1]?.[1]).toContain('You have 1 orchestration message')
       db.close()
@@ -35716,6 +35742,7 @@ describe('OrcaRuntimeService', () => {
 
       runtime.onPtyData('pty-1', '\x1b]0;Codex done\x07', 101)
       expect(pendingReads).toHaveBeenCalledTimes(1)
+      await flushAgentPromptStart()
       expect(write).toHaveBeenCalledWith(
         'pty-1',
         expect.stringContaining('You have 1 orchestration message')
@@ -35756,6 +35783,7 @@ describe('OrcaRuntimeService', () => {
       expect(write).not.toHaveBeenCalled()
 
       syncSinglePty(runtime)
+      await flushAgentPromptStart()
       expect(write).toHaveBeenCalledWith(
         'pty-1',
         expect.stringContaining('You have 1 orchestration message')
@@ -35771,7 +35799,7 @@ describe('OrcaRuntimeService', () => {
     try {
       const runtime = new OrcaRuntimeService(store)
       const db = new InMemoryOrchestrationMessages()
-      const write = vi.fn().mockReturnValue(true)
+      const write = makePromptAwareWrite(runtime)
       setInMemoryOrchestrationMessages(runtime, db)
       runtime.setPtyController({
         write,
@@ -35908,7 +35936,9 @@ describe('OrcaRuntimeService', () => {
     await vi.waitFor(() => {
       expect(write).toHaveBeenCalledWith(
         'pty-1',
-        '\nYou have 1 orchestration message. Run `orca orchestration check --run run_codex_native_title`.\n'
+        expect.stringContaining(
+          'You have 1 orchestration message. Run `orca orchestration check --run run_codex_native_title`.'
+        )
       )
     })
     db.close()
@@ -35976,6 +36006,7 @@ describe('OrcaRuntimeService', () => {
       // already-idle title first. The seed left lastAgentStatus 'idle', so there
       // is no transition — only the liveness edge can release the row (#12536).
       runtime.onPtyData('pty-1', '\x1b]0;Codex done\x07', 100)
+      await flushAgentPromptStart()
 
       expect(write).toHaveBeenCalledWith(
         'pty-1',
@@ -36025,6 +36056,7 @@ describe('OrcaRuntimeService', () => {
       // The first live idle frame authorizes it and the row still delivers.
       runtime.onPtyData('pty-1', '\x1b]0;Codex working\x07', 100)
       runtime.onPtyData('pty-1', '\x1b]0;Codex done\x07', 101)
+      await flushAgentPromptStart()
       expect(write).toHaveBeenCalledWith(
         'pty-1',
         expect.stringContaining('You have 1 orchestration message')
@@ -36134,9 +36166,9 @@ describe('OrcaRuntimeService', () => {
       const payloads = write.mock.calls
         .map(([, data]) => data)
         .filter((data): data is string => typeof data === 'string')
-      expect(payloads).toContain(
-        '\nYou have 1 orchestration message. Run `orca orchestration check --run run_test`.\n'
-      )
+      expect(
+        payloads.some((data) => data.includes('orca orchestration check --run run_test'))
+      ).toBe(true)
       expect(payloads.some((data) => data.includes('reserved completion'))).toBe(false)
       expect(status.delivered_at).toEqual(expect.any(String))
       expect(done.delivered_at).toBeNull()
@@ -36272,6 +36304,8 @@ describe('OrcaRuntimeService', () => {
       })
       runtime.notifyMessageArrived(republished.handle, 'status')
       await Promise.resolve()
+      await flushAgentPromptStart()
+      await flushAgentPromptStart()
 
       expect(write).not.toHaveBeenCalled()
       await vi.advanceTimersByTimeAsync(600)
@@ -36287,7 +36321,7 @@ describe('OrcaRuntimeService', () => {
     try {
       const runtime = new OrcaRuntimeService(store)
       const db = new InMemoryOrchestrationMessages()
-      const write = vi.fn().mockReturnValue(true)
+      const write = makePromptAwareWrite(runtime)
       setInMemoryOrchestrationMessages(runtime, db)
       runtime.setPtyController({
         write,
@@ -36317,6 +36351,7 @@ describe('OrcaRuntimeService', () => {
 
       runtime.notifyMessageArrived(republished.handle, 'status')
       await Promise.resolve()
+      await flushAgentPromptStart()
 
       expect(write).toHaveBeenCalledWith(
         'pty-1',
@@ -36373,6 +36408,7 @@ describe('OrcaRuntimeService', () => {
       // working frame, since exit keeps lastAgentStatus 'idle' for `ps` and the
       // replacement can come up straight at an idle prompt (no transition).
       runtime.onPtyData('pty-1', '\x1b]0;Codex done\x07', 200)
+      await flushAgentPromptStart()
       expect(write).toHaveBeenCalledWith(
         'pty-1',
         expect.stringContaining('You have 1 orchestration message')
@@ -36423,6 +36459,7 @@ describe('OrcaRuntimeService', () => {
       runtime.notifyMessageArrived(terminal.handle, 'status')
 
       await Promise.resolve()
+      await flushAgentPromptStart()
       expect(write).toHaveBeenCalledWith(
         'pty-1',
         expect.stringContaining('You have 1 orchestration message')
@@ -36502,6 +36539,7 @@ describe('OrcaRuntimeService', () => {
 
       runtime.notifyMessageArrived(terminal.handle, 'status')
       await Promise.resolve()
+      await flushAgentPromptStart()
       runtime.notifyMessageArrived(terminal.handle, 'status')
       await Promise.resolve()
 
@@ -36532,7 +36570,7 @@ describe('OrcaRuntimeService', () => {
     try {
       const runtime = new OrcaRuntimeService(store)
       const db = new InMemoryOrchestrationMessages()
-      const write = vi.fn().mockReturnValue(true)
+      const write = makePromptAwareWrite(runtime)
       setInMemoryOrchestrationMessages(runtime, db)
       runtime.setPtyController({
         write,
@@ -36550,7 +36588,7 @@ describe('OrcaRuntimeService', () => {
       runtime.notifyMessageArrived(terminal.handle, 'status')
       // Why the flush: the deferred push must actually arm its flight before the
       // second message arrives, or this exercises a plain batch instead.
-      await Promise.resolve()
+      await flushAgentPromptStart()
 
       // Why: mid-flight notify parks the leaf; flight settle re-runs delivery
       // so the second row is not lost and is not double-injected with the first.
@@ -36565,12 +36603,13 @@ describe('OrcaRuntimeService', () => {
       ).toHaveLength(1)
       expect(second.delivered_at).toBeNull()
 
-      // Why: release must not require another agent-status OSC — only the
-      // delayed-Enter flight timer. Advancing 3s with no status output covers
-      // timer-only settle (CodeRabbit settling-timeout gap, #12584).
-      await vi.advanceTimersByTimeAsync(3_000)
+      await vi.advanceTimersByTimeAsync(1_500)
       expect(write).toHaveBeenCalledWith('pty-1', '\r')
       expect(first.delivered_at).toEqual(expect.any(String))
+      expect(second.delivered_at).toBeNull()
+
+      runtime.onPtyData('pty-1', '\x1b]0;Codex done\x07', 102)
+      await flushAgentPromptStart()
       expect(
         write.mock.calls.filter(
           ([, payload]) =>
@@ -36581,6 +36620,7 @@ describe('OrcaRuntimeService', () => {
         'pty-1',
         expect.stringContaining('You have 1 orchestration message')
       )
+      await vi.advanceTimersByTimeAsync(1_500)
       expect(second.delivered_at).toEqual(expect.any(String))
       db.close()
     } finally {
@@ -36608,6 +36648,7 @@ describe('OrcaRuntimeService', () => {
     db.insertMessage({ from: 'sender', to: terminal.handle, subject: 'after wait' })
 
     runtime.deliverPendingMessagesForHandle(terminal.handle)
+    await flushAgentPromptStart()
 
     expect(write).toHaveBeenCalledWith(
       'pty-1',
@@ -45351,9 +45392,9 @@ describe('OrcaRuntimeService', () => {
 
     runtime.onPtyData('pty-startup-draft', '›', Date.now())
     await Promise.resolve()
-    await Promise.resolve()
-
-    expect(write).toHaveBeenCalledWith('pty-startup-draft', `\x1b[200~${draftUrl}\x1b[201~`)
+    await vi.waitFor(() => {
+      expect(write).toHaveBeenCalledWith('pty-startup-draft', `\x1b[200~${draftUrl}\x1b[201~`)
+    })
   })
 
   it('keeps the 8s main-runtime startup readiness budget for non-Codex agents', async () => {
@@ -45538,7 +45579,16 @@ describe('OrcaRuntimeService', () => {
     }
     const runtime = new OrcaRuntimeService(runtimeStore as never)
     const spawn = vi.fn().mockResolvedValue({ id: 'pty-cli-aider-startup' })
-    const write = vi.fn().mockReturnValue(true)
+    const write = vi.fn((ptyId: string, data: string) => {
+      if (data === '\r') {
+        runtime.onPtyData(
+          ptyId,
+          '\x1b]9999;{"state":"working","agentType":"aider"}\x07',
+          Date.now()
+        )
+      }
+      return true
+    })
     runtime.setPtyController({
       spawn,
       write,
@@ -45588,7 +45638,10 @@ describe('OrcaRuntimeService', () => {
       })
     )
     await vi.waitFor(() => {
-      expect(write).toHaveBeenCalledWith('pty-cli-aider-startup', 'fix it\r')
+      expect(write.mock.calls).toEqual([
+        ['pty-cli-aider-startup', '\x1b[200~fix it\x1b[201~'],
+        ['pty-cli-aider-startup', '\r']
+      ])
     })
   })
 

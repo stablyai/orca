@@ -96,7 +96,7 @@ export function getUndeliveredUnreadMessages(
   const conditions = [
     'to_handle = ?',
     'read = 0',
-    'delivered_at IS NULL',
+    "COALESCE(delivery_state, CASE WHEN delivered_at IS NULL THEN 'none' ELSE 'delivered' END) = 'none'",
     "delivery_contract = 'current_delivery'"
   ]
   const params: (string | number)[] = [toHandle]
@@ -128,7 +128,7 @@ export function getUndeliveredUnreadMailboxHandles(this: OrchestrationDb): strin
     this.db
       .prepare(
         `SELECT DISTINCT to_handle FROM messages
-         WHERE read = 0 AND delivered_at IS NULL
+         WHERE read = 0 AND COALESCE(delivery_state, CASE WHEN delivered_at IS NULL THEN 'none' ELSE 'delivered' END) = 'none'
            AND delivery_contract = 'current_delivery'`
       )
       .all() as { to_handle: string }[]
@@ -164,7 +164,7 @@ export function markAsDelivered(this: OrchestrationDb, ids: string[]): void {
     this,
     ids,
     (placeholders) =>
-      `UPDATE messages SET delivered_at = datetime('now') WHERE id IN (${placeholders})`
+      `UPDATE messages SET delivered_at = COALESCE(delivered_at, datetime('now')), delivery_state = 'delivered' WHERE id IN (${placeholders})`
   )
 }
 
@@ -173,8 +173,26 @@ export function markAsUndelivered(this: OrchestrationDb, ids: string[]): void {
     this,
     ids,
     (placeholders) =>
-      `UPDATE messages SET delivered_at = NULL
+      `UPDATE messages SET delivered_at = NULL, delivery_state = 'none'
        WHERE read = 0 AND id IN (${placeholders})`
+  )
+}
+
+export function markAsDeliveryStaged(this: OrchestrationDb, ids: string[]): void {
+  runBatchedMessageMutation(
+    this,
+    ids,
+    (placeholders) =>
+      `UPDATE messages SET delivered_at = COALESCE(delivered_at, datetime('now')), delivery_state = 'staged' WHERE read = 0 AND id IN (${placeholders})`
+  )
+}
+
+export function markAsDeliveryUnknown(this: OrchestrationDb, ids: string[]): void {
+  runBatchedMessageMutation(
+    this,
+    ids,
+    (placeholders) =>
+      `UPDATE messages SET delivered_at = COALESCE(delivered_at, datetime('now')), delivery_state = 'unknown' WHERE read = 0 AND id IN (${placeholders})`
   )
 }
 
@@ -201,7 +219,7 @@ export function markAsReadAndDelivered(this: OrchestrationDb, ids: string[]): vo
     this,
     ids,
     (placeholders) =>
-      `UPDATE messages SET read = 1, delivered_at = COALESCE(delivered_at, datetime('now')) WHERE id IN (${placeholders})`
+      `UPDATE messages SET read = 1, delivered_at = COALESCE(delivered_at, datetime('now')), delivery_state = 'delivered' WHERE id IN (${placeholders})`
   )
 }
 
@@ -270,6 +288,8 @@ export type MessageInboxMethods = {
   markAsRead: typeof markAsRead
   markAsDelivered: typeof markAsDelivered
   markAsUndelivered: typeof markAsUndelivered
+  markAsDeliveryStaged: typeof markAsDeliveryStaged
+  markAsDeliveryUnknown: typeof markAsDeliveryUnknown
   areUnreadMessages: typeof areUnreadMessages
   markAsReadAndDelivered: typeof markAsReadAndDelivered
   getInbox: typeof getInbox
@@ -288,6 +308,8 @@ export function attachMessageInbox(ctor: { prototype: object }): void {
     markAsRead,
     markAsDelivered,
     markAsUndelivered,
+    markAsDeliveryStaged,
+    markAsDeliveryUnknown,
     areUnreadMessages,
     markAsReadAndDelivered,
     getInbox,

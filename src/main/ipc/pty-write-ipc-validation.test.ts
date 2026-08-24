@@ -90,6 +90,85 @@ describe('registerPtyHandlers', () => {
     ).toBe(false)
     expect(mockProc.proc.write).toHaveBeenCalledTimes(1)
   })
+  it('closes prompt paste before accepting renderer input', async () => {
+    const mockProc = createMockProc()
+    spawnMock.mockReturnValue(mockProc.proc)
+    const runtime = {
+      setPtyController: vi.fn(),
+      getDriver: vi.fn(() => ({ kind: 'desktop' })),
+      noteTerminalSpawnCommand: vi.fn(),
+      getPtyOutputSequence: vi.fn().mockReturnValue(0),
+      onPtySpawned: vi.fn(),
+      onPtyData: vi.fn(),
+      onPtyExit: vi.fn(),
+      createPreAllocatedTerminalHandle: vi.fn(() => null),
+      preAllocateHandleForPty: vi.fn()
+    }
+    registerPtyHandlers(mainWindow as never, runtime as never)
+    const result = (await handlers.get('pty:spawn')!(null, {
+      cols: 80,
+      rows: 24
+    })) as { id: string }
+    const controller = runtime.setPtyController.mock.calls[0]?.[0]
+    const transaction = controller.beginInputTransaction(result.id, 1)
+    mainWindow.webContents.send.mockClear()
+
+    await expect(transaction.write('\x1b[200~prompt')).resolves.toBe(true)
+    getPtyWriteListener()(mainWindowIpcEvent, { id: result.id, data: '\x1b[?0u' })
+    expect(mockProc.proc.write.mock.calls.map(([data]) => data)).toEqual(['\x1b[200~prompt'])
+    getPtyWriteListener()(mainWindowIpcEvent, { id: result.id, data: 'manual' })
+    expect(
+      handlers.get('pty:writeAccepted')!(mainWindowIpcEvent, {
+        id: result.id,
+        data: '\x03'
+      })
+    ).toBe(true)
+    await expect(transaction.invalidated).resolves.toBe('terminal_input_superseded')
+    expect(mainWindow.webContents.send).not.toHaveBeenCalledWith(
+      'pty:writeUnavailable',
+      expect.anything()
+    )
+
+    expect(mockProc.proc.write.mock.calls.map(([data]) => data)).toEqual([
+      '\x1b[200~prompt',
+      '\x1b[201~',
+      '\x1b[?0u',
+      'manual',
+      '\x03'
+    ])
+  })
+  it('admits a large renderer write without a sentinel generation race', async () => {
+    const mockProc = createMockProc()
+    spawnMock.mockReturnValue(mockProc.proc)
+    const runtime = {
+      setPtyController: vi.fn(),
+      getDriver: vi.fn(() => ({ kind: 'desktop' })),
+      noteTerminalSpawnCommand: vi.fn(),
+      getPtyOutputSequence: vi.fn().mockReturnValue(0),
+      onPtySpawned: vi.fn(),
+      onPtyData: vi.fn(),
+      onPtyExit: vi.fn(),
+      createPreAllocatedTerminalHandle: vi.fn(() => null),
+      preAllocateHandleForPty: vi.fn()
+    }
+    registerPtyHandlers(mainWindow as never, runtime as never)
+    const result = (await handlers.get('pty:spawn')!(null, {
+      cols: 80,
+      rows: 24
+    })) as { id: string }
+    const controller = runtime.setPtyController.mock.calls[0]?.[0]
+    const prompt = controller.beginInputTransaction(result.id, 1, 'agent-prompt')
+    await expect(prompt.write('\x1b[200~prompt')).resolves.toBe(true)
+
+    const large = 'm'.repeat(TERMINAL_INPUT_CHUNK_MAX_BYTES + 1)
+    await expect(
+      handlers.get('pty:writeAccepted')!(mainWindowIpcEvent, { id: result.id, data: large })
+    ).resolves.toBe(true)
+    await expect(prompt.invalidated).resolves.toBe('terminal_input_superseded')
+    expect(mockProc.proc.write.mock.calls[0]?.[0]).toBe('\x1b[200~prompt')
+    expect(mockProc.proc.write.mock.calls[1]?.[0]).toBe('\x1b[201~')
+    expect(mockProc.proc.write.mock.calls[2]?.[0]).toBe('m'.repeat(TERMINAL_INPUT_CHUNK_MAX_BYTES))
+  })
   it('asks the renderer to remount when the provider rejects a stale daemon write', async () => {
     const write = vi.fn(() => {
       throw new PtyWriteUnavailableError('daemon generation lost')

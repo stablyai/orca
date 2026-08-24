@@ -442,8 +442,7 @@ describe('agent prompt submission runtime', () => {
   it('does not write Enter after the PTY generation changes during settlement', async () => {
     vi.useFakeTimers()
     const { runtime, handle, writes } = await createPromptRuntime(() => undefined)
-    const submission = runtime.sendTerminalAgentPrompt(handle, 'review this')
-    const rejected = expect(submission).rejects.toThrow('terminal_handle_stale')
+    const outcome = runtime.sendTerminalAgentPrompt(handle, 'review this').catch((error) => error)
 
     await vi.advanceTimersByTimeAsync(0)
     expect(writes.some((data) => data.includes(AGENT_PROMPT_BRACKETED_PASTE_END))).toBe(true)
@@ -454,7 +453,10 @@ describe('agent prompt submission runtime', () => {
     )
     await vi.runAllTimersAsync()
 
-    await rejected
+    await expect(outcome).resolves.toMatchObject({
+      code: 'operation_unknown',
+      data: { reason: 'terminal_handle_stale' }
+    })
     expect(writes).not.toContain('\r')
   })
 

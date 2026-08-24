@@ -36,6 +36,8 @@ CREATE TABLE IF NOT EXISTS messages (
   sequence      INTEGER PRIMARY KEY AUTOINCREMENT,
   created_at    TEXT NOT NULL DEFAULT (datetime('now')),
   delivered_at  TEXT,
+  delivery_state TEXT NOT NULL DEFAULT 'none'
+    CHECK(delivery_state IN ('none', 'staged', 'delivered', 'unknown')),
   sender_pane_key TEXT
 );
 

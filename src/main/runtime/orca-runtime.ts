@@ -92,6 +92,7 @@ import {
 import { buildOrchestrationTaskDisplayMetadata } from '../../shared/orchestration-task-display'
 import {
   isTerminalInputTooLargeWithYield,
+  TERMINAL_INPUT_CHUNK_MAX_BYTES,
   TERMINAL_INPUT_TOO_LARGE_ERROR,
   iterateTerminalInputChunks
 } from '../../shared/terminal-input'
@@ -105,6 +106,17 @@ import {
   type AgentPromptActivity,
   verifyAgentPromptSubmission
 } from './agent-prompt-submission-verification'
+import {
+  type AgentPromptDeliveryUnknownError,
+  agentPromptDeliveryBecameUnknown,
+  isAgentPromptDeliveryUnknownError
+} from './agent-prompt-delivery-outcome'
+import {
+  PtyInputTransactionOwner,
+  isPtyInputTransactionQueryReply,
+  type PtyInputTransaction,
+  type PtyInputTransactionKind
+} from '../pty-input-transaction'
 import {
   awaitWindowsHostGitEnvironmentReady,
   gitExecFileAsync,
@@ -1907,6 +1919,12 @@ type RuntimePtyController = {
   }>
   write(ptyId: string, data: string): boolean
   writeWithSettlement?(ptyId: string, data: string): Promise<boolean>
+  beginInputTransaction?(
+    ptyId: string,
+    generation: number,
+    kind: PtyInputTransactionKind
+  ): PtyInputTransaction | null
+  invalidateInputTransactions?(ptyId: string, generation: number): void
   /** Attach-only adoption of a live local daemon session so its output streams
    *  to main without a renderer pane; never creates, resizes, or focuses.
    *  False on doubt (absent session, SSH-scoped id, non-daemon provider). */
@@ -2036,9 +2054,21 @@ function assertAgentPromptRequestActive(signal?: AbortSignal): void {
   }
 }
 
-async function waitForAgentPromptPromise<T>(promise: Promise<T>, signal?: AbortSignal): Promise<T> {
+async function waitForAgentPromptPromise<T>(
+  promise: Promise<T>,
+  signal?: AbortSignal,
+  invalidated?: Promise<'terminal_handle_stale' | 'terminal_input_superseded'>
+): Promise<T> {
+  const awaited = invalidated
+    ? Promise.race([
+        promise,
+        invalidated.then((reason) => {
+          throw new Error(reason)
+        })
+      ])
+    : promise
   if (!signal) {
-    return await promise
+    return await awaited
   }
   assertAgentPromptRequestActive(signal)
   return await new Promise<T>((resolve, reject) => {
@@ -2061,7 +2091,7 @@ async function waitForAgentPromptPromise<T>(promise: Promise<T>, signal?: AbortS
       onAbort()
       return
     }
-    promise.then(
+    awaited.then(
       (value) => finish({ value }),
       (error: unknown) => finish({ error })
     )
@@ -3207,11 +3237,28 @@ export class OrcaRuntimeService {
       getLiveLeafForHandle: (handle) => this.getLiveLeafForHandle(handle).leaf,
       getMessageWaiters: (mailboxHandle) => this.messageWaitersByHandle.get(mailboxHandle),
       getTabTitle: (tabId) => this.tabs.get(tabId)?.title,
-      getTerminalHandleForLeafKey: (leafKey) => this.handleByLeafKey.get(leafKey),
-      isLeafPtyProvenAbsent: (ptyId) => this.isLeafPtyProvenAbsent(ptyId),
+      getTerminalHandleForLeaf: (leaf) =>
+        this.handleByLeafKey.get(this.getLeafKey(leaf.tabId, leaf.leafId)),
       redriveMailbox: (mailboxHandle, reservedTypes) =>
         this.deliverPendingMessagesForHandle(mailboxHandle, reservedTypes),
-      writePty: (ptyId, data) => this.writeOrchestrationPointerPty(ptyId, data)
+      sendPrompt: async (handle, prompt, options) => {
+        let providerAttempted = false
+        try {
+          await this.sendTerminalAgentPrompt(handle, prompt, {
+            signal: options.signal,
+            beforeWrite: options.beforeWrite,
+            beforeAttempt: () => {
+              options.beforeAttempt()
+              providerAttempted = true
+            }
+          })
+          return 'delivered'
+        } catch (error) {
+          return providerAttempted || isAgentPromptDeliveryUnknownError(error)
+            ? 'unknown'
+            : 'rejected'
+        }
+      }
     })
   private readonly orchestrationMailboxNotifications =
     new OrchestrationMailboxNotificationCoordinator<MessageWaiter>({
@@ -3299,7 +3346,10 @@ export class OrcaRuntimeService {
   >()
   private agentPromptPermissionSequenceByPtyId = new Map<string, number>()
   private agentPromptExplicitStatusFloorByPtyId = new Map<string, number>()
-  private agentPromptSubmissionTailByPtyId = new Map<string, Promise<void>>()
+  private agentPromptSubmissionTailByPtyId = new Map<
+    string,
+    Promise<AgentPromptDeliveryUnknownError | null>
+  >()
   private providerSequenceInitializedPtys = new Set<string>()
   private providerSequenceOffsetByPtyId = new Map<string, number>()
   private providerSnapshotPreferredPtys = new Set<string>()
@@ -6166,6 +6216,24 @@ export class OrcaRuntimeService {
     // Why: CLI terminal writes must go through the main-owned PTY registry
     // instead of tunneling back through renderer IPC, or live handles could
     // drift from the process they are supposed to control during reloads.
+    if (
+      controller &&
+      (!controller.beginInputTransaction || !controller.invalidateInputTransactions)
+    ) {
+      const write = controller.write.bind(controller)
+      const writeWithSettlement = controller.writeWithSettlement?.bind(controller)
+      const inputOwner = new PtyInputTransactionOwner(
+        (ptyId, data) => write(ptyId, data),
+        writeWithSettlement
+          ? (ptyId, data) => writeWithSettlement(ptyId, data)
+          : (ptyId, data) => write(ptyId, data)
+      )
+      controller.write = (ptyId, data) => inputOwner.write(ptyId, data)
+      controller.beginInputTransaction = (ptyId, generation, kind) =>
+        inputOwner.begin(ptyId, generation, kind)
+      controller.invalidateInputTransactions = (ptyId, generation) =>
+        inputOwner.acknowledgeGeneration(ptyId, generation)
+    }
     this.ptyController = controller
   }
 
@@ -12246,7 +12314,9 @@ export class OrcaRuntimeService {
   }
 
   private advancePtyLifecycleGeneration(ptyId: string): void {
-    this.ptyLifecycleGenerationById.set(ptyId, this.nextPtyLifecycleGeneration++)
+    const generation = this.nextPtyLifecycleGeneration++
+    this.ptyLifecycleGenerationById.set(ptyId, generation)
+    this.ptyController?.invalidateInputTransactions?.(ptyId, generation)
     // Why: a stop whose exit never arrived would otherwise stay armed across a
     // same-id respawn and label the NEXT process's crash an operator close —
     // the exact lie this cause model exists to remove.
@@ -18625,6 +18695,7 @@ export class OrcaRuntimeService {
       reserveWrite?: (ptyId: string) => void
       afterWrite?: (ptyId: string) => void | Promise<void>
       suffixFailureError?: string
+      inputKind?: 'interactive' | 'automation'
     } = {}
   ): Promise<RuntimeTerminalSend> {
     const pty = this.getLivePtyForHandle(handle)
@@ -18637,7 +18708,25 @@ export class OrcaRuntimeService {
         throw new Error('invalid_terminal_send')
       }
       await assertTerminalInputWithinLimitWithYield(action.text)
-      await this.writeTerminalAction(pty.pty.ptyId, action, payload, options)
+      const writeDirectly =
+        isPtyInputTransactionQueryReply(payload) ||
+        (options.inputKind !== 'automation' &&
+          !terminalActionNeedsInputTransaction(action, payload))
+      await (writeDirectly
+        ? this.writeTerminalAction(pty.pty.ptyId, action, payload, options)
+        : this.withPtyInputTransaction(
+            pty.pty.ptyId,
+            this.getPtyLifecycleGeneration(pty.pty.ptyId),
+            options.inputKind ?? 'interactive',
+            (transaction) =>
+              this.writeTerminalAction(
+                pty.pty.ptyId,
+                action,
+                payload,
+                options,
+                (data) => transaction.write(data) as boolean
+              )
+          ))
       return {
         handle,
         accepted: true,
@@ -18662,7 +18751,24 @@ export class OrcaRuntimeService {
       throw new Error('terminal_not_writable')
     }
 
-    await this.writeTerminalAction(leaf.ptyId, action, payload, options)
+    const writeDirectly =
+      isPtyInputTransactionQueryReply(payload) ||
+      (options.inputKind !== 'automation' && !terminalActionNeedsInputTransaction(action, payload))
+    await (writeDirectly
+      ? this.writeTerminalAction(leaf.ptyId, action, payload, options)
+      : this.withPtyInputTransaction(
+          leaf.ptyId,
+          this.getPtyLifecycleGeneration(leaf.ptyId),
+          options.inputKind ?? 'interactive',
+          (transaction) =>
+            this.writeTerminalAction(
+              leaf.ptyId!,
+              action,
+              payload,
+              options,
+              (data) => transaction.write(data) as boolean
+            )
+        ))
 
     return {
       handle,
@@ -18676,6 +18782,8 @@ export class OrcaRuntimeService {
     prompt: string,
     options: {
       beforeWrite?: (ptyId: string) => void | Promise<void>
+      beforeAttempt?: (ptyId: string) => void
+      onMutated?: (ptyId: string) => void
       suffixFailureError?: string
       signal?: AbortSignal
     } = {}
@@ -18694,12 +18802,19 @@ export class OrcaRuntimeService {
         async () => {
           this.assertLiveTerminalHandleTargetsPty(handle, pty.pty.ptyId)
           this.assertAgentPromptGeneration(pty.pty.ptyId, generation)
-          return await this.writeTerminalAgentPrompt(
-            handle,
+          return await this.withPtyInputTransaction(
             pty.pty.ptyId,
             generation,
-            payload,
-            options
+            'agent-prompt',
+            (transaction) =>
+              this.writeTerminalAgentPrompt(
+                handle,
+                pty.pty.ptyId,
+                generation,
+                payload,
+                transaction,
+                options
+              )
           )
         }
       )
@@ -18721,7 +18836,20 @@ export class OrcaRuntimeService {
     const submits = await this.serializeAgentPromptSubmission(leaf.ptyId, generation, async () => {
       this.assertLiveTerminalHandleTargetsPty(handle, leaf.ptyId!)
       this.assertAgentPromptGeneration(leaf.ptyId!, generation)
-      return await this.writeTerminalAgentPrompt(handle, leaf.ptyId!, generation, payload, options)
+      return await this.withPtyInputTransaction(
+        leaf.ptyId!,
+        generation,
+        'agent-prompt',
+        (transaction) =>
+          this.writeTerminalAgentPrompt(
+            handle,
+            leaf.ptyId!,
+            generation,
+            payload,
+            transaction,
+            options
+          )
+      )
     })
     const bytesWritten = Buffer.byteLength(payload, 'utf8') + submits
     return { handle, accepted: true, bytesWritten }
@@ -19321,14 +19449,16 @@ export class OrcaRuntimeService {
       reserveWrite?: (ptyId: string) => void
       afterWrite?: (ptyId: string) => void | Promise<void>
       suffixFailureError?: string
-    } = {}
+    } = {},
+    writeInput: (data: string) => boolean = (data) =>
+      this.ptyController?.write(ptyId, data) ?? false
   ): Promise<void> {
     // Why: direct terminal.send can carry paste-sized text from RPC/mobile
     // clients; chunk text before PTY/ConPTY while preserving suffix separation.
     const hasText = typeof action.text === 'string' && action.text.length > 0
     const hasSuffix = action.enter || action.interrupt
     if (hasText) {
-      await this.writeTerminalInputChunks(ptyId, action.text!, options)
+      await this.writeTerminalInputChunks(ptyId, action.text!, options, writeInput)
     }
     if (hasSuffix) {
       const suffix = (action.enter ? '\r' : '') + (action.interrupt ? '\x03' : '')
@@ -19344,7 +19474,7 @@ export class OrcaRuntimeService {
         }
         throw error
       }
-      const suffixWrote = this.ptyController?.write(ptyId, suffix) ?? false
+      const suffixWrote = writeInput(suffix)
       if (!suffixWrote) {
         throw new Error(options.suffixFailureError ?? 'terminal_not_writable')
       }
@@ -19357,11 +19487,38 @@ export class OrcaRuntimeService {
 
     await options.beforeWrite?.(ptyId)
     options.reserveWrite?.(ptyId)
-    const wrote = this.ptyController?.write(ptyId, payload) ?? false
+    const wrote = writeInput(payload)
     if (!wrote) {
       throw new Error('terminal_not_writable')
     }
     await options.afterWrite?.(ptyId)
+  }
+
+  private async withPtyInputTransaction<T>(
+    ptyId: string,
+    generation: number,
+    kind: PtyInputTransactionKind,
+    run: (transaction: PtyInputTransaction) => Promise<T>
+  ): Promise<T> {
+    const controller = this.ptyController
+    const transaction = controller?.beginInputTransaction?.(ptyId, generation, kind)
+    if (controller?.beginInputTransaction && !transaction) {
+      throw new Error('terminal_input_busy')
+    }
+    const fallback: PtyInputTransaction = {
+      write: (data) => controller?.write(ptyId, data) ?? false,
+      invalidated: new Promise<'terminal_handle_stale' | 'terminal_input_superseded'>(
+        () => undefined
+      ),
+      active: true,
+      invalidationReason: null,
+      release: () => undefined
+    }
+    try {
+      return await run(transaction ?? fallback)
+    } finally {
+      transaction?.release()
+    }
   }
 
   private async writeTerminalInputChunks(
@@ -19371,14 +19528,16 @@ export class OrcaRuntimeService {
       beforeWrite?: (ptyId: string) => void | Promise<void>
       reserveWrite?: (ptyId: string) => void
       afterWrite?: (ptyId: string) => void | Promise<void>
-    } = {}
+    } = {},
+    writeInput: (data: string) => boolean = (data) =>
+      this.ptyController?.write(ptyId, data) ?? false
   ): Promise<void> {
     const chunks = iterateTerminalInputChunks(text)
     let chunk = chunks.next()
     while (!chunk.done) {
       await options.beforeWrite?.(ptyId)
       options.reserveWrite?.(ptyId)
-      const wrote = this.ptyController?.write(ptyId, chunk.value) ?? false
+      const wrote = writeInput(chunk.value)
       if (!wrote) {
         throw new Error('terminal_not_writable')
       }
@@ -19395,8 +19554,11 @@ export class OrcaRuntimeService {
     ptyId: string,
     generation: number,
     pastePayload: string,
+    transaction: PtyInputTransaction,
     options: {
       beforeWrite?: (ptyId: string) => void | Promise<void>
+      beforeAttempt?: (ptyId: string) => void
+      onMutated?: (ptyId: string) => void
       suffixFailureError?: string
       signal?: AbortSignal
     } = {}
@@ -19405,8 +19567,10 @@ export class OrcaRuntimeService {
     this.assertAgentPromptGeneration(ptyId, generation)
     const permissionBaseline = this.getAgentPromptActivity(handle, ptyId)
     this.assertAgentPromptPermissionSafe(permissionBaseline, permissionBaseline)
-    const renderGate = this.createAgentPromptRenderGate(ptyId)
+    const settlementTarget = await this.resolveAgentPromptSettlementTarget(ptyId)
+    const renderGate = this.createAgentPromptRenderGate(ptyId, settlementTarget.agent)
     let wrotePasteBytes = false
+    let attemptedPaste = false
     let completedPaste = false
     try {
       const chunks = iterateTerminalInputChunks(pastePayload)
@@ -19425,11 +19589,19 @@ export class OrcaRuntimeService {
         if (nextChunk.done) {
           renderGate?.arm()
         }
-        const wrote = this.ptyController?.write(ptyId, chunk.value) ?? false
+        if (!attemptedPaste) {
+          options.beforeAttempt?.(ptyId)
+          attemptedPaste = true
+        }
+        const wrote = await transaction.write(chunk.value)
         if (!wrote) {
           throw new Error('terminal_not_writable')
         }
-        wrotePasteBytes = true
+        if (!wrotePasteBytes) {
+          wrotePasteBytes = true
+          options.onMutated?.(ptyId)
+        }
+        this.assertPtyInputTransactionActive(transaction)
         chunk = nextChunk
         if (!chunk.done) {
           await new Promise((resolve) => setTimeout(resolve, 0))
@@ -19442,45 +19614,70 @@ export class OrcaRuntimeService {
         !completedPaste &&
         this.getPtyLifecycleGeneration(ptyId) === generation
       ) {
-        this.ptyController?.write(ptyId, AGENT_PROMPT_BRACKETED_PASTE_END)
+        await transaction.write(AGENT_PROMPT_BRACKETED_PASTE_END)
       }
       renderGate?.dispose()
+      if (wrotePasteBytes) {
+        throw agentPromptDeliveryBecameUnknown(error)
+      }
       throw error
     }
 
-    if (renderGate) {
-      try {
-        await waitForAgentPromptPromise(renderGate.wait(), options.signal)
-      } finally {
-        renderGate.dispose()
-      }
-    } else {
-      await waitForAgentPromptDelay(AGENT_PROMPT_SUBMIT_DELAY_MS, options.signal)
-    }
-    assertAgentPromptRequestActive(options.signal)
-    this.assertAgentPromptGeneration(ptyId, generation)
     try {
-      await options.beforeWrite?.(ptyId)
-    } catch (error) {
-      if (options.suffixFailureError) {
-        throw new Error(options.suffixFailureError)
+      if (renderGate) {
+        try {
+          await waitForAgentPromptPromise(
+            renderGate.wait(),
+            options.signal,
+            transaction.invalidated
+          )
+        } finally {
+          renderGate.dispose()
+        }
+      } else {
+        await waitForAgentPromptPromise(
+          waitForAgentPromptDelay(AGENT_PROMPT_SUBMIT_DELAY_MS),
+          options.signal,
+          transaction.invalidated
+        )
       }
-      throw error
+      assertAgentPromptRequestActive(options.signal)
+      this.assertAgentPromptGeneration(ptyId, generation)
+      try {
+        await options.beforeWrite?.(ptyId)
+      } catch (error) {
+        if (options.suffixFailureError) {
+          throw new Error(options.suffixFailureError)
+        }
+        throw error
+      }
+      assertAgentPromptRequestActive(options.signal)
+      this.assertAgentPromptGeneration(ptyId, generation)
+      const baseline = this.getAgentPromptActivity(handle, ptyId)
+      this.assertAgentPromptPermissionSafe(permissionBaseline, baseline)
+      await this.assertAgentPromptSettlementTarget(ptyId, settlementTarget)
+      assertAgentPromptRequestActive(options.signal)
+      this.assertAgentPromptGeneration(ptyId, generation)
+      this.assertPtyInputTransactionActive(transaction)
+      this.assertAgentPromptPermissionSafe(
+        permissionBaseline,
+        this.getAgentPromptActivity(handle, ptyId)
+      )
+      const suffixWrote = await transaction.write(AGENT_PROMPT_SUBMIT)
+      if (!suffixWrote) {
+        throw new Error(options.suffixFailureError ?? 'terminal_not_writable')
+      }
+      this.assertPtyInputTransactionActive(transaction)
+      await verifyAgentPromptSubmission({
+        baseline,
+        readActivity: () => this.getAgentPromptActivity(handle, ptyId),
+        assertActive: () => this.assertPtyInputTransactionActive(transaction),
+        signal: options.signal
+      })
+      return 1
+    } catch (error) {
+      throw agentPromptDeliveryBecameUnknown(error)
     }
-    assertAgentPromptRequestActive(options.signal)
-    this.assertAgentPromptGeneration(ptyId, generation)
-    const baseline = this.getAgentPromptActivity(handle, ptyId)
-    this.assertAgentPromptPermissionSafe(permissionBaseline, baseline)
-    const suffixWrote = this.ptyController?.write(ptyId, AGENT_PROMPT_SUBMIT) ?? false
-    if (!suffixWrote) {
-      throw new Error(options.suffixFailureError ?? 'terminal_not_writable')
-    }
-    await verifyAgentPromptSubmission({
-      baseline,
-      readActivity: () => this.getAgentPromptActivity(handle, ptyId),
-      signal: options.signal
-    })
-    return 1
   }
 
   private async serializeAgentPromptSubmission<T>(
@@ -19489,11 +19686,16 @@ export class OrcaRuntimeService {
     submit: () => Promise<T>
   ): Promise<T> {
     const queueKey = `${ptyId}\u0000${generation}`
-    const previous = this.agentPromptSubmissionTailByPtyId.get(queueKey) ?? Promise.resolve()
-    const submission = previous.catch(() => undefined).then(submit)
+    const previous = this.agentPromptSubmissionTailByPtyId.get(queueKey) ?? Promise.resolve(null)
+    const submission = previous.then((priorUnknown) => {
+      if (priorUnknown) {
+        throw priorUnknown
+      }
+      return submit()
+    })
     const tail = submission.then(
-      () => undefined,
-      () => undefined
+      () => null,
+      (error: unknown) => (isAgentPromptDeliveryUnknownError(error) ? error : null)
     )
     this.agentPromptSubmissionTailByPtyId.set(queueKey, tail)
     try {
@@ -19556,14 +19758,91 @@ export class OrcaRuntimeService {
     }
   }
 
-  private createAgentPromptRenderGate(ptyId: string): {
+  private assertPtyInputTransactionActive(transaction: PtyInputTransaction): void {
+    if (!transaction.active) {
+      throw new Error(transaction.invalidationReason ?? 'terminal_input_superseded')
+    }
+  }
+
+  private async resolveAgentPromptSettlementTarget(
+    ptyId: string
+  ): Promise<AgentPromptSettlementTarget> {
+    const pty = this.ptysById.get(ptyId)
+    const inspection = await this.inspectAgentPromptForeground(ptyId)
+    if (inspection.available) {
+      const recognized = recognizeAgentProcess(inspection.process)?.agent
+      if (!recognized) {
+        throw new Error('agent_prompt_target_changed')
+      }
+      if (pty) {
+        pty.foregroundAgent = recognized
+      }
+      return {
+        agent: recognized,
+        evidence: 'authoritative'
+      }
+    }
+    const fallback = pty?.foregroundAgent ?? pty?.launchAgent ?? null
+    return {
+      agent: getAgentPromptSettlementPolicy(fallback) ? fallback : null,
+      evidence: 'fallback'
+    }
+  }
+
+  private async assertAgentPromptSettlementTarget(
+    ptyId: string,
+    expected: AgentPromptSettlementTarget
+  ): Promise<void> {
+    const inspection = await this.inspectAgentPromptForeground(ptyId)
+    if (!inspection.available) {
+      if (expected.evidence === 'fallback') {
+        return
+      }
+      throw new Error('agent_prompt_target_unavailable')
+    }
+    const recognized = recognizeAgentProcess(inspection.process)?.agent
+    if (!recognized || recognized !== expected.agent) {
+      throw new Error('agent_prompt_target_changed')
+    }
+  }
+
+  private async inspectAgentPromptForeground(
+    ptyId: string
+  ): Promise<{ available: boolean; process: string | null }> {
+    const controller = this.ptyController
+    if (!controller) {
+      return { available: false, process: null }
+    }
+    if (controller.inspectProcess) {
+      try {
+        const inspection = await controller.inspectProcess(ptyId)
+        return {
+          // Null is a valid idle-shell observation; only the explicit unavailable bit permits fallback.
+          available: inspection.unavailable !== true,
+          process: inspection.foregroundProcess
+        }
+      } catch {
+        return { available: false, process: null }
+      }
+    }
+    try {
+      const process = await controller.getForegroundProcess(ptyId)
+      return { available: process !== null, process }
+    } catch {
+      return { available: false, process: null }
+    }
+  }
+
+  private createAgentPromptRenderGate(
+    ptyId: string,
+    agent: TuiAgent | null
+  ): {
     arm: () => void
     wait: () => Promise<void>
     dispose: () => void
   } | null {
-    const pty = this.ptysById.get(ptyId)
-    const agent = pty?.launchAgent ?? pty?.foregroundAgent
-    if (!isTerminalSendSettlementAgent(agent)) {
+    const policy = getAgentPromptSettlementPolicy(agent)
+    if (!policy) {
       return null
     }
     let armed = false
@@ -19573,11 +19852,13 @@ export class OrcaRuntimeService {
     let quietTimer: NodeJS.Timeout | null = null
     let hardTimer: NodeJS.Timeout | null = null
     let resolveRender!: () => void
-    const rendered = new Promise<void>((resolve) => {
+    let rejectRender!: (error: Error) => void
+    const rendered = new Promise<void>((resolve, reject) => {
       resolveRender = resolve
+      rejectRender = reject
     })
 
-    const finish = (): void => {
+    const finish = (error?: Error): void => {
       if (settled) {
         return
       }
@@ -19590,7 +19871,11 @@ export class OrcaRuntimeService {
         clearTimeout(hardTimer)
         hardTimer = null
       }
-      resolveRender()
+      if (error) {
+        rejectRender(error)
+      } else {
+        resolveRender()
+      }
     }
     const armQuietTimer = (): void => {
       if (quietTimer) {
@@ -19602,7 +19887,13 @@ export class OrcaRuntimeService {
       if (hardTimer) {
         clearTimeout(hardTimer)
       }
-      hardTimer = setTimeout(finish, AGENT_PROMPT_RENDER_TIMEOUT_MS)
+      hardTimer = setTimeout(
+        () =>
+          finish(
+            policy.renderTimeout === 'reject' ? new Error('agent_prompt_not_ready') : undefined
+          ),
+        AGENT_PROMPT_RENDER_TIMEOUT_MS
+      )
     }
     const unsubscribe = this.subscribeToTerminalData(ptyId, (data) => {
       if (!armed || settled) {
@@ -19626,12 +19917,7 @@ export class OrcaRuntimeService {
         markerCarry = ''
         armHardTimer()
       },
-      wait: async () => {
-        if (settled) {
-          return
-        }
-        await rendered
-      },
+      wait: () => rendered,
       dispose: () => {
         unsubscribe()
         if (quietTimer) {
@@ -23963,14 +24249,15 @@ export class OrcaRuntimeService {
 
   private pasteStartupDraftWhenReady(handle: string, draft: WorktreeStartupDraftPaste): void {
     void this.waitForStartupDraftReady(handle, draft.agent)
-      .then((ptyId) => {
+      .then(async (ptyId) => {
         if (!ptyId) {
           console.warn('[worktree-create] agent did not become ready for draft paste')
           return
         }
-        this.ptyController?.write(
-          ptyId,
-          `${BRACKETED_PASTE_BEGIN}${draft.content}${BRACKETED_PASTE_END}`
+        await this.sendTerminal(
+          handle,
+          { text: `${BRACKETED_PASTE_BEGIN}${draft.content}${BRACKETED_PASTE_END}` },
+          { inputKind: 'automation' }
         )
       })
       .catch((error) => {
@@ -23980,12 +24267,12 @@ export class OrcaRuntimeService {
 
   private sendStartupFollowupWhenReady(handle: string, followup: WorktreeStartupFollowup): void {
     void this.waitForStartupFollowupReady(handle, followup.expectedProcess)
-      .then((ptyId) => {
+      .then(async (ptyId) => {
         if (!ptyId) {
           console.warn('[worktree-create] agent did not become ready for follow-up prompt')
           return
         }
-        this.ptyController?.write(ptyId, `${followup.prompt}\r`)
+        await this.sendTerminalAgentPrompt(handle, followup.prompt)
       })
       .catch((error) => {
         console.warn('[worktree-create] failed to send startup follow-up prompt:', error)
@@ -29413,10 +29700,20 @@ export class OrcaRuntimeService {
     if (!pty || this.terminalSpawnCommandsByPtyId.has(pty.ptyId)) {
       return
     }
-    if (this.ptyController?.write(pty.ptyId, command)) {
-      // Why: Enter rides its own write so a long command cannot swallow it.
-      this.ptyController.write(pty.ptyId, '\r')
-      this.noteTerminalSpawnCommand(pty.ptyId, command)
+    const transaction = this.ptyController?.beginInputTransaction?.(
+      pty.ptyId,
+      this.getPtyLifecycleGeneration(pty.ptyId),
+      'automation'
+    )
+    if (!transaction) {
+      return
+    }
+    try {
+      if (transaction.write(command) === true && transaction.write('\r') === true) {
+        this.noteTerminalSpawnCommand(pty.ptyId, command)
+      }
+    } finally {
+      transaction.release()
     }
   }
 
@@ -34695,7 +34992,7 @@ export class OrcaRuntimeService {
       }
       const recognized = recognizeAgentProcess(await this.ptyController.getForegroundProcess(ptyId))
       const recognizedAgent = recognized?.agent
-      if (!isTerminalSendSettlementAgent(recognizedAgent)) {
+      if (!recognizedAgent || !getAgentPromptSettlementPolicy(recognizedAgent)) {
         return false
       }
       if (!(await this.isTerminalRunningAgent(handle, { retryForegroundWrappers: false }))) {
@@ -34825,17 +35122,6 @@ export class OrcaRuntimeService {
 
   deliverPendingMessagesForHandle(handle: string, reservedTypes?: ReadonlySet<string>): void {
     this.orchestrationMailboxNotifications.deliverForHandle(handle, reservedTypes)
-  }
-
-  private writeOrchestrationPointerPty(ptyId: string, data: string): boolean | Promise<boolean> {
-    try {
-      if (this.ptyController?.writeWithSettlement) {
-        return this.ptyController.writeWithSettlement(ptyId, data).catch(() => false)
-      }
-      return this.ptyController?.write(ptyId, data) ?? false
-    } catch {
-      return false
-    }
   }
 
   private retireOrchestrationMailboxDeliveryForPty(ptyId: string): void {
@@ -39962,6 +40248,16 @@ function buildSendPayload(action: {
   return payload.length > 0 ? payload : null
 }
 
+function terminalActionNeedsInputTransaction(
+  action: { text?: string; enter?: boolean; interrupt?: boolean },
+  payload: string
+): boolean {
+  return (
+    Boolean(action.text && (action.enter || action.interrupt)) ||
+    Buffer.byteLength(payload, 'utf8') > TERMINAL_INPUT_CHUNK_MAX_BYTES
+  )
+}
+
 async function assertTerminalInputWithinLimitWithYield(text: string | undefined): Promise<void> {
   if (!text) {
     return
@@ -40839,10 +41135,32 @@ function classifyAgentTitle(title: string | null): 'agent' | 'management' | 'neu
   return detectAgentStatusFromTitle(title) !== null ? 'agent' : 'neutral'
 }
 
-function isTerminalSendSettlementAgent(
+type AgentPromptSettlementPolicy = Readonly<{
+  renderTimeout: 'submit' | 'reject'
+}>
+
+type AgentPromptSettlementTarget = Readonly<{
+  agent: TuiAgent | null
+  evidence: 'authoritative' | 'fallback'
+}>
+
+const BOUNDED_FALLBACK_AGENT_PROMPT_SETTLEMENT: AgentPromptSettlementPolicy = {
+  renderTimeout: 'submit'
+}
+const READINESS_REQUIRED_AGENT_PROMPT_SETTLEMENT: AgentPromptSettlementPolicy = {
+  renderTimeout: 'reject'
+}
+
+function getAgentPromptSettlementPolicy(
   agent: TuiAgent | null | undefined
-): agent is 'claude' | 'codex' {
-  return agent === 'claude' || agent === 'codex'
+): AgentPromptSettlementPolicy | null {
+  if (agent === 'claude' || agent === 'codex') {
+    return BOUNDED_FALLBACK_AGENT_PROMPT_SETTLEMENT
+  }
+  if (agent === 'opencode') {
+    return READINESS_REQUIRED_AGENT_PROMPT_SETTLEMENT
+  }
+  return null
 }
 
 function findLastCompleteOscTitleRange(data: string): { start: number; end: number } | null {

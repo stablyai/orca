@@ -412,6 +412,35 @@ describe('orchestration RPC methods', () => {
       )
     })
 
+    it('retains terminal ownership when task input delivery becomes unknown', async () => {
+      setup()
+      mockCurrentWorkerStart()
+      vi.mocked(runtime.sendTerminalAgentPrompt).mockRejectedValueOnce(
+        Object.assign(new Error('Agent prompt delivery outcome is unknown'), {
+          code: 'operation_unknown'
+        })
+      )
+      const task = db.createTask({ spec: 'ambiguous input' })
+
+      const result = (await call('orchestration.workerStart', {
+        task: task.id,
+        from: 'term_coord',
+        agent: 'codex'
+      })) as { dispatchId: string; state: string; failedStage: string }
+
+      expect(result).toMatchObject({ state: 'outcome_unknown', failedStage: 'dispatch_input' })
+      expect(db.getTask(task.id)?.status).toBe('blocked')
+      expect(db.getWorkerDispatch(result.dispatchId)?.state).toBe('start_unknown')
+      expect(
+        db.findTransferableWorkerTerminalResource({
+          terminalHandle: 'term_worker',
+          paneKey: 'tab_worker:leaf_worker',
+          processIncarnation: 'runtime_test:term_worker:1',
+          hostScope: null
+        })
+      ).toBeUndefined()
+    })
+
     it.each(['codex-update-prompt', 'codex-trust-workspace'] as const)(
       'returns a truthful readiness failure for %s',
       async (blockedReason) => {

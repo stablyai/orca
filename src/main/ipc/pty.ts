@@ -165,6 +165,7 @@ import { mergePersistedWindowsPath, resolvePathEnvKey } from '../pty/windows-env
 import { addOrcaWslInteropEnv, stampWslOrchestrationCompatibilityHost } from '../pty/wsl-orca-env'
 import { resolveCodexShellLaunchPreflightCommand } from '../pty/codex-shell-launch-preflight'
 import { PtyProducerFlowController } from './pty-producer-flow-control'
+import { PtyInputTransactionOwner } from '../pty-input-transaction'
 import { beginTerminalInstall } from './watcher-removal-gate'
 import {
   clearHiddenRendererPtyDeliveryState,
@@ -4535,6 +4536,28 @@ export function registerPtyHandlers(
     }
   }
 
+  const ptyInputTransactions = new PtyInputTransactionOwner(
+    (ptyId, data) => {
+      try {
+        return getProviderForPty(ptyId).write(ptyId, data) !== false
+      } catch (error) {
+        reportUnavailablePtyWrite(ptyId, error)
+        return false
+      }
+    },
+    async (ptyId, data) => {
+      try {
+        const provider = getProviderForPty(ptyId)
+        return provider.writeWithSettlement
+          ? await provider.writeWithSettlement(ptyId, data)
+          : provider.write(ptyId, data) !== false
+      } catch (error) {
+        reportUnavailablePtyWrite(ptyId, error)
+        return false
+      }
+    }
+  )
+
   // Why: route through getProviderForPty() so CLI commands work for remote PTYs too; localProvider would silently fail for them.
   runtime?.setPtyController({
     claimStablePaneCreate: (args) => {
@@ -5526,23 +5549,11 @@ export function registerPtyHandlers(
         finishTerminalInstall()
       }
     },
-    write: (ptyId, data) => {
-      try {
-        return getProviderForPty(ptyId).write(ptyId, data) !== false
-      } catch {
-        return false
-      }
-    },
-    writeWithSettlement: async (ptyId, data) => {
-      try {
-        const provider = getProviderForPty(ptyId)
-        return provider.writeWithSettlement
-          ? await provider.writeWithSettlement(ptyId, data)
-          : provider.write(ptyId, data) !== false
-      } catch {
-        return false
-      }
-    },
+    write: (ptyId, data) => ptyInputTransactions.write(ptyId, data),
+    beginInputTransaction: (ptyId, generation, kind) =>
+      ptyInputTransactions.begin(ptyId, generation, kind),
+    invalidateInputTransactions: (ptyId, generation) =>
+      ptyInputTransactions.acknowledgeGeneration(ptyId, generation),
     probePtyLiveness: async (ptyId) => {
       try {
         // Why: no locally routed provider can authoritatively answer for a
@@ -7240,36 +7251,29 @@ export function registerPtyHandlers(
   }
 
   const writePtyProviderInputWithinLimit = (
-    provider: IPtyProvider,
     id: string,
     data: string
   ): boolean | Promise<boolean> => {
     const chunks = iterateTerminalInputChunks(data)
     const first = chunks.next()
     if (first.done) {
-      provider.write(id, data)
-      return true
+      return ptyInputTransactions.write(id, data)
     }
     const second = chunks.next()
     if (second.done) {
-      provider.write(id, first.value)
-      return true
+      return ptyInputTransactions.write(id, first.value)
     }
-    return writePtyProviderInputChunks(provider, id, chunks, first.value, second.value)
+    return writePtyProviderInputChunks(id, chunks, first.value, second.value)
   }
 
-  const writePtyProviderInput = (
-    provider: IPtyProvider,
-    id: string,
-    data: string
-  ): boolean | Promise<boolean> => {
+  const writePtyProviderInput = (id: string, data: string): boolean | Promise<boolean> => {
     try {
       const tooLarge = isTerminalInputTooLargeWithDeferredMeasurement(data)
       if (typeof tooLarge === 'boolean') {
-        return tooLarge ? false : writePtyProviderInputWithinLimit(provider, id, data)
+        return tooLarge ? false : writePtyProviderInputWithinLimit(id, data)
       }
       return tooLarge
-        .then((result) => (result ? false : writePtyProviderInputWithinLimit(provider, id, data)))
+        .then((result) => (result ? false : writePtyProviderInputWithinLimit(id, data)))
         .catch((error) => {
           reportUnavailablePtyWrite(id, error)
           return false
@@ -7281,17 +7285,19 @@ export function registerPtyHandlers(
   }
 
   const writePtyProviderInputChunks = async (
-    provider: IPtyProvider,
     id: string,
     chunks: Iterator<string>,
     firstChunk: string,
     secondChunk: string
   ): Promise<boolean> => {
+    const transaction = ptyInputTransactions.beginUnversionedInteractive(id)
     try {
       let chunk: IteratorResult<string> = { done: false, value: firstChunk }
       let nextChunk: IteratorResult<string> = { done: false, value: secondChunk }
       while (!chunk.done) {
-        provider.write(id, chunk.value)
+        if (!(await transaction.write(chunk.value))) {
+          return false
+        }
         if (!nextChunk.done) {
           await new Promise((resolve) => setTimeout(resolve, 0))
         }
@@ -7302,6 +7308,8 @@ export function registerPtyHandlers(
     } catch (error) {
       reportUnavailablePtyWrite(id, error)
       return false
+    } finally {
+      transaction.release()
     }
   }
 
@@ -7355,7 +7363,7 @@ export function registerPtyHandlers(
       if (visibleRendererPtys.has(args.id)) {
         clearHiddenRendererResizeOutput(args.id)
       }
-      return writePtyProviderInput(provider, args.id, args.data)
+      return writePtyProviderInput(args.id, args.data)
     } catch {
       return false
     }
@@ -7380,7 +7388,7 @@ export function registerPtyHandlers(
       if (visibleRendererPtys.has(args.id)) {
         clearHiddenRendererResizeOutput(args.id)
       }
-      return writePtyProviderInput(provider, args.id, args.data)
+      return writePtyProviderInput(args.id, args.data)
     } catch {
       return false
     }

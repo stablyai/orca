@@ -2,6 +2,10 @@ import { describe, expect, it, vi } from 'vitest'
 import { OrcaRuntimeService } from './orca-runtime'
 import { getDefaultWorkspaceSession } from '../../shared/constants'
 import type { WorkspaceSessionState } from '../../shared/workspace-session-state-types'
+import {
+  AGENT_PROMPT_BRACKETED_PASTE_END,
+  AGENT_PROMPT_SUBMIT_DELAY_MS
+} from '../../shared/agent-prompt-injection'
 
 // STA repro (silent-send incident): `orca terminal send` to a leaf whose ptyId
 // no provider in this process owns was a silent no-op reported as success —
@@ -41,18 +45,29 @@ async function makeRuntimeWithLeafHandle(options: {
   leafPtyId?: string
   probePtyLiveness?: (ptyId: string) => Promise<boolean | null>
   hasPty?: (ptyId: string) => boolean | null
+  foregroundProcess?: string | null
+  onWrite?: (runtime: OrcaRuntimeService, data: string) => void
 }): Promise<{
   runtime: OrcaRuntimeService
   handle: string
   write: ReturnType<typeof vi.fn>
 }> {
   const runtime = new OrcaRuntimeService(makeStore() as never)
-  const write = vi.fn(() => true)
+  const write = vi.fn((_ptyId: string, data: string) => {
+    if (data.includes(AGENT_PROMPT_BRACKETED_PASTE_END)) {
+      runtime.onPtyData(STALE_PTY_ID, '\x1b[?25h', Date.now())
+    }
+    if (data === '\r') {
+      runtime.onPtyData(STALE_PTY_ID, '\x1b]0;Codex working\x07', Date.now())
+    }
+    options.onWrite?.(runtime, data)
+    return true
+  })
   runtime.setPtyController({
     spawn: vi.fn(async () => ({ id: 'never' })),
     write,
     kill: () => true,
-    getForegroundProcess: async () => null,
+    getForegroundProcess: async () => options.foregroundProcess ?? null,
     listProcesses: vi.fn(async () => []),
     ...(options.hasPty ? { hasPty: options.hasPty } : {}),
     ...(options.probePtyLiveness ? { probePtyLiveness: options.probePtyLiveness } : {})
@@ -61,6 +76,12 @@ async function makeRuntimeWithLeafHandle(options: {
   publishLeafGraph(runtime, options.leafPtyId ?? STALE_PTY_ID)
   const { terminals } = await runtime.listTerminals(`id:${WORKTREE_ID}`)
   return { runtime, handle: terminals[0].handle, write }
+}
+
+async function flushAgentPromptStart(): Promise<void> {
+  for (let turn = 0; turn < 20; turn += 1) {
+    await Promise.resolve()
+  }
 }
 
 // Re-invocable: every graph resync replaces leaf records with fresh objects.
@@ -150,6 +171,31 @@ describe('sendTerminal absence gate for leaf-branch writes', () => {
     })
 
     expect(write).toHaveBeenCalledWith(STALE_PTY_ID, 'ping')
+  })
+
+  it('uses fresh OpenCode readiness for a restored leaf-only session', async () => {
+    vi.useFakeTimers()
+    const { runtime, handle, write } = await makeRuntimeWithLeafHandle({
+      probePtyLiveness: async () => true,
+      foregroundProcess: 'opencode',
+      onWrite: (runtime, data) => {
+        if (data.includes(AGENT_PROMPT_BRACKETED_PASTE_END)) {
+          runtime.onPtyData(STALE_PTY_ID, '\x1b[?25h', Date.now())
+        }
+        if (data === '\r') {
+          runtime.onPtyData(STALE_PTY_ID, '\x1b]0;OpenCode working\x07', Date.now())
+        }
+      }
+    })
+    const submission = runtime.sendTerminalAgentPrompt(handle, 'review this')
+
+    await vi.advanceTimersByTimeAsync(AGENT_PROMPT_SUBMIT_DELAY_MS)
+    expect(write).not.toHaveBeenCalledWith(STALE_PTY_ID, '\r')
+    await vi.runAllTimersAsync()
+
+    await expect(submission).resolves.toMatchObject({ accepted: true })
+    expect(write.mock.calls.filter(([, data]) => data === '\r')).toHaveLength(1)
+    vi.useRealTimers()
   })
 
   it('proceeds unchanged when the controller exposes no probe', async () => {
@@ -350,6 +396,9 @@ describe('push-on-idle orchestration delivery absence gate', () => {
     resolveProbe(null)
     await new Promise((resolve) => setTimeout(resolve, 0))
     await new Promise((resolve) => setTimeout(resolve, 0))
+    resolveProbe(null)
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    await flushAgentPromptStart()
 
     expect(write).not.toHaveBeenCalled()
     expect(stub.rows[0].delivered_at).toBeNull()
@@ -360,6 +409,9 @@ describe('push-on-idle orchestration delivery absence gate', () => {
     resolveProbe(null)
     await new Promise((resolve) => setTimeout(resolve, 0))
     await new Promise((resolve) => setTimeout(resolve, 0))
+    resolveProbe(null)
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    await flushAgentPromptStart()
 
     expect(write).toHaveBeenCalledWith(
       STALE_PTY_ID,
@@ -446,6 +498,9 @@ describe('push-on-idle orchestration delivery absence gate', () => {
     await new Promise((resolve) => setTimeout(resolve, 0))
     // Why twice: the probe continuation yields a turn before delivering.
     await new Promise((resolve) => setTimeout(resolve, 0))
+    resolveProbe(null)
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    await flushAgentPromptStart()
 
     const payloads = write.mock.calls
       .map(([, data]) => data)
@@ -507,6 +562,9 @@ describe('push-on-idle orchestration delivery absence gate', () => {
       runtime.deliverPendingMessagesForHandle(handle)
       resolveProbe(null)
       await vi.advanceTimersByTimeAsync(0)
+      resolveProbe(null)
+      await vi.advanceTimersByTimeAsync(0)
+      await flushAgentPromptStart()
 
       const pointerWrites = () =>
         write.mock.calls.filter(
@@ -525,18 +583,18 @@ describe('push-on-idle orchestration delivery absence gate', () => {
 
       // The submit-time liveness probe settles the flight, then the parked
       // trigger arms its own delivery probe for the newer sequence.
-      await vi.advanceTimersByTimeAsync(500)
+      await vi.advanceTimersByTimeAsync(1_500)
+      runtime.onPtyData(STALE_PTY_ID, '\x1b]0;Codex done\x07', 300)
       resolveProbe(null)
       await vi.advanceTimersByTimeAsync(0)
       resolveProbe(null)
       await vi.advanceTimersByTimeAsync(0)
+      await flushAgentPromptStart()
 
       expect(pointerWrites()).toHaveLength(2)
       expect(pointerWrites()[1]?.[1]).toContain('You have 1 orchestration message')
 
-      await vi.advanceTimersByTimeAsync(500)
-      resolveProbe(null)
-      await vi.advanceTimersByTimeAsync(0)
+      await vi.advanceTimersByTimeAsync(1_500)
       expect(stub.markAsDelivered).toHaveBeenCalledTimes(2)
       expect(stub.rows.map((row) => row.delivered_at)).toEqual(
         stub.rows.map(() => expect.any(String))
@@ -560,6 +618,7 @@ describe('push-on-idle orchestration delivery absence gate', () => {
       runtime.deliverPendingMessagesForHandle(handle)
       stub.insert('second')
       runtime.deliverPendingMessagesForHandle(handle)
+      await flushAgentPromptStart()
 
       const pointerWrites = () =>
         write.mock.calls.filter(
@@ -571,11 +630,13 @@ describe('push-on-idle orchestration delivery absence gate', () => {
 
       // Settle flushes the parked trigger; both still-pending rows are counted,
       // while the newer sequence authorizes exactly one fresh pointer.
-      await vi.advanceTimersByTimeAsync(500)
+      await vi.advanceTimersByTimeAsync(1_500)
+      runtime.onPtyData(STALE_PTY_ID, '\x1b]0;Codex done\x07', 300)
+      await flushAgentPromptStart()
       expect(pointerWrites()).toHaveLength(2)
       expect(pointerWrites()[1]?.[1]).toContain('You have 1 orchestration message')
 
-      await vi.advanceTimersByTimeAsync(500)
+      await vi.advanceTimersByTimeAsync(1_500)
       expect(stub.markAsDelivered).toHaveBeenCalledTimes(2)
       expect(stub.rows.map((row) => row.delivered_at)).toEqual(
         stub.rows.map(() => expect.any(String))
@@ -597,16 +658,17 @@ describe('push-on-idle orchestration delivery absence gate', () => {
       stub.insert('for the old session')
 
       runtime.deliverPendingMessagesForHandle(handle)
+      await flushAgentPromptStart()
       expect(write).toHaveBeenCalledTimes(1)
 
       runtime.onPtyExit(STALE_PTY_ID, 0)
       runtime.onPtySpawned(STALE_PTY_ID)
 
-      await vi.advanceTimersByTimeAsync(500)
+      await vi.advanceTimersByTimeAsync(1_500)
       expect(write.mock.calls.filter(([, data]) => data === '\r')).toHaveLength(0)
       expect(stub.markAsDelivered).toHaveBeenCalledOnce()
-      expect(stub.markAsUndelivered).toHaveBeenCalledOnce()
-      expect(stub.rows[0].delivered_at).toBeNull()
+      expect(stub.markAsUndelivered).not.toHaveBeenCalled()
+      expect(stub.rows[0].delivered_at).toEqual(expect.any(String))
 
       // The replacement's own delivery starts a fresh flight and completes —
       // but only once ITS live title proves idle; the dead session's live status
@@ -622,10 +684,10 @@ describe('push-on-idle orchestration delivery absence gate', () => {
       const payloadWrites = write.mock.calls.filter(
         ([, data]) => typeof data === 'string' && data.includes('orca orchestration check')
       )
-      expect(payloadWrites).toHaveLength(2)
-      await vi.advanceTimersByTimeAsync(500)
-      expect(write.mock.calls.filter(([, data]) => data === '\r')).toHaveLength(1)
-      expect(stub.markAsDelivered).toHaveBeenCalledTimes(2)
+      expect(payloadWrites).toHaveLength(1)
+      await vi.advanceTimersByTimeAsync(1_500)
+      expect(write.mock.calls.filter(([, data]) => data === '\r')).toHaveLength(0)
+      expect(stub.markAsDelivered).toHaveBeenCalledOnce()
       expect(stub.rows[0].delivered_at).toEqual(expect.any(String))
     } finally {
       vi.useRealTimers()
@@ -643,17 +705,18 @@ describe('push-on-idle orchestration delivery absence gate', () => {
       runtime.deliverPendingMessagesForHandle(handle)
       stub.insert('second')
       runtime.deliverPendingMessagesForHandle(handle)
-      await Promise.resolve()
+      await flushAgentPromptStart()
 
       runtime.onPtyExit(STALE_PTY_ID, 0)
 
-      await vi.advanceTimersByTimeAsync(500)
+      await vi.advanceTimersByTimeAsync(1_500)
       expect(write.mock.calls.filter(([, data]) => data === '\r')).toHaveLength(0)
       expect(stub.markAsDelivered).toHaveBeenCalledOnce()
-      expect(stub.markAsUndelivered).toHaveBeenCalledOnce()
+      expect(stub.markAsUndelivered).not.toHaveBeenCalled()
       // No stray settle flushed the parked trigger into the dead pty.
       expect(write).toHaveBeenCalledTimes(1)
-      expect(stub.rows.every((row) => row.delivered_at === null)).toBe(true)
+      expect(stub.rows[0].delivered_at).toEqual(expect.any(String))
+      expect(stub.rows[1].delivered_at).toBeNull()
     } finally {
       vi.useRealTimers()
     }
@@ -672,17 +735,18 @@ describe('push-on-idle orchestration delivery absence gate', () => {
       stub.insert('orphaned snapshot')
 
       runtime.deliverPendingMessagesForHandle(handle)
+      await flushAgentPromptStart()
       expect(write).toHaveBeenCalledTimes(1)
 
       // Replace the leaf object the armed callback closed over, then exit.
       publishLeafGraph(runtime, STALE_PTY_ID)
       runtime.onPtyExit(STALE_PTY_ID, 0)
 
-      await vi.advanceTimersByTimeAsync(500)
+      await vi.advanceTimersByTimeAsync(1_500)
       expect(write.mock.calls.filter(([, data]) => data === '\r')).toHaveLength(0)
       expect(stub.markAsDelivered).toHaveBeenCalledOnce()
-      expect(stub.markAsUndelivered).toHaveBeenCalledOnce()
-      expect(stub.rows[0].delivered_at).toBeNull()
+      expect(stub.markAsUndelivered).not.toHaveBeenCalled()
+      expect(stub.rows[0].delivered_at).toEqual(expect.any(String))
     } finally {
       vi.useRealTimers()
     }

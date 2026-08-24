@@ -1,8 +1,11 @@
 import type { OrchestrationMailboxLeaf } from './mailbox-owner'
 
 export type OrchestrationMailboxDeliveryFlight = {
-  enterTimer: ReturnType<typeof setTimeout> | null
-  stagedMessageIds: string[]
+  abortController: AbortController
+  mutated: boolean
+  messageIds: string[]
+  usedLegacyDeliveredTransition: boolean
+  redriveMailbox: string | null
 }
 
 export type ParkedOrchestrationMailboxDelivery = {
@@ -28,7 +31,13 @@ export class OrchestrationMailboxPointerState {
   }
 
   beginFlight(ptyId: string): OrchestrationMailboxDeliveryFlight {
-    const flight = { enterTimer: null, stagedMessageIds: [] }
+    const flight = {
+      abortController: new AbortController(),
+      mutated: false,
+      messageIds: [],
+      usedLegacyDeliveredTransition: false,
+      redriveMailbox: null
+    }
     this.flightsByPtyId.set(ptyId, flight)
     return flight
   }
@@ -77,19 +86,17 @@ export class OrchestrationMailboxPointerState {
   releaseSupersededWatermark(
     mailboxHandle: string,
     newestSequence: number,
-    ptyId: string | null,
+    ptyId: string | undefined,
     leafKey: string
   ): boolean {
     const owner = this.watermarkByMailbox.get(mailboxHandle)
-    if (newestSequence > (owner?.sequence ?? -1)) {
+    if (!owner) {
       return true
     }
-    return Boolean(
-      owner &&
-      !owner.active &&
-      !(owner.ptyId === ptyId && owner.leafKey === leafKey) &&
-      this.clearWatermark(mailboxHandle, owner.sequence, owner.ptyId)
-    )
+    if (newestSequence <= owner.sequence) {
+      return false
+    }
+    return owner.active || owner.ptyId !== ptyId || owner.leafKey !== leafKey
   }
 
   setWatermark(mailbox: string, sequence: number, ptyId: string, leafKey: string): void {
@@ -156,7 +163,10 @@ export class OrchestrationMailboxPointerState {
     const releasedMailboxes: string[] = []
     for (const mailboxHandle of this.watermarkMailboxesByPtyId.get(ptyId) ?? []) {
       const owner = this.watermarkByMailbox.get(mailboxHandle)
-      if (owner?.ptyId === ptyId && this.clearWatermark(mailboxHandle, owner.sequence, ptyId)) {
+      if (!owner || owner.ptyId !== ptyId) {
+        continue
+      }
+      if (this.clearWatermark(mailboxHandle, owner.sequence, ptyId)) {
         releasedMailboxes.push(mailboxHandle)
       }
     }
