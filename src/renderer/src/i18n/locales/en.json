@@ -7912,7 +7912,9 @@
           "63308571d8": "Orca first",
           "c43c7ff5f9": "Decide who first intercepts shortcuts",
           "c3a554288e": "Shortcuts in Terminal",
-          "0f55c6f15c": "Choose whether Orca or the focused terminal wins when shortcuts overlap."
+          "0f55c6f15c": "Choose whether Orca or the focused terminal wins when shortcuts overlap.",
+          "captureNotifications": "Show terminal shortcut capture notifications",
+          "captureNotificationsDescription": "Show a one-time notification for each shortcut Orca handles in a focused terminal."
         },
         "ShortcutsPane": {
           "4b7ae34062": "directly.",
@@ -9737,6 +9739,9 @@
             "4811a8264a": "terminal first",
             "afda131738": "orca first",
             "0ecfc47434": "conflict",
+            "captureNotification": "notification",
+            "toast": "toast",
+            "capture": "capture",
             "0f8cb15582": "agent",
             "f1adebbe8c": "shell",
             "7f1b38f59a": "tui",

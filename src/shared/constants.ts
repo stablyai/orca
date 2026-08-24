@@ -286,6 +286,7 @@ export function getDefaultSettings(homedir: string): GlobalSettings {
     ctrlTabOrderMode: 'mru',
     // Why: Orca-first keeps core shortcuts working from a focused terminal; TUI-ownership users opt in.
     terminalShortcutPolicy: 'orca-first',
+    terminalShortcutCaptureNotificationEnabled: true,
     floatingTerminalEnabled: true,
     floatingTerminalDefaultedForAllUsers: true,
     floatingTerminalCwd: '~',

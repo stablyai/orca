@@ -49,6 +49,9 @@ export function showTerminalShortcutCaptureNotification({
   platform: NodeJS.Platform
   keybindings?: KeybindingOverrides
 }): void {
+  if (useAppStore.getState().settings?.terminalShortcutCaptureNotificationEnabled === false) {
+    return
+  }
   const definition = getKeybindingDefinition(actionId)
   if (!definition || !isKeybindingPotentialTerminalConflict(definition)) {
     return

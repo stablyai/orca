@@ -657,6 +657,20 @@ describe('Store', () => {
     expect(store.getSettings().terminalShortcutPolicy).toBe('orca-first')
   })
 
+  it('updateSettings persists terminal shortcut capture notification preference', async () => {
+    const store = await createStore()
+
+    store.updateSettings({ terminalShortcutCaptureNotificationEnabled: false })
+    expect(store.getSettings().terminalShortcutCaptureNotificationEnabled).toBe(false)
+    store.flush()
+
+    const reloaded = await createStore()
+    expect(reloaded.getSettings().terminalShortcutCaptureNotificationEnabled).toBe(false)
+
+    reloaded.updateSettings({ terminalShortcutCaptureNotificationEnabled: 'false' as never })
+    expect(reloaded.getSettings().terminalShortcutCaptureNotificationEnabled).toBe(true)
+  })
+
   it('reloads sourceControlViewMode from global settings without touching workspace state', async () => {
     const workspaceSession = {
       activeRepoId: 'r1',

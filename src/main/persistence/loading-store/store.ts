@@ -1176,6 +1176,17 @@ export class Store {
         ) {
           this.loadNeedsSave = true
         }
+        const rawTerminalShortcutCaptureNotificationEnabled =
+          parsed.settings?.terminalShortcutCaptureNotificationEnabled
+        const terminalShortcutCaptureNotificationEnabled =
+          rawTerminalShortcutCaptureNotificationEnabled !== false
+        if (
+          rawTerminalShortcutCaptureNotificationEnabled !== undefined &&
+          rawTerminalShortcutCaptureNotificationEnabled !==
+            terminalShortcutCaptureNotificationEnabled
+        ) {
+          this.loadNeedsSave = true
+        }
         result = {
           ...defaults,
           ...parsed,
@@ -1268,6 +1279,7 @@ export class Store {
             terminalShortcutPolicy: normalizeTerminalShortcutPolicy(
               parsed.settings?.terminalShortcutPolicy
             ),
+            terminalShortcutCaptureNotificationEnabled,
             disabledTuiAgents: migratedDisabledTuiAgents,
             ...migratedAgentYoloDefaults,
             claudeAgentTeamsDefaultDisabledMigrated: true,

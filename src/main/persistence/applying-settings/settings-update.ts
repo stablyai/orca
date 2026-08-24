@@ -150,6 +150,10 @@ export function updateSettings(
       updates.terminalShortcutPolicy
     )
   }
+  if ('terminalShortcutCaptureNotificationEnabled' in updates) {
+    sanitizedUpdates.terminalShortcutCaptureNotificationEnabled =
+      updates.terminalShortcutCaptureNotificationEnabled !== false
+  }
   if ('sourceControlGroupOrder' in updates) {
     sanitizedUpdates.sourceControlGroupOrder = normalizeSourceControlGroupOrder(
       updates.sourceControlGroupOrder

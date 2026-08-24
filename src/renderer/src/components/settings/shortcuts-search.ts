@@ -29,7 +29,13 @@ export const getTerminalShortcutPolicySearchEntry = createLocalizedCatalog(
       ...translateSearchKeyword(
         'auto.components.settings.shortcuts.search.4811a8264a',
         'terminal first'
-      )
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.shortcuts.search.captureNotification',
+        'notification'
+      ),
+      ...translateSearchKeyword('auto.components.settings.shortcuts.search.toast', 'toast'),
+      ...translateSearchKeyword('auto.components.settings.shortcuts.search.capture', 'capture')
     ]
   })
 )

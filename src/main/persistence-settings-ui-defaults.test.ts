@@ -92,6 +92,7 @@ describe('Store', () => {
     expect(settings.rightSidebarOpenByDefault).toBe(true)
     expect(settings.showTasksButton).toBe(true)
     expect(settings.showAutomationsButton).toBe(true)
+    expect(settings.terminalShortcutCaptureNotificationEnabled).toBe(true)
     expect(settings.visibleTaskProviders).toEqual(['github', 'gitlab', 'linear', 'jira'])
     expect(settings.openInApplications).toEqual([
       { id: 'vscode', label: 'VS Code', command: 'code' }
@@ -119,6 +120,32 @@ describe('Store', () => {
     expect(store.getSettings().terminalLineHeight).toBe(1)
     store.flush()
     expect((readDataFile() as PersistedState).settings.terminalLineHeight).toBe(1)
+  })
+
+  it('only disables terminal shortcut capture notifications for an explicit false', async () => {
+    writeDataFile(getDefaultPersistedState(testState.dir))
+    const initialized = await createStore()
+    initialized.flush()
+
+    const persisted = readDataFile() as PersistedState
+    writeDataFile({
+      ...persisted,
+      settings: {
+        ...persisted.settings,
+        terminalShortcutCaptureNotificationEnabled: 'false' as never
+      }
+    })
+
+    const store = await createStore()
+    expect(store.getSettings().terminalShortcutCaptureNotificationEnabled).toBe(true)
+    await vi.waitFor(
+      () => {
+        expect(
+          (readDataFile() as PersistedState).settings.terminalShortcutCaptureNotificationEnabled
+        ).toBe(true)
+      },
+      { timeout: 2_000 }
+    )
   })
 
   it('returns default UI state when no data file exists', async () => {

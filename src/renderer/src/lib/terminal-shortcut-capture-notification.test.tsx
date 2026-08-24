@@ -1,5 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { toast } from 'sonner'
+import type { GlobalSettings } from '../../../shared/global-settings-types'
+import { useAppStore } from '../store'
 import { showTerminalShortcutCaptureNotification } from './terminal-shortcut-capture-notification'
 
 const { toastMessage } = vi.hoisted(() => ({
@@ -34,9 +36,11 @@ function createLocalStorage(): Storage {
 describe('showTerminalShortcutCaptureNotification', () => {
   beforeEach(() => {
     vi.stubGlobal('localStorage', createLocalStorage())
+    useAppStore.setState({ settings: {} as GlobalSettings })
   })
 
   afterEach(() => {
+    useAppStore.setState({ settings: null })
     vi.unstubAllGlobals()
     vi.clearAllMocks()
   })
@@ -60,5 +64,28 @@ describe('showTerminalShortcutCaptureNotification', () => {
         action: expect.objectContaining({ label: 'Open Shortcuts' })
       })
     )
+  })
+
+  it('does not consume or show notices while capture notifications are disabled', () => {
+    useAppStore.setState({
+      settings: { terminalShortcutCaptureNotificationEnabled: false } as GlobalSettings
+    })
+
+    showTerminalShortcutCaptureNotification({
+      actionId: 'tab.close',
+      platform: 'darwin'
+    })
+
+    expect(toast.message).not.toHaveBeenCalled()
+
+    useAppStore.setState({
+      settings: { terminalShortcutCaptureNotificationEnabled: true } as GlobalSettings
+    })
+    showTerminalShortcutCaptureNotification({
+      actionId: 'tab.close',
+      platform: 'darwin'
+    })
+
+    expect(toast.message).toHaveBeenCalledTimes(1)
   })
 })

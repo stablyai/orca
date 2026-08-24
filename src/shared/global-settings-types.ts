@@ -242,6 +242,8 @@ export type GlobalSettings = {
   ctrlTabOrderMode?: CtrlTabOrderMode
   /** Orca-first keeps app shortcuts from TUIs; terminal-first is opt-in to let shell/TUI bindings win. */
   terminalShortcutPolicy?: TerminalShortcutPolicy
+  /** Show the one-time notice when Orca handles a shortcut from a focused terminal. */
+  terminalShortcutCaptureNotificationEnabled?: boolean
   /** Floating Workspace: global surface for terminal/browser/markdown tabs outside repo/worktree context. */
   floatingTerminalEnabled: boolean
   /** One-shot migration flag for the floating-workspace default-on rollout; after migration an explicit off sticks. */

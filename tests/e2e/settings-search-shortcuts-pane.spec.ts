@@ -42,4 +42,70 @@ test.describe('Settings sidebar search on the Shortcuts pane', () => {
     await expect(orcaPage.getByText('Create worktree', { exact: true })).toBeVisible()
     await expect(orcaPage.getByText('Go to File', { exact: true })).not.toBeVisible()
   })
+
+  test('terminal shortcut capture notifications can be found and disabled', async ({
+    orcaPage
+  }, testInfo) => {
+    await waitForSessionReady(orcaPage)
+    const rendererErrors: string[] = []
+    orcaPage.on('console', (message) => {
+      if (message.type() === 'error') {
+        rendererErrors.push(message.text())
+      }
+    })
+    orcaPage.on('pageerror', (error) => rendererErrors.push(error.message))
+
+    await orcaPage.evaluate(async () => {
+      const store = window.__store
+      if (!store) {
+        throw new Error('window.__store is not available')
+      }
+      await store.getState().updateSettings({
+        uiLanguage: 'en',
+        terminalShortcutCaptureNotificationEnabled: true
+      })
+      store.getState().openSettingsTarget({ pane: 'shortcuts', repoId: null })
+      store.getState().openSettingsPage()
+    })
+
+    const searchInput = orcaPage.getByPlaceholder('Search settings')
+    await searchInput.fill('toast')
+
+    const toggle = orcaPage.getByRole('switch', {
+      name: 'Show terminal shortcut capture notifications'
+    })
+    await expect(toggle).toBeVisible()
+    await expect(toggle).toBeChecked()
+
+    const enabledScreenshotPath = testInfo.outputPath(
+      'terminal-shortcut-capture-notification-on.png'
+    )
+    await orcaPage.screenshot({ path: enabledScreenshotPath, animations: 'disabled' })
+    await testInfo.attach('terminal shortcut capture notification enabled', {
+      path: enabledScreenshotPath,
+      contentType: 'image/png'
+    })
+
+    await toggle.click()
+
+    await expect(toggle).not.toBeChecked()
+    await expect
+      .poll(() =>
+        orcaPage.evaluate(
+          () => window.__store?.getState().settings?.terminalShortcutCaptureNotificationEnabled
+        )
+      )
+      .toBe(false)
+
+    await searchInput.focus()
+    const disabledScreenshotPath = testInfo.outputPath(
+      'terminal-shortcut-capture-notification-off.png'
+    )
+    await orcaPage.screenshot({ path: disabledScreenshotPath, animations: 'disabled' })
+    await testInfo.attach('terminal shortcut capture notification disabled', {
+      path: disabledScreenshotPath,
+      contentType: 'image/png'
+    })
+    expect(rendererErrors).toEqual([])
+  })
 })
