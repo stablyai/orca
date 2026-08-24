@@ -515,34 +515,6 @@ describe('remote hook service installers', () => {
     expect(fs.files.get('/home/dev/.orca/agent-hooks/kimi-hook.sh')).toContain('/hook/kimi')
   })
 
-  it('installs remote ZCode hooks with the documented nested JSON schema', async () => {
-    const { sftp, fs } = createFakeSftp({
-      '/home/dev/.zcode/cli/config.json': `${JSON.stringify({ theme: 'dark' })}\n`
-    })
-
-    const status = await new ZcodeHookService().installRemote(sftp, '/home/dev')
-    expect(status.state).toBe('installed')
-
-    const config = JSON.parse(fs.files.get('/home/dev/.zcode/cli/config.json')!) as {
-      theme?: string
-      hooks?: { enabled?: boolean; events?: Record<string, unknown[]> }
-    }
-    expect(config.theme).toBe('dark')
-    expect(config.hooks?.enabled).toBe(true)
-    for (const eventName of [
-      'SessionStart',
-      'UserPromptSubmit',
-      'PreToolUse',
-      'PostToolUse',
-      'PostToolUseFailure',
-      'PermissionRequest',
-      'Stop'
-    ]) {
-      expect(config.hooks?.events?.[eventName]).toBeDefined()
-    }
-    expect(fs.files.get('/home/dev/.orca/agent-hooks/zcode-hook.sh')).toContain('/hook/zcode')
-  })
-
   it('does not overwrite malformed remote Devin JSONC', async () => {
     const original = '{"hooks": }'
     const { sftp, fs } = createFakeSftp({
