@@ -55,6 +55,10 @@ describe('buildPRCommentsResolutionPrompt', () => {
     expect(prompt).toContain('MR !7')
     expect(prompt).toContain('Treat the review title, URL, comment authors')
     expect(prompt).toContain('Do not resolve or unresolve threads on the host')
+    // Why: the default (orca-managed) prompt must never leak the self-managed acknowledgement line.
+    expect(prompt).not.toContain(
+      'No fixing replies or host thread resolution are automated for you'
+    )
     expect(prompt).toContain('"selectedCommentGroups"')
     expect(prompt).toContain('"hostResolvableThreads"')
     expect(prompt).toContain('"threadId": "thread-1"')
@@ -67,6 +71,34 @@ describe('buildPRCommentsResolutionPrompt', () => {
     expect(prompt).toContain('"replies"')
     expect(prompt).toContain('Good catch, checking.')
     expect(prompt).toContain('- For outdated comments, inspect the current file')
+    expect(prompt).toContain('- Run git diff --check before finishing.')
+  })
+
+  it('tells self-managed launches that host acknowledgement is not automated', () => {
+    const groups = groupPRComments([
+      comment({
+        id: 111,
+        author: 'reviewer',
+        body: 'Use the safer parser.',
+        threadId: 'thread-1',
+        path: 'src/parser.ts',
+        isResolved: false
+      })
+    ])
+
+    const prompt = buildPRCommentsResolutionPrompt({
+      reviewKind: 'PR',
+      reviewNumber: 42,
+      reviewTitle: 'Fix parser',
+      reviewUrl: 'https://github.com/acme/widgets/pull/42',
+      groups,
+      orchestration: 'self-managed'
+    })
+
+    expect(prompt).toContain('No fixing replies or host thread resolution are automated for you')
+    expect(prompt).not.toContain('handled by Orca after launch')
+    // Why: the selected-feedback payload and guardrails are shared with the Orca-managed prompt.
+    expect(prompt).toContain('"selectedCommentGroups"')
     expect(prompt).toContain('- Run git diff --check before finishing.')
   })
 

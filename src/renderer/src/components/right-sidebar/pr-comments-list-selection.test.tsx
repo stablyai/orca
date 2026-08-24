@@ -110,17 +110,28 @@ function renderList(props: {
   comments: PRComment[]
   contextKey?: string
   strictMode?: boolean
+  commentsLoading?: boolean
+  resolveCommentsWithAIDisabled?: boolean
+  resolveCommentsWithAIDisabledReason?: string
+  copyCommentsPromptDisabled?: boolean
+  copyCommentsPromptDisabledReason?: string
   onResolveSelectedCommentsWithAI?: (groups: PRCommentGroup[]) => void
+  onCopyCommentsPromptToClipboard?: (groups: PRCommentGroup[]) => Promise<boolean>
   clearRequest?: PRCommentsListSelectionClearRequest | null
 }): void {
   const list = (
     <TooltipProvider>
       <PRCommentsList
         comments={props.comments}
-        commentsLoading={false}
+        commentsLoading={props.commentsLoading ?? false}
+        resolveCommentsWithAIDisabled={props.resolveCommentsWithAIDisabled}
+        resolveCommentsWithAIDisabledReason={props.resolveCommentsWithAIDisabledReason}
+        copyCommentsPromptDisabled={props.copyCommentsPromptDisabled}
+        copyCommentsPromptDisabledReason={props.copyCommentsPromptDisabledReason}
         selectionContextKey={props.contextKey ?? 'review:42'}
         selectionClearRequest={props.clearRequest}
         onResolveSelectedCommentsWithAI={props.onResolveSelectedCommentsWithAI ?? vi.fn()}
+        onCopyCommentsPromptToClipboard={props.onCopyCommentsPromptToClipboard}
       />
     </TooltipProvider>
   )
@@ -289,6 +300,100 @@ describe('PRCommentsList comment resolution selection', () => {
     expect(selectedGroups[0]?.kind === 'thread' ? selectedGroups[0].replies[0]?.body : '').toBe(
       'Human reply.'
     )
+  })
+
+  it('copies the resolution prompt for all selectable groups from the header action', () => {
+    const onCopyCommentsPromptToClipboard = vi.fn().mockResolvedValue(true)
+    renderList({
+      comments: [
+        comment({ id: 1, threadId: 'thread-1', path: 'src/a.ts', isResolved: false }),
+        comment({ id: 2, author: 'bob', threadId: 'thread-2', path: 'src/b.ts', isResolved: false })
+      ],
+      onCopyCommentsPromptToClipboard
+    })
+
+    clickButton('Copy unresolved PR comments prompt')
+
+    expect(onCopyCommentsPromptToClipboard).toHaveBeenCalledTimes(1)
+    const groups = onCopyCommentsPromptToClipboard.mock.calls[0]?.[0] as PRCommentGroup[]
+    expect(groups).toHaveLength(2)
+  })
+
+  it('hides the copy action when no copy handler is provided', () => {
+    renderList({
+      comments: [comment({ id: 1, threadId: 'thread-1', path: 'src/a.ts', isResolved: false })]
+    })
+
+    expect(hasButton('Copy unresolved PR comments prompt')).toBe(false)
+  })
+
+  const headerCopyButton = (): HTMLButtonElement | undefined =>
+    [...container.querySelectorAll('button')].find((candidate) =>
+      candidate.getAttribute('aria-label')?.includes('Copy unresolved PR comments prompt')
+    )
+
+  it('keeps the copy action enabled even when the launch (Send) action is disabled', () => {
+    // Why: copy launches no agent, so it must not inherit the Send button's eligibility
+    // (e.g. no enabled agent detected). Only copy-specific prerequisites may disable it.
+    const onCopyCommentsPromptToClipboard = vi.fn().mockResolvedValue(true)
+    renderList({
+      comments: [comment({ id: 1, threadId: 'thread-1', path: 'src/a.ts', isResolved: false })],
+      resolveCommentsWithAIDisabled: true,
+      resolveCommentsWithAIDisabledReason: 'No enabled agent detected.',
+      onCopyCommentsPromptToClipboard
+    })
+
+    expect(headerCopyButton()?.hasAttribute('disabled')).toBe(false)
+  })
+
+  it('disables the header copy action and skips the handler on copy-specific prerequisites', () => {
+    const onCopyCommentsPromptToClipboard = vi.fn().mockResolvedValue(true)
+    renderList({
+      comments: [comment({ id: 1, threadId: 'thread-1', path: 'src/a.ts', isResolved: false })],
+      copyCommentsPromptDisabled: true,
+      copyCommentsPromptDisabledReason: 'Comments are still loading.',
+      onCopyCommentsPromptToClipboard
+    })
+
+    const copyButton = headerCopyButton()
+    expect(copyButton?.hasAttribute('disabled')).toBe(true)
+    act(() => {
+      copyButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    })
+    expect(onCopyCommentsPromptToClipboard).not.toHaveBeenCalled()
+  })
+
+  it('copies only the queued groups from the selection-mode copy action', () => {
+    const onCopyCommentsPromptToClipboard = vi.fn().mockResolvedValue(true)
+    renderList({
+      // Why: distinct timestamps pin thread-1 to the first row under the newest-first grouped order.
+      comments: [
+        comment({
+          id: 1,
+          createdAt: '2026-05-15T00:00:00Z',
+          threadId: 'thread-1',
+          path: 'src/a.ts',
+          isResolved: false
+        }),
+        comment({
+          id: 2,
+          author: 'bob',
+          createdAt: '2026-05-14T00:00:00Z',
+          threadId: 'thread-2',
+          path: 'src/b.ts',
+          isResolved: false
+        })
+      ],
+      onCopyCommentsPromptToClipboard
+    })
+
+    clickButton('Queue for agent')
+    clickButton('Copy 1 queued comments prompt')
+
+    expect(onCopyCommentsPromptToClipboard).toHaveBeenCalledTimes(1)
+    const groups = onCopyCommentsPromptToClipboard.mock.calls[0]?.[0] as PRCommentGroup[]
+    expect(groups).toHaveLength(1)
+    expect(groups[0]?.kind === 'thread' ? groups[0].threadId : '').toBe('thread-1')
   })
 
   it('lets a user queue one eligible comment thread for the agent from the visible row action', () => {

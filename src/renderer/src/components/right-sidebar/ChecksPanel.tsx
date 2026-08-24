@@ -2867,6 +2867,15 @@ export default function ChecksPanel(): React.JSX.Element {
                 ? 'Open a GitLab MR before resolving comments.'
                 : undefined
 
+  // Why: copy only needs loaded comments and an active review. Unlike launch it must NOT
+  // gate on agent detection (aiActionDisabledReason) or ack-busy — copying starts no agent,
+  // so a user with no Orca-managed agent can still copy the prompt for one they already have.
+  const copyCommentsPromptDisabledReason = commentsLoading
+    ? 'Comments are still loading.'
+    : !activeReview
+      ? 'Open a PR or MR before copying comments.'
+      : undefined
+
   const handleAddPRComment = useCallback(
     async (body: string) => {
       if (!repo || !prNumber || !pr?.prRepo) {
@@ -3232,6 +3241,56 @@ export default function ChecksPanel(): React.JSX.Element {
       resolveCommentsWithAIDisabledReason,
       sourceControlAiActionsVisible,
       stateRequestKey
+    ]
+  )
+
+  // Why: unlike the launch flow, copy never delivers the prompt to an agent, so it must not
+  // set up a pending ack, open the composer, or write host state. The user pastes it into an
+  // agent they already have open; the self-managed prompt drops the "Orca handles it" promise.
+  const handleCopyCommentsPrompt = useCallback(
+    async (selectedGroups: PRCommentGroup[]): Promise<boolean> => {
+      if (!sourceControlAiActionsVisible || !activeReview || copyCommentsPromptDisabledReason) {
+        return false
+      }
+      if (selectedGroups.length === 0) {
+        toast.message(
+          translate(
+            'auto.components.right.sidebar.ChecksPanel.f316a8ca2b',
+            'No unresolved comments selected.'
+          )
+        )
+        return false
+      }
+      const prompt = buildPRCommentsResolutionPrompt({
+        reviewKind: activeReview.provider === 'gitlab' ? 'MR' : 'PR',
+        reviewNumber: activeReview.number,
+        reviewTitle: activeReview.title,
+        reviewUrl: activeReview.url,
+        groups: selectedGroups,
+        worktreePath: activeWorktreePath,
+        orchestration: 'self-managed'
+      })
+      try {
+        await window.api.ui.writeClipboardText(prompt)
+        return true
+      } catch (err) {
+        // Why: writeClipboardText verifies the write and can reject; without a toast a
+        // verify-failure is a silent no-op the user could mistake for success and paste stale text.
+        console.warn('Failed to copy PR comment resolution prompt to clipboard:', err)
+        toast.error(
+          translate(
+            'auto.components.right.sidebar.ChecksPanel.copyPromptFailed',
+            'Could not copy the prompt to the clipboard.'
+          )
+        )
+        return false
+      }
+    },
+    [
+      activeReview,
+      activeWorktreePath,
+      copyCommentsPromptDisabledReason,
+      sourceControlAiActionsVisible
     ]
   )
 
@@ -4632,9 +4691,14 @@ export default function ChecksPanel(): React.JSX.Element {
         selectionClearRequest={commentsSelectionClearRequest}
         resolveCommentsWithAIDisabled={Boolean(resolveCommentsWithAIDisabledReason)}
         resolveCommentsWithAIDisabledReason={resolveCommentsWithAIDisabledReason}
+        copyCommentsPromptDisabled={Boolean(copyCommentsPromptDisabledReason)}
+        copyCommentsPromptDisabledReason={copyCommentsPromptDisabledReason}
         onAddComment={pr ? handleAddPRComment : undefined}
         onResolveSelectedCommentsWithAI={
           sourceControlAiActionsVisible ? handleResolveCommentsWithAI : undefined
+        }
+        onCopyCommentsPromptToClipboard={
+          sourceControlAiActionsVisible ? handleCopyCommentsPrompt : undefined
         }
         onReply={pr ? handleReplyToComment : undefined}
         onResolve={pr || activeGitLabReview ? handleResolve : undefined}
