@@ -9,8 +9,9 @@
 
 // Why: per-message hook bag owned by the Unix transport. `signal` aborts
 // when the underlying connection terminates so long-poll handlers can bail
-// out. `startKeepalive` is opt-in per request — only long-poll dispatches
-// call it, so short RPCs pay no timer overhead. See design doc §3.1.
+// out. `startKeepalive` is opt-in per request — long-polls and the slow
+// methods in KEEPALIVE_ONLY_METHODS call it, so short RPCs pay no timer
+// overhead. See design doc §3.1.
 export type RpcMessageContext = {
   signal: AbortSignal
   startKeepalive: () => void

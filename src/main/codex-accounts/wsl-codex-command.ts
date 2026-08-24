@@ -63,7 +63,11 @@ export function buildWslCodexAppServerArgs(
   return buildWslCodexShellArgs(distro, command)
 }
 
-export function buildWslCodexLoginArgs(distro: string, linuxHomePath: string): string[] {
+export function buildWslCodexLoginArgs(
+  distro: string,
+  linuxHomePath: string,
+  deviceAuth?: boolean
+): string[] {
   const command = [
     buildCodexPathLookup(),
     'if [ -z "$resolved" ]; then',
@@ -71,7 +75,9 @@ export function buildWslCodexLoginArgs(distro: string, linuxHomePath: string): s
     '  exit 127',
     'fi',
     `export CODEX_HOME=${quotePosixShell(linuxHomePath)}`,
-    'exec "$resolved" login'
+    // Why: device-code auth has no local callback server, so it works when the
+    // browser completing sign-in is on a different machine than this WSL host.
+    deviceAuth ? 'exec "$resolved" login --device-auth' : 'exec "$resolved" login'
   ].join('\n')
   return buildWslCodexShellArgs(distro, command)
 }

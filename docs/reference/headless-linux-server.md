@@ -321,6 +321,54 @@ If you later install the desktop CLI from Orca settings, use that CLI for normal
 shell workflows. Keep the AppImage path in systemd so service restarts do not
 depend on an interactive shell profile.
 
+## Managing Agent Accounts
+
+Use the `account` commands to manage the Codex and Claude accounts a headless
+server signs agents in with. They work the same way whether you run the
+AppImage directly or a separately installed CLI:
+
+```bash
+/opt/orca/orca-linux.AppImage account list --json
+/opt/orca/orca-linux.AppImage account add --agent codex
+/opt/orca/orca-linux.AppImage account add --agent claude --json
+/opt/orca/orca-linux.AppImage account select --agent codex --id <accountId>
+/opt/orca/orca-linux.AppImage account rm --agent claude --id <accountId>
+```
+
+`--agent` names the account provider — `claude` or `codex` (default
+`claude`) — not a coding agent to act on. `account rm` is the canonical verb;
+`account remove` stays available as an alias.
+
+`account list` shows every managed account per agent, which one is active,
+and its rate-limit/usage state. On a cold server the first call can take a
+few seconds while usage is fetched for each account; an account whose usage
+hasn't arrived yet shows as still loading rather than as 0%.
+
+`account add` has two different flows, depending on where the login runs:
+
+- **On the server** — run it locally, or over SSH, with no `--environment`
+  or `--pairing-code`: the real provider login runs attached to your
+  terminal — `claude auth login --claudeai` for Claude, `codex login
+  --device-auth` for Codex — into a temporary config directory, and the
+  captured credentials are then registered with the local Orca runtime.
+  Codex uses device authorization specifically so the browser step can be
+  completed from a different machine: it prints a static URL and a
+  short-lived one-time code instead of binding a localhost OAuth callback a
+  remote browser could never reach. Claude's CLI polls Anthropic's OAuth
+  backend on its own and usually completes within seconds of authorizing in
+  any browser; its "paste the code" prompt is a rare fallback, not the
+  expected path.
+- **Targeting a remote host** — with `--environment <name>` or
+  `--pairing-code`: the login instead runs on the remote Orca host, and its
+  output is streamed back to your terminal, because the local flow's
+  credential import needs a filesystem path that only exists on the machine
+  running the CLI. The Codex device code still carries a real ~15-minute
+  server-side expiry in this mode.
+
+`account select` and `account rm` take `--agent claude|codex` and `--id
+<accountId>` (from `account list --json`) to switch the active account or
+remove one.
+
 ## Upgrade
 
 `orca serve` never updates itself. In headless mode Orca wires up no auto-updater
@@ -837,6 +885,10 @@ refuse to run there and print the command to run on the machine you want.
   `orca` user and that `/opt/orca` is readable by that user.
 - Clients cannot connect: make sure `--pairing-address` is an address reachable
   from the client, and make sure firewalls allow the selected `--port`.
+- `orca account list` seems slow to return on a busy or cold server: the first
+  call fetches rate-limit usage for every managed account, which can take a
+  few seconds. It no longer drops the connection while doing so — that was a
+  bug fixed in this change — so re-running the command is always safe.
 - Journal shows `Another Orca instance is already running for this userData
   profile` and the unit exits `3`: another process already owns the profile, so
   `RestartPreventExitStatus=3` leaves the unit `failed` on purpose. Find the

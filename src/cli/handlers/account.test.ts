@@ -49,12 +49,14 @@ vi.mock('../../shared/node-cli-command-resolution', () => ({
 import { ACCOUNT_HANDLERS } from './account'
 import type { HandlerContext } from '../dispatch'
 import type { RuntimeClient } from '../runtime-client'
+import { ACCOUNT_COMMAND_SPECS } from '../specs/account'
 import {
   getCmdExePath,
   WINDOWS_BATCH_UNSAFE_ARGUMENTS_ERROR,
   WINDOWS_BATCH_UNSAFE_CHARACTERS_LABEL
 } from '../../shared/windows-batch-spawn'
 import { ACCOUNT_IMPORT_RUNTIME_CAPABILITY } from '../../shared/protocol-version'
+import type { RateLimitState } from '../../shared/rate-limit-types'
 
 function successfulChild(): EventEmitter {
   const child = new EventEmitter()
@@ -82,6 +84,45 @@ function accountState(email: string) {
     activeAccountId: 'account-1',
     activeAccountIdsByRuntime: { host: 'account-1', wsl: {} }
   }
+}
+
+// Why: formatAccountsList dereferences rateLimits.inactive*Accounts
+// unconditionally, so every `accounts.list` fixture needs a full
+// RateLimitState, not just the {claude, codex} pair the old handler used.
+function rateLimitState(overrides: Partial<RateLimitState> = {}): RateLimitState {
+  return {
+    claude: null,
+    codex: null,
+    gemini: null,
+    opencodeGo: null,
+    kimi: null,
+    antigravity: null,
+    minimax: null,
+    grok: null,
+    minimaxCookieConfigured: false,
+    grokAuthConfigured: false,
+    claudeTarget: { runtime: 'host', wslDistro: null },
+    codexTarget: { runtime: 'host', wslDistro: null },
+    inactiveClaudeAccounts: [],
+    inactiveCodexAccounts: [],
+    ...overrides
+  }
+}
+
+// Why: the handler only reads id/email/active-slot fields, so fixtures state
+// just those rather than every timestamp on the real summary types.
+type AccountsStateFixture = {
+  accounts: { id: string; email: string }[]
+  activeAccountId: string | null
+  activeAccountIdsByRuntime?: { host: string | null; wsl: Record<string, string | null> }
+}
+
+function accountsSnapshotResult(
+  claude: AccountsStateFixture,
+  codex: AccountsStateFixture,
+  rateLimitsOverrides: Partial<RateLimitState> = {}
+) {
+  return { claude, codex, rateLimits: rateLimitState(rateLimitsOverrides) }
 }
 
 describe('account CLI handlers', () => {
@@ -462,35 +503,77 @@ describe('account CLI handlers', () => {
   })
 
   it.each(['environment', 'pairing-code'])(
-    'rejects --%s instead of silently ignoring it',
+    '`account add` takes the remote server-side login branch instead of the local terminal login when --%s is set',
     async (flag) => {
-      // Why: account commands are pinned to the local runtime, so honoring these
-      // silently would register the account on the wrong host.
-      await expect(
-        ACCOUNT_HANDLERS['account add']({
-          ...context('codex'),
-          flags: new Map<string, string | boolean>([
-            ['agent', 'codex'],
-            [flag, 'homelab']
-          ])
-        })
-      ).rejects.toThrow(`\`--${flag}\` does not retarget`)
+      // Why: main's local import RPCs take a filesystem path that only resolves
+      // on this CLI's own machine, so a remote-selector flag must route to the
+      // server-side login (accounts.addCodex + pollAdd) instead — never spawn
+      // a local `codex login`/`claude login` or hit the local capability check.
+      callMock.mockReset().mockImplementation((method: string) => {
+        if (method === 'accounts.addCodex') {
+          return Promise.resolve({
+            id: 'test',
+            ok: true,
+            result: { loginId: 'login-remote' },
+            _meta: { runtimeId: 'test-runtime' }
+          })
+        }
+        if (method === 'accounts.pollAdd') {
+          return Promise.resolve({
+            id: 'test',
+            ok: true,
+            result: {
+              loginId: 'login-remote',
+              provider: 'codex',
+              status: 'completed',
+              outputTail: 'Visit https://auth.example.com/login to continue.\nSigned in.\n',
+              state: accountState('codex@example.com')
+            },
+            _meta: { runtimeId: 'test-runtime' }
+          })
+        }
+        throw new Error(`unexpected method: ${method}`)
+      })
+
+      await ACCOUNT_HANDLERS['account add']({
+        ...context('codex'),
+        flags: new Map<string, string | boolean>([
+          ['agent', 'codex'],
+          [flag, 'homelab']
+        ])
+      })
+
       expect(spawnMock).not.toHaveBeenCalled()
+      expect(callMock).not.toHaveBeenCalledWith('status.get')
+      expect(callMock).toHaveBeenCalledWith('accounts.addCodex', {})
+      expect(logSpy).toHaveBeenCalledWith(
+        expect.stringContaining('Added codex account: codex@example.com')
+      )
     }
   )
 
   it.each(['environment', 'pairing-code'])(
-    'rejects --%s on `account list` instead of listing the local host',
+    '`account list` no longer special-cases --%s and lists normally',
     async (flag) => {
-      // Why: listing is read-only, but answering with the LOCAL machine's accounts
-      // when the user named a remote host is the specific wrong answer they'd act on.
-      await expect(
-        ACCOUNT_HANDLERS['account list']({
-          ...context('claude'),
-          flags: new Map<string, string | boolean>([[flag, 'homelab']])
-        })
-      ).rejects.toThrow(`\`--${flag}\` does not retarget`)
-      expect(callMock).not.toHaveBeenCalled()
+      // Why: rejectRemoteSelectionFlags was deleted on purpose — the flag now
+      // just selects which runtime ctx.client talks to (see index.ts), so the
+      // handler itself must neither reject it nor otherwise special-case it.
+      callMock.mockReset().mockResolvedValue({
+        id: 'test',
+        ok: true,
+        result: accountsSnapshotResult(
+          accountState('claude@example.com'),
+          accountState('codex@example.com')
+        ),
+        _meta: { runtimeId: 'test-runtime' }
+      })
+
+      await ACCOUNT_HANDLERS['account list']({
+        ...context('claude'),
+        flags: new Map<string, string | boolean>([[flag, 'homelab']])
+      })
+
+      expect(callMock).toHaveBeenCalledWith('accounts.list', { refreshUsage: true })
     }
   )
 
@@ -558,41 +641,283 @@ describe('account CLI handlers', () => {
     expect(spawnMock).not.toHaveBeenCalled()
   })
 
-  it('marks an account selected for WSL as active in human output', async () => {
+  it('marks the active account "yes" in the usage table', async () => {
+    // Why: `account list` now renders formatAccountsList's usage table (an
+    // ACTIVE column), not the old formatAccountsBlock "(active)" suffix text
+    // that `account add`'s block-style output still uses.
     callMock.mockResolvedValue({
       id: 'test',
       ok: true,
-      result: {
-        claude: {
+      result: accountsSnapshotResult(
+        {
+          accounts: [{ id: 'claude-1', email: 'claude@example.com' }],
+          activeAccountId: 'claude-1'
+        },
+        { accounts: [], activeAccountId: null }
+      ),
+      _meta: { runtimeId: 'test-runtime' }
+    })
+
+    await ACCOUNT_HANDLERS['account list']({ ...context('claude'), flags: new Map() })
+
+    const output = String(logSpy.mock.calls.at(-1)?.[0])
+    expect(output).toMatch(/claude@example\.com\s+claude-1\s+yes/)
+  })
+
+  it('marks an account active when it is selected only on a WSL slot', async () => {
+    // Why: selection is per-runtime-slot, so ACTIVE must read every slot — not
+    // just activeAccountId, which tracks the usage-fetch target alone.
+    callMock.mockResolvedValue({
+      id: 'test',
+      ok: true,
+      result: accountsSnapshotResult(
+        {
           accounts: [{ id: 'claude-wsl', email: 'claude@example.com' }],
           activeAccountId: null,
           activeAccountIdsByRuntime: { host: null, wsl: { Ubuntu: 'claude-wsl' } }
         },
-        codex: { accounts: [], activeAccountId: null }
-      },
+        { accounts: [], activeAccountId: null }
+      ),
       _meta: { runtimeId: 'test-runtime' }
     })
 
     await ACCOUNT_HANDLERS['account list']({ ...context('claude'), flags: new Map() })
 
-    expect(logSpy).toHaveBeenCalledWith(expect.stringContaining('claude@example.com (active)'))
+    const output = String(logSpy.mock.calls.at(-1)?.[0])
+    expect(output).toMatch(/claude@example\.com\s+claude-wsl\s+yes/)
   })
 
-  it('lists accounts without forcing a provider usage refresh', async () => {
-    // Why: the forced lane bypasses the poll throttle and costs one serial
-    // round-trip per managed account, and this output shows no usage numbers.
+  it('lists accounts with a forced usage refresh, since the table now renders usage numbers', async () => {
+    // Why: this handler renders usage now (unlike the pre-consolidation
+    // local-only listing), so it needs accounts.list's forced-refresh lane
+    // despite its cost (bypasses the poll throttle; one serial round-trip
+    // per managed account) — inverted from the old local-only contract.
     callMock.mockResolvedValue({
       id: 'test',
       ok: true,
-      result: {
-        claude: { accounts: [], activeAccountId: null },
-        codex: { accounts: [], activeAccountId: null }
-      },
+      result: accountsSnapshotResult(
+        { accounts: [], activeAccountId: null },
+        { accounts: [], activeAccountId: null }
+      ),
       _meta: { runtimeId: 'test-runtime' }
     })
 
     await ACCOUNT_HANDLERS['account list']({ ...context('claude'), flags: new Map() })
 
-    expect(callMock).toHaveBeenCalledWith('accounts.list', { refreshUsage: false })
+    expect(callMock).toHaveBeenCalledWith('accounts.list', { refreshUsage: true })
+  })
+
+  it('renders usage numbers from rateLimits for the active and inactive accounts of each agent', async () => {
+    callMock.mockResolvedValue({
+      id: 'test',
+      ok: true,
+      result: accountsSnapshotResult(
+        { accounts: [], activeAccountId: null },
+        {
+          accounts: [
+            { id: 'acc-active', email: 'active@example.com' },
+            { id: 'acc-inactive', email: 'inactive@example.com' }
+          ],
+          activeAccountId: 'acc-active'
+        },
+        {
+          codex: {
+            provider: 'codex',
+            session: {
+              usedPercent: 42.4,
+              windowMinutes: 300,
+              resetsAt: null,
+              resetDescription: null
+            },
+            weekly: null,
+            updatedAt: 0,
+            error: null,
+            status: 'ok'
+          },
+          inactiveCodexAccounts: [
+            {
+              accountId: 'acc-inactive',
+              rateLimits: null,
+              updatedAt: 0,
+              isFetching: false
+            }
+          ]
+        }
+      ),
+      _meta: { runtimeId: 'test-runtime' }
+    })
+
+    await ACCOUNT_HANDLERS['account list']({
+      ...context('codex'),
+      flags: new Map([['agent', 'codex']])
+    })
+
+    const output = String(logSpy.mock.calls.at(-1)?.[0])
+    expect(output).toContain('5h 42%')
+    expect(output).toContain('n/a')
+  })
+
+  it('narrows `account list` human output to --agent but keeps --json output as the full unfiltered snapshot', async () => {
+    callMock.mockResolvedValue({
+      id: 'test',
+      ok: true,
+      result: accountsSnapshotResult(
+        accountState('claude@example.com'),
+        accountState('codex@example.com')
+      ),
+      _meta: { runtimeId: 'test-runtime' }
+    })
+
+    await ACCOUNT_HANDLERS['account list']({
+      ...context('codex'),
+      flags: new Map([['agent', 'codex']])
+    })
+    const humanOutput = String(logSpy.mock.calls.at(-1)?.[0])
+    expect(humanOutput).toContain('codex@example.com')
+    expect(humanOutput).not.toContain('claude@example.com')
+
+    logSpy.mockClear()
+    await ACCOUNT_HANDLERS['account list']({
+      ...context('codex', true),
+      flags: new Map([['agent', 'codex']])
+    })
+    const jsonPrinted = JSON.parse(String(logSpy.mock.calls.at(-1)?.[0]))
+    expect(jsonPrinted.result.claude.accounts[0].email).toBe('claude@example.com')
+    expect(jsonPrinted.result.codex.accounts[0].email).toBe('codex@example.com')
+  })
+
+  it('selects a codex account by id', async () => {
+    callMock.mockResolvedValue({
+      id: 'test',
+      ok: true,
+      result: accountState('codex@example.com'),
+      _meta: { runtimeId: 'test-runtime' }
+    })
+
+    await ACCOUNT_HANDLERS['account select']({
+      ...context('codex'),
+      flags: new Map([
+        ['agent', 'codex'],
+        ['id', 'account-1']
+      ])
+    })
+
+    expect(callMock).toHaveBeenCalledWith('accounts.selectCodex', { accountId: 'account-1' })
+    expect(logSpy).toHaveBeenCalledWith(
+      expect.stringContaining('Active codex account: codex@example.com (account-1)')
+    )
+  })
+
+  it('selects a claude account by id', async () => {
+    callMock.mockResolvedValue({
+      id: 'test',
+      ok: true,
+      result: accountState('claude@example.com'),
+      _meta: { runtimeId: 'test-runtime' }
+    })
+
+    await ACCOUNT_HANDLERS['account select']({
+      ...context('claude'),
+      flags: new Map([
+        ['agent', 'claude'],
+        ['id', 'account-1']
+      ])
+    })
+
+    expect(callMock).toHaveBeenCalledWith('accounts.selectClaude', { accountId: 'account-1' })
+  })
+
+  it('removes a codex account via `account rm`', async () => {
+    callMock.mockResolvedValue({
+      id: 'test',
+      ok: true,
+      result: { accounts: [], activeAccountId: null },
+      _meta: { runtimeId: 'test-runtime' }
+    })
+
+    await ACCOUNT_HANDLERS['account rm']({
+      ...context('codex'),
+      flags: new Map([
+        ['agent', 'codex'],
+        ['id', 'account-1']
+      ])
+    })
+
+    expect(callMock).toHaveBeenCalledWith('accounts.removeCodex', { accountId: 'account-1' })
+    expect(logSpy).toHaveBeenCalledWith(
+      expect.stringContaining('Removed codex account. 0 account(s) remain.')
+    )
+  })
+
+  it('removes a claude account via `account rm`', async () => {
+    callMock.mockResolvedValue({
+      id: 'test',
+      ok: true,
+      result: { accounts: [], activeAccountId: null },
+      _meta: { runtimeId: 'test-runtime' }
+    })
+
+    await ACCOUNT_HANDLERS['account rm']({
+      ...context('claude'),
+      flags: new Map([
+        ['agent', 'claude'],
+        ['id', 'account-1']
+      ])
+    })
+
+    expect(callMock).toHaveBeenCalledWith('accounts.removeClaude', { accountId: 'account-1' })
+  })
+
+  it('rejects `account select` missing --id', async () => {
+    await expect(
+      ACCOUNT_HANDLERS['account select']({
+        ...context('codex'),
+        flags: new Map([['agent', 'codex']])
+      })
+    ).rejects.toThrow('Missing required --id')
+    expect(callMock).not.toHaveBeenCalled()
+  })
+
+  it('rejects `account rm` missing --id', async () => {
+    await expect(
+      ACCOUNT_HANDLERS['account rm']({
+        ...context('codex'),
+        flags: new Map([['agent', 'codex']])
+      })
+    ).rejects.toThrow('Missing required --id')
+    expect(callMock).not.toHaveBeenCalled()
+  })
+
+  it('rejects `account select` missing --agent', async () => {
+    await expect(
+      ACCOUNT_HANDLERS['account select']({
+        ...context('codex'),
+        flags: new Map([['id', 'account-1']])
+      })
+    ).rejects.toThrow('Missing required --agent')
+    expect(callMock).not.toHaveBeenCalled()
+  })
+
+  it('rejects `account rm` with a valueless --agent instead of defaulting', async () => {
+    // Why: shared with `account add` via getAgentFlag — a boolean-parsed flag
+    // must never silently pick a provider for a destructive removal.
+    await expect(
+      ACCOUNT_HANDLERS['account rm']({
+        ...context('codex'),
+        flags: new Map<string, string | boolean>([
+          ['agent', true],
+          ['id', 'account-1']
+        ])
+      })
+    ).rejects.toThrow('Missing a value for --agent')
+    expect(callMock).not.toHaveBeenCalled()
+  })
+
+  it('declares `account remove` as an alias for the canonical `account rm` command', () => {
+    // Why: the generic alias-canonicalization mechanism is covered elsewhere
+    // (args.test.ts); this pins the actual spec data so removing the alias
+    // declaration here is caught even though it isn't exercised through main().
+    const rm = ACCOUNT_COMMAND_SPECS.find((spec) => spec.path.join(' ') === 'account rm')
+    expect(rm?.aliases).toContainEqual(['account', 'remove'])
   })
 })

@@ -1,5 +1,6 @@
 import { z } from 'zod'
 import { defineMethod, defineStreamingMethod, type RpcAnyMethod } from '../core'
+import { OptionalFiniteNumber } from '../schemas'
 
 // Why: monotonically increasing per-process counter avoids the Date.now()
 // collision that fired when two near-simultaneous accounts.subscribe calls
@@ -80,6 +81,46 @@ const ListAccountsParams = z.object({
   refreshUsage: z.boolean().default(true)
 })
 
+// Why: caps how long accounts.list waits on the forced refresh so the reply
+// lands well inside the local-socket idle window even on a cold host with
+// several managed accounts; the refresh itself keeps running to warm the
+// cache and set the fetch debounce for the next call (#8884).
+export const ACCOUNTS_LIST_REFRESH_BUDGET_MS = 10_000
+
+// Why: races the refresh against the budget instead of cancelling it — a late
+// rejection must not surface as an unhandled rejection, and the timer must
+// never keep the process alive nor leak once the refresh wins the race.
+function awaitAccountsRefreshWithinBudget(refresh: Promise<void>): Promise<void> {
+  return new Promise((resolve) => {
+    let settled = false
+    const timer = setTimeout(() => {
+      settled = true
+      resolve()
+    }, ACCOUNTS_LIST_REFRESH_BUDGET_MS)
+    if (typeof timer.unref === 'function') {
+      timer.unref()
+    }
+    void refresh.then(
+      () => {
+        if (settled) {
+          return
+        }
+        settled = true
+        clearTimeout(timer)
+        resolve()
+      },
+      () => {
+        if (settled) {
+          return
+        }
+        settled = true
+        clearTimeout(timer)
+        resolve()
+      }
+    )
+  })
+}
+
 const AccountsUnsubscribeParams = z.object({
   subscriptionId: z
     .unknown()
@@ -87,14 +128,37 @@ const AccountsUnsubscribeParams = z.object({
     .pipe(z.string().min(1, 'Missing subscriptionId'))
 })
 
+const AddAccountParams = z.object({
+  target: z
+    .object({
+      runtime: z.enum(['host', 'wsl']).optional(),
+      wslDistro: z.union([z.string(), z.null()]).optional()
+    })
+    .optional()
+})
+
+const PollAddAccountParams = z.object({
+  loginId: z.string().min(1, 'Missing loginId'),
+  timeoutMs: OptionalFiniteNumber
+})
+
+const SubmitLoginInputParams = z.object({
+  loginId: z.string().min(1, 'Missing loginId'),
+  input: z.string().min(1, 'Missing input')
+})
+
 // Why: bridges the desktop ClaudeAccountService / CodexAccountService /
-// RateLimitService into the WebSocket / local-socket RPC. Read + switch +
-// remove for all clients; interactive add/re-auth flows spawn `claude login`
-// / `codex login` PTYs that need a desktop browser, so they intentionally
-// remain desktop-only. `accounts.addClaudeFromConfigDir` is the exception: it
-// captures an already-authenticated CLAUDE_CONFIG_DIR (no PTY) so the local
-// `orca account add` CLI can register accounts on a headless host; it is gated
-// to the local runtime connection, never a mobile device token. See #1438.
+// RateLimitService into the WebSocket / local-socket RPC and the headless
+// CLI. Read + switch + remove work for all clients. accounts.addCodex /
+// addClaude still spawn `claude login` / `codex login`, which need a real
+// OAuth browser round-trip — they return a loginId immediately and
+// accounts.pollAdd long-polls the result (the one-shot CLI transport can't
+// hold a streaming method open; see plan in spec doc for issue #1438).
+// `accounts.addClaudeFromConfigDir` / `accounts.addCodexFromHome` cover the
+// no-PTY case: they capture an already-authenticated CLAUDE_CONFIG_DIR /
+// Codex home so the local `orca account add` CLI can register accounts on a
+// headless host; both are gated to the local runtime connection, never a
+// mobile device token.
 export const ACCOUNT_METHODS: readonly RpcAnyMethod[] = [
   defineMethod({
     name: 'accounts.list',
@@ -105,7 +169,7 @@ export const ACCOUNT_METHODS: readonly RpcAnyMethod[] = [
       // inactive-account caches only fill on AccountsPane open, so without
       // this the mobile UI would render stale nulls / zeroes.
       if (params.refreshUsage) {
-        await runtime.refreshAccountsForMobile()
+        await awaitAccountsRefreshWithinBudget(runtime.refreshAccountsForMobile())
       }
       return runtime.getAccountsSnapshot()
     }
@@ -171,6 +235,32 @@ export const ACCOUNT_METHODS: readonly RpcAnyMethod[] = [
         runtime: params.runtime,
         wslDistro: params.wslDistro ?? null
       })
+    }
+  }),
+  defineMethod({
+    name: 'accounts.addCodex',
+    params: AddAccountParams,
+    handler: async (params, { runtime }) => runtime.addCodexAccount(params.target)
+  }),
+  defineMethod({
+    name: 'accounts.addClaude',
+    params: AddAccountParams,
+    handler: async (params, { runtime }) => runtime.addClaudeAccount(params.target)
+  }),
+  defineMethod({
+    name: 'accounts.pollAdd',
+    params: PollAddAccountParams,
+    handler: async (params, { runtime, signal }) =>
+      runtime.pollAddAccount(params.loginId, { timeoutMs: params.timeoutMs, signal })
+  }),
+  // Why: relays a pasted OAuth code from the CLI's terminal into the Claude
+  // login child process's stdin on the server — see ClaudeAccountAddOptions.
+  defineMethod({
+    name: 'accounts.submitLoginInput',
+    params: SubmitLoginInputParams,
+    handler: async (params, { runtime }) => {
+      runtime.submitAccountLoginInput(params.loginId, params.input)
+      return { submitted: true }
     }
   }),
   // Why: streaming counterpart so mobile usage bars refresh in place when the

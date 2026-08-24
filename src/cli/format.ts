@@ -5,6 +5,14 @@ import type { RuntimeRpcFailure, RuntimeRpcSuccess } from './runtime-client'
 import { RuntimeClientError, RuntimeRpcFailureError } from './runtime/types'
 
 export {
+  formatAccountAddResult,
+  formatAccountAddStarted,
+  formatAccountRemoveResult,
+  formatAccountSelectResult,
+  formatAccountsList
+} from './accounts-format'
+
+export {
   formatBrowserProfileList,
   formatScreenshot,
   formatSnapshot,

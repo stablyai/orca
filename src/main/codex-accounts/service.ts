@@ -38,6 +38,7 @@ import { readCodexTopLevelModelProvider } from '../codex/codex-model-provider-co
 import { resolveCodexCommand } from '../codex-cli/command'
 import type { Store } from '../persistence'
 import type { RateLimitService } from '../rate-limits/service'
+import { invokeLoginCallbackSafely } from '../accounts/safe-login-callback-invocation'
 import { parseWslUncPath } from '../../shared/wsl-paths'
 import { toWindowsWslPath } from '../wsl'
 import { buildEncodedWslBashCommand } from '../wsl-bash-command'
@@ -64,6 +65,11 @@ import {
 import { isDefinitiveAbsence } from '../../shared/definitive-filesystem-absence'
 
 const LOGIN_TIMEOUT_MS = 120_000
+// Why: device-code auth's one-time code has a real 15-minute server-side
+// expiry; this adds grace for polling/network latency on top of that, unlike
+// LOGIN_TIMEOUT_MS which times a same-machine browser redirect that should
+// complete in under 2 minutes.
+const DEVICE_AUTH_LOGIN_TIMEOUT_MS = 16 * 60 * 1000
 const MAX_LOGIN_OUTPUT_CHARS = 4_000
 // Why: mirrors the Windows rm retry policy in local-worktree-filesystem — a
 // just-terminated codex login can briefly keep handles inside a managed home.
@@ -96,6 +102,14 @@ type CanonicalCodexConfig = {
 export type CodexAccountAddTarget = {
   runtime?: 'host' | 'wsl'
   wslDistro?: string | null
+}
+
+export type CodexAccountAddOptions = {
+  // Why: headless/remote callers (CLI, mobile) have no local browser sharing
+  // the machine with the login process, so a browser-redirect OAuth callback
+  // bound to localhost can never complete; device-code auth has no callback
+  // server at all.
+  deviceAuth?: boolean
 }
 
 export type CodexAccountReauthenticateOptions = {
@@ -299,8 +313,12 @@ export class CodexAccountService {
     return this.getSnapshot()
   }
 
-  async addAccount(target?: CodexAccountAddTarget): Promise<CodexRateLimitAccountsState> {
-    return this.serializeMutation(() => this.doAddAccount(target))
+  async addAccount(
+    target?: CodexAccountAddTarget,
+    onOutput?: (chunk: string) => void,
+    options?: CodexAccountAddOptions
+  ): Promise<CodexRateLimitAccountsState> {
+    return this.serializeMutation(() => this.doAddAccount(target, onOutput, options))
   }
 
   /**
@@ -754,7 +772,11 @@ export class CodexAccountService {
     })
   }
 
-  private async doAddAccount(target?: CodexAccountAddTarget): Promise<CodexRateLimitAccountsState> {
+  private async doAddAccount(
+    target?: CodexAccountAddTarget,
+    onOutput?: (chunk: string) => void,
+    options?: CodexAccountAddOptions
+  ): Promise<CodexRateLimitAccountsState> {
     const accountId = randomUUID()
     const managedHome = await this.createManagedHome(accountId, target)
     const { managedHomePath } = managedHome
@@ -762,7 +784,9 @@ export class CodexAccountService {
       const canonicalConfig = this.readCanonicalConfigForManagedHome(managedHomePath)
       this.assertOAuthAccountAddAllowed(canonicalConfig)
       this.safeSyncCanonicalConfigIntoManagedHome(managedHomePath, canonicalConfig, accountId)
-      await this.runCodexLogin(managedHomePath)
+      // Why: forwards onOutput/deviceAuth so headless callers get device-code
+      // streaming, then shares main's persistence path with doAddAccountFromHome.
+      await this.runCodexLogin(managedHomePath, onOutput, options)
       return await this.persistCapturedCodexAccount(accountId, managedHome)
     } catch (error) {
       this.removeManagedHomeUnlessUnproven(error, managedHomePath, accountId)
@@ -1693,7 +1717,11 @@ export class CodexAccountService {
     }
   }
 
-  private async runCodexLogin(managedHomePath: string): Promise<void> {
+  private async runCodexLogin(
+    managedHomePath: string,
+    onOutput?: (chunk: string) => void,
+    options?: CodexAccountAddOptions
+  ): Promise<void> {
     const wslInfo = parseWslUncPath(managedHomePath)
     if (wslInfo) {
       await this.assertWslCodexCliAvailable(wslInfo)
@@ -1709,14 +1737,17 @@ export class CodexAccountService {
       const spawnConfig = wslInfo
         ? {
             command: 'wsl.exe',
-            args: buildWslCodexLoginArgs(wslInfo.distro, wslInfo.linuxPath),
+            args: buildWslCodexLoginArgs(wslInfo.distro, wslInfo.linuxPath, options?.deviceAuth),
             env: process.env,
             codexCommand: 'codex'
           }
         : (() => {
             const codexCommand = resolveCodexCommand()
             // Why: Windows codex may be a .cmd/.bat; spawn+shell:true would trigger DEP0190, so invoke cmd.exe /c explicitly.
-            const { spawnCmd, spawnArgs } = getSpawnArgsForWindows(codexCommand, ['login'])
+            const { spawnCmd, spawnArgs } = getSpawnArgsForWindows(
+              codexCommand,
+              options?.deviceAuth ? ['login', '--device-auth'] : ['login']
+            )
             return {
               command: spawnCmd,
               args: spawnArgs,
@@ -1737,10 +1768,16 @@ export class CodexAccountService {
       let settled = false
       let output = ''
       const appendOutput = (chunk: Buffer): void => {
-        output = `${output}${chunk.toString()}`
+        const text = chunk.toString()
+        output = `${output}${text}`
         if (output.length > MAX_LOGIN_OUTPUT_CHARS) {
           output = output.slice(-MAX_LOGIN_OUTPUT_CHARS)
         }
+        // Why: forwarding is additive to the truncated error-message buffer
+        // above and must not affect the timeout/kill/reject flow below. This
+        // runs synchronously inside a child.stdout 'data' handler, so a
+        // throwing callback must not escape and crash the host process.
+        invokeLoginCallbackSafely('codex-accounts onOutput', onOutput, text)
       }
 
       let timeout: ReturnType<typeof setTimeout> | null = null
@@ -1777,12 +1814,15 @@ export class CodexAccountService {
       }
 
       const timeoutError = new Error('Codex sign-in took too long to finish. Please try again.')
-      timeout = setTimeout(() => {
-        killLoginProcessTree(child)
-        settle(() => {
-          rejectPromise(timeoutError)
-        })
-      }, LOGIN_TIMEOUT_MS)
+      timeout = setTimeout(
+        () => {
+          killLoginProcessTree(child)
+          settle(() => {
+            rejectPromise(timeoutError)
+          })
+        },
+        options?.deviceAuth ? DEVICE_AUTH_LOGIN_TIMEOUT_MS : LOGIN_TIMEOUT_MS
+      )
 
       // Why: on Windows the codex login CLI can linger after writing auth.json,
       // and its open handles on the managed home (log/codex-login.log) make the

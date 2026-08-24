@@ -27,6 +27,16 @@ describe('WSL Codex commands', () => {
     expect(command).toContain('export CODEX_HOME=')
     expect(command).toContain('/home/alice/managed-home')
     expect(command).toContain('exec "$resolved" login')
+    expect(command).not.toContain('--device-auth')
+  })
+
+  it('adds --device-auth when requesting device-code login for headless callers', () => {
+    const args = buildWslCodexLoginArgs('Ubuntu', '/home/alice/managed-home', true)
+    const command = args.at(-1)
+
+    expect(command).toContain('export CODEX_HOME=')
+    expect(command).toContain('/home/alice/managed-home')
+    expect(command).toContain('exec "$resolved" login --device-auth')
   })
 
   it('quotes an explicit read-only app-server contract without changing the default', () => {

@@ -12,6 +12,7 @@ import type {
 } from '../../shared/managed-account-types'
 import type { Store } from '../persistence'
 import type { RateLimitService } from '../rate-limits/service'
+import { invokeLoginCallbackSafely } from '../accounts/safe-login-callback-invocation'
 import { resolveClaudeCommand } from '../codex-cli/command'
 import type { ClaudeRuntimeAuthService } from './runtime-auth-service'
 import {
@@ -47,6 +48,12 @@ import {
 } from './runtime-selection'
 
 const LOGIN_TIMEOUT_MS = 180_000
+// Why: headless/remote callers (CLI over `orca serve`) have no local browser
+// on the same machine as the login process, so the user must open the URL on
+// a different device, complete OAuth, then paste the resulting code back into
+// this process's stdin — unlike the desktop flow's same-machine ~3 minute
+// budget, this needs real wall-clock time for a human round trip.
+const REMOTE_LOGIN_TIMEOUT_MS = 16 * 60 * 1000
 const STATUS_TIMEOUT_MS = 20_000
 const MAX_COMMAND_OUTPUT_CHARS = 4_000
 const WINDOWS_TASKKILL_TIMEOUT_MS = 5_000
@@ -74,6 +81,16 @@ type ManagedClaudeAuthSnapshot = {
 export type ClaudeAccountAddTarget = {
   runtime?: 'host' | 'wsl'
   wslDistro?: string | null
+}
+
+export type ClaudeAccountAddOptions = {
+  // Why: headless/remote callers have no local browser to auto-complete the
+  // OAuth callback, so the user must manually visit the URL (possibly on a
+  // different device), copy the resulting code, and paste it back — which
+  // needs both more wall-clock time and a way to relay that pasted text
+  // into the login child process's stdin.
+  remoteAuth?: boolean
+  onChildReady?: (writeInput: (text: string) => void) => void
 }
 
 export type ClaudeAccountImportOptions = ClaudeAccountAddTarget & {
@@ -108,8 +125,12 @@ export class ClaudeAccountService {
     return this.getSnapshot()
   }
 
-  async addAccount(target?: ClaudeAccountAddTarget): Promise<ClaudeRateLimitAccountsState> {
-    return this.serializeMutation(() => this.doAddAccount(target))
+  async addAccount(
+    target?: ClaudeAccountAddTarget,
+    onOutput?: (chunk: string) => void,
+    options?: ClaudeAccountAddOptions
+  ): Promise<ClaudeRateLimitAccountsState> {
+    return this.serializeMutation(() => this.doAddAccount(target, onOutput, options))
   }
 
   /**
@@ -159,13 +180,15 @@ export class ClaudeAccountService {
   }
 
   private async doAddAccount(
-    target?: ClaudeAccountAddTarget
+    target?: ClaudeAccountAddTarget,
+    onOutput?: (chunk: string) => void,
+    options?: ClaudeAccountAddOptions
   ): Promise<ClaudeRateLimitAccountsState> {
     const accountId = randomUUID()
     const managedAuth = await this.createManagedAuthDir(accountId, target)
     const previousSettings = this.store.getSettings()
     try {
-      const captured = await this.runClaudeLoginAndCapture(managedAuth)
+      const captured = await this.runClaudeLoginAndCapture(managedAuth, onOutput, options)
       return await this.persistCapturedClaudeAccount(
         accountId,
         managedAuth,
@@ -579,7 +602,9 @@ export class ClaudeAccountService {
       managedAuthRuntime: 'host',
       wslDistro: null,
       wslLinuxAuthPath: null
-    }
+    },
+    onOutput?: (chunk: string) => void,
+    options?: ClaudeAccountAddOptions
   ): Promise<CapturedClaudeAuth> {
     const tempConfig = await this.createTemporaryClaudeConfigDir(location)
     const loginAbortController = new AbortController()
@@ -598,10 +623,17 @@ export class ClaudeAccountService {
       if (loginAbortController.signal.aborted) {
         throw new Error('Claude sign-in was cancelled.')
       }
-      await this.runClaudeCommand(['auth', 'login', '--claudeai'], tempConfig, LOGIN_TIMEOUT_MS, {
-        signal: loginAbortController.signal,
-        keepStdinOpen: true
-      })
+      await this.runClaudeCommand(
+        ['auth', 'login', '--claudeai'],
+        tempConfig,
+        options?.remoteAuth ? REMOTE_LOGIN_TIMEOUT_MS : LOGIN_TIMEOUT_MS,
+        {
+          signal: loginAbortController.signal,
+          keepStdinOpen: true,
+          onOutput,
+          onChildReady: options?.onChildReady
+        }
+      )
       this.cancelPendingClaudeLogin = null
       const status = await this.runClaudeCommand(
         ['auth', 'status', '--json'],
@@ -1040,7 +1072,13 @@ export class ClaudeAccountService {
     args: string[],
     configDir: { windowsPath: string; linuxPath: string | null; wslDistro: string | null },
     timeoutMs: number,
-    options?: { allowFailure?: boolean; signal?: AbortSignal; keepStdinOpen?: boolean }
+    options?: {
+      allowFailure?: boolean
+      signal?: AbortSignal
+      keepStdinOpen?: boolean
+      onOutput?: (chunk: string) => void
+      onChildReady?: (writeInput: (text: string) => void) => void
+    }
   ): Promise<string> {
     return new Promise((resolvePromise, rejectPromise) => {
       const spawnConfig =
@@ -1093,6 +1131,17 @@ export class ClaudeAccountService {
         // A process group lets cancellation terminate the whole POSIX login tree.
         detached: process.platform !== 'win32'
       })
+      if (child.stdin) {
+        const childStdin = child.stdin
+        const writeInput = (text: string): void => {
+          try {
+            childStdin.write(`${text}\n`)
+          } catch (error) {
+            console.warn('[claude-accounts] Failed to write pasted input to Claude login:', error)
+          }
+        }
+        invokeLoginCallbackSafely('claude-accounts onChildReady', options?.onChildReady, writeInput)
+      }
       const stdout = child.stdout
       const stderr = child.stderr
       if (!stdout || !stderr) {
@@ -1114,10 +1163,16 @@ export class ClaudeAccountService {
       let settled = false
       let output = ''
       const appendOutput = (chunk: Buffer): void => {
-        output = `${output}${chunk.toString()}`
+        const text = chunk.toString()
+        output = `${output}${text}`
         if (output.length > MAX_COMMAND_OUTPUT_CHARS) {
           output = output.slice(-MAX_COMMAND_OUTPUT_CHARS)
         }
+        // Why: forwarding runs before the denial scan so callers still see the
+        // chunk that triggered the kill, matching Codex's additive semantics.
+        // This runs synchronously inside a child.stdout 'data' handler, so a
+        // throwing callback must not escape and crash the host process.
+        invokeLoginCallbackSafely('claude-accounts onOutput', options?.onOutput, text)
         if (CLAUDE_AUTH_DENIED_PATTERN.test(output)) {
           killChild(() =>
             settle(() => rejectPromise(new Error('Claude sign-in was denied. Please try again.')))

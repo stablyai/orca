@@ -106,6 +106,114 @@ describe('CodexAccountService config sync', () => {
     expect(runtimeHome.syncForCurrentSelection).toHaveBeenCalledWith({ runtime: 'host' })
   })
 
+  it('spawns plain login args for the existing desktop-style addAccount() call', async () => {
+    vi.resetModules()
+
+    const spawnMock = vi.fn(
+      (_command: string, _args: string[], options: { env: NodeJS.ProcessEnv }) => {
+        const child = new EventEmitter() as EventEmitter & {
+          stdout: PassThrough
+          stderr: PassThrough
+          kill: () => void
+        }
+        child.stdout = new PassThrough()
+        child.stderr = new PassThrough()
+        child.kill = vi.fn()
+
+        const loginHome = options.env.CODEX_HOME
+        const payload = Buffer.from(JSON.stringify({ email: 'user@example.com' })).toString(
+          'base64url'
+        )
+        writeFileSync(
+          join(loginHome!, 'auth.json'),
+          JSON.stringify({ tokens: { id_token: `header.${payload}.signature` } }),
+          'utf-8'
+        )
+        queueMicrotask(() => child.emit('close', 0))
+        return child
+      }
+    )
+
+    vi.doMock('node:child_process', () => ({
+      execFileSync: vi.fn(),
+      spawn: spawnMock
+    }))
+    vi.doMock('../codex-cli/command', () => ({
+      resolveCodexCommand: () => 'codex'
+    }))
+
+    const settings = createSettings()
+    const store = createStore(settings)
+    const rateLimits = createRateLimits()
+    const runtimeHome = createRuntimeHome()
+
+    const { CodexAccountService } = await import('./service')
+    const service = new CodexAccountService(
+      store as never,
+      rateLimits as never,
+      runtimeHome as never
+    )
+
+    await service.addAccount()
+
+    expect(spawnMock).toHaveBeenCalledTimes(1)
+    expect(spawnMock.mock.calls[0][1]).toEqual(['login'])
+  })
+
+  it('spawns --device-auth login args when the headless CLI path requests device-code auth', async () => {
+    vi.resetModules()
+
+    const spawnMock = vi.fn(
+      (_command: string, _args: string[], options: { env: NodeJS.ProcessEnv }) => {
+        const child = new EventEmitter() as EventEmitter & {
+          stdout: PassThrough
+          stderr: PassThrough
+          kill: () => void
+        }
+        child.stdout = new PassThrough()
+        child.stderr = new PassThrough()
+        child.kill = vi.fn()
+
+        const loginHome = options.env.CODEX_HOME
+        const payload = Buffer.from(JSON.stringify({ email: 'user@example.com' })).toString(
+          'base64url'
+        )
+        writeFileSync(
+          join(loginHome!, 'auth.json'),
+          JSON.stringify({ tokens: { id_token: `header.${payload}.signature` } }),
+          'utf-8'
+        )
+        queueMicrotask(() => child.emit('close', 0))
+        return child
+      }
+    )
+
+    vi.doMock('node:child_process', () => ({
+      execFileSync: vi.fn(),
+      spawn: spawnMock
+    }))
+    vi.doMock('../codex-cli/command', () => ({
+      resolveCodexCommand: () => 'codex'
+    }))
+
+    const settings = createSettings()
+    const store = createStore(settings)
+    const rateLimits = createRateLimits()
+    const runtimeHome = createRuntimeHome()
+
+    const { CodexAccountService } = await import('./service')
+    const service = new CodexAccountService(
+      store as never,
+      rateLimits as never,
+      runtimeHome as never
+    )
+
+    await service.addAccount(undefined, undefined, { deviceAuth: true })
+
+    expect(spawnMock).toHaveBeenCalledTimes(1)
+    expect(spawnMock.mock.calls[0][1]).toEqual(['login', '--device-auth'])
+  })
+
   it('does not seed source-home hook trust when adding a self-contained account', async () => {
     vi.resetModules()
     let fixture: Awaited<ReturnType<typeof createCanonicalHookTrustFixture>>

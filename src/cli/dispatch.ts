@@ -13,7 +13,7 @@ export type HandlerContext = {
 export type CommandHandler = (ctx: HandlerContext) => Promise<void>
 
 // Why: routing only needs key→group, so every CLI invocation can skip the
-// transitive module graph of the 24 groups it does not dispatch into.
+// transitive module graph of the groups it does not dispatch into.
 function buildRoutes(groups: readonly HandlerGroup[]): Map<string, HandlerGroup> {
   const table = new Map<string, HandlerGroup>()
   for (const group of groups) {

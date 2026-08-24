@@ -1204,13 +1204,18 @@ import {
 } from '../providers/ssh-git-dispatch'
 import { detectGitHubAvatarIcon, detectRepoIconAndUpstream } from '../repo-icon-autodetect'
 import { enrichMissingRepoGitRemoteIdentities } from '../repo-git-remote-identity-enrichment'
-import type { ClaudeAccountService } from '../claude-accounts/service'
+import type { ClaudeAccountAddTarget, ClaudeAccountService } from '../claude-accounts/service'
 import type {
+  CodexAccountAddTarget,
   CodexAccountService,
   CodexResetCreditRejectedBeforeProviderReason
 } from '../codex-accounts/service'
 import type { CodexAccountSelectionTarget } from '../codex-accounts/runtime-selection'
 import type { RateLimitService } from '../rate-limits/service'
+import {
+  PendingAccountLoginRegistry,
+  type PendingAccountLoginSnapshot
+} from '../accounts/pending-account-login-registry'
 import { applyPRBotAuthorOverride } from '../../shared/pr-bot-author-overrides'
 import type { CodexRateLimitResetOutcome, RateLimitState } from '../../shared/rate-limit-types'
 import type { CodexResetCreditExpectedScope } from '../../shared/codex-reset-credit-scope'
@@ -1232,6 +1237,10 @@ import { createNestedRepoImportTargetResolver } from '../project-groups/nested-r
 function sanitizeNestedRepoRuntimeImportError(context: string, error: unknown): string {
   console.warn(`[project-groups] ${context}`, error)
   return 'Repository could not be imported'
+}
+
+function describeAccountLoginError(error: unknown): string {
+  return error instanceof Error ? error.message : String(error)
 }
 
 type RuntimeAccountServices = {
@@ -3668,6 +3677,9 @@ export class OrcaRuntimeService {
   private ptyControllerAggregateInventoryGeneration = 0
   private ptyControllerInventoryGenerationByProvider = new Map<string, number>()
   private accountServices: RuntimeAccountServices | null = null
+  private readonly pendingAccountLogins = new PendingAccountLoginRegistry<
+    CodexRateLimitAccountsState | ClaudeRateLimitAccountsState
+  >()
   private commitMessageAgentEnv: CommitMessageAgentEnvironmentResolvers | null = null
   private automationService: AutomationService | null = null
   private artifactService: ArtifactCloudService | null = null
@@ -14845,6 +14857,80 @@ export class OrcaRuntimeService {
 
   removeCodexAccount(accountId: string): Promise<CodexRateLimitAccountsState> {
     return this.requireAccountServices().codexAccounts.removeAccount(accountId)
+  }
+
+  // Why: `codex login`/`claude auth login` spawn a real OAuth flow with no
+  // synchronous result, so headless callers (the CLI over a one-shot socket)
+  // get a loginId back immediately and poll pollAddAccount for progress
+  // instead of holding one RPC call open for the whole login.
+  addCodexAccount(target?: CodexAccountAddTarget): { loginId: string } {
+    const { codexAccounts } = this.requireAccountServices()
+    const loginId = randomUUID()
+    this.pendingAccountLogins.begin(loginId, 'codex')
+    void codexAccounts
+      .addAccount(
+        target,
+        (chunk) => this.pendingAccountLogins.appendOutput(loginId, chunk),
+        // Why: this RPC is only reachable via headless CLI/mobile, which have
+        // no local browser sharing the login process's machine — device-code
+        // auth avoids a localhost OAuth callback that could never complete.
+        { deviceAuth: true }
+      )
+      .then(
+        (state) => this.pendingAccountLogins.complete(loginId, state),
+        (error) => this.pendingAccountLogins.fail(loginId, describeAccountLoginError(error))
+      )
+    return { loginId }
+  }
+
+  addClaudeAccount(target?: ClaudeAccountAddTarget): { loginId: string } {
+    const { claudeAccounts } = this.requireAccountServices()
+    const loginId = randomUUID()
+    this.pendingAccountLogins.begin(loginId, 'claude')
+    void claudeAccounts
+      .addAccount(target, (chunk) => this.pendingAccountLogins.appendOutput(loginId, chunk), {
+        // Why: this RPC is only reachable via headless CLI/mobile, which has
+        // no local browser sharing the login process's machine — the user
+        // must paste the OAuth code back in, which needs a stdin writer and
+        // more wall-clock time than the desktop same-machine flow.
+        remoteAuth: true,
+        onChildReady: (writeInput) => this.pendingAccountLogins.setInputWriter(loginId, writeInput)
+      })
+      .then(
+        (state) => this.pendingAccountLogins.complete(loginId, state),
+        (error) => this.pendingAccountLogins.fail(loginId, describeAccountLoginError(error))
+      )
+    return { loginId }
+  }
+
+  submitAccountLoginInput(loginId: string, input: string): void {
+    this.requireAccountServices()
+    this.pendingAccountLogins.submitInput(loginId, input)
+  }
+
+  // Why: long-poll counterpart to terminal.wait/orchestration.check — blocks
+  // until the login's state changes or timeoutMs elapses, then always
+  // resolves (never rejects on a still-in-progress login) so the CLI's poll
+  // loop gets one response per call.
+  async pollAddAccount(
+    loginId: string,
+    options?: { timeoutMs?: number; signal?: AbortSignal }
+  ): Promise<
+    PendingAccountLoginSnapshot<CodexRateLimitAccountsState | ClaudeRateLimitAccountsState>
+  > {
+    this.requireAccountServices()
+    const existing = this.pendingAccountLogins.get(loginId)
+    if (!existing) {
+      throw new Error('That account login no longer exists.')
+    }
+    if (existing.status === 'in_progress') {
+      await this.pendingAccountLogins.waitForUpdate(
+        loginId,
+        options?.timeoutMs ?? ACCOUNT_LOGIN_POLL_DEFAULT_TIMEOUT_MS,
+        options?.signal
+      )
+    }
+    return this.pendingAccountLogins.get(loginId) ?? existing
   }
 
   // Why: Codex counterpart of addClaudeAccountFromConfigDir — register a managed
@@ -40009,6 +40095,7 @@ async function assertTerminalInputWithinLimitWithYield(text: string | undefined)
 const TUI_IDLE_DEFAULT_TIMEOUT_MS = 5 * 60 * 1000
 const TUI_IDLE_POLL_INTERVAL_MS = 2000
 const TUI_IDLE_QUIESCENCE_MS = 3000
+const ACCOUNT_LOGIN_POLL_DEFAULT_TIMEOUT_MS = 20 * 1000
 const EXPLICIT_IDLE_TITLE_RE = /(^|\s)(ready|idle|done)(\s|$|[.!?])/i
 const CLAUDE_IDLE_PREFIX = '\u2733'
 const GEMINI_IDLE_PREFIX = '\u25c7'

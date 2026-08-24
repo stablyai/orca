@@ -21,6 +21,8 @@ Agent Discovery:
 Accounts:
   account add               Add a managed Claude or Codex account on this Orca host
   account list              List managed Claude and Codex accounts on this Orca host
+  account select            Switch the active managed account for an agent
+  account rm                Remove a managed account for an agent
 
 Skills:
   skills installed          List installed skill selectors
@@ -227,7 +229,9 @@ Common Commands:
   orca diagnostics memory [--json]
   orca agent-context [--json]
   orca account add [--agent claude|codex] [--json]
-  orca account list [--json]
+  orca account list [--agent claude|codex] [--json]
+  orca account select --agent claude|codex --id <accountId> [--json]
+  orca account rm --agent claude|codex --id <accountId> [--json]
   orca host list [--json]
   orca environment add --name <name> --pairing-code <code> [--json]
   orca environment list [--json]
@@ -522,11 +526,17 @@ function formatCommandFlagHelp(flag: string, commandPath: string[]): string {
   if (command === 'account add' && flag === 'agent') {
     return '--agent <id>           Account provider: claude or codex (default claude)'
   }
+  if (command.startsWith('account ') && flag === 'agent') {
+    return '--agent <id>           Account provider: claude or codex'
+  }
   if (flag === 'key' && command === 'computer hotkey') {
     return '--key <key-combo>      Modifier chord with one key, e.g. CmdOrCtrl+A'
   }
   if (flag === 'key' && command === 'computer press-key') {
     return '--key <key>            Single key, e.g. Return, Escape, Tab, Left, or PageUp'
+  }
+  if (command.startsWith('account ') && flag === 'id') {
+    return '--id <id>             Managed account id from `orca account list --json`'
   }
   return formatFlagHelp(flag)
 }

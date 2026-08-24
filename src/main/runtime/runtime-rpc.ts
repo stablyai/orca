@@ -446,7 +446,9 @@ type LongPollClass = 'ask' | 'wait'
 
 // Why: single classifier for long-poll requests (handlers that block on an external event), shared by counter/abort/keepalive. See §3.1.
 function longPollClassOf(request: RpcRequest): LongPollClass | null {
-  if (request.method === 'terminal.wait') {
+  // Why: accounts.pollAdd blocks on the device-auth login completing, the same
+  // wait-style long-poll as terminal.wait / check --wait.
+  if (request.method === 'terminal.wait' || request.method === 'accounts.pollAdd') {
     return 'wait'
   }
   // Why: orchestration.ask blocks unconditionally (default 600 s) holding the
@@ -462,6 +464,17 @@ function longPollClassOf(request: RpcRequest): LongPollClass | null {
     return params?.wait === true ? 'wait' : null
   }
   return null
+}
+
+// Why: methods whose bounded (not blocking-wait) work can still approach the
+// socket idle timeout on a slow host, so they need keepalive framing without
+// being admitted as a long-poll — they must not consume a terminal.wait / ask
+// slot. accounts.list's forced refresh is capped in accounts.ts (Layer 2) but
+// keepalive is the backstop if that cap is ever exceeded. See #8884.
+const KEEPALIVE_ONLY_METHODS = new Set(['accounts.list'])
+
+function needsKeepaliveOnly(request: RpcRequest): boolean {
+  return KEEPALIVE_ONLY_METHODS.has(request.method)
 }
 
 // Why: status.get has no per-connection context in the dispatcher, so stamp the scope here at the transport boundary.
@@ -1539,8 +1552,8 @@ export class OrcaRuntimeRpcServer {
     if (rejection) {
       return this.buildError(request.id, 'runtime_busy', rejection)
     }
-    if (longPoll) {
-      // Why: arm keepalive only for long-polls; short RPCs never create the setInterval. See §3.1.
+    if (longPoll || needsKeepaliveOnly(request)) {
+      // Why: arm keepalive for long-polls and bounded-but-slow methods; other short RPCs never create the setInterval. See §3.1.
       context?.startKeepalive()
     }
 

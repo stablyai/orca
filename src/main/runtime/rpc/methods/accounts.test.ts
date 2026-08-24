@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import type { OrcaRuntimeService } from '../../orca-runtime'
 import { isStreamingMethod } from '../core'
-import { ACCOUNT_METHODS } from './accounts'
+import { ACCOUNT_METHODS, ACCOUNTS_LIST_REFRESH_BUDGET_MS } from './accounts'
 
 function method(name: string) {
   const found = ACCOUNT_METHODS.find((candidate) => candidate.name === name)
@@ -102,6 +102,63 @@ describe('account RPC methods', () => {
       list.handler(list.params?.parse({ refreshUsage: false }), { runtime })
     ).resolves.toBe(snapshot)
     expect(runtime.refreshAccountsForMobile).not.toHaveBeenCalled()
+  })
+
+  it('returns the snapshot once the refresh budget elapses when the refresh never settles', async () => {
+    vi.useFakeTimers()
+    try {
+      const snapshot = { claude: null, codex: null }
+      const runtime = {
+        // Why: simulates a cold-host refresh that outlives the socket idle window (#8884).
+        refreshAccountsForMobile: vi.fn(() => new Promise<void>(() => {})),
+        getAccountsSnapshot: vi.fn(() => snapshot)
+      } as unknown as OrcaRuntimeService
+      const list = method('accounts.list')
+      if (isStreamingMethod(list)) {
+        throw new Error('accounts.list must be a request method')
+      }
+
+      const pending = list.handler(list.params?.parse({}), { runtime })
+      await vi.advanceTimersByTimeAsync(ACCOUNTS_LIST_REFRESH_BUDGET_MS)
+
+      await expect(pending).resolves.toBe(snapshot)
+      expect(runtime.refreshAccountsForMobile).toHaveBeenCalledOnce()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('still resolves promptly on a fast refresh instead of waiting out the full budget', async () => {
+    vi.useFakeTimers()
+    try {
+      const snapshot = { claude: null, codex: null }
+      let resolveRefresh: () => void = () => {}
+      const refresh = new Promise<void>((resolve) => {
+        resolveRefresh = resolve
+      })
+      const runtime = {
+        refreshAccountsForMobile: vi.fn(() => refresh),
+        getAccountsSnapshot: vi.fn(() => snapshot)
+      } as unknown as OrcaRuntimeService
+      const list = method('accounts.list')
+      if (isStreamingMethod(list)) {
+        throw new Error('accounts.list must be a request method')
+      }
+
+      let settled = false
+      const pending = list.handler(list.params?.parse({}), { runtime }) as Promise<unknown>
+      void pending.then(() => {
+        settled = true
+      })
+
+      resolveRefresh()
+      await vi.advanceTimersByTimeAsync(0)
+
+      expect(settled).toBe(true)
+      await expect(pending).resolves.toBe(snapshot)
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   it('forwards a client idempotency key when consuming a Codex reset credit', async () => {
@@ -221,5 +278,70 @@ describe('account RPC methods', () => {
     expect(emit).toHaveBeenCalledWith(expect.objectContaining({ type: 'ready', snapshot }))
     cleanup?.()
     await running
+  })
+
+  it('kicks off a headless Codex login and returns its loginId', async () => {
+    const runtime = {
+      addCodexAccount: vi.fn(() => ({ loginId: 'login-1' }))
+    } as unknown as OrcaRuntimeService
+    const addCodex = method('accounts.addCodex')
+    if (isStreamingMethod(addCodex)) {
+      throw new Error('accounts.addCodex must be a request method')
+    }
+
+    await expect(
+      addCodex.handler({ target: { runtime: 'wsl', wslDistro: 'Ubuntu' } }, { runtime })
+    ).resolves.toEqual({ loginId: 'login-1' })
+    expect(runtime.addCodexAccount).toHaveBeenCalledWith({ runtime: 'wsl', wslDistro: 'Ubuntu' })
+  })
+
+  it('kicks off a headless Claude login and returns its loginId', async () => {
+    const runtime = {
+      addClaudeAccount: vi.fn(() => ({ loginId: 'login-2' }))
+    } as unknown as OrcaRuntimeService
+    const addClaude = method('accounts.addClaude')
+    if (isStreamingMethod(addClaude)) {
+      throw new Error('accounts.addClaude must be a request method')
+    }
+
+    await expect(addClaude.handler({}, { runtime })).resolves.toEqual({ loginId: 'login-2' })
+    expect(runtime.addClaudeAccount).toHaveBeenCalledWith(undefined)
+  })
+
+  it('long-polls a pending login and forwards timeoutMs/signal', async () => {
+    const snapshot = {
+      loginId: 'login-1',
+      provider: 'codex',
+      status: 'completed',
+      outputTail: 'done'
+    }
+    const runtime = {
+      pollAddAccount: vi.fn().mockResolvedValue(snapshot)
+    } as unknown as OrcaRuntimeService
+    const pollAdd = method('accounts.pollAdd')
+    if (isStreamingMethod(pollAdd)) {
+      throw new Error('accounts.pollAdd must be a request method')
+    }
+    const signal = new AbortController().signal
+
+    await expect(
+      pollAdd.handler({ loginId: 'login-1', timeoutMs: 5000 }, { runtime, signal })
+    ).resolves.toBe(snapshot)
+    expect(runtime.pollAddAccount).toHaveBeenCalledWith('login-1', { timeoutMs: 5000, signal })
+  })
+
+  it('submits pasted login input and returns an ack', async () => {
+    const runtime = {
+      submitAccountLoginInput: vi.fn()
+    } as unknown as OrcaRuntimeService
+    const submitLoginInput = method('accounts.submitLoginInput')
+    if (isStreamingMethod(submitLoginInput)) {
+      throw new Error('accounts.submitLoginInput must be a request method')
+    }
+
+    await expect(
+      submitLoginInput.handler({ loginId: 'login-1', input: 'pasted-code' }, { runtime })
+    ).resolves.toEqual({ submitted: true })
+    expect(runtime.submitAccountLoginInput).toHaveBeenCalledWith('login-1', 'pasted-code')
   })
 })
