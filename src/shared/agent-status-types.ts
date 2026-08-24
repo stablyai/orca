@@ -79,6 +79,18 @@ export type AgentStatusOrchestrationContext = {
   parentPaneKey?: string
   coordinatorHandle?: string
   orchestrationRunId?: string
+  /** Logical identity of the parent selected by the orchestration runtime. */
+  parentIdentity?: string
+  /** Run generation that owned the parent when this task was created. */
+  parentRuntimeEpoch?: number
+  /** Parent-loss lifecycle. CHECKPOINTED is only emitted after a durable checkpoint exists. */
+  parentStatus?: 'READY' | 'PARENT_LOST' | 'FROZEN' | 'CHECKPOINTED'
+  /** Runtime-enforced direct-input policy for this worker. */
+  inputPolicy?: 'DIRECT_ALLOWED' | 'PARENT_ONLY' | 'FROZEN'
+  /** C1 observes loss; approval and rebind mutation belong to C2. */
+  rebindStatus?: 'NOT_REQUIRED' | 'NOT_REQUESTED' | 'CHECKPOINTED' | 'APPROVAL_REQUIRED'
+  /** Durable checkpoint receipt, when one has been created. */
+  checkpointId?: string
 }
 
 export type AgentSubagentState = 'working' | 'blocked' | 'waiting' | 'idle'

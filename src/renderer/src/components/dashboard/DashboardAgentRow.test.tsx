@@ -126,6 +126,32 @@ function classTokensForTaggedElement(markup: string, dataAttribute: string): str
 }
 
 describe('DashboardAgentRow', () => {
+  it('renders an evidence-backed frozen parent-loss recovery surface', () => {
+    const markup = renderRow(
+      makeAgent(
+        {},
+        {
+          orchestration: {
+            taskId: 'task-1',
+            dispatchId: 'dispatch-1',
+            parentIdentity: 'coordinator-1',
+            parentPaneKey: 'parent-tab:00000000-0000-4000-8000-000000000001',
+            parentStatus: 'FROZEN',
+            inputPolicy: 'FROZEN',
+            rebindStatus: 'APPROVAL_REQUIRED'
+          }
+        }
+      )
+    )
+
+    expect(markup).toContain('data-parent-loss-state="frozen"')
+    expect(markup).toContain('Parent lost · worker frozen')
+    expect(markup).toContain('Keep direct input and new mutations paused')
+    expect(markup).toContain('Go to parent')
+    expect(markup).toContain('Checkpoint required')
+    expect(markup).toContain('Rebind approval required')
+  })
+
   it('renders orchestration task preview instead of the raw dispatch preamble prompt', () => {
     const markup = renderRow(
       makeAgent(

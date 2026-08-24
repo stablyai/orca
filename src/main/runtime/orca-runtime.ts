@@ -56,6 +56,7 @@ import {
   type AgentStatusEntry
 } from '../../shared/agent-status-types'
 import { terminalStatusPayloadMatchesHook } from '../../shared/agent-terminal-status-equivalence'
+import { observeParentLoss } from '../../shared/orchestration-parent-loss'
 import { indexAgentStatusRowsByPaneKey } from '../agent-hooks/agent-status-pane-index'
 import type { AgentHookAuthorityAttestation } from '../agent-hooks/server'
 import type {
@@ -18257,6 +18258,30 @@ export class OrcaRuntimeService {
     return this.getPaneKeyForTerminalHandle(handle)
   }
 
+  /** Rejects worker-originated mutations after the runtime can no longer prove its parent is live. */
+  assertOrchestrationMutationAllowed(handle: string | undefined): void {
+    if (!handle) {
+      return
+    }
+    const context = this.getAgentStatusOrchestrationContextForHandle(handle)
+    if (context?.inputPolicy !== 'FROZEN') {
+      return
+    }
+    throw new OrchestrationError(
+      'parent_lost_frozen',
+      `Dispatch ${context.dispatchId} is frozen because parent ${context.parentIdentity ?? 'unknown'} is not live. Create a checkpoint and request an approved rebind before mutating orchestration state.`,
+      {
+        effectsApplied: false,
+        dispatchId: context.dispatchId,
+        taskId: context.taskId,
+        parentIdentity: context.parentIdentity,
+        parentRuntimeEpoch: context.parentRuntimeEpoch,
+        inputPolicy: context.inputPolicy,
+        rebindStatus: context.rebindStatus
+      }
+    )
+  }
+
   getLiveTerminalPaneKey(handle: string): string | null {
     const runtimePty = this.getLivePtyForHandle(handle)
     if (runtimePty) {
@@ -34606,6 +34631,15 @@ export class OrcaRuntimeService {
     const parentPaneKey = parentTerminalHandle
       ? this.getPaneKeyForTerminalHandle(parentTerminalHandle)
       : undefined
+    const dispatchActive = dispatch.status === 'pending' || dispatch.status === 'dispatched'
+    const parentLive = parentTerminalHandle
+      ? this.getLiveTerminalPaneKey(parentTerminalHandle) !== null
+      : false
+    const parentLoss = observeParentLoss({
+      dispatchActive,
+      parentSelected: parentTerminalHandle !== undefined,
+      parentLive
+    })
 
     return {
       taskId: dispatch.task_id,
@@ -34616,7 +34650,10 @@ export class OrcaRuntimeService {
       ...(parentTerminalHandle ? { parentTerminalHandle } : {}),
       ...(parentPaneKey ? { parentPaneKey } : {}),
       ...(coordinatorHandle ? { coordinatorHandle } : {}),
-      ...(orchestrationRunId ? { orchestrationRunId } : {})
+      ...(orchestrationRunId ? { orchestrationRunId } : {}),
+      ...(parentTerminalHandle ? { parentIdentity: parentTerminalHandle } : {}),
+      ...(owningRun ? { parentRuntimeEpoch: owningRun.consumer_generation } : {}),
+      ...parentLoss
     }
   }
 

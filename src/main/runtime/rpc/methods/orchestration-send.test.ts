@@ -288,7 +288,11 @@ describe('orchestration RPC methods', () => {
       const task = db.createTask({ spec: 'work' })
       const dispatch = db.createDispatchContext(task.id, 'term_worker', 'tab_worker:leaf_worker')
       vi.spyOn(runtime, 'getTerminalPaneKey').mockImplementation((handle) =>
-        handle === 'term_worker' ? 'tab_worker:leaf_worker' : null
+        handle === 'term_worker'
+          ? 'tab_worker:leaf_worker'
+          : handle === 'term_coord'
+            ? coordinatorPaneKey
+            : null
       )
       vi.spyOn(runtime, 'deliverPendingMessagesForHandle').mockImplementation(() => {})
 

@@ -14,6 +14,7 @@ import type { DashboardAgentRow as DashboardAgentRowData } from './useDashboardD
 import { getAgentRowPrimaryText } from '@/lib/agent-row-primary-text'
 import { useAgentRowConversationName } from './use-agent-row-conversation-name'
 import { lastEnteredDoneAt } from './agent-finished-timestamp'
+import { parsePaneKey } from '../../../../shared/stable-pane-id'
 
 // Why: narrow the dashboard's rollup states to shared dot states, defaulting unknowns to 'idle' so a row never crashes.
 function asDotState(
@@ -189,6 +190,19 @@ const DashboardAgentRow = React.memo(function DashboardAgentRow({
   }
 
   const titleParts = sendTargetDisabledReason ? [sendTargetDisabledReason, ...tsParts] : tsParts
+  const orchestration = agent.entry.orchestration
+  const isParentFrozen = orchestration?.parentStatus === 'FROZEN'
+  const parentPane = orchestration?.parentPaneKey ? parsePaneKey(orchestration.parentPaneKey) : null
+  const handleActivateParent = useCallback(
+    (event: React.MouseEvent<HTMLButtonElement>) => {
+      event.preventDefault()
+      event.stopPropagation()
+      if (parentPane) {
+        onActivate(parentPane.tabId, orchestration?.parentPaneKey ?? agent.paneKey)
+      }
+    },
+    [agent.paneKey, onActivate, orchestration?.parentPaneKey, parentPane]
+  )
 
   return (
     // Why: no role="button" — nested interactive children (buttons, tooltip triggers) would violate ARIA nesting rules.
@@ -321,6 +335,32 @@ const DashboardAgentRow = React.memo(function DashboardAgentRow({
         isInterrupted={isInterrupted}
         lastAssistantMessage={lastAssistantMessage}
       />
+      {isParentFrozen ? (
+        <div
+          className="mt-1 ml-5 rounded-md border border-border bg-muted/50 px-2 py-1.5 text-[10px] text-muted-foreground"
+          data-parent-loss-state="frozen"
+          role="status"
+        >
+          <div className="font-medium text-foreground">Parent lost · worker frozen</div>
+          <div className="mt-0.5">
+            Keep direct input and new mutations paused. Create a checkpoint before requesting an
+            approved rebind.
+          </div>
+          <div className="mt-1 flex items-center gap-2">
+            {parentPane ? (
+              <button
+                type="button"
+                className="text-foreground underline underline-offset-2"
+                onClick={handleActivateParent}
+              >
+                Go to parent
+              </button>
+            ) : null}
+            <span>Checkpoint required</span>
+            <span>Rebind approval required</span>
+          </div>
+        </div>
+      ) : null}
     </div>
   )
 })

@@ -43478,8 +43478,34 @@ describe('OrcaRuntimeService', () => {
         parentTerminalHandle: handles.creator,
         parentPaneKey: paneKey('creator'),
         coordinatorHandle: handles.coordinator,
-        orchestrationRunId: runA.id
+        orchestrationRunId: runA.id,
+        parentIdentity: handles.creator,
+        parentRuntimeEpoch: runA.consumer_generation,
+        parentStatus: 'READY',
+        inputPolicy: 'PARENT_ONLY',
+        rebindStatus: 'NOT_REQUIRED'
       })
+
+      const getLiveTerminalPaneKey = vi.spyOn(runtime, 'getLiveTerminalPaneKey')
+      getLiveTerminalPaneKey.mockImplementation((handle) =>
+        handle === handles.creator ? null : paneKey('coordinator')
+      )
+      expect(
+        runtime.syncWindowGraph(1, graph()).agentOrchestrationByPaneKey?.[paneKey('worker')]
+      ).toMatchObject({
+        parentIdentity: handles.creator,
+        parentRuntimeEpoch: runA.consumer_generation,
+        parentStatus: 'FROZEN',
+        inputPolicy: 'FROZEN',
+        rebindStatus: 'APPROVAL_REQUIRED'
+      })
+      expect(() => runtime.assertOrchestrationMutationAllowed(handles.worker)).toThrowError(
+        expect.objectContaining({
+          code: 'parent_lost_frozen',
+          data: expect.objectContaining({ effectsApplied: false })
+        })
+      )
+      getLiveTerminalPaneKey.mockRestore()
 
       const oldCreatorPaneKey = paneKey('creator')
       terminalByName.creator.tabId = 'tab-creator-reminted'
@@ -43531,7 +43557,11 @@ describe('OrcaRuntimeService', () => {
         dispatchStatus: 'dispatched',
         taskTitle: 'coordinator-created work',
         displayName: 'coordinator-created work',
-        orchestrationRunId: runA.id
+        orchestrationRunId: runA.id,
+        parentRuntimeEpoch: 2,
+        parentStatus: 'READY',
+        inputPolicy: 'DIRECT_ALLOWED',
+        rebindStatus: 'NOT_REQUIRED'
       })
     } finally {
       db.close()

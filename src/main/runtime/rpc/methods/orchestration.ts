@@ -457,6 +457,7 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
     ) => {
       const db = runtime.getOrchestrationDb()
       const from = params.from ?? 'unknown'
+      runtime.assertOrchestrationMutationAllowed(params.from)
       const attestedCaller =
         orchestrationCompatibilityCallerAuthority?.terminalHandle === from
           ? orchestrationCompatibilityCallerAuthority
@@ -1416,6 +1417,7 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
       { orchestrationCompatibilityEvidence, runtime, legacyCoordinatorRunId }
     ) => {
       const db = runtime.getOrchestrationDb()
+      runtime.assertOrchestrationMutationAllowed(params.from)
       const original = db.getMessageById(params.id)
       if (!original) {
         throw new Error(`Message not found: ${params.id}`)
@@ -1515,6 +1517,7 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
     params: TaskCreateParams,
     handler: (params, { orchestrationCompatibilityEvidence, runtime, legacyCoordinatorRunId }) => {
       const db = runtime.getOrchestrationDb()
+      runtime.assertOrchestrationMutationAllowed(params.callerTerminalHandle)
       let deps: string[] | undefined
       if (params.deps) {
         try {
@@ -1600,6 +1603,7 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
     params: TaskUpdateParams,
     handler: (params, { orchestrationCompatibilityEvidence, runtime, legacyCoordinatorRunId }) => {
       const db = runtime.getOrchestrationDb()
+      runtime.assertOrchestrationMutationAllowed(params.callerTerminalHandle)
       const run = resolveRunScope(runtime, {
         runId: params.run,
         callerTerminalHandle: params.callerTerminalHandle,
@@ -1635,6 +1639,7 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
       }
     ) => {
       const db = runtime.getOrchestrationDb()
+      runtime.assertOrchestrationMutationAllowed(params.from)
       const task = db.getTask(params.task)
       if (!task) {
         throw new Error(`Task not found: ${params.task}`)
@@ -1797,6 +1802,7 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
 
       const db = runtime.getOrchestrationDb()
       const from = params.from ?? 'unknown'
+      runtime.assertOrchestrationMutationAllowed(params.from)
       // Why: echoed on every return so a clamped caller reports the budget actually waited, not the one it asked for.
       const timeoutMs = clampOrchestrationAskTimeoutMs(params.timeoutMs)
       const paneKey = runtime.getTerminalPaneKey(from) ?? undefined

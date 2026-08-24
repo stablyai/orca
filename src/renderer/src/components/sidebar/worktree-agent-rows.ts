@@ -59,7 +59,13 @@ function orchestrationContextsEqual(
     a.parentTerminalHandle === b.parentTerminalHandle &&
     a.parentPaneKey === b.parentPaneKey &&
     a.coordinatorHandle === b.coordinatorHandle &&
-    a.orchestrationRunId === b.orchestrationRunId
+    a.orchestrationRunId === b.orchestrationRunId &&
+    a.parentIdentity === b.parentIdentity &&
+    a.parentRuntimeEpoch === b.parentRuntimeEpoch &&
+    a.parentStatus === b.parentStatus &&
+    a.inputPolicy === b.inputPolicy &&
+    a.rebindStatus === b.rebindStatus &&
+    a.checkpointId === b.checkpointId
   )
 }
 
