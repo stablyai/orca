@@ -7863,13 +7863,22 @@ export function registerPtyHandlers(
     }
     const ownedConnectionId = ptyOwnership.get(args.id)
     const parsedSshId = ownedConnectionId === undefined ? parseAppSshPtyId(args.id) : null
-    const provider = parsedSshId
-      ? sshProviders.get(parsedSshId.connectionId)
-      : tryGetProviderForPty(args.id)
-    if (!provider?.hasPty) {
+    const connectionId = ownedConnectionId ?? parsedSshId?.connectionId
+    const startupPromise = getLocalPtyProviderStartupPromise(connectionId)
+    if (startupPromise) {
+      await startupPromise
+    }
+    const provider = connectionId ? sshProviders.get(connectionId) : tryGetProviderForPty(args.id)
+    if (!provider) {
       return null
     }
     try {
+      if (provider.probePtyLiveness) {
+        return await provider.probePtyLiveness(args.id)
+      }
+      if (!provider.hasPty) {
+        return null
+      }
       return provider.hasPty(args.id)
     } catch {
       // Why: liveness is only allowed to close panes on an authoritative false.

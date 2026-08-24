@@ -6,6 +6,8 @@ import { toProcessExitStartup } from './process-exit-startup'
 import { recoverUnverifiableDirectSshReattach } from './direct-ssh-reattach-recovery'
 import type { ConnectPanePtySession } from './connect-pane-pty-session'
 
+const PANE_OWNER_UNVERIFIED_ERROR = 'terminal_pane_owner_unverified'
+
 export function startDeferredSessionReattach(
   session: ConnectPanePtySession,
   deferredReattachSessionId: string
@@ -22,12 +24,16 @@ export function startDeferredSessionReattach(
       : window.api.pty.declarePendingPaneSerializer(session.cacheKey).catch(() => null)
 
   let expiredReattachError = false
+  let paneOwnerUnverified = false
   const coldRestoreStartup = session.buildColdRestoreAgentResumeStartup()
   const outputCallbacks = session.captureTransportOutputCallbacks(
     (message) => {
       if (isSshSessionExpiredError(message)) {
         expiredReattachError = true
         return
+      }
+      if (message.includes(PANE_OWNER_UNVERIFIED_ERROR)) {
+        paneOwnerUnverified = true
       }
       if (!session.isCapturedDirectSshReattachCurrent(deferredReattachSessionId)) {
         return
@@ -68,6 +74,14 @@ export function startDeferredSessionReattach(
   const trackedReattachPromise = Promise.resolve(reattachPromise)
     .then(async (result) => {
       if (outputCallbacks.generation !== session.transportStreamGeneration) {
+        session.finishReattachLiveDataDeferral(false, outputCallbacks.generation)
+        const gen = await preSignalPromise
+        if (typeof gen === 'number') {
+          void window.api.pty.clearPendingPaneSerializer(session.cacheKey, gen).catch(() => {})
+        }
+        return
+      }
+      if (!result && paneOwnerUnverified) {
         session.finishReattachLiveDataDeferral(false, outputCallbacks.generation)
         const gen = await preSignalPromise
         if (typeof gen === 'number') {
@@ -131,6 +145,10 @@ export function startDeferredSessionReattach(
         return
       }
       if (session.rejectObsoleteDirectSshReattach(deferredReattachSessionId)) {
+        return
+      }
+      if (message.includes(PANE_OWNER_UNVERIFIED_ERROR)) {
+        session.reportError(message)
         return
       }
       warnTerminalLifecycleAnomaly('restored PTY reattach threw', {

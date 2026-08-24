@@ -407,6 +407,62 @@ describe('registerPtyHandlers', () => {
     expect(hasPty).toHaveBeenCalledWith('dead-pty')
     expect(listProcesses).not.toHaveBeenCalled()
   })
+  it('prefers tri-state liveness over a legacy boolean absence', async () => {
+    const probePtyLiveness = vi
+      .fn<(id: string) => Promise<boolean | null>>()
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce(false)
+      .mockRejectedValueOnce(new Error('legacy daemon unavailable'))
+    const hasPty = vi.fn(() => false)
+    installDaemonTestProvider({ hasPty, probePtyLiveness })
+    registerPtyHandlers(mainWindow as never)
+
+    await expect(handlers.get('pty:hasPty')!(null, { id: 'unmapped-legacy-pty' })).resolves.toBe(
+      null
+    )
+    await expect(handlers.get('pty:hasPty')!(null, { id: 'confirmed-exited-pty' })).resolves.toBe(
+      false
+    )
+    await expect(handlers.get('pty:hasPty')!(null, { id: 'unreachable-legacy-pty' })).resolves.toBe(
+      null
+    )
+
+    expect(probePtyLiveness).toHaveBeenNthCalledWith(1, 'unmapped-legacy-pty')
+    expect(probePtyLiveness).toHaveBeenNthCalledWith(2, 'confirmed-exited-pty')
+    expect(probePtyLiveness).toHaveBeenNthCalledWith(3, 'unreachable-legacy-pty')
+    expect(hasPty).not.toHaveBeenCalled()
+  })
+  it('waits for local provider startup before resolving liveness', async () => {
+    const barrier = makeDeferred()
+    const awaitLocalPtyProviderStartup = vi.fn(() => barrier.promise)
+    registerPtyHandlers(
+      mainWindow as never,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      { awaitLocalPtyProviderStartup }
+    )
+    const pending = handlers.get('pty:hasPty')!(null, {
+      id: 'restored-local-pty'
+    }) as Promise<boolean | null>
+    let settled = false
+    void pending.then(() => {
+      settled = true
+    })
+
+    await Promise.resolve()
+    expect(awaitLocalPtyProviderStartup).toHaveBeenCalledTimes(1)
+    expect(settled).toBe(false)
+
+    const probePtyLiveness = vi.fn(async () => true)
+    installDaemonTestProvider({ probePtyLiveness })
+    barrier.resolve()
+
+    await expect(pending).resolves.toBe(true)
+    expect(probePtyLiveness).toHaveBeenCalledWith('restored-local-pty')
+  })
   it('treats unsupported or failed single-PTY liveness as unknown', async () => {
     setLocalPtyProvider({
       spawn: vi.fn(),
