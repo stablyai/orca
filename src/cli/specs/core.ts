@@ -172,7 +172,7 @@ export const CORE_COMMAND_SPECS: CommandSpec[] = [
     allowedFlags: [...GLOBAL_FLAGS, 'worktree', 'force', 'run-hooks'],
     notes: [
       'Repo-defined orca.yaml archive hooks are skipped unless --run-hooks is passed.',
-      'Removal also deletes the branch Orca created for this worktree once it is fully merged, with or without --force. A branch with unmerged commits, or one you checked out rather than had Orca create, is left alone.'
+      'For Git worktrees, removal also attempts to delete the checked-out local branch, with or without --force. Orca retains branches it knows predated the worktree and any branch whose changes it cannot prove are already merged.'
     ]
   },
   {

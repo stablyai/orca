@@ -548,7 +548,7 @@ export function formatFlagHelp(flag: string): string {
     title: '--title <text>         Custom title for the terminal tab (omit to reset)',
     enter: '--enter                Append Enter after sending text',
     force:
-      '--force                Force worktree removal when supported; see notes on branch deletion',
+      '--force                Force worktree removal when supported; does not force branch deletion',
     focus: '--focus                Reveal the created terminal session in Orca',
     for: '--for exit|tui-idle    Wait condition to satisfy',
     'from-element-index': '--from-element-index <n> Source element index from get-app-state',
