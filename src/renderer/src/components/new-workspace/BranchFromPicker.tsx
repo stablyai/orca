@@ -28,13 +28,14 @@ function displayBranchName(branch: string): string {
   return branch.replace(/^refs\/heads\//, '')
 }
 
-export function CreateFromPicker({
+export function BranchFromPicker({
   repoId,
   repoMap,
   worktrees,
   value,
   triggerClassName,
-  onValueChange
+  onValueChange,
+  inlineLabel = true
 }: {
   repoId: string
   repoMap: Map<string, Repo>
@@ -42,6 +43,8 @@ export function CreateFromPicker({
   value: string
   triggerClassName?: string
   onValueChange: (baseBranch: string) => void
+  /** When false, the trigger shows only the value — the host supplies its own field label. */
+  inlineLabel?: boolean
 }): React.JSX.Element {
   const activeRuntimeEnvironmentId = useAppStore((state) =>
     getRuntimeEnvironmentIdForRepo(state, repoId)
@@ -184,12 +187,14 @@ export function CreateFromPicker({
             className={cn('h-9 w-full justify-between px-3 text-sm font-normal', triggerClassName)}
           >
             <span className="flex min-w-0 items-center gap-1.5">
-              <span className="shrink-0 text-muted-foreground">
-                {translate(
-                  'auto.components.automations.CreateFromPicker.dd3841b442',
-                  'Branch from'
-                )}
-              </span>
+              {inlineLabel ? (
+                <span className="shrink-0 text-muted-foreground">
+                  {translate(
+                    'auto.components.automations.CreateFromPicker.dd3841b442',
+                    'Branch from'
+                  )}
+                </span>
+              ) : null}
               <span className="truncate">{selectedLabel}</span>
             </span>
             <ChevronsUpDown className="size-4 opacity-50" />

@@ -1,31 +1,15 @@
 // @vitest-environment happy-dom
 
 import React, { act } from 'react'
-import { createRoot } from 'react-dom/client'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { createRoot, type Root } from 'react-dom/client'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import NewWorkspaceComposerCard from './NewWorkspaceComposerCard'
 import type { NewWorkspaceProjectOption } from '@/lib/new-workspace-project-options'
-import type { ProjectHostSetupOption } from '@/lib/project-host-setup-options'
-
-const storeMocks = vi.hoisted(() => ({
-  closeModal: vi.fn(),
-  openModal: vi.fn(),
-  openSettingsPage: vi.fn(),
-  openSettingsTarget: vi.fn()
-}))
 
 vi.mock('@/store', () => ({
   useAppStore: Object.assign(
     (selector: (state: unknown) => unknown) =>
       selector({
-        closeModal: storeMocks.closeModal,
-        openModal: storeMocks.openModal,
-        openSettingsPage: storeMocks.openSettingsPage,
-        openSettingsTarget: storeMocks.openSettingsTarget,
-        setRuntimeEnvironmentStatus: vi.fn(),
-        setupProjectExistingFolder: vi.fn(),
-        setupProjectClone: vi.fn(),
-        activeModal: 'new-workspace-composer',
         settings: { defaultTuiAgent: null, disabledTuiAgents: [] },
         updateSettings: vi.fn(),
         projects: [],
@@ -38,12 +22,6 @@ vi.mock('@/store', () => ({
 
 vi.mock('@/components/contextual-tours/use-contextual-tour', () => ({
   useContextualTour: vi.fn()
-}))
-
-vi.mock('@/components/ui/tooltip', () => ({
-  Tooltip: ({ children }: { children: React.ReactNode }) => <>{children}</>,
-  TooltipContent: ({ children }: { children: React.ReactNode }) => <>{children}</>,
-  TooltipTrigger: ({ children }: { children: React.ReactNode }) => <>{children}</>
 }))
 
 vi.mock('@/components/ui/tooltip', () => ({
@@ -73,20 +51,7 @@ vi.mock('@/components/new-workspace/ProjectCombobox', () => ({
 }))
 
 vi.mock('@/components/new-workspace/SetProjectLocationDialog', () => ({
-  SetProjectLocationDialog: ({
-    option,
-    projectName
-  }: {
-    option: { label: string } | null
-    projectName: string
-  }) =>
-    option ? (
-      <div
-        data-testid="set-project-location-dialog"
-        data-host={option.label}
-        data-project={projectName}
-      />
-    ) : null
+  SetProjectLocationDialog: () => null
 }))
 
 const projectOptions: NewWorkspaceProjectOption[] = [
@@ -102,33 +67,9 @@ const projectOptions: NewWorkspaceProjectOption[] = [
   }
 ]
 
-const hostOptions: ProjectHostSetupOption[] = [
-  {
-    kind: 'ready',
-    id: 'setup-local',
-    projectId: 'project-group:platform',
-    hostId: 'local',
-    repoId: 'repo-a',
-    label: 'Local Mac',
-    detail: 'Orca',
-    path: '/Users/alice/orca'
-  },
-  {
-    kind: 'needs-setup',
-    id: 'needs-setup:ssh:devbox',
-    projectId: 'project-group:platform',
-    hostId: 'ssh:devbox',
-    label: 'Devbox',
-    detail: 'Project location not set',
-    isAvailable: true,
-    attention: false,
-    canSetLocation: true
-  }
-]
-
 function renderCard(
   overrides: Partial<React.ComponentProps<typeof NewWorkspaceComposerCard>> = {}
-): HTMLDivElement {
+): { container: HTMLDivElement; root: Root } {
   const container = document.createElement('div')
   document.body.appendChild(container)
   const root = createRoot(container)
@@ -158,6 +99,8 @@ function renderCard(
         canReuseSelectedBranch={false}
         reuseSelectedBranch={false}
         onReuseSelectedBranchChange={() => {}}
+        branchNameOverride={undefined}
+        onBranchNameOverrideChange={() => {}}
         forkPushWarning={null}
         detectedAgentIds={null}
         onOpenAgentSettings={() => {}}
@@ -187,55 +130,77 @@ function renderCard(
         sparsePresets={[]}
         sparseSelectedPresetId={null}
         onSparseSelectPreset={() => {}}
-        branchNameOverride={undefined}
-        onBranchNameOverrideChange={() => {}}
-        branchesEnabled={false}
+        branchesEnabled
         setupControlsEnabled={false}
         sparseControlsEnabled={false}
-        projectHostSetupOptions={hostOptions}
-        selectedProjectHostSetupId="setup-local"
         {...overrides}
       />
     )
   })
-  return container
+  return { container, root }
 }
 
-describe('NewWorkspaceComposerCard set location', () => {
-  let container: HTMLDivElement | null = null
+function hasBranchFromLabel(container: HTMLElement): boolean {
+  return [...container.querySelectorAll('label')].some(
+    (candidate) => candidate.textContent?.trim() === 'Branch from'
+  )
+}
 
-  beforeEach(() => {
-    storeMocks.closeModal.mockReset()
-    storeMocks.openModal.mockReset()
-    storeMocks.openSettingsPage.mockReset()
-  })
+describe('NewWorkspaceComposerCard base branch picker', () => {
+  let current: { container: HTMLDivElement; root: Root } | null = null
 
   afterEach(() => {
-    container?.remove()
-    container = null
+    if (current) {
+      act(() => current?.root.unmount())
+      current.container.remove()
+      current = null
+    }
   })
 
-  it('opens set-location over the composer without leaving the create dialog', () => {
-    const nestedOpenChanges: boolean[] = []
-    container = renderCard({
-      onNestedDialogOpenChange: (open) => nestedOpenChanges.push(open)
+  it('shows Branch from for a GitHub issue source', () => {
+    current = renderCard({
+      smartNameSelection: { kind: 'github-issue', label: '#7 Fix', url: 'https://example.com/i/7' }
     })
 
-    act(() => {
-      container?.querySelector<HTMLElement>('div[data-run-target-combobox-root="true"]')?.click()
-    })
-    const setLocation = [...document.body.querySelectorAll<HTMLButtonElement>('button')].find(
-      (button) => button.textContent?.includes('Set project location')
-    )
-    expect(setLocation).toBeTruthy()
-    act(() => setLocation?.click())
+    expect(hasBranchFromLabel(current.container)).toBe(true)
+  })
 
-    const dialog = document.body.querySelector('[data-testid="set-project-location-dialog"]')
-    expect(dialog?.getAttribute('data-host')).toBe('Devbox')
-    expect(dialog?.getAttribute('data-project')).toBe('Platform')
-    expect(nestedOpenChanges).toEqual([true])
-    expect(storeMocks.closeModal).not.toHaveBeenCalled()
-    expect(storeMocks.openModal).not.toHaveBeenCalled()
-    expect(storeMocks.openSettingsPage).not.toHaveBeenCalled()
+  it('shows Branch from for a Linear source', () => {
+    current = renderCard({
+      smartNameSelection: { kind: 'linear', label: 'ENG-42' }
+    })
+
+    expect(hasBranchFromLabel(current.container)).toBe(true)
+  })
+
+  it('omits Branch from for a GitHub PR source', () => {
+    current = renderCard({
+      smartNameSelection: { kind: 'github-pr', label: '#42 Fix', url: 'https://example.com/pr/42' }
+    })
+
+    expect(hasBranchFromLabel(current.container)).toBe(false)
+  })
+
+  it('omits Branch from for a bare branch source', () => {
+    current = renderCard({
+      smartNameSelection: { kind: 'branch', label: 'main' }
+    })
+
+    expect(hasBranchFromLabel(current.container)).toBe(false)
+  })
+
+  it('omits Branch from when nothing is selected', () => {
+    current = renderCard({ smartNameSelection: null })
+
+    expect(hasBranchFromLabel(current.container)).toBe(false)
+  })
+
+  it('omits Branch from for non-git projects even with a task source', () => {
+    current = renderCard({
+      selectedRepoIsGit: false,
+      smartNameSelection: { kind: 'github-issue', label: '#7 Fix', url: 'https://example.com/i/7' }
+    })
+
+    expect(hasBranchFromLabel(current.container)).toBe(false)
   })
 })

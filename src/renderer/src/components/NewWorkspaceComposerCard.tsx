@@ -47,6 +47,8 @@ import SmartWorkspaceNameField, {
   type SmartWorkspaceNameSelection
 } from '@/components/new-workspace/SmartWorkspaceNameField'
 import type { SmartNameMode } from '@/components/new-workspace/smart-workspace-source-results'
+import { BranchFromPicker } from '@/components/new-workspace/BranchFromPicker'
+import { isBaseBranchSelectableSourceKind } from '../../../shared/new-workspace/workspace-source'
 import ProjectCombobox from '@/components/new-workspace/ProjectCombobox'
 import RunTargetCombobox from '@/components/new-workspace/RunTargetCombobox'
 import { SetProjectLocationDialog } from '@/components/new-workspace/SetProjectLocationDialog'
@@ -64,6 +66,8 @@ import type { WorkspaceCreateErrorDisplay } from '@/lib/workspace-create-error-f
 import type { SshConnectionStatus } from '../../../shared/ssh-types'
 import type { TaskSourceContext } from '../../../shared/task-source-context'
 import type { RuntimeStatus } from '../../../shared/runtime-types'
+import type { Repo } from '../../../shared/repo-types'
+import type { Worktree } from '../../../shared/worktree/types'
 import { unwrapRuntimeRpcResult } from '@/runtime/runtime-rpc-client'
 import { translate } from '@/i18n/i18n'
 import { withUiConnectTimeout } from '@/ssh/ssh-connect-ui-timeout'
@@ -74,6 +78,7 @@ type EphemeralVmRecipeOption = NonNullable<OrcaHooks['environmentRecipes']>[numb
 const EMPTY_PROJECT_OPTIONS: NewWorkspaceProjectOption[] = []
 const EMPTY_PROJECT_HOST_SETUP_OPTIONS: ProjectHostSetupOption[] = []
 const EMPTY_EPHEMERAL_VM_RECIPES: EphemeralVmRecipeOption[] = []
+const EMPTY_WORKTREES: Worktree[] = []
 
 type NewWorkspaceComposerCardProps = {
   contextualTourSource?: string
@@ -119,6 +124,8 @@ type NewWorkspaceComposerCardProps = {
   onOpenJiraSettings?: () => void
   smartNameSelection: SmartWorkspaceNameSelection | null
   onClearSmartNameSelection: () => void
+  baseBranch: string | undefined
+  onBaseBranchChange: (next: string | undefined) => void
   /** True when an existing local branch is selected and can be reused. */
   canReuseSelectedBranch: boolean
   reuseSelectedBranch: boolean
@@ -335,6 +342,8 @@ export default function NewWorkspaceComposerCard({
   onOpenJiraSettings,
   smartNameSelection,
   onClearSmartNameSelection,
+  baseBranch,
+  onBaseBranchChange,
   canReuseSelectedBranch,
   reuseSelectedBranch,
   onReuseSelectedBranchChange,
@@ -526,6 +535,18 @@ export default function NewWorkspaceComposerCard({
   )
   const projects = useAppStore((state) => state.projects)
   const repos = useAppStore((state) => state.repos)
+  const repoMap = React.useMemo<Map<string, Repo>>(
+    () => new Map(repos.map((repo) => [repo.id, repo])),
+    [repos]
+  )
+  const repoWorktrees = useAppStore(
+    (state) => state.worktreesByRepo[repoId] ?? EMPTY_WORKTREES
+  )
+  const showBaseBranchPicker =
+    selectedRepoIsGit &&
+    branchesEnabled &&
+    smartNameSelection !== null &&
+    isBaseBranchSelectableSourceKind(smartNameSelection.kind)
   const defaultCloneUrl = React.useMemo(
     () => resolveProjectCloneUrlPrefill(projects, repos, selectedProjectId),
     [projects, repos, selectedProjectId]
@@ -892,6 +913,26 @@ export default function NewWorkspaceComposerCard({
             </div>
           </div>
         </div>
+
+        {showBaseBranchPicker ? (
+          <div className="min-w-0 space-y-1">
+            <label className="text-xs font-medium text-muted-foreground">
+              {translate('auto.components.NewWorkspaceComposerCard.branchFrom', 'Branch from')}
+            </label>
+            <BranchFromPicker
+              // Why: branch search state belongs to the selected project, so repo switches
+              // should reset it before the next paint.
+              key={repoId}
+              repoId={repoId}
+              repoMap={repoMap}
+              worktrees={repoWorktrees}
+              value={baseBranch ?? ''}
+              onValueChange={(next) => onBaseBranchChange(next || undefined)}
+              triggerClassName="h-9 w-full border-input text-sm focus:border-ring focus:ring-[3px] focus:ring-ring/50"
+              inlineLabel={false}
+            />
+          </div>
+        ) : null}
 
         <div className="min-w-0 space-y-1" data-contextual-tour-target="workspace-creation-agent">
           <div className="flex items-center justify-between gap-2">

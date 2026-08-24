@@ -215,6 +215,12 @@ export function buildWorkspaceSourceSelection(args: {
   }
 }
 
+/** True when the source's branch isn't itself the base — a base can still be picked manually.
+ *  False for a PR/MR (base comes from the PR/MR start-point) and a bare branch pick (it IS the base). */
+export function isBaseBranchSelectableSourceKind(kind: WorkspaceSourceSelectionKind): boolean {
+  return kind === 'github-issue' || kind === 'gitlab-issue' || kind === 'linear' || kind === 'jira'
+}
+
 export function shouldPreserveWorkspaceSourceOnRepoChange(
   item: WorkspaceSourceItemLike | null
 ): boolean {

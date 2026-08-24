@@ -5,8 +5,10 @@ import {
   buildWorkspaceSourceSelection,
   getWorkspaceSourceName,
   getWorkspaceSourceProvider,
+  isBaseBranchSelectableSourceKind,
   shouldApplyWorkspaceSourceAutoName,
-  shouldPreserveWorkspaceSourceOnRepoChange
+  shouldPreserveWorkspaceSourceOnRepoChange,
+  type WorkspaceSourceSelectionKind
 } from './workspace-source'
 
 describe('workspace source policy', () => {
@@ -122,5 +124,20 @@ describe('workspace source policy', () => {
     expect(
       shouldApplyWorkspaceSourceAutoName({ currentName: 'my workspace', lastAutoName: 'old' })
     ).toBe(false)
+  })
+
+  it('allows picking a base branch only for sources whose branch is not itself the base', () => {
+    const expected: Record<WorkspaceSourceSelectionKind, boolean> = {
+      'github-pr': false,
+      'github-issue': true,
+      'gitlab-mr': false,
+      'gitlab-issue': true,
+      branch: false,
+      linear: true,
+      jira: true
+    }
+    for (const [kind, allowed] of Object.entries(expected)) {
+      expect(isBaseBranchSelectableSourceKind(kind as WorkspaceSourceSelectionKind)).toBe(allowed)
+    }
   })
 })

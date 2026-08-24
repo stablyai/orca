@@ -33,7 +33,8 @@ vi.mock('@/store', () => ({
         settings: { defaultTuiAgent: null, disabledTuiAgents: [] },
         updateSettings: vi.fn(),
         projects: [],
-        repos: []
+        repos: [],
+        worktreesByRepo: {}
       }),
     {
       getState: () => ({
@@ -225,6 +226,8 @@ function renderCard(
         onSmartLinearIssueSelect={() => {}}
         smartNameSelection={null}
         onClearSmartNameSelection={() => {}}
+        baseBranch={undefined}
+        onBaseBranchChange={() => {}}
         canReuseSelectedBranch={false}
         reuseSelectedBranch={false}
         onReuseSelectedBranchChange={() => {}}

@@ -4,7 +4,7 @@ import React, { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Repo } from '../../../../shared/repo-types'
-import { CreateFromPicker } from './CreateFromPicker'
+import { BranchFromPicker } from './BranchFromPicker'
 import {
   getRuntimeRepoBaseRefDefault,
   searchRuntimeRepoBaseRefs
@@ -62,7 +62,7 @@ function makeRepo(overrides: Partial<Repo>): Repo {
 async function renderPicker(repo: Repo): Promise<void> {
   await act(async () => {
     root.render(
-      <CreateFromPicker
+      <BranchFromPicker
         repoId={repo.id}
         repoMap={repoMapFor(repo)}
         worktrees={[]}
@@ -73,7 +73,7 @@ async function renderPicker(repo: Repo): Promise<void> {
   })
 }
 
-describe('CreateFromPicker host routing', () => {
+describe('BranchFromPicker host routing', () => {
   beforeEach(() => {
     container = document.createElement('div')
     document.body.appendChild(container)
