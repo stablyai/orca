@@ -1020,6 +1020,7 @@ import {
   getRemoteDrift,
   getRecentDriftSubjects
 } from '../git/repo'
+import { getLocalGitRepoAccessBlocker } from '../git/git-safe-directory'
 import { hasCommitObjectViaGitExec } from '../git/commit-object-ref'
 import { hasWorktreeBaseCommitRef } from '../git/worktree-base-ref-probe'
 import { resolveLocalGitUsername } from '../git/git-username'
@@ -21079,6 +21080,11 @@ export class OrcaRuntimeService {
           continue
         }
         const importRepoPath = await importTargetResolver.resolveLocal(repoPath)
+        const accessBlocker = await getLocalGitRepoAccessBlocker(importRepoPath)
+        if (accessBlocker) {
+          results.push({ path: repoPath, status: 'failed', error: accessBlocker })
+          continue
+        }
         const normalizedImportRepoPath = normalizeRuntimePathForComparison(importRepoPath)
         const alreadyImportedProjectId = importedProjectIdsByRepoPath.get(normalizedImportRepoPath)
         if (alreadyImportedProjectId) {
@@ -21206,6 +21212,14 @@ export class OrcaRuntimeService {
     if (kind === 'git' && !isGitRepo(path)) {
       throw new Error(`Not a valid git repository: ${path}`)
     }
+    if (kind === 'git') {
+      // Why: marker-based isGitRepo can accept an Administrators-owned checkout while Git
+      // refuses worktree scans — same zero-worktree silent import as local repos:add (#12627).
+      const accessBlocker = await getLocalGitRepoAccessBlocker(path)
+      if (accessBlocker) {
+        throw new Error(accessBlocker)
+      }
+    }
 
     const existing = this.store.getRepos().find((repo) => {
       if (!runtimePathsEqual(repo.path, path)) {
@@ -21214,6 +21228,12 @@ export class OrcaRuntimeService {
       return runtimeRepoMatchesExecutionHost(repo, executionHostId)
     })
     if (existing) {
+      if (existing.kind === 'git' || kind === 'git') {
+        const accessBlocker = await getLocalGitRepoAccessBlocker(existing.path)
+        if (accessBlocker) {
+          throw new Error(accessBlocker)
+        }
+      }
       // Only a runtime host backfills a legacy unstamped repo. An unstamped repo is
       // indistinguishable from a genuine local repo (both have null executionHostId and
       // connectionId), so we never stamp local/ssh onto it — that would re-attribute a
