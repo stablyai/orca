@@ -21,6 +21,8 @@ import { diffEditorScrollbarOptions } from './diff-editor-scrollbar-options'
 import { LargeDiffFallback } from './LargeDiffFallback'
 import { getLargeDiffRenderLimit } from './large-diff-render-limit'
 import { useDiffViewerLargeDiffLifecycle } from './useDiffViewerLargeDiffLifecycle'
+import { submitDiffViewerComment } from './diff-viewer-comment-submit'
+import { useMonacoLspForDiff } from './use-monaco-lsp-for-diff'
 import { getDiffViewerLargeDiffSaveAction } from './diff-viewer-large-diff-save-action'
 import type { DiffViewerProps } from './diff-viewer-props'
 import { buildDiffEditorWordWrapOptions } from './diff-editor-word-wrap-options'
@@ -75,6 +77,13 @@ export default function DiffViewer({
   const diffBodyRef = useRef<HTMLDivElement | null>(null)
   const lineNumberOptionsSubRef = useRef<{ dispose: () => void } | null>(null)
   const [modifiedEditor, setModifiedEditor] = useState<editor.ICodeEditor | null>(null)
+  useMonacoLspForDiff({
+    modifiedEditor,
+    relativePath,
+    worktreeId,
+    language,
+    modelIdentity: modifiedModelKey ?? modelKey
+  })
   const [popover, setPopover] = useState<{
     lineNumber: number
     startLine?: number
@@ -235,34 +244,16 @@ export default function DiffViewer({
     if (!popover) {
       return
     }
-    if (onAddLineComment) {
-      const ok = await onAddLineComment({
-        lineNumber: popover.lineNumber,
-        startLine: popover.startLine,
-        body
-      })
-      if (ok) {
-        setPopover(null)
-      }
-      return
-    }
-    if (!worktreeId) {
-      return
-    }
-    // Why: await persistence — a null result (failed save) keeps the popover open for retry instead of losing the draft.
-    const result = await addDiffComment({
-      worktreeId,
-      filePath: relativePath,
-      source: 'diff',
-      startLine: popover.startLine,
-      lineNumber: popover.lineNumber,
+    const persisted = await submitDiffViewerComment({
+      addDiffComment,
       body,
-      side: 'modified'
+      onAddLineComment,
+      popover,
+      relativePath,
+      worktreeId
     })
-    if (result) {
+    if (persisted) {
       setPopover(null)
-    } else {
-      console.error('Failed to add diff comment — draft preserved')
     }
   }
 
