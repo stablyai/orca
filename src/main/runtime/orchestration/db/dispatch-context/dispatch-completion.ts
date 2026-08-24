@@ -49,6 +49,13 @@ export function failActiveDispatchForTask(
 }
 
 // Why: only bump status='dispatched' — a zombie heartbeat from a finished dispatch would mask a hung retry from the stale detector (§5.3.4).
+//
+// CONTRACT: `at` is ARRIVAL time on this host, never a stamp a worker chose for itself. Both readers
+// (getStaleDispatches and the worker-list freshness fields) subtract it from this host's clock, so a
+// remote stamp would make every federated lane's age a measure of clock skew. All three writers honor
+// this: lifecycle-reconciliation passes the local message row's created_at, the federation relay import
+// is fed a stamp taken on the Run home as it imports (federation-sync parseFederatedLifecycle), and the
+// legacy lifecycle RPC stamps it in the handler that owns this DB.
 export function recordHeartbeat(this: OrchestrationDb, dispatchId: string, at: string): void {
   this.db
     .prepare(

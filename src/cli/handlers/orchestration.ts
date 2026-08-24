@@ -478,6 +478,26 @@ function formatWorkerRelease(value: WorkerReleaseReceipt): string {
   return lines.join('\n')
 }
 
+// Why: three distinct answers must not collapse into one. A host predating the field cannot say
+// anything (no segment); 'none' is the Dispatch never reporting; 'unknown' is a stored stamp this host
+// cannot turn into an age. Printing 'none' for either of the other two invents a liveness claim.
+function formatHeartbeatFreshness(worker: {
+  heartbeatState?: 'never' | 'recorded' | 'unreadable'
+  heartbeatAgeSeconds?: number | null
+}): string {
+  if (worker.heartbeatState === undefined) {
+    return ''
+  }
+  if (worker.heartbeatState === 'never') {
+    return ' heartbeat=none'
+  }
+  // Why: 'recorded' without a number would be a host contradicting itself; read it as unknown.
+  if (worker.heartbeatState === 'unreadable' || typeof worker.heartbeatAgeSeconds !== 'number') {
+    return ' heartbeat=unknown'
+  }
+  return ` heartbeat=${worker.heartbeatAgeSeconds}s`
+}
+
 function safeJson(value: unknown): string {
   try {
     return JSON.stringify(value)
@@ -1068,6 +1088,10 @@ export const ORCHESTRATION_HANDLERS: Record<string, CommandHandler> = {
         dispatchStatus: string
         agentTerminalHandle: string | null
         terminalState: string | null
+        // Optional: a host predating heartbeat freshness omits all three (remote-wire-compatibility Rule 1).
+        lastHeartbeatReceivedAt?: string | null
+        heartbeatAgeSeconds?: number | null
+        heartbeatState?: 'never' | 'recorded' | 'unreadable'
         resource: unknown
       }[]
       counts: Record<string, number>
@@ -1082,7 +1106,7 @@ export const ORCHESTRATION_HANDLERS: Record<string, CommandHandler> = {
       const rows = r.workers
         .map(
           (w) =>
-            `${w.dispatchId} task=${w.taskId} [${w.workerState}] terminal=${w.terminalState ?? 'none'}`
+            `${w.dispatchId} task=${w.taskId} [${w.workerState}] terminal=${w.terminalState ?? 'none'}${formatHeartbeatFreshness(w)}`
         )
         .join('\n')
       const counts = Object.entries(r.counts)

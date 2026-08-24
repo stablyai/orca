@@ -155,6 +155,9 @@ export const ORCHESTRATION_WORKER_RELEASE_METHODS: RpcMethod[] = [
           dispatchStatus: row.dispatchStatus,
           agentTerminalHandle: row.agentTerminalHandle,
           terminalState: row.terminalState,
+          lastHeartbeatReceivedAt: row.lastHeartbeatReceivedAt,
+          heartbeatAgeSeconds: row.heartbeatAgeSeconds,
+          heartbeatState: row.heartbeatState,
           resource: row.resource ? exposeWorkerTerminalResource(row.resource) : null
         }))
       const counts: Partial<Record<WorkerTerminalListState, number>> = {}

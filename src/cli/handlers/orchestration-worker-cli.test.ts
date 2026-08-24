@@ -296,4 +296,91 @@ describe('orchestration worker-start CLI contract', () => {
       source: 'transcript'
     })
   })
+
+  it('renders heartbeat freshness only when the host reports it', async () => {
+    callMock.mockResolvedValue({ workers: [], counts: {} })
+
+    await ORCHESTRATION_HANDLERS['orchestration worker-list']({
+      flags: new Map<string, string | boolean>(),
+      client: { call: callMock },
+      cwd: '/tmp/repo',
+      json: false
+    } as never)
+
+    const formatter = vi.mocked(printResult).mock.calls[0]?.[2] as
+      | ((result: {
+          workers: {
+            dispatchId: string
+            taskId: string
+            workerState: string
+            terminalState: string | null
+            lastHeartbeatReceivedAt?: string | null
+            heartbeatAgeSeconds?: number | null
+            heartbeatState?: 'never' | 'recorded' | 'unreadable'
+          }[]
+          counts: Record<string, number>
+        }) => string)
+      | undefined
+
+    expect(
+      formatter?.({
+        workers: [
+          {
+            dispatchId: 'ctx_fresh',
+            taskId: 'task_1',
+            workerState: 'ready',
+            terminalState: 'active',
+            lastHeartbeatReceivedAt: '2026-08-22T10:00:00Z',
+            heartbeatAgeSeconds: 42,
+            heartbeatState: 'recorded'
+          },
+          {
+            dispatchId: 'ctx_silent',
+            taskId: 'task_2',
+            workerState: 'ready',
+            terminalState: 'active',
+            lastHeartbeatReceivedAt: null,
+            heartbeatAgeSeconds: null,
+            heartbeatState: 'never'
+          },
+          // A stored stamp with no derivable age must not read as "never reported".
+          {
+            dispatchId: 'ctx_corrupt',
+            taskId: 'task_3',
+            workerState: 'ready',
+            terminalState: 'active',
+            lastHeartbeatReceivedAt: 'not-a-timestamp',
+            heartbeatAgeSeconds: null,
+            heartbeatState: 'unreadable'
+          },
+          // A host contradicting itself — 'recorded' with no number — is unknown, never fabricated.
+          {
+            dispatchId: 'ctx_contradictory',
+            taskId: 'task_4',
+            workerState: 'ready',
+            terminalState: 'active',
+            lastHeartbeatReceivedAt: '2026-08-22T10:00:00Z',
+            heartbeatAgeSeconds: null,
+            heartbeatState: 'recorded'
+          },
+          // An old host omits every field; the row must not claim the worker went silent.
+          {
+            dispatchId: 'ctx_old_host',
+            taskId: 'task_5',
+            workerState: 'ready',
+            terminalState: 'active'
+          }
+        ],
+        counts: {}
+      })
+    ).toBe(
+      [
+        'ctx_fresh task=task_1 [ready] terminal=active heartbeat=42s',
+        'ctx_silent task=task_2 [ready] terminal=active heartbeat=none',
+        'ctx_corrupt task=task_3 [ready] terminal=active heartbeat=unknown',
+        'ctx_contradictory task=task_4 [ready] terminal=active heartbeat=unknown',
+        'ctx_old_host task=task_5 [ready] terminal=active'
+      ].join('\n')
+    )
+  })
 })

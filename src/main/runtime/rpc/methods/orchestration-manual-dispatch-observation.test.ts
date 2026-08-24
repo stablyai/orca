@@ -207,6 +207,88 @@ describe('manual Dispatch observation', () => {
     })
   })
 
+  it('worker-list reports heartbeat freshness for an injected lane', async () => {
+    db = new OrchestrationDb(':memory:')
+    const runtime = new OrcaRuntimeService()
+    runtime.setOrchestrationDb(db)
+    const run = db.createRun({
+      objective: 'heartbeat freshness',
+      coordinatorHandle: 'term_coord',
+      coordinatorPaneKey: 'tab_coord:leaf_coord'
+    })
+    const task = db.createTask({ spec: 'injected lane', runId: run.id })
+    const dispatch = db.createDispatchContext(
+      task.id,
+      'term_worker',
+      'tab_worker:leaf_worker',
+      'launch-hash',
+      'runtime_test:term_worker:1'
+    )
+    const workerList = ORCHESTRATION_METHODS.find(
+      (candidate) => candidate.name === 'orchestration.workerList'
+    )
+    if (!workerList) {
+      throw new Error('Missing method orchestration.workerList')
+    }
+    const listWorkers = async () =>
+      (
+        (await workerList.handler({ run: run.id }, { runtime } as never)) as {
+          workers: {
+            lastHeartbeatReceivedAt: string | null
+            heartbeatAgeSeconds: number | null
+            heartbeatState: string
+          }[]
+        }
+      ).workers
+    const overwriteStoredStamp = (stamp: string) =>
+      (
+        db as unknown as { db: { prepare: (sql: string) => { run: (...a: unknown[]) => void } } }
+      ).db
+        .prepare('UPDATE dispatch_contexts SET last_heartbeat_at = ? WHERE id = ?')
+        .run(stamp, dispatch.id)
+
+    expect(await listWorkers()).toEqual([
+      expect.objectContaining({
+        lastHeartbeatReceivedAt: null,
+        heartbeatAgeSeconds: null,
+        heartbeatState: 'never'
+      })
+    ])
+
+    // The federation relay hands recordHeartbeat an explicit-offset stamp; local reconciliation hands
+    // it SQLite's space format. Both are taken on this host, so both read back normalized and aged.
+    db.recordHeartbeat(dispatch.id, '2020-01-01T00:00:00Z')
+    expect(await listWorkers()).toEqual([
+      expect.objectContaining({
+        lastHeartbeatReceivedAt: '2020-01-01T00:00:00Z',
+        heartbeatState: 'recorded'
+      })
+    ])
+    expect((await listWorkers())[0]?.heartbeatAgeSeconds).toBeGreaterThan(86_400)
+
+    // A stamp this host cannot parse is not the same fact as never having reported: the value is still
+    // published so an operator can see the corruption, but no age is invented for it.
+    overwriteStoredStamp('not-a-timestamp')
+    expect(await listWorkers()).toEqual([
+      expect.objectContaining({
+        lastHeartbeatReceivedAt: 'not-a-timestamp',
+        heartbeatAgeSeconds: null,
+        heartbeatState: 'unreadable'
+      })
+    ])
+
+    // Arrival time cannot be in this host's future; reading that as "just reported" would hide a hung
+    // lane behind a clock anomaly, so it degrades to unreadable rather than clamping to 0.
+    overwriteStoredStamp('2999-01-01 00:00:00')
+    expect(await listWorkers()).toEqual([
+      expect.objectContaining({
+        lastHeartbeatReceivedAt: '2999-01-01T00:00:00Z',
+        heartbeatAgeSeconds: null,
+        heartbeatState: 'unreadable'
+      })
+    ])
+  })
+
   it.each([
     ['orchestration.workerStop', 'stopped'],
     ['orchestration.workerAbandon', 'abandoned']

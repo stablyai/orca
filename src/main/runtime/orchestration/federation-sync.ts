@@ -252,6 +252,9 @@ function parseFederatedLifecycle(
     }
   | { kind: 'rejected'; code: string; reason: string } {
   if (message.type === 'heartbeat') {
+    // Why: stamped here, on the Run home, as the relay item is imported — recordHeartbeat's stamp is
+    // arrival time, and the relayed payload carries no worker timestamp precisely so a skewed worker
+    // clock cannot become this lane's freshness.
     return { kind: 'heartbeat', at: new Date().toISOString() }
   }
   if (message.type !== 'worker_done') {
