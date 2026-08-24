@@ -158,4 +158,64 @@ describe('WorkspaceCleanupConfirmRemove', () => {
       expect(container.querySelector(`[aria-label="Host: ${hostLabel}"]`)).not.toBeNull()
     }
   })
+
+  it('shows every destructive git risk and the fleet-level force projection', () => {
+    const failed = makeFacetCandidate({
+      worktreeId: 'repo-1::/failed',
+      blockers: ['pinned', 'git-status-error'],
+      git: {
+        clean: null,
+        upstreamAhead: null,
+        upstreamBehind: null,
+        checkedAt: null
+      }
+    })
+    const unknownBase = makeFacetCandidate({
+      worktreeId: 'repo-1::/unknown-base',
+      blockers: ['unknown-base']
+    })
+
+    act(() => {
+      root.render(
+        <WorkspaceCleanupConfirmRemove
+          candidates={[failed, unknownBase]}
+          now={Date.now()}
+          reviewInfoByWorktreeId={new Map()}
+          progress={null}
+          onBack={vi.fn()}
+          onCancel={vi.fn()}
+          onConfirm={vi.fn()}
+        />
+      )
+    })
+
+    expect(container.textContent).toContain('Pinned')
+    expect(container.textContent).toContain('Git status unavailable')
+    expect(container.textContent).toContain('Could not verify unpushed commits')
+    expect(container.textContent).toContain(
+      '2 workspaces currently show risk and may need a force delete'
+    )
+    expect(
+      [...container.querySelectorAll('.text-destructive')].map((node) => node.textContent)
+    ).toEqual(
+      expect.arrayContaining(['Git status unavailable', 'Could not verify unpushed commits'])
+    )
+
+    act(() => {
+      root.render(
+        <WorkspaceCleanupConfirmRemove
+          candidates={[failed]}
+          now={Date.now()}
+          reviewInfoByWorktreeId={new Map()}
+          progress={null}
+          onBack={vi.fn()}
+          onCancel={vi.fn()}
+          onConfirm={vi.fn()}
+        />
+      )
+    })
+    expect(container.textContent).toContain(
+      '1 workspace currently shows risk and may need a force delete'
+    )
+  })
 })

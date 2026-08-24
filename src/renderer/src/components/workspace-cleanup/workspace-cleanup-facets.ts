@@ -4,10 +4,10 @@ import type { WorkspaceStatusDefinition } from '../../../../shared/worktree/type
 import { getWorkspaceCleanupCandidateIdentity } from '../../../../shared/workspace-cleanup-host-identity'
 import { getWorkspaceStatus } from '../../../../shared/workspace-statuses'
 import {
-  canSelectWorkspaceCleanupCandidate,
+  canQueueWorkspaceCleanupCandidate,
+  WORKSPACE_CLEANUP_BULK_SELECT_EXCLUSIONS,
   type WorkspaceCleanupBlocker,
-  type WorkspaceCleanupCandidate,
-  type WorkspaceCleanupTier
+  type WorkspaceCleanupCandidate
 } from '../../../../shared/workspace-cleanup'
 import { getWorkspaceCleanupGitState } from './workspace-cleanup-filter-sort'
 import type {
@@ -48,7 +48,6 @@ export type WorkspaceCleanupFacets = {
   path: string
   branch: string
   hostId: ExecutionHostId
-  tier: WorkspaceCleanupTier
   blockers: readonly WorkspaceCleanupBlocker[]
   blockerCount: number
   isDismissed: boolean
@@ -119,14 +118,15 @@ export function buildWorkspaceCleanupFacets(
     path: candidate.path,
     branch,
     hostId: worktree?.hostId ?? getWorkspaceCleanupCandidateHostId(candidate),
-    tier: candidate.tier,
     blockers: candidate.blockers,
     blockerCount: candidate.blockers.length,
     isDismissed:
       (sources.dismissedIdentities?.has(getWorkspaceCleanupCandidateIdentity(candidate)) ??
         false) ||
       candidate.blockers.includes('dismissed'),
-    isSelectable: canSelectWorkspaceCleanupCandidate(candidate),
+    isSelectable:
+      canQueueWorkspaceCleanupCandidate(candidate) &&
+      !candidate.blockers.some((blocker) => WORKSPACE_CLEANUP_BULK_SELECT_EXCLUSIONS.has(blocker)),
     lastActivityAt: candidate.lastActivityAt,
     createdAt: toFiniteOrNull(worktree?.createdAt ?? candidate.createdAt),
     lastVisitedAt: toFiniteOrNull(
@@ -230,7 +230,6 @@ function buildSearchText(facets: Omit<WorkspaceCleanupFacets, 'searchText'>): st
     facets.review.title,
     facets.review.provider,
     facets.gitState,
-    facets.tier,
     ...facets.ticketSources,
     ...facets.blockers
   ]

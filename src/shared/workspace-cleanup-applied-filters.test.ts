@@ -16,8 +16,7 @@ const FORMAT = {
   branchQuery: (v: string) => `Branch ~ ${v}`,
   pathPrefix: (v: string) => `Path ~ ${v}`,
   presence: (kind: string, mode: string) => `${kind}:${mode}`,
-  completelyEmpty: () => 'Nothing to lose',
-  selectableOnly: () => 'Deletable only'
+  completelyEmpty: () => 'Nothing to lose'
 }
 
 const list = (f: ReturnType<typeof createDefaultWorkspaceCleanupFilterState>) =>
@@ -131,7 +130,7 @@ describe('listAppliedWorkspaceCleanupFilters', () => {
     filters.status.matchStatusless = false
     filters.git.branchQuery = 'release'
     filters.location.pathPrefix = '/repos'
-    filters.safety.selectableOnly = true
+    filters.safety.dismissed = 'only'
 
     let next = filters
     for (const applied of list(filters)) {

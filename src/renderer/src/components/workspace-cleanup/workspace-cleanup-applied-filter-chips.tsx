@@ -121,9 +121,7 @@ function buildAppliedFilterFormatters(): Parameters<typeof listAppliedWorkspaceC
             : translate('components.workspace.cleanup.browse.chip.none', 'None')
       }),
     completelyEmpty: () =>
-      translate('components.workspace.cleanup.browse.chip.completelyEmpty', 'Nothing to lose'),
-    selectableOnly: () =>
-      translate('components.workspace.cleanup.browse.chip.selectableOnly', 'Deletable only')
+      translate('components.workspace.cleanup.browse.chip.completelyEmpty', 'Nothing to lose')
   }
 }
 
@@ -153,8 +151,6 @@ function getChipKindLabel(kind: string): string {
       return translate('components.workspace.cleanup.browse.chip.kind.repo', 'Repo')
     case 'blocker':
       return translate('components.workspace.cleanup.browse.chip.kind.blocker', 'Blocker')
-    case 'tier':
-      return translate('components.workspace.cleanup.browse.chip.kind.tier', 'Safety')
     case 'dismissed':
       return translate('components.workspace.cleanup.browse.chip.kind.dismissed', 'Ignored')
     case 'archived':

@@ -232,7 +232,10 @@
         "workspace": {
           "cleanup": {
             "9d6e531da6": "워크스페이스가 더 이상 존재하지 않습니다.",
-            "changedSinceConfirmation": "확인 후 워크스페이스가 변경되었습니다. 제거하기 전에 새로 고쳐 검토하세요."
+            "changedSinceConfirmation": "확인 후 워크스페이스가 변경되었습니다. 제거하기 전에 새로 고쳐 검토하세요.",
+            "gitStatusUnavailable": "Orca가 이 워크스페이스의 Git 상태를 확인할 수 없습니다. 다시 시도하거나 호스트별 사이드바 또는 프로젝트 목록에서 삭제하세요.",
+            "gitStatusUnavailableOlderPeer": "Orca가 이 Git 상태 확인 실패를 호스트와 연결할 수 없습니다. 이전 연결 피어를 업데이트하거나 호스트별 사이드바 또는 프로젝트 목록에서 워크스페이스를 삭제하세요.",
+            "forceNeedsApproval": "강제로 삭제하기 전에 이 워크스페이스를 검토하고 확인하세요."
           }
         },
         "worktrees": {
@@ -14568,6 +14571,11 @@
           "githubPullRequestNumber": "PR #{{value0}}"
         },
         "browse": {
+          "gitStatusCheckFailed": "Git 상태 확인 실패",
+          "gitStatusUnverified": "Git 상태를 확인할 수 없음",
+          "deleteAnyway": "그래도 삭제",
+          "forceDeleteProjectionOne": "현재 워크스페이스 {{count}}개에 위험 요소가 표시되며 강제 삭제가 필요할 수 있습니다",
+          "forceDeleteProjectionMany": "현재 워크스페이스 {{count}}개에 위험 요소가 표시되며 강제 삭제가 필요할 수 있습니다",
           "appliedFilters": "적용된 필터",
           "removeFilter": "{{value0}} 필터 제거",
           "chip": {

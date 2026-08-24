@@ -35,7 +35,6 @@ type Formatters = {
   pathPrefix: (value: string) => string
   presence: (kind: string, mode: string) => string
   completelyEmpty: () => string
-  selectableOnly: () => string
 }
 
 /**
@@ -232,22 +231,10 @@ export function listAppliedWorkspaceCleanupFilters(
       safety: { ...f.safety, blockers: [] }
     }))
   }
-  if (safety.tiers.length > 0) {
-    add('safety.tiers', format.list('tier', safety.tiers.length), (f) => ({
-      ...f,
-      safety: { ...f.safety, tiers: [] }
-    }))
-  }
   if (safety.dismissed !== 'any') {
     add('safety.dismissed', format.triState('dismissed', safety.dismissed), (f) => ({
       ...f,
       safety: { ...f.safety, dismissed: 'any' }
-    }))
-  }
-  if (safety.selectableOnly) {
-    add('safety.selectableOnly', format.selectableOnly(), (f) => ({
-      ...f,
-      safety: { ...f.safety, selectableOnly: false }
     }))
   }
 

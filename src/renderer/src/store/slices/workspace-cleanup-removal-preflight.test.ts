@@ -37,9 +37,7 @@ describe('workspace cleanup removal and protection', () => {
         worktreeId: 'repo-c::/other',
         repoId: 'repo-c',
         path: '/other',
-        displayName: 'other',
-        git: { clean: null, upstreamAhead: null, upstreamBehind: null, checkedAt: null },
-        blockers: ['git-status-error']
+        displayName: 'other'
       })
     ]
     const candidateById = new Map(candidates.map((candidate) => [candidate.worktreeId, candidate]))
@@ -90,7 +88,7 @@ describe('workspace cleanup removal and protection', () => {
     // internal-caller compatibility path leaves the host unqualified.
     expect(removeWorktree).toHaveBeenCalledWith(
       { id: 'repo-c::/other', executionHostId: null },
-      true,
+      false,
       {
         suppressPreservedBranchToast: true
       }
@@ -101,7 +99,11 @@ describe('workspace cleanup removal and protection', () => {
   it('returns preserved branches for the cleanup batch summary', async () => {
     const candidate = makeCandidate()
     installWorkspaceCleanupApi(
-      vi.fn(async () => ({ scannedAt: NOW, candidates: [candidate], errors: [] }))
+      vi.fn(async () => ({
+        scannedAt: NOW,
+        candidates: [candidate],
+        errors: []
+      }))
     )
     const removeWorktree = vi.fn().mockResolvedValue({
       ok: true,
@@ -109,7 +111,11 @@ describe('workspace cleanup removal and protection', () => {
     })
     const store = createCleanupTestStore(removeWorktree)
     store.setState({
-      workspaceCleanupScan: { scannedAt: NOW, candidates: [candidate], errors: [] }
+      workspaceCleanupScan: {
+        scannedAt: NOW,
+        candidates: [candidate],
+        errors: []
+      }
     } as Partial<AppState>)
 
     await expect(
@@ -138,7 +144,11 @@ describe('workspace cleanup removal and protection', () => {
   it('forwards the snapshot batch through each successful removal', async () => {
     const candidate = makeCandidate({ executionHostId: 'ssh:ssh-1' })
     installWorkspaceCleanupApi(
-      vi.fn(async () => ({ scannedAt: NOW, candidates: [candidate], errors: [] }))
+      vi.fn(async () => ({
+        scannedAt: NOW,
+        candidates: [candidate],
+        errors: []
+      }))
     )
     const removeWorktree = vi.fn().mockResolvedValue({ ok: true })
     const store = createCleanupTestStore(removeWorktree)
@@ -176,8 +186,7 @@ describe('workspace cleanup removal and protection', () => {
         workspaceCleanupViewedCandidates: {
           [WORKTREE_ID]: {
             viewedAt: Date.now(),
-            fingerprint: 'fingerprint-1',
-            wasSuggested: true
+            fingerprint: 'fingerprint-1'
           }
         }
       }),
@@ -197,8 +206,7 @@ describe('workspace cleanup removal and protection', () => {
         workspaceCleanupViewedCandidates: {
           [WORKTREE_ID]: {
             viewedAt: Date.now(),
-            fingerprint: 'fingerprint-1',
-            wasSuggested: true
+            fingerprint: 'fingerprint-1'
           }
         }
       }),
@@ -335,7 +343,9 @@ describe('workspace cleanup removal and protection', () => {
 
     const removeWorktree = vi.fn().mockResolvedValue({ ok: true })
     const store = createCleanupTestStore(removeWorktree)
-    store.setState({ activeWorktreeId: 'repo1::/tmp/other-workspace' } as Partial<AppState>)
+    store.setState({
+      activeWorktreeId: 'repo1::/tmp/other-workspace'
+    } as Partial<AppState>)
 
     await store.getState().removeWorkspaceCleanupCandidates([WORKTREE_ID])
 
@@ -393,7 +403,12 @@ describe('workspace cleanup removal and protection', () => {
       executionHostId: 'local',
       tier: 'review',
       blockers: ['dirty-files'],
-      git: { clean: false, upstreamAhead: 0, upstreamBehind: 0, checkedAt: NOW }
+      git: {
+        clean: false,
+        upstreamAhead: 0,
+        upstreamBehind: 0,
+        checkedAt: NOW
+      }
     })
     const scan = vi.fn().mockResolvedValue({
       scannedAt: NOW,
@@ -428,7 +443,12 @@ describe('workspace cleanup removal and protection', () => {
       executionHostId: 'local',
       tier: 'review',
       blockers: ['dirty-files'],
-      git: { clean: false, upstreamAhead: 0, upstreamBehind: 0, checkedAt: NOW }
+      git: {
+        clean: false,
+        upstreamAhead: 0,
+        upstreamBehind: 0,
+        checkedAt: NOW
+      }
     })
     const scan = vi.fn().mockResolvedValue({
       scannedAt: NOW,
@@ -462,7 +482,12 @@ describe('workspace cleanup removal and protection', () => {
       executionHostId: 'local',
       tier: 'review',
       blockers: ['git-status-error'],
-      git: { clean: null, upstreamAhead: null, upstreamBehind: null, checkedAt: null }
+      git: {
+        clean: null,
+        upstreamAhead: null,
+        upstreamBehind: null,
+        checkedAt: null
+      }
     })
     const nowRevealsUnpushed = makeCandidate({
       executionHostId: 'local',
