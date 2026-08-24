@@ -151,7 +151,13 @@ export function createRemoveWorktree(
             throw error
           }
           if (currentResolution.kind === 'resolved') {
+            // Why (#16243): a not-found verdict from the runtime while this same
+            // runtime's catalog still resolves the confirmed-host route is a host-
+            // qualification/resolution gap, not a stale mirror. Forgetting only the
+            // local mirror here silently abandoned a live remote workspace — the row
+            // returned on the next refresh with nothing deleted and no failure shown.
             removalGenerationGuard?.assertCurrent()
+            throw error
           }
           try {
             removalResult = await window.api.worktrees.forgetLocal({
