@@ -18,6 +18,24 @@ function PopoverAnchor(props: React.ComponentProps<typeof PopoverPrimitive.Ancho
   return <PopoverPrimitive.Anchor data-slot="popover-anchor" {...props} />
 }
 
+/**
+ * Nearest scrollable element between the wheel target and the popover content,
+ * inclusive of both. Returns null when nothing in that chain can scroll.
+ */
+function resolvePopoverScroller(target: EventTarget | null, content: HTMLElement): HTMLElement | null {
+  let node = target instanceof Node ? target : null
+  while (node && node !== content.parentNode) {
+    if (node instanceof HTMLElement && node.scrollHeight > node.clientHeight) {
+      const overflowY = getComputedStyle(node).overflowY
+      if (overflowY === 'auto' || overflowY === 'scroll') {
+        return node
+      }
+    }
+    node = node.parentNode
+  }
+  return null
+}
+
 function PopoverContent({
   className,
   align = 'center',
@@ -55,8 +73,23 @@ function PopoverContent({
         return
       }
 
-      const el = event.currentTarget
-      if (!el.classList.contains('popover-scroll-content') || el.scrollHeight <= el.clientHeight) {
+      const content = event.currentTarget
+      // Why two markers: `popover-scroll-content` also imposes a 15rem max-height and its
+      // own overflow, which a popover that manages its own layout (a fixed-height flex
+      // column over a pinned footer) must not inherit. `popover-wheel-scroll` opts into
+      // the shim alone.
+      if (
+        !content.classList.contains('popover-scroll-content') &&
+        !content.classList.contains('popover-wheel-scroll')
+      ) {
+        return
+      }
+
+      // Why resolve rather than use currentTarget: a popover whose content is a flex
+      // column with a nested viewport (a ScrollArea above a pinned footer) is itself
+      // overflow-hidden, so the scroller is a descendant under the pointer.
+      const el = resolvePopoverScroller(event.target, content)
+      if (!el) {
         return
       }
 
