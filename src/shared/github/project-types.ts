@@ -87,6 +87,10 @@ export type GitHubProjectView = {
   filter: string
   fields: GitHubProjectField[]
   groupByFields: GitHubProjectField[]
+  /** Board views: the field whose options become the board columns. Optional
+   *  so table-view fixtures and cached payloads predating board support stay
+   *  valid. */
+  verticalGroupByFields?: GitHubProjectField[]
   sortByFields: GitHubProjectSort[]
 }
 
