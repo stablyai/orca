@@ -1060,14 +1060,11 @@ export function getOpenCodeFamilyPluginSource(
     '  };',
     '};',
     '',
-    '// Why: OpenCode also resolves plugins through the module default export, and that',
-    '// loader rejects the module unless the default exposes `server()` ("must default',
-    '// export an object with server()"). `setup()` does not satisfy it. Keep the named',
-    '// export so the factory-based loader still finds the same instance.',
-    'export default {',
-    '  id: "orca-opencode-status",',
-    '  server: OrcaOpenCodeStatusPlugin,',
-    '};',
+    '// Why: OpenCode resolves plugins through the module default export and calls it as',
+    '// the plugin factory (`defaultExport(input)`); shipping an object default crashes',
+    '// every OpenCode launch with "TypeError: fn3 is not a function" (orca #15897, #16245).',
+    '// Default-export the same async factory as the named export so both loaders share one instance.',
+    'export default OrcaOpenCodeStatusPlugin;',
     ''
   ].join('\n')
 }

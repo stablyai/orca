@@ -18,10 +18,9 @@ import { _internals } from './hook-service'
 
 /**
  * OpenCode loads a plugin file either through a named factory export or through the
- * module default export. The default-export loader rejects the module outright unless
- * the default is an object exposing `server()` — verified against opencode 1.18.18,
- * which logs `failed to load plugin … must default export an object with server()` for
- * a default of `{ id, setup }` and accepts `{ id, server }`. These tests execute the
+ * module default export. The shipped loader CALLS the default export as the plugin
+ * factory (`defaultExport(input)`), so an object default crashes every launch with
+ * `TypeError: fn3 is not a function` (orca #15897 / #16245). These tests execute the
  * generated module so the shipped file is checked against both loaders, not a substring.
  */
 describe('OpenCode status plugin module contract', () => {
@@ -30,7 +29,7 @@ describe('OpenCode status plugin module contract', () => {
     dispose?: () => Promise<void>
   }
   type PluginModule = {
-    default?: { id?: unknown; server?: (ctx: unknown) => Promise<PluginHooks> }
+    default?: (ctx: unknown) => Promise<PluginHooks>
     OrcaOpenCodeStatusPlugin?: (ctx: unknown) => Promise<PluginHooks>
   }
 
@@ -82,22 +81,20 @@ describe('OpenCode status plugin module contract', () => {
     return (await import(pathToFileURL(pluginPath).href)) as PluginModule
   }
 
-  it('exposes a default export carrying a string id and a callable server()', async () => {
+  it('exposes a callable default export identical to the named factory', async () => {
     const module = await loadPluginModule()
 
-    expect(module.default).toBeTypeOf('object')
-    expect(typeof module.default?.id).toBe('string')
-    expect(module.default?.id).toBe('orca-opencode-status')
-    expect(module.default?.server).toBeTypeOf('function')
+    expect(module.default).toBeTypeOf('function')
+    expect(module.default).toBe(module.OrcaOpenCodeStatusPlugin)
   })
 
-  it('rejects the shape OpenCode refuses: a default export without server()', async () => {
+  it('rejects the object default that crashes the default-export loader', async () => {
     const module = await loadPluginModule()
 
-    // Why: pins the specific reason the loader fails a module — `setup` alone is not
-    // accepted, so a default export must never regress to it.
-    expect(module.default).not.toBeUndefined()
-    expect(Object.hasOwn(module.default ?? {}, 'server')).toBe(true)
+    // Why: pins the defect behind orca #15897 / #16245 — the loader invokes the default
+    // as `defaultExport(input)`, so an `{ id, server }` object throws
+    // `TypeError: fn3 is not a function` and breaks every OpenCode launch.
+    expect(typeof module.default).not.toBe('object')
   })
 
   it('keeps the named factory export so the factory-based loader still resolves', async () => {
@@ -106,10 +103,10 @@ describe('OpenCode status plugin module contract', () => {
     expect(module.OrcaOpenCodeStatusPlugin).toBeTypeOf('function')
   })
 
-  it('returns an event handler from the default export server(), like the named factory', async () => {
+  it('returns an event handler when the loader calls the default export, like the named factory', async () => {
     const module = await loadPluginModule()
 
-    const fromDefault = await module.default?.server?.({})
+    const fromDefault = await module.default?.({})
     const fromNamed = await module.OrcaOpenCodeStatusPlugin?.({})
 
     expect(fromDefault?.event).toBeTypeOf('function')
@@ -125,7 +122,7 @@ describe('OpenCode status plugin module contract', () => {
     }) as unknown as typeof globalThis.fetch
 
     const module = await loadPluginModule()
-    const hooks = await module.default?.server?.({
+    const hooks = await module.default?.({
       client: {
         session: {
           // Why: a root session (no parentID) must pass the child-session filter,
