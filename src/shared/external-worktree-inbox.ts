@@ -34,6 +34,17 @@ export function mergeExternalWorktreeInboxPaths(
   return merged
 }
 
+export function removeExternalWorktreeInboxPath(
+  existing: readonly string[] | undefined,
+  removal: string
+): string[] {
+  const normalized = normalizeExternalWorktreeInboxPath(removal)
+  if (!normalized) {
+    return [...(existing ?? [])]
+  }
+  return (existing ?? []).filter((path) => normalizeExternalWorktreeInboxPath(path) !== normalized)
+}
+
 export function getHiddenExternalWorktrees(
   detected: DetectedWorktreeListResult | undefined
 ): DetectedWorktree[] {

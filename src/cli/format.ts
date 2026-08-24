@@ -54,9 +54,11 @@ export {
   formatRepoList,
   formatRepoRefs,
   formatRepoShow,
+  formatWorktreeImport,
   formatWorktreeList,
   formatWorktreePs,
-  formatWorktreeShow
+  formatWorktreeShow,
+  formatWorktreeUnimport
 } from './workspace-format'
 
 type CliErrorContext = {

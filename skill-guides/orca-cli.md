@@ -116,6 +116,8 @@ ORCA worktree create --name independent-task --no-parent --json
 ORCA worktree set --worktree id:<repoId>::<worktreePath> --display-name "My Task" --json
 ORCA worktree set --worktree active --comment "reproduced bug; testing fix" --json
 ORCA worktree set --worktree active --workspace-status in-review --json
+ORCA worktree import --worktree path:<absolutePath> --json
+ORCA worktree unimport --worktree path:<absolutePath> --json
 ORCA worktree rm --worktree id:<repoId>::<worktreePath> --force --json
 ```
 
@@ -125,6 +127,14 @@ Selectors:
 - The full id is the exact `<repo-id>::<path>` value returned by `orca worktree create --json` or `orca worktree list --json`; a bare repo id is not a worktree id.
 - `active` / `current` for the enclosing Orca-managed worktree from the shell cwd
 - For `worktree create --parent-worktree` only, folder/worktree parent context keys are also valid: `folder:<folderId>`, `worktree:<repoId>::<worktreePath>`, `id:folder:<folderId>`, `id:worktree:<repoId>::<worktreePath>`
+
+Hidden worktrees:
+
+- Orca hides worktrees it did not create. `worktree import` reveals one by recording its path on the owning repo; it does not create, move, or check out anything, and does not mark the worktree as Orca-created.
+- Repo visibility sources reveal a whole source at once — the built-in `.claude/worktrees` source covers every coding-agent scratch worktree under it. An import reveals a single worktree instead, which is what makes per-checkout decisions scriptable.
+- Only worktrees of a registered repo are eligible. An independent clone of the same upstream — its own `.git` directory rather than a linked worktree — is never reported as that repo's worktree, so there is nothing for `worktree import` to reveal.
+- `active` and `current` resolve to the enclosing _visible_ worktree, so a hidden one cannot be addressed that way. Pass the worktree's absolute path; `path:$PWD` is a shorthand for POSIX shells and PowerShell only.
+- Importing twice is a no-op and reports `already-imported`. `worktree unimport` drops the import so the worktree follows the repo's ordinary visibility rules again — it only changes visibility, and never deletes a worktree.
 
 Lineage rules:
 

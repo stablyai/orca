@@ -6,7 +6,12 @@ import type {
   RuntimeWorktreeRemoveResult
 } from '../../shared/runtime-types'
 import type { CommandHandler } from '../dispatch'
-import { formatWorktreeList, formatWorktreePs, formatWorktreeShow, printResult } from '../format'
+import {
+  formatWorktreeList,
+  formatWorktreePs,
+  formatWorktreeShow,
+  printResult
+} from '../format'
 import { RuntimeClientError } from '../runtime-client'
 import {
   getOptionalNullableNumberFlag,

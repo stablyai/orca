@@ -10,6 +10,7 @@ import {
   getVisibleExternalWorktrees,
   getVisibleNonOrcaWorktrees,
   mergeExternalWorktreeInboxPaths,
+  removeExternalWorktreeInboxPath,
   shouldOfferNewExternalWorktreeInbox
 } from './external-worktree-inbox'
 import {
@@ -117,6 +118,25 @@ describe('external worktree inbox', () => {
       '/repo/one/',
       '/repo/two'
     ])
+  })
+
+  it('removes an inbox path that matches after normalization and keeps the rest in order', () => {
+    const existing = ['/repo/one', '/repo/two/', '/repo/three']
+
+    expect(removeExternalWorktreeInboxPath(existing, '/repo/two')).toEqual([
+      '/repo/one',
+      '/repo/three'
+    ])
+    expect(removeExternalWorktreeInboxPath(existing, '/repo/missing')).toEqual(existing)
+    expect(removeExternalWorktreeInboxPath(undefined, '/repo/one')).toEqual([])
+  })
+
+  it('leaves the inbox path list untouched for an empty removal', () => {
+    expect(removeExternalWorktreeInboxPath(['/repo/one', ''], '')).toEqual(['/repo/one', ''])
+  })
+
+  it('removes Windows inbox paths that differ only by separator or case', () => {
+    expect(removeExternalWorktreeInboxPath(['C:\\repo\\One'], 'c:/repo/one')).toEqual([])
   })
 
   it('offers the inbox only after the initial prompt is dismissed and discovery is not suppressed', () => {
