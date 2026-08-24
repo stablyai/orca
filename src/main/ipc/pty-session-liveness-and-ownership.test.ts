@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { onMock } from './pty-ipc-mock-registry'
 import { setupPtyIpcSuite } from './pty-ipc-test-harness'
 import { AGENT_SESSION_CLAIM_DIGEST_VERSION } from '../../shared/agent-session-host-authority'
+import type { PtySessionInventorySnapshot } from '../../shared/pty-listed-session'
 import {
   registerPtyHandlers,
   registerSshPtyProvider,
@@ -168,6 +169,44 @@ describe('registerPtyHandlers', () => {
       immediate: true,
       keepHistory: false
     })
+  })
+  it('keeps a connection-lost SSH ownership scope unavailable after provider unregister', async () => {
+    registerPtyHandlers(mainWindow as never)
+    registerSshPtyProvider('ssh-available', {
+      listProcesses: vi.fn(async () => [
+        { id: 'ssh:ssh-available@@pty-1', cwd: '/repo', title: 'available' }
+      ])
+    } as never)
+    // Connection loss unregisters the provider but intentionally retains PTY
+    // routing ownership for daemon/relay grace and later reattach.
+    setPtyOwnership('ssh:ssh-disconnected@@retained', 'ssh-disconnected')
+
+    try {
+      const inventory = (await handlers.get('pty:listSessionInventory')!(
+        null,
+        undefined
+      )) as PtySessionInventorySnapshot
+      expect(inventory.sessions).toEqual([
+        {
+          id: 'ssh:ssh-available@@pty-1',
+          cwd: '/repo',
+          title: 'available',
+          agentOwnership: 'unknown'
+        }
+      ])
+      expect(inventory.hostIdBySessionId).toEqual({
+        'ssh:ssh-available@@pty-1': 'ssh:ssh-available'
+      })
+      expect(new Set(inventory.queriedHostIds)).toEqual(new Set(['local', 'ssh:ssh-available']))
+      expect(new Set(inventory.respondingHostIds)).toEqual(new Set(['local', 'ssh:ssh-available']))
+      expect(inventory.unavailableHostIds).toEqual(['ssh:ssh-disconnected'])
+      expect(inventory.retainedSessionIdsByHost).toEqual({
+        'ssh:ssh-disconnected': ['ssh:ssh-disconnected@@retained']
+      })
+      expect(inventory.complete).toBe(false)
+    } finally {
+      unregisterSshPtyProvider('ssh-available')
+    }
   })
   it('reports agent ownership through pty:listSessions so the renderer cannot guess it', async () => {
     registerPtyHandlers(mainWindow as never)

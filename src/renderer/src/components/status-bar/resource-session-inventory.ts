@@ -1,43 +1,45 @@
 import type { DaemonSession } from './resource-usage-merge-types'
 
-/** Last-known daemon terminal inventory for the Resource Manager badge. */
+/** Last-known daemon terminal inventory exposed to Resource Usage consumers. */
 export type DaemonSessionInventory = {
   sessions: DaemonSession[]
   count: number
 }
 
+export const EMPTY_DAEMON_SESSION_ROWS: DaemonSession[] = []
+
 export const EMPTY_DAEMON_SESSION_INVENTORY: DaemonSessionInventory = {
-  sessions: [],
+  sessions: EMPTY_DAEMON_SESSION_ROWS,
   count: 0
 }
 
-export function inventoryFromSessions(sessions: readonly DaemonSession[]): DaemonSessionInventory {
-  return {
-    sessions: sessions.slice(),
-    count: sessions.length
-  }
-}
+/** Mutable row index owned by one inventory hook instance. Lifecycle removals are O(1). */
+export class ResourceSessionInventoryRows {
+  private rowsById = new Map<string, DaemonSession>()
 
-export function removeSessionsFromInventory(
-  inventory: DaemonSessionInventory,
-  sessionIds: ReadonlySet<string>
-): DaemonSessionInventory {
-  if (sessionIds.size === 0 || inventory.sessions.length === 0) {
-    return inventory
+  replace(sessions: readonly DaemonSession[]): void {
+    this.rowsById = new Map(sessions.map((session) => [session.id, session]))
   }
-  const sessions = inventory.sessions.filter((session) => !sessionIds.has(session.id))
-  if (sessions.length === inventory.sessions.length) {
-    return inventory
-  }
-  return {
-    sessions,
-    count: sessions.length
-  }
-}
 
-export function removeSessionFromInventory(
-  inventory: DaemonSessionInventory,
-  sessionId: string
-): DaemonSessionInventory {
-  return removeSessionsFromInventory(inventory, new Set([sessionId]))
+  remove(sessionId: string): boolean {
+    return this.rowsById.delete(sessionId)
+  }
+
+  removeMany(sessionIds: ReadonlySet<string>): number {
+    let removed = 0
+    for (const sessionId of sessionIds) {
+      if (this.rowsById.delete(sessionId)) {
+        removed += 1
+      }
+    }
+    return removed
+  }
+
+  clear(): void {
+    this.rowsById.clear()
+  }
+
+  toArray(): DaemonSession[] {
+    return Array.from(this.rowsById.values())
+  }
 }

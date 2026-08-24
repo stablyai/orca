@@ -118,7 +118,9 @@ describe('registerPtyHandlers', () => {
       await spawnAndGetEnv()
 
       expect(mainWindow.webContents.send).toHaveBeenCalledWith('pty:spawned', {
-        id: expect.any(String)
+        id: expect.any(String),
+        hostId: 'local',
+        isReattach: false
       })
     })
     it('marks local Claude launches live until the PTY is killed', async () => {

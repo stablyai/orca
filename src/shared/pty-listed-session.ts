@@ -1,3 +1,6 @@
+import type { ExecutionHostId } from './execution-host'
+
+export const PTY_SESSION_INVENTORY_RETAINED_ID_LIMIT = 4096
 /**
  * Whether an agent holds a listed session.
  *
@@ -22,6 +25,22 @@ export type PtyListedSession = {
    * Manager force-kill live agent sessions (#8459).
    */
   agentOwnership: AgentOwnershipEvidence
+}
+
+/**
+ * Additive detailed inventory contract. Only `respondingHostIds` are
+ * authoritative for pruning. `unavailableHostIds` includes retained ownership
+ * scopes whose provider is currently unregistered after connection loss.
+ */
+export type PtySessionInventorySnapshot = {
+  sessions: PtyListedSession[]
+  hostIdBySessionId: Record<string, ExecutionHostId>
+  queriedHostIds: ExecutionHostId[]
+  /** Bounded last-known IDs for unavailable hosts, used by a cold renderer. */
+  retainedSessionIdsByHost: Partial<Record<ExecutionHostId, string[]>>
+  respondingHostIds: ExecutionHostId[]
+  unavailableHostIds: ExecutionHostId[]
+  complete: boolean
 }
 
 /** Only proven absence authorizes destroying a session without asking. */

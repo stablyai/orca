@@ -1,13 +1,14 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useMountedRef } from '@/hooks/useMountedRef'
+import type { ExecutionHostId } from '../../../../shared/execution-host'
 import { subscribeDaemonSessionInventoryInvalidated } from './daemon-session-inventory-invalidation'
 import {
-  EMPTY_DAEMON_SESSION_INVENTORY,
-  inventoryFromSessions,
-  removeSessionFromInventory,
-  removeSessionsFromInventory,
+  EMPTY_DAEMON_SESSION_ROWS,
+  ResourceSessionInventoryRows,
   type DaemonSessionInventory
 } from './resource-session-inventory'
+import { readResourceSessionInventory } from './resource-session-inventory-reader'
+import { reconcileResourceSessionInventory } from './resource-session-inventory-reconciliation'
 
 type ResourceSessionInventory = {
   sessionInventory: DaemonSessionInventory
@@ -20,19 +21,29 @@ type ResourceSessionInventory = {
 
 type ResourceSessionInventoryState = {
   ready: boolean
-  sessionInventory: DaemonSessionInventory
+  sessionCount: number
+  sessionRowsRevision: number
   sessionsError: boolean
 }
 
-export function useResourceSessionInventory(ready: boolean): ResourceSessionInventory {
+export function useResourceSessionInventory(
+  ready: boolean,
+  authoritativeInventoryRequested: boolean
+): ResourceSessionInventory {
   const mountedRef = useMountedRef()
   const refreshGenerationRef = useRef(0)
   const lifecycleRevisionRef = useRef(0)
   const removedAtRevisionRef = useRef(new Map<string, number>())
+  const spawnedAtRevisionRef = useRef(new Map<string, number>())
   const knownSessionIdsRef = useRef(new Set<string>())
+  const knownHostIdBySessionIdRef = useRef(new Map<string, ExecutionHostId>())
+  const listedSessionIdsRef = useRef(new Set<string>())
+  const sessionRowsRef = useRef(new ResourceSessionInventoryRows())
+  const previousAuthoritativeInventoryRequestedRef = useRef(authoritativeInventoryRequested)
   const [storedState, setStoredState] = useState<ResourceSessionInventoryState>(() => ({
     ready,
-    sessionInventory: EMPTY_DAEMON_SESSION_INVENTORY,
+    sessionCount: 0,
+    sessionRowsRevision: 0,
     sessionsError: false
   }))
   const state =
@@ -40,7 +51,8 @@ export function useResourceSessionInventory(ready: boolean): ResourceSessionInve
       ? storedState
       : {
           ready,
-          sessionInventory: EMPTY_DAEMON_SESSION_INVENTORY,
+          sessionCount: 0,
+          sessionRowsRevision: storedState.sessionRowsRevision + 1,
           sessionsError: false
         }
   if (state !== storedState) {
@@ -56,29 +68,38 @@ export function useResourceSessionInventory(ready: boolean): ResourceSessionInve
     const generation = ++refreshGenerationRef.current
     const lifecycleRevision = lifecycleRevisionRef.current
     try {
-      const sessions = await window.api.pty.listSessions()
-      // Why: an exit or newer refresh can land while the global provider list
-      // is in flight; stale results must not resurrect dead sessions.
+      const inventory = await readResourceSessionInventory()
+      // Why: lifecycle events can land while the global provider list is in flight.
+      // Exits must not resurrect dead sessions, while authoritative novel spawns
+      // must remain counted even if this particular list started too early.
       if (!mountedRef.current || generation !== refreshGenerationRef.current) {
         return
       }
-      const currentRemovedAtRevision = removedAtRevisionRef.current
-      const liveSessions = sessions.filter(
-        ({ id }) => (currentRemovedAtRevision.get(id) ?? 0) <= lifecycleRevision
-      )
-      // Tombstones at or before this request cannot suppress later ID reuse;
-      // only exits that raced this request must survive to the next refresh.
-      for (const [id, removedAtRevision] of currentRemovedAtRevision) {
-        if (removedAtRevision <= lifecycleRevision) {
-          currentRemovedAtRevision.delete(id)
-        }
-      }
-      knownSessionIdsRef.current = new Set(liveSessions.map(({ id }) => id))
-      setStoredState({
-        ready: true,
-        sessionInventory: inventoryFromSessions(liveSessions),
-        sessionsError: false
+      const reconciliation = reconcileResourceSessionInventory({
+        snapshot: inventory,
+        lifecycleRevision,
+        removedAtRevision: removedAtRevisionRef.current,
+        spawnedAtRevision: spawnedAtRevisionRef.current,
+        currentKnownSessionIds: knownSessionIdsRef.current,
+        currentHostIdBySessionId: knownHostIdBySessionIdRef.current
       })
+      const { liveSessions, listedSessionIds, knownSessionIds, hostIdBySessionId, complete } =
+        reconciliation
+      knownSessionIdsRef.current = knownSessionIds
+      knownHostIdBySessionIdRef.current = hostIdBySessionId
+      listedSessionIdsRef.current = listedSessionIds
+      const retainedSessions = sessionRowsRef.current
+        .toArray()
+        .filter(({ id }) => knownSessionIds.has(id) && !listedSessionIds.has(id))
+      const sessions =
+        retainedSessions.length === 0 ? liveSessions : [...liveSessions, ...retainedSessions]
+      sessionRowsRef.current.replace(sessions)
+      setStoredState((current) => ({
+        ready: true,
+        sessionCount: knownSessionIds.size,
+        sessionRowsRevision: current.sessionRowsRevision + 1,
+        sessionsError: !complete
+      }))
     } catch {
       if (mountedRef.current && generation === refreshGenerationRef.current) {
         setStoredState((current) => ({ ...current, sessionsError: true }))
@@ -95,10 +116,15 @@ export function useResourceSessionInventory(ready: boolean): ResourceSessionInve
     // only that id preserves unrelated sessions discovered by the same list.
     const lifecycleRevision = ++lifecycleRevisionRef.current
     removedAtRevisionRef.current.set(sessionId, lifecycleRevision)
+    spawnedAtRevisionRef.current.delete(sessionId)
     knownSessionIdsRef.current.delete(sessionId)
+    knownHostIdBySessionIdRef.current.delete(sessionId)
+    listedSessionIdsRef.current.delete(sessionId)
+    const removedRow = sessionRowsRef.current.remove(sessionId)
     setStoredState((current) => ({
       ...current,
-      sessionInventory: removeSessionFromInventory(current.sessionInventory, sessionId)
+      sessionCount: knownSessionIdsRef.current.size,
+      sessionRowsRevision: current.sessionRowsRevision + (removedRow ? 1 : 0)
     }))
   }, [])
 
@@ -106,11 +132,16 @@ export function useResourceSessionInventory(ready: boolean): ResourceSessionInve
     const lifecycleRevision = ++lifecycleRevisionRef.current
     for (const sessionId of sessionIds) {
       removedAtRevisionRef.current.set(sessionId, lifecycleRevision)
+      spawnedAtRevisionRef.current.delete(sessionId)
       knownSessionIdsRef.current.delete(sessionId)
+      knownHostIdBySessionIdRef.current.delete(sessionId)
+      listedSessionIdsRef.current.delete(sessionId)
     }
+    const removedRows = sessionRowsRef.current.removeMany(sessionIds)
     setStoredState((current) => ({
       ...current,
-      sessionInventory: removeSessionsFromInventory(current.sessionInventory, sessionIds)
+      sessionCount: knownSessionIdsRef.current.size,
+      sessionRowsRevision: current.sessionRowsRevision + removedRows
     }))
   }, [])
 
@@ -118,11 +149,23 @@ export function useResourceSessionInventory(ready: boolean): ResourceSessionInve
     refreshGenerationRef.current += 1
     if (!ready) {
       removedAtRevisionRef.current.clear()
+      spawnedAtRevisionRef.current.clear()
       knownSessionIdsRef.current.clear()
+      knownHostIdBySessionIdRef.current.clear()
+      listedSessionIdsRef.current.clear()
+      sessionRowsRef.current.clear()
       return
     }
     void refreshSessions()
   }, [ready, refreshSessions])
+
+  useEffect(() => {
+    const wasRequested = previousAuthoritativeInventoryRequestedRef.current
+    previousAuthoritativeInventoryRequestedRef.current = authoritativeInventoryRequested
+    if (ready && authoritativeInventoryRequested && !wasRequested) {
+      void refreshSessions()
+    }
+  }, [authoritativeInventoryRequested, ready, refreshSessions])
 
   useEffect(() => {
     if (!ready) {
@@ -161,7 +204,7 @@ export function useResourceSessionInventory(ready: boolean): ResourceSessionInve
           }
           lifecycleRefresh = null
           for (const id of pendingSpawnIds) {
-            if (knownSessionIdsRef.current.has(id)) {
+            if (listedSessionIdsRef.current.has(id)) {
               pendingSpawnIds.delete(id)
             }
           }
@@ -169,15 +212,44 @@ export function useResourceSessionInventory(ready: boolean): ResourceSessionInve
         })
       }, 0)
     }
-    const unsubscribeSpawned = window.api.pty.onSpawned(({ id }) => {
-      // Why: reattach emits the same lifecycle signal; known IDs must not turn remounts into global inventory scans.
-      if (knownSessionIdsRef.current.has(id)) {
-        return
+    const unsubscribeSpawned = window.api.pty.onSpawned(
+      ({ id, hostId, isReattach, exitedBeforeSpawnReply }) => {
+        // Why: a spawn already dead before its reply is ambiguous even when
+        // its reusable ID is still known; only a full inventory can settle it.
+        if (exitedBeforeSpawnReply) {
+          pendingSpawnIds.add(id)
+          scheduleLifecycleRefresh()
+          return
+        }
+        if (hostId) {
+          knownHostIdBySessionIdRef.current.set(id, hostId)
+        }
+        // Reattach emits the same lifecycle signal. A known ID is already
+        // counted; unknown or mixed-version classification must reconcile.
+        if (knownSessionIdsRef.current.has(id)) {
+          return
+        }
+        if (isReattach !== false) {
+          pendingSpawnIds.add(id)
+          scheduleLifecycleRefresh()
+          return
+        }
+
+        const lifecycleRevision = ++lifecycleRevisionRef.current
+        spawnedAtRevisionRef.current.set(id, lifecycleRevision)
+        knownSessionIdsRef.current.add(id)
+        setStoredState((current) => ({
+          ...current,
+          sessionCount: knownSessionIdsRef.current.size
+        }))
+
+        if (authoritativeInventoryRequested) {
+          // The open popover needs full rows, not only the authoritative badge count.
+          pendingSpawnIds.add(id)
+          scheduleLifecycleRefresh()
+        }
       }
-      pendingSpawnIds.add(id)
-      // Why: serialize slow provider-wide lists; retry once only when a result missed a later spawn.
-      scheduleLifecycleRefresh()
-    })
+    )
     const unsubscribeExit = window.api.pty.onExit(({ id }) => {
       pendingSpawnIds.delete(id)
       if (pendingSpawnIds.size === 0 && refreshTimer !== null) {
@@ -195,10 +267,21 @@ export function useResourceSessionInventory(ready: boolean): ResourceSessionInve
       unsubscribeSpawned()
       unsubscribeExit()
     }
-  }, [ready, refreshSessions, removeSession])
+  }, [authoritativeInventoryRequested, ready, refreshSessions, removeSession])
 
+  const sessions = useMemo(() => {
+    // The rows live in a ref; this revision invalidates their materialized snapshot.
+    void state.sessionRowsRevision
+    return ready && authoritativeInventoryRequested
+      ? sessionRowsRef.current.toArray()
+      : EMPTY_DAEMON_SESSION_ROWS
+  }, [authoritativeInventoryRequested, ready, state.sessionRowsRevision])
+  const sessionInventory = useMemo(
+    () => ({ sessions, count: state.sessionCount }),
+    [sessions, state.sessionCount]
+  )
   return {
-    sessionInventory: state.sessionInventory,
+    sessionInventory,
     sessionsError: state.sessionsError,
     refreshSessions,
     clearSessionsError,

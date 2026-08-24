@@ -3,8 +3,9 @@ import type {
   SleepingAgentLaunchConfig
 } from '../../shared/agent-session-resume'
 import type { StartupCommandDelivery } from '../../shared/codex-startup-delivery'
+import type { ExecutionHostId } from '../../shared/execution-host'
 import type { ProjectExecutionRuntimeResolution } from '../../shared/project-execution-runtime'
-import type { PtyListedSession } from '../../shared/pty-listed-session'
+import type { PtyListedSession, PtySessionInventorySnapshot } from '../../shared/pty-listed-session'
 import type { PtyMainDeliveryDiagnostics } from '../../shared/pty-delivery-diagnostics'
 import type { PtyModelRestoreNeededEvent } from '../../shared/pty-model-restore-marker'
 import type {
@@ -16,6 +17,16 @@ import type { TerminalSideEffectBatch } from '../../shared/terminal-side-effect-
 import type { TerminalViewAttributes } from '../../shared/terminal-view-attributes'
 import type { TuiAgent } from '../../shared/tui-agent'
 import type { PtyManagementApi } from './pty-management-api'
+
+export type PtySpawnedEvent = {
+  id: string
+  /** Provider scope for authoritative per-host pruning. Missing is fail-safe unknown. */
+  hostId?: ExecutionHostId
+  /** False proves a new provider session; true is a reattach. Missing means a mixed-version sender is ambiguous. */
+  isReattach?: boolean
+  /** The provider reported that this spawn was already dead before its reply, so consumers must reconcile. */
+  exitedBeforeSpawnReply?: true
+}
 
 export type PtyApi = {
   spawn: (opts: {
@@ -115,6 +126,11 @@ export type PtyApi = {
   getCwd: (id: string) => Promise<string>
   getSize: (id: string) => Promise<{ cols: number; rows: number } | null>
   listSessions: () => Promise<PtyListedSession[]>
+  /**
+   * Detailed additive inventory. Missing on an older main process means
+   * completeness is unknown and consumers must fail safe.
+   */
+  listSessionInventory?: () => Promise<PtySessionInventorySnapshot>
   getAuthoritativeBufferSnapshotCapabilities?: (
     ids: string[]
   ) => Promise<{ id: string; authoritative: boolean | null }[]>
@@ -196,7 +212,7 @@ export type PtyApi = {
   onExit: (
     callback: (data: { id: string; code: number; preserveRendererBinding?: boolean }) => void
   ) => () => void
-  onSpawned: (callback: (data: { id: string }) => void) => () => void
+  onSpawned: (callback: (data: PtySpawnedEvent) => void) => () => void
   onSerializeBufferRequest: (
     callback: (data: {
       requestId: string

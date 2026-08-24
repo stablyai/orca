@@ -453,6 +453,11 @@ describe('registerPtyHandlers', () => {
 
     expect(result).toMatchObject({ id: 'ssh-reattach', isReattach: true })
     expect(result.launchConfig).toBeUndefined()
+    expect(mainWindow.webContents.send).toHaveBeenCalledWith('pty:spawned', {
+      id: 'ssh-reattach',
+      hostId: 'ssh:ssh-reattach-1',
+      isReattach: true
+    })
   })
   it('reuses the runtime background handle in local PTY spawn env', async () => {
     type RuntimeSpawnController = {
@@ -497,7 +502,9 @@ describe('registerPtyHandlers', () => {
       'term_expected'
     )
     expect(mainWindow.webContents.send).toHaveBeenCalledWith('pty:spawned', {
-      id: spawned.id
+      id: spawned.id,
+      hostId: 'local',
+      isReattach: false
     })
   })
 })

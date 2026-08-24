@@ -116,7 +116,7 @@ import type {
 } from '../shared/worktree/launch-types'
 import type { GitPushTarget, WorktreeHeadIdentity } from '../shared/worktree/types'
 import type { PtyModelRestoreNeededEvent } from '../shared/pty-model-restore-marker'
-import type { PtyListedSession } from '../shared/pty-listed-session'
+import type { PtyListedSession, PtySessionInventorySnapshot } from '../shared/pty-listed-session'
 import type {
   PtyRendererDeliveryHealthReply,
   PtyRendererDeliveryStateReport
@@ -259,6 +259,7 @@ import type {
   PluginHostLogLine,
   PreloadApi
 } from './api-types'
+import type { PtySpawnedEvent } from './api/pty-api'
 import type { AgentKind, LaunchSource, RequestKind } from '../shared/telemetry-events'
 import {
   KEYBOARD_LAYOUT_CHANGED_CHANNEL,
@@ -1139,6 +1140,8 @@ const api = {
       ipcRenderer.invoke('pty:kill', { id, keepHistory: opts?.keepHistory ?? false }),
 
     listSessions: (): Promise<PtyListedSession[]> => ipcRenderer.invoke('pty:listSessions'),
+    listSessionInventory: (): Promise<PtySessionInventorySnapshot> =>
+      ipcRenderer.invoke('pty:listSessionInventory'),
     getAuthoritativeBufferSnapshotCapabilities: (
       ids: string[]
     ): Promise<{ id: string; authoritative: boolean | null }[]> =>
@@ -1283,8 +1286,8 @@ const api = {
       return () => ipcRenderer.removeListener('pty:exit', listener)
     },
 
-    onSpawned: (callback: (data: { id: string }) => void): (() => void) => {
-      const listener = (_event: Electron.IpcRendererEvent, data: { id: string }) => callback(data)
+    onSpawned: (callback: (data: PtySpawnedEvent) => void): (() => void) => {
+      const listener = (_event: Electron.IpcRendererEvent, data: PtySpawnedEvent) => callback(data)
       ipcRenderer.on('pty:spawned', listener)
       return () => ipcRenderer.removeListener('pty:spawned', listener)
     },

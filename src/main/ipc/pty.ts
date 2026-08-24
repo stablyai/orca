@@ -240,7 +240,11 @@ import {
 import { getSshFilesystemProvider } from '../providers/ssh-filesystem-dispatch'
 import { resolveLocalProjectRuntimeForWorktreeId } from '../local-project-runtime-resolution'
 import { isPtyIncarnationId } from '../../shared/pty-incarnation'
-import type { PtyListedSession } from '../../shared/pty-listed-session'
+import {
+  PTY_SESSION_INVENTORY_RETAINED_ID_LIMIT,
+  type PtyListedSession,
+  type PtySessionInventorySnapshot
+} from '../../shared/pty-listed-session'
 
 // ─── Provider Registry ──────────────────────────────────────────────
 // Routes PTY operations by connectionId (null = local provider).
@@ -2475,6 +2479,7 @@ export function registerPtyHandlers(
   ipc.removeHandler('pty:spawn')
   ipc.removeHandler('pty:kill')
   ipc.removeHandler('pty:listSessions')
+  ipc.removeHandler('pty:listSessionInventory')
   ipc.removeHandler('pty:hasPty')
   ipc.removeHandler('pty:hasChildProcesses')
   ipc.removeHandler('pty:getForegroundProcess')
@@ -3796,9 +3801,19 @@ export function registerPtyHandlers(
     }
   }
 
-  function sendPtySpawnedToRenderer(id: string): void {
+  function sendPtySpawnedToRenderer(
+    id: string,
+    hostId: ExecutionHostId,
+    isReattach: boolean,
+    exitedBeforeSpawnReply: boolean
+  ): void {
     if (!isRendererGone(mainWindow)) {
-      sendToRenderer(mainWindow, 'pty:spawned', { id })
+      sendToRenderer(mainWindow, 'pty:spawned', {
+        id,
+        hostId,
+        isReattach,
+        ...(exitedBeforeSpawnReply ? { exitedBeforeSpawnReply: true } : {})
+      })
     }
   }
 
@@ -5466,7 +5481,12 @@ export function registerPtyHandlers(
           })
         }
         // Why: runtime-owned/background spawns bypass mounted-pane state, so inventory consumers need an explicit signal.
-        sendPtySpawnedToRenderer(result.id)
+        sendPtySpawnedToRenderer(
+          result.id,
+          args.connectionId ? toSshExecutionHostId(args.connectionId) : LOCAL_EXECUTION_HOST_ID,
+          result.isReattach === true,
+          result.exitedBeforeSpawnReply === true
+        )
         if (!args.connectionId) {
           options?.onCodexHomePtySpawned?.({
             id: result.id,
@@ -7189,7 +7209,12 @@ export function registerPtyHandlers(
             : {})
         }
         // Why: renderer tab state cannot reliably infer background and reattached PTYs in the daemon inventory.
-        sendPtySpawnedToRenderer(result.id)
+        sendPtySpawnedToRenderer(
+          result.id,
+          args.connectionId ? toSshExecutionHostId(args.connectionId) : LOCAL_EXECUTION_HOST_ID,
+          result.isReattach === true,
+          result.exitedBeforeSpawnReply === true
+        )
         if (!args.connectionId) {
           options?.onCodexHomePtySpawned?.({
             id: result.id,
@@ -7773,18 +7798,39 @@ export function registerPtyHandlers(
     }
   })
 
-  ipc.handle('pty:listSessions', async (): Promise<PtyListedSession[]> => {
+  const listPtySessionInventory = async (): Promise<PtySessionInventorySnapshot> => {
+    const providers = registeredPtyProviders()
     const deduped = new Map<string, PtyListedSession>()
+    const hostIdBySessionId = new Map<string, ExecutionHostId>()
     const admission = new PtyProcessListAdmission()
+    const queriedHostIds = new Set<ExecutionHostId>(
+      providers.map(({ connectionId }) =>
+        connectionId ? toSshExecutionHostId(connectionId) : LOCAL_EXECUTION_HOST_ID
+      )
+    )
+    const respondingHostIds = new Set<ExecutionHostId>()
     await visitPtyProcessListingsInBatches(
-      registeredPtyProviders(),
-      ({ provider, connectionId }) =>
-        connectionId === null ? provider.listProcesses() : provider.listProcesses().catch(() => []),
+      providers,
+      async ({ provider, connectionId }) => {
+        const hostId = connectionId ? toSshExecutionHostId(connectionId) : LOCAL_EXECUTION_HOST_ID
+        try {
+          const sessions = await provider.listProcesses()
+          respondingHostIds.add(hostId)
+          return sessions
+        } catch (error) {
+          if (!connectionId) {
+            throw error
+          }
+          return []
+        }
+      },
       ({ provider, connectionId }, sessions) => {
+        const hostId = connectionId ? toSshExecutionHostId(connectionId) : LOCAL_EXECUTION_HOST_ID
         for (const rawSession of sessions) {
           const session = admission.admit(rawSession)
           // Why: kill actions only send back the PTY id, so rebuild ownership while listing to keep reconnect-discovered remote sessions routed to their provider.
           ptyOwnership.set(session.id, connectionId)
+          hostIdBySessionId.set(session.id, hostId)
           deduped.set(session.id, {
             id: session.id,
             cwd: session.cwd,
@@ -7802,8 +7848,53 @@ export function registerPtyHandlers(
         }
       }
     )
-    return Array.from(deduped.values())
+    // A connection-lost SSH provider is unregistered before its durable PTYs
+    // disappear. Retained routing ownership keeps that host in the expected set.
+    const expectedHostIds = new Set<ExecutionHostId>(queriedHostIds)
+    for (const connectionId of ptyOwnership.values()) {
+      expectedHostIds.add(
+        connectionId ? toSshExecutionHostId(connectionId) : LOCAL_EXECUTION_HOST_ID
+      )
+    }
+    const unavailableHostIds = Array.from(expectedHostIds).filter(
+      (hostId) => !respondingHostIds.has(hostId)
+    )
+    const unavailableHostIdSet = new Set(unavailableHostIds)
+    const retainedSessionIdsByHost = new Map<ExecutionHostId, string[]>()
+    let retainedSessionIdCount = 0
+    for (const [sessionId, connectionId] of ptyOwnership) {
+      if (retainedSessionIdCount >= PTY_SESSION_INVENTORY_RETAINED_ID_LIMIT) {
+        break
+      }
+      if (connectionId === null || deduped.has(sessionId)) {
+        continue
+      }
+      const hostId = toSshExecutionHostId(connectionId)
+      if (!unavailableHostIdSet.has(hostId)) {
+        continue
+      }
+      const retainedSessionIds = retainedSessionIdsByHost.get(hostId) ?? []
+      retainedSessionIds.push(sessionId)
+      retainedSessionIdsByHost.set(hostId, retainedSessionIds)
+      retainedSessionIdCount += 1
+    }
+    return {
+      sessions: Array.from(deduped.values()),
+      hostIdBySessionId: Object.fromEntries(hostIdBySessionId),
+      queriedHostIds: Array.from(queriedHostIds),
+      retainedSessionIdsByHost: Object.fromEntries(retainedSessionIdsByHost),
+      respondingHostIds: Array.from(respondingHostIds),
+      unavailableHostIds,
+      complete: unavailableHostIds.length === 0
+    }
+  }
+
+  ipc.handle('pty:listSessions', async (): Promise<PtyListedSession[]> => {
+    const inventory = await listPtySessionInventory()
+    return inventory.sessions
   })
+
+  ipc.handle('pty:listSessionInventory', listPtySessionInventory)
 
   ipc.handle(
     'pty:getAuthoritativeBufferSnapshotCapabilities',

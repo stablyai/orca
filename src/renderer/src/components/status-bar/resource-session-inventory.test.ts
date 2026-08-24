@@ -1,9 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import {
   EMPTY_DAEMON_SESSION_INVENTORY,
-  inventoryFromSessions,
-  removeSessionFromInventory,
-  removeSessionsFromInventory
+  EMPTY_DAEMON_SESSION_ROWS,
+  ResourceSessionInventoryRows
 } from './resource-session-inventory'
 import type { DaemonSession } from './resource-usage-merge-types'
 
@@ -11,35 +10,37 @@ function session(id: string): DaemonSession {
   return { id, cwd: '/workspace', title: id, agentOwnership: 'absent' as const }
 }
 
-describe('resource session inventory', () => {
-  it('builds count from daemon listSessions payloads', () => {
-    const inventory = inventoryFromSessions([session('a'), session('b')])
-    expect(inventory.count).toBe(2)
-    expect(inventory.sessions.map((entry) => entry.id)).toEqual(['a', 'b'])
-  })
-
-  it('returns a detached sessions array so callers can mutate safely', () => {
-    const source = [session('a')]
-    const inventory = inventoryFromSessions(source)
+describe('resource session inventory rows', () => {
+  it('replaces rows with a detached session-id index', () => {
+    const source = [session('a'), session('b')]
+    const rows = new ResourceSessionInventoryRows()
+    rows.replace(source)
     source.pop()
-    expect(inventory.sessions).toEqual([session('a')])
-    expect(inventory.count).toBe(1)
+
+    expect(rows.toArray()).toEqual([session('a'), session('b')])
   })
 
-  it('removes killed or exited sessions without inventing wake-hint ids', () => {
-    const start = inventoryFromSessions([session('live'), session('orphan'), session('other')])
-    const afterOne = removeSessionFromInventory(start, 'orphan')
-    expect(afterOne.count).toBe(2)
-    expect(afterOne.sessions.map((entry) => entry.id)).toEqual(['live', 'other'])
+  it('removes one or many rows by session id', () => {
+    const rows = new ResourceSessionInventoryRows()
+    rows.replace([session('live'), session('orphan'), session('other')])
 
-    const afterMany = removeSessionsFromInventory(start, new Set(['live', 'missing', 'other']))
-    expect(afterMany).toEqual(inventoryFromSessions([session('orphan')]))
+    expect(rows.remove('orphan')).toBe(true)
+    expect(rows.toArray().map(({ id }) => id)).toEqual(['live', 'other'])
+    expect(rows.removeMany(new Set(['live', 'missing', 'other']))).toBe(2)
+    expect(rows.toArray()).toEqual([])
   })
 
-  it('is a no-op when removed ids are absent', () => {
-    const start = inventoryFromSessions([session('live')])
-    expect(removeSessionFromInventory(start, 'gone')).toBe(start)
-    expect(removeSessionsFromInventory(start, new Set())).toBe(start)
+  it('does not report row changes for absent ids', () => {
+    const rows = new ResourceSessionInventoryRows()
+    rows.replace([session('live')])
+
+    expect(rows.remove('gone')).toBe(false)
+    expect(rows.removeMany(new Set())).toBe(0)
+    expect(rows.toArray()).toEqual([session('live')])
+  })
+
+  it('shares the allocation-free closed inventory rows', () => {
+    expect(EMPTY_DAEMON_SESSION_INVENTORY.sessions).toBe(EMPTY_DAEMON_SESSION_ROWS)
     expect(EMPTY_DAEMON_SESSION_INVENTORY.count).toBe(0)
   })
 })

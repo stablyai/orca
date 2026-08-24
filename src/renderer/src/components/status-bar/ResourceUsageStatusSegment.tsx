@@ -752,7 +752,7 @@ export function ResourceUsageStatusSegment({
     clearSessionsError,
     removeSession,
     removeSessions
-  } = useResourceSessionInventory(workspaceSessionReady)
+  } = useResourceSessionInventory(workspaceSessionReady, open)
   const sessions = sessionInventory.sessions
   const [killConfirm, setKillConfirm] = useState<UnifiedSessionRow | null>(null)
   const [killing, setKilling] = useState(false)
@@ -855,23 +855,22 @@ export function ResourceUsageStatusSegment({
     }
   }, [workspaceSessionReady, fetchSnapshot])
 
-  // Poll memory only while the popover is open. Session inventory is still
-  // explicit-on-open/action/seed (not a closed interval) because full
-  // listSessions can pause input with large preserved-session sets.
+  // Poll memory only while the popover is open. The inventory hook performs
+  // one authoritative session reconciliation on open, then uses lifecycle
+  // events between explicit action/management refreshes.
   useEffect(() => {
     if (!open) {
       return
     }
     void fetchSnapshot()
-    void refreshSessions()
-    // Why: only memory polls on an interval; session inventory is explicit on open/action since it's expensive with many terminals.
+    // Why: session inventory is event-driven; only memory needs an open interval.
     const memTimer = window.setInterval(() => {
       void fetchSnapshot()
     }, POLL_MS)
     return () => {
       window.clearInterval(memTimer)
     }
-  }, [open, fetchSnapshot, refreshSessions])
+  }, [open, fetchSnapshot])
 
   useEffect(() => {
     if (!open) {
