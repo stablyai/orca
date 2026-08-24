@@ -510,6 +510,26 @@
   margin-left: var(--pane-padding-x, 4px);
 }
 
+/* Terminal background image: painted by a ::before on the pane-manager root so it stays a single
+   continuous layer under every split. `isolation` keeps z-index:-1 above the root's own background
+   (the theme color) while still below panes; xterm draws with a transparent fill when an image is set. */
+.pane-background-image-host {
+  isolation: isolate;
+}
+
+.pane-background-image-host::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background-image: var(--pane-background-image);
+  background-size: var(--pane-background-image-size, cover);
+  background-position: var(--pane-background-image-position, center);
+  background-repeat: var(--pane-background-image-repeat, no-repeat);
+  opacity: var(--pane-background-image-opacity, 0.15);
+}
+
 /* When a pane has a title, shift the terminal content down to make room.
    The .pane container uses position: relative, so the absolutely-positioned
    title bar occupies the top title-height pixels. Height is reduced by the

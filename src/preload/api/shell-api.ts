@@ -26,6 +26,10 @@ export type ShellApi = {
     dataUrl: string
     fileName: string
   } | null>
+  pickTerminalBackgroundImage: () => Promise<{
+    dataUrl: string
+    fileName: string
+  } | null>
   pickAudio: () => Promise<string | null>
   pickDirectory: (args: { defaultPath?: string }) => Promise<string | null>
   copyFile: (args: { srcPath: string; destPath: string }) => Promise<void>

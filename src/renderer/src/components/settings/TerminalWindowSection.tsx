@@ -6,6 +6,7 @@ import { Label } from '../ui/label'
 import { Switch } from '../ui/switch'
 import { ColorField, NumberField } from './SettingsFormControls'
 import { SearchableSetting } from './SearchableSetting'
+import { TerminalBackgroundImageSetting } from './TerminalBackgroundImageSetting'
 import { clampNumber } from '@/lib/terminal-theme'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import { translate } from '@/i18n/i18n'
@@ -92,6 +93,8 @@ export function TerminalWindowSection({
             }
           />
         </SearchableSetting>
+
+        <TerminalBackgroundImageSetting settings={settings} updateSettings={updateSettings} />
 
         <SearchableSetting
           title={translate(

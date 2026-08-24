@@ -48,6 +48,33 @@ export function isHexColor(value: string): boolean {
   return HEX_COLOR_RE.test(value)
 }
 
+const RGBA_RE = /^rgba?\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*(?:,\s*[\d.]+\s*)?\)$/i
+
+// Keeps the RGB so xterm's contrast math still sees the real theme color; only the fill goes away.
+export function withTransparentBackground(theme: ITheme): ITheme {
+  const background = theme.background
+  if (!background) {
+    return theme
+  }
+  if (isHexColor(background)) {
+    return { ...theme, background: hexToRgba(background, 0) }
+  }
+  const match = RGBA_RE.exec(background)
+  if (match) {
+    return { ...theme, background: `rgba(${match[1]}, ${match[2]}, ${match[3]}, 0)` }
+  }
+  return theme
+}
+
+export function terminalBackgroundNeedsTransparency(
+  settings: Pick<GlobalSettings, 'terminalBackgroundOpacity' | 'terminalBackgroundImage'>
+): boolean {
+  return (
+    (settings.terminalBackgroundOpacity !== undefined && settings.terminalBackgroundOpacity < 1) ||
+    Boolean(settings.terminalBackgroundImage)
+  )
+}
+
 // Why extracted: lets the settings preview compose the same theme without depending on PaneManager. Keep pure.
 export function composeActiveTerminalTheme(
   baseTheme: ITheme | null,
@@ -149,6 +176,9 @@ export function applyTerminalAppearance(
   // Publish composed appearance to main's hidden-PTY query responder — the only point it exists; deduped in the publisher.
   publishTerminalViewAttributes(theme, appearance.mode, settings)
   const paneBackground = theme?.background ?? '#000000'
+  const backgroundImage = settings.terminalBackgroundImage
+  // Why: the root paints the theme color and the image ::before sits above it, so xterm must not cover them.
+  const paneTheme = theme && backgroundImage ? withTransparentBackground(theme) : theme
 
   const terminalFontWeights = resolveTerminalFontWeights(
     settings.terminalFontWeight,
@@ -161,8 +191,8 @@ export function applyTerminalAppearance(
 
   for (const pane of manager.getPanes()) {
     // Why value-gated: writing options.theme rebuilds the palette, discarding TUI OSC 4/10/11/12 mutations; skip on no-op change.
-    if (theme && !composedTerminalThemesEqual(pane.terminal.options.theme, theme)) {
-      pane.terminal.options.theme = theme
+    if (paneTheme && !composedTerminalThemesEqual(pane.terminal.options.theme, paneTheme)) {
+      pane.terminal.options.theme = paneTheme
     }
     // Gate off the configured theme background; the live OSC-11 background is deliberately preserved by the
     // theme write above, so a TUI that repaints its background at runtime won't re-gate (known limitation).
@@ -175,8 +205,7 @@ export function applyTerminalAppearance(
       pane.terminal.options.minimumContrastRatio = minimumContrastRatio
     }
     // Why clear explicitly: allowTransparency has rendering cost and a stale `true` could bleed in from a prior opacity.
-    pane.terminal.options.allowTransparency =
-      settings.terminalBackgroundOpacity !== undefined && settings.terminalBackgroundOpacity < 1
+    pane.terminal.options.allowTransparency = terminalBackgroundNeedsTransparency(settings)
     const cursorStyle = settings.terminalCursorStyle ?? 'block'
     pane.terminal.options.cursorStyle = cursorStyle
     pane.terminal.options.cursorInactiveStyle = resolveTerminalCursorInactiveStyle(cursorStyle)
@@ -237,6 +266,9 @@ export function applyTerminalAppearance(
     dividerThicknessPx: paneStyles.dividerThicknessPx,
     focusFollowsMouse: paneStyles.focusFollowsMouse,
     paddingX: settings.terminalPaddingX,
-    paddingY: settings.terminalPaddingY
+    paddingY: settings.terminalPaddingY,
+    backgroundImage: backgroundImage ?? null,
+    backgroundImageOpacity: settings.terminalBackgroundImageOpacity,
+    backgroundImageFit: settings.terminalBackgroundImageFit
   })
 }
