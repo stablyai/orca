@@ -29,6 +29,11 @@ export function mapIssueWorkItem(item: Record<string, unknown>): MainWorkItem {
           .filter(Boolean)
       : [],
     updatedAt: String(item.updated_at ?? item.updatedAt ?? ''),
+    ...(typeof item.created_at === 'string'
+      ? { createdAt: item.created_at }
+      : typeof item.createdAt === 'string'
+        ? { createdAt: item.createdAt }
+        : {}),
     ...authorFieldsFromUnknown(item),
     ...(item.assignees !== undefined ? { assignees: usersFromUnknown(item.assignees) } : {})
   }
@@ -86,6 +91,11 @@ export function mapPullRequestWorkItem(
           .filter(Boolean)
       : [],
     updatedAt: String(item.updated_at ?? item.updatedAt ?? ''),
+    ...(typeof item.created_at === 'string'
+      ? { createdAt: item.created_at }
+      : typeof item.createdAt === 'string'
+        ? { createdAt: item.createdAt }
+        : {}),
     ...authorFieldsFromUnknown(item),
     branchName:
       typeof item.head === 'object' && item.head !== null && 'ref' in item.head

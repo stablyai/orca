@@ -25,7 +25,11 @@ import type {
   IssueInfo,
   PRInfo
 } from '../../../../shared/github/pull-request-types'
-import type { GitHubWorkItem, ListWorkItemsResult } from '../../../../shared/github/work-item-types'
+import type {
+  GitHubWorkItem,
+  ListWorkItemsAcrossReposResult,
+  ListWorkItemsResult
+} from '../../../../shared/github/work-item-types'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import type { IssueSourcePreference, Repo } from '../../../../shared/repo-types'
 import type { Worktree } from '../../../../shared/worktree/types'
@@ -392,6 +396,76 @@ function listGitHubWorkItemsForRepo(
   return window.api.gh.listWorkItems({
     repoPath: context.repoPath,
     repoId: context.repoId,
+    ...args
+  })
+}
+
+function getGitHubWorkItemRequestContexts(
+  state: AppState,
+  repos: readonly {
+    repoId: string
+    path: string
+    sourceContext?: TaskSourceContext | null
+  }[],
+  sourceContext?: TaskSourceContext | null
+): GitHubWorkItemRequestContext[] {
+  return repos.map((repoArg) => {
+    const repo = findRepoForGitHubOwner(state, repoArg.repoId, repoArg.path)
+    const effectiveSourceContext = repoArg.sourceContext ?? sourceContext
+    const settings = getGitHubWorkItemSourceSettings(state.settings, repo, effectiveSourceContext)
+    return getGitHubWorkItemRequestContext(
+      state,
+      settings,
+      repoArg.repoId,
+      repoArg.path,
+      effectiveSourceContext
+    )
+  })
+}
+
+function listGitHubWorkItemsAcrossRepos(
+  contexts: readonly GitHubWorkItemRequestContext[],
+  args: GitHubWorkItemsListArgs
+): Promise<ListWorkItemsAcrossReposResult> | null {
+  // Why: single-repo callers retain existing cache/source/error semantics;
+  // grouped Search API pagination exists for the cross-repository merge.
+  if (contexts.length < 2) {
+    return null
+  }
+  const firstTarget = contexts[0].target
+  if (
+    contexts.some(
+      (context) =>
+        context.target.kind !== firstTarget.kind ||
+        (context.target.kind === 'environment' &&
+          firstTarget.kind === 'environment' &&
+          context.target.environmentId !== firstTarget.environmentId)
+    )
+  ) {
+    // Why: one RPC request cannot cross runtime environments and the desktop
+    // IPC path cannot resolve a repository owned by a runtime.
+    return null
+  }
+  if (firstTarget.kind === 'environment') {
+    return callRuntimeRpc<ListWorkItemsAcrossReposResult>(
+      { kind: 'environment', environmentId: firstTarget.environmentId },
+      'github.listWorkItemsAcrossRepos',
+      {
+        repos: contexts.map((context) => ({
+          repo:
+            context.target.kind === 'environment' ? context.target.runtimeRepoId : context.repoPath,
+          repoId: context.repoId
+        })),
+        ...args
+      },
+      { timeoutMs: 30_000 }
+    )
+  }
+  if (typeof window.api.gh.listWorkItemsAcrossRepos !== 'function') {
+    return null
+  }
+  return window.api.gh.listWorkItemsAcrossRepos({
+    repos: contexts.map((context) => ({ repoPath: context.repoPath, repoId: context.repoId })),
     ...args
   })
 }
@@ -1685,6 +1759,50 @@ function withBoundedCacheEntry<T extends { fetchedAt: number }>(
   return evictStaleEntries({ ...cache, [key]: entry })
 }
 
+function cacheGroupedWorkItems(
+  state: AppState,
+  repos: readonly {
+    repoId: string
+    path: string
+    sourceContext?: TaskSourceContext | null
+  }[],
+  limit: number,
+  query: string,
+  items: readonly GitHubWorkItem[],
+  sourcesByRepo: ListWorkItemsAcrossReposResult['sourcesByRepo'],
+  append: boolean
+): AppState['workItemsCache'] {
+  if (!sourcesByRepo) {
+    return state.workItemsCache
+  }
+  let cache = state.workItemsCache
+  const fetchedAt = Date.now()
+  for (const repo of repos) {
+    const metadata = sourcesByRepo[repo.repoId]
+    if (!metadata) {
+      continue
+    }
+    const repoItems = items.filter((item) => item.repoId === repo.repoId)
+    const key =
+      repo.sourceContext?.provider === 'github'
+        ? workItemsCacheKey(repo.repoId, limit, query, getTaskSourceCacheScope(repo.sourceContext))
+        : getWorkItemsCacheKeyForOwner(state, repo.repoId, limit, query, repo.path)
+    const existing = append ? (cache[key]?.data ?? []) : []
+    const deduped = new Map<string, GitHubWorkItem>()
+    for (const item of [...existing, ...repoItems]) {
+      deduped.set(`${item.type}:${item.id}`, item)
+    }
+    const { issueSourceFellBack, ...sources } = metadata
+    cache = withBoundedCacheEntry(cache, key, {
+      data: sortWorkItemsByNumber([...deduped.values()]).slice(0, GITHUB_SEARCH_RESULT_WINDOW),
+      fetchedAt,
+      sources,
+      ...(issueSourceFellBack ? { issueSourceFellBack: true as const } : {})
+    })
+  }
+  return cache
+}
+
 // Why: prRefresh* maps have no `fetchedAt` to sort by, so bound them by insertion order (oldest-touched evicted first; an evicted long-idle branch restarts clean).
 function capRecordByInsertionOrder<T>(
   record: Record<string, T>,
@@ -1998,6 +2116,10 @@ export type GitHubSlice = {
     items: GitHubWorkItem[]
     failedCount: number
     githubUnavailable: boolean
+    totalCount?: number
+    errorTypes?: ClassifiedError['type'][]
+    searchWindowLimited?: true
+    queryTooLarge?: true
     requestFailureCount?: number
   }>
   /** Fetch one numbered provider page. Pagination pages remain renderer-local. */
@@ -2017,8 +2139,11 @@ export type GitHubSlice = {
     items: GitHubWorkItem[]
     failedCount: number
     errorTypes: ClassifiedError['type'][]
+    totalCount?: number
+    searchWindowLimited?: true
+    queryTooLarge?: true
   }>
-  /** Count items and derive pages from the largest per-repo result set. */
+  /** Count items and derive pages using the grouped display page size. */
   countWorkItemsAcrossRepos: (
     repos: {
       repoId: string
@@ -2027,7 +2152,8 @@ export type GitHubSlice = {
       sourceContext?: TaskSourceContext | null
     }[],
     query: string,
-    perRepoLimit: number
+    perRepoLimit: number,
+    groupedPageSize?: number
   ) => Promise<{ totalCount: number; totalPages: number }>
   /** Fire-and-forget prefetch to warm the cache before the page mounts (hover/focus of the "new workspace" buttons). */
   prefetchWorkItems: (
@@ -2822,9 +2948,49 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
 
   fetchWorkItemsAcrossRepos: async (repos, perRepoLimit, displayLimit, query, options) => {
     if (isGitHubWorkItemsQueryTooLarge(query)) {
-      return { items: [], failedCount: 0, githubUnavailable: false }
+      return { items: [], failedCount: 0, githubUnavailable: false, queryTooLarge: true }
     }
     const state = get()
+    const groupedRequest = listGitHubWorkItemsAcrossRepos(
+      getGitHubWorkItemRequestContexts(state, repos, options?.sourceContext),
+      {
+        limit: displayLimit,
+        query: query || undefined,
+        ...(options?.noCache || options?.force ? { noCache: true } : {})
+      }
+    )
+    if (groupedRequest) {
+      try {
+        const result = await groupedRequest
+        if (!result.queryTooLarge) {
+          set((s) => ({
+            workItemsCache: cacheGroupedWorkItems(
+              s,
+              repos,
+              perRepoLimit,
+              query,
+              result.items,
+              result.sourcesByRepo,
+              false
+            )
+          }))
+        }
+        return {
+          items: result.items,
+          failedCount: result.failedCount,
+          githubUnavailable: result.githubUnavailable,
+          totalCount: result.totalCount,
+          ...(result.errorTypes ? { errorTypes: result.errorTypes } : {}),
+          ...(result.searchWindowLimited ? { searchWindowLimited: true as const } : {}),
+          ...(result.queryTooLarge ? { queryTooLarge: true as const } : {})
+        }
+      } catch (err) {
+        // Why: mixed or temporarily unavailable transports retain the proven
+        // per-repo path instead of turning a renderer optimization into a
+        // user-visible outage.
+        console.warn('[workItems] grouped fetch failed; using per-repo fallback:', err)
+      }
+    }
     let failedCount = 0
     let requestFailureCount = 0
     let unavailableFailureCount = 0
@@ -2887,7 +3053,39 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
 
   fetchWorkItemsNextPage: async (repos, perRepoLimit, displayLimit, query, page, options) => {
     if (isGitHubWorkItemsQueryTooLarge(query)) {
-      return { items: [], failedCount: 0, errorTypes: [] }
+      return { items: [], failedCount: 0, errorTypes: [], queryTooLarge: true }
+    }
+    const groupedRequest = listGitHubWorkItemsAcrossRepos(
+      getGitHubWorkItemRequestContexts(get(), repos),
+      { limit: displayLimit, query: query || undefined, page }
+    )
+    if (groupedRequest) {
+      try {
+        const result = await groupedRequest
+        if (!result.queryTooLarge) {
+          set((s) => ({
+            workItemsCache: cacheGroupedWorkItems(
+              s,
+              repos,
+              perRepoLimit,
+              query,
+              result.items,
+              result.sourcesByRepo,
+              true
+            )
+          }))
+        }
+        return {
+          items: result.items,
+          failedCount: result.failedCount,
+          errorTypes: result.errorTypes ?? [],
+          totalCount: result.totalCount,
+          ...(result.searchWindowLimited ? { searchWindowLimited: true as const } : {}),
+          ...(result.queryTooLarge ? { queryTooLarge: true as const } : {})
+        }
+      } catch (err) {
+        console.warn('[workItems] grouped next page failed; using per-repo fallback:', err)
+      }
     }
     let failedCount = 0
     const errorTypes: ClassifiedError['type'][] = []
@@ -2965,11 +3163,33 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
     return { items: merged, failedCount, errorTypes }
   },
 
-  countWorkItemsAcrossRepos: async (repos, query, perRepoLimit) => {
+  countWorkItemsAcrossRepos: async (repos, query, perRepoLimit, groupedPageSize) => {
     if (isGitHubWorkItemsQueryTooLarge(query)) {
       return { totalCount: 0, totalPages: 0 }
     }
     const normalizedLimit = Math.max(1, Math.floor(perRepoLimit))
+    const pageSize = Math.max(
+      1,
+      Math.floor(groupedPageSize ?? normalizedLimit * Math.max(1, repos.length))
+    )
+    const groupedRequest = listGitHubWorkItemsAcrossRepos(
+      getGitHubWorkItemRequestContexts(get(), repos),
+      { limit: 1, query: query || undefined, page: 1 }
+    )
+    if (groupedRequest) {
+      try {
+        const result = await groupedRequest
+        const reachableTotal = result.searchWindowLimited
+          ? Math.min(result.totalCount, result.reachableCount ?? result.totalCount)
+          : result.totalCount
+        return {
+          totalCount: reachableTotal,
+          totalPages: Math.ceil(reachableTotal / pageSize)
+        }
+      } catch (err) {
+        console.warn('[workItems] grouped count failed; using per-repo fallback:', err)
+      }
+    }
     // Why: GitHub 422s pages that start past its 1000-result search window.
     const maxReachablePages = Math.max(1, Math.ceil(GITHUB_SEARCH_RESULT_WINDOW / normalizedLimit))
     const counts = await Promise.all(

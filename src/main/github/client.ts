@@ -25,6 +25,7 @@ export {
 export { getRepoSlug, getRepoUpstream } from './client/fetch/repo-slug-upstream'
 export { getWorkItem, getWorkItemByOwnerRepo } from './client/fetch/get-work-item'
 export { listWorkItems } from './client/list/list-work-items'
+export { listWorkItemsAcrossRepos } from './client/list/work-items-across-repos'
 export { mergePR } from './client/merge/merge-pr'
 export { removePRReviewers, requestPRReviewers } from './client/update/pr-reviewers'
 export { rerunPRChecks } from './client/check/rerun-pr-checks'
@@ -35,6 +36,10 @@ export { setPRFileViewed } from './client/update/pr-file-viewed'
 export { updatePRDetails, updatePRTitle } from './client/update/pr-details'
 export { updatePRState } from './client/update/pr-state'
 export type { GitHubPRBranchLookupOptions } from './client/lookup/pull-request-lookup-data'
+export type {
+  GitHubWorkItemsBatchInput,
+  GitHubWorkItemResolutionFailure
+} from './client/list/work-items-across-repos'
 export type { MainWorkItem } from './client/map/work-item-field-coercion'
 export { _resetOwnerRepoCache } from './gh-utils'
 export { getIssue, listIssues } from './issues'

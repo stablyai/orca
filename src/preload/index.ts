@@ -83,7 +83,11 @@ import type {
 } from '../shared/github/pull-request-refresh-types'
 import type { GitHubAssignableUser, GitHubOwnerRepo } from '../shared/github/pull-request-types'
 import type { GetRateLimitResult } from '../shared/github/rate-limit-types'
-import type { GitHubWorkItem, ListWorkItemsResult } from '../shared/github/work-item-types'
+import type {
+  GitHubWorkItem,
+  ListWorkItemsAcrossReposResult,
+  ListWorkItemsResult
+} from '../shared/github/work-item-types'
 import type { GhosttyImportPreview } from '../shared/global-settings-types'
 import type { GitHubCreateIssueResult } from '../shared/issue-mutation-types'
 import type { JiraProjectStatusOrder } from '../shared/jira-types'
@@ -1510,6 +1514,15 @@ const api = {
       noCache?: boolean
     }): Promise<ListWorkItemsResult<Omit<GitHubWorkItem, 'repoId'>>> =>
       ipcRenderer.invoke('gh:listWorkItems', args),
+
+    listWorkItemsAcrossRepos: (args: {
+      repos: { repoPath: string; repoId: string }[]
+      limit?: number
+      query?: string
+      page?: number
+      noCache?: boolean
+    }): Promise<ListWorkItemsAcrossReposResult> =>
+      ipcRenderer.invoke('gh:listWorkItemsAcrossRepos', args),
 
     prChecks: (args: {
       repoPath: string

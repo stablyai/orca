@@ -120,6 +120,7 @@ import {
   getClonePathComparisonKey
 } from '../git/repo-clone-path'
 import { getGitCloneFailureMessage } from '../../shared/git-clone-failure-message'
+import { MAX_GITHUB_WORK_ITEMS_BATCH_REPOS } from '../../shared/github/work-items-query-bounds'
 import { GIT_FETCH_SKIP_AUTO_MAINTENANCE_CONFIG_ARGS } from '../../shared/git-fetch-auto-maintenance'
 import { createHash, randomUUID } from 'node:crypto'
 import { homedir } from 'node:os'
@@ -746,6 +747,7 @@ import {
   getWorkItem,
   listIssues as listGitHubIssues,
   listWorkItems,
+  listWorkItemsAcrossRepos,
   countWorkItems,
   getPRChecks,
   getPRCheckDetails,
@@ -771,7 +773,9 @@ import {
   listLabels,
   listAssignableUsers,
   type MainWorkItem,
-  type GitHubPRBranchLookupOptions
+  type GitHubPRBranchLookupOptions,
+  type GitHubWorkItemsBatchInput,
+  type GitHubWorkItemResolutionFailure
 } from '../github/client'
 import { resolveGitHubPrStartPoint } from '../github/pr-start-point'
 import {
@@ -21853,6 +21857,43 @@ export class OrcaRuntimeService {
       noCache,
       ...this.getLocalGitExecutionOptionArgs(repo)
     )
+  }
+
+  async listRepoWorkItemsAcrossRepos(
+    selectors: { repo: string; repoId: string }[],
+    limit?: number,
+    query?: string,
+    page?: number,
+    noCache?: boolean
+  ): Promise<Awaited<ReturnType<typeof listWorkItemsAcrossRepos>>> {
+    if (selectors.length > MAX_GITHUB_WORK_ITEMS_BATCH_REPOS) {
+      throw new Error(
+        `GitHub work-item selection exceeds the ${MAX_GITHUB_WORK_ITEMS_BATCH_REPOS}-repository limit`
+      )
+    }
+    const inputs: GitHubWorkItemsBatchInput[] = []
+    const resolutionFailures: GitHubWorkItemResolutionFailure[] = []
+    const resolved = await Promise.allSettled(
+      selectors.map(async (selector) => {
+        const repo = await this.resolveRepoSelector(selector.repo)
+        const localGitOptions = this.getLocalGitExecutionOptionArgs(repo)[0]
+        return {
+          repoId: selector.repoId,
+          repoPath: repo.path,
+          preference: repo.issueSourcePreference,
+          connectionId: repo.connectionId ?? null,
+          ...(localGitOptions ? { localGitOptions } : {})
+        }
+      })
+    )
+    resolved.forEach((result, index) => {
+      if (result.status === 'fulfilled') {
+        inputs.push(result.value)
+      } else {
+        resolutionFailures.push({ repoId: selectors[index].repoId, reason: result.reason })
+      }
+    })
+    return listWorkItemsAcrossRepos(inputs, limit, query, page, noCache, resolutionFailures)
   }
 
   async listRepoIssues(

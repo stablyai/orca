@@ -2071,6 +2071,7 @@
         "loadPageUnreachable": "Page {{value0}} is beyond what GitHub search can return.",
         "loadPageFailed": "Page {{value0}} could not be loaded from GitHub.",
         "loadPageNoMoreResults": "No more results on page {{value0}}.",
+        "githubQueryTooLarge": "GitHub search query is too large. Narrow your filters or select fewer repositories.",
         "linearHasWorktreeLoadFailed": "Unable to load Linear issues linked to an Orca workspace.",
         "linearHasWorktreePartialLoadFailed": "Some Linear issues linked to an Orca workspace could not be loaded. Refresh to try again.",
         "linearHasWorktreeSearchPlaceholder": "Filter issues linked to an Orca workspace...",

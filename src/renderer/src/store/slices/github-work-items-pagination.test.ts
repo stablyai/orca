@@ -9,6 +9,7 @@ import type { AppState } from '../types'
 import type { GitHubWorkItem } from '../../../../shared/github/work-item-types'
 import { GITHUB_WORK_ITEMS_SSH_REMOTE_REQUIRED_MESSAGE } from '../../../../shared/work-items'
 import { GITHUB_WORK_ITEMS_QUERY_MAX_BYTES } from './github-work-items-query-bounds'
+import { workItemsCacheKey } from './github'
 
 describe('createGitHubSlice.fetchWorkItems source/error envelope', () => {
   beforeEach(() => {
@@ -412,7 +413,7 @@ describe('createGitHubSlice.fetchWorkItems source/error envelope', () => {
           24,
           oversizedQuery
         )
-    ).resolves.toEqual({ items: [], failedCount: 0, githubUnavailable: false })
+    ).resolves.toEqual({ items: [], failedCount: 0, githubUnavailable: false, queryTooLarge: true })
     await expect(
       store
         .getState()
@@ -423,7 +424,7 @@ describe('createGitHubSlice.fetchWorkItems source/error envelope', () => {
           oversizedQuery,
           1
         )
-    ).resolves.toEqual({ items: [], failedCount: 0, errorTypes: [] })
+    ).resolves.toEqual({ items: [], failedCount: 0, errorTypes: [], queryTooLarge: true })
     await expect(
       store
         .getState()
@@ -441,5 +442,186 @@ describe('createGitHubSlice.fetchWorkItems source/error envelope', () => {
     expect(mockApi.gh.countWorkItems).not.toHaveBeenCalled()
     expect(runtimeEnvironmentCall).not.toHaveBeenCalled()
     expect(JSON.stringify(store.getState().workItemsCache)).not.toContain(secret)
+  })
+
+  it('uses grouped Search API pagination for a multi-repo fetch', async () => {
+    const item = {
+      type: 'issue',
+      number: 4,
+      title: 'Newest issue',
+      url: 'https://github.com/acme/repo/issues/4',
+      updatedAt: '2026-08-02T00:00:00Z',
+      repoId: 'repo-2'
+    } as GitHubWorkItem
+    mockApi.gh.listWorkItemsAcrossRepos.mockResolvedValueOnce({
+      items: [item],
+      totalCount: 4,
+      failedCount: 0,
+      githubUnavailable: false,
+      sourcesByRepo: {
+        'repo-1': {
+          issues: { owner: 'acme', repo: 'one' },
+          prs: { owner: 'acme', repo: 'one' },
+          originCandidate: { owner: 'acme', repo: 'one' },
+          upstreamCandidate: null
+        },
+        'repo-2': {
+          issues: { owner: 'acme', repo: 'repo' },
+          prs: { owner: 'acme', repo: 'repo' },
+          originCandidate: { owner: 'acme', repo: 'repo' },
+          upstreamCandidate: null
+        }
+      }
+    })
+    const store = createTestStore()
+
+    const result = await store.getState().fetchWorkItemsAcrossRepos(
+      [
+        { repoId: 'repo-1', path: '/repo/one' },
+        { repoId: 'repo-2', path: '/repo/two' }
+      ],
+      24,
+      48,
+      'is:open'
+    )
+
+    expect(result).toEqual({
+      items: [item],
+      failedCount: 0,
+      githubUnavailable: false,
+      totalCount: 4
+    })
+    expect(mockApi.gh.listWorkItemsAcrossRepos).toHaveBeenCalledWith({
+      repos: [
+        { repoPath: '/repo/one', repoId: 'repo-1' },
+        { repoPath: '/repo/two', repoId: 'repo-2' }
+      ],
+      limit: 48,
+      query: 'is:open'
+    })
+    expect(mockApi.gh.listWorkItems).not.toHaveBeenCalled()
+    expect(
+      store.getState().workItemsCache[workItemsCacheKey('repo-2', 24, 'is:open')]?.data
+    ).toEqual([item])
+    expect(
+      store.getState().workItemsCache[workItemsCacheKey('repo-2', 24, 'is:open')]?.sources
+    ).toEqual({
+      issues: { owner: 'acme', repo: 'repo' },
+      prs: { owner: 'acme', repo: 'repo' },
+      originCandidate: { owner: 'acme', repo: 'repo' },
+      upstreamCandidate: null
+    })
+  })
+
+  it('merges grouped next-page rows into the per-repository cache', async () => {
+    const first = {
+      id: 'issue:1',
+      type: 'issue',
+      number: 1,
+      title: 'First',
+      url: 'https://github.com/acme/repo/issues/1',
+      updatedAt: '2026-08-02T00:00:00Z',
+      repoId: 'repo-1'
+    } as GitHubWorkItem
+    const second = { ...first, id: 'issue:2', number: 2, title: 'Second' }
+    const sourcesByRepo = {
+      'repo-1': {
+        issues: { owner: 'acme', repo: 'repo' },
+        prs: { owner: 'acme', repo: 'repo' },
+        originCandidate: { owner: 'acme', repo: 'repo' },
+        upstreamCandidate: null
+      },
+      'repo-2': {
+        issues: { owner: 'acme', repo: 'other' },
+        prs: { owner: 'acme', repo: 'other' },
+        originCandidate: { owner: 'acme', repo: 'other' },
+        upstreamCandidate: null
+      }
+    }
+    const store = createTestStore()
+    mockApi.gh.listWorkItemsAcrossRepos
+      .mockResolvedValueOnce({
+        items: [first],
+        totalCount: 2,
+        failedCount: 0,
+        githubUnavailable: false,
+        sourcesByRepo
+      })
+      .mockResolvedValueOnce({
+        items: [second],
+        totalCount: 2,
+        failedCount: 0,
+        githubUnavailable: false,
+        sourcesByRepo
+      })
+
+    await store.getState().fetchWorkItemsAcrossRepos(
+      [
+        { repoId: 'repo-1', path: '/repo/one' },
+        { repoId: 'repo-2', path: '/repo/two' }
+      ],
+      24,
+      48,
+      'is:open'
+    )
+    await store.getState().fetchWorkItemsNextPage(
+      [
+        { repoId: 'repo-1', path: '/repo/one' },
+        { repoId: 'repo-2', path: '/repo/two' }
+      ],
+      24,
+      48,
+      'is:open',
+      2
+    )
+
+    expect(
+      store.getState().workItemsCache[workItemsCacheKey('repo-1', 24, 'is:open')]?.data
+    ).toEqual(expect.arrayContaining([first, second]))
+  })
+
+  it('caps grouped count pages at the reachable Search API window', async () => {
+    mockApi.gh.listWorkItemsAcrossRepos.mockResolvedValueOnce({
+      items: [],
+      totalCount: 1_500,
+      reachableCount: 1_000,
+      searchWindowLimited: true,
+      failedCount: 0,
+      githubUnavailable: false
+    })
+    const store = createTestStore()
+
+    await expect(
+      store.getState().countWorkItemsAcrossRepos(
+        [
+          { repoId: 'repo-1', path: '/repo/one' },
+          { repoId: 'repo-2', path: '/repo/two' }
+        ],
+        'is:open',
+        24
+      )
+    ).resolves.toEqual({ totalCount: 1_000, totalPages: 21 })
+  })
+
+  it('uses the explicit grouped display page size for grouped counts', async () => {
+    mockApi.gh.listWorkItemsAcrossRepos.mockResolvedValueOnce({
+      items: [],
+      totalCount: 60,
+      failedCount: 0,
+      githubUnavailable: false
+    })
+    const store = createTestStore()
+
+    await expect(
+      store.getState().countWorkItemsAcrossRepos(
+        [
+          { repoId: 'repo-1', path: '/repo/one' },
+          { repoId: 'repo-2', path: '/repo/two' }
+        ],
+        'is:open',
+        10,
+        30
+      )
+    ).resolves.toEqual({ totalCount: 60, totalPages: 2 })
   })
 })

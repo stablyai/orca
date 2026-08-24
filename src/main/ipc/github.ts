@@ -19,6 +19,7 @@ import type {
 } from '../../shared/issue-mutation-types'
 import type { Repo } from '../../shared/repo-types'
 import { getRepoExecutionHostId } from '../../shared/execution-host'
+import { MAX_GITHUB_WORK_ITEMS_BATCH_REPOS } from '../../shared/github/work-items-query-bounds'
 import type { TaskSourceContext } from '../../shared/task-source-context'
 import type { Store } from '../persistence'
 import type { StatsCollector } from '../stats/collector'
@@ -29,6 +30,7 @@ import {
   getRepoUpstream,
   listIssues,
   listWorkItems,
+  listWorkItemsAcrossRepos,
   countWorkItems,
   getWorkItem,
   getWorkItemByOwnerRepo,
@@ -56,7 +58,11 @@ import {
   checkOrcaStarred,
   starOrca
 } from '../github/client'
-import type { GitHubPRBranchLookupOptions } from '../github/client'
+import type {
+  GitHubPRBranchLookupOptions,
+  GitHubWorkItemResolutionFailure,
+  GitHubWorkItemsBatchInput
+} from '../github/client'
 import {
   clearVisiblePRRefreshWindow,
   enqueuePRRefresh,
@@ -451,6 +457,55 @@ export function registerGitHubHandlers(store: Store, stats: StatsCollector): voi
         repoConnectionId(repo),
         args.noCache,
         ...localGitOptionArgs(store, repo)
+      )
+    }
+  )
+
+  ipcMain.handle(
+    'gh:listWorkItemsAcrossRepos',
+    (
+      _event,
+      args: {
+        repos: { repoPath: string; repoId: string }[]
+        limit?: number
+        query?: string
+        page?: number
+        noCache?: boolean
+      }
+    ) => {
+      const repos = Array.isArray(args?.repos) ? args.repos : []
+      if (repos.length > MAX_GITHUB_WORK_ITEMS_BATCH_REPOS) {
+        throw new Error(
+          `GitHub work-item selection exceeds the ${MAX_GITHUB_WORK_ITEMS_BATCH_REPOS}-repository limit`
+        )
+      }
+      if (repos.length === 0) {
+        return listWorkItemsAcrossRepos([], args?.limit, args?.query, args?.page, false, [])
+      }
+      const inputs: GitHubWorkItemsBatchInput[] = []
+      const resolutionFailures: GitHubWorkItemResolutionFailure[] = []
+      for (const selector of repos) {
+        try {
+          const repo = assertRegisteredRepo(selector, store)
+          const localGitOptions = localGitOptionArgs(store, repo)[0]
+          inputs.push({
+            repoId: repo.id,
+            repoPath: repo.path,
+            preference: repo.issueSourcePreference,
+            connectionId: repoConnectionId(repo),
+            ...(localGitOptions ? { localGitOptions } : {})
+          })
+        } catch (err) {
+          resolutionFailures.push({ repoId: selector.repoId, reason: err })
+        }
+      }
+      return listWorkItemsAcrossRepos(
+        inputs,
+        args.limit,
+        args.query,
+        args.page,
+        args.noCache,
+        resolutionFailures
       )
     }
   )

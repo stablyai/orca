@@ -38,6 +38,7 @@ import type {
 import type {
   GitHubWorkItem,
   GitHubWorkItemDetails,
+  ListWorkItemsAcrossReposResult,
   ListWorkItemsResult
 } from '../../shared/github/work-item-types'
 import type { GitHubCreateIssueResult, GitHubIssueUpdate } from '../../shared/issue-mutation-types'
@@ -102,6 +103,13 @@ export type GithubWorkItemApi = {
     page?: number
     noCache?: boolean
   }) => Promise<ListWorkItemsResult<Omit<GitHubWorkItem, 'repoId'>>>
+  listWorkItemsAcrossRepos: (args: {
+    repos: { repoPath: string; repoId: string }[]
+    limit?: number
+    query?: string
+    page?: number
+    noCache?: boolean
+  }) => Promise<ListWorkItemsAcrossReposResult>
   updateIssue: (
     args: GitHubRepoSelectorArgs & {
       number: number

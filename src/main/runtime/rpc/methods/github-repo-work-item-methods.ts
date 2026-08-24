@@ -2,8 +2,25 @@ import { z } from 'zod'
 import { defineMethod, type RpcMethod } from '../core'
 import { OptionalFiniteNumber, OptionalString, requiredString } from '../schemas'
 import { RepoSelector } from './github-repo-target-schemas'
+import { MAX_GITHUB_WORK_ITEMS_BATCH_REPOS } from '../../../../shared/github/work-items-query-bounds'
 
 const WorkItemsList = RepoSelector.extend({
+  limit: OptionalFiniteNumber,
+  query: OptionalString,
+  page: z.number().int().positive().optional(),
+  noCache: z.boolean().optional()
+})
+
+const WorkItemsBatch = z.object({
+  repos: z
+    .array(
+      z.object({
+        repo: requiredString('Missing repo selector'),
+        repoId: requiredString('Missing repo id')
+      })
+    )
+    .min(1)
+    .max(MAX_GITHUB_WORK_ITEMS_BATCH_REPOS, 'Too many repositories selected'),
   limit: OptionalFiniteNumber,
   query: OptionalString,
   page: z.number().int().positive().optional(),
@@ -61,6 +78,18 @@ export const GITHUB_REPO_WORK_ITEM_METHODS: RpcMethod[] = [
     handler: async (params, { runtime }) =>
       runtime.listRepoWorkItems(
         params.repo,
+        params.limit,
+        params.query,
+        params.page,
+        params.noCache
+      )
+  }),
+  defineMethod({
+    name: 'github.listWorkItemsAcrossRepos',
+    params: WorkItemsBatch,
+    handler: async (params, { runtime }) =>
+      runtime.listRepoWorkItemsAcrossRepos(
+        params.repos,
         params.limit,
         params.query,
         params.page,

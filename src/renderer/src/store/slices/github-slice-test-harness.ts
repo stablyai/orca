@@ -55,6 +55,7 @@ export const mockApi = {
     setPRCommentReaction: stubMock(),
     resolveReviewThread: stubMock(),
     listWorkItems: stubMock(),
+    listWorkItemsAcrossRepos: stubMock(),
     countWorkItems: stubMock().mockResolvedValue(0),
     getProjectViewTable: stubMock(),
     updateProjectItemField: stubMock(),
