@@ -4405,7 +4405,7 @@
     },
     {
       "id": "agent-status.manual-compact-identity",
-      "title": "Manual Claude compact completion retires only its exact status generation",
+      "title": "A finished Claude compact clears the pane, and an aborted one never strands it",
       "maturity": "experimental",
       "protection": "partial",
       "owner": "agent-session",
@@ -4420,19 +4420,19 @@
       "providers": ["local", "daemon", "ssh", "wsl", "remote-runtime"],
       "coveredPlatforms": ["macos"],
       "coveredProviders": ["local", "ssh"],
-      "coverageNotes": "Deterministic listener, loopback HTTP, relay-restart, persisted-restore, and fake-SSH transport contracts run on macOS. Claude Code 2.1.220 captures prove manual PreCompact starts a new prompt UUID and exact PreCompact/PostCompact pairs share it. The shared Node paths are platform-independent; live Linux, Windows, WSL, and paired-runtime journeys remain gaps.",
+      "coverageNotes": "Deterministic listener, loopback HTTP, relay-restart, persisted-restore, and fake-SSH transport contracts run on macOS. Behavior tests deliver only events present in CLAUDE_EVENTS, so a mapping that is not registered cannot pass -- the failure mode that let the earlier compact correlation ship unreachable. Claude Code 2.1.227 PTY captures prove a successful manual compact emits PreCompact, a start-less summarizer SubagentStop, SessionStart(source=compact), then PostCompact, that an aborted compact emits PreCompact ALONE, that /compact emits no UserPromptSubmit, and that session_id is stable across the window. The shared Node paths are platform-independent; live Linux, Windows, WSL, and paired-runtime journeys remain gaps.",
       "motivatingLinks": [
         "https://github.com/stablyai/orca/issues/11352",
         "https://github.com/stablyai/orca/pull/11353"
       ],
-      "invariant": "A Claude manual PreCompact may replace only a current Claude row from the same receiving connection and provider session; a manual PostCompact may mark done only when the current authoritative row is its exact manual PreCompact generation, including provider prompt UUID. Missing identity is never a wildcard; later cross-provider work, replay, duplication, pane or tab retirement, and server stop invalidate completion. Automatic Claude and Kimi completion remain fail-closed until their hooks expose independently proven generation identity.",
-      "oracle": "Run one byte-identical state-machine oracle plus local HTTP, relay-restart, SSH, and persisted-restore streams using Claude's observed different prior-turn and compact prompt UUIDs. Require matching manual completion to emit done while wrong or absent prompt UUID, session-presence mismatch, wrong source or connection, stale replay and duplicate delivery, later Codex work, automatic completion, and lifecycle cleanup cannot retire the current row. Assert both emitted event order and the authoritative lastStatusByPaneKey snapshot.",
+      "invariant": "PreCompact is never registered and may never move a pane, because it fires before the compact is validated and an aborted compact emits it alone. Only a manual PostCompact may mark done, and it does so as a session boundary so completion-reactive consumers stay out of it; an automatic PostCompact claims nothing and writes no compact-scoped state, since its turn resumes and emits its own Stop. A completion either CLEARS a row or publishes nothing at all: it never creates a row, so a retired pane cannot be resurrected, and it never restates one it cannot clear, because a restated row loses restoredUnconfirmed and restarts the staleness clock. A manual /compact only completes at an idle prompt, so it retires a subagent that exists ONLY as a disk snapshot; live evidence -- a child observed in this runtime, an unclassifiable running background task, a registered session cron -- still holds the pane at working. A completion requires a valid provider prompt UUID, matches the pane owner by connection and provider session -- except on a restored row, which carries the previous connection and may carry no session at all -- and is applied at most once per compact. Ownership is enforced by the client that owns pane identity; a relay forwards and defers, so a cold relay cache cannot swallow the clearing event. A relay predating this contract forwards its own mapping, so ingest drops automatic envelopes, stamps the boundary on manual ones, carries the summarized turn label onto a promptless completion with or without a trigger, and classifies a trigger-stripped replay by payload state while still enforcing ownership. Kimi and other Claude-compatible vendors remain fail-closed.",
+      "oracle": "Replay the measured Claude compact streams through a harness gated on the real CLAUDE_EVENTS, plus local HTTP, relay, SSH, and persisted-restore transports. Require the successful manual stream to end done with sessionBoundary set, and require the aborted stream (PreCompact alone) to leave both an idle and a working pane exactly as it found them. Drive the restart shape end to end over loopback HTTP from a hydrated row: a pane held only by a snapshot child must reach done with an empty roster, while a pane a runtime child still owns must emit NOTHING and keep its row object identical, so receivedAt and restoredUnconfirmed both survive. Deliver the restored-row cases with the hydrated row still cached at completion time and assert the summarizer published nothing, so the restored-row branch is the branch under test. Require rejection of an automatic completion, a completion with absent prompt UUID, a foreign provider session, a duplicate, and a completion for a pane with no cached row; require an automatic completion to leave the consumed-compact map untouched. Require a relay with a COLD cache to forward the completion while the client still refuses to mint a row it never had. Require ingest to drop legacy automatic envelopes, stamp the boundary on legacy manual ones, carry the summarized turn label onto a promptless completion with and without a trigger, and leave a FINISHED pane finished when a trigger-stripped working replay arrives. Require the consumed-compact map to be empty after each pane-scoped teardown route and to follow a pane move. Assert registration membership, emitted event order, and the authoritative lastStatusByPaneKey snapshot.",
       "commands": [
-        "pnpm exec vitest run --config config/vitest.config.ts src/shared/manual-compact-prompt-identity.test.ts src/main/agent-hooks/manual-compact-hook-stream.test.ts src/main/agent-hooks/manual-compact-status-cleanup.test.ts src/shared/agent-hook-listener-claude-turn-state.test.ts src/shared/agent-hook-listener-claude-compatible-vendors.test.ts src/shared/agent-hook-relay.test.ts src/relay/agent-hook-server.test.ts src/main/agent-hooks/server-claude-normalization.test.ts src/main/agent-hooks/server-last-status-write.test.ts src/main/ssh/ssh-relay-session-agent-hooks.integration.test.ts --reporter=dot",
-        "Manual Claude Code 2.1.220 interactive compact: isolate UserPromptSubmit, PreCompact, and PostCompact hooks; submit one ordinary prompt then /compact; compare source, trigger, session_id, and prompt_id"
+        "pnpm exec vitest run --config config/vitest.config.ts src/main/claude/compact-status-registration.test.ts src/main/agent-hooks/manual-compact-hook-stream.test.ts src/main/agent-hooks/manual-compact-status-cleanup.test.ts src/shared/agent-hook-listener-claude-turn-state.test.ts src/shared/agent-hook-listener-claude-compatible-vendors.test.ts src/shared/agent-hook-relay.test.ts src/relay/agent-hook-server.test.ts src/main/agent-hooks/server-claude-normalization.test.ts src/main/agent-hooks/server-last-status-write.test.ts src/main/ssh/ssh-relay-session-agent-hooks.integration.test.ts --reporter=dot",
+        "Manual Claude Code interactive compact under a PTY: register every hook to a logging script, run one turn then /compact to observe the abort stream, then seven turns and /compact to observe the success stream; compare source, trigger, session_id, and prompt_id across both"
       ],
       "testFiles": [
-        "src/shared/manual-compact-prompt-identity.test.ts",
+        "src/main/claude/compact-status-registration.test.ts",
         "src/main/agent-hooks/manual-compact-hook-stream.test.ts",
         "src/main/agent-hooks/manual-compact-status-cleanup.test.ts",
         "src/shared/agent-hook-listener-claude-turn-state.test.ts",
@@ -4445,19 +4445,29 @@
       ],
       "assertionRefs": [
         {
-          "file": "src/shared/manual-compact-prompt-identity.test.ts",
+          "file": "src/main/claude/compact-status-registration.test.ts",
           "assertions": [
-            "matching manual identity settles once",
-            "stale, duplicate, session-mismatched, malformed, automatic, and unproven provider completion fail closed",
-            "4,097 rejected pane keys allocate no ownership state"
+            "PostCompact is registered in CLAUDE_EVENTS and written into the settings Claude reads, and PreCompact is absent from both",
+            "the measured successful manual compact ends a stuck working row as a done with sessionBoundary",
+            "an aborted compact (PreCompact alone) leaves an idle pane idle and a working pane working",
+            "an automatic completion claims nothing, writes no compact-scoped state, and the turn's own Stop still closes it",
+            "a completion retires a child that exists only as a disk snapshot, but a runtime child or an active session cron still holds the pane and the completion then publishes nothing at all",
+            "a completion clears a restored row -- delivered while that hydrated row is still the cached owner -- despite a stale connection id or a missing provider session, but never resurrects a retired pane",
+            "absent prompt UUID, foreign provider session, and duplicate delivery fail closed",
+            "the consumed-compact record is dropped by clearPaneCacheState and clearAllListenerCaches and follows movePaneCacheState"
           ]
         },
         {
           "file": "src/main/agent-hooks/manual-compact-hook-stream.test.ts",
           "assertions": [
-            "local HTTP and relay-restart streams preserve the distinct prior-turn and compact prompt identities",
-            "later provider work and wrong transport identity remain authoritative",
-            "persisted PreCompact restores its prompt"
+            "the measured local HTTP stream settles once and rejects a duplicate completion",
+            "a hydrated restart-stuck pane reaches done with an empty roster, and a pane a runtime child owns emits nothing and keeps its row object identical",
+            "the relay forwards the completion and preserves its compact identity in the replay cache so the client re-runs ownership before applying the clearing row",
+            "a relay with a cold cache still forwards the completion, and the client still refuses to mint a row it never had",
+            "a legacy relay's manual envelope is stamped as a session boundary and its automatic envelope is dropped instead of minting working",
+            "a promptless completion keeps the summarized turn's label with and without a trigger on the envelope",
+            "a trigger-stripped replay is classified by payload state, leaves a FINISHED pane finished, and is still rejected on an owner mismatch",
+            "a PreCompact envelope never drives pane state"
           ]
         },
         {
@@ -4473,22 +4483,22 @@
       ],
       "evidenceRuns": [
         {
-          "date": "2026-08-02",
+          "date": "2026-08-18",
           "runner": "local",
           "platform": "macos",
-          "command": "pnpm exec vitest run --config config/vitest.config.ts src/shared/manual-compact-prompt-identity.test.ts src/main/agent-hooks/manual-compact-hook-stream.test.ts src/main/agent-hooks/manual-compact-status-cleanup.test.ts src/shared/agent-hook-listener-claude-turn-state.test.ts src/shared/agent-hook-listener-claude-compatible-vendors.test.ts src/shared/agent-hook-relay.test.ts src/relay/agent-hook-server.test.ts src/main/agent-hooks/server-claude-normalization.test.ts src/main/agent-hooks/server-last-status-write.test.ts src/main/ssh/ssh-relay-session-agent-hooks.integration.test.ts --reporter=dot",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/main/claude/compact-status-registration.test.ts src/main/agent-hooks/manual-compact-hook-stream.test.ts src/main/agent-hooks/manual-compact-status-cleanup.test.ts src/shared/agent-hook-listener-claude-turn-state.test.ts src/shared/agent-hook-listener-claude-compatible-vendors.test.ts src/shared/agent-hook-relay.test.ts src/relay/agent-hook-server.test.ts src/main/agent-hooks/server-claude-normalization.test.ts src/main/agent-hooks/server-last-status-write.test.ts src/main/ssh/ssh-relay-session-agent-hooks.integration.test.ts --reporter=dot",
           "result": "passed",
-          "durationSeconds": 2.66,
-          "summary": "Eight focused files and 435 tests passed with local HTTP, relay, SSH, persistence, adversarial identity, cleanup, and existing provider-regression coverage."
+          "durationSeconds": 3.28,
+          "summary": "Ten files and 116 tests passed across registration, listener, local HTTP, relay, SSH, persistence, and cleanup. Reverting only the four source files to the merge base first turned 12 of 21 registration-gated tests and 8 of 12 relay/ingest tests red, so the suite observes its own failure rather than passing over unreachable code. Every assertion was additionally mutation-tested: 18 of 18 targeted mutations -- including reaping runtime children as well as snapshot ones, restating a pane live evidence still holds, re-enforcing compact ownership on the relay, and dropping the consumed-compact map from any one teardown route -- are caught."
         },
         {
-          "date": "2026-08-02",
+          "date": "2026-08-17",
           "runner": "manual",
           "platform": "macos",
-          "command": "Manual Claude Code 2.1.220 interactive compact: isolate UserPromptSubmit, PreCompact, and PostCompact hooks; submit one ordinary prompt then /compact; compare source, trigger, session_id, and prompt_id",
+          "command": "Manual Claude Code interactive compact under a PTY: register every hook to a logging script, run one turn then /compact to observe the abort stream, then seven turns and /compact to observe the success stream; compare source, trigger, session_id, and prompt_id across both",
           "result": "passed",
-          "durationSeconds": 120,
-          "summary": "A fresh capture proved /compact emits no UserPromptSubmit and its PreCompact uses a new UUID distinct from the preceding user turn; the preserved authenticated capture proved the matching manual PreCompact and PostCompact share that UUID and session. Automatic capture reused one prompt UUID across multiple compact generations, so automatic completion remains disabled."
+          "durationSeconds": 1080,
+          "summary": "Claude Code 2.1.227. Aborted compact emitted PreCompact(manual) ALONE with no PostCompact and no SessionStart(compact). Successful compact emitted PreCompact(manual), a start-less SubagentStop (agent_type empty, no matching SubagentStart), SessionStart(source=compact), PostCompact(manual), then Notification(idle_prompt). /compact emitted no UserPromptSubmit in either the TUI or print mode; session_id was stable across the whole window while the compact allocated its own prompt_id."
         }
       ],
       "runtimeBudget": {

@@ -330,17 +330,23 @@ describe('SshRelaySession agent hooks over a fake relay transport', () => {
       })
 
     relay.notifyAgentHook(compactEnvelope('UserPromptSubmit', 'working'))
+    await waitForStatusCount(events, 1)
+
+    // Why: PreCompact fires before the compact is validated, so it may never move the pane —
+    // over SSH just as locally.
     relay.notifyAgentHook(compactEnvelope('PreCompact', 'working'))
-    await waitForStatusCount(events, 2)
+    await new Promise((resolve) => setImmediate(resolve))
+    expect(events).toHaveLength(1)
+
     relay.notifyAgentHook({
       ...compactEnvelope('PostCompact', 'done'),
       providerPromptId: undefined
     })
     await new Promise((resolve) => setImmediate(resolve))
-    expect(events).toHaveLength(2)
+    expect(events).toHaveLength(1)
 
     relay.notifyAgentHook(compactEnvelope('PostCompact', 'done'))
-    await waitForStatusCount(events, 3)
+    await waitForStatusCount(events, 2)
 
     expect(events.at(-1)).toMatchObject({
       connectionId: 'conn-compact',
@@ -351,13 +357,15 @@ describe('SshRelaySession agent hooks over a fake relay transport', () => {
     ).toMatchObject({
       source: 'claude',
       providerPromptId: COMPACT_PROMPT_ID,
-      compactTrigger: undefined,
-      connectionId: 'conn-compact'
+      connectionId: 'conn-compact',
+      // Why: a compact that finished must not read as a completed turn to notification and
+      // automation consumers, over SSH just as locally.
+      payload: { sessionBoundary: true }
     })
 
     relay.notifyAgentHook(compactEnvelope('PostCompact', 'done'))
     await new Promise((resolve) => setImmediate(resolve))
-    expect(events).toHaveLength(3)
+    expect(events).toHaveLength(2)
   })
 
   it('clears stamped status on reconnect loss but not final shutdown', async () => {
