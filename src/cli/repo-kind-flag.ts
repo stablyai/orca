@@ -1,12 +1,13 @@
 import type { RepoKind } from '../shared/repo-types'
-import { getOptionalStringFlag } from './flags'
 import { RuntimeClientError } from './runtime-client'
 
 export function getOptionalRepoKind(flags: Map<string, string | boolean>): RepoKind | undefined {
-  const kind = getOptionalStringFlag(flags, 'kind')
-  if (kind === undefined) {
+  // Why: read the raw entry, not getOptionalStringFlag - that maps a bare `--kind`
+  // (parsed as boolean true) to undefined, silently falling back to git.
+  if (!flags.has('kind')) {
     return undefined
   }
+  const kind = flags.get('kind')
   if (kind === 'git' || kind === 'folder') {
     return kind
   }
