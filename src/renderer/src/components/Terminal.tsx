@@ -124,6 +124,7 @@ import {
   TERMINAL_HIDDEN_WORKTREE_RETENTION_TTL_MS,
   countEvictionExemptTabRoutes,
   formatEvictionExemptRouteCounts,
+  getTerminalWorktreeParkingInputsKey,
   hasPendingRetentionSpawnWork,
   selectForceParkEvictableTabIds,
   selectRetentionForceParkedTerminalWorktrees,
@@ -332,6 +333,10 @@ function Terminal(): React.JSX.Element | null {
   )
   const activeView = useAppStore((s) => s.activeView)
   const tabsByWorktree = useAppStore((s) => s.tabsByWorktree)
+  const terminalWorktreeParkingInputsKey = useMemo(
+    () => getTerminalWorktreeParkingInputsKey(tabsByWorktree),
+    [tabsByWorktree]
+  )
   const pendingStartupByTabId = useAppStore((s) => s.pendingStartupByTabId)
   const terminalParkingEnabled = useAppStore((s) => s.settings?.terminalHiddenViewParking !== false)
   const terminalSshParkingEnabled = useAppStore((s) => s.settings?.terminalSshViewParking !== false)
@@ -933,6 +938,10 @@ function Terminal(): React.JSX.Element | null {
   // Worktree cold-park policy: hiddenSince bookkeeping, parked-set selection, and one recheck timer per deadline so React re-renders when hysteresis elapses instead of polling.
   useEffect(() => {
     const parkingTimers = terminalWorktreeParkingTimersRef.current
+    const parkingStore = useAppStore.getState()
+    const parkingTabsByWorktree = parkingStore.tabsByWorktree
+    // Read with the tabs, not per tab: the owner check reads each tab's active leaf.
+    const parkingLayoutsByTabId = parkingStore.terminalLayoutsByTabId
     for (const timer of parkingTimers.values()) {
       window.clearTimeout(timer)
     }
@@ -996,9 +1005,9 @@ function Terminal(): React.JSX.Element | null {
       retentionCandidates.push({
         worktreeId,
         worktreeOwner: getTerminalParkWorktreeOwner(terminalParkWorktreeOwnerState, worktreeId),
-        terminalTabs: (tabsByWorktree[worktreeId] ?? []).map((tab) => ({
+        terminalTabs: (parkingTabsByWorktree[worktreeId] ?? []).map((tab) => ({
           ...tab,
-          activeLeafId: useAppStore.getState().terminalLayoutsByTabId[tab.id]?.activeLeafId ?? null
+          activeLeafId: parkingLayoutsByTabId[tab.id]?.activeLeafId ?? null
         })),
         isVisible,
         shouldMeasureHiddenWorktree,
@@ -1036,7 +1045,7 @@ function Terminal(): React.JSX.Element | null {
       })
     // Why: a worktree with any watcher-uncoverable tab must never park, or it goes silent for bells/titles/completions (sank the first parking attempt).
     for (const worktreeId of Array.from(nextParkedTerminalWorktreeIds)) {
-      if (!worktreeTabsAreWatcherCovered(worktreeId, tabsByWorktree[worktreeId] ?? [])) {
+      if (!worktreeTabsAreWatcherCovered(worktreeId, parkingTabsByWorktree[worktreeId] ?? [])) {
         nextParkedTerminalWorktreeIds.delete(worktreeId)
       }
     }
@@ -1046,7 +1055,7 @@ function Terminal(): React.JSX.Element | null {
     // is the accepted cost of bounding retention.
     const retentionBudgetCandidates: TerminalWorktreeRetentionCandidate[] = retentionCandidates.map(
       (candidate) => {
-        const tabs = tabsByWorktree[candidate.worktreeId] ?? []
+        const tabs = parkingTabsByWorktree[candidate.worktreeId] ?? []
         const parkEligible = canParkTerminalWorktreeRenderers({
           ...candidate,
           // Why nulled: the post-measure cool-down is a timing gate, not a
@@ -1103,7 +1112,7 @@ function Terminal(): React.JSX.Element | null {
     const repos = useAppStore.getState().repos
     const nextEvictionExemptTabIds = new Set<string>()
     for (const worktreeId of forceParkedWorktreeIds) {
-      const forceParkedTabs = tabsByWorktree[worktreeId] ?? []
+      const forceParkedTabs = parkingTabsByWorktree[worktreeId] ?? []
       const exemptTabIds = selectEvictionExemptTerminalTabIds(worktreeId, forceParkedTabs)
       for (const tabId of exemptTabIds) {
         nextEvictionExemptTabIds.add(tabId)
@@ -1206,7 +1215,7 @@ function Terminal(): React.JSX.Element | null {
     pendingStartupByTabId,
     pairedRuntimeParkingEnvironmentIds,
     renderedActiveWorktreeId,
-    tabsByWorktree,
+    terminalWorktreeParkingInputsKey,
     terminalParkingEnabled,
     terminalParkingRevision,
     terminalProviderSnapshotCapabilityRevision,

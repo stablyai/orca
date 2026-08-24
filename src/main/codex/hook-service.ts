@@ -299,13 +299,18 @@ function getRuntimeHooksWithSystemUserHooks(
 ): {
   hooks: Record<string, HookDefinition[]>
   trustEntries: MirroredRuntimeUserHookTrustEntry[]
-} {
+} | null {
   const systemConfigPath = getSystemConfigPath()
   if (systemConfigPath === runtimeConfigPath) {
     return { hooks: { ...runtimeHooks }, trustEntries: [] }
   }
 
-  const systemConfig = readHooksJson(systemConfigPath)
+  const { raw: systemRaw, config: systemConfig } = readHooksJsonWithRaw(systemConfigPath)
+  if (!systemConfig && systemRaw === null) {
+    // Why: rebuilding from an unreadable source drops the last-known user hooks
+    // from the managed runtime; let launch prep retry without changing it.
+    return null
+  }
   if (!systemConfig?.hooks) {
     return { hooks: {}, trustEntries: [] }
   }
@@ -1284,6 +1289,15 @@ export class CodexHookService {
     const isManagedCommand = createManagedCommandMatcher(getCodexManagedScriptFileName())
     const command = getManagedCommand(scriptPath)
     const hookPlan = getRuntimeHooksWithSystemUserHooks(config.hooks, isManagedCommand, configPath)
+    if (!hookPlan) {
+      return {
+        agent: 'codex',
+        state: 'error',
+        configPath,
+        managedHooksPresent: false,
+        detail: 'Could not read system Codex hooks.json'
+      }
+    }
     const nextHooks = hookPlan.hooks
     const managedEvents = new Set<string>(CODEX_EVENTS)
 
@@ -1534,6 +1548,15 @@ export class CodexHookService {
 
     const isManagedCommand = createManagedCommandMatcher(getCodexManagedScriptFileName())
     const hookPlan = getRuntimeHooksWithSystemUserHooks(config.hooks, isManagedCommand, configPath)
+    if (!hookPlan) {
+      return {
+        agent: 'codex',
+        state: 'error',
+        configPath,
+        managedHooksPresent: false,
+        detail: 'Could not read system Codex hooks.json'
+      }
+    }
     config.hooks = hookPlan.hooks
     writeCodexHooksJson(configPath, hookPlan.hooks)
 

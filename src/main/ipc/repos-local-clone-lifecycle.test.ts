@@ -30,6 +30,7 @@ vi.mock('../providers/ssh-filesystem-dispatch', () =>
   moduleMocks.sshFilesystemDispatchModuleMock(reposMocks)
 )
 vi.mock('./ssh', () => moduleMocks.sshModuleMock(reposMocks))
+vi.mock('../ssh/ssh-target-registry', () => moduleMocks.sshModuleMock(reposMocks))
 
 import { registerRepoHandlers } from './repos'
 import { clearGitCapabilityStateForTests } from '../git/git-capability-state'

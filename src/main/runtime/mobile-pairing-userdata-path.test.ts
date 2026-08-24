@@ -6,6 +6,7 @@ import { tmpdir } from 'node:os'
 // Import from the production source of truth so a filename rename can't silently
 // pass these tests against stale names.
 import { DEVICE_REGISTRY_FILENAME, E2EE_KEYPAIR_FILENAME } from './mobile-pairing-files'
+import { installFakeAppEnvironment } from '../../../config/scripts/vitest-host-ports-setup'
 
 // Mutable userData the electron mock resolves. We flip it mid-test to simulate
 // app.setName('Orca') changing how app.getPath('userData') resolves (e.g. from
@@ -15,8 +16,12 @@ import { DEVICE_REGISTRY_FILENAME, E2EE_KEYPAIR_FILENAME } from './mobile-pairin
 // of whether the test host's filesystem is case-sensitive.
 const appState = { userData: '' }
 
+// Why the port for getPath: userData now resolves through AppEnvironment, so an
+// electron mock would be inert here. safeStorage is still mocked because the modules
+// under test seal through it directly.
+installFakeAppEnvironment({ getPath: () => appState.userData })
+
 vi.mock('electron', () => ({
-  app: { getPath: () => appState.userData },
   safeStorage: {
     isEncryptionAvailable: () => false,
     encryptString: (plaintext: string) => Buffer.from(plaintext, 'utf-8'),
@@ -38,6 +43,8 @@ describe('mobile pairing userData path stability', () => {
     lateDir = join(root, 'userdata-late')
     mkdirSync(canonicalDir, { recursive: true })
     mkdirSync(lateDir, { recursive: true })
+    // Why re-install: the global setup's beforeEach reinstates its own fake.
+    installFakeAppEnvironment({ getPath: () => appState.userData })
     vi.resetModules()
   })
 
@@ -55,8 +62,9 @@ describe('mobile pairing userData path stability', () => {
     appState.userData = lateDir
 
     expect(getCanonicalUserDataPath()).toBe(canonicalDir)
-    const { app } = await import('electron')
-    expect(getCanonicalUserDataPath()).not.toBe(app.getPath('userData'))
+    // Why the port: this is the "resolve late" path the captured value must differ from.
+    const { getAppEnvironment } = await import('../../shared/app-environment')
+    expect(getCanonicalUserDataPath()).not.toBe(getAppEnvironment().getPath('userData'))
   })
 
   it('writes DeviceRegistry + E2EE keypair under the canonical path, not the late one', async () => {

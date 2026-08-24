@@ -6,12 +6,54 @@ import {
 } from '../terminal/terminal-provider-snapshot-capability'
 import {
   TERMINAL_HIDDEN_WORKTREE_RETENTION_TTL_MS,
+  getTerminalWorktreeParkingInputsKey,
   hasPendingRetentionSpawnWork,
   isEvictionExemptTerminalPty,
   selectForceParkEvictableTabIds,
   selectRetentionForceParkedTerminalWorktrees,
   type TerminalWorktreeRetentionCandidate
 } from './terminal-hidden-worktree-retention'
+
+describe('getTerminalWorktreeParkingInputsKey', () => {
+  const tabs = {
+    'repo::/worktree': [
+      {
+        id: 'tab-1',
+        ptyId: 'repo::/worktree@@pty-1',
+        pendingActivationSpawn: undefined,
+        title: 'Original title'
+      }
+    ]
+  }
+
+  it('ignores display-only tab changes', () => {
+    const retitledTabs = {
+      'repo::/worktree': [{ ...tabs['repo::/worktree'][0], title: 'Updated title' }]
+    }
+    expect(getTerminalWorktreeParkingInputsKey(retitledTabs)).toBe(
+      getTerminalWorktreeParkingInputsKey(tabs)
+    )
+  })
+
+  it('changes for inputs consumed by the parking policy', () => {
+    const original = getTerminalWorktreeParkingInputsKey(tabs)
+    expect(
+      getTerminalWorktreeParkingInputsKey({
+        'repo::/worktree': [{ ...tabs['repo::/worktree'][0], ptyId: null }]
+      })
+    ).not.toBe(original)
+    expect(
+      getTerminalWorktreeParkingInputsKey({
+        'repo::/worktree': [{ ...tabs['repo::/worktree'][0], pendingActivationSpawn: true }]
+      })
+    ).not.toBe(original)
+    expect(
+      getTerminalWorktreeParkingInputsKey({
+        'repo::/worktree': [{ ...tabs['repo::/worktree'][0], id: 'tab-2' }]
+      })
+    ).not.toBe(original)
+  })
+})
 
 describe('hasPendingRetentionSpawnWork', () => {
   const remoteTab = {

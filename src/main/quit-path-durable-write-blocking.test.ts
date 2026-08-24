@@ -4,6 +4,7 @@ import type * as NodeFs from 'node:fs'
 import type * as NodeFsPromises from 'node:fs/promises'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
+import { installFakeAppEnvironment } from '../../config/scripts/vitest-host-ports-setup'
 
 // Why these tests exist: will-quit used to run stats.flush() and store.flush() synchronously,
 // before preventDefault(). On a stalled network profile mount those fsync/rename syscalls park
@@ -115,6 +116,8 @@ async function createStore(dir: string): Promise<TestStore> {
   testState.dir = dir
   vi.resetModules()
   const { Store, initDataPath } = await import('./persistence')
+  // Why: userData resolves through AppEnvironment; point it at this file's temp dir.
+  installFakeAppEnvironment({ getPath: () => testState.dir })
   initDataPath()
   return new Store() as unknown as TestStore
 }

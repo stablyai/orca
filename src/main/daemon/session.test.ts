@@ -62,6 +62,7 @@ function createMockSubprocess() {
       // Simulate async exit
       setTimeout(() => onExit?.(0), 5)
     },
+    terminateOwnedTree: () => 'terminated' as const,
     forceKill() {
       killed = true
     },
@@ -674,6 +675,17 @@ describe('Session', () => {
       const killRoot = killWithDescendantSweepMock.mock.calls[0][1] as () => void
       killRoot()
       expect(subprocess.killed).toBe(true)
+    })
+
+    it('agent kill hands the sweep the pty job, which outlives a reparented child', () => {
+      // A grandchild that detached leaves the shell's console and reparents, so
+      // the pid walk behind the sweep's fallback cannot see it. Only the job can.
+      createSession({ launchAgent: 'claude' })
+      session.kill()
+      const deps = killWithDescendantSweepMock.mock.calls[0][2] as {
+        terminateOwnedTree?: () => string
+      }
+      expect(deps.terminateOwnedTree?.()).toBe('terminated')
     })
 
     it('agent kill root callback is a no-op after the session already exited', () => {

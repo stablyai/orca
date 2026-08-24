@@ -35,9 +35,10 @@ export function getWorktreePaletteCreateActionState({
  */
 export function isWorktreePaletteCreateActivationAllowed(args: {
   hasTaskUrlIntent: boolean
+  hasCreateName: boolean
   selectionMovedByUser: boolean
 }): boolean {
-  return args.hasTaskUrlIntent || args.selectionMovedByUser
+  return args.hasTaskUrlIntent || args.hasCreateName || args.selectionMovedByUser
 }
 
 export const WORKTREE_PALETTE_SELECTION_MOVE_KEYS: ReadonlySet<string> = new Set([

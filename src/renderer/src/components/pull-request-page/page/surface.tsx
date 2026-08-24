@@ -10,11 +10,9 @@ import { toast } from 'sonner'
 import { useAppStore } from '@/store'
 import { useAllWorktrees } from '@/store/selectors'
 import { canUseGitHubRepoContext } from '@/lib/github-source-runtime-context'
-import {
-  findGithubPrWorkspaceAttachment,
-  getGithubPrWorkspaceAttachmentLabel
-} from '@/lib/github-work-item-workspace-attachment'
+import { findGithubPrWorkspaceAttachment } from '@/lib/github-work-item-workspace-attachment'
 import { activateAndRevealWorktree } from '@/lib/worktree-activation'
+import { getWorktreeAttachmentLabel } from '@/lib/worktree-attachment-label'
 import {
   clearGitHubLinkCopied,
   createGitHubLinkCopyState,
@@ -72,7 +70,7 @@ export default function PullRequestPage({
     [allWorktrees, effectiveRepoId, workItem]
   )
   const attachedWorkspaceLabel = attachedWorkspace
-    ? getGithubPrWorkspaceAttachmentLabel(attachedWorkspace)
+    ? getWorktreeAttachmentLabel(attachedWorkspace)
     : null
 
   // Why: key must include issue source preference so origin/upstream toggles for the same issue number don't read back the wrong repo's details.

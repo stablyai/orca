@@ -36,6 +36,9 @@ vi.mock('./worktree-symlinks', async () =>
   (await import('./worktrees-test-module-mocks')).worktreeSymlinksModuleMock()
 )
 vi.mock('./ssh', async () => (await import('./worktrees-test-module-mocks')).sshModuleMock())
+vi.mock('../ssh/ssh-target-registry', async () =>
+  (await import('./worktrees-test-module-mocks')).sshTargetRegistryModuleMock()
+)
 vi.mock('../hooks', async () => (await import('./worktrees-test-module-mocks')).hooksModuleMock())
 vi.mock('../setup-runner-script-text', async (importOriginal) =>
   (await import('./worktrees-test-module-mocks')).setupRunnerScriptTextModuleMock(
@@ -209,6 +212,61 @@ describe('registerWorktreeHandlers', () => {
         }
       })
     ).rejects.toThrow('Reconnect to deploy the latest relay')
+    expect(provider.addWorktree).not.toHaveBeenCalled()
+  })
+
+  it('drops the fork remote it just added when the SSH head fetch fails', async () => {
+    const repo = {
+      id: 'repo-ssh',
+      path: '/remote/repo',
+      displayName: 'ssh',
+      badgeColor: '#000',
+      addedAt: 0,
+      connectionId: 'conn-1',
+      worktreeBaseRef: 'origin/main'
+    }
+    const exec = vi.fn().mockImplementation(async (args: string[]) => {
+      validateGitExecArgs(args)
+      if (args[0] === 'remote' && args[1] === 'get-url') {
+        return { stdout: 'git@github.com:stablyai/orca.git\n', stderr: '' }
+      }
+      if (args[0] === 'remote' && args.length === 1) {
+        return { stdout: 'origin\n', stderr: '' }
+      }
+      return { stdout: '', stderr: '' }
+    })
+    const provider = {
+      exec,
+      fetchRemoteTrackingRef: vi
+        .fn()
+        .mockImplementation(async (_repoPath: string, remote: string) => {
+          if (remote === 'pr-contributor-orca') {
+            throw new Error('network unreachable')
+          }
+        }),
+      addWorktree: vi.fn().mockResolvedValue(undefined),
+      listWorktrees: vi.fn().mockResolvedValue([])
+    }
+    const mux = { request: vi.fn().mockResolvedValue(undefined), notify: vi.fn() }
+    store.getRepos.mockReturnValue([repo])
+    store.getRepo.mockReturnValue(repo)
+    getSshGitProviderMock.mockReturnValue(provider)
+    getActiveMultiplexerMock.mockReturnValue(mux)
+
+    await expect(
+      handlers['worktrees:create'](null, {
+        repoId: 'repo-ssh',
+        name: 'contributor-fix',
+        branchNameOverride: 'contributor/fix',
+        pushTarget: {
+          remoteName: 'pr-contributor-orca',
+          branchName: 'contributor/fix',
+          remoteUrl: 'https://github.com/contributor/orca.git'
+        }
+      })
+    ).rejects.toThrow('network unreachable')
+
+    expect(exec).toHaveBeenCalledWith(['remote', 'remove', 'pr-contributor-orca'], '/remote/repo')
     expect(provider.addWorktree).not.toHaveBeenCalled()
   })
 })

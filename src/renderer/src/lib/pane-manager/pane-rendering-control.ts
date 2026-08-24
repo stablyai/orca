@@ -6,6 +6,8 @@ import {
   disposeWebgl,
   isPaneWebglContextLost,
   markComplexScriptOutput,
+  clearWebglTextureAtlas,
+  presentPaneViewport,
   resetWebglTextureAtlas
 } from './pane-webgl-renderer'
 import { rebuildAttachedWebgl, reattachWebglIfNeeded } from './pane-webgl-reattach'
@@ -99,5 +101,17 @@ export function resumePaneRendering(
 export function resetPaneWebglTextureAtlases(panes: Iterable<ManagedPaneInternal>): void {
   for (const pane of panes) {
     resetWebglTextureAtlas(pane)
+  }
+}
+
+export function clearPaneWebglTextureAtlases(panes: Iterable<ManagedPaneInternal>): void {
+  for (const pane of panes) {
+    clearWebglTextureAtlas(pane)
+  }
+}
+
+export function presentPaneViewports(panes: Iterable<ManagedPaneInternal>): void {
+  for (const pane of panes) {
+    presentPaneViewport(pane)
   }
 }

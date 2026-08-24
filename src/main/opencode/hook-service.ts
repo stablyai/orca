@@ -1,5 +1,5 @@
 /* eslint-disable max-lines -- Why: holds an inline JS plugin source emitted as one file; splitting across TS modules would scatter tightly coupled string-template logic. */
-import { app } from 'electron'
+import { getAppEnvironment } from '../../shared/app-environment'
 import { join } from 'node:path'
 import {
   existsSync,
@@ -36,10 +36,13 @@ function toSafeDirName(id: string): string {
 }
 
 export function getOpenCodePluginSource(): string {
-  return getOpenCodeFamilyPluginSource('/hook/opencode')
+  return getOpenCodeFamilyPluginSource('/hook/opencode', { emitSessionStart: true })
 }
 
-export function getOpenCodeFamilyPluginSource(hookPathname: string): string {
+export function getOpenCodeFamilyPluginSource(
+  hookPathname: string,
+  options: { emitSessionStart: boolean }
+): string {
   // Why: the plugin posts PTY environment data from OpenCode to the shared hooks server.
   return [
     '// Why: process-lifetime guard so a recurring parse error on a malformed',
@@ -875,6 +878,20 @@ export function getOpenCodeFamilyPluginSource(hookPathname: string): string {
     '',
     '    const sessionID = event.properties?.sessionID;',
     '    const updatedPart = event.properties?.part;',
+    ...(options.emitSessionStart
+      ? [
+          '    if (event.type === "session.created") {',
+          '      const info = event.properties?.info;',
+          '      if (!info?.id || info.parentID) return;',
+          '      rememberSessionRoot(info.id, info.id);',
+          '      await enqueueLifecycle(() =>',
+          '        disposed ? undefined : post("SessionStart", { sessionID: info.id })',
+          '      );',
+          '      return;',
+          '    }',
+          ''
+        ]
+      : []),
     '    if (',
     '      event.type === "message.part.updated" &&',
     '      updatedPart?.type === "tool" &&',
@@ -1096,7 +1113,7 @@ export class OpenCodeHookService {
   }
 
   private getOverlayRoot(): string {
-    return join(app.getPath('userData'), OPENCODE_OVERLAY_DIR)
+    return join(getAppEnvironment().getPath('userData'), OPENCODE_OVERLAY_DIR)
   }
 
   private getSourceOverlayDir(sourceConfigDir: string): string {
@@ -1104,7 +1121,11 @@ export class OpenCodeHookService {
   }
 
   private getSharedConfigDir(): string {
-    return join(app.getPath('userData'), OPENCODE_LEGACY_HOOKS_DIR, OPENCODE_SHARED_CONFIG_DIR)
+    return join(
+      getAppEnvironment().getPath('userData'),
+      OPENCODE_LEGACY_HOOKS_DIR,
+      OPENCODE_SHARED_CONFIG_DIR
+    )
   }
 
   private readOverlayManifest(overlayDir: string): OpenCodeOverlayManifest {

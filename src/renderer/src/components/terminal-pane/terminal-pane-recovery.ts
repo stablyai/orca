@@ -27,6 +27,7 @@ export type TerminalPaneRecoveryReason =
   // rejection frame is the evidence instead — it came from the process that
   // owns the PTY, over a connection that is by construction still up.
   | 'input-rejected-by-host'
+  | 'reattach-unverifiable'
   // A restore was requested for a certified-dead pipeline (reveal path).
   | 'restore-blocked'
 
@@ -82,6 +83,15 @@ type RecoveryBudget =
   | { allowed: true }
   | { allowed: false; declinedBy: 'window-cap'; retryInMs: number }
   | { allowed: false; declinedBy: 'cooldown'; retryInMs: number }
+
+function shouldScheduleRecoveryRetry(request: RecoveryRequest, budget: RecoveryBudget): boolean {
+  return (
+    !budget.allowed &&
+    (budget.declinedBy === 'cooldown'
+      ? request.terminalRecoveryGeneration !== undefined
+      : request.reason !== 'reattach-unverifiable')
+  )
+}
 
 function recoveryBudget(tabId: string, now: number): RecoveryBudget {
   const timestamps = recoveryTimestampsByTabId.get(tabId) ?? []
@@ -202,10 +212,7 @@ export async function requestTerminalPaneRecovery(request: RecoveryRequest): Pro
   }
   const budget = recoveryBudget(request.tabId, Date.now())
   if (!budget.allowed) {
-    if (
-      budget.declinedBy === 'window-cap' ||
-      (budget.declinedBy === 'cooldown' && request.terminalRecoveryGeneration !== undefined)
-    ) {
+    if (shouldScheduleRecoveryRetry(request, budget)) {
       scheduleRecoveryRetry(request, budget.retryInMs)
     }
     return false
@@ -239,10 +246,7 @@ export async function requestTerminalPaneRecovery(request: RecoveryRequest): Pro
     }
     const recheck = recoveryBudget(request.tabId, Date.now())
     if (!recheck.allowed) {
-      if (
-        recheck.declinedBy === 'window-cap' ||
-        (recheck.declinedBy === 'cooldown' && request.terminalRecoveryGeneration !== undefined)
-      ) {
+      if (shouldScheduleRecoveryRetry(request, recheck)) {
         scheduleRecoveryRetry(request, recheck.retryInMs)
       }
       return false

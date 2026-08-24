@@ -67,6 +67,14 @@ export function isGeminiTerminalTitle(title: string): boolean {
   if (isPiAgentTitle(title)) {
     return false
   }
+  // Why: Antigravity's models are named "Gemini <n.n> <Name>", so an agy pane's own
+  // title carries a whole `gemini` token. Gemini CLI is checked before Antigravity in
+  // getAgentLabel, so without this the model name wins and an agy pane reads as Gemini
+  // CLI. Only the token path defers — the four Gemini OSC glyphs stay decisive, and agy
+  // emits none of them.
+  if (titleHasAgentName(title, 'antigravity') || AGY_AGENT_NAME_RE.test(title)) {
+    return false
+  }
   return titleHasAgentName(title, 'gemini')
 }
 
