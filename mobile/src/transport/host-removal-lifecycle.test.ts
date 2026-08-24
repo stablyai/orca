@@ -17,6 +17,7 @@ vi.mock('./host-store', () => ({
 }))
 
 import { removeHostAndCloseClient } from './host-removal-lifecycle'
+import { connectionLogStore } from './connection-log-buffer'
 import {
   getHostNotificationSession,
   resetHostNotificationSessionsForTests
@@ -73,6 +74,22 @@ describe('host removal lifecycle', () => {
     expect(afterRemoval).not.toBe(session)
     expect(afterRemoval.lastDeliveredSeq).toBe(0)
     expect(afterRemoval.lastDeliveredEpoch).toBeNull()
+  })
+
+  it('drops the connection log so a removed host retains no capped array', async () => {
+    // Why the log lives at module scope: it must survive client swaps, so
+    // removal is the only event that can retire it — same as the session above.
+    removeHostMock.mockResolvedValue(undefined)
+    connectionLogStore.append('host-1', {
+      id: 'log-1',
+      ts: 1_000,
+      level: 'info',
+      message: 'connected'
+    })
+
+    await removeHostAndCloseClient('host-1', vi.fn())
+
+    expect(connectionLogStore.get('host-1')).toEqual([])
   })
 
   it('erases the persisted watermark, not just the in-memory session', async () => {

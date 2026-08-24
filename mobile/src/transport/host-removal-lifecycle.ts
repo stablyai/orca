@@ -2,6 +2,7 @@ import {
   clearWatermark,
   forgetHostNotificationSession
 } from '../notifications/notification-reconnect-catchup'
+import { connectionLogStore } from './connection-log-buffer'
 import { removeHost } from './host-store'
 
 export async function removeHostAndCloseClient(
@@ -16,5 +17,7 @@ export async function removeHostAndCloseClient(
   // reconnects), so removal is the only thing that can retire it. Left behind, a
   // re-pair of the same host would inherit a watermark for a counter it never saw.
   forgetHostNotificationSession(hostId)
+  // Why after close: closing can still append final lifecycle entries.
+  connectionLogStore.forgetHost(hostId)
   void clearWatermark(hostId)
 }
