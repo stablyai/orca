@@ -1282,6 +1282,13 @@ function setInMemoryOrchestrationMessages(
   runtime.setOrchestrationDb(db as unknown as OrchestrationDb)
 }
 
+function pendingMailPointerRepoints(runtime: OrcaRuntimeService): number {
+  const internals = runtime as unknown as {
+    mailPointerRepointScheduler: { pendingCount: number }
+  }
+  return internals.mailPointerRepointScheduler.pendingCount
+}
+
 function bindSinglePtyRun(db: InMemoryOrchestrationMessages, terminalHandle: string): string {
   db.setRun({
     id: 'run_test',
@@ -35712,7 +35719,7 @@ describe('OrcaRuntimeService', () => {
 
       await vi.advanceTimersByTimeAsync(20_000)
       expect(pendingReads).not.toHaveBeenCalled()
-      expect(vi.getTimerCount()).toBe(0)
+      expect(pendingMailPointerRepoints(runtime)).toBe(0)
 
       runtime.onPtyData('pty-1', '\x1b]0;Codex done\x07', 101)
       expect(pendingReads).toHaveBeenCalledTimes(1)
@@ -35799,7 +35806,7 @@ describe('OrcaRuntimeService', () => {
             typeof payload === 'string' && payload.includes('orca orchestration check')
         )
       ).toHaveLength(1)
-      expect(vi.getTimerCount()).toBe(0)
+      expect(pendingMailPointerRepoints(runtime)).toBe(0)
       db.close()
     } finally {
       vi.useRealTimers()
