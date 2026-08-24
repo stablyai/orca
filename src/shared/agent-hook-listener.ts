@@ -815,7 +815,16 @@ const TOOL_INPUT_KEYS_BY_TOOL: Record<string, readonly string[]> = {
   ask_question: ['question', 'questions'],
   ask_permission: ['Action', 'Target', 'Reason'],
   spawn_subagent: ['prompt', 'description', 'subagent_type'],
-  open_page: ['url']
+  open_page: ['url'],
+  // Why: Auggie's built-in tool names (docs.augmentcode.com/cli/hooks — tool_name examples).
+  // `view` is already covered by the shared entry above.
+  'launch-process': ['command'],
+  'str-replace-editor': ['path'],
+  'save-file': ['path'],
+  'remove-files': ['file_paths', 'path'],
+  'web-fetch': ['url'],
+  'web-search': ['query'],
+  'codebase-retrieval': ['information_request']
 }
 
 const FALLBACK_TOOL_INPUT_KEYS = [
@@ -1672,6 +1681,50 @@ function extractClaudeToolFields(
     }
   }
   return update
+}
+
+// Why: Auggie's PostToolUse carries plain-string tool_error/tool_output (not Claude's tool_response
+// object), and its Stop only exposes conversation.agentTextResponse — no transcript_path to fall back to.
+function extractAuggieToolFields(
+  eventName: unknown,
+  hookPayload: Record<string, unknown>
+): ToolSnapshot {
+  if (eventName === 'PreToolUse' || eventName === 'PostToolUse') {
+    const toolName = readString(hookPayload, 'tool_name')
+    const update: ToolSnapshot = toolUpdate(
+      {
+        toolName,
+        // Why: fall back to obvious arg fields so a new/unmapped Auggie tool still shows a value, not a blank row.
+        toolInput:
+          deriveToolInputPreview(toolName, hookPayload.tool_input) ??
+          deriveFallbackToolInputPreview(hookPayload.tool_input),
+        interactivePrompt: deriveInteractivePrompt(toolName, hookPayload.tool_input, eventName)
+      },
+      { hasToolInputField: hasOwnField(hookPayload, 'tool_input') }
+    )
+    if (eventName === 'PostToolUse') {
+      const responseText =
+        readString(hookPayload, 'tool_error') ?? readString(hookPayload, 'tool_output')
+      if (responseText) {
+        update.lastAssistantMessage = responseText
+      }
+    }
+    return update
+  }
+  if (
+    eventName === 'Stop' &&
+    typeof hookPayload.conversation === 'object' &&
+    hookPayload.conversation !== null
+  ) {
+    const text = readString(
+      hookPayload.conversation as Record<string, unknown>,
+      'agentTextResponse'
+    )
+    if (text) {
+      return { lastAssistantMessage: text }
+    }
+  }
+  return {}
 }
 
 function extractCodexToolFields(
@@ -2548,6 +2601,12 @@ export function isNewTurnEvent(source: AgentHookSource, eventName: unknown): boo
     case 'devin':
       // Why: SessionStart is handled by an early return in normalizeDevinEvent, so UserPromptSubmit is Devin's real new-turn boundary here.
       return eventName === 'UserPromptSubmit'
+    case 'aug':
+      // Why: PromptSubmit (added in a newer Auggie build than this integration's original)
+      // fires on every user turn, unlike SessionStart which fires once per process — it is
+      // Auggie's real per-turn boundary. Kept alongside SessionStart for older CLI builds that
+      // never emit PromptSubmit and only ever get one turn boundary at process start.
+      return eventName === 'SessionStart' || eventName === 'PromptSubmit'
   }
 }
 
@@ -2640,6 +2699,8 @@ function extractToolFields(
       return extractHermesToolFields(eventName, hookPayload)
     case 'devin':
       return extractClaudeToolFields(eventName, hookPayload)
+    case 'aug':
+      return extractAuggieToolFields(eventName, hookPayload)
   }
 }
 
@@ -3432,6 +3493,59 @@ function normalizeKimiEvent(
     toolInput: snapshot.toolInput,
     lastAssistantMessage: snapshot.lastAssistantMessage,
     interrupted
+  })
+}
+
+// Why: Auggie has no PermissionRequest; PreToolUse is the only signal for "blocked on user
+// input" (its ask-user-style tool auto-runs). PromptSubmit (newer CLI builds) is the per-turn
+// working boundary; PreToolUse/PostToolUse still cover tool activity within the turn.
+function normalizeAuggieEvent(
+  state: HookListenerState,
+  eventName: unknown,
+  promptText: string,
+  paneKey: string,
+  hookPayload: Record<string, unknown>
+): ParsedAgentStatusPayload | null {
+  const toolName = readString(hookPayload, 'tool_name')
+  const isUserInputTool = isAskUserQuestionTool(toolName)
+
+  const stateName =
+    eventName === 'PromptSubmit' ||
+    eventName === 'PostToolUse' ||
+    (eventName === 'PreToolUse' && !isUserInputTool)
+      ? 'working'
+      : eventName === 'PreToolUse' && isUserInputTool
+        ? 'waiting'
+        : eventName === 'SessionStart' || eventName === 'SessionEnd' || eventName === 'Stop'
+          ? 'done'
+          : null
+
+  if (!stateName) {
+    return null
+  }
+
+  const snapshot = resolveToolState(
+    state,
+    paneKey,
+    extractToolFields('aug', eventName, hookPayload),
+    { resetOnNewTurn: isNewTurnEvent('aug', eventName) }
+  )
+
+  const interrupted =
+    eventName === 'Stop' && hookPayload['agent_stop_cause'] === 'interrupted' ? true : undefined
+
+  return normalizeAgentStatusPayload({
+    state: stateName,
+    prompt: resolvePrompt(state, paneKey, promptText, {
+      resetOnNewTurn: isNewTurnEvent('aug', eventName)
+    }),
+    agentType: 'aug',
+    toolName: snapshot.toolName,
+    toolInput: snapshot.toolInput,
+    interactivePrompt: snapshot.interactivePrompt,
+    lastAssistantMessage: snapshot.lastAssistantMessage,
+    interrupted,
+    sessionBoundary: eventName === 'SessionStart' || eventName === 'SessionEnd' ? true : undefined
   })
 }
 
@@ -4708,6 +4822,29 @@ export function normalizeHookPayload(
     case 'kimi':
       payload = normalizeKimiEvent(state, eventName, promptText, paneKey, hookPayloadRecord)
       break
+    case 'aug':
+      // Why: Auggie's only prompt field is the nested conversation.userPrompt, present only on
+      // Stop (with includeConversationData) — extractPromptText only reads top-level keys.
+      if (
+        typeof hookPayloadRecord.conversation === 'object' &&
+        hookPayloadRecord.conversation !== null
+      ) {
+        const conversationPrompt = readString(
+          hookPayloadRecord.conversation as Record<string, unknown>,
+          'userPrompt'
+        )
+        if (conversationPrompt) {
+          resolvedPromptText = conversationPrompt
+        }
+      }
+      payload = normalizeAuggieEvent(
+        state,
+        eventName,
+        resolvedPromptText,
+        paneKey,
+        hookPayloadRecord
+      )
+      break
   }
 
   const providerSessionOnly =
@@ -4789,7 +4926,8 @@ export const HOOK_SOURCE_BY_PATHNAME: Readonly<Record<string, AgentHookSource>> 
   '/hook/copilot': 'copilot',
   '/hook/hermes': 'hermes',
   '/hook/devin': 'devin',
-  '/hook/kimi': 'kimi'
+  '/hook/kimi': 'kimi',
+  '/hook/aug': 'aug'
 })
 
 export function resolveHookSource(pathname: string): AgentHookSource | null {
