@@ -39,7 +39,7 @@ const PERCENT_RE = /(\d{1,3})(?:\.\d+)?\s*%\s*(used|consumed|left|remaining|avai
 // example "Max 20x" or "Pro 5x". Keep this deliberately narrow so a random
 // occurrence of "pro" in the TUI cannot become a package label.
 const PLAN_LABEL_RE =
-  /^(?:(?:current|active)\s+)?(?:(?:subscription|plan)(?:\s+(?:tier|type))?\s*[:\-]\s*)?(?:claude\s+)?(max|pro|team|enterprise|go)(?:\s+(\d+(?:\.\d+)?)\s*x?)?$/i
+  /^(?:(?:current|active)\s+)?(?:(?:subscription|plan)(?:\s+(?:tier|type))?\s*[:-]\s*)?(?:claude\s+)?(max|pro|team|enterprise|go)(?:\s+(\d+(?:\.\d+)?)\s*x?)?$/i
 const ESC = String.fromCharCode(27)
 const BEL = String.fromCharCode(7)
 const OSC_SEQUENCE_RE = new RegExp(`${ESC}\\][^${BEL}]*(?:${BEL}|${ESC}\\\\)`, 'g')
@@ -100,7 +100,7 @@ function extractPlanType(lines: string[]): string | null {
   // Only inspect the header before the first usage section. This avoids
   // treating model names or prose in the usage details as a subscription.
   const firstUsageLine = lines.findIndex(isSectionLabel)
-  const headerLines = firstUsageLine >= 0 ? lines.slice(0, firstUsageLine) : lines
+  const headerLines = firstUsageLine !== -1 ? lines.slice(0, firstUsageLine) : lines
   for (const line of headerLines) {
     const match = PLAN_LABEL_RE.exec(line.trim().replace(/\s+/g, ' '))
     if (!match) {

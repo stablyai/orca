@@ -13,6 +13,8 @@ describe('formatPlanLabel', () => {
     expect(formatPlanLabel('CHATGPT_PLUS')).toBe('ChatGPT Plus')
     expect(formatPlanLabel('team-plus')).toBe('Team Plus')
     expect(formatPlanLabel('pro trial')).toBe('Pro Trial')
+    expect(formatPlanLabel('max_20x')).toBe('Max 20x')
+    expect(formatPlanLabel('pro_5x')).toBe('Pro 5x')
   })
 
   it('returns null when there is no usable plan', () => {
