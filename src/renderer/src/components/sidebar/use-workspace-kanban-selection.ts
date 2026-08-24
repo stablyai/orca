@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo, useState } from 'react'
+import React, { useCallback, useLayoutEffect, useMemo, useState } from 'react'
 import type { Worktree } from '../../../../shared/worktree/types'
 import { getWorktreeHostIdentity } from '../../../../shared/worktree/host-qualified-identity'
 import {
@@ -21,6 +21,24 @@ function resolveRenderedAnchorId(
   return renderedWorktreeIds.find((id) => selectedWorktreeIds.has(id)) ?? null
 }
 
+export type WorkspaceKanbanSelection = {
+  selectedWorktreeIds: ReadonlySet<string>
+  selectedWorktrees: readonly Worktree[]
+  selectionAnchorId: string | null
+  updateSelectionForGesture: (event: React.MouseEvent<HTMLElement>, worktreeId: string) => boolean
+  updateSelectionForArea: (
+    areaIds: readonly string[],
+    additive: boolean,
+    baseSelectedIds?: ReadonlySet<string>,
+    baseAnchorId?: string | null
+  ) => void
+  clearSelection: () => void
+  selectForContextMenu: (
+    event: React.MouseEvent<HTMLElement>,
+    worktree: Worktree
+  ) => readonly Worktree[]
+}
+
 // Why: board search hides cards without dropping them from the board, so range
 // and area gestures index the rendered subset while pruning still spans the
 // whole board — a card hidden by a query keeps its selection until a gesture
@@ -29,7 +47,7 @@ export function useWorkspaceKanbanSelection(
   open: boolean,
   boardWorktrees: readonly Worktree[],
   renderedWorktrees: readonly Worktree[] = boardWorktrees
-) {
+): WorkspaceKanbanSelection {
   const boardWorktreeIds = useMemo(
     () => boardWorktrees.map(getWorktreeHostIdentity),
     [boardWorktrees]
@@ -40,32 +58,42 @@ export function useWorkspaceKanbanSelection(
   )
   const [selectedWorktreeIds, setSelectedWorktreeIds] = useState<Set<string>>(new Set())
   const [selectionAnchorId, setSelectionAnchorId] = useState<string | null>(null)
+
+  // Why memo: derive pruned selection during render so children never receive or commit stale unrendered IDs, without executing setState in the render body.
+  const prunedSelection = useMemo(
+    () =>
+      open
+        ? pruneWorktreeSelection(selectedWorktreeIds, selectionAnchorId, boardWorktreeIds)
+        : { selectedIds: new Set<string>(), anchorId: null },
+    [boardWorktreeIds, open, selectedWorktreeIds, selectionAnchorId]
+  )
+  const effectiveSelectedWorktreeIds = prunedSelection.selectedIds
+  const effectiveSelectionAnchorId = prunedSelection.anchorId
+
   const selectedWorktrees = useMemo(
     () =>
       boardWorktrees.filter((worktree) =>
-        selectedWorktreeIds.has(getWorktreeHostIdentity(worktree))
+        effectiveSelectedWorktreeIds.has(getWorktreeHostIdentity(worktree))
       ),
-    [boardWorktrees, selectedWorktreeIds]
+    [boardWorktrees, effectiveSelectedWorktreeIds]
   )
 
-  if (!open) {
-    if (selectedWorktreeIds.size > 0) {
-      setSelectedWorktreeIds(new Set())
+  // Why layout effect: synchronize pruned state back to local state after commit if filtering dropped selected cards, using equality guards.
+  useLayoutEffect(() => {
+    if (!areWorktreeSelectionsEqual(selectedWorktreeIds, effectiveSelectedWorktreeIds)) {
+      setSelectedWorktreeIds(effectiveSelectedWorktreeIds)
     }
-    if (selectionAnchorId !== null) {
-      setSelectionAnchorId(null)
+    if (selectionAnchorId !== effectiveSelectionAnchorId) {
+      setSelectionAnchorId(effectiveSelectionAnchorId)
     }
-  } else {
-    const pruned = pruneWorktreeSelection(selectedWorktreeIds, selectionAnchorId, boardWorktreeIds)
-    // Why: the drawer can keep rendering while rows are filtered/reordered.
-    // Prune stale local selection before children see ids that no longer exist.
-    if (!areWorktreeSelectionsEqual(selectedWorktreeIds, pruned.selectedIds)) {
-      setSelectedWorktreeIds(pruned.selectedIds)
-    }
-    if (selectionAnchorId !== pruned.anchorId) {
-      setSelectionAnchorId(pruned.anchorId)
-    }
-  }
+  }, [
+    boardWorktreeIds,
+    effectiveSelectedWorktreeIds,
+    effectiveSelectionAnchorId,
+    open,
+    selectedWorktreeIds,
+    selectionAnchorId
+  ])
 
   const updateSelectionForGesture = useCallback(
     (event: React.MouseEvent<HTMLElement>, worktreeId: string): boolean => {
@@ -75,13 +103,16 @@ export function useWorkspaceKanbanSelection(
       // from visibleIds as "no anchor" and collapses the range to the click,
       // so re-anchor onto the first still-rendered selected card instead.
       const anchorId =
-        intent === 'range' && selectionAnchorId !== null
-          ? (resolveRenderedAnchorId(renderedWorktreeIds, selectedWorktreeIds, selectionAnchorId) ??
-            selectionAnchorId)
-          : selectionAnchorId
+        intent === 'range' && effectiveSelectionAnchorId !== null
+          ? (resolveRenderedAnchorId(
+              renderedWorktreeIds,
+              effectiveSelectedWorktreeIds,
+              effectiveSelectionAnchorId
+            ) ?? effectiveSelectionAnchorId)
+          : effectiveSelectionAnchorId
       const result = updateWorktreeSelection({
         visibleIds: renderedWorktreeIds,
-        previousSelectedIds: selectedWorktreeIds,
+        previousSelectedIds: effectiveSelectedWorktreeIds,
         previousAnchorId: anchorId,
         targetId: worktreeId,
         intent
@@ -93,28 +124,31 @@ export function useWorkspaceKanbanSelection(
       setSelectionAnchorId(result.anchorId)
       return intent !== 'replace'
     },
-    [renderedWorktreeIds, selectedWorktreeIds, selectionAnchorId]
+    [effectiveSelectedWorktreeIds, effectiveSelectionAnchorId, renderedWorktreeIds]
   )
 
   const selectForContextMenu = useCallback(
     (_event: React.MouseEvent<HTMLElement>, worktree: Worktree): readonly Worktree[] => {
       const worktreeIdentity = getWorktreeHostIdentity(worktree)
-      if (selectedWorktreeIds.has(worktreeIdentity) && selectedWorktreeIds.size > 1) {
+      if (
+        effectiveSelectedWorktreeIds.has(worktreeIdentity) &&
+        effectiveSelectedWorktreeIds.size > 1
+      ) {
         return selectedWorktrees
       }
       setSelectedWorktreeIds(new Set([worktreeIdentity]))
       setSelectionAnchorId(worktreeIdentity)
       return [worktree]
     },
-    [selectedWorktreeIds, selectedWorktrees]
+    [effectiveSelectedWorktreeIds, selectedWorktrees]
   )
 
   const updateSelectionForArea = useCallback(
     (
       areaIds: readonly string[],
       additive: boolean,
-      baseSelectedIds: ReadonlySet<string> = selectedWorktreeIds,
-      baseAnchorId: string | null = selectionAnchorId
+      baseSelectedIds: ReadonlySet<string> = effectiveSelectedWorktreeIds,
+      baseAnchorId: string | null = effectiveSelectionAnchorId
     ): void => {
       const result = updateWorktreeAreaSelection({
         visibleIds: renderedWorktreeIds,
@@ -130,7 +164,7 @@ export function useWorkspaceKanbanSelection(
         previous === result.anchorId ? previous : result.anchorId
       )
     },
-    [renderedWorktreeIds, selectedWorktreeIds, selectionAnchorId]
+    [effectiveSelectedWorktreeIds, effectiveSelectionAnchorId, renderedWorktreeIds]
   )
 
   const clearSelection = useCallback(() => {
@@ -139,9 +173,9 @@ export function useWorkspaceKanbanSelection(
   }, [])
 
   return {
-    selectedWorktreeIds,
+    selectedWorktreeIds: effectiveSelectedWorktreeIds,
     selectedWorktrees,
-    selectionAnchorId,
+    selectionAnchorId: effectiveSelectionAnchorId,
     updateSelectionForGesture,
     updateSelectionForArea,
     clearSelection,
