@@ -136,7 +136,15 @@ type StagedRuntimeImportSource =
 
 type StagedRuntimeImportEntry =
   | { relativePath: string; kind: 'directory' }
-  | { relativePath: string; kind: 'file'; contentBase64: string }
+  | { relativePath: string; kind: 'file'; byteLength: number }
+
+/** Locates a staged file on the client so main can stream it without the renderer reading it. */
+type RuntimeUploadSource = {
+  sourceRootPath: string
+  entryRelativePath: string
+  /** What staging measured; main refuses the upload if the file no longer matches. */
+  byteLength: number
+}
 
 type RuntimeImportResult =
   | {
@@ -164,7 +172,6 @@ type RuntimeFileWatchEvent =
   | { type: 'error'; message: string }
   | { type: 'end' }
 
-const REMOTE_UPLOAD_BASE64_CHUNK_CHARS = 512 * 1024
 const REMOTE_DOWNLOAD_CHUNK_BYTES = 384 * 1024
 const REMOTE_DOWNLOAD_UPDATE_REQUIRED_MESSAGE =
   'Remote file download requires a newer Orca server. Update the headless server and try again.'
@@ -739,7 +746,11 @@ export async function importExternalPathsToRuntime(
           target,
           context.worktreeId,
           entryRelativePath,
-          entry.contentBase64,
+          {
+            sourceRootPath: source.sourcePath,
+            entryRelativePath: entry.relativePath,
+            byteLength: entry.byteLength
+          },
           assertImportSessionCurrent,
           context.expectedSshConnectionGeneration,
           context.expectedSshTargetId,
@@ -790,7 +801,7 @@ async function uploadRuntimeFileWithoutClobber(
   target: { kind: 'environment'; environmentId: string },
   worktreeId: string,
   relativePath: string,
-  contentBase64: string,
+  source: RuntimeUploadSource,
   assertCurrent?: () => void,
   expectedSshConnectionGeneration?: number,
   expectedSshTargetId?: string,
@@ -799,17 +810,21 @@ async function uploadRuntimeFileWithoutClobber(
 ): Promise<void> {
   const tempRelativePath = makeRuntimeUploadTempPath(relativePath)
   try {
-    await writeRuntimeBase64File(
-      target,
-      worktreeId,
-      tempRelativePath,
-      contentBase64,
-      assertCurrent,
-      expectedSshConnectionGeneration,
+    assertCurrent?.()
+    // Why: main owns the file handle and the runtime socket, so it streams the
+    // body in slices; the renderer never holds the whole file.
+    await window.api.fs.uploadExternalFileToRuntime({
+      environmentId: target.environmentId,
+      sourceRootPath: source.sourceRootPath,
+      entryRelativePath: source.entryRelativePath,
+      expectedByteLength: source.byteLength,
+      worktree: toRuntimeWorktreeSelector(worktreeId),
+      relativePath: tempRelativePath,
       expectedSshTargetId,
+      expectedSshConnectionGeneration,
       expectedExecutionHostId,
       expectedEnvironmentPairingRevision
-    )
+    })
     assertCurrent?.()
     await callRuntimeFileMutation(
       target,
@@ -841,56 +856,6 @@ async function uploadRuntimeFileWithoutClobber(
       15_000,
       expectedEnvironmentPairingRevision
     ).catch(() => {})
-  }
-}
-
-async function writeRuntimeBase64File(
-  target: { kind: 'environment'; environmentId: string },
-  worktreeId: string,
-  relativePath: string,
-  contentBase64: string,
-  assertCurrent?: () => void,
-  expectedSshConnectionGeneration?: number,
-  expectedSshTargetId?: string,
-  expectedExecutionHostId?: 'local' | `ssh:${string}`,
-  expectedEnvironmentPairingRevision?: number
-): Promise<void> {
-  if (contentBase64.length <= REMOTE_UPLOAD_BASE64_CHUNK_CHARS) {
-    assertCurrent?.()
-    await callRuntimeFileMutation(
-      target,
-      'files.writeBase64',
-      {
-        worktree: toRuntimeWorktreeSelector(worktreeId),
-        relativePath,
-        contentBase64,
-        expectedSshTargetId,
-        expectedSshConnectionGeneration,
-        expectedExecutionHostId
-      },
-      30_000,
-      expectedEnvironmentPairingRevision
-    )
-    return
-  }
-
-  for (let offset = 0; offset < contentBase64.length; offset += REMOTE_UPLOAD_BASE64_CHUNK_CHARS) {
-    assertCurrent?.()
-    await callRuntimeFileMutation(
-      target,
-      'files.writeBase64Chunk',
-      {
-        worktree: toRuntimeWorktreeSelector(worktreeId),
-        relativePath,
-        contentBase64: contentBase64.slice(offset, offset + REMOTE_UPLOAD_BASE64_CHUNK_CHARS),
-        append: offset > 0,
-        expectedSshTargetId,
-        expectedSshConnectionGeneration,
-        expectedExecutionHostId
-      },
-      30_000,
-      expectedEnvironmentPairingRevision
-    )
   }
 }
 

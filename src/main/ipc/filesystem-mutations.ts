@@ -1,4 +1,4 @@
-import { ipcMain } from 'electron'
+import { app, ipcMain } from 'electron'
 import { constants } from 'node:fs'
 import { copyFile, mkdir, writeFile } from 'node:fs/promises'
 import { basename, dirname } from 'node:path'
@@ -19,6 +19,7 @@ import type {
 } from './filesystem-import-result-types'
 import { importOneSource } from './filesystem-import-local'
 import { stageOneSourceForRuntimeUpload } from './filesystem-runtime-upload-staging'
+import { streamExternalFileToRuntime } from './runtime-upload-file-stream'
 
 /**
  * IPC handlers for file/folder creation and renaming.
@@ -201,6 +202,38 @@ export function registerFilesystemMutationHandlers(store: Store): void {
       }
       return { sources }
     }
+  )
+
+  // Why: the file handle and the runtime socket both live in main, so the byte
+  // pump runs here. The renderer keeps deconflict/commit/rollback orchestration
+  // and never sees file contents.
+  ipcMain.handle(
+    'fs:uploadExternalFileToRuntime',
+    async (
+      _event,
+      args: {
+        environmentId: string
+        sourceRootPath: string
+        entryRelativePath: string
+        worktree: string
+        relativePath: string
+        expectedByteLength?: number
+        expectedEnvironmentPairingRevision?: number
+      } & SshMutationExpectation
+    ): Promise<{ byteLength: number }> =>
+      streamExternalFileToRuntime({
+        userDataPath: app.getPath('userData'),
+        environmentId: args.environmentId,
+        sourceRootPath: args.sourceRootPath,
+        entryRelativePath: args.entryRelativePath,
+        expectedByteLength: args.expectedByteLength,
+        worktree: args.worktree,
+        relativePath: args.relativePath,
+        expectedExecutionHostId: args.expectedExecutionHostId,
+        expectedSshTargetId: args.expectedSshTargetId,
+        expectedSshConnectionGeneration: args.expectedSshConnectionGeneration,
+        expectedEnvironmentPairingRevision: args.expectedEnvironmentPairingRevision
+      })
   )
 
   // Why: terminal drag-and-drop resolver. Local worktrees pass paths through

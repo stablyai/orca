@@ -3440,7 +3440,7 @@ const api = {
             kind: 'file' | 'directory'
             entries: (
               | { relativePath: string; kind: 'directory' }
-              | { relativePath: string; kind: 'file'; contentBase64: string }
+              | { relativePath: string; kind: 'file'; byteLength: number }
             )[]
           }
         | {
@@ -3455,6 +3455,18 @@ const api = {
           }
       )[]
     }> => ipcRenderer.invoke('fs:stageExternalPathsForRuntimeUpload', args),
+    uploadExternalFileToRuntime: (
+      args: {
+        environmentId: string
+        sourceRootPath: string
+        entryRelativePath: string
+        worktree: string
+        relativePath: string
+        expectedByteLength?: number
+        expectedEnvironmentPairingRevision?: number
+      } & SshMutationExpectation
+    ): Promise<{ byteLength: number }> =>
+      ipcRenderer.invoke('fs:uploadExternalFileToRuntime', args),
     resolveDroppedPathsForAgent: (
       args: {
         paths: string[]
