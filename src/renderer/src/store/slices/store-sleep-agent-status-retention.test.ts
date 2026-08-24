@@ -57,11 +57,18 @@ describe('shutdownWorktreeTerminals (sleep) — agent status hygiene', () => {
       ptyIdsByTabId: { 'tab-1': ['pty-1'] }
     })
 
-    store.getState().setAgentStatus('tab-1:0', {
-      state: 'working',
-      prompt: 'p',
-      agentType: 'claude'
-    })
+    store.getState().setAgentStatus(
+      'tab-1:0',
+      {
+        state: 'working',
+        prompt: 'p',
+        agentType: 'claude'
+      },
+      'Claude',
+      { updatedAt: 1000, stateStartedAt: 1000 },
+      { tabId: 'tab-1', worktreeId: wt },
+      { providerSession: { key: 'session_id', id: 'claude-session-1' } }
+    )
     expect(store.getState().agentStatusByPaneKey['tab-1:0']).toBeDefined()
 
     await store.getState().shutdownWorktreeTerminals(wt, { keepIdentifiers: true })
@@ -412,18 +419,22 @@ describe('shutdownWorktreeTerminals (sleep) — agent status hygiene', () => {
       },
       'Claude',
       { updatedAt: 2000, stateStartedAt: 2000 },
-      { tabId: 'tab-1', worktreeId: wt }
+      { tabId: 'tab-1', worktreeId: wt },
+      { providerSession: { key: 'session_id', id: 'claude-session-2' } }
     )
 
     const liveEntry = store.getState().agentStatusByPaneKey['tab-1:0']
     expect(liveEntry?.agentType).toBe('claude')
-    expect(liveEntry?.providerSession).toBeUndefined()
+    expect(liveEntry?.providerSession).toEqual({ key: 'session_id', id: 'claude-session-2' })
 
     await store.getState().shutdownWorktreeTerminals(wt, { keepIdentifiers: true })
 
     const state = store.getState()
     expect(state.agentStatusByPaneKey['tab-1:0']).toBeUndefined()
-    expect(state.sleepingAgentSessionsByPaneKey['tab-1:0']).toBeUndefined()
+    expect(state.sleepingAgentSessionsByPaneKey['tab-1:0']).toMatchObject({
+      agent: 'claude',
+      providerSession: { key: 'session_id', id: 'claude-session-2' }
+    })
   })
 
   it('drops retainedAgentsByPaneKey entries for the slept worktree', async () => {
@@ -528,11 +539,18 @@ describe('shutdownWorktreeTerminals (sleep) — agent status hygiene', () => {
       ptyIdsByTabId: { 'tab-1': ['pty-1'] }
     })
 
-    store.getState().setAgentStatus('tab-1:0', {
-      state: 'working',
-      prompt: 'p',
-      agentType: 'claude'
-    })
+    store.getState().setAgentStatus(
+      'tab-1:0',
+      {
+        state: 'working',
+        prompt: 'p',
+        agentType: 'claude'
+      },
+      'Claude',
+      { updatedAt: 1000, stateStartedAt: 1000 },
+      { tabId: 'tab-1', worktreeId: wt },
+      { providerSession: { key: 'session_id', id: 'claude-session-1' } }
+    )
     store.getState().acknowledgeAgents(['tab-1:0'])
     const ackBeforeSleep = store.getState().acknowledgedAgentsByPaneKey['tab-1:0']
     expect(ackBeforeSleep).toBeGreaterThan(0)
@@ -606,11 +624,18 @@ describe('shutdownWorktreeTerminals (sleep) — agent status hygiene', () => {
       ptyIdsByTabId: { 'tab-1': ['pty-1'] }
     })
 
-    store.getState().setAgentStatus('tab-1:0', {
-      state: 'working',
-      prompt: 'p',
-      agentType: 'claude'
-    })
+    store.getState().setAgentStatus(
+      'tab-1:0',
+      {
+        state: 'working',
+        prompt: 'p',
+        agentType: 'claude'
+      },
+      'Claude',
+      { updatedAt: 1000, stateStartedAt: 1000 },
+      { tabId: 'tab-1', worktreeId: wt },
+      { providerSession: { key: 'session_id', id: 'claude-session-1' } }
+    )
     store.getState().acknowledgeAgents(['tab-1:0'])
     store.getState().retainAgents([
       {

@@ -5527,7 +5527,10 @@
               "host": {
                 "unverified": "The host could not confirm terminal shutdown. The workspace was kept open; check the connection and try again."
               },
-              "retry": "The workspace was kept open. Try again; if the problem continues, check the host connection."
+              "retry": "The workspace was kept open. Try again; if the problem continues, check the host connection.",
+              "capture": {
+                "missing": "A session could not be saved for resume, so the workspace was kept open."
+              }
             }
           }
         },

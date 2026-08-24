@@ -189,11 +189,18 @@ describe('shutdownWorktreeTerminals (sleep) — agent status hygiene', () => {
       tabsByWorktree: { [wt]: [makeTab({ id: 'tab-1', worktreeId: wt })] },
       ptyIdsByTabId: { 'tab-1': ['remote:runtime-1@@pty-1'] }
     })
-    store.getState().setAgentStatus('tab-1:leaf-1', {
-      state: 'working',
-      prompt: 'keep running',
-      agentType: 'codex'
-    })
+    store.getState().setAgentStatus(
+      'tab-1:leaf-1',
+      {
+        state: 'working',
+        prompt: 'keep running',
+        agentType: 'codex'
+      },
+      'Codex',
+      { updatedAt: 1000, stateStartedAt: 1000 },
+      { tabId: 'tab-1', worktreeId: wt },
+      { providerSession: { key: 'session_id', id: 'codex-session-1' } }
+    )
 
     await expect(
       store.getState().shutdownWorktreeTerminals(wt, { keepIdentifiers: true })
@@ -681,11 +688,18 @@ describe('shutdownWorktreeTerminals (sleep) — agent status hygiene', () => {
       tabsByWorktree: { [wt]: [makeTab({ id: 'tab-1', worktreeId: wt })] },
       ptyIdsByTabId: { 'tab-1': ['pty-1'] }
     })
-    store.getState().setAgentStatus('tab-1:leaf-1', {
-      state: 'working',
-      prompt: 'still live',
-      agentType: 'codex'
-    })
+    store.getState().setAgentStatus(
+      'tab-1:leaf-1',
+      {
+        state: 'working',
+        prompt: 'still live',
+        agentType: 'codex'
+      },
+      'Codex',
+      { updatedAt: 1000, stateStartedAt: 1000 },
+      { tabId: 'tab-1', worktreeId: wt },
+      { providerSession: { key: 'session_id', id: 'codex-session-1' } }
+    )
 
     await expect(
       store.getState().shutdownWorktreeTerminals(wt, { keepIdentifiers: true })

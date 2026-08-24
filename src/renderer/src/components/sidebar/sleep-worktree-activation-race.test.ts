@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 const mocks = vi.hoisted(() => {
   const state = {
     activeWorktreeId: null as string | null,
+    preflightManualWorktreeSleep: vi.fn(),
     setActiveWorktree: vi.fn((worktreeId: string | null) => {
       state.activeWorktreeId = worktreeId
     }),
@@ -57,6 +58,7 @@ describe('sleep flow vs slept-workspace activation', () => {
       }
     })
     mocks.state.activeWorktreeId = 'wt-parent'
+    mocks.state.preflightManualWorktreeSleep.mockReset()
     mocks.state.setActiveWorktree.mockClear()
     mocks.state.shutdownWorktreeBrowsers.mockClear().mockResolvedValue(undefined)
     mocks.state.shutdownWorktreeTerminals.mockClear().mockImplementation(async (worktreeId) => {

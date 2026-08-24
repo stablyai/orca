@@ -1,9 +1,9 @@
 import { useAppStore } from '@/store'
 import {
   agentProviderSessionsEqual,
+  getAgentResumeArgv,
   type SleepingAgentSessionRecord
 } from '../../../shared/agent-session-resume'
-import { AGENT_STATUS_STALE_AFTER_MS } from '../../../shared/agent-status-types'
 import {
   getProviderSessionClaimKey,
   isPassiveCompletedHibernationEvidence,
@@ -132,14 +132,16 @@ function activeOrQueuedResumeClaimsProviderSession(
   return false
 }
 
-// Why: an interrupted turn is still resumable — `claude --resume` reopens the transcript at the
-// prompt — so discarding those records only stranded the session across wake and restart.
+// Why: capturedAt - updatedAt is hook quiet time, not process death. A recoverable provider
+// session id is enough to resume; freshness is a display TTL (STA-2844).
 function isInvalidWorktreeActivationRecord(record: SleepingAgentSessionRecord): boolean {
   if (!record.origin && record.state === 'done') {
     return true
   }
-  return (
-    record.state !== 'done' && record.capturedAt - record.updatedAt > AGENT_STATUS_STALE_AFTER_MS
+  return !getAgentResumeArgv(
+    record.agent,
+    record.providerSession,
+    record.launchConfig?.ompResumeFilePath
   )
 }
 

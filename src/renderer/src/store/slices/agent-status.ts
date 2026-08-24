@@ -656,18 +656,29 @@ function markManualSleepLazyRestore(record: SleepingAgentSessionRecord): void {
   }
 }
 
-// Why: `live`/legacy rows are provisional checkpoints a fresh capture supersedes; an explicit
-// sleep or quit capture is the pane's only resume handle once its live row is gone.
+// Why: `live`/legacy rows are provisional unless they already carry a recoverable provider
+// session id — wiping that id is what left sleep with nothing to resume (STA-2844).
 function isDurableSleepingCapture(record: SleepingAgentSessionRecord): boolean {
-  return record.origin === 'worktree-sleep' || record.origin === 'quit'
+  if (record.origin === 'worktree-sleep' || record.origin === 'quit') {
+    return true
+  }
+  return (
+    record.origin === 'live' &&
+    Boolean(
+      getAgentResumeArgv(
+        record.agent,
+        record.providerSession,
+        record.launchConfig?.ompResumeFilePath
+      )
+    )
+  )
 }
 
-// Why: manual sleep kills the pty either way, so the record carries resume identity, not the dead
-// turn's interrupt flag — and an explicitly slept workspace is never stale at wake, so a row the
-// user is deliberately sleeping must not trip the wake-side staleness discard. `state` is preserved
-// so a done pane wakes lazily in place instead of spawning a new tab.
-function manualSleepCaptureEntry(entry: AgentStatusEntry, capturedAt: number): AgentStatusEntry {
-  return { ...entry, updatedAt: capturedAt, interrupted: false }
+// Why: the record carries resume identity, not the dead turn's interrupt flag. `state` is
+// preserved so a done pane wakes lazily in place instead of spawning a new tab. Do not stamp
+// `updatedAt` — hook quiet time is not death, and wake must not need a fake freshness window.
+function manualSleepCaptureEntry(entry: AgentStatusEntry): AgentStatusEntry {
+  return { ...entry, interrupted: false }
 }
 
 // Why: capture recreates a record the manual-sleep wipe would otherwise remove, so a deliberately
@@ -735,10 +746,15 @@ export function collectSleepingAgentSessionRecordsForWorktree(
   if (isManualWorktreeSleep) {
     for (const existing of Object.values(state.sleepingAgentSessionsByPaneKey)) {
       const liveEntry = state.agentStatusByPaneKey[existing.paneKey]
+      const liveEntryCanRecapture =
+        liveEntry !== undefined &&
+        isResumableTuiAgent(liveEntry.agentType) &&
+        liveEntry.providerSession != null &&
+        Boolean(getAgentResumeArgv(liveEntry.agentType, liveEntry.providerSession))
       if (
         existing.worktreeId !== worktreeId ||
         existing.origin !== 'live' ||
-        (liveEntry !== undefined &&
+        (liveEntryCanRecapture &&
           !isCompletedPiCompatibleAgentWithLiveRecoveryRecord(liveEntry, existing)) ||
         (allowedPaneKeys && !allowedPaneKeys.has(existing.paneKey)) ||
         !getAgentResumeArgv(existing.agent, existing.providerSession)
@@ -746,12 +762,12 @@ export function collectSleepingAgentSessionRecordsForWorktree(
         continue
       }
       // Why: Pi identity is resumable with no turn row and while idle after done, so manual
-      // sleep must promote both instead of deleting the checkpoint.
+      // sleep must promote both instead of deleting the checkpoint. Keep the original
+      // updatedAt — quiet time is not death, and wake must not require a stamped TTL.
       records[existing.paneKey] = {
         ...existing,
         state: 'working',
         capturedAt,
-        updatedAt: capturedAt,
         origin: 'worktree-sleep'
       }
       promotedLiveRecoveryPaneKeys.add(existing.paneKey)
@@ -775,9 +791,7 @@ export function collectSleepingAgentSessionRecordsForWorktree(
     }
     const record = sleepingRecordFromEntry({
       state,
-      entry: isManualWorktreeSleep
-        ? manualSleepCaptureEntry(retained.entry, capturedAt)
-        : retained.entry,
+      entry: isManualWorktreeSleep ? manualSleepCaptureEntry(retained.entry) : retained.entry,
       worktreeId,
       tab: retained.tab,
       capturedAt,
@@ -815,7 +829,7 @@ export function collectSleepingAgentSessionRecordsForWorktree(
     }
     const record = sleepingRecordFromEntry({
       state,
-      entry: isManualWorktreeSleep ? manualSleepCaptureEntry(entry, capturedAt) : entry,
+      entry: isManualWorktreeSleep ? manualSleepCaptureEntry(entry) : entry,
       worktreeId,
       capturedAt,
       launchConfig: getLaunchConfigForEntry(state, entry),

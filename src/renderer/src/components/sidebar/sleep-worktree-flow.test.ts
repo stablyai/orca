@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 const mocks = vi.hoisted(() => {
   const state = {
     activeWorktreeId: null as string | null,
+    preflightManualWorktreeSleep: vi.fn(),
     setActiveWorktree: vi.fn(),
     shutdownWorktreeBrowsers: vi.fn().mockResolvedValue(undefined),
     shutdownWorktreeTerminals: vi.fn().mockResolvedValue(undefined),
@@ -49,6 +50,7 @@ describe('runSleepWorktree', () => {
       },
       requestAnimationFrame: vi.fn()
     })
+    mocks.state.preflightManualWorktreeSleep.mockReset()
     mocks.state.setActiveWorktree.mockClear()
     mocks.state.shutdownWorktreeBrowsers.mockClear().mockResolvedValue(undefined)
     mocks.state.shutdownWorktreeTerminals.mockClear().mockResolvedValue(undefined)
@@ -102,11 +104,15 @@ describe('runSleepWorktree', () => {
 
     expect(mocks.markWorktreeSleepIntent).toHaveBeenCalledWith('wt-1')
     expect(mocks.clearWorktreeSleepIntent).toHaveBeenCalledWith('wt-1')
+    const preflightCall = mocks.state.preflightManualWorktreeSleep.mock.invocationCallOrder[0]
     const markCall = mocks.markWorktreeSleepIntent.mock.invocationCallOrder[0]
     const activeClear = mocks.state.setActiveWorktree.mock.invocationCallOrder[0]
+    const browserShutdown = mocks.state.shutdownWorktreeBrowsers.mock.invocationCallOrder[0]
     const terminalShutdown = mocks.state.shutdownWorktreeTerminals.mock.invocationCallOrder[0]
     const clearCall = mocks.clearWorktreeSleepIntent.mock.invocationCallOrder[0]
+    expect(preflightCall).toBeLessThan(markCall)
     expect(markCall).toBeLessThan(activeClear)
+    expect(activeClear).toBeLessThan(browserShutdown)
     expect(terminalShutdown).toBeLessThan(clearCall)
   })
 
@@ -212,6 +218,28 @@ describe('runSleepWorktree', () => {
     )
   })
 
+  it('keeps the active workspace untouched when resume metadata cannot be captured', async () => {
+    mocks.state.activeWorktreeId = 'wt-1'
+    mocks.state.preflightManualWorktreeSleep.mockImplementationOnce(() => {
+      throw new Error('agent_sleep_capture_missing')
+    })
+
+    await runSleepWorktree('wt-1')
+
+    expect(mocks.markWorktreeSleepIntent).not.toHaveBeenCalled()
+    expect(mocks.clearWorktreeSleepIntent).not.toHaveBeenCalled()
+    expect(mocks.state.setActiveWorktree).not.toHaveBeenCalled()
+    expect(mocks.state.shutdownWorktreeBrowsers).not.toHaveBeenCalled()
+    expect(mocks.state.shutdownWorktreeTerminals).not.toHaveBeenCalled()
+    expect(mocks.suspendWorkspace).not.toHaveBeenCalled()
+    expect(mocks.toastError).toHaveBeenCalledWith(
+      'Failed to sleep workspace',
+      expect.objectContaining({
+        description: 'A session could not be saved for resume, so the workspace was kept open.'
+      })
+    )
+  })
+
   it('restores the active workspace when terminal convergence fails', async () => {
     mocks.state.activeWorktreeId = 'wt-1'
     mocks.state.shutdownWorktreeTerminals.mockRejectedValueOnce(
@@ -254,6 +282,37 @@ describe('runSleepWorktree', () => {
       expect.objectContaining({
         description:
           'The workspace was kept open. Try again; if the problem continues, check the host connection.'
+      })
+    )
+  })
+
+  it('leaves a failed active worktree untouched while sleeping a later safe worktree', async () => {
+    mocks.state.activeWorktreeId = 'wt-1'
+    mocks.state.preflightManualWorktreeSleep.mockImplementation((worktreeId: string) => {
+      if (worktreeId === 'wt-1') {
+        throw new Error('agent_sleep_capture_missing')
+      }
+    })
+
+    await runSleepWorktrees(['wt-1', 'wt-2'])
+
+    expect(mocks.state.setActiveWorktree).not.toHaveBeenCalled()
+    expect(mocks.markWorktreeSleepIntent).not.toHaveBeenCalled()
+    expect(mocks.clearWorktreeSleepIntent).not.toHaveBeenCalled()
+    expect(mocks.state.shutdownWorktreeBrowsers).not.toHaveBeenCalledWith('wt-1')
+    expect(mocks.state.shutdownWorktreeTerminals).not.toHaveBeenCalledWith('wt-1', {
+      keepIdentifiers: true
+    })
+    expect(mocks.state.shutdownWorktreeBrowsers).toHaveBeenCalledWith('wt-2')
+    expect(mocks.state.shutdownWorktreeTerminals).toHaveBeenCalledWith('wt-2', {
+      keepIdentifiers: true
+    })
+    expect(mocks.suspendWorkspace).toHaveBeenCalledTimes(1)
+    expect(mocks.suspendWorkspace).toHaveBeenCalledWith({ workspaceId: 'wt-2' })
+    expect(mocks.toastError).toHaveBeenCalledWith(
+      'Failed to sleep some workspaces',
+      expect.objectContaining({
+        description: 'A session could not be saved for resume, so the workspace was kept open.'
       })
     )
   })

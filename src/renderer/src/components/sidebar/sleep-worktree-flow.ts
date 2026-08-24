@@ -108,6 +108,12 @@ function preserveSidebarWorktreePosition(worktreeId: string): () => void {
 
 function describeSleepFailure(error: unknown): string {
   const detail = error instanceof Error ? error.message : String(error)
+  if (detail.includes('agent_sleep_capture_missing')) {
+    return translate(
+      'auto.components.sidebar.sleep.worktree.flow.capture.missing',
+      'A session could not be saved for resume, so the workspace was kept open.'
+    )
+  }
   if (detail.includes('legacy')) {
     return translate(
       'auto.components.sidebar.sleep.worktree.flow.legacy.unverified',
@@ -137,12 +143,31 @@ export async function runSleepWorktrees(worktreeIds: readonly string[]): Promise
   }
   const {
     activeWorktreeId,
+    preflightManualWorktreeSleep,
     setActiveWorktree,
     shutdownWorktreeBrowsers,
     shutdownWorktreeTerminals
   } = useAppStore.getState()
+  const errors: string[] = []
+  const failedWorktreeIds = new Set<string>()
+  for (const worktreeId of worktreeIds) {
+    try {
+      preflightManualWorktreeSleep(worktreeId)
+    } catch (err) {
+      console.error('[sleep-worktree] session capture preflight failed', {
+        worktreeId,
+        error: err
+      })
+      failedWorktreeIds.add(worktreeId)
+      errors.push(describeSleepFailure(err))
+    }
+  }
   let activeSleepIntentWorktreeId: string | null = null
-  if (activeWorktreeId && worktreeIds.includes(activeWorktreeId)) {
+  if (
+    activeWorktreeId &&
+    worktreeIds.includes(activeWorktreeId) &&
+    !failedWorktreeIds.has(activeWorktreeId)
+  ) {
     const restoreSidebarPosition = preserveSidebarWorktreePosition(activeWorktreeId)
     // Why: clearing the active workspace can unmount TerminalPanes before
     // shutdownWorktreeTerminals writes PTY suppressions. Use a non-rendering
@@ -153,10 +178,11 @@ export async function runSleepWorktrees(worktreeIds: readonly string[]): Promise
     setActiveWorktree(null)
     restoreSidebarPosition()
   }
-  const errors: string[] = []
-  const failedWorktreeIds = new Set<string>()
   try {
     for (const worktreeId of worktreeIds) {
+      if (failedWorktreeIds.has(worktreeId)) {
+        continue
+      }
       try {
         // Why: sleep mirrors removeWorktree's shutdown sequence — browsers first
         // so destroyPersistentWebview unregisters the Chromium guests before any

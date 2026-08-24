@@ -768,7 +768,7 @@ describe('resumeSleepingAgentSessionsForWorktree', () => {
     expect(state.sleepingAgentSessionsByPaneKey[record.paneKey]).toBeUndefined()
   })
 
-  it('clears stale manual records without launching a tab', () => {
+  it('resumes working records that were already stale at capture', () => {
     const record = makeRecord({ capturedAt: 3_000_000, updatedAt: 1 })
     useAppStore.setState({
       tabsByWorktree: { 'wt-1': [] },
@@ -777,9 +777,12 @@ describe('resumeSleepingAgentSessionsForWorktree', () => {
 
     const launched = resumeSleepingAgentSessionsForWorktree('wt-1')
 
-    expect(launched).toBe(0)
-    expect(useAppStore.getState().tabsByWorktree['wt-1']).toEqual([])
-    expect(useAppStore.getState().sleepingAgentSessionsByPaneKey[record.paneKey]).toBeUndefined()
+    const state = useAppStore.getState()
+    const resumedTab = state.tabsByWorktree['wt-1']?.[0]
+    expect(launched).toBe(1)
+    expect(resumedTab?.launchAgent).toBe('claude')
+    expect(state.pendingStartupByTabId[resumedTab!.id]?.command).toContain('--resume')
+    expect(state.sleepingAgentSessionsByPaneKey[record.paneKey]).toBeUndefined()
   })
 
   it('resumes interrupted manual records that no preserved pane can own', () => {

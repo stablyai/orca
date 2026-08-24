@@ -155,6 +155,10 @@ import {
   type AgentStatusWorktreeShutdownReason
 } from './agent-status'
 import {
+  AGENT_SLEEP_CAPTURE_MISSING,
+  listUnrecordableManualSleepAgentPanes
+} from './manual-sleep-recovery-guard'
+import {
   buildTerminalTabRetirementPlan,
   classifyTerminalRetirementWorktree,
   isTerminalTabPresent,
@@ -445,6 +449,25 @@ function sortedUniquePtyIds(ptyIds: readonly string[] | undefined): string[] {
   return [...new Set((ptyIds ?? []).filter((ptyId) => ptyId.length > 0))].sort()
 }
 
+function collectRecordableManualWorktreeSleepSessions(
+  state: AppState,
+  worktreeId: string,
+  rendererShutdownPtyIds: readonly string[],
+  sleepingPaneKeys?: readonly string[]
+): ReturnType<typeof collectSleepingAgentSessionRecordsForWorktree> {
+  const records = collectSleepingAgentSessionRecordsForWorktree(state, worktreeId, {
+    paneKeys: sleepingPaneKeys,
+    captureMode: 'manual-worktree-sleep'
+  })
+  if (
+    rendererShutdownPtyIds.length > 0 &&
+    listUnrecordableManualSleepAgentPanes(state, worktreeId, records, sleepingPaneKeys).length > 0
+  ) {
+    throw new Error(AGENT_SLEEP_CAPTURE_MISSING)
+  }
+  return records
+}
+
 function equalStringSets(a: readonly string[], b: readonly string[]): boolean {
   if (a.length !== b.length) {
     return false
@@ -685,6 +708,7 @@ export type TerminalSlice = {
   invalidateStaleDirectSshTargetPtyBindings: (authority: DirectSshAuthority) => number
   retryDirectSshTargetPanes: (authority: DirectSshAuthority, now?: number) => number
   settleDirectSshPaneRetry: (result: DirectSshPaneRetryResult, now?: number) => void
+  preflightManualWorktreeSleep: (worktreeId: string, sleepingPaneKeys?: readonly string[]) => void
   shutdownWorktreeTerminals: (
     worktreeId: string,
     opts?: {
@@ -2926,6 +2950,20 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
     })
   },
 
+  preflightManualWorktreeSleep: (worktreeId, sleepingPaneKeys) => {
+    const state = get()
+    const tabs = state.tabsByWorktree[worktreeId] ?? []
+    const rendererShutdownPtyIds = sortedUniquePtyIds(
+      tabs.flatMap((tab) => state.ptyIdsByTabId[tab.id] ?? [])
+    )
+    collectRecordableManualWorktreeSleepSessions(
+      state,
+      worktreeId,
+      rendererShutdownPtyIds,
+      sleepingPaneKeys
+    )
+  },
+
   shutdownWorktreeTerminals: async (worktreeId, opts) => {
     const keepIdentifiers = opts?.keepIdentifiers ?? false
     const shutdownReason: AgentStatusWorktreeShutdownReason =
@@ -2937,15 +2975,21 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
     const runtimeEnvironmentId = resolveTerminalStopRuntimeEnvironmentId(get(), worktreeId)
     // Why: only renderer-bound ids emit pane exit callbacks, so they are the complete guard set (expectedRuntimePtyIds are raw RPC handles).
     const exitGuardPtyIds = rendererShutdownPtyIds
-    const sleepingAgentSessionRecords = keepIdentifiers
-      ? collectSleepingAgentSessionRecordsForWorktree(get(), worktreeId, {
-          paneKeys: opts?.sleepingPaneKeys,
-          ...(shutdownReason === 'manual-sleep' ? { captureMode: 'manual-worktree-sleep' } : {}),
-          ...(shutdownReason === 'auto-hibernate-completed-agent'
-            ? { captureMode: 'completed-agent-hibernation' }
-            : {})
-        })
-      : {}
+    const sleepingAgentSessionRecords = !keepIdentifiers
+      ? {}
+      : shutdownReason === 'manual-sleep'
+        ? collectRecordableManualWorktreeSleepSessions(
+            get(),
+            worktreeId,
+            rendererShutdownPtyIds,
+            opts?.sleepingPaneKeys
+          )
+        : collectSleepingAgentSessionRecordsForWorktree(get(), worktreeId, {
+            paneKeys: opts?.sleepingPaneKeys,
+            ...(shutdownReason === 'auto-hibernate-completed-agent'
+              ? { captureMode: 'completed-agent-hibernation' }
+              : {})
+          })
     const retainedCompletionEvidence =
       shutdownReason === 'auto-hibernate-completed-agent'
         ? collectHibernatedCompletionEvidenceForWorktree(get(), worktreeId, opts?.sleepingPaneKeys)

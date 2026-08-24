@@ -106,8 +106,14 @@ describe('manual sleep agent session capture', () => {
       state: 'done'
     })
     expect(records['tab-1:interrupted'].interrupted).toBeUndefined()
-    expect(records['tab-1:post-input']).toMatchObject({ state: 'working', updatedAt: NOW })
-    expect(records['tab-1:stale']).toMatchObject({ state: 'working', updatedAt: NOW })
+    expect(records['tab-1:post-input']).toMatchObject({
+      state: 'working',
+      updatedAt: NOW - 1_000
+    })
+    expect(records['tab-1:stale']).toMatchObject({
+      state: 'working',
+      updatedAt: NOW - AGENT_STATUS_STALE_AFTER_MS - 1
+    })
   })
 
   it('marks finished panes for tab-open-only restore so a mobile wake cannot respawn them all', () => {
@@ -200,8 +206,9 @@ describe('manual sleep agent session capture', () => {
   })
 
   // Why: a retained row is the pane's last status after its pty died, so it is stale by
-  // construction — capturing it verbatim rebuilt a record wake discards as stale (#11598).
-  it('refreshes a stale retained working row so wake cannot discard it', () => {
+  // construction. Capture must keep the real updatedAt; wake resumes from the provider
+  // session id rather than a stamped freshness window (STA-2844).
+  it('keeps the real last-status time on a stale retained working row', () => {
     vi.useFakeTimers()
     vi.setSystemTime(NOW)
     const store = createTestStore()
@@ -226,8 +233,12 @@ describe('manual sleep agent session capture', () => {
     store.getState().captureSleepingAgentSessionsByWorktree('wt-1')
 
     const record = store.getState().sleepingAgentSessionsByPaneKey['tab-1:retained']
-    expect(record).toMatchObject({ origin: 'worktree-sleep', state: 'working', updatedAt: NOW })
-    expect(record.capturedAt - record.updatedAt).toBeLessThanOrEqual(AGENT_STATUS_STALE_AFTER_MS)
+    expect(record).toMatchObject({
+      origin: 'worktree-sleep',
+      state: 'working',
+      updatedAt: NOW - AGENT_STATUS_STALE_AFTER_MS - 1
+    })
+    expect(record.capturedAt - record.updatedAt).toBeGreaterThan(AGENT_STATUS_STALE_AFTER_MS)
     expect(record.interrupted).toBeUndefined()
   })
 
@@ -319,7 +330,7 @@ describe('manual sleep agent session capture', () => {
 
     expect(store.getState().sleepingAgentSessionsByPaneKey['tab-1:stale']).toMatchObject({
       origin: 'worktree-sleep',
-      updatedAt: NOW,
+      updatedAt: NOW - AGENT_STATUS_STALE_AFTER_MS - 1,
       providerSession: { key: 'session_id', id: 'session-tab-1:stale' }
     })
   })
@@ -489,7 +500,7 @@ describe('manual sleep agent session capture', () => {
 
     expect(store.getState().sleepingAgentSessionsByPaneKey['tab-1:stale']).toMatchObject({
       origin: 'worktree-sleep',
-      updatedAt: NOW,
+      updatedAt: NOW - AGENT_STATUS_STALE_AFTER_MS - 1,
       providerSession: { key: 'session_id', id: 'session-tab-1:stale' }
     })
   })
