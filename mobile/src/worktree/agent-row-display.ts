@@ -12,9 +12,12 @@ export const AGENT_STATUS_STALE_AFTER_MS = 30 * 60 * 1000
 export type AgentDotState = 'working' | 'blocked' | 'waiting' | 'done' | 'idle' | 'interrupted'
 
 export function agentDotState(
-  row: Pick<RuntimeWorktreeAgentRow, 'state' | 'interrupted' | 'updatedAt'>,
+  row: Pick<RuntimeWorktreeAgentRow, 'state' | 'interrupted' | 'updatedAt' | 'restoredUnconfirmed'>,
   now: number
 ): AgentDotState {
+  if (row.restoredUnconfirmed) {
+    return 'idle'
+  }
   if (row.interrupted) {
     return 'interrupted'
   }

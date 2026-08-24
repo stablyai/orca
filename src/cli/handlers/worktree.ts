@@ -172,7 +172,8 @@ async function getCreateRepoSelector(
 export const WORKTREE_HANDLERS: Record<string, CommandHandler> = {
   'worktree ps': async ({ flags, client, json }) => {
     const result = await client.call<RuntimeWorktreePsResult>('worktree.ps', {
-      limit: getOptionalPositiveIntegerFlag(flags, 'limit')
+      limit: getOptionalPositiveIntegerFlag(flags, 'limit'),
+      supportsWorktreeRestoredAgentPresence: true
     })
     printResult(result, json, formatWorktreePs)
   },

@@ -67,7 +67,7 @@ function deferred<T>() {
 }
 
 describe('stable logical RPC client', () => {
-  it('advertises source-default support on worktree catalog requests', async () => {
+  it('advertises current worktree projection support on catalog requests', async () => {
     const session = new FakeSession('connected')
     session.sendRequest.mockResolvedValue(success([]))
     const client = createStableLogicalRpcClient(session, 'lan')
@@ -78,7 +78,11 @@ describe('stable logical RPC client', () => {
     expect(session.sendRequest).toHaveBeenNthCalledWith(
       1,
       'worktree.ps',
-      { limit: 10_000, supportsWorktreeVisibilitySourceDefaults: true },
+      {
+        limit: 10_000,
+        supportsWorktreeVisibilitySourceDefaults: true,
+        supportsWorktreeRestoredAgentPresence: true
+      },
       undefined
     )
     expect(session.sendRequest).toHaveBeenNthCalledWith(2, 'status.get', undefined, undefined)

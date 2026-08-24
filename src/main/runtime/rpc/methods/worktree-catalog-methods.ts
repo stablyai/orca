@@ -1,6 +1,7 @@
 import { defineMethod, type RpcMethod } from '../core'
 import { resolveWorktreeCatalogSnapshot } from '../worktree-catalog-snapshot'
 import { supportsWorktreeVisibilitySourceDefaults } from '../worktree-visibility-client-capability'
+import { supportsWorktreeRestoredAgentPresence } from '../worktree-restored-agent-presence-client-capability'
 import {
   WorktreeDetectedListParams,
   WorktreeListParams,
@@ -17,7 +18,8 @@ export const WORKTREE_CATALOG_METHODS: RpcMethod[] = [
         supportsWorktreeVisibilitySourceDefaults(
           context,
           params.supportsWorktreeVisibilitySourceDefaults
-        )
+        ),
+        supportsWorktreeRestoredAgentPresence(context, params.supportsWorktreeRestoredAgentPresence)
       )
       // Why: callers that never send the field get the byte-exact legacy response.
       return params.afterSnapshotId === undefined

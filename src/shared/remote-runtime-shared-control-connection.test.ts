@@ -66,7 +66,8 @@ describe('RemoteRuntimeSharedControlConnection', () => {
         protocolVersion.AGENT_SESSION_BOUNDARY_RUNTIME_CAPABILITY,
         protocolVersion.SKILL_INSTALL_RESULT_V2_CAPABILITY,
         protocolVersion.WORKTREE_VISIBILITY_DEFAULTS_RUNTIME_CAPABILITY,
-        protocolVersion.WORKTREE_VISIBILITY_SOURCE_DEFAULTS_RUNTIME_CAPABILITY
+        protocolVersion.WORKTREE_VISIBILITY_SOURCE_DEFAULTS_RUNTIME_CAPABILITY,
+        protocolVersion.WORKTREE_RESTORED_AGENT_PRESENCE_RUNTIME_CAPABILITY
       ]
     })
     expect(server.requests.map((request) => request.method)).toEqual([

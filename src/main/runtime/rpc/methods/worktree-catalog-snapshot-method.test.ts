@@ -2,7 +2,10 @@ import { describe, expect, it, vi } from 'vitest'
 import type { OrcaRuntimeService } from '../../orca-runtime'
 import { RpcDispatcher } from '../dispatcher'
 import { WORKTREE_METHODS } from './worktree'
-import { WORKTREE_VISIBILITY_SOURCE_DEFAULTS_RUNTIME_CAPABILITY } from '../../../../shared/protocol-version'
+import {
+  WORKTREE_RESTORED_AGENT_PRESENCE_RUNTIME_CAPABILITY,
+  WORKTREE_VISIBILITY_SOURCE_DEFAULTS_RUNTIME_CAPABILITY
+} from '../../../../shared/protocol-version'
 
 function makeRuntime() {
   return {
@@ -80,21 +83,30 @@ describe('worktree.ps catalog snapshots', () => {
         params: { limit: 10_000 }
       },
       () => {},
-      { clientCapabilities: [WORKTREE_VISIBILITY_SOURCE_DEFAULTS_RUNTIME_CAPABILITY] }
+      {
+        clientCapabilities: [
+          WORKTREE_VISIBILITY_SOURCE_DEFAULTS_RUNTIME_CAPABILITY,
+          WORKTREE_RESTORED_AGENT_PRESENCE_RUNTIME_CAPABILITY
+        ]
+      }
     )
     await dispatcher.dispatchStreaming(
       {
         id: 'mobile',
         authToken: 'token',
         method: 'worktree.ps',
-        params: { limit: 10_000, supportsWorktreeVisibilitySourceDefaults: true }
+        params: {
+          limit: 10_000,
+          supportsWorktreeVisibilitySourceDefaults: true,
+          supportsWorktreeRestoredAgentPresence: true
+        }
       },
       () => {},
       { clientCapabilities: [] }
     )
 
-    expect(runtime.getWorktreePs).toHaveBeenNthCalledWith(1, 10_000, false)
-    expect(runtime.getWorktreePs).toHaveBeenNthCalledWith(2, 10_000, true)
-    expect(runtime.getWorktreePs).toHaveBeenNthCalledWith(3, 10_000, true)
+    expect(runtime.getWorktreePs).toHaveBeenNthCalledWith(1, 10_000, false, false)
+    expect(runtime.getWorktreePs).toHaveBeenNthCalledWith(2, 10_000, true, true)
+    expect(runtime.getWorktreePs).toHaveBeenNthCalledWith(3, 10_000, true, true)
   })
 })

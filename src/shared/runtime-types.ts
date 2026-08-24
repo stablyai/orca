@@ -804,7 +804,7 @@ export type RuntimeTerminalWait = {
   blockedReason?: RuntimeTerminalWaitBlockedReason
 }
 
-/** One agent's live status as carried to mobile in a worktree.ps summary.
+/** One agent's current or execution-host-unverifiable presence in a worktree.ps summary.
  *  Flat shape (parentPaneKey points to another row in the same worktree's list)
  *  so the client can rebuild the spawn-lineage tree desktop renders inline. */
 export type RuntimeWorktreeAgentRow = {
@@ -828,6 +828,8 @@ export type RuntimeWorktreeAgentRow = {
   updatedAt: number
   /** See AgentStatusEntry.restoredUnconfirmed — set for hydrated nonterminal rows so clients don't render them as confirmed activity. */
   restoredUnconfirmed?: boolean
+  /** Execution-host verdict for a restored row. Exited rows are omitted. */
+  agentLiveness?: 'live' | 'unverifiable'
 }
 
 export type RuntimeWorktreePsSummary = {
@@ -871,7 +873,7 @@ export type RuntimeWorktreePsSummary = {
   lastOutputAt: number | null
   preview: string
   status: RuntimeWorktreeStatus
-  /** Live agents in this worktree, newest-state-first. Empty for shell-only
+  /** Current or unverifiable agents in this worktree, newest-state-first. Empty for shell-only
    *  worktrees. Mirrors desktop's inline agent list (WorktreeCardAgents). */
   agents: RuntimeWorktreeAgentRow[]
 }

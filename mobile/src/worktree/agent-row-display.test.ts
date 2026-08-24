@@ -54,6 +54,12 @@ describe('agentDotState', () => {
       'interrupted'
     )
   })
+
+  it('renders restored-unconfirmed presence as idle instead of stale activity', () => {
+    expect(
+      agentDotState(row({ state: 'working', interrupted: true, restoredUnconfirmed: true }), 0)
+    ).toBe('idle')
+  })
 })
 
 describe('agentDisplayLabel', () => {
