@@ -2632,7 +2632,11 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
         // Why the normalizer rather than a cast: this blob is hand-editable and
         // may come from an older or newer build; it degrades field by field
         // instead of bricking the cleanup dialog.
-        workspaceCleanupBrowse: normalizeWorkspaceCleanupBrowseState(ui.workspaceCleanup?.browse),
+        // Why: a sync broadcast can carry stale browse state while its writer is debounced.
+        workspaceCleanupBrowse:
+          source === 'startup'
+            ? normalizeWorkspaceCleanupBrowseState(ui.workspaceCleanup?.browse)
+            : s.workspaceCleanupBrowse,
         // Why: restore only on startup; on 'sync' broadcasts it would clobber the window's current per-window view.
         activeView:
           source === 'startup'
