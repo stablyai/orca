@@ -253,6 +253,122 @@ describe('registerWorktreeHandlers', () => {
     )
   })
 
+  it('stops retrying immediately when an existing ref is a prefix of the requested branch', async () => {
+    // STA-4762: `release` blocks `release/1.0`, `release/1.0-2`, ... `release/1.0-100`.
+    // Suffixing is provably futile, and over SSH each attempt costs several remote round trips.
+    const repo = {
+      id: 'repo-ssh',
+      path: '/remote/repo',
+      displayName: 'ssh',
+      badgeColor: '#000',
+      addedAt: 0,
+      connectionId: 'conn-1',
+      worktreeBaseRef: 'origin/main'
+    }
+    const provider = {
+      exec: vi.fn().mockImplementation(async (args: string[]) => {
+        if (args[0] === 'remote') {
+          return { stdout: 'origin\n', stderr: '' }
+        }
+        if (args[0] === 'for-each-ref') {
+          return args.some((arg) => arg.startsWith('refs/heads/'))
+            ? { stdout: 'refs/heads/release\n', stderr: '' }
+            : { stdout: '', stderr: '' }
+        }
+        if (args[0] === 'rev-parse') {
+          throw new Error('missing local branch')
+        }
+        return { stdout: '', stderr: '' }
+      }),
+      fetchRemoteTrackingRef: vi.fn().mockResolvedValue(undefined),
+      addWorktree: vi.fn().mockResolvedValue(undefined),
+      removeWorktree: vi.fn().mockResolvedValue(undefined),
+      listWorktrees: vi.fn().mockResolvedValue([])
+    }
+    const mux = {
+      request: vi.fn().mockResolvedValue(undefined),
+      notify: vi.fn()
+    }
+    store.getRepos.mockReturnValue([repo])
+    store.getRepo.mockReturnValue(repo)
+    getSshGitProviderMock.mockReturnValue(provider)
+    getActiveMultiplexerMock.mockReturnValue(mux)
+
+    await expect(
+      handlers['worktrees:create'](null, {
+        repoId: 'repo-ssh',
+        name: 'release-1-0',
+        branchNameOverride: 'release/1.0'
+      })
+    ).rejects.toThrow(/no suffix avoids it/)
+
+    expect(provider.addWorktree).not.toHaveBeenCalled()
+    // The loop must bail on the first candidate, not grind through all 100.
+    const refProbes = provider.exec.mock.calls.filter(
+      (call) => (call[0] as string[])[0] === 'for-each-ref'
+    )
+    expect(refProbes.length).toBeLessThan(5)
+  })
+
+  it('suffixes SSH worktree creation when a nested local ref blocks the requested branch', async () => {
+    // STA-4762: refs/heads/feature/tti_fix_1440 makes `feature` uncreatable; without
+    // detection the SSH flow surfaced raw `cannot lock ref` text from git.
+    const repo = {
+      id: 'repo-ssh',
+      path: '/remote/repo',
+      displayName: 'ssh',
+      badgeColor: '#000',
+      addedAt: 0,
+      connectionId: 'conn-1',
+      worktreeBaseRef: 'origin/main'
+    }
+    const provider = {
+      exec: vi.fn().mockImplementation(async (args: string[]) => {
+        if (args[0] === 'remote') {
+          return { stdout: 'origin\n', stderr: '' }
+        }
+        if (args[0] === 'for-each-ref') {
+          return args.includes('refs/heads/feature')
+            ? { stdout: 'refs/heads/feature/tti_fix_1440\n', stderr: '' }
+            : { stdout: '', stderr: '' }
+        }
+        if (args[0] === 'rev-parse') {
+          throw new Error('missing local branch')
+        }
+        return { stdout: '', stderr: '' }
+      }),
+      fetchRemoteTrackingRef: vi.fn().mockResolvedValue(undefined),
+      addWorktree: vi.fn().mockResolvedValue(undefined),
+      removeWorktree: vi.fn().mockResolvedValue(undefined),
+      listWorktrees: vi.fn().mockResolvedValue([
+        {
+          path: '/remote/repo-feature-2',
+          head: 'abc123',
+          branch: 'refs/heads/feature-2',
+          isBare: false,
+          isMainWorktree: false
+        }
+      ])
+    }
+    const mux = {
+      request: vi.fn().mockResolvedValue(undefined),
+      notify: vi.fn()
+    }
+    store.getRepos.mockReturnValue([repo])
+    store.getRepo.mockReturnValue(repo)
+    getSshGitProviderMock.mockReturnValue(provider)
+    getActiveMultiplexerMock.mockReturnValue(mux)
+
+    await handlers['worktrees:create'](null, { repoId: 'repo-ssh', name: 'feature' })
+
+    expect(provider.addWorktree).toHaveBeenCalledWith(
+      '/remote/repo',
+      'feature-2',
+      '/remote/repo-feature-2',
+      { base: 'origin/main' }
+    )
+  })
+
   it('suffixes SSH worktree creation when a slashed remote owns the requested branch', async () => {
     const repo = {
       id: 'repo-ssh',

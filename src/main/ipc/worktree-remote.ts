@@ -33,6 +33,14 @@ import {
   resolveDefaultBaseRefViaExec,
   resolveDefaultBaseRefWithLocalGit
 } from '../git/repo'
+import {
+  branchRefDirectoryConflictKind,
+  buildBranchRefConflictArgv,
+  classifyBranchRefDirectoryConflict,
+  formatBranchConflictMessage,
+  isUnsuffixableBranchConflict,
+  type BranchConflictKind
+} from '../git/branch-ref-conflict'
 import { resolveLocalGitUsername, getSshGitUsername } from '../git/git-username'
 import { hasCommitObjectViaGitExec } from '../git/commit-object-ref'
 import { probeWorktreeBaseRefPresence } from '../git/worktree-base-ref-probe'
@@ -844,14 +852,37 @@ async function hasSshLocalBranchConflict(
   }
 }
 
+/** SSH counterpart of the local directory/file ref probe; see branch-ref-conflict.ts. */
+async function getSshLocalRefDirectoryConflictKind(
+  provider: SshGitProvider,
+  repoPath: string,
+  branchName: string
+): Promise<BranchConflictKind | null> {
+  try {
+    const { stdout } = await provider.exec(buildBranchRefConflictArgv(branchName), repoPath)
+    const conflict = classifyBranchRefDirectoryConflict(branchName, stdout)
+    return conflict ? branchRefDirectoryConflictKind(conflict) : null
+  } catch {
+    return null
+  }
+}
+
 async function getSshBranchConflictKind(
   provider: SshGitProvider,
   repoPath: string,
   branchName: string,
   allowedBaseRef: string
-): Promise<'local' | 'remote' | null> {
+): Promise<BranchConflictKind | null> {
   if (await hasSshLocalBranchConflict(provider, repoPath, branchName)) {
     return 'local'
+  }
+  const directoryConflictKind = await getSshLocalRefDirectoryConflictKind(
+    provider,
+    repoPath,
+    branchName
+  )
+  if (directoryConflictKind) {
+    return directoryConflictKind
   }
   return (await hasSshRemoteBranchConflict(provider, repoPath, branchName, allowedBaseRef))
     ? 'remote'
@@ -920,7 +951,7 @@ function isMatchingSelectedGitHubPr(
 }
 
 function isAllowedPushTargetRemoteConflict(
-  conflictKind: 'local' | 'remote' | null,
+  conflictKind: BranchConflictKind | null,
   branchName: string,
   args: SelectedReviewBranchInput
 ): boolean {
@@ -1587,7 +1618,7 @@ export async function createRemoteWorktree(
   let checkoutExistingBranch = false
   let remotePath = ''
   let selectedExistingLocalBranchName: string | null = null
-  let lastBranchConflictKind: 'local' | 'remote' | null = null
+  let lastBranchConflictKind: BranchConflictKind | null = null
   let remotePathResolved = false
   const shouldRetireGeneratedName =
     args.nameWasGenerated === true && isGeneratedWorktreeCreateName(sanitizedName)
@@ -1644,6 +1675,9 @@ export async function createRemoteWorktree(
         ? await getSelectedHostedReviewForBranch(repo, branchName, args).catch(() => null)
         : null
       if (!selectedReview?.matchesSelected) {
+        if (isUnsuffixableBranchConflict(lastBranchConflictKind)) {
+          break
+        }
         continue
       }
       lastBranchConflictKind = null
@@ -1664,7 +1698,7 @@ export async function createRemoteWorktree(
   if (!remotePathResolved) {
     if (lastBranchConflictKind) {
       throw new Error(
-        `Branch "${branchName}" already exists ${lastBranchConflictKind === 'local' ? 'locally' : 'on a remote'}. Pick a different ${branchConflictSubject}.`
+        formatBranchConflictMessage(branchName, lastBranchConflictKind, branchConflictSubject)
       )
     }
     throw new Error(
@@ -2162,7 +2196,7 @@ export async function createLocalWorktree(
   let resolved = false
   let checkoutExistingBranch = false
   let selectedExistingLocalBranchName: string | null = null
-  let lastBranchConflictKind: 'local' | 'remote' | null = null
+  let lastBranchConflictKind: BranchConflictKind | null = null
   let lastExistingPR: Awaited<ReturnType<typeof getPRForBranch>> | null = null
   let lastExistingReviewNumber: number | null = null
   const shouldRetireGeneratedName =
@@ -2253,6 +2287,9 @@ export async function createLocalWorktree(
       }
     }
     if (lastBranchConflictKind) {
+      if (isUnsuffixableBranchConflict(lastBranchConflictKind)) {
+        break
+      }
       continue
     }
 
@@ -2295,7 +2332,7 @@ export async function createLocalWorktree(
     }
     if (lastBranchConflictKind) {
       throw new Error(
-        `Branch "${branchName}" already exists ${lastBranchConflictKind === 'local' ? 'locally' : 'on a remote'}. Pick a different ${branchConflictSubject}.`
+        formatBranchConflictMessage(branchName, lastBranchConflictKind, branchConflictSubject)
       )
     }
     throw new Error(

@@ -23,6 +23,9 @@ export function classifyWorkspaceCreateError(error: unknown): WorkspaceCreateErr
     return 'base_ref_missing'
   }
   if (
+    // Narrow anchor for the directory/file ref collision (`feature` vs
+    // `feature/x`): a name collision, not a git execution failure.
+    text.includes('conflicts with an existing branch name') ||
     text.includes('already exists locally') ||
     text.includes('already exists on a remote') ||
     text.includes('already exists. pick') ||

@@ -4,6 +4,7 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 
+import { isUnsuffixableBranchConflict } from './branch-ref-conflict'
 import {
   buildSearchBaseRefsArgv,
   getDefaultBaseRef,
@@ -587,5 +588,126 @@ describe('getRemoteCount', () => {
     const count = await getRemoteCount(path.join(tmpDir, 'does-not-exist'))
 
     expect(count).toBe(0)
+  })
+})
+
+describe('getBranchConflictKind — git directory/file ref conflicts (STA-4762)', () => {
+  let tmpDir: string
+
+  beforeEach(() => {
+    tmpDir = mkdtempSync(path.join(tmpdir(), 'orca-repo-test-'))
+    initRepo(tmpDir)
+  })
+
+  afterEach(() => {
+    rmSync(tmpDir, { recursive: true, force: true })
+  })
+
+  /**
+   * Ground truth: does the user's real git binary refuse to create this branch?
+   * Every conflict assertion below is paired with this so the test cannot pass
+   * by asserting a rule git does not actually enforce.
+   */
+  function gitRefusesBranch(branchName: string): boolean {
+    try {
+      git(tmpDir, ['branch', branchName, 'refs/heads/main'])
+      git(tmpDir, ['branch', '-D', branchName])
+      return false
+    } catch {
+      return true
+    }
+  }
+
+  it('detects a nested ref blocking a shorter name (feature/x exists, create feature)', async () => {
+    git(tmpDir, ['branch', 'feature/tti_fix_1440'])
+
+    expect(gitRefusesBranch('feature')).toBe(true)
+    expect(await getBranchConflictKind(tmpDir, 'feature', 'origin/main')).toBe('local-directory')
+  })
+
+  it('detects a flat ref blocking a nested name (release exists, create release/1.0)', async () => {
+    git(tmpDir, ['branch', 'release'])
+
+    expect(gitRefusesBranch('release/1.0')).toBe(true)
+    expect(await getBranchConflictKind(tmpDir, 'release/1.0', 'origin/main')).toBe(
+      'local-ref-prefix'
+    )
+  })
+
+  it('detects a blocking prefix several segments up', async () => {
+    git(tmpDir, ['branch', 'team'])
+
+    expect(gitRefusesBranch('team/a/b/c')).toBe(true)
+    expect(await getBranchConflictKind(tmpDir, 'team/a/b/c', 'origin/main')).toBe(
+      'local-ref-prefix'
+    )
+  })
+
+  it('detects conflicts against packed refs', async () => {
+    git(tmpDir, ['branch', 'feature/packed'])
+    git(tmpDir, ['pack-refs', '--all'])
+
+    expect(gitRefusesBranch('feature')).toBe(true)
+    expect(await getBranchConflictKind(tmpDir, 'feature', 'origin/main')).toBe('local-directory')
+  })
+
+  it('still reports an exact collision as a plain local conflict', async () => {
+    git(tmpDir, ['branch', 'feature/x'])
+
+    expect(await getBranchConflictKind(tmpDir, 'feature/x', 'origin/main')).toBe('local')
+  })
+
+  it('leaves creatable names alone', async () => {
+    git(tmpDir, ['branch', 'feature/x'])
+    git(tmpDir, ['branch', 'release/1.0'])
+
+    for (const candidate of ['feature/y', 'featurex', 'feature2/z', 'release/1.0-2', 'rel']) {
+      expect(gitRefusesBranch(candidate)).toBe(false)
+      expect(await getBranchConflictKind(tmpDir, candidate, 'origin/main')).toBeNull()
+    }
+  })
+
+  it('lets the create flow suffix past a directory conflict, as it already does for exact ones', async () => {
+    git(tmpDir, ['branch', 'feature/tti_fix_1440'])
+
+    // Mirrors the worktree-create suffix loop: advance while a conflict is reported.
+    let candidate = 'feature'
+    for (
+      let suffix = 2;
+      (await getBranchConflictKind(tmpDir, candidate, 'origin/main')) !== null;
+    ) {
+      candidate = `feature-${suffix}`
+      suffix += 1
+    }
+
+    expect(candidate).toBe('feature-2')
+    expect(gitRefusesBranch(candidate)).toBe(false)
+  })
+
+  it('reports a blocking prefix as unsuffixable, because git refuses every suffix', async () => {
+    git(tmpDir, ['branch', 'release'])
+
+    // Ground truth: no candidate the suffix loop can generate escapes `release`.
+    for (const candidate of ['release/1.0', 'release/1.0-2', 'release/1.0-100']) {
+      expect(gitRefusesBranch(candidate)).toBe(true)
+      expect(
+        isUnsuffixableBranchConflict(await getBranchConflictKind(tmpDir, candidate, 'origin/main'))
+      ).toBe(true)
+    }
+  })
+
+  it('reports a nested ref as suffixable, because a suffix does escape it', async () => {
+    git(tmpDir, ['branch', 'feature/tti_fix_1440'])
+
+    expect(
+      isUnsuffixableBranchConflict(await getBranchConflictKind(tmpDir, 'feature', 'origin/main'))
+    ).toBe(false)
+    expect(gitRefusesBranch('feature-2')).toBe(false)
+  })
+
+  it('does not report a conflict when the probe cannot run', async () => {
+    expect(
+      await getBranchConflictKind(path.join(tmpDir, 'does-not-exist'), 'feature', 'origin/main')
+    ).toBeNull()
   })
 })

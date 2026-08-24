@@ -34,6 +34,13 @@ describe('classifyWorkspaceCreateError', () => {
     expect(classifyWorkspaceCreateError(err)).toBe('path_collision')
   })
 
+  it('buckets a directory/file ref-conflict throw as path_collision', () => {
+    const err = new Error(
+      'Branch "feature" conflicts with an existing branch name in this repo. Git cannot store both. Pick a different worktree name.'
+    )
+    expect(classifyWorkspaceCreateError(err)).toBe('path_collision')
+  })
+
   it('buckets an existing-PR collision throw as path_collision', () => {
     const err = new Error('Branch "feature/foo" already has PR #42. Pick a different branch name.')
     expect(classifyWorkspaceCreateError(err)).toBe('path_collision')

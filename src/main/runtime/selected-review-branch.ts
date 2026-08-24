@@ -1,6 +1,7 @@
 import type { GitPushTarget } from '../../shared/worktree/types'
 import type { ForgeProviderId } from '../source-control/forge-provider'
 import type { getPRForBranch } from '../github/client'
+import type { BranchConflictKind } from '../git/branch-ref-conflict'
 
 export type SelectedReviewBranchInput = {
   branchNameOverride?: string
@@ -65,7 +66,7 @@ export function isMatchingSelectedGitHubPr(
 }
 
 export function isAllowedPushTargetRemoteConflict(
-  conflictKind: 'local' | 'remote' | null,
+  conflictKind: BranchConflictKind | null,
   branchName: string,
   args: SelectedReviewBranchInput
 ): boolean {

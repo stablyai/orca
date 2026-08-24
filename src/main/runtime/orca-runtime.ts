@@ -1001,6 +1001,11 @@ import type {
   UpdatePullRequestBySlugArgs
 } from '../../shared/github/project-request-types'
 import {
+  formatBranchConflictMessage,
+  isUnsuffixableBranchConflict,
+  type BranchConflictKind
+} from '../git/branch-ref-conflict'
+import {
   getBaseRefDefault,
   getDefaultRemote,
   getBranchConflictKind,
@@ -24573,7 +24578,7 @@ export class OrcaRuntimeService {
     let branchName = ''
     let checkoutExistingBranch = false
     let selectedExistingLocalBranchName: string | null = null
-    let branchConflictKind: 'local' | 'remote' | null = null
+    let branchConflictKind: BranchConflictKind | null = null
     let worktreePath = ''
     let worktreePathResolved = false
     const shouldRetireGeneratedName =
@@ -24669,6 +24674,9 @@ export class OrcaRuntimeService {
           }
         }
         if (branchConflictKind) {
+          if (isUnsuffixableBranchConflict(branchConflictKind)) {
+            break
+          }
           continue
         }
       }
@@ -24700,9 +24708,7 @@ export class OrcaRuntimeService {
     }
     if (!worktreePathResolved) {
       if (branchConflictKind) {
-        throw new Error(
-          `Branch "${branchName}" already exists ${branchConflictKind === 'local' ? 'locally' : 'on a remote'}.`
-        )
+        throw new Error(formatBranchConflictMessage(branchName, branchConflictKind))
       }
       throw new Error(
         `Could not find an available worktree path for "${sanitizedName}". Pick a different worktree name.`
