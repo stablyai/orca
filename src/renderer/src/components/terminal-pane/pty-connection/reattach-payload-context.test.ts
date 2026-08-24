@@ -37,6 +37,7 @@ function createContext(replay: string, attemptGeneration: number): ReattachPaylo
     fetchSshMainModelReattachSnapshot: async () => null,
     hasStructuralReplay: true,
     coldRestoreStartup: undefined,
+    shouldInjectResumeAfterRestore: false,
     reattachPayloadApplied: false
   }
 }
@@ -93,14 +94,16 @@ describe('reattach payload context', () => {
         id: 'pty-1',
         coldRestore: { scrollback: 'restored scrollback', cwd: '/workspace' }
       },
-      coldRestoreStartup: startup
+      coldRestoreStartup: startup,
+      shouldInjectResumeAfterRestore: true
     }
 
     await createReattachPayloadHandlers(session, context).applyReattachPayload()
 
     expect(applyColdRestoreAgentResumeStartup).toHaveBeenCalledWith(startup)
     expect(buildColdRestoreAgentResumeStartup).not.toHaveBeenCalled()
-    expect(schedulePendingStartupCommandDelivery).not.toHaveBeenCalled()
+    expect(schedulePendingStartupCommandDelivery).toHaveBeenCalledTimes(1)
+    expect(session.pendingStartupCommand).toEqual({ command: startup.command })
     expect(context.reattachPayloadApplied).toBe(true)
   })
 })

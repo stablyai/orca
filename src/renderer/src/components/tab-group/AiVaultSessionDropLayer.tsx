@@ -260,6 +260,8 @@ export default function AiVaultSessionDropLayer({
             agent: payload.agent,
             worktreeId,
             command: startup.command,
+            title: payload.title,
+            sessionId: payload.sessionId,
             ...(payload.sessionCwd ? { cwd: payload.sessionCwd } : {}),
             ...(startup.env ? { env: startup.env } : {}),
             ...(startup.envToDelete ? { envToDelete: startup.envToDelete } : {}),

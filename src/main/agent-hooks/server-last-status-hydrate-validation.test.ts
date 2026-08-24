@@ -121,6 +121,52 @@ describe('Last-status persistence', () => {
     }
   })
 
+  it('keeps hydrated OMP metadata-only entries that still have a resume locator', async () => {
+    mkdirSync(join(userDataPath, 'agent-hooks'), { recursive: true })
+    const receivedAt = recentTs()
+    writeFileSync(
+      lastStatusPath(),
+      JSON.stringify({
+        version: 2,
+        entries: {
+          [PANE]: {
+            paneKey: PANE,
+            tabId: 'tab-1',
+            worktreeId: 'wt-1',
+            receivedAt,
+            stateStartedAt: receivedAt,
+            providerSessionOnly: true,
+            providerSession: {
+              key: 'session_id',
+              id: 'omp-session-1',
+              transcriptPath: '/tmp/omp-session-1.jsonl'
+            },
+            payload: { state: 'done', prompt: '', agentType: 'omp' }
+          }
+        }
+      }),
+      'utf8'
+    )
+
+    const server = new AgentHookServer()
+    await server.start({ env: 'production', userDataPath })
+    try {
+      expect(server.getStatusSnapshot()).toEqual([
+        expect.objectContaining({
+          paneKey: PANE,
+          providerSessionOnly: true,
+          providerSession: {
+            key: 'session_id',
+            id: 'omp-session-1',
+            transcriptPath: '/tmp/omp-session-1.jsonl'
+          }
+        })
+      ])
+    } finally {
+      server.stop()
+    }
+  })
+
   it('rejects a stale version mismatch on hydrate', async () => {
     mkdirSync(join(userDataPath, 'agent-hooks'), { recursive: true })
     writeFileSync(

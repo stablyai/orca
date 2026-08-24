@@ -61,6 +61,7 @@ import {
   extractAgentProviderSession,
   type AgentProviderSessionMetadata
 } from './agent-session-resume'
+import { isPiCompatibleAgentType } from './pi-agent-kind'
 import { parsePaneKey } from './stable-pane-id'
 import {
   isCompactContinuationUserTurnText,
@@ -4067,8 +4068,10 @@ function normalizePiCompatibleEvent(
   paneKey: string,
   hookPayload: Record<string, unknown>
 ): ParsedAgentStatusPayload | null {
-  if (agentType !== 'omp' && eventName === 'session_start') {
-    // Why: Pi's session_start fires on TUI open/resume; discard stale turn details, no working row before user activity.
+  if (eventName === 'session_start') {
+    // Why: Pi/OMP/Prime session_start fires on TUI open/resume; discard stale turn
+    // details, no working row before user activity. OMP used to skip this so its
+    // session_start was dropped entirely and sleep never captured a resume id.
     clearPaneTurnCacheState(state, paneKey)
     return null
   }
@@ -4601,9 +4604,7 @@ export function normalizeHookPayload(
   }
 
   const providerSessionOnly =
-    (source === 'pi' || source === 'prime-agent') &&
-    eventName === 'session_start' &&
-    providerSession !== null
+    isPiCompatibleAgentType(source) && eventName === 'session_start' && providerSession !== null
   // Why: transcript session_start carries resume identity while idle; receivers discard the placeholder row.
   const transportPayload =
     payload ??

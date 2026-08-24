@@ -343,6 +343,31 @@ describe('shared agent-hook-listener', () => {
     expect(tool?.payload.interactivePrompt).toBeUndefined()
   })
 
+  it('emits OMP resume identity on session_start without a working row', () => {
+    const sessionStart = normalizeHookPayload(
+      state,
+      'omp',
+      {
+        paneKey: PANE_KEY,
+        payload: {
+          hook_event_name: 'session_start',
+          session_id: 'omp-session-2',
+          session_file: '/tmp/omp-session-2.jsonl'
+        }
+      },
+      'production'
+    )
+    expect(sessionStart).toMatchObject({
+      providerSessionOnly: true,
+      providerSession: {
+        key: 'session_id',
+        id: 'omp-session-2',
+        transcriptPath: '/tmp/omp-session-2.jsonl'
+      },
+      payload: { state: 'done', prompt: '', agentType: 'omp' }
+    })
+  })
+
   it('captures Pi session ids on Pi-compatible status events', () => {
     const event = normalizeHookPayload(
       state,

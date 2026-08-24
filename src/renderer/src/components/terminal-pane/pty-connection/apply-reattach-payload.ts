@@ -270,7 +270,23 @@ export function createReattachPayloadHandlers(
       if (!isRemoteRuntimePtyId(ctx.ptyId)) {
         window.api.pty.ackColdRestore(ctx.ptyId)
       }
-      if (didPrepareResume && !ctx.coldRestoreStartup) {
+      if (ctx.shouldInjectResumeAfterRestore && preparedStartup?.command) {
+        session.pendingStartupCommand = { command: preparedStartup.command }
+        session.schedulePendingStartupCommandDelivery()
+      }
+    }
+    if (
+      ctx.shouldInjectResumeAfterRestore &&
+      !ctx.connectResult?.snapshot &&
+      !ctx.connectResult?.replay &&
+      !ctx.connectResult?.coldRestore
+    ) {
+      if (session.applyColdRestoreAgentResumeStartup(ctx.coldRestoreStartup)) {
+        session.showSessionRestoredBanner()
+        session.clearSleepingRecordAfterColdRestoreSpawn(ctx.coldRestoreStartup)
+      }
+      if (ctx.coldRestoreStartup?.command) {
+        session.pendingStartupCommand = { command: ctx.coldRestoreStartup.command }
         session.schedulePendingStartupCommandDelivery()
       }
     }

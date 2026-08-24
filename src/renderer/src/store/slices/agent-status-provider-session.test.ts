@@ -11,8 +11,11 @@ const PI_COMPATIBLE_CASES = [
 ]
 
 function makePiCompatibleProviderSession(agent: 'pi' | 'omp' | 'prime-agent') {
-  const session = { key: 'session_id' as const, id: `${agent}-session-1` }
-  return agent === 'omp' ? session : { ...session, transcriptPath: `/tmp/${agent}-session-1.jsonl` }
+  return {
+    key: 'session_id' as const,
+    id: `${agent}-session-1`,
+    transcriptPath: `/tmp/${agent}-session-1.jsonl`
+  }
 }
 
 describe('recordAgentProviderSession', () => {
@@ -122,6 +125,56 @@ describe('recordAgentProviderSession', () => {
     expect(store.getState().agentStatusByPaneKey['tab-1:leaf-1']?.providerSession).toBeUndefined()
   })
 
+  it('keeps an OMP session across a metadata-less new turn so worktree sleep can resume it', () => {
+    const store = createTestStore()
+    store.setState({
+      tabsByWorktree: {
+        'wt-1': [makeTab({ id: 'tab-1', worktreeId: 'wt-1' })]
+      }
+    } as Partial<AppState>)
+    const providerSession = {
+      key: 'session_id' as const,
+      id: 'omp-session-1',
+      transcriptPath: '/tmp/omp-session-1.jsonl'
+    }
+
+    store
+      .getState()
+      .setAgentStatus(
+        'tab-1:leaf-1',
+        { state: 'working', prompt: 'first', agentType: 'omp' },
+        'OMP',
+        { updatedAt: 10, stateStartedAt: 10 },
+        { tabId: 'tab-1', worktreeId: 'wt-1' },
+        { providerSession }
+      )
+    store.getState().setAgentStatus('tab-1:leaf-1', {
+      state: 'done',
+      prompt: 'first',
+      agentType: 'omp'
+    })
+    store.getState().setAgentStatus('tab-1:leaf-1', {
+      state: 'working',
+      prompt: 'second',
+      agentType: 'omp'
+    })
+
+    expect(store.getState().agentStatusByPaneKey['tab-1:leaf-1']?.providerSession).toEqual(
+      providerSession
+    )
+
+    store.getState().captureSleepingAgentSessionsByWorktree('wt-1')
+    expect(store.getState().sleepingAgentSessionsByPaneKey['tab-1:leaf-1']).toMatchObject({
+      agent: 'omp',
+      providerSession,
+      origin: 'worktree-sleep'
+    })
+    expect(
+      store.getState().sleepingAgentSessionsByPaneKey['tab-1:leaf-1']?.launchConfig
+        ?.ompResumeFilePath
+    ).toBeUndefined()
+  })
+
   it('uses the session file as part of transcript-based resume ownership only', () => {
     const base = {
       paneKey: 'tab-1:leaf-1',
@@ -134,7 +187,7 @@ describe('recordAgentProviderSession', () => {
       origin: 'live' as const
     }
     const makeRecord = (
-      agent: 'pi' | 'prime-agent' | 'claude',
+      agent: 'pi' | 'prime-agent' | 'omp' | 'claude',
       transcriptPath: string
     ): SleepingAgentSessionRecord => ({
       ...base,
@@ -147,6 +200,9 @@ describe('recordAgentProviderSession', () => {
     )
     expect(getProviderSessionClaimKey(makeRecord('prime-agent', '/tmp/first.jsonl'))).not.toBe(
       getProviderSessionClaimKey(makeRecord('prime-agent', '/tmp/second.jsonl'))
+    )
+    expect(getProviderSessionClaimKey(makeRecord('omp', '/tmp/first.jsonl'))).not.toBe(
+      getProviderSessionClaimKey(makeRecord('omp', '/tmp/second.jsonl'))
     )
     expect(getProviderSessionClaimKey(makeRecord('claude', '/tmp/first.jsonl'))).toBe(
       getProviderSessionClaimKey(makeRecord('claude', '/tmp/second.jsonl'))

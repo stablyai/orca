@@ -376,6 +376,7 @@ import type {
   AgentProviderSessionMetadata,
   SleepingAgentLaunchConfig
 } from '../../shared/agent-session-resume'
+import { isPiCompatibleAgentType } from '../../shared/pi-agent-kind'
 import type { ExactWorkerProviderSession } from '../../shared/orchestration-worker-output'
 import type { RuntimeClientEvent } from '../../shared/runtime-client-events'
 import { toRuntimeActivateWorktreeEvent } from '../../shared/runtime-client-events'
@@ -34191,7 +34192,7 @@ export class OrcaRuntimeService {
       if (
         entry.agentType &&
         (entry.providerSessionOnly !== true ||
-          (entry.agentType === 'pi' && entry.providerSession != null)) &&
+          (isPiCompatibleAgentType(entry.agentType) && entry.providerSession != null)) &&
         entry.receivedAt >= agentTypeFreshAfter &&
         (!agent || entry.receivedAt > agent.receivedAt)
       ) {

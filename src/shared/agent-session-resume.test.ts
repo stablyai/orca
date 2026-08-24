@@ -49,6 +49,15 @@ describe('agent session resume metadata', () => {
     ['devin', { session_id: 'devin-session' }, { key: 'session_id', id: 'devin-session' }],
     ['omp', { session_id: 'omp-session' }, { key: 'session_id', id: 'omp-session' }],
     [
+      'omp',
+      { session_id: 'omp-session', session_file: '/tmp/omp-session.jsonl' },
+      {
+        key: 'session_id',
+        id: 'omp-session',
+        transcriptPath: '/tmp/omp-session.jsonl'
+      }
+    ],
+    [
       'prime-agent',
       { session_id: 'prime-session', session_file: '/tmp/prime-session.jsonl' },
       { key: 'session_id', id: 'prime-session', transcriptPath: '/tmp/prime-session.jsonl' }
@@ -85,6 +94,11 @@ describe('agent session resume metadata', () => {
     ['devin', { key: 'session_id', id: 'abc12345' }, ['devin', '--resume', 'abc12345']],
     ['omp', { key: 'session_id', id: 's1' }, ['omp', '--resume', 's1']],
     [
+      'omp',
+      { key: 'session_id', id: 's1', transcriptPath: '/tmp/omp-session.jsonl' },
+      ['omp', '--resume', '/tmp/omp-session.jsonl']
+    ],
+    [
       'prime-agent',
       { key: 'session_id', id: 's1', transcriptPath: '/tmp/prime-session.jsonl' },
       ['prime-agent', '--resume', '/tmp/prime-session.jsonl']
@@ -97,6 +111,16 @@ describe('agent session resume metadata', () => {
     ]
   ] as const)('builds %s resume argv', (agent, providerSession, expected) => {
     expect(getAgentResumeArgv(agent, providerSession)).toEqual(expected)
+  })
+
+  it('prefers an explicit OMP resume file path over the transcript path and session id', () => {
+    expect(
+      getAgentResumeArgv(
+        'omp',
+        { key: 'session_id', id: 's1', transcriptPath: '/tmp/from-hook.jsonl' },
+        '/tmp/from-vault.jsonl'
+      )
+    ).toEqual(['omp', '--resume', '/tmp/from-vault.jsonl'])
   })
 
   it('rejects unsupported sources and unsafe ids', () => {
@@ -125,6 +149,7 @@ describe('agent session resume metadata', () => {
 
     expect(agentProviderSessionsEqual('pi', first, second)).toBe(false)
     expect(agentProviderSessionsEqual('prime-agent', first, second)).toBe(false)
+    expect(agentProviderSessionsEqual('omp', first, second)).toBe(false)
     expect(agentProviderSessionsEqual('claude', first, second)).toBe(true)
   })
 

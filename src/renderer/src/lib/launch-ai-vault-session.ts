@@ -7,6 +7,7 @@ import {
   isWebRuntimeSessionActive
 } from '@/runtime/web-runtime-session'
 import type { AiVaultAgent } from '../../../shared/ai-vault-types'
+import { isAiVaultTitleAgent } from '../../../shared/ai-vault-session-title'
 import type {
   AgentProviderSessionMetadata,
   SleepingAgentLaunchConfig
@@ -18,6 +19,31 @@ export type LaunchAiVaultSessionInNewTabResult =
   | { tabId: string; groupId?: string }
   | { tabId: null; groupId?: string; runtimeLaunch: Promise<WebRuntimeTerminalCreateOutcome> }
 
+function seedAiVaultResumeTabTitle(args: {
+  agent: AiVaultAgent
+  tabId: string
+  title?: string
+  sessionId?: string
+}): void {
+  const title = args.title?.trim()
+  if (!title) {
+    return
+  }
+  const store = useAppStore.getState()
+  if (isAiVaultTitleAgent(args.agent) && args.sessionId?.trim()) {
+    store.setAiVaultTabTitle(args.tabId, {
+      agent: args.agent,
+      sessionId: args.sessionId.trim(),
+      title
+    })
+    return
+  }
+  // Why: aiVaultTitle only models Claude/Codex, and a live OSC title outranks the
+  // plain tab title — every other agent would overwrite the resumed conversation
+  // name seconds after launch. customTitle is the only field that survives it.
+  store.setTabCustomTitle(args.tabId, title, { recordInteraction: false })
+}
+
 export function launchAiVaultSessionInNewTab(args: {
   agent: AiVaultAgent
   worktreeId: string
@@ -27,6 +53,8 @@ export function launchAiVaultSessionInNewTab(args: {
   envToDelete?: string[]
   launchConfig?: SleepingAgentLaunchConfig
   providerSession?: AgentProviderSessionMetadata
+  title?: string
+  sessionId?: string
   targetGroupId?: string
   splitDirection?: TabSplitDirection
 }): LaunchAiVaultSessionInNewTabResult {
@@ -68,20 +96,39 @@ export function launchAiVaultSessionInNewTab(args: {
       targetGroupId
   }
 
-  const tab = args.cwd
-    ? store.createTab(args.worktreeId, targetGroupId, undefined, { startupCwd: args.cwd })
-    : store.createTab(args.worktreeId, targetGroupId)
+  const createOptions = {
+    launchAgent: args.agent,
+    ...(args.cwd ? { startupCwd: args.cwd } : {})
+  }
+  const tab = store.createTab(args.worktreeId, targetGroupId, undefined, createOptions)
   store.queueTabStartupCommand(tab.id, {
     command: args.command,
     ...(args.env ? { env: args.env } : {}),
     ...(args.envToDelete ? { envToDelete: args.envToDelete } : {}),
-    ...(args.launchConfig ? { launchConfig: args.launchConfig, launchAgent: args.agent } : {}),
+    ...(args.launchConfig ? { launchConfig: args.launchConfig } : {}),
+    launchAgent: args.agent,
     ...(args.providerSession ? { resumeProviderSession: args.providerSession } : {}),
+    ...(args.launchConfig ? { agentArgsOverride: args.launchConfig.agentArgs } : {}),
+    ...(args.agent === 'codex' ? { startupCommandDelivery: 'shell-ready' as const } : {}),
+    showSessionRestoredBanner: true,
     telemetry: {
       agent_kind: tuiAgentToAgentKind(args.agent),
       launch_source: 'sidebar',
       request_kind: 'resume'
     }
+  })
+  if (args.providerSession) {
+    store.claimAutomaticAgentResume(tab.id, {
+      worktreeId: args.worktreeId,
+      launchAgent: args.agent,
+      providerSession: args.providerSession
+    })
+  }
+  seedAiVaultResumeTabTitle({
+    agent: args.agent,
+    tabId: tab.id,
+    ...(args.title ? { title: args.title } : {}),
+    ...(args.sessionId ? { sessionId: args.sessionId } : {})
   })
   store.setActiveTabType('terminal')
 

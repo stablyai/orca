@@ -43,7 +43,8 @@ export function startDeferredSessionReattach(
     cols: session.cols,
     rows: session.rows,
     sessionId: deferredReattachSessionId,
-    ...(coldRestoreStartup?.command ? { command: coldRestoreStartup.command } : {}),
+    // Why: argv on a restored sessionId is dropped by createOrAttach; the
+    // resume line is typed into the restored shell after coldRestore paint.
     ...(coldRestoreStartup?.env
       ? { env: session.mergeStartupEnvWithPaneIdentity(coldRestoreStartup.env) }
       : {}),

@@ -5,7 +5,7 @@ import { warnTerminalLifecycleAnomaly } from '../terminal-lifecycle-diagnostics'
 // actually attached — nothing is inspectable while the session hydrates.
 import { notifyCodexPaneBoundForStaleSweep } from '@/lib/codex-stale-pane-sweep'
 import { useAppStore } from '@/store'
-import { isPassiveCompletedHibernationEvidence } from '@/lib/sleeping-agent-pane-ownership'
+import { shouldInjectWorktreeSleepResumeAfterRestore } from '@/lib/sleeping-agent-pane-ownership'
 import { parseAppSshPtyId } from '../../../../../shared/ssh-pty-id'
 import { resolveHiddenRestoreScrollbackRows } from '../terminal-hidden-restore-scrollback'
 
@@ -146,26 +146,19 @@ export function bindHandleReattachResult(sessionBag: ConnectPanePtySession): voi
     const hasStructuralReplay = Boolean(
       connectResult?.snapshot || connectResult?.replay || connectResult?.coldRestore
     )
-    const resumeComesFromPassiveHibernation = Boolean(
+    const resumeComesFromWorktreeSleepOrPassiveHibernation = Boolean(
       coldRestoreStartup &&
       !coldRestoreStartup.useLiveEntry &&
       coldRestoreStartup.sleepingRecordEntry &&
-      isPassiveCompletedHibernationEvidence(coldRestoreStartup.sleepingRecordEntry.record)
+      shouldInjectWorktreeSleepResumeAfterRestore(coldRestoreStartup.sleepingRecordEntry.record)
     )
-    // Why: reattach drops startup commands; only passive hibernation is authority to retire an empty adopted shell and resume its provider session.
-    if (!hasStructuralReplay && connectResult?.isReattach && resumeComesFromPassiveHibernation) {
-      session.transport.disconnect()
-      if (staleSessionId) {
-        session.deps.clearExitedPanePtyLayoutBinding(session.pane.id, staleSessionId)
-        session.deps.clearTabPtyId(session.deps.tabId, staleSessionId)
-      } else {
-        session.deps.syncPanePtyLayoutBinding(session.pane.id, null)
-      }
-      session.startFreshColdRestoreAgentResume(coldRestoreStartup, {
-        forceBlankRestoredViewport: true
-      })
-      return false
-    }
+    // Why: createOrAttach(sessionId) drops argv even when the daemon omits
+    // isReattach (sleep kill → new empty shell + optional coldRestore).
+    // Snapshot/replay mean a live TUI is still there and must not be typed into.
+    const shouldInjectResumeAfterRestore =
+      resumeComesFromWorktreeSleepOrPassiveHibernation &&
+      !connectResult?.snapshot &&
+      !connectResult?.replay
     session.setPanePtyFitBinding(ptyId)
     session.reportPanePtyVisibility(ptyId, session.deps.isVisibleRef.current)
     session.registerSideEffectFactConsumerForPty(ptyId)
@@ -239,6 +232,7 @@ export function bindHandleReattachResult(sessionBag: ConnectPanePtySession): voi
       fetchSshMainModelReattachSnapshot,
       hasStructuralReplay,
       coldRestoreStartup,
+      shouldInjectResumeAfterRestore,
       reattachPayloadApplied: !hasStructuralReplay && prefetchedParkModelSnapshot === null
     }
     const { applyReattachPayload, fitAfterReattachRestore } = createReattachPayloadHandlers(

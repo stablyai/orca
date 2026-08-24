@@ -7,18 +7,28 @@ import type {
 } from '../../../shared/terminal-tab-types'
 import { parseLegacyNumericPaneKey, parsePaneKey } from '../../../shared/stable-pane-id'
 import { isWebTerminalSurfaceTabId } from '../../../shared/terminal-surface-id'
+import { isPiCompatibleAgentType } from '../../../shared/pi-agent-kind'
 
 type AppStoreState = ReturnType<typeof useAppStore.getState>
 
 export function getProviderSessionClaimKey(record: SleepingAgentSessionRecord): string {
   const base = `${record.worktreeId}\0${record.agent}\0${record.providerSession.key}\0${record.providerSession.id}`
-  return record.agent === 'pi' || record.agent === 'prime-agent'
+  return isPiCompatibleAgentType(record.agent)
     ? `${base}\0${record.providerSession.transcriptPath ?? ''}`
     : base
 }
 
 export function isPassiveCompletedHibernationEvidence(record: SleepingAgentSessionRecord): boolean {
   return record.origin !== 'quit' && record.origin !== 'live' && record.state === 'done'
+}
+
+// Why: createOrAttach drops argv even when keepHistory scrollback is present, so
+// worktree-sleep (working or done) and other passive completed hibernation
+// records type `--resume` into the adopted shell. live/quit stay on that shell.
+export function shouldInjectWorktreeSleepResumeAfterRestore(
+  record: SleepingAgentSessionRecord
+): boolean {
+  return record.origin === 'worktree-sleep' || isPassiveCompletedHibernationEvidence(record)
 }
 
 function getLegacyPaneTabId(record: SleepingAgentSessionRecord): string | null {

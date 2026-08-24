@@ -238,15 +238,19 @@ describe('connectPanePty', () => {
     }
   })
 
-  it('re-runs the resume command when a hibernated local session reattaches with no payload', async () => {
-    // Why: the daemon drops startup commands on reattach, so a passive hibernation record must replace a contentless adopted shell.
+  async function runWorktreeSleepReattachResume(args: {
+    agent: 'codex' | 'claude'
+    sessionId: string
+    state: 'working' | 'done'
+    connectResult: Record<string, unknown>
+    expectedInput: string
+  }): Promise<void> {
     const pendingTimeouts: (() => void)[] = []
     const originalSetTimeout = globalThis.setTimeout
     globalThis.setTimeout = vi.fn((fn: () => void) => {
       pendingTimeouts.push(fn)
       return 999 as unknown as ReturnType<typeof setTimeout>
     }) as unknown as typeof setTimeout
-
     try {
       const { connectPanePty } = await import('./pty-connection')
       const paneKey = makePaneKey('tab-1', LEAF_2)
@@ -259,13 +263,7 @@ describe('connectPanePty', () => {
       transport.connect.mockImplementation(async (opts: { sessionId?: string }) => {
         if (opts.sessionId) {
           activePtyId = opts.sessionId
-          return {
-            id: opts.sessionId,
-            isReattach: true,
-            snapshot: undefined,
-            replay: undefined,
-            coldRestore: undefined
-          }
+          return { id: opts.sessionId, ...args.connectResult }
         }
         activePtyId = 'fresh-resume-pty'
         const onPtySpawn = createdTransportOptions[0]?.onPtySpawn as
@@ -287,19 +285,16 @@ describe('connectPanePty', () => {
             paneKey,
             tabId: 'tab-1',
             worktreeId: 'wt-1',
-            agent: 'codex',
-            providerSession: { key: 'session_id', id: 'codex-session-1' },
+            agent: args.agent,
+            providerSession: { key: 'session_id', id: args.sessionId },
             prompt: 'finish the task',
-            // Mirrors the user's scenario: a stopped/completed agent that hibernated.
-            state: 'done',
+            state: args.state,
             origin: 'worktree-sleep',
             capturedAt: 1,
             updatedAt: 1
           }
         }
       } as StoreState
-      const pane = createPane(2)
-      const manager = createManager(2)
       const deps = createDeps({
         restoredLeafId: LEAF_2,
         restoredPtyIdByLeafId: { [LEAF_2]: 'restored-session' }
@@ -307,36 +302,79 @@ describe('connectPanePty', () => {
       vi.mocked(window.api.pty.declarePendingPaneSerializer)
         .mockResolvedValueOnce(1)
         .mockResolvedValueOnce(2)
-
-      connectPanePty(pane as never, manager as never, deps as never)
+      connectPanePty(createPane(2) as never, createManager(2) as never, deps as never)
       await flushAsyncTicks(20)
       for (const fn of pendingTimeouts) {
         fn()
       }
       await flushAsyncTicks(10)
-
-      expect(transport.disconnect).toHaveBeenCalledTimes(1)
-      expect(transport.connect).toHaveBeenCalledTimes(2)
-      expect(transport.connect).toHaveBeenNthCalledWith(
-        2,
-        expect.objectContaining({
-          command: "codex '--dangerously-bypass-approvals-and-sandbox' 'resume' 'codex-session-1'",
-          env: expect.objectContaining({
-            ORCA_PANE_KEY: paneKey,
-            ORCA_AGENT_LAUNCH_TOKEN: expect.stringMatching(new RegExp(`^${UUID_RE}$`))
-          })
-        })
-      )
-      // The dead session is not adopted as the pane's live PTY.
-      expect(deps.clearExitedPanePtyLayoutBinding).toHaveBeenCalledWith(2, 'restored-session')
-      expect(deps.clearTabPtyId).toHaveBeenCalledWith('tab-1', 'restored-session')
-      expect(deps.syncPanePtyLayoutBinding).not.toHaveBeenCalledWith(2, 'restored-session')
-      expect(deps.syncPanePtyLayoutBinding).toHaveBeenCalledWith(2, 'fresh-resume-pty')
+      expect(transport.disconnect).not.toHaveBeenCalled()
+      expect(transport.connect).toHaveBeenCalledTimes(1)
+      expect(transport.sendInput).toHaveBeenCalledWith(args.expectedInput)
+      expect(deps.syncPanePtyLayoutBinding).toHaveBeenCalledWith(2, 'restored-session')
       expect(mockStoreState.clearSleepingAgentSession).toHaveBeenCalledWith(paneKey)
-      expect(window.api.pty.clearPendingPaneSerializer).toHaveBeenCalledWith(paneKey, 1)
     } finally {
       globalThis.setTimeout = originalSetTimeout
     }
+  }
+
+  it('re-runs the resume command when a hibernated local session reattaches with no payload', async () => {
+    await runWorktreeSleepReattachResume({
+      agent: 'codex',
+      sessionId: 'codex-session-1',
+      state: 'done',
+      connectResult: { isReattach: true },
+      expectedInput:
+        "codex '--dangerously-bypass-approvals-and-sandbox' 'resume' 'codex-session-1'\r"
+    })
+  })
+
+  it('re-runs the resume command when a working worktree-sleep session reattaches with no payload', async () => {
+    await runWorktreeSleepReattachResume({
+      agent: 'codex',
+      sessionId: 'codex-session-1',
+      state: 'working',
+      connectResult: { isReattach: true },
+      expectedInput:
+        "codex '--dangerously-bypass-approvals-and-sandbox' 'resume' 'codex-session-1'\r"
+    })
+  })
+
+  it('re-runs the resume command when a working worktree-sleep session reattaches with cold restore scrollback', async () => {
+    await runWorktreeSleepReattachResume({
+      agent: 'codex',
+      sessionId: 'codex-session-1',
+      state: 'working',
+      connectResult: {
+        isReattach: true,
+        coldRestore: {
+          scrollback: 'agent output before sleep\r\n',
+          cwd: '/projects/demo',
+          cols: 80,
+          rows: 24
+        }
+      },
+      expectedInput:
+        "codex '--dangerously-bypass-approvals-and-sandbox' 'resume' 'codex-session-1'\r"
+    })
+  })
+
+  it('re-runs the resume command when worktree-sleep wake returns coldRestore without isReattach', async () => {
+    await runWorktreeSleepReattachResume({
+      agent: 'claude',
+      sessionId: '40f363f4-7f37-43c6-a3d0-1213daa9d610',
+      state: 'done',
+      connectResult: {
+        coldRestore: {
+          scrollback: 'agent output before sleep\r\n',
+          cwd: '/projects/demo',
+          cols: 80,
+          rows: 24
+        }
+      },
+      expectedInput:
+        "claude '--dangerously-skip-permissions' '--resume' '40f363f4-7f37-43c6-a3d0-1213daa9d610'\r"
+    })
   })
 
   // Regression (#12320): a cold restore after reboot typed PowerShell single quotes into
@@ -429,7 +467,10 @@ describe('connectPanePty', () => {
       }
       await flushAsyncTicks(10)
 
-      return (transport.connect.mock.calls.at(-1)?.[0] as { command?: string } | undefined)?.command
+      const typed = transport.sendInput.mock.calls
+        .map((call) => call[0])
+        .find((value): value is string => typeof value === 'string' && value.includes('resume'))
+      return typed?.replace(/\r$/, '')
     } finally {
       globalThis.setTimeout = originalSetTimeout
       restoreNavigator()

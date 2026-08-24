@@ -347,7 +347,7 @@ describe('getPiAgentStatusExtensionSource', () => {
     }
   })
 
-  it('keeps OMP runtime status payloads unchanged by Pi session metadata', async () => {
+  it('posts OMP session identity on session_start so sleep can resume an idle TUI', async () => {
     const harness = createHarness({ kind: 'omp' })
 
     await harness.callHook(
@@ -360,20 +360,13 @@ describe('getPiAgentStatusExtensionSource', () => {
         }
       }
     )
-    await harness.callHook('agent_start')
 
     expect(harness.fetchMock).toHaveBeenCalledTimes(1)
-    expect(harness.fetchMock.mock.calls[0]?.[1]?.body).toBe(
-      JSON.stringify({
-        paneKey: 'pane-1',
-        launchToken: 'launch-1',
-        tabId: 'tab-1',
-        worktreeId: 'tree-1',
-        env: 'env-1',
-        version: '1.2.3',
-        payload: { hook_event_name: 'agent_start' }
-      })
-    )
+    expect(JSON.parse(String(harness.fetchMock.mock.calls[0]?.[1]?.body)).payload).toEqual({
+      hook_event_name: 'session_start',
+      session_id: 'omp-session-1',
+      session_file: '/tmp/omp-session-1.jsonl'
+    })
   })
 
   it('tracks persistent OMP sessions and clears ephemeral session ids', async () => {
@@ -393,11 +386,16 @@ describe('getPiAgentStatusExtensionSource', () => {
     expect(
       harness.fetchMock.mock.calls.map(([_, init]) => JSON.parse(String(init?.body)).payload)
     ).toEqual([
-      { hook_event_name: 'agent_start', session_id: 'omp-session-8' },
+      {
+        hook_event_name: 'agent_start',
+        session_id: 'omp-session-8',
+        session_file: '/tmp/s'
+      },
       {
         hook_event_name: 'before_agent_start',
         prompt: 'hi',
-        session_id: 'omp-session-9'
+        session_id: 'omp-session-9',
+        session_file: '/tmp/s'
       },
       { hook_event_name: 'agent_end' }
     ])
@@ -445,9 +443,9 @@ describe('getPiAgentStatusExtensionSource', () => {
         hook_event_name: 'message_end',
         role: 'assistant',
         text: 'done',
-        session_id: 'omp-session-9'
+        session_id: 'omp-session-9',
+        session_file: '/tmp/omp-session-9.jsonl'
       })
-      expect(body.payload).not.toHaveProperty('session_file')
       expect(harness.fetchMock.mock.calls[1]?.[0]).toBe('http://127.0.0.1:4321/hook/omp')
       expect(harness.spawnMock).not.toHaveBeenCalled()
       finishDeliveries[1]?.()

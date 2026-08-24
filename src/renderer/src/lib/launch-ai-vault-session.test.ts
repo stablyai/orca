@@ -5,6 +5,10 @@ const mockCreateEmptySplitGroup = vi.fn()
 const mockQueueTabStartupCommand = vi.fn()
 const mockSetActiveTabType = vi.fn()
 const mockSetTabBarOrder = vi.fn()
+const mockSetAiVaultTabTitle = vi.fn()
+const mockUpdateTabTitle = vi.fn()
+const mockSetTabCustomTitle = vi.fn()
+const mockClaimAutomaticAgentResume = vi.fn()
 const runtimeMocks = vi.hoisted(() => ({
   createWebRuntimeSessionTerminal: vi.fn(),
   getRuntimeEnvironmentIdForWorktree: vi.fn<() => string | null>(() => null),
@@ -17,6 +21,10 @@ const mockState = {
   queueTabStartupCommand: mockQueueTabStartupCommand,
   setActiveTabType: mockSetActiveTabType,
   setTabBarOrder: mockSetTabBarOrder,
+  setAiVaultTabTitle: mockSetAiVaultTabTitle,
+  updateTabTitle: mockUpdateTabTitle,
+  setTabCustomTitle: mockSetTabCustomTitle,
+  claimAutomaticAgentResume: mockClaimAutomaticAgentResume,
   tabsByWorktree: {} as Record<string, { id: string }[]>,
   openFiles: [] as { id: string; worktreeId: string }[],
   browserTabsByWorktree: {} as Record<string, { id: string }[]>,
@@ -79,9 +87,13 @@ describe('launchAiVaultSessionInNewTab', () => {
       command: 'claude --resume session-1'
     })
 
-    expect(mockCreateTab).toHaveBeenCalledWith('wt-1', 'group-1')
+    expect(mockCreateTab).toHaveBeenCalledWith('wt-1', 'group-1', undefined, {
+      launchAgent: 'claude'
+    })
     expect(mockQueueTabStartupCommand).toHaveBeenCalledWith('tab-1', {
       command: 'claude --resume session-1',
+      launchAgent: 'claude',
+      showSessionRestoredBanner: true,
       telemetry: {
         agent_kind: 'claude',
         launch_source: 'sidebar',
@@ -110,6 +122,7 @@ describe('launchAiVaultSessionInNewTab', () => {
     })
 
     expect(mockCreateTab).toHaveBeenCalledWith('wt-1', undefined, undefined, {
+      launchAgent: 'claude',
       startupCwd: 'C:\\Users\\alice\\repo'
     })
     expect(mockQueueTabStartupCommand).toHaveBeenCalledWith('tab-1', {
@@ -123,12 +136,58 @@ describe('launchAiVaultSessionInNewTab', () => {
       },
       launchAgent: 'claude',
       resumeProviderSession: { key: 'session_id', id: 'session-1' },
+      agentArgsOverride: '--dangerously-skip-permissions --effort max',
+      showSessionRestoredBanner: true,
       telemetry: {
         agent_kind: 'claude',
         launch_source: 'sidebar',
         request_kind: 'resume'
       }
     })
+    expect(mockClaimAutomaticAgentResume).toHaveBeenCalledWith('tab-1', {
+      worktreeId: 'wt-1',
+      launchAgent: 'claude',
+      providerSession: { key: 'session_id', id: 'session-1' }
+    })
+  })
+
+  it('seeds aiVaultTitle immediately for Claude/Codex history resumes', () => {
+    launchAiVaultSessionInNewTab({
+      agent: 'codex',
+      worktreeId: 'wt-1',
+      command: "codex resume 'session-1'",
+      title: 'Fix the sleep restore bug',
+      sessionId: 'session-1',
+      providerSession: { key: 'session_id', id: 'session-1' }
+    })
+
+    expect(mockCreateTab).toHaveBeenCalledWith('wt-1', undefined, undefined, {
+      launchAgent: 'codex'
+    })
+    expect(mockSetAiVaultTabTitle).toHaveBeenCalledWith('tab-1', {
+      agent: 'codex',
+      sessionId: 'session-1',
+      title: 'Fix the sleep restore bug'
+    })
+    expect(mockUpdateTabTitle).not.toHaveBeenCalled()
+  })
+
+  // Why: gemini/pi/omp have no aiVaultTitle slot, and their OSC title would replace
+  // a plain tab title within seconds of the resume launching.
+  it('pins a custom tab title for non-Claude/Codex history resumes', () => {
+    launchAiVaultSessionInNewTab({
+      agent: 'gemini',
+      worktreeId: 'wt-1',
+      command: 'gemini --resume session-2',
+      title: 'Investigate flaky tests',
+      sessionId: 'session-2'
+    })
+
+    expect(mockSetTabCustomTitle).toHaveBeenCalledWith('tab-1', 'Investigate flaky tests', {
+      recordInteraction: false
+    })
+    expect(mockUpdateTabTitle).not.toHaveBeenCalled()
+    expect(mockSetAiVaultTabTitle).not.toHaveBeenCalled()
   })
 
   it('creates a split group before launching when a split direction is provided', () => {
@@ -141,7 +200,9 @@ describe('launchAiVaultSessionInNewTab', () => {
     })
 
     expect(mockCreateEmptySplitGroup).toHaveBeenCalledWith('wt-1', 'group-1', 'right')
-    expect(mockCreateTab).toHaveBeenCalledWith('wt-1', 'group-new')
+    expect(mockCreateTab).toHaveBeenCalledWith('wt-1', 'group-new', undefined, {
+      launchAgent: 'codex'
+    })
   })
 
   it('creates runtime-hosted resume terminals through the paired host', async () => {

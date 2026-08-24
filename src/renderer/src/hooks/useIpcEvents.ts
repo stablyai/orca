@@ -68,6 +68,7 @@ import {
   type AgentStatusIpcPayload,
   type ParsedAgentStatusPayload
 } from '../../../shared/agent-status-types'
+import { isPiCompatibleAgentType } from '../../../shared/pi-agent-kind'
 import {
   resolveAgentStatusIdentity,
   shouldSuppressInheritedTerminalStatus
@@ -3422,13 +3423,13 @@ export function useIpcEvents(): void {
         return 'dropped'
       }
       if (data.providerSessionOnly) {
-        if (!data.providerSession || data.agentType !== 'pi') {
+        if (!data.providerSession || !isPiCompatibleAgentType(data.agentType)) {
           return 'dropped'
         }
         const providerSessionUpdate: AgentStatusBatchUpdate = {
           kind: 'providerSession',
           paneKey,
-          agent: 'pi',
+          agent: data.agentType,
           providerSession: data.providerSession,
           timing: { updatedAt: data.receivedAt },
           routing: {

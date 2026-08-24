@@ -97,6 +97,7 @@ import {
   normalizeAgentProviderSession,
   type AgentProviderSessionMetadata
 } from '../../shared/agent-session-resume'
+import { isPiCompatibleAgentType } from '../../shared/pi-agent-kind'
 import { isCommandCodeNewTurnWhileWorking } from '../../shared/command-code-turn-boundary'
 
 export type { AgentHookSource }
@@ -268,12 +269,16 @@ function dropHydratedIdleClaudeSubagents(
   }
 }
 
-// Why: remote metadata-only rows are currently a Pi contract; user-dismissed rows use an internal persisted marker instead.
+// Why: remote metadata-only rows are the Pi-compatible resume contract; user-dismissed rows use an internal persisted marker instead.
 function isValidPiProviderSessionOnly(
   providerSession: AgentProviderSessionMetadata | undefined,
   agentType: AgentType | undefined
 ): boolean {
-  return Boolean(providerSession && agentType === 'pi' && getAgentResumeArgv('pi', providerSession))
+  return Boolean(
+    providerSession &&
+    isPiCompatibleAgentType(agentType) &&
+    getAgentResumeArgv(agentType, providerSession)
+  )
 }
 
 function sanitizeHydratedEntry(

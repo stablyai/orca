@@ -23,6 +23,7 @@ import {
   type SleepingAgentLaunchConfig,
   type SleepingAgentSessionRecord
 } from '../../../../shared/agent-session-resume'
+import { buildSleepingAgentLaunchConfig } from '../../../../shared/sleeping-agent-launch-config'
 import {
   resolveAgentStatusIdentity,
   shouldSuppressInheritedTerminalStatus
@@ -35,6 +36,7 @@ import {
   getWorktreeExecutionHostId
 } from '../../../../shared/execution-host'
 import { isExplicitAgentStatusFresh } from '@/lib/agent-status'
+import { isPiCompatibleAgentType } from '../../../../shared/pi-agent-kind'
 import {
   getAgentRowGeneratedTitleText,
   getOrcaDispatchTaskId,
@@ -601,7 +603,8 @@ function sleepingRecordFromEntry(args: {
   if (!isResumableTuiAgent(agent) || !args.entry.providerSession) {
     return null
   }
-  if (!getAgentResumeArgv(agent, args.entry.providerSession)) {
+  const launchConfig = withOmpResumeFilePath(agent, args.entry.providerSession, args.launchConfig)
+  if (!getAgentResumeArgv(agent, args.entry.providerSession, launchConfig?.ompResumeFilePath)) {
     return null
   }
   const tab = args.tab ?? findTabForAgentEntry(args.state, args.worktreeId, args.entry)
@@ -621,8 +624,9 @@ function sleepingRecordFromEntry(args: {
     ...(args.entry.lastAssistantMessage
       ? { lastAssistantMessage: args.entry.lastAssistantMessage }
       : {}),
-    ...(args.launchConfig ? { launchConfig: copyLaunchConfig(args.launchConfig) } : {}),
+    ...(launchConfig ? { launchConfig: copyLaunchConfig(launchConfig) } : {}),
     ...(args.entry.interrupted ? { interrupted: true } : {}),
+    ...(args.entry.connectionId !== undefined ? { connectionId: args.entry.connectionId } : {}),
     ...(args.origin ? { origin: args.origin } : {})
   }
 }
@@ -929,6 +933,27 @@ function copyLaunchConfig(config: SleepingAgentLaunchConfig): SleepingAgentLaunc
     agentEnv: { ...config.agentEnv },
     ...(config.ompResumeFilePath ? { ompResumeFilePath: config.ompResumeFilePath } : {})
   }
+}
+
+function withOmpResumeFilePath(
+  agent: string | undefined,
+  providerSession: AgentProviderSessionMetadata | undefined,
+  launchConfig: SleepingAgentLaunchConfig | undefined
+): SleepingAgentLaunchConfig | undefined {
+  if (agent !== 'omp' || !launchConfig) {
+    return launchConfig
+  }
+  const ompResumeFilePath =
+    launchConfig.ompResumeFilePath?.trim() || providerSession?.transcriptPath?.trim()
+  if (!ompResumeFilePath || launchConfig.ompResumeFilePath === ompResumeFilePath) {
+    return launchConfig
+  }
+  return buildSleepingAgentLaunchConfig({
+    agentCommand: launchConfig.agentCommand,
+    agentArgs: launchConfig.agentArgs,
+    agentEnv: launchConfig.agentEnv,
+    ompResumeFilePath
+  })
 }
 
 function launchConfigsEqual(
@@ -2238,11 +2263,14 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
         // prompt — so `done` must carry the id through, including done→done (OSC 9999 repaints and reconnect
         // snapshot replays both re-deliver a metadata-less `done` onto an already-done row). Without that, every
         // surface keyed on the id — mobile Chat UI transcripts, the resumable recovery anchor below — loses the
-        // session while the agent sits idle, which is precisely when it is read (#10630). Only a new turn
-        // (done→working) still drops it, so a reused pane cannot inherit a finished session.
+        // session while the agent sits idle, which is precisely when it is read (#10630). Claude still drops the
+        // id on done→working so a reused pane cannot inherit a finished session. Pi/OMP/Prime continue the same
+        // TUI session across turns and often omit session_id on later hooks, so sleep capture must keep it.
         const canReuseExistingProviderSession =
           existing?.agentType === identity.agentType &&
-          (existing.state !== 'done' || payload.state === 'done')
+          (existing.state !== 'done' ||
+            payload.state === 'done' ||
+            isPiCompatibleAgentType(identity.agentType))
         const providerSession =
           metadata?.providerSession ??
           (canReuseExistingProviderSession ? existing.providerSession : undefined)
@@ -2486,10 +2514,15 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
           delete nextLaunchConfigs[paneKey]
         }
         if (liveRecoveryRecord) {
-          if (!recoveryRecordMatches(existingSleepingRecord, liveRecoveryRecord)) {
+          const nextRecord =
+            existingSleepingRecord?.connectionId !== undefined &&
+            liveRecoveryRecord.connectionId === undefined
+              ? { ...liveRecoveryRecord, connectionId: existingSleepingRecord.connectionId }
+              : liveRecoveryRecord
+          if (!recoveryRecordMatches(existingSleepingRecord, nextRecord)) {
             nextSleepingAgentSessions = {
               ...s.sleepingAgentSessionsByPaneKey,
-              [paneKey]: liveRecoveryRecord
+              [paneKey]: nextRecord
             }
           }
         } else if (existingSleepingRecord) {

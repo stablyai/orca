@@ -164,7 +164,7 @@ export function runDeferredSessionAttach(session: ConnectPanePtySession): void {
             cols: session.cols,
             rows: session.rows,
             sessionId: pendingSessionId,
-            ...(coldRestoreStartup?.command ? { command: coldRestoreStartup.command } : {}),
+            // Why: argv on a restored sessionId is dropped by createOrAttach.
             ...(coldRestoreStartup?.env
               ? { env: session.mergeStartupEnvWithPaneIdentity(coldRestoreStartup.env) }
               : {}),
