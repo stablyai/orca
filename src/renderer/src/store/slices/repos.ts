@@ -2845,6 +2845,17 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
           'Update the remote runtime to link Jira'
         )
       }
+      if (
+        target.kind === 'environment' &&
+        (args.linkedTask?.provider === 'shortcut' ||
+          args.linkedTaskSourceContext?.provider === 'shortcut')
+      ) {
+        await assertRuntimeEnvironmentCapability(
+          target.environmentId,
+          WORKTREE_LINKED_WORK_ITEM_CONTEXT_RUNTIME_CAPABILITY,
+          'Update the remote runtime to link Shortcut'
+        )
+      }
       const workspace =
         target.kind === 'local'
           ? await window.api.folderWorkspaces.create(args)
@@ -2899,6 +2910,17 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
         target.environmentId,
         WORKTREE_LINKED_WORK_ITEM_CONTEXT_RUNTIME_CAPABILITY,
         'Update the remote runtime to link Jira'
+      )
+    }
+    if (
+      target.kind === 'environment' &&
+      (updates.linkedTask?.provider === 'shortcut' ||
+        updates.linkedTaskSourceContext?.provider === 'shortcut')
+    ) {
+      await assertRuntimeEnvironmentCapability(
+        target.environmentId,
+        WORKTREE_LINKED_WORK_ITEM_CONTEXT_RUNTIME_CAPABILITY,
+        'Update the remote runtime to link Shortcut'
       )
     }
     const updateTicket = folderWorkspaceUpdates.begin(

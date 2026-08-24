@@ -29,7 +29,9 @@ export const TaskResumeState = z
       .strict()
       .optional(),
     jiraPreset: z.enum(['assigned', 'reported', 'all', 'done']).optional(),
-    jiraQuery: z.string().optional()
+    jiraQuery: z.string().optional(),
+    shortcutPreset: z.enum(['assigned', 'requested', 'all', 'done']).optional(),
+    shortcutQuery: z.string().optional()
   })
   .strict()
 

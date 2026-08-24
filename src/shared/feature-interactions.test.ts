@@ -48,6 +48,7 @@ describe('feature interactions', () => {
       'gitlab-tasks',
       'linear-tasks',
       'jira-tasks',
+      'shortcut-tasks',
       'automations',
       'automation-created',
       'automation-run',
@@ -176,6 +177,7 @@ describe('feature interactions', () => {
     expect(FEATURE_INTERACTION_CATEGORY_BY_ID.tasks).toBe('task_management')
     expect(FEATURE_INTERACTION_CATEGORY_BY_ID['github-tasks']).toBe('task_management')
     expect(FEATURE_INTERACTION_CATEGORY_BY_ID['jira-tasks']).toBe('task_management')
+    expect(FEATURE_INTERACTION_CATEGORY_BY_ID['shortcut-tasks']).toBe('task_management')
     expect(FEATURE_INTERACTION_CATEGORY_BY_ID['markdown-file-created']).toBe('notes')
     expect(FEATURE_INTERACTION_CATEGORY_BY_ID['agent-browser-setup']).toBe('setup')
     expect(FEATURE_INTERACTION_CATEGORY_BY_ID['terminal-tabs']).toBe('terminal')

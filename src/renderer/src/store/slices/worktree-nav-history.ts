@@ -3,6 +3,7 @@ import type { AppState } from '../types'
 import { findWorktreeById } from './worktree-helpers'
 import type { GitHubWorkItem } from '../../../../shared/github/work-item-types'
 import type { JiraIssue } from '../../../../shared/jira-types'
+import type { ShortcutStory } from '../../../../shared/shortcut-types'
 import type { LinearIssue } from '../../../../shared/linear/issue-types'
 import type { GitLabWorkItem } from '../../../../shared/gitlab-types'
 import {
@@ -46,6 +47,12 @@ export type WorktreeNavHistoryTaskDetailEntry =
       kind: 'task-detail'
       source: 'jira'
       issue: JiraIssue
+      sourceContext?: TaskSourceContext | null
+    }
+  | {
+      kind: 'task-detail'
+      source: 'shortcut'
+      story: ShortcutStory
       sourceContext?: TaskSourceContext | null
     }
 export type WorktreeNavHistoryViewEntry =
@@ -125,6 +132,13 @@ function getHistoryEntryKey(entry: WorktreeNavHistoryEntry): string {
         ? getTaskSourceCacheScope(entry.sourceContext)
         : 'legacy'
     return `view:task-detail:jira:${sourceScope}:${entry.issue.siteId ?? 'selected'}:${entry.issue.key}`
+  }
+  if (entry.source === 'shortcut') {
+    const sourceScope =
+      entry.sourceContext?.provider === 'shortcut'
+        ? getTaskSourceCacheScope(entry.sourceContext)
+        : 'legacy'
+    return `view:task-detail:shortcut:${sourceScope}:${entry.story.workspaceId ?? 'selected'}:${entry.story.id}`
   }
   const sourceScope =
     entry.sourceContext?.provider === 'linear'

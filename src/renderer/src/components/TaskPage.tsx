@@ -90,6 +90,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
 import TaskProjectSourceCombobox from '@/components/task-project-source-combobox'
 import { JiraConnectDialog } from '@/components/jira-connect-dialog'
+import { ShortcutConnectDialog } from '@/components/shortcut-connect-dialog'
 import { LinearApiKeyDialog } from '@/components/linear-api-key-dialog'
 import { LinearScopeSelector } from '@/components/linear-scope-selector'
 import RepoBadgeLabel from '@/components/repo/RepoBadgeLabel'
@@ -198,12 +199,15 @@ import {
 } from '@/components/linear-project-view-surfaces'
 import JiraIssueWorkspace from '@/components/JiraIssueWorkspace'
 import { TaskPageJiraIssueList } from '@/components/task-page-jira-issue-list'
+import ShortcutStoryWorkspace from '@/components/ShortcutStoryWorkspace'
+import { TaskPageShortcutStoryList } from '@/components/task-page-shortcut-story-list'
 import {
   getSingleJiraProjectScope,
   getTaskPageJiraStatusOrderScopeKey,
   loadTaskPageJiraProjectStatusOrder
 } from '@/components/task-page-jira-status-order'
 import { JiraIcon } from '@/components/icons/JiraIcon'
+import { ShortcutIcon } from '@/components/icons/ShortcutIcon'
 import { cn } from '@/lib/utils'
 import {
   getLinkedWorkItemSuggestedName,
@@ -309,6 +313,7 @@ import {
 } from '@/store/slices/task-creation-drafts'
 import { useTaskCreationDraftRetention } from '@/components/use-task-creation-draft-retention'
 import { findTaskPageJiraIssue } from '@/components/task-page-jira-cache-selectors'
+import { findTaskPageShortcutStory } from '@/components/task-page-shortcut-cache-selectors'
 import { getRepoBackedTaskEmptyState } from '@/components/task-page-empty-state'
 import {
   getDefaultTaskRepoSelection,
@@ -341,6 +346,10 @@ import {
   createTaskPageJiraLoadFailureState,
   type TaskPageJiraLoadError
 } from '@/components/task-page-jira-load-state'
+import {
+  createTaskPageShortcutLoadFailureState,
+  type TaskPageShortcutLoadError
+} from '@/components/task-page-shortcut-load-state'
 import { deriveTaskPagePRCheckSummary } from '@/components/task-page-pr-check-summary'
 import { presentGitHubPRMergeState } from '@/components/github-pr-merge-state'
 import {
@@ -363,6 +372,13 @@ import type {
   JiraProject,
   JiraProjectStatusOrder
 } from '../../../shared/jira-types'
+import type {
+  ShortcutStory,
+  ShortcutStoryType,
+  ShortcutTeam,
+  ShortcutWorkflow
+} from '../../../shared/shortcut-types'
+import { shortcutStoryReference } from '../../../shared/shortcut-story-reference'
 import type { LinearIssue } from '../../../shared/linear/issue-types'
 import type {
   LinearCustomViewModel,
@@ -411,6 +427,11 @@ import {
   jiraListPriorities
 } from '@/runtime/runtime-jira-client'
 import {
+  shortcutCreateStory,
+  shortcutListTeams,
+  shortcutListWorkflows
+} from '@/runtime/runtime-shortcut-client'
+import {
   sortJiraIssues,
   type JiraIssueSortColumn,
   type JiraIssueSortDirection,
@@ -418,6 +439,7 @@ import {
 } from './jira-issue-sorter'
 import { TaskPageJiraSortControls } from './task-page-jira-sort-controls'
 import { bindTaskPageJiraItemSourceContext } from './task-page-jira-item-source-context'
+import { bindTaskPageShortcutItemSourceContext } from './task-page-shortcut-item-source-context'
 import {
   normalizeVisibleTaskProviders,
   restoreAvailableDefaultTaskProvider,
@@ -431,6 +453,7 @@ import {
   getGitLabIssueFilters,
   getGitLabMRFilters,
   getJiraPresets,
+  getShortcutPresets,
   getLinearDisplayProperties,
   getLinearGroupOptions,
   getLinearModeOptions,
@@ -442,6 +465,7 @@ import {
   type GitLabIssueFilter,
   type GitLabTaskFilter,
   type JiraPresetId,
+  type ShortcutPresetId,
   LinearIcon,
   type LinearDisplayProperty,
   type LinearGroupBy,
@@ -458,6 +482,7 @@ import {
 } from '@/components/task-page-github-task-kind'
 import { areStringSetsEqual } from '@/components/task-page-string-set-equality'
 import { getJiraStatusTone } from '@/components/task-page-jira-status-tone'
+import { getShortcutStateTone } from '@/components/task-page-shortcut-status-tone'
 import {
   compareJiraProjectsByDisplayLabel,
   getJiraProjectSelectionKey
@@ -483,6 +508,7 @@ function isGitLabIssueFilter(
 const TASK_SEARCH_DEBOUNCE_MS = 300
 const LINEAR_ITEM_LIMIT = 36
 const JIRA_ITEM_LIMIT = 50
+const SHORTCUT_ITEM_LIMIT = 50
 const PR_CHECKS_EAGER_PREFETCH_LIMIT = 20
 
 const GITHUB_TASK_GRID_CLASS =
@@ -519,6 +545,17 @@ function getJiraIssueWorkspaceSeed(issue: JiraIssue): string {
       title: `${issue.key} ${issue.title}`,
       jiraIdentifier: issue.key
     })?.seedName ?? getLinkedWorkItemSuggestedName(issue)
+  )
+}
+
+function getShortcutStoryWorkspaceSeed(story: ShortcutStory): string {
+  return (
+    getLinkedWorkItemWorkspaceName({
+      type: 'issue',
+      provider: 'shortcut',
+      number: Number(story.id) || 0,
+      title: story.title
+    })?.seedName ?? getLinkedWorkItemSuggestedName(story)
   )
 }
 
@@ -3034,6 +3071,13 @@ export default function TaskPage(): React.JSX.Element {
   const searchJiraIssues = useAppStore((s) => s.searchJiraIssues)
   const listJiraIssues = useAppStore((s) => s.listJiraIssues)
   const checkJiraConnection = useAppStore((s) => s.checkJiraConnection)
+  const shortcutStatus = useAppStore((s) => s.shortcutStatus)
+  const shortcutStatusChecked = useAppStore((s) => s.shortcutStatusChecked)
+  const shortcutStatusContextKey = useAppStore((s) => s.shortcutStatusContextKey)
+  const selectShortcutWorkspace = useAppStore((s) => s.selectShortcutWorkspace)
+  const searchShortcutStories = useAppStore((s) => s.searchShortcutStories)
+  const listShortcutStories = useAppStore((s) => s.listShortcutStories)
+  const checkShortcutConnection = useAppStore((s) => s.checkShortcutConnection)
   const providerRuntimeContextKey = getProviderRuntimeContextKey(settings)
   const providerRuntimeContextKeyRef = useRef(providerRuntimeContextKey)
   providerRuntimeContextKeyRef.current = providerRuntimeContextKey
@@ -3042,8 +3086,11 @@ export default function TaskPage(): React.JSX.Element {
   const preflightStatusCurrent = preflightStatusContextKey === expectedPreflightContextKey
   const linearStatusReady = linearStatusCurrent && linearStatusChecked
   const jiraStatusReady = jiraStatusCurrent && jiraStatusChecked
+  const shortcutStatusCurrent = shortcutStatusContextKey === providerRuntimeContextKey
+  const shortcutStatusReady = shortcutStatusCurrent && shortcutStatusChecked
   const linearConnected = linearStatusCurrent && linearStatus.connected
   const jiraConnected = jiraStatusCurrent && jiraStatus.connected
+  const shortcutConnected = shortcutStatusCurrent && shortcutStatus.connected
   const submitShortcutLabel = getScreenSubmitShortcutLabel()
   const eligibleRepos = useMemo(() => getTaskEligibleRepos(repos), [repos])
 
@@ -3139,6 +3186,20 @@ export default function TaskPage(): React.JSX.Element {
     selectedJiraSiteId && selectedJiraSiteId !== 'all'
       ? (jiraSites.find((site) => site.id === selectedJiraSiteId) ?? null)
       : null
+  const shortcutWorkspaces = useMemo(
+    () => shortcutStatus.workspaces ?? [],
+    [shortcutStatus.workspaces]
+  )
+  const selectedShortcutWorkspaceId =
+    shortcutStatus.selectedWorkspaceId ??
+    shortcutStatus.activeWorkspaceId ??
+    shortcutWorkspaces[0]?.id ??
+    null
+  const selectedShortcutWorkspace =
+    selectedShortcutWorkspaceId && selectedShortcutWorkspaceId !== 'all'
+      ? (shortcutWorkspaces.find((workspace) => workspace.id === selectedShortcutWorkspaceId) ??
+        null)
+      : null
   const preferredVisibleTaskProviders = useMemo(
     () => normalizeVisibleTaskProviders(settings?.visibleTaskProviders),
     [settings?.visibleTaskProviders]
@@ -3166,6 +3227,7 @@ export default function TaskPage(): React.JSX.Element {
   const githubModeButtons = getGitHubModeButtons()
   const linearModeOptions = getLinearModeOptions()
   const jiraPresets = getJiraPresets()
+  const shortcutPresets = getShortcutPresets()
   const gitLabIssueFilters = getGitLabIssueFilters()
   const gitLabMRFilters = getGitLabMRFilters()
   const linearViewOptions = getLinearViewOptions()
@@ -3431,8 +3493,31 @@ export default function TaskPage(): React.JSX.Element {
   const jiraTaskSourceScopeKey = jiraTaskSourceContext
     ? getTaskSourceCacheScope(jiraTaskSourceContext)
     : providerRuntimeContextKey
+  const shortcutTaskSourceContext = useMemo(
+    () =>
+      normalizeTaskSourceContext({
+        provider: 'shortcut',
+        projectId: fallbackTaskSourceProjectId,
+        hostId: accountBackedTaskSourceHostId,
+        providerIdentity: {
+          provider: 'shortcut',
+          workspaceId:
+            selectedShortcutWorkspaceId && selectedShortcutWorkspaceId !== 'all'
+              ? selectedShortcutWorkspaceId
+              : null,
+          workspaceSlug: selectedShortcutWorkspace?.urlSlug ?? null
+        },
+        accountLabel: selectedShortcutWorkspace?.name ?? selectedShortcutWorkspace?.urlSlug ?? null
+      }),
+    [
+      accountBackedTaskSourceHostId,
+      fallbackTaskSourceProjectId,
+      selectedShortcutWorkspace,
+      selectedShortcutWorkspaceId
+    ]
+  )
   const accountBackedTaskSourceHostAvailability = useMemo<TaskSourceHostAvailability[]>(() => {
-    if (taskSource !== 'linear' && taskSource !== 'jira') {
+    if (taskSource !== 'linear' && taskSource !== 'jira' && taskSource !== 'shortcut') {
       return []
     }
     const host = hostRegistryById.get(accountBackedTaskSourceHostId)
@@ -3505,6 +3590,13 @@ export default function TaskPage(): React.JSX.Element {
           sourceCount: 1,
           hostLabelById,
           hostAvailability: accountAvailability
+        }) ?? undefined,
+      shortcut:
+        getTaskSourceAvailabilityNotice({
+          providerLabel: labelFor('shortcut'),
+          sourceCount: 1,
+          hostLabelById,
+          hostAvailability: accountAvailability
         }) ?? undefined
     }
   }, [
@@ -3526,7 +3618,7 @@ export default function TaskPage(): React.JSX.Element {
       providerLabel,
       repoContexts: taskSourceRepoContexts,
       hostAvailability:
-        taskSource === 'linear' || taskSource === 'jira'
+        taskSource === 'linear' || taskSource === 'jira' || taskSource === 'shortcut'
           ? accountBackedTaskSourceHostAvailability
           : taskSourceHostAvailability,
       accountHostId: accountBackedTaskSourceHostId,
@@ -3534,11 +3626,14 @@ export default function TaskPage(): React.JSX.Element {
       selectedRepoCount: selectedRepos.length,
       linearWorkspaceName:
         selectedLinearWorkspace?.organizationName ?? selectedLinearWorkspace?.id ?? null,
-      jiraSiteName: selectedJiraSite?.displayName ?? selectedJiraSite?.siteUrl ?? null
+      jiraSiteName: selectedJiraSite?.displayName ?? selectedJiraSite?.siteUrl ?? null,
+      shortcutWorkspaceName:
+        selectedShortcutWorkspace?.name ?? selectedShortcutWorkspace?.urlSlug ?? null
     })
   }, [
     selectedJiraSite,
     selectedLinearWorkspace,
+    selectedShortcutWorkspace,
     selectedRepos.length,
     sourceOptions,
     taskSource,
@@ -3554,11 +3649,11 @@ export default function TaskPage(): React.JSX.Element {
     return getTaskSourceAvailabilityNotice({
       providerLabel,
       sourceCount:
-        taskSource === 'linear' || taskSource === 'jira'
+        taskSource === 'linear' || taskSource === 'jira' || taskSource === 'shortcut'
           ? 1
           : Math.max(1, taskSourceRepoContexts.length),
       hostAvailability:
-        taskSource === 'linear' || taskSource === 'jira'
+        taskSource === 'linear' || taskSource === 'jira' || taskSource === 'shortcut'
           ? accountBackedTaskSourceHostAvailability
           : taskSourceHostAvailability,
       hostLabelById
@@ -3586,6 +3681,7 @@ export default function TaskPage(): React.JSX.Element {
   const linearSearchPersistReadyRef = useRef(false)
   const linearViewPersistReadyRef = useRef(false)
   const jiraSearchPersistReadyRef = useRef(false)
+  const shortcutSearchPersistReadyRef = useRef(false)
   const [taskResumeApplied, setTaskResumeApplied] = useState(false)
 
   // Why: useState only inits once, so sync taskSource from the store when a sidebar source-icon click changes pageData.taskSource.
@@ -4319,7 +4415,9 @@ export default function TaskPage(): React.JSX.Element {
         openLinearIssue: undefined,
         openLinearSourceContext: undefined,
         openJiraIssue: undefined,
-        openJiraSourceContext: undefined
+        openJiraSourceContext: undefined,
+        openShortcutStory: undefined,
+        openShortcutSourceContext: undefined
       }
     }))
   }, [clearSelectedLinearIssue, setDialogWorkItem])
@@ -4382,6 +4480,70 @@ export default function TaskPage(): React.JSX.Element {
       )
     },
     [jiraTaskSourceContext, openTaskPage]
+  )
+
+  const [selectedShortcutStoryId, setSelectedShortcutStoryId] = useState<string | null>(null)
+  const [selectedShortcutStoryFallback, setSelectedShortcutStoryFallback] =
+    useState<ShortcutStory | null>(null)
+  const shortcutCacheSnapshot = useAppStore(
+    useShallow((s) => ({
+      storyCache: s.shortcutStoryCache,
+      searchCache: s.shortcutSearchCache
+    }))
+  )
+  const cachedSelectedShortcutStory = findTaskPageShortcutStory(
+    shortcutCacheSnapshot.storyCache,
+    shortcutCacheSnapshot.searchCache,
+    selectedShortcutStoryId,
+    {
+      sourceContext: shortcutTaskSourceContext,
+      workspaceId:
+        selectedShortcutStoryFallback?.workspaceId ??
+        pageData.openShortcutStory?.workspaceId ??
+        null
+    }
+  )
+  const selectedShortcutStory = selectedShortcutStoryId
+    ? (cachedSelectedShortcutStory ?? selectedShortcutStoryFallback)
+    : null
+  const shortcutDetailSourceContext = useMemo(() => {
+    if (
+      selectedShortcutStory &&
+      pageData.openShortcutSourceContext?.provider === 'shortcut' &&
+      pageData.openShortcutStory?.id === selectedShortcutStory.id &&
+      pageData.openShortcutStory.workspaceId === selectedShortcutStory.workspaceId
+    ) {
+      return pageData.openShortcutSourceContext
+    }
+    return shortcutTaskSourceContext
+  }, [
+    shortcutTaskSourceContext,
+    pageData.openShortcutStory,
+    pageData.openShortcutSourceContext,
+    selectedShortcutStory
+  ])
+
+  const setSelectedShortcutStory = useCallback((story: ShortcutStory | null) => {
+    setSelectedShortcutStoryId(story?.id ?? null)
+    setSelectedShortcutStoryFallback(story)
+  }, [])
+
+  useEffect(() => {
+    setSelectedShortcutStory(pageData.openShortcutStory ?? null)
+  }, [pageData.openShortcutStory, setSelectedShortcutStory])
+
+  const openShortcutDetailPage = useCallback(
+    (story: ShortcutStory) => {
+      openTaskPage(
+        {
+          taskSource: 'shortcut',
+          openShortcutStory: story,
+          openShortcutSourceContext: shortcutTaskSourceContext
+        },
+        { recordTasksInteraction: false }
+      )
+    },
+    [shortcutTaskSourceContext, openTaskPage]
   )
 
   // Linear tab state
@@ -4662,6 +4824,52 @@ export default function TaskPage(): React.JSX.Element {
     [jiraOrderBy]
   )
 
+  // Shortcut tab state
+  const [shortcutStories, setShortcutStories] = useState<ShortcutStory[]>([])
+  const [shortcutLoading, setShortcutLoading] = useState(false)
+  const [shortcutError, setShortcutError] = useState<TaskPageShortcutLoadError | null>(null)
+  const [shortcutErrorDetailsOpen, setShortcutErrorDetailsOpen] = useState(false)
+  const [shortcutSearchInput, setShortcutSearchInput] = useState('')
+  const [appliedShortcutSearch, setAppliedShortcutSearch] = useState('')
+  const [activeShortcutPreset, setActiveShortcutPreset] = useState<ShortcutPresetId>('assigned')
+  const [shortcutRefreshNonce, setShortcutRefreshNonce] = useState(0)
+  // Why: workflow state positions drive list-group ordering; loaded separately
+  // from stories because search payloads reference states only by id.
+  const [shortcutGroupingWorkflows, setShortcutGroupingWorkflows] = useState<ShortcutWorkflow[]>([])
+
+  useEffect(() => {
+    if (!taskResumeApplied) {
+      return
+    }
+    if (taskSource !== 'shortcut' || !shortcutConnected) {
+      setShortcutGroupingWorkflows((current) => (current.length === 0 ? current : []))
+      return
+    }
+    let cancelled = false
+    void shortcutListWorkflows(
+      shortcutTaskSourceContext ?? settings,
+      selectedShortcutWorkspaceId && selectedShortcutWorkspaceId !== 'all'
+        ? selectedShortcutWorkspaceId
+        : undefined
+    )
+      .then((workflows) => {
+        if (!cancelled) {
+          setShortcutGroupingWorkflows(workflows)
+        }
+      })
+      .catch(() => {})
+    return () => {
+      cancelled = true
+    }
+  }, [
+    settings,
+    taskSource,
+    shortcutConnected,
+    selectedShortcutWorkspaceId,
+    taskResumeApplied,
+    shortcutTaskSourceContext
+  ])
+
   useEffect(() => {
     if (taskResumeAppliedRef.current || !persistedUIReady || !settings) {
       return
@@ -4710,6 +4918,12 @@ export default function TaskPage(): React.JSX.Element {
     setActiveJiraPreset(jiraPreset)
     setJiraSearchInput(jiraQuery)
     setAppliedJiraSearch(jiraQuery)
+
+    const shortcutPreset = taskResumeState?.shortcutPreset ?? 'assigned'
+    const shortcutQuery = taskResumeState?.shortcutQuery ?? ''
+    setActiveShortcutPreset(shortcutPreset)
+    setShortcutSearchInput(shortcutQuery)
+    setAppliedShortcutSearch(shortcutQuery)
 
     // Why: settings/UI hydrate async; apply the restored Tasks context exactly once so later source/filter clicks stay local.
     taskResumeAppliedRef.current = true
@@ -5720,6 +5934,27 @@ export default function TaskPage(): React.JSX.Element {
       jiraPrioritiesBySite
     )
   }, [displayedJiraIssues, jiraOrderBy, jiraOrderDirection, jiraPrioritiesBySite])
+  const displayedShortcutStories = useMemo(
+    () =>
+      shortcutStories.map(
+        (story) =>
+          findTaskPageShortcutStory(
+            shortcutCacheSnapshot.storyCache,
+            shortcutCacheSnapshot.searchCache,
+            story.id,
+            {
+              sourceContext: shortcutTaskSourceContext,
+              workspaceId: story.workspaceId
+            }
+          ) ?? story
+      ),
+    [
+      shortcutStories,
+      shortcutCacheSnapshot.storyCache,
+      shortcutCacheSnapshot.searchCache,
+      shortcutTaskSourceContext
+    ]
+  )
   // New Linear project dialog state
   const [newLinearProjectOpen, setNewLinearProjectOpen] = useState(false)
   const [newLinearProjectName, setNewLinearProjectName] = useState('')
@@ -5872,6 +6107,7 @@ export default function TaskPage(): React.JSX.Element {
 
   const [linearConnectOpen, setLinearConnectOpen] = useState(false)
   const [jiraConnectOpen, setJiraConnectOpen] = useState(false)
+  const [shortcutConnectOpen, setShortcutConnectOpen] = useState(false)
   useContextualTour(
     'tasks',
     !dialogWorkItem &&
@@ -5882,6 +6118,7 @@ export default function TaskPage(): React.JSX.Element {
       !newLinearIssueOpen &&
       !linearConnectOpen &&
       !jiraConnectOpen &&
+      !shortcutConnectOpen &&
       activeModal === 'none',
     'tasks_open'
   )
@@ -6018,6 +6255,16 @@ export default function TaskPage(): React.JSX.Element {
     Record<string, string>
   >({})
 
+  // New Shortcut story dialog state
+  const [newShortcutStoryOpen, setNewShortcutStoryOpen] = useState(false)
+  const [newShortcutStoryTitle, setNewShortcutStoryTitle] = useState('')
+  const [newShortcutStoryBody, setNewShortcutStoryBody] = useState('')
+  const [newShortcutStoryTeamId, setNewShortcutStoryTeamId] = useState<string | null>(null)
+  const [newShortcutStoryType, setNewShortcutStoryType] = useState<ShortcutStoryType>('feature')
+  const [newShortcutStorySubmitting, setNewShortcutStorySubmitting] = useState(false)
+  const [availableShortcutTeams, setAvailableShortcutTeams] = useState<ShortcutTeam[]>([])
+  const [shortcutTeamsLoading, setShortcutTeamsLoading] = useState(false)
+
   const discardNewJiraIssueDraft = useTaskCreationDraftRetention({
     open: newJiraIssueOpen,
     draft: { title: newJiraIssueTitle, body: newJiraIssueBody },
@@ -6062,7 +6309,17 @@ export default function TaskPage(): React.JSX.Element {
       setNewJiraIssueCustomFieldValues({})
       setNewJiraIssueSubmitting(false)
     }
-  }, [newJiraIssueOpen, newLinearIssueOpen, providerRuntimeContextKey])
+    if (newShortcutStoryOpen) {
+      setNewShortcutStoryOpen(false)
+      setNewShortcutStoryTitle('')
+      setNewShortcutStoryBody('')
+      setNewShortcutStoryTeamId(null)
+      setNewShortcutStoryType('feature')
+      setAvailableShortcutTeams([])
+      setShortcutTeamsLoading(false)
+      setNewShortcutStorySubmitting(false)
+    }
+  }, [newJiraIssueOpen, newLinearIssueOpen, newShortcutStoryOpen, providerRuntimeContextKey])
 
   const sortedAvailableJiraProjects = useMemo(
     () =>
@@ -7863,6 +8120,130 @@ export default function TaskPage(): React.JSX.Element {
     discardNewJiraIssueDraft
   ])
 
+  useEffect(() => {
+    if (!newShortcutStoryOpen || !shortcutConnected) {
+      setAvailableShortcutTeams([])
+      setShortcutTeamsLoading(false)
+      return
+    }
+    let cancelled = false
+    setAvailableShortcutTeams([])
+    setShortcutTeamsLoading(true)
+    void shortcutListTeams(shortcutTaskSourceContext ?? settings, selectedShortcutWorkspaceId)
+      .then((teams) => {
+        if (cancelled) {
+          return
+        }
+        setAvailableShortcutTeams(teams)
+        setNewShortcutStoryTeamId((current) =>
+          current && teams.some((team) => team.id === current) ? current : (teams[0]?.id ?? null)
+        )
+      })
+      .catch(() => {
+        if (!cancelled) {
+          toast.error(
+            translate(
+              'auto.components.TaskPage.shortcutTeamsFailed',
+              'Failed to load Shortcut teams.'
+            )
+          )
+        }
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setShortcutTeamsLoading(false)
+        }
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [
+    settings,
+    shortcutConnected,
+    newShortcutStoryOpen,
+    selectedShortcutWorkspaceId,
+    shortcutTaskSourceContext
+  ])
+
+  const newShortcutStoryTargetTeam = useMemo(
+    () =>
+      availableShortcutTeams.find((team) => team.id === newShortcutStoryTeamId) ??
+      availableShortcutTeams[0] ??
+      null,
+    [availableShortcutTeams, newShortcutStoryTeamId]
+  )
+  // Why: under an 'all' selection only a team pins the target workspace, so
+  // creation without one would land in an arbitrary connected workspace.
+  const canCreateShortcutStory =
+    selectedShortcutWorkspaceId !== 'all' || newShortcutStoryTargetTeam !== null
+
+  const handleCreateNewShortcutStory = useCallback(async (): Promise<void> => {
+    const title = newShortcutStoryTitle.trim()
+    if (!title || newShortcutStorySubmitting || !canCreateShortcutStory) {
+      return
+    }
+    setNewShortcutStorySubmitting(true)
+    const submitProviderRuntimeContextKey = providerRuntimeContextKey
+    try {
+      const result = await shortcutCreateStory(shortcutTaskSourceContext ?? settings, {
+        workspaceId:
+          newShortcutStoryTargetTeam?.workspaceId ??
+          (selectedShortcutWorkspaceId && selectedShortcutWorkspaceId !== 'all'
+            ? selectedShortcutWorkspaceId
+            : undefined),
+        teamId: newShortcutStoryTargetTeam?.id,
+        storyType: newShortcutStoryType,
+        title,
+        description: newShortcutStoryBody || undefined
+      })
+      if (submitProviderRuntimeContextKey !== providerRuntimeContextKeyRef.current) {
+        return
+      }
+      if (!result.ok) {
+        toast.error(
+          result.error ||
+            translate(
+              'auto.components.TaskPage.shortcutCreateFailed',
+              'Failed to create Shortcut story.'
+            )
+        )
+        return
+      }
+      toast.success(
+        translate('auto.components.TaskPage.shortcutCreated', 'Created sc-{{value0}}', {
+          value0: result.id
+        }),
+        {
+          action: result.url
+            ? {
+                label: translate('auto.components.TaskPage.9c57663908', 'View'),
+                onClick: () => window.open(result.url, '_blank')
+              }
+            : undefined
+        }
+      )
+      setNewShortcutStoryOpen(false)
+      setNewShortcutStoryTitle('')
+      setNewShortcutStoryBody('')
+      setShortcutRefreshNonce((n) => n + 1)
+    } finally {
+      if (submitProviderRuntimeContextKey === providerRuntimeContextKeyRef.current) {
+        setNewShortcutStorySubmitting(false)
+      }
+    }
+  }, [
+    canCreateShortcutStory,
+    newShortcutStoryBody,
+    newShortcutStorySubmitting,
+    newShortcutStoryTargetTeam,
+    newShortcutStoryTitle,
+    newShortcutStoryType,
+    providerRuntimeContextKey,
+    selectedShortcutWorkspaceId,
+    shortcutTaskSourceContext,
+    settings
+  ])
+
   const githubTasksBusy = tasksLoading || tasksRefreshing || tasksFiltering
 
   useEffect(() => {
@@ -7870,10 +8251,12 @@ export default function TaskPage(): React.JSX.Element {
     if (
       dialogWorkItem ||
       selectedJiraIssue ||
+      selectedShortcutStory ||
       selectedLinearIssue ||
       newIssueOpen ||
       newLinearIssueOpen ||
       newJiraIssueOpen ||
+      newShortcutStoryOpen ||
       activeModal !== 'none'
     ) {
       return
@@ -7923,8 +8306,10 @@ export default function TaskPage(): React.JSX.Element {
     newIssueOpen,
     newLinearIssueOpen,
     newJiraIssueOpen,
+    newShortcutStoryOpen,
     selectedLinearIssue,
-    selectedJiraIssue
+    selectedJiraIssue,
+    selectedShortcutStory
   ])
 
   useEffect(() => {
@@ -7937,9 +8322,15 @@ export default function TaskPage(): React.JSX.Element {
     if (!jiraStatusReady) {
       void checkJiraConnection()
     }
+    if (!shortcutStatusReady) {
+      void checkShortcutConnection()
+    }
   }, [
     checkJiraConnection,
     checkLinearConnection,
+    checkShortcutConnection,
+    shortcutStatusContextKey,
+    shortcutStatusReady,
     expectedPreflightContextKey,
     jiraStatusContextKey,
     jiraStatusReady,
@@ -8706,6 +9097,115 @@ export default function TaskPage(): React.JSX.Element {
     taskSource
   ])
 
+  useEffect(() => {
+    if (!taskResumeApplied) {
+      return
+    }
+    const timeout = window.setTimeout(() => {
+      setAppliedShortcutSearch(shortcutSearchInput)
+    }, TASK_SEARCH_DEBOUNCE_MS)
+    return () => window.clearTimeout(timeout)
+  }, [shortcutSearchInput, taskResumeApplied])
+
+  useEffect(() => {
+    if (!taskResumeApplied) {
+      return
+    }
+    if (!shortcutSearchPersistReadyRef.current) {
+      shortcutSearchPersistReadyRef.current = true
+      return
+    }
+    setTaskResumeState({ shortcutQuery: appliedShortcutSearch.trim() })
+  }, [appliedShortcutSearch, setTaskResumeState, taskResumeApplied])
+
+  useEffect(() => {
+    if (!taskResumeApplied) {
+      return
+    }
+    if (taskSource !== 'shortcut') {
+      return
+    }
+    if (!shortcutConnected) {
+      return
+    }
+
+    let cancelled = false
+    setShortcutLoading(true)
+    setShortcutError(null)
+    setShortcutErrorDetailsOpen(false)
+
+    const trimmed = appliedShortcutSearch.trim()
+    const request =
+      trimmed.length > 0
+        ? searchShortcutStories(trimmed, SHORTCUT_ITEM_LIMIT, {
+            sourceContext: shortcutTaskSourceContext
+          })
+        : listShortcutStories(activeShortcutPreset, SHORTCUT_ITEM_LIMIT, {
+            sourceContext: shortcutTaskSourceContext
+          })
+
+    void request
+      .then((stories) => {
+        if (cancelled) {
+          return
+        }
+        setShortcutStories(stories)
+        setShortcutLoading(false)
+      })
+      .catch((err) => {
+        if (cancelled) {
+          return
+        }
+        const failureState = createTaskPageShortcutLoadFailureState(err)
+        setShortcutStories(failureState.stories)
+        setShortcutError(failureState.error)
+        setShortcutLoading(false)
+      })
+
+    return () => {
+      cancelled = true
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    taskSource,
+    shortcutConnected,
+    selectedShortcutWorkspaceId,
+    appliedShortcutSearch,
+    activeShortcutPreset,
+    shortcutRefreshNonce,
+    taskResumeApplied,
+    shortcutTaskSourceContext
+  ])
+
+  useEffect(() => {
+    if (!taskResumeApplied || taskSource !== 'shortcut') {
+      return
+    }
+    if (!shortcutConnected || displayedShortcutStories.length === 0) {
+      if (selectedShortcutStoryId !== null) {
+        setSelectedShortcutStoryId(null)
+      }
+      if (selectedShortcutStoryFallback !== null) {
+        setSelectedShortcutStoryFallback(null)
+      }
+      return
+    }
+    if (
+      selectedShortcutStoryId &&
+      !displayedShortcutStories.some((story) => story.id === selectedShortcutStoryId)
+    ) {
+      setSelectedShortcutStoryId(null)
+      setSelectedShortcutStoryFallback(null)
+    }
+  }, [
+    displayedShortcutStories,
+    shortcutConnected,
+    selectedShortcutStoryFallback,
+    selectedShortcutStoryId,
+    taskResumeApplied,
+    taskSource
+  ])
+
   // Why: Linear ids are strings (e.g. "ENG-123") but the provider-generic shape needs a numeric number, so the adapter uses 0 as placeholder.
   const openComposerForLinearItem = useCallback(
     (issue: LinearIssue): void => {
@@ -8848,11 +9348,54 @@ export default function TaskPage(): React.JSX.Element {
     [openComposerForJiraItem]
   )
 
+  const openComposerForShortcutStory = useCallback(
+    (story: ShortcutStory): void => {
+      const taskSourceContext = bindTaskPageShortcutItemSourceContext({
+        story,
+        workspaces: shortcutWorkspaces,
+        sourceContext: shortcutTaskSourceContext
+      })
+      if (!taskSourceContext) {
+        // Why: composer drops Shortcut items without matching source context — refuse rather than create unlinked.
+        toast.error(
+          translate(
+            'auto.components.TaskPage.shortcutLinkSourceUnavailable',
+            'Couldn’t link this Shortcut story. Reconnect Shortcut or pick the matching workspace, then try again.'
+          )
+        )
+        return
+      }
+      const linkedWorkItem: LinkedWorkItemSummary = {
+        type: 'issue',
+        provider: 'shortcut',
+        number: Number(story.id) || 0,
+        title: `${shortcutStoryReference(story)} ${story.title}`,
+        url: story.url
+      }
+      openModal('new-workspace-composer', {
+        linkedWorkItem,
+        taskSourceContext,
+        prefilledName: getShortcutStoryWorkspaceSeed(story),
+        telemetrySource: 'sidebar'
+      })
+    },
+    [shortcutWorkspaces, shortcutTaskSourceContext, openModal]
+  )
+
+  const handleUseShortcutItem = useCallback(
+    (story: ShortcutStory): void => {
+      useAppStore.getState().recordFeatureInteraction('shortcut-tasks')
+      openComposerForShortcutStory(story)
+    },
+    [openComposerForShortcutStory]
+  )
+
   const taskPageListChromeHidden = shouldHideTaskPageListChrome({
     taskSource,
     hasGitHubDetail: Boolean(dialogWorkItem),
     hasGitLabDetail: Boolean(gitlabDialogItem),
     hasJiraDetail: Boolean(selectedJiraIssue),
+    hasShortcutDetail: Boolean(selectedShortcutStory),
     hasLinearIssueDetail: Boolean(selectedLinearIssue),
     hasLinearProjectContext: Boolean(selectedLinearProject),
     hasLinearViewContext: Boolean(selectedLinearCustomView)
@@ -9039,6 +9582,47 @@ export default function TaskPage(): React.JSX.Element {
                             {jiraSites.map((site) => (
                               <SelectItem key={site.id} value={site.id}>
                                 {site.displayName}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      ) : null}
+                    </div>
+                  ) : null}
+                  {taskSource === 'shortcut' && shortcutConnected ? (
+                    <div className="flex items-center gap-2">
+                      {shortcutWorkspaces.length > 1 ? (
+                        <Select
+                          value={selectedShortcutWorkspaceId ?? undefined}
+                          onValueChange={(value) => {
+                            setSelectedShortcutStoryId(null)
+                            setSelectedShortcutStoryFallback(null)
+                            setShortcutStories([])
+                            setShortcutError(null)
+                            setShortcutLoading(true)
+                            void selectShortcutWorkspace(value).catch(() => {
+                              toast.error(
+                                translate(
+                                  'auto.components.TaskPage.shortcutSwitchFailed',
+                                  'Failed to switch Shortcut workspace.'
+                                )
+                              )
+                            })
+                          }}
+                        >
+                          <SelectTrigger className="h-8 w-[220px] rounded-md border-border/50 bg-muted/50 text-xs font-medium shadow-sm">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="all">
+                              {translate(
+                                'auto.components.TaskPage.allShortcutWorkspaces',
+                                'All Shortcut workspaces'
+                              )}
+                            </SelectItem>
+                            {shortcutWorkspaces.map((workspace) => (
+                              <SelectItem key={workspace.id} value={workspace.id}>
+                                {workspace.name}
                               </SelectItem>
                             ))}
                           </SelectContent>
@@ -9823,6 +10407,146 @@ export default function TaskPage(): React.JSX.Element {
                               setAppliedJiraSearch('')
                               setTaskResumeState({ jiraQuery: '' })
                               setJiraRefreshNonce((n) => n + 1)
+                            }}
+                            className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground transition hover:text-foreground"
+                          >
+                            <X className="size-4" />
+                          </button>
+                        ) : null}
+                      </div>
+                    </div>
+                  </div>
+                ) : taskSource === 'shortcut' && shortcutConnected ? (
+                  <div className="rounded-md rounded-b-none border border-border/50 bg-muted/50 px-3 pt-2 pb-0 shadow-sm">
+                    <div className="flex flex-wrap items-center justify-between gap-3">
+                      <div className="flex flex-wrap gap-2">
+                        {shortcutPresets.map((preset) => {
+                          const active = !shortcutSearchInput && activeShortcutPreset === preset.id
+                          return (
+                            <button
+                              key={preset.id}
+                              type="button"
+                              onClick={() => {
+                                setShortcutSearchInput('')
+                                setAppliedShortcutSearch('')
+                                setActiveShortcutPreset(preset.id)
+                                setTaskResumeState({
+                                  shortcutPreset: preset.id,
+                                  shortcutQuery: ''
+                                })
+                                setShortcutRefreshNonce((n) => n + 1)
+                              }}
+                              className={cn(
+                                'rounded-md border px-2 py-1 text-xs transition',
+                                active
+                                  ? 'border-border/50 bg-foreground/90 text-background backdrop-blur-md'
+                                  : 'border-border/50 bg-transparent text-foreground hover:bg-muted/50'
+                              )}
+                            >
+                              {preset.label}
+                            </button>
+                          )
+                        })}
+                      </div>
+                      <div className="flex shrink-0 items-center gap-2">
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <Button
+                              variant="outline"
+                              size="icon"
+                              onClick={() => {
+                                setNewShortcutStoryTitle('')
+                                setNewShortcutStoryBody('')
+                                setNewShortcutStoryType('feature')
+                                setNewShortcutStoryOpen(true)
+                              }}
+                              aria-label={translate(
+                                'auto.components.TaskPage.newShortcutStory',
+                                'New Shortcut story'
+                              )}
+                              className="border-border/50 bg-transparent hover:bg-muted/50 backdrop-blur-md supports-[backdrop-filter]:bg-transparent"
+                            >
+                              <Plus className="size-4" />
+                            </Button>
+                          </TooltipTrigger>
+                          <TooltipContent side="bottom" sideOffset={6}>
+                            {translate(
+                              'auto.components.TaskPage.newShortcutStory',
+                              'New Shortcut story'
+                            )}
+                          </TooltipContent>
+                        </Tooltip>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <Button
+                              variant="outline"
+                              size="icon"
+                              onClick={() => setShortcutRefreshNonce((n) => n + 1)}
+                              disabled={shortcutLoading}
+                              aria-label={translate(
+                                'auto.components.TaskPage.refreshShortcutStories',
+                                'Refresh Shortcut stories'
+                              )}
+                              className="border-border/50 bg-transparent hover:bg-muted/50 backdrop-blur-md supports-[backdrop-filter]:bg-transparent"
+                            >
+                              {shortcutLoading ? (
+                                <LoaderCircle className="size-4 animate-spin" />
+                              ) : (
+                                <RefreshCw className="size-4" />
+                              )}
+                            </Button>
+                          </TooltipTrigger>
+                          <TooltipContent side="bottom" sideOffset={6}>
+                            {translate(
+                              'auto.components.TaskPage.refreshShortcutStories',
+                              'Refresh Shortcut stories'
+                            )}
+                          </TooltipContent>
+                        </Tooltip>
+                      </div>
+                    </div>
+                    <div className="mt-3 flex items-center gap-3">
+                      <div className="relative min-w-[320px] flex-1">
+                        <Search className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
+                        <Input
+                          value={shortcutSearchInput}
+                          onChange={(e) => setShortcutSearchInput(e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') {
+                              if (
+                                shouldSuppressEnterSubmit(
+                                  { isComposing: e.nativeEvent.isComposing, shiftKey: e.shiftKey },
+                                  false
+                                )
+                              ) {
+                                return
+                              }
+                              e.preventDefault()
+                              const trimmed = shortcutSearchInput.trim()
+                              setShortcutSearchInput(trimmed)
+                              setAppliedShortcutSearch(trimmed)
+                              setTaskResumeState({ shortcutQuery: trimmed })
+                              setShortcutRefreshNonce((n) => n + 1)
+                            }
+                          }}
+                          placeholder={translate(
+                            'auto.components.TaskPage.shortcutSearchPlaceholder',
+                            'Shortcut search, e.g. owner:me state:"In Progress"'
+                          )}
+                          className="h-8 rounded-md border-border/50 bg-background pl-8 pr-8 text-xs"
+                        />
+                        {shortcutSearchInput ? (
+                          <button
+                            type="button"
+                            aria-label={translate(
+                              'auto.components.TaskPage.b797bdd7c3',
+                              'Clear search'
+                            )}
+                            onClick={() => {
+                              setShortcutSearchInput('')
+                              setAppliedShortcutSearch('')
+                              setTaskResumeState({ shortcutQuery: '' })
+                              setShortcutRefreshNonce((n) => n + 1)
                             }}
                             className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground transition hover:text-foreground"
                           >
@@ -10971,6 +11695,119 @@ export default function TaskPage(): React.JSX.Element {
                   onUse={handleUseJiraItem}
                   onClose={closeTaskDetailPage}
                   sourceContext={jiraDetailSourceContext}
+                />
+              </div>
+            )
+          ) : taskSource === 'shortcut' ? (
+            !shortcutStatusReady ? (
+              <div className="mt-4 flex items-center justify-center py-14">
+                <LoaderCircle className="size-5 animate-spin text-muted-foreground" />
+              </div>
+            ) : !shortcutConnected ? (
+              <div className="mt-4 flex flex-col items-center justify-center rounded-md border border-border/50 bg-muted/50 px-6 py-14 text-center shadow-sm">
+                <ShortcutIcon className="mb-4 size-8 text-muted-foreground/60" />
+                <p className="text-base font-medium text-foreground">
+                  {translate(
+                    'auto.components.TaskPage.connectShortcutTitle',
+                    'Connect your Shortcut workspace'
+                  )}
+                </p>
+                <p className="mt-2 max-w-sm text-sm text-muted-foreground">
+                  {translate(
+                    'auto.components.TaskPage.connectShortcutBody',
+                    'Browse, edit, create, and start work from Shortcut stories directly from here.'
+                  )}
+                </p>
+                <div className="mt-5 flex flex-wrap items-center justify-center gap-2">
+                  <Button onClick={() => setShortcutConnectOpen(true)}>
+                    {translate('auto.components.TaskPage.connectShortcut', 'Connect Shortcut')}
+                  </Button>
+                  <Button variant="outline" onClick={() => hideTaskSource('shortcut', 'Shortcut')}>
+                    {translate('auto.components.TaskPage.hideShortcut', 'Hide Shortcut')}
+                  </Button>
+                </div>
+              </div>
+            ) : (
+              <div className="flex min-h-0 max-h-full flex-col overflow-hidden rounded-md rounded-t-none border border-t-0 border-border/50 bg-background shadow-sm">
+                <div className="flex h-10 flex-none items-center justify-between gap-3 border-b border-border/50 bg-muted/35 px-3">
+                  <div className="min-w-0 text-[11px] font-medium uppercase tracking-[0.12em] text-muted-foreground">
+                    {translate('auto.components.TaskPage.shortcutStories', 'Shortcut stories')}
+                  </div>
+                  <div className="shrink-0 text-[11px] text-muted-foreground">
+                    {displayedShortcutStories.length}{' '}
+                    {translate('auto.components.TaskPage.b7bae28b6a', 'shown')}
+                  </div>
+                </div>
+
+                <div
+                  className="min-h-0 flex-1 overflow-y-auto scrollbar-sleek"
+                  style={{ scrollbarGutter: 'stable' }}
+                >
+                  {shortcutStatus.credentialError ? (
+                    <div className="border-b border-border px-4 py-4 text-sm text-destructive">
+                      {shortcutStatus.credentialError}
+                    </div>
+                  ) : null}
+                  {!shortcutStatus.credentialError && shortcutError ? (
+                    <TaskPageJiraErrorBanner
+                      error={shortcutError}
+                      open={shortcutErrorDetailsOpen}
+                      onOpenChange={setShortcutErrorDetailsOpen}
+                    />
+                  ) : null}
+
+                  {shortcutLoading && shortcutStories.length === 0 ? (
+                    <div className="divide-y divide-border/50">
+                      {Array.from({ length: 6 }).map((_, i) => (
+                        <div key={i} className="px-3 py-3">
+                          <div className="h-4 w-4/5 animate-pulse rounded bg-muted/70" />
+                          <div className="mt-2 h-3 w-3/5 animate-pulse rounded bg-muted/60" />
+                        </div>
+                      ))}
+                    </div>
+                  ) : null}
+
+                  {!shortcutLoading &&
+                  shortcutStories.length === 0 &&
+                  !shortcutError &&
+                  !shortcutStatus.credentialError ? (
+                    <div className="px-4 py-10 text-center">
+                      <p className="text-sm font-medium text-foreground">
+                        {translate(
+                          'auto.components.TaskPage.noShortcutStories',
+                          'No Shortcut stories found'
+                        )}
+                      </p>
+                      <p className="mt-2 text-sm text-muted-foreground">
+                        {shortcutSearchInput
+                          ? translate(
+                              'auto.components.TaskPage.shortcutTryDifferentQuery',
+                              'Try a different search query.'
+                            )
+                          : translate(
+                              'auto.components.TaskPage.shortcutNoPresetMatches',
+                              'No stories match the selected preset.'
+                            )}
+                      </p>
+                    </div>
+                  ) : null}
+
+                  <TaskPageShortcutStoryList
+                    formatUpdatedAt={formatRelativeTime}
+                    getStateTone={getShortcutStateTone}
+                    stories={displayedShortcutStories}
+                    onOpenStory={openShortcutDetailPage}
+                    onStartWorkspace={handleUseShortcutItem}
+                    selectedStory={selectedShortcutStory}
+                    showWorkspaceContext={selectedShortcutWorkspaceId === 'all'}
+                    workflows={shortcutGroupingWorkflows}
+                  />
+                </div>
+                <ShortcutStoryWorkspace
+                  story={selectedShortcutStory}
+                  onUse={handleUseShortcutItem}
+                  onClose={closeTaskDetailPage}
+                  sourceContext={shortcutDetailSourceContext}
                 />
               </div>
             )
@@ -13551,6 +14388,153 @@ export default function TaskPage(): React.JSX.Element {
       />
 
       <JiraConnectDialog open={jiraConnectOpen} onOpenChange={setJiraConnectOpen} />
+      <ShortcutConnectDialog open={shortcutConnectOpen} onOpenChange={setShortcutConnectOpen} />
+
+      <Dialog
+        open={newShortcutStoryOpen}
+        onOpenChange={(open) => {
+          if (!newShortcutStorySubmitting) {
+            setNewShortcutStoryOpen(open)
+          }
+        }}
+      >
+        <DialogContent
+          className="sm:max-w-lg"
+          onKeyDown={(event) => {
+            if (isScreenSubmitShortcut(event)) {
+              event.preventDefault()
+              void handleCreateNewShortcutStory()
+            }
+          }}
+        >
+          <DialogHeader>
+            <DialogTitle>
+              {translate('auto.components.TaskPage.newShortcutStory', 'New Shortcut story')}
+            </DialogTitle>
+            <DialogDescription>
+              {newShortcutStoryTargetTeam
+                ? translate(
+                    'auto.components.TaskPage.newShortcutStoryInTeam',
+                    'Creates a new story in {{value0}}.',
+                    { value0: newShortcutStoryTargetTeam.name }
+                  )
+                : translate(
+                    'auto.components.TaskPage.newShortcutStoryDefaultWorkflow',
+                    'Creates a new story in the default workflow of the selected workspace.'
+                  )}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex flex-col gap-3">
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div className="flex flex-col gap-1">
+                <label className="text-[11px] font-medium text-muted-foreground">
+                  {translate('auto.components.TaskPage.shortcutTeam', 'Team')}
+                </label>
+                <Select
+                  value={newShortcutStoryTargetTeam?.id ?? undefined}
+                  onValueChange={(value) => setNewShortcutStoryTeamId(value)}
+                  disabled={
+                    newShortcutStorySubmitting ||
+                    shortcutTeamsLoading ||
+                    availableShortcutTeams.length === 0
+                  }
+                >
+                  <SelectTrigger className="h-9 text-xs">
+                    <SelectValue
+                      placeholder={
+                        shortcutTeamsLoading
+                          ? translate('auto.components.TaskPage.shortcutTeamsLoading', 'Loading…')
+                          : translate('auto.components.TaskPage.shortcutNoTeam', 'No team')
+                      }
+                    />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {availableShortcutTeams.map((team) => (
+                      <SelectItem key={team.id} value={team.id}>
+                        {selectedShortcutWorkspaceId === 'all' && team.workspaceName
+                          ? `${team.workspaceName} / ${team.name}`
+                          : team.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="flex flex-col gap-1">
+                <label className="text-[11px] font-medium text-muted-foreground">
+                  {translate('auto.components.TaskPage.shortcutStoryType', 'Type')}
+                </label>
+                <Select
+                  value={newShortcutStoryType}
+                  onValueChange={(value) => setNewShortcutStoryType(value as ShortcutStoryType)}
+                  disabled={newShortcutStorySubmitting}
+                >
+                  <SelectTrigger className="h-9 text-xs capitalize">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {(['feature', 'bug', 'chore'] as const).map((storyType) => (
+                      <SelectItem key={storyType} value={storyType} className="capitalize">
+                        {storyType}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            <Input
+              value={newShortcutStoryTitle}
+              onChange={(event) => setNewShortcutStoryTitle(event.target.value)}
+              placeholder={translate(
+                'auto.components.TaskPage.shortcutStoryTitlePlaceholder',
+                'Story title'
+              )}
+              disabled={newShortcutStorySubmitting}
+              autoFocus
+            />
+            <textarea
+              value={newShortcutStoryBody}
+              onChange={(event) => setNewShortcutStoryBody(event.target.value)}
+              placeholder={translate(
+                'auto.components.TaskPage.shortcutStoryBodyPlaceholder',
+                'Description (Markdown, optional)'
+              )}
+              rows={5}
+              disabled={newShortcutStorySubmitting}
+              className="min-h-24 w-full resize-y rounded-md border border-input bg-transparent px-3 py-2 text-sm outline-none placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
+            />
+            <p className="text-[10px] text-muted-foreground">
+              {submitShortcutLabel} {translate('auto.components.TaskPage.fc0d8a1fa4', 'to submit.')}
+            </p>
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setNewShortcutStoryOpen(false)}
+              disabled={newShortcutStorySubmitting}
+            >
+              {translate('auto.components.TaskPage.ff69a30681', 'Cancel')}
+            </Button>
+            <Button
+              onClick={() => void handleCreateNewShortcutStory()}
+              disabled={
+                !newShortcutStoryTitle.trim() ||
+                !canCreateShortcutStory ||
+                shortcutTeamsLoading ||
+                newShortcutStorySubmitting
+              }
+            >
+              {newShortcutStorySubmitting ? (
+                <>
+                  <LoaderCircle className="size-4 animate-spin" />
+                  {translate('auto.components.TaskPage.8ff6fdc368', 'Creating…')}
+                </>
+              ) : (
+                translate('auto.components.TaskPage.createShortcutStory', 'Create story')
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

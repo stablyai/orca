@@ -1,3 +1,4 @@
+import { getTaskProviderDisplayLabel } from './automation-source-display'
 import type { Automation } from '../../../../shared/automations-types'
 import { getRepoExecutionHostId, parseExecutionHostId } from '../../../../shared/execution-host'
 import {
@@ -197,7 +198,7 @@ function getAutomationSourceAvailability(
   if (!availability) {
     return null
   }
-  const providerLabel = getAutomationSourceProviderLabel(sourceContext.provider)
+  const providerLabel = getTaskProviderDisplayLabel(sourceContext.provider)
   switch (availability.reason) {
     case undefined:
       break
@@ -249,19 +250,6 @@ function getAutomationSourceAvailability(
     )
   }
   return null
-}
-
-function getAutomationSourceProviderLabel(provider: TaskSourceContext['provider']): string {
-  switch (provider) {
-    case 'github':
-      return 'GitHub'
-    case 'gitlab':
-      return 'GitLab'
-    case 'linear':
-      return 'Linear'
-    case 'jira':
-      return 'Jira'
-  }
 }
 
 function getRuntimeAutomationAvailability(

@@ -244,3 +244,4 @@ function ProviderAccountScopeRow({ scope }: { scope: ReturnType<typeof getProvid
 }
 
 export { JiraIntegrationCard } from './jira-integration-card'
+export { ShortcutIntegrationCard } from './shortcut-integration-card'

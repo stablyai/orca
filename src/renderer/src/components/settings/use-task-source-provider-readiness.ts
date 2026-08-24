@@ -58,6 +58,12 @@ export function useTaskSourceProviderReadiness(
     preflightStatus.glab.authenticated === true
   const jiraChecking = jiraStatusContextKey !== providerRuntimeContextKey || !jiraStatusChecked
   const jiraConnected = !jiraChecking && jiraStatus.connected === true
+  const shortcutStatus = useAppStore((s) => s.shortcutStatus)
+  const shortcutStatusChecked = useAppStore((s) => s.shortcutStatusChecked)
+  const shortcutStatusContextKey = useAppStore((s) => s.shortcutStatusContextKey)
+  const shortcutChecking =
+    shortcutStatusContextKey !== providerRuntimeContextKey || !shortcutStatusChecked
+  const shortcutConnected = !shortcutChecking && shortcutStatus.connected === true
   const linearChecking =
     linearStatusContextKey !== providerRuntimeContextKey || !linearStatusChecked
   // Normalization returns a new array, so memoize by provider contents.
@@ -89,6 +95,11 @@ export function useTaskSourceProviderReadiness(
         connected: jiraConnected,
         checking: jiraChecking,
         visible: visible.has('jira')
+      },
+      shortcut: {
+        connected: shortcutConnected,
+        checking: shortcutChecking,
+        visible: visible.has('shortcut')
       }
     }
   }, [
@@ -103,6 +114,8 @@ export function useTaskSourceProviderReadiness(
     linearSkillSettled,
     reviewChecking,
     reviewUnavailable,
+    shortcutChecking,
+    shortcutConnected,
     visibleProvidersKey
   ])
 }

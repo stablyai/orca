@@ -192,6 +192,46 @@ export const getIntegrationsPaneSearchEntries = createLocalizedCatalog(() => [
   },
   {
     title: translate(
+      'auto.components.settings.integrations.search.shortcutTitle',
+      'Shortcut Integration'
+    ),
+    description: translate(
+      'auto.components.settings.integrations.search.shortcutDescription',
+      'Connect Shortcut or update Shortcut API token credentials.'
+    ),
+    keywords: [
+      ...translateSearchKeyword(
+        'auto.components.settings.integrations.search.shortcutKeyword',
+        'shortcut'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.integrations.search.shortcutStoryKeyword',
+        'story'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.integrations.search.c450244ad7',
+        'integration'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.integrations.search.2ec2bd328c',
+        'api token'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.integrations.search.20540996ef',
+        'credentials'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.integrations.search.3c3d3d8ffa',
+        'connect'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.integrations.search.a626990bd2',
+        'disconnect'
+      )
+    ]
+  },
+  {
+    title: translate(
       'auto.components.settings.integrations.search.b027b4b318',
       'Linear Integration'
     ),

@@ -79,6 +79,8 @@ export type TaskResumeState = {
   }
   jiraPreset?: 'assigned' | 'reported' | 'all' | 'done'
   jiraQuery?: string
+  shortcutPreset?: 'assigned' | 'requested' | 'all' | 'done'
+  shortcutQuery?: string
 }
 
 export type RightSidebarTab =

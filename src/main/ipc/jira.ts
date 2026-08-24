@@ -1,7 +1,7 @@
 import { ipcMain } from 'electron'
 import { connect, disconnect, getStatus, selectSite, testConnection } from '../jira/client'
 import { _resetPreflightCache } from './preflight'
-import { JiraCancellableRequests } from './jira-cancellable-requests'
+import { ProviderCancellableRequests } from './provider-cancellable-requests'
 import {
   addIssueComment,
   createIssue,
@@ -28,8 +28,8 @@ import type {
 } from '../../shared/jira-types'
 
 const VALID_FILTERS = new Set<JiraIssueFilter>(['assigned', 'reported', 'all', 'done'])
-const issueSummaryRequests = new JiraCancellableRequests()
-const searchRequests = new JiraCancellableRequests()
+const issueSummaryRequests = new ProviderCancellableRequests()
+const searchRequests = new ProviderCancellableRequests()
 
 function normalizeSiteId(value: unknown): string | undefined {
   return typeof value === 'string' && value.trim() ? value.trim() : undefined

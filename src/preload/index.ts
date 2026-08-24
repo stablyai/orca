@@ -2055,6 +2055,82 @@ const api = {
     }): Promise<JiraProjectStatusOrder> => ipcRenderer.invoke('jira:getProjectStatusOrder', args)
   },
 
+  shortcut: {
+    connect: (args: {
+      apiToken: string
+    }): Promise<{ ok: true; viewer: unknown } | { ok: false; error: string }> =>
+      ipcRenderer.invoke('shortcut:connect', args),
+
+    disconnect: (args?: { workspaceId?: string }): Promise<void> =>
+      ipcRenderer.invoke('shortcut:disconnect', args),
+
+    selectWorkspace: (args: { workspaceId: string }): Promise<unknown> =>
+      ipcRenderer.invoke('shortcut:selectWorkspace', args),
+
+    status: (): Promise<unknown> => ipcRenderer.invoke('shortcut:status'),
+
+    readStatus: (): Promise<unknown> => ipcRenderer.invoke('shortcut:readStatus'),
+
+    testConnection: (args?: {
+      workspaceId?: string
+    }): Promise<{ ok: true; viewer: unknown } | { ok: false; error: string }> =>
+      ipcRenderer.invoke('shortcut:testConnection', args),
+
+    searchStories: (args: {
+      query: string
+      limit?: number
+      workspaceId?: string
+      requestId?: string
+    }): Promise<unknown[]> => ipcRenderer.invoke('shortcut:searchStories', args),
+    cancelSearchStories: (args: { requestId: string }): Promise<void> =>
+      ipcRenderer.invoke('shortcut:cancelSearchStories', args),
+
+    listStories: (args?: {
+      filter?: 'assigned' | 'requested' | 'all' | 'done'
+      limit?: number
+      workspaceId?: string
+    }): Promise<unknown[]> => ipcRenderer.invoke('shortcut:listStories', args),
+
+    getStory: (args: { storyId: string; workspaceId?: string }): Promise<unknown> =>
+      ipcRenderer.invoke('shortcut:getStory', args),
+
+    createStory: (args: {
+      workspaceId?: string
+      teamId?: string
+      workflowStateId?: string
+      storyType?: 'feature' | 'bug' | 'chore'
+      title: string
+      description?: string
+    }): Promise<{ ok: true; id: string; url: string } | { ok: false; error: string }> =>
+      ipcRenderer.invoke('shortcut:createStory', args),
+
+    updateStory: (args: {
+      storyId: string
+      updates: unknown
+      workspaceId?: string
+    }): Promise<{ ok: true } | { ok: false; error: string }> =>
+      ipcRenderer.invoke('shortcut:updateStory', args),
+
+    addStoryComment: (args: {
+      storyId: string
+      body: string
+      workspaceId?: string
+    }): Promise<{ ok: true; id: string } | { ok: false; error: string }> =>
+      ipcRenderer.invoke('shortcut:addStoryComment', args),
+
+    storyComments: (args: { storyId: string; workspaceId?: string }): Promise<unknown[]> =>
+      ipcRenderer.invoke('shortcut:storyComments', args),
+
+    listTeams: (args?: { workspaceId?: string }): Promise<unknown[]> =>
+      ipcRenderer.invoke('shortcut:listTeams', args),
+
+    listWorkflows: (args?: { workspaceId?: string }): Promise<unknown[]> =>
+      ipcRenderer.invoke('shortcut:listWorkflows', args),
+
+    listMembers: (args?: { workspaceId?: string }): Promise<unknown[]> =>
+      ipcRenderer.invoke('shortcut:listMembers', args)
+  },
+
   starNag: {
     onShow: (
       callback: (payload?: { mode?: 'gh' | 'web'; surface?: 'card' | 'toast' }) => void
