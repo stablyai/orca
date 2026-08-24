@@ -85,6 +85,11 @@ export function invalidateAiVaultServiceCache(paths: string[]): Promise<void> {
   return sharedClient?.invalidate(paths) ?? Promise.resolve()
 }
 
+/** A forced refresh is a deliberate user action, so it reopens the restart circuit. */
+export function clearAiVaultServiceRestartCircuit(): void {
+  sharedClient?.clearRestartCircuit()
+}
+
 export function resetAiVaultScannerServiceForTests(): void {
   sharedClient?.dispose()
   sharedClient = null
