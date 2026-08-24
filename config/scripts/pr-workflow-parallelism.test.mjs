@@ -347,12 +347,26 @@ describe('PR workflow parallelism', () => {
       'test',
       'managed_hook_node18',
       'package',
-      'package_windows'
+      'package_windows',
+      'golden_e2e'
     ])
     const verifyStep = workflow.jobs.verify.steps.find(
       (step) => step.name === 'Require successful checks'
     )
     expect(verifyStep.env.MANAGED_HOOK_NODE18).toBe('${{ needs.managed_hook_node18.result }}')
     expect(verifyStep.run).toContain('"$MANAGED_HOOK_NODE18"')
+    // Why assert all three parts: listing a job in `needs` alone does not gate
+    // it. verify only fails when the result is also read into env and checked in
+    // the loop, so a partial wiring would leave the check advisory while looking
+    // required.
+    expect(verifyStep.env.GOLDEN_E2E).toBe('${{ needs.golden_e2e.result }}')
+    expect(verifyStep.run).toContain('"$GOLDEN_E2E"')
+  })
+
+  it('keeps the full e2e suite out of the required aggregate', () => {
+    // Why: the 238-spec suite is red on main, so gating on it would block every
+    // PR — including the ones repairing it. golden_e2e is the gating lane
+    // instead. If e2e is ever made required, do it deliberately and update this.
+    expect(workflow.jobs.verify.needs).not.toContain('e2e')
   })
 })

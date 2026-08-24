@@ -733,6 +733,61 @@ jobs:
     with:
       test_files: ${{ needs.e2e-paths.outputs.test_files }}
 
+  golden_e2e:
+    name: golden e2e
+    # Why macOS and not the cheaper Linux runner: the e2e harness passes
+    # --disable-gpu on Linux (see tests/e2e/helpers/electron-launch-args.ts,
+    # needed for Xvfb stability), so WebGL is unavailable there and every
+    # WebGL-dependent spec skips itself. On Linux this gate would report green
+    # while executing none of the rendering coverage it exists for. macOS runs
+    # them for real.
+    runs-on: macos-15
+    timeout-minutes: 30
+    # Why this is blocking while the full e2e suite is not: it is a handful of
+    # core-flow and terminal-rendering specs that run green on main, it always
+    # runs, and it is built with `electron-vite build --mode e2e` — a
+    # production-mode bundle. That makes it the only required gate that sees the
+    # built CSS cascade, where #14583 shipped a black bar visible in packaged
+    # builds but not under `pn dev`.
+    env:
+      NODE_OPTIONS: --max-old-space-size=4096
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version-file: package.json
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v6
+        with:
+          run_install: false
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build Electron app for E2E
+        run: npx electron-vite build --mode e2e
+
+      - name: Run golden E2E
+        run: |
+          env SKIP_BUILD=1 ORCA_E2E_FORWARD_APP_LOGS=1 pnpm run test:e2e -- tests/e2e/golden-core-flows.spec.ts
+          env SKIP_BUILD=1 ORCA_E2E_FORWARD_APP_LOGS=1 pnpm run test:e2e:terminal-rendering-golden
+
+      - name: Upload Playwright traces
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: golden-pr-playwright-traces
+          path: test-results/
+          retention-days: 7
+          if-no-files-found: ignore
+
   verify:
     if: always()
     needs:
@@ -747,17 +802,26 @@ jobs:
       - managed_hook_node18
       - package
       - package_windows
+      - golden_e2e
     runs-on: ubuntu-latest
 
     steps:
-      # Why: e2e is deliberately absent from needs. The suite is currently red on
-      # main (every scheduled run), so gating merges on it would block any PR that
-      # touches tests/e2e/** — including the ones fixing the suite. Until it is
-      # green the job runs and reports for E2E-path PRs without blocking. To flip
-      # it on: add `e2e` to needs, add E2E to the env below, and require
-      # `"$E2E" = success || skipped` after the loop — skipped is the normal
-      # result for a path-filtered job and must keep passing, so it has to be
-      # checked outside the loop or it would excuse the jobs above.
+      # Why the two e2e lanes are gated differently:
+      #
+      # `golden_e2e` IS in needs. It is a small set of core-flow and
+      # terminal-rendering specs, it runs green on main, and it always runs, so
+      # it can block. It is also the only required gate built from
+      # `electron-vite build --mode e2e` — a production-mode bundle — so it is
+      # the only one that sees the built CSS cascade rather than the dev server.
+      #
+      # `e2e` (the full 238-spec suite) is deliberately absent from needs. It is
+      # currently red on main (every scheduled run), so gating merges on it would
+      # block any PR that touches tests/e2e/** — including the ones fixing the
+      # suite. Until it is green the job runs and reports for E2E-path PRs
+      # without blocking. To flip it on: add `e2e` to needs, add E2E to the env
+      # below, and require `"$E2E" = success || skipped` after the loop — skipped
+      # is the normal result for a path-filtered job and must keep passing, so it
+      # has to be checked outside the loop or it would excuse the jobs above.
       - name: Require successful checks
         env:
           CODE_PATHS: ${{ needs.code_paths.result }}
@@ -772,6 +836,7 @@ jobs:
           MANAGED_HOOK_NODE18: ${{ needs.managed_hook_node18.result }}
           PACKAGE: ${{ needs.package.result }}
           PACKAGE_WINDOWS: ${{ needs.package_windows.result }}
+          GOLDEN_E2E: ${{ needs.golden_e2e.result }}
         run: |
           if [ "$CODE_PATHS" != "success" ]; then
             exit 1
@@ -809,7 +874,8 @@ jobs:
             "$TEST" \
             "$MANAGED_HOOK_NODE18" \
             "$PACKAGE" \
-            "$PACKAGE_WINDOWS"; do
+            "$PACKAGE_WINDOWS" \
+            "$GOLDEN_E2E"; do
             if [ "$result" != "success" ]; then
               exit 1
             fi
