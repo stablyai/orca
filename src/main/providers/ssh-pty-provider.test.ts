@@ -1,6 +1,7 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest'
 import { SshPtyProvider } from './ssh-pty-provider'
 import { AGENT_SESSION_EXECUTION_OWNER_PROTOCOL_VERSION } from '../../shared/agent-session-host-authority'
+import { PTY_VISIBLE_SCREEN_SNAPSHOT_PROTOCOL_VERSION } from '../../shared/pty-visible-screen-snapshot'
 import {
   createMockMux,
   expectRequest,
@@ -23,6 +24,72 @@ describe('SshPtyProvider', () => {
 
   it('reports that SSH panes cannot restore from authoritative provider snapshots', () => {
     expect(provider.canProvideAuthoritativeBufferSnapshot(scopedPty1)).toBe(false)
+  })
+
+  it('negotiates authoritative visible-screen snapshots', async () => {
+    mux.request.mockResolvedValue({
+      visibleScreenSnapshotVersion: PTY_VISIBLE_SCREEN_SNAPSHOT_PROTOCOL_VERSION
+    })
+
+    await expect(provider.probeAuthoritativeBufferSnapshotSupport()).resolves.toBe(true)
+    expect(provider.canProvideAuthoritativeBufferSnapshot(scopedPty1)).toBe(true)
+    expectRequest(mux.request, 'pty.getCapabilities', undefined, { timeoutMs: 5_000 })
+  })
+
+  it('keeps old SSH relays snapshot-ineligible', async () => {
+    mux.request.mockResolvedValue({})
+
+    await expect(provider.probeAuthoritativeBufferSnapshotSupport()).resolves.toBe(false)
+    expect(provider.canProvideAuthoritativeBufferSnapshot(scopedPty1)).toBe(false)
+  })
+
+  it('returns an authoritative snapshot for the current incarnation', async () => {
+    mux.request
+      .mockResolvedValueOnce({
+        visibleScreenSnapshotVersion: PTY_VISIBLE_SCREEN_SNAPSHOT_PROTOCOL_VERSION
+      })
+      .mockResolvedValueOnce({ replay: '', incarnationId: 'incarnation-1' })
+      .mockResolvedValueOnce({
+        data: '',
+        cols: 80,
+        rows: 24,
+        seq: 12,
+        incarnationId: 'incarnation-1',
+        source: 'headless'
+      })
+
+    await provider.probeAuthoritativeBufferSnapshotSupport()
+    await provider.attachForReconnect(scopedPty1)
+
+    await expect(provider.getBufferSnapshot(scopedPty1)).resolves.toEqual({
+      data: '',
+      cols: 80,
+      rows: 24,
+      seq: 12,
+      incarnationId: 'incarnation-1',
+      source: 'headless'
+    })
+  })
+
+  it('rejects a visible-screen snapshot from another incarnation', async () => {
+    mux.request
+      .mockResolvedValueOnce({
+        visibleScreenSnapshotVersion: PTY_VISIBLE_SCREEN_SNAPSHOT_PROTOCOL_VERSION
+      })
+      .mockResolvedValueOnce({ replay: '', incarnationId: 'incarnation-1' })
+      .mockResolvedValueOnce({
+        data: 'wrong owner',
+        cols: 80,
+        rows: 24,
+        seq: 12,
+        incarnationId: 'incarnation-2',
+        source: 'headless'
+      })
+
+    await provider.probeAuthoritativeBufferSnapshotSupport()
+    await provider.attachForReconnect(scopedPty1)
+
+    await expect(provider.getBufferSnapshot(scopedPty1)).resolves.toBeNull()
   })
 
   it('keeps a shared claim probe alive when one waiter disconnects', async () => {

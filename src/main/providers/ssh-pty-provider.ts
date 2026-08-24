@@ -23,6 +23,7 @@ import { SshPtySpawnExitRaceTracker } from './ssh-pty-spawn-exit-race'
 import { SshAgentSessionCapabilities } from './ssh-agent-session-capabilities'
 import type { PtyProcessInspection } from './pty-process-inspection'
 import { writeToSshPty, writeToSshPtyWithSettlement } from './ssh-pty-write'
+import { SshPtyVisibleScreenSnapshots } from './ssh-pty-visible-screen-snapshot'
 
 // Why: sequential relay teardown calls share one absolute budget; convert to the mux-relative timeout only at dispatch.
 function relayTimeoutOptions(deadlineMs: number | undefined): { timeoutMs: number } | undefined {
@@ -38,6 +39,7 @@ export class SshPtyProvider implements IPtyProvider {
   private readonly agentSessionCapabilities: SshAgentSessionCapabilities
   private spawnExitRaces = new SshPtySpawnExitRaceTracker()
   private readonly outputState: SshPtyProviderOutputState
+  private readonly visibleScreenSnapshots: SshPtyVisibleScreenSnapshots
 
   requestHostRpc: NonNullable<IPtyProvider['requestHostRpc']> = (method, params, options) =>
     this.mux.request(method, params as Record<string, unknown>, options)
@@ -61,6 +63,11 @@ export class SshPtyProvider implements IPtyProvider {
         this.spawnExitRaces.recordExit(relayPtyId, incarnationId)
       }
     })
+    this.visibleScreenSnapshots = new SshPtyVisibleScreenSnapshots(
+      mux,
+      (id) => this.toRelayPtyId(id),
+      (id) => this.outputState.ptyIncarnation(id)
+    )
   }
 
   dispose(): void {
@@ -70,7 +77,18 @@ export class SshPtyProvider implements IPtyProvider {
 
   getConnectionId = (): string => this.connectionId
 
-  canProvideAuthoritativeBufferSnapshot = (_id: string): boolean => false
+  canProvideAuthoritativeBufferSnapshot = (_id: string): boolean =>
+    this.visibleScreenSnapshots.canProvide()
+
+  async probeAuthoritativeBufferSnapshotSupport(
+    options: { signal?: AbortSignal } = {}
+  ): Promise<boolean> {
+    return await this.visibleScreenSnapshots.probe(options)
+  }
+
+  async getBufferSnapshot(id: string, opts: { scrollbackRows?: number } = {}) {
+    return await this.visibleScreenSnapshots.get(id, opts)
+  }
 
   private toRelayPtyId = (id: string): string => toRelaySshPtyId(this.connectionId, id)
 

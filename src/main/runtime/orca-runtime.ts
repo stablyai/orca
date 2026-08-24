@@ -102,6 +102,14 @@ import {
   buildAgentPromptPasteBytes
 } from '../../shared/agent-prompt-injection'
 import {
+  CODEX_LARGE_PASTE_CHAR_THRESHOLD,
+  codexAgentPromptCharCount,
+  collectCodexPasteMarkers,
+  countCodexPasteMarker,
+  findCodexPasteMarkerDelta,
+  type CodexPasteMarkerMultiset
+} from '../../shared/agent-prompt-codex-ingest'
+import {
   type AgentPromptActivity,
   verifyAgentPromptSubmission
 } from './agent-prompt-submission-verification'
@@ -1794,6 +1802,18 @@ type RuntimeVisibleTerminalState = {
   generation: number
 }
 
+type CodexPasteIngestBaseline = Readonly<{
+  charCount: number
+  markers: CodexPasteMarkerMultiset
+  screen: RuntimeVisibleTerminalState
+}>
+
+type CodexPasteIngestProof = Readonly<{
+  marker: string
+  visibleCount: number
+  screen: RuntimeVisibleTerminalState
+}>
+
 type ProviderBufferAcquisition = {
   generation: number
   scrollbackRows: number
@@ -1955,6 +1975,7 @@ type RuntimePtyController = {
     ptyId: string,
     opts?: { scrollbackRows?: number }
   ): Promise<PtyProviderBufferSnapshot | null>
+  supportsProviderBufferSnapshot?(ptyId: string, signal?: AbortSignal): Promise<boolean>
   // Why: synchronous probe used by maybeHydrateHeadlessFromRenderer to skip
   // hydration when no renderer is authoritative for this PTY. See
   // docs/mobile-prefer-renderer-scrollback.md.
@@ -2027,6 +2048,8 @@ const BRACKETED_PASTE_END = '\x1b[201~'
 const BRACKETED_PASTE_QUIET_MS = 1500
 const AGENT_PROMPT_RENDER_TIMEOUT_MS = 8000
 const AGENT_PROMPT_RENDER_QUIET_MS = 1500
+const AGENT_PROMPT_SCREEN_POLL_MS = 50
+const AGENT_PROMPT_MAX_SUBMITS = 3
 // Why: Claude and Codex emit show-cursor after accepting bracketed paste.
 const AGENT_PROMPT_RENDER_MARKER = '\x1b[?25h'
 
@@ -18681,6 +18704,7 @@ export class OrcaRuntimeService {
     } = {}
   ): Promise<RuntimeTerminalSend> {
     const payload = buildAgentPromptPasteBytes(prompt)
+    const codexCharCount = codexAgentPromptCharCount(prompt)
     const pty = this.getLivePtyForHandle(handle)
     if (pty) {
       if (!pty.pty.connected) {
@@ -18699,6 +18723,7 @@ export class OrcaRuntimeService {
             pty.pty.ptyId,
             generation,
             payload,
+            codexCharCount,
             options
           )
         }
@@ -18721,7 +18746,14 @@ export class OrcaRuntimeService {
     const submits = await this.serializeAgentPromptSubmission(leaf.ptyId, generation, async () => {
       this.assertLiveTerminalHandleTargetsPty(handle, leaf.ptyId!)
       this.assertAgentPromptGeneration(leaf.ptyId!, generation)
-      return await this.writeTerminalAgentPrompt(handle, leaf.ptyId!, generation, payload, options)
+      return await this.writeTerminalAgentPrompt(
+        handle,
+        leaf.ptyId!,
+        generation,
+        payload,
+        codexCharCount,
+        options
+      )
     })
     const bytesWritten = Buffer.byteLength(payload, 'utf8') + submits
     return { handle, accepted: true, bytesWritten }
@@ -19395,6 +19427,7 @@ export class OrcaRuntimeService {
     ptyId: string,
     generation: number,
     pastePayload: string,
+    codexCharCount: number,
     options: {
       beforeWrite?: (ptyId: string) => void | Promise<void>
       suffixFailureError?: string
@@ -19405,7 +19438,18 @@ export class OrcaRuntimeService {
     this.assertAgentPromptGeneration(ptyId, generation)
     const permissionBaseline = this.getAgentPromptActivity(handle, ptyId)
     this.assertAgentPromptPermissionSafe(permissionBaseline, permissionBaseline)
-    const renderGate = this.createAgentPromptRenderGate(ptyId)
+    const isLargeCodexPaste =
+      this.getAgentPromptTargetAgent(ptyId) === 'codex' &&
+      codexCharCount > CODEX_LARGE_PASTE_CHAR_THRESHOLD
+    const codexIngestBaseline = isLargeCodexPaste
+      ? await this.captureCodexPasteIngestBaseline(
+          ptyId,
+          generation,
+          codexCharCount,
+          options.signal
+        )
+      : null
+    const renderGate = isLargeCodexPaste ? null : this.createAgentPromptRenderGate(ptyId)
     let wrotePasteBytes = false
     let completedPaste = false
     try {
@@ -19413,22 +19457,18 @@ export class OrcaRuntimeService {
       let chunk = chunks.next()
       while (!chunk.done) {
         const nextChunk = chunks.next()
-        assertAgentPromptRequestActive(options.signal)
-        this.assertAgentPromptGeneration(ptyId, generation)
-        await options.beforeWrite?.(ptyId)
-        assertAgentPromptRequestActive(options.signal)
-        this.assertAgentPromptGeneration(ptyId, generation)
-        this.assertAgentPromptPermissionSafe(
-          permissionBaseline,
-          this.getAgentPromptActivity(handle, ptyId)
-        )
         if (nextChunk.done) {
           renderGate?.arm()
         }
-        const wrote = this.ptyController?.write(ptyId, chunk.value) ?? false
-        if (!wrote) {
-          throw new Error('terminal_not_writable')
-        }
+        await this.writeAgentPromptBytes({
+          handle,
+          ptyId,
+          generation,
+          data: chunk.value,
+          permissionBaseline,
+          ...(isLargeCodexPaste ? { writeFailureError: 'agent_prompt_unverifiable' } : {}),
+          options
+        })
         wrotePasteBytes = true
         chunk = nextChunk
         if (!chunk.done) {
@@ -19448,7 +19488,17 @@ export class OrcaRuntimeService {
       throw error
     }
 
-    if (renderGate) {
+    let codexIngestProof: CodexPasteIngestProof | null = null
+    if (codexIngestBaseline) {
+      codexIngestProof = await this.waitForCodexPasteIngest(
+        handle,
+        ptyId,
+        generation,
+        permissionBaseline,
+        codexIngestBaseline,
+        options.signal
+      )
+    } else if (renderGate) {
       try {
         await waitForAgentPromptPromise(renderGate.wait(), options.signal)
       } finally {
@@ -19457,30 +19507,224 @@ export class OrcaRuntimeService {
     } else {
       await waitForAgentPromptDelay(AGENT_PROMPT_SUBMIT_DELAY_MS, options.signal)
     }
-    assertAgentPromptRequestActive(options.signal)
-    this.assertAgentPromptGeneration(ptyId, generation)
-    try {
-      await options.beforeWrite?.(ptyId)
-    } catch (error) {
-      if (options.suffixFailureError) {
-        throw new Error(options.suffixFailureError)
-      }
-      throw error
+    if (codexIngestProof) {
+      return await this.submitVerifiedCodexPaste({
+        handle,
+        ptyId,
+        generation,
+        permissionBaseline,
+        ingest: codexIngestProof,
+        options
+      })
     }
-    assertAgentPromptRequestActive(options.signal)
-    this.assertAgentPromptGeneration(ptyId, generation)
     const baseline = this.getAgentPromptActivity(handle, ptyId)
-    this.assertAgentPromptPermissionSafe(permissionBaseline, baseline)
-    const suffixWrote = this.ptyController?.write(ptyId, AGENT_PROMPT_SUBMIT) ?? false
-    if (!suffixWrote) {
-      throw new Error(options.suffixFailureError ?? 'terminal_not_writable')
-    }
+    await this.writeAgentPromptBytes({
+      handle,
+      ptyId,
+      generation,
+      data: AGENT_PROMPT_SUBMIT,
+      permissionBaseline,
+      failureError: options.suffixFailureError,
+      options
+    })
     await verifyAgentPromptSubmission({
       baseline,
       readActivity: () => this.getAgentPromptActivity(handle, ptyId),
       signal: options.signal
     })
     return 1
+  }
+
+  private getAgentPromptTargetAgent(ptyId: string): TuiAgent | null | undefined {
+    const pty = this.ptysById.get(ptyId)
+    return pty?.launchAgent ?? pty?.foregroundAgent
+  }
+
+  private async captureCodexPasteIngestBaseline(
+    ptyId: string,
+    generation: number,
+    charCount: number,
+    signal?: AbortSignal
+  ): Promise<CodexPasteIngestBaseline> {
+    if (this.providerSnapshotPreferredPtys.has(ptyId)) {
+      const supported = await this.ptyController?.supportsProviderBufferSnapshot?.(ptyId, signal)
+      assertAgentPromptRequestActive(signal)
+      this.assertAgentPromptGeneration(ptyId, generation)
+      if (supported !== true) {
+        throw new Error('agent_prompt_unverifiable')
+      }
+    }
+    const screen = await this.readCodexPasteScreen(ptyId, generation)
+    if (!screen) {
+      throw new Error('agent_prompt_unverifiable')
+    }
+    return {
+      charCount,
+      markers: collectCodexPasteMarkers(screen.lines, charCount),
+      screen
+    }
+  }
+
+  private async waitForCodexPasteIngest(
+    handle: string,
+    ptyId: string,
+    generation: number,
+    permissionBaseline: AgentPromptActivity,
+    baseline: CodexPasteIngestBaseline,
+    signal?: AbortSignal
+  ): Promise<CodexPasteIngestProof> {
+    const deadline = Date.now() + AGENT_PROMPT_RENDER_TIMEOUT_MS
+    while (Date.now() < deadline) {
+      assertAgentPromptRequestActive(signal)
+      this.assertAgentPromptGeneration(ptyId, generation)
+      this.assertAgentPromptPermissionSafe(
+        permissionBaseline,
+        this.getAgentPromptActivity(handle, ptyId)
+      )
+      const screen = await this.readCodexPasteScreen(ptyId, generation)
+      if (screen) {
+        if (screen.sequence < baseline.screen.sequence) {
+          throw new Error('agent_prompt_unverifiable')
+        }
+        const delta = findCodexPasteMarkerDelta(
+          baseline.markers,
+          collectCodexPasteMarkers(screen.lines, baseline.charCount)
+        )
+        if (delta) {
+          return { ...delta, screen }
+        }
+      }
+      await waitForAgentPromptDelay(AGENT_PROMPT_SCREEN_POLL_MS, signal)
+    }
+    throw new Error('agent_prompt_ingest_unverified')
+  }
+
+  private async submitVerifiedCodexPaste(args: {
+    handle: string
+    ptyId: string
+    generation: number
+    permissionBaseline: AgentPromptActivity
+    ingest: CodexPasteIngestProof
+    options: {
+      beforeWrite?: (ptyId: string) => void | Promise<void>
+      signal?: AbortSignal
+    }
+  }): Promise<number> {
+    let previousScreen = args.ingest.screen
+    for (let submits = 1; submits <= AGENT_PROMPT_MAX_SUBMITS; submits += 1) {
+      await this.writeAgentPromptBytes({
+        handle: args.handle,
+        ptyId: args.ptyId,
+        generation: args.generation,
+        data: AGENT_PROMPT_SUBMIT,
+        permissionBaseline: args.permissionBaseline,
+        failureError: 'agent_prompt_unverifiable',
+        options: args.options
+      })
+      await waitForAgentPromptDelay(AGENT_PROMPT_SUBMIT_DELAY_MS, args.options.signal)
+      this.assertAgentPromptPermissionSafe(
+        args.permissionBaseline,
+        this.getAgentPromptActivity(args.handle, args.ptyId)
+      )
+      const screen = await this.readCodexPasteScreen(args.ptyId, args.generation)
+      if (!screen || screen.sequence < previousScreen.sequence) {
+        throw new Error('agent_prompt_unverifiable')
+      }
+      const visibleCount = countCodexPasteMarker(screen.lines, args.ingest.marker)
+      if (visibleCount < args.ingest.visibleCount) {
+        if (screen.sequence <= previousScreen.sequence) {
+          throw new Error('agent_prompt_unverifiable')
+        }
+        return submits
+      }
+      if (visibleCount > args.ingest.visibleCount) {
+        throw new Error('agent_prompt_unverifiable')
+      }
+      previousScreen = screen
+    }
+    throw new Error('agent_prompt_stalled')
+  }
+
+  private async readCodexPasteScreen(
+    ptyId: string,
+    generation: number
+  ): Promise<RuntimeVisibleTerminalState | null> {
+    if (!this.providerSnapshotPreferredPtys.has(ptyId)) {
+      const screen = await this.readHeadlessVisibleTerminalState(ptyId)
+      return screen?.generation === generation ? screen : null
+    }
+    const snapshot = await this.captureProviderTerminalBuffer(
+      ptyId,
+      { scrollbackRows: 0 },
+      generation
+    )
+    if (
+      !snapshot ||
+      this.getPtyLifecycleGeneration(ptyId) !== generation ||
+      this.getPtyOutputSequence(ptyId) > snapshot.seq
+    ) {
+      return null
+    }
+    return {
+      lines: await this.parseVisibleSnapshotLines(snapshot),
+      isAlternateScreen: snapshot.alternateScreen ?? false,
+      sequence: snapshot.seq,
+      generation
+    }
+  }
+
+  private async writeAgentPromptBytes(args: {
+    handle: string
+    ptyId: string
+    generation: number
+    data: string
+    permissionBaseline: AgentPromptActivity
+    failureError?: string
+    writeFailureError?: string
+    options: {
+      beforeWrite?: (ptyId: string) => void | Promise<void>
+      signal?: AbortSignal
+    }
+  }): Promise<void> {
+    assertAgentPromptRequestActive(args.options.signal)
+    this.assertLiveTerminalHandleTargetsPty(args.handle, args.ptyId)
+    this.assertAgentPromptGeneration(args.ptyId, args.generation)
+    try {
+      await args.options.beforeWrite?.(args.ptyId)
+    } catch (error) {
+      if (args.failureError) {
+        throw new Error(args.failureError)
+      }
+      throw error
+    }
+    assertAgentPromptRequestActive(args.options.signal)
+    this.assertLiveTerminalHandleTargetsPty(args.handle, args.ptyId)
+    this.assertAgentPromptGeneration(args.ptyId, args.generation)
+    this.assertAgentPromptPermissionSafe(
+      args.permissionBaseline,
+      this.getAgentPromptActivity(args.handle, args.ptyId)
+    )
+    this.assertAgentPromptWritable(args.handle, args.ptyId)
+    const wrote = this.ptyController?.writeWithSettlement
+      ? await this.ptyController.writeWithSettlement(args.ptyId, args.data)
+      : (this.ptyController?.write(args.ptyId, args.data) ?? false)
+    if (!wrote) {
+      throw new Error(args.writeFailureError ?? args.failureError ?? 'terminal_not_writable')
+    }
+  }
+
+  private assertAgentPromptWritable(handle: string, ptyId: string): void {
+    const runtimePty = this.getLivePtyForHandle(handle)
+    if (runtimePty) {
+      if (runtimePty.pty.ptyId !== ptyId || !runtimePty.pty.connected) {
+        throw new Error('terminal_not_writable')
+      }
+      return
+    }
+    const { leaf } = this.getLiveLeafForHandle(handle)
+    if (leaf.ptyId !== ptyId || !leaf.connected || !leaf.writable) {
+      throw new Error('terminal_not_writable')
+    }
   }
 
   private async serializeAgentPromptSubmission<T>(

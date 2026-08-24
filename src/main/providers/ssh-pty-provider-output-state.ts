@@ -128,6 +128,10 @@ export class SshPtyProviderOutputState {
     }
   }
 
+  ptyIncarnation(relayPtyId: string): string | undefined {
+    return this.incarnationByRelayPtyId.get(relayPtyId)
+  }
+
   private resolvePtyIncarnation(relayPtyId: string, incarnationId: unknown): string {
     this.rememberPtyIncarnation(relayPtyId, incarnationId)
     let resolved = this.incarnationByRelayPtyId.get(relayPtyId)

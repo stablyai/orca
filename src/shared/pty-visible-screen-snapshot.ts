@@ -1,0 +1,1 @@
+export const PTY_VISIBLE_SCREEN_SNAPSHOT_PROTOCOL_VERSION = 1 as const

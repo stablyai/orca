@@ -5912,6 +5912,17 @@ export function registerPtyHandlers(
         return null
       }
     },
+    supportsProviderBufferSnapshot: async (ptyId, signal) => {
+      try {
+        const provider = getProviderForPty(ptyId)
+        if (provider.probeAuthoritativeBufferSnapshotSupport) {
+          return await provider.probeAuthoritativeBufferSnapshotSupport({ signal })
+        }
+        return provider.canProvideAuthoritativeBufferSnapshot?.(ptyId) === true
+      } catch {
+        return false
+      }
+    },
     hasRendererSerializer: (ptyId) => {
       // Why: a synchronous probe lets the runtime decide whether to skip the daemon-snapshot seed (renderer will hydrate) or run it (no renderer authoritative).
       return rendererSerializerReadiness.has(ptyId)

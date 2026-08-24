@@ -1,7 +1,9 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   ORCHESTRATION_CONTRACT_RUNTIME_CAPABILITY,
-  ORCHESTRATION_FEDERATION_RUNTIME_CAPABILITY
+  ORCHESTRATION_FEDERATION_RUNTIME_CAPABILITY,
+  ORCHESTRATION_PROMPT_SUBMIT_VERIFICATION_RUNTIME_CAPABILITY,
+  RUNTIME_CAPABILITIES
 } from '../../../../shared/protocol-version'
 import { OrcaRuntimeService } from '../../orca-runtime'
 import { OrchestrationDb } from '../../orchestration/db'
@@ -244,5 +246,55 @@ describe('orchestration migration behavior', () => {
     ).rejects.toMatchObject({ code: 'capability_unsupported' })
     expect(db.getTask(task.id)?.status).toBe('ready')
     expect(db.getDispatchContext(task.id)).toBeUndefined()
+  })
+
+  it('rejects a connected server missing prompt verification before Task mutation', async () => {
+    const { db, runtime } = createRuntime()
+    const run = db.createRun({
+      objective: 'unverified remote worker',
+      coordinatorHandle: 'term_coord',
+      coordinatorPaneKey: 'tab_coord:leaf_coord'
+    })
+    const task = db.createTask({ spec: 'remote work', runId: run.id })
+    vi.spyOn(runtime, 'resolveOrchestrationWorkerServer').mockReturnValue({
+      environmentId: 'environment_windows',
+      name: 'windows',
+      peerFingerprint: 'windows_peer'
+    })
+    vi.spyOn(runtime, 'callOrchestrationWorkerServer').mockResolvedValue({
+      capabilities: [
+        ORCHESTRATION_CONTRACT_RUNTIME_CAPABILITY,
+        ORCHESTRATION_FEDERATION_RUNTIME_CAPABILITY
+      ]
+    })
+
+    await expect(
+      startFederatedWorker({
+        params: {
+          task: task.id,
+          from: 'term_coord',
+          on: 'windows',
+          worktree: 'new-top-level',
+          repo: 'id:windows-repo',
+          name: 'remote-work',
+          agent: 'codex'
+        },
+        runtime,
+        db,
+        runId: run.id,
+        task,
+        orchestrationMutation: {
+          callerFingerprint: 'caller',
+          requestId: 'remote_start',
+          method: 'orchestration.workerStart',
+          payloadHash: 'payload'
+        }
+      })
+    ).rejects.toMatchObject({ code: 'capability_unsupported' })
+    expect(db.getTask(task.id)?.status).toBe('ready')
+    expect(db.getDispatchContext(task.id)).toBeUndefined()
+    expect(RUNTIME_CAPABILITIES).toContain(
+      ORCHESTRATION_PROMPT_SUBMIT_VERIFICATION_RUNTIME_CAPABILITY
+    )
   })
 })

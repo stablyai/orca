@@ -5,6 +5,7 @@ import {
 } from '../../shared/agent-prompt-injection'
 import { OrcaRuntimeService } from './orca-runtime'
 import { makeStore } from './runtime-rpc-worktree-store-fixtures'
+import type { TuiAgent } from '../../shared/tui-agent'
 
 const WORKTREE_PATH = '/tmp/worktree-a'
 
@@ -30,7 +31,9 @@ vi.mock('../git/worktree', () => ({
 }))
 
 async function createPromptRuntime(
-  onWrite: (runtime: OrcaRuntimeService, data: string, writeIndex: number) => void
+  onWrite: (runtime: OrcaRuntimeService, data: string, writeIndex: number) => void,
+  agent: TuiAgent = 'aider',
+  settleWrite?: (data: string) => Promise<boolean>
 ): Promise<{ runtime: OrcaRuntimeService; handle: string; writes: string[] }> {
   const runtime = new OrcaRuntimeService(makeStore() as never)
   const writes: string[] = []
@@ -41,11 +44,20 @@ async function createPromptRuntime(
       onWrite(runtime, data, writes.length)
       return true
     },
+    ...(settleWrite
+      ? {
+          writeWithSettlement: async (_ptyId: string, data: string) => {
+            writes.push(data)
+            onWrite(runtime, data, writes.length)
+            return await settleWrite(data)
+          }
+        }
+      : {}),
     kill: () => true,
     getForegroundProcess: async () => null
   })
   const terminal = await runtime.createTerminal(`path:${WORKTREE_PATH}`, {
-    launchAgent: 'aider'
+    launchAgent: agent
   })
   return { runtime, handle: terminal.handle, writes }
 }
@@ -66,6 +78,113 @@ describe('agent prompt submission runtime', () => {
 
     await expect(submission).resolves.toMatchObject({ accepted: true })
     expect(writes.filter((data) => data === '\r')).toHaveLength(1)
+  })
+
+  it('waits for a large Codex paste marker before Enter despite cursor output', async () => {
+    vi.useFakeTimers()
+    const prompt = 'x'.repeat(1_001)
+    let markerVisible = false
+    const { runtime, handle, writes } = await createPromptRuntime((runtime, data) => {
+      if (data.includes(AGENT_PROMPT_BRACKETED_PASTE_END)) {
+        runtime.onPtyData('pty-prompt', '\x1b[?25h', Date.now())
+        setTimeout(() => {
+          markerVisible = true
+          runtime.onPtyData('pty-prompt', '[Pasted Content 1001 chars]', Date.now())
+        }, 500)
+      } else if (data === '\r') {
+        runtime.onPtyData('pty-prompt', '\x1b[2J\x1b[Hworking', Date.now())
+      }
+    }, 'codex')
+    runtime.onPtyData('pty-prompt', '\x1b[2J\x1b[H› ', Date.now())
+
+    const submission = runtime.sendTerminalAgentPrompt(handle, prompt)
+    await vi.advanceTimersByTimeAsync(499)
+    expect(writes).not.toContain('\r')
+    await vi.advanceTimersByTimeAsync(501)
+    await submission
+
+    expect(markerVisible).toBe(true)
+    expect(writes.filter((data) => data === '\r')).toHaveLength(1)
+  })
+
+  it('fails a large Codex paste before Enter when no marker appears', async () => {
+    vi.useFakeTimers()
+    const { runtime, handle, writes } = await createPromptRuntime((runtime, data) => {
+      if (data.includes(AGENT_PROMPT_BRACKETED_PASTE_END)) {
+        runtime.onPtyData('pty-prompt', '\x1b[?25h', Date.now())
+      }
+    }, 'codex')
+    runtime.onPtyData('pty-prompt', '\x1b[2J\x1b[H› ', Date.now())
+
+    const submission = runtime.sendTerminalAgentPrompt(handle, 'x'.repeat(1_001))
+    const rejected = expect(submission).rejects.toThrow('agent_prompt_ingest_unverified')
+    await vi.runAllTimersAsync()
+
+    await rejected
+    expect(writes).not.toContain('\r')
+  })
+
+  it('fails a large Codex paste closed when no visible screen is available', async () => {
+    const { runtime, handle, writes } = await createPromptRuntime(() => undefined, 'codex')
+
+    await expect(runtime.sendTerminalAgentPrompt(handle, 'x'.repeat(1_001))).rejects.toThrow(
+      'agent_prompt_unverifiable'
+    )
+    expect(writes).toEqual([])
+  })
+
+  it('maps unsettled large Codex paste delivery to unverifiable', async () => {
+    const { runtime, handle, writes } = await createPromptRuntime(
+      () => undefined,
+      'codex',
+      async () => false
+    )
+    runtime.onPtyData('pty-prompt', '\x1b[2J\x1b[H› ', Date.now())
+
+    await expect(runtime.sendTerminalAgentPrompt(handle, 'x'.repeat(1_001))).rejects.toThrow(
+      'agent_prompt_unverifiable'
+    )
+    expect(writes).toHaveLength(1)
+    expect(writes).not.toContain('\r')
+  })
+
+  it('retries large Codex submit only while its marker remains', async () => {
+    vi.useFakeTimers()
+    let enters = 0
+    const { runtime, handle, writes } = await createPromptRuntime((runtime, data) => {
+      if (data.includes(AGENT_PROMPT_BRACKETED_PASTE_END)) {
+        runtime.onPtyData('pty-prompt', '[Pasted Content 1001 chars] #23', Date.now())
+      } else if (data === '\r') {
+        enters += 1
+        if (enters === 2) {
+          runtime.onPtyData('pty-prompt', '\x1b[2J\x1b[Hworking', Date.now())
+        }
+      }
+    }, 'codex')
+    runtime.onPtyData('pty-prompt', '\x1b[2J\x1b[H› ', Date.now())
+
+    const submission = runtime.sendTerminalAgentPrompt(handle, 'x'.repeat(1_001))
+    await vi.runAllTimersAsync()
+    await expect(submission).resolves.toMatchObject({ accepted: true })
+
+    expect(writes.filter((data) => data === '\r')).toHaveLength(2)
+  })
+
+  it('bounds large Codex retries when its marker never leaves', async () => {
+    vi.useFakeTimers()
+    const { runtime, handle, writes } = await createPromptRuntime((runtime, data) => {
+      if (data.includes(AGENT_PROMPT_BRACKETED_PASTE_END)) {
+        runtime.onPtyData('pty-prompt', '[Pasted Content 1001 chars]', Date.now())
+      }
+    }, 'codex')
+    runtime.onPtyData('pty-prompt', '\x1b[2J\x1b[H› ', Date.now())
+
+    const submission = runtime.sendTerminalAgentPrompt(handle, 'x'.repeat(1_001))
+    const rejected = expect(submission).rejects.toThrow('agent_prompt_stalled')
+    await vi.runAllTimersAsync()
+
+    await rejected
+    expect(writes.filter((data) => data === '\r')).toHaveLength(3)
   })
 
   it('accepts a working-to-idle cycle completed before the first poll', async () => {

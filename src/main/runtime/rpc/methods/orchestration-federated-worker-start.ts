@@ -20,6 +20,7 @@ import {
   resolveFederatedWorkerLaunchReceipt,
   type OrchestrationWorkerLaunchReceipt
 } from './orchestration-worker-launch-preferences'
+import { assertPromptSubmitVerificationSupported } from './orchestration-prompt-submit-capability'
 import { validateFederatedWorkerStartPlacement } from './orchestration-worker-start-validation'
 
 export async function startFederatedWorker(args: {
@@ -78,6 +79,7 @@ export async function startFederatedWorker(args: {
       `Connected server ${server.name} does not support orchestration federation.`
     )
   }
+  assertPromptSubmitVerificationSupported(status.capabilities, server.name)
   assertWorkerLaunchPreferencesRuntimeSupported({
     model: params.model,
     effort: params.effort,

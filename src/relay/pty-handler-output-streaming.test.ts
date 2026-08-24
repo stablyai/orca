@@ -1,5 +1,6 @@
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest'
 import { PTY_STARTUP_INGRESS_VERSION } from '../shared/pty-startup-ingress'
+import { PTY_VISIBLE_SCREEN_SNAPSHOT_PROTOCOL_VERSION } from '../shared/pty-visible-screen-snapshot'
 
 const { mockPtySpawn, mockPtyInstance, mockCreateShellPromptReadinessProbe } = vi.hoisted(() => ({
   mockPtySpawn: vi.fn(),
@@ -126,6 +127,36 @@ describe('PtyHandler', () => {
     expect(dispatcher.notify).not.toHaveBeenCalledWith('pty.data', expect.anything())
     vi.advanceTimersByTime(8)
     expect(dispatcher.notify).toHaveBeenCalledWith('pty.data', { id: 'pty-1', data: 'hello world' })
+  })
+
+  it('serves an ordered visible-screen snapshot for the current PTY incarnation', async () => {
+    let dataCallback: ((data: string) => void) | undefined
+    mockPtySpawn.mockReturnValue({
+      ...mockPtyInstance,
+      onData: vi.fn((callback: (data: string) => void) => {
+        dataCallback = callback
+      }),
+      onExit: vi.fn()
+    })
+    const spawned = (await dispatcher.callRequest('pty.spawn', {
+      cols: 80,
+      rows: 24
+    })) as { id: string; incarnationId: string }
+
+    dataCallback?.('[Pasted Content 1001 chars]')
+    const snapshot = (await dispatcher.callRequest('pty.getBufferSnapshot', {
+      id: spawned.id
+    })) as { data: string; seq: number; incarnationId: string }
+    const capabilities = (await dispatcher.callRequest('pty.getCapabilities')) as {
+      visibleScreenSnapshotVersion: number
+    }
+
+    expect(snapshot.data).toContain('[Pasted Content 1001 chars]')
+    expect(snapshot.seq).toBe('[Pasted Content 1001 chars]'.length)
+    expect(snapshot.incarnationId).toBe(spawned.incarnationId)
+    expect(capabilities.visibleScreenSnapshotVersion).toBe(
+      PTY_VISIBLE_SCREEN_SNAPSHOT_PROTOCOL_VERSION
+    )
   })
 
   it('consumes capable startup queries before relay replay and fanout', async () => {

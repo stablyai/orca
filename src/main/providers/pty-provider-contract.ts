@@ -29,6 +29,8 @@ export type PtyProviderBufferSnapshot = {
   cwd?: string | null
   lastTitle?: string
   seq: number
+  /** Process identity that owned the provider screen at this sequence. */
+  incarnationId?: PtyIncarnationId
   source: 'headless'
   oscLinks?: TerminalOscLinkRange[]
   alternateScreen?: boolean
@@ -178,6 +180,10 @@ export type IPtyProvider = {
   ) => Promise<PtyProviderBufferSnapshot | null>
   /** Whether this exact PTY can return a sequence-safe provider snapshot. */
   canProvideAuthoritativeBufferSnapshot?: (id: string) => boolean
+  /** Negotiated proof that provider snapshots are available on this execution host. */
+  probeAuthoritativeBufferSnapshotSupport?: (
+    options?: PtyProbeOptions
+  ) => boolean | Promise<boolean>
   /**
    * The size the PTY has ACTUALLY applied, not the last size requested.
    * resize() is fire-and-forget for remote providers (daemon/SSH `notify`),

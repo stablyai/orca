@@ -89,6 +89,9 @@ import {
   injectRelayFishHistoryEnv,
   injectRelayHistoryEnv
 } from './terminal-history'
+import { HeadlessEmulator } from '../main/daemon/headless-emulator'
+import type { PtyProviderBufferSnapshot } from '../main/providers/pty-provider-contract'
+import { PTY_VISIBLE_SCREEN_SNAPSHOT_PROTOCOL_VERSION } from '../shared/pty-visible-screen-snapshot'
 
 // Why: only Linux compiles node-pty (no prebuilt), so the build-tools remedy is a closable setup gap
 // there and wrong advice anywhere node-pty ships one. The relay only sees an unloadable binding, never
@@ -149,6 +152,10 @@ type ManagedPty = {
   /** Why a chunk deque: rebuilding a rolling 100KB string per PTY chunk copied the
    * whole window on every write once saturated. Readers are attach/adopt/revive only. */
   buffered: RecentPtyOutputBuffer
+  screen: HeadlessEmulator
+  screenWriteChain: Promise<void>
+  screenSequence: number
+  screenAppliedSequence: number
   /** Timer for SIGKILL fallback after a graceful SIGTERM shutdown. */
   killTimer?: ReturnType<typeof setTimeout>
   /** True once disposeManagedPty has run; blocks double-dispose and makes post-dispose calls fail "not found" not silently. */
@@ -232,11 +239,24 @@ function finishPtyCreationOperations(operations: readonly (() => void)[]): void 
   }
 }
 
+function createManagedPtyScreen(
+  cols: number,
+  rows: number
+): Pick<ManagedPty, 'screen' | 'screenWriteChain' | 'screenSequence' | 'screenAppliedSequence'> {
+  return {
+    screen: new HeadlessEmulator({ cols, rows, scrollback: 0 }),
+    screenWriteChain: Promise.resolve(),
+    screenSequence: 0,
+    screenAppliedSequence: 0
+  }
+}
+
 function disposeManagedPty(managed: ManagedPty): void {
   if (managed.disposed) {
     return
   }
   managed.disposed = true
+  managed.screen.dispose()
   // Why: clear the SIGKILL fallback timer so it can't fire pty.kill on an already-disposed instance.
   if (managed.killTimer) {
     clearTimeout(managed.killTimer)
@@ -823,6 +843,13 @@ export class PtyHandler {
       })
     }
     managed.pty.onData((data: string) => {
+      const screenSequence = managed.screenSequence + data.length
+      managed.screenSequence = screenSequence
+      const screenWrite = managed.screenWriteChain.then(async () => {
+        await managed.screen.write(data)
+        managed.screenAppliedSequence = screenSequence
+      })
+      managed.screenWriteChain = screenWrite.catch(() => {})
       const startup = managed.startupCommand
       if (startup?.waitForShellReady && startup.outputScanState && !startup.delivered) {
         const scanned = scanShellStartupOutput(startup.outputScanState, data)
@@ -913,6 +940,7 @@ export class PtyHandler {
     this.dispatcher.onRequest('pty.getCwd', (p) => this.getCwd(p))
     this.dispatcher.onRequest('pty.getInitialCwd', (p) => this.getInitialCwd(p))
     this.dispatcher.onRequest('pty.getSize', (p) => this.getSize(p))
+    this.dispatcher.onRequest('pty.getBufferSnapshot', (p) => this.getBufferSnapshot(p))
     this.dispatcher.onRequest('pty.clearBuffer', (p) => this.clearBuffer(p))
     this.dispatcher.onRequest('pty.hasChildProcesses', (p) => this.hasChildProcesses(p))
     this.dispatcher.onRequest('pty.getForegroundProcess', (p) => this.getForegroundProcess(p))
@@ -920,7 +948,8 @@ export class PtyHandler {
     this.dispatcher.onRequest('pty.getCapabilities', async () => ({
       startupIngressVersion: PTY_STARTUP_INGRESS_VERSION,
       agentSessionClaimVersion: AGENT_SESSION_EXECUTION_OWNER_PROTOCOL_VERSION,
-      agentSessionCreateOperationVersion: AGENT_SESSION_CREATE_OPERATION_PROTOCOL_VERSION
+      agentSessionCreateOperationVersion: AGENT_SESSION_CREATE_OPERATION_PROTOCOL_VERSION,
+      visibleScreenSnapshotVersion: PTY_VISIBLE_SCREEN_SNAPSHOT_PROTOCOL_VERSION
     }))
     this.dispatcher.onRequest('pty.listProcesses', () => this.listProcesses())
     this.dispatcher.onRequest('pty.getDefaultShell', async () => resolveDefaultShell())
@@ -1694,6 +1723,7 @@ export class PtyHandler {
         preserveChunkBoundaries: false,
         limit: REPLAY_BUFFER_MAX
       }),
+      ...createManagedPtyScreen(cols, rows),
       paneKey,
       tabId,
       ...(attachIdentity.paneKey || attachIdentity.tabId ? { attachIdentity } : {}),
@@ -1897,6 +1927,43 @@ export class PtyHandler {
     const managed = this.ptys.get(id)
     if (managed && !managed.disposed) {
       managed.pty.resize(cols, rows)
+      managed.screenWriteChain = managed.screenWriteChain
+        .then(() => managed.screen.resize(cols, rows))
+        .catch(() => {})
+    }
+  }
+
+  private async getBufferSnapshot(
+    params: Record<string, unknown>
+  ): Promise<PtyProviderBufferSnapshot | null> {
+    const managed = this.ptys.get(params.id as string)
+    if (!managed || managed.disposed) {
+      return null
+    }
+    const incarnationId = managed.incarnationId
+    await managed.screenWriteChain
+    if (this.ptys.get(managed.id) !== managed || managed.disposed) {
+      return null
+    }
+    const scrollbackRows = Math.max(0, Math.floor(Number(params.scrollbackRows) || 0))
+    const snapshot = managed.screen.getSnapshot({ scrollbackRows })
+    return {
+      data: snapshot.rehydrateSequences + snapshot.snapshotAnsi,
+      frameRestoreAnsi: snapshot.frameRestoreAnsi,
+      scrollbackAnsi: snapshot.scrollbackAnsi,
+      cols: snapshot.cols,
+      rows: snapshot.rows,
+      cwd: snapshot.cwd,
+      lastTitle: snapshot.lastTitle,
+      seq: managed.screenAppliedSequence,
+      incarnationId,
+      source: 'headless',
+      oscLinks: snapshot.oscLinks,
+      alternateScreen: managed.screen.isAlternateScreen,
+      pendingEscapeTailAnsi: snapshot.pendingEscapeTailAnsi,
+      ...(typeof snapshot.modes.kittyKeyboardFlags === 'number'
+        ? { kittyKeyboardFlags: snapshot.modes.kittyKeyboardFlags }
+        : {})
     }
   }
 
@@ -2285,6 +2352,7 @@ export class PtyHandler {
         preserveChunkBoundaries: false,
         limit: REPLAY_BUFFER_MAX
       }),
+      ...createManagedPtyScreen(entry.cols, entry.rows),
       paneKey: entry.paneKey,
       tabId: entry.tabId,
       attachIdentity: entry.attachIdentity,

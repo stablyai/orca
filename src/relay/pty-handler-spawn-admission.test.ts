@@ -69,6 +69,7 @@ describe('PtyHandler', () => {
     expect(methods).toContain('pty.sendSignal')
     expect(methods).toContain('pty.getCwd')
     expect(methods).toContain('pty.getInitialCwd')
+    expect(methods).toContain('pty.getBufferSnapshot')
     expect(methods).toContain('pty.clearBuffer')
     expect(methods).toContain('pty.hasChildProcesses')
     expect(methods).toContain('pty.getForegroundProcess')
