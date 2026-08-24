@@ -7,6 +7,10 @@ const sessionRouteSource = readFileSync(
   new URL('../../app/h/[hostId]/session/[worktreeId].tsx', import.meta.url),
   'utf8'
 )
+const liveSendSource = readFileSync(
+  new URL('./send-live-terminal-input.ts', import.meta.url),
+  'utf8'
+)
 
 function routeSlice(anchorStart: string, anchorEnd: string): string {
   const start = sessionRouteSource.indexOf(anchorStart)
@@ -121,7 +125,14 @@ describe('session route offline-compose wiring', () => {
     // connect wait — a parked send replays stale bytes into the PTY. Accessory
     // keys get the same option inside terminal-live-accessory-raw-send.ts.
     const optOuts = sessionRouteSource.match(/TERMINAL_INPUT_SEND_OPTIONS/g)?.length ?? 0
-    expect(optOuts).toBe(4)
+    // STA-3199 moved the live-mirror send into send-live-terminal-input.ts, so the
+    // route now carries 3 and that module carries the 4th - the same split this
+    // test already tolerates for terminal-live-accessory-raw-send.ts.
+    expect(optOuts).toBe(3)
+    expect(liveSendSource).toContain('TERMINAL_INPUT_SEND_OPTIONS')
+    // The pipelined stream path never reaches terminal.send, so its now-or-never
+    // guarantee has to come from the connection gate instead.
+    expect(liveSendSource).toContain('!args.connected')
     expect(TERMINAL_INPUT_SEND_OPTIONS).toEqual({ failWhenDisconnected: true })
   })
 

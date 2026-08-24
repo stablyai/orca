@@ -7,6 +7,7 @@ import {
   buildTerminalUnsubscribeParams,
   updateTerminalSubscriptionViewport
 } from './rpc-client-terminal-subscription'
+import { TerminalInputStreamRegistry } from './rpc-client-terminal-input-send'
 import type { RpcClient } from './rpc-client'
 import type { RpcResponse, RpcSuccess } from './types'
 
@@ -27,6 +28,8 @@ type StreamRecord = {
 type StreamManagerOptions = {
   nextId: () => string
   sendFrame: (request: { id: string; method: string; params?: unknown }) => boolean
+  sendBinary: (bytes: Uint8Array) => boolean
+  isConnected: () => boolean
   waitForConnected: () => Promise<void>
 }
 
@@ -34,6 +37,7 @@ export class MobileRelayRpcStreams {
   private readonly streams = new Map<string, StreamRecord>()
   private readonly terminalListeners = new Map<number, (result: unknown) => void>()
   private readonly terminalSnapshots = new Map<number, TerminalSnapshotState>()
+  private readonly terminalInputStreams = new TerminalInputStreamRegistry()
   private activeBrowserStream: StreamRecord | null = null
 
   constructor(private readonly options: StreamManagerOptions) {}
@@ -92,6 +96,7 @@ export class MobileRelayRpcStreams {
       if (typeof metadata.streamId === 'number') {
         stream.streamIds.add(metadata.streamId)
         this.terminalListeners.set(metadata.streamId, stream.listener)
+        this.terminalInputStreams.remember(stream.params, metadata.streamId)
       }
       if (stream.method === 'browser.screencast') {
         this.activeBrowserStream = stream
@@ -106,6 +111,15 @@ export class MobileRelayRpcStreams {
       stream.listener(result)
     }
     return true
+  }
+
+  sendTerminalInput(terminal: string, text: string) {
+    return this.terminalInputStreams.send(
+      terminal,
+      text,
+      this.options.isConnected(),
+      this.options.sendBinary
+    )
   }
 
   handleBinary(bytes: Uint8Array): void {
@@ -127,6 +141,7 @@ export class MobileRelayRpcStreams {
     this.streams.clear()
     this.terminalListeners.clear()
     this.terminalSnapshots.clear()
+    this.terminalInputStreams.clear()
     this.activeBrowserStream = null
   }
 
@@ -160,6 +175,7 @@ export class MobileRelayRpcStreams {
     if (!stream) {
       return
     }
+    this.terminalInputStreams.forget(stream.params, stream.streamIds)
     for (const streamId of stream.streamIds) {
       this.terminalListeners.delete(streamId)
       this.terminalSnapshots.delete(streamId)

@@ -3,7 +3,12 @@ import {
   BrowserScreencastOpcode,
   encodeBrowserScreencastFrame
 } from '../../../src/shared/browser-screencast-protocol'
-import { encodeTerminalStreamFrame, TerminalStreamOpcode } from './terminal-stream-protocol'
+import {
+  decodeTerminalStreamFrame,
+  decodeTerminalStreamText,
+  encodeTerminalStreamFrame,
+  TerminalStreamOpcode
+} from './terminal-stream-protocol'
 import { isRpcDeliveryUnknown } from './rpc-delivery-ambiguity'
 
 const fakes = vi.hoisted(() => ({
@@ -18,6 +23,7 @@ const fakes = vi.hoisted(() => ({
     onError(error: Error): void
   },
   sendText: vi.fn(() => true),
+  sendBinary: vi.fn(() => true),
   close: vi.fn()
 }))
 
@@ -27,6 +33,7 @@ vi.mock('./mobile-relay-e2ee-link', () => ({
       fakes.linkOptions = options
     }
     sendText = fakes.sendText
+    sendBinary = fakes.sendBinary
     close = fakes.close
   }
 }))
@@ -102,6 +109,7 @@ describe('mobile relay RPC session', () => {
     vi.clearAllMocks()
     fakes.linkOptions = null
     fakes.sendText.mockReturnValue(true)
+    fakes.sendBinary.mockReturnValue(true)
   })
   afterEach(() => vi.useRealTimers())
 
@@ -169,8 +177,18 @@ describe('mobile relay RPC session', () => {
       streamId: 42,
       chunk: 'hello'
     })
+    expect(session.sendTerminalInput('term-1', 'xy')).toBe('sent')
+    expect(fakes.sendBinary).toHaveBeenCalledOnce()
+    const binaryPayload = fakes.sendBinary.mock.calls[0]?.[0]
+    expect(binaryPayload).toBeInstanceOf(Uint8Array)
+    const input =
+      binaryPayload instanceof Uint8Array ? decodeTerminalStreamFrame(binaryPayload) : null
+    expect(input?.opcode).toBe(TerminalStreamOpcode.Input)
+    expect(input?.streamId).toBe(42)
+    expect(input ? decodeTerminalStreamText(input.payload) : '').toBe('xy')
 
     fakes.sendText.mockClear()
+    fakes.sendBinary.mockClear()
     const onBinaryFrame = vi.fn()
     session.subscribe('browser.screencast', {}, vi.fn(), { onBinaryFrame })
     await vi.waitFor(() => expect(fakes.sendText).toHaveBeenCalledOnce())

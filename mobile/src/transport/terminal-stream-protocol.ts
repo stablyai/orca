@@ -9,6 +9,7 @@ export enum TerminalStreamOpcode {
   SnapshotEnd = 4,
   Resized = 5,
   Error = 6,
+  Input = 7,
   Metadata = 12
 }
 
@@ -64,6 +65,10 @@ export function decodeTerminalStreamJson<T>(payload: Uint8Array): T | null {
   }
 }
 
+export function encodeTerminalStreamText(value: string): Uint8Array {
+  return new TextEncoder().encode(value)
+}
+
 export function decodeTerminalStreamText(payload: Uint8Array): string {
   return new TextDecoder().decode(payload)
 }
@@ -76,6 +81,7 @@ function isTerminalStreamOpcode(value: number): value is TerminalStreamOpcode {
     value === TerminalStreamOpcode.SnapshotEnd ||
     value === TerminalStreamOpcode.Resized ||
     value === TerminalStreamOpcode.Error ||
+    value === TerminalStreamOpcode.Input ||
     value === TerminalStreamOpcode.Metadata
   )
 }

@@ -4,7 +4,7 @@ import type { RpcClient } from '../transport/rpc-client'
 import type { ConnectionState } from '../transport/types'
 
 type TerminalLiveAccessoryRawSendArgs = {
-  readonly client: Pick<RpcClient, 'sendRequest'> | null
+  readonly client: Pick<RpcClient, 'sendRequest' | 'sendTerminalInput'> | null
   readonly targetHandle: string
   readonly activeHandle: string | null
   readonly activeSessionTabType: string | null
@@ -23,6 +23,10 @@ export async function sendTerminalLiveAccessoryRawBytes(
     activeSessionTabType: args.activeSessionTabType
   })
   if (!args.client || !rawSendTarget || args.connState !== 'connected') {
+    return
+  }
+  const streamResult = args.client.sendTerminalInput?.(rawSendTarget, args.bytes)
+  if (streamResult === 'sent' || streamResult === 'failed') {
     return
   }
   await args.client

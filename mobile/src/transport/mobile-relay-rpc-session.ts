@@ -57,6 +57,8 @@ export function connectMobileRelayRpcSession(args: {
   const streams = new MobileRelayRpcStreams({
     nextId,
     sendFrame,
+    sendBinary: (bytes) => link.sendBinary(bytes),
+    isConnected: () => state === 'connected',
     waitForConnected: () => waitForConnected()
   })
 
@@ -103,6 +105,10 @@ export function connectMobileRelayRpcSession(args: {
         return () => {}
       }
       return streams.subscribe(method, params, listener, options)
+    },
+
+    sendTerminalInput(terminal, text) {
+      return streams.sendTerminalInput(terminal, text)
     },
 
     updateTerminalSubscriptionViewport(terminal, viewport) {

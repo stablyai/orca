@@ -113,6 +113,10 @@ export function createStableLogicalRpcClient(
       })
     },
 
+    sendTerminalInput(terminal, text) {
+      return activeSession.sendTerminalInput?.(terminal, text) ?? 'no-stream'
+    },
+
     subscribe(method, params, listener, options) {
       if (closed) {
         return () => {}

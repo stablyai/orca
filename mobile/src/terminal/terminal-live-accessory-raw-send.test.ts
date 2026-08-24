@@ -17,6 +17,17 @@ const BASE_ARGS = {
 } as const
 
 describe('terminal live accessory raw send', () => {
+  it('writes accessory bytes on the subscribe stream when the host has one', async () => {
+    const sendTerminalInput = vi.fn(() => 'sent' as const)
+    const sendRequest = vi.fn()
+    const client = { sendRequest, sendTerminalInput }
+
+    await sendTerminalLiveAccessoryRawBytes({ ...BASE_ARGS, client })
+
+    expect(sendTerminalInput).toHaveBeenCalledWith('terminal-a', '')
+    expect(sendRequest).not.toHaveBeenCalled()
+  })
+
   it('sends raw bytes now-or-never with the device presence tag', async () => {
     const { client, sendRequest } = captureClient()
 

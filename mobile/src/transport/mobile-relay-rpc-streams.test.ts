@@ -18,6 +18,8 @@ describe('MobileRelayRpcStreams failure parity', () => {
     const streams = new MobileRelayRpcStreams({
       nextId: () => 'stream-1',
       sendFrame,
+      sendBinary: () => true,
+      isConnected: () => true,
       waitForConnected: async () => {}
     })
     const cancel = streams.subscribe(
@@ -45,6 +47,8 @@ describe('MobileRelayRpcStreams failure parity', () => {
     const streams = new MobileRelayRpcStreams({
       nextId: () => 'stream-1',
       sendFrame,
+      sendBinary: () => true,
+      isConnected: () => true,
       waitForConnected: () => Promise.reject(waitError)
     })
     const cancel = streams.subscribe(
@@ -71,6 +75,8 @@ describe('MobileRelayRpcStreams failure parity', () => {
     const streams = new MobileRelayRpcStreams({
       nextId: () => 'stream-1',
       sendFrame,
+      sendBinary: () => true,
+      isConnected: () => true,
       waitForConnected: async () => {}
     })
     const cancel = streams.subscribe(
@@ -98,6 +104,8 @@ describe('MobileRelayRpcStreams failure parity', () => {
     const streams = new MobileRelayRpcStreams({
       nextId: () => 'stream-1',
       sendFrame,
+      sendBinary: () => true,
+      isConnected: () => true,
       waitForConnected: () => connection.promise
     })
     const cancel = streams.subscribe(
@@ -121,6 +129,8 @@ describe('MobileRelayRpcStreams failure parity', () => {
     const streams = new MobileRelayRpcStreams({
       nextId: () => 'stream-1',
       sendFrame,
+      sendBinary: () => true,
+      isConnected: () => true,
       waitForConnected: () => connection.promise
     })
     streams.subscribe('session.tabs.subscribe', { worktree: 'id:worktree-1' }, listener)
@@ -140,6 +150,8 @@ describe('MobileRelayRpcStreams failure parity', () => {
     const streams = new MobileRelayRpcStreams({
       nextId: () => 'stream-1',
       sendFrame: () => true,
+      sendBinary: () => true,
+      isConnected: () => true,
       waitForConnected: async () => {}
     })
     streams.subscribe('session.tabs.subscribe', { worktree: 'id:worktree-1' }, listener)

@@ -18,6 +18,7 @@ class FakeSession implements RpcClient {
     vi.fn<RpcClient['updateTerminalSubscriptionViewport']>()
   readonly notifyForeground = vi.fn()
   readonly close = vi.fn()
+  sendTerminalInput = vi.fn(() => 'no-stream' as const)
   private state: ConnectionState
   private readonly stateListeners = new Set<(state: ConnectionState) => void>()
   private readonly streamListeners = new Set<(result: unknown) => void>()
@@ -67,6 +68,15 @@ function deferred<T>() {
 }
 
 describe('stable logical RPC client', () => {
+  it('forwards live terminal input to the active physical session', () => {
+    const session = new FakeSession('connected')
+    session.sendTerminalInput = vi.fn(() => 'sent')
+    const client = createStableLogicalRpcClient(session, 'lan')
+
+    expect(client.sendTerminalInput('term-1', 'ab')).toBe('sent')
+    expect(session.sendTerminalInput).toHaveBeenCalledWith('term-1', 'ab')
+  })
+
   it('advertises source-default support on worktree catalog requests', async () => {
     const session = new FakeSession('connected')
     session.sendRequest.mockResolvedValue(success([]))

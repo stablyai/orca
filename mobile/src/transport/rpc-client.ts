@@ -11,7 +11,6 @@ import {
   deriveSharedKey,
   publicKeyFromBase64,
   publicKeyToBase64,
-  encrypt,
   decrypt,
   decryptBytes
 } from './e2ee'
@@ -28,6 +27,11 @@ import {
   buildTerminalUnsubscribeParams,
   updateTerminalSubscriptionViewport as updateCachedTerminalSubscriptionViewport
 } from './rpc-client-terminal-subscription'
+import { sendEncryptedJson, sendLanTerminalInputFrame } from './rpc-client-encrypted-binary-send'
+import {
+  TerminalInputStreamRegistry,
+  type TerminalInputSendResult
+} from './rpc-client-terminal-input-send'
 import { describeSocketEvent, redactSocketEndpoint } from './socket-event-debug'
 import {
   isStaleRpcSocketEvent,
@@ -102,6 +106,7 @@ export type RpcClient = {
     onData: StreamingListener,
     options?: SubscribeOptions
   ) => () => void
+  sendTerminalInput?: (terminal: string, text: string) => TerminalInputSendResult
   updateTerminalSubscriptionViewport: (
     terminal: string,
     viewport: { cols: number; rows: number }
@@ -202,6 +207,7 @@ export function connect(
   const streamListeners = new Map<string, StreamRequest>()
   const terminalStreamListeners = new Map<number, StreamingListener>()
   const terminalStreamIdsByRequest = new Map<string, Set<number>>()
+  const terminalInputStreams = new TerminalInputStreamRegistry()
   const terminalSnapshots = new Map<number, TerminalSnapshotState>()
   let activeBrowserScreencastRequestId: string | null = null
   let pendingBrowserScreencastRequestId: string | null = null
@@ -561,6 +567,7 @@ export function connect(
             }
             ids.add(result.streamId)
             terminalStreamListeners.set(result.streamId, stream.listener)
+            terminalInputStreams.remember(stream.params, result.streamId)
           }
           if (!stream.cancelled) {
             stream.listener(result)
@@ -839,6 +846,7 @@ export function connect(
     }
     const terminalStreamIds = terminalStreamIdsByRequest.get(id)
     if (terminalStreamIds) {
+      terminalInputStreams.forget(stream?.params, terminalStreamIds)
       for (const streamId of terminalStreamIds) {
         terminalStreamListeners.delete(streamId)
         terminalSnapshots.delete(streamId)
@@ -862,6 +870,7 @@ export function connect(
     if (!terminalStreamIds) {
       return
     }
+    terminalInputStreams.forget(streamListeners.get(id)?.params, terminalStreamIds)
     for (const streamId of terminalStreamIds) {
       terminalStreamListeners.delete(streamId)
       terminalSnapshots.delete(streamId)
@@ -936,33 +945,21 @@ export function connect(
   }
 
   function sendEncrypted(request: unknown): boolean {
-    if (ws && ws.readyState === WebSocket.OPEN && sharedKey) {
-      const sendingWs = ws
-      try {
-        sendingWs.send(encrypt(JSON.stringify(request), sharedKey))
-        return true
-      } catch {
-        if (ws === sendingWs) {
-          closeAndSynthesize(sendingWs)
+    return sendEncryptedJson({
+      socket: ws,
+      sharedKey,
+      request,
+      state,
+      onWriteError: (socket) => {
+        if (ws === socket) {
+          closeAndSynthesize(socket)
         }
-        return false
+      },
+      onDesync: (socket) => {
+        synthesizedCloses.remember(socket, authenticationGeneration)
+        handleSocketClosed(socket, { timedOut: false })
       }
-    }
-    console.log('[net] sendEncrypted FAILED — channel not ready', {
-      hasWs: !!ws,
-      readyState: ws?.readyState,
-      hasKey: !!sharedKey,
-      state
     })
-    // Why: RN can drop onclose, leaving state 'connected' over a dead socket; force reconnect or every send silently fails forever.
-    if (state === 'connected' && ws && ws.readyState !== WebSocket.OPEN) {
-      console.log('[net] sendEncrypted detected ws desync — forcing reconnect', {
-        readyState: ws.readyState
-      })
-      synthesizedCloses.remember(ws, authenticationGeneration)
-      handleSocketClosed(ws, { timedOut: false })
-    }
-    return false
   }
 
   function sendBrowserScreencastUnsubscribe(subscriptionId: string): void {
@@ -1065,6 +1062,18 @@ export function connect(
         }
       })
     },
+
+    sendTerminalInput: (terminal, text) =>
+      sendLanTerminalInputFrame({
+        registry: terminalInputStreams,
+        terminal,
+        text,
+        connected: state === 'connected',
+        socket: ws,
+        sharedKey,
+        isCurrentSocket: (socket) => ws === socket,
+        onWriteError: closeAndSynthesize
+      }),
 
     subscribe(
       method: string,

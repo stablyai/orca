@@ -125,7 +125,7 @@ import {
 import { useTerminalLiveInputFocus } from '../../../../src/terminal/use-terminal-live-input-focus'
 import { dismissTerminalKeyboard } from '../../../../src/terminal/terminal-keyboard-dismiss'
 import type { TerminalLiveInputSender } from '../../../../src/terminal/terminal-live-input-sender'
-import { isTerminalSendRpcAccepted } from '../../../../src/terminal/terminal-send-rpc-response'
+import { sendLiveTerminalInputBytes } from '../../../../src/terminal/send-live-terminal-input'
 import { sendMobileTerminalQueryReply } from '../../../../src/terminal/mobile-terminal-query-reply'
 import { TERMINAL_QUERY_REPLY_INPUT_RUNTIME_CAPABILITY } from '../../../../../src/shared/protocol-version'
 import { useTerminalLiveInputCommit } from '../../../../src/terminal/use-terminal-live-input-commit'
@@ -3024,30 +3024,17 @@ export default function SessionScreen() {
         showToast('Input too large (max 256 KiB)', 1500)
         return false
       }
-      const rpc = clientRef.current
-      // Why: callers suppress follow-up controls/toasts when this live send is stale.
-      if (
-        !rpc ||
-        connStateRef.current !== 'connected' ||
-        handle !== activeHandleRef.current ||
-        activeSessionTabTypeRef.current !== 'terminal'
-      ) {
-        return false
-      }
       // Why: live-mirror deltas queued behind a dying send drain into the connect
       // wait and replay stale bytes after reconnect (#6713's `YZZYecho …` corruption).
-      return rpc
-        .sendRequest(
-          'terminal.send',
-          buildTerminalSendParams({
-            terminal: handle,
-            text,
-            enter: false,
-            deviceToken: deviceTokenRef.current
-          }),
-          TERMINAL_INPUT_SEND_OPTIONS
-        )
-        .then(isTerminalSendRpcAccepted, () => false)
+      return sendLiveTerminalInputBytes({
+        rpc: clientRef.current,
+        handle,
+        bytes: text,
+        connected: connStateRef.current === 'connected',
+        activeHandle: activeHandleRef.current,
+        activeSessionTabType: activeSessionTabTypeRef.current,
+        deviceToken: deviceTokenRef.current
+      })
     },
     [showToast]
   )
