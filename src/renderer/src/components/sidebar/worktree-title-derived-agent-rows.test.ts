@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { applyAgentRowLineage } from '@/components/dashboard/agent-row-lineage'
+import { applyAgentRowLineage } from '../dashboard/agent-row-lineage'
 import type { TerminalLayoutSnapshot, TerminalTab } from '../../../../shared/terminal-tab-types'
 import type { TuiAgent } from '../../../../shared/tui-agent'
 import { makePaneKey } from '../../../../shared/stable-pane-id'
@@ -87,6 +87,46 @@ describe('buildTitleDerivedAgentRows', () => {
 
     expect(rows.map((row) => [row.agentType, row.state, row.entry.terminalTitle])).toEqual([
       ['omp', 'working', '\u280b OMP']
+    ])
+  })
+
+  it('normalizes Pi-compatible title-derived rows to the launched Kimchi owner', () => {
+    const rows = buildWorktreeAgentRows({
+      tabs: [makeTab('tab-1', { launchAgent: 'kimchi' })],
+      entries: [],
+      retained: [],
+      runtimePaneTitlesByTabId: {
+        'tab-1': {
+          1: '⠋ π: tmp'
+        }
+      },
+      ptyIdsByTabId: { 'tab-1': ['pty-kimchi'] },
+      terminalLayoutsByTabId: { 'tab-1': makeSingleLayout(LEAF_ID_1) },
+      now: 2000
+    })
+
+    expect(rows.map((row) => [row.agentType, row.state, row.entry.terminalTitle])).toEqual([
+      ['kimchi', 'working', '⠋ Kimchi']
+    ])
+  })
+
+  it('keeps the kimchi agent type for title-derived idle rows', () => {
+    const rows = buildWorktreeAgentRows({
+      tabs: [makeTab('tab-1', { launchAgent: 'kimchi' })],
+      entries: [],
+      retained: [],
+      runtimePaneTitlesByTabId: {
+        'tab-1': {
+          1: 'Kimchi ready'
+        }
+      },
+      ptyIdsByTabId: { 'tab-1': ['pty-kimchi'] },
+      terminalLayoutsByTabId: { 'tab-1': makeSingleLayout(LEAF_ID_1) },
+      now: 2000
+    })
+
+    expect(rows.map((row) => [row.agentType, row.state, row.entry.lastAssistantMessage])).toEqual([
+      ['kimchi', 'idle', 'Idle']
     ])
   })
 

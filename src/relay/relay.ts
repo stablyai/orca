@@ -870,6 +870,15 @@ async function main(): Promise<void> {
           env.ORCA_PRIME_AGENT_SOURCE_AGENT_DIR = result.sourceAgentDir
         }
       }
+      if (kind === 'kimchi') {
+        const sourceDir = resolvePiSourceAgentDir(ctx.env, ctx.shell, 'kimchi')
+        const result = pluginOverlay.materializePi(overlayId, sourceDir, 'kimchi', {
+          materializeDefaultHome: explicitKind === 'kimchi'
+        })
+        if (result?.sourceAgentDir) {
+          env.ORCA_KIMCHI_SOURCE_AGENT_DIR = result.sourceAgentDir
+        }
+      }
     }
     return env
   })
@@ -898,22 +907,26 @@ async function main(): Promise<void> {
     const pi = params.piExtensionSource
     const omp = params.ompExtensionSource
     const primeAgent = params.primeAgentExtensionSource
+    const kimchi = params.kimchiExtensionSource
     assertPluginSourceUnderByteCap('opencodePluginSource', opencode)
     assertPluginSourceUnderByteCap('piExtensionSource', pi)
     assertPluginSourceUnderByteCap('ompExtensionSource', omp)
     assertPluginSourceUnderByteCap('primeAgentExtensionSource', primeAgent)
+    assertPluginSourceUnderByteCap('kimchiExtensionSource', kimchi)
     pluginOverlay.setSources({
       opencodePluginSource: typeof opencode === 'string' ? opencode : undefined,
       piExtensionSource: typeof pi === 'string' ? pi : undefined,
       ompExtensionSource: typeof omp === 'string' ? omp : undefined,
-      primeAgentExtensionSource: typeof primeAgent === 'string' ? primeAgent : undefined
+      primeAgentExtensionSource: typeof primeAgent === 'string' ? primeAgent : undefined,
+      kimchiExtensionSource: typeof kimchi === 'string' ? kimchi : undefined
     })
     return {
       installed: {
         opencode: pluginOverlay.hasOpenCodeSource(),
         pi: pluginOverlay.hasPiSource('pi'),
         omp: pluginOverlay.hasPiSource('omp'),
-        primeAgent: pluginOverlay.hasPiSource('prime-agent')
+        primeAgent: pluginOverlay.hasPiSource('prime-agent'),
+        kimchi: pluginOverlay.hasPiSource('kimchi')
       }
     }
   })

@@ -2113,7 +2113,7 @@ function extractCopilotToolFields(
 function extractPiToolFields(
   eventName: unknown,
   hookPayload: Record<string, unknown>,
-  agentKind: 'pi' | 'omp' | 'prime-agent'
+  agentKind: 'pi' | 'omp' | 'prime-agent' | 'kimchi'
 ): ToolSnapshot {
   if (
     eventName === 'tool_call' ||
@@ -2123,9 +2123,10 @@ function extractPiToolFields(
     const toolName = readString(hookPayload, 'tool_name')
     const rawToolInput = hookPayload.tool_input
     const toolInput = deriveToolInputPreview(toolName, rawToolInput)
-    // Why: OMP shares this extractor; only derive interactivePrompt for Pi so OMP ask_user_question metadata stays unchanged.
+    // Why: OMP shares this extractor; only derive interactivePrompt for Pi-family ask_user_question so OMP ask metadata stays unchanged.
     const interactivePrompt =
-      agentKind === 'pi' && (eventName === 'tool_call' || eventName === 'tool_execution_start')
+      (agentKind === 'pi' || agentKind === 'kimchi') &&
+      (eventName === 'tool_call' || eventName === 'tool_execution_start')
         ? deriveInteractivePrompt(toolName, rawToolInput, eventName)
         : undefined
     return toolUpdate(
@@ -2504,6 +2505,7 @@ export function isNewTurnEvent(source: AgentHookSource, eventName: unknown): boo
     case 'pi':
     case 'omp':
     case 'prime-agent':
+    case 'kimchi':
       return eventName === 'before_agent_start'
     case 'droid':
       return eventName === 'UserPromptSubmit'
@@ -2599,6 +2601,7 @@ function extractToolFields(
     case 'pi':
     case 'omp':
     case 'prime-agent':
+    case 'kimchi':
       return extractPiToolFields(eventName, hookPayload, source)
     case 'droid':
       return extractDroidToolFields(eventName, hookPayload)
@@ -4061,7 +4064,7 @@ function normalizeCopilotEvent(
 
 function normalizePiCompatibleEvent(
   state: HookListenerState,
-  agentType: 'pi' | 'omp' | 'prime-agent',
+  agentType: 'pi' | 'omp' | 'prime-agent' | 'kimchi',
   eventName: unknown,
   promptText: string,
   paneKey: string,
@@ -4077,7 +4080,8 @@ function normalizePiCompatibleEvent(
   const toolName = readString(hookPayload, 'tool_name')
   const isPiCompatibleAsk =
     ((agentType === 'pi' && isAskUserQuestionTool(toolName)) ||
-      (agentType === 'omp' && toolName === 'ask')) &&
+      (agentType === 'omp' && toolName === 'ask') ||
+      (agentType === 'kimchi' && isAskUserQuestionTool(toolName))) &&
     (eventName === 'tool_call' || eventName === 'tool_execution_start')
 
   const stateName = isPiCompatibleAsk
@@ -4553,6 +4557,16 @@ export function normalizeHookPayload(
         hookPayloadRecord
       )
       break
+    case 'kimchi':
+      payload = normalizePiCompatibleEvent(
+        state,
+        'kimchi',
+        eventName,
+        promptText,
+        paneKey,
+        hookPayloadRecord
+      )
+      break
     case 'droid':
       payload = normalizeDroidEvent(state, eventName, promptText, paneKey, hookPayloadRecord)
       break
@@ -4601,7 +4615,7 @@ export function normalizeHookPayload(
   }
 
   const providerSessionOnly =
-    (source === 'pi' || source === 'prime-agent') &&
+    (source === 'pi' || source === 'prime-agent' || source === 'kimchi') &&
     eventName === 'session_start' &&
     providerSession !== null
   // Why: transcript session_start carries resume identity while idle; receivers discard the placeholder row.
@@ -4671,6 +4685,7 @@ export const HOOK_SOURCE_BY_PATHNAME: Readonly<Record<string, AgentHookSource>> 
   '/hook/mimo-code': 'mimo-code',
   '/hook/cursor': 'cursor',
   '/hook/pi': 'pi',
+  '/hook/kimchi': 'kimchi',
   '/hook/omp': 'omp',
   '/hook/prime-agent': 'prime-agent',
   '/hook/droid': 'droid',

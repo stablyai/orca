@@ -35,6 +35,12 @@ describe('synthetic agent titles', () => {
     expect(shouldDriveSyntheticAgentTitleFromHook('omp', 'working')).toBe(true)
   })
 
+  it('provides Pi-compatible Kimchi titles for hook-driven status updates', () => {
+    expect(getSyntheticAgentTerminalTitle('kimchi', 'done')).toBe('Kimchi ready')
+    expect(getSyntheticAgentTerminalTitle('kimchi', 'waiting')).toBe('Kimchi - action required')
+    expect(shouldDriveSyntheticAgentTitleFromHook('kimchi', 'working')).toBe(true)
+  })
+
   it('provides Pi titles for hook-driven status updates', () => {
     expect(getSyntheticAgentTerminalTitle('pi', 'done')).toBe('Pi ready')
     expect(getSyntheticAgentTerminalTitle('pi', 'waiting')).toBe('Pi - action required')

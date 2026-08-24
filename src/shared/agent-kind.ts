@@ -22,6 +22,7 @@ const TUI_AGENT_KIND_BY_AGENT = {
   opencode: 'opencode',
   'mimo-code': 'mimo-code',
   pi: 'pi',
+  kimchi: 'kimchi',
   omp: 'omp',
   'prime-agent': 'prime-agent',
   gemini: 'gemini',

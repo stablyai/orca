@@ -155,6 +155,12 @@ describe('resolveTerminalTitleAgentType', () => {
     )
     expect(resolveTerminalTitleAgentType('⠋ Codex: fix cursor offsets')).toBe('codex')
   })
+
+  it('maps synthesized Kimchi titles to the kimchi agent', () => {
+    expect(resolveTerminalTitleAgentType('⠋ Kimchi')).toBe('kimchi')
+    expect(resolveTerminalTitleAgentType('Kimchi ready')).toBe('kimchi')
+    expect(resolveTerminalTitleAgentType('Kimchi - action required')).toBe('kimchi')
+  })
 })
 
 // Why: this module carries its own isClaudeAgent copy parallel to agent-title-identity.ts;

@@ -21,6 +21,7 @@ export const SKILLS_CLI_AGENT_KEY_BY_TUI_AGENT = {
   opencode: 'opencode',
   'mimo-code': null,
   pi: 'pi',
+  kimchi: 'kimchi',
   omp: null,
   'prime-agent': null,
   gemini: 'gemini-cli',

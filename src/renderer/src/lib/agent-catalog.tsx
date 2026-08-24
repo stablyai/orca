@@ -135,6 +135,13 @@ export const getAgentCatalog = createLocalizedCatalog((): AgentCatalogEntry[] =>
     homepageUrl: 'https://github.com/PrimeIntellect-ai/prime-agent'
   },
   {
+    id: 'kimchi',
+    label: translate('auto.lib.agent.catalog.f0a4b18c2d', 'Kimchi'),
+    cmd: 'kimchi',
+    faviconDomain: 'kimchi.dev',
+    homepageUrl: 'https://kimchi.dev'
+  },
+  {
     id: 'gemini',
     label: translate('auto.lib.agent.catalog.12e6baa4f7', 'Gemini'),
     cmd: 'gemini',
