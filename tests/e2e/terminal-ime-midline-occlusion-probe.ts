@@ -20,6 +20,9 @@ export type MidlinePreeditOcclusionSample = {
   /** Overlay text as rendered, LRM marks stripped. */
   overlayText: string
   overlayActive: boolean
+  /** Computed overlay paint, used to catch seams against styled terminal cells. */
+  overlayBackgroundColor: string
+  overlayOpacity: string
   cursorColumn: number
   /** Columns covered by the overlay, as `[first, last]`; null when it covers none. */
   coveredColumns: [number, number] | null
@@ -57,6 +60,7 @@ function readMidlinePreeditOcclusion(): MidlinePreeditOcclusionSample {
 
   const screenRect = screen.getBoundingClientRect()
   const overlayRect = view.getBoundingClientRect()
+  const overlayStyle = getComputedStyle(view)
   const cellWidth = terminal.cols > 0 ? screenRect.width / terminal.cols : 0
 
   // A column counts as hidden when the overlay covers most of its cell, which keeps the sample
@@ -84,6 +88,8 @@ function readMidlinePreeditOcclusion(): MidlinePreeditOcclusionSample {
     // The overlay wraps its text in LRM marks; strip them so assertions read as the user sees it.
     overlayText: (view.textContent ?? '').replaceAll('‎', ''),
     overlayActive: view.classList.contains('active'),
+    overlayBackgroundColor: overlayStyle.backgroundColor,
+    overlayOpacity: overlayStyle.opacity,
     cursorColumn,
     coveredColumns: first === null ? null : [first, last],
     cellWidth,
