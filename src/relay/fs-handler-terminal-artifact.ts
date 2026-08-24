@@ -2,13 +2,13 @@ import { constants } from 'node:fs'
 import type { Stats } from 'node:fs'
 import { chmod, open, realpath, rename, rm, writeFile } from 'node:fs/promises'
 import type { FileHandle } from 'node:fs/promises'
-import { basename, dirname, extname, join } from 'node:path'
+import { basename, dirname, join } from 'node:path'
 import { randomUUID } from 'node:crypto'
 import {
-  IMAGE_MIME_TYPES,
   isBinaryBuffer,
   MAX_PREVIEWABLE_BINARY_SIZE,
-  MAX_TEXT_FILE_SIZE
+  MAX_TEXT_FILE_SIZE,
+  previewableBinaryMedia
 } from './fs-handler-utils'
 
 type TerminalArtifactStat = {
@@ -36,14 +36,14 @@ export async function readVerifiedTerminalArtifact(params: Record<string, unknow
   const handle = await openVerifiedTerminalArtifact(filePath, options, constants.O_RDONLY)
   try {
     await verifiedHandleStat(handle, options)
-    const mimeType = terminalArtifactImageMimeType(filePath)
+    const media = terminalArtifactPreviewableMedia(filePath)
     const sizeLimit = Math.min(
-      options.maxBytes ?? (mimeType ? MAX_PREVIEWABLE_BINARY_SIZE : MAX_TEXT_FILE_SIZE),
-      mimeType ? MAX_PREVIEWABLE_BINARY_SIZE : MAX_TEXT_FILE_SIZE
+      options.maxBytes ?? (media ? MAX_PREVIEWABLE_BINARY_SIZE : MAX_TEXT_FILE_SIZE),
+      media ? MAX_PREVIEWABLE_BINARY_SIZE : MAX_TEXT_FILE_SIZE
     )
     const buffer = await readBoundedFileFromHandle(handle, sizeLimit)
-    if (mimeType) {
-      return { content: buffer.toString('base64'), isBinary: true, isImage: true, mimeType }
+    if (media) {
+      return { content: buffer.toString('base64'), isBinary: true, ...media }
     }
     if (isBinaryBuffer(buffer)) {
       return { content: '', isBinary: true }
@@ -104,11 +104,13 @@ async function openStatClose(filePath: string): Promise<Stats> {
   }
 }
 
-function terminalArtifactImageMimeType(filePath: string): string | undefined {
-  const mimeType = IMAGE_MIME_TYPES[extname(filePath).toLowerCase()]
+function terminalArtifactPreviewableMedia(
+  filePath: string
+): { mimeType: string; isImage: true } | { mimeType: string; isVideo: true } | null {
+  const media = previewableBinaryMedia(filePath)
   // Why: mobile renders SVG terminal artifacts as source text; returning image
   // data from the relay would make SSH disagree with local artifact previews.
-  return mimeType === 'image/svg+xml' ? undefined : mimeType
+  return media?.mimeType === 'image/svg+xml' ? null : media
 }
 
 async function readBoundedFileFromHandle(handle: FileHandle, maxBytes: number): Promise<Buffer> {

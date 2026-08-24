@@ -7,6 +7,7 @@
  */
 import { spawn } from 'node:child_process'
 import { open } from 'node:fs/promises'
+import { extname } from 'node:path'
 import {
   buildRgArgs,
   createAccumulator,
@@ -15,6 +16,7 @@ import {
   SEARCH_TIMEOUT_MS as SHARED_SEARCH_TIMEOUT_MS
 } from '../shared/text-search'
 import { IMAGE_FILE_MIME_TYPES } from '../shared/image-file-extensions'
+import { VIDEO_FILE_MIME_TYPES } from '../shared/video-file-extensions'
 import type { SearchResult as SharedSearchResult } from '../shared/code-search-types'
 import {
   absorbPendingRipgrepSpawnError,
@@ -41,6 +43,20 @@ export const DEFAULT_MAX_RESULTS = 2000
 export const IMAGE_MIME_TYPES: Record<string, string> = {
   ...IMAGE_FILE_MIME_TYPES,
   '.pdf': 'application/pdf'
+}
+
+// Why: previewable binaries are not all images — mobile plays video containers in a
+// native player, so a read reports which media kind it carries.
+export function previewableBinaryMedia(
+  filePath: string
+): { mimeType: string; isImage: true } | { mimeType: string; isVideo: true } | null {
+  const extension = extname(filePath).toLowerCase()
+  const imageMimeType = IMAGE_MIME_TYPES[extension]
+  if (imageMimeType) {
+    return { mimeType: imageMimeType, isImage: true }
+  }
+  const videoMimeType = VIDEO_FILE_MIME_TYPES[extension]
+  return videoMimeType ? { mimeType: videoMimeType, isVideo: true } : null
 }
 
 // ─── Binary detection ────────────────────────────────────────────────

@@ -15,6 +15,7 @@ type StreamMetadataResponse = {
   totalSize: number
   isBinary: boolean
   isImage?: boolean
+  isVideo?: boolean
   mimeType?: string
   resultEncoding?: 'base64' | 'utf-8'
   empty?: boolean
@@ -64,9 +65,9 @@ export async function readFileViaStream(
   return new Promise<FileReadResult>((resolve, reject) => {
     let buffer: Buffer | null = null
     let resultEncoding: 'base64' | 'utf-8' = RESULT_ENCODING_BASE64
-    let isBinary = false
-    let isImage: boolean | undefined
-    let mimeType: string | undefined
+    // Carried from the metadata frame to the result; optional media flags are only
+    // present when the relay sent them, so old relays stay wire-compatible.
+    let resultFields: Omit<FileReadResult, 'content'> = { isBinary: false }
     let totalSize = 0
     let expectedSeq = 0
     let receivedChunks = 0
@@ -206,12 +207,7 @@ export async function readFileViaStream(
         resultEncoding === RESULT_ENCODING_BASE64
           ? buffer.toString('base64')
           : buffer.toString('utf-8')
-      succeed({
-        content,
-        isBinary,
-        ...(isImage !== undefined ? { isImage } : {}),
-        ...(mimeType !== undefined ? { mimeType } : {})
-      })
+      succeed({ content, ...resultFields })
     }
 
     const handleStreamError = (params: Record<string, unknown>): void => {
@@ -290,18 +286,16 @@ export async function readFileViaStream(
           return
         }
         const metadata = rawMetadata as StreamMetadataResponse
-        isBinary = metadata.isBinary
-        isImage = metadata.isImage
-        mimeType = metadata.mimeType
+        resultFields = {
+          isBinary: metadata.isBinary,
+          ...(metadata.isImage !== undefined ? { isImage: metadata.isImage } : {}),
+          ...(metadata.isVideo !== undefined ? { isVideo: metadata.isVideo } : {}),
+          ...(metadata.mimeType !== undefined ? { mimeType: metadata.mimeType } : {})
+        }
         resultEncoding = metadata.resultEncoding ?? RESULT_ENCODING_BASE64
 
         if (metadata.empty) {
-          succeed({
-            content: '',
-            isBinary: metadata.isBinary,
-            ...(metadata.isImage !== undefined ? { isImage: metadata.isImage } : {}),
-            ...(metadata.mimeType !== undefined ? { mimeType: metadata.mimeType } : {})
-          })
+          succeed({ content: '', ...resultFields })
           return
         }
 

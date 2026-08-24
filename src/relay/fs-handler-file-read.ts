@@ -1,31 +1,30 @@
 import { open, readFile, stat } from 'node:fs/promises'
 import type { FileHandle } from 'node:fs/promises'
-import { extname } from 'node:path'
 import type { RelayDispatcher, RequestContext } from './dispatcher'
 import { MAX_CONCURRENT_STREAMS, STREAM_ACK_WINDOW_CHUNKS, STREAM_CHUNK_SIZE } from './protocol'
 import { TooManyStreamsError, type RelayStreamRegistry } from './fs-stream-registry'
 import {
   BINARY_PROBE_BYTES,
-  IMAGE_MIME_TYPES,
   MAX_PREVIEWABLE_BINARY_SIZE,
   MAX_TEXT_FILE_SIZE,
   isBinaryBuffer,
-  isBinaryFilePrefix
+  isBinaryFilePrefix,
+  previewableBinaryMedia
 } from './fs-handler-utils'
 
 export async function readRelayFileContent(filePath: string) {
   const stats = await stat(filePath)
-  const mimeType = IMAGE_MIME_TYPES[extname(filePath).toLowerCase()]
-  const sizeLimit = mimeType ? MAX_PREVIEWABLE_BINARY_SIZE : MAX_TEXT_FILE_SIZE
+  const media = previewableBinaryMedia(filePath)
+  const sizeLimit = media ? MAX_PREVIEWABLE_BINARY_SIZE : MAX_TEXT_FILE_SIZE
   if (stats.size > sizeLimit) {
     throw new Error(
       `File too large: ${(stats.size / 1024 / 1024).toFixed(1)}MB exceeds ${sizeLimit / 1024 / 1024}MB limit`
     )
   }
 
-  if (mimeType) {
+  if (media) {
     const buffer = await readFile(filePath)
-    return { content: buffer.toString('base64'), isBinary: true, isImage: true, mimeType }
+    return { content: buffer.toString('base64'), isBinary: true, ...media }
   }
 
   if (stats.size > BINARY_PROBE_BYTES && (await isBinaryFilePrefix(filePath))) {
@@ -44,6 +43,7 @@ export type StreamMetadata = {
   totalSize: number
   isBinary: boolean
   isImage?: boolean
+  isVideo?: boolean
   mimeType?: string
   /** On-the-wire encoding of each chunk's `data` field. Always 'base64'. */
   chunkEncoding?: 'base64'
@@ -79,8 +79,8 @@ export async function readRelayFileStreamMetadata(
   pumpOptions?: StreamPumpOptions
 ): Promise<StreamMetadata> {
   const stats = await stat(filePath)
-  const mimeType = IMAGE_MIME_TYPES[extname(filePath).toLowerCase()]
-  const sizeLimit = mimeType ? MAX_PREVIEWABLE_BINARY_SIZE : MAX_TEXT_FILE_SIZE
+  const media = previewableBinaryMedia(filePath)
+  const sizeLimit = media ? MAX_PREVIEWABLE_BINARY_SIZE : MAX_TEXT_FILE_SIZE
   if (stats.size > sizeLimit) {
     throw new Error(
       `File too large: ${(stats.size / 1024 / 1024).toFixed(1)}MB exceeds ${sizeLimit / 1024 / 1024}MB limit`
@@ -90,16 +90,15 @@ export async function readRelayFileStreamMetadata(
   if (stats.size === 0) {
     return {
       totalSize: 0,
-      isBinary: !!mimeType,
-      mimeType,
-      isImage: mimeType ? true : undefined,
+      isBinary: !!media,
+      ...media,
       empty: true
     }
   }
   // Why: unlike the legacy single-shot path, streaming does not read the full
   // buffer before classifying content. Probe every unknown file so small binary
   // files do not get decoded as UTF-8 text over SSH.
-  if (!mimeType && (await isBinaryFilePrefix(filePath))) {
+  if (!media && (await isBinaryFilePrefix(filePath))) {
     return { totalSize: 0, isBinary: true, empty: true }
   }
 
@@ -138,11 +137,10 @@ export async function readRelayFileStreamMetadata(
   return {
     streamId,
     totalSize: stats.size,
-    isBinary: !!mimeType,
-    isImage: mimeType ? true : undefined,
-    mimeType,
+    isBinary: !!media,
+    ...media,
     chunkEncoding: 'base64',
-    resultEncoding: mimeType ? 'base64' : 'utf-8'
+    resultEncoding: media ? 'base64' : 'utf-8'
   }
 }
 

@@ -1,7 +1,8 @@
-import { classifyMobileArtifact } from '../session/mobile-artifact-kind'
+import { isMobileBinaryPreviewPath } from '../session/mobile-artifact-kind'
 import type { RpcFailure, RpcResponse } from '../transport/types'
 import type { RpcClient } from '../transport/rpc-client'
 import {
+  isMobileFilePreviewTextResult,
   normalizeMobileFilePreviewResponse,
   previewError,
   type MobileFilePreviewResult
@@ -14,6 +15,7 @@ import {
 
 export {
   formatPreviewByteLength,
+  isMobileFilePreviewTextResult,
   normalizeMobileFilePreviewResponse,
   previewError
 } from './mobile-file-preview-response'
@@ -60,10 +62,9 @@ export function createMobileFilePreviewRequest(
       ? { source: 'worktree' as const, worktreeId: worktreeIdOrSource, relativePath: relativePath! }
       : worktreeIdOrSource
   if (source.source === 'terminalArtifact') {
-    const method =
-      classifyMobileArtifact(source.absolutePath) === 'image'
-        ? 'files.readTerminalArtifactPreview'
-        : 'files.readTerminalArtifact'
+    const method = isMobileBinaryPreviewPath(source.absolutePath)
+      ? 'files.readTerminalArtifactPreview'
+      : 'files.readTerminalArtifact'
     return {
       method,
       params: {
@@ -74,8 +75,7 @@ export function createMobileFilePreviewRequest(
     }
   }
   return {
-    method:
-      classifyMobileArtifact(source.relativePath) === 'image' ? 'files.readPreview' : 'files.read',
+    method: isMobileBinaryPreviewPath(source.relativePath) ? 'files.readPreview' : 'files.read',
     params: {
       worktree: `id:${source.worktreeId}`,
       relativePath: source.relativePath
@@ -251,7 +251,7 @@ function terminalArtifactPreviewMatchesBase(
   if (preview.status === 'empty') {
     return baseContent.length === 0
   }
-  return preview.status === 'ready' && preview.kind !== 'image' && preview.content === baseContent
+  return isMobileFilePreviewTextResult(preview) && preview.content === baseContent
 }
 
 function previewPathForSource(source: MobileFilePreviewSource): string {

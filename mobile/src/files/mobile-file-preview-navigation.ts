@@ -1,4 +1,4 @@
-import { classifyMobileArtifact } from '../session/mobile-artifact-kind'
+import { isMobileBinaryPreviewPath } from '../session/mobile-artifact-kind'
 import {
   createMobileFilePreviewHref,
   type MobileFilePreviewHref,
@@ -33,5 +33,5 @@ export function canPreviewMobileFileRow(item: {
   kind: 'text' | 'binary'
   relativePath: string
 }): boolean {
-  return item.kind === 'text' || classifyMobileArtifact(item.relativePath) === 'image'
+  return item.kind === 'text' || isMobileBinaryPreviewPath(item.relativePath)
 }

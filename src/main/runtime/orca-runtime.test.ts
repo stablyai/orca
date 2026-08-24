@@ -4285,6 +4285,33 @@ describe('OrcaRuntimeService', () => {
     })
   })
 
+  it.each([
+    ['demo.mp4', 'video/mp4'],
+    ['demo.m4v', 'video/mp4'],
+    ['demo.mov', 'video/quicktime']
+  ])('previews %s as base64 so mobile can hand it to a native player', async (name, mimeType) => {
+    const folderPath = await mkdtemp(join(tmpdir(), 'orca-runtime-video-preview-'))
+    await writeFile(join(folderPath, name), Buffer.from([0x00, 0x00, 0x00, 0x18, 0x66]))
+    const folderWorkspace = makeFolderWorkspace({ folderPath })
+    const projectGroup = makeFolderProjectGroup({ parentPath: folderPath })
+    const runtime = new OrcaRuntimeService(
+      createFolderWorkspaceRuntimeStore(folderWorkspace, projectGroup) as never
+    )
+
+    try {
+      await expect(
+        runtime.readFileExplorerPreview(`id:${TEST_FOLDER_WORKSPACE_KEY}`, name)
+      ).resolves.toEqual({
+        content: 'AAAAGGY=',
+        isBinary: true,
+        isVideo: true,
+        mimeType
+      })
+    } finally {
+      await rm(folderPath, { recursive: true, force: true })
+    }
+  })
+
   it('routes SSH folder workspace file explorer paths through the filesystem provider', async () => {
     const folderPath = '/srv/platform'
     const fsProvider = {

@@ -148,6 +148,18 @@ export const filePreviewStyles = StyleSheet.create({
   image: {
     backgroundColor: colors.editorSurface
   },
+  videoContainer: {
+    flex: 1,
+    backgroundColor: colors.editorSurface
+  },
+  video: {
+    flex: 1
+  },
+  videoLoading: {
+    ...StyleSheet.absoluteFillObject,
+    alignItems: 'center',
+    justifyContent: 'center'
+  },
   editContainer: {
     flex: 1,
     backgroundColor: colors.editorSurface,

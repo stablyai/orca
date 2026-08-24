@@ -197,6 +197,7 @@ import { MobileTerminalLiveInputStatus } from '../../../../src/session/MobileTer
 import { MobileTerminalInputActions } from '../../../../src/session/MobileTerminalInputActions'
 import { resolveMobileFileTabDoc } from '../../../../src/files/mobile-file-tab-doc'
 import { captureMobileFileMutationOwnership } from '../../../../src/files/mobile-file-mutation-ownership'
+import { MobileFileVideoPreview } from '../../../../src/files/MobileFileVideoPreview'
 import { useMobileFileTapHandlers } from '../../../../src/session/use-mobile-file-tap-handlers'
 import { useLiveWorktreeName } from '../../../../src/session/use-live-worktree-name'
 import { useMissingWorktreeBounce } from '../../../../src/session/use-missing-worktree-bounce'
@@ -682,6 +683,17 @@ function FileReader({
           />
         </ScrollView>
       </View>
+    )
+  }
+
+  if (doc.kind === 'video') {
+    return (
+      <MobileFileVideoPreview
+        relativePath={relativePath || title}
+        base64={doc.base64}
+        mimeType={doc.mimeType}
+        title={title}
+      />
     )
   }
 

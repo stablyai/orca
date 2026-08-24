@@ -1,6 +1,7 @@
-import type {
-  MobileFilePreviewResult,
-  MobileFilePreviewSource
+import {
+  isMobileFilePreviewTextResult,
+  type MobileFilePreviewResult,
+  type MobileFilePreviewSource
 } from './mobile-file-preview-request'
 
 export function isEditableMobileTerminalArtifactPreview(
@@ -11,8 +12,7 @@ export function isEditableMobileTerminalArtifactPreview(
     return false
   }
   return (
-    (preview.status === 'ready' && preview.kind !== 'image' && !preview.truncated) ||
-    preview.status === 'empty'
+    (isMobileFilePreviewTextResult(preview) && !preview.truncated) || preview.status === 'empty'
   )
 }
 

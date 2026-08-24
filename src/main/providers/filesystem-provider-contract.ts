@@ -16,6 +16,8 @@ export type FileReadResult = {
   content: string
   isBinary: boolean
   isImage?: boolean
+  /** Set for video containers mobile can play natively (mp4/m4v/mov). */
+  isVideo?: boolean
   mimeType?: string
 }
 
