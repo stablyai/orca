@@ -30,6 +30,7 @@ type CoalescedBreadcrumbState = {
   emitted?: CrashReportBreadcrumb
   /** Newest suppressed payload, sanitized only if a snapshot actually asks for it. */
   pending?: CrashReportBreadcrumbData
+  origin?: string
 }
 
 let breadcrumbs: CrashReportBreadcrumb[] = []
@@ -42,19 +43,21 @@ function retainedBreadcrumbKey(breadcrumb: CrashReportBreadcrumb): string | null
   }
   const surface = breadcrumb.data?.rendererSurface
   const threshold = breadcrumb.data?.thresholdPct
-  return `${breadcrumb.name}:${String(surface)}:${String(threshold)}`
+  return `${breadcrumb.name}:${String(surface)}:${String(threshold)}:${breadcrumb.origin ?? 'global'}`
 }
 
 /** Returns the stored breadcrumb so coalescing can refresh the entry it owns. */
 export function recordCrashBreadcrumb(
   name: string,
-  data?: CrashReportBreadcrumbData
+  data?: CrashReportBreadcrumbData,
+  origin?: string
 ): CrashReportBreadcrumb | undefined {
   const sanitized = sanitizeCrashReportBreadcrumbs([
     {
       createdAt: new Date().toISOString(),
       name,
-      data
+      data,
+      ...(origin ? { origin } : {})
     }
   ])
   const breadcrumb = sanitized?.[0]
@@ -85,12 +88,14 @@ export function recordCoalescedCrashBreadcrumb({
   name,
   data,
   coalesceKey,
-  minIntervalMs
+  minIntervalMs,
+  origin
 }: {
   name: string
   data?: CrashReportBreadcrumbData
   coalesceKey: string
   minIntervalMs: number
+  origin?: string
 }): { suppressedSinceLast: number } | undefined {
   const now = monotonicNow()
   const previous = coalescedBreadcrumbs.get(coalesceKey)
@@ -136,7 +141,8 @@ export function recordCoalescedCrashBreadcrumb({
     windowStartedAtMs: now,
     suppressed: 0,
     carried: suppressedSinceLast,
-    resolved: 0
+    resolved: 0,
+    ...(origin ? { origin } : {})
   }
   coalescedBreadcrumbs.set(coalesceKey, state)
   while (coalescedBreadcrumbs.size > MAX_COALESCE_KEYS) {
@@ -149,7 +155,8 @@ export function recordCoalescedCrashBreadcrumb({
   }
   state.emitted = recordCrashBreadcrumb(
     name,
-    suppressedSinceLast > 0 ? { ...data, suppressedSinceLast } : data
+    suppressedSinceLast > 0 ? { ...data, suppressedSinceLast } : data,
+    origin
   )
   return { suppressedSinceLast }
 }
@@ -206,10 +213,11 @@ function preservePendingCoalescedBreadcrumb(state: CoalescedBreadcrumbState): vo
   if (state.emitted || unresolved <= 0) {
     return
   }
-  recordCrashBreadcrumb(state.name, {
-    ...state.pending,
-    suppressedSinceLast: unresolved
-  })
+  recordCrashBreadcrumb(
+    state.name,
+    { ...state.pending, suppressedSinceLast: unresolved },
+    state.origin
+  )
   state.resolved = state.suppressed
   state.pending = undefined
 }
@@ -220,11 +228,23 @@ function resolveAllPendingCoalescedBreadcrumbs(): void {
   }
 }
 
-export function getCrashBreadcrumbSnapshot(): CrashReportBreadcrumb[] {
+function isVisibleToReporter(
+  breadcrumb: CrashReportBreadcrumb,
+  reporterOrigin: string | undefined
+): boolean {
+  return !reporterOrigin || !breadcrumb.origin || breadcrumb.origin === reporterOrigin
+}
+
+export function getCrashBreadcrumbSnapshot(reporterOrigin?: string): CrashReportBreadcrumb[] {
   resolveAllPendingCoalescedBreadcrumbs()
   // Why: long sessions must retain threshold profiles without growing the 30-entry budget.
-  const retained = [...retainedBreadcrumbs.values()]
-  const recent = breadcrumbs.slice(-(MAX_BREADCRUMBS - retained.length))
+  const retained = [...retainedBreadcrumbs.values()].filter((breadcrumb) =>
+    isVisibleToReporter(breadcrumb, reporterOrigin)
+  )
+  const visibleRecent = breadcrumbs.filter((breadcrumb) =>
+    isVisibleToReporter(breadcrumb, reporterOrigin)
+  )
+  const recent = visibleRecent.slice(-(MAX_BREADCRUMBS - retained.length))
   return [...retained, ...recent]
     .sort((left, right) => left.createdAt.localeCompare(right.createdAt))
     .map((breadcrumb) => ({

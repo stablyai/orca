@@ -114,6 +114,22 @@ describe('recordProcessGoneCrash', () => {
     expect(sink.flushMock).toHaveBeenCalledOnce()
   })
 
+  it('keeps suppressed renderer evidence scoped to its renderer', () => {
+    const dedupe = new ProcessGoneDedupe()
+    const suppressed = (webContentsId: number) =>
+      event({ reason: 'killed', exitCode: 1, expectedTeardown: 'renderer-reload', webContentsId })
+
+    recordProcessGoneCrash({ record: vi.fn() } as never, suppressed(11), dedupe)
+    recordProcessGoneCrash({ record: vi.fn() } as never, suppressed(22), dedupe)
+
+    expect(getCrashBreadcrumbSnapshot('renderer:11')).toEqual([
+      expect.objectContaining({ origin: 'renderer:11' })
+    ])
+    expect(getCrashBreadcrumbSnapshot('renderer:22')).toEqual([
+      expect.objectContaining({ origin: 'renderer:22' })
+    ])
+  })
+
   it('coalesces a recoverable-service crash loop instead of flushing every event', () => {
     const record = vi.fn()
     const dedupe = new ProcessGoneDedupe()
@@ -312,6 +328,26 @@ describe('recordProcessGoneCrash', () => {
       })
     ])
     expect(sink.flushMock).toHaveBeenCalledOnce()
+  })
+
+  it('keeps simultaneous renderer reports distinct by webContents identity', async () => {
+    const record = vi.fn().mockResolvedValue({ id: 'report-1' })
+    const dedupe = new ProcessGoneDedupe()
+
+    recordProcessGoneCrash(
+      { record, attachDetails } as never,
+      event({ webContentsId: 11 }),
+      dedupe,
+      noMinidump
+    )
+    recordProcessGoneCrash(
+      { record, attachDetails } as never,
+      event({ webContentsId: 22 }),
+      dedupe,
+      noMinidump
+    )
+
+    await vi.waitFor(() => expect(record).toHaveBeenCalledTimes(2))
   })
 
   it('still persists the report when the forced trace flush fails', async () => {
