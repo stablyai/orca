@@ -9,7 +9,11 @@ import {
   validateCommandAndFlags
 } from './args'
 import { dispatch } from './dispatch'
-import { resolveHostFlagEnvironmentId } from './execution-host-flag'
+import {
+  assertEnvironmentSelectorResolvable,
+  resolveHostFlagEnvironmentId
+} from './execution-host-flag'
+import { listSshTargets } from './host-selector-alternatives'
 import { reportCliError } from './format'
 import { printHelp } from './help'
 import type { RuntimeClient } from './runtime-client'
@@ -90,6 +94,15 @@ export async function main(
     const ignoreRemoteSelection = shouldIgnoreRemoteSelection(parsed.commandPath)
     const pairingCode = ignoreRemoteSelection ? null : parsed.flags.get('pairing-code')
     const environmentSelector = ignoreRemoteSelection ? null : parsed.flags.get('environment')
+    // Why: only the explicit flag is asserted eagerly. An ambient ORCA_ENVIRONMENT is background
+    // config, and failing local-only commands because of a stale one would be a regression; the
+    // explicit flag means the caller named that machine, so a bad name should fail immediately
+    // with the cross-kind hint rather than a bare store error at first use.
+    const listSshTargetsForSuggestion = async (): Promise<{ id: string; label: string }[]> =>
+      listSshTargets(new RuntimeClientClass(undefined, undefined, null, null))
+    if (typeof environmentSelector === 'string') {
+      await assertEnvironmentSelectorResolvable(environmentSelector, listSshTargetsForSuggestion)
+    }
     // Why: --host runtime:<id> names a paired server, not a filter over this
     // runtime's rows, so it has to pick the connection before the client exists.
     // An ambient ORCA_ENVIRONMENT is checked for disagreement too — silently
@@ -99,6 +112,9 @@ export async function main(
     const hostEnvironmentId = ignoreRemoteSelection
       ? null
       : await resolveHostFlagEnvironmentId(parsed.flags, {
+          // Why: only consulted when the name missed, and against this machine's own runtime —
+          // SSH targets are registered there, not in the paired server we failed to find.
+          listSshTargets: listSshTargetsForSuggestion,
           pairingCode: typeof pairingCode === 'string' ? pairingCode : null,
           environmentSelector:
             typeof environmentSelector === 'string'
@@ -107,6 +123,12 @@ export async function main(
                 ? { value: process.env.ORCA_ENVIRONMENT, label: 'ORCA_ENVIRONMENT' }
                 : null
         })
+    // Why: --host runtime:<name> is canonicalized to the environment's id so downstream host-id
+    // comparisons against stored rows still match; rewrite the flag once, here, rather than
+    // resolving the name again at every consumer.
+    if (hostEnvironmentId !== null) {
+      parsed.flags.set('host', `runtime:${hostEnvironmentId}`)
+    }
     // Why: pass `null` (not `undefined`) when remote selection is suppressed
     // so the RuntimeClient default parameter does not re-activate the
     // ORCA_PAIRING_CODE / ORCA_ENVIRONMENT env-var fallback for commands

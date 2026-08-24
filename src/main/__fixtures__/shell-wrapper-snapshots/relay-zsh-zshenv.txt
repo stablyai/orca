@@ -1,58 +1,46 @@
 # Orca relay zsh overlay wrapper
-typeset -ga _orca_shell_features
-_orca_shell_features=(${(s:,:)${ORCA_SHELL_FEATURES:-}})
-builtin unset ORCA_SHELL_FEATURES
-__orca_has_feature() { (( ${_orca_shell_features[(Ie)$1]} )) }
-__orca_has_feature identity && printf "\033]777;orca-shell-start:%s\007" "$$"
-__orca_resolve_user_config_dir() {
-  typeset -g _orca_resolved_config_dir="${1:-}"
-  while [[ "$_orca_resolved_config_dir" == */ ]]; do _orca_resolved_config_dir="${_orca_resolved_config_dir%/}"; done
-  if [[ -z "$_orca_resolved_config_dir" || -f "$_orca_resolved_config_dir/.orca-shell-wrapper" || "$_orca_resolved_config_dir" == */shell-ready/zsh ]]; then
-    _orca_resolved_config_dir="$HOME"
-  fi
-}
-# Why stricter for an inherited value: Orca can be launched from a terminal that
-# already pointed ZDOTDIR at its own wrapper dir, and a directory holding no zsh
-# startup file at all is not the user's config root whoever wrote it.
-__orca_resolve_inherited_config_dir() {
-  __orca_resolve_user_config_dir "${1:-}"
-  [[ "$_orca_resolved_config_dir" == "$HOME" ]] && return 0
+__orca_usable_zdotdir() {
+  [[ -n "${1:-}" ]] || return 1
+  # Orca's own dir, by marker file or by the shape older builds wrote.
+  [[ "$1" != */shell-ready/zsh ]] || return 1
+  [[ ! -f "$1/.orca-shell-wrapper" ]] || return 1
+  # A directory holding no zsh startup file at all is not a config root,
+  # whoever wrote it — and a stale value pointing at one would stop zsh from
+  # ever reading the user's real .zshenv.
   local _orca_startup_file
   for _orca_startup_file in .zshenv .zshrc .zprofile .zlogin; do
-    [[ -r "$_orca_resolved_config_dir/$_orca_startup_file" ]] && return 0
+    [[ -r "$1/$_orca_startup_file" ]] && return 0
   done
-  _orca_resolved_config_dir="$HOME"
+  return 1
 }
-__orca_resolve_inherited_config_dir "${ORCA_ORIG_ZDOTDIR:-$HOME}"
-export ORCA_ORIG_ZDOTDIR="$_orca_resolved_config_dir"
-[[ -f "$ORCA_ORIG_ZDOTDIR/.zshenv" ]] && source "$ORCA_ORIG_ZDOTDIR/.zshenv"
-__orca_resolve_user_config_dir "${ZDOTDIR:-${ORCA_ORIG_ZDOTDIR:-$HOME}}"
-export ORCA_USER_ZDOTDIR="$_orca_resolved_config_dir"
-
-if [[ -f "$ORCA_ORIG_ZDOTDIR/.zshenv" ]] && [[ -o ksharrays || -o shwordsplit || -o shglob ]] 2>/dev/null; then
-  case "$(emulate 2>/dev/null)" in
-    sh|ksh)
-      export ZDOTDIR="$ORCA_USER_ZDOTDIR"
-      # Why unset: an ORCA_HISTFILE no wrapper file will ever consume is
-      # inherited by everything this pane spawns, including a nested Orca.
-      builtin unset ORCA_HISTFILE _orca_shell_features _orca_home _orca_resolved_config_dir _orca_wrapper_zdotdir_self
-      unfunction __orca_shell_epilogue __orca_has_feature __orca_resolve_user_config_dir __orca_resolve_inherited_config_dir 2>/dev/null
-      return 0
-      ;;
-  esac
+if __orca_usable_zdotdir "${ORCA_ORIG_ZDOTDIR:-}"; then
+  builtin export ZDOTDIR="$ORCA_ORIG_ZDOTDIR"
+else
+  builtin unset ZDOTDIR
 fi
-
-export ZDOTDIR='<WRAPPER_ROOT>/zsh'
-
-__orca_shell_epilogue() {
+builtin unset ORCA_ORIG_ZDOTDIR ORCA_ZSHENV_SOURCE_DIR
+builtin unfunction __orca_usable_zdotdir
+builtin typeset -ga _orca_shell_features
+_orca_shell_features=(${(s:,:)${ORCA_SHELL_FEATURES:-}})
+builtin unset ORCA_SHELL_FEATURES
+# Why ORCA_HISTFILE is consumed HERE and not in the deferred hook: a user config
+# that replaces precmd_functions wholesale drops the hook, and an exported value
+# nothing will ever consume is then inherited by every child of this pane,
+# including a nested Orca (#11146). Captured non-exported, it cannot escape.
+builtin typeset -g _orca_histfile="${ORCA_HISTFILE:-}"
+builtin unset ORCA_HISTFILE
+__orca_has_feature() { (( ${_orca_shell_features[(Ie)$1]} )) }
+__orca_has_feature identity && printf "\033]777;orca-shell-start:%s\007" "$$"
+__orca_deferred_init() {
   # Why first: this body runs after the user's own config, so it would otherwise
   # inherit whatever options that config left set. Under NO_UNSET an unset
-  # precmd_functions is a fatal error that returns from the whole epilogue
-  # (skipping the ready widget and the ZDOTDIR restore), and KSH_ARRAYS makes
-  # the 1-based feature lookup drop the first selected feature.
-  emulate -L zsh
-  (( $+_orca_epilogue_done )) && return 0
-  typeset -g _orca_epilogue_done=1
+  # precmd_functions is fatal, and KSH_ARRAYS makes the 1-based feature lookup
+  # drop whichever feature is listed first.
+  builtin emulate -L zsh
+  (( $+_orca_deferred_init_done )) && return 0
+  builtin typeset -g _orca_deferred_init_done=1
+  builtin typeset -g precmd_functions
+  precmd_functions=(${precmd_functions:#__orca_deferred_init})
   if __orca_has_feature overlay; then
     # Why: remote startup files can re-export user defaults after relay spawn.
     [[ -n "${ORCA_OPENCODE_CONFIG_DIR:-}" ]] && export OPENCODE_CONFIG_DIR="${ORCA_OPENCODE_CONFIG_DIR}"
@@ -83,19 +71,13 @@ __orca_shell_epilogue() {
       fi
     }
     if [[ -n "${ORCA_OMP_STATUS_EXTENSION:-}" ]]; then
-      omp() { __orca_omp "$@"; }
+      # Why the function reserved word: it suppresses alias expansion of the name, which
+      # an `alias omp` otherwise rewrites at parse time, aborting the rest of the file.
+      function omp { __orca_omp "$@"; }
     fi
   fi
-  if [[ -n "${ORCA_HISTFILE:-}" ]]; then
-    HISTFILE="$ORCA_HISTFILE"
-    builtin unset ORCA_HISTFILE
-  elif [[ "${HISTFILE:-}" == "$ZDOTDIR/.zsh_history" ]]; then
-    # Why also when Orca injected nothing: /etc/zshrc derived this from Orca's
-    # wrapper ZDOTDIR, so history would accumulate INSIDE the wrapper dir and the
-    # user's real history would be invisible — the plain #11044 bug, with no
-    # per-worktree scoping involved. Matching the exact clobbered value means a
-    # HISTFILE the user set deliberately is never touched.
-    HISTFILE="${ORCA_ORIG_ZDOTDIR:-$HOME}/.zsh_history"
+  if [[ -n "${_orca_histfile:-}" ]]; then
+    HISTFILE="$_orca_histfile"
   fi
   if __orca_has_feature ready; then
     # Why: capture the prior zle-line-init so the marker chains to it. On a
@@ -121,11 +103,14 @@ __orca_shell_epilogue() {
     }
     zle -N zle-line-init __orca_prompt_mark
   fi
-  __orca_resolve_user_config_dir "${ORCA_USER_ZDOTDIR:-${ORCA_ORIG_ZDOTDIR:-$HOME}}"
-  # Why: after Orca's last wrapper file has loaded, the interactive shell should
-  # expose the same ZDOTDIR a normal zsh startup would expose.
-  export ZDOTDIR="$_orca_resolved_config_dir"
-  unset _orca_home _orca_resolved_config_dir
-  unset _orca_shell_features
-  unfunction __orca_shell_epilogue __orca_has_feature __orca_resolve_user_config_dir __orca_resolve_inherited_config_dir
+  builtin unset _orca_shell_features _orca_histfile
+  builtin unfunction __orca_deferred_init __orca_has_feature
+}
+{
+  builtin typeset _orca_user_zshenv="${ZDOTDIR-$HOME}/.zshenv"
+  [[ ! -r "$_orca_user_zshenv" ]] || builtin source -- "$_orca_user_zshenv"
+} always {
+  builtin unset _orca_user_zshenv
+  builtin typeset -ag precmd_functions
+  (( ${precmd_functions[(Ie)__orca_deferred_init]} )) || precmd_functions+=(__orca_deferred_init)
 }

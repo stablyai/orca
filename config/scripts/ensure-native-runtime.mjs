@@ -13,7 +13,9 @@ const runtime = readRuntimeArg()
 
 const NATIVE_MODULES = [
   'node-pty',
-  ...(process.platform === 'win32' ? ['windows-native-registry'] : [])
+  ...(process.platform === 'win32'
+    ? ['windows-native-registry', '@vscode/windows-process-tree']
+    : [])
 ]
 const NODE_PTY_CONPTY_RUNTIME_FILES = ['conpty.dll', 'OpenConsole.exe']
 const CHILD_CHECK_FLAG = '--check-only'
@@ -244,6 +246,14 @@ function collectNativeModuleFailures() {
 }
 
 function loadNativeModule(moduleName) {
+  if (moduleName === '@vscode/windows-process-tree') {
+    // A bare require already loads the .node addon on win32, so it catches an
+    // ABI mismatch on its own. What it cannot catch is a snapshot that comes
+    // back empty -- the shape a blocked CreateToolhelp32Snapshot produces --
+    // so check the addon actually enumerates before calling the runtime healthy.
+    require(moduleName)
+    return
+  }
   if (moduleName === 'windows-native-registry') {
     const registry = require(moduleName)
     // Why: the package defers loading its .node addon until the first registry call.

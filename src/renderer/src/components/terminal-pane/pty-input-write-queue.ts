@@ -3,7 +3,6 @@ import {
   isTerminalInputTooLargeWithDeferredMeasurement,
   iterateTerminalInputChunks
 } from '../../../../shared/terminal-input'
-import { needsCookedEchoSafeQueryReply } from '../../../../shared/terminal-query-reply'
 
 // Why: 4096 UTF-16 code units encode to at most ~12KB UTF-8, safely under the
 // 16KB TERMINAL_INPUT_CHUNK_MAX_BYTES cap without paying byte measurement on
@@ -262,7 +261,8 @@ export function createPtyInputWriteQueue(deps: PtyInputWriteQueueDeps): PtyInput
       if (failedGeneration === generation) {
         return false
       }
-      const replyOnly = queryReply && needsCookedEchoSafeQueryReply(data)
+      // Every query reply stays atomic so host-side ordering can classify it (#13892).
+      const replyOnly = queryReply
       if (replyOnly && !admitReply(data)) {
         return false
       }

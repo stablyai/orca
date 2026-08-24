@@ -158,7 +158,8 @@ describe('registerPtyHandlers', () => {
       tabId: 'tab-headless',
       leafId,
       ptyId: expect.any(String),
-      incarnationId: expect.any(String)
+      incarnationId: expect.any(String),
+      hostAdmittedMembership: true
     })
   })
   it('shuts down a split PTY when its expected source binding was retired', async () => {
@@ -511,7 +512,8 @@ describe('registerPtyHandlers', () => {
       tabId: 'tab-race',
       leafId,
       ptyId: 'pty-shared',
-      startupCwd: '/tmp'
+      startupCwd: '/tmp',
+      hostAdmittedMembership: true
     })
   })
 })

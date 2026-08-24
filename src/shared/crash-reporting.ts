@@ -4,6 +4,8 @@ import {
 } from './crash-reporting-diagnostic-bundle'
 import { appendMinidumpSignatureLines } from './crash-report-signature-lines'
 import { formatCrashReportExitCode } from './crash-report-exit-code'
+import { appendBoundaryAttributionLines } from './crash-report-attribution-lines'
+import type { CrashReportAttribution } from './react-update-depth-attribution'
 
 export type { CrashReportDiagnosticBundle } from './crash-reporting-diagnostic-bundle'
 
@@ -86,6 +88,8 @@ export type ReactErrorBoundaryReportArgs = {
   activeTabType?: string | null
   activeRightSidebarTab?: string | null
   hasActiveWorktree?: boolean
+  // Absent means "attribution is as trustworthy as it ever was"; older hosts ignore it.
+  attribution?: CrashReportAttribution
 }
 
 export type ReactErrorBoundaryReportResult =
@@ -254,6 +258,7 @@ export function formatCrashReportText(
   ]
 
   appendMinidumpSignatureLines(lines, report.details)
+  appendBoundaryAttributionLines(lines, report.details)
   appendDiagnosticBundleLines(lines, diagnosticBundle, sanitizeCrashReportString)
 
   const details = Object.entries(report.details)

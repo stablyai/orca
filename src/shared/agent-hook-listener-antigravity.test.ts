@@ -23,6 +23,81 @@ describe('shared agent-hook-listener', () => {
     vi.unstubAllEnvs()
   })
 
+  // Why (#15117): the Windows script posts stdin verbatim through curl, so an event that
+  // fires without a payload arrives as `payload=""` rather than the `{}` the POSIX script
+  // substitutes. Both transports must still produce the status transition.
+  it('accepts an Antigravity event whose payload is empty or whitespace-only', () => {
+    for (const payload of ['', '   ', '\r\n']) {
+      const started = normalizeHookPayload(
+        state,
+        'antigravity',
+        {
+          paneKey: PANE_KEY,
+          tabId: 'tab-1',
+          worktreeId: 'wt',
+          hook_event_name: 'PreInvocation',
+          payload
+        },
+        'production'
+      )
+      expect(started?.payload, `payload ${JSON.stringify(payload)}`).toMatchObject({
+        state: 'working',
+        agentType: 'antigravity'
+      })
+    }
+  })
+
+  // Why (#15117): this is the shape Windows actually produces — curl omits the form field
+  // entirely when the agent supplies no stdin, so the key is absent rather than empty.
+  it('accepts an Antigravity event that carries no payload key at all', () => {
+    const started = normalizeHookPayload(
+      state,
+      'antigravity',
+      {
+        paneKey: PANE_KEY,
+        tabId: 'tab-1',
+        worktreeId: 'wt',
+        hook_event_name: 'PreInvocation'
+      },
+      'production'
+    )
+    expect(started?.payload).toMatchObject({ state: 'working', agentType: 'antigravity' })
+  })
+
+  it('still drops an Antigravity event whose payload is malformed rather than empty', () => {
+    expect(
+      normalizeHookPayload(
+        state,
+        'antigravity',
+        {
+          paneKey: PANE_KEY,
+          hook_event_name: 'PreInvocation',
+          payload: '{"prompt":'
+        },
+        'production'
+      )
+    ).toBeNull()
+  })
+
+  // Why: the empty-payload allowance is Antigravity's documented policy, not a global one —
+  // every other source must keep rejecting a body it cannot parse.
+  it('does not extend the empty-payload allowance to other sources', () => {
+    for (const payload of ['', undefined]) {
+      expect(
+        normalizeHookPayload(
+          state,
+          'gemini',
+          {
+            paneKey: PANE_KEY,
+            hook_event_name: 'BeforeAgent',
+            ...(payload === undefined ? {} : { payload })
+          },
+          'production'
+        )
+      ).toBeNull()
+    }
+  })
+
   it('normalizes Antigravity invocation and tool hooks', () => {
     const started = normalizeHookPayload(
       state,

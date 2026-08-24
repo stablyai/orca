@@ -21,6 +21,7 @@ import { PickerListDrawer } from './PickerListDrawer'
 import { MobileAgentIcon } from './MobileAgentIcon'
 import { getSuggestedCreatureName } from './worktree-name-suggestion'
 import { useRetiredWorktreeNames } from '../worktree/use-retired-worktree-names'
+import { repoColor } from '../worktree/repo-color'
 import { deriveWorkspaceSshGate, workspaceSshStatusLabel } from '../tasks/workspace-ssh-gate'
 import {
   isSetupHookTrusted,
@@ -118,15 +119,6 @@ type DetectedAgentIdsState = {
 type CreateOptions = {
   setupOverride?: Exclude<SetupDecision, 'inherit'>
   approvedSetupContentHash?: string
-}
-
-function repoColor(name: string): string {
-  const palette = ['#f97316', '#8b5cf6', '#06b6d4', '#ec4899', '#84cc16', '#f59e0b', '#6366f1']
-  let hash = 0
-  for (let i = 0; i < name.length; i += 1) {
-    hash = (hash * 31 + name.charCodeAt(i)) | 0
-  }
-  return palette[Math.abs(hash) % palette.length]!
 }
 
 function repoBadgeColor(repo: Repo | null): string {

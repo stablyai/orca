@@ -44,6 +44,7 @@ import { removeInheritedNoColor } from '../pty/terminal-color-env'
 import { removeAppImageRuntimeEnv } from '../pty/appimage-terminal-env'
 import { stripInheritedBuildModeEnv } from '../pty/build-mode-env'
 import { stripLegacyTerminalShimEnv } from '../pty/legacy-terminal-shim-dir'
+import { dropIncoherentCondaActivationEnv } from '../pty/conda-activation-env'
 import { SessionNotFoundError } from '../daemon/daemon-errors'
 import { resolvePathEnvKey } from '../pty/windows-environment-path'
 import { isHostCodexHomeForWsl, isWslCodexHomeForHost } from '../pty/codex-home-wsl-env'
@@ -64,6 +65,7 @@ import { getAgentForegroundContextPaths } from './agent-foreground-context-paths
 import { recognizeAgentProcessFromCommandLine } from '../../shared/agent-process-recognition'
 import { killWithDescendantSweep } from '../pty-descendant-termination'
 import { readWindowsConptyProcessIds } from './windows-conpty-process-membership'
+import { terminatePtyJob } from '../windows/windows-pty-job'
 import { canConfirmAgentFromConsolePresence } from './windows-console-foreground'
 import { forceKillPosixPtyProcessGroups } from '../pty/posix-pty-process-groups'
 import { shouldUseShellReadyStartupDelivery } from '../../shared/codex-startup-delivery'
@@ -72,14 +74,10 @@ import { ORCA_HERMES_STARTUP_QUERY_ENV } from '../../shared/hermes-startup-query
 import { PhysicalExitTracker } from '../../shared/physical-exit-tracker'
 import { mergeGitConfigEnvProtocol } from '../../shared/git-credential-prompt-env'
 import { PtyStartupIngress, type PtyIngressEmission } from '../../shared/pty-startup-ingress'
-import { extractOnlyCookedEchoSafeQueryReplies } from '../../shared/terminal-query-reply'
 import { resolvePtyOwnerBackend } from '../../shared/pty-owner-backend'
 import { signalPosixPtyForegroundGroup } from '../pty/posix-pty-foreground-group'
 import { readPtsName } from '../pty/node-pty-pts-name'
-import {
-  createPtySlaveEchoProbe,
-  readPtySlavePath
-} from '../../shared/pty-slave-line-discipline-echo'
+import { readPtySlavePath } from '../../shared/pty-slave-line-discipline-echo'
 import {
   createShellStartupOutputScanState,
   drainShellStartupOutputScanState,
@@ -838,6 +836,8 @@ export class LocalPtyProvider implements IPtyProvider {
     )
     // Why: raw requested PATH promotion runs after the host-env scrub.
     stripLegacyTerminalShimEnv(finalEnv, process.platform)
+    // Why after every deletion pass: an envToDelete of CONDA_PREFIX must not leave the sentinel behind.
+    dropIncoherentCondaActivationEnv(finalEnv, process.platform)
 
     // Why: worktree-scoped HISTFILE — without it worktrees share one global history (terminal-history-scope-design §7–§10).
     const worktreeId = args.worktreeId
@@ -1001,7 +1001,6 @@ export class LocalPtyProvider implements IPtyProvider {
         )
       }
     }
-    const startupEchoProbe = createPtySlaveEchoProbe(readPtySlavePath(proc))
     const startupIngress = new PtyStartupIngress({
       ...(args.startupIngress ? { intent: args.startupIngress } : {}),
       ownerBackend: resolvePtyOwnerBackend({
@@ -1010,8 +1009,7 @@ export class LocalPtyProvider implements IPtyProvider {
         wslDistro: spawnedWslDistro
       }),
       write: (data) => proc.write(data),
-      onEmission: emitIngressData,
-      ...(startupEchoProbe ? { echoProbe: startupEchoProbe } : {})
+      onEmission: emitIngressData
     })
     startupIngressByPty.set(id, startupIngress)
 
@@ -1192,12 +1190,10 @@ export class LocalPtyProvider implements IPtyProvider {
     return ptyProcesses.has(id)
   }
   write(id: string, data: string): boolean {
-    // Cooked PTYs echo private DSR/OSC replies; CPR/DA remain immediate (#13137, #7329).
-    if (extractOnlyCookedEchoSafeQueryReplies(data)) {
-      const ingress = startupIngressByPty.get(id)
-      if (ingress?.answerLiveQueryReply(data)) {
-        return true
-      }
+    // Cooked PTYs echo private DSR/OSC replies; CPR/DA stay immediate unless one of
+    // those is still held, which they must not overtake (#13137, #7329, #15559).
+    if (startupIngressByPty.get(id)?.answerLiveQueryReply(data)) {
+      return true
     }
     const proc = ptyProcesses.get(id)
     if (!proc) {
@@ -1291,7 +1287,8 @@ export class LocalPtyProvider implements IPtyProvider {
       // identity probe returns `own` so agent/MCP orphans cannot hold the worktree cwd
       // (#10004). `unknown`/`foreign`/`absent` skip taskkill and rely on root close alone.
       await killWithDescendantSweep(proc.pid, signalRoot, {
-        ownsRoot: () => ptyProcesses.get(id) === proc
+        ownsRoot: () => ptyProcesses.get(id) === proc,
+        terminateOwnedTree: () => terminatePtyJob(proc)
       })
     } else if (process.platform === 'win32' && operation.immediate) {
       // Why: a plain shell's ConPTY teardown doesn't reap orphaned children (useConptyDll
@@ -1299,7 +1296,8 @@ export class LocalPtyProvider implements IPtyProvider {
       // holds the worktree cwd. Tree kill runs only when the OS identity probe returns `own`;
       // otherwise root close alone, and detached children may block physical stop (#10004).
       await killWithDescendantSweep(proc.pid, signalRoot, {
-        ownsRoot: () => ptyProcesses.get(id) === proc
+        ownsRoot: () => ptyProcesses.get(id) === proc,
+        terminateOwnedTree: () => terminatePtyJob(proc)
       })
     } else {
       signalRoot()

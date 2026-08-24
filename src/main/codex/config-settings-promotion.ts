@@ -14,7 +14,7 @@ import {
 import { parseTomlKeyPath, parseTomlTableHeaderPath } from './config-toml-key-path'
 import { tuiStructuredKey, upsertPromotedSettingsInContent } from './codex-config-settings-upsert'
 import {
-  readCodexSettingsBaseline,
+  observeCodexSettingsBaseline,
   writeCodexSettingsBaseline,
   type CodexSettingsBaseline,
   type CodexSettingsConflict
@@ -235,10 +235,17 @@ function promoteCodexRuntimeSettingsToSystemUnsafe(
     throw runtimeTomlObservation.error
   }
   // Why: without a baseline, a stale runtime value looks like a fresh in-Codex change; skip until the mirror writes one.
-  const baseline = readCodexSettingsBaseline(runtimeHomePath)
-  if (!baseline) {
+  const baselineObservation = observeCodexSettingsBaseline(runtimeHomePath)
+  if (baselineObservation.kind === 'indeterminate') {
+    // Why: an empty plan here lets the mirror proceed and write the system value
+    // back over an in-Codex edit this baseline would have identified. The caller
+    // turns a throw into the existing stall-and-retry null.
+    throw new Error('Codex settings baseline could not be read')
+  }
+  if (baselineObservation.kind === 'absent') {
     return emptyPromotionPlan()
   }
+  const baseline = baselineObservation.baseline
   const runtimeValues = readPromotedSettingValues(runtimeTomlPath)
   const systemValues = readPromotedSettingValues(systemTomlPath)
   const updates = new Map<string, string>()
@@ -260,10 +267,10 @@ function promoteCodexRuntimeSettingsToSystemUnsafe(
   const writeTarget = resolvePromotionWriteTarget(systemTomlPath)
   // Why: a dangling symlink may target an unmade dir tree; create its real parent so the atomic temp write has a home.
   mkdirSync(dirname(writeTarget.path), { recursive: true, mode: 0o700 })
-  // Why: this is the user's real ~/.codex/config.toml, and `existsSync` reading
-  // `false` for a locked file sent it down the reconstruct branch below, which
-  // replaces the canonical config with settings derived from Orca's runtime
-  // copy. One read replaces the old existsSync + read pair and its TOCTOU gap.
+  // Why: this is the user's real ~/.codex/config.toml, and an indeterminate
+  // existence probe sent it down the reconstruct branch below, which replaces
+  // the canonical config with settings derived from Orca's runtime copy. One
+  // read replaces the old existsSync + read pair and its TOCTOU gap.
   // The indeterminate arm is a backstop rather than the live guard: an
   // unreadable system config already refused in readPromotedSettingValues,
   // because `writeTarget.path` always resolves to the same file as

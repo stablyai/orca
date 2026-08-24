@@ -19,10 +19,8 @@ import type {
   SleepingAgentLaunchConfig,
   AgentProviderSessionMetadata
 } from '../../../shared/agent-session-resume'
-import {
-  AGENT_SESSION_OMP_RESUME_PATH_RUNTIME_CAPABILITY,
-  BROWSER_TAB_CREATE_KNOWN_ID_RUNTIME_CAPABILITY
-} from '../../../shared/protocol-version'
+import { BROWSER_TAB_CREATE_KNOWN_ID_RUNTIME_CAPABILITY } from '../../../shared/protocol-version'
+import { agentResumeHostAuthorityCapability } from './agent-resume-host-authority-capability'
 import type {
   AgentLaunchPreferences,
   AgentPromptDelivery,
@@ -337,13 +335,15 @@ async function createWebRuntimeSessionTerminalResult(
                   })) as RuntimeRpcResponse<RuntimeCreateAgentSessionResult>
                 )
               )
+      const resumeHostAuthorityCapability =
+        args.agentSessionKind === 'resume' ? agentResumeHostAuthorityCapability(agent) : undefined
       const created = await runRemoteAgentSessionLaunch<{
         terminal: CreatedAgentTerminalIdentity
       }>({
         environmentId,
         ...(hostAuthority ? { hostAuthority } : {}),
-        ...(args.agentSessionKind === 'resume' && agent === 'omp'
-          ? { hostAuthorityCapability: AGENT_SESSION_OMP_RESUME_PATH_RUNTIME_CAPABILITY }
+        ...(resumeHostAuthorityCapability
+          ? { hostAuthorityCapability: resumeHostAuthorityCapability }
           : {}),
         legacy: async () => {
           const response = await callEnvironment({
@@ -848,16 +848,30 @@ export async function refreshWebRuntimeSessionTabsSnapshot(
         ...options.confirmAgentSessionHandoff
       })
     }
-    const { applyFreshWebSessionTabsSnapshot, applyWebSessionTabsStorePatch } =
-      await import('./web-session-tabs-sync')
+    const {
+      applyWebSessionTabsSnapshot,
+      applyWebSessionTabsStorePatch,
+      decideWebSessionTabsSnapshot
+    } = await import('./web-session-tabs-sync')
     if (getRuntimeEnvironmentRevision(environmentId) !== expectedEnvironmentPairingRevision) {
       return
     }
-    applyWebSessionTabsStorePatch((state) => {
-      // Why: eager refreshes can resolve after the user switched worktrees; update tabs without stealing focus.
-      const patch = applyFreshWebSessionTabsSnapshot(state, snapshot, environmentId)
-      return patch === state ? state : patch
-    }, snapshot)
+    // Why: this list is the host answering, but only the frame's own decision
+    // says whether that answer is evidence — a workspace the mirror never
+    // writes is discarded with nothing accepted behind it.
+    const decision = decideWebSessionTabsSnapshot(snapshot, environmentId)
+    const settleMirror = applyWebSessionTabsStorePatch(
+      (state) => {
+        // Why: eager refreshes can resolve after the user switched worktrees; update tabs without stealing focus.
+        const patch = decision.apply
+          ? applyWebSessionTabsSnapshot(state, snapshot, environmentId)
+          : state
+        return patch === state ? state : patch
+      },
+      { frames: [{ environmentId, worktreeId: snapshot.worktree, decision }] },
+      snapshot
+    )
+    settleMirror()
   } catch (error) {
     if (options.errorMode === 'throw') {
       throw error

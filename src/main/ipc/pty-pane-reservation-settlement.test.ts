@@ -530,7 +530,8 @@ describe('registerPtyHandlers', () => {
         worktreeId: 'wt-remote',
         tabId: 'tab-remote',
         leafId,
-        ptyId: 'ssh:ssh-1@@relay-pty'
+        ptyId: 'ssh:ssh-1@@relay-pty',
+        hostAdmittedMembership: true
       },
       'ssh:ssh-1'
     )

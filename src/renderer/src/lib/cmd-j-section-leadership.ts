@@ -31,9 +31,11 @@ export type PaletteRankedItem = {
   /** Existing smart-recency / list position, used only after match rank ties. */
   order: number
   id: string
+  /** Timestamp of most recent activity (focus or agent interaction). */
+  lastActiveAt?: number
 }
 
-/** Match rank first, then the section's own recency order, then a stable id. */
+/** Match rank first, then recent activity, then positional order, then stable id. */
 export function comparePaletteRankedItems(a: PaletteRankedItem, b: PaletteRankedItem): number {
   if (a.rank && b.rank) {
     const byRank = comparePaletteDocumentRank(a.rank, b.rank)
@@ -42,6 +44,13 @@ export function comparePaletteRankedItems(a: PaletteRankedItem, b: PaletteRanked
     }
   } else if (a.rank !== b.rank) {
     return a.rank ? -1 : 1
+  }
+  if (a.lastActiveAt !== b.lastActiveAt) {
+    const aTime = a.lastActiveAt ?? 0
+    const bTime = b.lastActiveAt ?? 0
+    if (aTime !== bTime) {
+      return bTime - aTime
+    }
   }
   if (a.order !== b.order) {
     return a.order - b.order

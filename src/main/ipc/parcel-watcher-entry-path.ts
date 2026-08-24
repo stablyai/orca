@@ -1,14 +1,14 @@
 import { existsSync } from 'node:fs'
+import { getAppEnvironment, hasAppEnvironment } from '../../shared/app-environment'
 import { join } from 'node:path'
 
-type ElectronAppPath = { getAppPath(): string; isPackaged: boolean }
+type ElectronAppPath = { getAppPath(): string; isPackaged(): boolean }
 
+// Why the port and not require('electron'): this module is reachable from plain-Node
+// fork entries, where the literal text require("electron") fails the build guard even
+// inside a try/catch. hasAppEnvironment() gives the same "no app root here" answer.
 function loadElectronApp(): ElectronAppPath | null {
-  try {
-    return require('electron').app ?? null
-  } catch {
-    return null
-  }
+  return hasAppEnvironment() ? getAppEnvironment() : null
 }
 
 export function resolveWatcherProcessEntryPath(
@@ -53,7 +53,7 @@ export function resolveWatcherProcessEntryPathWithoutApp(
 export function getWatcherProcessEntryPath(): string {
   const app = loadElectronApp()
   if (app) {
-    return resolveWatcherProcessEntryPath(app.getAppPath(), app.isPackaged)
+    return resolveWatcherProcessEntryPath(app.getAppPath(), app.isPackaged())
   }
   return resolveWatcherProcessEntryPathWithoutApp(process.cwd(), process.resourcesPath)
 }

@@ -4,10 +4,7 @@
  * Why: the wrappers emit an OSC 777 marker after startup files finish, which the
  * readiness scanner watches for before a startup command is written.
  */
-import {
-  buildZshStartupWrapperFiles,
-  type ZshStartupWrapperFiles
-} from '../zsh-startup-wrapper-builder'
+import { buildZshStartupHook } from '../zsh-startup-wrapper-builder'
 import { writeShellWrapperFiles } from '../shell-wrapper-file-writer'
 import {
   buildLocalShellReadyWrapperFiles,
@@ -18,8 +15,8 @@ import {
   shellReadyWrappersExist
 } from './local-pty-shell-ready-wrapper-root'
 
-export function getZshShellReadyWrapperFiles(): ZshStartupWrapperFiles {
-  return buildZshStartupWrapperFiles(getLocalZshWrapperSpec(`${getShellReadyWrapperRoot()}/zsh`))
+export function getZshShellReadyWrapperFile(): string {
+  return buildZshStartupHook(getLocalZshWrapperSpec())
 }
 
 /** True when every wrapper file is present and non-empty afterwards. */

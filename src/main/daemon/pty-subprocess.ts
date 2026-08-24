@@ -43,6 +43,7 @@ import { dropInheritedOrcaHistFile } from '../worktree-history-file-path'
 import { removeAppImageRuntimeEnv } from '../pty/appimage-terminal-env'
 import { stripInheritedBuildModeEnv } from '../pty/build-mode-env'
 import { stripLegacyTerminalShimEnv } from '../pty/legacy-terminal-shim-dir'
+import { dropIncoherentCondaActivationEnv } from '../pty/conda-activation-env'
 import { resolvePathEnvKey } from '../pty/windows-environment-path'
 import { parseWslPath } from '../wsl'
 import { addWslEnvKeys } from '../wsl-env'
@@ -61,6 +62,7 @@ import { isWindowsGitBashShellPath, resolveWindowsGitBashShellPath } from '../gi
 import { WINDOWS_GIT_BASH_SHELL } from '../../shared/windows-terminal-shell'
 import { resolveAgentForegroundProcessWithAvailability } from '../providers/agent-foreground-process'
 import { readWindowsConptyProcessIds } from '../providers/windows-conpty-process-membership'
+import { assignHostProcessToKillOnCloseJob, terminatePtyJob } from '../windows/windows-pty-job'
 import {
   isAgentForegroundWrapperProcess,
   recognizeAgentProcess,
@@ -588,6 +590,13 @@ function spawnDaemonPtyWithWindowsFallback(args: {
   let reportsChildExitStatus = true
   const spawnAt = (shellPath: string, shellArgs: string[], cwd: string): pty.IPty => {
     const wrapped = wrapShellSpawnForMacosTccAttribution(shellPath, shellArgs, args.env)
+    // Why here: children inherit job membership, so the host job has to exist
+    // before the first pty -- but resolving it loads the ConPTY addon, and
+    // paying that at startup delayed the daemon's endpoint past the boot smoke
+    // test's readiness check. This path already pays ConPTY cost. Memoised.
+    if (process.platform === 'win32') {
+      assignHostProcessToKillOnCloseJob()
+    }
     const proc = pty.spawn(wrapped.file, wrapped.args, {
       name: args.env.TERM ?? 'xterm-256color',
       cols: args.cols,
@@ -894,6 +903,8 @@ export async function createPtySubprocess(opts: PtySubprocessOptions): Promise<S
   promoteAgentTeamsShimPath(env, requestedPath)
   // Why: raw requested PATH promotion runs after the inherited-env scrub.
   stripLegacyTerminalShimEnv(env, process.platform)
+  // Why after every deletion pass: an envToDelete of CONDA_PREFIX must not leave the sentinel behind.
+  dropIncoherentCondaActivationEnv(env, process.platform)
 
   // Why: asar packaging can strip +x from node-pty's spawn-helper; the daemon is a separate forked process from the main-process fix.
   ensureNodePtySpawnHelperExecutable()
@@ -1313,10 +1324,18 @@ export async function createPtySubprocess(opts: PtySubprocessOptions): Promise<S
         throw error
       }
     },
+    terminateOwnedTree: () => terminatePtyJob(proc),
     forceKill: () => {
       // Why: after reap/dispose proc.pid is a recycled pid, so SIGKILL would hit an unrelated process (forceKill only signals a live child).
+      if (dead) {
+        return
+      }
       // Why: Windows node-pty kill already closed ConPTY; forcing again can double-close the native handle.
-      if (dead || (process.platform === 'win32' && nodePtyKillIssued)) {
+      // That left forceKill a permanent no-op after any kill(), so a wedged ConPTY -- which
+      // never fires onExit -- had no escalation at all (#9854). The job is that escalation:
+      // it terminates the tree without touching the shell handle node-pty owns.
+      if (process.platform === 'win32' && nodePtyKillIssued) {
+        terminatePtyJob(proc)
         return
       }
       try {

@@ -1,6 +1,7 @@
 import type * as FsPromises from 'node:fs/promises'
 import { sep } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { installFakeAppEnvironment } from '../../config/scripts/vitest-host-ports-setup'
 
 const {
   existsSyncMock,
@@ -64,12 +65,6 @@ vi.mock('node:fs/promises', async () => ({
   rm: rmAsyncMock
 }))
 
-vi.mock('electron', () => ({
-  app: {
-    getPath: getPathMock
-  }
-}))
-
 const { parseWslPathMock, toLinuxPathMock } = vi.hoisted(() => ({
   parseWslPathMock: vi.fn((_path: string) => null as { distro: string; linuxPath: string } | null),
   toLinuxPathMock: vi.fn((p: string) => p)
@@ -120,6 +115,7 @@ describe('terminal-history', () => {
     rmAsyncMock.mockReset()
     rmAsyncMock.mockResolvedValue(undefined)
     getPathMock.mockReturnValue('/fake/userData')
+    installFakeAppEnvironment({ getPath: getPathMock })
     existsSyncMock.mockReturnValue(true)
     statSyncMock.mockReturnValue({ isDirectory: () => true, size: 100 })
     openSyncMock.mockImplementation(() => 1)

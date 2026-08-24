@@ -21,6 +21,11 @@ const STRING_FORM = new RegExp(String.raw`wsl(?:\.exe)?\b[^\n]*?[^-]--\s+${GUEST
 const SCANNED_ROOTS = ['src', 'config', 'tests']
 const SCANNED_EXTENSIONS = ['.ts', '.tsx', '.mjs', '.js']
 const IGNORED_DIRECTORIES = new Set(['node_modules', 'dist', 'out', 'build', '.git'])
+// Why: the cross-version e2e lane checks whole historical releases out under
+// tests/e2e/.cross-version-checkouts/. Those are shipped code we cannot edit, so
+// scanning them made this guard fail on every machine that had run that lane --
+// 21 "offenders", all of them copies of a past release.
+const IGNORED_DIRECTORY_PREFIX = '.'
 
 function collectSourceFiles(root: string): string[] {
   let found: string[] = []
@@ -31,7 +36,7 @@ function collectSourceFiles(root: string): string[] {
     return found
   }
   for (const entry of entries) {
-    if (IGNORED_DIRECTORIES.has(entry)) {
+    if (IGNORED_DIRECTORIES.has(entry) || entry.startsWith(IGNORED_DIRECTORY_PREFIX)) {
       continue
     }
     const full = join(root, entry)
@@ -85,7 +90,7 @@ describe('wsl.exe mode separator', () => {
   it('sees a `--` separator split across lines by the formatter', () => {
     // Why: the guard once matched line-by-line and was blind to this exact shape,
     // which is how every multi-element argv array in this repo is formatted.
-    const formatted = ["args: [", "  '-d',", "  distro,", "  '--',", "  'bash'", "]"].join('\n')
+    const formatted = ['args: [', "  '-d',", '  distro,', "  '--',", "  'bash'", ']'].join('\n')
 
     expect(ARGV_FORM.test(codeText(formatted))).toBe(true)
   })

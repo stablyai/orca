@@ -175,6 +175,26 @@ describe('activateBrowserPagePaletteResult', () => {
     })
   })
 
+  it('activates an SSH worktree through its paired-runtime owner alias', () => {
+    seedStore({
+      worktreesByRepo: {
+        'repo-1': [
+          makeWorktree({
+            hostId: 'ssh:private-target',
+            runtimeOwnerEnvironmentId: 'paired-host'
+          })
+        ]
+      }
+    })
+
+    expect(
+      activateBrowserPagePaletteResult({ ...target, executionHostId: 'runtime:paired-host' }).status
+    ).toBe('activated')
+    expect(mocks.activateAndRevealWorktree).toHaveBeenCalledWith('wt-1', {
+      executionHostId: 'runtime:paired-host'
+    })
+  })
+
   it('activates pages in remote folder workspaces', () => {
     const worktreeId = folderWorkspaceKey('folder-1')
     seedStore({

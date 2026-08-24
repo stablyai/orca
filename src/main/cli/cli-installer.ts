@@ -1,5 +1,5 @@
 /* eslint-disable max-lines -- Why: this file centralizes cross-platform CLI install state, launcher resolution, and PATH registration so the public shell command stays consistent across packaged and development builds. */
-import { app } from 'electron'
+import { getAppEnvironment } from '../../shared/app-environment'
 import { execFile } from 'node:child_process'
 import { constants, existsSync } from 'node:fs'
 import {
@@ -93,11 +93,11 @@ export class CliInstaller {
 
   constructor(options: CliInstallerOptions = {}) {
     this.platform = options.platform ?? process.platform
-    this.isPackaged = options.isPackaged ?? app.isPackaged
-    this.userDataPath = options.userDataPath ?? app.getPath('userData')
+    this.isPackaged = options.isPackaged ?? getAppEnvironment().isPackaged()
+    this.userDataPath = options.userDataPath ?? getAppEnvironment().getPath('userData')
     this.resourcesPath = options.resourcesPath ?? process.resourcesPath
     this.execPathValue = options.execPath ?? process.execPath
-    this.appPathValue = options.appPath ?? app.getAppPath()
+    this.appPathValue = options.appPath ?? getAppEnvironment().getAppPath()
     this.homePath = options.homePath ?? homedir()
     this.localAppDataPath =
       options.localAppDataPath ??

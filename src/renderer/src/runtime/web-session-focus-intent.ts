@@ -95,6 +95,33 @@ export function resolveWebSessionVisibleTabId(
   )
 }
 
+export function resolveWebSessionSiblingVisibleTabId(
+  state: WebSessionVisibleTabState,
+  worktreeId: string,
+  tabs = state.unifiedTabsByWorktree?.[worktreeId] ?? []
+): string | null {
+  const activeGroupId = state.activeGroupIdByWorktree?.[worktreeId] ?? null
+  const preferredType =
+    state.activeTabTypeByWorktree?.[worktreeId] ??
+    (state.activeWorktreeId === worktreeId ? state.activeTabType : null)
+  const tabById = new Map(tabs.map((tab) => [tab.id, tab]))
+  let fallback: string | null = null
+  for (const group of state.groupsByWorktree?.[worktreeId] ?? []) {
+    if (group.id === activeGroupId || group.activeTabId == null) {
+      continue
+    }
+    const tab = tabById.get(group.activeTabId)
+    if (!tab || tab.groupId !== group.id) {
+      continue
+    }
+    if (preferredType && toVisibleTabType(tab.contentType) === preferredType) {
+      return tab.id
+    }
+    fallback ??= tab.id
+  }
+  return fallback
+}
+
 function focusIntentPartitionKey(owner: WebSessionIntentOwner, worktreeId: string): string {
   return `${webSessionIntentOwnerKey(owner)}\0${worktreeId}`
 }
