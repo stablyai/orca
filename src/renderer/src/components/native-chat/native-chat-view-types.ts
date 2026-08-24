@@ -27,6 +27,8 @@ export type NativeChatResolvedViewProps = {
   agent: NativeChatSession['agent']
   sessionId: string | null
   transcriptPath: string | null
+  connectionId: string | null
+  transcriptOwnership: 'proven-local' | 'proven-ssh' | 'unknown'
   isVisible: boolean
   targetPtyId: string | null
   terminalTabId: string

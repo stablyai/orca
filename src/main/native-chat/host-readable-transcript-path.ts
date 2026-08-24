@@ -36,6 +36,8 @@ export type HostReadableTranscriptPathDeps = {
   signal?: AbortSignal
   /** Each installed WSL distro's `$HOME` as a Windows UNC path. */
   listWslHomeDirs?: () => Promise<string[]>
+  /** Authenticated distro owner. When present, never probe another distro. */
+  wslDistro?: string
 }
 
 // Why: candidates are `\\wsl.localhost` UNC paths served over 9P. A sync probe
@@ -136,6 +138,11 @@ export async function toHostReadableTranscriptPath(
     return (await pathExists(path)) ? path : null
   }
 
+  if (deps.wslDistro) {
+    const ownedPath = toWindowsWslPath(path, deps.wslDistro)
+    return (await pathExists(ownedPath)) ? ownedPath : null
+  }
+
   const homeDirs = await wslHomeDirs(deps.listWslHomeDirs ?? defaultListWslHomeDirs)
   // Sequential on purpose: the ranked order picks the owning distro, and probing
   // every distro at once would fan out 9P calls to ones the user left stopped.
@@ -182,13 +189,15 @@ function rankDistrosForGuestPath(wslHomeUncDirs: readonly string[], guestPath: s
  * hook path is absent.
  */
 export async function wslCodexSessionsDirs(
-  deps: Pick<HostReadableTranscriptPathDeps, 'platform' | 'listWslHomeDirs'> = {}
+  deps: Pick<HostReadableTranscriptPathDeps, 'platform' | 'listWslHomeDirs' | 'wslDistro'> = {}
 ): Promise<string[]> {
   const platform = deps.platform ?? process.platform
   if (platform !== 'win32') {
     return []
   }
-  const homeDirs = await wslHomeDirs(deps.listWslHomeDirs ?? defaultListWslHomeDirs)
+  const homeDirs = (await wslHomeDirs(deps.listWslHomeDirs ?? defaultListWslHomeDirs)).filter(
+    (home) => !deps.wslDistro || parseWslUncPath(home)?.distro === deps.wslDistro
+  )
   return homeDirs.flatMap((home) => [
     joinUnderWslHome(home, ...WSL_CODEX_RUNTIME_HOME_SEGMENTS, 'sessions'),
     joinUnderWslHome(home, '.codex', 'sessions')

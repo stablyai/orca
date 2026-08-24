@@ -142,6 +142,44 @@ describe('native chat transcript subscription with a stalled install stat', () =
     subscription.unsubscribe()
   })
 
+  it('enters the poll loop when the first resolve throws a non-gate error', async () => {
+    mocks.resolve.mockRejectedValue(Object.assign(new Error('EACCES'), { code: 'EACCES' }))
+    const snapshots: Snapshot[] = []
+
+    const subscription = await subscribeCollecting(snapshots)
+    const attemptsAfterSetup = mocks.resolve.mock.calls.length
+    await vi.advanceTimersByTimeAsync(500)
+
+    expect(mocks.resolve.mock.calls.length).toBeGreaterThan(attemptsAfterSetup)
+    expect(snapshots).toEqual([])
+    expect(unhandled).toEqual([])
+    subscription.unsubscribe()
+  })
+
+  it('keeps polling when the retryable snapshot callback throws', async () => {
+    mocks.resolve.mockResolvedValue(UNC_PATH)
+    mocks.stat.mockImplementation(stalls)
+
+    const subscribing = subscribeNativeChatTranscript({
+      agent: 'claude',
+      sessionId: 'session-id',
+      onAppend: () => {},
+      onInitialSnapshot: () => {
+        throw new Error('subscriber closed')
+      },
+      initialLimit: 10,
+      resolvePollIntervalMs: 50,
+      reconciliationIntervalMs: 1_000
+    })
+    await vi.advanceTimersByTimeAsync(WSL_TRANSCRIPT_FS_EXACT_TIMEOUT_MS + 1)
+    const subscription = await subscribing
+    await vi.advanceTimersByTimeAsync(WSL_TRANSCRIPT_FS_EXACT_TIMEOUT_MS + 500)
+
+    expect(mocks.resolve.mock.calls.length).toBeGreaterThan(1)
+    expect(unhandled).toEqual([])
+    subscription.unsubscribe()
+  })
+
   it('detaches drain waiters on unsubscribe and starts no further gated work', async () => {
     mocks.resolve.mockResolvedValue(UNC_PATH)
     mocks.stat.mockResolvedValue({ ...EMPTY_STATS, size: 64 })

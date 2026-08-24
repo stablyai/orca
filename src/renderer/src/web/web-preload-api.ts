@@ -165,6 +165,7 @@ import {
 } from '@/components/native-chat/native-chat-runtime-contract'
 import { createWebFileMutationMethods } from './web-file-mutation-methods'
 import { mergeWorkspaceCleanupUIState } from '../../../shared/workspace-cleanup-ui-state'
+import { NATIVE_CHAT_TRANSCRIPT_OWNER_RUNTIME_CAPABILITY } from '../../../shared/protocol-version'
 
 const SETTINGS_STORAGE_KEY = 'orca.web.settings.v1'
 const UI_STORAGE_KEY = 'orca.web.ui.v1'
@@ -1279,16 +1280,47 @@ function createWebKeybindingsApi(): WebKeybindingsApi {
 
 // Why: web has no IPC for native-chat transcripts, so route readSession/subscribe through runtime RPC (as mobile does).
 function createNativeChatApi(): NativeChatApi {
+  const captureSession = () => {
+    const environment = requireActiveEnvironment()
+    const client = getClientForEnvironment(environment)
+    const assertCurrent = (): void => {
+      if (activeClient !== client || requireActiveEnvironmentOrNull()?.id !== environment.id) {
+        throw new Error('Runtime pairing changed; refresh and try again')
+      }
+    }
+    const call = async <TResult>(method: string, params?: unknown): Promise<TResult> => {
+      assertCurrent()
+      const response = await client.call(method, params, { timeoutMs: 15_000 })
+      assertCurrent()
+      if (!response.ok) {
+        throw new Error(response.error.message)
+      }
+      return response.result as TResult
+    }
+    return { client, assertCurrent, call }
+  }
+  const assertOwnerCapability = async (
+    call: <TResult>(method: string, params?: unknown) => Promise<TResult>
+  ): Promise<void> => {
+    const status = await call<RuntimeStatus>('status.get')
+    if (!status.capabilities?.includes(NATIVE_CHAT_TRANSCRIPT_OWNER_RUNTIME_CAPABILITY)) {
+      throw new Error('This host is too old to route remote agent chat safely. Update Orca.')
+    }
+  }
   return {
-    readSession: async (agent, sessionId, limit, transcriptPath) =>
-      parseRuntimeNativeChatReadSessionResult(
-        await callRuntimeResult<unknown>('nativeChat.readSession', {
+    readSession: async (agent, sessionId, limit, transcriptPath, paneKey) => {
+      const session = captureSession()
+      await assertOwnerCapability(session.call)
+      return parseRuntimeNativeChatReadSessionResult(
+        await session.call<unknown>('nativeChat.readSession', {
           agent,
           sessionId,
           limit,
-          transcriptPath
+          transcriptPath,
+          paneKey
         })
-      ),
+      )
+    },
     subscribe: (args, onFrame) => {
       // No paired runtime yet: return a no-op teardown so the chat view mounts cleanly; only the not-paired case is swallowed.
       const environment = requireActiveEnvironmentOrNull()
@@ -1307,98 +1339,103 @@ function createNativeChatApi(): NativeChatApi {
       let handle: { unsubscribe: () => void } | null = null
       let cancelled = false
       let receivedInitial = false
-      void getClientForEnvironment(environment)
-        .subscribe(
-          'nativeChat.subscribe',
-          {
-            agent: args.agent,
-            sessionId: args.sessionId,
-            subscriptionId: args.subscriptionId,
-            transcriptPath: args.transcriptPath,
-            limit: args.limit
-          },
-          {
-            onResponse: (response) => {
-              if (cancelled) {
-                return
-              }
-              if (!response.ok) {
-                if (!receivedInitial) {
+      const session = captureSession()
+      void assertOwnerCapability(session.call)
+        .then(() => {
+          session.assertCurrent()
+          return session.client.subscribe(
+            'nativeChat.subscribe',
+            {
+              agent: args.agent,
+              sessionId: args.sessionId,
+              subscriptionId: args.subscriptionId,
+              transcriptPath: args.transcriptPath,
+              paneKey: args.paneKey,
+              limit: args.limit
+            },
+            {
+              onResponse: (response) => {
+                if (cancelled) {
+                  return
+                }
+                if (!response.ok) {
+                  if (!receivedInitial) {
+                    receivedInitial = true
+                    onFrame({
+                      type: 'snapshot',
+                      messages: [],
+                      hasMore: false,
+                      error: response.error.message
+                    })
+                  }
+                  return
+                }
+                const result = response.result as {
+                  type?: string
+                  messages?: NativeChatAppendedMessages
+                  hasMore?: boolean
+                  error?: string
+                  lifecycle?: unknown
+                }
+                const lifecycle = parseRuntimeNativeChatTurnLifecycle(result?.lifecycle)
+                if (
+                  (result?.type === 'appended' ||
+                    result?.type === 'snapshot' ||
+                    result?.type === 'replacement') &&
+                  Array.isArray(result.messages)
+                ) {
+                  if (!receivedInitial) {
+                    receivedInitial = true
+                    onFrame({
+                      type: 'snapshot',
+                      messages: result.messages,
+                      hasMore: result.hasMore ?? result.messages.length >= (args.limit ?? 300),
+                      ...(result.error ? { error: result.error } : {}),
+                      ...(lifecycle ? { lifecycle } : {})
+                    })
+                  } else if (result.type === 'snapshot') {
+                    onFrame({
+                      type: 'snapshot',
+                      messages: result.messages,
+                      hasMore: result.hasMore ?? false,
+                      ...(result.error ? { error: result.error } : {}),
+                      ...(lifecycle ? { lifecycle } : {})
+                    })
+                  } else {
+                    onFrame(
+                      result.type === 'replacement'
+                        ? {
+                            type: 'replacement',
+                            messages: result.messages,
+                            hasMore: result.hasMore ?? false,
+                            ...(lifecycle ? { lifecycle } : {})
+                          }
+                        : {
+                            type: 'appended',
+                            messages: result.messages,
+                            ...(lifecycle ? { lifecycle } : {})
+                          }
+                    )
+                  }
+                } else if (!receivedInitial) {
+                  // Why: an unrecognized ok payload never flips receivedInitial, stranding the view on 'loading'; settle it empty instead.
                   receivedInitial = true
                   onFrame({
                     type: 'snapshot',
                     messages: [],
                     hasMore: false,
-                    error: response.error.message
+                    ...(result?.error ? { error: result.error } : {})
                   })
                 }
-                return
               }
-              const result = response.result as {
-                type?: string
-                messages?: NativeChatAppendedMessages
-                hasMore?: boolean
-                error?: string
-                lifecycle?: unknown
-              }
-              const lifecycle = parseRuntimeNativeChatTurnLifecycle(result?.lifecycle)
-              if (
-                (result?.type === 'appended' ||
-                  result?.type === 'snapshot' ||
-                  result?.type === 'replacement') &&
-                Array.isArray(result.messages)
-              ) {
-                if (!receivedInitial) {
-                  receivedInitial = true
-                  onFrame({
-                    type: 'snapshot',
-                    messages: result.messages,
-                    hasMore: result.hasMore ?? result.messages.length >= (args.limit ?? 300),
-                    ...(result.error ? { error: result.error } : {}),
-                    ...(lifecycle ? { lifecycle } : {})
-                  })
-                } else if (result.type === 'snapshot') {
-                  onFrame({
-                    type: 'snapshot',
-                    messages: result.messages,
-                    hasMore: result.hasMore ?? false,
-                    ...(result.error ? { error: result.error } : {}),
-                    ...(lifecycle ? { lifecycle } : {})
-                  })
-                } else {
-                  onFrame(
-                    result.type === 'replacement'
-                      ? {
-                          type: 'replacement',
-                          messages: result.messages,
-                          hasMore: result.hasMore ?? false,
-                          ...(lifecycle ? { lifecycle } : {})
-                        }
-                      : {
-                          type: 'appended',
-                          messages: result.messages,
-                          ...(lifecycle ? { lifecycle } : {})
-                        }
-                  )
-                }
-              } else if (!receivedInitial) {
-                // Why: an unrecognized ok payload never flips receivedInitial, stranding the view on 'loading'; settle it empty instead.
-                receivedInitial = true
-                onFrame({
-                  type: 'snapshot',
-                  messages: [],
-                  hasMore: false,
-                  ...(result?.error ? { error: result.error } : {})
-                })
-              }
+            },
+            {
+              // Why: unsubscribe reaps the fs-watcher on view-toggle (leak fix); echo the pane token so two panes don't tear down each other's watcher.
+              buildUnsubscribe: () =>
+                buildNativeChatUnsubscribe(args.agent, args.sessionId, args.subscriptionId)
             }
-          },
-          {
-            // Why: unsubscribe reaps the fs-watcher on view-toggle (leak fix); echo the pane token so two panes don't tear down each other's watcher.
-            buildUnsubscribe: () =>
-              buildNativeChatUnsubscribe(args.agent, args.sessionId, args.subscriptionId)
-          }
-        )
+          )
+        })
         .then((h) => {
           if (cancelled) {
             h.unsubscribe()

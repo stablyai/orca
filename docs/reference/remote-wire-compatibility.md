@@ -113,7 +113,7 @@ getting that wrong turns a skew into a false "nothing is blocked".
   unverifiable, the pane was unreadable, or the agent probe did not answer in time.
 
 A new client against an old host sees the field absent, which is why absence must read as
-*unknown* and never as *not waiting*. Collapsing absent into `null` at any hop — including a
+_unknown_ and never as _not waiting_. Collapsing absent into `null` at any hop — including a
 convenience `?? null` in an RPC handler — makes an old or unreachable peer indistinguishable
 from a healthy idle worker, which is the exact failure the field exists to remove.
 
@@ -121,20 +121,22 @@ An old client against a new host ignores the key, as Rule 1 allows. New members 
 `RuntimeTerminalWaitBlockedReason` are also Rule 1: no consumer switches exhaustively on it,
 and both the CLI and worker-start interpolate it as an opaque string.
 
-## Known debt: JSON-RPC errors drop Node's string code
+## Compatibility example: preserving Node's string error code
 
-An error raised on an SSH host crosses the relay as JSON-RPC, and
-`ssh-channel-multiplexer` rebuilds it with the TRANSPORT's numeric `code`. Node's
-string code — `'ENOENT'`, `'EACCES'` — does not survive, so a caller on this side
-cannot ask what kind of failure it was.
+When a client-initiated request fails on an SSH host, the relay's numeric JSON-RPC
+`code` cannot directly carry Node's string code such as `'ENOENT'` or `'EACCES'`.
+The dispatcher copies recognized system codes into optional `error.data.errno`, and
+`ssh-channel-multiplexer` retains the data when it rebuilds the error. This follows
+Rule 1: old clients ignore the field, while new clients prefer it over message
+inference. Host-initiated requests use a separate response path and do not publish
+this field.
 
-`isENOENT` in `src/main/ipc/filesystem-path-containment.ts` pays for that by also
-matching Node's canonical message text, which is what makes remote worktree creation
-work. The cost is that a host can make an unrelated failure read as "absent" by
-putting that sentence in a message.
+Relays predating the field omit it even for system errors, so the classifiers still
+match canonical `ENOENT` and `ENOTDIR` messages where mixed-version compatibility
+requires it. The fallback is used only when no string code or structured errno is
+present, preventing a new relay's non-absence or malformed code from being overridden
+by a contradictory message.
 
-The exit is Rule 1: carry the original string code in a new optional field on the
-error payload and read that instead. An old host omits it and the message match still
-covers them; once hosts that send it are the floor, the message match can be deleted
-rather than lived with at its ~10 call sites. Narrowing `isENOENT` back to `.code`
-without doing this reinstates the bug — the transport has already overwritten it.
+Once relays that publish `error.data.errno` are the supported floor, the message
+fallback can be deleted. Narrowing `isENOENT` before then breaks new-client/old-host
+pairings.

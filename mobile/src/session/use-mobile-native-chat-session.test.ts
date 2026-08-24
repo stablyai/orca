@@ -32,22 +32,36 @@ describe('useMobileNativeChatSession', () => {
     renderer = null
   })
 
-  function Harness({ client }: { client: RpcClient | null }): null {
+  function Harness({ client, paneKey }: { client: RpcClient | null; paneKey?: string }): null {
     state = useMobileNativeChatSession({
       client,
       sourceIdentity: 'host-a\0workspace-a',
       agent: 'claude',
       sessionId: 'session',
-      transcriptPath: null
+      transcriptPath: null,
+      paneKey: paneKey ?? null
     })
     return null
   }
 
-  async function mount(client: RpcClient): Promise<void> {
+  async function mount(client: RpcClient, paneKey?: string): Promise<void> {
     await act(async () => {
-      renderer = create(createElement(Harness, { client }))
+      renderer = create(createElement(Harness, { client, paneKey }))
     })
   }
+
+  it('forwards pane identity through the mobile subscribe request', async () => {
+    const paneKey = 'tab:leaf'
+    const subscribe = vi.fn(() => () => {})
+
+    await mount({ subscribe } as unknown as RpcClient, paneKey)
+
+    expect(subscribe).toHaveBeenCalledWith(
+      'nativeChat.subscribe',
+      expect.objectContaining({ paneKey }),
+      expect.any(Function)
+    )
+  })
 
   it('drops an older-page response captured before transcript replacement', async () => {
     let resolveEarlier: (response: unknown) => void = () => {}

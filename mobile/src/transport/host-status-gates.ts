@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState, useSyncExternalStore } from 'react'
 import type { RpcClient } from './rpc-client'
 import type { ConnectionState, RpcSuccess } from './types'
 import { evaluateCompat, type CompatVerdict } from './protocol-compat'
@@ -15,9 +15,17 @@ export type HostStatusGates = {
 type LoadedHostStatusGates = Omit<HostStatusGates, 'statusPending'> & {
   hostId: string | undefined
   client: RpcClient
+  generation: number
 }
 
 const EMPTY_HOST_CAPABILITIES: string[] = []
+
+function clientGeneration(client: RpcClient | null): number {
+  const generation = (
+    client as (RpcClient & { getGeneration?: () => number }) | null
+  )?.getGeneration?.()
+  return typeof generation === 'number' ? generation : 0
+}
 
 // Reads status.get on connect for capabilities, protocol-compat verdict, and the
 // floating-workspace flag. Compat constants are wide-open today so this never blocks yet.
@@ -31,6 +39,19 @@ export function useHostStatusGates(args: {
   // Why (F10): a drop must not erase proven capabilities, but it does invalidate them — this keeps
   // statusPending true across the reconnect refetch, so gates stay "unknown" while the data survives.
   const [unverified, setUnverified] = useState(false)
+  const subscribeGeneration = useCallback(
+    (listener: () => void): (() => void) => {
+      if (!client) {
+        return () => {}
+      }
+      const subscribeState = (client as RpcClient & { onStateChange?: RpcClient['onStateChange'] })
+        .onStateChange
+      return subscribeState ? subscribeState.call(client, listener) : () => {}
+    },
+    [client]
+  )
+  const readGeneration = useCallback(() => clientGeneration(client), [client])
+  const generation = useSyncExternalStore(subscribeGeneration, readGeneration, readGeneration)
 
   useEffect(() => {
     if (connState !== 'connected' || !client) {
@@ -40,7 +61,7 @@ export function useHostStatusGates(args: {
     let cancelled = false
     const requestClient = client
     const settle = (gates: Omit<HostStatusGates, 'statusPending'>) => {
-      setLoaded({ hostId, client: requestClient, ...gates })
+      setLoaded({ hostId, client: requestClient, generation, ...gates })
       setUnverified(false)
     }
     void (async () => {
@@ -92,10 +113,16 @@ export function useHostStatusGates(args: {
     return () => {
       cancelled = true
     }
-  }, [client, connState, hostId])
+  }, [client, connState, generation, hostId])
 
   // Why: effects run after render, so key loaded gates by host and client to fail closed during route reuse.
-  const proven = loaded && loaded.hostId === hostId && loaded.client === client ? loaded : null
+  const proven =
+    loaded &&
+    loaded.hostId === hostId &&
+    loaded.client === client &&
+    loaded.generation === generation
+      ? loaded
+      : null
   if (!proven) {
     return {
       hostCapabilities: EMPTY_HOST_CAPABILITIES,

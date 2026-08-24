@@ -72,6 +72,10 @@ export type ResolveSessionFileOptions = {
    *  directly — recent Claude Code names the transcript with a UUID that differs
    *  from the hook session_id, so the id-based glob below would miss it. */
   transcriptPath?: string
+  /** Stable pane identity for server-owned transcript routing. */
+  paneKey?: string
+  /** Authenticated WSL owner for exact-path translation and fallback scans. */
+  wslDistro?: string
 }
 
 /**
@@ -103,7 +107,10 @@ export async function resolveSessionFilePath(
   const hookPath = options.transcriptPath?.trim()
   if (hookPath && extname(hookPath) === '.jsonl') {
     try {
-      const hostReadable = await toHostReadableTranscriptPath(hookPath, { signal })
+      const hostReadable = await toHostReadableTranscriptPath(hookPath, {
+        signal,
+        wslDistro: options.wslDistro
+      })
       if (hostReadable) {
         return hostReadable
       }
@@ -148,7 +155,7 @@ async function resolveSessionFileById(
       overrideDirs ?? codexSessionsDirs(),
       // Why: enumerating WSL homes spawns wsl.exe per distro, which boots ones the
       // user left stopped. Only pay that after this host's own Codex roots miss.
-      overrideDirs ? undefined : wslCodexSessionsDirs,
+      overrideDirs ? undefined : () => wslCodexSessionsDirs({ wslDistro: options.wslDistro }),
       signal
     )
   }

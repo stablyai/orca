@@ -98,6 +98,7 @@ import {
   type AgentProviderSessionMetadata
 } from '../../shared/agent-session-resume'
 import { isCommandCodeNewTurnWhileWorking } from '../../shared/command-code-turn-boundary'
+import { isWslHookRelayConnectionId } from '../../shared/wsl-hook-relay-contract'
 
 export type { AgentHookSource }
 
@@ -142,6 +143,21 @@ type PersistedAgentHookAuthorityCommitment = {
   observedAt: number
 }
 
+export type AgentHookTranscriptOwnerEvidence = Readonly<{
+  paneKey: string
+  agentType: AgentType
+  sessionId: string
+  transcriptPath?: string
+  connectionId: string | null
+  observedAt: number
+}>
+
+export type AgentHookUnresolvedRemoteTranscriptOwner = Readonly<{
+  paneKey: string
+  connectionId: string
+  observedAt: number
+}>
+
 export type AgentHookStatusChangeEntry = {
   state: AgentStatusState
   receivedAt: number
@@ -171,6 +187,7 @@ export type AgentHookAuthorityAttestation = Readonly<{
 
 type StatusChangeListener = (statuses: AgentHookStatusChangeEntry[]) => void
 type ProviderSessionChangeListener = (providerSessions: AgentHookProviderSessionIdentity[]) => void
+type TranscriptOwnerChangeListener = () => void
 type PaneStatusClearListener = (clear: AgentStatusClearIpcPayload) => void
 type PaneKeyAliasPersistenceListener = (entries: LegacyPaneKeyAliasEntry[]) => void
 type PaneKeyAliasEntry = {
@@ -214,6 +231,8 @@ type LastStatusFile = {
   version: number
   entries: Record<string, PersistedAgentHookEventPayload>
   authorityCommitments?: Record<string, PersistedAgentHookAuthorityCommitment>
+  transcriptOwners?: Record<string, AgentHookTranscriptOwnerEvidence>
+  unresolvedRemoteTranscriptOwners?: Record<string, AgentHookUnresolvedRemoteTranscriptOwner>
 }
 
 type AgentPromptSentDedupeEntry = {
@@ -428,6 +447,56 @@ function authorityCommitmentsMatch(
     left.tabId === right.tabId &&
     left.worktreeId === right.worktreeId
   )
+}
+
+function sanitizeTranscriptOwnerEvidence(
+  paneKey: string,
+  value: unknown
+): AgentHookTranscriptOwnerEvidence | null {
+  if (!isValidPaneKey(paneKey) || typeof value !== 'object' || value === null) {
+    return null
+  }
+  const record = value as Record<string, unknown>
+  const agentType = typeof record.agentType === 'string' ? record.agentType.trim() : ''
+  const sessionId = typeof record.sessionId === 'string' ? record.sessionId.trim() : ''
+  const transcriptPath =
+    typeof record.transcriptPath === 'string' ? record.transcriptPath.trim() : ''
+  const connectionId = record.connectionId
+  const observedAt = record.observedAt
+  if (
+    !agentType ||
+    agentType === 'unknown' ||
+    !sessionId ||
+    (connectionId !== null && typeof connectionId !== 'string') ||
+    typeof observedAt !== 'number' ||
+    !Number.isFinite(observedAt)
+  ) {
+    return null
+  }
+  return Object.freeze({
+    paneKey,
+    agentType: agentType as AgentType,
+    sessionId,
+    ...(transcriptPath ? { transcriptPath } : {}),
+    connectionId,
+    observedAt
+  })
+}
+
+function sanitizeUnresolvedRemoteTranscriptOwner(
+  paneKey: string,
+  value: unknown
+): AgentHookUnresolvedRemoteTranscriptOwner | null {
+  if (!isValidPaneKey(paneKey) || typeof value !== 'object' || value === null) {
+    return null
+  }
+  const record = value as Record<string, unknown>
+  const connectionId = typeof record.connectionId === 'string' ? record.connectionId.trim() : ''
+  const observedAt = record.observedAt
+  if (!connectionId || typeof observedAt !== 'number' || !Number.isFinite(observedAt)) {
+    return null
+  }
+  return Object.freeze({ paneKey, connectionId, observedAt })
 }
 
 function toAgentStatusIpcPayload(entry: EnrichedAgentHookEventPayload): AgentStatusIpcPayload {
@@ -702,6 +771,7 @@ export class AgentHookServer {
   private paneStatusClearListeners = new Set<PaneStatusClearListener>()
   private statusChangeListeners = new Set<StatusChangeListener>()
   private providerSessionChangeListeners = new Set<ProviderSessionChangeListener>()
+  private transcriptOwnerChangeListeners = new Set<TranscriptOwnerChangeListener>()
   // Why: setListener is a single slot owned by the main-window fanout; the
   // plugin event bus (and future consumers) need an additive subscription
   // that also works in headless serve, where no window listener exists.
@@ -724,6 +794,13 @@ export class AgentHookServer {
   private persistedAuthorityCommitmentsByPaneKey = new Map<string, AgentHookAuthorityEvidence>()
   private revokedHydratedAuthorityCommitments = new WeakSet<AgentHookAuthorityEvidence>()
   private currentAuthorityObservations = new Map<string, AgentHookAuthorityEvidence>()
+  private transcriptOwnersByPaneKey = new Map<string, AgentHookTranscriptOwnerEvidence>()
+  private unresolvedRemoteTranscriptOwnersByPaneKey = new Map<
+    string,
+    AgentHookUnresolvedRemoteTranscriptOwner
+  >()
+  private transcriptOwnerHydrated = false
+  private transcriptOwnerHydrationWaiters = new Set<() => void>()
   private legacyPaneKeyAliases = new Map<string, PaneKeyAliasEntry>()
   // Why: indexed by every key the retirement fenced, so a re-attach on any of them
   // (owner, physical, or a deleted alias) finds the same record. Bounded like the maps
@@ -799,6 +876,38 @@ export class AgentHookServer {
     }
   }
 
+  subscribeTranscriptOwnerChanges(listener: TranscriptOwnerChangeListener): () => void {
+    this.transcriptOwnerChangeListeners.add(listener)
+    return () => {
+      this.transcriptOwnerChangeListeners.delete(listener)
+    }
+  }
+
+  awaitTranscriptOwnerHydration(): Promise<void> {
+    if (this.transcriptOwnerHydrated) {
+      return Promise.resolve()
+    }
+    return new Promise((resolve) => this.transcriptOwnerHydrationWaiters.add(resolve))
+  }
+
+  private markTranscriptOwnerHydrated(): void {
+    this.transcriptOwnerHydrated = true
+    for (const resolve of this.transcriptOwnerHydrationWaiters) {
+      resolve()
+    }
+    this.transcriptOwnerHydrationWaiters.clear()
+  }
+
+  private notifyTranscriptOwnerChanges(): void {
+    for (const listener of this.transcriptOwnerChangeListeners) {
+      try {
+        listener()
+      } catch (err) {
+        console.error('[agent-hooks] transcript-owner listener threw', err)
+      }
+    }
+  }
+
   /** Multi-subscriber tap on every enriched status change (no replay). */
   subscribeEnrichedStatus(listener: (payload: EnrichedAgentHookEventPayload) => void): () => void {
     this.enrichedStatusListeners.add(listener)
@@ -848,8 +957,23 @@ export class AgentHookServer {
   }
 
   getStatusSnapshotForPane(paneKey: string): AgentStatusIpcPayload[] {
-    const entry = this.state.lastStatusByPaneKey.get(paneKey)
+    const entry = this.state.lastStatusByPaneKey.get(this.resolvePaneKeyAlias(paneKey))
     return entry ? [toAgentStatusIpcPayload(entry as EnrichedAgentHookEventPayload)] : []
+  }
+
+  getTranscriptOwnerEvidence(paneKey?: string): readonly AgentHookTranscriptOwnerEvidence[] {
+    if (paneKey) {
+      const evidence = this.transcriptOwnersByPaneKey.get(this.resolvePaneKeyAlias(paneKey))
+      return evidence ? Object.freeze([evidence]) : Object.freeze([])
+    }
+    return Object.freeze(Array.from(this.transcriptOwnersByPaneKey.values()))
+  }
+
+  hasUnresolvedRemoteTranscriptOwner(paneKey?: string): boolean {
+    if (paneKey) {
+      return this.unresolvedRemoteTranscriptOwnersByPaneKey.has(this.resolvePaneKeyAlias(paneKey))
+    }
+    return this.unresolvedRemoteTranscriptOwnersByPaneKey.size > 0
   }
 
   getHydratedAuthorityCommitments(): readonly AgentHookAuthorityEvidence[] {
@@ -1415,6 +1539,7 @@ export class AgentHookServer {
       this.clearAssistantMessageRetry(enriched.paneKey)
       this.runtimeObservedStatusPaneKeys.delete(enriched.paneKey)
       this.state.lastStatusByPaneKey.set(enriched.paneKey, enriched)
+      this.recordTranscriptOwnerEvidence(enriched)
       this.scheduleStatusPersist()
       this.notifyStatusChangeListeners()
       this.emitEnrichedStatus(enriched)
@@ -1562,6 +1687,7 @@ export class AgentHookServer {
       this.runtimeObservedStatusPaneKeys.add(enriched.paneKey)
     }
     this.state.lastStatusByPaneKey.set(enriched.paneKey, enriched)
+    this.recordTranscriptOwnerEvidence(enriched)
     this.scheduleStatusPersist()
     this.notifyStatusChangeListeners()
     this.emitEnrichedStatus(enriched)
@@ -1866,6 +1992,23 @@ export class AgentHookServer {
         })
       )
     }
+    const transcriptOwner = this.transcriptOwnersByPaneKey.get(previousOwnerPaneKey)
+    if (transcriptOwner) {
+      this.transcriptOwnersByPaneKey.delete(previousOwnerPaneKey)
+      this.transcriptOwnersByPaneKey.set(
+        toPaneKey,
+        Object.freeze({ ...transcriptOwner, paneKey: toPaneKey })
+      )
+    }
+    const unresolvedRemoteOwner =
+      this.unresolvedRemoteTranscriptOwnersByPaneKey.get(previousOwnerPaneKey)
+    if (unresolvedRemoteOwner) {
+      this.unresolvedRemoteTranscriptOwnersByPaneKey.delete(previousOwnerPaneKey)
+      this.unresolvedRemoteTranscriptOwnersByPaneKey.set(
+        toPaneKey,
+        Object.freeze({ ...unresolvedRemoteOwner, paneKey: toPaneKey })
+      )
+    }
     if (this.runtimeObservedStatusPaneKeys.delete(previousOwnerPaneKey)) {
       this.runtimeObservedStatusPaneKeys.add(toPaneKey)
     }
@@ -1911,9 +2054,12 @@ export class AgentHookServer {
     this.boundPaneKeyAliases()
     this.closedAgentStatusPaneKeys.delete(toPaneKey)
     this.notifyPaneKeyAliasPersistenceListener()
-    if (hadStatus || persistedAuthority) {
+    if (hadStatus || persistedAuthority || transcriptOwner || unresolvedRemoteOwner) {
       this.scheduleStatusPersist()
       this.notifyStatusChangeListeners()
+      if (transcriptOwner || unresolvedRemoteOwner) {
+        this.notifyTranscriptOwnerChanges()
+      }
     }
   }
 
@@ -2084,6 +2230,13 @@ export class AgentHookServer {
       changed = this.hydratedLaunchTokenHashByPaneKey.delete(resolvedPaneKey) || changed
       changed = this.persistedAuthorityCommitmentsByPaneKey.delete(paneKey) || changed
       changed = this.persistedAuthorityCommitmentsByPaneKey.delete(resolvedPaneKey) || changed
+      changed = this.transcriptOwnersByPaneKey.delete(paneKey) || changed
+      changed = this.transcriptOwnersByPaneKey.delete(resolvedPaneKey) || changed
+      changed = this.unresolvedRemoteTranscriptOwnersByPaneKey.delete(paneKey) || changed
+      changed = this.unresolvedRemoteTranscriptOwnersByPaneKey.delete(resolvedPaneKey) || changed
+    }
+    if (changed) {
+      this.notifyTranscriptOwnerChanges()
     }
     return changed
   }
@@ -2481,6 +2634,7 @@ export class AgentHookServer {
     if (this.server) {
       return
     }
+    this.transcriptOwnerHydrated = false
 
     if (options?.env) {
       this.env = options.env
@@ -2501,6 +2655,7 @@ export class AgentHookServer {
       this.hydrateLastStatusFromDisk()
     }
     this.captureHydratedAuthorityCommitments()
+    this.markTranscriptOwnerHydrated()
     const handleRequest = async (req: IncomingMessage, res: ServerResponse): Promise<void> => {
       if (req.method !== 'POST') {
         res.writeHead(404)
@@ -2641,6 +2796,9 @@ export class AgentHookServer {
     this.persistedAuthorityCommitmentsByPaneKey.clear()
     this.revokedHydratedAuthorityCommitments = new WeakSet()
     this.currentAuthorityObservations.clear()
+    this.transcriptOwnersByPaneKey.clear()
+    this.unresolvedRemoteTranscriptOwnersByPaneKey.clear()
+    this.transcriptOwnerHydrated = false
     this.promptSentDedupeByPaneKey.clear()
     this.closedAgentStatusTabIds.clear()
     this.closedAgentStatusPaneKeys.clear()
@@ -3009,6 +3167,8 @@ export class AgentHookServer {
     this.state.lastStatusByPaneKey.clear()
     this.hydratedLaunchTokenHashByPaneKey.clear()
     this.persistedAuthorityCommitmentsByPaneKey.clear()
+    this.transcriptOwnersByPaneKey.clear()
+    this.unresolvedRemoteTranscriptOwnersByPaneKey.clear()
     let raw: string
     try {
       raw = readFileSync(this.lastStatusFilePath, 'utf8')
@@ -3057,6 +3217,25 @@ export class AgentHookServer {
           ? rawEntry
           : { ...(rawEntry as Record<string, unknown>), paneKey: resolvedPaneKey }
       const entry = sanitizeHydratedEntry(resolvedPaneKey, rawResolvedEntry)
+      if (
+        entry?.providerSession &&
+        entry.payload.agentType &&
+        entry.payload.agentType !== 'unknown'
+      ) {
+        this.transcriptOwnersByPaneKey.set(
+          resolvedPaneKey,
+          Object.freeze({
+            paneKey: resolvedPaneKey,
+            agentType: entry.payload.agentType,
+            sessionId: entry.providerSession.id,
+            ...(entry.providerSession.transcriptPath
+              ? { transcriptPath: entry.providerSession.transcriptPath }
+              : {}),
+            connectionId: entry.connectionId,
+            observedAt: entry.receivedAt
+          })
+        )
+      }
       if (entry && entry.receivedAt >= ttlCutoff) {
         const launchTokenHash = readPersistedLaunchTokenHash(rawResolvedEntry)
         if (launchTokenHash) {
@@ -3112,9 +3291,43 @@ export class AgentHookServer {
         dropped += 1
       }
     }
+    for (const [paneKey, rawOwner] of Object.entries(file.transcriptOwners ?? {})) {
+      const resolvedPaneKey = this.resolvePaneKeyAlias(paneKey)
+      const owner = sanitizeTranscriptOwnerEvidence(resolvedPaneKey, rawOwner)
+      if (owner) {
+        this.transcriptOwnersByPaneKey.set(resolvedPaneKey, owner)
+      } else {
+        dropped += 1
+      }
+    }
+    for (const [paneKey, rawMarker] of Object.entries(
+      file.unresolvedRemoteTranscriptOwners ?? {}
+    )) {
+      const resolvedPaneKey = this.resolvePaneKeyAlias(paneKey)
+      const marker = sanitizeUnresolvedRemoteTranscriptOwner(resolvedPaneKey, rawMarker)
+      if (marker && !this.transcriptOwnersByPaneKey.has(resolvedPaneKey)) {
+        this.unresolvedRemoteTranscriptOwnersByPaneKey.set(resolvedPaneKey, marker)
+      } else if (!marker) {
+        dropped += 1
+      }
+    }
     for (const [paneKey, rawCommitment] of Object.entries(file.authorityCommitments ?? {})) {
       const resolvedPaneKey = this.resolvePaneKeyAlias(paneKey)
       const commitment = sanitizePersistedAuthorityCommitment(resolvedPaneKey, rawCommitment)
+      if (
+        commitment?.connectionId &&
+        !isWslHookRelayConnectionId(commitment.connectionId) &&
+        !this.transcriptOwnersByPaneKey.has(resolvedPaneKey)
+      ) {
+        this.unresolvedRemoteTranscriptOwnersByPaneKey.set(
+          resolvedPaneKey,
+          Object.freeze({
+            paneKey: resolvedPaneKey,
+            connectionId: commitment.connectionId,
+            observedAt: commitment.observedAt
+          })
+        )
+      }
       if (!commitment || commitment.observedAt < ttlCutoff) {
         dropped += 1
         continue
@@ -3134,7 +3347,16 @@ export class AgentHookServer {
         `[agent-hooks] last-status hydrate dropped ${dropped} entries (kept ${hydrated})`
       )
     }
-    if (dropped > 0 || prunedLegacyClaudeSubagents > 0 || scrubbedLegacyLaunchTokens > 0) {
+    const migratedTranscriptOwnership =
+      (file.transcriptOwners === undefined && this.transcriptOwnersByPaneKey.size > 0) ||
+      (file.unresolvedRemoteTranscriptOwners === undefined &&
+        this.unresolvedRemoteTranscriptOwnersByPaneKey.size > 0)
+    if (
+      dropped > 0 ||
+      prunedLegacyClaudeSubagents > 0 ||
+      scrubbedLegacyLaunchTokens > 0 ||
+      migratedTranscriptOwnership
+    ) {
       // Why: persist load-time pruning and bearer scrubbing once.
       this.runStatusPersist()
     } else if (hydrated > 0) {
@@ -3162,9 +3384,50 @@ export class AgentHookServer {
   private recordCurrentAuthorityObservation(payload: AgentHookEventPayload): void {
     const evidence = this.toAuthorityEvidence(payload)
     if (evidence) {
+      const previous =
+        this.currentAuthorityObservations.get(evidence.paneKey) ??
+        this.persistedAuthorityCommitmentsByPaneKey.get(evidence.paneKey)
+      if (previous && !authorityCommitmentsMatch(previous, evidence)) {
+        const ownerChanged = this.transcriptOwnersByPaneKey.delete(evidence.paneKey)
+        const markerChanged = this.unresolvedRemoteTranscriptOwnersByPaneKey.delete(
+          evidence.paneKey
+        )
+        if (ownerChanged || markerChanged) {
+          this.notifyTranscriptOwnerChanges()
+        }
+      }
       this.currentAuthorityObservations.set(evidence.paneKey, evidence)
       this.persistedAuthorityCommitmentsByPaneKey.set(evidence.paneKey, evidence)
       this.hydratedLaunchTokenHashByPaneKey.set(evidence.paneKey, evidence.launchTokenHash)
+    }
+  }
+
+  private recordTranscriptOwnerEvidence(payload: EnrichedAgentHookEventPayload): void {
+    const providerSession = payload.providerSession
+    const agentType = payload.payload.agentType
+    if (!providerSession || !agentType || agentType === 'unknown') {
+      return
+    }
+    const paneKey = this.resolvePaneKeyAlias(payload.paneKey)
+    const next = Object.freeze({
+      paneKey,
+      agentType,
+      sessionId: providerSession.id,
+      ...(providerSession.transcriptPath ? { transcriptPath: providerSession.transcriptPath } : {}),
+      connectionId: payload.connectionId,
+      observedAt: payload.receivedAt
+    })
+    const previous = this.transcriptOwnersByPaneKey.get(paneKey)
+    const changed =
+      !previous ||
+      previous.agentType !== next.agentType ||
+      previous.sessionId !== next.sessionId ||
+      previous.transcriptPath !== next.transcriptPath ||
+      previous.connectionId !== next.connectionId
+    this.transcriptOwnersByPaneKey.set(paneKey, next)
+    const clearedUnresolved = this.unresolvedRemoteTranscriptOwnersByPaneKey.delete(paneKey)
+    if (changed || clearedUnresolved) {
+      this.notifyTranscriptOwnerChanges()
     }
   }
 
@@ -3192,9 +3455,20 @@ export class AgentHookServer {
   private serializeStatusFile(): string {
     const entries: Record<string, PersistedAgentHookEventPayload> = {}
     const authorityCommitments: Record<string, PersistedAgentHookAuthorityCommitment> = {}
+    const transcriptOwners: Record<string, AgentHookTranscriptOwnerEvidence> = {}
+    const unresolvedRemoteTranscriptOwners: Record<
+      string,
+      AgentHookUnresolvedRemoteTranscriptOwner
+    > = {}
     const conflictedCommitments = new Set<string>()
     for (const [paneKey, commitment] of this.persistedAuthorityCommitmentsByPaneKey) {
       authorityCommitments[paneKey] = { ...commitment }
+    }
+    for (const [paneKey, owner] of this.transcriptOwnersByPaneKey) {
+      transcriptOwners[paneKey] = { ...owner }
+    }
+    for (const [paneKey, marker] of this.unresolvedRemoteTranscriptOwnersByPaneKey) {
+      unresolvedRemoteTranscriptOwners[paneKey] = { ...marker }
     }
     for (const [paneKey, payload] of this.state.lastStatusByPaneKey) {
       // Why: never persist invalid keys (matches the hydrate-path invariant).
@@ -3235,7 +3509,9 @@ export class AgentHookServer {
     const file: LastStatusFile = {
       version: LAST_STATUS_FILE_VERSION,
       entries,
-      authorityCommitments
+      authorityCommitments,
+      transcriptOwners,
+      unresolvedRemoteTranscriptOwners
     }
     return JSON.stringify(file)
   }

@@ -16,8 +16,8 @@ import type {
 import type { TerminalPaneSplitSource } from '../../../shared/feature-education-telemetry'
 import type { StartupCommandDelivery } from '../../../shared/codex-startup-delivery'
 import type {
-  SleepingAgentLaunchConfig,
-  AgentProviderSessionMetadata
+  AgentProviderSessionMetadata,
+  SleepingAgentLaunchConfig
 } from '../../../shared/agent-session-resume'
 import { BROWSER_TAB_CREATE_KNOWN_ID_RUNTIME_CAPABILITY } from '../../../shared/protocol-version'
 import { agentResumeHostAuthorityCapability } from './agent-resume-host-authority-capability'

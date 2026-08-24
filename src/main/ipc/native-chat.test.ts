@@ -2,6 +2,12 @@ import { appendFile, mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import type { IFilesystemProvider } from '../providers/types'
+import {
+  registerSshFilesystemProvider,
+  unregisterSshFilesystemProvider
+} from '../providers/ssh-filesystem-dispatch'
+import { agentHookServer } from '../agent-hooks/server'
 
 const { handlers, listeners } = vi.hoisted(() => ({
   handlers: new Map<string, (_event: unknown, args?: unknown) => unknown>(),
@@ -59,6 +65,7 @@ async function invokeReadSession(args: {
   sessionId: string
   limit?: number
   transcriptPath?: string
+  paneKey?: string
 }): Promise<unknown> {
   registerNativeChatHandlers()
   const handler = handlers.get('nativeChat:readSession')
@@ -69,6 +76,66 @@ async function invokeReadSession(args: {
 }
 
 describe('nativeChat:readSession handler', () => {
+  it('routes a stamped SSH provider session through ranged desktop IPC reads', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'orca-native-chat-ipc-ssh-'))
+    tempRoots.push(root)
+    const transcriptPath = join(root, 'same-path.jsonl')
+    await writeFile(
+      transcriptPath,
+      `${JSON.stringify({
+        type: 'assistant',
+        uuid: 'desktop-poison',
+        message: { role: 'assistant', content: [{ type: 'text', text: 'wrong host' }] }
+      })}\n`
+    )
+    const remoteBytes = Buffer.from(
+      `${JSON.stringify({
+        type: 'assistant',
+        uuid: 'remote-real',
+        message: { role: 'assistant', content: [{ type: 'text', text: 'right host' }] }
+      })}\n`
+    )
+    const readFile = vi.fn(async () => {
+      throw new Error('whole-file read forbidden')
+    })
+    const provider = {
+      stat: async () => ({ size: remoteBytes.length, type: 'file', mtime: 1, mtimeMs: 1 }),
+      readFile,
+      readFileRange: async (_path: string, position: number, length: number) => {
+        const bytes = remoteBytes.subarray(position, position + length)
+        return { bytes, bytesRead: bytes.length }
+      },
+      supportsFileRangeRead: async () => true
+    } as unknown as IFilesystemProvider
+    const paneKey = 'ipc-tab:11111111-1111-4111-8111-111111111111'
+    agentHookServer.ingestRemote(
+      {
+        paneKey,
+        providerSession: {
+          key: 'session_id',
+          id: 'same-session',
+          transcriptPath
+        },
+        payload: { state: 'working', prompt: '', agentType: 'claude' }
+      },
+      'ipc-owner'
+    )
+    registerSshFilesystemProvider('ipc-owner', provider)
+    try {
+      const result = await invokeReadSession({
+        agent: 'claude',
+        sessionId: 'same-session',
+        transcriptPath,
+        paneKey
+      })
+      expect(result).toMatchObject({ messages: [{ id: 'remote-real' }] })
+      expect(result).not.toMatchObject({ messages: [{ id: 'desktop-poison' }] })
+      expect(readFile).not.toHaveBeenCalled()
+    } finally {
+      unregisterSshFilesystemProvider('ipc-owner')
+      agentHookServer.dropStatusEntry(paneKey)
+    }
+  })
   it('preserves notFound so a just-created session stays in retry/loading', async () => {
     const result = (await invokeReadSession({
       agent: 'claude',

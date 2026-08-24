@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { RuntimeRpcResponse } from '../../../shared/runtime-rpc-envelope'
+import { NATIVE_CHAT_TRANSCRIPT_OWNER_RUNTIME_CAPABILITY } from '../../../shared/protocol-version'
 import {
   installApi,
   installBrowserGlobals,
@@ -27,11 +28,14 @@ describe('web native chat preload API', () => {
     }
     vi.doMock('./web-runtime-client', () => ({
       WebRuntimeClient: class {
-        call(): Promise<RuntimeRpcResponse<unknown>> {
+        call(method: string): Promise<RuntimeRpcResponse<unknown>> {
           return Promise.resolve({
             id: 'read-1',
             ok: true,
-            result: { messages: [message], lifecycle },
+            result:
+              method === 'status.get'
+                ? { capabilities: [NATIVE_CHAT_TRANSCRIPT_OWNER_RUNTIME_CAPABILITY] }
+                : { messages: [message], lifecycle },
             _meta: { runtimeId: 'runtime-1' }
           })
         }
@@ -75,7 +79,7 @@ describe('web native chat preload API', () => {
       { subscriptionId: 'sub-1', agent: 'claude', sessionId: 'session-1' },
       (frame) => frames.push(frame)
     )
-    await Promise.resolve()
+    await vi.waitFor(() => expect(frames).toHaveLength(1))
 
     expect(frames).toEqual([
       {
@@ -85,6 +89,46 @@ describe('web native chat preload API', () => {
         lifecycle
       }
     ])
+  })
+
+  it('makes zero native-chat calls when the paired host lacks owner routing', async () => {
+    const calls: string[] = []
+    vi.doMock('./web-runtime-client', () => ({
+      WebRuntimeClient: class {
+        call(method: string): Promise<RuntimeRpcResponse<unknown>> {
+          calls.push(method)
+          return Promise.resolve({
+            id: 'status-1',
+            ok: true,
+            result: { capabilities: [] },
+            _meta: { runtimeId: 'runtime-1' }
+          })
+        }
+
+        subscribe(method: string): Promise<{ unsubscribe: () => void }> {
+          calls.push(method)
+          return Promise.resolve({ unsubscribe: vi.fn() })
+        }
+
+        close(): void {}
+      }
+    }))
+    const globals = installBrowserGlobals('Linux')
+    writeStoredRuntimeEnvironment(globals.storage)
+    const { installWebPreloadApi } = await import('./web-preload-api')
+    installWebPreloadApi()
+
+    await expect(globals.window.api.nativeChat.readSession('claude', 'session-1')).rejects.toThrow(
+      /too old/i
+    )
+    globals.window.api.nativeChat.subscribe(
+      { subscriptionId: 'sub-1', agent: 'claude', sessionId: 'session-1' },
+      vi.fn()
+    )
+    await Promise.resolve()
+    await Promise.resolve()
+
+    expect(calls.filter((method) => method.startsWith('nativeChat.'))).toEqual([])
   })
 })
 

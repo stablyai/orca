@@ -1,33 +1,29 @@
-import { wslGatedRead } from './wsl-transcript-fs-access'
-import type { TranscriptFileHandle } from './wsl-transcript-fs-access'
-
 export const TAIL_CHUNK_BYTES = 64 * 1024
+export type TranscriptTailChunkRead = (position: number, length: number) => Promise<Buffer>
 
 /**
  * The byte at `position`, or null when the file shrank below it between the
  * caller's stat and this read (allocUnsafe would otherwise hand back garbage).
  */
 export async function readTranscriptByteAt(
-  handle: TranscriptFileHandle,
-  filePath: string,
+  read: TranscriptTailChunkRead,
   position: number,
   signal?: AbortSignal
 ): Promise<number | null> {
-  const byte = Buffer.allocUnsafe(1)
-  const { bytesRead } = await wslGatedRead(handle, filePath, byte, 0, 1, position, 'exact', signal)
   signal?.throwIfAborted()
-  return bytesRead === 1 ? byte[0] : null
+  const bytes = await read(position, 1)
+  signal?.throwIfAborted()
+  return bytes.length === 1 ? (bytes[0] ?? null) : null
 }
 
 /** End offset (exclusive) of the last newline-terminated line at or before `end`. */
 export async function findLastCompleteLineEnd(
-  handle: TranscriptFileHandle,
-  filePath: string,
+  read: TranscriptTailChunkRead,
   end: number,
   signal?: AbortSignal
 ): Promise<number> {
   signal?.throwIfAborted()
-  const lastByte = await readTranscriptByteAt(handle, filePath, end - 1, signal)
+  const lastByte = await readTranscriptByteAt(read, end - 1, signal)
   if (lastByte === null) {
     // File shrank between stat and probe.
     return 0
@@ -39,23 +35,13 @@ export async function findLastCompleteLineEnd(
   while (cursor > 0) {
     signal?.throwIfAborted()
     const start = Math.max(0, cursor - TAIL_CHUNK_BYTES)
-    const buffer = Buffer.allocUnsafe(cursor - start)
-    const { bytesRead } = await wslGatedRead(
-      handle,
-      filePath,
-      buffer,
-      0,
-      buffer.length,
-      start,
-      'exact',
-      signal
-    )
+    const buffer = await read(start, cursor - start)
     signal?.throwIfAborted()
-    if (bytesRead < buffer.length) {
+    if (buffer.length < cursor - start) {
       // File shrank mid-walk: any boundary computed from stale offsets is wrong.
       return 0
     }
-    const newline = buffer.subarray(0, bytesRead).lastIndexOf(0x0a)
+    const newline = buffer.lastIndexOf(0x0a)
     if (newline !== -1) {
       return start + newline + 1
     }

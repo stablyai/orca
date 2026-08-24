@@ -1,4 +1,5 @@
 /* eslint-disable max-lines -- dispatcher keeps client routing, cancellation, and framing state together */
+import { constants as osConstants } from 'node:os'
 import {
   FrameDecoder,
   HEADER_LENGTH,
@@ -71,6 +72,14 @@ export type MethodHandler = (
   params: Record<string, unknown>,
   context: RequestContext
 ) => Promise<unknown>
+
+function systemErrnoCode(code: unknown): string | null {
+  if (typeof code !== 'string') {
+    return null
+  }
+  // libuv can surface UNKNOWN even though Node omits it from os.constants.errno.
+  return code === 'UNKNOWN' || Object.hasOwn(osConstants.errno, code) ? code : null
+}
 
 export type NotificationHandler = (params: Record<string, unknown>, context: RequestContext) => void
 
@@ -1055,7 +1064,9 @@ export class RelayDispatcher {
         errorCode === SKILL_INSTALL_RPC_ERROR_CODE
           ? SkillInstallFailureSchema.safeParse((err as { data?: unknown }).data)
           : null
-      const data = skillFailure?.success === true ? skillFailure.data : undefined
+      const errno = systemErrnoCode(errorCode)
+      const data =
+        skillFailure?.success === true ? skillFailure.data : errno ? { errno } : undefined
       const accepted = this.sendResponse(
         client,
         req.id,

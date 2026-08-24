@@ -4466,16 +4466,24 @@ const api = {
       agent: AgentType,
       sessionId: string,
       limit?: number,
-      transcriptPath?: string
+      transcriptPath?: string,
+      paneKey?: string
     ): Promise<NativeChatReadSessionResult> =>
-      ipcRenderer.invoke('nativeChat:readSession', { agent, sessionId, limit, transcriptPath }),
-    /** Start live tailing; onAppended fires with only newly-appended messages. Returns an unsubscribe fn that closes the watcher. */
+      ipcRenderer.invoke('nativeChat:readSession', {
+        agent,
+        sessionId,
+        limit,
+        transcriptPath,
+        paneKey
+      }),
+    /** Start live tailing; `onFrame` receives snapshots, replacements, and appends. */
     subscribe: (
       args: {
         subscriptionId: string
         agent: AgentType
         sessionId: string
         transcriptPath?: string
+        paneKey?: string
         limit?: number
       },
       onFrame: (frame: NativeChatSubscriptionFrame) => void

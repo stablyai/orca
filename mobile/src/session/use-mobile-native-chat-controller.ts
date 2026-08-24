@@ -35,6 +35,8 @@ export function useMobileNativeChatController(args: {
   activeHandleRef: MutableRefObject<string | null>
   deviceTokenRef: MutableRefObject<string | null>
   nativeChatTranscriptIsLocalReadable: boolean
+  nativeChatTranscriptOwnerCapable: boolean
+  nativeChatTranscriptOwnerCapabilityPending: boolean
   nativeChatInputLeaseReady: boolean
   /** Live socket state; the lease collapses on disconnect but one render later. */
   connState: ConnectionState
@@ -52,6 +54,8 @@ export function useMobileNativeChatController(args: {
     activeHandleRef,
     deviceTokenRef,
     nativeChatTranscriptIsLocalReadable,
+    nativeChatTranscriptOwnerCapable,
+    nativeChatTranscriptOwnerCapabilityPending,
     nativeChatInputLeaseReady,
     connState,
     onSendError,
@@ -73,6 +77,17 @@ export function useMobileNativeChatController(args: {
   }, [activeChatAgent, showNativeChat])
 
   const activeChatSessionId = activeChatResolution?.sessionId ?? null
+  const transcriptOwnership =
+    activeSessionTab?.agentStatus?.connectionId === undefined
+      ? 'unknown'
+      : activeSessionTab.agentStatus.connectionId === null
+        ? 'proven-local'
+        : 'proven-ssh'
+  const transcriptTransportAuthorized =
+    transcriptOwnership === 'proven-local' ||
+    (transcriptOwnership === 'proven-ssh' &&
+      nativeChatTranscriptOwnerCapable &&
+      !nativeChatTranscriptOwnerCapabilityPending)
   const routeKey = `${hostId}\0${worktreeId}\0${activeSessionTabId ?? ''}`
   const streamIdentity = `${routeKey}\0${activeChatSessionId ?? ''}\0${activeHandleRef.current ?? ''}`
   // Same chat, but keyed off the tab rather than the view-gated resolution:
@@ -81,11 +96,12 @@ export function useMobileNativeChatController(args: {
   const streamScopeKey = `${routeKey}\0${activeSessionTab?.agentStatus?.providerSession?.id ?? ''}\0${activeHandleRef.current ?? ''}`
 
   const nativeChatSession = useMobileNativeChatSession({
-    client,
+    client: transcriptTransportAuthorized ? client : null,
     sourceIdentity: encodeNativeChatTranscriptIdentity([hostId, worktreeId]),
     agent: activeChatResolution?.agent ?? null,
     sessionId: activeChatSessionId,
-    transcriptPath: activeChatResolution?.transcriptPath ?? null
+    transcriptPath: activeChatResolution?.transcriptPath ?? null,
+    paneKey: activeChatResolution?.paneKey ?? null
   })
   const {
     composerText: chatComposerText,

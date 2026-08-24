@@ -184,7 +184,6 @@ describe.skipIf(process.platform === 'win32')(
       expect(working.state).toBe('working')
       expect(working.prompt).toBe('live roundtrip')
       expect(working.agentType).toBe('claude')
-
       const stopRes = await postClaude({ hook_event_name: 'Stop' })
       expect(stopRes.status).toBe(204)
       await vi.waitFor(

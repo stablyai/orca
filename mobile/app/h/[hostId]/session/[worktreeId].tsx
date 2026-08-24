@@ -127,7 +127,10 @@ import { dismissTerminalKeyboard } from '../../../../src/terminal/terminal-keybo
 import type { TerminalLiveInputSender } from '../../../../src/terminal/terminal-live-input-sender'
 import { isTerminalSendRpcAccepted } from '../../../../src/terminal/terminal-send-rpc-response'
 import { sendMobileTerminalQueryReply } from '../../../../src/terminal/mobile-terminal-query-reply'
-import { TERMINAL_QUERY_REPLY_INPUT_RUNTIME_CAPABILITY } from '../../../../../src/shared/protocol-version'
+import {
+  NATIVE_CHAT_TRANSCRIPT_OWNER_RUNTIME_CAPABILITY,
+  TERMINAL_QUERY_REPLY_INPUT_RUNTIME_CAPABILITY
+} from '../../../../../src/shared/protocol-version'
 import { useTerminalLiveInputCommit } from '../../../../src/terminal/use-terminal-live-input-commit'
 import { resolveMobileTerminalInputGate } from '../../../../src/terminal/terminal-input-connection-gate'
 import {
@@ -229,6 +232,7 @@ import { MobileNativeChatOverlay } from '../../../../src/session/MobileNativeCha
 import { MobileBrowserTabActionSheet } from '../../../../src/session/MobileBrowserTabActionSheet'
 import { useMobileNativeChatController } from '../../../../src/session/use-mobile-native-chat-controller'
 import { useMobileNativeChatReadability } from '../../../../src/session/use-mobile-native-chat-readability'
+import { useHostProtocolGates } from '../../../../src/components/HostProtocolGate'
 import { useMobileNativeChatInputLease } from '../../../../src/session/use-mobile-native-chat-input-lease'
 import { useMobileNativeChatSendError } from '../../../../src/session/use-mobile-native-chat-send-error'
 import { getMobileTerminalActionSheetActions } from '../../../../src/session/mobile-terminal-action-sheet-actions'
@@ -1088,6 +1092,7 @@ export default function SessionScreen() {
     showToast
   })
   const nativeChatTranscriptIsLocalReadable = useMobileNativeChatReadability(client, worktreeId)
+  const { hostCapabilities, statusPending: hostStatusPending } = useHostProtocolGates()
   const {
     ready: nativeChatInputLeaseReady,
     readyRef: nativeChatInputLeaseReadyRef,
@@ -1107,6 +1112,10 @@ export default function SessionScreen() {
     activeHandleRef,
     deviceTokenRef,
     nativeChatTranscriptIsLocalReadable,
+    nativeChatTranscriptOwnerCapable: hostCapabilities.includes(
+      NATIVE_CHAT_TRANSCRIPT_OWNER_RUNTIME_CAPABILITY
+    ),
+    nativeChatTranscriptOwnerCapabilityPending: hostStatusPending,
     nativeChatInputLeaseReady,
     connState,
     onSendError: nativeChatSendError.show,

@@ -26,7 +26,11 @@ describe('resolveNativeChatSession', () => {
         agentStatusEntry: entry({
           paneKey,
           agentType: 'claude',
-          providerSession: { key: 'session_id', id: 'sess-abc' }
+          connectionId: 'builder',
+          providerSession: {
+            key: 'session_id',
+            id: 'sess-abc'
+          }
         }),
         ptyId: 'pty-1'
       })
@@ -34,6 +38,8 @@ describe('resolveNativeChatSession', () => {
       agent: 'claude',
       sessionId: 'sess-abc',
       transcriptPath: null,
+      connectionId: 'builder',
+      transcriptOwnership: 'proven-ssh',
       ptyId: 'pty-1',
       paneKey
     })
@@ -60,6 +66,8 @@ describe('resolveNativeChatSession', () => {
       agent: 'claude',
       sessionId: 'sess-abc',
       transcriptPath: '/home/u/.claude/projects/slug/real-uuid.jsonl',
+      connectionId: null,
+      transcriptOwnership: 'unknown',
       ptyId: 'pty-1',
       paneKey
     })
@@ -75,7 +83,15 @@ describe('resolveNativeChatSession', () => {
         agentStatusEntry: entry({ paneKey, agentType: 'claude' }),
         ptyId: 'pty-1'
       })
-    ).toEqual({ agent: 'claude', sessionId: null, transcriptPath: null, ptyId: 'pty-1', paneKey })
+    ).toEqual({
+      agent: 'claude',
+      sessionId: null,
+      transcriptPath: null,
+      connectionId: null,
+      transcriptOwnership: 'unknown',
+      ptyId: 'pty-1',
+      paneKey
+    })
   })
 
   it('resolves two split leaves independently to their own values', () => {
@@ -105,6 +121,8 @@ describe('resolveNativeChatSession', () => {
       agent: 'claude',
       sessionId: 'left-sess',
       transcriptPath: null,
+      connectionId: null,
+      transcriptOwnership: 'unknown',
       ptyId: 'pty-left',
       paneKey: leftKey
     })
@@ -112,6 +130,8 @@ describe('resolveNativeChatSession', () => {
       agent: 'codex',
       sessionId: 'right-sess',
       transcriptPath: null,
+      connectionId: null,
+      transcriptOwnership: 'unknown',
       ptyId: 'pty-right',
       paneKey: rightKey
     })
@@ -134,6 +154,8 @@ describe('resolveNativeChatSession', () => {
       agent: 'codex',
       sessionId: 'codex-1',
       transcriptPath: null,
+      connectionId: null,
+      transcriptOwnership: 'unknown',
       ptyId: 'pty-1',
       paneKey
     })
@@ -154,6 +176,8 @@ describe('resolveNativeChatSession', () => {
         agent: resolvedAgent,
         sessionId: null,
         transcriptPath: null,
+        connectionId: null,
+        transcriptOwnership: 'unknown',
         ptyId: 'pty-1',
         paneKey
       })
@@ -295,6 +319,8 @@ describe('resolveNativeChatSession', () => {
       agent: 'codex',
       sessionId: 'codex-live',
       transcriptPath: null,
+      connectionId: null,
+      transcriptOwnership: 'unknown',
       ptyId: 'pty-1',
       paneKey
     })

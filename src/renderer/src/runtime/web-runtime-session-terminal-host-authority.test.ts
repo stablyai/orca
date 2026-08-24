@@ -167,7 +167,10 @@ describe('createWebRuntimeSessionTerminal', () => {
           ...(sessionKind === 'resume'
             ? {
                 command: "codex resume 'session-1'",
-                providerSession: { key: 'session_id' as const, id: 'session-1' }
+                providerSession: {
+                  key: 'session_id' as const,
+                  id: 'session-1'
+                }
               }
             : {}),
           activate

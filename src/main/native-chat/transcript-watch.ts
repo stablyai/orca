@@ -1,5 +1,6 @@
 import { extname } from 'node:path'
 import type { NativeChatMessage } from '../../shared/native-chat-types'
+import { agentHookServer } from '../agent-hooks/server'
 import {
   needsWslHostTranslation,
   toHostReadableTranscriptPath
@@ -11,7 +12,10 @@ import type {
   SubscribeNativeChatTranscriptArgs
 } from './transcript-watch-contract'
 import { nativeChatLineDecoderForAgent } from './transcript-tail-reader'
-import { WslTranscriptFsError, wslTranscriptFsRefusal } from './wsl-transcript-fs-gate'
+import { WslTranscriptFsError } from './wsl-transcript-fs-gate'
+import { resolveNativeChatTranscriptOwner } from './native-chat-transcript-owner'
+import { subscribeSshNativeChatTranscript } from './ssh-transcript-subscription'
+import { TRANSCRIPT_UNVERIFIABLE_MESSAGE } from './transcript-host-verdict'
 
 export { readNativeChatTranscriptTail } from './transcript-tail-reader'
 export { getActiveNativeChatWatcherCount } from './transcript-watch-engine'
@@ -49,7 +53,6 @@ async function attemptInstall(
 const INITIAL_RESOLVE_POLL_MS = 500
 const MAX_RESOLVE_POLL_MS = 5_000
 const FALLBACK_RESOLVE_POLL_MS = 5_000
-
 function exactTranscriptPath(args: SubscribeNativeChatTranscriptArgs): string | null {
   const path = args.transcriptPath?.trim()
   return path && extname(path) === '.jsonl' ? path : null
@@ -78,8 +81,6 @@ function subscribeViaResolvePoll(
   // the exact-path install doesn't wait on the slower id-glob (#10326).
   let hostReadableExactPath: string | null = null
   let lastWslTranslateAt = 0
-  // Latches only once a frame was actually emitted, so a subscriber without the
-  // callback can't suppress it for a later one.
   let gateErrorEmitted = false
   const resolveController = new AbortController()
 
@@ -150,11 +151,14 @@ function subscribeViaResolvePoll(
       // stalled WSL distro would otherwise poll silently forever, leaving the
       // client at 'loading'; emit its retryable message once and keep polling,
       // so a later tick's real snapshot still replaces it. Narrowed with a bare
-      // instanceof, never wslTranscriptFsRefusal — that helper rethrows, and
-      // runAttempt is invoked as `void runAttempt()`.
+      // instanceof; runAttempt is invoked as `void runAttempt()`.
       if (error instanceof WslTranscriptFsError && !gateErrorEmitted && args.onInitialSnapshot) {
         gateErrorEmitted = true
-        args.onInitialSnapshot([], false, 0, error.message)
+        try {
+          args.onInitialSnapshot([], false, 0, error.message)
+        } catch {
+          // A closing subscriber cannot own retry liveness.
+        }
       }
       result = null
     }
@@ -190,6 +194,129 @@ function subscribeViaResolvePoll(
   }
 }
 
+async function subscribeLocalNativeChatTranscript(
+  args: SubscribeNativeChatTranscriptArgs,
+  decode: (line: string, fallbackId: string) => NativeChatMessage | null,
+  signal?: AbortSignal
+): Promise<NativeChatTranscriptSubscription> {
+  let installed: NativeChatTranscriptSubscription | null
+  try {
+    installed = await attemptInstall(args, decode, signal)
+  } catch {
+    signal?.throwIfAborted()
+    installed = null
+  }
+  if (installed) {
+    return installed
+  }
+  signal?.throwIfAborted()
+  return subscribeViaResolvePoll(args, decode)
+}
+
+async function subscribeHostResolvedNativeChatTranscript(
+  args: SubscribeNativeChatTranscriptArgs,
+  decode: (line: string, fallbackId: string) => NativeChatMessage | null,
+  setupSignal?: AbortSignal
+): Promise<NativeChatTranscriptSubscription> {
+  let closed = false
+  let installed: NativeChatTranscriptSubscription | null = null
+  let ownerKey: string | null = null
+  let attemptVersion = 0
+  let attemptController: AbortController | null = null
+  let unverifiableEmitted = false
+
+  function emitUnverifiable(): void {
+    if (unverifiableEmitted) {
+      return
+    }
+    unverifiableEmitted = true
+    try {
+      args.onInitialSnapshot?.([], false, 0, TRANSCRIPT_UNVERIFIABLE_MESSAGE)
+    } catch {
+      // Ownership changes must remain observable even if the client is closing.
+    }
+  }
+
+  async function rebind(): Promise<void> {
+    if (closed) {
+      return
+    }
+    const owner = resolveNativeChatTranscriptOwner(args)
+    const nextOwnerKey =
+      owner.kind === 'ssh'
+        ? `ssh:${owner.connectionId}:${owner.transcriptPath ?? ''}`
+        : owner.kind === 'local'
+          ? `local:${owner.wslDistro ?? ''}:${owner.transcriptPath ?? ''}`
+          : owner.kind
+    if (nextOwnerKey === ownerKey && installed) {
+      return
+    }
+    ownerKey = nextOwnerKey
+    const version = ++attemptVersion
+    attemptController?.abort()
+    installed?.unsubscribe()
+    installed = null
+    if (owner.kind === 'unknown') {
+      emitUnverifiable()
+      return
+    }
+    unverifiableEmitted = false
+    const controller = new AbortController()
+    attemptController = controller
+    try {
+      const next =
+        owner.kind === 'ssh'
+          ? subscribeSshNativeChatTranscript(owner, args, controller.signal)
+          : await subscribeLocalNativeChatTranscript(
+              owner.kind === 'local'
+                ? {
+                    ...args,
+                    transcriptPath: owner.transcriptPath,
+                    wslDistro: owner.wslDistro
+                  }
+                : args,
+              decode,
+              controller.signal
+            )
+      if (closed || controller.signal.aborted || version !== attemptVersion) {
+        next.unsubscribe()
+        return
+      }
+      installed = next
+    } catch {
+      if (!closed && !controller.signal.aborted && version === attemptVersion) {
+        emitUnverifiable()
+      }
+    }
+  }
+
+  await agentHookServer.awaitTranscriptOwnerHydration()
+  setupSignal?.throwIfAborted()
+  const stopOwnerChanges = agentHookServer.subscribeTranscriptOwnerChanges(() => void rebind())
+  const abortFromSetup = (): void => subscription.unsubscribe()
+  const subscription: NativeChatTranscriptSubscription = {
+    watching: true,
+    unsubscribe: () => {
+      if (closed) {
+        return
+      }
+      closed = true
+      attemptVersion++
+      setupSignal?.removeEventListener('abort', abortFromSetup)
+      stopOwnerChanges()
+      attemptController?.abort()
+      installed?.unsubscribe()
+      installed = null
+    }
+  }
+  setupSignal?.addEventListener('abort', abortFromSetup, { once: true })
+  if (setupSignal?.aborted) {
+    subscription.unsubscribe()
+  }
+  await rebind()
+  return subscription
+}
+
 /**
  * Subscribe to live appends on an agent's transcript file. Returns an
  * unsubscribe fn that tears the watcher down completely.
@@ -220,19 +347,8 @@ export async function subscribeNativeChatTranscript(
     return { unsubscribe: () => {}, watching: false }
   }
 
-  let installed: NativeChatTranscriptSubscription | null
-  try {
-    installed = await attemptInstall(args, decode, setupSignal)
-  } catch (error) {
-    setupSignal?.throwIfAborted()
-    // Why: a gate-refused resolve (stalled WSL distro) must degrade to the
-    // resolve-poll fallback below, not fail the subscribe outright.
-    void wslTranscriptFsRefusal(error) // rethrows anything that is not a gate refusal
-    installed = null
+  if (!args.filePath) {
+    return subscribeHostResolvedNativeChatTranscript(args, decode, setupSignal)
   }
-  if (installed) {
-    return installed
-  }
-  setupSignal?.throwIfAborted()
-  return subscribeViaResolvePoll(args, decode)
+  return subscribeLocalNativeChatTranscript(args, decode, setupSignal)
 }

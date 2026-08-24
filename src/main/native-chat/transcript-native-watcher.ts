@@ -10,6 +10,15 @@ export type TranscriptNativeWatcher = {
   dispose: () => void
 }
 
+export function createIdleTranscriptNativeWatcher(): TranscriptNativeWatcher {
+  return {
+    bind: () => false,
+    invalidate: () => {},
+    needsRebind: () => false,
+    dispose: () => {}
+  }
+}
+
 /**
  * Optional fs.watch acceleration for transcript reconciliation. Native watches
  * can fail on otherwise-readable remote filesystems, so binding is retryable

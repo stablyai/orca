@@ -249,11 +249,14 @@ export function createStableLogicalRpcClient(
       const previousStateUnsubscribe = activeStateUnsubscribe
       const nextGeneration = generation + 1
 
-      // Why: replay on the authenticated replacement before closing the old
-      // session, but fence callbacks until the generation becomes current.
+      // Why: native-chat ownership is generation-bound; its hook reprobes status before resubscribing.
       for (const record of subscriptions.values()) {
         const disposePrevious = record.disposePhysical
-        attachSubscription(record, nextSession, nextGeneration)
+        if (record.method === 'nativeChat.subscribe') {
+          record.disposePhysical = null
+        } else {
+          attachSubscription(record, nextSession, nextGeneration)
+        }
         disposePrevious?.()
       }
       generation = nextGeneration

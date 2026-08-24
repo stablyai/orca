@@ -1,9 +1,4 @@
-import { z } from 'zod'
-import type {
-  NativeChatBlock,
-  NativeChatMessage,
-  AgentType
-} from '../../../../shared/native-chat-types'
+import type { NativeChatBlock, NativeChatMessage } from '../../../../shared/native-chat-types'
 import {
   readNativeChatTranscriptTail,
   subscribeNativeChatTranscript,
@@ -12,48 +7,16 @@ import {
 } from '../../../native-chat/transcript-watch'
 import { defineMethod, defineStreamingMethod, type RpcAnyMethod, type RpcContext } from '../core'
 import { sanitizeNativeChatRpcImageBlock } from './native-chat-rpc-image-block'
+import {
+  MOBILE_NATIVE_CHAT_MAX_WINDOW,
+  NativeChatSession,
+  NativeChatUnsubscribe
+} from './native-chat-rpc-schema'
 
 // Why: native chat renders an agent's own transcript (Claude/Codex JSONL). The
 // desktop reaches the readers via Electron IPC; mobile/web clients reach the
 // same pure readers through these runtime RPC methods so the native chat view
 // works over the paired connection, not just in the desktop renderer.
-
-const NativeChatSession = z.object({
-  agent: z
-    .unknown()
-    .transform((v) => (typeof v === 'string' ? v : ''))
-    .pipe(z.string().min(1, 'Missing agent'))
-    .transform((v) => v as AgentType),
-  sessionId: z
-    .unknown()
-    .transform((v) => (typeof v === 'string' ? v : ''))
-    .pipe(z.string().min(1, 'Missing session id')),
-  // How many of the most-recent messages to return. Clients start small for a
-  // fast first paint and raise it to page older history in as the user scrolls.
-  // Clamp (don't reject) a limit past the max window so a client paging beyond it
-  // gets the capped tail and pagination stops cleanly — a hard `.max` rejection
-  // would fail the read and stall "load earlier" at the boundary.
-  limit: z
-    .number()
-    .int()
-    .positive()
-    .transform((value) => Math.min(value, MOBILE_NATIVE_CHAT_MAX_WINDOW))
-    .optional(),
-  // Optional client-supplied cleanup token. When present, the subscribe handler
-  // keys the fs-watcher cleanup under it so registration and unsubscribe derive
-  // from the SAME token (back-compat: falls back to `agent:sessionId` when absent,
-  // which is exactly what existing mobile clients rely on).
-  subscriptionId: z.string().min(1).optional(),
-  // Authoritative transcript path from the agent hook (providerSession), used to
-  // locate the file directly when the session id no longer names it (recent
-  // Claude Code). Optional for back-compat with older clients.
-  transcriptPath: z.string().min(1).optional(),
-  beforeOffset: z.number().int().nonnegative().optional()
-})
-
-const NativeChatUnsubscribe = z.object({
-  subscriptionId: z.string().min(1).optional()
-})
 
 // Why: a long agent session can hold thousands of turns (with full tool I/O).
 // Shipping all of them over the paired connection and rendering them at once
@@ -63,7 +26,6 @@ const NativeChatUnsubscribe = z.object({
 // Small first page for a fast initial paint; the client raises `limit` to load
 // older history as the user scrolls back.
 const MOBILE_NATIVE_CHAT_DEFAULT_WINDOW = 40
-const MOBILE_NATIVE_CHAT_MAX_WINDOW = 2000
 // Why: a single tool result (a big file read, a long diff) can be hundreds of KB.
 // The mobile view only previews tool block bodies, so truncate them on the wire
 // to keep the payload small; the marker tells the user content was clipped.
@@ -211,6 +173,7 @@ export const NATIVE_CHAT_METHODS: readonly RpcAnyMethod[] = [
           agent: params.agent,
           sessionId: params.sessionId,
           transcriptPath: params.transcriptPath,
+          paneKey: params.paneKey,
           limit,
           beforeOffset: params.beforeOffset
         },
@@ -272,6 +235,7 @@ export const NATIVE_CHAT_METHODS: readonly RpcAnyMethod[] = [
         agent: params.agent,
         sessionId: params.sessionId,
         transcriptPath: params.transcriptPath,
+        paneKey: params.paneKey,
         initialLimit: limit,
         onInitialSnapshot: (messages, hasMore, beforeOffset, error, lifecycle) => {
           if (closed) {

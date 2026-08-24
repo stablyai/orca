@@ -1,4 +1,5 @@
 import { readTranscriptSlice, wslGatedStat } from './wsl-transcript-fs-access'
+import type { TranscriptRangeFs } from './transcript-range-fs'
 
 const BOUNDARY_FINGERPRINT_BYTES = 64
 
@@ -11,8 +12,12 @@ export type TranscriptFileVersion = {
 
 export async function readTranscriptFileVersion(
   filePath: string,
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  rangeFs?: TranscriptRangeFs
 ): Promise<TranscriptFileVersion> {
+  if (rangeFs) {
+    return rangeFs.stat(filePath, signal)
+  }
   const value = await wslGatedStat(filePath, 'exact', signal)
   return {
     identity: `${value.dev}:${value.ino}`,
@@ -25,13 +30,16 @@ export async function readTranscriptFileVersion(
 export async function boundaryFingerprint(
   filePath: string,
   offset: number,
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  rangeFs?: TranscriptRangeFs
 ): Promise<string> {
   if (offset <= 0) {
     return ''
   }
   const start = Math.max(0, offset - BOUNDARY_FINGERPRINT_BYTES)
-  const slice = await readTranscriptSlice(filePath, start, offset - start, 'exact', signal)
+  const slice = rangeFs
+    ? await rangeFs.read(filePath, start, offset - start, signal)
+    : await readTranscriptSlice(filePath, start, offset - start, 'exact', signal)
   return slice.toString('base64')
 }
 

@@ -1,11 +1,15 @@
 import type { NativeChatApi, NativeChatAppendedMessages } from '../../../../preload/api-types'
+import { makePaneKey, parsePaneKey } from '../../../../shared/stable-pane-id'
+import { toHostSessionTabId } from '../../../../shared/terminal-surface-id'
 import { isWebClientLocation } from '@/lib/web-client-location'
 import {
   callRuntimeRpc,
   RuntimeRpcCallError,
+  runtimeEnvironmentSupportsCapability,
   type RuntimeClientTarget
 } from '@/runtime/runtime-rpc-client'
 import { isRuntimeCompatBlockError } from '@/runtime/runtime-protocol-compat'
+import { NATIVE_CHAT_TRANSCRIPT_OWNER_RUNTIME_CAPABILITY } from '../../../../shared/protocol-version'
 import {
   parseRuntimeNativeChatReadSessionResult,
   parseRuntimeNativeChatTurnLifecycle,
@@ -22,6 +26,18 @@ const RUNTIME_TOO_OLD =
 
 /** Backoff before re-opening a dropped runtime chat stream. Exported for tests. */
 export const RUNTIME_NATIVE_CHAT_RECONNECT_MS = 2_000
+
+export function toNativeChatHostPaneKey(paneKey: string | undefined): string | undefined {
+  if (!paneKey) {
+    return undefined
+  }
+  const pane = parsePaneKey(paneKey)
+  if (!pane) {
+    return paneKey
+  }
+  const hostTabId = toHostSessionTabId(pane.tabId)
+  return hostTabId === pane.tabId ? paneKey : makePaneKey(hostTabId, pane.leafId)
+}
 
 /** Map a runtime read failure to the message the read-error state renders. A
  *  version block (old runtime lacking the method, or the protocol-compat gate)
@@ -43,21 +59,44 @@ export function toRuntimeNativeChatErrorMessage(err: unknown): string {
  *  using this adapter (R3). Preserves whatever `subscribe` returns (sync fn on
  *  desktop, promise on the web bridge) — the hook's teardown handles both (R6). */
 const localNativeChatTransport: NativeChatSessionTransport = {
-  readSession: (agent, sessionId, limit, transcriptPath) =>
-    window.api.nativeChat.readSession(agent, sessionId, limit, transcriptPath),
-  subscribe: (args, onFrame) => window.api.nativeChat.subscribe(args, onFrame)
+  readSession: (agent, sessionId, limit, transcriptPath, paneKey) => {
+    const hostPaneKey = toNativeChatHostPaneKey(paneKey)
+    return hostPaneKey
+      ? window.api.nativeChat.readSession(agent, sessionId, limit, transcriptPath, hostPaneKey)
+      : window.api.nativeChat.readSession(agent, sessionId, limit, transcriptPath)
+  },
+  subscribe: (args, onFrame) =>
+    window.api.nativeChat.subscribe(
+      { ...args, paneKey: toNativeChatHostPaneKey(args.paneKey) },
+      onFrame
+    )
 }
 
 function createRuntimeNativeChatTransport(environmentId: string): NativeChatSessionTransport {
   const target: RuntimeClientTarget = { kind: 'environment', environmentId }
 
   return {
-    readSession: async (agent, sessionId, limit, transcriptPath) => {
+    readSession: async (agent, sessionId, limit, transcriptPath, paneKey) => {
       try {
+        if (
+          !(await runtimeEnvironmentSupportsCapability(
+            environmentId,
+            NATIVE_CHAT_TRANSCRIPT_OWNER_RUNTIME_CAPABILITY,
+            15_000
+          ))
+        ) {
+          return { error: RUNTIME_TOO_OLD }
+        }
         const result = await callRuntimeRpc<unknown>(
           target,
           'nativeChat.readSession',
-          { agent, sessionId, limit, transcriptPath },
+          {
+            agent,
+            sessionId,
+            limit,
+            transcriptPath,
+            paneKey: toNativeChatHostPaneKey(paneKey)
+          },
           { timeoutMs: 15_000 }
         )
         return parseRuntimeNativeChatReadSessionResult(result)
@@ -66,7 +105,8 @@ function createRuntimeNativeChatTransport(environmentId: string): NativeChatSess
       }
     },
     subscribe: (args, onFrame) => {
-      const { subscriptionId, agent, sessionId, transcriptPath, limit } = args
+      const { subscriptionId, agent, sessionId, transcriptPath, paneKey, limit } = args
+      const hostPaneKey = toNativeChatHostPaneKey(paneKey)
       let cancelled = false
       let receivedInitial = false
       let handleUnsubscribe: (() => void) | null = null
@@ -100,12 +140,22 @@ function createRuntimeNativeChatTransport(environmentId: string): NativeChatSess
 
       const openStream = (): void => {
         const attempt = ++activeAttempt
-        void window.api.runtimeEnvironments
-          .subscribe(
+        const subscribe = () => {
+          if (cancelled || attempt !== activeAttempt) {
+            return Promise.resolve(null)
+          }
+          return window.api.runtimeEnvironments.subscribe(
             {
               selector: environmentId,
               method: 'nativeChat.subscribe',
-              params: { subscriptionId, agent, sessionId, transcriptPath, limit },
+              params: {
+                subscriptionId,
+                agent,
+                sessionId,
+                transcriptPath,
+                paneKey: hostPaneKey,
+                limit
+              },
               timeoutMs: 15_000
             },
             {
@@ -195,7 +245,22 @@ function createRuntimeNativeChatTransport(environmentId: string): NativeChatSess
               onClose: () => scheduleReconnect(attempt)
             }
           )
+        }
+        const handlePromise = runtimeEnvironmentSupportsCapability(
+          environmentId,
+          NATIVE_CHAT_TRANSCRIPT_OWNER_RUNTIME_CAPABILITY,
+          15_000
+        ).then((supported) => {
+          if (!supported) {
+            throw new Error(RUNTIME_TOO_OLD)
+          }
+          return subscribe()
+        })
+        void handlePromise
           .then((handle) => {
+            if (!handle) {
+              return
+            }
             // Why: reconnect attempts may resolve out of order. A stale handle
             // must never replace or tear down the current stream.
             if (cancelled || attempt !== activeAttempt || reconnectPendingAttempt === attempt) {
@@ -216,7 +281,10 @@ function createRuntimeNativeChatTransport(environmentId: string): NativeChatSess
                 type: 'snapshot',
                 messages: [],
                 hasMore: false,
-                error: toRuntimeNativeChatErrorMessage(err)
+                error:
+                  err instanceof Error && err.message === RUNTIME_TOO_OLD
+                    ? RUNTIME_TOO_OLD
+                    : toRuntimeNativeChatErrorMessage(err)
               })
               return
             }

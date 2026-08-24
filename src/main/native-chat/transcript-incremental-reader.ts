@@ -1,10 +1,16 @@
 import type { NativeChatMessage, NativeChatTurnLifecycle } from '../../shared/native-chat-types'
+import { Readable } from 'node:stream'
 import { transcriptFallbackId } from './transcript-fallback-id'
 import {
   MAX_NATIVE_CHAT_TRANSCRIPT_RECORD_BYTES,
   type NativeChatLineDecoder
 } from './transcript-tail-reader'
-import { openTranscriptReadStream, wslGatedStat } from './wsl-transcript-fs-access'
+import {
+  openTranscriptReadStream,
+  WSL_TRANSCRIPT_READ_CHUNK_BYTES,
+  wslGatedStat
+} from './wsl-transcript-fs-access'
+import type { TranscriptRangeFs } from './transcript-range-fs'
 
 const APPEND_BATCH_MESSAGE_LIMIT = 40
 
@@ -31,19 +37,28 @@ export async function readIncrementalTranscriptMessages(
   onBatch?: (messages: NativeChatMessage[]) => void,
   decodeLifecycle?: (line: string, fallbackId: string) => NativeChatTurnLifecycle | null,
   onLifecycle?: (lifecycle: NativeChatTurnLifecycle) => void,
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  rangeFs?: TranscriptRangeFs
 ): Promise<NativeChatMessage[]> {
-  const end = (await wslGatedStat(filePath, 'exact', signal)).size
+  const openingStamp = rangeFs ? await rangeFs.stat(filePath, signal, true) : null
+  const end = openingStamp?.size ?? (await wslGatedStat(filePath, 'exact', signal)).size
   if (end <= state.offset) {
     return []
   }
   const messages: NativeChatMessage[] = []
-  const stream = openTranscriptReadStream(
-    filePath,
-    { start: state.offset, end: end - 1 },
-    'exact',
-    signal
-  )
+  const openingState = rangeFs
+    ? {
+        offset: state.offset,
+        pendingChunks: [...state.pendingChunks],
+        pendingStart: state.pendingStart,
+        pendingBytes: state.pendingBytes,
+        droppingOversizedRecord: state.droppingOversizedRecord
+      }
+    : null
+  const stagedBatches: NativeChatMessage[][] = []
+  const stream = rangeFs
+    ? Readable.from(rangeTranscriptChunks(rangeFs, filePath, state.offset, end - 1, signal))
+    : openTranscriptReadStream(filePath, { start: state.offset, end: end - 1 }, 'exact', signal)
   try {
     let absoluteOffset = state.offset
     for await (const rawChunk of stream) {
@@ -65,7 +80,22 @@ export async function readIncrementalTranscriptMessages(
       absoluteOffset += chunk.length
       state.offset = absoluteOffset
     }
+    if (rangeFs && openingStamp) {
+      await rangeFs.assertStable(filePath, openingStamp, signal)
+      for (const batch of stagedBatches) {
+        onBatch?.(batch)
+      }
+    }
     return messages
+  } catch (error) {
+    if (openingState) {
+      state.offset = openingState.offset
+      state.pendingChunks = openingState.pendingChunks
+      state.pendingStart = openingState.pendingStart
+      state.pendingBytes = openingState.pendingBytes
+      state.droppingOversizedRecord = openingState.droppingOversizedRecord
+    }
+    throw error
   } finally {
     // Early exits (throw/oversized-record bail) must not leak the fd or, on
     // UNC, the gated handle the generator's finally closes.
@@ -111,7 +141,35 @@ export async function readIncrementalTranscriptMessages(
     }
     messages.push(message)
     if (onBatch && messages.length >= APPEND_BATCH_MESSAGE_LIMIT) {
-      onBatch(messages.splice(0))
+      const batch = messages.splice(0)
+      if (rangeFs) {
+        stagedBatches.push(batch)
+      } else {
+        onBatch(batch)
+      }
+    }
+  }
+}
+
+async function* rangeTranscriptChunks(
+  rangeFs: TranscriptRangeFs,
+  filePath: string,
+  start: number,
+  endInclusive: number,
+  signal?: AbortSignal
+): AsyncGenerator<Buffer> {
+  let position = start
+  while (position <= endInclusive) {
+    signal?.throwIfAborted()
+    const length = Math.min(WSL_TRANSCRIPT_READ_CHUNK_BYTES, endInclusive - position + 1)
+    const chunk = await rangeFs.read(filePath, position, length, signal)
+    if (chunk.length === 0) {
+      return
+    }
+    yield chunk
+    position += chunk.length
+    if (chunk.length < length) {
+      return
     }
   }
 }

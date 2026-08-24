@@ -33,6 +33,8 @@ export type NativeChatPaneResolution = {
   /** Authoritative transcript path from the hook, when reported. Preferred over
    *  reconstructing the path from sessionId (recent Claude Code diverges them). */
   transcriptPath: string | null
+  connectionId: string | null
+  transcriptOwnership: 'proven-local' | 'proven-ssh' | 'unknown'
   ptyId: string | null
   paneKey: string
 }
@@ -54,6 +56,13 @@ export function resolveNativeChatSession(
     agent,
     sessionId: input.agentStatusEntry?.providerSession?.id ?? null,
     transcriptPath: input.agentStatusEntry?.providerSession?.transcriptPath ?? null,
+    connectionId: input.agentStatusEntry?.connectionId ?? null,
+    transcriptOwnership:
+      input.agentStatusEntry?.connectionId === undefined
+        ? 'unknown'
+        : input.agentStatusEntry.connectionId === null
+          ? 'proven-local'
+          : 'proven-ssh',
     ptyId: input.ptyId,
     paneKey: input.paneKey
   }

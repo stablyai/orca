@@ -118,6 +118,22 @@ describe('stable logical RPC client', () => {
     pending.resolve(success('late'))
   })
 
+  it('does not replay native-chat subscriptions across an unproven generation', async () => {
+    const oldSession = new FakeSession('connected')
+    const replacement = new FakeSession('connected')
+    const client = createStableLogicalRpcClient(oldSession, 'lan')
+    client.subscribe('nativeChat.subscribe', { sessionId: 'session-1' }, vi.fn())
+
+    await client.migrateTo(replacement, 'relay')
+
+    expect(replacement.subscribe).not.toHaveBeenCalledWith(
+      'nativeChat.subscribe',
+      expect.anything(),
+      expect.any(Function),
+      expect.anything()
+    )
+  })
+
   it('keeps replies that commit before cutover and carries viewport state into replay', async () => {
     const oldSession = new FakeSession('connected')
     const nextSession = new FakeSession('connected')

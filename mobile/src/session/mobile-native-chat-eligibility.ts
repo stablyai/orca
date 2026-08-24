@@ -23,6 +23,7 @@ export type MobileNativeChatResolution = {
   /** Hook-reported transcript path. Recent Claude sessions cannot always be
    *  resolved from the provider session id, so mobile forwards this to runtime. */
   transcriptPath: string | null
+  paneKey: string | null
 }
 
 export type MobileNativeChatTab = {
@@ -60,7 +61,8 @@ export function resolveMobileNativeChat(
   return {
     agent,
     sessionId: tab.agentStatus?.providerSession?.id ?? null,
-    transcriptPath: tab.agentStatus?.providerSession?.transcriptPath ?? null
+    transcriptPath: tab.agentStatus?.providerSession?.transcriptPath ?? null,
+    paneKey: tab.agentStatus?.paneKey ?? null
   }
 }
 

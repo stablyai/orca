@@ -209,8 +209,11 @@ export class SshFilesystemProvider implements IFilesystemProvider {
     }
   }
 
-  async stat(filePath: string): Promise<FileStat> {
-    return (await this.mux.request('fs.stat', { filePath })) as FileStat
+  async stat(filePath: string, options?: { signal?: AbortSignal }): Promise<FileStat> {
+    const request = options?.signal
+      ? this.mux.request('fs.stat', { filePath }, options)
+      : this.mux.request('fs.stat', { filePath })
+    return (await request) as FileStat
   }
 
   async lstat(filePath: string): Promise<FileStat> {

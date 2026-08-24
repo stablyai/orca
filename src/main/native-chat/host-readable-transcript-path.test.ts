@@ -100,6 +100,22 @@ describe('toHostReadableTranscriptPath', () => {
     expect(seen).toHaveLength(1)
   })
 
+  it('pins translation to the authenticated WSL distro', async () => {
+    const seen: string[] = []
+    await expect(
+      toHostReadableTranscriptPath('/home/ada/.codex/sessions/rollout.jsonl', {
+        platform: 'win32',
+        wslDistro: 'Debian',
+        pathExists: async (candidate) => {
+          seen.push(candidate)
+          return true
+        },
+        listWslHomeDirs: async () => [UBUNTU_HOME, DEBIAN_HOME]
+      })
+    ).resolves.toBe('\\\\wsl.localhost\\Debian\\home\\ada\\.codex\\sessions\\rollout.jsonl')
+    expect(seen).toEqual(['\\\\wsl.localhost\\Debian\\home\\ada\\.codex\\sessions\\rollout.jsonl'])
+  })
+
   it('returns null when no distro maps to an existing file', async () => {
     await expect(
       toHostReadableTranscriptPath(ROLLOUT_LINUX, {

@@ -23,6 +23,7 @@ import { RelayDispatcher } from './dispatcher'
 import { RelayContext } from './context'
 import { FsHandler } from './fs-handler'
 import { GitHandler } from './git-handler'
+import { isENOENT } from '../shared/definitive-filesystem-absence'
 
 function gitInit(dir: string): void {
   execFileSync('git', ['init'], { cwd: dir, stdio: 'pipe' })
@@ -195,9 +196,39 @@ describe('Integration: Client Mux ↔ Relay Dispatcher', () => {
     })
 
     it('errors propagate correctly through the protocol', async () => {
-      await expect(
-        mux.request('fs.stat', { filePath: '/nonexistent/path/that/does/not/exist' })
-      ).rejects.toThrow()
+      const error = await mux
+        .request('fs.stat', { filePath: path.join(tmpDir, 'missing') })
+        .catch((reason: unknown) => reason)
+
+      expect(error).toBeInstanceOf(Error)
+      expect(error).toMatchObject({ code: -32000, data: { errno: 'ENOENT' } })
+    })
+
+    it.skipIf(process.platform === 'win32')(
+      'preserves ENOTDIR from the real filesystem through the protocol',
+      async () => {
+        const filePath = path.join(tmpDir, 'not-a-directory')
+        writeFileSync(filePath, 'file')
+
+        const error = await mux
+          .request('fs.stat', { filePath: path.join(filePath, 'child') })
+          .catch((reason: unknown) => reason)
+
+        expect(error).toMatchObject({ code: -32000, data: { errno: 'ENOTDIR' } })
+      }
+    )
+
+    it('preserves a non-absence errno over a legacy-looking message', async () => {
+      dispatcher.onRequest('test.fsDenied', async () => {
+        throw Object.assign(new Error("ENOENT: no such file or directory, stat '/private'"), {
+          code: 'EACCES'
+        })
+      })
+
+      const error = await mux.request('test.fsDenied', {}).catch((reason: unknown) => reason)
+
+      expect(error).toMatchObject({ code: -32000, data: { errno: 'EACCES' } })
+      expect(isENOENT(error)).toBe(false)
     })
   })
 

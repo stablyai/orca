@@ -4,6 +4,7 @@ import type {
   NativeChatTurnLifecycle
 } from '../../shared/native-chat-types'
 import type { ResolveSessionFileOptions } from './session-file-resolver'
+import type { TranscriptRangeFs } from './transcript-range-fs'
 
 export type SubscribeNativeChatTranscriptArgs = ResolveSessionFileOptions & {
   agent: AgentType
@@ -30,6 +31,8 @@ export type SubscribeNativeChatTranscriptArgs = ResolveSessionFileOptions & {
   resolvePollIntervalMs?: number
   /** Test-only override for the host-side watcher reconciliation interval. */
   reconciliationIntervalMs?: number
+  /** Positional filesystem for a transcript owned by another execution host. */
+  rangeFs?: TranscriptRangeFs
 }
 
 export type NativeChatTranscriptSubscription = {

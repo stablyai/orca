@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "updatedAt": "2026-08-20",
+  "updatedAt": "2026-08-21",
   "policy": {
     "maturityLevels": ["experimental", "soak", "blocking", "accepted-gap", "deprecated"],
     "blockingPromotion": {
@@ -4639,6 +4639,189 @@
         "Live SSH and paired-runtime launch journeys are covered by existing authority contracts rather than this focused oracle."
       ],
       "demotionRule": "Demote if discovery and launch can resolve different authorities, a scoped Floating probe overwrites the active-project inventory, or local context selection adds recurring scans or retained in-flight entries."
+    },
+    {
+      "id": "native-chat.transcript-host-ownership",
+      "title": "Native chat reads and tails transcripts only on their owning execution host",
+      "maturity": "experimental",
+      "protection": "partial",
+      "owner": "native-chat",
+      "layer": "cross-boundary",
+      "surfaces": [
+        "pane-scoped provider-session identity",
+        "agent hook ingress",
+        "transcript snapshot",
+        "transcript live tail",
+        "Electron IPC",
+        "paired runtime RPC",
+        "mobile native chat"
+      ],
+      "platforms": ["macos", "linux", "windows"],
+      "providers": ["local", "ssh", "wsl", "remote-runtime"],
+      "coveredPlatforms": ["macos", "linux"],
+      "coveredProviders": ["local", "ssh", "wsl", "remote-runtime"],
+      "coverageNotes": "A deterministic host-routing oracle covers server-owned pane selection, caller-path spoof rejection, local, SSH, WSL, unknown ownership, reconnect, provider replacement, bounded range reads, and relay errno classification. A Docker Linux SSH/relay target plus headed macOS Electron/CDP proves remote snapshot and tail rendering for SSH git and folder workspaces. A compiled windowless serve journey covers the shared runtime boundary.",
+      "motivatingLinks": [
+        "https://github.com/stablyai/orca/issues/13663",
+        "https://github.com/stablyai/orca/pull/15515",
+        "https://github.com/stablyai/orca/pull/15517"
+      ],
+      "invariant": "Main or the serving runtime resolves optional pane identity plus session id against its own agent-hook row, then uses only that row's connection id and transcript path. Unknown or ambiguous ownership is unverifiable and never falls back to the desktop filesystem. SSH snapshots and tails use bounded positional reads, forward cancellation, reject stale provider generations, and classify definitive remote absence without losing errno at the relay boundary; locator-free legacy requests remain local only when no authoritative row exists.",
+      "oracle": "The focused oracle gives desktop and SSH providers colliding session ids and paths but different bytes, then requires the requested pane's server-owned row for snapshot and live append. It proves caller path spoofing cannot select a source, ambiguous or missing ownership cannot install a local watcher, WSL provenance remains local, owner and provider loss fail closed and recover, cancellation reaches remote stat, definitive absence survives the relay with an old-relay fallback, and large appends never call whole-file read or reread the prefix. The baseline/candidate comparison and real Docker SSH plus Electron/CDP journey supply independent red/green and rendered evidence.",
+      "commands": [
+        "pnpm exec vitest run --config config/vitest.config.ts src/main/native-chat/ssh-transcript-host-routing.test.ts --reporter=dot",
+        "pnpm exec vitest run --config config/vitest.config.ts src/main/native-chat/ssh-transcript-relay-errno.test.ts src/relay/dispatcher-structured-error.test.ts src/relay/integration.test.ts src/main/ipc/filesystem-path-containment-remote-enoent.test.ts --reporter=dot",
+        "pnpm exec vitest run --config config/vitest.config.ts src/main/agent-hooks/server-hook-http-ingest.test.ts src/main/agent-hooks/server-ingest-remote.test.ts src/main/agent-hooks/server-ingest-terminal-status.test.ts src/main/agent-hooks/server-last-status-hydrate-validation.test.ts src/main/agent-hooks/wsl-hook-relay-live.integration.test.ts src/main/ipc/native-chat.test.ts src/main/native-chat/transcript-watch-error.test.ts src/main/providers/ssh-filesystem-dispatch.test.ts src/main/providers/ssh-filesystem-provider-range.test.ts src/main/runtime/rpc/methods/native-chat.test.ts src/renderer/src/components/native-chat/native-chat-pane-resolution.test.ts src/renderer/src/components/native-chat/native-chat-session-transport.test.ts src/renderer/src/components/native-chat/use-native-chat-live-session.test.ts src/renderer/src/components/terminal-pane/remote-runtime-pty-transport-host-session-launch.test.ts src/renderer/src/runtime/web-runtime-session-terminal-host-authority.test.ts src/shared/agent-session-resume.test.ts --reporter=dot",
+        "pnpm exec vitest run --config config/vitest.config.ts src/main/native-chat/transcript-watch-wsl-exact-path.test.ts --reporter=dot",
+        "pnpm --dir mobile exec vitest run --root .. mobile/src/session/mobile-native-chat-eligibility.test.ts mobile/src/session/use-mobile-native-chat-session.test.ts --reporter=dot",
+        "pnpm exec electron-vite build --mode e2e && SKIP_BUILD=1 pnpm exec playwright test tests/e2e/headless-native-chat-runtime-routing.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1",
+        "Isolated headed Orca Electron/CDP against a throwaway Docker Linux SSH/relay target, with same-path desktop poison and remote-only live append"
+      ],
+      "testFiles": [
+        "src/main/native-chat/ssh-transcript-host-routing.test.ts",
+        "src/main/native-chat/ssh-transcript-relay-errno.test.ts",
+        "src/main/native-chat/transcript-watch-error.test.ts",
+        "src/main/native-chat/transcript-watch-wsl-exact-path.test.ts",
+        "src/main/agent-hooks/server-hook-http-ingest.test.ts",
+        "src/main/agent-hooks/server-ingest-remote.test.ts",
+        "src/main/agent-hooks/server-ingest-terminal-status.test.ts",
+        "src/main/agent-hooks/server-last-status-hydrate-validation.test.ts",
+        "src/main/agent-hooks/wsl-hook-relay-live.integration.test.ts",
+        "src/main/ipc/native-chat.test.ts",
+        "src/main/ipc/filesystem-path-containment-remote-enoent.test.ts",
+        "src/main/providers/ssh-filesystem-dispatch.test.ts",
+        "src/main/providers/ssh-filesystem-provider-range.test.ts",
+        "src/main/runtime/rpc/methods/native-chat.test.ts",
+        "src/renderer/src/components/native-chat/native-chat-pane-resolution.test.ts",
+        "src/renderer/src/components/native-chat/native-chat-session-transport.test.ts",
+        "src/renderer/src/components/native-chat/use-native-chat-live-session.test.ts",
+        "src/renderer/src/components/terminal-pane/remote-runtime-pty-transport-host-session-launch.test.ts",
+        "src/renderer/src/runtime/web-runtime-session-terminal-host-authority.test.ts",
+        "src/shared/agent-session-resume.test.ts",
+        "src/relay/dispatcher-structured-error.test.ts",
+        "src/relay/integration.test.ts",
+        "mobile/src/session/mobile-native-chat-eligibility.test.ts",
+        "mobile/src/session/use-mobile-native-chat-session.test.ts",
+        "tests/e2e/headless-native-chat-runtime-routing.spec.ts"
+      ],
+      "assertionRefs": [
+        {
+          "file": "src/main/native-chat/ssh-transcript-host-routing.test.ts",
+          "assertions": [
+            "the requested pane's server-owned SSH row wins over desktop and other-SSH same-id/path lookalikes",
+            "caller transcript paths cannot override a hook-owned path or disambiguate locator-free ownership",
+            "unknown ownership never reads or watches locally",
+            "WSL ownership stays local while SSH owner and provider loss fail closed and recover",
+            "every remote request is at most 256 KiB and a large append does not reread the prefix or call readFile"
+          ]
+        },
+        {
+          "file": "src/main/native-chat/ssh-transcript-relay-errno.test.ts",
+          "assertions": [
+            "structured ENOENT from the owning relay is retryable notFound",
+            "structured ENOTDIR from the owning relay is retryable notFound",
+            "new clients retain canonical ENOENT and ENOTDIR compatibility with older relays",
+            "a transcript removed after stat is retryable notFound",
+            "structured non-absence or malformed errno data overrides a contradictory legacy-looking message"
+          ]
+        },
+        {
+          "file": "src/relay/dispatcher-structured-error.test.ts",
+          "assertions": [
+            "only recognized system errno codes are published as errno data",
+            "invalid structured skill-failure data remains private"
+          ]
+        },
+        {
+          "file": "src/relay/integration.test.ts",
+          "assertions": [
+            "definitive filesystem absence retains optional errno data through the real dispatcher and SSH multiplexer",
+            "a real non-directory filesystem path retains ENOTDIR through the dispatcher and SSH multiplexer",
+            "a non-absence errno survives the real relay path and overrides a contradictory legacy-looking message"
+          ]
+        },
+        {
+          "file": "src/main/providers/ssh-filesystem-provider-range.test.ts",
+          "assertions": ["remote stat forwards cancellation to the SSH multiplexer"]
+        },
+        {
+          "file": "src/main/runtime/rpc/methods/native-chat.test.ts",
+          "assertions": ["runtime read and subscription forward optional pane identity"]
+        },
+        {
+          "file": "tests/e2e/headless-native-chat-runtime-routing.spec.ts",
+          "assertions": [
+            "a compiled windowless runtime retains locator-free local compatibility",
+            "the same real file is unverifiable through a pane-scoped request with no authoritative row"
+          ]
+        }
+      ],
+      "evidenceRuns": [
+        {
+          "date": "2026-08-22",
+          "runner": "local",
+          "platform": "macos",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/main/native-chat/ssh-transcript-relay-errno.test.ts src/relay/dispatcher-structured-error.test.ts src/relay/integration.test.ts src/main/ipc/filesystem-path-containment-remote-enoent.test.ts --reporter=dot",
+          "result": "passed",
+          "durationSeconds": 3,
+          "summary": "The post-OpenCode errno oracle passed 44/44, adding real-filesystem ENOTDIR transport, old-relay ENOTDIR fallback, post-stat disappearance, malformed-data precedence, and non-errno publication coverage. The prior mutation regressed publication to absence-only errnos and native-chat classification to ENOENT-only, failing exactly three targeted assertions (37/40); restoration returned to 40/40 before the expanded cases."
+        },
+        {
+          "date": "2026-08-21",
+          "runner": "local",
+          "platform": "macos",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/main/native-chat/ssh-transcript-host-routing.test.ts --reporter=dot",
+          "result": "passed",
+          "durationSeconds": 3,
+          "summary": "The server-authoritative candidate passed all 20 deterministic pane selection, caller-path spoof rejection, WSL-local, unknown-owner, reconnect, replacement, cancellation, binding, and bounded-range cases. Earlier red/green runs failed when SSH-owner recognition, cancellation, and outage recovery were disabled, then returned to green after restoration."
+        },
+        {
+          "date": "2026-08-22",
+          "runner": "manual",
+          "platform": "macos",
+          "command": "Isolated headed Orca Electron/CDP against a throwaway Docker Linux SSH/relay target, with same-path desktop poison and remote-only live append",
+          "result": "passed",
+          "durationSeconds": 180,
+          "summary": "SSH git-worktree and folder-workspace native chat rendered the real remote initial snapshot and later remote-only append; DOM assertions found neither desktop poison marker. The remote bytes were independently read inside Docker while the desktop poison file remained present."
+        },
+        {
+          "date": "2026-08-21",
+          "runner": "local",
+          "platform": "macos",
+          "command": "pnpm exec electron-vite build --mode e2e && SKIP_BUILD=1 pnpm exec playwright test tests/e2e/headless-native-chat-runtime-routing.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1",
+          "result": "passed",
+          "durationSeconds": 9,
+          "summary": "The compiled headless runtime passed locator-free local compatibility and pane-scoped unknown-owner no-fallback assertions through the registered runtime RPC."
+        }
+      ],
+      "runtimeBudget": {
+        "p95Seconds": 15,
+        "scope": "20-case deterministic routing oracle, 44-case relay errno slice, and one compiled headless runtime journey; Docker/headed Electron remains manual"
+      },
+      "flakeHistory": {
+        "status": "soaking",
+        "evidence": "Repeated focused local oracles and the compiled headless journey pass; long-term CI history is not yet available."
+      },
+      "redGreenEvidence": {
+        "status": "complete",
+        "evidence": "The byte-identical 13-case oracle failed 11/13 on latest origin/main 59892a2f13 and advisory-only PR head aba8aafafa, passed 13/13 on the candidate, failed 9/13 when only exact SSH-owner recognition was disabled, and passed 13/13 after restoration. The prior 16-case candidate passed 16/16, failed 11/16 under the same owner mutation, and returned to 16/16. The post-review 17-case candidate passed 17/17, failed 3/17 when remote stat cancellation, outage rearming, and remote-specific unresolved copy were disabled together, and returned to 17/17. The third-review relay errno slice passed 37/37, failed exactly four targeted assertions (33/37) when errno publication and relay-aware absence classification were disabled, and returned to 37/37 after restoration. The final mutation regressed publication to absence-only errnos and native-chat classification to ENOENT-only; the three targeted assertions failed (37/40), and restoration returned the slice to 40/40. Four additional OpenCode-review cases expanded the passing slice to 44/44. Baseline headed Electron visibly selected desktop lookalike bytes in both SSH workspace kinds; the candidate rendered only remote snapshot and tail bytes."
+      },
+      "performanceBudget": {
+        "required": true,
+        "evidence": "SSH reads require readFileRange support, cap each request at the shared 256 KiB maximum, and tail from the last byte offset. The large-append oracle requires total requested bytes no more than append size plus 256 bytes, rejects any whole-file read, and verifies the prefix is not polled again."
+      },
+      "promotionCriteria": [
+        "Collect 100 consecutive focused CI passes or 14 days of soak history.",
+        "Keep the Docker SSH git and folder workspace snapshot/tail journey green when transcript routing changes.",
+        "Add physical Windows SSH and WSL live evidence before claiming full platform coverage.",
+        "Exercise mixed-version live pairing against at least one older client and one older host."
+      ],
+      "knownGaps": [
+        "Physical Windows SSH and live WSL transcript journeys were not run; WSL exact-path behavior is contract-tested.",
+        "The live Docker target used the current relay; older relay fallback and mixed-version behavior are contract-tested rather than exercised in a live pairing.",
+        "SSH provider sessions without an authoritative transcript path fail closed instead of running a broad remote session-id scan."
+      ],
+      "demotionRule": "Demote if a located session can read a non-owner filesystem, provider loss selects local bytes, reconnect leaves duplicate or stale watchers, any SSH poll uses whole-file reads, or the bounded-range oracle flakes without a product or harness defect."
     },
     {
       "id": "agent-session.provider-ownership",

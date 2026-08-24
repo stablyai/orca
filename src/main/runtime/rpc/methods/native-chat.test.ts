@@ -21,7 +21,10 @@ const cachedResult = vi.hoisted(() => ({
     }
   }
 }))
-const tailRead = vi.hoisted(() => ({ signal: undefined as AbortSignal | undefined }))
+const tailRead = vi.hoisted(() => ({
+  signal: undefined as AbortSignal | undefined,
+  args: null as Record<string, unknown> | null
+}))
 const watcher = vi.hoisted(() => ({
   args: null as null | {
     onInitialSnapshot?: (
@@ -53,6 +56,7 @@ const watcher = vi.hoisted(() => ({
         timestamp: number | null
       }
     ) => void
+    paneKey?: string
   },
   watching: true,
   setupSignal: undefined as AbortSignal | undefined,
@@ -63,8 +67,10 @@ const watcher = vi.hoisted(() => ({
   unsubscribe: vi.fn()
 }))
 vi.mock('../../../native-chat/transcript-watch', () => ({
-  readNativeChatTranscriptTail: ({ limit }: { limit: number }, signal?: AbortSignal) => {
+  readNativeChatTranscriptTail: (args: { limit: number }, signal?: AbortSignal) => {
     tailRead.signal = signal
+    tailRead.args = args
+    const { limit } = args
     const messages = cachedResult.value.messages
     return Promise.resolve({
       messages: messages.slice(-limit),
@@ -157,6 +163,13 @@ function activeWatcherArgs(): NonNullable<typeof watcher.args> {
 }
 
 describe('nativeChat.readSession clientKind truncation gating', () => {
+  it('forwards pane identity through runtime RPC reads', async () => {
+    const paneKey = 'tab-1:11111111-1111-4111-8111-111111111111'
+
+    await readSessionHandler()({ agent: 'claude', sessionId: 's', paneKey }, ctxWith('mobile'))
+
+    expect(tailRead.args).toMatchObject({ paneKey })
+  })
   it('passes request cancellation to transcript resolution', async () => {
     const controller = new AbortController()
     const context = { ...ctxWith('runtime'), signal: controller.signal }
@@ -416,6 +429,20 @@ describe('nativeChat.readSession clientKind truncation gating', () => {
 })
 
 describe('nativeChat.subscribe initial snapshot', () => {
+  it('forwards pane identity through runtime RPC subscriptions', async () => {
+    watcher.watching = true
+    watcher.args = null
+    const paneKey = 'tab-1:11111111-1111-4111-8111-111111111111'
+
+    await subscribeHandler()(
+      { agent: 'claude', sessionId: 's', paneKey },
+      streamingContext('mobile'),
+      vi.fn()
+    )
+
+    expect(activeWatcherArgs()).toMatchObject({ paneKey })
+  })
+
   it('preserves long assistant text across mobile stream frame types', async () => {
     watcher.watching = true
     watcher.args = null

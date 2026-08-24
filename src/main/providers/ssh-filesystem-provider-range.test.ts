@@ -15,6 +15,17 @@ function providerWith(request: ReturnType<typeof vi.fn>): SshFilesystemProvider 
   return new SshFilesystemProvider('conn-1', mux)
 }
 
+describe('SshFilesystemProvider.stat', () => {
+  it('forwards an abort signal to the multiplexer', async () => {
+    const controller = new AbortController()
+    const request = vi.fn().mockResolvedValue({ size: 0, type: 'file', mtime: 1 })
+    await providerWith(request).stat('/x.jsonl', { signal: controller.signal })
+    expect(request).toHaveBeenCalledWith('fs.stat', expect.anything(), {
+      signal: controller.signal
+    })
+  })
+})
+
 describe('SshFilesystemProvider.readFileRange', () => {
   it('decodes the base64 window the relay returned', async () => {
     const payload = Buffer.from('hello')

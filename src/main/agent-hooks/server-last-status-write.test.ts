@@ -166,6 +166,11 @@ describe('Last-status persistence', () => {
             tabId: 'tab-1',
             worktreeId: 'wt-1',
             connectionId: 'ssh-target',
+            providerSession: {
+              key: 'session_id',
+              id: 'retained-session',
+              transcriptPath: '/remote/retained-session.jsonl'
+            },
             receivedAt,
             stateStartedAt: receivedAt,
             payload: {
@@ -192,6 +197,13 @@ describe('Last-status persistence', () => {
       launchTokenHash,
       connectionId: 'ssh-target'
     })
+    expect(afterClear.transcriptOwners[PANE]).toMatchObject({
+      paneKey: PANE,
+      agentType: 'codex',
+      sessionId: 'retained-session',
+      transcriptPath: '/remote/retained-session.jsonl',
+      connectionId: 'ssh-target'
+    })
 
     const restored = new AgentHookServer()
     await restored.start({ env: 'production', userDataPath })
@@ -203,6 +215,12 @@ describe('Last-status persistence', () => {
         terminalProvenance: 'restored'
       })
     ).toEqual({ paneKey: PANE, source: 'hydrated_commitment' })
+    expect(restored.getTranscriptOwnerEvidence(PANE)).toEqual([
+      expect.objectContaining({
+        sessionId: 'retained-session',
+        connectionId: 'ssh-target'
+      })
+    ])
     restored.retirePaneAuthority(PANE)
     restored.flushStatusPersistSync()
     restored.stop()

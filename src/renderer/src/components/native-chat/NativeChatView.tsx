@@ -95,6 +95,8 @@ export default function NativeChatView({
           agent={resolution.agent}
           sessionId={resolution.sessionId}
           transcriptPath={resolution.transcriptPath}
+          connectionId={resolution.connectionId}
+          transcriptOwnership={resolution.transcriptOwnership}
           isVisible={isVisible}
           targetPtyId={targetPtyId}
           terminalTabId={terminalTabId}
@@ -112,6 +114,8 @@ function NativeChatResolvedView({
   agent,
   sessionId,
   transcriptPath,
+  connectionId,
+  transcriptOwnership,
   isVisible,
   targetPtyId,
   terminalTabId,
@@ -129,8 +133,9 @@ function NativeChatResolvedView({
     agent,
     sessionId,
     transcriptPath,
+    transcriptConnectionId: connectionId,
     runtimeEnvironmentId,
-    enabled: isVisible
+    enabled: isVisible && transcriptOwnership !== 'unknown'
   })
   const launchPrompt = useAppStore((s) => s.nativeChatLaunchPromptByTabId[terminalTabId] ?? null)
   const clearNativeChatLaunchPrompt = useAppStore((s) => s.clearNativeChatLaunchPrompt)

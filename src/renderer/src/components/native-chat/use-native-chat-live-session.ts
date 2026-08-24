@@ -1,9 +1,7 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import {
   NATIVE_CHAT_SOURCE_PRIORITY,
-  type AgentType,
-  type NativeChatMessage,
-  type NativeChatSession
+  type NativeChatMessage
 } from '../../../../shared/native-chat-types'
 import {
   applyAppend,
@@ -22,52 +20,25 @@ import { useNativeChatHookStatus } from './use-native-chat-hook-status'
 import { useNativeChatAssembledMessages } from './use-native-chat-assembled-messages'
 import { createNativeChatReadRetryTimer } from './native-chat-read-retry-timer'
 import { openNativeChatTranscriptStream } from './native-chat-stream-teardown'
+import {
+  nextNativeChatSubscriptionId,
+  NOTFOUND_RETRY_WINDOW_MS
+} from './native-chat-subscription-identity'
+import type {
+  NativeChatLiveSession,
+  ReadState,
+  UseNativeChatLiveSessionArgs
+} from './native-chat-live-session-types'
+import { nativeChatLiveSourceKey } from './native-chat-live-source-key'
 
-export type UseNativeChatLiveSessionArgs = {
-  /** Composite `${tabId}:${leafId}` key — selects the live hook entry. */
-  paneKey: string
-  agent: AgentType
-  /** The agent's own session id, or null before it reports one — nothing to read/tail, so the view shows live hook state. */
-  sessionId: string | null
-  /** Authoritative transcript path from the hook, preferred over reconstructing it from sessionId. Null when not reported. */
-  transcriptPath?: string | null
-  /** Runtime owner (Model B): non-null routes read/subscribe to the remote host; null keeps the local IPC path. */
-  runtimeEnvironmentId?: string | null
-  /** False suspends transcript IO while retaining the last committed session. */
-  enabled?: boolean
-}
-
-/** A live session plus the older-history pagination controls the view needs. */
-export type NativeChatLiveSession = NativeChatSession & {
-  /** True when an older page may still exist (the last read filled the window). */
-  hasMore: boolean
-  /** Whether an older-history page is currently loading. */
-  loadingEarlier: boolean
-  /** Grow the read window to page in older history (scrolled-to-top trigger). */
-  loadEarlier: () => void
-  /** Raw initial-read phase. `status` is not a substitute: a live 'working' hook
-   *  outranks (and so hides) 'loading', which would let a consumer deciding from
-   *  an empty list treat an in-flight transcript as real history. */
-  readPhase: ReadState['phase']
-}
+export type {
+  NativeChatLiveSession,
+  ReadState,
+  UseNativeChatLiveSessionArgs
+} from './native-chat-live-session-types'
 
 // Stable empty-base reference so a non-ready read doesn't churn the base axis.
 const EMPTY_MESSAGES: readonly NativeChatMessage[] = []
-
-let subscriptionCounter = 0
-
-function nextSubscriptionId(): string {
-  subscriptionCounter += 1
-  return `native-chat-${subscriptionCounter}-${Date.now()}`
-}
-
-// Why: a new session's transcript can take minutes to appear on disk (#8401).
-const NOTFOUND_RETRY_WINDOW_MS = 60_000
-
-export type ReadState =
-  | { phase: 'loading' }
-  | { phase: 'ready'; messages: NativeChatMessage[] }
-  | { phase: 'error'; error: string }
 
 /**
  * Renderer hook that streams a NativeChatSession for a pane: windowed
@@ -117,13 +88,7 @@ export function useNativeChatLiveSession(
   const latestTransport = useRef(transport)
   latestTransport.current = transport
   const transcriptEpochRef = useRef(0)
-  const sourceKey = JSON.stringify([
-    paneKey,
-    runtimeEnvironmentId ?? null,
-    agent,
-    sessionId,
-    transcriptPath ?? null
-  ])
+  const sourceKey = nativeChatLiveSourceKey(args)
   const retainedSourceKeyRef = useRef(sourceKey)
 
   useEffect(() => {
@@ -175,7 +140,7 @@ export function useNativeChatLiveSession(
         return
       }
       void transport
-        .readSession(agent, activeSessionId, limitRef.current, transcriptPath ?? undefined)
+        .readSession(agent, activeSessionId, limitRef.current, transcriptPath ?? undefined, paneKey)
         .then((result) => {
           if (cancelled || !latestEnabled.current || frameArrived) {
             return
@@ -203,7 +168,7 @@ export function useNativeChatLiveSession(
 
     loadSession(0)
 
-    const subscriptionId = nextSubscriptionId()
+    const subscriptionId = nextNativeChatSubscriptionId()
     const closeStream = openNativeChatTranscriptStream(
       transport,
       {
@@ -211,6 +176,7 @@ export function useNativeChatLiveSession(
         agent,
         sessionId,
         transcriptPath: transcriptPath ?? undefined,
+        paneKey,
         limit: limitRef.current
       },
       (frame) => {
@@ -223,7 +189,11 @@ export function useNativeChatLiveSession(
           setLoadingEarlier(false)
           if ('error' in frame && frame.error) {
             // Why: an error frame carries no transcript, so it must not consume the seed — a healthy read still has to repair the pane.
-            setRead({ phase: 'error', error: frame.error })
+            const error = frame.error
+            // Retain existing transcript history after a stream error.
+            setRead((prev) =>
+              prev.phase === 'ready' && prev.messages.length > 0 ? prev : { phase: 'error', error }
+            )
             return
           }
           frameArrived = true
@@ -246,7 +216,16 @@ export function useNativeChatLiveSession(
       closeStream()
     }
     // `transport` identity changes on an owner flip, re-running this effect to re-subscribe against the new host.
-  }, [agent, enabled, sessionId, sourceKey, transcriptPath, transport, transcriptLifecycleControl])
+  }, [
+    agent,
+    enabled,
+    paneKey,
+    sessionId,
+    sourceKey,
+    transcriptPath,
+    transport,
+    transcriptLifecycleControl
+  ])
 
   const loadEarlier = useCallback(() => {
     if (
@@ -263,7 +242,7 @@ export function useNativeChatLiveSession(
     const lifecycleRevision = transcriptLifecycleControl.revision()
     setLoadingEarlier(true)
     void transport
-      .readSession(agent, sessionId, nextLimit, transcriptPath ?? undefined)
+      .readSession(agent, sessionId, nextLimit, transcriptPath ?? undefined, paneKey)
       .then((result) => {
         // Ignore a stale resolve from a swapped session or flipped owner — either would paint the wrong host's history.
         if (
@@ -294,6 +273,7 @@ export function useNativeChatLiveSession(
       })
   }, [
     agent,
+    paneKey,
     sessionId,
     transcriptPath,
     transport,

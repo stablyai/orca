@@ -14,6 +14,7 @@ const holdUnconfirmedSend = vi.fn()
 // and transcript state; defaults keep the send-seam tests unchanged.
 const viewMode = { isTabChatView: (_tabId: string) => true }
 const sessionState = { messages: [] as unknown[], status: 'ready', transcriptLoading: false }
+const sessionArgs: Record<string, unknown>[] = []
 const draftsArgs: Record<string, unknown>[] = []
 const promptsState = {
   permission: null as unknown,
@@ -31,7 +32,10 @@ vi.mock('./use-mobile-session-view-mode', () => ({
   })
 }))
 vi.mock('./use-mobile-native-chat-session', () => ({
-  useMobileNativeChatSession: () => sessionState
+  useMobileNativeChatSession: (args: Record<string, unknown>) => {
+    sessionArgs.push(args)
+    return sessionState
+  }
 }))
 vi.mock('./use-mobile-native-chat-drafts', () => ({
   useMobileNativeChatDrafts: (args: Record<string, unknown>) => {
@@ -120,6 +124,8 @@ describe('useMobileNativeChatController handleNativeChatSend', () => {
       activeHandleRef: { current: 'term-1' },
       deviceTokenRef: { current: null },
       nativeChatTranscriptIsLocalReadable: true,
+      nativeChatTranscriptOwnerCapable: true,
+      nativeChatTranscriptOwnerCapabilityPending: false,
       nativeChatInputLeaseReady: true,
       onSendError,
       onSendResolved
@@ -345,6 +351,8 @@ describe('useMobileNativeChatController launch-draft wiring', () => {
       activeHandleRef: { current: 'term-1' },
       deviceTokenRef: { current: null },
       nativeChatTranscriptIsLocalReadable: true,
+      nativeChatTranscriptOwnerCapable: true,
+      nativeChatTranscriptOwnerCapabilityPending: false,
       nativeChatInputLeaseReady: true,
       onSendError: vi.fn(),
       onSendResolved: vi.fn()
@@ -437,6 +445,8 @@ describe('useMobileNativeChatController ask dismissal across a transcript reload
       activeHandleRef: { current: 'term-1' },
       deviceTokenRef: { current: null },
       nativeChatTranscriptIsLocalReadable: true,
+      nativeChatTranscriptOwnerCapable: true,
+      nativeChatTranscriptOwnerCapabilityPending: false,
       nativeChatInputLeaseReady: true,
       onSendError: vi.fn(),
       onSendResolved: vi.fn()
@@ -698,22 +708,41 @@ describe('useMobileNativeChatController streaming scope', () => {
     agentStatus: {
       state: 'working',
       agentType: 'claude',
+      connectionId: 'ssh-owner',
       providerSession: { id: 'session-1' }
     },
     isActive: true
   }
 
-  function Harness(): null {
+  function Harness({
+    capable = true,
+    pending = false,
+    connectionId = 'ssh-owner',
+    unknownOwner = false
+  }: {
+    capable?: boolean
+    pending?: boolean
+    connectionId?: string | null
+    unknownOwner?: boolean
+  } = {}): null {
     controller = useMobileNativeChatController({
       client: clientStub as unknown as RpcClient,
       connState: 'connected',
       hostId: 'h',
       worktreeId: 'w',
-      activeSessionTab: workingTab as never,
+      activeSessionTab: {
+        ...workingTab,
+        agentStatus: {
+          ...workingTab.agentStatus,
+          connectionId: unknownOwner ? undefined : connectionId
+        }
+      } as never,
       activeSessionTabId: 'tab-1',
       activeHandleRef: { current: 'term-1' },
       deviceTokenRef: { current: null },
       nativeChatTranscriptIsLocalReadable: true,
+      nativeChatTranscriptOwnerCapable: capable,
+      nativeChatTranscriptOwnerCapabilityPending: pending,
       nativeChatInputLeaseReady: true,
       onSendError: vi.fn(),
       onSendResolved: vi.fn()
@@ -722,6 +751,7 @@ describe('useMobileNativeChatController streaming scope', () => {
   }
 
   beforeEach(() => {
+    sessionArgs.length = 0
     viewMode.isTabChatView = () => true
     act(() => {
       renderer = create(createElement(Harness))
@@ -733,6 +763,22 @@ describe('useMobileNativeChatController streaming scope', () => {
     renderer = null
     controller = null
     viewMode.isTabChatView = () => true
+  })
+
+  it('withholds the native-chat client until the SSH owner capability is proven', () => {
+    expect(sessionArgs.at(-1)?.client).toBe(clientStub)
+
+    act(() => renderer?.update(createElement(Harness, { pending: true })))
+    expect(sessionArgs.at(-1)?.client).toBeNull()
+
+    act(() => renderer?.update(createElement(Harness, { capable: false })))
+    expect(sessionArgs.at(-1)?.client).toBeNull()
+
+    act(() => renderer?.update(createElement(Harness, { unknownOwner: true })))
+    expect(sessionArgs.at(-1)?.client).toBeNull()
+
+    act(() => renderer?.update(createElement(Harness, { connectionId: null })))
+    expect(sessionArgs.at(-1)?.client).toBe(clientStub)
   })
 
   it('holds the stream scope and liveness while the user peeks at the terminal', () => {

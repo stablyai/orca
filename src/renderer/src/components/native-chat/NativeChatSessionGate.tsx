@@ -29,13 +29,12 @@ export function NativeChatSessionGate({
       previousResolution.sessionId &&
       !currentResolution.sessionId
     ) {
-      // Why: reconnect snapshots can retain a pane/agent fallback while briefly
-      // omitting provider-session metadata. Keep the conversation generation
-      // stable so transcript IO and the composer do not reset mid-reconnect.
+      // A reconnect gap has no provider session by construction; retain the last complete identity.
       return {
         ...currentResolution,
         sessionId: previousResolution.sessionId,
-        transcriptPath: previousResolution.transcriptPath
+        transcriptPath: previousResolution.transcriptPath,
+        connectionId: previousResolution.connectionId
       }
     }
     return currentResolution

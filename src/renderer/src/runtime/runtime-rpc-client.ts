@@ -217,7 +217,10 @@ export function clearRuntimeCompatibilityCache(environmentId?: string | null): v
   runtimeCompatibilityChecks.clear()
 }
 
-export function markRuntimeEnvironmentCompatible(environmentId: string): void {
+export function markRuntimeEnvironmentCompatible(
+  environmentId: string,
+  capabilities?: RuntimeCapability[]
+): void {
   const trimmed = environmentId.trim()
   if (!trimmed) {
     return
@@ -226,8 +229,8 @@ export function markRuntimeEnvironmentCompatible(environmentId: string): void {
     check: Promise.resolve(),
     failedAt: null,
     provenCompatible: true,
-    status: null,
-    statusCheckedAt: null
+    status: capabilities ? ({ capabilities } as RuntimeStatus) : null,
+    statusCheckedAt: capabilities ? Date.now() : null
   })
 }
 

@@ -105,6 +105,59 @@ describe('useHostStatusGates', () => {
     }
   })
 
+  it('invalidates and reprobes capabilities when a stable client generation changes', async () => {
+    let generation = 1
+    let publishState = (): void => {}
+    let resolveReplacement: ((response: unknown) => void) | null = null
+    const replacementStatus = new Promise((resolve) => {
+      resolveReplacement = resolve
+    })
+    const sendRequest = vi
+      .fn()
+      .mockResolvedValueOnce({ ok: true, result: { capabilities: ['old-capability'] } })
+      .mockReturnValueOnce(replacementStatus)
+    const client = {
+      sendRequest,
+      getGeneration: () => generation,
+      onStateChange: (listener: () => void) => {
+        publishState = listener
+        return () => {}
+      }
+    } as unknown as RpcClient
+    let gates: HostStatusGates | null = null
+    let renderer: ReactTestRenderer | null = null
+
+    function Probe(): null {
+      gates = useHostStatusGates({ hostId: 'host-1', client, connState: 'connected' })
+      return null
+    }
+
+    try {
+      await act(async () => {
+        renderer = create(createElement(Probe))
+        await Promise.resolve()
+      })
+      expect(gates?.hostCapabilities).toEqual(['old-capability'])
+
+      act(() => {
+        generation = 2
+        publishState()
+      })
+      expect(gates).toMatchObject({ hostCapabilities: [], statusPending: true })
+
+      await act(async () => {
+        resolveReplacement?.({ ok: true, result: { capabilities: ['replacement-capability'] } })
+        await replacementStatus
+      })
+      expect(gates).toMatchObject({
+        hostCapabilities: ['replacement-capability'],
+        statusPending: false
+      })
+    } finally {
+      renderer?.unmount()
+    }
+  })
+
   it('keeps the proven gates while the same client reconnects, pending until it re-answers', async () => {
     let resolveReconnect: ((response: unknown) => void) | null = null
     const pendingReconnect = new Promise((resolve) => {

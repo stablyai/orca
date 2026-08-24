@@ -197,6 +197,29 @@ describe('useNativeChatLiveSession — transport routing', () => {
     expect(transport.subscribe).not.toHaveBeenCalled()
   })
 
+  it('makes zero transcript calls while ownership is unknown, then binds when proven', async () => {
+    const transport = getMockTransport('env-1')
+    const root = await render({
+      paneKey: PANE,
+      agent: AGENT,
+      sessionId: SESSION,
+      runtimeEnvironmentId: 'env-1',
+      enabled: false
+    })
+    expect(transport.readSession).not.toHaveBeenCalled()
+    expect(transport.subscribe).not.toHaveBeenCalled()
+
+    await rerender(root, {
+      paneKey: PANE,
+      agent: AGENT,
+      sessionId: SESSION,
+      runtimeEnvironmentId: 'env-1',
+      enabled: true
+    })
+    expect(transport.readSession).toHaveBeenCalledOnce()
+    expect(transport.subscribe).toHaveBeenCalledOnce()
+  })
+
   it('uses the local transport when the owner is null (unchanged behavior, R6)', async () => {
     await render({ paneKey: PANE, agent: AGENT, sessionId: SESSION })
 
@@ -634,6 +657,27 @@ describe('useNativeChatLiveSession — notFound retry (#8401)', () => {
 
     expect(latest?.status).toBe('error')
     expect(latest?.error).toBe('No transcript found')
+  })
+
+  // The advisory carries no transcript: a pane that already read history must
+  // keep it rather than trade it for an error card.
+  it('keeps already-read history when an error frame arrives', async () => {
+    const transport = getMockTransport('env-1', { autoSnapshot: false })
+    transport.readSession.mockResolvedValue({ messages: [assistant('a-1', 'hello')] })
+
+    await render({ paneKey: PANE, agent: AGENT, sessionId: SESSION, runtimeEnvironmentId: 'env-1' })
+    expect(latest?.messages.map((m) => m.id)).toContain('a-1')
+
+    await act(async () => {
+      transport.emit({
+        type: 'snapshot',
+        messages: [],
+        hasMore: false,
+        error: 'No transcript found for this session on this machine.'
+      })
+    })
+
+    expect(latest?.messages.map((m) => m.id)).toContain('a-1')
   })
 
   it('renders live-appended content instead of loading while the read is still retrying', async () => {
