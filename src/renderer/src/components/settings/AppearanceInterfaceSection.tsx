@@ -2,6 +2,7 @@ import type React from 'react'
 
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select'
+import { CustomUiThemeManager } from './CustomUiThemeManager'
 import { UIZoomControl } from './UIZoomControl'
 import { SearchableSetting } from './SearchableSetting'
 import { AppearanceAdvancedDisclosure } from './AppearanceAdvancedDisclosure'
@@ -111,6 +112,18 @@ export function AppearanceInterfaceSection({
             />
           }
         />
+      </SearchableSetting>
+
+      <SearchableSetting
+        title={translate('settings.appearance.customUiTheme.title', 'Custom UI Theme')}
+        description={translate(
+          'settings.appearance.customUiTheme.description',
+          'Customize the shell theme beyond light/dark presets'
+        )}
+        keywords={['custom', 'theme', 'color', 'tweakcn', 'shadcn', 'import']}
+        forceVisible={forceVisiblePrimary}
+      >
+        <CustomUiThemeManager settings={settings} updateSettings={updateSettings} />
       </SearchableSetting>
 
       {SHOW_UI_LANGUAGE_SETTING ? (

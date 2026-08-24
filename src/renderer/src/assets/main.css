@@ -3018,3 +3018,11 @@ html.native-shell .app-layout {
     inset 0 1px 0 0 color-mix(in srgb, var(--foreground) 5%, transparent),
     0 10px 24px rgba(0, 0, 0, 0.18);
 }
+
+/* Why: when a custom UI theme is active, the hardcoded secondary/muted
+   combo on the input bar badge clashes. Remap to theme-aware tokens. */
+.custom-ui-theme-active .bg-secondary\/70.text-muted-foreground {
+  background-color: var(--muted);
+  color: var(--foreground);
+  border-color: var(--border);
+}

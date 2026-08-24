@@ -38,6 +38,21 @@
       "menuBarIcon": {
         "title": "Mostrar icono en la barra de menús",
         "description": "Mantén un acceso directo de Orca e indicador de actividad en la barra de menús de macOS."
+      },
+      "customUiTheme": {
+        "title": "Tema de interfaz personalizada",
+        "description": "Personaliza el tema del shell más allá de los ajustes preestablecidos claros y oscuros",
+        "activeLabel": "Tema activo",
+        "defaultTheme": "Predeterminado",
+        "customThemesList": "Temas personalizados",
+        "deleteTheme": "Eliminar tema",
+        "importTheme": "Importar tema",
+        "themeNamePlaceholder": "Nombre del tema (ej. Claude)",
+        "fallbackThemeName": "Tema personalizado",
+        "importErrorDescription": "No se pudieron analizar las variables. Asegúrate de que tenga bloques :root o .dark, o coincida con el JSON de tema de Shadcn.",
+        "limitErrorDescription": "Puedes almacenar hasta {{value0}} temas personalizados.",
+        "importButton": "Importar",
+        "textareaPlaceholder": "Pega el código de tema CSS (salida de Tweakcn) o el JSON de tema de Shadcn..."
       }
     }
   },

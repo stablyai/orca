@@ -46,7 +46,7 @@ export function AppearanceSection({
         disabled={toggleDisabled}
         className="flex w-full items-center gap-3.5 px-4 py-3.5 text-left transition-colors hover:bg-accent/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50 disabled:cursor-default disabled:hover:bg-transparent"
       >
-        <span className="grid size-8 shrink-0 place-items-center rounded-md bg-secondary text-foreground [&_svg]:size-4">
+        <span className="grid size-8 shrink-0 place-items-center rounded-md bg-secondary text-secondary-foreground [&_svg]:size-4">
           {icon}
         </span>
         <span className="min-w-0 flex-1">
