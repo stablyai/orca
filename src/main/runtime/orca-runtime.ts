@@ -3632,6 +3632,9 @@ export class OrcaRuntimeService {
       }) => AgentHookAuthorityAttestation | null)
     | null
   private readonly retireAgentHookCompatibilityAuthorityFn: ((paneKey: string) => void) | null
+  private readonly reconcileAgentStatusForEndedProcessFn:
+    | ((paneKeys: Iterable<string>) => void)
+    | null
   private readonly canRecoverPersistentLocalPtysFn: () => boolean
   private readonly buildAgentHookPtyEnv: (() => Record<string, string>) | null
   private readonly getDesktopWindowStatusFn: () => RuntimeDesktopWindowStatus
@@ -3713,6 +3716,7 @@ export class OrcaRuntimeService {
         terminalProvenance: 'current_runtime' | 'restored'
       }) => AgentHookAuthorityAttestation | null
       retireAgentHookCompatibilityAuthority?: (paneKey: string) => void
+      reconcileAgentStatusForEndedProcess?: (paneKeys: Iterable<string>) => void
       canRecoverPersistentLocalPtys?: () => boolean
       // Why: codex-home paths for the Agent Session History scan must be sourced
       // here, not via the window-only registerCoreHandlers path — that path never
@@ -3755,6 +3759,7 @@ export class OrcaRuntimeService {
       deps?.attestAgentHookCompatibilityAuthority ?? null
     this.retireAgentHookCompatibilityAuthorityFn =
       deps?.retireAgentHookCompatibilityAuthority ?? null
+    this.reconcileAgentStatusForEndedProcessFn = deps?.reconcileAgentStatusForEndedProcess ?? null
     this.canRecoverPersistentLocalPtysFn = deps?.canRecoverPersistentLocalPtys ?? (() => true)
     // Why: configure the shared AiVault scan cache from a serve-mode-reachable
     // seam so the aiVault.listSessions RPC includes managed-Codex + WSL sessions
@@ -13962,6 +13967,27 @@ export class OrcaRuntimeService {
     }
   }
 
+  /** Every pane key this PTY could be addressed by. Independent of launch authority: an ordinary
+   *  restored PTY has neither a launch token nor a receipt, and those are exactly the panes whose
+   *  spawn-time `ptyPaneKey` mapping teardown could not resolve. */
+  private collectPaneKeysForPty(ptyId: string): Set<string> {
+    const paneKeys = new Set<string>()
+    const pty = this.ptysById.get(ptyId)
+    if (pty?.paneKey && parsePaneKey(pty.paneKey)) {
+      paneKeys.add(pty.paneKey)
+    }
+    const receipt = this.restoredOrchestrationAuthorityByPtyId.get(ptyId)
+    if (receipt?.paneKey && parsePaneKey(receipt.paneKey)) {
+      paneKeys.add(receipt.paneKey)
+    }
+    for (const leaf of this.getLeavesForPty(ptyId)) {
+      if (isValidTerminalTabId(leaf.tabId) && isTerminalLeafId(leaf.leafId)) {
+        paneKeys.add(makePaneKey(leaf.tabId, leaf.leafId))
+      }
+    }
+    return paneKeys
+  }
+
   private retirePtyAgentLaunchAuthority(ptyId: string): void {
     const pty = this.ptysById.get(ptyId)
     if (!pty) {
@@ -13971,21 +13997,10 @@ export class OrcaRuntimeService {
     if (!pty.launchToken && !receipt) {
       return
     }
+    const paneKeys = this.collectPaneKeysForPty(ptyId)
     this.restoredOrchestrationAuthorityByPtyId.delete(ptyId)
     pty.launchToken = null
     pty.launchIncarnationId = null
-    const paneKeys = new Set<string>()
-    if (pty.paneKey && parsePaneKey(pty.paneKey)) {
-      paneKeys.add(pty.paneKey)
-    }
-    if (receipt?.paneKey && parsePaneKey(receipt.paneKey)) {
-      paneKeys.add(receipt.paneKey)
-    }
-    for (const leaf of this.getLeavesForPty(ptyId)) {
-      if (isValidTerminalTabId(leaf.tabId) && isTerminalLeafId(leaf.leafId)) {
-        paneKeys.add(makePaneKey(leaf.tabId, leaf.leafId))
-      }
-    }
     for (const paneKey of paneKeys) {
       this.retireAgentHookCompatibilityAuthorityFn?.(paneKey)
     }
@@ -15201,7 +15216,14 @@ export class OrcaRuntimeService {
     ptyId: string,
     exitCode: number,
     exitIncarnationId?: PtyIncarnationId,
-    options?: { hostExitConfirmed?: boolean; cause?: TerminalExitCause }
+    options?: {
+      hostExitConfirmed?: boolean
+      cause?: TerminalExitCause
+      /** The provider's own physical-exit callback fired. Separate from `hostExitConfirmed`, which
+       *  also drives the SSH surface decision and the liveness verdict: node-pty reports real exits
+       *  as -1, so the numeric code alone cannot tell a dead process from a failed stop. */
+      providerExitObserved?: boolean
+    }
   ): void {
     const pty = this.ptysById.get(ptyId)
     if (exitIncarnationId && pty?.incarnationId && exitIncarnationId !== pty.incarnationId) {
@@ -15227,6 +15249,9 @@ export class OrcaRuntimeService {
       pty?.connectionId != null &&
       exitCode < 0 &&
       options?.hostExitConfirmed !== true
+    // Why: collect before retirePtyAgentLaunchAuthority, which deletes the restored-authority
+    // receipt a receipt-only pane's key comes from.
+    const exitPaneKeys = this.collectPaneKeysForPty(ptyId)
     if (preservesAbnormalSshSurface) {
       if (this.getPtyLivenessVerdict(ptyId)?.status !== 'unverifiable') {
         this.markPtyLivenessUnverifiable(ptyId, SSH_EXIT_UNCONFIRMED_REASON)
@@ -15234,6 +15259,15 @@ export class OrcaRuntimeService {
       this.restoredOrchestrationAuthorityByPtyId.delete(ptyId)
     } else {
       this.retirePtyAgentLaunchAuthority(ptyId)
+    }
+    // Why: a synthetic -1 from a failed or unverified stop is not a death certificate (the PTY can
+    // have survived it), while a real exit can also report -1 — so neither the numeric code nor the
+    // SSH surface predicate is sufficient on its own. Decided separately from
+    // preservesAbnormalSshSurface, which a host-confirmed negative SSH exit would otherwise skip.
+    const processDeathCertified =
+      exitCode >= 0 || options?.hostExitConfirmed === true || options?.providerExitObserved === true
+    if (processDeathCertified && exitPaneKeys.size > 0) {
+      this.reconcileAgentStatusForEndedProcessFn?.(exitPaneKeys)
     }
     const incarnationId =
       exitIncarnationId ??

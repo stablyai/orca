@@ -5032,6 +5032,9 @@ const api = {
     drop: (paneKey: string): void => {
       ipcRenderer.send('agentStatus:drop', paneKey)
     },
+    reconcileEndedProcess: (paneKey: string): void => {
+      ipcRenderer.send('agentStatus:reconcileEndedProcess', paneKey)
+    },
     /** Drop all cached hook statuses under one terminal tab prefix; fired on explicit tab close even without a local row. */
     dropByTabPrefix: (tabId: string): void => {
       ipcRenderer.send('agentStatus:dropByTabPrefix', tabId)
