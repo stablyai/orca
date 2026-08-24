@@ -1,9 +1,8 @@
-import { randomUUID } from 'node:crypto'
-import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, readFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { dirname } from 'node:path'
 import { getDefaultPersistedState, getDefaultWorkspaceSession } from '../../shared/constants'
-import type { ExecutionHostId } from '../../shared/execution-host'
+import { normalizeExecutionHostId, type ExecutionHostId } from '../../shared/execution-host'
 import { projectHostSetupProjectionFromRepos } from '../../shared/project-host-setup-projection'
 import { carryProjectStateThroughIdentityChange } from '../../shared/project-identity-succession'
 import type { PersistedState } from '../../shared/persisted-state-types'
@@ -13,6 +12,11 @@ import type { WorkspaceSessionState } from '../../shared/workspace-session-state
 import type { SparsePreset } from '../../shared/worktree/create-types'
 import type { RetiredNameRegistry } from '../../shared/worktree/retired-name-registry'
 import { getOrcaProfileDataFile } from './profile-index-store'
+import {
+  readWorkspaceSessionSidecarsForProfile,
+  replaceWorkspaceSessionSidecarsSync
+} from '../persistence/loading-store/workspace-session-sidecar'
+import { durableWriteTempPath, writeFileDurableSync } from '../durable-file-write'
 
 export type TransferProfileState = PersistedState
 
@@ -35,7 +39,7 @@ export function readProfileState(profileId: string, userDataPath: string): Trans
     return structuredClone(defaults)
   }
   const parsed = JSON.parse(readFileSync(dataFile, 'utf-8')) as Partial<PersistedState>
-  return rebuildRepoBackedProjectState({
+  const state = rebuildRepoBackedProjectState({
     ...defaults,
     ...parsed,
     repos: arrayOrEmpty<Repo>(parsed.repos),
@@ -84,18 +88,69 @@ export function readProfileState(profileId: string, userDataPath: string): Trans
       ? parsed.featureInteractionTelemetryBuckets
       : defaults.featureInteractionTelemetryBuckets
   })
+  const embeddedHostIds = new Set<ExecutionHostId>()
+  if (isRecord(parsed.workspaceSessionsByHostId)) {
+    for (const rawHostId of Object.keys(parsed.workspaceSessionsByHostId)) {
+      const hostId = normalizeExecutionHostId(rawHostId)
+      if (hostId && hostId !== 'local') {
+        embeddedHostIds.add(hostId)
+      }
+    }
+  }
+  return {
+    ...state,
+    ...readWorkspaceSessionSidecarsForProfile({
+      dataFile,
+      workspaceSession: state.workspaceSession,
+      workspaceSessionsByHostId: state.workspaceSessionsByHostId,
+      embeddedLocalPresent: parsed.workspaceSession !== undefined,
+      embeddedHostIds,
+      embeddedPayloadPresent:
+        parsed.workspaceSession !== undefined || parsed.workspaceSessionsByHostId !== undefined,
+      embeddedGenerationByHostId: state.workspaceSessionSidecarGenerationByHostId,
+      replacementPending: state.workspaceSessionSidecarReplacementPending
+    })
+  }
+}
+export type ProfileStateWriteOptions = {
+  afterJournalWrite?: () => void
+  afterSidecarReplacement?: () => void
 }
 
 export function writeProfileState(
   profileId: string,
   userDataPath: string,
-  state: TransferProfileState
+  state: TransferProfileState,
+  options: ProfileStateWriteOptions = {}
 ): void {
   const dataFile = getOrcaProfileDataFile(profileId, userDataPath)
   mkdirSync(dirname(dataFile), { recursive: true })
-  const tmpPath = `${dataFile}.${process.pid}.${randomUUID()}.tmp`
-  writeFileSync(tmpPath, JSON.stringify(state, null, 2), 'utf-8')
-  renameSync(tmpPath, dataFile)
+  const writeCore = (coreState: TransferProfileState): void => {
+    writeFileDurableSync(
+      durableWriteTempPath(dataFile),
+      dataFile,
+      JSON.stringify(coreState, null, 2)
+    )
+  }
+  // Journal first: if sidecar publication or pruning stops halfway, the complete embedded
+  // projection remains authoritative and the next load repairs every partition.
+  writeCore({
+    ...state,
+    workspaceSessionSidecarGenerationByHostId: {},
+    workspaceSessionSidecarReplacementPending: true
+  })
+  options.afterJournalWrite?.()
+  const generations = replaceWorkspaceSessionSidecarsSync({
+    dataFile,
+    workspaceSession: state.workspaceSession,
+    workspaceSessionsByHostId: state.workspaceSessionsByHostId
+  })
+  options.afterSidecarReplacement?.()
+  writeCore({
+    ...state,
+    workspaceSessionSidecarGenerationByHostId: generations,
+    workspaceSessionSidecarReplacementPending: false
+  })
 }
 
 function isRepoBackedProjectHostSetup(

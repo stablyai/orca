@@ -7,12 +7,13 @@ import type { Repo } from '../shared/repo-types'
 import type { TerminalTab } from '../shared/terminal-tab-types'
 import type { WorkspaceLineage, WorktreeLineage } from '../shared/worktree/lineage-types'
 import { folderWorkspaceKey, worktreeWorkspaceKey } from '../shared/workspace-scope'
+import type { StoreOptions } from './persistence/loading-store/store'
 
 // Shared mutable state so the electron mock can reference a per-test directory
 export const testState = { dir: '' }
 
 /** Reset modules and dynamically import Store so the data-file path picks up the current testState.dir */
-export async function createStore() {
+export async function createStore(options: StoreOptions = {}) {
   vi.resetModules()
   // Why here and not a per-file vi.mock('electron'): the data-file path resolves through
   // AppEnvironment now, and it must point at this test's dir rather than the global
@@ -20,7 +21,7 @@ export async function createStore() {
   installFakeAppEnvironment({ getPath: () => testState.dir })
   const { Store, initDataPath } = await import('./persistence')
   initDataPath()
-  return new Store()
+  return new Store(options)
 }
 
 export async function withPlatform<T>(platform: NodeJS.Platform, fn: () => Promise<T>): Promise<T> {

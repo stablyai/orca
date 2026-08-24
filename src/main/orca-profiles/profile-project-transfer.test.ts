@@ -1,4 +1,4 @@
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { beforeEach, afterEach, describe, expect, it, vi } from 'vitest'
@@ -11,6 +11,10 @@ import type { PersistedState } from '../../shared/persisted-state-types'
 import type { Repo } from '../../shared/repo-types'
 import type { WorktreeMeta } from '../../shared/worktree/meta-types'
 import type { SshTarget } from '../../shared/ssh-types'
+import {
+  readProfileState as readHydratedProfileState,
+  writeProfileState as writeHydratedProfileState
+} from './profile-project-state-file'
 
 const testState = { dir: '' }
 
@@ -57,7 +61,7 @@ function writeProfileState(profileId: string, state: PersistedState): void {
 }
 
 function readProfileState(profileId: string): PersistedState {
-  return JSON.parse(readFileSync(profileDataPath(profileId), 'utf-8')) as PersistedState
+  return readHydratedProfileState(profileId, testState.dir)
 }
 
 function makeRepo(overrides: Partial<Repo> = {}): Repo {
@@ -323,5 +327,34 @@ describe('profile project transfer', () => {
       duplicateRepoId: 'repo-existing'
     })
     expect(readProfileState('work').repos.map((repo) => repo.id)).toEqual(['repo-existing'])
+  })
+  it('recovers the complete embedded transfer projection when sidecar publication is interrupted', () => {
+    const desired = makeState({
+      workspaceSession: {
+        ...getDefaultPersistedState('/Users/tester').workspaceSession,
+        activeRepoId: 'journal-local'
+      },
+      workspaceSessionsByHostId: {
+        'runtime:journal-host': {
+          ...getDefaultPersistedState('/Users/tester').workspaceSession,
+          activeRepoId: 'journal-remote'
+        }
+      }
+    })
+
+    expect(() =>
+      writeHydratedProfileState('work', testState.dir, desired, {
+        afterJournalWrite: () => {
+          throw new Error('injected transfer interruption')
+        }
+      })
+    ).toThrow('injected transfer interruption')
+
+    const recovered = readHydratedProfileState('work', testState.dir)
+    expect(recovered.workspaceSession.activeRepoId).toBe('journal-local')
+    expect(recovered.workspaceSessionsByHostId?.['runtime:journal-host']?.activeRepoId).toBe(
+      'journal-remote'
+    )
+    expect(recovered.workspaceSessionSidecarReplacementPending).toBe(true)
   })
 })

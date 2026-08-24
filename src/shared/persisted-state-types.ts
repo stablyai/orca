@@ -85,10 +85,17 @@ export type PersistedState = {
     pr: Record<string, { data: PRInfo | null; fetchedAt: number }>
     issue: Record<string, { data: IssueInfo | null; fetchedAt: number }>
   }
-  /** Legacy single-blob session, kept as the canonical 'local' host partition so an app downgrade still reads its workspace. */
+  /** In-memory local-host API and rollback-compatible core projection. The sidecar is the hot-path
+   *  authority; core synchronization is debounced separately. */
   workspaceSession: WorkspaceSessionState
-  /** Per-execution-host session partitions for non-'local' hosts (ssh:/runtime:); 'local' stays in workspaceSession so pre-partition builds keep working. */
+  /** In-memory non-local partitions and rollback-compatible core projection. Each host also has an
+   *  independently atomic sidecar. */
   workspaceSessionsByHostId?: Partial<Record<ExecutionHostId, WorkspaceSessionState>>
+  /** Logical generations mirrored into the rollback-compatible core projection. */
+  workspaceSessionSidecarGenerationByHostId?: Partial<Record<ExecutionHostId, number>>
+  /** Profile transfer journal: while true, embedded sessions/host ids are authoritative over a
+   *  possibly partial sidecar replacement. */
+  workspaceSessionSidecarReplacementPending?: boolean
   sshTargets: SshTarget[]
   /** SSH config aliases the user deleted; suppresses re-import from ~/.ssh/config so a deleted host doesn't reappear. */
   deletedSshConfigAliases: string[]

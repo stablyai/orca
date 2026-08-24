@@ -42,7 +42,11 @@ export function normalizeBrowserHistoryEntries(
       continue
     }
     seen.add(key)
-    normalizedEntries.push({ ...entry, url: safeUrl, normalizedUrl: key })
+    normalizedEntries.push(
+      entry.url === safeUrl && entry.normalizedUrl === key
+        ? entry
+        : { ...entry, url: safeUrl, normalizedUrl: key }
+    )
     if (normalizedEntries.length >= MAX_BROWSER_HISTORY_ENTRIES) {
       break
     }

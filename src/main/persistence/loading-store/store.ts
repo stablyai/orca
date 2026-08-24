@@ -201,6 +201,12 @@ import {
 } from '../leasing-ssh-ptys/secret-validation'
 import { getDataFile, getGithubCacheFile, readGithubCacheSnapshot } from './user-data-path'
 import {
+  WorkspaceSessionSidecarStore,
+  workspaceSessionHash,
+  type WorkspaceSessionSidecarOptions,
+  type WorkspaceSessionPartitionWriteTrigger
+} from './workspace-session-sidecar'
+import {
   STALE_DURABLE_WRITE_TEMP_AGE_MS,
   gcStaleWorktreeMeta,
   normalizeWorktreeLinkedItemMetadata
@@ -362,6 +368,10 @@ import { ProjectHostSetupPersistenceOperations } from '../tracking-repos/project
 // Why (issue #1158): keep 5 rolling backups at >=1h spacing so a corrupt/empty write leaves an earlier copy recoverable.
 const BACKUP_COUNT = 5
 const BACKUP_MIN_INTERVAL_MS = 60 * 60 * 1000
+const loadMigratedSessionHostIdsByState = new WeakMap<
+  PersistedState,
+  ReadonlySet<ExecutionHostId>
+>()
 const WORKSPACE_SESSION_PATCH_FULL_NORMALIZATION_KEYS = new Set<keyof WorkspaceSessionState>([
   'tabsByWorktree',
   'terminalLayoutsByTabId'
@@ -393,8 +403,8 @@ function workspaceSessionSalvageLogDetails(result: {
   }
 }
 
-/** Normalize non-'local' host partitions; 'local' (the legacy workspaceSession blob) is dropped so the two surfaces never diverge.
- *  Each partition is zod-validated independently, so one corrupt host drops to defaults without taking out the others. Idempotent. */
+/** Normalize legacy embedded non-local partitions; 'local' is read from the separate legacy field.
+ *  Each partition is zod-validated independently, so one corrupt host drops to defaults without taking out the others. */
 function parseWorkspaceSessionsByHostId(
   raw: unknown,
   defaults: WorkspaceSessionState
@@ -498,6 +508,7 @@ function deleteRemovedTerminalScrollbackSnapshots(
 
 export type StoreOptions = {
   dataFile?: string
+  workspaceSessionSidecars?: WorkspaceSessionSidecarOptions
 }
 
 export type PtyBindingSourceExpectation = {
@@ -513,6 +524,7 @@ export class Store {
   private readonly state: PersistedState
   private readonly dataFile: string
   private readonly activeViewPreference: ActiveViewPreference
+  private readonly workspaceSessionSidecars: WorkspaceSessionSidecarStore
   private readonly terminalScrollbackSnapshotStorage: TerminalScrollbackSnapshotStorage
   private writeTimer: ReturnType<typeof setTimeout> | null = null
   private pendingWrite: Promise<void> | null = null
@@ -529,7 +541,9 @@ export class Store {
   private quitFlushPromise: Promise<void> | null = null
   // Content hash at last write, to skip no-op writes; derived from the payload with encrypted blobs normalized back to plaintext (see buildStateToSave), since encrypt() uses a random IV per call.
   private lastWrittenStateHash: string | null = null
-  private lastDurableWriteGeneration = -1
+  private lastDurableWriteGeneration = 0
+  private sessionCompatibilityGeneration = 0
+  private lastCoreSessionCompatibilityGeneration = 0
   private firstPendingSaveAt: number | null = null
   private githubCacheDirty = false
   private githubCacheGeneration = 0
@@ -538,6 +552,7 @@ export class Store {
   private readonly gitUsernameCache = new Map<string, string>()
   private readonly protectedSecrets = new ProtectedSecretPersistence()
   private loadNeedsSave = false
+  private coreRestoredFromBackup = false
   private settingsChangeListeners = new Set<
     (
       updates: Partial<GlobalSettings>,
@@ -550,6 +565,16 @@ export class Store {
   constructor(options: StoreOptions = {}) {
     // Why: profile switching yields multiple state paths; capture per Store so late async writes can't follow a global path.
     this.dataFile = options.dataFile ?? getDataFile()
+    if (!existsSync(this.dataFile)) {
+      this.lastDurableWriteGeneration = -1
+    }
+    this.workspaceSessionSidecars = new WorkspaceSessionSidecarStore(this.dataFile, {
+      ...options.workspaceSessionSidecars,
+      onTrace: (trace) => {
+        options.workspaceSessionSidecars?.onTrace?.(trace)
+        logPersistenceStartupMilestone('persistence-session-partition-write', trace)
+      }
+    })
     this.staleTempCleanup = removeStaleDurableWriteTempFiles(this.dataFile, {
       minimumAgeMs: STALE_DURABLE_WRITE_TEMP_AGE_MS
     })
@@ -565,12 +590,44 @@ export class Store {
     }
     const loaded = this.load()
     const normalized = normalizePersistedPaneIdentityState(loaded)
+    const normalizedSessionHostIds = new Set<ExecutionHostId>(
+      loadMigratedSessionHostIdsByState.get(loaded)
+    )
+    if (loaded.workspaceSession !== normalized.state.workspaceSession) {
+      normalizedSessionHostIds.add(LOCAL_EXECUTION_HOST_ID)
+    }
+    for (const [rawHostId, session] of Object.entries(
+      normalized.state.workspaceSessionsByHostId ?? {}
+    )) {
+      const hostId = normalizeExecutionHostId(rawHostId)
+      if (hostId && session !== loaded.workspaceSessionsByHostId?.[hostId]) {
+        normalizedSessionHostIds.add(hostId)
+      }
+    }
     this.state = normalized.state
     // Why: activeView is a frequent, tiny preference; keeping it beside the
     // profile avoids serializing the multi-MB recovery store on navigation.
     this.activeViewPreference = new ActiveViewPreference(this.dataFile, this.state.ui?.activeView)
     const adaptedProjectGroups = this.adaptFlatFolderScanProjectGroups()
     this.hydrateFolderWorkspaceDiffComments()
+    this.workspaceSessionSidecars.initialize(
+      this.state.workspaceSession,
+      this.state.workspaceSessionsByHostId,
+      normalizedSessionHostIds
+    )
+    const durableSessionGenerations = this.workspaceSessionSidecars.getDurableGenerationByHostId()
+    const persistedSessionGenerations = this.state.workspaceSessionSidecarGenerationByHostId ?? {}
+    if (
+      this.state.workspaceSessionSidecarReplacementPending === true ||
+      Object.keys(durableSessionGenerations).length !==
+        Object.keys(persistedSessionGenerations).length ||
+      Object.entries(durableSessionGenerations).some(([rawHostId, generation]) => {
+        const hostId = normalizeExecutionHostId(rawHostId)
+        return !hostId || persistedSessionGenerations[hostId] !== generation
+      })
+    ) {
+      this.loadNeedsSave = true
+    }
     for (const entry of normalized.migrationUnsupportedEntries) {
       setMigrationUnsupportedPty(entry)
     }
@@ -794,6 +851,7 @@ export class Store {
         const raw = readFileSync(path, 'utf-8')
         JSON.parse(raw)
         mkdirSync(dirname(dataFile), { recursive: true })
+        this.coreRestoredFromBackup = true
         writeFileSync(dataFile, raw, 'utf-8')
         console.warn(`[persistence] Recovered state from backup slot ${i}: ${path}`)
         return true
@@ -813,6 +871,9 @@ export class Store {
     })
 
     let result: PersistedState | null = null
+    let embeddedSessionPayloadPresent = false
+    let embeddedLocalSessionPresent = false
+    const embeddedSessionHostIds = new Set<ExecutionHostId>()
     try {
       if (fileExistedOnLoad) {
         const readStartedAt = performance.now()
@@ -823,6 +884,21 @@ export class Store {
         })
         logPersistenceStartupMilestone('persistence-json-parse-start')
         const parsed = JSON.parse(raw) as PersistedState
+        embeddedLocalSessionPresent = parsed.workspaceSession !== undefined
+        embeddedSessionPayloadPresent =
+          embeddedLocalSessionPresent || parsed.workspaceSessionsByHostId !== undefined
+        if (
+          parsed.workspaceSessionsByHostId &&
+          typeof parsed.workspaceSessionsByHostId === 'object' &&
+          !Array.isArray(parsed.workspaceSessionsByHostId)
+        ) {
+          for (const rawHostId of Object.keys(parsed.workspaceSessionsByHostId)) {
+            const hostId = normalizeExecutionHostId(rawHostId)
+            if (hostId && hostId !== LOCAL_EXECUTION_HOST_ID) {
+              embeddedSessionHostIds.add(hostId)
+            }
+          }
+        }
         logPersistenceStartupMilestone('persistence-json-parse-done')
 
         // Why: secrets are stored encrypted via safeStorage; decrypt at the load boundary so the app sees plaintext.
@@ -1499,7 +1575,8 @@ export class Store {
             }
             return { ...defaults.workspaceSession, ...result.value }
           })(),
-          // Why: per-host session partitions, validated independently; 'local' stays in workspaceSession for downgrade compat.
+          // Why: validate legacy embedded host partitions independently before sidecars resolve
+          // the newest mixed-version copy.
           workspaceSessionsByHostId: (() => {
             const { partitions, repaired } = parseWorkspaceSessionsByHostId(
               parsed.workspaceSessionsByHostId,
@@ -1511,6 +1588,10 @@ export class Store {
             }
             return partitions
           })(),
+          workspaceSessionSidecarGenerationByHostId:
+            parsed.workspaceSessionSidecarGenerationByHostId ?? {},
+          workspaceSessionSidecarReplacementPending:
+            parsed.workspaceSessionSidecarReplacementPending === true,
           sshTargets: (parsed.sshTargets ?? []).map(normalizeSshTarget),
           deletedSshConfigAliases: Array.isArray(parsed.deletedSshConfigAliases)
             ? parsed.deletedSshConfigAliases.filter(
@@ -1571,11 +1652,50 @@ export class Store {
     }
 
     if (result === null) {
+      if (fileExistedOnLoad) {
+        this.loadNeedsSave = true
+      }
       result = getDefaultPersistedState(homedir())
     }
-
+    const loadedSessionPartitions = this.workspaceSessionSidecars.resolveForLoad({
+      workspaceSession: result.workspaceSession,
+      workspaceSessionsByHostId: result.workspaceSessionsByHostId,
+      embeddedLocalPresent: embeddedLocalSessionPresent,
+      embeddedHostIds: embeddedSessionHostIds,
+      embeddedPayloadPresent: embeddedSessionPayloadPresent,
+      embeddedGenerationByHostId: result.workspaceSessionSidecarGenerationByHostId,
+      coreRestoredFromBackup: this.coreRestoredFromBackup,
+      replacementPending: result.workspaceSessionSidecarReplacementPending
+    })
+    result = {
+      ...result,
+      ...loadedSessionPartitions
+    }
+    const resolvedWorkspaceSessionHash = workspaceSessionHash(
+      loadedSessionPartitions.workspaceSession
+    )
+    const resolvedWorkspaceSessionHashesByHostId = Object.fromEntries(
+      Object.entries(loadedSessionPartitions.workspaceSessionsByHostId).map(([hostId, session]) => [
+        hostId,
+        session ? workspaceSessionHash(session) : null
+      ])
+    )
+    const loadMigratedSessionHostIds = new Set<ExecutionHostId>()
     const workspaceSession = pruneWorkspaceSessionBrowserHistory(
       pruneLocalTerminalScrollbackBuffers(result.workspaceSession, result.repos)
+    )
+    if (workspaceSession !== result.workspaceSession) {
+      loadMigratedSessionHostIds.add(LOCAL_EXECUTION_HOST_ID)
+    }
+    result.workspaceSessionsByHostId = Object.fromEntries(
+      Object.entries(result.workspaceSessionsByHostId ?? {}).map(([rawHostId, session]) => {
+        const pruned = session ? pruneWorkspaceSessionBrowserHistory(session) : session
+        const hostId = normalizeExecutionHostId(rawHostId)
+        if (hostId && pruned !== session) {
+          loadMigratedSessionHostIds.add(hostId)
+        }
+        return [rawHostId, pruned]
+      })
     )
     const migratedScrollback = migrateWorkspaceSessionTerminalScrollbackSnapshots(
       workspaceSession,
@@ -1641,6 +1761,21 @@ export class Store {
     } else {
       migrated.githubCache = readGithubCacheSnapshot(this.dataFile) ?? migrated.githubCache
     }
+
+    if (workspaceSessionHash(migrated.workspaceSession) !== resolvedWorkspaceSessionHash) {
+      loadMigratedSessionHostIds.add(LOCAL_EXECUTION_HOST_ID)
+    }
+    for (const [rawHostId, session] of Object.entries(migrated.workspaceSessionsByHostId ?? {})) {
+      const hostId = normalizeExecutionHostId(rawHostId)
+      if (
+        hostId &&
+        session &&
+        workspaceSessionHash(session) !== resolvedWorkspaceSessionHashesByHostId[hostId]
+      ) {
+        loadMigratedSessionHostIds.add(hostId)
+      }
+    }
+    loadMigratedSessionHostIdsByState.set(migrated, loadMigratedSessionHostIds)
 
     logPersistenceStartupMilestone('persistence-load-done', {
       repos: migrated.repos.length,
@@ -1757,13 +1892,22 @@ export class Store {
 
   /** Wait for any in-flight async disk write to complete. Used in tests. */
   async waitForPendingWrite(): Promise<void> {
-    await Promise.all([this.pendingWrite, this.activeViewPreference.waitForPendingWrite()])
+    await Promise.all([
+      this.pendingWrite,
+      this.workspaceSessionSidecars.waitForPendingWrite(),
+      this.activeViewPreference.waitForPendingWrite()
+    ])
   }
 
-  // Why githubCache is omitted: memory-only this session (see getGithubCacheFile), so refreshes never touch the durable file.
+  // The rollback-compatible core projection is synchronized on the ordinary core debounce; sidecars remain the hot-path authority.
   private getDurableState(): Omit<PersistedState, 'githubCache'> {
     const { githubCache: _memoryOnly, ...durable } = this.state
-    return durable
+    return {
+      ...durable,
+      workspaceSessionSidecarGenerationByHostId:
+        this.workspaceSessionSidecars.getDurableGenerationByHostId(),
+      workspaceSessionSidecarReplacementPending: false
+    }
   }
 
   // Why: build payload synchronously so hash and bytes reflect one state tick. A degraded prefix makes the first healthy retry durable even when plaintext state is unchanged.
@@ -1868,10 +2012,27 @@ export class Store {
     if (this.writesFrozen) {
       return
     }
+    await this.workspaceSessionSidecars.flushPending({
+      drainToStableGeneration: true,
+      trigger: 'flush'
+    })
+    if (!this.workspaceSessionSidecars.isCoreCleanupReady()) {
+      throw new Error('Workspace session migration is not durable')
+    }
     const gen = this.writeGeneration
+    const compatibilityGeneration = this.sessionCompatibilityGeneration
+    const coreProjectionHashes = this.workspaceSessionSidecars.captureCoreProjectionHashes(
+      this.state.workspaceSession,
+      this.state.workspaceSessionsByHostId
+    )
     const { payload, stateHash, protectedSecretUpdates } = this.buildStateToSave()
     // Why: don't rewrite a byte-identical multi-MB file when state nets out to already-persisted.
     if (stateHash === this.lastWrittenStateHash) {
+      this.lastCoreSessionCompatibilityGeneration = Math.max(
+        this.lastCoreSessionCompatibilityGeneration,
+        compatibilityGeneration
+      )
+      this.workspaceSessionSidecars.commitCoreProjectionHashes(coreProjectionHashes)
       this.lastDurableWriteGeneration = Math.max(this.lastDurableWriteGeneration, gen)
       return
     }
@@ -1917,6 +2078,16 @@ export class Store {
       }
       if (renamed) {
         this.lastDurableWriteGeneration = Math.max(this.lastDurableWriteGeneration, gen)
+        this.lastCoreSessionCompatibilityGeneration = Math.max(
+          this.lastCoreSessionCompatibilityGeneration,
+          compatibilityGeneration
+        )
+        this.workspaceSessionSidecars.commitCoreProjectionHashes(coreProjectionHashes)
+        if (this.sessionCompatibilityGeneration > compatibilityGeneration) {
+          this.workspaceSessionSidecars.refreshPartitionsNewerThanCoreProjection(
+            coreProjectionHashes
+          )
+        }
       }
     } finally {
       if (!renamed) {
@@ -1938,9 +2109,23 @@ export class Store {
     if (this.writesFrozen) {
       return
     }
+    this.workspaceSessionSidecars.flushSync('flush')
+    if (!this.workspaceSessionSidecars.isCoreCleanupReady()) {
+      throw new Error('Workspace session migration is not durable')
+    }
+    const compatibilityGeneration = this.sessionCompatibilityGeneration
+    const coreProjectionHashes = this.workspaceSessionSidecars.captureCoreProjectionHashes(
+      this.state.workspaceSession,
+      this.state.workspaceSessionsByHostId
+    )
     const { payload, stateHash, protectedSecretUpdates } = this.buildStateToSave()
     // Why: matching hash means the file already holds this state; force overrides when an async rename may be racing past the gen check.
     if (!opts.force && stateHash === this.lastWrittenStateHash) {
+      this.lastCoreSessionCompatibilityGeneration = Math.max(
+        this.lastCoreSessionCompatibilityGeneration,
+        compatibilityGeneration
+      )
+      this.workspaceSessionSidecars.commitCoreProjectionHashes(coreProjectionHashes)
       return
     }
     const dataFile = this.dataFile
@@ -1963,6 +2148,11 @@ export class Store {
         this.lastDurableWriteGeneration,
         this.writeGeneration
       )
+      this.lastCoreSessionCompatibilityGeneration = Math.max(
+        this.lastCoreSessionCompatibilityGeneration,
+        compatibilityGeneration
+      )
+      this.workspaceSessionSidecars.commitCoreProjectionHashes(coreProjectionHashes)
     } finally {
       if (!renamed) {
         try {
@@ -1982,14 +2172,30 @@ export class Store {
     if (this.quitFlushStarted) {
       throw new Error('Cannot synchronously flush after final persistence has started')
     }
+    this.workspaceSessionSidecars.flushSync('flush')
+    if (
+      this.lastCoreSessionCompatibilityGeneration < this.sessionCompatibilityGeneration &&
+      this.lastDurableWriteGeneration >= this.writeGeneration
+    ) {
+      this.writeGeneration++
+    }
+    const coreWritePending =
+      this.writeTimer !== null ||
+      this.pendingWrite !== null ||
+      this.lastDurableWriteGeneration < this.writeGeneration
     if (this.writeTimer) {
       clearTimeout(this.writeTimer)
       this.writeTimer = null
     }
     this.firstPendingSaveAt = null
+    if (!coreWritePending) {
+      return
+    }
     const asyncWriteWasInFlight = this.pendingWrite !== null
     // Why: bump writeGeneration so an in-flight async write skips its rename and can't overwrite this sync write.
-    this.writeGeneration++
+    if (asyncWriteWasInFlight) {
+      this.writeGeneration++
+    }
     if (this.inFlightAsyncTmpFile) {
       try {
         unlinkSync(this.inFlightAsyncTmpFile)
@@ -2107,6 +2313,8 @@ export class Store {
     this.projectGroupOperations ??= new ProjectGroupPersistenceOperations({
       state: this.state,
       scheduleSave: () => this.scheduleSave(),
+      workspaceSessionChanged: () =>
+        this.markWorkspaceSessionPartitionDirty(LOCAL_EXECUTION_HOST_ID, 'prune'),
       removeWorkspaceLineageForFolderParent: (folderWorkspaceId) =>
         this.removeWorkspaceLineageForFolderParent(folderWorkspaceId),
       pruneMobileClientTabSelections: (matchesWorktreeId) =>
@@ -2142,6 +2350,8 @@ export class Store {
     this.folderWorkspaceOperations ??= new FolderWorkspacePersistenceOperations({
       state: this.state,
       scheduleSave: () => this.scheduleSave(),
+      workspaceSessionChanged: () =>
+        this.markWorkspaceSessionPartitionDirty(LOCAL_EXECUTION_HOST_ID, 'prune'),
       removeWorkspaceLineageForFolderParent: (folderWorkspaceId) =>
         this.removeWorkspaceLineageForFolderParent(folderWorkspaceId),
       pruneMobileClientTabSelections: (matchesWorktreeId) =>
@@ -2215,6 +2425,7 @@ export class Store {
       this.state.workspaceSessionsByHostId,
       id
     )
+    this.markAllWorkspaceSessionPartitionsDirty('prune')
     this.scheduleSave()
   }
 
@@ -2238,6 +2449,7 @@ export class Store {
         this.state.workspaceSessionsByHostId,
         id
       )
+      this.markAllWorkspaceSessionPartitionsDirty('prune')
     } else if (parseExecutionHostId(hostId)?.kind === 'runtime') {
       const session = this.state.workspaceSessionsByHostId?.[hostId]
       if (session) {
@@ -2245,6 +2457,7 @@ export class Store {
           ...this.state.workspaceSessionsByHostId,
           [hostId]: removeRepoFromWorkspaceSession(session, id)
         }
+        this.markWorkspaceSessionPartitionDirty(hostId, 'prune')
       }
     }
     this.scheduleSave()
@@ -2404,6 +2617,7 @@ export class Store {
     return {
       state: this.state,
       flush: () => this.flush(),
+      scheduleSave: () => this.scheduleSave(),
       recordCreated: () => this.recordFeatureInteraction('automation-created')
     }
   }
@@ -2412,6 +2626,7 @@ export class Store {
     return {
       state: this.state,
       flush: () => this.flush(),
+      scheduleSave: () => this.scheduleSave(),
       recordManualRun: () => this.recordFeatureInteraction('automation-run'),
       getWorkspaceDisplayName: (workspaceId) =>
         this.getAutomationRunWorkspaceDisplayName(workspaceId)
@@ -2591,6 +2806,7 @@ export class Store {
    */
   migrateWorktreeIdentity(oldWorktreeId: string, newWorktreeId: string): void {
     if (migrateWorktreeIdentityOperation(this.state, oldWorktreeId, newWorktreeId)) {
+      this.markAllWorkspaceSessionPartitionsDirty('replace')
       this.scheduleSave()
     }
   }
@@ -2771,6 +2987,24 @@ export class Store {
   private resolveHostId(hostId?: string | null): ExecutionHostId {
     return normalizeExecutionHostId(hostId) ?? LOCAL_EXECUTION_HOST_ID
   }
+  private markWorkspaceSessionPartitionDirty(
+    hostId: ExecutionHostId,
+    trigger: WorkspaceSessionPartitionWriteTrigger
+  ): void {
+    if (this.quitFlushStarted) {
+      return
+    }
+    this.workspaceSessionSidecars.markDirty(hostId, this.getWorkspaceSession(hostId), trigger)
+    this.sessionCompatibilityGeneration++
+  }
+
+  private markAllWorkspaceSessionPartitionsDirty(
+    trigger: WorkspaceSessionPartitionWriteTrigger
+  ): void {
+    for (const hostId of this.getWorkspaceSessionHostIds()) {
+      this.markWorkspaceSessionPartitionDirty(hostId, trigger)
+    }
+  }
 
   getWorkspaceSession(hostId?: string | null): PersistedState['workspaceSession'] {
     const resolved = this.resolveHostId(hostId)
@@ -2851,7 +3085,7 @@ export class Store {
         [resolved]: session
       }
     }
-    this.scheduleSave()
+    this.markWorkspaceSessionPartitionDirty(resolved, 'prune')
   }
 
   /** Whether a partition still holds terminal membership for `worktreeId`. */
@@ -2895,7 +3129,7 @@ export class Store {
       ...this.state.workspaceSessionsByHostId,
       [hostId]: pruned
     }
-    this.scheduleSave()
+    this.markWorkspaceSessionPartitionDirty(hostId, 'replace')
   }
 
   private setLocalWorkspaceSession(
@@ -2903,6 +3137,7 @@ export class Store {
     deferSnapshotFiles = false
   ): void {
     const prior = this.state.workspaceSession
+    let coreStateChanged = false
     session = sanitizeWorkspaceSessionTerminalRetirements(session, prior)
     session = pruneWorkspaceSessionBrowserHistory(
       pruneLocalTerminalScrollbackBuffers(session, this.state.repos)
@@ -2925,6 +3160,7 @@ export class Store {
         ...this.state.ui,
         acknowledgedAgentsByPaneKey: remappedAcknowledgements.acknowledgements
       }
+      coreStateChanged = true
     }
     for (const entry of normalized.legacyPaneKeyAliasEntries) {
       registerPersistedPaneKeyAlias(entry)
@@ -2940,6 +3176,7 @@ export class Store {
     )
     if (remappedLeases.changed) {
       this.state.sshRemotePtyLeases = remappedLeases.leases
+      coreStateChanged = true
     }
     if (session && prior) {
       const priorTabs = prior.tabsByWorktree ?? {}
@@ -3049,7 +3286,10 @@ export class Store {
     if (deferSnapshotFiles) {
       this.enqueueTerminalScrollbackSnapshotWork(prior, session)
     }
-    this.scheduleSave()
+    this.markWorkspaceSessionPartitionDirty(LOCAL_EXECUTION_HOST_ID, 'replace')
+    if (coreStateChanged) {
+      this.scheduleSave()
+    }
   }
 
   private enqueueTerminalScrollbackSnapshotWork(
@@ -3077,6 +3317,7 @@ export class Store {
           this.state.workspaceSession === staged ? migrated : this.state.workspaceSession
         if (this.state.workspaceSession === staged) {
           this.state.workspaceSession = migrated
+          this.markWorkspaceSessionPartitionDirty(LOCAL_EXECUTION_HOST_ID, 'snapshot')
         } else if (current) {
           await deleteRemovedTerminalScrollbackSnapshotsAsync(
             migrated,
@@ -3125,7 +3366,7 @@ export class Store {
         [resolved]: next
       }
     }
-    this.scheduleSave()
+    this.markWorkspaceSessionPartitionDirty(resolved, 'patch')
   }
 
   private getTerminalLayoutLeafIds(root: TerminalPaneLayoutNode | null): Set<string> {
@@ -3313,6 +3554,7 @@ export class Store {
           [resolvedHostId]: sessionBeforeBinding
         }
       }
+      this.markWorkspaceSessionPartitionDirty(resolvedHostId, 'pty-binding')
     }
     if (args.incarnationId) {
       session.terminalPtyIncarnationsByPaneKey = {
@@ -3356,10 +3598,19 @@ export class Store {
     if (!isTerminalLeafId(args.leafId)) {
       // Why: keep legacy renderer-local pane ids out of durable leaf-keyed layout state after the UUID migration.
       advanceTopologyFence()
+      this.markWorkspaceSessionPartitionDirty(resolvedHostId, 'pty-binding')
       try {
-        this.flushOrThrow()
+        this.workspaceSessionSidecars.flushSync('pty-binding')
+        if (!existsSync(this.dataFile)) {
+          this.flushOrThrow()
+        }
       } catch (err) {
         restoreSession()
+        try {
+          this.workspaceSessionSidecars.flushSync('pty-binding')
+        } catch {
+          // Preserve the original persistence error; restored state remains dirty for retry.
+        }
         throw err
       }
       return true
@@ -3404,10 +3655,19 @@ export class Store {
       }
     }
     advanceTopologyFence()
+    this.markWorkspaceSessionPartitionDirty(resolvedHostId, 'pty-binding')
     try {
-      this.flushOrThrow()
+      this.workspaceSessionSidecars.flushSync('pty-binding')
+      if (!existsSync(this.dataFile)) {
+        this.flushOrThrow()
+      }
     } catch (err) {
       restoreSession()
+      try {
+        this.workspaceSessionSidecars.flushSync('pty-binding')
+      } catch {
+        // Preserve the original persistence error; restored state remains dirty for retry.
+      }
       throw err
     }
     return true
@@ -3570,9 +3830,32 @@ export class Store {
       state: this.state,
       protectedSecrets: this.protectedSecrets,
       syncProjectHostSetupCompatibilityState: () => this.syncProjectHostSetupCompatibilityState(),
-      scheduleSave: () => this.scheduleSave()
+      scheduleSave: () => this.scheduleSave(),
+      workspaceSessionPartitionsReassigned: (oldHostId, newHostId, changedHostIds) => {
+        this.state.workspaceSessionSidecarReplacementPending = true
+        this.scheduleSave()
+        this.flushOrThrow()
+        const normalizedOldHostId = normalizeExecutionHostId(oldHostId)
+        const normalizedNewHostId = normalizeExecutionHostId(newHostId)
+        if (normalizedOldHostId && normalizedNewHostId) {
+          this.workspaceSessionSidecars.reassignHostPartition(
+            normalizedOldHostId,
+            normalizedNewHostId,
+            this.state.workspaceSessionsByHostId?.[normalizedNewHostId]
+          )
+        }
+        for (const rawHostId of changedHostIds) {
+          const hostId = normalizeExecutionHostId(rawHostId)
+          if (hostId && hostId !== normalizedOldHostId && hostId !== normalizedNewHostId) {
+            this.markWorkspaceSessionPartitionDirty(hostId, 'replace')
+          }
+        }
+        this.state.workspaceSessionSidecarReplacementPending = false
+      }
     }
-    return reassignSshTargetIdOperation(operations, oldTargetId, newTargetId)
+    const reassigned = reassignSshTargetIdOperation(operations, oldTargetId, newTargetId)
+    this.flushOrThrow()
+    return reassigned
   }
 
   // ── SSH PTY Consumer Recovery ──────────────────────────────────────
@@ -3581,6 +3864,7 @@ export class Store {
     return {
       state: this.state,
       protectedSecrets: this.protectedSecrets,
+      scheduleSave: () => this.scheduleSave(),
       flushDurableStateOrThrowAsync: () => this.flushDurableStateOrThrowAsync()
     }
   }
@@ -3607,7 +3891,15 @@ export class Store {
       state: this.state,
       toComparablePtyId: (targetId, ptyId) =>
         this.getRelayPtyIdForSshLeaseComparison(targetId, ptyId),
-      scheduleSave: () => this.scheduleSave()
+      scheduleSave: () => this.scheduleSave(),
+      workspaceSessionPartitionsChanged: (hostIds) => {
+        for (const rawHostId of hostIds) {
+          const hostId = normalizeExecutionHostId(rawHostId)
+          if (hostId) {
+            this.markWorkspaceSessionPartitionDirty(hostId, 'pty-binding')
+          }
+        }
+      }
     }
   }
 
@@ -3626,6 +3918,7 @@ export class Store {
           targetId,
           leases
         ),
+      scheduleSave: () => this.scheduleSave(),
       flush: () => this.flush(),
       flushDurableStateOrThrowAsync: () => this.flushDurableStateOrThrowAsync()
     }
@@ -3717,7 +4010,19 @@ export class Store {
       return this.quitFlushPromise
     }
     this.quitFlushStarted = true
-    this.quitFlushPromise = this.flushCurrentStateAsync(true).catch(() => {})
+    const pendingSnapshotFileWork = this.pendingSnapshotFileWork
+    this.quitFlushPromise = (async () => {
+      await pendingSnapshotFileWork
+      if (pendingSnapshotFileWork) {
+        this.workspaceSessionSidecars.markDirty(
+          LOCAL_EXECUTION_HOST_ID,
+          this.state.workspaceSession,
+          'snapshot'
+        )
+      }
+      this.workspaceSessionSidecars.beginFinalFlush()
+      await this.flushCurrentStateAsync(true)
+    })().catch(() => {})
     return this.quitFlushPromise
   }
 
@@ -3727,12 +4032,22 @@ export class Store {
   }
 
   flushPendingOrThrowAsync(
-    options: { signal?: AbortSignal; drainToStableGeneration?: boolean } = {}
+    options: {
+      signal?: AbortSignal
+      drainToStableGeneration?: boolean
+      syncCompatibilityProjection?: boolean
+    } = {}
   ): Promise<void> {
     if (this.writesFrozen || this.quitFlushStarted) {
       return Promise.reject(new Error('Cannot flush while persistence is finalized'))
     }
-    return this.flushCurrentStateAsync(false, options.signal, options.drainToStableGeneration, true)
+    return this.flushCurrentStateAsync(
+      false,
+      options.signal,
+      options.drainToStableGeneration,
+      true,
+      options.syncCompatibilityProjection
+    )
   }
 
   // Async twin of flushOrThrow: durable state only. Active-view and GitHub sidecars are
@@ -3747,8 +4062,11 @@ export class Store {
         this.writeTimer = null
       }
       this.firstPendingSaveAt = null
+      await this.workspaceSessionSidecars.flushPending({ drainToStableGeneration: true })
       const generation = this.writeGeneration
-      await this.enqueueWrite()
+      if (this.lastDurableWriteGeneration < generation || this.pendingWrite !== null) {
+        await this.enqueueWrite()
+      }
       if (generation === this.writeGeneration) {
         break
       }
@@ -3759,7 +4077,8 @@ export class Store {
     final: boolean,
     signal?: AbortSignal,
     drainToStableGeneration = true,
-    requireInitialGenerationDurable = false
+    requireInitialGenerationDurable = false,
+    syncCompatibilityProjection = false
   ): Promise<void> {
     const requiredDurableGeneration = requireInitialGenerationDurable ? this.writeGeneration : null
     for (;;) {
@@ -3771,9 +4090,24 @@ export class Store {
         this.writeTimer = null
       }
       this.firstPendingSaveAt = null
-      const generation = this.writeGeneration
+      let generation = this.writeGeneration
       try {
-        await this.enqueueWrite()
+        await this.workspaceSessionSidecars.flushPending({
+          signal,
+          drainToStableGeneration,
+          trigger: final ? 'quit' : 'flush'
+        })
+        if (
+          (final || syncCompatibilityProjection) &&
+          this.lastCoreSessionCompatibilityGeneration < this.sessionCompatibilityGeneration &&
+          this.lastDurableWriteGeneration >= this.writeGeneration
+        ) {
+          this.writeGeneration++
+        }
+        generation = this.writeGeneration
+        if (this.lastDurableWriteGeneration < generation || this.pendingWrite !== null) {
+          await this.enqueueWrite()
+        }
       } catch (error) {
         await (final
           ? this.activeViewPreference.flushAsync()
@@ -3797,7 +4131,10 @@ export class Store {
         }
         continue
       }
-      if (generation === this.writeGeneration) {
+      const compatibilityProjectionCurrent =
+        !(final || syncCompatibilityProjection) ||
+        this.lastCoreSessionCompatibilityGeneration >= this.sessionCompatibilityGeneration
+      if (generation === this.writeGeneration && compatibilityProjectionCurrent) {
         break
       }
     }
@@ -3859,6 +4196,7 @@ export class Store {
   // Why: a project move rewrote the data file directly; in-memory state is now stale and any write would undo the transfer.
   freezeWrites(): void {
     this.writesFrozen = true
+    this.workspaceSessionSidecars.freeze()
     if (this.writeTimer) {
       clearTimeout(this.writeTimer)
       this.writeTimer = null

@@ -7,6 +7,7 @@ export type SshPtyBindingCleanupOperations = {
   state: StoreOwnedPersistedState
   toComparablePtyId: (targetId: string, ptyId: string) => string
   scheduleSave: () => void
+  workspaceSessionPartitionsChanged: (hostIds: ReadonlySet<string>) => void
 }
 
 function sshRemotePtyLeaseMayReferenceBinding(
@@ -51,13 +52,18 @@ export function clearSshRemotePtyBindingsForLeases(
     return false
   }
   let changed = false
-  const sessions = new Set(
-    [
-      operations.state.workspaceSession,
-      operations.state.workspaceSessionsByHostId?.[toSshExecutionHostId(targetId)]
-    ].filter((session): session is WorkspaceSessionState => Boolean(session))
+  const changedHostIds = new Set<string>()
+  const sessions = [
+    { hostId: 'local', session: operations.state.workspaceSession },
+    {
+      hostId: toSshExecutionHostId(targetId),
+      session: operations.state.workspaceSessionsByHostId?.[toSshExecutionHostId(targetId)]
+    }
+  ].filter((entry): entry is { hostId: string; session: WorkspaceSessionState } =>
+    Boolean(entry.session)
   )
-  for (const session of sessions) {
+  for (const { hostId, session } of sessions) {
+    let sessionChanged = false
     for (const [worktreeId, tabs] of Object.entries(session.tabsByWorktree ?? {})) {
       for (const tab of tabs) {
         if (
@@ -73,6 +79,7 @@ export function clearSshRemotePtyBindingsForLeases(
         ) {
           tab.ptyId = null
           changed = true
+          sessionChanged = true
         }
       }
     }
@@ -107,10 +114,15 @@ export function clearSshRemotePtyBindingsForLeases(
       if (Object.keys(nextBindings).length !== Object.keys(bindings).length) {
         layout.ptyIdsByLeafId = nextBindings
         changed = true
+        sessionChanged = true
       }
+    }
+    if (sessionChanged) {
+      changedHostIds.add(hostId)
     }
   }
   if (changed) {
+    operations.workspaceSessionPartitionsChanged(changedHostIds)
     operations.scheduleSave()
   }
   return changed

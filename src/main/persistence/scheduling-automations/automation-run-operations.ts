@@ -22,6 +22,7 @@ import {
 export type AutomationRunOperations = {
   state: StoreOwnedPersistedState
   flush: () => void
+  scheduleSave: () => void
   recordManualRun: () => void
   getWorkspaceDisplayName: (workspaceId: string | null | undefined) => string | null
 }
@@ -85,6 +86,7 @@ export function createAutomationRun(
   if (trigger === 'manual') {
     operations.recordManualRun()
   }
+  operations.scheduleSave()
   operations.flush()
   return run
 }
@@ -139,6 +141,7 @@ export function updateAutomationRun(
     automation.lastRunAt = now
     automation.updatedAt = now
   }
+  operations.scheduleSave()
   operations.flush()
   return updated
 }
@@ -161,6 +164,7 @@ export function snapshotAutomationRunWorkspaceDisplayName(
     return { ...run, workspaceDisplayName: normalizedDisplayName }
   })
   if (updatedCount > 0) {
+    operations.scheduleSave()
     operations.flush()
   }
   return updatedCount

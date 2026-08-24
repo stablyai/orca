@@ -14,6 +14,7 @@ import { removeWorkspaceSessionOwner } from './session-owner-removal'
 export type FolderWorkspaceMutationOperations = {
   state: StoreOwnedPersistedState
   scheduleSave: () => void
+  workspaceSessionChanged: () => void
   removeWorkspaceLineageForFolderParent: (folderWorkspaceId: string) => void
   pruneMobileClientTabSelections: (matchesWorktreeId: (worktreeId: string) => boolean) => void
   hydrateRepo: (repo: Repo) => Repo
@@ -220,6 +221,7 @@ export class FolderWorkspacePersistenceOperations {
       this.state.workspaceSession,
       folderWorkspaceKey(id)
     )!
+    this.operations.workspaceSessionChanged()
     this.removeWorkspaceLineageForFolderParent(id)
     this.pruneMobileClientTabSelections((worktreeId) => worktreeId === folderWorkspaceKey(id))
     this.scheduleSave()

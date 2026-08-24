@@ -35686,6 +35686,9 @@ describe('OrcaRuntimeService', () => {
 
   it('leaves later delivery to the idle edge instead of polling a working mailbox', async () => {
     vi.useFakeTimers()
+    // Why: CI reuses Vitest workers across files. Reset their fake-clock queue so
+    // this leak assertion measures only timers allocated by the mailbox path below.
+    vi.clearAllTimers()
     try {
       const runtime = new OrcaRuntimeService(store)
       const db = new InMemoryOrchestrationMessages()

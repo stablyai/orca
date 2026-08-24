@@ -8,6 +8,7 @@ export type SshPtyLeaseOperations = {
   toStoredPtyId: (targetId: string, ptyId: string) => string
   clearBindingsForTarget: (targetId: string) => void
   clearBindingsForLeases: (targetId: string, leases: SshRemotePtyLease[]) => boolean
+  scheduleSave: () => void
   flush: () => void
   flushDurableStateOrThrowAsync: () => Promise<void>
 }
@@ -54,6 +55,7 @@ export function upsertSshRemotePtyLease(
   } else {
     operations.state.sshRemotePtyLeases.push(next)
   }
+  operations.scheduleSave()
   operations.flush()
 }
 
@@ -104,6 +106,7 @@ export function markSshRemotePtyLeases(
   state: SshRemotePtyLease['state']
 ): void {
   if (updateSshRemotePtyLeaseStates(operations, targetId, state)) {
+    operations.scheduleSave()
     operations.flush()
   }
 }
@@ -125,6 +128,7 @@ export async function markSshRemotePtyLeasesAsync(
   state: SshRemotePtyLease['state']
 ): Promise<void> {
   if (updateSshRemotePtyLeaseStates(operations, targetId, state)) {
+    operations.scheduleSave()
     await operations.flushDurableStateOrThrowAsync()
   }
 }
@@ -136,6 +140,7 @@ export async function markSshRemotePtyLeasesAttachedAsync(
 ): Promise<void> {
   const relayPtyIds = new Set(ptyIds.map((ptyId) => operations.toStoredPtyId(targetId, ptyId)))
   if (updateSshRemotePtyLeaseStates(operations, targetId, 'attached', relayPtyIds)) {
+    operations.scheduleSave()
     await operations.flushDurableStateOrThrowAsync()
   }
 }
@@ -156,6 +161,7 @@ export function markSshRemotePtyLease(
   const shouldClearBindings = state === 'terminated' || state === 'expired'
   if (lease.state === state) {
     if (shouldClearBindings && operations.clearBindingsForLeases(targetId, [lease])) {
+      operations.scheduleSave()
       operations.flush()
     }
     return
@@ -171,6 +177,7 @@ export function markSshRemotePtyLease(
   if (shouldClearBindings) {
     operations.clearBindingsForLeases(targetId, [lease])
   }
+  operations.scheduleSave()
   operations.flush()
 }
 
@@ -189,6 +196,7 @@ export function removeSshRemotePtyLease(
     (lease) => lease.targetId !== targetId || lease.ptyId !== relayPtyId
   )
   if (operations.state.sshRemotePtyLeases.length !== before) {
+    operations.scheduleSave()
     operations.flush()
   }
 }
@@ -204,6 +212,7 @@ export function removeSshRemotePtyLeases(
     (lease) => lease.targetId !== targetId
   )
   if (operations.state.sshRemotePtyLeases.length !== before) {
+    operations.scheduleSave()
     operations.flush()
   }
 }

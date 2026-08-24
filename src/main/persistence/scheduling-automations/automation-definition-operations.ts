@@ -18,6 +18,7 @@ import {
 export type AutomationDefinitionOperations = {
   state: StoreOwnedPersistedState
   flush: () => void
+  scheduleSave: () => void
   recordCreated: () => void
 }
 
@@ -67,6 +68,7 @@ export function createAutomation(
     updatedAt: now
   }
   operations.state.automations = [...(operations.state.automations ?? []), automation]
+  operations.scheduleSave()
   operations.recordCreated()
   operations.flush()
   return automation
@@ -151,6 +153,7 @@ export function updateAutomation(
     updatedAt: Date.now()
   }
   operations.state.automations[index] = updated
+  operations.scheduleSave()
   operations.flush()
   return updated
 }
@@ -162,5 +165,6 @@ export function deleteAutomation(operations: AutomationDefinitionOperations, id:
   operations.state.automationRuns = (operations.state.automationRuns ?? []).filter(
     (entry) => entry.automationId !== id
   )
+  operations.scheduleSave()
   operations.flush()
 }

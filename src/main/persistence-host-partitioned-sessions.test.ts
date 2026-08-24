@@ -134,10 +134,10 @@ describe('Store host-partitioned workspace sessions', () => {
     // The legacy blob is the 'local' partition; an explicit/default hostId reads it.
     expect(store.getWorkspaceSession().activeRepoId).toBe('legacy-repo')
     expect(store.getWorkspaceSession('local').activeRepoId).toBe('legacy-repo')
-    // No data was moved, so a downgrade still finds the legacy field intact.
     store.flush()
-    const persisted = readDataFile() as { workspaceSession?: { activeRepoId?: string } }
-    expect(persisted.workspaceSession?.activeRepoId).toBe('legacy-repo')
+    expect(readDataFile()).toHaveProperty('workspaceSession')
+    const reloaded = await createStore()
+    expect(reloaded.getWorkspaceSession('local').activeRepoId).toBe('legacy-repo')
   })
 
   it('is idempotent: re-loading already-partitioned state preserves all hosts', async () => {
@@ -419,7 +419,12 @@ describe('Store host-partitioned workspace sessions', () => {
     const store = await createStore()
     store.setWorkspaceSession(makeBoundHostSession(null), 'local')
     store.setWorkspaceSession(makeBoundHostSession(null), 'ssh:ssh-1')
-    const flush = vi.spyOn(store, 'flushOrThrow').mockImplementationOnce(() => {
+    const sidecars = (
+      store as unknown as {
+        workspaceSessionSidecars: { flushSync: (trigger?: string) => void }
+      }
+    ).workspaceSessionSidecars
+    const flush = vi.spyOn(sidecars, 'flushSync').mockImplementationOnce(() => {
       throw new Error('disk unavailable')
     })
 
@@ -441,6 +446,11 @@ describe('Store host-partitioned workspace sessions', () => {
     ).toBeNull()
     expect(
       store.getWorkspaceSession('local').tabsByWorktree['repo-1::/worktree'][0]?.ptyId
+    ).toBeNull()
+    store.freezeWrites()
+    const reloaded = await createStore()
+    expect(
+      reloaded.getWorkspaceSession('ssh:ssh-1').tabsByWorktree['repo-1::/worktree'][0]?.ptyId
     ).toBeNull()
   })
 
@@ -806,7 +816,17 @@ describe('Store host-partitioned workspace sessions', () => {
     // dirtied every load would otherwise leave those tests silently vacuous.
     await loadAndAwaitScheduledSave()
     expect(readFileSync(dataFile(), 'utf-8')).toBe(canonical)
-    return JSON.parse(canonical) as PersistedSessionsFile
+    const store = await createStore()
+    const workspaceSessionsByHostId: Record<string, WorkspaceSessionState> = {}
+    for (const hostId of store.getWorkspaceSessionHostIds()) {
+      if (hostId !== 'local') {
+        workspaceSessionsByHostId[hostId] = structuredClone(store.getWorkspaceSession(hostId))
+      }
+    }
+    return {
+      workspaceSession: structuredClone(store.getWorkspaceSession('local')),
+      workspaceSessionsByHostId
+    }
   }
 
   it('schedules a save for a salvaged local session instead of re-salvaging every launch', async () => {
@@ -835,10 +855,10 @@ describe('Store host-partitioned workspace sessions', () => {
       warn.mockRestore()
     }
 
-    const persisted = readDataFile() as PersistedSessionsFile
-    expect(persisted.workspaceSession?.tabsByWorktree?.[worktreeId]?.map((tab) => tab.id)).toEqual([
-      'tab-keep'
-    ])
+    const persisted = await createStore()
+    expect(
+      persisted.getWorkspaceSession('local').tabsByWorktree?.[worktreeId]?.map((tab) => tab.id)
+    ).toEqual(['tab-keep'])
   })
 
   it('schedules a save for salvaged host partitions', async () => {
@@ -868,14 +888,18 @@ describe('Store host-partitioned workspace sessions', () => {
     writeDataFile(profile)
     await loadAndAwaitScheduledSave()
 
-    const persisted = (readDataFile() as PersistedSessionsFile).workspaceSessionsByHostId
+    const persisted = await createStore()
     expect(
-      persisted?.['runtime:env-a']?.tabsByWorktree?.[worktreeId]?.map((tab) => tab.id)
+      persisted
+        .getWorkspaceSession('runtime:env-a')
+        .tabsByWorktree?.[worktreeId]?.map((tab) => tab.id)
     ).toEqual(['runtime-keep'])
-    expect(persisted?.['ssh:target-b']?.tabsByWorktree?.[worktreeId]?.map((tab) => tab.id)).toEqual(
-      ['ssh-keep']
-    )
-    expect(persisted).not.toHaveProperty('runtime:broken')
+    expect(
+      persisted
+        .getWorkspaceSession('ssh:target-b')
+        .tabsByWorktree?.[worktreeId]?.map((tab) => tab.id)
+    ).toEqual(['ssh-keep'])
+    expect(persisted.getWorkspaceSessionHostIds()).not.toContain('runtime:broken')
   })
 
   it('writes back sleeping-agent records dropped during salvage', async () => {
@@ -893,7 +917,7 @@ describe('Store host-partitioned workspace sessions', () => {
 
     await loadAndAwaitScheduledSave()
 
-    const persisted = readDataFile() as PersistedSessionsFile
-    expect(persisted.workspaceSession?.sleepingAgentSessionsByPaneKey).toBeUndefined()
+    const persisted = await createStore()
+    expect(persisted.getWorkspaceSession('local').sleepingAgentSessionsByPaneKey).toBeUndefined()
   })
 })

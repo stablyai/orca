@@ -12,6 +12,7 @@ import { removeWorkspaceSessionOwner } from '../restoring-sessions/session-owner
 export type ProjectGroupMutationOperations = {
   state: StoreOwnedPersistedState
   scheduleSave: () => void
+  workspaceSessionChanged: () => void
   removeWorkspaceLineageForFolderParent: (folderWorkspaceId: string) => void
   pruneMobileClientTabSelections: (matchesWorktreeId: (worktreeId: string) => boolean) => void
 }
@@ -112,6 +113,9 @@ export class ProjectGroupPersistenceOperations {
         )!
         this.removeWorkspaceLineageForFolderParent(workspace.id)
       }
+    }
+    if (removedFolderWorkspaceKeys.size > 0) {
+      this.operations.workspaceSessionChanged()
     }
     this.state.folderWorkspaces = (this.state.folderWorkspaces ?? []).filter(
       (workspace) => !deletedGroupIds.has(workspace.projectGroupId)

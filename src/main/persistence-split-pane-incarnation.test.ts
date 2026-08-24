@@ -348,7 +348,11 @@ describe('Store', () => {
       },
       terminalPtyIncarnationsByPaneKey: { [paneKey]: 'inc-stale' }
     })
-    vi.spyOn(store, 'flushOrThrow').mockImplementationOnce(() => {
+    const storeInternals = store as unknown as {
+      workspaceSessionSidecars: { flushSync: (trigger?: string) => void }
+    }
+    const sidecarStore = storeInternals.workspaceSessionSidecars
+    vi.spyOn(sidecarStore, 'flushSync').mockImplementationOnce(() => {
       throw new Error('disk full')
     })
 

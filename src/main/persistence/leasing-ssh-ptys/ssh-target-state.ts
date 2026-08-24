@@ -107,6 +107,7 @@ export function addClaudeLivePtySessionId(
   operations.state.claudeLivePtySessionIds = [...ids, sessionId].slice(
     -MAX_CLAUDE_LIVE_PTY_SESSION_IDS
   )
+  operations.scheduleSave()
   // Why: flush sync so a force-quit right after a Claude spawn still seeds the live-PTY gate next launch.
   operations.flush()
 }

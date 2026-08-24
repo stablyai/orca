@@ -7,6 +7,7 @@ import { normalizeSshPtyConsumerRecovery } from './ssh-normalization'
 export type SshPtyConsumerRecoveryOperations = {
   state: StoreOwnedPersistedState
   protectedSecrets: Pick<ProtectedSecretPersistence, 'isSealed' | 'removeRetainedBlob'>
+  scheduleSave: () => void
   flushDurableStateOrThrowAsync: () => Promise<void>
 }
 
@@ -51,6 +52,7 @@ export async function upsertSshPtyConsumerRecovery(
     ...recoveries.filter((candidate) => candidate.targetId !== normalized.targetId),
     normalized
   ]
+  operations.scheduleSave()
   await flushSshPtyConsumerRecovery(operations)
 }
 
@@ -65,5 +67,6 @@ export async function removeSshPtyConsumerRecovery(
   }
   operations.state.sshPtyConsumerRecoveries = next
   operations.protectedSecrets.removeRetainedBlob(sshPtyOwnerLeaseSecretSlot(targetId))
+  operations.scheduleSave()
   await flushSshPtyConsumerRecovery(operations)
 }

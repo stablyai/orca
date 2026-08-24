@@ -12,7 +12,13 @@ export async function flushActiveProfileBeforeFileMutation(store: Store): Promis
     }, PROFILE_PERSISTENCE_TIMEOUT_MS)
   })
   try {
-    await Promise.race([store.flushPendingOrThrowAsync({ signal: controller.signal }), deadline])
+    await Promise.race([
+      store.flushPendingOrThrowAsync({
+        signal: controller.signal,
+        syncCompatibilityProjection: true
+      }),
+      deadline
+    ])
   } finally {
     if (timeout) {
       clearTimeout(timeout)

@@ -17,6 +17,11 @@ export type SshTargetReassignmentOperations = {
   protectedSecrets: Pick<ProtectedSecretPersistence, 'removeRetainedBlob'>
   syncProjectHostSetupCompatibilityState: () => void
   scheduleSave: () => void
+  workspaceSessionPartitionsReassigned: (
+    oldHostId: string,
+    newHostId: string,
+    changedHostIds: ReadonlySet<string>
+  ) => void
 }
 
 /** Retirement namespaces key on the endpoint a target reaches, so a rotation moves them only when
@@ -83,14 +88,21 @@ export function reassignSshTargetId(
     }
   }
   // Why: any carrier still holding the old id later throws `SSH target not found` (STA-1468); migrate them all.
+  const changedSessionHostIds = new Set<string>()
   let carrierChanged = migrateWorkspaceSessionSshTargetId(
     operations.state.workspaceSession,
     oldTargetId,
     newTargetId
   )
-  for (const session of Object.values(operations.state.workspaceSessionsByHostId ?? {})) {
+  if (carrierChanged) {
+    changedSessionHostIds.add('local')
+  }
+  for (const [hostId, session] of Object.entries(
+    operations.state.workspaceSessionsByHostId ?? {}
+  )) {
     if (session && migrateWorkspaceSessionSshTargetId(session, oldTargetId, newTargetId)) {
       carrierChanged = true
+      changedSessionHostIds.add(hostId)
     }
   }
   // Why: partitions are read by host id; re-key from the removed id to the new one (keep new if it already exists).
@@ -100,6 +112,8 @@ export function reassignSshTargetId(
     delete partitions[oldHostId]
     partitions[newHostId] ??= oldPartition
     carrierChanged = true
+    changedSessionHostIds.delete(oldHostId)
+    changedSessionHostIds.add(newHostId)
   }
   if (migrateUiHostScopeSshTargetId(operations.state.ui, oldTargetId, newTargetId)) {
     carrierChanged = true
@@ -148,6 +162,7 @@ export function reassignSshTargetId(
   if (repoIds.size > 0 || setupsChanged) {
     operations.syncProjectHostSetupCompatibilityState()
   }
+  operations.workspaceSessionPartitionsReassigned(oldHostId, newHostId, changedSessionHostIds)
   if (repoIds.size > 0 || metaChanged || carrierChanged || setupsChanged) {
     operations.scheduleSave()
   }
