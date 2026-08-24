@@ -5508,7 +5508,10 @@
           "showPinnedWorktreesInGroups": {
             "title": "也在原来的列表中显示已固定的工作树",
             "description": "已固定的工作树会保留在 Pinned 中，同时也显示在全部、项目、状态和 PR 中。"
-          }
+          },
+          "fileIconThemeLabel": "File Icons",
+          "fileIconThemeClassic": "Classic",
+          "fileIconThemeMaterial": "Material"
         },
         "AutoRenameBranchFromWorkSetting": {
           "1626524572": "Nautilus",
@@ -10186,6 +10189,16 @@
           "saveFailed": "无法保存可见性默认设置。",
           "updateServer": "请更新此服务器以配置来源默认设置。",
           "updateServerDefaults": "请更新此服务器以配置可见性默认设置。"
+        },
+        "fileIconTheme": {
+          "search": {
+            "title": "File Icons",
+            "description": "Choose how file type icons appear in the file explorer, search results, and editor tabs.",
+            "icons": "file icons",
+            "explorer": "file explorer",
+            "material": "material",
+            "classic": "classic"
+          }
         }
       },
       "right": {

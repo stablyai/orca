@@ -17,6 +17,7 @@ import { TASK_PROVIDERS } from './task-providers'
 import { DEFAULT_WORKTREE_CARD_PROPERTIES } from './worktree/card-properties'
 import { getDefaultSourceControlAiSettings } from './source-control-ai'
 import { DEFAULT_APP_ICON_ID } from './app-icon'
+import { DEFAULT_FILE_ICON_THEME } from './file-icon-theme'
 import { DEFAULT_OPEN_IN_APPLICATIONS } from './open-in-applications'
 import { DEFAULT_BROWSER_PAGE_ZOOM_LEVEL } from './browser-page-zoom'
 import { DEFAULT_DISABLED_TUI_AGENTS } from './tui-agent-selection'
@@ -168,6 +169,7 @@ function getDefaultWorkspaceDir(homeDir: string): string {
   return [trimmedHomeDir, 'orca', 'workspaces'].join(separator)
 }
 
+/** Keep fresh, migrated, local, and remote settings aligned on one complete default schema. */
 export function getDefaultSettings(homedir: string): GlobalSettings {
   return {
     workspaceDir: getDefaultWorkspaceDir(homedir),
@@ -186,6 +188,7 @@ export function getDefaultSettings(homedir: string): GlobalSettings {
     leftSidebarTintOpacity: DEFAULT_LEFT_SIDEBAR_TINT_OPACITY,
     uiLanguage: UI_LANGUAGE_SYSTEM,
     appIcon: DEFAULT_APP_ICON_ID,
+    fileIconTheme: DEFAULT_FILE_ICON_THEME,
     appFontFamily: DEFAULT_APP_FONT_FAMILY,
     editorAutoSave: false,
     editorAutoSaveDelayMs: DEFAULT_EDITOR_AUTO_SAVE_DELAY_MS,

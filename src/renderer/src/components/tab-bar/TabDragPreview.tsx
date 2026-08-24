@@ -1,17 +1,21 @@
 import { Globe, Terminal as TerminalIcon } from 'lucide-react'
-import { getFileTypeIcon } from '@/lib/file-type-icons'
+import { ThemedFileIcon } from '@/components/file-icons/ThemedFileIcon'
 import { AgentIcon } from '@/lib/agent-catalog'
 import type { TabDragItemData } from '../tab-group/useTabDragSplit'
 
-// Why: a terminal tab running an agent leads with the provider glyph so the
-// ghost matches the resting tab; plain terminals keep the generic icon.
+/** Keep the drag ghost's leading icon aligned with the resting tab across every tab mode. */
 function LeadingIcon({ drag }: { drag: TabDragItemData }): React.JSX.Element {
   if (drag.tabType === 'browser') {
     return <Globe className="h-3.5 w-3.5 shrink-0" />
   }
   if (drag.tabType === 'editor') {
-    const FileIcon = getFileTypeIcon(drag.iconPath ?? drag.label)
-    return <FileIcon className="h-3.5 w-3.5 shrink-0" />
+    return (
+      <ThemedFileIcon
+        className="h-3.5 w-3.5 shrink-0"
+        classicClassName="h-3.5 w-3.5 shrink-0"
+        filePath={drag.iconPath ?? drag.label}
+      />
+    )
   }
   if (drag.agent) {
     return <AgentIcon agent={drag.agent} size={14} />

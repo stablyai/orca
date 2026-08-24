@@ -10169,6 +10169,16 @@
           "updateServer": "소스 기본값을 구성하려면 이 서버를 업데이트하세요.",
           "updateServerDefaults": "표시 기본값을 구성하려면 이 서버를 업데이트하세요."
         },
+        "fileIconTheme": {
+          "search": {
+            "title": "File Icons",
+            "description": "Choose how file type icons appear in the file explorer, search results, and editor tabs.",
+            "icons": "file icons",
+            "explorer": "file explorer",
+            "material": "material",
+            "classic": "classic"
+          }
+        },
         "automations": {
           "title": "자동화",
           "description": "에이전트 작업을 예약하고 사이드바에 자동화 표시 여부를 선택합니다.",

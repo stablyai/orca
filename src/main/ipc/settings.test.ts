@@ -686,6 +686,24 @@ describe('registerSettingsHandlers', () => {
     expect(applyAppIconMock).toHaveBeenCalledWith('classic')
   })
 
+  it('normalizes file icon theme changes from renderer settings IPC', async () => {
+    store.getSettings.mockReturnValue({ fileIconTheme: 'classic' })
+    store.updateSettings.mockReturnValue({ fileIconTheme: 'classic' })
+    registerSettingsHandlers(store as never)
+
+    const handler = handleMock.mock.calls.find((call) => call[0] === 'settings:set')?.[1] as (
+      _event: unknown,
+      args: unknown
+    ) => Promise<unknown>
+
+    await handler(settingsInvokeEvent, { fileIconTheme: 'not-real' })
+
+    expect(store.updateSettings).toHaveBeenCalledWith(
+      { fileIconTheme: 'classic' },
+      { notifyListeners: true, originWebContentsId: 1 }
+    )
+  })
+
   it('rebuilds the app menu after Automations sidebar visibility changes', async () => {
     store.getSettings.mockReturnValue({ showAutomationsButton: true })
     store.updateSettings.mockReturnValue({ showAutomationsButton: false })

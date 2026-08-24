@@ -13,6 +13,7 @@ import { normalizeOpenInApplications } from '../../../shared/open-in-application
 import { normalizeTerminalShortcutPolicy } from '../../../shared/keybindings'
 import { normalizeSourceControlGroupOrder } from '../../../shared/source-control-group-order'
 import { normalizeAppIconId } from '../../../shared/app-icon'
+import { normalizeFileIconTheme } from '../../../shared/file-icon-theme'
 import { normalizeUiLanguage } from '../../../shared/ui-language'
 import { normalizeWorktreeVisibilityDefaults } from '../../../shared/external-worktree-visibility'
 import { normalizePRBotAuthorOverrides } from '../../../shared/pr-bot-author-overrides'
@@ -101,6 +102,9 @@ export function updateSettings(
     sanitizedUpdates.terminalCustomThemes = normalizeTerminalCustomThemes(
       updates.terminalCustomThemes
     )
+  }
+  if ('fileIconTheme' in updates) {
+    sanitizedUpdates.fileIconTheme = normalizeFileIconTheme(updates.fileIconTheme)
   }
   if ('terminalCursorStyle' in updates) {
     Object.assign(

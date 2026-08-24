@@ -1,5 +1,6 @@
 import React, { useCallback, useRef } from 'react'
-import { File, Folder } from 'lucide-react'
+import { Folder } from 'lucide-react'
+import { ThemedFileIcon } from '@/components/file-icons/ThemedFileIcon'
 import type { TreeNode } from './file-explorer-types'
 
 export type InlineInput = {
@@ -11,6 +12,7 @@ export type InlineInput = {
   operationOwner?: TreeNode['operationOwner']
 }
 
+/** Honor the active icon theme during creation so file rows do not change appearance on submit. */
 export function InlineInputRow({
   depth,
   inlineInput,
@@ -137,7 +139,11 @@ export function InlineInputRow({
       {inlineInput.type === 'folder' ? (
         <Folder className="size-3 shrink-0 text-muted-foreground" />
       ) : (
-        <File className="size-3 shrink-0 text-muted-foreground" />
+        <ThemedFileIcon
+          className="size-3.5 shrink-0"
+          classicClassName="size-3 shrink-0 text-muted-foreground"
+          filePath={inlineInput.existingName ?? ''}
+        />
       )}
       <input
         key={inlineInputKey}

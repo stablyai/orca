@@ -4,6 +4,7 @@ import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import type { StatusBarItem } from '../../../../shared/ui-chrome-types'
 import type { FeatureInteractionId } from '../../../../shared/feature-interaction-catalog'
 import { SearchableSetting } from './SearchableSetting'
+import { FileIconThemeSetting } from './FileIconThemeSetting'
 import { AppearanceAdvancedDisclosure } from './AppearanceAdvancedDisclosure'
 import { useAppStore } from '../../store'
 import {
@@ -20,6 +21,7 @@ import {
   getUsagePercentageDisplayEntry
 } from './appearance-search'
 import { USAGE_PERCENTAGE_DISPLAY_SETTING_ID } from './appearance-usage-percentage-search'
+import { getFileIconThemeEntries } from './file-icon-theme-search'
 import { LeftSidebarAppearanceSetting } from './LeftSidebarAppearanceSetting'
 import {
   getLeftSidebarAppearanceEntry,
@@ -59,6 +61,7 @@ function recordStatusBarToggleInteraction(
   }
 }
 
+/** Keep related appearance controls together so search can reveal the correct subsection. */
 export function AppearanceWindowSidebarSection({
   settings,
   updateSettings,
@@ -77,6 +80,7 @@ export function AppearanceWindowSidebarSection({
   const leftSidebarAppearanceEntry = getLeftSidebarAppearanceEntry()
   const sidebarEntries = getSidebarEntries()
   const workspaceCardLayoutEntry = getWorkspaceCardLayoutEntry()
+  const fileIconThemeEntry = getFileIconThemeEntries()[0]
   const layoutEntries = getLayoutEntries()
   const statusBarTitle = translate(
     'auto.components.settings.AppearancePane.3e4175e5c6',
@@ -105,7 +109,10 @@ export function AppearanceWindowSidebarSection({
     workspaceCardLayoutEntry,
     ...sidebarEntries
   ])
-  const fileExplorerAdvancedMatches = matchesSettingsSearch(searchQuery, layoutEntries)
+  const fileExplorerAdvancedMatches = matchesSettingsSearch(searchQuery, [
+    fileIconThemeEntry,
+    ...layoutEntries
+  ])
   const showStatusBarControls = !isSearching || statusBarSectionMatches || statusBarControlMatches
   const showSidebarAdvanced = !isSearching || sidebarAdvancedMatches
   const showFileExplorerAdvanced = !isSearching || fileExplorerAdvancedMatches
@@ -350,6 +357,8 @@ export function AppearanceWindowSidebarSection({
                   )}
                 />
                 <div className="ml-4 divide-y divide-border/40">
+                  <FileIconThemeSetting settings={settings} updateSettings={updateSettings} />
+
                   <SearchableSetting
                     title={
                       layoutEntries[0]?.title ??

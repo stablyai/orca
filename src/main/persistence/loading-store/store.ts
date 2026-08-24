@@ -132,6 +132,7 @@ import { normalizeOpenInApplications } from '../../../shared/open-in-application
 import { normalizeTerminalShortcutPolicy } from '../../../shared/keybindings'
 import { normalizeSourceControlGroupOrder } from '../../../shared/source-control-group-order'
 import { normalizeAppIconId } from '../../../shared/app-icon'
+import { normalizeFileIconTheme } from '../../../shared/file-icon-theme'
 import { normalizeTerminalCustomThemes } from '../../../shared/terminal-custom-themes'
 import {
   normalizeFeatureInteractionTelemetryBuckets,
@@ -1255,6 +1256,7 @@ export class Store {
               parsed.settings?.terminalCustomThemes
             ),
             appIcon: normalizeAppIconId(parsed.settings?.appIcon),
+            fileIconTheme: normalizeFileIconTheme(parsed.settings?.fileIconTheme),
             mobilePairingCustomAddress,
             mobilePairingCustomAddresses,
             // Why: persisted settings may be hand-edited or from older builds; keep tray-minimize false unless stored value is true.

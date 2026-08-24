@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it } from 'vitest'
 
 import { i18n } from '@/i18n/i18n'
-import { getLanguageEntries } from './appearance-search'
+import { getAppearancePaneSearchEntries, getLanguageEntries } from './appearance-search'
 import { matchesSettingsSearch } from './settings-search'
 
 // Native word for "language" in each supported UI language. These must be
@@ -29,4 +29,16 @@ describe('getLanguageEntries', () => {
     await i18n.changeLanguage('en')
     expect(matchesSettingsSearch('Español', getLanguageEntries()[0])).toBe(true)
   })
+})
+
+describe('getAppearancePaneSearchEntries', () => {
+  // Why: the pane-level index is what Settings search consults to decide the
+  // Appearance pane matches at all. An entry wired only into AppearancePane's
+  // per-section buckets renders "No settings found" for its own name.
+  it.each(['file icons', 'material', 'classic', 'file explorer'])(
+    'surfaces the file icon theme setting for the query "%s"',
+    (query) => {
+      expect(matchesSettingsSearch(query, getAppearancePaneSearchEntries())).toBe(true)
+    }
+  )
 })

@@ -393,6 +393,28 @@ describe('AppearancePane', () => {
     expect(mocks.state.setWorktreeCardMode).toHaveBeenCalledWith('Compact')
   })
 
+  it('changes the file icon theme from the file explorer appearance controls', async () => {
+    mocks.state.settingsSearchQuery = 'file icons'
+    const updateSettings = vi.fn()
+    const settings = {
+      ...getDefaultSettings('/tmp'),
+      fileIconTheme: 'classic' as const
+    }
+
+    const container = await renderAppearancePane(settings, updateSettings)
+    const materialButton = Array.from(
+      container.querySelectorAll<HTMLButtonElement>('button[role="radio"]')
+    ).find((button) => button.textContent === 'Material')
+
+    expect(materialButton).toBeDefined()
+
+    await act(async () => {
+      materialButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    })
+
+    expect(updateSettings).toHaveBeenCalledWith({ fileIconTheme: 'material' })
+  })
+
   it('renders the three top-level section rows and no Code & Markdown row when not searching', async () => {
     mocks.state.settingsSearchQuery = ''
     const container = await renderAppearancePane(getDefaultSettings('/tmp'))
