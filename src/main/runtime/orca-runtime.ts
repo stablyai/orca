@@ -4091,6 +4091,7 @@ export class OrcaRuntimeService {
       agentId: input.agentId,
       runContext: input.runContext,
       sourceContext: input.sourceContext,
+      linkedTask: input.linkedTask,
       projectId: target.projectId,
       workspaceMode: target.workspaceMode,
       workspaceId: target.workspaceId,
@@ -4128,6 +4129,9 @@ export class OrcaRuntimeService {
     }
     if (hasRuntimeAutomationUpdateValue(updates, 'sourceContext')) {
       patch.sourceContext = updates.sourceContext
+    }
+    if (hasRuntimeAutomationUpdateValue(updates, 'linkedTask')) {
+      patch.linkedTask = updates.linkedTask
     }
     if (hasRuntimeAutomationUpdateValue(updates, 'baseBranch')) {
       patch.baseBranch = updates.baseBranch

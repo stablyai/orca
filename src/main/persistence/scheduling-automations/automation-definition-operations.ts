@@ -7,6 +7,7 @@ import type {
 import type { PersistedState } from '../../../shared/persisted-state-types'
 import { normalizeAutomationPrecheck } from '../../../shared/automation-precheck'
 import { nextAutomationOccurrenceAfter } from '../../../shared/automation-schedules'
+import { isWorkspaceLinkedItemSourceContextMatch } from '../../../shared/workspace-linked-item-source-context'
 import type { StoreOwnedPersistedState } from '../loading-store/store-owned-state'
 import {
   getAutomationContextsForRepo,
@@ -36,6 +37,13 @@ export function createAutomation(
   const executionTargetType = repo?.connectionId ? 'ssh' : 'local'
   const schedulerOwner = getAutomationSchedulerOwner(repo)
   const contexts = getAutomationContextsForRepo(repo, operations.state.projectHostSetups ?? [])
+  const sourceContext = input.sourceContext ?? contexts.sourceContext
+  if (
+    input.linkedTask &&
+    (!sourceContext || !isWorkspaceLinkedItemSourceContextMatch(input.linkedTask, sourceContext))
+  ) {
+    throw new Error('Linked task and source context identities must match.')
+  }
   const automation: Automation = {
     id: randomUUID(),
     name: input.name.trim() || 'Untitled automation',
@@ -43,7 +51,8 @@ export function createAutomation(
     precheck: normalizeAutomationPrecheck(input.precheck),
     agentId: input.agentId,
     runContext: input.runContext ?? contexts.runContext,
-    sourceContext: input.sourceContext ?? contexts.sourceContext,
+    sourceContext,
+    linkedTask: input.linkedTask ?? null,
     projectId: input.projectId,
     executionTargetType,
     executionTargetId: executionTargetType === 'ssh' ? (repo?.connectionId ?? '') : 'local',
@@ -96,6 +105,20 @@ export function updateAutomation(
   const dtstart = updates.dtstart ?? current.dtstart
   const scheduleChanged = updates.rrule !== undefined || updates.dtstart !== undefined
   const workspaceMode = updates.workspaceMode ?? current.workspaceMode
+  const sourceContext = Object.hasOwn(definedUpdates, 'sourceContext')
+    ? (definedUpdates.sourceContext ?? null)
+    : updates.projectId !== undefined
+      ? contexts.sourceContext
+      : (current.sourceContext ?? contexts.sourceContext)
+  const linkedTask = Object.hasOwn(definedUpdates, 'linkedTask')
+    ? (definedUpdates.linkedTask ?? null)
+    : (current.linkedTask ?? null)
+  if (
+    linkedTask &&
+    (!sourceContext || !isWorkspaceLinkedItemSourceContextMatch(linkedTask, sourceContext))
+  ) {
+    throw new Error('Linked task and source context identities must match.')
+  }
   const updated: Automation = {
     ...current,
     ...definedUpdates,
@@ -109,11 +132,8 @@ export function updateAutomation(
       : updates.projectId !== undefined
         ? contexts.runContext
         : (current.runContext ?? contexts.runContext),
-    sourceContext: Object.hasOwn(definedUpdates, 'sourceContext')
-      ? (definedUpdates.sourceContext ?? null)
-      : updates.projectId !== undefined
-        ? contexts.sourceContext
-        : (current.sourceContext ?? contexts.sourceContext),
+    sourceContext,
+    linkedTask,
     executionTargetType,
     executionTargetId: executionTargetType === 'ssh' ? (repo?.connectionId ?? '') : 'local',
     schedulerOwner,

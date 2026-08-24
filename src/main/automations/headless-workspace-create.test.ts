@@ -103,4 +103,40 @@ describe('headless automation workspace create args', () => {
 
     expect(args.setupDecision).toBe('skip')
   })
+
+  it('links the exact external task when creating a new workspace', () => {
+    const sourceContext = {
+      kind: 'task-source' as const,
+      provider: 'github' as const,
+      projectId: 'github:aprudkin/aimem',
+      hostId: 'local' as const,
+      providerIdentity: { provider: 'github' as const, owner: 'aprudkin', repo: 'aimem' }
+    }
+    const linkedTask = {
+      provider: 'github' as const,
+      type: 'issue' as const,
+      number: 814,
+      title: 'Disposable routing probe',
+      url: 'https://github.com/aprudkin/aimem/issues/814'
+    }
+    const newerTask = {
+      ...linkedTask,
+      number: 815,
+      url: 'https://github.com/aprudkin/aimem/issues/815'
+    }
+    const args = buildHeadlessAutomationWorktreeCreateArgs({
+      automation: { ...automation, sourceContext, linkedTask: newerTask },
+      run: {
+        id: 'run-1',
+        title: 'Task review run',
+        scheduledFor: Date.UTC(2026, 0, 2, 3, 4, 5),
+        sourceContext,
+        linkedTask
+      },
+      repo
+    })
+
+    expect(args.linkedWorkItem).toEqual(linkedTask)
+    expect(args.linkedTaskSourceContext).toEqual(sourceContext)
+  })
 })

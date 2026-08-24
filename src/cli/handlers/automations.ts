@@ -15,6 +15,8 @@ import {
 } from '../../shared/task-source-context'
 import type { ProjectHostSetup } from '../../shared/project-types'
 import type { TuiAgent } from '../../shared/tui-agent'
+import { normalizeWorkspaceLinkedItem } from '../../shared/workspace-linked-item'
+import type { WorkspaceLinkedItem } from '../../shared/worktree/types'
 import {
   DEFAULT_AUTOMATION_PRECHECK_TIMEOUT_SECONDS,
   MAX_AUTOMATION_PRECHECK_TIMEOUT_SECONDS
@@ -322,6 +324,35 @@ function getSourceContextFlag(
   return sourceContext
 }
 
+function getLinkedTaskFlag(
+  flags: Map<string, string | boolean>
+): WorkspaceLinkedItem | null | undefined {
+  if (!flags.has('linked-task')) {
+    return undefined
+  }
+  const value = flags.get('linked-task')
+  if (typeof value !== 'string') {
+    throw new RuntimeClientError(
+      'invalid_argument',
+      '--linked-task requires a JSON work item or null'
+    )
+  }
+  let parsed: unknown
+  try {
+    parsed = JSON.parse(value)
+  } catch {
+    throw new RuntimeClientError('invalid_argument', '--linked-task must be valid JSON')
+  }
+  if (parsed === null) {
+    return null
+  }
+  const linkedTask = normalizeWorkspaceLinkedItem(parsed)
+  if (!linkedTask) {
+    throw new RuntimeClientError('invalid_argument', '--linked-task is not a valid work item')
+  }
+  return linkedTask
+}
+
 function getWorkspaceModeFlag(
   flags: Map<string, string | boolean>
 ): 'existing' | 'new_per_run' | undefined {
@@ -440,6 +471,7 @@ export const AUTOMATION_HANDLERS: Record<string, CommandHandler> = {
     }
     const target = await resolveDefaultTarget(flags, cwd, client)
     const sourceContext = getSourceContextFlag(flags)
+    const linkedTask = getLinkedTaskFlag(flags)
     const workspaceMode =
       getWorkspaceModeFlag(flags) ?? (target.workspace ? 'existing' : 'new_per_run')
     const result = await client.call<{ automation: Automation }>('automation.create', {
@@ -449,6 +481,7 @@ export const AUTOMATION_HANDLERS: Record<string, CommandHandler> = {
       agentId: getProviderFlag(flags),
       ...(target.runContext ? { runContext: target.runContext } : {}),
       ...(sourceContext !== undefined ? { sourceContext } : {}),
+      ...(linkedTask !== undefined ? { linkedTask } : {}),
       repo: target.repo,
       workspace: target.workspace,
       workspaceMode,
@@ -465,6 +498,7 @@ export const AUTOMATION_HANDLERS: Record<string, CommandHandler> = {
     const target = await getExplicitTarget(flags, cwd, client)
     const schedule = getScheduleFlag(flags, false)
     const sourceContext = getSourceContextFlag(flags)
+    const linkedTask = getLinkedTaskFlag(flags)
     const result = await client.call<{ automation: Automation }>('automation.update', {
       id: getRequiredStringFlag(flags, 'id'),
       updates: {
@@ -474,6 +508,7 @@ export const AUTOMATION_HANDLERS: Record<string, CommandHandler> = {
         agentId: getOptionalProviderFlag(flags),
         ...(target.runContext ? { runContext: target.runContext } : {}),
         ...(sourceContext !== undefined ? { sourceContext } : {}),
+        ...(linkedTask !== undefined ? { linkedTask } : {}),
         repo: target.repo,
         workspace: target.workspace,
         workspaceMode: getWorkspaceModeFlag(flags),

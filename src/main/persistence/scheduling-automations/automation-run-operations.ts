@@ -59,6 +59,7 @@ export function createAutomationRun(
     runNumber,
     runContext: automation.runContext ?? null,
     sourceContext: automation.sourceContext ?? null,
+    linkedTask: automation.linkedTask ?? null,
     title: `${automation.name} run ${runNumber}`,
     scheduledFor,
     status: 'pending',
