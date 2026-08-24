@@ -1,6 +1,7 @@
 # Parent-loss observation contract
 
-Status: C1 verified in `c5ebf55745`; C2 durable checkpoint/rebind is under verification.
+Status after the 2026-08-25 upstream rebase: C1 verified in `5bd6886a73`; C2 durable
+checkpoint/rebind verified in `9232474669`.
 
 An active dispatched worker remains parent-controlled. The runtime projects
 `parentIdentity`, `parentRuntimeEpoch`, `parentStatus`, `inputPolicy`, `rebindStatus`, and

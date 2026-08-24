@@ -43222,7 +43222,10 @@ describe('OrcaRuntimeService', () => {
       dispatchId: 'ctx-missing-run',
       dispatchStatus: 'dispatched',
       taskTitle: 'modern task without proven Run',
-      displayName: 'modern task without proven Run'
+      displayName: 'modern task without proven Run',
+      parentStatus: 'READY',
+      inputPolicy: 'DIRECT_ALLOWED',
+      rebindStatus: 'NOT_REQUIRED'
     })
     expect(getActiveCoordinatorRun).not.toHaveBeenCalled()
   })
@@ -43826,7 +43829,10 @@ describe('OrcaRuntimeService', () => {
     expect(result.agentOrchestrationByPaneKey?.[workerPaneKey]).toEqual({
       taskId: 'task-done',
       dispatchId: 'ctx-done',
-      dispatchStatus: 'completed'
+      dispatchStatus: 'completed',
+      parentStatus: 'READY',
+      inputPolicy: 'DIRECT_ALLOWED',
+      rebindStatus: 'NOT_REQUIRED'
     })
   })
 
@@ -43879,7 +43885,10 @@ describe('OrcaRuntimeService', () => {
       expect(result.agentOrchestrationByPaneKey?.[workerPaneKey]).toEqual({
         taskId: 'task-settled',
         dispatchId: 'ctx-settled',
-        dispatchStatus
+        dispatchStatus,
+        parentStatus: 'READY',
+        inputPolicy: 'DIRECT_ALLOWED',
+        rebindStatus: 'NOT_REQUIRED'
       })
       expect(getActiveCoordinatorRun).not.toHaveBeenCalled()
     }

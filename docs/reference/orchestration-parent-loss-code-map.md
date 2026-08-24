@@ -9,7 +9,7 @@
 | Durable checkpoint/rebind store      | `src/main/runtime/orchestration/db/parent-loss/parent-loss-checkpoint-store.ts`                                                                                                                                                      |
 | Schema and v29 -> v30 migration      | `create-graph-tables-sql.ts`, `migrate-v13-v29.ts`, `contract-constants.ts`                                                                                                                                                          |
 | Checkpoint/rebind RPC                | `orchestration.parentCheckpoint`, `orchestration.parentRebind` in `src/main/runtime/rpc/methods/orchestration.ts`                                                                                                                    |
-| Public CLI                           | `src/cli/specs/orchestration-parent-loss-specs.ts` and the `parent-checkpoint` / `parent-rebind` handlers in `src/cli/handlers/orchestration.ts`                                                                                       |
+| Public CLI                           | `src/cli/specs/orchestration-parent-loss-specs.ts` and the `parent-checkpoint` / `parent-rebind` handlers in `src/cli/handlers/orchestration.ts`                                                                                     |
 | Renderer merge/equality              | `src/renderer/src/store/slices/agent-status.ts`, `src/renderer/src/components/sidebar/worktree-agent-rows.ts`                                                                                                                        |
 | Visible degraded UX                  | `src/renderer/src/components/dashboard/DashboardAgentRow.tsx`                                                                                                                                                                        |
 | Contract tests                       | `src/shared/orchestration-parent-loss.test.ts`, `src/main/runtime/orca-runtime.test.ts`, `src/main/runtime/rpc/methods/orchestration-parent-loss-freeze.test.ts`, `src/renderer/src/components/dashboard/DashboardAgentRow.test.tsx` |
@@ -21,3 +21,26 @@ handlers do not. C2 flows from frozen runtime evidence -> durable checkpoint -> 
 exact-live-local-parent validation -> bounded single-writer transaction -> old Dispatch failure ->
 Run epoch increment -> new Dispatch/correlation -> rebind receipt. D1 remains separate and
 independently revertible.
+
+## D1 cross-plane verification
+
+| Concern                                                                 | Canonical implementation                                                            |
+| ----------------------------------------------------------------------- | ----------------------------------------------------------------------------------- |
+| Shared evidence/verdict contract                                        | `src/shared/orchestration-ack-contract.ts`                                          |
+| Stored message, thread, sequence, epoch, and native Dispatch query-back | `orchestration.crossPlaneVerify` in `src/main/runtime/rpc/methods/orchestration.ts` |
+| Public query command                                                    | `src/cli/specs/orchestration-ack-specs.ts`, `orchestration ack-verify` handler      |
+| Contract and runtime evidence tests                                     | `src/main/runtime/orchestration/orchestration-cross-plane-ack-contract.test.ts`     |
+
+The neutral coordinator supplies the identity-link evidence; Orca independently queries its native
+message and Dispatch records. Neither side's logical identity is rewritten to the other.
+
+## Revisions after upstream rebase
+
+| Slice                          | Revision          | State                                      |
+| ------------------------------ | ----------------- | ------------------------------------------ |
+| A1 bootstrap diagnostics       | `a442773a20`      | `VERIFIED_IMPLEMENTED / UPSTREAM_UNLANDED` |
+| B1 canonical self-send guard   | `31d2d97453`      | `VERIFIED_IMPLEMENTED / UPSTREAM_UNLANDED` |
+| A2 profile-routing diagnostics | `742b325ff8`      | `VERIFIED_IMPLEMENTED / UPSTREAM_UNLANDED` |
+| C1 parent-loss observation     | `5bd6886a73`      | `VERIFIED_IMPLEMENTED / UPSTREAM_UNLANDED` |
+| C2 approved rebind             | `9232474669`      | `VERIFIED_IMPLEMENTED / UPSTREAM_UNLANDED` |
+| D1 cross-plane verification    | current D1 commit | `VERIFIED_IMPLEMENTED / UPSTREAM_UNLANDED` |

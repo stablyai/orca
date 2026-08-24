@@ -30,6 +30,59 @@ The passing CLI regression suite writes expected parser/reset messages and three
 
 Two investigation commands also requested nonexistent guessed paths (`db/index.ts` and `schema/schema-version.ts`). The tracked file map established `db.ts`, `db/orchestration-db.ts`, and `db/contract-constants.ts` as the actual locations; no product cause was inferred from those lookup errors.
 
+D1 documentation and multi-file edits hit several `apply_patch` verification errors: one added Markdown line lacked the required `+` prefix, one patch targeted the same gate file for delete and add, and some hunks assumed pre-format spacing. Each failed atomically. The edits were split into exact operations after reading the current lines; no partial product mutation was accepted as evidence.
+
 Additional global-shell incident: every tool command printed `starship::print: Under a 'dumb' terminal` because the user CurrentHost PowerShell profile initialized Starship unconditionally while tool runners set `TERM=dumb`. Only Starship initialization is now guarded by interactive `ConsoleHost` and non-dumb-terminal checks; zoxide, PSFzf, and cache wiring remain unchanged. A fresh profile-loaded command printed `profile-load-ok`, reported `StarshipInteractive=False`, and emitted no Starship error.
 
 Earlier environment/tool corrections retained from A1/B1/A2: a missing Prettier command was replaced with the repository formatter; PowerShell `utf8NoBOM` incompatibility was avoided with `git format-patch -o`; a wrong `runtime.json` assumption was corrected to `orca-runtime.json`; sandboxed CIM access and Git fetch writes were rerun with narrowly scoped approval. None is evidence of product recovery by itself.
+
+## 2026-08-25 upstream freshness and D1 verification
+
+`origin/main` advanced by 26 commits while A1 through D1 were local. The six independent commits
+were rebased in order instead of being squashed. C1 conflicted once in
+`src/main/runtime/orca-runtime.ts`: upstream added `terminalStatusPayloadMatchesHook` at the same
+import boundary where C1 added `observeParentLoss`. Both imports were retained. The repository's
+named `resolving-merge-conflicts` skill was not available in the active skill inventory, so the
+resolution was verified by the full runtime suite and typecheck rather than claimed from tool use.
+
+The first attempt to stage the resolved file failed twice with `.git/index.lock: Permission denied`.
+No lock file existed; many long-lived Git processes were observable. A narrowly approved `git add`
+outside the restricted filesystem boundary succeeded, and rebase then completed. No process was
+terminated and no stash, reset, or skipped commit was used.
+
+The first post-rebase full runtime run failed 5 of 1,198 tests. Upstream exact-equality fixtures did
+not yet name C1's three default projection fields (`parentStatus`, `inputPolicy`, `rebindStatus`) for
+two missing/mismatched Run cases, one completed Dispatch, and two settled Dispatch states. The
+fixtures were updated to assert the actual contract; the focused patterns passed 9/9 and the full
+runtime file then passed 1,192/1,192. Product state derivation was not weakened.
+
+Post-rebase receipts on Node `v24.15.0`: combined D1/C1/B1/CLI tests passed 116/116; C2 checkpoint,
+reset, and v29-to-v30 migration tests passed 6/6; full runtime passed 1,192/1,192; canonical full
+typecheck exited 0. Windows bootstrap diagnostics passed 11 tests and skipped 17 because
+`runtime-client.test.ts` is platform-skipped on Windows. Those skips are explicit platform coverage
+gaps, not a full Windows verification claim.
+
+One bounded PowerShell search used the POSIX-style `docs/reference/*.md` argument and failed with
+Windows error 123. Re-running `rg` against the directory succeeded. The failed lookup changed no
+files and was not treated as product evidence.
+
+The first final formatting check found only the new code-map revision table misaligned. The
+repository formatter was applied to the named documentation set, followed by a clean check; no
+source semantics changed.
+
+The commit-time freshness fetch then found one additional upstream workspace-cleanup commit, moving
+the branch to 1 behind / 6 ahead after the first verification run. Receipts were committed before a
+second six-commit rebase. That rebase completed without conflict. Its 48 changed upstream paths were
+all in workspace-cleanup and i18n surfaces, with no overlap with A1 through D1; targeted contracts
+and typecheck were nevertheless rerun before the final amend. The seven-file A/B/C/D suite passed
+119/119, parent-loss runtime projection patterns passed 10/10, and canonical full typecheck exited 0.
+
+The first attempt to update the second-rebase SHA table used pre-formatter Markdown spacing and
+failed atomically during patch context verification. The current formatted rows were read and an
+exact patch was applied; no partial documentation edit occurred.
+
+A subsequent final fetch observed three more upstream commits and again changed freshness from
+0 behind to 3 behind. They affected crash reporting, sidebar activity status, and popover behavior;
+none touched the A1-D1 paths. A third six-commit rebase completed without conflict and restored
+0 behind / 6 ahead. Core A/B/C/D contracts passed 119/119 and canonical full typecheck exited 0 on
+that base.

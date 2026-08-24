@@ -41,6 +41,7 @@ import {
   ORCHESTRATION_FEDERATION_CONTROL_MAIL_PROTOCOL_VERSION,
   ORCHESTRATION_FEDERATION_LIFECYCLE_SETTLEMENT_PROTOCOL_VERSION
 } from '../../../../shared/protocol-version'
+import { verifyCrossPlaneAck } from '../../../../shared/orchestration-ack-contract'
 
 const TASK_STATUSES: TaskStatus[] = [
   'pending',
@@ -305,6 +306,20 @@ const ParentRebindParams = z.object({
   leaseMs: OptionalFiniteNumber
 })
 
+const CrossPlaneVerifyParams = z.object({
+  messageId: requiredString('Missing --message-id'),
+  ackMessageId: OptionalString,
+  completionReceiptId: OptionalString,
+  correlationId: requiredString('Missing --correlation-id'),
+  senderEpoch: requiredString('Missing --sender-epoch'),
+  receiverEpoch: requiredString('Missing --receiver-epoch'),
+  dispatchId: OptionalString,
+  orcaIdentity: requiredString('Missing --orca-identity'),
+  externalPlane: requiredString('Missing --external-plane'),
+  externalIdentity: requiredString('Missing --external-identity'),
+  linkEvidenceId: requiredString('Missing --link-evidence-id')
+})
+
 const ResetParams = z
   .object({
     all: OptionalBoolean,
@@ -513,6 +528,72 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
         rebindReceiptId: result.checkpoint.rebind_receipt_id,
         correlationId: result.checkpoint.correlation_id
       }
+    }
+  }),
+  defineMethod({
+    name: 'orchestration.crossPlaneVerify',
+    params: CrossPlaneVerifyParams,
+    handler: (params, { runtime }) => {
+      const db = runtime.getOrchestrationDb()
+      const message = db.getMessageById(params.messageId)
+      if (!message) {
+        throw new OrchestrationError('message_not_found', 'Original message was not found.', {
+          effectsApplied: false,
+          messageId: params.messageId
+        })
+      }
+      const ack = params.ackMessageId ? db.getMessageById(params.ackMessageId) : undefined
+      const completion = params.completionReceiptId
+        ? db.getMessageById(params.completionReceiptId)
+        : undefined
+      const threadId = message.thread_id ?? message.id
+      const ackReadBack = ack !== undefined && ack.thread_id === threadId
+      const completionReadBack = completion !== undefined && completion.thread_id === threadId
+      const parseEvidencePayload = (payload: string | null | undefined) => {
+        try {
+          const value: unknown = payload ? JSON.parse(payload) : undefined
+          return value && typeof value === 'object' && !Array.isArray(value)
+            ? (value as Record<string, unknown>)
+            : {}
+        } catch {
+          return {}
+        }
+      }
+      const ackPayload = parseEvidencePayload(ack?.payload)
+      const completionPayload = parseEvidencePayload(completion?.payload)
+      const originalPayload = parseEvidencePayload(message.payload)
+      const dispatch = params.dispatchId ? db.getDispatchContextById(params.dispatchId) : undefined
+      return verifyCrossPlaneAck({
+        messageId: message.id,
+        sequence: message.sequence,
+        threadId,
+        correlationId:
+          originalPayload.correlationId === params.correlationId ? params.correlationId : '',
+        senderEpoch: originalPayload.senderEpoch === params.senderEpoch ? params.senderEpoch : '',
+        receiverEpoch: params.receiverEpoch,
+        ackMessageId: ack?.id,
+        ackSequence: ack?.sequence,
+        ackReadBack,
+        ackCorrelationId:
+          typeof ackPayload.correlationId === 'string' ? ackPayload.correlationId : undefined,
+        ackSenderEpoch:
+          typeof ackPayload.senderEpoch === 'string' ? ackPayload.senderEpoch : undefined,
+        ackReceiverEpoch:
+          typeof ackPayload.receiverEpoch === 'string' ? ackPayload.receiverEpoch : undefined,
+        completionReceiptId: completionReadBack ? completion?.id : undefined,
+        nativeCompletionQueryBack: completionReadBack && dispatch?.status === 'completed',
+        nativeCompletionCorrelationId:
+          typeof completionPayload.correlationId === 'string'
+            ? completionPayload.correlationId
+            : undefined,
+        identityLink: {
+          orcaIdentity: params.orcaIdentity,
+          externalPlane: params.externalPlane,
+          externalIdentity: params.externalIdentity,
+          linkedBy: 'neutral_coordinator',
+          evidenceId: params.linkEvidenceId
+        }
+      })
     }
   }),
   defineMethod({

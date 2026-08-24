@@ -715,6 +715,46 @@ describe('orchestration parent-loss recovery commands', () => {
     })
   })
 })
+
+describe('orchestration cross-plane ACK verification', () => {
+  it('forwards every query-back identity and correlation field', async () => {
+    callMock.mockReset().mockResolvedValue({
+      result: { state: 'completion_verified', verified: true, effectsApplied: false, missing: [] }
+    })
+    await ORCHESTRATION_HANDLERS['orchestration ack-verify']({
+      flags: new Map([
+        ['message-id', 'msg_1'],
+        ['ack-message-id', 'msg_ack_1'],
+        ['completion-receipt-id', 'msg_completion_1'],
+        ['correlation-id', 'corr_1'],
+        ['sender-epoch', 'orca:7'],
+        ['receiver-epoch', 'herdr:12'],
+        ['dispatch-id', 'ctx_1'],
+        ['orca-identity', 'dispatch:ctx_1'],
+        ['external-plane', 'herdr'],
+        ['external-identity', 'pane:42'],
+        ['link-evidence-id', 'link_1']
+      ]),
+      client: { call: callMock },
+      cwd: '/tmp/repo',
+      json: true
+    } as never)
+
+    expect(callMock).toHaveBeenCalledWith('orchestration.crossPlaneVerify', {
+      messageId: 'msg_1',
+      ackMessageId: 'msg_ack_1',
+      completionReceiptId: 'msg_completion_1',
+      correlationId: 'corr_1',
+      senderEpoch: 'orca:7',
+      receiverEpoch: 'herdr:12',
+      dispatchId: 'ctx_1',
+      orcaIdentity: 'dispatch:ctx_1',
+      externalPlane: 'herdr',
+      externalIdentity: 'pane:42',
+      linkEvidenceId: 'link_1'
+    })
+  })
+})
 describe('orchestration timeout flag validation', () => {
   const invalidTimeoutValues: [string, string | boolean][] = [
     ['missing', true],
