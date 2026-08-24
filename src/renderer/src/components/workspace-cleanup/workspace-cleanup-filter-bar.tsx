@@ -5,6 +5,11 @@ import { Input } from '@/components/ui/input'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { translate } from '@/i18n/i18n'
+import {
+  useAppliedWorkspaceCleanupFilters,
+  WorkspaceCleanupAppliedFilterChips
+} from './workspace-cleanup-applied-filter-chips'
+import type { WorkspaceCleanupAppliedFilter } from '../../../../shared/workspace-cleanup-applied-filters'
 import { WorkspaceCleanupGitReviewFacets } from './workspace-cleanup-git-review-facets'
 import { WorkspaceCleanupLifecycleFacets } from './workspace-cleanup-lifecycle-facets'
 import type { WorkspaceCleanupFacetGroupProps } from './workspace-cleanup-facet-panel-model'
@@ -23,7 +28,8 @@ export function WorkspaceCleanupFilterBar({
   hasActiveFilters,
   gitEvidence,
   onQueryChange,
-  onClearFilters
+  onClearFilters,
+  onClearAppliedFilter
 }: {
   facetProps: WorkspaceCleanupFacetGroupProps
   facetPanelOpen: boolean
@@ -34,8 +40,10 @@ export function WorkspaceCleanupFilterBar({
   gitEvidence: WorkspaceCleanupGitEvidenceProgress
   onQueryChange: (query: string) => void
   onClearFilters: () => void
+  onClearAppliedFilter: (filter: WorkspaceCleanupAppliedFilter) => void
 }): React.JSX.Element {
   const { filters, totalCount } = facetProps
+  const applied = useAppliedWorkspaceCleanupFilters(filters)
   return (
     <div className="flex flex-wrap items-center gap-2 border-b border-border bg-muted/15 px-3 py-2">
       <div className="relative min-w-[180px] flex-1">
@@ -101,6 +109,15 @@ export function WorkspaceCleanupFilterBar({
         )}
       </span>
 
+      {/* Why out here and not only in the popover: a filter narrowing the list must be
+          clearable without first discovering which panel it lives in. */}
+      {hasActiveFilters ? (
+        <Button variant="ghost" size="sm" className="shrink-0" onClick={onClearFilters}>
+          <RotateCcw className="size-3.5" />
+          {translate('components.workspace.cleanup.browse.clearFilters', 'Clear filters')}
+        </Button>
+      ) : null}
+
       {gitEvidence.pendingCount > 0 ? (
         <span className="flex shrink-0 items-center gap-1.5 text-xs text-muted-foreground">
           <Loader2 className="size-3.5 animate-spin" />
@@ -111,6 +128,8 @@ export function WorkspaceCleanupFilterBar({
           )}
         </span>
       ) : null}
+
+      <WorkspaceCleanupAppliedFilterChips applied={applied} onClear={onClearAppliedFilter} />
     </div>
   )
 }

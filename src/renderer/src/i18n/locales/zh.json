@@ -14557,6 +14557,54 @@
         "presentation": {
           "gitlabMergeRequestNumber": "MR #{{value0}}",
           "githubPullRequestNumber": "PR #{{value0}}"
+        },
+        "browse": {
+          "appliedFilters": "已应用的筛选",
+          "removeFilter": "移除筛选 {{value0}}",
+          "chip": {
+            "idleDays": "闲置 {{value0}} 天以上",
+            "neverVisited": "从未访问",
+            "minSize": "至少 {{value0}} MB",
+            "maxSize": "最多 {{value0}} MB",
+            "excludesUnsized": "仅已测量",
+            "excludesStatusless": "有状态",
+            "list": "{{value0}}：{{value1}}",
+            "triState": "{{value0}}：{{value1}}",
+            "only": "仅",
+            "exclude": "排除",
+            "minAhead": "领先 {{value0}} 个以上",
+            "minBehind": "落后 {{value0}} 个以上",
+            "branchQuery": "分支：{{value0}}",
+            "pathPrefix": "路径：{{value0}}",
+            "presence": "{{value0}}：{{value1}}",
+            "has": "有",
+            "none": "无",
+            "completelyEmpty": "没有可丢失的内容",
+            "selectableOnly": "仅可删除",
+            "kind": {
+              "status": "状态",
+              "agent": "代理",
+              "git": "Git",
+              "review": "审查",
+              "reviewState": "审查状态",
+              "reviewProvider": "提供方",
+              "ticket": "工单",
+              "ticketSource": "工单来源",
+              "context": "上下文",
+              "host": "主机",
+              "repo": "仓库",
+              "blocker": "阻塞项",
+              "tier": "安全",
+              "dismissed": "已忽略",
+              "archived": "已归档",
+              "pinned": "已固定",
+              "unread": "未读",
+              "comment": "评论",
+              "prunable": "可修剪",
+              "locked": "已锁定",
+              "retainedAgents": "已完成的代理"
+            }
+          }
         }
       }
     },

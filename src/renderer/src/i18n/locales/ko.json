@@ -14566,6 +14566,54 @@
         "presentation": {
           "gitlabMergeRequestNumber": "MR #{{value0}}",
           "githubPullRequestNumber": "PR #{{value0}}"
+        },
+        "browse": {
+          "appliedFilters": "적용된 필터",
+          "removeFilter": "{{value0}} 필터 제거",
+          "chip": {
+            "idleDays": "{{value0}}일 이상 유휴",
+            "neverVisited": "방문한 적 없음",
+            "minSize": "{{value0}} MB 이상",
+            "maxSize": "{{value0}} MB 이하",
+            "excludesUnsized": "측정된 항목만",
+            "excludesStatusless": "상태 있음",
+            "list": "{{value0}}: {{value1}}",
+            "triState": "{{value0}}: {{value1}}",
+            "only": "만",
+            "exclude": "제외",
+            "minAhead": "{{value0}}개 이상 앞섬",
+            "minBehind": "{{value0}}개 이상 뒤처짐",
+            "branchQuery": "브랜치: {{value0}}",
+            "pathPrefix": "경로: {{value0}}",
+            "presence": "{{value0}}: {{value1}}",
+            "has": "있음",
+            "none": "없음",
+            "completelyEmpty": "잃을 것 없음",
+            "selectableOnly": "삭제 가능한 항목만",
+            "kind": {
+              "status": "상태",
+              "agent": "에이전트",
+              "git": "Git",
+              "review": "리뷰",
+              "reviewState": "리뷰 상태",
+              "reviewProvider": "제공자",
+              "ticket": "티켓",
+              "ticketSource": "티켓 소스",
+              "context": "컨텍스트",
+              "host": "호스트",
+              "repo": "저장소",
+              "blocker": "차단 요인",
+              "tier": "안전",
+              "dismissed": "무시됨",
+              "archived": "보관됨",
+              "pinned": "고정됨",
+              "unread": "읽지 않음",
+              "comment": "댓글",
+              "prunable": "정리 가능",
+              "locked": "잠김",
+              "retainedAgents": "완료된 에이전트"
+            }
+          }
         }
       }
     },
