@@ -278,6 +278,95 @@ describe('registerPtyHandlers', () => {
 
       expect(write).not.toHaveBeenCalled()
     })
+    it('retries failed implicit reclaim before later host input', async () => {
+      const write = setupProviderWithAppliedSize({ applied: { cols: 80, rows: 24 } })
+      const retry = Promise.withResolvers<boolean>()
+      const claimRemoteDesktopHostForInput = vi
+        .fn<() => Promise<boolean> | null>()
+        .mockResolvedValueOnce(false)
+        .mockReturnValueOnce(retry.promise)
+      const runtime = {
+        setPtyController: vi.fn(),
+        createPreAllocatedTerminalHandle: vi.fn(() => null),
+        registerPty: vi.fn(),
+        getDriver: vi.fn(() => ({ kind: 'idle' })),
+        claimRemoteDesktopHostForInput,
+        onPtySpawned: vi.fn(),
+        onPtyExit: vi.fn(),
+        onPtyData: vi.fn()
+      }
+      handlers.clear()
+      registerPtyHandlers(mainWindow as never, runtime as never)
+      const spawn = await handlers.get('pty:spawn')!(null, { cols: 80, rows: 24, env: {} })
+      const id = (spawn as { id: string }).id
+      const writeEvent = onMock.mock.calls.find((entry: unknown[]) => entry[0] === 'pty:write')
+
+      writeEvent?.[1](mainWindowIpcEvent, { id, data: 'first' })
+      expect(claimRemoteDesktopHostForInput).toHaveBeenCalledWith(id)
+      expect(write).not.toHaveBeenCalled()
+      await Promise.resolve()
+      await Promise.resolve()
+
+      writeEvent?.[1](mainWindowIpcEvent, { id, data: 'second' })
+      expect(claimRemoteDesktopHostForInput).toHaveBeenCalledTimes(2)
+      expect(write).not.toHaveBeenCalled()
+
+      retry.resolve(true)
+      await vi.waitFor(() => expect(write).toHaveBeenCalledWith(id, 'second'))
+      expect(write).not.toHaveBeenCalledWith(id, 'first')
+    })
+    it('writes terminal query replies without reclaiming host viewport ownership', async () => {
+      const write = setupProviderWithAppliedSize({ applied: { cols: 80, rows: 24 } })
+      const claimRemoteDesktopHostForInput = vi.fn().mockResolvedValue(true)
+      const runtime = {
+        setPtyController: vi.fn(),
+        createPreAllocatedTerminalHandle: vi.fn(() => null),
+        registerPty: vi.fn(),
+        getDriver: vi.fn(() => ({ kind: 'idle' })),
+        claimRemoteDesktopHostForInput,
+        onPtySpawned: vi.fn(),
+        onPtyExit: vi.fn(),
+        onPtyData: vi.fn()
+      }
+      handlers.clear()
+      registerPtyHandlers(mainWindow as never, runtime as never)
+      const spawn = await handlers.get('pty:spawn')!(null, { cols: 80, rows: 24, env: {} })
+      const id = (spawn as { id: string }).id
+      const writeEvent = onMock.mock.calls.find((entry: unknown[]) => entry[0] === 'pty:write')
+
+      writeEvent?.[1](mainWindowIpcEvent, { id, data: '\u001b[3;1R', inputKind: 'query-reply' })
+
+      expect(claimRemoteDesktopHostForInput).not.toHaveBeenCalled()
+      expect(write).toHaveBeenCalledWith(id, '\u001b[3;1R')
+    })
+    it('writes terminal focus reports without reclaiming host viewport ownership', async () => {
+      const write = setupProviderWithAppliedSize({ applied: { cols: 80, rows: 24 } })
+      const claimRemoteDesktopHostForInput = vi.fn().mockResolvedValue(true)
+      const runtime = {
+        setPtyController: vi.fn(),
+        createPreAllocatedTerminalHandle: vi.fn(() => null),
+        registerPty: vi.fn(),
+        getDriver: vi.fn(() => ({ kind: 'idle' })),
+        claimRemoteDesktopHostForInput,
+        onPtySpawned: vi.fn(),
+        onPtyExit: vi.fn(),
+        onPtyData: vi.fn()
+      }
+      handlers.clear()
+      registerPtyHandlers(mainWindow as never, runtime as never)
+      const spawn = await handlers.get('pty:spawn')!(null, { cols: 80, rows: 24, env: {} })
+      const id = (spawn as { id: string }).id
+      const writeEvent = onMock.mock.calls.find((entry: unknown[]) => entry[0] === 'pty:write')
+
+      writeEvent?.[1](mainWindowIpcEvent, { id, data: '\u001b[I' })
+      writeEvent?.[1](mainWindowIpcEvent, { id, data: '\u001b[O' })
+      writeEvent?.[1](mainWindowIpcEvent, { id, data: '\u001b[O\u001b[I' })
+
+      expect(claimRemoteDesktopHostForInput).not.toHaveBeenCalled()
+      expect(write).toHaveBeenNthCalledWith(1, id, '\u001b[I')
+      expect(write).toHaveBeenNthCalledWith(2, id, '\u001b[O')
+      expect(write).toHaveBeenNthCalledWith(3, id, '\u001b[O\u001b[I')
+    })
     it('does not populate the remote reclaim cache when only a phone drives', async () => {
       const resizeSpy = vi.fn()
       setupProviderWithAppliedSize({ applied: { cols: 80, rows: 24 }, resize: resizeSpy })

@@ -20,6 +20,7 @@ import {
 
 import { isRemoteRuntimePtyId } from './paired-parked-terminal-restore'
 import { TRANSPORT_CONNECT_SETTLE_GRACE_MS } from './pty-connect-limits'
+import { shouldClaimDesktopViewportForUserActivity } from '../remote-desktop-viewport-claim'
 
 import type { ConnectPanePtySession } from './connect-pane-pty-session'
 
@@ -192,7 +193,14 @@ export function installPtyInputRecovery(session: ConnectPanePtySession): void {
 
   session.claimViewportForUserActivity = (): void => {
     const currentPtyId = session.transport.getPtyId()
-    if (!currentPtyId || getFitOverrideForPty(currentPtyId)?.mode !== 'remote-desktop-fit') {
+    if (
+      !currentPtyId ||
+      !shouldClaimDesktopViewportForUserActivity({
+        initialRemoteFitPending:
+          isRemoteRuntimePtyId(currentPtyId) && session.pendingVisibleRemoteViewportClaim,
+        holdMode: getFitOverrideForPty(currentPtyId)?.mode ?? null
+      })
+    ) {
       return
     }
     let proposed: { cols: number; rows: number } | undefined

@@ -15450,7 +15450,7 @@ export class OrcaRuntimeService {
   // Why: the host's own fit cascade (window resize, split drag, tab reveal,
   // "+"-new-tab re-render) must not resize a PTY whose width a remote client
   // owns — that is the remote "porridge" bug. True while a phone (mobile driver)
-  // OR an active remote desktop viewer owns the PTY. Input is deliberately NOT gated
+  // OR remote desktop ownership/reclaim still reserves the PTY. Input is deliberately NOT gated
   // here (see the `writePtyInput` mobile-only checks): shared-control desktop
   // viewers may still type alongside the host.
   // Note: this is intentionally NOT a driver kind. An active remote viewer needs
@@ -15467,7 +15467,7 @@ export class OrcaRuntimeService {
   }
 
   isRemoteDesktopResizeDriven(ptyId: string): boolean {
-    return this.remoteDesktopOwners.has(ptyId)
+    return this.hasRemoteDesktopLayoutState(ptyId)
   }
 
   isRemoteDesktopViewerOwner(ptyId: string, subscriptionKey: string): boolean {
@@ -15650,6 +15650,14 @@ export class OrcaRuntimeService {
     this.remoteDesktopOwners.delete(ptyId)
     this.bumpRemoteDesktopViewerRevision(ptyId)
     return this.applyRemoteDesktopLayout(ptyId)
+  }
+
+  claimRemoteDesktopHostForInput(ptyId: string): Promise<boolean> | null {
+    if (!this.hasRemoteDesktopLayoutState(ptyId)) {
+      return null
+    }
+    const target = this.resolveRemoteDesktopHostReclaimTarget(ptyId)
+    return this.claimRemoteDesktopHost(ptyId, target.cols, target.rows)
   }
 
   unregisterRemoteDesktopViewer(ptyId: string, subscriptionKey: string): Promise<boolean> {

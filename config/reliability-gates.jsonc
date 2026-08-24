@@ -278,7 +278,7 @@
           "platform": "macos",
           "command": "SKIP_BUILD=1 pnpm exec playwright test tests/e2e/paired-cmd-j-host-qualified-tabs.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1",
           "result": "passed",
-          "durationSeconds": 20.6,
+          "durationSeconds": 21.3,
           "summary": "After a fresh build exposed an unrelated mirrored terminal entering the broad backing-state diagnostic, the exact built candidate passed with that oracle scoped to the four seeded browser/simulator tabs; rendered active-tab and backing execution-host assertions remained green."
         }
       ],
@@ -5526,8 +5526,8 @@
       "platforms": ["macos", "linux", "windows"],
       "providers": ["local", "daemon", "ssh", "remote-runtime"],
       "coveredPlatforms": ["macos"],
-      "coveredProviders": [],
-      "coverageNotes": "Local macOS evidence on main@1282f5c2d, including #7192's runtime-mirror geometry authority slice. Deterministic provider-contract coverage now includes settled window-wake reassertion and SSH relay applied-size readback. Live shell-visible SSH/remote geometry and Windows ConPTY readback remain non-blocking gaps.",
+      "coveredProviders": ["remote-runtime"],
+      "coverageNotes": "Local macOS evidence on main@1282f5c2d, including #7192's runtime-mirror geometry authority slice. Deterministic provider-contract coverage includes settled window-wake reassertion and SSH relay applied-size readback. A headed host plus two paired desktop clients now covers remote-runtime viewport ownership and a capability-less legacy client. Live shell-visible SSH geometry and Windows ConPTY readback remain non-blocking gaps.",
       "motivatingLinks": [
         "https://github.com/stablyai/orca/pull/6644",
         "https://github.com/stablyai/orca/pull/6649",
@@ -5537,20 +5537,31 @@
         "https://github.com/stablyai/orca/pull/6939",
         "https://github.com/stablyai/orca/pull/7192"
       ],
-      "invariant": "A visible desktop-owned terminal cannot trust 0x0, stale requested size, or renderer-only size; xterm, fit/proposed size, applied PTY size, shell-visible size, and the runtime mirror's parse dimensions must converge or enter explicit degraded state, and mirror resize reflow must stay ordered with queued output writes.",
-      "oracle": "The current executable slice uses deterministic frame schedulers and fake providers to force 0x0 first fit, delayed layout settle, dropped resize/readback drift, hidden-to-visible activation, and window wake. It asserts the renderer forwards a usable size, pty:getSize reports applied rather than merely requested size where available, visibility resume reasserts real drift without hot listSessions, one settled wake produces one geometry-only readback, and SSH relay readback is authoritative with bounded fallback. Shell-visible stty/echo-wrap convergence remains a live-gate follow-up.",
+      "invariant": "A visible desktop-owned terminal cannot trust 0x0, stale requested size, or renderer-only size; xterm, fit/proposed size, applied PTY size, shell-visible size, and the runtime mirror's parse dimensions must converge or enter explicit degraded state, and mirror resize reflow must stay ordered with queued output writes. Across desktops, the most recently active visible owner controls geometry: passive attach, unfocused layout, and automatic terminal protocol traffic cannot transfer ownership; input claims before bytes; detach and failed reclaim preserve a deterministic restoration target.",
+      "oracle": "The executable slices force 0x0 first fit, delayed layout settle, dropped resize/readback drift, hidden-to-visible activation, window wake, delayed fit publication, adjacent focus reports, two competing desktop viewers, failed reclaim, stream detach, and capability-less legacy traffic. They assert usable renderer geometry, applied provider size, ordered runtime mirrors, atomic automatic-input classification, passive non-ownership, input-before-bytes transfer, host reclaim, detach fallback, and intentional legacy resize-as-activity. Shell-visible stty/echo-wrap convergence remains a live-gate follow-up.",
       "commands": [
-        "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/terminal-pane/pty-size-reconcile.test.ts src/renderer/src/components/terminal-pane/pty-size-reassertion.test.ts src/renderer/src/components/terminal-pane/split-right-white-screen.test.ts src/renderer/src/components/terminal-pane/use-terminal-window-wake-recovery.test.ts src/main/ipc/pty-applied-size-reporting.test.ts src/main/providers/ssh-pty-provider.test.ts src/main/runtime/orca-runtime.test.ts src/relay/pty-handler-output-streaming.test.ts"
+        "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/terminal-pane/pty-size-reconcile.test.ts src/renderer/src/components/terminal-pane/pty-size-reassertion.test.ts src/renderer/src/components/terminal-pane/split-right-white-screen.test.ts src/renderer/src/components/terminal-pane/use-terminal-window-wake-recovery.test.ts src/main/ipc/pty-applied-size-reporting.test.ts src/main/providers/ssh-pty-provider.test.ts src/main/runtime/orca-runtime.test.ts src/relay/pty-handler-output-streaming.test.ts",
+        "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/terminal-pane/pty-input-write-queue.test.ts src/renderer/src/components/terminal-pane/pty-connection-terminal-input-gating.test.ts src/renderer/src/components/terminal-pane/remote-desktop-viewport-claim.test.ts src/main/ipc/pty-applied-size-reporting.test.ts src/main/runtime/remote-desktop-driver.test.ts src/main/runtime/rpc/terminal-desktop-input-claim-serialization.test.ts src/main/runtime/rpc/terminal-desktop-stream-detach-serialization.test.ts",
+        "SKIP_BUILD=1 ORCA_E2E_FORCE_HEADFUL=1 pnpm exec playwright test tests/e2e/paired-terminal-viewport-ownership-audit.spec.ts --config tests/playwright.config.ts --project electron-headful --workers=1 -g 'current clients'",
+        "SKIP_BUILD=1 ORCA_E2E_FORCE_HEADFUL=1 pnpm exec playwright test tests/e2e/paired-terminal-viewport-ownership-audit.spec.ts --config tests/playwright.config.ts --project electron-headful --workers=1 -g 'host input reclaims'",
+        "SKIP_BUILD=1 ORCA_E2E_FORCE_HEADFUL=1 pnpm exec playwright test tests/e2e/paired-terminal-viewport-ownership-audit.spec.ts --config tests/playwright.config.ts --project electron-headful --workers=1 -g 'legacy clients'"
       ],
       "testFiles": [
         "src/renderer/src/components/terminal-pane/pty-size-reconcile.test.ts",
         "src/renderer/src/components/terminal-pane/pty-size-reassertion.test.ts",
         "src/renderer/src/components/terminal-pane/split-right-white-screen.test.ts",
         "src/renderer/src/components/terminal-pane/use-terminal-window-wake-recovery.test.ts",
+        "src/renderer/src/components/terminal-pane/pty-input-write-queue.test.ts",
+        "src/renderer/src/components/terminal-pane/pty-connection-terminal-input-gating.test.ts",
+        "src/renderer/src/components/terminal-pane/remote-desktop-viewport-claim.test.ts",
         "src/main/ipc/pty-applied-size-reporting.test.ts",
         "src/main/providers/ssh-pty-provider.test.ts",
+        "src/main/runtime/remote-desktop-driver.test.ts",
+        "src/main/runtime/rpc/terminal-desktop-input-claim-serialization.test.ts",
+        "src/main/runtime/rpc/terminal-desktop-stream-detach-serialization.test.ts",
         "src/main/runtime/orca-runtime.test.ts",
-        "src/relay/pty-handler-output-streaming.test.ts"
+        "src/relay/pty-handler-output-streaming.test.ts",
+        "tests/e2e/paired-terminal-viewport-ownership-audit.spec.ts"
       ],
       "assertionRefs": [
         {
@@ -5588,7 +5599,36 @@
           "assertions": [
             "accepted desktop resizes fan out to the runtime after provider resize",
             "rejected desktop resizes do not fan out to the runtime",
+            "automatic terminal query replies do not reclaim host viewport ownership",
+            "single and transport-batched xterm focus reports do not reclaim host viewport ownership",
             "provider-owned null remains unverified instead of falling back to requested size"
+          ]
+        },
+        {
+          "file": "src/renderer/src/components/terminal-pane/pty-connection-terminal-input-gating.test.ts",
+          "assertions": [
+            "an acknowledged reclaim rejection does not arm parser probes or remount a live bound pane"
+          ]
+        },
+        {
+          "file": "src/main/runtime/remote-desktop-driver.test.ts",
+          "assertions": [
+            "failed host restoration retains remote geometry suppression until input retry succeeds",
+            "host input restores cached host geometry before bytes",
+            "current-owner input applies geometry recorded by an earlier passive relayout"
+          ]
+        },
+        {
+          "file": "src/main/runtime/rpc/terminal-desktop-input-claim-serialization.test.ts",
+          "assertions": [
+            "multiplex and single desktop input revalidate runtime ownership before bytes",
+            "terminal query replies and transport-batched xterm focus reports do not transfer desktop viewport ownership"
+          ]
+        },
+        {
+          "file": "src/main/runtime/rpc/terminal-desktop-stream-detach-serialization.test.ts",
+          "assertions": [
+            "slot and connection cleanup drop queued current and legacy viewport work before restoration"
           ]
         },
         {
@@ -5611,6 +5651,18 @@
             "relay readback reports the grid actually applied by node-pty",
             "missing relay PTYs return an unverified null size"
           ]
+        },
+        {
+          "file": "tests/e2e/paired-terminal-viewport-ownership-audit.spec.ts",
+          "assertions": [
+            "passive attach and unfocused layout publish no desktop viewport claim",
+            "passive terminal preview subscription does not resize or publish a claim",
+            "focused input claims before bytes while fit state is delayed",
+            "host input reclaims cached host geometry before bytes while renderer fit state is delayed",
+            "host input and later desktop input transfer ownership in order",
+            "desktop detach falls back to the remaining active viewer, then the host",
+            "capability-less legacy clients retain resize-as-activity behavior"
+          ]
         }
       ],
       "evidenceRuns": [
@@ -5620,8 +5672,44 @@
           "platform": "macos",
           "command": "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/terminal-pane/pty-size-reconcile.test.ts src/renderer/src/components/terminal-pane/pty-size-reassertion.test.ts src/renderer/src/components/terminal-pane/split-right-white-screen.test.ts src/renderer/src/components/terminal-pane/use-terminal-window-wake-recovery.test.ts src/main/ipc/pty-applied-size-reporting.test.ts src/main/providers/ssh-pty-provider.test.ts src/main/runtime/orca-runtime.test.ts src/relay/pty-handler-output-streaming.test.ts",
           "result": "passed",
-          "durationSeconds": 18.54,
-          "summary": "8 test files passed, 1,272 tests passed on the PR branch."
+          "durationSeconds": 11.49,
+          "summary": "8 test files passed, 1,282 tests passed and 1 skipped on the PR branch. One prior combined run timed out in an unrelated legacy-worker orchestration fixture; the exact test passed alone in 84 ms and this rerun passed."
+        },
+        {
+          "date": "2026-08-23",
+          "runner": "local",
+          "platform": "macos",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/terminal-pane/pty-input-write-queue.test.ts src/renderer/src/components/terminal-pane/pty-connection-terminal-input-gating.test.ts src/renderer/src/components/terminal-pane/remote-desktop-viewport-claim.test.ts src/main/ipc/pty-applied-size-reporting.test.ts src/main/runtime/remote-desktop-driver.test.ts src/main/runtime/rpc/terminal-desktop-input-claim-serialization.test.ts src/main/runtime/rpc/terminal-desktop-stream-detach-serialization.test.ts",
+          "result": "passed",
+          "durationSeconds": 4.6,
+          "summary": "7 focused ownership-boundary files passed, 109 tests passed."
+        },
+        {
+          "date": "2026-08-23",
+          "runner": "local",
+          "platform": "macos",
+          "command": "SKIP_BUILD=1 ORCA_E2E_FORCE_HEADFUL=1 pnpm exec playwright test tests/e2e/paired-terminal-viewport-ownership-audit.spec.ts --config tests/playwright.config.ts --project electron-headful --workers=1 -g 'current clients'",
+          "result": "passed",
+          "durationSeconds": 22.7,
+          "summary": "Current-client ownership passed twice consecutively with a headed host and two real paired Electron clients after the payload-aware wire oracle excluded pure focus reports."
+        },
+        {
+          "date": "2026-08-23",
+          "runner": "local",
+          "platform": "macos",
+          "command": "SKIP_BUILD=1 ORCA_E2E_FORCE_HEADFUL=1 pnpm exec playwright test tests/e2e/paired-terminal-viewport-ownership-audit.spec.ts --config tests/playwright.config.ts --project electron-headful --workers=1 -g 'host input reclaims'",
+          "result": "passed",
+          "durationSeconds": 20.2,
+          "summary": "Host input reclaimed cached host geometry before bytes while host fit events and renderer viewport claims were suppressed."
+        },
+        {
+          "date": "2026-08-23",
+          "runner": "local",
+          "platform": "macos",
+          "command": "SKIP_BUILD=1 ORCA_E2E_FORCE_HEADFUL=1 pnpm exec playwright test tests/e2e/paired-terminal-viewport-ownership-audit.spec.ts --config tests/playwright.config.ts --project electron-headful --workers=1 -g 'legacy clients'",
+          "result": "passed",
+          "durationSeconds": 20.2,
+          "summary": "The capability-less legacy arm passed in a separate fresh Playwright process."
         }
       ],
       "runtimeBudget": {
@@ -5630,11 +5718,11 @@
       },
       "flakeHistory": {
         "status": "unknown",
-        "evidence": "Deterministic Vitest slices passed locally; no CI soak history yet."
+        "evidence": "Deterministic Vitest slices and all three paired Electron arms passed locally. A wire assertion initially counted a pure focus-report Input as activity; recording raw Input payloads made the oracle semantic, after which current/current passed twice consecutively. Repeated Playwright processes also exposed an unrelated seeded-worktree loader failure before the test body; no CI soak history yet."
       },
       "redGreenEvidence": {
         "status": "partial",
-        "evidence": "#7192 proved the mirror slice red before its fix (snapshot stayed 80x24, queued write parsed at the wrong width). The renderer 0x0/settle slices do not have recorded red runs."
+        "evidence": "#7192 proved the mirror slice red before its fix (snapshot stayed 80x24, queued write parsed at the wrong width). STA-5050's paired oracle failed with [14,8] for unfocused generic resize when that guard was disabled, failed with input [7] at the prior owner's 57x41 grid instead of [14,8,7] at 20x26 when pre-fit claiming was disabled, and put HOST_PRE_FIT_INPUT bytes at the remote 20x26 grid instead of cached host 107x52 when host reclaim was disabled. Disabling runtime input revalidation failed both multiplex and single-stream tests; disabling query-reply classification or the focus-report predicate invoked ownership reclaim; exact-only focus classification failed on a transport-batched ESC[O ESC[I payload; disabling retained-target suppression exposed the failed restoration to layout resize; disabling stream-liveness gates failed all four detach cases. The renderer 0x0/settle slices do not have recorded red runs."
       },
       "performanceBudget": {
         "required": true,
@@ -5648,7 +5736,9 @@
         "Local and Docker-backed SSH Electron wake specs exist but remain manual/non-blocking pending runtime and flake history.",
         "The deterministic gate proves the SSH provider/relay readback contract, not live shell-visible convergence across every remote path.",
         "Does not yet prove Windows ConPTY geometry/readback.",
-        "Current command uses deterministic fake providers for the main/renderer contracts, not a real remote PTY."
+        "A passive current-owner relayout can temporarily leave xterm and PTY geometry divergent until the next genuine input revalidates and applies the recorded geometry; no bytes run at the stale geometry.",
+        "If provider resize persistently fails, genuine input is rejected until ownership geometry can be established; delivering or indefinitely queueing those bytes would violate the ordering invariant or risk delayed interactive input.",
+        "The Vitest command uses deterministic fake providers; the paired macOS Electron arm covers a real remote-runtime PTY."
       ],
       "demotionRule": "Cannot promote without deterministic oracle and runtime history."
     },

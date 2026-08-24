@@ -874,7 +874,10 @@ describe('connectPanePty', () => {
     const { connectPanePty } = await import('./pty-connection')
     const { WRITE_PIPELINE_STALL_CHECK_MS } =
       await import('@/lib/pane-manager/terminal-write-pipeline-health')
+    const remountTerminalTabForRecovery = vi.fn<(tabId: string) => boolean>(() => true)
+    mockStoreState = { ...mockStoreState, remountTerminalTabForRecovery } as StoreState
     const transport = createMockTransport('pty-rejected')
+    transport.isConnected = vi.fn(() => true)
     transport.sendInputAccepted = vi.fn().mockResolvedValue(false)
     transportFactoryQueue.push(transport)
     const pane = createPane(1)
@@ -890,6 +893,7 @@ describe('connectPanePty', () => {
 
     expect(transport.sendInputAccepted).toHaveBeenCalledWith('\x03')
     expect(pane.terminal.write).not.toHaveBeenCalledWith('', expect.any(Function))
+    expect(remountTerminalTabForRecovery).not.toHaveBeenCalled()
     binding.dispose()
   })
 

@@ -101,6 +101,7 @@ export function createHostTerminalRuntimeStub(
     registerRemoteTerminalViewSubscriber: () => () => {},
     requestRendererTerminalTabMount: () => true,
     updateRemoteDesktopViewer: async () => true,
+    claimRemoteDesktopViewer: async () => true,
     unregisterRemoteDesktopViewer: async () => true,
     unregisterRemoteDesktopViewers: async () => true,
     isPtyResizeDrivenRemotely: () => false,

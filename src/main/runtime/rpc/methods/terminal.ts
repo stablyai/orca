@@ -38,6 +38,7 @@ import {
 } from '../terminal-stream-byte-length'
 import { isTuiAgent } from '../../../../shared/tui-agent-config'
 import { isTerminalQueryReply } from '../../../../shared/terminal-query-reply'
+import { isTerminalFocusReport } from '../../../../shared/terminal-focus-report'
 import {
   EMPTY_TERMINAL_REPLY_QUERY_SCAN_STATE,
   scanTerminalReplyQuerySequences,
@@ -862,6 +863,25 @@ async function updateViewportForClient(
           claim
         )
   return { updated, applied: updated }
+}
+
+function enqueueRemoteDesktopInputClaim(
+  runtime: OrcaRuntimeService,
+  ptyId: string,
+  subscriptionKey: string,
+  priorClaimTail: Promise<boolean>,
+  registered: boolean,
+  isLive: () => boolean
+): Promise<boolean> {
+  // Why: host reclaim can outrun its renderer notification; runtime ownership must be current before bytes.
+  return priorClaimTail
+    .then((priorClaimed) => {
+      if (!isLive()) {
+        return false
+      }
+      return registered ? runtime.claimRemoteDesktopViewer(ptyId, subscriptionKey) : priorClaimed
+    })
+    .catch(() => false)
 }
 
 const TerminalHandle = z.object({
@@ -2229,10 +2249,30 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
           if (isTerminalInputLockedForClient(runtime, stream.ptyId, stream.client)) {
             return
           }
-          // Mobile already has the higher-priority floor, so a rejected desktop claim must not suppress later phone input.
-          const inputClaimTail = stream.isMobile ? Promise.resolve(true) : stream.desktopClaimTail
+          const transfersDesktopOwnership =
+            !stream.isMobile && !isTerminalFocusReport(text) && !isTerminalQueryReply(text)
+          const inputClaimTail = stream.isMobile
+            ? Promise.resolve(true)
+            : transfersDesktopOwnership
+              ? enqueueRemoteDesktopInputClaim(
+                  runtime,
+                  stream.ptyId,
+                  stream.remoteDesktopSubscriptionKey,
+                  stream.desktopClaimTail,
+                  stream.registeredRemoteDesktopDriver,
+                  () => !closed && streams.get(stream.streamId) === stream
+                )
+              : stream.desktopClaimTail
+          if (transfersDesktopOwnership) {
+            stream.desktopClaimTail = inputClaimTail
+          }
           void inputClaimTail.then(async (claimed) => {
-            if (!claimed || isTerminalInputLockedForClient(runtime, stream.ptyId, stream.client)) {
+            if (
+              closed ||
+              streams.get(stream.streamId) !== stream ||
+              !claimed ||
+              isTerminalInputLockedForClient(runtime, stream.ptyId, stream.client)
+            ) {
               return
             }
             const outcome = await sendTerminalStreamInput(runtime, {
@@ -2278,6 +2318,9 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
           }
           stream.desktopClaimTail = stream.desktopClaimTail
             .then(async (priorClaimed) => {
+              if (closed || streams.get(stream.streamId) !== stream) {
+                return false
+              }
               const result = await updateViewportForClient(
                 runtime,
                 stream.ptyId,
@@ -2311,17 +2354,11 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
           stream.registeredRemoteDesktopDriver = true
           stream.desktopClaimTail = stream.desktopClaimTail
             .then(
-              () =>
-                runtime.updateRemoteDesktopViewer(
-                  stream.ptyId,
-                  stream.remoteDesktopSubscriptionKey,
-                  stream.client!.id,
-                  cols,
-                  rows,
-                  true
-                ),
-              () =>
-                runtime.updateRemoteDesktopViewer(
+              () => {
+                if (closed || streams.get(stream.streamId) !== stream) {
+                  return false
+                }
+                return runtime.updateRemoteDesktopViewer(
                   stream.ptyId,
                   stream.remoteDesktopSubscriptionKey,
                   stream.client!.id,
@@ -2329,6 +2366,20 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
                   rows,
                   true
                 )
+              },
+              () => {
+                if (closed || streams.get(stream.streamId) !== stream) {
+                  return false
+                }
+                return runtime.updateRemoteDesktopViewer(
+                  stream.ptyId,
+                  stream.remoteDesktopSubscriptionKey,
+                  stream.client!.id,
+                  cols,
+                  rows,
+                  true
+                )
+              }
             )
             .catch(() => false)
           return
@@ -3256,8 +3307,27 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
             if (isTerminalInputLockedForClient(runtime, ptyId, params.client)) {
               return
             }
-            void desktopClaimTail.then(async (claimed) => {
-              if (!claimed || isTerminalInputLockedForClient(runtime, ptyId, params.client)) {
+            const transfersDesktopOwnership =
+              !isMobile && !isTerminalFocusReport(text) && !isTerminalQueryReply(text)
+            const inputClaimTail = transfersDesktopOwnership
+              ? enqueueRemoteDesktopInputClaim(
+                  runtime,
+                  ptyId,
+                  remoteDesktopSubscriptionKey,
+                  desktopClaimTail,
+                  registeredRemoteDesktopDriver,
+                  () => !closed
+                )
+              : desktopClaimTail
+            if (transfersDesktopOwnership) {
+              desktopClaimTail = inputClaimTail
+            }
+            void inputClaimTail.then(async (claimed) => {
+              if (
+                closed ||
+                !claimed ||
+                isTerminalInputLockedForClient(runtime, ptyId, params.client)
+              ) {
                 return
               }
               const outcome = await sendTerminalStreamInput(runtime, {
@@ -3294,6 +3364,9 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
             }
             desktopClaimTail = desktopClaimTail
               .then(async (priorClaimed) => {
+                if (closed) {
+                  return false
+                }
                 const result = await updateViewportForClient(
                   runtime,
                   ptyId,
@@ -3332,17 +3405,11 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
             registeredRemoteDesktopDriver = true
             desktopClaimTail = desktopClaimTail
               .then(
-                () =>
-                  runtime.updateRemoteDesktopViewer(
-                    ptyId,
-                    remoteDesktopSubscriptionKey,
-                    clientId,
-                    cols,
-                    rows,
-                    true
-                  ),
-                () =>
-                  runtime.updateRemoteDesktopViewer(
+                () => {
+                  if (closed) {
+                    return false
+                  }
+                  return runtime.updateRemoteDesktopViewer(
                     ptyId,
                     remoteDesktopSubscriptionKey,
                     clientId,
@@ -3350,6 +3417,20 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
                     rows,
                     true
                   )
+                },
+                () => {
+                  if (closed) {
+                    return false
+                  }
+                  return runtime.updateRemoteDesktopViewer(
+                    ptyId,
+                    remoteDesktopSubscriptionKey,
+                    clientId,
+                    cols,
+                    rows,
+                    true
+                  )
+                }
               )
               .catch(() => false)
           }

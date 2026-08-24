@@ -20,6 +20,10 @@ import { FOREGROUND_GRID_DRIFT_CHECK_MIN_MS } from './foreground-output-budgets'
 import { TERMINAL_FOCUS_IN_SEQUENCE, TERMINAL_FOCUS_OUT_SEQUENCE } from './foreground-output-scan'
 import { isRemoteRuntimePtyId } from './paired-parked-terminal-restore'
 import { isCodexPaneStale } from './codex-pane-stale'
+import {
+  getRemoteDesktopViewportClaimDocumentState,
+  isRemoteDesktopViewportClaimEligible
+} from '../remote-desktop-viewport-claim'
 
 import type { ConnectPanePtySession } from './connect-pane-pty-session'
 
@@ -212,7 +216,11 @@ export function installPtyInputForward(session: ConnectPanePtySession): void {
     if (queuePanePtyResizeIfHeld(session.pane.container, cols, rows)) {
       return
     }
-    session.transport.resize(cols, rows, { claim: true })
+    const claim = isRemoteDesktopViewportClaimEligible({
+      paneVisible: session.deps.isVisibleRef.current,
+      ...getRemoteDesktopViewportClaimDocumentState()
+    })
+    session.transport.resize(cols, rows, { claim })
   }
 
   session.onHeldPtyResizeFlush = (event: Event): void => {

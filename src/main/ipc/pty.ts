@@ -26,6 +26,7 @@ import type {
   PtyRendererDeliveryStateReport
 } from '../../shared/pty-renderer-delivery-health'
 import { extractHiddenStartupRendererQueryData } from '../../shared/terminal-reply-query-extraction'
+import { isTerminalFocusReport } from '../../shared/terminal-focus-report'
 import {
   INITIAL_MODE_2031_REPLY_SCAN_STATE,
   scanMode2031ReplyDecision,
@@ -7305,7 +7306,7 @@ export function registerPtyHandlers(
     }
   }
 
-  type PtyWritePayload = { id: string; data: string }
+  type PtyWritePayload = { id: string; data: string; inputKind?: 'query-reply' }
   type PtyViewportClaimPayload = { id: string; cols: number; rows: number }
 
   const isPtyWritePayload = (value: unknown): value is PtyWritePayload =>
@@ -7313,7 +7314,9 @@ export function registerPtyHandlers(
     value !== null &&
     typeof (value as { id?: unknown }).id === 'string' &&
     (value as { id: string }).id.length > 0 &&
-    typeof (value as { data?: unknown }).data === 'string'
+    typeof (value as { data?: unknown }).data === 'string' &&
+    ((value as { inputKind?: unknown }).inputKind === undefined ||
+      (value as { inputKind?: unknown }).inputKind === 'query-reply')
 
   const isPtyViewportClaimPayload = (value: unknown): value is PtyViewportClaimPayload =>
     typeof value === 'object' &&
@@ -7388,6 +7391,37 @@ export function registerPtyHandlers(
 
   const hostViewportClaimTails = new Map<string, Promise<boolean>>()
 
+  const trackHostViewportClaim = (id: string, claim: Promise<boolean>): Promise<boolean> => {
+    const tracked = claim.catch(() => false)
+    hostViewportClaimTails.set(id, tracked)
+    void tracked.then(() => {
+      if (hostViewportClaimTails.get(id) === tracked) {
+        hostViewportClaimTails.delete(id)
+      }
+    })
+    return tracked
+  }
+
+  const getHostInputViewportClaim = (id: string): Promise<boolean> | null => {
+    const pending = hostViewportClaimTails.get(id)
+    if (pending || runtime?.getDriver(id).kind === 'mobile') {
+      return pending ?? null
+    }
+    // Runtime owns both active viewers and retained failed-reclaim targets.
+    const claim = runtime?.claimRemoteDesktopHostForInput(id) ?? null
+    return claim ? trackHostViewportClaim(id, claim) : null
+  }
+
+  const getHostWriteViewportClaim = (args: PtyWritePayload): Promise<boolean> | null => {
+    if (args.inputKind === 'query-reply') {
+      return null
+    }
+    if (isTerminalFocusReport(args.data)) {
+      return hostViewportClaimTails.get(args.id) ?? null
+    }
+    return getHostInputViewportClaim(args.id)
+  }
+
   ipc.on('pty:write', (event, args: unknown) => {
     if (
       !isPtyWriteEventFromMainWindow(event, rendererWebContents(mainWindow)) ||
@@ -7395,7 +7429,7 @@ export function registerPtyHandlers(
     ) {
       return
     }
-    const claimTail = hostViewportClaimTails.get(args.id)
+    const claimTail = getHostWriteViewportClaim(args)
     if (claimTail) {
       void claimTail.then((claimed) => (claimed ? writePtyInput(args) : false))
       return
@@ -7409,7 +7443,7 @@ export function registerPtyHandlers(
     ) {
       return false
     }
-    const claimTail = hostViewportClaimTails.get(args.id)
+    const claimTail = getHostWriteViewportClaim(args)
     return claimTail
       ? claimTail.then((claimed) => (claimed ? writePtyInputAccepted(args) : false))
       : writePtyInputAccepted(args)
@@ -7426,20 +7460,15 @@ export function registerPtyHandlers(
     }
     const prior = hostViewportClaimTails.get(args.id)
     // Why: two panes can mirror one PTY — never let a later no-op claim replace the in-flight resize that the following host input must await.
-    const claim = (
+    trackHostViewportClaim(
+      args.id,
       prior
         ? prior.then(
             () => runtime.claimRemoteDesktopHost(args.id, args.cols, args.rows),
             () => runtime.claimRemoteDesktopHost(args.id, args.cols, args.rows)
           )
         : runtime.claimRemoteDesktopHost(args.id, args.cols, args.rows)
-    ).catch(() => false)
-    hostViewportClaimTails.set(args.id, claim)
-    void claim.then(() => {
-      if (hostViewportClaimTails.get(args.id) === claim) {
-        hostViewportClaimTails.delete(args.id)
-      }
-    })
+    )
   })
 
   // Why: resize is fire-and-forget — ipc.on (not .handle) halves IPC traffic by skipping the empty acknowledgement reply.

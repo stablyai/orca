@@ -34,7 +34,7 @@ export type PtyInputWriteQueue = {
 
 export type PtyInputWriteQueueDeps = {
   isWritable: (id: string) => boolean
-  write: (id: string, data: string) => void
+  write: (id: string, data: string, inputKind?: 'query-reply') => void
   yieldBetweenWrites?: () => Promise<void>
   onDrainFailure?: (id: string) => void
 }
@@ -215,7 +215,7 @@ export function createPtyInputWriteQueue(deps: PtyInputWriteQueueDeps): PtyInput
           removePending(next)
           continue
         }
-        deps.write(next.id, chunk.value)
+        deps.write(next.id, chunk.value, next.replyOnly ? 'query-reply' : undefined)
         const following = next.chunks.next()
         if (following.done) {
           removePending(next)

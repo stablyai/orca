@@ -1049,8 +1049,8 @@ const api = {
       agentResumeUnavailable?: true
     }> => ipcRenderer.invoke('pty:spawn', opts),
 
-    write: (id: string, data: string): void => {
-      ipcRenderer.send('pty:write', { id, data })
+    write: (id: string, data: string, inputKind?: 'query-reply'): void => {
+      ipcRenderer.send('pty:write', { id, data, inputKind })
     },
     writeAccepted: (id: string, data: string): Promise<boolean> =>
       ipcRenderer.invoke('pty:writeAccepted', { id, data }),

@@ -66,7 +66,7 @@ export type PtyApi = {
     startupCwdFallback?: { kind: 'worktree'; cwd: string }
     agentResumeUnavailable?: true
   }>
-  write: (id: string, data: string) => void
+  write: (id: string, data: string, inputKind?: 'query-reply') => void
   writeAccepted: (id: string, data: string) => Promise<boolean>
   onWriteUnavailable?: (callback: (payload: { id: string }) => void) => () => void
   resize: (id: string, cols: number, rows: number) => void

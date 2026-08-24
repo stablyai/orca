@@ -4,6 +4,12 @@ import {
   consumeForegroundImmediateBudget,
   createForegroundImmediateBudget
 } from './foreground-output-budgets'
+import {
+  TERMINAL_FOCUS_IN_SEQUENCE,
+  TERMINAL_FOCUS_OUT_SEQUENCE
+} from '../../../../../shared/terminal-focus-report'
+
+export { TERMINAL_FOCUS_IN_SEQUENCE, TERMINAL_FOCUS_OUT_SEQUENCE }
 
 export const TERMINAL_RENDERER_RISK_SCAN_TAIL_CHARS = 256
 export const SYNCHRONIZED_OUTPUT_START_SEQUENCE = '\x1b[?2026h'
@@ -11,8 +17,6 @@ export const SYNCHRONIZED_OUTPUT_END_SEQUENCE = '\x1b[?2026l'
 export const SYNCHRONIZED_OUTPUT_MARKER_TAIL_CHARS = SYNCHRONIZED_OUTPUT_START_SEQUENCE.length - 1
 export const CURSOR_SHOW_SEQUENCE = '\x1b[?25h'
 export const CURSOR_HIDE_SEQUENCE = '\x1b[?25l'
-export const TERMINAL_FOCUS_IN_SEQUENCE = '\x1b[I'
-export const TERMINAL_FOCUS_OUT_SEQUENCE = '\x1b[O'
 export const FOCUS_REPORTING_DISABLE_SEQUENCE = '\x1b[?1004l'
 export const REATTACH_IDLE_AGENT_CURSOR_RESET_DELAY_MS = 250
 export const SHIFT_ENTER_RECONFIRM_IDLE_MS = 350

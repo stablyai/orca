@@ -84,12 +84,12 @@ describe('createIpcPtyTransport', () => {
 
       expect(transport.sendInput(`${chunk}tail`)).toBe(true)
       expect(window.api.pty.write).toHaveBeenCalledTimes(1)
-      expect(window.api.pty.write).toHaveBeenNthCalledWith(1, 'pty-1', chunk)
+      expect(window.api.pty.write).toHaveBeenNthCalledWith(1, 'pty-1', chunk, undefined)
 
       await vi.runOnlyPendingTimersAsync()
 
       expect(window.api.pty.write).toHaveBeenCalledTimes(2)
-      expect(window.api.pty.write).toHaveBeenNthCalledWith(2, 'pty-1', 'tail')
+      expect(window.api.pty.write).toHaveBeenNthCalledWith(2, 'pty-1', 'tail', undefined)
     } finally {
       vi.useRealTimers()
     }
@@ -114,11 +114,11 @@ describe('createIpcPtyTransport', () => {
       await vi.runAllTimersAsync()
 
       expect(vi.mocked(window.api.pty.write).mock.calls).toEqual([
-        ['pty-1', first],
-        ['pty-1', ordinary],
+        ['pty-1', first, 'query-reply'],
+        ['pty-1', ordinary, undefined],
         ...replies
           .slice(-PTY_INPUT_WRITE_QUEUE_MAX_PENDING_REPLIES)
-          .map((reply) => ['pty-1', reply])
+          .map((reply) => ['pty-1', reply, 'query-reply'])
       ])
     } finally {
       vi.useRealTimers()

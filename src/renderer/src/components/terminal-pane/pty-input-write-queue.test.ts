@@ -204,6 +204,23 @@ describe('pty input write queue', () => {
     expect(writes.map((write) => write.data)).toEqual(replies)
   })
 
+  it('classifies query replies for host ownership without classifying user input', async () => {
+    const writes: { data: string; inputKind?: 'query-reply' }[] = []
+    const queue = createPtyInputWriteQueue({
+      isWritable: () => true,
+      write: (_id, data, inputKind) => writes.push({ data, inputKind })
+    })
+
+    queue.enqueueQueryReply('pty-1', '\u001b[1;1R')
+    queue.enqueue('pty-1', 'x')
+    await queue.waitForDrain()
+
+    expect(writes).toEqual([
+      { data: '\u001b[1;1R', inputKind: 'query-reply' },
+      { data: 'x', inputKind: undefined }
+    ])
+  })
+
   it('does not coalesce a color-scheme reply with a following keystroke', async () => {
     const { writes, queue } = createRecordingQueue()
     const reply = mode2031SequenceFor('dark')

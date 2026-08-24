@@ -4,7 +4,10 @@ import { requestStablePaneFit } from '@/lib/pane-manager/pane-fit-resize-observe
 import { getFitOverrideForPty } from '@/lib/pane-manager/mobile-fit-overrides'
 import { isPtyLocked } from '@/lib/pane-manager/mobile-driver-state'
 import { reconcilePtySizeAcrossFrames } from '../pty-size-reconcile'
-import { shouldClaimRemoteDesktopViewport } from '../remote-desktop-viewport-claim'
+import {
+  getRemoteDesktopViewportClaimDocumentState,
+  shouldClaimRemoteDesktopViewport
+} from '../remote-desktop-viewport-claim'
 import { deferTerminalGeometryMutationDuringRebuild } from '@/lib/pane-manager/terminal-scroll-intent-rebuild'
 import { waitForStableStartupGrid } from '../terminal-startup-grid-settle'
 
@@ -78,8 +81,7 @@ export function installPtyResizeGeometry(session: ConnectPanePtySession): void {
           current: proposed,
           paneGeometryChanged,
           paneVisible: session.deps.isVisibleRef.current,
-          documentVisible: document.visibilityState !== 'hidden',
-          documentFocused: document.hasFocus()
+          ...getRemoteDesktopViewportClaimDocumentState()
         })
       ) {
         // Why: a focused, visible layout change is genuine activity; release

@@ -33,6 +33,7 @@ export function stubRuntime(overrides: Partial<OrcaRuntimeService> = {}): OrcaRu
     resolveLiveLeafForHandle: vi.fn().mockReturnValue({ ptyId: 'pty-1' }),
     requestRendererTerminalTabMount: vi.fn().mockReturnValue(true),
     updateRemoteDesktopViewer: vi.fn().mockResolvedValue(true),
+    claimRemoteDesktopViewer: vi.fn().mockResolvedValue(true),
     unregisterRemoteDesktopViewer: vi.fn().mockResolvedValue(true),
     unregisterRemoteDesktopViewers: vi.fn().mockResolvedValue(true),
     isPtyResizeDrivenRemotely: vi.fn().mockReturnValue(false),

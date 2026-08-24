@@ -12,6 +12,7 @@ import { buildPaneConnectionDeps } from './pty-connection-test-deps'
 import { createInitialStoreState } from './pty-connection-test-store-fixtures'
 import type { StoreState } from './pty-connection-test-store-state'
 import {
+  installFocusedTerminalTestDocument,
   installTerminalTestGlobals,
   restoreTerminalTestGlobals
 } from './pty-connection-test-environment'
@@ -136,6 +137,7 @@ describe('connectPanePty', () => {
     storeSubscribers = []
     mockStoreState = createInitialStoreState(() => mockStoreState)
     installTerminalTestGlobals()
+    installFocusedTerminalTestDocument()
   })
 
   afterEach(async () => {

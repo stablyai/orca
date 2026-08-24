@@ -241,6 +241,32 @@ describe('remote desktop viewer width driver', () => {
     })
   })
 
+  it('reclaims from the cached host grid when input precedes renderer fit state', async () => {
+    const { runtime } = createRuntime()
+    await runtime.updateRemoteDesktopViewer('pty-1', 'sub-A', 'viewer-A', 80, 24)
+
+    await runtime.claimRemoteDesktopHostForInput('pty-1')
+
+    expect(runtime.isPtyResizeDrivenRemotely('pty-1')).toBe(false)
+    expect(runtime.getTerminalSize('pty-1')).toEqual({ cols: 150, rows: 40 })
+    expect(runtime.claimRemoteDesktopHostForInput('pty-1')).toBeNull()
+  })
+
+  it('retries a retained host target after input reclaim fails', async () => {
+    const { runtime, setResizeSucceeds } = createRuntime()
+    await runtime.updateRemoteDesktopViewer('pty-1', 'sub-A', 'viewer-A', 80, 24)
+    setResizeSucceeds(false)
+
+    await expect(runtime.claimRemoteDesktopHostForInput('pty-1')).resolves.toBe(false)
+    expect(runtime.isPtyResizeDrivenRemotely('pty-1')).toBe(true)
+    expect(runtime.getTerminalSize('pty-1')).toEqual({ cols: 80, rows: 24 })
+
+    setResizeSucceeds(true)
+    await expect(runtime.claimRemoteDesktopHostForInput('pty-1')).resolves.toBe(true)
+    expect(runtime.isPtyResizeDrivenRemotely('pty-1')).toBe(false)
+    expect(runtime.getTerminalSize('pty-1')).toEqual({ cols: 150, rows: 40 })
+  })
+
   it('does not emit resize churn for repeated activity from the current owner', async () => {
     const { runtime, resizeCalls, fitOverrideEvents } = createRuntime()
     await runtime.updateRemoteDesktopViewer('pty-1', 'sub-A', 'viewer-A', 100, 30)
@@ -251,6 +277,17 @@ describe('remote desktop viewer width driver', () => {
 
     expect(resizeCalls).toHaveLength(0)
     expect(fitOverrideEvents).toHaveLength(0)
+  })
+
+  it('applies passively recorded owner geometry before later input', async () => {
+    const { runtime } = createRuntime()
+    await runtime.updateRemoteDesktopViewer('pty-1', 'sub-A', 'viewer-A', 80, 24)
+
+    await runtime.updateRemoteDesktopViewer('pty-1', 'sub-A', 'viewer-A', 100, 30, false)
+    expect(runtime.getTerminalSize('pty-1')).toEqual({ cols: 80, rows: 24 })
+
+    await expect(runtime.claimRemoteDesktopViewer('pty-1', 'sub-A')).resolves.toBe(true)
+    expect(runtime.getTerminalSize('pty-1')).toEqual({ cols: 100, rows: 30 })
   })
 
   it('reclaims the host width when the last viewer detaches', async () => {

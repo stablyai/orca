@@ -1,5 +1,29 @@
 import { describe, expect, it } from 'vitest'
-import { shouldClaimRemoteDesktopViewport } from './remote-desktop-viewport-claim'
+import {
+  isRemoteDesktopViewportClaimEligible,
+  shouldClaimRemoteDesktopViewport,
+  shouldClaimDesktopViewportForUserActivity
+} from './remote-desktop-viewport-claim'
+
+describe('isRemoteDesktopViewportClaimEligible', () => {
+  it.each([
+    { paneVisible: false, documentVisible: true, documentFocused: true },
+    { paneVisible: true, documentVisible: false, documentFocused: true },
+    { paneVisible: true, documentVisible: true, documentFocused: false }
+  ])('rejects passive background geometry: %o', (visibility) => {
+    expect(isRemoteDesktopViewportClaimEligible(visibility)).toBe(false)
+  })
+
+  it('accepts a focused visible pane', () => {
+    expect(
+      isRemoteDesktopViewportClaimEligible({
+        paneVisible: true,
+        documentVisible: true,
+        documentFocused: true
+      })
+    ).toBe(true)
+  })
+})
 
 describe('shouldClaimRemoteDesktopViewport', () => {
   it('requires a second, changed measurement from a focused visible pane', () => {
@@ -54,6 +78,26 @@ describe('shouldClaimRemoteDesktopViewport', () => {
         paneVisible: true,
         documentVisible: true,
         documentFocused: true
+      })
+    ).toBe(true)
+  })
+})
+
+describe('shouldClaimDesktopViewportForUserActivity', () => {
+  it.each([
+    { initialRemoteFitPending: true, holdMode: null, expected: true },
+    { initialRemoteFitPending: false, holdMode: null, expected: false },
+    { initialRemoteFitPending: false, holdMode: 'remote-desktop-fit' as const, expected: true },
+    { initialRemoteFitPending: true, holdMode: 'mobile-fit' as const, expected: false }
+  ])('handles connection-local and authoritative fit state: %o', (input) => {
+    expect(shouldClaimDesktopViewportForUserActivity(input)).toBe(input.expected)
+  })
+
+  it('preserves known host reclaim', () => {
+    expect(
+      shouldClaimDesktopViewportForUserActivity({
+        initialRemoteFitPending: false,
+        holdMode: 'remote-desktop-fit'
       })
     ).toBe(true)
   })

@@ -94,6 +94,15 @@ export function installTerminalTestGlobals(): void {
   globalThis.cancelAnimationFrame = vi.fn()
 }
 
+export function installFocusedTerminalTestDocument(): void {
+  const target = new EventTarget()
+  Object.defineProperties(target, {
+    visibilityState: { value: 'visible' },
+    hasFocus: { value: vi.fn(() => true) }
+  })
+  ;(globalThis as { document?: Document }).document = target as Document
+}
+
 export async function restoreTerminalTestGlobals(): Promise<void> {
   // Drain deferred confirmation work before the next test replaces its store mock.
   await drainFakeTimerWork()

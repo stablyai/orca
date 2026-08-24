@@ -213,7 +213,7 @@ describe('terminal multiplex RPC', () => {
         })
       )
       const sentAfterSuccessfulClaim = vi.mocked(runtime.sendTerminal).mock.calls.length
-      vi.mocked(runtime.updateRemoteDesktopViewer).mockResolvedValueOnce(false)
+      vi.mocked(runtime.claimRemoteDesktopViewer).mockResolvedValueOnce(false)
       for (const [opcode, seq, payload] of [
         [TerminalStreamOpcode.ClaimViewport, 3, encodeTerminalStreamJson({ cols: 88, rows: 28 })],
         [TerminalStreamOpcode.Resize, 4, encodeTerminalStreamJson({ cols: 88, rows: 28 })],
