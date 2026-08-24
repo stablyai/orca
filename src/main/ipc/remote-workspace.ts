@@ -1,16 +1,27 @@
 import { ipcMain, type BrowserWindow } from 'electron'
 import type { Store } from '../persistence'
 import { getActiveMultiplexer, getSshConnectionStore } from './ssh'
-import { exportRemoteWorkspaceSession } from '../../shared/remote-workspace-session-projection'
 import type {
   RemoteWorkspaceChangedEvent,
   RemoteWorkspacePatchResult,
   RemoteWorkspaceSession
 } from '../../shared/remote-workspace-types'
+import type { DirectSshAuthority } from '../../shared/ssh-types'
 import type { WorkspaceSessionState } from '../../shared/workspace-session-state-types'
-import { getRepoIdFromWorktreeId } from '../../shared/worktree/id'
+import { toSshExecutionHostId } from '../../shared/execution-host'
+import { isAdmissibleDirectSshAuthority } from '../../shared/ssh-retained-payload-admission'
+import { adoptOrphanedWorkspaceSessionPartition } from '../../shared/workspace-session-partition-adoption'
+import { findAmbiguousWorkspaceSessionKeys } from '../../shared/workspace-session-partition-authority'
 import { getRemoteWorkspaceNamespace } from './remote-workspace-namespace'
 import { registerRemoteWorkspaceNotificationHandler } from './remote-workspace-events'
+import {
+  exportExplicitSessionForTarget,
+  exportSessionForTarget
+} from './remote-workspace-explicit-session-authority'
+import {
+  getSshProviderAuthority,
+  isCurrentSshProviderAuthority
+} from '../ssh/ssh-provider-authority'
 import { CLIENT_ID } from './remote-workspace-client-identity'
 import { listRemoteWorkspaceConnectedClients } from './remote-workspace-connected-clients'
 import {
@@ -55,27 +66,17 @@ function getExplicitHydratedTargetIds(value: unknown): Set<string> | null {
   return new Set(value)
 }
 
-function targetForWorktree(store: Store, worktreeId: string): string | null {
-  const repoId = getRepoIdFromWorktreeId(worktreeId)
-  return store.getRepo(repoId)?.connectionId ?? null
-}
-
-function exportSessionForTarget(
-  store: Store,
-  targetId: string,
-  session: WorkspaceSessionState
-): RemoteWorkspaceSession {
-  return exportRemoteWorkspaceSession(session, {
-    isTargetWorktree: (worktreeId) => targetForWorktree(store, worktreeId) === targetId
-  })
-}
-
 export function handleRemoteWorkspaceNotification(
   targetId: string,
   method: string,
-  params: Record<string, unknown>
+  params: Record<string, unknown>,
+  authority: DirectSshAuthority
 ): void {
-  if (method !== 'workspace.changed') {
+  if (
+    method !== 'workspace.changed' ||
+    authority.targetId !== targetId ||
+    !isCurrentSshProviderAuthority(authority)
+  ) {
     return
   }
   const target = getSshConnectionStore()?.getTarget(targetId)
@@ -84,7 +85,7 @@ export function handleRemoteWorkspaceNotification(
   }
   const namespace = getRemoteWorkspaceNamespace(target)
   const snapshot = normalizeSnapshot(params.snapshot, namespace)
-  rememberRemoteWorkspaceSnapshot(targetId, snapshot)
+  rememberRemoteWorkspaceSnapshot(authority, snapshot)
   const event: RemoteWorkspaceChangedEvent = {
     targetId,
     snapshot,
@@ -116,33 +117,89 @@ export function registerRemoteWorkspaceHandlers(
     if (!target) {
       return null
     }
-    return getRemoteSnapshot(target)
+    return getRemoteSnapshot(target, getSshProviderAuthority(target.id))
   })
 
   ipcMain.handle(
     'remoteWorkspace:setForConnectedTargets',
-    async (_event, args: { session?: WorkspaceSessionState; hydratedTargetIds?: unknown }) => {
+    async (
+      _event,
+      args: {
+        session?: WorkspaceSessionState
+        sessionTargetId?: unknown
+        sessionAuthority?: unknown
+        hydratedTargetIds?: unknown
+      }
+    ) => {
       const hydratedTargetIds = getExplicitHydratedTargetIds(args.hydratedTargetIds)
       if (!hydratedTargetIds) {
         // Why: an omitted hydration set used to broadcast one session to every
         // SSH target, overwriting unrelated remote workspace snapshots.
         return []
       }
+      const sessionTargetId =
+        typeof args.sessionTargetId === 'string' && args.sessionTargetId.length > 0
+          ? args.sessionTargetId
+          : null
+      const sessionAuthority = isAdmissibleDirectSshAuthority(args.sessionAuthority)
+        ? ({ ...args.sessionAuthority } as DirectSshAuthority)
+        : null
+      if (
+        args.session &&
+        (!sessionTargetId ||
+          !sessionAuthority ||
+          sessionAuthority.targetId !== sessionTargetId ||
+          !hydratedTargetIds.has(sessionTargetId) ||
+          !isCurrentSshProviderAuthority(sessionAuthority))
+      ) {
+        return []
+      }
       const targets =
         getSshConnectionStore()
           ?.listTargets()
           .filter(
-            (target) => hydratedTargetIds.has(target.id) && getActiveMultiplexer(target.id)
+            (target) =>
+              hydratedTargetIds.has(target.id) &&
+              (!args.session || target.id === sessionTargetId) &&
+              getActiveMultiplexer(target.id)
           ) ?? []
 
-      const workspaceSession = args.session ?? store.getWorkspaceSession()
+      const fallbackSession = args.session ?? store.getWorkspaceSession()
       const results = await Promise.all(
         targets.map(async (target) => {
+          // Boot owns persistence; export only overlays stranded SSH state.
+          let session: RemoteWorkspaceSession | null
+          const authority = args.session ? sessionAuthority : getSshProviderAuthority(target.id)
+          if (!authority || !isCurrentSshProviderAuthority(authority)) {
+            return null
+          }
+          if (args.session) {
+            session = exportExplicitSessionForTarget(store, authority, args.session)
+          } else {
+            const targetPartition = store.getWorkspaceSession(toSshExecutionHostId(target.id))
+            const ambiguousKeys = findAmbiguousWorkspaceSessionKeys([
+              fallbackSession,
+              targetPartition
+            ])
+            const hasPopulatedLocalConflict = [...ambiguousKeys].some(
+              (key) => (fallbackSession.tabsByWorktree[key]?.length ?? 0) > 0
+            )
+            if (hasPopulatedLocalConflict) {
+              return null
+            }
+            session = exportSessionForTarget(
+              store,
+              authority,
+              adoptOrphanedWorkspaceSessionPartition(fallbackSession, targetPartition).session
+            )
+          }
+          if (!session) {
+            return null
+          }
           // Why: each target has its own revision stream. Keep same-target
           // writes queued, but do not let one slow relay block others.
-          const session = exportSessionForTarget(store, target.id, workspaceSession)
           const result = await queueRemoteWorkspacePatch(target.id, () =>
-            patchRemoteWorkspaceSession(target, session)
+            patchRemoteWorkspaceSession(target, session, authority)
           )
           return result ? { targetId: target.id, result } : null
         })

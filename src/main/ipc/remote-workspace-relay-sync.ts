@@ -3,10 +3,11 @@ import type {
   RemoteWorkspaceSession,
   RemoteWorkspaceSnapshot
 } from '../../shared/remote-workspace-types'
-import type { SshTarget } from '../../shared/ssh-types'
+import type { DirectSshAuthority, SshTarget } from '../../shared/ssh-types'
 import { getActiveMultiplexer } from './ssh'
 import { CLIENT_ID } from './remote-workspace-client-identity'
 import { getRemoteWorkspaceNamespace } from './remote-workspace-namespace'
+import { isCurrentSshProviderAuthority } from '../ssh/ssh-provider-authority'
 import {
   getCachedRemoteWorkspaceSnapshot,
   rememberRemoteWorkspaceSnapshot
@@ -17,19 +18,26 @@ import {
 } from './remote-workspace-snapshot-normalization'
 
 export async function getRemoteSnapshot(
-  target: SshTarget
+  target: SshTarget,
+  authority: DirectSshAuthority
 ): Promise<RemoteWorkspaceSnapshot | null> {
   const mux = getActiveMultiplexer(target.id)
-  if (!mux) {
+  if (!mux || authority.targetId !== target.id || !isCurrentSshProviderAuthority(authority)) {
     return null
   }
   const namespace = getRemoteWorkspaceNamespace(target)
   try {
     const raw = await mux.request('workspace.get', { namespace })
+    if (!isCurrentSshProviderAuthority(authority)) {
+      return null
+    }
     const snapshot = normalizeSnapshot(raw, namespace)
-    rememberRemoteWorkspaceSnapshot(target.id, snapshot)
+    rememberRemoteWorkspaceSnapshot(authority, snapshot)
     return snapshot
   } catch (err) {
+    if (!isCurrentSshProviderAuthority(authority)) {
+      return null
+    }
     if ((err as { code?: unknown })?.code === -32601) {
       return null
     }
@@ -39,15 +47,24 @@ export async function getRemoteSnapshot(
 
 export async function patchRemoteWorkspaceSession(
   target: SshTarget,
-  session: RemoteWorkspaceSession
+  session: RemoteWorkspaceSession,
+  authority: DirectSshAuthority
 ): Promise<RemoteWorkspacePatchResult | null> {
+  if (authority.targetId !== target.id || !isCurrentSshProviderAuthority(authority)) {
+    return null
+  }
   const mux = getActiveMultiplexer(target.id)
   if (!mux) {
     return null
   }
   const namespace = getRemoteWorkspaceNamespace(target)
   const current =
-    getCachedRemoteWorkspaceSnapshot(target.id) ?? (await getRemoteSnapshot(target)) ?? undefined
+    getCachedRemoteWorkspaceSnapshot(authority) ??
+    (await getRemoteSnapshot(target, authority)) ??
+    undefined
+  if (!isCurrentSshProviderAuthority(authority)) {
+    return null
+  }
   if (current && remoteWorkspaceSessionMatchesSnapshot(current, session)) {
     // Why: a pulled workspace snapshot rehydrates local state and can trigger
     // session persistence. Identical target sessions must stay a local no-op or
@@ -57,7 +74,10 @@ export async function patchRemoteWorkspaceSession(
 
   const requestPatch = async (
     baseRevision: number | undefined
-  ): Promise<RemoteWorkspacePatchResult> => {
+  ): Promise<RemoteWorkspacePatchResult | null> => {
+    if (!isCurrentSshProviderAuthority(authority)) {
+      return null
+    }
     try {
       return (await mux.request('workspace.patch', {
         namespace,
@@ -66,6 +86,9 @@ export async function patchRemoteWorkspaceSession(
         patch: { kind: 'replace-session', session }
       })) as RemoteWorkspacePatchResult
     } catch (err) {
+      if (!isCurrentSshProviderAuthority(authority)) {
+        return null
+      }
       return (err as { code?: unknown })?.code === -32601
         ? {
             ok: false,
@@ -81,12 +104,15 @@ export async function patchRemoteWorkspaceSession(
   }
 
   const result = await requestPatch(current?.revision)
+  if (!result) {
+    return null
+  }
   if (result.ok) {
-    rememberRemoteWorkspaceSnapshot(target.id, result.snapshot)
+    rememberRemoteWorkspaceSnapshot(authority, result.snapshot)
     return result
   }
   if (result.snapshot) {
-    rememberRemoteWorkspaceSnapshot(target.id, result.snapshot)
+    rememberRemoteWorkspaceSnapshot(authority, result.snapshot)
   }
 
   if (
@@ -103,10 +129,13 @@ export async function patchRemoteWorkspaceSession(
     // only for backwards revisions restores the blank-slate target without
     // overwriting a newer snapshot from another device.
     const retry = await requestPatch(result.snapshot.revision)
+    if (!retry) {
+      return null
+    }
     if (retry.ok) {
-      rememberRemoteWorkspaceSnapshot(target.id, retry.snapshot)
+      rememberRemoteWorkspaceSnapshot(authority, retry.snapshot)
     } else if (retry.snapshot) {
-      rememberRemoteWorkspaceSnapshot(target.id, retry.snapshot)
+      rememberRemoteWorkspaceSnapshot(authority, retry.snapshot)
     }
     return retry
   }

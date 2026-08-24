@@ -69,8 +69,11 @@ describe('remoteWorkspace:setForConnectedTargets patch queue', () => {
   const handlers = new Map<string, (event: unknown, args: unknown) => unknown>()
   const muxByTargetId = new Map<string, { request: ReturnType<typeof vi.fn> }>()
   const getRepoMock = vi.fn<Store['getRepo']>()
+  const getWorkspaceSessionMock = vi.fn<Store['getWorkspaceSession']>()
+  let currentSession = sessionWithTab('unused::/unused', 'unused')
   const store = {
-    getRepo: getRepoMock
+    getRepo: getRepoMock,
+    getWorkspaceSession: getWorkspaceSessionMock
   } as unknown as Store
 
   const target: SshTarget = {
@@ -95,6 +98,18 @@ describe('remoteWorkspace:setForConnectedTargets patch queue', () => {
       listTargets: () => [target]
     })
     getRepoMock.mockReset()
+    getWorkspaceSessionMock.mockReset()
+    getWorkspaceSessionMock.mockImplementation((hostId?: string | null) =>
+      hostId
+        ? {
+            activeRepoId: null,
+            activeWorktreeId: null,
+            activeTabId: null,
+            tabsByWorktree: {},
+            terminalLayoutsByTabId: {}
+          }
+        : currentSession
+    )
     getRepoMock.mockImplementation((repoId: string) =>
       repoId === 'repo-target-1'
         ? ({
@@ -122,7 +137,8 @@ describe('remoteWorkspace:setForConnectedTargets patch queue', () => {
     if (!handler) {
       throw new Error('remoteWorkspace:setForConnectedTargets handler was never registered')
     }
-    return handler(null, args)
+    currentSession = args.session
+    return handler(null, { hydratedTargetIds: args.hydratedTargetIds })
   }
 
   it('serializes overlapping writes for the same target so they use fresh base revisions', async () => {

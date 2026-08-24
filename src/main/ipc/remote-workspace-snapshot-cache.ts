@@ -1,17 +1,36 @@
 import type { RemoteWorkspaceSnapshot } from '../../shared/remote-workspace-types'
+import type { DirectSshAuthority } from '../../shared/ssh-types'
+import { isCurrentSshProviderAuthority } from '../ssh/ssh-provider-authority'
 
 export const REMOTE_WORKSPACE_SNAPSHOT_CACHE_MAX_ENTRIES = 64
 
-const latestSnapshotByTargetId = new Map<string, RemoteWorkspaceSnapshot>()
+type RemoteWorkspaceSnapshotCacheEntry = {
+  authority: DirectSshAuthority
+  snapshot: RemoteWorkspaceSnapshot
+}
+
+const latestSnapshotByTargetId = new Map<string, RemoteWorkspaceSnapshotCacheEntry>()
+
+function authoritiesEqual(left: DirectSshAuthority, right: DirectSshAuthority): boolean {
+  return (
+    left.targetId === right.targetId &&
+    left.providerEpoch === right.providerEpoch &&
+    left.connectionGeneration === right.connectionGeneration
+  )
+}
 
 export function rememberRemoteWorkspaceSnapshot(
-  targetId: string,
+  authority: DirectSshAuthority,
   snapshot: RemoteWorkspaceSnapshot
 ): void {
+  if (!isCurrentSshProviderAuthority(authority)) {
+    return
+  }
+  const targetId = authority.targetId
   if (latestSnapshotByTargetId.has(targetId)) {
     latestSnapshotByTargetId.delete(targetId)
   }
-  latestSnapshotByTargetId.set(targetId, snapshot)
+  latestSnapshotByTargetId.set(targetId, { authority: { ...authority }, snapshot })
   while (latestSnapshotByTargetId.size > REMOTE_WORKSPACE_SNAPSHOT_CACHE_MAX_ENTRIES) {
     const oldest = latestSnapshotByTargetId.keys().next()
     if (oldest.done) {
@@ -22,16 +41,21 @@ export function rememberRemoteWorkspaceSnapshot(
 }
 
 export function getCachedRemoteWorkspaceSnapshot(
-  targetId: string
+  authority: DirectSshAuthority
 ): RemoteWorkspaceSnapshot | undefined {
-  const snapshot = latestSnapshotByTargetId.get(targetId)
-  if (!snapshot) {
+  const entry = latestSnapshotByTargetId.get(authority.targetId)
+  if (!entry) {
+    return undefined
+  }
+  if (!authoritiesEqual(entry.authority, authority) || !isCurrentSshProviderAuthority(authority)) {
+    latestSnapshotByTargetId.delete(authority.targetId)
     return undefined
   }
   // Why: remote workspace snapshots can contain the whole tab/layout session
   // for a target. Touch cache hits so deleted or rarely used targets age out.
-  rememberRemoteWorkspaceSnapshot(targetId, snapshot)
-  return snapshot
+  latestSnapshotByTargetId.delete(authority.targetId)
+  latestSnapshotByTargetId.set(authority.targetId, entry)
+  return entry.snapshot
 }
 
 export function clearRemoteWorkspaceSnapshotCache(): void {
@@ -44,15 +68,30 @@ export function getRemoteWorkspaceSnapshotCacheSize(): number {
 
 /** @internal - exposed for cache-bound tests only. */
 export function _rememberRemoteWorkspaceSnapshotForTests(
-  targetId: string,
+  authority: DirectSshAuthority,
   snapshot: RemoteWorkspaceSnapshot
 ): void {
-  rememberRemoteWorkspaceSnapshot(targetId, snapshot)
+  const targetId = authority.targetId
+  latestSnapshotByTargetId.delete(targetId)
+  latestSnapshotByTargetId.set(targetId, { authority: { ...authority }, snapshot })
+  while (latestSnapshotByTargetId.size > REMOTE_WORKSPACE_SNAPSHOT_CACHE_MAX_ENTRIES) {
+    const oldest = latestSnapshotByTargetId.keys().next()
+    if (oldest.done) {
+      break
+    }
+    latestSnapshotByTargetId.delete(oldest.value)
+  }
 }
 
 /** @internal - exposed for cache-bound tests only. */
 export function _getRemoteWorkspaceSnapshotForTests(
-  targetId: string
+  authority: DirectSshAuthority
 ): RemoteWorkspaceSnapshot | undefined {
-  return getCachedRemoteWorkspaceSnapshot(targetId)
+  const entry = latestSnapshotByTargetId.get(authority.targetId)
+  if (!entry || !authoritiesEqual(entry.authority, authority)) {
+    return undefined
+  }
+  latestSnapshotByTargetId.delete(authority.targetId)
+  latestSnapshotByTargetId.set(authority.targetId, entry)
+  return entry.snapshot
 }

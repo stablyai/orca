@@ -11,6 +11,7 @@ import type {
 } from '../../../shared/project-types'
 import type { PersistedState } from '../../../shared/persisted-state-types'
 import type { Repo } from '../../../shared/repo-types'
+import type { ExecutionHostId } from '../../../shared/execution-host'
 import { getRepoExecutionHostId, normalizeExecutionHostId } from '../../../shared/execution-host'
 import { normalizeProjectRuntimePreference } from '../../../shared/project-execution-runtime'
 import type { StoreOwnedPersistedState } from '../loading-store/store-owned-state'
@@ -201,8 +202,11 @@ export class ProjectHostPersistenceOperations {
     return this.state.repos.length
   }
 
-  getRepo(id: string): Repo | undefined {
-    const repo = this.state.repos.find((r) => r.id === id)
+  getRepo(id: string, hostId?: ExecutionHostId): Repo | undefined {
+    const repo = this.state.repos.find(
+      (candidate) =>
+        candidate.id === id && (!hostId || getRepoExecutionHostId(candidate) === hostId)
+    )
     return repo ? this.hydrateRepo(repo) : undefined
   }
 

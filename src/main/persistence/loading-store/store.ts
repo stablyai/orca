@@ -91,6 +91,11 @@ import {
   normalizeWorktreeCardProperties
 } from '../../../shared/constants'
 import { parseWorkspaceSessionSalvaging } from '../../../shared/workspace-session-salvage'
+import { adoptOrphanedWorkspaceSessionPartition } from '../../../shared/workspace-session-partition-adoption'
+import {
+  findCrossHostWorkspaceSessionKeyCollisions,
+  findWorkspaceTabIdOwnerCollisions
+} from '../../../shared/workspace-session-partition-authority'
 import { isExistingPersistedProfile } from '../../../shared/project-order-manual-default-notice'
 import { resolveUsagePercentageDisplayChangeNoticeDismissed } from '../../../shared/usage-percentage-display-change-notice'
 import { normalizePRBotAuthorOverrides } from '../../../shared/pr-bot-author-overrides'
@@ -1979,6 +1984,9 @@ export class Store {
   }
 
   flushOrThrow(): void {
+    if (this.writesFrozen) {
+      throw new Error('Cannot synchronously flush while persistence writes are frozen')
+    }
     if (this.quitFlushStarted) {
       throw new Error('Cannot synchronously flush after final persistence has started')
     }
@@ -2090,8 +2098,8 @@ export class Store {
     return this.getProjectHostOperations().getRepoCount()
   }
 
-  getRepo(id: string): Repo | undefined {
-    return this.getProjectHostOperations().getRepo(id)
+  getRepo(id: string, hostId?: ExecutionHostId): Repo | undefined {
+    return this.getProjectHostOperations().getRepo(id, hostId)
   }
 
   setResolvedRepoGitUsername(
@@ -2778,6 +2786,69 @@ export class Store {
       return this.state.workspaceSession ?? getDefaultWorkspaceSession()
     }
     return this.state.workspaceSessionsByHostId?.[resolved] ?? getDefaultWorkspaceSession()
+  }
+
+  adoptSshWorkspaceSessionPartition(hostId?: string): WorkspaceSessionState {
+    if (hostId && parseExecutionHostId(hostId)?.kind !== 'ssh') {
+      return this.getWorkspaceSession()
+    }
+    const originalOwner = this.getWorkspaceSession()
+    const originalPartitions = this.state.workspaceSessionsByHostId
+    const sshPartitions = Object.entries(originalPartitions ?? {})
+      .filter(([partitionHostId, session]) =>
+        Boolean(
+          session &&
+            parseExecutionHostId(partitionHostId)?.kind === 'ssh' &&
+            (!hostId || partitionHostId === hostId)
+        )
+      )
+      .sort(([left], [right]) => left.localeCompare(right)) as [string, WorkspaceSessionState][]
+    if (sshPartitions.length === 0) {
+      return originalOwner
+    }
+
+    const sources = sshPartitions.map(([, source]) => source)
+    const preservedWorkspaceKeys = new Set([
+      ...findCrossHostWorkspaceSessionKeyCollisions(sources),
+      ...findWorkspaceTabIdOwnerCollisions([originalOwner, ...sources])
+    ])
+    const prunableHostIds = new Set<string>()
+    let owner = originalOwner
+    for (const [partitionHostId, source] of sshPartitions) {
+      const adoption = adoptOrphanedWorkspaceSessionPartition(owner, source, {
+        preserveWorkspaceKeys: preservedWorkspaceKeys
+      })
+      owner = adoption.session
+      if (adoption.ambiguousWorktreeIds.length === 0) {
+        prunableHostIds.add(partitionHostId)
+      }
+    }
+    if (prunableHostIds.size === 0) {
+      return originalOwner
+    }
+    this.state.workspaceSession = owner
+    try {
+      this.flushOrThrow()
+    } catch (error) {
+      this.state.workspaceSession = originalOwner
+      this.state.workspaceSessionsByHostId = originalPartitions
+      throw error
+    }
+
+    this.state.workspaceSessionsByHostId = Object.fromEntries(
+      Object.entries(originalPartitions ?? {}).filter(
+        ([partitionHostId]) => !prunableHostIds.has(partitionHostId)
+      )
+    )
+    try {
+      this.flushOrThrow()
+    } catch (error) {
+      // Why: phase one is already durable; keep its owner plus retryable sources.
+      this.state.workspaceSession = owner
+      this.state.workspaceSessionsByHostId = originalPartitions
+      throw error
+    }
+    return owner
   }
 
   /** Whether a partition was ever written; `getWorkspaceSession` defaults absent ones and cannot tell them apart. */

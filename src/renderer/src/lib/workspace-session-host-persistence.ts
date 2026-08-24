@@ -21,6 +21,7 @@ import {
   indexWorkspaceRuntimeHostOwnership,
   type WorkspaceRuntimeOwnerProjection
 } from './workspace-runtime-host-ownership'
+import { adoptStrandedSshHostPartitions } from './workspace-session-ssh-partition-hydration'
 
 export type HostPersistenceState = {
   repos: readonly Pick<Repo, 'id' | 'connectionId' | 'executionHostId'>[]
@@ -37,6 +38,7 @@ export type HostPersistenceState = {
 type SessionApi = {
   get: (hostId?: ExecutionHostId) => Promise<WorkspaceSessionState>
   patch: (args: WorkspaceSessionPatch, hostId?: ExecutionHostId) => Promise<void>
+  adoptSshPartition?: (hostId?: `ssh:${string}`) => Promise<WorkspaceSessionState>
   setSync: (args: WorkspaceSessionState, hostId?: ExecutionHostId) => void
 }
 
@@ -313,7 +315,7 @@ export async function fetchWorkspaceSessionFromHosts(
 }
 
 export async function fetchWorkspaceSessionWithRuntimeHostOwners(
-  api: Pick<SessionApi, 'get'>,
+  api: Pick<SessionApi, 'get' | 'adoptSshPartition'>,
   repos: readonly Pick<Repo, 'connectionId' | 'executionHostId'>[],
   additionalRuntimeHostIds: readonly ExecutionHostId[] = []
 ): Promise<WorkspaceSessionHostRead> {
@@ -335,8 +337,19 @@ export async function fetchWorkspaceSessionWithRuntimeHostOwners(
       }
     })
   )
+  // Why: ssh partitions stay out of `slices` — SSH worktrees are local-owned
+  // here, so an ssh slice must never feed the runtime-owner map or win a blind
+  // last-wins merge; it is only a source for orphan adoption.
+  if (api.adoptSshPartition) {
+    // Main enumerates persisted partitions, including folder-only SSH projects.
+    slices[LOCAL_EXECUTION_HOST_ID] = await api.adoptSshPartition()
+  }
+  const merged = mergeWorkspaceSessionsFromHosts(slices)
+  const session = api.adoptSshPartition
+    ? merged
+    : await adoptStrandedSshHostPartitions(api, repos, merged)
   return {
-    session: mergeWorkspaceSessionsFromHosts(slices),
+    session,
     runtimeHostIdByWorkspaceSessionKey: buildRuntimeHostIdByWorkspaceSessionKey(slices)
   }
 }

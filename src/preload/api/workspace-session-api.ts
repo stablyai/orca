@@ -4,6 +4,7 @@ import type {
   WorkspaceSessionState
 } from '../../shared/workspace-session-state-types'
 import type { ExecutionHostId } from '../../shared/execution-host'
+import type { DirectSshAuthority } from '../../shared/ssh-types'
 import type {
   RemoteWorkspaceChangedEvent,
   RemoteWorkspaceConnectedClient,
@@ -17,6 +18,7 @@ export type WorkspaceSessionApi = {
     get: (hostId?: ExecutionHostId) => Promise<WorkspaceSessionState>
     set: (args: WorkspaceSessionState, hostId?: ExecutionHostId) => Promise<void>
     patch: (args: WorkspaceSessionPatch, hostId?: ExecutionHostId) => Promise<void>
+    adoptSshPartition: (hostId?: `ssh:${string}`) => Promise<WorkspaceSessionState>
     flush: () => Promise<void>
     readTerminalScrollback: (args: { ref: string }) => string | null
     setSync: (args: WorkspaceSessionState, hostId?: ExecutionHostId) => void
@@ -37,6 +39,8 @@ export type WorkspaceSessionApi = {
     get: (args: { targetId: string }) => Promise<RemoteWorkspaceSnapshot | null>
     setForConnectedTargets: (args: {
       session?: WorkspaceSessionState
+      sessionTargetId?: string
+      sessionAuthority?: DirectSshAuthority
       hydratedTargetIds?: string[]
     }) => Promise<{ targetId: string; result: RemoteWorkspacePatchResult }[]>
     listEnabledConnectedTargets: () => Promise<string[]>
