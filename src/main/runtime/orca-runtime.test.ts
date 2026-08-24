@@ -2386,6 +2386,30 @@ describe('OrcaRuntimeService', () => {
     )
   })
 
+  it('redacts Kagi credentials from headless browser snapshots', () => {
+    const runtime = createRuntime()
+    runtime.setOffscreenBrowserBackend({ createTab: vi.fn(), closeTab: vi.fn() })
+    runtime.setAgentBrowserBridge({
+      tabList: vi.fn(() => ({
+        tabs: [
+          {
+            browserPageId: 'page-kagi',
+            index: 0,
+            url: 'https://kagi.com/search?token=session-secret&q=private+project',
+            title: '',
+            active: true
+          }
+        ]
+      }))
+    } as never)
+
+    const browserTabs = runtime['buildHeadlessMobileSessionBrowserTabs'](TEST_WORKTREE_ID)
+
+    expect(browserTabs[0]?.url).toBe('https://kagi.com/search?q=private+project')
+    expect(browserTabs[0]?.title).toBe('https://kagi.com/search?q=private+project')
+    expect(JSON.stringify(browserTabs)).not.toContain('session-secret')
+  })
+
   it('detects headless browser-tab changes by field, treating absent and null loadError alike', () => {
     const runtime = createRuntime()
     const base = {

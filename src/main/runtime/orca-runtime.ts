@@ -19,6 +19,7 @@ import {
   isAgentSkillSharingEnabled
 } from '../../shared/agent-skill-sharing-gate'
 import { sortDirEntries } from '../../shared/file-name-sort'
+import { redactKagiSessionToken } from '../../shared/browser-url'
 import { isServerDriveListRequest, listWindowsDrives } from './windows-drive-listing'
 import { extractLastOsc7Uri, extractOscScanTail } from '../daemon/osc7-uri-extraction'
 import { parseFileUriPathParts } from '../daemon/osc7-file-uri'
@@ -8342,15 +8343,17 @@ export class OrcaRuntimeService {
     }
     return this.agentBrowserBridge.tabList(worktreeId).tabs.map((tab) => {
       const persistedProps = this.getPersistedUnifiedSessionTabProps(worktreeId, tab.browserPageId)
+      const safeUrl = redactKagiSessionToken(tab.url || 'about:blank')
+      const safeTitle = redactKagiSessionToken(tab.title)
       return {
         type: 'browser' as const,
         // Why: an offscreen page has no separate workspace identity, so the page id
         // is its own workspace id (matches the server's browserWorkspaceId fallback).
         id: tab.browserPageId,
-        title: tab.title || tab.url || 'Browser',
+        title: safeTitle || safeUrl || 'Browser',
         browserWorkspaceId: tab.browserPageId,
         browserPageId: tab.browserPageId,
-        url: tab.url || 'about:blank',
+        url: safeUrl,
         loading: false,
         canGoBack: false,
         canGoForward: false,

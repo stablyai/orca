@@ -27,6 +27,11 @@ import {
   recordAgentHibernationPaneOutput,
   resetAgentHibernationOutputActivityForTests
 } from '@/lib/agent-hibernation-output-activity'
+import {
+  discardKagiPrivateInitialNavigation,
+  getKagiPrivateInitialNavigation,
+  queueKagiPrivateInitialNavigation
+} from '@/lib/kagi-private-initial-navigation'
 
 vi.mock('sonner', () => ({
   toast: { info: vi.fn(), success: vi.fn(), error: vi.fn(), warning: vi.fn() }
@@ -221,7 +226,6 @@ describe('worktree removal evicts the per-worktree + per-page maps it previously
         [TAB2]: { tabId: TAB2, agent: 'codex', text: 'fix wt2', createdAt: 2 }
       }
     })
-
     store.getState().purgeWorktreeTerminalState([WT1])
 
     const s = store.getState()
@@ -302,6 +306,8 @@ describe('worktree removal evicts the per-worktree + per-page maps it previously
         [WS2]: [makePage(P2, WS2, WT2)]
       }
     })
+    queueKagiPrivateInitialNavigation(P1, 'https://kagi.com/search?token=removed')
+    queueKagiPrivateInitialNavigation(P2, 'https://kagi.com/search?token=surviving')
 
     store.getState().purgeWorktreeTerminalState([WT1])
 
@@ -320,5 +326,12 @@ describe('worktree removal evicts the per-worktree + per-page maps it previously
     expect(s.pendingAddressBarFocusByTabId[WS2]).toBe(true)
     expect(s.pendingAddressBarFocusByTabId[P2]).toBe(true)
     expect(s.recentlyClosedBrowserPagesByWorkspace[WS2]).toBeDefined()
+    expect(getKagiPrivateInitialNavigation(P1, 'https://kagi.com/search').navigationUrl).toBe(
+      'https://kagi.com/search'
+    )
+    expect(getKagiPrivateInitialNavigation(P2, 'https://kagi.com/search').navigationUrl).toBe(
+      'https://kagi.com/search?token=surviving'
+    )
+    discardKagiPrivateInitialNavigation(P2)
   })
 })

@@ -406,6 +406,32 @@ describe('openWorkspaceBrowserTab', () => {
     expect(createBrowserTab).not.toHaveBeenCalled()
   })
 
+  it('preserves private Kagi navigation with the desktop provider', async () => {
+    const createBrowserTab = vi.fn()
+    const sshHost = toSshExecutionHostId('ssh-target')
+    const privateUrl = 'https://kagi.com/search?token=secret&q=private+project'
+    mocks.state = {
+      ...ownerState(sshHost, 'hub-a'),
+      createBrowserTab,
+      defaultBrowserSessionProfileId: 'focused-profile',
+      defaultBrowserSessionProfileIdByHostId: { [sshHost]: 'ssh-profile' }
+    }
+    mocks.createRemote.mockResolvedValue(false)
+
+    await openWorkspaceBrowserTab({
+      workspaceId: WORKSPACE_ID,
+      url: privateUrl,
+      intent: { kind: 'search', engine: 'kagi' }
+    })
+
+    expect(mocks.createRemote).not.toHaveBeenCalled()
+    expect(createBrowserTab).toHaveBeenCalledWith(
+      WORKSPACE_ID,
+      privateUrl,
+      expect.objectContaining({ sessionProfileId: 'ssh-profile' })
+    )
+  })
+
   it('fails closed for invalid targets and unresolved owners, then falls back locally', async () => {
     const secretUrl = 'https://example.com/?q=secret-value'
     const request = {
@@ -449,5 +475,25 @@ describe('openWorkspaceBrowserTab', () => {
     mocks.createRemote.mockResolvedValue(false)
     await expect(openWorkspaceBrowserTab(request)).rejects.toThrow('Unable to search with Kagi.')
     expect(mocks.state.createBrowserTab).not.toHaveBeenCalled()
+  })
+
+  it('surfaces client tab creation failures', async () => {
+    const createBrowserTab = vi.fn(() => {
+      throw new Error('create failed')
+    })
+    mocks.state = {
+      ...ownerState('local'),
+      createBrowserTab,
+      defaultBrowserSessionProfileId: null,
+      defaultBrowserSessionProfileIdByHostId: {}
+    }
+
+    await expect(
+      openWorkspaceBrowserTab({
+        workspaceId: WORKSPACE_ID,
+        url: 'https://kagi.com/search?token=secret&q=private+project',
+        intent: { kind: 'search', engine: 'kagi' }
+      })
+    ).rejects.toThrow('Unable to search with Kagi.')
   })
 })

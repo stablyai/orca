@@ -119,6 +119,33 @@ describe('buildWorkspaceSessionPayload', () => {
     expect(payload.defaultTerminalTabsAppliedByWorktreeId).toEqual({ 'wt-1': true })
   })
 
+  it('redacts Kagi credentials at the session persistence boundary', () => {
+    const privateUrl = 'https://kagi.com/search?token=session-secret&q=private+project'
+    const snapshot = createSnapshot()
+    const tab = snapshot.browserTabsByWorktree['wt-1']?.[0]
+    const page = snapshot.browserPagesByWorkspace['browser-1']?.[0]
+    if (!tab || !page) {
+      throw new Error('Expected browser session fixtures.')
+    }
+    tab.url = privateUrl
+    tab.title = privateUrl
+    page.url = privateUrl
+    page.title = privateUrl
+
+    const payload = buildWorkspaceSessionPayload(snapshot)
+
+    expect(payload.browserTabsByWorktree?.['wt-1']?.[0]?.url).toBe(
+      'https://kagi.com/search?q=private+project'
+    )
+    expect(payload.browserPagesByWorkspace?.['browser-1']?.[0]?.url).toBe(
+      'https://kagi.com/search?q=private+project'
+    )
+    expect(payload.browserPagesByWorkspace?.['browser-1']?.[0]?.title).toBe(
+      'https://kagi.com/search?q=private+project'
+    )
+    expect(JSON.stringify(payload)).not.toContain('session-secret')
+  })
+
   it('persists floating terminal tabs for daemon reattach after restart', () => {
     const payload = buildWorkspaceSessionPayload(
       createSnapshot({

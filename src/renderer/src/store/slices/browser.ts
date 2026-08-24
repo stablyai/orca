@@ -17,7 +17,7 @@ import type { WorkspaceSessionState } from '../../../../shared/workspace-session
 import { GRAB_BUDGET, type BrowserPageAnnotation } from '../../../../shared/browser-grab-types'
 import { FLOATING_TERMINAL_WORKTREE_ID, ORCA_BROWSER_BLANK_URL } from '../../../../shared/constants'
 import { folderWorkspaceKey } from '../../../../shared/workspace-scope'
-import { redactKagiSessionToken } from '../../../../shared/browser-url'
+import { normalizeKagiSessionLink, redactKagiSessionToken } from '../../../../shared/browser-url'
 import {
   MAX_BROWSER_HISTORY_ENTRIES,
   normalizeBrowserHistoryEntries,
@@ -42,6 +42,10 @@ import type {
   BrowserProfileListResult
 } from '../../../../shared/runtime-types'
 import { createBrowserUuid } from '@/lib/browser-uuid'
+import {
+  discardKagiPrivateInitialNavigation,
+  queueKagiPrivateInitialNavigation
+} from '@/lib/kagi-private-initial-navigation'
 import { translate } from '@/i18n/i18n'
 import {
   getExecutionHostLabel,
@@ -412,6 +416,15 @@ function buildBrowserPage(
   }
 }
 
+function queuePrivateBrowserPageInitialNavigation(page: BrowserPage, rawUrl: string): void {
+  const trimmedUrl = rawUrl.trim()
+  const isClientOwned =
+    page.browserRuntimeEnvironmentId === null || page.browserRuntimeEnvironmentId === undefined
+  if (isClientOwned && normalizeKagiSessionLink(trimmedUrl)) {
+    queueKagiPrivateInitialNavigation(page.id, trimmedUrl)
+  }
+}
+
 function buildWorkspaceFromPage(
   id: string,
   worktreeId: string,
@@ -632,6 +645,7 @@ export const createBrowserSlice: StateCreator<AppState, [], [], BrowserSlice> = 
       sessionProfileId,
       options?.sessionPartition
     )
+    queuePrivateBrowserPageInitialNavigation(page, url)
 
     set((s) => {
       const existingTabs = s.browserTabsByWorktree[worktreeId] ?? []
@@ -702,7 +716,6 @@ export const createBrowserSlice: StateCreator<AppState, [], [], BrowserSlice> = 
           : s.pendingAddressBarFocusByTabId
       }
     })
-
     const state = get()
     const alreadyHasUnifiedTab = (state.unifiedTabsByWorktree[worktreeId] ?? []).some(
       (t) => t.contentType === 'browser' && t.entityId === workspaceId
@@ -805,6 +818,7 @@ export const createBrowserSlice: StateCreator<AppState, [], [], BrowserSlice> = 
   },
   closeBrowserTab: (tabId) => {
     let remotePagesToClose: { worktreeId: string; handle: RemoteBrowserPageHandle }[] = []
+    let closedPageIds: string[] = []
     set((s) => {
       let owningWorktreeId: string | null = null
       let closedWorkspace: BrowserWorkspace | null = null
@@ -825,6 +839,7 @@ export const createBrowserSlice: StateCreator<AppState, [], [], BrowserSlice> = 
       }
 
       const closedPages = s.browserPagesByWorkspace[tabId] ?? []
+      closedPageIds = closedPages.map((page) => page.id)
       const nextBrowserPagesByWorkspace = { ...s.browserPagesByWorkspace }
       delete nextBrowserPagesByWorkspace[tabId]
       const nextBrowserAnnotationsByPageId = { ...s.browserAnnotationsByPageId }
@@ -932,6 +947,10 @@ export const createBrowserSlice: StateCreator<AppState, [], [], BrowserSlice> = 
         browserAnnotationsByPageId: nextBrowserAnnotationsByPageId
       }
     })
+
+    for (const pageId of closedPageIds) {
+      discardKagiPrivateInitialNavigation(pageId)
+    }
 
     for (const remotePage of remotePagesToClose) {
       closeRemoteBrowserPageInOwningEnvironment(remotePage.worktreeId, remotePage.handle)
@@ -1108,6 +1127,7 @@ export const createBrowserSlice: StateCreator<AppState, [], [], BrowserSlice> = 
       options?.title,
       options?.browserRuntimeEnvironmentId
     )
+    queuePrivateBrowserPageInitialNavigation(page, url)
 
     set((s) => {
       const pages = s.browserPagesByWorkspace[workspaceId] ?? []
@@ -1154,7 +1174,6 @@ export const createBrowserSlice: StateCreator<AppState, [], [], BrowserSlice> = 
           : s.pendingAddressBarFocusByTabId
       }
     })
-
     const nextWorkspace = findWorkspace(get().browserTabsByWorktree, workspaceId)
     if (nextWorkspace?.activePageId === page.id) {
       const item = Object.values(get().unifiedTabsByWorktree)
@@ -1168,6 +1187,7 @@ export const createBrowserSlice: StateCreator<AppState, [], [], BrowserSlice> = 
   },
 
   closeBrowserPage: (pageId) => {
+    discardKagiPrivateInitialNavigation(pageId)
     let closedWorkspaceIdForLabel: string | null = null
     const remotePagesToClose: { worktreeId: string; handle: RemoteBrowserPageHandle }[] = []
     set((s) => {

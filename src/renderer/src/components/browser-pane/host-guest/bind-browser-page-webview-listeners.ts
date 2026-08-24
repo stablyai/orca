@@ -1,5 +1,6 @@
 import { normalizeBrowserNavigationUrl } from '../../../../../shared/browser-url'
 import { ORCA_BROWSER_BLANK_URL } from '../../../../../shared/constants'
+import { getKagiPrivateInitialNavigation } from '@/lib/kagi-private-initial-navigation'
 import { parkBrowserPageViewport } from './browser-page-viewport'
 import { subscribeBrowserSystemResume } from './browser-system-resume'
 import {
@@ -165,11 +166,13 @@ export function bindBrowserPageWebviewListeners({
 
   if (needsInitialNavigation) {
     // Why: set src only after listeners attach so a fast localhost failure isn't missed; only non-blank tabs show the loading indicator.
-    const initialUrl =
+    const modelUrl =
       normalizeBrowserNavigationUrl(initialBrowserUrlRef.current) ?? ORCA_BROWSER_BLANK_URL
-    trackNextLoadingEventRef.current = initialUrl !== ORCA_BROWSER_BLANK_URL
-    lastKnownWebviewUrlRef.current = initialUrl
-    webview.src = initialUrl
+    const initialNavigation = getKagiPrivateInitialNavigation(browserTabId, modelUrl)
+    trackNextLoadingEventRef.current = initialNavigation.navigationUrl !== ORCA_BROWSER_BLANK_URL
+    // Why: URL sync compares against the persisted model URL; retaining the bearer here would immediately replace the authenticated navigation.
+    lastKnownWebviewUrlRef.current = initialNavigation.modelUrl
+    webview.src = initialNavigation.navigationUrl
   } else if (isPaintableRef.current) {
     if (isBrowserPageRendererRecoveryPending(browserTabId)) {
       guestRecovery.recoverRenderer()

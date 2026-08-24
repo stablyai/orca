@@ -182,6 +182,39 @@ describe('applyWebSessionTabsSnapshot', () => {
     expect(patch).toBe(state)
   })
 
+  it('redacts Kagi credentials published by an older host', () => {
+    const patch = applyWebSessionTabsSnapshot(
+      makeState(),
+      makeSnapshot(
+        [
+          {
+            type: 'browser',
+            id: 'host-browser-tab',
+            title: 'https://kagi.com/search?token=session-secret&q=private+project',
+            browserWorkspaceId: 'host-browser-workspace',
+            browserPageId: 'host-browser-page',
+            url: 'https://kagi.com/search?token=session-secret&q=private+project',
+            loading: false,
+            canGoBack: false,
+            canGoForward: false,
+            isActive: true
+          }
+        ],
+        { activeTabId: 'host-browser-tab', activeTabType: 'browser' }
+      ),
+      ENV,
+      NOW
+    ) as Partial<WebSessionTabsSyncState>
+
+    expect(patch.browserPagesByWorkspace?.['host-browser-workspace']?.[0]?.url).toBe(
+      'https://kagi.com/search?q=private+project'
+    )
+    expect(patch.browserPagesByWorkspace?.['host-browser-workspace']?.[0]?.title).toBe(
+      'https://kagi.com/search?q=private+project'
+    )
+    expect(JSON.stringify(patch)).not.toContain('session-secret')
+  })
+
   it('suppresses a tab the client is closing until the host confirms removal (no close flash)', () => {
     const surface = {
       type: 'terminal' as const,

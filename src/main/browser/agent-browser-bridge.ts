@@ -48,7 +48,7 @@ import type {
   BrowserCookie
 } from '../../shared/runtime-types'
 import { assertClipboardTextWriteWithinLimitWithYield } from '../../shared/clipboard-text'
-import { normalizeBrowserNavigationUrl } from '../../shared/browser-url'
+import { normalizeBrowserNavigationUrl, redactKagiSessionToken } from '../../shared/browser-url'
 import { iterateBrowserTextInsertionChunks } from './browser-text-insertion'
 
 // Why: must exceed agent-browser's internal timeouts (goto 30s, wait 60s) so the bridge never kills a command before its own timeout fires.
@@ -748,10 +748,12 @@ export class AgentBrowserBridge {
         browserPageId: tabId,
         index: index++,
         // Why: failed WebContents report chrome-error://, not the address the user asked to load.
-        url: loadError?.validatedUrl ?? wc.getURL() ?? '',
-        title: wc.getTitle() ?? '',
+        url: redactKagiSessionToken(loadError?.validatedUrl ?? wc.getURL() ?? ''),
+        title: redactKagiSessionToken(wc.getTitle() ?? ''),
         active: wcId === activeWcId,
-        loadError,
+        loadError: loadError
+          ? { ...loadError, validatedUrl: redactKagiSessionToken(loadError.validatedUrl) }
+          : loadError,
         certificateFailure
       })
     }

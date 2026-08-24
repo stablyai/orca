@@ -5,6 +5,7 @@ import { useAppStore } from '../store'
 import type { RuntimeRpcResponse } from '../../../shared/runtime-rpc-envelope'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../shared/constants'
 import { toRuntimeExecutionHostId } from '../../../shared/execution-host'
+import { redactKagiSessionToken } from '../../../shared/browser-url'
 import {
   AGENT_STATUS_STALE_AFTER_MS,
   pickParsedAgentStatusPayload,
@@ -1702,12 +1703,14 @@ function buildMirroredBrowserTabs(
         ? preferredClientGroupId
         : undefined
     const groupId = clientGroupId ?? hostGroupId
-    const title = tab.title.trim() || 'Browser'
+    // Why: older hosts can publish live Kagi bearer URLs; the client must not mirror them into persisted page state.
+    const safeUrl = redactKagiSessionToken(tab.url)
+    const title = redactKagiSessionToken(tab.title.trim()) || 'Browser'
     const nextPage: BrowserPage = {
       id: pageId,
       workspaceId,
       worktreeId: snapshot.worktree,
-      url: tab.url,
+      url: safeUrl,
       title,
       loading: tab.loading,
       faviconUrl: existing?.page.faviconUrl ?? null,

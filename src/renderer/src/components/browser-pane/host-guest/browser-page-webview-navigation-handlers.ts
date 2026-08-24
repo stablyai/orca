@@ -4,7 +4,9 @@ import {
   normalizeBrowserNavigationUrl,
   redactKagiSessionToken
 } from '../../../../../shared/browser-url'
+import { ORCA_BROWSER_BLANK_URL } from '../../../../../shared/constants'
 import type { BrowserLoadError } from '../../../../../shared/browser-workspace-types'
+import { discardKagiPrivateInitialNavigation } from '@/lib/kagi-private-initial-navigation'
 import { BROWSER_GUEST_RECOVERY_ERROR_CODE } from './browser-page-guest-recovery'
 import { rememberLiveBrowserUrl } from '../describe-page/live-browser-url-registry'
 import type { BrowserOverlayViewport } from '../describe-page/browser-annotation-geometry'
@@ -109,6 +111,16 @@ export function createBrowserPageWebviewNavigationHandlers({
     const pendingRecoveryNavigation = recoveryNavigationValidationRef.current
     if (event.isMainFrame !== false && pendingRecoveryNavigation?.started) {
       pendingRecoveryNavigation.committed = true
+    }
+    if (event.isMainFrame !== false) {
+      const committedUrl = event.url ?? webview.getURL() ?? webview.src ?? 'about:blank'
+      const normalizedCommittedUrl = normalizeBrowserNavigationUrl(committedUrl)
+      if (
+        !isChromiumErrorPage(committedUrl) &&
+        normalizedCommittedUrl !== ORCA_BROWSER_BLANK_URL
+      ) {
+        discardKagiPrivateInitialNavigation(browserTabId)
+      }
     }
     const preserveRecoveryError =
       activeLoadFailureRef.current?.code === BROWSER_GUEST_RECOVERY_ERROR_CODE

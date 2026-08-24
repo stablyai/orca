@@ -1,6 +1,7 @@
 import type { AppState } from '../../../types'
 import { forgetHugeRepoWarningDismissalsForWorktrees } from '@/lib/source-control-huge-repo-warning-dismissals'
 import { parseWorkspaceKey } from '../../../../../../shared/workspace-scope'
+import { discardKagiPrivateInitialNavigation } from '@/lib/kagi-private-initial-navigation'
 import { pruneHostedReviewLinkMutationGenerations } from '../metadata/hosted-review-link-mutation'
 import { collectWorktreePurgeDoomedIds } from './worktree-purge-doomed-ids'
 import { createWorktreePurgeOmitters } from './worktree-purge-omitters'
@@ -13,6 +14,9 @@ export function buildWorktreePurgeState(s: AppState, worktreeIds: string[]): Par
   forgetHugeRepoWarningDismissalsForWorktrees(worktreeIdSet)
 
   const doomed = collectWorktreePurgeDoomedIds(s, worktreeIdSet)
+  for (const pageId of doomed.doomedPageIds) {
+    discardKagiPrivateInitialNavigation(pageId)
+  }
   const {
     omitByWorktree,
     omitWorkspaceLineageByWorktree,
