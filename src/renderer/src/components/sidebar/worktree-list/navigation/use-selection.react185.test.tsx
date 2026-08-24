@@ -140,9 +140,7 @@ describe('useSidebarWorktreeSelection cannot trigger React #185 loop', () => {
     }
     expect(latestSelection!.selectedWorktreeIds.size).toBe(0)
 
-    // 7. Functional guard test: select a worktree, then dispatch rapid pointerdown burst in a single act
-    // before React cleans up the listener, ensuring functional guards (prev => prev.size === 0 ? prev : new Set())
-    // bail out of redundant state updates and prevent render cascades.
+    // Why single act: burst events before effect cleanup to verify redundant clears bail out.
     act(() => {
       latestSelection!.selectForContextMenu({} as React.MouseEvent<HTMLElement>, wt2)
     })
@@ -155,7 +153,7 @@ describe('useSidebarWorktreeSelection cannot trigger React #185 loop', () => {
       }
     })
     expect(latestSelection!.selectedWorktreeIds.size).toBe(0)
-    // Functional guard prevents 50 separate re-renders; settles in at most 2 commits
+    // Why <= 2: functional guards bail out of redundant renders on already-empty state.
     expect(renderCount - rendersBeforeBurst).toBeLessThanOrEqual(2)
 
     // 8. Active selection pruning during rapid filtering cycles
