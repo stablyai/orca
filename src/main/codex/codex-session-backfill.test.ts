@@ -617,7 +617,7 @@ describe('startCodexSessionBackfillInBackground', () => {
     expect(JSON.parse(readFileSync(getMarkerPath(), 'utf-8'))).toMatchObject({ version: 0 })
     const recovered = await startCodexSessionBackfillInBackground()
     expect(recovered).toMatchObject({ skippedExistingFiles: 1 })
-    expect(JSON.parse(readFileSync(getMarkerPath(), 'utf-8'))).toMatchObject({ version: 3 })
+    expect(JSON.parse(readFileSync(getMarkerPath(), 'utf-8'))).toMatchObject({ version: 4 })
   })
 
   it('fails launch preparation when a stale marker cannot be invalidated', async () => {
@@ -629,7 +629,7 @@ describe('startCodexSessionBackfillInBackground', () => {
     expect(() => invalidateCodexSessionBackfillMarker(getMarkerPath())).toThrow(
       'Failed to invalidate Codex session backfill marker'
     )
-    expect(JSON.parse(readFileSync(getMarkerPath(), 'utf-8'))).toMatchObject({ version: 3 })
+    expect(JSON.parse(readFileSync(getMarkerPath(), 'utf-8'))).toMatchObject({ version: 4 })
   })
 
   it('writes a completion marker and skips the walk on later runs', async () => {
@@ -638,7 +638,7 @@ describe('startCodexSessionBackfillInBackground', () => {
     const first = await startCodexSessionBackfillInBackground()
     expect(first).toMatchObject({ linkedFiles: 1, failedFiles: 0 })
     expect(existsSync(getMarkerPath())).toBe(true)
-    expect(JSON.parse(readFileSync(getMarkerPath(), 'utf-8'))).toMatchObject({ version: 3 })
+    expect(JSON.parse(readFileSync(getMarkerPath(), 'utf-8'))).toMatchObject({ version: 4 })
 
     // An ordinary call remains a no-op; only a launch-scheduled pass bypasses the marker.
     writeManagedSession(join('2026', '07', '01', 'rollout-later.jsonl'), '{"id":"later"}\n')
@@ -677,7 +677,7 @@ describe('startCodexSessionBackfillInBackground', () => {
     expect(existsSync(getMarkerPath())).toBe(true)
   })
 
-  it('lets an explicit bounded final pass restore a certified baseline', async () => {
+  it('keeps a bounded final pass from recreating an invalidated baseline', async () => {
     writeManagedSession(join('2026', '05', '26', 'rollout-baseline.jsonl'), 'baseline\n')
     await startCodexSessionBackfillInBackground()
 
@@ -691,7 +691,7 @@ describe('startCodexSessionBackfillInBackground', () => {
     })
 
     expect(bounded).toMatchObject({ scannedFiles: 1, linkedFiles: 1 })
-    expect(existsSync(getMarkerPath())).toBe(true)
+    expect(existsSync(getMarkerPath())).toBe(false)
   })
 
   it('records a new heal event when a linked rollout grows in place', async () => {
@@ -784,7 +784,7 @@ describe('startCodexSessionBackfillInBackground', () => {
     const empty = await startCodexSessionBackfillInBackground()
     expect(empty).toMatchObject({ scannedFiles: 0, linkedFiles: 0 })
     expect(JSON.parse(readFileSync(getMarkerPath(), 'utf-8'))).toMatchObject({
-      summary: { scannedFiles: 0 }
+      baseline: { summary: { scannedFiles: 0 } }
     })
 
     writeManagedSession(join('2026', '07', '28', 'rollout-later.jsonl'), '{"id":"later"}\n')
@@ -810,7 +810,7 @@ describe('startCodexSessionBackfillInBackground', () => {
     rmSync(getMarkerPath(), { recursive: true })
     const resumed = await startCodexSessionBackfillInBackground()
     expect(resumed).toMatchObject({ skippedExistingFiles: 1, failedHealAuditRecords: 0 })
-    expect(JSON.parse(readFileSync(getMarkerPath(), 'utf-8'))).toMatchObject({ version: 3 })
+    expect(JSON.parse(readFileSync(getMarkerPath(), 'utf-8'))).toMatchObject({ version: 4 })
     expect(warnSpy).toHaveBeenCalled()
     warnSpy.mockRestore()
   })

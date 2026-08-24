@@ -2561,6 +2561,8 @@ void app.whenReady().then(async () => {
     isQuitting: () => isQuitting,
     resolveSystemCodexHomePathOverride: () =>
       resolveHostCodexSessionSourceHome(store!.getSettings()),
+    resolvePendingScanDates: () =>
+      codexRuntimeHome?.getHostSystemDefaultPendingSessionMigrationDates() ?? [],
     prepareScheduledRun: () => codexRuntimeHome?.prepareHostSystemDefaultSessionMigrationPass(),
     finishScheduledRun: () => codexRuntimeHome?.finishHostSystemDefaultSessionMigrationPass(),
     startBackfill: startCodexSessionBackfillInBackground,

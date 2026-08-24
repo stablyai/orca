@@ -255,7 +255,7 @@ describe('runCodexSessionIndexHeal', () => {
     expect(rig.readLog().serverStarts).toBe(1)
   })
 
-  it('re-reads a healed thread after a later publication event', async () => {
+  it('does not re-read a healed thread when the same target gets another audit event', async () => {
     const id = threadId('1')
     const stamp = '2026-07-01T10-00-00'
     const rig = createHealRig({ auditedThreads: [{ stamp, id }] })
@@ -273,7 +273,30 @@ describe('runCodexSessionIndexHeal', () => {
       interBatchDelayMs: 0
     })
 
-    expect(repeated).toMatchObject({ pendingThreads: 1, healedThreads: 1 })
+    expect(repeated).toMatchObject({ pendingThreads: 0, healedThreads: 0 })
+    expect(rig.readLog().threadIds).toEqual([id])
+  })
+
+  it('re-reads a healed thread when its target path changes', async () => {
+    const id = threadId('1')
+    const rig = createHealRig({
+      auditedThreads: [{ stamp: '2026-07-01T10-00-00', id }]
+    })
+    await runCodexSessionIndexHeal(rig.paths, {
+      buildInvocation: rig.buildInvocation,
+      interBatchDelayMs: 0
+    })
+
+    await createCodexSessionBackfillAuditWriter(rig.paths.auditLogPath)({
+      action: 'existing',
+      target: rolloutTarget(rig.paths.systemSessionsRoot, '2026-07-02T10-00-00', id)
+    })
+    const moved = await runCodexSessionIndexHeal(rig.paths, {
+      buildInvocation: rig.buildInvocation,
+      interBatchDelayMs: 0
+    })
+
+    expect(moved).toMatchObject({ pendingThreads: 1, healedThreads: 1 })
     expect(rig.readLog().threadIds).toEqual([id, id])
   })
 
@@ -363,7 +386,7 @@ describe('runCodexSessionIndexHeal', () => {
     expect(readLedgerOutcomes(rig.paths)[threadId('1')]).toBe('healed')
   })
 
-  it('retries a missing thread when a later backfill republishes its rollout', async () => {
+  it('does not retry a missing thread when the same target gets another audit event', async () => {
     const id = threadId('1')
     const rig = createHealRig({
       auditedThreads: [{ stamp: '2026-07-01T10-00-00', id }],
@@ -398,8 +421,8 @@ describe('runCodexSessionIndexHeal', () => {
       interBatchDelayMs: 0
     })
 
-    expect(healed).toMatchObject({ outcome: 'completed', pendingThreads: 1, healedThreads: 1 })
-    expect(rig.readLog().threadIds).toEqual([id, id])
+    expect(healed).toMatchObject({ outcome: 'completed', pendingThreads: 0, healedThreads: 0 })
+    expect(rig.readLog().threadIds).toEqual([id])
   })
 
   it('keeps a processed outcome readable after a torn heal-ledger tail', async () => {
@@ -770,7 +793,7 @@ describe('runCodexSessionIndexHeal', () => {
     expect(resumed).toMatchObject({ outcome: 'completed', pendingThreads: 0 })
     expect(rig.readLog().threadIds).toEqual([id])
     expect(JSON.parse(readFileSync(rig.paths.healMarkerPath, 'utf-8'))).toMatchObject({
-      version: 3
+      version: 4
     })
     expect(warnSpy).toHaveBeenCalled()
     warnSpy.mockRestore()

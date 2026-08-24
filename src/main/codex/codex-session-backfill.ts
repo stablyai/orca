@@ -107,7 +107,10 @@ async function runCodexSessionBackfillOncePerHost(
     summary.failedDirectories === 0 &&
     summary.failedHealAuditRecords === 0
   ) {
-    writeBackfillMarker(paths.markerPath, paths.systemSessionsRoot, summary, markerGeneration)
+    writeBackfillMarker(paths.markerPath, paths.systemSessionsRoot, summary, markerGeneration, {
+      bounded: options.scanDates !== undefined,
+      preservePending: options.preservePendingMarker === true
+    })
   }
   return summary
 }

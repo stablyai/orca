@@ -54,7 +54,7 @@ describe('CodexRuntimeHomeService', () => {
     const { CodexRuntimeHomeService } = await import('./runtime-home-service')
     const service = new CodexRuntimeHomeService(store as never)
     expect(service.prepareForCodexLaunch()).toBe(getRuntimeCodexHomePath())
-    expect(existsSync(markerPath)).toBe(false)
+    expect(existsSync(markerPath)).toBe(true)
     service.finishHostSystemDefaultSessionMigrationPass()
     expect(service.beginHostSystemDefaultSessionMigrationLaunch(getRuntimeCodexHomePath())).toBe(
       true
@@ -82,7 +82,7 @@ describe('CodexRuntimeHomeService', () => {
     expect(service.beginHostSystemDefaultSessionMigrationLaunch(getRuntimeCodexHomePath())).toBe(
       false
     )
-    expect(existsSync(markerPath)).toBe(false)
+    expect(existsSync(markerPath)).toBe(true)
     service.prepareForCodexLaunch()
     expect(service.beginHostSystemDefaultSessionMigrationLaunch(getRuntimeCodexHomePath())).toBe(
       false
@@ -101,7 +101,7 @@ describe('CodexRuntimeHomeService', () => {
     expect(service.beginHostSystemDefaultSessionMigrationLaunch(null, { reattached: true })).toBe(
       false
     )
-    expect(existsSync(markerPath)).toBe(false)
+    expect(existsSync(markerPath)).toBe(true)
     store.updateSettings({
       codexSessionSourceHome: { host: join(testState.fakeHomeDir, 'moved-history'), wsl: {} }
     })
@@ -140,7 +140,7 @@ describe('CodexRuntimeHomeService', () => {
     mkdirSync(join(testState.userDataDir, 'codex-session-backfill'), { recursive: true })
     writeFileSync(markerPath, '{}\n', 'utf-8')
     expect(service.prepareForCodexLaunch()).toBe(getRuntimeCodexHomePath())
-    expect(existsSync(markerPath)).toBe(false)
+    expect(existsSync(markerPath)).toBe(true)
     expect(service.beginHostSystemDefaultSessionMigrationLaunch(getRuntimeCodexHomePath())).toBe(
       true
     )

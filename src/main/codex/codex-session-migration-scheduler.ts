@@ -29,6 +29,7 @@ export function createCodexSessionMigrationScheduler(args: {
   isEligible: () => boolean
   isQuitting: () => boolean
   resolveSystemCodexHomePathOverride: () => string | undefined
+  resolvePendingScanDates?: () => readonly CodexSessionBackfillDate[]
   prepareScheduledRun?: () => boolean | void
   finishScheduledRun?: () => void
   startBackfill: MigrationRun
@@ -106,11 +107,12 @@ export function createCodexSessionMigrationScheduler(args: {
           shouldStop,
           scanDates,
           ignoreCompletionMarker: isScheduledRun,
-          writeCompletionMarker: activeLaunches.size === 0,
+          writeCompletionMarker: fullScanRequired || activeLaunches.size === 0,
           writeBoundedCompletionMarker:
             isScheduledRun && activeLaunches.size === 0 && !fullScanRequired,
+          preservePendingMarker: activeLaunches.size > 0,
           canWriteCompletionMarker: () =>
-            activeLaunches.size === 0 &&
+            (fullScanRequired || activeLaunches.size === 0) &&
             scheduledTimer === null &&
             pendingScheduledRunGeneration === null &&
             (!isScheduledRun || activeScheduledRunGeneration === scheduledRunGeneration)
@@ -150,7 +152,7 @@ export function createCodexSessionMigrationScheduler(args: {
         if (
           isScheduledRun &&
           !incompleteBackfill &&
-          activeLaunches.size === 0 &&
+          (fullScanRequired || activeLaunches.size === 0) &&
           scheduledTimer === null &&
           pendingScheduledRunGeneration === null
         ) {
@@ -166,16 +168,25 @@ export function createCodexSessionMigrationScheduler(args: {
   const armScheduledRun = (generation?: number): void => {
     scheduledTimer = setTimeout(() => {
       scheduledTimer = null
+      let requestedGeneration = generation
       if (generation !== undefined) {
         const currentDate = getCodexSessionBackfillDate()
         scheduledScanDates.set(currentDate.join('-'), currentDate)
+      } else {
+        const recoveredScanDates = args.resolvePendingScanDates?.() ?? []
+        for (const scanDate of recoveredScanDates) {
+          scheduledScanDates.set(scanDate.join('-'), scanDate)
+        }
+        if (recoveredScanDates.length > 0) {
+          requestedGeneration = ++scheduledRunGeneration
+        }
       }
       const scanDates = [...scheduledScanDates.values()].sort(compareBackfillDates)
       scheduledScanDates.clear()
       const fullScanRequired = scheduledFullScan
       scheduledFullScan = false
       // Why: a launch can invalidate the marker while a long index-heal pass is active.
-      requestRun(true, generation, scanDates, fullScanRequired)
+      requestRun(true, requestedGeneration, scanDates, fullScanRequired)
     }, args.initialDelayMs ?? 15_000)
   }
 

@@ -71,8 +71,12 @@ import { getDefaultWslDistro, getWslHome } from '../wsl'
 import { hasCustomCodexHomeOverrideForLaunch } from '../codex/codex-real-home-path'
 import {
   hasCompletedCodexSessionBackfillMarker,
-  invalidateCodexSessionBackfillMarker
+  invalidateCodexSessionBackfillMarker,
+  markCodexSessionBackfillPending,
+  readCodexSessionBackfillMarkerStatus
 } from '../codex/codex-session-backfill-marker'
+import { getCodexSessionBackfillDate } from '../codex/codex-session-backfill-date'
+import type { CodexSessionBackfillDate } from '../codex/codex-session-backfill-types'
 import { resolveCodexSessionBackfillPaths } from '../codex/codex-session-backfill'
 import {
   ManagedCodexHomeTemporarilyUnavailableError,
@@ -309,14 +313,17 @@ export class CodexRuntimeHomeService {
     const paths = resolveCodexSessionBackfillPaths(
       resolveHostCodexSessionSourceHome(this.store.getSettings())
     )
+    const previousTarget = this.pendingHostSystemDefaultSessionMigrationTarget
     if (
       this.hostSystemDefaultSessionMigrationPending &&
-      this.pendingHostSystemDefaultSessionMigrationTarget !== paths.systemSessionsRoot
+      previousTarget !== paths.systemSessionsRoot
     ) {
       this.pendingHostSystemDefaultSessionMigrationNeedsFullScan = true
       this.pendingHostSystemDefaultSessionMigrationTarget = paths.systemSessionsRoot
     }
-    invalidateCodexSessionBackfillMarker(paths.markerPath)
+    if (previousTarget && previousTarget !== paths.systemSessionsRoot) {
+      invalidateCodexSessionBackfillMarker(paths.markerPath)
+    }
     return this.pendingHostSystemDefaultSessionMigrationNeedsFullScan
   }
 
@@ -324,6 +331,19 @@ export class CodexRuntimeHomeService {
     this.hostSystemDefaultSessionMigrationPending = false
     this.pendingHostSystemDefaultSessionMigrationNeedsFullScan = false
     this.pendingHostSystemDefaultSessionMigrationTarget = null
+  }
+
+  getHostSystemDefaultPendingSessionMigrationDates(): readonly CodexSessionBackfillDate[] {
+    const paths = resolveCodexSessionBackfillPaths(
+      resolveHostCodexSessionSourceHome(this.store.getSettings())
+    )
+    const markerStatus = readCodexSessionBackfillMarkerStatus(
+      paths.markerPath,
+      paths.systemSessionsRoot
+    )
+    return markerStatus.hasBaseline && markerStatus.pendingSince
+      ? getCodexSessionBackfillDatesBetween(markerStatus.pendingSince, new Date())
+      : []
   }
 
   // Why: a managed HOST account runs against its own self-contained CODEX_HOME
@@ -529,7 +549,16 @@ export class CodexRuntimeHomeService {
       this.pendingHostSystemDefaultSessionMigrationTarget = paths.systemSessionsRoot
       this.hostSystemDefaultSessionMigrationPending = true
     }
-    return this.prepareHostSystemDefaultSessionMigrationPass()
+    const paths = resolveCodexSessionBackfillPaths(
+      resolveHostCodexSessionSourceHome(this.store.getSettings())
+    )
+    const needsFullScan = markCodexSessionBackfillPending(
+      paths.markerPath,
+      paths.systemSessionsRoot,
+      getCodexSessionBackfillDate()
+    )
+    this.pendingHostSystemDefaultSessionMigrationNeedsFullScan ||= needsFullScan
+    return this.pendingHostSystemDefaultSessionMigrationNeedsFullScan
   }
 
   private startWslSessionBridgeForLaunch(
@@ -2372,6 +2401,24 @@ export class CodexRuntimeHomeService {
   clearSystemDefaultSnapshot(): void {
     rmSync(this.getSystemDefaultSnapshotPath(), { force: true })
   }
+}
+
+function getCodexSessionBackfillDatesBetween(
+  startedAt: CodexSessionBackfillDate,
+  finishedAt: Date
+): CodexSessionBackfillDate[] {
+  const cursor = new Date(
+    Date.UTC(Number(startedAt[0]), Number(startedAt[1]) - 1, Number(startedAt[2]))
+  )
+  const last = new Date(
+    Date.UTC(finishedAt.getUTCFullYear(), finishedAt.getUTCMonth(), finishedAt.getUTCDate())
+  )
+  const dates: CodexSessionBackfillDate[] = []
+  while (cursor <= last) {
+    dates.push(getCodexSessionBackfillDate(cursor))
+    cursor.setUTCDate(cursor.getUTCDate() + 1)
+  }
+  return dates
 }
 
 // Why: Codex reads this config inside WSL, so relative path settings must anchor to the Linux-side home (verbatim copy breaks load, os error 2).
