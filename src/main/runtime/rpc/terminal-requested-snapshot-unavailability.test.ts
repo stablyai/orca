@@ -13,7 +13,16 @@ import {
   encodeTerminalStreamJson
 } from '../../../shared/terminal-stream-protocol'
 
-type SerializedBuffer = { data: string; cols: number; rows: number } | null
+type SerializedBuffer = {
+  data: string
+  scrollbackAnsi?: string
+  cols: number
+  rows: number
+  seq?: number
+  cwd?: string
+  source?: 'headless' | 'renderer'
+  pendingEscapeTailAnsi?: string
+} | null
 type SnapshotStartPayload = Record<string, unknown>
 
 // Why: 256 KiB is the pending-output budget, so this many 1 KiB chunks always trips the overflow guard.
@@ -168,13 +177,61 @@ describe('requested terminal snapshot unavailability reasons', () => {
     expect(start.unavailable).toBeUndefined()
   })
 
-  it('omits a reason for a proven-empty buffer so absence stays distinguishable from failure', async () => {
+  // Why: unavailable answers retry and eventually banner; empty answers are valid.
+  it('does not report a reason when the serializer answered with an empty buffer', async () => {
     const { start, chunks } = await requestSnapshotReply({
       connectionId: 'conn-reason-empty',
       serializeRequested: async () => ({ data: '', cols: 120, rows: 40 })
     })
     expect(chunks).toBe('')
     expect(start).toMatchObject({ requestId: 77, truncated: false })
+    expect(start.unavailable).toBeUndefined()
+  })
+
+  // Why: empty visual data cannot anchor stream provenance.
+  it('omits seq, source, and cwd metadata for an empty serialized answer', async () => {
+    const { start } = await requestSnapshotReply({
+      connectionId: 'conn-reason-empty-metadata',
+      serializeRequested: async () => ({
+        data: '',
+        cols: 120,
+        rows: 40,
+        seq: 42,
+        source: 'renderer',
+        cwd: '/stale'
+      })
+    })
+    expect(start.seq).toBeUndefined()
+    expect(start.source).toBeUndefined()
+    expect(start.cwd).toBeUndefined()
+  })
+
+  it('preserves parser carry state when serialized visual data is empty', async () => {
+    const { start, chunks } = await requestSnapshotReply({
+      connectionId: 'conn-reason-empty-parser-tail',
+      serializeRequested: async () => ({
+        data: '',
+        cols: 120,
+        rows: 40,
+        pendingEscapeTailAnsi: '\x1b[38;2;255'
+      })
+    })
+    expect(chunks).toBe('')
+    expect(start.pendingEscapeTailAnsi).toBe('\x1b[38;2;255')
+    expect(start.unavailable).toBeUndefined()
+  })
+
+  it('accepts scrollback-only serialized content', async () => {
+    const { start, chunks } = await requestSnapshotReply({
+      connectionId: 'conn-reason-scrollback',
+      serializeRequested: async () => ({
+        data: '',
+        scrollbackAnsi: 'restored scrollback',
+        cols: 120,
+        rows: 40
+      })
+    })
+    expect(chunks).toBe('restored scrollback')
     expect(start.unavailable).toBeUndefined()
   })
 
