@@ -659,6 +659,8 @@ jobs:
           src/main/runtime/repo-worktree-admin-fingerprint.test.ts
           src/main/runtime/worktree-scan-admin-fingerprint-gate.test.ts
           src/shared/secure-file-fsync-flags.test.ts
+          src/main/ipc/pty-codex-account-attribution.test.ts
+          src/main/ipc/pty-spawn-env-codex-resume-provenance.test.ts
 
       # Why the :parallel variant: identical to build:release except the three
       # electron-vite targets overlap instead of running back to back. The Linux package
