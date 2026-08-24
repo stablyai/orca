@@ -7,6 +7,7 @@ import type { HostSectionRow } from '../../host-section-rows'
 import type { Worktree } from '../../../../../../shared/worktree/types'
 import { getWorktreeHostIdentity } from '../../../../../../shared/worktree/host-qualified-identity'
 import { useSidebarWorktreeSelection, type SidebarWorktreeSelection } from './use-selection'
+
 declare global {
   var IS_REACT_ACT_ENVIRONMENT: boolean | undefined
 }
@@ -104,12 +105,14 @@ describe('useSidebarWorktreeSelection cannot trigger React #185 loop', () => {
     expect(latestSelection!.selectedWorktreeIds.size).toBe(1)
     expect(latestSelection!.selectedWorktreeIds.has(getWorktreeHostIdentity(wt1))).toBe(true)
 
-    // 3. Select wt-2 via context menu
+    // 3. Select wt-2 via context menu (replaces single selection)
     act(() => {
       const mouseEvent = {} as React.MouseEvent<HTMLElement>
       latestSelection!.selectForContextMenu(mouseEvent, wt2)
     })
     expect(latestSelection!.selectedWorktreeIds.has(getWorktreeHostIdentity(wt2))).toBe(true)
+    expect(latestSelection!.selectedWorktreeIds.size).toBe(1)
+    expect(latestSelection!.selectedWorktreeIds.has(getWorktreeHostIdentity(wt1))).toBe(false)
 
     // 4. Trigger outside pointerdown -> should clear selection
     act(() => {
@@ -137,7 +140,7 @@ describe('useSidebarWorktreeSelection cannot trigger React #185 loop', () => {
     }
     expect(latestSelection!.selectedWorktreeIds.size).toBe(0)
 
-    // 7. Stress test: rapid outside clicks and filtering cycles
+    // 7. Stress test: rapid outside clicks and filtering cycles while actively selecting
     for (let i = 0; i < 50; i += 1) {
       act(() => {
         document.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true }))
@@ -145,13 +148,22 @@ describe('useSidebarWorktreeSelection cannot trigger React #185 loop', () => {
     }
 
     for (let i = 0; i < 20; i += 1) {
+      const selectedWorktree = i % 2 === 0 ? wt2 : wt1
       act(() => {
-        root.render(
-          <SelectionHarness
-            sectionRows={makeSectionRows(i % 2 === 0 ? [wt1, wt2] : [wt2, wt3, wt4])}
-          />
-        )
+        latestSelection!.selectForContextMenu({} as React.MouseEvent<HTMLElement>, selectedWorktree)
       })
+      expect(
+        latestSelection!.selectedWorktreeIds.has(getWorktreeHostIdentity(selectedWorktree))
+      ).toBe(true)
+
+      const nextRows = i % 2 === 0 ? [wt1, wt3] : [wt2, wt4]
+      act(() => {
+        root.render(<SelectionHarness sectionRows={makeSectionRows(nextRows)} />)
+      })
+      expect(
+        latestSelection!.selectedWorktreeIds.has(getWorktreeHostIdentity(selectedWorktree))
+      ).toBe(false)
+      expect(latestSelection!.selectedWorktreeIds.size).toBe(0)
     }
 
     expect(renderCount).toBeLessThan(MAX_PASSES)

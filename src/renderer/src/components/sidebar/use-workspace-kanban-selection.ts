@@ -59,7 +59,7 @@ export function useWorkspaceKanbanSelection(
   const [selectedWorktreeIds, setSelectedWorktreeIds] = useState<Set<string>>(new Set())
   const [selectionAnchorId, setSelectionAnchorId] = useState<string | null>(null)
 
-  // Why memo: derive pruned selection during render so children never receive or commit stale unrendered IDs, without executing setState in the render body.
+  // Why memo: derive pruned selection during render so children never receive or commit IDs no longer present on the board (retaining query-hidden cards), without executing setState in the render body.
   const prunedSelection = useMemo(
     () =>
       open
