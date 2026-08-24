@@ -11,6 +11,7 @@ export type { CrashReportDiagnosticBundle } from './crash-reporting-diagnostic-b
 
 export type CrashReportStatus = 'pending' | 'sent' | 'dismissed'
 export type CrashReportSource = 'renderer' | 'child'
+export type CrashReportRendererKind = 'main-window' | 'browser-guest' | 'browser-popup'
 
 export type CrashReportDetailValue = string | number | boolean | null
 export type CrashReportBreadcrumbData = Record<string, CrashReportDetailValue>
@@ -41,6 +42,8 @@ export type CrashReportRecord = {
   arch: string
   electronVersion: string
   chromeVersion: string
+  /** Typed (not a details string) so prompt-eligibility policy can consult it. Absent for child processes and pre-existing records. */
+  rendererKind?: CrashReportRendererKind
   details: Record<string, CrashReportDetailValue>
   breadcrumbs?: CrashReportBreadcrumb[]
 }
@@ -159,6 +162,16 @@ export function isCrashReportReason(reason: string): boolean {
     'memory-eviction',
     'oom'
   ].includes(reason)
+}
+
+/**
+ * Embedded browser-content renderer deaths (guest pages and their popups) are
+ * page failures, not app crashes: they must stay recorded for triage, but must
+ * never drive the user-facing "Orca crashed" prompt. Reports without a
+ * renderer kind (child processes, pre-existing records) keep prompting.
+ */
+export function isUserPromptEligibleCrashReport(report: CrashReportRecord): boolean {
+  return report.rendererKind !== 'browser-guest' && report.rendererKind !== 'browser-popup'
 }
 
 export function isReactErrorBoundaryReport(report: CrashReportRecord): boolean {

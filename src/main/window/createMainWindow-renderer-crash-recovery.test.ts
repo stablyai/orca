@@ -171,6 +171,8 @@ describe('createMainWindow', () => {
     const windowHandlers: Record<string, (...args: any[]) => void> = {}
     const webContents = {
       id: 142,
+      isDestroyed: vi.fn(() => false),
+      getProcessId: vi.fn(() => 7),
       on: vi.fn((event, handler) => {
         windowHandlers[event] = handler
       }),
@@ -203,7 +205,9 @@ describe('createMainWindow', () => {
     const details = { reason: 'crashed', exitCode: 5 } as Electron.RenderProcessGoneDetails
     windowHandlers['render-process-gone']?.({} as never, details)
 
-    expect(onRendererProcessGone).toHaveBeenCalledWith(details, 142)
+    // Why: the render-process-host id read at event time is the dedupe
+    // identity for shared-process deaths (#15063).
+    expect(onRendererProcessGone).toHaveBeenCalledWith(details, 142, 7)
   })
 
   it('passes the renderer webContents id through crash recording and recovery callbacks', () => {
@@ -212,6 +216,8 @@ describe('createMainWindow', () => {
     const windowHandlers: Record<string, (...args: any[]) => void> = {}
     const webContents = {
       id: 424,
+      isDestroyed: vi.fn(() => false),
+      getProcessId: vi.fn(() => 9),
       on: vi.fn((event, handler) => {
         windowHandlers[event] = handler
       }),
@@ -251,7 +257,7 @@ describe('createMainWindow', () => {
       windowHandlers['render-process-gone']?.({} as never, details)
       vi.advanceTimersByTime(250)
 
-      expect(onRendererProcessGone).toHaveBeenCalledWith(details, 424)
+      expect(onRendererProcessGone).toHaveBeenCalledWith(details, 424, 9)
       expect(shouldRecoverRenderer).toHaveBeenCalledWith(details, 424)
     } finally {
       consoleError.mockRestore()
@@ -300,12 +306,69 @@ describe('createMainWindow', () => {
       } as Electron.RenderProcessGoneDetails
     )
 
+    // Why: this mock webContents cannot answer getProcessId; the death must
+    // still be forwarded with an unreadable (undefined) process identity.
     expect(onRendererProcessGone).toHaveBeenCalledWith(
       expect.objectContaining({ reason: 'killed', exitCode: 15 }),
-      expect.any(Number)
+      expect.any(Number),
+      undefined
     )
 
     consoleError.mockRestore()
+  })
+
+  it('still delivers the crash report when the window webContents getter is destroyed', () => {
+    const windowHandlers: Record<string, (...args: any[]) => void> = {}
+    const webContents = {
+      id: 142,
+      isDestroyed: vi.fn(() => false),
+      getProcessId: vi.fn(() => 7),
+      on: vi.fn((event, handler) => {
+        windowHandlers[event] = handler
+      }),
+      setZoomLevel: vi.fn(),
+      setBackgroundThrottling: vi.fn(),
+      invalidate: vi.fn(),
+      setWindowOpenHandler: vi.fn(),
+      send: vi.fn()
+    }
+    let windowDestroyed = false
+    const browserWindowInstance = {
+      // Why: BrowserWindow.webContents throws once the window is destroyed; the
+      // gone handler must read the emitting webContents, not this getter (#15063).
+      get webContents() {
+        if (windowDestroyed) {
+          throw new Error('Object has been destroyed')
+        }
+        return webContents
+      },
+      on: vi.fn(),
+      isDestroyed: vi.fn(() => windowDestroyed),
+      isMaximized: vi.fn(() => true),
+      isFullScreen: vi.fn(() => false),
+      getSize: vi.fn(() => [1200, 800]),
+      setSize: vi.fn(),
+      maximize: vi.fn(),
+      show: vi.fn(),
+      loadFile: vi.fn(),
+      loadURL: vi.fn()
+    }
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {})
+    browserWindowMock.mockImplementation(function () {
+      return browserWindowInstance
+    })
+    const onRendererProcessGone = vi.fn()
+
+    try {
+      createMainWindow(null, { onRendererProcessGone })
+
+      windowDestroyed = true
+      const details = { reason: 'killed', exitCode: 15 } as Electron.RenderProcessGoneDetails
+      expect(() => windowHandlers['render-process-gone']?.({} as never, details)).not.toThrow()
+      expect(onRendererProcessGone).toHaveBeenCalledWith(details, 142, 7)
+    } finally {
+      consoleError.mockRestore()
+    }
   })
 
   const createRendererRecoveryWindowHarness = () => {

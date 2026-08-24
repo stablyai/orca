@@ -11,7 +11,8 @@ export function buildSuppressedProcessGoneBreadcrumbData({
   reason,
   exitCode,
   expectedTeardown,
-  details
+  details,
+  webContentsId
 }: {
   source: 'renderer' | 'child'
   processType: string
@@ -19,6 +20,7 @@ export function buildSuppressedProcessGoneBreadcrumbData({
   exitCode: number | null
   expectedTeardown: ExpectedTeardownScope
   details: Record<string, unknown>
+  webContentsId?: number
 }): CrashReportBreadcrumbData {
   const breadcrumb: CrashReportBreadcrumbData = {
     source,
@@ -26,6 +28,11 @@ export function buildSuppressedProcessGoneBreadcrumbData({
     reason,
     exitCode,
     expectedTeardown
+  }
+  // Why: names which renderer a suppressed/deduped event belonged to now that
+  // several renderers (main window + browser guests) report concurrently.
+  if (typeof webContentsId === 'number') {
+    breadcrumb.webContentsId = webContentsId
   }
   const name = safeString(details.name)
   if (name) {

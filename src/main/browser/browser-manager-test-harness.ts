@@ -53,6 +53,7 @@ export function resetBrowserManagerState(): void {
   browserManager.unregisterAll()
   browserManager.setBrowserGuestStateChangedListener(null)
   browserManager.setDictationShortcutForwardingPredicate(null)
+  browserManager.setGuestRendererGoneReporter(null)
   browserManager.setSettingsResolver(() => ({}))
 }
 

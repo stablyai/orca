@@ -349,7 +349,12 @@ import {
   shouldRecoverRendererAfterProcessGone,
   type ExpectedTeardownScope
 } from './crash-reporting/process-gone-classification'
-import { recordProcessGoneCrash as recordProcessGoneCrashEvent } from './crash-reporting/process-gone-recorder'
+import {
+  recordProcessGoneCrash as recordProcessGoneCrashEvent,
+  type ProcessGoneCrashDetails
+} from './crash-reporting/process-gone-recorder'
+import { buildGuestRendererGoneReporter } from './crash-reporting/guest-renderer-gone-reporter'
+import type { ProcessGoneRendererIdentity } from './crash-reporting/process-gone-renderer-identity'
 import { startCrashpadCapture } from './crash-reporting/crashpad-capture'
 import { startPreGoneProcessMetricsSampling } from './crash-reporting/process-gone-diagnostics'
 import { resolveExpectedTeardownScope } from './crash-reporting/expected-teardown-state'
@@ -1457,16 +1462,19 @@ function openMainWindow(options: { revealOnDidFinishLoad?: boolean } = {}): Brow
       isQuitting = false
       clearExpectedRendererReload()
     },
-    onRendererProcessGone: (details, webContentsId) => {
+    onRendererProcessGone: (details, webContentsId, rendererProcessId) => {
       recordProcessGoneCrash(
         'renderer',
         'renderer',
         details.reason,
         details.exitCode ?? null,
         {
-          processType: 'renderer'
+          processType: 'renderer',
+          rendererKind: 'main-window',
+          webContentsId,
+          ...(rendererProcessId !== undefined ? { rendererProcessId } : {})
         },
-        webContentsId
+        { webContentsId, rendererProcessId }
       )
     },
     shouldRecoverRenderer: (details, webContentsId) =>
@@ -1896,16 +1904,21 @@ function recordProcessGoneCrash(
   processType: string,
   reason: string,
   exitCode: number | null,
-  details: Record<string, unknown>,
-  webContentsId?: number
+  details: ProcessGoneCrashDetails,
+  // Why: two positional optional numbers let a caller transpose the ids silently (#15063).
+  rendererIdentity?: ProcessGoneRendererIdentity
 ): void {
   recordProcessGoneCrashEvent(crashReports, {
     source,
     processType,
     reason,
     exitCode,
-    expectedTeardown: getExpectedTeardownScope(webContentsId),
-    details
+    expectedTeardown: getExpectedTeardownScope(rendererIdentity?.webContentsId),
+    details,
+    ...(rendererIdentity !== undefined ? { webContentsId: rendererIdentity.webContentsId } : {}),
+    ...(rendererIdentity?.rendererProcessId !== undefined
+      ? { rendererProcessId: rendererIdentity.rendererProcessId }
+      : {})
   })
 }
 
@@ -3032,6 +3045,11 @@ void app.whenReady().then(async () => {
   // Why: process-gone metrics only see survivors; retain a recent whole-app
   // snapshot for comparison in crash reports.
   startPreGoneProcessMetricsSampling()
+  // Why: only the main window's render-process-gone was wired to the recorder,
+  // so embedded-browser guest renderer deaths left zero trace (#15052).
+  browserManager.setGuestRendererGoneReporter(
+    buildGuestRendererGoneReporter(recordProcessGoneCrash)
+  )
   app.on('child-process-gone', (_event, details) => {
     recordProcessGoneCrash('child', details.type, details.reason, details.exitCode ?? null, {
       name: details.name,

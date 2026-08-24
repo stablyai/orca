@@ -4,7 +4,8 @@ import {
   isCrashReportReason,
   sanitizeCrashReportDetails,
   sanitizeCrashReportString,
-  type CrashReportBreadcrumbData
+  type CrashReportBreadcrumbData,
+  type CrashReportRendererKind
 } from '../../shared/crash-reporting'
 import { decodePosixWaitStatus, describePosixWaitStatus } from '../../shared/posix-wait-status'
 import type { CrashReportStore } from './crash-report-store'
@@ -34,13 +35,22 @@ import {
 import { minidumpSignatureDetails } from './minidump-crash-signature'
 import { flushActiveSink, startSpan } from '../observability/tracer'
 
+/** rendererKind is typed here so it can be promoted onto the report record for prompt-eligibility policy, never string-matched out of details. */
+export type ProcessGoneCrashDetails = Record<string, unknown> & {
+  rendererKind?: CrashReportRendererKind
+}
+
 export type ProcessGoneCrashEvent = {
   source: ProcessGoneSource
   processType: string
   reason: string
   exitCode: number | null
   expectedTeardown: ExpectedTeardownScope
-  details: Record<string, unknown>
+  details: ProcessGoneCrashDetails
+  /** Which webContents observed the death — evidence for attribution, never dedupe identity (#15063). */
+  webContentsId?: number
+  /** Render-process-host id of the process that died, so concurrent deaths dedupe apart (#15052) while shared-process observers coalesce (#15063). */
+  rendererProcessId?: number
 }
 
 type CrashReportRecorderStore = Pick<CrashReportStore, 'record' | 'attachDetails'>
@@ -196,9 +206,25 @@ export function recordProcessGoneCrash(
     return
   }
 
-  const key = getProcessGoneDedupeKey(event.source, event.processType, event.reason, event.exitCode)
+  const key = getProcessGoneDedupeKey(
+    event.source,
+    event.processType,
+    event.reason,
+    event.exitCode,
+    event.rendererProcessId ?? null
+  )
   const claim = dedupe.tryClaim(key)
   if (!claim) {
+    // Why: a deduped drop was a bare return with no trace, indistinguishable
+    // from a wiring gap. Coalesce per dedupe key so one death's multi-reason
+    // burst costs one breadcrumb instead of flooding the 30-entry ring.
+    const dedupedData = processGoneBreadcrumbData(event)
+    recordCoalescedDurableCrashBreadcrumb({
+      name: 'process_gone_deduped',
+      data: dedupedData,
+      coalesceKey: key,
+      minIntervalMs: SUPPRESSED_PROCESS_GONE_COALESCE_MS
+    })
     return
   }
   const mainProcessLifecycle = getMainProcessLifecycleIdentity()
@@ -215,6 +241,12 @@ export function recordProcessGoneCrash(
       'crash.source': event.source,
       'crash.process_type': event.processType,
       'crash.reason': event.reason,
+      ...(event.webContentsId !== undefined
+        ? { 'crash.web_contents_id': event.webContentsId }
+        : {}),
+      ...(event.rendererProcessId !== undefined
+        ? { 'crash.renderer_process_id': event.rendererProcessId }
+        : {}),
       ...(event.exitCode !== null ? { 'crash.exit_code': event.exitCode } : {}),
       ...decodedExitCodeAttribute(event),
       'app.version': app.getVersion(),
@@ -251,6 +283,11 @@ export function recordProcessGoneCrash(
       arch: process.arch,
       electronVersion: process.versions.electron ?? 'unknown',
       chromeVersion: process.versions.chrome ?? 'unknown',
+      // Why: prompt eligibility must not depend on parsing details; the kind
+      // rides the record as a typed field while details keep the display copy.
+      ...(event.details.rendererKind !== undefined
+        ? { rendererKind: event.details.rendererKind }
+        : {}),
       details: crashDetails,
       breadcrumbs
     })

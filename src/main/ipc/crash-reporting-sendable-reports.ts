@@ -1,3 +1,7 @@
+import {
+  isUserPromptEligibleCrashReport,
+  type CrashReportRecord
+} from '../../shared/crash-reporting'
 import type { CrashReportStore } from '../crash-reporting/crash-report-store'
 
 export const inFlightSubmissions = new Set<string>()
@@ -19,13 +23,31 @@ export function rememberSubmittedReportId(reportId: string): void {
   }
 }
 
+function latestUnsubmittedPendingReport(reports: CrashReportRecord[]): CrashReportRecord | null {
+  return (
+    reports.find((report) => report.status === 'pending' && !submittedReportIds.has(report.id)) ??
+    null
+  )
+}
+
+/**
+ * Feeds the startup "Orca crashed" prompt, so this is the prompt-eligibility
+ * gate: embedded browser-content renderer deaths stay recorded (and reachable
+ * through listRecent/getById/Help-menu paths) but are skipped here — a web
+ * page crashing its own renderer must not read as an app crash. Skipping also
+ * keeps a guest death from shadowing an eligible report recorded before it.
+ */
 export async function getLatestPendingReport(
   store: CrashReportStore
 ): Promise<Awaited<ReturnType<CrashReportStore['getLatestPending']>>> {
   const reports = await store.listRecent()
   return (
-    reports.find((report) => report.status === 'pending' && !submittedReportIds.has(report.id)) ??
-    null
+    reports.find(
+      (report) =>
+        report.status === 'pending' &&
+        !submittedReportIds.has(report.id) &&
+        isUserPromptEligibleCrashReport(report)
+    ) ?? null
   )
 }
 
@@ -51,5 +73,10 @@ export async function getRequestedCrashReport(
   }
   // Why: Help > Report Crash can intentionally submit without a report ID.
   // Do not replace that uncaptured report with a pending crash that appears later.
-  return args ? null : getLatestPendingReport(store)
+  if (args) {
+    return null
+  }
+  // Why: this fallback serves user-invoked Help-menu diagnostics, not the crash
+  // prompt, so prompt-suppressed guest-renderer reports stay reachable here.
+  return latestUnsubmittedPendingReport(await store.listRecent())
 }

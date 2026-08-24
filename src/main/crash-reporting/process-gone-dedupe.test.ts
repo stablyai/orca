@@ -58,20 +58,26 @@ describe('ProcessGoneDedupe', () => {
     const dedupe = new ProcessGoneDedupe({ windowMs: 2_000 })
 
     expect(
-      dedupe.shouldRecord(getProcessGoneDedupeKey('renderer', 'renderer', 'crashed', -36861), 1_000)
+      dedupe.shouldRecord(
+        getProcessGoneDedupeKey('renderer', 'renderer', 'crashed', -36861, 4),
+        1_000
+      )
     ).toBe(true)
     expect(
-      dedupe.shouldRecord(getProcessGoneDedupeKey('renderer', 'renderer', 'oom', -536870904), 1_284)
+      dedupe.shouldRecord(
+        getProcessGoneDedupeKey('renderer', 'renderer', 'oom', -536870904, 4),
+        1_284
+      )
     ).toBe(false)
     expect(
       dedupe.shouldRecord(
-        getProcessGoneDedupeKey('renderer', 'renderer', 'launch-failed', 18),
+        getProcessGoneDedupeKey('renderer', 'renderer', 'launch-failed', 18, 4),
         1_898
       )
     ).toBe(false)
     expect(
       dedupe.shouldRecord(
-        getProcessGoneDedupeKey('renderer', 'renderer', 'launch-failed', 18),
+        getProcessGoneDedupeKey('renderer', 'renderer', 'launch-failed', 18, 4),
         3_000
       )
     ).toBe(true)

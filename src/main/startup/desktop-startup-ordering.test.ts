@@ -213,7 +213,11 @@ describe('startup ordering', () => {
     )
     expect(recorderStart).toBeGreaterThanOrEqual(0)
     expect(recorderEnd).toBeGreaterThan(recorderStart)
-    expect(recorder).toContain('expectedTeardown: getExpectedTeardownScope(webContentsId)')
+    // Why: token-anchored — the claim is scope-from-webContentsId with the single-arg
+    // (default includeSystemSessionEnd) call; exact text broke on the #15063 identity refactor.
+    expect(recorder).toMatch(
+      /expectedTeardown:\s*getExpectedTeardownScope\(\s*[\w$?.]*webContentsId\s*\)/
+    )
   })
 
   it('attaches renderer services before starting the TCC prompt watcher', () => {

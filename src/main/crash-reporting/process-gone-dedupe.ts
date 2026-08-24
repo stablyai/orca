@@ -80,12 +80,23 @@ export function getProcessGoneDedupeKey(
   source: 'renderer' | 'child',
   processType: string,
   reason: string,
-  exitCode: number | null
+  exitCode: number | null,
+  rendererProcessId?: number | null
 ): string {
   // Why: one renderer death can surface as crashed/oom/launch-failed in a
-  // burst. Coalesce that prompt noise while keeping child identities precise.
+  // burst. Coalesce that prompt noise per renderer process — concurrent deaths
+  // of distinct renderers (main window + browser guests, #15052) must each
+  // report — while keeping child identities precise. The identity is the
+  // render-process-host id, not the webContents id: several webContents can
+  // share one OS renderer process (same-site popups, #15063), and keying on
+  // webContents filed one report per observer of a single death.
   if (source === 'renderer') {
-    return `${source}:${processType}`
+    // Why: an unreadable identity (webContents destroyed mid-event) buckets as
+    // 'unknown'. Every observation of one death goes unreadable together, so
+    // its burst still coalesces; collapsing two distinct concurrent deaths
+    // would need both unreadable inside the 2s window — degrading to the
+    // pre-#15052 missed-report, never to the duplicate noise #14667 removed.
+    return `${source}:${processType}:rph:${rendererProcessId ?? 'unknown'}`
   }
   return `${source}:${processType}:${reason}:${exitCode ?? 'null'}`
 }
