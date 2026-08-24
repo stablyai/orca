@@ -8,21 +8,20 @@ import type { OrchestrationDb } from '../orchestration-db'
 
 // ── Tasks ──
 
-export function createTask(
-  this: OrchestrationDb,
-  task: {
-    spec: string
-    taskTitle?: string
-    displayName?: string
-    deps?: string[]
-    parentId?: string
-    createdByTerminalHandle?: string
-    createdByPaneKey?: string
-    createdByProcessIncarnation?: string
-    createdByRunGeneration?: number
-    runId?: string
-  }
-): TaskRow {
+export type CreateTaskInput = {
+  spec: string
+  taskTitle?: string
+  displayName?: string
+  deps?: string[]
+  parentId?: string
+  createdByTerminalHandle?: string
+  createdByPaneKey?: string
+  createdByProcessIncarnation?: string
+  createdByRunGeneration?: number
+  runId?: string
+}
+
+export function createTask(this: OrchestrationDb, task: CreateTaskInput): TaskRow {
   const runId = task.runId ?? LEGACY_RUN_ID
   this.requireRun(runId)
   if (task.parentId) {

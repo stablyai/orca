@@ -1,7 +1,9 @@
 import { isTuiAgent } from '../../../../shared/tui-agent-config'
 import type { TuiAgent } from '../../../../shared/tui-agent'
 import type { OrcaRuntimeService } from '../../orca-runtime'
+import type { OrchestrationDb } from '../../orchestration/db'
 import { OrchestrationError } from '../../orchestration/orchestration-error'
+import type { RunRow, TaskRow } from '../../orchestration/types'
 import type { FederationAttachStartInput } from './orchestration-federation-start-schema'
 import {
   assertWorkerLaunchPreferencesCreateTerminal,
@@ -11,6 +13,25 @@ import {
 import type { WorkerStartInput } from './orchestration-worker-start-schema'
 
 type WorkerStartLaunch = ReturnType<typeof resolveWorkerLaunchPreferences>
+
+export function requireExistingWorkerStartTask(args: {
+  db: OrchestrationDb
+  params: WorkerStartInput
+  run: RunRow
+}): TaskRow | undefined {
+  const { db, params, run } = args
+  if (!params.task) {
+    return undefined
+  }
+  const task = db.getTask(params.task)
+  if (!task || task.run_id !== run.id) {
+    throw new OrchestrationError(
+      'task_not_found',
+      `Task ${params.task} was not found in Run ${run.id}.`
+    )
+  }
+  return task
+}
 
 export function validateFederatedWorkerStartPlacement(
   params: WorkerStartInput,

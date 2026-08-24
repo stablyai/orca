@@ -8,7 +8,10 @@ vi.mock('../selectors', () => ({ getTerminalHandle: vi.fn() }))
 
 import { ORCHESTRATION_HANDLERS } from './orchestration'
 import { printResult } from '../format'
-import { ORCHESTRATION_WORKER_LAUNCH_PREFERENCES_RUNTIME_CAPABILITY } from '../../shared/protocol-version'
+import {
+  ORCHESTRATION_WORKER_LAUNCH_PREFERENCES_RUNTIME_CAPABILITY,
+  ORCHESTRATION_WORKER_START_SPEC_RUNTIME_CAPABILITY
+} from '../../shared/protocol-version'
 
 describe('orchestration worker-start CLI contract', () => {
   beforeEach(() => {
@@ -140,6 +143,223 @@ describe('orchestration worker-start CLI contract', () => {
     ).rejects.toMatchObject({ code: 'incompatible_runtime' })
 
     expect(callMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('capability-gates --spec and forwards the inline task fields', async () => {
+    callMock
+      .mockResolvedValueOnce({
+        result: { capabilities: [ORCHESTRATION_WORKER_START_SPEC_RUNTIME_CAPABILITY] }
+      })
+      .mockResolvedValueOnce({
+        result: {
+          runId: 'run_1',
+          taskId: 'task_created',
+          dispatchId: 'ctx_1',
+          state: 'ready',
+          effects: [],
+          residualResources: []
+        }
+      })
+
+    await invokeWorkerStart(
+      new Map<string, string | boolean>([
+        ['spec', 'Inline worker task'],
+        ['task-title', 'Inline title'],
+        ['agent', 'codex'],
+        ['from', 'term_coord']
+      ])
+    )
+
+    expect(callMock).toHaveBeenNthCalledWith(1, 'status.get')
+    expect(callMock).toHaveBeenNthCalledWith(
+      2,
+      'orchestration.workerStart',
+      expect.objectContaining({
+        task: undefined,
+        spec: 'Inline worker task',
+        taskTitle: 'Inline title'
+      }),
+      { orchestrationRequestId: expect.stringMatching(/^worker_start_spec_[0-9a-f]{32}$/) }
+    )
+  })
+
+  it('reuses one request id across identical --spec runs so a blind re-run replays', async () => {
+    const capabilities = {
+      result: { capabilities: [ORCHESTRATION_WORKER_START_SPEC_RUNTIME_CAPABILITY] }
+    }
+    const started = {
+      result: {
+        runId: 'run_1',
+        taskId: 'task_created',
+        dispatchId: 'ctx_1',
+        state: 'ready',
+        effects: [],
+        residualResources: []
+      }
+    }
+    const specFlags = (): Map<string, string | boolean> =>
+      new Map<string, string | boolean>([
+        ['spec', 'Inline worker task'],
+        ['agent', 'codex'],
+        ['from', 'term_coord']
+      ])
+    callMock.mockResolvedValue(started).mockResolvedValueOnce(capabilities)
+    await invokeWorkerStart(specFlags())
+    const first = callMock.mock.calls[1]?.[2]?.orchestrationRequestId
+
+    callMock.mockReset()
+    callMock.mockResolvedValue(started).mockResolvedValueOnce(capabilities)
+    await invokeWorkerStart(specFlags())
+    const second = callMock.mock.calls[1]?.[2]?.orchestrationRequestId
+
+    expect(first).toBeTruthy()
+    expect(second).toBe(first)
+  })
+
+  it('gives a different --spec run its own request id', async () => {
+    const capabilities = {
+      result: { capabilities: [ORCHESTRATION_WORKER_START_SPEC_RUNTIME_CAPABILITY] }
+    }
+    const started = {
+      result: {
+        runId: 'run_1',
+        taskId: 'task_created',
+        dispatchId: 'ctx_1',
+        state: 'ready',
+        effects: [],
+        residualResources: []
+      }
+    }
+    callMock.mockResolvedValue(started).mockResolvedValueOnce(capabilities)
+    await invokeWorkerStart(
+      new Map<string, string | boolean>([
+        ['spec', 'Inline worker task'],
+        ['agent', 'codex'],
+        ['from', 'term_coord']
+      ])
+    )
+    const first = callMock.mock.calls[1]?.[2]?.orchestrationRequestId
+
+    callMock.mockReset()
+    callMock.mockResolvedValue(started).mockResolvedValueOnce(capabilities)
+    await invokeWorkerStart(
+      new Map<string, string | boolean>([
+        ['spec', 'A different worker task'],
+        ['agent', 'codex'],
+        ['from', 'term_coord']
+      ])
+    )
+
+    expect(callMock.mock.calls[1]?.[2]?.orchestrationRequestId).not.toBe(first)
+  })
+
+  it('lets an explicit --retry-request override the derived --spec request id', async () => {
+    callMock
+      .mockResolvedValueOnce({
+        result: { capabilities: [ORCHESTRATION_WORKER_START_SPEC_RUNTIME_CAPABILITY] }
+      })
+      .mockResolvedValueOnce({
+        result: {
+          runId: 'run_1',
+          taskId: 'task_created',
+          dispatchId: 'ctx_1',
+          state: 'ready',
+          effects: [],
+          residualResources: []
+        }
+      })
+
+    await invokeWorkerStart(
+      new Map<string, string | boolean>([
+        ['spec', 'Inline worker task'],
+        ['agent', 'codex'],
+        ['from', 'term_coord'],
+        ['retry-request', 'explicit_request']
+      ])
+    )
+
+    expect(callMock).toHaveBeenNthCalledWith(2, 'orchestration.workerStart', expect.anything(), {
+      orchestrationRequestId: 'explicit_request'
+    })
+  })
+
+  it('leaves the --task path on a per-invocation request id', async () => {
+    callMock.mockResolvedValue({
+      result: {
+        runId: 'run_1',
+        taskId: 'task_1',
+        dispatchId: 'ctx_1',
+        state: 'ready',
+        effects: [],
+        residualResources: []
+      }
+    })
+
+    await invokeWorkerStart(
+      new Map<string, string | boolean>([
+        ['task', 'task_1'],
+        ['agent', 'codex'],
+        ['from', 'term_coord']
+      ])
+    )
+
+    expect(callMock).toHaveBeenCalledWith('orchestration.workerStart', expect.anything())
+  })
+
+  it('fails before worker-start when the runtime would strip --spec', async () => {
+    callMock.mockResolvedValueOnce({ result: { capabilities: [] } })
+
+    await expect(
+      invokeWorkerStart(
+        new Map<string, string | boolean>([
+          ['spec', 'Inline worker task'],
+          ['agent', 'codex'],
+          ['from', 'term_coord']
+        ])
+      )
+    ).rejects.toMatchObject({ code: 'incompatible_runtime' })
+
+    expect(callMock).toHaveBeenCalledTimes(1)
+  })
+
+  it.each([
+    [
+      'both --task and --spec',
+      new Map<string, string | boolean>([
+        ['task', 'task_1'],
+        ['spec', 'Inline worker task'],
+        ['agent', 'codex'],
+        ['from', 'term_coord']
+      ])
+    ],
+    [
+      'neither --task nor --spec',
+      new Map<string, string | boolean>([
+        ['agent', 'codex'],
+        ['from', 'term_coord']
+      ])
+    ],
+    [
+      '--task-title without --spec',
+      new Map<string, string | boolean>([
+        ['task', 'task_1'],
+        ['task-title', 'Inline title'],
+        ['agent', 'codex'],
+        ['from', 'term_coord']
+      ])
+    ],
+    [
+      '--retry-of with --spec',
+      new Map<string, string | boolean>([
+        ['spec', 'Inline worker task'],
+        ['retry-of', 'ctx_1'],
+        ['agent', 'codex'],
+        ['from', 'term_coord']
+      ])
+    ]
+  ])('rejects %s before any RPC call', async (_case, flags) => {
+    await expect(invokeWorkerStart(flags)).rejects.toMatchObject({ code: 'invalid_argument' })
+    expect(callMock).not.toHaveBeenCalled()
   })
 
   it('sets an unsuccessful exit code for failed and unknown receipts', async () => {

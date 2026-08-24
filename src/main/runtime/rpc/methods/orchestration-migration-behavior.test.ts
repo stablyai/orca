@@ -186,7 +186,7 @@ describe('orchestration migration behavior', () => {
         runtime,
         db,
         runId: run.id,
-        task,
+        taskId: task.id,
         orchestrationMutation: {
           callerFingerprint: 'caller',
           requestId: 'remote_start',
@@ -233,7 +233,7 @@ describe('orchestration migration behavior', () => {
         runtime,
         db,
         runId: run.id,
-        task,
+        taskId: task.id,
         orchestrationMutation: {
           callerFingerprint: 'caller',
           requestId: 'remote_start',

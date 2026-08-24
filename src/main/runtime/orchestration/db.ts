@@ -5,6 +5,7 @@ export {
   LEGACY_RUN_ID
 } from './db/contract-constants'
 export type { RunListPage, TaskRuntimeLineageRow } from './db/run-list-page'
+export type { CreateTaskInput } from './db/tasks/task-store'
 export { ORCHESTRATION_DELIVERY_BATCH_LIMIT } from './db/messages/mailbox-routing-page'
 export { DISPATCH_CONTEXT_CLAIM_SQL } from './db/dispatch-context/dispatch-context-store'
 export type {

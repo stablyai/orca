@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto'
+import { canonicalizeJson } from '../../../shared/canonical-json'
 import { isOrchestrationMutation } from '../../../shared/orchestration-rpc-contract'
 import { parsePaneKey } from '../../../shared/stable-pane-id'
 import type { OrcaRuntimeService } from '../orca-runtime'
@@ -35,7 +36,7 @@ export class OrchestrationMutationExecutor {
     const payloadHash = createHash('sha256')
       .update(
         JSON.stringify(
-          canonicalize({
+          canonicalizeJson({
             method: request.method,
             params: replayStableCallerParams(this.runtime, params)
           })
@@ -160,23 +161,6 @@ function replayStableCallerParams(runtime: OrcaRuntimeService, params: unknown):
     if (paneKey) {
       const leafId = parsePaneKey(paneKey)?.leafId
       result[property] = leafId ? { paneLeafId: leafId } : { paneKey }
-    }
-  }
-  return result
-}
-
-function canonicalize(value: unknown): unknown {
-  if (Array.isArray(value)) {
-    return value.map(canonicalize)
-  }
-  if (!value || typeof value !== 'object') {
-    return value
-  }
-  const source = value as Record<string, unknown>
-  const result: Record<string, unknown> = {}
-  for (const key of Object.keys(source).sort()) {
-    if (source[key] !== undefined) {
-      result[key] = canonicalize(source[key])
     }
   }
   return result

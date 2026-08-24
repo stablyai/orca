@@ -1,4 +1,5 @@
 /* eslint-disable max-lines -- Why: orchestration CLI handlers share flag-parsing helpers and dispatch/preamble logic; splitting by verb would fragment the RuntimeClient call shape without reducing complexity. */
+import { createHash } from 'node:crypto'
 import type { CommandHandler } from '../dispatch'
 import type { RuntimeClient } from '../runtime-client'
 import { printResult } from '../format'
@@ -15,6 +16,8 @@ import {
   resolveOrchestrationAskClientTimeoutMs
 } from '../../shared/orchestration-ask-timeout'
 import { abbreviateOrchestrationTasks } from '../../shared/orchestration-task-summary'
+import { canonicalizeJson } from '../../shared/canonical-json'
+import { workerStartTaskSourceError } from '../../shared/orchestration-worker-start-task-source'
 import { parsePositiveSafeIntegerText } from '../../shared/timer-delay'
 import type {
   OrchestrationWorkerReadResult,
@@ -22,7 +25,10 @@ import type {
 } from '../../shared/orchestration-worker-output'
 import type { NativeChatMessage } from '../../shared/native-chat-types'
 import type { RuntimeStatus, RuntimeTerminalRead } from '../../shared/runtime-types'
-import { ORCHESTRATION_WORKER_LAUNCH_PREFERENCES_RUNTIME_CAPABILITY } from '../../shared/protocol-version'
+import {
+  ORCHESTRATION_WORKER_LAUNCH_PREFERENCES_RUNTIME_CAPABILITY,
+  ORCHESTRATION_WORKER_START_SPEC_RUNTIME_CAPABILITY
+} from '../../shared/protocol-version'
 import { orchestrationMigrationData } from '../../shared/orchestration-rpc-contract'
 import { ORCHESTRATION_RUN_PAGE_LIMIT } from '../../shared/orchestration-run-pagination'
 import {
@@ -410,17 +416,29 @@ function callMutation<TResult>(
   flags: Map<string, string | boolean>,
   method: string,
   params: unknown,
-  options?: { timeoutMs?: number; orchestrationCapability?: string }
+  options?: { timeoutMs?: number; orchestrationCapability?: string; defaultRequestId?: string }
 ) {
-  const requestId = getOptionalStringFlag(flags, 'retry-request')
+  const { defaultRequestId, ...callOptions } = options ?? {}
+  const requestId = getOptionalStringFlag(flags, 'retry-request') ?? defaultRequestId
   const result = requestId
-    ? client.call<TResult>(method, params, { ...options, orchestrationRequestId: requestId })
-    : options
-      ? client.call<TResult>(method, params, options)
+    ? client.call<TResult>(method, params, { ...callOptions, orchestrationRequestId: requestId })
+    : Object.keys(callOptions).length > 0
+      ? client.call<TResult>(method, params, callOptions)
       : client.call<TResult>(method, params)
   return result.catch((error) => {
     throw orchestrationMutationRecoveryError(error)
   })
+}
+
+// Why: --task re-runs are already at-most-once (the Task leaves 'ready' on dispatch), but
+// --spec mints a fresh Task every call. Deriving the request id from the payload makes a blind
+// re-run - an agent retrying after a Bash timeout - replay the original receipt instead of
+// starting a second worktree and agent. Pass --retry-request to force a distinct start.
+function deterministicWorkerStartRequestId(params: unknown): string {
+  const digest = createHash('sha256')
+    .update(JSON.stringify(canonicalizeJson(params)))
+    .digest('hex')
+  return `worker_start_spec_${digest.slice(0, 32)}`
 }
 
 type LegacyWorkerReadResult = {
@@ -880,9 +898,22 @@ export const ORCHESTRATION_HANDLERS: Record<string, CommandHandler> = {
   'orchestration worker-start': async ({ flags, client, cwd, json }) => {
     const model = getOptionalStringFlag(flags, 'model')
     const effort = getOptionalStringFlag(flags, 'effort')
-    if (model || effort) {
+    const task = getOptionalStringFlag(flags, 'task')
+    const spec = getOptionalStringFlag(flags, 'spec')
+    const taskTitle = getOptionalStringFlag(flags, 'task-title')
+    const taskSourceError = workerStartTaskSourceError({
+      task,
+      spec,
+      taskTitle,
+      retryOf: getOptionalStringFlag(flags, 'retry-of')
+    })
+    if (taskSourceError) {
+      throw new RuntimeClientError('invalid_argument', taskSourceError)
+    }
+    if (model || effort || spec) {
       const status = await client.call<RuntimeStatus>('status.get')
       if (
+        (model || effort) &&
         !status.result.capabilities?.includes(
           ORCHESTRATION_WORKER_LAUNCH_PREFERENCES_RUNTIME_CAPABILITY
         )
@@ -892,19 +923,20 @@ export const ORCHESTRATION_HANDLERS: Record<string, CommandHandler> = {
           'The connected Orca runtime does not support worker model or effort overrides. Update or restart Orca and try again.'
         )
       }
+      if (
+        spec &&
+        !status.result.capabilities?.includes(ORCHESTRATION_WORKER_START_SPEC_RUNTIME_CAPABILITY)
+      ) {
+        throw new RuntimeClientError(
+          'incompatible_runtime',
+          'The connected Orca runtime does not support worker-start --spec. Update or restart Orca and try again.'
+        )
+      }
     }
-    const result = await callMutation<{
-      runId: string
-      taskId: string
-      dispatchId: string
-      state: string
-      failedStage?: string
-      lastError?: string
-      warning?: string
-      effects: unknown[]
-      residualResources: unknown[]
-    }>(client, flags, 'orchestration.workerStart', {
-      task: getRequiredStringFlag(flags, 'task'),
+    const workerStartParams = {
+      task,
+      spec,
+      taskTitle,
       on: getOptionalStringFlag(flags, 'on'),
       worktree: getOptionalStringFlag(flags, 'worktree'),
       name: getOptionalStringFlag(flags, 'name'),
@@ -922,6 +954,19 @@ export const ORCHESTRATION_HANDLERS: Record<string, CommandHandler> = {
       run: getOptionalStringFlag(flags, 'run'),
       from: await resolveCoordinatorTerminalHandle(flags, cwd, client),
       devMode: isDevCliInvocation()
+    }
+    const result = await callMutation<{
+      runId: string
+      taskId: string
+      dispatchId: string
+      state: string
+      failedStage?: string
+      lastError?: string
+      warning?: string
+      effects: unknown[]
+      residualResources: unknown[]
+    }>(client, flags, 'orchestration.workerStart', workerStartParams, {
+      defaultRequestId: spec ? deterministicWorkerStartRequestId(workerStartParams) : undefined
     })
     if (result.result.state !== 'ready') {
       process.exitCode = 1
