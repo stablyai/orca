@@ -73,6 +73,10 @@ import {
   type TerminalTabTitleUpdate
 } from './terminal-tab-title-batch'
 import {
+  adoptTerminalTabOwnerMetadataOnlyBuckets,
+  getTerminalTabOwnerWorktreeId
+} from './terminal-tab-owner-index'
+import {
   dedupeTabOrder,
   ensureGroup,
   findTabByEntityInGroup,
@@ -307,26 +311,6 @@ function buildRuntimeSessionPlaceholders({
     nextWorktreesByRepo[parsed.repoId] = [...current, placeholder]
   }
   return { repos: nextRepos, worktreesByRepo: nextWorktreesByRepo }
-}
-
-let terminalTabOwnerCacheSource: Record<string, TerminalTab[]> | null = null
-let terminalTabOwnerCache = new Map<string, string>()
-
-function getTerminalTabOwnerWorktreeId(
-  tabsByWorktree: Record<string, TerminalTab[]>,
-  tabId: string
-): string | null {
-  if (terminalTabOwnerCacheSource !== tabsByWorktree) {
-    const nextCache = new Map<string, string>()
-    for (const [worktreeId, tabs] of Object.entries(tabsByWorktree)) {
-      for (const tab of tabs) {
-        nextCache.set(tab.id, worktreeId)
-      }
-    }
-    terminalTabOwnerCacheSource = tabsByWorktree
-    terminalTabOwnerCache = nextCache
-  }
-  return terminalTabOwnerCache.get(tabId) ?? null
 }
 
 function getTabIdFromPaneKey(paneKey: string): string | null {
@@ -1959,11 +1943,7 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
 
   updateTabTitle: (tabId, title) => {
     set((state) => {
-      const ownerWorktreeId = getTerminalTabOwnerWorktreeId(state.tabsByWorktree, tabId)
-      const ownerByTabId = ownerWorktreeId
-        ? new Map([[tabId, ownerWorktreeId]])
-        : new Map<string, string>()
-      const result = applyTerminalTabTitleUpdates(state, [{ tabId, title }], ownerByTabId)
+      const result = applyTerminalTabTitleUpdates(state, [{ tabId, title }])
       if (result.runtimeGraphChanged) {
         scheduleRuntimeGraphSync()
       }
@@ -2000,13 +1980,17 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
         return s
       }
       const ownerTabs = tabs.map((tab) => (tab.id === tabId ? { ...tab, aiVaultTitle } : tab))
+      const nextTabsByWorktree = { ...s.tabsByWorktree, [ownerWorktreeId]: ownerTabs }
       const unifiedTabs = s.unifiedTabsByWorktree[ownerWorktreeId] ?? []
       const nextUnifiedTabs = unifiedTabs.map((tab) =>
         tab.contentType === 'terminal' && tab.entityId === tabId ? { ...tab, aiVaultTitle } : tab
       )
+      adoptTerminalTabOwnerMetadataOnlyBuckets(s.tabsByWorktree, nextTabsByWorktree, [
+        ownerWorktreeId
+      ])
       scheduleRuntimeGraphSync()
       return {
-        tabsByWorktree: { ...s.tabsByWorktree, [ownerWorktreeId]: ownerTabs },
+        tabsByWorktree: nextTabsByWorktree,
         unifiedTabsByWorktree: {
           ...s.unifiedTabsByWorktree,
           [ownerWorktreeId]: nextUnifiedTabs
@@ -2036,11 +2020,7 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
       return
     }
     set((latestState) => {
-      const result = applyGeneratedTabTitleUpdates(
-        latestState,
-        [{ paneKey, prompt, options }],
-        new Map([[tabId, ownerWorktreeId]])
-      )
+      const result = applyGeneratedTabTitleUpdates(latestState, [{ paneKey, prompt, options }])
       if (result.runtimeGraphChanged) {
         scheduleRuntimeGraphSync()
       }
