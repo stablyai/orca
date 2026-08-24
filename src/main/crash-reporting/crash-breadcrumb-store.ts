@@ -164,22 +164,29 @@ export function recordCoalescedCrashBreadcrumb({
 /** Whether any future snapshot can still include this crumb. The ring only
  *  appends and the retained map only grows toward its cap, so an entry pushed
  *  past the snapshot budget is invisible forever, not just for now. */
-function isCoalescedCrumbStillInEvidence(crumb: CrashReportBreadcrumb): boolean {
-  const visibleFrom = breadcrumbs.length - (MAX_BREADCRUMBS - retainedBreadcrumbs.size)
-  const index = breadcrumbs.indexOf(crumb)
-  if (index !== -1 && index >= visibleFrom) {
+function isCoalescedCrumbStillInEvidence(
+  crumb: CrashReportBreadcrumb,
+  reporterOrigin?: string
+): boolean {
+  const retained = [...retainedBreadcrumbs.values()].filter((breadcrumb) =>
+    isVisibleToReporter(breadcrumb, reporterOrigin)
+  )
+  if (retained.some((retainedBreadcrumb) => retainedBreadcrumb === crumb)) {
     return true
   }
-  for (const retained of retainedBreadcrumbs.values()) {
-    if (retained === crumb) {
-      return true
-    }
-  }
-  return false
+  const visibleRecent = breadcrumbs.filter((breadcrumb) =>
+    isVisibleToReporter(breadcrumb, reporterOrigin)
+  )
+  return visibleRecent
+    .slice(-(MAX_BREADCRUMBS - retained.length))
+    .some((recentBreadcrumb) => recentBreadcrumb === crumb)
 }
 
 /** Fold a key's newest suppressed payload into the ring entry it owns. */
-function resolvePendingCoalescedBreadcrumb(state: CoalescedBreadcrumbState): void {
+function resolvePendingCoalescedBreadcrumb(
+  state: CoalescedBreadcrumbState,
+  reporterOrigin?: string
+): void {
   // `data` is optional, so the count—not pending payload presence—marks unresolved work.
   if (!state.emitted || state.suppressed <= state.resolved) {
     return
@@ -189,7 +196,7 @@ function resolvePendingCoalescedBreadcrumb(state: CoalescedBreadcrumbState): voi
   // then claim nothing — the burst vanishes from the record entirely. Drop the
   // handle (keeping `resolved` for folds that landed while it was live) so a
   // later emit or bounded cleanup can materialize the unclaimed repeats.
-  if (!isCoalescedCrumbStillInEvidence(state.emitted)) {
+  if (!isCoalescedCrumbStillInEvidence(state.emitted, reporterOrigin)) {
     state.emitted = undefined
     return
   }
@@ -208,7 +215,7 @@ function resolvePendingCoalescedBreadcrumb(state: CoalescedBreadcrumbState): voi
 /** Resolve into the owned crumb, or emit the unclaimed repeats before bounded
  *  cleanup drops an orphan's last accounting state. */
 function preservePendingCoalescedBreadcrumb(state: CoalescedBreadcrumbState): void {
-  resolvePendingCoalescedBreadcrumb(state)
+  resolvePendingCoalescedBreadcrumb(state, state.origin)
   const unresolved = state.suppressed - state.resolved
   if (state.emitted || unresolved <= 0) {
     return
@@ -222,9 +229,12 @@ function preservePendingCoalescedBreadcrumb(state: CoalescedBreadcrumbState): vo
   state.pending = undefined
 }
 
-function resolveAllPendingCoalescedBreadcrumbs(): void {
+function resolveAllPendingCoalescedBreadcrumbs(reporterOrigin?: string): void {
   for (const state of coalescedBreadcrumbs.values()) {
-    resolvePendingCoalescedBreadcrumb(state)
+    if (reporterOrigin && state.origin && state.origin !== reporterOrigin) {
+      continue
+    }
+    resolvePendingCoalescedBreadcrumb(state, reporterOrigin)
   }
 }
 
@@ -236,7 +246,7 @@ function isVisibleToReporter(
 }
 
 export function getCrashBreadcrumbSnapshot(reporterOrigin?: string): CrashReportBreadcrumb[] {
-  resolveAllPendingCoalescedBreadcrumbs()
+  resolveAllPendingCoalescedBreadcrumbs(reporterOrigin)
   // Why: long sessions must retain threshold profiles without growing the 30-entry budget.
   const retained = [...retainedBreadcrumbs.values()].filter((breadcrumb) =>
     isVisibleToReporter(breadcrumb, reporterOrigin)
