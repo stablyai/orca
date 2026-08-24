@@ -6,6 +6,7 @@ import { act, cleanup, render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Automation } from '../../../../shared/automations-types'
+import { i18n } from '@/i18n/i18n'
 import { AutomationDetail } from './AutomationDetail'
 import { AutomationPromptDisclosure } from './AutomationPromptDisclosure'
 
@@ -66,7 +67,8 @@ const detailCallbacks = {
 }
 
 describe('AutomationPromptDisclosure', () => {
-  beforeEach(() => {
+  beforeEach(async () => {
+    await i18n.changeLanguage('en')
     vi.stubGlobal('ResizeObserver', PromptResizeObserver)
     vi.spyOn(HTMLElement.prototype, 'clientHeight', 'get').mockImplementation(
       function (this: HTMLElement) {
@@ -85,11 +87,12 @@ describe('AutomationPromptDisclosure', () => {
     )
   })
 
-  afterEach(() => {
+  afterEach(async () => {
     cleanup()
     resizeCallback = null
     vi.restoreAllMocks()
     vi.unstubAllGlobals()
+    await i18n.changeLanguage('en')
   })
 
   it('leaves a short prompt fully readable without a disclosure control', () => {
@@ -98,6 +101,15 @@ describe('AutomationPromptDisclosure', () => {
 
     expect(screen.getByText('Synthetic short prompt.')).toBeVisible()
     expect(screen.queryByRole('button', { name: 'Show more' })).not.toBeInTheDocument()
+  })
+
+  it('labels the prompt correctly in Spanish', async () => {
+    promptNaturalHeight = 40
+    await i18n.changeLanguage('es')
+    render(<AutomationPromptDisclosure prompt="Synthetic short prompt." />)
+
+    expect(screen.getByText('Prompt')).toBeVisible()
+    expect(screen.queryByText('Inmediato')).not.toBeInTheDocument()
   })
 
   it('reveals the complete long prompt from the keyboard and keeps it selectable', async () => {

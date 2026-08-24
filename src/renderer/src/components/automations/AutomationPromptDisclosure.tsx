@@ -50,7 +50,7 @@ export function AutomationPromptDisclosure({ prompt }: { prompt: string }): Reac
     <div className="rounded-md border border-border/50 bg-muted/20 shadow-sm">
       <div className="flex items-center justify-between gap-3 border-b border-border/50 px-3 py-2">
         <div className="text-sm font-medium">
-          {translate('auto.components.automations.AutomationDetail.007c8ad874', 'Prompt')}
+          {translate('auto.components.automations.AutomationEditorDialog.058c23cb3f', 'Prompt')}
         </div>
         {overflows || expanded ? (
           <Button
