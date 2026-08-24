@@ -84,6 +84,23 @@ describe('selectProjectNavigationTarget', () => {
     ).toBe('c1')
   })
 
+  it('keeps the active workspace when the only project wraps onto itself', () => {
+    const single = new Map<string, readonly Worktree[]>([['B', [wt('b1', 1), wt('b2', 2)]]])
+    for (const direction of ['down', 'up'] as const) {
+      expect(
+        selectProjectNavigationTarget(
+          inputs({
+            direction,
+            orderedProjectKeys: ['B'],
+            worktreesByProjectKey: single,
+            activeProjectKey: 'B',
+            activeWorktreeId: 'b1'
+          })
+        )?.id
+      ).toBe('b1')
+    }
+  })
+
   it('activates the most-recently-focused worktree within the target project', () => {
     // No visits recorded: falls back to higher lastActivityAt (b2 > b1).
     expect(

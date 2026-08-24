@@ -10,6 +10,7 @@ import {
   getWorktreeHostIdentity
 } from '../../../../shared/worktree/host-qualified-identity'
 import { orderEmptyQueryWorktrees } from '@/lib/order-empty-query-worktrees'
+import { isPaletteCurrentWorktree } from '@/lib/palette-repo-resolution'
 import type { HostSectionRow } from './host-section-rows'
 import { getProjectGroupHeaderKey, PINNED_GROUP_KEY } from './worktree-list/grouping/group-keys'
 import type { ProjectGroupingModel } from './worktree-list/grouping/project-grouping'
@@ -190,9 +191,20 @@ export function selectProjectNavigationTarget(inputs: ProjectNavigationInputs): 
         ? (currentIndex - 1 + count) % count
         : (currentIndex + 1) % count
 
-  const projectWorktrees = worktreesByProjectKey.get(orderedProjectKeys[targetIndex]) ?? []
+  const targetProjectKey = orderedProjectKeys[targetIndex]
+  const projectWorktrees = worktreesByProjectKey.get(targetProjectKey) ?? []
   if (projectWorktrees.length === 0) {
     return null
+  }
+
+  // Wrapping onto the project you are already in reveals it; it must not
+  // switch workspaces, or "next project" degrades into worktree navigation.
+  if (activeProjectKey !== null && targetProjectKey === activeProjectKey) {
+    return (
+      projectWorktrees.find((worktree) =>
+        isPaletteCurrentWorktree(worktree, activeWorktreeId, activeWorkspaceExecutionHostId)
+      ) ?? projectWorktrees[0]
+    )
   }
 
   const { switchableWorktreesForRows } = orderEmptyQueryWorktrees({
@@ -201,7 +213,6 @@ export function selectProjectNavigationTarget(inputs: ProjectNavigationInputs): 
     activeWorkspaceExecutionHostId,
     lastVisitedAtByWorktreeId
   })
-  // The fallback covers a single-project wrap with only the active workspace.
   return switchableWorktreesForRows[0] ?? projectWorktrees[0] ?? null
 }
 
