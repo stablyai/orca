@@ -89,6 +89,9 @@ vi.mock('lucide-react', () => ({
   Columns2: function Columns2(props: Record<string, unknown>) {
     return { type: 'Columns2', props }
   },
+  Copy: function Copy(props: Record<string, unknown>) {
+    return { type: 'Copy', props }
+  },
   Minimize2: function Minimize2(props: Record<string, unknown>) {
     return { type: 'Minimize2', props }
   },
