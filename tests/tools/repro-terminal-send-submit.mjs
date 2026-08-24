@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import { spawn } from 'node:child_process'
+import { appendFileSync } from 'node:fs'
 import { mkdir, readFile, rm, symlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
@@ -280,6 +281,7 @@ async function parentMain() {
 async function fakeAgentMain() {
   const reportPath = argValue('report')
   const marker = argValue('marker')
+  const inputObservationPath = argValue('input-observation')
   const timeoutMs = parsePositiveInteger('timeout-ms', DEFAULT_TIMEOUT_MS)
   const pasteFramingRequired = !hasFlag('allow-unframed-paste')
   const swallowFirstEnter = hasFlag('swallow-first-enter')
@@ -339,6 +341,9 @@ async function fakeAgentMain() {
     setTimeout(() => void writeReport(false), 250)
   }
   process.stdin.on('data', (chunk) => {
+    if (inputObservationPath) {
+      appendFileSync(inputObservationPath, chunk)
+    }
     input += chunk.toString('utf8')
     if (!renderScheduled && input.includes(marker)) {
       renderScheduled = true
@@ -370,6 +375,7 @@ async function fakeAgentMain() {
         return
       }
       prematureEnters += 1
+      void writeReport(false)
       nextCarriage = input.indexOf('\r', countedCarriages)
     }
   })

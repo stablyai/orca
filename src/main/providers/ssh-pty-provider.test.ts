@@ -230,6 +230,13 @@ describe('SshPtyProvider', () => {
     expectRequest(mux.request, 'pty.getForegroundProcess', { id: 'pty-1' })
   })
 
+  it('confirms foreground process with a fresh relay request', async () => {
+    mux.request.mockResolvedValue('codex')
+
+    await expect(provider.confirmForegroundProcess(scopedPty1)).resolves.toBe('codex')
+    expectRequest(mux.request, 'pty.getForegroundProcess', { id: 'pty-1' })
+  })
+
   it('preserves unavailable process inspection', async () => {
     const inspection = {
       foregroundProcess: null,

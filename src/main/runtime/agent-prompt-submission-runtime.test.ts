@@ -288,6 +288,32 @@ describe('agent prompt submission runtime', () => {
     expect(writes).not.toContain('\r')
   })
 
+  it('keeps the floor check and PTY write in one synchronous turn', async () => {
+    vi.useFakeTimers()
+    let floorOwner: 'desktop' | 'mobile' = 'desktop'
+    const writeOwners: string[] = []
+    const { runtime, handle, writes } = await createPromptRuntime((_runtime, data) => {
+      writeOwners.push(`${floorOwner}:${data === '\r' ? 'enter' : 'paste'}`)
+    })
+    const submission = runtime.sendTerminalAgentPrompt(handle, 'review this', {
+      assertWriteAuthority: () => {
+        if (floorOwner === 'mobile') {
+          throw new Error('terminal_guard_not_writable')
+        }
+        queueMicrotask(() => {
+          floorOwner = 'mobile'
+        })
+      }
+    })
+    const rejected = expect(submission).rejects.toThrow('terminal_guard_not_writable')
+
+    await vi.runAllTimersAsync()
+
+    await rejected
+    expect(writeOwners).toEqual(['desktop:paste'])
+    expect(writes).not.toContain('\r')
+  })
+
   it('stops a chunked paste after transient output-only permission', async () => {
     const { runtime, handle, writes } = await createPromptRuntime(() => undefined)
     runtime.onPtyData('pty-prompt', 'initial output\n', Date.now())

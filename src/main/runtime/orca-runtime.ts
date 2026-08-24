@@ -551,7 +551,8 @@ import { repoIsRemote } from '../../shared/agent-launch-remote'
 import {
   isAgentForegroundWrapperProcess,
   isExpectedAgentProcess,
-  recognizeAgentProcess
+  recognizeAgentProcess,
+  type RecognizedAgentProcess
 } from '../../shared/agent-process-recognition'
 import {
   haveSameDisabledTuiAgents,
@@ -18622,6 +18623,7 @@ export class OrcaRuntimeService {
     },
     options: {
       beforeWrite?: (ptyId: string) => void | Promise<void>
+      assertWriteAuthority?: (ptyId: string) => void
       reserveWrite?: (ptyId: string) => void
       afterWrite?: (ptyId: string) => void | Promise<void>
       suffixFailureError?: string
@@ -18676,8 +18678,10 @@ export class OrcaRuntimeService {
     prompt: string,
     options: {
       beforeWrite?: (ptyId: string) => void | Promise<void>
+      assertWriteAuthority?: (ptyId: string) => void
       suffixFailureError?: string
       signal?: AbortSignal
+      requireSettledForeground?: boolean
     } = {}
   ): Promise<RuntimeTerminalSend> {
     const payload = buildAgentPromptPasteBytes(prompt)
@@ -18694,15 +18698,22 @@ export class OrcaRuntimeService {
         async () => {
           this.assertLiveTerminalHandleTargetsPty(handle, pty.pty.ptyId)
           this.assertAgentPromptGeneration(pty.pty.ptyId, generation)
-          return await this.writeTerminalAgentPrompt(
-            handle,
-            pty.pty.ptyId,
-            generation,
-            payload,
-            options
-          )
+          // Why: classify inside the PTY queue so concurrent sends cannot fan out or reuse a stale foreground proof.
+          const settlementAgent = options.requireSettledForeground
+            ? await this.recognizeSettledPromptAgent(handle, pty.pty.ptyId, options.signal)
+            : undefined
+          if (options.requireSettledForeground && !settlementAgent) {
+            return null
+          }
+          return await this.writeTerminalAgentPrompt(handle, pty.pty.ptyId, generation, payload, {
+            ...options,
+            settlementAgent: settlementAgent ?? undefined
+          })
         }
       )
+      if (submits === null) {
+        return { handle, accepted: false, bytesWritten: 0 }
+      }
       const bytesWritten = Buffer.byteLength(payload, 'utf8') + submits
       return { handle, accepted: true, bytesWritten }
     }
@@ -18721,8 +18732,20 @@ export class OrcaRuntimeService {
     const submits = await this.serializeAgentPromptSubmission(leaf.ptyId, generation, async () => {
       this.assertLiveTerminalHandleTargetsPty(handle, leaf.ptyId!)
       this.assertAgentPromptGeneration(leaf.ptyId!, generation)
-      return await this.writeTerminalAgentPrompt(handle, leaf.ptyId!, generation, payload, options)
+      const settlementAgent = options.requireSettledForeground
+        ? await this.recognizeSettledPromptAgent(handle, leaf.ptyId!, options.signal)
+        : undefined
+      if (options.requireSettledForeground && !settlementAgent) {
+        return null
+      }
+      return await this.writeTerminalAgentPrompt(handle, leaf.ptyId!, generation, payload, {
+        ...options,
+        settlementAgent: settlementAgent ?? undefined
+      })
     })
+    if (submits === null) {
+      return { handle, accepted: false, bytesWritten: 0 }
+    }
     const bytesWritten = Buffer.byteLength(payload, 'utf8') + submits
     return { handle, accepted: true, bytesWritten }
   }
@@ -19318,6 +19341,7 @@ export class OrcaRuntimeService {
     payload: string,
     options: {
       beforeWrite?: (ptyId: string) => void | Promise<void>
+      assertWriteAuthority?: (ptyId: string) => void
       reserveWrite?: (ptyId: string) => void
       afterWrite?: (ptyId: string) => void | Promise<void>
       suffixFailureError?: string
@@ -19337,6 +19361,7 @@ export class OrcaRuntimeService {
       }
       try {
         await options.beforeWrite?.(ptyId)
+        options.assertWriteAuthority?.(ptyId)
         options.reserveWrite?.(ptyId)
       } catch (error) {
         if (options.suffixFailureError) {
@@ -19356,6 +19381,7 @@ export class OrcaRuntimeService {
     }
 
     await options.beforeWrite?.(ptyId)
+    options.assertWriteAuthority?.(ptyId)
     options.reserveWrite?.(ptyId)
     const wrote = this.ptyController?.write(ptyId, payload) ?? false
     if (!wrote) {
@@ -19369,6 +19395,7 @@ export class OrcaRuntimeService {
     text: string,
     options: {
       beforeWrite?: (ptyId: string) => void | Promise<void>
+      assertWriteAuthority?: (ptyId: string) => void
       reserveWrite?: (ptyId: string) => void
       afterWrite?: (ptyId: string) => void | Promise<void>
     } = {}
@@ -19377,6 +19404,7 @@ export class OrcaRuntimeService {
     let chunk = chunks.next()
     while (!chunk.done) {
       await options.beforeWrite?.(ptyId)
+      options.assertWriteAuthority?.(ptyId)
       options.reserveWrite?.(ptyId)
       const wrote = this.ptyController?.write(ptyId, chunk.value) ?? false
       if (!wrote) {
@@ -19397,15 +19425,17 @@ export class OrcaRuntimeService {
     pastePayload: string,
     options: {
       beforeWrite?: (ptyId: string) => void | Promise<void>
+      assertWriteAuthority?: (ptyId: string) => void
       suffixFailureError?: string
       signal?: AbortSignal
+      settlementAgent?: TuiAgent
     } = {}
   ): Promise<number> {
     assertAgentPromptRequestActive(options.signal)
     this.assertAgentPromptGeneration(ptyId, generation)
     const permissionBaseline = this.getAgentPromptActivity(handle, ptyId)
     this.assertAgentPromptPermissionSafe(permissionBaseline, permissionBaseline)
-    const renderGate = this.createAgentPromptRenderGate(ptyId)
+    const renderGate = this.createAgentPromptRenderGate(ptyId, options.settlementAgent)
     let wrotePasteBytes = false
     let completedPaste = false
     try {
@@ -19418,10 +19448,17 @@ export class OrcaRuntimeService {
         await options.beforeWrite?.(ptyId)
         assertAgentPromptRequestActive(options.signal)
         this.assertAgentPromptGeneration(ptyId, generation)
+        if (!wrotePasteBytes && options.settlementAgent) {
+          await this.assertSettledPromptForeground(ptyId, options.settlementAgent, options.signal)
+          assertAgentPromptRequestActive(options.signal)
+          this.assertAgentPromptGeneration(ptyId, generation)
+        }
         this.assertAgentPromptPermissionSafe(
           permissionBaseline,
           this.getAgentPromptActivity(handle, ptyId)
         )
+        // Why: awaited guards can yield; ownership must be checked in the same turn as the PTY write.
+        options.assertWriteAuthority?.(ptyId)
         if (nextChunk.done) {
           renderGate?.arm()
         }
@@ -19469,8 +19506,14 @@ export class OrcaRuntimeService {
     }
     assertAgentPromptRequestActive(options.signal)
     this.assertAgentPromptGeneration(ptyId, generation)
+    if (options.settlementAgent) {
+      await this.assertSettledPromptForeground(ptyId, options.settlementAgent, options.signal)
+      assertAgentPromptRequestActive(options.signal)
+      this.assertAgentPromptGeneration(ptyId, generation)
+    }
     const baseline = this.getAgentPromptActivity(handle, ptyId)
     this.assertAgentPromptPermissionSafe(permissionBaseline, baseline)
+    options.assertWriteAuthority?.(ptyId)
     const suffixWrote = this.ptyController?.write(ptyId, AGENT_PROMPT_SUBMIT) ?? false
     if (!suffixWrote) {
       throw new Error(options.suffixFailureError ?? 'terminal_not_writable')
@@ -19556,13 +19599,42 @@ export class OrcaRuntimeService {
     }
   }
 
-  private createAgentPromptRenderGate(ptyId: string): {
+  private async assertSettledPromptForeground(
+    ptyId: string,
+    expectedAgent: TuiAgent,
+    signal?: AbortSignal
+  ): Promise<void> {
+    const foregroundProcess = await this.readSettledPromptForegroundConfirmation(ptyId, signal)
+    assertAgentPromptRequestActive(signal)
+    if (recognizeAgentProcess(foregroundProcess)?.agent !== expectedAgent) {
+      throw new Error('terminal_guard_not_writable')
+    }
+  }
+
+  private async readSettledPromptForegroundConfirmation(
+    ptyId: string,
+    signal?: AbortSignal
+  ): Promise<string | null> {
+    const controller = this.ptyController
+    if (!controller) {
+      throw new Error('terminal_guard_not_writable')
+    }
+    const foreground = controller.confirmForegroundProcess
+      ? controller.confirmForegroundProcess(ptyId)
+      : controller.getForegroundProcess(ptyId)
+    return await waitForAgentPromptPromise(foreground, signal)
+  }
+
+  private createAgentPromptRenderGate(
+    ptyId: string,
+    provenAgent?: TuiAgent
+  ): {
     arm: () => void
     wait: () => Promise<void>
     dispose: () => void
   } | null {
     const pty = this.ptysById.get(ptyId)
-    const agent = pty?.launchAgent ?? pty?.foregroundAgent
+    const agent = provenAgent ?? pty?.launchAgent ?? pty?.foregroundAgent
     if (!isTerminalSendSettlementAgent(agent)) {
       return null
     }
@@ -34619,7 +34691,7 @@ export class OrcaRuntimeService {
   // Why: title is the tightest agent-presence signal, but a Claude management title is negative evidence for task activity.
   async isTerminalRunningAgent(
     handle: string,
-    options: { retryForegroundWrappers?: boolean } = {}
+    options: { retryForegroundWrappers?: boolean; signal?: AbortSignal } = {}
   ): Promise<boolean> {
     try {
       const pty = this.getLivePtyForHandle(handle)
@@ -34660,7 +34732,10 @@ export class OrcaRuntimeService {
       if (!leaf.ptyId || !this.ptyController) {
         return false
       }
-      const fg = await this.ptyController.getForegroundProcess(leaf.ptyId)
+      const fg = await waitForAgentPromptPromise(
+        this.ptyController.getForegroundProcess(leaf.ptyId),
+        options.signal
+      )
       // Why: a bare `Cursor Agent` title is identity, not liveness — it reads the same
       // whether cursor-agent is parked or long exited with the shell back. A null
       // foreground is untracked, not alive, so no-evidence must stay a refusal. A live
@@ -34677,41 +34752,79 @@ export class OrcaRuntimeService {
       // Why: review-note delivery auto-submits with Enter, so only known agent processes are safe (not arbitrary focused TUIs).
       return await this.isRecognizedForegroundAgentProcess(leaf.ptyId, fg, {
         suppressClaude: shouldSuppressClaudeForeground,
-        retryWrappers: options.retryForegroundWrappers !== false
+        retryWrappers: options.retryForegroundWrappers !== false,
+        signal: options.signal
       })
     } catch {
+      assertAgentPromptRequestActive(options.signal)
       return false
     }
   }
 
-  async isTerminalRunningSettledPromptAgent(handle: string): Promise<boolean> {
+  async isTerminalRunningSettledPromptAgent(
+    handle: string,
+    options: { signal?: AbortSignal } = {}
+  ): Promise<boolean> {
     try {
       const livePty = this.getLivePtyForHandle(handle)
       const leaf = livePty ? null : this.getLiveLeafForHandle(handle).leaf
       const ptyId = livePty?.pty.ptyId ?? leaf?.ptyId ?? null
-      const trackedPty = livePty?.pty ?? (ptyId ? this.ptysById.get(ptyId) : null)
-      if (!ptyId || !trackedPty || !this.ptyController) {
+      if (!ptyId) {
         return false
       }
-      const recognized = recognizeAgentProcess(await this.ptyController.getForegroundProcess(ptyId))
-      const recognizedAgent = recognized?.agent
-      if (!isTerminalSendSettlementAgent(recognizedAgent)) {
-        return false
-      }
-      if (!(await this.isTerminalRunningAgent(handle, { retryForegroundWrappers: false }))) {
-        return false
-      }
-      trackedPty.foregroundAgent = recognizedAgent
-      return true
+      return (await this.recognizeSettledPromptAgent(handle, ptyId, options.signal)) !== null
     } catch {
+      assertAgentPromptRequestActive(options.signal)
       return false
     }
+  }
+
+  private async recognizeSettledPromptAgent(
+    handle: string,
+    ptyId: string,
+    signal?: AbortSignal
+  ): Promise<TuiAgent | null> {
+    if (!this.ptyController) {
+      return null
+    }
+    assertAgentPromptRequestActive(signal)
+    const foregroundProcess = await waitForAgentPromptPromise(
+      this.ptyController.getForegroundProcess(ptyId),
+      signal
+    )
+    const recognized = await this.recognizeForegroundAgentProcess(ptyId, foregroundProcess, {
+      signal
+    })
+    if (!isTerminalSendSettlementAgent(recognized?.agent)) {
+      if (!foregroundProcess || this.isAgentWrapperForegroundProcess(foregroundProcess)) {
+        throw new Error('terminal_guard_not_writable')
+      }
+      return null
+    }
+    assertAgentPromptRequestActive(signal)
+    if (
+      !(await this.isTerminalRunningAgent(handle, {
+        retryForegroundWrappers: false,
+        signal
+      }))
+    ) {
+      throw new Error('terminal_guard_not_writable')
+    }
+    assertAgentPromptRequestActive(signal)
+    const confirmed = recognizeAgentProcess(
+      await this.readSettledPromptForegroundConfirmation(ptyId, signal)
+    )
+    assertAgentPromptRequestActive(signal)
+    if (confirmed?.agent !== recognized.agent) {
+      throw new Error('terminal_guard_not_writable')
+    }
+    return recognized.agent
   }
 
   private async isPtyRunningAgent(
     pty: RuntimePtyWorktreeRecord,
     leaf: RuntimeLeafRecord | null = null,
-    options: { retryForegroundWrappers?: boolean } = {}
+    options: { retryForegroundWrappers?: boolean; signal?: AbortSignal } = {}
   ): Promise<boolean> {
     const leafTitle = leaf
       ? getLatestAgentCandidateTitle(
@@ -34755,7 +34868,10 @@ export class OrcaRuntimeService {
     if (!this.ptyController) {
       return false
     }
-    const fg = await this.ptyController.getForegroundProcess(pty.ptyId)
+    const fg = await waitForAgentPromptPromise(
+      this.ptyController.getForegroundProcess(pty.ptyId),
+      options.signal
+    )
     // Why: mirrors the leaf path — an unreadable foreground is indistinguishable from an
     // exited one, so a bare Cursor identity title never substitutes for corroboration.
     if (!fg) {
@@ -34771,50 +34887,63 @@ export class OrcaRuntimeService {
     // Why: review-note delivery auto-submits with Enter, so only known agent processes are safe (not arbitrary focused TUIs).
     return await this.isRecognizedForegroundAgentProcess(pty.ptyId, fg, {
       suppressClaude: shouldSuppressClaudeForeground,
-      retryWrappers: options.retryForegroundWrappers !== false
+      retryWrappers: options.retryForegroundWrappers !== false,
+      signal: options.signal
     })
   }
 
   private async isRecognizedForegroundAgentProcess(
     ptyId: string,
     foregroundProcess: string,
-    options: { suppressClaude?: boolean; retryWrappers?: boolean } = {}
+    options: { suppressClaude?: boolean; retryWrappers?: boolean; signal?: AbortSignal } = {}
   ): Promise<boolean> {
+    return (await this.recognizeForegroundAgentProcess(ptyId, foregroundProcess, options)) !== null
+  }
+
+  private async recognizeForegroundAgentProcess(
+    ptyId: string,
+    foregroundProcess: string | null,
+    options: { suppressClaude?: boolean; retryWrappers?: boolean; signal?: AbortSignal } = {}
+  ): Promise<RecognizedAgentProcess | null> {
+    assertAgentPromptRequestActive(options.signal)
     const initialRecognition = recognizeAgentProcess(foregroundProcess)
     if (initialRecognition !== null) {
-      return !(
-        options.suppressClaude === true &&
+      return options.suppressClaude === true &&
         isExpectedAgentProcess(initialRecognition.processName, 'claude')
-      )
+        ? null
+        : initialRecognition
     }
     if (
       options.retryWrappers === false ||
       !this.isAgentWrapperForegroundProcess(foregroundProcess) ||
       !this.ptyController
     ) {
-      return false
+      return null
     }
     const startedAt = Date.now()
     while (Date.now() - startedAt < FOREGROUND_AGENT_WRAPPER_RETRY_TIMEOUT_MS) {
-      await new Promise((resolve) =>
-        setTimeout(resolve, FOREGROUND_AGENT_WRAPPER_RETRY_INTERVAL_MS)
+      await waitForAgentPromptDelay(FOREGROUND_AGENT_WRAPPER_RETRY_INTERVAL_MS, options.signal)
+      assertAgentPromptRequestActive(options.signal)
+      const refreshedProcess = await waitForAgentPromptPromise(
+        this.ptyController.getForegroundProcess(ptyId),
+        options.signal
       )
-      const refreshedProcess = await this.ptyController.getForegroundProcess(ptyId)
+      assertAgentPromptRequestActive(options.signal)
       const refreshedRecognition = recognizeAgentProcess(refreshedProcess)
       if (refreshedRecognition !== null) {
-        return !(
-          options.suppressClaude === true &&
+        return options.suppressClaude === true &&
           isExpectedAgentProcess(refreshedRecognition.processName, 'claude')
-        )
+          ? null
+          : refreshedRecognition
       }
       if (!refreshedProcess || !this.isAgentWrapperForegroundProcess(refreshedProcess)) {
-        return false
+        return null
       }
     }
-    return false
+    return null
   }
 
-  private isAgentWrapperForegroundProcess(processName: string): boolean {
+  private isAgentWrapperForegroundProcess(processName: string | null): boolean {
     // Why: daemon/SSH PTYs can report the interpreter before the async cmdline cache resolves; retry only known wrappers.
     return isAgentForegroundWrapperProcess(processName)
   }
