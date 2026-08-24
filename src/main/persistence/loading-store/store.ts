@@ -337,6 +337,7 @@ import {
 } from '../scheduling-automations/automation-run-operations'
 import {
   advanceAutomationNextRun as advanceAutomationNextRunOperation,
+  deferAutomationNextRunAfterScheduleError as deferAutomationNextRunAfterScheduleErrorOperation,
   getLatestAutomationOccurrence as getLatestAutomationOccurrenceOperation
 } from '../scheduling-automations/automation-schedule-operations'
 import { migrateWorktreeIdentity as migrateWorktreeIdentityOperation } from '../tracking-repos/worktree-identity-migration'
@@ -2477,6 +2478,10 @@ export class Store {
 
   advanceAutomationNextRun(id: string, now = Date.now()): Automation {
     return advanceAutomationNextRunOperation(this.state, () => this.flush(), id, now)
+  }
+
+  deferAutomationNextRunAfterScheduleError(id: string, now = Date.now()): Automation | null {
+    return deferAutomationNextRunAfterScheduleErrorOperation(this.state, () => this.flush(), id, now)
   }
 
   getLatestAutomationOccurrence(automation: Automation, now = Date.now()): number | null {
