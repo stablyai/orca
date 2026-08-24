@@ -12084,10 +12084,6 @@
         "TerminalRenderingSection": {
           "6d4c55bacc": "Inline Images",
           "fffab5890b": "Display images directly in the terminal using SIXEL, iTerm2 (IIP), and Kitty graphics protocols."
-        },
-        "TerminalShellHistorySection": {
-          "title": "Shell History",
-          "description": "Choose whether new terminal sessions use workspace-only or your shell's normal history."
         }
       },
       "right": {
