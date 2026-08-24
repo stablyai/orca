@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { posix } from 'node:path'
 import {
   buildOriginHeadFetchArgs,
   buildOriginHeadUpdateRefArgs,
@@ -60,13 +61,15 @@ describe('repo-managed checkout identity', () => {
       '--groups',
       'default,vendor',
       '--repo-url',
-      '/src/aosp/.repo/repo'
+      '/src/aosp/.repo/repo',
+      '--no-repo-verify'
     ])
     expect(buildRepoSyncArgs()).toEqual([
       'sync',
       '--local-only',
       '--no-manifest-update',
-      '--fail-fast'
+      '--verbose',
+      '-j1'
     ])
   })
 
@@ -75,10 +78,10 @@ describe('repo-managed checkout identity', () => {
       'bionic',
       'frameworks/base'
     ])
-    expect(parseGitDirPointer('gitdir: ../.repo/projects/bionic.git\n', '/src/aosp/bionic')).toBe(
-      '/src/aosp/.repo/projects/bionic.git'
-    )
-    expect(getRepoManagedProjectsGitDir('/src/aosp', 'packages/apps/Settings')).toBe(
+    expect(
+      parseGitDirPointer('gitdir: ../.repo/projects/bionic.git\n', '/src/aosp/bionic', posix.join)
+    ).toBe('/src/aosp/.repo/projects/bionic.git')
+    expect(getRepoManagedProjectsGitDir('/src/aosp', 'packages/apps/Settings', posix.join)).toBe(
       '/src/aosp/.repo/projects/packages/apps/Settings.git'
     )
   })
@@ -201,6 +204,7 @@ describe('repo-managed checkout identity', () => {
     ).toEqual([
       'clone',
       '--bare',
+      '--no-local',
       '--reference',
       '/src/aosp/.repo/projects/bionic.git',
       '/src/aosp/.repo/projects/bionic.git',

@@ -113,7 +113,13 @@ describe('materializeRepoManagedCheckout', () => {
     expect(repoCommands[0]).toContain('--reference')
     const manifestFlag = repoCommands[0]?.indexOf('-m') ?? -1
     expect(repoCommands[0]?.[manifestFlag + 1]).toBe('default.xml')
-    expect(repoCommands[1]).toEqual(['sync', '--local-only', '--no-manifest-update', '--fail-fast'])
+    expect(repoCommands[1]).toEqual([
+      'sync',
+      '--local-only',
+      '--no-manifest-update',
+      '--verbose',
+      '-j1'
+    ])
     expect(phases).toEqual(['preparing', 'init', 'seed', 'sync'])
     await expect(stat(destPath)).resolves.toBeTruthy()
   })
@@ -194,16 +200,17 @@ describe('seedDerivedRepoProjectGitDirs', () => {
 
     const destGit = join(destPath, '.repo', 'projects', 'bionic.git')
     const sourceGit = join(mainPath, 'bionic', '.git')
+    const timeoutOptions = { cwd: destPath, timeout: 120_000 }
     expect(vi.mocked(gitExecFileAsync)).toHaveBeenCalledWith(
-      ['clone', '--bare', '--reference', sourceGit, sourceGit, destGit],
-      { cwd: destPath }
+      ['clone', '--bare', '--no-local', '--reference', sourceGit, sourceGit, destGit],
+      timeoutOptions
     )
     expect(
       vi.mocked(gitExecFileAsync).mock.calls.some((call) => call[0].includes('--shared'))
     ).toBe(false)
     expect(vi.mocked(gitExecFileAsync)).toHaveBeenCalledWith(
       ['--git-dir', destGit, 'config', 'core.bare', 'false'],
-      { cwd: destPath }
+      timeoutOptions
     )
     expect(vi.mocked(gitExecFileAsync)).toHaveBeenCalledWith(
       [
@@ -213,7 +220,7 @@ describe('seedDerivedRepoProjectGitDirs', () => {
         'remote.origin.fetch',
         '+refs/heads/*:refs/remotes/origin/*'
       ],
-      { cwd: destPath }
+      timeoutOptions
     )
     expect(vi.mocked(gitExecFileAsync)).toHaveBeenCalledWith(
       [
@@ -224,11 +231,22 @@ describe('seedDerivedRepoProjectGitDirs', () => {
         sourceGit,
         '+refs/heads/*:refs/remotes/origin/*'
       ],
-      { cwd: destPath }
+      timeoutOptions
+    )
+    expect(vi.mocked(gitExecFileAsync)).toHaveBeenCalledWith(
+      [
+        '--git-dir',
+        destGit,
+        'fetch',
+        '--no-tags',
+        sourceGit,
+        '+refs/remotes/origin/*:refs/remotes/origin/*'
+      ],
+      timeoutOptions
     )
     expect(vi.mocked(gitExecFileAsync)).toHaveBeenCalledWith(
       ['--git-dir', destGit, 'update-ref', 'refs/remotes/origin/main', 'refs/heads/main'],
-      { cwd: destPath }
+      timeoutOptions
     )
   })
 
@@ -251,8 +269,8 @@ describe('seedDerivedRepoProjectGitDirs', () => {
 
     const destGit = join(destPath, '.repo', 'projects', 'frameworks', 'base.git')
     expect(vi.mocked(gitExecFileAsync)).toHaveBeenCalledWith(
-      ['clone', '--bare', '--reference', farm, farm, destGit],
-      { cwd: destPath }
+      ['clone', '--bare', '--no-local', '--reference', farm, farm, destGit],
+      { cwd: destPath, timeout: 120_000 }
     )
     expect(
       vi
@@ -312,7 +330,7 @@ describe('seedDerivedRepoProjectGitDirs', () => {
     )
     expect(vi.mocked(gitExecFileAsync)).toHaveBeenCalledWith(
       ['--git-dir', destGit, 'update-ref', 'refs/remotes/origin/main', 'refs/heads/main'],
-      { cwd: destPath }
+      { cwd: destPath, timeout: 120_000 }
     )
   })
 

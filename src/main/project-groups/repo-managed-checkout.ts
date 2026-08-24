@@ -1,6 +1,6 @@
 import { join as joinPath } from 'node:path'
+import { readFile } from 'node:fs/promises'
 import { REPO_METADATA_DIR } from '../../shared/repo-managed-project'
-
 export type RepoManagedCheckoutIdentity = {
   manifestUrl: string
   manifestBranch: string | null
@@ -66,11 +66,23 @@ export async function readRepoManagedCheckoutIdentity(args: {
   const manifestBranch = abbrev && abbrev !== 'HEAD' ? abbrev : null
   const manifestXml = args.paths.join(args.mainPath, REPO_METADATA_DIR, 'manifest.xml')
   let manifestFile = DEFAULT_MANIFEST_FILE
-  if (args.paths.realpath) {
+  let generatedManifest: string | null = null
+  try {
+    generatedManifest = await readFile(manifestXml, 'utf8')
+  } catch {
+    generatedManifest = null
+  }
+  const include = generatedManifest
+    ? /<include\s+name=["']([^"']+)["']\s*\/>/.exec(generatedManifest)
+    : null
+  if (include?.[1]) {
+    manifestFile = include[1]
+  } else {
     try {
-      manifestFile = resolveRepoManagedManifestFile(
-        args.paths.basename(await args.paths.realpath(manifestXml))
-      )
+      const manifestPath = args.paths.realpath
+        ? await args.paths.realpath(manifestXml)
+        : manifestXml
+      manifestFile = resolveRepoManagedManifestFile(args.paths.basename(manifestPath))
     } catch {
       manifestFile = DEFAULT_MANIFEST_FILE
     }
@@ -101,13 +113,13 @@ export function buildRepoInitArgs(args: {
     initArgs.push('--groups', args.identity.groups)
   }
   if (args.identity.repoUrl) {
-    initArgs.push('--repo-url', args.identity.repoUrl)
+    initArgs.push('--repo-url', args.identity.repoUrl, '--no-repo-verify')
   }
   return initArgs
 }
 
 export function buildRepoSyncArgs(): string[] {
-  return ['sync', '--local-only', '--no-manifest-update', '--fail-fast']
+  return ['sync', '--local-only', '--no-manifest-update', '--verbose', '-j1']
 }
 
 export function getRepoManagedProjectsGitDir(
@@ -183,7 +195,7 @@ export async function resolveRepoManagedSourceGitDir(args: {
 }
 
 export function buildRepoProjectSeedCloneArgs(sourceGitDir: string, destGitDir: string): string[] {
-  return ['clone', '--bare', '--reference', sourceGitDir, sourceGitDir, destGitDir]
+  return ['clone', '--bare', '--no-local', '--reference', sourceGitDir, sourceGitDir, destGitDir]
 }
 
 export function buildOriginHeadFetchArgs(destGitDir: string, sourceGitDir: string): string[] {
@@ -194,6 +206,20 @@ export function buildOriginHeadFetchArgs(destGitDir: string, sourceGitDir: strin
     '--no-tags',
     sourceGitDir,
     '+refs/heads/*:refs/remotes/origin/*'
+  ]
+}
+
+export function buildOriginTrackingRefFetchArgs(
+  destGitDir: string,
+  sourceGitDir: string
+): string[] {
+  return [
+    '--git-dir',
+    destGitDir,
+    'fetch',
+    '--no-tags',
+    sourceGitDir,
+    '+refs/remotes/origin/*:refs/remotes/origin/*'
   ]
 }
 

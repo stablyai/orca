@@ -15,9 +15,12 @@ import { useAppStore } from '@/store'
 import type { Repo } from '../../../../shared/repo-types'
 import { isGitRepoKind } from '../../../../shared/repo-kind'
 import { finishProjectAddWithDefaultCheckout } from './project-added-default-checkout'
+import { completeRepoManagedOpen } from './complete-repo-managed-open'
 import { translate } from '@/i18n/i18n'
 import { upsertAddedRepoWithProjectHostSetup } from './add-repo-store-upsert'
 import { worktreeRefreshOptions } from './add-repo-runtime-owner'
+import { isRepoManagedScan } from '../../../../shared/repo-managed-project'
+import type { NestedRepoScanResult } from '../../../../shared/project-group-types'
 
 const NON_GIT_REPO_ERROR = 'Not a valid git repository'
 
@@ -27,6 +30,7 @@ const AddProjectFromFolderDialog = React.memo(function AddProjectFromFolderDialo
   const closeModal = useAppStore((s) => s.closeModal)
   const openModal = useAppStore((s) => s.openModal)
   const addRepoPath = useAppStore((s) => s.addRepoPath)
+  const scanNestedRepos = useAppStore((s) => s.scanNestedRepos)
   const fetchWorktrees = useAppStore((s) => s.fetchWorktrees)
   const setHideDefaultBranchWorkspace = useAppStore((s) => s.setHideDefaultBranchWorkspace)
 
@@ -72,6 +76,22 @@ const AddProjectFromFolderDialog = React.memo(function AddProjectFromFolderDialo
     setIsAdding(true)
     setError(null)
     try {
+      let scan: NestedRepoScanResult | null = null
+      if (!connectionId && scanNestedRepos) {
+        scan = await scanNestedRepos(folderPath, undefined, { runtimeEnvironmentId })
+        if (scan && isRepoManagedScan(scan)) {
+          await completeRepoManagedOpen({
+            scan,
+            generation: gen,
+            currentGeneration: () => addGenRef.current,
+            connectionId: null,
+            runtimeEnvironmentId,
+            closeModal,
+            setIsAdding
+          })
+          return
+        }
+      }
       let repo: Repo | null
       if (connectionId) {
         const result = await window.api.repos.addRemote({
@@ -112,8 +132,24 @@ const AddProjectFromFolderDialog = React.memo(function AddProjectFromFolderDialo
         openNonGitConfirmation()
         return
       }
-      // Why: after the repo is already added, a non-authoritative refresh
-      // should still close onto the project row instead of trapping the user.
+      if (!scan && scanNestedRepos) {
+        scan = await scanNestedRepos(folderPath, connectionId || undefined, {
+          runtimeEnvironmentId
+        })
+      }
+      if (scan && isRepoManagedScan(scan)) {
+        await completeRepoManagedOpen({
+          scan,
+          generation: gen,
+          currentGeneration: () => addGenRef.current,
+          connectionId: connectionId || null,
+          runtimeEnvironmentId,
+          closeModal,
+          setIsAdding
+        })
+        return
+      }
+      // Why: after the repo is already added, a non-authoritative refresh should still close onto the project row instead of trapping the user.
       const ownerOptions = worktreeRefreshOptions(runtimeEnvironmentId, connectionId)
       await fetchWorktrees(repo.id, ownerOptions)
       if (!mountedRef.current || gen !== addGenRef.current) {
@@ -157,7 +193,7 @@ const AddProjectFromFolderDialog = React.memo(function AddProjectFromFolderDialo
     mountedRef,
     openNonGitConfirmation,
     runtimeEnvironmentId,
-    setHideDefaultBranchWorkspace
+    scanNestedRepos
   ])
 
   const handleOpenChange = useCallback(

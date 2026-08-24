@@ -1583,6 +1583,12 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
         pendingFirstAgentMessageRename: args.pendingFirstAgentMessageRename,
         onPhase: (phase) => {
           event.sender.send('folderWorkspaces:deriveProgress', repoManagedDeriveProgress(phase))
+        },
+        onSeedProgress: (progress) => {
+          event.sender.send(
+            'folderWorkspaces:deriveProgress',
+            repoManagedDeriveProgress('seed', progress)
+          )
         }
       })
       notifyReposChanged(mainWindow)

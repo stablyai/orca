@@ -1,5 +1,5 @@
 import { execFile } from 'node:child_process'
-import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, rm, symlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { promisify } from 'node:util'
@@ -126,5 +126,31 @@ describe('seedDerivedRepoProjectGitDirs live git', () => {
       'remote.origin.fetch'
     ])
     expect(fetch.trim()).toBe('+refs/heads/*:refs/remotes/origin/*')
+  })
+  it('seeds when the source gitdir objects directory is a symlink', async () => {
+    const root = await tempRoot()
+    const mainPath = join(root, 'main')
+    const destPath = join(root, 'task-a')
+    const sourceGit = join(mainPath, '.repo', 'projects', 'build_system.git')
+    const objectStore = join(mainPath, '.repo', 'project-objects', 'build_system.git', 'objects')
+    await mkdir(sourceGit, { recursive: true })
+    await mkdir(objectStore, { recursive: true })
+    await mkdir(join(mainPath, '.repo'), { recursive: true })
+    await writeFile(join(mainPath, '.repo', 'project.list'), 'build_system\n')
+    await execFileAsync('git', ['init', '--bare', sourceGit])
+    await rm(join(sourceGit, 'objects'), { recursive: true, force: true })
+    await symlink(objectStore, join(sourceGit, 'objects'), 'junction')
+    await mkdir(destPath, { recursive: true })
+
+    await seedDerivedRepoProjectGitDirs({ mainPath, destPath })
+
+    await expect(
+      execFileAsync('git', [
+        '--git-dir',
+        join(destPath, '.repo', 'projects', 'build_system.git'),
+        'rev-parse',
+        '--is-bare-repository'
+      ])
+    ).resolves.toMatchObject({ stdout: 'false\n' })
   })
 })

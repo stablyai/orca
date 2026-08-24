@@ -1340,10 +1340,20 @@ export default function NewWorkspaceComposerCard({
                       'Initializing repo checkout…'
                     )
                   : deriveProgress.phase === 'seed'
-                    ? translate(
-                        'auto.components.NewWorkspaceComposerCard.derivePhaseSeed',
-                        'Copying local git objects…'
-                      )
+                    ? deriveProgress.totalProjects
+                      ? translate(
+                          'auto.components.NewWorkspaceComposerCard.derivePhaseSeedProject',
+                          'Copying local git objects… {{value0}}/{{value1}} · {{value2}}',
+                          {
+                            value0: deriveProgress.processedProjects ?? 0,
+                            value1: deriveProgress.totalProjects,
+                            value2: deriveProgress.currentProject ?? ''
+                          }
+                        )
+                      : translate(
+                          'auto.components.NewWorkspaceComposerCard.derivePhaseSeed',
+                          'Copying local git objects…'
+                        )
                     : deriveProgress.phase === 'sync'
                       ? translate(
                           'auto.components.NewWorkspaceComposerCard.derivePhaseSync',
