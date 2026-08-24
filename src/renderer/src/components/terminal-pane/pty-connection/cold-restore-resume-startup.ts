@@ -2,10 +2,7 @@ import { useAppStore } from '@/store'
 import { createBrowserUuid } from '@/lib/browser-uuid'
 import { buildAgentResumeStartupPlan } from '@/lib/tui-agent-startup'
 import { resolveAgentResumeLaunchTarget } from '@/lib/agent-resume-launch-target'
-import {
-  resolveTuiAgentLaunchArgs,
-  resolveTuiAgentLaunchEnv
-} from '../../../../../shared/tui-agent-launch-defaults'
+import { resolveResumeLaunchInputs } from '../../../../../shared/agent-resume-permission-drop'
 import {
   agentProviderSessionsEqual,
   isResumableTuiAgent,
@@ -46,7 +43,7 @@ export function bindBuildColdRestoreAgentResumeStartup(session: ConnectPanePtySe
           agentProviderSessionsEqual(agent, sleepingRecord.providerSession, providerSession)))
         ? sleepingRecord.launchConfig
         : undefined
-    const launchConfig =
+    const recordedLaunchConfig =
       (useLiveEntry && entry ? state.getAgentLaunchConfigForStatusEntry(entry) : undefined) ??
       matchingSleepingLaunchConfig
     // Why: the resume line is typed into this pane's live shell, so its quoting must
@@ -59,18 +56,22 @@ export function bindBuildColdRestoreAgentResumeStartup(session: ConnectPanePtySe
       terminalWindowsShell: state.settings?.terminalWindowsShell,
       tabShellOverride: session.shellOverride
     })
+    // Why: the recorded config describes the launch this pane started with, so a
+    // permission escalation the user has since turned off must not ride along
+    // into the restart's resume (#10886).
+    const { launchConfig, agentArgs, agentEnv } = resolveResumeLaunchInputs({
+      agent,
+      launchConfig: recordedLaunchConfig,
+      settings: state.settings,
+      platform: resumeTarget.platform,
+      shell: resumeTarget.shell
+    })
     const startupPlan = buildAgentResumeStartupPlan({
       agent,
       providerSession,
       cmdOverrides: state.settings?.agentCmdOverrides ?? {},
-      agentArgs:
-        launchConfig !== undefined
-          ? launchConfig.agentArgs
-          : resolveTuiAgentLaunchArgs(agent, state.settings?.agentDefaultArgs),
-      agentEnv:
-        launchConfig !== undefined
-          ? launchConfig.agentEnv
-          : resolveTuiAgentLaunchEnv(agent, state.settings?.agentDefaultEnv),
+      agentArgs,
+      agentEnv,
       ...(launchConfig?.agentCommand ? { agentCommand: launchConfig.agentCommand } : {}),
       ...(launchConfig?.ompResumeFilePath
         ? { ompResumeFilePath: launchConfig.ompResumeFilePath }
