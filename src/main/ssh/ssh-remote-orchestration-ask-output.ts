@@ -1,4 +1,8 @@
 import type { RpcResponse } from '../runtime/rpc/core'
+import {
+  withOrchestrationAskOutcome,
+  type OrchestrationAskResultShape
+} from '../../shared/orchestration-ask-outcome'
 import { formatRemoteCli } from './ssh-remote-cli-format'
 import { hasRemoteLifecycleRejection } from './ssh-remote-orchestration-send'
 
@@ -12,7 +16,9 @@ export function formatRemoteOrchestrationAsk(
       : formatRemoteCli(response)
   }
   if (json) {
-    return { stdout: `${JSON.stringify(response.result)}\n`, stderr: '' }
+    // Why: match local `orca orchestration ask --json` so SSH remote engines get outcome/pending.
+    const askResult = withOrchestrationAskOutcome(response.result as OrchestrationAskResultShape)
+    return { stdout: `${JSON.stringify(askResult)}\n`, stderr: '' }
   }
   if (isRecord(response.result.legacyCompatibility)) {
     const compatibility = response.result.legacyCompatibility
