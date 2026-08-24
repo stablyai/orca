@@ -28,6 +28,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 import { RichMarkdownToolbarButton } from './RichMarkdownToolbarButton'
 import { translate } from '@/i18n/i18n'
 import { insertToggle } from './rich-markdown-slash-command-primitives'
+import { RichMarkdownTextColorControl } from './RichMarkdownTextColorControl'
 
 type RichMarkdownToolbarProps = {
   editor: Editor | null
@@ -149,6 +150,7 @@ export function RichMarkdownToolbar({
       >
         S
       </RichMarkdownToolbarButton>
+      <RichMarkdownTextColorControl editor={editor} />
       <Separator />
       <RichMarkdownToolbarButton
         active={false}

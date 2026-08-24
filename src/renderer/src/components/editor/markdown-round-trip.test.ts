@@ -5,6 +5,7 @@ import { createRichMarkdownExtensions } from './rich-markdown-extensions'
 import { createRichMarkdownEditorCodec } from './rich-markdown-source-transport'
 import type { SlashCommandId } from './rich-markdown-slash-commands'
 import { slashCommands } from './rich-markdown-slash-commands'
+import { RICH_MARKDOWN_TEXT_COLORS } from './rich-markdown-text-color-palette'
 
 function roundTripMarkdown(content: string): string {
   const codec = createRichMarkdownEditorCodec()
@@ -46,6 +47,55 @@ function markdownAfterTextReplace(content: string, search: string, replacement: 
       throw new Error(`Missing text: ${search}`)
     }
     editor.view.dispatch(editor.state.tr.insertText(replacement, from, from + search.length))
+    return editor.getMarkdown().trimEnd()
+  } finally {
+    editor.destroy()
+  }
+}
+
+function markdownAfterColorCommand(
+  content: string,
+  from: number,
+  to: number,
+  color: string | null
+): string {
+  const codec = createRichMarkdownEditorCodec()
+  const editor = new Editor({
+    element: null,
+    extensions: createRichMarkdownExtensions({ codec }),
+    content: encodeRawMarkdownHtmlForRichEditor(content, codec),
+    contentType: 'markdown'
+  })
+
+  try {
+    const chain = editor.chain().setTextSelection({ from, to })
+    if (color) {
+      chain.setMark('richMarkdownTextColor', { color }).run()
+    } else {
+      chain.unsetMark('richMarkdownTextColor').run()
+    }
+    return editor.getMarkdown().trimEnd()
+  } finally {
+    editor.destroy()
+  }
+}
+
+function markdownAfterColoredTyping(content: string, position: number, text: string): string {
+  const codec = createRichMarkdownEditorCodec()
+  const editor = new Editor({
+    element: null,
+    extensions: createRichMarkdownExtensions({ codec }),
+    content,
+    contentType: 'markdown'
+  })
+
+  try {
+    editor
+      .chain()
+      .setTextSelection(position)
+      .setMark('richMarkdownTextColor', { color: 'purple' })
+      .run()
+    editor.view.dispatch(editor.state.tr.insertText(text))
     return editor.getMarkdown().trimEnd()
   } finally {
     editor.destroy()
@@ -97,6 +147,51 @@ function slashCommandSelectionParent(commandId: SlashCommandId): string {
 }
 
 describe('rich markdown round trip', () => {
+  it.each(RICH_MARKDOWN_TEXT_COLORS)('preserves the %s text color mark', (color) => {
+    const source = `<span data-orca-text-color="${color}">colored text</span>`
+    expect(roundTripMarkdown(source)).toBe(source)
+  })
+
+  it('preserves markdown formatting inside a text color mark', () => {
+    const source = '<span data-orca-text-color="blue">**bold** and *italic*</span>'
+    expect(roundTripMarkdown(source)).toBe(source)
+  })
+
+  it('applies a text color mark to the selected text', () => {
+    expect(markdownAfterColorCommand('marked text', 1, 7, 'red')).toBe(
+      '<span data-orca-text-color="red">marked</span> text'
+    )
+  })
+
+  it('clears a text color mark from the selected text', () => {
+    expect(
+      markdownAfterColorCommand('<span data-orca-text-color="green">plain</span>', 1, 6, null)
+    ).toBe('plain')
+  })
+
+  it('continues a selected text color while typing', () => {
+    expect(markdownAfterColoredTyping('plain ', 7, 'purple')).toBe(
+      'plain <span data-orca-text-color="purple">purple</span>'
+    )
+  })
+
+  it('preserves unsupported colors through raw HTML passthrough', () => {
+    const source = '<span data-orca-text-color="cyan">unchanged</span>'
+    expect(roundTripMarkdown(source)).toBe(source)
+  })
+
+  it('preserves ordinary spans through raw HTML passthrough', () => {
+    const source = '<span class="label">unchanged</span>'
+    expect(roundTripMarkdown(source)).toBe(source)
+  })
+
+  it('keeps text color syntax literal inside code', () => {
+    const inline = '`<span data-orca-text-color="red">inline</span>`'
+    const fenced = '```html\n<span data-orca-text-color="red">block</span>\n```'
+    expect(roundTripMarkdown(inline)).toBe(inline)
+    expect(roundTripMarkdown(fenced)).toBe(fenced)
+  })
+
   it('preserves inline html inside paragraphs', () => {
     expect(roundTripMarkdown('Before <span>hi</span> after\n')).toBe('Before <span>hi</span> after')
   })
