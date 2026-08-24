@@ -167,6 +167,38 @@ describe('Store', () => {
     expect(store.getSettings().commitMessageAi?.customPrompt).toBe('Use Conventional Commits.')
   })
 
+  it("marks Orca's released Pi seed without reinterpreting later concrete writes", async () => {
+    writeDataFile({
+      schemaVersion: 1,
+      repos: [],
+      worktreeMeta: {},
+      settings: {
+        commitMessageAi: {
+          enabled: true,
+          agentId: 'pi',
+          selectedModelByAgent: { pi: 'github-copilot/gpt-5.4-mini' },
+          selectedThinkingByModel: {},
+          customPrompt: '',
+          customAgentCommand: ''
+        }
+      },
+      ui: {},
+      githubCache: { pr: {}, issue: {} },
+      workspaceSession: {}
+    })
+
+    const store = await createStore()
+
+    expect(store.getSettings().piConfiguredDefaultModelState?.defaultsByHost.local).toBe(true)
+    store.flush()
+    expect((readDataFile() as PersistedState).settings.piConfiguredDefaultModelState).toMatchObject(
+      {
+        version: 1,
+        defaultsByHost: { local: true }
+      }
+    )
+  })
+
   it('migrates first-work branch auto-rename on for existing profiles once', async () => {
     writeDataFile({
       schemaVersion: 1,

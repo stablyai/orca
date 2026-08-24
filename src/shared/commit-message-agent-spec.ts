@@ -107,6 +107,16 @@ const CLAUDE_THINKING_LEVELS: ThinkingLevel[] = [
   { id: 'max', label: 'Max' }
 ]
 
+export const PI_DEFAULT_MODEL_ID = 'default'
+
+/**
+ * The model id Orca used to persist for Pi before `Pi default` existed. Orca itself
+ * seeded this into `selectedModelByAgent.pi` the first time a user picked Pi, so a
+ * pre-upgrade user carries it even though they never chose a Copilot model. Treated
+ * as "no selection" on read so the fix reaches them (STA-4249).
+ */
+export const PI_RETIRED_COPILOT_DEFAULT_MODEL_ID = 'github-copilot/gpt-5.4-mini'
+
 function uniqueModels(models: CommitMessageModel[]): CommitMessageModel[] {
   const seen = new Set<string>()
   return models.filter((model) => {
@@ -145,6 +155,12 @@ function withOpenAiThinking(
   return /(?:gpt-5|codex)/i.test(id)
     ? { thinkingLevels: OPENAI_THINKING_LEVELS, defaultThinkingLevel: 'low' }
     : {}
+}
+
+export const PI_COMPATIBILITY_MODEL: CommitMessageModel = {
+  id: PI_RETIRED_COPILOT_DEFAULT_MODEL_ID,
+  label: 'Github Copilot GPT 5.4 Mini',
+  ...withOpenAiThinking('gpt-5.4-mini')
 }
 
 export function parseClaudeModels(stdout: string): CommitMessageModel[] {
@@ -500,22 +516,19 @@ export const COMMIT_MESSAGE_AGENT_SPECS: Partial<Record<TuiAgent, CommitMessageA
       '--no-context-files',
       '--mode',
       'text',
-      '--model',
-      model,
+      ...(model === PI_DEFAULT_MODEL_ID ? [] : ['--model', model]),
       ...(thinkingLevel ? ['--thinking', thinkingLevel] : [])
     ],
     modelSource: 'dynamic',
     modelDiscovery: { binary: 'pi', args: ['--list-models'], parse: parsePiModels },
     models: [
       {
-        // Why: Pi commonly authenticates through GitHub Copilot locally; using
-        // that provider avoids selecting a raw OpenAI model when no key exists.
-        id: 'github-copilot/gpt-5.4-mini',
-        label: 'Github Copilot GPT 5.4 Mini',
-        ...withOpenAiThinking('gpt-5.4-mini')
+        id: PI_DEFAULT_MODEL_ID,
+        label: 'Pi default',
+        isDefault: true
       }
     ],
-    defaultModelId: 'github-copilot/gpt-5.4-mini'
+    defaultModelId: PI_DEFAULT_MODEL_ID
   },
   amp: {
     id: 'amp',
@@ -796,7 +809,8 @@ function toCommitMessageAgentCapability(
       ...(model.description ? { description: model.description } : {}),
       ...(model.thinkingLevels ? { thinkingLevels: [...model.thinkingLevels] } : {}),
       ...(model.defaultThinkingLevel ? { defaultThinkingLevel: model.defaultThinkingLevel } : {}),
-      ...(model.supportsFastMode ? { supportsFastMode: true } : {})
+      ...(model.supportsFastMode ? { supportsFastMode: true } : {}),
+      ...(model.isDefault ? { isDefault: true } : {})
     }))
   }
 }

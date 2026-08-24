@@ -43,7 +43,7 @@ describe('COMMIT_MESSAGE_AGENT_SPECS', () => {
   it('uses the strongest available defaults for core agents', () => {
     expect(COMMIT_MESSAGE_AGENT_SPECS.claude?.defaultModelId).toBe('sonnet')
     expect(COMMIT_MESSAGE_AGENT_SPECS.codex?.defaultModelId).toBe('gpt-5.5')
-    expect(COMMIT_MESSAGE_AGENT_SPECS.pi?.defaultModelId).toBe('github-copilot/gpt-5.4-mini')
+    expect(COMMIT_MESSAGE_AGENT_SPECS.pi?.defaultModelId).toBe('default')
   })
 
   it('uses --prompt (not Claude --print) for Kimi non-interactive generation', () => {
@@ -91,6 +91,17 @@ describe('COMMIT_MESSAGE_AGENT_SPECS', () => {
     for (const model of ['default', '']) {
       expect(spec.buildArgs({ prompt: 'PROMPT', model })).not.toContain('--model')
     }
+  })
+
+  it('lets Pi use its configured default unless a model is explicit', () => {
+    const spec = COMMIT_MESSAGE_AGENT_SPECS.pi!
+
+    expect(spec.models).toEqual([{ id: 'default', label: 'Pi default', isDefault: true }])
+    expect(getCommitMessageAgentCapability('pi')?.models).toEqual(spec.models)
+    expect(spec.buildArgs({ prompt: 'PROMPT', model: 'default' })).not.toContain('--model')
+    expect(spec.buildArgs({ prompt: 'PROMPT', model: 'openai-codex/gpt-5.5' })).toEqual(
+      expect.arrayContaining(['--model', 'openai-codex/gpt-5.5'])
+    )
   })
 
   it('lists Copilot hosted CLI models even when account policy filters the picker', () => {

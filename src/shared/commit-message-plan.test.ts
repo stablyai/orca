@@ -2,6 +2,41 @@ import { describe, expect, it } from 'vitest'
 import { planCommitMessageGeneration, planAgentBinary } from './commit-message-plan'
 
 describe('planCommitMessageGeneration', () => {
+  it('omits Pi model args only for valid configured-default intent', () => {
+    const result = planCommitMessageGeneration(
+      {
+        agentId: 'pi',
+        model: 'github-copilot/gpt-5.4-mini',
+        useConfiguredDefaultModel: true
+      },
+      'PROMPT'
+    )
+
+    expect(result).toMatchObject({ ok: true })
+    expect(result.ok && result.plan.args).not.toContain('--model')
+  })
+
+  it('rejects configured-default intent for a non-Pi model', () => {
+    expect(
+      planCommitMessageGeneration(
+        { agentId: 'codex', model: 'gpt-5.4', useConfiguredDefaultModel: true },
+        'PROMPT'
+      )
+    ).toMatchObject({ ok: false })
+  })
+
+  it.each([
+    { model: 'openai-codex/gpt-5.5' },
+    { model: 'github-copilot/gpt-5.4-mini', thinkingLevel: 'medium' }
+  ])('rejects invalid Pi configured-default params: $model $thinkingLevel', (params) => {
+    expect(
+      planCommitMessageGeneration(
+        { agentId: 'pi', useConfiguredDefaultModel: true, ...params },
+        'PROMPT'
+      )
+    ).toMatchObject({ ok: false })
+  })
+
   it('plans Claude non-interactive generation with the prompt on stdin only', () => {
     const result = planCommitMessageGeneration(
       {

@@ -8,7 +8,9 @@ import {
   listCommitMessageAgentCapabilities,
   type CustomAgentId,
   isCustomAgentId,
-  resolveCommitMessageAgentChoice
+  resolveCommitMessageAgentChoice,
+  PI_DEFAULT_MODEL_ID,
+  PI_RETIRED_COPILOT_DEFAULT_MODEL_ID
 } from './commit-message-agent-spec'
 import { LOCAL_COMMIT_MESSAGE_HOST_KEY } from './commit-message-host-key'
 import {
@@ -48,6 +50,7 @@ export const DEFAULT_SOURCE_CONTROL_AI_PR_CREATION_DEFAULTS: Required<SourceCont
 export type ResolvedSourceControlAiGenerationParams = {
   agentId: TuiAgent | 'custom'
   model: string
+  useConfiguredDefaultModel?: boolean
   thinkingLevel?: string
   customPrompt?: string
   commandInputTemplate?: string
@@ -69,7 +72,11 @@ export type ResolveSourceControlAiResult =
 type ResolveSourceControlAiInput = {
   settings: Pick<
     GlobalSettings,
-    'defaultTuiAgent' | 'agentCmdOverrides' | 'commitMessageAi' | 'sourceControlAi'
+    | 'defaultTuiAgent'
+    | 'agentCmdOverrides'
+    | 'commitMessageAi'
+    | 'sourceControlAi'
+    | 'piConfiguredDefaultModelState'
   > &
     Partial<Pick<GlobalSettings, 'disabledTuiAgents'>>
   repo?: Pick<Repo, 'sourceControlAi'> | null
@@ -113,6 +120,28 @@ function supportedSourceControlAiAgentSummary(): string {
 
 function copyRecord<T>(value: T | undefined): T | undefined {
   return value === undefined ? undefined : structuredClone(value)
+}
+
+function prunePiConfiguredDefaultFromDiscovery(
+  value: SourceControlAiSettings['discoveredModelsByAgent'] | undefined
+): SourceControlAiSettings['discoveredModelsByAgent'] | undefined {
+  const copied = copyRecord(value)
+  if (copied?.pi) {
+    copied.pi = copied.pi.filter((model) => model.id !== PI_DEFAULT_MODEL_ID)
+  }
+  return copied
+}
+
+function prunePiConfiguredDefaultFromHostDiscovery(
+  value: SourceControlAiSettings['discoveredModelsByAgentByHost'] | undefined
+): SourceControlAiSettings['discoveredModelsByAgentByHost'] | undefined {
+  const copied = copyRecord(value)
+  for (const hostModels of Object.values(copied ?? {})) {
+    if (hostModels?.pi) {
+      hostModels.pi = hostModels.pi.filter((model) => model.id !== PI_DEFAULT_MODEL_ID)
+    }
+  }
+  return copied
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -776,9 +805,11 @@ export function normalizeSourceControlAiSettings(
     selectedModelByAgentByHost:
       copyRecord(base.selectedModelByAgentByHost) ?? defaults.selectedModelByAgentByHost,
     discoveredModelsByAgent:
-      copyRecord(base.discoveredModelsByAgent) ?? defaults.discoveredModelsByAgent,
+      prunePiConfiguredDefaultFromDiscovery(base.discoveredModelsByAgent) ??
+      defaults.discoveredModelsByAgent,
     discoveredModelsByAgentByHost:
-      copyRecord(base.discoveredModelsByAgentByHost) ?? defaults.discoveredModelsByAgentByHost,
+      prunePiConfiguredDefaultFromHostDiscovery(base.discoveredModelsByAgentByHost) ??
+      defaults.discoveredModelsByAgentByHost,
     selectedThinkingByModel: {
       ...defaults.selectedThinkingByModel,
       ...base.selectedThinkingByModel
@@ -893,8 +924,11 @@ export function projectSourceControlAiToLegacyCommitMessageAi(
       sourceControlAi.selectedModelByAgentByHost,
       commitMessageChoice?.selectedModelByAgentByHost
     ),
-    discoveredModelsByAgent: copyRecord(sourceControlAi.discoveredModelsByAgent) ?? {},
-    discoveredModelsByAgentByHost: copyRecord(sourceControlAi.discoveredModelsByAgentByHost) ?? {},
+    discoveredModelsByAgent:
+      prunePiConfiguredDefaultFromDiscovery(sourceControlAi.discoveredModelsByAgent) ?? {},
+    discoveredModelsByAgentByHost:
+      prunePiConfiguredDefaultFromHostDiscovery(sourceControlAi.discoveredModelsByAgentByHost) ??
+      {},
     selectedThinkingByModel: {
       ...sourceControlAi.selectedThinkingByModel,
       ...commitMessageChoice?.selectedThinkingByModel
@@ -939,7 +973,7 @@ function getDiscoveredModels(
   )
 }
 
-function selectPersistedModelId(args: {
+function selectPersistedModel(args: {
   source: SourceControlAiSettings
   legacy: CommitMessageAiSettings | null | undefined
   repoOverrides: RepoSourceControlAiOverrides | null | undefined
@@ -947,26 +981,48 @@ function selectPersistedModelId(args: {
   hostKey: string
   agentId: TuiAgent
   defaultModelId: string
-}): string {
-  const { source, legacy, repoOverrides, operation, hostKey, agentId, defaultModelId } = args
-  return (
-    readSourceControlAiModelChoiceForHost(
-      repoOverrides?.modelOverridesByOperation?.[operation],
-      hostKey,
-      agentId
-    ) ??
-    readSourceControlAiModelChoiceForHost(
-      source.modelOverridesByOperation?.[operation],
-      hostKey,
-      agentId
-    ) ??
+  configuredDefaultState: GlobalSettings['piConfiguredDefaultModelState']
+}): { modelId: string; useConfiguredDefaultModel: boolean } {
+  const {
+    source,
+    legacy,
+    repoOverrides,
+    operation,
+    hostKey,
+    agentId,
+    defaultModelId,
+    configuredDefaultState
+  } = args
+  const repoModel = readSourceControlAiModelChoiceForHost(
+    repoOverrides?.modelOverridesByOperation?.[operation],
+    hostKey,
+    agentId
+  )
+  const operationModel = readSourceControlAiModelChoiceForHost(
+    source.modelOverridesByOperation?.[operation],
+    hostKey,
+    agentId
+  )
+  const defaultModel =
     readDefaultSelectedModelId(source, hostKey, agentId) ??
     legacy?.selectedModelByAgentByHost?.[hostKey]?.[agentId] ??
     (hostKey === LOCAL_COMMIT_MESSAGE_HOST_KEY
       ? legacy?.selectedModelByAgent?.[agentId]
-      : undefined) ??
-    defaultModelId
-  )
+      : undefined)
+  const persisted = repoModel ?? operationModel ?? defaultModel ?? defaultModelId
+  const markedOperationSeed =
+    operation === 'commitMessage' &&
+    configuredDefaultState?.commitMessageSeedByHost[hostKey] === true &&
+    repoModel === undefined &&
+    operationModel === PI_RETIRED_COPILOT_DEFAULT_MODEL_ID
+  const markedDefault =
+    configuredDefaultState?.defaultsByHost[hostKey] === true &&
+    repoModel === undefined &&
+    operationModel === undefined &&
+    persisted === PI_RETIRED_COPILOT_DEFAULT_MODEL_ID
+  const useConfiguredDefaultModel =
+    agentId === 'pi' && (persisted === PI_DEFAULT_MODEL_ID || markedOperationSeed || markedDefault)
+  return { modelId: persisted, useConfiguredDefaultModel }
 }
 
 function resolveThinkingLevel(args: {
@@ -1283,31 +1339,38 @@ export function resolveSourceControlAiForOperation(
   }
 
   const hostKey = input.discoveryHostKey ?? LOCAL_COMMIT_MESSAGE_HOST_KEY
-  const persistedModelId = selectPersistedModelId({
+  const persistedModel = selectPersistedModel({
     source,
     legacy,
     repoOverrides,
     operation: input.operation,
     hostKey,
     agentId: resolvedActionAgentId,
-    defaultModelId: spec.defaultModelId
+    defaultModelId: spec.defaultModelId,
+    configuredDefaultState: input.settings.piConfiguredDefaultModelState
   })
+  const persistedModelId = persistedModel.modelId
   const discoveredModels = getDiscoveredModels(source, legacy, hostKey, resolvedActionAgentId)
   const model =
     spec.models.find((candidate) => candidate.id === persistedModelId) ??
     discoveredModels.find((candidate) => candidate.id === persistedModelId) ??
+    (spec.modelSource === 'dynamic' && persistedModelId
+      ? { id: persistedModelId, label: persistedModelId }
+      : undefined) ??
     getCommitMessageModel(resolvedActionAgentId, spec.defaultModelId)
   if (!model) {
     return { ok: false, error: `No model is available for ${spec.label}.` }
   }
 
-  const thinkingLevel = resolveThinkingLevel({
-    model,
-    source,
-    legacy,
-    repoOverrides,
-    operation: input.operation
-  })
+  const thinkingLevel = persistedModel.useConfiguredDefaultModel
+    ? undefined
+    : resolveThinkingLevel({
+        model,
+        source,
+        legacy,
+        repoOverrides,
+        operation: input.operation
+      })
   const agentCommandOverride = input.settings.agentCmdOverrides?.[resolvedActionAgentId]?.trim()
   return {
     ok: true,
@@ -1315,7 +1378,10 @@ export function resolveSourceControlAiForOperation(
       enabled: true,
       params: {
         agentId: resolvedActionAgentId,
-        model: model.id,
+        model: persistedModel.useConfiguredDefaultModel
+          ? PI_RETIRED_COPILOT_DEFAULT_MODEL_ID
+          : model.id,
+        ...(persistedModel.useConfiguredDefaultModel ? { useConfiguredDefaultModel: true } : {}),
         thinkingLevel,
         customPrompt: resolveInstructionsFromNormalized(
           source,

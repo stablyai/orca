@@ -391,6 +391,11 @@ export function getDefaultSettings(homedir: string): GlobalSettings {
       customAgentCommand: ''
     },
     sourceControlAi: getDefaultSourceControlAiSettings(),
+    piConfiguredDefaultModelState: {
+      version: 1,
+      defaultsByHost: {},
+      commitMessageSeedByHost: {}
+    },
     voice: getDefaultVoiceSettings()
   }
 }

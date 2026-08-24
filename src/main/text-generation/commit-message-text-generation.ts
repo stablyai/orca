@@ -38,6 +38,7 @@ import {
   getAgentModelProbeSpec,
   type AgentModelProbeSpec
 } from '../../shared/agent-model-probe-spec'
+import { PI_COMPATIBILITY_MODEL, PI_DEFAULT_MODEL_ID } from '../../shared/commit-message-agent-spec'
 import {
   planAgentBinary,
   planCommitMessageGeneration,
@@ -280,6 +281,9 @@ function finalizeModelDiscoveryOutput(
     models = spec.modelDiscovery?.parse(stderr) ?? []
   }
   if (models.length === 0) {
+    if (spec.id === 'pi') {
+      return toModelDiscoveryCapability(spec, [PI_COMPATIBILITY_MODEL], PI_COMPATIBILITY_MODEL.id)
+    }
     if (spec.models.length > 0) {
       console.warn('[commit-message] Model discovery returned no models; using static fallback:', {
         label: spec.label
@@ -287,6 +291,13 @@ function finalizeModelDiscoveryOutput(
       return toModelDiscoveryCapability(spec, spec.models, spec.defaultModelId)
     }
     return { success: false, error: `${spec.label} returned no available models.` }
+  }
+  models = models.filter((model) => model.id !== PI_DEFAULT_MODEL_ID)
+  const cliDefault = spec.models.find(
+    (model) => model.id === spec.defaultModelId && model.isDefault
+  )
+  if (spec.id !== 'pi' && cliDefault && !models.some((model) => model.id === cliDefault.id)) {
+    models = [cliDefault, ...models]
   }
   const defaultModelId = models.some((model) => model.id === spec.defaultModelId)
     ? spec.defaultModelId

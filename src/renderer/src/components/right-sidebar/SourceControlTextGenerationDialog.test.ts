@@ -212,6 +212,25 @@ describe('buildCommitMessageGenerationParams', () => {
     })
   })
 
+  it('preserves Pi configured-default intent through dialog reconstruction', () => {
+    expect(
+      buildCommitMessageGenerationParams({
+        agentId: 'pi',
+        commandTemplate: '{basePrompt}',
+        baseParams: {
+          agentId: 'pi',
+          model: 'github-copilot/gpt-5.4-mini',
+          useConfiguredDefaultModel: true
+        },
+        settings: null
+      })
+    ).toMatchObject({
+      agentId: 'pi',
+      model: 'github-copilot/gpt-5.4-mini',
+      useConfiguredDefaultModel: true
+    })
+  })
+
   it('keeps existing custom-command generation usable from the dialog', () => {
     expect(
       buildCommitMessageGenerationParams({

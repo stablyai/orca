@@ -51,6 +51,9 @@ export function buildCommitMessageGenerationParams(args: {
   return {
     agentId: args.agentId,
     model: modelId,
+    ...(sameResolvedAgent && args.baseParams?.useConfiguredDefaultModel
+      ? { useConfiguredDefaultModel: true }
+      : {}),
     ...(thinkingLevel ? { thinkingLevel } : {}),
     commandInputTemplate: args.commandTemplate,
     ...(args.agentArgs !== undefined ? { agentArgs: args.agentArgs } : {}),

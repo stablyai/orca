@@ -441,6 +441,12 @@ export type GlobalSettings = {
   commitMessageAi?: CommitMessageAiSettings
   /** Source-control AI generation settings for commit messages and hosted-review drafts. */
   sourceControlAi?: SourceControlAiSettings
+  /** Distinguishes Orca's former automatic Pi seed from a later explicit choice. */
+  piConfiguredDefaultModelState?: {
+    version: 1
+    defaultsByHost: Record<string, true>
+    commitMessageSeedByHost: Record<string, true>
+  }
   /** GitLab project preferences (pinned + recent paths). Optional for pre-GitLab profiles; persistence merge fills the default. */
   gitlabProjects?: GitLabProjectSettings
   /** Anonymous product-telemetry state; optional until the one-shot Store.load() migration populates it.

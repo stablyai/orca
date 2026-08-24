@@ -157,6 +157,7 @@ import {
   projectSourceControlAiToLegacyCommitMessageAi,
   sourceControlAiSettingsFromLegacy
 } from '../../../shared/source-control-ai'
+import { migratePiConfiguredDefaultModelState } from '../../../shared/pi-configured-default-model-state'
 import { normalizeDisabledTuiAgents } from '../../../shared/tui-agent-selection'
 import { hasUnsupportedTuiAgentArgs } from '../../../shared/tui-agent-launch-defaults'
 import { normalizeTerminalCursorStyleDefault } from '../../../shared/terminal-cursor-style-settings'
@@ -934,6 +935,14 @@ export class Store {
               parsed.settings?.sourceControlAi,
               legacyCommitMessageAi
             )
+        const piConfiguredDefaultMigration = migratePiConfiguredDefaultModelState({
+          sourceControlAi: migratedSourceControlAi,
+          commitMessageAi: legacyCommitMessageAi,
+          persistedState: parsed.settings?.piConfiguredDefaultModelState
+        })
+        if (piConfiguredDefaultMigration.changed) {
+          this.loadNeedsSave = true
+        }
         // Why (issue #903): old 'true' default broke non-US Option-layer chars; flip 'true'→'auto' once so the layout probe decides.
         const rawOptionAsAlt = parsed.settings?.terminalMacOptionAsAlt
         const alreadyMigrated = parsed.settings?.terminalMacOptionAsAltMigrated === true
@@ -1276,6 +1285,7 @@ export class Store {
             }),
             notifications: normalizedNotifications,
             sourceControlAi: migratedSourceControlAi,
+            piConfiguredDefaultModelState: piConfiguredDefaultMigration.state,
             sourceControlGroupOrder: normalizedSourceControlGroupOrder,
             // Why: rollback builds still read commitMessageAi, so refresh the legacy projection from sourceControlAi for compat.
             commitMessageAi: projectSourceControlAiToLegacyCommitMessageAi(

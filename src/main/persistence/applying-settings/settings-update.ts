@@ -27,6 +27,7 @@ import {
   normalizeSourceControlAiSettings,
   projectSourceControlAiToLegacyCommitMessageAi
 } from '../../../shared/source-control-ai'
+import { applyPiConfiguredDefaultSelectionUpdate } from '../../../shared/pi-configured-default-model-state'
 import {
   PROTECTED_SECRET_SLOT,
   type ProtectedSecretPersistence
@@ -211,6 +212,15 @@ export function updateSettings(
       sanitizedUpdates.sourceControlAi,
       operations.state.settings
     )
+    const previousSourceControlAi = normalizeSourceControlAiSettings(
+      operations.state.settings.sourceControlAi,
+      operations.state.settings.commitMessageAi
+    )
+    sanitizedUpdates.piConfiguredDefaultModelState = applyPiConfiguredDefaultSelectionUpdate({
+      previous: previousSourceControlAi,
+      next: sanitizedUpdates.sourceControlAi!,
+      state: operations.state.settings.piConfiguredDefaultModelState
+    })
     const normalizedSourceControlAi = normalizeSourceControlAiSettings(
       sanitizedUpdates.sourceControlAi,
       operations.state.settings.commitMessageAi
