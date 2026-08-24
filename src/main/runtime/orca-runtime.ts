@@ -8309,6 +8309,7 @@ export class OrcaRuntimeService {
               parentTabId: tab.id,
               leafId,
               title,
+              ...(tab.customTitle?.trim() ? { customTitle: tab.customTitle.trim() } : {}),
               ...(ptyId ? { ptyId } : {}),
               ...(tab.startupCwd ? { startupCwd: tab.startupCwd } : {}),
               ...(tab.launchAgent ? { launchAgent: tab.launchAgent } : {}),
@@ -33719,8 +33720,17 @@ export class OrcaRuntimeService {
         liveLeafPty?.foregroundAgent ??
         pty?.foregroundAgent ??
         null
+      // Why: a desktop rename is the user's stable session identity. PTY/OSC
+      // titles keep changing with the foreground agent and must not replace it
+      // in the mobile tab strip (the renderer already scoped this metadata to
+      // the correct terminal surface).
       const title = normalizeCompatibleAgentTitleForOwner(
-        trackerOnlyTitle ?? leafTitle ?? ptyTitle ?? syncedTab?.title ?? tab.title,
+        tab.customTitle?.trim() ||
+          trackerOnlyTitle ||
+          leafTitle ||
+          ptyTitle ||
+          syncedTab?.title ||
+          tab.title,
         ownerAgent
       )
       const liveTitleEvidence = leafTitle ?? ptyTitle
