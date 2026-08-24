@@ -21,6 +21,8 @@ const CLAUDE_TERMINAL_BACKGROUND_TASK_STATUSES = new Set([
   'canceled',
   'timed_out'
 ])
+const CLAUDE_NON_AGENT_TASK_ID_MAX_LENGTH = 128
+const CLAUDE_NON_AGENT_TASK_ID_MAX_COUNT = 256
 
 /** One agent entry from the `background_tasks` array Claude attaches to Stop
  *  (and SubagentStop) hook payloads. Non-agent tasks do not become rows. */
@@ -43,18 +45,30 @@ export function readClaudeBackgroundAgentTasks(hookPayload: Record<string, unkno
   tasks: ClaudeBackgroundAgentTask[]
   truncated: boolean
   hasRunningNonAgentTask: boolean
+  runningNonAgentTaskIds: string[]
+  hasUnidentifiedRunningNonAgentTask: boolean
 } {
   const raw = hookPayload['background_tasks']
   if (!Array.isArray(raw)) {
-    return { present: false, tasks: [], truncated: false, hasRunningNonAgentTask: false }
+    return {
+      present: false,
+      tasks: [],
+      truncated: false,
+      hasRunningNonAgentTask: false,
+      runningNonAgentTaskIds: [],
+      hasUnidentifiedRunningNonAgentTask: false
+    }
   }
   const tasks: ClaudeBackgroundAgentTask[] = []
+  const runningNonAgentTaskIds: string[] = []
   let truncated = false
   let hasRunningNonAgentTask = false
+  let hasUnidentifiedRunningNonAgentTask = false
   for (const item of raw) {
     if (typeof item !== 'object' || item === null) {
       truncated = true
       hasRunningNonAgentTask = true
+      hasUnidentifiedRunningNonAgentTask = true
       continue
     }
     const obj = item as Record<string, unknown>
@@ -65,12 +79,23 @@ export function readClaudeBackgroundAgentTasks(hookPayload: Record<string, unkno
     if (taskType.length === 0) {
       truncated = true
       hasRunningNonAgentTask ||= !isTerminal
+      hasUnidentifiedRunningNonAgentTask ||= !isTerminal
       continue
     }
     const isAgentTask = taskType === 'subagent' || taskType === 'teammate'
     // Why: future non-agent types and nonterminal labels must fail active; only typed agent rows or explicit terminal states can safely retire work.
     if (!isAgentTask && !isTerminal) {
       hasRunningNonAgentTask = true
+      const taskId = typeof obj.id === 'string' ? obj.id.trim() : ''
+      if (
+        taskId.length > 0 &&
+        taskId.length <= CLAUDE_NON_AGENT_TASK_ID_MAX_LENGTH &&
+        runningNonAgentTaskIds.length < CLAUDE_NON_AGENT_TASK_ID_MAX_COUNT
+      ) {
+        runningNonAgentTaskIds.push(taskId)
+      } else {
+        hasUnidentifiedRunningNonAgentTask = true
+      }
     }
     if (!isAgentTask) {
       continue
@@ -93,5 +118,12 @@ export function readClaudeBackgroundAgentTasks(hookPayload: Record<string, unkno
       teammate: taskType === 'teammate'
     })
   }
-  return { present: true, tasks, truncated, hasRunningNonAgentTask }
+  return {
+    present: true,
+    tasks,
+    truncated,
+    hasRunningNonAgentTask,
+    runningNonAgentTaskIds,
+    hasUnidentifiedRunningNonAgentTask
+  }
 }

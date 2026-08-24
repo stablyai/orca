@@ -1,4 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { appendFileSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { AgentHookServer, _internals } from './server'
 import { AGENT_STATUS_MAX_FIELD_LENGTH } from '../../shared/agent-status-types'
 import { makePaneKey } from '../../shared/stable-pane-id'
@@ -127,6 +130,80 @@ describe('AgentHookServer listener replay', () => {
       expect(server._getStateForTests().claudeActiveSessionCronPaneKeys.has(PANE)).toBe(true)
     } finally {
       server.stop()
+    }
+  })
+
+  it('does not retire Claude subagents from a rejected idle status', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'claude-rejected-idle-'))
+    const transcriptPath = join(dir, 'session.jsonl')
+    writeFileSync(transcriptPath, '')
+    const server = new AgentHookServer()
+    await server.start({ env: 'production' })
+    try {
+      const env = server.buildPtyEnv()
+      const postHook = async (
+        source: 'codex' | 'claude',
+        payload: Record<string, unknown>
+      ): Promise<void> => {
+        const response = await fetch(
+          `http://127.0.0.1:${env.ORCA_AGENT_HOOK_PORT}/hook/${source}`,
+          {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'X-Orca-Agent-Hook-Token': env.ORCA_AGENT_HOOK_TOKEN
+            },
+            body: JSON.stringify(buildBody(payload))
+          }
+        )
+        expect(response.status).toBe(204)
+      }
+
+      await postHook('codex', {
+        hook_event_name: 'UserPromptSubmit',
+        prompt: 'parent codex'
+      })
+      const parent = server.getStatusSnapshot()[0]
+      const state = server._getStateForTests()
+      const parentPrompt = state.lastPromptByPaneKey.get(PANE)
+      const parentTool = state.lastToolByPaneKey.get(PANE)
+      state.claudeSubagentRosterByPaneKey.set(
+        PANE,
+        new Map([['agent-1', { state: 'working', startedAt: 1 }]])
+      )
+      state.claudeBackgroundTaskObservationsByPaneKey.set(
+        PANE,
+        new Map([['agent-1', { transcriptPath, transcriptByteOffset: 0, nonAgent: false }]])
+      )
+      appendFileSync(
+        transcriptPath,
+        `${JSON.stringify({
+          type: 'user',
+          promptSource: 'system',
+          origin: { kind: 'task-notification' },
+          message: {
+            content:
+              '<task-notification>\n<task-id>agent-1</task-id>\n<status>completed</status>\n</task-notification>'
+          }
+        })}\n`
+      )
+
+      await postHook('claude', {
+        hook_event_name: 'Notification',
+        notification_type: 'idle_prompt',
+        transcript_path: transcriptPath
+      })
+
+      expect(server.getStatusSnapshot()[0]).toEqual(parent)
+      expect(
+        server._getStateForTests().claudeSubagentRosterByPaneKey.get(PANE)?.has('agent-1')
+      ).toBe(true)
+      expect(server._getStateForTests().claudeLeadStateByPaneKey.has(PANE)).toBe(false)
+      expect(server._getStateForTests().lastPromptByPaneKey.get(PANE)).toBe(parentPrompt)
+      expect(server._getStateForTests().lastToolByPaneKey.get(PANE)).toEqual(parentTool)
+    } finally {
+      server.stop()
+      rmSync(dir, { recursive: true, force: true })
     }
   })
 

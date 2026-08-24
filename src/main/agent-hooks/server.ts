@@ -39,7 +39,9 @@ import {
   warnOnHookEnvOrVersionMismatch,
   writeEndpointFile,
   type AgentHookEventPayload,
-  type HookListenerState
+  type ClaudeLeadTurnState,
+  type HookListenerState,
+  type ToolSnapshot
 } from '../../shared/agent-hook-listener'
 import {
   createHookTransportInterferenceTracker,
@@ -51,7 +53,8 @@ import {
   claudeTeammateIdMatchesName,
   claudeRosterHasRestoredSnapshotSubagent,
   claudeRosterHasWorkingSubagent,
-  claudeRosterToSnapshots
+  claudeRosterToSnapshots,
+  type ClaudeSubagentRoster
 } from '../../shared/claude-subagent-roster'
 import {
   isAgentHookSource,
@@ -118,6 +121,12 @@ type EnrichedAgentHookEventPayload = AgentHookEventPayload & {
 type NormalizedLocalHook = {
   event: AgentHookEventPayload | null
   onAccepted?: () => void
+}
+
+function cloneClaudeSubagentRoster(
+  roster: ClaudeSubagentRoster | undefined
+): ClaudeSubagentRoster | undefined {
+  return roster ? new Map(Array.from(roster, ([id, tracked]) => [id, { ...tracked }])) : undefined
 }
 
 type PersistedAgentHookEventPayload = Omit<
@@ -2112,30 +2121,141 @@ export class AgentHookServer {
       return { event: normalizeHookPayload(this.state, source, body, this.env) }
     }
     const previousRunningTask = this.state.claudeRunningNonAgentTaskPaneKeys.has(paneKey)
+    const previousTaskObservations = new Map(
+      this.state.claudeBackgroundTaskObservationsByPaneKey.get(paneKey) ?? []
+    )
+    const previousUnidentifiedTask =
+      this.state.claudeUnidentifiedRunningNonAgentTaskPaneKeys.has(paneKey)
     const previousActiveCron = this.state.claudeActiveSessionCronPaneKeys.has(paneKey)
+    const previousSubagentRoster = cloneClaudeSubagentRoster(
+      this.state.claudeSubagentRosterByPaneKey.get(paneKey)
+    )
+    const previousLeadState = this.cloneClaudeLeadState(paneKey)
+    const previousPrompt = this.state.lastPromptByPaneKey.get(paneKey)
+    const previousTool = this.cloneClaudeToolState(paneKey)
+    const previousUnconfirmed = this.state.claudeUnconfirmedRestoredStatusPaneKeys.has(paneKey)
     const event = normalizeHookPayload(this.state, source, body, this.env)
     const nextRunningTask = this.state.claudeRunningNonAgentTaskPaneKeys.has(paneKey)
+    const nextTaskObservations = new Map(
+      this.state.claudeBackgroundTaskObservationsByPaneKey.get(paneKey) ?? []
+    )
+    const nextUnidentifiedTask =
+      this.state.claudeUnidentifiedRunningNonAgentTaskPaneKeys.has(paneKey)
     const nextActiveCron = this.state.claudeActiveSessionCronPaneKeys.has(paneKey)
-    this.setClaudeBackgroundEvidence(paneKey, previousRunningTask, previousActiveCron)
+    const nextSubagentRoster = cloneClaudeSubagentRoster(
+      this.state.claudeSubagentRosterByPaneKey.get(paneKey)
+    )
+    const nextLeadState = this.cloneClaudeLeadState(paneKey)
+    const nextPrompt = this.state.lastPromptByPaneKey.get(paneKey)
+    const nextTool = this.cloneClaudeToolState(paneKey)
+    const nextUnconfirmed = this.state.claudeUnconfirmedRestoredStatusPaneKeys.has(paneKey)
+    this.setClaudeBackgroundEvidence(
+      paneKey,
+      previousRunningTask,
+      previousTaskObservations,
+      previousUnidentifiedTask,
+      previousActiveCron
+    )
+    this.setClaudeSubagentRoster(paneKey, previousSubagentRoster)
+    this.setClaudeLeadState(paneKey, previousLeadState)
+    this.setClaudeNormalizationCache(paneKey, previousPrompt, previousTool, previousUnconfirmed)
     if (!event || event.paneKey !== paneKey) {
       return { event }
     }
-    // Why: nested CLIs may inherit the pane key; only accepted statuses may mutate its background-work gate.
+    // Why: nested CLIs may inherit the pane key; only accepted statuses may mutate Claude lifecycle evidence.
     return {
       event,
-      onAccepted: () => this.setClaudeBackgroundEvidence(paneKey, nextRunningTask, nextActiveCron)
+      onAccepted: () => {
+        this.setClaudeBackgroundEvidence(
+          paneKey,
+          nextRunningTask,
+          nextTaskObservations,
+          nextUnidentifiedTask,
+          nextActiveCron
+        )
+        this.setClaudeSubagentRoster(paneKey, nextSubagentRoster)
+        this.setClaudeLeadState(paneKey, nextLeadState)
+        this.setClaudeNormalizationCache(paneKey, nextPrompt, nextTool, nextUnconfirmed)
+      }
+    }
+  }
+
+  private setClaudeSubagentRoster(paneKey: string, roster: ClaudeSubagentRoster | undefined): void {
+    if (roster) {
+      this.state.claudeSubagentRosterByPaneKey.set(paneKey, roster)
+    } else {
+      this.state.claudeSubagentRosterByPaneKey.delete(paneKey)
+    }
+  }
+
+  private cloneClaudeLeadState(paneKey: string): ClaudeLeadTurnState | undefined {
+    const lead = this.state.claudeLeadStateByPaneKey.get(paneKey)
+    return lead
+      ? {
+          ...lead,
+          ...(lead.stateBeforeWait ? { stateBeforeWait: { ...lead.stateBeforeWait } } : {})
+        }
+      : undefined
+  }
+
+  private setClaudeLeadState(paneKey: string, lead: ClaudeLeadTurnState | undefined): void {
+    if (lead) {
+      this.state.claudeLeadStateByPaneKey.set(paneKey, lead)
+    } else {
+      this.state.claudeLeadStateByPaneKey.delete(paneKey)
+    }
+  }
+
+  private cloneClaudeToolState(paneKey: string): ToolSnapshot | undefined {
+    const tool = this.state.lastToolByPaneKey.get(paneKey)
+    return tool ? { ...tool } : undefined
+  }
+
+  private setClaudeNormalizationCache(
+    paneKey: string,
+    prompt: string | undefined,
+    tool: ToolSnapshot | undefined,
+    restoredUnconfirmed: boolean
+  ): void {
+    if (prompt === undefined) {
+      this.state.lastPromptByPaneKey.delete(paneKey)
+    } else {
+      this.state.lastPromptByPaneKey.set(paneKey, prompt)
+    }
+    if (tool === undefined) {
+      this.state.lastToolByPaneKey.delete(paneKey)
+    } else {
+      this.state.lastToolByPaneKey.set(paneKey, tool)
+    }
+    if (restoredUnconfirmed) {
+      this.state.claudeUnconfirmedRestoredStatusPaneKeys.add(paneKey)
+    } else {
+      this.state.claudeUnconfirmedRestoredStatusPaneKeys.delete(paneKey)
     }
   }
 
   private setClaudeBackgroundEvidence(
     paneKey: string,
     hasRunningTask: boolean,
+    taskObservations: ReadonlyMap<
+      string,
+      { transcriptPath: string; transcriptByteOffset: number; nonAgent: boolean }
+    >,
+    hasUnidentifiedTask: boolean,
     hasActiveCron: boolean
   ): void {
     if (hasRunningTask) {
       this.state.claudeRunningNonAgentTaskPaneKeys.add(paneKey)
+      this.state.claudeBackgroundTaskObservationsByPaneKey.set(paneKey, new Map(taskObservations))
+      if (hasUnidentifiedTask) {
+        this.state.claudeUnidentifiedRunningNonAgentTaskPaneKeys.add(paneKey)
+      } else {
+        this.state.claudeUnidentifiedRunningNonAgentTaskPaneKeys.delete(paneKey)
+      }
     } else {
       this.state.claudeRunningNonAgentTaskPaneKeys.delete(paneKey)
+      this.state.claudeBackgroundTaskObservationsByPaneKey.delete(paneKey)
+      this.state.claudeUnidentifiedRunningNonAgentTaskPaneKeys.delete(paneKey)
     }
     if (hasActiveCron) {
       this.state.claudeActiveSessionCronPaneKeys.add(paneKey)
@@ -2465,8 +2585,12 @@ export class AgentHookServer {
         ? () => {
             if (envelope.claudeRunningNonAgentTask) {
               this.state.claudeRunningNonAgentTaskPaneKeys.add(paneKey)
+              this.state.claudeBackgroundTaskObservationsByPaneKey.delete(paneKey)
+              this.state.claudeUnidentifiedRunningNonAgentTaskPaneKeys.add(paneKey)
             } else {
               this.state.claudeRunningNonAgentTaskPaneKeys.delete(paneKey)
+              this.state.claudeBackgroundTaskObservationsByPaneKey.delete(paneKey)
+              this.state.claudeUnidentifiedRunningNonAgentTaskPaneKeys.delete(paneKey)
             }
           }
         : undefined
@@ -2703,6 +2827,8 @@ export class AgentHookServer {
           this.state.claudeSubagentRosterByPaneKey.delete(paneKey)
           this.state.claudeLeadStateByPaneKey.delete(paneKey)
           this.state.claudeRunningNonAgentTaskPaneKeys.delete(paneKey)
+          this.state.claudeBackgroundTaskObservationsByPaneKey.delete(paneKey)
+          this.state.claudeUnidentifiedRunningNonAgentTaskPaneKeys.delete(paneKey)
           this.state.claudeActiveSessionCronPaneKeys.delete(paneKey)
         }
       }

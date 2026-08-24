@@ -39,7 +39,11 @@ import {
   upsertWorkingClaudeSubagent,
   type ClaudeSubagentRoster
 } from './claude-subagent-roster'
-import { readClaudeBackgroundAgentTasks } from './claude-background-task-inventory'
+import {
+  readClaudeBackgroundAgentTasks,
+  type ClaudeBackgroundAgentTask
+} from './claude-background-task-inventory'
+import { readClaudeTerminalTaskNotifications } from './claude-task-notification'
 import {
   codexRosterEffectiveState,
   codexRosterToSnapshots,
@@ -140,6 +144,13 @@ export type HookListenerState = {
   claudeUnconfirmedRestoredStatusPaneKeys: Set<string>
   /** Panes whose latest authoritative Claude task inventory still has running non-agent work. */
   claudeRunningNonAgentTaskPaneKeys: Set<string>
+  /** Provider task ids backing the non-agent working gate. */
+  claudeBackgroundTaskObservationsByPaneKey: Map<
+    string,
+    Map<string, { transcriptPath: string; transcriptByteOffset: number; nonAgent: boolean }>
+  >
+  /** Panes whose working inventory contained a task Orca cannot match by id. */
+  claudeUnidentifiedRunningNonAgentTaskPaneKeys: Set<string>
   /** Panes whose latest authoritative Claude cron inventory still has a scheduled job. */
   claudeActiveSessionCronPaneKeys: Set<string>
   /** Live thread-spawn children per Codex pane. */
@@ -181,6 +192,8 @@ export function createHookListenerState(): HookListenerState {
     claudeLeadStateByPaneKey: new Map(),
     claudeUnconfirmedRestoredStatusPaneKeys: new Set(),
     claudeRunningNonAgentTaskPaneKeys: new Set(),
+    claudeBackgroundTaskObservationsByPaneKey: new Map(),
+    claudeUnidentifiedRunningNonAgentTaskPaneKeys: new Set(),
     claudeActiveSessionCronPaneKeys: new Set(),
     codexSubagentRosterByPaneKey: new Map(),
     codexSubagentTranscriptByPaneKey: new Map(),
@@ -198,6 +211,8 @@ export function clearPaneCacheState(state: HookListenerState, paneKey: string): 
   state.claudeLeadStateByPaneKey.delete(paneKey)
   state.claudeUnconfirmedRestoredStatusPaneKeys.delete(paneKey)
   state.claudeRunningNonAgentTaskPaneKeys.delete(paneKey)
+  state.claudeBackgroundTaskObservationsByPaneKey.delete(paneKey)
+  state.claudeUnidentifiedRunningNonAgentTaskPaneKeys.delete(paneKey)
   state.claudeActiveSessionCronPaneKeys.delete(paneKey)
   state.codexSubagentRosterByPaneKey.delete(paneKey)
   state.codexSubagentTranscriptByPaneKey.delete(paneKey)
@@ -245,6 +260,12 @@ export function movePaneCacheState(
   movePaneScopedMapEntries(state.claudeLeadStateByPaneKey, fromPaneKey, toPaneKey)
   movePaneScopedSetEntries(state.claudeUnconfirmedRestoredStatusPaneKeys, fromPaneKey, toPaneKey)
   movePaneScopedSetEntries(state.claudeRunningNonAgentTaskPaneKeys, fromPaneKey, toPaneKey)
+  movePaneScopedMapEntries(state.claudeBackgroundTaskObservationsByPaneKey, fromPaneKey, toPaneKey)
+  movePaneScopedSetEntries(
+    state.claudeUnidentifiedRunningNonAgentTaskPaneKeys,
+    fromPaneKey,
+    toPaneKey
+  )
   movePaneScopedSetEntries(state.claudeActiveSessionCronPaneKeys, fromPaneKey, toPaneKey)
   movePaneScopedMapEntries(state.codexSubagentRosterByPaneKey, fromPaneKey, toPaneKey)
   movePaneScopedMapEntries(state.codexSubagentTranscriptByPaneKey, fromPaneKey, toPaneKey)
@@ -290,6 +311,8 @@ export function clearAllListenerCaches(state: HookListenerState): void {
   state.claudeLeadStateByPaneKey.clear()
   state.claudeUnconfirmedRestoredStatusPaneKeys.clear()
   state.claudeRunningNonAgentTaskPaneKeys.clear()
+  state.claudeBackgroundTaskObservationsByPaneKey.clear()
+  state.claudeUnidentifiedRunningNonAgentTaskPaneKeys.clear()
   state.claudeActiveSessionCronPaneKeys.clear()
   state.codexSubagentRosterByPaneKey.clear()
   state.codexSubagentTranscriptByPaneKey.clear()
@@ -1632,7 +1655,10 @@ function extractClaudeToolFields(
       update.lastAssistantMessage = errorText
     }
   }
-  if (eventName === 'Stop') {
+  if (
+    eventName === 'Stop' ||
+    (eventName === 'Notification' && hookPayload.notification_type === 'idle_prompt')
+  ) {
     const direct = readString(hookPayload, 'last_assistant_message')
     if (direct) {
       update.lastAssistantMessage = direct
@@ -2627,17 +2653,130 @@ function getOrCreateClaudeSubagentRoster(
   return roster
 }
 
-function updateClaudeRunningNonAgentTask(
+function updateClaudeBackgroundTaskEvidence(
   state: HookListenerState,
   paneKey: string,
   hasRunningNonAgentTask: boolean,
-  interrupted: boolean
+  runningNonAgentTaskIds: readonly string[],
+  agentTasks: readonly ClaudeBackgroundAgentTask[],
+  hasUnidentifiedRunningTask: boolean,
+  interrupted: boolean,
+  hookPayload: Record<string, unknown>
 ): void {
+  const transcriptPath = readString(hookPayload, 'transcript_path')
+  let transcriptByteOffset: number | null = null
+  if (transcriptPath) {
+    try {
+      transcriptByteOffset = statSync(transcriptPath).size
+    } catch {
+      transcriptByteOffset = null
+    }
+  }
+  const previous = state.claudeBackgroundTaskObservationsByPaneKey.get(paneKey)
+  const observations = new Map<
+    string,
+    { transcriptPath: string; transcriptByteOffset: number; nonAgent: boolean }
+  >()
+  let hasUnidentified = hasUnidentifiedRunningTask
+  if (!interrupted) {
+    const runningTasks = [
+      ...runningNonAgentTaskIds.map((id) => ({ id, nonAgent: true })),
+      ...agentTasks
+        .filter((task) => task.running && !task.teammate)
+        .map((task) => ({ id: task.id, nonAgent: false }))
+    ]
+    for (const task of runningTasks) {
+      const existing = previous?.get(task.id)
+      if (
+        existing &&
+        existing.transcriptPath === transcriptPath &&
+        existing.nonAgent === task.nonAgent
+      ) {
+        observations.set(task.id, existing)
+      } else if (transcriptPath && transcriptByteOffset !== null) {
+        observations.set(task.id, { transcriptPath, transcriptByteOffset, nonAgent: task.nonAgent })
+      } else if (task.nonAgent) {
+        hasUnidentified = true
+      }
+    }
+  }
+  if (observations.size > 0) {
+    state.claudeBackgroundTaskObservationsByPaneKey.set(paneKey, observations)
+  } else {
+    state.claudeBackgroundTaskObservationsByPaneKey.delete(paneKey)
+  }
   if (hasRunningNonAgentTask && !interrupted) {
     state.claudeRunningNonAgentTaskPaneKeys.add(paneKey)
+    if (hasUnidentified) {
+      state.claudeUnidentifiedRunningNonAgentTaskPaneKeys.add(paneKey)
+    } else {
+      state.claudeUnidentifiedRunningNonAgentTaskPaneKeys.delete(paneKey)
+    }
   } else {
     state.claudeRunningNonAgentTaskPaneKeys.delete(paneKey)
+    state.claudeUnidentifiedRunningNonAgentTaskPaneKeys.delete(paneKey)
   }
+}
+
+function reconcileClaudeIdlePromptTasks(
+  state: HookListenerState,
+  paneKey: string,
+  hookPayload: Record<string, unknown>
+): boolean {
+  const transcriptPath = readString(hookPayload, 'transcript_path')
+  const observations = state.claudeBackgroundTaskObservationsByPaneKey.get(paneKey)
+  if (!transcriptPath || !observations) {
+    return false
+  }
+  const matchingObservations = Array.from(observations.entries()).filter(
+    ([, observation]) => observation.transcriptPath === transcriptPath
+  )
+  const minimumByteOffset = Math.min(
+    ...matchingObservations.map(([, observation]) => observation.transcriptByteOffset)
+  )
+  if (!Number.isFinite(minimumByteOffset)) {
+    return false
+  }
+  const notifications = readClaudeTerminalTaskNotifications(transcriptPath, minimumByteOffset)
+  const terminalTaskIds = new Set<string>()
+  for (const [taskId, observation] of matchingObservations) {
+    if (
+      notifications.some(
+        (notification) =>
+          notification.taskId === taskId &&
+          notification.byteOffset >= observation.transcriptByteOffset
+      )
+    ) {
+      observations.delete(taskId)
+      terminalTaskIds.add(taskId)
+    }
+  }
+  if (terminalTaskIds.size === 0) {
+    return false
+  }
+  if (observations.size === 0) {
+    state.claudeBackgroundTaskObservationsByPaneKey.delete(paneKey)
+  }
+  const hasTrackedNonAgentTask = Array.from(observations.values()).some(
+    (observation) => observation.nonAgent
+  )
+  if (
+    !hasTrackedNonAgentTask &&
+    !state.claudeUnidentifiedRunningNonAgentTaskPaneKeys.has(paneKey)
+  ) {
+    state.claudeRunningNonAgentTaskPaneKeys.delete(paneKey)
+  }
+  const roster = state.claudeSubagentRosterByPaneKey.get(paneKey)
+  if (!roster) {
+    return true
+  }
+  for (const taskId of terminalTaskIds) {
+    stopClaudeSubagent(roster, taskId)
+  }
+  if (roster.size === 0) {
+    state.claudeSubagentRosterByPaneKey.delete(paneKey)
+  }
+  return true
 }
 
 function resolveClaudePaneState(
@@ -2751,7 +2890,7 @@ function normalizeClaudeSubagentLifecycleEvent(
 /** Sync the Claude lead-turn record when the SERVER infers an interrupt outside the hook stream (Ctrl+C with a missed Stop); else a later child lifecycle event resurrects the cancelled pane. */
 export function markClaudeLeadTurnInterrupted(state: HookListenerState, paneKey: string): void {
   state.claudeLeadStateByPaneKey.set(paneKey, { state: 'done', interrupted: true })
-  state.claudeRunningNonAgentTaskPaneKeys.delete(paneKey)
+  updateClaudeBackgroundTaskEvidence(state, paneKey, false, [], [], false, true, {})
   state.claudeActiveSessionCronPaneKeys.delete(paneKey)
 }
 
@@ -2949,7 +3088,7 @@ function normalizeClaudeEvent(
     // Why: a new process owns the pane; stale children/tasks/crons must not gate the
     // fresh session's idle row back up to 'working' (same reset Codex does on SessionStart).
     state.claudeSubagentRosterByPaneKey.delete(paneKey)
-    state.claudeRunningNonAgentTaskPaneKeys.delete(paneKey)
+    updateClaudeBackgroundTaskEvidence(state, paneKey, false, [], [], false, false, {})
     state.claudeActiveSessionCronPaneKeys.delete(paneKey)
     state.claudeLeadStateByPaneKey.set(paneKey, { state: 'done' })
     return buildClaudeStatusPayload(state, eventName, promptText, paneKey, hookPayload, {
@@ -2959,6 +3098,12 @@ function normalizeClaudeEvent(
     })
   }
   const previousLead = state.claudeLeadStateByPaneKey.get(paneKey)
+  const isIdlePromptNotification =
+    eventName === 'Notification' && hookPayload['notification_type'] === 'idle_prompt'
+  const reconciledIdlePrompt =
+    isIdlePromptNotification && eventAgentId === undefined
+      ? reconcileClaudeIdlePromptTasks(state, paneKey, hookPayload)
+      : false
   // Why: only a turn boundary may declare an interrupt or carry a prior one forward; any other event starts a fresh turn and drops it.
   const isTurnBoundary = eventName === 'Stop' || eventName === 'StopFailure'
   const interrupted =
@@ -2995,7 +3140,9 @@ function normalizeClaudeEvent(
       ? 'working'
       : eventName === 'PermissionRequest' || isAskUserQuestion
         ? 'waiting'
-        : isTurnBoundary || (eventName === 'PostCompact' && hookPayload.trigger === 'manual')
+        : isTurnBoundary ||
+            reconciledIdlePrompt ||
+            (eventName === 'PostCompact' && hookPayload.trigger === 'manual')
           ? 'done'
           : null
 
@@ -3003,11 +3150,15 @@ function normalizeClaudeEvent(
     return null
   }
   if (backgroundTasks.present && eventAgentId === undefined) {
-    updateClaudeRunningNonAgentTask(
+    updateClaudeBackgroundTaskEvidence(
       state,
       paneKey,
       backgroundTasks.hasRunningNonAgentTask,
-      interrupted === true
+      backgroundTasks.runningNonAgentTaskIds,
+      backgroundTasks.tasks,
+      backgroundTasks.hasUnidentifiedRunningNonAgentTask,
+      interrupted === true,
+      hookPayload
     )
   }
   if (sessionCronInventoryPresent && eventAgentId === undefined) {
@@ -3120,7 +3271,7 @@ function normalizeClaudeEvent(
   const waitingToolUseId = eventToolUseId ?? previousLead?.waitingToolUseId
 
   if (interrupted && eventAgentId === undefined) {
-    state.claudeRunningNonAgentTaskPaneKeys.delete(paneKey)
+    updateClaudeBackgroundTaskEvidence(state, paneKey, false, [], [], false, true, {})
     state.claudeActiveSessionCronPaneKeys.delete(paneKey)
   }
 
@@ -3131,11 +3282,14 @@ function normalizeClaudeEvent(
   // Why: the lead already ended — the pane stays `working` only because background inventory is still registered. `stateStartedAt` is pinned for that whole run, so this end time is the per-turn identity and the later all-clear's pair key.
   const turnCompletedAt =
     eventAgentId === undefined &&
-    isTurnBoundary &&
+    (isTurnBoundary || reconciledIdlePrompt) &&
     reportedStateName === 'done' &&
-    effectiveState === 'working' &&
     interrupted !== true
-      ? Date.now()
+      ? effectiveState === 'working'
+        ? (previousLead?.turnCompletedAt ?? Date.now())
+        : reconciledIdlePrompt
+          ? previousLead?.turnCompletedAt
+          : undefined
       : undefined
 
   state.claudeLeadStateByPaneKey.set(paneKey, {

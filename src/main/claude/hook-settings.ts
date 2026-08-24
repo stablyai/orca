@@ -48,6 +48,10 @@ export const CLAUDE_EVENTS = [
     eventName: 'Stop',
     definition: { hooks: [{ type: 'command', command: '' }] }
   },
+  {
+    eventName: 'Notification',
+    definition: { matcher: 'idle_prompt', hooks: [{ type: 'command', command: '' }] }
+  },
   // Why: OpenClaude skips normal Stop hooks after API/model errors and emits
   // StopFailure instead; without this hook Orca leaves the turn spinning.
   {

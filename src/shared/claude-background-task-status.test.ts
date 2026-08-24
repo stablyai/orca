@@ -1,4 +1,7 @@
 import { describe, expect, it } from 'vitest'
+import { appendFileSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import {
   clearAllListenerCaches,
   clearPaneCacheState,
@@ -27,6 +30,19 @@ function claudeEvent(state: HookListenerState, paneKey: string, payload: Record<
   return normalizeHookPayload(state, 'claude', { paneKey, payload }, 'production')?.payload
 }
 
+function taskNotificationLine(taskId: string, status = 'completed'): string {
+  return `${JSON.stringify({
+    type: 'user',
+    promptSource: 'system',
+    origin: { kind: 'task-notification' },
+    message: {
+      content:
+        `<task-notification>\n<task-id>${taskId}</task-id>\n` +
+        `<status>${status}</status>\n</task-notification>`
+    }
+  })}\n`
+}
+
 describe('Claude background task status', () => {
   it('finds pending monitor work after the visible child-row cap', () => {
     const agentTasks = Array.from({ length: AGENT_STATUS_MAX_SUBAGENTS + 1 }, (_, index) => ({
@@ -51,6 +67,10 @@ describe('Claude background task status', () => {
   })
 
   it('fails unknown, partial, or malformed task entries active but ignores terminal entries', () => {
+    expect(readClaudeBackgroundAgentTasks({ background_tasks: [RUNNING_SHELL] })).toMatchObject({
+      runningNonAgentTaskIds: [RUNNING_SHELL.id],
+      hasUnidentifiedRunningNonAgentTask: false
+    })
     for (const status of ['queued', undefined]) {
       expect(
         readClaudeBackgroundAgentTasks({
@@ -76,6 +96,14 @@ describe('Claude background task status', () => {
     expect(
       readClaudeBackgroundAgentTasks({ background_tasks: [null, 'shell'] }).hasRunningNonAgentTask
     ).toBe(true)
+    expect(
+      readClaudeBackgroundAgentTasks({
+        background_tasks: [{ id: 'x'.repeat(129), type: 'shell', status: 'running' }]
+      })
+    ).toMatchObject({
+      runningNonAgentTaskIds: [],
+      hasUnidentifiedRunningNonAgentTask: true
+    })
 
     for (const backgroundTasks of [
       [{ id: 'shell-1', type: 'shell', status: 'completed' }],
@@ -140,6 +168,223 @@ describe('Claude background task status', () => {
         background_tasks: []
       })?.state
     ).toBe('done')
+  })
+
+  it('reconciles only matching completed tasks at Claude idle ownership boundaries', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'claude-idle-task-'))
+    const transcriptPath = join(dir, 'session.jsonl')
+    writeFileSync(transcriptPath, '')
+    try {
+      const state = createHookListenerState()
+      expect(
+        claudeEvent(state, SOURCE_PANE, {
+          hook_event_name: 'Stop',
+          transcript_path: transcriptPath,
+          background_tasks: [RUNNING_SHELL, { id: 'shell-2', type: 'shell', status: 'running' }]
+        })?.state
+      ).toBe('working')
+
+      appendFileSync(transcriptPath, taskNotificationLine('different-task'))
+      expect(
+        claudeEvent(state, SOURCE_PANE, {
+          hook_event_name: 'Notification',
+          notification_type: 'idle_prompt',
+          transcript_path: transcriptPath
+        })
+      ).toBeUndefined()
+      expect(state.claudeLeadStateByPaneKey.get(SOURCE_PANE)?.state).toBe('done')
+
+      appendFileSync(transcriptPath, taskNotificationLine(RUNNING_SHELL.id))
+      expect(
+        claudeEvent(state, SOURCE_PANE, {
+          hook_event_name: 'Notification',
+          notification_type: 'idle_prompt',
+          transcript_path: transcriptPath
+        })
+      ).toMatchObject({ state: 'working' })
+      expect(state.claudeRunningNonAgentTaskPaneKeys.has(SOURCE_PANE)).toBe(true)
+
+      appendFileSync(transcriptPath, taskNotificationLine('shell-2', 'failed'))
+      expect(
+        claudeEvent(state, SOURCE_PANE, {
+          hook_event_name: 'Notification',
+          notification_type: 'idle_prompt',
+          transcript_path: transcriptPath
+        })
+      ).toMatchObject({ state: 'done' })
+    } finally {
+      rmSync(dir, { recursive: true, force: true })
+    }
+  })
+
+  it('fails unidentified background work active at an idle notification', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'claude-idle-unknown-task-'))
+    const transcriptPath = join(dir, 'session.jsonl')
+    writeFileSync(transcriptPath, taskNotificationLine('shell-1'))
+    try {
+      const state = createHookListenerState()
+      claudeEvent(state, SOURCE_PANE, {
+        hook_event_name: 'Stop',
+        transcript_path: transcriptPath,
+        background_tasks: [{ type: 'shell', status: 'running' }]
+      })
+
+      expect(
+        claudeEvent(state, SOURCE_PANE, {
+          hook_event_name: 'Notification',
+          notification_type: 'idle_prompt',
+          transcript_path: transcriptPath
+        })
+      ).toBeUndefined()
+      expect(state.claudeRunningNonAgentTaskPaneKeys.has(SOURCE_PANE)).toBe(true)
+    } finally {
+      rmSync(dir, { recursive: true, force: true })
+    }
+  })
+
+  it('does not reuse a matching completion that predates task ownership', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'claude-idle-old-task-'))
+    const transcriptPath = join(dir, 'session.jsonl')
+    writeFileSync(transcriptPath, taskNotificationLine(RUNNING_SHELL.id))
+    try {
+      const state = createHookListenerState()
+      claudeEvent(state, SOURCE_PANE, {
+        hook_event_name: 'Stop',
+        transcript_path: transcriptPath,
+        background_tasks: [RUNNING_SHELL]
+      })
+      expect(
+        claudeEvent(state, SOURCE_PANE, {
+          hook_event_name: 'Notification',
+          notification_type: 'idle_prompt',
+          transcript_path: transcriptPath
+        })
+      ).toBeUndefined()
+      expect(state.claudeRunningNonAgentTaskPaneKeys.has(SOURCE_PANE)).toBe(true)
+
+      appendFileSync(transcriptPath, taskNotificationLine(RUNNING_SHELL.id))
+      expect(
+        claudeEvent(state, SOURCE_PANE, {
+          hook_event_name: 'Notification',
+          notification_type: 'idle_prompt',
+          transcript_path: transcriptPath
+        })?.state
+      ).toBe('done')
+    } finally {
+      rmSync(dir, { recursive: true, force: true })
+    }
+  })
+
+  it('preserves completion evidence across repeated running inventories', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'claude-idle-repeated-task-'))
+    const transcriptPath = join(dir, 'session.jsonl')
+    writeFileSync(transcriptPath, '')
+    try {
+      const state = createHookListenerState()
+      claudeEvent(state, SOURCE_PANE, {
+        hook_event_name: 'Stop',
+        transcript_path: transcriptPath,
+        background_tasks: [RUNNING_SHELL]
+      })
+      appendFileSync(transcriptPath, taskNotificationLine(RUNNING_SHELL.id))
+      claudeEvent(state, SOURCE_PANE, {
+        hook_event_name: 'Stop',
+        transcript_path: transcriptPath,
+        background_tasks: [RUNNING_SHELL]
+      })
+
+      expect(
+        claudeEvent(state, SOURCE_PANE, {
+          hook_event_name: 'Notification',
+          notification_type: 'idle_prompt',
+          transcript_path: transcriptPath
+        })
+      ).toMatchObject({ state: 'done' })
+    } finally {
+      rmSync(dir, { recursive: true, force: true })
+    }
+  })
+
+  it('retires a background subagent whose SubagentStop was missed', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'claude-idle-subagent-'))
+    const transcriptPath = join(dir, 'session.jsonl')
+    writeFileSync(transcriptPath, '')
+    try {
+      const state = createHookListenerState()
+      expect(
+        claudeEvent(state, SOURCE_PANE, {
+          hook_event_name: 'Stop',
+          transcript_path: transcriptPath,
+          background_tasks: [{ id: 'agent-1', type: 'subagent', status: 'running' }]
+        })
+      ).toMatchObject({ state: 'working', subagents: [{ id: 'agent-1', state: 'working' }] })
+
+      appendFileSync(transcriptPath, taskNotificationLine('agent-1'))
+      expect(
+        claudeEvent(state, SOURCE_PANE, {
+          hook_event_name: 'Notification',
+          notification_type: 'idle_prompt',
+          transcript_path: transcriptPath
+        })
+      ).toMatchObject({ state: 'done', subagents: undefined })
+    } finally {
+      rmSync(dir, { recursive: true, force: true })
+    }
+  })
+
+  it('keeps session cron work separate from matching task completion', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'claude-idle-cron-'))
+    const transcriptPath = join(dir, 'session.jsonl')
+    writeFileSync(transcriptPath, taskNotificationLine(RUNNING_SHELL.id))
+    try {
+      const state = createHookListenerState()
+      claudeEvent(state, SOURCE_PANE, {
+        hook_event_name: 'Stop',
+        transcript_path: transcriptPath,
+        background_tasks: [RUNNING_SHELL],
+        session_crons: [{ id: 'cron-1' }]
+      })
+      appendFileSync(transcriptPath, taskNotificationLine(RUNNING_SHELL.id))
+
+      expect(
+        claudeEvent(state, SOURCE_PANE, {
+          hook_event_name: 'Notification',
+          notification_type: 'idle_prompt',
+          transcript_path: transcriptPath
+        })?.state
+      ).toBe('working')
+      expect(state.claudeActiveSessionCronPaneKeys.has(SOURCE_PANE)).toBe(true)
+    } finally {
+      rmSync(dir, { recursive: true, force: true })
+    }
+  })
+
+  it('ignores Claude notifications that are not idle_prompt', () => {
+    const state = createHookListenerState()
+    claudeEvent(state, SOURCE_PANE, { hook_event_name: 'UserPromptSubmit', prompt: 'run it' })
+
+    expect(
+      claudeEvent(state, SOURCE_PANE, {
+        hook_event_name: 'Notification',
+        notification_type: 'permission_prompt'
+      })
+    ).toBeUndefined()
+    expect(state.claudeLeadStateByPaneKey.get(SOURCE_PANE)?.state).toBe('working')
+  })
+
+  it('does not treat idle_prompt alone as task completion evidence', () => {
+    const state = createHookListenerState()
+    claudeEvent(state, SOURCE_PANE, { hook_event_name: 'UserPromptSubmit', prompt: 'run it' })
+    claudeEvent(state, SOURCE_PANE, { hook_event_name: 'PreToolUse', tool_name: 'Bash' })
+
+    expect(
+      claudeEvent(state, SOURCE_PANE, {
+        hook_event_name: 'Notification',
+        notification_type: 'idle_prompt',
+        transcript_path: 'unowned-session.jsonl'
+      })
+    ).toBeUndefined()
+    expect(state.claudeLeadStateByPaneKey.get(SOURCE_PANE)?.state).toBe('working')
   })
 
   it('keeps pending task state when pane authority moves', () => {

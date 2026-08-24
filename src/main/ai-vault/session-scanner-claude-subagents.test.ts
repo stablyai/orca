@@ -144,6 +144,8 @@ describe('listClaudeSubagentSessions', () => {
       {
         // Interim notification: superseded by the terminal one below.
         type: 'user',
+        promptSource: 'system',
+        origin: { kind: 'task-notification' },
         sessionId: 'parent-session',
         timestamp: '2026-07-05T10:00:30.000Z',
         message: {
@@ -154,6 +156,8 @@ describe('listClaudeSubagentSessions', () => {
       },
       {
         type: 'user',
+        promptSource: 'system',
+        origin: { kind: 'task-notification' },
         sessionId: 'parent-session',
         timestamp: '2026-07-05T10:01:00.000Z',
         message: {
@@ -163,7 +167,7 @@ describe('listClaudeSubagentSessions', () => {
         }
       },
       {
-        // queue-operation records carry the notification as a plain string.
+        // The view-only scanner preserves historical queue-record support.
         type: 'queue-operation',
         operation: 'enqueue',
         sessionId: 'parent-session',
@@ -240,6 +244,8 @@ describe('listClaudeSubagentSessions', () => {
       },
       {
         type: 'user',
+        promptSource: 'system',
+        origin: { kind: 'task-notification' },
         sessionId: 'parent-session',
         timestamp: '2026-07-05T10:01:00.000Z',
         message: { role: 'user', content: notification }
@@ -269,6 +275,8 @@ describe('listClaudeSubagentSessions', () => {
     await writeJsonlFile(parentFilePath, [
       {
         type: 'user',
+        promptSource: 'system',
+        origin: { kind: 'task-notification' },
         sessionId: 'parent-session',
         timestamp: '2026-07-05T10:00:00.000Z',
         message: {

@@ -7,6 +7,10 @@ import type {
   AiVaultSubagentRunStatus
 } from '../../shared/ai-vault-types'
 import {
+  CLAUDE_TASK_NOTIFICATION_MARKER,
+  parseClaudeTaskNotificationLineForDisplay
+} from '../../shared/claude-task-notification'
+import {
   openTranscriptReadStream,
   wslGatedReaddir,
   wslGatedReadFile,
@@ -40,15 +44,12 @@ const SUBAGENT_PARSE_CONCURRENCY = 8
 // stays reserved for live transcript probes.
 const SUBAGENT_FS_PRIORITY = 'scan'
 
-const TASK_NOTIFICATION_MARKER = '<task-notification>'
 const TOOL_USE_RESULT_MARKER = '"toolUseResult"'
 // A sync-Task toolUseResult sets a status only when it carries an agentId. Tool
 // output records (Read/Bash) also carry "toolUseResult" and are the largest lines
 // in a transcript, so gating on this second marker keeps the status pass from
 // JSON-parsing ~all of the file's bytes on every on-demand fetch.
 const TOOL_USE_RESULT_AGENT_ID_MARKER = '"agentId"'
-const TASK_ID_PATTERN = /<task-id>([^<]+)<\/task-id>/
-const TASK_STATUS_PATTERN = /<status>([a-z_]+)<\/status>/
 
 // Statuses reported by parent-transcript <task-notification> records
 // (background Tasks) and toolUseResult records (synchronous Tasks).
@@ -214,7 +215,7 @@ async function collectSubagentTaskStatuses(parentFilePath: string): Promise<Map<
   const lines = createInterface({ input, crlfDelay: Infinity })
   try {
     for await (const line of lines) {
-      const hasNotification = line.includes(TASK_NOTIFICATION_MARKER)
+      const hasNotification = line.includes(CLAUDE_TASK_NOTIFICATION_MARKER)
       const hasTaskResult =
         line.includes(TOOL_USE_RESULT_MARKER) && line.includes(TOOL_USE_RESULT_AGENT_ID_MARKER)
       if (!hasNotification && !hasTaskResult) {
@@ -234,13 +235,9 @@ async function collectSubagentTaskStatuses(parentFilePath: string): Promise<Map<
       // dot on a view-only row, so we don't gate on user-type markers here (that
       // would risk dropping genuine harness-delivered statuses).
       if (hasNotification) {
-        const text = taskNotificationText(record)
-        if (text.startsWith(TASK_NOTIFICATION_MARKER)) {
-          const taskId = TASK_ID_PATTERN.exec(text)?.[1]?.trim()
-          const status = TASK_STATUS_PATTERN.exec(text)?.[1]
-          if (taskId && status) {
-            statuses.set(taskId, status)
-          }
+        const notification = parseClaudeTaskNotificationLineForDisplay(line)
+        if (notification) {
+          statuses.set(notification.taskId, notification.status)
           continue
         }
       }
@@ -260,34 +257,6 @@ async function collectSubagentTaskStatuses(parentFilePath: string): Promise<Map<
     input.destroy()
   }
   return statuses
-}
-
-// The <status> marker follows <tool-use-id>/<output-file> lines in real
-// notifications, so it sits well past the 96-char title cap — the notification
-// text must be read untruncated (unlike titles/previews). Both delivery shapes
-// appear: queue-operation records carry it as top-level `content`; user-message
-// records under `message.content` (a string, or text content blocks).
-function taskNotificationText(record: Record<string, unknown>): string {
-  const direct = extractString(record.content)
-  if (direct) {
-    return direct
-  }
-  const content = asRecord(record.message)?.content
-  if (typeof content === 'string') {
-    return content.trim()
-  }
-  if (Array.isArray(content)) {
-    return content.map(taskNotificationBlockText).filter(Boolean).join(' ').trim()
-  }
-  return ''
-}
-
-function taskNotificationBlockText(block: unknown): string {
-  if (typeof block === 'string') {
-    return block
-  }
-  const record = asRecord(block)
-  return extractString(record?.text) ?? extractString(record?.content) ?? ''
 }
 
 // Claude writes an `agent-<id>.meta.json` sidecar for every subagent transcript,
