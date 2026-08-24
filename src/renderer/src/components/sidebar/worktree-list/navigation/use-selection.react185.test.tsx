@@ -86,14 +86,12 @@ describe('useSidebarWorktreeSelection cannot trigger React #185 loop', () => {
     const wt3 = makeWorktree('wt-3')
     const wt4 = makeWorktree('wt-4')
 
-    // 1. Initial mount with 3 worktrees
     act(() => {
       root.render(<SelectionHarness sectionRows={makeSectionRows([wt1, wt2, wt3])} />)
     })
     expect(latestSelection).not.toBeNull()
     expect(latestSelection!.selectedWorktreeIds.size).toBe(0)
 
-    // 2. Drive selection through gesture API (select wt-1)
     act(() => {
       const mouseEvent = {
         metaKey: false,
@@ -105,7 +103,6 @@ describe('useSidebarWorktreeSelection cannot trigger React #185 loop', () => {
     expect(latestSelection!.selectedWorktreeIds.size).toBe(1)
     expect(latestSelection!.selectedWorktreeIds.has(getWorktreeHostIdentity(wt1))).toBe(true)
 
-    // 3. Select wt-2 via context menu (replaces single selection)
     act(() => {
       const mouseEvent = {} as React.MouseEvent<HTMLElement>
       latestSelection!.selectForContextMenu(mouseEvent, wt2)
@@ -114,20 +111,17 @@ describe('useSidebarWorktreeSelection cannot trigger React #185 loop', () => {
     expect(latestSelection!.selectedWorktreeIds.size).toBe(1)
     expect(latestSelection!.selectedWorktreeIds.has(getWorktreeHostIdentity(wt1))).toBe(false)
 
-    // 4. Trigger outside pointerdown -> should clear selection
     act(() => {
       document.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true }))
     })
     expect(latestSelection!.selectedWorktreeIds.size).toBe(0)
 
-    // 5. Select wt-1 again
     act(() => {
       const mouseEvent = {} as React.MouseEvent<HTMLElement>
       latestSelection!.selectForContextMenu(mouseEvent, wt1)
     })
     expect(latestSelection!.selectedWorktreeIds.has(getWorktreeHostIdentity(wt1))).toBe(true)
 
-    // 6. Filter rows so wt-1 is no longer rendered (prune test)
     renderedSnapshots.length = 0
     act(() => {
       root.render(<SelectionHarness sectionRows={makeSectionRows([wt2, wt3])} />)
@@ -156,7 +150,6 @@ describe('useSidebarWorktreeSelection cannot trigger React #185 loop', () => {
     // Why <= 2: functional guards bail out of redundant renders on already-empty state.
     expect(renderCount - rendersBeforeBurst).toBeLessThanOrEqual(2)
 
-    // 8. Active selection pruning during rapid filtering cycles
     for (let i = 0; i < 20; i += 1) {
       const selectedWorktree = i % 2 === 0 ? wt2 : wt1
       act(() => {
