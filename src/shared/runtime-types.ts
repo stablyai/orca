@@ -470,8 +470,17 @@ export type RuntimeTerminalSummary = {
   title: string | null
   connected: boolean
   writable: boolean
+  /** Epoch ms of the last byte this main ingested via live PTY data. Null means
+   *  this main has not ingested live output — never a synthesized snapshot time,
+   *  and never idle/exited by itself. A seeded `preview` is retained screen;
+   *  `activityObservation: 'unverifiable'` means the provider could not be asked. */
   lastOutputAt: number | null
   preview: string
+  /** Present only when this main has no live output, the listing preview is
+   *  empty, and the provider snapshot could not be consulted. The PTY is still
+   *  live in inventory — never read this as idle or exited. Absent on older
+   *  hosts. */
+  activityObservation?: 'unverifiable'
   /** Why this terminal's process is gone. Absent while it is still running, and
    *  absent from a host predating the field — never read an absent value as a
    *  clean finish (STA-4536). */

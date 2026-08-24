@@ -1520,6 +1520,12 @@ type RuntimePtyWorktreeRecord = {
   waitBlockedAt: number | null
   // Why: memoized wait scan of the current retained tail (see RuntimeLeafRecord).
   tailWaitState?: TerminalTailWaitState
+  // Why: inventory rediscovers daemon PTYs this main never attached to; a failed
+  // provider snapshot must not be re-asked on every list (200-row hot path).
+  providerActivitySeedAttempted?: boolean
+  providerActivityObservation?: 'unverifiable'
+  // Listing-only screen; must not write the restore tail (read/reveal owns that budget).
+  providerActivityPreview?: string
 }
 
 type TerminalAgentStatusSnapshot = {
@@ -11097,6 +11103,8 @@ export class OrcaRuntimeService {
       pty.connected = true
       pty.disconnectedAt = null
       pty.lastOutputAt = at
+      pty.providerActivityObservation = undefined
+      pty.providerActivityPreview = undefined
       const normalized = normalizeTerminalChunk(data, pty.tailPendingAnsi)
       pty.tailPendingAnsi = normalized.pendingAnsi
       const nextTail = appendNormalizedToTailBuffer(
@@ -17264,6 +17272,9 @@ export class OrcaRuntimeService {
       resolvedWorktrees,
       targetWorktreeId
     )
+    if (controllerInventory) {
+      await this.seedUnattachedLocalDaemonPtyActivityFromProvider(controllerInventory.livePtyIds)
+    }
     const refreshedPtyLiveness = controllerInventory
       ? new Set(controllerInventory.livePtyIds)
       : null
@@ -32821,6 +32832,80 @@ export class OrcaRuntimeService {
     }
   }
 
+  // Why: list would otherwise report lastOutputAt:null / preview:"" for a
+  // never-attached local daemon PTY as if that were an observation. Seed a
+  // listing-only preview from a shallow provider snapshot. Recency stays unset
+  // — snapshot bytes are historical — and the restore tail is left for read.
+  private async seedUnattachedLocalDaemonPtyActivityFromProvider(
+    livePtyIds: ReadonlySet<string>
+  ): Promise<void> {
+    const candidates: RuntimePtyWorktreeRecord[] = []
+    for (const ptyId of livePtyIds) {
+      if (candidates.length >= DEFAULT_TERMINAL_LIST_LIMIT) {
+        break
+      }
+      if (!this.isKnownUnattachedLocalDaemonPty(ptyId)) {
+        continue
+      }
+      // Recovered legacy workers own a 120-row provider read; listing must not serialize them.
+      if (this.legacyWorkerRecoveredPtys.has(ptyId)) {
+        continue
+      }
+      const pty = this.ptysById.get(ptyId)
+      if (!pty || pty.providerActivitySeedAttempted || !restoredTerminalTailSeedAllowed(pty)) {
+        continue
+      }
+      pty.providerActivitySeedAttempted = true
+      candidates.push(pty)
+    }
+    if (candidates.length === 0) {
+      return
+    }
+    const serialize = this.ptyController?.serializeProviderBuffer
+    if (!serialize) {
+      for (const pty of candidates) {
+        pty.providerActivityObservation = 'unverifiable'
+      }
+      return
+    }
+    await Promise.all(
+      candidates.map((pty) => this.seedOneUnattachedLocalDaemonPtyActivity(pty, serialize))
+    )
+  }
+
+  private async seedOneUnattachedLocalDaemonPtyActivity(
+    pty: RuntimePtyWorktreeRecord,
+    serialize: NonNullable<RuntimePtyController['serializeProviderBuffer']>
+  ): Promise<void> {
+    // Why Promise.resolve().then: a synchronous serialize throw must become a
+    // rejection so withTimeout can map it to null instead of aborting the sweep.
+    const snapshot = await withTimeout(
+      Promise.resolve().then(() =>
+        serialize(pty.ptyId, { scrollbackRows: LIST_PROVIDER_ACTIVITY_SEED_ROWS })
+      ),
+      VISIBLE_TERMINAL_SNAPSHOT_TIMEOUT_MS,
+      null
+    )
+    if (
+      !this.ptysById.has(pty.ptyId) ||
+      this.legacyWorkerRecoveredPtys.has(pty.ptyId) ||
+      !restoredTerminalTailSeedAllowed(pty)
+    ) {
+      return
+    }
+    if (!snapshot) {
+      pty.providerActivityObservation = 'unverifiable'
+      return
+    }
+    const text = `${snapshot.scrollbackAnsi ?? ''}${snapshot.data}`
+    // Listing preview only — applying this 24-row snapshot to the restore tail
+    // spends the one-shot seed and blocks the 120-row read/reveal fetch.
+    const seed = text.length > 0 ? buildRestoredTerminalTailSeed(text) : null
+    if (seed) {
+      pty.providerActivityPreview = seed.preview
+    }
+  }
+
   private refreshFloatingWorkspacePtyLiveness(): Set<string> | null {
     const controller = this.ptyController
     if (!controller?.hasPty) {
@@ -33053,6 +33138,12 @@ export class OrcaRuntimeService {
       !leaf.ptyId.startsWith('remote:') &&
       parseAppSshPtyId(leaf.ptyId) === null &&
       this.ptyController?.hasPty?.(leaf.ptyId) !== true
+    const preview = leaf.preview || pty?.providerActivityPreview || ''
+    const activityUnverifiable =
+      !provenAbsent &&
+      leaf.lastOutputAt === null &&
+      preview.length === 0 &&
+      pty?.providerActivityObservation === 'unverifiable'
     return {
       handle: this.issueHandle(leaf),
       ptyId: leaf.ptyId,
@@ -33067,7 +33158,8 @@ export class OrcaRuntimeService {
       connected: provenAbsent ? false : leaf.connected,
       writable: provenAbsent ? false : leaf.writable,
       lastOutputAt: leaf.lastOutputAt,
-      preview: leaf.preview,
+      preview,
+      ...(activityUnverifiable ? { activityObservation: 'unverifiable' } : {}),
       ...(leaf.lastExitCause ? { exitCause: leaf.lastExitCause } : {}),
       ...this.terminalExecutionHostField(leaf.ptyId, leaf.worktreeId)
     }
@@ -35032,6 +35124,11 @@ export class OrcaRuntimeService {
 
     const pane = parsePaneKey(pty.paneKey ?? '')
     const orphaned = !pty.tabId || !pane || pane.tabId !== pty.tabId
+    const preview = pty.preview || pty.providerActivityPreview || ''
+    const activityUnverifiable =
+      pty.lastOutputAt === null &&
+      preview.length === 0 &&
+      pty.providerActivityObservation === 'unverifiable'
     return {
       handle: this.issuePtyHandle(pty),
       ptyId: pty.ptyId,
@@ -35046,7 +35143,8 @@ export class OrcaRuntimeService {
       connected: pty.connected,
       writable: pty.connected,
       lastOutputAt: pty.lastOutputAt,
-      preview: pty.preview,
+      preview,
+      ...(activityUnverifiable ? { activityObservation: 'unverifiable' } : {}),
       ...(pty.lastExitCause ? { exitCause: pty.lastExitCause } : {}),
       ...this.terminalExecutionHostField(pty.ptyId, pty.worktreeId)
     }
@@ -38691,6 +38789,9 @@ const VISIBLE_TERMINAL_SNAPSHOT_RETRY_MS = 1_000
 const TUI_IDLE_VISIBLE_PROBE_SETTLE_MARGIN_MS = 10
 const MAX_PREVIEW_LINES = 6
 const MAX_PREVIEW_CHARS = 300
+// Why: list preview is 6 lines; extra rows cover CR redraws without a full
+// terminal-read snapshot (DEFAULT_TERMINAL_READ_LIMIT is 120).
+const LIST_PROVIDER_ACTIVITY_SEED_ROWS = 24
 const WORKTREE_STATUS_PRIORITY: Record<RuntimeWorktreeStatus, number> = {
   inactive: 0,
   active: 1,
