@@ -10,6 +10,7 @@ import { SourceControlEntryContextMenu } from './entry-context-menu'
 import { toPermanentSourceControlRowOpenEvent, type SourceControlRowOpenEvent } from './split-open'
 import { SOURCE_CONTROL_TREE_FILE_PADDING_PX, SOURCE_CONTROL_TREE_INDENT_PX } from './row-layout'
 import { STATUS_COLORS, STATUS_LABELS } from '../../status-display'
+import { ReviewThreadBadge } from '@/components/diff-comments/review-thread-badge'
 
 export function BranchEntryRow({
   entry,
@@ -20,6 +21,7 @@ export function BranchEntryRow({
   connectionId,
   onOpen,
   commentCount,
+  reviewThreadCount = 0,
   showPathHint = true
 }: {
   entry: GitBranchChangeEntry
@@ -30,6 +32,8 @@ export function BranchEntryRow({
   connectionId?: string | null
   onOpen: (event?: SourceControlRowOpenEvent) => void
   commentCount: number
+  /** Review-thread count of the linked GitHub PR for this file. */
+  reviewThreadCount?: number
   showPathHint?: boolean
 }): React.JSX.Element {
   const FileIcon = getFileTypeIcon(entry.path)
@@ -67,6 +71,7 @@ export function BranchEntryRow({
             <span className="ml-1.5 text-[11px] text-muted-foreground">{dirPath}</span>
           )}
         </span>
+        <ReviewThreadBadge count={reviewThreadCount} />
         {commentCount > 0 && (
           <span
             className="flex shrink-0 items-center gap-0.5 text-[10px] text-muted-foreground"

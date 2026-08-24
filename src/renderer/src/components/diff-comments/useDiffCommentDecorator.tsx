@@ -1,11 +1,15 @@
 import { useCallback, useEffect, useMemo, useRef } from 'react'
 import type { editor as monacoEditor, IDisposable } from 'monaco-editor'
 import { createRoot, type Root } from 'react-dom/client'
-import { getCommentBodyLayoutLineCount } from '@/lib/comment-body-line-count'
+import {
+  getCommentBodyLayoutLineCount,
+  getReviewThreadLayoutLineCount
+} from '@/lib/comment-body-line-count'
 import { useAppStore } from '@/store'
 import { installDiffCommentAddButtonOverlay } from './diff-comment-add-button-overlay'
 import { installDiffCommentZoneMouseDownStopper } from './diff-comment-zone-mouse-events'
 import { getRenderSignature, renderDiffCommentZoneCard } from './diff-comment-zone-card'
+import { useReviewThreadLineMarkers } from './use-review-thread-line-markers'
 import type { DecoratedDiffComment } from './decorated-diff-comment'
 import {
   resizeDiffCommentZone,
@@ -14,6 +18,8 @@ import {
   ZONE_MIN_PX,
   type ZoneEntry
 } from './diff-comment-view-zone-entry'
+
+const EMPTY_MARKER_LINES: readonly number[] = []
 
 type DecoratorArgs = {
   editor: monacoEditor.ICodeEditor | null
@@ -29,6 +35,8 @@ type DecoratorArgs = {
   // Present only on surfaces that allow editing (local diffs); PR review notes are remote and can't be edited here.
   onUpdateComment?: (commentId: string, body: string) => Promise<boolean>
   formatCommentPrompt?: (comment: DecoratedDiffComment) => string
+  /** Lines whose review threads are currently hidden; rendered as gutter markers instead of zones. */
+  reviewThreadMarkerLines?: readonly number[]
   // Pending scroll-to-note id from the sidebar; decorator reveals the line and acks so the same id can be re-requested later.
   pendingScrollCommentId?: string | null
   onPendingScrollConsumed?: () => void
@@ -46,6 +54,7 @@ export function useDiffCommentDecorator({
   onDeleteComment,
   onUpdateComment,
   formatCommentPrompt,
+  reviewThreadMarkerLines,
   pendingScrollCommentId,
   onPendingScrollConsumed
 }: DecoratorArgs): void {
@@ -71,6 +80,7 @@ export function useDiffCommentDecorator({
   onDeleteCommentRef.current = onDeleteComment
   onUpdateCommentRef.current = onUpdateComment
   onPendingScrollConsumedRef.current = onPendingScrollConsumed
+  useReviewThreadLineMarkers(editor, reviewThreadMarkerLines ?? EMPTY_MARKER_LINES)
 
   const cancelScrollToZoneFrame = useCallback((): void => {
     if (scrollToZoneFrameRef.current === null) {
@@ -212,7 +222,9 @@ export function useDiffCommentDecorator({
         const root = createRoot(dom)
 
         // Estimate height up front: Monaco fixes heightInPx at insertion and never re-measures, so an underestimate bleeds into the next line.
-        const lineCount = getCommentBodyLayoutLineCount(c.body)
+        const lineCount = c.reviewThread
+          ? getReviewThreadLayoutLineCount(c)
+          : getCommentBodyLayoutLineCount(c.body)
         const heightInPx = Math.max(ZONE_MIN_PX, ZONE_CHROME_PX + lineCount * ZONE_LINE_PX)
 
         // suppressMouseDown: false so clicks (Delete button) reach our DOM listeners; true would route mousedown to the editor.

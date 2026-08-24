@@ -84,7 +84,8 @@ export function CombinedDiffFileTree({
   viewedSectionKeys,
   collapsed,
   onCollapsedChange,
-  onNavigate
+  onNavigate,
+  reviewThreadCountByPath
 }: {
   mode: CombinedDiffFileTreeMode
   worktreePath: string
@@ -95,6 +96,8 @@ export function CombinedDiffFileTree({
   collapsed: boolean
   onCollapsedChange: (collapsed: boolean) => void
   onNavigate: (entry: CombinedDiffFileTreeEntry) => void
+  /** Review-thread counts of the linked/viewed PR, keyed by file path. */
+  reviewThreadCountByPath?: ReadonlyMap<string, number>
 }): React.JSX.Element | null {
   const [collapsedDirectoryKeys, setCollapsedDirectoryKeys] = React.useState<Set<string>>(
     () => new Set()
@@ -308,6 +311,7 @@ export function CombinedDiffFileTree({
                     isCollapsed={collapsedDirectoryKeys.has(node.key)}
                     onToggleDirectory={toggleDirectory}
                     onNavigate={onNavigate}
+                    reviewThreadCountByPath={reviewThreadCountByPath}
                   />
                 ))}
               </div>
@@ -331,6 +335,7 @@ export function CombinedDiffFileTree({
                     isCollapsed={collapsedDirectoryKeys.has(node.key)}
                     onToggleDirectory={toggleDirectory}
                     onNavigate={onNavigate}
+                    reviewThreadCountByPath={reviewThreadCountByPath}
                   />
                 ))}
               </div>
@@ -348,6 +353,7 @@ export function CombinedDiffFileTree({
               isCollapsed={collapsedDirectoryKeys.has(node.key)}
               onToggleDirectory={toggleDirectory}
               onNavigate={onNavigate}
+              reviewThreadCountByPath={reviewThreadCountByPath}
             />
           ))
         )}

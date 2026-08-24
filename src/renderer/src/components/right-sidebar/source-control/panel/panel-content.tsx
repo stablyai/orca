@@ -1,3 +1,6 @@
+import { useMemo } from 'react'
+import { countReviewThreadsByPath } from '@/components/github/pr-review-thread-grouping'
+import { useLocalPRReviewThreads } from '@/components/github/use-local-pr-review-threads'
 import { GitHistoryPanel } from '../sync/git-history-panel'
 import { shouldShowSourceControlCompareUnavailableCard } from './header-toolbar'
 import { shouldRenderCommitArea } from '../commit/component-gates'
@@ -12,6 +15,15 @@ import type { SourceControlPanelReadyProps } from './panel-props'
 /** The scrolling surface: status, commit affordances, the file sections and the history dock. */
 export function SourceControlPanelContent(props: SourceControlPanelReadyProps) {
   const { activeWorktree, currentWorktreeId, model, worktreePath } = props
+  // Why: gate the details fetch on a rendered branch section; without a linked PR the hook is inert.
+  const linkedPRThreads = useLocalPRReviewThreads(
+    currentWorktreeId,
+    props.model.branchSummary?.status === 'ready'
+  )
+  const reviewThreadCountByPath = useMemo(
+    () => countReviewThreadsByPath(linkedPRThreads.comments),
+    [linkedPRThreads.comments]
+  )
   const {
     activeConnectionId,
     activeOpenRowKeys,
@@ -203,6 +215,7 @@ export function SourceControlPanelContent(props: SourceControlPanelReadyProps) {
           openCommittedDiff={openCommittedDiff}
           openBranchAllDiffs={openBranchAllDiffs}
           diffCommentCountByPath={diffCommentCountByPath}
+          prThreadCountByPath={reviewThreadCountByPath}
         />
       )}
 

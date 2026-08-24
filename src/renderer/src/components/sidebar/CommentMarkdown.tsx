@@ -15,6 +15,10 @@ import {
 } from './comment-markdown-element-renderers'
 
 export type { CommentMarkdownLinkClickHandler } from './comment-markdown-element-renderers'
+import {
+  withSuggestionFenceComponents,
+  type CommentSuggestionOptions
+} from './comment-suggestion-fence'
 
 type MarkdownPlugins = NonNullable<React.ComponentProps<typeof Markdown>['rehypePlugins']>
 type UrlTransform = NonNullable<React.ComponentProps<typeof Markdown>['urlTransform']>
@@ -186,6 +190,8 @@ type CommentMarkdownProps = React.ComponentPropsWithoutRef<'div'> & {
   onLinkClick?: CommentMarkdownLinkClickHandler
   allowFileUriLinks?: boolean
   expandImages?: boolean
+  /** Render ```suggestion fences as diff previews. Callers should memoize. */
+  suggestion?: CommentSuggestionOptions
 }
 
 // Why forwardRef + rest props: Radix's HoverCardTrigger asChild merges a ref
@@ -201,22 +207,23 @@ const CommentMarkdown = React.memo(
       onLinkClick,
       allowFileUriLinks = false,
       expandImages = false,
+      suggestion,
       ...rest
     },
     ref
   ) {
     const components = React.useMemo(() => {
-      if (!onLinkClick) {
-        return variant === 'document'
+      const base = !onLinkClick
+        ? variant === 'document'
           ? documentCommentMarkdownComponents
           : expandImages
             ? createCompactCommentMarkdownComponents(undefined, true)
             : compactCommentMarkdownComponents
-      }
-      return variant === 'document'
-        ? createDocumentCommentMarkdownComponents(onLinkClick)
-        : createCompactCommentMarkdownComponents(onLinkClick, expandImages)
-    }, [expandImages, variant, onLinkClick])
+        : variant === 'document'
+          ? createDocumentCommentMarkdownComponents(onLinkClick)
+          : createCompactCommentMarkdownComponents(onLinkClick, expandImages)
+      return suggestion ? withSuggestionFenceComponents(base, suggestion) : base
+    }, [expandImages, variant, onLinkClick, suggestion])
     const activeRemarkPlugins = React.useMemo(
       () => (githubRepo ? [...remarkPlugins, remarkGitHubReferences(githubRepo)] : remarkPlugins),
       [githubRepo]

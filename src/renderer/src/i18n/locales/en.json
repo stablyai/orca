@@ -5953,6 +5953,10 @@
           "projectOnly": "Added in this project only.",
           "useGlobalFor": "Use global for {{value0}}",
           "useGlobal": "Use global"
+        },
+        "commentSuggestionFence": {
+          "header": "Suggested change",
+          "removalOnly": "Suggestion removes these lines."
         }
       },
       "shared": {
@@ -11796,7 +11800,9 @@
             "c7d4e2f801": "Change base ref: {{value0}}",
             "f3a1b8c204": "upstream",
             "createPrIntentEmptyGeneratedBody": "Generated review details did not include a description. Retry Create PR.",
-            "createPrIntentGenerateDetailsFailed": "Could not generate review details. Retry Create PR."
+            "createPrIntentGenerateDetailsFailed": "Could not generate review details. Retry Create PR.",
+            "reviewThreadBadge_one": "{{count}} pull request conversation",
+            "reviewThreadBadge_other": "{{count}} pull request conversations"
           },
           "SourceControlAgentActionDialog": {
             "8e856842d1": "Could not start the selected agent.",
@@ -14593,6 +14599,26 @@
           },
           "useDiffCommentDecorator": {
             "995fa28b50": "This note"
+          },
+          "ReviewThreadCard": {
+            "resolvedBadge": "Resolved",
+            "collapseThread": "Collapse resolved conversation",
+            "commentCount_one": "{{count}} comment",
+            "commentCount_other": "{{count}} comments",
+            "expandResolved_one": "Resolved conversation, {{count}} comment — expand",
+            "expandResolved_other": "Resolved conversation, {{count}} comments — expand",
+            "outdatedThreads_one": "{{count}} outdated conversation",
+            "outdatedThreads_other": "{{count}} outdated conversations"
+          },
+          "ReviewThreadCommentBlock": {
+            "pendingBadge": "Pending",
+            "openInBrowser": "Open in browser",
+            "openAction": "Open"
+          },
+          "reviewThreads": {
+            "hideAction": "Hide comments",
+            "showAction": "Show comments",
+            "hiddenMarker": "Review comment hidden — use \"Show comments\" to reveal it."
           }
         }
       },

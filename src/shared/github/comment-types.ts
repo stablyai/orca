@@ -45,6 +45,12 @@ export type PRComment = {
    *  predictable naming convention. Absent when the data source can't report it
    *  (non-GitHub fallbacks via `gh pr view`). */
   isBot?: boolean
+  /** True for the viewer's own unsubmitted review-draft comments (GraphQL comment state PENDING). */
+  isPending?: boolean
+  /** Diff side the thread anchors to. RIGHT (head) unless GitHub reports LEFT (base). */
+  diffSide?: 'LEFT' | 'RIGHT'
+  /** Anchor hunk of the thread's root comment; its last line is the commented line's content at the PR head. */
+  diffHunk?: string
 }
 
 export type GitHubIssueTimelineTarget = {

@@ -2908,6 +2908,94 @@ html.native-shell .app-layout {
   margin-top: 2px;
 }
 
+/* Hosted review threads (grouped PR review comments in the diff) */
+/* Markdown body: no pre-wrap — react-markdown owns whitespace and block spacing. */
+.orca-review-thread-body {
+  font-size: 13.5px;
+  line-height: 1.5;
+  color: var(--foreground);
+  word-break: break-word;
+  margin-top: 2px;
+}
+
+.orca-review-thread-replies {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 8px;
+  padding-left: 10px;
+  border-left: 2px solid color-mix(in srgb, var(--foreground) 10%, var(--border));
+}
+
+.orca-review-thread-collapsed-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  padding: 4px 6px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--muted-foreground);
+  font-size: 12.5px;
+  cursor: pointer;
+  text-align: left;
+}
+
+.orca-review-thread-collapsed-row:hover {
+  background: var(--accent);
+}
+
+.orca-review-thread-resolved-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--muted-foreground);
+}
+
+.orca-review-thread-resolved-icon {
+  color: var(--muted-foreground);
+}
+
+.orca-review-thread-count {
+  font-size: 12px;
+  color: var(--muted-foreground);
+}
+
+.orca-review-thread-comment {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.orca-review-thread-pending-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 0 5px;
+  border-radius: 9999px;
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--secondary-foreground);
+  background: var(--secondary);
+}
+
+.orca-review-thread-line-marker::before {
+  content: '';
+  display: block;
+  width: 6px;
+  height: 6px;
+  margin: 7px auto 0;
+  border-radius: 9999px;
+  background: var(--muted-foreground);
+}
+
 /* Popover for adding new comment */
 .orca-diff-comment-popover {
   position: absolute;
