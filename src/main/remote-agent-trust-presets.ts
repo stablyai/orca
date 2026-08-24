@@ -3,6 +3,7 @@ import { upsertProjectTrustLevelInContent } from './codex/config-toml-trust'
 import { getActiveMultiplexer } from './ssh/ssh-target-registry'
 import { getSshFilesystemProvider } from './providers/ssh-filesystem-dispatch'
 import type { IFilesystemProvider } from './providers/types'
+import path from 'node:path'
 import {
   isWindowsAbsolutePathLike,
   normalizeRuntimePathSeparators
@@ -13,9 +14,20 @@ export async function markRemoteAgentWorkspaceTrusted(args: {
   connectionId: string
   workspacePath: string
 }): Promise<void> {
-  const home = await resolveRemoteHome(args.connectionId)
   const fsProvider = getSshFilesystemProvider(args.connectionId)
-  if (!home || !fsProvider) {
+  if (!fsProvider) {
+    return
+  }
+
+  // Why: qoder only needs the workspace filesystem, not the user home.
+  if (args.preset === 'qoder') {
+    const workspacePath = await canonicalizeRemoteWorkspacePath(fsProvider, args.workspacePath)
+    await markRemoteQoderWorkspaceTrusted(fsProvider, workspacePath)
+    return
+  }
+
+  const home = await resolveRemoteHome(args.connectionId)
+  if (!home) {
     return
   }
 
@@ -145,4 +157,24 @@ async function markRemoteCopilotFolderTrusted(
   config.trustedFolders = [...existing.filter((entry) => typeof entry === 'string'), workspacePath]
   await fsProvider.createDir(configDir)
   await fsProvider.writeFile(configPath, `${JSON.stringify(config, null, 2)}\n`)
+}
+
+// Why: qodercli reads a workspace-local `.trusted` marker; mirror the local
+// preset by writing an empty marker on the remote checkout root.
+async function markRemoteQoderWorkspaceTrusted(
+  fsProvider: IFilesystemProvider,
+  workspacePath: string
+): Promise<void> {
+  const trustPath = path.posix.join(workspacePath.replace(/\/$/, ''), '.trusted')
+  try {
+    await fsProvider.stat(trustPath)
+    return // already exists
+  } catch {
+    // doesn't exist, proceed
+  }
+  try {
+    await fsProvider.writeFile(trustPath, '')
+  } catch {
+    // Best-effort: the user can accept the remote trust prompt manually.
+  }
 }

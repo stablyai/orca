@@ -126,6 +126,7 @@ const ICONABLE_AGENT_TYPES: Record<TuiAgent, true> = {
   kimi: true,
   'mistral-vibe': true,
   'qwen-code': true,
+  qoder: true,
   rovo: true,
   hermes: true,
   openclaw: true,

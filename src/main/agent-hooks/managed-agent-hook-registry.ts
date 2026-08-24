@@ -10,6 +10,7 @@ import { cursorHookService } from '../cursor/hook-service'
 import { devinHookService } from '../devin/hook-service'
 import { droidHookService } from '../droid/hook-service'
 import { geminiHookService } from '../gemini/hook-service'
+import { qoderHookService } from '../qoder/hook-service'
 import { grokHookService } from '../grok/hook-service'
 import { hermesHookService } from '../hermes/hook-service'
 import { kimiHookService } from '../kimi/hook-service'
@@ -25,6 +26,7 @@ export const MANAGED_AGENT_HOOK_INSTALLERS: readonly ManagedAgentHookInstaller[]
   ['openclaude', () => openClaudeHookService.install()],
   ['codex', () => codexHookService.install()],
   ['gemini', () => geminiHookService.install()],
+  ['qoder', () => qoderHookService.install()],
   ['antigravity', () => antigravityHookService.install()],
   ['amp', () => ampHookService.install()],
   ['cursor', () => cursorHookService.install()],
@@ -48,6 +50,7 @@ export const MANAGED_AGENT_HOOK_SCRIPT_REFRESHERS: readonly ManagedAgentHookScri
   ['openclaude', () => openClaudeHookService.refreshManagedScripts()],
   ['codex', () => codexHookService.refreshManagedScripts()],
   ['gemini', () => geminiHookService.refreshManagedScripts()],
+  ['qoder', () => qoderHookService.refreshManagedScripts()],
   ['antigravity', () => antigravityHookService.refreshManagedScripts()],
   ['cursor', () => cursorHookService.refreshManagedScripts()],
   ['droid', () => droidHookService.refreshManagedScripts()],
@@ -63,6 +66,7 @@ export const MANAGED_AGENT_HOOK_REMOVERS: readonly ManagedAgentHookRemover[] = [
   ['openclaude', () => openClaudeHookService.remove()],
   ['codex', () => codexHookService.remove()],
   ['gemini', () => geminiHookService.remove()],
+  ['qoder', () => qoderHookService.remove()],
   ['antigravity', () => antigravityHookService.remove()],
   ['amp', () => ampHookService.remove()],
   ['cursor', () => cursorHookService.remove()],
@@ -80,6 +84,7 @@ export const MANAGED_AGENT_HOOK_STATUS_READERS: readonly ManagedAgentHookStatusR
   ['openclaude', () => openClaudeHookService.getStatus()],
   ['codex', () => codexHookService.getStatus()],
   ['gemini', () => geminiHookService.getStatus()],
+  ['qoder', () => qoderHookService.getStatus()],
   ['antigravity', () => antigravityHookService.getStatus()],
   ['amp', () => ampHookService.getStatus()],
   ['cursor', () => cursorHookService.getStatus()],

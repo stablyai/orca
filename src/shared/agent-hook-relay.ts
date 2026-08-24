@@ -38,6 +38,7 @@ const AGENT_HOOK_SOURCES = [
   'claude',
   'codex',
   'gemini',
+  'qoder',
   'antigravity',
   'amp',
   'opencode',

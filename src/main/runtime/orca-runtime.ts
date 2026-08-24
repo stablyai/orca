@@ -577,7 +577,8 @@ import {
 import {
   markCodexProjectTrusted,
   markCopilotFolderTrusted,
-  markCursorWorkspaceTrusted
+  markCursorWorkspaceTrusted,
+  markQoderWorkspaceTrusted
 } from '../agent-trust-presets'
 import { markRemoteAgentWorkspaceTrusted } from '../remote-agent-trust-presets'
 import { applyAgentStatusHooksEnabled } from '../agent-hooks/managed-agent-hook-controls'
@@ -23860,6 +23861,8 @@ export class OrcaRuntimeService {
         markCopilotFolderTrusted(workspacePath)
       } else if (preset === 'codex') {
         markCodexProjectTrusted(workspacePath)
+      } else if (preset === 'qoder') {
+        markQoderWorkspaceTrusted(workspacePath)
       }
     } catch {
       // Best-effort: the user can still accept the agent trust prompt manually.
