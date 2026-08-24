@@ -10,7 +10,7 @@ import {
 } from '../../../../shared/protocol-version'
 import { orchestrationMigrationData } from '../../../../shared/orchestration-rpc-contract'
 import type { OrcaRuntimeService } from '../../orca-runtime'
-import type { OrchestrationDb } from '../../orchestration/db'
+import type { CreateTaskInput, OrchestrationDb } from '../../orchestration/db'
 import { OrchestrationError } from '../../orchestration/orchestration-error'
 import type { WorkerStartInput } from './orchestration-worker-start-schema'
 import {
@@ -27,7 +27,10 @@ export async function startFederatedWorker(args: {
   runtime: OrcaRuntimeService
   db: OrchestrationDb
   runId: string
-  task: { id: string; spec: string; status: string }
+  taskId?: string
+  // Why: a --spec task is created inside createStartingWorkerDispatch's transaction after
+  // the remote preflight, so a rejected launch cannot persist an orphan Task.
+  createTask?: CreateTaskInput
   orchestrationMutation?: {
     callerFingerprint: string
     requestId: string
@@ -35,7 +38,7 @@ export async function startFederatedWorker(args: {
     payloadHash: string
   }
 }): Promise<unknown> {
-  const { params, runtime, db, task, runId, orchestrationMutation } = args
+  const { params, runtime, db, taskId, createTask, runId, orchestrationMutation } = args
   if (!orchestrationMutation) {
     throw new OrchestrationError(
       'invalid_argument',
@@ -97,7 +100,8 @@ export async function startFederatedWorker(args: {
 
   const setupDecision = createsWorktree ? (params.setup ?? 'run') : 'not_applicable'
   const started = db.createStartingWorkerDispatch({
-    taskId: task.id,
+    taskId,
+    createTask,
     retryOf: params.retryOf,
     startOptions: {
       on: server.environmentId,
@@ -126,6 +130,7 @@ export async function startFederatedWorker(args: {
       protocolVersion: federationProtocolVersion
     }
   })
+  const task = started.task
   db.recordWorkerStage({ dispatchId: started.dispatch.id, stage: 'remote_attach_requested' })
   try {
     const remote = (await runtime.callOrchestrationWorkerServer(

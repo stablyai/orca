@@ -22,7 +22,7 @@ Use this skill when coordination state matters. For lightweight terminal prompts
 
 ## Tool Boundary
 
-If a task says to use Orca orchestration, the coordinator must create or bind a Run, create the Task with `orca orchestration task-create`, then attach the worker with either the preferred `orca orchestration worker-start` composition or the low-level `orca orchestration dispatch --inject` path.
+If a task says to use Orca orchestration, the coordinator must create or bind a Run, create the Task with `orca orchestration task-create` (or inline via `worker-start --spec`), then attach the worker with either the preferred `orca orchestration worker-start` composition or the low-level `orca orchestration dispatch --inject` path.
 
 Do not substitute non-Orca subagent tools, generic agent-spawn APIs, or chat-only parallel worker features. Those may create useful workers, but they do not create Orca task/dispatch provenance, injected lifecycle preambles, `worker_done` authority, or decision gates.
 
@@ -190,6 +190,16 @@ orca orchestration worker-start --task <task_a> --worktree current --agent codex
 orca orchestration worker-start --task <task_b> --worktree current --agent claude --json
 ```
 
+When the Task does not exist yet, `--spec` creates it and dispatches in the same call (`--task-title` optionally labels it). Exactly one of `--task` or `--spec` is required; use separate `task-create` calls when Tasks need `--deps` or `--parent`:
+
+```bash
+orca orchestration worker-start --spec "<worker task>" --task-title "<title>" --worktree current --agent codex --json
+```
+
+Re-running an identical `--spec` command replays the original receipt instead of starting a second worker, so a command that appears to time out is safe to repeat. Change any option, or pass an explicit `--retry-request <id>`, to start a genuinely separate worker on the same spec. `--display-name` stays a worktree label here; the created Task takes its label from `--task-title`.
+
+`--retry-of` requires `--task`. To retry a worker started with `--spec`, take `taskId` from the failed receipt and switch to the `--task` form.
+
 `current` and exact existing worktrees create a fresh agent terminal and do not rerun setup. Reuse an existing agent only with `--terminal <handle>`.
 
 For a per-invocation Claude, Codex, or Cursor launch, pass an opaque provider model id with `--model`; add `--effort` only when that agent/model supports the level. These options apply only to fresh agent terminals, override general agent default arguments, and are reported under `launch.requested` and `launch.effective` in the receipt:
@@ -264,7 +274,7 @@ orca orchestration reply --id <message_id> --body "<answer>" --json
 Recovery is conditional, never a fixed destructive sequence:
 
 - `worker-show --dispatch <id>` says `ready`: keep waiting or read bounded output.
-- It proves `failed` or `stopped`: start a replacement with `worker-start --task <task> --retry-of <id>` plus an explicit `--on`/`--worktree` and `--agent`/`--terminal` choice. Retry does not silently inherit placement.
+- It proves `failed` or `stopped`: start a replacement with `worker-start --task <task> --retry-of <id>` plus an explicit `--on`/`--worktree` and `--agent`/`--terminal` choice. Retry does not silently inherit placement. For a worker started with `--spec`, read `taskId` from its receipt first — `--retry-of` never combines with `--spec`.
 - It remains `outcome_unknown`: either `worker-stop --dispatch <id>` and inspect again, or explicitly `worker-abandon --dispatch <id>` while accepting that resources may still be live. Abandon performs no remote, process, or filesystem action.
 - `worker-stop` closes only the exact supervised agent terminal. It never deletes the worktree, setup terminal, configured tabs, or unrelated processes.
 
@@ -403,6 +413,6 @@ orca orchestration check --wait --types worker_done,escalation,question --timeou
 
 ## Next Action
 
-Coordinator: confirm `orca status --json`, create or bind a Run, inspect `task-list`/`dispatch-show` if inheriting state, then use the explicit supervised loop (`task-create` -> `worker-start` -> `check --wait`). Use low-level terminal creation plus `dispatch --inject` only when the composed start does not express the needed topology. After every accepted `worker_done`, either transfer the exact terminal to an immediate follow-up Dispatch or run `worker-release` before the next wait.
+Coordinator: confirm `orca status --json`, create or bind a Run, inspect `task-list`/`dispatch-show` if inheriting state, then use the explicit supervised loop (`task-create` -> `worker-start` -> `check --wait`, or `worker-start --spec` -> `check --wait` when the Task needs no `--deps`/`--parent`). Use low-level terminal creation plus `dispatch --inject` only when the composed start does not express the needed topology. After every accepted `worker_done`, either transfer the exact terminal to an immediate follow-up Dispatch or run `worker-release` before the next wait.
 
 Worker: if the current prompt contains a live dispatch preamble, do the task, use `ask` for blocking questions, and send `worker_done` once with the required payload. If the preamble is stale or absent, do not send lifecycle messages; inspect state or treat the prompt as an ordinary handoff.

@@ -19,7 +19,11 @@ import {
   persistWorkerSetupWaitOutcome
 } from './orchestration-worker-setup-gate'
 import { failWorkerStartWithReceipt } from './orchestration-worker-start-receipt'
-import { prepareLocalWorkerStart } from './orchestration-worker-start-validation'
+import { buildWorkerStartTaskInput } from './orchestration-worker-start-task-input'
+import {
+  prepareLocalWorkerStart,
+  requireExistingWorkerStartTask
+} from './orchestration-worker-start-validation'
 
 export const ORCHESTRATION_WORKER_START_METHODS: RpcMethod[] = [
   defineMethod({
@@ -35,13 +39,12 @@ export const ORCHESTRATION_WORKER_START_METHODS: RpcMethod[] = [
           'worker-start requires the coordinator terminal currently bound to the Task Run.'
         )
       }
-      const task = db.getTask(params.task)
-      if (!task || task.run_id !== run.id) {
-        throw new OrchestrationError(
-          'task_not_found',
-          `Task ${params.task} was not found in Run ${run.id}.`
-        )
-      }
+      const existingTask = requireExistingWorkerStartTask({ db, params, run })
+      // Why: --spec task creation happens inside createStartingWorkerDispatch's transaction,
+      // so neither a preflight rejection nor a failed acceptance can persist an orphan Task.
+      const createTask = existingTask
+        ? undefined
+        : buildWorkerStartTaskInput({ runtime, params, run })
 
       if (params.on) {
         return startFederatedWorker({
@@ -49,7 +52,8 @@ export const ORCHESTRATION_WORKER_START_METHODS: RpcMethod[] = [
           runtime,
           db,
           runId: run.id,
-          task,
+          taskId: existingTask?.id,
+          createTask,
           orchestrationMutation
         })
       }
@@ -110,12 +114,14 @@ export const ORCHESTRATION_WORKER_START_METHODS: RpcMethod[] = [
           : 'existing_worktree'
       }
       const started = db.createStartingWorkerDispatch({
-        taskId: task.id,
+        taskId: existingTask?.id,
+        createTask,
         retryOf: params.retryOf,
         startOptions,
         runtimeEpoch: runtime.getRuntimeId(),
         mutationReceipt: orchestrationMutation
       })
+      const task = started.task
       const effects: WorkerEffect[] = []
       if (resolvedWorktree) {
         effects.push(

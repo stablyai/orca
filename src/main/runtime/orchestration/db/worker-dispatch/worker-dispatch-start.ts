@@ -1,14 +1,18 @@
-import type { DispatchContextRow, WorkerDispatchRow } from '../../types'
+import type { DispatchContextRow, TaskRow, WorkerDispatchRow } from '../../types'
 import { OrchestrationError } from '../../orchestration-error'
 import { ensureMutationReceiptCapacity } from '../../mutation-receipt-capacity'
 import { CURRENT_CONTRACT_VERSION } from '../contract-constants'
 import { generateId } from '../generated-id'
 import type { OrchestrationDb } from '../orchestration-db'
+import type { CreateTaskInput } from '../tasks/task-store'
 
 export function createStartingWorkerDispatch(
   this: OrchestrationDb,
   params: {
-    taskId: string
+    taskId?: string
+    // Why: inline (--spec) task creation must share this transaction so a rejected or
+    // crashed acceptance rolls the task back instead of leaving a receiptless orphan.
+    createTask?: CreateTaskInput
     startOptions: unknown
     launchTokenHash?: string
     retryOf?: string
@@ -26,7 +30,13 @@ export function createStartingWorkerDispatch(
       payloadHash: string
     }
   }
-): { dispatch: DispatchContextRow; worker: WorkerDispatchRow } {
+): { dispatch: DispatchContextRow; worker: WorkerDispatchRow; task: TaskRow } {
+  if (params.taskId && params.createTask) {
+    throw new OrchestrationError(
+      'invalid_argument',
+      'createStartingWorkerDispatch accepts taskId or createTask, not both.'
+    )
+  }
   this.db.exec('BEGIN IMMEDIATE')
   try {
     if (params.mutationReceipt) {
@@ -53,9 +63,20 @@ export function createStartingWorkerDispatch(
         )
         .run(receipt.callerFingerprint, receipt.requestId, receipt.method, receipt.payloadHash)
     }
-    const task = this.getTask(params.taskId)
-    if (!task) {
-      throw new OrchestrationError('task_not_found', `Task ${params.taskId} was not found.`)
+    let task: TaskRow
+    if (params.taskId) {
+      const existing = this.getTask(params.taskId)
+      if (!existing) {
+        throw new OrchestrationError('task_not_found', `Task ${params.taskId} was not found.`)
+      }
+      task = existing
+    } else if (params.createTask) {
+      task = createInlineDispatchTask(this, params.createTask)
+    } else {
+      throw new OrchestrationError(
+        'invalid_argument',
+        'createStartingWorkerDispatch requires either taskId or createTask.'
+      )
     }
     if (params.retryOf) {
       const prior = this.getDispatchContextById(params.retryOf)
@@ -133,11 +154,30 @@ export function createStartingWorkerDispatch(
     this.hasAnyDispatchContextsCache = true
     return {
       dispatch: this.getDispatchContextById(id) as DispatchContextRow,
-      worker: this.getWorkerDispatch(id) as WorkerDispatchRow
+      worker: this.getWorkerDispatch(id) as WorkerDispatchRow,
+      // Why: re-read so callers see the post-dispatch row, not the pre-UPDATE status.
+      task: this.getTask(task.id) as TaskRow
     }
   } catch (error) {
     this.db.exec('ROLLBACK')
     throw error
+  }
+}
+
+// Why: createTask throws plain Errors (missing run, foreign parent/dep). Inside worker-start
+// those escape past the failure-receipt handler as unclassified internal errors, so map them
+// to an orchestration code the coordinator can act on.
+function createInlineDispatchTask(db: OrchestrationDb, input: CreateTaskInput): TaskRow {
+  try {
+    return db.createTask(input)
+  } catch (error) {
+    if (error instanceof OrchestrationError) {
+      throw error
+    }
+    throw new OrchestrationError(
+      'invalid_argument',
+      error instanceof Error ? error.message : String(error)
+    )
   }
 }
 
