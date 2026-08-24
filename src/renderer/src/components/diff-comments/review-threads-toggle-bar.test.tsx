@@ -1,8 +1,7 @@
 // @vitest-environment happy-dom
 import '@testing-library/jest-dom/vitest'
-import { cleanup, render, screen } from '@testing-library/react'
+import { act, cleanup, render, renderHook, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { renderHook, act } from '@testing-library/react'
 import { afterEach, describe, expect, it } from 'vitest'
 import { ReviewThreadsToggleBar } from './review-threads-toggle-bar'
 import { setReviewThreadsVisible, useReviewThreadsVisible } from './review-thread-visibility'

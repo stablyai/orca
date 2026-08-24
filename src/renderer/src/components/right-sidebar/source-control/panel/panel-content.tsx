@@ -18,7 +18,7 @@ export function SourceControlPanelContent(props: SourceControlPanelReadyProps) {
   // Why: gate the details fetch on a rendered branch section; without a linked PR the hook is inert.
   const linkedPRThreads = useLocalPRReviewThreads(
     currentWorktreeId,
-    props.model.branchSummary?.status === 'ready'
+    props.model.branchSummary?.status === 'ready' && props.model.filteredBranchEntries.length > 0
   )
   const reviewThreadCountByPath = useMemo(
     () => countReviewThreadsByPath(linkedPRThreads.comments),

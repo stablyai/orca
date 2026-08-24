@@ -2041,8 +2041,10 @@ export default function CombinedDiffViewer({
               </button>
             )}
             {hasReviewThreads ? (
-              <button
-                className="text-left text-xs text-muted-foreground hover:text-foreground transition-colors"
+              <Button
+                variant="ghost"
+                size="xs"
+                className="h-auto px-0 text-left text-xs font-normal text-muted-foreground transition-colors hover:bg-transparent hover:text-foreground"
                 onClick={() => setReviewThreadsVisible(!reviewThreadsVisible)}
               >
                 {reviewThreadsVisible
@@ -2054,7 +2056,7 @@ export default function CombinedDiffViewer({
                       'auto.components.diff.comments.reviewThreads.showAction',
                       'Show comments'
                     )}
-              </button>
+              </Button>
             ) : null}
             <button
               className="w-20 text-left text-xs text-muted-foreground hover:text-foreground transition-colors"

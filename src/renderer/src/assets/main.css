@@ -2996,6 +2996,20 @@ html.native-shell .app-layout {
   background: var(--muted-foreground);
 }
 
+.orca-suggestion-lines {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  line-height: 1.45;
+}
+
+.orca-suggestion-line-removed {
+  background: color-mix(in srgb, var(--git-decoration-deleted) 12%, transparent);
+}
+
+.orca-suggestion-line-added {
+  background: color-mix(in srgb, var(--git-decoration-added) 12%, transparent);
+}
+
 /* Popover for adding new comment */
 .orca-diff-comment-popover {
   position: absolute;

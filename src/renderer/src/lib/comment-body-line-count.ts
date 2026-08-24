@@ -31,7 +31,6 @@ export function getReviewThreadLayoutLineCount(comment: {
   if (!thread) {
     return getCommentBodyLayoutLineCount(comment.body)
   }
-  // Resolved threads mount collapsed to a single summary row.
   if (thread.isResolved) {
     return 1
   }

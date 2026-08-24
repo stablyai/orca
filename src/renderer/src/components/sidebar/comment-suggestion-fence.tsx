@@ -42,14 +42,11 @@ export function CommentSuggestionBlock({
           {translate('auto.components.sidebar.commentSuggestionFence.header', 'Suggested change')}
         </span>
       </div>
-      <div className="max-h-60 overflow-x-auto font-mono text-[11px] leading-5">
+      <div className="orca-suggestion-lines max-h-60 overflow-x-auto">
         {(options?.originalLines ?? []).map((line, index) => (
           <div
             key={`old-${String(index)}`}
-            className="whitespace-pre px-2 text-muted-foreground line-through"
-            style={{
-              background: 'color-mix(in srgb, var(--git-decoration-deleted) 12%, transparent)'
-            }}
+            className="orca-suggestion-line-removed whitespace-pre px-2 text-muted-foreground line-through"
           >
             {line || ' '}
           </div>
@@ -57,10 +54,7 @@ export function CommentSuggestionBlock({
         {suggestedLines.map((line, index) => (
           <div
             key={`new-${String(index)}`}
-            className="whitespace-pre px-2"
-            style={{
-              background: 'color-mix(in srgb, var(--git-decoration-added) 12%, transparent)'
-            }}
+            className="orca-suggestion-line-added whitespace-pre px-2"
           >
             {line || ' '}
           </div>
