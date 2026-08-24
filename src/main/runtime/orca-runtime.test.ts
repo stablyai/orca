@@ -10482,6 +10482,18 @@ describe('OrcaRuntimeService', () => {
       expect(serializeProviderBuffer).toHaveBeenCalledOnce()
     })
 
+    it('treats a provider-preferred PTY with no mode tracker as an unknown screen', () => {
+      const { runtime } = createSideEffectRuntime()
+      runtime.synchronizePtyOutputSequenceFromProvider(
+        'pty-tui',
+        { value: 900, generation: 'continued' },
+        0
+      )
+
+      expect(runtime.getTerminalScreenKind('pty-tui')).toBe('unknown')
+      expect(runtime.isTerminalAlternateScreen('pty-tui')).toBe(false)
+    })
+
     it('uses provider alternate-screen state while a partial model is unsafe', async () => {
       const { runtime } = createSideEffectRuntime()
       runtime.setPtyController({

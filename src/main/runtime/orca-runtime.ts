@@ -45,6 +45,7 @@ import type {
 } from '../../shared/terminal-side-effect-facts'
 import type { TerminalGitHubPRLink } from '../../shared/terminal-github-pr-link-detector'
 import { TerminalKittyKeyboardModeTracker } from '../../shared/terminal-kitty-keyboard-mode-tracker'
+import { resolveTerminalScreenKind } from './rpc/mobile-terminal-resize-restream'
 import { parseTerminalKittyKeyboardFlags } from '../../shared/terminal-kitty-keyboard-flags'
 import {
   AGENT_STATUS_STALE_AFTER_MS,
@@ -12743,14 +12744,20 @@ export class OrcaRuntimeService {
   // TUI's own redraw, so the resize re-stream must be skipped. Provider state
   // covers restored PTYs whose main-side emulator is only a partial suffix.
   isTerminalAlternateScreen(ptyId: string): boolean {
-    if (this.providerSnapshotPreferredPtys.has(ptyId)) {
-      return this.providerModeTrackersByPtyId.get(ptyId)?.isAlternateScreen ?? false
-    }
-    return (
-      this.headlessTerminals.get(ptyId)?.emulator.isAlternateScreen ??
-      this.providerModeTrackersByPtyId.get(ptyId)?.isAlternateScreen ??
-      false
-    )
+    return this.getTerminalScreenKind(ptyId) === 'alternate'
+  }
+
+  // Why: mobile resize restream must not treat "no tracker yet" as a normal
+  // buffer. A provider-preferred suffix can miss the 1049h that entered a
+  // TUI, and restreaming that remounts Claude Code on every apply-layout.
+  getTerminalScreenKind(ptyId: string): 'alternate' | 'normal' | 'unknown' {
+    const tracked = this.providerModeTrackersByPtyId.get(ptyId)?.isAlternateScreen
+    const headless = this.headlessTerminals.get(ptyId)?.emulator.isAlternateScreen
+    return resolveTerminalScreenKind({
+      providerSnapshotPreferred: this.providerSnapshotPreferredPtys.has(ptyId),
+      ...(tracked !== undefined ? { trackedAlternateScreen: tracked } : {}),
+      ...(headless !== undefined ? { headlessAlternateScreen: headless } : {})
+    })
   }
 
   // Why: daemon-backed PTYs that the runtime adopted after an Orca relaunch

@@ -246,6 +246,7 @@ import {
   readTerminalViewportDims,
   runTerminalViewportFitPass
 } from '../../../../src/session/mobile-terminal-viewport-resubscribe'
+import { resolveMobileTerminalResizePaint } from '../../../../src/session/mobile-terminal-resize-paint'
 import { activateMobileSessionTab } from '../../../../src/session/mobile-session-tab-activation'
 import { MobileTerminalDiagnostics } from '../../../../src/session/mobile-terminal-diagnostics'
 import { runAcceptedMobileSessionTabsEffects } from '../../../../src/session/mobile-session-tabs-accepted-effects'
@@ -1500,11 +1501,11 @@ export default function SessionScreen() {
               data,
               viewport
             )
-            const serialized = typeof data.serialized === 'string' ? data.serialized : null
+            const resizePaint = resolveMobileTerminalResizePaint(data.serialized)
             diagnostics.streamResized(handle, seq, eventSeq, data, getTerminalRef(handle) != null)
             const oscLinks = isTerminalOscLinkRanges(data.oscLinks) ? data.oscLinks : undefined
-            if (serialized != null) {
-              getTerminalRef(handle)?.init(cols, rows, serialized, true, oscLinks)
+            if (resizePaint.kind === 'init') {
+              getTerminalRef(handle)?.init(cols, rows, resizePaint.data, true, oscLinks)
             } else {
               getTerminalRef(handle)?.resize(cols, rows)
             }

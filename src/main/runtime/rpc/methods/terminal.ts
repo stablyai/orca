@@ -48,6 +48,7 @@ import {
   MOBILE_SNAPSHOT_BYTE_BUDGET,
   MOBILE_SUBSCRIBE_SCROLLBACK_ROWS
 } from '../../scrollback-limits'
+import { shouldRestreamMobileResizeScrollback } from '../mobile-terminal-resize-restream'
 import { assertTerminalAgentSendable } from '../terminal-agent-send-guard'
 import {
   navigationTargetsHost,
@@ -800,8 +801,16 @@ async function sendMobileResizeRestream(
   event: { cols: number; rows: number; displayMode: string; reason: string; seq?: number },
   shouldSend?: () => boolean
 ): Promise<boolean> {
-  // Why: only a true geometry reflow rewraps scrollback; a dimensionless mode-change would re-send the whole buffer for nothing.
-  if (event.reason !== 'apply-layout' || runtime.isTerminalAlternateScreen(ptyId)) {
+  // Why: only a known normal-buffer apply-layout rewraps scrollback. Unknown
+  // screen is the Linux daemon hole: a TUI can be live while the tracker still
+  // reads "not alt", and restreaming remounts it on every layout tick.
+  const screen =
+    typeof runtime.getTerminalScreenKind === 'function'
+      ? runtime.getTerminalScreenKind(ptyId)
+      : runtime.isTerminalAlternateScreen(ptyId)
+        ? 'alternate'
+        : 'normal'
+  if (!shouldRestreamMobileResizeScrollback({ reason: event.reason, screen })) {
     return false
   }
   const serialized = await serializeBudgetedMobileSnapshot(runtime, ptyId, true)
