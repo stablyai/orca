@@ -43,6 +43,10 @@ export type TerminalTab = {
    *  hook status overrides this once the agent does anything. Plain terminals
    *  and manually-started agents omit it. */
   launchAgent?: TuiAgent
+  /** Why: `launchAgent` is tab-scoped. Pinning it to the original leaf stops a
+   *  remaining sibling (or a new pane in the same slot) from inheriting the
+   *  launched identity after the launched pane closes. */
+  launchAgentLeafId?: string
   /** Why: when `setActiveWorktree` bumps generation on all-dead tabs to drive a
    *  TerminalPane remount, the fresh PTY that results is caused by navigation,
    *  not by the user doing work. Without this flag the resulting

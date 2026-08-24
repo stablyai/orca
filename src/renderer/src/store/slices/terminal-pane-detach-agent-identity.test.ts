@@ -20,7 +20,13 @@ describe('syncPaneDetachPtyOwnership agent identity', () => {
       },
       tabsByWorktree: {
         [worktreeId]: [
-          makeTab({ id: sourceTabId, worktreeId, ptyId: 'pty-droid' }),
+          makeTab({
+            id: sourceTabId,
+            worktreeId,
+            ptyId: 'pty-droid',
+            launchAgent: 'droid',
+            launchAgentLeafId: detachedLeafId
+          }),
           makeTab({ id: targetTabId, worktreeId, ptyId: null })
         ]
       },
@@ -112,6 +118,13 @@ describe('syncPaneDetachPtyOwnership agent identity', () => {
     expect(state.paneForegroundAgentByPaneKey[siblingPaneKey]).toEqual({
       agent: 'antigravity',
       shellForeground: false
+    })
+    const tabs = state.tabsByWorktree[worktreeId] ?? []
+    expect(tabs.find((tab) => tab.id === sourceTabId)).not.toHaveProperty('launchAgent')
+    expect(tabs.find((tab) => tab.id === sourceTabId)).not.toHaveProperty('launchAgentLeafId')
+    expect(tabs.find((tab) => tab.id === targetTabId)).toMatchObject({
+      launchAgent: 'droid',
+      launchAgentLeafId: detachedLeafId
     })
     expect(resolveWindowsShiftEnterEncodingForPane(state, targetPaneKey)).toBe('csi-u')
     expect(resolveWindowsShiftEnterEncodingForPane(state, siblingPaneKey)).toBe('alt-enter')

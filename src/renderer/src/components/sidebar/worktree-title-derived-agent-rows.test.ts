@@ -304,6 +304,165 @@ describe('buildTitleDerivedAgentRows', () => {
     expect(rows.map((row) => [row.agentType, row.state])).toEqual([['cursor', 'working']])
   })
 
+  // STA-4774: cursor-agent replaces the native identity title with an arbitrary
+  // conversation name. Launch provenance, not a title token, has to keep the row.
+  it('keeps a launched Cursor pane visible under an arbitrary session title', () => {
+    const rows = buildWorktreeAgentRows({
+      tabs: [makeTab('tab-1', { launchAgent: 'cursor', launchAgentLeafId: LEAF_ID_1 })],
+      entries: [],
+      retained: [],
+      runtimePaneTitlesByTabId: { 'tab-1': { 1: 'Rename the auth helper' } },
+      ptyIdsByTabId: { 'tab-1': ['pty-cursor'] },
+      terminalLayoutsByTabId: { 'tab-1': makeSingleLayout(LEAF_ID_1) },
+      now: 2000
+    })
+
+    expect(rows.map((row) => [row.agentType, row.state, row.entry.prompt])).toEqual([
+      ['cursor', 'idle', 'Cursor']
+    ])
+    expect(rows[0]?.entry.terminalTitle).toBe('Rename the auth helper')
+  })
+
+  it('keeps a live mirrored Cursor title that was also stamped as the tab default', () => {
+    const rows = buildWorktreeAgentRows({
+      tabs: [
+        makeTab('tab-1', {
+          launchAgent: 'cursor',
+          launchAgentLeafId: LEAF_ID_1,
+          defaultTitle: 'Cursor Agent'
+        })
+      ],
+      entries: [],
+      retained: [],
+      runtimePaneTitlesByTabId: { 'tab-1': { 1: 'Cursor Agent' } },
+      ptyIdsByTabId: { 'tab-1': ['pty-cursor'] },
+      terminalLayoutsByTabId: { 'tab-1': makeSingleLayout(LEAF_ID_1) },
+      now: 2000
+    })
+
+    expect(rows.map((row) => [row.agentType, row.state])).toEqual([['cursor', 'idle']])
+  })
+
+  it('keeps a launched Codex pane visible under an arbitrary session title', () => {
+    const rows = buildWorktreeAgentRows({
+      tabs: [makeTab('tab-1', { launchAgent: 'codex', launchAgentLeafId: LEAF_ID_1 })],
+      entries: [],
+      retained: [],
+      runtimePaneTitlesByTabId: { 'tab-1': { 1: 'Rename the auth helper' } },
+      ptyIdsByTabId: { 'tab-1': ['pty-codex'] },
+      terminalLayoutsByTabId: { 'tab-1': makeSingleLayout(LEAF_ID_1) },
+      now: 2000
+    })
+
+    expect(rows.map((row) => [row.agentType, row.state, row.entry.prompt])).toEqual([
+      ['codex', 'idle', 'Codex']
+    ])
+  })
+
+  it('does not keep a launched Cursor pane after the title returns to the shell', () => {
+    const rows = buildWorktreeAgentRows({
+      tabs: [makeTab('tab-1', { launchAgent: 'cursor', launchAgentLeafId: LEAF_ID_1 })],
+      entries: [],
+      retained: [],
+      runtimePaneTitlesByTabId: { 'tab-1': { 1: 'zsh' } },
+      ptyIdsByTabId: { 'tab-1': ['pty-cursor'] },
+      terminalLayoutsByTabId: { 'tab-1': makeSingleLayout(LEAF_ID_1) },
+      now: 2000
+    })
+
+    expect(rows).toHaveLength(0)
+  })
+
+  it('does not keep a launched Cursor pane after the title returns to the default Terminal title', () => {
+    const rows = buildWorktreeAgentRows({
+      tabs: [
+        makeTab('tab-1', {
+          launchAgent: 'cursor',
+          launchAgentLeafId: LEAF_ID_1,
+          defaultTitle: 'Terminal 1'
+        })
+      ],
+      entries: [],
+      retained: [],
+      runtimePaneTitlesByTabId: { 'tab-1': { 1: 'Terminal 1' } },
+      ptyIdsByTabId: { 'tab-1': ['pty-cursor'] },
+      terminalLayoutsByTabId: { 'tab-1': makeSingleLayout(LEAF_ID_1) },
+      now: 2000
+    })
+
+    expect(rows).toHaveLength(0)
+  })
+
+  it('does not treat a bare Terminal title as exit unless it matches the tab defaultTitle', () => {
+    const rows = buildWorktreeAgentRows({
+      tabs: [makeTab('tab-1', { launchAgent: 'codex', launchAgentLeafId: LEAF_ID_1 })],
+      entries: [],
+      retained: [],
+      runtimePaneTitlesByTabId: { 'tab-1': { 1: 'Terminal 1' } },
+      ptyIdsByTabId: { 'tab-1': ['pty-codex'] },
+      terminalLayoutsByTabId: { 'tab-1': makeSingleLayout(LEAF_ID_1) },
+      now: 2000
+    })
+
+    expect(rows.map((row) => [row.agentType, row.state])).toEqual([['codex', 'idle']])
+  })
+
+  it('keeps a launched Cursor pane on a sole leaf even before launchAgentLeafId is stamped', () => {
+    const rows = buildWorktreeAgentRows({
+      tabs: [makeTab('tab-1', { launchAgent: 'cursor' })],
+      entries: [],
+      retained: [],
+      runtimePaneTitlesByTabId: { 'tab-1': { 1: 'Rename the auth helper' } },
+      ptyIdsByTabId: { 'tab-1': ['pty-cursor'] },
+      terminalLayoutsByTabId: { 'tab-1': makeSingleLayout(LEAF_ID_1) },
+      now: 2000
+    })
+
+    expect(rows.map((row) => [row.agentType, row.state])).toEqual([['cursor', 'idle']])
+  })
+
+  it('does not invent a Cursor row from an arbitrary title without launch identity', () => {
+    const rows = buildWorktreeAgentRows({
+      tabs: [makeTab('tab-1')],
+      entries: [],
+      retained: [],
+      runtimePaneTitlesByTabId: { 'tab-1': { 1: 'Rename the auth helper' } },
+      ptyIdsByTabId: { 'tab-1': ['pty-anon'] },
+      terminalLayoutsByTabId: { 'tab-1': makeSingleLayout(LEAF_ID_1) },
+      now: 2000
+    })
+
+    expect(rows).toHaveLength(0)
+  })
+
+  it('does not recycle launch identity onto a remaining leaf after the original pane closes', () => {
+    const rows = buildWorktreeAgentRows({
+      tabs: [makeTab('tab-1', { launchAgent: 'cursor', launchAgentLeafId: LEAF_ID_1 })],
+      entries: [],
+      retained: [],
+      runtimePaneTitlesByTabId: { 'tab-1': { 1: 'Rename the auth helper' } },
+      ptyIdsByTabId: { 'tab-1': ['pty-remaining'] },
+      terminalLayoutsByTabId: { 'tab-1': makeSingleLayout(LEAF_ID_2) },
+      now: 2000
+    })
+
+    expect(rows).toHaveLength(0)
+  })
+
+  it('keeps launch identity on the original leaf after a sibling closes', () => {
+    const rows = buildWorktreeAgentRows({
+      tabs: [makeTab('tab-1', { launchAgent: 'cursor', launchAgentLeafId: LEAF_ID_1 })],
+      entries: [],
+      retained: [],
+      runtimePaneTitlesByTabId: { 'tab-1': { 1: 'Rename the auth helper' } },
+      ptyIdsByTabId: { 'tab-1': ['pty-cursor'] },
+      terminalLayoutsByTabId: { 'tab-1': makeSingleLayout(LEAF_ID_1) },
+      now: 2000
+    })
+
+    expect(rows.map((row) => [row.agentType, row.state])).toEqual([['cursor', 'idle']])
+  })
+
   // #8940: an OpenCode pane's own task text must not hand the row to Claude Code.
   it('keeps an OpenCode-launched pane OpenCode across its own status frames', () => {
     const frames: [string, string][] = [

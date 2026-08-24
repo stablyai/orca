@@ -20,6 +20,7 @@ import type { WorkspaceSessionState } from './workspace-session-state-types'
 import { isValidTerminalTabId } from './terminal-tab-id'
 import { parseExecutionHostId, type ExecutionHostId } from './execution-host'
 import { isTuiAgent } from './tui-agent-config'
+import { isTerminalLeafId } from './stable-pane-id'
 import { isWorkspaceKey } from './workspace-scope'
 import {
   browserHistoryEntriesSchema,
@@ -103,7 +104,10 @@ const terminalTabSchema = z.object({
   launchAgent: z
     .custom<TuiAgent>((v) => isTuiAgent(v))
     .optional()
-    .catch(undefined)
+    .catch(undefined),
+  // Why: optional so older sessions restore; unknown/non-UUID values drop rather
+  // than failing the whole-session parse.
+  launchAgentLeafId: z.string().refine(isTerminalLeafId).optional().catch(undefined)
 })
 
 // ─── Unified tab model ──────────────────────────────────────────────

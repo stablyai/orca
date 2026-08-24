@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { useAppStore } from '@/store'
-import { isShellProcess } from '../../../shared/agent-detection'
+import { titleShowsNoAgent } from '../../../shared/agent-detection'
 import { worktreeUsesRemoteConnection } from '@/store/slices/terminals'
 import { parseRemoteRuntimePtyId } from '@/runtime/runtime-terminal-stream'
 import { isTerminalLeafId, makePaneKey } from '../../../shared/stable-pane-id'
@@ -21,12 +21,6 @@ import { isOpenCodeNativeTitle } from '../../../shared/opencode-terminal-title'
 import { resolvePaneAgentOwner } from '../../../shared/pane-agent-owner'
 import type { TerminalTab } from '../../../shared/terminal-tab-types'
 import type { TuiAgent } from '../../../shared/tui-agent'
-
-// A shell name or the tab's neutral default title (where inferred-interrupt reset parks it); blank titles are no evidence.
-function titleShowsNoAgent(title: string, defaultTitle?: string): boolean {
-  const trimmed = title.trim()
-  return trimmed.length > 0 && (isShellProcess(trimmed) || trimmed === defaultTitle?.trim())
-}
 
 /**
  * Resolves wrapper-compatible signal identity against the launch owner.

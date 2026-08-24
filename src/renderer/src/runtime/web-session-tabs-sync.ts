@@ -35,6 +35,7 @@ import {
   buildRetiredTerminalTabStateSweepPatch,
   type RetiredTerminalTabSweepState
 } from '../store/slices/retired-terminal-tab-state-sweep'
+import { resolveLaunchAgentLeafId } from '../store/slices/launch-agent-leaf-stamp'
 import { getRemoteRuntimePtyEnvironmentId, toRemoteRuntimePtyId } from './runtime-terminal-stream'
 import { sanitizeTerminalLayoutPaneTitlesForLabels } from '@/lib/terminal-pane-title-sanitization'
 import { terminalLayoutEqual } from '@/lib/terminal-layout-equality'
@@ -1126,6 +1127,14 @@ function buildMirroredTerminalTabs(
     // Why: viewMode echoes back through host snapshots, so prefer the client's record during the echo window and adopt the host value only without a prior tab.
     const hostViewModeSurface = surfaces.find((surface) => surface.viewMode)
     const viewMode = existing ? existing.viewMode : hostViewModeSurface?.viewMode
+    // Why: host snapshots omit this pin; stamp the first sole leaf and keep it
+    // only while launchAgent remains so a remaining sibling cannot inherit it.
+    const launchAgentLeafId = resolveLaunchAgentLeafId({
+      launchAgent,
+      existingLeafId: existing?.launchAgentLeafId,
+      previousLayout: existingLayout,
+      nextLayout: layout
+    })
     return {
       tab: {
         id: localTabId,
@@ -1146,7 +1155,8 @@ function buildMirroredTerminalTabs(
         sortOrder: sortOffset + index,
         createdAt: existing?.createdAt ?? now + index,
         // Why: launchAgent is host-owned lifecycle metadata; once the host omits it, don't resurrect stale startup intent.
-        ...(launchAgent ? { launchAgent } : {})
+        ...(launchAgent ? { launchAgent } : {}),
+        ...(launchAgentLeafId ? { launchAgentLeafId } : {})
       },
       hostTabId: parentTabId,
       ptyIds,
@@ -2263,6 +2273,7 @@ function terminalTabEqual(a: TerminalTab, b: TerminalTab): boolean {
     a.generation === b.generation &&
     a.shellOverride === b.shellOverride &&
     a.launchAgent === b.launchAgent &&
+    a.launchAgentLeafId === b.launchAgentLeafId &&
     a.pendingActivationSpawn === b.pendingActivationSpawn
   )
 }

@@ -22,6 +22,12 @@ export function isShellProcess(processName: string): boolean {
   )
 }
 
+/** A shell name or the tab's own neutral default title; blank titles are no evidence. */
+export function titleShowsNoAgent(title: string, defaultTitle?: string): boolean {
+  const trimmed = title.trim()
+  return trimmed.length > 0 && (isShellProcess(trimmed) || trimmed === defaultTitle?.trim())
+}
+
 // Why: a ConPTY-side buffer clear cannot reach PSReadLine's cached cursor
 // row, so the first Enter after a terminal clear still repaints the prompt at
 // the stale row. Only the PowerShell family binds Ctrl+L (form feed) to a

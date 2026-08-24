@@ -4,6 +4,7 @@ import {
   buildAgentStartupPlan,
   isShellProcess
 } from './tui-agent-startup'
+import { titleShowsNoAgent } from '../../../shared/agent-detection'
 import { resolveTuiAgentLaunchArgs } from '../../../shared/tui-agent-launch-defaults'
 
 const emptyLaunchConfig = (agentCommand: string) => ({
@@ -418,5 +419,23 @@ describe('isShellProcess', () => {
   it('does not confuse agent processes with the host shell', () => {
     expect(isShellProcess('gemini')).toBe(false)
     expect(isShellProcess('cursor-agent')).toBe(false)
+  })
+})
+
+describe('titleShowsNoAgent', () => {
+  it('treats shell names and default Terminal titles as no agent', () => {
+    expect(titleShowsNoAgent('zsh')).toBe(true)
+    expect(titleShowsNoAgent('cmd.exe')).toBe(true)
+    // A bare "Terminal N" is NOT evidence of exit on its own: a pane can carry a
+    // retained agent identity under that title (use-tab-agent-retained-identity).
+    // It only means "no agent" when it matches the tab's own default title.
+    expect(titleShowsNoAgent('Terminal 1')).toBe(false)
+    expect(titleShowsNoAgent('Terminal 1', 'Terminal 1')).toBe(true)
+  })
+
+  it('does not treat blank or conversation titles as exit', () => {
+    expect(titleShowsNoAgent('')).toBe(false)
+    expect(titleShowsNoAgent('Rename the auth helper')).toBe(false)
+    expect(titleShowsNoAgent('Cursor Agent')).toBe(false)
   })
 })

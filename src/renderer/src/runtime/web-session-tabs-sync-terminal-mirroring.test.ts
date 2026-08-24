@@ -55,6 +55,7 @@ describe('applyWebSessionTabsSnapshot', () => {
         id: mirroredId,
         ptyId: 'remote:web-env-1@@terminal-1',
         launchAgent: 'codex',
+        launchAgentLeafId: LEAF_ID,
         startupCwd: '/worktree/packages/web',
         title: 'host shell',
         worktreeId: WT
@@ -87,13 +88,21 @@ describe('applyWebSessionTabsSnapshot', () => {
       color: null,
       sortOrder: 0,
       createdAt: NOW,
-      launchAgent: 'codex'
+      launchAgent: 'codex',
+      launchAgentLeafId: LEAF_ID
     }
 
     const patch = applyWebSessionTabsSnapshot(
       makeState({
         tabsByWorktree: { [WT]: [existingTab] },
-        ptyIdsByTabId: { [existingTab.id]: ['remote:web-env-1@@terminal-1'] }
+        ptyIdsByTabId: { [existingTab.id]: ['remote:web-env-1@@terminal-1'] },
+        terminalLayoutsByTabId: {
+          [existingTab.id]: {
+            root: { type: 'leaf', leafId: LEAF_ID },
+            activeLeafId: LEAF_ID,
+            expandedLeafId: null
+          }
+        }
       }),
       makeSnapshot([
         {
@@ -116,6 +125,60 @@ describe('applyWebSessionTabsSnapshot', () => {
       title: 'zsh'
     })
     expect(patch.tabsByWorktree?.[WT]?.[0]?.launchAgent).toBeUndefined()
+    expect(patch.tabsByWorktree?.[WT]?.[0]?.launchAgentLeafId).toBeUndefined()
+  })
+
+  it('does not recycle launch provenance onto a remaining mirrored sibling', () => {
+    const existingTab: TerminalTab = {
+      id: toWebTerminalSurfaceTabId('host-tab-1'),
+      ptyId: 'remote:web-env-1@@terminal-1',
+      worktreeId: WT,
+      title: 'Rename the auth helper',
+      defaultTitle: 'Codex',
+      customTitle: null,
+      color: null,
+      sortOrder: 0,
+      createdAt: NOW,
+      launchAgent: 'codex',
+      launchAgentLeafId: LEAF_ID
+    }
+
+    const patch = applyWebSessionTabsSnapshot(
+      makeState({
+        tabsByWorktree: { [WT]: [existingTab] },
+        ptyIdsByTabId: { [existingTab.id]: ['remote:web-env-1@@terminal-2'] },
+        terminalLayoutsByTabId: {
+          [existingTab.id]: {
+            root: {
+              type: 'split',
+              direction: 'horizontal',
+              first: { type: 'leaf', leafId: LEAF_ID },
+              second: { type: 'leaf', leafId: SECOND_LEAF_ID }
+            },
+            activeLeafId: SECOND_LEAF_ID,
+            expandedLeafId: null
+          }
+        }
+      }),
+      makeSnapshot([
+        {
+          type: 'terminal',
+          id: `host-tab-1::${SECOND_LEAF_ID}`,
+          title: 'Rename the auth helper',
+          parentTabId: 'host-tab-1',
+          leafId: SECOND_LEAF_ID,
+          isActive: true,
+          launchAgent: 'codex',
+          status: 'ready',
+          terminal: 'terminal-2'
+        }
+      ]),
+      ENV,
+      NOW + 1
+    ) as Partial<WebSessionTabsSyncState>
+
+    expect(patch.tabsByWorktree?.[WT]?.[0]?.launchAgent).toBe('codex')
+    expect(patch.tabsByWorktree?.[WT]?.[0]?.launchAgentLeafId).toBe(LEAF_ID)
   })
 
   it('drops mirrored startup cwd when a later host snapshot omits it', () => {
