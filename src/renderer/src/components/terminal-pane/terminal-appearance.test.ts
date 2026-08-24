@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { ManagedPane, PaneManager } from '@/lib/pane-manager/pane-manager'
 import { getDefaultSettings } from '../../../../shared/constants'
 import {
@@ -11,6 +11,18 @@ import { safeFit } from '@/lib/pane-manager/pane-fit'
 import { mode2031SequenceFor } from '../../../../shared/terminal-color-scheme-protocol'
 import { _resetTerminalViewAttributesPublisherForTest } from './terminal-view-attributes-publisher'
 import type { TerminalViewAttributes } from '../../../../shared/terminal-view-attributes'
+
+const { terminalBackgroundActiveMock } = vi.hoisted(() => ({
+  terminalBackgroundActiveMock: vi.fn(() => false)
+}))
+
+vi.mock('@/lib/appearance-background-runtime', () => ({
+  isTerminalAppearanceBackgroundActive: terminalBackgroundActiveMock
+}))
+
+beforeEach(() => {
+  terminalBackgroundActiveMock.mockReset().mockReturnValue(false)
+})
 
 function fakeTransport(overrides?: { connected?: boolean; sendOk?: boolean }): {
   isConnected: () => boolean
@@ -216,6 +228,33 @@ describe('applyTerminalAppearance theme assignment', () => {
     expect(pane.terminal.options.theme?.background).toBe('#102030')
   })
 
+  it('keeps the pane surface opaque behind a loaded terminal background image', () => {
+    terminalBackgroundActiveMock.mockReturnValue(true)
+    const pane = makePane(1)
+    const manager = makeManager([pane])
+    const settings = getDefaultSettings('/tmp')
+
+    applyTerminalAppearance(
+      manager,
+      {
+        ...settings,
+        terminalBackgroundOpacity: undefined,
+        terminalColorOverrides: { background: '#102030' }
+      },
+      true,
+      new Map(),
+      new Map(),
+      'false',
+      new Map(),
+      new Map()
+    )
+
+    expect(pane.terminal.options.theme?.background).toBe('rgba(16, 32, 48, 0)')
+    expect(pane.terminal.options.allowTransparency).toBe(true)
+    expect(manager.setPaneStyleOptions).toHaveBeenCalledWith(
+      expect.objectContaining({ paneBackground: '#102030' })
+    )
+  })
   // #7934: contrast correction rescues invisible white text on light backgrounds but over-corrects on dark;
   // gate by the composed theme's background luminance (either theme slot can hold either kind of theme).
   it('keeps xterm contrast correction on light themes', () => {

@@ -92,12 +92,12 @@ export function WarpThemeImportModal({
           <DialogDescription className="text-xs">
             {mode === 'yaml'
               ? translate(
-                  'auto.components.settings.WarpThemeImportModal.yaml_description',
-                  'Import theme YAML files (Warp format) as Orca terminal themes.'
+                  'auto.components.settings.WarpThemeImportModal.yaml_draft_description',
+                  'Add theme YAML files (Warp format) to your appearance draft.'
                 )
               : translate(
-                  'auto.components.settings.WarpThemeImportModal.description',
-                  'Import Warp themes as Orca terminal themes.'
+                  'auto.components.settings.WarpThemeImportModal.draft_description',
+                  'Add Warp themes to your appearance draft.'
                 )}
           </DialogDescription>
         </DialogHeader>
@@ -238,7 +238,7 @@ export function WarpThemeImportModal({
             </div>
           ) : (
             <div className="space-y-2 text-xs text-muted-foreground">
-              <p>
+              <p role={preview.error ? 'alert' : undefined}>
                 {preview.error ??
                   (mode === 'yaml'
                     ? translate(
@@ -305,11 +305,15 @@ export function WarpThemeImportModal({
             </div>
           ) : null}
 
-          {applyError ? <p className="text-xs text-destructive">{applyError}</p> : null}
+          {applyError ? (
+            <p className="text-xs text-destructive" role="alert">
+              {applyError}
+            </p>
+          ) : null}
         </div>
 
         <DialogFooter>
-          <Button variant="outline" onClick={() => handleOpenChange(false)}>
+          <Button variant="ghost" onClick={() => handleOpenChange(false)}>
             {translate('auto.components.settings.WarpThemeImportModal.cancel', 'Cancel')}
           </Button>
           <Button
@@ -318,18 +322,18 @@ export function WarpThemeImportModal({
           >
             {selectedCount === 1
               ? translate(
-                  'auto.components.settings.WarpThemeImportModal.import_theme_one',
-                  'Import 1 Theme'
+                  'auto.components.settings.WarpThemeImportModal.add_theme_one',
+                  'Add 1 Theme to Draft'
                 )
               : selectedCount > 0
                 ? translate(
-                    'auto.components.settings.WarpThemeImportModal.import_theme_other',
-                    'Import {{value0}} Themes',
+                    'auto.components.settings.WarpThemeImportModal.add_theme_other',
+                    'Add {{value0}} Themes to Draft',
                     { value0: selectedCount }
                   )
                 : translate(
-                    'auto.components.settings.WarpThemeImportModal.import_themes',
-                    'Import Themes'
+                    'auto.components.settings.WarpThemeImportModal.add_themes',
+                    'Add Themes to Draft'
                   )}
           </Button>
         </DialogFooter>

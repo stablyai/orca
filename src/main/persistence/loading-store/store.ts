@@ -122,6 +122,7 @@ import { hasWorktreeRemovalRepoOwnerOnOtherHost } from '../../worktree-removal-r
 import { isPathInsideOrEqual } from '../../../shared/cross-platform-path'
 import { normalizeTerminalQuickCommands } from '../../../shared/terminal-quick-commands'
 import { normalizeTaskProviderSettings } from '../../../shared/task-providers'
+import { normalizeOrcaBackgroundSettings } from '../../../shared/orca-background-settings'
 import { normalizeAutoRenameBranchFromWorkDefaultOn } from '../../../shared/auto-rename-branch-from-work-settings'
 import {
   addMobilePairingCustomAddress,
@@ -1202,6 +1203,7 @@ export class Store {
             ...defaults.settings,
             // Why (#7977): keep persisted experimentalNewWorktreeCardStyle:true — v1.4.130's onboarding auto-wrote it as a plain boolean, so it's indistinguishable from a real opt-in; only the default changed.
             ...stripRetiredGlobalSettings(parsed.settings),
+            ...normalizeOrcaBackgroundSettings(parsed.settings),
             worktreeVisibilityDefaults: migratedExternalVisibility.defaults,
             prBotAuthorOverrides: normalizePRBotAuthorOverrides(
               parsed.settings?.prBotAuthorOverrides

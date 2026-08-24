@@ -23,6 +23,7 @@ vi.mock('react', async () => {
       return [mockStateValues[i], setter]
     },
     useCallback: (fn: () => void) => fn,
+    useEffect: (effect: () => void) => effect(),
     useMemo: (fn: () => unknown) => fn(),
     useSyncExternalStore: (_subscribe: () => () => void, getSnapshot: () => unknown) =>
       getSnapshot()
@@ -392,18 +393,47 @@ describe('TerminalAppearanceSection ghostty import wiring', () => {
     expect(catalog?.props.showThemeImport).toBe(true)
   })
 
+  it('shares font hover and theme target state with the central preview', () => {
+    const onPreviewFontFamilyChange = vi.fn()
+    const onPreviewThemeTargetChange = vi.fn()
+    const element = TerminalAppearanceSection({
+      settings: {} as never,
+      updateSettings: () => {},
+      systemPrefersDark: true,
+      terminalFontSuggestions: [],
+      ghostty: ghosttyMock,
+      warpThemes: warpThemesMock,
+      previewThemeTarget: 'light',
+      onPreviewFontFamilyChange,
+      onPreviewThemeTargetChange
+    })
+    const fontRow = findComponentByTypeName(element, 'SettingsRow')
+    const fontAutocomplete = fontRow?.props.control as ReactElementLike
+    const catalog = findTerminalThemeCatalogSection(element)
+
+    ;(fontAutocomplete.props.onPreviewFontFamily as (font: string | null) => void)('JetBrains Mono')
+
+    expect(onPreviewFontFamilyChange).toHaveBeenCalledWith('JetBrains Mono')
+    expect(catalog?.props.selectedTarget).toBe('light')
+    expect(catalog?.props.onTargetChange).toBe(onPreviewThemeTargetChange)
+  })
+
   it('routes dark and light theme searches to the matching catalog target', () => {
     mockSettingsSearchQuery = 'Light Divider Color'
+    const onPreviewThemeTargetChange = vi.fn()
     const lightElement = TerminalAppearanceSection({
       settings: {} as never,
       updateSettings: () => {},
       systemPrefersDark: true,
       terminalFontSuggestions: [],
       ghostty: ghosttyMock,
-      warpThemes: warpThemesMock
+      warpThemes: warpThemesMock,
+      previewThemeTarget: 'dark',
+      onPreviewThemeTargetChange
     })
 
     expect(findTerminalThemeCatalogSection(lightElement)?.props.preferredTarget).toBe('light')
+    expect(onPreviewThemeTargetChange).toHaveBeenCalledWith('light')
 
     mockSettingsSearchQuery = 'Dark Theme'
     resetMockState()

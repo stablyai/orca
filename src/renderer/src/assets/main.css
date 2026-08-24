@@ -129,7 +129,8 @@
 
 /* ── Light Mode ──────────────────────────────────────── */
 
-:root {
+:root,
+.theme-light {
   --app-font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   --font-sans: var(--app-font-family);
   --font-mono:
@@ -710,6 +711,54 @@
   height: 100dvh;
   width: 100vw;
   overflow: hidden;
+}
+
+[data-orca-background-relative] {
+  position: relative;
+}
+
+[data-orca-background-area] {
+  isolation: isolate;
+}
+
+[data-orca-background-area='terminal'] {
+  --orca-background-area-image: var(--orca-background-terminal-image);
+  --orca-background-area-opacity: var(--orca-background-terminal-opacity, 0.35);
+  --orca-background-area-blur: var(--orca-background-terminal-blur, 0px);
+  --orca-background-area-scale: var(--orca-background-terminal-scale, 1);
+}
+
+[data-orca-background-area='left-sidebar'] {
+  --orca-background-area-image: var(--orca-background-left-sidebar-image);
+  --orca-background-area-opacity: var(--orca-background-left-sidebar-opacity, 0.35);
+  --orca-background-area-blur: var(--orca-background-left-sidebar-blur, 0px);
+  --orca-background-area-scale: var(--orca-background-left-sidebar-scale, 1);
+}
+
+[data-orca-background-area='right-sidebar'] {
+  --orca-background-area-image: var(--orca-background-right-sidebar-image);
+  --orca-background-area-opacity: var(--orca-background-right-sidebar-opacity, 0.35);
+  --orca-background-area-blur: var(--orca-background-right-sidebar-blur, 0px);
+  --orca-background-area-scale: var(--orca-background-right-sidebar-scale, 1);
+}
+
+html[data-orca-background-areas~='terminal'] [data-orca-background-area='terminal']::before,
+html[data-orca-background-areas~='left-sidebar'] [data-orca-background-area='left-sidebar']::before,
+html[data-orca-background-areas~='right-sidebar']
+  [data-orca-background-area='right-sidebar']::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background-image: var(--orca-background-area-image);
+  background-position: center;
+  background-repeat: var(--orca-background-repeat, no-repeat);
+  background-size: var(--orca-background-size, cover);
+  opacity: var(--orca-background-area-opacity);
+  filter: blur(var(--orca-background-area-blur));
+  transform: scale(var(--orca-background-area-scale));
+  transform-origin: center;
 }
 
 /* Why: native windows have a stable content box and need no wake-time viewport reflow. */

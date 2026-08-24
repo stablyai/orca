@@ -26,6 +26,11 @@ import type { TerminalColorOverrides } from './terminal-color-overrides'
 import type { TerminalQuickCommand } from './terminal-quick-command-types'
 import type { TuiAgent } from './tui-agent'
 import type {
+  OrcaBackgroundArea,
+  OrcaBackgroundAreaMap,
+  OrcaBackgroundFit
+} from './orca-background-settings'
+import type {
   AgentDashboardMode,
   BranchPrefixStrategy,
   FloatingTerminalTriggerLocation,
@@ -78,6 +83,17 @@ export type GlobalSettings = {
   leftSidebarAppearanceMode: LeftSidebarAppearanceMode
   leftSidebarTintColor?: string
   leftSidebarTintOpacity?: number
+  /** Legacy shared image retained as the fallback for early background-enabled profiles. */
+  orcaBackgroundImage?: string | null
+  orcaBackgroundByArea?: OrcaBackgroundAreaMap<string | null>
+  /** Legacy shared opacity retained as the fallback for areas without an override. */
+  orcaBackgroundOpacity?: number
+  orcaBackgroundOpacityByArea?: OrcaBackgroundAreaMap<number>
+  /** Legacy shared blur retained as the fallback for areas without an override. */
+  orcaBackgroundBlur?: number
+  orcaBackgroundBlurByArea?: OrcaBackgroundAreaMap<number>
+  orcaBackgroundFit?: OrcaBackgroundFit
+  orcaBackgroundAreas?: Record<OrcaBackgroundArea, boolean>
   uiLanguage: UiLanguage
   appIcon: AppIconId
   appFontFamily: string

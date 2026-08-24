@@ -8,6 +8,7 @@ import { SHOW_UI_LANGUAGE_SETTING } from '@/i18n/supported-languages'
 import { getStatusBarToggles } from './appearance-status-bar-search'
 import { getUsagePercentageDisplayEntry } from './appearance-usage-percentage-search'
 import { getMenuBarIconEntries, getSystemTrayEntries } from './appearance-system-presence-search'
+import { getAppearanceBackgroundSearchEntry } from './appearance-background-section-model'
 
 export {
   getMenuBarIconEntries,
@@ -224,6 +225,7 @@ type AppearancePaneSearchOptions = {
   showWarpImport?: boolean
   showSystemTray?: boolean
   showMenuBarIcon?: boolean
+  showBackgroundImages?: boolean
 }
 
 function buildAppearancePaneSearchEntries(
@@ -240,6 +242,7 @@ function buildAppearancePaneSearchEntries(
     ...getTitlebarEntries(),
     ...getStatusBarEntries(),
     ...getSidebarEntries(),
+    ...(options.showBackgroundImages ? [getAppearanceBackgroundSearchEntry()] : []),
     ...getAppIconEntries(),
     ...getSystemTrayEntries(options),
     ...getMenuBarIconEntries(options)
@@ -252,6 +255,7 @@ export function getAppearancePaneSearchEntries(
   return buildAppearancePaneSearchEntries({
     showWarpImport: options.showWarpImport ?? true,
     showSystemTray: options.showSystemTray,
-    showMenuBarIcon: options.showMenuBarIcon
+    showMenuBarIcon: options.showMenuBarIcon,
+    showBackgroundImages: options.showBackgroundImages ?? true
   })
 }

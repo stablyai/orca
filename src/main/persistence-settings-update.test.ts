@@ -93,6 +93,45 @@ describe('Store', () => {
     expect(updated.branchPrefix).toBe('git-username')
   })
 
+  it('normalizes custom background settings on load and update', async () => {
+    writeDataFile({
+      settings: {
+        orcaBackgroundByArea: {
+          terminal: 'terminal.png',
+          leftSidebar: '../outside.png'
+        },
+        orcaBackgroundOpacity: 2,
+        orcaBackgroundBlurByArea: { terminal: 60 },
+        orcaBackgroundFit: 'invalid',
+        orcaBackgroundAreas: { terminal: false, leftSidebar: true }
+      } as never
+    })
+    const store = await createStore()
+
+    expect(store.getSettings()).toMatchObject({
+      orcaBackgroundByArea: { terminal: 'terminal.png', leftSidebar: null },
+      orcaBackgroundOpacity: 1,
+      orcaBackgroundBlurByArea: { terminal: 40 },
+      orcaBackgroundFit: 'cover',
+      orcaBackgroundAreas: {
+        terminal: false,
+        leftSidebar: true,
+        rightSidebar: false
+      }
+    })
+
+    const updated = store.updateSettings({
+      orcaBackgroundOpacityByArea: { terminal: -1, rightSidebar: 0.75 },
+      orcaBackgroundBlur: -4
+    })
+    expect(updated.orcaBackgroundOpacityByArea).toEqual({ terminal: 0, rightSidebar: 0.75 })
+    expect(updated.orcaBackgroundBlur).toBe(0)
+    expect(updated.orcaBackgroundByArea).toEqual({
+      terminal: 'terminal.png',
+      leftSidebar: null
+    })
+  })
+
   it('persists the agent skill sharing capability as an exact boolean', async () => {
     const store = await createStore()
 

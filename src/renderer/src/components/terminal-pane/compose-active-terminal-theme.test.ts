@@ -66,6 +66,38 @@ describe('composeActiveTerminalTheme', () => {
     expect(result!.background).toBe('rgba(17, 34, 51, 0)')
   })
 
+  it('only makes the terminal transparent for an explicitly loaded background image', () => {
+    const base = { background: '#112233' }
+    const settings = settingsWith({ terminalBackgroundOpacity: undefined })
+
+    expect(composeActiveTerminalTheme(base, settings)?.background).toBe('#112233')
+    expect(composeActiveTerminalTheme(base, settings, true)?.background).toBe('rgba(17, 34, 51, 0)')
+  })
+
+  it('preserves background RGB when making an rgba override transparent', () => {
+    const base = { background: 'rgba(17, 34, 51, 0.5)' }
+
+    expect(composeActiveTerminalTheme(base, settingsWith({}), true)?.background).toBe(
+      'rgba(17, 34, 51, 0)'
+    )
+  })
+
+  it('makes a loaded image transparent with a non-hex background override', () => {
+    const base = { background: 'red' }
+
+    expect(composeActiveTerminalTheme(base, settingsWith({}), true)?.background).toBe('transparent')
+  })
+
+  it('leaves non-hex backgrounds intact when applying configured opacity', () => {
+    const base = { background: 'red' }
+    const result = composeActiveTerminalTheme(
+      base,
+      settingsWith({ terminalBackgroundOpacity: 0.5 })
+    )
+
+    expect(result!.background).toBe('red')
+  })
+
   it('applies cursor opacity only when the cursor is a hex color', () => {
     const base = { cursor: '#ffffff' }
     const result = composeActiveTerminalTheme(base, settingsWith({ terminalCursorOpacity: 0.3 }))

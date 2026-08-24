@@ -2,6 +2,7 @@
 import { contextBridge, ipcRenderer, webFrame, webUtils } from 'electron'
 import { electronAPI } from '@electron-toolkit/preload'
 import { preloadE2EConfig } from './e2e-config'
+import { createOrcaBackgroundApi } from './orca-background-api'
 import { glApi } from './gitlab'
 import type { AppIdentity } from '../shared/app-identity'
 import type { MacCapturedDigitRowChord } from '../shared/macos-symbolic-hotkeys'
@@ -2109,6 +2110,8 @@ const api = {
     deleteBundle: (ticketId: string): Promise<void> =>
       ipcRenderer.invoke('diagnostics:deleteBundle', ticketId)
   },
+
+  backgrounds: createOrcaBackgroundApi(ipcRenderer),
 
   settings: {
     get: (): Promise<unknown> => ipcRenderer.invoke('settings:get'),

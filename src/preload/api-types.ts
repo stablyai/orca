@@ -35,6 +35,7 @@ import type { JiraApi } from './api/jira-api'
 import type { LinearApi } from './api/linear-api'
 import type { MobileApi } from './api/mobile-api'
 import type { NativeChatApi } from './api/native-chat-api'
+import type { OrcaBackgroundApi } from './api/orca-background-api'
 import type { OnboardingApi, StarNagApi } from './api/onboarding-api'
 import type { OrcaProfileApi } from './api/orca-profile-api'
 import type {
@@ -93,6 +94,7 @@ export type PreloadApi = {
   telemetryTrack: TelemetryApi['telemetryTrack']
   telemetrySetOptIn: TelemetryApi['telemetrySetOptIn']
   diagnostics: DiagnosticsApi
+  backgrounds: OrcaBackgroundApi
   telemetryGetConsentState: TelemetryApi['telemetryGetConsentState']
   telemetryAcknowledgeBanner: TelemetryApi['telemetryAcknowledgeBanner']
   settings: SettingsApi

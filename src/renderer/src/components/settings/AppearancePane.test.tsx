@@ -47,6 +47,10 @@ vi.mock('./TerminalAppearanceSection', () => ({
   TerminalAppearanceSection: () => null
 }))
 
+vi.mock('./AppearancePreviewColumn', () => ({
+  AppearancePreviewColumn: () => <div data-testid="appearance-preview" />
+}))
+
 vi.mock('../ui/select', async () => {
   const React = await import('react')
 
@@ -103,41 +107,16 @@ import { TooltipProvider } from '../ui/tooltip'
 
 const mountedRoots: Root[] = []
 
-function createGhosttyStub() {
-  return {
-    loading: false,
-    preview: null,
-    error: null,
-    open: vi.fn(),
-    close: vi.fn(),
-    refresh: vi.fn(),
-    apply: vi.fn()
-  }
-}
-
-function createWarpThemesStub() {
-  return {
-    open: false,
-    preview: null,
-    loading: false,
-    desktopOnly: false,
-    applyError: null,
-    importSignal: 0,
-    selectedThemeIds: new Set<string>(),
-    handleClick: vi.fn(),
-    handlePreviewSource: vi.fn(),
-    handleToggleTheme: vi.fn(),
-    handleToggleAll: vi.fn(),
-    handleApply: vi.fn(),
-    handleOpenChange: vi.fn()
-  }
-}
-
 async function renderAppearancePane(
   settings: GlobalSettings,
   updateSettings: (updates: Partial<GlobalSettings>) => void = vi.fn(),
   options: {
+    changeCount?: number
+    discardChanges?: () => void
     onRequestFontSuggestions?: () => void
+    saveChanges?: () => Promise<boolean>
+    saveFailed?: boolean
+    saving?: boolean
   } = {}
 ): Promise<HTMLDivElement> {
   const container = document.createElement('div')
@@ -152,13 +131,15 @@ async function renderAppearancePane(
           <AppearancePane
             settings={settings}
             updateSettings={updateSettings}
-            applyTheme={vi.fn()}
+            changeCount={options.changeCount ?? 0}
+            saving={options.saving ?? false}
+            saveFailed={options.saveFailed ?? false}
+            saveChanges={options.saveChanges ?? vi.fn().mockResolvedValue(true)}
+            discardChanges={options.discardChanges ?? vi.fn()}
             fontSuggestions={[]}
             terminalFontSuggestions={[]}
             onRequestFontSuggestions={options.onRequestFontSuggestions}
             systemPrefersDark={false}
-            ghostty={createGhosttyStub() as never}
-            warpThemes={createWarpThemesStub() as never}
           />
         </TooltipProvider>
       </I18nextProvider>
@@ -182,12 +163,14 @@ async function rerenderAppearancePane(
           <AppearancePane
             settings={settings}
             updateSettings={vi.fn()}
-            applyTheme={vi.fn()}
+            changeCount={0}
+            saving={false}
+            saveFailed={false}
+            saveChanges={vi.fn().mockResolvedValue(undefined)}
+            discardChanges={vi.fn()}
             fontSuggestions={[]}
             terminalFontSuggestions={[]}
             systemPrefersDark={false}
-            ghostty={createGhosttyStub() as never}
-            warpThemes={createWarpThemesStub() as never}
           />
         </TooltipProvider>
       </I18nextProvider>
@@ -197,7 +180,7 @@ async function rerenderAppearancePane(
 
 function appearanceSectionToggle(
   container: HTMLElement,
-  sectionId: 'interface' | 'terminal' | 'window'
+  sectionId: 'interface' | 'terminal' | 'window' | 'background'
 ): HTMLButtonElement | undefined {
   return Array.from(container.querySelectorAll<HTMLButtonElement>('button[aria-expanded]')).find(
     (button) => button.getAttribute('aria-controls') === `appearance-section-${sectionId}`
@@ -256,6 +239,34 @@ describe('AppearancePane', () => {
     expect(
       container.querySelector('button[role="switch"][aria-label="Titlebar App Name"]')
     ).toBeNull()
+  })
+
+  it('renders the fixed preview and applies or discards the visible draft', async () => {
+    mocks.state.settingsSearchQuery = ''
+    const saveChanges = vi.fn().mockResolvedValue(undefined)
+    const discardChanges = vi.fn()
+    const container = await renderAppearancePane(getDefaultSettings('/tmp'), vi.fn(), {
+      changeCount: 2,
+      discardChanges,
+      saveChanges
+    })
+    const buttons = Array.from(container.querySelectorAll<HTMLButtonElement>('button'))
+    const saveButton = buttons.find((button) => button.textContent === 'Save')
+    const discardButton = buttons.find((button) => button.textContent === 'Discard')
+
+    expect(container.querySelector('[data-testid="appearance-preview"]')).not.toBeNull()
+    expect(
+      container.querySelector('[data-testid="appearance-preview"]')?.parentElement?.className
+    ).toContain('lg:grid-cols-[minmax(0,1fr)_18rem]')
+    expect(container.textContent).toContain('2 unsaved changes')
+
+    await act(async () => {
+      saveButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+      discardButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    })
+
+    expect(saveChanges).toHaveBeenCalledOnce()
+    expect(discardChanges).toHaveBeenCalledOnce()
   })
 
   it('keeps Advanced closed when searching for language', async () => {
@@ -393,13 +404,14 @@ describe('AppearancePane', () => {
     expect(mocks.state.setWorktreeCardMode).toHaveBeenCalledWith('Compact')
   })
 
-  it('renders the three top-level section rows and no Code & Markdown row when not searching', async () => {
+  it('renders the four top-level section rows and no Code & Markdown row when not searching', async () => {
     mocks.state.settingsSearchQuery = ''
     const container = await renderAppearancePane(getDefaultSettings('/tmp'))
 
     expect(container.textContent).toContain('Interface')
     expect(container.textContent).toContain('Terminal')
     expect(container.textContent).toContain('Window & Sidebar')
+    expect(container.textContent).toContain('Background Image')
     // Code & Markdown is intentionally omitted — Orca has no Appearance-level
     // code/markdown settings, so the row would be empty.
     expect(container.textContent).not.toContain('Code & Markdown')
@@ -576,7 +588,7 @@ describe('AppearancePane', () => {
     expect(mocks.state.toggleStatusBarItem).toHaveBeenCalledWith('antigravity')
   })
 
-  it('expands Interface, Terminal, and Window & Sidebar by default', async () => {
+  it('expands all appearance sections by default', async () => {
     mocks.state.settingsSearchQuery = ''
     const container = await renderAppearancePane(getDefaultSettings('/tmp'))
 
@@ -584,10 +596,11 @@ describe('AppearancePane', () => {
       container.querySelectorAll<HTMLButtonElement>('button[aria-expanded="true"]')
     ).filter((button) => button.getAttribute('aria-controls')?.startsWith('appearance-section-'))
 
-    expect(expanded).toHaveLength(3)
+    expect(expanded).toHaveLength(4)
     expect(expanded.map((button) => button.textContent).join(' ')).toContain('Interface')
     expect(expanded.map((button) => button.textContent).join(' ')).toContain('Terminal')
     expect(expanded.map((button) => button.textContent).join(' ')).toContain('Window & Sidebar')
+    expect(expanded.map((button) => button.textContent).join(' ')).toContain('Background Image')
   })
 
   it('lets each appearance section collapse independently', async () => {
@@ -608,10 +621,13 @@ describe('AppearancePane', () => {
       container.querySelectorAll<HTMLButtonElement>('button[aria-expanded="true"]')
     ).filter((button) => button.getAttribute('aria-controls')?.startsWith('appearance-section-'))
 
-    expect(stillExpanded).toHaveLength(2)
+    expect(stillExpanded).toHaveLength(3)
     expect(stillExpanded.map((button) => button.textContent).join(' ')).toContain('Interface')
     expect(stillExpanded.map((button) => button.textContent).join(' ')).toContain(
       'Window & Sidebar'
+    )
+    expect(stillExpanded.map((button) => button.textContent).join(' ')).toContain(
+      'Background Image'
     )
   })
 

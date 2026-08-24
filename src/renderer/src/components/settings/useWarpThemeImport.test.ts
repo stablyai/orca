@@ -111,8 +111,7 @@ describe('useWarpThemeImport', () => {
         expect.objectContaining({ id: 'warp:tokyo-night', name: 'Tokyo Night' })
       ]
     })
-    // Success is reported via a toast, and the modal closes itself.
-    expect(toastSuccess).toHaveBeenCalledWith('Imported 1 theme')
+    expect(toastSuccess).toHaveBeenCalledWith('Added 1 theme to appearance draft')
 
     resetMockState()
     warp = useWarpThemeImport(updateSettings, baseSettings)

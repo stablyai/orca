@@ -87,10 +87,10 @@ describe('GhosttyImportModal', () => {
 
     const buttons = findButtons(element)
     expect(buttons.some((b) => b.text === 'Cancel')).toBe(true)
-    expect(buttons.some((b) => b.text === 'Apply Changes')).toBe(true)
+    expect(buttons.some((b) => b.text === 'Add to Draft')).toBe(true)
     expect(buttons.some((b) => b.text === 'Done')).toBe(false)
 
-    const applyButton = buttons.find((b) => b.text === 'Apply Changes')
+    const applyButton = buttons.find((b) => b.text === 'Add to Draft')
     applyButton?.onClick()
     expect(onApply).toHaveBeenCalledTimes(1)
 
@@ -131,13 +131,13 @@ describe('GhosttyImportModal', () => {
       applied: true
     })
 
-    expect(containsText(element, 'Import complete')).toBe(true)
+    expect(containsText(element, 'Added to appearance draft')).toBe(true)
     expect(containsText(element, 'Font Size')).toBe(true)
     expect(containsText(element, 'JetBrains Mono')).toBe(true)
 
     const buttons = findButtons(element)
     expect(buttons.some((b) => b.text === 'Done')).toBe(true)
-    expect(buttons.some((b) => b.text === 'Apply Changes')).toBe(false)
+    expect(buttons.some((b) => b.text === 'Add to Draft')).toBe(false)
     expect(buttons.some((b) => b.text === 'Cancel')).toBe(false)
 
     const doneButton = buttons.find((b) => b.text === 'Done')
@@ -156,7 +156,7 @@ describe('GhosttyImportModal', () => {
     })
 
     expect(containsText(element, 'Loading preview')).toBe(true)
-    expect(findButtons(element).some((b) => b.text === 'Apply Changes')).toBe(false)
+    expect(findButtons(element).some((b) => b.text === 'Add to Draft')).toBe(false)
   })
 
   it('shows no-config message when preview is not found', () => {
@@ -170,7 +170,7 @@ describe('GhosttyImportModal', () => {
     })
 
     expect(containsText(element, 'No Ghostty config found')).toBe(true)
-    expect(findButtons(element).some((b) => b.text === 'Apply Changes')).toBe(false)
+    expect(findButtons(element).some((b) => b.text === 'Add to Draft')).toBe(false)
   })
 
   it('shows already-matched message when diff is empty', () => {
@@ -184,6 +184,6 @@ describe('GhosttyImportModal', () => {
     })
 
     expect(containsText(element, 'No new settings to import')).toBe(true)
-    expect(findButtons(element).some((b) => b.text === 'Apply Changes')).toBe(false)
+    expect(findButtons(element).some((b) => b.text === 'Add to Draft')).toBe(false)
   })
 })

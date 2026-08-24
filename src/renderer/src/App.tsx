@@ -20,6 +20,7 @@ import {
   hasCustomTitleBar
 } from './app-shell/app-window-chrome'
 import { useAppChromeLayout } from './app-shell/use-app-chrome-layout'
+import { useAppearanceBackgroundRuntime } from './app-shell/use-appearance-background-runtime'
 import { useAppSessionPersistence } from './app-shell/use-app-session-persistence'
 import { useAppShellServices } from './app-shell/use-app-shell-services'
 import { useAppStartupHydration } from './app-shell/use-app-startup-hydration'
@@ -47,6 +48,7 @@ function App(): React.JSX.Element {
   useRuntimeGraphSync()
   usePersistedUIWriter()
   useDocumentAppearance()
+  useAppearanceBackgroundRuntime()
   useWindowVisibilityEffects()
   useGlobalKeybindings({ layout, floatingWorkspace })
 
