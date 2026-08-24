@@ -125,7 +125,13 @@ orca linear list --filter assigned --limit 10 --workspace all --json
 orca linear list --filter open --team <key-or-id> --workspace <workspaceId> --json
 ```
 
-Use `list-issues` when MCP-compatible filters or cursor pagination are needed. Omitting `--limit` returns every match (`result.meta.limit` is `null`), so filter before listing a large workspace; `--limit <n>` caps the read. `--json` sets `result.truncated` (and `result.meta.hasMore`) when a cap held results back; human output prints `truncated: showing N`. Check `truncated` before reporting a count, then page with `--cursor` until `truncated` is false. Issued `--cursor` values bind the workspace; `--workspace all` cannot page; a raw Linear cursor still needs a concrete `--workspace`. Replay `--cursor` against the same Orca runtime that issued it. `--priority` is `0=none`, `1=urgent`, `2=high`, `3=medium`, `4=low`; JSON includes `priorityLabel` on each issue (CLI setter vocabulary). `orca linear search`, `orca linear list`, and `orca linear project list` still cap at their own `--limit` and set `result.truncated` when the cap is hit. Project JSON `priorityLabel` stays Linear's title-case provider string.
+Use `list-issues` when MCP-compatible filters or cursor pagination are needed. Omitting `--limit` returns every match (`result.meta.limit` is `null`), so filter before listing a large workspace; `--limit <n>` caps the read. `--json` sets `result.truncated` (and `result.meta.hasMore`) when a cap or safety backstop held results back; human output prints `truncated: showing N`. Check `truncated` before reporting a count, then page with `--cursor` until `truncated` is false. Issued `--cursor` values bind the workspace; `--workspace all` cannot page; a raw Linear cursor still needs a concrete `--workspace`. Replay `--cursor` against the same Orca runtime that issued it. `--priority` is `0=none`, `1=urgent`, `2=high`, `3=medium`, `4=low`; JSON includes `priorityLabel` on each issue (CLI setter vocabulary).
+
+`orca linear list` and `orca linear project list` follow the same omitted-limit contract: they walk provider pages until exhaustion or a safety backstop, return `meta.limit: null`, and report truncation when stopped early. An explicit `--limit <n>` is preserved as the caller cap. `orca linear search` stays capped at 50; JSON reports the provider's pre-pagination `totalCount`, and truncated human output says `truncated: showing N of M`. Older hosts may omit `totalCount`, in which case output falls back to `truncated: showing N`. Project JSON `priorityLabel` stays Linear's title-case provider string.
+
+```json
+{ "meta": { "limit": null, "returned": 87, "hasMore": false } }
+```
 
 Prefer `label add` and `label remove` for incremental edits. `label set` replaces the full label set and should be used only when deliberate cleanup is intended.
 

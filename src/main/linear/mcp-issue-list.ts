@@ -15,10 +15,8 @@ import { resolveWorkspaceSelector } from './issue-context-workspaces'
 import { encodeIssueListCursor, resolveIssueListCursor } from './mcp-issue-list-cursor'
 import { buildIssueFilter } from './mcp-issue-list-filter'
 
-// Why: `--limit` is opt-in, so the default read walks every page instead of quietly cutting
-// the answer off. Linear caps `first` at 250. The budget and page ceiling are backstops, not
-// caps: the CLI abandons an RPC at 60s, so a walk that would outlive it has to stop early and
-// say `truncated` with a continuation cursor rather than fail the whole command.
+// Why: omitted limits walk pages; this size balances throughput against GraphQL complexity.
+// The deadline and page ceiling stop before the CLI timeout and preserve a continuation cursor.
 const LIST_ISSUES_PAGE_SIZE = 250
 const LIST_ISSUES_MAX_PAGES = 200
 const LIST_ISSUES_READ_BUDGET_MS = 20_000

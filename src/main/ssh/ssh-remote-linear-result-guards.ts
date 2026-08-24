@@ -35,7 +35,11 @@ export function isLinearSearchResult(result: unknown): result is LinearSearchRes
     Array.isArray(result.issues) &&
     isRecord(result.meta) &&
     typeof result.meta.query === 'string' &&
-    typeof result.meta.returned === 'number'
+    typeof result.meta.returned === 'number' &&
+    (result.totalCount === undefined ||
+      (typeof result.totalCount === 'number' &&
+        Number.isFinite(result.totalCount) &&
+        result.totalCount >= 0))
   )
 }
 
@@ -65,7 +69,7 @@ export function isLinearProjectListResult(result: unknown): result is LinearProj
     Array.isArray(result.projects) &&
     result.projects.every(isLinearProjectListProject) &&
     isRecord(result.meta) &&
-    typeof result.meta.limit === 'number' &&
+    (typeof result.meta.limit === 'number' || result.meta.limit === null) &&
     typeof result.meta.returned === 'number' &&
     typeof result.meta.hasMore === 'boolean' &&
     typeof result.meta.partial === 'boolean' &&

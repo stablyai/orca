@@ -6,7 +6,6 @@ const rawRequest = vi.fn()
 const getClients = vi.fn()
 const clearToken = vi.fn()
 const isAuthError = vi.fn()
-
 vi.mock('./linear-request-concurrency', () => ({
   acquire: vi.fn().mockResolvedValue(undefined),
   release: vi.fn()
@@ -17,6 +16,7 @@ vi.mock('./linear-token-store', () => ({
 }))
 
 vi.mock('./client', () => ({
+  createSignalBoundLinearClient: (entry: LinearClientForWorkspace) => entry.client,
   getClients: (...args: unknown[]) => getClients(...args),
   isAuthError: (...args: unknown[]) => isAuthError(...args)
 }))

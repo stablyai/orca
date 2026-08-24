@@ -211,6 +211,43 @@ describe('Linear agent project access helpers', () => {
     expect(result.meta).toMatchObject({ limit: 1, returned: 1, hasMore: true })
   })
 
+  it('represents an omitted agent project limit as an exhaustive null limit', async () => {
+    const runtime = new OrcaRuntimeService()
+    const read = vi.spyOn(runtime, 'linearListProjects').mockResolvedValue({
+      items: [{ id: 'project-1', name: 'Launch' }],
+      hasMore: false
+    } as never)
+
+    const result = await runtime.linearProjectListForAgents({})
+
+    expect(read).toHaveBeenCalledWith(undefined, null, undefined, true)
+    expect(result.meta).toMatchObject({ limit: null, returned: 1, hasMore: false })
+  })
+
+  it('represents an omitted agent issue limit as an exhaustive null limit', async () => {
+    const runtime = new OrcaRuntimeService()
+    const read = vi.spyOn(runtime, 'linearListIssues').mockResolvedValue({
+      items: [
+        {
+          id: 'issue-1',
+          identifier: 'ENG-1',
+          title: 'Fix auth',
+          url: 'https://linear.app/acme/issue/ENG-1',
+          labels: [],
+          updatedAt: '2026-01-01T00:00:00.000Z',
+          workspaceId: 'workspace-1',
+          workspaceName: 'Acme'
+        }
+      ],
+      hasMore: false
+    } as never)
+
+    const result = await runtime.linearIssueListForAgents({})
+
+    expect(read).toHaveBeenCalledWith('assigned', null, undefined, { teamId: undefined })
+    expect(result.meta).toMatchObject({ limit: null, returned: 1, hasMore: false })
+  })
+
   it('passes the resolved project id into agent issue create', async () => {
     vi.resetModules()
     const createIssueForAgent = vi.fn().mockResolvedValue({

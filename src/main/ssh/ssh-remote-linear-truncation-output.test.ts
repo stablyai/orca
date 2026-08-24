@@ -47,4 +47,61 @@ describe('remote Linear list truncation output', () => {
     delete (withoutReturned.meta as { returned?: number }).returned
     expect(formatRemoteLinearCli(withoutReturned)?.stdout).toContain('truncated: showing 1')
   })
+
+  it('prints the provider total for SSH search output', () => {
+    const result = {
+      issues: [issue],
+      totalCount: 349,
+      truncated: true,
+      meta: {
+        query: 'auth',
+        limit: 1,
+        returned: 1,
+        limitReached: true,
+        partial: false,
+        workspaceErrors: []
+      }
+    }
+
+    expect(formatRemoteLinearCli(result)?.stdout).toContain('truncated: showing 1 of 349')
+    expect(formatRemoteLinearCli(result)?.stderr).toContain(
+      'warning: showing 1 of 349 Linear issues'
+    )
+  })
+
+  it('formats search output from an older host without totalCount', () => {
+    const result = {
+      issues: [issue],
+      truncated: true,
+      meta: { query: 'auth', limit: 1, returned: 1, limitReached: true }
+    }
+
+    expect(formatRemoteLinearCli(result)?.stdout).toContain('truncated: showing 1')
+  })
+
+  it('falls back to raw JSON for malformed provider totals', () => {
+    const result = {
+      issues: [issue],
+      totalCount: '349',
+      truncated: true,
+      meta: { query: 'auth', limit: 1, returned: 1, limitReached: true }
+    }
+
+    expect(formatRemoteLinearCli(result)).toBeNull()
+  })
+
+  it('accepts null limits from a new project-list host', () => {
+    const result = {
+      projects: [{ id: 'project-1', name: 'Launch' }],
+      meta: {
+        limit: null,
+        returned: 1,
+        hasMore: false,
+        partial: false,
+        workspaceErrors: []
+      }
+    }
+
+    expect(formatRemoteLinearCli(result)?.stdout).toContain('Launch')
+  })
 })

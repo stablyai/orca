@@ -74,7 +74,7 @@ async function loadClientModule(options: SafeStorageMockOptions = {}) {
   vi.resetModules()
   linearClientMock = vi.fn(function LinearClient(
     this: { viewer: Promise<unknown> },
-    { apiKey }: { apiKey: string }
+    { apiKey }: { apiKey: string; signal?: AbortSignal }
   ) {
     const fixture = fixtures.get(apiKey)
     if (!fixture) {
@@ -146,6 +146,21 @@ function mkdtempLike(prefix: string): string {
 }
 
 describe('Linear client workspace storage', () => {
+  it('constructs signal-bound clients with the workspace API key', async () => {
+    writeMultiWorkspaceFiles([{ id: 'org-alpha', token: 'token-alpha' }], 'org-alpha')
+    const linear = await loadClientModule()
+    const entry = linear.getClients('org-alpha')[0]
+    const controller = new AbortController()
+    linearClientMock.mockClear()
+
+    linear.createSignalBoundLinearClient(entry, controller.signal)
+
+    expect(linearClientMock).toHaveBeenCalledWith({
+      apiKey: 'token-alpha',
+      signal: controller.signal
+    })
+  })
+
   it('stores multiple workspaces and remembers the selected workspace', async () => {
     const linear = await loadClientModule()
 

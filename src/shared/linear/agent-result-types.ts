@@ -145,6 +145,7 @@ export type LinearSearchIssueSummary = Pick<
 
 export type LinearSearchResult = {
   issues: LinearSearchIssueSummary[]
+  totalCount?: number
   truncated?: boolean
   meta: {
     query: string
@@ -216,7 +217,7 @@ export type LinearIssueListResult = {
     filter: LinearIssueListFilter
     workspaceId?: (string & {}) | 'all'
     team?: LinearTeamSummary
-    limit: number
+    limit: number | null
     returned: number
     hasMore: boolean
     partial: boolean
@@ -243,7 +244,7 @@ export type LinearProjectListResult = {
   meta: {
     query?: string
     workspaceId?: (string & {}) | 'all'
-    limit: number
+    limit: number | null
     returned: number
     hasMore: boolean
     partial: boolean

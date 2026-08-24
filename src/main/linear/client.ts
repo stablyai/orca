@@ -99,6 +99,13 @@ export function getPublicFileUrlClient(entry: LinearClientForWorkspace): LinearC
   })
 }
 
+export function createSignalBoundLinearClient(
+  entry: LinearClientForWorkspace,
+  signal: AbortSignal
+): LinearClient {
+  return new (loadLinearSdk().LinearClient)({ apiKey: entry.apiKey, signal })
+}
+
 // ── Auth error detection ─────────────────────────────────────────────
 // Why: 401 errors must trigger token clearing and a re-auth prompt in the
 // renderer. All other errors are swallowed with console.warn to match GitHub

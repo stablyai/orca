@@ -451,6 +451,9 @@ function formatCommandFlagHelp(flag: string, commandPath: string[]): string {
   if (command === 'linear search' && flag === 'workspace') {
     return '--workspace <id|all>  Connected Linear workspace id, or all'
   }
+  if (command === 'linear search' && flag === 'limit') {
+    return '--limit <n>            Top matches to return, capped at 50; output reports totalCount'
+  }
   if (command === 'linear list-issues' && flag === 'cursor') {
     return '--cursor <cursor>      Opaque cursor from a previous list-issues page; issued cursors bind the workspace, raw Linear cursors need --workspace'
   }
@@ -459,6 +462,12 @@ function formatCommandFlagHelp(flag: string, commandPath: string[]): string {
   }
   if (command === 'linear list-issues' && flag === 'limit') {
     return '--limit <n>            Max issues to return; omit to return every match'
+  }
+  if (command === 'linear list' && flag === 'limit') {
+    return '--limit <n>            Max issues to return; omit to walk pages until exhaustion or a safety backstop'
+  }
+  if (command === 'linear project list' && flag === 'limit') {
+    return '--limit <n>            Max projects to return; omit to walk pages until exhaustion or a safety backstop'
   }
   if (command === 'artifacts list' && flag === 'cursor') {
     return '--cursor <cursor>      Opaque cursor returned by a previous artifacts page'
@@ -469,7 +478,10 @@ function formatCommandFlagHelp(flag: string, commandPath: string[]): string {
   if (command === 'orchestration worker-list' && flag === 'terminal-state') {
     return '--terminal-state <state> Terminal accounting filter: active, reclaimable, retained, release_pending, release_unknown, or released'
   }
-  if (command === 'linear list-issues' && flag === 'workspace') {
+  if (
+    ['linear list-issues', 'linear list', 'linear project list'].includes(command) &&
+    flag === 'workspace'
+  ) {
     return '--workspace <id|all>  Connected Linear workspace id, or all'
   }
   if (command.startsWith('linear ') && flag === 'workspace') {

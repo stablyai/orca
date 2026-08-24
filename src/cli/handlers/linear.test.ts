@@ -1,4 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 
 const callMock = vi.fn()
 
@@ -230,7 +232,7 @@ describe('orca linear CLI handlers', () => {
     })
   })
 
-  it('maps project list to agent project RPC with capped limit', async () => {
+  it('maps project list to agent project RPC with the explicit limit unchanged', async () => {
     queueFixtures(
       callMock,
       okFixture('req_projects', {
@@ -238,7 +240,7 @@ describe('orca linear CLI handlers', () => {
         meta: {
           query: 'launch',
           workspaceId: 'all',
-          limit: 50,
+          limit: 500,
           returned: 0,
           hasMore: false,
           partial: false,
@@ -254,8 +256,32 @@ describe('orca linear CLI handlers', () => {
 
     expect(callMock).toHaveBeenCalledWith('linear.agentProjectList', {
       query: 'launch',
-      limit: 50,
+      limit: 500,
       workspaceId: 'all'
+    })
+  })
+
+  it('keeps an omitted project-list limit omitted', async () => {
+    queueFixtures(
+      callMock,
+      okFixture('req_projects_all', {
+        projects: [],
+        meta: {
+          limit: null,
+          returned: 0,
+          hasMore: false,
+          partial: false,
+          workspaceErrors: []
+        }
+      })
+    )
+
+    await main(['linear', 'project', 'list'], join(tmpdir(), 'repo'))
+
+    expect(callMock).toHaveBeenCalledWith('linear.agentProjectList', {
+      query: undefined,
+      limit: undefined,
+      workspaceId: undefined
     })
   })
 

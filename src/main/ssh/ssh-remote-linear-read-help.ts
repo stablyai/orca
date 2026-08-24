@@ -154,10 +154,10 @@ const LINEAR_PROJECT_LIST_HELP = `orca linear project list
 
 Usage: orca linear project list [--query <text>] [--limit <n>] [--workspace <id>|all] [--json]
 
-List connected Linear projects`
+List Linear projects. Omit --limit to walk until exhaustion or a safety backstop.`
 
 const LINEAR_LIST_HELP = `orca linear list
 
 Usage: orca linear list [--filter assigned|created|all|completed|open] [--team <key|id>] [--limit <n>] [--workspace <id>|all] [--json]
 
-List Linear issues`
+List Linear issues. Omit --limit to walk until exhaustion or a safety backstop.`
