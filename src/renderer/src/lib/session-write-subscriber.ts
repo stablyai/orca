@@ -3,6 +3,7 @@ import { isDecorativeAgentTitleFrameChange } from '../../../shared/agent-decorat
 import type { WorkspaceSessionPatch } from '../../../shared/workspace-session-state-types'
 import { SESSION_RELEVANT_FIELDS, shouldPersistWorkspaceSession } from './workspace-session'
 import { buildWorkspaceSessionPatch } from './workspace-session-patch'
+import { createWorktreeTabBucketProjection } from './worktree-tab-bucket-projection'
 
 type SessionRelevantField = (typeof SESSION_RELEVANT_FIELDS)[number]
 type TabsByWorktree = AppState['tabsByWorktree']
@@ -33,30 +34,12 @@ function terminalTabChangedForSession(prev: TerminalTab, next: TerminalTab): boo
   }
   return prev.title !== next.title && !isDecorativeAgentTitleFrameChange(prev.title, next.title)
 }
-
-function tabsByWorktreeChangedForSession(prev: TabsByWorktree, next: TabsByWorktree): boolean {
-  if (prev === next) {
-    return false
-  }
-  const worktreeIds = new Set([...Object.keys(prev), ...Object.keys(next)])
-  for (const worktreeId of worktreeIds) {
-    const prevTabs = prev[worktreeId] ?? []
-    const nextTabs = next[worktreeId] ?? []
-    if (prevTabs === nextTabs) {
-      continue
-    }
-    if (prevTabs.length !== nextTabs.length) {
-      return true
-    }
-    for (let i = 0; i < prevTabs.length; i += 1) {
-      const prevTab = prevTabs[i]
-      const nextTab = nextTabs[i]
-      if (!prevTab || !nextTab || terminalTabChangedForSession(prevTab, nextTab)) {
-        return true
-      }
-    }
-  }
-  return false
+function createTerminalSessionTabsProjection() {
+  return createWorktreeTabBucketProjection<TerminalTab, TerminalTab>({
+    projectTab: (tab) => tab,
+    isSameProjectedTab: (previousTab, nextTab) =>
+      !terminalTabChangedForSession(previousTab, nextTab)
+  })
 }
 
 function unifiedTabChangedForSession(prev: UnifiedTab, next: UnifiedTab): boolean {
@@ -83,57 +66,11 @@ function unifiedTabChangedForSession(prev: UnifiedTab, next: UnifiedTab): boolea
   }
   return !isDecorativeAgentTitleFrameChange(prev.label, next.label)
 }
-
-function unifiedTabsByWorktreeChangedForSession(
-  prev: UnifiedTabsByWorktree,
-  next: UnifiedTabsByWorktree
-): boolean {
-  if (prev === next) {
-    return false
-  }
-  const worktreeIds = new Set([...Object.keys(prev), ...Object.keys(next)])
-  for (const worktreeId of worktreeIds) {
-    const prevTabs = prev[worktreeId] ?? []
-    const nextTabs = next[worktreeId] ?? []
-    if (prevTabs === nextTabs) {
-      continue
-    }
-    if (prevTabs.length !== nextTabs.length) {
-      return true
-    }
-    for (let i = 0; i < prevTabs.length; i += 1) {
-      const prevTab = prevTabs[i]
-      const nextTab = nextTabs[i]
-      if (!prevTab || !nextTab || unifiedTabChangedForSession(prevTab, nextTab)) {
-        return true
-      }
-    }
-  }
-  return false
-}
-
-function sessionRelevantFieldChanged(
-  key: SessionRelevantField,
-  prevValue: unknown,
-  nextValue: unknown
-): boolean {
-  if (prevValue === nextValue) {
-    return false
-  }
-  if (key === 'tabsByWorktree') {
-    // Why: focused agent CLIs can emit spinner/title OSC frames many times per
-    // second. Those labels are live UI chrome, not durable terminal topology.
-    return tabsByWorktreeChangedForSession(prevValue as TabsByWorktree, nextValue as TabsByWorktree)
-  }
-  if (key === 'unifiedTabsByWorktree') {
-    // Why: terminal live titles are mirrored into unified tab labels, so the
-    // same decorative frames must not wake unified-tab session persistence.
-    return unifiedTabsByWorktreeChangedForSession(
-      prevValue as UnifiedTabsByWorktree,
-      nextValue as UnifiedTabsByWorktree
-    )
-  }
-  return true
+function createUnifiedSessionTabsProjection() {
+  return createWorktreeTabBucketProjection<UnifiedTab, UnifiedTab>({
+    projectTab: (tab) => tab,
+    isSameProjectedTab: (previousTab, nextTab) => !unifiedTabChangedForSession(previousTab, nextTab)
+  })
 }
 
 export type WorkspaceSessionWrite = {
@@ -166,33 +103,35 @@ export function createSessionWriteSubscriber({
   // Why: the subscriber fires on every store update (agent status, usage
   // refreshes, runtime title ticks, …). Without this gate each fire reset
   // the debounce, and when it finally expired buildWorkspaceSessionPayload
-  // crossed 70-110ms with many tabs, tripping setTimeout violations. Compare
-  // each session-feeding field by reference against the prior snapshot and
-  // skip both the timer reset and the rebuild when none changed. `null`
-  // sentinel guarantees the very first fire always proceeds.
+  // crossed 70-110ms with many tabs, tripping setTimeout violations. Terminal
+  // and unified maps use durable per-worktree projections, so display frames
+  // reuse the prior identity while a real session change keeps fresh tabs for
+  // the eventual getState() patch build. `null` makes the first fire proceed.
   let prev: Record<string, unknown> | null = null
   const pendingChangedFields = new Set<SessionRelevantField>()
+  const terminalTabsProjection = createTerminalSessionTabsProjection()
+  const unifiedTabsProjection = createUnifiedSessionTabsProjection()
 
   const unsub = store.subscribe((state) => {
     if (!shouldPersistWorkspaceSession(state)) {
       return
     }
-    const changedFields: SessionRelevantField[] = []
-    if (prev === null) {
-      changedFields.push(...SESSION_RELEVANT_FIELDS)
-    } else {
-      for (const key of SESSION_RELEVANT_FIELDS) {
-        if (sessionRelevantFieldChanged(key, prev[key], state[key])) {
-          changedFields.push(key)
-        }
-      }
-    }
-    if (changedFields.length === 0) {
-      return
-    }
     const next: Record<string, unknown> = {}
     for (const key of SESSION_RELEVANT_FIELDS) {
-      next[key] = state[key]
+      const value = state[key]
+      next[key] =
+        key === 'tabsByWorktree'
+          ? terminalTabsProjection.project(value as TabsByWorktree)
+          : key === 'unifiedTabsByWorktree'
+            ? unifiedTabsProjection.project(value as UnifiedTabsByWorktree)
+            : value
+    }
+    const changedFields =
+      prev === null
+        ? [...SESSION_RELEVANT_FIELDS]
+        : SESSION_RELEVANT_FIELDS.filter((key) => prev?.[key] !== next[key])
+    if (changedFields.length === 0) {
+      return
     }
     prev = next
     for (const field of changedFields) {

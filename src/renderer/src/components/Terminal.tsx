@@ -119,7 +119,7 @@ import {
   TERMINAL_HIDDEN_WORKTREE_RETENTION_TTL_MS,
   countEvictionExemptTabRoutes,
   formatEvictionExemptRouteCounts,
-  getTerminalWorktreeParkingInputsKey,
+  createTerminalWorktreeTopologyProjection,
   hasPendingRetentionSpawnWork,
   selectForceParkEvictableTabIds,
   selectRetentionForceParkedTerminalWorktrees,
@@ -192,11 +192,13 @@ import {
 } from './terminal-pane/use-manual-terminal-worktree-parking'
 import { EDITOR_TAB_CONTENT_TYPES, getEditorCmdSaveFileId } from './editor/editor-cmd-save-target'
 import { getClientCreationActionPolicy } from '@/lib/client-creation-action-policy'
+import type { WorktreeTabBucketProjection } from '@/lib/worktree-tab-bucket-projection'
 
 const EditorPanel = lazy(() => import('./editor/EditorPanel'))
 
 // Why: gate handler runs after a dialog advances so a stray carry-over click can't act on the next dialog; ~200ms absorbs a physical double-click while staying responsive.
 const CLOSE_DIALOG_DEBOUNCE_MS = 200
+const EMPTY_TERMINAL_TABS: TerminalTab[] = []
 type TerminalStoreSnapshot = ReturnType<typeof useAppStore.getState>
 
 function showClientCreationActionError(error: unknown): void {
@@ -293,8 +295,19 @@ function getKeybindingContext(target: EventTarget | null): KeybindingContext {
     ? 'terminal'
     : 'app'
 }
+function LiveTerminalTabBar(
+  props: Omit<React.ComponentProps<typeof TabBar>, 'tabs'>
+): React.JSX.Element {
+  const tabs = useAppStore((state) => state.tabsByWorktree[props.worktreeId] ?? EMPTY_TERMINAL_TABS)
+  return <TabBar {...props} tabs={tabs} />
+}
 
 function Terminal(): React.JSX.Element | null {
+  const terminalTopologyProjectionRef = useRef<WorktreeTabBucketProjection<
+    TerminalTab,
+    TerminalTab
+  > | null>(null)
+  terminalTopologyProjectionRef.current ??= createTerminalWorktreeTopologyProjection()
   const mountedWorktreeIdsRef = useRef(new Set<string>())
   // Why an array: browser-guest eviction needs activation order (LRU), not just membership.
   const browserGuestWorktreeRecencyRef = useRef<string[]>([])
@@ -325,10 +338,11 @@ function Terminal(): React.JSX.Element | null {
     getResolvedExecutionHostIdForWorktree(s, renderedActiveWorktreeId)
   )
   const activeView = useAppStore((s) => s.activeView)
-  const tabsByWorktree = useAppStore((s) => s.tabsByWorktree)
-  const terminalWorktreeParkingInputsKey = useMemo(
-    () => getTerminalWorktreeParkingInputsKey(tabsByWorktree),
-    [tabsByWorktree]
+  // Why: terminal titles are leaf chrome. The root host only subscribes to
+  // mount/parking semantics; a real transition publishes fresh tab objects,
+  // while LiveTerminalTabBar reads title-only updates from the active bucket.
+  const tabsByWorktree = useAppStore((s) =>
+    terminalTopologyProjectionRef.current!.project(s.tabsByWorktree)
   )
   const pendingStartupByTabId = useAppStore((s) => s.pendingStartupByTabId)
   const terminalParkingEnabled = useAppStore((s) => s.settings?.terminalHiddenViewParking !== false)
@@ -1184,7 +1198,7 @@ function Terminal(): React.JSX.Element | null {
     pendingStartupByTabId,
     pairedRuntimeParkingEnvironmentIds,
     renderedActiveWorktreeId,
-    terminalWorktreeParkingInputsKey,
+    tabsByWorktree,
     terminalParkingEnabled,
     terminalParkingRevision,
     terminalProviderSnapshotCapabilityRevision,
@@ -2457,10 +2471,9 @@ function Terminal(): React.JSX.Element | null {
         !effectiveActiveLayout &&
         titlebarTabsTarget &&
         createPortal(
-          <TabBar
-            tabs={tabs}
-            activeTabId={activeTabId}
+          <LiveTerminalTabBar
             worktreeId={renderedActiveWorktreeId}
+            activeTabId={activeTabId}
             onActivate={handleActivateTab}
             onClose={handleCloseTab}
             onCloseOthers={handleCloseOthers}
