@@ -37,6 +37,7 @@ function makeAutomation(overrides: Partial<Automation> = {}): Automation {
     baseBranch: null,
     reuseSession: false,
     timezone: 'America/Los_Angeles',
+    agentArgs: null,
     rrule: 'FREQ=DAILY',
     dtstart: 1,
     enabled: true,
