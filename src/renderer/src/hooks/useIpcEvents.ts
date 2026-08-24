@@ -575,14 +575,20 @@ function remountTerminalTabsAwaitingHostHydration(): void {
   }
 }
 
-function getActiveRuntimeEnvironmentId(): string | null {
-  return useAppStore.getState().settings?.activeRuntimeEnvironmentId?.trim() || null
+export type RuntimeEnvironmentStoreSyncState = Pick<
+  AppState,
+  'runtimeEnvironments' | 'runtimeStatusByEnvironmentId' | 'settings' | 'sshStateByEnvironment'
+>
+
+function getActiveRuntimeEnvironmentId(state: RuntimeEnvironmentStoreSyncState): string | null {
+  return state.settings?.activeRuntimeEnvironmentId?.trim() || null
 }
 
-function getRuntimeClientEventEnvironmentIds(): string[] {
-  const state = useAppStore.getState()
+export function getRuntimeClientEventEnvironmentIds(
+  state: RuntimeEnvironmentStoreSyncState
+): string[] {
   const ids = new Set<string>()
-  const activeEnvironmentId = getActiveRuntimeEnvironmentId()
+  const activeEnvironmentId = getActiveRuntimeEnvironmentId(state)
   if (activeEnvironmentId) {
     ids.add(activeEnvironmentId)
   }
@@ -595,8 +601,9 @@ function getRuntimeClientEventEnvironmentIds(): string[] {
   return [...ids]
 }
 
-function getReachableRuntimeEnvironmentIds(): string[] {
-  const state = useAppStore.getState()
+export function getReachableRuntimeEnvironmentIds(
+  state: RuntimeEnvironmentStoreSyncState
+): string[] {
   const ids: string[] = []
   for (const [environmentId, status] of state.runtimeStatusByEnvironmentId ?? []) {
     if (status?.status) {
@@ -604,6 +611,18 @@ function getReachableRuntimeEnvironmentIds(): string[] {
     }
   }
   return ids
+}
+
+export function canSkipRuntimeEnvironmentStoreSync(
+  state: RuntimeEnvironmentStoreSyncState,
+  previousState: RuntimeEnvironmentStoreSyncState
+): boolean {
+  return (
+    state.runtimeEnvironments === previousState.runtimeEnvironments &&
+    state.runtimeStatusByEnvironmentId === previousState.runtimeStatusByEnvironmentId &&
+    state.sshStateByEnvironment === previousState.sshStateByEnvironment &&
+    getActiveRuntimeEnvironmentId(state) === getActiveRuntimeEnvironmentId(previousState)
+  )
 }
 
 export function buildRuntimeClientEventEnvironmentKey(environmentIds: string[]): string {
@@ -645,6 +664,115 @@ export function getRuntimeProjectRefreshEnvironmentIds(args: {
       ...getNewlyConnectedRuntimeEnvironmentIds(args.previousReachable, args.nextReachable)
     ])
   ]
+}
+
+type RuntimeEnvironmentStoreSyncSubscriberDeps = {
+  initialDesiredEnvironmentIds: string[]
+  initialReachableEnvironmentIds: string[]
+  buildEnvironmentKey: (environmentIds: string[]) => string
+  getDesiredEnvironmentIds: (state: RuntimeEnvironmentStoreSyncState) => string[]
+  getReachableEnvironmentIds: (state: RuntimeEnvironmentStoreSyncState) => string[]
+  requestProjectRefresh: (environmentId: string) => void
+  markEnvironmentSshStateStale: (environmentId: string) => void
+  sync: () => void
+}
+
+export type RuntimeEnvironmentStoreSyncSubscriber = (
+  state: RuntimeEnvironmentStoreSyncState,
+  previousState: RuntimeEnvironmentStoreSyncState
+) => void
+
+/**
+ * Builds the one renderer-wide runtime subscriber. The reference gate runs
+ * before either host collection is enumerated; key generation remains the
+ * second gate for relevant-reference writes whose effective subscription set
+ * did not change.
+ */
+export function createRuntimeEnvironmentStoreSyncSubscriber(
+  deps: RuntimeEnvironmentStoreSyncSubscriberDeps
+): RuntimeEnvironmentStoreSyncSubscriber {
+  let desiredEnvironmentIds = deps.initialDesiredEnvironmentIds
+  let desiredEnvironmentKey = deps.buildEnvironmentKey(desiredEnvironmentIds)
+  let reachableEnvironmentIds = deps.initialReachableEnvironmentIds
+  let reachableEnvironmentKey = deps.buildEnvironmentKey(reachableEnvironmentIds)
+  let handlingStoreWrite = false
+
+  return (state, previousState) => {
+    // markEnvironmentSshStateStale can synchronously publish its nested SSH
+    // bucket. The outer pass incorporates that generation before syncing, so a
+    // re-entrant pass would only enumerate and sync the same transition twice.
+    if (handlingStoreWrite || canSkipRuntimeEnvironmentStoreSync(state, previousState)) {
+      return
+    }
+
+    handlingStoreWrite = true
+    try {
+      const nextDesiredEnvironmentIds = deps.getDesiredEnvironmentIds(state)
+      const nextReachableEnvironmentIds = deps.getReachableEnvironmentIds(state)
+      const refreshEnvironmentIds = getRuntimeProjectRefreshEnvironmentIds({
+        previousDesired: desiredEnvironmentIds,
+        nextDesired: nextDesiredEnvironmentIds,
+        previousReachable: reachableEnvironmentIds,
+        nextReachable: nextReachableEnvironmentIds
+      })
+      const disconnectedEnvironmentIds = getNewlyDisconnectedRuntimeEnvironmentIds(
+        reachableEnvironmentIds,
+        nextReachableEnvironmentIds
+      )
+
+      desiredEnvironmentIds = nextDesiredEnvironmentIds
+      reachableEnvironmentIds = nextReachableEnvironmentIds
+      for (const environmentId of refreshEnvironmentIds) {
+        deps.requestProjectRefresh(environmentId)
+      }
+      for (const environmentId of disconnectedEnvironmentIds) {
+        deps.markEnvironmentSshStateStale(environmentId)
+      }
+
+      // Build after disconnect invalidation: marking a mirrored SSH bucket stale
+      // advances its generation, and the replacement subscription must capture
+      // that final generation in this same (single) sync.
+      const nextDesiredEnvironmentKey = deps.buildEnvironmentKey(desiredEnvironmentIds)
+      const nextReachableEnvironmentKey = deps.buildEnvironmentKey(reachableEnvironmentIds)
+      if (
+        nextDesiredEnvironmentKey === desiredEnvironmentKey &&
+        nextReachableEnvironmentKey === reachableEnvironmentKey
+      ) {
+        return
+      }
+      desiredEnvironmentKey = nextDesiredEnvironmentKey
+      reachableEnvironmentKey = nextReachableEnvironmentKey
+      deps.sync()
+    } finally {
+      handlingStoreWrite = false
+    }
+  }
+}
+
+type RuntimeClientEventReplayInvalidationDeps = {
+  getSshStateReference: () => RuntimeEnvironmentStoreSyncState['sshStateByEnvironment']
+  requestProjectRefresh: () => void
+  markEnvironmentSshStateStale: () => void
+  hydrateEnvironmentSshState: () => Promise<unknown>
+  sync: () => void
+}
+
+/**
+ * Invalidates a replay after the runtime event stream reports a transport gap.
+ * A tracked SSH bucket publishes synchronously and lets the store subscriber
+ * sync it; an empty/already-stale bucket has no reference publication, so this
+ * path must explicitly sync the advanced module-level SSH generation.
+ */
+export function invalidateRuntimeClientEventReplay(
+  deps: RuntimeClientEventReplayInvalidationDeps
+): void {
+  deps.requestProjectRefresh()
+  const previousSshStateReference = deps.getSshStateReference()
+  deps.markEnvironmentSshStateStale()
+  if (deps.getSshStateReference() === previousSshStateReference) {
+    deps.sync()
+  }
+  void deps.hydrateEnvironmentSshState().catch(() => {})
 }
 
 function getWorktreeRuntimeEnvironmentId(worktreeId: string | null | undefined): string | null {
@@ -1066,7 +1194,7 @@ export function useIpcEvents(): void {
     }
 
     const runtimeClientEventsSync = createRuntimeClientEventsSync({
-      getDesiredEnvironmentIds: getRuntimeClientEventEnvironmentIds,
+      getDesiredEnvironmentIds: () => getRuntimeClientEventEnvironmentIds(useAppStore.getState()),
       getSubscriptionKey: (environmentId) => buildRuntimeClientEventEnvironmentKey([environmentId]),
       subscribe: (environmentId, onEvent, onError) => {
         const sshGeneration = getEnvironmentSshStateGeneration(environmentId)
@@ -1085,62 +1213,53 @@ export function useIpcEvents(): void {
           },
           onError,
           () => {
-            // Why: events during a transport gap are lost; a quick reconnect won't flip unreachable, so refetch (#7970).
-            runtimeProjectRefreshScheduler.request(environmentId)
-            // Why: sshStateChanged events during the transport gap are lost, so downgrade the possibly-stale bucket, then refetch.
-            useAppStore.getState().markEnvironmentSshStateStale(environmentId)
-            void hydrateRuntimeEnvironmentSshState(environmentId, { force: true }).catch(() => {})
+            invalidateRuntimeClientEventReplay({
+              getSshStateReference: () => useAppStore.getState().sshStateByEnvironment,
+              requestProjectRefresh: () => runtimeProjectRefreshScheduler.request(environmentId),
+              markEnvironmentSshStateStale: () =>
+                useAppStore.getState().markEnvironmentSshStateStale(environmentId),
+              hydrateEnvironmentSshState: () =>
+                hydrateRuntimeEnvironmentSshState(environmentId, { force: true }),
+              sync: runtimeClientEventsSync.sync
+            })
           }
         )
       },
       onEvent: handleRuntimeClientEvent
     })
 
-    runtimeClientEventsSync.sync()
     // Why: no on-connect repo fetch (PR #2); seed discovery for connected runtimes or remote projects hide until Add-Project.
-    let runtimeClientEventEnvironmentIds = getRuntimeClientEventEnvironmentIds()
+    const initialRuntimeEnvironmentState = useAppStore.getState()
+    const runtimeClientEventEnvironmentIds = getRuntimeClientEventEnvironmentIds(
+      initialRuntimeEnvironmentState
+    )
     for (const environmentId of runtimeClientEventEnvironmentIds) {
       runtimeProjectRefreshScheduler.request(environmentId)
     }
-    let runtimeClientEventEnvironmentKey = buildRuntimeClientEventEnvironmentKey(
-      runtimeClientEventEnvironmentIds
+    const reachableRuntimeEnvironmentIds = getReachableRuntimeEnvironmentIds(
+      initialRuntimeEnvironmentState
     )
-    let reachableRuntimeEnvironmentIds = getReachableRuntimeEnvironmentIds()
-    let reachableRuntimeEnvironmentKey = buildRuntimeClientEventEnvironmentKey(
-      reachableRuntimeEnvironmentIds
-    )
-    const unsubscribeRuntimeEnvironmentStore = useAppStore.subscribe(() => {
-      const nextEnvironmentIds = getRuntimeClientEventEnvironmentIds()
-      const nextKey = buildRuntimeClientEventEnvironmentKey(nextEnvironmentIds)
-      const nextReachableEnvironmentIds = getReachableRuntimeEnvironmentIds()
-      const nextReachableKey = buildRuntimeClientEventEnvironmentKey(nextReachableEnvironmentIds)
-      if (
-        nextKey === runtimeClientEventEnvironmentKey &&
-        nextReachableKey === reachableRuntimeEnvironmentKey
-      ) {
-        return
-      }
-      for (const environmentId of getRuntimeProjectRefreshEnvironmentIds({
-        previousDesired: runtimeClientEventEnvironmentIds,
-        nextDesired: nextEnvironmentIds,
-        previousReachable: reachableRuntimeEnvironmentIds,
-        nextReachable: nextReachableEnvironmentIds
-      })) {
-        runtimeProjectRefreshScheduler.request(environmentId)
-      }
-      for (const environmentId of getNewlyDisconnectedRuntimeEnvironmentIds(
-        reachableRuntimeEnvironmentIds,
-        nextReachableEnvironmentIds
-      )) {
+    const handleRuntimeEnvironmentStoreWrite = createRuntimeEnvironmentStoreSyncSubscriber({
+      initialDesiredEnvironmentIds: runtimeClientEventEnvironmentIds,
+      initialReachableEnvironmentIds: reachableRuntimeEnvironmentIds,
+      buildEnvironmentKey: buildRuntimeClientEventEnvironmentKey,
+      getDesiredEnvironmentIds: getRuntimeClientEventEnvironmentIds,
+      getReachableEnvironmentIds: getReachableRuntimeEnvironmentIds,
+      requestProjectRefresh: (environmentId) =>
+        runtimeProjectRefreshScheduler.request(environmentId),
+      markEnvironmentSshStateStale: (environmentId) => {
         // No-op when the environment has no SSH bucket (e.g. web client).
         useAppStore.getState().markEnvironmentSshStateStale(environmentId)
-      }
-      runtimeClientEventEnvironmentIds = nextEnvironmentIds
-      runtimeClientEventEnvironmentKey = nextKey
-      reachableRuntimeEnvironmentIds = nextReachableEnvironmentIds
-      reachableRuntimeEnvironmentKey = nextReachableKey
-      runtimeClientEventsSync.sync()
+      },
+      sync: runtimeClientEventsSync.sync
     })
+    const unsubscribeRuntimeEnvironmentStore = useAppStore.subscribe(
+      handleRuntimeEnvironmentStoreWrite
+    )
+    // Subscribe before the first runtime stream starts: replay invalidation may
+    // synchronously publish a tracked SSH bucket and relies on this listener to
+    // replace that subscription exactly once.
+    runtimeClientEventsSync.sync()
     unsubs.push(runtimeClientEventsSync.stop)
     unsubs.push(runtimeProjectRefreshScheduler.stop)
 
