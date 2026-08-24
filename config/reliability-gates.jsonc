@@ -2674,7 +2674,7 @@
           "platform": "macos",
           "command": "ORCA_E2E_WEB_CLIENT=1 ORCA_E2E_FORCE_HEADFUL=1 pnpm exec playwright test tests/e2e/paired-remote-terminal-browser-link.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1",
           "result": "failed",
-          "durationSeconds": 60,
+          "durationSeconds": 53,
           "summary": "The byte-identical final Electron oracle failed at its exact host/client identity barrier when the sole source delta replaced src/renderer/src/store/index.ts registration lines 110-113 with registerRuntimeHttpLinkBrowserOpener(null); no host-owned browser appeared within the deterministic 60-second bound."
         }
       ],
@@ -12284,7 +12284,7 @@
       "id": "terminal-render.pixel-refresh-repair",
       "title": "Forced repaint does not change revealed pane pixels",
       "maturity": "experimental",
-      "protection": "none",
+      "protection": "partial",
       "owner": "terminal-rendering",
       "layer": "electron-visual-golden",
       "surfaces": [
@@ -12296,46 +12296,206 @@
       ],
       "platforms": ["macos", "linux", "windows"],
       "providers": ["local", "daemon"],
-      "coveredPlatforms": [],
-      "coveredProviders": [],
-      "coverageNotes": "Registered gap only; the live repro harness with a refresh-repair oracle exists but is not productized into the release-blocking terminal-rendering-golden suite.",
+      "coveredPlatforms": ["macos"],
+      "coveredProviders": ["local"],
+      "coverageNotes": "A headed macOS Electron test drives explicit destructive atlas recovery while DEC 2026 output is held, then compares compositor screenshots before and after a direct full-buffer present. The same renderer choreography is provider-local, but daemon, SSH, remote-runtime, Linux, and Windows GPU runs remain gaps.",
       "motivatingLinks": [
         "https://github.com/stablyai/orca/pull/7133",
         "https://github.com/stablyai/orca/pull/7054"
       ],
-      "invariant": "After any reveal, restore, or wake, the pixels a pane displays must equal what a forced full model-invalidating repaint would draw from the buffer; a material refresh-repair diff means stale rendering escaped, whatever the mechanism.",
-      "oracle": "Screenshot the revealed pane, force a model-invalidating full repaint, screenshot again, and assert the bounded pixel diff is immaterial; pair with a JS-level render-model-vs-buffer comparison. Compositor screenshots only, because WebGL canvas readback is blank with preserveDrawingBuffer disabled.",
-      "commands": [],
-      "testFiles": [],
-      "assertionRefs": [],
-      "evidenceRuns": [],
+      "invariant": "After proven renderer damage triggers destructive recovery, visible pixels equal a full model-invalidating present of the current buffer.",
+      "oracle": "Hold DEC 2026, invoke explicit atlas recovery, require an atlas clear, screenshot the pane, force a direct renderer present, and assert the bounded pixel diff is immaterial. Compositor screenshots only, because WebGL canvas readback is blank with preserveDrawingBuffer disabled.",
+      "commands": [
+        "pnpm run ensure:electron-runtime && pnpm exec playwright test tests/e2e/terminal-reveal-paused-render-repro.spec.ts --config tests/playwright.config.ts --project electron-headful --workers=1",
+        "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/terminal-pane/pty-connection-hidden-backlog-snapshot.test.ts src/renderer/src/components/terminal-pane/terminal-visibility-resume.test.ts src/renderer/src/components/terminal-pane/use-terminal-window-wake-recovery.test.ts src/renderer/src/lib/pane-manager/pane-manager-registry.test.ts src/renderer/src/lib/pane-manager/pane-webgl-renderer.test.ts src/renderer/src/lib/pane-manager/terminal-canvas-dpr-repair.test.ts src/renderer/src/lib/pane-manager/terminal-render-pause-release.test.ts",
+        "ORCA_E2E_RECORD_VIDEO=1 pnpm exec playwright test tests/e2e/terminal-reveal-paused-render-repro.spec.ts --config tests/playwright.config.ts --project electron-headful --workers=1 --repeat-each=3"
+      ],
+      "testFiles": [
+        "src/renderer/src/components/terminal-pane/pty-connection-hidden-backlog-snapshot.test.ts",
+        "src/renderer/src/components/terminal-pane/terminal-visibility-resume.test.ts",
+        "src/renderer/src/components/terminal-pane/use-terminal-window-wake-recovery.test.ts",
+        "src/renderer/src/lib/pane-manager/pane-manager-registry.test.ts",
+        "src/renderer/src/lib/pane-manager/pane-webgl-renderer.test.ts",
+        "src/renderer/src/lib/pane-manager/terminal-canvas-dpr-repair.test.ts",
+        "src/renderer/src/lib/pane-manager/terminal-render-pause-release.test.ts",
+        "tests/e2e/terminal-reveal-paused-render-repro.spec.ts"
+      ],
+      "assertionRefs": [
+        {
+          "file": "src/renderer/src/components/terminal-pane/use-terminal-window-wake-recovery.test.ts",
+          "assertions": [
+            "deduplicates a deferred dpr retry and consumes it after repair succeeds",
+            "caps a deferred dpr transition at sixteen animation-frame retries"
+          ]
+        },
+        {
+          "file": "src/renderer/src/components/terminal-pane/terminal-visibility-resume.test.ts",
+          "assertions": ["defers a heavy-reveal dpr present until the shared atlas recovery"]
+        },
+        {
+          "file": "src/renderer/src/lib/pane-manager/terminal-canvas-dpr-repair.test.ts",
+          "assertions": [
+            "repairs when the canvas and renderer dimensions share a stale dpr cache",
+            "defers an unmeasurable WebGL canvas but accepts a renderer-less pane"
+          ]
+        },
+        {
+          "file": "tests/e2e/terminal-reveal-paused-render-repro.spec.ts",
+          "assertions": ["@headful atlas recovery presents a synchronized-output WebGL frame"]
+        }
+      ],
+      "evidenceRuns": [
+        {
+          "date": "2026-08-23",
+          "runner": "local",
+          "platform": "macos",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/terminal-pane/pty-connection-hidden-backlog-snapshot.test.ts src/renderer/src/components/terminal-pane/terminal-visibility-resume.test.ts src/renderer/src/components/terminal-pane/use-terminal-window-wake-recovery.test.ts src/renderer/src/lib/pane-manager/pane-manager-registry.test.ts src/renderer/src/lib/pane-manager/pane-webgl-renderer.test.ts src/renderer/src/lib/pane-manager/terminal-canvas-dpr-repair.test.ts src/renderer/src/lib/pane-manager/terminal-render-pause-release.test.ts",
+          "result": "passed",
+          "durationSeconds": 2,
+          "summary": "All 98 renderer contracts passed, including same-DPR zero-scan behavior, visible-only fanout, tri-state DPR repair, deduplicated bounded retry, heavy-reveal repair, and listener cleanup."
+        },
+        {
+          "date": "2026-08-23",
+          "runner": "local",
+          "platform": "macos",
+          "command": "pnpm run ensure:electron-runtime && pnpm exec playwright test tests/e2e/terminal-reveal-paused-render-repro.spec.ts --config tests/playwright.config.ts --project electron-headful --workers=1",
+          "result": "passed",
+          "durationSeconds": 60,
+          "summary": "Both headed oracles passed together. Explicit destructive atlas recovery presented the held synchronized-output buffer with zero pixels different from a direct renderer present; the test attached before/after screenshots plus pixel-diff metadata."
+        },
+        {
+          "date": "2026-08-22",
+          "runner": "local",
+          "platform": "macos",
+          "command": "ORCA_E2E_RECORD_VIDEO=1 pnpm exec playwright test tests/e2e/terminal-reveal-paused-render-repro.spec.ts --config tests/playwright.config.ts --project electron-headful --workers=1 --repeat-each=3",
+          "result": "passed",
+          "durationSeconds": 48,
+          "summary": "Three consecutive headed real-WebGL runs passed in 15.0-15.7 seconds each and emitted a 1920x1080 video per BrowserWindow."
+        }
+      ],
       "runtimeBudget": {
-        "p95Seconds": 300,
-        "scope": "release-blocking golden Electron visual test"
+        "p95Seconds": 120,
+        "scope": "focused prebuilt headed Electron visual test"
       },
       "flakeHistory": {
-        "status": "not-started",
-        "evidence": "Runs nightly only while the per-platform diff threshold stabilizes; the destination is the release-blocking terminal-rendering-golden suite in release-cut.yml."
+        "status": "unknown",
+        "evidence": "Five local macOS headed runs passed, including one on the final branch state and three consecutive video-recorded repeats; CI soak history and cross-platform GPU runs are not yet available."
       },
       "redGreenEvidence": {
-        "status": "missing",
-        "evidence": "Needs an intentionally fossilized render model (skip the model invalidation on reveal) proving the refresh-repair diff fires."
+        "status": "complete",
+        "evidence": "Without the forced synchronized-output present, the damaged compositor differed from a direct renderer present across 87.68% of pixels even though serialization already contained the new frame. With explicit destructive recovery, the same oracle passes the 1.5% material-diff threshold."
       },
       "performanceBudget": {
         "required": true,
-        "evidence": "Soak-only; must not add product-path repaints beyond the existing reveal hardening."
+        "evidence": "Destructive recovery remains event-driven and limited to confirmed renderer-lifecycle boundaries. Gate-local contracts prove ordinary same-DPR resize performs zero pane scans; a true transition scans only the visible manager; unavailable canvas retry is deduplicated and capped at 16 frames; and heavy reveal adds one bounded visible-pane scan. The shared terminal-render.atlas-recovery-fanout contracts separately prove zero hidden-manager atlas clears or presents and a per-pane display:none retry capped at 16 frames."
       },
       "promotionCriteria": [
-        "Productize the existing stale-render repro harness with the refresh-repair oracle and failure artifacts.",
         "Establish a stable material-diff threshold across platforms via nightly runs.",
         "Promotion means membership in the release-blocking terminal-rendering-golden suite that release-cut.yml runs against every release tag; never PR-blocking.",
-        "Register the gate command as a direct spec-file invocation; the checker rejects --grep tag selectors, so do not reuse the existing --grep-based golden script as the command."
+        "Add Linux and Windows GPU evidence or retain those platform gaps explicitly."
       ],
       "knownGaps": [
-        "No manifest command yet.",
-        "Buffer-clean, pixels-stale variants are otherwise invisible to every buffer oracle in the manifest."
+        "The deterministic recovery test disables xterm's one-second safety timeout so the held-frame damage remains stable until recovery.",
+        "The renderer-level frame injection isolates the paint failure; provider delivery and hidden-output snapshot restore have separate gates.",
+        "Linux, Windows, daemon, SSH, and remote-runtime live GPU evidence is not yet recorded."
       ],
       "demotionRule": "Drop from the golden suite back to nightly diagnostic if diff thresholds cannot be kept stable across CI runners."
+    },
+    {
+      "id": "terminal-render.synchronized-reveal-coherence",
+      "title": "Ordinary reveal preserves synchronized-output frame coherence",
+      "maturity": "experimental",
+      "protection": "partial",
+      "owner": "terminal-rendering",
+      "layer": "electron-visual-golden",
+      "surfaces": ["WebGL rendering", "tab reveal", "snapshot restore", "DEC 2026"],
+      "platforms": ["macos", "linux", "windows"],
+      "providers": ["local", "daemon", "ssh", "remote-runtime"],
+      "coveredPlatforms": ["macos"],
+      "coveredProviders": ["local"],
+      "coverageNotes": "A headed macOS Electron test uses a real xterm WebGL renderer and production tab reveal. It proves the coherent pre-hide canvas remains visible while DEC 2026 holds a newer buffer, then proves normal release and xterm's one-second watchdog publish complete frames. Renderer behavior is provider-neutral; live Linux, Windows, daemon, SSH, and remote-runtime GPU runs remain gaps.",
+      "motivatingLinks": [
+        "https://github.com/stablyai/orca/pull/7133",
+        "https://github.com/stablyai/orca/pull/7054"
+      ],
+      "invariant": "terminal-render.synchronized-reveal-coherence: an ordinary reveal never clears a healthy shared atlas or publishes a partially built DEC 2026 frame; it retains the last coherent canvas until release or xterm's bounded watchdog.",
+      "oracle": "Paint and capture a coherent frame, hide the real terminal tab, build a distinct full-screen frame while DEC 2026 is held, reveal through production, and require zero atlas clears plus pixel-equivalence with the coherent frame. Then release normally and through the one-second watchdog, requiring both compositor frames to match a direct renderer present.",
+      "commands": [
+        "pnpm run ensure:electron-runtime && pnpm exec playwright test tests/e2e/terminal-reveal-paused-render-repro.spec.ts --config tests/playwright.config.ts --project electron-headful --workers=1",
+        "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/terminal-pane/pty-connection-hidden-backlog-snapshot.test.ts src/renderer/src/components/terminal-pane/terminal-visibility-resume.test.ts src/renderer/src/components/terminal-pane/terminal-webgl-atlas-recovery.test.ts src/renderer/src/lib/pane-manager/pane-webgl-renderer.test.ts src/renderer/src/lib/pane-manager/terminal-render-pause-release.test.ts"
+      ],
+      "testFiles": [
+        "src/renderer/src/components/terminal-pane/pty-connection-hidden-backlog-snapshot.test.ts",
+        "src/renderer/src/components/terminal-pane/terminal-visibility-resume.test.ts",
+        "src/renderer/src/components/terminal-pane/terminal-webgl-atlas-recovery.test.ts",
+        "src/renderer/src/lib/pane-manager/pane-webgl-renderer.test.ts",
+        "src/renderer/src/lib/pane-manager/terminal-render-pause-release.test.ts",
+        "tests/e2e/terminal-reveal-paused-render-repro.spec.ts"
+      ],
+      "assertionRefs": [
+        {
+          "file": "src/renderer/src/components/terminal-pane/terminal-visibility-resume.test.ts",
+          "assertions": [
+            "schedules an atlas-preserving present on a light tab reveal",
+            "keeps heavy atlas recovery off a plain window refocus"
+          ]
+        },
+        {
+          "file": "src/renderer/src/lib/pane-manager/pane-webgl-renderer.test.ts",
+          "assertions": ["preserves a synchronized frame on an ordinary reveal present"]
+        },
+        {
+          "file": "src/renderer/src/lib/pane-manager/terminal-render-pause-release.test.ts",
+          "assertions": [
+            "routes synchronized output through RenderService instead of the renderer",
+            "releases observer pause before requesting the synchronized frame"
+          ]
+        },
+        {
+          "file": "tests/e2e/terminal-reveal-paused-render-repro.spec.ts",
+          "assertions": [
+            "@headful reveal preserves the coherent frame until synchronized output releases"
+          ]
+        }
+      ],
+      "evidenceRuns": [
+        {
+          "date": "2026-08-23",
+          "runner": "local",
+          "platform": "macos",
+          "command": "pnpm run ensure:electron-runtime && pnpm exec playwright test tests/e2e/terminal-reveal-paused-render-repro.spec.ts --config tests/playwright.config.ts --project electron-headful --workers=1",
+          "result": "passed",
+          "durationSeconds": 53,
+          "summary": "Both final-head headed oracles passed together. The coherent held frame differed by 73 of 1,404,288 pixels (0.0052%), ordinary reveal performed zero atlas clears, normal release differed from the direct present by 95 pixels (0.0068%), and watchdog release matched exactly. All three ratios passed the 1.5% compositor threshold."
+        }
+      ],
+      "runtimeBudget": {
+        "p95Seconds": 120,
+        "scope": "focused prebuilt headed Electron prevention and watchdog test"
+      },
+      "flakeHistory": {
+        "status": "unknown",
+        "evidence": "One final watchdog-inclusive macOS headed run passed; CI soak history and cross-platform GPU runs are not yet available."
+      },
+      "redGreenEvidence": {
+        "status": "complete",
+        "evidence": "Before the prevention change, the ordinary reveal oracle failed deterministically because it observed three atlas clears. After the change, reveal performs zero clears and the first visible frame remains pixel-equivalent to the coherent pre-hide frame."
+      },
+      "performanceBudget": {
+        "required": true,
+        "evidence": "Ordinary reveal removes three shared-atlas clears and their global visible-manager presents. It adds one settled, event-driven full-viewport refresh request per revealed pane; DEC 2026 coalesces it and uses xterm's existing one-second watchdog. No polling, subprocess, provider call, PTY inventory, background-output work, listener, or unbounded retry was added; the display-none retry remains deduplicated and capped at 16 frames."
+      },
+      "promotionCriteria": [
+        "Accumulate stable macOS runs for both normal release and watchdog release.",
+        "Add Linux and Windows GPU evidence or retain those platform gaps explicitly.",
+        "Keep the destructive atlas-recovery oracle separate and passing."
+      ],
+      "knownGaps": [
+        "The deterministic test injects full-screen marker frames through xterm rather than invoking a live model; genuine OpenCode full-window evidence separately proves the original corruption.",
+        "Linux, Windows, daemon, SSH, and remote-runtime live GPU evidence is not yet recorded.",
+        "The 1.5% compositor threshold tolerates cursor and shell-prompt timing noise; exact buffer content and atlas-clear counts are asserted separately."
+      ],
+      "demotionRule": "Demote if ordinary reveal clears the shared atlas, the held frame stops matching its coherent baseline, release/watchdog output diverges from a direct present, or the headed oracle cannot remain deterministic."
     },
     {
       "id": "pty-delivery.renderer-lifecycle-accounting-reset",

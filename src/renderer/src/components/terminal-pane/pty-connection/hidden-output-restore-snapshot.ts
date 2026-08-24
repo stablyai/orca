@@ -11,6 +11,7 @@ import {
   writeTerminalOutput
 } from '@/lib/pane-manager/pane-terminal-output-scheduler'
 import { recordTerminalOutput } from '@/lib/pane-manager/pane-scroll'
+import { presentPaneViewportPreservingSynchronizedOutput } from '@/lib/pane-manager/pane-webgl-renderer'
 import {
   buildMainModelSnapshotReplayWrites,
   hasPositiveTerminalDimensions,
@@ -22,6 +23,7 @@ import { HIDDEN_OUTPUT_RESTORE_UNAVAILABLE_WARNING } from './hidden-output-resto
 import { shouldWritePtyOutputForeground } from './foreground-output-scan'
 import { isRemoteRuntimePtyId } from './paired-parked-terminal-restore'
 import { restoredSnapshotPaintsPrintableContent } from '../restored-snapshot-coverage'
+import { recordTerminalFreezeBreadcrumb } from '../terminal-freeze-breadcrumbs'
 
 import type { ConnectPanePtySession } from './connect-pane-pty-session'
 
@@ -152,6 +154,12 @@ export function bindHiddenOutputRestoreSnapshot(session: ConnectPanePtySession):
           session.recordRendererOrderedSeq(snapshot)
           recordTerminalOutput(session.pane.terminal)
           await waitForTerminalReplayWritesParsed(session.pane.terminal)
+          if (session.deps.isVisibleRef.current) {
+            presentPaneViewportPreservingSynchronizedOutput(session.pane)
+            recordTerminalFreezeBreadcrumb('stale-pixel-restore-present', {
+              paneId: session.pane.id
+            })
+          }
         },
         {
           shouldRestore: () =>
