@@ -8,6 +8,11 @@ export type SyntheticAgentTitleProfile = {
   titleIdentityGroup?: string
   synthesizeTerminalTitle?: boolean
   synthesizeWorkingTitle?: boolean
+  synthesizeWorkingTitleOnRelay?: boolean
+}
+
+type SyntheticAgentTitleHookContext = {
+  isRelay?: boolean
 }
 
 export const SYNTHETIC_AGENT_TITLE_AGENTS = [
@@ -50,7 +55,8 @@ export const SYNTHETIC_AGENT_TITLE_PROFILES: Record<string, SyntheticAgentTitleP
     // Why: Pi owns its working OSC title (`π ⠋ <session>`) and animates it itself. Synthesizing
     // over it replaced the session label and fought its frames at 80ms. Terminal states still
     // synthesize: they carry the pane's agent identity downstream, and Pi is quiet at rest.
-    synthesizeWorkingTitle: false
+    synthesizeWorkingTitle: false,
+    synthesizeWorkingTitleOnRelay: true
   },
   omp: {
     workingLabel: 'OMP',
@@ -59,7 +65,8 @@ export const SYNTHETIC_AGENT_TITLE_PROFILES: Record<string, SyntheticAgentTitleP
     titleIdentityGroup: 'pi-compatible',
     // Why: on an Orca-hosted pane it is Orca's own injected titlebar extension writing the
     // working title (src/main/pi/titlebar-extension-source.ts). See pi above.
-    synthesizeWorkingTitle: false
+    synthesizeWorkingTitle: false,
+    synthesizeWorkingTitleOnRelay: true
   },
   droid: {
     workingLabel: 'Droid',
@@ -100,11 +107,16 @@ export function getSyntheticAgentTerminalTitle(
 
 export function shouldDriveSyntheticAgentTitleFromHook(
   agentType: AgentType | null | undefined,
-  state: AgentStatusState
+  state: AgentStatusState,
+  context: SyntheticAgentTitleHookContext = {}
 ): boolean {
   const profile = getSyntheticAgentTitleProfile(agentType)
   if (!profile || profile.synthesizeTerminalTitle === false) {
     return false
   }
-  return state !== 'working' || profile.synthesizeWorkingTitle !== false
+  // Why: relays install status hooks but not Pi-compatible native title sources.
+  const synthesizeWorkingTitle = context.isRelay
+    ? (profile.synthesizeWorkingTitleOnRelay ?? profile.synthesizeWorkingTitle)
+    : profile.synthesizeWorkingTitle
+  return state !== 'working' || synthesizeWorkingTitle !== false
 }

@@ -1733,7 +1733,9 @@ function openMainWindow(options: { revealOnDidFinishLoad?: boolean } = {}): Brow
       const profile = getSyntheticAgentTitleProfile(payload.agentType)
       if (
         profile &&
-        shouldDriveSyntheticAgentTitleFromHook(payload.agentType, payload.state) &&
+        shouldDriveSyntheticAgentTitleFromHook(payload.agentType, payload.state, {
+          isRelay: connectionId !== null
+        }) &&
         !suppressSyntheticCodexAutoApprovalTitle
       ) {
         driveSyntheticTitleFromHook(paneKey, payload.state, profile)

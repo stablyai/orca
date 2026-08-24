@@ -41,4 +41,12 @@ describe('synthetic agent titles', () => {
     expect(getSyntheticAgentTerminalTitle('pi', 'waiting')).toBe('Pi - action required')
     expect(shouldDriveSyntheticAgentTitleFromHook('pi', 'working')).toBe(false)
   })
+
+  it('synthesizes Pi-compatible working titles when a relay has no native title source', () => {
+    expect(shouldDriveSyntheticAgentTitleFromHook('omp', 'working', { isRelay: true })).toBe(true)
+    expect(shouldDriveSyntheticAgentTitleFromHook('pi', 'working', { isRelay: true })).toBe(true)
+    expect(shouldDriveSyntheticAgentTitleFromHook('codex', 'working', { isRelay: true })).toBe(
+      false
+    )
+  })
 })
