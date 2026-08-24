@@ -42,5 +42,6 @@ export type {
   MutationReceiptRow,
   MutationState,
   WorkerDispatchRow,
-  WorkerDispatchState
+  WorkerDispatchState,
+  ParentLossCheckpointRow
 } from './types'

@@ -29,6 +29,7 @@ import type { ForeignDirectMailboxRoutingMethods } from './messages/foreign-dire
 import type { MessageInboxMethods } from './messages/message-inbox'
 import type { MessageInsertMethods } from './messages/message-insert'
 import type { MutationReceiptStoreMethods } from './mutation-receipts/mutation-receipt-store'
+import type { ParentLossCheckpointStoreMethods } from './parent-loss/parent-loss-checkpoint-store'
 import type { QuestionThreadsMethods } from './questions/question-threads'
 import type { OrchestrationResetMethods } from './reset/orchestration-reset'
 import type { RunBindingMethods } from './runs/run-binding'
@@ -66,6 +67,7 @@ export type OrchestrationDbMethods = CreateTablesMethods &
   BackfillLegacyQuestionThreadsMethods &
   AdoptLegacyRunMethods &
   MutationReceiptStoreMethods &
+  ParentLossCheckpointStoreMethods &
   LegacyCompatibilityPrincipalsMethods &
   LegacyCompatibilityCandidatesMethods &
   LegacyWorkerCompletionMethods &

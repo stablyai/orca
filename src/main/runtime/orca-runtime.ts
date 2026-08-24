@@ -18259,6 +18259,12 @@ export class OrcaRuntimeService {
   }
 
   /** Rejects worker-originated mutations after the runtime can no longer prove its parent is live. */
+  getAgentStatusOrchestrationContextForTerminal(
+    handle: string
+  ): AgentStatusOrchestrationContext | undefined {
+    return this.getAgentStatusOrchestrationContextForHandle(handle)
+  }
+
   assertOrchestrationMutationAllowed(handle: string | undefined): void {
     if (!handle) {
       return
@@ -34640,6 +34646,16 @@ export class OrcaRuntimeService {
       parentSelected: parentTerminalHandle !== undefined,
       parentLive
     })
+    const checkpoint = db?.getParentLossCheckpointByDispatch?.(dispatch.id)
+    const checkpointProjection =
+      checkpoint?.status === 'checkpointed'
+        ? {
+            parentStatus: 'CHECKPOINTED' as const,
+            inputPolicy: 'FROZEN' as const,
+            rebindStatus: 'CHECKPOINTED' as const,
+            checkpointId: checkpoint.id
+          }
+        : {}
 
     return {
       taskId: dispatch.task_id,
@@ -34653,7 +34669,8 @@ export class OrcaRuntimeService {
       ...(orchestrationRunId ? { orchestrationRunId } : {}),
       ...(parentTerminalHandle ? { parentIdentity: parentTerminalHandle } : {}),
       ...(owningRun ? { parentRuntimeEpoch: owningRun.consumer_generation } : {}),
-      ...parentLoss
+      ...parentLoss,
+      ...checkpointProjection
     }
   }
 

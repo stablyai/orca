@@ -289,6 +289,22 @@ const AskParams = z
     }
   })
 
+const ParentCheckpointParams = z.object({
+  dispatch: requiredString('Missing --dispatch'),
+  oldParent: requiredString('Missing --old-parent'),
+  checkpoint: requiredString('Missing --checkpoint'),
+  from: requiredString('Missing --from')
+})
+
+const ParentRebindParams = z.object({
+  checkpoint: requiredString('Missing --checkpoint'),
+  newParent: requiredString('Missing --new-parent'),
+  newParentPaneKey: requiredString('Missing --new-parent-pane-key'),
+  approvedBy: requiredString('Missing --approved-by'),
+  approvalId: requiredString('Missing --approval-id'),
+  leaseMs: OptionalFiniteNumber
+})
+
 const ResetParams = z
   .object({
     all: OptionalBoolean,
@@ -440,6 +456,65 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
   ...ORCHESTRATION_RUN_METHODS,
   ...ORCHESTRATION_WORKER_METHODS,
   ...ORCHESTRATION_FEDERATION_METHODS,
+  defineMethod({
+    name: 'orchestration.parentCheckpoint',
+    params: ParentCheckpointParams,
+    handler: (params, { runtime }) => {
+      const context = runtime.getAgentStatusOrchestrationContextForTerminal(params.from)
+      if (
+        !context ||
+        context.dispatchId !== params.dispatch ||
+        context.parentIdentity !== params.oldParent ||
+        context.inputPolicy !== 'FROZEN'
+      ) {
+        throw new OrchestrationError(
+          'parent_loss_not_observed',
+          'Checkpoint requires the exact frozen Dispatch and observed parent identity.',
+          { effectsApplied: false, dispatchId: params.dispatch }
+        )
+      }
+      const checkpoint = runtime.getOrchestrationDb().createParentLossCheckpoint({
+        dispatchId: params.dispatch,
+        oldParent: params.oldParent,
+        checkpoint: params.checkpoint
+      })
+      return { checkpoint }
+    }
+  }),
+  defineMethod({
+    name: 'orchestration.parentRebind',
+    params: ParentRebindParams,
+    handler: (params, { runtime }) => {
+      if (runtime.getLiveTerminalPaneKey(params.newParent) !== params.newParentPaneKey) {
+        throw new OrchestrationError(
+          'rebind_parent_not_live',
+          'The approved new parent must resolve to the exact live local pane identity.',
+          { effectsApplied: false, newParent: params.newParent }
+        )
+      }
+      const result = runtime.getOrchestrationDb().approveParentLossRebind({
+        checkpointId: params.checkpoint,
+        newParent: params.newParent,
+        newParentPaneKey: params.newParentPaneKey,
+        approvedBy: params.approvedBy,
+        approvalId: params.approvalId,
+        leaseMs: params.leaseMs ?? 60_000
+      })
+      return {
+        oldParent: result.checkpoint.old_parent,
+        newParent: result.checkpoint.new_parent,
+        checkpointHash: result.checkpoint.checkpoint_hash,
+        approvedBy: result.checkpoint.approved_by,
+        approvalId: result.checkpoint.approval_id,
+        leaseExpiresAt: result.checkpoint.lease_expires_at,
+        coordinatorEpoch: result.checkpoint.coordinator_epoch,
+        oldDispatchId: result.checkpoint.old_dispatch_id,
+        newDispatchId: result.newDispatchId,
+        rebindReceiptId: result.checkpoint.rebind_receipt_id,
+        correlationId: result.checkpoint.correlation_id
+      }
+    }
+  }),
   defineMethod({
     name: 'orchestration.send',
     params: SendParams,

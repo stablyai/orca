@@ -29,6 +29,7 @@ import { attachForeignDirectMailboxRouting } from './messages/foreign-direct-mai
 import { attachMessageInbox } from './messages/message-inbox'
 import { attachMessageInsert } from './messages/message-insert'
 import { attachMutationReceiptStore } from './mutation-receipts/mutation-receipt-store'
+import { attachParentLossCheckpointStore } from './parent-loss/parent-loss-checkpoint-store'
 import { attachQuestionThreads } from './questions/question-threads'
 import { attachOrchestrationReset } from './reset/orchestration-reset'
 import { attachRunBinding } from './runs/run-binding'
@@ -67,6 +68,7 @@ export function attachOrchestrationDbMethods(ctor: { prototype: object }): void 
   attachBackfillLegacyQuestionThreads(ctor)
   attachAdoptLegacyRun(ctor)
   attachMutationReceiptStore(ctor)
+  attachParentLossCheckpointStore(ctor)
   attachLegacyCompatibilityPrincipals(ctor)
   attachLegacyCompatibilityCandidates(ctor)
   attachLegacyWorkerCompletion(ctor)

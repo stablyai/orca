@@ -43505,6 +43505,19 @@ describe('OrcaRuntimeService', () => {
           data: expect.objectContaining({ effectsApplied: false })
         })
       )
+      const checkpoint = db.createParentLossCheckpoint({
+        dispatchId: workerDispatch.id,
+        oldParent: handles.creator,
+        checkpoint: '{"head":"abc123"}'
+      })
+      expect(
+        runtime.syncWindowGraph(1, graph()).agentOrchestrationByPaneKey?.[paneKey('worker')]
+      ).toMatchObject({
+        parentStatus: 'CHECKPOINTED',
+        inputPolicy: 'FROZEN',
+        rebindStatus: 'CHECKPOINTED',
+        checkpointId: checkpoint.id
+      })
       getLiveTerminalPaneKey.mockRestore()
 
       const oldCreatorPaneKey = paneKey('creator')

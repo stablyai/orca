@@ -21,6 +21,26 @@ export type TaskStatus = 'pending' | 'ready' | 'dispatched' | 'completed' | 'fai
 
 export type DispatchStatus = 'pending' | 'dispatched' | 'completed' | 'failed' | 'circuit_broken'
 
+export type ParentLossCheckpointRow = {
+  id: string
+  run_id: string
+  task_id: string
+  old_dispatch_id: string
+  old_parent: string
+  checkpoint_hash: string
+  status: 'checkpointed' | 'rebound'
+  new_parent: string | null
+  new_dispatch_id: string | null
+  approved_by: string | null
+  approval_id: string | null
+  lease_expires_at: string | null
+  coordinator_epoch: number | null
+  rebind_receipt_id: string | null
+  correlation_id: string | null
+  created_at: string
+  rebound_at: string | null
+}
+
 export type WorkerReportOutcome = 'succeeded' | 'failed'
 
 export type WorkerReportSettlement =

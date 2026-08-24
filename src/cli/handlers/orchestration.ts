@@ -6,6 +6,7 @@ import {
 } from './orchestration/dispatch-handlers'
 import { ORCHESTRATION_GATE_HANDLERS } from './orchestration/gate-handlers'
 import { ORCHESTRATION_INBOX_HANDLERS } from './orchestration/message-inbox-handlers'
+import { ORCHESTRATION_PARENT_LOSS_HANDLERS } from './orchestration/parent-loss-handlers'
 import { ORCHESTRATION_QUESTION_HANDLER } from './orchestration/question-handler'
 import { ORCHESTRATION_RESET_HANDLER } from './orchestration/reset-handler'
 import { ORCHESTRATION_RUN_HANDLERS } from './orchestration/run-handlers'
@@ -20,6 +21,7 @@ export const ORCHESTRATION_HANDLERS: Record<string, CommandHandler> = {
   ...ORCHESTRATION_SEND_HANDLER,
   ...ORCHESTRATION_CHECK_HANDLER,
   ...ORCHESTRATION_INBOX_HANDLERS,
+  ...ORCHESTRATION_PARENT_LOSS_HANDLERS,
   ...ORCHESTRATION_TASK_HANDLERS,
   ...ORCHESTRATION_WORKER_LAUNCH_HANDLER,
   ...ORCHESTRATION_WORKER_OBSERVATION_HANDLERS,

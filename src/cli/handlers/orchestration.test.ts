@@ -648,6 +648,73 @@ describe('orchestration task-create caller handle', () => {
     })
   })
 })
+
+describe('orchestration parent-loss recovery commands', () => {
+  beforeEach(() => {
+    callMock.mockReset()
+    getTerminalHandleMock.mockReset()
+  })
+
+  it('forwards exact checkpoint evidence and worker identity', async () => {
+    callMock.mockResolvedValue({
+      result: { checkpoint: { id: 'checkpoint_1', checkpoint_hash: 'abc', status: 'checkpointed' } }
+    })
+    await ORCHESTRATION_HANDLERS['orchestration parent-checkpoint']({
+      flags: new Map([
+        ['dispatch', 'ctx_old'],
+        ['old-parent', 'term_old'],
+        ['checkpoint-state', '{"head":"abc"}'],
+        ['from', 'term_worker']
+      ]),
+      client: { call: callMock },
+      cwd: '/tmp/repo',
+      json: true
+    } as never)
+
+    expect(callMock).toHaveBeenCalledWith('orchestration.parentCheckpoint', {
+      dispatch: 'ctx_old',
+      oldParent: 'term_old',
+      checkpoint: '{"head":"abc"}',
+      from: 'term_worker'
+    })
+  })
+
+  it('forwards mandatory approval evidence and lease duration', async () => {
+    callMock.mockResolvedValue({
+      result: {
+        oldParent: 'term_old',
+        newParent: 'term_new',
+        oldDispatchId: 'ctx_old',
+        newDispatchId: 'ctx_new',
+        coordinatorEpoch: 2,
+        rebindReceiptId: 'rebind_1',
+        correlationId: 'corr_1'
+      }
+    })
+    await ORCHESTRATION_HANDLERS['orchestration parent-rebind']({
+      flags: new Map([
+        ['checkpoint', 'checkpoint_1'],
+        ['new-parent', 'term_new'],
+        ['new-parent-pane-key', 'tab-new:cccccccc-cccc-4ccc-8ccc-cccccccccccc'],
+        ['approved-by', 'human:maintainer'],
+        ['approval-id', 'approval-1'],
+        ['lease-ms', '60000']
+      ]),
+      client: { call: callMock },
+      cwd: '/tmp/repo',
+      json: true
+    } as never)
+
+    expect(callMock).toHaveBeenCalledWith('orchestration.parentRebind', {
+      checkpoint: 'checkpoint_1',
+      newParent: 'term_new',
+      newParentPaneKey: 'tab-new:cccccccc-cccc-4ccc-8ccc-cccccccccccc',
+      approvedBy: 'human:maintainer',
+      approvalId: 'approval-1',
+      leaseMs: 60_000
+    })
+  })
+})
 describe('orchestration timeout flag validation', () => {
   const invalidTimeoutValues: [string, string | boolean][] = [
     ['missing', true],

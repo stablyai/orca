@@ -137,6 +137,30 @@ CREATE INDEX IF NOT EXISTS idx_dispatch_task ON dispatch_contexts(task_id);
 CREATE INDEX IF NOT EXISTS idx_dispatch_status ON dispatch_contexts(status);
 CREATE INDEX IF NOT EXISTS idx_dispatch_assignee_handle ON dispatch_contexts(assignee_handle);
 
+CREATE TABLE IF NOT EXISTS parent_loss_checkpoints (
+  id                    TEXT PRIMARY KEY,
+  run_id                TEXT NOT NULL,
+  task_id               TEXT NOT NULL,
+  old_dispatch_id       TEXT NOT NULL UNIQUE,
+  old_parent            TEXT NOT NULL,
+  checkpoint_hash       TEXT NOT NULL,
+  status                TEXT NOT NULL DEFAULT 'checkpointed'
+    CHECK(status IN ('checkpointed', 'rebound')),
+  new_parent            TEXT,
+  new_dispatch_id       TEXT UNIQUE,
+  approved_by           TEXT,
+  approval_id           TEXT UNIQUE,
+  lease_expires_at      TEXT,
+  coordinator_epoch     INTEGER,
+  rebind_receipt_id     TEXT UNIQUE,
+  correlation_id       TEXT UNIQUE,
+  created_at            TEXT NOT NULL DEFAULT (datetime('now')),
+  rebound_at            TEXT
+);
+
+CREATE INDEX IF NOT EXISTS idx_parent_loss_checkpoint_run_status
+  ON parent_loss_checkpoints(run_id, status);
+
 CREATE TABLE IF NOT EXISTS decision_gates (
   id            TEXT PRIMARY KEY,
   run_id        TEXT NOT NULL DEFAULT '${LEGACY_RUN_ID}',

@@ -18,6 +18,10 @@ Each entry separates symptom, cause confidence, correction, and verification. No
 
 Additional C1 implementation incident: the first runtime projection test classified a renderer-backed live parent as `FROZEN`. The implementation had queried only `getLivePtyForHandle`, which excludes valid renderer leaf authority. It now queries the canonical `getLiveTerminalPaneKey` boundary. The focused regression passed: 1 passed, 1185 filtered/skipped.
 
+C2's first RPC run failed because the new rebind schema was inserted before the existing `AskParams.superRefine` chain closed, so rebind incorrectly required ask question/resume fields and Node typecheck failed. The ask refinement was restored to `AskParams`, and `ParentRebindParams` is now an independent object schema.
+
+The first C2 schema investigation guessed two nonexistent paths (`db/index.ts` and `schema/schema-version.ts`). Bounded `rg --files` established the actual barrel/version locations. The schema was implemented through `db.ts`, `db/contract-constants.ts`, and the existing migration module; no guessed file was created.
+
 The first combined C1/B1 regression then failed one identity-less worker completion fixture. That fixture overrode terminal lookup for the worker and returned no coordinator pane, which correctly became parent loss under the new policy. The fixture now models its intended live coordinator explicitly; the product guard remains fail-closed.
 
 The canonical changed-code quality script again failed on Windows with `spawnSync pnpm.cmd EINVAL`. This is a harness defect already observed before C1, not a lint verdict. Direct oxlint completed and reported only the known `max-lines` findings in `agent-status-types.ts` and `orchestration-send.test.ts`; no new rule finding was emitted.
