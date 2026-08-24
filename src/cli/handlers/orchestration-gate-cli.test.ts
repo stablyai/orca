@@ -228,6 +228,9 @@ describe('orchestration gate commands carry caller identity', () => {
     expect(output.error.message).toContain('may already have taken effect')
     expect(output.error.message).toContain('Failed stage: dispatch_input')
     expect(output.error.message).toMatch(/Residual resources:.*repo::child.*term_worker/)
+    // Why: the mutation may have landed, so this path must never suggest closing the residual.
+    expect(output.error.message).not.toContain('terminal close')
+    expect(output.error.message).toContain('Do not close a residual resource on this path')
     expect(output.error.message).not.toMatch(/restart Orca/i)
     expect(output.error.data).toMatchObject({
       orchestrationRequestId: 'mutation_1',

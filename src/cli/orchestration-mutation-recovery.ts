@@ -16,6 +16,10 @@ export function orchestrationMutationRecoveryError(error: unknown): unknown {
     typeof data?.failedStage === 'string' ? `Failed stage: ${data.failedStage}.` : undefined,
     Array.isArray(data?.residualResources)
       ? `Residual resources: ${JSON.stringify(data.residualResources)}.`
+      : undefined,
+    // Why: the mutation may have landed, so a residual handle here can be a live worker.
+    Array.isArray(data?.residualResources) && data.residualResources.length > 0
+      ? 'Do not close a residual resource on this path; retry first and act on the receipt the retry returns.'
       : undefined
   ].filter((line): line is string => line !== undefined)
   return new RuntimeClientError(error.code, message.join('\n'), error.data)
