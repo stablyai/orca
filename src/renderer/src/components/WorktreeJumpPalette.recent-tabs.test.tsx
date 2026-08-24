@@ -12,6 +12,7 @@ import { makePaneKey } from '../../../shared/stable-pane-id'
 import {
   LEAF_ID,
   makeAgentEntry,
+  makeDuplicateRecentTabState,
   makeGroup,
   makeManyTabState,
   makeRecentTabState,
@@ -227,6 +228,25 @@ describe('WorktreeJumpPalette recent chats & terminals', () => {
     expect(rows.some((id) => id.startsWith('worktree:'))).toBe(true)
     expect(testContainer.textContent).toContain('Recent Chats & Terminals')
     expect(testContainer.textContent).toContain('Recent Worktrees')
+  })
+
+  it('keeps duplicate persisted tab ids as separate recent rows and digit targets', async () => {
+    await renderPalette(makeDuplicateRecentTabState())
+
+    expect(
+      getRenderedRowIds().filter(
+        (id) => id === 'workspace-tab:tab-duplicate' || id.includes(':workspace-tab:tab-duplicate')
+      )
+    ).toEqual(['workspace-tab:tab-duplicate', 'palette-dup:1:workspace-tab:tab-duplicate'])
+
+    await act(async () => {
+      emitCmdJRowIndexJump(1)
+    })
+    await flushEffects()
+
+    expect(activateWorkspaceTabPaletteResult).toHaveBeenCalledWith(
+      expect.objectContaining({ tabId: 'tab-duplicate', worktreeId: 'wt-beta' })
+    )
   })
 
   it('caps the recent section so the worktree header stays above the fold', async () => {

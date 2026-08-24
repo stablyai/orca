@@ -24,10 +24,7 @@ import type {
   Worktree
 } from '../../../../shared/worktree/types'
 import type { TaskSourceContext } from '../../../../shared/task-source-context'
-import type {
-  WorktreeForceDeleteReason,
-  WorktreeRemovalTarget
-} from '../../../../shared/worktree/removal'
+import type { WorktreeRemovalTarget } from '../../../../shared/worktree/removal'
 import type { TerminalGitHubPRLink } from '../../../../shared/terminal-github-pr-link-detector'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
 import type { RemoveWorktreeOptions } from './worktree-removal-options'
@@ -43,19 +40,11 @@ import type {
 import { getRepoIdFromWorktreeId } from '../../../../shared/worktree/id'
 import type { AppState } from '../types'
 import type { WorktreeRefreshAllOptions } from './worktree-refresh-options'
+export type { WorktreePurgeTarget, WorktreePurgeTargets } from './worktree-purge-target'
+import type { WorktreePurgeTargets } from './worktree-purge-target'
+export type { WorktreeDeleteState, WorktreeDeleteStateTarget } from './worktree-delete-state-types'
+import type { WorktreeDeleteState, WorktreeDeleteStateTarget } from './worktree-delete-state-types'
 export { getRepoIdFromWorktreeId } from '../../../../shared/worktree/id'
-
-export type WorktreeDeleteState = {
-  isDeleting: boolean
-  phase?: 'deleting' | 'queued'
-  executionHostId?: ExecutionHostId | null
-  error: string | null
-  canForceDelete: boolean
-  forceDeleteReason: WorktreeForceDeleteReason | null
-  lockReason?: string | null
-}
-
-export type WorktreeDeleteStateTarget = Pick<Worktree, 'id' | 'hostId'>
 
 import type { RendererRemoveWorktreeResult } from './renderer-remove-worktree-result'
 
@@ -147,6 +136,7 @@ export type WorktreeSlice = {
    * (activateAndRevealWorktree), NOT from background activity events or raw
    * `setActiveWorktree` calls. See docs/cmd-j-empty-query-ordering.md.
    */
+  /** New host-qualified rows use `${host}|${worktreeId}`; legacy bare ids remain readable. */
   lastVisitedAtByWorktreeId: Record<string, number>
   /**
    * Guards the one-shot hydration-time purge in `fetchAllWorktrees`. Set to
@@ -296,7 +286,11 @@ export type WorktreeSlice = {
    * stored value. Called from user-initiated activations only. See
    * docs/cmd-j-empty-query-ordering.md.
    */
-  markWorktreeVisited: (worktreeId: string, visitedAt?: number) => void
+  markWorktreeVisited: (
+    worktreeId: string,
+    visitedAt?: number,
+    executionHostId?: ExecutionHostId
+  ) => void
   /**
    * Drop `lastVisitedAtByWorktreeId` entries whose worktree IDs no longer
    * exist. Must be called AFTER worktree hydration completes — repos load
@@ -337,7 +331,7 @@ export type WorktreeSlice = {
    * Called by the `worktrees:changed` listener on server-side deletions and
    * one-shot at hydration time. See design §4.4.
    */
-  purgeWorktreeTerminalState: (worktreeIds: string[]) => void
+  purgeWorktreeTerminalState: (worktreeTargets: WorktreePurgeTargets) => void
   /**
    * Retires every client-store row (repos, project host setups, worktree +
    * detected-worktree rows, and their tab/PTY/browser/editor cascade) owned by a

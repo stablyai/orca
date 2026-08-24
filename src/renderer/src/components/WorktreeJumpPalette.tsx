@@ -350,9 +350,56 @@ function isCurrentOpenTabItem(item: OpenTabPaletteItem): boolean {
   return item.type === 'browser-page' ? item.result.isCurrentPage : item.result.isCurrentTab
 }
 
+/** Not the command id: two hosts — or a duplicate snapshot — can publish the same tab id. */
+function getRecentTabOccurrenceBase(item: OpenTabPaletteItem): string {
+  if (item.type === 'browser-page') {
+    const result = item.result
+    return JSON.stringify([
+      item.type,
+      item.id,
+      result.executionHostId ?? '',
+      result.worktreeId,
+      result.workspaceId,
+      result.pageId
+    ])
+  }
+  if (item.type === 'simulator-tab') {
+    const result = item.result
+    // Why no groupId: it changes when a tab is regrouped mid-open, and the frozen
+    // order must keep resolving the row; tabId already identifies it within a host.
+    return JSON.stringify([
+      item.type,
+      item.id,
+      result.executionHostId ?? '',
+      result.worktreeId,
+      result.tabId
+    ])
+  }
+  const result = item.result
+  return JSON.stringify([
+    item.type,
+    item.id,
+    result.executionHostId ?? '',
+    result.worktreeId,
+    result.tabId,
+    result.entityId
+  ])
+}
+
+function buildRecentTabOccurrenceIds(items: readonly OpenTabPaletteItem[]): string[] {
+  const nextOrdinalByBase = new Map<string, number>()
+  return items.map((item) => {
+    const base = getRecentTabOccurrenceBase(item)
+    const ordinal = nextOrdinalByBase.get(base) ?? 0
+    nextOrdinalByBase.set(base, ordinal + 1)
+    return `recent-tab:${base}:${ordinal}`
+  })
+}
+
 /** An open tab's recent-section row plus the inputs inclusion needs. */
 type OpenTabRecentRow = {
   item: OpenTabPaletteItem
+  occurrenceId: string
   worktree: Worktree
   row: RecentWorkspaceTabRow
 }
@@ -1419,17 +1466,22 @@ function WorktreeJumpPaletteContent({
   // once inclusion would drop it (a current tab that quiets down), or the pip blanks mid-open.
   const openTabRecentRows = useMemo<OpenTabRecentRow[]>(() => {
     const entries: OpenTabRecentRow[] = []
-    for (const item of openTabItems) {
+    const occurrenceIds = buildRecentTabOccurrenceIds(openTabItems)
+    for (const [index, item] of openTabItems.entries()) {
       const worktree = resolveWorktree(item.result.worktreeId, item.result.executionHostId)
       if (!worktree) {
         continue
       }
+      const occurrenceId = occurrenceIds[index]
       entries.push({
         item,
+        occurrenceId,
         worktree,
         row: {
           id: item.id,
+          occurrenceId,
           worktreeId: worktree.id,
+          worktreeHostId: worktree.hostId,
           unifiedTabId: item.type === 'browser-page' ? null : item.result.tabId,
           terminalTab:
             item.type === 'workspace-tab' && item.result.contentType === 'terminal'
@@ -1442,8 +1494,8 @@ function WorktreeJumpPaletteContent({
     return entries
   }, [openTabItems, resolveWorktree, terminalTabsById])
 
-  const recentTabRowById = useMemo(
-    () => new Map(openTabRecentRows.map(({ row }) => [row.id, row])),
+  const recentTabRowByItem = useMemo(
+    () => new Map(openTabRecentRows.map(({ item, row }) => [item, row])),
     [openTabRecentRows]
   )
 
@@ -1558,15 +1610,16 @@ function WorktreeJumpPaletteContent({
     visible
   ])
 
-  // Why: walk the frozen order rather than re-sorting the tab list — the frozen ids are the ranking,
-  // so agent churn never reshuffles rows under the cursor. Cap after resolving, not before: a chip
-  // applied mid-open narrows `openTabItems`, and capping first would leave the section empty.
+  // Why walk the frozen order, and cap after resolving: agent churn must not reshuffle rows, and a
+  // mid-open chip narrows `openTabItems` — capping first would leave the section empty.
   const recentTabItems = useMemo<PaletteItem[]>(() => {
-    const itemById = new Map(openTabItems.map((item) => [item.id, item]))
+    const itemByOccurrenceId = new Map(
+      openTabRecentRows.map(({ occurrenceId, item }) => [occurrenceId, item])
+    )
     return recentTabOrder
-      .flatMap((id) => itemById.get(id) ?? [])
+      .flatMap((occurrenceId) => itemByOccurrenceId.get(occurrenceId) ?? [])
       .slice(0, EMPTY_QUERY_RECENT_TAB_CAP)
-  }, [openTabItems, recentTabOrder])
+  }, [openTabRecentRows, recentTabOrder])
 
   const settingsResults = useMemo(
     () => buildCmdJSettingsResults(settingsSections),
@@ -1873,10 +1926,10 @@ function WorktreeJumpPaletteContent({
   ])
 
   // Why: badges number the snapshotted recent rows only — ⌘N is meaningless on a typed query.
-  const recentTabShortcutIndexById = useMemo(
+  const recentTabShortcutIndexByItem = useMemo(
     () =>
       new Map(
-        hasQuery ? [] : paletteSections.visibleOpenTabItems.map((item, index) => [item.id, index])
+        hasQuery ? [] : paletteSections.visibleOpenTabItems.map((item, index) => [item, index])
       ),
     [hasQuery, paletteSections]
   )
@@ -3450,7 +3503,7 @@ function WorktreeJumpPaletteContent({
                   )
                 // Why regardless of query: a searched-for tab is exactly when you need to know it's
                 // still working — the map covers every open tab, not just the recent section.
-                const recentRow = recentTabRowById.get(entry.id) ?? null
+                const recentRow = recentTabRowByItem.get(entry) ?? null
 
                 return (
                   <CommandItem
@@ -3512,7 +3565,7 @@ function WorktreeJumpPaletteContent({
                             </span>
                           )}
                           <PaletteRowShortcutBadge
-                            index={recentTabShortcutIndexById.get(entry.id)}
+                            index={recentTabShortcutIndexByItem.get(entry)}
                             modifierKeys={digitShortcutModifiers}
                           />
                         </div>
@@ -3594,7 +3647,7 @@ function WorktreeJumpPaletteContent({
                             </span>
                           )}
                           <PaletteRowShortcutBadge
-                            index={recentTabShortcutIndexById.get(entry.id)}
+                            index={recentTabShortcutIndexByItem.get(entry)}
                             modifierKeys={digitShortcutModifiers}
                           />
                         </div>
@@ -3672,7 +3725,7 @@ function WorktreeJumpPaletteContent({
                           </span>
                         )}
                         <PaletteRowShortcutBadge
-                          index={recentTabShortcutIndexById.get(entry.id)}
+                          index={recentTabShortcutIndexByItem.get(entry)}
                           modifierKeys={digitShortcutModifiers}
                         />
                       </div>

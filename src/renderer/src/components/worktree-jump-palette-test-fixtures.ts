@@ -136,6 +136,36 @@ export function makeRecentTabState(overrides: Partial<AppState> = {}): Partial<A
   }
 }
 
+/** Two host-qualified worktrees intentionally publish the same unified tab id. */
+export function makeDuplicateRecentTabState(): Partial<AppState> {
+  const alpha = makeWorktree('wt-alpha', 'Alpha workspace', { hostId: 'ssh:alpha' })
+  const beta = makeWorktree('wt-beta', 'Beta workspace', { hostId: 'ssh:beta' })
+  return {
+    worktreesByRepo: { 'repo-1': [alpha, beta] },
+    showSleepingWorkspaces: true,
+    ptyIdsByTabId: {
+      'term-alpha': ['pty-term-alpha'],
+      'term-beta': ['pty-term-beta']
+    },
+    tabsByWorktree: {
+      'wt-alpha': [makeTerminalTab('term-alpha', 'wt-alpha', 'Alpha duplicate')],
+      'wt-beta': [makeTerminalTab('term-beta', 'wt-beta', 'Beta duplicate')]
+    },
+    unifiedTabsByWorktree: {
+      'wt-alpha': [makeUnifiedTab('tab-duplicate', 'wt-alpha', 'term-alpha', 'Alpha duplicate')],
+      'wt-beta': [makeUnifiedTab('tab-duplicate', 'wt-beta', 'term-beta', 'Beta duplicate')]
+    },
+    groupsByWorktree: {
+      'wt-alpha': [makeGroup('wt-alpha', ['tab-duplicate'])],
+      'wt-beta': [makeGroup('wt-beta', ['tab-duplicate'])]
+    },
+    activeGroupIdByWorktree: {
+      'wt-alpha': 'group-wt-alpha',
+      'wt-beta': 'group-wt-beta'
+    }
+  }
+}
+
 /** One tab-heavy worktree plus `count` bare ones, so both sections overflow their caps. */
 export function makeManyTabState(count: number): Partial<AppState> {
   const ids = Array.from({ length: count }, (_, index) => `${index}`)

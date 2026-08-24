@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   buildFocusedGroupTabRecency,
+  focusedGroupTabKey,
   orderRecentWorkspaceTabs,
   resolveRecentWorkspaceTabStatus,
   type RecentWorkspaceTabRow
@@ -130,6 +131,22 @@ describe('orderRecentWorkspaceTabs', () => {
     ).toEqual(['warm', 'cold'])
   })
 
+  it('uses host-qualified recency for same-id worktree rows', () => {
+    const rows = [
+      row('local', { worktreeId: 'repo::/app', worktreeHostId: 'local' }),
+      row('ssh', { worktreeId: 'repo::/app', worktreeHostId: 'ssh:builder' })
+    ]
+
+    expect(
+      order(rows, sources([]), {
+        lastVisitedAtByWorktreeId: {
+          'local|repo::/app': NOW - 1_000,
+          'ssh:builder|repo::/app': NOW
+        }
+      })
+    ).toEqual(['ssh', 'local'])
+  })
+
   it('prefers any visited worktree over a never-visited one', () => {
     const rows = [row('never'), row('ancient')]
 
@@ -151,9 +168,9 @@ describe('orderRecentWorkspaceTabs', () => {
       order(rows, sources([]), {
         lastVisitedAtByWorktreeId: { 'wt-1': NOW },
         focusedGroupTabRecency: new Map([
-          ['unified-first', 0],
-          ['unified-third', 1],
-          ['unified-second', 2]
+          [focusedGroupTabKey('wt-1', 'unified-first'), 0],
+          [focusedGroupTabKey('wt-1', 'unified-third'), 1],
+          [focusedGroupTabKey('wt-1', 'unified-second'), 2]
         ])
       })
     ).toEqual(['second', 'third', 'first'])
@@ -171,12 +188,68 @@ describe('orderRecentWorkspaceTabs', () => {
     expect(
       order(rows, sources([]), {
         focusedGroupTabRecency: new Map([
-          ['unified-alpha-1', 0],
-          ['unified-alpha-2', 1],
-          ['unified-beta-1', 5]
+          [focusedGroupTabKey('wt-alpha', 'unified-alpha-1'), 0],
+          [focusedGroupTabKey('wt-alpha', 'unified-alpha-2'), 1],
+          [focusedGroupTabKey('wt-beta', 'unified-beta-1'), 5]
         ])
       })
     ).toEqual(['alpha-2', 'alpha-1', 'beta-1'])
+  })
+
+  it('keeps an interleaved worktree block together before applying its focused-group MRU', () => {
+    const rows = [
+      row('alpha-old', { worktreeId: 'wt-alpha', unifiedTabId: 'unified-alpha-old' }),
+      row('beta', { worktreeId: 'wt-beta', unifiedTabId: 'unified-beta' }),
+      row('alpha-new', { worktreeId: 'wt-alpha', unifiedTabId: 'unified-alpha-new' })
+    ]
+
+    expect(
+      order(rows, sources([]), {
+        focusedGroupTabRecency: new Map([
+          [focusedGroupTabKey('wt-alpha', 'unified-alpha-old'), 0],
+          [focusedGroupTabKey('wt-alpha', 'unified-alpha-new'), 1],
+          [focusedGroupTabKey('wt-beta', 'unified-beta'), 0]
+        ])
+      })
+    ).toEqual(['alpha-new', 'alpha-old', 'beta'])
+  })
+
+  it('keeps duplicate tab ids in separate worktrees on their own MRU ordinals', () => {
+    const rows = [
+      row('alpha-1', { worktreeId: 'wt-alpha', unifiedTabId: 'shared-tab' }),
+      row('alpha-2', { worktreeId: 'wt-alpha', unifiedTabId: 'alpha-only' }),
+      row('beta', { worktreeId: 'wt-beta', unifiedTabId: 'shared-tab' })
+    ]
+
+    expect(
+      order(rows, sources([]), {
+        lastVisitedAtByWorktreeId: { 'wt-alpha': NOW, 'wt-beta': NOW - 1 },
+        focusedGroupTabRecency: new Map([
+          [focusedGroupTabKey('wt-alpha', 'shared-tab'), 0],
+          [focusedGroupTabKey('wt-alpha', 'alpha-only'), 1],
+          // Beta's ordinal for the same tab id must not hoist alpha's occurrence.
+          [focusedGroupTabKey('wt-beta', 'shared-tab'), 9]
+        ])
+      })
+    ).toEqual(['alpha-2', 'alpha-1', 'beta'])
+  })
+
+  it('keeps same-id worktrees on two hosts in separate order blocks', () => {
+    const rows = [
+      row('local-old', { worktreeId: 'wt-1', worktreeHostId: 'local', unifiedTabId: 'local-old' }),
+      row('ssh', { worktreeId: 'wt-1', worktreeHostId: 'ssh:box', unifiedTabId: 'ssh' }),
+      row('local-new', { worktreeId: 'wt-1', worktreeHostId: 'local', unifiedTabId: 'local-new' })
+    ]
+
+    expect(
+      order(rows, sources([]), {
+        focusedGroupTabRecency: new Map([
+          [focusedGroupTabKey('wt-1', 'local-old'), 0],
+          [focusedGroupTabKey('wt-1', 'local-new'), 1],
+          [focusedGroupTabKey('wt-1', 'ssh'), 5]
+        ])
+      })
+    ).toEqual(['local-new', 'local-old', 'ssh'])
   })
 
   it('keeps input (positional) order when nothing else separates two rows', () => {
@@ -186,6 +259,21 @@ describe('orderRecentWorkspaceTabs', () => {
       'a',
       'b'
     ])
+  })
+
+  it('returns each occurrence identity when palette ids collide', () => {
+    const rows = [
+      row('workspace-tab:duplicate', {
+        occurrenceId: 'recent-tab:alpha',
+        worktreeId: 'wt-alpha'
+      }),
+      row('workspace-tab:duplicate', {
+        occurrenceId: 'recent-tab:beta',
+        worktreeId: 'wt-beta'
+      })
+    ]
+
+    expect(order(rows, sources([]))).toEqual(['recent-tab:alpha', 'recent-tab:beta'])
   })
 
   it('treats rows without a terminal tab as idle', () => {
@@ -272,8 +360,8 @@ describe('buildFocusedGroupTabRecency', () => {
     )
 
     expect([...recency]).toEqual([
-      ['t1', 0],
-      ['t2', 1]
+      [focusedGroupTabKey('wt-1', 't1'), 0],
+      [focusedGroupTabKey('wt-1', 't2'), 1]
     ])
   })
 

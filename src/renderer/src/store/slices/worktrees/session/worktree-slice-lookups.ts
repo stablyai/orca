@@ -82,11 +82,14 @@ export function createPurgeWorktreeTerminalState(
   set: WorktreeSliceSet,
   _get: WorktreeSliceGet
 ): WorktreeSlice['purgeWorktreeTerminalState'] {
-  return (worktreeIds: string[]) => {
-    const purgeableWorktreeIds = worktreeIds.filter((id) => id !== FLOATING_TERMINAL_WORKTREE_ID)
-    if (purgeableWorktreeIds.length === 0) {
+  return (worktreeTargets) => {
+    const purgeableWorktreeTargets = worktreeTargets.filter((target) => {
+      const worktreeId = typeof target === 'string' ? target : target.id
+      return worktreeId !== FLOATING_TERMINAL_WORKTREE_ID
+    })
+    if (purgeableWorktreeTargets.length === 0) {
       return
     }
-    set((s) => buildWorktreePurgeState(s, purgeableWorktreeIds))
+    set((s) => buildWorktreePurgeState(s, purgeableWorktreeTargets))
   }
 }

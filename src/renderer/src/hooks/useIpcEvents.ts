@@ -924,7 +924,12 @@ export function useIpcEvents(): void {
           `[worktree-purge] diff-based purge removing state for ${removed.length} worktree(s):`,
           removed
         )
-        afterState.purgeWorktreeTerminalState(removed)
+        const purgeHostId =
+          options?.executionHostId ??
+          (options?.forceLocalOwner ? LOCAL_EXECUTION_HOST_ID : undefined)
+        afterState.purgeWorktreeTerminalState(
+          purgeHostId ? removed.map((id) => ({ id, hostId: purgeHostId })) : removed
+        )
         afterState.removeWorkspaceSpaceWorktrees(removed)
       }
     }

@@ -1,6 +1,10 @@
 import type { WorkspaceKey } from '../../../shared/folder-workspace-types'
 import type { WorkspaceSessionState } from '../../../shared/workspace-session-state-types'
 import { worktreeWorkspaceKey } from '../../../shared/workspace-scope'
+import {
+  getWorktreeIdFromHostIdentity,
+  isWorktreeHostIdentity
+} from '../../../shared/worktree/host-qualified-identity'
 import type { StoreOwnedPersistedState } from '../loading-store/store-owned-state'
 
 /**
@@ -94,7 +98,29 @@ export function migrateWorktreeIdentity(
       moveSessionKey(session.tabGroups, (groups) => groups.map(withNewWorktreeId)) || sessionChanged
     sessionChanged = moveSessionKey(session.tabGroupLayouts) || sessionChanged
     sessionChanged = moveSessionKey(session.activeGroupIdByWorktree) || sessionChanged
-    sessionChanged = moveSessionKey(session.lastVisitedAtByWorktreeId) || sessionChanged
+    if (session.lastVisitedAtByWorktreeId) {
+      const nextRecency = { ...session.lastVisitedAtByWorktreeId }
+      let recencyChanged = false
+      for (const [key, value] of Object.entries(session.lastVisitedAtByWorktreeId)) {
+        const rawId = isWorktreeHostIdentity(key) ? getWorktreeIdFromHostIdentity(key) : key
+        if (rawId !== oldWorktreeId) {
+          continue
+        }
+        const nextKey = isWorktreeHostIdentity(key)
+          ? `${key.slice(0, key.length - rawId.length)}${newWorktreeId}`
+          : newWorktreeId
+        // Why max: a partial migration leaves both identities behind; taking the older one would
+        // regress Cmd+J recency after restart.
+        const existing = nextRecency[nextKey]
+        nextRecency[nextKey] = existing === undefined ? value : Math.max(existing, value)
+        delete nextRecency[key]
+        recencyChanged = true
+      }
+      if (recencyChanged) {
+        session.lastVisitedAtByWorktreeId = nextRecency
+        sessionChanged = true
+      }
+    }
     sessionChanged =
       moveSessionKey(session.defaultTerminalTabsAppliedByWorktreeId) || sessionChanged
     if (session.activeWorktreeIdsOnShutdown?.includes(oldWorktreeId)) {

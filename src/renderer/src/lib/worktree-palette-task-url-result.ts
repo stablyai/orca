@@ -38,7 +38,7 @@ export function buildWorktreePaletteTaskUrlResult(args: {
     qualityClass: 'exact-intent',
     rank: {
       exactIntent: 0,
-      matchedDirectField: 0,
+      containerOnlyTokenCount: 0,
       wholeQuery: 0,
       worstQuality: 0,
       usesSupportingEvidence: 1,

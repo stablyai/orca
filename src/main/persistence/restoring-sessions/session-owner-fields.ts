@@ -1,6 +1,10 @@
 import type { TerminalTab } from '../../../shared/terminal-tab-types'
 import type { WorkspaceSessionState } from '../../../shared/workspace-session-state-types'
 import { getRepoIdFromWorktreeId } from '../../../shared/worktree/id'
+import {
+  getWorktreeIdFromHostIdentity,
+  isWorktreeHostIdentity
+} from '../../../shared/worktree/host-qualified-identity'
 
 export function createMinimalPersistedTerminalTab(args: {
   worktreeId: string
@@ -93,7 +97,12 @@ export function deleteOwnerKeyedSessionFields(
     delete next.activeGroupIdByWorktree[ownerKey]
   }
   if (next.lastVisitedAtByWorktreeId) {
-    delete next.lastVisitedAtByWorktreeId[ownerKey]
+    for (const key of Object.keys(next.lastVisitedAtByWorktreeId)) {
+      const rawId = isWorktreeHostIdentity(key) ? getWorktreeIdFromHostIdentity(key) : key
+      if (key === ownerKey || rawId === ownerKey) {
+        delete next.lastVisitedAtByWorktreeId[key]
+      }
+    }
   }
   if (next.defaultTerminalTabsAppliedByWorktreeId) {
     delete next.defaultTerminalTabsAppliedByWorktreeId[ownerKey]
