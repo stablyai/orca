@@ -9,7 +9,8 @@ import type { OrchestrationDb } from '../orchestration-db'
 
 export function requestWorkerTerminalRelease(
   this: OrchestrationDb,
-  dispatchId: string
+  dispatchId: string,
+  options: { preserveExplicitRetain?: boolean } = {}
 ):
   | { disposition: 'requested'; resource: WorkerTerminalResourceRow }
   | { disposition: 'already_released'; resource: WorkerTerminalResourceRow }
@@ -74,6 +75,14 @@ export function requestWorkerTerminalRelease(
     if (resource.ownership_state === 'transferred') {
       this.db.exec('COMMIT')
       return { disposition: 'retained', resource, reason: 'ownership_transferred' }
+    }
+    if (
+      options.preserveExplicitRetain &&
+      resource.release_state === 'retained' &&
+      resource.retained_reason === 'user_requested'
+    ) {
+      this.db.exec('COMMIT')
+      return { disposition: 'retained', resource, reason: 'user_requested' }
     }
     if (resource.release_state === 'retained' && resource.retained_reason === 'user_requested') {
       this.db.prepare('DELETE FROM worker_terminal_archives WHERE dispatch_id = ?').run(dispatchId)

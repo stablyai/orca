@@ -15,6 +15,7 @@ import { buildDispatchPreamble } from '../../orchestration/preamble'
 import { formatMessageBanner } from '../../orchestration/formatter'
 import { isGroupAddress, resolveGroupAddress } from '../../orchestration/groups'
 import { reconcileLifecycleMessage } from '../../orchestration/lifecycle-reconciliation'
+import { scheduleAutomaticWorkerTerminalRelease } from '../../orchestration/automatic-worker-terminal-release'
 import { waitForFederatedLifecycleSettlement } from '../../orchestration/federation-lifecycle-settlement'
 import { abbreviateOrchestrationTasks } from '../../../../shared/orchestration-task-summary'
 import {
@@ -793,6 +794,9 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
             return withSendWarnings({ message: rejection, lifecycle: reconciled })
           }
           runtime.notifyMessageArrived(msg.to_handle, msg.type)
+          if (reconciled.action === 'completed' || reconciled.action === 'failed') {
+            scheduleAutomaticWorkerTerminalRelease(runtime, reconciled.dispatchId)
+          }
           return withSendWarnings(
             msg.type === 'worker_done' ? { message: msg, lifecycle: reconciled } : { message: msg }
           )
@@ -1327,6 +1331,9 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
           // Why: unread check is an authoritative read path for worker_done/heartbeat, so reconcile lifecycle messages here too.
           visibleMessages = messages.map((message) => {
             const reconciled = reconcileLifecycleMessage(db, message)
+            if (reconciled.action === 'completed' || reconciled.action === 'failed') {
+              scheduleAutomaticWorkerTerminalRelease(runtime, reconciled.dispatchId)
+            }
             return reconciled.action === 'rejected'
               ? (db.getMessageById(message.id) ?? message)
               : message

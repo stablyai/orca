@@ -82,6 +82,24 @@ export function listWorkerTerminalReleaseBacklog(
     .all() as WorkerTerminalResourceRow[]
 }
 
+export function listAutomaticWorkerTerminalReleaseCandidates(
+  this: OrchestrationDb
+): { dispatchId: string; settledAt: string }[] {
+  return this.db
+    .prepare(
+      `SELECT r.owner_dispatch_id AS dispatch_id, w.updated_at AS settled_at
+         FROM worker_terminal_resources r
+         JOIN worker_dispatches w ON w.dispatch_id = r.owner_dispatch_id
+        WHERE w.state IN ('succeeded', 'failed')
+          AND r.ownership_state = 'owned' AND r.release_state = 'not_requested'`
+    )
+    .all()
+    .map((row) => {
+      const candidate = row as { dispatch_id: string; settled_at: string }
+      return { dispatchId: candidate.dispatch_id, settledAt: candidate.settled_at }
+    })
+}
+
 export function listWorkerTerminalResources(
   this: OrchestrationDb,
   params: { runId?: string } = {}
@@ -146,6 +164,7 @@ export function listWorkerTerminalResources(
 export type WorkerTerminalListingMethods = {
   markWorkerTerminalUserOwned: typeof markWorkerTerminalUserOwned
   listWorkerTerminalReleaseBacklog: typeof listWorkerTerminalReleaseBacklog
+  listAutomaticWorkerTerminalReleaseCandidates: typeof listAutomaticWorkerTerminalReleaseCandidates
   listWorkerTerminalResources: typeof listWorkerTerminalResources
 }
 
@@ -153,6 +172,7 @@ export function attachWorkerTerminalListing(ctor: { prototype: object }): void {
   Object.assign(ctor.prototype, {
     markWorkerTerminalUserOwned,
     listWorkerTerminalReleaseBacklog,
+    listAutomaticWorkerTerminalReleaseCandidates,
     listWorkerTerminalResources
   })
 }

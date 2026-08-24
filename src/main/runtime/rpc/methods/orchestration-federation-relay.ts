@@ -2,6 +2,7 @@ import { z } from 'zod'
 import { ORCHESTRATION_FEDERATION_CONTROL_MAIL_PROTOCOL_VERSION } from '../../../../shared/protocol-version'
 import { importFederatedControlMessage } from '../../orchestration/federation-control-message'
 import { OrchestrationError } from '../../orchestration/orchestration-error'
+import { scheduleAutomaticWorkerTerminalRelease } from '../../orchestration/automatic-worker-terminal-release'
 import {
   areFederatedLifecycleSettlementsEqual,
   publishFederatedLifecycleSettlement,
@@ -130,6 +131,9 @@ export const ORCHESTRATION_FEDERATION_RELAY_METHODS: RpcMethod[] = [
               }))
             })
       })
+      if (terminalOutcomes.size === 1) {
+        scheduleAutomaticWorkerTerminalRelease(runtime, params.dispatchId)
+      }
       for (const settlement of settlements) {
         publishFederatedLifecycleSettlement(
           runtime,
