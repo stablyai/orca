@@ -306,6 +306,45 @@ describe('shared agent-hook-listener', () => {
       expect(idled?.payload.state).toBe('done')
     })
 
+    it('does not mint roster rows from tool-hook agent_ids without a SubagentStart', () => {
+      claudeEvent({ hook_event_name: 'UserPromptSubmit', prompt: 'dispatch workers' })
+      // Why: long-lived async agents emit non-stable agent_ids (no agent_type)
+      // on tool hooks; each one used to mint a phantom "Working - Agent" row
+      // until the 32-row cap silently hid real children.
+      for (const agentId of ['a5607a3521aa9a9ed', 'a92cd47f7566dec58', 'a60d222b0681b351b']) {
+        const tool = claudeEvent({
+          hook_event_name: 'PreToolUse',
+          agent_id: agentId,
+          tool_name: 'Bash',
+          tool_input: { command: 'sleep 5' }
+        })
+        expect(tool?.payload.subagents).toBeUndefined()
+      }
+      const post = claudeEvent({
+        hook_event_name: 'PostToolUse',
+        agent_id: 'ad3d02b0637f28744',
+        tool_name: 'Bash',
+        tool_input: { command: 'sleep 5' }
+      })
+      expect(post?.payload.subagents).toBeUndefined()
+
+      // a real child still appears and refreshes from its tool activity
+      claudeEvent({
+        hook_event_name: 'SubagentStart',
+        agent_id: 'a-real',
+        agent_type: 'Explore'
+      })
+      const refresh = claudeEvent({
+        hook_event_name: 'PostToolUse',
+        agent_id: 'a-real',
+        tool_name: 'Bash',
+        tool_input: { command: 'ls' }
+      })
+      expect(refresh?.payload.subagents).toEqual([
+        expect.objectContaining({ id: 'a-real', state: 'working', agentType: 'Explore' })
+      ])
+    })
+
     it('scopes subagent rosters per pane', () => {
       claudeEvent(
         { hook_event_name: 'SubagentStart', agent_id: 'a1', agent_type: 'general-purpose' },

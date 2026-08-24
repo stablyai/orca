@@ -9,7 +9,9 @@ import {
   foldClaudeBackgroundTasksIntoRoster,
   idleClaudeTeammateByName,
   reapUnconfirmedRestoredClaudeSubagents,
+  refreshWorkingClaudeSubagent,
   stopClaudeSubagent,
+  trackClaudeSubagentToolActivity,
   upsertWorkingClaudeSubagent,
   type ClaudeSubagentRoster
 } from './claude-subagent-roster'
@@ -36,6 +38,59 @@ describe('claude-subagent-roster', () => {
     stopClaudeSubagent(roster, 'a1')
     expect(roster.size).toBe(0)
     expect(claudeRosterToSnapshots(roster)).toBeUndefined()
+  })
+
+  it('never mints a row for an unknown id on refresh', () => {
+    const roster: ClaudeSubagentRoster = new Map()
+    // Why: long-lived async agents emit non-stable agent_ids (no agent_type)
+    // on tool hooks; creating a row per id filled the roster cap with
+    // phantoms and silently dropped real children.
+    expect(refreshWorkingClaudeSubagent(roster, 'a-phantom', {})).toBe(false)
+    expect(roster.size).toBe(0)
+  })
+
+  it('refreshes a tracked child to working and merges its type', () => {
+    const roster: ClaudeSubagentRoster = new Map()
+    upsertWorkingClaudeSubagent(roster, 'areviewer-6d3cb5b5', {}, 100)
+    stopClaudeSubagent(roster, 'areviewer-6d3cb5b5')
+    expect(roster.get('areviewer-6d3cb5b5')).toMatchObject({ state: 'idle' })
+
+    expect(
+      refreshWorkingClaudeSubagent(roster, 'areviewer-6d3cb5b5', { agentType: 'Explore' })
+    ).toBe(true)
+    expect(roster.get('areviewer-6d3cb5b5')).toMatchObject({
+      state: 'working',
+      agentType: 'Explore'
+    })
+  })
+
+  it('never mints a row from an untyped tool-hook agent_id', () => {
+    const roster: ClaudeSubagentRoster = new Map()
+    upsertWorkingClaudeSubagent(roster, 'a-real', { agentType: 'Explore' }, 100)
+    // Why: long-lived async agents emit non-stable agent_ids without
+    // agent_type on tool calls; each one used to mint a phantom row until
+    // the cap silently dropped real children.
+    trackClaudeSubagentToolActivity(roster, 'a5607a3521aa9a9ed', {}, 200)
+    trackClaudeSubagentToolActivity(roster, 'a92cd47f7566dec58', {}, 201)
+    expect(roster.size).toBe(1)
+    expect(roster.has('a5607a3521aa9a9ed')).toBe(false)
+  })
+
+  it('recovers a start-less child from a typed tool hook', () => {
+    const roster: ClaudeSubagentRoster = new Map()
+    // Why: a real child whose SubagentStart was missed (Orca restart) still
+    // carries agent_type on its tool events — the only proof it is alive
+    // before the next lead-Stop fold.
+    trackClaudeSubagentToolActivity(
+      roster,
+      'a0000000000000001',
+      { agentType: 'general-purpose' },
+      200
+    )
+    expect(roster.get('a0000000000000001')).toMatchObject({
+      state: 'working',
+      agentType: 'general-purpose'
+    })
   })
 
   it('parks a teammate-shaped named agent as idle on stop', () => {
