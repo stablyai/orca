@@ -12,27 +12,27 @@ describe('TuiAgent usage support catalog', () => {
   it('maps only adapters with a matching usage provider', () => {
     expect(getTuiAgentUsageSupport('claude')).toEqual({
       usageProvider: 'claude',
-      usageAuth: 'oauth-or-cli',
+      usageCredentialSource: 'oauth-or-cli',
       planLabelSource: 'provider-account'
     })
     expect(getTuiAgentUsageSupport('claude-agent-teams')).toEqual({
       usageProvider: 'claude',
-      usageAuth: 'oauth-or-cli',
+      usageCredentialSource: 'oauth-or-cli',
       planLabelSource: 'provider-account'
     })
     expect(getTuiAgentUsageSupport('codex')).toEqual({
       usageProvider: 'codex',
-      usageAuth: 'oauth',
+      usageCredentialSource: 'oauth',
       planLabelSource: 'provider-account'
     })
     expect(getTuiAgentUsageSupport('grok')).toEqual({
       usageProvider: 'grok',
-      usageAuth: 'oauth',
+      usageCredentialSource: 'oauth',
       planLabelSource: 'provider-account'
     })
     expect(getTuiAgentUsageSupport('opencode')).toEqual({
       usageProvider: null,
-      usageAuth: 'none',
+      usageCredentialSource: 'not-owned',
       planLabelSource: 'not-exposed'
     })
   })
