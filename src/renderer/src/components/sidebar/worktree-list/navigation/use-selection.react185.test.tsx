@@ -1,4 +1,5 @@
 /** @vitest-environment happy-dom */
+import { join } from 'node:path'
 import { act } from 'react'
 import { createRoot } from 'react-dom/client'
 import { afterEach, describe, expect, it } from 'vitest'
@@ -6,7 +7,6 @@ import type { HostSectionRow } from '../../host-section-rows'
 import type { Worktree } from '../../../../../../shared/worktree/types'
 import { getWorktreeHostIdentity } from '../../../../../../shared/worktree/host-qualified-identity'
 import { useSidebarWorktreeSelection, type SidebarWorktreeSelection } from './use-selection'
-
 declare global {
   var IS_REACT_ACT_ENVIRONMENT: boolean | undefined
 }
@@ -17,7 +17,7 @@ const MAX_PASSES = 400
 function makeWorktree(id: string): Worktree {
   return {
     id,
-    path: `/repo/${id}`,
+    path: join(process.cwd(), 'repo', id),
     repoId: 'repo-1',
     hostId: 'local',
     createdAt: 0,
