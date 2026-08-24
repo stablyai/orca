@@ -43,4 +43,17 @@ describe('getStatusBarToggles', () => {
       expect.arrayContaining(['status bar', 'minimax', 'usage', 'subscription', 'cookie'])
     )
   })
+
+  it('includes ClinePass quota so Appearance can toggle the default-on status item', () => {
+    const clinePassToggle = getStatusBarToggles().find((entry) => entry.id === 'clinepass')
+
+    expect(clinePassToggle).toMatchObject({
+      title: 'ClinePass Usage',
+      description: 'Show ClinePass subscription quota in the status bar.',
+      toggleDescription: 'Show ClinePass 5-hour, weekly, and monthly subscription quota.'
+    })
+    expect(clinePassToggle?.keywords).toEqual(
+      expect.arrayContaining(['status bar', 'clinepass', 'cline', 'usage', 'subscription', 'quota'])
+    )
+  })
 })

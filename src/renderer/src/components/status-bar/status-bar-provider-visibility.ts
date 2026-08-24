@@ -17,10 +17,12 @@ export type UsageProviderSettings = Pick<
   // Why: MiniMax/Grok sign-in live on disk, not in settings; main sets these each poll.
   minimaxCookieConfigured: boolean
   grokAuthConfigured: boolean
+  clinePassApiKeyConfigured?: boolean
 }
 
 type UsageProviderSnapshots = {
   claude: ProviderRateLimits | null | undefined
+  clinePass?: ProviderRateLimits | null
   codex: ProviderRateLimits | null | undefined
   gemini: ProviderRateLimits | null | undefined
   opencodeGo: ProviderRateLimits | null | undefined
@@ -70,6 +72,7 @@ export function hasUsageProviderSettings(
   settings: Partial<UsageProviderSettings> | null | undefined
 ): boolean {
   return Boolean(
+    settings?.clinePassApiKeyConfigured === true ||
     (settings?.codexManagedAccounts?.length ?? 0) > 0 ||
     (settings?.claudeManagedAccounts?.length ?? 0) > 0 ||
     settings?.geminiCliOAuthEnabled === true ||
@@ -90,6 +93,9 @@ export function hasUsageProviderSettingsForProvider(
   }
   if (providerId === 'claude') {
     return (settings.claudeManagedAccounts?.length ?? 0) > 0
+  }
+  if (providerId === 'clinepass') {
+    return settings.clinePassApiKeyConfigured === true
   }
   if (providerId === 'codex') {
     return (settings.codexManagedAccounts?.length ?? 0) > 0
@@ -120,7 +126,7 @@ function createPendingProviderSnapshot(providerId: UsageProviderId): ProviderRat
     provider: providerId,
     session: null,
     weekly: null,
-    ...(providerId === 'opencode-go' ? { monthly: null } : {}),
+    ...(providerId === 'opencode-go' || providerId === 'clinepass' ? { monthly: null } : {}),
     ...(providerId === 'gemini' ? { buckets: [] } : {}),
     updatedAt: 0,
     error: null,
@@ -157,8 +163,12 @@ export function isUsageEmptyState(
   const antigravitySnapshotPending =
     hasUsageProviderSettingsForProvider('antigravity', settings) &&
     isProviderSnapshotPending(providers.antigravity)
+  const clinePassSnapshotPending =
+    hasUsageProviderSettingsForProvider('clinepass', settings) &&
+    isProviderSnapshotPending(providers.clinePass)
   if (
     isProviderSnapshotPending(providers.claude) ||
+    clinePassSnapshotPending ||
     isProviderSnapshotPending(providers.codex) ||
     isProviderSnapshotPending(providers.gemini) ||
     isProviderSnapshotPending(providers.opencodeGo) ||
@@ -172,6 +182,7 @@ export function isUsageEmptyState(
   return (
     !hasUsageProviderSettings(settings) &&
     !isProviderConfigured(providers.claude) &&
+    !isProviderConfigured(providers.clinePass) &&
     !isProviderConfigured(providers.codex) &&
     !isProviderConfigured(providers.gemini) &&
     !isProviderConfigured(providers.opencodeGo) &&

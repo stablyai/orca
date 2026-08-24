@@ -51,6 +51,7 @@ export type AgentActivityDisplayMode = 'compact' | 'full'
 
 export type StatusBarItem =
   | 'claude'
+  | 'clinepass'
   | 'codex'
   | 'gemini'
   | 'antigravity'

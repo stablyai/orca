@@ -4,6 +4,7 @@ import type {
 } from '../../shared/managed-account-types'
 import type { CodexConfigSyncStatus } from '../../shared/codex-config-sync-types'
 import type { GrokAccountStatus } from '../../shared/rate-limit-types'
+import type { ClinePassCredentialsStatus } from '../../shared/clinepass-credentials'
 
 export type CodexAccountsApi = {
   list: () => Promise<CodexRateLimitAccountsState>
@@ -57,6 +58,12 @@ export type ClaudeAccountsApi = {
 export type GrokAccountsApi = {
   getStatus: () => Promise<GrokAccountStatus>
 }
+export type ClinePassCredentialsApi = {
+  getStatus: () => Promise<ClinePassCredentialsStatus>
+  saveApiKey: (apiKey: string) => Promise<ClinePassCredentialsStatus>
+  clearApiKey: () => Promise<ClinePassCredentialsStatus>
+}
+
 
 export type MinimaxCredentialsApi = {
   getStatus: () => Promise<{ configured: boolean }>

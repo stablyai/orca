@@ -10,6 +10,7 @@ describe('isStatusBarItemAvailable', () => {
     expect(isStatusBarItemAvailable('resource-usage', [])).toBe(true)
     expect(isStatusBarItemAvailable('ports', [])).toBe(true)
     expect(isStatusBarItemAvailable('opencode-go', [])).toBe(true)
+    expect(isStatusBarItemAvailable('clinepass', [])).toBe(true)
   })
 
   it('keeps CLI items visible while detection is in flight', () => {

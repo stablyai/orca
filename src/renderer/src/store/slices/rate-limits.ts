@@ -18,6 +18,7 @@ export type RateLimitSlice = {
 export const createRateLimitSlice: StateCreator<AppState, [], [], RateLimitSlice> = (set, get) => ({
   rateLimits: {
     claude: null,
+    clinePass: null,
     codex: null,
     gemini: null,
     opencodeGo: null,
@@ -25,6 +26,7 @@ export const createRateLimitSlice: StateCreator<AppState, [], [], RateLimitSlice
     antigravity: null,
     minimax: null,
     grok: null,
+    clinePassApiKeyConfigured: false,
     minimaxCookieConfigured: false,
     grokAuthConfigured: false,
     claudeTarget: { runtime: 'host', wslDistro: null },

@@ -6,6 +6,8 @@ export function getUsageProviderAccountsSectionId(
   switch (provider) {
     case 'claude':
       return 'accounts-claude'
+    case 'clinepass':
+      return 'accounts-clinepass'
     case 'codex':
       return 'accounts-codex'
     case 'gemini':

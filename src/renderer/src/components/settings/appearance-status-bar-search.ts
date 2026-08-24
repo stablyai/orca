@@ -201,6 +201,39 @@ export const getStatusBarToggles = createLocalizedCatalog(
     },
     getGrokStatusBarToggleSearchEntry(),
     {
+      id: 'clinepass',
+      title: translate('auto.components.settings.appearance.search.6c82e7d14f', 'ClinePass Usage'),
+      description: translate(
+        'auto.components.settings.appearance.search.df7ae25c91',
+        'Show ClinePass subscription quota in the status bar.'
+      ),
+      keywords: [
+        ...translateSearchKeyword(
+          'auto.components.settings.appearance.search.896eb53fd4',
+          'status bar'
+        ),
+        ...translateSearchKeyword(
+          'auto.components.settings.appearance.search.93a7f4026d',
+          'clinepass'
+        ),
+        ...translateSearchKeyword('auto.components.settings.appearance.search.ac8d39e715', 'cline'),
+        ...translateSearchKeyword('auto.components.settings.appearance.search.00a028f25f', 'usage'),
+        ...translateSearchKeyword(
+          'auto.components.settings.appearance.search.de586def95',
+          'subscription'
+        ),
+        ...translateSearchKeyword('auto.components.settings.appearance.search.83f2db601a', 'quota'),
+        ...translateSearchKeyword(
+          'auto.components.settings.appearance.search.4bbef739a2',
+          'api key'
+        )
+      ],
+      toggleDescription: translate(
+        'settings.appearance.statusBar.clinePassToggleDescription',
+        'Show ClinePass 5-hour, weekly, and monthly subscription quota.'
+      )
+    },
+    {
       id: 'ssh',
       title: translate('auto.components.settings.appearance.search.57fb424c56', 'Remote Hosts'),
       description: translate(

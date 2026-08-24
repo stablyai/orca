@@ -15,7 +15,11 @@ vi.mock('./settings-search-keywords', () => ({
   translateSearchKeyword: (_key: string, fallback: string) => [fallback]
 }))
 
-import { getAccountsMiniMaxSearchEntries, getAccountsPaneSearchEntries } from './accounts-search'
+import {
+  getAccountsClinePassSearchEntries,
+  getAccountsMiniMaxSearchEntries,
+  getAccountsPaneSearchEntries
+} from './accounts-search'
 
 describe('getAccountsMiniMaxSearchEntries', () => {
   it('returns a single entry that targets the MiniMax session cookie flow', () => {
@@ -40,5 +44,37 @@ describe('getAccountsMiniMaxSearchEntries', () => {
     const allEntries = getAccountsPaneSearchEntries()
     const titles = allEntries.map((entry) => entry.title)
     expect(titles).toContain('MiniMax Usage')
+  })
+})
+
+describe('getAccountsClinePassSearchEntries', () => {
+  it('indexes ClinePass subscription quota and API-key configuration', () => {
+    const entries = getAccountsClinePassSearchEntries()
+    expect(entries).toHaveLength(1)
+    const [entry] = entries
+
+    expect(entry.title).toBe('ClinePass Subscription Quota')
+    expect(entry.description).toContain('5-hour, weekly, and monthly')
+    expect(entry.keywords).toEqual(
+      expect.arrayContaining([
+        'clinepass',
+        'cline',
+        'subscription',
+        'quota',
+        'api key',
+        'CLINE_API_KEY',
+        '5-hour',
+        'weekly',
+        'monthly',
+        'rate limit',
+        'status bar'
+      ])
+    )
+  })
+
+  it('includes ClinePass in the rolled-up pane search entries', () => {
+    expect(getAccountsPaneSearchEntries().map((entry) => entry.title)).toContain(
+      'ClinePass Subscription Quota'
+    )
   })
 })

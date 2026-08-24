@@ -43,6 +43,7 @@ import {
 } from '../status-bar/icons'
 import { toast } from 'sonner'
 import {
+  getAccountsClinePassSearchEntries,
   getAccountsClaudeSearchEntries,
   getAccountsCodexSearchEntries,
   getAccountsGeminiSearchEntries,
@@ -52,6 +53,7 @@ import {
   getAccountsOpencodeSearchEntries,
   getAccountsPaneSearchEntries
 } from './accounts-search'
+import { ClinePassAccountsSection } from './ClinePassAccountsSection'
 import { GrokAccountsSection } from './GrokAccountsSection'
 import { getRemoteAccountsPaneScope } from './provider-account-scope'
 import { ProviderHostScopeControl } from './ProviderHostScopeControl'
@@ -1982,6 +1984,9 @@ export function AccountsPane({
           </SearchableSetting>
         </div>
       </section>
+    ) : null,
+    matchesSettingsSearch(searchQuery, getAccountsClinePassSearchEntries()) ? (
+      <ClinePassAccountsSection key="clinepass" />
     ) : null,
     matchesSettingsSearch(searchQuery, getAccountsGrokSearchEntries()) ? (
       <GrokAccountsSection key="grok" />
