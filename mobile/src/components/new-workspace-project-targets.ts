@@ -60,19 +60,20 @@ export function buildNewWorkspaceProjectOptions<TRepo extends WorkspaceRepo>(
 
 export function getNewWorkspaceRunTarget(
   repo: WorkspaceRepo,
-  localPlatform: NodeJS.Platform | null = null
+  localPlatform: NodeJS.Platform | null = null,
+  sshTargetLabels: ReadonlyMap<string, string> = new Map()
 ): {
   label: string
   detail: string
 } {
   const hostId = getRepoExecutionHostId(repo)
   const host = parseExecutionHostId(hostId)
-  const hostLabel = getExecutionHostLabel(hostId)
   if (host?.kind === 'ssh') {
-    return { label: `SSH · ${hostLabel}`, detail: repo.path }
+    const label = sshTargetLabels.get(host.targetId) || getExecutionHostLabel(hostId)
+    return { label: `SSH · ${label}`, detail: repo.path }
   }
   if (host?.kind === 'runtime') {
-    return { label: `Remote · ${hostLabel}`, detail: repo.path }
+    return { label: `Remote · ${getExecutionHostLabel(hostId)}`, detail: repo.path }
   }
   return {
     label: localPlatform ? getLocalExecutionHostLabel(localPlatform) : 'This computer',
@@ -83,7 +84,8 @@ export function getNewWorkspaceRunTarget(
 export function buildNewWorkspaceRunTargetOptions<TRepo extends WorkspaceRepo>(
   repos: readonly TRepo[],
   projectId: string | null,
-  localPlatform: NodeJS.Platform | null = null
+  localPlatform: NodeJS.Platform | null = null,
+  sshTargetLabels: ReadonlyMap<string, string> = new Map()
 ): NewWorkspaceRunTargetOption<TRepo>[] {
   if (!projectId) {
     return []
@@ -97,7 +99,7 @@ export function buildNewWorkspaceRunTargetOptions<TRepo extends WorkspaceRepo>(
     if (!options.has(hostId)) {
       options.set(hostId, {
         id: repo.id,
-        ...getNewWorkspaceRunTarget(repo, localPlatform),
+        ...getNewWorkspaceRunTarget(repo, localPlatform, sshTargetLabels),
         repo
       })
     }

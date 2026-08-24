@@ -87,6 +87,9 @@ describe('NewWorktreeModal project targets', () => {
       if (method === 'status.get') {
         return Promise.resolve({ ok: true, result: { hostPlatform: 'darwin' } })
       }
+      if (method === 'ssh.listTargetSummaries') {
+        return Promise.resolve({ ok: true, result: { targets: [] } })
+      }
       return new Promise(() => {})
     })
     const client = { sendRequest } as unknown as RpcClient
@@ -136,6 +139,12 @@ describe('NewWorktreeModal project targets', () => {
         if (method === 'status.get') {
           return Promise.resolve({ ok: true, result: { hostPlatform: 'darwin' } })
         }
+        if (method === 'ssh.listTargetSummaries') {
+          return Promise.resolve({
+            ok: true,
+            result: { targets: [{ id: 'build-server', label: 'devbox' }] }
+          })
+        }
         return new Promise(() => {})
       })
     } as unknown as RpcClient
@@ -159,7 +168,7 @@ describe('NewWorktreeModal project targets', () => {
     expect(pickerItems(renderer, 'Run on')).toEqual([
       expect.objectContaining({ label: LOCAL_HOST_LABEL, detail: '/src/orca' }),
       expect.objectContaining({
-        label: 'SSH · build-server',
+        label: 'SSH · devbox',
         detail: '/home/dev/orca'
       })
     ])

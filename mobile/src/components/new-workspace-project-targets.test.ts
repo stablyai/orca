@@ -54,12 +54,16 @@ describe('new workspace project targets', () => {
       getNewWorkspaceRunTarget({ id: 'local', displayName: 'orca', path: 'C:\\src\\orca' }, 'win32')
     ).toEqual({ label: 'Local Windows', detail: 'C:\\src\\orca' })
     expect(
-      getNewWorkspaceRunTarget({
-        id: 'ssh',
-        displayName: 'orca',
-        path: 'C:\\src\\orca',
-        executionHostId: 'ssh:Windows%20VM'
-      })
+      getNewWorkspaceRunTarget(
+        {
+          id: 'ssh',
+          displayName: 'orca',
+          path: 'C:\\src\\orca',
+          executionHostId: 'ssh:ssh-1724000000000-abc123'
+        },
+        null,
+        new Map([['ssh-1724000000000-abc123', 'Windows VM']])
+      )
     ).toEqual({ label: 'SSH · Windows VM', detail: 'C:\\src\\orca' })
     expect(
       getNewWorkspaceRunTarget({
@@ -69,6 +73,17 @@ describe('new workspace project targets', () => {
         executionHostId: 'runtime:devbox'
       })
     ).toEqual({ label: 'Remote · devbox', detail: '/src/orca' })
+  })
+
+  it('falls back to the SSH target id when its label is unavailable', () => {
+    expect(
+      getNewWorkspaceRunTarget({
+        id: 'ssh',
+        displayName: 'orca',
+        path: '/home/dev/orca',
+        connectionId: 'ssh-1724000000000-abc123'
+      })
+    ).toEqual({ label: 'SSH · ssh-1724000000000-abc123', detail: '/home/dev/orca' })
   })
 
   it('shows one target per host when the project has multiple local worktrees', () => {
