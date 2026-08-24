@@ -4,6 +4,7 @@ import { join } from 'node:path'
 import { createServer, type Socket } from 'node:net'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { ORCHESTRATION_CONTRACT_RUNTIME_CAPABILITY } from '../shared/protocol-version'
+import { getRuntimeMetadataPath } from '../shared/runtime-bootstrap'
 import { RuntimeClient, RuntimeClientError, RuntimeRpcFailureError } from './runtime-client'
 import { launchOrcaApp } from './runtime/launch'
 
@@ -224,7 +225,28 @@ describe.skipIf(process.platform === 'win32')('RuntimeClient', () => {
       runtime: {
         state: 'not_running',
         reachable: false,
-        runtimeId: null
+        runtimeId: null,
+        bootstrap: {
+          observedAt: expect.any(String),
+          userDataPath,
+          profileSource: process.env.ORCA_USER_DATA_PATH ? 'explicit' : 'default',
+          metadataPath: getRuntimeMetadataPath(userDataPath),
+          metadataPresent: false,
+          metadataRuntimeId: null,
+          metadataPid: null,
+          pidVerdict: 'unverifiable',
+          transportKind: null,
+          reason: 'metadata_missing',
+          verification: {
+            kind: 'process_signal_0',
+            result: 'unverifiable'
+          },
+          recoveryCode: 'start_orca',
+          recovery: [
+            'Confirm the CLI and desktop app use the same user-data path and OS user.',
+            'Restart Orca, then run `orca status --json` and require a new reachable runtimeId.'
+          ]
+        }
       },
       graph: {
         state: 'not_running'
@@ -241,6 +263,39 @@ describe.skipIf(process.platform === 'win32')('RuntimeClient', () => {
 
     expect(status.result.runtime.state).toBe('stale_bootstrap')
     expect(status.result.runtime.reachable).toBe(false)
+    expect(status.result.runtime.bootstrap).toMatchObject({
+      userDataPath,
+      metadataPresent: true,
+      pidVerdict: 'exited',
+      reason: 'runtime_process_exited',
+      recoveryCode: 'restart_and_query_back',
+      verification: { kind: 'process_signal_0', result: 'exited' }
+    })
+  })
+
+  it('keeps an indeterminate runtime PID unverifiable', async () => {
+    const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-client-'))
+    writeMetadata(userDataPath, join(userDataPath, 'missing.sock'), 'token', process.pid)
+    const denied = Object.assign(new Error('denied'), { code: 'EPERM' })
+    const kill = vi.spyOn(process, 'kill').mockImplementation(() => {
+      throw denied
+    })
+
+    try {
+      const status = await new RuntimeClient(userDataPath, 100).getCliStatus()
+
+      expect(status.result.runtime).toMatchObject({
+        state: 'starting',
+        reachable: false,
+        bootstrap: {
+          pidVerdict: 'unverifiable',
+          reason: 'runtime_process_unverifiable',
+          recoveryCode: 'verify_profile_and_integrity'
+        }
+      })
+    } finally {
+      kill.mockRestore()
+    }
   })
 
   it('reports graph_not_ready when the runtime is reachable but graph is unavailable', async () => {

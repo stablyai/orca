@@ -206,6 +206,18 @@ export function formatCliStatus(status: CliStatusResult): string {
     `runtimeState: ${status.runtime.state}`,
     `runtimeReachable: ${status.runtime.reachable}`,
     `runtimeId: ${status.runtime.runtimeId ?? 'none'}`,
+    ...(status.runtime.bootstrap
+      ? [
+          `bootstrapReason: ${status.runtime.bootstrap.reason}`,
+          `bootstrapObservedAt: ${status.runtime.bootstrap.observedAt}`,
+          `profileSource: ${status.runtime.bootstrap.profileSource}`,
+          `pidVerdict: ${status.runtime.bootstrap.pidVerdict}`,
+          `recoveryCode: ${status.runtime.bootstrap.recoveryCode}`,
+          `userDataPath: ${status.runtime.bootstrap.userDataPath}`,
+          `metadataPath: ${status.runtime.bootstrap.metadataPath}`,
+          ...status.runtime.bootstrap.recovery.map((step) => `recovery: ${step}`)
+        ]
+      : []),
     `graphState: ${status.graph.state}`
   ].join('\n')
 }

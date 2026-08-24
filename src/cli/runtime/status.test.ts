@@ -6,7 +6,7 @@ import { afterEach, describe, expect, it } from 'vitest'
 import { getRuntimeMetadataPath } from '../../shared/runtime-bootstrap'
 import type { RuntimeStatus } from '../../shared/runtime-types'
 import { RuntimeClient } from './client'
-import { projectRemoteAppStatus } from './status'
+import { classifyProcess, getCliStatus, projectRemoteAppStatus } from './status'
 
 const servers = new Set<ReturnType<typeof createServer>>()
 const sockets = new Set<Socket>()
@@ -82,6 +82,40 @@ describe.skipIf(process.platform === 'win32')('CLI runtime status', () => {
       state: 'ready',
       degradations: [expect.objectContaining({ code: 'browser_unavailable' })]
     })
+  })
+})
+
+describe('CLI bootstrap diagnostics', () => {
+  it('reports missing metadata without claiming an exited process', async () => {
+    const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-status-'))
+
+    const status = await getCliStatus(userDataPath)
+
+    expect(status.result.runtime.bootstrap).toMatchObject({
+      userDataPath,
+      metadataPresent: false,
+      pidVerdict: 'unverifiable',
+      reason: 'metadata_missing',
+      verification: { kind: 'process_signal_0', result: 'unverifiable' },
+      recoveryCode: 'start_orca'
+    })
+  })
+
+  it('distinguishes exited and unverifiable PID probes', () => {
+    const exited = Object.assign(new Error('missing'), { code: 'ESRCH' })
+    const denied = Object.assign(new Error('denied'), { code: 'EPERM' })
+
+    expect(
+      classifyProcess(42, () => {
+        throw exited
+      })
+    ).toBe('exited')
+    expect(
+      classifyProcess(42, () => {
+        throw denied
+      })
+    ).toBe('unverifiable')
+    expect(classifyProcess(42, () => undefined)).toBe('live')
   })
 })
 

@@ -187,6 +187,29 @@ export type CliStatusResult = {
     remoteUpdateSupport?: RemoteServerUpdateSupport
     capabilities?: RuntimeCapability[]
     degradations?: RuntimeDegradation[]
+    bootstrap?: {
+      observedAt: string
+      userDataPath: string
+      profileSource: 'env' | 'default' | 'explicit'
+      metadataPath: string
+      metadataPresent: boolean
+      metadataRuntimeId: string | null
+      metadataPid: number | null
+      pidVerdict: 'live' | 'unverifiable' | 'exited'
+      transportKind: 'unix' | 'named-pipe' | 'websocket' | null
+      reason:
+        | 'metadata_missing'
+        | 'metadata_incomplete'
+        | 'runtime_process_exited'
+        | 'runtime_process_unverifiable'
+        | 'runtime_starting'
+      verification: {
+        kind: 'process_signal_0'
+        result: 'live' | 'unverifiable' | 'exited'
+      }
+      recoveryCode: 'start_orca' | 'restart_and_query_back' | 'verify_profile_and_integrity'
+      recovery: string[]
+    }
   }
   graph: {
     state: RuntimeGraphStatus | 'not_running' | 'starting'
