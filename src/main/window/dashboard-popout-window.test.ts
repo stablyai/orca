@@ -140,6 +140,7 @@ import {
   isDashboardPopoutRenderer,
   zoomDashboardPopoutIfFocused
 } from './dashboard-popout-window'
+import { isRendererPreloadWindow } from './renderer-preload-window-registry'
 
 type FakeWindow = InstanceType<typeof BrowserWindowMock>
 
@@ -211,6 +212,13 @@ describe('createOrFocusDashboardPopout', () => {
     expect(permissionCallback).toHaveBeenCalledWith(false)
     expect(session.setPermissionCheckHandler.mock.calls[0][0]()).toBe(false)
     expect(sendToTrustedUIRendererMock).toHaveBeenCalledWith('dashboard:popoutOpenChanged', true)
+  })
+
+  it('registers the popout as a pre-relaunch handshake target', () => {
+    createOrFocusDashboardPopout(makeStore() as never)
+
+    // Why: only registered windows are asked to prepare before Restart Orca.
+    expect(isRendererPreloadWindow(instances[0].webContents as never)).toBe(true)
   })
 
   it('shows the window on ready-to-show', () => {

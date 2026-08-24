@@ -3,6 +3,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const {
   handlers,
+  ipcMainListeners,
+  getAllWindowsMock,
   appExitMock,
   appQuitMock,
   appRelaunchMock,
@@ -15,6 +17,8 @@ const {
   registerMacKeyboardLayoutChangeNotificationsMock
 } = vi.hoisted(() => ({
   handlers: new Map<string, (_event: unknown, args?: unknown) => unknown>(),
+  ipcMainListeners: new Map<string, (_event: unknown, args?: unknown) => unknown>(),
+  getAllWindowsMock: vi.fn<() => unknown[]>(() => []),
   appExitMock: vi.fn(),
   appQuitMock: vi.fn(),
   appRelaunchMock: vi.fn(),
@@ -77,7 +81,8 @@ vi.mock('electron', () => ({
     relaunch: appRelaunchMock
   },
   BrowserWindow: {
-    fromWebContents: vi.fn(() => null)
+    fromWebContents: vi.fn(() => null),
+    getAllWindows: getAllWindowsMock
   },
   dialog: {
     showOpenDialog: showOpenDialogMock
@@ -85,6 +90,12 @@ vi.mock('electron', () => ({
   ipcMain: {
     handle: vi.fn((channel: string, handler: (_event: unknown, args?: unknown) => unknown) => {
       handlers.set(channel, handler)
+    }),
+    on: vi.fn((channel: string, listener: (_event: unknown, args?: unknown) => unknown) => {
+      ipcMainListeners.set(channel, listener)
+    }),
+    removeListener: vi.fn((channel: string) => {
+      ipcMainListeners.delete(channel)
     })
   }
 }))
@@ -137,6 +148,7 @@ vi.mock('../pwsh', () => ({
 }))
 
 import { registerAppHandlers } from './app'
+import { registerRendererPreloadWindow } from '../window/renderer-preload-window-registry'
 
 describe('registerAppHandlers', () => {
   const originalPlatform = process.platform
@@ -147,6 +159,9 @@ describe('registerAppHandlers', () => {
   beforeEach(() => {
     vi.useFakeTimers()
     handlers.clear()
+    ipcMainListeners.clear()
+    getAllWindowsMock.mockReset()
+    getAllWindowsMock.mockReturnValue([])
     appExitMock.mockReset()
     appQuitMock.mockReset()
     appRelaunchMock.mockReset()
@@ -184,8 +199,10 @@ describe('registerAppHandlers', () => {
     const onBeforeRelaunch = vi.fn()
     registerAppHandlers({} as never, { onBeforeRelaunch })
 
-    const relaunchPromise = Promise.resolve(handlers.get('app:relaunch')?.(null))
+    const relaunchPromise = Promise.resolve(handlers.get('app:relaunch')?.({ sender: { id: 1 } }))
 
+    // Why: with no other windows to prepare, cleanup starts on the next microtask.
+    await vi.advanceTimersByTimeAsync(0)
     expect(onBeforeRelaunch).toHaveBeenCalledTimes(1)
     expect(appRelaunchMock).not.toHaveBeenCalled()
     expect(appExitMock).not.toHaveBeenCalled()
@@ -212,8 +229,9 @@ describe('registerAppHandlers', () => {
     )
     registerAppHandlers({} as never, { onBeforeRelaunch })
 
-    const relaunchPromise = Promise.resolve(handlers.get('app:relaunch')?.(null))
+    const relaunchPromise = Promise.resolve(handlers.get('app:relaunch')?.({ sender: { id: 1 } }))
 
+    await vi.advanceTimersByTimeAsync(0)
     expect(onBeforeRelaunch).toHaveBeenCalledTimes(1)
 
     await vi.advanceTimersByTimeAsync(150)
@@ -225,6 +243,265 @@ describe('registerAppHandlers', () => {
     await vi.advanceTimersByTimeAsync(150)
 
     expect(appRelaunchMock).toHaveBeenCalledTimes(1)
+    expect(appExitMock).toHaveBeenCalledWith(0)
+  })
+
+  it('schedules a single relaunch exit no matter how many surfaces invoke it', async () => {
+    let finishCleanup!: () => void
+    const onBeforeRelaunch = vi.fn(
+      () =>
+        new Promise<void>((resolve) => {
+          finishCleanup = resolve
+        })
+    )
+    registerAppHandlers({} as never, { onBeforeRelaunch })
+
+    // Two surfaces (error-boundary Restart, hydration toast) can race a relaunch;
+    // they must join the same checkpoint as well as the same replacement exit.
+    const first = Promise.resolve(handlers.get('app:relaunch')?.({ sender: { id: 1 } }))
+    const second = Promise.resolve(handlers.get('app:relaunch')?.({ sender: { id: 1 } }))
+    await vi.advanceTimersByTimeAsync(0)
+    expect(onBeforeRelaunch).toHaveBeenCalledTimes(1)
+    await vi.advanceTimersByTimeAsync(150)
+    expect(relaunchAppMock).not.toHaveBeenCalled()
+
+    finishCleanup()
+    await Promise.all([first, second])
+    const third = Promise.resolve(handlers.get('app:relaunch')?.({ sender: { id: 1 } }))
+    await third
+    await vi.advanceTimersByTimeAsync(150)
+
+    expect(onBeforeRelaunch).toHaveBeenCalledTimes(1)
+    expect(relaunchAppMock).toHaveBeenCalledTimes(1)
+    expect(appExitMock).toHaveBeenCalledTimes(1)
+  })
+
+  // Fake BrowserWindow for the pre-relaunch preparation handshake.
+  type FakeRelaunchWindow = {
+    isDestroyed: () => boolean
+    webContents: { id: number; isDestroyed: () => boolean; send: ReturnType<typeof vi.fn> }
+  }
+
+  function createFakeRelaunchWindow(id: number): FakeRelaunchWindow {
+    const win: FakeRelaunchWindow = {
+      isDestroyed: () => false,
+      webContents: { id, isDestroyed: () => false, send: vi.fn() }
+    }
+    // Why: preparation only handshakes windows registered as running the Orca preload.
+    registerRendererPreloadWindow(win.webContents as never)
+    return win
+  }
+
+  /** e.g. an offscreen browser-backend window: no Orca preload, can never answer. */
+  function createFakePreloadlessWindow(id: number): FakeRelaunchWindow {
+    return {
+      isDestroyed: () => false,
+      webContents: { id, isDestroyed: () => false, send: vi.fn() }
+    }
+  }
+
+  function sentPrepareRequest(win: FakeRelaunchWindow): { requestId: number } {
+    const call = win.webContents.send.mock.calls.find(
+      ([channel]) => channel === 'app:relaunch-prepare'
+    )
+    expect(call).toBeDefined()
+    return call?.[1] as { requestId: number }
+  }
+
+  function replyToPrepare(windowId: number, requestId: number, ok: boolean): void {
+    ipcMainListeners.get('app:relaunch-prepare-reply')?.(
+      { sender: { id: windowId } },
+      {
+        requestId,
+        ok
+      }
+    )
+  }
+
+  it('prepares the other windows before a relaunch invoked from a popout exits', async () => {
+    const onBeforeRelaunch = vi.fn()
+    const invoker = createFakeRelaunchWindow(1)
+    const mainWindow = createFakeRelaunchWindow(2)
+    getAllWindowsMock.mockReturnValue([invoker, mainWindow])
+    registerAppHandlers({} as never, { onBeforeRelaunch })
+
+    const relaunchPromise = Promise.resolve(handlers.get('app:relaunch')?.({ sender: { id: 1 } }))
+    await vi.advanceTimersByTimeAsync(0)
+
+    // Why: the invoking preload already prepared its own document.
+    expect(invoker.webContents.send).not.toHaveBeenCalled()
+    const request = sentPrepareRequest(mainWindow)
+
+    // Nothing may tear down before the other window confirms its backup.
+    expect(onBeforeRelaunch).not.toHaveBeenCalled()
+    await vi.advanceTimersByTimeAsync(150)
+    expect(appExitMock).not.toHaveBeenCalled()
+
+    replyToPrepare(2, request.requestId, true)
+    await relaunchPromise
+    await vi.advanceTimersByTimeAsync(150)
+
+    expect(onBeforeRelaunch).toHaveBeenCalledTimes(1)
+    expect(appExitMock).toHaveBeenCalledWith(0)
+  })
+
+  it('keeps the app open and re-arms when a window refuses its pre-relaunch checkpoint', async () => {
+    const onBeforeRelaunch = vi.fn()
+    const invoker = createFakeRelaunchWindow(1)
+    const mainWindow = createFakeRelaunchWindow(2)
+    getAllWindowsMock.mockReturnValue([invoker, mainWindow])
+    registerAppHandlers({} as never, { onBeforeRelaunch })
+
+    let relaunchError: unknown = null
+    const relaunchPromise = Promise.resolve(
+      handlers.get('app:relaunch')?.({ sender: { id: 1 } })
+    ).catch((error: unknown) => {
+      relaunchError = error
+    })
+    await vi.advanceTimersByTimeAsync(0)
+    const request = sentPrepareRequest(mainWindow)
+
+    replyToPrepare(2, request.requestId, false)
+    await relaunchPromise
+    await vi.advanceTimersByTimeAsync(150)
+
+    expect(relaunchError).toBeInstanceOf(Error)
+    expect(onBeforeRelaunch).not.toHaveBeenCalled()
+    expect(appExitMock).not.toHaveBeenCalled()
+    // Why: the refusing window (and any prepared sibling) must release its restart latch.
+    expect(mainWindow.webContents.send).toHaveBeenCalledWith('app:relaunch-prepare-abort')
+
+    // A retry runs a fresh preparation instead of joining the rejected round.
+    const retryPromise = Promise.resolve(handlers.get('app:relaunch')?.({ sender: { id: 1 } }))
+    await vi.advanceTimersByTimeAsync(0)
+    const retryCall = mainWindow.webContents.send.mock.calls.filter(
+      ([channel]) => channel === 'app:relaunch-prepare'
+    )
+    expect(retryCall).toHaveLength(2)
+    const retryRequest = retryCall[1][1] as { requestId: number }
+    replyToPrepare(2, retryRequest.requestId, true)
+    await retryPromise
+    await vi.advanceTimersByTimeAsync(150)
+
+    expect(onBeforeRelaunch).toHaveBeenCalledTimes(1)
+    expect(appExitMock).toHaveBeenCalledWith(0)
+  })
+
+  it('degrades to an unprepared relaunch when a window never answers the handshake', async () => {
+    const onBeforeRelaunch = vi.fn()
+    const invoker = createFakeRelaunchWindow(1)
+    const unresponsive = createFakeRelaunchWindow(2)
+    getAllWindowsMock.mockReturnValue([invoker, unresponsive])
+    registerAppHandlers({} as never, { onBeforeRelaunch })
+
+    const relaunchPromise = Promise.resolve(handlers.get('app:relaunch')?.({ sender: { id: 1 } }))
+    await vi.advanceTimersByTimeAsync(0)
+    expect(onBeforeRelaunch).not.toHaveBeenCalled()
+
+    // Why: a hung renderer must not pin every future relaunch open.
+    await vi.advanceTimersByTimeAsync(5_000)
+    await relaunchPromise
+    await vi.advanceTimersByTimeAsync(150)
+
+    expect(onBeforeRelaunch).toHaveBeenCalledTimes(1)
+    expect(appExitMock).toHaveBeenCalledWith(0)
+  })
+
+  it('re-arms the relaunch singleflight when the exit pair throws', async () => {
+    const onBeforeRelaunch = vi.fn()
+    registerAppHandlers({} as never, { onBeforeRelaunch })
+    destroySystemTrayMock.mockImplementationOnce(() => {
+      throw new Error('tray teardown failed')
+    })
+
+    await Promise.resolve(handlers.get('app:relaunch')?.({ sender: { id: 1 } }))
+    await vi.advanceTimersByTimeAsync(150)
+    expect(appExitMock).not.toHaveBeenCalled()
+
+    // Why: a settled no-op promise would make every retry resolve instantly.
+    await Promise.resolve(handlers.get('app:relaunch')?.({ sender: { id: 1 } }))
+    await vi.advanceTimersByTimeAsync(150)
+
+    expect(relaunchAppMock).toHaveBeenCalledTimes(1)
+    expect(appExitMock).toHaveBeenCalledWith(0)
+  })
+
+  it('broadcasts the prepare abort to prepared windows when the exit pair throws', async () => {
+    const onBeforeRelaunch = vi.fn()
+    const invoker = createFakeRelaunchWindow(1)
+    const mainWindow = createFakeRelaunchWindow(2)
+    getAllWindowsMock.mockReturnValue([invoker, mainWindow])
+    registerAppHandlers({} as never, { onBeforeRelaunch })
+    destroySystemTrayMock.mockImplementationOnce(() => {
+      throw new Error('tray teardown failed')
+    })
+
+    const relaunchPromise = Promise.resolve(handlers.get('app:relaunch')?.({ sender: { id: 1 } }))
+    await vi.advanceTimersByTimeAsync(0)
+    const request = sentPrepareRequest(mainWindow)
+    replyToPrepare(2, request.requestId, true)
+    await relaunchPromise
+    await vi.advanceTimersByTimeAsync(150)
+    expect(appExitMock).not.toHaveBeenCalled()
+
+    // Why: the prepared window latched its restart bypass and froze its shutdown
+    // checkpoint; only this abort releases them — non-invokers have no self-heal.
+    expect(mainWindow.webContents.send).toHaveBeenCalledWith('app:relaunch-prepare-abort')
+    // Why: the invoker's relaunch invoke already resolved, so this abort is what
+    // releases it before its 5s settle grace.
+    expect(invoker.webContents.send).toHaveBeenCalledWith('app:relaunch-prepare-abort')
+
+    // A retry must run a fresh preparation round so the window re-stages state.
+    const retryPromise = Promise.resolve(handlers.get('app:relaunch')?.({ sender: { id: 1 } }))
+    await vi.advanceTimersByTimeAsync(0)
+    const prepareCalls = mainWindow.webContents.send.mock.calls.filter(
+      ([channel]) => channel === 'app:relaunch-prepare'
+    )
+    expect(prepareCalls).toHaveLength(2)
+    replyToPrepare(2, (prepareCalls[1][1] as { requestId: number }).requestId, true)
+    await retryPromise
+    await vi.advanceTimersByTimeAsync(150)
+    expect(appExitMock).toHaveBeenCalledWith(0)
+  })
+
+  it('never registers a second replacement instance when app.exit throws after relaunch', async () => {
+    registerAppHandlers({} as never, { onBeforeRelaunch: vi.fn() })
+    appExitMock.mockImplementationOnce(() => {
+      throw new Error('exit failed')
+    })
+
+    await Promise.resolve(handlers.get('app:relaunch')?.({ sender: { id: 1 } }))
+    await vi.advanceTimersByTimeAsync(150)
+    expect(relaunchAppMock).toHaveBeenCalledTimes(1)
+
+    await Promise.resolve(handlers.get('app:relaunch')?.({ sender: { id: 1 } }))
+    await vi.advanceTimersByTimeAsync(150)
+
+    // Why: a second app.relaunch() would register two replacement instances.
+    expect(relaunchAppMock).toHaveBeenCalledTimes(1)
+    expect(appExitMock).toHaveBeenCalledTimes(2)
+  })
+
+  it('excludes preload-less windows from the handshake instead of stalling into the degrade', async () => {
+    const onBeforeRelaunch = vi.fn()
+    const invoker = createFakeRelaunchWindow(1)
+    const mainWindow = createFakeRelaunchWindow(2)
+    const offscreen = createFakePreloadlessWindow(99)
+    getAllWindowsMock.mockReturnValue([invoker, mainWindow, offscreen])
+    registerAppHandlers({} as never, { onBeforeRelaunch })
+
+    const relaunchPromise = Promise.resolve(handlers.get('app:relaunch')?.({ sender: { id: 1 } }))
+    await vi.advanceTimersByTimeAsync(0)
+
+    // Why: a window with no Orca preload can never answer; asking it would stall
+    // every relaunch the full 5s and then exit through the unprepared degrade.
+    expect(offscreen.webContents.send).not.toHaveBeenCalled()
+
+    const request = sentPrepareRequest(mainWindow)
+    replyToPrepare(2, request.requestId, true)
+    await relaunchPromise
+    // Why: well under the 5s unresponsive timeout — the exit must not wait on it.
+    await vi.advanceTimersByTimeAsync(150)
     expect(appExitMock).toHaveBeenCalledWith(0)
   })
 

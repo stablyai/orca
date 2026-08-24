@@ -168,7 +168,7 @@
       "1b3024bcd6": "The floating workspace hit an error.",
       "8d1e160ed1": "Retry the sidebar or switch tabs to reload this surface.",
       "ed6b168d00": "The right sidebar hit an error.",
-      "03a14f6b5b": "Retry the page or navigate to another Orca surface.",
+      "03a14f6b5b": "Retry this page or switch to another part of Orca.",
       "b7a714db1e": "This page hit an error.",
       "98d4ea2823": "Terminal, browser, or editor rendering failed in this workspace. Retry to remount it.",
       "5a9519aef0": "The workspace workbench hit an error.",
@@ -13823,7 +13823,11 @@
           "RecoverableRenderErrorBoundary": {
             "55001880db": "Retry",
             "34a189ae0f": "The rest of the app is still running. Retry this surface or switch away and come back.",
-            "ab855c11f4": "This part of Orca hit an error."
+            "ab855c11f4": "This part of Orca hit an error.",
+            "restartOrca": "Restart Orca",
+            "restartStalled": "Restarting didn't complete. Try again, or retry this part of Orca.",
+            "staleChunkDescription": "Restart Orca to reload the app, or retry loading this part.",
+            "staleChunkTitle": "This part of Orca could not load."
           }
         }
       },

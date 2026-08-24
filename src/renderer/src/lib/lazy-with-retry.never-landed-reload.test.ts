@@ -129,6 +129,28 @@ describe('loadLazyWithRetry when the recovery reload never lands', () => {
     expect(window.sessionStorage.getItem(RELOAD_GUARD_KEY)).toBeNull()
   })
 
+  it('caps reload requests at two per document even when every call site defaults to reloadKey unknown', async () => {
+    const breadcrumbs = installBreadcrumbSink()
+
+    // Three sequential failures without a reloadKey: the guard is keyless, so
+    // 'unknown' must not defeat the per-document cap.
+    for (let failure = 0; failure < 3; failure += 1) {
+      const settled = loadLazyWithRetry(() => Promise.reject(CORRUPT_CHUNK_ERROR()), {
+        retries: 0
+      }).catch((error: unknown) => error)
+      await vi.advanceTimersByTimeAsync(0)
+      await vi.advanceTimersByTimeAsync(RELOAD_SETTLE_GRACE_MS + 1)
+      expect(isLazyChunkLoadError(await settled)).toBe(true)
+    }
+
+    const reloads = breadcrumbs.filter((crumb) => crumb.name === 'lazy_chunk_reload')
+    expect(reloads).toHaveLength(2)
+    expect(reloads.every((crumb) => crumb.data.reloadKey === 'unknown')).toBe(true)
+    const vetoed = breadcrumbs.filter((crumb) => crumb.name === 'lazy_chunk_reload_vetoed')
+    expect(vetoed).toHaveLength(2)
+    expect(vetoed.every((crumb) => crumb.data.outcome === 'never-landed')).toBe(true)
+  })
+
   it('still surfaces ordinary evaluation bugs after a never-landed reload attempt', async () => {
     const error = new Error('render bug from lazy module evaluation')
     const settled = loadLazyWithRetry(() => Promise.reject(error), { retries: 0 }).catch(

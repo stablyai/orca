@@ -15,6 +15,7 @@ vi.mock('../browser/browser-manager', async () =>
 )
 
 import { createMainWindow, loadMainWindow } from './createMainWindow'
+import { isRendererPreloadWindow } from './renderer-preload-window-registry'
 import { ipcMain } from 'electron'
 import { resetExpectedTeardownStateForTest } from '../crash-reporting/expected-teardown-state'
 import {
@@ -72,6 +73,42 @@ describe('createMainWindow', () => {
 
     expect(browserWindowInstance.loadFile).toHaveBeenCalledTimes(1)
     expect(browserWindowInstance.loadURL).not.toHaveBeenCalled()
+  })
+
+  it('registers the main window as a pre-relaunch handshake target', () => {
+    const webContents = {
+      id: 41,
+      on: vi.fn(),
+      setZoomLevel: vi.fn(),
+      setBackgroundThrottling: vi.fn(),
+      invalidate: vi.fn(),
+      setWindowOpenHandler: vi.fn(),
+      send: vi.fn(),
+      isDevToolsOpened: vi.fn(),
+      openDevTools: vi.fn(),
+      closeDevTools: vi.fn()
+    }
+    const browserWindowInstance = {
+      webContents,
+      on: vi.fn(),
+      isDestroyed: vi.fn(() => false),
+      isMaximized: vi.fn(() => true),
+      isFullScreen: vi.fn(() => false),
+      getSize: vi.fn(() => [1200, 800]),
+      setSize: vi.fn(),
+      maximize: vi.fn(),
+      show: vi.fn(),
+      loadFile: vi.fn(),
+      loadURL: vi.fn()
+    }
+    browserWindowMock.mockImplementation(function () {
+      return browserWindowInstance
+    })
+
+    createMainWindow(null, { deferLoad: true })
+
+    // Why: only registered windows are asked to prepare before Restart Orca.
+    expect(isRendererPreloadWindow(webContents as never)).toBe(true)
   })
 
   it('enables renderer sandboxing and opens external links safely', () => {

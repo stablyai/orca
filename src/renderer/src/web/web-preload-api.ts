@@ -7,6 +7,11 @@ import type {
   NativeChatAppendedMessages
 } from '../../../preload/api-types'
 import type { RuntimeRpcResponse } from '../../../shared/runtime-rpc-envelope'
+import { prepareRendererForAppRestart } from '../../../shared/renderer-restart-preparation'
+import {
+  ORCA_APP_RESTART_ABORTED_EVENT,
+  ORCA_APP_RESTART_STARTED_EVENT
+} from '../../../shared/updater-renderer-events'
 import { parseHostAccessLink } from '../../../shared/remote-pairing-address'
 import { verifyRemotePairingRuntimeStatus } from '../../../shared/remote-pairing-verification'
 import type { AiVaultDeleteSessionArgs } from '../../../shared/ai-vault-session-deletion'
@@ -547,6 +552,20 @@ async function writeWebClipboardText(text: string): Promise<void> {
   }
 }
 
+// Why: app.relaunch on web is an in-place reload, but a bare reload discards
+// dirty editor buffers. Run the same restart preparation as the Electron
+// preload (hot-exit backup + checkpoint) and never navigate if it refuses.
+async function prepareAndReloadForRelaunch(): Promise<void> {
+  await prepareRendererForAppRestart(window, {
+    startedEventName: ORCA_APP_RESTART_STARTED_EVENT,
+    abortedEventName: ORCA_APP_RESTART_ABORTED_EVENT,
+    // Why: web staging writes through to browser storage synchronously
+    // (see stageBeforeUnloadSync below), so there is nothing left to join.
+    awaitCheckpoint: () => Promise.resolve()
+  })
+  window.location.reload()
+}
+
 function createWebPreloadApi(): Partial<PreloadApi> {
   const webOrcaProfileAuthStatus = () =>
     Promise.resolve({
@@ -570,7 +589,7 @@ function createWebPreloadApi(): Partial<PreloadApi> {
           dockBadgeLabel: null
         }),
       getFeatureWallAssetBaseUrl: () => Promise.resolve('/'),
-      relaunch: () => Promise.resolve(window.location.reload()),
+      relaunch: prepareAndReloadForRelaunch,
       restart: () => Promise.resolve(window.location.reload()),
       reload: () => Promise.resolve(window.location.reload()),
       stageBeforeUnloadSync: ({ sessions, ui }) => {

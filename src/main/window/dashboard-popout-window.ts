@@ -5,6 +5,7 @@ import type { Store } from '../persistence'
 import { rectHasVisibleAreaOnAnyDisplay } from './window-bounds-validation'
 import { sendToTrustedUIRenderer } from '../ipc/ui'
 import { installPrivilegedWindowNavigationPolicy } from './privileged-window-navigation'
+import { registerRendererPreloadWindow } from './renderer-preload-window-registry'
 import { stepUIZoomLevel, type UIZoomDirection } from '../../shared/ui-zoom-level'
 import { nativeZoomCommandMatchesKeybindings } from '../../shared/window-shortcut-policy'
 import {
@@ -182,6 +183,8 @@ export function createOrFocusDashboardPopout(
     }
   })
   installPrivilegedWindowNavigationPolicy(window.webContents)
+  // Why: marks this window as an eligible pre-relaunch handshake target.
+  registerRendererPreloadWindow(window.webContents)
   // Why: isolated sessions do not inherit the main session's deny-by-default permission policy.
   window.webContents.session.setPermissionRequestHandler((_webContents, _permission, callback) =>
     callback(false)

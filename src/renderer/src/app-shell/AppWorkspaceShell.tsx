@@ -207,7 +207,7 @@ export function AppWorkspaceShell(props: {
                       title={translate('auto.App.b7a714db1e', 'This page hit an error.')}
                       description={translate(
                         'auto.App.03a14f6b5b',
-                        'Retry the page or navigate to another Orca surface.'
+                        'Retry this page or switch to another part of Orca.'
                       )}
                     >
                       <ActivePage layout={layout} />

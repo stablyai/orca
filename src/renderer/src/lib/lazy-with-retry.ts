@@ -1,4 +1,12 @@
-import { lazy, type ComponentType, type LazyExoticComponent } from 'react'
+import {
+  createElement,
+  lazy,
+  useState,
+  type ComponentProps,
+  type ComponentType,
+  type LazyExoticComponent,
+  type ReactElement
+} from 'react'
 
 import {
   requestLazyChunkRecoveryReload,
@@ -250,9 +258,50 @@ export async function loadLazyWithRetry<T extends AnyComponent>(
   throw lastError
 }
 
+// Epoch advances only when a boundary catches a chunk failure (a committed,
+// user-visible fallback). A remount from a LATER epoch is a deliberate reset
+// (Retry press or resetKey change); a remount from the SAME epoch is React
+// retrying the suspended tree after the load promise settled, and minting there
+// would re-fetch a broken chunk in an unbounded loop.
+let chunkRetryEpoch = 0
+
+export function advanceLazyChunkRetryEpoch(): void {
+  chunkRetryEpoch += 1
+}
+
 export function lazyWithRetry<T extends AnyComponent>(
   factory: LazyFactory<T>,
   options?: LazyWithRetryOptions
-): LazyExoticComponent<T> {
-  return lazy(() => loadLazyWithRetry(factory, options))
+): ComponentType<ComponentProps<T>> {
+  // -1 = last load did not fail; otherwise the epoch the failure settled in.
+  let failedAtEpoch = -1
+  const mintLazy = (): LazyExoticComponent<T> =>
+    lazy(() =>
+      loadLazyWithRetry(factory, options).then(
+        (loaded) => {
+          failedAtEpoch = -1
+          return loaded
+        },
+        (error: unknown) => {
+          failedAtEpoch = chunkRetryEpoch
+          throw error
+        }
+      )
+    )
+  let current = mintLazy()
+
+  // Why: React.lazy caches a rejection forever, so a boundary Retry that re-renders
+  // the same Lazy can never recover it. A reset remounts this wrapper; minting a
+  // fresh Lazy then lets the retry re-invoke the factory (the chunk may load fine
+  // after an update finishes). Bounded: one mint per caught failure per reset.
+  return function LazyWithRetry(props: ComponentProps<T>): ReactElement {
+    const [Component] = useState<LazyExoticComponent<T>>(() => {
+      if (failedAtEpoch !== -1 && failedAtEpoch !== chunkRetryEpoch) {
+        failedAtEpoch = -1
+        current = mintLazy()
+      }
+      return current
+    })
+    return createElement(Component, props)
+  }
 }

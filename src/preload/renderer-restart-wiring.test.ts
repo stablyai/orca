@@ -1,13 +1,49 @@
 import { describe, expect, it, vi } from 'vitest'
+import {
+  APP_RELAUNCH_PREPARE_ABORT_CHANNEL,
+  APP_RELAUNCH_PREPARE_CHANNEL,
+  APP_RELAUNCH_PREPARE_REPLY_CHANNEL
+} from '../shared/relaunch-preparation-ipc'
 import { ORCA_RENDERER_UNLOAD_PREVENTED_EVENT } from '../shared/renderer-shutdown-events'
 import {
   ORCA_APP_RESTART_ABORTED_EVENT,
+  ORCA_APP_RESTART_STARTED_EVENT,
   ORCA_UPDATER_QUIT_AND_INSTALL_STARTED_EVENT
 } from '../shared/updater-renderer-events'
 import {
   prepareAndInvokeUpdaterInstall,
+  registerRelaunchPreparationRequestHandler,
   registerRendererRestartIpcRelays
 } from './renderer-restart-wiring'
+
+function createPreparationHarness(): {
+  eventTarget: EventTarget
+  listeners: Map<string, (...args: unknown[]) => void>
+  sent: [string, unknown][]
+  register: (awaitCheckpoint: () => Promise<void>) => void
+} {
+  const eventTarget = new EventTarget()
+  const listeners = new Map<string, (...args: unknown[]) => void>()
+  const sent: [string, unknown][] = []
+  const ipcRenderer = {
+    on: vi.fn((channel: string, listener: (...args: unknown[]) => void) => {
+      listeners.set(channel, listener)
+      return ipcRenderer
+    }),
+    send: vi.fn((channel: string, payload: unknown) => {
+      sent.push([channel, payload])
+    })
+  } as unknown as Parameters<typeof registerRelaunchPreparationRequestHandler>[0]
+  return {
+    eventTarget,
+    listeners,
+    sent,
+    register: (awaitCheckpoint) =>
+      registerRelaunchPreparationRequestHandler(ipcRenderer, eventTarget, awaitCheckpoint)
+  }
+}
+
+const flushMicrotasks = (): Promise<void> => new Promise((resolve) => setTimeout(resolve, 0))
 
 describe('renderer restart wiring', () => {
   it('relays updater status, aborted installs, and prevented unload events', () => {
@@ -37,6 +73,47 @@ describe('renderer restart wiring', () => {
     expect(abort).toHaveBeenCalledTimes(1)
     expect(unloadPrevented).toHaveBeenCalledTimes(1)
     expect(restartAborted).toHaveBeenCalledTimes(1)
+  })
+
+  it('prepares this window and confirms a main-driven relaunch preparation request', async () => {
+    const { eventTarget, listeners, sent, register } = createPreparationHarness()
+    const order: string[] = []
+    eventTarget.addEventListener(ORCA_APP_RESTART_STARTED_EVENT, () => order.push('started'))
+    const awaitCheckpoint = vi.fn(async () => {
+      order.push('checkpoint-joined')
+    })
+    register(awaitCheckpoint)
+
+    listeners.get(APP_RELAUNCH_PREPARE_CHANNEL)?.({}, { requestId: 7 })
+    await flushMicrotasks()
+
+    expect(order).toEqual(['started', 'checkpoint-joined'])
+    expect(sent).toEqual([[APP_RELAUNCH_PREPARE_REPLY_CHANNEL, { requestId: 7, ok: true }]])
+  })
+
+  it('reports a refused checkpoint so main keeps the app open', async () => {
+    const { eventTarget, listeners, sent, register } = createPreparationHarness()
+    const aborted = vi.fn()
+    eventTarget.addEventListener(ORCA_APP_RESTART_ABORTED_EVENT, aborted)
+    register(() => Promise.reject(new Error('Failed to persist renderer state before unload.')))
+
+    listeners.get(APP_RELAUNCH_PREPARE_CHANNEL)?.({}, { requestId: 3 })
+    await flushMicrotasks()
+
+    expect(sent).toEqual([[APP_RELAUNCH_PREPARE_REPLY_CHANNEL, { requestId: 3, ok: false }]])
+    // Why: prepareRendererForAppRestart releases the restart latch on failure.
+    expect(aborted).toHaveBeenCalledTimes(1)
+  })
+
+  it('releases the restart latch when main aborts the relaunch after preparation', () => {
+    const { eventTarget, listeners, register } = createPreparationHarness()
+    const aborted = vi.fn()
+    eventTarget.addEventListener(ORCA_APP_RESTART_ABORTED_EVENT, aborted)
+    register(async () => {})
+
+    listeners.get(APP_RELAUNCH_PREPARE_ABORT_CHANNEL)?.({})
+
+    expect(aborted).toHaveBeenCalledTimes(1)
   })
 
   it('marks preparation before invoking main and aborts on IPC failure', async () => {

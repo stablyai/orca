@@ -162,6 +162,44 @@ describe('RichMarkdownErrorBoundary lazy chunk containment', () => {
     expect(recordBreadcrumbMock).toHaveBeenCalledTimes(1)
   })
 
+  it('re-invokes the chunk factory on Retry and recovers once assets settle', async () => {
+    window.sessionStorage.setItem(RELOAD_GUARD_KEY, LANDED_RELOAD_GUARD_VALUE)
+    const HealedEditor = (): ReactElement => <div data-testid="healed-editor">healed</div>
+    const chunkFactory = vi
+      .fn<() => Promise<{ default: typeof HealedEditor }>>()
+      .mockRejectedValueOnce(new SyntaxError(CORRUPT_CHUNK_PARSE_ERROR))
+      .mockResolvedValue({ default: HealedEditor })
+    const LazyHealingChunk = lazyWithRetry(chunkFactory, { retries: 0 })
+    ;({ container, root } = createContainer())
+
+    await act(async () => {
+      root?.render(
+        <BoundaryHarness>
+          <LazyHealingChunk />
+        </BoundaryHarness>
+      )
+    })
+    await flushReactWork()
+    await flushReactWork()
+
+    expect(container?.textContent).toContain('rich markdown editor')
+    expect(chunkFactory).toHaveBeenCalledTimes(1)
+
+    const retry = container?.querySelector('button')
+    expect(retry).not.toBeNull()
+    await act(async () => {
+      retry?.click()
+    })
+    await flushReactWork()
+    await flushReactWork()
+
+    // Without the boundary advancing the retry epoch, the remounted wrapper keeps
+    // React.lazy's cached rejection and the editor pane stays dead until restart.
+    expect(chunkFactory).toHaveBeenCalledTimes(2)
+    expect(container?.querySelector('[data-testid="healed-editor"]')).not.toBeNull()
+    expect(container?.textContent).not.toContain('rich markdown editor hit an unexpected error')
+  })
+
   it('still reports ordinary render errors', async () => {
     const error = new Error('ordinary render failure')
     function BrokenEditor(): ReactElement {

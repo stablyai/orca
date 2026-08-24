@@ -58,6 +58,7 @@ import { resolveWindowCloseAction } from './window-close-decision'
 import { rectHasVisibleAreaOnAnyDisplay } from './window-bounds-validation'
 import { closeDashboardPopout } from './dashboard-popout-window'
 import { installPrivilegedWindowNavigationPolicy } from './privileged-window-navigation'
+import { registerRendererPreloadWindow } from './renderer-preload-window-registry'
 import { isMacosTahoeOrNewer } from './macos-tahoe-release'
 import { registerPluginPanelNavigationGuard } from '../plugins/plugin-panel-navigation-guard'
 import { installWindowsPathRegistryChangeListener } from '../pty/windows-path-registry-change'
@@ -306,6 +307,8 @@ export function createMainWindow(
     }
   })
   const rendererWebContentsId = mainWindow.webContents.id
+  // Why: marks this window as an eligible pre-relaunch handshake target.
+  registerRendererPreloadWindow(mainWindow.webContents)
   installWindowsPathRegistryChangeListener(mainWindow)
   // Why: native paste fallback is privileged IPC; only the top-level renderer may request it.
   setTrustedUIRendererWebContentsId(rendererWebContentsId)

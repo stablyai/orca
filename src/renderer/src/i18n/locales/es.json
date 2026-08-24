@@ -101,7 +101,7 @@
       "1b3024bcd6": "El espacio de trabajo flotante tuvo un error.",
       "8d1e160ed1": "Vuelve a intentarlo o cambia de pestaña para recargar la barra lateral.",
       "ed6b168d00": "La barra lateral derecha tuvo un error.",
-      "03a14f6b5b": "Vuelve a intentarlo con la página o navega a otra sección de Orca.",
+      "03a14f6b5b": "Vuelve a intentar cargar esta página o cambia a otra parte de Orca.",
       "b7a714db1e": "Esta página tuvo un error.",
       "98d4ea2823": "No se pudo mostrar el terminal, el navegador o el editor en este espacio de trabajo. Vuelve a intentarlo para recargarlo.",
       "5a9519aef0": "El panel principal del espacio de trabajo tuvo un error.",
@@ -12490,7 +12490,11 @@
           "RecoverableRenderErrorBoundary": {
             "55001880db": "Reintentar",
             "34a189ae0f": "El resto de la app sigue ejecutándose. Reintenta esta vista o cambia a otra y vuelve.",
-            "ab855c11f4": "Esta parte de Orca encontró un error."
+            "ab855c11f4": "Esta parte de Orca encontró un error.",
+            "restartOrca": "Reiniciar Orca",
+            "restartStalled": "El reinicio no se completó. Inténtalo de nuevo, o reintenta esta parte de Orca.",
+            "staleChunkDescription": "Reinicia Orca para volver a cargar la aplicación, o reintenta cargar esta parte.",
+            "staleChunkTitle": "No se pudo cargar esta parte de Orca."
           }
         }
       },

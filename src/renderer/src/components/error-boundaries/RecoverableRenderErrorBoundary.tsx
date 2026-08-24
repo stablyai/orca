@@ -2,8 +2,10 @@ import React from 'react'
 import { AlertTriangle, RotateCw } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
-import { isLazyChunkLoadError } from '@/lib/lazy-with-retry'
+import { advanceLazyChunkRetryEpoch, isLazyChunkLoadError } from '@/lib/lazy-with-retry'
 import { reportReactErrorBoundaryCrash } from '@/lib/react-error-boundary-reporting'
+import { isAppRelaunchCapable } from '@/components/error-boundaries/app-relaunch-capability'
+import { StaleChunkRecoveryActions } from '@/components/error-boundaries/StaleChunkRecoveryActions'
 import type { ReactErrorBoundaryReportArgs } from '../../../../shared/crash-reporting'
 import { translate } from '@/i18n/i18n'
 
@@ -31,7 +33,10 @@ type State = {
 }
 
 export class RecoverableRenderErrorBoundary extends React.Component<Props, State> {
-  state: State = { error: null, resetKey: this.props.resetKey }
+  state: State = {
+    error: null,
+    resetKey: this.props.resetKey
+  }
 
   static getDerivedStateFromProps(props: Props, state: State): Partial<State> | null {
     if (props.resetKey !== state.resetKey) {
@@ -46,6 +51,10 @@ export class RecoverableRenderErrorBoundary extends React.Component<Props, State
 
   componentDidCatch(error: Error, errorInfo: React.ErrorInfo): void {
     console.error(`[${this.props.boundaryId}] render crash contained by boundary`, error, errorInfo)
+    if (isLazyChunkLoadError(error)) {
+      // Why: lets the next reset (Retry or resetKey) mint a lazy that can load again.
+      advanceLazyChunkRetryEpoch()
+    }
     if (this.props.reportAsCrash === false) {
       return
     }
@@ -74,6 +83,11 @@ export class RecoverableRenderErrorBoundary extends React.Component<Props, State
       return this.props.fallback({ error: this.state.error, reset: this.handleReset })
     }
 
+    // A contained chunk failure usually means the app updated under this renderer;
+    // a main-driven relaunch is the recovery that a swallowed in-place reload isn't.
+    const staleChunk = isLazyChunkLoadError(this.state.error)
+    const canRelaunch = staleChunk && isAppRelaunchCapable()
+
     return (
       <div
         className={cn(
@@ -89,26 +103,48 @@ export class RecoverableRenderErrorBoundary extends React.Component<Props, State
         <div className="space-y-1">
           <div className="font-medium text-foreground">
             {this.props.title ??
-              translate(
-                'auto.components.error.boundaries.RecoverableRenderErrorBoundary.ab855c11f4',
-                'This part of Orca hit an error.'
-              )}
+              (staleChunk
+                ? translate(
+                    'auto.components.error.boundaries.RecoverableRenderErrorBoundary.staleChunkTitle',
+                    'This part of Orca could not load.'
+                  )
+                : translate(
+                    'auto.components.error.boundaries.RecoverableRenderErrorBoundary.ab855c11f4',
+                    'This part of Orca hit an error.'
+                  ))}
           </div>
           <div className="max-w-md text-xs">
             {this.props.description ??
-              translate(
-                'auto.components.error.boundaries.RecoverableRenderErrorBoundary.34a189ae0f',
-                'The rest of the app is still running. Retry this surface or switch away and come back.'
-              )}
+              (staleChunk
+                ? translate(
+                    'auto.components.error.boundaries.RecoverableRenderErrorBoundary.staleChunkDescription',
+                    'Restart Orca to reload the app, or retry loading this part.'
+                  )
+                : translate(
+                    'auto.components.error.boundaries.RecoverableRenderErrorBoundary.34a189ae0f',
+                    'The rest of the app is still running. Retry this surface or switch away and come back.'
+                  ))}
           </div>
         </div>
-        <Button type="button" variant="outline" size="sm" onClick={this.handleReset}>
-          <RotateCw className="size-3.5" />
-          {translate(
-            'auto.components.error.boundaries.RecoverableRenderErrorBoundary.55001880db',
-            'Retry'
-          )}
-        </Button>
+        {canRelaunch ? (
+          // No state can leak from an earlier fallback: catching an error
+          // rebuilds the boundary's subtree, so the row remounts fresh per
+          // error (pinned by the stalled-notice leak tests).
+          <StaleChunkRecoveryActions
+            boundaryId={this.props.boundaryId}
+            onRetry={this.handleReset}
+          />
+        ) : (
+          <div className="flex items-center gap-2">
+            <Button type="button" variant="outline" size="sm" onClick={this.handleReset}>
+              <RotateCw className="size-3.5" />
+              {translate(
+                'auto.components.error.boundaries.RecoverableRenderErrorBoundary.55001880db',
+                'Retry'
+              )}
+            </Button>
+          </div>
+        )}
       </div>
     )
   }

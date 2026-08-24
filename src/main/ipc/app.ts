@@ -7,14 +7,12 @@ import { is } from '@electron-toolkit/utils'
 import type { AppIdentity } from '../../shared/app-identity'
 import type { MarkdownDocument } from '../../shared/filesystem-entry-types'
 import type { FloatingTerminalCwdRequest } from '../../shared/ui-chrome-types'
-import { relaunchApp } from '../app-relaunch'
 import type { Store } from '../persistence'
 import { getDevInstanceIdentity } from '../startup/dev-instance-identity'
 import { isPwshAvailableAsync } from '../pwsh'
 import { isWslAvailableAsync, listWslDistrosAsync } from '../wsl'
 import { isGitBashAvailable } from '../git-bash'
 import { setUnreadDockBadgeCount } from '../dock/unread-badge'
-import { destroySystemTray } from '../tray/system-tray'
 import { authorizeExternalPath } from './filesystem-auth'
 import {
   ensureDefaultFloatingWorkspacePath,
@@ -22,6 +20,7 @@ import {
   resolveFloatingTerminalCwd
 } from './floating-workspace-directory'
 import { isMarkdownDocumentName, markdownDocumentFromFilePath } from './markdown-documents'
+import { registerAppRelaunchHandlers } from './app-relaunch-handlers'
 import { registerMacSymbolicHotkeysProbeHandler } from './macos-symbolic-hotkeys-probe'
 import { registerRendererShutdownCheckpointHandler } from './renderer-shutdown-checkpoint'
 import { readMacKeyboardLayoutSnapshot } from './macos-keyboard-layout-snapshot'
@@ -288,25 +287,7 @@ export function registerAppHandlers(store: Store, options: RegisterAppHandlersOp
 
   ipcMain.handle('app:getKeyboardLayoutSnapshot', () => readMacKeyboardLayoutSnapshot())
 
-  ipcMain.handle('app:relaunch', async () => {
-    // Why: brief delay lets the renderer paint "Restarting…" before the window tears down.
-    await runBeforeRelaunchCleanup(options.onBeforeRelaunch)
-    setTimeout(() => {
-      // Why: app.exit(0) skips before-quit, so destroy the Windows tray manually to avoid a stale icon.
-      destroySystemTray()
-      relaunchApp('renderer-request')
-      app.exit(0)
-    }, 150)
-  })
-
-  ipcMain.handle('app:restart', async () => {
-    // Why: use the normal quit pipeline so daemon checkpoints and telemetry flush before exit.
-    await runBeforeRelaunchCleanup(options.onBeforeRelaunch)
-    setTimeout(() => {
-      relaunchApp('admin-restart')
-      app.quit()
-    }, 150)
-  })
+  registerAppRelaunchHandlers(options)
 
   registerMacSymbolicHotkeysProbeHandler(readCommandStdout)
 
@@ -325,18 +306,4 @@ export function registerAppHandlers(store: Store, options: RegisterAppHandlersOp
   ipcMain.handle('app:pickFloatingWorkspaceDirectory', (event) =>
     pickFloatingWorkspaceDirectory(event, store)
   )
-}
-
-async function runBeforeRelaunchCleanup(
-  onBeforeRelaunch?: () => void | Promise<void>
-): Promise<void> {
-  try {
-    await onBeforeRelaunch?.()
-  } catch (error) {
-    // Why: best-effort cleanup must never block relaunch; log only error.name to avoid leaking secrets.
-    console.warn(
-      '[app] Pre-relaunch cleanup failed; continuing relaunch:',
-      error instanceof Error ? error.name : typeof error
-    )
-  }
 }
