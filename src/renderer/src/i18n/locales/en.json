@@ -15955,6 +15955,10 @@
         "copyId": "Copy story ID",
         "copyBranch": "Copy suggested branch name",
         "copyPrompt": "Copy prompt",
+        "urlLabel": "URL",
+        "storyIdLabel": "Story ID",
+        "branchNameLabel": "Branch name",
+        "promptLabel": "Prompt",
         "storyTitle": "Shortcut story",
         "sheetDescription": "Preview, edit, and start work from the selected story.",
         "startWorkspace": "Start workspace",
@@ -15963,6 +15967,7 @@
         "addOwner": "+ Owner",
         "unassigned": "Unassigned",
         "commentPlaceholder": "Add a Shortcut comment...",
+        "commentFieldLabel": "Add a Shortcut comment",
         "comment": "Comment",
         "title": "Title",
         "labels": "Labels",
@@ -15974,6 +15979,7 @@
         "unknown": "Unknown",
         "commentTooLarge": "Comment is too large to submit safely.",
         "commentFailed": "Failed to add comment.",
+        "commentsLoadFailed": "Failed to load comments.",
         "updateFailed": "Failed to update Shortcut story."
       },
       "shortcut": {

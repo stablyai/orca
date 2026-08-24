@@ -39,7 +39,8 @@ export function looksLikeAuthError(error: unknown): boolean {
   const msg = error instanceof Error ? error.message : String(error)
   // Why: Shortcut 403 commonly means entitlement/permission gaps while the
   // saved token is still valid; do not flip Settings back to disconnected.
-  return /authenticat|unauthorized|401/i.test(msg)
+  // 401 is boundary-anchored so ids inside messages (e.g. "Story 1401") don't match.
+  return /authenticat|unauthorized|\b401\b/i.test(msg)
 }
 
 export type InflightShortcutReadRequest<T> = {

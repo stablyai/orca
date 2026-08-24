@@ -29,7 +29,9 @@ export function ShortcutIntegrationCard(): React.JSX.Element {
   const mountedRef = useMountedRef()
 
   const [dialogOpen, setDialogOpen] = useState(false)
-  const [testingWorkspaceId, setTestingWorkspaceId] = useState<string | null>(null)
+  const [testingWorkspaceIds, setTestingWorkspaceIds] = useState<ReadonlySet<string>>(
+    () => new Set()
+  )
   const [testResultByWorkspace, setTestResultByWorkspace] = useState<
     Record<string, VerificationResult>
   >({})
@@ -62,7 +64,7 @@ export function ShortcutIntegrationCard(): React.JSX.Element {
   // Why: explicit user-triggered verification. This is the only settings path
   // that decrypts a stored Shortcut token, avoiding surprise keychain prompts.
   const handleTest = async (workspaceId: string): Promise<void> => {
-    setTestingWorkspaceId(workspaceId)
+    setTestingWorkspaceIds((prev) => new Set(prev).add(workspaceId))
     setTestResultByWorkspace((prev) => {
       const next = { ...prev }
       delete next[workspaceId]
@@ -76,7 +78,11 @@ export function ShortcutIntegrationCard(): React.JSX.Element {
       ...prev,
       [workspaceId]: result.ok ? { state: 'ok' } : { state: 'error', error: result.error }
     }))
-    setTestingWorkspaceId(null)
+    setTestingWorkspaceIds((prev) => {
+      const next = new Set(prev)
+      next.delete(workspaceId)
+      return next
+    })
   }
 
   return (
@@ -147,7 +153,7 @@ export function ShortcutIntegrationCard(): React.JSX.Element {
           <div className="space-y-2">
             {workspaces.map((workspace) => {
               const testResult = testResultByWorkspace[workspace.id]
-              const testing = testingWorkspaceId === workspace.id
+              const testing = testingWorkspaceIds.has(workspace.id)
               return (
                 <div key={workspace.id} className={subordinateRowClass}>
                   <div className="min-w-0 flex-1">

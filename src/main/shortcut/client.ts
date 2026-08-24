@@ -156,6 +156,11 @@ export async function testConnection(
       ? { ok: true, viewer }
       : { ok: false, error: 'Could not read the Shortcut member for this token.' }
   } catch (error) {
+    // Why: a 401 means the saved credential is dead; keeping it would leave
+    // getStatus reporting the workspace as connected, like the mutation paths.
+    if (isAuthError(error)) {
+      clearToken(client.workspace.id)
+    }
     return { ok: false, error: error instanceof Error ? error.message : 'Connection failed.' }
   } finally {
     release()

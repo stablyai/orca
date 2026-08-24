@@ -33,7 +33,12 @@ export async function createStory(
       body.group_id = args.teamId
     }
     if (args.workflowStateId) {
-      body.workflow_state_id = Number(args.workflowStateId)
+      const workflowStateId = Number(args.workflowStateId)
+      // Why: NaN serializes to null in JSON, silently sending workflow_state_id: null.
+      if (!Number.isInteger(workflowStateId)) {
+        return { ok: false, error: 'Invalid workflow state.' }
+      }
+      body.workflow_state_id = workflowStateId
     }
     const created = await shortcutRequest<ShortcutRecord>(entry, '/api/v3/stories', {
       method: 'POST',
@@ -77,7 +82,11 @@ export async function updateStory(
       body.owner_ids = updates.ownerIds
     }
     if (updates.workflowStateId !== undefined) {
-      body.workflow_state_id = Number(updates.workflowStateId)
+      const workflowStateId = Number(updates.workflowStateId)
+      if (!Number.isInteger(workflowStateId)) {
+        return { ok: false, error: 'Invalid workflow state.' }
+      }
+      body.workflow_state_id = workflowStateId
     }
     if (updates.storyType !== undefined) {
       body.story_type = updates.storyType

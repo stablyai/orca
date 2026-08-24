@@ -1,5 +1,3 @@
-/* oxlint-disable react-doctor/no-adjust-state-on-prop-change -- Why: Shortcut story hydration,
-   comments, workflow states, and member options are loaded from provider IPC for the selected story. */
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { toast } from 'sonner'
 
@@ -25,7 +23,7 @@ import type { TaskSourceContext } from '../../../shared/task-source-context'
 import { translate } from '@/i18n/i18n'
 
 export type ShortcutStoryWorkspaceState = {
-  displayed: ShortcutStory | null
+  displayed: ShortcutStory
   storyLoading: boolean
   comments: ShortcutStoryCommentsState['comments']
   commentsLoading: boolean
@@ -54,11 +52,8 @@ export type ShortcutStoryWorkspaceState = {
 
 function statesForStory(
   workflows: ShortcutWorkflow[],
-  story: ShortcutStory | null
+  story: ShortcutStory
 ): ShortcutWorkflowState[] {
-  if (!story) {
-    return []
-  }
   const workflow = workflows.find((candidate) => candidate.id === story.workflowId)
   if (workflow) {
     return workflow.states
@@ -71,43 +66,33 @@ function statesForStory(
   )
 }
 
+// Why: callers remount this hook per story (React key on the owning
+// component), so drafts seed once from initial state instead of prop-sync
+// effects; the effect below only hydrates from provider IPC.
 export function useShortcutStoryWorkspaceState(
-  story: ShortcutStory | null,
+  story: ShortcutStory,
   sourceContext?: TaskSourceContext | null
 ): ShortcutStoryWorkspaceState {
   const settings = useAppStore((s) => s.settings)
   const providerSettings = sourceContext ?? settings
   const patchShortcutStory = useAppStore((s) => s.patchShortcutStory)
-  const [fullStory, setFullStory] = useState<ShortcutStory | null>(null)
+  const [fullStory, setFullStory] = useState<ShortcutStory>(story)
   const [storyLoading, setStoryLoading] = useState(false)
   const [workflows, setWorkflows] = useState<ShortcutWorkflow[]>([])
   const [members, setMembers] = useState<ShortcutMember[]>([])
   const [pendingField, setPendingField] = useState<string | null>(null)
-  const [titleDraft, setTitleDraft] = useState('')
-  const [labelsDraft, setLabelsDraft] = useState('')
+  const [titleDraft, setTitleDraft] = useState(story.title)
+  const [labelsDraft, setLabelsDraft] = useState(() => story.labels.join(', '))
   const requestIdRef = useRef(0)
   const commentsState = useShortcutStoryComments(providerSettings, requestIdRef)
-  const { loadComments, resetComments } = commentsState
+  const { loadComments } = commentsState
 
-  const displayed = fullStory ?? story
-  const workspaceId = displayed?.workspaceId ?? undefined
+  const displayed = fullStory
+  const workspaceId = displayed.workspaceId ?? undefined
 
   useEffect(() => {
-    if (!story) {
-      setFullStory(null)
-      setStoryLoading(false)
-      setWorkflows([])
-      setMembers([])
-      resetComments()
-      return
-    }
-
     requestIdRef.current += 1
     const requestId = requestIdRef.current
-    resetComments()
-    setFullStory(story)
-    setTitleDraft(story.title)
-    setLabelsDraft(story.labels.join(', '))
     setStoryLoading(true)
 
     void shortcutGetStory(providerSettings, story.id, story.workspaceId)
@@ -142,12 +127,9 @@ export function useShortcutStoryWorkspaceState(
       .catch(() => {})
 
     void loadComments(story, requestId)
-  }, [story, loadComments, resetComments, providerSettings])
+  }, [story, loadComments, providerSettings])
 
   const refreshStory = useCallback(async (): Promise<void> => {
-    if (!displayed) {
-      return
-    }
     try {
       const latest = await shortcutGetStory(providerSettings, displayed.id, displayed.workspaceId)
       if (latest) {
@@ -165,7 +147,7 @@ export function useShortcutStoryWorkspaceState(
       updates: ShortcutStoryUpdate,
       optimistic?: Partial<ShortcutStory>
     ): Promise<void> => {
-      if (!displayed || pendingField) {
+      if (pendingField) {
         return
       }
       setPendingField(field)
@@ -212,9 +194,6 @@ export function useShortcutStoryWorkspaceState(
   )
 
   const saveTitle = useCallback(() => {
-    if (!displayed) {
-      return
-    }
     const title = titleDraft.trim()
     if (!title || title === displayed.title) {
       setTitleDraft(displayed.title)
@@ -224,15 +203,12 @@ export function useShortcutStoryWorkspaceState(
   }, [displayed, mutateStory, titleDraft])
 
   const saveLabels = useCallback(() => {
-    if (!displayed) {
-      return
-    }
     const labels = labelsDraft
       .split(',')
       .map((label) => label.trim())
       .filter(Boolean)
     void mutateStory('labels', { labels }, { labels })
-  }, [displayed, labelsDraft, mutateStory])
+  }, [labelsDraft, mutateStory])
 
   return {
     displayed,
@@ -241,9 +217,7 @@ export function useShortcutStoryWorkspaceState(
     commentsLoading: commentsState.commentsLoading,
     commentsError: commentsState.commentsError,
     reloadComments: () => {
-      if (displayed) {
-        void loadComments(displayed, requestIdRef.current)
-      }
+      void loadComments(displayed, requestIdRef.current)
     },
     workflowStates: statesForStory(workflows, displayed),
     members,

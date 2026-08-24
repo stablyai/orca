@@ -91,12 +91,13 @@ async function loadClientModule(options: SafeStorageMockOptions = {}) {
 
   // One import call per reset so the split modules share a single graph (and
   // thus one copy of the request queue / credential caches) per test.
-  const [client, queue, api] = await Promise.all([
+  const [client, queue, api, metadata] = await Promise.all([
     import('./client'),
     import('./request-queue'),
-    import('./authenticated-request')
+    import('./authenticated-request'),
+    import('./workspace-metadata')
   ])
-  return { ...client, ...queue, ...api }
+  return { ...client, ...queue, ...api, ...metadata }
 }
 
 function memberInfoResponse(): Response {
@@ -268,5 +269,85 @@ describe('Shortcut client stored credentials', () => {
     expect(shortcut.isAuthError(new shortcut.ShortcutApiError('nope', 401))).toBe(true)
     expect(shortcut.isAuthError(new shortcut.ShortcutApiError('forbidden', 403))).toBe(false)
     expect(shortcut.isAuthError(new Error('401'))).toBe(false)
+  })
+
+  it('testConnection clears the stored token on 401', async () => {
+    const workspaceId = 'workspace-alpha'
+    writeShortcutFiles(workspaceId, 'token-alpha')
+    netFetchMock.mockResolvedValueOnce(
+      new Response(JSON.stringify({ message: 'Sorry, we could not authenticate you.' }), {
+        status: 401,
+        headers: { 'Content-Type': 'application/json' }
+      })
+    )
+    const shortcut = await loadClientModule()
+
+    await expect(shortcut.testConnection(workspaceId)).resolves.toEqual({
+      ok: false,
+      error: 'Sorry, we could not authenticate you.'
+    })
+    expect(shortcut.getStatus().connected).toBe(false)
+    expect(existsSync(tokenPathForWorkspace(workspaceId))).toBe(false)
+  })
+
+  it('testConnection keeps the stored token on 403', async () => {
+    const workspaceId = 'workspace-alpha'
+    writeShortcutFiles(workspaceId, 'token-alpha')
+    netFetchMock.mockResolvedValueOnce(
+      new Response(JSON.stringify({ message: 'Forbidden.' }), {
+        status: 403,
+        headers: { 'Content-Type': 'application/json' }
+      })
+    )
+    const shortcut = await loadClientModule()
+
+    await expect(shortcut.testConnection(workspaceId)).resolves.toEqual({
+      ok: false,
+      error: 'Forbidden.'
+    })
+    expect(shortcut.getStatus().connected).toBe(true)
+    expect(existsSync(tokenPathForWorkspace(workspaceId))).toBe(true)
+  })
+})
+
+describe('Shortcut workspace metadata cache', () => {
+  it('does not let an in-flight fetch repopulate the cache after clearWorkspaceMetadata', async () => {
+    const workspaceId = 'workspace-alpha'
+    writeShortcutFiles(workspaceId, 'token-alpha')
+    const gate: { resolve: (response: Response) => void } = { resolve: () => {} }
+    netFetchMock.mockImplementation(
+      async () =>
+        new Response(JSON.stringify([]), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' }
+        })
+    )
+    netFetchMock.mockImplementationOnce(
+      () =>
+        new Promise<Response>((resolve) => {
+          gate.resolve = resolve
+        })
+    )
+    const shortcut = await loadClientModule()
+    const client = shortcut.getClients(workspaceId)[0]
+    if (!client) {
+      throw new Error('expected a Shortcut client for the stored workspace')
+    }
+
+    const pending = shortcut.getWorkspaceMetadata(client)
+    await vi.waitFor(() => expect(netFetchMock).toHaveBeenCalledTimes(1))
+    shortcut.clearWorkspaceMetadata(workspaceId)
+    gate.resolve(
+      new Response(JSON.stringify([]), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' }
+      })
+    )
+    await pending
+    expect(netFetchMock).toHaveBeenCalledTimes(3)
+
+    // A cleared workspace must refetch instead of serving the stale result.
+    await shortcut.getWorkspaceMetadata(client)
+    expect(netFetchMock).toHaveBeenCalledTimes(6)
   })
 })

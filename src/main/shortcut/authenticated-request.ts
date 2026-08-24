@@ -7,6 +7,10 @@ export const SHORTCUT_API_BASE_URL = 'https://api.app.shortcut.com'
 
 const SHORTCUT_API_USER_AGENT = 'Orca'
 
+// Why: a hung request would otherwise hold one of the four shared queue slots
+// indefinitely; callers' own abort signals still apply via AbortSignal.any.
+const REQUEST_TIMEOUT_MS = 30_000
+
 export type ShortcutClientForWorkspace = {
   workspace: ShortcutWorkspace
   token: string
@@ -102,9 +106,11 @@ export async function requestWithToken(
   headers.set('Content-Type', 'application/json')
   headers.set('User-Agent', SHORTCUT_API_USER_AGENT)
   headers.set('Shortcut-Token', apiToken)
+  const timeoutSignal = AbortSignal.timeout(REQUEST_TIMEOUT_MS)
   const response = await shortcutFetch(`${SHORTCUT_API_BASE_URL}${path}`, {
     ...init,
-    headers
+    headers,
+    signal: init?.signal ? AbortSignal.any([init.signal, timeoutSignal]) : timeoutSignal
   })
   if (!response.ok) {
     throw new ShortcutApiError(await readShortcutError(response), response.status)

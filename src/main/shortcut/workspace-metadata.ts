@@ -105,11 +105,17 @@ export async function getWorkspaceMetadata(
   }
   const promise = fetchMetadata(client)
     .then((metadata) => {
-      cache.set(workspaceId, { fetchedAt: Date.now(), metadata })
+      // Why: clearWorkspaceMetadata during the fetch (disconnect/logout) must
+      // win — only the still-current request may repopulate the cache.
+      if (inflight.get(workspaceId) === promise) {
+        cache.set(workspaceId, { fetchedAt: Date.now(), metadata })
+      }
       return metadata
     })
     .finally(() => {
-      inflight.delete(workspaceId)
+      if (inflight.get(workspaceId) === promise) {
+        inflight.delete(workspaceId)
+      }
     })
   inflight.set(workspaceId, promise)
   return promise

@@ -61,7 +61,14 @@ export function useShortcutStoryComments(
         setComments(fetched)
       } catch (error) {
         if (requestId === requestIdRef.current) {
-          setCommentsError(error instanceof Error ? error.message : 'Failed to load comments.')
+          setCommentsError(
+            error instanceof Error
+              ? error.message
+              : translate(
+                  'auto.components.ShortcutStoryWorkspace.commentsLoadFailed',
+                  'Failed to load comments.'
+                )
+          )
         }
       } finally {
         if (requestId === requestIdRef.current) {

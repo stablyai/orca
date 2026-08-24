@@ -29,11 +29,15 @@ export function ShortcutStoryTitleSection({
   return (
     <section className="border-b border-border/40 px-4 py-4">
       <div className="grid gap-2">
-        <label className="text-[11px] font-medium text-muted-foreground">
+        <label
+          htmlFor="shortcut-story-title"
+          className="text-[11px] font-medium text-muted-foreground"
+        >
           {translate('auto.components.ShortcutStoryWorkspace.title', 'Title')}
         </label>
         <div className="flex gap-2">
           <Input
+            id="shortcut-story-title"
             value={titleDraft}
             onChange={(event) => setTitleDraft(event.target.value)}
             onKeyDown={(event) => {
@@ -57,11 +61,15 @@ export function ShortcutStoryTitleSection({
             )}
           </Button>
         </div>
-        <label className="mt-2 text-[11px] font-medium text-muted-foreground">
+        <label
+          htmlFor="shortcut-story-labels"
+          className="mt-2 text-[11px] font-medium text-muted-foreground"
+        >
           {translate('auto.components.ShortcutStoryWorkspace.labels', 'Labels')}
         </label>
         <div className="flex gap-2">
           <Input
+            id="shortcut-story-labels"
             value={labelsDraft}
             onChange={(event) => setLabelsDraft(event.target.value)}
             placeholder={translate(

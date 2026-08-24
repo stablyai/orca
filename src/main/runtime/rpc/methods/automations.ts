@@ -5,6 +5,11 @@ import {
   normalizeAutomationPrecheckTimeoutSeconds
 } from '../../../../shared/automation-precheck'
 import { normalizeExecutionHostId } from '../../../../shared/execution-host'
+import {
+  isTaskProvider,
+  TASK_PROVIDERS,
+  type TaskProvider
+} from '../../../../shared/task-providers'
 import type { TaskProviderIdentity as SharedTaskProviderIdentity } from '../../../../shared/task-source-context'
 import { isTuiAgent } from '../../../../shared/tui-agent-config'
 import { defineMethod, type RpcMethod } from '../core'
@@ -60,7 +65,7 @@ const TaskProviderIdentity = z
       value !== null &&
       typeof value === 'object' &&
       'provider' in value &&
-      ['github', 'gitlab', 'linear', 'jira', 'shortcut'].includes(String(value.provider))
+      isTaskProvider(value.provider)
   )
   .optional()
   .nullable()
@@ -68,7 +73,7 @@ const TaskProviderIdentity = z
 const TaskSourceContext = z
   .object({
     kind: z.literal('task-source'),
-    provider: z.enum(['github', 'gitlab', 'linear', 'jira', 'shortcut']),
+    provider: z.enum(TASK_PROVIDERS as readonly [TaskProvider, ...TaskProvider[]]),
     projectId: requiredString('Missing source project id'),
     hostId: ExecutionHostId,
     projectHostSetupId: OptionalNullablePlainString,

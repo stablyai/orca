@@ -1,10 +1,11 @@
-import { existsSync, mkdirSync, readFileSync, unlinkSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, readFileSync, unlinkSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 import {
   CredentialDecryptionError,
   credentialFileHasContent,
   readStoredCredentialToken,
+  writeCredentialFileAtomic,
   writeEncryptedCredential
 } from '../integration-credential-file'
 import type { ShortcutWorkspace, ShortcutWorkspaceSelection } from '../../shared/shortcut-types'
@@ -150,10 +151,12 @@ export function writeWorkspaceFile(file: ShortcutWorkspaceFile): void {
     workspaces
   }
   workspaceFileLoaded = true
-  writeFileSync(getWorkspaceFilePath(), JSON.stringify(cachedWorkspaceFile, null, 2), {
-    encoding: 'utf-8',
-    mode: 0o600
-  })
+  // Why: a crash mid-write would leave invalid JSON, dropping every stored
+  // connection while the token files stay orphaned; rename keeps it all-or-nothing.
+  writeCredentialFileAtomic(
+    getWorkspaceFilePath(),
+    Buffer.from(JSON.stringify(cachedWorkspaceFile, null, 2), 'utf-8')
+  )
 }
 
 export function readToken(workspaceId: string): string | null {
