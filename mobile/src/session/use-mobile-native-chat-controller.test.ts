@@ -222,7 +222,9 @@ describe('useMobileNativeChatController handleNativeChatSend', () => {
       accepted = await controller!.handleNativeChatSend('look', ['file:///a.jpg'])
     })
     expect(accepted).toBe(true)
-    expect(acceptSend).toHaveBeenCalledWith(ORIGIN, 'look', ['file:///a.jpg'])
+    // Trailing arg is the send-time "agent was already replying" tier; this agent
+    // is idle, so the reply that follows renders below this echo.
+    expect(acceptSend).toHaveBeenCalledWith(ORIGIN, 'look', ['file:///a.jpg'], false)
     // Optimistic clear happens at send time, never a restore on success.
     expect(clearDraftForSend).toHaveBeenCalledWith(ORIGIN, 'look')
     expect(restoreRejectedDraft).not.toHaveBeenCalled()

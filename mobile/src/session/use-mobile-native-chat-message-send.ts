@@ -53,13 +53,23 @@ export function useMobileNativeChatMessageSend(args: {
   /** Captured when a control send starts so a later tab switch cannot record its
    *  session-option effects against the newly active tab. */
   commandSendRef: MutableRefObject<(command: string) => void>
+  /** Whether the agent was already replying, read at send time so the optimistic
+   *  echo can be tiered against the streaming bubble. */
+  agentWorkingRef: MutableRefObject<boolean>
   captureSendOrigin: (text: string) => MobileNativeChatSendOrigin | null
   /** Launch-context text Orca parked on the agent's TUI input line, or null. Read
    *  at send time so the pre-clear can be sized to every line it occupies. */
   readSeededLaunchDraftSeed: () => MobileNativeChatLaunchDraftSeed | null
   clearDraftForSend: (origin: MobileNativeChatSendOrigin, text: string) => void
   restoreRejectedDraft: (origin: MobileNativeChatSendOrigin, text: string) => void
-  acceptSend: (origin: MobileNativeChatSendOrigin, text: string, images?: string[]) => void
+  acceptSend: (
+    origin: MobileNativeChatSendOrigin,
+    text: string,
+    images?: string[],
+    /** True when the agent was already replying, so the echo renders after the
+     *  streaming bubble instead of above it. */
+    queuedWhileWorking?: boolean
+  ) => void
   holdUnconfirmedSend: (
     origin: MobileNativeChatSendOrigin,
     text: string,
@@ -74,6 +84,7 @@ export function useMobileNativeChatMessageSend(args: {
     deviceTokenRef,
     agentRef,
     commandSendRef,
+    agentWorkingRef,
     captureSendOrigin,
     readSeededLaunchDraftSeed,
     clearDraftForSend,
@@ -98,6 +109,10 @@ export function useMobileNativeChatMessageSend(args: {
       const text = draftText.trimEnd()
       const handle = handleRef.current
       const origin = captureSendOrigin(text)
+      // Snapshot here, not at acceptSend: the send itself flips the agent to
+      // working, so reading it after the RPC settles would tag every idle send as
+      // queued and push the reply above the prompt that caused it.
+      const queuedWhileWorking = agentWorkingRef.current
       const agent = agentRef.current
       const recordCommand = commandSendRef.current
       // Why: the lease collapses one render after `connState`, so a question-card
@@ -217,7 +232,7 @@ export function useMobileNativeChatMessageSend(args: {
       if (classification === 'chat') {
         // `images` are local preview URIs for the optimistic echo only — the actual
         // image bytes already rode along as a bracketed paste before this text send.
-        acceptSend(origin, text, images)
+        acceptSend(origin, text, images, queuedWhileWorking)
       } else if (recordControlSend) {
         // The session-option catalog can recognize controls omitted from the
         // autocomplete catalog (for example Claude `/model` and `/fast`).
@@ -228,6 +243,7 @@ export function useMobileNativeChatMessageSend(args: {
     [
       acceptSend,
       agentRef,
+      agentWorkingRef,
       captureSendOrigin,
       clearDraftForSend,
       client,

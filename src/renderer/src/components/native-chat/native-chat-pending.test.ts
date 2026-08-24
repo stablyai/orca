@@ -3,8 +3,6 @@ import type { NativeChatMessage } from '../../../../shared/native-chat-types'
 import {
   appendPendingSendCache,
   clearPendingSendCacheForTests,
-  isLaunchPromptMessageId,
-  isPendingMessageId,
   launchPromptAsMessage,
   nextNativeChatPendingSendId,
   pendingSendsAsMessages,
@@ -22,6 +20,7 @@ import {
   isCommandMarkerId,
   readCommandMarkerCache
 } from './native-chat-command-marker'
+import { isLaunchPromptMessageId, isPendingMessageId } from './native-chat-synthetic-message-ids'
 import { stripNoiseMessages } from './native-chat-noise'
 
 function userMessage(id: string, text: string, timestamp = 1): NativeChatMessage {
@@ -506,6 +505,18 @@ describe('pendingSendsAsMessages', () => {
     expect(
       pendingSendsAsMessages(pending, [{ ...userMessage('u1', 'rename it'), timestamp: null }])
     ).toEqual([])
+  })
+
+  // The id prefix is what the sort reads to decide whether the streaming reply
+  // belongs above this echo (it answers it) or below it (the echo is queued).
+  it('marks a send issued while the agent was already replying as queued', () => {
+    const idle = pendingOf('p1', 'first')
+    const queued = { ...pendingOf('p2', 'second'), queuedWhileWorking: true }
+
+    expect(pendingSendsAsMessages([idle, queued], []).map((m) => m.id)).toEqual([
+      'pending:p1',
+      'pending-queued:p2'
+    ])
   })
 
   it('hides only one of two identical pending sends for one real user turn', () => {

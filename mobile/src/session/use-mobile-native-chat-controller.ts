@@ -117,6 +117,10 @@ export function useMobileNativeChatController(args: {
 
   const nativeChatStatus = activeChatResolution ? activeSessionTab?.agentStatus : null
   const nativeChatAgentWorking = nativeChatStatus?.state === 'working'
+  // Read at send time (not render time) so an echo can be tiered against the
+  // streaming bubble without re-creating the send callback on every status tick.
+  const nativeChatAgentWorkingRef = useRef(nativeChatAgentWorking)
+  nativeChatAgentWorkingRef.current = nativeChatAgentWorking
   // Deliberately not gated on the chat view being visible: the streaming gate
   // has to tell "hidden mid-turn" from "the turn ended".
   const nativeChatStreamLive = activeSessionTab?.agentStatus?.state === 'working'
@@ -220,6 +224,7 @@ export function useMobileNativeChatController(args: {
     deviceTokenRef,
     agentRef: activeChatAgentRef,
     commandSendRef: recordSessionOptionCommandRef,
+    agentWorkingRef: nativeChatAgentWorkingRef,
     captureSendOrigin,
     readSeededLaunchDraftSeed,
     clearDraftForSend,

@@ -30,6 +30,22 @@ export function isNearBottom(
   return distanceFromBottom(geometry) <= threshold
 }
 
+/** Held anchors must be discarded, not kept: a read that adds no history (a
+ *  full-window read reports `hasMore` optimistically) would otherwise restore a
+ *  stale scroll position instead of letting a new message pin to the bottom. */
+export function resolvePrependAnchor(args: {
+  /** Container scrollHeight captured when the load-earlier was requested. */
+  anchorScrollHeight: number
+  /** Container scrollHeight now. */
+  scrollHeight: number
+  loadingEarlier: boolean
+}): 'restore' | 'wait' | 'discard' {
+  if (args.scrollHeight > args.anchorScrollHeight) {
+    return 'restore'
+  }
+  return args.loadingEarlier ? 'wait' : 'discard'
+}
+
 /** Whether the "jump to latest" affordance should show: only when the user has
  *  detached (scrolled up) and there is actually scrollable content below. */
 export function shouldShowJumpToLatest(

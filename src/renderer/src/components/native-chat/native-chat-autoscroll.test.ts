@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest'
 import {
   distanceFromBottom,
   isNearBottom,
+  resolvePrependAnchor,
   shouldShowJumpToLatest,
   NATIVE_CHAT_BOTTOM_THRESHOLD_PX
 } from './native-chat-autoscroll'
@@ -40,5 +41,26 @@ describe('shouldShowJumpToLatest', () => {
   })
   it('hides when there is nothing to scroll', () => {
     expect(shouldShowJumpToLatest(false, noOverflow)).toBe(false)
+  })
+})
+
+describe('resolvePrependAnchor', () => {
+  it('restores the reading position when the older page grew the content', () => {
+    expect(
+      resolvePrependAnchor({ anchorScrollHeight: 1000, scrollHeight: 2400, loadingEarlier: false })
+    ).toBe('restore')
+  })
+
+  it('waits while the read is still in flight', () => {
+    expect(
+      resolvePrependAnchor({ anchorScrollHeight: 1000, scrollHeight: 1000, loadingEarlier: true })
+    ).toBe('wait')
+  })
+
+  // A held anchor hijacked a later send's stick-to-bottom.
+  it('discards the anchor once a load settles without adding history', () => {
+    expect(
+      resolvePrependAnchor({ anchorScrollHeight: 1000, scrollHeight: 1000, loadingEarlier: false })
+    ).toBe('discard')
   })
 })
