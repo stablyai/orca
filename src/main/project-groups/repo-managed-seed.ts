@@ -92,12 +92,12 @@ async function seedWslProjects(args: {
     const parent = dest.slice(0, dest.lastIndexOf('/')) || '/'
     script.push(
       `mkdir -p ${q(parent)}`,
-      `if [ ! -d ${q(dest)} ]; then git clone --bare --no-local --reference ${q(source)} ${q(source)} ${q(dest)}; fi`,
+      `rm -rf ${q(dest)}`,
+      `cp -a ${q(source)} ${q(dest)}`,
+      `object_store=$(readlink -f ${q(`${source}/objects`)})`,
+      `rm -rf ${q(`${dest}/objects`)}`,
+      `ln -s "$object_store" ${q(`${dest}/objects`)}`,
       `git --git-dir=${q(dest)} config core.bare false`,
-      `git --git-dir=${q(dest)} config remote.origin.url ${q(source)}`,
-      `git --git-dir=${q(dest)} config remote.origin.fetch '+refs/heads/*:refs/remotes/origin/*'`,
-      `git --git-dir=${q(dest)} fetch --no-tags ${q(source)} '+refs/heads/*:refs/remotes/origin/*' || true`,
-      `git --git-dir=${q(dest)} fetch --no-tags ${q(source)} '+refs/remotes/origin/*:refs/remotes/origin/*' || true`,
       `printf 'ORCA_SEED_DONE:%s\\n' ${q(project.relPath)}`
     )
   }
