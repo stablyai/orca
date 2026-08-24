@@ -23,6 +23,7 @@ import type { HostedReviewProvider } from '../../../shared/hosted-review'
 import type { ResolvedSourceControlAiGenerationParams } from '../../../shared/source-control-ai'
 import { getCommitMessageModelDiscoveryHostKeyForScope } from '../../../shared/commit-message-host-key'
 import type { GitHistoryOptions, GitHistoryResult } from '../../../shared/git-history'
+import { REBASE_FROM_BASE_RPC_TIMEOUT_MS } from '../../../shared/git-rebase-source'
 import { getRepoIdFromWorktreeId, splitWorktreeIdForFilesystem } from '../../../shared/worktree/id'
 import { callRuntimeRpc, getActiveRuntimeTarget } from './runtime-rpc-client'
 import { toRuntimeWorktreeSelector } from './runtime-worktree-selector'
@@ -548,7 +549,7 @@ export async function rebaseRuntimeGitFromBase(
     target,
     'git.rebaseFromBase',
     { worktree: toRuntimeWorktreeSelector(context.worktreeId), baseRef },
-    { timeoutMs: 30_000 }
+    { timeoutMs: REBASE_FROM_BASE_RPC_TIMEOUT_MS }
   )
 }
 

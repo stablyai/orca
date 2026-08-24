@@ -218,6 +218,50 @@ describe('runner execFile timeout handling', () => {
     expect(child.kill).toHaveBeenCalled()
   })
 
+  it.skipIf(process.platform === 'win32')(
+    'keeps a barrier Git abort pending until the process group closes',
+    async () => {
+      const child = createMockChildProcess(1234)
+      spawnMock.mockImplementation((command: string) => {
+        if (command !== 'ps') {
+          return child
+        }
+        const probe = createMockChildProcess(4321)
+        queueMicrotask(() => probe.emit('close', 0, null))
+        return probe
+      })
+      const processKill = vi.spyOn(process, 'kill').mockImplementation(() => true)
+      const controller = new AbortController()
+      try {
+        const pending = gitExecFileAsync(['status'], {
+          cwd: '/repo',
+          signal: controller.signal,
+          terminationBarrier: true
+        })
+        let settled = false
+        void pending.then(
+          () => {
+            settled = true
+          },
+          () => {
+            settled = true
+          }
+        )
+
+        controller.abort()
+        child.emit('close', 0, null)
+        await vi.advanceTimersByTimeAsync(1_999)
+        expect(settled).toBe(false)
+        await vi.advanceTimersByTimeAsync(1)
+        expect(processKill).toHaveBeenCalledWith(-1234, 'SIGKILL')
+
+        await expect(pending).rejects.toMatchObject({ name: 'AbortError' })
+      } finally {
+        processKill.mockRestore()
+      }
+    }
+  )
+
   it('rejects gh executions that never call back using the default timeout', async () => {
     const child = createMockChildProcess(1234)
     execFileMock.mockReturnValue(child)

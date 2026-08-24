@@ -33,6 +33,7 @@ import {
 import { InFlightPromiseDedupe, stableInFlightKey } from '../../shared/in-flight-promise-dedupe'
 import { gitExecMutatesRepository } from '../../shared/git-exec-mutation'
 import { GitStatusReadLeaseOwner } from '../git/git-status-read-lease-owner'
+import { REBASE_FROM_BASE_RPC_TIMEOUT_MS } from '../../shared/git-rebase-source'
 import { GitUpstreamStatusReadOwner } from '../git/git-upstream-status-read-owner'
 
 type NonInteractiveExecQueueEntry = {
@@ -565,7 +566,11 @@ export class SshGitProvider implements IGitProvider {
 
   async rebaseFromBase(worktreePath: string, baseRef: string): Promise<void> {
     await this.runWithGitReadInvalidation(async () => {
-      await this.mux.request('git.rebaseFromBase', { worktreePath, baseRef })
+      await this.mux.request(
+        'git.rebaseFromBase',
+        { worktreePath, baseRef },
+        { timeoutMs: REBASE_FROM_BASE_RPC_TIMEOUT_MS }
+      )
     })
   }
 
