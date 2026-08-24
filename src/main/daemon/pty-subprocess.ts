@@ -22,10 +22,7 @@ import {
 import { resolveProcessExitCause, type TerminalExitCause } from '../../shared/terminal-exit-cause'
 import { signalPosixPtyForegroundGroup } from '../pty/posix-pty-foreground-group'
 import { readPtsName } from '../pty/node-pty-pts-name'
-import {
-  ORCA_CODEX_LAUNCH_PREFLIGHT_CMD_QUOTE_ENV,
-  resolveWindowsShellLaunchArgs
-} from '../providers/windows-shell-args'
+import { resolveWindowsShellLaunchArgs } from '../providers/windows-shell-args'
 import {
   resolveEffectiveWindowsPowerShell,
   shouldProbeWindowsPowerShellAvailability,
@@ -746,13 +743,6 @@ export async function createPtySubprocess(opts: PtySubprocessOptions): Promise<S
             pwshAvailable: shouldProbePwsh ? isPwshAvailable() : false
           }) ?? shellPath)
         : shellPath
-    }
-    if (
-      pathWin32.basename(shellPath).toLowerCase() === 'cmd.exe' &&
-      env.ORCA_CODEX_LAUNCH_PREFLIGHT
-    ) {
-      // Why: node-pty backslash-escapes argv quotes; expand the quote inside cmd.exe instead.
-      env[ORCA_CODEX_LAUNCH_PREFLIGHT_CMD_QUOTE_ENV] = '"'
     }
     // Why: a bare `pwsh.exe` resolves to the Store App Execution Alias stub whose launch fails with ERROR_ACCESS_DENIED (5).
     windowsFallbackAttempts = buildWindowsPowerShellSpawnAttempts({

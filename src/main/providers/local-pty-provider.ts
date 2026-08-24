@@ -1,10 +1,7 @@
 /* eslint-disable max-lines -- Why: splitting spawn() would scatter tightly coupled PTY lifecycle logic (scan → ready → write → exit) with no cleaner ownership seam. */
 import { basename, delimiter, win32 as pathWin32 } from 'node:path'
 import { randomUUID } from 'node:crypto'
-import {
-  ORCA_CODEX_LAUNCH_PREFLIGHT_CMD_QUOTE_ENV,
-  resolveWindowsShellLaunchArgs
-} from './windows-shell-args'
+import { resolveWindowsShellLaunchArgs } from './windows-shell-args'
 import {
   resolveEffectiveWindowsPowerShell,
   shouldProbeWindowsPowerShellAvailability,
@@ -796,16 +793,8 @@ export class LocalPtyProvider implements IPtyProvider {
         delete finalEnv.ORCA_CODEX_HOME
       }
 
-      const shellBasename = pathWin32.basename(shellPath).toLowerCase()
       const codexLaunchPreflightCommand = finalEnv.ORCA_CODEX_LAUNCH_PREFLIGHT
-      if (
-        codexLaunchPreflightCommand &&
-        (shellBasename === 'cmd.exe' || isWindowsGitBashShellPath(shellPath))
-      ) {
-        if (shellBasename === 'cmd.exe') {
-          // Why: node-pty backslash-escapes argv quotes; expand the quote inside cmd.exe instead.
-          finalEnv[ORCA_CODEX_LAUNCH_PREFLIGHT_CMD_QUOTE_ENV] = '"'
-        }
+      if (codexLaunchPreflightCommand && isWindowsGitBashShellPath(shellPath)) {
         const resolved = resolveWindowsShellLaunchArgs(
           shellPath,
           cwd,

@@ -12,10 +12,7 @@ import { join } from 'node:path'
 import * as pty from 'node-pty'
 import { afterEach, describe, expect, it } from 'vitest'
 import { resolveGitBashPath } from '../git-bash'
-import {
-  ORCA_CODEX_LAUNCH_PREFLIGHT_CMD_QUOTE_ENV,
-  resolveWindowsShellLaunchArgs
-} from './windows-shell-args'
+import { resolveWindowsShellLaunchArgs } from './windows-shell-args'
 
 const describeWindows = process.platform === 'win32' ? describe : describe.skip
 const tempDirs: string[] = []
@@ -116,7 +113,7 @@ afterEach(() => {
 })
 
 describeWindows('Windows Codex shell preflight runtime', () => {
-  it('runs a spaced executable through cmd.exe and continues after failure', async () => {
+  it('starts the cmd.exe startup command without blocking on the Codex preflight', async () => {
     const root = makeTempDir()
     const preflight = writeFailingPreflight(root)
     const preflightMarker = join(root, 'cmd-preflight-ran')
@@ -130,6 +127,10 @@ describeWindows('Windows Codex shell preflight runtime', () => {
       preflight
     )
 
+    // Why: an inline preflight is a CLI round-trip into the running app; a slow
+    // one delayed the agent past its launch budget, so it must not be in argv.
+    expect(resolved.shellArgs.join(' ')).not.toContain('prepare-codex')
+
     await runPty({
       shellPath: 'cmd.exe',
       shellArgs: resolved.shellArgs,
@@ -137,12 +138,11 @@ describeWindows('Windows Codex shell preflight runtime', () => {
       env: {
         ...process.env,
         ORCA_CODEX_LAUNCH_PREFLIGHT: preflight,
-        [ORCA_CODEX_LAUNCH_PREFLIGHT_CMD_QUOTE_ENV]: '"',
         ORCA_PREFLIGHT_MARKER: preflightMarker
       }
     })
 
-    expect(readFileSync(preflightMarker, 'utf8')).toBe('ran')
+    expect(existsSync(preflightMarker)).toBe(false)
     expect(readFileSync(startupMarker, 'utf8').trim()).toBe('launched')
   })
 

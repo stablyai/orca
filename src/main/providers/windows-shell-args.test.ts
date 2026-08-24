@@ -9,8 +9,6 @@ import { resolveWindowsShellLaunchArgs } from './windows-shell-args'
 import { getShellReadyWrapperRoot } from './local-pty-shell-ready-wrapper-root'
 
 const CODEX_LAUNCH_PREFLIGHT = 'C:\\Program Files\\Orca\\orca.exe'
-const CMD_CODEX_LAUNCH_PREFLIGHT =
-  'if defined ORCA_CODEX_LAUNCH_PREFLIGHT call %ORCA_CODEX_LAUNCH_PREFLIGHT_CMD_QUOTE%%ORCA_CODEX_LAUNCH_PREFLIGHT%%ORCA_CODEX_LAUNCH_PREFLIGHT_CMD_QUOTE% agent hooks prepare-codex > nul 2>&1'
 
 function expectedWslArgs(linuxCwd: string, distro?: string): string[] {
   const command = `cd '${linuxCwd}' && export PATH="$HOME/.local/bin:$PATH" && ${buildWslInteractiveLoginShellCommand()}`
@@ -66,7 +64,7 @@ describe('resolveWindowsShellLaunchArgs', () => {
       undefined,
       CODEX_LAUNCH_PREFLIGHT
     )
-    expect(result.shellArgs).toEqual(['/K', `chcp 65001 > nul & ${CMD_CODEX_LAUNCH_PREFLIGHT}`])
+    expect(result.shellArgs).toEqual(['/K', 'chcp 65001 > nul'])
     expect(result.startupCommandDeliveredInShellArgs).toBeUndefined()
     expect(result.effectiveCwd).toBe('C:\\Users\\alice')
     expect(result.validationCwd).toBe('C:\\Users\\alice')
@@ -81,10 +79,7 @@ describe('resolveWindowsShellLaunchArgs', () => {
       'codex --no-alt-screen',
       CODEX_LAUNCH_PREFLIGHT
     )
-    expect(result.shellArgs).toEqual([
-      '/K',
-      `chcp 65001 > nul & ${CMD_CODEX_LAUNCH_PREFLIGHT} & codex --no-alt-screen`
-    ])
+    expect(result.shellArgs).toEqual(['/K', 'chcp 65001 > nul & codex --no-alt-screen'])
     expect(result.startupCommandDeliveredInShellArgs).toBe(true)
   })
 
@@ -111,7 +106,7 @@ describe('resolveWindowsShellLaunchArgs', () => {
       `codex ${'x'.repeat(7000)}`,
       CODEX_LAUNCH_PREFLIGHT
     )
-    expect(result.shellArgs).toEqual(['/K', `chcp 65001 > nul & ${CMD_CODEX_LAUNCH_PREFLIGHT}`])
+    expect(result.shellArgs).toEqual(['/K', 'chcp 65001 > nul'])
     expect(result.startupCommandDeliveredInShellArgs).toBeUndefined()
   })
 
@@ -308,7 +303,7 @@ describe('resolveWindowsShellLaunchArgs', () => {
     expect(result.startupCommandDeliveredInShellArgs).toBeUndefined()
   })
 
-  it('quotes a spaced preflight path through each shell environment', () => {
+  it('keeps the Codex preflight out of cmd.exe args and in the Git Bash wrapper', () => {
     const cmd = resolveWindowsShellLaunchArgs(
       'cmd.exe',
       'C:\\Users\\alice',
@@ -326,10 +321,9 @@ describe('resolveWindowsShellLaunchArgs', () => {
       CODEX_LAUNCH_PREFLIGHT
     )
 
-    expect(cmd.shellArgs[1]).toContain(
-      'call %ORCA_CODEX_LAUNCH_PREFLIGHT_CMD_QUOTE%%ORCA_CODEX_LAUNCH_PREFLIGHT%%ORCA_CODEX_LAUNCH_PREFLIGHT_CMD_QUOTE%'
-    )
-    expect(cmd.shellArgs[1]).not.toContain('"')
+    // Why: cmd.exe cannot defer the preflight behind a `codex` wrapper, so an
+    // inline call would block every pane on a CLI round-trip into the app.
+    expect(cmd.shellArgs[1]).not.toContain('prepare-codex')
     expect(cmd.shellArgs[1]).not.toContain(CODEX_LAUNCH_PREFLIGHT)
     const rcfilePath = getGitBashRcfilePath(gitBash.shellArgs[1])
     expect(readFileSync(rcfilePath, 'utf8')).toContain('"${ORCA_CODEX_LAUNCH_PREFLIGHT}"')

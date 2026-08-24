@@ -9,6 +9,11 @@ import { __setWindowsPathRegistryLoaderForTests } from '../pty/windows-path-regi
 import { hasLiveClaudePtys, markClaudePtySpawned } from '../claude-accounts/live-pty-gate'
 import { registerPtyHandlers, buildPtyHostEnv, clearProviderPtyState } from './pty'
 
+const prepareManagedCodexHomeMock = vi.hoisted(() => vi.fn(() => null))
+vi.mock('../codex/managed-home-shell-preflight', () => ({
+  prepareManagedCodexHomeBeforeShellLaunch: prepareManagedCodexHomeMock,
+  resolveManagedCodexShellPreflightHome: () => null
+}))
 vi.mock('electron', () => import('./pty-ipc-mock-registry').then((m) => m.electronModuleMock()))
 vi.mock('fs', () => import('./pty-ipc-mock-registry').then((m) => m.fsModuleMock()))
 vi.mock('node-pty', () => import('./pty-ipc-mock-registry').then((m) => m.nodePtyModuleMock()))
@@ -243,6 +248,34 @@ describe('registerPtyHandlers', () => {
       // Why (STA-4270): a bare name would be resolved by the post-profile PATH the codex()
       // wrapper inherits, so the preflight must carry the CLI's verified absolute path.
       expect(env.ORCA_CODEX_LAUNCH_PREFLIGHT).toBe(BUNDLED_CLI_PATH)
+    })
+    // Why: cmd.exe has no deferred `codex` wrapper, so its preflight ran inline at
+    // shell start as a CLI round-trip into this app — slow enough to push agent
+    // launches past their startup budget. Same prep, done in-process instead.
+    it('prepares the managed Codex home in-process instead of from the shell', async () => {
+      prepareManagedCodexHomeMock.mockClear()
+      const env = await withBundledCli(() =>
+        spawnAndGetEnv(undefined, undefined, () => TEST_CODEX_HOME)
+      )
+
+      expect(env.ORCA_CODEX_LAUNCH_PREFLIGHT).toBe(BUNDLED_CLI_PATH)
+      expect(prepareManagedCodexHomeMock).toHaveBeenCalledWith(
+        expect.objectContaining({
+          hooksEnabled: true,
+          env: expect.objectContaining({
+            CODEX_HOME: TEST_CODEX_HOME,
+            ORCA_CODEX_HOME: TEST_CODEX_HOME
+          })
+        })
+      )
+    })
+    it('does not prepare a managed Codex home when no preflight is installed', async () => {
+      prepareManagedCodexHomeMock.mockClear()
+      await withBundledCli(() => spawnAndGetEnv(undefined, undefined, () => TEST_CODEX_HOME), {
+        launcherExecutable: false
+      })
+
+      expect(prepareManagedCodexHomeMock).not.toHaveBeenCalled()
     })
     it('skips the Codex launch preflight when the bundled CLI is not executable', async () => {
       const env = await withBundledCli(

@@ -61,7 +61,10 @@ import {
 import { agentHookServer } from '../agent-hooks/server'
 import { wslHookRelayManager } from '../agent-hooks/wsl-hook-relay-manager'
 import { ensureWslHookRelayForReattach } from '../agent-hooks/wsl-hook-relay-reattach'
-import { isAgentStatusHooksEnabled } from '../agent-hooks/managed-agent-hook-controls'
+import {
+  isAgentStatusHooksEnabled,
+  prepareManagedCodexHomeBeforeShellLaunch
+} from '../agent-hooks/managed-agent-hook-controls'
 import { piTitlebarExtensionService } from '../pi/titlebar-extension-service'
 import {
   detectExplicitPiAgentKindFromCommand,
@@ -1933,6 +1936,14 @@ export function buildPtyHostEnv(
     })
     if (preflightCommand) {
       baseEnv.ORCA_CODEX_LAUNCH_PREFLIGHT = preflightCommand
+      // Why: cmd.exe has no deferred `codex` wrapper, so its preflight ran inline
+      // at shell start — a CLI round-trip back into this app that stalled agent
+      // launches for seconds. Same idempotent prep, done in-process instead.
+      prepareManagedCodexHomeBeforeShellLaunch({
+        env: baseEnv,
+        userDataPath: opts.userDataPath,
+        hooksEnabled: true
+      })
     } else {
       delete baseEnv.ORCA_CODEX_LAUNCH_PREFLIGHT
     }
