@@ -14546,6 +14546,16 @@
     },
     "workspace": {
       "cleanup": {
+        "browse": {
+          "selectionWithheldOne": "선택한 워크스페이스 1개가 현재 필터에 의해 숨겨져 선택이 해제되었습니다.",
+          "selectionWithheld": "선택한 워크스페이스 {{value0}}개가 현재 필터에 의해 숨겨져 선택이 해제되었습니다.",
+          "selectAllCountOne": "안전 검사를 통과한 워크스페이스 1개 선택",
+          "selectAllCount": "안전 검사를 통과한 워크스페이스 {{value0}}개 모두 선택"
+        },
+        "scan": {
+          "readyOne": "워크스페이스 1개를 찾았습니다.",
+          "readyMany": "워크스페이스 {{value0}}개를 찾았습니다."
+        },
         "presentationFixtures": {
           "reviewAlphaCleanup": "알파 정리 검토"
         },

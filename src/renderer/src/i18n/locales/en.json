@@ -16226,7 +16226,11 @@
           "measuringSizesProgress": "Scanning {{value0}}/{{value1}}",
           "measuringSizes": "Scanning sizes",
           "measureSizesFailed": "Could not scan workspace sizes",
-          "selectedCount": "{{value0}} selected"
+          "selectedCount": "{{value0}} selected",
+          "selectionWithheldOne": "1 selected workspace is hidden by the current filters and was deselected.",
+          "selectionWithheld": "{{value0}} selected workspaces are hidden by the current filters and were deselected.",
+          "selectAllCountOne": "Select 1 safety-checked workspace",
+          "selectAllCount": "Select all {{value0}} safety-checked workspaces"
         },
         "scan": {
           "progress": "Scanning workspaces ({{value0}}/{{value1}})",
@@ -16239,7 +16243,9 @@
           "readyManyOne": "{{value0}} workspaces found, with 1 cleanup suggestion.",
           "readyManyMany": "{{value0}} workspaces found, with {{value1}} cleanup suggestions.",
           "fallbackRepository": "a repository",
-          "gitListFailed": "Git could not list worktrees"
+          "gitListFailed": "Git could not list worktrees",
+          "readyOne": "1 workspace found.",
+          "readyMany": "{{value0}} workspaces found."
         },
         "relativeTime": {
           "never": "Never",

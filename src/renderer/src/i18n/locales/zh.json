@@ -14537,6 +14537,16 @@
     },
     "workspace": {
       "cleanup": {
+        "browse": {
+          "selectionWithheldOne": "当前筛选条件隐藏了 1 个已选工作区，已取消选择。",
+          "selectionWithheld": "当前筛选条件隐藏了 {{value0}} 个已选工作区，已取消选择。",
+          "selectAllCountOne": "选择 1 个通过安全检查的工作区",
+          "selectAllCount": "选择全部 {{value0}} 个通过安全检查的工作区"
+        },
+        "scan": {
+          "readyOne": "找到 1 个工作区。",
+          "readyMany": "找到 {{value0}} 个工作区。"
+        },
         "presentationFixtures": {
           "reviewAlphaCleanup": "评审 Alpha 清理"
         },
