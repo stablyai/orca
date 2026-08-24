@@ -12,6 +12,7 @@ const {
   adoptionLeaseReleases,
   lifecycleLeaseErrors,
   disconnectOnlyErrors,
+  retireIfIdleOutcomes,
   routerSubscriptionError,
   adapterInstances,
   defaultListSessionsSessions,
@@ -74,6 +75,39 @@ describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
     expect(adapterInstances[0].establishLifecycleLease.mock.invocationCallOrder[0]).toBeLessThan(
       adoptionLeaseReleases[0].mock.invocationCallOrder[0]
     )
+  })
+
+  it('installs no route for a legacy daemon that acknowledges idle retirement', async () => {
+    const mod = await importFresh()
+    probeSocketExistsMock.mockImplementation(
+      (path?: string) => path?.endsWith('daemon-v24.sock') ?? false
+    )
+    mockOnlyDaemonSocketAlive('daemon-v24.sock')
+    retireIfIdleOutcomes.push(true)
+
+    await mod.initDaemonPtyProvider()
+
+    const legacy = adapterInstances.find((instance) => instance.protocolVersion === 24)
+    expect(legacy?.retireIfIdle).toHaveBeenCalledOnce()
+    expect(mod.getDaemonProvider()).toBe(adapterInstances[0])
+  })
+
+  it('keeps a legacy daemon routed when it refuses idle retirement', async () => {
+    const mod = await importFresh()
+    probeSocketExistsMock.mockImplementation(
+      (path?: string) => path?.endsWith('daemon-v24.sock') ?? false
+    )
+    mockOnlyDaemonSocketAlive('daemon-v24.sock')
+    retireIfIdleOutcomes.push(false)
+
+    await mod.initDaemonPtyProvider()
+
+    const { DaemonPtyRouter } = await import('./daemon-pty-router')
+    const provider = mod.getDaemonProvider()
+    expect(provider).toBeInstanceOf(DaemonPtyRouter)
+    expect(
+      adapterInstances.find((instance) => instance.protocolVersion === 24)?.retireIfIdle
+    ).toHaveBeenCalledOnce()
   })
 
   it('passes the packaged app version to runtime stale-bundle retirement', async () => {

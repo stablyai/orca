@@ -114,6 +114,7 @@ function createDaemonInitMockState(): DaemonInitMockState {
   const adoptionLeaseReleases: DaemonInitMockState['adoptionLeaseReleases'] = []
   const lifecycleLeaseErrors: Error[] = []
   const disconnectOnlyErrors: Error[] = []
+  const retireIfIdleOutcomes: (boolean | Error)[] = []
   const routerSubscriptionError: { current: Error | null } = { current: null }
   // Same for DaemonPtyAdapter — tests assert the replacement adapter is fresh but its respawn closure targets the *original* spawner.
   const adapterInstances: MockAdapter[] = []
@@ -186,6 +187,7 @@ function createDaemonInitMockState(): DaemonInitMockState {
     adoptionLeaseReleases,
     lifecycleLeaseErrors,
     disconnectOnlyErrors,
+    retireIfIdleOutcomes,
     routerSubscriptionError,
     adapterInstances,
     defaultListSessionsSessions,

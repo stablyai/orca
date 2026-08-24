@@ -8,7 +8,7 @@ import { DaemonClient } from './client'
 import { waitForEndpointUnreachable } from './daemon-endpoint-reachability-test-harness'
 import { DaemonPtyAdapter } from './daemon-pty-adapter'
 import { DaemonServer } from './daemon-server'
-import { PROTOCOL_VERSION } from './types'
+import { CLEAN_DISCONNECT_PROTOCOL_VERSION, PROTOCOL_VERSION } from './types'
 import {
   getDaemonPidPath,
   getDaemonSocketPath,
@@ -278,6 +278,78 @@ describe('current daemon lifecycle retirement', () => {
 
     await waitFor(() => onIdleShutdown.mock.calls.length === 1)
     expect(clock.pendingCount).toBe(0)
+  })
+
+  it('acknowledges atomic retirement of an empty legacy adapter', async () => {
+    await startServer()
+    const adapter = new DaemonPtyAdapter({ socketPath, tokenPath })
+
+    await expect(adapter.retireIfIdle()).resolves.toBe(true)
+
+    await waitFor(() => onIdleShutdown.mock.calls.length === 1)
+  })
+
+  it('keeps a refused legacy adapter usable with its live session', async () => {
+    await startServer()
+    const adapter = new DaemonPtyAdapter({ socketPath, tokenPath })
+    await adapter.spawn({ sessionId: 'preserved', cols: 80, rows: 24 })
+
+    await expect(adapter.retireIfIdle()).resolves.toBe(false)
+    await expect(adapter.listSessions()).resolves.toMatchObject([
+      { sessionId: 'preserved', isAlive: true }
+    ])
+
+    subprocess.exit(0)
+    await adapter.disconnectOnly()
+  })
+
+  it('keeps a legacy adapter usable when retirement returns a malformed result', async () => {
+    await startServer()
+    const adapter = new DaemonPtyAdapter({ socketPath, tokenPath })
+    await adapter.listProcesses()
+    const client = (adapter as unknown as { client: DaemonClient }).client
+    const request = vi.spyOn(client, 'request').mockResolvedValueOnce({ retiring: 'yes' })
+
+    await expect(adapter.retireIfIdle()).resolves.toBe(false)
+    request.mockRestore()
+    await expect(adapter.listProcesses()).resolves.toEqual([])
+
+    await adapter.disconnectOnly()
+  })
+
+  it('bounds an unverifiable legacy retirement request', async () => {
+    await startServer()
+    const adapter = new DaemonPtyAdapter({ socketPath, tokenPath })
+    const daemon = server as unknown as {
+      routeRequest(clientId: string, request: { type: string }): Promise<unknown>
+    }
+    const routeRequest = daemon.routeRequest.bind(server)
+    daemon.routeRequest = async (clientId, request) => {
+      if (request.type === 'shutdownIfIdle') {
+        return new Promise<never>(() => {})
+      }
+      return routeRequest(clientId, request)
+    }
+
+    try {
+      await expect(adapter.retireIfIdle(50)).rejects.toThrow()
+    } finally {
+      daemon.routeRequest = routeRequest
+      await adapter.disconnectOnly()
+    }
+  })
+
+  it('does not request idle retirement from a pre-v24 adapter', async () => {
+    const protocolVersion = CLEAN_DISCONNECT_PROTOCOL_VERSION - 1
+    await startServer({ protocolVersion })
+    const adapter = new DaemonPtyAdapter({ socketPath, tokenPath, protocolVersion })
+    const client = (adapter as unknown as { client: DaemonClient }).client
+    const request = vi.spyOn(client, 'request')
+
+    await expect(adapter.retireIfIdle()).resolves.toBe(false)
+    expect(request).not.toHaveBeenCalled()
+
+    await adapter.disconnectOnly()
   })
 
   it('preserves a live session after clean detach and retires when that session exits', async () => {

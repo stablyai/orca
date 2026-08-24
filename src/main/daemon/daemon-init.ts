@@ -43,6 +43,7 @@ import {
 } from './daemon-host-relocation'
 import { DegradedDaemonPtyProvider } from './degraded-daemon-pty-provider'
 import { trackDaemonReplaced, trackDaemonRetired } from './daemon-lifecycle-event'
+import { retireIdleLegacyDaemonGenerations } from './legacy-daemon-generation-retirement'
 import type { DaemonReplaceReason } from '../../shared/daemon-lifecycle-telemetry'
 import {
   getLocalPtyProvider,
@@ -993,6 +994,8 @@ export async function initDaemonPtyProvider(
     releaseDaemonAdoptionLease(newSpawner.getHandle())
 
     legacyAdapters = await createLegacyDaemonAdapters(runtimeDir)
+    // Why: only the daemon can close admission and atomically prove its live-session inventory empty.
+    legacyAdapters = (await retireIdleLegacyDaemonGenerations(legacyAdapters)).kept
     routedAdapter =
       launchMode === 'degraded-new-pty-fallback'
         ? new DegradedDaemonPtyProvider({

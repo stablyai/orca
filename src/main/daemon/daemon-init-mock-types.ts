@@ -25,6 +25,7 @@ export type MockAdapter = {
   getActiveSessionIds: Mock
   fanoutSyntheticExits: Mock
   listProcesses: Mock
+  retireIfIdle: Mock
   listSessions: Mock
   establishLifecycleLease: Mock
   shutdown: Mock
@@ -131,6 +132,7 @@ export type DaemonInitMockState = {
   adoptionLeaseReleases: Mock<(...args: unknown[]) => void>[]
   lifecycleLeaseErrors: Error[]
   disconnectOnlyErrors: Error[]
+  retireIfIdleOutcomes: (boolean | Error)[]
   routerSubscriptionError: { current: Error | null }
   adapterInstances: MockAdapter[]
   defaultListSessionsSessions: { sessionId: string }[]

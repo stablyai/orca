@@ -35,6 +35,7 @@ import {
   type ListSessionsResult,
   SessionNotFoundError,
   type SessionInfo,
+  type ShutdownIfIdleResult,
   type TakePendingOutputResult
 } from './types'
 import {
@@ -175,6 +176,9 @@ const DURABLE_HISTORY_OVERLAY_DEADLINE_MS = 5_000
 // adapter, so one hung daemon stalls each restoring pane. Answering "unknown" quickly is strictly
 // better here: unknown never authorizes retirement, it only defers it.
 export const LIVENESS_PROBE_TIMEOUT_MS = 2_000
+
+// Why: a failed probe keeps the adapter routed, so one second favors bounded startup.
+const LEGACY_DAEMON_RETIREMENT_TIMEOUT_MS = 1_000
 
 // Why: providers take an absolute teardown deadline, but the client RPC takes a
 // relative timeout — convert only here, at the request itself, so sequential RPCs
@@ -1992,6 +1996,25 @@ export class DaemonPtyAdapter implements IPtyProvider {
     // Why: an authenticated pair cancels the adoption watchdog and lets a never-used adapter retire its empty daemon on quit.
     await this.client.ensureConnected()
     this.recordAuthenticatedIdentity()
+  }
+
+  async retireIfIdle(budgetMs = LEGACY_DAEMON_RETIREMENT_TIMEOUT_MS): Promise<boolean> {
+    if (this.protocolVersion < CLEAN_DISCONNECT_PROTOCOL_VERSION) {
+      return false
+    }
+    const deadlineMs = Date.now() + budgetMs
+    await this.ensureConnected(deadlineMs)
+    const retirement = await this.client.request<ShutdownIfIdleResult>(
+      'shutdownIfIdle',
+      undefined,
+      remainingRequestTimeoutMs(deadlineMs)
+    )
+    if (retirement?.retiring !== true) {
+      return false
+    }
+    // Why: the daemon closed admission before acknowledging; any checkpoint RPC now would race exit.
+    this.dispose()
+    return true
   }
 
   // Why: unlike dispose(), leave history files unclean (no endedAt) so the next launch treats them as crash-recoverable,

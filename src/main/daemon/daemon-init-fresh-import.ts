@@ -29,6 +29,7 @@ export async function importFreshDaemonInit(state: DaemonInitMockState) {
     adoptionLeaseReleases,
     lifecycleLeaseErrors,
     disconnectOnlyErrors,
+    retireIfIdleOutcomes,
     routerSubscriptionError,
     adapterInstances,
     defaultListSessionsSessions,
@@ -48,6 +49,7 @@ export async function importFreshDaemonInit(state: DaemonInitMockState) {
   adoptionLeaseReleases.length = 0
   lifecycleLeaseErrors.length = 0
   disconnectOnlyErrors.length = 0
+  retireIfIdleOutcomes.length = 0
   routerSubscriptionError.current = null
   adapterInstances.length = 0
   defaultListSessionsSessions.length = 0
