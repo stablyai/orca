@@ -114,6 +114,11 @@ const METHODS = [
     handler: () => ({ cleared: false })
   }),
   defineMethod({
+    name: 'browser.profileClearDefaultGoogleCookies',
+    params: z.object({}),
+    handler: () => ({ cleared: true })
+  }),
+  defineMethod({
     name: 'computer.permissions',
     params: z.object({}),
     handler: () => ({ opened: true })
@@ -165,6 +170,7 @@ describe('RpcDispatcher feature interactions', () => {
     await dispatcher.dispatch(makeRequest('browser.profileImportFromBrowser'))
     await dispatcher.dispatch(makeRequest('browser.profileList'))
     await dispatcher.dispatch(makeRequest('browser.profileClearDefaultCookies'))
+    await dispatcher.dispatch(makeRequest('browser.profileClearDefaultGoogleCookies'))
 
     expect(runtime.recordFeatureInteraction).toHaveBeenCalledWith('computer-use-setup')
     expect(runtime.recordFeatureInteraction).toHaveBeenCalledWith('cookie-import')

@@ -9,6 +9,10 @@ vi.mock('sonner', () => ({
   toast: { success: successToastMock, warning: warningToastMock }
 }))
 
+vi.mock('@/lib/browser-google-cookie-clear-settings', () => ({
+  openDefaultGoogleCookieClearSettings: vi.fn()
+}))
+
 import type { BrowserCookieImportSummary } from '../../../shared/browser-workspace-types'
 import { emitBrowserCookieImportToast } from './browser-cookie-import-toast'
 
@@ -83,7 +87,10 @@ describe('emitBrowserCookieImportToast', () => {
     expect(successToastMock).toHaveBeenCalledWith('Imported 2 cookies.')
     expect(warningToastMock).toHaveBeenCalledWith(
       'Google cookies were not imported. Open a browser in Orca on Remote Mac with this profile, then sign into Google.',
-      { duration: 12000 }
+      expect.objectContaining({
+        duration: 12000,
+        action: expect.objectContaining({ label: 'Clear Google cookies' })
+      })
     )
     expect(successToastMock.mock.invocationCallOrder[0]).toBeLessThan(
       warningToastMock.mock.invocationCallOrder[0]
@@ -231,7 +238,10 @@ describe('emitBrowserCookieImportToast', () => {
       ],
       [
         'Google cookies were not imported. Open a browser in Orca on Remote Mac with this profile, then sign into Google.',
-        { duration: 12000 }
+        expect.objectContaining({
+          duration: 12000,
+          action: expect.objectContaining({ label: 'Clear Google cookies' })
+        })
       ]
     ])
   })

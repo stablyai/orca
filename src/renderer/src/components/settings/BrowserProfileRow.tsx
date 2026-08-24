@@ -18,6 +18,7 @@ import {
   DropdownMenuTrigger
 } from '../ui/dropdown-menu'
 import { BrowserCookieImportDisclosure } from '../BrowserCookieImportDisclosure'
+import { ClearDefaultGoogleCookiesButton } from './ClearDefaultGoogleCookiesButton'
 import { useAppStore } from '../../store'
 import { BROWSER_FAMILY_LABELS } from '../../../../shared/constants'
 import { translate } from '@/i18n/i18n'
@@ -223,25 +224,32 @@ export function BrowserProfileRow({
           </DropdownMenuContent>
         </DropdownMenu>
         {isDefault ? (
-          <Button
-            variant="ghost"
-            size="icon"
-            className="size-7 text-muted-foreground hover:text-destructive"
-            disabled={!profile.source}
-            onClick={async () => {
-              const ok = await useAppStore.getState().clearDefaultSessionCookies()
-              if (ok) {
-                toast.success(
-                  translate(
-                    'auto.components.settings.BrowserProfileRow.2d4bea7f35',
-                    'Default cookies cleared.'
+          <>
+            <ClearDefaultGoogleCookiesButton />
+            <Button
+              variant="ghost"
+              size="icon"
+              className="size-7 text-muted-foreground hover:text-destructive"
+              aria-label={translate(
+                'auto.components.settings.BrowserProfileRow.clearImportedCookies',
+                'Clear imported cookies'
+              )}
+              disabled={!profile.source}
+              onClick={async () => {
+                const ok = await useAppStore.getState().clearDefaultSessionCookies()
+                if (ok) {
+                  toast.success(
+                    translate(
+                      'auto.components.settings.BrowserProfileRow.2d4bea7f35',
+                      'Default cookies cleared.'
+                    )
                   )
-                )
-              }
-            }}
-          >
-            <Trash2 className="size-3" />
-          </Button>
+                }
+              }}
+            >
+              <Trash2 className="size-3" />
+            </Button>
+          </>
         ) : (
           <Button
             variant="ghost"

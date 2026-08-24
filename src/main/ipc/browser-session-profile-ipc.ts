@@ -97,12 +97,20 @@ export function registerBrowserSessionProfileHandlers(): void {
   )
 
   ipcMain.removeHandler('browser:session:clearDefaultCookies')
+  ipcMain.removeHandler('browser:session:clearDefaultGoogleCookies')
 
   ipcMain.handle('browser:session:clearDefaultCookies', async (event): Promise<boolean> => {
     if (!isTrustedBrowserRenderer(event.sender)) {
       return false
     }
     return browserSessionRegistry.clearDefaultSessionCookies()
+  })
+
+  ipcMain.handle('browser:session:clearDefaultGoogleCookies', async (event): Promise<boolean> => {
+    if (!isTrustedBrowserRenderer(event.sender)) {
+      return false
+    }
+    return browserSessionRegistry.clearDefaultGoogleCookies()
   })
 
   ipcMain.removeHandler('browser:session:detectBrowsers')

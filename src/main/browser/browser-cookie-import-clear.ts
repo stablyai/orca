@@ -169,6 +169,33 @@ function groupRemovableCookies(
   return groups
 }
 
+export async function removePlannedCookieEntries(
+  targetSession: CookieClearSession,
+  removable: readonly { cookie: Cookie; url: string }[]
+): Promise<void> {
+  if (removable.length === 0) {
+    return
+  }
+  const identities = await targetSession.snapshotClearIdentities(removable)
+  assertClearIdentitiesCoverRemovable(removable, identities)
+  const removalGroups = [...groupRemovableCookies(removable).values()]
+  const results = await mapSettledWithConcurrency(
+    removalGroups,
+    COOKIE_CLEAR_CONCURRENCY,
+    async (group) => {
+      for (const { cookie, url } of group) {
+        await targetSession.cookies.remove(url, cookie.name)
+      }
+    }
+  )
+  const failures = results.flatMap((result) =>
+    result.status === 'rejected' ? [result.reason] : []
+  )
+  if (failures.length > 0) {
+    await restoreClearedCookies(targetSession, identities, failures)
+  }
+}
+
 async function restoreClearedCookies(
   targetSession: CookieClearSession,
   identities: readonly CookieClearIdentity[],
@@ -219,40 +246,10 @@ export async function removeTransplantableCookies(
     }
 
     const initialRemovable = removableCookieEntries(initialCookies, preserveFamilies, importScope)
-    if (initialRemovable.length === 0) {
-      return
-    }
-    const identities = await targetSession.snapshotClearIdentities(initialRemovable)
-    assertClearIdentitiesCoverRemovable(initialRemovable, identities)
-    // Why (STA-4170): fixing the removal plan here, beside the identities that can undo it, is what
-    // keeps the two sets equal. Re-reading the jar in the fallback widened the removal set past the
-    // restore set, so a cookie that arrived mid-clear — a login the user had just completed — was
-    // deleted with nothing able to put it back. Removing an already-deleted cookie is a harmless
-    // no-op, so the stale plan costs nothing; only its narrowness matters.
-    const removalGroups = [...groupRemovableCookies(initialRemovable).values()]
-
-    // Why (STA-4797): the bulk clearData shortcut is gone. It clears by exclusion, so the only
-    // scope it could express was "everything except google.com" — the defect itself. Narrowing it
-    // to an include list would not help either: clearData matches at the registrable-domain
-    // boundary, so it would still take host-only siblings this import does not replace, and a
-    // partial delete followed by a rejection would destroy them with no identity to restore from.
-    // The frozen per-coordinate plan is now the only path, and it is a small one — it covers the
-    // imported domains rather than the jar.
-    const results = await mapSettledWithConcurrency(
-      removalGroups,
-      COOKIE_CLEAR_CONCURRENCY,
-      async (group) => {
-        // Why: identical removal coordinates must stay ordered instead of racing.
-        for (const { cookie, url } of group) {
-          await store.remove(url, cookie.name)
-        }
-      }
-    )
-    const failures = results.flatMap((result) =>
-      result.status === 'rejected' ? [result.reason] : []
-    )
-    if (failures.length > 0) {
-      await restoreClearedCookies(targetSession, identities, failures)
-    }
+    // Why (STA-4170): the plan is frozen here, beside the identities that can undo it.
+    // Why (STA-4797): clearData is gone — it can only exclude, so the only scope it could
+    // express was "everything except google.com". The frozen per-coordinate plan is the
+    // only path, and it covers the imported domains rather than the jar.
+    await removePlannedCookieEntries(targetSession, initialRemovable)
   })
 }

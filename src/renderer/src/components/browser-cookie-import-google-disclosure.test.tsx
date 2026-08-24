@@ -10,7 +10,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import en from '@/i18n/locales/en.json'
 
 const DISCLOSURE_TITLE = "Google logins aren't imported"
-const DISCLOSURE_DESCRIPTION = 'Sign in to Google directly in Orca.'
+const DISCLOSURE_DESCRIPTION =
+  'Sign in to Google directly in Orca. Stale Google cookies can be cleared from Session & Cookies.'
+const DISCLOSURE_ACTION = 'Clear Google cookies…'
 
 vi.mock('@/components/ui/dropdown-menu', () => dropdownMenuStubs())
 vi.mock('../ui/dropdown-menu', () => dropdownMenuStubs())
@@ -18,6 +20,9 @@ vi.mock('@/components/ui/popover', () => popoverStubs())
 vi.mock('@/store', () => ({ useAppStore: appStoreStub() }))
 vi.mock('../../store', () => ({ useAppStore: appStoreStub() }))
 vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn() } }))
+vi.mock('@/components/confirmation-dialog-context', () => ({
+  useConfirmationDialog: () => vi.fn().mockResolvedValue(true)
+}))
 
 import { BrowserCookieImportDisclosure } from './BrowserCookieImportDisclosure'
 import { BrowserImportHintButton } from './browser-pane/assemble-chrome/BrowserImportHintButton'
@@ -91,6 +96,7 @@ describe('cookie-import Google disclosure footer', () => {
           importState={null}
           isActive
           onSelect={vi.fn()}
+          isDefault
         />
       )
     ]
@@ -99,6 +105,7 @@ describe('cookie-import Google disclosure footer', () => {
 
     expect(container.textContent).toContain(DISCLOSURE_TITLE)
     expect(container.textContent).toContain(DISCLOSURE_DESCRIPTION)
+    expect(container.textContent).toContain(DISCLOSURE_ACTION)
   })
 
   it('renders the icon and separator as non-interactive footer chrome', () => {
@@ -109,12 +116,47 @@ describe('cookie-import Google disclosure footer', () => {
     expect(label?.previousElementSibling?.tagName).toBe('HR')
   })
 
+  it('keeps Clear Google cookies enabled on the default profile with no import source', () => {
+    act(() =>
+      root.render(
+        <BrowserProfileRow
+          profile={
+            {
+              id: 'default',
+              scope: 'default',
+              partition: 'persist:default',
+              label: 'Default',
+              source: null
+            } as never
+          }
+          detectedBrowsers={DETECTED_BROWSERS}
+          importState={null}
+          isActive
+          onSelect={vi.fn()}
+          isDefault
+        />
+      )
+    )
+
+    const googleClear = [...container.querySelectorAll('button')].find(
+      (button) => button.textContent === 'Clear Google cookies'
+    )
+    const importedClear = [...container.querySelectorAll('button')].find(
+      (button) => button.getAttribute('aria-label') === 'Clear imported cookies'
+    )
+    expect(googleClear?.disabled).toBe(false)
+    expect(importedClear?.disabled).toBe(true)
+  })
+
   it('reads the footer copy from the catalog', () => {
     expect(catalogEntry('auto.components.BrowserCookieImportDisclosure.title')).toBe(
       DISCLOSURE_TITLE
     )
     expect(catalogEntry('auto.components.BrowserCookieImportDisclosure.description')).toBe(
       DISCLOSURE_DESCRIPTION
+    )
+    expect(catalogEntry('auto.components.BrowserCookieImportDisclosure.clearGoogleCookies')).toBe(
+      DISCLOSURE_ACTION
     )
   })
 })
@@ -176,6 +218,8 @@ function appStoreStub(): unknown {
     importCookiesToProfile: vi.fn(),
     openSettingsTarget: vi.fn(),
     openSettingsPage: vi.fn(),
+    clearDefaultGoogleCookies: vi.fn(),
+    clearDefaultSessionCookies: vi.fn(),
     persistedUIReady: true,
     setBrowserImportHintHidden: vi.fn(),
     settingsSearchQuery: ''

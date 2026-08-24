@@ -3028,6 +3028,9 @@ const api = {
     sessionClearDefaultCookies: (): Promise<boolean> =>
       ipcRenderer.invoke('browser:session:clearDefaultCookies'),
 
+    sessionClearDefaultGoogleCookies: (): Promise<boolean> =>
+      ipcRenderer.invoke('browser:session:clearDefaultGoogleCookies'),
+
     notifyActiveTabChanged: (args: { browserPageId: string }): Promise<boolean> =>
       ipcRenderer.invoke('browser:activeTabChanged', args)
   },

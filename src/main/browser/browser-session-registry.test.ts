@@ -1,12 +1,16 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-const { sessionFromPartitionMock, askForMediaAccessMock, getMediaAccessStatusMock } = vi.hoisted(
-  () => ({
-    sessionFromPartitionMock: vi.fn(),
-    askForMediaAccessMock: vi.fn(),
-    getMediaAccessStatusMock: vi.fn()
-  })
-)
+const {
+  sessionFromPartitionMock,
+  askForMediaAccessMock,
+  getMediaAccessStatusMock,
+  clearGoogleCookiesForPartitionMock
+} = vi.hoisted(() => ({
+  sessionFromPartitionMock: vi.fn(),
+  askForMediaAccessMock: vi.fn(),
+  getMediaAccessStatusMock: vi.fn(),
+  clearGoogleCookiesForPartitionMock: vi.fn()
+}))
 
 vi.mock('electron', () => ({
   session: {
@@ -27,6 +31,11 @@ vi.mock('./browser-manager', () => ({
   }
 }))
 
+vi.mock('./browser-google-cookie-clear', () => ({
+  clearGoogleCookiesForPartition: (...args: unknown[]) =>
+    clearGoogleCookiesForPartitionMock(...args)
+}))
+
 import { browserSessionRegistry } from './browser-session-registry'
 import { googleAuthUserAgent } from './browser-google-auth-ua'
 import { setupClientHintsOverride } from './browser-session-ua'
@@ -42,6 +51,8 @@ describe('BrowserSessionRegistry', () => {
     sessionFromPartitionMock.mockReset()
     askForMediaAccessMock.mockReset()
     getMediaAccessStatusMock.mockReset()
+    clearGoogleCookiesForPartitionMock.mockReset()
+    clearGoogleCookiesForPartitionMock.mockResolvedValue(true)
     askForMediaAccessMock.mockResolvedValue(true)
     getMediaAccessStatusMock.mockReturnValue('granted')
     sessionFromPartitionMock.mockReturnValue({
@@ -192,6 +203,24 @@ describe('BrowserSessionRegistry', () => {
     const deleted = await browserSessionRegistry.deleteProfile('default')
     expect(deleted).toBe(false)
     expect(browserSessionRegistry.getDefaultProfile()).not.toBeNull()
+  })
+
+  it('clears Google cookies on the default partition without wiping import source', async () => {
+    const sourced = browserSessionRegistry.updateProfileSource('default', {
+      browserFamily: 'chrome',
+      importedAt: 1
+    })
+    expect(sourced?.source).not.toBeNull()
+
+    const first = await browserSessionRegistry.clearDefaultGoogleCookies()
+    const second = await browserSessionRegistry.clearDefaultGoogleCookies()
+
+    expect(first).toBe(true)
+    expect(second).toBe(true)
+    expect(clearGoogleCookiesForPartitionMock).toHaveBeenCalledTimes(2)
+    expect(clearGoogleCookiesForPartitionMock).toHaveBeenCalledWith(ORCA_BROWSER_PARTITION)
+    expect(browserSessionRegistry.getDefaultProfile().source).not.toBeNull()
+    expect(sessionFromPartitionMock).not.toHaveBeenCalled()
   })
 
   it('hydrates profiles from persisted data', () => {

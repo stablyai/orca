@@ -30,6 +30,7 @@ import {
 } from './browser-session-partition-policies'
 import { isValidPersistedBrowserSessionProfile } from './browser-session-persisted-profile-validation'
 import { clearBrowserSessionUserAgentMode } from './browser-session-user-agent-mode'
+import { clearGoogleCookiesForPartition } from './browser-google-cookie-clear'
 
 export type BrowserSessionRegistryProfileOptions = {
   orcaProfileId: string
@@ -278,6 +279,11 @@ class BrowserSessionRegistry {
     } catch {
       return false
     }
+  }
+
+  // Why (STA-4398): import neither writes nor clears this family; source metadata stays.
+  async clearDefaultGoogleCookies(): Promise<boolean> {
+    return clearGoogleCookiesForPartition(this.defaultPartition)
   }
 
   hydrateFromPersisted(profiles: BrowserSessionProfile[]): void {

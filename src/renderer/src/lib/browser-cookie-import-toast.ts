@@ -2,6 +2,7 @@ import { toast } from 'sonner'
 import type { BrowserCookieImportSummary } from '../../../shared/browser-workspace-types'
 import { isHandledWireDiscriminant } from '../../../shared/handled-wire-discriminant'
 import { translate } from '@/i18n/i18n'
+import { openDefaultGoogleCookieClearSettings } from '@/lib/browser-google-cookie-clear-settings'
 
 type CookieImportWarning = NonNullable<BrowserCookieImportSummary['warning']>
 type CookieImportWarningCode = CookieImportWarning['code']
@@ -103,7 +104,16 @@ function emitGoogleCookieImportWarning(
       'Google cookies were not imported. Open a browser in Orca on {{value0}} with this profile, then sign into Google.',
       { value0: executionHostLabel }
     ),
-    { duration: 12000 }
+    {
+      duration: 12000,
+      action: {
+        label: translate(
+          'auto.lib.browser.cookie.import.toast.clearGoogleCookies',
+          'Clear Google cookies'
+        ),
+        onClick: openDefaultGoogleCookieClearSettings
+      }
+    }
   )
 }
 

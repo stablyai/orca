@@ -1,6 +1,11 @@
 import { Info } from 'lucide-react'
 import { translate } from '@/i18n/i18n'
-import { DropdownMenuLabel, DropdownMenuSeparator } from '@/components/ui/dropdown-menu'
+import {
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator
+} from '@/components/ui/dropdown-menu'
+import { openDefaultGoogleCookieClearSettings } from '@/lib/browser-google-cookie-clear-settings'
 
 export function BrowserCookieImportDisclosure(): React.JSX.Element {
   return (
@@ -18,11 +23,21 @@ export function BrowserCookieImportDisclosure(): React.JSX.Element {
           <span className="block leading-4 text-muted-foreground">
             {translate(
               'auto.components.BrowserCookieImportDisclosure.description',
-              'Sign in to Google directly in Orca.'
+              'Sign in to Google directly in Orca. Stale Google cookies can be cleared from Session & Cookies.'
             )}
           </span>
         </span>
       </DropdownMenuLabel>
+      <DropdownMenuItem
+        onSelect={() => {
+          openDefaultGoogleCookieClearSettings()
+        }}
+      >
+        {translate(
+          'auto.components.BrowserCookieImportDisclosure.clearGoogleCookies',
+          'Clear Google cookies…'
+        )}
+      </DropdownMenuItem>
     </>
   )
 }

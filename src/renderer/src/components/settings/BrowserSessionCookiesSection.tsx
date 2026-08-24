@@ -59,7 +59,9 @@ export function BrowserSessionCookiesSection({
         'chrome',
         'edge',
         'arc',
-        'profile'
+        'profile',
+        'google',
+        'clear'
       ]}
       className="space-y-3 py-2"
     >

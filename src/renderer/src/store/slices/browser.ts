@@ -237,6 +237,7 @@ export type BrowserSlice = {
     browserProfile?: string
   ) => Promise<BrowserCookieImportExecutionResult>
   clearDefaultSessionCookies: () => Promise<boolean>
+  clearDefaultGoogleCookies: () => Promise<boolean>
   browserUrlHistory: BrowserHistoryEntry[]
   addBrowserHistoryEntry: (url: string, title: string) => void
   clearBrowserHistory: () => void
@@ -2330,6 +2331,28 @@ export const createBrowserSlice: StateCreator<AppState, [], [], BrowserSlice> = 
         await get().fetchBrowserSessionProfiles()
       }
       return ok
+    } catch {
+      return false
+    }
+  },
+
+  clearDefaultGoogleCookies: async () => {
+    const runtimeEnvironmentId = getBrowserSettingsRuntimeEnvironmentId(get())
+    if (runtimeEnvironmentId) {
+      try {
+        const result = await callRuntimeRpc<BrowserProfileClearDefaultCookiesResult>(
+          { kind: 'environment', environmentId: runtimeEnvironmentId },
+          'browser.profileClearDefaultGoogleCookies',
+          undefined,
+          { timeoutMs: 15_000 }
+        )
+        return result.cleared
+      } catch {
+        return false
+      }
+    }
+    try {
+      return await window.api.browser.sessionClearDefaultGoogleCookies()
     } catch {
       return false
     }

@@ -788,6 +788,7 @@
               "restartFallbackUnavailableNone": "None of the {{value0}} cookies could be loaded, and the restart fallback was unavailable. The previous cookies for this profile were replaced. Try the import again.",
               "restartFallbackUnavailablePartial": "Imported {{value0}} of {{value1}} cookies. The rest could not be loaded, and the restart fallback was unavailable. Try the import again.",
               "googleCookiesSkipped": "Google cookies were not imported. Open a browser in Orca on {{value0}} with this profile, then sign into Google.",
+              "clearGoogleCookies": "Clear Google cookies",
               "undecryptableAppBound": "Orca cannot decrypt {{value0}} of this browser's cookies because they use app-bound encryption. You can import cookies from a file using “From File…”.",
               "undecryptableAppBoundMixed": "Orca cannot decrypt {{value0}} of this browser's cookies because they use app-bound encryption; {{value1}} more could not be decrypted for another reason. You can import cookies from a file using “From File…”.",
               "undecryptableKeyring": "{{value0}} cookies could not be decrypted because the system keyring was unavailable. Unlock your login keyring (or install a Secret Service provider such as gnome-keyring) and import again.",
@@ -981,7 +982,8 @@
     "components": {
       "BrowserCookieImportDisclosure": {
         "title": "Google logins aren't imported",
-        "description": "Sign in to Google directly in Orca."
+        "description": "Sign in to Google directly in Orca. Stale Google cookies can be cleared from Session & Cookies.",
+        "clearGoogleCookies": "Clear Google cookies…"
       },
       "CodexRestartChip": {
         "a4c8e1b2f7": "Codex is still signed in as {{value0}}",
@@ -6411,7 +6413,15 @@
           "4399c77caa": "Default",
           "4af9a17947": "kagi"
         },
+        "ClearDefaultGoogleCookiesButton": {
+          "label": "Clear Google cookies",
+          "confirmTitle": "Clear Google cookies?",
+          "confirmDescription": "This signs you out of Google in the default browser profile. Cookies for other sites stay. You can sign in to Google again inside Orca.",
+          "cleared": "Google cookies cleared.",
+          "failed": "Could not clear Google cookies. Try again."
+        },
         "BrowserProfileRow": {
+          "clearImportedCookies": "Clear imported cookies",
           "8e636cae25": "Profile \"{{value0}}\" removed.",
           "2d4bea7f35": "Default cookies cleared.",
           "ebb78dfd6f": "From File…",

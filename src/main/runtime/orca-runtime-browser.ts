@@ -1602,6 +1602,10 @@ export class RuntimeBrowserCommands {
     return { cleared: await browserSessionRegistry.clearDefaultSessionCookies() }
   }
 
+  async browserProfileClearDefaultGoogleCookies(): Promise<BrowserProfileClearDefaultCookiesResult> {
+    return { cleared: await browserSessionRegistry.clearDefaultGoogleCookies() }
+  }
+
   async browserTabClose(params: {
     index?: number
     page?: string
