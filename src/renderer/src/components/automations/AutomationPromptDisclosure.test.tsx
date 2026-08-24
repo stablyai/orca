@@ -108,6 +108,7 @@ describe('AutomationPromptDisclosure', () => {
 
     const content = screen.getByText(/SYNTHETIC-END-MARKER/)
     const toggle = screen.getByRole('button', { name: 'Show more' })
+    expect(screen.getAllByText('Prompt')).toHaveLength(1)
     expect(content).toHaveClass('line-clamp-4', 'select-text', '[overflow-wrap:anywhere]')
     expect(toggle).toHaveAttribute('aria-expanded', 'false')
     expect(toggle).toHaveAttribute('aria-controls', content.id)

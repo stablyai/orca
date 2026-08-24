@@ -75,23 +75,18 @@ export function AutomationPromptDisclosure({ prompt }: { prompt: string }): Reac
           </Button>
         ) : null}
       </div>
-      <div className="px-3 py-3">
-        <div className="min-w-0">
-          <div className="text-[11px] font-medium uppercase text-muted-foreground">
-            {translate('auto.components.automations.AutomationDetail.007c8ad874', 'Prompt')}
-          </div>
-          <p
-            ref={setPromptElement}
-            id={contentId}
-            tabIndex={-1}
-            className={cn(
-              'mt-1 select-text whitespace-pre-wrap text-sm text-foreground [overflow-wrap:anywhere]',
-              !expanded && 'line-clamp-4'
-            )}
-          >
-            {prompt}
-          </p>
-        </div>
+      <div className="min-w-0 px-3 py-3">
+        <p
+          ref={setPromptElement}
+          id={contentId}
+          tabIndex={-1}
+          className={cn(
+            'select-text whitespace-pre-wrap text-sm text-foreground [overflow-wrap:anywhere]',
+            !expanded && 'line-clamp-4'
+          )}
+        >
+          {prompt}
+        </p>
       </div>
     </div>
   )
