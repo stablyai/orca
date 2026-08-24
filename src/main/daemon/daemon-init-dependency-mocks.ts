@@ -254,8 +254,16 @@ export function createNetConnectStubs(state: DaemonInitMockState): NetConnectStu
         on(event: string, cb: () => void) {
           handlers[event]?.push(cb)
           if (event === 'error') {
-            queueMicrotask(() => cb())
+            queueMicrotask(() =>
+              (cb as (error: NodeJS.ErrnoException) => void)(
+                Object.assign(new Error('missing endpoint'), { code: 'ENOENT' })
+              )
+            )
           }
+          return this
+        },
+        off(event: string, cb: () => void) {
+          handlers[event] = handlers[event]?.filter((handler) => handler !== cb) ?? []
           return this
         },
         removeListener(event: string, cb: () => void) {
@@ -277,6 +285,10 @@ export function createNetConnectStubs(state: DaemonInitMockState): NetConnectStu
           if ((live && event === 'connect') || (!live && event === 'error')) {
             queueMicrotask(() => callback())
           }
+          return this
+        },
+        off(event: string, callback: () => void) {
+          handlers[event] = handlers[event]?.filter((handler) => handler !== callback) ?? []
           return this
         },
         removeListener(event: string, callback: () => void) {

@@ -57,6 +57,10 @@ describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
         }
         return this
       },
+      off(event: string, cb: () => void) {
+        handlers[event] = handlers[event]?.filter((handler) => handler !== cb) ?? []
+        return this
+      },
       removeListener(event: string, cb: () => void) {
         handlers[event] = handlers[event]?.filter((handler) => handler !== cb) ?? []
         return this
@@ -104,8 +108,8 @@ describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
     expect(forkMock).not.toHaveBeenCalled()
   })
 
-  it('replaces a permanently wedged daemon after the grace window is exhausted (#8689)', async () => {
-    // Why: a socket that accepts connections but never answers hello was preserved forever (#8689); after grace it must be replaced.
+  it('holds a connectable daemon when occupancy stays unknown after the grace window', async () => {
+    // Unknown occupancy is not permission to kill ConPTY-owned sessions.
     const mod = await importFresh()
     await mod.initDaemonPtyProvider()
 
@@ -116,7 +120,7 @@ describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
         disconnect: vi.fn()
       }
     }
-    // Permanent wedge: every probe times out, then the freshly spawned daemon accepts the temporary adoption lease.
+    // Every occupancy probe times out while the incumbent still owns the endpoint.
     let daemonClientConstructionCount = 0
     daemonClientMock.mockImplementation(function MockDaemonClient() {
       daemonClientConstructionCount++
@@ -159,23 +163,15 @@ describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
     const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
 
     try {
-      await launcher('/fake/socket', '/fake/token')
+      const handle = await launcher('/fake/socket', '/fake/token')
 
-      expect(killStaleDaemonMock).toHaveBeenCalledWith(
-        FAKE_RUNTIME_DIR,
-        '/fake/socket',
-        '/fake/token'
-      )
-      expect(forkMock).toHaveBeenCalled()
+      expect(handle).toMatchObject({ mode: 'held' })
+      expect(killStaleDaemonMock).not.toHaveBeenCalled()
+      expect(forkMock).not.toHaveBeenCalled()
       // The launcher probes the full grace budget: 1 initial probe + WEDGED_DAEMON_GRACE_RETRIES retries.
-      expect(daemonClientMock).toHaveBeenCalledTimes(3 + WEDGED_DAEMON_GRACE_RETRIES)
-      // Why: this replace path used to kill the daemon with no log, so a post-hoc
-      // reader could not tell it apart from an adoption; the verdict must be recorded.
+      expect(daemonClientMock).toHaveBeenCalledTimes(2 + WEDGED_DAEMON_GRACE_RETRIES)
       expect(warnSpy).toHaveBeenCalledWith(
-        expect.stringContaining('Replacing daemon that failed the health check')
-      )
-      expect(warnSpy).toHaveBeenCalledWith(
-        expect.stringContaining(`graceRetries=${WEDGED_DAEMON_GRACE_RETRIES}`)
+        expect.stringContaining('HOLDING daemon with unverifiable occupancy')
       )
     } finally {
       warnSpy.mockRestore()

@@ -15,7 +15,8 @@ import {
   adoptOwningProvider,
   attachDaemonOwnedSession,
   findDaemonAdapter,
-  listProviderSessionIds
+  listProviderSessionIds,
+  ownerForDaemonOwnedOperation
 } from './degraded-daemon-session-routing'
 import { DegradedDaemonFreshSpawnRouter } from './degraded-daemon-fresh-spawn-routing'
 import { DegradedDaemonOwnerRecovery } from './degraded-daemon-owner-recovery'
@@ -109,18 +110,18 @@ export class DegradedDaemonPtyProvider implements IPtyProvider {
     )?.providesAgentSessionOwnerListings?.(ptyId) === true
 
   write(id: string, data: string): boolean | void {
-    return this.providerFor(id).write(id, data)
+    return this.ownerFor(id).write(id, data)
   }
 
   async writeWithSettlement(id: string, data: string): Promise<boolean> {
-    const provider = this.providerFor(id)
+    const provider = this.ownerFor(id)
     return provider.writeWithSettlement
       ? await provider.writeWithSettlement(id, data)
       : provider.write(id, data) !== false
   }
 
   resize(id: string, cols: number, rows: number): void {
-    this.providerFor(id).resize(id, cols, rows)
+    this.ownerFor(id).resize(id, cols, rows)
   }
 
   pauseProducer(id: string): void {
@@ -139,14 +140,14 @@ export class DegradedDaemonPtyProvider implements IPtyProvider {
     id: string,
     opts: { immediate?: boolean; keepHistory?: boolean; deadlineMs?: number }
   ): Promise<void> {
-    await this.providerFor(id).shutdown(id, opts)
+    await this.ownerFor(id).shutdown(id, opts)
     if (!opts.keepHistory) {
       this.sessionProviders.delete(id)
     }
   }
 
   async sendSignal(id: string, signal: string): Promise<void> {
-    await this.providerFor(id).sendSignal(id, signal)
+    await this.ownerFor(id).sendSignal(id, signal)
   }
 
   async getCwd(id: string): Promise<string> {
@@ -343,6 +344,10 @@ export class DegradedDaemonPtyProvider implements IPtyProvider {
       this.findProviderForExistingSession(sessionId) ??
       this.fallback
     )
+  }
+
+  private ownerFor(sessionId: string): IPtyProvider {
+    return ownerForDaemonOwnedOperation(this.providerFor(sessionId), this.fallback, sessionId)
   }
 
   private findProviderForExistingSession(sessionId: string): IPtyProvider | null {

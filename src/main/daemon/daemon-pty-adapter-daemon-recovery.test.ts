@@ -233,28 +233,52 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
 
     it('joins a request-path respawn instead of forking a second daemon', async () => {
       let releaseRespawn!: () => void
+      let respawnCalls = 0
       const respawn = vi.fn(async () => {
-        await new Promise<void>((resolve) => {
-          releaseRespawn = resolve
-        })
+        respawnCalls += 1
+        if (respawnCalls > 1) {
+          throw new Error('unexpected second respawn')
+        }
+        await new Promise<void>((resolve) => (releaseRespawn = resolve))
         restartServerOnRespawn()
         await server.start()
       })
       const healingAdapter = new DaemonPtyAdapter({ socketPath, tokenPath, respawn })
+      const adapterInternals = healingAdapter as unknown as {
+        ensureConnected(): Promise<void>
+      }
       try {
         const { id } = await healingAdapter.spawn({ cols: 80, rows: 24 })
         const client = (healingAdapter as unknown as { client: DaemonClient }).client
         await server.shutdown()
         await waitFor(() => !client.isConnected())
 
+        let releaseStaleAttempt!: () => void
+        let staleAttemptStarted!: () => void
+        const staleAttempt = new Promise<void>((resolve) => (staleAttemptStarted = resolve))
+        const realEnsureConnected = adapterInternals.ensureConnected.bind(adapterInternals)
+        vi.spyOn(adapterInternals, 'ensureConnected')
+          .mockImplementationOnce(async () => {
+            staleAttemptStarted()
+            await new Promise<void>((resolve) => (releaseStaleAttempt = resolve))
+            throw Object.assign(new Error('connect ENOENT from stale request'), {
+              code: 'ENOENT',
+              syscall: 'connect'
+            })
+          })
+          .mockImplementation(realEnsureConnected)
+
         const newSpawn = healingAdapter.spawn({
           sessionId: 'request-path-session',
           cols: 80,
           rows: 24
         })
-        await waitFor(() => releaseRespawn !== undefined)
+        await staleAttempt
         expect(() => healingAdapter.write(id, 'queued')).toThrow(PtyWriteUnavailableError)
+        await waitFor(() => releaseRespawn !== undefined)
         releaseRespawn()
+        await waitFor(() => client.isConnected())
+        releaseStaleAttempt()
 
         await expect(newSpawn).resolves.toMatchObject({ id: 'request-path-session' })
         expect(respawn).toHaveBeenCalledTimes(1)

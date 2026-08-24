@@ -248,6 +248,8 @@ export class DaemonPtyAdapter implements IPtyProvider {
   private respawnAdoptionClosed = false
   // Why: concurrent spawn() calls hitting a dead daemon would each fork their own; this promise coalesces respawns so only the first forks and the rest await it.
   private respawnPromise: Promise<void> | null = null
+  // A late failure retries the replacement it straddled instead of replacing that replacement.
+  private respawnGeneration = 0
   private staleBundleReplacementPromise: Promise<void> | null = null
   private writeRecoveryPromise: Promise<void> | null = null
   private writeRecoveryAttempted = false
@@ -2607,6 +2609,7 @@ export class DaemonPtyAdapter implements IPtyProvider {
   }
 
   private async withDaemonRetry<T>(fn: () => Promise<T>): Promise<T> {
+    const attemptGeneration = this.respawnGeneration
     try {
       return await fn()
     } catch (err) {
@@ -2621,12 +2624,11 @@ export class DaemonPtyAdapter implements IPtyProvider {
       if (this.respawnAdoptionClosed || !this.respawnFn || !isDaemonGoneError(err)) {
         throw err
       }
-      if (!this.respawnPromise) {
-        this.respawnPromise = this.doRespawn().finally(() => {
-          this.respawnPromise = null
-        })
+      if (attemptGeneration === this.respawnGeneration) {
+        await this.ensureRespawn()
+      } else if (this.respawnPromise) {
+        await this.respawnPromise
       }
-      await this.respawnPromise
       try {
         return await fn()
       } finally {
@@ -2735,15 +2737,10 @@ export class DaemonPtyAdapter implements IPtyProvider {
 
     // Why: replacing the daemon kills its sessions without exit fanout; emit exits first so panes don't write to dead PTYs.
     this.fanoutSyntheticExits(-1)
-    if (!this.respawnPromise) {
-      this.respawnPromise = this.doRespawn(
-        '[daemon] macOS system resolver unavailable - respawning daemon',
-        'unhealthy_resolver'
-      ).finally(() => {
-        this.respawnPromise = null
-      })
-    }
-    await this.respawnPromise
+    await this.ensureRespawn(
+      '[daemon] macOS system resolver unavailable - respawning daemon',
+      'unhealthy_resolver'
+    )
   }
 
   /** Replace a stale packaged daemon only after its live sessions drain. */
@@ -2789,15 +2786,10 @@ export class DaemonPtyAdapter implements IPtyProvider {
     }
 
     this.fanoutSyntheticExits(-1)
-    if (!this.respawnPromise) {
-      this.respawnPromise = this.doRespawn(
-        '[daemon] Packaged daemon is stale - respawning from the current app bundle',
-        'stale_bundle'
-      ).finally(() => {
-        this.respawnPromise = null
-      })
-    }
-    await this.respawnPromise
+    await this.ensureRespawn(
+      '[daemon] Packaged daemon is stale - respawning from the current app bundle',
+      'stale_bundle'
+    )
   }
 
   /** Replace a TCC-severed daemon only after its live sessions drain. */
@@ -2829,15 +2821,10 @@ export class DaemonPtyAdapter implements IPtyProvider {
     }
 
     this.fanoutSyntheticExits(-1)
-    if (!this.respawnPromise) {
-      this.respawnPromise = this.doRespawn(
-        '[daemon] macOS TCC attribution severed - respawning daemon under the current app binary',
-        'severed_tcc_attribution'
-      ).finally(() => {
-        this.respawnPromise = null
-      })
-    }
-    await this.respawnPromise
+    await this.ensureRespawn(
+      '[daemon] macOS TCC attribution severed - respawning daemon under the current app binary',
+      'severed_tcc_attribution'
+    )
   }
 
   private async getDaemonLiveSessionCount(): Promise<number | null> {
@@ -2872,6 +2859,22 @@ export class DaemonPtyAdapter implements IPtyProvider {
       throw new Error('Daemon adapter closed during respawn')
     }
     this.pendingRespawnAdoptionRelease = releaseAdoptionLease ?? null
+  }
+
+  private ensureRespawn(message?: string, reason?: DaemonRespawnReason): Promise<void> {
+    if (!this.respawnPromise) {
+      const respawn = this.doRespawn(message, reason)
+        .then(() => {
+          this.respawnGeneration += 1
+        })
+        .finally(() => {
+          if (this.respawnPromise === respawn) {
+            this.respawnPromise = null
+          }
+        })
+      this.respawnPromise = respawn
+    }
+    return this.respawnPromise
   }
 
   private releasePendingRespawnAdoptionLease(): void {

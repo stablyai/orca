@@ -45,7 +45,7 @@ export type MockAdapterConstructor = new (opts: MockAdapter['options']) => MockA
 
 /** Handle the fake spawner hands back from ensureRunning/getHandle. */
 export type MockSpawnerHandle = {
-  mode?: 'degraded-new-pty-fallback'
+  mode?: 'degraded-new-pty-fallback' | 'held'
   releaseAdoptionLease?: () => void
   shutdown: () => Promise<void>
 }
@@ -53,6 +53,7 @@ export type MockSpawnerHandle = {
 /** Slice of net.Socket the daemon socket probe drives. */
 export type MockProbeSocket = {
   on: (event: string, callback: () => void) => MockProbeSocket
+  off: (event: string, callback: () => void) => MockProbeSocket
   removeListener: (event: string, callback: () => void) => MockProbeSocket
   destroy: () => void
 }
@@ -93,7 +94,7 @@ export type MockLocalPtyProvider = {
 export type EnsureRunningOverride = () => Promise<{
   socketPath: string
   tokenPath: string
-  mode?: 'degraded-new-pty-fallback'
+  mode?: 'degraded-new-pty-fallback' | 'held'
 }>
 
 /** Every stub daemon-init's suites share, plus the control knobs they mutate per test. */

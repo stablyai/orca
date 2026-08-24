@@ -28,8 +28,10 @@ export type DaemonPidFile = {
   spawnerExecPath?: string
 }
 
+export type DaemonLaunchMode = 'degraded-new-pty-fallback' | 'held'
+
 export type DaemonProcessHandle = {
-  mode?: 'degraded-new-pty-fallback'
+  mode?: DaemonLaunchMode
   releaseAdoptionLease?(): void
   shutdown(): Promise<void>
 }

@@ -1,6 +1,6 @@
 import type { IPtyProvider } from '../providers/types'
 import type { DaemonPtyAdapter } from './daemon-pty-adapter'
-import { SessionNotFoundError } from './daemon-errors'
+import { SessionNotFoundError, TerminalSessionOwnerUnverifiedError } from './daemon-errors'
 
 export function listProviderSessionIds(
   sessionProviders: ReadonlyMap<string, IPtyProvider>,
@@ -24,6 +24,17 @@ export async function attachDaemonOwnedSession(
     throw new SessionNotFoundError(sessionId)
   }
   return await owner.attach(sessionId)
+}
+
+export function ownerForDaemonOwnedOperation(
+  owner: IPtyProvider,
+  fallback: IPtyProvider,
+  sessionId: string
+): IPtyProvider {
+  if (owner === fallback && fallback.hasPty?.(sessionId) !== true) {
+    throw new TerminalSessionOwnerUnverifiedError(sessionId)
+  }
+  return owner
 }
 
 /** Probes providers for an id absent from the routing map and adopts the

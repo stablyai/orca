@@ -1,3 +1,5 @@
+import { PtyWriteUnavailableError } from '../providers/pty-write-unavailable-error'
+
 // Error classes shared across the daemon protocol boundary (client, server,
 // host). Split from types.ts, which is capped for wire-shape declarations.
 const ATTACH_CANCELED_PREFIX = 'Attach canceled for session '
@@ -61,7 +63,7 @@ export class SessionNotFoundError extends Error {
   }
 }
 
-export class TerminalSessionOwnerUnverifiedError extends Error {
+export class TerminalSessionOwnerUnverifiedError extends PtyWriteUnavailableError {
   constructor(sessionId: string) {
     super(`Terminal session owner could not be verified: ${sessionId}`)
     this.name = 'TerminalSessionOwnerUnverifiedError'

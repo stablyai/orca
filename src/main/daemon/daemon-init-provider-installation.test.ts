@@ -255,6 +255,26 @@ describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
     expect(adapterInstances[0].listProcesses).toHaveBeenCalled()
   })
 
+  it('installs a held daemon without requiring an adoption handshake', async () => {
+    const mod = await importFresh()
+    ensureRunningOverrides.push(async () => ({
+      socketPath: '/fake/held-socket',
+      tokenPath: '/fake/held-token',
+      mode: 'held'
+    }))
+
+    await mod.initDaemonPtyProvider()
+
+    const { DegradedDaemonPtyProvider } = await import('./degraded-daemon-pty-provider')
+    const provider = mod.getDaemonProvider()
+    expect(provider).toBeInstanceOf(DegradedDaemonPtyProvider)
+    expect(adapterInstances[0].establishLifecycleLease).not.toHaveBeenCalled()
+    expect(adoptionLeaseReleases[0]).not.toHaveBeenCalled()
+    await expect(provider!.spawn({ cols: 80, rows: 24 })).resolves.toEqual({
+      id: 'local-fallback-pty'
+    })
+  })
+
   it('rechecks the preserved daemon endpoint before recovering fresh-spawn routing', async () => {
     const mod = await importFresh()
     ensureRunningOverrides.push(async () => ({

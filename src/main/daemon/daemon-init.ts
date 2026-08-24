@@ -14,10 +14,16 @@ import {
   replaceDaemonPidFile,
   unlinkOwnedDaemonPidFile,
   type DaemonLauncher,
+  type DaemonLaunchMode,
   type DaemonPidFile,
   type DaemonProcessHandle
 } from './daemon-spawner'
 import { DAEMON_EXIT_ENDPOINT_OCCUPIED } from './daemon-endpoint-ownership'
+import { endpointIsProvenDead, probeSocketConnect } from './daemon-endpoint-probe'
+import {
+  shouldDisableUnknownOccupancyHold,
+  shouldForceDaemonInventoryUnavailable
+} from './daemon-supervision-fault-injection'
 import { DaemonPtyAdapter, type DaemonRespawnReason } from './daemon-pty-adapter'
 import { DaemonPtyRouter } from './daemon-pty-router'
 import { DaemonClient } from './client'
@@ -177,6 +183,9 @@ async function getAliveDaemonSessionCount(
   tokenPath: string,
   protocolVersion = PROTOCOL_VERSION
 ): Promise<number | null> {
+  if (shouldForceDaemonInventoryUnavailable()) {
+    return null
+  }
   const client = new DaemonClient({ socketPath, tokenPath, protocolVersion })
   try {
     await client.ensureConnected()
@@ -192,7 +201,7 @@ async function getAliveDaemonSessionCount(
 function createPreservedDaemonHandle(
   runtimeDir: string,
   protocolVersion = PROTOCOL_VERSION,
-  mode?: 'degraded-new-pty-fallback'
+  mode?: DaemonLaunchMode
 ): DaemonProcessHandle {
   const handle: DaemonProcessHandle = {
     shutdown: async () => {
@@ -474,9 +483,12 @@ function createOutOfProcessLauncher(
       adoptionClient.disconnect()
       adoptionClient = null
     }
-    const preserveDaemon = async (
-      mode?: 'degraded-new-pty-fallback'
-    ): Promise<DaemonProcessHandle> => {
+    const holdIncumbentDaemon = (): DaemonProcessHandle => {
+      adoptionClient?.disconnect()
+      adoptionClient = null
+      return createPreservedDaemonHandle(runtimeDir, PROTOCOL_VERSION, 'held')
+    }
+    const preserveDaemon = async (mode?: DaemonLaunchMode): Promise<DaemonProcessHandle> => {
       const connectedClient = adoptionClient ?? undefined
       adoptionClient = null
       return holdDaemonAdoptionLease(
@@ -599,6 +611,18 @@ function createOutOfProcessLauncher(
             `[daemon] Preserving daemon that failed the health check because it owns ${liveSessionCount} live session${liveSessionCount === 1 ? '' : 's'}`
           )
           return preserveDaemon()
+        }
+        // Unverifiable occupancy is not authority to destroy the incumbent process tree.
+        if (
+          liveSessionCount === null &&
+          health !== 'rejected' &&
+          !shouldDisableUnknownOccupancyHold() &&
+          !endpointIsProvenDead(await probeSocketConnect(socketPath))
+        ) {
+          console.warn(
+            `[daemon] DEGRADED MODE: HOLDING daemon with unverifiable occupancy (health=${health}, graceRetries=${graceRetry}). Replacing it could end live terminals; fresh terminals run locally until it recovers or you restart it.`
+          )
+          return holdIncumbentDaemon()
         }
         // Why: the sibling replace branches announce themselves, but this one used
         // to kill a daemon silently — leaving no way to tell a replacement apart
@@ -989,12 +1013,14 @@ export async function initDaemonPtyProvider(
   let routedAdapter: DaemonProvider = newAdapter
   try {
     // Why: the launcher's temporary pair closes only after this permanent pair is established, leaving no adoption gap.
-    await newAdapter.establishLifecycleLease()
-    releaseDaemonAdoptionLease(newSpawner.getHandle())
+    if (launchMode !== 'held') {
+      await newAdapter.establishLifecycleLease()
+      releaseDaemonAdoptionLease(newSpawner.getHandle())
+    }
 
     legacyAdapters = await createLegacyDaemonAdapters(runtimeDir)
     routedAdapter =
-      launchMode === 'degraded-new-pty-fallback'
+      launchMode === 'degraded-new-pty-fallback' || launchMode === 'held'
         ? new DegradedDaemonPtyProvider({
             current: newAdapter,
             legacy: legacyAdapters,

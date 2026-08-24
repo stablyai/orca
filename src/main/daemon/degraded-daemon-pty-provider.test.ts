@@ -5,6 +5,7 @@ import type { DaemonPtyAdapter } from './daemon-pty-adapter'
 import type { IPtyProvider, PtySpawnOptions, PtySpawnResult } from '../providers/types'
 import type { PtyProcessInspection } from '../providers/pty-process-inspection'
 import { SessionNotFoundError, TerminalSessionOwnerUnverifiedError } from './daemon-errors'
+import { PtyWriteUnavailableError } from '../providers/pty-write-unavailable-error'
 
 type ProviderMock = IPtyProvider & {
   probePtyLiveness: (id: string) => Promise<boolean | null>
@@ -158,6 +159,32 @@ it('forwards dead-endpoint write-unavailable signals from the daemon adapters', 
   unsubscribe()
   current.triggerWriteUnavailable('after-unsubscribe')
   expect(recovered).toEqual(['daemon-pane', 'legacy-pane'])
+})
+
+it('fences mutating operations when no provider can prove session ownership', async () => {
+  const current = createDaemonAdapter('daemon')
+  const fallback = createProvider('fallback')
+  const provider = new DegradedDaemonPtyProvider({ current, legacy: [], fallback })
+
+  expect(() => provider.write('unverified-session', 'input')).toThrow(
+    TerminalSessionOwnerUnverifiedError
+  )
+  expect(() => provider.write('unverified-session', 'input')).toThrow(PtyWriteUnavailableError)
+  await expect(provider.writeWithSettlement('unverified-session', 'input')).rejects.toBeInstanceOf(
+    TerminalSessionOwnerUnverifiedError
+  )
+  expect(() => provider.resize('unverified-session', 80, 24)).toThrow(
+    TerminalSessionOwnerUnverifiedError
+  )
+  await expect(provider.shutdown('unverified-session', { immediate: true })).rejects.toBeInstanceOf(
+    TerminalSessionOwnerUnverifiedError
+  )
+  await expect(provider.sendSignal('unverified-session', 'SIGINT')).rejects.toBeInstanceOf(
+    TerminalSessionOwnerUnverifiedError
+  )
+
+  expect(fallback.write).not.toHaveBeenCalled()
+  expect(fallback.shutdown).not.toHaveBeenCalled()
 })
 
 it('routes attach-only to a legacy session created after startup inventory', async () => {

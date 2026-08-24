@@ -418,6 +418,10 @@ describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
           }
           return this
         },
+        off(event: string, cb: () => void) {
+          handlers[event] = handlers[event]?.filter((handler) => handler !== cb) ?? []
+          return this
+        },
         removeListener(event: string, cb: () => void) {
           handlers[event] = handlers[event]?.filter((handler) => handler !== cb) ?? []
           return this
@@ -447,6 +451,10 @@ describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
       const socket = {
         on(event: string, cb: () => void) {
           handlers[event]?.add(cb)
+          return this
+        },
+        off(event: string, cb: () => void) {
+          handlers[event]?.delete(cb)
           return this
         },
         removeListener(event: string, cb: () => void) {

@@ -58,6 +58,10 @@ function createDaemonInitMockState(): DaemonInitMockState {
         }
         return this
       },
+      off(event: string, cb: () => void) {
+        handlers[event] = handlers[event]?.filter((handler) => handler !== cb) ?? []
+        return this
+      },
       removeListener(event: string, cb: () => void) {
         handlers[event] = handlers[event]?.filter((handler) => handler !== cb) ?? []
         return this
