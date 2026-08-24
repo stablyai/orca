@@ -25,6 +25,7 @@ vi.mock('./antigravity-loopback-client', async (importOriginal) => ({
 
 import { fetchAntigravityRateLimits } from './antigravity-usage-fetcher'
 import { AntigravityLoopbackResponseError } from './antigravity-loopback-client'
+import { readAntigravityLogExcerpt } from './antigravity-log-discovery'
 
 function logEntry(name: string): Dirent {
   return { name, isFile: () => true } as Dirent
@@ -185,5 +186,25 @@ describe('Antigravity rotating-log discovery', () => {
     await Promise.resolve()
     await Promise.resolve()
     expect(close).toHaveBeenCalledOnce()
+  })
+
+  it('observes cancellation after the final log read before returning the excerpt', async () => {
+    const controller = new AbortController()
+    const contents = 'Language server listening on random port at 40200 for HTTP'
+    openMock.mockResolvedValue(readableLog(contents))
+    const nativeThrowIfAborted = controller.signal.throwIfAborted.bind(controller.signal)
+    let abortChecks = 0
+    vi.spyOn(controller.signal, 'throwIfAborted').mockImplementation(() => {
+      abortChecks += 1
+      if (abortChecks === 5) {
+        controller.abort()
+      }
+      nativeThrowIfAborted()
+    })
+
+    await expect(
+      readAntigravityLogExcerpt('/tmp/antigravity.log', controller.signal)
+    ).rejects.toThrow(/aborted/i)
+    expect(abortChecks).toBe(5)
   })
 })

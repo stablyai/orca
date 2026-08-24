@@ -2111,10 +2111,10 @@ function StatusBarInner({ floatingTerminalOpen }: StatusBarProps): React.JSX.Ele
   const { claude, codex, gemini, opencodeGo, kimi, antigravity, minimax, grok } = rateLimits
 
   // Why: a bar is earned by a live snapshot or durable Settings setup; detection-gating hides per-CLI bars when the agent isn't on PATH.
-  // Why: Antigravity has no persisted credential, so a checked status item + detected CLI is the durable "show its slot" signal.
+  // Why: Antigravity may be provided by the desktop runtime even when `agy` is not on PATH.
   const antigravityUsageConfigured =
     statusBarItems.includes('antigravity') &&
-    isStatusBarItemAvailable('antigravity', detectedAgentIds)
+    isStatusBarItemAvailable('antigravity', detectedAgentIds, antigravity)
   // Why: thread non-GlobalSettings durability flags so bars stay visible across reloads and snapshot refreshes.
   const usageSettings = {
     ...settings,
@@ -2148,7 +2148,7 @@ function StatusBarInner({ floatingTerminalOpen }: StatusBarProps): React.JSX.Ele
   const showAntigravity =
     visibleAntigravity !== null &&
     statusBarItems.includes('antigravity') &&
-    isStatusBarItemAvailable('antigravity', detectedAgentIds)
+    isStatusBarItemAvailable('antigravity', detectedAgentIds, antigravity)
   // Why: MiniMax is cookie-auth, not a CLI on PATH, so detection-gating doesn't apply.
   const showMiniMax = visibleMiniMax !== null && statusBarItems.includes('minimax')
   const showGrok =
@@ -2488,7 +2488,7 @@ function StatusBarInner({ floatingTerminalOpen }: StatusBarProps): React.JSX.Ele
               {translate('auto.components.status.bar.StatusBar.c1df0d67ec', 'Gemini Usage')}
             </DropdownMenuCheckboxItem>
           )}
-          {isStatusBarItemAvailable('antigravity', detectedAgentIds) && (
+          {isStatusBarItemAvailable('antigravity', detectedAgentIds, antigravity) && (
             <DropdownMenuCheckboxItem
               checked={statusBarItems.includes('antigravity')}
               onCheckedChange={() => {

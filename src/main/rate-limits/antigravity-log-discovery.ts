@@ -117,6 +117,8 @@ async function readLogSection(
     }
     totalBytesRead += bytesRead
   }
+  // Why: cancellation can land after the final read resolves but before its caller parses the log.
+  signal.throwIfAborted()
   return buffer.subarray(0, totalBytesRead)
 }
 
