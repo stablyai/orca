@@ -76,6 +76,19 @@ describe('tui agent permissions', () => {
     ).toBe('mixed')
   })
 
+  it('resolves ZCode permission arguments through the shared profile', () => {
+    expect(
+      resolveTuiAgentPermissionMode({
+        agent: 'zcode',
+        agentArgs: YOLO_TUI_AGENT_ARGS.zcode,
+        agentEnv: {}
+      })
+    ).toBe('yolo')
+    expect(resolveTuiAgentPermissionMode({ agent: 'zcode', agentArgs: '', agentEnv: {} })).toBe(
+      'manual'
+    )
+  })
+
   it('resolves env-driven yolo launches', () => {
     expect(
       resolveTuiAgentPermissionMode({
