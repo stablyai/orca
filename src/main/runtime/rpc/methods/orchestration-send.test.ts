@@ -53,13 +53,85 @@ describe('orchestration RPC methods', () => {
       const result = (await call('orchestration.send', {
         from: 'term_coord',
         to: `run:${activeRunId}`,
-        subject: 'hello'
+        subject: 'hello',
+        allowSelf: true
       })) as { message: { id: string; from_handle: string; run_id: string } }
 
       expect(result.message.id).toMatch(/^msg_/)
       expect(result.message.from_handle).toBe('term_coord')
       expect(result.message.run_id).toBe(activeRunId)
       expect(runtime.deliverPendingMessagesForHandle).toHaveBeenCalled()
+    })
+
+    it('rejects an accidental exact self-message and permits an explicit one', async () => {
+      setup(false)
+      const before = db.getInbox().length
+
+      await expect(
+        call('orchestration.send', {
+          from: 'term_coord',
+          to: 'term_coord',
+          subject: 'loop'
+        })
+      ).rejects.toThrow('Sender and recipient resolve to the same mailbox')
+      expect(db.getInbox()).toHaveLength(before)
+
+      const result = (await call('orchestration.send', {
+        from: 'term_coord',
+        to: 'term_coord',
+        subject: 'intentional loop',
+        allowSelf: true
+      })) as {
+        message: { from_handle: string; to_handle: string }
+        audit: { kind: string; from: string; to: string; runId: string | null }
+      }
+
+      expect(result.message).toMatchObject({
+        from_handle: 'term_coord',
+        to_handle: 'term_coord'
+      })
+      expect(result.audit).toEqual({
+        kind: 'intentional_self_message',
+        from: 'term_coord',
+        to: 'term_coord',
+        runId: null
+      })
+    })
+
+    it('rejects an omitted recipient that resolves to the sender Run mailbox', async () => {
+      setup()
+      const before = db.getInbox().length
+
+      await expect(
+        call('orchestration.send', { from: 'term_coord', subject: 'loop' })
+      ).rejects.toThrow('Sender and recipient resolve to the same mailbox')
+
+      expect(db.getInbox()).toHaveLength(before)
+    })
+
+    it('rejects a worker sending to its own Dispatch without lifecycle mutation', async () => {
+      setup()
+      const task = db.createTask({ spec: 'self-target guard' })
+      const dispatch = db.createDispatchContext(task.id, 'term_worker')
+      const before = db.getInbox().length
+
+      await expect(
+        call('orchestration.send', {
+          from: 'term_worker',
+          to: `dispatch:${dispatch.id}`,
+          subject: 'self completion',
+          type: 'worker_done',
+          payload: JSON.stringify({
+            taskId: task.id,
+            dispatchId: dispatch.id,
+            outcome: 'succeeded'
+          })
+        })
+      ).rejects.toThrow('Sender and recipient resolve to the same mailbox')
+
+      expect(db.getInbox()).toHaveLength(before)
+      expect(db.getTask(task.id)?.status).toBe('dispatched')
+      expect(db.getDispatchContextById(dispatch.id)?.status).toBe('dispatched')
     })
 
     it('wakes the Run mailbox after canonicalizing an old coordinator recipient', async () => {
@@ -82,11 +154,40 @@ describe('orchestration RPC methods', () => {
       const result = (await call('orchestration.send', {
         from: 'term_reminted',
         to: 'term_coord',
-        subject: 'late completion'
+        subject: 'late completion',
+        allowSelf: true
       })) as { message: { to_handle: string } }
 
       expect(result.message.to_handle).toBe(`run:${activeRunId}`)
       await expect(waiting).resolves.toBe('notified')
+    })
+
+    it('rejects reminted handles that canonicalize to the sender mailbox', async () => {
+      setup()
+      const remintedPaneKey = 'tab_reminted:bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb'
+      vi.mocked(runtime.getTerminalPaneKey).mockImplementation((handle) =>
+        handle === 'term_reminted'
+          ? remintedPaneKey
+          : handle === 'term_coord'
+            ? coordinatorPaneKey
+            : null
+      )
+      vi.mocked(runtime.getLiveTerminalPaneKey).mockImplementation((handle) =>
+        runtime.getTerminalPaneKey(handle)
+      )
+      db.bindRun({
+        runId: activeRunId!,
+        coordinatorHandle: 'term_reminted',
+        coordinatorPaneKey: remintedPaneKey
+      })
+
+      await expect(
+        call('orchestration.send', {
+          from: 'term_reminted',
+          to: 'term_coord',
+          subject: 'loop after remint'
+        })
+      ).rejects.toThrow('Sender and recipient resolve to the same mailbox')
     })
 
     it('routes exact Dispatch mail independently of terminal handles', async () => {
@@ -322,6 +423,7 @@ describe('orchestration RPC methods', () => {
       await call('orchestration.send', {
         from: 'term_coord',
         to: 'term_coord',
+        allowSelf: true,
         subject: 'Done',
         type: 'worker_done',
         payload: JSON.stringify({

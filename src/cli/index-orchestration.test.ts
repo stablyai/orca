@@ -85,6 +85,30 @@ describe('orca cli worktree awareness', () => {
     expect(logSpy).toHaveBeenCalledWith('Sent 2 messages to 2 recipients')
   })
 
+  it('accepts --allow-self and forwards the explicit override', async () => {
+    process.env.ORCA_TERMINAL_HANDLE = 'term_sender'
+    callMock.mockResolvedValueOnce(okFixture('req_send_self', { message: { id: 'msg_self' } }))
+
+    await main(
+      [
+        'orchestration',
+        'send',
+        '--to',
+        'term_sender',
+        '--subject',
+        'intentional loop',
+        '--allow-self',
+        '--json'
+      ],
+      '/tmp/repo'
+    )
+
+    expect(callMock).toHaveBeenCalledWith(
+      'orchestration.send',
+      expect.objectContaining({ allowSelf: true })
+    )
+  })
+
   it('rejects no-flag orchestration reset before calling the runtime', async () => {
     await main(['orchestration', 'reset'], '/tmp/repo')
 

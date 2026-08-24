@@ -96,6 +96,7 @@ export const ORCHESTRATION_SEND_HANDLER: Record<string, CommandHandler> = {
       // Why: pane key is the remint-stable sender identity the runtime verifies lifecycle ownership against; older runtimes strip it.
       senderPaneKey: process.env.ORCA_PANE_KEY || undefined,
       waitForLifecycleSettlement: type === 'worker_done' ? true : undefined,
+      ...(flags.get('allow-self') === true ? { allowSelf: true } : {}),
       devMode: isDevCliInvocation()
     }
     const dispatchCapability = getOptionalStringFlag(flags, 'dispatch-capability')

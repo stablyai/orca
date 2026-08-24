@@ -147,6 +147,7 @@ const SendParams = z
     senderPaneKey: OptionalString,
     run: OptionalString,
     waitForLifecycleSettlement: OptionalBoolean,
+    allowSelf: OptionalBoolean,
     devMode: OptionalBoolean
   })
   .superRefine((params, ctx) => {
@@ -617,11 +618,48 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
           sendWarnings.push(recipient.warning)
         }
       }
+      const senderRecipient = resolveBareOrchestrationRecipient({
+        runtime,
+        db,
+        handle: from,
+        senderRunId: routing.run?.id,
+        explicitRunId: params.run
+      })
+      const logicalSelf =
+        to === from ||
+        (senderRecipient.ok &&
+          (senderRecipient.to === to || senderRecipient.to === params.to) &&
+          (senderRecipient.runId ?? '') === (messageRunId ?? ''))
+      if (logicalSelf && !params.allowSelf) {
+        throw new OrchestrationError(
+          'invalid_argument',
+          'Sender and recipient resolve to the same mailbox. Pass --allow-self only for an intentional self-message.'
+        )
+      }
       const withSendWarnings = <T extends object>(
         receipt: T
       ): T & {
         warnings?: SendRecipientWarning[]
-      } => (sendWarnings.length > 0 ? { ...receipt, warnings: sendWarnings } : receipt)
+        audit?: {
+          kind: 'intentional_self_message'
+          from: string
+          to: string
+          runId: string | null
+        }
+      } => ({
+        ...receipt,
+        ...(sendWarnings.length > 0 ? { warnings: sendWarnings } : {}),
+        ...(logicalSelf
+          ? {
+              audit: {
+                kind: 'intentional_self_message' as const,
+                from,
+                to,
+                runId: messageRunId ?? null
+              }
+            }
+          : {})
+      })
 
       if (!isGroupAddress(to)) {
         const federatedDispatchId = to.startsWith('dispatch:')
@@ -833,15 +871,15 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
           resolution: { ok: true; to: string; runId?: string; warning?: SendRecipientWarning }
         } => recipient.resolution.ok
       )
-      const senderRecipient = resolveBareOrchestrationRecipient({
+      const groupSenderRecipient = resolveBareOrchestrationRecipient({
         runtime,
         db,
         handle: from,
         senderRunId: routing.run?.id,
         legacyAdoptedMailboxOwner
       })
-      const senderMailboxKey = senderRecipient.ok
-        ? `${senderRecipient.runId ?? ''}\u0000${senderRecipient.to}`
+      const senderMailboxKey = groupSenderRecipient.ok
+        ? `${groupSenderRecipient.runId ?? ''}\u0000${groupSenderRecipient.to}`
         : undefined
       const seenMailboxes = new Set<string>()
       const uniqueRecipients = deliverableRecipients.filter(({ resolution }) => {

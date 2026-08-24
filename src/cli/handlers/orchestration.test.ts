@@ -114,6 +114,22 @@ describe('orchestration send structured payload flags', () => {
     expect(callMock).toHaveBeenCalledWith('orchestration.send', expect.objectContaining({ body }))
   })
 
+  it('forwards an explicit self-send override to the runtime', async () => {
+    await invokeSend(
+      new Map<string, string | boolean>([
+        ['from', 'term_coord'],
+        ['to', 'term_coord'],
+        ['subject', 'intentional loop'],
+        ['allow-self', true]
+      ])
+    )
+
+    expect(callMock).toHaveBeenCalledWith(
+      'orchestration.send',
+      expect.objectContaining({ allowSelf: true })
+    )
+  })
+
   it('carries Dispatch authority in the RPC envelope instead of message params', async () => {
     await invokeSend(
       new Map<string, string | boolean>([
