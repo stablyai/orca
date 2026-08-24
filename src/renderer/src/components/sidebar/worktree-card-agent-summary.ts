@@ -11,9 +11,9 @@ export type SummaryAgentGroup = {
 const SUMMARY_STATE_ORDER: AgentDotState[] = [
   'waiting',
   'blocked',
-  'interrupted',
   'working',
   'monitoring',
+  'interrupted',
   'done',
   'idle'
 ]

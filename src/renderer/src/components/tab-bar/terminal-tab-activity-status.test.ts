@@ -110,7 +110,7 @@ describe('resolveTerminalTabActivityStatus', () => {
     ).toBe('done')
   })
 
-  it('treats an interrupted done as done, matching the worktree card', () => {
+  it('reports an interrupted done as interrupted, matching the worktree card', () => {
     const interrupted = entry(FIRST_LEAF_ID, 'done', { interrupted: true })
     expect(
       resolveTerminalTabActivityStatus({
@@ -118,7 +118,22 @@ describe('resolveTerminalTabActivityStatus', () => {
         agentStatusByPaneKey: { [interrupted.paneKey]: interrupted },
         ptyIdsByTabId: LIVE_PTY
       })
-    ).toBe('done')
+    ).toBe('interrupted')
+  })
+
+  it('does not let a finished sibling mask an interrupted outcome', () => {
+    const interrupted = entry(FIRST_LEAF_ID, 'done', { interrupted: true })
+    const finished = entry(SECOND_LEAF_ID, 'done')
+    expect(
+      resolveTerminalTabActivityStatus({
+        tab: TAB,
+        agentStatusByPaneKey: {
+          [interrupted.paneKey]: interrupted,
+          [finished.paneKey]: finished
+        },
+        ptyIdsByTabId: LIVE_PTY
+      })
+    ).toBe('interrupted')
   })
 
   it('falls back to a live working title when hook status is stale', () => {
@@ -273,6 +288,9 @@ describe('resolveTerminalTabAttentionBadge', () => {
     )
     expect(resolveTerminalTabAttentionBadge({ status: 'done', hasUnread: true })).toBe('unread')
     expect(resolveTerminalTabAttentionBadge({ status: 'done', hasUnread: false })).toBe('done')
+    expect(resolveTerminalTabAttentionBadge({ status: 'interrupted', hasUnread: false })).toBe(
+      'interrupted'
+    )
     expect(resolveTerminalTabAttentionBadge({ status: 'active', hasUnread: false })).toBeNull()
   })
 })
@@ -302,6 +320,7 @@ describe('terminalTabActivityToAgentDotState', () => {
     expect(terminalTabActivityToAgentDotState('monitoring')).toBe('monitoring')
     expect(terminalTabActivityToAgentDotState('permission')).toBe('permission')
     expect(terminalTabActivityToAgentDotState('done')).toBe('done')
+    expect(terminalTabActivityToAgentDotState('interrupted')).toBe('interrupted')
     expect(terminalTabActivityToAgentDotState('active')).toBeNull()
     expect(terminalTabActivityToAgentDotState('inactive')).toBeNull()
   })

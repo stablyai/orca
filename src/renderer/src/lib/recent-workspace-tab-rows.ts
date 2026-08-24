@@ -7,10 +7,12 @@ import {
   type WorktreeAttention
 } from '@/components/sidebar/smart-attention'
 import { tabHasLivePty } from './tab-has-live-pty'
+import { isExplicitAgentStatusFresh } from './pane-agent-evidence'
 import type { WorktreeStatus } from './worktree-status'
 import type { TabGroup } from '../../../shared/tab-types'
 import type { TerminalTab } from '../../../shared/terminal-tab-types'
 import type { ExecutionHostId } from '../../../shared/execution-host'
+import { AGENT_STATUS_STALE_AFTER_MS } from '../../../shared/agent-status-types'
 import { getWorktreeVisitTimestamp } from './worktree-visit-recency'
 import { composeWorktreeHostIdentity } from '../../../shared/worktree/host-qualified-identity'
 
@@ -105,7 +107,19 @@ export function resolveRecentWorkspaceTabStatus(
     )
     return hasForegroundWork ? 'working' : 'monitoring'
   }
-  if (explicit) {
+  if (explicit === 'permission') {
+    return explicit
+  }
+  const hasInterrupted = panes.some(
+    (pane) =>
+      pane.kind === 'hook' &&
+      pane.entry.interrupted === true &&
+      isExplicitAgentStatusFresh(pane.entry, now, AGENT_STATUS_STALE_AFTER_MS)
+  )
+  if (hasInterrupted) {
+    return 'interrupted'
+  }
+  if (explicit === 'done') {
     return explicit
   }
   return tabHasLivePty(paneSources.ptyIdsByTabId, row.terminalTab.id) ? 'active' : 'inactive'

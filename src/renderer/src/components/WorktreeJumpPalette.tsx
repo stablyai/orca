@@ -449,7 +449,7 @@ function shouldIncludeOpenTabInRecentSection({
       unreadAgentCompletionPanes
     })
   })
-  return badge != null && badge !== 'done'
+  return badge != null && badge !== 'done' && badge !== 'interrupted'
 }
 
 function PaletteRowShortcutBadge({

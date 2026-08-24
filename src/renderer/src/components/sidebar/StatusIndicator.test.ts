@@ -60,4 +60,11 @@ describe('StatusIndicator', () => {
 
     expect(classNames).toContain('bg-emerald-500')
   })
+
+  it('renders interrupted distinctly from done', () => {
+    const classNames = renderDotClassNames('interrupted')
+
+    expect(classNames).toContain('bg-red-500')
+    expect(classNames).not.toContain('bg-emerald-500')
+  })
 })

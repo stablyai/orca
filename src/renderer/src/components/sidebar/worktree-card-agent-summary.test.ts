@@ -55,4 +55,18 @@ describe('worktree card agent summary', () => {
       /Monitoring background tasks<\/span><span[^>]*> - Run background checks<\/span>/
     )
   })
+
+  it('lists interrupted outcomes before clean completions', () => {
+    const done = monitoringAgent()
+    done.state = 'done'
+    done.entry.state = 'done'
+    done.entry.workingMode = undefined
+    const interrupted = {
+      ...done,
+      paneKey: 'tab-1:leaf-2',
+      entry: { ...done.entry, paneKey: 'tab-1:leaf-2', interrupted: true }
+    }
+
+    expect(summarizeAgents([done, interrupted], 'Agents')).toBe('Agents: 1 interrupted, 1 done')
+  })
 })

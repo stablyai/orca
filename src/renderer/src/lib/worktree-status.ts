@@ -16,6 +16,7 @@ export type WorktreeStatus =
   | 'working'
   | 'monitoring'
   | 'permission'
+  | 'interrupted'
   | 'done'
   | 'inactive'
 
@@ -31,6 +32,7 @@ const STATUS_LABELS: Record<WorktreeStatus, string> = {
   working: 'Working',
   monitoring: 'Monitoring background tasks',
   permission: 'Needs permission',
+  interrupted: 'Interrupted',
   done: 'Done',
   inactive: 'Inactive'
 }
@@ -124,8 +126,7 @@ export function getWorktreeStatusLabel(status: WorktreeStatus): string {
 }
 
 /**
- * Apply the WorktreeCard priority overlay (permission > working > done >
- * heuristic) on top of the title-heuristic base. Explicit agent rows may
+ * Apply the WorktreeCard priority overlay on top of the title-heuristic base. Explicit agent rows may
  * promote the dot; sleep cleanup owns removing stale retained rows.
  *
  * Map args are narrowed to this worktree. `hasPermission`/`hasLiveWorking`/
@@ -143,6 +144,7 @@ export function resolveWorktreeStatus(args: {
   hasPermission: boolean
   hasLiveWorking: boolean
   hasLiveMonitoring?: boolean
+  hasInterrupted?: boolean
   hasLiveDone: boolean
   hasRetainedDone: boolean
 }): WorktreeStatus {
@@ -170,6 +172,10 @@ export function resolveWorktreeStatus(args: {
   }
   if (args.hasLiveMonitoring || heuristic === 'monitoring') {
     return 'monitoring'
+  }
+  // Terminal outcomes follow live states, but an interrupted outcome must not collapse into success.
+  if (args.hasInterrupted) {
+    return 'interrupted'
   }
   if (args.hasLiveDone || args.hasRetainedDone) {
     return 'done'

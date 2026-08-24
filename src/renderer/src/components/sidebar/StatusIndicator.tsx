@@ -53,6 +53,18 @@ const StatusIndicator = React.memo(function StatusIndicator({
     )
   }
 
+  if (status === 'interrupted') {
+    return (
+      <span
+        className={cn('inline-flex h-3 w-3 shrink-0 items-center justify-center', className)}
+        title={resolvedTitle}
+        {...rest}
+      >
+        <span className="block size-1.5 rounded-full bg-red-500" />
+      </span>
+    )
+  }
+
   if (status === 'permission') {
     return (
       <span

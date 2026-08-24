@@ -93,7 +93,8 @@ export const LEAF_ID = '11111111-2222-4333-8444-555555555555'
 export function makeAgentEntry(
   tabId: string,
   state: AgentStatusState,
-  stateStartedAt: number
+  stateStartedAt: number,
+  overrides: Partial<AgentStatusEntry> = {}
 ): AgentStatusEntry {
   return {
     state,
@@ -101,7 +102,8 @@ export function makeAgentEntry(
     updatedAt: stateStartedAt,
     stateStartedAt,
     paneKey: makePaneKey(tabId, LEAF_ID),
-    stateHistory: []
+    stateHistory: [],
+    ...overrides
   }
 }
 

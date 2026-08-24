@@ -34,6 +34,7 @@ export function selectWorktreeActivityStatuses(
       hasPermission,
       hasLiveWorking,
       hasLiveMonitoring,
+      hasInterrupted,
       hasLiveDone,
       hasRetainedDone,
       agentStatusPaneIdsByTabId
@@ -50,6 +51,7 @@ export function selectWorktreeActivityStatuses(
         hasPermission,
         hasLiveWorking,
         hasLiveMonitoring,
+        hasInterrupted,
         hasLiveDone,
         hasRetainedDone
       })

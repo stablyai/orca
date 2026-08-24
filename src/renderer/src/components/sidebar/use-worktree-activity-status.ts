@@ -26,6 +26,7 @@ export function useWorktreeActivityStatus(worktreeId: string): WorktreeStatus {
     hasPermission,
     hasLiveWorking,
     hasLiveMonitoring,
+    hasInterrupted,
     hasLiveDone,
     hasRetainedDone,
     agentStatusPaneIdsByTabId
@@ -46,6 +47,7 @@ export function useWorktreeActivityStatus(worktreeId: string): WorktreeStatus {
         hasPermission,
         hasLiveWorking,
         hasLiveMonitoring,
+        hasInterrupted,
         hasLiveDone,
         hasRetainedDone
       }),
@@ -59,6 +61,7 @@ export function useWorktreeActivityStatus(worktreeId: string): WorktreeStatus {
       hasPermission,
       hasLiveWorking,
       hasLiveMonitoring,
+      hasInterrupted,
       hasLiveDone,
       hasRetainedDone
     ]

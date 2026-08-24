@@ -312,6 +312,27 @@ describe('orderRecentWorkspaceTabs', () => {
 })
 
 describe('resolveRecentWorkspaceTabStatus', () => {
+  it('surfaces an interrupted outcome without promoting its sort class', () => {
+    const interrupted = entry('interrupted', 'done', NOW - 1_000, { interrupted: true })
+
+    expect(resolveRecentWorkspaceTabStatus(row('interrupted'), sources([interrupted]), NOW)).toBe(
+      'interrupted'
+    )
+  })
+
+  it('does not let a cleanly finished sibling mask an interruption', () => {
+    const interrupted = entry('mixed', 'done', NOW - 1_000, {
+      paneKey: `mixed:${LEAF_ID}`,
+      interrupted: true
+    })
+    const finished = entry('mixed', 'done', NOW - 2_000, {
+      paneKey: 'mixed:22222222-2222-4222-8222-222222222222'
+    })
+
+    expect(
+      resolveRecentWorkspaceTabStatus(row('mixed'), sources([interrupted, finished]), NOW)
+    ).toBe('interrupted')
+  })
   it('maps attention classes onto the sidebar dot vocabulary', () => {
     const blocked = row('blocked')
     const done = row('done')

@@ -665,7 +665,7 @@ describe('WorktreeJumpPalette recent chats & terminals', () => {
     expect(getTabRowIds()).toContain('tab-alpha')
   })
 
-  it('excludes the current tab when its agent is merely done', async () => {
+  it.each([undefined, true])('excludes current terminal outcomes', async (interrupted) => {
     await renderPalette(
       makeRecentTabState({
         activeWorktreeId: 'wt-alpha',
@@ -674,7 +674,9 @@ describe('WorktreeJumpPalette recent chats & terminals', () => {
         activeTabIdByWorktree: { 'wt-alpha': 'term-alpha' },
         activeTabTypeByWorktree: { 'wt-alpha': 'terminal' },
         agentStatusByPaneKey: {
-          [makePaneKey('term-alpha', LEAF_ID)]: makeAgentEntry('term-alpha', 'done', Date.now())
+          [makePaneKey('term-alpha', LEAF_ID)]: makeAgentEntry('term-alpha', 'done', Date.now(), {
+            interrupted
+          })
         }
       })
     )
