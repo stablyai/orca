@@ -4615,7 +4615,8 @@
           "hostDisconnected": "연결 끊김",
           "failedNestWorkspace": "워크스페이스를 중첩하지 못했습니다",
           "sidebarRowMissing": "대상이 더 이상 존재하지 않습니다",
-          "failedUnnestWorkspace": "워크트리 펼치기 실패"
+          "failedUnnestWorkspace": "워크트리 펼치기 실패",
+          "newTerminalGroup": "새 터미널 그룹"
         },
         "WorktreeMetaDialog": {
           "3db0a2a593": "취소",
@@ -5164,6 +5165,15 @@
           "3b7ea51793": "검색 지우기",
           "7f1c2e94a5": "검색어가 너무 깁니다 — 보드가 필터링되지 않았습니다",
           "9a4d0f6b21": "너무 김"
+        },
+        "NewTerminalGroupDialog": {
+          "title": "새 터미널 그룹",
+          "description": "{{value1}}의 {{value0}}에서 실행되는 터미널과 agent입니다. 새 워크트리나 브랜치를 만들지 않습니다.",
+          "nameLabel": "이름",
+          "namePlaceholder": "servers, research, scripts…",
+          "agentLabel": "agent",
+          "cancel": "취소",
+          "create": "그룹 만들기"
         }
       },
       "shared": {

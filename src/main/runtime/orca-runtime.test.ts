@@ -41773,6 +41773,43 @@ describe('OrcaRuntimeService', () => {
     expect(listWorktrees).toHaveBeenCalledTimes(1)
   })
 
+  // `orca worktree ps` and `orca terminal create --worktree` both read the resolved catalog, so a
+  // terminal group only reaches the CLI if the git scan's rows are joined by its meta-backed row.
+  it('lists a git project terminal group next to its checkouts', async () => {
+    const terminalGroupId = `${TEST_REPO_ID}::${TEST_REPO_PATH}${FOLDER_WORKSPACE_INSTANCE_SEPARATOR}44444444-4444-4444-8444-444444444444`
+    const metaById: Record<string, WorktreeMeta> = {
+      ...store.getAllWorktreeMeta(),
+      [terminalGroupId]: makeWorktreeMeta({
+        instanceId: '44444444-4444-4444-8444-444444444444',
+        displayName: 'servers'
+      })
+    }
+    vi.mocked(listWorktrees).mockClear()
+    vi.mocked(listWorktrees).mockResolvedValue([makeWorktreeInfo(TEST_REPO_PATH)])
+    const runtime = new OrcaRuntimeService({
+      ...store,
+      getAllWorktreeMeta: () => metaById,
+      getWorktreeMeta: (id: string) => metaById[id],
+      setWorktreeMeta: (id: string, meta: Partial<WorktreeMeta>) => {
+        metaById[id] = { ...(metaById[id] ?? makeWorktreeMeta()), ...meta }
+        return metaById[id]
+      }
+    } as never)
+
+    const listed = await runtime.listManagedWorktrees(`id:${TEST_REPO_ID}`)
+
+    expect(listed.worktrees).toContainEqual(
+      expect.objectContaining({
+        id: terminalGroupId,
+        repoId: TEST_REPO_ID,
+        path: TEST_REPO_PATH,
+        displayName: 'servers',
+        branch: '',
+        isMainWorktree: false
+      })
+    )
+  })
+
   it('bounds repeated detected worktree scans across the reported 15-repo shape', async () => {
     vi.mocked(listWorktrees).mockReset()
     const repos = Array.from({ length: 15 }, (_, index) => ({

@@ -1,4 +1,5 @@
 import { Suspense } from 'react'
+import NewTerminalGroupDialog from '../components/sidebar/NewTerminalGroupDialog'
 import { lazyWithRetry as lazy } from '@/lib/lazy-with-retry'
 import { translate } from '@/i18n/i18n'
 import { RecoverableRenderErrorBoundary } from '../components/error-boundaries/RecoverableRenderErrorBoundary'
@@ -191,6 +192,14 @@ export function AppRootSurfaces(props: {
           </ModalBoundary>
         ) : null}
         {/* Why: Settings can start Add Project without Sidebar, so its handoff dialogs must share the root host. */}
+        {activeModal === 'new-terminal-group' ? (
+          <ModalBoundary
+            boundaryId="modal.new-terminal-group"
+            resetKey={activeModal === 'new-terminal-group'}
+          >
+            <NewTerminalGroupDialog />
+          </ModalBoundary>
+        ) : null}
         {activeModal === 'confirm-non-git-folder' ? (
           <ModalBoundary boundaryId="modal.confirm-non-git-folder" resetKey>
             <NonGitFolderDialog />

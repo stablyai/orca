@@ -17,6 +17,7 @@ import {
 } from './worktrees/metadata/worktree-base-status'
 import { createPrefetchWorktreeCreateBase } from './worktrees/create/prefetch-worktree-create-base'
 import { createCreateWorktree } from './worktrees/create/create-worktree'
+import { createCreateTerminalGroup } from './worktrees/create/create-terminal-group'
 import {
   createBeginPendingWorktreeCreation,
   createRemovePendingWorktreeCreation,
@@ -86,6 +87,7 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
   updateWorktreeRemoteBranchConflict: createUpdateWorktreeRemoteBranchConflict(set, get),
   prefetchWorktreeCreateBase: createPrefetchWorktreeCreateBase(set, get),
   createWorktree: createCreateWorktree(set, get),
+  createTerminalGroup: createCreateTerminalGroup(set, get),
   beginPendingWorktreeCreation: createBeginPendingWorktreeCreation(set, get),
   updatePendingWorktreeCreation: createUpdatePendingWorktreeCreation(set, get),
   removePendingWorktreeCreation: createRemovePendingWorktreeCreation(set, get),

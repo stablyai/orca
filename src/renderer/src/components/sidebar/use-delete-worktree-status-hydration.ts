@@ -9,7 +9,7 @@ import type { Worktree } from '../../../../shared/worktree/types'
 import type { GitStatusResult } from '../../../../shared/git-status-types'
 import { parseExecutionHostId } from '../../../../shared/execution-host'
 import { getWorktreeHostIdentity } from '../../../../shared/worktree/host-qualified-identity'
-import { isFolderWorkspaceDelete } from './delete-worktree-dialog-copy'
+import { preservesCheckoutOnDelete } from './delete-worktree-dialog-copy'
 
 const EMPTY_STATUS_BY_IDENTITY = new Map<string, GitStatusResult['entries']>()
 
@@ -40,7 +40,10 @@ export function useDeleteWorktreeStatusHydration({
     }
     const gitStatusByWorktree = useAppStore.getState().gitStatusByWorktree
     const targets = deleteTargets.filter(
-      (target) => !target.isMainWorktree && !isFolderWorkspaceDelete(repoMap, target)
+      (target) =>
+        !target.isMainWorktree &&
+        !preservesCheckoutOnDelete(repoMap, target) &&
+        gitStatusByWorktree[target.id] === undefined
     )
     const controller = new AbortController()
     for (const target of targets) {

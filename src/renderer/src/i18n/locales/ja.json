@@ -4613,7 +4613,8 @@
           "hostDisconnected": "切断済み",
           "failedNestWorkspace": "ワークスペースをネストできませんでした",
           "sidebarRowMissing": "対象はもう存在しません",
-          "failedUnnestWorkspace": "ワークスペースの展開に失敗しました"
+          "failedUnnestWorkspace": "ワークスペースの展開に失敗しました",
+          "newTerminalGroup": "新しいターミナルグループ"
         },
         "WorktreeMetaDialog": {
           "3db0a2a593": "キャンセル",
@@ -5162,6 +5163,15 @@
           "3b7ea51793": "検索をクリア",
           "7f1c2e94a5": "検索テキストが長すぎます — ボードは絞り込まれていません",
           "9a4d0f6b21": "長すぎます"
+        },
+        "NewTerminalGroupDialog": {
+          "title": "新しいターミナルグループ",
+          "description": "{{value1}} 上の {{value0}} で実行されるターミナルと Agent。新しいワークツリーもブランチも作成しません。",
+          "nameLabel": "名前",
+          "namePlaceholder": "servers、research、scripts…",
+          "agentLabel": "Agent",
+          "cancel": "キャンセル",
+          "create": "グループを作成"
         }
       },
       "shared": {

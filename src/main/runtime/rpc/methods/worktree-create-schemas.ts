@@ -31,6 +31,8 @@ export const WorktreeCreate = z
     baseBranch: OptionalString,
     compareBaseRef: OptionalString,
     branchNameOverride: OptionalString,
+    /** Create a terminal group on the project's checkout instead of a worktree. Older hosts ignore it. */
+    terminalGroup: OptionalBoolean,
     linkedIssue: TriStateLinkedIssue,
     linkedPR: TriStateLinkedIssue,
     linkedLinearIssue: z.string().optional(),

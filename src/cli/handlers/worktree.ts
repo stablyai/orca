@@ -237,6 +237,7 @@ export const WORKTREE_HANDLERS: Record<string, CommandHandler> = {
       linkedIssue: getOptionalNumberFlag(flags, 'issue'),
       ...linearIssueLink,
       comment: getOptionalStringFlag(flags, 'comment'),
+      ...(flags.get('terminal-group') === true ? { terminalGroup: true } : {}),
       runHooks: flags.get('run-hooks') === true,
       activate,
       // Why: the CLI pairs as a runtime device but is not a viewer, so caller-scoped

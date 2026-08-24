@@ -12,6 +12,11 @@ const FOLDER_WORKSPACE_INSTANCE_SUFFIX = new RegExp(
   `${FOLDER_WORKSPACE_INSTANCE_SEPARATOR.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}[0-9a-f-]{36}$`
 )
 
+/** `<repoId>::<path>::workspace:<uuid>` — a workspace that shares another row's checkout. */
+export function isWorkspaceInstanceWorktreeId(worktreeId: string): boolean {
+  return FOLDER_WORKSPACE_INSTANCE_SUFFIX.test(worktreeId)
+}
+
 export function getRepoIdFromWorktreeId(worktreeId: string): string {
   const separatorIdx = worktreeId.indexOf(WORKTREE_ID_SEPARATOR)
   return separatorIdx === -1 ? worktreeId : worktreeId.slice(0, separatorIdx)

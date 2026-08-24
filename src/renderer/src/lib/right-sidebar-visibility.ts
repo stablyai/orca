@@ -1,5 +1,5 @@
 import type { AppState } from '@/store/types'
-import { isFolderRepo } from '../../../shared/repo-kind'
+import { sharesProjectCheckout } from '../../../shared/workspace-instance-worktree'
 
 type ActiveView = AppState['activeView']
 
@@ -43,7 +43,7 @@ export function rightSidebarShowsPullRequestData(
   const activeRepo = activeWorktree
     ? state.repos.find((repo) => repo.id === activeWorktree.repoId)
     : null
-  if (!activeRepo || isFolderRepo(activeRepo)) {
+  if (!activeRepo || sharesProjectCheckout(activeRepo, state.activeWorktreeId)) {
     return false
   }
 

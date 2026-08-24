@@ -5,7 +5,7 @@ import { issueCacheKey as getIssueCacheKey } from '@/store/slices/github'
 import { getHostedReviewCacheKey } from '@/store/slices/hosted-review'
 import { hostedReviewInfoFromGitHubPRInfo } from '../../../../shared/hosted-review-github'
 import type { HostedReviewInfo } from '../../../../shared/hosted-review'
-import { isFolderRepo } from '../../../../shared/repo-kind'
+import { sharesProjectCheckout } from '../../../../shared/workspace-instance-worktree'
 import { parseWorkspaceKey } from '../../../../shared/workspace-scope'
 import {
   getWorktreeCardPrDisplay,
@@ -31,7 +31,7 @@ export function useWorktreeCardReviewDetails({
   const workspaceScope = parseWorkspaceKey(worktree.id)
   const folderWorkspaceId =
     workspaceScope?.type === 'folder' ? workspaceScope.folderWorkspaceId : null
-  const isFolder = repo ? isFolderRepo(repo) : folderWorkspaceId !== null
+  const isFolder = sharesProjectCheckout(repo, worktree.id) || folderWorkspaceId !== null
   // Why: project groups gate folder workspaces, so folder paths stay hidden from identity surfaces until that capability exists.
   const hasProjectGroups = projectGroups.length > 0
   const branchIdentityDisplay = !isFolder && branch.length > 0 ? branch : undefined

@@ -77,6 +77,9 @@ export type CreateWorktreeArgs = {
   branchNameOverride?: string
   setupDecision?: SetupDecision
   sparseCheckout?: CreateSparseCheckoutRequest
+  /** Create a terminal group on the project's existing checkout instead of a new worktree.
+   *  Ignored by folder projects, whose every workspace already works that way. */
+  terminalGroup?: boolean
   linkedIssue?: number
   linkedPR?: number
   linkedLinearIssue?: string

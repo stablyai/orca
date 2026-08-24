@@ -1,4 +1,5 @@
 import type { WorkspaceKey } from '../../../../shared/folder-workspace-types'
+import type { TerminalGroupCreateArgs } from './worktrees/create/terminal-group-args'
 import type { TuiAgent } from '../../../../shared/tui-agent'
 import type { WorkspaceSource as WorkspaceCreateTelemetrySource } from '../../../../shared/workspace-source'
 import type {
@@ -223,6 +224,8 @@ export type WorktreeSlice = {
       }
     }
   ) => Promise<CreateWorktreeResult>
+  /** Create a terminal group on the project's existing checkout. No branch, no base ref, no setup hooks. */
+  createTerminalGroup: (args: TerminalGroupCreateArgs) => Promise<Worktree | null>
   /** Register an in-flight background creation and make it the active surface. */
   beginPendingWorktreeCreation: (entry: PendingWorktreeCreation) => void
   /** Merge a status patch into an existing pending entry. */

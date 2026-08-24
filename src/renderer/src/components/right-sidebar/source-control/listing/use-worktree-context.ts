@@ -1,4 +1,5 @@
 import { useMemo } from 'react'
+import { sharesProjectCheckout } from '../../../../../../shared/workspace-instance-worktree'
 import { getConnectionId } from '@/lib/connection-context'
 import { getLocalProjectExecutionRuntimeContext } from '@/lib/local-preflight-context'
 import { getRepoOwnerRoutedSettings } from '@/lib/repo-runtime-owner'
@@ -10,7 +11,6 @@ import { getGitHubPRCacheKey } from '@/store/slices/github-cache-key'
 import { getHostedReviewCacheKey } from '@/store/slices/hosted-review'
 import type { GitBranchChangeEntry } from '../../../../../../shared/git-diff-compare-types'
 import type { GitStatusEntry } from '../../../../../../shared/git-status-types'
-import { isFolderRepo } from '../../../../../../shared/repo-kind'
 import { selectReviewCacheData, selectReviewCacheEntry } from '../../review-cache-entry-selection'
 
 const EMPTY_GIT_STATUS_ENTRIES: GitStatusEntry[] = []
@@ -124,7 +124,7 @@ export function useSourceControlWorktreeContext() {
   const activeRepoRuntimeEnvironmentId = activeRepoSettings?.activeRuntimeEnvironmentId ?? null
   const rightSidebarOpen = useAppStore((s) => s.rightSidebarOpen)
 
-  const isFolder = activeRepo ? isFolderRepo(activeRepo) : false
+  const isFolder = sharesProjectCheckout(activeRepo, activeWorktreeId)
   const worktreePath = activeWorktree?.path ?? null
   const activeConnectionId = activeWorktreeId
     ? (getConnectionId(activeWorktreeId) ?? activeRepoConnectionId)

@@ -4625,7 +4625,8 @@
           "hostDisconnected": "已断开连接",
           "failedNestWorkspace": "无法嵌套工作区",
           "sidebarRowMissing": "目标不再存在",
-          "failedUnnestWorkspace": "展开工作区失败"
+          "failedUnnestWorkspace": "展开工作区失败",
+          "newTerminalGroup": "新建终端组"
         },
         "WorktreeMetaDialog": {
           "3db0a2a593": "取消",
@@ -5174,6 +5175,15 @@
           "3b7ea51793": "清除搜索",
           "7f1c2e94a5": "搜索文本过长 — 看板未被筛选",
           "9a4d0f6b21": "过长"
+        },
+        "NewTerminalGroupDialog": {
+          "title": "新建终端组",
+          "description": "在 {{value1}} 上的 {{value0}} 中运行的终端和代理。不创建新的工作树，也不创建分支。",
+          "nameLabel": "名称",
+          "namePlaceholder": "servers、research、scripts…",
+          "agentLabel": "代理",
+          "cancel": "取消",
+          "create": "创建组"
         }
       },
       "shared": {

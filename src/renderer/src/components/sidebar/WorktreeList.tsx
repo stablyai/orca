@@ -223,6 +223,15 @@ const WorktreeList = React.memo(function WorktreeList({
     [openModal]
   )
 
+
+  const handleCreateTerminalGroup = useCallback(
+    (projectId: string) => {
+      openModal('new-terminal-group', { repoId: projectId })
+    },
+    [openModal]
+  )
+
+
   useSidebarRevealRequests({
     groupBy,
     renderedSidebarRowKeys: rowModel.renderedSidebarRowKeys,
@@ -302,6 +311,7 @@ const WorktreeList = React.memo(function WorktreeList({
         handleRenameProjectGroup={projectGroupDialogs.handleRenameProjectGroup}
         handleDeleteProjectGroup={projectGroupDialogs.handleDeleteProjectGroup}
         handleCreateFolderWorkspace={handleCreateFolderWorkspace}
+        handleCreateTerminalGroup={handleCreateTerminalGroup}
         activeModal={activeModal}
         pendingRevealWorktree={pendingRevealWorktree}
         pendingRevealSidebarRow={pendingRevealSidebarRow}

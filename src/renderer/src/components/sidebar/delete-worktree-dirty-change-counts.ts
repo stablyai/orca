@@ -1,7 +1,7 @@
 import type { Repo } from '../../../../shared/repo-types'
 import type { Worktree } from '../../../../shared/worktree/types'
 import type { WorktreeDeleteState } from '../../store/slices/worktree-helpers'
-import { isFolderWorkspaceDelete } from './delete-worktree-dialog-copy'
+import { preservesCheckoutOnDelete } from './delete-worktree-dialog-copy'
 import { getDeleteStateForWorktreeHost } from './worktree-delete-state-host-match'
 import { getWorktreeHostIdentity } from '../../../../shared/worktree/host-qualified-identity'
 
@@ -20,7 +20,7 @@ export function getDeleteWorktreeDirtyChangeCounts({
 }): Map<string, number> {
   const result = new Map<string, number>()
   for (const item of deleteTargets) {
-    if (item.isMainWorktree || isFolderWorkspaceDelete(repoMap, item)) {
+    if (item.isMainWorktree || preservesCheckoutOnDelete(repoMap, item)) {
       continue
     }
     const resultKey = item.hostId ? getWorktreeHostIdentity(item) : item.id

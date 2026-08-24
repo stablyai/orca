@@ -4632,7 +4632,8 @@
           "hostDisconnected": "Desconectado",
           "failedNestWorkspace": "No se pudo anidar el espacio de trabajo",
           "sidebarRowMissing": "El destino ya no existe",
-          "failedUnnestWorkspace": "Error al expandir el espacio de trabajo"
+          "failedUnnestWorkspace": "Error al expandir el espacio de trabajo",
+          "newTerminalGroup": "Nuevo grupo de terminales"
         },
         "WorktreeMetaDialog": {
           "3db0a2a593": "Cancelar",
@@ -5162,6 +5163,15 @@
           "3b7ea51793": "Borrar búsqueda",
           "7f1c2e94a5": "El texto de búsqueda es demasiado largo: el tablero no está filtrado",
           "9a4d0f6b21": "Demasiado largo"
+        },
+        "NewTerminalGroupDialog": {
+          "title": "Nuevo grupo de terminales",
+          "description": "Terminales y agentes que se ejecutan en {{value0}} en {{value1}}. Sin worktree nuevo, sin rama.",
+          "nameLabel": "Nombre",
+          "namePlaceholder": "servidores, investigación, scripts…",
+          "agentLabel": "Agente",
+          "cancel": "Cancelar",
+          "create": "Crear grupo"
         }
       },
       "shared": {

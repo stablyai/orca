@@ -23,10 +23,10 @@ import { DeleteWorktreeWarningPanels } from './DeleteWorktreeWarningPanels'
 import { persistDeleteWorktreeConfirmSkipPreference } from './delete-worktree-preference-toast'
 import { getDeleteWorktreeDirtyChangeCounts } from './delete-worktree-dirty-change-counts'
 import {
-  countFolderWorkspaceDeletes,
+  countCheckoutPreservingDeletes,
   getDeleteWorktreeDialogCopy,
   getDeleteWorktreeLineageDialogCopy,
-  isFolderWorkspaceDelete as getIsFolderWorkspaceDelete
+  preservesCheckoutOnDelete
 } from './delete-worktree-dialog-copy'
 import { translate } from '@/i18n/i18n'
 import type { WorktreeRemovalTarget } from '../../../../shared/worktree/removal'
@@ -112,17 +112,17 @@ const DeleteWorktreeDialog = React.memo(function DeleteWorktreeDialog() {
   }, [allWorktrees, worktreeDeleteIdentities, worktreeIds])
   const repoMap = useMemo(() => new Map(repos.map((repo) => [repo.id, repo])), [repos])
   const isBatchDelete = worktreeIds.length > 1
-  const isFolderWorkspaceDelete = !isBatchDelete && getIsFolderWorkspaceDelete(repoMap, worktree)
-  const folderWorkspaceDeleteCount = useMemo(
-    () => countFolderWorkspaceDeletes(repoMap, worktrees),
+  const preservesCheckout = !isBatchDelete && preservesCheckoutOnDelete(repoMap, worktree)
+  const checkoutPreservingDeleteCount = useMemo(
+    () => countCheckoutPreservingDeletes(repoMap, worktrees),
     [repoMap, worktrees]
   )
   const deleteCopy = getDeleteWorktreeDialogCopy({
     isBatchDelete,
     worktree,
     worktreeCount: worktrees.length,
-    folderWorkspaceDeleteCount,
-    isFolderWorkspaceDelete
+    checkoutPreservingDeleteCount,
+    preservesCheckout
   })
   const deleteStateByWorktreeId = useAppStore((s) => s.deleteStateByWorktreeId)
   const lineageDelete = useMemo(
@@ -141,14 +141,14 @@ const DeleteWorktreeDialog = React.memo(function DeleteWorktreeDialog() {
   const hasLineageChildren = childWorkspaceCount > 0
   const canDeleteAllLineage =
     !isMainWorktree && !isBatchDelete && lineageDelete.deleteAllTargets.length > 1
-  const lineageFolderWorkspaceDeleteCount = useMemo(
-    () => countFolderWorkspaceDeletes(repoMap, lineageDelete.deleteAllTargets),
+  const lineageCheckoutPreservingDeleteCount = useMemo(
+    () => countCheckoutPreservingDeletes(repoMap, lineageDelete.deleteAllTargets),
     [lineageDelete.deleteAllTargets, repoMap]
   )
   const lineageDeleteCopy = getDeleteWorktreeLineageDialogCopy({
     childWorkspaceCount,
     deleteTargetCount: lineageDelete.deleteAllTargets.length,
-    folderWorkspaceDeleteCount: lineageFolderWorkspaceDeleteCount
+    checkoutPreservingDeleteCount: lineageCheckoutPreservingDeleteCount
   })
   const allowSkipConfirm =
     !isBatchDelete && modalData.allowSkipConfirm !== false && childWorkspaceCount === 0

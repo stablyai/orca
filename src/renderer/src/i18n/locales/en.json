@@ -5345,7 +5345,8 @@
           "groupRenameFailedDesc": "Orca could not confirm the new name with the group's host. Recheck the group after reconnecting.",
           "failedNestWorkspace": "Failed to nest workspace",
           "sidebarRowMissing": "Target no longer exists",
-          "failedUnnestWorkspace": "Failed to unnest workspace"
+          "failedUnnestWorkspace": "Failed to unnest workspace",
+          "newTerminalGroup": "New terminal group"
         },
         "WorktreeMetaDialog": {
           "3db0a2a593": "Cancel",
@@ -5937,6 +5938,15 @@
         },
         "WorktreeListScrollToTopButton": {
           "jumpToTop": "Jump to top"
+        },
+        "NewTerminalGroupDialog": {
+          "title": "New terminal group",
+          "description": "Terminals and agents that run in {{value0}} on {{value1}}. No new worktree, no branch.",
+          "nameLabel": "Name",
+          "namePlaceholder": "servers, research, scripts…",
+          "agentLabel": "Agent",
+          "cancel": "Cancel",
+          "create": "Create group"
         },
         "WorktreeVisibilitySourceList": {
           "claude": "Claude Code",

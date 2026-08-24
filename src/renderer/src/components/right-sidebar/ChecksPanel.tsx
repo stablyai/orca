@@ -39,7 +39,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
-import { isFolderRepo } from '../../../../shared/repo-kind'
+import { sharesProjectCheckout } from '../../../../shared/workspace-instance-worktree'
 import { githubProjectHost } from '../../../../shared/github/project-identity'
 import HostedReviewActions from './HostedReviewActions'
 import { GitHubPRStackMap, type GitHubPRStackMapNavigationModifiers } from './GitHubPRStackMap'
@@ -740,7 +740,7 @@ export default function ChecksPanel(): React.JSX.Element {
     }
   }
 
-  const isFolder = repo ? isFolderRepo(repo) : false
+  const isFolder = sharesProjectCheckout(repo, activeWorktreeId)
   const prCacheKey =
     repo && branch
       ? getGitHubPRCacheKey(
