@@ -18,6 +18,7 @@ import {
 } from './crash-breadcrumb-store'
 import { ProcessGoneDedupe } from './process-gone-dedupe'
 import { recordProcessGoneCrash, type ProcessGoneCrashEvent } from './process-gone-recorder'
+import { resetProcessGoneSiblingCorrelationForTest } from './process-gone-sibling-correlation'
 import { _resetTracerForTests, setActiveSink, type TracerSink } from '../observability/tracer'
 
 type CapturingSink = TracerSink & { records: unknown[]; flushMock: ReturnType<typeof vi.fn> }
@@ -56,6 +57,7 @@ beforeEach(() => {
   sink = capturingSink()
   setActiveSink(sink)
   clearCrashBreadcrumbsForTest()
+  resetProcessGoneSiblingCorrelationForTest()
 })
 
 afterEach(() => {
@@ -63,6 +65,7 @@ afterEach(() => {
   vi.restoreAllMocks()
   _resetTracerForTests()
   clearCrashBreadcrumbsForTest()
+  resetProcessGoneSiblingCorrelationForTest()
 })
 
 describe('recordProcessGoneCrash', () => {
