@@ -10,6 +10,7 @@ import {
 import { SKILL_INSTALL_CAPABILITY } from '../../../../shared/skill-install-capability'
 import type { SkillInstallProviderId } from '../../../../shared/skill-install-providers'
 import { SkillInstallAgentPicker } from './SkillInstallAgentPicker'
+import { SkillInstallWorkspaceCombobox } from './SkillInstallWorkspaceCombobox'
 import type { SkillInstallWorkspaceChoice } from './skill-install-workspace-choices'
 import { translate } from '@/i18n/i18n'
 
@@ -197,32 +198,13 @@ export function SkillInstallTargetFields(props: {
           <Label htmlFor={`${fieldId}-workspace`}>
             {translate('auto.components.skills.SkillInstallTargetFields.0e5b43a9e3', 'Workspace')}
           </Label>
-          <Select value={props.workspace} onValueChange={props.onWorkspaceChange}>
-            <SelectTrigger id={`${fieldId}-workspace`} className="w-full min-w-0">
-              <SelectValue
-                placeholder={translate(
-                  'auto.components.skills.SkillInstallTargetFields.5845cfe543',
-                  'Choose a worktree or folder'
-                )}
-              />
-            </SelectTrigger>
-            <SelectContent>
-              {props.workspaceChoices.map((choice) => (
-                <SelectItem key={`${choice.kind}:${choice.id}`} value={choice.id}>
-                  {choice.label} ·{' '}
-                  {choice.kind === 'worktree'
-                    ? translate(
-                        'auto.components.skills.SkillInstallTargetFields.d628c416a2',
-                        'Git worktree'
-                      )
-                    : translate(
-                        'auto.components.skills.SkillInstallTargetFields.7a366323e7',
-                        'Folder'
-                      )}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          <SkillInstallWorkspaceCombobox
+            id={`${fieldId}-workspace`}
+            value={props.workspace}
+            onValueChange={props.onWorkspaceChange}
+            choices={props.workspaceChoices}
+            disabled={props.busy}
+          />
           {props.workspaceChoices.length === 0 ? (
             <p className="text-xs text-muted-foreground">
               {translate(
@@ -235,6 +217,7 @@ export function SkillInstallTargetFields(props: {
       ) : null}
 
       <SkillInstallAgentPicker
+        id={`${fieldId}-agents`}
         scope={props.scope}
         selected={props.providers}
         detectedAgents={props.detectedAgents}
