@@ -67,7 +67,7 @@ describe('session tab move validation', () => {
     } as never)
     setMobileSessionSnapshot(runtime, {
       worktree: 'wt-1',
-      publicationEpoch: 'epoch-1',
+      publicationEpoch: 'headless:epoch-1',
       snapshotVersion: 1,
       activeGroupId: 'group-1',
       activeTabId: 'terminal-tab::leaf-1',
@@ -111,6 +111,28 @@ describe('session tab move validation', () => {
       targetGroupId: 'group-1',
       tabOrder: ['browser-live-tab', 'terminal-tab']
     })
+
+    moveSessionTab.mockClear()
+    const headlessSnapshot = runtime['mobileSessionTabsByWorktree'].get('wt-1')!
+    setMobileSessionSnapshot(runtime, {
+      ...headlessSnapshot,
+      publicationEpoch: 'renderer:epoch-2'
+    })
+
+    await expect(
+      runtime.moveMobileSessionTab('id:wt-1', {
+        kind: 'reorder',
+        tabId: 'browser-stale',
+        targetGroupId: 'group-1',
+        tabOrder: ['browser-stale', 'browser-live', 'terminal-tab']
+      })
+    ).resolves.toEqual({ moved: true })
+    expect(moveSessionTab).toHaveBeenCalledWith('wt-1', {
+      kind: 'reorder',
+      tabId: 'browser-stale-tab',
+      targetGroupId: 'group-1',
+      tabOrder: ['browser-stale-tab', 'browser-live-tab', 'terminal-tab']
+    })
   })
 
   it('rejects moves into groups hidden from the sanitized session model', async () => {
@@ -122,7 +144,7 @@ describe('session tab move validation', () => {
     } as never)
     setMobileSessionSnapshot(runtime, {
       worktree: 'wt-1',
-      publicationEpoch: 'epoch-1',
+      publicationEpoch: 'headless:epoch-1',
       snapshotVersion: 1,
       activeGroupId: 'group-visible',
       activeTabId: 'terminal-tab::leaf-1',
