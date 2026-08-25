@@ -12,12 +12,16 @@ export type CodexAppServerInvocation = {
   command: string
   args: string[]
   /**
-   * The resolved CLI path, when `command` is a wrapper such as cmd.exe. Used to
-   * pair the CLI with the `node` it was installed against; without it a CLI
-   * resolved out of a version-manager directory runs under whatever node leads
-   * PATH and dies on a NODE_MODULE_VERSION mismatch (stablyai/orca#10932).
+   * The resolved CLI path, used to pair the CLI with the `node` it was installed
+   * against — without it a CLI resolved out of a version-manager directory runs
+   * under whatever node leads PATH and dies on a NODE_MODULE_VERSION mismatch
+   * (stablyai/orca#10932).
+   *
+   * Required, and `null` only for a guest-side launcher (wsl.exe) where the host
+   * path means nothing. Optional would let a native builder omit it and silently
+   * fall back to pairing against a cmd.exe wrapper with no type error.
    */
-  cliPath?: string
+  cliPath: string | null
   /** Overlay applied on top of the inherited environment (e.g. CODEX_HOME). */
   env?: Record<string, string>
   /** Env keys stripped from the inherited environment before spawn (e.g. an
@@ -119,7 +123,9 @@ export async function runCodexAppServerSession<T>(
   for (const key of invocation.envToDelete ?? []) {
     delete childEnv[key]
   }
-  const pairedEnv = withCliRuntimeOnPath(invocation.cliPath ?? invocation.command, childEnv)
+  const pairedEnv = invocation.cliPath
+    ? withCliRuntimeOnPath(invocation.cliPath, childEnv)
+    : childEnv
   const child = spawnImpl(invocation.command, invocation.args, {
     env: pairedEnv,
     stdio: ['pipe', 'pipe', 'pipe'],

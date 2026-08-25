@@ -1,3 +1,4 @@
+import type * as NodeCliCommandResolutionModule from '../../shared/node-cli-command-resolution'
 import { EventEmitter } from 'node:events'
 import { createHash } from 'node:crypto'
 import { existsSync } from 'node:fs'
@@ -43,7 +44,10 @@ vi.mock('../../main/claude-accounts/keychain', () => ({
   readActiveClaudeKeychainCredentialsStrict: readKeychainMock,
   writeActiveClaudeKeychainCredentials: writeKeychainMock
 }))
-vi.mock('../../shared/node-cli-command-resolution', () => ({
+// Why importOriginal: withCliRuntimeOnPath is a pure filesystem-probing helper,
+// and the PATH assertions below are only meaningful against the real one.
+vi.mock('../../shared/node-cli-command-resolution', async (importOriginal) => ({
+  ...(await importOriginal<typeof NodeCliCommandResolutionModule>()),
   getVersionManagerBinPaths: getVersionManagerBinPathsMock,
   resolveCliCommand: resolveCliCommandMock
 }))
