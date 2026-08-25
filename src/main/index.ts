@@ -2565,7 +2565,8 @@ void app.whenReady().then(async () => {
     resolvePendingScanDates: () =>
       codexRuntimeHome?.getHostSystemDefaultPendingSessionMigrationDates() ?? [],
     prepareScheduledRun: () => codexRuntimeHome?.prepareHostSystemDefaultSessionMigrationPass(),
-    finishScheduledRun: () => codexRuntimeHome?.finishHostSystemDefaultSessionMigrationPass(),
+    finishScheduledRun: (keepLaunchTracking) =>
+      codexRuntimeHome?.finishHostSystemDefaultSessionMigrationPass(keepLaunchTracking),
     startBackfill: startCodexSessionBackfillInBackground,
     startIndexHeal: startCodexSessionIndexHealInBackground
   })
