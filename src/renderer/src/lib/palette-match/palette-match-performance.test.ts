@@ -113,9 +113,7 @@ describe('palette matcher performance budget', () => {
       return
     }
 
-    const samples: number[] = []
-    for (let run = 0; run < 10; run += 1) {
-      const start = performance.now()
+    const matchAllDocuments = (): void => {
       for (const document of documents.values()) {
         matchPaletteDocument({
           document,
@@ -123,6 +121,14 @@ describe('palette matcher performance budget', () => {
           normalizedQuery: prepared.normalized
         })
       }
+    }
+
+    // Warm the matcher before timing so JIT compilation is not part of p95.
+    matchAllDocuments()
+    const samples: number[] = []
+    for (let run = 0; run < 10; run += 1) {
+      const start = performance.now()
+      matchAllDocuments()
       samples.push(performance.now() - start)
     }
     expect(percentile95(samples)).toBeLessThan(PALETTE_MATCH_BUDGET.warmMatchP95Ms)
