@@ -348,6 +348,35 @@ function prunePackagedNodePty(resourcesDir, electronPlatformName, electronArch) 
     return
   }
 
+  // Why delete only conpty.node: node-pty's loader tries build/Release, then
+  // build/Debug, then prebuilds/<platform>-<arch>, swallowing every failure in
+  // between. Only the source build carries Orca's job-object exports, so an ABI
+  // mismatch or an AV quarantine of build/Release/conpty.node would silently
+  // fall through to the UNPATCHED prebuild -- teardown back to guessing by PID
+  // ancestry, with no error anywhere.
+  //
+  // Why NOT the whole prebuilds/ tree: Orca's own patch deletes the
+  // `conpty_console_list` and winpty `pty` gyp targets, so a Windows source
+  // build emits conpty.node and nothing else. conpty_console_list.node,
+  // pty.node, winpty.dll and winpty-agent.exe exist ONLY here. Removing them
+  // silently kills console-membership probing (the forked agent throws at
+  // require, and its caller resolves null with silent: true), and removes the
+  // winpty backend that node-pty still selects below Windows build 18309.
+  //
+  // Why the arch check: a cross-arch package copies the host's build/Release,
+  // so its mere presence does not mean it matches electronArch -- deleting the
+  // target-arch prebuild would then remove the only loadable binary.
+  if (
+    electronPlatformName === 'win32' &&
+    electronArch === process.arch &&
+    existsSync(join(nodePtyDir, 'build', 'Release', 'conpty.node'))
+  ) {
+    const prebuildDir = join(nodePtyDir, 'prebuilds', `win32-${electronArch}`)
+    for (const staleFallback of ['conpty.node', 'conpty.pdb']) {
+      rmSync(join(prebuildDir, staleFallback), { force: true })
+    }
+  }
+
   const allowedPrebuildPrefix = NODE_PTY_PREBUILD_PREFIX_BY_PLATFORM[electronPlatformName]
   if (allowedPrebuildPrefix) {
     pruneNodePtyNativeDirectories(
