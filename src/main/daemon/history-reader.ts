@@ -86,9 +86,12 @@ export class HistoryReader {
     return this.probeRestorableHistory(sessionId).status !== 'none'
   }
 
+  // Why scrollbackRows: read-only surfaces ask for a bounded frame. It only
+  // reaches the log-replay path, which owns the emulator being serialized; a
+  // checkpoint-only restore returns bytes the daemon already baked.
   async detectColdRestore(
     sessionId: string,
-    opts?: { ignoreCleanEnd?: boolean; wslDistro?: string }
+    opts?: { ignoreCleanEnd?: boolean; wslDistro?: string; scrollbackRows?: number }
   ): Promise<ColdRestoreInfo | null> {
     const detection = await this.detectColdRestoreState(sessionId, opts)
     return detection.status === 'restored' ? detection.restoreInfo : null
@@ -96,7 +99,7 @@ export class HistoryReader {
 
   async detectColdRestoreState(
     sessionId: string,
-    opts?: { ignoreCleanEnd?: boolean; wslDistro?: string }
+    opts?: { ignoreCleanEnd?: boolean; wslDistro?: string; scrollbackRows?: number }
   ): Promise<ColdRestoreDetection> {
     if (hasTerminalHistoryRecoveryProtection(this.basePath, sessionId)) {
       return { status: 'unreadable', sessionId }
@@ -127,12 +130,10 @@ export class HistoryReader {
     // byte-exact output up to ~5s before the crash (up to the full-snapshot
     // cooldown, ~45s, for a streaming session mid-deferral), while the
     // checkpoint can be a full log-cap (~5MB of output) stale.
-    const logRestore = await this.restoreFromIncrementalLog(
-      sessionDir,
-      meta,
-      checkpoint,
-      opts?.wslDistro
-    )
+    const logRestore = await this.restoreFromIncrementalLog(sessionDir, meta, checkpoint, {
+      wslDistro: opts?.wslDistro,
+      scrollbackRows: opts?.scrollbackRows
+    })
     if (logRestore.restoreInfo) {
       return {
         status: 'restored',
@@ -243,7 +244,7 @@ export class HistoryReader {
     sessionDir: string,
     meta: SessionMeta,
     checkpoint: TerminalCheckpointFile | null,
-    wslDistro?: string
+    opts?: { wslDistro?: string; scrollbackRows?: number }
   ): Promise<IncrementalLogRestore> {
     const logPath = join(sessionDir, 'output.log')
     try {
@@ -282,7 +283,7 @@ export class HistoryReader {
         cols: checkpoint?.cols ?? meta.cols,
         rows: checkpoint?.rows ?? meta.rows,
         scrollback: DAEMON_RESTORE_SCROLLBACK_ROWS,
-        wslDistro
+        wslDistro: opts?.wslDistro
       })
       const replay = new ColdRestoreReplayWriter(emulator)
       try {
@@ -316,7 +317,7 @@ export class HistoryReader {
             }
           }
         }
-        const snapshot = emulator.getSnapshot()
+        const snapshot = emulator.getSnapshot({ scrollbackRows: opts?.scrollbackRows })
         const lastBatch = log.batches.at(-1)!
         return {
           restoreInfo: coldRestoreInfoFromSnapshot(

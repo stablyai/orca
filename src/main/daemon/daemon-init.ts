@@ -19,6 +19,7 @@ import {
 } from './daemon-spawner'
 import { DAEMON_EXIT_ENDPOINT_OCCUPIED } from './daemon-endpoint-ownership'
 import { DaemonPtyAdapter, type DaemonRespawnReason } from './daemon-pty-adapter'
+import type { ColdRestoreInfo } from './history-reader'
 import { DaemonPtyRouter } from './daemon-pty-router'
 import { DaemonClient } from './client'
 import {
@@ -1098,6 +1099,44 @@ export async function listLiveDaemonPtyIds(): Promise<string[] | null> {
   return inventories.flatMap((inventory) =>
     inventory.status === 'fulfilled' ? inventory.value.map((process) => process.id) : []
   )
+}
+
+// Why: read-only surfaces need the last frame of a session that is no longer
+// running. Legacy adapters are searched too — they run an older protocol but
+// share this profile's one history directory, so any of them can answer.
+export async function readColdRestoreTerminalSnapshot(
+  sessionId: string,
+  opts?: { scrollbackRows?: number }
+): Promise<ColdRestoreInfo | null> {
+  const provider = adapter
+  if (!provider) {
+    return null
+  }
+  const adapters =
+    provider instanceof DaemonPtyRouter || provider instanceof DegradedDaemonPtyProvider
+      ? provider.getAllAdapters()
+      : [provider]
+  // Why the guard sits here and not inside each adapter: because they share one
+  // history directory, a legacy adapter that never attached the session would
+  // otherwise serve a stale frame for a session the current adapter is running
+  // — and the dashboard would tear a live pane down to a read-only one.
+  if (adapters.some((entry) => entry.hasPty(sessionId))) {
+    return null
+  }
+  for (const entry of adapters) {
+    try {
+      const restore = await entry.readColdRestoreSnapshot(sessionId, opts)
+      if (restore) {
+        return restore
+      }
+    } catch (error) {
+      // Best effort: a failed history read just leaves the preview empty — but
+      // silently, it is indistinguishable from the "pane has closed" this path
+      // exists to avoid, so a corrupt history directory must leave a trace.
+      console.warn('[daemon] Cold-restore history read failed for preview:', error)
+    }
+  }
+  return null
 }
 
 // Why: keep the module-level adapter and ipc/pty.ts's localProvider in sync so app-quit can't dispose a stale reference.

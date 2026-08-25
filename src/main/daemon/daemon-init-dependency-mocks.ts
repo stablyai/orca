@@ -118,6 +118,8 @@ export function createDaemonInitModuleFactories(state: DaemonInitMockState) {
     readonly disconnectOnly: Mock
     readonly onData: Mock
     readonly onExit: Mock
+    readonly hasPty: Mock
+    readonly readColdRestoreSnapshot: Mock
     readonly callOrder: string[]
     constructor(opts: MockAdapter['options']) {
       this.protocolVersion = opts.protocolVersion ?? PROTOCOL_VERSION
@@ -154,6 +156,8 @@ export function createDaemonInitModuleFactories(state: DaemonInitMockState) {
         return () => {}
       })
       this.onExit = vi.fn(() => () => {})
+      this.hasPty = vi.fn(() => false)
+      this.readColdRestoreSnapshot = vi.fn(async () => null)
       adapterInstances.push(this as unknown as MockAdapter)
     }
   }

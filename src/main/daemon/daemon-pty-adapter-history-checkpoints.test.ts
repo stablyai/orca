@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { join } from 'node:path'
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { DaemonPtyAdapter } from './daemon-pty-adapter'
+import type { HistoryReader } from './history-reader'
 import type { DaemonServer } from './daemon-server'
 import { getHistorySessionDirName } from './history-paths'
 import type { PendingOutputRecord } from './types'
@@ -791,6 +792,83 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
         cols: 120,
         rows: 40
       })
+    })
+
+    // Why: the pop-out dashboard reads panes this Orca never attached. After a
+    // reboot that is every pane until its worktree is reopened, so history is
+    // the only frame the board can show.
+    it('reads a cold-restore frame for an unattached session, never for one it owns', async () => {
+      const sessionId = 'preview-cold-restore'
+      const sessionDir = join(historyDir, getHistorySessionDirName(sessionId))
+      mkdirSync(sessionDir, { recursive: true })
+      writeFileSync(
+        join(sessionDir, 'meta.json'),
+        JSON.stringify({
+          cwd: '/projects/rebooted',
+          cols: 120,
+          rows: 40,
+          startedAt: '2026-04-15T10:00:00Z',
+          endedAt: null,
+          exitCode: null
+        })
+      )
+      writeFileSync(join(sessionDir, 'scrollback.bin'), 'output from before the reboot\r\n')
+
+      historyAdapter = new DaemonPtyAdapter({ socketPath, tokenPath, historyPath: historyDir })
+      const reader = (historyAdapter as unknown as { historyReader: HistoryReader }).historyReader
+      const detectSpy = vi.spyOn(reader, 'detectColdRestore')
+      const restore = await historyAdapter.readColdRestoreSnapshot(sessionId, {
+        scrollbackRows: 24
+      })
+      expect(detectSpy).toHaveBeenCalledWith(
+        sessionId,
+        expect.objectContaining({ scrollbackRows: 24 })
+      )
+      expect(restore).not.toBeNull()
+      expect(restore!.scrollbackAnsi + restore!.snapshotAnsi).toContain(
+        'output from before the reboot'
+      )
+      expect(restore).toMatchObject({ cols: 120, rows: 40 })
+
+      expect(await historyAdapter.readColdRestoreSnapshot('never-existed')).toBeNull()
+
+      // Once this adapter owns the session, its live snapshot supersedes disk.
+      await historyAdapter.spawn({ cols: 80, rows: 24, sessionId })
+      expect(await historyAdapter.readColdRestoreSnapshot(sessionId)).toBeNull()
+    })
+
+    // Why: spawn() registers its pending operation before the async
+    // create/attach resolves. A preview landing inside that window would
+    // otherwise be served disk history and mark a reopening pane read-only.
+    it('treats an in-flight spawn as live, not as a cold-restore candidate', async () => {
+      const sessionId = 'preview-deferred-spawn'
+      const sessionDir = join(historyDir, getHistorySessionDirName(sessionId))
+      mkdirSync(sessionDir, { recursive: true })
+      writeFileSync(
+        join(sessionDir, 'meta.json'),
+        JSON.stringify({
+          cwd: '/projects/reopening',
+          cols: 120,
+          rows: 40,
+          startedAt: '2026-04-15T10:00:00Z',
+          endedAt: null,
+          exitCode: null
+        })
+      )
+      writeFileSync(join(sessionDir, 'scrollback.bin'), 'stale frame from before\r\n')
+
+      historyAdapter = new DaemonPtyAdapter({ socketPath, tokenPath, historyPath: historyDir })
+
+      // Before the spawn starts, history is the only frame available.
+      expect(await historyAdapter.readColdRestoreSnapshot(sessionId)).not.toBeNull()
+
+      const spawnPromise = historyAdapter.spawn({ cols: 80, rows: 24, sessionId })
+      // Mid-flight: the pane is reopening, so the preview must not fall back to disk.
+      const duringSpawn = await historyAdapter.readColdRestoreSnapshot(sessionId)
+      await spawnPromise
+
+      expect(duringSpawn).toBeNull()
+      expect(await historyAdapter.readColdRestoreSnapshot(sessionId)).toBeNull()
     })
   })
 })

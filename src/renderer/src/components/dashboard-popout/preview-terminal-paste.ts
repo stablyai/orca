@@ -20,8 +20,15 @@ export function createPreviewClipboardPaster(deps: {
   getTerminal: () => Terminal | null
   getTerminalInput: () => DashboardCardTerminalInput | null
   isDisposed: () => boolean
+  /** A history frame is read-only, but live:false only means this Orca holds no
+   * PTY. Gate the actual write path because chunked paste bypasses xterm. */
+  isReadOnly: () => boolean
 }): (activeElementAtDispatch: Element | null, source: 'keyboard' | 'app-menu') => Promise<void> {
   return async (activeElementAtDispatch, source) => {
+    if (deps.isReadOnly()) {
+      // Refuse before reading the clipboard so a historical pane never samples it.
+      return
+    }
     let text: string
     try {
       text = await window.api.ui.readClipboardText({ maxBytes: TERMINAL_PASTE_MAX_BYTES })

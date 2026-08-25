@@ -32,6 +32,8 @@ export type MockAdapter = {
   disconnectOnly: Mock
   onData: Mock
   onExit: Mock
+  hasPty: Mock<(id: string) => boolean>
+  readColdRestoreSnapshot: Mock<(sessionId: string) => Promise<unknown>>
   // Why: the router calls onData/onExit on each adapter; the stub returns a no-op unsubscribe so router subscription doesn't explode.
   callOrder: string[]
 }
