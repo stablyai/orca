@@ -7,6 +7,45 @@ import {
   moveWorktreeIdsWithinGroup,
   shouldWriteManualOrderForGroupDrop
 } from './worktree-manual-order'
+import { buildSparseManualOrderUpdates } from './worktree-manual-order-ranks'
+
+describe('buildSparseManualOrderUpdates durable migration', () => {
+  it('materializes filtered rows when the first drag creates Manual order', () => {
+    const result = buildSparseManualOrderUpdates({
+      orderedIds: ['a', 'c', 'b'],
+      movedIds: ['b'],
+      allWorktreeIds: ['a', 'b', 'hidden', 'c'],
+      rankByWorktreeId: new Map([
+        ['a', 4000],
+        ['b', 3000],
+        ['c', 1000]
+      ]),
+      now: 10_000
+    })
+
+    expect([...result.keys()]).toEqual(['a', 'c', 'hidden', 'b'])
+    expect([...result.values()].map((update) => update.manualOrder)).toEqual([
+      10_000, 9000, 8000, 7000
+    ])
+  })
+
+  it('keeps sparse updates after every known row has a durable rank', () => {
+    const result = buildSparseManualOrderUpdates({
+      orderedIds: ['a', 'c', 'b'],
+      movedIds: ['b'],
+      allWorktreeIds: ['a', 'b', 'hidden', 'c'],
+      rankByWorktreeId: new Map([
+        ['a', 4000],
+        ['b', 3000],
+        ['hidden', 2000],
+        ['c', 1000]
+      ]),
+      now: 10_000
+    })
+
+    expect([...result]).toEqual([['b', { manualOrder: 0 }]])
+  })
+})
 
 describe('expandDraggedWorktreeIdsForVisibleLineage', () => {
   it('expands an expanded lineage parent to its visible descendants for reordering', () => {

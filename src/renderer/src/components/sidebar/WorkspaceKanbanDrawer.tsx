@@ -135,6 +135,7 @@ function WorkspaceKanbanDrawerContent({
     updateWorktreesMeta,
     workspaceStatuses,
     worktreeById,
+    allWorktreeIds: boardWorktrees.map((worktree) => worktree.id),
     worktreesByStatus
   })
   // Why: dragging or right-clicking one visible match must not silently move

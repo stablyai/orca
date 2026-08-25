@@ -19,14 +19,21 @@ import type { WorktreeStatusDropAtIndexArgs } from './drop-commit-context'
 
 function buildRankByWorktreeId(
   groups: readonly WorktreeDragGroup[],
-  worktreeMap: Map<string, Worktree>
+  worktreeMap: Map<string, Worktree>,
+  allWorktreeIds: readonly string[]
 ): Map<string, number> {
   const rankByWorktreeId = new Map<string, number>()
+  for (const worktreeId of allWorktreeIds) {
+    const worktree = worktreeMap.get(worktreeId)
+    if (worktree?.manualOrder !== undefined) {
+      rankByWorktreeId.set(worktreeId, worktree.manualOrder)
+    }
+  }
   for (const group of groups) {
     for (const worktreeId of group.worktreeIds) {
       const worktree = worktreeMap.get(worktreeId)
-      if (worktree) {
-        rankByWorktreeId.set(worktreeId, worktree.manualOrder ?? worktree.sortOrder)
+      if (worktree?.manualOrder !== undefined) {
+        rankByWorktreeId.set(worktreeId, worktree.manualOrder)
       }
     }
   }
@@ -36,10 +43,11 @@ function buildRankByWorktreeId(
 // Every write a sidebar drop can make: status changes, pin, manual order, and the board lane drop.
 export function useWorktreeStatusMutations(args: {
   worktreeMap: Map<string, Worktree>
+  allWorktreeIds: readonly string[]
   workspaceStatuses: readonly WorkspaceStatusDefinition[]
   sortBy: SortBy
 }) {
-  const { worktreeMap, workspaceStatuses, sortBy } = args
+  const { allWorktreeIds, worktreeMap, workspaceStatuses, sortBy } = args
   const updateWorktreeMeta = useAppStore((s) => s.updateWorktreeMeta)
   const updateWorktreesMeta = useAppStore((s) => s.updateWorktreesMeta)
   const setSortBy = useAppStore((s) => s.setSortBy)
@@ -81,7 +89,8 @@ export function useWorktreeStatusMutations(args: {
         draggedIds: dropArgs.worktreeIds,
         dropIndex: dropArgs.dropIndex,
         now: Date.now(),
-        rankByWorktreeId: buildRankByWorktreeId(dropArgs.groups, worktreeMap)
+        rankByWorktreeId: buildRankByWorktreeId(dropArgs.groups, worktreeMap, allWorktreeIds),
+        allWorktreeIds
       })
       const updates = new Map<string, Partial<WorktreeMeta>>()
       for (const worktreeId of dropArgs.worktreeIds) {
@@ -112,7 +121,7 @@ export function useWorktreeStatusMutations(args: {
       }
       void updateWorktreesMeta(updates)
     },
-    [setSortBy, updateWorktreesMeta, worktreeMap, workspaceStatuses]
+    [allWorktreeIds, setSortBy, updateWorktreesMeta, worktreeMap, workspaceStatuses]
   )
 
   const pinWorktree = useCallback(
@@ -139,7 +148,8 @@ export function useWorktreeStatusMutations(args: {
       const result = buildManualOrderUpdatesForVisibleGroups({
         ...reorderArgs,
         now: Date.now(),
-        rankByWorktreeId: buildRankByWorktreeId(reorderArgs.groups, worktreeMap)
+        rankByWorktreeId: buildRankByWorktreeId(reorderArgs.groups, worktreeMap, allWorktreeIds),
+        allWorktreeIds
       })
       if (!result.changed) {
         return
@@ -148,7 +158,7 @@ export function useWorktreeStatusMutations(args: {
       setSortBy('manual')
       void updateWorktreesMeta(result.updates)
     },
-    [setSortBy, updateWorktreesMeta, worktreeMap]
+    [allWorktreeIds, setSortBy, updateWorktreesMeta, worktreeMap]
   )
 
   const shouldShowWorkspaceBoardDropIndicator = useCallback(
@@ -173,7 +183,8 @@ export function useWorktreeStatusMutations(args: {
         worktreeById: worktreeMap,
         workspaceStatuses,
         sortBy,
-        now: Date.now()
+        now: Date.now(),
+        allWorktreeIds
       })
       if (result.updates.size === 0) {
         return
@@ -185,7 +196,7 @@ export function useWorktreeStatusMutations(args: {
       useAppStore.getState().recordFeatureInteraction('workspace-board-actions')
       void updateWorktreesMeta(result.updates)
     },
-    [setSortBy, sortBy, updateWorktreesMeta, worktreeMap, workspaceStatuses]
+    [allWorktreeIds, setSortBy, sortBy, updateWorktreesMeta, worktreeMap, workspaceStatuses]
   )
 
   return {

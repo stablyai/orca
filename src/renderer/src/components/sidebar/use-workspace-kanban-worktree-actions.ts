@@ -23,6 +23,7 @@ export function useWorkspaceKanbanWorktreeActions(args: {
   updateWorktreesMeta: ReturnType<typeof useAppStore.getState>['updateWorktreesMeta']
   workspaceStatuses: ReturnType<typeof useAppStore.getState>['workspaceStatuses']
   worktreeById: ReadonlyMap<string, Worktree>
+  allWorktreeIds: readonly string[]
   worktreesByStatus: ReadonlyMap<string, readonly Worktree[]>
 }) {
   const recordInteraction = (): void => {
@@ -90,12 +91,12 @@ export function useWorkspaceKanbanWorktreeActions(args: {
         drop.writeManualOrder ?? shouldWriteDropManualOrder(drop.worktreeIds, drop.status)
       const rankByWorktreeId = writeManualOrder
         ? new Map(
-            args.boardDragGroups.flatMap((group) =>
-              group.worktreeIds.flatMap((worktreeId) => {
-                const worktree = args.worktreeById.get(worktreeId)
-                return worktree ? [[worktreeId, worktree.manualOrder ?? worktree.sortOrder]] : []
-              })
-            )
+            args.allWorktreeIds.flatMap((worktreeId) => {
+              const worktree = args.worktreeById.get(worktreeId)
+              return worktree?.manualOrder !== undefined
+                ? [[worktreeId, worktree.manualOrder] as const]
+                : []
+            })
           )
         : undefined
       const order = writeManualOrder
@@ -105,7 +106,8 @@ export function useWorkspaceKanbanWorktreeActions(args: {
             draggedIds: drop.worktreeIds,
             dropIndex: drop.dropIndex,
             now: Date.now(),
-            rankByWorktreeId
+            rankByWorktreeId,
+            allWorktreeIds: args.allWorktreeIds
           })
         : { changed: false, updates: new Map<string, { manualOrder: number }>() }
       for (const worktreeId of drop.worktreeIds) {

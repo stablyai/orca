@@ -15,6 +15,30 @@ function buildFallbackManualOrderUpdates(
   return updates
 }
 
+function mergeVisibleOrderIntoKnownOrder(
+  knownIds: readonly string[],
+  visibleOrder: readonly string[]
+): string[] {
+  const visibleSet = new Set(visibleOrder)
+  if (!knownIds.some((id) => visibleSet.has(id))) {
+    return [...knownIds, ...visibleOrder.filter((id) => !knownIds.includes(id))]
+  }
+
+  const merged: string[] = []
+  let visibleIndex = 0
+  for (let index = 0; index < knownIds.length; index++) {
+    const id = knownIds[index]!
+    if (visibleSet.has(id)) {
+      merged.push(visibleOrder[visibleIndex] ?? id)
+      visibleIndex++
+      continue
+    }
+    merged.push(id)
+  }
+  merged.push(...visibleOrder.slice(visibleIndex).filter((id) => !knownIds.includes(id)))
+  return merged
+}
+
 function getManualOrderRank(
   rankByWorktreeId: ReadonlyMap<string, number>,
   worktreeId: string | undefined
@@ -30,6 +54,8 @@ export function buildSparseManualOrderUpdates(args: {
   orderedIds: readonly string[]
   movedIds: readonly string[]
   rankByWorktreeId?: ReadonlyMap<string, number>
+  /** Current order of every known row, including filtered/collapsed rows. */
+  allWorktreeIds?: readonly string[]
   now: number
 }): Map<string, WorktreeManualOrderUpdate> {
   const movedSet = new Set(args.movedIds)
@@ -39,6 +65,19 @@ export function buildSparseManualOrderUpdates(args: {
   }
   if (!args.rankByWorktreeId) {
     return buildFallbackManualOrderUpdates(args.orderedIds, args.now)
+  }
+
+  // Why: Manual is a durable sequence, not a rank for only the rendered slice.
+  // Materialize every known row once when any row is still on the mutable
+  // sortOrder fallback; subsequent drags can use sparse ranks again.
+  if (
+    args.allWorktreeIds &&
+    args.allWorktreeIds.some((id) => getManualOrderRank(args.rankByWorktreeId!, id) === null)
+  ) {
+    return buildFallbackManualOrderUpdates(
+      mergeVisibleOrderIntoKnownOrder(args.allWorktreeIds, args.orderedIds),
+      args.now
+    )
   }
 
   const firstMovedIndex = args.orderedIds.findIndex((id) => movedSet.has(id))

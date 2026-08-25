@@ -215,6 +215,7 @@ export function buildWorkspaceKanbanSidebarDropUpdates(args: {
   dropIndex: number
   groups: readonly WorktreeDragGroup[]
   worktreeById: ReadonlyMap<string, Worktree>
+  allWorktreeIds?: readonly string[]
   workspaceStatuses: readonly WorkspaceStatusDefinition[]
   sortBy: string
   now: number
@@ -238,7 +239,9 @@ export function buildWorkspaceKanbanSidebarDropUpdates(args: {
           for (const worktreeId of group.worktreeIds) {
             const worktree = args.worktreeById.get(worktreeId)
             if (worktree) {
-              ranks.set(worktreeId, worktree.manualOrder ?? worktree.sortOrder)
+              if (worktree.manualOrder !== undefined) {
+                ranks.set(worktreeId, worktree.manualOrder)
+              }
             }
           }
         }
@@ -252,7 +255,8 @@ export function buildWorkspaceKanbanSidebarDropUpdates(args: {
         draggedIds: args.worktreeIds,
         dropIndex: args.dropIndex,
         now: args.now,
-        rankByWorktreeId
+        rankByWorktreeId,
+        allWorktreeIds: args.allWorktreeIds
       })
     : { changed: false, updates: new Map<string, { manualOrder: number }>() }
 

@@ -599,7 +599,9 @@ describe('workspace kanban sidebar drop updates', () => {
     expect(result.shouldSwitchToManual).toBe(true)
     expect(result.updates.get('todo-a')).toEqual({
       workspaceStatus: 'doing',
-      manualOrder: 1500
+      manualOrder: 9000
     })
+    expect(result.updates.get('doing-a')).toEqual({ manualOrder: 10_000 })
+    expect(result.updates.get('doing-b')).toEqual({ manualOrder: 8000 })
   })
 })
