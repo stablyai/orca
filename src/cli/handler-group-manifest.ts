@@ -135,7 +135,8 @@ export const HANDLER_GROUPS: readonly HandlerGroup[] = [
       'orchestration reset',
       'orchestration collaboration-publish',
       'orchestration collaboration-checkpoint',
-      'orchestration collaboration-ack'
+      'orchestration collaboration-ack',
+      'orchestration collaboration-configure'
     ],
     load: async () => (await import('./handlers/orchestration.js')).ORCHESTRATION_HANDLERS
   },
