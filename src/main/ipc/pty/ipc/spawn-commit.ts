@@ -95,6 +95,7 @@ export async function commitPtyIpcSpawn(ctx: PtyIpcSpawnState): Promise<PtySpawn
             tabId: args.tabId,
             leafId: ctx.metadataLeafId,
             ...(ctx.result.incarnationId ? { incarnationId: ctx.result.incarnationId } : {}),
+            ...(ctx.result.ownerIdentity ? { ownerIdentity: ctx.result.ownerIdentity } : {}),
             ...(agentLaunchAuthority ? { agentLaunchAuthority } : {})
           }
         : undefined,

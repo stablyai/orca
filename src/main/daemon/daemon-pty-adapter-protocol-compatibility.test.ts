@@ -465,7 +465,7 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
 
       expect(adapter.hasPty(id)).toBe(false)
       await expect(adapter.probePtyLiveness(id)).resolves.toBe(true)
-      await expect(adapter.probePtyLiveness('missing-session')).resolves.toBe(false)
+      await expect(adapter.probePtyLiveness('missing-session')).resolves.toBeNull()
     })
 
     it('returns unknown when the daemon cannot answer', async () => {
@@ -479,16 +479,27 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
       await expect(adapter.probePtyLiveness('session')).resolves.toBeNull()
     })
 
-    function createProbeAdapter(
-      protocolVersion: number,
-      request: ReturnType<typeof vi.fn>
-    ): DaemonPtyAdapter {
+    type DaemonRequest = (
+      type: string,
+      payload: unknown,
+      timeoutMs?: number,
+      signal?: AbortSignal
+    ) => Promise<unknown>
+
+    function createProbeAdapter(protocolVersion: number, request: DaemonRequest): DaemonPtyAdapter {
       const probeAdapter = new DaemonPtyAdapter({ socketPath, tokenPath, protocolVersion })
-      ;(
-        probeAdapter as unknown as {
-          client: { request: ReturnType<typeof vi.fn>; disconnect: ReturnType<typeof vi.fn> }
-        }
-      ).client = { request, disconnect: vi.fn() }
+      const client = (probeAdapter as unknown as { client: DaemonClient }).client
+      vi.spyOn(client, 'request').mockImplementation(request)
+      vi.spyOn(
+        probeAdapter as unknown as { ensureConnected: () => Promise<void> },
+        'ensureConnected'
+      ).mockImplementation(async () => {
+        ;(
+          probeAdapter as unknown as {
+            lastAuthenticatedIdentity: { pid: number; startedAtMs: number; launchNonce: string }
+          }
+        ).lastAuthenticatedIdentity = { pid: 42, startedAtMs: 1, launchNonce: 'probe-owner' }
+      })
       return probeAdapter
     }
 
@@ -511,8 +522,8 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
       const legacy = createProbeAdapter(GET_SIZE_PROTOCOL_VERSION - 1, request)
 
       await expect(legacy.probePtyLiveness('legacy-live')).resolves.toBe(true)
-      await expect(legacy.probePtyLiveness('legacy-exited')).resolves.toBe(false)
-      await expect(legacy.probePtyLiveness('never-existed')).resolves.toBe(false)
+      await expect(legacy.probePtyLiveness('legacy-exited')).resolves.toBeNull()
+      await expect(legacy.probePtyLiveness('never-existed')).resolves.toBeNull()
       expect(request).toHaveBeenCalledWith('listSessions', undefined, LIVENESS_PROBE_TIMEOUT_MS)
       expect(request).not.toHaveBeenCalledWith('getSize', expect.anything())
 
@@ -544,7 +555,7 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
       const ambiguous = createProbeAdapter(GET_SIZE_PROTOCOL_VERSION, request)
 
       await expect(ambiguous.probePtyLiveness('ambiguous-live')).resolves.toBe(true)
-      await expect(ambiguous.probePtyLiveness('never-existed')).resolves.toBe(false)
+      await expect(ambiguous.probePtyLiveness('never-existed')).resolves.toBeNull()
 
       // The rejection is remembered, so later probes skip the round trip that cannot work.
       expect(request.mock.calls.filter(([type]) => type === 'getSize')).toHaveLength(1)

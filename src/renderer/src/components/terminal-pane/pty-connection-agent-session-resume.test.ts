@@ -741,17 +741,14 @@ describe('connectPanePty', () => {
       1,
       expect.objectContaining({ sessionId: staleSessionId })
     )
-    expect(transport.connect).toHaveBeenNthCalledWith(
-      2,
-      expect.not.objectContaining({ sessionId: expect.any(String) })
-    )
-    expect(deps.clearTabPtyId).toHaveBeenCalledWith('tab-1', staleSessionId)
+    expect(transport.connect).toHaveBeenCalledTimes(1)
+    expect(deps.clearTabPtyId).not.toHaveBeenCalledWith('tab-1', staleSessionId)
     expect(pane.terminal.write).not.toHaveBeenCalledWith(
       expect.stringContaining('--- session restored ---'),
       expect.any(Function)
     )
-    expect(deps.onShowSessionRestoredBanner).toHaveBeenCalledTimes(1)
-    expect(deps.onShowSessionRestoredBanner).toHaveBeenCalledWith(2, 'restored')
-    expect(mockStoreState.clearSleepingAgentSession).toHaveBeenCalledWith(paneKey)
+    expect(deps.onShowSessionRestoredBanner).not.toHaveBeenCalled()
+    expect(mockStoreState.clearSleepingAgentSession).not.toHaveBeenCalled()
+    expect(mockStoreState.sleepingAgentSessionsByPaneKey[paneKey]).toBeDefined()
   })
 })

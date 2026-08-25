@@ -69,13 +69,22 @@ describe('humanizeTerminalError', () => {
   it('replaces the pane-owner-unverified code with actionable copy', () => {
     const humanized = humanizeTerminalError('terminal_pane_owner_unverified')
     expect(humanized).not.toContain('terminal_pane_owner_unverified')
-    expect(humanized).toContain('Reopen this pane to retry')
+    expect(humanized).toContain('left the session and history untouched')
   })
 
   it('humanizes an IPC-wrapped pane-owner-unverified error', () => {
     const wrapped =
       "Error invoking remote method 'pty:spawn': Error: terminal_pane_owner_unverified"
     expect(humanizeTerminalError(wrapped)).not.toContain('terminal_pane_owner_unverified')
+  })
+
+  it('hides the owner-conflict diagnostic from user-facing copy', () => {
+    const humanized = humanizeTerminalError(
+      "terminal_pane_owner_conflict Error invoking remote method 'pty:spawn': Error: terminal_pane_owner_unverified"
+    )
+    expect(humanized).not.toContain('terminal_pane_owner_conflict')
+    expect(humanized).not.toContain('Error invoking remote method')
+    expect(humanized).toContain('left the session and history untouched')
   })
 
   it('leaves other errors untouched', () => {

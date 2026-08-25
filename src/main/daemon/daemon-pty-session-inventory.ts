@@ -50,11 +50,15 @@ export abstract class DaemonPtySessionInventory extends DaemonPtyProcessInspecti
           continue
         }
         aliveSessionIds.add(session.sessionId)
+        this.recordSessionAuthority(session.sessionId, session.incarnationId)
         const { worktreeId } = parsePtySessionId(session.sessionId)
         processes.push(
           admission.admit({
             id: session.sessionId,
             ...(session.incarnationId ? { incarnationId: session.incarnationId } : {}),
+            ...(this.ownerIdentity(session.incarnationId)
+              ? { ownerIdentity: this.ownerIdentity(session.incarnationId) }
+              : {}),
             // Why: OSC 7 may not arrive before cleanup; spawn cwd is authoritative until the daemon reports a live cwd.
             cwd: session.cwd ?? this.initialCwds.get(session.sessionId) ?? '',
             title: 'shell',
@@ -71,6 +75,10 @@ export abstract class DaemonPtySessionInventory extends DaemonPtyProcessInspecti
       for (const id of preRequestActiveIds) {
         if (!aliveSessionIds.has(id)) {
           this.activeSessionIds.delete(id)
+          if (!this.historyPreservingStopSessionIds.has(id)) {
+            this.sessionIncarnations.delete(id)
+            this.sessionOwnerIdentities.delete(id)
+          }
         }
       }
       this.publishAuditObservation(
@@ -147,6 +155,7 @@ export abstract class DaemonPtySessionInventory extends DaemonPtyProcessInspecti
     this.overlayDeadlineWarnedSessionIds.clear()
     this.periodicDeadlineWarnedSessionIds.clear()
     this.nonFinalAdmissionDeniedSessionIds.clear()
+    this.historyPreservingStopSessionIds.clear()
     this.pausedProducerSessionIds.clear()
     this.producerResumesOwedOnReconnect.clear()
     this.stopCheckpointTimer()
@@ -164,6 +173,7 @@ export abstract class DaemonPtySessionInventory extends DaemonPtyProcessInspecti
         })
       }
       this.sessionIncarnations.delete(id)
+      this.sessionOwnerIdentities.delete(id)
     }
   }
 

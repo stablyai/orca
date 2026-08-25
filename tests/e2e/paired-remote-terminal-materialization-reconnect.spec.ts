@@ -208,6 +208,7 @@ async function runMaterializationJourney(
   await expect
     .poll(() => getTerminalContent(page), { timeout: 30_000 })
     .toContain('MATERIALIZE_READY')
+  await expect(page.locator('[data-terminal-owner-unavailable-banner]')).toHaveCount(0)
 
   const originalTerminal = await callRuntime<{ terminal: RuntimeTerminalShow }>(
     page,
@@ -315,6 +316,7 @@ async function runMaterializationJourney(
   await expect(tab).toBeVisible({ timeout: 10_000 })
   await tab.click()
   await expect.poll(() => getTerminalContent(page), { timeout: 10_000 }).toContain(marker)
+  await expect(page.locator('[data-terminal-owner-unavailable-banner]')).toHaveCount(0)
 
   const listed = await callRuntime<RuntimeTerminalListResult>(
     page,

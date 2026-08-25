@@ -88,7 +88,6 @@ export function killPtyFromRuntimeController(
               err instanceof Error ? err.message : String(err)
             )
           }
-          runtime?.onPtyExit(ptyId, -1, ptyIncarnationById.get(ptyId))
         }
       })
     return true
@@ -107,7 +106,6 @@ export function killPtyFromRuntimeController(
             err instanceof Error ? err.message : String(err)
           )
         }
-        runtime?.onPtyExit(ptyId, -1, ptyIncarnationById.get(ptyId))
       }
     })
     return true
@@ -241,16 +239,7 @@ export async function stopAndWaitPtyFromRuntimeController(
     provider = connectionId ? getProvider(connectionId) : getProviderForPty(ptyId)
   } catch {
     if (connectionId) {
-      // Why: an absent SSH provider means there is no live target left to
-      // await, but the relay lease must still be tombstoned.
-      const incarnationId = finishPtyShutdown(ptyId, connectionId, store)
-      runtime?.onPtyExit(ptyId, -1, incarnationId)
-      rememberSyntheticKillExit(ptyId)
-      sendPtyExitToRenderer({
-        id: ptyId,
-        code: -1,
-        ...(incarnationId ? { incarnationId } : {})
-      })
+      // An absent SSH provider is lost contact, not evidence the remote PTY exited.
       runtime?.markPtyLivenessUnverifiable?.(ptyId, SSH_PROVIDER_UNREGISTERED_REASON)
     }
     return false

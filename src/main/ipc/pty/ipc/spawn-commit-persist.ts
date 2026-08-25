@@ -108,6 +108,7 @@ export async function persistPtyIpcSpawnCommit(ctx: PtyIpcSpawnState): Promise<{
         leafId: ctx.validatedLeafId,
         ptyId: ctx.result.id,
         ...(ctx.result.incarnationId ? { incarnationId: ctx.result.incarnationId } : {}),
+        ...(ctx.result.ownerIdentity ? { ownerIdentity: ctx.result.ownerIdentity } : {}),
         ...(ctx.cwd ? { startupCwd: ctx.cwd } : {})
       }
       if (args.connectionId) {

@@ -1021,7 +1021,8 @@ async function reapRestoredSubagentsWithoutLiveAgent(): Promise<void> {
     currentStore.getWorkspaceSession().terminalLayoutsByTabId ?? {}
   )
   await sweepRestoredSubagentsWithoutLiveAgent({
-    probeLiveLocalPty: (ptyId) => provider.probePtyLiveness(ptyId),
+    probeLiveLocalPty: (ptyId, expectedIncarnationId) =>
+      provider.probePtyLiveness(ptyId, expectedIncarnationId),
     isLocalExecutionHost: (worktreeId) =>
       isLocalExecutionHost(
         resolveAgentWorkspaceExecutionHostId(worktreeId, {
@@ -1034,6 +1035,8 @@ async function reapRestoredSubagentsWithoutLiveAgent(): Promise<void> {
       ),
     getBoundPtyIdForPaneKey: getPtyIdForPaneKey,
     getPersistedPtyIdForPaneKey: (paneKey) => persistedPtyIdByPaneKey.get(paneKey),
+    getPersistedPtyIncarnationForPaneKey: (paneKey) =>
+      currentStore.getWorkspaceSession().terminalPtyIncarnationsByPaneKey?.[paneKey],
     reap: (isLocalHost, isLocalPaneAgentLive, isLocalPaneLivenessEvidenceCurrent) =>
       agentHookServer.reapRestoredClaudeSubagentsWithoutLiveAgent(
         isLocalHost,

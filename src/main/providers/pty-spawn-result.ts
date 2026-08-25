@@ -3,6 +3,7 @@ import type { TuiAgent } from '../../shared/tui-agent'
 import type { AgentSessionClaimedSpawnResult } from '../../shared/agent-session-host-authority'
 import type { PtyIncarnationId } from '../../shared/pty-incarnation'
 import type { PtySourceReceivingActivation } from '../../shared/pty-source-receiving-activation'
+import type { TerminalOwnerIdentity } from '../../shared/terminal-owner-identity'
 
 export type PtySpawnResult = {
   agentSessionEnsure?: AgentSessionClaimedSpawnResult
@@ -11,6 +12,8 @@ export type PtySpawnResult = {
   id: string
   /** Opaque provider-owned identity for this process behind a reusable PTY id. */
   incarnationId?: PtyIncarnationId
+  /** Authenticated exact owner identity, when the provider can prove it. */
+  ownerIdentity?: TerminalOwnerIdentity
   /** Relay source identity installed before adjacent source frames are decoded. */
   sourceActivation?: PtySourceReceivingActivation
   /** The provider observed this exact spawn exit before its control reply settled. */

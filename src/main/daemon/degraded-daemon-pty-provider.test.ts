@@ -4,7 +4,7 @@ import { DEGRADED_DAEMON_RECOVERY_RETRY_MS } from './degraded-daemon-fresh-spawn
 import type { DaemonPtyAdapter } from './daemon-pty-adapter'
 import type { IPtyProvider, PtySpawnOptions, PtySpawnResult } from '../providers/types'
 import type { PtyProcessInspection } from '../providers/pty-process-inspection'
-import { SessionNotFoundError, TerminalSessionOwnerUnverifiedError } from './daemon-errors'
+import { TerminalSessionOwnerUnverifiedError } from './daemon-errors'
 
 type ProviderMock = IPtyProvider & {
   probePtyLiveness: (id: string) => Promise<boolean | null>
@@ -201,7 +201,7 @@ it('keeps an attach unresolved when a legacy inventory listing fails', async () 
   expect(current.spawn).not.toHaveBeenCalled()
 })
 
-it('confirms repeated stale-binding absence without falling back or spawning', async () => {
+it('keeps repeated stale-binding absence unverifiable without fallback spawn', async () => {
   const current = createDaemonAdapter('daemon-current')
   const legacy = createDaemonAdapter('daemon-legacy')
   const fallback = createProvider('local-fallback')
@@ -223,12 +223,12 @@ it('confirms repeated stale-binding absence without falling back or spawning', a
     rows: 24
   } as const
 
-  await expect(provider.spawn(attach)).rejects.toBeInstanceOf(SessionNotFoundError)
-  await expect(provider.spawn(attach)).rejects.toBeInstanceOf(SessionNotFoundError)
+  await expect(provider.spawn(attach)).rejects.toBeInstanceOf(TerminalSessionOwnerUnverifiedError)
+  await expect(provider.spawn(attach)).rejects.toBeInstanceOf(TerminalSessionOwnerUnverifiedError)
 
-  expect(fallback.listProcesses).toHaveBeenCalledTimes(2)
-  expect(current.listProcesses).toHaveBeenCalledTimes(2)
-  expect(legacy.listProcesses).toHaveBeenCalledTimes(2)
+  expect(fallback.listProcesses).toHaveBeenCalledOnce()
+  expect(current.listProcesses).toHaveBeenCalledOnce()
+  expect(legacy.listProcesses).toHaveBeenCalledOnce()
   expect(fallback.spawn).not.toHaveBeenCalled()
   expect(current.spawn).not.toHaveBeenCalled()
   expect(legacy.spawn).not.toHaveBeenCalled()
@@ -256,9 +256,9 @@ it('confirms repeated stale-binding absence without falling back or spawning', a
   })
   expect(current.spawn).not.toHaveBeenCalled()
   expect(legacy.spawn).not.toHaveBeenCalled()
-  expect(fallback.listProcesses).toHaveBeenCalledTimes(2)
-  expect(current.listProcesses).toHaveBeenCalledTimes(2)
-  expect(legacy.listProcesses).toHaveBeenCalledTimes(2)
+  expect(fallback.listProcesses).toHaveBeenCalledOnce()
+  expect(current.listProcesses).toHaveBeenCalledOnce()
+  expect(legacy.listProcesses).toHaveBeenCalledOnce()
 })
 
 it('rejects completion inspection instead of borrowing the fallback provider', async () => {
@@ -510,7 +510,8 @@ describe('DegradedDaemonPtyProvider', () => {
     expect(fallback.probePtyLiveness).not.toHaveBeenCalled()
 
     currentSessions.push('unknown-session')
-    await expect(provider.probePtyLiveness('unknown-session')).resolves.toBe(true)
+    await expect(provider.probePtyLiveness('unknown-session')).resolves.toBeNull()
+    expect(current.listProcesses).not.toHaveBeenCalled()
   })
 
   it('reports a routed fallback PTY live before probing daemon absence', async () => {

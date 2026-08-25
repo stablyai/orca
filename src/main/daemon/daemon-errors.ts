@@ -68,6 +68,13 @@ export class TerminalSessionOwnerUnverifiedError extends Error {
   }
 }
 
+export class TerminalSessionExitedError extends Error {
+  constructor(sessionId: string) {
+    super(`Terminal session exited: ${sessionId}`)
+    this.name = 'TerminalSessionExitedError'
+  }
+}
+
 export class TerminalHostGoneError extends Error {
   constructor() {
     super('terminal_host_gone')

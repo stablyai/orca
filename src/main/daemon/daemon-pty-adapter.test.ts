@@ -283,6 +283,41 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
       expect(internals.pendingClaimSpawnOperations.size).toBe(0)
     })
 
+    it('does not let an unrelated fresh claim authorize a stale owner exit', async () => {
+      const sessionId = 'stale-owner-during-unrelated-claim'
+      const created = await adapter.spawn({ cols: 80, rows: 24, sessionId })
+      const exits: string[] = []
+      adapter.onExit(({ id }) => exits.push(id))
+      const pendingClaim = {
+        exitsBySessionId: new Map<string, { incarnationId?: string }[]>(),
+        ignoredExitIncarnationIds: new Set<string>(),
+        ignoreNextExit: false,
+        acceptsUnroutedExit: true
+      }
+      const internals = adapter as unknown as {
+        activeSessionIds: Set<string>
+        lastAuthenticatedIdentity: { pid: number; startedAtMs: number; launchNonce: string }
+        pendingClaimSpawnOperations: Set<typeof pendingClaim>
+        sessionIncarnations: Map<string, string>
+      }
+      const originalIdentity = internals.lastAuthenticatedIdentity
+      internals.lastAuthenticatedIdentity = {
+        ...internals.lastAuthenticatedIdentity,
+        launchNonce: 'replacement-daemon'
+      }
+      internals.pendingClaimSpawnOperations.add(pendingClaim)
+
+      lastSubprocess._simulateExit(0)
+      await waitFor(() => pendingClaim.exitsBySessionId.has(sessionId))
+
+      expect(created.incarnationId).toBeDefined()
+      expect(exits).toEqual([])
+      expect(internals.activeSessionIds.has(sessionId)).toBe(true)
+      expect(internals.sessionIncarnations.get(sessionId)).toBe(created.incarnationId)
+      internals.lastAuthenticatedIdentity = originalIdentity
+      internals.pendingClaimSpawnOperations.delete(pendingClaim)
+    })
+
     it('does not dispatch createOrAttach when cancellation wins during preflight', async () => {
       let finishPreflight: (() => void) | undefined
       const preflight = new Promise<void>((resolve) => {
@@ -711,6 +746,68 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
         incarnationId: expect.any(String),
         cause: { kind: 'exited', exitCode: 42 }
       })
+    })
+
+    it('ignores an incarnation-less exit for an incarnation-fenced session', async () => {
+      const exits: { id: string; code: number; incarnationId?: string }[] = []
+      adapter.onExit((payload) => exits.push(payload))
+      const spawned = await adapter.spawn({ cols: 80, rows: 24 })
+      const client = (adapter as unknown as { client: DaemonClient }).client
+      const eventListeners = (
+        client as unknown as {
+          eventListeners: {
+            each: (visit: (listener: (event: unknown) => void) => void) => void
+          }
+        }
+      ).eventListeners
+
+      eventListeners.each((listener) =>
+        listener({
+          type: 'event',
+          event: 'exit',
+          sessionId: spawned.id,
+          payload: { code: 0 }
+        })
+      )
+
+      expect(exits).toEqual([])
+      expect(adapter.hasPty(spawned.id)).toBe(true)
+    })
+
+    it('ignores an echoed expected incarnation after daemon identity replacement', async () => {
+      const exits: { id: string; code: number; incarnationId?: string }[] = []
+      adapter.onExit((payload) => exits.push(payload))
+      const spawned = await adapter.spawn({ cols: 80, rows: 24 })
+      const internals = adapter as unknown as {
+        client: DaemonClient
+        lastAuthenticatedIdentity: { pid: number; startedAtMs: number; launchNonce: string }
+      }
+      const originalIdentity = internals.lastAuthenticatedIdentity
+      internals.lastAuthenticatedIdentity = {
+        pid: process.pid,
+        startedAtMs: Date.now() + 10_000,
+        launchNonce: 'replacement-owner'
+      }
+      const eventListeners = (
+        internals.client as unknown as {
+          eventListeners: {
+            each: (visit: (listener: (event: unknown) => void) => void) => void
+          }
+        }
+      ).eventListeners
+
+      eventListeners.each((listener) =>
+        listener({
+          type: 'event',
+          event: 'exit',
+          sessionId: spawned.id,
+          payload: { code: -1, incarnationId: spawned.incarnationId }
+        })
+      )
+
+      expect(exits).toEqual([])
+      expect(adapter.hasPty(spawned.id)).toBe(true)
+      internals.lastAuthenticatedIdentity = originalIdentity
     })
   })
 

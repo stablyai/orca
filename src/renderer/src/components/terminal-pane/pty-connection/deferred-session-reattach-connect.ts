@@ -3,8 +3,9 @@ import { recordPtyConnectDiagnostic } from './pty-connect-limits'
 import { isSshSessionExpiredError } from './ssh-session-connect'
 import { isRemoteRuntimePtyId } from './paired-parked-terminal-restore'
 import { toProcessExitStartup } from './process-exit-startup'
-import { recoverUnverifiableDirectSshReattach } from './direct-ssh-reattach-recovery'
+import { recoverUnverifiableReattach } from './unverifiable-reattach-recovery'
 import type { ConnectPanePtySession } from './connect-pane-pty-session'
+import { isTerminalPaneOwnerUnverified } from '../../../../../shared/terminal-pane-owner-verdict'
 
 export function startDeferredSessionReattach(
   session: ConnectPanePtySession,
@@ -75,6 +76,15 @@ export function startDeferredSessionReattach(
         }
         return
       }
+      if (result && typeof result === 'object' && result.ownerUnverifiable) {
+        session.finishReattachLiveDataDeferral(false, outputCallbacks.generation)
+        const gen = await preSignalPromise
+        if (typeof gen === 'number') {
+          void window.api.pty.clearPendingPaneSerializer(session.cacheKey, gen).catch(() => {})
+        }
+        recoverUnverifiableReattach(session, deferredReattachSessionId)
+        return
+      }
       if (!result && expiredReattachError) {
         session.finishReattachLiveDataDeferral(false, outputCallbacks.generation)
         const gen = await preSignalPromise
@@ -133,6 +143,11 @@ export function startDeferredSessionReattach(
       if (session.rejectObsoleteDirectSshReattach(deferredReattachSessionId)) {
         return
       }
+      if (isTerminalPaneOwnerUnverified(message)) {
+        session.reportError(message)
+        recoverUnverifiableReattach(session, deferredReattachSessionId)
+        return
+      }
       warnTerminalLifecycleAnomaly('restored PTY reattach threw', {
         tabId: session.deps.tabId,
         worktreeId: session.deps.worktreeId,
@@ -150,15 +165,9 @@ export function startDeferredSessionReattach(
         return
       }
       session.reportError(message)
-      if (session.connectionId) {
-        recoverUnverifiableDirectSshReattach(session, deferredReattachSessionId)
-        return
+      if (session.directSshRetryAttempt) {
+        session.settleDirectSshPaneRetryAttempt(session.directSshRetryAttempt, 'failed')
       }
-      session.deps.clearExitedPanePtyLayoutBinding(session.pane.id, deferredReattachSessionId)
-      session.deps.clearTabPtyId(session.deps.tabId, deferredReattachSessionId)
-      session.startFreshColdRestoreAgentResume(coldRestoreStartup, {
-        forceBlankRestoredViewport: true
-      })
     })
   session.armDirectSshPaneRetryTimeout(trackedReattachPromise, session.directSshRetryAttempt)
 }

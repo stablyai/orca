@@ -79,6 +79,7 @@ export abstract class DaemonPtyEventSubscriptions extends DaemonPtySessionInvent
     this.overlayDeadlineWarnedSessionIds.clear()
     this.periodicDeadlineWarnedSessionIds.clear()
     this.nonFinalAdmissionDeniedSessionIds.clear()
+    this.historyPreservingStopSessionIds.clear()
     this.coldRestoreCache.clear()
     this.wslDistrosBySessionId.clear()
     this.pausedProducerSessionIds.clear()

@@ -14,6 +14,7 @@ export type {
 import type { StartupCommandDelivery } from '../../shared/codex-startup-delivery'
 import type { TuiAgent } from '../../shared/tui-agent'
 import type { PtyStartupIngressIntent } from '../../shared/pty-startup-ingress'
+import type { PtyIncarnationId } from '../../shared/pty-incarnation'
 import type {
   AgentSessionExecutionClaim,
   AgentSessionOwnerBinding,
@@ -35,6 +36,7 @@ export {
   PROTOCOL_VERSION,
   PTY_STARTUP_INGRESS_PROTOCOL_VERSION,
   MODE_2031_UNSUBSCRIBE_FACT_PROTOCOL_VERSION,
+  SESSION_INCARNATION_ATTACH_FENCE_DAEMON_PROTOCOL_VERSION,
   supportsMode2031UnsubscribeFact,
   supportsPtyStartupIngress
 } from './daemon-protocol-version'
@@ -71,6 +73,8 @@ export type CreateOrAttachRequest = {
     launchAgent?: TuiAgent
     /** Rejects an absent session instead of interpreting mount uncertainty as create permission. */
     attachOnly?: boolean
+    /** Exact session incarnation required for a side-effect-free attach. */
+    expectedIncarnationId?: PtyIncarnationId
     /** Explicit Windows shell override selected by the user (e.g. 'wsl.exe').
      *  The daemon forwards this to its subprocess spawner so each tab honors
      *  the shell picked in the "+" menu or the persisted default-shell setting,
@@ -111,10 +115,7 @@ export type CancelCreateOrAttachRequest = {
 export type WriteRequest = {
   id: string
   type: 'write'
-  payload: {
-    sessionId: string
-    data: string
-  }
+  payload: { sessionId: string; data: string; expectedIncarnationId?: PtyIncarnationId }
 }
 
 export type ResizeRequest = {
@@ -124,6 +125,7 @@ export type ResizeRequest = {
     sessionId: string
     cols: number
     rows: number
+    expectedIncarnationId?: PtyIncarnationId
   }
 }
 

@@ -100,7 +100,7 @@ export abstract class DaemonPtySpawnRequest extends DaemonPtyRuntimeState {
     context: DaemonPtySpawnContext,
     historySeedSegments: readonly string[] | null
   ): Promise<CreateOrAttachResult> {
-    const requestCreateOrAttach = (
+    const requestCreateOrAttach = async (
       historySeed: string | undefined,
       historySeedTransferId: string | undefined
     ) => {
@@ -119,6 +119,11 @@ export abstract class DaemonPtySpawnRequest extends DaemonPtyRuntimeState {
         startupCommandDelivery: context.attachOnly ? undefined : opts.startupCommandDelivery,
         launchAgent: context.attachOnly ? undefined : opts.launchAgent,
         ...(context.attachOnly && !context.emulateLegacyAttachOnly ? { attachOnly: true } : {}),
+        ...(context.attachOnly &&
+        opts.expectedIncarnationIsAuthoritative === true &&
+        opts.expectedIncarnationId !== undefined
+          ? { expectedIncarnationId: opts.expectedIncarnationId }
+          : {}),
         shellOverride: context.attachOnly ? undefined : opts.shellOverride,
         terminalWindowsWslDistro: context.attachOnly ? undefined : opts.terminalWindowsWslDistro,
         terminalWindowsPowerShellImplementation: context.attachOnly
@@ -137,14 +142,19 @@ export abstract class DaemonPtySpawnRequest extends DaemonPtyRuntimeState {
           ? { agentSessionEnsure: opts.agentSessionEnsure }
           : {})
       }
-      return opts.signal
-        ? this.client.request<CreateOrAttachResult>(
-            'createOrAttach',
-            payload,
-            undefined,
-            opts.signal
-          )
-        : this.client.request<CreateOrAttachResult>('createOrAttach', payload)
+      context.operation.acceptsUnroutedExit = !context.attachOnly
+      try {
+        return await (opts.signal
+          ? this.client.request<CreateOrAttachResult>(
+              'createOrAttach',
+              payload,
+              undefined,
+              opts.signal
+            )
+          : this.client.request<CreateOrAttachResult>('createOrAttach', payload))
+      } finally {
+        context.operation.acceptsUnroutedExit = false
+      }
     }
 
     let historySeedUnavailable = false

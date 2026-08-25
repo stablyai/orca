@@ -81,21 +81,32 @@ async function restartWithInFlightSubagent(options?: {
 function sweepWith(
   server: AgentHookServer,
   overrides: {
-    probeLiveLocalPty?: (ptyId: string) => boolean | null | Promise<boolean | null>
+    probeLiveLocalPty?: (
+      ptyId: string,
+      expectedIncarnationId: string
+    ) => boolean | null | Promise<boolean | null>
     executionHostId?: string | null
     boundPtyIdByPaneKey?: Record<string, string>
     persistedPtyIdByPaneKey?: Record<string, string>
+    persistedPtyIncarnationByPaneKey?: Record<string, string>
   } = {}
 ): Promise<number> {
   return sweepRestoredSubagentsWithoutLiveAgent({
-    probeLiveLocalPty: async (ptyId) =>
-      overrides.probeLiveLocalPty ? await overrides.probeLiveLocalPty(ptyId) : false,
+    probeLiveLocalPty: async (ptyId, expectedIncarnationId) =>
+      overrides.probeLiveLocalPty
+        ? await overrides.probeLiveLocalPty(ptyId, expectedIncarnationId)
+        : false,
     isLocalExecutionHost: () =>
       isLocalExecutionHost(
         overrides.executionHostId === undefined ? 'local' : overrides.executionHostId
       ),
     getBoundPtyIdForPaneKey: (paneKey) => overrides.boundPtyIdByPaneKey?.[paneKey],
     getPersistedPtyIdForPaneKey: (paneKey) => overrides.persistedPtyIdByPaneKey?.[paneKey],
+    getPersistedPtyIncarnationForPaneKey: (paneKey) =>
+      overrides.persistedPtyIncarnationByPaneKey?.[paneKey] ??
+      (overrides.persistedPtyIdByPaneKey?.[paneKey] || overrides.boundPtyIdByPaneKey?.[paneKey]
+        ? 'incarnation-1'
+        : undefined),
     reap: (isLocalHost, isLocalPaneAgentLive, isLocalPaneLivenessEvidenceCurrent) =>
       server.reapRestoredClaudeSubagentsWithoutLiveAgent(
         isLocalHost,
@@ -186,7 +197,7 @@ describe('restored subagent liveness sweep', () => {
         })
       ).toBe(0)
 
-      expect(probeLiveLocalPty).toHaveBeenCalledExactlyOnceWith(PTY)
+      expect(probeLiveLocalPty).toHaveBeenCalledExactlyOnceWith(PTY, 'incarnation-1')
       expect(paneStatus(server).state).toBe('working')
     } finally {
       server.stop()
@@ -205,7 +216,7 @@ describe('restored subagent liveness sweep', () => {
         })
       ).toBe(2)
 
-      expect(probeLiveLocalPty).toHaveBeenCalledExactlyOnceWith(PTY)
+      expect(probeLiveLocalPty).toHaveBeenCalledExactlyOnceWith(PTY, 'incarnation-1')
     } finally {
       server.stop()
     }
@@ -409,7 +420,9 @@ describe('restored subagent liveness sweep', () => {
     )
     try {
       const sweep = sweepWith(server, { probeLiveLocalPty, boundPtyIdByPaneKey })
-      await vi.waitFor(() => expect(probeLiveLocalPty).toHaveBeenCalledExactlyOnceWith(PTY))
+      await vi.waitFor(() =>
+        expect(probeLiveLocalPty).toHaveBeenCalledExactlyOnceWith(PTY, 'incarnation-1')
+      )
       boundPtyIdByPaneKey[PANE] = 'wt-1__pty-new'
       resolveProbe(false)
 
@@ -436,8 +449,39 @@ describe('restored subagent liveness sweep', () => {
         boundPtyIdByPaneKey,
         persistedPtyIdByPaneKey: { [PANE]: PTY }
       })
-      await vi.waitFor(() => expect(probeLiveLocalPty).toHaveBeenCalledExactlyOnceWith(PTY))
+      await vi.waitFor(() =>
+        expect(probeLiveLocalPty).toHaveBeenCalledExactlyOnceWith(PTY, 'incarnation-1')
+      )
       boundPtyIdByPaneKey[PANE] = PTY
+      resolveProbe(false)
+
+      expect(await sweep).toBe(0)
+      expect(paneStatus(server).state).toBe('working')
+    } finally {
+      server.stop()
+    }
+  })
+
+  it('keeps a same-id replacement whose persisted incarnation changes during the probe', async () => {
+    const server = await restartWithInFlightSubagent()
+    const persistedPtyIncarnationByPaneKey = { [PANE]: 'incarnation-a' }
+    let resolveProbe!: (live: boolean | null) => void
+    const probeLiveLocalPty = vi.fn(
+      () =>
+        new Promise<boolean | null>((resolve) => {
+          resolveProbe = resolve
+        })
+    )
+    try {
+      const sweep = sweepWith(server, {
+        probeLiveLocalPty,
+        persistedPtyIdByPaneKey: { [PANE]: PTY },
+        persistedPtyIncarnationByPaneKey
+      })
+      await vi.waitFor(() =>
+        expect(probeLiveLocalPty).toHaveBeenCalledExactlyOnceWith(PTY, 'incarnation-a')
+      )
+      persistedPtyIncarnationByPaneKey[PANE] = 'incarnation-b'
       resolveProbe(false)
 
       expect(await sweep).toBe(0)

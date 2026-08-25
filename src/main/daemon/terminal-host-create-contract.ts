@@ -22,6 +22,8 @@ export type CreateOrAttachOptions = {
   launchAgent?: TuiAgent
   /** Missing ownership is not permission to create during stable-pane adoption. */
   attachOnly?: boolean
+  /** Exact session incarnation required before attach mutates client ownership. */
+  expectedIncarnationId?: PtyIncarnationId
   /** Explicit shell the renderer asked for, forwarded to the subprocess. */
   shellOverride?: string
   terminalWindowsWslDistro?: string | null

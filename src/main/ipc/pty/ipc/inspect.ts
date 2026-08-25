@@ -27,6 +27,8 @@ import {
   rendererSerializerReadiness,
   settlePendingPaneSerializer
 } from '../pane/serializer-state'
+import { installPtyHasPtyIpc } from './has-pty'
+import { TerminalSessionOwnerUnverifiedError } from '../../../daemon/daemon-errors'
 
 export function installPtyInspectIpcHandlers(deps: {
   store?: Store
@@ -49,6 +51,7 @@ export function installPtyInspectIpcHandlers(deps: {
     rememberSyntheticKillExit,
     sendPtyExitToRenderer
   } = deps
+  installPtyHasPtyIpc({ store, getLocalPtyProviderStartupPromise })
 
   ipcMain.handle('pty:kill', async (_event, args: { id: string; keepHistory?: boolean }) => {
     if (typeof args?.id !== 'string' || !args.id || args.id.startsWith('remote:')) {
@@ -188,30 +191,6 @@ export function installPtyInspectIpcHandlers(deps: {
     }
   )
 
-  ipcMain.handle('pty:hasPty', async (_event, args: { id: string }): Promise<boolean | null> => {
-    if (typeof args?.id !== 'string' || args.id.startsWith('remote:')) {
-      // Why: same routing hazard pty:kill guards against — ptyOwnership never holds
-      // a runtime terminal handle and parseAppSshPtyId ignores it, so the lookup
-      // falls through to the local provider and its "not in my table" reads as an
-      // authoritative dead. That is a fabricated answer about another host's PTY.
-      return null
-    }
-    const ownedConnectionId = ptyOwnership.get(args.id)
-    const parsedSshId = ownedConnectionId === undefined ? parseAppSshPtyId(args.id) : null
-    const provider = parsedSshId
-      ? sshProviders.get(parsedSshId.connectionId)
-      : tryGetProviderForPty(args.id)
-    if (!provider?.hasPty) {
-      return null
-    }
-    try {
-      return provider.hasPty(args.id)
-    } catch {
-      // Why: liveness is only allowed to close panes on an authoritative false.
-      return null
-    }
-  })
-
   ipcMain.handle(
     'pty:hasChildProcesses',
     async (_event, args: { id: string }): Promise<boolean> => {
@@ -234,15 +213,27 @@ export function installPtyInspectIpcHandlers(deps: {
 
   ipcMain.handle('pty:inspectProcess', async (_event, args: { id: string }) => {
     // Why: same routing hazard as pty:hasPty — an unroutable id must read as unavailable, not as a local-provider answer or a raised IPC error.
+    const unavailable = {
+      foregroundProcess: null,
+      hasChildProcesses: false,
+      unavailable: true as const
+    }
     if (
       typeof args?.id !== 'string' ||
       !args.id ||
       args.id.startsWith('remote:') ||
       !hasPtyProviderForInspection(args.id)
     ) {
-      return { foregroundProcess: null, hasChildProcesses: false, unavailable: true as const }
+      return unavailable
     }
-    return inspectPtyProviderProcessForRenderer(getProviderForPty(args.id), args.id)
+    try {
+      return await inspectPtyProviderProcessForRenderer(getProviderForPty(args.id), args.id)
+    } catch (error) {
+      if (error instanceof TerminalSessionOwnerUnverifiedError) {
+        return unavailable
+      }
+      throw error
+    }
   })
 
   ipcMain.handle(

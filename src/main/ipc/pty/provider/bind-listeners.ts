@@ -84,21 +84,23 @@ export function bindProviderListeners(session: PtyIpcSession): void {
   )
   setLocalExitUnsub(
     localProvider.onExit((payload) => {
+      // Local configure fences and forwards before cleanup removes the incarnation.
+      if (isLocalProvider) {
+        return
+      }
       if (!isCurrentPtyExit(payload)) {
         return
       }
       if (session.consumeSyntheticKillExit(payload.id)) {
         return
       }
-      if (!isLocalProvider) {
-        clearProviderPtyState(payload.id)
-        ptyOwnership.delete(payload.id)
-        markClaudePtyExited(payload.id)
-        session.runtime?.onPtyExit(payload.id, payload.code, payload.incarnationId, {
-          providerExitObserved: true,
-          ...(payload.cause ? { cause: payload.cause } : {})
-        })
-      }
+      clearProviderPtyState(payload.id)
+      ptyOwnership.delete(payload.id)
+      markClaudePtyExited(payload.id)
+      session.runtime?.onPtyExit(payload.id, payload.code, payload.incarnationId, {
+        providerExitObserved: true,
+        ...(payload.cause ? { cause: payload.cause } : {})
+      })
       // Why not the whole payload: the exit cause is a main-process fact for the
       // runtime's records; the renderer's pty:exit contract stays as it was.
       session.sendPtyExitToRenderer({

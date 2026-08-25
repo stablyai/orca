@@ -23,6 +23,14 @@ export function deleteScannedSessionFieldsForOwners(
       })
     )
   }
+  if (next.terminalPtyOwnersByPaneKey) {
+    next.terminalPtyOwnersByPaneKey = Object.fromEntries(
+      Object.entries(next.terminalPtyOwnersByPaneKey).filter(([paneKey]) => {
+        const separator = paneKey.lastIndexOf(':')
+        return separator < 1 || !removedTabIds.has(paneKey.slice(0, separator))
+      })
+    )
+  }
   if (next.terminalSurfaceTombstonesByPaneKey) {
     next.terminalSurfaceTombstonesByPaneKey = Object.fromEntries(
       Object.entries(next.terminalSurfaceTombstonesByPaneKey).filter(

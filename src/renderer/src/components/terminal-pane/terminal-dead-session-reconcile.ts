@@ -16,7 +16,10 @@ export type ReconcilableBinding = {
   reconcileIfSessionMissing?: (hasPty: HasPty, livenessRequestedAt?: number) => void
 }
 
-export type HasPty = (ptyId: string) => Promise<boolean | null>
+export type HasPty = (
+  ptyId: string,
+  owner?: { paneKey: string; worktreeId: string }
+) => Promise<boolean | null>
 
 /**
  * PURE decision: should the pane bound to `ptyId` be reconciled (torn down)

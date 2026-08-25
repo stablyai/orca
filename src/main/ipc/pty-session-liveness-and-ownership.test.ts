@@ -9,6 +9,7 @@ import {
   setLocalPtyProvider,
   unregisterSshPtyProvider
 } from './pty'
+import { TerminalSessionOwnerUnverifiedError } from '../daemon/daemon-errors'
 
 vi.mock('electron', () => import('./pty-ipc-mock-registry').then((m) => m.electronModuleMock()))
 vi.mock('fs', () => import('./pty-ipc-mock-registry').then((m) => m.fsModuleMock()))
@@ -511,6 +512,33 @@ describe('registerPtyHandlers', () => {
     setLocalPtyProvider({ hasPty: vi.fn(() => false) } as never)
 
     await expect(handlers.get('pty:inspectProcess')!(null, { id: 'gone-pty' })).resolves.toEqual({
+      foregroundProcess: null,
+      hasChildProcesses: false,
+      unavailable: true
+    })
+  })
+  it('preserves unknown liveness while settling structured process inspection', async () => {
+    const unavailable = vi.fn(() => {
+      throw new TerminalSessionOwnerUnverifiedError('saved-pty')
+    })
+    registerPtyHandlers(mainWindow as never)
+    setLocalPtyProvider({
+      hasChildProcesses: unavailable,
+      getForegroundProcess: unavailable,
+      confirmForegroundProcess: unavailable,
+      inspectProcess: unavailable
+    } as never)
+
+    await expect(handlers.get('pty:hasChildProcesses')!(null, { id: 'saved-pty' })).rejects.toThrow(
+      TerminalSessionOwnerUnverifiedError
+    )
+    await expect(
+      handlers.get('pty:getForegroundProcess')!(null, { id: 'saved-pty' })
+    ).rejects.toThrow(TerminalSessionOwnerUnverifiedError)
+    await expect(
+      handlers.get('pty:confirmForegroundProcess')!(null, { id: 'saved-pty' })
+    ).rejects.toThrow(TerminalSessionOwnerUnverifiedError)
+    await expect(handlers.get('pty:inspectProcess')!(null, { id: 'saved-pty' })).resolves.toEqual({
       foregroundProcess: null,
       hasChildProcesses: false,
       unavailable: true

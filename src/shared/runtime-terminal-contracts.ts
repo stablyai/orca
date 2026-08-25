@@ -8,6 +8,7 @@ import type { PtyIncarnationId } from './pty-incarnation'
 import type { RuntimeMobileSessionTabsResult } from './runtime-session-contracts'
 import type { TabGroupLayoutNode } from './tab-types'
 import type { TerminalExitCause } from './terminal-exit-cause'
+import type { TerminalOwnerIdentity } from './terminal-owner-identity'
 import type { TerminalPaneLayoutNode } from './terminal-tab-types'
 import type { TuiAgent } from './tui-agent'
 
@@ -15,6 +16,7 @@ export type RuntimeTerminalSummary = {
   handle: string
   ptyId: string | null
   incarnationId?: string | null
+  ownerIdentity?: TerminalOwnerIdentity
   orphaned?: boolean
   worktreeId: string
   worktreePath: string

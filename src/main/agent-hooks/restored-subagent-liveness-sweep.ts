@@ -11,13 +11,14 @@ import { parseWorkspaceKey } from '../../shared/workspace-scope'
 
 export type RestoredSubagentLivenessSweepDeps = {
   /** Targeted provider liveness, or null when the provider cannot prove either state. */
-  probeLiveLocalPty: (ptyId: string) => Promise<boolean | null>
+  probeLiveLocalPty: (ptyId: string, expectedIncarnationId: string) => Promise<boolean | null>
   isLocalExecutionHost: (worktreeId: string | undefined) => boolean
   /** PTY bound to this pane in the current session, if it has one. */
   getBoundPtyIdForPaneKey: (paneKey: string) => string | undefined
   /** PTY this pane was bound to when the session was last persisted; covers panes
    *  whose surviving daemon session has not been reattached yet. */
   getPersistedPtyIdForPaneKey: (paneKey: string) => string | undefined
+  getPersistedPtyIncarnationForPaneKey: (paneKey: string) => string | undefined
   reap: (
     isLocalExecutionHost: (worktreeId: string | undefined) => boolean,
     isLocalPaneAgentLive: (paneKey: string) => Promise<boolean>,
@@ -30,34 +31,44 @@ export type RestoredSubagentLivenessSweepDeps = {
 export async function sweepRestoredSubagentsWithoutLiveAgent(
   deps: RestoredSubagentLivenessSweepDeps
 ): Promise<number> {
-  const probesByPtyId = new Map<string, Promise<boolean | null>>()
+  const probesByOwner = new Map<string, Promise<boolean | null>>()
   const boundPtyIdAtProbeByPaneKey = new Map<string, string | undefined>()
+  const incarnationAtProbeByPaneKey = new Map<string, string | undefined>()
   return await deps.reap(
     (worktreeId) => deps.isLocalExecutionHost(worktreeId),
     async (paneKey) => {
       const boundPtyId = deps.getBoundPtyIdForPaneKey(paneKey)
       boundPtyIdAtProbeByPaneKey.set(paneKey, boundPtyId)
       const ptyId = boundPtyId ?? deps.getPersistedPtyIdForPaneKey(paneKey)
-      if (!ptyId) {
+      const incarnationId = deps.getPersistedPtyIncarnationForPaneKey(paneKey)
+      incarnationAtProbeByPaneKey.set(paneKey, incarnationId)
+      if (!ptyId || !incarnationId) {
         return true
       }
       try {
-        let probe = probesByPtyId.get(ptyId)
+        const ownerKey = `${ptyId}\0${incarnationId}`
+        let probe = probesByOwner.get(ownerKey)
         if (!probe) {
-          probe = deps.probeLiveLocalPty(ptyId)
-          probesByPtyId.set(ptyId, probe)
+          probe = deps.probeLiveLocalPty(ptyId, incarnationId)
+          probesByOwner.set(ownerKey, probe)
         }
         const live = await probe
         const currentBoundPtyId = deps.getBoundPtyIdForPaneKey(paneKey)
         // Why: cold restore can rebind the persisted id while its absence probe is in flight.
-        return currentBoundPtyId !== boundPtyId || live !== false
+        return (
+          currentBoundPtyId !== boundPtyId ||
+          deps.getPersistedPtyIncarnationForPaneKey(paneKey) !== incarnationId ||
+          live !== false
+        )
       } catch {
         return true
       }
     },
     (paneKey) =>
       !boundPtyIdAtProbeByPaneKey.has(paneKey) ||
-      deps.getBoundPtyIdForPaneKey(paneKey) === boundPtyIdAtProbeByPaneKey.get(paneKey)
+      (deps.getBoundPtyIdForPaneKey(paneKey) === boundPtyIdAtProbeByPaneKey.get(paneKey) &&
+        deps.getPersistedPtyIncarnationForPaneKey(paneKey) ===
+          incarnationAtProbeByPaneKey.get(paneKey))
   )
 }
 

@@ -173,6 +173,91 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
       expect(lastSubprocess).toBe(subprocessBeforeAttach)
     })
 
+    it('forwards an authoritative expected incarnation to a current daemon', async () => {
+      const created = await adapter.spawn({
+        cols: 80,
+        rows: 24,
+        sessionId: 'incarnation-fenced-session'
+      })
+      const request = vi.spyOn(DaemonClient.prototype, 'request')
+
+      await expect(
+        adapter.spawn({
+          cols: 80,
+          rows: 24,
+          sessionId: created.id,
+          attachOnly: true,
+          expectedIncarnationId: created.incarnationId,
+          expectedIncarnationIsAuthoritative: true
+        })
+      ).resolves.toMatchObject({
+        id: created.id,
+        incarnationId: created.incarnationId,
+        isReattach: true
+      })
+
+      expect(request).toHaveBeenCalledWith(
+        'createOrAttach',
+        expect.objectContaining({
+          attachOnly: true,
+          expectedIncarnationId: created.incarnationId
+        })
+      )
+      request.mockRestore()
+    })
+
+    it('reattaches an exact surviving session through a pre-fence daemon', async () => {
+      const request = vi.spyOn(DaemonClient.prototype, 'request')
+      request.mockResolvedValue({
+        id: 'legacy-owner-session',
+        isNew: false,
+        isReattach: true,
+        incarnationId: 'expected-incarnation',
+        snapshot: null
+      } as never)
+      const legacy = new DaemonPtyAdapter({ socketPath, tokenPath, protocolVersion: 36 })
+      ;(
+        legacy as unknown as {
+          lastAuthenticatedIdentity: { pid: number; startedAtMs: number; launchNonce: string }
+        }
+      ).lastAuthenticatedIdentity = {
+        pid: 42,
+        startedAtMs: 1,
+        launchNonce: 'legacy-owner'
+      }
+      vi.spyOn(
+        (legacy as unknown as { client: DaemonClient }).client,
+        'ensureConnected'
+      ).mockResolvedValue()
+      try {
+        await expect(
+          legacy.spawn({
+            cols: 80,
+            rows: 24,
+            sessionId: 'legacy-owner-session',
+            attachOnly: true,
+            expectedIncarnationId: 'expected-incarnation',
+            expectedIncarnationIsAuthoritative: true
+          })
+        ).resolves.toMatchObject({
+          id: 'legacy-owner-session',
+          isReattach: true,
+          ownerIdentity: {
+            ownerIncarnationId: expect.any(String),
+            sessionIncarnationId: 'expected-incarnation',
+            protocolVersion: 36
+          }
+        })
+        expect(request).toHaveBeenCalledWith(
+          'createOrAttach',
+          expect.objectContaining({ attachOnly: true })
+        )
+      } finally {
+        legacy.dispose()
+        request.mockRestore()
+      }
+    })
+
     it('does not inspect cold history for attach-only ownership checks', async () => {
       const historyDir = join(dir, 'attach-only-history')
       const historyAdapter = new DaemonPtyAdapter({

@@ -26,12 +26,19 @@ export function configureLocalPtyProvider(args: {
   getSettings?: () => GlobalSettings
   getSelectedCodexHomePath?: GetSelectedCodexHomePath
   trustedTerminalHandleEnv: Set<string>
+  sendPtyExitToRenderer: (payload: { id: string; code: number; incarnationId?: string }) => void
 }): void {
   // Why: only LocalPtyProvider needs main-process hook injection; daemon-backed providers spawn subprocesses internally.
   if (!(localProvider instanceof LocalPtyProvider)) {
     return
   }
-  const { runtime, getSettings, getSelectedCodexHomePath, trustedTerminalHandleEnv } = args
+  const {
+    runtime,
+    getSettings,
+    getSelectedCodexHomePath,
+    trustedTerminalHandleEnv,
+    sendPtyExitToRenderer
+  } = args
   localProvider.configure({
     isHistoryEnabled: () => getSettings?.()?.terminalScopeHistoryByWorktree ?? true,
     getWindowsShell: () => getSettings?.()?.terminalWindowsShell,
@@ -108,6 +115,7 @@ export function configureLocalPtyProvider(args: {
         providerExitObserved: true,
         ...(cause ? { cause } : {})
       })
+      sendPtyExitToRenderer({ id, code, ...(incarnationId ? { incarnationId } : {}) })
     },
     onData: (id, data, timestamp, sequenceChars, transformed) =>
       runtime?.onPtyData(id, data, timestamp, sequenceChars ?? data.length, transformed)

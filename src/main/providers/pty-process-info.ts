@@ -1,9 +1,11 @@
 import type { AgentSessionOwnerBinding } from '../../shared/agent-session-host-authority'
 import type { PtyIncarnationId } from '../../shared/pty-incarnation'
+import type { TerminalOwnerIdentity } from '../../shared/terminal-owner-identity'
 
 export type PtyProcessInfo = {
   id: string
   incarnationId?: PtyIncarnationId
+  ownerIdentity?: TerminalOwnerIdentity
   cwd: string
   title: string
   /** Owning worktree when the provider can report it authoritatively. */

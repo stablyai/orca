@@ -90,6 +90,25 @@ describe('registerPtyHandlers', () => {
     ).toBe(false)
     expect(mockProc.proc.write).toHaveBeenCalledTimes(1)
   })
+  it('rejects acknowledged input when owner lookup becomes unverifiable', async () => {
+    installDaemonTestProvider({
+      hasPty: vi.fn(() => {
+        throw new Error('terminal_pane_owner_unverified')
+      })
+    })
+    registerPtyHandlers(mainWindow as never)
+    const result = (await handlers.get('pty:spawn')!(null, {
+      cols: 80,
+      rows: 24
+    })) as { id: string }
+
+    expect(
+      handlers.get('pty:writeAccepted')!(mainWindowIpcEvent, {
+        id: result.id,
+        data: '\x03'
+      })
+    ).toBe(false)
+  })
   it('asks the renderer to remount when the provider rejects a stale daemon write', async () => {
     const write = vi.fn(() => {
       throw new PtyWriteUnavailableError('daemon generation lost')

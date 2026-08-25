@@ -38,6 +38,13 @@ export async function createOrAttachTerminalSession(
     throw new SessionNotFoundError(opts.sessionId)
   }
 
+  if (
+    opts.expectedIncarnationId !== undefined &&
+    existing?.incarnationId !== opts.expectedIncarnationId
+  ) {
+    throw new SessionNotFoundError(opts.sessionId)
+  }
+
   if (existing && existing.isAlive && !existing.isTerminating) {
     const snapshot = existing.getSnapshot()
     existing.detachAllClients()

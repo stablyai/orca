@@ -1,12 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { requestTerminalPaneRecovery } from '../terminal-pane-recovery'
-import { recoverUnverifiableDirectSshReattach } from './direct-ssh-reattach-recovery'
+import { recoverUnverifiableReattach } from './unverifiable-reattach-recovery'
 
 vi.mock('../terminal-pane-recovery', () => ({
   requestTerminalPaneRecovery: vi.fn()
 }))
 
-describe('recoverUnverifiableDirectSshReattach', () => {
+describe('recoverUnverifiableReattach', () => {
   beforeEach(() => {
     vi.clearAllMocks()
   })
@@ -15,7 +15,7 @@ describe('recoverUnverifiableDirectSshReattach', () => {
     const attempt = { attemptId: 'attempt-1' }
     const settleDirectSshPaneRetryAttempt = vi.fn()
 
-    recoverUnverifiableDirectSshReattach(
+    recoverUnverifiableReattach(
       { directSshRetryAttempt: attempt, settleDirectSshPaneRetryAttempt } as never,
       'ssh:target@@pty-1'
     )
@@ -25,7 +25,7 @@ describe('recoverUnverifiableDirectSshReattach', () => {
   })
 
   it('remounts over the preserved PTY when no retry lease exists', () => {
-    recoverUnverifiableDirectSshReattach(
+    recoverUnverifiableReattach(
       {
         directSshRetryAttempt: undefined,
         deps: { tabId: 'tab-1' },

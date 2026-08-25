@@ -6,7 +6,9 @@ export const ptyIncarnationById = new Map<string, string>()
 
 export function isCurrentPtyExit(payload: { id: string; incarnationId?: string }): boolean {
   const current = ptyIncarnationById.get(payload.id)
-  return !current || payload.incarnationId === current
+  return current === undefined
+    ? payload.incarnationId === undefined
+    : payload.incarnationId === current
 }
 
 export function deletePtyOwnership(id: string): void {

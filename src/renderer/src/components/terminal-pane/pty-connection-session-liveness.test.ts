@@ -1,5 +1,6 @@
 import type * as React from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { makePaneKey } from '../../../../shared/stable-pane-id'
 import { flushAsyncTicks } from './pty-connection-test-async'
 import { sendTerminalInputThroughPane } from './pty-connection-test-dom'
 import {
@@ -203,7 +204,10 @@ describe('connectPanePty', () => {
       binding.reconcileIfSessionMissing(hasPty)
       await flushAsyncTicks()
 
-      expect(hasPty).toHaveBeenCalledWith('pty-pane-2')
+      expect(hasPty).toHaveBeenCalledWith('pty-pane-2', {
+        paneKey: makePaneKey('tab-1', LEAF_2),
+        worktreeId: 'wt-1'
+      })
       expect(manager.closePane).toHaveBeenCalledWith(2)
     })
 

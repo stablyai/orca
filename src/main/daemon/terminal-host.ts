@@ -138,16 +138,16 @@ export class TerminalHost {
     }
   }
 
-  write(sessionId: string, data: string): void {
-    this.getAliveSession(sessionId).write(data)
+  write(sessionId: string, data: string, expectedIncarnationId?: string): void {
+    this.getAliveSession(sessionId, expectedIncarnationId).write(data)
   }
 
   closeStartupQueryAuthority(sessionId: string): number {
     return this.getAliveSession(sessionId).closeStartupQueryAuthority()
   }
 
-  resize(sessionId: string, cols: number, rows: number): void {
-    this.getAliveSession(sessionId).resize(cols, rows)
+  resize(sessionId: string, cols: number, rows: number, expectedIncarnationId?: string): void {
+    this.getAliveSession(sessionId, expectedIncarnationId).resize(cols, rows)
   }
 
   // Why null-not-throw (unlike write/resize): pause/resume are best-effort hints against a session that may have exited.
@@ -310,9 +310,13 @@ export class TerminalHost {
     this.killedTombstones.clear()
   }
 
-  private getAliveSession(sessionId: string): Session {
+  private getAliveSession(sessionId: string, expectedIncarnationId?: string): Session {
     const session = this.sessions.get(sessionId)
-    if (!session || !session.isAlive) {
+    if (
+      !session ||
+      !session.isAlive ||
+      (expectedIncarnationId !== undefined && session.incarnationId !== expectedIncarnationId)
+    ) {
       throw new SessionNotFoundError(sessionId)
     }
     return session

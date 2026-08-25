@@ -6,7 +6,7 @@ import {
 } from '../../shared/agent-session-host-authority'
 import type { PtySpawnResult } from './pty-spawn-result'
 import type { SshChannelMultiplexer } from '../ssh/ssh-channel-multiplexer'
-import { SSH_AGENT_SESSION_CAPABILITY_PROBE_TIMEOUT_MS } from './ssh-agent-session-create-operation'
+import { SSH_AGENT_SESSION_CAPABILITY_PROBE_TIMEOUT_MS } from './ssh-agent-session-capability'
 import { isPtyIncarnationId } from '../../shared/pty-incarnation'
 
 export type ClaimedSshSpawnValidation =

@@ -52,7 +52,7 @@ vi.mock('../codex/codex-state-db-backfill-recovery', () =>
 describe('registerPtyHandlers', () => {
   const { handlers, mainWindow } = setupPtyIpcSuite()
 
-  it('repairs a stale persisted incarnation after exact same-id reattach', async () => {
+  it('preserves a stale persisted incarnation when the same id belongs to another session', async () => {
     const tabId = 'tab-persisted-owner'
     const leafId = '88888888-8888-4888-8888-888888888888'
     const paneKey = makePaneKey(tabId, leafId)
@@ -140,72 +140,26 @@ describe('registerPtyHandlers', () => {
       }
     }
 
-    const mounted = await handlers.get('pty:spawn')!(null, spawnArgs)
-
-    expect(mounted).toMatchObject({
-      id: 'pty-persisted-owner',
-      incarnationId: 'inc-live-owner',
-      isReattach: true
-    })
+    await expect(handlers.get('pty:spawn')!(null, spawnArgs)).rejects.toThrow(
+      'terminal_pane_owner_unverified'
+    )
     expect(providerSpawn).toHaveBeenNthCalledWith(
       1,
       expect.objectContaining({
         attachOnly: true,
         sessionId: 'pty-persisted-owner',
         expectedIncarnationId: 'inc-stale-owner',
-        expectedIncarnationIsAuthoritative: false,
-        command: undefined
-      })
-    )
-    expect(runtime.registerPreAllocatedHandleForPty).toHaveBeenCalledWith(
-      'pty-persisted-owner',
-      'term-rebuilt-owner'
-    )
-    expect(runtime.noteTerminalSpawnCommand).not.toHaveBeenCalled()
-    expect(store.persistPtyBinding).toHaveBeenCalledOnce()
-    expect(store.persistPtyBinding).toHaveBeenCalledWith(
-      expect.objectContaining({
-        worktreeId,
-        tabId,
-        leafId,
-        ptyId: 'pty-persisted-owner',
-        incarnationId: 'inc-live-owner',
-        expectedBinding: {
-          ptyId: 'pty-persisted-owner',
-          incarnationId: 'inc-stale-owner'
-        }
-      }),
-      undefined
-    )
-    expect(
-      mainWindow.webContents.send.mock.calls.filter(([channel]) => channel === 'pty:spawned')
-    ).toHaveLength(1)
-    expect(runtime.onPtyExit).not.toHaveBeenCalled()
-
-    store.persistPtyBinding.mockClear()
-    await expect(handlers.get('pty:spawn')!(null, spawnArgs)).rejects.toThrow(
-      'terminal_pane_owner_changed'
-    )
-    expect(store.persistPtyBinding).not.toHaveBeenCalled()
-
-    runtime.assertPtyRegistrationAllowed.mockImplementationOnce(() => {
-      throw new Error('agent_session_exited_during_start')
-    })
-    await expect(handlers.get('pty:spawn')!(null, spawnArgs)).rejects.toThrow(
-      'agent_session_exited_during_start'
-    )
-    expect(store.persistPtyBinding).not.toHaveBeenCalled()
-    expect(providerSpawn).toHaveBeenCalledTimes(3)
-    expect(providerSpawn).toHaveBeenNthCalledWith(
-      2,
-      expect.objectContaining({
-        attachOnly: true,
-        sessionId: 'pty-persisted-owner',
-        expectedIncarnationId: 'inc-live-owner',
         expectedIncarnationIsAuthoritative: true,
         command: undefined
       })
     )
+    expect(runtime.registerPreAllocatedHandleForPty).not.toHaveBeenCalled()
+    expect(runtime.noteTerminalSpawnCommand).not.toHaveBeenCalled()
+    expect(store.persistPtyBinding).not.toHaveBeenCalled()
+    expect(
+      mainWindow.webContents.send.mock.calls.filter(([channel]) => channel === 'pty:spawned')
+    ).toHaveLength(0)
+    expect(runtime.onPtyExit).not.toHaveBeenCalled()
     clearProviderPtyState('pty-persisted-owner')
   })
   it.each([
@@ -222,7 +176,7 @@ describe('registerPtyHandlers', () => {
       folderMissing: true
     }
   ])(
-    'retires a persistence-only dead owner before fresh recovery ($label)',
+    'preserves a persistence-only owner after unqualified absence ($label)',
     async ({ worktreeId, cwd, folderMissing }) => {
       const tabId = 'tab-dead-persisted-owner'
       const leafId = '12121212-1212-4212-8212-121212121212'
@@ -341,44 +295,16 @@ describe('registerPtyHandlers', () => {
         }
       })
 
-      if (folderMissing) {
-        await expect(mountedPromise).rejects.toThrow(`folder_workspace_path_missing:${cwd}`)
-        expect(providerSpawn).toHaveBeenCalledOnce()
-        expect(providerSpawn.mock.calls[0]?.[0]).toMatchObject({
-          attachOnly: true,
-          sessionId: 'pty-dead-persisted-owner',
-          command: undefined
-        })
-        expect(store.setWorkspaceSession).toHaveBeenCalledOnce()
-        expect(runtime.onPtyExit).toHaveBeenCalledWith(
-          'pty-dead-persisted-owner',
-          0,
-          'inc-dead-persisted-owner'
-        )
-        return
-      }
-      const mounted = await mountedPromise
-
-      expect(mounted).toMatchObject({
-        id: 'pty-fresh-recovery',
-        incarnationId: 'inc-fresh-recovery'
-      })
-      expect(providerSpawn).toHaveBeenCalledTimes(2)
+      await expect(mountedPromise).rejects.toThrow('terminal_pane_owner_unverified')
+      expect(providerSpawn).toHaveBeenCalledOnce()
       expect(providerSpawn.mock.calls[0]?.[0]).toMatchObject({
         attachOnly: true,
         sessionId: 'pty-dead-persisted-owner',
         command: undefined
       })
-      expect(providerSpawn.mock.calls[1]?.[0]).toMatchObject({
-        command: 'codex resume exact-dead-provider-session'
-      })
-      expect(store.setWorkspaceSession).toHaveBeenCalledOnce()
-      expect(store.flushOrThrow).toHaveBeenCalledOnce()
-      expect(runtime.onPtyExit).toHaveBeenCalledWith(
-        'pty-dead-persisted-owner',
-        0,
-        'inc-dead-persisted-owner'
-      )
+      expect(store.setWorkspaceSession).not.toHaveBeenCalled()
+      expect(store.flushOrThrow).not.toHaveBeenCalled()
+      expect(runtime.onPtyExit).not.toHaveBeenCalled()
     }
   )
   it('keeps a persisted owner when daemon routing is unresolved', async () => {

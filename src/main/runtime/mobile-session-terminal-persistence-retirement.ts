@@ -47,6 +47,8 @@ function recordTerminalSurfaceRetirement(
     ...session.terminalPtyIncarnationsByPaneKey
   }
   delete terminalPtyIncarnationsByPaneKey[paneKey]
+  const terminalPtyOwnersByPaneKey = { ...session.terminalPtyOwnersByPaneKey }
+  delete terminalPtyOwnersByPaneKey[paneKey]
   const terminalSurfaceTombstonesByPaneKey = {
     ...session.terminalSurfaceTombstonesByPaneKey
   }
@@ -55,6 +57,7 @@ function recordTerminalSurfaceRetirement(
     {
       ...session,
       terminalPtyIncarnationsByPaneKey,
+      terminalPtyOwnersByPaneKey,
       terminalSurfaceTombstonesByPaneKey
     },
     surface.worktreeId

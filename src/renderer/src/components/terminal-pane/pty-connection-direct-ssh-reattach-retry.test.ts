@@ -220,6 +220,84 @@ describe('connectPanePty', () => {
     await flushAsyncTicks(12)
   })
 
+  it.each(['result', 'throw'] as const)(
+    'settles an owner-unverifiable direct SSH retry without changing topology (%s)',
+    async (outcome) => {
+      const { connectPanePty } = await import('./pty-connection')
+      const restoredPtyId = toAppSshPtyId('target-a', 'pty-owner-unverifiable')
+      const transport = createMockTransport()
+      transport.connect.mockImplementation(async () => {
+        if (outcome === 'throw') {
+          throw new Error('terminal_pane_owner_unverified')
+        }
+        return { id: restoredPtyId, ownerUnverifiable: true }
+      })
+      transportFactoryQueue.push(transport)
+      const pendingRetry = {
+        attemptId: `attempt-owner-unverifiable-${outcome}`,
+        authority: {
+          targetId: 'target-a',
+          providerEpoch: 'epoch-1',
+          connectionGeneration: 3
+        },
+        tabGeneration: 7,
+        startedAt: 1
+      }
+      const settleDirectSshPaneRetry = vi.fn()
+      mockStoreState = {
+        ...mockStoreState,
+        tabsByWorktree: {
+          'wt-1': [{ id: 'tab-1', ptyId: restoredPtyId, generation: 7 }]
+        },
+        ptyIdsByTabId: { 'tab-1': [restoredPtyId] },
+        terminalLayoutsByTabId: {
+          'tab-1': {
+            root: { type: 'leaf', leafId: LEAF_1 },
+            activeLeafId: LEAF_1,
+            expandedLeafId: null,
+            ptyIdsByLeafId: { [LEAF_1]: restoredPtyId }
+          }
+        },
+        repos: [{ id: 'repo1', connectionId: 'target-a', displayName: 'orca' }],
+        sshConnectionStates: new Map([
+          [
+            'target-a',
+            {
+              targetId: 'target-a',
+              status: 'connected',
+              providerEpoch: 'epoch-1',
+              connectionGeneration: 3
+            }
+          ]
+        ]),
+        directSshPaneRetryByTabId: { 'tab-1': pendingRetry },
+        settleDirectSshPaneRetry
+      }
+      const deps = createDeps({
+        restoredLeafId: LEAF_1,
+        restoredPtyIdByLeafId: { [LEAF_1]: restoredPtyId }
+      })
+
+      connectPanePty(createPane(1) as never, createManager(1) as never, deps as never)
+      await flushAsyncTicks(12)
+
+      expect(transport.connect).toHaveBeenCalledTimes(1)
+      expect(deps.clearExitedPanePtyLayoutBinding).not.toHaveBeenCalled()
+      expect(deps.clearTabPtyId).not.toHaveBeenCalled()
+      expect(settleDirectSshPaneRetry).toHaveBeenCalledExactlyOnceWith({
+        status: 'failed',
+        tabId: 'tab-1',
+        attemptId: pendingRetry.attemptId,
+        authority: pendingRetry.authority,
+        tabGeneration: pendingRetry.tabGeneration
+      })
+      expect(mockStoreState.tabsByWorktree['wt-1']?.[0]?.ptyId).toBe(restoredPtyId)
+      expect(mockStoreState.terminalLayoutsByTabId?.['tab-1']?.ptyIdsByLeafId).toEqual({
+        [LEAF_1]: restoredPtyId
+      })
+    }
+  )
+
   it('commits a successful direct SSH reattach with its exact retry lease', async () => {
     const { connectPanePty } = await import('./pty-connection')
     const restoredPtyId = toAppSshPtyId('target-a', 'pty-restored')

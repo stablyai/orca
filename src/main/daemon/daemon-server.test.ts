@@ -554,13 +554,17 @@ describe('DaemonServer', () => {
         c.onEvent((event) => resolve(event))
       })
 
-      c.notify('write', { sessionId: 'missing-session', data: 'hi' })
+      c.notify('write', {
+        sessionId: 'missing-session',
+        data: 'hi',
+        expectedIncarnationId: 'owner-incarnation'
+      })
 
       await expect(exitEvent).resolves.toMatchObject({
         type: 'event',
         event: 'exit',
         sessionId: 'missing-session',
-        payload: { code: -1 }
+        payload: { code: -1, incarnationId: 'owner-incarnation' }
       })
     })
 

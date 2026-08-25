@@ -401,7 +401,7 @@ describe('registerPtyHandlers', () => {
         id: 'pty-claimed-admission',
         incarnationId: 'unrelated-incarnation'
       })
-    ).toBe(true)
+    ).toBe(false)
     await expect(controller.spawn(request)).resolves.toMatchObject({
       id: 'pty-claimed-admission',
       agentSessionEnsure: { disposition: 'created' }

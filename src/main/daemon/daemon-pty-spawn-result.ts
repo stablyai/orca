@@ -2,7 +2,9 @@ import { isAgentSessionClaimedSpawnResult } from '../../shared/agent-session-hos
 import { parseTerminalKittyKeyboardFlags } from '../../shared/terminal-kitty-keyboard-flags'
 import { DaemonPtySpawnRequest, type DaemonPtySpawnContext } from './daemon-pty-spawn-request'
 import { providerSequenceFromCreateOrAttach } from './daemon-pty-provider-sequence'
+import { TerminalSessionOwnerUnverifiedError } from './daemon-errors'
 import { takeHistoryRecoveryFreeze } from './daemon-history-recovery-freeze'
+import { daemonPtySpawnIdentityFields } from './daemon-pty-spawn-identity-fields'
 import { getRecoveredHistorySeedSegments } from './terminal-history-seed-segments'
 import { SessionNotFoundError, type CreateOrAttachResult } from './types'
 import type { PtySpawnResult } from '../providers/types'
@@ -71,13 +73,16 @@ export abstract class DaemonPtySpawnResult extends DaemonPtySpawnRequest {
     if (exitedResult) {
       return exitedResult
     }
-    if (result.incarnationId) {
-      this.sessionIncarnations.set(sessionId, result.incarnationId)
+    if (
+      opts.attachOnly &&
+      opts.expectedIncarnationIsAuthoritative &&
+      (!result.incarnationId || result.incarnationId !== opts.expectedIncarnationId)
+    ) {
+      throw new TerminalSessionOwnerUnverifiedError(sessionId)
     }
+    this.recordSessionAuthority(sessionId, result.incarnationId)
     const claimResult = (): Pick<PtySpawnResult, 'agentSessionEnsure'> | Record<string, never> =>
       result.agentSessionEnsure ? { agentSessionEnsure: result.agentSessionEnsure } : {}
-    const incarnationResult = (): Pick<PtySpawnResult, 'incarnationId'> | Record<string, never> =>
-      result.incarnationId ? { incarnationId: result.incarnationId } : {}
     let providerWslDistro = result.wslDistro === undefined ? wslDistro : result.wslDistro
     // Why: explicit null from a current daemon overrides the caller's WSL preference; undefined keeps compatibility with older daemons.
     wslDistro = providerWslDistro ?? undefined
@@ -112,7 +117,7 @@ export abstract class DaemonPtySpawnResult extends DaemonPtySpawnRequest {
       }
       return {
         id: sessionId,
-        ...incarnationResult(),
+        ...daemonPtySpawnIdentityFields(result, this.ownerIdentity(result.incarnationId)),
         pid,
         ...claimResult(),
         ...launchIdentity(),
@@ -144,9 +149,7 @@ export abstract class DaemonPtySpawnResult extends DaemonPtySpawnRequest {
         if (exitedRetryResult) {
           return exitedRetryResult
         }
-        if (result.incarnationId) {
-          this.sessionIncarnations.set(sessionId, result.incarnationId)
-        }
+        this.recordSessionAuthority(sessionId, result.incarnationId)
         providerWslDistro = result.wslDistro === undefined ? wslDistro : result.wslDistro
         wslDistro = providerWslDistro ?? undefined
         context.wslDistro = wslDistro
@@ -206,7 +209,7 @@ export abstract class DaemonPtySpawnResult extends DaemonPtySpawnRequest {
         this.coldRestoreCache.set(sessionId, coldRestore)
         return {
           id: sessionId,
-          ...incarnationResult(),
+          ...daemonPtySpawnIdentityFields(result, this.ownerIdentity(result.incarnationId)),
           pid,
           ...claimResult(),
           ...launchIdentity(),
@@ -218,7 +221,7 @@ export abstract class DaemonPtySpawnResult extends DaemonPtySpawnRequest {
       }
       return {
         id: sessionId,
-        ...incarnationResult(),
+        ...daemonPtySpawnIdentityFields(result, this.ownerIdentity(result.incarnationId)),
         pid,
         ...claimResult(),
         ...launchIdentity(),
@@ -266,7 +269,7 @@ export abstract class DaemonPtySpawnResult extends DaemonPtySpawnRequest {
     if (!isReattach || !result.snapshot) {
       return {
         id: sessionId,
-        ...incarnationResult(),
+        ...daemonPtySpawnIdentityFields(result, this.ownerIdentity(result.incarnationId)),
         pid,
         ...claimResult(),
         ...launchIdentity(),
@@ -293,7 +296,7 @@ export abstract class DaemonPtySpawnResult extends DaemonPtySpawnRequest {
     )
     return {
       id: sessionId,
-      ...incarnationResult(),
+      ...daemonPtySpawnIdentityFields(result, this.ownerIdentity(result.incarnationId)),
       pid,
       ...claimResult(),
       ...launchIdentity(),

@@ -9,7 +9,7 @@ import { CheckpointSessionQueue } from './daemon-checkpoint-session-queue'
 import { SNAPSHOT_SERIALIZER_FIDELITY_DAEMON_PROTOCOL_VERSION } from './daemon-protocol-version'
 import type { DaemonEndpointIdentity } from './daemon-hello-protocol'
 import type { DaemonEvidenceSource, ExactDaemonIncarnation } from './daemon-incarnation-evidence'
-import { readDaemonPidRecord } from './daemon-endpoint-incarnation'
+import { readDaemonPidRecord, sameEndpointIdentity } from './daemon-endpoint-incarnation'
 import { removeDaemonListener } from './daemon-listener-registry'
 import type { ParsedDaemonPid } from './daemon-pid-file-parse'
 import {
@@ -19,6 +19,7 @@ import {
   PROTOCOL_VERSION,
   supportsMode2031UnsubscribeFact,
   supportsPtyStartupIngress,
+  type ListSessionsResult,
   type TakePendingOutputResult
 } from './types'
 import { ColdRestorePayloadCache } from './cold-restore-payload-cache'
@@ -30,12 +31,15 @@ import {
 import { HistoryReader } from './history-reader'
 import type { PtyBackgroundStreamEvent } from '../providers/types'
 import type { PtyIncarnationId } from '../../shared/pty-incarnation'
+import type { ExecutionHostId } from '../../shared/execution-host'
 import type { TerminalExitCause } from '../../shared/terminal-exit-cause'
+import type { TerminalOwnerIdentity } from '../../shared/terminal-owner-identity'
 
 export type PendingDaemonSpawnOperation = {
   exitsBySessionId: Map<string, { incarnationId?: string }[]>
   ignoredExitIncarnationIds: Set<string>
   ignoreNextExit: boolean
+  acceptsUnroutedExit: boolean
 }
 
 export type HistoryRecoveryContext = {
@@ -59,6 +63,7 @@ export type DaemonPtyAdapterOptions = {
   runtimeDir?: string
   packagedAppVersion?: string | null
   respawn?: (reason: DaemonRespawnReason) => Promise<void | (() => void)>
+  executionHostId?: ExecutionHostId
 }
 
 export type DaemonRespawnReason =
@@ -91,6 +96,8 @@ export abstract class DaemonPtyRuntimeState {
   protected respawnFn: DaemonPtyAdapterOptions['respawn'] | null
   protected runtimeDir: string | null
   protected packagedAppVersion: string | null
+  protected readonly executionHostId: ExecutionHostId
+  protected readonly ownerEndpointRef: string
   protected pendingRespawnAdoptionRelease: (() => void) | null = null
   protected respawnAdoptionClosed = false
   protected respawnPromise: Promise<void> | null = null
@@ -124,6 +131,8 @@ export abstract class DaemonPtyRuntimeState {
   protected getSizeUnsupported = false
   protected sessionsAwaitingDaemonRecovery = new Set<string>()
   protected sessionIncarnations = new Map<string, string>()
+  protected sessionOwnerIdentities = new Map<string, DaemonEndpointIdentity>()
+  protected livenessInventoryInFlight: Promise<ListSessionsResult> | null = null
   protected pendingSpawnOperationsBySessionId = new Map<string, Set<PendingDaemonSpawnOperation>>()
   protected pendingClaimSpawnOperations = new Set<PendingDaemonSpawnOperation>()
   protected historySpawnLocks = new Map<string, Promise<void>>()
@@ -140,6 +149,7 @@ export abstract class DaemonPtyRuntimeState {
   protected overlayDeadlineWarnedSessionIds = new Set<string>()
   protected periodicDeadlineWarnedSessionIds = new Set<string>()
   protected keepHistoryShutdowns = new Set<Promise<void>>()
+  protected historyPreservingStopSessionIds = new Set<string>()
   protected disconnectOnlyPromise: Promise<void> | null = null
   protected supportsCheckpoints: boolean
   protected supportsIncrementalCheckpoints: boolean
@@ -186,6 +196,8 @@ export abstract class DaemonPtyRuntimeState {
     this.respawnFn = opts.respawn ?? null
     this.runtimeDir = opts.runtimeDir ?? opts.profileScope ?? null
     this.packagedAppVersion = opts.packagedAppVersion ?? null
+    this.executionHostId = opts.executionHostId ?? 'local'
+    this.ownerEndpointRef = `daemon-v${this.protocolVersion}`
     this.supportsCheckpoints = this.protocolVersion >= 4
     this.supportsIncrementalCheckpoints = this.protocolVersion >= 13
     this.supportsProducerFlowControl = this.protocolVersion >= 19
@@ -228,6 +240,58 @@ export abstract class DaemonPtyRuntimeState {
 
   getLastAuthenticatedDaemonIdentity(): DaemonEndpointIdentity | null {
     return this.lastAuthenticatedIdentity ? { ...this.lastAuthenticatedIdentity } : null
+  }
+
+  protected ownerIdentity(
+    sessionIncarnationId?: PtyIncarnationId
+  ): TerminalOwnerIdentity | undefined {
+    const daemon = this.lastAuthenticatedIdentity
+    if (!daemon || !sessionIncarnationId) {
+      return undefined
+    }
+    return {
+      executionHostId: this.executionHostId,
+      ownerKind: 'daemon',
+      ownerIncarnationId: daemon.launchNonce,
+      sessionIncarnationId,
+      protocolVersion: this.protocolVersion,
+      endpointRef: this.ownerEndpointRef
+    }
+  }
+
+  getTerminalOwnerIdentity(id: string): TerminalOwnerIdentity | null {
+    if (!this.hasExactSessionAuthority(id)) {
+      return null
+    }
+    return this.ownerIdentity(this.sessionIncarnations.get(id)) ?? null
+  }
+
+  protected recordSessionAuthority(id: string, incarnationId?: PtyIncarnationId): void {
+    if (!incarnationId || !this.lastAuthenticatedIdentity) {
+      return
+    }
+    const previousIncarnationId = this.sessionIncarnations.get(id)
+    this.sessionIncarnations.set(id, incarnationId)
+    this.sessionOwnerIdentities.set(id, { ...this.lastAuthenticatedIdentity })
+    if (previousIncarnationId && previousIncarnationId !== incarnationId) {
+      this.historyPreservingStopSessionIds.delete(id)
+    }
+  }
+
+  protected hasExactSessionAuthority(
+    id: string,
+    expectedIncarnationId?: PtyIncarnationId
+  ): boolean {
+    const sessionIncarnationId = this.sessionIncarnations.get(id)
+    const ownerIdentity = this.sessionOwnerIdentities.get(id)
+    const currentIdentity = this.lastAuthenticatedIdentity
+    return Boolean(
+      sessionIncarnationId &&
+      ownerIdentity &&
+      currentIdentity &&
+      sameEndpointIdentity(ownerIdentity, currentIdentity) &&
+      (expectedIncarnationId === undefined || expectedIncarnationId === sessionIncarnationId)
+    )
   }
 
   getLastAuditObservation(): DaemonAuditObservation | null {

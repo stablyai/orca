@@ -3,11 +3,8 @@ import type { Store } from '../../../persistence'
 import { makePaneKey } from '../../../../shared/stable-pane-id'
 import { getProvider } from '../provider/registry'
 import { makePaneSpawnReservationKey, paneSpawnReservationsByOwnerKey } from './spawn-reservation'
-import {
-  attachStablePaneOwner,
-  resolveStablePaneOwner,
-  stablePaneAdoptionsByOwnerKey
-} from './stable-owner'
+import { resolveStablePaneOwner, stablePaneAdoptionsByOwnerKey } from './stable-owner'
+import { attachStablePaneOwner } from './stable-owner-attach'
 import type { AdoptStablePaneArgs, AdoptStablePaneResult } from '../ipc/spawn-types'
 
 export async function adoptStablePane(

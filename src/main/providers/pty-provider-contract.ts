@@ -11,6 +11,7 @@ import type {
 } from '../../shared/agent-session-host-authority'
 import type { PtyProcessInfo } from './pty-process-info'
 import type { TerminalExitCause } from '../../shared/terminal-exit-cause'
+import type { TerminalOwnerIdentity } from '../../shared/terminal-owner-identity'
 
 export type {
   PtyBackgroundStreamEvent,
@@ -79,6 +80,8 @@ export type PtySpawnOptions = {
   expectedIncarnationId?: PtyIncarnationId
   /** True when runtime state makes the expected incarnation a hard attach fence. */
   expectedIncarnationIsAuthoritative?: boolean
+  /** Persisted exact owner fence; absence means legacy/unknown. */
+  expectedOwnerIdentity?: TerminalOwnerIdentity
   /** Why: allows the renderer to request a specific shell for a single new
    *  terminal tab (e.g. "open this tab in WSL" from the "+" submenu) without
    *  changing the user's persistent default shell setting. Only consulted on
@@ -135,7 +138,13 @@ export type IPtyProvider = {
   attach(id: string): Promise<Pick<PtySpawnResult, 'providerSequence'> | void>
   hasPty?: (id: string) => boolean
   /** Exact provider readback: false only when the provider answered that the PTY is absent. */
-  probePtyLiveness?: (id: string) => Promise<boolean | null>
+  probePtyLiveness?: (
+    id: string,
+    expectedIncarnationId?: PtyIncarnationId,
+    expectedOwnerIdentity?: TerminalOwnerIdentity
+  ) => Promise<boolean | null>
+  /** Exact authenticated owner identity for a session, if this provider can prove it. */
+  getTerminalOwnerIdentity?: (id: string) => TerminalOwnerIdentity | null
   write(id: string, data: string): boolean | void
   writeWithSettlement?: (id: string, data: string) => Promise<boolean>
   resize(id: string, cols: number, rows: number): void

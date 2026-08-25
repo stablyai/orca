@@ -19,6 +19,7 @@ import {
 } from './degraded-daemon-session-routing'
 import { DegradedDaemonFreshSpawnRouter } from './degraded-daemon-fresh-spawn-routing'
 import { DegradedDaemonOwnerRecovery } from './degraded-daemon-owner-recovery'
+import type { DaemonPtyRouterExitEvent } from './daemon-pty-router-events'
 
 export class DegradedDaemonPtyProvider implements IPtyProvider {
   readonly isDegraded = true
@@ -31,7 +32,7 @@ export class DegradedDaemonPtyProvider implements IPtyProvider {
   private ownerRecovery: DegradedDaemonOwnerRecovery
   private unsubscribers: (() => void)[] = []
   private dataListeners: ((payload: PtyDataEvent) => void)[] = []
-  private exitListeners: ((payload: { id: string; code: number }) => void)[] = []
+  private exitListeners: ((payload: DaemonPtyRouterExitEvent) => void)[] = []
 
   constructor(opts: {
     current: DaemonPtyAdapter
@@ -59,7 +60,9 @@ export class DegradedDaemonPtyProvider implements IPtyProvider {
       this.unsubscribers.push(
         provider.onData((payload) => this.dataListeners.forEach((listener) => listener(payload))),
         provider.onExit((payload) => {
-          this.ownerRecovery.forgetRoute(payload.id)
+          if (this.sessionProviders.get(payload.id) === provider) {
+            this.ownerRecovery.forgetRoute(payload.id)
+          }
           this.exitListeners.forEach((listener) => listener(payload))
         })
       )
@@ -261,7 +264,7 @@ export class DegradedDaemonPtyProvider implements IPtyProvider {
     return trackedUnsubscribe
   }
 
-  onExit(callback: (payload: { id: string; code: number }) => void): () => void {
+  onExit(callback: (payload: DaemonPtyRouterExitEvent) => void): () => void {
     this.exitListeners.push(callback)
     return () => {
       const idx = this.exitListeners.indexOf(callback)
@@ -311,11 +314,12 @@ export class DegradedDaemonPtyProvider implements IPtyProvider {
 
   fanoutCurrentDaemonSyntheticExits(code: number): void {
     for (const id of this.getCurrentDaemonSessionIds()) {
+      const incarnationId = this.current.getTerminalOwnerIdentity?.(id)?.sessionIncarnationId
       this.sessionProviders.delete(id)
       // Why: restart kills listed sessions even when the adapter did not track them active.
       // oxlint-disable-next-line unicorn/no-useless-spread -- copy-safe: listeners may unsubscribe during iteration
       for (const listener of [...this.exitListeners]) {
-        listener({ id, code })
+        listener({ id, code, ...(incarnationId ? { incarnationId } : {}) })
       }
     }
   }

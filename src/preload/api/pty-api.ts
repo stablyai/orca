@@ -118,7 +118,7 @@ export type PtyApi = {
   getAuthoritativeBufferSnapshotCapabilities?: (
     ids: string[]
   ) => Promise<{ id: string; authoritative: boolean | null }[]>
-  hasPty: (id: string) => Promise<boolean | null>
+  hasPty: (id: string, owner?: { paneKey: string; worktreeId: string }) => Promise<boolean | null>
   getMainBufferSnapshot: (
     id: string,
     opts?: { scrollbackRows?: number }

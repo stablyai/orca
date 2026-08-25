@@ -74,6 +74,7 @@ import type {
   PtySourceRecoveryRequest,
   PtySourceRecoveryResult
 } from '../shared/pty-source-recovery-contract'
+import { TERMINAL_SESSION_EXITED } from '../shared/terminal-pane-owner-verdict'
 import type { PtySourceReceivingActivation } from '../shared/pty-source-receiving-activation'
 import {
   AGENT_SESSION_CREATE_OPERATION_PROTOCOL_VERSION,
@@ -1775,9 +1776,16 @@ export class PtyHandler {
     if (!managed || managed.disposed) {
       throw new Error(`PTY "${id}" not found`)
     }
+    if (
+      typeof params.expectedIncarnationId === 'string' &&
+      params.expectedIncarnationId !== managed.incarnationId
+    ) {
+      throw new Error(`PTY "${id}" not found (incarnation mismatch)`)
+    }
 
     // Why: verify liveness because shells can exit without node-pty onExit.
     if (managed.pty.pid && !isProcessAlive(managed.pty.pid)) {
+      const exactIncarnationMatched = params.expectedIncarnationId === managed.incarnationId
       managed.physicalExit?.markExited()
       this.releaseRelayIngress(managed)
       this.flushPtyOutput(id)
@@ -1786,7 +1794,9 @@ export class PtyHandler {
       disposeManagedPty(managed)
       this.removePty(id)
       this.clearPtyFlowState(id)
-      throw new Error(`PTY "${id}" not found`)
+      throw new Error(
+        exactIncarnationMatched ? `${TERMINAL_SESSION_EXITED}: ${id}` : `PTY "${id}" not found`
+      )
     }
 
     // Why: generation resets can reuse PTY IDs; reject conflicting identities.

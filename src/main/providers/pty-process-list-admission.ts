@@ -2,6 +2,7 @@ import { isAgentSessionOwnerBinding } from '../../shared/agent-session-host-auth
 import { MAX_CLAIMED_AGENT_PTY_OWNER_ENTRIES } from '../../shared/claimed-agent-pty-owner'
 import { cloneAgentSessionOwnerBinding } from '../../shared/claimed-agent-pty-owner-snapshot'
 import { isPtyIncarnationId } from '../../shared/pty-incarnation'
+import { isTerminalOwnerIdentity } from '../../shared/terminal-owner-identity'
 import type { PtyProcessInfo } from './types'
 
 export const MAX_AGGREGATED_PTY_PROCESS_LIST_ENTRIES = 4096
@@ -35,6 +36,20 @@ function retainedOwnerBytes(owner: unknown, ptyId: string): number | null {
   ].reduce((total, value) => total + Buffer.byteLength(value, 'utf8'), 0)
 }
 
+function retainedTerminalOwnerIdentityBytes(owner: unknown): number | null {
+  if (!isTerminalOwnerIdentity(owner)) {
+    return null
+  }
+  return [
+    owner.executionHostId,
+    owner.ownerKind,
+    owner.ownerIncarnationId,
+    owner.sessionIncarnationId,
+    String(owner.protocolVersion),
+    ...(owner.endpointRef ? [owner.endpointRef] : [])
+  ].reduce((total, value) => total + Buffer.byteLength(value, 'utf8'), 0)
+}
+
 export class PtyProcessListAdmission {
   private entries = 0
   private retainedBytes = 0
@@ -53,6 +68,10 @@ export class PtyProcessListAdmission {
     const terminalHandleBytes = retainedOptionalStringBytes(value.terminalHandle)
     const wslDistroBytes =
       value.wslDistro === null ? 0 : retainedOptionalStringBytes(value.wslDistro)
+    const terminalOwnerIdentityBytes =
+      value.ownerIdentity === undefined
+        ? 0
+        : retainedTerminalOwnerIdentityBytes(value.ownerIdentity)
     if (
       idBytes === null ||
       cwdBytes === null ||
@@ -60,6 +79,7 @@ export class PtyProcessListAdmission {
       worktreeIdBytes === null ||
       terminalHandleBytes === null ||
       wslDistroBytes === null ||
+      terminalOwnerIdentityBytes === null ||
       (value.incarnationId !== undefined && !isPtyIncarnationId(value.incarnationId)) ||
       (value.agentSessionOwners !== undefined && !Array.isArray(value.agentSessionOwners))
     ) {
@@ -91,6 +111,7 @@ export class PtyProcessListAdmission {
       worktreeIdBytes +
       terminalHandleBytes +
       wslDistroBytes +
+      terminalOwnerIdentityBytes +
       ownerBytes
     if (
       nextEntries > MAX_AGGREGATED_PTY_PROCESS_LIST_ENTRIES ||
@@ -111,6 +132,7 @@ export class PtyProcessListAdmission {
       ...(value.worktreeId !== undefined ? { worktreeId: value.worktreeId } : {}),
       ...(value.terminalHandle !== undefined ? { terminalHandle: value.terminalHandle } : {}),
       ...(value.wslDistro !== undefined ? { wslDistro: value.wslDistro } : {}),
+      ...(value.ownerIdentity !== undefined ? { ownerIdentity: { ...value.ownerIdentity } } : {}),
       ...(normalizedOwners !== undefined ? { agentSessionOwners: normalizedOwners } : {})
     }
   }

@@ -59,7 +59,11 @@ import { resolveLeafCloseCopyKind } from '../terminal/terminal-close-copy-kind'
 import { RUNNING_CLOSE_PROBE_TIMEOUT_MS } from '../terminal/running-terminal-close-guard'
 import CodexRestartChip from '../CodexRestartChip'
 import { MobileDriverOverlay } from './MobileDriverOverlay'
-import { stripSshReconnectOwnedErrorLines, TerminalErrorToast } from './TerminalErrorToast'
+import {
+  isPaneOwnerUnverifiedError,
+  stripSshReconnectOwnedErrorLines,
+  TerminalErrorToast
+} from './TerminalErrorToast'
 import { TerminalProcessExitOverlay } from './TerminalProcessExitOverlay'
 import { TerminalSessionStateSaveFailureDialog } from './TerminalSessionStateSaveFailureDialog'
 import TerminalContextMenu from './TerminalContextMenu'
@@ -501,6 +505,11 @@ function TerminalPane(
       transport.notifyErrorSurfaceDismissed?.()
     }
   }, [])
+  const retryTerminalConnection = useCallback(() => {
+    if (useAppStore.getState().remountTerminalTabForRecovery(tabId)) {
+      setTerminalError(null)
+    }
+  }, [tabId])
   const onPtyRecoveryStateRef = useRef(
     (paneId: number, state: PtyTransportRecoveryState | null) => {
       setPtyRecoveryStatesByPaneId((previous) =>
@@ -3076,6 +3085,8 @@ function TerminalPane(
         <TerminalErrorToast
           error={terminalError}
           onDismiss={dismissTerminalError}
+          onRetry={isPaneOwnerUnverifiedError(terminalError) ? retryTerminalConnection : undefined}
+          terminalLabel={terminalTab?.title ?? 'Terminal session'}
           onRestartDaemon={() => daemonActions.setPending('restart')}
         />
       ) : null}

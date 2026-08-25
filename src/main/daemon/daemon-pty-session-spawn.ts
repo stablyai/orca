@@ -1,5 +1,7 @@
 import { recognizeAgentProcessFromCommandLine } from '../../shared/agent-process-recognition'
 import { shouldUseShellReadyStartupDelivery } from '../../shared/codex-startup-delivery'
+import { sameTerminalOwnerIdentity } from '../../shared/terminal-owner-identity'
+import { SessionNotFoundError, TerminalSessionExitedError } from './daemon-errors'
 import type {
   HistoryRecoveryContext,
   PendingDaemonSpawnOperation
@@ -29,7 +31,8 @@ export abstract class DaemonPtySessionSpawn extends DaemonPtySpawnResult {
     const operation = {
       exitsBySessionId: new Map<string, { incarnationId?: string }[]>(),
       ignoredExitIncarnationIds: new Set<string>(),
-      ignoreNextExit: false
+      ignoreNextExit: false,
+      acceptsUnroutedExit: false
     }
     const operations = this.pendingSpawnOperationsBySessionId.get(sessionId) ?? new Set()
     operations.add(operation)
@@ -48,6 +51,20 @@ export abstract class DaemonPtySessionSpawn extends DaemonPtySpawnResult {
           this.doSpawn({ ...spawnOpts, sessionId }, operation, historyRecovery)
         )
       )
+    } catch (error) {
+      const exactOwner = this.getTerminalOwnerIdentity(sessionId)
+      if (
+        error instanceof SessionNotFoundError &&
+        spawnOpts.attachOnly === true &&
+        spawnOpts.expectedIncarnationIsAuthoritative === true &&
+        spawnOpts.expectedIncarnationId !== undefined &&
+        this.hasExactSessionAuthority(sessionId, spawnOpts.expectedIncarnationId) &&
+        (spawnOpts.expectedOwnerIdentity === undefined ||
+          sameTerminalOwnerIdentity(exactOwner, spawnOpts.expectedOwnerIdentity))
+      ) {
+        throw new TerminalSessionExitedError(sessionId)
+      }
+      throw error
     } finally {
       if (historyRecovery.freeze) {
         this.historyManager?.abandonRecoveryFreeze(historyRecovery.freeze)

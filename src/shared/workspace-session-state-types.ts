@@ -4,6 +4,7 @@ import type { WorkspaceKey } from './folder-workspace-types'
 import type { Tab, TabGroup, TabGroupLayoutNode, WorkspaceVisibleTabType } from './tab-types'
 import type { TerminalLayoutSnapshot, TerminalTab } from './terminal-tab-types'
 import type { BrowserHistoryEntry, BrowserPage, BrowserWorkspace } from './browser-workspace-types'
+import type { TerminalOwnerIdentity } from './terminal-owner-identity'
 
 /** Minimal subset of OpenFile persisted across restarts.
  *  Only edit-mode files are saved — diffs, conflict reviews, and other
@@ -96,6 +97,8 @@ export type WorkspaceSessionState = {
   sleepingAgentSessionsByPaneKey?: Record<string, SleepingAgentSessionRecord>
   /** Host-issued process incarnation for each durable terminal surface. */
   terminalPtyIncarnationsByPaneKey?: Record<string, string>
+  /** Authenticated exact owner identity for each durable terminal surface. */
+  terminalPtyOwnersByPaneKey?: Record<string, TerminalOwnerIdentity>
   /** Monotonic host authority watermark for terminal membership in each repo. */
   terminalTopologyRevisionByRepoId?: Record<string, number>
   /** Legacy per-surface fences migrated into terminalTopologyRevisionByRepoId on load. */

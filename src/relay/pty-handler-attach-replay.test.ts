@@ -60,11 +60,7 @@ describe('PtyHandler', () => {
     await endPtyHandlerTest(handler, originalPlatform)
   })
 
-  it('reports not-found and reaps a reattach whose backing shell is dead', async () => {
-    // Why: a lingering managed entry whose child died without an onExit would
-    // otherwise attach-succeed with an empty replay and strand the pane on a
-    // black shell. A provably-dead pid must surface as not-found so the SSH
-    // provider maps it to SSH_SESSION_EXPIRED and the pane respawns fresh.
+  it('reports exact exit and reaps a reattach whose matched backing shell is dead', async () => {
     let onExitCb: ((evt: { exitCode: number }) => void) | undefined
     mockPtySpawn.mockReturnValue({
       ...mockPtyInstance,
@@ -76,15 +72,21 @@ describe('PtyHandler', () => {
     const exits: { id: string; paneKey?: string }[] = []
     handler.setExitListener((evt) => exits.push(evt))
 
-    await dispatcher.callRequest('pty.spawn', { env: { ORCA_PANE_KEY: 'tab-dead:0' } })
+    const spawned = (await dispatcher.callRequest('pty.spawn', {
+      env: { ORCA_PANE_KEY: 'tab-dead:0' }
+    })) as { incarnationId: string }
     expect(handler.activePtyCount).toBe(1)
     expect(onExitCb).toBeDefined()
 
     const aliveSpy = vi.spyOn(ptyShellUtils, 'isProcessAlive').mockReturnValue(false)
     try {
       await expect(
-        dispatcher.callRequest('pty.attach', { id: 'pty-1', suppressReplayNotification: true })
-      ).rejects.toThrow('PTY "pty-1" not found')
+        dispatcher.callRequest('pty.attach', {
+          id: 'pty-1',
+          suppressReplayNotification: true,
+          expectedIncarnationId: spawned.incarnationId
+        })
+      ).rejects.toThrow('terminal_session_exited: pty-1')
     } finally {
       aliveSpy.mockRestore()
     }
@@ -411,6 +413,37 @@ describe('PtyHandler', () => {
     await expect(dispatcher.callRequest('pty.attach', { id: 'pty-999' })).rejects.toThrow(
       'PTY "pty-999" not found'
     )
+  })
+
+  it('rejects a mismatched session incarnation before consuming replay', async () => {
+    let dataCallback: ((data: string) => void) | undefined
+    mockPtySpawn.mockReturnValue({
+      ...mockPtyInstance,
+      onData: vi.fn((cb: (data: string) => void) => {
+        dataCallback = cb
+      }),
+      onExit: vi.fn()
+    })
+    const spawn = await spawnPty()
+    dataCallback!('identity-fenced-output')
+
+    await expect(
+      attachPty({
+        id: 'pty-1',
+        expectedIncarnationId: 'different-incarnation',
+        suppressReplayNotification: true
+      })
+    ).rejects.toThrow('incarnation mismatch')
+    await expect(
+      attachPty({
+        id: 'pty-1',
+        expectedIncarnationId: spawn.incarnationId,
+        suppressReplayNotification: true
+      })
+    ).resolves.toEqual({
+      incarnationId: spawn.incarnationId,
+      replay: 'identity-fenced-output'
+    })
   })
 
   it('attach preserves buffer so repeated attaches return the same data plus new output', async () => {

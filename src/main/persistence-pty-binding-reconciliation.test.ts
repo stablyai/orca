@@ -310,6 +310,68 @@ describe('Store', () => {
     ).toBeUndefined()
   })
 
+  it('persists exact owner identity atomically with a terminal binding', async () => {
+    const store = await createStore()
+    store.setWorkspaceSession({
+      ...getDefaultWorkspaceSession(),
+      tabsByWorktree: {
+        wt1: [
+          {
+            id: 'tab-owner',
+            worktreeId: 'wt1',
+            title: 'Terminal',
+            customTitle: null,
+            color: null,
+            sortOrder: 0,
+            createdAt: 1,
+            ptyId: null
+          }
+        ]
+      },
+      terminalLayoutsByTabId: {
+        'tab-owner': {
+          root: { type: 'leaf', leafId: TEST_LEAF_1 },
+          activeLeafId: TEST_LEAF_1,
+          expandedLeafId: null
+        }
+      }
+    })
+    const ownerIdentity = {
+      executionHostId: 'local' as const,
+      ownerKind: 'daemon' as const,
+      ownerIncarnationId: 'daemon-a',
+      sessionIncarnationId: 'session-a',
+      protocolVersion: 37,
+      endpointRef: 'local-daemon'
+    }
+    store.persistPtyBinding({
+      worktreeId: 'wt1',
+      tabId: 'tab-owner',
+      leafId: TEST_LEAF_1,
+      ptyId: 'pty-owner',
+      incarnationId: 'session-a',
+      ownerIdentity
+    })
+    expect(
+      store.getWorkspaceSession().terminalPtyOwnersByPaneKey?.[`tab-owner:${TEST_LEAF_1}`]
+    ).toEqual(ownerIdentity)
+    expect(
+      store.persistPtyBinding({
+        worktreeId: 'wt1',
+        tabId: 'tab-owner',
+        leafId: TEST_LEAF_1,
+        ptyId: 'pty-owner',
+        incarnationId: 'session-a',
+        ownerIdentity: { ...ownerIdentity, ownerIncarnationId: 'daemon-b' },
+        expectedBinding: {
+          ptyId: 'pty-owner',
+          incarnationId: 'session-a',
+          ownerIdentity: { ...ownerIdentity, ownerIncarnationId: 'daemon-b' }
+        }
+      })
+    ).toBe(false)
+  })
+
   it('reconciles only the incarnation of an unchanged durable PTY binding', async () => {
     const store = await createStore()
     const paneKey = `tab1:${TEST_LEAF_1}`

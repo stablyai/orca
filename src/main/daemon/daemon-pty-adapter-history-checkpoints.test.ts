@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { join } from 'node:path'
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { DaemonPtyAdapter } from './daemon-pty-adapter'
+import { TerminalSessionExitedError } from './daemon-errors'
 import type { DaemonServer } from './daemon-server'
 import { getHistorySessionDirName } from './history-paths'
 import type { PendingOutputRecord } from './types'
@@ -715,12 +716,13 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
     it('writes a final checkpoint before keepHistory shutdown', async () => {
       historyAdapter = new DaemonPtyAdapter({ socketPath, tokenPath, historyPath: historyDir })
 
-      const { id } = await historyAdapter.spawn({
+      const spawned = await historyAdapter.spawn({
         cols: 80,
         rows: 24,
         cwd: '/home/user',
         sessionId: 'sleep-checkpoint'
       })
+      const { id } = spawned
       const checkpointSpy = vi.spyOn(historyAdapter.getHistoryManager()!, 'checkpoint')
 
       lastSubprocess._simulateData('fresh output before sleep\r\n')
@@ -732,6 +734,21 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
         { pendingOutputSeq: expect.any(Number) }
       )
       expect(existsSync(join(historyDir, getHistorySessionDirName(id)))).toBe(true)
+      expect(historyAdapter.getTerminalOwnerIdentity(id)).toEqual(spawned.ownerIdentity)
+      await expect(
+        historyAdapter.probePtyLiveness(id, spawned.incarnationId, spawned.ownerIdentity)
+      ).resolves.toBe(false)
+      await expect(
+        historyAdapter.spawn({
+          sessionId: id,
+          attachOnly: true,
+          expectedIncarnationId: spawned.incarnationId,
+          expectedIncarnationIsAuthoritative: true,
+          expectedOwnerIdentity: spawned.ownerIdentity,
+          cols: 80,
+          rows: 24
+        })
+      ).rejects.toBeInstanceOf(TerminalSessionExitedError)
     })
 
     itOnPosix('persists final take records that are not represented in the snapshot', async () => {

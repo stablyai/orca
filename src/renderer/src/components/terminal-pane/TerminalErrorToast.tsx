@@ -1,4 +1,6 @@
 import { useEffect, useState } from 'react'
+import { ServerOff } from 'lucide-react'
+import { Button } from '@/components/ui/button'
 import { translate } from '@/i18n/i18n'
 import { resolveClientEnvironmentFooter } from '@/lib/client-environment-info'
 import { hasClientEnvironmentFooter } from '../../../../shared/client-environment-info'
@@ -17,7 +19,13 @@ const STALE_DAEMON_CWD_MARKERS = [
   'node-pty: daemon_cwd failed: ENOENT'
 ]
 // Thrown by ipc/pty.ts when a persisted pane owner can't be proven alive or dead (STA-3536).
-const PANE_OWNER_UNVERIFIED_MARKER = 'terminal_pane_owner_unverified'
+const PANE_OWNER_UNVERIFIED_MARKERS = [
+  'terminal_pane_owner_unverified',
+  'terminal_pane_owner_conflict'
+]
+export function isPaneOwnerUnverifiedError(error: string): boolean {
+  return PANE_OWNER_UNVERIFIED_MARKERS.some((marker) => error.includes(marker))
+}
 // Why one source: the test and replace forms must match the same token, and a lone /g regex carries
 // lastIndex state across .test() calls. Capture the leading boundary so replacement can restore it.
 const TERMINAL_HOST_GONE_SOURCE = '(^|[^a-z0-9_])terminal_host_gone(?=$|[^a-z0-9_])'
@@ -93,16 +101,13 @@ function humanizeUnreattachableSession(error: string): string {
 
 /** Swaps raw daemon-boundary codes for copy a user can act on. */
 export function humanizeTerminalError(error: string): string {
-  let humanized = error
-  if (humanized.includes(PANE_OWNER_UNVERIFIED_MARKER)) {
-    humanized = humanized.replace(
-      PANE_OWNER_UNVERIFIED_MARKER,
-      translate(
-        'auto.components.terminal.pane.TerminalErrorToast.7ee11bc0db',
-        "Orca couldn't confirm whether this terminal's previous session is still running, so it left the session untouched. Reopen this pane to retry."
-      )
+  if (isPaneOwnerUnverifiedError(error)) {
+    return translate(
+      'auto.components.terminal.pane.TerminalErrorToast.7ee11bc0db',
+      "Orca couldn't confirm whether this terminal's previous session is still running, so it left the session and history untouched."
     )
   }
+  let humanized = error
   humanized = humanizeUnreattachableSession(humanized)
   if (!isExplainedTerminalError(humanized)) {
     return humanized
@@ -128,13 +133,18 @@ export function humanizeTerminalError(error: string): string {
 export function TerminalErrorToast({
   error,
   onDismiss,
-  onRestartDaemon
+  onRestartDaemon,
+  onRetry,
+  terminalLabel = 'Terminal session'
 }: {
   error: string
   onDismiss: () => void
   onRestartDaemon?: () => void
+  onRetry?: () => void
+  terminalLabel?: string
 }): React.JSX.Element {
   const ssh = isSshError(error)
+  const ownerUnavailable = isPaneOwnerUnverifiedError(error)
   const showDaemonRestart = !ssh && onRestartDaemon && shouldOfferDaemonRestart(error)
   // Restart cannot recover a session after its owning daemon exits.
   const showIssueLink = !ssh && !showDaemonRestart && !isExplainedTerminalError(error)
@@ -162,6 +172,55 @@ export function TerminalErrorToast({
 
   const footer = environmentFooter?.error === displayError ? environmentFooter.footer : ''
 
+  if (ownerUnavailable) {
+    return (
+      <div
+        className="pointer-events-none absolute inset-x-3 bottom-3 z-40 flex justify-center"
+        data-terminal-owner-unavailable-banner
+      >
+        <div
+          className="pointer-events-auto flex w-full max-w-xl items-center gap-3 rounded-md border border-border bg-card px-3 py-3 text-card-foreground shadow-xs"
+          role="status"
+          aria-live="polite"
+        >
+          <div className="flex size-8 shrink-0 items-center justify-center rounded-md border border-border bg-muted text-muted-foreground">
+            <ServerOff className="size-4" />
+          </div>
+          <div className="min-w-0 flex-1">
+            <div className="flex min-w-0 items-center gap-2">
+              <div className="shrink-0 text-sm font-semibold">
+                {translate(
+                  'auto.components.terminal.pane.TerminalErrorToast.ownerUnavailableTitle',
+                  'Terminal session not connected'
+                )}
+              </div>
+              <div className="flex min-w-0 items-center gap-1.5 text-xs text-muted-foreground">
+                <span className="truncate font-medium">{terminalLabel}</span>
+              </div>
+            </div>
+            <div className="mt-0.5 text-xs leading-5 text-muted-foreground">
+              {translate(
+                'auto.components.terminal.pane.TerminalErrorToast.ownerUnavailableDetail',
+                "Orca couldn't verify whether this saved session is still running, so it left the tab and history untouched. Check again retries the saved panes in this tab; it won't close or replace them."
+              )}
+            </div>
+            {footer ? (
+              <div className="mt-1 text-xs leading-5 text-muted-foreground [overflow-wrap:anywhere]">
+                {footer}
+              </div>
+            ) : null}
+          </div>
+          <Button className="shrink-0" size="sm" onClick={onRetry}>
+            {translate(
+              'auto.components.terminal.pane.TerminalErrorToast.retryConnection',
+              'Check again'
+            )}
+          </Button>
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div
       style={{
@@ -172,9 +231,12 @@ export function TerminalErrorToast({
         zIndex: 50,
         padding: '10px 14px',
         borderRadius: 6,
-        background: ssh ? 'rgba(234, 179, 8, 0.12)' : 'rgba(220, 38, 38, 0.15)',
-        border: ssh ? '1px solid rgba(234, 179, 8, 0.35)' : '1px solid rgba(220, 38, 38, 0.4)',
-        color: ssh ? '#fde68a' : '#fca5a5',
+        background: ssh || ownerUnavailable ? 'rgba(234, 179, 8, 0.12)' : 'rgba(220, 38, 38, 0.15)',
+        border:
+          ssh || ownerUnavailable
+            ? '1px solid rgba(234, 179, 8, 0.35)'
+            : '1px solid rgba(220, 38, 38, 0.4)',
+        color: ssh || ownerUnavailable ? '#fde68a' : '#fca5a5',
         fontSize: 12,
         fontFamily: 'monospace',
         whiteSpace: 'pre-wrap',
@@ -240,7 +302,7 @@ export function TerminalErrorToast({
           style={{
             background: 'none',
             border: 'none',
-            color: ssh ? '#fde68a' : '#fca5a5',
+            color: ssh || ownerUnavailable ? '#fde68a' : '#fca5a5',
             cursor: 'pointer',
             fontSize: 14,
             padding: '0 0 0 8px',

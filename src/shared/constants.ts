@@ -545,6 +545,7 @@ export function getDefaultWorkspaceSession(): WorkspaceSessionState {
     activeFileIdByWorktree: {},
     activeTabTypeByWorktree: {},
     browserUrlHistory: [],
-    defaultTerminalTabsAppliedByWorktreeId: {}
+    defaultTerminalTabsAppliedByWorktreeId: {},
+    terminalPtyOwnersByPaneKey: {}
   }
 }

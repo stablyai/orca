@@ -137,7 +137,8 @@ export function registerPtyHandlers(
     runtime,
     getSettings,
     getSelectedCodexHomePath,
-    trustedTerminalHandleEnv: session.trustedTerminalHandleEnv
+    trustedTerminalHandleEnv: session.trustedTerminalHandleEnv,
+    sendPtyExitToRenderer: session.sendPtyExitToRenderer
   })
   installSessionSshOutputIntake(session)
   bindProviderListeners(session)

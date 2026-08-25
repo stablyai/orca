@@ -438,7 +438,7 @@ describe('connectPanePty', () => {
     connectPanePty(createPane(2) as never, createManager(2) as never, deps as never)
     await flushAsyncTicks(20)
 
-    expect(transport.connect).toHaveBeenCalledTimes(2)
+    expect(transport.connect).toHaveBeenCalledTimes(1)
     expect(deps.onShowSessionRestoredBanner).not.toHaveBeenCalled()
     expect(mockStoreState.clearSleepingAgentSession).not.toHaveBeenCalled()
     expect(mockStoreState.sleepingAgentSessionsByPaneKey[paneKey]).toBeDefined()

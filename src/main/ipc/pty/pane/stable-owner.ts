@@ -1,18 +1,15 @@
 import { toSshExecutionHostId } from '../../../../shared/execution-host'
 import { makePaneKey, parsePaneKey } from '../../../../shared/stable-pane-id'
+import {
+  sameTerminalOwnerIdentity,
+  type TerminalOwnerIdentity
+} from '../../../../shared/terminal-owner-identity'
 import type { Store } from '../../../persistence'
 import { retireTerminalSurfaceFromPersistence } from '../../../runtime/mobile-session-terminal-persistence-retirement'
 import type { OrcaRuntimeService } from '../../../runtime/orca-runtime'
 import type { IPtyProvider, PtySpawnOptions, PtySpawnResult } from '../../../providers/types'
 import { parseAppSshPtyId } from '../../../providers/ssh-pty-id'
-import {
-  isDaemonEndpointGoneError,
-  TerminalHostGoneError,
-  TerminalSessionOwnerUnverifiedError
-} from '../../../daemon/daemon-errors'
 import { ptyIncarnationById, ptyOwnership } from '../provider/ownership-state'
-import { isPtyAlreadyGoneError } from '../provider/liveness'
-import { clearProviderPtyState } from '../provider/state-cleanup'
 
 export type StablePaneOwner = {
   handle?: string
@@ -23,6 +20,7 @@ export type StablePaneOwner = {
   hasPersistedBinding?: true
   persistedIncarnationId?: string
   runtimeIncarnationId?: string
+  ownerIdentity?: TerminalOwnerIdentity
 }
 export type StablePaneAdoption = {
   result: PtySpawnResult
@@ -36,7 +34,7 @@ export function resolvePersistedStablePaneOwner(
   paneKey: string,
   worktreeId: string,
   connectionId: string | null | undefined
-): Pick<StablePaneOwner, 'tabId' | 'leafId' | 'ptyId' | 'incarnationId'> | null {
+): Pick<StablePaneOwner, 'tabId' | 'leafId' | 'ptyId' | 'incarnationId' | 'ownerIdentity'> | null {
   if (!store || typeof store.getWorkspaceSession !== 'function') {
     return null
   }
@@ -55,11 +53,13 @@ export function resolvePersistedStablePaneOwner(
     return null
   }
   const incarnationId = session.terminalPtyIncarnationsByPaneKey?.[paneKey]
+  const ownerIdentity = session.terminalPtyOwnersByPaneKey?.[paneKey]
   return {
     tabId: parsed.tabId,
     leafId: parsed.leafId,
     ptyId,
-    ...(incarnationId ? { incarnationId } : {})
+    ...(incarnationId ? { incarnationId } : {}),
+    ...(ownerIdentity ? { ownerIdentity } : {})
   }
 }
 
@@ -113,6 +113,7 @@ export function resolveStablePaneOwner(
     ...(runtimeIncarnationId || persisted?.incarnationId
       ? { incarnationId: runtimeIncarnationId ?? persisted?.incarnationId }
       : {}),
+    ...(persisted?.ownerIdentity ? { ownerIdentity: persisted.ownerIdentity } : {}),
     ...(persisted ? { hasPersistedBinding: true as const } : {}),
     ...(persisted?.incarnationId ? { persistedIncarnationId: persisted.incarnationId } : {}),
     ...(runtimeIncarnationId ? { runtimeIncarnationId } : {})
@@ -137,7 +138,14 @@ export function retirePersistedStablePaneOwner(
     // not a competing owner. Reporting failure here strands the pane after its PTY is proven dead.
     return true
   }
-  if (current.ptyId !== owner.ptyId || current.incarnationId !== owner.persistedIncarnationId) {
+  const ownerIdentityMatches = owner.ownerIdentity
+    ? sameTerminalOwnerIdentity(current.ownerIdentity, owner.ownerIdentity)
+    : current.ownerIdentity === undefined
+  if (
+    current.ptyId !== owner.ptyId ||
+    current.incarnationId !== owner.persistedIncarnationId ||
+    !ownerIdentityMatches
+  ) {
     return false
   }
   const session = store.getWorkspaceSession(hostId)
@@ -152,7 +160,12 @@ export function retirePersistedStablePaneOwner(
     return false
   }
   store.setWorkspaceSession(retired, hostId)
-  store.flushOrThrow()
+  try {
+    store.flushOrThrow()
+  } catch (error) {
+    store.setWorkspaceSession(session, hostId)
+    throw error
+  }
   return true
 }
 
@@ -168,13 +181,18 @@ export type StablePaneSpawnContext = {
   onFreshSpawn?: (result: PtySpawnResult) => void
 }
 
-export function stablePanePersistenceFence(
-  owner: StablePaneOwner | null
-): { ptyId: string; incarnationId?: string } | undefined {
+export function stablePanePersistenceFence(owner: StablePaneOwner | null):
+  | {
+      ptyId: string
+      incarnationId?: string
+      ownerIdentity?: TerminalOwnerIdentity | null
+    }
+  | undefined {
   return owner?.hasPersistedBinding
     ? {
         ptyId: owner.ptyId,
-        ...(owner.persistedIncarnationId ? { incarnationId: owner.persistedIncarnationId } : {})
+        ...(owner.persistedIncarnationId ? { incarnationId: owner.persistedIncarnationId } : {}),
+        ownerIdentity: owner.ownerIdentity ?? null
       }
     : undefined
 }
@@ -198,6 +216,7 @@ export function persistAdmittedStablePaneBinding(args: {
       leafId: args.owner.leafId,
       ptyId: args.result.id,
       ...(args.result.incarnationId ? { incarnationId: args.result.incarnationId } : {}),
+      ...(args.result.ownerIdentity ? { ownerIdentity: args.result.ownerIdentity } : {}),
       ...(args.startupCwd ? { startupCwd: args.startupCwd } : {}),
       expectedBinding
     },
@@ -207,87 +226,4 @@ export function persistAdmittedStablePaneBinding(args: {
     throw new Error('terminal_pane_owner_changed')
   }
   return true
-}
-
-export async function attachStablePaneOwner(
-  args: StablePaneSpawnContext & { owner: StablePaneOwner }
-): Promise<{ result: PtySpawnResult; owner: StablePaneOwner } | null> {
-  const { owner, provider, runtime, spawnOptions } = args
-  let result: PtySpawnResult
-  try {
-    result = await provider.spawn({
-      ...spawnOptions,
-      sessionId: owner.ptyId,
-      attachOnly: true,
-      expectedIncarnationId: owner.runtimeIncarnationId ?? owner.persistedIncarnationId,
-      expectedIncarnationIsAuthoritative: owner.runtimeIncarnationId !== undefined,
-      isNewSession: undefined,
-      command: undefined,
-      commandDelivery: undefined,
-      startupCommandDelivery: undefined,
-      launchAgent: undefined,
-      startupIngress: undefined,
-      agentSessionEnsure: undefined,
-      agentSessionCreateOperationId: undefined,
-      onPtySpawnCommitted: undefined
-    })
-  } catch (error) {
-    if (error instanceof TerminalSessionOwnerUnverifiedError) {
-      throw new Error('terminal_pane_owner_unverified')
-    }
-    // Why: translate before paired-runtime RPC strips the socket error's code and syscall.
-    if (isDaemonEndpointGoneError(error)) {
-      throw new TerminalHostGoneError()
-    }
-    if (!isPtyAlreadyGoneError(error)) {
-      throw error
-    }
-    const ownerBeforeRetire = args.resolveOwner?.()
-    if (
-      ownerBeforeRetire &&
-      (ownerBeforeRetire.ptyId !== owner.ptyId ||
-        ownerBeforeRetire.runtimeIncarnationId !== owner.runtimeIncarnationId ||
-        ownerBeforeRetire.hasPersistedBinding !== owner.hasPersistedBinding ||
-        ownerBeforeRetire.persistedIncarnationId !== owner.persistedIncarnationId)
-    ) {
-      throw new Error('terminal_pane_owner_changed')
-    }
-    runtime?.onPtyExit(owner.ptyId, 0, owner.incarnationId)
-    clearProviderPtyState(owner.ptyId)
-    ptyOwnership.delete(owner.ptyId)
-    if (
-      args.worktreeId &&
-      !retirePersistedStablePaneOwner(args.store, owner, args.worktreeId, args.connectionId)
-    ) {
-      throw new Error('terminal_pane_owner_changed')
-    }
-    if (args.resolveOwner?.()) {
-      throw new Error('terminal_pane_owner_changed')
-    }
-    return null
-  }
-  if (
-    result.id !== owner.ptyId ||
-    result.isReattach !== true ||
-    (owner.runtimeIncarnationId !== undefined &&
-      result.incarnationId !== owner.runtimeIncarnationId) ||
-    (result.incarnationId === undefined && owner.incarnationId !== undefined)
-  ) {
-    throw new Error('terminal_pane_owner_changed')
-  }
-  return { result, owner }
-}
-
-export async function spawnForStablePane(
-  args: StablePaneSpawnContext
-): Promise<{ result: PtySpawnResult; owner: StablePaneOwner | null }> {
-  if (args.owner) {
-    const attached = await attachStablePaneOwner({ ...args, owner: args.owner })
-    if (attached) {
-      return attached
-    }
-  }
-  const result = await args.provider.spawn(args.spawnOptions)
-  args.onFreshSpawn?.(result)
-  return { result, owner: null }
 }

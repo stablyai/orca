@@ -8,6 +8,7 @@ import {
   setLocalPtyProvider,
   unregisterSshPtyProvider
 } from './pty'
+import { TerminalSessionExitedError } from '../daemon/daemon-errors'
 
 vi.mock('electron', () => import('./pty-ipc-mock-registry').then((m) => m.electronModuleMock()))
 vi.mock('fs', () => import('./pty-ipc-mock-registry').then((m) => m.fsModuleMock()))
@@ -67,7 +68,7 @@ describe('registerPtyHandlers', () => {
     const freshPtyId = `ssh:${connectionId}@@fresh-relay-pty`
     const remoteSpawn = vi.fn(async (options: { attachOnly?: boolean; command?: string }) => {
       if (options.attachOnly) {
-        throw new Error('PTY "dead-relay-pty" not found')
+        throw new TerminalSessionExitedError(deadPtyId)
       }
       return { id: freshPtyId, incarnationId: 'inc-fresh-ssh-owner' }
     })

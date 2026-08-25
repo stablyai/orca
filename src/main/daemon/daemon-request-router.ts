@@ -71,13 +71,19 @@ export class DaemonRequestRouter {
           appliedSeq: this.options.host.closeStartupQueryAuthority(request.payload.sessionId)
         }
       case 'write':
-        return this.write(client, request.payload.sessionId, request.payload.data)
+        return this.write(
+          client,
+          request.payload.sessionId,
+          request.payload.data,
+          request.payload.expectedIncarnationId
+        )
       case 'resize':
         return this.resize(
           client,
           request.payload.sessionId,
           request.payload.cols,
-          request.payload.rows
+          request.payload.rows,
+          request.payload.expectedIncarnationId
         )
       case 'pausePty':
         this.options.host.pauseProducer(request.payload.sessionId)
@@ -146,15 +152,16 @@ export class DaemonRequestRouter {
   private write(
     client: ConnectedDaemonClient | undefined,
     sessionId: string,
-    data: string
+    data: string,
+    expectedIncarnationId?: string
   ): Record<string, never> {
     try {
       this.options.attachments.recordInput(sessionId)
-      this.options.host.write(sessionId, data)
+      this.options.host.write(sessionId, data, expectedIncarnationId)
     } catch (error) {
       this.options.attachments.clearInput(sessionId)
       if (error instanceof SessionNotFoundError) {
-        this.sendExitEvent(client, sessionId, -1)
+        this.sendExitEvent(client, sessionId, -1, expectedIncarnationId)
       }
       throw error
     }
@@ -165,13 +172,14 @@ export class DaemonRequestRouter {
     client: ConnectedDaemonClient | undefined,
     sessionId: string,
     cols: number,
-    rows: number
+    rows: number,
+    expectedIncarnationId?: string
   ): Record<string, never> {
     try {
-      this.options.host.resize(sessionId, cols, rows)
+      this.options.host.resize(sessionId, cols, rows, expectedIncarnationId)
     } catch (error) {
       if (error instanceof SessionNotFoundError) {
-        this.sendExitEvent(client, sessionId, -1)
+        this.sendExitEvent(client, sessionId, -1, expectedIncarnationId)
       }
       throw error
     }
@@ -266,7 +274,8 @@ export class DaemonRequestRouter {
   private sendExitEvent(
     client: ConnectedDaemonClient | undefined,
     sessionId: string,
-    code: number
+    code: number,
+    incarnationId?: string
   ): void {
     if (!client?.streamSocket) {
       return
@@ -275,7 +284,7 @@ export class DaemonRequestRouter {
       type: 'event',
       event: 'exit',
       sessionId,
-      payload: { code }
+      payload: { code, ...(incarnationId ? { incarnationId } : {}) }
     })
     this.options.streamDataBatcher.flush(client.clientId)
   }

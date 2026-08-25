@@ -8,7 +8,26 @@ import {
   visitPtyProcessListingsInBatches
 } from './pty-process-list-admission'
 
+const ownerIdentity = {
+  executionHostId: 'local' as const,
+  ownerKind: 'daemon' as const,
+  ownerIncarnationId: 'daemon-a',
+  sessionIncarnationId: 'session-a',
+  protocolVersion: 37
+}
+
 describe('PtyProcessListAdmission', () => {
+  it('retains a validated terminal owner identity', () => {
+    expect(
+      new PtyProcessListAdmission().admit({
+        id: 'pty-1',
+        cwd: '/repo',
+        title: 'shell',
+        ownerIdentity
+      })
+    ).toMatchObject({ ownerIdentity })
+  })
+
   it('strips unknown provider payloads from admitted process metadata', () => {
     const admission = new PtyProcessListAdmission()
 

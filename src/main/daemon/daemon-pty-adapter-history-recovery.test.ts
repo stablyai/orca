@@ -146,6 +146,34 @@ describe('DaemonPtyAdapter history recovery', () => {
     expect(JSON.parse(readFileSync(metaPath, 'utf-8')).endedAt).toBeNull()
   })
 
+  it('retains exact exit authority when an unreadable keepHistory stop exits late', async () => {
+    historyAdapter = new DaemonPtyAdapter({ socketPath, tokenPath, historyPath: historyDir })
+    const spawned = await historyAdapter.spawn({
+      cols: 80,
+      rows: 24,
+      sessionId: 'sleep-unreadable-late-exit'
+    })
+    const reader = (historyAdapter as unknown as { historyReader: HistoryReader }).historyReader
+    vi.spyOn(reader, 'detectColdRestoreState').mockResolvedValue({
+      status: 'unreadable',
+      sessionId: spawned.id
+    })
+    const exited = new Promise<void>((resolve) => {
+      historyAdapter.onExit((event) => {
+        if (event.id === spawned.id) {
+          resolve()
+        }
+      })
+    })
+
+    await historyAdapter.shutdown(spawned.id, { immediate: true, keepHistory: true })
+    await exited
+
+    await expect(
+      historyAdapter.probePtyLiveness(spawned.id, spawned.incarnationId, spawned.ownerIdentity)
+    ).resolves.toBe(false)
+  })
+
   it('suspends an empty final checkpoint with unreadable post-checkpoint recovery', async () => {
     historyAdapter = new DaemonPtyAdapter({ socketPath, tokenPath, historyPath: historyDir })
     const { id } = await historyAdapter.spawn({

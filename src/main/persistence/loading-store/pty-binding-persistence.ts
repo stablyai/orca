@@ -1,5 +1,9 @@
 import { LOCAL_EXECUTION_HOST_ID } from '../../../shared/execution-host'
 import { isTerminalLeafId } from '../../../shared/stable-pane-id'
+import {
+  sameTerminalOwnerIdentity,
+  type TerminalOwnerIdentity
+} from '../../../shared/terminal-owner-identity'
 import { getRepoIdFromWorktreeId } from '../../../shared/worktree/id'
 import {
   cloneLayoutNode,
@@ -41,8 +45,14 @@ export class PtyBindingPersistenceOperations {
       leafId: string
       ptyId: string
       incarnationId?: string
+      ownerIdentity?: TerminalOwnerIdentity
       startupCwd?: string
-      expectedBinding?: { ptyId: string; incarnationId?: string }
+      expectedBinding?: {
+        ptyId: string
+        incarnationId?: string
+        /** Present (including null) to compare the persisted owner tuple. */
+        ownerIdentity?: TerminalOwnerIdentity | null
+      }
       expectedSourceBinding?: PtyBindingSourceExpectation
       /** Set by host-initiated creates, which have no renderer session writer behind them. */
       hostAdmittedMembership?: boolean
@@ -79,10 +89,20 @@ export class PtyBindingPersistenceOperations {
         (candidate) => candidate.id === args.tabId && candidate.worktreeId === bindingWorktreeId
       )
       const boundPtyId = session.terminalLayoutsByTabId?.[args.tabId]?.ptyIdsByLeafId?.[args.leafId]
+      const expectedOwnerMatches =
+        !('ownerIdentity' in args.expectedBinding) ||
+        (args.expectedBinding.ownerIdentity === null
+          ? session.terminalPtyOwnersByPaneKey?.[paneKey] === undefined
+          : sameTerminalOwnerIdentity(
+              session.terminalPtyOwnersByPaneKey?.[paneKey],
+              args.expectedBinding.ownerIdentity
+            ))
       if (
         !tab ||
         boundPtyId !== args.expectedBinding.ptyId ||
-        session.terminalPtyIncarnationsByPaneKey?.[paneKey] !== args.expectedBinding.incarnationId
+        session.terminalPtyIncarnationsByPaneKey?.[paneKey] !==
+          args.expectedBinding.incarnationId ||
+        !expectedOwnerMatches
       ) {
         return false
       }
@@ -141,6 +161,17 @@ export class PtyBindingPersistenceOperations {
         }
         delete session.terminalSurfaceTombstonesByPaneKey[paneKey]
       }
+    }
+    if (args.ownerIdentity) {
+      // A partial owner record invites inference, so persist the complete tuple atomically.
+      session.terminalPtyOwnersByPaneKey = {
+        ...session.terminalPtyOwnersByPaneKey,
+        [paneKey]: { ...args.ownerIdentity }
+      }
+    } else if (args.incarnationId) {
+      // A new authenticated session without owner metadata must not inherit an older owner.
+      session.terminalPtyOwnersByPaneKey = { ...session.terminalPtyOwnersByPaneKey }
+      delete session.terminalPtyOwnersByPaneKey[paneKey]
     }
     const tabs = session.tabsByWorktree?.[bindingWorktreeId]
     const tab = tabs?.find((t) => t.id === args.tabId)

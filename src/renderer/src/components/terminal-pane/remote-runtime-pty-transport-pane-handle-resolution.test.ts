@@ -96,6 +96,75 @@ describe('createRemoteRuntimePtyTransport', () => {
     expect(latestSubscribePayload()).toMatchObject({ terminal: 'hub-terminal-1' })
   })
 
+  it('keeps a saved host pane in reconnect recovery for a runtime outage', async () => {
+    runtimeCall.mockRejectedValue(
+      Object.assign(new Error('Remote Orca runtime closed the connection.'), {
+        code: 'remote_runtime_unavailable'
+      })
+    )
+    const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
+    const onError = vi.fn()
+    const transport = createRemoteRuntimePtyTransport('hub-env', {
+      worktreeId: 'wt-1',
+      tabId: 'tab-1',
+      leafId: 'pane:1'
+    })
+
+    const result = await transport.connect({
+      url: '',
+      sessionId: 'ssh:hub-private@@pty-2',
+      callbacks: { onError }
+    })
+
+    expect(result).toBeUndefined()
+    expect(onError).not.toHaveBeenCalled()
+    expect(transport.getRecoveryState?.().phase).toBe('disconnected')
+  })
+
+  it('returns owner-unverifiable only for an explicit saved-pane owner verdict', async () => {
+    runtimeCall.mockRejectedValue(new Error('terminal_pane_owner_unverified'))
+    const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
+    const onError = vi.fn()
+    const transport = createRemoteRuntimePtyTransport('hub-env', {
+      worktreeId: 'wt-1',
+      tabId: 'tab-1',
+      leafId: 'pane:1'
+    })
+
+    const result = await transport.connect({
+      url: '',
+      sessionId: 'ssh:hub-private@@pty-2',
+      callbacks: { onError }
+    })
+
+    expect(result).toEqual({
+      id: 'ssh:hub-private@@pty-2',
+      ownerUnverifiable: true
+    })
+    expect(onError).toHaveBeenCalledWith('terminal_pane_owner_unverified')
+  })
+
+  it('surfaces a generic saved-pane error without changing its owner verdict', async () => {
+    runtimeCall.mockRejectedValue(new Error('Remote runtime rejected the pairing token.'))
+    const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
+    const onError = vi.fn()
+    const transport = createRemoteRuntimePtyTransport('hub-env', {
+      worktreeId: 'wt-1',
+      tabId: 'tab-1',
+      leafId: 'pane:1'
+    })
+
+    const result = await transport.connect({
+      url: '',
+      sessionId: 'ssh:hub-private@@pty-2',
+      callbacks: { onError }
+    })
+
+    expect(result).toBeUndefined()
+    expect(onError).toHaveBeenCalledWith('Remote runtime rejected the pairing token.')
+    expect(transport.getRecoveryState?.().phase).toBe('offline')
+  })
+
   it('verifies a legacy pane response against the requested worktree session', async () => {
     runtimeCall.mockImplementation(async (request: { method: string; params?: unknown }) => {
       if (request.method === 'terminal.resolvePane') {

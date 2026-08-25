@@ -623,12 +623,12 @@ describe('spawn', () => {
     })
   })
 
-  it('does not fresh-spawn over an expired reattach session', async () => {
+  it('keeps an unqualified missing relay session owner-unverified', async () => {
     mux.request.mockRejectedValueOnce(new Error('PTY "pty-old" not found'))
 
-    await expect(provider.spawn({ cols: 80, rows: 24, sessionId: 'pty-old' })).rejects.toThrow(
-      'SSH_SESSION_EXPIRED: pty-old'
-    )
+    await expect(
+      provider.spawn({ cols: 80, rows: 24, sessionId: 'pty-old' })
+    ).rejects.toMatchObject({ name: 'TerminalSessionOwnerUnverifiedError' })
 
     expect(mux.request).toHaveBeenNthCalledWith(
       1,

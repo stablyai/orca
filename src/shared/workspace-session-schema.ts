@@ -27,6 +27,7 @@ import {
   browserWorkspaceSchema
 } from './workspace-session-browser-schema'
 import { sleepingAgentSessionsByPaneKeySchema } from './workspace-session-sleeping-agents'
+import { terminalPtyOwnersByPaneKeySchema } from './terminal-owner-bindings-schema'
 import { salvagedField, salvagedOptional, salvagingArray, salvagingRecord } from './zod-salvage'
 
 // ─── Terminal pane layout (recursive) ───────────────────────────────
@@ -312,6 +313,7 @@ export const workspaceSessionStateSchema: z.ZodType<WorkspaceSessionState> = z.o
     'terminalPtyIncarnationsByPaneKey',
     salvagingRecord(z.string(), z.string().min(1).max(128))
   ),
+  terminalPtyOwnersByPaneKey: terminalPtyOwnersByPaneKeySchema,
   terminalTopologyRevisionByRepoId: salvagedOptional(
     'terminalTopologyRevisionByRepoId',
     salvagingRecord(z.string(), z.number().int().nonnegative())

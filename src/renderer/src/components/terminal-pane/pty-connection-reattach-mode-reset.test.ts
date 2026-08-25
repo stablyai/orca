@@ -424,10 +424,8 @@ describe('connectPanePty', () => {
     })
   })
 
-  it('applies the fresh-shell reset when a spawn is answered with a cold-restore reattach', async () => {
-    // Why: main can answer a *spawn* with an adopted session, so the reattach handler
-    // is reachable by a second door that skips the restored-session path entirely. The
-    // cold-restore signal has to survive that door too, or #12101 returns on it.
+  it('does not spawn a replacement shell when reattach ownership is unverifiable', async () => {
+    // Unknown ownership must not turn an adopted pane into a fresh shell.
     const { connectPanePty } = await import('./pty-connection')
     const transport = createMockTransport('tab-pty')
     let activePtyId = 'tab-pty'
@@ -464,7 +462,7 @@ describe('connectPanePty', () => {
       connectPanePty(pane as never, manager as never, deps as never)
       await flushAsyncTicks(30)
 
-      expect(transport.connect).toHaveBeenCalledTimes(2)
+      expect(transport.connect).toHaveBeenCalledTimes(1)
       expect(transport.connect.mock.calls[0]?.[0]?.sessionId).toBe('tab-pty')
       expect(transport.connect.mock.calls[1]?.[0]?.sessionId).toBeUndefined()
       const writes = (pane.terminal.write as ReturnType<typeof vi.fn>).mock.calls.map(
@@ -472,10 +470,8 @@ describe('connectPanePty', () => {
       )
       const output = writes.join('')
       const snapshotIndex = output.indexOf('\x1b[?1003h\x1b[?1006h\x1b[?2004huser@host ~ $ ')
-      const resetIndex = output.indexOf(POST_REPLAY_MODE_RESET)
-      expect(snapshotIndex).toBeGreaterThanOrEqual(0)
-      expect(resetIndex).toBeGreaterThan(snapshotIndex)
-      expect(writes).toContain(POST_REPLAY_MODE_RESET)
+      expect(snapshotIndex).toBe(-1)
+      expect(writes).not.toContain(POST_REPLAY_MODE_RESET)
       expect(writes).not.toContain(POST_REPLAY_LIVE_AGENT_REATTACH_RESET)
     })
   })

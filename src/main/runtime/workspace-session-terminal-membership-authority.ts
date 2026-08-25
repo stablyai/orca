@@ -287,6 +287,25 @@ export function rebaseWorkspaceSessionTerminalMembership(
       : {})
   }
   return rebasedMembership
-    ? { ...next, terminalPtyIncarnationsByPaneKey: rebaseIncarnationBindings(next, prior) }
+    ? {
+        ...next,
+        terminalPtyIncarnationsByPaneKey: rebaseIncarnationBindings(next, prior),
+        terminalPtyOwnersByPaneKey: rebaseOwnerBindings(next, prior)
+      }
     : next
+}
+
+function rebaseOwnerBindings(
+  session: WorkspaceSessionState,
+  prior: WorkspaceSessionState
+): WorkspaceSessionState['terminalPtyOwnersByPaneKey'] {
+  const retainedIncarnations = rebaseIncarnationBindings(session, prior) ?? {}
+  const merged = { ...session.terminalPtyOwnersByPaneKey, ...prior.terminalPtyOwnersByPaneKey }
+  return Object.fromEntries(
+    Object.entries(merged).filter(
+      ([paneKey, owner]) =>
+        retainedIncarnations[paneKey] !== undefined &&
+        owner.sessionIncarnationId === retainedIncarnations[paneKey]
+    )
+  )
 }

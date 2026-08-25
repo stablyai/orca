@@ -1,4 +1,8 @@
 import { isRuntimeOwnedSshTargetId } from '../../../../shared/execution-host'
+import {
+  isTerminalPaneOwnerUnverified,
+  isTerminalSessionExited
+} from '../../../../shared/terminal-pane-owner-verdict'
 import { extractIpcErrorMessage } from '@/lib/ipc-error'
 import { ensurePtyDispatcher } from './pty-dispatcher'
 import {
@@ -69,10 +73,16 @@ export async function connectIpcPty(
       return
     }
     const spawnResult = await spawnIpcPty(transportOptions, options, admittedSessionId)
-    const retireFreshSpawn = async (): Promise<void> => {
+    const retireFreshSpawn = async (): Promise<boolean> => {
       if (!spawnResult.isReattach && !spawnResult.coldRestore) {
-        await window.api.pty.kill(spawnResult.id)
+        try {
+          await window.api.pty.kill(spawnResult.id)
+        } catch (error) {
+          context.getCallbacks().onError?.(error instanceof Error ? error.message : String(error))
+          return false
+        }
       }
+      return true
     }
 
     if (context.isDestroyed()) {
@@ -80,8 +90,7 @@ export async function connectIpcPty(
       return
     }
     if (options.admitPtyId && !options.admitPtyId(spawnResult.id)) {
-      await retireFreshSpawn()
-      return spawnResult
+      return (await retireFreshSpawn()) ? spawnResult : undefined
     }
     if (spawnResult.isReattach && !admittedSessionId) {
       context.getCallbacks().onReattachDetermined?.()
@@ -118,6 +127,13 @@ function handleConnectError(
     error,
     error instanceof Error ? error.message : String(error)
   )
+  if (options.sessionId && (isTerminalSessionExited(error) || isTerminalSessionExited(message))) {
+    return { id: options.sessionId, exitedBeforeAttach: true }
+  }
+  if (options.sessionId && isTerminalPaneOwnerUnverified(message)) {
+    context.getCallbacks().onError?.(message)
+    return { id: options.sessionId, ownerUnverifiable: true }
+  }
   if (
     connectionId &&
     options.sessionId &&
@@ -127,7 +143,11 @@ function handleConnectError(
     return { id: options.sessionId, sessionExpired: true }
   }
   if (message.includes('was explicitly killed')) {
-    return undefined
+    return options.sessionId ? { id: options.sessionId, exitedBeforeAttach: true } : undefined
+  }
+  if (options.sessionId) {
+    context.getCallbacks().onError?.(message)
+    throw error
   }
   if (connectionId && message.includes('No PTY provider for connection')) {
     if (!isRuntimeOwnedSshTargetId(connectionId)) {

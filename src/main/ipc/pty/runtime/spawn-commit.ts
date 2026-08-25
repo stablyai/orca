@@ -69,7 +69,8 @@ export async function commitRuntimePtySpawn(ctx: RuntimePtySpawnState) {
       {
         tabId: owner.surface.tabId,
         leafId: owner.surface.leafId,
-        ...(ctx.result.incarnationId ? { incarnationId: ctx.result.incarnationId } : {})
+        ...(ctx.result.incarnationId ? { incarnationId: ctx.result.incarnationId } : {}),
+        ...(ctx.result.ownerIdentity ? { ownerIdentity: ctx.result.ownerIdentity } : {})
       }
     )
     if (!args.connectionId) {
@@ -154,6 +155,7 @@ export async function commitRuntimePtySpawn(ctx: RuntimePtySpawnState) {
         ptyId: ctx.result.id,
         hostAdmittedMembership: true,
         ...(ctx.result.incarnationId ? { incarnationId: ctx.result.incarnationId } : {}),
+        ...(ctx.result.ownerIdentity ? { ownerIdentity: ctx.result.ownerIdentity } : {}),
         ...(ctx.cwd ? { startupCwd: ctx.cwd } : {}),
         ...(ctx.hostSessionBinding.expectedSourceBinding
           ? { expectedSourceBinding: ctx.hostSessionBinding.expectedSourceBinding }
@@ -204,7 +206,8 @@ export async function commitRuntimePtySpawn(ctx: RuntimePtySpawnState) {
         ? {
             tabId: args.tabId,
             leafId: ctx.metadataLeafId,
-            ...(ctx.result.incarnationId ? { incarnationId: ctx.result.incarnationId } : {})
+            ...(ctx.result.incarnationId ? { incarnationId: ctx.result.incarnationId } : {}),
+            ...(ctx.result.ownerIdentity ? { ownerIdentity: ctx.result.ownerIdentity } : {})
           }
         : undefined,
       !args.connectionId

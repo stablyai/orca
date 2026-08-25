@@ -64,8 +64,10 @@ export class DaemonPtyAdapter extends DaemonPtyDaemonRecovery implements IPtyPro
           fact: event.payload
         })
       } else if (event.event === 'exit') {
+        const directPendingOperations =
+          this.pendingSpawnOperationsBySessionId.get(event.sessionId) ?? new Set()
         const pendingOperations = new Set([
-          ...(this.pendingSpawnOperationsBySessionId.get(event.sessionId) ?? []),
+          ...directPendingOperations,
           ...this.pendingClaimSpawnOperations
         ])
         for (const operation of pendingOperations) {
@@ -80,10 +82,14 @@ export class DaemonPtyAdapter extends DaemonPtyDaemonRecovery implements IPtyPro
           operation.exitsBySessionId.set(event.sessionId, exits)
         }
         const currentIncarnationId = this.sessionIncarnations.get(event.sessionId)
+        const acceptsUnroutedExit =
+          directPendingOperations.size > 0 &&
+          [...directPendingOperations].every((operation) => operation.acceptsUnroutedExit)
         if (
-          event.payload.incarnationId &&
-          currentIncarnationId &&
-          event.payload.incarnationId !== currentIncarnationId
+          !event.payload.incarnationId ||
+          (currentIncarnationId && event.payload.incarnationId !== currentIncarnationId) ||
+          (!acceptsUnroutedExit &&
+            !this.hasExactSessionAuthority(event.sessionId, event.payload.incarnationId))
         ) {
           return
         }
@@ -93,7 +99,10 @@ export class DaemonPtyAdapter extends DaemonPtyDaemonRecovery implements IPtyPro
         this.pausedProducerSessionIds.delete(event.sessionId)
         this.producerResumesOwedOnReconnect.delete(event.sessionId)
         this.backgroundedSessionIds.delete(event.sessionId)
-        if (!this.sleepRestoreSessionIds.has(event.sessionId)) {
+        const preservesRestorableAuthority =
+          this.sleepRestoreSessionIds.has(event.sessionId) ||
+          this.historyPreservingStopSessionIds.has(event.sessionId)
+        if (!preservesRestorableAuthority) {
           this.coldRestoreCache.delete(event.sessionId)
         }
         this.sessionsNeedingFullCheckpoint.delete(event.sessionId)
@@ -111,7 +120,10 @@ export class DaemonPtyAdapter extends DaemonPtyDaemonRecovery implements IPtyPro
         }
         this.initialCwds.delete(event.sessionId)
         this.wslDistrosBySessionId.delete(event.sessionId)
-        this.sessionIncarnations.delete(event.sessionId)
+        if (!preservesRestorableAuthority) {
+          this.sessionIncarnations.delete(event.sessionId)
+          this.sessionOwnerIdentities.delete(event.sessionId)
+        }
         // oxlint-disable-next-line unicorn/no-useless-spread -- copy-safe: listeners may unsubscribe during iteration
         for (const listener of [...this.exitListeners]) {
           listener({

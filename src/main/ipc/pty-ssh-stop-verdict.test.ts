@@ -101,12 +101,12 @@ describe('stopping a PTY whose SSH provider is unregistered', () => {
     deletePtyOwnership('ssh-detached-pty')
   })
 
-  it('reports an unconfirmed exact stop instead of a fabricated teardown', async () => {
+  it('preserves runtime ownership when an exact stop cannot reach its provider', async () => {
     setPtyOwnership('ssh-detached-stop', 'ssh-dropped')
     const { controller, runtime } = installController()
 
     await expect(controller.stopAndWait('ssh-detached-stop')).resolves.toBe(false)
-    expect(runtime.onPtyExit).toHaveBeenCalledWith('ssh-detached-stop', -1, undefined)
+    expect(runtime.onPtyExit).not.toHaveBeenCalled()
     expect(runtime.markPtyLivenessUnverifiable).toHaveBeenCalledWith(
       'ssh-detached-stop',
       expect.stringContaining('SSH')
@@ -230,7 +230,7 @@ describe('stopping a PTY whose SSH provider is unregistered', () => {
           'relay disconnected during kill'
         )
       )
-      expect(runtime.onPtyExit).toHaveBeenCalledWith(ptyId, -1, undefined)
+      expect(runtime.onPtyExit).not.toHaveBeenCalled()
     } finally {
       deletePtyOwnership(ptyId)
       unregisterSshPtyProvider(connectionId)

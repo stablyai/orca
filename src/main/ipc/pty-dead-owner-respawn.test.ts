@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { setupPtyIpcSuite } from './pty-ipc-test-harness'
 import { makePaneKey } from '../../shared/stable-pane-id'
 import { registerPtyHandlers, setLocalPtyProvider } from './pty'
+import { TerminalSessionExitedError } from '../daemon/daemon-errors'
 
 vi.mock('electron', () => import('./pty-ipc-mock-registry').then((m) => m.electronModuleMock()))
 vi.mock('fs', () => import('./pty-ipc-mock-registry').then((m) => m.fsModuleMock()))
@@ -59,7 +60,7 @@ describe('registerPtyHandlers', () => {
     const providerSpawn = vi.fn(
       async (options: { attachOnly?: boolean; command?: string; sessionId?: string }) => {
         if (options.attachOnly) {
-          throw new Error('Session not found: pty-proven-absent-owner')
+          throw new TerminalSessionExitedError('pty-proven-absent-owner')
         }
         return { id: 'pty-fresh-proven', incarnationId: 'inc-fresh-proven' }
       }
@@ -178,7 +179,7 @@ describe('registerPtyHandlers', () => {
     const providerSpawn = vi.fn(
       async (options: { attachOnly?: boolean; command?: string; sessionId?: string }) => {
         if (options.attachOnly) {
-          throw new Error('Session not found: pty-probe-blip-owner')
+          throw new TerminalSessionExitedError('pty-probe-blip-owner')
         }
         return { id: 'pty-fresh-probe-blip', incarnationId: 'inc-fresh-probe-blip' }
       }
@@ -299,7 +300,7 @@ describe('registerPtyHandlers', () => {
     const providerSpawn = vi.fn(
       async (options: { attachOnly?: boolean; command?: string; sessionId?: string }) => {
         if (options.attachOnly) {
-          throw new Error('Session not found: pty-already-retired-owner')
+          throw new TerminalSessionExitedError('pty-already-retired-owner')
         }
         return { id: 'pty-fresh-already-retired', incarnationId: 'inc-fresh-already-retired' }
       }

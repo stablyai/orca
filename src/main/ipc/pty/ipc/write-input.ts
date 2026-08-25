@@ -177,11 +177,11 @@ export function createPtyWriteInput(deps: {
     if (ptyOwnership.get(args.id) !== null) {
       return false
     }
-    const provider = tryGetProviderForPty(args.id)
-    if (!provider?.hasPty?.(args.id)) {
-      return false
-    }
     try {
+      const provider = tryGetProviderForPty(args.id)
+      if (!provider?.hasPty?.(args.id)) {
+        return false
+      }
       const now = performance.now()
       lastInputAtByPty.set(args.id, now)
       interactiveOutputCharsByPty.set(args.id, 0)

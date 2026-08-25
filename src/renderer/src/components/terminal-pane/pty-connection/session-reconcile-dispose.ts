@@ -61,7 +61,12 @@ export function installSessionReconcileDispose(session: ConnectPanePtySession): 
 
     let livenessPromise: Promise<boolean | null>
     try {
-      livenessPromise = Promise.resolve(hasPty(requestedPtyId))
+      livenessPromise = Promise.resolve(
+        hasPty(requestedPtyId, {
+          paneKey: session.cacheKey,
+          worktreeId: session.deps.worktreeId
+        })
+      )
     } catch {
       return
     }

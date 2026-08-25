@@ -59,7 +59,7 @@ describe('startup ordering', () => {
     expect(sweepEnd).toBeGreaterThan(sweepStart)
     expect(sweep).toContain('const provider = getDaemonProvider()')
     expect(sweep).toContain('if (!provider) {')
-    expect(sweep).toContain('provider.probePtyLiveness(ptyId)')
+    expect(sweep).toContain('provider.probePtyLiveness(ptyId, expectedIncarnationId)')
   })
 
   it('bounds WSL reconciliation before serve RPC while leaving desktop startup independent', () => {

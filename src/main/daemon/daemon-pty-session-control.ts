@@ -1,21 +1,19 @@
 import type { ColdRestorePayload } from './cold-restore-payload-cache'
-import { isUnknownRequestTypeError } from './daemon-endpoint-errors'
-import { GET_SIZE_PROTOCOL_VERSION } from './daemon-protocol-version'
 import { FinalCheckpointWaitExpiredError } from './daemon-pty-lifecycle-errors'
-import { DaemonPtySessionSpawn } from './daemon-pty-session-spawn'
+import { DaemonPtySessionAuthority } from './daemon-pty-session-authority'
 import { providerSequenceFromCreateOrAttach } from './daemon-pty-provider-sequence'
 import { remainingDaemonRequestTimeoutMs } from './daemon-request-deadline'
 import type { ColdRestoreInfo } from './history-reader'
 import { normalizeWslColdRestoreCwd } from './wsl-cold-restore-cwd'
-import { SessionNotFoundError, type CreateOrAttachResult, type ListSessionsResult } from './types'
+import { SessionNotFoundError, type CreateOrAttachResult } from './types'
 import { resolveSafePtyDefaultCwd } from '../providers/pty-default-cwd'
 import type { PtySpawnResult } from '../providers/types'
 import { PtyWriteUnavailableError } from '../providers/pty-write-unavailable-error'
-export const LIVENESS_PROBE_TIMEOUT_MS = 2_000
+export { LIVENESS_PROBE_TIMEOUT_MS } from './daemon-pty-session-authority'
 
 const MAX_TOMBSTONES = 1000
 
-export abstract class DaemonPtySessionControl extends DaemonPtySessionSpawn {
+export abstract class DaemonPtySessionControl extends DaemonPtySessionAuthority {
   async attach(id: string): Promise<Pick<PtySpawnResult, 'providerSequence'> | void> {
     await this.ensureConnected()
     if (!this.canDelegateBackgroundToDaemon) {
@@ -56,54 +54,32 @@ export abstract class DaemonPtySessionControl extends DaemonPtySessionSpawn {
     return this.activeSessionIds.has(id)
   }
 
-  async probePtyLiveness(id: string): Promise<boolean | null> {
-    try {
-      if (!this.getSizeUnsupported && this.protocolVersion >= GET_SIZE_PROTOCOL_VERSION) {
-        try {
-          const result = await this.client.request<{ size: { cols: number; rows: number } | null }>(
-            'getSize',
-            { sessionId: id },
-            LIVENESS_PROBE_TIMEOUT_MS
-          )
-          return result.size !== null
-        } catch (error) {
-          // Why the capability probe rather than the version alone: `getSize` shipped into an
-          // already-released protocol without a bump, so a daemon can report a version that
-          // implies support and still reject the request. Ask what it can do, not what its
-          // number implies — and remember the answer so later probes skip the dead round trip.
-          if (!isUnknownRequestTypeError(error)) {
-            throw error
-          }
-          this.getSizeUnsupported = true
-        }
-      }
-      // Why: a daemon without `getSize` would otherwise answer `null` forever, and one `null`
-      // makes the whole owner fan-out unprovable — a dead pane could then never be retired.
-      // `listSessions` is the same inventory legacy discovery routes by, and has existed since
-      // the first daemon protocol. Requested directly rather than through `listProcesses` so a
-      // liveness probe does not publish inventory audit observations as a side effect; both
-      // rethrow on failure, so either way a dead socket stays `null` instead of reading absent.
-      const { sessions } = await this.client.request<ListSessionsResult>(
-        'listSessions',
-        undefined,
-        LIVENESS_PROBE_TIMEOUT_MS
-      )
-      return sessions.some((session) => session.sessionId === id && session.isAlive)
-    } catch {
-      return null
-    }
-  }
-
   write(id: string, data: string): boolean {
     const recoverable = this.prepareWrite(id)
-    return this.finishWrite(id, this.client.notify('write', { sessionId: id, data }), recoverable)
+    return this.finishWrite(
+      id,
+      this.client.notify('write', {
+        sessionId: id,
+        data,
+        ...(this.sessionIncarnations.get(id)
+          ? { expectedIncarnationId: this.sessionIncarnations.get(id) }
+          : {})
+      }),
+      recoverable
+    )
   }
 
   async writeWithSettlement(id: string, data: string): Promise<boolean> {
     const recoverable = this.prepareWrite(id)
     return this.finishWrite(
       id,
-      await this.client.notifyWithSettlement('write', { sessionId: id, data }),
+      await this.client.notifyWithSettlement('write', {
+        sessionId: id,
+        data,
+        ...(this.sessionIncarnations.get(id)
+          ? { expectedIncarnationId: this.sessionIncarnations.get(id) }
+          : {})
+      }),
       recoverable
     )
   }
@@ -138,7 +114,14 @@ export abstract class DaemonPtySessionControl extends DaemonPtySessionSpawn {
 
   resize(id: string, cols: number, rows: number): void {
     this.markSessionDirty(id)
-    this.client.notify('resize', { sessionId: id, cols, rows })
+    this.client.notify('resize', {
+      sessionId: id,
+      cols,
+      rows,
+      ...(this.sessionIncarnations.get(id)
+        ? { expectedIncarnationId: this.sessionIncarnations.get(id) }
+        : {})
+    })
   }
 
   pauseProducer(id: string): void {
@@ -185,6 +168,9 @@ export abstract class DaemonPtySessionControl extends DaemonPtySessionSpawn {
     if (opts.keepHistory && this.disconnectOnlyPromise) {
       throw new Error('Cannot keep history after daemon disconnect has started')
     }
+    if (opts.keepHistory) {
+      this.historyPreservingStopSessionIds.add(id)
+    }
     const shutdown = this.withHistorySpawnLock(id, () => this.shutdownWithHistoryLock(id, opts))
     if (!opts.keepHistory) {
       await shutdown
@@ -193,6 +179,9 @@ export abstract class DaemonPtySessionControl extends DaemonPtySessionSpawn {
     this.keepHistoryShutdowns.add(shutdown)
     try {
       await shutdown
+    } catch (error) {
+      this.historyPreservingStopSessionIds.delete(id)
+      throw error
     } finally {
       this.keepHistoryShutdowns.delete(shutdown)
     }
@@ -259,6 +248,11 @@ export abstract class DaemonPtySessionControl extends DaemonPtySessionSpawn {
       remainingDaemonRequestTimeoutMs(opts.deadlineMs)
     )
     this.activeSessionIds.delete(id)
+    if (!opts.keepHistory) {
+      this.historyPreservingStopSessionIds.delete(id)
+      this.sessionIncarnations.delete(id)
+      this.sessionOwnerIdentities.delete(id)
+    }
     this.clearSessionAwaitingDaemonRecovery(id)
     this.dirtySessionVersions.delete(id)
     if (!opts.keepHistory) {
@@ -297,6 +291,7 @@ export abstract class DaemonPtySessionControl extends DaemonPtySessionSpawn {
   }
 
   ackColdRestore(sessionId: string): void {
+    this.historyPreservingStopSessionIds.delete(sessionId)
     this.coldRestoreCache.delete(sessionId)
     this.sleepRestoreSessionIds.delete(sessionId)
   }

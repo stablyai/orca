@@ -62,11 +62,12 @@ function createAdapter(
     spawn: vi.fn(async (opts: PtySpawnOptions): Promise<PtySpawnResult> => {
       const id = opts.sessionId ?? `${label}-new`
       sessions.push(id)
-      return { id }
+      return { id, incarnationId: `${label}:${id}` }
     }),
     listProcesses: vi.fn(async () =>
       sessions.map((id) => ({
         id,
+        incarnationId: `${label}:${id}`,
         cwd: '',
         title: label
       }))
@@ -555,14 +556,14 @@ describe('DaemonPtyRouter', () => {
     expect(current.hasPty).not.toHaveBeenCalledWith('legacy-session')
   })
 
-  it('discovers an unmapped live session from one coalesced inventory', async () => {
+  it('does not scan adapters to discover an unmapped liveness owner', async () => {
     const current = createAdapter('current')
     const legacy = createAdapter('legacy', ['surviving-session'])
     const router = new DaemonPtyRouter({ current, legacy: [legacy] })
 
-    await expect(router.probePtyLiveness('surviving-session')).resolves.toBe(true)
-    expect(current.listProcesses).toHaveBeenCalledOnce()
-    expect(legacy.listProcesses).toHaveBeenCalledOnce()
+    await expect(router.probePtyLiveness('surviving-session')).resolves.toBeNull()
+    expect(current.listProcesses).not.toHaveBeenCalled()
+    expect(legacy.listProcesses).not.toHaveBeenCalled()
     expect(current.probePtyLiveness).not.toHaveBeenCalled()
     expect(legacy.probePtyLiveness).not.toHaveBeenCalled()
   })
@@ -574,16 +575,18 @@ describe('DaemonPtyRouter', () => {
     const router = new DaemonPtyRouter({ current, legacy: [legacy] })
 
     await expect(router.probePtyLiveness('unknown-session')).resolves.toBeNull()
+    expect(current.listProcesses).not.toHaveBeenCalled()
+    expect(legacy.listProcesses).not.toHaveBeenCalled()
   })
 
-  it('reports absence after every possible daemon owner returns a complete inventory', async () => {
+  it('does not treat complete current-daemon inventory as proof about a missing owner', async () => {
     const current = createAdapter('current')
     const legacy = createAdapter('legacy')
     const router = new DaemonPtyRouter({ current, legacy: [legacy] })
 
-    await expect(router.probePtyLiveness('missing-session')).resolves.toBe(false)
-    expect(current.listProcesses).toHaveBeenCalledOnce()
-    expect(legacy.listProcesses).toHaveBeenCalledOnce()
+    await expect(router.probePtyLiveness('missing-session')).resolves.toBeNull()
+    expect(current.listProcesses).not.toHaveBeenCalled()
+    expect(legacy.listProcesses).not.toHaveBeenCalled()
     expect(current.spawn).not.toHaveBeenCalled()
     expect(legacy.spawn).not.toHaveBeenCalled()
   })
@@ -619,10 +622,13 @@ describe('DaemonPtyRouter', () => {
     await router.discoverLegacySessions()
 
     await expect(router.probePtyLiveness('legacy-session')).resolves.toBe(true)
-    expect(legacy.probePtyLiveness).toHaveBeenCalledExactlyOnceWith('legacy-session')
+    expect(legacy.probePtyLiveness).toHaveBeenCalledExactlyOnceWith(
+      'legacy-session',
+      'legacy:legacy-session'
+    )
   })
 
-  it('keeps consulting a legacy daemon whose inventory listing failed', async () => {
+  it('does not rescan a failed legacy discovery for an unmapped probe', async () => {
     const current = createAdapter('current')
     const legacy = createAdapter('legacy', ['legacy-session'])
     vi.mocked(legacy.listProcesses).mockRejectedValue(new Error('wedged'))
@@ -630,9 +636,8 @@ describe('DaemonPtyRouter', () => {
     const router = new DaemonPtyRouter({ current, legacy: [legacy] })
     await router.discoverLegacySessions()
 
-    // Without an inventory nothing proves the legacy daemon doesn't own this id.
     await expect(router.probePtyLiveness('unknown-session')).resolves.toBeNull()
-    expect(legacy.listProcesses).toHaveBeenCalledTimes(2)
+    expect(legacy.listProcesses).toHaveBeenCalledOnce()
     expect(legacy.probePtyLiveness).not.toHaveBeenCalled()
   })
 
@@ -752,7 +757,7 @@ describe('DaemonPtyRouter', () => {
     expect(current.listProcesses).toHaveBeenCalledTimes(3)
   })
 
-  it('pins colliding unmapped legacy ids falling through to the current daemon', async () => {
+  it('never falls an unmapped colliding id through to the current daemon', async () => {
     const sessionId = 'cross-generation-collision'
     const current = createAdapter('current', [sessionId])
     const legacy = createAdapter('legacy', [sessionId])
@@ -761,9 +766,11 @@ describe('DaemonPtyRouter', () => {
     const router = new DaemonPtyRouter({ current, legacy: [legacy] })
 
     await router.discoverLegacySessions()
-    router.write(sessionId, 'misrouted\n')
+    expect(() => router.write(sessionId, 'misrouted\n')).toThrow(
+      TerminalSessionOwnerUnverifiedError
+    )
 
-    expect(current.write).toHaveBeenCalledWith(sessionId, 'misrouted\n')
+    expect(current.write).not.toHaveBeenCalled()
     expect(legacy.write).not.toHaveBeenCalled()
     warn.mockRestore()
   })

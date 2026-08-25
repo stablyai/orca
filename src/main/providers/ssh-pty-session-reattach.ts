@@ -1,11 +1,6 @@
 import type { SshChannelMultiplexer } from '../ssh/ssh-channel-multiplexer'
 import { isPtyIncarnationId, type PtyIncarnationId } from '../../shared/pty-incarnation'
-import {
-  SSH_PTY_IDENTITY_MISMATCH_ERROR,
-  SSH_SESSION_EXPIRED_ERROR,
-  isSshPtyIdentityMismatchError,
-  isSshPtyNotFoundError
-} from './ssh-pty-errors'
+import { isSshPtyNotFoundError } from './ssh-pty-errors'
 import { toAppSshPtyId, toRelaySshPtyId } from './ssh-pty-id'
 import type { PtySpawnOptions, PtySpawnResult } from './types'
 import type { SshPtySpawnExitRaceTracker } from './ssh-pty-spawn-exit-race'
@@ -18,6 +13,11 @@ import {
   type PtySourceReceivingActivation
 } from '../../shared/pty-source-receiving-activation'
 import type { SshPtyReceivingActivationLease } from './ssh-pty-notification-routing'
+import {
+  TerminalSessionExitedError,
+  TerminalSessionOwnerUnverifiedError
+} from '../daemon/daemon-errors'
+import { isTerminalSessionExited } from '../../shared/terminal-pane-owner-verdict'
 
 export type SshPtyAttachResult = {
   replay?: string
@@ -83,9 +83,16 @@ export async function requestSshPtyAttach(args: {
     activation: PtySourceReceivingActivation
   ) => SshPtyReceivingActivationLease
   rememberPtyIncarnation?: (relayPtyId: string, incarnationId: unknown) => void
+  expectedIncarnationId?: PtyIncarnationId
 }): Promise<SshPtyAttachResult> {
   let activationLease: SshPtyReceivingActivationLease | undefined
   const installFromResult = (result: SshPtyAttachResult): void => {
+    if (
+      args.expectedIncarnationId !== undefined &&
+      result.incarnationId !== args.expectedIncarnationId
+    ) {
+      throw new TerminalSessionOwnerUnverifiedError(args.relayPtyId)
+    }
     if (!activationLease && result.sourceActivation && args.installSourceActivation) {
       activationLease = args.installSourceActivation(args.relayPtyId, result.sourceActivation)
     }
@@ -202,8 +209,12 @@ export async function reattachSshPtySession(args: {
         // answers "you already have this", and the pane stays blank until new output arrives.
         requireReplay: true,
         ...(expectedPaneKey ? { expectedPaneKey } : {}),
-        ...(expectedTabId ? { expectedTabId } : {})
+        ...(expectedTabId ? { expectedTabId } : {}),
+        ...(args.options.expectedIncarnationId
+          ? { expectedIncarnationId: args.options.expectedIncarnationId }
+          : {})
       },
+      expectedIncarnationId: args.options.expectedIncarnationId,
       installSourceActivation: args.installSourceActivation,
       rememberPtyIncarnation: args.rememberPtyIncarnation
     })
@@ -224,11 +235,11 @@ export async function reattachSshPtySession(args: {
   } catch (error) {
     // Why: an expired relay lease must be surfaced distinctly so the renderer clears its binding.
     console.warn(`[ssh-pty] pty.attach FAILED for ${args.sessionId}:`, error)
+    if (isTerminalSessionExited(error)) {
+      throw new TerminalSessionExitedError(relaySessionId)
+    }
     if (isSshPtyNotFoundError(error)) {
-      const mismatchMarker = isSshPtyIdentityMismatchError(error)
-        ? ` ${SSH_PTY_IDENTITY_MISMATCH_ERROR}`
-        : ''
-      throw new Error(`${SSH_SESSION_EXPIRED_ERROR}: ${relaySessionId}${mismatchMarker}`)
+      throw new TerminalSessionOwnerUnverifiedError(relaySessionId)
     }
     throw error
   }
@@ -279,9 +290,8 @@ export async function reattachSshPtySessionForSpawn(
   try {
     result = await reattachSshPtySessionWithExitFence(args)
     if (result.sourceRecovery?.status === 'restoreRequired') {
-      throw new Error(
-        `${SSH_SESSION_EXPIRED_ERROR}: ${toRelaySshPtyId(args.connectionId, result.id)}`
-      )
+      // The exact PTY attached successfully; missing replay continuity cannot prove process exit.
+      throw new TerminalSessionOwnerUnverifiedError(toRelaySshPtyId(args.connectionId, result.id))
     }
     args.acceptLivePty(result.id)
     result.sourceActivationLease?.commit()
