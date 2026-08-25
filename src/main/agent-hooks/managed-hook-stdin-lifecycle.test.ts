@@ -209,11 +209,11 @@ async function generatePosixScripts(): Promise<Map<string, string>> {
   return scripts
 }
 
-function withPlatform<T>(platform: NodeJS.Platform, run: () => T): T {
+async function withPlatformAsync<T>(platform: NodeJS.Platform, run: () => Promise<T>): Promise<T> {
   const original = Object.getOwnPropertyDescriptor(process, 'platform')
   Object.defineProperty(process, 'platform', { configurable: true, value: platform })
   try {
-    return run()
+    return await run()
   } finally {
     if (original) {
       Object.defineProperty(process, 'platform', original)
@@ -222,7 +222,7 @@ function withPlatform<T>(platform: NodeJS.Platform, run: () => T): T {
 }
 
 describe('Windows managed hook stdin structure', () => {
-  it('exits immediately when Orca env is missing and keeps drain for other failures', () => {
+  it('exits immediately when Orca env is missing and keeps drain for other failures', async () => {
     const home = mkdtempSync(join(tmpdir(), 'orca-hook-stdin-windows-'))
     homedirMock.mockReturnValue(home)
     const previousGrokHome = process.env.GROK_HOME
@@ -230,9 +230,9 @@ describe('Windows managed hook stdin structure', () => {
     delete process.env.GROK_HOME
     delete process.env.KIMI_CODE_HOME
     try {
-      withPlatform('win32', () => {
+      await withPlatformAsync('win32', async () => {
         for (const entry of LOCAL_INSTALLERS) {
-          expect(entry.install().state, `${entry.agent} install status`).toBe('installed')
+          expect((await entry.install()).state, `${entry.agent} install status`).toBe('installed')
         }
       })
       const hooksDir = join(home, '.orca', 'agent-hooks')
@@ -317,7 +317,7 @@ describe('Windows managed hook stdin structure', () => {
       try {
         const gitBash = findGitBash()
         for (const entry of LOCAL_INSTALLERS) {
-          expect(entry.install().state, `${entry.agent} install status`).toBe('installed')
+          expect((await entry.install()).state, `${entry.agent} install status`).toBe('installed')
         }
         const hooksDir = join(home, '.orca', 'agent-hooks')
         const mainScripts = readdirSync(hooksDir).filter(

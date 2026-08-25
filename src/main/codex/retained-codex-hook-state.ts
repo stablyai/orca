@@ -1,20 +1,22 @@
 import type { AgentHookInstallStatus } from '../../shared/agent-hook-types'
 
 type RetainedCodexHookService = {
-  install: (runtimeHomePath: string) => AgentHookInstallStatus
-  refreshRuntimeUserHooks: (runtimeHomePath: string) => AgentHookInstallStatus
+  install: (runtimeHomePath: string) => Promise<AgentHookInstallStatus> | AgentHookInstallStatus
+  refreshRuntimeUserHooks: (
+    runtimeHomePath: string
+  ) => Promise<AgentHookInstallStatus> | AgentHookInstallStatus
 }
 
-export function reconcileRetainedCodexHookHomes(args: {
+export async function reconcileRetainedCodexHookHomes(args: {
   hookService: RetainedCodexHookService
   hooksEnabled: boolean
   runtimeHomePaths: readonly string[]
-}): void {
+}): Promise<void> {
   for (const runtimeHomePath of args.runtimeHomePaths) {
     try {
       const status = args.hooksEnabled
-        ? args.hookService.install(runtimeHomePath)
-        : args.hookService.refreshRuntimeUserHooks(runtimeHomePath)
+        ? await args.hookService.install(runtimeHomePath)
+        : await args.hookService.refreshRuntimeUserHooks(runtimeHomePath)
       if (status.state === 'error') {
         console.warn('[codex-hook-service] failed to reconcile retained Codex home', status.detail)
       }

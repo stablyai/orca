@@ -1,6 +1,7 @@
 import { spawnSync } from 'node:child_process'
 import { existsSync } from 'node:fs'
 import { join } from 'node:path'
+import { Worker } from 'node:worker_threads'
 import {
   CodexAppServerTimeoutError,
   CodexAppServerUnsupportedError,
@@ -28,6 +29,8 @@ const GRANT_ENTRY_FILE_NAME = 'codex-app-server-grant-entry.js'
 // (and its result envelope) win the race; the margin only reaps a hung entry.
 const GRANT_ENTRY_TIMEOUT_MARGIN_MS = 5_000
 const GRANT_ENTRY_MAX_BUFFER_BYTES = 16 * 1024 * 1024
+const GRANT_WORKER_TIMEOUT_MARGIN_MS = 2_000
+const GRANT_WORKER_FILE_NAME = 'codex-app-server-grant-worker-entry.js'
 
 export function resolveCodexGrantEntryPath(
   pathExists: (candidate: string) => boolean = existsSync,
@@ -58,6 +61,36 @@ export type RunGrantSessionSyncOptions = {
   timeoutMarginMs?: number
 }
 
+export type RunGrantSessionOptions = RunGrantSessionSyncOptions & {
+  workerPath?: string
+  workerFactory?: (workerPath: string, workerData: CodexGrantWorkerRequest) => Worker
+}
+
+export type CodexGrantWorkerRequest = {
+  request: CodexAppServerEntryRequest
+  options: RunGrantSessionSyncOptions
+}
+
+type CodexGrantWorkerResponse =
+  | { ok: true; result: CodexAppServerEntryResult }
+  | { ok: false; errorName: string; message: string; unsupported?: boolean }
+
+export function resolveCodexGrantWorkerPath(
+  pathExists: (candidate: string) => boolean = existsSync,
+  moduleDir = __dirname
+): string | null {
+  const toUnpackedDir = (dir: string): string =>
+    dir.replace(/([\\/])app\.asar(?=([\\/]|$))/, '$1app.asar.unpacked')
+  const baseDirs = [moduleDir, join(moduleDir, '..')].map(toUnpackedDir)
+  for (const baseDir of baseDirs) {
+    const candidate = join(baseDir, 'codex', GRANT_WORKER_FILE_NAME)
+    if (pathExists(candidate)) {
+      return candidate
+    }
+  }
+  return null
+}
+
 /**
  * Blocking wrapper for the grant session. Hook install/refresh is synchronous
  * launch prep (pane launch must not proceed until trust is settled), and a
@@ -67,11 +100,28 @@ export type RunGrantSessionSyncOptions = {
  * always reaps the entry; a killed entry closes the codex child's stdin,
  * which makes codex app-server exit on EOF.
  */
+export function runCodexHookTrustGrantSession(
+  request: CodexHookTrustGrantRequest,
+  options: RunGrantSessionOptions = {}
+): Promise<CodexHookTrustGrantSessionResult> {
+  return runCodexAppServerEntryInWorker(
+    request,
+    options
+  ) as Promise<CodexHookTrustGrantSessionResult>
+}
+
 export function runCodexHookTrustGrantSessionSync(
   request: CodexHookTrustGrantRequest,
   options: RunGrantSessionSyncOptions = {}
 ): CodexHookTrustGrantSessionResult {
   return runCodexAppServerEntrySync(request, options) as CodexHookTrustGrantSessionResult
+}
+
+export function runCodexUserHookTrustRebaseSession(
+  request: CodexUserHookTrustRebaseRequest,
+  options: RunGrantSessionOptions = {}
+): Promise<CodexUserHookTrustRebaseResult> {
+  return runCodexAppServerEntryInWorker(request, options) as Promise<CodexUserHookTrustRebaseResult>
 }
 
 export function runCodexUserHookTrustRebaseSessionSync(
@@ -81,7 +131,7 @@ export function runCodexUserHookTrustRebaseSessionSync(
   return runCodexAppServerEntrySync(request, options) as CodexUserHookTrustRebaseResult
 }
 
-function runCodexAppServerEntrySync(
+export function runCodexAppServerEntrySync(
   request: CodexAppServerEntryRequest,
   options: RunGrantSessionSyncOptions
 ): CodexAppServerEntryResult {
@@ -141,4 +191,86 @@ function runCodexAppServerEntrySync(
     throw new Error(envelope.message)
   }
   return envelope.result
+}
+
+function runCodexAppServerEntryInWorker(
+  request: CodexAppServerEntryRequest,
+  options: RunGrantSessionOptions
+): Promise<CodexAppServerEntryResult> {
+  const workerPath = options.workerPath ?? resolveCodexGrantWorkerPath()
+  if (!workerPath) {
+    return Promise.reject(new Error('codex trust-grant worker bundle not found'))
+  }
+  const workerData: CodexGrantWorkerRequest = {
+    request,
+    options: {
+      entryPath: options.entryPath,
+      nodeCommand: options.nodeCommand,
+      timeoutMarginMs: options.timeoutMarginMs
+    }
+  }
+  let worker: Worker
+  try {
+    worker = (options.workerFactory ?? ((path, data) => new Worker(path, { workerData: data })))(
+      workerPath,
+      workerData
+    )
+  } catch (error) {
+    return Promise.reject(error)
+  }
+
+  return new Promise((resolve, reject) => {
+    let settled = false
+    const deadlineMs =
+      request.invocation.timeoutMs +
+      (options.timeoutMarginMs ?? GRANT_ENTRY_TIMEOUT_MARGIN_MS) +
+      GRANT_WORKER_TIMEOUT_MARGIN_MS
+    const deadline = setTimeout(() => {
+      finish(() =>
+        reject(
+          new CodexAppServerTimeoutError(
+            `codex trust-grant worker exceeded ${request.invocation.timeoutMs}ms session deadline`
+          )
+        )
+      )
+    }, deadlineMs)
+    deadline.unref?.()
+
+    const finish = (settle: () => void): void => {
+      if (settled) {
+        return
+      }
+      settled = true
+      clearTimeout(deadline)
+      worker.removeAllListeners()
+      void worker.terminate().catch(() => undefined)
+      settle()
+    }
+
+    worker.once('message', (response: CodexGrantWorkerResponse) => {
+      finish(() => {
+        if (response.ok) {
+          resolve(response.result)
+          return
+        }
+        if (response.unsupported) {
+          reject(new CodexAppServerUnsupportedError(response.message))
+          return
+        }
+        if (response.errorName === 'CodexAppServerTimeoutError') {
+          reject(new CodexAppServerTimeoutError(response.message))
+          return
+        }
+        const error = new Error(response.message)
+        error.name = response.errorName
+        reject(error)
+      })
+    })
+    worker.once('error', (error) => finish(() => reject(error)))
+    worker.once('exit', (code) => {
+      if (!settled) {
+        finish(() => reject(new Error(`codex trust-grant worker exited with code ${code}`)))
+      }
+    })
+  })
 }

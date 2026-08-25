@@ -31,6 +31,7 @@
     "../src/main/codex/codex-app-server-capability-signal.ts",
     "../src/main/codex/codex-app-server-client.ts",
     "../src/main/codex/codex-app-server-grant-bridge.ts",
+    "../src/main/codex/codex-hook-transaction-queue.ts",
     "../src/main/codex/codex-app-server-grant-envelope.ts",
     "../src/main/codex/codex-app-server-session.ts",
     "../src/main/codex/codex-config-mirror.ts",

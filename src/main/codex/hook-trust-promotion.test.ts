@@ -130,7 +130,7 @@ function readSystemToml(): string {
 }
 
 describe('codex hook trust write-back promotion', () => {
-  it('mirrors default-home trust when the .codex directory is a symlink', () => {
+  it('mirrors default-home trust when the .codex directory is a symlink', async () => {
     const targetHome = join(tmpHome, 'dotfiles-codex')
     mkdirSync(targetHome)
     symlinkSync(targetHome, systemCodexDir(), process.platform === 'win32' ? 'junction' : 'dir')
@@ -141,7 +141,7 @@ describe('codex hook trust write-back promotion', () => {
       upsertHookTrustEntriesInContent('', [systemEntry])
     )
 
-    expect(new CodexHookService().install().state).toBe('installed')
+    expect((await new CodexHookService().install()).state).toBe('installed')
 
     const runtimeTrust = readHookTrustEntries(join(runtimeHomeDir(), 'config.toml'))
     expect(runtimeTrust.get(computeTrustKey(runtimeUserStopEntry()))?.trustedHash).toBe(
@@ -149,10 +149,10 @@ describe('codex hook trust write-back promotion', () => {
     )
   })
 
-  it('keeps an in-Orca approval of a user hook across launches and promotes it to ~/.codex', () => {
+  it('keeps an in-Orca approval of a user hook across launches and promotes it to ~/.codex', async () => {
     writeSystemUserHook()
     const service = new CodexHookService()
-    service.install()
+    await service.install()
 
     // The mirrored user hook has no system trust yet, so no runtime trust
     // entry exists for it — Codex would show it as pending review.
@@ -163,7 +163,7 @@ describe('codex hook trust write-back promotion', () => {
     simulateCodexApproval(runtimeUserStopEntry())
     const approvedHash = computeTrustedHash(runtimeUserStopEntry())
 
-    service.install()
+    await service.install()
 
     // Approval survives the relaunch instead of being wiped as stale…
     expect(readHookTrustEntries(runtimeTomlPath).get(approvalKey)?.trustedHash).toBe(approvedHash)
@@ -177,15 +177,15 @@ describe('codex hook trust write-back promotion', () => {
     // Steady state: another launch with no external changes rewrites nothing.
     const systemTomlAfterPromotion = readSystemToml()
     const runtimeTomlAfterPromotion = readFileSync(runtimeTomlPath, 'utf-8')
-    service.install()
+    await service.install()
     expect(readSystemToml()).toBe(systemTomlAfterPromotion)
     expect(readFileSync(runtimeTomlPath, 'utf-8')).toBe(runtimeTomlAfterPromotion)
   })
 
-  it('never promotes trust for the Orca-managed status hook into ~/.codex', () => {
+  it('never promotes trust for the Orca-managed status hook into ~/.codex', async () => {
     writeSystemUserHook()
     const service = new CodexHookService()
-    service.install()
+    await service.install()
 
     // Simulate Codex rewriting the managed Stop hook's trust entry (as an
     // approval after hash drift would).
@@ -206,20 +206,20 @@ describe('codex hook trust write-back promotion', () => {
       { hash: 'sha256:codex-corrected-managed-hash' }
     )
 
-    service.install()
+    await service.install()
 
     expect(readSystemToml()).not.toContain(managedCommand)
     expect(readSystemToml()).not.toContain('codex-corrected-managed-hash')
   })
 
-  it('does not resurrect trust the user revoked in ~/.codex/config.toml', () => {
+  it('does not resurrect trust the user revoked in ~/.codex/config.toml', async () => {
     writeSystemUserHook()
     // Pre-trust the hook in the system config, as a terminal Codex session would.
     const systemTomlPath = join(systemCodexDir(), 'config.toml')
     writeFileSync(systemTomlPath, upsertHookTrustEntriesInContent('', [systemUserStopEntry()]))
 
     const service = new CodexHookService()
-    service.install()
+    await service.install()
 
     const runtimeTomlPath = join(runtimeHomeDir(), 'config.toml')
     const approvalKey = computeTrustKey(runtimeUserStopEntry())
@@ -227,19 +227,19 @@ describe('codex hook trust write-back promotion', () => {
 
     // User revokes in the system config; the runtime copy must not win.
     writeFileSync(systemTomlPath, '')
-    service.install()
+    await service.install()
 
     expect(readHookTrustEntries(runtimeTomlPath).get(approvalKey)).toBeUndefined()
     expect(readSystemToml()).not.toContain('[hooks.state.')
   })
 
-  it('promotes an in-Orca disable of a mirrored user hook back to the system config', () => {
+  it('promotes an in-Orca disable of a mirrored user hook back to the system config', async () => {
     writeSystemUserHook()
     const systemTomlPath = join(systemCodexDir(), 'config.toml')
     writeFileSync(systemTomlPath, upsertHookTrustEntriesInContent('', [systemUserStopEntry()]))
 
     const service = new CodexHookService()
-    service.install()
+    await service.install()
 
     // User disables the hook via /hooks inside Orca-launched Codex.
     const runtimeTomlPath = join(runtimeHomeDir(), 'config.toml')
@@ -251,7 +251,7 @@ describe('codex hook trust write-back promotion', () => {
       upsertHookTrustEntriesInContent(runtimeToml, [{ ...runtimeUserStopEntry(), enabled: false }])
     )
 
-    service.install()
+    await service.install()
 
     const systemState = readHookTrustEntries(systemTomlPath).get(
       computeTrustKey(systemUserStopEntry())
@@ -261,17 +261,17 @@ describe('codex hook trust write-back promotion', () => {
     expect(readHookTrustEntries(runtimeTomlPath).get(approvalKey)?.enabled).toBe(false)
   })
 
-  it('carries a Codex-written hash verbatim when it differs from the reproduced hash', () => {
+  it('carries a Codex-written hash verbatim when it differs from the reproduced hash', async () => {
     // Simulates Codex changing its trust hash algorithm: the approval hash in
     // the runtime config no longer matches computeTrustedHash's output.
     writeSystemUserHook()
     const service = new CodexHookService()
-    service.install()
+    await service.install()
 
     const driftedHash = 'sha256:codex-next-gen-hash-orca-cannot-reproduce'
     simulateCodexApproval(runtimeUserStopEntry(), { hash: driftedHash })
 
-    service.install()
+    await service.install()
 
     const runtimeTomlPath = join(runtimeHomeDir(), 'config.toml')
     const approvalKey = computeTrustKey(runtimeUserStopEntry())
@@ -283,24 +283,24 @@ describe('codex hook trust write-back promotion', () => {
     ).toBe(driftedHash)
 
     // And the launch after that still keeps it.
-    service.install()
+    await service.install()
     expect(readHookTrustEntries(runtimeTomlPath).get(approvalKey)?.trustedHash).toBe(driftedHash)
   })
 
-  it('does not touch ~/.codex on the first launch after upgrading (no provenance yet)', () => {
+  it('does not touch ~/.codex on the first launch after upgrading (no provenance yet)', async () => {
     // Simulates an existing install: runtime home fully materialized by a
     // build without provenance snapshots, managed hooks only.
     const service = new CodexHookService()
-    service.install()
+    await service.install()
     rmSync(join(runtimeHomeDir(), '.orca-hook-trust-provenance.json'), { force: true })
 
-    service.install()
+    await service.install()
 
     expect(readSystemToml()).toBe('')
     expect(existsSync(join(systemCodexDir(), 'config.toml'))).toBe(false)
   })
 
-  it('re-promoting mirrored trust without provenance is a no-op on ~/.codex', () => {
+  it('re-promoting mirrored trust without provenance is a no-op on ~/.codex', async () => {
     // Existing install with a system-trusted user hook, upgraded to this
     // build: the mirrored runtime entry has no provenance, so promotion must
     // sit out this launch and leave the system config byte-identical.
@@ -308,16 +308,16 @@ describe('codex hook trust write-back promotion', () => {
     const systemTomlPath = join(systemCodexDir(), 'config.toml')
     writeFileSync(systemTomlPath, upsertHookTrustEntriesInContent('', [systemUserStopEntry()]))
     const service = new CodexHookService()
-    service.install()
+    await service.install()
     rmSync(join(runtimeHomeDir(), '.orca-hook-trust-provenance.json'), { force: true })
     const systemTomlBefore = readSystemToml()
 
-    service.install()
+    await service.install()
 
     expect(readSystemToml()).toBe(systemTomlBefore)
   })
 
-  it('does not resurrect trust revoked in ~/.codex before the first provenance snapshot', () => {
+  it('does not resurrect trust revoked in ~/.codex before the first provenance snapshot', async () => {
     // Old build mirrored a system-trusted hook into the runtime home; the
     // user then revoked it in ~/.codex/config.toml and upgraded to this
     // build. The stale runtime mirror must not be mistaken for an approval.
@@ -325,11 +325,11 @@ describe('codex hook trust write-back promotion', () => {
     const systemTomlPath = join(systemCodexDir(), 'config.toml')
     writeFileSync(systemTomlPath, upsertHookTrustEntriesInContent('', [systemUserStopEntry()]))
     const service = new CodexHookService()
-    service.install()
+    await service.install()
     rmSync(join(runtimeHomeDir(), '.orca-hook-trust-provenance.json'), { force: true })
     writeFileSync(systemTomlPath, '')
 
-    service.install()
+    await service.install()
 
     expect(readSystemToml()).not.toContain('[hooks.state.')
     expect(
@@ -339,21 +339,21 @@ describe('codex hook trust write-back promotion', () => {
     ).toBeUndefined()
   })
 
-  it('does not flip a hook the user disabled in ~/.codex back to enabled after upgrading', () => {
+  it('does not flip a hook the user disabled in ~/.codex back to enabled after upgrading', async () => {
     // Old build mirrored the hook enabled=true; the user then set
     // enabled = false in ~/.codex/config.toml and upgraded to this build.
     writeSystemUserHook()
     const systemTomlPath = join(systemCodexDir(), 'config.toml')
     writeFileSync(systemTomlPath, upsertHookTrustEntriesInContent('', [systemUserStopEntry()]))
     const service = new CodexHookService()
-    service.install()
+    await service.install()
     rmSync(join(runtimeHomeDir(), '.orca-hook-trust-provenance.json'), { force: true })
     writeFileSync(
       systemTomlPath,
       upsertHookTrustEntriesInContent('', [{ ...systemUserStopEntry(), enabled: false }])
     )
 
-    service.install()
+    await service.install()
 
     expect(
       readHookTrustEntries(systemTomlPath).get(computeTrustKey(systemUserStopEntry()))?.enabled
@@ -365,13 +365,13 @@ describe('codex hook trust write-back promotion', () => {
     ).toBe(false)
   })
 
-  it('promotes one approval to every identical system hook collapsed by deduping', () => {
+  it('promotes one approval to every identical system hook collapsed by deduping', async () => {
     writeSystemUserHook([USER_HOOK_COMMAND, USER_HOOK_COMMAND])
     const service = new CodexHookService()
-    service.install()
+    await service.install()
 
     simulateCodexApproval(runtimeUserStopEntry())
-    service.install()
+    await service.install()
 
     const systemTrust = readHookTrustEntries(join(systemCodexDir(), 'config.toml'))
     const approvedHash = computeTrustedHash(runtimeUserStopEntry())
@@ -379,16 +379,16 @@ describe('codex hook trust write-back promotion', () => {
     expect(systemTrust.get(computeTrustKey(systemUserStopEntry(1)))?.trustedHash).toBe(approvedHash)
   })
 
-  it('skips promotion when the approved hook no longer exists in ~/.codex/hooks.json', () => {
+  it('skips promotion when the approved hook no longer exists in ~/.codex/hooks.json', async () => {
     writeSystemUserHook()
     const service = new CodexHookService()
-    service.install()
+    await service.install()
 
     simulateCodexApproval(runtimeUserStopEntry())
     // User deletes the hook from their system hooks.json before relaunching.
     writeFileSync(join(systemCodexDir(), 'hooks.json'), JSON.stringify({ hooks: {} }))
 
-    service.install()
+    await service.install()
 
     expect(readSystemToml()).not.toContain('[hooks.state.')
     // The runtime copy of the deleted hook (and its approval) is cleaned up.
@@ -398,10 +398,10 @@ describe('codex hook trust write-back promotion', () => {
     ).toBeUndefined()
   })
 
-  it('promotes approvals recorded while status hooks are disabled (refresh path)', () => {
+  it('promotes approvals recorded while status hooks are disabled (refresh path)', async () => {
     writeSystemUserHook()
     const service = new CodexHookService()
-    service.refreshRuntimeUserHooks()
+    await service.refreshRuntimeUserHooks()
 
     // Without the managed status hook, the mirrored user hook sits at group 0.
     const refreshedRuntimeEntry: CodexTrustEntry = {
@@ -411,7 +411,7 @@ describe('codex hook trust write-back promotion', () => {
     simulateCodexApproval(refreshedRuntimeEntry)
     const approvedHash = computeTrustedHash(refreshedRuntimeEntry)
 
-    service.refreshRuntimeUserHooks()
+    await service.refreshRuntimeUserHooks()
 
     expect(
       readHookTrustEntries(join(systemCodexDir(), 'config.toml')).get(

@@ -82,6 +82,7 @@ import {
 } from './codex-managed-trust-reconciliation'
 import type { CodexTrustGrantLedgerHome } from './codex-trust-grant-ledger'
 import { mutateRealHomeHooksPreservingUserTrust } from './codex-user-hook-trust-rebase'
+import { runCodexHookTransaction } from './codex-hook-transaction-queue'
 
 // Why: Pre/PostToolUse feed the live in-flight-tool readout; PermissionRequest exits with no decision so Codex still shows its approval UI while Orca flips the pane to waiting.
 const CODEX_EVENTS = [
@@ -585,7 +586,7 @@ function removeSystemManagedHookTrustEntries(systemHomePath: string, hooksJsonPa
   })
 }
 
-function cleanupLegacySystemManagedHooks(): void {
+async function cleanupLegacySystemManagedHooks(): Promise<void> {
   if (systemCodexHomeHookSweepSuppressed()) {
     return
   }
@@ -650,7 +651,7 @@ function cleanupLegacySystemManagedHooks(): void {
     // Remove only stale Orca hook entries and preserve other managers' metadata.
     const hooksWritePath = resolveHooksJsonWritePath(legacyConfigPath)
     const previousMode = statSync(hooksWritePath).mode
-    mutateRealHomeHooksPreservingUserTrust({
+    await mutateRealHomeHooksPreservingUserTrust({
       sourcePath: legacyConfigPath,
       runtimeHomePath: systemHomePath,
       tomlPath: getSystemCodexConfigTomlPath(),
@@ -717,9 +718,9 @@ function cleanupLegacyCodexProfileHooks(): void {
   }
 }
 
-function cleanupLegacyManagedHookRepresentations(): void {
+async function cleanupLegacyManagedHookRepresentations(): Promise<void> {
   try {
-    cleanupLegacySystemManagedHooks()
+    await cleanupLegacySystemManagedHooks()
     cleanupLegacyCodexProfileHooks()
   } catch (error) {
     console.warn('[codex-hook-service] failed to clean legacy Codex hooks', error)
@@ -859,9 +860,9 @@ function getManagedScript(target: 'local' | 'posix' = 'local'): string {
   ].join('\n')
 }
 
-function installManagedHooksIntoWslRuntime(
+async function installManagedHooksIntoWslRuntime(
   plan: CodexWslRuntimeHookInstallPlan
-): AgentHookInstallStatus {
+): Promise<AgentHookInstallStatus> {
   const config = readHooksJson(plan.configPath)
   if (!config) {
     return {
@@ -924,7 +925,7 @@ function installManagedHooksIntoWslRuntime(
       trustEntries,
       previousLedgerHome ? [previousLedgerHome] : []
     )
-    const grant = grantManagedCodexHookTrust({
+    const grant = await grantManagedCodexHookTrust({
       runtimeHomePath,
       tomlPath: plan.tomlPath,
       managedCommand: command,
@@ -1028,6 +1029,12 @@ function getWslHookReconciliationAction(args: {
   return 'reinstall'
 }
 
+function runWslHookReconciliation(operation: () => Promise<void>): void {
+  void runCodexHookTransaction(operation).catch((error) => {
+    console.warn('[codex-hook-service] failed to reconcile WSL hook path', error)
+  })
+}
+
 // Why: fold only the Windows-case-insensitive portion; a full lowercase would let case-distinct WSL homes share one reconciliation slot.
 function getWslReconciliationKey(runtimeHomePath: string): string {
   return normalizeCodexProjectPathForLookup(runtimeHomePath)
@@ -1053,7 +1060,16 @@ export class CodexHookService {
   installForRuntimeHome(
     runtimeHomePath: string | null | undefined,
     target?: CodexWslRuntimeHookTarget
-  ): AgentHookInstallStatus | null {
+  ): Promise<AgentHookInstallStatus | null> {
+    return runCodexHookTransaction(() =>
+      this.installForRuntimeHomeInternal(runtimeHomePath, target)
+    )
+  }
+
+  private async installForRuntimeHomeInternal(
+    runtimeHomePath: string | null | undefined,
+    target?: CodexWslRuntimeHookTarget
+  ): Promise<AgentHookInstallStatus | null> {
     const generation = this.supersedeWslReconciliation(runtimeHomePath)
     let installedTrustConfigPath: string | null = null
     // Why: JS is single-threaded, so the synchronous install below finishes
@@ -1097,13 +1113,15 @@ export class CodexHookService {
       if (!resolvedPlan) {
         return
       }
-      const status = installManagedHooksIntoWslRuntime(resolvedPlan)
-      if (status.state === 'error') {
-        console.warn('[codex-hook-service] failed to reconcile WSL hook path', status.detail)
-        return
-      }
-      installedTrustConfigPath = resolvedPlan.trustConfigPath
-      installSucceeded = status.state === 'installed'
+      runWslHookReconciliation(async () => {
+        const status = await installManagedHooksIntoWslRuntime(resolvedPlan)
+        if (status.state === 'error') {
+          console.warn('[codex-hook-service] failed to reconcile WSL hook path', status.detail)
+          return
+        }
+        installedTrustConfigPath = resolvedPlan.trustConfigPath
+        installSucceeded = status.state === 'installed'
+      })
     }
     const wslPlan = createCodexWslRuntimeHookInstallPlan(
       runtimeHomePath,
@@ -1112,7 +1130,7 @@ export class CodexHookService {
       onCanonicalPathSettled
     )
     installedTrustConfigPath = wslPlan?.trustConfigPath ?? null
-    const status = wslPlan ? installManagedHooksIntoWslRuntime(wslPlan) : null
+    const status = wslPlan ? await installManagedHooksIntoWslRuntime(wslPlan) : null
     installSucceeded = status?.state === 'installed'
     return status
   }
@@ -1120,10 +1138,12 @@ export class CodexHookService {
   refreshRuntimeUserHooksForRuntimeHome(
     runtimeHomePath: string | null | undefined,
     target?: CodexWslRuntimeHookTarget
-  ): AgentHookInstallStatus | null {
-    this.supersedeWslReconciliation(runtimeHomePath)
-    const wslPlan = createCodexWslRuntimeHookInstallPlan(runtimeHomePath, target)
-    return wslPlan ? refreshWslRuntimeUserHooks(wslPlan) : null
+  ): Promise<AgentHookInstallStatus | null> {
+    return runCodexHookTransaction(() => {
+      this.supersedeWslReconciliation(runtimeHomePath)
+      const wslPlan = createCodexWslRuntimeHookInstallPlan(runtimeHomePath, target)
+      return wslPlan ? refreshWslRuntimeUserHooks(wslPlan) : null
+    })
   }
 
   getStatus(runtimeHomePath: string = getOrcaManagedCodexHomePath()): AgentHookInstallStatus {
@@ -1273,7 +1293,15 @@ export class CodexHookService {
   // Why: runtimeHomePath defaults to the shared managed mirror, but a managed
   // account launching against its own self-contained CODEX_HOME passes that
   // per-account home so hooks.json/config.toml/trust land where codex reads.
-  install(runtimeHomePath: string = getOrcaManagedCodexHomePath()): AgentHookInstallStatus {
+  install(
+    runtimeHomePath: string = getOrcaManagedCodexHomePath()
+  ): Promise<AgentHookInstallStatus> {
+    return runCodexHookTransaction(() => this.installInternal(runtimeHomePath))
+  }
+
+  private async installInternal(
+    runtimeHomePath: string = getOrcaManagedCodexHomePath()
+  ): Promise<AgentHookInstallStatus> {
     const configPath = getConfigPath(runtimeHomePath)
     const scriptPath = getManagedScriptPath()
     // Why: must run before this install rewrites hooks.json/config.toml —
@@ -1375,7 +1403,7 @@ export class CodexHookService {
       // then carry Codex's verbatim hashes into stale cleanup so it cannot
       // delete what Codex just wrote. Mirrored user trust keeps its existing
       // verbatim-carry lane either way.
-      const grant = grantManagedCodexHookTrust({
+      const grant = await grantManagedCodexHookTrust({
         runtimeHomePath,
         tomlPath,
         managedCommand: command,
@@ -1411,7 +1439,7 @@ export class CodexHookService {
     }
     snapshotCodexRuntimeHookTrustProvenance(runtimeHomePath)
     try {
-      cleanupLegacySystemManagedHooks()
+      await cleanupLegacySystemManagedHooks()
       cleanupLegacyCodexProfileHooks()
     } catch (error) {
       console.warn('[codex-hook-service] failed to clean legacy Codex hooks', error)
@@ -1535,7 +1563,13 @@ export class CodexHookService {
 
   refreshRuntimeUserHooks(
     runtimeHomePath: string = getOrcaManagedCodexHomePath()
-  ): AgentHookInstallStatus {
+  ): Promise<AgentHookInstallStatus> {
+    return runCodexHookTransaction(() => this.refreshRuntimeUserHooksInternal(runtimeHomePath))
+  }
+
+  private async refreshRuntimeUserHooksInternal(
+    runtimeHomePath: string = getOrcaManagedCodexHomePath()
+  ): Promise<AgentHookInstallStatus> {
     const configPath = getConfigPath(runtimeHomePath)
     // Why: same as install() — capture in-Orca approvals before this refresh
     // rewrites the runtime files they are keyed against.
@@ -1543,7 +1577,7 @@ export class CodexHookService {
     const config = readHooksJson(configPath)
     if (!config) {
       // Why: disabled launch prep once called remove(); preserve that legacy cleanup even when runtime hooks.json is malformed.
-      cleanupLegacyManagedHookRepresentations()
+      await cleanupLegacyManagedHookRepresentations()
       return {
         agent: 'codex',
         state: 'error',
@@ -1592,17 +1626,21 @@ export class CodexHookService {
     }
     snapshotCodexRuntimeHookTrustProvenance(runtimeHomePath)
 
-    cleanupLegacyManagedHookRepresentations()
+    await cleanupLegacyManagedHookRepresentations()
     return this.getStatus(runtimeHomePath)
   }
 
-  remove(): AgentHookInstallStatus {
+  remove(): Promise<AgentHookInstallStatus> {
+    return runCodexHookTransaction(() => this.removeInternal())
+  }
+
+  private async removeInternal(): Promise<AgentHookInstallStatus> {
     const configPath = getConfigPath()
     const configExists = existsSync(configPath)
     const config = readHooksJson(configPath)
     if (!config) {
       // Why: a malformed hooks.json shouldn't strand old hooks in ~/.codex or the legacy profile after disabling.
-      cleanupLegacyManagedHookRepresentations()
+      await cleanupLegacyManagedHookRepresentations()
       return {
         agent: 'codex',
         state: 'error',
@@ -1635,7 +1673,7 @@ export class CodexHookService {
     // Why: drop trust entries so config.toml doesn't accumulate dead [hooks.state] blocks across install/remove cycles.
     removeRuntimeManagedHookTrustEntries(configPath)
 
-    cleanupLegacyManagedHookRepresentations()
+    await cleanupLegacyManagedHookRepresentations()
 
     return this.getStatus()
   }
@@ -1649,5 +1687,6 @@ export const _internals = {
   installManagedHooksIntoWslRuntime,
   refreshWslRuntimeUserHooks,
   removeStaleWslRuntimeManagedHookTrustEntries,
-  getWslHookReconciliationAction
+  getWslHookReconciliationAction,
+  runWslHookReconciliation
 }

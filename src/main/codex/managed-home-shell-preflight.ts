@@ -81,10 +81,10 @@ export function prepareManagedCodexHomeBeforeShellLaunch(args: {
   env?: ShellPreflightEnvironment
   userDataPath: string
   hooksEnabled: boolean
-  install?: (runtimeHomePath: string) => AgentHookInstallStatus
-}): AgentHookInstallStatus | null {
+  install?: (runtimeHomePath: string) => Promise<AgentHookInstallStatus> | AgentHookInstallStatus
+}): Promise<AgentHookInstallStatus | null> {
   if (!args.hooksEnabled) {
-    return null
+    return Promise.resolve(null)
   }
   const env = args.env ?? {
     CODEX_HOME: process.env.CODEX_HOME,
@@ -92,7 +92,9 @@ export function prepareManagedCodexHomeBeforeShellLaunch(args: {
   }
   const runtimeHomePath = resolveManagedCodexShellPreflightHome(env, args.userDataPath)
   if (!runtimeHomePath) {
-    return null
+    return Promise.resolve(null)
   }
-  return (args.install ?? ((home) => codexHookService.install(home)))(runtimeHomePath)
+  return Promise.resolve(
+    (args.install ?? ((home) => codexHookService.install(home)))(runtimeHomePath)
+  )
 }

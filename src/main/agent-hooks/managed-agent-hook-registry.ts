@@ -15,9 +15,15 @@ import { hermesHookService } from '../hermes/hook-service'
 import { kimiHookService } from '../kimi/hook-service'
 import { openClaudeHookService } from '../openclaude/hook-service'
 
-export type ManagedAgentHookInstaller = readonly [HookInstallAgent, () => AgentHookInstallStatus]
+export type ManagedAgentHookInstaller = readonly [
+  HookInstallAgent,
+  () => Promise<AgentHookInstallStatus> | AgentHookInstallStatus
+]
 export type ManagedAgentHookScriptRefresher = readonly [HookInstallAgent, () => Promise<void>]
-export type ManagedAgentHookRemover = readonly [HookInstallAgent, () => AgentHookInstallStatus]
+export type ManagedAgentHookRemover = readonly [
+  HookInstallAgent,
+  () => Promise<AgentHookInstallStatus> | AgentHookInstallStatus
+]
 export type ManagedAgentHookStatusReader = readonly [HookInstallAgent, () => AgentHookInstallStatus]
 
 export const MANAGED_AGENT_HOOK_INSTALLERS: readonly ManagedAgentHookInstaller[] = [

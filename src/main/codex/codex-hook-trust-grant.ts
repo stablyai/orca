@@ -10,7 +10,7 @@ import {
   type CodexTrustGrantTelemetryLane,
   type CodexTrustGrantVerifyClass
 } from './codex-trust-grant-telemetry'
-import { runCodexHookTrustGrantSessionSync } from './codex-app-server-grant-bridge'
+import { runCodexHookTrustGrantSession } from './codex-app-server-grant-bridge'
 import {
   codexAppServerCapabilityCache,
   getCodexAppServerHostKey
@@ -77,11 +77,9 @@ const transientRetryAfterByHost = new Map<string, number>()
 
 export const getCodexTrustGrantDiagnostics = (): CodexTrustGrantDiagnostics => ({ ...diagnostics })
 
-type GrantSessionRunnerSync = (
-  request: CodexHookTrustGrantRequest
-) => CodexHookTrustGrantSessionResult
+type GrantSessionRunner = (request: CodexHookTrustGrantRequest) => Promise<CodexHookTrustGrantSessionResult> | CodexHookTrustGrantSessionResult
 
-let runSessionSync: GrantSessionRunnerSync = runCodexHookTrustGrantSessionSync
+let runSession: GrantSessionRunner = runCodexHookTrustGrantSession
 
 function fallback(
   plan: CodexManagedTrustGrantPlan,
@@ -173,9 +171,9 @@ function findLedgerGrant(
  * throws: any unexpected failure is a fallback, because hook install is
  * best-effort launch prep.
  */
-export function grantManagedCodexHookTrust(
+export async function grantManagedCodexHookTrust(
   plan: CodexManagedTrustGrantPlan
-): CodexManagedTrustGrantOutcome {
+): Promise<CodexManagedTrustGrantOutcome> {
   try {
     if (process.env[DISABLE_ENV_FLAG] === '1') {
       return fallback(plan, 'disabled')
@@ -218,7 +216,7 @@ export function grantManagedCodexHookTrust(
       // Why: Windows fallback writes equivalent separator variants that Codex's
       // canonical RPC key may not overwrite, leaving conflicting logical trust.
       removeSelfComputedTrustBeforeGrant(plan)
-      result = runSessionSync(
+      result = await runSession(
         resolvedHost.buildRequest({
           runtimeHomePath: plan.runtimeHomePath,
           managedCommand: plan.managedCommand,
@@ -330,8 +328,8 @@ export function grantManagedCodexHookTrust(
 }
 
 export const _internals = {
-  setGrantSessionRunnerSync(runner: GrantSessionRunnerSync | null): void {
-    runSessionSync = runner ?? runCodexHookTrustGrantSessionSync
+  setGrantSessionRunnerSync(runner: GrantSessionRunner | null): void {
+    runSession = runner ?? runCodexHookTrustGrantSession
   },
   resetDiagnostics(): void {
     diagnostics.granted = 0

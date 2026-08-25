@@ -38,7 +38,7 @@ function command(command: string): HookCommandConfig {
 }
 
 describe('real-home user hook trust rebasing', () => {
-  it('writes directly without reading config or spawning Codex when user positions stay stable', () => {
+  it('writes directly without reading config or spawning Codex when user positions stay stable', async () => {
     const user = command('user-hook')
     const orca = command('orca-hook')
     const before = { Stop: [{ hooks: [user] }] }
@@ -48,7 +48,7 @@ describe('real-home user hook trust rebasing', () => {
       throw new Error('stable positions must not open an app-server session')
     })
 
-    expect(
+    await expect(
       mutateRealHomeHooksPreservingUserTrust({
         sourcePath: hooksPath,
         runtimeHomePath: root,
@@ -62,12 +62,12 @@ describe('real-home user hook trust rebasing', () => {
           throw new Error('restore must not run')
         }
       })
-    ).toBeNull()
+    ).resolves.toBeNull()
     expect(wroteHooks).toBe(true)
     expect(existsSync(configPath)).toBe(false)
   })
 
-  it('finds multiple shifted user hooks, including a handler from a mixed group', () => {
+  it('finds multiple shifted user hooks, including a handler from a mixed group', async () => {
     const orca = command('orca-hook')
     const first = command('first-user')
     const second = command('second-user')
@@ -98,7 +98,7 @@ describe('real-home user hook trust rebasing', () => {
     ])
   })
 
-  it('carries only previously trusted states into the repair request', () => {
+  it('carries only previously trusted states into the repair request', async () => {
     const orca = command('orca-hook')
     const trusted = command('trusted-user')
     const untrusted = command('untrusted-user')
@@ -123,7 +123,7 @@ describe('real-home user hook trust rebasing', () => {
       return { outcome: 'repaired', repaired: 1 }
     })
 
-    mutateRealHomeHooksPreservingUserTrust({
+    await mutateRealHomeHooksPreservingUserTrust({
       sourcePath: hooksPath,
       runtimeHomePath: root,
       tomlPath: configPath,
@@ -147,7 +147,7 @@ describe('real-home user hook trust rebasing', () => {
     }
   })
 
-  it('marks the host unsupported and skips further codex sessions', () => {
+  it('marks the host unsupported and skips further codex sessions', async () => {
     const orca = command('orca-hook')
     const user = command('user-hook')
     const before = { Stop: [{ hooks: [orca] }, { hooks: [user] }] }
@@ -172,13 +172,15 @@ describe('real-home user hook trust rebasing', () => {
       }
     }
 
-    expect(() => mutateRealHomeHooksPreservingUserTrust(args)).toThrow('unrecognized subcommand')
-    expect(() => mutateRealHomeHooksPreservingUserTrust(args)).toThrow('marked unsupported')
+    await expect(mutateRealHomeHooksPreservingUserTrust(args)).rejects.toThrow(
+      'unrecognized subcommand'
+    )
+    await expect(mutateRealHomeHooksPreservingUserTrust(args)).rejects.toThrow('marked unsupported')
     expect(sessions).toBe(1)
     expect(codexAppServerCapabilityCache.shouldTry('native')).toBe(false)
   })
 
-  it('cools down after a transient session failure instead of retrying every launch prep', () => {
+  it('cools down after a transient session failure instead of retrying every launch prep', async () => {
     const orca = command('orca-hook')
     const user = command('user-hook')
     const before = { Stop: [{ hooks: [orca] }, { hooks: [user] }] }
@@ -203,14 +205,16 @@ describe('real-home user hook trust rebasing', () => {
       }
     }
 
-    expect(() => mutateRealHomeHooksPreservingUserTrust(args)).toThrow('0 of 1 moved user hooks')
-    expect(() => mutateRealHomeHooksPreservingUserTrust(args)).toThrow('cooling down')
+    await expect(mutateRealHomeHooksPreservingUserTrust(args)).rejects.toThrow(
+      '0 of 1 moved user hooks'
+    )
+    await expect(mutateRealHomeHooksPreservingUserTrust(args)).rejects.toThrow('cooling down')
     expect(sessions).toBe(1)
     // Why: a transient failure must not poison the shared capability signal.
     expect(codexAppServerCapabilityCache.shouldTry('native')).toBe(true)
   })
 
-  it('restores both files byte-exactly when post-mutation repair fails', () => {
+  it('restores both files byte-exactly when post-mutation repair fails', async () => {
     const orca = command('orca-hook')
     const user = command('user-hook')
     const before = { Stop: [{ hooks: [orca] }, { hooks: [user] }] }
@@ -236,7 +240,7 @@ describe('real-home user hook trust rebasing', () => {
       throw new Error('repair transport failed')
     })
 
-    expect(() =>
+    await expect(
       mutateRealHomeHooksPreservingUserTrust({
         sourcePath: hooksPath,
         runtimeHomePath: root,
@@ -246,7 +250,7 @@ describe('real-home user hook trust rebasing', () => {
         writeHooks: () => writeFileSync(hooksPath, `${JSON.stringify({ hooks: after })}\n`),
         restoreHooks: () => writeFileSync(hooksPath, originalHooks)
       })
-    ).toThrow('repair transport failed')
+    ).rejects.toThrow('repair transport failed')
     expect(readFileSync(hooksPath, 'utf-8')).toBe(originalHooks)
     expect(readFileSync(configPath, 'utf-8')).toBe(originalConfig)
   })

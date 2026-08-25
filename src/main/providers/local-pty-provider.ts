@@ -364,23 +364,31 @@ function allocatePtyId(sessionId: string | undefined): string {
   return id
 }
 
-async function prepareLocalPtySpawn(id: string): Promise<void> {
+async function awaitCancelableLocalPtySpawn<T>(
+  id: string,
+  operation: () => Promise<T> | T
+): Promise<T> {
   const pendingSpawn: PendingLocalPtySpawn = { canceled: false }
   const pending = pendingLocalPtySpawns.get(id) ?? new Set()
   pending.add(pendingSpawn)
   pendingLocalPtySpawns.set(id, pending)
   try {
-    // Why: shutdown must be able to cancel a stable session id during the async macOS capability probe, before node-pty exists.
-    await prepareMacosTccLoginShell()
+    const result = await operation()
     if (pendingSpawn.canceled) {
       throw new Error(`PTY spawn canceled: ${id}`)
     }
+    return result
   } finally {
     pending.delete(pendingSpawn)
     if (pending.size === 0) {
       pendingLocalPtySpawns.delete(id)
     }
   }
+}
+
+async function prepareLocalPtySpawn(id: string): Promise<void> {
+  // Why: shutdown must be able to cancel a stable session id during the async macOS capability probe, before node-pty exists.
+  await awaitCancelableLocalPtySpawn(id, prepareMacosTccLoginShell)
 }
 
 function cancelPendingLocalPtySpawns(id: string): void {
@@ -525,7 +533,7 @@ export type LocalPtyProviderOptions = {
       isWsl?: boolean
       wslDistro?: string | null
     }
-  ) => Record<string, string>
+  ) => Promise<Record<string, string>> | Record<string, string>
   /** Whether worktree-scoped shell history is enabled; when true (or absent) with a worktreeId, HISTFILE is scoped per-worktree. */
   isHistoryEnabled?: () => boolean
   /** Why: COMSPEC is always cmd.exe, so this callback injects the user's persisted shell preference. Undefined when none set. */
@@ -735,15 +743,17 @@ export class LocalPtyProvider implements IPtyProvider {
     const isWslShell = Boolean(wslInfo) || pathWin32.basename(shellPath).toLowerCase() === 'wsl.exe'
     const launchWslDistro = isWslShell ? (launchWslContext?.distro ?? null) : null
     const finalEnv = this.opts.buildSpawnEnv
-      ? this.opts.buildSpawnEnv(id, spawnEnv, {
-          command: args.command,
-          launchAgent: args.launchAgent,
-          codexHomePathOverride: args.codexHomePathOverride,
-          cwd,
-          shellPath,
-          isWsl: isWslShell,
-          wslDistro: launchWslDistro
-        })
+      ? await awaitCancelableLocalPtySpawn(id, () =>
+          this.opts.buildSpawnEnv!(id, spawnEnv, {
+            command: args.command,
+            launchAgent: args.launchAgent,
+            codexHomePathOverride: args.codexHomePathOverride,
+            cwd,
+            shellPath,
+            isWsl: isWslShell,
+            wslDistro: launchWslDistro
+          })
+        )
       : spawnEnv
     // Why: app-level env hooks can re-add scrubbed vars; delete last so shims like Claude Agent Teams keep their PATH.
     for (const key of args.envToDelete ?? []) {

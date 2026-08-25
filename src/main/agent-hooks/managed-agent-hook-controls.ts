@@ -71,13 +71,13 @@ function selectedInstallers(options: InstallOptions): readonly ManagedAgentHookI
   return MANAGED_AGENT_HOOK_INSTALLERS.filter(([agent]) => allowed.has(agent))
 }
 
-function runInstaller(
+async function runInstaller(
   entry: ManagedAgentHookInstaller,
   onInstallError: InstallOptions['onInstallError']
-): AgentHookInstallStatus {
+): Promise<AgentHookInstallStatus> {
   const [agent, install] = entry
   try {
-    return install()
+    return await install()
   } catch (error) {
     console.error(`[agent-hooks] Failed to install ${agent} managed hooks:`, error)
     try {
@@ -161,22 +161,26 @@ export async function installManagedAgentHooks(
       )
       continue
     }
-    results.push(runInstaller(entry, options.onInstallError))
+    results.push(await runInstaller(entry, options.onInstallError))
   }
   return results
 }
 
-export function removeManagedAgentHooks(options: RemoveOptions = {}): AgentHookInstallStatus[] {
+export async function removeManagedAgentHooks(
+  options: RemoveOptions = {}
+): Promise<AgentHookInstallStatus[]> {
   const allowed = options.agents ? new Set(options.agents) : null
-  return MANAGED_AGENT_HOOK_REMOVERS.filter(
-    ([agent]) => allowed === null || allowed.has(agent)
-  ).map(([agent, remove]) => {
-    try {
-      return remove()
-    } catch (error) {
-      return errorStatus(agent, error)
-    }
-  })
+  return Promise.all(
+    MANAGED_AGENT_HOOK_REMOVERS.filter(([agent]) => allowed === null || allowed.has(agent)).map(
+      async ([agent, remove]) => {
+        try {
+          return await remove()
+        } catch (error) {
+          return errorStatus(agent, error)
+        }
+      }
+    )
+  )
 }
 
 export function getManagedAgentHookStatuses(): AgentHookInstallStatus[] {
@@ -208,7 +212,10 @@ export async function applyAgentStatusHooksEnabled(
     return installed
   }
   const removed = new Map(
-    removeManagedAgentHooks({ agents: disabledToRemove }).map((status) => [status.agent, status])
+    (await removeManagedAgentHooks({ agents: disabledToRemove })).map((status) => [
+      status.agent,
+      status
+    ])
   )
   return installed.map((status) => removed.get(status.agent) ?? status)
 }

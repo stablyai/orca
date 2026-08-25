@@ -43,7 +43,7 @@ export type GetSelectedCodexHomePath = (
   target?: CodexAccountSelectionTarget,
   launchEnv?: NodeJS.ProcessEnv,
   launchContext?: CodexHomeLaunchContext
-) => string | null
+) => Promise<string | null> | string | null
 
 export type PrepareCodexSessionResume = (args: {
   providerSession: AgentProviderSessionMetadata

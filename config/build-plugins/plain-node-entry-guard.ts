@@ -41,7 +41,8 @@ const WORKER_THREAD_ENTRY_NAMES = [
   'session-scanner-opencode-sqlite-worker-entry',
   'session-scanner-worker-entry',
   'main-thread-hang-watchdog-entry',
-  'port-scan-command-worker-entry'
+  'port-scan-command-worker-entry',
+  'codex/codex-app-server-grant-worker-entry'
 ] as const
 
 export const GUARDED_ENTRY_NAMES = [

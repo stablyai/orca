@@ -15,6 +15,8 @@ import {
 import { killCodexAppServerProcessTree, runCodexAppServerSession } from './codex-app-server-session'
 import {
   resolveCodexGrantEntryPath,
+  resolveCodexGrantWorkerPath,
+  runCodexHookTrustGrantSession as runCodexHookTrustGrantSessionInWorker,
   runCodexHookTrustGrantSessionSync
 } from './codex-app-server-grant-bridge'
 
@@ -541,6 +543,81 @@ describe('runCodexHookTrustGrantSessionSync', () => {
   })
 })
 
+describe('runCodexHookTrustGrantSession worker bridge', () => {
+  function writeWorkerFixture(source: string): string {
+    const root = mkdtempSync(join(tmpdir(), 'orca-codex-worker-'))
+    tempRoots.push(root)
+    const workerPath = join(root, 'grant-worker.cjs')
+    writeFileSync(workerPath, source)
+    return workerPath
+  }
+
+  const baseRequest: CodexHookTrustGrantRequest = {
+    invocation: { command: 'codex', cliPath: null, args: ['app-server'], timeoutMs: 1_000 },
+    hooksListCwd: '/tmp',
+    expectedTrustKeys: ['k'],
+    managedCommand: MANAGED_COMMAND
+  }
+
+  it('keeps the main event loop ticking while a real worker waits on a blocking child', async () => {
+    const workerPath = writeWorkerFixture(`
+      const { spawnSync } = require('node:child_process')
+      const { parentPort } = require('node:worker_threads')
+      spawnSync(process.execPath, ['-e', 'Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 180)'])
+      parentPort.postMessage({ ok: true, result: { outcome: 'granted', wroteTrust: true, entries: [] } })
+    `)
+    let ticks = 0
+    let maxGapMs = 0
+    let lastTickAt = Date.now()
+    const interval = setInterval(() => {
+      const now = Date.now()
+      maxGapMs = Math.max(maxGapMs, now - lastTickAt)
+      lastTickAt = now
+      ticks += 1
+    }, 10)
+    try {
+      const result = await runCodexHookTrustGrantSessionInWorker(baseRequest, {
+        workerPath,
+        timeoutMarginMs: 500
+      })
+      expect(result).toMatchObject({ outcome: 'granted', wroteTrust: true })
+      expect(ticks).toBeGreaterThanOrEqual(10)
+      expect(maxGapMs).toBeLessThanOrEqual(250)
+    } finally {
+      clearInterval(interval)
+    }
+  })
+
+  it('rejects a missing worker bundle without spawning on the main thread', async () => {
+    await expect(
+      runCodexHookTrustGrantSessionInWorker(baseRequest, {
+        workerPath: join(tmpdir(), 'missing-worker.cjs')
+      })
+    ).rejects.toThrow(/worker bundle not found|Cannot find module|ENOENT/)
+  })
+
+  it('rejects a worker crash without falling back to a main-thread child', async () => {
+    const workerPath = writeWorkerFixture(`process.exit(12)`)
+    await expect(
+      runCodexHookTrustGrantSessionInWorker(baseRequest, { workerPath })
+    ).rejects.toThrow(/exited with code 12/)
+  })
+
+  it('terminates a worker that exceeds the bounded bridge deadline', async () => {
+    const workerPath = writeWorkerFixture(`setInterval(() => {}, 1000)`)
+    const request = {
+      ...baseRequest,
+      invocation: { ...baseRequest.invocation, timeoutMs: 20 }
+    }
+    await expect(
+      runCodexHookTrustGrantSessionInWorker(request, {
+        workerPath,
+        timeoutMarginMs: 20
+      })
+    ).rejects.toBeInstanceOf(CodexAppServerTimeoutError)
+  })
+})
+
 describe('resolveCodexGrantEntryPath', () => {
   const entryName = 'codex-app-server-grant-entry.js'
 
@@ -568,6 +645,32 @@ describe('resolveCodexGrantEntryPath', () => {
     for (const archiveDir of ['app.asar', 'app.asar.unpacked']) {
       const moduleDir = join(resourcesDir, archiveDir, 'out', 'main', 'chunks')
       expect(resolveCodexGrantEntryPath((candidate) => candidate === expected, moduleDir)).toBe(
+        expected
+      )
+    }
+  })
+})
+
+describe('resolveCodexGrantWorkerPath', () => {
+  const workerName = 'codex-app-server-grant-worker-entry.js'
+
+  it('finds the worker from emitted main and chunk directories', () => {
+    const mainDir = join('/opt', 'orca', 'out', 'main')
+    const expected = join(mainDir, 'codex', workerName)
+    expect(resolveCodexGrantWorkerPath((candidate) => candidate === expected, mainDir)).toBe(
+      expected
+    )
+    expect(
+      resolveCodexGrantWorkerPath((candidate) => candidate === expected, join(mainDir, 'chunks'))
+    ).toBe(expected)
+  })
+
+  it('redirects packaged app.asar workers to the unpacked Codex bundle', () => {
+    const resourcesDir = join('/Applications', 'Orca.app', 'Contents', 'Resources')
+    const expected = join(resourcesDir, 'app.asar.unpacked', 'out', 'main', 'codex', workerName)
+    for (const archiveDir of ['app.asar', 'app.asar.unpacked']) {
+      const moduleDir = join(resourcesDir, archiveDir, 'out', 'main', 'chunks')
+      expect(resolveCodexGrantWorkerPath((candidate) => candidate === expected, moduleDir)).toBe(
         expected
       )
     }

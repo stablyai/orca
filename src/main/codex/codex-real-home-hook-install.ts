@@ -25,44 +25,27 @@ import { getSystemCodexHomePath } from './codex-home-paths'
 import type { CodexTrustEntry } from './config-toml-trust'
 import { restoreCodexTrustConfig } from './codex-trust-config-rollback'
 import { mutateRealHomeHooksPreservingUserTrust } from './codex-user-hook-trust-rebase'
+import { runCodexHookTransaction } from './codex-hook-transaction-queue'
 
-/**
- * Real-home Codex hook lane for the system-default selection (flag ON).
- *
- * - 'pending': no attempt yet this process; routing may optimistically use the
- *   real home (reads are hook-free and the install runs before pane spawns).
- * - 'installed': entry appended LAST in ~/.codex/hooks.json and trusted by
- *   codex itself through the app-server grant client.
- * - 'unavailable': the grant lane could not trust the entry (old binary,
- *   unsupported RPC, verify failure). The entry is rolled back and the host
- *   stays on the managed-home lane.
- * - 'removed': hooks are opted out; Orca entries are swept from the real home.
- */
+/** Real-home Codex hook lane for the system-default selection (flag ON). */
 export type RealHomeCodexHookLane = 'pending' | 'installed' | 'unavailable' | 'removed'
+type RealHomeCodexHookStateArgs = { hooksEnabled: boolean; userDataPath: string }
 
 let currentLane: RealHomeCodexHookLane = 'pending'
 let installRetryAfterMs = 0
 
-export function getRealHomeCodexHookLane(): RealHomeCodexHookLane {
-  return currentLane
-}
+export const getRealHomeCodexHookLane = (): RealHomeCodexHookLane => currentLane
 
 /**
  * Routing gate consumed by CodexRuntimeHomeService. Both a failed install and
  * a failed opt-out cleanup use the managed lane so no half-mutated hook state
  * can diverge from PTY, rate-limit, or commit-message routing.
  */
-export function isRealHomeCodexHookLaneUsable(): boolean {
-  return currentLane !== 'unavailable'
-}
+export const isRealHomeCodexHookLaneUsable = (): boolean => currentLane !== 'unavailable'
 
-function getRealHomeHooksJsonPath(): string {
-  return join(getSystemCodexHomePath(), 'hooks.json')
-}
+const getRealHomeHooksJsonPath = (): string => join(getSystemCodexHomePath(), 'hooks.json')
 
-function getRealHomeConfigTomlPath(): string {
-  return join(getSystemCodexHomePath(), 'config.toml')
-}
+const getRealHomeConfigTomlPath = (): string => join(getSystemCodexHomePath(), 'config.toml')
 
 /** Orca-side state dir; nothing extra is ever written into the user's ~/.codex. */
 function getRealHomeHookStateDir(userDataPath: string): string {
@@ -82,17 +65,16 @@ function assertHooksJsonGeneration(
   }
 }
 
-/**
- * Ensures the real-home hook state matches the settings: installs and trusts
- * the Orca status hook when enabled, sweeps it when opted out. Idempotent and
- * synchronous (launch prep); repeat calls are cheap — an unchanged hooks.json
- * write no-ops and a valid grant ledger skips the RPC session entirely.
- * Never throws: any failure logs and leaves the host on the managed lane.
- */
-export function ensureRealHomeCodexHookState(args: {
-  hooksEnabled: boolean
-  userDataPath: string
-}): RealHomeCodexHookLane {
+/** Installs or removes the real-home status hook while preserving safe fallback semantics. */
+export function ensureRealHomeCodexHookState(
+  args: RealHomeCodexHookStateArgs
+): Promise<RealHomeCodexHookLane> {
+  return runCodexHookTransaction(() => ensureRealHomeCodexHookStateInternal(args))
+}
+
+async function ensureRealHomeCodexHookStateInternal(
+  args: RealHomeCodexHookStateArgs
+): Promise<RealHomeCodexHookLane> {
   // Why: the grant client caches failed probes, but mutating and rolling back
   // hooks.json before consulting it still adds synchronous work to every pane.
   if (args.hooksEnabled && currentLane === 'unavailable' && Date.now() < installRetryAfterMs) {
@@ -100,8 +82,8 @@ export function ensureRealHomeCodexHookState(args: {
   }
   try {
     currentLane = args.hooksEnabled
-      ? installRealHomeCodexHook(args.userDataPath)
-      : sweepRealHomeCodexHook()
+      ? await installRealHomeCodexHook(args.userDataPath)
+      : await sweepRealHomeCodexHook()
     if (!args.hooksEnabled || currentLane === 'installed') {
       installRetryAfterMs = 0
     }
@@ -115,7 +97,7 @@ export function ensureRealHomeCodexHookState(args: {
   return currentLane
 }
 
-function installRealHomeCodexHook(userDataPath: string): RealHomeCodexHookLane {
+async function installRealHomeCodexHook(userDataPath: string): Promise<RealHomeCodexHookLane> {
   const material = getCodexManagedHookInstallMaterial()
   const hooksJsonPath = getRealHomeHooksJsonPath()
   const hooksWritePath = resolveHooksJsonWritePath(hooksJsonPath)
@@ -175,7 +157,7 @@ function installRealHomeCodexHook(userDataPath: string): RealHomeCodexHookLane {
   backupRealHomeHooksJsonOnce(userDataPath, previousRaw)
   // Why: unknown top-level fields belong to the user (other managers'
   // metadata); unlike the managed-home writer, preserve them verbatim.
-  const trustConfigSnapshot = mutateRealHomeHooksPreservingUserTrust({
+  const trustConfigSnapshot = await mutateRealHomeHooksPreservingUserTrust({
     sourcePath: hooksJsonPath,
     runtimeHomePath: getSystemCodexHomePath(),
     tomlPath: getRealHomeConfigTomlPath(),
@@ -190,7 +172,7 @@ function installRealHomeCodexHook(userDataPath: string): RealHomeCodexHookLane {
     restoreHooks: () => restoreRealHomeHooksJson(hooksWritePath, previousRaw, previousMode)
   })
 
-  const grant = grantManagedCodexHookTrust({
+  const grant = await grantManagedCodexHookTrust({
     runtimeHomePath: getSystemCodexHomePath(),
     tomlPath: getRealHomeConfigTomlPath(),
     managedCommand: material.command,
@@ -269,7 +251,7 @@ function getInstallRetryAfterMs(reason: CodexTrustGrantFallbackReason): number {
     : Date.now() + CODEX_TRUST_GRANT_TRANSIENT_RETRY_INTERVAL_MS
 }
 
-function sweepRealHomeCodexHook(): RealHomeCodexHookLane {
+async function sweepRealHomeCodexHook(): Promise<RealHomeCodexHookLane> {
   const hooksJsonPath = getRealHomeHooksJsonPath()
   // Why: single read — the pre-write generation guard must compare against
   // the exact bytes this sweep's parse came from.
@@ -306,7 +288,7 @@ function sweepRealHomeCodexHook(): RealHomeCodexHookLane {
   if (removedAny) {
     const hooksWritePath = resolveHooksJsonWritePath(hooksJsonPath)
     const previousMode = statSync(hooksWritePath).mode
-    mutateRealHomeHooksPreservingUserTrust({
+    await mutateRealHomeHooksPreservingUserTrust({
       sourcePath: hooksJsonPath,
       runtimeHomePath: getSystemCodexHomePath(),
       tomlPath: getRealHomeConfigTomlPath(),

@@ -1059,7 +1059,7 @@ function startTerminalRuntimeStartupServices(): WindowsDesktopStartupServices {
         if (livePtyIds) {
           reconcileCodexPaneAccountsWithLivePtys(livePtyIds)
           const settings = store?.getSettings()
-          reconcileRetainedCodexHookHomes({
+          void reconcileRetainedCodexHookHomes({
             hookService: codexHookService,
             hooksEnabled:
               isAgentStatusHooksEnabled(settings) &&
@@ -1125,24 +1125,25 @@ function bindTerminalRuntimeStartupServices(
   localPtyProviderStartupReady = services.then((value) => value.localPtyProviderReady)
 }
 
-function prepareCodexRuntimeHomeForLaunch(
+async function prepareCodexRuntimeHomeForLaunch(
   target?: CodexAccountSelectionTarget,
   launchEnv?: NodeJS.ProcessEnv,
   launchContext?: CodexHomeLaunchContext
-): string | null {
+): Promise<string | null> {
   if (
     target?.runtime !== 'wsl' &&
     launchContext?.launchAgent === 'codex' &&
     launchContext.workspacePath
   ) {
     try {
-      // Why: renderer quick-launch cannot await trust IPC before its PTY mounts; launch prep runs synchronously before every recognized Codex spawn.
+      // Why: mark the workspace before the Codex hook transaction so trust is
+      // ready when the pane starts without mutating unrelated shell panes.
       markCodexProjectTrusted(launchContext.workspacePath)
     } catch (error) {
       console.warn('[codex-project-trust] failed to pre-mark launch workspace:', error)
     }
   }
-  const ensureRealHomeHooksIfSelected = (): boolean => {
+  const ensureRealHomeHooksIfSelected = async (): Promise<boolean> => {
     if (
       target?.runtime === 'wsl' ||
       !codexRuntimeHome!.isHostSystemDefaultRealHomeSelected(launchEnv)
@@ -1153,13 +1154,16 @@ function prepareCodexRuntimeHomeForLaunch(
     // and trusted by codex's own app-server grant — in the real ~/.codex before
     // the pane spawns. An incapable grant flips the lane gate so the launch
     // below falls back to the managed home instead of a status-blind pane.
-    ensureRealHomeCodexHookState({
+    await ensureRealHomeCodexHookState({
       hooksEnabled: isAgentStatusHooksEnabled(store?.getSettings()),
       userDataPath: app.getPath('userData')
     })
     return true
   }
-  let realHomeHooksPrepared = ensureRealHomeHooksIfSelected()
+  // Plain PowerShell, Git Bash, and other panes still resolve their selected
+  // runtime home, but must never wait for a Codex trust transaction.
+  const isCodexLaunch = launchContext?.launchAgent === 'codex'
+  let realHomeHooksPrepared = isCodexLaunch ? await ensureRealHomeHooksIfSelected() : false
   // Why: a ManagedCodexHomeTemporarilyUnavailableError must escape uncaught —
   // the fallbacks below all key off `null`, which means "system default", so
   // swallowing the refusal would launch the wrong account (#STA-4422).
@@ -1170,7 +1174,7 @@ function prepareCodexRuntimeHomeForLaunch(
     // Why: launch prep can reject an untrusted managed home and clear its
     // selection. Establish hook capability for that newly selected lane, then
     // re-resolve if the capability gate rejects it.
-    realHomeHooksPrepared = ensureRealHomeHooksIfSelected()
+    realHomeHooksPrepared = isCodexLaunch ? await ensureRealHomeHooksIfSelected() : false
     if (realHomeHooksPrepared) {
       runtimeHomePath = codexRuntimeHome!.prepareForCodexLaunch(target, launchEnv, {
         unavailableManagedHomePath: launchContext?.unavailableManagedHomePath
@@ -1190,15 +1194,20 @@ function prepareCodexRuntimeHomeForLaunch(
         }
       : target
   const hooksEnabled = isAgentStatusHooksEnabled(store?.getSettings())
+  if (!isCodexLaunch) {
+    return runtimeHomePath
+  }
   try {
     // Why: honor the persisted off switch so post-startup launches can't reinstall removed hooks.
     const status = hooksEnabled
-      ? (codexHookService.installForRuntimeHome(runtimeHomePath, hookTarget) ??
+      ? ((await codexHookService.installForRuntimeHome(runtimeHomePath, hookTarget)) ??
         // Why: a managed account's launch home is its own self-contained
         // CODEX_HOME, so hooks/trust must install there, not the shared mirror.
-        codexHookService.install(runtimeHomePath ?? undefined))
-      : (codexHookService.refreshRuntimeUserHooksForRuntimeHome(runtimeHomePath, hookTarget) ??
-        codexHookService.refreshRuntimeUserHooks(runtimeHomePath ?? undefined))
+        (await codexHookService.install(runtimeHomePath ?? undefined)))
+      : ((await codexHookService.refreshRuntimeUserHooksForRuntimeHome(
+          runtimeHomePath,
+          hookTarget
+        )) ?? (await codexHookService.refreshRuntimeUserHooks(runtimeHomePath ?? undefined)))
     if (status.state === 'error') {
       console.warn(
         `[codex-hook-service] failed to ${
@@ -1303,11 +1312,16 @@ async function prepareCodexSessionResumeForLaunch(args: {
       const hooksEnabled = isAgentStatusHooksEnabled(settingsStore.getSettings())
       try {
         if (isSystemHome) {
-          ensureRealHomeCodexHookState({ hooksEnabled, userDataPath: app.getPath('userData') })
+          await ensureRealHomeCodexHookState({
+            hooksEnabled,
+            userDataPath: app.getPath('userData')
+          }).catch((error) => {
+            console.warn('[codex-hook-service] failed to reconcile retained Codex homes:', error)
+          })
         } else if (hooksEnabled) {
-          codexHookService.install(resumeHome)
+          await codexHookService.install(resumeHome)
         } else {
-          codexHookService.refreshRuntimeUserHooks(resumeHome)
+          await codexHookService.refreshRuntimeUserHooks(resumeHome)
         }
       } catch (error) {
         // Why: hook repair is best-effort; session provenance must still win over the currently selected home.
@@ -3014,9 +3028,11 @@ void app.whenReady().then(async () => {
   if (codexRuntimeHome.isHostSystemDefaultRealHomeSelected()) {
     // Why: establish capability before managed-hook reconciliation so an
     // incapable host re-arms and completes the legacy real-home sweep now.
-    ensureRealHomeCodexHookState({
+    void ensureRealHomeCodexHookState({
       hooksEnabled: isAgentStatusHooksEnabled(store.getSettings()),
       userDataPath: app.getPath('userData')
+    }).catch((error) => {
+      console.warn('[codex-real-home-hooks] startup reconciliation failed:', error)
     })
   }
   if (shouldInstallManagedHooks(is.dev)) {
@@ -3034,7 +3050,9 @@ void app.whenReady().then(async () => {
         console.warn('[agent-hooks] failed to reconcile managed hooks on startup:', error)
       })
     } else {
-      removeManagedAgentHooks()
+      void removeManagedAgentHooks().catch((error) => {
+        console.warn('[agent-hooks] failed to remove managed hooks on startup:', error)
+      })
     }
   }
   // Why: process-gone metrics only see survivors; retain a recent whole-app

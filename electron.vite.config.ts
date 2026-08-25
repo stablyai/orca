@@ -245,6 +245,9 @@ export const electronViteConfig: UserConfig = {
           'codex/codex-app-server-grant-entry': resolve(
             'src/main/codex/codex-app-server-grant-entry.ts'
           ),
+          'codex/codex-app-server-grant-worker-entry': resolve(
+            'src/main/codex/codex-app-server-grant-worker-entry.ts'
+          ),
           // Why: electron-vite cleans out/main in dev. The dev CLI imports
           // this path for `orca agent hooks ...`, so it must survive rebuilds.
           'agent-hooks/managed-agent-hook-controls': resolve(

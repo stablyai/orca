@@ -110,8 +110,8 @@ export type PtySpawnIpcDeps = {
   ) => Promise<CodexResumeLaunch>
   reconcileSharedRuntimeResumeHome: (
     resumeHome: Extract<CodexSessionResumePreparation, { outcome: 'resume' }>,
-    resolveCurrent: () => string | null
-  ) => string
+    resolveCurrent: () => Promise<string | null> | string | null
+  ) => Promise<string>
   stripSequencedStartupResumeArgv: <T extends Record<string, string> | undefined>(
     env: T,
     launch: CodexResumeLaunch

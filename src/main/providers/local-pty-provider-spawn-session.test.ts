@@ -316,6 +316,39 @@ describe('LocalPtyProvider', () => {
       expect(spawnMock).toHaveBeenCalledOnce()
     })
 
+    it('does not spawn after shutdown cancels an async environment build', async () => {
+      let finishEnvironmentBuild!: () => void
+      const buildSpawnEnv = vi.fn(
+        (_id: string, env: Record<string, string>) =>
+          new Promise<Record<string, string>>((resolve) => {
+            finishEnvironmentBuild = () => resolve(env)
+          })
+      )
+      provider.configure({ buildSpawnEnv })
+      spawnMock.mockClear()
+
+      const spawn = provider.spawn({
+        cols: 80,
+        rows: 24,
+        sessionId: 'pending-environment-session'
+      })
+      const canceledSpawn = expect(spawn).rejects.toThrow(
+        'PTY spawn canceled: pending-environment-session'
+      )
+      await vi.waitFor(() => expect(buildSpawnEnv).toHaveBeenCalledOnce())
+
+      await provider.shutdown('pending-environment-session', { immediate: true })
+      finishEnvironmentBuild()
+      await canceledSpawn
+      expect(spawnMock).not.toHaveBeenCalled()
+
+      provider.configure({ buildSpawnEnv: (_id, env) => env })
+      await expect(
+        provider.spawn({ cols: 80, rows: 24, sessionId: 'pending-environment-session' })
+      ).resolves.toMatchObject({ id: 'pending-environment-session' })
+      expect(spawnMock).toHaveBeenCalledOnce()
+    })
+
     it('coalesces a concurrent same-session-id spawn before launching a redundant shell (F3)', async () => {
       spawnMock.mockClear()
       const procA = { ...mockProc, pid: 1001 }

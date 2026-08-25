@@ -51,24 +51,27 @@ export async function assemblePtyIpcSpawnCodexEnv(ctx: PtyIpcSpawnState): Promis
   // Why: declared after the strip so a local-provider spawn cannot capture the
   // pre-strip env — only the daemon branch below re-derives this from baseEnv.
   ctx.env = ctx.baseEnv
+  const resolveSelectedCodexHome = async (
+    unavailableManagedHomePath?: string
+  ): Promise<string | null> =>
+    getCompatibleSelectedCodexHomePath(
+      ctx.codexSelectionTarget,
+      (await ctx.deps.getSelectedCodexHomePath?.(ctx.codexSelectionTarget, ctx.baseEnv, {
+        workspacePath: ctx.cwd,
+        launchAgent: isTuiAgent(args.launchAgent) ? args.launchAgent : undefined,
+        unavailableManagedHomePath
+      })) ?? null
+    )
   ctx.selectedCodexHomePath =
     !ctx.preAdoptedStablePane && !args.connectionId
       ? getCompatibleSelectedCodexHomePath(
           ctx.codexSelectionTarget,
           codexResumeHome
-            ? ctx.deps.reconcileSharedRuntimeResumeHome(codexResumeHome, () =>
-                getCompatibleSelectedCodexHomePath(
-                  ctx.codexSelectionTarget,
-                  ctx.deps.getSelectedCodexHomePath?.(ctx.codexSelectionTarget, ctx.baseEnv, {
-                    workspacePath: ctx.cwd,
-                    launchAgent: isTuiAgent(args.launchAgent) ? args.launchAgent : undefined
-                  }) ?? null
-                )
+            ? await ctx.deps.reconcileSharedRuntimeResumeHome(
+                codexResumeHome,
+                resolveSelectedCodexHome
               )
-            : (ctx.deps.getSelectedCodexHomePath?.(ctx.codexSelectionTarget, ctx.baseEnv, {
-                workspacePath: ctx.cwd,
-                launchAgent: isTuiAgent(args.launchAgent) ? args.launchAgent : undefined
-              }) ?? null)
+            : await resolveSelectedCodexHome()
         )
       : null
   if (!ctx.preAdoptedStablePane && args.launchAgent === 'codex' && args.sessionId === undefined) {
@@ -77,23 +80,8 @@ export async function assemblePtyIpcSpawnCodexEnv(ctx: PtyIpcSpawnState): Promis
       getSettings: () => ctx.deps.getSettings?.(),
       requiredCodexHomePath: codexResumeHome?.codexHomePath,
       target: ctx.codexSelectionTarget,
-      resolveCurrent: () =>
-        getCompatibleSelectedCodexHomePath(
-          ctx.codexSelectionTarget,
-          ctx.deps.getSelectedCodexHomePath?.(ctx.codexSelectionTarget, ctx.baseEnv, {
-            workspacePath: ctx.cwd,
-            launchAgent: 'codex'
-          }) ?? null
-        ),
-      resolveAfterUnavailable: (unavailableManagedHomePath) =>
-        getCompatibleSelectedCodexHomePath(
-          ctx.codexSelectionTarget,
-          ctx.deps.getSelectedCodexHomePath?.(ctx.codexSelectionTarget, ctx.baseEnv, {
-            workspacePath: ctx.cwd,
-            launchAgent: 'codex',
-            unavailableManagedHomePath
-          }) ?? null
-        )
+      resolveCurrent: resolveSelectedCodexHome,
+      resolveAfterUnavailable: resolveSelectedCodexHome
     })
     ctx.selectedCodexHomePath = resolution instanceof Promise ? await resolution : resolution
   }
