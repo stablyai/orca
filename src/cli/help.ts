@@ -74,6 +74,8 @@ Worktrees:
   worktree create           Create a new Orca-managed worktree
   worktree set              Update Orca metadata for a worktree
   worktree rm               Remove a worktree from Orca and git
+  worktree import           Reveal an existing worktree Orca did not create
+  worktree unimport         Undo an import so the worktree follows repo visibility
   worktree ps               Show a compact orchestration summary across worktrees
 
 Files:
@@ -239,6 +241,8 @@ Common Commands:
   orca worktree current [--json]
   orca worktree set --worktree <selector> [--display-name <name>] [--issue <number|null>] [--linear-issue <identifier-or-url|null>] [--comment <text>] [--workspace-status <id>] [--parent-worktree <selector>|--no-parent] [--json]
   orca worktree rm --worktree <selector> [--force] [--run-hooks] [--json]
+  orca worktree import --worktree <selector> [--json]
+  orca worktree unimport --worktree <selector> [--json]
   orca worktree ps [--limit <n>] [--json]
   orca file open <path> [--worktree <selector>] [--json]
   orca file diff <path> [--staged] [--worktree <selector>] [--json]

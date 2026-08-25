@@ -6,9 +6,11 @@ import type { PublicKnownRuntimeEnvironment } from '../shared/runtime-environmen
 import type {
   RuntimeRepoList,
   RuntimeRepoSearchRefs,
+  RuntimeWorktreeImportResult,
   RuntimeWorktreeListResult,
   RuntimeWorktreePsResult,
-  RuntimeWorktreeRecord
+  RuntimeWorktreeRecord,
+  RuntimeWorktreeUnimportResult
 } from '../shared/runtime-types'
 import type { MemorySnapshot, WorktreeMemory } from '../shared/process-stats-types'
 
@@ -173,6 +175,34 @@ export function formatWorktreeShow(result: { worktree: RuntimeWorktreeRecord }):
         `${key}: ${typeof value === 'object' ? JSON.stringify(value) : String(value)}`
     )
     .join('\n')
+}
+
+// Why the default branch is the unknown one: `outcome` crosses the wire as a plain string, so a
+// newer host can answer with an outcome this build has never heard of. Reporting that as success
+// would tell the user a worktree was imported when it was not.
+export function formatWorktreeImport(result: RuntimeWorktreeImportResult): string {
+  if (result.outcome === 'imported') {
+    return `imported: ${result.worktree.path}`
+  }
+  if (result.outcome === 'already-imported') {
+    return `already imported: ${result.worktree.path}`
+  }
+  if (result.outcome === 'always-visible') {
+    return `already visible without an import: ${result.worktree.path}`
+  }
+  // Why String(): the declared union is exhausted above, so the compiler narrows this to `never`
+  // — but the value arrives from the host as a plain string and a newer outcome lands here.
+  return `${String(result.outcome)}: ${result.worktree.path}`
+}
+
+export function formatWorktreeUnimport(result: RuntimeWorktreeUnimportResult): string {
+  if (result.outcome === 'unimported') {
+    return `unimported: ${result.worktree.path}`
+  }
+  if (result.outcome === 'not-imported') {
+    return `not imported: ${result.worktree.path}`
+  }
+  return `${String(result.outcome)}: ${result.worktree.path}`
 }
 
 export function formatAutomationList(result: { automations: Automation[] }): string {

@@ -489,6 +489,8 @@ import {
   type RuntimeRendererSyncWindowGraph,
   type RuntimeSyncWindowGraph,
   type RuntimeWorktreeListResult,
+  type RuntimeWorktreeImportResult,
+  type RuntimeWorktreeUnimportResult,
   type BrowserTabInfo,
   type BrowserScreencastResult
 } from '../../shared/runtime-types'
@@ -621,6 +623,10 @@ import {
   type WorktreeVisibilitySourceMatcher
 } from '../../shared/worktree/visibility-sources'
 import { resolveConfiguredWorktreeBasePaths } from '../../shared/worktree/configured-worktree-base-path'
+import {
+  decideExternalWorktreeImport,
+  decideExternalWorktreeUnimport
+} from '../../shared/external-worktree-import'
 import {
   BROWSER_HEADLESS_RUNTIME_CAPABILITY,
   BROWSER_CERTIFICATE_TRUST_RUNTIME_CAPABILITY,
@@ -23689,6 +23695,121 @@ export class OrcaRuntimeService {
       throw new Error('selector_not_found')
     }
     return target.managedWorktree
+  }
+
+  /** Reveals a worktree Orca did not create by recording its path on the owning
+   *  repo. The git worktree is never created, moved, or modified, and no Orca
+   *  authorship metadata is written, so the checkout keeps the deletion
+   *  semantics it already had (#10671). */
+  async importExternalWorktree(worktreeSelector: string): Promise<RuntimeWorktreeImportResult> {
+    const target = await this.resolveExternalWorktreeImportTarget(worktreeSelector)
+    const decision = decideExternalWorktreeImport({
+      repo: target.repo,
+      worktree: target.detected
+    })
+    if (decision.outcome === 'imported') {
+      this.applyExternalWorktreeImportPaths(target.repo, decision.importedExternalWorktreePaths)
+    }
+    return { outcome: decision.outcome, worktree: target.worktree }
+  }
+
+  /** Drops an explicit import so the worktree follows the repo's ordinary visibility
+   *  rules again. Whether it then disappears depends on those rules; this never
+   *  deletes a checkout. */
+  async unimportExternalWorktree(worktreeSelector: string): Promise<RuntimeWorktreeUnimportResult> {
+    const target = await this.resolveExternalWorktreeImportTarget(worktreeSelector)
+    const decision = decideExternalWorktreeUnimport({
+      repo: target.repo,
+      worktree: target.detected
+    })
+    if (decision.outcome === 'unimported') {
+      this.applyExternalWorktreeImportPaths(target.repo, decision.importedExternalWorktreePaths)
+    }
+    return { outcome: decision.outcome, worktree: target.worktree }
+  }
+
+  private async resolveExternalWorktreeImportTarget(worktreeSelector: string): Promise<{
+    worktree: ResolvedWorktree
+    repo: Repo
+    detected: DetectedWorktree
+  }> {
+    const worktree = await this.resolveWorktreeSelector(worktreeSelector)
+    // Why: every await that can reach real I/O has to finish here, before the repo row is
+    // read. `decide*` rewrites importedExternalWorktreePaths as a whole array, so the
+    // read -> decide -> write span below is only safe while it stays one uninterrupted
+    // microtask chain — concurrent invocations arrive as separate macrotasks and cannot
+    // interleave into it. Awaiting a scan after this point reintroduces a lost update.
+    const visibilitySourceMatcher =
+      await this.buildExternalWorktreeImportVisibilityMatcher(worktree)
+    const repo = this.requireRepoForResolvedWorktree(worktree)
+    return {
+      worktree,
+      repo,
+      detected: this.toRuntimeDetectedWorktree(repo, worktree, visibilitySourceMatcher)
+    }
+  }
+
+  /** Why: classification has to agree with the sidebar, which resolves the built-in
+   *  `.claude/worktrees` source before the agent-scratch rule. */
+  private async buildExternalWorktreeImportVisibilityMatcher(
+    worktree: ResolvedWorktree
+  ): Promise<WorktreeVisibilitySourceMatcher> {
+    const repo = this.requireRepoForResolvedWorktree(worktree)
+    const visibilityDefaults = this.requireStore().getSettings().worktreeVisibilityDefaults
+    let scan: RuntimeWorktreeScanResult
+    try {
+      scan = await this.listRepoWorktreesForResolution(repo)
+    } catch {
+      scan = { ok: false, worktrees: [] }
+    }
+    return createWorktreeVisibilitySourceMatcher(
+      [repo.path, ...scan.worktrees.map((candidate) => candidate.path)],
+      resolveCustomWorktreeVisibilitySources(repo, visibilityDefaults),
+      resolveConfiguredWorktreeBasePaths(repo)
+    )
+  }
+
+  /** Why not `resolveRepoSelector('id:...')`: the same repo id is registered once per
+   *  execution host, so that lookup throws selector_ambiguous even though the caller's
+   *  worktree selector was unique. The resolved worktree already names its host. */
+  private requireRepoForResolvedWorktree(worktree: ResolvedWorktree): Repo {
+    const candidates = this.requireStore()
+      .getRepos()
+      .filter((candidate) => candidate.id === worktree.repoId)
+    if (candidates.length === 0) {
+      throw new Error('repo_not_found')
+    }
+    if (candidates.length === 1) {
+      return candidates[0]
+    }
+    const hostMatch = candidates.find(
+      (candidate) => getRepoExecutionHostId(candidate) === worktree.hostId
+    )
+    if (!hostMatch) {
+      throw new Error('selector_ambiguous')
+    }
+    return hostMatch
+  }
+
+  private applyExternalWorktreeImportPaths(
+    repo: Repo,
+    importedExternalWorktreePaths: string[]
+  ): void {
+    // Why host-scoped: a repo id shared across execution hosts would otherwise patch
+    // whichever row comes first, landing the import on the wrong host.
+    const updated = this.requireStore().updateRepo(
+      repo.id,
+      { importedExternalWorktreePaths },
+      getRepoExecutionHostId(repo)
+    )
+    if (!updated) {
+      throw new Error('repo_not_found')
+    }
+    this.invalidateResolvedWorktreeCache()
+    this.notifyReposChanged()
+    // Why also worktreesChanged: reposChanged refreshes repo records but leaves worktree
+    // lists untouched, and the sidebar only recomputes visibility on worktreesChanged.
+    this.notifyWorktreesChanged(repo.id)
   }
 
   async scanWorkspacePorts(repoId?: string): Promise<WorkspacePortScanResult> {

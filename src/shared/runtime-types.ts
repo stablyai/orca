@@ -7,6 +7,10 @@ import type {
   AgentType
 } from './agent-status-types'
 import type {
+  ExternalWorktreeImportOutcome,
+  ExternalWorktreeUnimportOutcome
+} from './external-worktree-import'
+import type {
   BrowserCertificateFailure,
   BrowserCookieImportResult,
   BrowserLoadError,
@@ -997,6 +1001,16 @@ export type RuntimeWorktreeCreateResult = {
 export type RuntimeWorktreeRemoveResult = RemoveWorktreeResult & {
   removed: boolean
   warning?: string
+}
+
+export type RuntimeWorktreeImportResult = {
+  outcome: ExternalWorktreeImportOutcome
+  worktree: RuntimeWorktreeRecord
+}
+
+export type RuntimeWorktreeUnimportResult = {
+  outcome: ExternalWorktreeUnimportOutcome
+  worktree: RuntimeWorktreeRecord
 }
 
 export type RuntimeWorktreePsResult = {

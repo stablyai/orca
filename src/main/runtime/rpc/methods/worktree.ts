@@ -5,6 +5,7 @@ import {
 } from '../../../automations/workspace-provenance'
 import { buildCliWorkspaceProvenance } from '../../../../shared/cli-workspace-provenance'
 import { defineMethod, type RpcMethod } from '../core'
+import { WORKTREE_IMPORT_METHODS } from './worktree-import-methods'
 import { buildManagedWorktreeCreateArgs } from './worktree-create-args'
 import { resolvePairedCallerHostId } from './paired-caller-host-id'
 import { resolveRuntimeNavigationTarget } from '../../../../shared/runtime-navigation'
@@ -50,6 +51,7 @@ export const WORKTREE_METHODS: RpcMethod[] = [
       worktree: await runtime.showManagedWorktree(params.worktree)
     })
   }),
+  ...WORKTREE_IMPORT_METHODS,
   defineMethod({
     name: 'worktree.sleep',
     params: WorktreeSelector,
