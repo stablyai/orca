@@ -19,11 +19,10 @@ export type CrashReportBreadcrumb = {
   createdAt: string
   name: string
   data?: CrashReportBreadcrumbData
+  origin?: string
 }
 
-export type CrashReportBreadcrumbInput = {
-  createdAt: string
-  name: string
+export type CrashReportBreadcrumbInput = Omit<CrashReportBreadcrumb, 'data'> & {
   data?: Record<string, unknown>
 }
 
@@ -44,7 +43,6 @@ export type CrashReportRecord = {
   details: Record<string, CrashReportDetailValue>
   breadcrumbs?: CrashReportBreadcrumb[]
 }
-
 export type UncapturedCrashReportContext = {
   createdAt: string
   appVersion: string
@@ -54,7 +52,6 @@ export type UncapturedCrashReportContext = {
   electronVersion: string
   chromeVersion: string
 }
-
 export type CrashReportCreateInput = Omit<
   CrashReportRecord,
   'id' | 'createdAt' | 'status' | 'details' | 'breadcrumbs'
@@ -62,7 +59,6 @@ export type CrashReportCreateInput = Omit<
   details: Record<string, unknown>
   breadcrumbs?: CrashReportBreadcrumbInput[]
 }
-
 export type ReactErrorBoundarySurface =
   | 'app-root'
   | 'web-root'
@@ -217,7 +213,6 @@ export function sanitizeCrashReportBreadcrumbs(
   if (!breadcrumbs || breadcrumbs.length === 0) {
     return undefined
   }
-
   const sanitized = breadcrumbs
     .slice(-MAX_BREADCRUMBS)
     .map((breadcrumb): CrashReportBreadcrumb | null => {
@@ -225,10 +220,14 @@ export function sanitizeCrashReportBreadcrumbs(
         return null
       }
       const data = breadcrumb.data ? sanitizeCrashReportDetails(breadcrumb.data) : {}
+      const origin = breadcrumb.origin
+        ? sanitizeCrashReportString(breadcrumb.origin).slice(0, 80)
+        : ''
       return {
         createdAt: sanitizeCrashReportString(breadcrumb.createdAt),
         name: sanitizeCrashReportString(breadcrumb.name).slice(0, MAX_BREADCRUMB_NAME_LENGTH),
-        ...(Object.keys(data).length > 0 ? { data } : {})
+        ...(Object.keys(data).length > 0 ? { data } : {}),
+        ...(origin ? { origin } : {})
       }
     })
     .filter((breadcrumb): breadcrumb is CrashReportBreadcrumb => breadcrumb !== null)
