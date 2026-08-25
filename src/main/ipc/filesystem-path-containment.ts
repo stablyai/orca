@@ -16,12 +16,31 @@ export function isDescendantOrEqual(resolvedTarget: string, resolvedBase: string
 }
 
 /**
- * Returns true if the error is an ENOENT (file-not-found) error.
+ * Node's canonical ENOENT message. Matched in full so a message that merely mentions the word — a
+ * log line, a user's branch name — cannot be mistaken for a missing path.
  */
+const ENOENT_MESSAGE = /\bENOENT: no such file or directory\b/
+
 export function isENOENT(error: unknown): boolean {
-  return (
-    error instanceof Error && 'code' in error && (error as NodeJS.ErrnoException).code === 'ENOENT'
-  )
+  if (!(error instanceof Error)) {
+    return false
+  }
+  if ('code' in error && (error as NodeJS.ErrnoException).code === 'ENOENT') {
+    return true
+  }
+  // Why the message is also consulted: an error raised on an SSH host crosses the relay as JSON-RPC,
+  // and ssh-channel-multiplexer rebuilds it with the TRANSPORT's numeric code (msg.error.code), so
+  // Node's 'ENOENT' string code no longer exists on the object by the time any caller sees it. Every
+  // caller here asks the same question — "is this path simply absent?" — and for a remote path the
+  // answer was unreachable: remotePathExists rethrew instead of returning false, which surfaced as a
+  // raw "ENOENT: no such file or directory, lstat '<path>'" when creating a worktree over SSH.
+  //
+  // The cost, accepted rather than overlooked: a remote host can make an unrelated failure read as
+  // "absent" by putting that sentence in a message. Narrowing back to the code alone is not an
+  // option — the transport overwrites it, which IS the bug — and the blast radius is a host already
+  // trusted to run our relay. normalizeExistingPath is unaffected either way: its realpath runs
+  // locally and always carries a real .code, so symlink containment cannot be spoofed this way.
+  return ENOENT_MESSAGE.test(error.message)
 }
 
 export async function normalizeExistingPath(resolvedPath: string): Promise<string> {

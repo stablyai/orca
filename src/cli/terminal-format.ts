@@ -1,7 +1,9 @@
+import { PTY_LIVE_NOTE, describeUnconfirmedStop } from '../shared/pty-liveness-verdict'
 import type {
   RuntimeTerminalClose,
   RuntimeTerminalCreate,
   RuntimeTerminalFocus,
+  RuntimeTerminalListHostScope,
   RuntimeTerminalListResult,
   RuntimeTerminalVisualLayout,
   RuntimeTerminalVisualLayoutNode,
@@ -16,20 +18,34 @@ import type {
 } from '../shared/runtime-types'
 
 export function formatTerminalList(result: RuntimeTerminalListResult): string {
+  const scope = formatTerminalListHostScope(result.hostScope)
   if (result.terminals.length === 0) {
-    return 'No live terminals.'
+    return `No terminals listed.\n${scope}`
   }
   const body = result.terminals
     .map(
       (terminal) =>
-        `${terminal.handle}  ${terminal.title ?? '(untitled)'}  ${terminal.connected ? 'connected' : 'disconnected'}  ${terminal.worktreePath}\n${terminal.preview ? `preview: ${terminal.preview}` : 'preview: <empty>'}`
+        `${terminal.handle}  ${terminal.title ?? '(untitled)'}  ${terminal.connected ? 'connected' : 'disconnected'}  host=${terminal.executionHostId ?? 'unverifiable'}  ${terminal.worktreePath}\n${terminal.preview ? `preview: ${terminal.preview}` : 'preview: <empty>'}`
     )
     .join('\n\n')
   const visualLayout = formatTerminalVisualLayouts(result.visualLayouts)
   const bodyWithLayout = visualLayout ? `${body}\n\nvisual layout:\n${visualLayout}` : body
+  const bodyWithScope = `${bodyWithLayout}\n\n${scope}`
   return result.truncated
-    ? `${bodyWithLayout}\n\ntruncated: showing ${result.terminals.length} of ${result.totalCount}`
-    : bodyWithLayout
+    ? `${bodyWithScope}\ntruncated: showing ${result.terminals.length} of ${result.totalCount}`
+    : bodyWithScope
+}
+
+// Why: a listing that does not say what it covers reads as absolute, and an
+// absent scope means the host is too old to know — not that it covered everything.
+function formatTerminalListHostScope(scope: RuntimeTerminalListHostScope | undefined): string {
+  if (!scope) {
+    return 'scope: unverifiable — this host does not report which hosts it lists'
+  }
+  const covered = scope.hostIds.length > 0 ? scope.hostIds.join(', ') : 'none'
+  const omitted =
+    scope.omittedHostIds.length > 0 ? ` — not covered: ${scope.omittedHostIds.join(', ')}` : ''
+  return `scope: ${covered}${omitted}`
 }
 
 function formatTerminalVisualLayouts(
@@ -170,12 +186,25 @@ export function formatTerminalFocus(result: { focus: RuntimeTerminalFocus }): st
   return `Focused terminal ${result.focus.handle} (tab ${result.focus.tabId}).`
 }
 
+/** "PTY killed." is a claim of observed death, so only a confirmed kill earns it. */
+function describePtyStop(close: RuntimeTerminalClose): string {
+  if (close.ptyKilled) {
+    return ' PTY killed.'
+  }
+  if (close.ptyStopVerdict === 'live') {
+    return ` ${PTY_LIVE_NOTE}`
+  }
+  if (close.ptyStopVerdict === 'unverifiable') {
+    return ` ${describeUnconfirmedStop(close.ptyStopReason ?? 'its host could not be reached')}`
+  }
+  return ''
+}
+
 export function formatTerminalClose(result: { close: RuntimeTerminalClose }): string {
   if (result.close.closeMode === 'tab') {
     return `Closed terminal tab ${result.close.tabId} (${result.close.handle}).`
   }
-  const ptyNote = result.close.ptyKilled ? ' PTY killed.' : ''
-  return `Closed terminal ${result.close.handle}.${ptyNote}`
+  return `Closed terminal ${result.close.handle}.${describePtyStop(result.close)}`
 }
 
 export function formatTerminalWait(result: { wait: RuntimeTerminalWait }): string {

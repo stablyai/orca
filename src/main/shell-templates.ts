@@ -10,11 +10,13 @@ export const SHELL_STARTUP_IDENTITY_MARKER_BLOCK = `if [[ "\${ORCA_SHELL_STARTUP
   printf "\\033]777;orca-shell-start:%s\\007" "$$"
 fi`
 
-export function getZshEnvTemplate(zshDir: string, headerPrefix = ''): string {
-  const header = headerPrefix
-    ? `Orca ${headerPrefix} zsh shell-ready wrapper`
-    : 'Orca zsh shell-ready wrapper'
-  return `# ${header}
+// Why: daemon, local, and relay wrappers must preserve one Bash prompt-hook contract.
+export { BASH_PROMPT_COMMAND_COMPOSITION_BLOCK } from './bash-prompt-command-composition'
+export function getZshEnvTemplate(
+  zshDir: string,
+  headerLabel = 'Orca zsh shell-ready wrapper'
+): string {
+  return `# ${headerLabel}
 ${SHELL_STARTUP_IDENTITY_MARKER_BLOCK}
 # Why: capture the runtime wrapper dir before it is unset below. On WSL this
 # file is generated with a Windows path but sourced via /mnt/c, so the baked
@@ -101,6 +103,53 @@ unset _orca_spawn_orig_zdotdir _orca_user_zdotdir _orca_zshenv_source_dir _orca_
 `
 }
 
+/**
+ * The relay variant of the .zshenv above: it trusts the ZDOTDIR the remote
+ * shell already inherited instead of re-deriving one, and republishes it as
+ * ORCA_USER_ZDOTDIR for the later wrapper files.
+ *
+ * Why separate: this diverged from the discovery template before unification
+ * and is preserved verbatim here — reconciling the two is a follow-up.
+ */
+export function getZshOverlayEnvTemplate(zshDir: string, headerLabel: string): string {
+  return `# ${headerLabel}
+${SHELL_STARTUP_IDENTITY_MARKER_BLOCK}
+export ORCA_ORIG_ZDOTDIR="\${ORCA_ORIG_ZDOTDIR:-$HOME}"
+case "\${ORCA_ORIG_ZDOTDIR%/}" in
+  */shell-ready/zsh) export ORCA_ORIG_ZDOTDIR="$HOME" ;;
+esac
+[[ -f "$ORCA_ORIG_ZDOTDIR/.zshenv" ]] && source "$ORCA_ORIG_ZDOTDIR/.zshenv"
+export ORCA_USER_ZDOTDIR="\${ZDOTDIR:-\${ORCA_ORIG_ZDOTDIR:-$HOME}}"
+case "\${ORCA_USER_ZDOTDIR%/}" in
+  */shell-ready/zsh) export ORCA_USER_ZDOTDIR="$HOME" ;;
+esac
+export ZDOTDIR=${quotePosixSingle(zshDir)}
+`
+}
+
+/**
+ * Restores the worktree-scoped HISTFILE that macOS `/etc/zshrc` destroys.
+ *
+ * That file assigns `HISTFILE=${ZDOTDIR:-$HOME}/.zsh_history` with no
+ * check-before-set, and it runs before any wrapper file Orca controls — so the
+ * injected value is already gone, and because ZDOTDIR still points at Orca's
+ * wrapper dir the replacement lands INSIDE it. Per-worktree history was a
+ * silent no-op on the primary platform as a result (#11044).
+ *
+ * Emitted after the user's own startup file has been sourced, so it is the last
+ * word, exactly like the CODEX_HOME/OPENCODE_CONFIG_DIR restores beside it.
+ */
+export const ZSH_HISTFILE_RESTORE_BLOCK = `if [[ -n "\${ORCA_HISTFILE:-}" ]]; then
+  HISTFILE="$ORCA_HISTFILE"
+elif [[ "\${HISTFILE:-}" == "$ZDOTDIR/.zsh_history" ]]; then
+  # Why also when Orca injected nothing: /etc/zshrc derived this from Orca's
+  # wrapper ZDOTDIR, so history would accumulate INSIDE the wrapper dir and the
+  # user's real history would be invisible — the plain #11044 bug, with no
+  # per-worktree scoping involved. Matching the exact clobbered value means a
+  # HISTFILE the user set deliberately is never touched.
+  HISTFILE="\${ORCA_ORIG_ZDOTDIR:-$HOME}/.zsh_history"
+fi`
+
 export function getZshStartupFileSourceBlock(options: {
   fileName: '.zprofile' | '.zshrc' | '.zlogin'
   homeExpression?: string
@@ -166,11 +215,13 @@ fi
 `
 }
 
-// Why: fish has no ZDOTDIR-style wrapper dir, so the marker rides `--init-command`
-// and fires on fish_prompt — the earliest event fish exposes (STA-3417). Unlike zsh's
-// zle-line-init this lands just *before* fish arms `?2004h`, which PostReadyFlushGate
-// absorbs. `builtin printf` so a user-defined printf can't silently swallow the marker
-// and send every launch to the ready timeout.
+// Why: fish has no ZDOTDIR-style wrapper dir, so the marker rides `--init-command`,
+// which fish runs AFTER config.fish (verified on 4.7.1) — the same last-word
+// guarantee the zsh/bash wrapper files rely on. It fires on fish_prompt, the
+// earliest event fish exposes (STA-3417). Unlike zsh's zle-line-init this lands
+// just *before* fish arms `?2004h`, which PostReadyFlushGate absorbs. `builtin
+// printf` so a user-defined printf can't silently swallow the marker and send
+// every launch to the ready timeout.
 export function getFishShellReadyInitCommand(escapedMarker: string): string {
   return `if test "$ORCA_SHELL_READY_MARKER" = 1
   function __orca_shell_ready_marker --on-event fish_prompt

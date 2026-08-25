@@ -511,6 +511,9 @@ describe('registerWorktreeHandlers', () => {
       includeProviderInventory: true,
       includeLocalRegistry: false
     })
+    expect(store.removeWorktreeMeta).toHaveBeenCalledWith(worktreeId, 'ssh:conn-1')
+    expect(advertisedUrlWatcherForgetWorktreeMock).not.toHaveBeenCalled()
+    expect(deleteWorktreeHistoryDirMock).not.toHaveBeenCalled()
   })
 
   it('fences a mirrored runtime folder workspace sweep to its environment', async () => {

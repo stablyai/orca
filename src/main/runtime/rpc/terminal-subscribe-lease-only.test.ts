@@ -4,6 +4,7 @@ import type { OrcaRuntimeService } from '../orca-runtime'
 import type { RpcRequest } from './core'
 import { RpcDispatcher } from './dispatcher'
 import { TERMINAL_METHODS } from './methods/terminal'
+import { createSubscriptionRegistryDouble } from './subscription-registry-test-double'
 
 const request: RpcRequest = {
   id: 'req-1',
@@ -20,7 +21,7 @@ const request: RpcRequest = {
 describe('terminal lease-only subscription', () => {
   it('keeps mobile input ownership without viewport resize or output delivery', async () => {
     const messages: string[] = []
-    const cleanups = new Map<string, () => void>()
+    const registry = createSubscriptionRegistryDouble()
     const runtime = {
       getRuntimeId: () => 'test-runtime',
       resolveLeafForHandle: vi.fn().mockReturnValue({ ptyId: 'pty-1' }),
@@ -32,13 +33,9 @@ describe('terminal lease-only subscription', () => {
       serializeTerminalBuffer: vi.fn(),
       subscribeToTerminalResize: vi.fn(),
       subscribeToFitOverrideChanges: vi.fn(),
-      registerSubscriptionCleanup: vi.fn((id: string, cleanup: () => void) => {
-        cleanups.set(id, cleanup)
-      }),
-      cleanupSubscription: vi.fn((id: string) => {
-        cleanups.get(id)?.()
-        cleanups.delete(id)
-      }),
+      registerSubscriptionCleanup: vi.fn(registry.registerSubscriptionCleanup),
+      registerOwnedSubscriptionCleanup: vi.fn(registry.registerOwnedSubscriptionCleanup),
+      cleanupSubscription: vi.fn(registry.cleanupSubscription),
       waitForTerminal: vi.fn(() => new Promise<RuntimeTerminalWait>(() => {}))
     } as unknown as OrcaRuntimeService
     const dispatcher = new RpcDispatcher({ runtime, methods: TERMINAL_METHODS })

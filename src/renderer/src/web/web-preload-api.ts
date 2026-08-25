@@ -584,6 +584,8 @@ function createWebPreloadApi(): Partial<PreloadApi> {
       getKeyboardInputSourceId: () => Promise.resolve(null),
       // The web client cannot inspect local Mission Control shortcuts.
       getMacCapturedDigitRowChords: () => Promise.resolve([]),
+      getKeyboardLayoutSnapshot: () => Promise.resolve(null),
+      onKeyboardLayoutChanged: () => () => undefined,
       setUnreadDockBadgeCount: () => Promise.resolve(),
       getFloatingTerminalCwd: () => Promise.resolve(''),
       getFloatingMarkdownDirectory: () => Promise.resolve(''),
@@ -940,6 +942,7 @@ function createWebPreloadApi(): Partial<PreloadApi> {
       drop: () => {},
       dropByTabPrefix: () => {},
       retirePaneAuthority: () => {},
+      restorePaneAuthority: () => {},
       transferPaneAuthority: () => {}
     },
     mobile: {
@@ -2880,6 +2883,8 @@ function createWebUiApi(): NonNullable<Partial<PreloadApi>['ui']> {
     openOrcaDeepLink: () => {},
     onFocusEditorTab: () => noopUnsubscribe,
     onCloseSessionTab: () => noopUnsubscribe,
+    onSessionTabCloseRequest: () => noopUnsubscribe,
+    respondSessionTabClose: () => {},
     onMoveSessionTab: () => noopUnsubscribe,
     onOpenFileFromMobile: () => noopUnsubscribe,
     onOpenDiffFromMobile: () => noopUnsubscribe,
@@ -3140,8 +3145,6 @@ function createSkillsApi(): NonNullable<Partial<PreloadApi>['skills']> {
     cancelShare: () => Promise.resolve(),
     releaseShare: () => Promise.resolve(),
     resolveShare: () => Promise.reject(new Error('Skill share links require the desktop app.')),
-    createDownloadGrant: () =>
-      Promise.reject(new Error('Skill installation requires the desktop app.')),
     installShare: () => Promise.reject(new Error('Skill installation requires the desktop app.')),
     installBundleShare: () =>
       Promise.reject(new Error('Skill installation requires the desktop app.')),

@@ -853,7 +853,7 @@ export async function refreshWebRuntimeSessionTabsSnapshot(
       // Why: eager refreshes can resolve after the user switched worktrees; update tabs without stealing focus.
       const patch = applyFreshWebSessionTabsSnapshot(state, snapshot, environmentId)
       return patch === state ? state : patch
-    })
+    }, snapshot)
   } catch (error) {
     if (options.errorMode === 'throw') {
       throw error

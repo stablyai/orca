@@ -1,8 +1,13 @@
-import { mkdtemp, mkdir, symlink, writeFile } from 'node:fs/promises'
+import { mkdtemp, mkdir, rm, symlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { buildSkillDiscoverySources, clearSkillRootScanCache, discoverSkills } from './discovery'
+import {
+  buildSkillDiscoverySources,
+  clearSkillRootScanCache,
+  discoverSkills,
+  LAST_KNOWN_ROOT_SCAN_RETENTION_MS
+} from './discovery'
 import { TUI_AGENT_CONFIG } from '../../shared/tui-agent-config'
 import type * as SkillRootFileWalk from './skill-root-file-walk'
 import type { Repo } from '../../shared/repo-types'
@@ -48,6 +53,7 @@ beforeEach(() => {
 
 afterEach(() => {
   unavailableRootPath = null
+  vi.restoreAllMocks()
 })
 
 describe('skill discovery', () => {
@@ -90,6 +96,76 @@ describe('skill discovery', () => {
     })
     expect(result.sources.find((source) => source.path === stalledRoot)).toMatchObject({
       exists: true,
+      skippedReason: 'unavailable'
+    })
+  })
+
+  // The impact this exists for: every consumer derives "installed" from the skill
+  // list, so an empty list for an unanswered root made an installed skill offer
+  // Install again the moment a mount stalled.
+  it('serves the last answered skills for a root whose rescan did not answer', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'orca-skills-'))
+    const home = join(root, 'home')
+    const stalledRoot = join(home, '.omp', 'agent', 'skills')
+    await mkdir(join(stalledRoot, 'planning'), { recursive: true })
+    await writeFile(join(stalledRoot, 'planning', 'SKILL.md'), '# Planning\n\nPlan work.')
+
+    const first = await discoverSkills({ homeDir: home, cwd: join(root, 'missing-cwd') })
+    expect(first.skills.map((skill) => skill.name)).toEqual(['Planning'])
+
+    unavailableRootPath = stalledRoot
+    const second = await discoverSkills({
+      homeDir: home,
+      cwd: join(root, 'missing-cwd'),
+      refresh: true
+    })
+
+    expect(second.skills.map((skill) => skill.name)).toEqual(['Planning'])
+    expect(second.sources.find((source) => source.path === stalledRoot)).toMatchObject({
+      skippedReason: 'unavailable'
+    })
+  })
+
+  it('drops the retained copy once a root answers as absent', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'orca-skills-'))
+    const home = join(root, 'home')
+    const stalledRoot = join(home, '.omp', 'agent', 'skills')
+    await mkdir(join(stalledRoot, 'planning'), { recursive: true })
+    await writeFile(join(stalledRoot, 'planning', 'SKILL.md'), '# Planning\n\nPlan work.')
+    await discoverSkills({ homeDir: home, cwd: join(root, 'missing-cwd') })
+    await rm(stalledRoot, { recursive: true })
+
+    await discoverSkills({ homeDir: home, cwd: join(root, 'missing-cwd'), refresh: true })
+    unavailableRootPath = stalledRoot
+    const result = await discoverSkills({
+      homeDir: home,
+      cwd: join(root, 'missing-cwd'),
+      refresh: true
+    })
+
+    // A removed skill must not come back the next time its root stalls.
+    expect(result.skills.map((skill) => skill.name)).toEqual([])
+  })
+
+  it('stops serving a retained copy once it is older than the retention window', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'orca-skills-'))
+    const home = join(root, 'home')
+    const stalledRoot = join(home, '.omp', 'agent', 'skills')
+    await mkdir(join(stalledRoot, 'planning'), { recursive: true })
+    await writeFile(join(stalledRoot, 'planning', 'SKILL.md'), '# Planning\n\nPlan work.')
+    await discoverSkills({ homeDir: home, cwd: join(root, 'missing-cwd') })
+
+    const recordedAt = Date.now()
+    vi.spyOn(Date, 'now').mockReturnValue(recordedAt + LAST_KNOWN_ROOT_SCAN_RETENTION_MS + 1)
+    unavailableRootPath = stalledRoot
+    const result = await discoverSkills({
+      homeDir: home,
+      cwd: join(root, 'missing-cwd'),
+      refresh: true
+    })
+
+    expect(result.skills).toEqual([])
+    expect(result.sources.find((source) => source.path === stalledRoot)).toMatchObject({
       skippedReason: 'unavailable'
     })
   })

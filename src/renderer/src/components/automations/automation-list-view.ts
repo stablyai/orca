@@ -1,5 +1,6 @@
 import { getIntlLocale } from '@/i18n/i18n'
 import type { Automation, AutomationRun } from '../../../../shared/automations-types'
+import type { TuiAgent } from '../../../../shared/tui-agent'
 import type { ExternalAutomationListEntry } from './external-automation-list-entries'
 import {
   getExternalAutomationLastRunSnapshot,
@@ -26,6 +27,7 @@ export type AutomationListViewItem =
       enabled: boolean
       lastRunAt: number | null
       lastRun: AutomationLastRunSnapshot
+      agentId: TuiAgent
       automation: Automation
     }
   | {
@@ -35,25 +37,32 @@ export type AutomationListViewItem =
       enabled: boolean
       lastRunAt: number | null
       lastRun: AutomationLastRunSnapshot
+      agentId: null
       entry: ExternalAutomationListEntry
     }
 
 export type AutomationListFilter = {
   status: AutomationListStatusFilter
   lastRun: AutomationListLastRunFilter
+  agentIds: readonly TuiAgent[]
 }
 
 export const EMPTY_AUTOMATION_LIST_FILTER: AutomationListFilter = {
   status: 'all',
-  lastRun: 'all'
+  lastRun: 'all',
+  agentIds: []
 }
 
 export function isAutomationListFilterActive(filter: AutomationListFilter): boolean {
-  return filter.status !== 'all' || filter.lastRun !== 'all'
+  return filter.status !== 'all' || filter.lastRun !== 'all' || filter.agentIds.length > 0
 }
 
 export function countAutomationListFilters(filter: AutomationListFilter): number {
-  return (filter.status !== 'all' ? 1 : 0) + (filter.lastRun !== 'all' ? 1 : 0)
+  return (
+    (filter.status !== 'all' ? 1 : 0) +
+    (filter.lastRun !== 'all' ? 1 : 0) +
+    (filter.agentIds.length > 0 ? 1 : 0)
+  )
 }
 
 export function defaultAutomationListSortDirection(
@@ -114,6 +123,7 @@ export function buildAutomationListViewItems({
       enabled: automation.enabled,
       lastRunAt: lastRun.at,
       lastRun,
+      agentId: automation.agentId,
       automation
     }
   })
@@ -126,6 +136,7 @@ export function buildAutomationListViewItems({
       enabled: entry.job.enabled,
       lastRunAt: lastRun.at,
       lastRun,
+      agentId: null,
       entry
     }
   })
@@ -142,7 +153,9 @@ export function filterAutomationListViewItems(
   return items.filter(
     (item) =>
       matchesStatusFilter(item.enabled, filter.status) &&
-      matchesLastRunFilter(item.lastRun, filter.lastRun)
+      matchesLastRunFilter(item.lastRun, filter.lastRun) &&
+      (filter.agentIds.length === 0 ||
+        (item.agentId !== null && filter.agentIds.includes(item.agentId)))
   )
 }
 

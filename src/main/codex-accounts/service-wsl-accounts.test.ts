@@ -65,7 +65,7 @@ describe('CodexAccountService config sync', () => {
       if (script.includes('command -v codex')) {
         throw new Error('bash -ic does not inherit the distro login-shell PATH')
       }
-      if (args.slice(2, 5).join(' ') === '-- sh -c') {
+      if (args.slice(2, 5).join(' ') === '--exec sh -c') {
         expect(args).toEqual(buildWslCodexAvailabilityArgs('Debian'))
         return ''
       }
@@ -178,7 +178,7 @@ describe('CodexAccountService config sync', () => {
       if (script.includes('readlink -f')) {
         return `${wslLinuxHomePath}\n`
       }
-      if (args.slice(2, 5).join(' ') === '-- sh -c') {
+      if (args.slice(2, 5).join(' ') === '--exec sh -c') {
         expect(args).toEqual(buildWslCodexAvailabilityArgs('Debian'))
         throw new Error('codex missing')
       }

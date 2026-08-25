@@ -6,6 +6,7 @@ import {
   sanitizeCrashReportString,
   type CrashReportBreadcrumbData
 } from '../../shared/crash-reporting'
+import { decodePosixWaitStatus, describePosixWaitStatus } from '../../shared/posix-wait-status'
 import type { CrashReportStore } from './crash-report-store'
 import { getCrashBreadcrumbSnapshot } from './crash-breadcrumb-store'
 import {
@@ -17,10 +18,8 @@ import {
   type ExpectedTeardownScope,
   type ProcessGoneSource
 } from './process-gone-classification'
-import {
-  buildProcessGoneCrashDetails,
-  buildSuppressedProcessGoneBreadcrumbData
-} from './process-gone-diagnostics'
+import { buildProcessGoneCrashDetails } from './process-gone-diagnostics'
+import { buildSuppressedProcessGoneBreadcrumbData } from './suppressed-process-gone-breadcrumb'
 import {
   getProcessGoneDedupeKey,
   processGoneDedupe,
@@ -88,6 +87,17 @@ function suppressedProcessGoneCoalesceKey(data: CrashReportBreadcrumbData): stri
     data.name ?? null,
     data.type ?? null
   ])
+}
+
+// Why: POSIX exit codes arrive as raw wait statuses (61696 = exit 241); name the
+// meaning on the span so bundles read without manual decoding. Display-only —
+// the recorded exitCode stays raw. launch-failed codes are not wait statuses.
+function decodedExitCodeAttribute(event: ProcessGoneCrashEvent): Record<string, string> {
+  if (process.platform === 'win32' || event.reason === 'launch-failed' || event.exitCode === null) {
+    return {}
+  }
+  const decoded = decodePosixWaitStatus(event.exitCode)
+  return decoded ? { 'crash.exit_code_decoded': describePosixWaitStatus(decoded) } : {}
 }
 
 function persistFailureData(event: ProcessGoneCrashEvent, error: unknown) {
@@ -192,10 +202,13 @@ export function recordProcessGoneCrash(
     return
   }
   const mainProcessLifecycle = getMainProcessLifecycleIdentity()
-  const crashDetails = buildProcessGoneCrashDetails({
-    ...event.details,
-    ...mainProcessLifecycle
-  })
+  const crashDetails = buildProcessGoneCrashDetails(
+    {
+      ...event.details,
+      ...mainProcessLifecycle
+    },
+    event.processType
+  )
   const breadcrumbs = getCrashBreadcrumbSnapshot()
   const span = startSpan('electron.process_gone', {
     attributes: {
@@ -203,6 +216,7 @@ export function recordProcessGoneCrash(
       'crash.process_type': event.processType,
       'crash.reason': event.reason,
       ...(event.exitCode !== null ? { 'crash.exit_code': event.exitCode } : {}),
+      ...decodedExitCodeAttribute(event),
       'app.version': app.getVersion(),
       platform: process.platform,
       osRelease: os.release(),

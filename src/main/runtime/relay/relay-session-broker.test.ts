@@ -211,7 +211,20 @@ describe('RelaySessionBroker lifecycle ownership', () => {
         assignmentEpoch: 2,
         leaseExpiresAt: 2_000_000
       })
-    const broker = await RelaySessionBroker.connect(brokerOptions({ onStatus: vi.fn() }))
+    const resolvePreferredRegion = vi
+      .fn()
+      .mockResolvedValueOnce('asia-east2')
+      .mockResolvedValueOnce('us-central1')
+    const broker = await RelaySessionBroker.connect(
+      brokerOptions({
+        onStatus: vi.fn(),
+        resolvePreferredRegion
+      })
+    )
+    expect(fakes.assign).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({ preferredRegion: 'asia-east2', reconnect: true })
+    )
     fakes.controls[0]!.options.onConnectionOpen({
       connId: 'old-basis',
       connTicket: 'T'.repeat(43),
@@ -226,6 +239,12 @@ describe('RelaySessionBroker lifecycle ownership', () => {
       recovery: 'resolve-director'
     })
     await vi.waitFor(() => expect(fakes.controls).toHaveLength(2))
+
+    expect(fakes.assign).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({ preferredRegion: 'us-central1', reconnect: true })
+    )
+    expect(resolvePreferredRegion).toHaveBeenCalledTimes(2)
 
     expect(broker.endpoint?.cellUrl).toBe('https://relay-c2.example.test')
     expect(fakes.transports[0]!.openConnection).toHaveBeenCalledOnce()

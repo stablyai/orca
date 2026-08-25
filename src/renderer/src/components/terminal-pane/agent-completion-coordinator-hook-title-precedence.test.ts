@@ -174,6 +174,17 @@ describe('agent completion coordinator', () => {
     await flushAsyncTicks()
 
     expect(dispatchCompletion).toHaveBeenCalledTimes(1)
+
+    result = processResult('codex')
+    vi.advanceTimersByTime(2_000)
+    await flushAsyncTicks()
+    result = processResult('zsh', false)
+    vi.advanceTimersByTime(750)
+    await flushAsyncTicks()
+    vi.advanceTimersByTime(750)
+    await flushAsyncTicks()
+
+    expect(dispatchCompletion).toHaveBeenCalledTimes(2)
   })
 
   it('keeps duplicate done-only hooks inside replay guard suppressed after process inspection', async () => {

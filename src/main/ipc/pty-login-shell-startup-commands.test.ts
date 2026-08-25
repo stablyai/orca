@@ -2,7 +2,8 @@ import { describe, expect, it, vi } from 'vitest'
 import {
   loginPreflightExecFileMock,
   spawnMock,
-  openCodeBuildPtyEnvMock
+  openCodeBuildPtyEnvMock,
+  bindAgentSessionPaneMock
 } from './pty-ipc-mock-registry'
 import { posixOnlyIt } from './pty-ipc-test-constants'
 import { setupPtyIpcSuite } from './pty-ipc-test-harness'
@@ -229,7 +230,60 @@ describe('registerPtyHandlers', () => {
         mockProc.emitData('\x1b]133;A\x07% ')
         await Promise.resolve()
         vi.runAllTimers()
-        expect(mockProc.proc.write).toHaveBeenCalledWith('claude\n')
+        // Why the pin: a Claude launch carries a minted --session-id so a
+        // daemon-hosted session's hooks can still be traced to this pane (#9236).
+        expect(mockProc.proc.write).toHaveBeenCalledTimes(1)
+        expect(mockProc.proc.write.mock.calls[0][0]).toMatch(
+          /^claude --session-id [0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\n$/
+        )
+      } finally {
+        vi.useRealTimers()
+      }
+    }
+  )
+  posixOnlyIt(
+    'binds the minted session id to the spawning pane, so hooks can be traced back to it',
+    async () => {
+      // Why this asserts the SPAWN side: the hook server's own tests bind by
+      // hand, so without this the wiring that actually records the pane —
+      // the only thing that makes the correction fire in production — is
+      // deletable with every suite still green.
+      vi.useFakeTimers()
+      const mockProc = createMockProc()
+      spawnMock.mockReturnValue(mockProc.proc)
+      const tabId = 'tab-1'
+      const leafId = 'aaaaaaaa-1111-4111-8111-111111111111'
+      const paneKey = `${tabId}:${leafId}`
+
+      try {
+        registerPtyHandlers(mainWindow as never)
+        await handlers.get('pty:spawn')!(null, {
+          cols: 80,
+          rows: 24,
+          cwd: '/tmp',
+          command: 'claude',
+          tabId,
+          leafId,
+          worktreeId: 'wt-real',
+          env: { ORCA_PANE_KEY: paneKey, ORCA_TAB_ID: tabId, ORCA_WORKTREE_ID: 'wt-real' }
+        })
+
+        mockProc.emitData('last login: today\r\n')
+        vi.runOnlyPendingTimers()
+        mockProc.emitData('\x1b]133;A\x07% ')
+        await Promise.resolve()
+        vi.runAllTimers()
+
+        const written = String(mockProc.proc.write.mock.calls[0][0])
+        const mintedId = /--session-id ([0-9a-f-]{36})/.exec(written)?.[1]
+        expect(mintedId).toBeDefined()
+        // The id on the command line and the id recorded against the pane must
+        // be the same one, or the correction can never resolve.
+        expect(bindAgentSessionPaneMock).toHaveBeenCalledWith(
+          'claude',
+          mintedId,
+          expect.objectContaining({ paneKey, worktreeId: 'wt-real' })
+        )
       } finally {
         vi.useRealTimers()
       }

@@ -81,7 +81,9 @@ describe('runRemoteOrcaCli', () => {
       }),
       getLegacyAdoption: vi.fn(() => undefined),
       getActiveDispatchForIdentity: vi.fn(() => undefined),
+      getActiveDispatchMailboxOwners: vi.fn(() => []),
       getCurrentRunForPane: vi.fn(() => undefined),
+      getRunMailboxOwnerIdsForHandle: vi.fn(() => []),
       findActiveRemoteAttachmentForPane: vi.fn(() => undefined)
     }
     const runtime = {
@@ -96,6 +98,8 @@ describe('runRemoteOrcaCli', () => {
       }),
       getOrchestrationDb: () => db,
       getTerminalPaneKey: () => null,
+      getLiveTerminalPaneKey: (handle: string) =>
+        handle === 'term_windows' ? 'tab_windows:leaf_windows' : null,
       deliverPendingMessagesForHandle: vi.fn(),
       notifyMessageArrived: vi.fn(),
       linearIssueContext: vi.fn(async (request: unknown) => ({
@@ -188,9 +192,18 @@ describe('runRemoteOrcaCli', () => {
       LEGACY_FALLBACK_OPTIONS
     )
 
-    expect(result.exitCode).toBe(0)
-    const payload = JSON.parse(result.stdout) as { ok: boolean }
-    expect(payload.ok).toBe(true)
+    expect(result.exitCode, result.stdout).toBe(0)
+    expect(JSON.parse(result.stdout)).toMatchObject({
+      ok: true,
+      result: {
+        warnings: [
+          {
+            code: 'legacy_terminal_recipient',
+            recipient: 'term_windows'
+          }
+        ]
+      }
+    })
     expect(db.getUnreadMessages('term_windows')[0]?.from_handle).toBe('term_ssh')
   })
 
@@ -210,7 +223,7 @@ describe('runRemoteOrcaCli', () => {
       LEGACY_FALLBACK_OPTIONS
     )
 
-    expect(result.exitCode).toBe(0)
+    expect(result.exitCode, result.stdout).toBe(0)
     expect(db.insertMessage).toHaveBeenCalledWith(
       expect.objectContaining({ senderPaneKey: undefined })
     )
@@ -481,7 +494,7 @@ describe('runRemoteOrcaCli', () => {
       LEGACY_FALLBACK_OPTIONS
     )
 
-    expect(result.exitCode).toBe(0)
+    expect(result.exitCode, result.stdout).toBe(0)
     const payload = JSON.parse(result.stdout) as { ok: boolean }
     expect(payload.ok).toBe(true)
     const message = db.getUnreadMessages('term_windows')[0]

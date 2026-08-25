@@ -825,7 +825,9 @@
         "linearDescription": "Orca에서 Linear가 작동하는 방식, 설정 체크리스트, 에이전트 스킬, 프롬프트 예시입니다.",
         "pluginsTitle": "플러그인",
         "pluginsDescription": "실험적인 Orca 플러그인을 설치하고 관리합니다.",
-        "tasksDescription": "제공업체를 연결하고 Linear 스킬을 설치한 다음 작업에 표시할 항목을 선택하세요."
+        "tasksDescription": "제공업체를 연결하고 Linear 스킬을 설치한 다음 작업에 표시할 항목을 선택하세요.",
+        "automationsTitle": "자동화",
+        "automationsDescription": "에이전트 작업을 예약하고 사이드바에 자동화 표시 여부를 선택합니다."
       },
       "useAppMenuPaste": {
         "pasteTooLarge": "붙여넣기 내용이 너무 큽니다."
@@ -904,7 +906,7 @@
         "e52bed9264": "아직 보고된 체크가 없습니다.",
         "90020cc1f3": "이 PR에는 아직 보고된 체크가 없습니다.",
         "ecffebc251": "체크를 찾을 수 없습니다.",
-        "5dddefdf58": "GitHub에서 열기",
+        "checkOpenInBrowser": "브라우저에서 열기",
         "744197c84d": "이 체크에는 인라인 출력이 없습니다.",
         "08d072664d": "작업",
         "96d8f36798": "주석",
@@ -1440,7 +1442,6 @@
         "c57873d721": "PR이 병합되었습니다",
         "a63b3c159c": "그러면 GitHub의 PR이 업데이트됩니다.",
         "eec3706a6a": "{{value0}} PR #{{value1}}?",
-        "b8c6cbb8c4": "PR {{value0}}에 실패했습니다.",
         "710e47aa06": "PR이 다시 열렸습니다",
         "7aa3b5f706": "PR이 종료되었습니다.",
         "3d77438c92": "그러면 GitHub에서 PR이 다시 열립니다.",
@@ -1539,7 +1540,13 @@
         "dd5d9a4f17": "{{value0}}에 업데이트됨",
         "71a3c0f9d2": "워크스페이스 시작",
         "filesUnavailable": "변경된 파일을 불러오지 못했습니다.",
-        "filesRetry": "Retry"
+        "filesRetry": "Retry",
+        "77482513f8": "닫기",
+        "2f5195c6a0": "다시 열기",
+        "4b8ae7303f": "차이를 불러오지 못했습니다.",
+        "closePullRequestFailed": "PR을 닫지 못했습니다.",
+        "reopenPullRequestFailed": "PR을 다시 열지 못했습니다.",
+        "diffLoadTimedOut": "이 diff를 불러오는 데 시간이 초과되었습니다."
       },
       "QuickOpen": {
         "1dbd3f59ff": "이동",
@@ -2641,7 +2648,7 @@
               "346d409ab2": "agent 선택",
               "0adba8fa0c": "에이전트",
               "ec8f081919": "작업",
-              "ed04233b3e": "빠른 액세스를 위해 terminal 명령이나 agent 프롬프트를 저장하세요.",
+              "ed04233b3e": "저장한 항목은 탭 바 메뉴에 표시되어 한 번의 클릭으로 실행할 수 있습니다.",
               "ca414324ee": "명령 텍스트",
               "dc921c17ee": "프롬프트",
               "5b3f634a55": "빠른 명령 추가",
@@ -3271,7 +3278,9 @@
             "antigravityUsageDetails": "Antigravity 사용량 세부 정보 열기",
             "grokUsageAria": "Grok 사용량 세부 정보 열기",
             "grokUsageMenu": "Grok 사용량",
-            "floatingTerminalNewActivity": "{{label}}, 새 활동"
+            "floatingTerminalNewActivity": "{{label}}, 새 활동",
+            "codexSignInSuccess": "Codex에 로그인했습니다",
+            "codexSignInError": "Codex 로그인에 실패했습니다. 다시 시도해 주세요."
           },
           "StatusBarUsageEmptyCta": {
             "828c764a79": "계정 연결",
@@ -5318,6 +5327,7 @@
           "codexSystemDefaultNeedsSignIn": "{{value0}}에 대한 Codex 로그인을 찾을 수 없습니다.",
           "codexConfigSyncMissingSource": "Codex is still using the settings it last synced because {{value0}} is missing. Restore that file to resume syncing.",
           "codexConfigSyncBlankSource": "Codex is still using the settings it last synced because {{value0}} is empty. That is expected while a synced folder finishes downloading.",
+          "codexConfigSyncManagedHomeUnavailable": "현재 Orca가 이 계정의 Codex 파일을 읽을 수 없어 설정이 동기화되지 않을 수 있습니다. 바이러스 백신이나 백업 도구가 파일을 잠시 잠근 경우가 많으며, 일반적으로 자동으로 해결됩니다.",
           "codexConfigSyncUnreadableSource": "Codex is still using the settings it last synced because {{value0}} could not be read. Check that file's permissions."
         },
         "AdvancedPane": {
@@ -10144,6 +10154,22 @@
           "saveFailed": "가시성 기본값을 저장할 수 없습니다.",
           "updateServer": "소스 기본값을 구성하려면 이 서버를 업데이트하세요.",
           "updateServerDefaults": "표시 기본값을 구성하려면 이 서버를 업데이트하세요."
+        },
+        "automations": {
+          "title": "자동화",
+          "description": "에이전트 작업을 예약하고 사이드바에 자동화 표시 여부를 선택합니다.",
+          "showButton": "자동화 버튼 표시",
+          "showButtonDescription": "사이드바에 자동화 바로 가기를 표시합니다.",
+          "howItWorksTitle": "자동화 작동 방식",
+          "howItWorksDescription": "에이전트 작업을 한 번만 예약하면 Orca가 각 실행을 생성하고 결과를 한곳에 모아 관리합니다.",
+          "defineStepTitle": "작업 설명",
+          "defineStepDescription": "프로젝트, 에이전트, 프롬프트 및 일정을 선택합니다.",
+          "runStepTitle": "Orca가 각 실행 시작",
+          "runStepDescription": "예약 시간이 되면 선택된 에이전트에게 새로운 작업 공간이 할당됩니다.",
+          "reviewStepTitle": "결과 검토",
+          "reviewStepDescription": "최근 실행을 검토하고 필요할 때 언제든지 작업을 계속할 수 있습니다.",
+          "openAutomations": "자동화 열기",
+          "openAutomationsDescription": "일정을 생성하고 최근 실행을 확인합니다."
         }
       },
       "right": {
@@ -13635,6 +13661,7 @@
           "e46c1aa9ad": "생성",
           "a9d9dccf77": "저장",
           "777548c2d6": "변경 사항 저장",
+          "e8c2a14f70": "저장하면 일시 중지될 때까지 자동으로 실행됩니다.",
           "ff5db28639": "기존의"
         },
         "AutomationEditorDialogHeader": {
@@ -13925,6 +13952,19 @@
         },
         "AutomationListLocalRows": {
           "c92c9463c6": "자동화 작업"
+        },
+        "AutomationListFilterMenu": {
+          "926e785e4d": "agents 검색...",
+          "491043ee45": "검색어와 일치하는 agents가 없습니다.",
+          "agent": "에이전트",
+          "lastRun": "마지막 실행",
+          "all": "전체",
+          "failed": "실패",
+          "succeeded": "성공",
+          "neverRan": "실행 안 함",
+          "filters": "필터",
+          "clear": "필터 지우기",
+          "removeFilter": "{{value0}} 필터 제거"
         }
       },
       "agent": {
@@ -14268,6 +14308,13 @@
         "pendingChip": "{{value0}} 보류 중",
         "needsActionChip": "{{value0}}개 조치 필요",
         "unresolvedChip": "{{value0}}개 미해결"
+      },
+      "artifacts": {
+        "ArtifactsPage": {
+          "deleteTitle": "아티팩트를 삭제할까요?",
+          "deleteDescription": "“{{name}}”은(는) 공개 링크에서 더 이상 사용할 수 없습니다.",
+          "delete": "삭제"
+        }
       }
     },
     "i18n": {

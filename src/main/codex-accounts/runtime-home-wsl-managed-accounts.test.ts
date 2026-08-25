@@ -92,10 +92,14 @@ describe('CodexRuntimeHomeService', () => {
       expect(readFileSync(join(wslRuntimeHomePath, 'auth.json'), 'utf-8')).toBe(
         '{"account":"wsl"}\n'
       )
-      expect(service.prepareForRateLimitFetch()).toBe(getRuntimeCodexHomePath())
-      expect(service.prepareForRateLimitFetch({ runtime: 'wsl', wslDistro: 'Ubuntu' })).toBe(
-        wslRuntimeHomePath
-      )
+      expect(service.prepareForRateLimitFetch()).toEqual({
+        kind: 'ready',
+        codexHomePath: getRuntimeCodexHomePath()
+      })
+      expect(service.prepareForRateLimitFetch({ runtime: 'wsl', wslDistro: 'Ubuntu' })).toEqual({
+        kind: 'ready',
+        codexHomePath: wslRuntimeHomePath
+      })
     } finally {
       if (originalPlatform) {
         Object.defineProperty(process, 'platform', originalPlatform)

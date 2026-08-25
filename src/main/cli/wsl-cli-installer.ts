@@ -484,7 +484,7 @@ async function runWslCommand(distro: string, command: string): Promise<string> {
     try {
       child = execFile(
         'wsl.exe',
-        ['-d', distro, '--', 'bash', '-lc', buildEncodedWslBashCommand(command)],
+        ['-d', distro, '--exec', 'bash', '-lc', buildEncodedWslBashCommand(command)],
         {
           encoding: 'utf8',
           timeout: WSL_COMMAND_TIMEOUT_MS

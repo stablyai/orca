@@ -2,7 +2,12 @@ import { describe, expect, it, vi } from 'vitest'
 import type { RpcClient } from '../transport/rpc-client'
 import type { RpcResponse } from '../transport/types'
 import type { MobileSessionTab, SessionTabsResult } from './mobile-session-route-types'
-import { hasPendingTerminalHandleRecoveryNeed } from './pending-terminal-handle-recovery'
+import {
+  getPendingTerminalHandleRecoveryContextKey,
+  hasPendingTerminalHandleRecoveryNeed,
+  PendingTerminalHandleRecoveryBudget,
+  PENDING_TERMINAL_HANDLE_RECOVERY_ATTEMPTS
+} from './pending-terminal-handle-recovery'
 import {
   MobileSessionTabsStreamHealth,
   type SessionTabsApplyOutcome
@@ -62,6 +67,38 @@ describe('hasPendingTerminalHandleRecoveryNeed', () => {
     expect(hasPendingTerminalHandleRecoveryNeed([terminalTab(null)], null)).toBe(false)
     expect(hasPendingTerminalHandleRecoveryNeed([terminalTab(null)], 'gone')).toBe(false)
   })
+
+  it('keeps recovery contexts distinct when tab identifiers contain separators', () => {
+    const first = { ...terminalTab(null), id: 'a:b', parentTabId: 'c' }
+    const second = { ...terminalTab(null), id: 'a', parentTabId: 'b:c' }
+
+    expect(getPendingTerminalHandleRecoveryContextKey([first], first.id)).not.toBe(
+      getPendingTerminalHandleRecoveryContextKey([second], second.id)
+    )
+  })
+})
+
+describe('PendingTerminalHandleRecoveryBudget', () => {
+  it('parks after the bounded attempt window and resets for a new terminal', () => {
+    const budget = new PendingTerminalHandleRecoveryBudget()
+    for (let attempt = 1; attempt <= PENDING_TERMINAL_HANDLE_RECOVERY_ATTEMPTS; attempt += 1) {
+      expect(budget.take('terminal-a')).toEqual({
+        allowed: true,
+        parked: false
+      })
+    }
+    expect(budget.take('terminal-a')).toEqual({ allowed: false, parked: true })
+    expect(budget.take('terminal-b')).toEqual({ allowed: true, parked: false })
+  })
+
+  it('resets the current terminal budget explicitly', () => {
+    const budget = new PendingTerminalHandleRecoveryBudget()
+    for (let attempt = 0; attempt < PENDING_TERMINAL_HANDLE_RECOVERY_ATTEMPTS; attempt += 1) {
+      budget.take('terminal-a')
+    }
+    budget.reset()
+    expect(budget.take('terminal-a')).toEqual({ allowed: true, parked: false })
+  })
 })
 
 /**
@@ -82,6 +119,7 @@ describe('pending-handle recovery through MobileSessionTabsStreamHealth', () => 
     const client = { sendRequest, getGeneration: () => 1 } as unknown as RpcClient
     let tabs: MobileSessionTab[] = []
     let activeTabId: string | null = null
+    const recoveryBudget = new PendingTerminalHandleRecoveryBudget()
     const controller = new MobileSessionTabsStreamHealth<SessionTabsResult, MobileSessionTab>({
       client,
       scope: 'id:repo::worktree',
@@ -91,7 +129,9 @@ describe('pending-handle recovery through MobileSessionTabsStreamHealth', () => 
         return { accepted: true, effectiveTabs: result.tabs }
       },
       consumeAccepted: () => {},
-      hasRecoveryNeed: () => hasPendingTerminalHandleRecoveryNeed(tabs, activeTabId)
+      hasRecoveryNeed: () => hasPendingTerminalHandleRecoveryNeed(tabs, activeTabId),
+      allowRecoveryPoll: () =>
+        recoveryBudget.take(getPendingTerminalHandleRecoveryContextKey(tabs, activeTabId)).allowed
     })
     return {
       controller,
@@ -137,6 +177,88 @@ describe('pending-handle recovery through MobileSessionTabsStreamHealth', () => 
     expect(harness.sendRequest).toHaveBeenCalledWith('session.tabs.list', {
       worktree: 'id:repo::worktree'
     })
+  })
+
+  it('parks the live poll after five pending-handle lists', async () => {
+    const harness = makeHarness()
+    await driveToLiveStream(harness, null)
+
+    for (let attempt = 0; attempt < PENDING_TERMINAL_HANDLE_RECOVERY_ATTEMPTS; attempt += 1) {
+      const request = harness.controller.poll()
+      expect(request).not.toBeNull()
+      await settle()
+      harness.resolveNext(snapshot(null))
+      await request
+    }
+
+    expect(harness.sendRequest).toHaveBeenCalledTimes(PENDING_TERMINAL_HANDLE_RECOVERY_ATTEMPTS)
+    expect(harness.controller.poll()).toBeNull()
+    await settle()
+    expect(harness.sendRequest).toHaveBeenCalledTimes(PENDING_TERMINAL_HANDLE_RECOVERY_ATTEMPTS)
+  })
+
+  it('does not spend live fallback attempts while a slow request is coalesced', async () => {
+    const harness = makeHarness()
+    await driveToLiveStream(harness, null)
+
+    for (let attempt = 0; attempt < PENDING_TERMINAL_HANDLE_RECOVERY_ATTEMPTS; attempt += 1) {
+      const request = harness.controller.poll()
+      expect(request).not.toBeNull()
+      for (let joinedTick = 0; joinedTick < 5; joinedTick += 1) {
+        expect(harness.controller.poll()).toBe(request)
+      }
+      expect(harness.sendRequest).toHaveBeenCalledTimes(attempt + 1)
+      harness.resolveNext(snapshot(null))
+      await request
+    }
+
+    expect(harness.controller.poll()).toBeNull()
+    expect(harness.sendRequest).toHaveBeenCalledTimes(PENDING_TERMINAL_HANDLE_RECOVERY_ATTEMPTS)
+  })
+
+  it.each(['probing', 'degraded'] as const)(
+    'keeps polling a pending handle while stream health is %s',
+    async (health) => {
+      const harness = makeHarness()
+      harness.controller.setReconciliationActive(true)
+      const subscription = harness.controller.beginSubscription()
+      if (health === 'degraded') {
+        subscription.listener({ ...snapshot(null), type: 'end' })
+      }
+
+      for (let attempt = 0; attempt < PENDING_TERMINAL_HANDLE_RECOVERY_ATTEMPTS + 2; attempt += 1) {
+        const request = harness.controller.poll()
+        expect(request).not.toBeNull()
+        await settle()
+        harness.resolveNext(snapshot(null))
+        await request
+      }
+
+      expect(harness.sendRequest).toHaveBeenCalledTimes(
+        PENDING_TERMINAL_HANDLE_RECOVERY_ATTEMPTS + 2
+      )
+    }
+  )
+
+  it('starts a fresh retry and fences the half-open request result', async () => {
+    const harness = makeHarness()
+    await driveToLiveStream(harness, null)
+
+    const halfOpen = harness.controller.poll()
+    expect(harness.sendRequest).toHaveBeenCalledTimes(1)
+    const retry = harness.controller.retryReconciliation()
+    expect(retry).not.toBe(halfOpen)
+    expect(harness.sendRequest).toHaveBeenCalledTimes(2)
+    expect(harness.controller.retryReconciliation()).toBe(retry)
+    expect(harness.sendRequest).toHaveBeenCalledTimes(2)
+
+    harness.resolveNext(snapshot('stale-handle'))
+    await halfOpen
+    expect(harness.readTabs()[0]).toMatchObject({ terminal: null })
+
+    harness.resolveNext(snapshot('fresh-handle'))
+    await retry
+    expect(harness.readTabs()[0]).toMatchObject({ terminal: 'fresh-handle' })
   })
 
   it('stops polling once a fresh snapshot carries the handle', async () => {

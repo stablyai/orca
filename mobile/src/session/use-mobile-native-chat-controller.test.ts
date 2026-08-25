@@ -96,7 +96,8 @@ const ORIGIN = {
   pendingKey: 'h\0w\0tab-1\0session-1',
   normalizedText: 'look',
   baselineOccurrences: 0,
-  baselineTailMessageId: null
+  baselineTailMessageId: null,
+  baselineResolved: true
 }
 
 describe('useMobileNativeChatController handleNativeChatSend', () => {

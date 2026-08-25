@@ -11,6 +11,7 @@ import {
 import { CandidateRow } from './workspace-cleanup-candidate-row'
 import { WorkspaceCleanupCandidateList } from './workspace-cleanup-candidate-list'
 import { FACET_NOW, makeNamedFacets } from './workspace-cleanup-facet.test.fixture'
+import { getWorkspaceCleanupHostIdentity } from './workspace-cleanup-host-identity'
 import { runWorkspaceCleanupQuery } from './workspace-cleanup-query'
 import type { WorkspaceCleanupFacets } from './workspace-cleanup-facets'
 
@@ -41,7 +42,8 @@ function renderRows(rows: readonly WorkspaceCleanupFacets[]): void {
         scrollElement={null}
         renderRow={(row, index) => (
           <CandidateRow
-            key={row.worktreeId}
+            key={row.identity}
+            identity={row.identity}
             candidate={row.candidate}
             reviewInfo={row.review}
             expanded={false}
@@ -124,7 +126,9 @@ describe('workspace cleanup flat list', () => {
   })
 
   it('reports only the rows the user could actually queue for deletion', () => {
-    expect(query().selectableWorktreeIds).not.toContain('repo-1::/repo/protected-one')
+    expect(query().selectableIdentities).not.toContain(
+      getWorkspaceCleanupHostIdentity('local', 'repo-1::/repo/protected-one')
+    )
   })
 
   it('shows status and disk-size facts without expanding a row', () => {

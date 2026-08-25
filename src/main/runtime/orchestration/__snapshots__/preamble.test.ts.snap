@@ -48,8 +48,8 @@ Slack, GitHub comments, or any other channel to reach a human during the run.
   # Ask the coordinator a question and block until it answers.
   #
   # BEHAVIOR RULE #1 (MUST NOT VIOLATE):
-  # NEVER use AskUserQuestion; use \`orca orchestration ask\` or send
-  # --type decision_gate. AskUserQuestion opens a local TUI prompt that the
+  # NEVER use AskUserQuestion; use \`orca orchestration ask\`.
+  # AskUserQuestion opens a local TUI prompt that the
   # coordinator cannot see and cannot answer — your session will hang forever
   # waiting on a human. Every interactive question goes through \`ask\` below.
   #
@@ -67,7 +67,7 @@ Slack, GitHub comments, or any other channel to reach a human during the run.
   orca orchestration send --from term_WORKER \\
     --type escalation --subject "Blocked: <reason>" \\
     --body "<details>" \\
-    --task-id task_SNAP
+    --task-id task_SNAP --dispatch-id ctx_SNAP
 
   # Check for messages from the coordinator:
   orca orchestration check --terminal term_WORKER

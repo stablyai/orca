@@ -1,5 +1,5 @@
 import React from 'react'
-import { AlertTriangle, Loader2, Trash2, X } from 'lucide-react'
+import { AlertTriangle, Loader2, Monitor, Trash2, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Progress } from '@/components/ui/progress'
@@ -21,8 +21,14 @@ import { StatusPill } from './workspace-cleanup-status-pill'
 import { WorkspaceCleanupCandidateList } from './workspace-cleanup-candidate-list'
 import {
   getWorkspaceCleanupCandidateHostId,
+  getWorkspaceCleanupCandidateIdentity,
   getWorkspaceCleanupHostIdentity
 } from './workspace-cleanup-host-identity'
+import {
+  getWorkspaceCleanupCandidateAccessibleName,
+  getWorkspaceCleanupCandidateHostLabel
+} from './workspace-cleanup-host-label'
+import { WorkspaceCleanupMetadataChip } from './workspace-cleanup-metadata-chip'
 
 const CONFIRM_REMOVE_ROW_ESTIMATE_PX = 76
 
@@ -138,7 +144,7 @@ export function WorkspaceCleanupConfirmRemove({
             estimatedRowHeight={CONFIRM_REMOVE_ROW_ESTIMATE_PX}
             renderRow={(candidate, index) => (
               <ConfirmRemoveRow
-                key={candidate.worktreeId}
+                key={getWorkspaceCleanupCandidateIdentity(candidate)}
                 candidate={candidate}
                 now={now}
                 reviewInfo={
@@ -200,10 +206,22 @@ function ConfirmRemoveRow({
   const contextPillLabel = getContextPillLabel(candidate)
   const showGitMetadataChip = shouldShowGitMetadataChip(candidate)
   const factStatus = getCandidateFactStatus(candidate)
+  const hostLabel = getWorkspaceCleanupCandidateHostLabel(candidate)
   return (
-    <div className={cn('border-b border-border/60 px-5 py-2.5', last && 'border-b-0')}>
+    <div
+      role="group"
+      aria-label={getWorkspaceCleanupCandidateAccessibleName(candidate)}
+      className={cn('border-b border-border/60 px-5 py-2.5', last && 'border-b-0')}
+    >
       <div className="flex min-w-0 flex-wrap items-baseline gap-x-2 gap-y-0.5">
         <span className="min-w-0 truncate text-sm font-medium">{candidate.displayName}</span>
+        <WorkspaceCleanupMetadataChip
+          icon={Monitor}
+          label={translate('components.workspace.cleanup.host.label', 'Host: {{value0}}', {
+            value0: hostLabel
+          })}
+          value={hostLabel}
+        />
         <span className="text-xs text-muted-foreground">
           {translate(
             'auto.components.workspace.cleanup.WorkspaceCleanupDialog.352f15d6fc',

@@ -17,6 +17,10 @@ vi.mock('electron', () => ({
   ipcMain: { handle: handleMock }
 }))
 
+vi.mock('./skill-ipc-main-window', () => ({
+  handleMainWindowSkillIpc: (channel: string, handler: unknown) => handleMock(channel, handler)
+}))
+
 vi.mock('./runtime-environment-transport-routing', () => ({
   callRuntimeEnvironment: callRuntimeEnvironmentMock
 }))

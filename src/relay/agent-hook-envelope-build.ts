@@ -28,6 +28,7 @@ export function buildRelayHookEnvelope(
     compactTrigger: event.compactTrigger,
     toolUseId: event.toolUseId,
     toolAgentId: event.toolAgentId,
+    teammateName: event.teammateName,
     toolAgentType: event.toolAgentType,
     claudeRunningNonAgentTask: event.claudeRunningNonAgentTask,
     ...(event.providerSession ? { providerSession: event.providerSession } : {}),

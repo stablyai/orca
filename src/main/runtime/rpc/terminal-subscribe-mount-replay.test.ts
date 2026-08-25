@@ -9,6 +9,7 @@ import type { OrcaRuntimeService } from '../orca-runtime'
 import type { RpcRequest } from './core'
 import { RpcDispatcher } from './dispatcher'
 import { TERMINAL_METHODS } from './methods/terminal'
+import { createSubscriptionRegistryDouble } from './subscription-registry-test-double'
 
 const request: RpcRequest = {
   id: 'req-1',
@@ -24,7 +25,7 @@ const request: RpcRequest = {
 describe('terminal subscribe mount replay', () => {
   it('includes the restored idle screen when a missing model is background-mounted', async () => {
     const binaryFrames: Uint8Array<ArrayBufferLike>[] = []
-    const cleanups = new Map<string, () => void>()
+    const registry = createSubscriptionRegistryDouble()
     let mounted = false
     const runtime = {
       getRuntimeId: () => 'test-runtime',
@@ -59,13 +60,9 @@ describe('terminal subscribe mount replay', () => {
       isTerminalAlternateScreen: vi.fn().mockReturnValue(false),
       subscribeToTerminalResize: vi.fn().mockReturnValue(vi.fn()),
       subscribeToFitOverrideChanges: vi.fn().mockReturnValue(vi.fn()),
-      registerSubscriptionCleanup: vi.fn((id: string, cleanup: () => void) => {
-        cleanups.set(id, cleanup)
-      }),
-      cleanupSubscription: vi.fn((id: string) => {
-        cleanups.get(id)?.()
-        cleanups.delete(id)
-      }),
+      registerSubscriptionCleanup: vi.fn(registry.registerSubscriptionCleanup),
+      registerOwnedSubscriptionCleanup: vi.fn(registry.registerOwnedSubscriptionCleanup),
+      cleanupSubscription: vi.fn(registry.cleanupSubscription),
       waitForTerminal: vi.fn(() => new Promise<RuntimeTerminalWait>(() => {}))
     } as unknown as OrcaRuntimeService
     const dispatcher = new RpcDispatcher({ runtime, methods: TERMINAL_METHODS })
@@ -95,7 +92,7 @@ describe('terminal subscribe mount replay', () => {
 
   it('prefers restored history when phone-fit creates suffix-only headless state', async () => {
     const binaryFrames: Uint8Array<ArrayBufferLike>[] = []
-    const cleanups = new Map<string, () => void>()
+    const registry = createSubscriptionRegistryDouble()
     let generation = 1
     let headlessPresent = false
     let serializeCalls = 0
@@ -139,13 +136,9 @@ describe('terminal subscribe mount replay', () => {
       isTerminalAlternateScreen: vi.fn().mockReturnValue(false),
       subscribeToTerminalResize: vi.fn().mockReturnValue(vi.fn()),
       subscribeToFitOverrideChanges: vi.fn().mockReturnValue(vi.fn()),
-      registerSubscriptionCleanup: vi.fn((id: string, cleanup: () => void) => {
-        cleanups.set(id, cleanup)
-      }),
-      cleanupSubscription: vi.fn((id: string) => {
-        cleanups.get(id)?.()
-        cleanups.delete(id)
-      }),
+      registerSubscriptionCleanup: vi.fn(registry.registerSubscriptionCleanup),
+      registerOwnedSubscriptionCleanup: vi.fn(registry.registerOwnedSubscriptionCleanup),
+      cleanupSubscription: vi.fn(registry.cleanupSubscription),
       waitForTerminal: vi.fn(() => new Promise<RuntimeTerminalWait>(() => {}))
     } as unknown as OrcaRuntimeService
     const dispatcher = new RpcDispatcher({ runtime, methods: TERMINAL_METHODS })
@@ -188,7 +181,7 @@ describe('terminal subscribe mount replay', () => {
   it('replays a late recovery when readiness lands after the bounded initial response', async () => {
     vi.useFakeTimers()
     const binaryFrames: Uint8Array<ArrayBufferLike>[] = []
-    const cleanups = new Map<string, () => void>()
+    const registry = createSubscriptionRegistryDouble()
     let mounted = false
     let signalWaitStarted!: () => void
     const waitStarted = new Promise<void>((resolve) => {
@@ -235,13 +228,9 @@ describe('terminal subscribe mount replay', () => {
       isTerminalAlternateScreen: vi.fn().mockReturnValue(false),
       subscribeToTerminalResize: vi.fn().mockReturnValue(vi.fn()),
       subscribeToFitOverrideChanges: vi.fn().mockReturnValue(vi.fn()),
-      registerSubscriptionCleanup: vi.fn((id: string, cleanup: () => void) => {
-        cleanups.set(id, cleanup)
-      }),
-      cleanupSubscription: vi.fn((id: string) => {
-        cleanups.get(id)?.()
-        cleanups.delete(id)
-      }),
+      registerSubscriptionCleanup: vi.fn(registry.registerSubscriptionCleanup),
+      registerOwnedSubscriptionCleanup: vi.fn(registry.registerOwnedSubscriptionCleanup),
+      cleanupSubscription: vi.fn(registry.cleanupSubscription),
       waitForTerminal: vi.fn(() => new Promise<RuntimeTerminalWait>(() => {}))
     } as unknown as OrcaRuntimeService
     const dispatcher = new RpcDispatcher({ runtime, methods: TERMINAL_METHODS })
@@ -291,7 +280,7 @@ describe('terminal subscribe mount replay', () => {
 
   it('recovers from the pre-mount generation when suffix state appears during the PTY wait', async () => {
     const binaryFrames: Uint8Array<ArrayBufferLike>[] = []
-    const cleanups = new Map<string, () => void>()
+    const registry = createSubscriptionRegistryDouble()
     let generation = 0
     let headlessPresent = false
     const requestRendererTerminalTabMount = vi.fn(() => {
@@ -338,13 +327,9 @@ describe('terminal subscribe mount replay', () => {
       isTerminalAlternateScreen: vi.fn().mockReturnValue(false),
       subscribeToTerminalResize: vi.fn().mockReturnValue(vi.fn()),
       subscribeToFitOverrideChanges: vi.fn().mockReturnValue(vi.fn()),
-      registerSubscriptionCleanup: vi.fn((id: string, cleanup: () => void) => {
-        cleanups.set(id, cleanup)
-      }),
-      cleanupSubscription: vi.fn((id: string) => {
-        cleanups.get(id)?.()
-        cleanups.delete(id)
-      }),
+      registerSubscriptionCleanup: vi.fn(registry.registerSubscriptionCleanup),
+      registerOwnedSubscriptionCleanup: vi.fn(registry.registerOwnedSubscriptionCleanup),
+      cleanupSubscription: vi.fn(registry.cleanupSubscription),
       waitForTerminal: vi.fn(() => new Promise<RuntimeTerminalWait>(() => {}))
     } as unknown as OrcaRuntimeService
     const dispatcher = new RpcDispatcher({ runtime, methods: TERMINAL_METHODS })
@@ -379,7 +364,7 @@ describe('terminal subscribe mount replay', () => {
   })
 
   it('cancels the mount-ready wait when the mobile subscription closes', async () => {
-    const cleanups = new Map<string, () => void>()
+    const registry = createSubscriptionRegistryDouble()
     let waitSignal: AbortSignal | undefined
     const runtime = {
       getRuntimeId: () => 'test-runtime',
@@ -411,13 +396,9 @@ describe('terminal subscribe mount replay', () => {
       isTerminalAlternateScreen: vi.fn().mockReturnValue(false),
       subscribeToTerminalResize: vi.fn().mockReturnValue(vi.fn()),
       subscribeToFitOverrideChanges: vi.fn().mockReturnValue(vi.fn()),
-      registerSubscriptionCleanup: vi.fn((id: string, cleanup: () => void) => {
-        cleanups.set(id, cleanup)
-      }),
-      cleanupSubscription: vi.fn((id: string) => {
-        cleanups.get(id)?.()
-        cleanups.delete(id)
-      }),
+      registerSubscriptionCleanup: vi.fn(registry.registerSubscriptionCleanup),
+      registerOwnedSubscriptionCleanup: vi.fn(registry.registerOwnedSubscriptionCleanup),
+      cleanupSubscription: vi.fn(registry.cleanupSubscription),
       waitForTerminal: vi.fn(() => new Promise<RuntimeTerminalWait>(() => {}))
     } as unknown as OrcaRuntimeService
     const dispatcher = new RpcDispatcher({ runtime, methods: TERMINAL_METHODS })

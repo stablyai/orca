@@ -5,9 +5,10 @@ import type { Repo } from '../../../../../../shared/repo-types'
 import type { WorkspaceStatusDefinition, Worktree } from '../../../../../../shared/worktree/types'
 import type { WorktreeLineage } from '../../../../../../shared/worktree/lineage-types'
 import { PINNED_GROUP_KEY, getLineageGroupKey } from '../grouping/group-keys'
+import type { PinnedWorktreeDisplayPolicy, WorktreeGroupBy } from '../grouping/row-types'
 import type { ProjectGroupingModel } from '../grouping/project-grouping'
-import type { WorktreeGroupBy } from '../grouping/row-types'
 import { getGroupKeysForWorktree } from '../grouping/worktree-group-keys'
+import { isPinnedSectionWorktree } from '../../pinned-section-worktrees'
 import { getWorktreeLineageAncestors } from '../../worktree-lineage-projection'
 
 // While the agent send picker targets a workspace, force open every section that hides it.
@@ -15,6 +16,8 @@ export function useEffectiveCollapsedGroups(args: {
   collapsedGroups: Set<string>
   agentSendTargetWorktreeId: string | null
   groupBy: WorktreeGroupBy
+  pinnedDisplayPolicy: PinnedWorktreeDisplayPolicy
+  visibleWorktrees: readonly Worktree[]
   repoMap: Map<string, Repo>
   worktreeMap: Map<string, Worktree>
   worktreeLineageById: Record<string, WorktreeLineage>
@@ -28,6 +31,8 @@ export function useEffectiveCollapsedGroups(args: {
     collapsedGroups,
     agentSendTargetWorktreeId,
     groupBy,
+    pinnedDisplayPolicy,
+    visibleWorktrees,
     repoMap,
     worktreeMap,
     worktreeLineageById,
@@ -46,7 +51,10 @@ export function useEffectiveCollapsedGroups(args: {
       return collapsedGroups
     }
     const next = new Set(collapsedGroups)
-    if (targetWorktree.isPinned) {
+    if (
+      pinnedDisplayPolicy === 'single-location' &&
+      isPinnedSectionWorktree(targetWorktree, visibleWorktrees, worktreeLineageById, worktreeMap)
+    ) {
       next.delete(PINNED_GROUP_KEY)
     } else {
       for (const groupKey of getGroupKeysForWorktree(
@@ -75,6 +83,8 @@ export function useEffectiveCollapsedGroups(args: {
     agentSendTargetWorktreeId,
     collapsedGroups,
     groupBy,
+    pinnedDisplayPolicy,
+    visibleWorktrees,
     prCache,
     projectGroups,
     projectGrouping,

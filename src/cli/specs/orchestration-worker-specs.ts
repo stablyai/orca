@@ -42,7 +42,10 @@ export const ORCHESTRATION_WORKER_COMMAND_SPECS: CommandSpec[] = [
     path: ['orchestration', 'worker-show'],
     summary: 'Inspect one supervised worker Dispatch',
     usage: 'orca orchestration worker-show --dispatch <dispatch_id> [--json]',
-    allowedFlags: [...GLOBAL_FLAGS, 'dispatch']
+    allowedFlags: [...GLOBAL_FLAGS, 'dispatch'],
+    notes: [
+      'A Dispatch created by orchestration dispatch is shown as unsupervised and reports the exact adopted terminal when its identity is still provable.'
+    ]
   },
   {
     path: ['orchestration', 'worker-read'],
@@ -52,6 +55,7 @@ export const ORCHESTRATION_WORKER_COMMAND_SPECS: CommandSpec[] = [
     allowedFlags: [...GLOBAL_FLAGS, 'dispatch', 'source', 'cursor', 'limit'],
     notes: [
       'The default auto source uses an exact hook-reported transcript when available and otherwise returns labeled terminal output.',
+      'A Dispatch created by orchestration dispatch reads from its adopted terminal with worker status unsupervised.',
       'A returned cursor is pinned to the exact source; start a fresh read if Orca reports source_changed.'
     ]
   },
@@ -82,6 +86,7 @@ export const ORCHESTRATION_WORKER_COMMAND_SPECS: CommandSpec[] = [
     allowedFlags: [...GLOBAL_FLAGS, 'dispatch', 'retry-request'],
     notes: [
       'Post-completion cleanup for a settled (succeeded or failed) worker; closes only the exact coordinator-owned agent terminal of that worker.',
+      'A settled Dispatch created by orchestration dispatch has no owned terminal resource and is reported retained without process action.',
       'An inspectable output archive is preserved before the terminal closes, so worker-read still returns output afterwards.',
       'Never closes setup terminals, configured tabs, reused or pre-existing terminals, user-taken-over terminals, or unproven identities.',
       'Idempotent: repeating the call reports already_released. Only release_unknown exits 1; retained, release_pending, and already_released exit 0.'
@@ -95,6 +100,7 @@ export const ORCHESTRATION_WORKER_COMMAND_SPECS: CommandSpec[] = [
     allowedFlags: [...GLOBAL_FLAGS, 'dispatch', 'retry-request'],
     notes: [
       'Records a durable user-requested exception; a later explicit worker-release clears it and releases the terminal.',
+      'A settled Dispatch created by orchestration dispatch has no owned terminal resource and is reported retained without process action.',
       'Performs no process or filesystem action.'
     ]
   },
@@ -105,7 +111,8 @@ export const ORCHESTRATION_WORKER_COMMAND_SPECS: CommandSpec[] = [
       'orca orchestration worker-list [--run <run_id>] [--terminal-state <active|reclaimable|retained|release_pending|release_unknown|released>] [--json]',
     allowedFlags: [...GLOBAL_FLAGS, 'run', 'terminal-state'],
     notes: [
-      'Terminal state is process accounting and is reported separately from Task status; a completed Task can still own a live terminal.'
+      'Terminal state is process accounting and is reported separately from Task status; a completed Task can still own a live terminal.',
+      'Context-only Dispatches created by orchestration dispatch are included as unsupervised with terminal state retained.'
     ]
   }
 ]

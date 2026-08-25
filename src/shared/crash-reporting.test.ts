@@ -179,6 +179,54 @@ describe('crash-reporting shared helpers', () => {
     expect(text.indexOf('Check failure:')).toBeLessThan(text.indexOf('Details:'))
   })
 
+  it('decodes POSIX wait statuses in the exit code line and leaves Windows codes raw', () => {
+    const report = (overrides: Partial<CrashReportRecord>): CrashReportRecord => ({
+      id: 'crash-wait-status',
+      createdAt: '2026-08-14T09:32:19.696Z',
+      status: 'pending',
+      source: 'renderer',
+      processType: 'renderer',
+      reason: 'killed',
+      exitCode: null,
+      appVersion: '1.4.182',
+      platform: 'linux',
+      osRelease: '7.0.0-28-generic',
+      arch: 'x64',
+      electronVersion: '43.1.0',
+      chromeVersion: '150.0.7871.47',
+      details: {},
+      ...overrides
+    })
+
+    // Field bundles: linux 61696 = exit(241), 9 = SIGKILL, 133 = SIGTRAP+core, darwin 5 = SIGTRAP.
+    expect(formatCrashReportText(report({ exitCode: 61696 }))).toContain(
+      'Exit code: 61696 (exit status 241)'
+    )
+    expect(formatCrashReportText(report({ exitCode: 9 }))).toContain('Exit code: 9 (SIGKILL)')
+    expect(formatCrashReportText(report({ reason: 'crashed', exitCode: 133 }))).toContain(
+      'Exit code: 133 (SIGTRAP, core dumped)'
+    )
+    expect(
+      formatCrashReportText(report({ platform: 'darwin', reason: 'crashed', exitCode: 5 }))
+    ).toContain('Exit code: 5 (SIGTRAP)')
+    // Windows codes are not wait statuses; they must render byte-identical to before.
+    expect(formatCrashReportText(report({ platform: 'win32', exitCode: 1 }))).toContain(
+      'Exit code: 1\n'
+    )
+    expect(
+      formatCrashReportText(report({ platform: 'win32', reason: 'oom', exitCode: -536870904 }))
+    ).toContain('Exit code: -536870904\n')
+    // launch-failed carries a Chromium launch error, not a wait status — never decode it.
+    expect(formatCrashReportText(report({ reason: 'launch-failed', exitCode: 18 }))).toContain(
+      'Exit code: 18\n'
+    )
+    // A clean exit(0) must not grow an "(exit status 0)" suffix.
+    expect(formatCrashReportText(report({ reason: 'crashed', exitCode: 0 }))).toContain(
+      'Exit code: 0\n'
+    )
+    expect(formatCrashReportText(report({}))).toContain('Exit code: unknown')
+  })
+
   it('caps formatted reports to the crash endpoint limit', () => {
     const report: CrashReportRecord = {
       id: 'crash-oversized',

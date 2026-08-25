@@ -1,6 +1,9 @@
 import type { BrowserPage, BrowserWorkspace } from '../../../shared/browser-workspace-types'
 import type { Worktree } from '../../../shared/worktree/types'
-import type { SearchableBrowserPage } from './browser-palette-search'
+import {
+  buildSearchableBrowserPageDocument,
+  type SearchableBrowserPage
+} from './browser-palette-search'
 
 type BrowserPaletteActiveTabType = 'browser' | 'editor' | 'terminal' | 'simulator'
 
@@ -41,7 +44,8 @@ export function buildSearchableBrowserPages({
             activeTabType === 'browser' &&
             workspace.id === activeBrowserTabId &&
             workspace.activePageId === page.id,
-          isCurrentWorktree: activeWorktreeId === worktree.id
+          isCurrentWorktree: activeWorktreeId === worktree.id,
+          document: buildSearchableBrowserPageDocument({ page, workspace, worktree, repoName })
         })
       }
     }

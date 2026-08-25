@@ -12,6 +12,8 @@ import {
   type MigrationUnsupportedPtyEntry,
   type ParsedAgentStatusPayload
 } from '../../../../shared/agent-status-types'
+import type { AgentStatusObservation } from '../../../../shared/agent-status-observation'
+import { rendererAgentStatusObservations } from '../../lib/renderer-agent-status-observations'
 import {
   agentProviderSessionsEqual,
   getAgentResumeArgv,
@@ -112,6 +114,9 @@ export type AgentStatusPayload = ParsedAgentStatusPayload & {
   orchestration?: AgentStatusOrchestrationContext
   promptInteractionKey?: string
   restoredUnconfirmed?: boolean
+  /** Ingress provenance for this write (STA-4293). Read by nothing yet; a caller that omits
+   *  it produces exactly the entry it produces today. See agent-status-observation.ts. */
+  observation?: AgentStatusObservation
 }
 
 export type AgentStatusTiming = { updatedAt?: number; stateStartedAt?: number }
@@ -204,6 +209,8 @@ export type AgentStatusSlice = {
     paneKey: string,
     options?: { preserveSleepingAgentSession?: boolean }
   ) => void
+  /** Lift a pane's retirement fence once a live PTY re-attaches to it. Closed tabs stay retired. */
+  restoreAgentPaneAuthority: (paneKey: string) => void
   transferAgentPaneAuthority: (args: {
     fromPaneKey: string
     toPaneKey: string
@@ -1479,6 +1486,9 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
       const ownerPaneKey = resolveAgentPaneAuthorityKey(paneKey)
       const retiredPaneKeys = retireAgentPaneAuthorityAliases(paneKey)
       const retiredPaneKeySet = new Set(retiredPaneKeys)
+      for (const key of retiredPaneKeys) {
+        rendererAgentStatusObservations.forget(key)
+      }
       let hadLive = false
       set((s) => {
         const retiredLivePaneKeys = retiredPaneKeys.filter((key) => key in s.agentStatusByPaneKey)
@@ -1545,6 +1555,48 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
       }
     },
 
+    // Why: the tombstone claims this pane is gone; a live PTY binding to it proves
+    // otherwise. Lift the fence on that proof rather than on the next hook event —
+    // a pane re-attached mid-turn or while idle emits no new-turn event, so a
+    // turn-triggered revival leaves exactly the reported permanent suppression
+    // (STA-4114). This deliberately does NOT restore the rows retirement dropped;
+    // those are genuinely stale. It only re-opens the pane to future status.
+    restoreAgentPaneAuthority: (paneKey) => {
+      const ownerPaneKey = resolveAgentPaneAuthorityKey(paneKey)
+      // Why: a closed tab is a stronger, separate claim — re-attach must not undo it.
+      if (
+        isRecentlyClosedAgentStatusTab(
+          get().recentlyClosedAgentStatusTabIds,
+          getTabIdFromPaneKey(ownerPaneKey)
+        )
+      ) {
+        return
+      }
+      set((s) => {
+        const restorable = [paneKey, ownerPaneKey].filter(
+          (key) => key in s.recentlyRetiredAgentStatusPaneKeys
+        )
+        if (restorable.length === 0) {
+          return s
+        }
+        const next = { ...s.recentlyRetiredAgentStatusPaneKeys }
+        for (const key of restorable) {
+          delete next[key]
+        }
+        return { recentlyRetiredAgentStatusPaneKeys: next }
+      })
+      // Why: deliberately OUTSIDE the guard above, and not gated on having cleared
+      // anything here. This map is not a mirror of main's — main fences panes the
+      // renderer never hears about (retirePtyAgentLaunchAuthority on command-finished
+      // and PTY exit calls the hook server directly, and nothing pushes that back), and
+      // this map is per-window and non-persisted, so a renderer reload empties it while
+      // main's survives. Gating the send on a local tombstone reintroduces STA-4114 for
+      // exactly those panes. The send is idempotent and main refuses closed tabs itself.
+      if (typeof window !== 'undefined') {
+        window.api?.agentStatus?.restorePaneAuthority?.(ownerPaneKey)
+      }
+    },
+
     transferAgentPaneAuthority: ({ fromPaneKey, toPaneKey, ptyId }) => {
       const transfer = transferAgentPaneAuthorityAlias({ fromPaneKey, toPaneKey, ptyId })
       if (!transfer || transfer.previousOwnerPaneKey === transfer.ownerPaneKey) {
@@ -1552,6 +1604,10 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
       }
       const from = transfer.previousOwnerPaneKey
       const to = transfer.ownerPaneKey
+      // Why: the moved row carries the observation stamped for its OLD key; renderer-authored
+      // observations for the new key must sort after it, not race it.
+      rendererAgentStatusObservations.forget(from)
+      rendererAgentStatusObservations.rebind(to)
       const targetTabId = getTabIdFromPaneKey(to) ?? undefined
       const targetLeafId = getLeafIdFromPaneKey(to) ?? undefined
       set((s) => ({
@@ -2150,6 +2206,9 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
           ...(providerSession ? { providerSession } : {}),
           ...(promptInteractionKey ? { promptInteractionKey } : {}),
           ...(payload.restoredUnconfirmed ? { restoredUnconfirmed: true } : {}),
+          // Why: never inherited from `existing` — an unstamped write is an unstamped
+          // observation, not the previous one repeated.
+          ...(payload.observation ? { observation: payload.observation } : {}),
           // Why: `interrupted` is done-only; parseAgentStatusPayload already clamps it for non-done states, so write it through directly.
           interrupted: payload.interrupted,
           // Why: done→done repaints (OSC 9999, reconnect snapshot replays) re-deliver a

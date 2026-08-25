@@ -17,14 +17,13 @@ vi.mock('child_process', () => {
 
 import { detectWslCommandsOnPath } from './preflight-wsl-agent-detection'
 import { buildPosixCommandPathLookupScript } from '../../shared/posix-command-path-lookup'
-import { escapeWslShCommandForWindows } from '../../shared/wsl-login-shell-command'
 
 function lastShCommandPayload(): string {
   const call = execFileAsyncMock.mock.calls.at(-1)
   expect(call).toBeDefined()
   const [file, args] = call as [string, string[]]
   expect(file).toBe('wsl.exe')
-  // args: [...distroArgs, '--', 'sh', '-c', <payload>]
+  // args: [...distroArgs, '--exec', 'sh', '-c', <payload>]
   return args.at(-1) as string
 }
 
@@ -59,7 +58,7 @@ describe('detectWslCommandsOnPath', () => {
       kind: 'shell-variable',
       name: 'cmd'
     })
-    expect(payload).toContain(escapeWslShCommandForWindows(lookupScript))
+    expect(payload).toContain(lookupScript)
     expect(payload).not.toContain('type -P')
   })
 

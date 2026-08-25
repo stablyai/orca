@@ -23,7 +23,6 @@ import {
   SKILL_SSH_RELAY_REMOVE_METHOD,
   type SkillSshWorkspaceAuthority
 } from '../../shared/skill-ssh-relay-contract'
-import type { IPtyProvider } from '../providers/pty-provider-contract'
 import { recordSkillCapabilityAbsence } from './skill-operation-observability'
 import { retrySkillTransferRpc } from './skill-transfer-rpc-retry'
 import { transferSkillPackageToSshHost } from './skill-ssh-package-transfer'
@@ -34,15 +33,23 @@ import {
   shouldUseSkillSshClientTransfer,
   skillSshRelayCapabilities
 } from './skill-ssh-relay-client'
+import type { SkillSshProviderSource } from './skill-ssh-relay-client'
 
-export async function supportsSkillManagementOnSsh(provider: IPtyProvider): Promise<boolean> {
+const NON_RETRYABLE_SKILL_TRANSFER_ERRORS = new Set([
+  'skill-install-ssh-update-required',
+  'skill-install-ssh-download-unavailable'
+])
+
+export async function supportsSkillManagementOnSsh(
+  provider: SkillSshProviderSource
+): Promise<boolean> {
   return (await skillSshRelayCapabilities(requireSkillSshRelayClient(provider))).includes(
     SKILL_MANAGEMENT_CAPABILITY
   )
 }
 
 export async function installSkillOnSshHost(input: {
-  provider: IPtyProvider
+  provider: SkillSshProviderSource
   userDataPath: string
   request: SkillInstallRequest
   workspace?: SkillSshWorkspaceAuthority
@@ -50,30 +57,36 @@ export async function installSkillOnSshHost(input: {
   signal?: AbortSignal
   fetcher?: typeof fetch
 }): Promise<SkillInstallResult> {
-  const client = requireSkillSshRelayClient(input.provider)
-  const supported = await skillSshRelayCapabilities(client)
   const request = input.request
-  if (request.providers !== undefined && !supported.includes(SKILL_INSTALL_PROVIDERS_CAPABILITY)) {
-    throw new Error('skill-install-ssh-update-required')
-  }
-  if (!supported.includes(SKILL_INSTALL_CAPABILITY)) {
-    recordSkillCapabilityAbsence({
-      capability: SKILL_INSTALL_CAPABILITY,
-      destination: 'global-ssh'
-    })
-    throw new Error('skill-install-ssh-update-required')
-  }
   try {
     return SkillInstallResultSchema.parse(
       await retrySkillTransferRpc({
         signal: input.signal,
-        retryable: retryableSkillSshTransportError,
-        call: () =>
-          client(
+        retryable: (error) =>
+          (error as Error)?.message !== 'skill-install-ssh-update-required' &&
+          retryableSkillSshTransportError(error),
+        call: async () => {
+          const client = requireSkillSshRelayClient(input.provider)
+          const supported = await skillSshRelayCapabilities(client)
+          if (
+            request.providers !== undefined &&
+            !supported.includes(SKILL_INSTALL_PROVIDERS_CAPABILITY)
+          ) {
+            throw new Error('skill-install-ssh-update-required')
+          }
+          if (!supported.includes(SKILL_INSTALL_CAPABILITY)) {
+            recordSkillCapabilityAbsence({
+              capability: SKILL_INSTALL_CAPABILITY,
+              destination: 'global-ssh'
+            })
+            throw new Error('skill-install-ssh-update-required')
+          }
+          return client(
             SKILL_SSH_RELAY_INSTALL_METHOD,
-            { request: request, workspace: input.workspace },
+            { request, workspace: input.workspace },
             { timeoutMs: SKILL_SSH_REQUEST_TIMEOUT_MS, signal: input.signal }
           )
+        }
       })
     )
   } catch (error) {
@@ -84,17 +97,27 @@ export async function installSkillOnSshHost(input: {
       throw error
     }
   }
-  if (!supported.includes(SKILL_UPLOAD_CAPABILITY)) {
-    recordSkillCapabilityAbsence({
-      capability: SKILL_UPLOAD_CAPABILITY,
-      destination: 'global-ssh'
-    })
-    throw new Error('skill-install-ssh-download-unavailable')
-  }
   return retrySkillTransferRpc({
     signal: input.signal,
-    retryable: retryableSkillSshTransportError,
+    retryable: (error) =>
+      !NON_RETRYABLE_SKILL_TRANSFER_ERRORS.has((error as Error)?.message) &&
+      retryableSkillSshTransportError(error),
     call: async () => {
+      const client = requireSkillSshRelayClient(input.provider)
+      const supported = await skillSshRelayCapabilities(client)
+      if (
+        !supported.includes(SKILL_INSTALL_CAPABILITY) ||
+        (request.providers !== undefined && !supported.includes(SKILL_INSTALL_PROVIDERS_CAPABILITY))
+      ) {
+        throw new Error('skill-install-ssh-update-required')
+      }
+      if (!supported.includes(SKILL_UPLOAD_CAPABILITY)) {
+        recordSkillCapabilityAbsence({
+          capability: SKILL_UPLOAD_CAPABILITY,
+          destination: 'global-ssh'
+        })
+        throw new Error('skill-install-ssh-download-unavailable')
+      }
       const uploadId = await transferSkillPackageToSshHost(client, input)
       try {
         return SkillInstallResultSchema.parse(
@@ -118,7 +141,7 @@ export async function installSkillOnSshHost(input: {
 }
 
 export async function previewSkillInstallOnSshHost(input: {
-  provider: IPtyProvider
+  provider: SkillSshProviderSource
   request: SkillInstallPreviewRequest
   workspace?: SkillSshWorkspaceAuthority
 }): Promise<SkillInstallPreview> {
@@ -136,7 +159,7 @@ export async function previewSkillInstallOnSshHost(input: {
 }
 
 export async function removeSkillInstallOnSshHost(input: {
-  provider: IPtyProvider
+  provider: SkillSshProviderSource
   request: SkillRemoveRequest
   workspace?: SkillSshWorkspaceAuthority
 }): Promise<SkillInstallResult> {
@@ -154,7 +177,7 @@ export async function removeSkillInstallOnSshHost(input: {
 }
 
 export async function listSkillInstallsOnSshHost(input: {
-  provider: IPtyProvider
+  provider: SkillSshProviderSource
   connectionId: string
   workspaces: SkillSshWorkspaceAuthority[]
 }): Promise<ManagedSkillInstall[]> {

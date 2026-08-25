@@ -258,5 +258,35 @@ describe('skill bundle installation', () => {
         }
       ]
     })
+
+    await rm(providerPath, { recursive: true })
+    const retried = await installSkillBundle({
+      operationId: 'operation_provider_retry',
+      archivePath: bundle.archivePath,
+      packageId: bundle.manifest.packageId,
+      versionId: bundle.manifest.versionId,
+      bundleDigest: bundle.manifest.bundleDigest,
+      selectedSkillIds: ['alpha-skill'],
+      expectedArchiveSha256: bundle.archiveSha256,
+      scope: 'global',
+      homeDirectory,
+      orcaStateDirectory: join(root, 'state'),
+      detectedProviders: ['claude'],
+      destinationIdentity: 'local-global',
+      hostIdentity: 'host_1'
+    })
+
+    expect(retried).toMatchObject({
+      status: 'complete',
+      skills: [
+        {
+          name: 'alpha-skill',
+          status: 'unchanged',
+          placements: expect.arrayContaining([
+            expect.objectContaining({ provider: 'claude', status: 'unchanged' })
+          ])
+        }
+      ]
+    })
   })
 })

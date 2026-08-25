@@ -229,6 +229,45 @@ describe('parseMinidumpCrashSignature', () => {
     expect(signature?.processType).toBe('renderer')
   })
 
+  it('stops at the process type when the dump belongs to another process', () => {
+    const { dump } = buildDump({ annotations: { ptype: 'gpu-process' } })
+    const dumpWithMemory = Buffer.concat([
+      dump,
+      Buffer.from(`\0${ELECTRON_43_CHECK_LINE}\0`, 'utf8')
+    ])
+
+    const signature = parseMinidumpCrashSignature(dumpWithMemory, {
+      expectedProcessType: 'renderer'
+    })
+
+    expect(signature?.processType).toBe('gpu-process')
+    // The whole-buffer scan is skipped; the caller discards this dump anyway.
+    expect(signature?.checkMessage).toBeUndefined()
+  })
+
+  it('still parses fully when the process type matches', () => {
+    const { dump } = buildDump({ annotations: { ptype: 'renderer' } })
+    const dumpWithMemory = Buffer.concat([
+      dump,
+      Buffer.from(`\0${ELECTRON_43_CHECK_LINE}\0`, 'utf8')
+    ])
+
+    const signature = parseMinidumpCrashSignature(dumpWithMemory, {
+      expectedProcessType: 'renderer'
+    })
+
+    expect(signature?.checkMessage).toBe(ELECTRON_43_CHECK_LINE)
+  })
+
+  it('ignores a log prefix further back than the prefix limit', () => {
+    const { dump } = buildDump({ annotations: { ptype: 'renderer' } })
+    // `[` separated from the marker by more than MAX_LOG_PREFIX_BYTES (96).
+    const farPrefix = `[${'x'.repeat(200)}:FATAL:render_frame_impl.cc(4821)] Check failed: far.`
+    const dumpWithMemory = Buffer.concat([dump, Buffer.from(`\0${farPrefix}\0`, 'utf8')])
+
+    expect(parseMinidumpCrashSignature(dumpWithMemory)?.checkMessage).toBeUndefined()
+  })
+
   it('does not promote an unrelated Chromium ERROR line containing CHECK', () => {
     const { dump } = buildDump({})
     const unrelated =

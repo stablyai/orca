@@ -156,15 +156,19 @@ export function appendOrderedGroups(
         groupBy === 'repo'
           ? getMixedHostContextLabels(group, repoMap, projectIndex, hostLabelById)
           : undefined
-      const hostContextLabelByWorktreeId =
-        groupBy === 'repo' ? undefined : mixedWorktreeHostContextLabels
+      // Why (STA-4343): repo grouping normally labels by repo, but one repo id can
+      // be registered on two hosts — then every row in the group shares a repo id
+      // and the per-repo label cannot tell them apart. Fall back to the per-row
+      // host labels, which are keyed by host-qualified identity.
+      const hostContextLabelByWorktreeIdentity =
+        groupBy === 'repo' && hostContextLabelByRepoId ? undefined : mixedWorktreeHostContextLabels
       appendWorktreeRows(result, items, repoMap, lineageById, worktreeMap, {
         nestLineage,
         collapsedGroups,
         groupDepth: projectGroupDepth,
         sectionKey: key,
         hostContextLabelByRepoId,
-        hostContextLabelByWorktreeId,
+        hostContextLabelByWorktreeIdentity,
         cyclicLineageIds
       })
     }

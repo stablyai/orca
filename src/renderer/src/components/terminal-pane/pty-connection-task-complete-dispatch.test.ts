@@ -500,7 +500,8 @@ describe('connectPanePty', () => {
       {
         state: 'working',
         prompt: 'fix the remote title',
-        agentType: 'omp'
+        agentType: 'omp',
+        observation: expect.objectContaining({ origin: 'osc', kind: 'snapshot' })
       },
       '\u280b OMP',
       undefined,
@@ -521,7 +522,8 @@ describe('connectPanePty', () => {
       {
         state: 'working',
         prompt: 'keep the remote title',
-        agentType: 'omp'
+        agentType: 'omp',
+        observation: expect.objectContaining({ origin: 'osc', kind: 'snapshot' })
       },
       '\u280b OMP',
       undefined,

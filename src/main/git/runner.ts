@@ -35,8 +35,8 @@ import {
 } from '../../shared/git-credential-prompt-env'
 import { getSpawnArgsForWindows, isWindowsBatchScript, resolveWindowsCommand } from '../win32-utils'
 import {
+  buildWslExecArgs,
   buildWslLoginShellCommand,
-  escapeWslShCommandForWindows,
   quotePosixShell
 } from '../../shared/wsl-login-shell-command'
 import { UNTRANSLATED_GIT_OUTPUT_ENV } from '../../shared/git-output-locale'
@@ -364,14 +364,7 @@ function resolveCommand(
   if (options.useWslLoginShell) {
     return {
       binary: 'wsl.exe',
-      args: [
-        '-d',
-        wsl.distro,
-        '--',
-        'sh',
-        '-lc',
-        escapeWslShCommandForWindows(buildWslLoginShellCommand(shellCmd))
-      ],
+      args: buildWslExecArgs(wsl.distro, ['sh', '-lc', buildWslLoginShellCommand(shellCmd)]),
       cwd: undefined,
       wsl,
       wslMode: 'login-shell'
@@ -380,7 +373,7 @@ function resolveCommand(
 
   return {
     binary: 'wsl.exe',
-    args: ['-d', wsl.distro, '--', 'bash', '-c', shellCmd],
+    args: buildWslExecArgs(wsl.distro, ['bash', '-c', shellCmd]),
     // Why: the `cd` inside bash -c handles the directory; a UNC cwd on the Node process is redundant and can break Node internals.
     cwd: undefined,
     wsl,

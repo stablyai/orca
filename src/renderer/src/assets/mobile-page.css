@@ -38,6 +38,8 @@
   --mp-flow-card-inset: calc(var(--mp-flow-card-padding) + var(--mp-flow-card-border-width));
   --mp-flow-shell-height: 400px;
   --mp-qr-large-size: 184px;
+  --mp-pairing-qr-image-size: 164px;
+  --mp-pairing-qr-frame-size: calc(var(--mp-pairing-qr-image-size) + 20px);
   --m-bg-base: #111111;
   --m-bg-panel: #1a1a1a;
   --m-bg-raised: #242424;
@@ -596,6 +598,17 @@
   height: calc(var(--mp-qr-large-size) - 20px);
 }
 
+.mobile-page-root .mp-pairing-qr .mp-qr-large {
+  width: var(--mp-pairing-qr-frame-size);
+  height: var(--mp-pairing-qr-frame-size);
+}
+
+.mobile-page-root .mp-pairing-qr .mp-qr-large img {
+  width: var(--mp-pairing-qr-image-size);
+  height: var(--mp-pairing-qr-image-size);
+  image-rendering: pixelated;
+}
+
 .mobile-page-root .mp-qr-refreshing {
   filter: blur(5px);
   opacity: 0.32;
@@ -686,7 +699,7 @@
 
 .mobile-page-root .mp-pairing-layout {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) var(--mp-qr-large-size);
+  grid-template-columns: minmax(0, 1fr) var(--mp-pairing-qr-frame-size);
   grid-template-areas:
     'copy qr'
     'relay qr'

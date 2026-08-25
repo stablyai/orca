@@ -172,6 +172,48 @@ describe('Store', () => {
     ).toBe('run')
   })
 
+  it('treats undefined update fields as omitted, never as explicit clears', async () => {
+    // The renderer forwards a Partial verbatim, so an untouched field arrives as explicit undefined
+    // and must not take the `null` clear branch reserved for a real user clear.
+    const store = await createStore()
+    store.addRepo(makeRepo({ upstream: { owner: 'stablyai', repo: 'orca' } }))
+    const automation = store.createAutomation({
+      name: 'Nightly',
+      prompt: 'Run checks',
+      agentId: 'claude',
+      projectId: 'r1',
+      workspaceMode: 'new_per_run',
+      baseBranch: 'origin/release',
+      setupDecision: 'run',
+      precheck: { command: 'pnpm lint', timeoutSeconds: 30 },
+      timezone: 'UTC',
+      rrule: 'FREQ=DAILY;BYHOUR=9;BYMINUTE=0',
+      dtstart: new Date('2026-05-13T00:00:00Z').getTime()
+    })
+
+    const updated = store.updateAutomation(automation.id, {
+      precheck: undefined,
+      runContext: undefined,
+      sourceContext: undefined,
+      baseBranch: undefined,
+      setupDecision: undefined
+    })
+
+    expect(updated.precheck).toEqual(automation.precheck)
+    expect(updated.runContext).toEqual(automation.runContext)
+    expect(updated.sourceContext).toEqual(automation.sourceContext)
+    expect(updated.baseBranch).toBe('origin/release')
+    expect(updated.setupDecision).toBe('run')
+    // Explicit nulls still clear.
+    expect(store.updateAutomation(automation.id, { baseBranch: null }).baseBranch).toBeNull()
+
+    const existing = store.updateAutomation(automation.id, {
+      workspaceMode: 'existing',
+      workspaceId: 'wt1'
+    })
+    expect(store.updateAutomation(existing.id, { workspaceId: undefined }).workspaceId).toBe('wt1')
+  })
+
   it('derives automation source and run contexts from the project host setup', async () => {
     const store = await createStore()
     store.addRepo(

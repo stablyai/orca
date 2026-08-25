@@ -18,6 +18,7 @@ export type TerminalHostOptions = {
     terminalWindowsWslDistro?: string | null
     terminalWindowsPowerShellImplementation?: 'auto' | 'powershell.exe' | 'pwsh.exe'
     isCanceled?: () => boolean
+    cancelSignal?: AbortSignal
     // Async production spawns and sync test stubs share this boundary.
   }) => SubprocessHandle | Promise<SubprocessHandle>
   // Why: login-session death detection (#7936) needs subprocess exits even when no client is attached.

@@ -1,5 +1,6 @@
 import { worktreeWorkspaceKey } from '../../../../../../shared/workspace-scope'
 import type { WorktreeSliceSet } from '../listing/worktree-slice-types'
+import { removeDeleteStatesForWorktreeIds } from './worktree-delete-state'
 
 export function applyRemoveWorktreeSuccessState(
   set: WorktreeSliceSet,
@@ -34,8 +35,10 @@ export function applyRemoveWorktreeSuccessState(
       delete nextExpandedPaneByTabId[tabId]
       delete nextCanExpandPaneByTabId[tabId]
     }
-    const nextDeleteState = { ...s.deleteStateByWorktreeId }
-    delete nextDeleteState[worktreeId]
+    const nextDeleteState = removeDeleteStatesForWorktreeIds(
+      s.deleteStateByWorktreeId,
+      new Set([worktreeId])
+    )
     const nextLineage = { ...s.worktreeLineageById }
     delete nextLineage[worktreeId]
     const nextWorkspaceLineage = { ...s.workspaceLineageByChildKey }

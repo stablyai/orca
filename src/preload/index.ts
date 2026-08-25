@@ -63,6 +63,10 @@ import type {
 import type { PluginConsentRequest } from '../shared/plugins/plugin-consent-request'
 import type { PluginChangeEvent } from '../shared/plugins/plugin-change-event'
 import type { BrowserViewportOverride } from '../shared/browser-workspace-types'
+import type {
+  BrowserWebAuthnAccountRequest,
+  BrowserWebAuthnAccountResponse
+} from '../shared/browser-webauthn-account'
 import type { SearchResult } from '../shared/code-search-types'
 import type {
   FilesystemPathFlavor,
@@ -132,7 +136,6 @@ import type {
 } from '../shared/shell-open-types'
 import type { SkillDiscoveryResult, SkillDiscoveryTarget } from '../shared/skills'
 import type {
-  SkillCloudDownloadGrant,
   SkillCloudOwnedShare,
   SkillCloudOperation,
   SkillCloudPackageDetails
@@ -257,6 +260,10 @@ import type {
   PreloadApi
 } from './api-types'
 import type { AgentKind, LaunchSource, RequestKind } from '../shared/telemetry-events'
+import {
+  KEYBOARD_LAYOUT_CHANGED_CHANNEL,
+  type KeyboardLayoutChangeEvent
+} from '../shared/keyboard-layout-events'
 import { createBrowserFindSubscriptions } from './browser-find-subscriptions'
 import { createUsageProviderApi } from './usage-provider-api'
 import type { AppStarSource } from '../shared/gh-star-source'
@@ -567,6 +574,17 @@ const api = {
       ipcRenderer.invoke('app:getKeyboardInputSourceId'),
     getMacCapturedDigitRowChords: (): Promise<MacCapturedDigitRowChord[]> =>
       ipcRenderer.invoke('app:getMacCapturedDigitRowChords'),
+    getKeyboardLayoutSnapshot: () => ipcRenderer.invoke('app:getKeyboardLayoutSnapshot'),
+    onKeyboardLayoutChanged: (
+      callback: (event: KeyboardLayoutChangeEvent) => void
+    ): (() => void) => {
+      const listener = (
+        _event: Electron.IpcRendererEvent,
+        event: KeyboardLayoutChangeEvent
+      ): void => callback(event)
+      ipcRenderer.on(KEYBOARD_LAYOUT_CHANGED_CHANNEL, listener)
+      return () => ipcRenderer.removeListener(KEYBOARD_LAYOUT_CHANGED_CHANNEL, listener)
+    },
     setUnreadDockBadgeCount: (count: number): Promise<void> =>
       ipcRenderer.invoke('app:setUnreadDockBadgeCount', count),
     getFloatingTerminalCwd: (args?: FloatingTerminalCwdRequest): Promise<string> =>
@@ -2166,8 +2184,10 @@ const api = {
     list: (): Promise<unknown> => ipcRenderer.invoke('codexAccounts:list'),
     add: (args?: { runtime?: 'host' | 'wsl'; wslDistro?: string | null }): Promise<unknown> =>
       ipcRenderer.invoke('codexAccounts:add', args),
-    reauthenticate: (args: { accountId: string }): Promise<unknown> =>
-      ipcRenderer.invoke('codexAccounts:reauthenticate', args),
+    reauthenticate: (args: {
+      accountId: string
+      activateIfSelectionWasEmpty?: boolean
+    }): Promise<unknown> => ipcRenderer.invoke('codexAccounts:reauthenticate', args),
     remove: (args: { accountId: string }): Promise<unknown> =>
       ipcRenderer.invoke('codexAccounts:remove', args),
     select: (args: {
@@ -2584,8 +2604,6 @@ const api = {
       ipcRenderer.invoke('skills:releaseShare', preparationId),
     resolveShare: (shareId: string): Promise<SkillShareResolvedOperation> =>
       ipcRenderer.invoke('skills:resolveShare', shareId),
-    createDownloadGrant: (shareId: string): Promise<SkillCloudOperation<SkillCloudDownloadGrant>> =>
-      ipcRenderer.invoke('skills:createDownloadGrant', shareId),
     installShare: (input: SkillShareInstallInput): Promise<SkillShareInstallOperation> =>
       ipcRenderer.invoke('skills:installShare', input),
     installBundleShare: (
@@ -2678,6 +2696,29 @@ const api = {
 
     unregisterGuest: (args: { browserPageId: string }): Promise<void> =>
       ipcRenderer.invoke('browser:unregisterGuest', args),
+
+    onWebAuthnAccountRequest: (
+      callback: (request: BrowserWebAuthnAccountRequest) => void
+    ): (() => void) => {
+      const listener = (
+        _event: Electron.IpcRendererEvent,
+        request: BrowserWebAuthnAccountRequest
+      ): void => callback(request)
+      ipcRenderer.on('browser:webauthn-account-requested', listener)
+      return () => ipcRenderer.removeListener('browser:webauthn-account-requested', listener)
+    },
+
+    onWebAuthnAccountRequestClosed: (
+      callback: (event: { requestId: string }) => void
+    ): (() => void) => {
+      const listener = (_event: Electron.IpcRendererEvent, data: { requestId: string }): void =>
+        callback(data)
+      ipcRenderer.on('browser:webauthn-account-request-closed', listener)
+      return () => ipcRenderer.removeListener('browser:webauthn-account-request-closed', listener)
+    },
+
+    respondWebAuthnAccount: (response: BrowserWebAuthnAccountResponse): Promise<boolean> =>
+      ipcRenderer.invoke('browser:respondWebAuthnAccount', response),
 
     openDevTools: (args: { browserPageId: string }): Promise<boolean> =>
       ipcRenderer.invoke('browser:openDevTools', args),
@@ -4138,6 +4179,17 @@ const api = {
       ipcRenderer.on('ui:closeSessionTab', listener)
       return () => ipcRenderer.removeListener('ui:closeSessionTab', listener)
     },
+    onSessionTabCloseRequest: (callback) => {
+      const listener = (
+        _event: Electron.IpcRendererEvent,
+        request: Parameters<typeof callback>[0]
+      ) => callback(request)
+      ipcRenderer.on('ui:sessionTabCloseRequest', listener)
+      return () => ipcRenderer.removeListener('ui:sessionTabCloseRequest', listener)
+    },
+    respondSessionTabClose: (response) => {
+      ipcRenderer.send('ui:sessionTabCloseResponse', response)
+    },
     onMoveSessionTab: (
       callback: (data: { worktreeId: string } & RuntimeMobileSessionTabMove) => void
     ): (() => void) => {
@@ -4847,6 +4899,8 @@ const api = {
       | {
           available: true
           qrDataUrl: string | null
+          /** Natural bitmap width and height in pixels. */
+          qrSize: number | null
           qrError?: 'encoding_failed'
           pairingUrl: string
           /** Null when no direct address was advertised — the QR pairs over Relay alone. */
@@ -4981,6 +5035,9 @@ const api = {
     },
     retirePaneAuthority: (paneKey: string): void => {
       ipcRenderer.send('agentStatus:retirePaneAuthority', paneKey)
+    },
+    restorePaneAuthority: (paneKey: string): void => {
+      ipcRenderer.send('agentStatus:restorePaneAuthority', paneKey)
     },
     transferPaneAuthority: (args: {
       fromPaneKey: string

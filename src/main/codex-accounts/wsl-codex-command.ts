@@ -1,7 +1,7 @@
 import { buildPosixCommandPathLookupScript } from '../../shared/posix-command-path-lookup'
 import {
+  buildWslExecArgs,
   buildWslLoginShellCommand,
-  escapeWslShCommandForWindows,
   quotePosixShell
 } from '../../shared/wsl-login-shell-command'
 
@@ -59,12 +59,5 @@ function buildCodexPathLookup(): string {
 function buildWslCodexShellArgs(distro: string, command: string): string[] {
   // Why: Codex must use the distro user's configured login shell, whose PATH
   // can differ from a hard-coded non-login bash invocation.
-  return [
-    '-d',
-    distro,
-    '--',
-    'sh',
-    '-c',
-    escapeWslShCommandForWindows(buildWslLoginShellCommand(command))
-  ]
+  return buildWslExecArgs(distro, ['sh', '-c', buildWslLoginShellCommand(command)])
 }

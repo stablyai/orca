@@ -120,9 +120,19 @@ function FilenameFirstPath({ path }: { path: string }): React.JSX.Element {
   )
 }
 
-function getOpenTabIcon(
-  contentType: Extract<ActiveOption, { kind: 'tab' }>['option']['contentType']
-): React.ReactNode {
+function getOpenTabIcon(option: Extract<ActiveOption, { kind: 'tab' }>['option']): React.ReactNode {
+  if (option.contentType === 'terminal' && option.source === 'workspace' && option.occupantAgent) {
+    return (
+      <span
+        className="inline-flex shrink-0"
+        data-agent-icon={option.occupantAgent}
+        aria-hidden="true"
+      >
+        <AgentIcon agent={option.occupantAgent} size={14} />
+      </span>
+    )
+  }
+  const { contentType } = option
   if (contentType === 'terminal') {
     return <TerminalSquare className="size-3.5 shrink-0" aria-hidden="true" />
   }
@@ -168,7 +178,7 @@ function getActionPresentation(option: ActiveOption): {
   if (option.kind === 'tab') {
     return {
       detail: option.option.matchedText ?? option.option.title,
-      icon: getOpenTabIcon(option.option.contentType),
+      icon: getOpenTabIcon(option.option),
       label: translate('auto.components.tab.bar.TabBarCreateEntry.8f0a1c4d92', 'Switch to tab'),
       showDetail: true
     }

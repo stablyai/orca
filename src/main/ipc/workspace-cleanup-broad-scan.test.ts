@@ -183,6 +183,53 @@ describe('workspace cleanup broad scan opt-in', () => {
     ).toBe('runtime:env-1')
   })
 
+  it('does not borrow same-id local metadata for a connected SSH cleanup row', async () => {
+    const sharedPath = '/shared/workspace'
+    const worktreeId = `${REPO.id}::${sharedPath}`
+    const localRepo = { ...REPO, path: '/local/repo' }
+    const sshRepo = { ...REPO, path: '/remote/repo', connectionId: 'ssh-1' }
+    const sharedWorktree: GitWorktreeInfo = {
+      path: sharedPath,
+      head: 'shared123',
+      branch: 'refs/heads/shared',
+      isBare: false,
+      isMainWorktree: false
+    }
+    const localMeta = makeWorktreeMeta({
+      displayName: 'Local metadata only',
+      hostId: 'local',
+      isPinned: true,
+      lastActivityAt: NOW - 40 * DAY_MS
+    })
+    listRepoWorktreesMock.mockResolvedValue([sharedWorktree])
+    getSshGitProviderMock.mockReturnValue({
+      listWorktrees: vi.fn().mockResolvedValue([sharedWorktree])
+    })
+
+    const result = await scanWorkspaceCleanup(
+      makeStore([localRepo, sshRepo], { [worktreeId]: localMeta }),
+      { includeAllWorkspaces: true, skipGitWorktreeIds: [worktreeId] }
+    )
+
+    expect(result.candidates).toHaveLength(2)
+    expect(result.candidates).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          worktreeId,
+          executionHostId: 'local',
+          displayName: 'Local metadata only',
+          blockers: ['pinned']
+        }),
+        expect.objectContaining({
+          worktreeId,
+          executionHostId: 'ssh:ssh-1',
+          displayName: 'shared',
+          blockers: []
+        })
+      ])
+    )
+  })
+
   it('keeps the legacy suggestion-only projection when the flag is absent', async () => {
     const result = await scanWorkspaceCleanup(makeStore())
 
@@ -241,6 +288,31 @@ describe('workspace cleanup broad scan opt-in', () => {
         tier: 'protected',
         selectedByDefault: false,
         blockers: ['folder-repo']
+      })
+    ])
+  })
+
+  it('does not publish a same-id local folder instance on an SSH host', async () => {
+    const localFolderRepo = { ...FOLDER_REPO }
+    const sshFolderRepo = { ...FOLDER_REPO, connectionId: 'ssh-1' }
+    const instanceId = `${FOLDER_REPO.id}::${FOLDER_REPO.path}::workspace:11111111-2222-4333-8444-555555555555`
+    getSshGitProviderMock.mockReturnValue({})
+
+    const result = await scanWorkspaceCleanup(
+      makeStore([localFolderRepo, sshFolderRepo], {
+        [instanceId]: makeWorktreeMeta({
+          displayName: 'Local folder session',
+          hostId: 'local'
+        })
+      }),
+      { includeAllWorkspaces: true }
+    )
+
+    expect(result.candidates).toHaveLength(3)
+    expect(result.candidates.filter((candidate) => candidate.worktreeId === instanceId)).toEqual([
+      expect.objectContaining({
+        executionHostId: 'local',
+        displayName: 'Local folder session'
       })
     ])
   })
@@ -411,6 +483,34 @@ describe('workspace cleanup broad scan opt-in', () => {
       worktreeId: 'repo-ssh::/remote/recent',
       blockers: ['ssh-disconnected'],
       reasons: []
+    })
+  })
+
+  it('does not synthesize a disconnected SSH row from same-id local metadata', async () => {
+    const sharedPath = '/shared/workspace'
+    const worktreeId = `${REPO.id}::${sharedPath}`
+    const localRepo = { ...REPO, path: '/local/repo' }
+    const sshRepo = { ...REPO, path: '/remote/repo', connectionId: 'ssh-1' }
+    const sharedWorktree: GitWorktreeInfo = {
+      path: sharedPath,
+      head: 'shared123',
+      branch: 'refs/heads/shared',
+      isBare: false,
+      isMainWorktree: false
+    }
+    listRepoWorktreesMock.mockResolvedValue([sharedWorktree])
+
+    const result = await scanWorkspaceCleanup(
+      makeStore([localRepo, sshRepo], {
+        [worktreeId]: makeWorktreeMeta({ hostId: 'local' })
+      }),
+      { includeAllWorkspaces: true, skipGitWorktreeIds: [worktreeId] }
+    )
+
+    expect(result.candidates).toHaveLength(1)
+    expect(result.candidates[0]).toMatchObject({
+      worktreeId,
+      executionHostId: 'local'
     })
   })
 

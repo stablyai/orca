@@ -201,15 +201,33 @@ export const WORKTREE_METHODS: RpcMethod[] = [
     name: 'worktree.rm',
     params: WorktreeRemove,
     handler: async (params, { runtime }) => {
+      // Older mobile clients omit hostId, so resolve through the ambiguity gate
+      // before pinning removal. An ambiguous selector still fails closed: two
+      // hosts own the id and an unqualified client cannot say which it meant.
+      let resolvedHostId = params.hostId
+      if (!resolvedHostId) {
+        try {
+          resolvedHostId = (await runtime.showManagedWorktree(params.worktree)).hostId
+          if (!resolvedHostId) {
+            throw new Error('worktree.rm could not resolve the workspace host')
+          }
+        } catch (error) {
+          // 'selector_not_found' is not a failure to attribute — Git simply no
+          // longer lists the path. A delete legitimately arrives in that state and
+          // `removeManagedWorktree` handles it, so a stale workspace stays
+          // deletable by a client that sends no host. Anything else propagates.
+          if (!(error instanceof Error) || error.message !== 'selector_not_found') {
+            throw error
+          }
+        }
+      }
       const removalArgs = [
         params.worktree,
         params.force === true,
         params.runHooks === true,
         params.allowUnverifiedPtyStop === true
       ] as const
-      const result = params.hostId
-        ? await runtime.removeManagedWorktree(...removalArgs, params.hostId)
-        : await runtime.removeManagedWorktree(...removalArgs)
+      const result = await runtime.removeManagedWorktree(...removalArgs, resolvedHostId)
       return { removed: true, ...result }
     }
   }),

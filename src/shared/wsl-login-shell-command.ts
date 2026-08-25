@@ -2,19 +2,21 @@ export function quotePosixShell(value: string): string {
   return `'${value.replace(/'/g, "'\\''")}'`
 }
 
-export function escapeWslShCommandForWindows(command: string): string {
-  // WSL preprocesses unescaped $ in Windows argv before the WSL-side shell
-  // sees it, even when the POSIX script text would single-quote the dollar.
-  let escaped = ''
-  for (let index = 0; index < command.length; index += 1) {
-    const char = command[index]
-    if (char === '$' && command[index - 1] !== '\\') {
-      escaped += '\\$'
-      continue
-    }
-    escaped += char
-  }
-  return escaped
+/**
+ * Build `wsl.exe` argv that hands a POSIX script to the guest byte-for-byte.
+ *
+ * Why: `wsl.exe -d <distro> -- <argv>` expands `$name` in every argument against
+ * the guest environment before the guest ever runs — it does this even when no
+ * shell is in the command, so `-- /usr/bin/printf %s '$HOME'` prints /home/you.
+ * That silently rewrites scripts (`awk '{print $2}'` loses its field ref) and no
+ * amount of escaping on our side is reliable. `--exec` skips that preprocessing
+ * and passes argv through untouched, so scripts mean what they say.
+ */
+export function buildWslExecArgs(
+  distro: string | undefined,
+  shellArgs: readonly string[]
+): string[] {
+  return [...(distro ? ['-d', distro] : []), '--exec', ...shellArgs]
 }
 
 export function buildWslLoginShellCommand(command: string): string {

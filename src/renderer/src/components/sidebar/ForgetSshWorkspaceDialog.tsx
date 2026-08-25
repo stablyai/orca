@@ -14,6 +14,8 @@ import { useMountedRef } from '@/hooks/useMountedRef'
 import { useAppStore } from '@/store'
 import { translate } from '@/i18n/i18n'
 import { runWorktreeDeleteWithToast } from './delete-worktree-flow'
+import { toSshExecutionHostId } from '../../../../shared/execution-host'
+import type { WorktreeRemovalTarget } from '../../../../shared/worktree/removal'
 import type { SshWorkspaceForgetResolution } from './ssh-workspace-forget-resolution'
 
 type ForgetSshWorkspaceModalData = {
@@ -51,6 +53,13 @@ export function ForgetSshWorkspaceDialog(): React.JSX.Element | null {
   }
   const { worktreeId, displayName, resolution } = modalData
   const canReconnect = resolution.kind === 'disconnected'
+  // This dialog only opens for a workspace pinned to a named SSH target, so that
+  // target IS the host the removal was confirmed against (STA-4343).
+  const removalTarget: WorktreeRemovalTarget = {
+    id: worktreeId,
+    executionHostId:
+      resolution.kind === 'not-ssh' ? null : toSshExecutionHostId(resolution.targetId)
+  }
 
   const done = (): void => {
     if (mountedRef.current) {
@@ -83,7 +92,7 @@ export function ForgetSshWorkspaceDialog(): React.JSX.Element | null {
     }
     // Close before the delete toast fires so the two don't overlap.
     closeModal()
-    void runWorktreeDeleteWithToast(worktreeId, displayName)
+    void runWorktreeDeleteWithToast(removalTarget, displayName)
     if (mountedRef.current) {
       setBusy(null)
     }
@@ -95,7 +104,7 @@ export function ForgetSshWorkspaceDialog(): React.JSX.Element | null {
     try {
       const result = await useAppStore
         .getState()
-        .removeWorktree(worktreeId, false, { mode: 'forget-local' })
+        .removeWorktree(removalTarget, false, { mode: 'forget-local' })
       if (!result.ok) {
         toast.error(result.error)
         if (mountedRef.current) {

@@ -187,16 +187,38 @@ describe('mobile session startup', () => {
     )
   })
 
-  it('counts a pending-handle active terminal as a tabs recovery need (STA-4256)', () => {
-    const recoveryNeed = sliceBetween(
-      'const hasSessionTabsRecoveryNeed = useCallback(',
-      'const getSessionTabsApplicationRevision ='
+  it('wires pending-handle recovery through its bounded context (STA-4256)', () => {
+    const applySessionTabs = sliceBetween(
+      'const applySessionTabs = useCallback(',
+      'const consumeAcceptedSessionTabs = useCallback('
+    )
+    const recoveryContext = sliceBetween(
+      'const pendingTerminalRecoveryContextCache = useMemo(',
+      'const getSessionTabsApplicationRevision'
     )
 
-    expect(recoveryNeed).toContain('hasPendingTerminalHandleRecoveryNeed(')
-    expect(recoveryNeed).toContain('sessionTabsRef.current')
-    expect(recoveryNeed).toContain('activeSessionTabIdRef.current')
-    // The predicate only reaches the poll loop through this hook's option.
+    const tabsRefWrite = 'sessionTabsRef.current = nextTabs'
+    const tabsStateWrite = 'setSessionTabs((prev)'
+    const activeRefWrite = 'activeSessionTabIdRef.current = active?.id ?? null'
+    const activeStateWrite = 'setActiveSessionTabId(active?.id ?? null)'
+    for (const write of [tabsRefWrite, tabsStateWrite, activeRefWrite, activeStateWrite]) {
+      expect(applySessionTabs).toContain(write)
+    }
+    expect(applySessionTabs.indexOf(tabsRefWrite)).toBeLessThan(
+      applySessionTabs.indexOf(tabsStateWrite)
+    )
+    expect(applySessionTabs.indexOf(activeRefWrite)).toBeLessThan(
+      applySessionTabs.indexOf(activeStateWrite)
+    )
+    expect(recoveryContext).toContain('() => new PendingTerminalHandleRecoveryContextCache()')
+    expect(recoveryContext).toContain('sessionTabsRef.current,')
+    expect(recoveryContext).toContain('activeSessionTabIdRef.current')
+    expect(recoveryContext).toContain(
+      'const pendingTerminalRecoveryContextKey = getPendingTerminalRecoveryContextKey()'
+    )
     expect(source).toContain('hasRecoveryNeed: hasSessionTabsRecoveryNeed')
+    expect(source).toContain('getPendingTerminalRecoveryContextKey,')
+    expect(source).toContain('onPendingTerminalRecoveryParked: setParkedPendingTerminalContext')
+    expect(source).toContain('retryPendingTerminalRecovery()')
   })
 })

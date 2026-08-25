@@ -336,4 +336,60 @@ describe('ensureRetiredWorktreeNamesBackfilled', () => {
 
     expect(merged).toEqual([])
   })
+
+  it('skips a runtime-owned repo, which has no connectionId but is still not local', async () => {
+    // Why: a `connectionId` check calls this repo local, so the scan reads THIS machine's
+    // directories and files them under the runtime's namespace — retiring names never used there
+    // while missing the ones that were. The host id is the only reliable local test.
+    const root = await mkdtemp(join(tmpdir(), 'orca-retirement-runtime-'))
+    const workspaceRoot = join(root, 'workspaces')
+    await mkdir(join(workspaceRoot, FIRST), { recursive: true })
+    const merged: string[] = []
+    const store = {
+      mergeRetiredWorktreeNames: (_repoId: string, names: Iterable<string>) => {
+        merged.push(...names)
+        return true
+      }
+    }
+    const runtimeRepo = {
+      ...makeRepo('repo-runtime', '/repos/runtime'),
+      executionHostId: 'runtime:env-1'
+    } as Repo
+
+    try {
+      const collisionKey = await ensureRetiredWorktreeNamesBackfilled(store, runtimeRepo, {
+        workspaceDir: workspaceRoot,
+        nestWorkspaces: false
+      })
+
+      expect(merged).toEqual([])
+      expect(collisionKey).toBeNull()
+    } finally {
+      await rm(root, { force: true, recursive: true })
+    }
+  })
+
+  it('still backfills a plain local repo, so the skip is scoped to non-local hosts', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'orca-retirement-local-'))
+    const workspaceRoot = join(root, 'workspaces')
+    await mkdir(join(workspaceRoot, FIRST), { recursive: true })
+    const merged: string[] = []
+    const store = {
+      mergeRetiredWorktreeNames: (_repoId: string, names: Iterable<string>) => {
+        merged.push(...names)
+        return true
+      }
+    }
+
+    try {
+      await ensureRetiredWorktreeNamesBackfilled(store, makeRepo('repo-local', '/repos/local'), {
+        workspaceDir: workspaceRoot,
+        nestWorkspaces: false
+      })
+
+      expect(merged).toEqual([FIRST])
+    } finally {
+      await rm(root, { force: true, recursive: true })
+    }
+  })
 })

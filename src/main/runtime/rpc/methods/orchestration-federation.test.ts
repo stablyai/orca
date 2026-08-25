@@ -152,7 +152,8 @@ describe('orchestration federation', () => {
     } as never)
     vi.spyOn(runtime, 'closeTerminal').mockResolvedValue({
       handle: 'term_windows_worker',
-      closed: true
+      tabId: 'tab-windows-worker',
+      ptyKilled: true
     } as never)
   }
 
@@ -664,7 +665,7 @@ describe('orchestration federation', () => {
 
     expect(shown).toMatchObject({
       ok: true,
-      result: { observation: { status: 'running', exactWorker: true } }
+      result: { observation: { status: 'live', exactWorker: true } }
     })
     expect(homeDb.getFederatedDispatch(dispatch.id)?.remote_runtime_epoch).not.toBe(oldEpoch)
     expect(homeDb.getFederatedDispatch(dispatch.id)?.peer_fingerprint).toBe(

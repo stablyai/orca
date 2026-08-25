@@ -81,8 +81,11 @@ export function gcStaleWorktreeMeta(state: StoreOwnedPersistedState): number {
 }
 
 export function normalizeWorktreeLinkedItemMetadata(state: StoreOwnedPersistedState): boolean {
-  let changed = false
-  // Why: a hand-corrupted null lineage map would throw on the companion deletes below.
+  // Why: a hand-corrupted null lineage map would throw on the companion deletes below. The repair
+  // itself is dirty state — without it the map stays null on disk and is repaired again every load.
+  let changed =
+    (state.worktreeLineageById as unknown) === null ||
+    (state.workspaceLineageByChildKey as unknown) === null
   state.worktreeLineageById ??= {}
   state.workspaceLineageByChildKey ??= {}
   const rawWorktreeMeta = state.worktreeMeta as unknown
@@ -99,7 +102,7 @@ export function normalizeWorktreeLinkedItemMetadata(state: StoreOwnedPersistedSt
     // worktree recreated at the same repoId::path.
     state.worktreeLineageById = {}
     state.workspaceLineageByChildKey = {}
-    changed = rawWorktreeMeta !== undefined || hadLineage
+    changed ||= rawWorktreeMeta !== undefined || hadLineage
   }
   for (const [key, meta] of Object.entries(state.worktreeMeta)) {
     // Why: hand-corrupted non-object entries are a real input class; drop them here because gcStaleWorktreeMeta

@@ -54,6 +54,16 @@ describe('web UI preload API', () => {
     vi.doUnmock('./web-runtime-client')
   })
 
+  it('keeps native-only keyboard probes conservative', async () => {
+    const { api } = await installApi('Macintosh')
+
+    await expect(api.app.getMacCapturedDigitRowChords()).resolves.toEqual([])
+    await expect(api.app.getKeyboardLayoutSnapshot()).resolves.toBeNull()
+    const listener = vi.fn()
+    expect(api.app.onKeyboardLayoutChanged(listener)).toEqual(expect.any(Function))
+    expect(listener).not.toHaveBeenCalled()
+  })
+
   it('migrates missing right sidebar visibility from the effective web legacy default', async () => {
     const { api } = await installApi('Linux')
 

@@ -277,8 +277,20 @@ export const WORKTREE_HANDLERS: Record<string, CommandHandler> = {
     printResult(result, json, formatWorktreeShow)
   },
   'worktree rm': async ({ flags, client, cwd, json }) => {
+    const worktree = await getRequiredWorktreeSelector(flags, 'worktree', cwd, client)
+    const resolved = await client.call<{ worktree: RuntimeWorktreeRecord }>('worktree.show', {
+      worktree
+    })
+    const hostId = resolved.result.worktree.hostId
+    if (!hostId) {
+      throw new RuntimeClientError(
+        'worktree_host_unresolved',
+        'Orca cannot tell which host owns this workspace. Refresh projects and try again.'
+      )
+    }
     const result = await client.call<RuntimeWorktreeRemoveResult>('worktree.rm', {
-      worktree: await getRequiredWorktreeSelector(flags, 'worktree', cwd, client),
+      worktree,
+      hostId,
       force: flags.get('force') === true,
       // Why (#11960): --force is explicit here, so it may also waive PTY-stop proof.
       allowUnverifiedPtyStop: flags.get('force') === true,

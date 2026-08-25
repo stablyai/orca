@@ -88,25 +88,50 @@ describe('command aliases dispatch to the canonical handler', () => {
   })
 
   it('runs `worktree remove` as the canonical `worktree rm` (the incident)', async () => {
-    queueFixtures(callMock, okFixture('req', { removed: true }))
+    queueFixtures(
+      callMock,
+      okFixture('req_show', { worktree: { hostId: 'local' } }),
+      okFixture('req', { removed: true })
+    )
 
     await main(['worktree', 'remove', '--worktree', 'id:wt-1', '--force', '--json'], '/tmp/repo')
 
-    expect(callMock).toHaveBeenCalledWith(
+    expect(callMock).toHaveBeenNthCalledWith(
+      2,
       'worktree.rm',
-      expect.objectContaining({ worktree: 'id:wt-1', force: true })
+      expect.objectContaining({ worktree: 'id:wt-1', hostId: 'local', force: true })
     )
   })
 
   it('runs `worktree delete` as the canonical `worktree rm`', async () => {
-    queueFixtures(callMock, okFixture('req', { removed: true }))
+    queueFixtures(
+      callMock,
+      okFixture('req_show', { worktree: { hostId: 'runtime:env-1' } }),
+      okFixture('req', { removed: true })
+    )
 
     await main(['worktree', 'delete', '--worktree', 'id:wt-1', '--json'], '/tmp/repo')
 
-    expect(callMock).toHaveBeenCalledWith(
+    expect(callMock).toHaveBeenNthCalledWith(
+      2,
       'worktree.rm',
-      expect.objectContaining({ worktree: 'id:wt-1' })
+      expect.objectContaining({ worktree: 'id:wt-1', hostId: 'runtime:env-1' })
     )
+  })
+
+  it('fails closed when worktree removal cannot resolve a host', async () => {
+    queueFixtures(callMock, okFixture('req_show', { worktree: { id: 'wt-1' } }))
+    const priorExitCode = process.exitCode
+
+    try {
+      await main(['worktree', 'rm', '--worktree', 'id:wt-1', '--json'], '/tmp/repo')
+
+      expect(process.exitCode).toBe(1)
+      expect(callMock).toHaveBeenCalledTimes(1)
+      expect(callMock).toHaveBeenCalledWith('worktree.show', { worktree: 'id:wt-1' })
+    } finally {
+      process.exitCode = priorExitCode
+    }
   })
 
   it('still runs `terminal focus` after the handler de-duplication', async () => {

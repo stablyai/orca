@@ -91,6 +91,63 @@ describe('mobile endpoint supervisor', () => {
     supervisor.stop()
   })
 
+  it('does not announce Relay when credential selection finishes after backgrounding', async () => {
+    const logical = new FakeLogicalClient('reconnecting', 'lan')
+    let finishCredentialRead: ((value: MobileRelayCredentialBundle) => void) | undefined
+    const credentialReadPending = new Promise<MobileRelayCredentialBundle>((resolve) => {
+      finishCredentialRead = resolve
+    })
+    const readBundle = vi
+      .fn()
+      .mockResolvedValueOnce(null)
+      .mockReturnValueOnce(credentialReadPending)
+    const deps = dependencies({ readBundle })
+    const supervisor = new MobileEndpointSupervisor(logical, host, deps)
+
+    const starting = supervisor.start()
+    await vi.waitFor(() => expect(readBundle).toHaveBeenCalledTimes(2))
+    supervisor.setForeground(false)
+    finishCredentialRead?.(bundle)
+    await starting
+
+    expect(deps.openRelay).not.toHaveBeenCalled()
+    expect(logical.setRecoveryPath).not.toHaveBeenCalledWith('relay')
+    expect(logical.getPendingPath()).toBeNull()
+    supervisor.stop()
+  })
+
+  it('does not announce Relay without a dialable credential', async () => {
+    const logical = new FakeLogicalClient('reconnecting', 'lan')
+    const expired = { ...bundle, current: { ...bundle.current, expiresAt: Date.now() - 1 } }
+    const deps = dependencies({ readBundle: vi.fn(async () => expired) })
+    const supervisor = new MobileEndpointSupervisor(logical, host, deps)
+
+    await supervisor.start()
+
+    expect(deps.openRelay).not.toHaveBeenCalled()
+    expect(logical.setRecoveryPath).not.toHaveBeenCalledWith('relay')
+    expect(logical.getPendingPath()).toBeNull()
+    supervisor.stop()
+  })
+
+  it('keeps Relay pending through a failed dial cooldown and clears it on stop', async () => {
+    const logical = new FakeLogicalClient('reconnecting', 'lan')
+    const deps = dependencies({
+      openRelay: vi.fn(() => new FakeRelaySession('disconnected', new RelayOuterError(4408))),
+      randomBytes: () => new Uint8Array([128, 0])
+    })
+    const supervisor = new MobileEndpointSupervisor(logical, host, deps)
+
+    await supervisor.start()
+
+    expect(logical.getPendingPath()).toBe('relay')
+    await vi.advanceTimersByTimeAsync(249)
+    expect(logical.getPendingPath()).toBe('relay')
+
+    supervisor.stop()
+    expect(logical.getPendingPath()).toBeNull()
+  })
+
   it('does not spend a queued relay retry while direct authentication is progressing', async () => {
     const logical = new FakeLogicalClient('disconnected', 'lan')
     const openRelay = vi.fn(() => new FakeRelaySession('disconnected', new RelayOuterError(4408)))
@@ -187,10 +244,27 @@ describe('mobile endpoint supervisor', () => {
     logical.publishState('disconnected')
 
     expect(openRelay).toHaveBeenCalledOnce()
+    expect(logical.getPendingPath()).toBe('relay')
     await vi.advanceTimersByTimeAsync(249)
     expect(openRelay).toHaveBeenCalledOnce()
     await vi.advanceTimersByTimeAsync(1)
     expect(openRelay).toHaveBeenCalledTimes(2)
+    supervisor.stop()
+  })
+
+  it('does not announce recovery when an active Relay drops after credential expiry', async () => {
+    const logical = new FakeLogicalClient('connected', 'relay')
+    const expired = { ...bundle, current: { ...bundle.current, expiresAt: Date.now() - 1 } }
+    const deps = dependencies({ readBundle: vi.fn(async () => expired) })
+    const supervisor = new MobileEndpointSupervisor(logical, host, deps)
+    await supervisor.start()
+
+    logical.publishState('disconnected')
+    await vi.advanceTimersByTimeAsync(0)
+
+    expect(deps.openRelay).not.toHaveBeenCalled()
+    expect(logical.setRecoveryPath).not.toHaveBeenCalledWith('relay')
+    expect(logical.getPendingPath()).toBeNull()
     supervisor.stop()
   })
 
@@ -432,6 +506,7 @@ describe('mobile endpoint supervisor', () => {
 
     expect(openRelay).toHaveBeenCalledOnce()
     expect(deps.writeBundle).not.toHaveBeenCalled()
+    expect(logical.getPendingPath()).toBeNull()
 
     logical.publishState('connected')
     await vi.waitFor(() => expect(deps.writeBundle).toHaveBeenCalledOnce())

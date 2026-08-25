@@ -48,9 +48,11 @@ describe('worktree remote runtime mutations', () => {
       worktreesByRepo: { repo1: [wt] }
     } as Partial<AppState>)
 
-    const result = await store.getState().removeWorktree(wt.id, false, {
-      snapshotPruneBatchId: 'batch-1'
-    })
+    const result = await store
+      .getState()
+      .removeWorktree({ id: wt.id, executionHostId: null }, false, {
+        snapshotPruneBatchId: 'batch-1'
+      })
 
     expect(result).toEqual({ ok: true })
     expect(runtimeEnvironmentCall).toHaveBeenCalledWith({
@@ -78,6 +80,38 @@ describe('worktree remote runtime mutations', () => {
       backendOwnsPtyTeardown: true
     })
     expect(store.getState().worktreesByRepo.repo1).toEqual([])
+  })
+
+  it('does not clean up a hidden same-id VM owned by another host', async () => {
+    const store = createTestStore()
+    const wt = makeWorktree({
+      id: 'repo1::/path/shared',
+      repoId: 'repo1',
+      path: '/path/shared',
+      hostId: 'ssh:runtime-ssh-a'
+    })
+    mockApi.ephemeralVm.listRuntimes.mockResolvedValue([
+      {
+        id: 'runtime-a',
+        workspaceId: wt.id,
+        sshTargetId: 'runtime-ssh-a',
+        cleanupStatus: 'not_started'
+      },
+      {
+        id: 'runtime-b',
+        workspaceId: wt.id,
+        sshTargetId: 'runtime-ssh-b',
+        cleanupStatus: 'not_started'
+      }
+    ] as never)
+    store.setState({ worktreesByRepo: { repo1: [wt] } } as Partial<AppState>)
+
+    await expect(
+      store.getState().removeWorktree({ id: wt.id, executionHostId: 'ssh:runtime-ssh-a' })
+    ).resolves.toEqual({ ok: true })
+
+    expect(mockApi.ephemeralVm.cleanup).toHaveBeenCalledTimes(1)
+    expect(mockApi.ephemeralVm.cleanup).toHaveBeenCalledWith({ runtimeId: 'runtime-a' })
   })
 
   it('removes a HUB-owned SSH worktree through its exact HUB transport owner', async () => {
@@ -109,7 +143,7 @@ describe('worktree remote runtime mutations', () => {
       worktreesByRepo: { 'repo-ssh': [wt] }
     } as Partial<AppState>)
 
-    const result = await store.getState().removeWorktree(wt.id)
+    const result = await store.getState().removeWorktree({ id: wt.id, executionHostId: null })
 
     expect(result).toEqual({
       ok: true,
@@ -191,11 +225,11 @@ describe('worktree remote runtime mutations', () => {
       worktreesByRepo: { 'repo-shared': [localWorktree] }
     } as Partial<AppState>)
 
-    await store.getState().removeWorktree(worktreeId)
+    await store.getState().removeWorktree({ id: worktreeId, executionHostId: null })
     store.setState({
       worktreesByRepo: { 'repo-shared': [remoteWorktree] }
     } as Partial<AppState>)
-    await store.getState().removeWorktree(worktreeId)
+    await store.getState().removeWorktree({ id: worktreeId, executionHostId: null })
 
     await store
       .getState()
@@ -261,11 +295,11 @@ describe('worktree remote runtime mutations', () => {
       worktreesByRepo: { 'repo-shared': [localWorktree] }
     } as Partial<AppState>)
 
-    await store.getState().removeWorktree(worktreeId)
+    await store.getState().removeWorktree({ id: worktreeId, executionHostId: null })
     store.setState({
       worktreesByRepo: { 'repo-shared': [remoteWorktree] }
     } as Partial<AppState>)
-    await store.getState().removeWorktree(worktreeId)
+    await store.getState().removeWorktree({ id: worktreeId, executionHostId: null })
 
     const result = await store
       .getState()
@@ -306,7 +340,7 @@ describe('worktree remote runtime mutations', () => {
       }
     } as Partial<AppState>)
 
-    const result = await store.getState().removeWorktree(worktreeId)
+    const result = await store.getState().removeWorktree({ id: worktreeId, executionHostId: null })
 
     expect(result).toEqual({
       ok: false,
@@ -337,7 +371,7 @@ describe('worktree remote runtime mutations', () => {
         worktreesByRepo: { 'repo-gone': [wt] }
       } as Partial<AppState>)
 
-      const result = await store.getState().removeWorktree(wt.id)
+      const result = await store.getState().removeWorktree({ id: wt.id, executionHostId: null })
 
       expect(result).toEqual({ ok: true })
       expect(mockApi.worktrees.forgetLocal).toHaveBeenCalledWith({
@@ -376,7 +410,7 @@ describe('worktree remote runtime mutations', () => {
       worktreesByRepo: { 'repo-shared': [original] }
     } as Partial<AppState>)
 
-    const result = await store.getState().removeWorktree(worktreeId)
+    const result = await store.getState().removeWorktree({ id: worktreeId, executionHostId: null })
 
     expect(result).toEqual({
       ok: false,
@@ -384,6 +418,37 @@ describe('worktree remote runtime mutations', () => {
     })
     expect(mockApi.worktrees.forgetLocal).not.toHaveBeenCalled()
     expect(store.getState().worktreesByRepo['repo-shared']).toEqual([original, rival])
+  })
+
+  it('refuses an unqualified forget-local when same-id rows exist on two hosts', async () => {
+    const store = createTestStore()
+    const worktreeId = 'repo-shared::/path/stale'
+    const local = makeWorktree({
+      id: worktreeId,
+      repoId: 'repo-shared',
+      hostId: 'local'
+    })
+    const remote = makeWorktree({
+      id: worktreeId,
+      repoId: 'repo-shared',
+      hostId: 'runtime:env-1'
+    })
+    store.setState({
+      worktreesByRepo: { 'repo-shared': [local, remote] }
+    } as Partial<AppState>)
+
+    const result = await store
+      .getState()
+      .removeWorktree({ id: worktreeId, executionHostId: null }, false, {
+        mode: 'forget-local'
+      })
+
+    expect(result).toEqual({
+      ok: false,
+      error: 'Workspace identity is ambiguous across hosts. Refresh projects and try again.'
+    })
+    expect(mockApi.worktrees.forgetLocal).not.toHaveBeenCalled()
+    expect(store.getState().worktreesByRepo['repo-shared']).toEqual([local, remote])
   })
 
   it('does not forget a mirrored row when diagnostics merely mention a missing code', async () => {
@@ -408,7 +473,7 @@ describe('worktree remote runtime mutations', () => {
       worktreesByRepo: { repo1: [wt] }
     } as Partial<AppState>)
 
-    const result = await store.getState().removeWorktree(wt.id)
+    const result = await store.getState().removeWorktree({ id: wt.id, executionHostId: null })
 
     expect(result).toEqual({
       ok: false,
@@ -426,7 +491,7 @@ describe('worktree remote runtime mutations', () => {
     const wt = makeWorktree({ id: 'repo1::/w/one', repoId: 'repo1', path: '/w/one' })
     store.setState({ worktreesByRepo: { repo1: [wt] } } as Partial<AppState>)
 
-    await store.getState().removeWorktree(wt.id, true)
+    await store.getState().removeWorktree({ id: wt.id, executionHostId: null }, true)
     expect(mockApi.worktrees.remove).toHaveBeenLastCalledWith(
       expect.objectContaining({ force: true, allowUnverifiedPtyStop: false })
     )
@@ -436,7 +501,9 @@ describe('worktree remote runtime mutations', () => {
     const retry = makeWorktree({ id: 'repo1::/w/two', repoId: 'repo1', path: '/w/two' })
     store.setState({ worktreesByRepo: { repo1: [retry] } } as Partial<AppState>)
 
-    await store.getState().removeWorktree(retry.id, true, { allowUnverifiedPtyStop: true })
+    await store.getState().removeWorktree({ id: retry.id, executionHostId: null }, true, {
+      allowUnverifiedPtyStop: true
+    })
     expect(mockApi.worktrees.remove).toHaveBeenLastCalledWith(
       expect.objectContaining({ force: true, allowUnverifiedPtyStop: true })
     )
@@ -464,7 +531,7 @@ describe('worktree remote runtime mutations', () => {
       worktreesByRepo: { 'repo-ssh': [wt] }
     } as Partial<AppState>)
 
-    const result = await store.getState().removeWorktree(wt.id)
+    const result = await store.getState().removeWorktree({ id: wt.id, executionHostId: null })
 
     expect(result).toEqual({ ok: true })
     expect(mockApi.worktrees.remove).toHaveBeenCalledWith({
@@ -502,7 +569,7 @@ describe('worktree remote runtime mutations', () => {
       }
     } as Partial<AppState>)
 
-    const result = await store.getState().removeWorktree(worktreeId)
+    const result = await store.getState().removeWorktree({ id: worktreeId, executionHostId: null })
 
     expect(result).toEqual({
       ok: false,

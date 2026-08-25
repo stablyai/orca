@@ -167,9 +167,7 @@ describe('agent hook completion notifications', () => {
     }
   })
 
-  afterEach(() => {
-    vi.useRealTimers()
-  })
+  afterEach(() => vi.useRealTimers())
 
   it('requires fresh working after notifications start disabled and later re-enable', async () => {
     mockStoreState.settings.notifications.agentTaskComplete = false
@@ -178,6 +176,7 @@ describe('agent hook completion notifications', () => {
       syncAgentHookCompletionNotificationSettings
     } = await import('./agent-hook-completion-notifications')
 
+    syncAgentHookCompletionNotificationSettings()
     mockStoreState.settings.notifications.agentTaskComplete = true
     syncAgentHookCompletionNotificationSettings()
 

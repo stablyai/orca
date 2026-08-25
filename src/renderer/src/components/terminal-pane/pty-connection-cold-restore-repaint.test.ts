@@ -1,6 +1,9 @@
 import type * as React from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { POST_REPLAY_MODE_RESET } from '../../../../shared/terminal-mode-reset-profiles'
+import {
+  POST_REPLAY_MODE_RESET,
+  RESET_GRAPHIC_RENDITION
+} from '../../../../shared/terminal-mode-reset-profiles'
 import { Terminal } from '@xterm/headless'
 import { buildFreshShellViewportBlankingSequence } from './terminal-restored-viewport'
 import {
@@ -180,7 +183,10 @@ describe('connectPanePty', () => {
     connectPanePty(pane as never, manager as never, deps as never)
     await flushAsyncTicks(20)
 
-    expect(pane.terminal.write).toHaveBeenCalledWith('snapshot-payload', expect.any(Function))
+    expect(pane.terminal.write).toHaveBeenCalledWith(
+      `${RESET_GRAPHIC_RENDITION}snapshot-payload`,
+      expect.any(Function)
+    )
     expect(pane.terminal.write).not.toHaveBeenCalledWith('replay-payload', expect.any(Function))
   })
 
@@ -215,7 +221,10 @@ describe('connectPanePty', () => {
     connectPanePty(pane as never, manager as never, deps as never)
     await flushAsyncTicks(20)
 
-    expect(pane.terminal.write).toHaveBeenCalledWith('replay-payload', expect.any(Function))
+    expect(pane.terminal.write).toHaveBeenCalledWith(
+      `${RESET_GRAPHIC_RENDITION}replay-payload`,
+      expect.any(Function)
+    )
     expect(pane.terminal.write).not.toHaveBeenCalledWith('cold-payload', expect.any(Function))
     // Why: the replay branch supersedes cold-restore but must still ack, or the daemon redelivers the cold-restore payload next reattach.
     expect(window.api.pty.ackColdRestore).toHaveBeenCalledWith('tab-pty')
@@ -286,7 +295,8 @@ describe('connectPanePty', () => {
     const recoveredCols = 20
     const recoveredRows = 3
     const coldScrollback = '\x1b[1;1HCOLD\x1b[1;15HEND\r\nCOLD_SOURCE_ROW_02'
-    const viewportClear = '\x1b[2J\x1b[H'
+    const groundedColdScrollback = `${RESET_GRAPHIC_RENDITION}${coldScrollback}`
+    const viewportClear = `${RESET_GRAPHIC_RENDITION}\x1b[2J\x1b[H`
     transport.connect.mockImplementation(async ({ sessionId }: { sessionId?: string }) => {
       if (sessionId) {
         return {
@@ -362,10 +372,10 @@ describe('connectPanePty', () => {
     expect(written).toContain(viewportClear)
     expect(written).not.toContain(NORMAL_BUFFER_PROLOGUE)
     expect(written).toEqual(
-      expect.arrayContaining([coldScrollback, POST_REPLAY_MODE_RESET, blankViewport])
+      expect.arrayContaining([groundedColdScrollback, POST_REPLAY_MODE_RESET, blankViewport])
     )
-    expect(written.indexOf(viewportClear)).toBeLessThan(written.indexOf(coldScrollback))
-    expect(written.indexOf(coldScrollback)).toBeLessThan(written.indexOf(blankViewport))
+    expect(written.indexOf(viewportClear)).toBeLessThan(written.indexOf(groundedColdScrollback))
+    expect(written.indexOf(groundedColdScrollback)).toBeLessThan(written.indexOf(blankViewport))
     const viewportClearOperation = operations.findIndex(
       (operation) => operation.kind === 'write' && operation.data === viewportClear
     )
@@ -388,6 +398,7 @@ describe('connectPanePty', () => {
         rendered,
         'KEEP_1\r\nKEEP_2\r\nOLD_ROW_1\r\nOLD_ROW_2\r\nOLD_ROW_3\r\nOLD_ROW_4\r\nOLD_ROW_5'
       )
+      await writeHeadlessTerminal(rendered, '\x1b[44m')
       let replayedAtRecoveredGrid = false
       let sourceGridLines: string[] = []
       for (const operation of operations) {
@@ -410,6 +421,9 @@ describe('connectPanePty', () => {
           }
         } else {
           await writeHeadlessTerminal(rendered, operation.data)
+          if (operation.data === viewportClear) {
+            expect(rendered.buffer.active.getLine(0)?.getCell(0)?.getBgColor()).toBe(-1)
+          }
         }
       }
       if (sourceGridLines.length === 0) {

@@ -1,7 +1,11 @@
 import type { OrcaRuntimeService } from '../../orca-runtime'
 import type { OrchestrationDb } from '../../orchestration/db'
 import { OrchestrationError } from '../../orchestration/orchestration-error'
-import type { FederatedDispatchRow, WorkerDispatchRow } from '../../orchestration/types'
+import type {
+  DispatchContextRow,
+  FederatedDispatchRow,
+  WorkerDispatchRow
+} from '../../orchestration/types'
 
 export async function inspectWorkerTerminal(
   runtime: OrcaRuntimeService,
@@ -10,25 +14,79 @@ export async function inspectWorkerTerminal(
 ): Promise<{
   terminal: Awaited<ReturnType<OrcaRuntimeService['showTerminal']>> | null
   exact: boolean
-  status: 'unattached' | 'missing' | 'identity_changed' | 'running' | 'exited'
+  status: 'unattached' | 'missing' | 'identity_changed' | 'live' | 'exited' | 'unverifiable'
+  /** Set with `unverifiable`; names what we lost contact with. */
+  reason?: string
 }> {
   const worker = db.getWorkerDispatch(dispatchId)
-  if (!worker?.agent_terminal_handle) {
+  const terminalHandle =
+    worker?.agent_terminal_handle ?? db.getDispatchContextById(dispatchId)?.assignee_handle
+  if (!terminalHandle) {
     return { terminal: null, exact: false, status: 'unattached' }
   }
-  const terminal = await runtime.showTerminal(worker.agent_terminal_handle).catch(() => null)
+  const terminal = await runtime.showTerminal(terminalHandle).catch(() => null)
   if (!terminal) {
     return { terminal: null, exact: false, status: 'missing' }
   }
   const exact = db.isDispatchProcessCurrent({
     dispatchId,
-    paneKey: runtime.getTerminalPaneKey(worker.agent_terminal_handle),
-    processIncarnation: runtime.getTerminalProcessIncarnation(worker.agent_terminal_handle)
+    paneKey: runtime.getTerminalPaneKey(terminalHandle),
+    processIncarnation: runtime.getTerminalProcessIncarnation(terminalHandle)
   })
+  if (!exact) {
+    return { terminal, exact, status: 'identity_changed' }
+  }
+  // Why: the aggregate inventory only iterates registered providers, so a dropped
+  // relay clears `connected` for every remote PTY at once. Lost contact is not a
+  // death certificate, and the verdict is the only field that can tell them apart.
+  const verdict = runtime.getTerminalLivenessVerdict?.(terminalHandle) ?? null
+  if (verdict?.status === 'unverifiable') {
+    return { terminal, exact, status: 'unverifiable', reason: verdict.reason }
+  }
+  if (verdict?.status === 'live') {
+    return { terminal, exact, status: 'live' }
+  }
   return {
     terminal,
     exact,
-    status: exact ? (terminal.connected === false ? 'exited' : 'running') : 'identity_changed'
+    status: terminal.connected === false ? 'exited' : 'live'
+  }
+}
+
+export function exposeContextOnlyWorker(dispatch: DispatchContextRow) {
+  return {
+    dispatch_id: dispatch.id,
+    runtime_epoch: null,
+    state: 'unsupervised' as const,
+    stage: dispatch.capability_hash ? 'injected' : 'context_only',
+    worktree_id: null,
+    agent_terminal_handle: dispatch.assignee_handle,
+    setup_state: 'not_applicable',
+    effects: [],
+    residualResources: [],
+    startOptions: {},
+    last_error: dispatch.last_failure,
+    created_at: dispatch.created_at,
+    updated_at: dispatch.completed_at ?? dispatch.created_at
+  }
+}
+
+export async function showContextOnlyWorker(
+  runtime: OrcaRuntimeService,
+  db: OrchestrationDb,
+  dispatch: DispatchContextRow
+) {
+  const observation = await inspectWorkerTerminal(runtime, db, dispatch.id)
+  return {
+    dispatch,
+    worker: exposeContextOnlyWorker(dispatch),
+    terminal: observation.exact ? observation.terminal : null,
+    observation: {
+      status: observation.status,
+      exactWorker: observation.exact,
+      ...(observation.reason ? { reason: observation.reason } : {})
+    },
+    terminalResource: null
   }
 }
 
@@ -71,7 +129,7 @@ export async function callFederatedWorkerShow(
     residualResources: unknown[]
   }
   terminal: unknown
-  observation: { status: string; exactWorker: boolean }
+  observation: { status: string; exactWorker: boolean; reason?: string }
 }> {
   return (await runtime.callOrchestrationWorkerServer(
     federated.environment_id,

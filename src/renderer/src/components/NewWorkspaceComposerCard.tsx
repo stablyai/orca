@@ -34,6 +34,7 @@ import {
 } from '@/lib/text-control-paste'
 import { getScreenSubmitModifierLabel } from '@/lib/screen-submit-shortcut'
 import { useContextualTour } from '@/components/contextual-tours/use-contextual-tour'
+import { resolveProjectCloneUrlPrefill } from '@/lib/project-clone-url-prefill'
 import type { GitHubWorkItem } from '../../../shared/github/work-item-types'
 import type { GitLabWorkItem } from '../../../shared/gitlab-types'
 import type { JiraIssue } from '../../../shared/jira-types'
@@ -525,16 +526,10 @@ export default function NewWorkspaceComposerCard({
   )
   const projects = useAppStore((state) => state.projects)
   const repos = useAppStore((state) => state.repos)
-  // Prefill "Clone from URL" with the project's own remote so the common case is one click.
-  const defaultCloneUrl = React.useMemo(() => {
-    const sourceRepoIds =
-      projects.find((candidate) => candidate.id === selectedProjectId)?.sourceRepoIds ?? []
-    return (
-      sourceRepoIds
-        .map((sourceId) => repos.find((repo) => repo.id === sourceId)?.gitRemoteIdentity?.remoteUrl)
-        .find((url): url is string => Boolean(url)) ?? ''
-    )
-  }, [projects, repos, selectedProjectId])
+  const defaultCloneUrl = React.useMemo(
+    () => resolveProjectCloneUrlPrefill(projects, repos, selectedProjectId),
+    [projects, repos, selectedProjectId]
+  )
   const handleConnectRunTargetHost = React.useCallback(
     async (option: NeedsSetupProjectHostOption): Promise<void> => {
       const action = option.connectAction

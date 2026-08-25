@@ -1,6 +1,6 @@
 import { dirname, posix, resolve } from 'node:path'
 import type { SkillInstallResult, SkillPlacementResult } from '../../shared/skill-install-contract'
-import type { SkillDiscoveryResult } from '../../shared/skills'
+import type { DiscoveredSkill, SkillDiscoveryResult } from '../../shared/skills'
 import { parseWslUncPath } from '../../shared/wsl-paths'
 import { discoverSkills } from './discovery'
 import { discoverSkillsInWsl } from './skill-discovery-wsl'
@@ -37,6 +37,36 @@ function normalizedPath(path: string, wslDistro?: string): string {
     : withoutTrailingSlash
 }
 
+function unreadableRootPaths(discovery: SkillDiscoveryResult, wslDistro?: string): Set<string> {
+  return new Set(
+    discovery.sources
+      .filter((source) => source.skippedReason === 'unavailable')
+      .map((source) => normalizedPath(source.path, wslDistro))
+  )
+}
+
+/**
+ * Whether a root that actually answered reached this skill.
+ *
+ * Why verification cannot reuse discovery's leniency: a root that did not answer
+ * is served from the host's last completed scan, which is the state *before* this
+ * install wrote. Counting that as proof would report a reinstall as verified
+ * without reading a byte of what it just wrote. A co-owning root that did answer
+ * is still proof, so a symlinked placement verifies as before.
+ */
+function isAnsweredSkill(
+  skill: DiscoveredSkill,
+  unreadableRoots: ReadonlySet<string>,
+  wslDistro?: string
+): boolean {
+  if (unreadableRoots.size === 0) {
+    return true
+  }
+  return (skill.rootPaths ?? [skill.rootPath]).some(
+    (rootPath) => !unreadableRoots.has(normalizedPath(rootPath, wslDistro))
+  )
+}
+
 function placementIsDiscovered(
   discovery: SkillDiscoveryResult,
   placement: SkillPlacementResult,
@@ -48,8 +78,12 @@ function placementIsDiscovered(
     wslDistro ? posix.dirname(placementPath) : dirname(placement.path),
     wslDistro
   )
+  const unreadableRoots = unreadableRootPaths(discovery, wslDistro)
   return discovery.skills.some((skill) => {
     if (skill.name !== skillName) {
+      return false
+    }
+    if (!isAnsweredSkill(skill, unreadableRoots, wslDistro)) {
       return false
     }
     if (normalizedPath(skill.directoryPath, wslDistro) === placementPath) {

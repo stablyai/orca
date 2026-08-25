@@ -158,10 +158,11 @@ test('publishes, updates, revokes, and deletes without losing local state', asyn
       )
     ).toMatchObject({ status: 'ok' })
     const revokedInstall = await orcaPage.evaluate(
-      async ({ shareId, skillId }) => {
+      async ({ shareId, skillId, versionId }) => {
         try {
           return await window.api.skills.installBundleShare({
             shareId,
+            versionId,
             selectedSkillIds: [skillId],
             destination: { scope: 'global' }
           })
@@ -169,7 +170,11 @@ test('publishes, updates, revokes, and deletes without losing local state', asyn
           return { status: 'rejected' as const }
         }
       },
-      { shareId: first.published.share.id, skillId: bundleSkillId(first.published) }
+      {
+        shareId: first.published.share.id,
+        skillId: bundleSkillId(first.published),
+        versionId: first.published.version.versionId
+      }
     )
     expect(revokedInstall.status).toBe('rejected')
     expect(readFileSync(join(globalSkill, 'SKILL.md'), 'utf8')).toContain('version: v1')

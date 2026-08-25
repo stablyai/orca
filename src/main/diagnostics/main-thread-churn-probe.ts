@@ -38,9 +38,11 @@ export function classifySubprocessCommand(command: string, args: readonly string
   let binary = binaryName(command)
   const rest = [...args]
   if (binary === 'wsl') {
+    // Orca spawns guest commands with `--exec`; `--`/`-e` still appear on
+    // wsl.exe processes started outside Orca, so unwrap either separator.
     while (rest.length > 0) {
       const arg = rest.shift()
-      if (arg === '--') {
+      if (arg === '--' || arg === '--exec' || arg === '-e') {
         break
       }
     }

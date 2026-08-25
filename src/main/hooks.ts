@@ -181,7 +181,7 @@ export function runHook(
         const distroArgs = wslInfo.distro ? ['-d', wslInfo.distro] : []
         child = execFile(
           'wsl.exe',
-          [...distroArgs, '--', 'bash', '-c', bashCmd],
+          [...distroArgs, '--exec', 'bash', '-c', bashCmd],
           {
             timeout: HOOK_TIMEOUT,
             encoding: 'utf-8',

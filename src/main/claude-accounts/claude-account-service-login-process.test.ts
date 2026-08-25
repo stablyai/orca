@@ -215,7 +215,7 @@ describe('ClaudeAccountService credential capture', () => {
         [
           '-d',
           'Ubuntu Test',
-          '--',
+          '--exec',
           'bash',
           '-lc',
           "export CLAUDE_CONFIG_DIR='/home/user/.config/orca auth'; exec claude 'auth' 'status' '--json'"

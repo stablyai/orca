@@ -1,4 +1,4 @@
-import { DaemonProtocolError } from './types'
+import { DaemonConnectionLostError, DaemonProtocolError } from './types'
 import type { RpcResponse } from './types'
 import { addNodePtyRecoveryHint } from './node-pty-error-hints'
 import { decodeDaemonResponseError } from './daemon-errors'
@@ -44,10 +44,14 @@ export class DaemonPendingRequests {
     }
   }
 
+  // Why: only reached when the socket itself is gone, so the error class must stay
+  // DaemonConnectionLostError — daemon-client-rpc-request keys "may tear down the
+  // shared connection" off it, and a plain DaemonProtocolError would look like an
+  // ordinary error reply.
   rejectAll(reason: string): void {
     for (const [id, pending] of this.requests) {
       clearTimeout(pending.timer)
-      pending.reject(new DaemonProtocolError(reason))
+      pending.reject(new DaemonConnectionLostError(reason))
       this.requests.delete(id)
     }
   }

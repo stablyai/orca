@@ -108,6 +108,19 @@ function SetProjectLocationDialogBody({
   const [cloneUrl, setCloneUrl] = useState(defaultCloneUrl)
   const [cloneDestination, setCloneDestination] = useState('')
   const [isSubmitting, setIsSubmitting] = useState(false)
+  // Why: an SSH clone is unbounded and the dialog stays dismissable while it
+  // runs. Without this, a clone the user backed out of minutes ago still fires
+  // onReady, silently moving the run target (and resetting start-from) under a
+  // form they have since pointed at another host.
+  const abandoned = useRef(false)
+  useEffect(() => {
+    // Re-armed on mount: StrictMode runs mount/cleanup/mount, and latching this
+    // on the first cleanup would disable the success path for the whole session.
+    abandoned.current = false
+    return () => {
+      abandoned.current = true
+    }
+  }, [])
   const parsedHost = parseExecutionHostId(option.hostId)
   // Remote hosts browse in-dialog; the local host gets the native folder picker.
   const remoteHost =
@@ -154,7 +167,7 @@ function SetProjectLocationDialogBody({
         kind: setupKind,
         displayName: projectName
       })
-      if (result) {
+      if (result && !abandoned.current) {
         onReady(result.setup.id)
       }
     } finally {
@@ -175,7 +188,7 @@ function SetProjectLocationDialogBody({
         destination: cloneDestination.trim(),
         displayName: projectName
       })
-      if (result) {
+      if (result && !abandoned.current) {
         onReady(result.setup.id)
       }
     } finally {

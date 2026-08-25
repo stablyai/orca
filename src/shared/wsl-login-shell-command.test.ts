@@ -4,9 +4,9 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import {
+  buildWslExecArgs,
   buildWslInteractiveLoginShellCommand,
   buildWslLoginShellCommand,
-  escapeWslShCommandForWindows,
   quotePosixShell
 } from './wsl-login-shell-command'
 
@@ -21,7 +21,7 @@ function canRunWslSh(): boolean {
     return wslShAvailable
   }
   try {
-    execFileSync('wsl.exe', ['--', 'sh', '-lc', 'true'], {
+    execFileSync('wsl.exe', ['--exec', 'sh', '-lc', 'true'], {
       timeout: WSL_TEST_COMMAND_TIMEOUT_MS
     })
     wslShAvailable = true
@@ -46,7 +46,7 @@ function expectValidShSyntax(command: string): void {
   if (!canRunWslSh()) {
     return
   }
-  execFileSync('wsl.exe', ['--', 'sh', '-n'], {
+  execFileSync('wsl.exe', ['--exec', 'sh', '-n'], {
     input: command,
     timeout: WSL_TEST_COMMAND_TIMEOUT_MS
   })
@@ -122,37 +122,30 @@ describe('wsl login shell command helpers', () => {
     }
   )
 
-  it('preserves command-scoped environment variables through the outer WSL shell', () => {
+  it('keeps command-scoped environment variables in the quoted payload', () => {
     const command = buildWslLoginShellCommand('HISTFILE=/tmp/orca-history printf "$HISTFILE"')
-    const escaped = escapeWslShCommandForWindows(command)
 
     expect(command).toContain('\'HISTFILE=/tmp/orca-history printf "$HISTFILE"\'')
-    expect(escaped).toContain('\\$_orca_wsl_shell')
-    expect(escaped).toContain('\\${SHELL:-/bin/bash}')
-    expect(escaped).toContain('\\$(getent passwd "\\$(id -un)"')
-    expect(escaped).toContain('\\$HISTFILE')
     expectValidShSyntax(command)
   }, 30_000)
 
-  it('does not double-escape wrapper shell variables', () => {
-    const command = 'echo \\$_orca_wsl_shell "$_orca_wsl_shell"'
-
-    expect(escapeWslShCommandForWindows(command)).toBe(
-      'echo \\$_orca_wsl_shell "\\$_orca_wsl_shell"'
-    )
+  it('routes through --exec so wsl.exe cannot preprocess argv', () => {
+    expect(buildWslExecArgs('Ubuntu', ['sh', '-lc', 'printf "$HOME"'])).toEqual([
+      '-d',
+      'Ubuntu',
+      '--exec',
+      'sh',
+      '-lc',
+      'printf "$HOME"'
+    ])
+    // A distro-less target still has to bypass the `--` preprocessor.
+    expect(buildWslExecArgs(undefined, ['sh', '-c', 'true'])).toEqual([
+      '--exec',
+      'sh',
+      '-c',
+      'true'
+    ])
   })
-
-  it('escapes user command dollars inside POSIX-quoted payloads for WSL argv', () => {
-    const command = buildWslLoginShellCommand(
-      'HISTFILE=/tmp/orca-history printf "$HISTFILE"; printf \'%s\' "$SHELL"'
-    )
-    const escaped = escapeWslShCommandForWindows(command)
-
-    expect(escaped).toContain(
-      "'HISTFILE=/tmp/orca-history printf \"\\$HISTFILE\"; printf '\\''%s'\\'' \"\\$SHELL\"'"
-    )
-    expectValidShSyntax(command)
-  }, 30_000)
 
   it('preserves user command variables across the Windows-to-WSL argv boundary', () => {
     if (!canRunWslSh()) {
@@ -160,15 +153,44 @@ describe('wsl login shell command helpers', () => {
     }
 
     const command = buildWslLoginShellCommand('orca_value=ok; printf "<%s>" "$orca_value"')
-    const escaped = escapeWslShCommandForWindows(command)
 
     expect(
-      execFileSync('wsl.exe', ['--', 'sh', '-lc', escaped], {
+      execFileSync('wsl.exe', buildWslExecArgs(undefined, ['sh', '-lc', command]), {
         encoding: 'utf8',
         timeout: WSL_TEST_COMMAND_TIMEOUT_MS
       })
     ).toBe('<ok>')
   }, 30_000)
+
+  // Why: `--` expands $name in argv against the guest env before the guest runs,
+  // so these scripts reached the shell already rewritten. Each case below was
+  // measured to return DIFFERENT bytes under `--` than under `--exec`; cases
+  // that merely look risky but are unaffected (a sed backreference has no `$`)
+  // are deliberately not here, because they would pass either way.
+  it.each([
+    ['awk field reference', ['sh', '-c', `echo 'a b' | awk '{print $2}'`], 'b\n'],
+    ['literal escaped dollar', ['sh', '-c', `printf '[%s]' "\\$HOME"`], '[$HOME]'],
+    ['single-quoted dollar', ['sh', '-c', `printf '[%s]' '$PATH'`], '[$PATH]'],
+    // The shape wslUncDirectoryExists uses: `--` blanked $1, so every existing
+    // directory probed as missing.
+    ['positional argument', ['sh', '-c', 'printf "[%s]" "$1"', 'sh', 'ARG'], '[ARG]'],
+    ['shell local', ['sh', '-c', 'x=hi; printf "[%s]" "$x"'], '[hi]']
+  ])(
+    'passes %s to the guest byte-for-byte',
+    (_name, shellArgs, expected) => {
+      if (!canRunWslSh()) {
+        return
+      }
+
+      expect(
+        execFileSync('wsl.exe', buildWslExecArgs(undefined, shellArgs), {
+          encoding: 'utf8',
+          timeout: WSL_TEST_COMMAND_TIMEOUT_MS
+        })
+      ).toBe(expected)
+    },
+    30_000
+  )
 
   it('starts an interactive login shell without assuming bash', () => {
     const command = buildWslInteractiveLoginShellCommand()

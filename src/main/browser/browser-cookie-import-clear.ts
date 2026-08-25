@@ -4,7 +4,8 @@ import {
   cookieRemovalUrl,
   isNonTransplantableCookieDomain,
   NON_TRANSPLANTABLE_CLEAR_EXCLUDED_ORIGINS,
-  normalizeCookieDomain
+  normalizeCookieDomain,
+  registrableFamily
 } from './browser-cookie-import-policy'
 
 const COOKIE_CLEAR_CONCURRENCY = 8
@@ -33,6 +34,13 @@ export type CookieClearStore = Pick<Cookies, 'get' | 'remove'> & {
     cookies: readonly { cookie: Cookie; url: string }[]
   ): Promise<CookieClearIdentity[]>
   restoreClearIdentities(identities: readonly CookieClearIdentity[]): Promise<void>
+}
+
+// Why (STA-4300): the import writes go through this store, and 'set' stays out of it for the same
+// reason it stays out of the clear path — cookies.set() drops partitionKey silently, so a CHIPS
+// cookie imported through it is downgraded on the success path with nothing to report it.
+export type CookieImportWriteStore = Pick<Cookies, 'get' | 'remove'> & {
+  writeCookieIdentity(identity: CookieClearIdentity): Promise<void>
 }
 
 // Why (STA-4061): 'set' stays out so the lossy partition-dropping reconstruction cannot return.
@@ -84,11 +92,24 @@ export async function withCookieClearLock<T>(owner: object, run: () => Promise<T
   }
 }
 
-function removableCookieEntries(cookies: readonly Cookie[]): { cookie: Cookie; url: string }[] {
+function removableCookieEntries(
+  cookies: readonly Cookie[],
+  preserveFamilies: ReadonlySet<string>
+): { cookie: Cookie; url: string }[] {
   const removable: { cookie: Cookie; url: string }[] = []
   for (const cookie of cookies) {
     if (isNonTransplantableCookieDomain(cookie.domain ?? '')) {
       continue
+    }
+    // Why (STA-4300 I2): a family whose partition could not be read faithfully is neither written
+    // nor removed. Filtering HERE keeps it out of the removal plan and — because the CDP snapshot
+    // is taken from this same list — out of the restore set too, so it is never submitted to any
+    // mutation at all.
+    if (preserveFamilies.size > 0) {
+      const family = registrableFamily(cookie.domain ?? '')
+      if (family !== null && preserveFamilies.has(family)) {
+        continue
+      }
     }
     const domain = cookie.domain ? normalizeCookieDomain(cookie.domain) : null
     const url = domain ? cookieRemovalUrl(cookie, domain) : null
@@ -145,7 +166,8 @@ async function restoreClearedCookies(
 }
 
 export async function removeTransplantableCookies(
-  targetSession: CookieClearSession
+  targetSession: CookieClearSession,
+  preserveFamilies: ReadonlySet<string> = new Set()
 ): Promise<void> {
   return withCookieClearLock(targetSession, async () => {
     const store = targetSession.cookies
@@ -154,7 +176,7 @@ export async function removeTransplantableCookies(
       return
     }
 
-    const initialRemovable = removableCookieEntries(initialCookies)
+    const initialRemovable = removableCookieEntries(initialCookies, preserveFamilies)
     if (initialRemovable.length === 0) {
       return
     }
@@ -167,16 +189,26 @@ export async function removeTransplantableCookies(
     // no-op, so the stale plan costs nothing; only its narrowness matters.
     const removalGroups = [...groupRemovableCookies(initialRemovable).values()]
 
-    try {
-      // Why (STA-4065): excludeOrigins keeps the google.com family, including partitioned
-      // cookies, so one call replaces a remove() per cookie on the ordinary import path.
-      await targetSession.clearData({
-        dataTypes: ['cookies'],
-        excludeOrigins: NON_TRANSPLANTABLE_CLEAR_EXCLUDED_ORIGINS
-      })
-      return
-    } catch {
-      // Why: a rejected bulk clear can still have emptied part of the jar.
+    // Why (STA-4300 §4.3a): bulk clearData removes everything outside excludeOrigins, and its own
+    // contract admits a rejection may already have emptied part of the jar. Handing it a
+    // dynamically derived preserve list cannot be made safe: a partial delete followed by a
+    // rejection would destroy a preserved family with no identity to restore it from, because the
+    // preserved coordinates are deliberately absent from the snapshot. So when anything is
+    // preserved we do not use the bulk path at all — the frozen per-coordinate plan, which already
+    // excludes those families, becomes the primary path. Nothing is preserved on the ordinary
+    // import, so that path keeps today's single clearData call unchanged.
+    if (preserveFamilies.size === 0) {
+      try {
+        // Why (STA-4065): excludeOrigins keeps the google.com family, including partitioned
+        // cookies, so one call replaces a remove() per cookie on the ordinary import path.
+        await targetSession.clearData({
+          dataTypes: ['cookies'],
+          excludeOrigins: NON_TRANSPLANTABLE_CLEAR_EXCLUDED_ORIGINS
+        })
+        return
+      } catch {
+        // Why: a rejected bulk clear can still have emptied part of the jar.
+      }
     }
 
     const results = await mapSettledWithConcurrency(

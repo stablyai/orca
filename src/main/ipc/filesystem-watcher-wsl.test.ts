@@ -92,7 +92,7 @@ describe('createWslWatcher', () => {
 
     expect(spawnMock).toHaveBeenCalledWith(
       'wsl.exe',
-      ['-d', 'Ubuntu', '--', 'sh', '-s', '--', '/home/me/repo'],
+      ['-d', 'Ubuntu', '--exec', 'sh', '-s', '--', '/home/me/repo'],
       expect.objectContaining({
         stdio: ['pipe', 'pipe', 'pipe'],
         windowsHide: true

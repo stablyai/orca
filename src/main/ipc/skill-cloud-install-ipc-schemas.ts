@@ -19,7 +19,7 @@ const installDestinationFields = {
 export const skillCloudShareInstallSchema = z
   .object({
     shareId: z.string().min(1).max(128),
-    versionId: z.string().min(1).max(128).optional(),
+    versionId: z.string().min(1).max(128),
     ...installDestinationFields
   })
   .strict()
@@ -27,7 +27,7 @@ export const skillCloudShareInstallSchema = z
 export const skillCloudBundleShareInstallSchema = z
   .object({
     shareId: z.string().min(1).max(128),
-    versionId: z.string().min(1).max(128).optional(),
+    versionId: z.string().min(1).max(128),
     operationId: z.string().min(1).max(128).optional(),
     environmentId: skillCloudInstallEnvironmentIdSchema.optional(),
     selectedSkillIds: SkillBundleInstallRequestSchema.shape.selectedSkillIds,

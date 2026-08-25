@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto'
 import { z } from 'zod'
 import type { E2EEKeypair } from '../e2ee-keypair'
 import { cancelUnreadResponseBody } from '../../lib/unread-response-body'
+import type { RelayRegion } from './relay-region-preference'
 
 const RELAY_HTTP_REQUEST_DEADLINE_MS = 15_000
 const RELAY_RETRY_AFTER_MAX_MS = 5 * 60_000
@@ -117,6 +118,7 @@ export async function requestRelayAssignment(input: {
   relayToken: string
   relayHostId: string
   reconnect?: boolean
+  preferredRegion?: RelayRegion
   fetch?: typeof globalThis.fetch
   requestDeadlineMs?: number
 }): Promise<RelayAssignment> {
@@ -133,6 +135,7 @@ export async function requestRelayAssignment(input: {
     body: JSON.stringify({
       v: 1,
       relayHostId: input.relayHostId,
+      ...(input.preferredRegion ? { preferredRegion: input.preferredRegion } : {}),
       // Declares likely reconnection so the director can verify and admit
       // through its bounded fast lane instead of the placement queue.
       ...(input.reconnect ? { reconnect: true } : {})
@@ -141,6 +144,11 @@ export async function requestRelayAssignment(input: {
   if (!response.ok) {
     const retryAfterMs = relayRetryAfterMs(response.headers.get('retry-after'))
     await cancelUnreadResponseBody(response)
+    if (input.preferredRegion && response.status === 400) {
+      // A rolled-back director rejects the regional hint; preserve the
+      // reconnect lane while retrying without only that field.
+      return await requestRelayAssignment({ ...input, preferredRegion: undefined })
+    }
     if (input.reconnect && response.status === 400) {
       // A rolled-back director rejects unknown fields; retry once unhinted.
       return await requestRelayAssignment({ ...input, reconnect: false })

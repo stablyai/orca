@@ -4,7 +4,6 @@ import {
   dashboardCardDisplayState,
   type DashboardCard,
   type DashboardCardDotState,
-  type DashboardCardSubagent,
   type DashboardSnapshot,
   type DashboardWorkspace
 } from '../../../../shared/dashboard-snapshot'
@@ -56,6 +55,7 @@ import {
 } from './dashboard-worktree-launch-options'
 import { buildDashboardSnapshotFilterOptions } from './dashboard-snapshot-filter-options'
 import { dashboardBucketForDotState } from './dashboard-card-bucket'
+import { groupSubagentsByParentPaneKey } from './dashboard-subagent-cards'
 
 /** The store slices the snapshot builder reads. Kept as a Pick so unit tests
  *  can pass a partial store without constructing the whole AppState. */
@@ -141,13 +141,14 @@ export function buildDashboardSnapshot(
           ]
         : liveEntries
     const terminalLayoutsByTabId = selectTerminalLayoutsForWorktree(state, worktreeId)
+    const paneTitlesByTabId = selectRuntimePaneTitlesForWorktree(state, worktreeId)
 
     const rows = applyAgentRowLineage(
       buildWorktreeAgentRows({
         tabs: state.tabsByWorktree[worktreeId] ?? [],
         entries,
         retained: selectRetainedAgentEntriesForWorktree(state, worktreeId),
-        runtimePaneTitlesByTabId: selectRuntimePaneTitlesForWorktree(state, worktreeId),
+        runtimePaneTitlesByTabId: paneTitlesByTabId,
         ptyIdsByTabId: selectLivePtyIdsForWorktree(state, worktreeId),
         terminalLayoutsByTabId,
         runtimeAgentOrchestrationByPaneKey:
@@ -158,33 +159,8 @@ export function buildDashboardSnapshot(
       })
     )
     const subagentsByParentPaneKey = includeCardDetails
-      ? new Map<string, DashboardCardSubagent[]>()
+      ? groupSubagentsByParentPaneKey(rows)
       : undefined
-    if (subagentsByParentPaneKey) {
-      for (const row of rows) {
-        if (row.rowSource !== 'subagent') {
-          continue
-        }
-        const parentPaneKey = row.entry.orchestration?.parentPaneKey
-        if (!parentPaneKey) {
-          continue
-        }
-        const subagent: DashboardCardSubagent = {
-          id: row.paneKey,
-          name:
-            nonEmpty(row.entry.orchestration?.displayName) ??
-            nonEmpty(row.entry.prompt) ??
-            row.agentType,
-          dotState: row.state
-        }
-        const existing = subagentsByParentPaneKey.get(parentPaneKey)
-        if (existing) {
-          existing.push(subagent)
-        } else {
-          subagentsByParentPaneKey.set(parentPaneKey, [subagent])
-        }
-      }
-    }
     const context = includeCardDetails
       ? resolveDashboardCardContext(state, repo, worktree)
       : undefined
@@ -303,7 +279,14 @@ export function buildDashboardSnapshot(
         // board and the sidebar bold/mute the same agents at the same time.
         unseen,
         askSummary: bucket === 'attention' ? (row.entry.interactivePrompt ?? undefined) : undefined,
-        conversationName: boundedLabelOrUndefined(rowConversationName(row, generatedTitlesEnabled)),
+        conversationName: boundedLabelOrUndefined(
+          rowConversationName(
+            row,
+            generatedTitlesEnabled,
+            terminalLayoutsByTabId[row.tab.id],
+            paneTitlesByTabId[row.tab.id]
+          )
+        ),
         ...(terminalInput ? { terminalInput } : {})
       })
     }

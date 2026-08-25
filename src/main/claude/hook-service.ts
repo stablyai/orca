@@ -65,6 +65,8 @@ function getManagedScript(
     return [
       '@echo off',
       'setlocal',
+      // Why: Claude-compatible permission hooks fail closed on empty stdout (#14818).
+      'echo {}',
       // Why: refresh endpoint coordinates for PTYs surviving an Orca restart.
       'if defined ORCA_AGENT_HOOK_ENDPOINT if exist "%ORCA_AGENT_HOOK_ENDPOINT%" call "%ORCA_AGENT_HOOK_ENDPOINT%" 2>nul',
       // Why (#11549): the env guards must outrank the Devin skip — the Devin skip parks in more.com,
@@ -86,6 +88,8 @@ function getManagedScript(
 
   return [
     '#!/bin/sh',
+    // Why: Claude-compatible permission hooks fail closed on empty stdout (#14818).
+    'printf "{}\\n"',
     ...buildPosixHookPayloadCapture(),
     ...(options.skipWhenDevinImportsClaude
       ? [

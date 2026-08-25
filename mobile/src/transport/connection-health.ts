@@ -1,4 +1,5 @@
 import { isTailscaleEndpoint } from '../../../src/shared/remote-runtime-tailscale-hint'
+import type { MobileConnectionPath } from './stable-logical-rpc-client'
 import type { ConnectionState } from './types'
 
 // Why: thresholds for escalating connection UX from neutral
@@ -49,6 +50,10 @@ export function classifyConnection(args: {
   // Optional pinned host endpoint — enables the Tailscale hint on
   // warning/unreachable verdicts. Callers without it get plain labels.
   endpoint?: string | null
+  pendingPath?: MobileConnectionPath | null
+  // The desktop has repeatedly refused this device's relay credential — retrying
+  // cannot fix it, so it outranks any "still connecting" reading (STA-4681).
+  pairingRejected?: boolean
   nowMs?: number
 }): ConnectionVerdict {
   const { state, reconnectAttempts, lastConnectedAt } = args
@@ -57,12 +62,24 @@ export function classifyConnection(args: {
 
   // Why: auth-failed means the desktop no longer recognizes this pairing (e.g. it
   // lost its device registry) — retrying can't fix it, only re-pairing can, so say so.
-  if (state === 'auth-failed') {
+  if (state === 'auth-failed' || (args.pairingRejected && state !== 'connected')) {
     return { kind: 'auth-failed', label: 'Pairing invalid — re-pair with your desktop' }
   }
 
   if (state === 'connected') {
     return { kind: 'normal', label: 'Connected' }
+  }
+
+  if (args.pendingPath === 'relay') {
+    if (reconnectAttempts >= UNREACHABLE_ATTEMPTS) {
+      if (lastConnectedAt == null) {
+        return { kind: 'unreachable', label: "Can't connect via Relay", reason: 'never-connected' }
+      }
+      if (now - lastConnectedAt >= STALE_SINCE_LAST_CONNECT_MS) {
+        return { kind: 'unreachable', label: "Can't connect via Relay", reason: 'stale' }
+      }
+    }
+    return { kind: 'normal', label: 'Connecting via Relay…' }
   }
 
   if (state === 'disconnected') {

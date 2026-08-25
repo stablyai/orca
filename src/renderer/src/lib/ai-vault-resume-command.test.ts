@@ -306,7 +306,7 @@ describe('ai vault resume command runtime', () => {
         }
       })
     ).toBe(
-      "unset CODEX_HOME; unset ORCA_CODEX_HOME; cd '/home/alice/repo' && codex 'resume' 'session one'"
+      `cd '/home/alice/repo' && env -u CODEX_HOME -u ORCA_CODEX_HOME codex 'resume' 'session one'`
     )
   })
 
@@ -598,7 +598,7 @@ describe('ai vault resume command runtime', () => {
     })
 
     expect(command).toBe(
-      "unset CODEX_HOME; unset ORCA_CODEX_HOME; cd '/home/alice/repo' && codex 'resume' 'session one'"
+      `cd '/home/alice/repo' && env -u CODEX_HOME -u ORCA_CODEX_HOME codex 'resume' 'session one'`
     )
     expect(command).not.toContain('/retired/shared-home')
   })

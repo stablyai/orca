@@ -4,6 +4,7 @@ import { parseWorkspaceKey } from '../../../../../../shared/workspace-scope'
 import { pruneHostedReviewLinkMutationGenerations } from '../metadata/hosted-review-link-mutation'
 import { collectWorktreePurgeDoomedIds } from './worktree-purge-doomed-ids'
 import { createWorktreePurgeOmitters } from './worktree-purge-omitters'
+import { removeDeleteStatesForWorktreeIds } from './worktree-delete-state'
 
 export function buildWorktreePurgeState(s: AppState, worktreeIds: string[]): Partial<AppState> {
   const worktreeIdSet = new Set(worktreeIds)
@@ -101,7 +102,10 @@ export function buildWorktreePurgeState(s: AppState, worktreeIds: string[]): Par
     unreadAgentCompletionPanes: omitByPaneKeyTabPrefix(s.unreadAgentCompletionPanes),
     lastTerminalInputAtByPaneKey: omitByPaneKeyTabPrefix(s.lastTerminalInputAtByPaneKey),
     // Delete state
-    deleteStateByWorktreeId: omitByWorktree(s.deleteStateByWorktreeId),
+    deleteStateByWorktreeId: removeDeleteStatesForWorktreeIds(
+      s.deleteStateByWorktreeId,
+      worktreeIdSet
+    ),
     baseStatusByWorktreeId: omitByWorktree(s.baseStatusByWorktreeId),
     remoteBranchConflictByWorktreeId: omitByWorktree(s.remoteBranchConflictByWorktreeId),
     // File search

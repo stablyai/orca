@@ -14,11 +14,13 @@ import {
   getWorkspaceCleanupInactivityReasonsForWorkspace,
   isWorkspaceInactiveForCleanup
 } from './workspace-cleanup-candidate'
+import { getRepoOwnedWorktreeMeta, isWorktreeMetaOwnedByRepo } from '../worktree-metadata-ownership'
 
 export function synthesizeDisconnectedSshCleanupCandidates(
   store: Store,
   repo: Repo,
   scannedAt: number,
+  repoOwnerCount: number,
   targetWorktreeIds?: ReadonlySet<string>,
   includeAllWorkspaces = false
 ): WorkspaceCleanupCandidate[] {
@@ -32,7 +34,7 @@ export function synthesizeDisconnectedSshCleanupCandidates(
         continue
       }
       const meta = store.getWorktreeMeta(worktreeId)
-      if (meta) {
+      if (isWorktreeMetaOwnedByRepo(repo, meta, repoOwnerCount)) {
         candidates.push(createDisconnectedSshCandidate(repo, scannedAt, worktreeId, meta))
       }
     }
@@ -45,7 +47,7 @@ export function synthesizeDisconnectedSshCleanupCandidates(
     if (!Object.hasOwn(allMeta, worktreeId) || !worktreeId.startsWith(repoWorktreePrefix)) {
       continue
     }
-    const meta = allMeta[worktreeId]
+    const meta = getRepoOwnedWorktreeMeta(repo, worktreeId, allMeta, repoOwnerCount)
     if (!meta || (!includeAllWorkspaces && !isWorkspaceInactiveForCleanup(meta, scannedAt))) {
       continue
     }

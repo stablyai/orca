@@ -1,6 +1,7 @@
 // Type-only, so the cycle back through workspace-cleanup-filter-model erases at build.
 import type { WorkspaceCleanupBrowseState } from './workspace-cleanup-browse-state'
 import type { ExecutionHostId } from './execution-host'
+import { getWorkspaceCleanupCandidateHostId } from './workspace-cleanup-host-identity'
 
 export const WORKSPACE_CLEANUP_CLASSIFIER_VERSION = 2
 export const WORKSPACE_CLEANUP_ARCHIVED_IDLE_MS = 7 * 24 * 60 * 60 * 1000
@@ -38,6 +39,10 @@ export type WorkspaceCleanupDismissal = {
   dismissedAt: number
   fingerprint: string
   classifierVersion: number
+  // Why (STA-4343): `repoId::path` ids repeat across hosts, so ignoring one
+  // host's row must not hide another host's. Optional: a dismissal persisted
+  // before this field keeps its legacy id-only match.
+  executionHostId?: ExecutionHostId
 }
 
 export type WorkspaceCleanupUIState = {
@@ -266,12 +271,19 @@ export function isWorkspaceOldForCleanup(
 }
 
 export function shouldHideWorkspaceCleanupCandidate(
-  candidate: Pick<WorkspaceCleanupCandidate, 'worktreeId' | 'fingerprint'>,
+  candidate: Pick<
+    WorkspaceCleanupCandidate,
+    'worktreeId' | 'fingerprint' | 'connectionId' | 'executionHostId'
+  >,
   dismissal: WorkspaceCleanupDismissal | undefined
 ): boolean {
   return (
     dismissal?.worktreeId === candidate.worktreeId &&
     dismissal.fingerprint === candidate.fingerprint &&
-    dismissal.classifierVersion === WORKSPACE_CLEANUP_CLASSIFIER_VERSION
+    dismissal.classifierVersion === WORKSPACE_CLEANUP_CLASSIFIER_VERSION &&
+    // A host-qualified dismissal hides only its own host's row; a legacy one
+    // (no host recorded) keeps hiding every row that matches the fingerprint.
+    (dismissal.executionHostId === undefined ||
+      dismissal.executionHostId === getWorkspaceCleanupCandidateHostId(candidate))
   )
 }

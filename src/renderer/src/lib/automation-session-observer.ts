@@ -12,6 +12,7 @@ import { createAgentStatusOscProcessor } from '../../../shared/agent-status-osc'
 import type { ParsedAgentStatusPayload } from '../../../shared/agent-status-types'
 import { isMainTerminalSideEffectAuthorityForPty } from '@/components/terminal-pane/terminal-side-effect-facts-handler'
 import { resolveLiveAgentStatusConnectionRouting } from '@/lib/agent-status-connection-ownership'
+import { rendererAgentStatusObservations } from '@/lib/renderer-agent-status-observations'
 
 export async function observeExistingAutomationSession(args: {
   ptyId: string
@@ -44,7 +45,20 @@ export async function observeExistingAutomationSession(args: {
         // Why: a delayed reuse observer must not write into a pane that has
         // since rebound to another host's colliding tab/pane identifiers.
         if (routing) {
-          state.setAgentStatus(paneKey, payload, undefined, undefined, routing)
+          state.setAgentStatus(
+            paneKey,
+            {
+              ...payload,
+              observation: rendererAgentStatusObservations.observe(paneKey, {
+                origin: 'osc',
+                observedAt: Date.now(),
+                kind: 'snapshot'
+              })
+            },
+            undefined,
+            undefined,
+            routing
+          )
         }
       }
       args.onAgentStatus(payload)

@@ -60,7 +60,7 @@ function executeWslMetadataRead(distro: string, command: string): Promise<string
   return new Promise((resolve, reject) => {
     execFile(
       'wsl.exe',
-      ['-d', distro, '--', 'bash', '-c', command],
+      ['-d', distro, '--exec', 'bash', '-c', command],
       {
         encoding: 'utf8',
         maxBuffer: WSL_METADATA_MAX_BUFFER_BYTES,

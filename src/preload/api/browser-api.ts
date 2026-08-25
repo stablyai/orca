@@ -1,5 +1,9 @@
 import type { BrowserSetAnnotationViewportBridgeArgs } from '../../shared/browser-annotation-viewport-bridge'
 import type {
+  BrowserWebAuthnAccountRequest,
+  BrowserWebAuthnAccountResponse
+} from '../../shared/browser-webauthn-account'
+import type {
   BrowserSetGrabModeArgs,
   BrowserSetGrabModeResult,
   BrowserAwaitGrabSelectionArgs,
@@ -48,6 +52,11 @@ export type BrowserApi = {
     webContentsId: number
   }) => Promise<boolean>
   unregisterGuest: (args: { browserPageId: string }) => Promise<void>
+  onWebAuthnAccountRequest: (
+    callback: (request: BrowserWebAuthnAccountRequest) => void
+  ) => () => void
+  onWebAuthnAccountRequestClosed: (callback: (event: { requestId: string }) => void) => () => void
+  respondWebAuthnAccount: (response: BrowserWebAuthnAccountResponse) => Promise<boolean>
   openDevTools: (args: { browserPageId: string }) => Promise<boolean>
   setViewportOverride: (args: {
     browserPageId: string

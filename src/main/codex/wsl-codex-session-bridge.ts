@@ -1,6 +1,6 @@
 import { execFile } from 'node:child_process'
 import { posix as pathPosix } from 'node:path'
-import { escapeWslShCommandForWindows } from '../../shared/wsl-login-shell-command'
+import { buildWslExecArgs } from '../../shared/wsl-login-shell-command'
 import { parseWslUncPath } from '../../shared/wsl-paths'
 
 export type WslCodexSessionBridgeTarget = {
@@ -54,14 +54,10 @@ export async function syncWslCodexSessionsIntoManagedHome(
     return emptySummary
   }
 
-  const stdout = await execFileUtf8('wsl.exe', [
-    '-d',
-    target.distro,
-    '--',
-    'bash',
-    '-lc',
-    buildWslCodexSessionBridgeShellCommand(paths)
-  ])
+  const stdout = await execFileUtf8(
+    'wsl.exe',
+    buildWslExecArgs(target.distro, ['bash', '-lc', buildWslCodexSessionBridgeShellCommand(paths)])
+  )
   return parseWslSessionBridgeSummary(stdout)
 }
 
@@ -110,7 +106,7 @@ export function buildWslCodexSessionBridgeShellCommand(
     `done < <(find "$source_sessions_root" -type f -name '*.jsonl' -print0 2>/dev/null)`,
     `printf '{"scannedFiles":%s,"linkedFiles":%s}\\n' "$scanned_files" "$linked_files"`
   ].join('\n')
-  return escapeWslShCommandForWindows(shellCommand)
+  return shellCommand
 }
 
 function getWslSessionBridgeTaskKey(target: WslCodexSessionBridgeTarget): string {

@@ -1,6 +1,5 @@
 import type { SkillDiscoveryResult, SkillDiscoveryTarget } from '../../shared/skills'
 import type {
-  SkillCloudDownloadGrant,
   SkillCloudOperation,
   SkillCloudOwnedShare,
   SkillCloudPackageDetails
@@ -50,7 +49,6 @@ export type SkillsApi = {
   cancelShare: (preparationId: string) => Promise<void>
   releaseShare: (preparationId: string) => Promise<void>
   resolveShare: (shareId: string) => Promise<SkillShareResolvedOperation>
-  createDownloadGrant: (shareId: string) => Promise<SkillCloudOperation<SkillCloudDownloadGrant>>
   installShare: (input: SkillShareInstallInput) => Promise<SkillShareInstallOperation>
   installBundleShare: (
     input: SkillBundleShareInstallInput

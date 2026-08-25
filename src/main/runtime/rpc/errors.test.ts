@@ -45,6 +45,16 @@ describe('mapRuntimeError', () => {
     }
   )
 
+  it.each(['agent_prompt_blocked', 'agent_prompt_stalled', 'request_aborted'])(
+    'preserves the agent prompt failure %s',
+    (code) => {
+      expect(mapRuntimeError('req_1', { runtimeId: 'runtime-1' }, new Error(code))).toMatchObject({
+        ok: false,
+        error: { code, message: code }
+      })
+    }
+  )
+
   it.each([
     'remote_update_manual_required',
     'remote_update_not_available',

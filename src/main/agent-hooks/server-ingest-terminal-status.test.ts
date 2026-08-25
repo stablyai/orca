@@ -27,6 +27,97 @@ afterEach(() => {
 })
 
 describe('AgentHookServer ingestTerminalStatus', () => {
+  it('preserves a hook turn stamp when an OSC repaint omits hook-only completion text', () => {
+    const server = new AgentHookServer()
+    const listener = vi.fn()
+    server.setListener(listener)
+
+    server.ingestRemote(
+      {
+        paneKey: PANE,
+        payload: { state: 'working', prompt: 'review the PR', agentType: 'claude' }
+      },
+      'conn-1'
+    )
+    listener.mockClear()
+    server.ingestRemote(
+      {
+        paneKey: PANE,
+        payload: {
+          state: 'working',
+          prompt: 'review the PR',
+          agentType: 'claude',
+          lastAssistantMessage: 'Review complete.',
+          turnCompletedAt: 1_700_000_005_000
+        }
+      },
+      'conn-1'
+    )
+    server.ingestTerminalStatus({
+      paneKey: PANE,
+      connectionId: 'conn-1',
+      payload: { state: 'working', prompt: 'review the PR', agentType: 'claude' }
+    })
+
+    expect(listener).toHaveBeenCalledOnce()
+    expect(server.getStatusSnapshot()[0]).toMatchObject({
+      state: 'working',
+      lastAssistantMessage: 'Review complete.',
+      turnCompletedAt: 1_700_000_005_000
+    })
+
+    server.ingestTerminalStatus({
+      paneKey: PANE,
+      connectionId: 'conn-1',
+      payload: { state: 'done', prompt: 'review the PR', agentType: 'claude' }
+    })
+
+    expect(listener).toHaveBeenCalledTimes(2)
+    expect(listener).toHaveBeenLastCalledWith(
+      expect.objectContaining({ payload: expect.objectContaining({ state: 'done' }) })
+    )
+  })
+
+  it('accepts an identical-prompt hook boundary after a stamped turn', () => {
+    const server = new AgentHookServer()
+    const listener = vi.fn()
+    server.setListener(listener)
+
+    server.ingestRemote(
+      {
+        paneKey: PANE,
+        hookEventName: 'Stop',
+        payload: {
+          state: 'working',
+          prompt: 'check status',
+          agentType: 'claude',
+          turnCompletedAt: 1_700_000_005_000
+        }
+      },
+      'conn-1'
+    )
+    server.ingestRemote(
+      {
+        paneKey: PANE,
+        hookEventName: 'UserPromptSubmit',
+        payload: { state: 'working', prompt: 'check status', agentType: 'claude' }
+      },
+      'conn-1'
+    )
+
+    expect(listener).toHaveBeenCalledTimes(2)
+    expect(listener).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        payload: expect.objectContaining({
+          state: 'working',
+          prompt: 'check status',
+          turnCompletedAt: undefined
+        })
+      })
+    )
+    expect(server.getStatusSnapshot()[0]?.turnCompletedAt).toBeUndefined()
+  })
+
   // Why: the OSC 9999 payload cannot carry a provider session, so letting it overwrite the row
   // erased the session id from persisted rows and from headless `orca serve` — which serves these
   // rows straight to mobile — leaving Chat UI with no transcript to subscribe to (#10630).

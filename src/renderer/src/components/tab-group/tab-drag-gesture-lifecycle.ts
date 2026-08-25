@@ -1,5 +1,5 @@
 import { useCallback, useRef, type RefObject } from 'react'
-import { acquireWebviewsDragPassthrough } from '../browser-pane/webview-registry'
+import { acquireWebviewsDragPassthrough } from '../browser-pane/host-guest/webview-registry'
 import { installTabDragMissedEndListeners } from './tab-drag-missed-end-listeners'
 
 /** Global side effects a tab drag holds while in flight: webview pointer

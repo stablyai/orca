@@ -8,7 +8,8 @@ const WorkspaceCleanupDismissal = z.object({
   worktreeId: z.string(),
   dismissedAt: z.number().finite(),
   fingerprint: z.string(),
-  classifierVersion: z.number().finite()
+  classifierVersion: z.number().finite(),
+  executionHostId: z.string().min(1).optional()
 })
 
 /**

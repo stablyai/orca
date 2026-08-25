@@ -500,7 +500,9 @@ describe('query pipeline', () => {
     )
     expect(result.totalCount).toBe(1)
     expect(result.matchedCount).toBe(1)
-    expect(result.selectableWorktreeIds).toEqual(['repo-1::/repo/alpha'])
+    expect(result.selectableIdentities).toEqual([
+      getWorkspaceCleanupHostIdentity('local', 'repo-1::/repo/alpha')
+    ])
   })
 
   it('counts per-facet matches independently of the other groups', () => {

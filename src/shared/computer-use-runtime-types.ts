@@ -107,6 +107,7 @@ export type ComputerActionVerification =
         | 'synthetic_input'
         | 'clipboard_paste'
         | 'provider_unavailable'
+        | 'readback_unsupported'
         | 'window_changed'
         | 'value_mismatch'
       expected?: string | null

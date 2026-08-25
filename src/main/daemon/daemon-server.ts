@@ -100,11 +100,19 @@ type ConnectedClient = {
 
 type PendingPtySpawnPreparation = {
   canceled: boolean
+  // Why: `canceled` is only polled between spawn steps; the signal is what
+  // actually interrupts an in-progress cwd probe on a dead share.
+  readonly controller: AbortController
   cancelTimer?: ReturnType<typeof setTimeout>
   // Why: preparations are keyed by sessionId, but a control-socket close must
   // cancel only the disconnecting client's preps, not another client's (F4).
   clientId: string
   requestId: string
+}
+
+function cancelPtySpawnPreparation(preparation: PendingPtySpawnPreparation): void {
+  preparation.canceled = true
+  preparation.controller.abort()
 }
 
 type PendingShutdownReply = {
@@ -904,21 +912,28 @@ export class DaemonServer {
     this.pendingShutdownReplies.set(key, { start })
   }
 
-  private async preparePtySpawnUnlessCanceled(
+  /**
+   * Registers a cancellable preparation without doing spawn preflight. Every
+   * createOrAttach registers one, including attach-only: without it the server
+   * cannot match the client's cancel, and an attach-only request queued behind a
+   * hung create is bounded by neither side.
+   */
+  private registerPtySpawnPreparation(
     sessionId: string,
     clientId: string,
     requestId: string,
     cancelAfterMs: unknown
-  ): Promise<PendingPtySpawnPreparation> {
+  ): PendingPtySpawnPreparation {
     const preparation: PendingPtySpawnPreparation = {
       canceled: false,
+      controller: new AbortController(),
       clientId,
       requestId
     }
     if (Number.isSafeInteger(cancelAfterMs) && Number(cancelAfterMs) > 0) {
       preparation.cancelTimer = setTimeout(
         () => {
-          preparation.canceled = true
+          cancelPtySpawnPreparation(preparation)
         },
         Math.min(Number(cancelAfterMs), 300_000)
       )
@@ -927,16 +942,17 @@ export class DaemonServer {
     const pending = this.pendingPtySpawnPreparations.get(sessionId) ?? new Set()
     pending.add(preparation)
     this.pendingPtySpawnPreparations.set(sessionId, pending)
-    try {
-      // Why: register before the async probe so a concurrent close can cancel this creation before a subprocess exists.
-      await this.preparePtySpawn()
-      if (preparation.canceled) {
-        throw new TerminalAttachCanceledError(sessionId)
-      }
-      return preparation
-    } catch (error) {
-      this.finishPtySpawnPreparation(sessionId, preparation)
-      throw error
+    return preparation
+  }
+
+  private async preparePtySpawnUnlessCanceled(
+    sessionId: string,
+    preparation: PendingPtySpawnPreparation
+  ): Promise<void> {
+    // Why: registered before the async probe so a concurrent close can cancel this creation before a subprocess exists.
+    await this.preparePtySpawn()
+    if (preparation.canceled) {
+      throw new TerminalAttachCanceledError(sessionId)
     }
   }
 
@@ -971,7 +987,7 @@ export class DaemonServer {
       ) {
         continue
       }
-      preparation.canceled = true
+      cancelPtySpawnPreparation(preparation)
       canceled = true
     }
     return canceled
@@ -987,7 +1003,7 @@ export class DaemonServer {
     for (const pending of this.pendingPtySpawnPreparations.values()) {
       for (const preparation of pending) {
         if (preparation.clientId === clientId) {
-          preparation.canceled = true
+          cancelPtySpawnPreparation(preparation)
         }
       }
     }
@@ -1086,13 +1102,14 @@ export class DaemonServer {
           ) {
             throw new Error('agent_session_identity_required')
           }
+          spawnPreparation = this.registerPtySpawnPreparation(
+            p.sessionId,
+            clientId,
+            request.id,
+            p.cancelAfterMs
+          )
           if (!attachOnly) {
-            spawnPreparation = await this.preparePtySpawnUnlessCanceled(
-              p.sessionId,
-              clientId,
-              request.id,
-              p.cancelAfterMs
-            )
+            await this.preparePtySpawnUnlessCanceled(p.sessionId, spawnPreparation)
           }
           if (p.historySeed !== undefined && p.historySeedTransferId !== undefined) {
             throw new Error('Multiple terminal history seed sources')
@@ -1125,7 +1142,12 @@ export class DaemonServer {
               ? { shellReadyTimeoutMs: p.shellReadyTimeoutMs }
               : {}),
             ...(p.agentSessionEnsure ? { agentSessionEnsure: p.agentSessionEnsure } : {}),
-            ...(spawnPreparation ? { isCanceled: () => spawnPreparation?.canceled === true } : {}),
+            ...(spawnPreparation
+              ? {
+                  isCanceled: () => spawnPreparation?.canceled === true,
+                  cancelSignal: spawnPreparation.controller.signal
+                }
+              : {}),
             onSessionResolved: (sessionId) => {
               routedSessionId = sessionId
             },

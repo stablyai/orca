@@ -2,6 +2,7 @@ import { homedir } from 'node:os'
 import { join } from 'node:path'
 import {
   SKILL_BUNDLE_INSTALL_CAPABILITY,
+  SKILL_BUNDLE_PREVIEW_CAPABILITY,
   SKILL_INSTALL_CAPABILITY,
   SKILL_INSTALL_PROVIDERS_CAPABILITY,
   SKILL_INSTALL_PROGRESS_CAPABILITY,
@@ -19,6 +20,7 @@ import {
   SKILL_SSH_RELAY_GET_INSTALL_PROGRESS_METHOD,
   SKILL_SSH_RELAY_LIST_METHOD,
   SKILL_SSH_RELAY_PREVIEW_METHOD,
+  SKILL_SSH_RELAY_PREVIEW_BUNDLE_METHOD,
   SKILL_SSH_RELAY_REMOVE_METHOD,
   SKILL_SSH_RELAY_UPLOAD_CHUNK_METHOD,
   SkillSshInstallBundleParamsSchema,
@@ -26,6 +28,7 @@ import {
   SkillSshInstallParamsSchema,
   SkillSshListParamsSchema,
   SkillSshPreviewParamsSchema,
+  SkillSshPreviewBundleParamsSchema,
   SkillSshRemoveParamsSchema,
   type SkillSshWorkspaceAuthority
 } from '../shared/skill-ssh-relay-contract'
@@ -43,6 +46,7 @@ import type { RelayDispatcher } from './dispatcher'
 import { isCommandOnPathForRelay } from './preflight-handler'
 import type { SkillInstallDestinationAuthority } from '../main/skills/skill-install-destinations'
 import {
+  previewSharedSkillBundleInstall,
   previewSharedSkillInstall,
   removeSharedSkillInstall
 } from '../main/skills/skill-install-management-service'
@@ -63,6 +67,7 @@ export const SKILL_RELAY_CAPABILITIES = [
   SKILL_INSTALL_CAPABILITY,
   SKILL_INSTALL_PROVIDERS_CAPABILITY,
   SKILL_BUNDLE_INSTALL_CAPABILITY,
+  SKILL_BUNDLE_PREVIEW_CAPABILITY,
   SKILL_INSTALL_PROGRESS_CAPABILITY,
   SKILL_UPLOAD_CAPABILITY,
   SKILL_MANAGEMENT_CAPABILITY
@@ -82,6 +87,7 @@ export class SkillInstallHandler {
       homeDirectory?: string
       stateDirectory?: string
       detectProviders?: () => Promise<readonly string[]>
+      recovery?: Promise<unknown>
     } = {}
   ) {
     this.homeDirectory = options.homeDirectory ?? homedir()
@@ -90,7 +96,12 @@ export class SkillInstallHandler {
       join(this.stateDirectory, 'skill-installs', 'remote-uploads')
     )
     this.detectProviders = options.detectProviders ?? detectRelaySkillProviders
-    this.recovery = recoverPendingSkillTransactions(join(this.stateDirectory, 'skill-installs'))
+    this.recovery = (
+      options.recovery ??
+      recoverPendingSkillTransactions(join(this.stateDirectory, 'skill-installs'))
+    ).catch((error) => {
+      console.warn('[skills] relay startup transaction recovery failed:', error)
+    })
     this.registerHandlers()
   }
 
@@ -138,6 +149,17 @@ export class SkillInstallHandler {
       const input = SkillSshPreviewParamsSchema.parse(params)
       return this.executeSkillOperation(() =>
         previewSharedSkillInstall(input.request, {
+          authority: this.authority(input.workspace),
+          stateDirectory: this.stateDirectory,
+          detectProviders: this.detectProviders,
+          resolveProviderRootOverrides: () => resolveEnvironmentSkillProviderRoots()
+        })
+      )
+    })
+    this.dispatcher.onRequest(SKILL_SSH_RELAY_PREVIEW_BUNDLE_METHOD, async (params) => {
+      const input = SkillSshPreviewBundleParamsSchema.parse(params)
+      return this.executeSkillOperation(() =>
+        previewSharedSkillBundleInstall(input.request, {
           authority: this.authority(input.workspace),
           stateDirectory: this.stateDirectory,
           detectProviders: this.detectProviders,

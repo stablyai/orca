@@ -4,6 +4,7 @@ import {
   isFreshNonDoneAgentStatus,
   parseAgentStatusPayload,
   normalizeAgentStatusPayload,
+  pickParsedAgentStatusPayload,
   AGENT_STATUS_JSON_STRUCTURE_LIMITS,
   AGENT_STATUS_MAX_FIELD_LENGTH,
   AGENT_STATUS_MAX_SUBAGENTS,
@@ -433,6 +434,41 @@ Fix dispatch fallback preview for normalized status prompts`
     expect(
       parseAgentStatusPayload('{"state":"done","sessionBoundary":"true"}')!.sessionBoundary
     ).toBeUndefined()
+  })
+
+  it('keeps turnCompletedAt on the gated working row and its all-clear done, nowhere else', () => {
+    for (const state of ['working', 'done'] as const) {
+      expect(
+        parseAgentStatusPayload(`{"state":"${state}","turnCompletedAt":1767225601000}`)!
+          .turnCompletedAt
+      ).toBe(1767225601000)
+    }
+    for (const state of ['blocked', 'waiting'] as const) {
+      expect(
+        parseAgentStatusPayload(`{"state":"${state}","turnCompletedAt":1767225601000}`)!
+          .turnCompletedAt
+      ).toBeUndefined()
+    }
+    for (const raw of ['"1767225601000"', 'null', 'true']) {
+      expect(
+        parseAgentStatusPayload(`{"state":"done","turnCompletedAt":${raw}}`)!.turnCompletedAt
+      ).toBeUndefined()
+    }
+    for (const value of [Number.NaN, Number.POSITIVE_INFINITY]) {
+      expect(
+        normalizeAgentStatusPayload({ state: 'done', turnCompletedAt: value })!.turnCompletedAt
+      ).toBeUndefined()
+    }
+  })
+
+  it('carries turnCompletedAt through the client-visible payload projection', () => {
+    expect(
+      pickParsedAgentStatusPayload({
+        state: 'working',
+        prompt: 'run the build',
+        turnCompletedAt: 1767225601000
+      }).turnCompletedAt
+    ).toBe(1767225601000)
   })
 
   it('requires strict boolean true for interrupted (rejects truthy non-boolean)', () => {

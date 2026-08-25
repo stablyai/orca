@@ -32,7 +32,7 @@ export class SkillUploadSessionService {
 
   constructor(
     private readonly root: string,
-    options: { idleMs?: number } = {}
+    private readonly options: { idleMs?: number; initializeRoot?: () => Promise<void> } = {}
   ) {
     this.idleMs = options.idleMs ?? SESSION_IDLE_MS
   }
@@ -220,11 +220,23 @@ export class SkillUploadSessionService {
   }
 
   private async initialize(): Promise<void> {
-    this.initialized ??= (async () => {
-      await rm(this.root, { recursive: true, force: true })
-      await mkdir(this.root, { recursive: true, mode: 0o700 })
-    })()
-    return this.initialized
+    if (!this.initialized) {
+      const initialization = (async () => {
+        if (this.options.initializeRoot) {
+          await this.options.initializeRoot()
+        } else {
+          await rm(this.root, { recursive: true, force: true })
+          await mkdir(this.root, { recursive: true, mode: 0o700 })
+        }
+      })()
+      this.initialized = initialization
+      void initialization.catch(() => {
+        if (this.initialized === initialization) {
+          this.initialized = null
+        }
+      })
+    }
+    await this.initialized
   }
 
   private async prune(): Promise<void> {

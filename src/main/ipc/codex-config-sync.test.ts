@@ -25,9 +25,15 @@ import type { CodexConfigSyncStatus } from '../../shared/codex-config-sync-types
 let root: string
 
 function invokeHandler(mirroredHome: string | null): CodexConfigSyncStatus {
+  return invokeHandlerWithStatus({ kind: 'ready', homePath: mirroredHome })
+}
+
+function invokeHandlerWithStatus(
+  mirrored: { kind: 'ready'; homePath: string | null } | { kind: 'unavailable' }
+): CodexConfigSyncStatus {
   handleMock.mockClear()
   registerCodexConfigSyncHandlers({
-    getMirroredHostHomePathForStatus: () => mirroredHome
+    getMirroredHostHomePathForStatus: () => mirrored
   })
   const handler = handleMock.mock.calls.at(-1)?.[1] as () => CodexConfigSyncStatus
   return handler()
@@ -76,5 +82,23 @@ describe('codexConfigSync:status handler', () => {
   it('re-registers cleanly so a reload cannot leak a duplicate handler', () => {
     invokeHandler(null)
     expect(removeHandlerMock).toHaveBeenCalledWith('codexConfigSync:status')
+  })
+})
+
+// STA-4422: an unreadable managed home must not be reported as healthy. Before
+// the fix the resolver collapsed to `null`, which this channel reads as "no
+// mirror exists" and reports as synced.
+it('reports a managed-home-unavailable stall instead of synced when the home is unreadable', () => {
+  // Anchor: a genuine no-mirror lane still reports synced.
+  expect(invokeHandlerWithStatus({ kind: 'ready', homePath: null })).toEqual({
+    state: 'synced',
+    reason: null,
+    systemConfigPath: join(root, '.codex', 'config.toml')
+  })
+
+  expect(invokeHandlerWithStatus({ kind: 'unavailable' })).toEqual({
+    state: 'stalled',
+    reason: 'managed-home-unavailable',
+    systemConfigPath: join(root, '.codex', 'config.toml')
   })
 })
