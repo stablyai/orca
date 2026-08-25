@@ -100,7 +100,6 @@ inline src/renderer/src/components/terminal-pane/pty-transport.ts
 inline src/renderer/src/components/terminal-pane/remote-runtime-pty-transport.ts
 inline src/renderer/src/components/terminal-pane/use-terminal-pane-lifecycle.ts
 inline src/renderer/src/hooks/useAutomationDispatchEvents.ts
-inline src/renderer/src/hooks/useComposerState.ts
 inline src/renderer/src/hooks/useEditorExternalWatch.ts
 inline src/renderer/src/hooks/useSettingsNavigationMetadata.ts
 inline src/renderer/src/lib/pane-manager/pane-terminal-output-scheduler.ts
