@@ -1,20 +1,7 @@
 /**
- * #16243: "Delete Workspace" in the sidebar resolves nothing on a paired runtime while
- * `orca worktree rm --worktree "path:<dir>" --force` removes the very same workspace.
- *
- * The renderer can only address a workspace by its id (`toRuntimeWorktreeSelector` always emits
- * `id:<repoId>::<path>`), and the runtime matched that id by exact string equality — while a
- * `path:` selector has always compared through `normalizeRuntimePathForComparison`. A stored id
- * spelling its path differently from `git worktree list` therefore resolved for the CLI and
- * answered `selector_not_found` for the UI, which read that as a stale local mirror, ran
- * `forgetLocal`, reported success, and let the row return on the next refresh: a silent no-op.
- *
- * The contract pinned here is path-SPELLING parity, not dedup parity: an `id:` selector folds the
- * same path spellings a `path:` selector folds, and refuses the spellings it refuses. Where two
- * same-host rows spell one directory, `path:` collapses them to the first while `id:` refuses as
- * ambiguous — deliberately, because this resolver also serves delete. Parity covers plain worktree
- * ids; a folder-workspace id keeps a trailing slash placed before the `::workspace:<uuid>` suffix,
- * so that one spelling stays exact-match-only.
+ * Pins path-SPELLING parity between an `id:` selector and `path:`, deliberately not dedupe parity:
+ * where two same-host rows spell one directory, `path:` collapses them to the first while `id:`
+ * refuses as ambiguous, because this resolver also serves delete (#16243).
  */
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -71,6 +58,7 @@ function scannedSpellingOf(storedPath: string): string {
   return slashed.normalize('NFC').replace(/\/+/g, '/').replace(/\/$/, '')
 }
 
+/** One registered repo whose worktree meta is writable, so a delete's `forgetLocal` is observable. */
 function makeStore(repoPath: string = REPO_PATH) {
   const metaById: Record<string, Record<string, unknown>> = {}
   const store = {

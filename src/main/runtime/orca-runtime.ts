@@ -31514,6 +31514,7 @@ export class OrcaRuntimeService {
     return worktreeId
   }
 
+  /** Resolves one workspace or throws `selector_not_found` / `selector_ambiguous` — never picks a winner. */
   private async resolveWorktreeSelector(selector: string): Promise<ResolvedWorktree> {
     const explicitWorktreeId = this.getValidatedExplicitWorktreeIdSelector(selector)
     // Why only `id:`: every other selector kind is matched across the whole fleet, and their

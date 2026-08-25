@@ -19,15 +19,10 @@ export function getRepoIdFromWorktreeId(worktreeId: string): string {
 }
 
 /**
- * Canonical comparison form of a worktree id: one repo, one filesystem location, one
- * folder-workspace instance — regardless of how the path is spelled.
- *
- * Why (#16243): a `path:` selector has always compared through `normalizeRuntimePathForComparison`
- * while an id compared byte for byte, so a stored id spelling its path differently from
- * `git worktree list` resolved for the CLI and not for the UI, which can only address a workspace
- * by id. Comparison only — never persist or return this key.
- *
- * Null for malformed ids so callers keep exact matching for them.
+ * Canonical comparison form of a worktree id: the repoId is compared EXACT and only the path folds,
+ * through the same `normalizeRuntimePathForComparison` a `path:` selector has always applied and
+ * byte-exact id matching denied the renderer (#16243). Null for a malformed id, so callers keep
+ * exact matching for it. Comparison only — never persist or return this key.
  */
 export function worktreeIdComparisonKey(worktreeId: string): string | null {
   const parsed = splitWorktreeId(worktreeId)
