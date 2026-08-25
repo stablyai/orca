@@ -4,7 +4,8 @@ import {
   getRepoIdFromWorktreeId,
   getWorktreePathBasenameFromId,
   splitWorktreeId,
-  splitWorktreeIdForFilesystem
+  splitWorktreeIdForFilesystem,
+  worktreeIdComparisonKey
 } from './id'
 
 describe('WORKTREE_ID_SEPARATOR', () => {
@@ -117,5 +118,44 @@ describe('getWorktreePathBasenameFromId', () => {
   it('returns null when no worktree path is available', () => {
     expect(getWorktreePathBasenameFromId('repo-123')).toBeNull()
     expect(getWorktreePathBasenameFromId('repo-123::')).toBeNull()
+  })
+})
+
+/**
+ * #16243: the renderer can only address a workspace by `id:<repoId>::<path>`, so the key must fold
+ * exactly the path spellings a `path:` selector already folds — and nothing more.
+ */
+describe('worktreeIdComparisonKey path-spelling parity for id: selectors (#16243)', () => {
+  const canonical = 'repo-123::/data/workspaces/plugin'
+  const key = (worktreeId: string): string | null => worktreeIdComparisonKey(worktreeId)
+
+  it('folds the path spellings a `path:` selector already accepts', () => {
+    expect(key('repo-123::/data/workspaces/plugin/')).toBe(key(canonical))
+    expect(key('repo-123::/data//workspaces/plugin')).toBe(key(canonical))
+    expect(key('repo-123::/data/workspaces/Café'.normalize('NFD'))).toBe(
+      key('repo-123::/data/workspaces/Café'.normalize('NFC'))
+    )
+  })
+
+  it('folds no more loosely than `path:` does', () => {
+    // A leading `//` is a UNC root, not a doubled separator.
+    expect(key('repo-123://data/workspaces/plugin')).not.toBe(key(canonical))
+    // Dot segments are not canonicalized, so `id:` and `path:` still agree on refusing them.
+    expect(key('repo-123::/data/./workspaces/plugin')).not.toBe(key(canonical))
+  })
+
+  it('never merges different repos, workspaces, or folder sessions', () => {
+    // STA-4343: the repo id stays exact, or a removal lands on a repo the caller never confirmed.
+    expect(key('repo-999::/data/workspaces/plugin')).not.toBe(key(canonical))
+    expect(key('repo-123::/data/workspaces/other')).not.toBe(key(canonical))
+    expect(key('repo-a::/data/folder::workspace:123e4567-e89b-12d3-a456-426614174000')).not.toBe(
+      key('repo-a::/data/folder::workspace:123e4567-e89b-12d3-a456-426614174001')
+    )
+  })
+
+  it('returns null for ids with no repo boundary so callers keep exact matching', () => {
+    expect(key('repo-a')).toBeNull()
+    expect(key('repo-a::')).toBeNull()
+    expect(key('/data/workspaces/plugin')).toBeNull()
   })
 })

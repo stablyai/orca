@@ -200,3 +200,68 @@ describe('host-qualified scoped worktree resolution', () => {
     expect(getRepos).not.toHaveBeenCalled()
   })
 })
+
+/**
+ * #16243: the renderer can only address a workspace by `id:<repoId>::<path>`, and this scoped
+ * lookup is what a host-qualified removal resolves through. It matched the id byte for byte while a
+ * `path:` selector has always compared through `normalizeRuntimePathForComparison`, so a stored id
+ * spelling its path differently from `git worktree list` resolved for the CLI and not for the UI.
+ */
+describe('scoped worktree id resolution across path spellings (#16243)', () => {
+  it.each([
+    ['a trailing slash', '/same/worktree', 'shared::/same/worktree/'],
+    ['a doubled separator', '/same/worktree', 'shared::/same//worktree'],
+    ['an NFD name', '/same/café', `shared::${'/same/café'.normalize('NFD')}`]
+  ])(
+    'resolves the scanned row when the id carries %s',
+    async (_label, scannedPath, worktreeId) => {
+      const owner = repo('shared', '/local/repo', { executionHostId: 'local' })
+      const deps = createDeps([owner])
+      deps.scanRepo.mockImplementation(async () => ({
+        ok: true,
+        worktrees: [gitWorktree(scannedPath)]
+      }))
+
+      await expect(resolveScopedWorktreeIdRow(deps, worktreeId, 'local')).resolves.toMatchObject({
+        id: `shared::${scannedPath}`,
+        path: scannedPath
+      })
+    }
+  )
+
+  it('still refuses the same path under a different repo id', async () => {
+    const deps = createDeps([
+      repo('shared', '/local/repo', { executionHostId: 'local' }),
+      repo('unrelated', '/unrelated/repo', { executionHostId: 'local' })
+    ])
+
+    await expect(
+      resolveScopedWorktreeIdRow(deps, 'unrelated::/same/worktree/', 'local')
+    ).resolves.toBeNull()
+  })
+
+  it('refuses rather than guessing when two rows spell one path', async () => {
+    const owner = repo('shared', '/local/repo', { executionHostId: 'local' })
+    const deps = createDeps([owner])
+    deps.scanRepo.mockImplementation(async () => ({
+      ok: true,
+      worktrees: [gitWorktree('/same/worktree'), gitWorktree('/same//worktree')]
+    }))
+
+    await expect(resolveScopedWorktreeIdRow(deps, 'shared::/same/worktree/', 'local')).resolves
+      .toBeNull()
+  })
+
+  it('prefers the exactly matching row over an equivalent spelling', async () => {
+    const owner = repo('shared', '/local/repo', { executionHostId: 'local' })
+    const deps = createDeps([owner])
+    deps.scanRepo.mockImplementation(async () => ({
+      ok: true,
+      worktrees: [gitWorktree('/same//worktree'), gitWorktree('/same/worktree')]
+    }))
+
+    await expect(
+      resolveScopedWorktreeIdRow(deps, 'shared::/same//worktree', 'local')
+    ).resolves.toMatchObject({ id: 'shared::/same//worktree' })
+  })
+})
