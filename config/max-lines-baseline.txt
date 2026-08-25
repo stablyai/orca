@@ -34,13 +34,10 @@ inline src/main/ports/advertised-url-watcher.ts
 inline src/main/ports/local-workspace-port-scanner.ts
 inline src/main/project-groups/nested-repo-discovery.ts
 inline src/main/providers/local-pty-provider.ts
-inline src/main/rate-limits/claude-fetcher.ts
 inline src/main/rate-limits/claude-pty.ts
-inline src/main/rate-limits/codex-fetcher.ts
 inline src/main/rate-limits/service.ts
 inline src/main/runtime/orca-runtime-browser.ts
 inline src/main/runtime/orca-runtime-files.ts
-inline src/main/runtime/orca-runtime-git.ts
 inline src/main/runtime/orca-runtime.test.ts
 inline src/main/runtime/orca-runtime.ts
 inline src/main/runtime/rpc/methods/orchestration.ts
@@ -81,9 +78,6 @@ inline src/renderer/src/components/status-bar/ResourceUsageStatusSegment.tsx
 inline src/renderer/src/components/status-bar/StatusBar.tsx
 inline src/renderer/src/components/status-bar/WorkspaceSpaceManagerPanel.tsx
 inline src/renderer/src/components/terminal-pane/TerminalPane.tsx
-inline src/renderer/src/components/terminal-pane/agent-completion-coordinator.ts
-inline src/renderer/src/components/terminal-pane/keyboard-handlers.ts
-inline src/renderer/src/components/terminal-pane/pty-transport.ts
 inline src/renderer/src/components/terminal-pane/remote-runtime-pty-transport.ts
 inline src/renderer/src/components/terminal-pane/use-terminal-pane-lifecycle.ts
 inline src/renderer/src/hooks/useAutomationDispatchEvents.ts
@@ -92,7 +86,6 @@ inline src/renderer/src/lib/pane-manager/pane-terminal-output-scheduler.ts
 inline src/renderer/src/lib/pane-manager/pane-tree-ops.ts
 inline src/renderer/src/runtime/remote-runtime-terminal-multiplexer.ts
 inline src/renderer/src/runtime/runtime-file-client.ts
-inline src/renderer/src/runtime/runtime-git-client.ts
 inline src/renderer/src/runtime/runtime-linear-client.ts
 inline src/renderer/src/runtime/sync-runtime-graph.ts
 inline src/renderer/src/runtime/web-runtime-session.ts
@@ -102,7 +95,6 @@ inline src/renderer/src/store/slices/browser.ts
 inline src/renderer/src/store/slices/diffComments.ts
 inline src/renderer/src/store/slices/hosted-review.ts
 inline src/renderer/src/store/slices/linear.ts
-inline src/renderer/src/store/slices/repos.ts
 inline src/renderer/src/store/slices/tabs.ts
 inline src/renderer/src/store/slices/ui.ts
 inline src/renderer/src/web/web-runtime-client.ts

@@ -314,6 +314,8 @@ describe('repo slice host identity routing', () => {
     const store = createTestStore()
     store.setState({
       repos: [localDuplicate, remoteDuplicate],
+      activeRepoId: 'same-repo',
+      filterRepoIds: ['same-repo'],
       projects: [
         {
           id: 'repo:same-repo',
@@ -346,6 +348,9 @@ describe('repo slice host identity routing', () => {
     await store.getState().removeProject('same-repo')
 
     expect(store.getState().repos).toEqual([remoteDuplicate])
+    // Current contract: bare-ID UI selections clear even though the sibling host row survives.
+    expect(store.getState().activeRepoId).toBeNull()
+    expect(store.getState().filterRepoIds).toEqual([])
     expect(store.getState().worktreesByRepo['same-repo']).toEqual([remoteWorktree])
     expect(store.getState().tabsByWorktree[localWorktree.id]).toBeUndefined()
     expect(store.getState().tabsByWorktree[remoteWorktree.id]).toEqual([
@@ -361,9 +366,57 @@ describe('repo slice host identity routing', () => {
     // Why: the id also exists on runtime:env-1, so the local-side removal must be
     // host-scoped in main to avoid deleting the other host's persisted repo row.
     expect(reposRemoveForHost).toHaveBeenCalledWith({ repoId: 'same-repo', hostId: 'local' })
+
     expect(reposRemove).not.toHaveBeenCalled()
     expect(ptyKill).toHaveBeenCalledWith('local-pty')
     expect(ptyKill).not.toHaveBeenCalledWith('remote-pty')
+  })
+  it('purges hostless worktree state when two hosts collide on repoId and path', async () => {
+    const sharedWorktreeId = 'same-repo::/shared'
+    const localWorktree = makeWorktree({
+      id: sharedWorktreeId,
+      repoId: 'same-repo'
+    })
+    const remoteWorktree = makeWorktree({
+      id: sharedWorktreeId,
+      repoId: 'same-repo',
+      hostId: 'runtime:env-1'
+    })
+    const store = createTestStore()
+    store.setState({
+      repos: [localDuplicate, remoteDuplicate],
+      worktreesByRepo: { 'same-repo': [localWorktree, remoteWorktree] },
+      tabsByWorktree: {
+        [sharedWorktreeId]: [{ id: 'shared-tab', worktreeId: sharedWorktreeId }] as never
+      },
+      lastVisitedAtByWorktreeId: { [sharedWorktreeId]: 10 }
+    })
+
+    await store.getState().removeProject('same-repo', { hostId: 'local' })
+
+    expect(store.getState().worktreesByRepo['same-repo']).toEqual([remoteWorktree])
+    // Terminal/editor maps are keyed by hostless worktree ID and are purged, but the
+    // host-scoped purge deliberately leaves the sibling's legacy bare recency key intact.
+    expect(store.getState().tabsByWorktree[sharedWorktreeId]).toBeUndefined()
+    expect(store.getState().lastVisitedAtByWorktreeId[sharedWorktreeId]).toBe(10)
+  })
+
+  it('allows two removals of the same owner row to overlap', async () => {
+    const { promise: firstRemoval, resolve: resolveFirstRemoval } = Promise.withResolvers<void>()
+    const { promise: secondRemoval, resolve: resolveSecondRemoval } = Promise.withResolvers<void>()
+    reposRemove.mockReturnValueOnce(firstRemoval).mockReturnValueOnce(secondRemoval)
+    const store = createTestStore()
+    store.setState({ repos: [localDuplicate] })
+
+    const first = store.getState().removeProject(localDuplicate.id)
+    const second = store.getState().removeProject(localDuplicate.id)
+    expect(reposRemove).toHaveBeenCalledTimes(2)
+
+    resolveSecondRemoval()
+    resolveFirstRemoval()
+    await Promise.all([first, second])
+
+    expect(store.getState().repos).toEqual([])
   })
 
   it('preserves qualified recency for an exact-id sibling host', async () => {
@@ -651,9 +704,59 @@ describe('repo slice host identity routing', () => {
     })
     expect(reposReorderForHost).toHaveBeenCalledWith({
       hostId: 'ssh:target',
+
       orderedIds: ['delta', 'charlie']
     })
     expect(reposReorder).not.toHaveBeenCalled()
     expect(runtimeEnvironmentCall).not.toHaveBeenCalled()
+  })
+  it('treats an occurrence-invalid reorder as a total no-op', async () => {
+    const store = createTestStore()
+    store.setState({ repos: [localDuplicate, remoteDuplicate] })
+
+    await store.getState().reorderRepos(['same-repo'])
+
+    expect(store.getState().repos).toEqual([localDuplicate, remoteDuplicate])
+    expect(reposReorderForHost).not.toHaveBeenCalled()
+    expect(runtimeEnvironmentCall).not.toHaveBeenCalled()
+    expect(uiSet).not.toHaveBeenCalled()
+  })
+
+  it('resyncs after a host rejects an optimistic reorder', async () => {
+    reposReorderForHost.mockResolvedValue({ status: 'rejected' })
+    const resync = vi.fn().mockResolvedValue(undefined)
+    const alpha = { ...localDuplicate, id: 'alpha' }
+    const bravo = { ...localDuplicate, id: 'bravo' }
+    const store = createTestStore()
+    store.setState({
+      repos: [alpha, bravo],
+      fetchReposForAllHosts: resync
+    })
+
+    await store.getState().reorderRepos(['bravo', 'alpha'])
+
+    expect(store.getState().repos).toEqual([bravo, alpha])
+    expect(resync).toHaveBeenCalledOnce()
+  })
+
+  it('resyncs after host persistence throws during an optimistic reorder', async () => {
+    reposReorderForHost.mockRejectedValue(new Error('persist failed'))
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined)
+    const resync = vi.fn().mockResolvedValue(undefined)
+    const alpha = { ...localDuplicate, id: 'alpha' }
+    const bravo = { ...localDuplicate, id: 'bravo' }
+    const store = createTestStore()
+    store.setState({
+      repos: [alpha, bravo],
+      fetchReposForAllHosts: resync
+    })
+    try {
+      await store.getState().reorderRepos(['bravo', 'alpha'])
+    } finally {
+      errorSpy.mockRestore()
+    }
+
+    expect(store.getState().repos).toEqual([bravo, alpha])
+    expect(resync).toHaveBeenCalledOnce()
   })
 })
