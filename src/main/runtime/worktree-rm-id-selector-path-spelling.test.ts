@@ -74,7 +74,7 @@ function makeStore() {
     getAllWorktreeMeta: vi.fn(() => metaById),
     getWorktreeMeta: (id: string) => metaById[id],
     setWorktreeMeta: (id: string, meta: Record<string, unknown>) => {
-      metaById[id] = { ...(metaById[id] ?? {}), ...meta }
+      metaById[id] = { ...metaById[id], ...meta }
       return metaById[id]
     },
     removeWorktreeMeta: () => {},
@@ -182,7 +182,9 @@ describe('worktree id selectors vs. the path spelling git reports (#16243)', () 
     const runtime = new OrcaRuntimeService(makeStore() as never)
     const dotted = '/data/projects/./workspaces/headlamp-plugin'
 
-    await expect(runtime.showManagedWorktree(`path:${dotted}`)).rejects.toThrow('selector_not_found')
+    await expect(runtime.showManagedWorktree(`path:${dotted}`)).rejects.toThrow(
+      'selector_not_found'
+    )
     await expect(runtime.showManagedWorktree(`id:${REPO_ID}::${dotted}`)).rejects.toThrow(
       'selector_not_found'
     )

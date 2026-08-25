@@ -212,22 +212,19 @@ describe('scoped worktree id resolution across path spellings (#16243)', () => {
     ['a trailing slash', '/same/worktree', 'shared::/same/worktree/'],
     ['a doubled separator', '/same/worktree', 'shared::/same//worktree'],
     ['an NFD name', '/same/café', `shared::${'/same/café'.normalize('NFD')}`]
-  ])(
-    'resolves the scanned row when the id carries %s',
-    async (_label, scannedPath, worktreeId) => {
-      const owner = repo('shared', '/local/repo', { executionHostId: 'local' })
-      const deps = createDeps([owner])
-      deps.scanRepo.mockImplementation(async () => ({
-        ok: true,
-        worktrees: [gitWorktree(scannedPath)]
-      }))
+  ])('resolves the scanned row when the id carries %s', async (_label, scannedPath, worktreeId) => {
+    const owner = repo('shared', '/local/repo', { executionHostId: 'local' })
+    const deps = createDeps([owner])
+    deps.scanRepo.mockImplementation(async () => ({
+      ok: true,
+      worktrees: [gitWorktree(scannedPath)]
+    }))
 
-      await expect(resolveScopedWorktreeIdRow(deps, worktreeId, 'local')).resolves.toMatchObject({
-        id: `shared::${scannedPath}`,
-        path: scannedPath
-      })
-    }
-  )
+    await expect(resolveScopedWorktreeIdRow(deps, worktreeId, 'local')).resolves.toMatchObject({
+      id: `shared::${scannedPath}`,
+      path: scannedPath
+    })
+  })
 
   it('still refuses the same path under a different repo id', async () => {
     const deps = createDeps([
@@ -248,8 +245,9 @@ describe('scoped worktree id resolution across path spellings (#16243)', () => {
       worktrees: [gitWorktree('/same/worktree'), gitWorktree('/same//worktree')]
     }))
 
-    await expect(resolveScopedWorktreeIdRow(deps, 'shared::/same/worktree/', 'local')).resolves
-      .toBeNull()
+    await expect(
+      resolveScopedWorktreeIdRow(deps, 'shared::/same/worktree/', 'local')
+    ).resolves.toBeNull()
   })
 
   it('prefers the exactly matching row over an equivalent spelling', async () => {
