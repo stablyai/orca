@@ -4148,7 +4148,8 @@
           "retry": "Réessayer",
           "remoteShareNotice": "Ces skills se trouvent sur {{host}}. Ouvrez Skills sur cette machine pour les partager.",
           "viewSwitch": "Afficher",
-          "searchLinks": "Rechercher des liens"
+          "searchLinks": "Rechercher des liens",
+          "deleteSkills": "Supprimer des skills…"
         },
         "SkillFreshnessNudge": {
           "titleOne": "Un skill Orca installé n'est pas à jour",
@@ -4481,7 +4482,9 @@
           "detailSource": "Source",
           "detailContents": "Contenu",
           "skillActions": "Actions pour {{value0}}",
-          "viewDetails": "Voir les détails"
+          "viewDetails": "Voir les détails",
+          "deleteSkill": "Supprimer…",
+          "notDeletable": "Non supprimable"
         },
         "SkillSelectionBar": {
           "selectAll": "Sélectionner les {{count}} éligibles",
@@ -4521,7 +4524,15 @@
           "retryOne": "Réessayer {{count}} skill",
           "retryOther": "Réessayer {{count}} skills",
           "linkOne": "{{count}} lien",
-          "linkOther": "{{count}} liens"
+          "linkOther": "{{count}} liens",
+          "deleteOne": "Supprimer {{count}} skill",
+          "deleteOther": "Supprimer {{count}} skills",
+          "deletedOne": "{{count}} skill supprimé",
+          "deletedOther": "{{count}} skills supprimés",
+          "deleteFolderOne": "{{count}} dossier",
+          "deleteFolderOther": "{{count}} dossiers",
+          "deleteLinkOne": "{{count}} lien",
+          "deleteLinkOther": "{{count}} liens"
         },
         "host": {
           "local": "Cette machine",
@@ -4598,7 +4609,8 @@
           "exitTooltip": "Quitter la sélection · Esc",
           "title": "Sélectionner les skills à partager",
           "selectAll": "Sélectionner les {{count}} éligibles",
-          "clear": "Effacer"
+          "clear": "Effacer",
+          "deleteTitle": "Sélectionner les skills à supprimer"
         },
         "SkillDetailDialog": {
           "agents": "Agents",
@@ -4652,6 +4664,32 @@
           "supportingFilesDescription": "Inclut des fichiers de référence lisibles en plus des instructions principales.",
           "runnableFilesDescription": "Inclut des scripts qu'un agent peut exécuter avec vos accès.",
           "binaryFilesDescription": "Inclut des ressources opaques et un binaire exécutable."
+        },
+        "SkillDelete": {
+          "dismissResults": "Fermer",
+          "reasonBundled": "Intégré à Orca — il serait restauré",
+          "reasonPlugin": "Installé par un plugin — supprimez plutôt le plugin",
+          "reasonUnowned": "Ce skill vit hors des dossiers de skills d'Orca — supprimez-le là où il est stocké",
+          "reasonMissing": "Ce skill n'est plus présent sur le disque",
+          "reasonStale": "Ce skill a changé depuis le chargement de la liste — actualisez puis réessayez",
+          "blockedLine": "{{count}} × {{reason}}",
+          "resultLine": "{{count}} × {{label}}",
+          "statusSkipped": "Ignoré",
+          "statusBusy": "Occupé — une autre opération de skill est en cours",
+          "statusPartial": "Partiellement supprimé — certains fichiers restent sur le disque sous un nom caché",
+          "statusFailed": "Échec — rien n'a changé",
+          "statusDeleted": "Supprimé",
+          "confirmHost": "Sur {{host}}.",
+          "confirmPermanent": "Action irréversible.",
+          "failed": "Impossible de supprimer les skills",
+          "hostUnavailable": "Impossible de joindre la machine sélectionnée. Actualisez puis réessayez.",
+          "hostUnresolved": "La machine qui héberge ces skills est encore en cours d'identification.",
+          "hostUpdateRequired": "Mettez à jour Orca sur la machine sélectionnée pour supprimer des skills.",
+          "nothingOne": "Ce skill ne peut pas être supprimé depuis ici.",
+          "nothingOther": "Aucun des {{count}} skills sélectionnés ne peut être supprimé depuis ici.",
+          "placementSummaryParts": "Supprime {{parts}} répartis sur {{roots}}.",
+          "placementJoin": " et ",
+          "retainedSource": "Le skill lui-même reste à {{path}}."
         }
       },
       "sidebar": {
