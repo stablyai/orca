@@ -35,6 +35,7 @@ import { parseWslUncPath } from '../../shared/wsl-paths'
 import { toWindowsWslPath } from '../wsl'
 import { runWslProcess } from '../wsl/wsl-runner'
 import { buildWindowsCommandInvocation } from './windows-command-invocation'
+import { buildWindowsHostInteractiveLoginSpawn } from '../../shared/windows-interactive-login-spawn'
 import {
   getClaudeSelectionTargetForAccount,
   getSelectedClaudeAccountIdForTarget,
@@ -1043,8 +1044,27 @@ export class ClaudeAccountService {
     options?: { allowFailure?: boolean; signal?: AbortSignal; keepStdinOpen?: boolean }
   ): Promise<string> {
     return new Promise((resolvePromise, rejectPromise) => {
-      const spawnConfig =
-        configDir.linuxPath && configDir.wslDistro
+      const isWindowsHostInteractiveLogin =
+        process.platform === 'win32' &&
+        configDir.linuxPath === null &&
+        configDir.wslDistro === null &&
+        args[0] === 'auth' &&
+        args[1] === 'login'
+      const interactiveLogin = isWindowsHostInteractiveLogin
+        ? buildWindowsHostInteractiveLoginSpawn(resolveClaudeCommand(), args)
+        : null
+      const spawnConfig = interactiveLogin
+        ? {
+            command: interactiveLogin.command,
+            args: interactiveLogin.args,
+            env: {
+              ...process.env,
+              CLAUDE_CONFIG_DIR: configDir.windowsPath
+            },
+            shell: false,
+            windowsVerbatimArguments: false
+          }
+        : configDir.linuxPath && configDir.wslDistro
           ? {
               command: 'wsl.exe',
               args: [
@@ -1082,10 +1102,11 @@ export class ClaudeAccountService {
         // Why: Claude's browser auth can bind its callback lifetime to stdin.
         // Keeping stdin open prevents hidden managed-login runs from tearing down
         // the local callback server before the browser returns.
-        stdio: [options?.keepStdinOpen ? 'pipe' : 'ignore', 'pipe', 'pipe'],
+        stdio: interactiveLogin
+          ? interactiveLogin.stdio
+          : [options?.keepStdinOpen ? 'pipe' : 'ignore', 'pipe', 'pipe'],
         shell: spawnConfig.shell,
-        // On Windows this is wsl.exe or a cmd invocation; without the flag it
-        // opens a console and steals foreground on every managed login (#10488).
+        // Why: hide only the outer wrapper; start creates the visible login console.
         windowsHide: true,
         windowsVerbatimArguments: spawnConfig.windowsVerbatimArguments,
         env: spawnConfig.env,
@@ -1095,7 +1116,7 @@ export class ClaudeAccountService {
       })
       const stdout = child.stdout
       const stderr = child.stderr
-      if (!stdout || !stderr) {
+      if (!interactiveLogin && (!stdout || !stderr)) {
         if (options?.keepStdinOpen) {
           child.stdin?.destroy()
         }
@@ -1130,17 +1151,18 @@ export class ClaudeAccountService {
           clearTimeout(timeout)
           timeout = null
         }
-        stdout.off('data', appendOutput)
-        stderr.off('data', appendOutput)
+        stdout?.off('data', appendOutput)
+        stderr?.off('data', appendOutput)
         child.off('error', onError)
         child.off(completionEvent, onDone)
         options?.signal?.removeEventListener('abort', onAbort)
+        interactiveLogin?.cleanup?.()
         if (options?.keepStdinOpen) {
           child.stdin?.destroy()
         }
         if (completesOnExit) {
-          stdout.destroy()
-          stderr.destroy()
+          stdout?.destroy()
+          stderr?.destroy()
         }
       }
       const settle = (callback: () => void): void => {
@@ -1159,11 +1181,15 @@ export class ClaudeAccountService {
           return
         }
         terminationPending = true
-        if (process.platform === 'win32' && child.pid) {
-          const taskkill = spawn('taskkill.exe', ['/pid', String(child.pid), '/t', '/f'], {
-            stdio: 'ignore',
-            windowsHide: true
-          })
+        const killWindowsTree = (windowsTerminationPid: number): void => {
+          const taskkill = spawn(
+            'taskkill.exe',
+            ['/pid', String(windowsTerminationPid), '/t', '/f'],
+            {
+              stdio: 'ignore',
+              windowsHide: true
+            }
+          )
           let taskkillFinished = false
           const finishTaskkill = (succeeded: boolean): void => {
             if (taskkillFinished) {
@@ -1182,9 +1208,27 @@ export class ClaudeAccountService {
           }, WINDOWS_TASKKILL_TIMEOUT_MS)
           taskkill.once('error', () => finishTaskkill(false))
           taskkill.once('close', (code) => finishTaskkill(code === 0))
+        }
+        if (process.platform === 'win32') {
+          const resolveTerminationPid = interactiveLogin?.waitForTerminationPid
+            ? interactiveLogin.waitForTerminationPid()
+            : Promise.resolve(interactiveLogin?.getTerminationPid?.() ?? child.pid ?? null)
+          void resolveTerminationPid
+            .then((windowsTerminationPid) => {
+              if (windowsTerminationPid) {
+                killWindowsTree(windowsTerminationPid)
+                return
+              }
+              child.kill()
+              afterKill()
+            })
+            .catch(() => {
+              child.kill()
+              afterKill()
+            })
           return
         }
-        if (process.platform !== 'win32' && child.pid) {
+        if (child.pid) {
           try {
             process.kill(-child.pid)
             afterKill()
@@ -1229,8 +1273,8 @@ export class ClaudeAccountService {
         })
       }
 
-      stdout.on('data', appendOutput)
-      stderr.on('data', appendOutput)
+      stdout?.on('data', appendOutput)
+      stderr?.on('data', appendOutput)
       child.on('error', onError)
       // Native Windows browsers can inherit these pipes and indefinitely delay close.
       child.on(completionEvent, onDone)
