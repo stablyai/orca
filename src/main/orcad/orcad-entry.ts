@@ -11,28 +11,17 @@
  * the runtime factory, but only when an Electron serve sidecar or an operator-supplied
  * Chromium proves available at startup.
  */
-import { homedir, tmpdir } from 'node:os'
-import { join } from 'node:path'
 import process from 'node:process'
 import { setAppEnvironment, type AppEnvironment } from '../../shared/app-environment'
 import { setSecretStore, type SecretStore } from '../../shared/secret-store'
 import type { ServeReadiness } from '../server/serve-readiness'
 import { setRuntimeBrowserCommandsFactory } from '../runtime/runtime-browser-commands-factory'
 import { resolveOrcadBrowserProvider, type OrcadBrowserProvider } from './orcad-browser-provider'
+import { resolveOrcadInstallRoot, resolveOrcadPath, resolveUserDataPath } from './orcad-app-paths'
 
-/** XDG-ish data root. `$ORCA_USER_DATA` wins so a smoke test can isolate state. */
-function resolveUserDataPath(): string {
-  const explicit = process.env.ORCA_USER_DATA
-  if (explicit) {
-    return explicit
-  }
-  const xdg = process.env.XDG_DATA_HOME
-  return xdg ? join(xdg, 'Orca') : join(homedir(), '.orca')
-}
 let runOrcadQuitHandlers = (): void => {}
 
 function createNodeAppEnvironment(): AppEnvironment {
-  const userData = resolveUserDataPath()
   const quitHandlers: (() => void)[] = []
   // The main signal handler awaits runtime and browser teardown before process.exit.
   // Keep will-quit callbacks synchronous, but never let them pre-empt that async barrier.
@@ -46,9 +35,14 @@ function createNodeAppEnvironment(): AppEnvironment {
     }
   }
   return {
-    getPath: (name) => (name === 'home' ? homedir() : name === 'temp' ? tmpdir() : userData),
-    getAppPath: () => process.cwd(),
+    getPath: resolveOrcadPath,
+    getAppPath: () => resolveOrcadInstallRoot(),
     getVersion: () => process.env.ORCA_VERSION ?? '0.0.0-orcad',
+    // Why still true: consumers read this as "production build, not a dev checkout" —
+    // it gates HTTPS-only skill downloads, the real CLI command name, and shell-PATH
+    // hydration. Answering false to satisfy a path resolver would relax a security
+    // posture. Layout questions must ask whether the app root is an asar archive
+    // instead (see parcel-watcher-entry-path.ts).
     isPackaged: () => true,
     onWillQuit: (handler) => quitHandlers.push(handler),
     exit: (code = 0) => process.exit(code),
