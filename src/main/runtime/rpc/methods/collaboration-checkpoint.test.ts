@@ -265,4 +265,170 @@ describe('orchestration.collaborationCheckpoint', () => {
     expect(() => method.params!.parse({ from: 'term_worker', limit: 101 })).toThrow()
     expect(() => method.params!.parse({ from: 'term_worker', limit: 1.5 })).toThrow()
   })
+
+  describe('wait support', () => {
+    it('non-wait responses include timedOut and cancelled booleans', async () => {
+      setup(() => topologyFor(taskId))
+
+      const result = (await call({ from: 'term_worker' })) as Record<string, unknown>
+
+      expect(result).toMatchObject({
+        entries: [],
+        filteredMessageIds: [],
+        timedOut: false,
+        cancelled: false
+      })
+    })
+
+    it('wait:true returns immediately when an admitted entry already exists and never registers a waiter', async () => {
+      setup(() => topologyFor(taskId))
+      insertMessage(taskId, {
+        topic: 'progress',
+        semanticType: 'checkpoint',
+        producerTaskId: 'producer',
+        priority: 'urgent'
+      })
+      const wait = vi.spyOn(runtime, 'waitForMessage')
+
+      const result = (await call({ from: 'term_worker', wait: true })) as {
+        entries: unknown[]
+        timedOut: boolean
+        cancelled: boolean
+      }
+
+      expect(wait).not.toHaveBeenCalled()
+      expect(result.entries).toHaveLength(1)
+      expect(result.timedOut).toBe(false)
+      expect(result.cancelled).toBe(false)
+    })
+
+    it('wait:true on an empty mailbox registers a waiter and returns a notified admitted message', async () => {
+      setup(() => topologyFor(taskId))
+      const wait = vi.spyOn(runtime, 'waitForMessage')
+      let notifiedId = ''
+      wait.mockImplementation(async (handle) => {
+        expect(handle).toBe(buildCollaborationTaskMailboxAddress(taskId))
+        notifiedId = insertMessage(taskId, {
+          topic: 'progress',
+          semanticType: 'checkpoint',
+          producerTaskId: 'producer',
+          priority: 'urgent'
+        })
+        return 'notified'
+      })
+
+      const result = (await call({ from: 'term_worker', wait: true })) as {
+        entries: Record<string, unknown>[]
+        timedOut: boolean
+        cancelled: boolean
+      }
+
+      expect(wait).toHaveBeenCalledTimes(1)
+      expect(wait.mock.calls[0]![0]).toBe(buildCollaborationTaskMailboxAddress(taskId))
+      expect(result.entries).toEqual([
+        {
+          messageId: notifiedId,
+          topic: 'progress',
+          semanticType: 'checkpoint',
+          producerTaskId: 'producer',
+          priority: 'urgent',
+          body: 'body:progress'
+        }
+      ])
+      expect(result.timedOut).toBe(false)
+      expect(result.cancelled).toBe(false)
+    })
+
+    it('consumes notified messages filtered by admission and returns the next admitted one', async () => {
+      setup(() => topologyFor(taskId))
+      const wait = vi.spyOn(runtime, 'waitForMessage')
+      let filteredId = ''
+      let admittedId = ''
+      wait.mockImplementationOnce(async () => {
+        filteredId = insertMessage(taskId, {
+          topic: 'progress',
+          semanticType: 'notice',
+          producerTaskId: 'producer',
+          priority: 'normal'
+        })
+        return 'notified'
+      })
+      wait.mockImplementationOnce(async () => {
+        admittedId = insertMessage(taskId, {
+          topic: 'progress',
+          semanticType: 'checkpoint',
+          producerTaskId: 'producer',
+          priority: 'urgent'
+        })
+        return 'notified'
+      })
+
+      const result = (await call({ from: 'term_worker', wait: true })) as {
+        entries: Record<string, unknown>[]
+        filteredMessageIds: string[]
+        timedOut: boolean
+        cancelled: boolean
+      }
+
+      expect(wait).toHaveBeenCalledTimes(2)
+      expect(result.filteredMessageIds).toEqual([filteredId])
+      expect(result.entries).toEqual([
+        {
+          messageId: admittedId,
+          topic: 'progress',
+          semanticType: 'checkpoint',
+          producerTaskId: 'producer',
+          priority: 'urgent',
+          body: 'body:progress'
+        }
+      ])
+      expect(result.timedOut).toBe(false)
+      expect(result.cancelled).toBe(false)
+      const rows = db.getAllMessages(buildCollaborationTaskMailboxAddress(taskId))
+      expect(rows.find((row) => row.id === filteredId)!.read).toBe(1)
+    })
+
+    it('wait:true times out with empty entries and timedOut set', async () => {
+      setup(() => topologyFor(taskId))
+      vi.spyOn(runtime, 'waitForMessage').mockResolvedValueOnce('timed_out')
+
+      const result = (await call({ from: 'term_worker', wait: true })) as {
+        entries: unknown[]
+        filteredMessageIds: unknown[]
+        timedOut: boolean
+        cancelled: boolean
+      }
+
+      expect(result.entries).toEqual([])
+      expect(result.filteredMessageIds).toEqual([])
+      expect(result.timedOut).toBe(true)
+      expect(result.cancelled).toBe(false)
+    })
+
+    it('wait:true cancels with empty entries and cancelled set', async () => {
+      setup(() => topologyFor(taskId))
+      vi.spyOn(runtime, 'waitForMessage').mockResolvedValueOnce('cancelled')
+
+      const result = (await call({ from: 'term_worker', wait: true })) as {
+        entries: unknown[]
+        filteredMessageIds: unknown[]
+        timedOut: boolean
+        cancelled: boolean
+      }
+
+      expect(result.entries).toEqual([])
+      expect(result.filteredMessageIds).toEqual([])
+      expect(result.timedOut).toBe(false)
+      expect(result.cancelled).toBe(true)
+    })
+
+    it('wait:true rejects with waiter_exists when another waiter holds the mailbox', async () => {
+      setup(() => topologyFor(taskId))
+      vi.spyOn(runtime, 'waitForMessage').mockResolvedValueOnce('waiter_exists')
+
+      await expect(call({ from: 'term_worker', wait: true })).rejects.toMatchObject({
+        code: 'waiter_exists'
+      })
+    })
+  })
 })
