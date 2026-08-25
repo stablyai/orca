@@ -143,7 +143,6 @@ inline src/renderer/src/runtime/web-session-tabs-sync.ts
 inline src/renderer/src/store/slices/agent-status.ts
 inline src/renderer/src/store/slices/browser.ts
 inline src/renderer/src/store/slices/diffComments.ts
-inline src/renderer/src/store/slices/github.ts
 inline src/renderer/src/store/slices/hosted-review.ts
 inline src/renderer/src/store/slices/jira.ts
 inline src/renderer/src/store/slices/linear.ts

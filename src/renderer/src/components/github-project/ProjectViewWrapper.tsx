@@ -30,7 +30,7 @@ import { cn } from '@/lib/utils'
 import { callRuntimeRpc, getActiveRuntimeTarget } from '@/runtime/runtime-rpc-client'
 import { useAppStore } from '@/store'
 import { useMountedRef } from '@/hooks/useMountedRef'
-import { projectViewCacheKey } from '@/store/slices/github'
+import { projectViewCacheKey } from '@/store/github/cache-identity'
 import type {
   GitHubIssueType,
   GitHubProjectFieldMutationValue,

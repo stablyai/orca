@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import type { PRRefreshState } from '@/store/slices/github'
+import type { PRRefreshState } from '@/store/github/pr-refresh-state'
 import {
   buildChecksPanelPRRefreshBreadcrumbData,
   recordChecksPanelPRRefreshBreadcrumb

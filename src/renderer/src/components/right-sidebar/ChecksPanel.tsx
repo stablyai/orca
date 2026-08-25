@@ -15,11 +15,10 @@ import {
 import { useAppStore, type AppState } from '@/store'
 import {
   buildGitHubPRRefreshStateClearToken,
-  getGitHubPRRefreshStateExpiryAt,
-  mergePRCommentIntoList,
-  prChecksCacheSuffix,
-  prCommentsCacheSuffix
-} from '@/store/slices/github'
+  getGitHubPRRefreshStateExpiryAt
+} from '@/store/github/pr-refresh-state'
+import { mergePRCommentIntoList } from '@/store/github/pr-comment-cache'
+import { prChecksCacheSuffix, prCommentsCacheSuffix } from '@/store/github/cache-identity'
 import { getGitHubPRCacheKey, getGitHubRepoCacheKey } from '@/store/slices/github-cache-key'
 import { useActiveWorktree, useRepoById } from '@/store/selectors'
 import { useChecksPanelTerminalWorktree } from './use-checks-panel-terminal-worktree'
