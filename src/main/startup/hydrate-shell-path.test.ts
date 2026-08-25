@@ -168,7 +168,7 @@ describe('hydrateShellPath', () => {
         failureReason: 'timeout'
       })
 
-      await vi.advanceTimersByTimeAsync(5000)
+      await vi.advanceTimersByTimeAsync(10_000)
 
       await assertion
       expect(proc.kill).toHaveBeenCalledWith('SIGKILL')

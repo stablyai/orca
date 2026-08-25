@@ -345,7 +345,7 @@ describe('wsl.exe is spawned through one runner', () => {
     // ALLOWLIST.length >= N` cannot fail while the allowlist alone exceeds N,
     // so it passed even for a scanner that found nothing. This fails the moment
     // detection stops seeing a call that is definitely there.
-    expect(offenders).toContain('main/git/runner.ts')
+    expect(offenders).toContain('main/git/command-runner/wsl-command-resolution.ts')
   })
 
   it('adds no new direct wsl.exe spawn', () => {

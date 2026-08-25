@@ -5,11 +5,11 @@ import {
   SYNTHETIC_AGENT_TITLE_PROFILES,
   type SyntheticAgentTitleProfile
 } from './synthetic-agent-title'
-import {
-  getPiCompatibleSyntheticAgentLabel,
-  isLegacyPiCompatibleTitle
-} from './pi-compatible-synthetic-title'
+import { isLegacyPiCompatibleTitle } from './pi-compatible-synthetic-title'
 import { getWrapperTitleSegments } from './terminal-title-wrapper-segments'
+
+/** The π brand a Pi/OMP title leads with; the owner's label replaces it in place. */
+const LEGACY_PI_BRAND = 'π'
 
 type TitleProfileMatch = {
   profile: SyntheticAgentTitleProfile
@@ -150,6 +150,19 @@ export function normalizeCompatibleAgentTitleForOwner(
   ) {
     return title
   }
+  // Why: a π-branded title is the agent's own semantic session title (`π > <session> - <cwd>`;
+  // Orca's injected extension writes the same shape). Swap only the BRAND for the owner's label
+  // so the pane still reads as its launch owner (#6689, #7633, #9077) without discarding the
+  // session name and cwd, which collapsing to a bare profile label threw away (#16093).
+  if (isLegacyPiCompatibleTitle(source.sourceTitle)) {
+    // Why scoped to the matched segment: a multiplexer prefix could itself contain the brand,
+    // and a whole-string replace would rewrite that instead of the pane's own identity. Note the
+    // scoping is only as good as the segment match — a prefix that itself parses as a π title
+    // makes the whole string the match, and then the prefix's brand is what gets swapped.
+    const ownedSegment = source.sourceTitle.replace(LEGACY_PI_BRAND, ownerProfile.workingLabel)
+    const segmentAt = title.lastIndexOf(source.sourceTitle)
+    return segmentAt === -1 ? ownedSegment : title.slice(0, segmentAt) + ownedSegment
+  }
   const sourceStatus = getSourceTitleStatus(source.sourceTitle)
   if (sourceStatus === 'working') {
     return `\u280b ${ownerProfile.workingLabel}`
@@ -167,31 +180,6 @@ export function normalizeCompatibleAgentTitleForOwner(
     return ownerProfile.idleLabel
   }
   return ownerProfile.workingLabel
-}
-
-/**
- * Relabels only a bare identity frame ("⠋ Pi", "Pi ready") to the owner's label.
- *
- * Why: a wrapped harness publishes the inner agent's identity (OMP wraps Pi), so those frames
- * alternate against the owner's own and defeat decorative-frame suppression at the store. A
- * semantic session title ("π - <session> - <cwd>") is left alone — it carries text no owner
- * profile can reproduce, so rewriting it to a generic label would lose real information.
- */
-export function relabelCompatibleAgentIdentityFrameForOwner(
-  title: string,
-  ownerAgentType: AgentType | null | undefined
-): string {
-  const frameLabel = getPiCompatibleSyntheticAgentLabel(title)
-  if (!frameLabel) {
-    return title
-  }
-  // Why: the frame already names the owner, so its own status wording is authoritative — rewriting
-  // it would restate bare "Pi" as "Pi ready" and change a Pi-owned tab that never flapped.
-  const ownerProfile = getSyntheticAgentTitleProfile(ownerAgentType)
-  if (ownerProfile?.workingLabel.toLowerCase() === frameLabel.toLowerCase()) {
-    return title
-  }
-  return normalizeCompatibleAgentTitleForOwner(title, ownerAgentType)
 }
 
 /**

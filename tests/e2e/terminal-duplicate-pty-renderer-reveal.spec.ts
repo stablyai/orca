@@ -150,7 +150,7 @@ async function readMainStreamingFrame(
 
 function parseStreamingFrame(content: string | null, marker: string): number | null {
   const prefix = `${marker} frame `
-  const start = content?.indexOf(prefix) ?? -1
+  const start = content?.lastIndexOf(prefix) ?? -1
   if (!content || start < 0) {
     return null
   }

@@ -75,7 +75,7 @@ import {
 import { closeAllWatchers, desktopWorktreeWatcherRemoval } from './ipc/filesystem-watcher'
 import { disposeWorktreeBaseDirectoryWatchers } from './ipc/worktree-base-directory-watcher'
 import { stopFolderRepoGitUpgradeWatch } from './ipc/folder-repo-git-upgrade'
-import { registerCoreHandlers } from './ipc/register-core-handlers'
+import { registerCoreHandlers } from './ipc/register-core-handlers/register-core-handlers'
 import { initObservability, shutdownObservability } from './observability'
 import { registerMobileHandlers } from './ipc/mobile'
 import { initTelemetry, shutdownTelemetry, trackAppOpenedOnce, track } from './telemetry/client'
@@ -324,7 +324,7 @@ import { normalizeComputerAwakeMode } from '../shared/computer-awake-mode'
 import { registerSystemResumeBroadcast } from './system-resume-broadcast'
 import { settleTeardownWithinDeadline } from './quit-teardown-deadline'
 import { quitTeardownStartGate } from './quit-teardown-start-gate'
-import { beginSshShutdown } from './ipc/ssh'
+import { beginSshShutdown } from './ipc/ssh-shutdown-drain'
 import { PluginService } from './plugins/plugin-service'
 import { PluginKillListService } from './plugins/plugin-kill-list-service'
 import { getPluginsDataDir } from './plugins/plugin-discovery'
@@ -707,9 +707,10 @@ if (app.isPackaged && process.platform !== 'win32') {
       mergePathSegments(result.segments)
       return
     }
-    // Why: on failure the seeded fallbacks stay in front, which for an nvm user means
-    // the newest install rather than their `default`. Name the reason so that shows up
-    // in a log bundle instead of as an unexplained missing CLI.
+    // Why: on failure the seeded fallbacks stay in front. For an nvm user that is
+    // now their `default` version rather than the newest install, so it is usually
+    // survivable — but it is still not what their shell would have resolved. Name
+    // the reason so it shows up in a log bundle instead of as a missing CLI.
     console.warn(
       `[shell-path] login-shell probe failed (${result.failureReason}); using seeded PATH`
     )
