@@ -348,6 +348,22 @@ function prunePackagedNodePty(resourcesDir, electronPlatformName, electronArch) 
     return
   }
 
+  // Why remove the prebuild entirely on Windows: node-pty's loader tries
+  // build/Release, then build/Debug, then prebuilds/<platform>-<arch>, and
+  // swallows every failure in between. Only the source build carries Orca's
+  // job-object exports (listJobProcessIds/terminateJob/
+  // assignCurrentProcessToJob), so an ABI mismatch, a truncated file or an AV
+  // quarantine of build/Release/conpty.node would silently degrade the shipped
+  // app to the UNPATCHED prebuild -- PTY teardown falling back to guessing by
+  // PID ancestry, with no error anywhere. Deleting the fallback turns that
+  // silent downgrade into a loud load failure.
+  if (
+    electronPlatformName === 'win32' &&
+    existsSync(join(nodePtyDir, 'build', 'Release', 'conpty.node'))
+  ) {
+    rmSync(join(nodePtyDir, 'prebuilds'), { recursive: true, force: true })
+  }
+
   const allowedPrebuildPrefix = NODE_PTY_PREBUILD_PREFIX_BY_PLATFORM[electronPlatformName]
   if (allowedPrebuildPrefix) {
     pruneNodePtyNativeDirectories(
