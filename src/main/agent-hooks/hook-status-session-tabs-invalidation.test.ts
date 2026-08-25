@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { AgentHookEventPayload } from '../../shared/agent-hook-listener'
+import type { AgentHookEventPayload } from '../../shared/agent-hook-listener/listener-event'
 import type { ParsedAgentStatusPayload } from '../../shared/agent-status-types'
 import { createHookStatusSessionTabsInvalidator } from './hook-status-session-tabs-invalidation'
 

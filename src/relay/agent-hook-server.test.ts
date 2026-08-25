@@ -3,13 +3,19 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { homedir, tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { RelayAgentHookServer } from './agent-hook-server'
+import type { AgentHookResultRetryScheduler } from './agent-hook-result-retry-scheduler'
 import { endpointDirForRelaySocket } from './agent-hook-endpoint-coordinates'
 import type { AgentHookRelayEnvelope } from '../shared/agent-hook-relay'
 import { makePaneKey } from '../shared/stable-pane-id'
-import * as agentHookListener from '../shared/agent-hook-listener'
+import * as agentHookListener from '../shared/agent-hook-listener/grok-result-discovery'
 
 const LEAF_ID = '11111111-1111-4111-8111-111111111111'
 const PANE_KEY = makePaneKey('tab-1', LEAF_ID)
+
+type RelayServerInternals = {
+  state: { lastStatusByPaneKey: Map<string, unknown> }
+  retryScheduler: AgentHookResultRetryScheduler
+}
 
 describe('RelayAgentHookServer', () => {
   let dir: string
@@ -73,6 +79,97 @@ describe('RelayAgentHookServer', () => {
       expect(envelope.version).toBe('1')
     } finally {
       server.stop()
+    }
+  })
+
+  it('caches before forwarding, schedules retries after forwarding, and responds last', async () => {
+    const order: string[] = []
+    let server!: RelayAgentHookServer
+    let internals!: RelayServerInternals
+    server = new RelayAgentHookServer({
+      endpointDir: dir,
+      forward: () => {
+        expect(internals.state.lastStatusByPaneKey.has(PANE_KEY)).toBe(true)
+        order.push('forward')
+      }
+    })
+    // Characterization deliberately observes the server-owned scheduler without widening production API.
+    internals = server as unknown as RelayServerInternals
+    const retryScheduler = internals.retryScheduler
+    const originalAssistantRetry = retryScheduler.scheduleAssistantMessageRetry.bind(retryScheduler)
+    const originalCodexRetry = retryScheduler.scheduleCodexSubagentPoll.bind(retryScheduler)
+    const assistantRetry = vi
+      .spyOn(retryScheduler, 'scheduleAssistantMessageRetry')
+      .mockImplementation((...args) => {
+        order.push('assistant-retry')
+        originalAssistantRetry(...args)
+      })
+    const codexRetry = vi
+      .spyOn(retryScheduler, 'scheduleCodexSubagentPoll')
+      .mockImplementation((...args) => {
+        order.push('codex-retry')
+        originalCodexRetry(...args)
+      })
+    await server.start()
+    try {
+      const { port, token } = server.getCoordinates()
+      const res = await fetch(`http://127.0.0.1:${port}/hook/claude`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Orca-Agent-Hook-Token': token
+        },
+        body: JSON.stringify({
+          paneKey: PANE_KEY,
+          hook_event_name: 'UserPromptSubmit',
+          payload: { prompt: 'ordered' }
+        })
+      })
+      order.push('response')
+      expect(res.status).toBe(204)
+      expect(order).toEqual(['forward', 'assistant-retry', 'codex-retry', 'response'])
+    } finally {
+      server.stop()
+      assistantRetry.mockRestore()
+      codexRetry.mockRestore()
+    }
+  })
+
+  it('fails open after a throwing forward while retaining the already-cached event', async () => {
+    const server = new RelayAgentHookServer({
+      endpointDir: dir,
+      forward: () => {
+        throw new Error('forward failed')
+      }
+    })
+    // Characterization deliberately observes cache/scheduler order without widening production API.
+    const internals = server as unknown as RelayServerInternals
+    const retryScheduler = internals.retryScheduler
+    const assistantRetry = vi.spyOn(retryScheduler, 'scheduleAssistantMessageRetry')
+    const codexRetry = vi.spyOn(retryScheduler, 'scheduleCodexSubagentPoll')
+    await server.start()
+    try {
+      const { port, token } = server.getCoordinates()
+      const res = await fetch(`http://127.0.0.1:${port}/hook/claude`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Orca-Agent-Hook-Token': token
+        },
+        body: JSON.stringify({
+          paneKey: PANE_KEY,
+          hook_event_name: 'UserPromptSubmit',
+          payload: { prompt: 'cached before throw' }
+        })
+      })
+      expect(res.status).toBe(204)
+      expect(internals.state.lastStatusByPaneKey.has(PANE_KEY)).toBe(true)
+      expect(assistantRetry).not.toHaveBeenCalled()
+      expect(codexRetry).not.toHaveBeenCalled()
+    } finally {
+      server.stop()
+      assistantRetry.mockRestore()
+      codexRetry.mockRestore()
     }
   })
 

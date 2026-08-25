@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest'
+import { normalizeHookPayload } from './agent-hook-listener'
 import {
   createHookListenerState,
-  normalizeHookPayload,
   type HookListenerState
-} from './agent-hook-listener'
+} from './agent-hook-listener/listener-state'
 import { makePaneKey } from './stable-pane-id'
 
 const LEAF_ID = '44444444-4444-4444-8444-444444444444'

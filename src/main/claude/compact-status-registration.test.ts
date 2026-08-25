@@ -1,15 +1,15 @@
 import { describe, expect, it } from 'vitest'
 
+import { normalizeHookPayload } from '../../shared/agent-hook-listener'
 import {
   clearAllListenerCaches,
   clearPaneCacheState,
   createHookListenerState,
   movePaneCacheState,
-  normalizeHookPayload,
-  seedClaudeSubagentRosterFromSnapshots,
-  type AgentHookEventPayload,
   type HookListenerState
-} from '../../shared/agent-hook-listener'
+} from '../../shared/agent-hook-listener/listener-state'
+import { seedClaudeSubagentRosterFromSnapshots } from '../../shared/agent-hook-listener/providers/claude-roster-state'
+import type { AgentHookEventPayload } from '../../shared/agent-hook-listener/listener-event'
 import { makePaneKey } from '../../shared/stable-pane-id'
 import { applyManagedHooks, CLAUDE_EVENTS } from './hook-settings'
 

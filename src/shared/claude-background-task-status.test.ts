@@ -3,12 +3,14 @@ import {
   clearAllListenerCaches,
   clearPaneCacheState,
   createHookListenerState,
-  markClaudeLeadTurnInterrupted,
   movePaneCacheState,
-  normalizeHookPayload,
-  seedClaudeSubagentRosterFromSnapshots,
   type HookListenerState
-} from './agent-hook-listener'
+} from './agent-hook-listener/listener-state'
+import {
+  markClaudeLeadTurnInterrupted,
+  seedClaudeSubagentRosterFromSnapshots
+} from './agent-hook-listener/providers/claude-roster-state'
+import { normalizeHookPayload } from './agent-hook-listener'
 import { AGENT_STATUS_MAX_SUBAGENTS } from './agent-status-types'
 import { readClaudeBackgroundAgentTasks } from './claude-background-task-inventory'
 import { makePaneKey } from './stable-pane-id'
