@@ -1,5 +1,7 @@
 import type { RuntimeTerminalSend } from '../../../../../../shared/runtime-terminal-contracts'
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
+import { buildCollaborationWorkerProtocol } from '../../../../collaboration/collaboration-worker-protocol'
+import { getCollaborationRuntimeTopology } from '../../../../collaboration/collaboration-runtime-registry'
 import { buildDispatchPreamble } from '../../../../orchestration/preamble'
 import { sendStructuredWorkerPreamble } from '../../orchestration-structured-worker-session'
 import type { createStructuredWorkerSessionForWorktree } from './worker-topology'
@@ -19,6 +21,7 @@ export async function deliverWorkerDispatchPreamble(args: {
   terminalHandle: string
   dispatchId: string
   dispatchDepth: number
+  runId: string
   taskId: string
   taskSpec: string
   coordinatorHandle: string
@@ -27,6 +30,20 @@ export async function deliverWorkerDispatchPreamble(args: {
   requestId: string
 }): Promise<RuntimeTerminalSend['prompt']> {
   const { runtime, structuredSession, terminalHandle } = args
+  const cliCommand = runtime.getTerminalOrchestrationCliCommand(terminalHandle)
+  const collaborationStep = getCollaborationRuntimeTopology(runtime, args.runId)?.steps.find(
+    (step) => step.taskId === args.taskId
+  )
+  const preCompletionProtocol = collaborationStep
+    ? buildCollaborationWorkerProtocol({
+        cli: args.devMode ? 'orca-dev' : (cliCommand ?? 'orca'),
+        workerHandle: terminalHandle,
+        dispatchCapability: args.dispatchCapability,
+        publishesTo: collaborationStep.publishesTo ?? [],
+        requiredPublishesTo: collaborationStep.requiredPublishesTo ?? [],
+        subscribesTo: collaborationStep.subscribesTo ?? []
+      })
+    : undefined
   const preamble = buildDispatchPreamble({
     // Depth only. A worker is taught the same verbs whichever mode it runs in, so this must not
     // become a second gate: resolving the caller's worktree is what lets a structured worker
@@ -39,7 +56,8 @@ export async function deliverWorkerDispatchPreamble(args: {
     workerHandle: terminalHandle,
     dispatchCapability: args.dispatchCapability,
     devMode: args.devMode,
-    cliCommand: runtime.getTerminalOrchestrationCliCommand(terminalHandle)
+    cliCommand,
+    preCompletionProtocol
   })
   if (structuredSession) {
     await sendStructuredWorkerPreamble({
