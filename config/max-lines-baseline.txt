@@ -21,9 +21,6 @@ inline src/main/codex-accounts/service.ts
 inline src/main/codex/config-toml-trust.ts
 inline src/main/codex/hook-service.ts
 inline src/main/daemon/daemon-init.ts
-inline src/main/daemon/daemon-pty-adapter.ts
-inline src/main/daemon/daemon-server.ts
-inline src/main/daemon/pty-subprocess.ts
 inline src/main/git/runner.ts
 inline src/main/git/status.ts
 inline src/main/git/worktree.ts

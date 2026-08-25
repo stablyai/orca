@@ -21,7 +21,6 @@ main/codex-accounts/service.ts
 main/codex/codex-state-db-backfill-recovery.ts
 main/codex/codex-trust-grant-host.ts
 main/codex/codex-wsl-hook-install-plan.ts
-main/daemon/pty-subprocess.ts
 main/git/runner.ts
 main/git/wsl-git-read-environment.ts
 main/ipc/filesystem-watcher-wsl.ts
