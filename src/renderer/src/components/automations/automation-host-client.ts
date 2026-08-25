@@ -1,4 +1,4 @@
-import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
+import { assertRuntimeEnvironmentCapability, callRuntimeRpc } from '@/runtime/runtime-rpc-client'
 import type {
   Automation,
   AutomationCreateInput,
@@ -7,6 +7,7 @@ import type {
 } from '../../../../shared/automations-types'
 import { parseExecutionHostId } from '../../../../shared/execution-host'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
+import { AUTOMATION_LAUNCH_PREFERENCES_RUNTIME_CAPABILITY } from '../../../../shared/protocol-version'
 
 type RuntimeAutomationCreateInput = Omit<
   AutomationCreateInput,
@@ -128,6 +129,13 @@ export async function createAutomationForTarget(input: AutomationCreateInput): P
   if (target.kind === 'local') {
     return await window.api.automations.create(input)
   }
+  if (input.launchPreferences) {
+    await assertRuntimeEnvironmentCapability(
+      target.environmentId,
+      AUTOMATION_LAUNCH_PREFERENCES_RUNTIME_CAPABILITY,
+      'This Orca server is too old to save automation model preferences. Update the server and try again.'
+    )
+  }
   const result = await callRuntimeRpc<{ automation: Automation }>(
     target,
     'automation.create',
@@ -145,6 +153,13 @@ export async function updateAutomationForTarget(
   const target = getAutomationOwnerTarget(automation, sourceTarget)
   if (target.kind === 'local') {
     return await window.api.automations.update({ id: automation.id, updates })
+  }
+  if (Object.hasOwn(updates, 'launchPreferences')) {
+    await assertRuntimeEnvironmentCapability(
+      target.environmentId,
+      AUTOMATION_LAUNCH_PREFERENCES_RUNTIME_CAPABILITY,
+      'This Orca server is too old to update automation model preferences. Update the server and try again.'
+    )
   }
   const result = await callRuntimeRpc<{ automation: Automation }>(
     target,

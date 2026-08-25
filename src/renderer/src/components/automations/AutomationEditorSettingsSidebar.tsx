@@ -13,6 +13,7 @@ import type { Worktree } from '../../../../shared/worktree/types'
 import type { AgentCatalogEntry } from '@/lib/agent-catalog'
 import { AUTOMATION_EDITOR_SECTION_LABEL_CLASS, Field } from './automation-page-parts'
 import { AutomationMissedRunGraceField } from './AutomationMissedRunGraceField'
+import { AutomationAgentOptionsFields } from './AutomationAgentOptionsFields'
 import { AutomationPrecheckFields } from './AutomationPrecheckFields'
 import AutomationProjectCombobox from './AutomationProjectCombobox'
 import { AutomationSchedulePicker } from './AutomationSchedulePicker'
@@ -95,13 +96,19 @@ export function AutomationEditorSettingsSidebar({
                   agents={visibleAgents}
                   value={draft.agentId}
                   onValueChange={(agentId) =>
-                    agentId && onDraftChange((current) => ({ ...current, agentId }))
+                    agentId &&
+                    onDraftChange((current) => ({ ...current, agentId, model: '', effort: '' }))
                   }
                   defaultAgent={settings?.defaultTuiAgent ?? null}
                   triggerClassName={`h-9 w-full min-w-0 ${pickerTriggerClassName}`}
                   allowNarrowTrigger
                 />
               </Field>
+              <AutomationAgentOptionsFields
+                draft={draft}
+                pickerTriggerClassName={pickerTriggerClassName}
+                onDraftChange={onDraftChange}
+              />
             </div>
           </div>
         </div>

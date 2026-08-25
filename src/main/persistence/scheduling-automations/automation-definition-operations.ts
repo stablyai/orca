@@ -6,6 +6,7 @@ import type {
 } from '../../../shared/automations-types'
 import type { PersistedState } from '../../../shared/persisted-state-types'
 import { normalizeAutomationPrecheck } from '../../../shared/automation-precheck'
+import { assertAutomationLaunchPreferences } from '../../../shared/automation-launch-preferences'
 import { nextAutomationOccurrenceAfter } from '../../../shared/automation-schedules'
 import {
   getAutomationContextsForRepo,
@@ -41,6 +42,7 @@ export function createAutomation(
     prompt: input.prompt,
     precheck: normalizeAutomationPrecheck(input.precheck),
     agentId: input.agentId,
+    launchPreferences: assertAutomationLaunchPreferences(input.agentId, input.launchPreferences),
     runContext: input.runContext ?? contexts.runContext,
     sourceContext: input.sourceContext ?? contexts.sourceContext,
     projectId: input.projectId,
@@ -102,6 +104,12 @@ export function updateAutomation(
     precheck: Object.hasOwn(definedUpdates, 'precheck')
       ? normalizeAutomationPrecheck(definedUpdates.precheck)
       : normalizeAutomationPrecheck(current.precheck),
+    launchPreferences: assertAutomationLaunchPreferences(
+      updates.agentId ?? current.agentId,
+      Object.hasOwn(definedUpdates, 'launchPreferences')
+        ? definedUpdates.launchPreferences
+        : current.launchPreferences
+    ),
     projectId: repoId,
     runContext: Object.hasOwn(definedUpdates, 'runContext')
       ? (definedUpdates.runContext ?? null)

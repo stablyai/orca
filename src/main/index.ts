@@ -2794,7 +2794,8 @@ void app.whenReady().then(async () => {
               {
                 agent: automation.agentId,
                 prompt: automation.prompt,
-                title: run.title
+                title: run.title,
+                launchPreferences: automation.launchPreferences ?? undefined
               }
             )
             terminalHandle = terminal.handle

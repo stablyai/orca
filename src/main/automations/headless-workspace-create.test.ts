@@ -22,6 +22,7 @@ const automation: Automation = {
   prompt: 'Review changes',
   precheck: null,
   agentId: 'codex',
+  launchPreferences: { model: 'gpt-5.6-sol', effort: 'high' },
   runContext: {
     kind: 'workspace-run',
     projectId: 'project-1',
@@ -72,6 +73,7 @@ describe('headless automation workspace create args', () => {
       activate: false,
       createdWithAgent: 'codex',
       startupAgent: 'codex',
+      startupLaunchPreferences: { model: 'gpt-5.6-sol', effort: 'high' },
       startupPrompt: 'Review changes',
       telemetrySource: 'unknown',
       automationProvenance: {

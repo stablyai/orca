@@ -204,6 +204,8 @@ export function formatAutomationShow(result: { automation: Automation }): string
     `id: ${automation.id}`,
     `name: ${automation.name}`,
     `provider: ${automation.agentId}`,
+    `model: ${automation.launchPreferences?.model ?? 'default'}`,
+    `effort: ${automation.launchPreferences?.effort ?? 'default'}`,
     `enabled: ${automation.enabled}`,
     `schedule: ${formatAutomationSchedule(automation.rrule)}`,
     `rrule: ${automation.rrule}`,

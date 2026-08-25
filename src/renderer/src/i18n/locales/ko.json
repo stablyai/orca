@@ -13689,6 +13689,12 @@
           "eaa02014f8": "활성화됨",
           "29baf8f4c2": "소스"
         },
+        "AutomationAgentOptionsFields": {
+          "model": "모델",
+          "effort": "추론 강도",
+          "agentDefault": "에이전트 기본값",
+          "modelDefault": "모델 기본값"
+        },
         "AutomationEditorDialog": {
           "fb1896a5e7": "취소",
           "57b722cbba": "에이전트",

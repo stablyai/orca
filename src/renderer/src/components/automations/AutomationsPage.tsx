@@ -258,6 +258,8 @@ export default function AutomationsPage(): React.JSX.Element {
     name: '',
     prompt: '',
     agentId: defaultAgent,
+    model: '',
+    effort: '',
     projectId: '',
     workspaceMode: 'existing',
     workspaceId: '',
@@ -1052,6 +1054,8 @@ export default function AutomationsPage(): React.JSX.Element {
       setDraft((current) => ({
         ...current,
         agentId: 'hermes',
+        model: '',
+        effort: '',
         workspaceMode: 'existing',
         setupDecision: undefined,
         reuseSession: false
@@ -1069,6 +1073,8 @@ export default function AutomationsPage(): React.JSX.Element {
       name: '',
       prompt: '',
       agentId: defaultAgent,
+      model: '',
+      effort: '',
       projectId: target.projectId,
       workspaceMode: 'existing',
       workspaceId: target.workspaceId,
@@ -1124,6 +1130,8 @@ export default function AutomationsPage(): React.JSX.Element {
       name: latest.name,
       prompt: latest.prompt,
       agentId: latest.agentId,
+      model: latest.launchPreferences?.model ?? '',
+      effort: latest.launchPreferences?.effort ?? '',
       projectId: getAutomationRunRepoId(latest),
       workspaceMode: latest.workspaceMode,
       workspaceId: latest.workspaceId ?? '',
@@ -1175,6 +1183,8 @@ export default function AutomationsPage(): React.JSX.Element {
       name: job.name,
       prompt: job.prompt ?? job.promptPreview,
       agentId: 'hermes',
+      model: '',
+      effort: '',
       projectId,
       workspaceMode: 'existing',
       workspaceId,
@@ -1430,11 +1440,15 @@ export default function AutomationsPage(): React.JSX.Element {
           // Keep the in-memory automation as a fallback if the refresh fails.
         }
       }
+      const launchPreferences = draft.model
+        ? { model: draft.model, ...(draft.effort ? { effort: draft.effort } : {}) }
+        : null
       const updates: AutomationUpdateInput = {
         name: draft.name,
         prompt: draft.prompt,
         precheck,
         agentId: draft.agentId,
+        ...(launchPreferences || currentAutomation?.launchPreferences ? { launchPreferences } : {}),
         runContext,
         projectId: draft.projectId,
         workspaceMode: draft.workspaceMode,
@@ -1462,6 +1476,7 @@ export default function AutomationsPage(): React.JSX.Element {
             prompt: draft.prompt,
             precheck,
             agentId: draft.agentId,
+            ...(launchPreferences ? { launchPreferences } : {}),
             runContext,
             projectId: draft.projectId,
             workspaceMode: draft.workspaceMode,

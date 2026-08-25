@@ -13680,6 +13680,12 @@
           "eaa02014f8": "启用",
           "29baf8f4c2": "来源"
         },
+        "AutomationAgentOptionsFields": {
+          "model": "模型",
+          "effort": "推理强度",
+          "agentDefault": "智能体默认",
+          "modelDefault": "模型默认"
+        },
         "AutomationEditorDialog": {
           "fb1896a5e7": "取消",
           "57b722cbba": "智能体",

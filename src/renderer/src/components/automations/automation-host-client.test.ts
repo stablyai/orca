@@ -7,10 +7,12 @@ import {
   runAutomationNowForTarget,
   updateAutomationForTarget
 } from './automation-host-client'
-import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
+import { assertRuntimeEnvironmentCapability, callRuntimeRpc } from '@/runtime/runtime-rpc-client'
+import { AUTOMATION_LAUNCH_PREFERENCES_RUNTIME_CAPABILITY } from '../../../../shared/protocol-version'
 
 vi.mock('@/runtime/runtime-rpc-client', () => ({
-  callRuntimeRpc: vi.fn()
+  callRuntimeRpc: vi.fn(),
+  assertRuntimeEnvironmentCapability: vi.fn()
 }))
 
 const mockApi = {
@@ -164,6 +166,23 @@ describe('automation host client', () => {
       'automation.runNow',
       { id: automation.id },
       { timeoutMs: 15_000 }
+    )
+  })
+
+  it('requires the remote capability before writing model preferences', async () => {
+    const automation = makeAutomation({
+      launchPreferences: { model: 'gpt-5.6-sol', effort: 'high' }
+    })
+    vi.mocked(callRuntimeRpc).mockResolvedValueOnce({ automation })
+
+    await updateAutomationForTarget(automation, {
+      launchPreferences: { model: 'gpt-5.6-sol', effort: 'high' }
+    })
+
+    expect(assertRuntimeEnvironmentCapability).toHaveBeenCalledWith(
+      'gpu',
+      AUTOMATION_LAUNCH_PREFERENCES_RUNTIME_CAPABILITY,
+      expect.stringContaining('too old')
     )
   })
 })

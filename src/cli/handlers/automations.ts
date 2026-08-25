@@ -15,6 +15,9 @@ import {
 } from '../../shared/task-source-context'
 import type { ProjectHostSetup } from '../../shared/project-types'
 import type { TuiAgent } from '../../shared/tui-agent'
+import type { AgentLaunchPreferences } from '../../shared/agent-session-host-authority'
+import { AUTOMATION_LAUNCH_PREFERENCES_RUNTIME_CAPABILITY } from '../../shared/protocol-version'
+import type { RuntimeStatus } from '../../shared/runtime-types'
 import {
   DEFAULT_AUTOMATION_PRECHECK_TIMEOUT_SECONDS,
   MAX_AUTOMATION_PRECHECK_TIMEOUT_SECONDS
@@ -124,6 +127,49 @@ function getOptionalProviderFlag(flags: Map<string, string | boolean>): TuiAgent
     throw new RuntimeClientError('invalid_argument', `Unknown provider: ${provider}`)
   }
   return provider
+}
+
+function getLaunchPreferencesFlag(
+  flags: Map<string, string | boolean>,
+  allowReset: boolean
+): AgentLaunchPreferences | null | undefined {
+  const model = getOptionalStringFlag(flags, 'model')
+  const effort = getOptionalStringFlag(flags, 'effort')
+  const reset = flags.get('default-model')
+  if (typeof reset === 'string') {
+    throw new RuntimeClientError('invalid_argument', '--default-model does not take a value')
+  }
+  if (reset && !allowReset) {
+    throw new RuntimeClientError(
+      'invalid_argument',
+      '--default-model can only be used when editing an automation'
+    )
+  }
+  if (reset && (model || effort)) {
+    throw new RuntimeClientError(
+      'invalid_argument',
+      'Use either --default-model or --model/--effort, not both.'
+    )
+  }
+  if (effort && !model) {
+    throw new RuntimeClientError('invalid_argument', '--effort requires --model')
+  }
+  if (reset) {
+    return null
+  }
+  return model ? { model, ...(effort ? { effort } : {}) } : undefined
+}
+
+async function assertAutomationLaunchPreferencesSupported(
+  client: Parameters<CommandHandler>[0]['client']
+): Promise<void> {
+  const status = await client.call<RuntimeStatus>('status.get')
+  if (!status.result.capabilities?.includes(AUTOMATION_LAUNCH_PREFERENCES_RUNTIME_CAPABILITY)) {
+    throw new RuntimeClientError(
+      'incompatible_runtime',
+      'The running Orca runtime is too old to save automation model preferences. Update or restart Orca and try again.'
+    )
+  }
 }
 
 function getTimeFlag(flags: Map<string, string | boolean>): { hour: number; minute: number } {
@@ -442,11 +488,16 @@ export const AUTOMATION_HANDLERS: Record<string, CommandHandler> = {
     const sourceContext = getSourceContextFlag(flags)
     const workspaceMode =
       getWorkspaceModeFlag(flags) ?? (target.workspace ? 'existing' : 'new_per_run')
+    const launchPreferences = getLaunchPreferencesFlag(flags, false)
+    if (launchPreferences !== undefined) {
+      await assertAutomationLaunchPreferencesSupported(client)
+    }
     const result = await client.call<{ automation: Automation }>('automation.create', {
       name: getRequiredStringFlag(flags, 'name'),
       prompt: getRequiredStringFlag(flags, 'prompt'),
       precheck: getPrecheckFlag(flags),
       agentId: getProviderFlag(flags),
+      ...(launchPreferences !== undefined ? { launchPreferences } : {}),
       ...(target.runContext ? { runContext: target.runContext } : {}),
       ...(sourceContext !== undefined ? { sourceContext } : {}),
       repo: target.repo,
@@ -465,6 +516,10 @@ export const AUTOMATION_HANDLERS: Record<string, CommandHandler> = {
     const target = await getExplicitTarget(flags, cwd, client)
     const schedule = getScheduleFlag(flags, false)
     const sourceContext = getSourceContextFlag(flags)
+    const launchPreferences = getLaunchPreferencesFlag(flags, true)
+    if (launchPreferences !== undefined) {
+      await assertAutomationLaunchPreferencesSupported(client)
+    }
     const result = await client.call<{ automation: Automation }>('automation.update', {
       id: getRequiredStringFlag(flags, 'id'),
       updates: {
@@ -472,6 +527,7 @@ export const AUTOMATION_HANDLERS: Record<string, CommandHandler> = {
         prompt: getOptionalStringFlag(flags, 'prompt'),
         precheck: getPrecheckFlag(flags),
         agentId: getOptionalProviderFlag(flags),
+        ...(launchPreferences !== undefined ? { launchPreferences } : {}),
         ...(target.runContext ? { runContext: target.runContext } : {}),
         ...(sourceContext !== undefined ? { sourceContext } : {}),
         repo: target.repo,

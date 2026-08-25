@@ -40,6 +40,7 @@ export function buildHeadlessAutomationWorktreeCreateArgs({
     activate: false,
     createdWithAgent: automation.agentId,
     startupAgent: automation.agentId,
+    startupLaunchPreferences: automation.launchPreferences ?? undefined,
     startupPrompt: automation.prompt,
     telemetrySource: 'unknown',
     automationProvenance: buildAutomationWorkspaceProvenance(automation, run, repo, createdAt)

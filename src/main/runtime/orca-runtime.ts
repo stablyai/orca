@@ -74,6 +74,7 @@ import {
   AGENT_SESSION_OPERATION_FUTURE_SKEW_MS,
   parseAgentSessionOperationTimestamp
 } from '../../shared/agent-session-host-authority'
+import { assertAutomationLaunchPreferences } from '../../shared/automation-launch-preferences'
 import {
   canonicalizeAgentSessionIdentity,
   createEphemeralAgentSessionClaimSigner,
@@ -4118,11 +4119,16 @@ export class OrcaRuntimeService {
     if (input.reuseSession && target.workspaceMode !== 'existing') {
       throw new Error('Session reuse requires an existing workspace target.')
     }
+    const launchPreferences = assertAutomationLaunchPreferences(
+      input.agentId,
+      input.launchPreferences
+    )
     return this.store.createAutomation({
       name: input.name,
       prompt: input.prompt,
       precheck: input.precheck,
       agentId: input.agentId,
+      launchPreferences,
       runContext: input.runContext,
       sourceContext: input.sourceContext,
       projectId: target.projectId,
@@ -4156,6 +4162,17 @@ export class OrcaRuntimeService {
     }
     if (hasRuntimeAutomationUpdateValue(updates, 'agentId')) {
       patch.agentId = updates.agentId
+    }
+    if (hasRuntimeAutomationUpdateValue(updates, 'launchPreferences')) {
+      patch.launchPreferences = assertAutomationLaunchPreferences(
+        updates.agentId ?? current.agentId,
+        updates.launchPreferences
+      )
+    } else if (updates.agentId !== undefined && current.launchPreferences) {
+      patch.launchPreferences = assertAutomationLaunchPreferences(
+        updates.agentId,
+        current.launchPreferences
+      )
     }
     if (hasRuntimeAutomationUpdateValue(updates, 'runContext')) {
       patch.runContext = updates.runContext
@@ -28727,14 +28744,19 @@ export class OrcaRuntimeService {
 
   async launchAgentTerminal(
     worktreeSelector: string,
-    opts: { agent: TuiAgent; prompt: string; title?: string }
+    opts: {
+      agent: TuiAgent
+      prompt: string
+      title?: string
+      launchPreferences?: AgentLaunchPreferences
+    }
   ): Promise<RuntimeTerminalCreate> {
     const worktree = await this.resolveWorktreeSelector(worktreeSelector)
     const repo = this.store?.getRepo(worktree.repoId)
     if (!repo) {
       throw new Error('Repository for the selected workspace is no longer available.')
     }
-    const startup = this.buildStartupForAgent(repo, opts.agent, opts.prompt)
+    const startup = this.buildStartupForAgent(repo, opts.agent, opts.prompt, opts.launchPreferences)
     if (repo.connectionId) {
       await this.markRemoteWorkspaceTrustedForAgent(opts.agent, repo.connectionId, worktree.path)
     } else {

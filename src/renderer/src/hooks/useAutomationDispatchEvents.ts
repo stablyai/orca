@@ -502,6 +502,7 @@ export function useAutomationDispatchEvents(): void {
               agentId: automation.agentId,
               worktreeId: worktree.id,
               currentRunId: run.id,
+              launchPreferences: automation.launchPreferences,
               runs: await window.api.automations.listRuns({ automationId: automation.id }),
               state: useAppStore.getState()
             })
@@ -585,6 +586,7 @@ export function useAutomationDispatchEvents(): void {
             agent: automation.agentId,
             worktreeId: worktree.id,
             prompt: automation.prompt,
+            launchPreferences: automation.launchPreferences ?? undefined,
             launchSource: 'unknown',
             title: run.title,
             onData: (chunk) => {
