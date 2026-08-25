@@ -252,7 +252,9 @@ function recordHealOutcome(
       thread.threadId,
       outcome,
       thread.targetPath,
-      thread.auditRecordId
+      thread.auditRecordId,
+      thread.fileInstanceId,
+      thread.fileEventId
     )
   ) {
     throw new Error(`Failed to persist Codex session index-heal outcome for ${thread.threadId}`)

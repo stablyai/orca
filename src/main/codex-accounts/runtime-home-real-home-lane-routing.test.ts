@@ -117,6 +117,50 @@ describe('CodexRuntimeHomeService', () => {
     expect(existsSync(getRuntimeCodexHomePath())).toBe(true)
   })
 
+  it('persists the pre-spawn launch date when setup crosses UTC midnight', async () => {
+    vi.setSystemTime(new Date('2026-08-06T00:00:01Z'))
+    const store = createStore(createSettings())
+    const { CodexRuntimeHomeService } = await import('./runtime-home-service')
+    const service = new CodexRuntimeHomeService(store as never)
+
+    service.prepareForCodexLaunch()
+    service.beginHostSystemDefaultSessionMigrationLaunch(getRuntimeCodexHomePath(), {
+      startedAt: new Date('2026-08-05T23:59:59Z')
+    })
+
+    const marker = JSON.parse(
+      readFileSync(
+        join(testState.userDataDir, 'codex-session-backfill', 'backfill-complete.json'),
+        'utf-8'
+      )
+    ) as { pendingSince?: string }
+    expect(marker.pendingSince).toBe('2026-08-05')
+  })
+
+  it('preserves the pending date when an active launch changes session targets', async () => {
+    vi.setSystemTime(new Date('2026-08-05T10:00:00Z'))
+    const store = createStore(createSettings())
+    const { CodexRuntimeHomeService } = await import('./runtime-home-service')
+    const service = new CodexRuntimeHomeService(store as never)
+
+    service.prepareForCodexLaunch()
+    service.beginHostSystemDefaultSessionMigrationLaunch(getRuntimeCodexHomePath())
+    const movedHome = join(testState.fakeHomeDir, 'moved-history')
+    store.updateSettings({ codexSessionSourceHome: { host: movedHome, wsl: {} } })
+
+    expect(service.prepareHostSystemDefaultSessionMigrationPass()).toBe(true)
+    const marker = JSON.parse(
+      readFileSync(
+        join(testState.userDataDir, 'codex-session-backfill', 'backfill-complete.json'),
+        'utf-8'
+      )
+    ) as { systemSessionsRoot?: string; pendingSince?: string }
+    expect(marker).toMatchObject({
+      systemSessionsRoot: join(movedHome, 'sessions'),
+      pendingSince: '2026-08-05'
+    })
+  })
+
   it('routes host system default to the real home', async () => {
     const store = createStore(createSettings({ shellStartupEnvProbeSupported: true }))
     const { CodexRuntimeHomeService } = await import('./runtime-home-service')

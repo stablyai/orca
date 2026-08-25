@@ -31,7 +31,7 @@ export function createCodexSessionMigrationScheduler(args: {
   resolveSystemCodexHomePathOverride: () => string | undefined
   resolvePendingScanDates?: () => readonly CodexSessionBackfillDate[]
   prepareScheduledRun?: () => boolean | void
-  finishScheduledRun?: () => void
+  finishScheduledRun?: (keepLaunchTracking: boolean) => void
   startBackfill: MigrationRun
   startIndexHeal: MigrationRun
   initialDelayMs?: number
@@ -156,7 +156,7 @@ export function createCodexSessionMigrationScheduler(args: {
           scheduledTimer === null &&
           pendingScheduledRunGeneration === null
         ) {
-          args.finishScheduledRun?.()
+          args.finishScheduledRun?.(activeLaunches.size > 0)
         }
         if (shouldRerun) {
           requestRun()
@@ -169,17 +169,15 @@ export function createCodexSessionMigrationScheduler(args: {
     scheduledTimer = setTimeout(() => {
       scheduledTimer = null
       let requestedGeneration = generation
+      const recoveredScanDates = args.resolvePendingScanDates?.() ?? []
+      for (const scanDate of recoveredScanDates) {
+        scheduledScanDates.set(scanDate.join('-'), scanDate)
+      }
       if (generation !== undefined) {
         const currentDate = getCodexSessionBackfillDate()
         scheduledScanDates.set(currentDate.join('-'), currentDate)
-      } else {
-        const recoveredScanDates = args.resolvePendingScanDates?.() ?? []
-        for (const scanDate of recoveredScanDates) {
-          scheduledScanDates.set(scanDate.join('-'), scanDate)
-        }
-        if (recoveredScanDates.length > 0) {
-          requestedGeneration = ++scheduledRunGeneration
-        }
+      } else if (recoveredScanDates.length > 0) {
+        requestedGeneration = ++scheduledRunGeneration
       }
       const scanDates = [...scheduledScanDates.values()].sort(compareBackfillDates)
       scheduledScanDates.clear()

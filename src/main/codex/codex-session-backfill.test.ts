@@ -780,22 +780,6 @@ describe('startCodexSessionBackfillInBackground', () => {
     )
   })
 
-  it('self-heals a zero-file marker when managed rollouts appear later', async () => {
-    const empty = await startCodexSessionBackfillInBackground()
-    expect(empty).toMatchObject({ scannedFiles: 0, linkedFiles: 0 })
-    expect(JSON.parse(readFileSync(getMarkerPath(), 'utf-8'))).toMatchObject({
-      baseline: { summary: { scannedFiles: 0 } }
-    })
-
-    writeManagedSession(join('2026', '07', '28', 'rollout-later.jsonl'), '{"id":"later"}\n')
-    const healed = await startCodexSessionBackfillInBackground()
-
-    expect(healed).toMatchObject({ scannedFiles: 1, linkedFiles: 1 })
-    expect(
-      existsSync(join(getSystemSessionsRoot(), '2026', '07', '28', 'rollout-later.jsonl'))
-    ).toBe(true)
-  })
-
   it('recovers an installed rollout after the completion marker write fails', async () => {
     writeManagedSession(join('2026', '05', '26', 'rollout-a.jsonl'), '{"id":"a"}\n')
     mkdirSync(getMarkerPath(), { recursive: true })

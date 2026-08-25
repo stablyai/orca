@@ -473,7 +473,8 @@ function handleCodexHomePtySpawned(args: {
   const fullScanRequired =
     codexRuntimeHome?.beginHostSystemDefaultSessionMigrationLaunch(args.codexHomePath, {
       reattached: args.reattached,
-      launchEnv: args.launchEnv
+      launchEnv: args.launchEnv,
+      startedAt: args.startedAt
     }) ?? null
   if (fullScanRequired !== null) {
     codexSessionMigration?.beginLaunch(

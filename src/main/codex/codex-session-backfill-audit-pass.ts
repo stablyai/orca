@@ -5,6 +5,7 @@ import {
   createCodexSessionBackfillAuditWriter,
   createCodexSessionBackfillDiagnosticEventId,
   createCodexSessionBackfillFileEventId,
+  createCodexSessionBackfillFileInstanceId,
   readCodexSessionBackfillAuditCoverage,
   recordExistingCodexSessionForHeal,
   type CodexSessionBackfillAuditWriter
@@ -58,12 +59,22 @@ export async function createCodexSessionBackfillAuditPass(
       const fileEventId = targetStat
         ? createCodexSessionBackfillFileEventId(target, targetStat)
         : undefined
+      const fileInstanceId = targetStat
+        ? createCodexSessionBackfillFileInstanceId(target, targetStat)
+        : undefined
       if (fileEventId && coverage.fileEventIds.has(fileEventId)) {
         summary.skippedExistingFiles += 1
         return
       }
       if (
-        await recordExistingCodexSessionForHeal(appendRecord, summary, source, target, fileEventId)
+        await recordExistingCodexSessionForHeal(
+          appendRecord,
+          summary,
+          source,
+          target,
+          fileEventId,
+          fileInstanceId
+        )
       ) {
         if (fileEventId) {
           coverage.fileEventIds.add(fileEventId)
@@ -75,12 +86,16 @@ export async function createCodexSessionBackfillAuditPass(
       const fileEventId = targetStat
         ? createCodexSessionBackfillFileEventId(target, targetStat)
         : undefined
+      const fileInstanceId = targetStat
+        ? createCodexSessionBackfillFileInstanceId(target, targetStat)
+        : undefined
       if (
         await appendCodexSessionHealAuditRecord(appendRecord, summary, {
           action,
           source,
           target,
-          ...(fileEventId ? { fileEventId } : {})
+          ...(fileEventId ? { fileEventId } : {}),
+          ...(fileInstanceId ? { fileInstanceId } : {})
         })
       ) {
         if (fileEventId) {

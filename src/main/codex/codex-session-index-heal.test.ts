@@ -104,7 +104,13 @@ function rolloutTarget(sessionsRoot: string, stamp: string, id: string): string 
 
 function createHealRig(options: {
   scenario?: string
-  auditedThreads?: { stamp: string; id: string; action?: string }[]
+  auditedThreads?: {
+    stamp: string
+    id: string
+    action?: string
+    recordId?: string | null
+    fileInstanceId?: string
+  }[]
   missingThreadIds?: string[]
   failingThreadIds?: string[]
   busyThreadIds?: string[]
@@ -134,7 +140,10 @@ function createHealRig(options: {
         action: audited.action ?? 'hardlink',
         source: '/managed/sessions/x.jsonl',
         target: rolloutTarget(systemSessionsRoot, audited.stamp, audited.id),
-        recordId: `audit-record-${index}`
+        ...(audited.recordId === null
+          ? {}
+          : { recordId: audited.recordId ?? `audit-record-${index}` }),
+        ...(audited.fileInstanceId ? { fileInstanceId: audited.fileInstanceId } : {})
       })}\n`
     )
   }
@@ -255,28 +264,6 @@ describe('runCodexSessionIndexHeal', () => {
     expect(rig.readLog().serverStarts).toBe(1)
   })
 
-  it('does not re-read a healed thread when the same target gets another audit event', async () => {
-    const id = threadId('1')
-    const stamp = '2026-07-01T10-00-00'
-    const rig = createHealRig({ auditedThreads: [{ stamp, id }] })
-    await runCodexSessionIndexHeal(rig.paths, {
-      buildInvocation: rig.buildInvocation,
-      interBatchDelayMs: 0
-    })
-
-    await createCodexSessionBackfillAuditWriter(rig.paths.auditLogPath)({
-      action: 'existing',
-      target: rolloutTarget(rig.paths.systemSessionsRoot, stamp, id)
-    })
-    const repeated = await runCodexSessionIndexHeal(rig.paths, {
-      buildInvocation: rig.buildInvocation,
-      interBatchDelayMs: 0
-    })
-
-    expect(repeated).toMatchObject({ pendingThreads: 0, healedThreads: 0 })
-    expect(rig.readLog().threadIds).toEqual([id])
-  })
-
   it('re-reads a healed thread when its target path changes', async () => {
     const id = threadId('1')
     const rig = createHealRig({
@@ -291,6 +278,34 @@ describe('runCodexSessionIndexHeal', () => {
       action: 'existing',
       target: rolloutTarget(rig.paths.systemSessionsRoot, '2026-07-02T10-00-00', id)
     })
+    const moved = await runCodexSessionIndexHeal(rig.paths, {
+      buildInvocation: rig.buildInvocation,
+      interBatchDelayMs: 0
+    })
+
+    expect(moved).toMatchObject({ pendingThreads: 1, healedThreads: 1 })
+    expect(rig.readLog().threadIds).toEqual([id, id])
+  })
+
+  it('re-reads a healed thread without record ids when its target path changes', async () => {
+    const id = threadId('1')
+    const rig = createHealRig({
+      auditedThreads: [{ stamp: '2026-07-01T10-00-00', id, recordId: null }]
+    })
+    await runCodexSessionIndexHeal(rig.paths, {
+      buildInvocation: rig.buildInvocation,
+      interBatchDelayMs: 0
+    })
+
+    appendFileSync(
+      rig.paths.auditLogPath,
+      `${JSON.stringify({
+        at: '2026-07-02T00:00:00.000Z',
+        action: 'existing',
+        source: '/managed/sessions/y.jsonl',
+        target: rolloutTarget(rig.paths.systemSessionsRoot, '2026-07-02T10-00-00', id)
+      })}\n`
+    )
     const moved = await runCodexSessionIndexHeal(rig.paths, {
       buildInvocation: rig.buildInvocation,
       interBatchDelayMs: 0
@@ -389,7 +404,14 @@ describe('runCodexSessionIndexHeal', () => {
   it('does not retry a missing thread when the same target gets another audit event', async () => {
     const id = threadId('1')
     const rig = createHealRig({
-      auditedThreads: [{ stamp: '2026-07-01T10-00-00', id }],
+      auditedThreads: [
+        {
+          stamp: '2026-07-01T10-00-00',
+          id,
+          action: 'existing',
+          fileInstanceId: 'instance-a'
+        }
+      ],
       missingThreadIds: [id]
     })
 
@@ -401,7 +423,8 @@ describe('runCodexSessionIndexHeal', () => {
 
     await createCodexSessionBackfillAuditWriter(rig.paths.auditLogPath)({
       action: 'existing',
-      target: rolloutTarget(rig.paths.systemSessionsRoot, '2026-07-01T10-00-00', id)
+      target: rolloutTarget(rig.paths.systemSessionsRoot, '2026-07-01T10-00-00', id),
+      fileInstanceId: 'instance-a'
     })
     const healed = await runCodexSessionIndexHeal(rig.paths, {
       buildInvocation: (home, timeoutMs) => {
@@ -423,6 +446,48 @@ describe('runCodexSessionIndexHeal', () => {
 
     expect(healed).toMatchObject({ outcome: 'completed', pendingThreads: 0, healedThreads: 0 })
     expect(rig.readLog().threadIds).toEqual([id])
+  })
+
+  it('retries a missing thread without record ids when its target path changes', async () => {
+    const id = threadId('1')
+    const rig = createHealRig({
+      auditedThreads: [{ stamp: '2026-07-01T10-00-00', id, recordId: null }],
+      missingThreadIds: [id]
+    })
+    await runCodexSessionIndexHeal(rig.paths, {
+      buildInvocation: rig.buildInvocation,
+      interBatchDelayMs: 0
+    })
+
+    appendFileSync(
+      rig.paths.auditLogPath,
+      `${JSON.stringify({
+        at: '2026-07-02T00:00:00.000Z',
+        action: 'existing',
+        source: '/managed/sessions/y.jsonl',
+        target: rolloutTarget(rig.paths.systemSessionsRoot, '2026-07-02T10-00-00', id)
+      })}\n`
+    )
+    const moved = await runCodexSessionIndexHeal(rig.paths, {
+      buildInvocation: (home, timeoutMs) => {
+        const invocation = rig.buildInvocation(home, timeoutMs)
+        return {
+          ...invocation,
+          env: {
+            STUB_CONFIG: JSON.stringify({
+              scenario: 'ok',
+              readLogFile: rig.readLogFile,
+              missingThreadIds: [],
+              failingThreadIds: []
+            })
+          }
+        }
+      },
+      interBatchDelayMs: 0
+    })
+
+    expect(moved).toMatchObject({ outcome: 'completed', pendingThreads: 1, healedThreads: 1 })
+    expect(rig.readLog().threadIds).toEqual([id, id])
   })
 
   it('keeps a processed outcome readable after a torn heal-ledger tail', async () => {

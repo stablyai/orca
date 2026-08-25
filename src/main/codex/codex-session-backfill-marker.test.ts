@@ -14,7 +14,10 @@ vi.mock('node:os', async () => {
 })
 
 import { startCodexSessionBackfillInBackground } from './codex-session-backfill'
-import { markCodexSessionBackfillPending } from './codex-session-backfill-marker'
+import {
+  markCodexSessionBackfillPending,
+  readCodexSessionBackfillMarkerStatus
+} from './codex-session-backfill-marker'
 
 let fakeHomeDir: string
 let userDataDir: string
@@ -107,6 +110,104 @@ describe('Codex session backfill marker', () => {
       baseline: { summary: { scannedFiles: 1 } },
       pendingSince: '2026-08-05'
     })
+  })
+
+  it('keeps a zero-file v3 marker incomplete during migration', () => {
+    mkdirSync(dirname(getMarkerPath()), { recursive: true })
+    writeFileSync(
+      getMarkerPath(),
+      `${JSON.stringify({
+        version: 3,
+        systemSessionsRoot: getSystemSessionsRoot(),
+        completedAt: 1,
+        summary: { scannedFiles: 0 }
+      })}\n`,
+      'utf-8'
+    )
+
+    expect(
+      markCodexSessionBackfillPending(getMarkerPath(), getSystemSessionsRoot(), [
+        '2026',
+        '08',
+        '05'
+      ])
+    ).toBe(true)
+    expect(JSON.parse(readFileSync(getMarkerPath(), 'utf-8'))).toMatchObject({
+      version: 4,
+      pendingSince: '2026-08-05'
+    })
+    expect(JSON.parse(readFileSync(getMarkerPath(), 'utf-8'))).not.toHaveProperty('baseline')
+  })
+
+  it.each(['0000-00-00', '2026-02-29', '9999-12-31'])(
+    'rejects an unsafe pending date and requires a full scan: %s',
+    (pendingSince) => {
+      mkdirSync(dirname(getMarkerPath()), { recursive: true })
+      writeFileSync(
+        getMarkerPath(),
+        `${JSON.stringify({
+          version: 4,
+          systemSessionsRoot: getSystemSessionsRoot(),
+          baseline: { completedAt: 1, summary: { scannedFiles: 1 } },
+          pendingSince
+        })}\n`,
+        'utf-8'
+      )
+
+      expect(
+        readCodexSessionBackfillMarkerStatus(getMarkerPath(), getSystemSessionsRoot())
+      ).toEqual({ hasBaseline: false, pendingSince: undefined })
+    }
+  )
+
+  it('rejects a pending date outside the bounded recovery window', () => {
+    mkdirSync(dirname(getMarkerPath()), { recursive: true })
+    writeFileSync(
+      getMarkerPath(),
+      `${JSON.stringify({
+        version: 4,
+        systemSessionsRoot: getSystemSessionsRoot(),
+        baseline: { completedAt: 1, summary: { scannedFiles: 1 } },
+        pendingSince: '2020-01-01'
+      })}\n`,
+      'utf-8'
+    )
+
+    expect(readCodexSessionBackfillMarkerStatus(getMarkerPath(), getSystemSessionsRoot())).toEqual({
+      hasBaseline: false,
+      pendingSince: undefined
+    })
+  })
+
+  it('uses a zero-file baseline and discovers later rollouts through a launch date scan', async () => {
+    const empty = await startCodexSessionBackfillInBackground()
+    expect(empty).toMatchObject({ scannedFiles: 0, linkedFiles: 0 })
+    expect(JSON.parse(readFileSync(getMarkerPath(), 'utf-8'))).toMatchObject({
+      baseline: { summary: { scannedFiles: 0 } }
+    })
+    expect(await startCodexSessionBackfillInBackground()).toBeNull()
+
+    writeManagedSession(join('2026', '07', '28', 'rollout-later.jsonl'))
+    expect(
+      markCodexSessionBackfillPending(getMarkerPath(), getSystemSessionsRoot(), [
+        '2026',
+        '07',
+        '28'
+      ])
+    ).toBe(false)
+    const healed = await startCodexSessionBackfillInBackground({
+      ignoreCompletionMarker: true,
+      scanDates: [['2026', '07', '28']],
+      writeBoundedCompletionMarker: true
+    })
+
+    expect(healed).toMatchObject({ scannedFiles: 1, linkedFiles: 1 })
+    expect(
+      readFileSync(
+        join(getSystemSessionsRoot(), '2026', '07', '28', 'rollout-later.jsonl'),
+        'utf-8'
+      )
+    ).toBe('{"id":"a"}\n')
   })
 
   it('clears pendingSince after a successful bounded confirmation', async () => {

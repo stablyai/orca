@@ -121,6 +121,14 @@ export function createCodexSessionBackfillFileEventId(targetPath: string, stat: 
     .digest('hex')
 }
 
+export function createCodexSessionBackfillFileInstanceId(targetPath: string, stat: Stats): string {
+  return createHash('sha256')
+    .update(normalizeRuntimePathForComparison(targetPath))
+    .update('\0')
+    .update([stat.dev, stat.ino, stat.birthtimeMs].join('\0'))
+    .digest('hex')
+}
+
 export function createCodexSessionBackfillDiagnosticEventId(args: {
   action: 'copy-unsupported' | 'failed'
   source: string
@@ -180,7 +188,8 @@ export async function recordExistingCodexSessionForHeal(
   summary: CodexSessionBackfillSummary,
   source: string,
   target: string,
-  fileEventId?: string
+  fileEventId?: string,
+  fileInstanceId?: string
 ): Promise<boolean> {
   summary.skippedExistingFiles += 1
   // Why: this also recovers a rollout installed before a crash or audit
@@ -189,7 +198,8 @@ export async function recordExistingCodexSessionForHeal(
     action: 'existing',
     source,
     target,
-    ...(fileEventId ? { fileEventId } : {})
+    ...(fileEventId ? { fileEventId } : {}),
+    ...(fileInstanceId ? { fileInstanceId } : {})
   })
 }
 

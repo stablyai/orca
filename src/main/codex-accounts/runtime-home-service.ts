@@ -285,7 +285,7 @@ export class CodexRuntimeHomeService {
 
   beginHostSystemDefaultSessionMigrationLaunch(
     codexHomePath: string | null,
-    options: { reattached?: boolean; launchEnv?: NodeJS.ProcessEnv } = {}
+    options: { reattached?: boolean; launchEnv?: NodeJS.ProcessEnv; startedAt?: Date } = {}
   ): boolean | null {
     if (
       !this.isHostSystemDefaultSessionMigrationEligible() ||
@@ -298,7 +298,8 @@ export class CodexRuntimeHomeService {
     }
     // Why: an older pass can clear launch preparation while PTY spawn awaits recovery.
     return this.invalidateBackfillAfterManagedSystemDefaultLaunch(
-      options.reattached && !codexHomePath ? undefined : options.launchEnv
+      options.reattached && !codexHomePath ? undefined : options.launchEnv,
+      options.startedAt
     )
   }
 
@@ -322,12 +323,23 @@ export class CodexRuntimeHomeService {
       this.pendingHostSystemDefaultSessionMigrationTarget = paths.systemSessionsRoot
     }
     if (previousTarget && previousTarget !== paths.systemSessionsRoot) {
+      const pendingSince = readCodexSessionBackfillMarkerStatus(
+        paths.markerPath,
+        previousTarget
+      ).pendingSince
       invalidateCodexSessionBackfillMarker(paths.markerPath)
+      if (pendingSince) {
+        markCodexSessionBackfillPending(paths.markerPath, paths.systemSessionsRoot, pendingSince)
+      }
     }
     return this.pendingHostSystemDefaultSessionMigrationNeedsFullScan
   }
 
-  finishHostSystemDefaultSessionMigrationPass(): void {
+  finishHostSystemDefaultSessionMigrationPass(keepLaunchTracking = false): void {
+    if (keepLaunchTracking) {
+      this.pendingHostSystemDefaultSessionMigrationNeedsFullScan = false
+      return
+    }
     this.hostSystemDefaultSessionMigrationPending = false
     this.pendingHostSystemDefaultSessionMigrationNeedsFullScan = false
     this.pendingHostSystemDefaultSessionMigrationTarget = null
@@ -531,7 +543,8 @@ export class CodexRuntimeHomeService {
   }
 
   private invalidateBackfillAfterManagedSystemDefaultLaunch(
-    launchEnv?: NodeJS.ProcessEnv
+    launchEnv?: NodeJS.ProcessEnv,
+    startedAt = new Date()
   ): boolean | null {
     const settings = this.store.getSettings()
     if (
@@ -555,7 +568,7 @@ export class CodexRuntimeHomeService {
     const needsFullScan = markCodexSessionBackfillPending(
       paths.markerPath,
       paths.systemSessionsRoot,
-      getCodexSessionBackfillDate()
+      getCodexSessionBackfillDate(startedAt)
     )
     this.pendingHostSystemDefaultSessionMigrationNeedsFullScan ||= needsFullScan
     return this.pendingHostSystemDefaultSessionMigrationNeedsFullScan

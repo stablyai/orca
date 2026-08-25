@@ -7,6 +7,8 @@ import type {
 } from './codex-session-backfill-types'
 
 const CODEX_SESSION_BACKFILL_MARKER_VERSION = 4
+const MAX_PENDING_RECOVERY_DAYS = 366
+const MILLISECONDS_PER_DAY = 24 * 60 * 60 * 1_000
 let markerInvalidationGeneration = 0
 
 type CodexSessionBackfillMarker = {
@@ -34,7 +36,7 @@ export function readCodexSessionBackfillMarkerStatus(
 ): CodexSessionBackfillMarkerStatus {
   const marker = readCompatibleMarker(markerPath, systemSessionsRoot)
   return {
-    hasBaseline: marker?.baseline !== undefined && marker.baseline.summary.scannedFiles !== 0,
+    hasBaseline: marker?.baseline !== undefined,
     pendingSince: parseBackfillDate(marker?.pendingSince)
   }
 }
@@ -60,7 +62,7 @@ export function markCodexSessionBackfillPending(
   marker.pendingSince =
     marker.pendingSince && marker.pendingSince < pendingSince ? marker.pendingSince : pendingSince
   writeMarker(markerPath, marker)
-  return marker.baseline === undefined || marker.baseline.summary.scannedFiles === 0
+  return marker.baseline === undefined
 }
 
 export function writeCodexSessionBackfillMarker(
@@ -150,7 +152,7 @@ function readCompatibleMarker(
 function parseVersionFourMarker(
   marker: Record<string, unknown>,
   systemSessionsRoot: string
-): CodexSessionBackfillMarker {
+): CodexSessionBackfillMarker | null {
   const parsed: CodexSessionBackfillMarker = {
     version: CODEX_SESSION_BACKFILL_MARKER_VERSION,
     systemSessionsRoot
@@ -163,8 +165,12 @@ function parseVersionFourMarker(
       parsed.baseline = { completedAt, summary }
     }
   }
-  if (parseBackfillDate(marker.pendingSince)) {
-    parsed.pendingSince = marker.pendingSince as string
+  if (marker.pendingSince !== undefined) {
+    const pendingSince = parseBackfillDate(marker.pendingSince)
+    if (!pendingSince) {
+      return null
+    }
+    parsed.pendingSince = formatBackfillDate(pendingSince)
   }
   return parsed
 }
@@ -182,7 +188,29 @@ function parseBackfillDate(value: unknown): CodexSessionBackfillDate | undefined
     return undefined
   }
   const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value)
-  return match ? [match[1], match[2], match[3]] : undefined
+  if (!match) {
+    return undefined
+  }
+  const year = Number(match[1])
+  const month = Number(match[2])
+  const day = Number(match[3])
+  const candidate = new Date(0)
+  candidate.setUTCFullYear(year, month - 1, day)
+  candidate.setUTCHours(0, 0, 0, 0)
+  if (
+    candidate.getUTCFullYear() !== year ||
+    candidate.getUTCMonth() !== month - 1 ||
+    candidate.getUTCDate() !== day
+  ) {
+    return undefined
+  }
+  const now = new Date()
+  const today = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate())
+  const age = today - candidate.getTime()
+  if (age < 0 || age > MAX_PENDING_RECOVERY_DAYS * MILLISECONDS_PER_DAY) {
+    return undefined
+  }
+  return [match[1], match[2], match[3]]
 }
 
 function formatBackfillDate(date: CodexSessionBackfillDate): string {
