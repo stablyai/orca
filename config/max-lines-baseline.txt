@@ -11,9 +11,7 @@ inline src/main/browser/agent-browser-bridge.ts
 inline src/main/browser/browser-cookie-import.ts
 inline src/main/browser/browser-manager.ts
 inline src/main/browser/cdp-bridge.ts
-inline src/main/browser/grab-guest-script.ts
 inline src/main/claude-accounts/runtime-auth-service.ts
-inline src/main/cli/cli-installer.ts
 inline src/main/cli/wsl-cli-installer.ts
 inline src/main/codex-accounts/runtime-home-service.ts
 inline src/main/codex-accounts/service.ts
@@ -48,7 +46,6 @@ inline src/main/runtime/orca-runtime.ts
 inline src/main/runtime/rpc/methods/orchestration.ts
 inline src/main/runtime/runtime-rpc.ts
 inline src/main/source-control/hosted-review-creation.ts
-inline src/main/speech/model-manager.ts
 inline src/main/speech/stt-service.ts
 inline src/main/ssh/ssh-channel-multiplexer.ts
 inline src/main/ssh/ssh-connection.ts
@@ -56,7 +53,6 @@ inline src/main/ssh/ssh-relay-deploy.ts
 inline src/main/ssh/ssh-relay-session.ts
 inline src/main/updater.ts
 inline src/main/window/attach-main-window-services.ts
-inline src/main/window/createMainWindow.ts
 inline src/preload/index.ts
 inline src/relay/dispatcher.ts
 inline src/relay/git-handler.ts
