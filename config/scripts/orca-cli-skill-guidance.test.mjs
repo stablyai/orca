@@ -18,12 +18,36 @@ function readSkill(path = guidePath) {
 }
 
 describe('orca CLI skill guidance', () => {
-  it('keeps independent worktree lineage separate from Git base selection', () => {
+  it('keeps worktree lineage separate from Git base selection', () => {
     const skill = readSkill()
 
-    expect(skill).toContain('`--no-parent` only controls Orca lineage')
-    expect(skill).toContain('omit `--base-branch` so Orca uses the repo default base')
-    expect(skill).toContain('Never base it on the current feature branch')
+    expect(skill).toContain(
+      'Lineage and Git base are independent. `--no-parent` never changes the base; `--base-branch` never changes lineage.'
+    )
+    expect(skill).toContain('Omit `--base-branch` to use the repo default base')
+    expect(skill).toContain('Never base on the current feature branch')
+  })
+
+  it('documents both lineage outcomes and what decides between them', () => {
+    const skill = readSkill()
+
+    // Default: inferred parent, and what the inference is actually keyed on.
+    expect(skill).toContain(
+      'Orca infers a parent from the calling context (Orca terminal, orchestration context, or cwd)'
+    )
+    // An affirmative reason to choose top-level, so the choice stays reachable.
+    expect(skill).toContain(
+      '`--no-parent` makes the new worktree its own root, tracked separately from the work it came from'
+    )
+    // Factual guards: no cascade implication, no "detached is hidden" claim.
+    expect(skill).toContain('deleting a parent never deletes its children on its own')
+    expect(skill).toContain('Both stay visible either way')
+    // Handoff templates must not pre-detach lineage.
+    expect(skill).not.toContain('--no-parent --agent codex')
+    expect(skill).not.toContain('--name <task-name> --no-parent')
+    // No rule that ties lineage to whether the work is "stacked" or "independent".
+    expect(skill).not.toContain('Use `--no-parent` only when the new work is independent.')
+    expect(skill).not.toContain('--name independent-task')
   })
 
   it('documents non-lifecycle full handoffs and custom Codex model fallback', () => {
@@ -45,9 +69,7 @@ describe('orca CLI skill guidance', () => {
     expect(skill).toContain(
       '`task-create` is also forbidden because it records coordinator-owned tracking state'
     )
-    expect(skill).toContain(
-      'ORCA worktree create --name <task-name> --no-parent --agent codex --prompt'
-    )
+    expect(skill).toContain('ORCA worktree create --name <task-name> --agent codex --prompt')
     expect(skill).toContain('codex --model gpt-5.5 -c model_reasoning_effort="xhigh"')
     expect(skill).toContain('wait only for TUI readiness if needed to avoid losing input')
     expect(skill).toContain('send the prompt, and stop')

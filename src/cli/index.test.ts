@@ -495,7 +495,7 @@ describe('orca root help', () => {
     expect(createHelp).toContain('folder:<folderId>')
     expect(createHelp).toContain('worktree:<worktreeId>')
     expect(createHelp).toContain(
-      '--no-parent only affects Orca lineage; omit --base-branch to use the repo default base'
+      'Lineage and Git base are independent: --no-parent never changes the base, and --base-branch never changes lineage.'
     )
 
     logSpy.mockClear()
