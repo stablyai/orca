@@ -330,6 +330,12 @@ describe('orca root help', () => {
     expect(logSpy.mock.calls[0][0]).toContain(
       'project setup-delete      Remove a project host setup'
     )
+    expect(logSpy.mock.calls[0][0]).toContain(
+      'project-group scan-nested Scan a folder for nested Git repositories'
+    )
+    expect(logSpy.mock.calls[0][0]).toContain(
+      'project-group import-nested Import selected nested repositories into Orca'
+    )
     expect(logSpy.mock.calls[0][0]).toContain('Agent Sessions And Worktrees:')
     expect(logSpy.mock.calls[0][0]).toContain(
       '`worktree create --agent` creates a new checkout with an agent.'

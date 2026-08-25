@@ -156,6 +156,20 @@ describe('parseArgs', () => {
     expect(parsed.flags.get('label')).toBe(`Bug${REPEATED_FLAG_SEPARATOR}Regression`)
   })
 
+  it('preserves repeated project paths for nested repository imports', () => {
+    const parsed = parseArgs([
+      'project-group',
+      'import-nested',
+      '--project-path',
+      '/workspace/repo-a',
+      '--project-path=/workspace/repo-b'
+    ])
+
+    expect(parsed.flags.get('project-path')).toBe(
+      `/workspace/repo-a${REPEATED_FLAG_SEPARATOR}/workspace/repo-b`
+    )
+  })
+
   it('does not apply repeated flag encoding to ordinary string flags', () => {
     const parsed = parseArgs(['linear', 'list', '--workspace', 'old', '--workspace', 'new'])
 

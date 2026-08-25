@@ -154,6 +154,28 @@ ORCA worktree create --name task --run-hooks --json
 - If an older installed CLI rejects `--agent`, `--prompt`, or `--setup`, create the worktree normally, then run `orca terminal create --worktree <selector> --command "<requested-agent>"` and `orca terminal send` if a prompt is needed. This can leave a fallback shell when no default tabs are configured; close it only after confirming it is unused.
 - `worktree create` creates a new checkout. For a fresh agent in the **current** checkout (no new worktree), use `orca terminal create --worktree active --command "codex" --json` — that path does not create a second worktree shell.
 
+## Project Groups And Nested Repositories
+
+Use project groups when one folder contains several related Git repositories and Orca should show them together under that folder. Discovery and import are separate so agents can inspect the scan result before changing Orca state.
+
+Scan the folder without modifying Orca:
+
+```text
+ORCA project-group scan-nested --path /abs/task-root --json
+```
+
+Select repository paths from `result.repos[].path`, then import them as one group:
+
+```text
+ORCA project-group import-nested --path /abs/task-root --project-path /abs/task-root/repos/api --project-path /abs/task-root/repos/web --mode group --group-name task-root --json
+```
+
+Use `--mode separate` to register the selected repositories without creating a group. Omit `--group-name` in group mode to use the scanned folder name. Repeat `--project-path` once per selected repository; use the exact paths returned by `scan-nested` when possible. For a remote runtime, `--path` and every `--project-path` must be absolute paths on that runtime.
+
+Orca does not watch a previously imported folder for newly added repositories. If another repository appears later, run `scan-nested` again and import the new path with `--mode separate`. The current import RPC cannot append to an existing group: `--mode group` always creates a new group. Move the separately imported repository into the original group in the desktop UI when that grouping is required.
+
+Scan is read-only; import changes registered projects and group membership, so only run it when the user has authorized that change.
+
 ## Worktree Comments
 
 A worktree comment is the short status text shown in Orca's workspace list/card for quick progress visibility.

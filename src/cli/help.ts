@@ -60,6 +60,10 @@ Projects:
   project setup-update      Update project host setup metadata
   project setup-delete      Remove a project host setup
 
+Project Groups:
+  project-group scan-nested Scan a folder for nested Git repositories
+  project-group import-nested Import selected nested repositories into Orca
+
 Repos:
   repo list                 List repos registered in Orca
   repo add                  Add a project to Orca by filesystem path
@@ -260,6 +264,8 @@ Common Commands:
   orca project setup-create --project <id> --host <host-id> [--setup-id <id>] [--path <path>] [--kind git|folder] [--display-name <name>] [--worktree-base-path <path>] [--git-username <name>] [--state ready|not-set-up|setting-up|error|unsupported] [--method imported-existing-folder|cloned|provisioned] [--json]
   orca project setup-update --setup <setup-id> [--display-name <name>] [--path <path>] [--worktree-base-path <path>] [--git-username <name>] [--kind git|folder] [--state ready|not-set-up|setting-up|error|unsupported] [--method legacy-repo|imported-existing-folder|cloned|provisioned] [--json]
   orca project setup-delete --setup <setup-id> [--json]
+  orca project-group scan-nested --path <folder> [--json]
+  orca project-group import-nested --path <folder> --project-path <repo> [--project-path <repo>...] --mode group|separate [--group-name <name>] [--json]
   orca repo list [--json]
   orca repo add --path <path> [--json]
   orca repo show --repo <selector> [--json]
@@ -511,6 +517,9 @@ function formatCommandFlagHelp(flag: string, commandPath: string[]): string {
   if (command === 'worktree create' && flag === 'parent-worktree') {
     return '--parent-worktree <selector> Parent selector such as active/current, id:<repo-id>::<path>, branch:<branch>, issue:<number>, path:<path>, folder:<id>, or worktree:<worktreeId>'
   }
+  if (command === 'project-group import-nested' && flag === 'mode') {
+    return '--mode <mode>          Import mode: group or separate'
+  }
   if (command === 'orchestration task-create' && flag === 'task-title') {
     return '--task-title <text>  Concise title for the orchestration task'
   }
@@ -579,6 +588,8 @@ export function formatFlagHelp(flag: string): string {
     'parent-worktree':
       '--parent-worktree <selector> Parent worktree selector such as id:<repo-id>::<path>, branch:<branch>, issue:<number>, path:<path>, or active/current',
     path: '--path <path>          Path argument for the command',
+    'project-path': '--project-path <path> Repository path to import; repeat for several',
+    'group-name': '--group-name <name>    Group name; defaults to the scanned folder name',
     prompt: '--prompt <text>        Prompt text for agent-backed commands',
     query: '--query <text>        Search text for matching refs',
     ref: '--ref <ref>            Base ref to persist for the repo',
