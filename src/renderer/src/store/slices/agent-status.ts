@@ -34,6 +34,7 @@ import {
   getRepoExecutionHostId,
   getWorktreeExecutionHostId
 } from '../../../../shared/execution-host'
+import { generatedTitleNamesEndedSession } from '../../../../shared/agent-tab-title'
 import { isExplicitAgentStatusFresh } from '@/lib/agent-status'
 import {
   getAgentRowGeneratedTitleText,
@@ -435,20 +436,36 @@ function getTabIdFromPaneKey(paneKey: string): string | null {
   return paneKey.slice(0, separator)
 }
 
+function tabTitleBlocksGeneration(
+  tab: TerminalTab | undefined,
+  liveSessionId: string | undefined
+): boolean {
+  if (!tab) {
+    return false
+  }
+  if (tab.customTitle?.trim() || tab.quickCommandLabel?.trim()) {
+    return true
+  }
+  // Why: a generated title naming an ended session no longer blocks the write, so the
+  // dispatch preamble still has to be parsed — otherwise its raw text becomes the title.
+  return Boolean(tab.generatedTitle?.trim()) && !generatedTitleNamesEndedSession(tab, liveSessionId)
+}
+
 /** True when auto-title generation would no-op without replace (custom/quick/generated). */
 function agentStatusTabAlreadyHasProtectedOrGeneratedTitle(
   state: AppState,
   tabId: string | null,
-  worktreeId?: string | null
+  worktreeId?: string | null,
+  liveSessionId?: string
 ): boolean {
   if (!tabId) {
     return false
   }
   const ownerTabs = worktreeId ? state.tabsByWorktree[worktreeId] : undefined
   if (ownerTabs) {
-    const tab = ownerTabs.find((candidate) => candidate.id === tabId)
-    return Boolean(
-      tab?.customTitle?.trim() || tab?.quickCommandLabel?.trim() || tab?.generatedTitle?.trim()
+    return tabTitleBlocksGeneration(
+      ownerTabs.find((candidate) => candidate.id === tabId),
+      liveSessionId
     )
   }
   for (const tabs of Object.values(state.tabsByWorktree)) {
@@ -456,9 +473,7 @@ function agentStatusTabAlreadyHasProtectedOrGeneratedTitle(
     if (!tab) {
       continue
     }
-    return Boolean(
-      tab.customTitle?.trim() || tab.quickCommandLabel?.trim() || tab.generatedTitle?.trim()
-    )
+    return tabTitleBlocksGeneration(tab, liveSessionId)
   }
   return false
 }
@@ -1879,7 +1894,10 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
           entry.paneKey,
           getAgentRowGeneratedTitleText(entry),
           {
-            replaceExistingGeneratedTitle: true
+            replaceExistingGeneratedTitle: true,
+            // Why: this path also writes titles, so it has to record the owning session
+            // too — otherwise the label it writes can never be proven stale.
+            sessionId: entry.providerSession?.id
           }
         )
       }
@@ -2565,30 +2583,34 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
         )
         const shouldReplaceGeneratedTitle =
           hasMatchingOrchestrationLabels || isNewDispatchAgainstStickyOrchestration
+        // Why: identifies which session owns the title, so a later `/clear` (new session
+        // id, same pane) can retire it instead of labeling the new conversation.
+        const titleSessionId = entryForGeneratedTitle.providerSession?.id
         // Why: setAgentStatus is high-frequency, so only parse dispatch preambles when a title write is actually possible.
+        // A forced replace already answers that question, so the short-circuit skipping the
+        // session-aware check below is the conclusion, not a missed case.
         const mayWriteGeneratedTitle =
           get().settings?.tabAutoGenerateTitle === true &&
           (shouldReplaceGeneratedTitle ||
             !agentStatusTabAlreadyHasProtectedOrGeneratedTitle(
               get(),
               entryForGeneratedTitle.tabId ?? getTabIdFromPaneKey(paneKey),
-              entryForGeneratedTitle.worktreeId
+              entryForGeneratedTitle.worktreeId,
+              titleSessionId
             ))
         const generatedTitlePrompt =
           liveIsDispatchPrompt && mayWriteGeneratedTitle
             ? getAgentRowGeneratedTitleText(entryForGeneratedTitle)
             : entryForGeneratedTitle.prompt
-        if (shouldReplaceGeneratedTitle) {
-          applyGeneratedTabTitleUpdate({
-            paneKey,
-            prompt: generatedTitlePrompt,
-            options: {
-              replaceExistingGeneratedTitle: true
-            }
-          })
-        } else {
-          applyGeneratedTabTitleUpdate({ paneKey, prompt: generatedTitlePrompt })
-        }
+        // Why: setAgentStatus is high-frequency — one flat literal, not conditional spreads.
+        applyGeneratedTabTitleUpdate({
+          paneKey,
+          prompt: generatedTitlePrompt,
+          options: {
+            replaceExistingGeneratedTitle: shouldReplaceGeneratedTitle,
+            sessionId: titleSessionId
+          }
+        })
       }
       // Why: batches coalesce accepted updates; standalone calls keep their existing deferred scheduling.
       requestAgentStatusFreshness(generatedTitleEntry.current !== null)

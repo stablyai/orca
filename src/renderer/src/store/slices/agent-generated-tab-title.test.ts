@@ -340,4 +340,263 @@ Implement task B worker instructions for the next dispatch`,
     expect(tab.generatedTitle).toBeUndefined()
     expect(resolveTerminalTabTitle(tab, true)).toBe('Run tests')
   })
+
+  it('retitles the tab when /clear starts a new provider session in the same pane', () => {
+    vi.useFakeTimers()
+    const store = createTestStore()
+    const tabId = seedWorktree(store, true)
+    const paneKey = makePaneKey(tabId, LEAF_ID)
+
+    store
+      .getState()
+      .setAgentStatus(
+        paneKey,
+        { state: 'working', prompt: 'Upload the Kimi K3 model to GitHub', agentType: 'claude' },
+        undefined,
+        undefined,
+        undefined,
+        { providerSession: { key: 'session_id', id: 'session-a' } }
+      )
+    expect(store.getState().tabsByWorktree[WORKTREE_ID][0].generatedTitle).toBe(
+      'Upload the Kimi K3 model to GitHub'
+    )
+
+    // Same prompt stream, same session: the title stays put (no churn per turn).
+    store
+      .getState()
+      .setAgentStatus(
+        paneKey,
+        { state: 'working', prompt: 'Now add the download path too', agentType: 'claude' },
+        undefined,
+        undefined,
+        undefined,
+        { providerSession: { key: 'session_id', id: 'session-a' } }
+      )
+    expect(store.getState().tabsByWorktree[WORKTREE_ID][0].generatedTitle).toBe(
+      'Upload the Kimi K3 model to GitHub'
+    )
+
+    // `/clear` mints a new session id on the same pane.
+    store.getState().setAgentStatus(
+      paneKey,
+      {
+        state: 'working',
+        prompt: 'Refactor the auth middleware to use JWT',
+        agentType: 'claude'
+      },
+      undefined,
+      undefined,
+      undefined,
+      { providerSession: { key: 'session_id', id: 'session-b' } }
+    )
+
+    const tab = store.getState().tabsByWorktree[WORKTREE_ID][0]
+    expect(tab.generatedTitle).toBe('Refactor the auth middleware to use JWT')
+    expect(tab.generatedTitleSessionId).toBe('session-b')
+    expect(store.getState().unifiedTabsByWorktree[WORKTREE_ID][0].generatedLabel).toBe(
+      'Refactor the auth middleware to use JWT'
+    )
+  })
+
+  it('records the owning session for an orchestration-written label', () => {
+    vi.useFakeTimers()
+    const store = createTestStore()
+    const tabId = seedWorktree(store, true)
+    const paneKey = makePaneKey(tabId, LEAF_ID)
+    const dispatch = `You are working inside Orca, a multi-agent IDE. You are a dispatched worker.
+Your task ID is: task-1
+
+=== TASK ===
+Implement the alpha worker instructions`
+
+    // The first ping has no session id yet, so the title starts unowned.
+    store
+      .getState()
+      .setAgentStatus(paneKey, { state: 'working', prompt: dispatch, agentType: 'claude' })
+    // The session id is known now, but the title guard returns early, so it never lands.
+    store
+      .getState()
+      .setAgentStatus(
+        paneKey,
+        { state: 'working', prompt: dispatch, agentType: 'claude' },
+        undefined,
+        undefined,
+        undefined,
+        { providerSession: { key: 'session_id', id: 'session-a' } }
+      )
+    expect(store.getState().tabsByWorktree[WORKTREE_ID][0].generatedTitleSessionId).toBeFalsy()
+
+    // Orchestration replaces the label — and is the write that finally records an owner.
+    store.getState().setRuntimeAgentOrchestrationByPaneKey({
+      [paneKey]: {
+        taskId: 'task-1',
+        dispatchId: 'ctx-1',
+        taskTitle: 'Implement worker instructions',
+        displayName: 'Better worker label'
+      }
+    })
+    const labeled = store.getState().tabsByWorktree[WORKTREE_ID][0]
+    expect(labeled.generatedTitle).toBe('Better worker label')
+    expect(labeled.generatedTitleSessionId).toBe('session-a')
+
+    // Without that owner the `/clear` below could never retire the label.
+    store
+      .getState()
+      .setAgentStatus(
+        paneKey,
+        {
+          state: 'working',
+          prompt: 'Refactor the auth middleware to use JWT',
+          agentType: 'claude'
+        },
+        undefined,
+        undefined,
+        undefined,
+        { providerSession: { key: 'session_id', id: 'session-b' } }
+      )
+
+    expect(store.getState().tabsByWorktree[WORKTREE_ID][0].generatedTitle).toBe(
+      'Refactor the auth middleware to use JWT'
+    )
+  })
+
+  it('still parses the dispatch preamble when a new session retitles a worker tab', () => {
+    vi.useFakeTimers()
+    const store = createTestStore()
+    const tabId = seedWorktree(store, true)
+    const paneKey = makePaneKey(tabId, LEAF_ID)
+    const dispatchPrompt = (taskId: string, task: string): string =>
+      `You are working inside Orca, a multi-agent IDE. You are a dispatched worker.
+Your task ID is: ${taskId}
+
+=== TASK ===
+${task}`
+
+    store.getState().setAgentStatus(
+      paneKey,
+      {
+        state: 'working',
+        prompt: dispatchPrompt('task-a', 'Implement the alpha worker instructions'),
+        agentType: 'claude'
+      },
+      undefined,
+      undefined,
+      undefined,
+      { providerSession: { key: 'session_id', id: 'session-a' } }
+    )
+    expect(store.getState().tabsByWorktree[WORKTREE_ID][0].generatedTitle).toBe(
+      'Implement the alpha worker instructions'
+    )
+
+    // Sticky orchestration has expired, so nothing sets the replace flag. The session
+    // change alone opens the write — the preamble must still be parsed for the label.
+    store.getState().setAgentStatus(
+      paneKey,
+      {
+        state: 'working',
+        prompt: dispatchPrompt('task-b', 'Implement the beta worker instructions'),
+        agentType: 'claude'
+      },
+      undefined,
+      undefined,
+      undefined,
+      { providerSession: { key: 'session_id', id: 'session-b' } }
+    )
+
+    expect(store.getState().tabsByWorktree[WORKTREE_ID][0].generatedTitle).toBe(
+      'Implement the beta worker instructions'
+    )
+  })
+
+  it('re-stamps the owning session when /clear derives the same title text', () => {
+    vi.useFakeTimers()
+    const store = createTestStore()
+    const tabId = seedWorktree(store, true)
+    const paneKey = makePaneKey(tabId, LEAF_ID)
+    const firstPrompt = { state: 'working' as const, prompt: 'Upload the Kimi K3 model to GitHub' }
+
+    store
+      .getState()
+      .setAgentStatus(
+        paneKey,
+        { ...firstPrompt, agentType: 'claude' },
+        undefined,
+        undefined,
+        undefined,
+        {
+          providerSession: { key: 'session_id', id: 'session-a' }
+        }
+      )
+
+    // `/clear`, then the same request again: the visible title is already right, but the
+    // owner must move to session-b so the next turn is not read as a session change.
+    store
+      .getState()
+      .setAgentStatus(
+        paneKey,
+        { ...firstPrompt, agentType: 'claude' },
+        undefined,
+        undefined,
+        undefined,
+        {
+          providerSession: { key: 'session_id', id: 'session-b' }
+        }
+      )
+
+    expect(store.getState().tabsByWorktree[WORKTREE_ID][0].generatedTitleSessionId).toBe(
+      'session-b'
+    )
+
+    store
+      .getState()
+      .setAgentStatus(
+        paneKey,
+        { state: 'working', prompt: 'Now add the download path too', agentType: 'claude' },
+        undefined,
+        undefined,
+        undefined,
+        { providerSession: { key: 'session_id', id: 'session-b' } }
+      )
+
+    expect(store.getState().tabsByWorktree[WORKTREE_ID][0].generatedTitle).toBe(
+      'Upload the Kimi K3 model to GitHub'
+    )
+  })
+
+  it('keeps a user-set custom title when /clear starts a new provider session', () => {
+    vi.useFakeTimers()
+    const store = createTestStore()
+    const tabId = seedWorktree(store, true)
+    const paneKey = makePaneKey(tabId, LEAF_ID)
+
+    store
+      .getState()
+      .setAgentStatus(
+        paneKey,
+        { state: 'working', prompt: 'Upload the Kimi K3 model to GitHub', agentType: 'claude' },
+        undefined,
+        undefined,
+        undefined,
+        { providerSession: { key: 'session_id', id: 'session-a' } }
+      )
+    store.getState().setTabCustomTitle(tabId, 'My pinned name')
+
+    store.getState().setAgentStatus(
+      paneKey,
+      {
+        state: 'working',
+        prompt: 'Refactor the auth middleware to use JWT',
+        agentType: 'claude'
+      },
+      undefined,
+      undefined,
+      undefined,
+      { providerSession: { key: 'session_id', id: 'session-b' } }
+    )
+
+    const tab = store.getState().tabsByWorktree[WORKTREE_ID][0]
+    expect(tab.customTitle).toBe('My pinned name')
+    expect(tab.generatedTitle).toBe('Upload the Kimi K3 model to GitHub')
+    expect(resolveTerminalTabTitle(tab, true)).toBe('My pinned name')
+  })
 })
