@@ -200,6 +200,8 @@ export async function loadIpcEventsHarness(
           getZoomLevel: () => 0,
           consumePendingOpenSettings: () => Promise.resolve(false),
           consumePendingSkillShare: () => Promise.resolve(null),
+          consumePendingWorkspacePathLaunches: () => Promise.resolve([]),
+          onOpenWorkspacePath: () => () => {},
           set: vi.fn(),
           replyTabCreate: vi.fn(),
           replyTabClose: vi.fn(),

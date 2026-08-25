@@ -211,6 +211,11 @@ import { startMainThreadChurnProbe } from './diagnostics/main-thread-churn-probe
 import { parseSkillShareId } from '../shared/skill-share-link'
 import { SkillShareDeepLinkState } from './startup/skill-share-deep-link-state'
 import {
+  extractWorkspacePathFromArgv,
+  resolveExistingDirectoryPath,
+  WorkspacePathLaunchQueue
+} from './startup/workspace-path-launch'
+import {
   isStartupDiagnosticsEnabled,
   logStartupDiagnostic,
   logStartupMilestone
@@ -434,6 +439,7 @@ const recoveryReloadInFlight = createWebContentsTimedFlag()
 // Why: a tray "Settings…" click can precede the renderer's ui:openSettings listener; it pulls this one-shot on mount.
 const pendingOpenSettings = createWebContentsTimedFlag()
 const skillShareDeepLinks = new SkillShareDeepLinkState()
+const workspacePathLaunchQueue = new WorkspacePathLaunchQueue()
 let firstWindowStartupServicesReady: Promise<void> = Promise.resolve()
 let managedWslCliReconciliationReady: Promise<void> = Promise.resolve()
 let managedWslCliStartupBarrierReady: Promise<void> = Promise.resolve()
@@ -741,10 +747,27 @@ function focusExistingWindow(): void {
   })
 }
 
+function deliverWorkspacePathLaunch(folderPath: string): void {
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.webContents.send('ui:openWorkspacePath', folderPath)
+    return
+  }
+  // Why: the renderer pulls queued intents on mount, so a launch that races window creation is not lost.
+  workspacePathLaunchQueue.queue(folderPath)
+}
+
+function openWorkspacePathFromArgv(argv: readonly string[]): void {
+  const folderPath = extractWorkspacePathFromArgv(argv, { isPackaged: app.isPackaged })
+  if (folderPath) {
+    deliverWorkspacePathLaunch(folderPath)
+  }
+}
+
 function requestDesktopActivation(argv: readonly string[] = []): void {
   skillShareDeepLinks.capture(argv, (shareId) => {
     mainWindow?.webContents.send('ui:openSkillShare', shareId)
   })
+  openWorkspacePathFromArgv(argv)
   // Why: a duplicate `orca serve` must not drag a headless server into opening a desktop window (#11935).
   if (!shouldActivateDesktopForSecondInstance(argv)) {
     return
@@ -760,7 +783,16 @@ app.on('open-url', (event, url) => {
   requestDesktopActivation([url])
 })
 
+// Why: Finder/Dock folder opens (`open -a Orca <dir>`) arrive as open-file events instead of argv.
+app.on('open-file', (_event, filePath) => {
+  const folderPath = resolveExistingDirectoryPath(filePath)
+  if (folderPath) {
+    deliverWorkspacePathLaunch(folderPath)
+  }
+})
+
 skillShareDeepLinks.capture(process.argv)
+openWorkspacePathFromArgv(process.argv)
 
 const handleMacAppActivation = createMacAppActivationHandler({
   getWindow: () => mainWindow,
@@ -991,6 +1023,10 @@ ipcMain.handle('ui:consumePendingOpenSettings', (event) =>
 
 ipcMain.handle('ui:consumePendingSkillShare', () => {
   return skillShareDeepLinks.consume()
+})
+
+ipcMain.handle('ui:consumePendingWorkspacePathLaunches', () => {
+  return workspacePathLaunchQueue.drain()
 })
 
 ipcMain.handle(

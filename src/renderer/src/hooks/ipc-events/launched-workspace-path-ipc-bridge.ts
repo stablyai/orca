@@ -1,0 +1,47 @@
+import { useAppStore } from '../../store'
+import { isGitRepoKind } from '../../../../shared/repo-kind'
+
+async function revealAddedRepo(repoId: string): Promise<void> {
+  await useAppStore.getState().fetchWorktrees(repoId)
+  const worktrees = useAppStore.getState().worktreesByRepo[repoId] ?? []
+  const mainWorktree = worktrees.find((worktree) => worktree.isMainWorktree) ?? worktrees[0]
+  if (!mainWorktree) {
+    return
+  }
+  // Why: lazy import mirrors repo-add-actions to avoid a circular module load through the store root.
+  const { activateAndRevealWorktree } = await import('@/lib/worktree-activation')
+  activateAndRevealWorktree(mainWorktree.id, { sidebarRevealBehavior: 'auto' })
+}
+
+export async function openLaunchedWorkspacePaths(folderPaths: readonly string[]): Promise<void> {
+  for (const folderPath of folderPaths) {
+    try {
+      const repo = await useAppStore.getState().addRepoPath(folderPath, 'git')
+      if (repo && isGitRepoKind(repo)) {
+        await revealAddedRepo(repo.id)
+      }
+    } catch (error) {
+      console.error('Failed to open launched folder as a project:', error)
+    }
+  }
+}
+
+export function registerLaunchedWorkspacePathIpcBridge(unsubs: (() => void)[]): void {
+  unsubs.push(
+    window.api.ui.onOpenWorkspacePath?.((folderPath) => {
+      void openLaunchedWorkspacePaths([folderPath])
+    }) ?? (() => {})
+  )
+
+  // Why: a launch intent can queue in main before this bridge attaches; pull it once on mount.
+  const pendingLaunches = window.api.ui.consumePendingWorkspacePathLaunches?.()
+  if (pendingLaunches && typeof pendingLaunches.then === 'function') {
+    void pendingLaunches
+      .then((folderPaths) => {
+        if (folderPaths.length > 0) {
+          void openLaunchedWorkspacePaths(folderPaths)
+        }
+      })
+      .catch(() => {})
+  }
+}

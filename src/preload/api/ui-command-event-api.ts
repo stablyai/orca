@@ -42,6 +42,8 @@ export type UiCommandEventApi = {
   consumePendingOpenSettings: () => Promise<boolean>
   onOpenSkillShare: (callback: (shareId: string) => void) => () => void
   consumePendingSkillShare: () => Promise<string | null>
+  onOpenWorkspacePath: (callback: (folderPath: string) => void) => () => void
+  consumePendingWorkspacePathLaunches: () => Promise<string[]>
   onOpenSetupGuide: (callback: () => void) => () => void
   onOpenFeatureTour: (callback: () => void) => () => void
   onOpenCrashReport: (callback: () => void) => () => void

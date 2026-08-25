@@ -3715,6 +3715,14 @@ const api = {
     },
     consumePendingSkillShare: (): Promise<string | null> =>
       ipcRenderer.invoke('ui:consumePendingSkillShare'),
+    onOpenWorkspacePath: (callback: (folderPath: string) => void): (() => void) => {
+      const listener = (_event: Electron.IpcRendererEvent, folderPath: string): void =>
+        callback(folderPath)
+      ipcRenderer.on('ui:openWorkspacePath', listener)
+      return () => ipcRenderer.removeListener('ui:openWorkspacePath', listener)
+    },
+    consumePendingWorkspacePathLaunches: (): Promise<string[]> =>
+      ipcRenderer.invoke('ui:consumePendingWorkspacePathLaunches'),
     onOpenSetupGuide: (callback: () => void): (() => void) => {
       const listener = (_event: Electron.IpcRendererEvent) => callback()
       ipcRenderer.on('ui:openSetupGuide', listener)
