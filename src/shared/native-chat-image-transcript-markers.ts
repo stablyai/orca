@@ -36,8 +36,18 @@ export function stripImagePromptMarker(text: string): string {
   return result
 }
 
+// Why: a framed multi-line send reaches the agent with each ESC replaced by its
+// printable substitute, so the transcript echo carries U+241B where the pending
+// echo still holds the raw byte. Fold them together or the bubble never retires.
+const RAW_ESCAPE = '\u001b'
+const ESCAPE_SUBSTITUTE = '\u241b'
+
 export function normalizeNativeChatUserText(text: string): string {
-  return stripImagePromptMarker(text).trim().replace(/\s+/g, ' ')
+  return stripImagePromptMarker(text)
+    .split(RAW_ESCAPE)
+    .join(ESCAPE_SUBSTITUTE)
+    .trim()
+    .replace(/\s+/g, ' ')
 }
 
 export function normalizedNativeChatUserMessageText(message: NativeChatMessage): string | null {

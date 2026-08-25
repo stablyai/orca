@@ -3,6 +3,7 @@ import { isRpcDeliveryUnknown } from '../transport/rpc-delivery-ambiguity'
 import { isLogicalClientCutoverError } from '../transport/stable-logical-rpc-client'
 import { isTerminalSendRpcAccepted } from '../terminal/terminal-send-rpc-response'
 import { typeAgentTuiCommand } from '../../../src/shared/agent-tui-command-typing'
+import { frameMultilineTerminalPasteText } from '../../../src/shared/terminal-bracketed-paste-bytes'
 
 type MobileTerminalClient = {
   id: string
@@ -31,6 +32,11 @@ type MobileNativeChatSendArgs = {
   /** Shared budget for a whole user action (heal → paste → text, or one selector's
    *  keystroke sequence). Omit to give this write its own full budget. */
   deadline?: number
+  /** Composer prose only. Every newline in an unframed body is an Enter to the
+   *  agent TUI, so a multi-line message is submitted one line at a time. Opt in
+   *  per caller: this transport also carries a bare CR submit key and selector
+   *  keystrokes, and framing those stops them committing. */
+  framePasteWhenMultiline?: boolean
 }
 
 /** 'unknown' = the RPC failed without proof the request never reached the
@@ -61,11 +67,15 @@ export async function sendMobileNativeChatMessageWithOutcome(
     return 'rejected'
   }
   try {
+    // The kill byte stays OUTSIDE the frame; inside it is pasted as content.
+    const body = args.framePasteWhenMultiline
+      ? frameMultilineTerminalPasteText(args.text)
+      : args.text
     const response = await args.client.sendRequest(
       'terminal.send',
       {
         terminal: args.terminal,
-        text: args.clearInputFirst ? `${CLEAR_UNSUBMITTED_INPUT}${args.text}` : args.text,
+        text: args.clearInputFirst ? `${CLEAR_UNSUBMITTED_INPUT}${body}` : body,
         enter: args.enter ?? true,
         ...(args.resolvedLaunchDraft ? { resolvedLaunchDraft: args.resolvedLaunchDraft } : {}),
         ...(args.mobileClient ? { client: args.mobileClient } : {})

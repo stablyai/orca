@@ -98,6 +98,8 @@ docs/**
 !docs/agent-skill-sharing-installation-plan.md
 !docs/ai-vault-process-isolation-plan.md
 !docs/mobile-terminal-shortcut-bar.md
+!docs/plans/
+!docs/plans/2026-08-17-mobile-multiline-send-framing.md
 !docs/reference/
 !docs/reference/git-compatibility.md
 !docs/reference/headless-linux-server.md

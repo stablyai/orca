@@ -89,7 +89,10 @@ export function useMobileNativeChatMessageSend(args: {
       images: string[] | undefined,
       syncComposer: boolean,
       recordControlSend: boolean,
-      sharedDeadline?: number
+      sharedDeadline?: number,
+      // Composer prose only. Question answers and session-option commands share
+      // this path but are not prose, so they must never frame.
+      framePasteWhenMultiline = false
     ): Promise<MobileNativeChatSendOutcome> => {
       // The host writes trailing whitespace verbatim onto the agent's input line,
       // where it can glue the next rapid send onto this one (#14262). Only the
@@ -189,6 +192,7 @@ export function useMobileNativeChatMessageSend(args: {
               // Why: an image send already cleared before its paste; a second
               // clear here would wipe the image before submission.
               clearInputFirst: !images?.length && !seededLaunchDraft,
+              framePasteWhenMultiline,
               ...(resolvedLaunchDraft ? { resolvedLaunchDraft } : {}),
               deadline,
               ...(mobileClient ? { mobileClient } : {})
@@ -244,7 +248,7 @@ export function useMobileNativeChatMessageSend(args: {
 
   const sendWithOutcome = useCallback(
     (text: string, images?: string[], deadline?: number) =>
-      sendMessage(text, images, true, true, deadline),
+      sendMessage(text, images, true, true, deadline, true),
     [sendMessage]
   )
 
