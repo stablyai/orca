@@ -62,13 +62,16 @@ export const ORCHESTRATION_WORKER_COMMAND_SPECS: CommandSpec[] = [
   },
   {
     path: ['orchestration', 'worker-stop'],
-    summary: 'Fence one Dispatch and stop its supervised agent terminal',
+    summary: 'Fence one Dispatch; close its terminal only for the exact live supervised worker',
     usage:
       'orca orchestration worker-stop --dispatch <dispatch_id> [--retry-request <id>] [--json]',
     allowedFlags: [...GLOBAL_FLAGS, 'dispatch', 'retry-request'],
     notes: [
       'A Dispatch created by orchestration dispatch is fenced without closing its unsupervised terminal process.',
-      'Never deletes the worktree, setup terminal, configured tabs, or unrelated processes.'
+      'When the recorded agent process is still the exact live supervised worker, Orca may close that terminal and return processAction closed_agent_terminal — do not also run terminal close.',
+      'processAction is the close contract: closed_agent_terminal means the pane was closed; none means no close was attempted (already settled, identity changed, unsupervised fence, or process already gone); unknown means the close attempt did not complete.',
+      'Only stop_unknown exits 1. Already-settled or successful stopped receipts exit 0.',
+      'Never deletes the worktree, setup terminal, configured tabs, or unrelated processes. Prefer worker-abandon when you must fence without touching the process.'
     ]
   },
   {
