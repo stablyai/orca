@@ -1,4 +1,4 @@
-import type { RepoSlice } from './slices/repos'
+import type { RepoSlice } from './repos/repo-state'
 import type { SparsePresetsSlice } from './slices/sparse-presets'
 import type { WorktreeSlice } from './slices/worktrees'
 import type { TerminalSlice } from './terminals/terminal-state'

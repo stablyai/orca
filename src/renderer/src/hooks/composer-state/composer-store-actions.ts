@@ -12,7 +12,7 @@ import type {
   WorkspaceStatus
 } from '../../../../shared/worktree/types'
 import type { WorktreeMeta } from '../../../../shared/worktree/meta-types'
-import type { RepoUpdate } from '../../store/slices/repos'
+import type { RepoUpdate } from '../../store/repos/repo-state'
 import type { WorktreeMetaUpdateOptions } from '../../store/slices/worktree-helpers'
 import type { FolderWorkspace } from '../../../../shared/folder-workspace-types'
 import type { ExecutionHostId } from '../../../../shared/execution-host'

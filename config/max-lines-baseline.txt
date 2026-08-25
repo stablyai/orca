@@ -102,7 +102,6 @@ inline src/renderer/src/store/slices/browser.ts
 inline src/renderer/src/store/slices/diffComments.ts
 inline src/renderer/src/store/slices/hosted-review.ts
 inline src/renderer/src/store/slices/linear.ts
-inline src/renderer/src/store/slices/repos.ts
 inline src/renderer/src/store/slices/tabs.ts
 inline src/renderer/src/store/slices/ui.ts
 inline src/renderer/src/web/web-runtime-client.ts
