@@ -91,6 +91,7 @@ import { getActiveMultiplexer } from './ssh'
 import { normalizeSparseDirectories } from './sparse-checkout-directories'
 import { track } from '../telemetry/client'
 import { scheduleCurrentWorktreeBaseDirectoryWatcherSync } from './worktree-base-directory-watcher'
+import { getWorktreeBaseRepoIdentity } from './worktree-base-directory-watch-target-cache'
 import { wakeFolderRepoGitUpgradeWatch } from './folder-repo-git-upgrade-wake'
 import { getCohortAtEmit } from '../telemetry/cohort-classifier'
 import type { RepoMethod } from '../../shared/telemetry-events'
@@ -1329,7 +1330,7 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
 
   // Why one shared reference: enrichment dedupes coalesced callers by callback identity, so a fresh
   // closure per list call would stack up (and re-broadcast) for the length of a slow sweep.
-  const broadcastReposChanged = (): void => notifyReposChanged(mainWindow)
+  const broadcastReposChanged = (): void => notifyReposChanged(mainWindow, null)
 
   ipcMain.handle('repos:list', () => {
     enrichMissingRepoGitRemoteIdentities(store, { onChanged: broadcastReposChanged })
@@ -1375,14 +1376,14 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
       if (!result) {
         throw new Error(`Project not found: ${args.projectId}`)
       }
-      notifyReposChanged(mainWindow)
+      notifyReposChanged(mainWindow, null)
       return result
     }
   )
 
   ipcMain.handle(
     'projectHostSetups:update',
-    (_event, rawArgs: ProjectHostSetupUpdateArgs): ProjectHostSetupUpdateResult => {
+    async (_event, rawArgs: ProjectHostSetupUpdateArgs): Promise<ProjectHostSetupUpdateResult> => {
       const args = parseProjectGroupIpcArgs(
         ProjectHostSetupUpdateIpcArgs,
         rawArgs,
@@ -1393,10 +1394,10 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
         throw new Error(`Project host setup not found: ${args.setupId}`)
       }
       if ('worktreeBasePath' in args.updates && result.repo) {
-        void prepareLocalWorktreeRootForRepo(store, result.repo)
+        await prepareLocalWorktreeRootForRepo(store, result.repo)
         invalidateAuthorizedRootsCache()
       }
-      notifyReposChanged(mainWindow)
+      notifyReposChanged(mainWindow, result.repo ? [result.repo] : null)
       return result
     }
   )
@@ -1413,7 +1414,7 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
       if (!result) {
         throw new Error(`Project host setup not found: ${args.setupId}`)
       }
-      notifyReposChanged(mainWindow)
+      notifyReposChanged(mainWindow, result.repo ? [result.repo] : null)
       return result
     }
   )
@@ -1468,11 +1469,11 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
         throw err
       }
       invalidateAuthorizedRootsCache()
-      notifyReposChanged(mainWindow)
       emitRepoAdded('folder_picker', result.alreadyExisted)
       if (result.alreadyExisted) {
         await prepareLocalWorktreeRootForRepo(store, aligned.repo)
       }
+      notifyReposChanged(mainWindow, [aligned.repo])
       return aligned
     }
   )
@@ -1525,7 +1526,7 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
         ...args,
         creatorProvenance: { kind: 'host' }
       })
-      notifyReposChanged(mainWindow)
+      notifyReposChanged(mainWindow, null)
       return workspace
     }
   )
@@ -1564,7 +1565,7 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
       }
       const updated = store.updateFolderWorkspace(args.folderWorkspaceId, args.updates)
       if (updated) {
-        notifyReposChanged(mainWindow)
+        notifyReposChanged(mainWindow, null)
       }
       return updated
     }
@@ -1578,7 +1579,7 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
     )
     const deleted = store.removeFolderWorkspace(args.folderWorkspaceId)
     if (deleted) {
-      notifyReposChanged(mainWindow)
+      notifyReposChanged(mainWindow, null)
     }
     return deleted
   })
@@ -1596,7 +1597,7 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
       parentGroupId: args.parentGroupId ?? null,
       createdFrom: args.createdFrom ?? 'manual'
     })
-    notifyReposChanged(mainWindow)
+    notifyReposChanged(mainWindow, null)
     return group
   })
 
@@ -1608,7 +1609,7 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
     )
     const updated = store.updateProjectGroup(args.groupId, args.updates)
     if (updated) {
-      notifyReposChanged(mainWindow)
+      notifyReposChanged(mainWindow, null)
     }
     return updated
   })
@@ -1621,7 +1622,7 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
     )
     const deleted = store.deleteProjectGroup(args.groupId)
     if (deleted) {
-      notifyReposChanged(mainWindow)
+      notifyReposChanged(mainWindow, null)
     }
     return deleted
   })
@@ -1634,7 +1635,7 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
     )
     const moved = store.moveProjectToGroup(args.projectId, args.groupId, args.order)
     if (moved) {
-      notifyReposChanged(mainWindow)
+      notifyReposChanged(mainWindow, null)
     }
     return moved
   })
@@ -1698,6 +1699,7 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
           error: 'Repository was not found in the nested repo scan result'
         })
       )
+      const watchChangedRepos: Repo[] = []
       const importedProjectIdsByRepoPath = new Map<string, string>()
       const importTargetResolver = createNestedRepoImportTargetResolver()
 
@@ -1779,6 +1781,7 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
               : {})
           }
           store.addRepo(repo)
+          watchChangedRepos.push(repo)
           await prepareLocalWorktreeRootForRepo(store, repo)
           if (args.connectionId) {
             getActiveMultiplexer(args.connectionId)?.notify('session.registerRoot', {
@@ -1807,7 +1810,7 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
         }
       }
       invalidateAuthorizedRootsCache()
-      notifyReposChanged(mainWindow)
+      notifyReposChanged(mainWindow, watchChangedRepos.length > 0 ? watchChangedRepos : null)
       const rootGroup = groupResolver.getRootGroup()
       return {
         ...(rootGroup && importedCount + alreadyKnownCount > 0 ? { group: rootGroup } : {}),
@@ -1833,7 +1836,7 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
         await prepareLocalWorktreeRootForRepo(store, result.repo)
       }
       invalidateAuthorizedRootsCache()
-      notifyReposChanged(mainWindow)
+      notifyReposChanged(mainWindow, [result.repo])
       emitRepoAdded('folder_picker', result.alreadyExisted, result.repo.kind === 'git')
       return { repo: result.repo }
     }
@@ -1854,7 +1857,7 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
       if ('error' in result) {
         return result
       }
-      notifyReposChanged(mainWindow)
+      notifyReposChanged(mainWindow, [result.repo])
       emitRepoAdded('folder_picker', result.alreadyExisted, result.repo.kind === 'git')
       return { repo: result.repo }
     }
@@ -1875,7 +1878,7 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
       if ('error' in result) {
         return result
       }
-      notifyReposChanged(mainWindow)
+      notifyReposChanged(mainWindow, [result.repo])
       return result
     }
   )
@@ -2037,7 +2040,7 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
       store.addRepo(repo)
       await prepareLocalWorktreeRootForRepo(store, repo)
       invalidateAuthorizedRootsCache()
-      notifyReposChanged(mainWindow)
+      notifyReposChanged(mainWindow, [repo])
       // Why: repos:create git-inits when kind is 'git', so repoKind is the true git-vs-folder signal.
       emitRepoAdded('folder_picker', false, repoKind === 'git')
       return { repo }
@@ -2051,7 +2054,7 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
       const ids = Array.isArray(args?.orderedIds) ? args.orderedIds : []
       const applied = store.reorderRepos(ids)
       if (applied) {
-        notifyReposChanged(mainWindow)
+        notifyReposChanged(mainWindow, null)
         return { status: 'applied' }
       }
       return { status: 'rejected' }
@@ -2071,7 +2074,7 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
       const ids = Array.isArray(args?.orderedIds) ? args.orderedIds : []
       const applied = store.reorderReposForHost(ids, hostId)
       if (applied) {
-        notifyReposChanged(mainWindow)
+        notifyReposChanged(mainWindow, null)
         return { status: 'applied' }
       }
       return { status: 'rejected' }
@@ -2079,9 +2082,10 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
   )
 
   ipcMain.handle('repos:remove', async (_event, args: { repoId: string }) => {
+    const removedRepo = store.getRepo(args.repoId)
     store.removeProject(args.repoId)
     invalidateAuthorizedRootsCache()
-    notifyReposChanged(mainWindow)
+    notifyReposChanged(mainWindow, removedRepo ? [removedRepo] : null)
   })
 
   // Why: forget a project on one execution host without disturbing the same repo id on other hosts (SSH-workspace forget flow).
@@ -2092,15 +2096,18 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
       if (!hostId) {
         throw new Error(`Invalid host ID: ${args.hostId}`)
       }
+      const removedRepo = store
+        .getRepos()
+        .find((repo) => repo.id === args.repoId && getRepoExecutionHostId(repo) === hostId)
       store.removeProjectForHost(args.repoId, hostId)
       invalidateAuthorizedRootsCache()
-      notifyReposChanged(mainWindow)
+      notifyReposChanged(mainWindow, removedRepo ? [removedRepo] : null)
     }
   )
 
   ipcMain.handle(
     'repos:update',
-    (
+    async (
       _event,
       args: {
         repoId: string
@@ -2289,10 +2296,10 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
         : store.updateRepo(args.repoId, updates)
       if (updated) {
         if ('worktreeBasePath' in updates) {
-          void prepareLocalWorktreeRootForRepo(store, updated)
+          await prepareLocalWorktreeRootForRepo(store, updated)
           invalidateAuthorizedRootsCache()
         }
-        notifyReposChanged(mainWindow)
+        notifyReposChanged(mainWindow, [updated])
       }
       return updated
     }
@@ -2528,7 +2535,7 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
               if (updated) {
                 await prepareLocalWorktreeRootForRepo(store, updated)
                 invalidateAuthorizedRootsCache()
-                notifyReposChanged(mainWindow)
+                notifyReposChanged(mainWindow, [updated])
                 // Why: folder→git upgrade is a real new git repo provisioning event.
                 emitRepoAdded('clone_url', false, true)
                 return updated
@@ -2554,7 +2561,7 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
           store.addRepo(repo)
           await prepareLocalWorktreeRootForRepo(store, repo)
           invalidateAuthorizedRootsCache()
-          notifyReposChanged(mainWindow)
+          notifyReposChanged(mainWindow, [repo])
           emitRepoAdded('clone_url', false, true)
           return repo
         } finally {
@@ -2574,7 +2581,7 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
       args: { connectionId: string; url: string; destination: string }
     ): Promise<Repo> => {
       const repo = await cloneRemoteRepo(store, mainWindow, args)
-      notifyReposChanged(mainWindow)
+      notifyReposChanged(mainWindow, [repo])
       return repo
     }
   )
@@ -2771,7 +2778,10 @@ function getRepoForExecutionHost(
   )
 }
 
-export function notifyReposChanged(mainWindow: BrowserWindow): void {
+export function notifyReposChanged(
+  mainWindow: BrowserWindow,
+  watcherChangedRepos?: readonly Repo[] | null
+): void {
   wakeFolderRepoGitUpgradeWatch()
   if (!mainWindow.isDestroyed()) {
     mainWindow.webContents.send('repos:changed')
@@ -2784,7 +2794,13 @@ export function notifyReposChanged(mainWindow: BrowserWindow): void {
     // Why: a broadcast failure must never fail the mutation the user actually asked for.
     console.error('[repos] failed to notify remote clients of repo change', err)
   }
-  scheduleCurrentWorktreeBaseDirectoryWatcherSync()
+  if (watcherChangedRepos !== null) {
+    scheduleCurrentWorktreeBaseDirectoryWatcherSync(
+      watcherChangedRepos
+        ? { dirtyRepoIdentities: watcherChangedRepos.map(getWorktreeBaseRepoIdentity) }
+        : { fullRebuild: true }
+    )
+  }
 }
 
 function notifySparsePresetsChanged(mainWindow: BrowserWindow, repoId: string): void {

@@ -6,6 +6,7 @@ const { reposMocks, moduleMocks } = await vi.hoisted(async () => {
   const moduleMocks = await import('./repos-remote-test-harness')
   return { reposMocks: moduleMocks.createReposIpcMocks(), moduleMocks }
 })
+const scheduleWorktreeWatcherSyncMock = vi.hoisted(() => vi.fn())
 
 vi.mock('electron', () => moduleMocks.electronModuleMock(reposMocks))
 vi.mock('../git/repo', async (importOriginal) =>
@@ -21,6 +22,9 @@ vi.mock('./registered-worktree-roots-cache', () =>
 vi.mock('../worktree-root-preparation', () =>
   moduleMocks.worktreeRootPreparationModuleMock(reposMocks)
 )
+vi.mock('./worktree-base-directory-watcher', () => ({
+  scheduleCurrentWorktreeBaseDirectoryWatcherSync: scheduleWorktreeWatcherSyncMock
+}))
 vi.mock('../providers/ssh-git-dispatch', () => moduleMocks.sshGitDispatchModuleMock(reposMocks))
 vi.mock('../providers/ssh-filesystem-dispatch', () =>
   moduleMocks.sshFilesystemDispatchModuleMock(reposMocks)
@@ -54,6 +58,7 @@ describe('repos:add + repos:clone', () => {
     captureHandlers(handleMock)
     resetLocalRepoMocks(reposMocks)
     mockWindow.webContents.send.mockReset()
+    scheduleWorktreeWatcherSyncMock.mockClear()
 
     registerRepoHandlers(mockWindow as never, mockStore as never)
   })
@@ -193,16 +198,26 @@ describe('repos:add + repos:clone', () => {
     mockStore.getProjects.mockReturnValue([project])
     mockStore.getProjectHostSetups.mockReturnValue([setup])
     mockStore.updateRepo.mockReturnValue(aligned)
+    const preparation = Promise.withResolvers<void>()
+    prepareLocalWorktreeRootForRepoMock.mockReturnValueOnce(preparation.promise)
 
-    await handlers.get('projectHostSetups:setupExistingFolder')!(null, {
+    const setupResult = handlers.get('projectHostSetups:setupExistingFolder')!(null, {
       projectId: project.id,
       hostId: 'local',
       path: existing.path,
       kind: 'git',
       setupMethod: 'imported-existing-folder'
     })
+    await vi.waitFor(() =>
+      expect(prepareLocalWorktreeRootForRepoMock).toHaveBeenCalledWith(mockStore, aligned)
+    )
+    expect(scheduleWorktreeWatcherSyncMock).not.toHaveBeenCalled()
+    preparation.resolve()
+    await setupResult
 
-    expect(prepareLocalWorktreeRootForRepoMock).toHaveBeenCalledWith(mockStore, aligned)
+    expect(scheduleWorktreeWatcherSyncMock).toHaveBeenCalledWith({
+      dirtyRepoIdentities: [{ repoId: aligned.id, hostId: 'local' }]
+    })
     expect(mockStore.addRepo).not.toHaveBeenCalled()
   })
 
@@ -331,7 +346,7 @@ describe('repos:add + repos:clone', () => {
     expect(invalidateAuthorizedRootsCacheMock).toHaveBeenCalled()
   })
 
-  it('prepares and invalidates roots when repos:update changes worktree base path', () => {
+  it('prepares and invalidates roots when repos:update changes worktree base path', async () => {
     const updated = {
       id: 'repo-update-root',
       path: '/tmp/repo-update-root',
@@ -342,7 +357,7 @@ describe('repos:add + repos:clone', () => {
     }
     mockStore.updateRepo.mockReturnValue(updated)
 
-    const result = handlers.get('repos:update')!(null, {
+    const result = await handlers.get('repos:update')!(null, {
       repoId: updated.id,
       updates: { worktreeBasePath: ' ../worktrees ' }
     })
@@ -355,7 +370,36 @@ describe('repos:add + repos:clone', () => {
     expect(invalidateAuthorizedRootsCacheMock).toHaveBeenCalled()
   })
 
-  it('persists agent worktree visibility through local repos:update', () => {
+  it('waits for deferred root preparation before scheduling the watcher', async () => {
+    const updated = {
+      id: 'repo-deferred-root',
+      path: '/tmp/repo-deferred-root',
+      displayName: 'repo-deferred-root',
+      kind: 'git',
+      badgeColor: '#22c55e',
+      worktreeBasePath: '../worktrees'
+    }
+    const preparation = Promise.withResolvers<void>()
+    mockStore.updateRepo.mockReturnValue(updated)
+    prepareLocalWorktreeRootForRepoMock.mockReturnValueOnce(preparation.promise)
+
+    const result = handlers.get('repos:update')!(null, {
+      repoId: updated.id,
+      updates: { worktreeBasePath: '../worktrees' }
+    })
+    await vi.waitFor(() =>
+      expect(prepareLocalWorktreeRootForRepoMock).toHaveBeenCalledWith(mockStore, updated)
+    )
+    expect(scheduleWorktreeWatcherSyncMock).not.toHaveBeenCalled()
+
+    preparation.resolve()
+    await expect(result).resolves.toBe(updated)
+    expect(scheduleWorktreeWatcherSyncMock).toHaveBeenCalledWith({
+      dirtyRepoIdentities: [{ repoId: updated.id, hostId: 'local' }]
+    })
+  })
+
+  it('persists agent worktree visibility through local repos:update', async () => {
     const updated = {
       id: 'repo-agent-visibility',
       path: '/tmp/repo-agent-visibility',
@@ -366,7 +410,7 @@ describe('repos:add + repos:clone', () => {
     }
     mockStore.updateRepo.mockReturnValue(updated)
 
-    const result = handlers.get('repos:update')!(null, {
+    const result = await handlers.get('repos:update')!(null, {
       repoId: updated.id,
       updates: { agentWorktreeVisibility: 'show' }
     })
@@ -377,7 +421,7 @@ describe('repos:add + repos:clone', () => {
     })
   })
 
-  it('validates source definitions and preferences through local repos:update', () => {
+  it('validates source definitions and preferences through local repos:update', async () => {
     const updated = {
       id: 'repo-source-visibility',
       path: '/tmp/repo-source-visibility',
@@ -387,7 +431,7 @@ describe('repos:add + repos:clone', () => {
     }
     mockStore.updateRepo.mockReturnValue(updated)
 
-    handlers.get('repos:update')!(null, {
+    await handlers.get('repos:update')!(null, {
       repoId: updated.id,
       updates: {
         customWorktreeVisibilitySources: [
@@ -410,7 +454,7 @@ describe('repos:add + repos:clone', () => {
     })
   })
 
-  it('prepares and invalidates roots when project host setup update changes worktree base path', () => {
+  it('prepares and invalidates roots when project host setup update changes worktree base path', async () => {
     const repo = {
       id: 'repo-setup-update-root',
       path: '/tmp/repo-setup-update-root',
@@ -426,12 +470,12 @@ describe('repos:add + repos:clone', () => {
     }
     mockStore.updateProjectHostSetup.mockReturnValue(result)
 
-    expect(
+    await expect(
       handlers.get('projectHostSetups:update')!(null, {
         setupId: 'setup-1',
         updates: { worktreeBasePath: '../worktrees' }
       })
-    ).toBe(result)
+    ).resolves.toBe(result)
 
     expect(prepareLocalWorktreeRootForRepoMock).toHaveBeenCalledWith(mockStore, repo)
     expect(invalidateAuthorizedRootsCacheMock).toHaveBeenCalled()

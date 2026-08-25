@@ -30,6 +30,7 @@ export type WorktreeBaseWatchTarget = {
   kind: WorktreeBaseWatchKind
   path: string
   connectionId?: string
+  providerGeneration?: number
   repos: Map<string, WorktreeBaseRepoWatchConfig>
   /** Exact upstream leaf selected by accepted active-worktree status. */
   gitStatusRefPaths?: ReadonlySet<string>

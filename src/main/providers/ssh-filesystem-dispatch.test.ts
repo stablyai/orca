@@ -2,6 +2,8 @@ import { describe, expect, it, vi } from 'vitest'
 
 import {
   getSshFilesystemProvider,
+  getSshFilesystemProviderGeneration,
+  onSshFilesystemProviderGenerationChanged,
   onSshFilesystemProviderRegistered,
   registerSshFilesystemProvider,
   unregisterSshFilesystemProvider
@@ -65,5 +67,29 @@ describe('onSshFilesystemProviderRegistered', () => {
     unsubscribeHealthy()
     unregisterSshFilesystemProvider('conn-4')
     warnSpy.mockRestore()
+  })
+
+  it('advances the provider generation across reconnect and disconnect boundaries', () => {
+    const before = getSshFilesystemProviderGeneration('conn-generation')
+    registerSshFilesystemProvider('conn-generation', provider)
+    const registered = getSshFilesystemProviderGeneration('conn-generation')
+    registerSshFilesystemProvider('conn-generation', {} as IFilesystemProvider)
+    const reconnected = getSshFilesystemProviderGeneration('conn-generation')
+    unregisterSshFilesystemProvider('conn-generation')
+
+    expect(registered).toBe(before + 1)
+    expect(reconnected).toBe(registered + 1)
+    expect(getSshFilesystemProviderGeneration('conn-generation')).toBe(reconnected + 1)
+  })
+
+  it('notifies generation subscribers for both reconnect and disconnect', () => {
+    const listener = vi.fn()
+    const unsubscribe = onSshFilesystemProviderGenerationChanged(listener)
+    registerSshFilesystemProvider('conn-lifecycle', provider)
+    unregisterSshFilesystemProvider('conn-lifecycle')
+
+    expect(listener).toHaveBeenNthCalledWith(1, 'conn-lifecycle')
+    expect(listener).toHaveBeenNthCalledWith(2, 'conn-lifecycle')
+    unsubscribe()
   })
 })

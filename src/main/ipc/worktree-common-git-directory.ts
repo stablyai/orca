@@ -34,33 +34,49 @@ function runtimeDirname(pathValue: string): string {
   }
   return normalized.slice(0, index)
 }
+export type WorktreeCommonGitDirectoryProbe = {
+  path: string | null
+  transientFailure: boolean
+}
 
-export async function resolveWorktreeCommonGitDirectory(
+function isMissingPathError(error: unknown): boolean {
+  return (
+    error instanceof Error &&
+    'code' in error &&
+    (error.code === 'ENOENT' || error.code === 'ENOTDIR')
+  )
+}
+
+export async function probeWorktreeCommonGitDirectory(
   repo: Repo,
   access: GitDirectoryAccess = {}
-): Promise<string | null> {
+): Promise<WorktreeCommonGitDirectoryProbe> {
   const dotGitPath = resolveRuntimePath(repo.path, '.git')
   const statPath = access.stat ?? stat
   const readText = access.readFile ?? ((path: string) => readFile(path, 'utf8'))
   try {
     const dotGitStat = await statPath(dotGitPath)
     if (isDirectoryStat(dotGitStat)) {
-      return dotGitPath
+      return { path: dotGitPath, transientFailure: false }
     }
     if (!isFileStat(dotGitStat)) {
-      return null
+      return { path: null, transientFailure: false }
     }
     const content = await readText(dotGitPath)
     const gitDir = content.match(/^gitdir:\s*(.+)\s*$/m)?.[1]?.trim()
     if (!gitDir) {
-      return null
+      return { path: null, transientFailure: false }
     }
     const resolvedGitDir = resolveRuntimePath(repo.path, gitDir)
-    return getRuntimePathBasename(runtimeDirname(resolvedGitDir)) === 'worktrees'
-      ? runtimeDirname(runtimeDirname(resolvedGitDir))
-      : resolvedGitDir
+    return {
+      path:
+        getRuntimePathBasename(runtimeDirname(resolvedGitDir)) === 'worktrees'
+          ? runtimeDirname(runtimeDirname(resolvedGitDir))
+          : resolvedGitDir,
+      transientFailure: false
+    }
   } catch (error) {
     console.warn(`[worktree-base-watcher] cannot resolve git common dir for ${repo.id}:`, error)
-    return null
+    return { path: null, transientFailure: !isMissingPathError(error) }
   }
 }

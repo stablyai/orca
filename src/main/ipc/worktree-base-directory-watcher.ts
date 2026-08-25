@@ -1,5 +1,4 @@
 import type { BrowserWindow } from 'electron'
-import type { Store } from '../persistence'
 import { getSshFilesystemProvider } from '../providers/ssh-filesystem-dispatch'
 import {
   createWorktreeHeadIdentityRefreshState,
@@ -17,10 +16,15 @@ import {
   supportsWorktreeHeadIdentityRefresh
 } from './worktree-base-directory-notifications'
 import type { WorktreeBaseWatchTarget } from './worktree-base-directory-event-filter'
+import { clearWorktreeBaseDirectoryWatchTargetCache } from './worktree-base-directory-watch-target-cache'
+import { clearWorktreeBaseDirectoryWatchTargetWarnings } from './worktree-base-directory-watch-targets'
 import {
-  buildWorktreeBaseDirectoryWatchTargets,
-  clearWorktreeBaseDirectoryWatchTargetWarnings
-} from './worktree-base-directory-watch-targets'
+  reconcileWorktreeBaseDirectoryWatchers,
+  type WorktreeBaseDirectoryWatchReplacementResult
+} from './worktree-base-directory-watcher-reconciler'
+import { WorktreeBaseDirectoryWatcherRetries } from './worktree-base-directory-watcher-retries'
+import { createWorktreeBaseDirectoryWatcherSync } from './worktree-base-directory-watcher-sync'
+import type { PendingWorktreeBaseDirectoryWatcherSync } from './worktree-base-directory-watcher-sync-queue'
 import {
   createWorktreePollerWindowVisibility,
   startWorktreeBaseDirectoryPoller
@@ -49,9 +53,7 @@ type ActiveWatch = WorktreeBaseWatchTarget & {
 }
 
 const activeWatches = new Map<string, ActiveWatch>()
-let syncGeneration = 0
-let scheduledSync: ReturnType<typeof setTimeout> | null = null
-let latestSyncContext: { mainWindow: BrowserWindow; store: Store } | null = null
+
 export function setWorktreeGitStatusRefWatch(
   args: GitStatusRefBindingRequest,
   resolveUpstreamRef: (signal: AbortSignal) => Promise<string | undefined>
@@ -197,31 +199,57 @@ async function subscribeTarget(
   return activeWatch
 }
 
+type ReplaceWatchResult = WorktreeBaseDirectoryWatchReplacementResult
+
+async function disposeWatch(watch: ActiveWatch): Promise<void> {
+  watch.disposed = true
+  clearTimeout(watch.notifyTimer ?? undefined)
+  clearPendingWorktreeBaseNotifications(watch)
+  await watch.subscription.unsubscribe().catch((error) => {
+    console.warn(`[worktree-base-watcher] failed to unwatch ${watch.path}:`, error)
+  })
+}
+
 async function replaceWatch(
   target: WorktreeBaseWatchTarget,
   mainWindow: BrowserWindow,
-  generation: number
-): Promise<void> {
+  signal: AbortSignal
+): Promise<ReplaceWatchResult> {
   const previous = activeWatches.get(target.key)
   if (previous) {
+    // Keep the surviving subscription's routing current while a replacement is pending.
     previous.repos = target.repos
     previous.mainWindow = mainWindow
     applyActiveGitStatusRefBinding(previous)
-    return
+    if (previous.providerGeneration === target.providerGeneration) {
+      return 'ready'
+    }
   }
   try {
     const activeWatch = await subscribeTarget(target, mainWindow)
-    if (generation !== syncGeneration) {
-      activeWatch.disposed = true
-      await activeWatch.subscription.unsubscribe().catch((error) => {
-        console.warn(`[worktree-base-watcher] failed to unwatch stale ${target.path}:`, error)
-      })
-      return
+    if (signal.aborted) {
+      await disposeWatch(activeWatch)
+      return 'stale'
     }
     applyActiveGitStatusRefBinding(activeWatch)
     activeWatches.set(target.key, activeWatch)
+    if (previous) {
+      await disposeWatch(previous)
+      if (signal.aborted) {
+        if (activeWatches.get(target.key) === activeWatch) {
+          activeWatches.delete(target.key)
+        }
+        await disposeWatch(activeWatch)
+        return 'stale'
+      }
+    }
+    return 'ready'
   } catch (error) {
-    console.warn(`[worktree-base-watcher] failed to watch ${target.path}:`, error)
+    if (!signal.aborted) {
+      console.warn(`[worktree-base-watcher] failed to watch ${target.path}:`, error)
+      return 'failed'
+    }
+    return 'stale'
   }
 }
 
@@ -231,92 +259,63 @@ async function removeWatch(key: string): Promise<void> {
     return
   }
   activeWatches.delete(key)
-  watch.disposed = true
-  clearTimeout(watch.notifyTimer ?? undefined)
-  clearPendingWorktreeBaseNotifications(watch)
-  await watch.subscription.unsubscribe().catch((error) => {
-    console.warn(`[worktree-base-watcher] failed to unwatch ${watch.path}:`, error)
-  })
+  await disposeWatch(watch)
 }
 
-export async function syncWorktreeBaseDirectoryWatchers(
-  store: Store,
+function refreshRetainedWatch(
+  key: string,
+  repos: WorktreeBaseWatchTarget['repos'],
   mainWindow: BrowserWindow
+): void {
+  const watch = activeWatches.get(key)
+  if (!watch) {
+    return
+  }
+  watch.repos = repos
+  watch.mainWindow = mainWindow
+  applyActiveGitStatusRefBinding(watch)
+}
+
+async function runSyncPass(
+  request: PendingWorktreeBaseDirectoryWatcherSync,
+  signal: AbortSignal
 ): Promise<void> {
-  const generation = ++syncGeneration
-  const targets = await buildWorktreeBaseDirectoryWatchTargets(store)
-  if (generation !== syncGeneration) {
+  watcherRetries.activate()
+  if (request.mainWindow.isDestroyed()) {
     return
   }
-  for (const key of activeWatches.keys()) {
-    if (generation !== syncGeneration) {
-      return
-    }
-    if (!targets.has(key)) {
-      await removeWatch(key)
-      if (generation !== syncGeneration) {
-        return
-      }
-    }
-  }
-  for (const target of targets.values()) {
-    if (generation !== syncGeneration) {
-      return
-    }
-    await replaceWatch(target, mainWindow, generation)
-    if (generation !== syncGeneration) {
-      return
+  try {
+    await reconcileWorktreeBaseDirectoryWatchers(
+      request,
+      signal,
+      activeWatches,
+      watcherRetries,
+      (target, replacementSignal) => replaceWatch(target, request.mainWindow, replacementSignal),
+      removeWatch,
+      (key, repos) => refreshRetainedWatch(key, repos, request.mainWindow)
+    )
+  } catch (error) {
+    if (!signal.aborted) {
+      console.warn('[worktree-base-watcher] failed to synchronize watch targets:', error)
     }
   }
 }
 
-export function setWorktreeBaseDirectoryWatcherSyncContext(
-  store: Store,
-  mainWindow: BrowserWindow
-): void {
-  latestSyncContext = { store, mainWindow }
-  // Why: older integration tests use lean BrowserWindow stubs; real windows still
-  // clear this context on close so stale watcher syncs cannot target dead chrome.
-  if (typeof mainWindow.once === 'function') {
-    mainWindow.once('closed', () => {
-      if (latestSyncContext?.mainWindow === mainWindow) {
-        latestSyncContext = null
-      }
-    })
-  }
-}
+const watcherSync = createWorktreeBaseDirectoryWatcherSync(runSyncPass)
+const watcherRetries = new WorktreeBaseDirectoryWatcherRetries((store, mainWindow, identities) => {
+  void watcherSync.sync(store, mainWindow, { dirtyRepoIdentities: identities })
+})
 
-export function scheduleWorktreeBaseDirectoryWatcherSync(
-  store: Store,
-  mainWindow: BrowserWindow
-): void {
-  if (scheduledSync) {
-    clearTimeout(scheduledSync)
-  }
-  scheduledSync = setTimeout(() => {
-    scheduledSync = null
-    if (mainWindow.isDestroyed()) {
-      return
-    }
-    void syncWorktreeBaseDirectoryWatchers(store, mainWindow)
-  }, 100)
-}
-
-export function scheduleCurrentWorktreeBaseDirectoryWatcherSync(): void {
-  if (!latestSyncContext || latestSyncContext.mainWindow.isDestroyed()) {
-    return
-  }
-  scheduleWorktreeBaseDirectoryWatcherSync(latestSyncContext.store, latestSyncContext.mainWindow)
-}
+export const syncWorktreeBaseDirectoryWatchers = watcherSync.sync
+export const setWorktreeBaseDirectoryWatcherSyncContext = watcherSync.setContext
+export const scheduleWorktreeBaseDirectoryWatcherSync = watcherSync.schedule
+export const scheduleCurrentWorktreeBaseDirectoryWatcherSync = watcherSync.scheduleCurrent
 
 export async function disposeWorktreeBaseDirectoryWatchers(): Promise<void> {
-  syncGeneration++
-  latestSyncContext = null
   clearActiveGitStatusRefBinding()
-  if (scheduledSync) {
-    clearTimeout(scheduledSync)
-    scheduledSync = null
-  }
+  watcherRetries.dispose()
+  await watcherSync.dispose()
   await Promise.all([...activeWatches.keys()].map((key) => removeWatch(key)))
+  clearWorktreeBaseDirectoryWatchTargetCache()
   clearWorktreeBaseDirectoryWatchTargetWarnings()
 }

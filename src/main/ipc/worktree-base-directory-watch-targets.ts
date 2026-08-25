@@ -1,7 +1,6 @@
 import { normalize } from 'node:path'
 import { realpath, stat } from 'node:fs/promises'
 import type { Stats } from 'node:fs'
-import type { Store } from '../persistence'
 import type { FileStat, IFilesystemProvider } from '../providers/types'
 import type { GlobalSettings } from '../../shared/global-settings-types'
 import type { Repo } from '../../shared/repo-types'
@@ -15,14 +14,17 @@ import {
   resolveRuntimePath
 } from '../../shared/cross-platform-path'
 import { isWslUncPath } from '../../shared/wsl-paths'
-import { getSshFilesystemProvider } from '../providers/ssh-filesystem-dispatch'
+import {
+  getSshFilesystemProvider,
+  getSshFilesystemProviderGeneration
+} from '../providers/ssh-filesystem-dispatch'
 import {
   computeWorkspaceRoot,
   getWorktreePathSettings,
   hasRepoWorktreeBasePath
 } from './worktree-logic'
 import { shouldEmitBoundedWarning } from './bounded-warning-dedupe'
-import { resolveWorktreeCommonGitDirectory } from './worktree-common-git-directory'
+import { probeWorktreeCommonGitDirectory } from './worktree-common-git-directory'
 import type {
   WorktreeBaseRepoWatchConfig,
   WorktreeBaseWatchKind,
@@ -31,6 +33,19 @@ import type {
 
 const missingRootWarnings = new Set<string>()
 const skippedWslWarnings = new Set<string>()
+function throwIfAborted(signal: AbortSignal | undefined): void {
+  if (signal?.aborted) {
+    throw signal.reason ?? new Error('Worktree base directory watch target build aborted')
+  }
+}
+
+function isMissingPathError(error: unknown): boolean {
+  return (
+    error instanceof Error &&
+    'code' in error &&
+    (error.code === 'ENOENT' || error.code === 'ENOTDIR')
+  )
+}
 
 function normalizeWatchKey(pathValue: string): string {
   return normalizeRuntimePathForComparison(normalize(pathValue))
@@ -70,9 +85,11 @@ async function addTarget(
   kind: WorktreeBaseWatchKind,
   pathValue: string,
   config: WorktreeBaseRepoWatchConfig,
-  connectionId?: string
+  connectionId?: string,
+  signal?: AbortSignal
 ): Promise<void> {
   const watchedPath = await canonicalizeExistingPath(pathValue, connectionId)
+  throwIfAborted(signal)
   const key = `${kind}:${connectionId ?? 'local'}:${normalizeWatchKey(watchedPath)}`
   const existing = targets.get(key)
   if (existing) {
@@ -83,7 +100,12 @@ async function addTarget(
     key,
     kind,
     path: watchedPath,
-    ...(connectionId ? { connectionId } : {}),
+    ...(connectionId
+      ? {
+          connectionId,
+          providerGeneration: getSshFilesystemProviderGeneration(connectionId)
+        }
+      : {}),
     repos: new Map([[config.repoId, config]])
   })
 }
@@ -125,8 +147,9 @@ async function maybeAddBaseTarget(
   targets: Map<string, WorktreeBaseWatchTarget>,
   repo: Repo,
   settings: GlobalSettings,
-  connectionId?: string
-): Promise<void> {
+  connectionId?: string,
+  signal?: AbortSignal
+): Promise<boolean> {
   const pathSettings = getWorktreePathSettings(repo, settings)
   const { workspaceRoot, nestWorkspaces } = getBaseWatchLayout(repo, pathSettings, connectionId)
   // Why: WSL UNC roots are unreliable for native watching; avoid project-level polling.
@@ -137,7 +160,7 @@ async function maybeAddBaseTarget(
         `[worktree-base-watcher] skipping WSL worktree root watcher for ${workspaceRoot}`
       )
     }
-    return
+    return false
   }
 
   const config = {
@@ -147,23 +170,27 @@ async function maybeAddBaseTarget(
   }
   const remoteProvider = getRemoteProvider(connectionId)
   if (connectionId && !remoteProvider) {
-    return
+    return true
   }
+  let transientFailure = false
   try {
     const rootStat = remoteProvider
       ? await remoteProvider.stat(workspaceRoot)
       : await stat(workspaceRoot)
     if (isDirectoryStat(rootStat)) {
-      await addTarget(targets, 'base', workspaceRoot, config, connectionId)
+      await addTarget(targets, 'base', workspaceRoot, config, connectionId, signal)
     }
-  } catch {
+  } catch (error) {
+    throwIfAborted(signal)
+    transientFailure = !isMissingPathError(error)
     const key = normalizeWatchKey(workspaceRoot)
     if (shouldEmitBoundedWarning(missingRootWarnings, key)) {
       console.warn(`[worktree-base-watcher] worktree root unavailable: ${workspaceRoot}`)
     }
   }
+  throwIfAborted(signal)
 
-  const commonDir = await resolveWorktreeCommonGitDirectory(
+  const commonDirProbe = await probeWorktreeCommonGitDirectory(
     repo,
     remoteProvider
       ? {
@@ -172,28 +199,36 @@ async function maybeAddBaseTarget(
         }
       : undefined
   )
-  if (commonDir) {
-    await addTarget(targets, 'git-common', commonDir, config, connectionId)
+  throwIfAborted(signal)
+  if (commonDirProbe.path) {
+    await addTarget(targets, 'git-common', commonDirProbe.path, config, connectionId, signal)
   }
+  return transientFailure || commonDirProbe.transientFailure
 }
 
-export async function buildWorktreeBaseDirectoryWatchTargets(
-  store: Store
-): Promise<Map<string, WorktreeBaseWatchTarget>> {
-  const settings = store.getSettings()
+export type WorktreeBaseDirectoryRepoTargetResolution = {
+  targets: Map<string, WorktreeBaseWatchTarget>
+  transientFailure: boolean
+}
+
+export async function resolveWorktreeBaseDirectoryWatchTargetsForRepo(
+  repo: Repo,
+  settings: GlobalSettings,
+  signal: AbortSignal | undefined
+): Promise<WorktreeBaseDirectoryRepoTargetResolution> {
   const targets = new Map<string, WorktreeBaseWatchTarget>()
-  for (const repo of store.getRepos()) {
-    if (isFolderRepo(repo)) {
-      continue
-    }
-    const executionHostId = getRepoExecutionHostId(repo)
-    if (executionHostId === LOCAL_EXECUTION_HOST_ID) {
-      await maybeAddBaseTarget(targets, repo, settings)
-    } else if (repo.connectionId) {
-      await maybeAddBaseTarget(targets, repo, settings, repo.connectionId)
-    }
+  if (isFolderRepo(repo)) {
+    return { targets, transientFailure: false }
   }
-  return targets
+  const executionHostId = getRepoExecutionHostId(repo)
+  const transientFailure =
+    executionHostId === LOCAL_EXECUTION_HOST_ID
+      ? await maybeAddBaseTarget(targets, repo, settings, undefined, signal)
+      : repo.connectionId
+        ? await maybeAddBaseTarget(targets, repo, settings, repo.connectionId, signal)
+        : false
+  throwIfAborted(signal)
+  return { targets, transientFailure }
 }
 
 export function clearWorktreeBaseDirectoryWatchTargetWarnings(): void {

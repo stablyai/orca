@@ -11,7 +11,8 @@ const {
   previewWarpThemeImportMock,
   prepareLocalWorktreeRootsForReposMock,
   resolveEnvironmentMock,
-  rebuildAppMenuMock
+  rebuildAppMenuMock,
+  scheduleWorktreeWatcherSyncMock
 } = vi.hoisted(() => ({
   applyAppIconMock: vi.fn(),
   applyAgentStatusHooksEnabledMock: vi.fn(),
@@ -23,7 +24,8 @@ const {
   previewWarpThemeImportMock: vi.fn(),
   prepareLocalWorktreeRootsForReposMock: vi.fn(),
   resolveEnvironmentMock: vi.fn(),
-  rebuildAppMenuMock: vi.fn()
+  rebuildAppMenuMock: vi.fn(),
+  scheduleWorktreeWatcherSyncMock: vi.fn()
 }))
 
 vi.mock('electron', () => ({
@@ -55,6 +57,10 @@ vi.mock('../agent-hooks/managed-agent-hook-controls', () => ({
 
 vi.mock('../worktree-root-preparation', () => ({
   prepareLocalWorktreeRootsForRepos: prepareLocalWorktreeRootsForReposMock
+}))
+
+vi.mock('./worktree-base-directory-watcher', () => ({
+  scheduleCurrentWorktreeBaseDirectoryWatcherSync: scheduleWorktreeWatcherSyncMock
 }))
 
 vi.mock('../menu/register-app-menu', () => ({
@@ -100,6 +106,7 @@ describe('registerSettingsHandlers', () => {
       return { id: 'windows-2' }
     })
     rebuildAppMenuMock.mockClear()
+    scheduleWorktreeWatcherSyncMock.mockClear()
     browserWindowGetAllWindowsMock.mockReset()
     store.getSettings.mockReset()
     store.updateSettings.mockReset()
@@ -395,6 +402,7 @@ describe('registerSettingsHandlers', () => {
     await handler(settingsInvokeEvent, { workspaceDir: '/new/workspaces' })
 
     expect(prepareLocalWorktreeRootsForReposMock).toHaveBeenCalledWith(store)
+    expect(scheduleWorktreeWatcherSyncMock).toHaveBeenCalledWith({ fullRebuild: true })
   })
 
   it('prepares local worktree roots when workspace nesting changes', async () => {
@@ -410,6 +418,29 @@ describe('registerSettingsHandlers', () => {
     await handler(settingsInvokeEvent, { nestWorkspaces: true })
 
     expect(prepareLocalWorktreeRootsForReposMock).toHaveBeenCalledWith(store)
+    expect(scheduleWorktreeWatcherSyncMock).toHaveBeenCalledWith({ fullRebuild: true })
+  })
+
+  it('waits for deferred root creation before scheduling a full watcher rebuild', async () => {
+    const preparation = Promise.withResolvers<void>()
+    store.getSettings.mockReturnValue({ workspaceDir: '/old/workspaces', nestWorkspaces: false })
+    store.updateSettings.mockReturnValue({ workspaceDir: '/new/workspaces', nestWorkspaces: false })
+    prepareLocalWorktreeRootsForReposMock.mockReturnValueOnce(preparation.promise)
+    registerSettingsHandlers(store as never)
+    const handler = handleMock.mock.calls.find((call) => call[0] === 'settings:set')?.[1] as (
+      _event: unknown,
+      args: unknown
+    ) => Promise<unknown>
+
+    const result = handler(settingsInvokeEvent, { workspaceDir: '/new/workspaces' })
+    await vi.waitFor(() =>
+      expect(prepareLocalWorktreeRootsForReposMock).toHaveBeenCalledWith(store)
+    )
+    expect(scheduleWorktreeWatcherSyncMock).not.toHaveBeenCalled()
+
+    preparation.resolve()
+    await result
+    expect(scheduleWorktreeWatcherSyncMock).toHaveBeenCalledWith({ fullRebuild: true })
   })
 
   it('does not prepare local worktree roots when workspace layout values do not change', async () => {
@@ -425,6 +456,7 @@ describe('registerSettingsHandlers', () => {
     await handler(settingsInvokeEvent, { workspaceDir: '/workspaces', nestWorkspaces: false })
 
     expect(prepareLocalWorktreeRootsForReposMock).not.toHaveBeenCalled()
+    expect(scheduleWorktreeWatcherSyncMock).not.toHaveBeenCalled()
   })
 
   it('does not accept floating workspace trust grants from renderer settings IPC', async () => {

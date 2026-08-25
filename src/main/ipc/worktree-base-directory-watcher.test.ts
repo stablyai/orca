@@ -28,7 +28,9 @@ vi.mock('./worktree-remote', () => ({
 }))
 
 vi.mock('../providers/ssh-filesystem-dispatch', () => ({
-  getSshFilesystemProvider: vi.fn()
+  getSshFilesystemProvider: vi.fn(),
+  getSshFilesystemProviderGeneration: vi.fn(() => 0),
+  onSshFilesystemProviderGenerationChanged: vi.fn(() => () => {})
 }))
 
 vi.mock('./worktree-head-identity-reader', () => ({

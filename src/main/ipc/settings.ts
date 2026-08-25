@@ -232,8 +232,8 @@ export function registerSettingsHandlers(
       ('workspaceDir' in sanitizedArgs && before.workspaceDir !== result.workspaceDir) ||
       ('nestWorkspaces' in sanitizedArgs && before.nestWorkspaces !== result.nestWorkspaces)
     ) {
-      void prepareLocalWorktreeRootsForRepos(store)
-      scheduleCurrentWorktreeBaseDirectoryWatcherSync()
+      await prepareLocalWorktreeRootsForRepos(store)
+      scheduleCurrentWorktreeBaseDirectoryWatcherSync({ fullRebuild: true })
     }
     if (APPEARANCE_MENU_KEYS.some((key) => key in sanitizedArgs)) {
       rebuildAppMenu()
