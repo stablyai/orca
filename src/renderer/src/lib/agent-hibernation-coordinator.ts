@@ -93,6 +93,43 @@ function getRuntimeLivenessTargetWorktrees(state: AppState): Map<string, string>
   return targets
 }
 
+function getLocallyEligibleRuntimeLivenessTargets(
+  state: AppState,
+  now: number,
+  runtimeTargets: ReadonlyMap<string, string>
+): Map<string, string> {
+  if (runtimeTargets.size === 0) {
+    return new Map()
+  }
+  const assumedLivePtyIdsByWorktreeId: Record<string, string[]> = {}
+  for (const worktreeId of runtimeTargets.keys()) {
+    const ptyIds = new Set<string>()
+    for (const tab of state.tabsByWorktree[worktreeId] ?? []) {
+      const layout = state.terminalLayoutsByTabId[tab.id]
+      for (const ptyId of Object.values(layout?.ptyIdsByLeafId ?? {})) {
+        if (ptyId) {
+          ptyIds.add(ptyId)
+        }
+      }
+    }
+    assumedLivePtyIdsByWorktreeId[worktreeId] = [...ptyIds]
+  }
+
+  // Why: fresh provider liveness is still mandatory for shutdown, but local
+  // state can cheaply prove most worktrees ineligible before any RPC fanout.
+  const locallyEligibleWorktreeIds = new Set(
+    planAgentHibernationCandidates(
+      snapshotFromState(state, now, {
+        runtimeLivePtyIdsByWorktreeId: assumedLivePtyIdsByWorktreeId,
+        runtimeLivenessRequiredWorktreeIds: [...runtimeTargets.keys()]
+      })
+    ).map((candidate) => candidate.worktreeId)
+  )
+  return new Map(
+    [...runtimeTargets].filter(([worktreeId]) => locallyEligibleWorktreeIds.has(worktreeId))
+  )
+}
+
 function getTypedRuntimePtyId(terminal: RuntimeTerminalSummary): string | null {
   if (terminal.ptyId) {
     return terminal.ptyId
@@ -103,10 +140,16 @@ function getTypedRuntimePtyId(terminal: RuntimeTerminalSummary): string | null {
   return null
 }
 
-async function collectRuntimePtyLiveness(state: AppState): Promise<RuntimePtyLivenessSample> {
-  const targets = getRuntimeLivenessTargetWorktrees(state)
+async function collectRuntimePtyLiveness(
+  state: AppState,
+  now: number
+): Promise<RuntimePtyLivenessSample> {
+  const runtimeTargets = getRuntimeLivenessTargetWorktrees(state)
+  const targets = getLocallyEligibleRuntimeLivenessTargets(state, now, runtimeTargets)
   const runtimeLivePtyIdsByWorktreeId: Record<string, string[]> = {}
-  const runtimeLivenessRequiredWorktreeIds = [...targets.keys()]
+  // Unqueried runtime worktrees remain marked as requiring a sample, so a
+  // state change during the await fails closed until the next coordinator tick.
+  const runtimeLivenessRequiredWorktreeIds = [...runtimeTargets.keys()]
   await Promise.all(
     [...targets].map(async ([worktreeId, runtimeEnvironmentId]) => {
       try {
@@ -145,7 +188,7 @@ async function collectRuntimePtyLiveness(state: AppState): Promise<RuntimePtyLiv
 }
 
 async function currentCandidates(now: number) {
-  const runtimeLiveness = await collectRuntimePtyLiveness(useAppStore.getState())
+  const runtimeLiveness = await collectRuntimePtyLiveness(useAppStore.getState(), now)
   const freshState = useAppStore.getState()
   return planAgentHibernationCandidates(snapshotFromState(freshState, now, runtimeLiveness))
     .filter((candidate) => {

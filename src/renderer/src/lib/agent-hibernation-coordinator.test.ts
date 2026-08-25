@@ -466,6 +466,61 @@ describe('agent sleep coordinator', () => {
     expect(shutdown).not.toHaveBeenCalled()
   })
 
+  it('lists only locally eligible runtime worktrees before fresh liveness', async () => {
+    const tabsByWorktree: Record<string, TerminalTab[]> = { 'wt-bg': [tab()] }
+    for (let index = 0; index < 50; index += 1) {
+      const worktreeId = `wt-shell-${index}`
+      tabsByWorktree[worktreeId] = [
+        {
+          ...tab(),
+          id: `tab-shell-${index}`,
+          worktreeId,
+          title: 'Shell'
+        }
+      ]
+    }
+    installRuntimeListResponses(runtimeListResult(['pty-1']))
+    installEligibleState(vi.fn().mockResolvedValue(undefined), {
+      settings: {
+        experimentalAgentHibernation: true,
+        agentHibernationIdleMs: DEFAULT_AGENT_HIBERNATION_IDLE_MS,
+        activeRuntimeEnvironmentId: 'runtime-1'
+      } as never,
+      tabsByWorktree,
+      ptyIdsByTabId: { 'tab-1': [] }
+    })
+
+    await runAgentHibernationTick()
+
+    const listCalls = mockRuntimeEnvironmentCall.mock.calls.filter(
+      ([args]) => args.method === 'terminal.list'
+    )
+    expect(listCalls).toHaveLength(1)
+    expect(listCalls[0]?.[0]).toEqual(
+      expect.objectContaining({ params: expect.objectContaining({ worktree: 'id:wt-bg' }) })
+    )
+  })
+
+  it('skips runtime liveness entirely when local state has no candidate', async () => {
+    const workingEntry = { ...entry(), state: 'working' as const }
+    const shutdown = installEligibleState(vi.fn().mockResolvedValue(undefined), {
+      settings: {
+        experimentalAgentHibernation: true,
+        agentHibernationIdleMs: DEFAULT_AGENT_HIBERNATION_IDLE_MS,
+        activeRuntimeEnvironmentId: 'runtime-1'
+      } as never,
+      ptyIdsByTabId: { 'tab-1': [] },
+      agentStatusByPaneKey: { [workingEntry.paneKey]: workingEntry }
+    })
+
+    await runAgentHibernationTick()
+
+    expect(
+      mockRuntimeEnvironmentCall.mock.calls.filter(([args]) => args.method === 'terminal.list')
+    ).toHaveLength(0)
+    expect(shutdown).not.toHaveBeenCalled()
+  })
+
   it('hibernates a runtime-backed candidate with fresh liveness and exact PTYs', async () => {
     vi.useFakeTimers()
     installRuntimeListResponses(
