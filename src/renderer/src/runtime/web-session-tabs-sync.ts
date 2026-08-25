@@ -64,7 +64,7 @@ import {
   clearWebSessionFocusIntent,
   clearWebSessionFocusIntentsForOwner,
   peekWebSessionFocusIntent,
-  resolveWebSessionSiblingVisibleTabId,
+  resolveWebSessionGroupVisibleTabId,
   resolveWebSessionVisibleTabId
 } from './web-session-focus-intent'
 import {
@@ -105,6 +105,7 @@ import {
   clearWebSessionBrowserPlacementsForEnvironment,
   clearWebSessionBrowserPlacementsForWorktree,
   isWebSessionBrowserPlacementGroupReserved,
+  peekWebSessionBrowserPlacementSourceGroup,
   peekWebSessionBrowserPlacementGroup,
   resetWebSessionBrowserPlacementsForTests
 } from './web-session-browser-placement'
@@ -2916,15 +2917,26 @@ function applyWebSessionTabsSnapshotWithContext(
     nextUnifiedTabs ?? []
   )
   const activeGroupId = state.activeGroupIdByWorktree[worktreeId]
-  // Why: Open Preview to the Side can activate an empty reserved group before the host
-  // browser lands. A snapshot that still has the host terminal active must not treat
-  // that emptiness as a terminal focus change.
-  const reservedEmptyPreviewFallbackTabId =
-    currentVisibleUnifiedTabId == null &&
-    activeGroupId != null &&
-    isWebSessionBrowserPlacementGroupReserved({ worktreeId, groupId: activeGroupId })
-      ? resolveWebSessionSiblingVisibleTabId(state, worktreeId, nextUnifiedTabs ?? [])
-      : null
+  // Why: pointer/AT focus can enter the pending empty preview, so restore its recorded source instead of inferring from the host terminal or another editor group.
+  const reservedPreviewSourceGroupId =
+    currentVisibleUnifiedTabId == null && activeGroupId != null
+      ? peekWebSessionBrowserPlacementSourceGroup({
+          owner: {
+            environmentId,
+            pairingRevision: getRuntimeEnvironmentRevision(environmentId)
+          },
+          worktreeId,
+          groupId: activeGroupId
+        })
+      : undefined
+  const reservedEmptyPreviewFallbackTabId = reservedPreviewSourceGroupId
+    ? resolveWebSessionGroupVisibleTabId(
+        state,
+        worktreeId,
+        reservedPreviewSourceGroupId,
+        nextUnifiedTabs ?? []
+      )
+    : null
   // Why: a client-initiated activation also drives the visible unified tab, overriding the sticky current-visible tab.
   const intentUnifiedTabId = honorSnapshotActiveFocus
     ? navigationIntentTab?.type === 'browser'

@@ -1,12 +1,18 @@
+import { webSessionIntentOwnerKey, type WebSessionIntentOwner } from './web-session-intent-owner'
+
 type PendingBrowserPlacement = {
   groupId: string
   ownsGroupCleanup: boolean
+  requestSequence: number
+  sourceGroupId?: string
+  focusOwnerKey?: string
 }
 
 const placementByPendingPage = new Map<string, PendingBrowserPlacement>()
 const materializedGroupKeys = new Set<string>()
 const pendingCleanupClaimsByGroup = new Map<string, number>()
 const MAX_PENDING_PLACEMENTS = 128
+let nextPlacementSequence = 0
 
 function pageKey(environmentId: string, worktreeId: string, remotePageId: string): string {
   return `${environmentId}\0${worktreeId}\0${remotePageId}`
@@ -43,6 +49,8 @@ export function recordWebSessionBrowserPlacement(args: {
   remotePageId: string
   groupId: string
   callerCreatedGroup?: boolean
+  sourceGroupId?: string
+  focusOwner?: WebSessionIntentOwner
 }): void {
   const key = pageKey(args.environmentId, args.worktreeId, args.remotePageId)
   const existing = placementByPendingPage.get(key)
@@ -51,7 +59,18 @@ export function recordWebSessionBrowserPlacement(args: {
   }
   placementByPendingPage.set(key, {
     groupId: args.groupId,
-    ownsGroupCleanup: args.callerCreatedGroup === true || existing?.ownsGroupCleanup === true
+    ownsGroupCleanup: args.callerCreatedGroup === true || existing?.ownsGroupCleanup === true,
+    requestSequence: existing?.requestSequence ?? (nextPlacementSequence += 1),
+    ...(args.sourceGroupId
+      ? { sourceGroupId: args.sourceGroupId }
+      : existing?.sourceGroupId
+        ? { sourceGroupId: existing.sourceGroupId }
+        : {}),
+    ...(args.focusOwner
+      ? { focusOwnerKey: webSessionIntentOwnerKey(args.focusOwner) }
+      : existing?.focusOwnerKey
+        ? { focusOwnerKey: existing.focusOwnerKey }
+        : {})
   })
 }
 
@@ -65,12 +84,13 @@ export function moveWebSessionBrowserPlacement(args: {
   const placement = placementByPendingPage.get(fromKey)
   placementByPendingPage.delete(fromKey)
   if (placement) {
-    recordWebSessionBrowserPlacement({
-      environmentId: args.environmentId,
-      worktreeId: args.worktreeId,
-      remotePageId: args.toRemotePageId,
-      groupId: placement.groupId,
-      callerCreatedGroup: placement.ownsGroupCleanup
+    const toKey = pageKey(args.environmentId, args.worktreeId, args.toRemotePageId)
+    const existing = placementByPendingPage.get(toKey)
+    const newest =
+      existing && existing.requestSequence > placement.requestSequence ? existing : placement
+    placementByPendingPage.set(toKey, {
+      ...newest,
+      ownsGroupCleanup: placement.ownsGroupCleanup || existing?.ownsGroupCleanup === true
     })
   }
 }
@@ -122,6 +142,28 @@ export function isWebSessionBrowserPlacementGroupReserved(args: {
     }
   }
   return false
+}
+
+export function peekWebSessionBrowserPlacementSourceGroup(args: {
+  owner: WebSessionIntentOwner
+  worktreeId: string
+  groupId: string
+}): string | undefined {
+  const prefix = worktreePrefix(args.owner.environmentId, args.worktreeId)
+  const focusOwnerKey = webSessionIntentOwnerKey(args.owner)
+  let latest: PendingBrowserPlacement | undefined
+  for (const [key, placement] of placementByPendingPage) {
+    if (
+      key.startsWith(prefix) &&
+      placement.groupId === args.groupId &&
+      placement.focusOwnerKey === focusOwnerKey &&
+      placement.sourceGroupId &&
+      (!latest || placement.requestSequence > latest.requestSequence)
+    ) {
+      latest = placement
+    }
+  }
+  return latest?.sourceGroupId
 }
 
 export function releaseWebSessionBrowserPlacementGroup(args: {
@@ -210,4 +252,5 @@ export function resetWebSessionBrowserPlacementsForTests(): void {
   placementByPendingPage.clear()
   materializedGroupKeys.clear()
   pendingCleanupClaimsByGroup.clear()
+  nextPlacementSequence = 0
 }

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
-  resolveWebSessionSiblingVisibleTabId,
+  resolveWebSessionGroupVisibleTabId,
   resolveWebSessionVisibleTabId
 } from './web-session-focus-intent'
 import {
@@ -238,8 +238,8 @@ describe('resolveWebSessionVisibleTabId — no-group compatibility path', () => 
   })
 })
 
-describe('resolveWebSessionSiblingVisibleTabId', () => {
-  it('returns the sibling whose active tab matches the remembered visible type', () => {
+describe('resolveWebSessionGroupVisibleTabId', () => {
+  it('returns the requested group active tab', () => {
     const editor = tab({ id: 'tab-editor', entityId: 'file-1', contentType: 'editor' })
     const terminal = tab({
       id: 'tab-terminal',
@@ -261,7 +261,20 @@ describe('resolveWebSessionSiblingVisibleTabId', () => {
     })
 
     expect(resolveWebSessionVisibleTabId(state, WT)).toBeNull()
-    expect(resolveWebSessionSiblingVisibleTabId(state, WT)).toBe(editor.id)
+    expect(resolveWebSessionGroupVisibleTabId(state, WT, GROUP_A)).toBe(editor.id)
+  })
+
+  it('follows a tab rematerialized under a new id within the requested group', () => {
+    const local = tab({ id: 'tab-local', entityId: 'file-1', contentType: 'editor' })
+    const mirrored = tab({ id: 'tab-mirrored', entityId: 'file-1', contentType: 'editor' })
+    const state = makeState({
+      unifiedTabsByWorktree: { [WT]: [local] },
+      groupsByWorktree: {
+        [WT]: [group({ id: GROUP_A, activeTabId: local.id, tabOrder: [local.id] })]
+      }
+    })
+
+    expect(resolveWebSessionGroupVisibleTabId(state, WT, GROUP_A, [mirrored])).toBe(mirrored.id)
   })
 })
 

@@ -22,8 +22,11 @@ vi.mock('../store', () => ({
 
 const EDITOR_GROUP = 'client-editor-group'
 const PREVIEW_GROUP = 'client-preview-group'
+const UNRELATED_EDITOR_GROUP = 'unrelated-editor-group'
 const EDITOR_FILE_ID = '/repo/paired-html-focus.html'
 const EDITOR_TAB_ID = 'local-html-editor'
+const UNRELATED_EDITOR_FILE_ID = '/repo/unrelated.html'
+const UNRELATED_EDITOR_TAB_ID = 'unrelated-html-editor'
 const HOST_TERMINAL_PARENT = 'host-terminal'
 const HOST_TERMINAL_SURFACE = `${HOST_TERMINAL_PARENT}::${LEAF_ID}`
 const HOST_BROWSER_TAB = 'host-html-browser-tab'
@@ -59,6 +62,16 @@ function htmlEditorTab(): Tab {
   }
 }
 
+function unrelatedEditorTab(): Tab {
+  return {
+    ...htmlEditorTab(),
+    id: UNRELATED_EDITOR_TAB_ID,
+    entityId: UNRELATED_EDITOR_FILE_ID,
+    groupId: UNRELATED_EDITOR_GROUP,
+    label: 'unrelated.html'
+  }
+}
+
 function mirroredTerminalTab(terminalTabId: string): Tab {
   return {
     id: terminalTabId,
@@ -79,7 +92,14 @@ function mirroredTerminalTab(terminalTabId: string): Tab {
 function editorFocusedSplitState(activeGroupId: string): WebSessionTabsSyncState {
   const terminalTabId = toWebTerminalSurfaceTabId(HOST_TERMINAL_PARENT)
   const editorTab = htmlEditorTab()
+  const unrelatedTab = unrelatedEditorTab()
   const openFile = htmlOpenFile()
+  const unrelatedOpenFile = {
+    ...openFile,
+    id: UNRELATED_EDITOR_FILE_ID,
+    filePath: UNRELATED_EDITOR_FILE_ID,
+    relativePath: 'unrelated.html'
+  }
   return makeState({
     activeFileId: openFile.id,
     activeFileIdByWorktree: { [WT]: openFile.id },
@@ -88,7 +108,7 @@ function editorFocusedSplitState(activeGroupId: string): WebSessionTabsSyncState
     activeTabIdByWorktree: { [WT]: terminalTabId },
     activeTabType: 'editor',
     activeTabTypeByWorktree: { [WT]: 'editor' },
-    openFiles: [openFile],
+    openFiles: [unrelatedOpenFile, openFile],
     tabsByWorktree: {
       [WT]: [
         {
@@ -103,9 +123,18 @@ function editorFocusedSplitState(activeGroupId: string): WebSessionTabsSyncState
         }
       ]
     },
-    unifiedTabsByWorktree: { [WT]: [mirroredTerminalTab(terminalTabId), editorTab] },
+    unifiedTabsByWorktree: {
+      [WT]: [unrelatedTab, mirroredTerminalTab(terminalTabId), editorTab]
+    },
     groupsByWorktree: {
       [WT]: [
+        {
+          id: UNRELATED_EDITOR_GROUP,
+          worktreeId: WT,
+          activeTabId: unrelatedTab.id,
+          tabOrder: [unrelatedTab.id],
+          recentTabIds: [unrelatedTab.id]
+        },
         {
           id: EDITOR_GROUP,
           worktreeId: WT,
@@ -125,8 +154,14 @@ function editorFocusedSplitState(activeGroupId: string): WebSessionTabsSyncState
       [WT]: {
         type: 'split',
         direction: 'horizontal',
-        first: { type: 'leaf', groupId: EDITOR_GROUP },
-        second: { type: 'leaf', groupId: PREVIEW_GROUP },
+        first: { type: 'leaf', groupId: UNRELATED_EDITOR_GROUP },
+        second: {
+          type: 'split',
+          direction: 'horizontal',
+          first: { type: 'leaf', groupId: EDITOR_GROUP },
+          second: { type: 'leaf', groupId: PREVIEW_GROUP },
+          ratio: 0.5
+        },
         ratio: 0.5
       }
     }
@@ -201,6 +236,8 @@ describe('applyWebSessionTabsSnapshot — unfocused HTML side preview', () => {
       worktreeId: WT,
       remotePageId: HOST_BROWSER_PAGE,
       groupId: PREVIEW_GROUP,
+      sourceGroupId: EDITOR_GROUP,
+      focusOwner: { environmentId: ENV },
       callerCreatedGroup: true
     })
     const state = editorFocusedSplitState(PREVIEW_GROUP)
@@ -238,12 +275,54 @@ describe('applyWebSessionTabsSnapshot — unfocused HTML side preview', () => {
     expect(previewFocus(next).activeTabType).toBe('editor')
   })
 
+  it('does not fall back to an unrelated editor after the source group closes', () => {
+    recordWebSessionBrowserPlacement({
+      environmentId: ENV,
+      worktreeId: WT,
+      remotePageId: HOST_BROWSER_PAGE,
+      groupId: PREVIEW_GROUP,
+      sourceGroupId: EDITOR_GROUP,
+      focusOwner: { environmentId: ENV },
+      callerCreatedGroup: true
+    })
+    const state = editorFocusedSplitState(PREVIEW_GROUP)
+    state.groupsByWorktree = {
+      [WT]: (state.groupsByWorktree[WT] ?? []).filter((group) => group.id !== EDITOR_GROUP)
+    }
+    state.unifiedTabsByWorktree = {
+      [WT]: (state.unifiedTabsByWorktree[WT] ?? []).filter((tab) => tab.groupId !== EDITOR_GROUP)
+    }
+    state.openFiles = state.openFiles.filter((file) => file.id !== EDITOR_FILE_ID)
+    state.layoutByWorktree = {
+      [WT]: {
+        type: 'split',
+        direction: 'horizontal',
+        first: { type: 'leaf', groupId: UNRELATED_EDITOR_GROUP },
+        second: { type: 'leaf', groupId: PREVIEW_GROUP },
+        ratio: 0.5
+      }
+    }
+
+    const patch = applyWebSessionTabsSnapshot(
+      state,
+      unfocusedHtmlPreviewSnapshot(),
+      ENV,
+      NOW + 10
+    ) as Partial<WebSessionTabsSyncState>
+    const next = { ...state, ...patch }
+
+    expect(previewFocus(next).activeGroupId).not.toBe(UNRELATED_EDITOR_GROUP)
+    expect(previewFocus(next).activeTabId).not.toBe(UNRELATED_EDITOR_TAB_ID)
+  })
+
   it('keeps the source editor focused when the editor group is still active', () => {
     recordWebSessionBrowserPlacement({
       environmentId: ENV,
       worktreeId: WT,
       remotePageId: HOST_BROWSER_PAGE,
       groupId: PREVIEW_GROUP,
+      sourceGroupId: EDITOR_GROUP,
+      focusOwner: { environmentId: ENV },
       callerCreatedGroup: true
     })
     const state = editorFocusedSplitState(EDITOR_GROUP)

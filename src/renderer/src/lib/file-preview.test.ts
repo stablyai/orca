@@ -120,6 +120,7 @@ describe('openFileInBrowserTab', () => {
       url: 'file:///srv/repo/example.html',
       clientTargetGroupId: 'group-2',
       clientTargetGroupCreated: true,
+      clientSourceGroupId: 'group-1',
       focusOnCreate: false,
       stagedTitle: 'example.html',
       stagedFocusAddressBar: false

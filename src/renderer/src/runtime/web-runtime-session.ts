@@ -466,6 +466,7 @@ export async function createWebRuntimeSessionBrowserTab(args: {
   targetGroupId?: string
   clientTargetGroupId?: string
   clientTargetGroupCreated?: boolean
+  clientSourceGroupId?: string
   focusOnCreate?: boolean
   /** Wait until a renderer-backed host can publish the new page in its session snapshot. */
   waitForRegistration?: boolean
@@ -503,7 +504,9 @@ export async function createWebRuntimeSessionBrowserTab(args: {
         worktreeId: args.worktreeId,
         remotePageId: provisionalPageId,
         groupId: args.clientTargetGroupId,
-        callerCreatedGroup: args.clientTargetGroupCreated
+        callerCreatedGroup: args.clientTargetGroupCreated,
+        sourceGroupId: args.clientSourceGroupId,
+        focusOwner: intentOwner
       })
     }
     if (shouldSelectWorktree) {

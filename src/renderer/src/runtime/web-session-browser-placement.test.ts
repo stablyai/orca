@@ -6,6 +6,8 @@ import {
   forgetWebSessionBrowserPlacement,
   isWebSessionBrowserPlacementGroupReserved,
   peekWebSessionBrowserPlacementGroup,
+  peekWebSessionBrowserPlacementSourceGroup,
+  moveWebSessionBrowserPlacement,
   recordWebSessionBrowserPlacement,
   releaseWebSessionBrowserPlacementGroup,
   resetWebSessionBrowserPlacementsForTests,
@@ -18,6 +20,89 @@ const WORKTREE_ID = 'worktree-1'
 afterEach(resetWebSessionBrowserPlacementsForTests)
 
 describe('web session browser placement', () => {
+  it('keeps newest source focus through page remapping and overlapping settlement', () => {
+    const focusOwner = { environmentId: ENVIRONMENT_ID, pairingRevision: 1 }
+    recordWebSessionBrowserPlacement({
+      environmentId: ENVIRONMENT_ID,
+      worktreeId: WORKTREE_ID,
+      remotePageId: 'page-1',
+      groupId: 'preview-group',
+      sourceGroupId: 'source-group-1',
+      focusOwner
+    })
+    recordWebSessionBrowserPlacement({
+      environmentId: ENVIRONMENT_ID,
+      worktreeId: WORKTREE_ID,
+      remotePageId: 'page-2-provisional',
+      groupId: 'preview-group',
+      sourceGroupId: 'source-group-2',
+      focusOwner
+    })
+
+    moveWebSessionBrowserPlacement({
+      environmentId: ENVIRONMENT_ID,
+      worktreeId: WORKTREE_ID,
+      fromRemotePageId: 'page-2-provisional',
+      toRemotePageId: 'page-2-host'
+    })
+    expect(
+      peekWebSessionBrowserPlacementSourceGroup({
+        owner: focusOwner,
+        worktreeId: WORKTREE_ID,
+        groupId: 'preview-group'
+      })
+    ).toBe('source-group-2')
+
+    forgetWebSessionBrowserPlacement({
+      environmentId: ENVIRONMENT_ID,
+      worktreeId: WORKTREE_ID,
+      remotePageId: 'page-2-host'
+    })
+    expect(
+      peekWebSessionBrowserPlacementSourceGroup({
+        owner: focusOwner,
+        worktreeId: WORKTREE_ID,
+        groupId: 'preview-group'
+      })
+    ).toBe('source-group-1')
+  })
+
+  it('does not reuse cleanup-retained focus intent across environments or pairings', () => {
+    const retiredOwner = { environmentId: ENVIRONMENT_ID, pairingRevision: 1 }
+    recordWebSessionBrowserPlacement({
+      environmentId: ENVIRONMENT_ID,
+      worktreeId: WORKTREE_ID,
+      remotePageId: 'retired-page',
+      groupId: 'preview-group',
+      sourceGroupId: 'retired-source',
+      focusOwner: retiredOwner,
+      callerCreatedGroup: true
+    })
+    clearWebSessionBrowserPlacementsForEnvironment(ENVIRONMENT_ID)
+
+    expect(
+      peekWebSessionBrowserPlacementSourceGroup({
+        owner: { environmentId: ENVIRONMENT_ID, pairingRevision: 2 },
+        worktreeId: WORKTREE_ID,
+        groupId: 'preview-group'
+      })
+    ).toBeUndefined()
+    expect(
+      peekWebSessionBrowserPlacementSourceGroup({
+        owner: { environmentId: 'environment-2', pairingRevision: 1 },
+        worktreeId: WORKTREE_ID,
+        groupId: 'preview-group'
+      })
+    ).toBeUndefined()
+    expect(
+      peekWebSessionBrowserPlacementSourceGroup({
+        owner: retiredOwner,
+        worktreeId: WORKTREE_ID,
+        groupId: 'preview-group'
+      })
+    ).toBe('retired-source')
+  })
+
   it('keeps a shared target group reserved until every pending page settles', () => {
     for (const remotePageId of ['page-1', 'page-2']) {
       recordWebSessionBrowserPlacement({
