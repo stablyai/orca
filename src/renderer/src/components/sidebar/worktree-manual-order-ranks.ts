@@ -89,10 +89,16 @@ export function buildSparseManualOrderUpdates(args: {
   const nextRanks: number[] = []
 
   if (beforeId !== undefined && beforeRank === null) {
-    return buildFallbackManualOrderUpdates(args.orderedIds, args.now)
+    return buildFallbackManualOrderUpdates(
+      mergeVisibleOrderIntoKnownOrder(args.allWorktreeIds, args.orderedIds),
+      args.now
+    )
   }
   if (afterId !== undefined && afterRank === null) {
-    return buildFallbackManualOrderUpdates(args.orderedIds, args.now)
+    return buildFallbackManualOrderUpdates(
+      mergeVisibleOrderIntoKnownOrder(args.allWorktreeIds, args.orderedIds),
+      args.now
+    )
   }
 
   if (beforeRank === null && afterRank === null) {
@@ -113,7 +119,10 @@ export function buildSparseManualOrderUpdates(args: {
     // Why: repeated sparse inserts can eventually exhaust the numeric gap.
     // Re-index only in that rare dense case; ordinary drags persist moved rows.
     if (gap <= orderedMovedIds.length) {
-      return buildFallbackManualOrderUpdates(args.orderedIds, args.now)
+      return buildFallbackManualOrderUpdates(
+        mergeVisibleOrderIntoKnownOrder(args.allWorktreeIds, args.orderedIds),
+        args.now
+      )
     }
     const step = gap / (orderedMovedIds.length + 1)
     for (let index = 0; index < orderedMovedIds.length; index++) {

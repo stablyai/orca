@@ -57,6 +57,39 @@ describe('buildSparseManualOrderUpdates durable migration', () => {
 
     expect([...result.keys()]).toEqual(['b', 'a', 'hidden', 'c', 'unknown'])
   })
+
+  it('preserves hidden rows when dense ranks require a full reindex', () => {
+    const result = buildSparseManualOrderUpdates({
+      orderedIds: ['a', 'c', 'b'],
+      movedIds: ['c'],
+      allWorktreeIds: ['a', 'hidden', 'b', 'c'],
+      rankByWorktreeId: new Map([
+        ['a', 3],
+        ['hidden', 2.5],
+        ['b', 2],
+        ['c', 1]
+      ]),
+      now: 10_000
+    })
+
+    expect([...result.keys()]).toEqual(['a', 'hidden', 'c', 'b'])
+  })
+
+  it('preserves hidden rows when a stale neighbor requires a full reindex', () => {
+    const result = buildSparseManualOrderUpdates({
+      orderedIds: ['stale', 'b', 'a'],
+      movedIds: ['b'],
+      allWorktreeIds: ['a', 'hidden', 'b'],
+      rankByWorktreeId: new Map([
+        ['a', 3000],
+        ['hidden', 2000],
+        ['b', 1000]
+      ]),
+      now: 10_000
+    })
+
+    expect([...result.keys()]).toEqual(['b', 'hidden', 'a', 'stale'])
+  })
 })
 
 describe('expandDraggedWorktreeIdsForVisibleLineage', () => {

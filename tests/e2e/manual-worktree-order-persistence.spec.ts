@@ -150,8 +150,29 @@ test('manual drag survives activity and persisted-profile reload', async ({
       )
       .toEqual(expectedOrder)
 
-    // Allow the persisted UI preference and metadata writes to settle before relaunch.
-    await first.page.waitForTimeout(1_000)
+    await expect
+      .poll(async () => {
+        const [ui, worktrees] = await first.page.evaluate(async (ids) => {
+          const [persistedUi, persistedWorktrees] = await Promise.all([
+            window.api.ui.get(),
+            window.api.worktrees.listAll()
+          ])
+          return [
+            persistedUi,
+            persistedWorktrees
+              .filter((worktree) => ids.includes(worktree.id))
+              .map((worktree) => ({ id: worktree.id, manualOrder: worktree.manualOrder }))
+          ] as const
+        }, createdIds)
+        return {
+          sortBy: ui.sortBy,
+          ranks: Object.fromEntries(worktrees.map((row) => [row.id, row.manualOrder]))
+        }
+      })
+      .toEqual({
+        sortBy: 'manual',
+        ranks: Object.fromEntries(manualOrderAfterDrag.rows.map((row) => [row.id, row.manualOrder]))
+      })
 
     await session.close(firstApp)
     firstApp = null
