@@ -151,6 +151,17 @@ export function installAgentIdleWorkingHandlers(session: ConnectPanePtySession):
           : undefined
     return attempt
   })()
+  // Only the PENDING retry marks a mount that a reconnect created. directSshRetryAttempt also
+  // accepts the live binding, which is written at the same tab generation once the reconnect
+  // succeeds and then outlives it — so it stays truthy for every later remount of that generation,
+  // not just this one.
+  session.followsDirectSshReconnect = (() => {
+    const pending = session.state.directSshPaneRetryByTabId?.[session.deps.tabId]
+    return (
+      pending?.authority.targetId === session.connectionId &&
+      pending.tabGeneration === (session.tab?.generation ?? 0)
+    )
+  })()
   // Generation is part of ownership: a recovery remount must not join a spawn
   // started by the pane instance it replaced, while StrictMode remounts keep
   // the same generation and may still share their in-flight spawn.
