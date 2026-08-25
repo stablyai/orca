@@ -57,6 +57,10 @@ import {
   markTerminalPinnedViewport,
   syncTerminalScrollIntentFromViewport
 } from '@/lib/pane-manager/terminal-scroll-intent'
+import {
+  applySpatialPaneFocusKey,
+  isSpatialFocusDirection
+} from '@/lib/pane-manager/pane-spatial-focus'
 
 export function resolveTerminalKeyboardShortcutAction(
   event: Parameters<typeof resolveTerminalShortcutAction>[0],
@@ -745,16 +749,29 @@ export function useTerminalKeyboardShortcuts({
         return
       }
 
-      // Cmd+[ / Cmd+] cycles active split pane focus.
+      // Sequential cycle stays creation-order; spatial moves use #8263 adjacency.
       if (action.type === 'focusPane') {
         const panes = manager.getPanes()
         if (panes.length < 2) {
           return
         }
+
+        if (isSpatialFocusDirection(action.direction)) {
+          // Restore expanded geometry before measuring; do not claim the chord
+          // until a neighbor exists so worktree history can still run at an edge.
+          if (expandedPaneIdRef.current !== null) {
+            setExpandedPane(null)
+            restoreExpandedLayout()
+            refreshPaneSizes(true)
+            persistLayoutSnapshot()
+          }
+          applySpatialPaneFocusKey(e, manager, action.direction)
+          return
+        }
+
         e.preventDefault()
         e.stopImmediatePropagation()
 
-        // Collapse expanded pane before switching
         if (expandedPaneIdRef.current !== null) {
           setExpandedPane(null)
           restoreExpandedLayout()
