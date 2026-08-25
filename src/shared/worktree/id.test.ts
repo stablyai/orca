@@ -144,6 +144,17 @@ describe('worktreeIdComparisonKey path-spelling parity for id: selectors (#16243
     expect(key('repo-123::/data/./workspaces/plugin')).not.toBe(key(canonical))
   })
 
+  // #15598/#15616: the same Windows checkout is recorded with both separators.
+  it('folds Windows separator and drive-letter case, as `path:` already does', () => {
+    const windows = 'repo-123::D:/Agentic/game2'
+    expect(key('repo-123::D:\\Agentic\\game2')).toBe(key(windows))
+    expect(key('repo-123::d:/agentic/game2')).toBe(key(windows))
+    // A backslash is a valid POSIX filename character, so a POSIX path never folds it.
+    expect(key('repo-123::/data\\workspaces')).not.toBe(key('repo-123::/data/workspaces'))
+    // POSIX roots stay case-sensitive.
+    expect(key('repo-123::/data/Workspaces')).not.toBe(key('repo-123::/data/workspaces'))
+  })
+
   it('never merges different repos, workspaces, or folder sessions', () => {
     // STA-4343: the repo id stays exact, or a removal lands on a repo the caller never confirmed.
     expect(key('repo-999::/data/workspaces/plugin')).not.toBe(key(canonical))

@@ -64,12 +64,12 @@ function scannedSpellingOf(storedPath: string): string {
   return storedPath.normalize('NFC').replace(/\/+/g, '/').replace(/\/$/, '')
 }
 
-function makeStore() {
+function makeStore(repoPath: string = REPO_PATH) {
   const metaById: Record<string, Record<string, unknown>> = {}
   const store = {
     getRepo: (id: string) => store.getRepos().find((repo) => repo.id === id),
     getRepos: () => [
-      { id: REPO_ID, path: REPO_PATH, displayName: 'app', badgeColor: 'blue', addedAt: 1 }
+      { id: REPO_ID, path: repoPath, displayName: 'app', badgeColor: 'blue', addedAt: 1 }
     ],
     getAllWorktreeMeta: vi.fn(() => metaById),
     getWorktreeMeta: (id: string) => metaById[id],
@@ -96,9 +96,9 @@ function makeStore() {
 }
 
 /** `git worktree list` output: the main checkout plus one workspace at `worktreePath`. */
-function scanReports(worktreePath: string): void {
+function scanReports(worktreePath: string, repoPath: string = REPO_PATH): void {
   listWorktreesStrictMock.mockResolvedValue([
-    { path: REPO_PATH, head: 'abc', branch: 'main', isBare: false, isMainWorktree: true },
+    { path: repoPath, head: 'abc', branch: 'main', isBare: false, isMainWorktree: true },
     { path: worktreePath, head: 'def', branch: 'feature', isBare: false, isMainWorktree: false }
   ])
 }
@@ -188,5 +188,69 @@ describe('worktree id selectors vs. the path spelling git reports (#16243)', () 
     await expect(runtime.showManagedWorktree(`id:${REPO_ID}::${dotted}`)).rejects.toThrow(
       'selector_not_found'
     )
+  })
+
+  // #15598/#15616: on Windows one checkout is recorded under both spellings, and git reports the
+  // forward-slash one. The same divergence class, reaching the selector instead of a purge check.
+  describe('Windows drive-letter spellings', () => {
+    const WINDOWS_REPO = 'D:/Agentic/game2'
+    const WINDOWS_WORKTREE = 'D:/Agentic/game2/battle-core'
+    const BACKSLASH_ID = `${REPO_ID}::D:\\Agentic\\game2\\battle-core`
+
+    it('resolves a backslash id against the forward-slash spelling git reports', async () => {
+      scanReports(WINDOWS_WORKTREE, WINDOWS_REPO)
+      const runtime = new OrcaRuntimeService(makeStore(WINDOWS_REPO) as never)
+
+      await expect(runtime.showManagedWorktree(`id:${BACKSLASH_ID}`)).resolves.toMatchObject({
+        id: `${REPO_ID}::${WINDOWS_WORKTREE}`,
+        path: WINDOWS_WORKTREE
+      })
+    })
+
+    it('resolves a host-qualified removal target for the backslash id', async () => {
+      scanReports(WINDOWS_WORKTREE, WINDOWS_REPO)
+      const runtime = new OrcaRuntimeService(makeStore(WINDOWS_REPO) as never)
+      const internals = runtime as unknown as RemovalInternals
+
+      await expect(
+        internals.resolveWorktreeRemovalTarget(`id:${BACKSLASH_ID}`, LOCAL_EXECUTION_HOST_ID)
+      ).resolves.toMatchObject({ repoId: REPO_ID, path: WINDOWS_WORKTREE })
+    })
+
+    it('folds drive-letter case only for Windows paths, never for a POSIX path', async () => {
+      scanReports(WINDOWS_WORKTREE, WINDOWS_REPO)
+      const runtime = new OrcaRuntimeService(makeStore(WINDOWS_REPO) as never)
+
+      // A Windows root is case-insensitive, as `path:` already treats it.
+      await expect(
+        runtime.showManagedWorktree(`id:${REPO_ID}::d:/agentic/game2/battle-core`)
+      ).resolves.toMatchObject({ path: WINDOWS_WORKTREE })
+    })
+
+    it('does not fold a backslash inside a POSIX path, where it is a valid filename character', async () => {
+      scanReports(WORKTREE_PATH)
+      const runtime = new OrcaRuntimeService(makeStore() as never)
+
+      await expect(
+        runtime.showManagedWorktree(`id:${REPO_ID}::/data/projects\\workspaces\\headlamp-plugin`)
+      ).rejects.toThrow('selector_not_found')
+    })
+  })
+
+  // #15616 guarantees malformed ids keep exact-match behavior; both sites must honour that too.
+  it.each([
+    ['no repo boundary', 'not-an-id'],
+    ['an empty path', `${REPO_ID}::`]
+  ])('keeps exact matching for a malformed id with %s', async (_label, malformedId) => {
+    scanReports(WORKTREE_PATH)
+    const runtime = new OrcaRuntimeService(makeStore() as never)
+    const internals = runtime as unknown as RemovalInternals
+
+    await expect(runtime.showManagedWorktree(`id:${malformedId}`)).rejects.toThrow(
+      'selector_not_found'
+    )
+    await expect(
+      internals.resolveWorktreeRemovalTarget(`id:${malformedId}`, LOCAL_EXECUTION_HOST_ID)
+    ).rejects.toThrow('selector_not_found')
   })
 })

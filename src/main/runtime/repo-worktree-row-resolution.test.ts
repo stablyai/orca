@@ -262,4 +262,26 @@ describe('scoped worktree id resolution across path spellings (#16243)', () => {
       resolveScopedWorktreeIdRow(deps, 'shared::/same//worktree', 'local')
     ).resolves.toMatchObject({ id: 'shared::/same//worktree' })
   })
+
+  // #15598/#15616: the backslash spelling is what a pre-restart Windows registration recorded.
+  it('resolves a Windows backslash id against the forward-slash spelling git reports', async () => {
+    const path = 'D:/Agentic/game2/battle-core'
+    const owner = repo('shared', 'D:/Agentic/game2', { executionHostId: 'runtime:windows' })
+    const deps = createDeps([owner])
+    deps.scanRepo.mockImplementation(async () => ({ ok: true, worktrees: [gitWorktree(path)] }))
+
+    await expect(
+      resolveScopedWorktreeIdRow(deps, 'shared::D:\\Agentic\\game2\\battle-core', 'runtime:windows')
+    ).resolves.toMatchObject({ id: `shared::${path}`, path })
+  })
+
+  it.each([
+    ['no repo boundary', 'not-an-id'],
+    ['an empty path', 'shared::']
+  ])('keeps exact matching for a malformed id with %s', async (_label, worktreeId) => {
+    const deps = createDeps([repo('shared', '/local/repo', { executionHostId: 'local' })])
+
+    await expect(resolveScopedWorktreeIdRow(deps, worktreeId, 'local')).resolves.toBeNull()
+    expect(deps.scanRepo).not.toHaveBeenCalled()
+  })
 })
