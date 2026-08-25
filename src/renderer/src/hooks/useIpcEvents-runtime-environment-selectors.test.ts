@@ -8,11 +8,11 @@ import {
   getRuntimeClientEventEnvironmentIds,
   getRuntimeProjectRefreshEnvironmentIds,
   invalidateRuntimeClientEventReplay
-} from './useIpcEvents'
+} from './ipc-events/runtime-environment-subscription-selection'
 import type {
   RuntimeEnvironmentStoreSyncState,
   RuntimeEnvironmentStoreSyncSubscriber
-} from './useIpcEvents'
+} from './ipc-events/runtime-environment-subscription-selection'
 
 describe('buildRuntimeClientEventEnvironmentKey', () => {
   it('treats runtime environment ids as a stable set', () => {
