@@ -57,6 +57,11 @@ describe('client-hosted browser close intent lifecycle', () => {
     expect(recordClientHostedBrowserCloseIntents({}, [], NOW)).toBeNull()
   })
 
+  it('lists nothing for a store that has not materialized the map', () => {
+    // Why: replay fires and forgets from a status refresh; an absent map must not reject unhandled.
+    expect(listClientHostedBrowserCloseIntents(undefined, 'env-a')).toEqual([])
+  })
+
   it('evicts the oldest once one environment exceeds the cap', () => {
     let current: ClientHostedBrowserCloseIntentsByEnvironment = {}
     for (let index = 0; index <= MAX_CLIENT_HOSTED_BROWSER_CLOSE_INTENTS; index += 1) {
