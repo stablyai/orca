@@ -29,7 +29,6 @@ import type { DirectSshPaneRetryAttemptId } from '@/store/slices/direct-ssh-term
 import type { PaneProcessExit } from './pty-connection-types'
 import {
   createFilePathLinkProvider,
-  getTerminalFileOpenHint,
   getTerminalUrlOpenHint,
   installFilePathLinkClickFallback
 } from './terminal-link-handlers'
@@ -39,7 +38,7 @@ import {
 } from './terminal-link-open-hints'
 import { createTerminalHandleLinkProvider } from './terminal-handle-links'
 import type { LinkHandlerDeps } from './terminal-link-handlers'
-import { handleOscLink } from './terminal-osc-link-routing'
+import { getTerminalOscLinkFileHoverHint, handleOscLink } from './terminal-osc-link-routing'
 import { handleTerminalWebLinkClick } from './terminal-web-link-click'
 import {
   installHttpLinkClickFallback,
@@ -988,7 +987,6 @@ export function useTerminalPaneLifecycle({
       getTabWideAgentHintLeafId
     })
 
-    const fileOpenLinkHint = getTerminalFileOpenHint()
     // Why: read settingsRef at fire time so toggling link routing applies without recreating panes.
     const getUrlOpenLinkHint = (paneId: number): string =>
       getTerminalUrlOpenHint({
@@ -1220,7 +1218,7 @@ export function useTerminalPaneLifecycle({
         const linkPointerGesture = installTerminalLinkPointerGesture(pane.terminal)
         linkPointerGestures.set(pane.id, linkPointerGesture)
         const linkProviderDisposable = pane.terminal.registerLinkProvider(
-          createFilePathLinkProvider(pane.id, linkDeps, pane.linkTooltip, fileOpenLinkHint)
+          createFilePathLinkProvider(pane.id, linkDeps, pane.linkTooltip)
         )
         linkProviderDisposablesRef.current.set(pane.id, linkProviderDisposable)
         const terminalHandleLinkDisposable = pane.terminal.registerLinkProvider(
@@ -1332,6 +1330,19 @@ export function useTerminalPaneLifecycle({
           hover: (_event, text) => {
             oscTooltipHoverToken += 1
             const hoverToken = oscTooltipHoverToken
+            // Why: an OSC 8 target can name a file, and the click routes it to the
+            // file handler — so the hover must describe it as a file, not a URL.
+            const fileOpenLinkHint = getTerminalOscLinkFileHoverHint(text, {
+              ...linkDeps,
+              startupCwd: getPaneLinkCwd(pane.id),
+              runtimeEnvironmentId: linkDeps.getRuntimeEnvironmentIdForPane?.(pane.id) ?? null,
+              showActions: getLinkActionContext(pane.id) !== null
+            })
+            if (fileOpenLinkHint) {
+              pane.linkTooltip.textContent = `${text} (${fileOpenLinkHint})`
+              pane.linkTooltip.style.display = ''
+              return
+            }
             const urlOpenLinkHint = getUrlOpenLinkHint(pane.id)
             pane.linkTooltip.textContent = `${text} (${urlOpenLinkHint})`
             pane.linkTooltip.style.display = ''

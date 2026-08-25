@@ -201,6 +201,8 @@ export type GlobalSettings = {
   openLinksInAppModifierInverts?: boolean
   /** Show terminal link actions on plain click; off restores modifier-click-only terminal links. */
   terminalLinkActionPopoverEnabled?: boolean
+  /** Opt-in: swaps the terminal file-link chords so modifier-click opens the OS default app and Shift+modifier-click opens Orca. Off keeps Orca on the plain modifier. */
+  terminalFileLinkModifierInverts?: boolean
   /** Opt-in: open new coding-agent tabs in native chat instead of the raw terminal; optional for legacy settings. */
   openAgentTabsInChatByDefault?: boolean
   /** Experimental native chat surface for Claude/Codex sessions; off by default. */

@@ -1,7 +1,7 @@
 import type { IDisposable, ILink } from '@xterm/xterm'
 import { describe, expect, it, vi } from 'vitest'
 import type { PaneManager } from '@/lib/pane-manager/pane-manager'
-import { createFilePathLinkProvider, getTerminalFileOpenHint } from './terminal-link-handlers'
+import { createFilePathLinkProvider } from './terminal-link-handlers'
 import { TERMINAL_PATH_EXISTS_CACHE_MAX_ENTRIES } from './terminal-path-exists-cache'
 import { getConnectionId } from '@/lib/connection-context'
 import { createTerminalLinkTestDoubles } from './terminal-link-handlers-test-fixtures'
@@ -157,8 +157,7 @@ describe('createFilePathLinkProvider range bounds', () => {
         linkProviderDisposablesRef: { current: new Map<number, IDisposable>() },
         pathExistsCache
       },
-      { textContent: '', style: { display: '' } } as unknown as HTMLElement,
-      getTerminalFileOpenHint()
+      { textContent: '', style: { display: '' } } as unknown as HTMLElement
     )
 
     const links = await new Promise<ILink[]>((resolve) => {
@@ -192,8 +191,7 @@ describe('createFilePathLinkProvider range bounds', () => {
     const firstProvider = createFilePathLinkProvider(
       1,
       deps,
-      { textContent: '', style: { display: '' } } as unknown as HTMLElement,
-      getTerminalFileOpenHint()
+      { textContent: '', style: { display: '' } } as unknown as HTMLElement
     )
     const firstLinks = await new Promise<ILink[]>((resolve) => {
       firstProvider.provideLinks(1, (provided) => resolve(provided ?? []))
@@ -209,8 +207,7 @@ describe('createFilePathLinkProvider range bounds', () => {
     const secondProvider = createFilePathLinkProvider(
       1,
       deps,
-      { textContent: '', style: { display: '' } } as unknown as HTMLElement,
-      getTerminalFileOpenHint()
+      { textContent: '', style: { display: '' } } as unknown as HTMLElement
     )
     const secondLinks = await new Promise<ILink[]>((resolve) => {
       secondProvider.provideLinks(1, (provided) => resolve(provided ?? []))

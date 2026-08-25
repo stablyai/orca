@@ -7,7 +7,7 @@ import { Popover, PopoverAnchor, PopoverContent } from '@/components/ui/popover'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { useClipboardTextCopyFeedback } from '@/hooks/use-clipboard-text-copy-feedback'
 import { translate } from '@/i18n/i18n'
-import { BROWSER_TERMINAL_LINK_ACTIONS_SETTINGS_TARGET_ID } from '@/lib/settings-navigation-types'
+import { TERMINAL_LINK_ACTIONS_SETTINGS_TARGET_ID } from '@/lib/settings-navigation-types'
 import { useAppStore } from '@/store'
 import type { TerminalLinkAction, TerminalLinkActionRequest } from './terminal-link-action-request'
 
@@ -106,9 +106,9 @@ export function TerminalLinkActionPopover({
   const openTerminalLinkSettings = (): void => {
     onClose()
     openSettingsTarget({
-      pane: 'browser',
+      pane: 'terminal',
       repoId: null,
-      sectionId: BROWSER_TERMINAL_LINK_ACTIONS_SETTINGS_TARGET_ID
+      sectionId: TERMINAL_LINK_ACTIONS_SETTINGS_TARGET_ID
     })
     openSettingsPage()
   }

@@ -243,6 +243,7 @@ export const SETTINGS_CHANGED_WHITELIST = [
   'openLinksInApp',
   'openLinksInAppModifierInverts',
   'terminalLinkActionPopoverEnabled',
+  'terminalFileLinkModifierInverts',
   'experimentalMobile',
   'experimentalPet',
   'experimentalNativeChat',
