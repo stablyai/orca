@@ -207,7 +207,9 @@ describe('createBrowserSlice runtime guard', () => {
     expect(result).toMatchObject({
       ok: true,
       executionHostId: 'local',
-      executionHostLabel: getExecutionHostLabel('local')
+      executionHostLabel: getExecutionHostLabel('local'),
+      executionMachine: 'client',
+      executionRemoteEnvironment: false
     })
   })
 
@@ -231,6 +233,7 @@ describe('createBrowserSlice runtime guard', () => {
     expect(store.getState().detectedBrowsers).toEqual([
       { family: 'chrome', label: 'Google Chrome', profiles: [], selectedProfile: 'Default' }
     ])
+    expect(store.getState().detectedBrowsersHost).toEqual({ machine: 'client', hostLabel: 'env-1' })
   })
 
   it('falls back to the server-side detection when the desktop hosts no pages', async () => {
@@ -253,6 +256,7 @@ describe('createBrowserSlice runtime guard', () => {
     expect(store.getState().detectedBrowsers).toEqual([
       { family: 'chrome', label: 'Google Chrome', profiles: [], selectedProfile: 'Profile 3' }
     ])
+    expect(store.getState().detectedBrowsersHost).toEqual({ machine: 'remote', hostLabel: 'env-1' })
   })
 
   it('imports client-hosted logins on this desktop instead of the headless server', async () => {
@@ -275,7 +279,12 @@ describe('createBrowserSlice runtime guard', () => {
     expect(runtimeEnvironmentCall).not.toHaveBeenCalledWith(
       expect.objectContaining({ method: 'browser.profileImportFromBrowser' })
     )
-    expect(result).toMatchObject({ ok: true, executionHostId: 'runtime:env-1' })
+    expect(result).toMatchObject({
+      ok: true,
+      executionHostId: 'runtime:env-1',
+      executionMachine: 'client',
+      executionRemoteEnvironment: true
+    })
   })
 
   it('falls back to the server-side import when the desktop hosts no pages', async () => {
@@ -295,7 +304,11 @@ describe('createBrowserSlice runtime guard', () => {
     const result = await store.getState().importCookiesFromBrowser('default', 'chrome', 'Default')
 
     expect(mockApi.browser.sessionImportFromBrowserForClientHost).toHaveBeenCalled()
-    expect(result).toMatchObject({ ok: true })
+    expect(result).toMatchObject({
+      ok: true,
+      executionMachine: 'remote',
+      executionRemoteEnvironment: true
+    })
   })
 
   it('uses local browser IPC when no runtime environment is active', async () => {

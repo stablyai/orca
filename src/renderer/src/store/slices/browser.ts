@@ -129,14 +129,24 @@ export type RemoteBrowserPageHandle = {
 export type BrowserCookieImportExecutionResult = BrowserCookieImportResult & {
   executionHostId: ExecutionHostId
   executionHostLabel: string
+  // Why: for a remote environment the import silently runs on either machine; toasts must say which.
+  executionMachine: 'client' | 'remote'
+  executionRemoteEnvironment: boolean
 }
 
 function retainCookieImportExecutionHost(
   result: BrowserCookieImportResult,
   executionHostId: ExecutionHostId,
-  executionHostLabel: string
+  executionHostLabel: string,
+  executionMachine: 'client' | 'remote'
 ): BrowserCookieImportExecutionResult {
-  return { ...result, executionHostId, executionHostLabel }
+  return {
+    ...result,
+    executionHostId,
+    executionHostLabel,
+    executionMachine,
+    executionRemoteEnvironment: parseExecutionHostId(executionHostId)?.kind === 'runtime'
+  }
 }
 
 export type BrowserSlice = {
@@ -232,6 +242,9 @@ export type BrowserSlice = {
     selectedProfile: string
   }[]
   detectedBrowsersLoaded: boolean
+  // Why: which machine answered detection for a remote environment, so import menus can say where
+  // the import will read and store; null while browser settings target the local host.
+  detectedBrowsersHost: { machine: 'client' | 'remote'; hostLabel: string } | null
   fetchDetectedBrowsers: () => Promise<void>
   importCookiesFromBrowser: (
     profileId: string,
@@ -585,7 +598,8 @@ export const createBrowserSlice: StateCreator<AppState, [], [], BrowserSlice> = 
       defaultBrowserSessionProfileId: s.defaultBrowserSessionProfileIdByHostId[nextHostId] ?? null,
       browserSessionImportState: null,
       detectedBrowsers: [],
-      detectedBrowsersLoaded: false
+      detectedBrowsersLoaded: false,
+      detectedBrowsersHost: null
     }))
     await Promise.all([get().fetchBrowserSessionProfiles(), get().fetchDetectedBrowsers()])
   },
@@ -2073,7 +2087,8 @@ export const createBrowserSlice: StateCreator<AppState, [], [], BrowserSlice> = 
       return retainCookieImportExecutionHost(
         { ok: false as const, reason },
         hostId,
-        executionHostLabel
+        executionHostLabel,
+        'client'
       )
     }
     set((state) =>
@@ -2113,7 +2128,7 @@ export const createBrowserSlice: StateCreator<AppState, [], [], BrowserSlice> = 
           })
         )
       }
-      return retainCookieImportExecutionHost(result, hostId, executionHostLabel)
+      return retainCookieImportExecutionHost(result, hostId, executionHostLabel, 'client')
     } catch (err) {
       const reason = String((err as Error)?.message ?? err)
       set((state) =>
@@ -2127,7 +2142,8 @@ export const createBrowserSlice: StateCreator<AppState, [], [], BrowserSlice> = 
       return retainCookieImportExecutionHost(
         { ok: false as const, reason },
         hostId,
-        executionHostLabel
+        executionHostLabel,
+        'client'
       )
     }
   },
@@ -2138,18 +2154,21 @@ export const createBrowserSlice: StateCreator<AppState, [], [], BrowserSlice> = 
 
   detectedBrowsers: [],
   detectedBrowsersLoaded: false,
+  detectedBrowsersHost: null,
 
   fetchDetectedBrowsers: async () => {
     const hostId = getBrowserSettingsHostId(get())
     const runtimeEnvironmentId = getBrowserSettingsRuntimeEnvironmentId(get())
     if (runtimeEnvironmentId) {
+      const hostLabel = getBrowserSettingsHostLabel(get(), hostId)
       try {
         // Why: the import runs on whichever machine hosts the pages, so the picker must offer that
         // machine's browsers -- client-hosted means this desktop, not the (usually headless) remote.
+        const clientHostBrowsers = await window.api.browser.sessionDetectBrowsersForClientHost({
+          environmentId: runtimeEnvironmentId
+        })
         const browsers =
-          (await window.api.browser.sessionDetectBrowsersForClientHost({
-            environmentId: runtimeEnvironmentId
-          })) ??
+          clientHostBrowsers ??
           (
             await callRuntimeRpc<BrowserDetectProfilesResult>(
               { kind: 'environment', environmentId: runtimeEnvironmentId },
@@ -2158,15 +2177,20 @@ export const createBrowserSlice: StateCreator<AppState, [], [], BrowserSlice> = 
               { timeoutMs: 15_000 }
             )
           ).browsers
+        // Why: retain which machine answered so import menus can say where imports read and store.
+        const detectedBrowsersHost = {
+          machine: clientHostBrowsers ? ('client' as const) : ('remote' as const),
+          hostLabel
+        }
         set((s) =>
           getBrowserSettingsHostId(s) === hostId
-            ? { detectedBrowsers: browsers, detectedBrowsersLoaded: true }
+            ? { detectedBrowsers: browsers, detectedBrowsersLoaded: true, detectedBrowsersHost }
             : {}
         )
       } catch {
         set((s) =>
           getBrowserSettingsHostId(s) === hostId
-            ? { detectedBrowsers: [], detectedBrowsersLoaded: true }
+            ? { detectedBrowsers: [], detectedBrowsersLoaded: true, detectedBrowsersHost: null }
             : {}
         )
       }
@@ -2184,7 +2208,7 @@ export const createBrowserSlice: StateCreator<AppState, [], [], BrowserSlice> = 
       }[]
       set((s) =>
         getBrowserSettingsHostId(s) === hostId
-          ? { detectedBrowsers: browsers, detectedBrowsersLoaded: true }
+          ? { detectedBrowsers: browsers, detectedBrowsersLoaded: true, detectedBrowsersHost: null }
           : {}
       )
     } catch {
@@ -2207,16 +2231,20 @@ export const createBrowserSlice: StateCreator<AppState, [], [], BrowserSlice> = 
           error: null
         })
       )
+      // Why: tracked across the try so a failed fallback RPC still reports the machine it ran on.
+      let ranOnClient = false
       try {
         // Why: client-hosted pages render on this desktop, so their logins live
         // here -- detecting and importing on the headless remote finds nothing.
+        const clientHostResult = await window.api.browser.sessionImportFromBrowserForClientHost({
+          environmentId: runtimeEnvironmentId,
+          profileId,
+          browserFamily,
+          browserProfile
+        })
+        ranOnClient = clientHostResult != null
         const result =
-          (await window.api.browser.sessionImportFromBrowserForClientHost({
-            environmentId: runtimeEnvironmentId,
-            profileId,
-            browserFamily,
-            browserProfile
-          })) ??
+          clientHostResult ??
           (await callRuntimeRpc<BrowserProfileImportFromBrowserResult>(
             { kind: 'environment', environmentId: runtimeEnvironmentId },
             'browser.profileImportFromBrowser',
@@ -2247,7 +2275,12 @@ export const createBrowserSlice: StateCreator<AppState, [], [], BrowserSlice> = 
             })
           )
         }
-        return retainCookieImportExecutionHost(result, hostId, executionHostLabel)
+        return retainCookieImportExecutionHost(
+          result,
+          hostId,
+          executionHostLabel,
+          ranOnClient ? 'client' : 'remote'
+        )
       } catch (err) {
         const reason = String((err as Error)?.message ?? err)
         set((state) =>
@@ -2261,7 +2294,8 @@ export const createBrowserSlice: StateCreator<AppState, [], [], BrowserSlice> = 
         return retainCookieImportExecutionHost(
           { ok: false as const, reason },
           hostId,
-          executionHostLabel
+          executionHostLabel,
+          ranOnClient ? 'client' : 'remote'
         )
       }
     }
@@ -2304,7 +2338,7 @@ export const createBrowserSlice: StateCreator<AppState, [], [], BrowserSlice> = 
           })
         )
       }
-      return retainCookieImportExecutionHost(result, hostId, executionHostLabel)
+      return retainCookieImportExecutionHost(result, hostId, executionHostLabel, 'client')
     } catch (err) {
       const reason = String((err as Error)?.message ?? err)
       set((state) =>
@@ -2318,7 +2352,8 @@ export const createBrowserSlice: StateCreator<AppState, [], [], BrowserSlice> = 
       return retainCookieImportExecutionHost(
         { ok: false as const, reason },
         hostId,
-        executionHostLabel
+        executionHostLabel,
+        'client'
       )
     }
   },
