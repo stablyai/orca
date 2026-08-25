@@ -1,3 +1,7 @@
+import type { TerminalExitCause } from '../../shared/terminal-exit-cause'
+
+import type { JobTerminationOutcome } from '../windows/windows-pty-job'
+
 export type SubprocessHandle = {
   pid: number
   /** Live foreground process name of the PTY (node-pty's `.process`), e.g.
@@ -12,8 +16,8 @@ export type SubprocessHandle = {
   shellPath?: string
   shellCwd?: string
   shellPathEnv?: string
-  /** Slave device path, so startup replies can read the line discipline's ECHO bit before
-   *  writing. Absent on handles with no POSIX slave to read (ConPTY, tests). */
+  /** Slave device path, so the shell-readiness probe can read the line discipline.
+   *  Absent on handles with no POSIX slave to read (ConPTY, tests). */
   slavePath?: string
   write(data: string): void
   resize(cols: number, rows: number): void
@@ -26,9 +30,15 @@ export type SubprocessHandle = {
   clear?(): void
   kill(): void
   forceKill(): void
+  /**
+   * Terminate this pty's job object, covering descendants that detached or
+   * reparented. `unavailable` when the pty has no job -- never a false
+   * `terminated`, so callers must fall back rather than assume the tree is gone.
+   */
+  terminateOwnedTree(): JobTerminationOutcome
   signal(sig: string): void
   onData(cb: (data: string) => void): void
-  onExit(cb: (code: number) => void): void
+  onExit(cb: (code: number, cause?: TerminalExitCause) => void): void
   /** Release the native PTY handle via node-pty's destroy(). Idempotent; safe to call after exit. */
   dispose(): void
 }

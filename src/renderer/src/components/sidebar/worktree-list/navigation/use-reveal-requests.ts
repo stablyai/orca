@@ -6,6 +6,8 @@ import {
 } from '@/lib/scroll-to-current-workspace-status'
 import type { FolderWorkspace } from '../../../../../../shared/folder-workspace-types'
 import type { Worktree } from '../../../../../../shared/worktree/types'
+import type { ExecutionHostId } from '../../../../../../shared/execution-host'
+import { composeWorktreeHostIdentity } from '../../../../../../shared/worktree/host-qualified-identity'
 import type { WorktreeGroupBy } from '../grouping/row-types'
 import { getKnownSidebarWorktreeById } from './folder-reveal'
 
@@ -14,9 +16,11 @@ import { getKnownSidebarWorktreeById } from './folder-reveal'
 export function useSidebarRevealRequests(args: {
   groupBy: WorktreeGroupBy
   renderedSidebarRowKeys: ReadonlySet<string>
-  renderedWorktreeIds: readonly string[]
+  renderedWorktreeIdentities: readonly string[]
   currentSidebarWorktreeId: string | null
+  currentSidebarExecutionHostId: ExecutionHostId | null
   worktreeMap: Map<string, Worktree>
+  worktrees: readonly Worktree[]
   folderWorkspaces: readonly FolderWorkspace[]
   hasFilters: boolean
   clearFilters: () => void
@@ -24,9 +28,11 @@ export function useSidebarRevealRequests(args: {
   const {
     groupBy,
     renderedSidebarRowKeys,
-    renderedWorktreeIds,
+    renderedWorktreeIdentities,
     currentSidebarWorktreeId,
+    currentSidebarExecutionHostId,
     worktreeMap,
+    worktrees,
     folderWorkspaces,
     hasFilters,
     clearFilters
@@ -84,29 +90,38 @@ export function useSidebarRevealRequests(args: {
       const activeWorktree = getKnownSidebarWorktreeById(
         currentSidebarWorktreeId,
         worktreeMap,
-        folderWorkspaces
+        folderWorkspaces,
+        worktrees,
+        currentSidebarExecutionHostId
       )
       if (!activeWorktree || activeWorktree.isArchived) {
         return
       }
-      if (!renderedWorktreeIds.includes(currentSidebarWorktreeId)) {
+      const currentIdentity = composeWorktreeHostIdentity(
+        currentSidebarExecutionHostId ?? undefined,
+        currentSidebarWorktreeId
+      )
+      if (!renderedWorktreeIdentities.includes(currentIdentity)) {
         // Why: the reveal action must show the current workspace, so relax filters that hide it first.
         clearFilters()
       }
       revealWorktreeInSidebar(currentSidebarWorktreeId, {
         behavior: 'smooth',
         highlight: true,
-        beginRename: (detail as { beginRename?: boolean } | undefined)?.beginRename === true
+        beginRename: (detail as { beginRename?: boolean } | undefined)?.beginRename === true,
+        executionHostId: currentSidebarExecutionHostId ?? undefined
       })
     },
     [
       clearFilters,
       currentSidebarWorktreeId,
+      currentSidebarExecutionHostId,
       folderWorkspaces,
       revealSidebarRow,
-      renderedWorktreeIds,
+      renderedWorktreeIdentities,
       revealWorktreeInSidebar,
-      worktreeMap
+      worktreeMap,
+      worktrees
     ]
   )
 

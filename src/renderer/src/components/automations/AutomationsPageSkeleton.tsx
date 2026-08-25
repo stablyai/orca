@@ -1,10 +1,7 @@
 import React from 'react'
 import { cn } from '@/lib/utils'
-import {
-  AUTOMATIONS_TABLE_CONTAINER_CLASS,
-  AUTOMATIONS_TABLE_GRID_CLASS,
-  AUTOMATIONS_TABLE_HEADER_CLASS
-} from './automations-table-layout'
+import { AUTOMATIONS_TABLE_GRID_CLASS } from './automations-table-layout'
+import { LIST_TABLE_CONTAINER_CLASS, LIST_TABLE_HEADER_CLASS } from '@/lib/list-table-layout'
 import { translate } from '@/i18n/i18n'
 
 function SkeletonBar({ className }: { className?: string }): React.JSX.Element {
@@ -116,10 +113,10 @@ export function AutomationsPageSkeleton(): React.JSX.Element {
         <SkeletonBar className="h-8 w-32 shrink-0 rounded-md" />
       </div>
       <div
-        className={cn('min-h-0 flex-1 overflow-hidden', AUTOMATIONS_TABLE_CONTAINER_CLASS)}
+        className={cn('min-h-0 flex-1 overflow-hidden', LIST_TABLE_CONTAINER_CLASS)}
         data-contextual-fix-target="automations-list"
       >
-        <div className={cn(AUTOMATIONS_TABLE_GRID_CLASS, AUTOMATIONS_TABLE_HEADER_CLASS)}>
+        <div className={cn(AUTOMATIONS_TABLE_GRID_CLASS, LIST_TABLE_HEADER_CLASS)}>
           <SkeletonBar className="h-2.5 w-12" />
           <SkeletonBar className="h-2.5 w-14" />
           <SkeletonBar className="h-2.5 w-14" />

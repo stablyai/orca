@@ -51,6 +51,9 @@ export function classifyConnection(args: {
   // warning/unreachable verdicts. Callers without it get plain labels.
   endpoint?: string | null
   pendingPath?: MobileConnectionPath | null
+  // The desktop has repeatedly refused this device's relay credential — retrying
+  // cannot fix it, so it outranks any "still connecting" reading (STA-4681).
+  pairingRejected?: boolean
   nowMs?: number
 }): ConnectionVerdict {
   const { state, reconnectAttempts, lastConnectedAt } = args
@@ -59,7 +62,7 @@ export function classifyConnection(args: {
 
   // Why: auth-failed means the desktop no longer recognizes this pairing (e.g. it
   // lost its device registry) — retrying can't fix it, only re-pairing can, so say so.
-  if (state === 'auth-failed') {
+  if (state === 'auth-failed' || (args.pairingRejected && state !== 'connected')) {
     return { kind: 'auth-failed', label: 'Pairing invalid — re-pair with your desktop' }
   }
 

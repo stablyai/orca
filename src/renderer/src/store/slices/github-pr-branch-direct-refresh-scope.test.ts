@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   _clearGitHubPRRefreshStartedEntriesForTest,
   _getGitHubPRRequestGenerationCountForTest
-} from './github'
+} from '../github/request-coordination'
 import {
   createTestStore,
   makePR,

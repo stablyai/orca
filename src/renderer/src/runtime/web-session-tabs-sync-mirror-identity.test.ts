@@ -354,6 +354,44 @@ describe('remote mirror resource identity', () => {
     expect(next.browserCertificateFailuresByPageId['host-browser-page-2']).toBe(certificate)
   })
 
+  it('preserves a sibling runtime mirror under the same bare worktree id', () => {
+    const firstSnapshot = makeBrowserSnapshot({
+      workspaceId: 'browser-workspace-a',
+      pageId: 'browser-page-a',
+      tabId: 'browser-tab-a'
+    })
+    const firstPatch = applyWebSessionTabsSnapshot(makeState(), firstSnapshot, 'runtime-a', NOW)
+    const first = { ...makeState(), ...firstPatch }
+    const secondSnapshot = makeBrowserSnapshot({
+      workspaceId: 'browser-workspace-b',
+      pageId: 'browser-page-b',
+      tabId: 'browser-tab-b'
+    })
+    const secondPatch = applyWebSessionTabsSnapshot(first, secondSnapshot, 'runtime-b', NOW + 1)
+    const both = { ...first, ...secondPatch }
+
+    expect(
+      both.unifiedTabsByWorktree[WORKTREE_A]?.map((tab) => [tab.entityId, tab.executionHostId])
+    ).toEqual([
+      ['browser-workspace-a', 'runtime:runtime-a'],
+      ['browser-workspace-b', 'runtime:runtime-b']
+    ])
+
+    const removalPatch = applyWebSessionTabsSnapshot(
+      both,
+      makeSnapshot(WORKTREE_A, [], null),
+      'runtime-b',
+      NOW + 2
+    )
+    const afterRemoval = { ...both, ...removalPatch }
+    expect(
+      afterRemoval.unifiedTabsByWorktree[WORKTREE_A]?.map((tab) => [
+        tab.entityId,
+        tab.executionHostId
+      ])
+    ).toEqual([['browser-workspace-a', 'runtime:runtime-a']])
+  })
+
   it('emits no store updates for 128 accepted identical resource frames', () => {
     const terminal = makeTerminalSnapshot()
     const browser = makeBrowserSnapshot()

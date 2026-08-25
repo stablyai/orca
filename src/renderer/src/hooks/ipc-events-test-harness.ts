@@ -133,6 +133,7 @@ export type IpcEventsHarness = {
 export type IpcEventsHarnessOptions = {
   /** Sidebar order the workspace digit chord indexes into. */
   visibleWorktreeIds?: string[]
+  visibleWorktreeTargets?: { id: string; executionHostId?: 'local' | `ssh:${string}` }[]
 }
 
 /**
@@ -169,7 +170,9 @@ export async function loadIpcEventsHarness(
     ensureWorktreeHasInitialTerminal: vi.fn()
   }))
   vi.doMock('@/components/sidebar/visible-worktrees', () => ({
-    getVisibleWorktreeIds: () => options.visibleWorktreeIds ?? []
+    getVisibleWorktreeIds: () => options.visibleWorktreeIds ?? [],
+    getVisibleWorktreeShortcutTargets: () =>
+      options.visibleWorktreeTargets ?? (options.visibleWorktreeIds ?? []).map((id) => ({ id }))
   }))
   vi.doMock('@/lib/floating-workspace-terminal-actions', () => ({
     createFloatingWorkspaceTerminalTab: vi.fn(),

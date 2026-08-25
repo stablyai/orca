@@ -299,13 +299,18 @@ function getRuntimeHooksWithSystemUserHooks(
 ): {
   hooks: Record<string, HookDefinition[]>
   trustEntries: MirroredRuntimeUserHookTrustEntry[]
-} {
+} | null {
   const systemConfigPath = getSystemConfigPath()
   if (systemConfigPath === runtimeConfigPath) {
     return { hooks: { ...runtimeHooks }, trustEntries: [] }
   }
 
-  const systemConfig = readHooksJson(systemConfigPath)
+  const { raw: systemRaw, config: systemConfig } = readHooksJsonWithRaw(systemConfigPath)
+  if (!systemConfig && systemRaw === null) {
+    // Why: rebuilding from an unreadable source drops the last-known user hooks
+    // from the managed runtime; let launch prep retry without changing it.
+    return null
+  }
   if (!systemConfig?.hooks) {
     return { hooks: {}, trustEntries: [] }
   }
@@ -596,6 +601,13 @@ function cleanupLegacySystemManagedHooks(): void {
   // Why: the pre-write guard below compares against these bytes; a separate
   // later read would let a concurrent save land between parse and snapshot.
   const { raw: previousRaw, config } = readHooksJsonWithRaw(legacyConfigPath)
+  // Why: `config === null` with no raw is the "could not read" answer, not the
+  // "no hooks here" one — the branch below removes managed trust entries AND
+  // their grant-ledger record, so acting on it would discard approvals over a
+  // read that merely failed. A genuine absence still returns `config: {}`.
+  if (config === null && previousRaw === null) {
+    return
+  }
   if (!config?.hooks || previousRaw === null) {
     if (hasRecordedRealHomeGrant) {
       removeSystemManagedHookTrustEntries(systemHomePath, legacyConfigPath)
@@ -1284,6 +1296,15 @@ export class CodexHookService {
     const isManagedCommand = createManagedCommandMatcher(getCodexManagedScriptFileName())
     const command = getManagedCommand(scriptPath)
     const hookPlan = getRuntimeHooksWithSystemUserHooks(config.hooks, isManagedCommand, configPath)
+    if (!hookPlan) {
+      return {
+        agent: 'codex',
+        state: 'error',
+        configPath,
+        managedHooksPresent: false,
+        detail: 'Could not read system Codex hooks.json'
+      }
+    }
     const nextHooks = hookPlan.hooks
     const managedEvents = new Set<string>(CODEX_EVENTS)
 
@@ -1534,6 +1555,15 @@ export class CodexHookService {
 
     const isManagedCommand = createManagedCommandMatcher(getCodexManagedScriptFileName())
     const hookPlan = getRuntimeHooksWithSystemUserHooks(config.hooks, isManagedCommand, configPath)
+    if (!hookPlan) {
+      return {
+        agent: 'codex',
+        state: 'error',
+        configPath,
+        managedHooksPresent: false,
+        detail: 'Could not read system Codex hooks.json'
+      }
+    }
     config.hooks = hookPlan.hooks
     writeCodexHooksJson(configPath, hookPlan.hooks)
 
@@ -1614,6 +1644,7 @@ export class CodexHookService {
 export const codexHookService = new CodexHookService()
 
 export const _internals = {
+  cleanupLegacySystemManagedHooks,
   getManagedScript,
   installManagedHooksIntoWslRuntime,
   refreshWslRuntimeUserHooks,

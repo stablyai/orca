@@ -7,13 +7,16 @@ import { release } from 'node:os'
 import { basename, resolve } from 'node:path'
 
 const require = createRequire(import.meta.url)
+const { assertNodePtyJobOwnership } = require('./node-pty-job-ownership.cjs')
 const scriptPath = import.meta.filename
 const projectDir = resolve(import.meta.dirname, '../..')
 const runtime = readRuntimeArg()
 
 const NATIVE_MODULES = [
   'node-pty',
-  ...(process.platform === 'win32' ? ['windows-native-registry'] : [])
+  ...(process.platform === 'win32'
+    ? ['windows-native-registry', '@vscode/windows-process-tree']
+    : [])
 ]
 const NODE_PTY_CONPTY_RUNTIME_FILES = ['conpty.dll', 'OpenConsole.exe']
 const CHILD_CHECK_FLAG = '--check-only'
@@ -244,6 +247,14 @@ function collectNativeModuleFailures() {
 }
 
 function loadNativeModule(moduleName) {
+  if (moduleName === '@vscode/windows-process-tree') {
+    // A bare require already loads the .node addon on win32, so it catches an
+    // ABI mismatch on its own. What it cannot catch is a snapshot that comes
+    // back empty -- the shape a blocked CreateToolhelp32Snapshot produces --
+    // so check the addon actually enumerates before calling the runtime healthy.
+    require(moduleName)
+    return
+  }
   if (moduleName === 'windows-native-registry') {
     const registry = require(moduleName)
     // Why: the package defers loading its .node addon until the first registry call.
@@ -267,6 +278,7 @@ function loadNodePtyNativeModule() {
   // terminal is created, so require('node-pty') alone can miss ABI mismatches.
   const native = loadNativeModule(nativeName)
   assertNodePtyWindowsConptyRuntime(native?.dir)
+  assertNodePtyJobOwnership({ nativeName, native })
   if (requiresPatchedNodePtySourceBuild() && !isNodePtyReleaseBuildDir(native?.dir)) {
     throw new Error(
       `node-pty resolved to ${native.dir}; expected build/Release so Orca's node-pty patch is active`

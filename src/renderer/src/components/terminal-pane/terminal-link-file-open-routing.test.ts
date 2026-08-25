@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
+import { activateAndRevealWorktree } from '@/lib/worktree-activation'
 import { openDetectedFilePath } from './terminal-link-handlers'
 import { createTerminalLinkTestDoubles } from './terminal-link-handlers-test-fixtures'
 import {
@@ -58,6 +59,11 @@ describe('handleOscLink', () => {
       expect.objectContaining({ title: 'report.html', activate: true })
     )
     expect(openFilePathMock).not.toHaveBeenCalled()
+    // Why: the browser tab is the surface — activation must not re-seed a shell into a
+    // workspace whose last terminal the user closed.
+    expect(activateAndRevealWorktree).toHaveBeenCalledWith('wt-1', {
+      providesInitialSurface: true
+    })
   })
 
   it('also opens local .htm paths in Orca browser tabs with the platform modifier', async () => {
@@ -96,6 +102,10 @@ describe('handleOscLink', () => {
       matchLength: 0
     })
     expect(openFilePathMock).not.toHaveBeenCalled()
+    // Why: the editor file is the surface — the cross-worktree jump must not add a shell.
+    expect(activateAndRevealWorktree).toHaveBeenCalledWith('wt-1', {
+      providesInitialSurface: true
+    })
   })
 
   it('preserves explicit column for Orca opens from :line:column links', async () => {

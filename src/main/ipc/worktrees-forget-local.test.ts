@@ -52,6 +52,9 @@ vi.mock('./worktree-symlinks', async () =>
   (await import('./worktrees-test-module-mocks')).worktreeSymlinksModuleMock()
 )
 vi.mock('./ssh', async () => (await import('./worktrees-test-module-mocks')).sshModuleMock())
+vi.mock('../ssh/ssh-target-registry', async () =>
+  (await import('./worktrees-test-module-mocks')).sshTargetRegistryModuleMock()
+)
 vi.mock('../hooks', async () => (await import('./worktrees-test-module-mocks')).hooksModuleMock())
 vi.mock('../setup-runner-script-text', async (importOriginal) =>
   (await import('./worktrees-test-module-mocks')).setupRunnerScriptTextModuleMock(
@@ -153,6 +156,22 @@ describe('registerWorktreeHandlers', () => {
       expect(removeWorktreeMock).not.toHaveBeenCalled()
     })
 
+    it('purges metadata after a rejected best-effort PTY sweep', async () => {
+      const worktreeId = 'repo-1::/workspace/feature-wt'
+      killAllProcessesForWorktreeMock.mockRejectedValue(new Error('terminal inventory unavailable'))
+
+      await expect(handlers['worktrees:forgetLocal'](null, { worktreeId })).resolves.toEqual({})
+
+      expect(store.removeWorktreeMeta).toHaveBeenCalledWith(worktreeId, 'local')
+      expect(mainWindow.webContents.send).toHaveBeenCalledWith('worktrees:changed', {
+        repoId: 'repo-1'
+      })
+      expect(store.removeWorktreeMeta.mock.invocationCallOrder[0]).toBeLessThan(
+        mainWindow.webContents.send.mock.invocationCallOrder[0]
+      )
+      expect(removeWorktreeMock).not.toHaveBeenCalled()
+    })
+
     it('sweeps a connected SSH owner through its PTY provider', async () => {
       const worktreeId = 'repo-gone::/workspace/feature-wt'
       const sshProvider = {} as never
@@ -243,6 +262,32 @@ describe('registerWorktreeHandlers', () => {
       expect(store.removeWorktreeMeta).toHaveBeenCalledWith(worktreeId, 'ssh:ssh-live')
     })
 
+    it('rejects an unqualified forget when the repo id has owners on two hosts', async () => {
+      const localRepo = {
+        id: 'repo-shared',
+        path: '/workspace/local',
+        displayName: 'local',
+        badgeColor: '#000',
+        addedAt: 0
+      }
+      const sshRepo = {
+        ...localRepo,
+        path: '/workspace/remote',
+        connectionId: 'ssh-live'
+      }
+      const worktreeId = 'repo-shared::/workspace/feature-wt'
+      store.getRepos.mockReturnValue([localRepo, sshRepo])
+      store.getRepo.mockReturnValue(localRepo)
+      store.getWorktreeMeta.mockReturnValue({ hostId: 'local' })
+
+      await expect(handlers['worktrees:forgetLocal'](null, { worktreeId })).rejects.toThrow(
+        'Workspace identity is ambiguous across hosts'
+      )
+
+      expect(killAllProcessesForWorktreeMock).not.toHaveBeenCalled()
+      expect(store.removeWorktreeMeta).not.toHaveBeenCalled()
+    })
+
     it('scopes the purge to a local folder workspace owner', async () => {
       const repo = {
         id: 'repo-folder-child',
@@ -283,6 +328,28 @@ describe('registerWorktreeHandlers', () => {
 
       expect(store.removeWorktreeMeta).not.toHaveBeenCalled()
       expect(deleteWorktreeHistoryDirMock).not.toHaveBeenCalled()
+    })
+
+    it('does not apply another host folder root guard to an explicit missing owner', async () => {
+      const localRepo = {
+        id: 'repo-folder',
+        path: '/workspace/folder',
+        displayName: 'folder',
+        badgeColor: '#000',
+        addedAt: 0,
+        kind: 'folder' as const
+      }
+      const worktreeId = `${localRepo.id}::${localRepo.path}`
+      store.getRepos.mockReturnValue([localRepo])
+      store.getRepo.mockReturnValue(undefined)
+      store.getWorktreeMeta.mockReturnValue({ hostId: 'ssh:removed' })
+      getLocalPtyProviderMock.mockReturnValue({} as never)
+
+      await expect(
+        handlers['worktrees:forgetLocal'](null, { worktreeId, hostId: 'ssh:removed' })
+      ).resolves.toEqual({})
+
+      expect(store.removeWorktreeMeta).toHaveBeenCalledWith(worktreeId, 'ssh:removed')
     })
   })
 })

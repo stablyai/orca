@@ -14,6 +14,9 @@ import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
 
 const sourceScriptPath = fileURLToPath(new URL('./ensure-native-runtime.mjs', import.meta.url))
+const sourceNodePtyJobOwnershipPath = fileURLToPath(
+  new URL('./node-pty-job-ownership.cjs', import.meta.url)
+)
 
 describe('ensure-native-runtime', () => {
   it('rechecks Node native modules in fresh child processes after rebuilding', () => {
@@ -156,6 +159,10 @@ describe('ensure-native-runtime', () => {
 function mkTempProject() {
   const projectDir = mkdtempSync(join(tmpdir(), 'orca-native-runtime-'))
   mkdirSync(join(projectDir, 'config', 'scripts'), { recursive: true })
+  copyFileSync(
+    sourceNodePtyJobOwnershipPath,
+    join(projectDir, 'config', 'scripts', 'node-pty-job-ownership.cjs')
+  )
   return projectDir
 }
 

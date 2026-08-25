@@ -11,6 +11,12 @@ export type CloseFloatingItemListener = (payload: { sourceId: string }) => void
 export type SelectFloatingIndexListener = (payload: { index: number }) => void
 export type CloseTerminalListener = (data: { tabId: string; paneRuntimeId?: number | null }) => void
 export type CloseSessionTabListener = (data: { tabId: string; worktreeId: string }) => void
+export type SessionTabCloseRequestListener = (data: {
+  requestId: string
+  tabId: string
+  worktreeId: string
+  expiresAt?: number
+}) => void
 export type TerminalTabCloseRequestListener = (data: {
   requestId: string
   tabId: string
@@ -22,6 +28,8 @@ export async function useIpcEventsForCloseRouting({
   closeFloatingItemListenerRef,
   selectFloatingIndexListenerRef,
   closeSessionTabListenerRef,
+  sessionTabCloseRequestListenerRef,
+  respondSessionTabClose = vi.fn(),
   closeTerminalListenerRef,
   getState,
   requestTabCloseListenerRef,
@@ -34,6 +42,8 @@ export async function useIpcEventsForCloseRouting({
   closeFloatingItemListenerRef?: { current: CloseFloatingItemListener | null }
   selectFloatingIndexListenerRef?: { current: SelectFloatingIndexListener | null }
   closeSessionTabListenerRef?: { current: CloseSessionTabListener | null }
+  sessionTabCloseRequestListenerRef?: { current: SessionTabCloseRequestListener | null }
+  respondSessionTabClose?: ReturnType<typeof vi.fn>
   closeTerminalListenerRef?: { current: CloseTerminalListener | null }
   getState: () => Record<string, unknown>
   requestTabCloseListenerRef?: { current: RequestTabCloseListener | null }
@@ -168,6 +178,13 @@ export async function useIpcEventsForCloseRouting({
           }
           return () => {}
         },
+        onSessionTabCloseRequest: (listener: SessionTabCloseRequestListener) => {
+          if (sessionTabCloseRequestListenerRef) {
+            sessionTabCloseRequestListenerRef.current = listener
+          }
+          return () => {}
+        },
+        respondSessionTabClose,
         onMoveSessionTab: () => () => {},
         onOpenFileFromMobile: () => () => {},
         onOpenDiffFromMobile: () => () => {},

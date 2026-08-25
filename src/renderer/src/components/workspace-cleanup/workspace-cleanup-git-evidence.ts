@@ -6,6 +6,7 @@ import {
   applyWorkspaceCleanupPolicy,
   WORKSPACE_CLEANUP_TARGET_BATCH_LIMIT
 } from '../../../../shared/workspace-cleanup'
+import { getWorkspaceCleanupCandidateIdentity } from '../../../../shared/workspace-cleanup-host-identity'
 import type {
   WorkspaceCleanupFilterState,
   WorkspaceCleanupSortField,
@@ -72,16 +73,20 @@ export function selectWorkspaceCleanupGitEvidenceTargets(
   return targets
 }
 
-/** Focused re-scan results win over the deferred broad-scan row. */
+/**
+ * Focused re-scan results win over the deferred broad-scan row. Keyed by
+ * host-qualified identity: applying one host's git state to another host's
+ * same-id row would mislabel a dirty workspace as safe to delete (STA-4343).
+ */
 export function applyWorkspaceCleanupGitEvidence(
   candidates: readonly WorkspaceCleanupCandidate[],
-  evidenceByWorktreeId: ReadonlyMap<string, WorkspaceCleanupCandidate>
+  evidenceByIdentity: ReadonlyMap<string, WorkspaceCleanupCandidate>
 ): readonly WorkspaceCleanupCandidate[] {
-  if (evidenceByWorktreeId.size === 0) {
+  if (evidenceByIdentity.size === 0) {
     return candidates
   }
   return candidates.map((candidate) => {
-    const evidence = evidenceByWorktreeId.get(candidate.worktreeId)
+    const evidence = evidenceByIdentity.get(getWorkspaceCleanupCandidateIdentity(candidate))
     if (
       evidence === undefined ||
       (candidate.git.checkedAt !== null &&

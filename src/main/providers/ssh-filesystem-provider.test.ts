@@ -497,18 +497,19 @@ describe('SshFilesystemProvider', () => {
     expect(result).toEqual(['src/index.ts', 'package.json'])
   })
 
-  it('listFiles forwards supported list options', async () => {
-    mux.request.mockResolvedValue([])
+  it('listFiles forwards listing and query options', async () => {
     await provider.listFiles('/home/user/project', {
       excludePaths: ['/home/user/project/worktrees/b'],
-      maxResults: 20_000
+      maxResults: 20_000,
+      searchQuery: 'target'
     })
     expect(mux.request).toHaveBeenCalledWith(
       'fs.listFiles',
       {
         rootPath: '/home/user/project',
         excludePaths: ['/home/user/project/worktrees/b'],
-        maxResults: 20_000
+        maxResults: 20_000,
+        searchQuery: 'target'
       },
       { signal: undefined }
     )

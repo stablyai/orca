@@ -228,7 +228,7 @@ describe('Task/Dispatch lifecycle guards', () => {
 
       const released =
         operation === 'stop'
-          ? database.beginWorkerStop(contextOnly.id)
+          ? database.beginWorkerStop(contextOnly.id, 'runtime_test')
           : database.abandonWorkerDispatch(contextOnly.id)
       expect(released).toMatchObject({
         disposition: 'context_only',
@@ -257,7 +257,9 @@ describe('Task/Dispatch lifecycle guards', () => {
       const released = startWorker(database, task.id, `${operation}_released`)
 
       if (operation === 'stop') {
-        expect(database.beginWorkerStop(released.dispatchId).disposition).toBe('stopping')
+        expect(database.beginWorkerStop(released.dispatchId, 'runtime_test').disposition).toBe(
+          'stopping'
+        )
         expect(database.settleWorkerStop(released.dispatchId).state).toBe('stopped')
       } else {
         expect(database.abandonWorkerDispatch(released.dispatchId).disposition).toBe('abandoned')
@@ -286,7 +288,9 @@ describe('Task/Dispatch lifecycle guards', () => {
     sqliteFor(database).prepare("UPDATE tasks SET status = 'ready' WHERE id = ?").run(task.id)
     const abandoned = startWorker(database, task.id, 'interleaved_abandoned')
 
-    expect(database.beginWorkerStop(stopping.dispatchId).disposition).toBe('stopping')
+    expect(database.beginWorkerStop(stopping.dispatchId, 'runtime_test').disposition).toBe(
+      'stopping'
+    )
     expect(database.abandonWorkerDispatch(abandoned.dispatchId).disposition).toBe('abandoned')
     expect(database.getTask(task.id)?.status).toBe('dispatched')
 
@@ -305,7 +309,9 @@ describe('Task/Dispatch lifecycle guards', () => {
     database.markWorkerStartUnknown(uncertain.dispatch.id, 'agent_readiness', 'outcome unknown')
     expect(database.getTask(task.id)?.status).toBe('blocked')
 
-    expect(database.beginWorkerStop(uncertain.dispatch.id).disposition).toBe('stopping')
+    expect(database.beginWorkerStop(uncertain.dispatch.id, 'runtime_test').disposition).toBe(
+      'stopping'
+    )
     expect(database.settleWorkerStop(uncertain.dispatch.id).state).toBe('stopped')
     expect(database.getTask(task.id)?.status).toBe('dispatched')
     expect(

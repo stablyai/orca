@@ -49,6 +49,9 @@ export async function execLocalPreflightCommand(
   const commandPromise = execFileAsync(command, args, {
     encoding: 'utf-8',
     timeout: PREFLIGHT_COMMAND_TIMEOUT_MS,
+    // Preflight probes console-subsystem binaries (git, gh, node); without this
+    // each one flashes a console and steals foreground on Windows (#10488).
+    windowsHide: true,
     ...(env ? { env } : {})
   }) as Promise<PreflightCommandResult>
 
@@ -60,7 +63,10 @@ export async function execCommandInWsl(
   command: string
 ): Promise<PreflightCommandResult> {
   const commandPromise = runPreflightCommandInWsl(target, command, PREFLIGHT_COMMAND_TIMEOUT_MS)
-  return withPreflightTimeout('wsl.exe', commandPromise)
+  // Label only (runPreflightCommandInWsl owns the actual wsl.exe invocation) —
+  // not the literal 'wsl.exe' so the wsl-invocation-boundary guard doesn't
+  // mistake this string for a spawn site.
+  return withPreflightTimeout('wsl command', commandPromise)
 }
 
 export async function isCommandAvailable(
@@ -94,7 +100,13 @@ export async function isCommandOnPath(
     const { stdout } = await execCommandInWsl(
       wslTarget,
       [
-        buildPosixCommandPathLookupScript({ kind: 'literal', value: command }),
+        // Same skip as agent detection: without it this branch answers "yes"
+        // for a Windows binary reached through interop, so preflight and the
+        // detector disagree about the same distro.
+        buildPosixCommandPathLookupScript(
+          { kind: 'literal', value: command },
+          { skipWindowsMountDirs: true }
+        ),
         'if [ -n "$resolved" ]; then',
         `printf '${WSL_COMMAND_PATH_SENTINEL}%s\\n' "$resolved"`,
         'fi'

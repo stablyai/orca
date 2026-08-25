@@ -4,11 +4,13 @@ import { RpcDispatcher } from './dispatcher'
 import type { RpcRequest } from './core'
 import type { OrcaRuntimeService } from '../orca-runtime'
 import { TERMINAL_METHODS } from './methods/terminal'
+import { createSubscriptionRegistryDouble } from './subscription-registry-test-double'
 import type { RuntimeTerminalWait } from '../../../shared/runtime-types'
 
 function stubRuntime(overrides: Partial<OrcaRuntimeService> = {}): OrcaRuntimeService {
   return {
     getRuntimeId: () => 'test-runtime',
+    subscribeToPtyExit: vi.fn(() => vi.fn()),
     registerRemoteTerminalViewSubscriber: () => () => {},
     requestRendererTerminalTabMount: () => false,
     getRendererTerminalSerializerGenerationForHandle: () => 0,
@@ -64,7 +66,7 @@ describe('terminal.subscribe blank-tab background mount', () => {
 
   it('requests a renderer tab mount when a mobile subscribe has no headless model', async () => {
     // Why: stale preview text must not hide the missing live model/attachment.
-    const cleanups = new Map<string, () => void>()
+    const registry = createSubscriptionRegistryDouble()
     const callOrder: string[] = []
     const unsubscribeData = vi.fn()
     const requestRendererTerminalTabMount = vi.fn(() => {
@@ -91,13 +93,9 @@ describe('terminal.subscribe blank-tab background mount', () => {
       isTerminalAlternateScreen: vi.fn().mockReturnValue(false),
       subscribeToTerminalResize: vi.fn().mockReturnValue(vi.fn()),
       subscribeToFitOverrideChanges: vi.fn().mockReturnValue(vi.fn()),
-      registerSubscriptionCleanup: vi.fn((id: string, cleanup: () => void) => {
-        cleanups.set(id, cleanup)
-      }),
-      cleanupSubscription: vi.fn((id: string) => {
-        cleanups.get(id)?.()
-        cleanups.delete(id)
-      }),
+      registerSubscriptionCleanup: vi.fn(registry.registerSubscriptionCleanup),
+      registerOwnedSubscriptionCleanup: vi.fn(registry.registerOwnedSubscriptionCleanup),
+      cleanupSubscription: vi.fn(registry.cleanupSubscription),
       waitForTerminal: vi.fn(() => new Promise<RuntimeTerminalWait>(() => {}))
     })
     const dispatcher = new RpcDispatcher({ runtime, methods: TERMINAL_METHODS })
@@ -127,7 +125,7 @@ describe('terminal.subscribe blank-tab background mount', () => {
   })
 
   it('does not request a renderer tab mount when an attached terminal is legitimately blank', async () => {
-    const cleanups = new Map<string, () => void>()
+    const registry = createSubscriptionRegistryDouble()
     const requestRendererTerminalTabMount = vi.fn(() => true)
     const runtime = stubRuntime({
       resolveLeafForHandle: vi.fn().mockReturnValue({ ptyId: 'pty-1' }),
@@ -143,13 +141,9 @@ describe('terminal.subscribe blank-tab background mount', () => {
       isTerminalAlternateScreen: vi.fn().mockReturnValue(false),
       subscribeToTerminalResize: vi.fn().mockReturnValue(vi.fn()),
       subscribeToFitOverrideChanges: vi.fn().mockReturnValue(vi.fn()),
-      registerSubscriptionCleanup: vi.fn((id: string, cleanup: () => void) => {
-        cleanups.set(id, cleanup)
-      }),
-      cleanupSubscription: vi.fn((id: string) => {
-        cleanups.get(id)?.()
-        cleanups.delete(id)
-      }),
+      registerSubscriptionCleanup: vi.fn(registry.registerSubscriptionCleanup),
+      registerOwnedSubscriptionCleanup: vi.fn(registry.registerOwnedSubscriptionCleanup),
+      cleanupSubscription: vi.fn(registry.cleanupSubscription),
       waitForTerminal: vi.fn(() => new Promise<RuntimeTerminalWait>(() => {}))
     })
     const dispatcher = new RpcDispatcher({ runtime, methods: TERMINAL_METHODS })
@@ -176,7 +170,7 @@ describe('terminal.subscribe blank-tab background mount', () => {
   })
 
   it('does not wait for a remount when the current snapshot came from the renderer', async () => {
-    const cleanups = new Map<string, () => void>()
+    const registry = createSubscriptionRegistryDouble()
     const requestRendererTerminalTabMount = vi.fn(() => true)
     const waitForRendererTerminalSerializer = vi.fn()
     const runtime = stubRuntime({
@@ -200,13 +194,9 @@ describe('terminal.subscribe blank-tab background mount', () => {
       isTerminalAlternateScreen: vi.fn().mockReturnValue(false),
       subscribeToTerminalResize: vi.fn().mockReturnValue(vi.fn()),
       subscribeToFitOverrideChanges: vi.fn().mockReturnValue(vi.fn()),
-      registerSubscriptionCleanup: vi.fn((id: string, cleanup: () => void) => {
-        cleanups.set(id, cleanup)
-      }),
-      cleanupSubscription: vi.fn((id: string) => {
-        cleanups.get(id)?.()
-        cleanups.delete(id)
-      }),
+      registerSubscriptionCleanup: vi.fn(registry.registerSubscriptionCleanup),
+      registerOwnedSubscriptionCleanup: vi.fn(registry.registerOwnedSubscriptionCleanup),
+      cleanupSubscription: vi.fn(registry.cleanupSubscription),
       waitForTerminal: vi.fn(() => new Promise<RuntimeTerminalWait>(() => {}))
     })
     const dispatcher = new RpcDispatcher({ runtime, methods: TERMINAL_METHODS })

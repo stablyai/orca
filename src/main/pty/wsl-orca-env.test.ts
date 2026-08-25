@@ -1,11 +1,12 @@
 import { describe, expect, it } from 'vitest'
+import { isAbsolute } from 'node:path'
+import { getShellReadyWrapperRoot } from '../providers/local-pty-shell-ready-wrapper-root'
 import {
   SETUP_AGENT_SEQUENCE_STARTUP_COMMAND_ENV,
   SETUP_AGENT_SEQUENCE_STARTUP_SCRIPT_ENV
 } from '../../shared/setup-agent-sequencing'
 import {
   addOrcaWslInteropEnv,
-  addWorktreeSetupWslInteropEnv,
   stampWslOrchestrationCompatibilityHost
 } from './wsl-orca-env'
 
@@ -15,7 +16,23 @@ describe('addOrcaWslInteropEnv', () => {
 
     addOrcaWslInteropEnv(env)
 
-    expect(env.WSLENV).toBe('ORCA_TERMINAL_HANDLE/u')
+    expect(env.WSLENV).toBe('ORCA_TERMINAL_HANDLE/u:ORCA_SHELL_READY_ROOT/p')
+  })
+
+  // Why this is published at all: the wrapper tree is content-addressed, so the
+  // in-guest login script cannot rebuild its path from ORCA_USER_DATA_PATH -- it
+  // cannot derive the hash segment. Without this the guest finds no wrapper and
+  // every WSL pane launches unwrapped: no ready marker, so every startup command
+  // waits out the full readiness timeout.
+  it('publishes the resolved wrapper root path-translated for the guest', () => {
+    const env: Record<string, string> = {}
+
+    addOrcaWslInteropEnv(env)
+
+    expect(env.ORCA_SHELL_READY_ROOT).toBe(getShellReadyWrapperRoot())
+    expect(isAbsolute(env.ORCA_SHELL_READY_ROOT as string)).toBe(true)
+    // /p, not /u: the guest reads a Windows path through /mnt/c.
+    expect(env.WSLENV?.split(':')).toContain('ORCA_SHELL_READY_ROOT/p')
   })
 
   it('imports setup-gated startup env into WSL without path translation', () => {
@@ -27,6 +44,7 @@ describe('addOrcaWslInteropEnv', () => {
     addOrcaWslInteropEnv(env)
 
     expect(env.WSLENV?.split(':')).toEqual([
+      'ORCA_SHELL_READY_ROOT/p',
       `${SETUP_AGENT_SEQUENCE_STARTUP_COMMAND_ENV}/u`,
       `${SETUP_AGENT_SEQUENCE_STARTUP_SCRIPT_ENV}/u`
     ])
@@ -39,7 +57,7 @@ describe('addOrcaWslInteropEnv', () => {
 
     addOrcaWslInteropEnv(env)
 
-    expect(env.WSLENV).toBe('FOO/u:ORCA_TERMINAL_HANDLE/u:BAR/p')
+    expect(env.WSLENV).toBe('FOO/u:ORCA_TERMINAL_HANDLE/u:BAR/p:ORCA_SHELL_READY_ROOT/p')
   })
 
   it('marks OMP status and hook env for Windows to WSL import', () => {
@@ -178,7 +196,7 @@ describe('addOrcaWslInteropEnv', () => {
 
     addOrcaWslInteropEnv(env)
 
-    expect(env.WSLENV).toBe('ORCA_WORKSPACE_NAME/u')
+    expect(env.WSLENV).toBe('ORCA_SHELL_READY_ROOT/p:ORCA_WORKSPACE_NAME/u')
   })
 
   it('does not register setup vars that are absent from the env', () => {
@@ -186,7 +204,7 @@ describe('addOrcaWslInteropEnv', () => {
 
     addOrcaWslInteropEnv(env)
 
-    expect(env.WSLENV).toBe('ORCA_TERMINAL_HANDLE/u')
+    expect(env.WSLENV).toBe('ORCA_TERMINAL_HANDLE/u:ORCA_SHELL_READY_ROOT/p')
   })
 
   it('marks the WSL hook relay version for import on relay spawn envs', () => {
@@ -194,7 +212,7 @@ describe('addOrcaWslInteropEnv', () => {
       ORCA_WSL_HOOK_RELAY_VERSION: '0.1.0+abc'
     }
     addOrcaWslInteropEnv(env)
-    expect(env.WSLENV).toBe('ORCA_WSL_HOOK_RELAY_VERSION/u')
+    expect(env.WSLENV).toBe('ORCA_SHELL_READY_ROOT/p:ORCA_WSL_HOOK_RELAY_VERSION/u')
   })
 
   it('crosses a guest-side OpenCode config overlay untranslated (/u)', () => {
@@ -229,18 +247,3 @@ describe('addOrcaWslInteropEnv', () => {
   })
 })
 
-describe('addWorktreeSetupWslInteropEnv', () => {
-  it('registers only setup vars, sharing the /u-vs-/p flag logic with the PTY path (#9206)', () => {
-    const env: Record<string, string | undefined> = {
-      ORCA_ROOT_PATH: '/mnt/c/Users/jin/repo',
-      ORCA_WORKTREE_PATH: 'C:\\Users\\jin\\repo-worktrees\\fix-1',
-      ORCA_WORKSPACE_NAME: 'fix-1',
-      // Terminal-only vars must not leak into runHook's WSLENV.
-      ORCA_TERMINAL_HANDLE: 'term_wsl'
-    }
-
-    addWorktreeSetupWslInteropEnv(env)
-
-    expect(env.WSLENV).toBe('ORCA_ROOT_PATH/u:ORCA_WORKTREE_PATH/p:ORCA_WORKSPACE_NAME/u')
-  })
-})

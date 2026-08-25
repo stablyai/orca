@@ -8,7 +8,46 @@ vi.mock('./delete-worktree-flow', () => ({
   runWorktreeBatchDelete: mocks.runBatchDelete
 }))
 
-import { deferWorktreeContextMenuDeleteIntent } from './worktree-context-menu-delete-intent'
+import {
+  createWorktreeContextMenuDeleteIntent,
+  deferWorktreeContextMenuDeleteIntent,
+  runWorktreeContextMenuDeleteIntent
+} from './worktree-context-menu-delete-intent'
+
+describe('createWorktreeContextMenuDeleteIntent', () => {
+  it('routes a same-id row through the host that owns the context menu', () => {
+    const local = { id: 'shared', instanceId: 'local-instance', hostId: 'local' as const }
+    const ssh = { id: 'shared', instanceId: 'ssh-instance', hostId: 'ssh:box' as const }
+    const intent = createWorktreeContextMenuDeleteIntent({
+      worktree: ssh,
+      batchDeleteWorktrees: [local, ssh],
+      isMultiContext: false
+    })
+
+    runWorktreeContextMenuDeleteIntent(intent)
+
+    expect(mocks.runDelete).toHaveBeenCalledWith('shared', {
+      expectedInstanceId: 'ssh-instance',
+      expectedHostId: 'ssh:box'
+    })
+  })
+
+  it('keeps every selected host in a colliding batch', () => {
+    const worktrees = [
+      { id: 'shared', instanceId: 'local-instance', hostId: 'local' as const },
+      { id: 'shared', instanceId: 'ssh-instance', hostId: 'ssh:box' as const }
+    ]
+    const intent = createWorktreeContextMenuDeleteIntent({
+      worktree: worktrees[1],
+      batchDeleteWorktrees: worktrees,
+      isMultiContext: true
+    })
+
+    runWorktreeContextMenuDeleteIntent(intent)
+
+    expect(mocks.runBatchDelete).toHaveBeenCalledWith(worktrees)
+  })
+})
 
 describe('deferWorktreeContextMenuDeleteIntent', () => {
   beforeEach(() => {

@@ -84,11 +84,16 @@ describe('Store', () => {
     store.addRepo(makeRepo())
     expect(store.getRepo('r1')!.gitUsername).toBe('')
 
-    expect(store.setResolvedRepoGitUsername('r1', 'testuser')).toBe(true)
+    expect(store.setResolvedRepoGitUsername(makeRepo(), 'testuser')).toBe(true)
     expect(store.getRepo('r1')!.gitUsername).toBe('testuser')
     // Unchanged value reports no change so callers can skip renderer notify.
-    expect(store.setResolvedRepoGitUsername('r1', 'testuser')).toBe(false)
-    expect(store.setResolvedRepoGitUsername('missing', 'x')).toBe(false)
+    expect(store.setResolvedRepoGitUsername(makeRepo(), 'testuser')).toBe(false)
+    expect(store.setResolvedRepoGitUsername(makeRepo({ id: 'missing' }), 'x')).toBe(false)
+    // A repo id that exists only on another host must not fall back to the local row.
+    expect(store.setResolvedRepoGitUsername(makeRepo({ connectionId: 'ssh-1' }), 'ssh-user')).toBe(
+      false
+    )
+    expect(store.getRepo('r1')!.gitUsername).toBe('testuser')
 
     store.flush()
     const persisted = readDataFile() as PersistedState
@@ -460,6 +465,32 @@ describe('Store', () => {
     expect(
       store.getWorkspaceSession('ssh:ssh-a').lastVisitedAtByWorktreeId?.['shared::/repo']
     ).toBe(222)
+  })
+
+  it('removeProjectForHost on local prunes the unqualified host-identity visit key', async () => {
+    const store = await createStore()
+    store.addRepo(makeRepo({ id: 'shared', path: '/repo' }))
+    store.addRepo(
+      makeRepo({
+        id: 'shared',
+        path: '/repo',
+        connectionId: 'ssh-a',
+        executionHostId: 'ssh:ssh-a'
+      })
+    )
+    // No meta for this worktree, so only the unqualified host-identity key names it. The host split
+    // parks that canonical unknown-host form in the local partition; leaving it behind after a local
+    // removal re-materializes an orphaned workspace next launch.
+    store.setWorkspaceSession({
+      ...getDefaultWorkspaceSession(),
+      lastVisitedAtByWorktreeId: { '|shared::/repo/wt-orphan': 111 }
+    })
+
+    store.removeProjectForHost('shared', 'local')
+
+    expect(
+      store.getWorkspaceSession().lastVisitedAtByWorktreeId?.['|shared::/repo/wt-orphan']
+    ).toBeUndefined()
   })
 
   it('removeProjectForHost prunes only the removed host when a third host also shares the owner key', async () => {

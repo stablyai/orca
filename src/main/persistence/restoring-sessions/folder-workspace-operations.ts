@@ -8,11 +8,10 @@ import { normalizeStoredTaskSourceContext } from '../../../shared/task-source-co
 import { normalizeWorkspaceLinkedItem } from '../../../shared/workspace-linked-item'
 import { isWorkspaceLinkedItemSourceContextMatch } from '../../../shared/workspace-linked-item-source-context'
 import { folderWorkspaceKey } from '../../../shared/workspace-scope'
-import type { StoreOwnedPersistedState } from '../loading-store/store-owned-state'
 import { removeWorkspaceSessionOwner } from './session-owner-removal'
 
 export type FolderWorkspaceMutationOperations = {
-  state: StoreOwnedPersistedState
+  state: PersistedState
   scheduleSave: () => void
   removeWorkspaceLineageForFolderParent: (folderWorkspaceId: string) => void
   pruneMobileClientTabSelections: (matchesWorktreeId: (worktreeId: string) => boolean) => void
@@ -66,10 +65,11 @@ export class FolderWorkspacePersistenceOperations {
     const group = (this.state.projectGroups ?? []).find(
       (entry) => entry.id === input.projectGroupId
     )
+    // Why trim: the guard below accepts a padded path, so persist the same value it validated.
     const folderPath =
       typeof input.folderPath === 'string' && input.folderPath.trim().length > 0
         ? input.folderPath
-        : group?.parentPath
+        : group?.parentPath?.trim()
     if (!group || !folderPath) {
       throw new Error('Folder-backed project group not found.')
     }

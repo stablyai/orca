@@ -10,6 +10,7 @@ import {
   isOrcaDispatchPrompt,
   orchestrationLabelsMatchLiveDispatch
 } from './agent-row-primary-text'
+import { formatAgentToolPreview } from './agent-row-tool-preview'
 
 // Why: follow-up replies ("yes", "ok proceed") are valid hook prompts but are
 // terrible scan labels for a cross-worktree agent list — treat them as non-titles.
@@ -164,15 +165,9 @@ export function getActivityThreadStatusPreview(
     return 'Interrupted by user'
   }
   const state = agentState ?? entry.state
-  if (state === 'working') {
-    const toolName = entry.toolName?.trim() ?? ''
-    const toolInput = entry.toolInput?.trim() ?? ''
-    if (toolName && toolInput) {
-      return `${toolName}: ${toolInput}`
-    }
-    if (toolName) {
-      return toolName
-    }
+  const toolPreview = formatAgentToolPreview(entry, state)
+  if (toolPreview) {
+    return toolPreview
   }
   const assistant = entry.lastAssistantMessage?.trim() ?? ''
   if (assistant && !isMislabeledUserPrompt(assistant, entry)) {

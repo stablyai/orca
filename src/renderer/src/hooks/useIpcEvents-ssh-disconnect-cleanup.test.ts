@@ -155,6 +155,8 @@ describe('useIpcEvents updater integration', () => {
           onFocusTerminal: () => () => {},
           onFocusEditorTab: () => () => {},
           onCloseSessionTab: () => () => {},
+          onSessionTabCloseRequest: () => () => {},
+          respondSessionTabClose: () => {},
           onMoveSessionTab: () => () => {},
           onOpenFileFromMobile: () => () => {},
           onOpenDiffFromMobile: () => () => {},

@@ -107,6 +107,22 @@ function emitGoogleCookieImportWarning(
   )
 }
 
+// Why (STA-4300): these cookies were skipped rather than downgraded to unpartitioned, so the import
+// is lossy in a way the success count alone would hide.
+function emitPartitionSkippedImportWarning(summary: BrowserCookieImportSummary): void {
+  if (!summary.partitionSkippedCookies) {
+    return
+  }
+  toast.warning(
+    translate(
+      'auto.lib.browser.cookie.import.toast.partitionSkipped',
+      '{{value0}} cookies were not imported because their site-partition could not be read. Sign in to those sites again in Orca.',
+      { value0: summary.partitionSkippedCookies }
+    ),
+    { duration: 12000 }
+  )
+}
+
 // Why: a degraded import returns ok:true with a warning, so every call site must route it to a
 // warning toast instead of reporting an unqualified success (#9355).
 export function emitBrowserCookieImportToast(
@@ -121,4 +137,5 @@ export function emitBrowserCookieImportToast(
     toast.success(successMessage)
   }
   emitGoogleCookieImportWarning(summary, executionHostLabel)
+  emitPartitionSkippedImportWarning(summary)
 }

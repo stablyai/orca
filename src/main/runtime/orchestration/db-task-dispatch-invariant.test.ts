@@ -160,7 +160,7 @@ describe('Task/Dispatch invariant transactions', () => {
     sqliteFor(db).prepare("UPDATE tasks SET status = 'ready' WHERE id = ?").run(task.id)
     const second = db.createDispatchContext(task.id, 'term_second')
 
-    expect(db.beginWorkerStop(second.id)).toMatchObject({
+    expect(db.beginWorkerStop(second.id, 'runtime_test')).toMatchObject({
       disposition: 'context_only',
       releasedCurrentTask: false
     })

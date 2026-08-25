@@ -89,15 +89,11 @@ describe('searchWorktrees with a titleless cached review (Cmd+J palette crash pa
     ])
 
     expect(() =>
-      searchWorktrees(
-        [worktree],
-        'nonmatchingtext',
-        repoMap,
-        null,
-        null,
-        undefined,
-        checksReviewByWorktree
-      )
+      searchWorktrees([worktree], 'nonmatchingtext', repoMap, { checksReviewByWorktree })
     ).not.toThrow()
+    // The number still indexes, so the titleless review stays reachable.
+    expect(
+      searchWorktrees([worktree], '#7', repoMap, { checksReviewByWorktree })[0].supportingText
+    ).toMatchObject({ labelKind: 'pr', text: '#7' })
   })
 })

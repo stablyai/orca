@@ -526,6 +526,37 @@ describe('wrapPosixHookCommand', () => {
     }
   )
 
+  it('emits a fallback response before draining when the caller supplies one', () => {
+    const cmd = wrapPosixHookCommand('/does/not/exist.sh', {}, { fallbackStdout: '{"a":"b"}' })
+    expect(cmd).toBe(
+      `if [ -f '/does/not/exist.sh' ] && [ -r '/does/not/exist.sh' ] && [ -x '/does/not/exist.sh' ]; then /bin/sh '/does/not/exist.sh'; else printf '%s\\n' '{"a":"b"}'; ${POSIX_HOOK_STDIN_DRAIN_COMMAND}; fi`
+    )
+  })
+
+  it.skipIf(process.platform === 'win32')(
+    'writes the fallback response and still drains a large stdin payload',
+    () => {
+      const cmd = wrapPosixHookCommand('/does/not/exist.sh', {}, { fallbackStdout: '{"a":"b"}' })
+      const result = spawnSync('/bin/sh', ['-c', cmd], {
+        input: Buffer.alloc(1_000_000, 'x'),
+        encoding: 'utf8'
+      })
+      expect(result.status).toBe(0)
+      expect(result.stdout).toBe('{"a":"b"}\n')
+    }
+  )
+
+  it.skipIf(process.platform === 'win32')(
+    'runs the script instead of the fallback when the script is present',
+    () => {
+      const scriptPath = join(tmpDir, 'present-hook.sh')
+      writeFileSync(scriptPath, "#!/bin/sh\nprintf 'from-script\\n'\n", { mode: 0o755 })
+      const cmd = wrapPosixHookCommand(scriptPath, {}, { fallbackStdout: '{"a":"b"}' })
+      const result = spawnSync('/bin/sh', ['-c', cmd], { encoding: 'utf8' })
+      expect(result.stdout).toBe('from-script\n')
+    }
+  )
+
   it.skipIf(process.platform === 'win32')(
     'drains stdin when a directory occupies the managed script path',
     () => {

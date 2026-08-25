@@ -1,4 +1,5 @@
 import { describe, expect, it, vi, type Mock } from 'vitest'
+import { validateGitExecArgs } from '../../relay/git-exec-validator'
 import type { WorktreeMeta } from '../../shared/worktree/meta-types'
 import type { GitPushTarget } from '../../shared/worktree/types'
 import {
@@ -79,6 +80,20 @@ describe('cleanupUnusedWorktreePushTargetRemoteWithExec', () => {
       exec
     )
     expect(removeCalls(exec)).toEqual([['remote', 'remove', FORK_REMOTE]])
+  })
+
+  it('sends only argv the relay accepts, so SSH cleanup is not silently skipped', async () => {
+    const exec = makeExec()
+    await cleanupUnusedWorktreePushTargetRemoteWithExec(
+      REPO_PATH,
+      'repo-1::/wt/a',
+      forkTarget(),
+      storeOf({ 'repo-1::/wt/a': forkTarget() }),
+      exec
+    )
+    for (const [args] of exec.mock.calls) {
+      expect(() => validateGitExecArgs(args)).not.toThrow()
+    }
   })
 
   it('keeps a remote Orca did not create (remoteCreated falsy)', async () => {

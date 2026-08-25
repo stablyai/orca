@@ -30,12 +30,9 @@ import {
 } from './external-automation-display'
 import { getExternalAutomationScheduleDisplay } from './external-automation-schedule-display'
 import { getExternalAutomationActionDisabledMessage } from './external-automation-source-availability'
-import {
-  AUTOMATIONS_TABLE_GRID_CLASS,
-  AUTOMATIONS_TABLE_ROW_CLASS,
-  AUTOMATIONS_TABLE_ROW_SELECTED_CLASS
-} from './automations-table-layout'
-import { isPortaledRowMenuClick, isRowActivationKey } from './automation-list-row-interaction'
+import { AUTOMATIONS_TABLE_GRID_CLASS } from './automations-table-layout'
+import { LIST_TABLE_ROW_CLASS, LIST_TABLE_ROW_SELECTED_CLASS } from '@/lib/list-table-layout'
+import { isPortaledRowMenuClick, isRowActivationKey } from '@/lib/list-row-interaction'
 import { getExternalAutomationLastRunSnapshot } from './automation-list-last-run'
 import { AutomationListLastRunCell } from './AutomationListLastRunCell'
 import { AutomationListStatusCell } from './AutomationListStatusCell'
@@ -113,8 +110,8 @@ export function AutomationListExternalRows({
                 }}
                 className={cn(
                   AUTOMATIONS_TABLE_GRID_CLASS,
-                  AUTOMATIONS_TABLE_ROW_CLASS,
-                  isSelected && AUTOMATIONS_TABLE_ROW_SELECTED_CLASS
+                  LIST_TABLE_ROW_CLASS,
+                  isSelected && LIST_TABLE_ROW_SELECTED_CLASS
                 )}
               >
                 <span className="min-w-0 truncate font-medium">{entry.job.name}</span>

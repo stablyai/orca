@@ -4,6 +4,8 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import * as ownerIdentity from '../agent-hooks/managed-hook-owner-identity'
+import { CODEX_READ_ONLY_APP_SERVER_ARGS } from '../codex-cli/codex-read-only-app-server-args'
+import { getCmdExePath } from '../win32-utils'
 import {
   _internals,
   resolveCodexBackfillSupervisorLockRoot,
@@ -367,6 +369,51 @@ describe('Codex state DB backfill recovery', () => {
     expect(terminate).toHaveBeenCalledWith(child)
   })
 
+  it('uses batch-safe read-only arguments for native Windows recovery', async () => {
+    Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
+    const child = createFakeChild()
+    const spawnProcess = vi.fn(() => child)
+    const codexCommand = 'C:\\Users\\alice\\AppData\\Roaming\\npm\\codex.cmd'
+    const readStatus = vi
+      .fn()
+      .mockReturnValueOnce({ kind: 'incomplete', stateDbPath: 'state.sqlite', status: 'running' })
+      .mockReturnValue({ kind: 'complete', stateDbPath: 'state.sqlite' })
+
+    await runCodexStateDbBackfillRecovery(
+      'C:\\Users\\alice\\.codex',
+      new AbortController().signal,
+      {
+        spawnProcess: spawnProcess as never,
+        resolveCommand: () => codexCommand,
+        readStatus,
+        terminate: vi.fn(async () => {}),
+        sleep: vi.fn(async () => {}),
+        now: vi.fn(() => 1_000)
+      }
+    )
+
+    const [spawnFile, spawnArgs, spawnOptions] = spawnProcess.mock.calls[0] as unknown as [
+      string,
+      string[],
+      { cwd?: string; env?: NodeJS.ProcessEnv }
+    ]
+    expect(spawnFile).toBe(getCmdExePath())
+    expect(spawnArgs).toEqual([
+      '/d',
+      '/c',
+      codexCommand,
+      '-c',
+      'approval_policy=never',
+      '-s',
+      'read-only',
+      '-a',
+      'never',
+      'app-server'
+    ])
+    expect(spawnOptions.cwd).toBe('C:\\Users\\alice\\.codex')
+    expect(spawnOptions.env?.CODEX_HOME).toBe('C:\\Users\\alice\\.codex')
+  })
+
   it('retries a live foreign lease until one durable claimant can recover it', async () => {
     const first = createFakeChild()
     const second = createFakeChild()
@@ -431,6 +478,9 @@ describe('Codex state DB backfill recovery', () => {
     const command = spawnCall[1].join(' ')
     expect(command).toContain('export CODEX_HOME=')
     expect(command).toContain('/home/alice/.codex')
+    for (const arg of CODEX_READ_ONLY_APP_SERVER_ARGS) {
+      expect(command).toContain(arg)
+    }
   })
 })
 

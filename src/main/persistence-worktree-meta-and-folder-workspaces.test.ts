@@ -366,6 +366,29 @@ describe('Store', () => {
     )
   })
 
+  it('trims the group parentPath fallback and rejects a blank one', async () => {
+    // parentPath is persisted verbatim, so a padded scan result would otherwise become a folderPath
+    // that no path comparison matches.
+    const store = await createStore()
+    const padded = store.createProjectGroup({
+      name: 'Platform',
+      parentPath: '  /workspace/platform  ',
+      createdFrom: 'folder-scan'
+    })
+    const blank = store.createProjectGroup({
+      name: 'Blank',
+      parentPath: '   ',
+      createdFrom: 'folder-scan'
+    })
+
+    expect(store.createFolderWorkspace({ projectGroupId: padded.id }).folderPath).toBe(
+      '/workspace/platform'
+    )
+    expect(() => store.createFolderWorkspace({ projectGroupId: blank.id })).toThrow(
+      'Folder-backed project group not found.'
+    )
+  })
+
   it('normalizes persisted folder workspaces and drops orphaned records', async () => {
     writeDataFile({
       schemaVersion: 1,

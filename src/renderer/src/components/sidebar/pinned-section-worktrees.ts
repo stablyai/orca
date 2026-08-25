@@ -1,5 +1,6 @@
 import type { WorktreeLineage } from '../../../../shared/worktree/lineage-types'
 import type { Worktree } from '../../../../shared/worktree/types'
+import { getWorktreeHostIdentity } from '../../../../shared/worktree/host-qualified-identity'
 import { getProjectedWorktreeLineageChildrenByParentId } from './worktree-lineage-projection'
 
 // Why: pin is placement of the clicked row. Descendants keep their own isPinned
@@ -9,32 +10,34 @@ export function getPinnedSectionWorktrees(
   lineageById: Readonly<Record<string, WorktreeLineage>>,
   worktreeMap: ReadonlyMap<string, Worktree>
 ): Worktree[] {
-  const visibleIds = new Set(worktrees.map((worktree) => worktree.id))
+  const visibleIdentities = new Set(worktrees.map(getWorktreeHostIdentity))
   const childrenByParentId = getProjectedWorktreeLineageChildrenByParentId(lineageById, worktreeMap)
   const included = new Set<string>()
   const seen = new Set<string>()
-  const pendingIds = worktrees
+  const pendingWorktrees = worktrees
     .filter((worktree) => worktree.isPinned)
-    .map((worktree) => worktree.id)
+    .map(({ id, hostId }) => ({ id, hostId }))
 
-  while (pendingIds.length > 0) {
-    const id = pendingIds.pop()
-    if (!id) {
+  while (pendingWorktrees.length > 0) {
+    const current = pendingWorktrees.pop()
+    if (!current) {
       continue
     }
-    if (seen.has(id)) {
+    const identity = getWorktreeHostIdentity(current)
+    if (seen.has(identity)) {
       continue
     }
-    seen.add(id)
-    if (visibleIds.has(id)) {
-      included.add(id)
+    seen.add(identity)
+    if (visibleIdentities.has(identity)) {
+      included.add(identity)
     }
-    for (const child of childrenByParentId.get(id) ?? []) {
-      pendingIds.push(child.id)
+    for (const child of childrenByParentId.get(current.id) ?? []) {
+      // Lineage ids are hostless, but a lineage edge cannot cross execution hosts.
+      pendingWorktrees.push({ id: child.id, hostId: current.hostId })
     }
   }
 
-  return worktrees.filter((worktree) => included.has(worktree.id))
+  return worktrees.filter((worktree) => included.has(getWorktreeHostIdentity(worktree)))
 }
 
 export function isPinnedSectionWorktree(
@@ -46,7 +49,8 @@ export function isPinnedSectionWorktree(
   if (worktree.isPinned) {
     return true
   }
+  const identity = getWorktreeHostIdentity(worktree)
   return getPinnedSectionWorktrees(visibleWorktrees, lineageById, worktreeMap).some(
-    (candidate) => candidate.id === worktree.id
+    (candidate) => getWorktreeHostIdentity(candidate) === identity
   )
 }

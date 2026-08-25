@@ -15,6 +15,7 @@ import {
 import { scanSshAiVaultSessions } from '../ai-vault/ssh-session-list'
 import { AiVaultScanCoordinator } from '../ai-vault/ai-vault-scan-coordinator'
 import type { AiVaultDeleteSessionArgs } from '../../shared/ai-vault-session-deletion'
+import { describeAiVaultScanError } from '../../shared/ai-vault-scan-error-message'
 import {
   AI_VAULT_SCOPE_PATHS_MAX_COUNT,
   isAiVaultScanCancelledError,
@@ -237,10 +238,14 @@ async function scanLocalAiVaultSessionsAsIssue(
     if (isAiVaultScanCancelledError(error)) {
       throw error
     }
+    // Raw supervision text ("restart circuit is open") means nothing to a user,
+    // so the row carries actionable copy and the log keeps the original.
+    const raw = error instanceof Error ? error.message : 'Local session scan failed.'
+    console.error('[ai-vault] local session scan failed:', raw)
     return aiVaultScanIssueResult({
       executionHostId: LOCAL_EXECUTION_HOST_ID,
       path: 'this computer',
-      message: error instanceof Error ? error.message : 'Local session scan failed.'
+      message: describeAiVaultScanError(raw)
     })
   }
 }

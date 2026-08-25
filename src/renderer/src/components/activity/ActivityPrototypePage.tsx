@@ -11,7 +11,7 @@ import {
   TerminalSquare
 } from 'lucide-react'
 
-import { AgentStateDot, agentStateLabel } from '@/components/AgentStateDot'
+import { AgentStateDot, agentStateLabel, type AgentDotState } from '@/components/AgentStateDot'
 import { AgentIcon } from '@/lib/agent-catalog'
 import {
   agentTypeToIconAgent,
@@ -88,8 +88,15 @@ import { getAgentRowPrimaryText } from '@/lib/agent-row-primary-text'
 type ThreadReadFilter = 'all' | 'unread'
 type ActivityGroupBy = 'status' | 'project' | 'worktree' | 'agent'
 type ActivityEventState = Extract<AgentStatusState, 'done' | 'blocked' | 'waiting'>
-type ActivityLiveAgentState = Extract<AgentStatusState, 'working' | 'blocked' | 'waiting'>
-type ActivityStatusGroupId = 'working' | 'blocked' | 'waiting' | 'done' | 'interrupted'
+type ActivityHookLiveAgentState = Extract<AgentStatusState, 'working' | 'blocked' | 'waiting'>
+type ActivityLiveAgentState = ActivityHookLiveAgentState | 'monitoring'
+type ActivityStatusGroupId =
+  | 'working'
+  | 'monitoring'
+  | 'blocked'
+  | 'waiting'
+  | 'done'
+  | 'interrupted'
 
 type ActivityEvent = {
   id: string
@@ -137,7 +144,7 @@ type ActivityThreadGroup = {
   key: string
   id?: ActivityStatusGroupId
   label: string
-  state?: AgentStatusState
+  state?: AgentDotState
   threads: AgentPaneThread[]
 }
 
@@ -158,6 +165,7 @@ const ACTIVITY_TERMINAL_LOADING_LABEL_DELAY_MS = 180
 const ACTIVITY_THREAD_RESPONSE_RENDER_PREVIEW_MAX_LENGTH = 320
 const ACTIVITY_STATUS_GROUP_ORDER: ActivityStatusGroupId[] = [
   'working',
+  'monitoring',
   'blocked',
   'waiting',
   'done',
@@ -474,7 +482,9 @@ function isActivityEventState(state: AgentStatusState): state is ActivityEventSt
   return state === 'done' || state === 'blocked' || state === 'waiting'
 }
 
-function isActivityLiveAgentState(state: AgentStatusState): state is ActivityLiveAgentState {
+function isActivityHookLiveAgentState(
+  state: AgentStatusState
+): state is ActivityHookLiveAgentState {
   return state === 'working' || state === 'blocked' || state === 'waiting'
 }
 
@@ -482,10 +492,15 @@ function freshActivityLiveAgentState(
   entry: AgentStatusEntry,
   now: number
 ): ActivityLiveAgentState | null {
-  if (!isActivityLiveAgentState(entry.state)) {
+  if (
+    !isActivityHookLiveAgentState(entry.state) ||
+    !isExplicitAgentStatusFresh(entry, now, AGENT_STATUS_STALE_AFTER_MS)
+  ) {
     return null
   }
-  return isExplicitAgentStatusFresh(entry, now, AGENT_STATUS_STALE_AFTER_MS) ? entry.state : null
+  return entry.state === 'working' && entry.workingMode === 'monitoring'
+    ? 'monitoring'
+    : entry.state
 }
 
 function standaloneActivityWorktree(worktreeId: string): Worktree {
@@ -822,7 +837,7 @@ export function buildAgentPaneThreads(args: {
         agentType: liveAgent.agentType,
         currentAgentState: liveAgent.state,
         currentAgentEntry: liveAgent.entry,
-        responsePreview: statusPreviewForEntry(liveAgent.entry, liveAgent.state),
+        responsePreview: statusPreviewForEntry(liveAgent.entry, liveAgent.entry.state),
         latestTimestamp: liveAgent.timestamp,
         latestEvent: null,
         events: [],
@@ -840,7 +855,7 @@ export function buildAgentPaneThreads(args: {
     existing.currentAgentEntry = liveAgent.entry
     existing.responsePreview = statusPreviewForEntry(
       liveAgent.entry,
-      liveAgent.state,
+      liveAgent.entry.state,
       existing.responsePreview
     )
     existing.latestTimestamp = liveAgent.timestamp
@@ -960,7 +975,7 @@ function EventRepoBadge({ repo }: { repo: Repo | null }): React.JSX.Element | nu
   )
 }
 
-function threadAgentState(thread: AgentPaneThread): AgentStatusState {
+function threadAgentState(thread: AgentPaneThread): AgentDotState {
   return thread.currentAgentState ?? thread.latestEvent?.state ?? 'done'
 }
 
@@ -1024,10 +1039,12 @@ function threadStatusGroupId(thread: AgentPaneThread): ActivityStatusGroupId {
   if (!thread.currentAgentState && state === 'done' && thread.latestEvent?.entry.interrupted) {
     return 'interrupted'
   }
-  return state === 'working' || state === 'blocked' || state === 'waiting' ? state : 'done'
+  return state === 'working' || state === 'monitoring' || state === 'blocked' || state === 'waiting'
+    ? state
+    : 'done'
 }
 
-function threadStatusGroupState(id: ActivityStatusGroupId): AgentStatusState {
+function threadStatusGroupState(id: ActivityStatusGroupId): AgentDotState {
   return id === 'interrupted' ? 'done' : id
 }
 

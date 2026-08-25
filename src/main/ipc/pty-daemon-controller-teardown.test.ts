@@ -153,6 +153,62 @@ describe('registerPtyHandlers', () => {
         })
         expect(runtime.onPtyExit).not.toHaveBeenCalled()
       })
+      it('bounds keep-history inventory polls by the settlement deadline', async () => {
+        vi.useFakeTimers()
+        try {
+          const listProcesses = vi.fn(async (_opts?: { deadlineMs?: number }) => [])
+          setLocalPtyProvider({
+            spawn: vi.fn(),
+            write: vi.fn(),
+            resize: vi.fn(),
+            shutdown: vi.fn(async () => undefined),
+            sendSignal: vi.fn(),
+            getCwd: vi.fn(),
+            getInitialCwd: vi.fn(),
+            clearBuffer: vi.fn(),
+            acknowledgeDataEvent: vi.fn(),
+            hasChildProcesses: vi.fn(),
+            getForegroundProcess: vi.fn(),
+            serialize: vi.fn(),
+            revive: vi.fn(),
+            onData: vi.fn(() => () => {}),
+            onReplay: vi.fn(() => () => {}),
+            onExit: vi.fn(() => () => {}),
+            listProcesses,
+            getDefaultShell: vi.fn(),
+            getProfiles: vi.fn()
+          } as never)
+          const runtime = {
+            setPtyController: vi.fn(),
+            onPtyExit: vi.fn()
+          }
+          handlers.clear()
+          registerPtyHandlers(mainWindow as never, runtime as never)
+          const controller = runtime.setPtyController.mock.calls[0]?.[0] as {
+            stopAndWait: (
+              ptyId: string,
+              opts?: { keepHistory?: boolean; deadlineMs?: number }
+            ) => Promise<boolean>
+          }
+          const callerDeadlineMs = Date.now() + 5_000
+          const stopPromise = controller.stopAndWait('local-pty', {
+            keepHistory: true,
+            deadlineMs: callerDeadlineMs
+          })
+
+          await vi.advanceTimersByTimeAsync(1_000)
+          await expect(stopPromise).resolves.toBe(true)
+
+          expect(listProcesses.mock.calls[0]?.[0]).toEqual({ deadlineMs: callerDeadlineMs })
+          const settlementDeadlines = listProcesses.mock.calls
+            .slice(1)
+            .map(([opts]) => opts?.deadlineMs)
+          expect(settlementDeadlines.length).toBeGreaterThan(0)
+          expect(new Set(settlementDeadlines)).toEqual(new Set([callerDeadlineMs - 4_000]))
+        } finally {
+          vi.useRealTimers()
+        }
+      })
       it('uses inventory, not an incarnation-less exit, to confirm the current PTY stopped', async () => {
         const exitListeners = new Set<
           (payload: { id: string; code: number; incarnationId?: string }) => void
