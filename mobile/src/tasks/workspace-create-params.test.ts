@@ -163,4 +163,36 @@ describe('task workspace create params', () => {
       createdWithAgent: 'grok'
     })
   })
+
+  it('creates Plane workspaces in the selected repo and stores linked work item metadata', () => {
+    expect(
+      buildTaskWorkspaceCreateParams({
+        item: {
+          provider: 'plane',
+          source: {
+            identifier: 'AIF-8009',
+            title: 'Native Plane integration',
+            url: 'https://plane.home.usableapps.io/usableapps/issues/AIF-8009',
+            number: 8009,
+            instanceId: 'plane-instance'
+          }
+        },
+        targetRepoId: 'repo-plane',
+        setupDecision: 'inherit',
+        agent: 'codex'
+      })
+    ).toMatchObject({
+      repo: 'id:repo-plane',
+      name: 'aif-8009',
+      displayName: 'AIF-8009 Native Plane integration',
+      startupDraft: 'https://plane.home.usableapps.io/usableapps/issues/AIF-8009',
+      linkedWorkItem: {
+        provider: 'plane',
+        type: 'issue',
+        number: 8009,
+        planeIdentifier: 'AIF-8009',
+        planeInstanceId: 'plane-instance'
+      }
+    })
+  })
 })

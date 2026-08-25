@@ -32,6 +32,10 @@ export function useFeatureWallTaskSourcePresentation(
   const jiraStatusChecked = useAppStore((s) => s.jiraStatusChecked)
   const jiraStatusContextKey = useAppStore((s) => s.jiraStatusContextKey)
   const checkJiraConnection = useAppStore((s) => s.checkJiraConnection)
+  const planeStatus = useAppStore((s) => s.planeStatus)
+  const planeStatusChecked = useAppStore((s) => s.planeStatusChecked)
+  const planeStatusContextKey = useAppStore((s) => s.planeStatusContextKey)
+  const checkPlaneConnection = useAppStore((s) => s.checkPlaneConnection)
   const settings = useAppStore((s) => s.settings)
   const expectedPreflightContextKey = useAppStore((s) =>
     localPreflightContextKey(getLocalPreflightContext(s))
@@ -39,6 +43,7 @@ export function useFeatureWallTaskSourcePresentation(
   const providerRuntimeContextKey = getProviderRuntimeContextKey(settings)
   const linearStatusCurrent = linearStatusContextKey === providerRuntimeContextKey
   const jiraStatusCurrent = jiraStatusContextKey === providerRuntimeContextKey
+  const planeStatusCurrent = planeStatusContextKey === providerRuntimeContextKey
   const preflightStatusCurrent = preflightStatusContextKey === expectedPreflightContextKey
 
   useEffect(() => {
@@ -56,9 +61,13 @@ export function useFeatureWallTaskSourcePresentation(
     if (!jiraStatusCurrent || !jiraStatusChecked) {
       void checkJiraConnection()
     }
+    if (!planeStatusCurrent || !planeStatusChecked) {
+      void checkPlaneConnection()
+    }
   }, [
     checkJiraConnection,
     checkLinearConnection,
+    checkPlaneConnection,
     expectedPreflightContextKey,
     isOpen,
     jiraStatusCurrent,
@@ -67,6 +76,9 @@ export function useFeatureWallTaskSourcePresentation(
     linearStatusCurrent,
     linearStatusChecked,
     linearStatusContextKey,
+    planeStatusCurrent,
+    planeStatusChecked,
+    planeStatusContextKey,
     preflightStatusContextKey,
     preflightStatusCurrent,
     preflightStatusChecked,
@@ -87,6 +99,9 @@ export function useFeatureWallTaskSourcePresentation(
     jiraStatus,
     jiraStatusChecked,
     jiraStatusContextKey,
+    planeStatus,
+    planeStatusChecked,
+    planeStatusContextKey,
     providerRuntimeContextKey
   })
 

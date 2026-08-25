@@ -43,6 +43,7 @@ type Props = {
   repoId: string | null
   repos: readonly PasteRepoCandidate[]
   linearWorkspaceId?: string | null
+  planeInstanceId?: string | null
   sshReady: boolean
   onRepoChange: (repoId: string) => void
   onClose: () => void
@@ -56,6 +57,7 @@ export function SmartWorkspaceSourceDrawer({
   repoId,
   repos,
   linearWorkspaceId,
+  planeInstanceId,
   sshReady,
   onRepoChange,
   onClose
@@ -100,9 +102,10 @@ export function SmartWorkspaceSourceDrawer({
   // Snap the chosen mode back into the available set if availability changes.
   const effectiveMode = availableModes.includes(mode) ? mode : (availableModes[0] ?? 'text')
 
-  // Linear searches without a repo; every other provider/branch search needs a
+  // Linear and Plane search without a repo; other provider/branch searches need a
   // connected repo-backed target.
-  const searchEnabled = visible && (effectiveMode === 'linear' || sshReady)
+  const searchEnabled =
+    visible && (effectiveMode === 'linear' || effectiveMode === 'plane' || sshReady)
 
   const {
     rows,
@@ -121,8 +124,10 @@ export function SmartWorkspaceSourceDrawer({
     githubAvailable: availability.githubAvailable,
     gitlabAvailable: availability.gitlabAvailable,
     linearAvailable: availability.linearAvailable,
+    planeAvailable: availability.planeAvailable,
     mrStateFilter,
     linearWorkspaceId,
+    planeInstanceId,
     repos
   })
 
@@ -145,6 +150,9 @@ export function SmartWorkspaceSourceDrawer({
         break
       case 'linear':
         composer.handleSmartLinearIssueSelect(row.issue)
+        break
+      case 'plane':
+        composer.handleSmartPlaneIssueSelect(row.issue)
         break
     }
     onClose()
@@ -225,7 +233,10 @@ export function SmartWorkspaceSourceDrawer({
             </View>
           ) : null}
 
-          {!sshReady && effectiveMode !== 'text' && effectiveMode !== 'linear' ? (
+          {!sshReady &&
+          effectiveMode !== 'text' &&
+          effectiveMode !== 'linear' &&
+          effectiveMode !== 'plane' ? (
             <Text style={styles.notice}>Connect the repository to search sources.</Text>
           ) : needsGitHubRemote ? (
             <Text style={styles.notice}>

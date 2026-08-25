@@ -1,11 +1,13 @@
 import type { GitHubWorkItem } from '../../../src/shared/github/work-item-types'
 import type { GitLabWorkItem } from '../../../src/shared/gitlab-types'
 import type { LinearIssue } from '../../../src/shared/linear/issue-types'
+import type { PlaneWorkItem } from '../../../src/shared/plane/types'
 import { getLinearIssueWorkspaceName } from '../../../src/shared/workspace-name'
 import {
   buildGitHubWorkspaceSource,
   buildGitLabWorkspaceSource,
   buildLinearWorkspaceSource,
+  buildPlaneWorkspaceSource,
   buildWorkspaceSourceSelection,
   getWorkspaceSourceName,
   shouldApplyWorkspaceSourceAutoName
@@ -47,6 +49,12 @@ export function buildLinearLinkedWorkItem(issue: {
   return buildLinearWorkspaceSource(issue)
 }
 
+export function buildPlaneLinkedWorkItem(
+  issue: Pick<PlaneWorkItem, 'identifier' | 'sequenceId' | 'title' | 'url' | 'instanceId'>
+): MobileLinkedWorkItem {
+  return buildPlaneWorkspaceSource(issue)
+}
+
 // Faithful port of desktop applyLinkedWorkItem's name gate: the derived name
 // replaces the current field only when it's empty, still the last auto-name, or
 // a lookup query — never a name the user deliberately typed.
@@ -66,6 +74,17 @@ export function resolveWorkItemAutoName(item: {
 
 export function resolveLinearAutoName(issue: { identifier: string; title: string }): string {
   return getLinearIssueWorkspaceName(issue)
+}
+
+export function resolvePlaneAutoName(issue: { identifier: string; title: string }): string {
+  return getWorkspaceSourceName({
+    provider: 'plane',
+    type: 'issue',
+    number: 0,
+    title: issue.title,
+    url: '',
+    planeIdentifier: issue.identifier
+  }).seedName
 }
 
 // Derives the pill descriptor from the linked item (or a plain branch base),
@@ -152,4 +171,4 @@ export function resolveComposerBranchPick(args: {
   }
 }
 
-export type { GitHubWorkItem, GitLabWorkItem, LinearIssue }
+export type { GitHubWorkItem, GitLabWorkItem, LinearIssue, PlaneWorkItem }

@@ -64,6 +64,13 @@ export function getTaskSourceContextSummary(args: {
         hostLabelById: args.hostLabelById,
         hostAvailability: args.hostAvailability
       })
+    case 'plane':
+      return getAccountBackedTaskSourceSummary(args.providerLabel, {
+        accountLabel: null,
+        accountHostId: args.accountHostId,
+        hostLabelById: args.hostLabelById,
+        hostAvailability: args.hostAvailability
+      })
   }
 }
 
@@ -198,6 +205,10 @@ function getProviderIdentityLabel(
       return identity.workspaceName ?? identity.workspaceId ?? null
     case 'jira':
       return identity.siteUrl ?? identity.siteId ?? null
+    case 'plane':
+      return [identity.workspaceSlug, identity.projectIdentifier ?? identity.projectId]
+        .filter(Boolean)
+        .join('/') || identity.baseUrl || identity.instanceId || null
   }
 }
 

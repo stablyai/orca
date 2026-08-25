@@ -38,6 +38,9 @@ function statusFacts(overrides: Partial<StatusFacts> = {}): StatusFacts {
     jiraStatus: { connected: false },
     jiraStatusChecked: true,
     jiraStatusContextKey: 'local#0',
+    planeStatus: { connected: false },
+    planeStatusChecked: true,
+    planeStatusContextKey: 'local#0',
     providerRuntimeContextKey: 'local#0',
     ...overrides
   }

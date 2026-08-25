@@ -2,6 +2,7 @@ import { getLinearOrganizationUrlKeyFromIssueUrl } from '../linear/links'
 import type { FolderWorkspaceLinkedTask } from '../folder-workspace-types'
 import type { JiraIssue } from '../jira-types'
 import type { LinearIssue } from '../linear/issue-types'
+import type { PlaneWorkItem } from '../plane/types'
 import {
   getLinkedWorkItemSuggestedName,
   getLinkedWorkItemWorkspaceName,
@@ -15,6 +16,7 @@ export type WorkspaceSourceLinkedItem = FolderWorkspaceLinkedTask & {
   linearWorkspaceId?: string
   linearOrganizationUrlKey?: string
   linearBranchName?: string
+  planeInstanceId?: string
 }
 
 export type GitHubWorkspaceSource = WorkspaceSourceLinkedItem & {
@@ -37,6 +39,11 @@ export type JiraWorkspaceSource = WorkspaceSourceLinkedItem & {
   type: 'issue'
 }
 
+export type PlaneWorkspaceSource = WorkspaceSourceLinkedItem & {
+  provider: 'plane'
+  type: 'issue'
+}
+
 export type WorkspaceSourceItemLike = Omit<WorkspaceSourceLinkedItem, 'provider'> & {
   provider?: WorkspaceSourceProvider
 }
@@ -49,6 +56,7 @@ export type WorkspaceSourceSelectionKind =
   | 'branch'
   | 'linear'
   | 'jira'
+  | 'plane'
 
 export type WorkspaceSourceSelection = {
   kind: WorkspaceSourceSelectionKind
@@ -87,6 +95,9 @@ export function getWorkspaceSourceProvider(item: WorkspaceSourceItemLike): Works
   }
   if (item.jiraIdentifier || isJiraIssueUrl(item.url)) {
     return 'jira'
+  }
+  if (item.planeIdentifier) {
+    return 'plane'
   }
   if (item.type === 'mr' || isGitLabIssueUrl(item.url)) {
     return 'gitlab'
@@ -157,6 +168,20 @@ export function buildJiraWorkspaceSource(
   }
 }
 
+export function buildPlaneWorkspaceSource(
+  issue: Pick<PlaneWorkItem, 'identifier' | 'sequenceId' | 'title' | 'url' | 'instanceId'>
+): PlaneWorkspaceSource {
+  return {
+    provider: 'plane',
+    type: 'issue',
+    number: issue.sequenceId ?? 0,
+    title: issue.title,
+    url: issue.url,
+    planeIdentifier: issue.identifier,
+    planeInstanceId: issue.instanceId
+  }
+}
+
 export function shouldApplyWorkspaceSourceAutoName(args: {
   currentName: string
   lastAutoName: string
@@ -198,7 +223,9 @@ export function buildWorkspaceSourceSelection(args: {
       ? 'linear'
       : provider === 'jira'
         ? 'jira'
-        : provider === 'gitlab'
+        : provider === 'plane'
+          ? 'plane'
+          : provider === 'gitlab'
           ? linkedWorkItem.type === 'mr'
             ? 'gitlab-mr'
             : 'gitlab-issue'
@@ -208,7 +235,7 @@ export function buildWorkspaceSourceSelection(args: {
   return {
     kind,
     label:
-      provider === 'linear' || provider === 'jira' || linkedWorkItem.number === 0
+      provider === 'linear' || provider === 'jira' || provider === 'plane' || linkedWorkItem.number === 0
         ? linkedWorkItem.title
         : `#${linkedWorkItem.number} ${linkedWorkItem.title}`,
     url: linkedWorkItem.url
@@ -222,5 +249,5 @@ export function shouldPreserveWorkspaceSourceOnRepoChange(
     return false
   }
   const provider = getWorkspaceSourceProvider(item)
-  return provider === 'linear' || provider === 'jira'
+  return provider === 'linear' || provider === 'jira' || provider === 'plane'
 }

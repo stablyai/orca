@@ -45,6 +45,7 @@ import type { GitHubWorkItem } from '../../../shared/github/work-item-types'
 import type { GitLabWorkItem } from '../../../shared/gitlab-types'
 import type { JiraIssue } from '../../../shared/jira-types'
 import type { LinearIssue } from '../../../shared/linear/issue-types'
+import type { PlaneWorkItem } from '../../../shared/plane/types'
 import type {
   OrcaHooks,
   RepoHookSettings,
@@ -174,6 +175,7 @@ import {
 import { getForkPushWarning } from './fork-push-warning'
 import {
   buildJiraWorkspaceSource,
+  buildPlaneWorkspaceSource,
   buildWorkspaceSourceSelection,
   shouldApplyWorkspaceSourceAutoName,
   shouldPreserveWorkspaceSourceOnRepoChange
@@ -300,6 +302,7 @@ export type ComposerCardProps = {
   onSmartNameModeChange?: (mode: SmartNameMode) => void
   onSmartLinearIssueSelect: (issue: LinearIssue) => void
   onSmartJiraIssueSelect: (issue: JiraIssue, sourceContext: TaskSourceContext) => void
+  onSmartPlaneIssueSelect: (issue: PlaneWorkItem) => void
   onOpenJiraSettings: () => void
   smartNameGitHubSourceContext?: TaskSourceContext | null
   smartNameJiraSourceContext?: TaskSourceContext | null
@@ -3366,6 +3369,38 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
     [name]
   )
 
+  const handleSmartPlaneIssueSelect = useCallback(
+    (issue: PlaneWorkItem): void => {
+      const linkedItem: LinkedWorkItemSummary = buildPlaneWorkspaceSource(issue)
+      setLinkedIssue('')
+      setLinkedPR(null)
+      setLinkedGitLabIssue(null)
+      setLinkedGitLabMR(null)
+      setBaseBranch(undefined)
+      setCompareBaseRef(undefined)
+      setPushTarget(undefined)
+      setBranchNameOverride(undefined)
+      setBranchNameOverridePreservesNameEdits(false)
+      setForkPushWarning(null)
+      branchAutoNameRef.current = ''
+      setLinkedTaskSourceContext(null)
+      setLinkedWorkItem(linkedItem)
+      const suggestedName = getLinkedWorkItemWorkspaceName(linkedItem)?.seedName ?? getLinkedWorkItemSuggestedName(linkedItem)
+      if (
+        suggestedName &&
+        (shouldApplyWorkspaceSourceAutoName({
+          currentName: name,
+          lastAutoName: lastAutoNameRef.current
+        }) ||
+          name.trim().toLowerCase() === issue.identifier.toLowerCase())
+      ) {
+        setName(suggestedName)
+        lastAutoNameRef.current = suggestedName
+      }
+    },
+    [name]
+  )
+
   const handleClearSmartNameSelection = useCallback((): void => {
     smartGitHubPrStartPointSelectionRef.current = null
     setLinkedIssue('')
@@ -4732,6 +4767,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
     onSmartNameModeChange: setSmartNameMode,
     onSmartLinearIssueSelect: handleSmartLinearIssueSelect,
     onSmartJiraIssueSelect: handleSmartJiraIssueSelect,
+    onSmartPlaneIssueSelect: handleSmartPlaneIssueSelect,
     onOpenJiraSettings: handleOpenJiraSettings,
     smartNameGitHubSourceContext: selectedRepoGitHubSourceContext,
     smartNameJiraSourceContext,

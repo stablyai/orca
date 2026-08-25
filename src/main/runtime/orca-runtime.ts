@@ -966,6 +966,47 @@ import {
   updateIssue as updateJiraIssue
 } from '../jira/issues'
 import {
+  connect as connectPlane,
+  connectWithOAuth as connectPlaneOAuth,
+  disconnect as disconnectPlane,
+  getStatus as getPlaneStatus,
+  selectInstance as selectPlaneInstance,
+  testConnection as testPlaneConnection
+} from '../plane/client'
+import {
+  createIssue as createPlaneIssue,
+  deleteIssue as deletePlaneIssue,
+  getIssue as getPlaneIssue,
+  listIssues as listPlaneIssues,
+  searchIssues as searchPlaneIssues,
+  updateIssue as updatePlaneIssue,
+  type PlaneListFilter
+} from '../plane/issues'
+import {
+  addIssueComment as addPlaneIssueComment,
+  addIssueLink as addPlaneIssueLink,
+  issueAttachments as getPlaneIssueAttachments,
+  issueComments as getPlaneIssueComments,
+  issueLinks as getPlaneIssueLinks
+} from '../plane/issue-activity'
+import {
+  listCycles as listPlaneCycles,
+  listEstimates as listPlaneEstimates,
+  listLabels as listPlaneLabels,
+  listMembers as listPlaneMembers,
+  listModules as listPlaneModules,
+  listProjects as listPlaneProjects,
+  listStates as listPlaneStates,
+  listWorkItemTypes as listPlaneWorkItemTypes
+} from '../plane/project-resources'
+import type {
+  PlaneConnectArgs,
+  PlaneCreateIssueArgs,
+  PlaneIssueQuery,
+  PlaneIssueUpdate,
+  PlaneOAuthConnectArgs
+} from '../../shared/plane/types'
+import {
   clearProjectItemFieldValue,
   getProjectViewTable,
   getWorkItemDetailsBySlug,
@@ -38261,6 +38302,139 @@ export class OrcaRuntimeService {
     siteId?: string
   ): ReturnType<typeof getJiraProjectStatusOrder> {
     return getJiraProjectStatusOrder(projectKey, siteId)
+  }
+
+  // ── Plane integration ──
+
+  planeConnect(args: PlaneConnectArgs): ReturnType<typeof connectPlane> {
+    return connectPlane(args)
+  }
+
+  planeConnectOAuth(args: PlaneOAuthConnectArgs): ReturnType<typeof connectPlaneOAuth> {
+    return connectPlaneOAuth(args)
+  }
+
+  planeDisconnect(instanceId?: string): { ok: true } {
+    disconnectPlane(instanceId)
+    return { ok: true }
+  }
+
+  planeSelectInstance(instanceId: string): ReturnType<typeof getPlaneStatus> {
+    return selectPlaneInstance(instanceId)
+  }
+
+  planeStatus(): ReturnType<typeof getPlaneStatus> {
+    return getPlaneStatus()
+  }
+
+  planeTestConnection(instanceId?: string): ReturnType<typeof testPlaneConnection> {
+    return testPlaneConnection(instanceId)
+  }
+
+  planeListProjects(instanceId?: string): ReturnType<typeof listPlaneProjects> {
+    return listPlaneProjects(instanceId)
+  }
+
+  planeListStates(projectId: string, instanceId?: string): ReturnType<typeof listPlaneStates> {
+    return listPlaneStates(projectId, instanceId)
+  }
+
+  planeListLabels(projectId: string, instanceId?: string): ReturnType<typeof listPlaneLabels> {
+    return listPlaneLabels(projectId, instanceId)
+  }
+
+  planeListMembers(instanceId?: string): ReturnType<typeof listPlaneMembers> {
+    return listPlaneMembers(instanceId)
+  }
+
+  planeListCycles(projectId: string, instanceId?: string): ReturnType<typeof listPlaneCycles> {
+    return listPlaneCycles(projectId, instanceId)
+  }
+
+  planeListModules(projectId: string, instanceId?: string): ReturnType<typeof listPlaneModules> {
+    return listPlaneModules(projectId, instanceId)
+  }
+
+  planeListWorkItemTypes(
+    projectId: string,
+    instanceId?: string
+  ): ReturnType<typeof listPlaneWorkItemTypes> {
+    return listPlaneWorkItemTypes(projectId, instanceId)
+  }
+
+  planeListEstimates(
+    projectId: string,
+    instanceId?: string
+  ): ReturnType<typeof listPlaneEstimates> {
+    return listPlaneEstimates(projectId, instanceId)
+  }
+
+  planeSearchIssues(
+    query: string,
+    limit = 20,
+    instanceId?: string
+  ): ReturnType<typeof searchPlaneIssues> {
+    return searchPlaneIssues(query, Math.min(Math.max(1, limit), 50), instanceId)
+  }
+
+  planeListIssues(
+    filter?: PlaneListFilter | PlaneIssueQuery,
+    limit = 30,
+    instanceId?: string
+  ): ReturnType<typeof listPlaneIssues> {
+    return listPlaneIssues(filter, Math.min(Math.max(1, limit), 100), instanceId)
+  }
+
+  planeGetIssue(id: string, instanceId?: string): ReturnType<typeof getPlaneIssue> {
+    return getPlaneIssue(id, instanceId)
+  }
+
+  planeCreateIssue(args: PlaneCreateIssueArgs): ReturnType<typeof createPlaneIssue> {
+    return createPlaneIssue(args)
+  }
+
+  planeUpdateIssue(
+    id: string,
+    updates: PlaneIssueUpdate,
+    instanceId?: string
+  ): ReturnType<typeof updatePlaneIssue> {
+    return updatePlaneIssue(id, updates, instanceId)
+  }
+
+  planeDeleteIssue(id: string, instanceId?: string): ReturnType<typeof deletePlaneIssue> {
+    return deletePlaneIssue(id, instanceId)
+  }
+
+  planeAddIssueComment(
+    id: string,
+    body: string,
+    instanceId?: string
+  ): ReturnType<typeof addPlaneIssueComment> {
+    return addPlaneIssueComment(id, body, instanceId)
+  }
+
+  planeIssueComments(id: string, instanceId?: string): ReturnType<typeof getPlaneIssueComments> {
+    return getPlaneIssueComments(id, instanceId)
+  }
+
+  planeIssueLinks(id: string, instanceId?: string): ReturnType<typeof getPlaneIssueLinks> {
+    return getPlaneIssueLinks(id, instanceId)
+  }
+
+  planeAddIssueLink(
+    id: string,
+    title: string,
+    url: string,
+    instanceId?: string
+  ): ReturnType<typeof addPlaneIssueLink> {
+    return addPlaneIssueLink(id, title, url, instanceId)
+  }
+
+  planeIssueAttachments(
+    id: string,
+    instanceId?: string
+  ): ReturnType<typeof getPlaneIssueAttachments> {
+    return getPlaneIssueAttachments(id, instanceId)
   }
 
   // ── Browser automation ──

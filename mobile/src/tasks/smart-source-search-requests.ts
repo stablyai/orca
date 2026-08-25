@@ -1,6 +1,7 @@
 import type { GitHubWorkItem } from '../../../src/shared/github/work-item-types'
 import type { GitLabWorkItem } from '../../../src/shared/gitlab-types'
 import type { LinearIssue } from '../../../src/shared/linear/issue-types'
+import type { PlaneWorkItem } from '../../../src/shared/plane/types'
 import type { BaseRefSearchResult } from '../../../src/shared/repo-types'
 import type { RpcClient } from '../transport/rpc-client'
 import type { RpcSuccess } from '../transport/types'
@@ -10,6 +11,7 @@ import type { MrStateFilter } from './mobile-composer-source-types'
 
 const GITLAB_PER_PAGE = 50
 const LINEAR_LIMIT = 50
+const PLANE_LIMIT = 50
 const BRANCH_LIMIT = 20
 
 // Why: the desktop Smart picker returns BOTH issues and PRs — the runtime's
@@ -91,6 +93,30 @@ export async function searchLinearIssues(
   // extractLinearIssueReadItems yields the mobile issue-read shape; the fields the
   // row builder/create flow read (id/identifier/title/url/state/team) are a subset.
   return extractLinearIssueReadItems((response as RpcSuccess).result) as unknown as LinearIssue[]
+}
+
+export async function searchPlaneIssues(
+  client: RpcClient,
+  query: string,
+  planeInstanceId: string | null | undefined
+): Promise<PlaneWorkItem[]> {
+  const trimmed = query.trim()
+  const response = trimmed
+    ? await client.sendRequest('plane.searchIssues', {
+        query: trimmed,
+        limit: PLANE_LIMIT,
+        instanceId: planeInstanceId ?? undefined
+      })
+    : await client.sendRequest('plane.listIssues', {
+        filter: 'assigned',
+        limit: PLANE_LIMIT,
+        instanceId: planeInstanceId ?? undefined
+      })
+  if (!response.ok) {
+    throw new Error(response.error.message)
+  }
+  const result = (response as RpcSuccess).result as PlaneWorkItem[] | { items?: PlaneWorkItem[] }
+  return Array.isArray(result) ? result : (result.items ?? [])
 }
 
 export async function searchBranches(

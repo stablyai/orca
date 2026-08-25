@@ -69,16 +69,28 @@ function toTaskItem(item: MobileLinkedWorkItem, targetRepoId: string): Workspace
       }
     }
   }
+  if (item.provider === 'linear') {
+    return {
+      provider: 'linear',
+      source: {
+        identifier: item.linearIdentifier ?? '',
+        title: item.title,
+        url: item.url,
+        ...(item.linearWorkspaceId ? { workspaceId: item.linearWorkspaceId } : {}),
+        ...(item.linearOrganizationUrlKey
+          ? { organizationUrlKey: item.linearOrganizationUrlKey }
+          : {})
+      }
+    }
+  }
   return {
-    provider: 'linear',
+    provider: 'plane',
     source: {
-      identifier: item.linearIdentifier ?? '',
+      identifier: item.planeIdentifier ?? '',
       title: item.title,
       url: item.url,
-      ...(item.linearWorkspaceId ? { workspaceId: item.linearWorkspaceId } : {}),
-      ...(item.linearOrganizationUrlKey
-        ? { organizationUrlKey: item.linearOrganizationUrlKey }
-        : {})
+      number: item.number,
+      ...(item.planeInstanceId ? { instanceId: item.planeInstanceId } : {})
     }
   }
 }

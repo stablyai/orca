@@ -29,8 +29,10 @@ const smartArgs = {
   githubAvailable: true,
   gitlabAvailable: true,
   linearAvailable: true,
+  planeAvailable: true,
   mrStateFilter: 'opened' as const,
-  linearWorkspaceId: null
+  linearWorkspaceId: null,
+  planeInstanceId: null
 }
 
 describe('fanOutSmartSearch', () => {
@@ -41,6 +43,7 @@ describe('fanOutSmartSearch', () => {
         'github.listWorkItems': { items: [{ id: 'g1', type: 'issue', number: 1, title: 'A' }] },
         'gitlab.listWorkItems': { items: [{ id: 'gl1', type: 'mr', number: 2, title: 'B' }] },
         'linear.searchIssues': { items: [{ id: 'l1', identifier: 'ENG-1', title: 'C' }] },
+        'plane.searchIssues': { items: [{ id: 'p1', identifier: 'AIF-1', title: 'D' }] },
         'repo.searchRefs': { refDetails: [{ refName: 'main', localBranchName: 'main' }] }
       },
       calls
@@ -50,11 +53,13 @@ describe('fanOutSmartSearch', () => {
       'github.listWorkItems',
       'gitlab.listWorkItems',
       'linear.searchIssues',
+      'plane.searchIssues',
       'repo.searchRefs'
     ])
     expect(result.githubItems[0]).toMatchObject({ number: 1, repoId: 'repo-1' })
     expect(result.gitlabItems[0]).toMatchObject({ number: 2, repoId: 'repo-1' })
     expect(result.linearIssues[0]).toMatchObject({ identifier: 'ENG-1' })
+    expect(result.planeIssues[0]).toMatchObject({ identifier: 'AIF-1' })
     expect(result.branches).toEqual([{ refName: 'main', localBranchName: 'main' }])
     expect(result.error).toBe('')
   })
@@ -66,6 +71,7 @@ describe('fanOutSmartSearch', () => {
         'github.listWorkItems': new Error('gh down'),
         'gitlab.listWorkItems': { items: [{ id: 'gl1', type: 'mr', number: 2, title: 'B' }] },
         'linear.searchIssues': { items: [] },
+        'plane.searchIssues': { items: [] },
         'repo.searchRefs': { refDetails: [] }
       },
       calls
@@ -106,7 +112,18 @@ describe('fanOutSmartSearch', () => {
       githubItems: [],
       gitlabItems: [],
       linearIssues: [],
+      planeIssues: [],
       branches: []
     })
+  })
+
+  it('lists assigned Plane issues for empty Plane queries', async () => {
+    const calls: Call[] = []
+    const client = fakeClient({ 'plane.listIssues': { items: [{ id: 'p1', identifier: 'AIF-2' }] } }, calls)
+    const result = await fanOutSmartSearch({ ...smartArgs, mode: 'plane', query: '', client })
+    expect(calls).toEqual([
+      { method: 'plane.listIssues', params: { filter: 'assigned', limit: 50, instanceId: undefined } }
+    ])
+    expect(result.planeIssues[0]).toMatchObject({ identifier: 'AIF-2' })
   })
 })

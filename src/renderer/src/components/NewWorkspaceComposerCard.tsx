@@ -39,6 +39,7 @@ import type { GitHubWorkItem } from '../../../shared/github/work-item-types'
 import type { GitLabWorkItem } from '../../../shared/gitlab-types'
 import type { JiraIssue } from '../../../shared/jira-types'
 import type { LinearIssue } from '../../../shared/linear/issue-types'
+import type { PlaneWorkItem } from '../../../shared/plane/types'
 import type { OrcaHooks, SetupAgentStartupPolicy } from '../../../shared/orca-yaml-hook-types'
 import type { TuiAgent } from '../../../shared/tui-agent'
 import type { SparsePreset } from '../../../shared/worktree/create-types'
@@ -116,6 +117,7 @@ type NewWorkspaceComposerCardProps = {
   onSmartNameModeChange?: (mode: SmartNameMode) => void
   onSmartLinearIssueSelect: (issue: LinearIssue) => void
   onSmartJiraIssueSelect?: (issue: JiraIssue, sourceContext: TaskSourceContext) => void
+  onSmartPlaneIssueSelect?: (issue: PlaneWorkItem) => void
   onOpenJiraSettings?: () => void
   smartNameSelection: SmartWorkspaceNameSelection | null
   onClearSmartNameSelection: () => void
@@ -332,6 +334,7 @@ export default function NewWorkspaceComposerCard({
   onSmartNameModeChange,
   onSmartLinearIssueSelect,
   onSmartJiraIssueSelect,
+  onSmartPlaneIssueSelect,
   onOpenJiraSettings,
   smartNameSelection,
   onClearSmartNameSelection,
@@ -809,6 +812,7 @@ export default function NewWorkspaceComposerCard({
             onBranchSelect={onSmartBranchSelect}
             onLinearIssueSelect={onSmartLinearIssueSelect}
             onJiraIssueSelect={onSmartJiraIssueSelect}
+            onPlaneIssueSelect={onSmartPlaneIssueSelect}
             onOpenJiraSettings={onOpenJiraSettings}
             selectedSource={smartNameSelection}
             onClearSelectedSource={onClearSmartNameSelection}

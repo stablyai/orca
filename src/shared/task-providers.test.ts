@@ -15,8 +15,23 @@ describe('task providers', () => {
     ])
   })
 
+  it('preserves older saved visible provider lists without forcing Plane visible', () => {
+    expect(normalizeVisibleTaskProviders(['github', 'gitlab', 'linear', 'jira'])).toEqual([
+      'github',
+      'gitlab',
+      'linear',
+      'jira'
+    ])
+  })
+
   it('falls back to all providers when none are visible', () => {
-    expect(normalizeVisibleTaskProviders([])).toEqual(['github', 'gitlab', 'linear', 'jira'])
+    expect(normalizeVisibleTaskProviders([])).toEqual([
+      'github',
+      'gitlab',
+      'linear',
+      'jira',
+      'plane'
+    ])
   })
 
   it('restores a valid saved default when provider settings drifted', () => {
@@ -115,5 +130,15 @@ describe('task providers', () => {
         linearConnected: false
       })
     ).toEqual(['github'])
+  })
+
+  it('keeps Plane visible even before it is connected', () => {
+    expect(
+      filterAvailableTaskProviders(['plane'], {
+        gitlabInstalled: false,
+        linearConnected: false,
+        planeConnected: false
+      })
+    ).toEqual(['plane'])
   })
 })
