@@ -315,7 +315,10 @@ test('rolls back a headed-host browser when client reconciliation times out @hea
   const offer = await createRuntimeDesktopPairingOffer(orcaPage)
   const userDataDir = await electronApp.evaluate(({ app }) => app.getPath('userData'))
   await runReconciliationFailureJourney({
-    hostClient: new RuntimeClient(userDataDir, 5_000),
+    // Why 30s: browser.tabList on a headed host with no live browser tab first activates the
+    // browser view and waits up to 8s for a webview registration before answering; a 5s client
+    // times out before the runtime ever replies.
+    hostClient: new RuntimeClient(userDataDir, 30_000),
     offer,
     repoPath: testRepoPath,
     testInfo,
@@ -339,7 +342,10 @@ test('cleans up a headed-host preview when capability rejects after preflight @h
   const offer = await createRuntimeDesktopPairingOffer(orcaPage)
   const userDataDir = await electronApp.evaluate(({ app }) => app.getPath('userData'))
   await runCapabilityFailureJourney({
-    hostClient: new RuntimeClient(userDataDir, 5_000),
+    // Why 30s: browser.tabList on a headed host with no live browser tab first activates the
+    // browser view and waits up to 8s for a webview registration before answering; a 5s client
+    // times out before the runtime ever replies.
+    hostClient: new RuntimeClient(userDataDir, 30_000),
     offer,
     repoPath: testRepoPath,
     testInfo,
