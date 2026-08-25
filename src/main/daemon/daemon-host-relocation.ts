@@ -10,7 +10,7 @@ import {
   writeFileSync
 } from 'node:fs'
 import { dirname, join, win32 as winPath } from 'node:path'
-import { app } from 'electron'
+import { getAppEnvironment } from '../../shared/app-environment'
 import { parseDaemonPidFile } from './daemon-pid-file-parse'
 import { startTimeMatches } from './daemon-process-start-time'
 
@@ -85,9 +85,27 @@ function resolveEntrySourcePath(resourcesPath: string): string {
   return join(unpackedRoot, 'out', 'main', 'daemon-entry.js')
 }
 
+/**
+ * Whether this process is a packaged ELECTRON app on win32 — the only shape relocation
+ * addresses, because what it escapes is the NSIS updater's kill zone.
+ *
+ * Why asar and not isPackaged alone: orcad answers isPackaged() true (it is a shipped build,
+ * not a dev checkout) while having no asar, no resourcesPath and no NSIS installer. Asking
+ * whether the app root is an asar archive is the same honesty fix the watcher path uses, and
+ * it keeps a Node host from staging a copy of an Electron tree it does not have.
+ */
+function isPackagedElectronWin32(): boolean {
+  const environment = getAppEnvironment()
+  return (
+    process.platform === 'win32' &&
+    environment.isPackaged() &&
+    environment.getAppPath().includes('app.asar')
+  )
+}
+
 // Relocation inputs from the live packaged process, or null when it doesn't apply (non-win32, dev, or missing resourcesPath).
 function collectDaemonHostSources(): DaemonHostSources | null {
-  if (process.platform !== 'win32' || !app.isPackaged) {
+  if (!isPackagedElectronWin32()) {
     return null
   }
   const resourcesPath = process.resourcesPath
@@ -206,7 +224,7 @@ function hostRootDir(): string {
   const base =
     typeof localAppData === 'string' && localAppData.length > 0
       ? join(localAppData, LOCAL_HOST_ROOT_NAME)
-      : app.getPath('userData')
+      : getAppEnvironment().getPath('userData')
   return join(base, HOST_SUBDIR)
 }
 
@@ -219,7 +237,7 @@ export function getRelocatedDaemonHost(): RelocatedDaemonHost | null {
   if (!sources) {
     return null
   }
-  const version = app.getVersion()
+  const version = getAppEnvironment().getVersion()
   const dest = join(hostRootDir(), version)
   const marker = readMarker(dest)
   if (!marker || marker.version !== version) {
@@ -246,7 +264,7 @@ export function materializeRelocatedDaemonHost(): RelocatedDaemonHost | null {
   if (!sources) {
     return null
   }
-  const version = app.getVersion()
+  const version = getAppEnvironment().getVersion()
   const root = hostRootDir()
   const dest = join(root, version)
   const staging = join(root, `${version}.staging-${randomBytes(6).toString('hex')}`)
@@ -319,10 +337,10 @@ export function collectPinnedDaemonVersions(runtimeDir: string): Set<string> {
  * Best-effort — never throws; a locked/staging dir is retried on a future launch.
  */
 export function pruneOldDaemonHosts(pinnedVersions: ReadonlySet<string>): void {
-  if (process.platform !== 'win32' || !app.isPackaged) {
+  if (!isPackagedElectronWin32()) {
     return
   }
-  const version = app.getVersion()
+  const version = getAppEnvironment().getVersion()
   const root = hostRootDir()
   let entries
   try {

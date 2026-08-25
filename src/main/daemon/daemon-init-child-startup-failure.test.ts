@@ -14,7 +14,6 @@ const {
   (await import('./daemon-init-test-harness')).createDaemonInitMocks()
 )
 
-vi.mock('electron', () => moduleFactories.electron())
 vi.mock('fs', () => moduleFactories.fs())
 vi.mock('child_process', async (importOriginal) =>
   moduleFactories.childProcess(await importOriginal<Record<string, unknown>>())

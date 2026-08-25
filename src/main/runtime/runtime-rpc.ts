@@ -61,6 +61,12 @@ const DEFAULT_WS_PORT = 6768
 const WS_BIND_HOST_LOOPBACK = '127.0.0.1'
 const WS_BIND_HOST_ALL_INTERFACES = '0.0.0.0'
 
+// Why brackets: `ws://::1:6768` is not a URL, and every consumer of this endpoint parses it
+// with `new URL`. An IPv6 bind address would otherwise publish an unparseable endpoint.
+function formatWsEndpoint(host: string, port: number): string {
+  return `ws://${host.includes(':') ? `[${host}]` : host}:${port}`
+}
+
 type OrcaRuntimeRpcServerOptions = {
   runtime: OrcaRuntimeService
   userDataPath: string
@@ -73,6 +79,16 @@ type OrcaRuntimeRpcServerOptions = {
   // Why: STA-2370 — bind the WS listener to all interfaces at startup instead of loopback-until-paired.
   // Only `orca serve` (explicit remote opt-in) and E2E set this; the desktop app widens lazily on pairing.
   exposeNetworkByDefault?: boolean
+  /**
+   * Pin the WS listener to exactly this address for the process's whole life.
+   *
+   * Why a pin and not another default: the two paths below both widen on their own —
+   * `exposeNetworkByDefault` at startup, and a device that has connected once at every
+   * later startup. An unattended host (orcad) whose operator asked for loopback must
+   * still be on loopback after a client pairs and the service restarts, so the answer
+   * has to outrank both, and `ensureNetworkExposure()` has to refuse rather than widen.
+   */
+  pinnedBindHost?: string
   webClientRoot?: string
   // Why: test-only overrides for the two constants below; production must not pass these (defaults set by §3.1).
   keepaliveIntervalMs?: number
@@ -488,6 +504,7 @@ export class OrcaRuntimeRpcServer {
   private readonly wsPort: number
   private readonly preferPinnedWsPort: boolean
   private readonly exposeNetworkByDefault: boolean
+  private readonly pinnedBindHost: string | null
   private readonly webClientRoot: string | undefined
   // Why: STA-2370 — the host the WS listener is currently bound to, so pairing can widen loopback→all-interfaces once.
   private wsBoundHost: string | null = null
@@ -546,6 +563,7 @@ export class OrcaRuntimeRpcServer {
     wsPort = DEFAULT_WS_PORT,
     preferPinnedWsPort = false,
     exposeNetworkByDefault = false,
+    pinnedBindHost,
     webClientRoot,
     keepaliveIntervalMs = KEEPALIVE_INTERVAL_MS,
     longPollCap = LONG_POLL_CAP,
@@ -560,6 +578,7 @@ export class OrcaRuntimeRpcServer {
     this.wsPort = wsPort
     this.preferPinnedWsPort = preferPinnedWsPort
     this.exposeNetworkByDefault = exposeNetworkByDefault
+    this.pinnedBindHost = pinnedBindHost ?? null
     this.webClientRoot = webClientRoot
     this.keepaliveIntervalMs = keepaliveIntervalMs
     this.longPollCap = longPollCap
@@ -1244,6 +1263,9 @@ export class OrcaRuntimeRpcServer {
   // A grant minted for "This computer only" is excluded: its client is a browser on this machine, so
   // counting it would republish the runtime on every interface one restart after the user declined that.
   private resolveInitialWebSocketBindHost(): string {
+    if (this.pinnedBindHost) {
+      return this.pinnedBindHost
+    }
     if (this.exposeNetworkByDefault) {
       return WS_BIND_HOST_ALL_INTERFACES
     }
@@ -1289,7 +1311,7 @@ export class OrcaRuntimeRpcServer {
     this.wsBoundHost = options.host
     return {
       transport: wsTransport,
-      endpoint: `ws://${options.host}:${wsTransport.resolvedPort}`
+      endpoint: formatWsEndpoint(options.host, wsTransport.resolvedPort)
     }
   }
 
@@ -1362,6 +1384,14 @@ export class OrcaRuntimeRpcServer {
   // connected when a later LAN/QR offer opts in. Rebinding terminates them (ws cannot move a listener),
   // so the resolved port is reused — already-issued endpoints stay valid and clients reconnect in place.
   async ensureNetworkExposure(): Promise<void> {
+    if (this.pinnedBindHost && this.pinnedBindHost !== WS_BIND_HOST_ALL_INTERFACES) {
+      // Why throw and not return: callers widen so they can ADVERTISE a LAN endpoint. Returning
+      // quietly would let them publish one that nothing can reach; the throw lands in their
+      // existing network_exposure_failed branch, which reports the offer unavailable instead.
+      throw new Error(
+        `Runtime bind address is pinned to ${this.pinnedBindHost}; refusing to widen to all interfaces`
+      )
+    }
     if (
       !this.enableWebSocket ||
       this.stopping ||
