@@ -1,5 +1,6 @@
 import type { CommandSpec } from '../args'
 import { GLOBAL_FLAGS } from '../args'
+import { ORCHESTRATION_MOA_COMMAND_SPECS } from './orchestration-moa-specs'
 import { ORCHESTRATION_WORKER_COMMAND_SPECS } from './orchestration-worker-specs'
 
 export const ORCHESTRATION_COMMAND_SPECS: CommandSpec[] = [
@@ -255,6 +256,7 @@ export const ORCHESTRATION_COMMAND_SPECS: CommandSpec[] = [
     allowedFlags: [...GLOBAL_FLAGS, 'task', 'status', 'run', 'from'],
     notes: ['--run inspects a named Run without binding; otherwise gates are scoped to the caller.']
   },
+  ...ORCHESTRATION_MOA_COMMAND_SPECS,
   {
     path: ['orchestration', 'reset'],
     summary: 'Reset one explicit orchestration state scope',

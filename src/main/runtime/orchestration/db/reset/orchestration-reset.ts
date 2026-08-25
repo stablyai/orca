@@ -23,6 +23,8 @@ export function resetAll(this: OrchestrationDb): void {
   this.runResetTransaction(`
     DELETE FROM coordinator_runs;
     DELETE FROM decision_gates;
+    DELETE FROM moa_ledger_entries;
+    DELETE FROM moa_deliberations;
     DELETE FROM remote_questions;
     DELETE FROM question_threads;
     DELETE FROM deliveries;
@@ -50,9 +52,14 @@ export function resetAll(this: OrchestrationDb): void {
 export function resetTasks(this: OrchestrationDb): void {
   // Why: messages survive this scope, so question threads are closed rather than deleted — an orphaned
   // question message would otherwise answer as a generic reply while legacy acknowledgment rejects it.
+  // Why the ledger dies with tasks and not with messages: the ledger is authoritative
+  // deliberation state, so the mailbox-hygiene reset must never destroy it, while the
+  // task-scope reset discards the deliberations those tasks hosted.
   this.runResetTransaction(`
     DELETE FROM coordinator_runs;
     DELETE FROM decision_gates;
+    DELETE FROM moa_ledger_entries;
+    DELETE FROM moa_deliberations;
     DELETE FROM remote_questions;
     UPDATE question_threads
       SET status = 'closed', closed_at = COALESCE(closed_at, datetime('now'))

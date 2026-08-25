@@ -23,6 +23,7 @@ import {
 } from '../../../../shared/orchestration-rpc-contract'
 import { clampOrchestrationAskTimeoutMs } from '../../../../shared/orchestration-ask-timeout'
 import { ORCHESTRATION_GATE_METHODS } from './orchestration-gates'
+import { ORCHESTRATION_MOA_METHODS } from './orchestration-moa'
 import {
   resolveBareOrchestrationRecipient,
   type SendRecipientWarning
@@ -1906,6 +1907,8 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
   }),
 
   ...ORCHESTRATION_GATE_METHODS,
+
+  ...ORCHESTRATION_MOA_METHODS,
 
   defineMethod({
     name: 'orchestration.reset',

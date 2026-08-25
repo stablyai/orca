@@ -338,7 +338,7 @@ function getClientErrorMessage(err: unknown): string | undefined {
   return typeof message === 'string' ? message : undefined
 }
 
-async function resolveCoordinatorTerminalHandle(
+export async function resolveCoordinatorTerminalHandle(
   flags: Map<string, string | boolean>,
   cwd: string,
   client: Parameters<CommandHandler>[0]['client']
@@ -405,7 +405,7 @@ function rejectLifecycleGroupRecipient(type: string | undefined, to: string): vo
   }
 }
 
-function callMutation<TResult>(
+export function callMutation<TResult>(
   client: RuntimeClient,
   flags: Map<string, string | boolean>,
   method: string,

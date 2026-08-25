@@ -3,6 +3,7 @@ import { SCHEMA_VERSION } from '../contract-constants'
 import type { OrchestrationDb } from '../orchestration-db'
 import { applySchemaMigrationsV13ToV29 } from './migrate-v13-v29'
 import { applySchemaMigrationsV2ToV12 } from './migrate-v2-v12'
+import { applySchemaMigrationV30MoaLedger } from './migrate-v30-moa-ledger'
 
 // Why: CREATE TABLE IF NOT EXISTS won't alter existing DBs; migrate in a txn that bumps user_version only on success (atomic all-or-nothing).
 export function migrate(this: OrchestrationDb): void {
@@ -16,6 +17,7 @@ export function migrate(this: OrchestrationDb): void {
   try {
     applySchemaMigrationsV2ToV12.call(this, current)
     applySchemaMigrationsV13ToV29.call(this, current)
+    applySchemaMigrationV30MoaLedger.call(this, current)
     this.db.pragma(`user_version = ${SCHEMA_VERSION}`)
     this.db.exec('COMMIT')
   } catch (err) {

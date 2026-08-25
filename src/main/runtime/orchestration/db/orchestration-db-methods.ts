@@ -28,6 +28,7 @@ import type { DirectMailboxRoutingMethods } from './messages/direct-mailbox-rout
 import type { ForeignDirectMailboxRoutingMethods } from './messages/foreign-direct-mailbox-routing'
 import type { MessageInboxMethods } from './messages/message-inbox'
 import type { MessageInsertMethods } from './messages/message-insert'
+import type { MoaLedgerStoreMethods } from './moa-ledger/moa-ledger-store'
 import type { MutationReceiptStoreMethods } from './mutation-receipts/mutation-receipt-store'
 import type { QuestionThreadsMethods } from './questions/question-threads'
 import type { OrchestrationResetMethods } from './reset/orchestration-reset'
@@ -117,5 +118,6 @@ export type OrchestrationDbMethods = CreateTablesMethods &
   DispatchCompletionMethods &
   WorkerReportSettlementMethods &
   DecisionGateStoreMethods &
+  MoaLedgerStoreMethods &
   CoordinatorRunStoreMethods &
   OrchestrationResetMethods

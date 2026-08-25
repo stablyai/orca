@@ -49,9 +49,15 @@ export function insertMessage(this: OrchestrationDb, msg: MessageInsert): Messag
     msg.payload ?? null,
     msg.senderPaneKey ?? null
   )
-  return exposeMessageTimestamps(
+  const row = exposeMessageTimestamps(
     this.db.prepare('SELECT * FROM messages WHERE id = ?').get(id) as MessageRow
   )
+  // Why here and not in the send RPC: every arrival path (send, federation relay
+  // import, injected system mail) funnels through this insert, so payload.moa on a
+  // status message materializes exactly once, in the same transaction scope as its
+  // provenance row.
+  this.ingestMoaMessagePayload(row)
+  return row
 }
 
 export function insertMessages(this: OrchestrationDb, messages: MessageInsert[]): MessageRow[] {

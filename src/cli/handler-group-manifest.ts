@@ -136,6 +136,11 @@ export const HANDLER_GROUPS: readonly HandlerGroup[] = [
     load: async () => (await import('./handlers/orchestration.js')).ORCHESTRATION_HANDLERS
   },
   {
+    name: 'orchestration-moa',
+    keys: ['orchestration moa-log', 'orchestration moa-show'],
+    load: async () => (await import('./handlers/orchestration-moa.js')).ORCHESTRATION_MOA_HANDLERS
+  },
+  {
     name: 'emulator',
     keys: [
       'emulator list',

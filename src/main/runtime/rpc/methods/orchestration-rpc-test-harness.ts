@@ -89,9 +89,11 @@ export function createOrchestrationRpcHarness() {
       } else if (
         name === 'orchestration.gateCreate' ||
         name === 'orchestration.gateResolve' ||
-        name === 'orchestration.gateList'
+        name === 'orchestration.gateList' ||
+        name === 'orchestration.moaLog' ||
+        name === 'orchestration.moaShow'
       ) {
-        // Why: gates resolve their Run from the sender's pane binding, so naming the run would skip that check.
+        // Why: gates and MoA ledgers resolve their Run from the sender's pane binding, so naming the run would skip that check.
         scopedParams.from ??= 'term_coord'
       }
     }
