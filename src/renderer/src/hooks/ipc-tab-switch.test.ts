@@ -370,3 +370,77 @@ describe('handleSwitchRecentTab', () => {
     expect(store.setActiveTabType).not.toHaveBeenCalled()
   })
 })
+
+describe('reconciled group navigation composition', () => {
+  it('cycles an omitted live editor across all types but not within terminal type (#16389)', async () => {
+    vi.resetModules()
+    vi.doUnmock('@/components/tab-bar/group-tab-order')
+    const tabSwitch = await import('./ipc-tab-switch')
+    const { getActiveTabNavOrder } = await import('@/components/tab-bar/group-tab-order')
+    const group = {
+      id: 'group-1',
+      worktreeId: 'wt-1',
+      activeTabId: 'tab-term-2',
+      tabOrder: ['tab-term-1', 'tab-term-2']
+    }
+    const store = {
+      ...makeStore('terminal', {
+        activeTabId: 'term-2',
+        activeFileId: '/repo/omitted.md',
+        groupsByWorktree: { 'wt-1': [group] }
+      }),
+      unifiedTabsByWorktree: {
+        'wt-1': [
+          {
+            id: 'tab-term-1',
+            entityId: 'term-1',
+            groupId: 'group-1',
+            contentType: 'terminal'
+          },
+          {
+            id: 'tab-editor',
+            entityId: '/repo/omitted.md',
+            groupId: 'group-1',
+            contentType: 'editor'
+          },
+          {
+            id: 'tab-term-2',
+            entityId: 'term-2',
+            groupId: 'group-1',
+            contentType: 'terminal'
+          }
+        ]
+      },
+      tabBarOrderByWorktree: { 'wt-1': [] },
+      tabsByWorktree: { 'wt-1': [{ id: 'term-1' }, { id: 'term-2' }] },
+      openFiles: [{ id: '/repo/omitted.md', worktreeId: 'wt-1' }],
+      browserTabsByWorktree: {}
+    }
+    getStateMock.mockReturnValue(store)
+
+    expect(vi.isMockFunction(getActiveTabNavOrder)).toBe(false)
+    expect(getActiveTabNavOrder(store as never, 'wt-1')).toEqual([
+      { type: 'terminal', id: 'term-1', tabId: 'tab-term-1' },
+      { type: 'terminal', id: 'term-2', tabId: 'tab-term-2' },
+      { type: 'editor', id: '/repo/omitted.md', tabId: 'tab-editor' }
+    ])
+    expect(tabSwitch.handleSwitchTabAcrossAllTypes(1)).toBe(true)
+    expect(store.setActiveFile).toHaveBeenCalledWith('/repo/omitted.md')
+    expect(store.activateTab).toHaveBeenCalledWith('tab-editor')
+
+    vi.clearAllMocks()
+    store.activeTabId = 'term-1'
+    group.activeTabId = 'tab-term-1'
+    getStateMock.mockReturnValue(store)
+    expect(tabSwitch.handleSwitchTabAcrossAllTypes(-1)).toBe(true)
+    expect(store.setActiveFile).toHaveBeenCalledWith('/repo/omitted.md')
+    expect(store.activateTab).toHaveBeenCalledWith('tab-editor')
+
+    vi.clearAllMocks()
+    getStateMock.mockReturnValue(store)
+    expect(tabSwitch.handleSwitchTab(1)).toBe(true)
+    expect(store.setActiveTab).toHaveBeenCalledWith('term-2')
+    expect(store.setActiveFile).not.toHaveBeenCalled()
+    expect(store.activateTab).not.toHaveBeenCalled()
+  })
+})

@@ -28,7 +28,8 @@ function tab(id: string, entityId: string, label: string): Tab {
 function stateWithTabs(
   tabOrder: string[],
   recentTabIds: string[],
-  activeTabId: string
+  activeTabId: string,
+  liveTabIds: string[] = ['tab-a', 'tab-b', 'tab-c']
 ): Pick<
   AppState,
   | 'activeBrowserTabId'
@@ -47,7 +48,7 @@ function stateWithTabs(
     tab('tab-a', 'file-a', 'A'),
     tab('tab-b', 'file-b', 'B'),
     tab('tab-c', 'file-c', 'C')
-  ]
+  ].filter((entry) => liveTabIds.includes(entry.id))
   return {
     activeBrowserTabId: null,
     activeFileId: tabs.find((entry) => entry.id === activeTabId)?.entityId ?? null,
@@ -103,7 +104,7 @@ describe('buildRecentTabSwitcherModel', () => {
 
   it('returns null when there is no other tab to switch to', () => {
     const model = buildRecentTabSwitcherModel(
-      stateWithTabs(['tab-a'], ['tab-a'], 'tab-a'),
+      stateWithTabs(['tab-a'], ['tab-a'], 'tab-a', ['tab-a']),
       WT,
       'mru'
     )
