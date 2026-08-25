@@ -108,6 +108,8 @@
   --color-workspace-status-progress: var(--workspace-status-progress);
   --color-tab-group-split-divider: var(--tab-group-split-divider);
   --color-tab-group-split-divider-strong: var(--tab-group-split-divider-strong);
+  --color-tab-strip-active-surface: var(--tab-strip-active-surface);
+  --color-tab-strip-inactive-surface: var(--tab-strip-inactive-surface);
   --color-git-graph-ref: var(--git-graph-ref);
   --color-git-graph-remote-ref: var(--git-graph-remote-ref);
   --color-git-graph-base-ref: var(--git-graph-base-ref);
@@ -245,6 +247,13 @@
      meet >=3:1 against `--card`, not only the hover/drag strong state. */
   --tab-group-split-divider: #868690;
   --tab-group-split-divider-strong: #71717a;
+  /* Why: the active tab must read lighter than inactive ones in both themes.
+     `--card` is already max-lightness in light mode, so there's no way to
+     lighten it further — the 6% mix has to darken the *inactive* tab instead
+     (opposite of dark mode below, where mixing foreground into card
+     lightens the *active* tab). See #16283. */
+  --tab-strip-active-surface: var(--card);
+  --tab-strip-inactive-surface: color-mix(in srgb, var(--foreground) 6%, var(--card));
 }
 
 /* ── Dark Mode ───────────────────────────────────────── */
@@ -355,6 +364,10 @@
   /* Brighter than terminal defaults so the always-visible line clears 3:1 on `--card`. */
   --tab-group-split-divider: #71717a;
   --tab-group-split-divider-strong: #a1a1aa;
+  /* Why: here the 6% mix already lightens `--card` correctly, so the active
+     tab keeps the mix and the inactive tab stays plain `--card`. */
+  --tab-strip-active-surface: color-mix(in srgb, var(--foreground) 6%, var(--card));
+  --tab-strip-inactive-surface: var(--card);
 }
 
 .plugin-security-chrome {
