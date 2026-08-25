@@ -66,7 +66,6 @@ inline src/relay/workspace-space-scan.ts
 inline src/renderer/src/components/GitLabItemDialog.tsx
 inline src/renderer/src/components/JiraIssueWorkspace.tsx
 inline src/renderer/src/components/LinearItemDrawer.tsx
-inline src/renderer/src/components/NewWorkspaceComposerCard.tsx
 inline src/renderer/src/components/TaskPage.tsx
 inline src/renderer/src/components/Terminal.tsx
 inline src/renderer/src/components/WorktreeJumpPalette.tsx
@@ -112,7 +111,6 @@ inline src/renderer/src/store/slices/agent-status.ts
 inline src/renderer/src/store/slices/browser.ts
 inline src/renderer/src/store/slices/diffComments.ts
 inline src/renderer/src/store/slices/hosted-review.ts
-inline src/renderer/src/store/slices/jira.ts
 inline src/renderer/src/store/slices/linear.ts
 inline src/renderer/src/store/slices/repos.ts
 inline src/renderer/src/store/slices/tabs.ts
