@@ -38,7 +38,6 @@ inline src/main/rate-limits/claude-pty.ts
 inline src/main/rate-limits/service.ts
 inline src/main/runtime/orca-runtime-browser.ts
 inline src/main/runtime/orca-runtime-files.ts
-inline src/main/runtime/orca-runtime-git.ts
 inline src/main/runtime/orca-runtime.test.ts
 inline src/main/runtime/orca-runtime.ts
 inline src/main/runtime/rpc/methods/orchestration.ts
@@ -87,7 +86,6 @@ inline src/renderer/src/lib/pane-manager/pane-terminal-output-scheduler.ts
 inline src/renderer/src/lib/pane-manager/pane-tree-ops.ts
 inline src/renderer/src/runtime/remote-runtime-terminal-multiplexer.ts
 inline src/renderer/src/runtime/runtime-file-client.ts
-inline src/renderer/src/runtime/runtime-git-client.ts
 inline src/renderer/src/runtime/runtime-linear-client.ts
 inline src/renderer/src/runtime/sync-runtime-graph.ts
 inline src/renderer/src/runtime/web-runtime-session.ts
