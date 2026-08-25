@@ -117,7 +117,9 @@ function normalizeProfilePath(value: string): string {
 
 function profileSource(userDataPath: string): 'env' | 'default' | 'explicit' {
   const configured = process.env.ORCA_USER_DATA_PATH
-  if (!configured) return 'default'
+  if (!configured) {
+    return 'default'
+  }
   return normalizeProfilePath(configured) === normalizeProfilePath(userDataPath)
     ? 'env'
     : 'explicit'

@@ -135,7 +135,9 @@ describe('orchestration parent checkpoint and approved rebind RPC', () => {
 
   it('rejects a legacy Run atomically before changing its Dispatch or checkpoint', async () => {
     const { db, runtime, ctx, activeRunId } = harness.setup()
-    if (!activeRunId) throw new Error('expected an active Run fixture')
+    if (!activeRunId) {
+      throw new Error('expected an active Run fixture')
+    }
     const task = db.createTask({ spec: 'legacy parent' })
     const dispatch = db.createDispatchContext(task.id, 'term_worker')
     const checkpoint = db.createParentLossCheckpoint({
