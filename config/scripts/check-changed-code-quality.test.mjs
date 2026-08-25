@@ -75,9 +75,24 @@ describe('moved-code exemption', () => {
     expect(isMovedCode(['doThing()', 'newlyAddedSideEffect()'], base)).toBe(false)
   })
 
-  it('does not exempt when the base lines are non-contiguous', () => {
+  it('tolerates a few lines appended inside the moved block', () => {
+    // A split commonly grows a hook dependency array when closure variables
+    // become props; the moved body around it is still moved.
+    const body = Array.from({ length: 20 }, (_, i) => `line${i}()`)
+    const base = [body]
+    const moved = [...body.slice(0, 19), 'newDep,', body[19]]
+    expect(isMovedCode(moved, base)).toBe(true)
+  })
+
+  it('does not exempt when the anchor line is absent from the base', () => {
     const base = [['doThing()', 'filler()', 'other()']]
-    expect(isMovedCode(['doThing()', 'other()'], base)).toBe(false)
+    expect(isMovedCode(['brandNewCall()', 'doThing()', 'other()'], base)).toBe(false)
+  })
+
+  it('does not exempt when most of the block is absent from the base', () => {
+    const base = [['keep0()', 'keep1()', 'unrelated()']]
+    const mostlyNew = ['keep0()', ...Array.from({ length: 18 }, (_, i) => `fresh${i}()`)]
+    expect(isMovedCode(mostlyNew, base)).toBe(false)
   })
 
   it('ignores blank lines when matching', () => {
