@@ -1,4 +1,4 @@
-import { mkdirSync } from 'node:fs'
+import { mkdirSync, readFileSync, rmSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import type { SFTPWrapper } from 'ssh2'
 import type { AgentHookInstallState, AgentHookInstallStatus } from '../../shared/agent-hook-types'
@@ -9,12 +9,10 @@ import {
   readHooksJsonWithRaw,
   wrapPosixHookCommand,
   wrapWindowsCmdHookCommand,
-  writeManagedScript
+  writeHooksJson,
+  writeManagedScript,
+  type HooksConfig
 } from '../agent-hooks/installer-utils'
-import {
-  removeFileAtomicallyIfUnchanged,
-  writeFileAtomicallyIfUnchanged
-} from '../codex-accounts/fs-utils'
 import { refreshManagedScriptIfPresent } from '../agent-hooks/managed-hook-script-refresh'
 import { buildPosixHookPayloadCapture } from '../agent-hooks/hook-stdin-contract'
 import {
@@ -29,6 +27,12 @@ import {
   removeGrokHookConfigIfUnchanged,
   writeGrokHookConfigIfUnchanged
 } from './grok-hook-config-file'
+import {
+  clearGrokHookSessionOwner,
+  isGrokHookSessionOwnerStale,
+  readGrokHookSessionOwner,
+  writeGrokHookSessionOwner
+} from './grok-hook-session-owner'
 
 // Why: Grok's tool-event matcher is a real regex (see Grok hooks docs). Bare
 // `*` is not a valid "match all" pattern and can fail to load/match, so tool
@@ -45,6 +49,10 @@ function getConfigPath(): string {
   // home Grok and transcript lookup use; keep Orca entries in a dedicated file
   // so user-authored hook files stay untouched.
   return join(resolveGrokHomeDir(), 'hooks', 'orca-status.json')
+}
+
+function getSessionOwnerPath(): string {
+  return `${getConfigPath()}.orca-owner`
 }
 
 function getManagedScriptFileName(): string {
@@ -112,6 +120,25 @@ function getManagedScript(target: 'local' | 'posix' = 'local'): string {
     'exit 0',
     ''
   ].join('\n')
+}
+
+function readGrokHookConfigRawSync(configPath: string): string | null {
+  try {
+    return readFileSync(configPath, 'utf8')
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
+      return null
+    }
+    throw error
+  }
+}
+
+// Why not `Object.keys(config).length === 0`: orca-status.json is Orca-owned, so once no hook
+// entries remain the file has no reason to exist. Keying off total emptiness instead would leave a
+// stray non-hook key (a `$schema`, say) behind, and install()'s user-cleared guard would then read
+// that remnant as a deliberate opt-out and never reinstall.
+function isOrcaOwnedRemnant(config: HooksConfig): boolean {
+  return Object.keys(config.hooks ?? {}).length === 0
 }
 
 function notInstalledStatus(
@@ -202,10 +229,10 @@ export class GrokHookService {
     buildInstalledGrokConfig(config, getManagedCommand(scriptPath), getManagedScriptFileName())
     writeManagedScript(scriptPath, getManagedScript())
     mkdirSync(dirname(configPath), { recursive: true })
-    const serialized = `${JSON.stringify(config, null, 2)}\n`
-    if (!writeFileAtomicallyIfUnchanged(configPath, snapshot.raw, serialized)) {
+    if (readGrokHookConfigRawSync(configPath) !== snapshot.raw) {
       return notInstalledStatus(configPath, 'Grok hook config changed during installation')
     }
+    writeHooksJson(configPath, config)
     return this.getStatus()
   }
 
@@ -239,17 +266,39 @@ export class GrokHookService {
     if (!cleanup.removedAny) {
       return notInstalledStatus(configPath)
     }
-    const updated =
-      Object.keys(cleanup.config).length === 0
-        ? removeFileAtomicallyIfUnchanged(configPath, snapshot.raw)
-        : writeFileAtomicallyIfUnchanged(
-            configPath,
-            snapshot.raw,
-            `${JSON.stringify(cleanup.config, null, 2)}\n`
-          )
-    return updated
-      ? notInstalledStatus(configPath)
-      : notInstalledStatus(configPath, 'Grok hook config changed during cleanup')
+    if (readGrokHookConfigRawSync(configPath) !== snapshot.raw) {
+      return notInstalledStatus(configPath, 'Grok hook config changed during cleanup')
+    }
+    if (isOrcaOwnedRemnant(cleanup.config)) {
+      rmSync(configPath, { force: true })
+    } else {
+      writeHooksJson(configPath, cleanup.config)
+    }
+    return notInstalledStatus(configPath)
+  }
+
+  /**
+   * Startup reconciliation. Removes a hook config stranded by a previous Orca that never reached
+   * its quit path, so a crash does not leave Grok loading Orca's hooks forever (#15518). A config
+   * owned by a still-live Orca is left alone.
+   */
+  async reconcileAfterUncleanExit(): Promise<void> {
+    const ownerPath = getSessionOwnerPath()
+    const owner = await readGrokHookSessionOwner(ownerPath)
+    if (owner && !(await isGrokHookSessionOwnerStale(owner))) {
+      return
+    }
+    if (owner) {
+      await this.removeAsync()
+      await clearGrokHookSessionOwner(ownerPath)
+    }
+  }
+
+  /** Claims the installed config for this process so the next launch can detect an unclean exit. */
+  async claimSession(): Promise<void> {
+    if (this.getStatus().managedHooksPresent) {
+      await writeGrokHookSessionOwner(getSessionOwnerPath())
+    }
   }
 
   async removeAsync(): Promise<AgentHookInstallStatus> {
@@ -265,14 +314,16 @@ export class GrokHookService {
     if (!cleanup.removedAny) {
       return notInstalledStatus(configPath)
     }
-    const updated =
-      Object.keys(cleanup.config).length === 0
-        ? await removeGrokHookConfigIfUnchanged(configPath, snapshot.raw)
-        : await writeGrokHookConfigIfUnchanged(
-            configPath,
-            snapshot.raw,
-            `${JSON.stringify(cleanup.config, null, 2)}\n`
-          )
+    const updated = isOrcaOwnedRemnant(cleanup.config)
+      ? await removeGrokHookConfigIfUnchanged(configPath, snapshot.raw)
+      : await writeGrokHookConfigIfUnchanged(
+          configPath,
+          snapshot.raw,
+          `${JSON.stringify(cleanup.config, null, 2)}\n`
+        )
+    if (updated) {
+      await clearGrokHookSessionOwner(getSessionOwnerPath())
+    }
     return updated
       ? notInstalledStatus(configPath)
       : notInstalledStatus(configPath, 'Grok hook config changed during cleanup')

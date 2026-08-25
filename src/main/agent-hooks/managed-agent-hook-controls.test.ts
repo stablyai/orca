@@ -11,7 +11,11 @@ const mocks = vi.hoisted(() => ({
   statusClaude: vi.fn(),
   statusCodex: vi.fn(),
   refreshClaude: vi.fn(),
-  refreshCodex: vi.fn()
+  refreshCodex: vi.fn(),
+  reconcileClaude: vi.fn(async () => {}),
+  reconcileCodex: vi.fn(async () => {}),
+  claimClaude: vi.fn(async () => {}),
+  claimCodex: vi.fn(async () => {})
 }))
 
 vi.mock('./local-agent-cli-presence', () => ({
@@ -38,6 +42,14 @@ vi.mock('./managed-agent-hook-registry', () => ({
   MANAGED_AGENT_HOOK_SCRIPT_REFRESHERS: [
     ['claude', mocks.refreshClaude],
     ['codex', mocks.refreshCodex]
+  ],
+  MANAGED_AGENT_HOOK_SESSION_RECONCILERS: [
+    ['claude', mocks.reconcileClaude],
+    ['codex', mocks.reconcileCodex]
+  ],
+  MANAGED_AGENT_HOOK_SESSION_CLAIMERS: [
+    ['claude', mocks.claimClaude],
+    ['codex', mocks.claimCodex]
   ]
 }))
 
@@ -129,7 +141,10 @@ describe('managed agent hook controls', () => {
     })
 
     const install = installManagedAgentHooks({ agentCmdOverrides: {} })
-    await Promise.resolve()
+    // Why waitFor and not a fixed microtask tick: the install path awaits session reconcilers
+    // before refreshing scripts, so the number of ticks before this point is an implementation
+    // detail. The assertion below is the real contract: no CLI probe until the refresh resolves.
+    await vi.waitFor(() => expect(mocks.refreshClaude).toHaveBeenCalled())
 
     expect(mocks.detect).not.toHaveBeenCalled()
     releaseRefresh?.()

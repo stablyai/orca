@@ -23,6 +23,7 @@ export type ManagedAgentHookAsyncRemover = readonly [
   () => Promise<AgentHookInstallStatus>
 ]
 export type ManagedAgentHookStatusReader = readonly [HookInstallAgent, () => AgentHookInstallStatus]
+export type ManagedAgentHookSessionLifecycle = readonly [HookInstallAgent, () => Promise<void>]
 
 export const MANAGED_AGENT_HOOK_INSTALLERS: readonly ManagedAgentHookInstaller[] = [
   ['claude', () => claudeHookService.install()],
@@ -81,6 +82,16 @@ export const MANAGED_AGENT_HOOK_REMOVERS: readonly ManagedAgentHookRemover[] = [
 
 export const MANAGED_AGENT_HOOK_ASYNC_REMOVERS: readonly ManagedAgentHookAsyncRemover[] = [
   ['grok', () => grokHookService.removeAsync()]
+]
+
+/** Runs before installers so a config stranded by an unclean exit is cleared, not adopted. */
+export const MANAGED_AGENT_HOOK_SESSION_RECONCILERS: readonly ManagedAgentHookSessionLifecycle[] = [
+  ['grok', () => grokHookService.reconcileAfterUncleanExit()]
+]
+
+/** Runs after installers so this process is recorded as the owner of what it just installed. */
+export const MANAGED_AGENT_HOOK_SESSION_CLAIMERS: readonly ManagedAgentHookSessionLifecycle[] = [
+  ['grok', () => grokHookService.claimSession()]
 ]
 
 export const MANAGED_AGENT_HOOK_STATUS_READERS: readonly ManagedAgentHookStatusReader[] = [

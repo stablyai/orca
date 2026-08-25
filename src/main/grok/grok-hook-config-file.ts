@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto'
-import { link, readFile, rename, rm, writeFile } from 'node:fs/promises'
+import { readFile, rename, rm, writeFile } from 'node:fs/promises'
 import { parseHooksJsonText } from '../agent-hooks/hooks-json-read'
 import type { HooksConfig } from '../agent-hooks/installer-utils'
 
@@ -13,46 +13,31 @@ export type AsyncGrokHookConfigSnapshot = {
 export async function readGrokHookConfigSnapshot(
   targetPath: string
 ): Promise<AsyncGrokHookConfigSnapshot> {
-  try {
-    const raw = await readFile(targetPath, 'utf8')
-    return { raw, config: parseHooksJsonText(raw) }
-  } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
-      return { raw: null, config: {} }
-    }
-    throw error
-  }
+  const raw = await readFileOrNull(targetPath)
+  return raw === null ? { raw: null, config: {} } : { raw, config: parseHooksJsonText(raw) }
 }
 
+// Why temp+rename and not the guarded hard-link swap in codex-accounts/fs-utils: Grok stats every
+// global hook JSON and refuses to build a sandbox profile for one with st_nlink != 1, so a file
+// briefly carrying a second link fails any Grok session that starts in that window. rename() never
+// creates a second link. The compare-and-swap below is therefore read-compare-rename; the residual
+// window is one atomic rename rather than the whole publish.
 export async function writeGrokHookConfigIfUnchanged(
   targetPath: string,
   expectedContents: string,
   contents: string
 ): Promise<boolean> {
+  if ((await readFileOrNull(targetPath)) !== expectedContents) {
+    return false
+  }
   const tempPath = `${targetPath}.${process.pid}.${randomUUID()}.tmp`
-  const heldPath = guardedPath(targetPath)
-  await recoverInterruptedMutation(heldPath, targetPath)
   try {
     await writeFile(tempPath, contents, 'utf8')
-    await assertHardLinkPublicationSupported(tempPath, targetPath)
-    if (!(await moveTargetToHeld(targetPath, heldPath))) {
-      return false
-    }
-    if (!(await contentsEqual(heldPath, expectedContents))) {
-      await restoreHeldWithoutOverwrite(heldPath, targetPath)
-      return false
-    }
-    if (!(await publishWithoutOverwrite(tempPath, targetPath))) {
-      await rm(heldPath, { force: true })
-      return false
-    }
-    await rm(heldPath, { force: true })
+    await renameWithWindowsRetry(tempPath, targetPath)
     return true
   } catch (error) {
-    await restoreHeldWithoutOverwrite(heldPath, targetPath)
-    throw error
-  } finally {
     await rm(tempPath, { force: true })
+    throw error
   }
 }
 
@@ -60,90 +45,25 @@ export async function removeGrokHookConfigIfUnchanged(
   targetPath: string,
   expectedContents: string
 ): Promise<boolean> {
-  const heldPath = guardedPath(targetPath)
-  await recoverInterruptedMutation(heldPath, targetPath)
-  try {
-    await assertHardLinkPublicationSupported(targetPath, targetPath)
-  } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
-      return false
-    }
-    throw error
-  }
-  if (!(await moveTargetToHeld(targetPath, heldPath))) {
+  if ((await readFileOrNull(targetPath)) !== expectedContents) {
     return false
   }
+  await rm(targetPath, { force: true })
+  return true
+}
+
+async function readFileOrNull(targetPath: string): Promise<string | null> {
   try {
-    if (!(await contentsEqual(heldPath, expectedContents))) {
-      await restoreHeldWithoutOverwrite(heldPath, targetPath)
-      return false
-    }
-    await rm(heldPath, { force: true })
-    return !(await pathExists(targetPath))
-  } catch (error) {
-    await restoreHeldWithoutOverwrite(heldPath, targetPath)
-    throw error
-  }
-}
-
-function guardedPath(targetPath: string): string {
-  return `${targetPath}.orca-guarded`
-}
-
-async function recoverInterruptedMutation(heldPath: string, targetPath: string): Promise<void> {
-  if (!(await pathExists(heldPath))) {
-    return
-  }
-  await publishWithoutOverwrite(heldPath, targetPath)
-  await rm(heldPath, { force: true })
-}
-
-async function restoreHeldWithoutOverwrite(heldPath: string, targetPath: string): Promise<void> {
-  if (!(await pathExists(heldPath))) {
-    return
-  }
-  await publishWithoutOverwrite(heldPath, targetPath)
-  await rm(heldPath, { force: true })
-}
-
-async function assertHardLinkPublicationSupported(
-  sourcePath: string,
-  targetPath: string
-): Promise<void> {
-  const probePath = `${targetPath}.${process.pid}.${randomUUID()}.link-probe`
-  try {
-    if (!(await publishWithoutOverwrite(sourcePath, probePath))) {
-      throw new Error(`Guarded file publication probe already exists: ${probePath}`)
-    }
-  } finally {
-    await rm(probePath, { force: true })
-  }
-}
-
-async function publishWithoutOverwrite(sourcePath: string, targetPath: string): Promise<boolean> {
-  try {
-    await link(sourcePath, targetPath)
-    return true
-  } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === 'EEXIST') {
-      return false
-    }
-    throw error
-  }
-}
-
-async function moveTargetToHeld(targetPath: string, heldPath: string): Promise<boolean> {
-  try {
-    await renameWithWindowsRetry(targetPath, heldPath)
-    return true
+    return await readFile(targetPath, 'utf8')
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
-      return false
+      return null
     }
     throw error
   }
 }
 
+// Why: on Windows an antivirus scan or another agent CLI can hold the target open briefly.
 async function renameWithWindowsRetry(sourcePath: string, targetPath: string): Promise<void> {
   const attempts = process.platform === 'win32' ? WINDOWS_RENAME_ATTEMPTS : 1
   for (let attempt = 1; attempt <= attempts; attempt += 1) {
@@ -158,21 +78,5 @@ async function renameWithWindowsRetry(sourcePath: string, targetPath: string): P
       }
       throw error
     }
-  }
-}
-
-async function contentsEqual(targetPath: string, expectedContents: string): Promise<boolean> {
-  return (await readFile(targetPath, 'utf8')) === expectedContents
-}
-
-async function pathExists(targetPath: string): Promise<boolean> {
-  try {
-    await readFile(targetPath)
-    return true
-  } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
-      return false
-    }
-    throw error
   }
 }

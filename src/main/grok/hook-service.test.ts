@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { spawn } from 'node:child_process'
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { createServer } from 'node:http'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
@@ -20,6 +20,7 @@ vi.mock('os', async () => {
 import { getGrokToolEventMatcherForTests, GrokHookService } from './hook-service'
 import { buildWindowsGrokHookScript } from './windows-grok-hook-script'
 import { POSIX_HOOK_STDIN_READER } from '../agent-hooks/hook-stdin-contract'
+import { readManagedHookHostIdentity } from '../agent-hooks/managed-hook-owner-identity'
 
 const GROK_SCRIPT_FILE_NAME = process.platform === 'win32' ? 'grok-hook.cmd' : 'grok-hook.sh'
 const WINDOWS_POWERSHELL_LAUNCHER =
@@ -372,6 +373,61 @@ describe('GrokHookService', () => {
     service.install()
     expect(service.remove().state).toBe('not_installed')
     expect(() => readFileSync(configPath, 'utf8')).toThrow()
+  })
+
+  it('clears a hook config stranded by a previous Orca that never quit cleanly', async () => {
+    const service = new GrokHookService()
+    const configPath = join(homeDir, '.grok', 'hooks', 'orca-status.json')
+
+    expect(service.install().state).toBe('installed')
+    await service.claimSession()
+    // A pid that cannot be running: the owner probe reports it confirmed-absent.
+    writeFileSync(
+      `${configPath}.orca-owner`,
+      JSON.stringify({
+        pid: 2_147_483_646,
+        hostIdentity: await readManagedHookHostIdentity(),
+        processIdentity: 'gone:previous-boot'
+      }),
+      'utf8'
+    )
+
+    await service.reconcileAfterUncleanExit()
+
+    expect(existsSync(configPath)).toBe(false)
+    expect(existsSync(`${configPath}.orca-owner`)).toBe(false)
+  })
+
+  it('leaves a hook config owned by a live Orca alone', async () => {
+    const service = new GrokHookService()
+    const configPath = join(homeDir, '.grok', 'hooks', 'orca-status.json')
+
+    expect(service.install().state).toBe('installed')
+    await service.claimSession()
+    const before = readFileSync(configPath, 'utf8')
+
+    await service.reconcileAfterUncleanExit()
+
+    expect(readFileSync(configPath, 'utf8')).toBe(before)
+    expect(service.getStatus().state).toBe('installed')
+  })
+
+  // Why: remove() used to unlink only when the whole config object was empty, so any non-hook key
+  // left a remnant behind — and install()'s user-cleared guard then read that remnant as a
+  // deliberate opt-out and never reinstalled again.
+  it('removes the managed config even when a non-hook key remains', () => {
+    const service = new GrokHookService()
+    const configPath = join(homeDir, '.grok', 'hooks', 'orca-status.json')
+
+    expect(service.install().state).toBe('installed')
+    const withSchema = JSON.parse(readFileSync(configPath, 'utf8')) as Record<string, unknown>
+    withSchema.$schema = 'https://grok.example/hooks.schema.json'
+    writeFileSync(configPath, `${JSON.stringify(withSchema, null, 2)}\n`, 'utf8')
+
+    expect(service.remove().state).toBe('not_installed')
+
+    expect(existsSync(configPath)).toBe(false)
+    expect(service.install().state).toBe('installed')
   })
 
   it('preserves user-authored hook entries in the Orca Grok config file', () => {

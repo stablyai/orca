@@ -5,12 +5,15 @@ import {
 } from '../../shared/managed-agent-hook-targets'
 import { normalizeDisabledTuiAgents } from '../../shared/tui-agent-selection'
 import type { GlobalSettings } from '../../shared/global-settings-types'
+import type { ManagedAgentHookSessionLifecycle } from './managed-agent-hook-registry'
 import { detectLocalManagedAgentCliPresence } from './local-agent-cli-presence'
 import {
   MANAGED_AGENT_HOOK_ASYNC_REMOVERS,
   MANAGED_AGENT_HOOK_INSTALLERS,
   MANAGED_AGENT_HOOK_REMOVERS,
   MANAGED_AGENT_HOOK_SCRIPT_REFRESHERS,
+  MANAGED_AGENT_HOOK_SESSION_CLAIMERS,
+  MANAGED_AGENT_HOOK_SESSION_RECONCILERS,
   MANAGED_AGENT_HOOK_STATUS_READERS,
   type ManagedAgentHookInstaller
 } from './managed-agent-hook-registry'
@@ -120,10 +123,29 @@ async function refreshExistingManagedScripts(options: InstallOptions): Promise<v
   }
 }
 
+async function runSessionLifecycle(
+  entries: readonly ManagedAgentHookSessionLifecycle[],
+  options: InstallOptions
+): Promise<void> {
+  const allowed = options.agents ? new Set(options.agents) : null
+  await Promise.all(
+    entries
+      .filter(([agent]) => allowed === null || allowed.has(agent))
+      .map(async ([agent, run]) => {
+        try {
+          await run()
+        } catch (error) {
+          console.warn(`[agent-hooks] ${agent} session lifecycle step failed:`, error)
+        }
+      })
+  )
+}
+
 export async function installManagedAgentHooks(
   settings: ManagedHookSettings = null,
   options: InstallOptions = {}
 ): Promise<AgentHookInstallStatus[]> {
+  await runSessionLifecycle(MANAGED_AGENT_HOOK_SESSION_RECONCILERS, options)
   await refreshExistingManagedScripts(options)
   const installers = selectedInstallers(options)
   const disabled = new Set(normalizeDisabledTuiAgents(settings?.disabledTuiAgents))
@@ -176,6 +198,7 @@ export async function installManagedAgentHooks(
     }
     results.push(runInstaller(entry, options.onInstallError))
   }
+  await runSessionLifecycle(MANAGED_AGENT_HOOK_SESSION_CLAIMERS, options)
   return results
 }
 
