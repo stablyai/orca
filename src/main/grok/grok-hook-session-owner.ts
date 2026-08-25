@@ -1,4 +1,4 @@
-import { randomUUID } from 'node:crypto'
+import { createHash, randomUUID } from 'node:crypto'
 import { mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises'
 import { dirname } from 'node:path'
 import {
@@ -6,91 +6,146 @@ import {
   readManagedHookProcessIdentity
 } from '../agent-hooks/managed-hook-owner-identity'
 
+const OWNERS_VERSION = 1
+
 type GrokHookSessionOwner = {
   pid: number
-  hostIdentity: string
+  /** 'runtime' means the host probe was unavailable, so the scope cannot be compared. */
+  hostScope: 'durable' | 'runtime'
+  hostDigest: string
   processIdentity: string
 }
 
-// Why this exists: the global hook config is removed on quit, but a crash, SIGKILL or power loss
-// never reaches that path, and Grok keeps loading the orphaned file on every session — the exact
-// bug #15518 reports. Recording who installed the config lets the next launch tell "another live
-// Orca owns this" from "the process that wrote this is gone", and clean up in the second case.
-// Identity comes from the existing managed-hook owner probe, which qualifies the pid with process
-// start time, so a recycled pid cannot masquerade as the previous owner.
-export async function readGrokHookSessionOwner(
-  ownerPath: string
-): Promise<GrokHookSessionOwner | null> {
+type GrokHookSessionOwners = {
+  version: number
+  owners: GrokHookSessionOwner[]
+}
+
+// Why a LIST and not one slot: two Orcas can share one $GROK_HOME (packaged and dev do not share
+// the single-instance lock), and a single slot cannot express "someone else still needs this".
+// With one slot the first instance to quit deletes the config out from under every other live
+// instance. Owners are pruned against the process table on every read, so a crashed instance drops
+// out on its own and never pins the config.
+export async function readGrokHookSessionOwners(
+  ownersPath: string
+): Promise<GrokHookSessionOwner[]> {
   try {
-    const parsed = JSON.parse(await readFile(ownerPath, 'utf8')) as Partial<GrokHookSessionOwner>
-    if (
-      !Number.isSafeInteger(parsed.pid) ||
-      (parsed.pid ?? 0) <= 0 ||
-      typeof parsed.hostIdentity !== 'string' ||
-      parsed.hostIdentity.length === 0 ||
-      typeof parsed.processIdentity !== 'string' ||
-      parsed.processIdentity.length === 0
-    ) {
-      return null
+    const parsed = JSON.parse(await readFile(ownersPath, 'utf8')) as Partial<GrokHookSessionOwners>
+    if (parsed.version !== OWNERS_VERSION || !Array.isArray(parsed.owners)) {
+      return []
     }
-    return parsed as GrokHookSessionOwner
+    return parsed.owners.filter(isWellFormedOwner)
   } catch {
-    return null
+    return []
   }
 }
 
-export async function writeGrokHookSessionOwner(ownerPath: string): Promise<void> {
-  const [hostIdentity, processIdentity] = await Promise.all([
-    readManagedHookHostIdentity(),
-    readManagedHookProcessIdentity(process.pid)
-  ])
-  if (typeof processIdentity !== 'string') {
+/** Owners that are not provably gone. An unavailable probe counts as still-live, never as stale. */
+export async function readLiveGrokHookSessionOwners(
+  ownersPath: string
+): Promise<GrokHookSessionOwner[]> {
+  const owners = await readGrokHookSessionOwners(ownersPath)
+  const live = await Promise.all(
+    owners.map(async (owner) => ((await isStale(owner)) ? null : owner))
+  )
+  return live.filter((owner): owner is GrokHookSessionOwner => owner !== null)
+}
+
+export async function claimGrokHookSession(ownersPath: string): Promise<void> {
+  const self = await describeSelf()
+  if (!self) {
+    // Why loud: without a record a later crash leaves the config stranded with nothing to
+    // reconcile it, which is the failure this whole mechanism exists to prevent.
+    console.warn('[agent-hooks] Could not identify this process; Grok hook ownership not recorded')
     return
   }
-  const owner: GrokHookSessionOwner = { pid: process.pid, hostIdentity, processIdentity }
-  await mkdir(dirname(ownerPath), { recursive: true })
-  // Why a draft plus rename rather than writing in place: a crash mid-write would leave
-  // unparseable JSON, which reads as "no owner" and silently disables the reconciliation this
-  // record exists to drive. Why wx+0600 on the draft and not mode on the final write: mode applies
-  // only on creation, so truncating an existing record would keep whatever mode it already had --
-  // and hostIdentity can carry the durable managed-hook host token that lock ownership is keyed on.
-  const draftPath = `${ownerPath}.${process.pid}.${randomUUID()}.draft`
+  const live = await readLiveGrokHookSessionOwners(ownersPath)
+  const others = live.filter((owner) => owner.pid !== self.pid)
+  await writeOwners(ownersPath, [...others, self])
+}
+
+/** Drops this process from the record. Returns true when no other live owner remains. */
+export async function releaseGrokHookSession(ownersPath: string): Promise<boolean> {
+  const live = await readLiveGrokHookSessionOwners(ownersPath)
+  const others = live.filter((owner) => owner.pid !== process.pid)
+  if (others.length === 0) {
+    await rm(ownersPath, { force: true })
+    return true
+  }
+  await writeOwners(ownersPath, others)
+  return false
+}
+
+export async function clearGrokHookSessionOwners(ownersPath: string): Promise<void> {
+  await rm(ownersPath, { force: true })
+}
+
+async function writeOwners(ownersPath: string, owners: GrokHookSessionOwner[]): Promise<void> {
+  await mkdir(dirname(ownersPath), { recursive: true })
+  // Why draft+rename: writing in place would leave unparseable JSON after a crash mid-write, which
+  // reads as "nobody owns this" and silently disables reconciliation. rename also replaces the
+  // inode, so 0600 applies even when an older record already exists (mode only applies on create).
+  const draftPath = `${ownersPath}.${process.pid}.${randomUUID()}.draft`
   try {
-    await writeFile(draftPath, JSON.stringify(owner), {
+    const payload: GrokHookSessionOwners = { version: OWNERS_VERSION, owners }
+    await writeFile(draftPath, JSON.stringify(payload), {
       encoding: 'utf8',
       flag: 'wx',
       mode: 0o600
     })
-    await rename(draftPath, ownerPath)
+    await rename(draftPath, ownersPath)
   } catch (error) {
     await rm(draftPath, { force: true })
     throw error
   }
 }
 
-export async function clearGrokHookSessionOwner(ownerPath: string): Promise<void> {
-  await rm(ownerPath, { force: true })
+async function describeSelf(): Promise<GrokHookSessionOwner | null> {
+  const [hostIdentity, processIdentity] = await Promise.all([
+    readManagedHookHostIdentity(),
+    readManagedHookProcessIdentity(process.pid)
+  ])
+  if (typeof processIdentity !== 'string') {
+    return null
+  }
+  return {
+    pid: process.pid,
+    hostScope: hostIdentity.startsWith('runtime:') ? 'runtime' : 'durable',
+    // Why a digest: hostIdentity can carry the durable managed-hook host token that lock ownership
+    // is keyed on, and staleness only ever compares it for equality.
+    hostDigest: createHash('sha256').update(hostIdentity).digest('hex'),
+    processIdentity
+  }
 }
 
-/**
- * True only when the recorded owner is provably gone. An unavailable probe returns `undefined` and
- * is treated as "still owned", so an unreadable process table never causes us to delete hooks a
- * live Orca is using.
- */
-export async function isGrokHookSessionOwnerStale(owner: GrokHookSessionOwner): Promise<boolean> {
-  const hostIdentity = await readManagedHookHostIdentity()
-  // Why the runtime: prefix is exempt: with no durable host token (read-only /var/tmp, hardened
-  // container) the probe returns a per-process random identity, so a recorded one can never match
-  // and reconciliation would be dead on exactly those hosts. The process identity is already
-  // boot- and namespace-scoped, so it carries the comparison on its own.
-  const hostScopeIsComparable =
-    !hostIdentity.startsWith('runtime:') && !owner.hostIdentity.startsWith('runtime:')
-  if (hostScopeIsComparable && owner.hostIdentity !== hostIdentity) {
+async function isStale(owner: GrokHookSessionOwner): Promise<boolean> {
+  // Why never stale: a runtime-scoped identity is a fresh random value per process, so it can never
+  // match a recorded one. Comparing it would declare a live owner dead and delete its hooks.
+  if (owner.hostScope === 'runtime' || owner.processIdentity.startsWith('runtime:')) {
+    return false
+  }
+  const self = await describeSelf()
+  if (self && self.hostScope === 'durable' && self.hostDigest !== owner.hostDigest) {
     return false
   }
   const currentIdentity = await readManagedHookProcessIdentity(owner.pid)
+  // Why only these two: `undefined` means the probe was unavailable, which must count as live.
   return (
     currentIdentity === null ||
     (typeof currentIdentity === 'string' && currentIdentity !== owner.processIdentity)
+  )
+}
+
+function isWellFormedOwner(value: unknown): value is GrokHookSessionOwner {
+  const owner = value as Partial<GrokHookSessionOwner> | null
+  return (
+    !!owner &&
+    Number.isSafeInteger(owner.pid) &&
+    (owner.pid ?? 0) > 0 &&
+    (owner.hostScope === 'durable' || owner.hostScope === 'runtime') &&
+    typeof owner.hostDigest === 'string' &&
+    owner.hostDigest.length > 0 &&
+    typeof owner.processIdentity === 'string' &&
+    owner.processIdentity.length > 0
   )
 }

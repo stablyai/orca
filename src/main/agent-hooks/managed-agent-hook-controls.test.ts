@@ -152,6 +152,37 @@ describe('managed agent hook controls', () => {
     expect(mocks.detect).toHaveBeenCalledTimes(1)
   })
 
+  // Why ordering is pinned: reconcilers clear a config stranded by an unclean exit, so running
+  // them AFTER the installers would delete what install just wrote -- silently, and only on the
+  // launch that follows a crash. Claimers must run after, or they record ownership of nothing.
+  it('reconciles before installing and claims after', async () => {
+    mocks.detect.mockResolvedValue({
+      claude: { state: 'found' },
+      codex: { state: 'found' }
+    })
+
+    await installManagedAgentHooks({ agentCmdOverrides: {} })
+
+    const reconcileOrder = mocks.reconcileClaude.mock.invocationCallOrder[0]
+    const installOrder = mocks.installClaude.mock.invocationCallOrder[0]
+    const claimOrder = mocks.claimClaude.mock.invocationCallOrder[0]
+    expect(reconcileOrder).toBeLessThan(installOrder)
+    expect(installOrder).toBeLessThan(claimOrder)
+  })
+
+  it('does not claim ownership for an agent whose install was skipped', async () => {
+    mocks.detect.mockResolvedValue({
+      claude: { state: 'found' },
+      codex: { state: 'found' }
+    })
+
+    await installManagedAgentHooks({ agentCmdOverrides: {} }, { agents: ['claude'] })
+
+    expect(mocks.claimClaude).toHaveBeenCalledTimes(1)
+    expect(mocks.claimCodex).not.toHaveBeenCalled()
+    expect(mocks.reconcileCodex).not.toHaveBeenCalled()
+  })
+
   it('keeps installing when a script refresh throws', async () => {
     mocks.refreshClaude.mockRejectedValue(new Error('disk full'))
     mocks.detect.mockResolvedValue({

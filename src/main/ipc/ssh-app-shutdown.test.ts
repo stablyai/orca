@@ -23,6 +23,7 @@ vi.mock('../ssh/ssh-port-forward', () => mocks.sshPortForward)
 vi.mock('../ssh/ssh-port-scanner', () => mocks.sshPortScanner)
 
 import { getActiveMultiplexer } from './ssh'
+import { activeSessions } from './ssh-active-relay-sessions'
 import {
   beginSshShutdown,
   SSH_SHUTDOWN_BUDGET_MS,
@@ -67,6 +68,50 @@ describe('SSH IPC handlers', () => {
     expect(mockStore.markSshRemotePtyLeasesAsync).toHaveBeenCalledWith('ssh-1', 'detached')
     expect(mockStore.removeSshPtyConsumerRecovery).not.toHaveBeenCalled()
     expect(mockConnectionManager.disconnectAll).toHaveBeenCalled()
+  })
+
+  // Why this is pinned: the entire quit-time remote hook cleanup could be deleted and every other
+  // test here still passed. Grok loads Orca's hooks on a remote host after Orca closes exactly as
+  // it does locally (#15518), and the cleanup rides the same transport it is racing -- so it must
+  // both happen AND land before disconnectAll tears that transport down.
+  it('removes managed hooks on the remote before disconnecting the transport', async () => {
+    const target: SshTarget = {
+      id: 'ssh-1',
+      label: 'Server',
+      host: 'example.com',
+      port: 22,
+      username: 'deploy'
+    }
+    mockSshStore.getTarget.mockReturnValue(target)
+    mockConnectionManager.connect.mockResolvedValue({})
+    mockConnectionManager.getState.mockReturnValue({
+      targetId: 'ssh-1',
+      status: 'connected',
+      error: null,
+      reconnectAttempt: 0
+    })
+    await handlers.get('ssh:connect')!(null, { targetId: 'ssh-1' })
+
+    const session = [...activeSessions.values()][0]
+    expect(session).toBeDefined()
+    const order: string[] = []
+    const cleanupSpy = vi
+      .spyOn(session!, 'beginShutdownManagedHookCleanup')
+      .mockImplementation(async () => {
+        order.push('cleanup')
+      })
+    mockConnectionManager.disconnectAll
+      .mockClear()
+      .mockImplementation(async () => void order.push('disconnect'))
+
+    await beginSshShutdown()
+
+    // Why index comparison and not a fixed array: the real method caches its promise, but spying
+    // on it defeats that, so the drain's later phases call it again. The contract is the ordering.
+    expect(cleanupSpy).toHaveBeenCalled()
+    expect(order).toContain('disconnect')
+    expect(order.indexOf('cleanup')).toBeGreaterThanOrEqual(0)
+    expect(order.indexOf('cleanup')).toBeLessThan(order.indexOf('disconnect'))
   })
 
   it('detaches every lease in memory before a slow forward removal can cross the final flush', async () => {

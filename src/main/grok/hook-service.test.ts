@@ -1,17 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { spawn } from 'node:child_process'
-import {
-  existsSync,
-  mkdirSync,
-  mkdtempSync,
-  readdirSync,
-  readFileSync,
-  rmSync,
-  statSync,
-  writeFileSync
-} from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { createServer } from 'node:http'
 import { tmpdir } from 'node:os'
+import { createHash } from 'node:crypto'
 import { dirname, join } from 'node:path'
 
 const { homedirMock } = vi.hoisted(() => ({
@@ -116,6 +108,33 @@ async function runWindowsGrokHook(
   } finally {
     await new Promise<void>((resolve) => server.close(() => resolve()))
   }
+}
+
+function ownersPathFor(home: string): string {
+  const configPath = join(home, '.grok', 'hooks', 'orca-status.json')
+  const key = createHash('sha256').update(configPath).digest('hex').slice(0, 16)
+  return join(home, '.orca', 'agent-hooks', `grok-status-owners-${key}.json`)
+}
+
+async function selfHostDigest(): Promise<string> {
+  return createHash('sha256')
+    .update(await readManagedHookHostIdentity())
+    .digest('hex')
+}
+
+function deadOwner(hostDigest: string): Record<string, unknown> {
+  return {
+    pid: 2_147_483_646,
+    hostScope: 'durable',
+    hostDigest,
+    processIdentity: 'gone:previous-boot'
+  }
+}
+
+function writeOwnersRecordFor(home: string, owners: Record<string, unknown>[]): void {
+  const target = ownersPathFor(home)
+  mkdirSync(dirname(target), { recursive: true })
+  writeFileSync(target, JSON.stringify({ version: 1, owners }), 'utf8')
 }
 
 describe('GrokHookService', () => {
@@ -387,43 +406,6 @@ describe('GrokHookService', () => {
     expect(() => readFileSync(configPath, 'utf8')).toThrow()
   })
 
-  it('clears a hook config stranded by a previous Orca that never quit cleanly', async () => {
-    const service = new GrokHookService()
-    const configPath = join(homeDir, '.grok', 'hooks', 'orca-status.json')
-
-    expect(service.install().state).toBe('installed')
-    await service.claimSession()
-    // A pid that cannot be running: the owner probe reports it confirmed-absent.
-    writeFileSync(
-      `${configPath}.orca-owner`,
-      JSON.stringify({
-        pid: 2_147_483_646,
-        hostIdentity: await readManagedHookHostIdentity(),
-        processIdentity: 'gone:previous-boot'
-      }),
-      'utf8'
-    )
-
-    await service.reconcileAfterUncleanExit()
-
-    expect(existsSync(configPath)).toBe(false)
-    expect(existsSync(`${configPath}.orca-owner`)).toBe(false)
-  })
-
-  it('leaves a hook config owned by a live Orca alone', async () => {
-    const service = new GrokHookService()
-    const configPath = join(homeDir, '.grok', 'hooks', 'orca-status.json')
-
-    expect(service.install().state).toBe('installed')
-    await service.claimSession()
-    const before = readFileSync(configPath, 'utf8')
-
-    await service.reconcileAfterUncleanExit()
-
-    expect(readFileSync(configPath, 'utf8')).toBe(before)
-    expect(service.getStatus().state).toBe('installed')
-  })
-
   // Why: remove() used to unlink only when the whole config object was empty, so any non-hook key
   // left a remnant behind — and install()'s user-cleared guard then read that remnant as a
   // deliberate opt-out and never reinstalled again.
@@ -442,46 +424,38 @@ describe('GrokHookService', () => {
     expect(service.install().state).toBe('installed')
   })
 
-  it('drops the ownership record when hooks are turned off', async () => {
+  // Why a real child process: a second GrokHookService in THIS process has the same pid and
+  // process identity, so the record is byte-identical either way and proves nothing.
+  it('keeps another live instance in the ownership record when claiming', async () => {
     const service = new GrokHookService()
-    const configPath = join(homeDir, '.grok', 'hooks', 'orca-status.json')
+    const child = spawn(process.execPath, ['-e', 'setTimeout(() => {}, 60000)'], {
+      stdio: 'ignore'
+    })
+    try {
+      const otherIdentity = await readManagedHookProcessIdentity(child.pid!)
+      expect(typeof otherIdentity).toBe('string')
+      expect(service.install().state).toBe('installed')
+      writeOwnersRecordFor(homeDir, [
+        {
+          pid: child.pid,
+          hostScope: 'durable',
+          hostDigest: await selfHostDigest(),
+          processIdentity: otherIdentity
+        }
+      ])
 
-    expect(service.install().state).toBe('installed')
-    await service.claimSession()
-    expect(existsSync(`${configPath}.orca-owner`)).toBe(true)
+      await service.claimSession()
 
-    expect(service.remove().state).toBe('not_installed')
-
-    expect(existsSync(`${configPath}.orca-owner`)).toBe(false)
-  })
-
-  // Why: the record is written in place at every claim, so a crash mid-write would leave
-  // unparseable JSON, and an unreadable record reads as "nobody owns this" -- silently disabling
-  // the reconciliation the record exists to drive.
-  it('writes the ownership record without truncating it in place', async () => {
-    const service = new GrokHookService()
-    const ownerPath = join(homeDir, '.grok', 'hooks', 'orca-status.json.orca-owner')
-
-    expect(service.install().state).toBe('installed')
-    await service.claimSession()
-    const first = readFileSync(ownerPath, 'utf8')
-    await service.claimSession()
-
-    expect(readFileSync(ownerPath, 'utf8')).toBe(first)
-    if (process.platform !== 'win32') {
-      expect(statSync(ownerPath).mode & 0o077).toBe(0)
+      const owners = (
+        JSON.parse(readFileSync(ownersPathFor(homeDir), 'utf8')) as {
+          owners: { pid: number }[]
+        }
+      ).owners
+      expect(owners.map((owner) => owner.pid).sort()).toEqual([child.pid, process.pid].sort())
+    } finally {
+      child.kill()
     }
-    expect(readdirSync(join(homeDir, '.grok', 'hooks')).sort()).toEqual([
-      'orca-status.json',
-      'orca-status.json.orca-owner'
-    ])
   })
-
-  // Why: two Orcas can share one $GROK_HOME (packaged and dev do not share the single-instance
-  // lock). If a later starter overwrote the record and then crashed, the next launch would read
-  // that dead owner and remove the config the first, still-running Orca is still using.
-  // Why a real child process: a second GrokHookService in THIS process records the same pid and
-  // process identity, so the record is byte-identical either way and the assertion proves nothing.
   it('does not take the ownership record from another live instance', async () => {
     const service = new GrokHookService()
     const ownerPath = join(homeDir, '.grok', 'hooks', 'orca-status.json.orca-owner')
@@ -509,25 +483,95 @@ describe('GrokHookService', () => {
     }
   })
 
-  it('takes over the ownership record when the recorded owner is gone', async () => {
+  it('clears a hook config stranded by a previous Orca that never quit cleanly', async () => {
     const service = new GrokHookService()
-    const ownerPath = join(homeDir, '.grok', 'hooks', 'orca-status.json.orca-owner')
+    const configPath = join(homeDir, '.grok', 'hooks', 'orca-status.json')
 
     expect(service.install().state).toBe('installed')
-    writeFileSync(
-      ownerPath,
-      JSON.stringify({
-        pid: 2_147_483_646,
-        hostIdentity: await readManagedHookHostIdentity(),
-        processIdentity: 'gone:previous-boot'
-      }),
-      'utf8'
-    )
+    writeOwnersRecordFor(homeDir, [deadOwner(await selfHostDigest())])
 
+    await service.reconcileAfterUncleanExit()
+
+    expect(existsSync(configPath)).toBe(false)
+    expect(existsSync(ownersPathFor(homeDir))).toBe(false)
+  })
+
+  it('leaves a hook config alone while a recorded owner is still live', async () => {
+    const service = new GrokHookService()
+    const configPath = join(homeDir, '.grok', 'hooks', 'orca-status.json')
+
+    expect(service.install().state).toBe('installed')
+    await service.claimSession()
+    const before = readFileSync(configPath, 'utf8')
+
+    await service.reconcileAfterUncleanExit()
+
+    expect(readFileSync(configPath, 'utf8')).toBe(before)
+  })
+
+  // Why this is pinned: `undefined` from the identity probe means "could not tell", not "dead".
+  // Treating it as dead deletes the hooks of a live Orca, which is strictly worse than the bug.
+  it('treats an unavailable liveness probe as still-owned', async () => {
+    const service = new GrokHookService()
+    const configPath = join(homeDir, '.grok', 'hooks', 'orca-status.json')
+    expect(service.install().state).toBe('installed')
+    writeOwnersRecordFor(homeDir, [deadOwner(await selfHostDigest())])
+    const probe = await import('../agent-hooks/managed-hook-owner-identity')
+    const spy = vi
+      .spyOn(probe, 'readManagedHookProcessIdentity')
+      .mockResolvedValue(undefined as unknown as string)
+    try {
+      await service.reconcileAfterUncleanExit()
+    } finally {
+      spy.mockRestore()
+    }
+
+    expect(existsSync(configPath)).toBe(true)
+  })
+
+  // Why: a single-slot record cannot say "someone else still needs this", so the first Orca to
+  // quit would delete the config every other live instance is using.
+  it('does not remove the config on quit while another instance is live', async () => {
+    const service = new GrokHookService()
+    const configPath = join(homeDir, '.grok', 'hooks', 'orca-status.json')
+    const child = spawn(process.execPath, ['-e', 'setTimeout(() => {}, 60000)'], {
+      stdio: 'ignore'
+    })
+    try {
+      expect(service.install().state).toBe('installed')
+      await service.claimSession()
+      const otherIdentity = await readManagedHookProcessIdentity(child.pid!)
+      const record = JSON.parse(readFileSync(ownersPathFor(homeDir), 'utf8')) as {
+        version: number
+        owners: unknown[]
+      }
+      record.owners.push({
+        pid: child.pid,
+        hostScope: 'durable',
+        hostDigest: await selfHostDigest(),
+        processIdentity: otherIdentity
+      })
+      writeFileSync(ownersPathFor(homeDir), JSON.stringify(record), 'utf8')
+
+      await service.removeAsync()
+
+      expect(existsSync(configPath)).toBe(true)
+    } finally {
+      child.kill()
+    }
+  })
+
+  it('removes the config on quit once it is the last live instance', async () => {
+    const service = new GrokHookService()
+    const configPath = join(homeDir, '.grok', 'hooks', 'orca-status.json')
+
+    expect(service.install().state).toBe('installed')
     await service.claimSession()
 
-    const owner = JSON.parse(readFileSync(ownerPath, 'utf8')) as { pid: number }
-    expect(owner.pid).toBe(process.pid)
+    await service.removeAsync()
+
+    expect(existsSync(configPath)).toBe(false)
+    expect(existsSync(ownersPathFor(homeDir))).toBe(false)
   })
 
   it('preserves user-authored hook entries in the Orca Grok config file', () => {

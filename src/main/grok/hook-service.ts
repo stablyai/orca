@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto'
 import { mkdirSync, readFileSync, rmSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import type { SFTPWrapper } from 'ssh2'
@@ -27,10 +28,10 @@ import {
   writeGrokHookConfigIfUnchanged
 } from './grok-hook-config-file'
 import {
-  clearGrokHookSessionOwner,
-  isGrokHookSessionOwnerStale,
-  readGrokHookSessionOwner,
-  writeGrokHookSessionOwner
+  claimGrokHookSession,
+  clearGrokHookSessionOwners,
+  readLiveGrokHookSessionOwners,
+  releaseGrokHookSession
 } from './grok-hook-session-owner'
 
 // Why: Grok's tool-event matcher is a real regex (see Grok hooks docs). Bare
@@ -51,7 +52,8 @@ function getConfigPath(): string {
 }
 
 function getSessionOwnerPath(): string {
-  return `${getConfigPath()}.orca-owner`
+  const configKey = createHash('sha256').update(getConfigPath()).digest('hex').slice(0, 16)
+  return getSharedManagedScriptPath(`grok-status-owners-${configKey}.json`)
 }
 
 function getManagedScriptFileName(): string {
@@ -265,8 +267,8 @@ export class GrokHookService {
     } else {
       writeHooksJson(configPath, cleanup.config)
     }
-    // Why here too: turning hooks off goes through this path, and a stranded record would keep the
-    // managed-hook host token in Grok's directory after Orca promised to remove what it installed.
+    // Why unconditional: this is the explicit "turn agent status hooks off" action, so it removes
+    // what Orca installed regardless of other live instances, and the record must not outlive it.
     rmSync(getSessionOwnerPath(), { force: true })
     return notInstalledStatus(configPath)
   }
@@ -277,21 +279,18 @@ export class GrokHookService {
    * owned by a still-live Orca is left alone.
    */
   async reconcileAfterUncleanExit(): Promise<void> {
-    const ownerPath = getSessionOwnerPath()
-    const owner = await readGrokHookSessionOwner(ownerPath)
-    if (owner && !(await isGrokHookSessionOwnerStale(owner))) {
+    const ownersPath = getSessionOwnerPath()
+    if ((await readLiveGrokHookSessionOwners(ownersPath)).length > 0) {
       return
     }
-    if (owner) {
-      // Why surfaced: removeAsync reports failure as a status, not a throw, so a stranded config
-      // that cannot be cleaned would otherwise be invisible -- and this path exists precisely to
-      // catch the case the user already reported.
-      const status = await this.removeAsync()
-      if (status.detail) {
-        console.warn(`[agent-hooks] Grok hook reconciliation after unclean exit: ${status.detail}`)
-      }
-      await clearGrokHookSessionOwner(ownerPath)
+    // Why surfaced: removeAsync reports failure as a status, not a throw, so a stranded config that
+    // cannot be cleaned would otherwise be invisible -- and this path exists precisely to catch the
+    // case the user already reported.
+    const status = await this.removeAsync({ force: true })
+    if (status.detail) {
+      console.warn(`[agent-hooks] Grok hook reconciliation after unclean exit: ${status.detail}`)
     }
+    await clearGrokHookSessionOwners(ownersPath)
   }
 
   /**
@@ -306,17 +305,22 @@ export class GrokHookService {
     if (!this.getStatus().managedHooksPresent) {
       return
     }
-    const ownerPath = getSessionOwnerPath()
-    const owner = await readGrokHookSessionOwner(ownerPath)
-    if (owner && !(await isGrokHookSessionOwnerStale(owner))) {
-      return
-    }
-    await clearGrokHookSessionOwner(ownerPath)
-    await writeGrokHookSessionOwner(ownerPath)
+    await claimGrokHookSession(getSessionOwnerPath())
   }
 
-  async removeAsync(): Promise<AgentHookInstallStatus> {
+  /**
+   * Quit-path removal. Why it consults the ownership record: two Orcas can share one $GROK_HOME,
+   * and without this the first one to quit deletes the config every other live instance is using.
+   * `force` skips the check for startup reconciliation, where every recorded owner is already gone.
+   */
+  async removeAsync(options?: { force?: boolean }): Promise<AgentHookInstallStatus> {
     const configPath = getConfigPath()
+    if (options?.force !== true) {
+      const lastOwner = await releaseGrokHookSession(getSessionOwnerPath())
+      if (!lastOwner) {
+        return notInstalledStatus(configPath)
+      }
+    }
     const snapshot = await readGrokHookConfigSnapshot(configPath)
     if (!snapshot.config) {
       return notInstalledStatus(configPath, 'Could not parse Grok hook config')
@@ -335,9 +339,6 @@ export class GrokHookService {
           snapshot.raw,
           `${JSON.stringify(cleanup.config, null, 2)}\n`
         )
-    if (updated) {
-      await clearGrokHookSessionOwner(getSessionOwnerPath())
-    }
     return updated
       ? notInstalledStatus(configPath)
       : notInstalledStatus(configPath, 'Grok hook config changed during cleanup')
