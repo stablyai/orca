@@ -79,9 +79,6 @@ inline src/renderer/src/components/status-bar/ResourceUsageStatusSegment.tsx
 inline src/renderer/src/components/status-bar/StatusBar.tsx
 inline src/renderer/src/components/status-bar/WorkspaceSpaceManagerPanel.tsx
 inline src/renderer/src/components/terminal-pane/TerminalPane.tsx
-inline src/renderer/src/components/terminal-pane/agent-completion-coordinator.ts
-inline src/renderer/src/components/terminal-pane/keyboard-handlers.ts
-inline src/renderer/src/components/terminal-pane/pty-transport.ts
 inline src/renderer/src/components/terminal-pane/remote-runtime-pty-transport.ts
 inline src/renderer/src/components/terminal-pane/use-terminal-pane-lifecycle.ts
 inline src/renderer/src/hooks/useAutomationDispatchEvents.ts
