@@ -72,9 +72,7 @@ inline src/renderer/src/components/feature-wall/EditorAnimatedVisual.tsx
 inline src/renderer/src/components/floating-terminal/FloatingTerminalPanel.tsx
 inline src/renderer/src/components/new-workspace/SmartWorkspaceNameField.tsx
 inline src/renderer/src/components/onboarding/use-onboarding-flow.ts
-inline src/renderer/src/components/right-sidebar/ChecksPanel.tsx
 inline src/renderer/src/components/right-sidebar/PortsPanel.tsx
-inline src/renderer/src/components/right-sidebar/checks-panel-content.tsx
 inline src/renderer/src/components/settings/AccountsPane.tsx
 inline src/renderer/src/components/settings/RuntimeEnvironmentsPane.tsx
 inline src/renderer/src/components/settings/Settings.tsx

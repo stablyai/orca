@@ -70,7 +70,7 @@ vi.mock('@/components/ui/button', () => ({
   )
 }))
 
-vi.mock('./checks-panel-content', () => ({
+vi.mock('./checks-panel/check-presentation', () => ({
   CHECK_COLOR: {
     success: 'success',
     failure: 'failure',
@@ -84,7 +84,10 @@ vi.mock('./checks-panel-content', () => ({
     neutral: (props: { className?: string }) => <span data-icon="neutral" {...props} />
   },
   PullRequestIcon: (props: { className?: string }) => <span data-icon="review" {...props} />,
-  prStateColor: () => 'state-color',
+  prStateColor: () => 'state-color'
+}))
+
+vi.mock('./checks-panel/checks-list', () => ({
   ChecksList: ({ checks, checksLoading }: { checks: PRCheckDetail[]; checksLoading: boolean }) => (
     <div data-testid="checks-list">
       {checksLoading ? 'Loading checks' : null}
