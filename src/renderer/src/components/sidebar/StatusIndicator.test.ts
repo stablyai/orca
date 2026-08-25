@@ -31,6 +31,15 @@ describe('StatusIndicator', () => {
     expect(markup).toContain('motion-reduce:border-t-yellow-500')
   })
 
+  it('renders monitoring as a static radio glyph', () => {
+    const markup = renderMarkup('monitoring')
+
+    expect(markup).toContain('title="Monitoring background tasks"')
+    expect(markup).toContain('lucide-radio')
+    expect(markup).toContain('text-yellow-500')
+    expect(markup).not.toContain('data-agent-spinner')
+  })
+
   it('renders permission as the shared question glyph', () => {
     const markup = renderMarkup('permission')
 
@@ -50,5 +59,12 @@ describe('StatusIndicator', () => {
     const classNames = renderDotClassNames('done')
 
     expect(classNames).toContain('bg-emerald-500')
+  })
+
+  it('renders interrupted distinctly from done', () => {
+    const classNames = renderDotClassNames('interrupted')
+
+    expect(classNames).toContain('bg-red-500')
+    expect(classNames).not.toContain('bg-emerald-500')
   })
 })

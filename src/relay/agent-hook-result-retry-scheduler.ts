@@ -2,14 +2,14 @@
 // when the hook fired, so re-read the same body on a timer and re-apply only if it changed. Both
 // timer families live in one owner so pane teardown and server stop tear both down in one ordered
 // place before the listener caches are cleared.
+import { hasCodexTranscriptSubagents } from '../shared/agent-hook-listener/providers/codex-state'
 import {
-  hasCodexTranscriptSubagents,
   hasPendingAgentResultText,
-  normalizeHookPayload,
-  preparePendingGrokResultDiscovery,
-  type AgentHookEventPayload,
-  type HookListenerState
-} from '../shared/agent-hook-listener'
+  preparePendingGrokResultDiscovery
+} from '../shared/agent-hook-listener/grok-result-discovery'
+import { normalizeHookPayload } from '../shared/agent-hook-listener'
+import type { AgentHookEventPayload } from '../shared/agent-hook-listener/listener-event'
+import type { HookListenerState } from '../shared/agent-hook-listener/listener-state'
 import type { AgentHookSource } from '../shared/agent-hook-relay'
 
 const ASSISTANT_MESSAGE_RETRY_ATTEMPTS = 5

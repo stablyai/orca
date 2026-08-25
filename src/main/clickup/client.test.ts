@@ -7,11 +7,6 @@ const { ensureProxyMock, fetchMock, readAccountMock, readTokenMock } = vi.hoiste
   readTokenMock: vi.fn()
 }))
 
-vi.mock('electron', () => ({
-  net: { fetch: fetchMock },
-  session: { defaultSession: {} }
-}))
-
 vi.mock('../network/proxy-settings', () => ({
   ensureElectronProxyFromEnvironment: ensureProxyMock
 }))
@@ -29,8 +24,15 @@ vi.mock('./connection-storage', () => ({
 }))
 
 describe('ClickUp client', () => {
-  beforeEach(() => {
+  beforeEach(async () => {
     vi.clearAllMocks()
+    // Why the port and not an electron mock: the client fetches through MainHttpClient
+    // so it stays bootable on plain Node, which makes an electron net mock inert.
+    const { setMainHttpClient } = await import('../network/http-client')
+    setMainHttpClient({
+      fetch: (url, init) => fetchMock(url, init),
+      proxySession: () => ({}) as never
+    })
     ensureProxyMock.mockResolvedValue(undefined)
     readAccountMock.mockReturnValue({
       version: 1,

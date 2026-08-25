@@ -623,6 +623,47 @@ describe('setupGuestShortcutForwarding', () => {
     expect(rendererSendMock).toHaveBeenCalledWith('ui:toggleQuickCommandsMenu')
   })
 
+  it('forwards workspace delete shortcuts from focused guest pages', () => {
+    setupGuestShortcutForwarding({
+      browserTabId,
+      guest: makeGuest(),
+      resolveRenderer: () => makeRenderer()
+    })
+
+    const isMac = process.platform === 'darwin'
+    const preventDefault = triggerBeforeInput({
+      code: 'Backspace',
+      key: 'Backspace',
+      meta: isMac,
+      control: !isMac,
+      shift: true
+    })
+
+    expect(preventDefault).toHaveBeenCalledOnce()
+    expect(rendererSendMock).toHaveBeenCalledWith('ui:deleteCurrentWorkspace')
+  })
+
+  it('consumes repeated workspace delete shortcuts from focused guest pages', () => {
+    setupGuestShortcutForwarding({
+      browserTabId,
+      guest: makeGuest(),
+      resolveRenderer: () => makeRenderer()
+    })
+
+    const isMac = process.platform === 'darwin'
+    const preventDefault = triggerBeforeInput({
+      code: 'Backspace',
+      key: 'Backspace',
+      meta: isMac,
+      control: !isMac,
+      shift: true,
+      isAutoRepeat: true
+    })
+
+    expect(preventDefault).toHaveBeenCalledOnce()
+    expect(rendererSendMock).not.toHaveBeenCalled()
+  })
+
   it('consumes guest zoom shortcuts even when the renderer is unavailable', () => {
     setupGuestShortcutForwarding({
       browserTabId,

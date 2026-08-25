@@ -18,6 +18,11 @@ import {
 import type { MatchRange } from './palette-match/normalized-text'
 import type { PaletteDocument, PaletteDocumentRank } from './palette-match/palette-document'
 import type { PaletteResultQualityClass } from './palette-match/match-quality'
+import {
+  findAmbiguousWorktreeIds,
+  getUnifiedTabPaletteExecutionHostId,
+  isUnifiedTabOwnedByWorktree
+} from './unified-tab-host-ownership'
 
 const NO_RANGES: readonly MatchRange[] = []
 
@@ -80,6 +85,7 @@ export function isSimulatorPaletteQueryTooLarge(
 
 export type BuildSearchableSimulatorTabsOptions = {
   worktrees: readonly Worktree[]
+  ownershipWorktrees?: readonly Pick<Worktree, 'id'>[]
   repoMap: ReadonlyMap<string, { displayName?: string | null }>
   repoMapByHostIdentity?: ReadonlyMap<string, { displayName?: string | null }>
   worktreeOrder: ReadonlyMap<string, number>
@@ -130,7 +136,7 @@ export function simulatorPaletteTabTitle(tab: Tab): string {
 
 function baseResult(entry: SearchableSimulatorTab): SimulatorPaletteSearchResult {
   return {
-    executionHostId: entry.worktree.hostId,
+    executionHostId: getUnifiedTabPaletteExecutionHostId(entry.tab, entry.worktree),
     tabId: entry.tab.id,
     worktreeId: entry.worktree.id,
     groupId: entry.tab.groupId,
@@ -161,25 +167,29 @@ function baseResult(entry: SearchableSimulatorTab): SimulatorPaletteSearchResult
 function getActiveUnifiedTabId({
   worktreeId,
   worktreeHostId,
+  worktreeRuntimeOwnerEnvironmentId,
   activeWorktreeId,
   activeWorkspaceExecutionHostId,
   activeTabType,
-  activeGroupIdByWorktree,
-  groupsByWorktree
+  activeGroupId,
+  groups
 }: Pick<
   BuildSearchableSimulatorTabsOptions,
-  | 'activeGroupIdByWorktree'
-  | 'activeTabType'
-  | 'activeWorktreeId'
-  | 'activeWorkspaceExecutionHostId'
-  | 'groupsByWorktree'
+  'activeTabType' | 'activeWorktreeId' | 'activeWorkspaceExecutionHostId'
 > & {
   worktreeId: string
   worktreeHostId?: Worktree['hostId']
+  worktreeRuntimeOwnerEnvironmentId?: Worktree['runtimeOwnerEnvironmentId']
+  activeGroupId?: string
+  groups?: readonly TabGroup[]
 }): string | null {
   if (
     !isPaletteCurrentWorktree(
-      { id: worktreeId, hostId: worktreeHostId },
+      {
+        id: worktreeId,
+        hostId: worktreeHostId,
+        runtimeOwnerEnvironmentId: worktreeRuntimeOwnerEnvironmentId
+      },
       activeWorktreeId,
       activeWorkspaceExecutionHostId
     ) ||
@@ -187,15 +197,15 @@ function getActiveUnifiedTabId({
   ) {
     return null
   }
-  const activeGroupId = activeGroupIdByWorktree[worktreeId]
   const activeGroup = activeGroupId
-    ? (groupsByWorktree[worktreeId] ?? []).find((group) => group.id === activeGroupId)
+    ? groups?.find((group) => group.id === activeGroupId)
     : undefined
   return activeGroup?.activeTabId ?? null
 }
 
 export function buildSearchableSimulatorTabs({
   worktrees,
+  ownershipWorktrees,
   repoMap,
   repoMapByHostIdentity,
   worktreeOrder,
@@ -207,6 +217,7 @@ export function buildSearchableSimulatorTabs({
   activeTabType
 }: BuildSearchableSimulatorTabsOptions): SearchableSimulatorTab[] {
   const entries: SearchableSimulatorTab[] = []
+  const ambiguousWorktreeIds = findAmbiguousWorktreeIds(ownershipWorktrees ?? worktrees)
   for (const worktree of worktrees) {
     const repoName =
       resolvePaletteRepoForWorktree(worktree, repoMap, repoMapByHostIdentity)?.displayName ?? ''
@@ -217,15 +228,19 @@ export function buildSearchableSimulatorTabs({
     const activeUnifiedTabId = getActiveUnifiedTabId({
       worktreeId: worktree.id,
       worktreeHostId: worktree.hostId,
+      worktreeRuntimeOwnerEnvironmentId: worktree.runtimeOwnerEnvironmentId,
       activeWorktreeId,
       activeWorkspaceExecutionHostId,
       activeTabType,
-      activeGroupIdByWorktree,
-      groupsByWorktree
+      activeGroupId: activeGroupIdByWorktree[worktree.id],
+      groups: groupsByWorktree[worktree.id]
     })
     const tabs = unifiedTabsByWorktree[worktree.id] ?? []
     for (const tab of tabs) {
-      if (tab.contentType !== 'simulator') {
+      if (
+        tab.contentType !== 'simulator' ||
+        !isUnifiedTabOwnedByWorktree(tab, worktree, ambiguousWorktreeIds)
+      ) {
         continue
       }
       entries.push({

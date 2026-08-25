@@ -101,8 +101,10 @@ import {
 } from '@/lib/browser-palette-search'
 import { buildSearchableBrowserPages } from '@/lib/browser-palette-page-entries'
 import {
+  buildPaletteWorktreeIndex,
   isPaletteCurrentWorktree,
-  resolvePaletteRepoForWorktree
+  resolvePaletteRepoForWorktree,
+  resolvePaletteWorktree
 } from '@/lib/palette-repo-resolution'
 import { activateBrowserPagePaletteResult } from '@/lib/browser-page-palette-activation'
 import { activateSimulatorTabPaletteResult } from '@/lib/simulator-tab-palette-activation'
@@ -139,11 +141,8 @@ import {
 import { RepoBadgeMark } from '@/components/repo/RepoBadgeLabel'
 import { buildSidebarHostOptions } from '@/components/sidebar/sidebar-host-options'
 import { getPaletteHostBadge } from '@/components/cmd-j/palette-host-badge'
-import {
-  composeWorktreeHostIdentity,
-  getWorktreeHostIdentity
-} from '../../../shared/worktree/host-qualified-identity'
-import { findRepoForHost, getRepoHostIdentity } from '@/store/slices/repo-host-identity'
+import { getWorktreeHostIdentity } from '../../../shared/worktree/host-qualified-identity'
+import { getRepoHostIdentity } from '@/store/slices/repo-host-identity'
 import type { Repo } from '../../../shared/repo-types'
 import {
   getSettingsFocusedExecutionHostId,
@@ -351,9 +350,56 @@ function isCurrentOpenTabItem(item: OpenTabPaletteItem): boolean {
   return item.type === 'browser-page' ? item.result.isCurrentPage : item.result.isCurrentTab
 }
 
+/** Not the command id: two hosts — or a duplicate snapshot — can publish the same tab id. */
+function getRecentTabOccurrenceBase(item: OpenTabPaletteItem): string {
+  if (item.type === 'browser-page') {
+    const result = item.result
+    return JSON.stringify([
+      item.type,
+      item.id,
+      result.executionHostId ?? '',
+      result.worktreeId,
+      result.workspaceId,
+      result.pageId
+    ])
+  }
+  if (item.type === 'simulator-tab') {
+    const result = item.result
+    // Why no groupId: it changes when a tab is regrouped mid-open, and the frozen
+    // order must keep resolving the row; tabId already identifies it within a host.
+    return JSON.stringify([
+      item.type,
+      item.id,
+      result.executionHostId ?? '',
+      result.worktreeId,
+      result.tabId
+    ])
+  }
+  const result = item.result
+  return JSON.stringify([
+    item.type,
+    item.id,
+    result.executionHostId ?? '',
+    result.worktreeId,
+    result.tabId,
+    result.entityId
+  ])
+}
+
+function buildRecentTabOccurrenceIds(items: readonly OpenTabPaletteItem[]): string[] {
+  const nextOrdinalByBase = new Map<string, number>()
+  return items.map((item) => {
+    const base = getRecentTabOccurrenceBase(item)
+    const ordinal = nextOrdinalByBase.get(base) ?? 0
+    nextOrdinalByBase.set(base, ordinal + 1)
+    return `recent-tab:${base}:${ordinal}`
+  })
+}
+
 /** An open tab's recent-section row plus the inputs inclusion needs. */
 type OpenTabRecentRow = {
   item: OpenTabPaletteItem
+  occurrenceId: string
   worktree: Worktree
   row: RecentWorkspaceTabRow
 }
@@ -403,7 +449,7 @@ function shouldIncludeOpenTabInRecentSection({
       unreadAgentCompletionPanes
     })
   })
-  return badge != null && badge !== 'done'
+  return badge != null && badge !== 'done' && badge !== 'interrupted'
 }
 
 function PaletteRowShortcutBadge({
@@ -832,16 +878,12 @@ function WorktreeJumpPaletteContent({
     () => new Map(repos.map((repo) => [getRepoHostIdentity(repo), repo])),
     [repos]
   )
-  // Why not repoMap.get(worktree.repoId): one repo id can be registered on two hosts, so the
-  // bare map is last-wins and one side of the collision renders the other host's repo — wrong
-  // name, wrong badge, and a false SSH chip on a purely local workspace. Falls back to the
-  // bare lookup so a worktree with no host, or no repo on its host, keeps its badge.
+  // Why one resolver: a runtime-owned SSH row must not bypass fail-closed ownership through its physical host.
   const resolveRepoForWorktree = useCallback(
-    (worktree: Pick<Worktree, 'id' | 'repoId' | 'hostId'>): Repo | undefined =>
-      (worktree.hostId
-        ? findRepoForHost(repos, worktree.repoId, { hostId: worktree.hostId, settings })
-        : null) ?? resolvePaletteRepoForWorktree(worktree, repoMap, repoByHostIdentity),
-    [repoByHostIdentity, repoMap, repos, settings]
+    (
+      worktree: Pick<Worktree, 'id' | 'repoId' | 'hostId' | 'runtimeOwnerEnvironmentId'>
+    ): Repo | undefined => resolvePaletteRepoForWorktree(worktree, repoMap, repoByHostIdentity),
+    [repoByHostIdentity, repoMap]
   )
 
   const hostLabelOverrides = useMemo(() => getHostDisplayLabelOverrides(settings), [settings])
@@ -1070,34 +1112,16 @@ function WorktreeJumpPaletteContent({
     [hasQuery, browserSortedWorktrees, searchScopeWorktrees]
   )
 
-  // Why: browser search includes archived worktrees, so this map must cover all worktrees, not just non-archived.
-  // Why keyed on the host identity (STA-4343): `repoId::path` repeats across hosts, so a bare
-  // id lets the last host inserted win and both rows then resolve to the same workspace.
-  const worktreeMap = useMemo(() => {
-    const map = new Map<string, Worktree>()
-    for (const worktree of browserSortedWorktrees) {
-      map.set(getWorktreeHostIdentity(worktree), worktree)
-    }
-    return map
-  }, [browserSortedWorktrees])
-
-  // Why a bare-id fallback: rows built before a host was stamped carry none, and dropping
-  // them would be a worse regression than resolving them the old ambiguous way.
-  const worktreeByBareId = useMemo(() => {
-    const map = new Map<string, Worktree>()
-    for (const worktree of browserSortedWorktrees) {
-      if (!map.has(worktree.id)) {
-        map.set(worktree.id, worktree)
-      }
-    }
-    return map
-  }, [browserSortedWorktrees])
+  // Why browser search includes archived worktrees, so its host-qualified metadata index must too.
+  const paletteWorktreeIndex = useMemo(
+    () => buildPaletteWorktreeIndex(browserSortedWorktrees),
+    [browserSortedWorktrees]
+  )
 
   const resolveWorktree = useCallback(
     (worktreeId: string, hostId: ExecutionHostId | undefined): Worktree | undefined =>
-      worktreeMap.get(composeWorktreeHostIdentity(hostId, worktreeId)) ??
-      worktreeByBareId.get(worktreeId),
-    [worktreeByBareId, worktreeMap]
+      resolvePaletteWorktree(paletteWorktreeIndex, worktreeId, hostId),
+    [paletteWorktreeIndex]
   )
 
   const worktreeOrder = useMemo(
@@ -1191,6 +1215,7 @@ function WorktreeJumpPaletteContent({
     }
     return buildSearchableBrowserPages({
       worktrees: browserSortedWorktrees,
+      ownershipWorktrees: allWorktrees,
       repoMap,
       repoMapByHostIdentity: repoByHostIdentity,
       worktreeOrder,
@@ -1208,6 +1233,7 @@ function WorktreeJumpPaletteContent({
     activeTabType,
     activeWorktreeId,
     activeWorkspaceExecutionHostId,
+    allWorktrees,
     browserPagesByWorkspace,
     browserTabsByWorktree,
     browserSortedWorktrees,
@@ -1228,6 +1254,7 @@ function WorktreeJumpPaletteContent({
     }
     return buildSearchableSimulatorTabs({
       worktrees: browserSortedWorktrees,
+      ownershipWorktrees: allWorktrees,
       repoMap,
       repoMapByHostIdentity: repoByHostIdentity,
       worktreeOrder,
@@ -1244,6 +1271,7 @@ function WorktreeJumpPaletteContent({
     activeTabType,
     activeWorktreeId,
     activeWorkspaceExecutionHostId,
+    allWorktrees,
     browserSortedWorktrees,
     groupsByWorktree,
     repoMap,
@@ -1263,6 +1291,7 @@ function WorktreeJumpPaletteContent({
     }
     return buildSearchableWorkspaceTabs({
       worktrees: browserSortedWorktrees,
+      ownershipWorktrees: allWorktrees,
       repoMap,
       repoMapByHostIdentity: repoByHostIdentity,
       worktreeOrder,
@@ -1298,6 +1327,7 @@ function WorktreeJumpPaletteContent({
     activeWorktreeId,
     activeWorkspaceExecutionHostId,
     agentStatusByPaneKey,
+    allWorktrees,
     browserSortedWorktrees,
     groupsByWorktree,
     openFiles,
@@ -1436,17 +1466,22 @@ function WorktreeJumpPaletteContent({
   // once inclusion would drop it (a current tab that quiets down), or the pip blanks mid-open.
   const openTabRecentRows = useMemo<OpenTabRecentRow[]>(() => {
     const entries: OpenTabRecentRow[] = []
-    for (const item of openTabItems) {
+    const occurrenceIds = buildRecentTabOccurrenceIds(openTabItems)
+    for (const [index, item] of openTabItems.entries()) {
       const worktree = resolveWorktree(item.result.worktreeId, item.result.executionHostId)
       if (!worktree) {
         continue
       }
+      const occurrenceId = occurrenceIds[index]
       entries.push({
         item,
+        occurrenceId,
         worktree,
         row: {
           id: item.id,
+          occurrenceId,
           worktreeId: worktree.id,
+          worktreeHostId: worktree.hostId,
           unifiedTabId: item.type === 'browser-page' ? null : item.result.tabId,
           terminalTab:
             item.type === 'workspace-tab' && item.result.contentType === 'terminal'
@@ -1459,8 +1494,8 @@ function WorktreeJumpPaletteContent({
     return entries
   }, [openTabItems, resolveWorktree, terminalTabsById])
 
-  const recentTabRowById = useMemo(
-    () => new Map(openTabRecentRows.map(({ row }) => [row.id, row])),
+  const recentTabRowByItem = useMemo(
+    () => new Map(openTabRecentRows.map(({ item, row }) => [item, row])),
     [openTabRecentRows]
   )
 
@@ -1575,15 +1610,16 @@ function WorktreeJumpPaletteContent({
     visible
   ])
 
-  // Why: walk the frozen order rather than re-sorting the tab list — the frozen ids are the ranking,
-  // so agent churn never reshuffles rows under the cursor. Cap after resolving, not before: a chip
-  // applied mid-open narrows `openTabItems`, and capping first would leave the section empty.
+  // Why walk the frozen order, and cap after resolving: agent churn must not reshuffle rows, and a
+  // mid-open chip narrows `openTabItems` — capping first would leave the section empty.
   const recentTabItems = useMemo<PaletteItem[]>(() => {
-    const itemById = new Map(openTabItems.map((item) => [item.id, item]))
+    const itemByOccurrenceId = new Map(
+      openTabRecentRows.map(({ occurrenceId, item }) => [occurrenceId, item])
+    )
     return recentTabOrder
-      .flatMap((id) => itemById.get(id) ?? [])
+      .flatMap((occurrenceId) => itemByOccurrenceId.get(occurrenceId) ?? [])
       .slice(0, EMPTY_QUERY_RECENT_TAB_CAP)
-  }, [openTabItems, recentTabOrder])
+  }, [openTabRecentRows, recentTabOrder])
 
   const settingsResults = useMemo(
     () => buildCmdJSettingsResults(settingsSections),
@@ -1890,10 +1926,10 @@ function WorktreeJumpPaletteContent({
   ])
 
   // Why: badges number the snapshotted recent rows only — ⌘N is meaningless on a typed query.
-  const recentTabShortcutIndexById = useMemo(
+  const recentTabShortcutIndexByItem = useMemo(
     () =>
       new Map(
-        hasQuery ? [] : paletteSections.visibleOpenTabItems.map((item, index) => [item.id, index])
+        hasQuery ? [] : paletteSections.visibleOpenTabItems.map((item, index) => [item, index])
       ),
     [hasQuery, paletteSections]
   )
@@ -2753,6 +2789,7 @@ function WorktreeJumpPaletteContent({
     if (
       !isWorktreePaletteCreateActivationAllowed({
         hasTaskUrlIntent: taskSourceUrl !== null,
+        hasCreateName: trimmed.length > 0,
         selectionMovedByUser: selectionMovedByUserRef.current
       })
     ) {
@@ -3466,7 +3503,7 @@ function WorktreeJumpPaletteContent({
                   )
                 // Why regardless of query: a searched-for tab is exactly when you need to know it's
                 // still working — the map covers every open tab, not just the recent section.
-                const recentRow = recentTabRowById.get(entry.id) ?? null
+                const recentRow = recentTabRowByItem.get(entry) ?? null
 
                 return (
                   <CommandItem
@@ -3528,7 +3565,7 @@ function WorktreeJumpPaletteContent({
                             </span>
                           )}
                           <PaletteRowShortcutBadge
-                            index={recentTabShortcutIndexById.get(entry.id)}
+                            index={recentTabShortcutIndexByItem.get(entry)}
                             modifierKeys={digitShortcutModifiers}
                           />
                         </div>
@@ -3610,7 +3647,7 @@ function WorktreeJumpPaletteContent({
                             </span>
                           )}
                           <PaletteRowShortcutBadge
-                            index={recentTabShortcutIndexById.get(entry.id)}
+                            index={recentTabShortcutIndexByItem.get(entry)}
                             modifierKeys={digitShortcutModifiers}
                           />
                         </div>
@@ -3688,7 +3725,7 @@ function WorktreeJumpPaletteContent({
                           </span>
                         )}
                         <PaletteRowShortcutBadge
-                          index={recentTabShortcutIndexById.get(entry.id)}
+                          index={recentTabShortcutIndexByItem.get(entry)}
                           modifierKeys={digitShortcutModifiers}
                         />
                       </div>

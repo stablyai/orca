@@ -256,7 +256,9 @@ describe('PR workflow parallelism', () => {
     // resolution can never legitimately change anything.
     expect(dependencyInstall.run).toContain('--frozen-lockfile')
     expect(dependencyInstall.run).not.toContain('--no-frozen-lockfile')
-    expect(dependencyInstall.run).toContain('git diff --exit-code package.json pnpm-lock.yaml')
+    expect(dependencyInstall.run).toContain(
+      'git -C "$GITHUB_WORKSPACE" diff --exit-code -- package.json pnpm-lock.yaml'
+    )
     expect(dependencyInstall.run).toContain('--ignore-scripts')
     expect(dependencyInstall.run).not.toContain('--os=')
     expect(dependencyInstall.run).not.toContain('--cpu=')
@@ -343,6 +345,7 @@ describe('PR workflow parallelism', () => {
       'xterm_patch_sync',
       'shell_contracts',
       'test',
+      'orcad_browser',
       'managed_hook_node18',
       'package',
       'package_windows'
@@ -352,5 +355,9 @@ describe('PR workflow parallelism', () => {
     )
     expect(verifyStep.env.MANAGED_HOOK_NODE18).toBe('${{ needs.managed_hook_node18.result }}')
     expect(verifyStep.run).toContain('"$MANAGED_HOOK_NODE18"')
+    // Why assert this one too: the browser provider test skips itself without
+    // ORCA_BROWSER_EXECUTABLE, so it only guards anything if verify actually reads it.
+    expect(verifyStep.env.ORCAD_BROWSER).toBe('${{ needs.orcad_browser.result }}')
+    expect(verifyStep.run).toContain('"$ORCAD_BROWSER"')
   })
 })

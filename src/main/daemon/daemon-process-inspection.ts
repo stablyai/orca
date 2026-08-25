@@ -191,7 +191,13 @@ async function runInspectionCommand(
   args: string[],
   timeoutMs: number
 ): Promise<string> {
-  const { stdout } = await execFileAsync(file, args, { encoding: 'utf8', timeout: timeoutMs })
+  // powershell.exe is console-subsystem: without this it flashes a conhost and
+  // steals foreground on every inspection (#10488).
+  const { stdout } = await execFileAsync(file, args, {
+    encoding: 'utf8',
+    timeout: timeoutMs,
+    windowsHide: true
+  })
   return stdout
 }
 

@@ -46,7 +46,10 @@ export function forwardGuestShortcutInput(
     return true
   }
   if (input.isAutoRepeat) {
-    if (action?.type === 'dictationKeyDown' && shouldForwardDictationShortcut?.()) {
+    if (
+      (action?.type === 'dictationKeyDown' && shouldForwardDictationShortcut?.()) ||
+      action?.type === 'deleteCurrentWorkspace'
+    ) {
       event.preventDefault()
       return true
     }
@@ -176,10 +179,14 @@ export function forwardGuestShortcutInput(
     renderer.send('ui:toggleQuickCommandsMenu')
   } else if (action?.type === 'openNewWorkspace') {
     renderer.send('ui:openNewWorkspace')
+  } else if (action?.type === 'deleteCurrentWorkspace') {
+    renderer.send('ui:deleteCurrentWorkspace')
   } else if (action?.type === 'openWorkspaceBoard') {
     renderer.send('ui:openWorkspaceBoard')
   } else if (action?.type === 'openTasks') {
     renderer.send('ui:openTasks')
+  } else if (action?.type === 'toggleAgentDashboard') {
+    renderer.send('ui:toggleAgentDashboard')
   } else if (action?.type === 'openSettings') {
     renderer.send('ui:openSettings')
   } else if (action?.type === 'forceReload') {

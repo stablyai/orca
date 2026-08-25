@@ -1,6 +1,5 @@
 import type { PersistedState } from '../../../shared/persisted-state-types'
 import type { RemovedSshTargetTombstone, SshTarget } from '../../../shared/ssh-types'
-import type { StoreOwnedPersistedState } from '../loading-store/store-owned-state'
 import type { ProtectedSecretPersistence } from '../../protected-secret-persistence'
 import { sshPtyOwnerLeaseSecretSlot } from '../../protected-secret-persistence'
 import {
@@ -15,7 +14,7 @@ import {
 } from '../../worktree-retirement-namespace'
 
 export type SshTargetStateOperations = {
-  state: StoreOwnedPersistedState
+  state: PersistedState
   protectedSecrets: Pick<ProtectedSecretPersistence, 'removeRetainedBlob'>
   scheduleSave: () => void
   flush: () => void

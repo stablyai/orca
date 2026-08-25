@@ -11,9 +11,14 @@ export const WORKSPACE_CLEANUP_BROWSE_PERSIST_DEBOUNCE_MS = 250
 
 let persistTimer: ReturnType<typeof setTimeout> | null = null
 
+/** Updater form exists so two patches in one tick cannot read the same stale snapshot. */
+export type WorkspaceCleanupBrowseUpdate =
+  | WorkspaceCleanupBrowseState
+  | ((current: WorkspaceCleanupBrowseState) => WorkspaceCleanupBrowseState)
+
 export type WorkspaceCleanupBrowseSlice = {
   workspaceCleanupBrowse: WorkspaceCleanupBrowseState
-  updateWorkspaceCleanupBrowseState: (next: WorkspaceCleanupBrowseState) => void
+  updateWorkspaceCleanupBrowseState: (next: WorkspaceCleanupBrowseUpdate) => void
 }
 
 export const createWorkspaceCleanupBrowseSlice: StateCreator<
@@ -25,7 +30,10 @@ export const createWorkspaceCleanupBrowseSlice: StateCreator<
   workspaceCleanupBrowse: createDefaultWorkspaceCleanupBrowseState(),
 
   updateWorkspaceCleanupBrowseState: (next) => {
-    set({ workspaceCleanupBrowse: next })
+    set((state) => ({
+      workspaceCleanupBrowse:
+        typeof next === 'function' ? next(state.workspaceCleanupBrowse) : next
+    }))
     if (persistTimer !== null) {
       clearTimeout(persistTimer)
     }

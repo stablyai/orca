@@ -33,14 +33,16 @@ const {
   scheduleRuntimeGraphSync,
   shouldSeedCacheTimerOnInitialTitle,
   toastInfo,
-  notifyCodexPaneBoundForStaleSweep
+  notifyCodexPaneBoundForStaleSweep,
+  presentPaneViewportPreservingSynchronizedOutput
 } = vi.hoisted(() => ({
   resetAndRefreshAllTerminalWebglAtlases: vi.fn(),
   scheduleTerminalWebglAtlasRecovery: vi.fn(),
   scheduleRuntimeGraphSync: vi.fn(),
   shouldSeedCacheTimerOnInitialTitle: vi.fn(() => false),
   toastInfo: vi.fn(),
-  notifyCodexPaneBoundForStaleSweep: vi.fn()
+  notifyCodexPaneBoundForStaleSweep: vi.fn(),
+  presentPaneViewportPreservingSynchronizedOutput: vi.fn()
 }))
 
 let mockStoreState: StoreState
@@ -55,6 +57,11 @@ vi.mock('@/runtime/sync-runtime-graph', () => ({
 vi.mock('@/lib/pane-manager/pane-manager-registry', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   resetAndRefreshAllTerminalWebglAtlases
+}))
+
+vi.mock('@/lib/pane-manager/pane-webgl-renderer', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  presentPaneViewportPreservingSynchronizedOutput
 }))
 
 vi.mock('./terminal-webgl-atlas-recovery', () => ({
@@ -201,6 +208,7 @@ describe('connectPanePty', () => {
       expect.stringContaining('remote snapshot with hidden remote output'),
       expect.any(Function)
     )
+    expect(presentPaneViewportPreservingSynchronizedOutput).toHaveBeenCalledWith(pane)
     disposable.dispose()
   })
 

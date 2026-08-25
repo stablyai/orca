@@ -8,7 +8,7 @@ import { getWorktreeCardPrDisplay } from '@/components/sidebar/worktree-card-pr-
 import { getWorktreeGitIdentityDisplay } from '@/lib/worktree-git-identity-display'
 import { getGitHubRepoCacheKey } from '@/store/slices/github-cache-key'
 import { getHostedReviewCacheKey, linkedReviewHintKey } from '@/store/slices/hosted-review'
-import { prChecksCacheSuffix } from '@/store/slices/github'
+import { prChecksCacheSuffix } from '@/store/github/cache-identity'
 import {
   PARENT_PR_CHECKS_GROUP_LABELS,
   PARENT_PR_CHECKS_GROUP_ORDER,

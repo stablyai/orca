@@ -198,6 +198,7 @@ export default function BrowserTab({
     <div
       ref={setNodeRef}
       data-tab-id={tab.id}
+      data-active={isActive ? 'true' : 'false'}
       data-pinned={isPinned ? 'true' : 'false'}
       {...attributes}
       {...listeners}

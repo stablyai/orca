@@ -2,7 +2,7 @@ import type { Socket } from 'node:net'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { DaemonPendingRequests } from './daemon-client-pending-requests'
 import { requestDaemonRpc } from './daemon-client-rpc-request'
-import { isDaemonGoneError } from './daemon-pty-adapter'
+import { isDaemonGoneError } from './daemon-endpoint-errors'
 import {
   DAEMON_UNAVAILABLE_RECONNECT_MESSAGE,
   DaemonConnectionLostError,

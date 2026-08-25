@@ -22,7 +22,8 @@ const mocks = vi.hoisted(() => ({
     checking: boolean
     onOpenIntegrations: () => void
   }[],
-  jiraSetupProps: [] as { onOpenIntegrations: () => void }[]
+  jiraSetupProps: [] as { onOpenIntegrations: () => void }[],
+  clickUpSetupProps: [] as { onOpenIntegrations: () => void }[]
 }))
 
 vi.mock('./use-task-source-provider-readiness', () => ({

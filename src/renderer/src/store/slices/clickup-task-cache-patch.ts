@@ -1,5 +1,5 @@
 import type { ClickUpTask } from '../../../../shared/clickup-types'
-import type { CacheEntry } from './github'
+import type { CacheEntry } from '../github/cache-model'
 
 // Why: an explicit marker keeps the local runtime scope distinct from every task-source scope.
 export const CLICKUP_DEFAULT_CACHE_SCOPE = '__clickup_default_scope__'

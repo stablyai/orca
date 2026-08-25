@@ -1,4 +1,5 @@
 /* eslint-disable max-lines -- Why: keeps Codex's whole runtime-home contract in one place so account-switch semantics don't drift across launch/login/quota paths. */
+import { quotePosixShell } from '../../shared/wsl-login-shell-command'
 import {
   appendFileSync,
   copyFileSync,
@@ -1224,27 +1225,25 @@ export class CodexRuntimeHomeService {
         '-lc',
         [
           'set -e',
-          `if [ ! -e ${this.quoteBashString(activeLinuxPath)} ] && [ ! -L ${this.quoteBashString(activeLinuxPath)} ]; then :`,
-          `elif [ -e ${this.quoteBashString(activeLinuxPath)} ] && [ ! -L ${this.quoteBashString(activeLinuxPath)} ]; then :`,
+          `if [ ! -e ${quotePosixShell(activeLinuxPath)} ] && [ ! -L ${quotePosixShell(activeLinuxPath)} ]; then :`,
+          `elif [ -e ${quotePosixShell(activeLinuxPath)} ] && [ ! -L ${quotePosixShell(activeLinuxPath)} ]; then :`,
           'else',
-          `mkdir -p ${this.quoteBashString(activeLinuxParentPath)}`,
-          `rm -rf -- ${this.quoteBashString(nextLinuxPath)}`,
-          `ln -s -- ${this.quoteBashString(runtimeWsl.linuxPath)} ${this.quoteBashString(nextLinuxPath)}`,
-          `mv -Tf -- ${this.quoteBashString(nextLinuxPath)} ${this.quoteBashString(activeLinuxPath)}`,
+          `mkdir -p ${quotePosixShell(activeLinuxParentPath)}`,
+          `rm -rf -- ${quotePosixShell(nextLinuxPath)}`,
+          `ln -s -- ${quotePosixShell(runtimeWsl.linuxPath)} ${quotePosixShell(nextLinuxPath)}`,
+          `mv -Tf -- ${quotePosixShell(nextLinuxPath)} ${quotePosixShell(activeLinuxPath)}`,
           'fi'
         ].join('\n')
       ],
-      { stdio: ['ignore', 'pipe', 'pipe'], timeout: 5000 }
+      // wsl.exe is console-subsystem: without this a GUI-launched Orca flashes
+      // a conhost and steals foreground for up to the timeout (#10488).
+      { stdio: ['ignore', 'pipe', 'pipe'], timeout: 5000, windowsHide: true }
     )
   }
 
   private dirnameLinuxPath(value: string): string {
     const index = value.lastIndexOf('/')
     return index > 0 ? value.slice(0, index) : '/'
-  }
-
-  private quoteBashString(value: string): string {
-    return `'${value.replace(/'/g, `'\\''`)}'`
   }
 
   private joinWslPath(basePath: string, ...segments: string[]): string {

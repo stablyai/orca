@@ -4,6 +4,7 @@ import {
   type AiVaultListResult,
   type AiVaultSession
 } from '../../../../shared/ai-vault-types'
+import { describeAiVaultScanError } from '../../../../shared/ai-vault-scan-error-message'
 import {
   ALL_EXECUTION_HOSTS_SCOPE,
   requestedExecutionHostScope,
@@ -193,7 +194,7 @@ export function useAiVaultSessionRefresh(
           refreshIdRef.current === refreshId &&
           scanKey === currentScanScopeKey()
         ) {
-          setError(err instanceof Error ? err.message : String(err))
+          setError(describeAiVaultScanError(err instanceof Error ? err.message : String(err)))
         }
       } finally {
         refreshInFlightRef.current = false

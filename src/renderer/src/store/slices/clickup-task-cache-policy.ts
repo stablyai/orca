@@ -1,4 +1,4 @@
-import type { CacheEntry } from './github'
+import type { CacheEntry } from '../github/cache-model'
 import { CLICKUP_DEFAULT_CACHE_SCOPE } from './clickup-task-cache-patch'
 
 const CACHE_TTL = 60_000

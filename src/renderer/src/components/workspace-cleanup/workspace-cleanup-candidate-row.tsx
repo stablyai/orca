@@ -33,7 +33,7 @@ import {
   formatBranchSafetyDetails,
   formatContextDetails,
   formatGitStatus,
-  getCandidateFactStatus,
+  getCandidateFactStatuses,
   getContextCount,
   getDirtyGitLabel,
   getReviewPillTone,
@@ -42,10 +42,13 @@ import {
 } from './workspace-cleanup-candidate-row-data'
 import { StatusPill } from './workspace-cleanup-status-pill'
 import { WorkspaceCleanupMetadataChip } from './workspace-cleanup-metadata-chip'
+import { WorkspaceCleanupForgetLocallyButton } from './workspace-cleanup-forget-locally-button'
 import {
   getWorkspaceCleanupCandidateAccessibleName,
   getWorkspaceCleanupCandidateHostLabel
 } from './workspace-cleanup-host-label'
+import { formatCompactActivityLabel, getReviewTooltip } from './workspace-cleanup-row-labels'
+import type { WorkspaceCleanupFailure } from '@/store/slices/workspace-cleanup'
 
 export type WorkspaceCleanupDeletionPhase = 'deleting' | 'queued'
 
@@ -55,7 +58,7 @@ type CandidateRowProps = {
   identity: string
   deletionPhase?: WorkspaceCleanupDeletionPhase
   expanded: boolean
-  failure?: string
+  failure?: WorkspaceCleanupFailure
   /** A focused git re-scan is in flight, so "Not checked" is provisional. */
   gitEvidencePending?: boolean
   last: boolean
@@ -69,6 +72,8 @@ type CandidateRowProps = {
   selected: boolean
   onIgnore: (candidate: WorkspaceCleanupCandidate) => void
   onRemove: (candidate: WorkspaceCleanupCandidate) => void
+  onForgetLocally?: (candidate: WorkspaceCleanupCandidate) => void
+  onDeleteAnyway?: (candidate: WorkspaceCleanupCandidate) => void
   onToggleExpanded: (identity: string) => void
   onToggleSelected: (identity: string) => void
   onView: (candidate: WorkspaceCleanupCandidate) => void
@@ -95,6 +100,8 @@ export const CandidateRow = React.memo(function CandidateRow({
   selected,
   onIgnore,
   onRemove,
+  onForgetLocally,
+  onDeleteAnyway,
   onToggleExpanded,
   onToggleSelected,
   onView
@@ -107,7 +114,7 @@ export const CandidateRow = React.memo(function CandidateRow({
   const blockers = getWorkspaceCleanupBlockerLabels(candidate)
   const contextDetails = formatContextDetails(candidate)
   const branchSafetyDetails = formatBranchSafetyDetails(candidate)
-  const factStatus = getCandidateFactStatus(candidate)
+  const factStatuses = getCandidateFactStatuses(candidate)
   const dirtyLabel = getDirtyGitLabel(candidate)
   const gitLabel = getWorkspaceCleanupGitLabel(candidate)
   const showGitMetadataChip = shouldShowGitMetadataChip(candidate)
@@ -178,9 +185,13 @@ export const CandidateRow = React.memo(function CandidateRow({
                       'Deleting…'
                     )}
               </StatusPill>
-            ) : factStatus ? (
-              <StatusPill tone={factStatus.tone}>{factStatus.label}</StatusPill>
-            ) : null}
+            ) : (
+              factStatuses.map((status) => (
+                <StatusPill key={status.label} tone={status.tone}>
+                  {status.label}
+                </StatusPill>
+              ))
+            )}
             {workspaceStatusLabel ? (
               <WorkspaceCleanupMetadataChip
                 icon={CircleDot}
@@ -255,7 +266,17 @@ export const CandidateRow = React.memo(function CandidateRow({
           {failure ? (
             <div className="mt-2 flex items-center gap-1.5 text-xs text-destructive">
               <AlertTriangle className="size-3.5" />
-              {failure}
+              <span>{failure.message}</span>
+              {failure.canDeleteAnyway && onDeleteAnyway ? (
+                <Button
+                  variant="link"
+                  size="xs"
+                  className="h-auto px-1 text-destructive"
+                  onClick={() => onDeleteAnyway(candidate)}
+                >
+                  {translate('components.workspace.cleanup.browse.deleteAnyway', 'Delete anyway')}
+                </Button>
+              ) : null}
             </div>
           ) : null}
 
@@ -377,26 +398,11 @@ export const CandidateRow = React.memo(function CandidateRow({
               </TooltipContent>
             </Tooltip>
           ) : null}
+          {candidate.blockers.includes('ssh-disconnected') && onForgetLocally ? (
+            <WorkspaceCleanupForgetLocallyButton candidate={candidate} onForget={onForgetLocally} />
+          ) : null}
         </div>
       </div>
     </div>
   )
 })
-
-function formatCompactActivityLabel(label: string): string {
-  if (label === 'Just now') {
-    return 'now'
-  }
-  return label.replace(/ ago$/, '')
-}
-
-function getReviewTooltip(reviewInfo: WorkspaceCleanupReviewInfo): string {
-  const parts = [reviewInfo.label]
-  if (reviewInfo.state) {
-    parts.push(reviewInfo.state)
-  }
-  if (reviewInfo.title) {
-    parts.push(reviewInfo.title)
-  }
-  return parts.filter(Boolean).join(' · ')
-}

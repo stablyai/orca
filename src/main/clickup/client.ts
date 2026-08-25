@@ -1,6 +1,11 @@
-import { net, session } from 'electron'
 import { ensureElectronProxyFromEnvironment } from '../network/proxy-settings'
-import type { ClickUpConnectionStatus, ClickUpViewer, ClickUpWorkspace, ClickUpWorkspaceSelection } from '../../shared/clickup-types'
+import { getMainHttpClient } from '../network/http-client'
+import type {
+  ClickUpConnectionStatus,
+  ClickUpViewer,
+  ClickUpWorkspace,
+  ClickUpWorkspaceSelection
+} from '../../shared/clickup-types'
 import {
   deleteStoredClickUpConnection,
   getClickUpCredentialError,
@@ -68,8 +73,10 @@ async function readApiError(response: Response): Promise<string> {
 
 async function requestWithToken<T>(token: string, path: string, init?: RequestInit): Promise<T> {
   const url = `${CLICKUP_API_BASE_URL}${path}`
+  const httpClient = getMainHttpClient()
+  const proxySession = httpClient.proxySession()
   await ensureElectronProxyFromEnvironment({
-    proxySession: session.defaultSession,
+    ...(proxySession ? { proxySession } : {}),
     probeUrl: url
   }).catch(() => undefined)
   const headers = new Headers(init?.headers)
@@ -78,7 +85,9 @@ async function requestWithToken<T>(token: string, path: string, init?: RequestIn
   if (init?.body !== undefined) {
     headers.set('Content-Type', 'application/json')
   }
-  const response = await net.fetch(url, {
+  // Why the port: the desktop gets Electron's net.fetch, which follows Chromium
+  // proxy/session state; a host without Chromium gets Node's fetch instead.
+  const response = await httpClient.fetch(url, {
     ...init,
     headers,
     signal: init?.signal ?? AbortSignal.timeout(CLICKUP_REQUEST_TIMEOUT_MS)

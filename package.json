@@ -11,7 +11,7 @@
   "main": "./out/main/index.js",
   "scripts": {
     "format": "oxfmt --write .",
-    "lint": "oxlint && pnpm run audit:code-quality:native && pnpm run audit:code-quality:type-aware && pnpm run check:reliability-gates && pnpm run check:max-lines-ratchet && pnpm run verify:bundled-skill-guides && pnpm run verify:skill-bundle-manifest && pnpm run verify:localization-catalog && pnpm run verify:localization-extraction && pnpm run verify:localization-coverage",
+    "lint": "oxlint && pnpm run audit:code-quality:native && pnpm run audit:code-quality:type-aware && pnpm run check:reliability-gates && pnpm run check:max-lines-ratchet && pnpm run check:runtime-electron-ratchet && pnpm run verify:bundled-skill-guides && pnpm run verify:skill-bundle-manifest && pnpm run verify:localization-catalog && pnpm run verify:localization-extraction && pnpm run verify:localization-coverage",
     "audit:code-quality": "pnpm run audit:code-quality:native && pnpm run audit:code-quality:type-aware && pnpm run audit:react-doctor",
     "audit:code-quality:native": "oxlint --config config/oxlint-code-quality-native-plugins.json src config tests mobile --deny-warnings",
     "audit:code-quality:type-aware": "oxlint --type-aware --config config/oxlint-code-quality-type-aware.json src config tests --deny-warnings",
@@ -29,6 +29,10 @@
     "test:repro:remote-agent-session": "pnpm run build:cli && pnpm run build:electron-vite && node config/scripts/remote-agent-session-authority-repro.mjs",
     "check:reliability-gates": "node config/scripts/check-reliability-gates.mjs",
     "check:max-lines-ratchet": "node config/scripts/check-max-lines-ratchet.mjs",
+    "check:runtime-electron-ratchet": "node config/scripts/check-runtime-electron-ratchet.mjs",
+    "build:orcad": "node config/scripts/build-orcad.mjs",
+    "smoke:orcad-terminal": "node config/scripts/ensure-native-runtime.mjs --runtime=node && pnpm run build:cli && pnpm run build:orcad && node config/scripts/runtime-serve-terminal-smoke.mjs --target orcad",
+    "smoke:serve-terminal": "node config/scripts/runtime-serve-terminal-smoke.mjs",
     "check:feature-wall-assets": "node config/scripts/check-feature-wall-assets.mjs",
     "generate:bundled-skill-guides": "node config/scripts/generate-bundled-skill-guides.mjs --write",
     "verify:bundled-skill-guides": "node config/scripts/generate-bundled-skill-guides.mjs --check",
@@ -96,6 +100,7 @@
     "test:e2e:posix-profile-index-golden": "pnpm run ensure:electron-runtime && npx playwright test tests/e2e/golden-posix-fresh-startup.spec.ts tests/e2e/golden-posix-profile-index-fsync.spec.ts --grep @posix-profile-index-golden --config tests/playwright.config.ts --project electron-headless --workers=1",
     "test:e2e:windows-fresh-startup-golden": "pnpm run ensure:electron-runtime && npx playwright test tests/e2e/golden-windows-fresh-startup.spec.ts --grep @windows-fresh-startup-golden --config tests/playwright.config.ts --project electron-headless --workers=1",
     "test:e2e:agent-tui-golden": "pnpm run ensure:electron-runtime && npx playwright test tests/e2e/golden-agent-tui-launch.spec.ts tests/e2e/golden-shell-after-agent-exit.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1",
+    "test:e2e:tab-bar-agent-launch-golden": "pnpm run ensure:electron-runtime && npx playwright test tests/e2e/golden-tab-bar-agent-launch.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1",
     "test:e2e:terminal-rendering-release-evidence": "pnpm run ensure:electron-runtime && npx playwright test tests/e2e/terminal-opencode-emoji-table-rendering.spec.ts tests/e2e/terminal-long-table-scroll-restore.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=2",
     "test:e2e:terminal-perf": "pnpm run ensure:electron-runtime && npx playwright test tests/e2e/terminal-typing-latency.spec.ts tests/e2e/terminal-foreground-redraw-freeze.spec.ts tests/e2e/terminal-output-scheduler.spec.ts tests/e2e/terminal-hidden-tui-visual-restore.spec.ts tests/e2e/artificial-opencode-terminal-load.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=2",
     "test:e2e:terminal-perf:scale": "pnpm run ensure:electron-runtime && node config/scripts/run-terminal-scale-perf-e2e.mjs",
@@ -110,6 +115,7 @@
     "test:e2e:source-control-scale": "pnpm run ensure:electron-runtime && npx playwright test tests/e2e/source-control-large-file-count.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1",
     "win-update-e2e": "node tests/tools/win-update-e2e/run.mjs",
     "win-crash-survival-e2e": "node tests/tools/win-crash-survival-e2e/run.mjs",
+    "smoke:windows-pty-native-capability": "node tests/tools/windows-pty-native-capability-smoke/run.mjs",
     "test:e2e:ssh-codex-artifacts-repro": "node config/scripts/run-ssh-codex-artifacts-repro-e2e.mjs",
     "test:e2e:headful": "pnpm run ensure:electron-runtime && npx playwright test --config tests/playwright.config.ts --project electron-headful",
     "test:e2e:terminal-ime-native": "node config/scripts/run-terminal-ibus-hangul-e2e.mjs",
@@ -263,6 +269,7 @@
     "zustand": "^5.0.14"
   },
   "optionalDependencies": {
+    "@vscode/windows-process-tree": "0.8.0",
     "sherpa-onnx-darwin-arm64": "1.12.37",
     "sherpa-onnx-darwin-x64": "1.12.37",
     "sherpa-onnx-linux-arm64": "1.12.37",
@@ -314,7 +321,8 @@
       "@xterm/addon-webgl@0.20.0-beta.286": "config/patches/@xterm__addon-webgl@0.20.0-beta.286.patch",
       "@xterm/addon-serialize@0.15.0-beta.287": "config/patches/@xterm__addon-serialize@0.15.0-beta.287.patch",
       "@xterm/xterm@6.1.0-beta.287": "config/patches/@xterm__xterm@6.1.0-beta.287.patch",
-      "lint-staged@16.4.0": "config/patches/lint-staged@16.4.0.patch"
+      "lint-staged@16.4.0": "config/patches/lint-staged@16.4.0.patch",
+      "@vscode/windows-process-tree@0.8.0": "config/patches/@vscode__windows-process-tree@0.8.0.patch"
     }
   },
   "reactDoctor": {

@@ -303,7 +303,10 @@
             "9d6e531da6": "Workspace no longer exists.",
             "changedSinceConfirmation": "Workspace changed after confirmation. Refresh to review it before removing.",
             "hostCollision": "Error: this workspace exists on multiple hosts at the same path",
-            "hostUnresolved": "Orca cannot tell which host owns this workspace. Refresh projects and review it again."
+            "hostUnresolved": "Orca cannot tell which host owns this workspace. Refresh projects and review it again.",
+            "gitStatusUnavailable": "Orca couldn't check this workspace's git status. Try again, or delete it from its host-specific sidebar or project list.",
+            "gitStatusUnavailableOlderPeer": "Orca couldn't match this git-status failure to a host. Update the older connected peer, or delete the workspace from its host-specific sidebar or project list.",
+            "forceNeedsApproval": "Review and confirm this workspace before force deleting it."
           }
         },
         "worktrees": {
@@ -2935,6 +2938,14 @@
             "e16012e31e": "The terminal daemon that owned this session exited, so the session and its scrollback could not be recovered. Open a new terminal to continue.",
             "sessionUnavailable": "Orca couldn't reattach to this pane's terminal session on the host. Open a new terminal to continue."
           },
+          "TerminalProcessExitOverlay": {
+            "capacityTitle": "Git Bash console limit reached",
+            "capacityDetail": "Git Bash reached its 128-console limit. Close unused Git Bash terminals, then restart this terminal.",
+            "failedTitle": "Terminal exited",
+            "failedDetail": "The shell process ended with exit code {{code}}. Its output is preserved.",
+            "close": "Close",
+            "restart": "Restart"
+          },
           "TerminalPane": {
             "ac112e9036": "Remove title",
             "f984ab2a30": "Remove pane title: {{value0}}",
@@ -3747,13 +3758,9 @@
             }
           },
           "CaffeinateStatusSegment": {
-            "on": "On",
-            "auto": "Agent",
-            "off": "Off",
             "active": "Active",
             "inactive": "Inactive",
-            "ariaLabel": "Caffeinate, {{status}}",
-            "title": "Caffeinate",
+            "ariaLabel": "{{title}}, {{status}}",
             "onDescription": "Keep this computer awake continuously",
             "autoDescription": "Stay awake while an agent is working",
             "offDescription": "Allow normal system sleep behavior"
@@ -4347,7 +4354,8 @@
           "27672470d9": "Opening the link does not install anything. Review the immutable version first.",
           "66cff7a804": "https://app.orca.dev/skills/share/…",
           "93eb0fe8c7": "Orca skill link",
-          "releaseNotes": "Release notes:"
+          "releaseNotes": "Release notes:",
+          "targetHeader": "Installation Target"
         },
         "SkillInstallTargetFields": {
           "8e6a972229": "No workspaces are known on this machine.",
@@ -4366,6 +4374,10 @@
           "0785d0a503": "— update required",
           "8562dd1e6e": "This computer",
           "b8a0b706ad": "Machine"
+        },
+        "SkillInstallWorkspaceCombobox": {
+          "search": "Search workspaces...",
+          "empty": "No workspaces found."
         },
         "SkillShareReviewContent": {
           "e3caf6baeb": "Revoking this link blocks future access. It does not remove copies already installed on recipients’ machines.",
@@ -4567,7 +4579,15 @@
           "supportingFileWarning": "The selected skills include {{fileCount}} beyond SKILL.md.",
           "agentAccessWarning": "Skills contain instructions your agent may follow. Continue only if you trust the source of this share link.",
           "fileBinary": "binary",
-          "fileRunnable": "runnable"
+          "fileRunnable": "runnable",
+          "agentsCountBadge": "{{count}} selected",
+          "agentsCountLabel": "{{count}} {{label}}",
+          "targetAgentsHeader": "Target Agents",
+          "deselectAll": "Deselect optional",
+          "selectAll": "Select all",
+          "canonicalHeader": "Standard Agents (Always Included)",
+          "canonicalExplanation": "These agents natively read {{root}}, which Orca installs to by default:",
+          "additionalAgentsHeader": "Additional Agent Directories"
         },
         "filter": {
           "allAgents": "All agents",
@@ -5336,6 +5356,8 @@
           "f94466bc39": "{{value0}} of {{value1}} contained project{{value2}} remained after deleting the group.",
           "groupDeleteFailed": "Failed to delete group",
           "groupDeleteFailedDesc": "Something went wrong while deleting the group. No projects were removed.",
+          "groupRenameFailed": "Failed to rename group",
+          "groupRenameFailedDesc": "Orca could not confirm the new name with the group's host. Recheck the group after reconnecting.",
           "failedNestWorkspace": "Failed to nest workspace",
           "sidebarRowMissing": "Target no longer exists",
           "failedUnnestWorkspace": "Failed to unnest workspace"
@@ -6244,7 +6266,9 @@
           "3f1bdf3cb4": "Environment text is too large to parse safely.",
           "codexSessionSource": "Codex home to import from",
           "codexSessionSourceInfo": "About importing Codex history",
-          "codexSessionSourceTooltip": "Orca runs Codex in an isolated home. Point this at your existing Codex home to import that session history. Empty uses ~/.codex."
+          "codexSessionSourceTooltip": "Orca runs Codex in an isolated home. Point this at your existing Codex home to import that session history. Empty uses ~/.codex.",
+          "storedDefaultUndetected": "Saved as your default, but not detected right now",
+          "noAgentsDetected": "No agents detected. If one is installed, the probe may have timed out."
         },
         "AppIconSelector": {
           "d5a112dc9b": "Next icon",
@@ -14644,7 +14668,12 @@
           "micDisconnected": "Microphone disconnected. Dictation stopped."
         },
         "DictationIndicator": {
-          "335e1bc6cb": "Stop dictation"
+          "335e1bc6cb": "Stop dictation",
+          "7f3660a7ba": "Starting mic…",
+          "f082d0cb9d": "Processing…",
+          "3de5a129e7": "Listening",
+          "4977162383": "Too loud",
+          "25f2b7a6a5": "Speaking"
         }
       },
       "dashboard": {
@@ -15019,7 +15048,17 @@
           "3e3b2c369f": "Cron expression",
           "e81a02d61b": "Enter a valid five-field cron before saving.",
           "968e66d686": "Enter a five-field cron.",
-          "cadb7b0bc9": "invalid"
+          "cadb7b0bc9": "invalid",
+          "f6ca30da23": "Valid custom cron",
+          "a226dbdd40": "Minute",
+          "ec9c1e35df": "Hour",
+          "2d82246d23": "Day",
+          "0e1de0358b": "Month",
+          "77e96bded6": "Weekday"
+        },
+        "AutomationPromptDisclosure": {
+          "showLess": "Show less",
+          "showMore": "Show more"
         },
         "AutomationDetail": {
           "007c8ad874": "Prompt",
@@ -15338,6 +15377,16 @@
                 "done": "Done",
                 "failed": "Failed"
               }
+            }
+          },
+          "schedule": {
+            "label": {
+              "086a5a9fe2": "Invalid schedule",
+              "ba20c92073": "Custom schedule",
+              "a95afb7483": "Hourly at :{{minute}}",
+              "280ccd2701": "Daily at {{time}}",
+              "3f1422adc1": "Weekdays at {{time}}",
+              "cc71e252ba": "{{day}}s at {{time}}"
             }
           }
         },
@@ -16304,7 +16353,62 @@
           "measuringSizesProgress": "Scanning {{value0}}/{{value1}}",
           "measuringSizes": "Scanning sizes",
           "measureSizesFailed": "Could not scan workspace sizes",
-          "selectedCount": "{{value0}} selected"
+          "selectedCount": "{{value0}} selected",
+          "gitStatusCheckFailed": "Git status check failed",
+          "gitStatusUnverified": "Git status could not be verified",
+          "deleteAnyway": "Delete anyway",
+          "forceDeleteProjectionOne": "{{count}} workspace currently shows risk and may need a force delete",
+          "forceDeleteProjectionMany": "{{count}} workspaces currently show risk and may need a force delete",
+          "selectionWithheldOne": "1 selected workspace is hidden by the current filters and was deselected.",
+          "selectionWithheld": "{{value0}} selected workspaces are hidden by the current filters and were deselected.",
+          "selectAllCountOne": "Select 1 safety-checked workspace",
+          "selectAllCount": "Select all {{value0}} safety-checked workspaces",
+          "appliedFilters": "Applied filters",
+          "removeFilter": "Remove filter {{value0}}",
+          "chip": {
+            "idleDays": "Idle {{value0}}d+",
+            "neverVisited": "Never visited",
+            "minSize": "At least {{value0}} MB",
+            "maxSize": "At most {{value0}} MB",
+            "excludesUnsized": "Measured only",
+            "excludesStatusless": "Has a status",
+            "list": "{{value0}}: {{value1}}",
+            "triState": "{{value0}}: {{value1}}",
+            "only": "Only",
+            "exclude": "Excluded",
+            "minAhead": "Ahead {{value0}}+",
+            "minBehind": "Behind {{value0}}+",
+            "branchQuery": "Branch: {{value0}}",
+            "pathPrefix": "Path: {{value0}}",
+            "presence": "{{value0}}: {{value1}}",
+            "has": "Has",
+            "none": "None",
+            "completelyEmpty": "Nothing to lose",
+            "selectableOnly": "Deletable only",
+            "kind": {
+              "status": "Status",
+              "agent": "Agent",
+              "git": "Git",
+              "review": "Review",
+              "reviewState": "Review state",
+              "reviewProvider": "Provider",
+              "ticket": "Ticket",
+              "ticketSource": "Ticket source",
+              "context": "Context",
+              "host": "Host",
+              "repo": "Repo",
+              "blocker": "Blocker",
+              "tier": "Safety",
+              "dismissed": "Ignored",
+              "archived": "Archived",
+              "pinned": "Pinned",
+              "unread": "Unread",
+              "comment": "Comment",
+              "prunable": "Prunable",
+              "locked": "Locked",
+              "retainedAgents": "Finished agents"
+            }
+          }
         },
         "scan": {
           "progress": "Scanning workspaces ({{value0}}/{{value1}})",
@@ -16317,7 +16421,9 @@
           "readyManyOne": "{{value0}} workspaces found, with 1 cleanup suggestion.",
           "readyManyMany": "{{value0}} workspaces found, with {{value1}} cleanup suggestions.",
           "fallbackRepository": "a repository",
-          "gitListFailed": "Git could not list worktrees"
+          "gitListFailed": "Git could not list worktrees",
+          "readyOne": "1 workspace found.",
+          "readyMany": "{{value0}} workspaces found."
         },
         "relativeTime": {
           "never": "Never",

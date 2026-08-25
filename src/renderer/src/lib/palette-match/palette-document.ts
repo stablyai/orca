@@ -129,8 +129,8 @@ export type PaletteSupportingEvidence = {
 export type PaletteDocumentRank = {
   /** 0 when a recognized exact intent (such as a task URL) produced this row. */
   exactIntent: number
-  /** 0 when query matched at least one direct field; 1 when all matched tokens are container-only. */
-  matchedDirectField: number
+  /** Tokens whose chosen assignment only matched container fields. */
+  containerOnlyTokenCount: number
   /** 0 equality, 1 prefix, 2 word boundary, 3 none — whole query in visible text. */
   wholeQuery: number
   worstQuality: number
@@ -150,7 +150,7 @@ export type PaletteDocumentMatch = {
 
 const RANK_KEYS: readonly (keyof PaletteDocumentRank)[] = [
   'exactIntent',
-  'matchedDirectField',
+  'containerOnlyTokenCount',
   'wholeQuery',
   'worstQuality',
   'usesSupportingEvidence',

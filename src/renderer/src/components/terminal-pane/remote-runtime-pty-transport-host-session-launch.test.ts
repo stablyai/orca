@@ -348,6 +348,89 @@ describe('createRemoteRuntimePtyTransport', () => {
     )
   })
 
+  it('degrades a Kimi resume to a legacy launch when the host predates the resume capability', async () => {
+    const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
+    const transport = createRemoteRuntimePtyTransport('env-1', {
+      worktreeId: 'repo1::/remote/wt',
+      command: "kimi '--session' 'session_431324d7'",
+      launchAgent: 'kimi',
+      resumeProviderSession: { key: 'session_id', id: 'session_431324d7' },
+      tabId: 'tab-1',
+      leafId: '11111111-1111-4111-8111-111111111111'
+    })
+
+    await transport.connect({ url: '', callbacks: {} })
+
+    // Why: the beforeEach host advertises host-authority.v1 but not the Kimi gate, and it answers
+    // the widened ensureAgentSession enum with invalid_argument — not a fallback code. Only the
+    // per-agent probe keeps the pane alive.
+    expect(runtimeCall).not.toHaveBeenCalledWith(
+      expect.objectContaining({ method: 'terminal.ensureAgentSession' })
+    )
+    expect(runtimeCall).toHaveBeenCalledWith(
+      expect.objectContaining({
+        method: 'terminal.create',
+        params: expect.objectContaining({ command: "kimi '--session' 'session_431324d7'" })
+      })
+    )
+  })
+
+  it('claims the Kimi provider session on a host that advertises the resume capability', async () => {
+    runtimeCall.mockImplementation(async (args: { method?: string }) =>
+      args.method === 'status.get'
+        ? {
+            id: 'rpc-status',
+            ok: true,
+            result: {
+              runtimeProtocolVersion: 3,
+              minCompatibleRuntimeClientVersion: 2,
+              capabilities: ['agent-session.host-authority.v1', 'agent-session.kimi-resume.v1']
+            },
+            _meta: { runtimeId: 'runtime-remote' }
+          }
+        : {
+            id: 'rpc-create',
+            ok: true,
+            result: {
+              terminal: {
+                handle: 'term-remote',
+                worktreeId: 'repo1::/remote/wt',
+                title: null,
+                surface: 'background'
+              }
+            },
+            _meta: { runtimeId: 'runtime-remote' }
+          }
+    )
+    const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
+    const transport = createRemoteRuntimePtyTransport('env-1', {
+      worktreeId: 'repo1::/remote/wt',
+      command: "kimi '--session' 'session_431324d7'",
+      launchAgent: 'kimi',
+      resumeProviderSession: { key: 'session_id', id: 'session_431324d7' },
+      tabId: 'tab-1',
+      leafId: '11111111-1111-4111-8111-111111111111'
+    })
+
+    await transport.connect({ url: '', callbacks: {} })
+
+    expect(runtimeCall).toHaveBeenCalledWith(
+      expect.objectContaining({
+        method: 'terminal.ensureAgentSession',
+        params: expect.objectContaining({
+          agent: 'kimi',
+          providerSession: { key: 'session_id', id: 'session_431324d7' }
+        })
+      })
+    )
+    expect(runtimeCall).not.toHaveBeenCalledWith(
+      expect.objectContaining({
+        method: 'terminal.create',
+        params: expect.objectContaining({ command: expect.any(String) })
+      })
+    )
+  })
+
   it('treats an explicitly killed remote session as normal retirement', async () => {
     runtimeCall.mockImplementation(async (args: { method?: string }) =>
       args.method === 'terminal.create'

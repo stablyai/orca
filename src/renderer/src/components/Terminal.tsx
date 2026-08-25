@@ -119,6 +119,7 @@ import {
   TERMINAL_HIDDEN_WORKTREE_RETENTION_TTL_MS,
   countEvictionExemptTabRoutes,
   formatEvictionExemptRouteCounts,
+  createTerminalWorktreeTopologyProjection,
   hasPendingRetentionSpawnWork,
   selectForceParkEvictableTabIds,
   selectRetentionForceParkedTerminalWorktrees,
@@ -191,11 +192,13 @@ import {
 } from './terminal-pane/use-manual-terminal-worktree-parking'
 import { EDITOR_TAB_CONTENT_TYPES, getEditorCmdSaveFileId } from './editor/editor-cmd-save-target'
 import { getClientCreationActionPolicy } from '@/lib/client-creation-action-policy'
+import type { WorktreeTabBucketProjection } from '@/lib/worktree-tab-bucket-projection'
 
 const EditorPanel = lazy(() => import('./editor/EditorPanel'))
 
 // Why: gate handler runs after a dialog advances so a stray carry-over click can't act on the next dialog; ~200ms absorbs a physical double-click while staying responsive.
 const CLOSE_DIALOG_DEBOUNCE_MS = 200
+const EMPTY_TERMINAL_TABS: TerminalTab[] = []
 type TerminalStoreSnapshot = ReturnType<typeof useAppStore.getState>
 
 function showClientCreationActionError(error: unknown): void {
@@ -292,8 +295,19 @@ function getKeybindingContext(target: EventTarget | null): KeybindingContext {
     ? 'terminal'
     : 'app'
 }
+function LiveTerminalTabBar(
+  props: Omit<React.ComponentProps<typeof TabBar>, 'tabs'>
+): React.JSX.Element {
+  const tabs = useAppStore((state) => state.tabsByWorktree[props.worktreeId] ?? EMPTY_TERMINAL_TABS)
+  return <TabBar {...props} tabs={tabs} />
+}
 
 function Terminal(): React.JSX.Element | null {
+  const terminalTopologyProjectionRef = useRef<WorktreeTabBucketProjection<
+    TerminalTab,
+    TerminalTab
+  > | null>(null)
+  terminalTopologyProjectionRef.current ??= createTerminalWorktreeTopologyProjection()
   const mountedWorktreeIdsRef = useRef(new Set<string>())
   // Why an array: browser-guest eviction needs activation order (LRU), not just membership.
   const browserGuestWorktreeRecencyRef = useRef<string[]>([])
@@ -324,7 +338,12 @@ function Terminal(): React.JSX.Element | null {
     getResolvedExecutionHostIdForWorktree(s, renderedActiveWorktreeId)
   )
   const activeView = useAppStore((s) => s.activeView)
-  const tabsByWorktree = useAppStore((s) => s.tabsByWorktree)
+  // Why: terminal titles are leaf chrome. The root host only subscribes to
+  // mount/parking semantics; a real transition publishes fresh tab objects,
+  // while LiveTerminalTabBar reads title-only updates from the active bucket.
+  const tabsByWorktree = useAppStore((s) =>
+    terminalTopologyProjectionRef.current!.project(s.tabsByWorktree)
+  )
   const pendingStartupByTabId = useAppStore((s) => s.pendingStartupByTabId)
   const terminalParkingEnabled = useAppStore((s) => s.settings?.terminalHiddenViewParking !== false)
   const terminalSshParkingEnabled = useAppStore((s) => s.settings?.terminalSshViewParking !== false)
@@ -913,6 +932,7 @@ function Terminal(): React.JSX.Element | null {
   // Worktree cold-park policy: hiddenSince bookkeeping, parked-set selection, and one recheck timer per deadline so React re-renders when hysteresis elapses instead of polling.
   useEffect(() => {
     const parkingTimers = terminalWorktreeParkingTimersRef.current
+    const parkingTabsByWorktree = useAppStore.getState().tabsByWorktree
     for (const timer of parkingTimers.values()) {
       window.clearTimeout(timer)
     }
@@ -975,7 +995,7 @@ function Terminal(): React.JSX.Element | null {
 
       retentionCandidates.push({
         worktreeId,
-        terminalTabs: tabsByWorktree[worktreeId] ?? [],
+        terminalTabs: parkingTabsByWorktree[worktreeId] ?? [],
         isVisible,
         shouldMeasureHiddenWorktree,
         hasActivityTerminalPortal,
@@ -1012,7 +1032,7 @@ function Terminal(): React.JSX.Element | null {
       })
     // Why: a worktree with any watcher-uncoverable tab must never park, or it goes silent for bells/titles/completions (sank the first parking attempt).
     for (const worktreeId of Array.from(nextParkedTerminalWorktreeIds)) {
-      if (!worktreeTabsAreWatcherCovered(worktreeId, tabsByWorktree[worktreeId] ?? [])) {
+      if (!worktreeTabsAreWatcherCovered(worktreeId, parkingTabsByWorktree[worktreeId] ?? [])) {
         nextParkedTerminalWorktreeIds.delete(worktreeId)
       }
     }
@@ -1022,7 +1042,7 @@ function Terminal(): React.JSX.Element | null {
     // is the accepted cost of bounding retention.
     const retentionBudgetCandidates: TerminalWorktreeRetentionCandidate[] = retentionCandidates.map(
       (candidate) => {
-        const tabs = tabsByWorktree[candidate.worktreeId] ?? []
+        const tabs = parkingTabsByWorktree[candidate.worktreeId] ?? []
         const parkEligible = canParkTerminalWorktreeRenderers({
           ...candidate,
           // Why nulled: the post-measure cool-down is a timing gate, not a
@@ -1079,7 +1099,7 @@ function Terminal(): React.JSX.Element | null {
     const repos = useAppStore.getState().repos
     const nextEvictionExemptTabIds = new Set<string>()
     for (const worktreeId of forceParkedWorktreeIds) {
-      const forceParkedTabs = tabsByWorktree[worktreeId] ?? []
+      const forceParkedTabs = parkingTabsByWorktree[worktreeId] ?? []
       const exemptTabIds = selectEvictionExemptTerminalTabIds(worktreeId, forceParkedTabs)
       for (const tabId of exemptTabIds) {
         nextEvictionExemptTabIds.add(tabId)
@@ -1768,9 +1788,13 @@ function Terminal(): React.JSX.Element | null {
       }
       const currentTabs = state.browserTabsByWorktree[owningWorktreeId] ?? []
       if (currentTabs.length <= 1) {
-        destroyWorkspaceWebviews(state.browserPagesByWorkspace, tabId)
+        const hasUnifiedEntry = Object.values(state.unifiedTabsByWorktree).some((tabs) =>
+          tabs.some((tab) => tab.contentType === 'browser' && tab.entityId === tabId)
+        )
         closeBrowserTab(tabId)
-        if (state.activeWorktreeId === owningWorktreeId) {
+        // closeBrowserTab announces the MRU target before guest teardown can trigger bridge fallback.
+        destroyWorkspaceWebviews(state.browserPagesByWorkspace, tabId)
+        if (!hasUnifiedEntry && state.activeWorktreeId === owningWorktreeId) {
           const worktreeFile = state.openFiles.find((file) => file.worktreeId === owningWorktreeId)
           if (worktreeFile) {
             setActiveFile(worktreeFile.id)
@@ -1787,24 +1811,11 @@ function Terminal(): React.JSX.Element | null {
         }
         return
       }
-      if (state.activeWorktreeId === owningWorktreeId && tabId === state.activeBrowserTabId) {
-        const idx = currentTabs.findIndex((tab) => tab.id === tabId)
-        const nextTab = currentTabs[idx + 1] ?? currentTabs[idx - 1]
-        if (nextTab) {
-          setActiveBrowserTab(nextTab.id)
-        }
-      }
-      destroyWorkspaceWebviews(state.browserPagesByWorkspace, tabId)
       closeBrowserTab(tabId)
+      // closeBrowserTab announces the MRU target before guest teardown can trigger bridge fallback.
+      destroyWorkspaceWebviews(state.browserPagesByWorkspace, tabId)
     },
-    [
-      closeBrowserTab,
-      setActiveBrowserTab,
-      setActiveFile,
-      setActiveTab,
-      setActiveTabType,
-      setActiveWorktree
-    ]
+    [closeBrowserTab, setActiveFile, setActiveTab, setActiveTabType, setActiveWorktree]
   )
 
   const handlePtyExit = useCallback(
@@ -1873,8 +1884,8 @@ function Terminal(): React.JSX.Element | null {
         } else if (
           (state.browserTabsByWorktree[activeWorktreeId] ?? []).some((tab) => tab.id === id)
         ) {
-          destroyWorkspaceWebviews(state.browserPagesByWorkspace, id)
           closeBrowserTab(id)
+          destroyWorkspaceWebviews(state.browserPagesByWorkspace, id)
         } else if (unifiedTab?.contentType === 'simulator') {
           // Why: simulator tabs live only in the unified-tab store, so the
           // entity-store checks above never match them.
@@ -2460,10 +2471,9 @@ function Terminal(): React.JSX.Element | null {
         !effectiveActiveLayout &&
         titlebarTabsTarget &&
         createPortal(
-          <TabBar
-            tabs={tabs}
-            activeTabId={activeTabId}
+          <LiveTerminalTabBar
             worktreeId={renderedActiveWorktreeId}
+            activeTabId={activeTabId}
             onActivate={handleActivateTab}
             onClose={handleCloseTab}
             onCloseOthers={handleCloseOthers}

@@ -34,11 +34,11 @@ const MAX_MARKDOWN_BYTES = 256 * 1024
 // them for a few seconds is what bounds that fan-out.
 export const SKILL_ROOT_SCAN_TTL_MS = 10_000
 // Why: sized off the root formula, not a round number. One scan builds
-// `12 fixed home roots + 2 per local repo (+ cwd) + plugin roots`, so a bound
+// `17 fixed home roots + 7 per local repo (+ cwd) + plugin roots`, so a bound
 // smaller than a single scan's root count makes that scan evict its own earlier
 // entries and the cache degrades to a ~0% hit rate — exactly the walk this
 // exists to prevent. The live key space is the union across targets — the fixed
-// home roots plus two per repo plus two per distinct workspace cwd — so this holds
+// home roots plus seven per repo plus seven per distinct workspace cwd — so this holds
 // a few hundred repos with panes open, not an unbounded install. Past that the LRU
 // keeps the hot home roots and the repo roots thrash, which degrades rather than
 // breaks. Most repo roots do not exist, and a missing root caches as

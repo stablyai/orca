@@ -16,7 +16,7 @@ import {
 import { getTerminalTabColdParkRecheckDelayMs } from './terminal-cold-park-recheck-deadlines'
 import {
   TERMINAL_TAB_COLD_PARK_DELAY_MS,
-  selectPairedRuntimeParkingEnvironmentIds,
+  selectPairedRuntimeParkingEnvironmentIdsFromState,
   selectColdParkedTerminalTabs
 } from './terminal-hidden-view-parking'
 import {
@@ -105,10 +105,8 @@ export function useTerminalTabColdParking(args: {
   const terminalSshParkingEnabled = useAppStore(
     (state) => state.settings?.terminalSshViewParking !== false
   )
-  const runtimeStatusByEnvironmentId = useAppStore((state) => state.runtimeStatusByEnvironmentId)
-  const pairedRuntimeParkingEnvironmentIds = useMemo(
-    () => selectPairedRuntimeParkingEnvironmentIds(runtimeStatusByEnvironmentId),
-    [runtimeStatusByEnvironmentId]
+  const pairedRuntimeParkingEnvironmentIds = useAppStore(
+    selectPairedRuntimeParkingEnvironmentIdsFromState
   )
   const sleepingAgentSessionsByPaneKey = useAppStore(
     (state) => state.sleepingAgentSessionsByPaneKey
@@ -254,7 +252,7 @@ export function useTerminalTabColdParking(args: {
     activeTerminalTabId,
     isWorktreeActive,
     pendingStartupByTabId,
-    runtimeStatusByEnvironmentId,
+    pairedRuntimeParkingEnvironmentIds,
     shouldMeasureHiddenWorktree,
     terminalParkingEnabled,
     terminalSshParkingEnabled,

@@ -1,7 +1,13 @@
 import type { StateCreator } from 'zustand'
 import type { AppState } from '../types'
-import type { ClickUpConnectionStatus, ClickUpTask, ClickUpTaskFilter, ClickUpViewer, ClickUpWorkspaceSelection } from '../../../../shared/clickup-types'
-import type { CacheEntry } from './github'
+import type {
+  ClickUpConnectionStatus,
+  ClickUpTask,
+  ClickUpTaskFilter,
+  ClickUpViewer,
+  ClickUpWorkspaceSelection
+} from '../../../../shared/clickup-types'
+import type { CacheEntry } from '../github/cache-model'
 import {
   clickUpConnect,
   clickUpDisconnect,

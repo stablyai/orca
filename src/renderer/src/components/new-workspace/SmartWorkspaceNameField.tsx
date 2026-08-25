@@ -62,6 +62,7 @@ import {
   getVisibleBranchResults,
   getVisibleHeldProviderResults,
   isBlockingJiraUrlIntent,
+  isBlockingTaskUrlResolution,
   type SmartNameMode,
   type SmartWorkspaceSourceRow
 } from './smart-workspace-source-results'
@@ -683,6 +684,20 @@ export default function SmartWorkspaceNameField({
   const parsedGhLink = useMemo(
     () => (sourceQueryWithinLimit ? parseGitHubIssueOrPRLink(debouncedQuery) : null),
     [debouncedQuery, sourceQueryWithinLimit]
+  )
+  const githubUrlIntent = useMemo(
+    () =>
+      isSmartWorkspaceSourceQueryWithinLimit(value) && (mode === 'smart' || mode === 'github')
+        ? parseGitHubIssueOrPRLink(value)
+        : null,
+    [mode, value]
+  )
+  const gitlabUrlIntent = useMemo(
+    () =>
+      isSmartWorkspaceSourceQueryWithinLimit(value) && (mode === 'smart' || mode === 'gitlab')
+        ? parseGitLabIssueOrMRLink(value)
+        : null,
+    [mode, value]
   )
   const linearUrlIntent = useMemo(
     () => parseBoundedSmartWorkspaceLinearIssueUrlIntent(value),
@@ -1356,6 +1371,7 @@ export default function SmartWorkspaceNameField({
         value,
         debouncedQuery
       }),
+      githubUrlIntent,
       clickUpAvailable,
       clickUpTasks: getVisibleHeldProviderResults({
         items: clickUpTasks,
@@ -1368,6 +1384,7 @@ export default function SmartWorkspaceNameField({
         value,
         debouncedQuery
       }),
+      gitlabUrlIntent,
       jiraIntent: jiraSource.intent,
       jiraIssue: jiraSource.issue,
       jiraIssues: getVisibleHeldProviderResults({
@@ -1396,8 +1413,10 @@ export default function SmartWorkspaceNameField({
     clickUpTasks,
     debouncedQuery,
     githubItems,
+    githubUrlIntent,
     gitlabSourceAvailable,
     gitlabItems,
+    gitlabUrlIntent,
     jiraSource.accountChoices,
     jiraSource.intent,
     jiraSource.issue,
@@ -1463,6 +1482,12 @@ export default function SmartWorkspaceNameField({
     linearAvailable &&
     sourceIntent !== 'linear' &&
     (linearLoading || settledLinearUrlQuery !== linearQuery.trim())
+  const blockingTaskUrlResolution = isBlockingTaskUrlResolution({
+    sourceIntent: sourceIntent === 'github' || sourceIntent === 'gitlab' ? sourceIntent : null,
+    isQueryStale,
+    githubLoading,
+    gitlabLoading
+  })
 
   const resolvedCommandValue = resolveSmartWorkspaceCommandValue({
     currentValue: commandValue,
@@ -2088,7 +2113,7 @@ export default function SmartWorkspaceNameField({
                           handleEmojiSelect(selectedEmojiSuggestion)
                           return
                         }
-                        if (unresolvedLinearUrlIntent) {
+                        if (unresolvedLinearUrlIntent || blockingTaskUrlResolution) {
                           event.preventDefault()
                           return
                         }
@@ -2530,9 +2555,7 @@ function RowLabel({
   if (row.kind === 'clickup') {
     return (
       <span className="min-w-0 truncate">
-        <span className="font-medium text-foreground">
-          {row.task.customId ?? row.task.id}
-        </span>{' '}
+        <span className="font-medium text-foreground">{row.task.customId ?? row.task.id}</span>{' '}
         {row.task.name}
       </span>
     )

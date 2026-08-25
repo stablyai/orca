@@ -322,6 +322,7 @@ describe('workspace cleanup scan', () => {
       {
         repoId: 'repo-1',
         repoName: 'Repo',
+        executionHostId: 'local',
         message: 'Git could not list worktrees.'
       }
     ])
@@ -344,6 +345,7 @@ describe('workspace cleanup scan', () => {
         {
           repoId: 'repo-1',
           repoName: 'Repo',
+          executionHostId: 'local',
           message: 'Timed out listing worktrees.'
         }
       ]

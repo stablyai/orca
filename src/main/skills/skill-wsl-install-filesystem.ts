@@ -1,6 +1,4 @@
-import { execFile } from 'node:child_process'
 import { join, posix } from 'node:path'
-import { promisify } from 'node:util'
 import type { SkillPackageManifestV1 } from '../../shared/skill-package-manifest'
 import { parseWslUncPath } from '../../shared/wsl-paths'
 import {
@@ -11,10 +9,11 @@ import {
 import type { SkillInstallFilesystem, SkillInstalledFileMode } from './skill-install-filesystem'
 import { SKILL_INSTALL_PROVIDERS } from '../../shared/skill-install-providers'
 import type { SkillProviderRootOverrides } from './skill-provider-destinations'
+import { runWslProcess } from '../wsl/wsl-runner'
 
-const execFileAsync = promisify(execFile)
 const BATCH_FILE_COUNT = 8
 const GUEST_COMMAND_TIMEOUT_MS = 30_000
+const GUEST_COMMAND_MAX_OUTPUT_BYTES = 64 * 1024
 
 function isWindowsBackedGuestPath(path: string): boolean {
   return /^\/mnt\/[a-z](?:\/|$)/iu.test(path)
@@ -212,21 +211,22 @@ export class WslSkillInstallFilesystem implements SkillInstallFilesystem {
   }
 
   private async runOutput(script: string, args: string[]): Promise<string> {
-    try {
-      const { stdout } = await execFileAsync(
-        'wsl.exe',
-        ['-d', this.distro, '--exec', 'sh', '-c', script, 'orca-skill', ...args],
-        {
-          encoding: 'utf8',
-          timeout: GUEST_COMMAND_TIMEOUT_MS,
-          windowsHide: true,
-          maxBuffer: 64 * 1024
-        }
-      )
-      return stdout.trim()
-    } catch (error) {
-      throw Object.assign(new Error('skill-install-wsl-guest-operation-failed'), { cause: error })
+    const result = await runWslProcess({
+      distro: this.distro,
+      loginPath: 'none',
+      script,
+      // POSIX file operations; declared because the payload is opaque here.
+      shell: 'sh',
+      args,
+      timeoutMs: GUEST_COMMAND_TIMEOUT_MS,
+      maxOutputBytes: GUEST_COMMAND_MAX_OUTPUT_BYTES
+    })
+    if (result.code !== 0 || result.timedOut) {
+      throw Object.assign(new Error('skill-install-wsl-guest-operation-failed'), {
+        cause: new Error(`wsl exited ${result.code}: ${result.stderr}`)
+      })
     }
+    return result.stdout.trim()
   }
 }
 
