@@ -46,6 +46,26 @@ describe('workspace path launch wiring', () => {
     expect(senderSendIndex).toBeGreaterThan(flushIndex)
   })
 
+  it('revokes bridge readiness when the renderer navigates or its webContents die', () => {
+    const assignmentIndex = mainSource.indexOf('mainWindow = window')
+    const resetOnLoadIndex = mainSource.indexOf(
+      "window.webContents.on('did-start-loading'",
+      assignmentIndex
+    )
+    const resetOnDestroyedIndex = mainSource.indexOf(
+      "window.webContents.on('destroyed'",
+      assignmentIndex
+    )
+    expect(resetOnLoadIndex).toBeGreaterThan(assignmentIndex)
+    expect(resetOnDestroyedIndex).toBeGreaterThan(resetOnLoadIndex)
+    expect(mainSource.slice(resetOnLoadIndex, resetOnLoadIndex + 200)).toContain(
+      'workspacePathBridgeAttached = false'
+    )
+    expect(mainSource.slice(resetOnDestroyedIndex, resetOnDestroyedIndex + 200)).toContain(
+      'workspacePathBridgeAttached = false'
+    )
+  })
+
   it('accepts Finder/Dock folder opens through the open-file event', () => {
     expect(mainSource).toContain("app.on('open-file'")
   })

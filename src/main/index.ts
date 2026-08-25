@@ -1688,6 +1688,13 @@ function openMainWindow(options: { revealOnDidFinishLoad?: boolean } = {}): Brow
     stopAllSyntheticTitleSpinners()
   })
   mainWindow = window
+  // Why: a reload tears the folder-launch listener down; readiness must be re-earned via the bridge handshake.
+  window.webContents.on('did-start-loading', () => {
+    workspacePathBridgeAttached = false
+  })
+  window.webContents.on('destroyed', () => {
+    workspacePathBridgeAttached = false
+  })
   window.on('show', resumeSyntheticTitleSpinnerTimer)
   window.on('restore', resumeSyntheticTitleSpinnerTimer)
   window.on('hide', stopSyntheticTitleSpinnerTimer)
