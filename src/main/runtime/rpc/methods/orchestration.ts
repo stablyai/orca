@@ -27,6 +27,7 @@ import {
   resolveBareOrchestrationRecipient,
   type SendRecipientWarning
 } from './orchestration-recipient-routing'
+import { buildInjectRejectionMessage } from './orchestration-inject-rejection-message'
 import { resolveRunScope } from './orchestration-run-scope'
 import { ORCHESTRATION_RUN_METHODS } from './orchestration-runs'
 import { ORCHESTRATION_WORKER_METHODS } from './orchestration-worker-methods'
@@ -1643,11 +1644,7 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
       if (params.inject) {
         const hasAgent = await runtime.isTerminalRunningAgent(to)
         if (!hasAgent) {
-          throw new Error(
-            `Cannot dispatch --inject to terminal ${to}: no recognized agent detected. ` +
-              'Start an agent CLI (e.g. claude, codex, gemini, droid, cursor) in the terminal first, ' +
-              'or dispatch without --inject and send the prompt manually.'
-          )
+          throw new Error(buildInjectRejectionMessage(to))
         }
       }
 
