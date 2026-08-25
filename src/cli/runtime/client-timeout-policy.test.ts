@@ -4,6 +4,11 @@ import { join } from 'node:path'
 import { createServer, type Server, type Socket } from 'node:net'
 import { afterEach, describe, expect, it } from 'vitest'
 import { RuntimeClient } from './client'
+import {
+  COLLABORATION_CHECKPOINT_WAIT_BUDGET_MS,
+  LONG_POLL_CLIENT_GRACE_MS,
+  resolveMethodTimeoutMs
+} from './runtime-request-timeout'
 
 const servers = new Set<Server>()
 const sockets = new Set<Socket>()
@@ -61,5 +66,73 @@ describe.skipIf(process.platform === 'win32')('RuntimeClient timeout policy', ()
     const response = await client.call<{ satisfied: boolean }>('terminal.wait')
 
     expect(response.result).toEqual({ satisfied: true })
+  })
+})
+
+describe('resolveMethodTimeoutMs', () => {
+  it('gives collaborationCheckpoint wait=true an explicit timeoutMs plus grace', () => {
+    expect(
+      resolveMethodTimeoutMs(
+        'orchestration.collaborationCheckpoint',
+        { wait: true, timeoutMs: 5_000 },
+        10_000
+      )
+    ).toBe(5_000 + LONG_POLL_CLIENT_GRACE_MS)
+  })
+
+  it('uses the default collaboration wait budget plus grace when wait=true omits timeoutMs', () => {
+    expect(
+      resolveMethodTimeoutMs('orchestration.collaborationCheckpoint', { wait: true }, 10_000)
+    ).toBe(COLLABORATION_CHECKPOINT_WAIT_BUDGET_MS + LONG_POLL_CLIENT_GRACE_MS)
+  })
+
+  it('keeps the default budget even when the client is configured below 60s', () => {
+    expect(
+      resolveMethodTimeoutMs('orchestration.collaborationCheckpoint', { wait: true }, 1_000)
+    ).toBeGreaterThanOrEqual(COLLABORATION_CHECKPOINT_WAIT_BUDGET_MS)
+  })
+
+  it('never shortens below the client request timeout', () => {
+    expect(
+      resolveMethodTimeoutMs(
+        'orchestration.collaborationCheckpoint',
+        { wait: true, timeoutMs: 1_000 },
+        120_000
+      )
+    ).toBe(120_000)
+  })
+
+  it('applies the default budget for a non-finite or non-positive timeoutMs', () => {
+    for (const timeoutMs of [0, -5, Number.NaN, 'nope']) {
+      expect(
+        resolveMethodTimeoutMs(
+          'orchestration.collaborationCheckpoint',
+          { wait: true, timeoutMs },
+          10_000
+        )
+      ).toBe(COLLABORATION_CHECKPOINT_WAIT_BUDGET_MS + LONG_POLL_CLIENT_GRACE_MS)
+    }
+  })
+
+  it('uses the ordinary request timeout for a non-wait checkpoint', () => {
+    for (const params of [undefined, {}, { wait: false }, { timeoutMs: 5_000 }]) {
+      expect(resolveMethodTimeoutMs('orchestration.collaborationCheckpoint', params, 25_000)).toBe(
+        25_000
+      )
+    }
+  })
+
+  it('leaves orchestration.check wait=true behavior unchanged (no default budget)', () => {
+    expect(resolveMethodTimeoutMs('orchestration.check', { wait: true }, 10_000)).toBe(10_000)
+    expect(
+      resolveMethodTimeoutMs('orchestration.check', { wait: true, timeoutMs: 5_000 }, 10_000)
+    ).toBe(5_000 + LONG_POLL_CLIENT_GRACE_MS)
+  })
+
+  it('leaves terminal.wait behavior unchanged (no default budget)', () => {
+    expect(resolveMethodTimeoutMs('terminal.wait', undefined, 10_000)).toBe(10_000)
+    expect(resolveMethodTimeoutMs('terminal.wait', { timeoutMs: 5_000 }, 10_000)).toBe(
+      5_000 + LONG_POLL_CLIENT_GRACE_MS
+    )
   })
 })
