@@ -23,7 +23,9 @@ describe('browser route HTTP/3 and Direct Sockets egress under Electron', () => 
     expect(baseline.directSockets).toEqual({ tcp: 'function', udp: 'function', server: 'function' })
     // The constructor is reachable; whether it returns before ReportBadMessage lands is a race, so the kill is the oracle.
     expect(baseline.directSocketsConstruct).not.toMatch(/^threw:ReferenceError/)
-    expect(baseline.rendererGone).toBe('killed')
+    // The reason string is platform-dependent for the same ReportBadMessage kill ('crashed' on
+    // Windows); the oracle is that the renderer died at all.
+    expect(['killed', 'crashed']).toContain(baseline.rendererGone)
     expect(guarded.directSockets).toEqual({
       tcp: 'undefined',
       udp: 'undefined',
