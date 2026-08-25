@@ -39,6 +39,8 @@ export type PreparedFullSubmit = FullSubmitSource & {
   linkedLinearIssue: string | undefined
   linkedLinearIssueWorkspaceId: string | undefined
   linkedLinearIssueOrganizationUrlKey: string | undefined
+  linkedClickUpTaskId: string | undefined
+  linkedClickUpWorkspaceId: string | undefined
   effectiveBranchNameOverride: string | undefined
   createDisplayName: string | undefined
   pendingFirstAgentMessageRename: boolean
@@ -70,6 +72,8 @@ export type PreparedQuickSubmit = QuickSubmitSource & {
   linkedLinearIssue: string | undefined
   linkedLinearIssueWorkspaceId: string | undefined
   linkedLinearIssueOrganizationUrlKey: string | undefined
+  linkedClickUpTaskId: string | undefined
+  linkedClickUpWorkspaceId: string | undefined
   effectiveBranchNameOverride: string | undefined
   submitBaseBranch: string | undefined
   createDisplayName: string | undefined

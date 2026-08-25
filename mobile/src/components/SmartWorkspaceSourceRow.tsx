@@ -57,6 +57,13 @@ function resolveRowContent(row: SourceRow): RowContent {
         subtitle: `${row.issue.identifier} · ${row.issue.team?.key ?? 'Linear'}`,
         status: row.issue.state?.name
       }
+    case 'clickup':
+      return {
+        icon: <TaskProviderLogo provider="clickup" size={16} color={colors.textSecondary} />,
+        title: row.task.name,
+        subtitle: `${row.task.customId ?? row.task.id} · ${row.task.list.name}`,
+        status: row.task.status.name
+      }
     default:
       return { icon: <CaseSensitive size={16} color={colors.textSecondary} />, title: '' }
   }

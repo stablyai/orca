@@ -36,7 +36,8 @@ export function useNewWorkspaceRuntimeContext(
     void (async () => {
       const probes = Promise.allSettled([
         client.sendRequest('preflight.check'),
-        client.sendRequest('linear.status')
+        client.sendRequest('linear.status'),
+        client.sendRequest('clickup.status')
       ])
       const [settingsRes, uiRes] = await Promise.allSettled([
         client.sendRequest('settings.get'),
@@ -63,7 +64,7 @@ export function useNewWorkspaceRuntimeContext(
         setTrustedOrcaHooks(ui?.trustedOrcaHooks ?? {})
       }
 
-      const [preflightRes, linearRes] = await probes
+      const [preflightRes, linearRes, clickUpRes] = await probes
       if (stale) {
         return
       }
@@ -73,11 +74,15 @@ export function useNewWorkspaceRuntimeContext(
       const linearConnected =
         (settledSuccess(linearRes)?.result as { connected?: boolean } | undefined)?.connected ===
         true
+      const clickUpConnected =
+        (settledSuccess(clickUpRes)?.result as { connected?: boolean } | undefined)?.connected ===
+        true
       const visibleProviders = normalizeVisibleTaskProviders(settingsValue?.visibleTaskProviders)
       setAvailableProviders(
         filterAvailableTaskProviders(visibleProviders, {
           gitlabInstalled: glabInstalled,
-          linearConnected
+          linearConnected,
+          clickUpConnected
         }).filter((provider) => visibleProviders.includes(provider))
       )
     })()

@@ -28,6 +28,7 @@ export type SmartNameSelectionKind =
   | 'gitlab-issue'
   | 'branch'
   | 'linear'
+  | 'clickup'
 
 // The pill descriptor the field renders once a source is selected. Same shape
 // as desktop's `SmartWorkspaceNameSelection`.

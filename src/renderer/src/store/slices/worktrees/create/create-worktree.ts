@@ -56,6 +56,8 @@ export function createCreateWorktree(
     options
   ) => {
     const automationProvenanceRequest = options?.automationProvenanceRequest
+    const linkedClickUpTaskId = options?.linkedClickUpTaskId
+    const linkedClickUpWorkspaceId = options?.linkedClickUpWorkspaceId
     const linkedWorkItem = options?.linkedWorkItem
     const linkedTaskSourceContext = options?.linkedTaskSourceContext
     const startupDraft = options?.startupDraft
@@ -98,6 +100,8 @@ export function createCreateWorktree(
               ? { pendingFirstAgentMessageRename: true }
               : {}),
             ...(linkedLinearIssue !== undefined ? { linkedLinearIssue } : {}),
+            ...(linkedClickUpTaskId !== undefined ? { linkedClickUpTaskId } : {}),
+            ...(linkedClickUpWorkspaceId !== undefined ? { linkedClickUpWorkspaceId } : {}),
             ...(linkedLinearIssueWorkspaceId !== undefined ? { linkedLinearIssueWorkspaceId } : {}),
             ...(linkedLinearIssueOrganizationUrlKey !== undefined
               ? { linkedLinearIssueOrganizationUrlKey }
@@ -161,6 +165,10 @@ export function createCreateWorktree(
                       ? { pendingFirstAgentMessageRename: true }
                       : {}),
                     ...(linkedLinearIssue !== undefined ? { linkedLinearIssue } : {}),
+                    ...(linkedClickUpTaskId !== undefined ? { linkedClickUpTaskId } : {}),
+                    ...(linkedClickUpWorkspaceId !== undefined
+                      ? { linkedClickUpWorkspaceId }
+                      : {}),
                     ...(linkedLinearIssueWorkspaceId !== undefined
                       ? { linkedLinearIssueWorkspaceId }
                       : {}),

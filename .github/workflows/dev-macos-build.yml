@@ -1,0 +1,72 @@
+name: Development macOS Build
+
+on:
+  push:
+    branches:
+      - clickup-issues
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: dev-macos-build-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-macos:
+    # Why: this personal build must never run from or publish to the upstream repository.
+    if: github.repository == 'luizeof/orca'
+    runs-on: macos-15
+    timeout-minutes: 60
+    env:
+      CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+      NODE_OPTIONS: --max-old-space-size=4096
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v6
+        with:
+          run_install: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version-file: package.json
+          cache: pnpm
+
+      - name: Cache Electron downloads
+        uses: actions/cache@v5
+        with:
+          path: |
+            ~/Library/Caches/electron
+            ~/Library/Caches/electron-builder
+          key: electron-builder-dev-macos-${{ hashFiles('pnpm-lock.yaml') }}
+          restore-keys: |
+            electron-builder-dev-macos-
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Verify macOS entitlements
+        run: pnpm verify:macos-entitlements
+
+      - name: Build unsigned macOS installers
+        run: pnpm build:mac
+
+      - name: Upload Apple Silicon and Intel installers
+        uses: actions/upload-artifact@v4
+        with:
+          name: orca-macos-clickup-issues-${{ github.sha }}
+          path: |
+            dist/orca-macos-arm64.dmg
+            dist/orca-macos-arm64.zip
+            dist/orca-macos-x64.dmg
+            dist/orca-macos-x64.zip
+          if-no-files-found: error
+          retention-days: 7

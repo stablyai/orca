@@ -214,6 +214,7 @@ Funciona com **qualquer agente CLI** — se roda em um terminal, roda no Orca.
 - **[Baixe em onOrca.dev](https://onorca.dev/download)**
 - Ou baixe um build diretamente: [macOS Apple Silicon](https://github.com/stablyai/orca/releases/latest/download/orca-macos-arm64.dmg) · [macOS Intel](https://github.com/stablyai/orca/releases/latest/download/orca-macos-x64.dmg) · [Windows (.exe)](https://github.com/stablyai/orca/releases/latest/download/orca-windows-setup.exe) · [Linux AppImage](https://github.com/stablyai/orca/releases/latest/download/orca-linux.AppImage) · [Todos os builds](https://github.com/stablyai/orca/releases/latest)
 - Rodando `orca serve` em um servidor Linux headless? Veja o [guia de servidor Linux headless](../reference/headless-linux-server.md).
+- Usando o ClickUp como contexto de tarefas? Veja o [guia de integração com o ClickUp](../reference/clickup-integration.md).
 
 _Ou por um gerenciador de pacotes:_
 

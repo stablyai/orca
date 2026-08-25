@@ -41,6 +41,7 @@ export type ComposerSourceState = {
     ComposerModel,
     | 'handleSmartLinearIssueSelect'
     | 'handleSmartJiraIssueSelect'
+    | 'handleSmartClickUpTaskSelect'
     | 'handleClearSmartNameSelection'
     | 'smartNameSelection'
   >

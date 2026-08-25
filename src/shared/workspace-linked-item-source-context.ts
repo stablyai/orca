@@ -1,3 +1,4 @@
+import { parseClickUpTaskUrl } from './clickup-task-url'
 import { parseJiraIssueUrl } from './jira-issue-url'
 import { getWorkspaceSourceProvider } from './new-workspace/workspace-source'
 import type { TaskSourceContext } from './task-source-context'
@@ -17,6 +18,7 @@ function resolveLinkedItemProvider(
     title: item.title ?? '',
     ...(item.linearIdentifier ? { linearIdentifier: item.linearIdentifier } : {}),
     ...(item.jiraIdentifier ? { jiraIdentifier: item.jiraIdentifier } : {}),
+    ...(item.clickupIdentifier ? { clickupIdentifier: item.clickupIdentifier } : {}),
     ...(item.repoId ? { repoId: item.repoId } : {})
   })
 }
@@ -35,6 +37,9 @@ export function isWorkspaceLinkedItemSourceContextMatch(
   const itemProvider = resolveLinkedItemProvider(item)
   if (itemProvider !== context.provider) {
     return false
+  }
+  if (itemProvider === 'clickup') {
+    return isClickUpLinkedItemMatch(item, context)
   }
   if (itemProvider !== 'jira') {
     return true
@@ -64,4 +69,31 @@ export function isWorkspaceLinkedItemSourceContextMatch(
     itemUrl.origin === siteUrl.origin &&
     itemUrl.sitePath === siteUrl.sitePath
   )
+}
+
+function isClickUpLinkedItemMatch(
+  item: Pick<WorkspaceLinkedItem, 'type' | 'number' | 'url'> & Partial<WorkspaceLinkedItem>,
+  context: TaskSourceContext
+): boolean {
+  const identity = context.providerIdentity
+  const itemUrl = parseClickUpTaskUrl(item.url)
+  if (
+    item.type !== 'issue' ||
+    item.number !== 0 ||
+    identity?.provider !== 'clickup' ||
+    !identity.workspaceId ||
+    !item.clickupIdentifier ||
+    !itemUrl
+  ) {
+    return false
+  }
+  if (itemUrl.isCustomId && item.clickupIdentifier.toUpperCase() !== itemUrl.taskId) {
+    return false
+  }
+  if (!itemUrl.isCustomId && item.clickupIdentifier !== itemUrl.taskId) {
+    return false
+  }
+  // Why: only the custom-id URL form carries a Workspace id. A native task URL
+  // resolves without one, so it can only be matched on the task identifier.
+  return itemUrl.workspaceId === null || itemUrl.workspaceId === identity.workspaceId
 }

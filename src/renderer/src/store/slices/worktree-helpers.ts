@@ -202,6 +202,8 @@ export type WorktreeSlice = {
       automationProvenanceRequest?: CreateWorktreeArgs['automationProvenanceRequest']
       linkedWorkItem?: WorkspaceLinkedItem | null
       linkedTaskSourceContext?: TaskSourceContext | null
+      linkedClickUpTaskId?: string
+      linkedClickUpWorkspaceId?: string | null
       /** Lets the owning runtime launch and prefill a task agent without first creating an idle shell. */
       startupDraft?: string
       /** True only when `name` came from the creature-name generator; gates host-side retirement. */

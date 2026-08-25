@@ -40,8 +40,10 @@ export type UseSmartWorkspaceSourceArgs = {
   githubAvailable: boolean
   gitlabAvailable: boolean
   linearAvailable: boolean
+  clickUpAvailable: boolean
   mrStateFilter: MrStateFilter
   linearWorkspaceId?: string | null
+  clickupWorkspaceId?: string | null
   repos: readonly PasteRepoCandidate[]
 }
 
@@ -49,6 +51,7 @@ const EMPTY_FAN: SmartFanOutResult = {
   githubItems: [],
   gitlabItems: [],
   linearIssues: [],
+  clickUpTasks: [],
   branches: [],
   needsGitHubRemote: false,
   error: ''
@@ -66,8 +69,10 @@ export function useSmartWorkspaceSource(args: UseSmartWorkspaceSourceArgs) {
     githubAvailable,
     gitlabAvailable,
     linearAvailable,
+    clickUpAvailable,
     mrStateFilter,
     linearWorkspaceId,
+    clickupWorkspaceId,
     repos
   } = args
   const [fan, setFan] = useState<SmartFanOutResult>(EMPTY_FAN)
@@ -109,8 +114,10 @@ export function useSmartWorkspaceSource(args: UseSmartWorkspaceSourceArgs) {
         githubAvailable,
         gitlabAvailable,
         linearAvailable,
+        clickUpAvailable,
         mrStateFilter,
         linearWorkspaceId,
+        clickupWorkspaceId,
         repos,
         dismissedPasteRef,
         repoSlugCache: repoSlugCacheRef.current
@@ -143,8 +150,10 @@ export function useSmartWorkspaceSource(args: UseSmartWorkspaceSourceArgs) {
     githubAvailable,
     gitlabAvailable,
     linearAvailable,
+    clickUpAvailable,
     mrStateFilter,
     linearWorkspaceId,
+    clickupWorkspaceId,
     repos
   ])
 
@@ -157,11 +166,13 @@ export function useSmartWorkspaceSource(args: UseSmartWorkspaceSourceArgs) {
         gitlabItems: paste.gitlab ? [paste.gitlab] : fan.gitlabItems,
         linearAvailable,
         linearIssues: fan.linearIssues,
+        clickUpAvailable,
+        clickUpTasks: fan.clickUpTasks,
         mode,
         resultLimit: RESULT_LIMIT,
         value: query
       }),
-    [fan, gitlabAvailable, linearAvailable, mode, paste, query]
+    [clickUpAvailable, fan, gitlabAvailable, linearAvailable, mode, paste, query]
   )
 
   const dismissCrossRepoPrompt = useCallback(() => {
@@ -188,8 +199,10 @@ async function runSmartSearch(args: {
   githubAvailable: boolean
   gitlabAvailable: boolean
   linearAvailable: boolean
+  clickUpAvailable: boolean
   mrStateFilter: MrStateFilter
   linearWorkspaceId: string | null | undefined
+  clickupWorkspaceId: string | null | undefined
   repos: readonly PasteRepoCandidate[]
   dismissedPasteRef: { current: string }
   repoSlugCache: Map<string, { owner: string; repo: string; host?: string } | null>

@@ -33,6 +33,7 @@ type IssueSourceActionsInput = Pick<
 import { useCallback, useMemo } from 'react'
 import type { LinearIssue } from '../../../../shared/linear/issue-types'
 import type { JiraIssue } from '../../../../shared/jira-types'
+import type { ClickUpTask } from '../../../../shared/clickup-types'
 import {
   toLinearLinkedWorkItem,
   getLinkedItemDisplayName,
@@ -49,6 +50,7 @@ import {
   type LinkedWorkItemSummary
 } from '@/lib/new-workspace'
 import {
+  buildClickUpWorkspaceSource,
   buildJiraWorkspaceSource,
   buildWorkspaceSourceSelection,
   shouldApplyWorkspaceSourceAutoName
@@ -205,6 +207,60 @@ export function useIssueSourceActions(input: IssueSourceActionsInput) {
     ]
   )
 
+  const handleSmartClickUpTaskSelect = useCallback(
+    (task: ClickUpTask, sourceContext: TaskSourceContext): void => {
+      const linkedItem: LinkedWorkItemSummary = {
+        ...buildClickUpWorkspaceSource(task),
+        clickupWorkspaceId: task.workspaceId
+      }
+      setLinkedIssue('')
+      setLinkedPR(null)
+      setLinkedGitLabIssue(null)
+      setLinkedGitLabMR(null)
+      setBaseBranch(undefined)
+      setCompareBaseRef(undefined)
+      setPushTarget(undefined)
+      setBranchNameOverride(undefined)
+      setBranchNameOverridePreservesNameEdits(false)
+      setForkPushWarning(null)
+      branchAutoNameRef.current = ''
+      setLinkedWorkItem(linkedItem)
+      setLinkedTaskSourceContext(sourceContext)
+      const suggestedName =
+        getLinkedWorkItemWorkspaceName(linkedItem)?.seedName ??
+        getLinkedWorkItemSuggestedName(linkedItem)
+      // Why: the ClickUp lookup is async, so a name the user typed while it resolved must survive.
+      if (
+        suggestedName &&
+        shouldApplyWorkspaceSourceAutoName({
+          currentName: name,
+          lastAutoName: lastAutoNameRef.current
+        })
+      ) {
+        setName(suggestedName)
+        lastAutoNameRef.current = suggestedName
+      }
+    },
+    [
+      name,
+      branchAutoNameRef,
+      lastAutoNameRef,
+      setBaseBranch,
+      setBranchNameOverride,
+      setBranchNameOverridePreservesNameEdits,
+      setCompareBaseRef,
+      setForkPushWarning,
+      setLinkedGitLabIssue,
+      setLinkedGitLabMR,
+      setLinkedIssue,
+      setLinkedPR,
+      setLinkedTaskSourceContext,
+      setLinkedWorkItem,
+      setName,
+      setPushTarget
+    ]
+  )
+
   const handleClearSmartNameSelection = useCallback((): void => {
     smartGitHubPrStartPointSelectionRef.current = null
     setLinkedIssue('')
@@ -270,6 +326,7 @@ export function useIssueSourceActions(input: IssueSourceActionsInput) {
   return {
     handleSmartLinearIssueSelect,
     handleSmartJiraIssueSelect,
+    handleSmartClickUpTaskSelect,
     handleClearSmartNameSelection,
     smartNameSelection
   }

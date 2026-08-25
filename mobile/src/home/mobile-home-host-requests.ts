@@ -20,6 +20,10 @@ type HomeLinearStatus = {
   connected?: boolean
 }
 
+type HomeClickUpStatus = {
+  connected?: boolean
+}
+
 export type HomeStatsSetter = (
   updater: (previous: Record<string, HomeStatsSummary>) => Record<string, HomeStatsSummary>
 ) => void
@@ -75,9 +79,10 @@ export function fetchMobileHomeTaskProviders(
   Promise.all([
     sendSingleFlightRequest(client, hostId, 'settings.get'),
     sendSingleFlightRequest(client, hostId, 'preflight.check'),
-    sendSingleFlightRequest(client, hostId, 'linear.status')
+    sendSingleFlightRequest(client, hostId, 'linear.status'),
+    sendSingleFlightRequest(client, hostId, 'clickup.status')
   ])
-    .then(([settingsResponse, preflightResponse, linearResponse]) => {
+    .then(([settingsResponse, preflightResponse, linearResponse, clickUpResponse]) => {
       if (disposed()) {
         return
       }
@@ -89,11 +94,13 @@ export function fetchMobileHomeTaskProviders(
         ? (preflightResponse.result as HomePreflightStatus)
         : null
       const linear = linearResponse.ok ? (linearResponse.result as HomeLinearStatus) : null
+      const clickUp = clickUpResponse.ok ? (clickUpResponse.result as HomeClickUpStatus) : null
       const providers = filterAvailableTaskProviders(
         normalizeVisibleTaskProviders(settings.visibleTaskProviders),
         {
           gitlabInstalled: preflight?.glab?.installed === true,
-          linearConnected: linear?.connected === true
+          linearConnected: linear?.connected === true,
+          clickUpConnected: clickUp?.connected === true
         }
       )
       setProviders((previous) => ({ ...previous, [hostId]: providers }))

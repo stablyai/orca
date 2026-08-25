@@ -48,6 +48,8 @@ export function mergeFolderWorkspace(repo: Repo, worktreeId: string, meta: Workt
     linkedLinearIssue: meta.linkedLinearIssue ?? null,
     linkedLinearIssueWorkspaceId: meta.linkedLinearIssueWorkspaceId ?? null,
     linkedLinearIssueOrganizationUrlKey: meta.linkedLinearIssueOrganizationUrlKey ?? null,
+    linkedClickUpTaskId: meta.linkedClickUpTaskId ?? null,
+    linkedClickUpWorkspaceId: meta.linkedClickUpWorkspaceId ?? null,
     linkedGitLabMR: meta.linkedGitLabMR ?? null,
     linkedGitLabIssue: meta.linkedGitLabIssue ?? null,
     linkedBitbucketPR: meta.linkedBitbucketPR ?? null,

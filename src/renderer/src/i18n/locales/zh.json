@@ -4358,7 +4358,8 @@
           "196c1b5362": "打开 GitLab 任务",
           "0ccba862b8": "打开 GitHub 任务",
           "fee535205b": "任务",
-          "d599269755": "从侧边栏隐藏"
+          "d599269755": "从侧边栏隐藏",
+          "openClickUpTasks": "Open ClickUp tasks"
         },
         "SidebarRepositoryFilterSection": {
           "d3a9c4cea1": "清除",
@@ -4492,7 +4493,8 @@
           "34f03eb0de": "董事会设置",
           "26cbc92150": "工作区板设置",
           "87d24a0c2f": "同步看板和议题状态",
-          "4c2eaa78cc": "移动已关联的工作区时，如果存在匹配的工作流状态，将更新其 Linear 议题状态。"
+          "4c2eaa78cc": "移动已关联的工作区时，如果存在匹配的工作流状态，将更新其 Linear 议题状态。",
+          "taskTrackerSyncDescription": "Moving a linked workspace updates its Linear or ClickUp task when a matching status exists."
         },
         "WorkspaceKanbanStatusLane": {
           "8ad104642b": "空的",
@@ -5112,7 +5114,10 @@
           "b6c7d8e9f0": "无法完成任务状态同步。",
           "c7d8e9f0a1": "已更新 {{value0}} 个",
           "d8e9f0a1b2": "已跳过 {{value0}} 个",
-          "e9f0a1b2c3": "失败 {{value0}} 个"
+          "e9f0a1b2c3": "失败 {{value0}} 个",
+          "clickUpTaskReadFailed": "ClickUp task {{value0}} could not be read.",
+          "clickUpTaskUpdateFailed": "Could not update ClickUp task {{value0}}.",
+          "clickUpTaskSyncFailed": "Could not sync ClickUp task {{value0}}."
         },
         "WorktreeParentPickerPopover": {
           "failedSetParent": "无法设置父工作树",
@@ -14400,6 +14405,78 @@
           "deleteTitle": "删除工件？",
           "deleteDescription": "“{{name}}” 将无法再通过其公共链接访问。",
           "delete": "删除"
+        }
+      },
+      "clickup": {
+        "detail": {
+          "name": "Name",
+          "description": "Description",
+          "status": "Status",
+          "priority": "Priority",
+          "priorityNone": "None",
+          "priorityUrgent": "Urgent",
+          "priorityHigh": "High",
+          "priorityNormal": "Normal",
+          "priorityLow": "Low",
+          "dueDate": "Due date",
+          "comments": "Comments",
+          "commentPlaceholder": "Add a comment…",
+          "addComment": "Add comment",
+          "open": "Open in ClickUp",
+          "startWorkspace": "Start workspace",
+          "save": "Save"
+        },
+        "page": {
+          "connectTitle": "Connect your ClickUp account",
+          "connectDescription": "Browse, create, edit, and start work from ClickUp tasks.",
+          "connect": "Connect ClickUp",
+          "hide": "Hide ClickUp",
+          "allWorkspaces": "All Workspaces",
+          "searchPlaceholder": "Search ClickUp tasks…",
+          "clearSearch": "Clear search",
+          "newTask": "New ClickUp task",
+          "refresh": "Refresh ClickUp tasks",
+          "id": "ID",
+          "name": "Name",
+          "status": "Status",
+          "list": "List",
+          "updated": "Updated",
+          "emptyTitle": "No ClickUp tasks found",
+          "emptyDescription": "Try another filter or search term.",
+          "startWorkspace": "Start workspace",
+          "openTask": "Open in ClickUp",
+          "filterAssigned": "Assigned to me",
+          "filterOpen": "Open",
+          "filterCreated": "Created by me",
+          "filterCompleted": "Completed",
+          "filterAll": "All"
+        },
+        "dialog": {
+          "title": "Connect ClickUp",
+          "description": "Paste a Personal API token. Orca will load every ClickUp Workspace that token can access.",
+          "tokenLabel": "Personal API token",
+          "instructions": "Create the token from ClickUp Settings → Apps. Personal tokens inherit your account permissions.",
+          "openSettings": "Open ClickUp settings",
+          "remoteStorage": "The active remote runtime stores this token with runtime-supported encryption.",
+          "localStorage": "This device stores the token with Electron encrypted storage when available.",
+          "cancel": "Cancel",
+          "connecting": "Connecting…",
+          "connect": "Connect"
+        },
+        "token": {
+          "placeholder": "pk_..."
+        },
+        "create": {
+          "title": "Create ClickUp task",
+          "description": "Choose the destination List, then add the task details.",
+          "list": "List",
+          "loadingLists": "Loading Lists…",
+          "selectList": "Select a List",
+          "name": "Name",
+          "taskDescription": "Description",
+          "cancel": "Cancel",
+          "creating": "Creating…",
+          "submit": "Create task"
         }
       }
     },

@@ -3,6 +3,7 @@ import { CaseSensitive, GitBranch, Github, Gitlab, Sparkles } from 'lucide-react
 
 import { JiraIcon } from '@/components/icons/JiraIcon'
 import { translate } from '@/i18n/i18n'
+import { ClickUpIcon } from '@/components/icons/ClickUpIcon'
 import type { SmartNameMode } from './smart-workspace-source-results'
 
 export type MrStateFilter = 'opened' | 'merged' | 'closed' | 'all'
@@ -69,6 +70,11 @@ export function getSmartWorkspaceNameModes(): SmartWorkspaceNameModeOption[] {
       id: 'jira',
       label: translate('auto.components.new.workspace.SmartWorkspaceNameField.jiraMode', 'Jira'),
       Icon: JiraIcon
+    },
+    {
+      id: 'clickup',
+      label: translate('auto.components.new.workspace.SmartWorkspaceNameField.clickup', 'ClickUp'),
+      Icon: ClickUpIcon
     },
     {
       id: 'gitlab',

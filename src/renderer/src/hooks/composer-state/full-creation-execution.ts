@@ -87,6 +87,8 @@ export function useFullCreationExecution(input: FullCreationExecutionInput) {
         linkedLinearIssue,
         linkedLinearIssueWorkspaceId,
         linkedLinearIssueOrganizationUrlKey,
+        linkedClickUpTaskId,
+        linkedClickUpWorkspaceId,
         effectiveBranchNameOverride,
         createDisplayName,
         pendingFirstAgentMessageRename,
@@ -153,6 +155,8 @@ export function useFullCreationExecution(input: FullCreationExecutionInput) {
           linkedWorkItem: toFolderWorkspaceLinkedTask(submitLinkedWorkItem),
           linkedTaskSourceContext: taskSourceContext,
           nameWasGenerated,
+          ...(linkedClickUpTaskId ? { linkedClickUpTaskId } : {}),
+          ...(linkedClickUpWorkspaceId !== undefined ? { linkedClickUpWorkspaceId } : {}),
           ...(!backendStartup && startupPlan?.draftPrompt
             ? { startupDraft: startupPlan.draftPrompt }
             : {})

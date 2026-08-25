@@ -5062,7 +5062,10 @@
           "b6c7d8e9f0": "タスクステータスの同期を完了できませんでした。",
           "c7d8e9f0a1": "{{value0}} 件更新",
           "d8e9f0a1b2": "{{value0}} 件スキップ",
-          "e9f0a1b2c3": "{{value0}} 件失敗"
+          "e9f0a1b2c3": "{{value0}} 件失敗",
+          "clickUpTaskReadFailed": "ClickUp task {{value0}} could not be read.",
+          "clickUpTaskUpdateFailed": "Could not update ClickUp task {{value0}}.",
+          "clickUpTaskSyncFailed": "Could not sync ClickUp task {{value0}}."
         },
         "WorktreeParentPickerPopover": {
           "failedSetParent": "親ワークツリーを設定できませんでした",
@@ -14342,6 +14345,78 @@
           "deleteTitle": "成果物を削除しますか？",
           "deleteDescription": "「{{name}}」は公開リンクで利用できなくなります。",
           "delete": "削除"
+        }
+      },
+      "clickup": {
+        "detail": {
+          "name": "Name",
+          "description": "Description",
+          "status": "Status",
+          "priority": "Priority",
+          "priorityNone": "None",
+          "priorityUrgent": "Urgent",
+          "priorityHigh": "High",
+          "priorityNormal": "Normal",
+          "priorityLow": "Low",
+          "dueDate": "Due date",
+          "comments": "Comments",
+          "commentPlaceholder": "Add a comment…",
+          "addComment": "Add comment",
+          "open": "Open in ClickUp",
+          "startWorkspace": "Start workspace",
+          "save": "Save"
+        },
+        "page": {
+          "connectTitle": "Connect your ClickUp account",
+          "connectDescription": "Browse, create, edit, and start work from ClickUp tasks.",
+          "connect": "Connect ClickUp",
+          "hide": "Hide ClickUp",
+          "allWorkspaces": "All Workspaces",
+          "searchPlaceholder": "Search ClickUp tasks…",
+          "clearSearch": "Clear search",
+          "newTask": "New ClickUp task",
+          "refresh": "Refresh ClickUp tasks",
+          "id": "ID",
+          "name": "Name",
+          "status": "Status",
+          "list": "List",
+          "updated": "Updated",
+          "emptyTitle": "No ClickUp tasks found",
+          "emptyDescription": "Try another filter or search term.",
+          "startWorkspace": "Start workspace",
+          "openTask": "Open in ClickUp",
+          "filterAssigned": "Assigned to me",
+          "filterOpen": "Open",
+          "filterCreated": "Created by me",
+          "filterCompleted": "Completed",
+          "filterAll": "All"
+        },
+        "dialog": {
+          "title": "Connect ClickUp",
+          "description": "Paste a Personal API token. Orca will load every ClickUp Workspace that token can access.",
+          "tokenLabel": "Personal API token",
+          "instructions": "Create the token from ClickUp Settings → Apps. Personal tokens inherit your account permissions.",
+          "openSettings": "Open ClickUp settings",
+          "remoteStorage": "The active remote runtime stores this token with runtime-supported encryption.",
+          "localStorage": "This device stores the token with Electron encrypted storage when available.",
+          "cancel": "Cancel",
+          "connecting": "Connecting…",
+          "connect": "Connect"
+        },
+        "token": {
+          "placeholder": "pk_..."
+        },
+        "create": {
+          "title": "Create ClickUp task",
+          "description": "Choose the destination List, then add the task details.",
+          "list": "List",
+          "loadingLists": "Loading Lists…",
+          "selectList": "Select a List",
+          "name": "Name",
+          "taskDescription": "Description",
+          "cancel": "Cancel",
+          "creating": "Creating…",
+          "submit": "Create task"
         }
       }
     },

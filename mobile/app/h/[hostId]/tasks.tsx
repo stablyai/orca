@@ -140,6 +140,23 @@ import { hasSettledHostRepoList } from '../../../src/tasks/host-repo-list'
 import { useHostRepoList } from '../../../src/tasks/use-host-repo-list'
 import { isHostedTaskRepo, reconcileRepoSelection } from '../../../src/tasks/hosted-repo-selection'
 import {
+  createClickUpTask,
+  createGitHubTask,
+  createGitLabTask,
+  createGitLabTodoTask,
+  createLinearTask,
+  taskExternalOpenLabel,
+  taskKindLabel,
+  taskStatusActionLabel,
+  type ActionableTaskItem,
+  type GitHubAssignableUser,
+  type GitHubPRReviewSummary,
+  type GitHubWorkItem,
+  type GitLabTodo,
+  type GitLabWorkItem,
+  type TaskItem
+} from '../../../src/tasks/mobile-task-items'
+import {
   extractLinearIssueReadItems,
   type LinearMobileIssue
 } from '../../../src/tasks/linear-mobile-issue-read'
@@ -153,12 +170,24 @@ import type {
   GitHubOwnerRepo,
   ProviderCheckSummary
 } from '../../../../src/shared/github/pull-request-types'
+import type {
+  ClickUpComment,
+  ClickUpConnectionStatus,
+  ClickUpTask
+} from '../../../../src/shared/clickup-types'
 import type { PersistedTrustedOrcaHooks } from '../../../../src/shared/orca-yaml-hook-types'
 import type { BaseRefSearchResult } from '../../../../src/shared/repo-types'
 import type { TuiAgent } from '../../../../src/shared/tui-agent'
 import type { SparsePreset } from '../../../../src/shared/worktree/create-types'
 import type { SshConnectionState } from '../../../../src/shared/ssh-types'
 import type { HostedReviewDecision } from '../../../../src/shared/hosted-review'
+import {
+  compareTasksByRepository,
+  compareTasksByUpdated,
+  getRepoBadgeColor,
+  taskRepositoryMeta,
+  taskTime
+} from '@/tasks/task-repository-grouping'
 import {
   githubProjectHost,
   githubProjectIdentityKey as githubProjectKey
@@ -411,6 +440,13 @@ type DetailPayload =
       project?: LinearProject
       children: LinearIssueChild[]
     }
+  | {
+      provider: 'clickup'
+      body: string
+      comments: DetailComment[]
+      labels: string[]
+      assignees: string[]
+    }
 
 type GitHubTaskKind = 'issues' | 'prs'
 type GitHubMode = GitHubTaskKind | 'project'
@@ -433,6 +469,7 @@ type TaskResumeState = {
   githubProjectHiddenFieldIdsByView?: Record<string, string[]>
   linearPreset?: LinearFilter
   linearQuery?: string
+  clickUpQuery?: string
 }
 type RuntimeTaskSettings = {
   defaultTuiAgent?: TuiAgent | 'blank' | null
@@ -559,45 +596,6 @@ type GitHubProjectTable = {
   parentFieldDropped?: boolean
 }
 
-type TaskItem =
-  | {
-      key: string
-      provider: 'github'
-      title: string
-      subtitle: string
-      status: string
-      updatedAt: string
-      source: GitHubWorkItem
-    }
-  | {
-      key: string
-      provider: 'gitlab'
-      title: string
-      subtitle: string
-      status: string
-      updatedAt: string
-      source: GitLabWorkItem
-    }
-  | {
-      key: string
-      provider: 'gitlabTodo'
-      title: string
-      subtitle: string
-      status: string
-      updatedAt: string
-      source: GitLabTodo
-    }
-  | {
-      key: string
-      provider: 'linear'
-      title: string
-      subtitle: string
-      status: string
-      updatedAt: string
-      source: LinearIssue
-    }
-
-type ActionableTaskItem = Exclude<TaskItem, { provider: 'gitlabTodo' }>
 type HostedReviewMergeMethod = 'merge' | 'squash' | 'rebase'
 type HostedReviewItem =
   | Extract<TaskItem, { provider: 'github' }>
@@ -722,6 +720,18 @@ const PROVIDER_OPTIONS: PickerOption<TaskProvider>[] = [
         color={selected ? colors.textPrimary : colors.textSecondary}
       />
     )
+  },
+  {
+    value: 'clickup',
+    label: 'ClickUp',
+    subtitle: 'Assigned ClickUp tasks',
+    renderIcon: (selected) => (
+      <TaskProviderLogo
+        provider="clickup"
+        size={16}
+        color={selected ? colors.textPrimary : colors.textSecondary}
+      />
+    )
   }
 ]
 
@@ -748,7 +758,9 @@ function taskWorkspaceFallback(item: ActionableTaskItem): string {
   if (item.provider === 'github' || item.provider === 'gitlab') {
     return `${item.source.type}-${item.source.number}`
   }
-  return item.source.identifier.toLowerCase()
+  return item.provider === 'linear'
+    ? item.source.identifier.toLowerCase()
+    : (item.source.customId ?? item.source.id).toLowerCase()
 }
 
 function taskWorkspaceSuggestedName(item: ActionableTaskItem): string {
@@ -869,11 +881,6 @@ function isSuccess(response: unknown): response is RpcSuccess {
   return Boolean(response && typeof response === 'object' && (response as RpcSuccess).ok)
 }
 
-function taskTime(value: string): number {
-  const time = Date.parse(value)
-  return Number.isFinite(time) ? time : 0
-}
-
 function formatUpdatedAt(value: string): string {
   const time = taskTime(value)
   if (!time) {
@@ -907,7 +914,7 @@ function getTaskPresetQuery(preset: GitHubPreset): string {
 }
 
 function isTaskProvider(value: unknown): value is TaskProvider {
-  return value === 'github' || value === 'gitlab' || value === 'linear'
+  return value === 'github' || value === 'gitlab' || value === 'linear' || value === 'clickup'
 }
 
 function normalizeGitHubPreset(value: unknown): GitHubPreset {
@@ -1016,95 +1023,6 @@ function scopeGitHubTaskSearch(query: string, kind: GitHubTaskKind): string {
     return trimmed
   }
   return `${kind === 'prs' ? 'is:pr' : 'is:issue'} ${trimmed}`
-}
-
-function gitHubStatusLabel(item: GitHubWorkItem): string {
-  if (item.state === 'merged') {
-    return 'Merged'
-  }
-  if (item.state === 'draft') {
-    return 'Draft'
-  }
-  return item.state === 'closed' ? 'Closed' : 'Open'
-}
-
-function gitHubTaskSubtitle(item: GitHubWorkItem): string {
-  return `${item.repoName} ${item.type === 'pr' ? '#' : '#'}${item.number}`
-}
-
-function createGitHubTask(repo: RepoSummary, item: Omit<GitHubWorkItem, 'repoId' | 'repoName'>) {
-  const source: GitHubWorkItem = { ...item, repoId: repo.id, repoName: repo.displayName }
-  return {
-    key: `github:${repo.id}:${item.type}:${item.number}`,
-    provider: 'github' as const,
-    title: item.title,
-    subtitle: gitHubTaskSubtitle(source),
-    status: gitHubStatusLabel(source),
-    updatedAt: item.updatedAt,
-    source
-  }
-}
-
-function gitLabStatusLabel(item: GitLabWorkItem): string {
-  if (item.state === 'opened') {
-    return 'Open'
-  }
-  if (item.state === 'merged') {
-    return 'Merged'
-  }
-  if (item.state === 'draft') {
-    return 'Draft'
-  }
-  return item.state === 'closed' ? 'Closed' : 'Locked'
-}
-
-function createGitLabTask(repo: RepoSummary, item: Omit<GitLabWorkItem, 'repoId' | 'repoName'>) {
-  const source: GitLabWorkItem = { ...item, repoId: repo.id, repoName: repo.displayName }
-  return {
-    key: `gitlab:${repo.id}:${item.type}:${item.number}`,
-    provider: 'gitlab' as const,
-    title: item.title,
-    subtitle: `${repo.displayName} ${item.type === 'mr' ? '!' : '#'}${item.number}`,
-    status: gitLabStatusLabel(source),
-    updatedAt: item.updatedAt,
-    source
-  }
-}
-
-function gitLabTodoTargetLabel(todo: Pick<GitLabTodo, 'targetType'>): string {
-  if (todo.targetType === 'MergeRequest') {
-    return 'Merge request'
-  }
-  if (todo.targetType === 'Issue') {
-    return 'Issue'
-  }
-  return 'GitLab todo'
-}
-
-function gitLabTodoTargetRef(todo: Pick<GitLabTodo, 'targetType' | 'targetIid'>): string {
-  if (!todo.targetIid) {
-    return ''
-  }
-  if (todo.targetType === 'MergeRequest') {
-    return `!${todo.targetIid}`
-  }
-  if (todo.targetType === 'Issue') {
-    return `#${todo.targetIid}`
-  }
-  return String(todo.targetIid)
-}
-
-function createGitLabTodoTask(todo: GitLabTodo): TaskItem {
-  const targetRef = gitLabTodoTargetRef(todo)
-  return {
-    key: `gitlab-todo:${todo.id}`,
-    provider: 'gitlabTodo',
-    title: todo.targetTitle || todo.targetUrl,
-    subtitle: `${todo.projectPath}${targetRef ? ` ${targetRef}` : ''}`,
-    status: todo.actionName.replace(/_/g, ' ') || 'Todo',
-    updatedAt: todo.updatedAt,
-    source: todo
-  }
 }
 
 async function mapWithConcurrency<T, R>(
@@ -1720,39 +1638,6 @@ function optimisticProjectFieldValue(
   return { kind: 'text', fieldId: field.id, text: value.kind === 'text' ? value.text : '' }
 }
 
-function taskKindLabel(item: TaskItem): string {
-  if (item.provider === 'github') {
-    return item.source.type === 'pr' ? 'Pull request' : 'Issue'
-  }
-  if (item.provider === 'gitlab') {
-    return item.source.type === 'mr' ? 'Merge request' : 'Issue'
-  }
-  if (item.provider === 'gitlabTodo') {
-    return `${gitLabTodoTargetLabel(item.source)} todo`
-  }
-  return 'Linear ticket'
-}
-
-function taskExternalOpenLabel(item: TaskItem): string {
-  if (item.provider === 'github') {
-    return 'Open in GitHub'
-  }
-  if (item.provider === 'gitlab' || item.provider === 'gitlabTodo') {
-    return 'Open in GitLab'
-  }
-  return 'Open in Linear'
-}
-
-function taskStatusActionLabel(item: TaskItem): string {
-  const verb =
-    item.provider === 'github' || item.provider === 'gitlab'
-      ? item.source.state === 'closed'
-        ? 'Reopen'
-        : 'Close'
-      : ''
-  return verb ? `${verb} ${taskKindLabel(item).toLowerCase()}` : ''
-}
-
 function isGitHubPrMergeBlocked(item: Extract<TaskItem, { provider: 'github' }>): boolean {
   return item.source.type === 'pr' && item.source.mergeable === 'CONFLICTING'
 }
@@ -2003,19 +1888,6 @@ function buildPartialRepositoryNotice(failedCount: number, totalCount: number): 
   return `${failedCount} of ${repositoryCount(totalCount)} failed to load.`
 }
 
-function repoColor(name: string): string {
-  const palette = ['#f97316', '#8b5cf6', '#06b6d4', '#ec4899', '#84cc16', '#f59e0b', '#6366f1']
-  let hash = 0
-  for (let i = 0; i < name.length; i += 1) {
-    hash = (hash * 31 + name.charCodeAt(i)) | 0
-  }
-  return palette[Math.abs(hash) % palette.length]!
-}
-
-function getRepoBadgeColor(repo: RepoSummary | undefined, fallbackName: string): string {
-  return repo?.badgeColor || repoColor(repo?.displayName ?? fallbackName)
-}
-
 function setupSourceLabel(source: string | null): string {
   if (source === 'orca.yaml') {
     return 'orca.yaml'
@@ -2024,47 +1896,6 @@ function setupSourceLabel(source: string | null): string {
     return 'local hooks'
   }
   return 'repository hooks'
-}
-
-function taskRepositoryMeta(
-  item: TaskItem,
-  reposById: Map<string, RepoSummary>
-): { key: string; label: string; color: string } {
-  if (item.provider === 'github' || item.provider === 'gitlab') {
-    const repo = reposById.get(item.source.repoId)
-    return {
-      key: item.source.repoId,
-      label: repo?.displayName ?? item.source.repoName,
-      color: getRepoBadgeColor(repo, item.source.repoName)
-    }
-  }
-  if (item.provider === 'gitlabTodo') {
-    return {
-      key: item.source.projectPath,
-      label: item.source.projectPath,
-      color: repoColor(item.source.projectPath)
-    }
-  }
-  return {
-    key: item.source.team.id,
-    label: item.source.team.name,
-    color: item.source.state.color || colors.accentBlue
-  }
-}
-
-function compareTasksByUpdated(a: TaskItem, b: TaskItem): number {
-  return taskTime(b.updatedAt) - taskTime(a.updatedAt)
-}
-
-function compareTasksByRepository(
-  a: TaskItem,
-  b: TaskItem,
-  reposById: Map<string, RepoSummary>
-): number {
-  const aRepo = taskRepositoryMeta(a, reposById)
-  const bRepo = taskRepositoryMeta(b, reposById)
-  const repoComparison = aRepo.label.localeCompare(bRepo.label, undefined, { sensitivity: 'base' })
-  return repoComparison || compareTasksByUpdated(a, b)
 }
 
 export default function MobileTasksScreen() {
@@ -2097,6 +1928,10 @@ export default function MobileTasksScreen() {
     normalizeVisibleTaskProviders(undefined)
   )
   const [linearConnected, setLinearConnected] = useState(false)
+  const [clickUpConnected, setClickUpConnected] = useState(false)
+  const [selectedClickUpWorkspaceId, setSelectedClickUpWorkspaceId] = useState<
+    string | 'all' | null
+  >(null)
   const [githubMode, setGithubMode] = useState<'items' | 'project'>('items')
   const [githubKind, setGithubKind] = useState<GitHubTaskKind>('issues')
   const [githubPreset, setGithubPreset] = useState<GitHubPreset>('issues')
@@ -2223,7 +2058,7 @@ export default function MobileTasksScreen() {
   )
   const [workspaceRepoPickerItem, setWorkspaceRepoPickerItem] = useState<Extract<
     TaskItem,
-    { provider: 'linear' }
+    { provider: 'linear' | 'clickup' }
   > | null>(null)
   const [workspaceCreateDraft, setWorkspaceCreateDraft] = useState<WorkspaceCreateDraft | null>(
     null
@@ -2949,13 +2784,19 @@ export default function MobileTasksScreen() {
       }
       setTasksSupportState({ kind: 'supported', client })
       setError('')
-      const [settingsResponse, uiResponse, preflightResponse, linearStatusResponse] =
-        await Promise.all([
-          client.sendRequest('settings.get'),
-          client.sendRequest('ui.get'),
-          client.sendRequest('preflight.check'),
-          client.sendRequest('linear.status')
-        ])
+      const [
+        settingsResponse,
+        uiResponse,
+        preflightResponse,
+        linearStatusResponse,
+        clickUpStatusResponse
+      ] = await Promise.all([
+        client.sendRequest('settings.get'),
+        client.sendRequest('ui.get'),
+        client.sendRequest('preflight.check'),
+        client.sendRequest('linear.status'),
+        client.sendRequest('clickup.status')
+      ])
       if (stale) {
         return
       }
@@ -2986,17 +2827,33 @@ export default function MobileTasksScreen() {
       const linearStatus = isSuccess(linearStatusResponse)
         ? (linearStatusResponse.result as LinearStatusResponse)
         : null
+      const clickUpStatus = isSuccess(clickUpStatusResponse)
+        ? (clickUpStatusResponse.result as ClickUpConnectionStatus)
+        : null
       const preferredProviders = normalizeVisibleTaskProviders(settings.visibleTaskProviders)
       const linearIsConnected = linearStatus?.connected === true
+      const clickUpIsConnected = clickUpStatus?.connected === true
       const availableProviders = filterAvailableTaskProviders(preferredProviders, {
         gitlabInstalled: preflight?.glab?.installed === true,
-        linearConnected: linearIsConnected
+        linearConnected: linearIsConnected,
+        clickUpConnected: clickUpIsConnected
       })
-      const nextVisibleProviders =
-        preferredProviders.includes('linear') && !availableProviders.includes('linear')
-          ? [...availableProviders, 'linear' as const]
-          : availableProviders
+      const nextVisibleProviders = [...availableProviders]
+      for (const tracker of ['linear', 'clickup'] as const) {
+        if (preferredProviders.includes(tracker) && !nextVisibleProviders.includes(tracker)) {
+          nextVisibleProviders.push(tracker)
+        }
+      }
       setLinearConnected(linearIsConnected)
+      setClickUpConnected(clickUpIsConnected)
+      setSelectedClickUpWorkspaceId(
+        clickUpIsConnected
+          ? (clickUpStatus?.selectedWorkspaceId ??
+              clickUpStatus?.activeWorkspaceId ??
+              clickUpStatus?.workspaces?.[0]?.id ??
+              null)
+          : null
+      )
       if (!linearIsConnected) {
         setLinearWorkspaces([])
         setLinearTeams([])
@@ -3021,10 +2878,17 @@ export default function MobileTasksScreen() {
           : getTaskPresetQuery(preset)
       const nextLinearFilter = normalizeLinearFilter(resume.linearPreset)
       const nextLinearQuery = resume.linearQuery ?? ''
+      const nextClickUpQuery = resume.clickUpQuery ?? ''
       defaultRepoSelectionRef.current = settings.defaultRepoSelection ?? null
       defaultLinearTeamSelectionRef.current = settings.defaultLinearTeamSelection ?? null
       const nextQuery =
-        nextProvider === 'github' ? githubQuery : nextProvider === 'linear' ? nextLinearQuery : ''
+        nextProvider === 'github'
+          ? githubQuery
+          : nextProvider === 'linear'
+            ? nextLinearQuery
+            : nextProvider === 'clickup'
+              ? nextClickUpQuery
+              : ''
       const nextAppliedQuery =
         nextProvider === 'github'
           ? scopeGitHubTaskSearch(githubQuery, githubKindFromQuery(githubQuery, preset))
@@ -3451,6 +3315,7 @@ export default function MobileTasksScreen() {
     [
       appliedQuery,
       client,
+      clickUpConnected,
       connState,
       countGitHubItems,
       fetchGitHubItemsPage,
@@ -3466,6 +3331,7 @@ export default function MobileTasksScreen() {
       provider,
       selectedLinearTeamIds,
       selectedLinearWorkspaceId,
+      selectedClickUpWorkspaceId,
       selectedRepoIds,
       taskStateHydrated,
       tasksSupported
@@ -3958,6 +3824,13 @@ export default function MobileTasksScreen() {
   }, [appliedQuery, linearFilter, persistTaskResumeState, provider, taskUiReady])
 
   useEffect(() => {
+    if (!taskUiReady || provider !== 'clickup') {
+      return
+    }
+    persistTaskResumeState({ clickUpQuery: appliedQuery.trim() })
+  }, [appliedQuery, persistTaskResumeState, provider, taskUiReady])
+
+  useEffect(() => {
     if (connState !== 'connected' || !taskStateHydrated) {
       return
     }
@@ -4380,6 +4253,57 @@ export default function MobileTasksScreen() {
         return
       }
 
+      if (actionItem.provider === 'clickup') {
+        const [taskResponse, commentsResponse] = await Promise.all([
+          client.sendRequest(
+            'clickup.getTask',
+            {
+              taskId: actionItem.source.id,
+              workspaceId: actionItem.source.workspaceId
+            },
+            { timeoutMs: 30_000 }
+          ),
+          client.sendRequest(
+            'clickup.taskComments',
+            {
+              taskId: actionItem.source.id,
+              workspaceId: actionItem.source.workspaceId
+            },
+            { timeoutMs: 30_000 }
+          )
+        ])
+        if (!isSuccess(taskResponse)) {
+          throw new Error(taskResponse.error.message)
+        }
+        const task = taskResponse.result as ClickUpTask | null
+        if (!task) {
+          throw new Error('Details not found')
+        }
+        const comments = isSuccess(commentsResponse)
+          ? (((commentsResponse.result as ClickUpComment[]) ?? []).map((comment) => ({
+              id: comment.id,
+              author: comment.user?.username,
+              body: comment.body,
+              createdAt: comment.createdAt
+            })) satisfies DetailComment[])
+          : []
+        if (!stale) {
+          setDetailPayload({
+            provider: 'clickup',
+            body: task.description ?? '',
+            comments,
+            labels: task.tags.map((tag) => tag.name),
+            assignees: task.assignees.map((assignee) => assignee.username)
+          })
+          setActionItem((current) =>
+            current?.provider === 'clickup' && current.source.id === task.id
+              ? (createClickUpTask(task) as Extract<TaskItem, { provider: 'clickup' }>)
+              : current
+          )
+        }
+        return
+      }
+
       const [issueResponse, commentsResponse] = await Promise.all([
         client.sendRequest(
           'linear.getIssue',
@@ -4788,7 +4712,9 @@ export default function MobileTasksScreen() {
   const workspaceCreateSshConnectInProgress = workspaceCreateSshGate.connectInProgress
   const workspaceCreateSshError = workspaceCreateSshGate.error
   const workspaceCreateCanPickRepo =
-    workspaceCreateDraft?.item.provider === 'linear' && workspaceRepos.length > 1
+    (workspaceCreateDraft?.item.provider === 'linear' ||
+      workspaceCreateDraft?.item.provider === 'clickup') &&
+    workspaceRepos.length > 1
   const workspaceSparseCheckoutAvailable =
     workspaceCreateTargetRepo != null && !workspaceCreateTargetRepo.connectionId
   const workspaceSparseDraftParsed = useMemo(
@@ -5409,8 +5335,8 @@ export default function MobileTasksScreen() {
         const targetRepo = getWorkspaceTargetRepo(item, repoIdOverride)
         if (!targetRepo) {
           throw new Error(
-            item.provider === 'linear'
-              ? 'Add a Git repository before creating a Linear workspace.'
+            item.provider === 'linear' || item.provider === 'clickup'
+              ? `Add a Git repository before creating a ${taskKindLabel(item)} workspace.`
               : 'Repository not found.'
           )
         }
@@ -5584,9 +5510,29 @@ export default function MobileTasksScreen() {
             sparseCheckout: sparseCheckoutOverride,
             hostedStartPoint: mrStartPoint
           })
-        } else {
+        } else if (item.provider === 'linear') {
           params = buildTaskWorkspaceCreateParams({
             item,
+            targetRepoId: targetRepo.id,
+            setupDecision,
+            agent: selectedAgent,
+            workspaceName: workspaceNameOverride,
+            note: comment,
+            baseBranch: baseBranchOverride,
+            branchNameOverride,
+            sparseCheckout: sparseCheckoutOverride
+          })
+        } else {
+          params = buildTaskWorkspaceCreateParams({
+            item: {
+              provider: 'clickup',
+              source: {
+                taskId: item.source.id,
+                title: `${item.source.customId ?? item.source.id} ${item.source.name}`,
+                url: item.source.url,
+                workspaceId: item.source.workspaceId
+              }
+            },
             targetRepoId: targetRepo.id,
             setupDecision,
             agent: selectedAgent,
@@ -8334,7 +8280,13 @@ export default function MobileTasksScreen() {
       ? ((selectedCreateTarget as RepoSummary | null)?.displayName ?? 'Select target')
       : ((selectedCreateTarget as LinearTeam | null)?.name ?? 'Select target')
   const providerLabel =
-    provider === 'github' ? 'GitHub' : provider === 'gitlab' ? 'GitLab' : 'Linear'
+    provider === 'github'
+      ? 'GitHub'
+      : provider === 'gitlab'
+        ? 'GitLab'
+        : provider === 'linear'
+          ? 'Linear'
+          : 'ClickUp'
   const showHeaderCreateTask =
     provider === 'linear' || (provider === 'github' && githubMode === 'items')
   const providerOptions = useMemo(
@@ -9066,8 +9018,9 @@ export default function MobileTasksScreen() {
           ) : null}
         </ScrollView>
 
-        {provider === 'gitlab' && gitlabView === 'todos' ? null : provider === 'linear' &&
-          !linearConnected ? null : (
+        {provider === 'gitlab' && gitlabView === 'todos' ? null : (provider === 'linear' &&
+            !linearConnected) ||
+          (provider === 'clickup' && !clickUpConnected) ? null : (
           <View style={styles.searchBar}>
             <MobileSearchField
               value={isGithubProjectSearch ? githubProjectSearch : query}
@@ -9111,6 +9064,8 @@ export default function MobileTasksScreen() {
                   })
                 } else if (provider === 'linear') {
                   persistTaskResumeState({ linearQuery: nextQuery.trim() })
+                } else if (provider === 'clickup') {
+                  persistTaskResumeState({ clickUpQuery: nextQuery.trim() })
                 }
               }}
               onBlur={() => {
@@ -9143,6 +9098,8 @@ export default function MobileTasksScreen() {
                 setAppliedQuery('')
                 if (provider === 'linear') {
                   persistTaskResumeState({ linearQuery: '' })
+                } else if (provider === 'clickup') {
+                  persistTaskResumeState({ clickUpQuery: '' })
                 }
               }}
             />
@@ -9253,6 +9210,14 @@ export default function MobileTasksScreen() {
           >
             <Text style={styles.targetButtonText}>Connect Linear</Text>
           </Pressable>
+        </View>
+      ) : provider === 'clickup' && !clickUpConnected ? (
+        <View style={styles.centered}>
+          <TaskProviderLogo provider="clickup" size={32} color={colors.textSecondary} />
+          <Text style={styles.emptyText}>Connect your ClickUp account</Text>
+          <Text style={styles.centeredHint}>
+            Connect ClickUp in Settings on the selected Orca desktop or remote runtime.
+          </Text>
         </View>
       ) : provider === 'github' && githubMode === 'project' ? (
         githubProjectLoading ? (
@@ -9832,6 +9797,10 @@ export default function MobileTasksScreen() {
           } else if (next === 'linear') {
             const nextQuery = resume.linearQuery ?? ''
             setLinearFilter(normalizeLinearFilter(resume.linearPreset))
+            setQuery(nextQuery)
+            setAppliedQuery(nextQuery.trim())
+          } else if (next === 'clickup') {
+            const nextQuery = resume.clickUpQuery ?? ''
             setQuery(nextQuery)
             setAppliedQuery(nextQuery.trim())
           } else {
@@ -11076,8 +11045,9 @@ export default function MobileTasksScreen() {
 
             {workspaceCreateTargetRepo ? null : (
               <Text style={styles.detailError}>
-                {workspaceCreateDraft.item.provider === 'linear'
-                  ? 'Add a Git repository before creating a Linear workspace.'
+                {workspaceCreateDraft.item.provider === 'linear' ||
+                workspaceCreateDraft.item.provider === 'clickup'
+                  ? `Add a Git repository before creating a ${taskKindLabel(workspaceCreateDraft.item)} workspace.`
                   : 'Repository not found.'}
               </Text>
             )}
@@ -12745,7 +12715,9 @@ export default function MobileTasksScreen() {
                         <Text style={styles.detailMetaValue}>{detailPayload.project.name}</Text>
                       </View>
                     ) : null}
-                    {(detailPayload.provider === 'github' || detailPayload.provider === 'gitlab') &&
+                    {(detailPayload.provider === 'github' ||
+                      detailPayload.provider === 'gitlab' ||
+                      detailPayload.provider === 'clickup') &&
                     detailPayload.assignees.length > 0 ? (
                       <View style={styles.detailMetaItem}>
                         <Text style={styles.detailMetaLabel}>Assignees</Text>
@@ -13444,7 +13416,10 @@ export default function MobileTasksScreen() {
                 style={styles.actionRow}
                 disabled={creatingKey === actionItem.key}
                 onPress={() => {
-                  if (actionItem.provider === 'linear' && workspaceRepos.length > 1) {
+                  if (
+                    (actionItem.provider === 'linear' || actionItem.provider === 'clickup') &&
+                    workspaceRepos.length > 1
+                  ) {
                     setWorkspaceRepoPickerItem(actionItem)
                     return
                   }

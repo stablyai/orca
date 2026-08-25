@@ -46,6 +46,8 @@ describe('useFullCreationExecution cancellation', () => {
       linkedLinearIssue: undefined,
       linkedLinearIssueWorkspaceId: undefined,
       linkedLinearIssueOrganizationUrlKey: undefined,
+      linkedClickUpTaskId: undefined,
+      linkedClickUpWorkspaceId: undefined,
       effectiveBranchNameOverride: undefined,
       createDisplayName: undefined,
       pendingFirstAgentMessageRename: false,

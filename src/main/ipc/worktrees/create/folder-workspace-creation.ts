@@ -37,6 +37,12 @@ export function createFolderWorkspace(
     ...(args.linkedLinearIssueOrganizationUrlKey !== undefined
       ? { linkedLinearIssueOrganizationUrlKey: args.linkedLinearIssueOrganizationUrlKey }
       : {}),
+    ...(args.linkedClickUpTaskId !== undefined
+      ? { linkedClickUpTaskId: args.linkedClickUpTaskId }
+      : {}),
+    ...(args.linkedClickUpWorkspaceId !== undefined
+      ? { linkedClickUpWorkspaceId: args.linkedClickUpWorkspaceId }
+      : {}),
     ...(args.manualOrder !== undefined ? { manualOrder: args.manualOrder } : {}),
     ...(args.workspaceStatus !== undefined ? { workspaceStatus: args.workspaceStatus } : {}),
     ...(args.linkedGitLabIssue !== undefined ? { linkedGitLabIssue: args.linkedGitLabIssue } : {}),

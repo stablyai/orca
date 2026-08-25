@@ -26,7 +26,8 @@ function buildReadiness(
       skillChecking: false,
       visible: true
     },
-    jira: { connected: true, checking: false, visible: true }
+    jira: { connected: true, checking: false, visible: true },
+    clickup: { connected: true, checking: false, visible: true }
   }
   for (const provider of ORDER) {
     Object.assign(base[provider], overrides[provider])

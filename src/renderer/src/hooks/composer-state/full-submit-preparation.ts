@@ -153,6 +153,16 @@ export function useFullSubmitPreparation(input: FullSubmitPreparationInput) {
           ? submitLinkedWorkItem.linearOrganizationUrlKey
           : undefined
 
+      const linkedClickUpTaskId =
+        submitLinkedWorkItem && submitLinkedWorkItemProvider === 'clickup'
+          ? submitLinkedWorkItem.clickupIdentifier
+          : undefined
+
+      const linkedClickUpWorkspaceId =
+        submitLinkedWorkItem && submitLinkedWorkItemProvider === 'clickup'
+          ? submitLinkedWorkItem.clickupWorkspaceId
+          : undefined
+
       const effectiveBranchNameOverride = resolveComposerBranchNameOverrideForCreate({
         branchNameOverride: submitBranchNameOverride,
         branchAutoName: branchAutoNameRef.current,
@@ -234,6 +244,8 @@ export function useFullSubmitPreparation(input: FullSubmitPreparationInput) {
         linkedLinearIssue,
         linkedLinearIssueWorkspaceId,
         linkedLinearIssueOrganizationUrlKey,
+        linkedClickUpTaskId,
+        linkedClickUpWorkspaceId,
         effectiveBranchNameOverride,
         createDisplayName,
         pendingFirstAgentMessageRename,

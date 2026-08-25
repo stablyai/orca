@@ -7,13 +7,17 @@ import type { EphemeralVmCheckoutMode } from '../orca-yaml-hook-types'
 import type { BuiltInWorktreeVisibilitySourceId } from '../repo-types'
 
 export type WorkspaceLinkedItem = {
-  provider: 'github' | 'gitlab' | 'linear' | 'jira'
+  provider: 'github' | 'gitlab' | 'linear' | 'jira' | 'clickup'
   type: 'issue' | 'pr' | 'mr'
   number: number
   title: string
   url: string
   linearIdentifier?: string
   jiraIdentifier?: string
+  /** ClickUp custom task id when the Workspace has them enabled, else the native task id. */
+  clickupIdentifier?: string
+  /** The ClickUp Workspace that owns the task; a native /t/<id> URL does not name one. */
+  clickupWorkspaceId?: string
   repoId?: string
 }
 
@@ -80,6 +84,9 @@ export type Worktree = {
   linkedLinearIssue: string | null
   linkedLinearIssueWorkspaceId?: string | null
   linkedLinearIssueOrganizationUrlKey?: string | null
+  linkedClickUpTaskId?: string | null
+  /** ClickUp does not name the Workspace in a native /t/<id> URL, so it is stored alongside. */
+  linkedClickUpWorkspaceId?: string | null
   // Why: parallel slots for non-GitHub work-item references. Kept as separate
   // fields (rather than reusing linkedIssue / linkedPR with a provider
   // discriminator) so the persistence layer is unambiguous when a user

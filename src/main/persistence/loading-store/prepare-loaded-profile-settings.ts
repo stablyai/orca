@@ -99,11 +99,18 @@ export function prepareLoadedProfileSettings(
   })
   const visibleTaskProvidersDefaultedForJira =
     parsed.settings?.visibleTaskProvidersDefaultedForJira === true
-  const migratedVisibleTaskProviders = visibleTaskProvidersDefaultedForJira
+  const visibleTaskProvidersWithJira = visibleTaskProvidersDefaultedForJira
     ? rawTaskProviderSettings.visibleTaskProviders
     : rawTaskProviderSettings.visibleTaskProviders.includes('jira')
       ? rawTaskProviderSettings.visibleTaskProviders
       : [...rawTaskProviderSettings.visibleTaskProviders, 'jira' as const]
+  // Why: a profile saved before ClickUp shipped has no opinion about it, so reveal it once — the same one-shot stamp Jira uses.
+  const visibleTaskProvidersDefaultedForClickUp =
+    parsed.settings?.visibleTaskProvidersDefaultedForClickUp === true
+  const migratedVisibleTaskProviders =
+    visibleTaskProvidersDefaultedForClickUp || visibleTaskProvidersWithJira.includes('clickup')
+      ? visibleTaskProvidersWithJira
+      : [...visibleTaskProvidersWithJira, 'clickup' as const]
   const taskProviderSettings = normalizeTaskProviderSettings({
     visibleTaskProviders: migratedVisibleTaskProviders,
     defaultTaskSource: rawTaskProviderSettings.defaultTaskSource
@@ -124,7 +131,7 @@ export function prepareLoadedProfileSettings(
   if (migratePrimarySelectionPlatformDefault || stampPrimarySelectionTerminalDefaults) {
     markNeedsSave()
   }
-  if (!visibleTaskProvidersDefaultedForJira) {
+  if (!visibleTaskProvidersDefaultedForJira || !visibleTaskProvidersDefaultedForClickUp) {
     markNeedsSave()
   }
   const claudeAgentTeamsDefaultDisabledMigrated =

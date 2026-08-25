@@ -7,13 +7,14 @@ export type SmartWorkspaceCommandRowKind =
   | 'linear'
   | 'jira'
   | 'jira-account'
+  | 'clickup'
 
 export type SmartWorkspaceCommandRow = {
   kind: SmartWorkspaceCommandRowKind
   value: string
 }
 
-export type SmartWorkspaceSourceIntent = 'github' | 'gitlab' | 'linear' | 'jira' | null
+export type SmartWorkspaceSourceIntent = 'github' | 'gitlab' | 'linear' | 'jira' | 'clickup' | null
 
 export function resolveSmartWorkspaceCommandValue({
   currentValue,
@@ -59,6 +60,11 @@ export function resolveSmartWorkspaceCommandValue({
     const jiraRow = rows.find((row) => row.kind === 'jira')
     if (jiraRow) {
       return jiraRow.value
+    }
+  } else if (sourceIntent === 'clickup') {
+    const clickUpRow = rows.find((row) => row.kind === 'clickup')
+    if (clickUpRow) {
+      return clickUpRow.value
     }
   }
 

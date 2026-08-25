@@ -7,7 +7,8 @@ import { colors, radii, spacing } from '../theme/mobile-theme'
 const TASK_PROVIDER_LABELS: Record<TaskProvider, string> = {
   github: 'GitHub',
   gitlab: 'GitLab',
-  linear: 'Linear'
+  linear: 'Linear',
+  clickup: 'ClickUp'
 }
 
 export function MobileHomeTasksCard(props: {

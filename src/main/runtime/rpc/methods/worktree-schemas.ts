@@ -122,6 +122,8 @@ export const WorktreeSet = WorktreeSelector.extend({
   linkedLinearIssue: z.union([z.string(), z.null()]).optional(),
   linkedLinearIssueWorkspaceId: z.union([z.string(), z.null()]).optional(),
   linkedLinearIssueOrganizationUrlKey: z.union([z.string(), z.null()]).optional(),
+  linkedClickUpTaskId: z.union([z.string(), z.null()]).optional(),
+  linkedClickUpWorkspaceId: z.union([z.string(), z.null()]).optional(),
   linkedGitLabMR: TriStateLinkedIssue,
   linkedGitLabIssue: TriStateLinkedIssue,
   linkedBitbucketPR: TriStateLinkedIssue,

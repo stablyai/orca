@@ -1,3 +1,4 @@
+import type { ClickUpTask } from '../../../src/shared/clickup-types'
 import type { GitHubWorkItem } from '../../../src/shared/github/work-item-types'
 import type { GitLabWorkItem } from '../../../src/shared/gitlab-types'
 import type { LinearIssue } from '../../../src/shared/linear/issue-types'
@@ -10,6 +11,7 @@ import type { MrStateFilter } from './mobile-composer-source-types'
 
 const GITLAB_PER_PAGE = 50
 const LINEAR_LIMIT = 50
+const CLICKUP_LIMIT = 50
 const BRANCH_LIMIT = 20
 
 // Why: the desktop Smart picker returns BOTH issues and PRs — the runtime's
@@ -91,6 +93,29 @@ export async function searchLinearIssues(
   // extractLinearIssueReadItems yields the mobile issue-read shape; the fields the
   // row builder/create flow read (id/identifier/title/url/state/team) are a subset.
   return extractLinearIssueReadItems((response as RpcSuccess).result) as unknown as LinearIssue[]
+}
+
+export async function searchClickUpTasks(
+  client: RpcClient,
+  query: string,
+  workspaceId: string | null | undefined
+): Promise<ClickUpTask[]> {
+  const trimmed = query.trim()
+  const response = trimmed
+    ? await client.sendRequest('clickup.searchTasks', {
+        query: trimmed,
+        limit: CLICKUP_LIMIT,
+        workspaceId: workspaceId ?? undefined
+      })
+    : await client.sendRequest('clickup.listTasks', {
+        filter: 'assigned',
+        limit: CLICKUP_LIMIT,
+        workspaceId: workspaceId ?? undefined
+      })
+  if (!response.ok) {
+    throw new Error(response.error.message)
+  }
+  return ((response as RpcSuccess).result as ClickUpTask[]) ?? []
 }
 
 export async function searchBranches(

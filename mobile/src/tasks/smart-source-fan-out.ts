@@ -1,3 +1,4 @@
+import type { ClickUpTask } from '../../../src/shared/clickup-types'
 import type { GitHubWorkItem } from '../../../src/shared/github/work-item-types'
 import type { GitLabWorkItem } from '../../../src/shared/gitlab-types'
 import type { LinearIssue } from '../../../src/shared/linear/issue-types'
@@ -11,6 +12,7 @@ import { isGitHubWorkItemsSshRemoteRequiredError } from './mobile-work-items'
 import type { MrStateFilter } from './mobile-composer-source-types'
 import {
   searchBranches,
+  searchClickUpTasks,
   searchGitHubItems,
   searchGitLabItems,
   searchLinearIssues
@@ -20,6 +22,7 @@ export type SmartFanOutResult = {
   githubItems: GitHubWorkItem[]
   gitlabItems: GitLabWorkItem[]
   linearIssues: LinearIssue[]
+  clickUpTasks: ClickUpTask[]
   branches: BaseRefSearchResult[]
   needsGitHubRemote: boolean
   error: string
@@ -29,6 +32,7 @@ const EMPTY: Omit<SmartFanOutResult, 'needsGitHubRemote' | 'error'> = {
   githubItems: [],
   gitlabItems: [],
   linearIssues: [],
+  clickUpTasks: [],
   branches: []
 }
 
@@ -44,6 +48,10 @@ function shouldSearchLinear(mode: SmartNameMode, linearAvailable: boolean): bool
   return linearAvailable && (mode === 'smart' || mode === 'linear')
 }
 
+function shouldSearchClickUp(mode: SmartNameMode, clickUpAvailable: boolean): boolean {
+  return clickUpAvailable && (mode === 'smart' || mode === 'clickup')
+}
+
 function shouldSearchBranches(mode: SmartNameMode, query: string): boolean {
   return mode === 'branches' || (mode === 'smart' && query.trim().length > 0)
 }
@@ -56,8 +64,10 @@ type FanOutArgs = {
   githubAvailable: boolean
   gitlabAvailable: boolean
   linearAvailable: boolean
+  clickUpAvailable: boolean
   mrStateFilter: MrStateFilter
   linearWorkspaceId: string | null | undefined
+  clickupWorkspaceId: string | null | undefined
 }
 
 // Runs every provider search the active mode needs, concurrently. Smart mode is
@@ -78,6 +88,7 @@ export async function fanOutSmartSearch(args: FanOutArgs): Promise<SmartFanOutRe
     githubAvailable,
     gitlabAvailable,
     linearAvailable,
+    clickUpAvailable,
     mrStateFilter
   } = args
   const isSmart = mode === 'smart'
@@ -93,13 +104,17 @@ export async function fanOutSmartSearch(args: FanOutArgs): Promise<SmartFanOutRe
     linear: shouldSearchLinear(mode, linearAvailable)
       ? searchLinearIssues(client, query, args.linearWorkspaceId)
       : null,
+    clickup: shouldSearchClickUp(mode, clickUpAvailable)
+      ? searchClickUpTasks(client, query, args.clickupWorkspaceId)
+      : null,
     branches:
       shouldSearchBranches(mode, query) && repoId ? searchBranches(client, repoId, query) : null
   }
-  const [github, gitlab, linear, branches] = await Promise.allSettled([
+  const [github, gitlab, linear, clickup, branches] = await Promise.allSettled([
     tasks.github ?? Promise.resolve<GitHubWorkItem[]>([]),
     tasks.gitlab ?? Promise.resolve<GitLabWorkItem[]>([]),
     tasks.linear ?? Promise.resolve<LinearIssue[]>([]),
+    tasks.clickup ?? Promise.resolve<ClickUpTask[]>([]),
     tasks.branches ?? Promise.resolve<BaseRefSearchResult[]>([])
   ])
 
@@ -123,6 +138,9 @@ export async function fanOutSmartSearch(args: FanOutArgs): Promise<SmartFanOutRe
   if (linear.status === 'rejected') {
     fail(linear.reason)
   }
+  if (clickup.status === 'rejected') {
+    fail(clickup.reason)
+  }
   if (branches.status === 'rejected') {
     fail(branches.reason)
   }
@@ -132,6 +150,7 @@ export async function fanOutSmartSearch(args: FanOutArgs): Promise<SmartFanOutRe
     githubItems: github.status === 'fulfilled' ? github.value : [],
     gitlabItems: gitlab.status === 'fulfilled' ? gitlab.value : [],
     linearIssues: linear.status === 'fulfilled' ? linear.value : [],
+    clickUpTasks: clickup.status === 'fulfilled' ? clickup.value : [],
     branches: branches.status === 'fulfilled' ? branches.value : [],
     needsGitHubRemote,
     error
