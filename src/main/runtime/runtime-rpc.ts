@@ -386,6 +386,7 @@ const MOBILE_RPC_METHOD_ALLOWLIST = new Set([
   'settings.update',
   'settings.updateTerminalQuickCommands',
   'ssh.connect',
+  'ssh.ensureConfigTarget',
   'ssh.getState',
   'ssh.listRemovedTargetLabels',
   'ssh.listTargets',

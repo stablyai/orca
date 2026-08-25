@@ -112,6 +112,7 @@ import {
   type ExecutionHostId
 } from '../../shared/execution-host'
 import { joinRemotePath } from '../ssh/ssh-remote-platform'
+import { setSshProjectSetupExistingFolderHandler } from '../ssh/ssh-project-setup-registry'
 import {
   assertFolderWorkspacePathUsable,
   getFolderWorkspacePathStatus,
@@ -1278,6 +1279,57 @@ async function runNestedRepoScanForIpc(
   }
 }
 
+async function setupProjectExistingFolder(
+  store: Store,
+  mainWindow: BrowserWindow,
+  args: ProjectHostSetupExistingFolderArgs
+): Promise<ProjectHostSetupResult> {
+  const parsedHost = parseExecutionHostId(args.hostId)
+  if (!parsedHost) {
+    throw new Error(`Unsupported host: ${args.hostId}`)
+  }
+  const result =
+    parsedHost.kind === 'local'
+      ? await addLocalRepoFromPath(store, args.path, args.kind)
+      : parsedHost.kind === 'ssh'
+        ? await addRemoteRepoFromPath(store, {
+            connectionId: parsedHost.targetId,
+            remotePath: args.path,
+            displayName: args.displayName,
+            kind: args.kind
+          })
+        : {
+            error:
+              'Runtime hosts must be set up through the runtime projectHostSetup.setupExistingFolder RPC.'
+          }
+  if ('error' in result) {
+    throw new Error(result.error)
+  }
+  let aligned: ProjectHostSetupResult
+  try {
+    aligned = alignRepoWithRequestedProject(
+      store,
+      result.repo,
+      args.projectId,
+      args.setupMethod,
+      args.projectProviderIdentity
+    )
+  } catch (err) {
+    if (!result.alreadyExisted) {
+      store.removeProject(result.repo.id)
+      invalidateAuthorizedRootsCache()
+    }
+    throw err
+  }
+  invalidateAuthorizedRootsCache()
+  notifyReposChanged(mainWindow)
+  emitRepoAdded('folder_picker', result.alreadyExisted)
+  if (result.alreadyExisted) {
+    await prepareLocalWorktreeRootForRepo(store, aligned.repo)
+  }
+  return aligned
+}
+
 export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): void {
   // Remove previously registered handlers so we can re-register on macOS app re-activation (new window).
   ipcMain.removeHandler('repos:list')
@@ -1303,6 +1355,9 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
   ipcMain.removeHandler('projectGroups:scanNested')
   ipcMain.removeHandler('projectGroups:cancelNestedScan')
   ipcMain.removeHandler('projectGroups:importNested')
+  setSshProjectSetupExistingFolderHandler((args) =>
+    setupProjectExistingFolder(store, mainWindow, args)
+  )
   ipcMain.removeHandler('folderWorkspaces:list')
   ipcMain.removeHandler('folderWorkspaces:create')
   ipcMain.removeHandler('folderWorkspaces:update')
@@ -1429,51 +1484,7 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
         rawArgs,
         'project_host_setup_invalid_args'
       )
-      const parsedHost = parseExecutionHostId(args.hostId)
-      if (!parsedHost) {
-        throw new Error(`Unsupported host: ${args.hostId}`)
-      }
-      const result =
-        parsedHost.kind === 'local'
-          ? await addLocalRepoFromPath(store, args.path, args.kind)
-          : parsedHost.kind === 'ssh'
-            ? await addRemoteRepoFromPath(store, {
-                connectionId: parsedHost.targetId,
-                remotePath: args.path,
-                displayName: args.displayName,
-                kind: args.kind
-              })
-            : {
-                error:
-                  'Runtime hosts must be set up through the runtime projectHostSetup.setupExistingFolder RPC.'
-              }
-      if ('error' in result) {
-        throw new Error(result.error)
-      }
-      let aligned: ProjectHostSetupResult
-      try {
-        aligned = alignRepoWithRequestedProject(
-          store,
-          result.repo,
-          args.projectId,
-          args.setupMethod,
-          args.projectProviderIdentity
-        )
-      } catch (err) {
-        // Why: an import that cannot be linked must not leave a new repo registration or authorization root behind.
-        if (!result.alreadyExisted) {
-          store.removeProject(result.repo.id)
-          invalidateAuthorizedRootsCache()
-        }
-        throw err
-      }
-      invalidateAuthorizedRootsCache()
-      notifyReposChanged(mainWindow)
-      emitRepoAdded('folder_picker', result.alreadyExisted)
-      if (result.alreadyExisted) {
-        await prepareLocalWorktreeRootForRepo(store, aligned.repo)
-      }
-      return aligned
+      return setupProjectExistingFolder(store, mainWindow, args)
     }
   )
 

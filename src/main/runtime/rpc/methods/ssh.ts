@@ -1,6 +1,7 @@
 import { z } from 'zod'
 import {
   connectRegisteredSshTarget,
+  ensureRegisteredSshConfigTarget,
   getRegisteredSshState,
   listRegisteredRemovedSshTargetLabels,
   listRegisteredSshTargets
@@ -12,11 +13,23 @@ const SshTarget = z.object({
   targetId: z.string().min(1)
 })
 
+const SshConfigTarget = z.object({
+  alias: z.string().trim().min(1)
+})
+
 function listRegisteredSshTargetSummaries(): { id: string; label: string }[] {
   return listRegisteredSshTargets().map(({ id, label }) => ({ id, label }))
 }
 
 export const SSH_METHODS: RpcMethod[] = [
+  defineMethod({
+    name: 'ssh.ensureConfigTarget',
+    params: SshConfigTarget,
+    handler: async (params) => {
+      const { target, created } = await ensureRegisteredSshConfigTarget(params.alias)
+      return { target: { id: target.id, label: target.label }, created }
+    }
+  }),
   defineMethod({
     name: 'ssh.getState',
     params: SshTarget,
