@@ -19,7 +19,8 @@ import {
 } from '../../shared/pull-request-generation'
 import {
   cleanGeneratedCommitMessage,
-  excerptAgentFailureOutput
+  excerptAgentFailureOutput,
+  sanitizeAgentFailureDetail
 } from '../../shared/commit-message-prompt'
 import {
   captureAgentGenerationFailureOutput,
@@ -194,40 +195,6 @@ function formatAgentCliFailureMessage(
   return options?.includeLocalMacDnsHint === false
     ? message
     : withMacTailscaleDnsHint(message, detail)
-}
-
-function sanitizeAgentFailureDetail(detail: string | null): string | null {
-  // Cf covers bidi overrides (U+202E etc.) that could visually reorder the
-  // persisted, client-synced detail.
-  const trimmed = detail
-    ?.replace(/[\p{Cc}\p{Cf}]+/gu, ' ')
-    .replace(/\s+/g, ' ')
-    .trim()
-  if (!trimmed) {
-    return null
-  }
-  // Why: agent stderr often includes local or SSH repo paths. Persisting those
-  // into worktree metadata leaks environment details into synced renderer state.
-  const redacted = trimmed
-    .replace(
-      /\\\\[^\s"'`<>\\]+\\(?:[^\s"'`<>\\]+(?:\s+[^\s"'`<>\\]+)*(?=\\)\\)*[^\s"'`<>\\]+/g,
-      '[path]'
-    )
-    // Only backslashes may repeat: JSON provider bodies double them
-    // (`C:\\Users\\name\\…`), while a URL's `://` must stay single so remedy
-    // links like `https://…` survive redaction.
-    .replace(
-      /[A-Za-z]:(?:\\+|\/)(?:[^\s"'`<>\\/|:*?]+(?:\s+[^\s"'`<>\\/|:*?]+)*(?=[\\/])(?:\\+|\/))*[^\s"'`<>\\/|:*?]+/g,
-      '[path]'
-    )
-    // Why: require ≥2 segments (one internal `/`) so provider remedy tokens like
-    // `/login` survive while multi-segment paths (`/Users/name/repo`) still redact.
-    // `=:,` prefixes catch key=/path value:/path list,/path shapes in provider bodies.
-    .replace(
-      /(^|[\s"'`(=:,])\/(?:[^\s"'`<>/]+(?:\s+[^\s"'`<>/]+)*(?=\/)\/)+[^\s"'`<>/]+/g,
-      '$1[path]'
-    )
-  return redacted.length > 240 ? `${redacted.slice(0, 240).trimEnd()}...` : redacted
 }
 
 function userFacingUnsafeWindowsBatchArgs(label: string): string {
