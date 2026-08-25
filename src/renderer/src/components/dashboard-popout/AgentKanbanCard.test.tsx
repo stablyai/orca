@@ -10,6 +10,7 @@ import { TooltipProvider } from '@/components/ui/tooltip'
 import { AgentKanbanCard } from './AgentKanbanCard'
 
 const agentIconRender = vi.fn()
+const agentStateDotRender = vi.fn()
 
 vi.mock('@/lib/agent-catalog', () => ({
   AgentIcon: () => {
@@ -19,7 +20,10 @@ vi.mock('@/lib/agent-catalog', () => ({
 }))
 
 vi.mock('@/components/AgentStateDot', () => ({
-  AgentStateDot: () => <span data-testid="state-dot" />
+  AgentStateDot: ({ state }: { state: string }) => {
+    agentStateDotRender(state)
+    return <span data-testid="state-dot" />
+  }
 }))
 
 function card(overrides: Partial<DashboardCard> = {}): DashboardCard {
@@ -282,6 +286,24 @@ describe('AgentKanbanCard', () => {
     )
     expect(agentIconRender).toHaveBeenCalledTimes(2)
     expect(screen.getByText('2m')).toBeInTheDocument()
+  })
+
+  it('rerenders when a working card enters monitoring', () => {
+    const initial = card()
+    const { rerender } = renderCard({ card: initial, now: 2_000 })
+    expect(agentStateDotRender).toHaveBeenLastCalledWith('working')
+
+    rerender(
+      <TooltipProvider>
+        <AgentKanbanCard
+          card={{ ...initial, workingMode: 'monitoring' }}
+          now={2_000}
+          onOpenTerminal={vi.fn()}
+        />
+      </TooltipProvider>
+    )
+
+    expect(agentStateDotRender).toHaveBeenLastCalledWith('monitoring')
   })
 
   it('rerenders when the repo icon changes', () => {

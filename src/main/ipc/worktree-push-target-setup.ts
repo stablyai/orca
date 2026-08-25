@@ -95,14 +95,24 @@ export async function prepareWorktreePushTargetWithExec(
     }
   }
 
-  await execGit(
-    [
-      'fetch',
-      remoteName,
-      `+refs/heads/${target.branchName}:refs/remotes/${remoteName}/${target.branchName}`
-    ],
-    repoPath
-  )
+  try {
+    await execGit(
+      [
+        'fetch',
+        remoteName,
+        `+refs/heads/${target.branchName}:refs/remotes/${remoteName}/${target.branchName}`
+      ],
+      repoPath
+    )
+  } catch (error) {
+    // Why: the create this remote was added for is failing; leaving it behind
+    // orphans a pr-* remote nothing will ever clean up (cleanup runs on worktree
+    // removal, and no worktree exists).
+    if (remoteCreated) {
+      await execGit(['remote', 'remove', remoteName], repoPath).catch(() => {})
+    }
+    throw error
+  }
   return {
     ...sanitizedTarget,
     remoteName,

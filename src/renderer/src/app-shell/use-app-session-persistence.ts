@@ -1,7 +1,7 @@
 import { useEffect } from 'react'
 import { translate } from '@/i18n/i18n'
 import { useAppStore } from '../store'
-import { isRemoteWorkspaceSnapshotApplyInProgress } from '../hooks/useIpcEvents'
+import { isDirectSshRemoteWorkspaceApplyInProgress } from '../hooks/remote-workspace-snapshot-apply'
 import { createSessionWriteSubscriber } from '../lib/session-write-subscriber'
 import { buildActiveViewUnloadPatch } from '../lib/active-view-persist'
 import {
@@ -76,7 +76,7 @@ export function useAppSessionPersistence(): void {
   useEffect(() => {
     return createSessionWriteSubscriber({
       store: useAppStore,
-      shouldSchedulePersist: () => !isRemoteWorkspaceSnapshotApplyInProgress(),
+      shouldSchedulePersist: () => !isDirectSshRemoteWorkspaceApplyInProgress(),
       persist: ({ patch }) => {
         const state = useAppStore.getState()
         // Why: route each host's worktree-scoped slice to its own partition; return the local write so the remote-workspace upload chain below keeps its ordering.

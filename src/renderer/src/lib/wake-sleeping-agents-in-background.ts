@@ -209,13 +209,11 @@ export function wakeSleepingAgentsForWorktreeInBackground(worktreeId: string): v
       hasUntargetablePassiveRecord ? undefined : [...passiveTabIds]
     )
   }
-  const launchedTabIds: string[] = []
   resumeSleepingAgentSessionsForWorktree(worktreeId, {
     suppressNavigation: true,
     skipClaimKeys: wokenClaimKeys,
-    onSessionLaunched: (tabId) => launchedTabIds.push(tabId)
+    // Why: a mirror-parked sweep replays after this call returns, so each tab
+    // must request its own mount instead of a batch collected here.
+    onSessionLaunched: (tabId) => dispatchBackgroundMount(worktreeId, [tabId])
   })
-  if (launchedTabIds.length > 0) {
-    dispatchBackgroundMount(worktreeId, launchedTabIds)
-  }
 }

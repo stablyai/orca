@@ -1,8 +1,12 @@
 import { WebglAddon } from '@xterm/addon-webgl'
-import type { ManagedPaneInternal } from './pane-manager-types'
+import type { ManagedPane, ManagedPaneInternal } from './pane-manager-types'
 import { recordTerminalWebglDiagnostic } from '../../../../shared/terminal-webgl-diagnostics'
 import { getLivePaneCensus } from './pane-manager-registry'
-import { forceRepaintThroughRenderPause } from './terminal-render-pause-release'
+import { isManagedPaneDisplayNone } from './pane-display-visibility'
+import {
+  forceFullViewportPresent,
+  requestFullViewportPresent
+} from './terminal-render-pause-release'
 import {
   getTerminalWebglAutoDecision,
   resetTerminalWebglAutoDecision
@@ -24,10 +28,6 @@ let suggestedRendererType: 'dom' | undefined
 type ReleasableWebglContext = {
   getExtension(name: 'WEBGL_lose_context'): WEBGL_lose_context | null
   isContextLost?: () => boolean
-  blendFuncSeparate?: (srcRgb: number, dstRgb: number, srcAlpha: number, dstAlpha: number) => void
-  readonly SRC_ALPHA: number
-  readonly ONE_MINUS_SRC_ALPHA: number
-  readonly ONE: number
 }
 
 type XtermWebglAddonInternals = {
@@ -36,11 +36,6 @@ type XtermWebglAddonInternals = {
     _canvas?: HTMLCanvasElement
   }
 }
-
-const webglContextRestoreHandlers = new WeakMap<
-  WebglAddon,
-  { canvas: HTMLCanvasElement; handler: EventListener }
->()
 
 export function resetTerminalWebglSuggestion(): void {
   // Why: toggling GPU settings should let "auto" retry WebGL after an earlier
@@ -98,7 +93,6 @@ export function disposeWebgl(
   options?: { refreshDimensions?: boolean }
 ): void {
   cancelPendingWebglRefresh(pane)
-  markPaneTerminalRenderer(pane, 'dom')
   if (!pane.webglAddon) {
     return
   }
@@ -128,7 +122,6 @@ export function disposeWebgl(
 }
 
 function releaseXtermWebglContext(webglAddon: ManagedPaneInternal['webglAddon']): void {
-  removeWebglContextRestoreHandler(webglAddon)
   try {
     // Why: xterm removes the canvas on dispose, but Windows/ANGLE can keep the
     // driver context alive long enough for rapid terminal activation to hit
@@ -148,7 +141,7 @@ export function markComplexScriptOutput(pane: ManagedPaneInternal): void {
   pane.hasComplexScriptOutput = true
 }
 
-export function resetWebglTextureAtlas(pane: ManagedPaneInternal): void {
+export function clearWebglTextureAtlas(pane: ManagedPaneInternal): void {
   if (pane.webglDisabledAfterContextLoss) {
     return
   }
@@ -157,12 +150,89 @@ export function resetWebglTextureAtlas(pane: ManagedPaneInternal): void {
     // context-loss event. Clearing the atlas preserves GPU rendering and forces
     // a fresh paint when the pane becomes visible/focused again.
     pane.webglAddon?.clearTextureAtlas()
+  } catch {
+    /* ignore — pane may have been disposed in the meantime */
+  }
+}
+
+const DISPLAYED_PRESENT_RETRY_FRAMES = 16
+type ViewportPresentMode = 'preserve-synchronized-output' | 'force-current-buffer'
+type DisplayedPresentRetry = { frames: number; mode: ViewportPresentMode }
+const pendingDisplayedPresentRetries = new WeakMap<ManagedPaneInternal, DisplayedPresentRetry>()
+
+function schedulePresentWhenDisplayed(pane: ManagedPaneInternal, mode: ViewportPresentMode): void {
+  if (typeof globalThis.requestAnimationFrame !== 'function') {
+    return
+  }
+  const pending = pendingDisplayedPresentRetries.get(pane)
+  if (pending) {
+    if (mode === 'force-current-buffer') {
+      pending.mode = mode
+    }
+    return
+  }
+  pendingDisplayedPresentRetries.set(pane, {
+    frames: DISPLAYED_PRESENT_RETRY_FRAMES,
+    mode
+  })
+  const tick = (): void => {
+    const retry = pendingDisplayedPresentRetries.get(pane)
+    if (!retry || retry.frames <= 0 || !pane.terminal) {
+      pendingDisplayedPresentRetries.delete(pane)
+      return
+    }
+    if (isManagedPaneDisplayNone(pane)) {
+      if (retry.frames === 1) {
+        pendingDisplayedPresentRetries.delete(pane)
+        return
+      }
+      retry.frames -= 1
+      globalThis.requestAnimationFrame(tick)
+      return
+    }
+    pendingDisplayedPresentRetries.delete(pane)
+    presentPaneViewportWithMode(pane, retry.mode)
+  }
+  globalThis.requestAnimationFrame(tick)
+}
+
+function presentPaneViewportWithMode(pane: ManagedPane, mode: ViewportPresentMode): void {
+  const internal = pane as ManagedPaneInternal
+  if (internal.webglDisabledAfterContextLoss) {
+    return
+  }
+  try {
     // Why: on reveal xterm's IntersectionObserver can still report the pane as
     // not intersecting, so a plain refresh() is swallowed by RenderService's
-    // paused-render gate and the cleared model never repaints (stale bottom rows
-    // until a drag-select forces a redraw). Force the paused render through
-    // first; only fall back to refresh() when the terminal was not gated.
-    if (!forceRepaintThroughRenderPause(pane.terminal)) {
+    // paused-render gate and the pending model never repaints (stale bottom rows
+    // until a drag-select forces a redraw). Request one synchronous full present
+    // even if the observer already unpaused; only fall back to refresh() when
+    // internals are unavailable.
+    //
+    // Why the display check: that release is only right for a pane that is
+    // DOM-visible. A pane with no box at all (collapsed sibling of an expanded
+    // pane, a restore that stays display:none for its whole reattach) is
+    // legitimately paused, and releasing it paints into nothing and then leaves
+    // the service unpaused for good — the observer only
+    // fires on a change, so it never re-pauses. Clearing _needsFullRefresh with
+    // it also drops the full repaint the observer owes the pane on reveal, and
+    // the deferred _pausedResizeTask that flushes alongside it. Latching is what
+    // xterm's own gate does, and the reveal repaints from the latch.
+    if (isManagedPaneDisplayNone(pane)) {
+      pane.terminal.refresh(0, pane.terminal.rows - 1)
+      // Why: light tab reveal runs while the overlay is still display:none
+      // (field trace: paused=true needFull=true at click). A plain refresh only
+      // latches _needsFullRefresh; if IntersectionObserver never fires, the
+      // canvas keeps pre-hide pixels until a user resize. Retry once the box
+      // exists so the full present actually runs.
+      schedulePresentWhenDisplayed(internal, mode)
+      return
+    }
+    const presented =
+      mode === 'force-current-buffer'
+        ? forceFullViewportPresent(pane.terminal)
+        : requestFullViewportPresent(pane.terminal)
+    if (!presented) {
       // Why: refresh even without a WebGL addon so recovery never silently
       // no-ops — a DOM-rendered pane can hold stale pixels after reveal too.
       pane.terminal.refresh(0, pane.terminal.rows - 1)
@@ -170,6 +240,19 @@ export function resetWebglTextureAtlas(pane: ManagedPaneInternal): void {
   } catch {
     /* ignore — pane may have been disposed in the meantime */
   }
+}
+
+export function presentPaneViewport(pane: ManagedPane): void {
+  presentPaneViewportWithMode(pane, 'force-current-buffer')
+}
+
+export function presentPaneViewportPreservingSynchronizedOutput(pane: ManagedPane): void {
+  presentPaneViewportWithMode(pane, 'preserve-synchronized-output')
+}
+
+export function resetWebglTextureAtlas(pane: ManagedPaneInternal): void {
+  clearWebglTextureAtlas(pane)
+  presentPaneViewport(pane)
 }
 
 function refitAfterFitAnchoredWebglAttach(pane: ManagedPaneInternal): void {
@@ -270,10 +353,7 @@ export function attachWebgl(pane: ManagedPaneInternal): void {
       disposeWebgl(pane, { refreshDimensions: true })
     })
     pane.terminal.loadAddon(addon)
-    normalizeWebglAlphaBlending(addon)
-    installWebglContextRestoreHandler(addon)
     pane.webglAddon = addon
-    markPaneTerminalRenderer(pane, 'webgl')
     refreshTerminalAfterWebglAttach(pane)
   } catch (err) {
     if (pane.terminalGpuAcceleration === 'auto') {
@@ -290,39 +370,5 @@ export function attachWebgl(pane: ManagedPaneInternal): void {
       /* ignore — a half-constructed addon may throw on dispose */
     }
     pane.webglAddon = null
-  }
-}
-
-function normalizeWebglAlphaBlending(webglAddon: WebglAddon): void {
-  const gl = (webglAddon as unknown as XtermWebglAddonInternals)._renderer?._gl
-  // xterm's shared blendFunc squares destination alpha. Standard source-over keeps colored translucent backgrounds pixel-identical to CSS.
-  gl?.blendFuncSeparate?.(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA, gl.ONE, gl.ONE_MINUS_SRC_ALPHA)
-}
-
-function installWebglContextRestoreHandler(webglAddon: WebglAddon): void {
-  const canvas = (webglAddon as unknown as XtermWebglAddonInternals)._renderer?._canvas
-  if (!canvas) {
-    return
-  }
-  const handler = () => normalizeWebglAlphaBlending(webglAddon)
-  canvas.addEventListener('webglcontextrestored', handler)
-  webglContextRestoreHandlers.set(webglAddon, { canvas, handler })
-}
-
-function removeWebglContextRestoreHandler(webglAddon: ManagedPaneInternal['webglAddon']): void {
-  if (!webglAddon) {
-    return
-  }
-  const registered = webglContextRestoreHandlers.get(webglAddon)
-  if (!registered) {
-    return
-  }
-  registered.canvas.removeEventListener('webglcontextrestored', registered.handler)
-  webglContextRestoreHandlers.delete(webglAddon)
-}
-
-function markPaneTerminalRenderer(pane: ManagedPaneInternal, renderer: 'dom' | 'webgl'): void {
-  if (pane.xtermContainer.dataset) {
-    pane.xtermContainer.dataset.terminalRenderer = renderer
   }
 }

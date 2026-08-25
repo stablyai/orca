@@ -52,6 +52,9 @@ export type StableLogicalRpcClient = RpcClient & {
   getPendingPath(): MobileConnectionPath | null
   setRecoveryPath(path: MobileConnectionPath | null, attempt?: number): void
   setRecoveryAttempt(attempt: number): void
+  // Latched when the desktop has repeatedly refused this device's relay credential.
+  setPairingRejected(rejected: boolean): void
+  isPairingRejected(): boolean
   // Recovery attempts share this signal so status-only changes rerender.
   onConnectionPathChange(listener: () => void): () => void
   getGeneration(): number
@@ -157,6 +160,7 @@ export function createStableLogicalRpcClient(
     getState: () => state,
     getReconnectAttempt: () => connectionPath.reconnectAttempt(activeSession.getReconnectAttempt()),
     getLastConnectedAt: () => activeSession.getLastConnectedAt(),
+    getLastInboundAt: () => activeSession.getLastInboundAt?.() ?? null,
     onStateChange(listener) {
       stateListeners.add(listener)
       return () => stateListeners.delete(listener)
@@ -276,6 +280,8 @@ export function createStableLogicalRpcClient(
     getPendingPath: () => connectionPath.pending(),
     setRecoveryPath: (path, attempt) => connectionPath.setRecovery(path, attempt),
     setRecoveryAttempt: (attempt) => connectionPath.setRecoveryAttempt(attempt),
+    setPairingRejected: (rejected) => connectionPath.setPairingRejected(rejected),
+    isPairingRejected: () => connectionPath.isPairingRejected(),
     onConnectionPathChange: (listener) => connectionPath.subscribe(listener),
     getGeneration: () => generation
   }

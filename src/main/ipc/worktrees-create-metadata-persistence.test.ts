@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { REVIEW_HEAD_FETCH_TIMEOUT_MS } from '../../shared/review-head-tracking-ref'
 import {
+  handleMock,
   removeHandlerMock,
   listWorktreesMock,
   getPullRequestPushTargetMock,
@@ -13,6 +14,35 @@ import {
   makeWorktreeMeta
 } from './worktrees-test-fixtures'
 import type { WorktreeRuntimeStub } from './worktrees-test-runtime-stub'
+
+const WORKTREE_HANDLER_CHANNELS = [
+  'worktrees:listAll',
+  'worktrees:list',
+  'worktrees:listRetiredNames',
+  'worktrees:listDetected',
+  'worktrees:listKnownForExecutionHost',
+  'worktrees:forgetRemovedForExecutionHost',
+  'worktrees:cancelListDetected',
+  'worktrees:create',
+  'worktrees:adoptProvisionedRoot',
+  'worktrees:prefetchCreateBase',
+  'worktrees:resolvePrBase',
+  'worktrees:resolveMrBase',
+  'worktrees:remove',
+  'worktrees:forgetLocal',
+  'worktrees:forceDeletePreservedBranch',
+  'worktrees:updateMeta',
+  'worktrees:listLineage',
+  'worktrees:listLineageForHost',
+  'worktrees:updateLineage',
+  'worktrees:persistSortOrder',
+  'worktrees:getBranchRenameFailureOutput',
+  'hooks:check',
+  'hooks:inspectSetupScriptImports',
+  'hooks:createIssueCommandRunner',
+  'hooks:readIssueCommand',
+  'hooks:writeIssueCommand'
+] as const
 
 vi.mock('electron', async () =>
   (await import('./worktrees-test-module-mocks')).electronModuleMock()
@@ -47,6 +77,9 @@ vi.mock('./worktree-symlinks', async () =>
   (await import('./worktrees-test-module-mocks')).worktreeSymlinksModuleMock()
 )
 vi.mock('./ssh', async () => (await import('./worktrees-test-module-mocks')).sshModuleMock())
+vi.mock('../ssh/ssh-target-registry', async () =>
+  (await import('./worktrees-test-module-mocks')).sshTargetRegistryModuleMock()
+)
 vi.mock('../hooks', async () => (await import('./worktrees-test-module-mocks')).hooksModuleMock())
 vi.mock('../setup-runner-script-text', async (importOriginal) =>
   (await import('./worktrees-test-module-mocks')).setupRunnerScriptTextModuleMock(
@@ -108,6 +141,20 @@ describe('registerWorktreeHandlers', () => {
   it('clears the branch rename failure-output handler before re-registering IPC handlers', () => {
     expect(removeHandlerMock).toHaveBeenCalledWith('worktrees:getBranchRenameFailureOutput')
     expect(handlers['worktrees:getBranchRenameFailureOutput']).toBeDefined()
+  })
+
+  it('removes exactly the installed channel set before installing the first handler', () => {
+    const removedChannels = removeHandlerMock.mock.calls.map(([channel]) => channel)
+    const installedChannels = handleMock.mock.calls.map(([channel]) => channel)
+
+    expect(new Set(removedChannels)).toEqual(new Set(WORKTREE_HANDLER_CHANNELS))
+    expect(new Set(removedChannels)).toEqual(new Set(installedChannels))
+    expect(new Set(installedChannels)).toEqual(new Set(WORKTREE_HANDLER_CHANNELS))
+    expect(removedChannels).toHaveLength(WORKTREE_HANDLER_CHANNELS.length)
+    expect(installedChannels).toHaveLength(WORKTREE_HANDLER_CHANNELS.length)
+    expect(Math.max(...removeHandlerMock.mock.invocationCallOrder)).toBeLessThan(
+      Math.min(...handleMock.mock.invocationCallOrder)
+    )
   })
 
   it('persistSortOrder only reorders existing worktrees and never mints meta for a stale id', () => {

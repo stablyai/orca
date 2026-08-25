@@ -216,6 +216,7 @@ describe.skipIf(process.platform === 'win32')('RuntimeClient', () => {
     const status = await client.getCliStatus()
 
     expect(status.result).toEqual({
+      target: { kind: 'local' },
       app: {
         running: false,
         pid: null

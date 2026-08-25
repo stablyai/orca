@@ -1,14 +1,14 @@
 import { execFile, type ExecFileException } from 'node:child_process'
 
-// Why this exists: a startup color reply is written to the PTY master, and a POSIX
-// line discipline in ECHO copies it straight back out as visible junk (#12112).
-// Whether that will happen is readable state on the slave, not something that has to
-// be inferred from the bytes that come back — so Orca asks instead of guessing.
+// Reads the slave's line-discipline state for shell-prompt readiness detection.
+//
+// Orca deliberately does NOT read the ECHO bit to decide when to write a terminal reply.
+// It used to, and withholding the write until the bit was clear is what made the write
+// asynchronous and let replies overtake each other (#15559). Reply echoes are handled
+// on the output side instead — see pty-startup-reply-echo-shapes.ts.
 
 /** `unknown` means "could not be determined", never "assume quiet". */
 export type PtySlaveLineDisciplineEcho = 'echoing' | 'quiet' | 'unknown'
-
-export type PtySlaveEchoProbe = () => Promise<PtySlaveLineDisciplineEcho>
 
 export type PtySlaveLineEditorState = 'line-editor' | 'other' | 'unknown'
 
@@ -26,14 +26,6 @@ function sttyArgs(ptsName: string, platform: NodeJS.Platform): readonly string[]
   return platform === 'darwin' || platform.includes('bsd')
     ? ['-a', '-f', ptsName]
     : ['-a', '-F', ptsName]
-}
-
-function parseEchoFlag(sttyOutput: string): PtySlaveLineDisciplineEcho {
-  const match = ECHO_FLAG.exec(sttyOutput)
-  if (!match) {
-    return 'unknown'
-  }
-  return match[1] === '-' ? 'quiet' : 'echoing'
 }
 
 function parseLineEditorState(sttyOutput: string): PtySlaveLineEditorState {
@@ -86,21 +78,6 @@ function runStty(ptsName: string, platform: NodeJS.Platform): Promise<SttyProbeR
 export function readPtySlavePath(pty: unknown): string | undefined {
   const candidate = (pty as { ptsName?: unknown } | null | undefined)?.ptsName
   return typeof candidate === 'string' && candidate.length > 0 ? candidate : undefined
-}
-
-/**
- * Probe for whether the slave would echo a write to the master right now.
- *
- * Returns undefined when the platform has no line discipline to read: ConPTY and
- * wsl.exe do not echo a master write at all, so a caller with no probe is correct to
- * write immediately rather than degraded. A probe that exists but answers `unknown`
- * is the degraded case, and callers must not read that as `quiet`.
- */
-export function createPtySlaveEchoProbe(
-  ptsName: string | undefined,
-  platform: NodeJS.Platform = process.platform
-): PtySlaveEchoProbe | undefined {
-  return createSttyProbe(ptsName, platform, parseEchoFlag)
 }
 
 export function createPtySlaveLineEditorProbe(

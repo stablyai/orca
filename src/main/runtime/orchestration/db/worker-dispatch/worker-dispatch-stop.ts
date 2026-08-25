@@ -28,7 +28,8 @@ export function isDispatchProcessCurrent(
 
 export function beginWorkerStop(
   this: OrchestrationDb,
-  dispatchId: string
+  dispatchId: string,
+  runtimeEpoch: string
 ):
   | { disposition: 'stopping'; worker: WorkerDispatchRow; dispatch: DispatchContextRow }
   | { disposition: 'already_settled'; worker: WorkerDispatchRow; dispatch: DispatchContextRow }
@@ -61,10 +62,11 @@ export function beginWorkerStop(
     this.db
       .prepare(
         `UPDATE worker_dispatches
-         SET state = 'stopping', stage = 'stop_requested', updated_at = datetime('now')
+         SET state = 'stopping', stage = 'stop_requested',
+             runtime_epoch = COALESCE(?, runtime_epoch), updated_at = datetime('now')
          WHERE dispatch_id = ? AND state IN ('ready', 'start_unknown')`
       )
-      .run(dispatchId)
+      .run(runtimeEpoch, dispatchId)
     this.db
       .prepare(
         `UPDATE dispatch_contexts

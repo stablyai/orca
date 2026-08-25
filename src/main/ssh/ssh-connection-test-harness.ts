@@ -50,8 +50,17 @@ export let connectAttempts = 0
 export let pendingExecCallback: ((err: Error | undefined, channel: unknown) => void) | null = null
 export let pendingSftpCallback: ((err: Error | undefined, channel: unknown) => void) | null = null
 
+/** Lets a test present a real key blob instead of the placeholder. */
+export const VALID_ED25519_HOST_KEY = Buffer.from(
+  'AAAAC3NzaC1lZDI1NTE5AAAAIKqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq',
+  'base64'
+)
+
 // Knobs tests assign to; grouped because imported bindings cannot be reassigned.
 export const ssh2Mock = {
+  presentedHostKey: undefined as Buffer | undefined,
+  /** What the verifier decided about the presented key on the most recent connect. */
+  lastHostKeyAccepted: undefined as boolean | undefined,
   connectBehavior: 'ready' as 'ready' | 'error',
   connectErrorMessage: '',
   connectErrorCode: '',
@@ -136,9 +145,29 @@ export function createSsh2Module(): Ssh2ModuleMock {
     connect(config?: unknown) {
       connectAttempts += 1
       this.lastConnectConfig = config
-      const hostVerifier = (config as { hostVerifier?: (key: Buffer) => boolean } | undefined)
-        ?.hostVerifier
-      hostVerifier?.(Buffer.from('mock-ssh-host-key'))
+      // Why the callback form: ssh2 calls hostVerifier(key, verify) and only accepts synchronously
+      // when the return is not undefined. A mock that passed one argument and ignored the result
+      // would pass against a verifier that never decides — which is the regression host key
+      // verification exists to prevent.
+      const hostVerifier = (
+        config as
+          | { hostVerifier?: (key: Buffer, verify: (ok: boolean) => void) => undefined }
+          | undefined
+      )?.hostVerifier
+      const presentedHostKey = ssh2Mock.presentedHostKey ?? VALID_ED25519_HOST_KEY
+      ssh2Mock.lastHostKeyAccepted = undefined
+      hostVerifier?.(presentedHostKey, (ok) => {
+        ssh2Mock.lastHostKeyAccepted = ok
+      })
+      if (ssh2Mock.lastHostKeyAccepted === false) {
+        // ssh2 aborts the handshake when the verifier denies; a mock that carried on to 'ready'
+        // would let a rejected host key look like a successful connect.
+        setTimeout(
+          () => emitSshEvent('error', new Error('All configured authentication methods failed')),
+          0
+        )
+        return
+      }
       setTimeout(() => {
         const next = ssh2Mock.connectSequence.shift()
         if (next instanceof Error) {
@@ -242,6 +271,8 @@ export function resetSshConnectionMocks(): void {
   ssh2Mock.sftpBehavior = 'callback'
   pendingSftpCallback = null
   ssh2Mock.notifyClientCreated = undefined
+  ssh2Mock.presentedHostKey = undefined
+  ssh2Mock.lastHostKeyAccepted = undefined
   getOrcaControlSocketPathMock.mockReset()
   getOrcaControlSocketPathMock.mockReturnValue(null)
   removeControlSocketPathMock.mockReset()

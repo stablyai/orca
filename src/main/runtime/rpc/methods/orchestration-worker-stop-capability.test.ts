@@ -28,6 +28,7 @@ describe('federated worker stop capability', () => {
     })
     const runtime = {
       getOrchestrationDb: () => db,
+      getRuntimeId: () => 'runtime_current',
       resolveOrchestrationWorkerServer: () => ({
         environmentId: 'environment_linux',
         name: 'linux',
@@ -48,6 +49,7 @@ describe('federated worker stop capability', () => {
         }
       })
     ).resolves.toMatchObject({ state: 'stop_unknown', processAction: 'none' })
+    expect(db.beginWorkerStop).toHaveBeenCalledWith('ctx_remote', 'runtime_current')
     expect(markWorkerStopUnknown).toHaveBeenCalledWith(
       'ctx_remote',
       'Connected server linux cannot prove the worker stop outcome.'

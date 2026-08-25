@@ -105,6 +105,21 @@ function makeAnnotation(pageId: string, id = 'annotation-1'): BrowserPageAnnotat
 }
 
 describe('createBrowserSlice annotations', () => {
+  it('announces the store-selected browser page before its guest is destroyed', () => {
+    const store = createTestStore()
+    const previous = store.getState().createBrowserTab('wt-1', 'https://previous.example.com')
+    const closing = store.getState().createBrowserTab('wt-1', 'https://closing.example.com')
+    store.getState().setActiveBrowserTab(previous.id)
+    store.getState().setActiveBrowserTab(closing.id)
+    mockApi.browser.notifyActiveTabChanged.mockClear()
+
+    store.getState().closeBrowserTab(closing.id)
+
+    expect(mockApi.browser.notifyActiveTabChanged).toHaveBeenCalledWith({
+      browserPageId: previous.activePageId
+    })
+  })
+
   it('keeps a requested canonical page identity distinct from its workspace', () => {
     const store = createTestStore()
     const tab = store.getState().createBrowserTab('wt-1', 'about:blank', {

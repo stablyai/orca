@@ -387,7 +387,7 @@ describe('Jira issue operations', () => {
     ])
 
     expect(String(jiraRequestMock.mock.calls[0][1])).toContain(
-      '/rest/api/3/issue/createmeta/10000/issuetypes/10001?'
+      '/rest/api/3/issue/createmeta/10000/issuetypes/10001?maxResults=100&startAt=0'
     )
   })
 

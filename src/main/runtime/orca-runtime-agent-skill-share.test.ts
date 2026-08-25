@@ -3,6 +3,7 @@ import { mkdir, mkdtemp, readdir, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { installFakeAppEnvironment } from '../../../config/scripts/vitest-host-ports-setup'
 import type { AgentSkillShareRequest } from '../../shared/agent-skill-sharing-contract'
 import { getDefaultSettings } from '../../shared/constants'
 import type { DiscoveredSkill } from '../../shared/skills'
@@ -120,6 +121,7 @@ function runtimeWithCloud(options: {
 }
 
 beforeEach(async () => {
+  installFakeAppEnvironment({ getPath: () => mocks.userDataPath })
   testRoot = await mkdtemp(join(tmpdir(), 'orca-agent-skill-share-'))
   mocks.userDataPath = testRoot
 })

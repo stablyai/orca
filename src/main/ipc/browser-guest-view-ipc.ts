@@ -1,5 +1,11 @@
 import { ipcMain } from 'electron'
 import { browserManager } from '../browser/browser-manager'
+import { publishBrowserClientPageMetadata } from '../browser/browser-client-page-metadata-transport'
+import {
+  BrowserClientPageMetadataParams,
+  type BrowserClientPageMetadataPublishOutcome
+} from '../../shared/browser-client-page-metadata-protocol'
+import { RemoteRuntimeClientError } from '../../shared/remote-runtime-client-error'
 import { isTrustedBrowserRenderer } from './browser-renderer-trust'
 import type { BrowserViewportOverride } from '../../shared/browser-workspace-types'
 import {
@@ -14,6 +20,7 @@ export function registerBrowserGuestViewHandlers(): void {
   ipcMain.removeHandler('browser:setAnnotationViewportBridge')
   ipcMain.removeHandler('browser:acceptDownload')
   ipcMain.removeHandler('browser:cancelDownload')
+  ipcMain.removeHandler('browser:publishClientPageMetadata')
 
   ipcMain.handle('browser:openDevTools', (event, args: { browserPageId: string }) => {
     if (!isTrustedBrowserRenderer(event.sender)) {
@@ -87,6 +94,36 @@ export function registerBrowserGuestViewHandlers(): void {
     }
   )
 
+  // Why this is not an ordinary runtime call: the runtime accepts page traffic only on the
+  // connection its browser-host lease attached on, and that lease lives here in main. A renderer
+  // publishing straight to the runtime is refused as a stale lease and the page's URL never moves.
+  ipcMain.handle(
+    'browser:publishClientPageMetadata',
+    async (
+      event,
+      args: { environmentId: string; params: unknown }
+    ): Promise<BrowserClientPageMetadataPublishOutcome> => {
+      if (!isTrustedBrowserRenderer(event.sender)) {
+        return { status: 'refused' }
+      }
+      if (typeof args?.environmentId !== 'string' || !args.environmentId) {
+        return { status: 'refused' }
+      }
+      const params = BrowserClientPageMetadataParams.safeParse(args.params)
+      if (!params.success) {
+        return { status: 'refused' }
+      }
+      try {
+        return {
+          status: 'published',
+          ...(await publishBrowserClientPageMetadata(args.environmentId, params.data))
+        }
+      } catch (error) {
+        return { status: 'failed', errorCode: browserClientPageMetadataErrorCode(error) }
+      }
+    }
+  )
+
   ipcMain.handle('browser:cancelDownload', (event, args: { downloadId: string }) => {
     if (!isTrustedBrowserRenderer(event.sender)) {
       return false
@@ -96,4 +133,11 @@ export function registerBrowserGuestViewHandlers(): void {
       senderWebContentsId: event.sender.id
     })
   })
+}
+
+function browserClientPageMetadataErrorCode(error: unknown): string {
+  if (error instanceof RemoteRuntimeClientError) {
+    return error.code
+  }
+  return error instanceof Error ? error.message : 'browser_client_page_metadata_failed'
 }

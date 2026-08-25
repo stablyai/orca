@@ -1,6 +1,7 @@
 import type { Project, ProjectHostSetup } from '../../../../../../shared/project-types'
 import type { Repo } from '../../../../../../shared/repo-types'
 import type { Worktree } from '../../../../../../shared/worktree/types'
+import type { RenderableFolderWorkspace } from './folder-workspace-lanes'
 import { toSshExecutionHostId } from '../../../../../../shared/execution-host'
 import { parseWslUncPath } from '../../../../../../shared/wsl-paths'
 import {
@@ -20,6 +21,9 @@ export type WorktreeGroupEntry = {
   items: Worktree[]
   repo?: Repo
   repoIds: Set<string>
+  /** Folder workspaces bucketed into this lane under non-repo grouping. Carries
+   *  the owning group because FolderWorkspaceRow requires a non-optional one. */
+  folderWorkspaces?: RenderableFolderWorkspace[]
 }
 
 export type ProjectGroupingIndex = {

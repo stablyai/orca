@@ -105,9 +105,15 @@ function makeExternalEntry(
 
 describe('automation-list-view', () => {
   it('counts and detects active filters', () => {
-    expect(isAutomationListFilterActive({ status: 'all', lastRun: 'all' })).toBe(false)
-    expect(isAutomationListFilterActive({ status: 'paused', lastRun: 'all' })).toBe(true)
-    expect(countAutomationListFilters({ status: 'paused', lastRun: 'failed' })).toBe(2)
+    expect(isAutomationListFilterActive({ status: 'all', lastRun: 'all', agentIds: [] })).toBe(
+      false
+    )
+    expect(isAutomationListFilterActive({ status: 'paused', lastRun: 'all', agentIds: [] })).toBe(
+      true
+    )
+    expect(countAutomationListFilters({ status: 'paused', lastRun: 'failed', agentIds: [] })).toBe(
+      2
+    )
   })
 
   it('toggles sort direction and defaults last run to newest first', () => {
@@ -134,10 +140,34 @@ describe('automation-list-view', () => {
         makeRun({ automationId: 'paused', status: 'completed' }),
         makeRun({ automationId: 'ok', status: 'dispatch_failed' })
       ],
-      filter: { status: 'enabled', lastRun: 'failed' },
+      filter: { status: 'enabled', lastRun: 'failed', agentIds: [] },
       sort: null
     })
     expect(items.map((item) => item.id)).toEqual(['ok', 'manager-1:job-1'])
+  })
+
+  it('filters local rows by multiple agents and leaves external rows out of agent scopes', () => {
+    const items = applyAutomationListView({
+      automations: [
+        makeAutomation({ id: 'codex-job', agentId: 'codex' }),
+        makeAutomation({ id: 'claude-job', agentId: 'claude' })
+      ],
+      externalEntries: [makeExternalEntry()],
+      runs: [],
+      filter: { status: 'all', lastRun: 'all', agentIds: ['codex', 'claude'] },
+      sort: null
+    })
+
+    expect(items.map((item) => item.id)).toEqual(['codex-job', 'claude-job'])
+  })
+
+  it('counts an agent filter alongside status and last-run filters', () => {
+    expect(isAutomationListFilterActive({ status: 'all', lastRun: 'all', agentIds: [] })).toBe(
+      false
+    )
+    expect(
+      countAutomationListFilters({ status: 'paused', lastRun: 'failed', agentIds: ['codex'] })
+    ).toBe(3)
   })
 
   it('sorts by name across local and external rows', () => {
@@ -145,7 +175,7 @@ describe('automation-list-view', () => {
       automations: [makeAutomation({ name: 'Zebra job' })],
       externalEntries: [makeExternalEntry({ name: 'Alpha digest' })],
       runs: [],
-      filter: { status: 'all', lastRun: 'all' },
+      filter: { status: 'all', lastRun: 'all', agentIds: [] },
       sort: { field: 'name', direction: 'asc' }
     })
     expect(items.map((item) => item.name)).toEqual(['Alpha digest', 'Zebra job'])
@@ -159,7 +189,7 @@ describe('automation-list-view', () => {
       ],
       externalEntries: [makeExternalEntry({ lastRunAt: '2026-08-12T09:00:00Z' })],
       runs: [makeRun({ automationId: 'old', dispatchedAt: Date.parse('2026-08-11T09:00:00Z') })],
-      filter: { status: 'all', lastRun: 'all' },
+      filter: { status: 'all', lastRun: 'all', agentIds: [] },
       sort: { field: 'lastRun', direction: 'desc' }
     })
     expect(items.map((item) => item.id)).toEqual(['manager-1:job-1', 'old', 'never'])

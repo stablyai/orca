@@ -57,6 +57,23 @@ describe('TabsSlice', () => {
       expect(tab.label).toBe('main.ts')
     })
 
+    it('stamps tabs with the active execution host', () => {
+      store.setState({
+        activeWorktreeId: WT,
+        activeWorkspaceExecutionHostId: 'runtime:host-b'
+      })
+
+      expect(store.getState().createUnifiedTab(WT, 'simulator').executionHostId).toBe(
+        'runtime:host-b'
+      )
+    })
+
+    it('stamps active local tabs when the local host field is null', () => {
+      store.setState({ activeWorktreeId: WT, activeWorkspaceExecutionHostId: null })
+
+      expect(store.getState().createUnifiedTab(WT, 'browser').executionHostId).toBe('local')
+    })
+
     it('activates the newly created tab', () => {
       const tab1 = store.getState().createUnifiedTab(WT, 'terminal')
       const tab2 = store.getState().createUnifiedTab(WT, 'terminal')
@@ -330,12 +347,12 @@ describe('TabsSlice', () => {
       expect(buildMobileSessionTabSnapshots(store.getState())[0]?.tabs ?? []).toEqual([])
     })
 
-    it('activates the previously-active tab (MRU) instead of the visual neighbor', () => {
+    it('activates the previously-active tab across content types', () => {
       const t1 = store.getState().createUnifiedTab(WT, 'terminal')
-      const t2 = store.getState().createUnifiedTab(WT, 'terminal')
-      const t3 = store.getState().createUnifiedTab(WT, 'terminal')
+      const t2 = store.getState().createUnifiedTab(WT, 'browser')
+      const t3 = store.getState().createUnifiedTab(WT, 'editor')
 
-      // Visit order ...→t3→t1→t3; closing t3 should jump to t1 (MRU previous), not the visual neighbor t2.
+      // Visit order ...→t3→t1→t3; closing t3 should jump to t1, not browser neighbor t2.
       store.getState().activateTab(t1.id)
       store.getState().activateTab(t3.id)
       store.getState().closeUnifiedTab(t3.id)

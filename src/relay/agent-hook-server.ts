@@ -1,8 +1,3 @@
-// Relay-side adapter for the shared agent-hook listener: hosts a loopback HTTP server and
-// forwards each parsed payload via a callback so `relay.ts` re-emits it as an `agent.hook`
-// JSON-RPC notification over the SSH channel. Replay cache is bounded one-entry-per-paneKey: a
-// reattaching Orca only needs each pane's current status, never its history, and the bound keeps a
-// long-lived relay from growing with every event.
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http'
 import { randomUUID } from 'node:crypto'
 import { join } from 'node:path'
@@ -12,16 +7,22 @@ import {
   clearAllListenerCaches,
   clearPaneCacheState,
   createHookListenerState,
-  getEndpointFileName,
-  HOOK_REQUEST_SLOWLORIS_MS,
-  normalizeHookPayload,
-  readRequestBody,
-  resolveCachedClaudeCompactOwnership,
-  resolveHookSource,
-  writeEndpointFile,
-  type AgentHookEventPayload,
   type HookListenerState
-} from '../shared/agent-hook-listener'
+} from '../shared/agent-hook-listener/listener-state'
+import {
+  getEndpointFileName,
+  writeEndpointFile
+} from '../shared/agent-hook-listener/endpoint-publication'
+import { HOOK_REQUEST_SLOWLORIS_MS } from '../shared/agent-hook-listener/listener-limits'
+import { normalizeHookPayload } from '../shared/agent-hook-listener'
+import { readRequestBody } from '../shared/agent-hook-listener/request-body'
+import { resolveHookSource } from '../shared/agent-hook-listener/source-routing'
+import type { AgentHookEventPayload } from '../shared/agent-hook-listener/listener-event'
+import {
+  createHookTransportInterferenceTracker,
+  describeHookTransportInterference,
+  isHookRequestTruncatedError
+} from '../shared/agent-hook-transport-interference'
 import {
   REMOTE_AGENT_HOOK_ENV,
   type AgentHookRelayEnvelope,
@@ -33,7 +34,6 @@ import { AgentHookResultRetryScheduler } from './agent-hook-result-retry-schedul
 
 export type RelayHookForward = (envelope: AgentHookRelayEnvelope) => void
 
-// Why: WSL lacks per-pane teardown, so cap replay-cache recency.
 const MAX_CACHED_PANES = 256
 
 export type RelayHookServerOptions = {
@@ -45,7 +45,6 @@ export type RelayHookServerOptions = {
   token?: string
   /** Preferred bind port. WSL relay passes the Windows listener's port so env-sourced client coords stay truthful; falls back to :0 if occupied. Defaults to :0. */
   preferredPort?: number
-  /** Called once per parsed payload; the relay wires this to `dispatcher.notify('agent.hook', envelope)`. */
   forward: RelayHookForward
 }
 
@@ -62,6 +61,9 @@ export class RelayAgentHookServer {
   private endpointFilePath: string
   private endpointFileWritten = false
   private state: HookListenerState = createHookListenerState()
+  private transportInterference = createHookTransportInterferenceTracker((report) => {
+    process.stderr.write(`${describeHookTransportInterference(report)}\n`)
+  })
   // Why: retain envelope metadata so replays match live POSTs.
   // Invariant: keys mirror state.lastStatusByPaneKey, populated/cleared in lockstep.
   private lastEnvelopeMetaByPaneKey = new Map<
@@ -114,7 +116,6 @@ export class RelayAgentHookServer {
     }
   }
 
-  /** True when the preferred port was occupied and the server fell back to an ephemeral bind. */
   get usedPortFallback(): boolean {
     return this.portFallbackApplied
   }
@@ -225,7 +226,10 @@ export class RelayAgentHookServer {
       res.end()
       return
     }
+    // Why: track our own destroy so the slowloris cap can't be misread as outside interference.
+    let destroyedBySlowlorisCap = false
     req.setTimeout(HOOK_REQUEST_SLOWLORIS_MS, () => {
+      destroyedBySlowlorisCap = true
       req.destroy()
     })
     try {
@@ -238,8 +242,7 @@ export class RelayAgentHookServer {
         return
       }
       const event = normalizeHookPayload(this.state, source, body, this.env, {
-        allowUnanchoredPreCompact: true,
-        allowUnanchoredPostCompact: true
+        deferCompactOwnershipToClient: true
       })
       if (event) {
         // TODO: once normalizeHookPayload returns validated env/version, drop bodyEnv/bodyVersion and source them from the listener result.
@@ -252,6 +255,11 @@ export class RelayAgentHookServer {
       res.writeHead(204)
       res.end()
     } catch (err) {
+      // Why (#11217): a remote host can run the same IDS; count truncations here so a blocked SSH
+      // relay reports the cause instead of an anonymous "hook request failed".
+      if (isHookRequestTruncatedError(err) && !destroyedBySlowlorisCap) {
+        this.transportInterference.record({ source: null, error: err })
+      }
       // Why: hooks fail open (204 on any error) so a buggy agent never blocks the run; still log so the 204 doesn't mask bugs.
       process.stderr.write(
         `[relay-hook-server] hook request failed: ${err instanceof Error ? err.message : String(err)}\n`
@@ -270,8 +278,10 @@ export class RelayAgentHookServer {
     if (event.payload.state !== 'done' || event.payload.lastAssistantMessage) {
       this.retryScheduler.clearAssistantMessageRetry(event.paneKey)
     }
-    const previous = this.state.lastStatusByPaneKey.get(event.paneKey)
-    const cachedEvent = resolveCachedClaudeCompactOwnership(previous, event)
+    // Why: keep PostCompact identity in the replay cache so the client can re-run ownership when
+    // it reconnects. Stripping it would let a cold relay replay a completion as an ordinary `done`
+    // row and resurrect a pane that the client had already retired.
+    const cachedEvent = event
     // Why: delete-then-set makes Map insertion order = recency, so the cap below evicts the longest-idle pane.
     this.state.lastStatusByPaneKey.delete(event.paneKey)
     this.state.lastStatusByPaneKey.set(event.paneKey, cachedEvent)

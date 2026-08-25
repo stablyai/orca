@@ -1,6 +1,7 @@
 import type { AppState } from '../../../types'
 import { splitWorktreeIdForFilesystem } from '../../../../../../shared/worktree/id'
 import { worktreeWorkspaceKey } from '../../../../../../shared/workspace-scope'
+import { getWorktreeIdFromVisitKey } from '@/lib/worktree-visit-recency'
 import {
   remapClosedTerminalTabSnapshotCwds,
   type ClosedTerminalTabSnapshot
@@ -41,7 +42,6 @@ const WORKTREE_ID_KEYED_MAP_KEYS = [
   'gitBranchCompareRequestStatusHeadByWorktree',
   'showDotfilesByWorktree',
   'expandedDirs',
-  'lastVisitedAtByWorktreeId',
   'defaultTerminalTabsAppliedByWorktreeId',
   'recentlyClosedTabKindsByWorktree'
 ] as const satisfies readonly (keyof AppState)[]
@@ -97,6 +97,24 @@ export function buildWorktreeRenameState(
   }
   for (const key of WORKTREE_ID_KEYED_MAP_KEYS) {
     renameKey(key, renameValueByKey[key] as ((value: unknown) => unknown) | undefined)
+  }
+  // Recency keys may carry a host prefix. Preserve that prefix while moving
+  // the path-derived id so a rename cannot merge host twins.
+  const nextVisitRecency = { ...s.lastVisitedAtByWorktreeId }
+  let visitRecencyChanged = false
+  for (const [key, value] of Object.entries(s.lastVisitedAtByWorktreeId)) {
+    const rawId = getWorktreeIdFromVisitKey(key)
+    if (rawId !== oldWorktreeId) {
+      continue
+    }
+    const nextKey =
+      rawId === key ? newWorktreeId : `${key.slice(0, key.length - rawId.length)}${newWorktreeId}`
+    nextVisitRecency[nextKey] = value
+    delete nextVisitRecency[key]
+    visitRecencyChanged = true
+  }
+  if (visitRecencyChanged) {
+    renamed.lastVisitedAtByWorktreeId = nextVisitRecency
   }
   // Re-key on rename so a renamed worktree keeps its editor-undo + push/pull state.
   renameKey('recentlyClosedEditorTabsByWorktree', (files: { worktreeId: string }[]) =>

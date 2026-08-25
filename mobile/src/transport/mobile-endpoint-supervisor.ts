@@ -58,7 +58,7 @@ export class MobileEndpointSupervisor {
     })
     this.logRelay = createRelayRecoveryLog(dependencies.now, dependencies.onLog)
     this.relayReconnect = new RelayReconnectController(dependencies, this.recoverRelay.bind(this))
-    this.relayReconnect.reportFailureCountTo(logical.setRecoveryAttempt)
+    this.relayReconnect.reportRecoveryTo(logical)
     this.nudgeRouter = new MobileEndpointNudgeRouter({
       logical,
       controller: this.relayReconnect,

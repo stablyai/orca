@@ -53,6 +53,7 @@ const watcher = vi.hoisted(() => ({
         timestamp: number | null
       }
     ) => void
+    onTranscriptPending?: () => void
   },
   watching: true,
   setupSignal: undefined as AbortSignal | undefined,
@@ -441,6 +442,44 @@ describe('nativeChat.subscribe initial snapshot', () => {
     for (const frame of emitted as { messages: NativeChatMessage[] }[]) {
       expect(frame.messages[0].blocks[0]).toEqual({ type: 'text', text })
     }
+  })
+
+  it('settles a not-yet-flushed transcript with a pending window, then the real snapshot', async () => {
+    // A brand-new session's JSONL can be a minute out, or never written at all
+    // until the agent is prompted. With no frame the client just spins.
+    watcher.watching = true
+    watcher.args = null
+    const emitted: unknown[] = []
+    await subscribeHandler()(
+      { agent: 'claude', sessionId: 's', capabilities: { transcriptPending: 1 } },
+      streamingContext('mobile'),
+      (value) => emitted.push(value)
+    )
+
+    const callbacks = activeWatcherArgs()
+    callbacks.onTranscriptPending?.()
+    expect(emitted).toEqual([{ type: 'snapshot', messages: [], hasMore: false, pending: true }])
+
+    const message = makeTextMessage('first turn')
+    callbacks.onInitialSnapshot?.([message], false, 123)
+    expect(emitted).toHaveLength(2)
+    expect(emitted[1]).toMatchObject({ type: 'snapshot', hasMore: false })
+    // The real window is authoritative and carries no pending marker.
+    expect((emitted[1] as { pending?: boolean }).pending).toBeUndefined()
+  })
+
+  it('does not publish pending semantics to a legacy client', async () => {
+    watcher.watching = true
+    watcher.args = null
+    const emitted: unknown[] = []
+    await subscribeHandler()(
+      { agent: 'claude', sessionId: 's' },
+      streamingContext('mobile'),
+      (value) => emitted.push(value)
+    )
+
+    expect(activeWatcherArgs().onTranscriptPending).toBeUndefined()
+    expect(emitted).toEqual([])
   })
 
   it('emits one windowed snapshot with pagination state before live appends', async () => {

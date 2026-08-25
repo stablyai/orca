@@ -1,0 +1,10 @@
+function __orca_shell_ready_marker --on-event fish_prompt
+  builtin printf "\033]777;orca-shell-ready\007"
+  functions -e __orca_shell_ready_marker
+end
+if test -n "$ORCA_CODEX_LAUNCH_PREFLIGHT"; and test (type -t codex 2>/dev/null) = file
+  function codex
+    command "$ORCA_CODEX_LAUNCH_PREFLIGHT" agent hooks prepare-codex >/dev/null 2>&1; or true
+    command codex $argv
+  end
+end

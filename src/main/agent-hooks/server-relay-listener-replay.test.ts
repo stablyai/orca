@@ -2,9 +2,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { AgentHookServer, _internals } from './server'
 import {
   createHookListenerState,
-  normalizeHookPayload,
   type HookListenerState
-} from '../../shared/agent-hook-listener'
+} from '../../shared/agent-hook-listener/listener-state'
+import { normalizeHookPayload } from '../../shared/agent-hook-listener'
 import { createShedSubagentsField } from '../../shared/agent-hook-relay'
 import { buildBody, PANE } from './server.test-fixtures'
 

@@ -2,7 +2,7 @@ import { resolve, relative, isAbsolute, posix, sep, win32 } from 'node:path'
 import type { GlobalSettings, OrcaWorkspaceLayout } from '../../shared/global-settings-types'
 import type { Repo } from '../../shared/repo-types'
 import { isWindowsAbsolutePathLike, resolveRuntimePath } from '../../shared/cross-platform-path'
-import { isWslUncPath } from '../../shared/wsl-paths'
+import { isWslUncPath, resolveWslRepoWorktreeBasePath } from '../../shared/wsl-paths'
 import { splitWorktreeId } from '../../shared/worktree/id'
 import { replaceKnownEmojiWithShortcodes } from '../../shared/emoji-shortcode-catalog'
 import { getWslHome, getWslHomeAsync, parseWslPath } from '../wsl'
@@ -226,7 +226,11 @@ function getEffectiveWorktreeBasePath(
   repo: WorktreeBasePathRepo,
   settings: WorktreePathSettings
 ): string {
-  return getRepoWorktreeBasePath(repo) ?? settings.workspaceDir
+  const basePath = getRepoWorktreeBasePath(repo)
+  if (basePath === undefined) {
+    return settings.workspaceDir
+  }
+  return resolveWslRepoWorktreeBasePath(repo.path, basePath)
 }
 
 function getRepoWorktreeBasePath(repo: Pick<Repo, 'worktreeBasePath'>): string | undefined {

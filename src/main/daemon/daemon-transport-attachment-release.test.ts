@@ -24,6 +24,7 @@ function fixtureSubprocess(): SubprocessHandle {
     kill: () => {
       setTimeout(() => onExitCb?.(0), 1)
     },
+    terminateOwnedTree: () => 'unavailable' as const,
     forceKill: () => onExitCb?.(137),
     signal: () => {},
     onData: () => {},

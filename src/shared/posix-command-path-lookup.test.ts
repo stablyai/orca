@@ -14,7 +14,7 @@ import { tmpdir } from 'node:os'
 import { basename, delimiter, dirname, isAbsolute, join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { buildPosixCommandPathLookupScript } from './posix-command-path-lookup'
-import { buildWslLoginShellCommand, escapeWslShCommandForWindows } from './wsl-login-shell-command'
+import { buildWslCapturedLoginShellCommand, buildWslExecArgs } from './wsl-login-shell-command'
 
 type ShellCase = {
   name: string
@@ -233,7 +233,9 @@ describe('buildPosixCommandPathLookupScript', () => {
     'resolves through the Windows-to-WSL login-shell boundary with inline masks',
     () => {
       const lookup = buildPosixCommandPathLookupScript({ kind: 'literal', value: 'sh' })
-      const command = buildWslLoginShellCommand(
+      // Why the captured form: an interactive login shell also prints the distro's
+      // rc/motd to stdout, which would land in front of the resolved path.
+      const captured = buildWslCapturedLoginShellCommand(
         [
           `sh() { printf '%s\\n' masked-function; }`,
           `alias sh='printf masked-alias'`,
@@ -241,13 +243,13 @@ describe('buildPosixCommandPathLookupScript', () => {
           `printf '%s' "$resolved"`
         ].join('\n')
       )
-      const resolved = execFileSync(
+      const stdout = execFileSync(
         'wsl.exe',
-        ['--', 'sh', '-lc', escapeWslShCommandForWindows(command)],
+        buildWslExecArgs(undefined, ['sh', '-lc', captured.command]),
         { encoding: 'utf8', timeout: WSL_TEST_COMMAND_TIMEOUT_MS }
-      ).trim()
+      )
 
-      expect(resolved).toMatch(/^\/.+\/sh$/)
+      expect(captured.readStdout(stdout)?.trim()).toMatch(/^\/.+\/sh$/)
     },
     30_000
   )
@@ -266,7 +268,7 @@ function canRunWslSh(): boolean {
     return wslShAvailable
   }
   try {
-    execFileSync('wsl.exe', ['--', 'sh', '-lc', 'true'], {
+    execFileSync('wsl.exe', ['--exec', 'sh', '-lc', 'true'], {
       timeout: WSL_TEST_COMMAND_TIMEOUT_MS
     })
     wslShAvailable = true

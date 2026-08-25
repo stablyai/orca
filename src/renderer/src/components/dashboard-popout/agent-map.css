@@ -420,6 +420,10 @@
   stroke: var(--color-yellow-500);
 }
 
+.fleet-status-monitoring .agent-map-agent-mark {
+  stroke: var(--color-yellow-500);
+}
+
 .fleet-status-blocked .agent-map-agent-mark {
   stroke: var(--color-red-500);
 }

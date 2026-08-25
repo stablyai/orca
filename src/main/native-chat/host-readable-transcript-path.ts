@@ -1,14 +1,10 @@
 import { existsSync } from 'node:fs'
-import { access } from 'node:fs/promises'
 import { isAbsolute } from 'node:path'
 import { isWslUncPath, parseWslUncPath, toWindowsWslPath } from '../../shared/wsl-paths'
 import { WSL_CODEX_RUNTIME_HOME_SEGMENTS } from '../pty/codex-home-wsl-env'
 import { getWslHomeAsync, listWslDistrosAsync } from '../wsl'
-import {
-  runWslTranscriptFsTask,
-  wslTranscriptFsRefusal,
-  type WslTranscriptFsError
-} from './wsl-transcript-fs-gate'
+import { wslGatedAccess } from './wsl-transcript-fs-access'
+import { WslTranscriptFsError, wslTranscriptFsRefusal } from './wsl-transcript-fs-gate'
 
 /**
  * True for guest-absolute Linux paths that Win32 cannot open as-is.
@@ -50,15 +46,18 @@ async function pathExistsAsync(path: string, signal?: AbortSignal): Promise<bool
   if (!isWslUncPath(path)) {
     return existsSync(path)
   }
-  const probe = async (): Promise<boolean> => {
-    try {
-      await access(path)
-      return true
-    } catch {
-      return false
+  try {
+    return await wslGatedAccess(path, 'exact', signal)
+  } catch (error) {
+    if (error instanceof WslTranscriptFsError) {
+      throw error
     }
+    // A caller abort stays authoritative — it must never read as "missing".
+    if (signal?.aborted) {
+      throw error
+    }
+    return false
   }
-  return runWslTranscriptFsTask({ operation: 'access', path, priority: 'exact', signal }, probe)
 }
 
 // Why: resolveSessionFilePath runs on a 500ms–5s poll loop. listWslDistrosAsync

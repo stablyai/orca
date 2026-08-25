@@ -1,13 +1,15 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   clearClaudeAnsweredQuestionWait,
+  markClaudeLeadTurnInterrupted,
+  seedClaudeSubagentRosterFromSnapshots
+} from './agent-hook-listener/providers/claude-roster-state'
+import {
   clearPaneCacheState,
   createHookListenerState,
-  markClaudeLeadTurnInterrupted,
-  normalizeHookPayload,
-  seedClaudeSubagentRosterFromSnapshots,
   type HookListenerState
-} from './agent-hook-listener'
+} from './agent-hook-listener/listener-state'
+import { normalizeHookPayload } from './agent-hook-listener'
 import { clearGrokSessionPathLookupCacheForTests } from './grok-session-paths'
 import { AGENT_STATUS_MAX_SUBAGENTS } from './agent-status-types'
 import { makePaneKey } from './stable-pane-id'

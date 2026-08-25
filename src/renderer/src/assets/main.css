@@ -117,6 +117,7 @@
   --color-git-graph-lane-4: var(--git-graph-lane-4);
   --color-git-graph-lane-5: var(--git-graph-lane-5);
   --color-annotation-highlight: var(--annotation-highlight);
+  --shadow-floating: 0 10px 24px rgb(0 0 0 / 0.18);
   --radius-sm: calc(var(--radius) * 0.6);
   --radius-md: calc(var(--radius) * 0.8);
   --radius-lg: var(--radius);
@@ -395,7 +396,7 @@
   flex-wrap: wrap;
   gap: 10px;
   padding: 14px 16px;
-  box-shadow: 0 10px 24px rgb(0 0 0 / 0.18);
+  box-shadow: var(--shadow-floating);
 }
 
 [data-sonner-toaster] [data-sonner-toast][data-styled='true'] [data-icon] {
@@ -1322,7 +1323,7 @@ html.native-shell .app-layout {
   background: var(--popover);
   color: var(--popover-foreground);
   /* STYLEGUIDE: floating elevation for popovers that escape the editor surface. */
-  box-shadow: 0 10px 24px rgb(0 0 0 / 0.18);
+  box-shadow: var(--shadow-floating);
 }
 
 /* Why: caret points down at the usage meters this notice explains. */

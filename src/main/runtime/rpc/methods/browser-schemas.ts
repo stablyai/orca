@@ -148,7 +148,8 @@ export const ProfileDelete = z.object({ profileId: requiredString('Missing requi
 export const ProfileImportFromBrowser = z.object({
   profileId: requiredString('Missing required --profile'),
   browserFamily: requiredString('Missing required --browser-family'),
-  browserProfile: OptionalString
+  browserProfile: OptionalString,
+  supportsPartitionSkippedCookies: z.literal(true).optional()
 })
 
 export const Drag = BrowserTarget.extend({
