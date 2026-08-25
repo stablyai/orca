@@ -6,6 +6,8 @@ import { describe, expect, it, vi } from 'vitest'
 import { OrcaRuntimeService } from './orca-runtime'
 import { OrchestrationDb } from './orchestration/db'
 import { readRuntimeMetadata } from './runtime-metadata'
+import { createCollaborationTopology } from './collaboration/collaboration-topology'
+import { registerCollaborationRuntimeTopology } from './collaboration/collaboration-runtime-registry'
 import { classifyRuntimeLongPoll, OrcaRuntimeRpcServer } from './runtime-rpc'
 import {
   sendRequest,
@@ -234,6 +236,82 @@ describe('OrcaRuntimeRpcServer', () => {
           result: { timedOut: true }
         })
         expect(keepalives.length).toBeGreaterThanOrEqual(3)
+      } finally {
+        db.close()
+        await server.stop()
+      }
+    })
+
+    it('emits keepalive frames while orchestration.collaborationCheckpoint wait blocks', async () => {
+      const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-rpc-'))
+      const runtime = new OrcaRuntimeService()
+      const db = new OrchestrationDb(':memory:')
+      runtime.setOrchestrationDb(db)
+      const workerPaneKey = 'tab_worker:aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
+      vi.spyOn(runtime, 'getTerminalPaneKey').mockImplementation((handle) =>
+        handle === 'term_worker' ? workerPaneKey : null
+      )
+      const run = db.createRun({
+        objective: 'Checkpoint keepalive test',
+        coordinatorHandle: 'term_coord',
+        coordinatorPaneKey: 'tab_coord:bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb'
+      })
+      const task = db.createTask({ spec: 'Checkpoint subscriber', runId: run.id })
+      db.createDispatchContext(task.id, 'term_worker', workerPaneKey)
+      // Why: admission policy must exist or the handler throws before it can
+      // block; no checkpoint is ever published so wait:true times out empty.
+      registerCollaborationRuntimeTopology(
+        runtime,
+        run.id,
+        createCollaborationTopology([
+          {
+            taskId: task.id,
+            subscribesTo: ['progress'],
+            admission: { acceptedTypes: ['checkpoint'], minPriority: 'high' }
+          }
+        ])
+      )
+      const server = new OrcaRuntimeRpcServer({
+        runtime,
+        userDataPath,
+        keepaliveIntervalMs: 30
+      })
+      await server.start()
+
+      try {
+        const metadata = readRuntimeMetadata(userDataPath)
+        // Why: the mailbox stays empty, so wait:true holds the socket for the
+        // whole timeout on the same hold-the-socket path check --wait uses.
+        // Without collaborationCheckpoint in the long-poll classification the
+        // terminal frame still returns timedOut but zero keepalives fire.
+        const session = openFramedSession(metadata!.transports[0]!.endpoint, {
+          id: 'req_checkpoint',
+          authToken: metadata!.authToken,
+          method: 'orchestration.collaborationCheckpoint',
+          params: {
+            from: 'term_worker',
+            wait: true,
+            timeoutMs: 200
+          }
+        })
+        await session.done
+
+        const keepalives = session.frames.filter((f) => f._keepalive === true)
+        const terminals = session.frames.filter((f) => f.ok !== undefined)
+        expect(terminals).toHaveLength(1)
+        expect(terminals[0]).toMatchObject({
+          id: 'req_checkpoint',
+          ok: true,
+          result: {
+            entries: [],
+            filteredMessageIds: [],
+            timedOut: true,
+            cancelled: false
+          }
+        })
+        // Why: 200ms wait with 30ms keepalive → ~6 frames expected; assert ≥2
+        // to tolerate scheduler jitter without flaking.
+        expect(keepalives.length).toBeGreaterThanOrEqual(2)
       } finally {
         db.close()
         await server.stop()

@@ -54,5 +54,9 @@ export function classifyRuntimeLongPoll(request: RpcRequest): RuntimeLongPollCla
     const params = request.params as { wait?: unknown } | undefined
     return params?.wait === true ? 'wait' : null
   }
+  if (request.method === 'orchestration.collaborationCheckpoint') {
+    const params = request.params as { wait?: unknown } | undefined
+    return params?.wait === true ? 'wait' : null
+  }
   return null
 }
