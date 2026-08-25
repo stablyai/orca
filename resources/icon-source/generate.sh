@@ -1,6 +1,6 @@
 #!/bin/bash
 # Generate app icons from Icon Composer .icon project
-# Produces: resources/build/icon.icns (macOS), resources/build/icon.png (fallback), resources/icon.png (tray)
+# Produces: resources/build/icon.icns (macOS), resources/build/Assets.car, resources/build/icon.png (fallback), resources/icon.png (tray)
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
@@ -21,21 +21,75 @@ fi
 
 echo "Compiling icon from $ICON_SOURCE..."
 
-# Generate .icns using actool (requires Xcode)
+# Generate .icns and Assets.car using actool (requires Xcode)
+# Why: separate legacy raster slots from layered Clear/Tinted appearance renditions, which need different deployment targets.
+LEGACY_DIR="$TMP_DIR/legacy"
+APPEARANCE_DIR="$TMP_DIR/appearance"
+mkdir -p "$LEGACY_DIR" "$APPEARANCE_DIR"
+
 xcrun actool \
-  --compile "$TMP_DIR" \
+  --compile "$LEGACY_DIR" \
   --platform macosx \
   --minimum-deployment-target 10.12 \
   --app-icon icon \
-  --output-partial-info-plist "$TMP_DIR/partial.plist" \
+  --output-partial-info-plist "$LEGACY_DIR/partial.plist" \
   "$ICON_SOURCE" >/dev/null
 
-if [ ! -f "$TMP_DIR/icon.icns" ]; then
+if [ ! -f "$LEGACY_DIR/icon.icns" ]; then
   echo "Error: actool failed to produce icon.icns" >&2
   exit 1
 fi
 
-cp "$TMP_DIR/icon.icns" "$BUILD_DIR/icon.icns"
+cp "$LEGACY_DIR/icon.icns" "$BUILD_DIR/icon.icns"
+
+# Why: an actool older than Xcode 26 cannot compile Icon Composer projects at all.
+if ! xcrun actool \
+  --compile "$APPEARANCE_DIR" \
+  --platform macosx \
+  --minimum-deployment-target 26.0 \
+  --app-icon icon \
+  "$ICON_SOURCE" >/dev/null; then
+  echo "Install Xcode 26 or newer: actool cannot compile Icon Composer .icon projects" >&2
+  exit 1
+fi
+
+if [ ! -f "$APPEARANCE_DIR/Assets.car" ]; then
+  echo "Error: actool failed to produce Assets.car" >&2
+  exit 1
+fi
+
+# Why: the Appearances map proves the catalog contains actual Clear/Tinted renditions.
+ASSET_INFO=""
+if ! ASSET_INFO="$(assetutil --info "$APPEARANCE_DIR/Assets.car" 2>/dev/null)"; then
+  echo "Error: assetutil failed to inspect the compiled Assets.car" >&2
+  exit 1
+fi
+if ! printf '%s' "$ASSET_INFO" |
+  python3 -c '
+import json
+import sys
+
+try:
+    asset_info = json.load(sys.stdin)
+except Exception:
+    sys.exit(1)
+
+required_appearance_keys = {"NSAppearanceNameDarkAqua", "ISAppearanceTintable"}
+if not isinstance(asset_info, list) or not any(
+    isinstance(entry, dict)
+    and isinstance(entry.get("Appearances"), dict)
+    and required_appearance_keys.issubset(entry["Appearances"])
+    for entry in asset_info
+):
+    sys.exit(1)
+'
+then
+  echo "Error: compiled Assets.car is missing Clear/Tinted appearance renditions" >&2
+  exit 1
+fi
+
+cp "$APPEARANCE_DIR/Assets.car" "$BUILD_DIR/Assets.car"
+echo "  -> resources/build/Assets.car"
 
 # macOS list views use the small .icns slots directly. Icon Composer keeps the
 # safe-area inset there, so trim only those slots while preserving larger icons.
@@ -64,10 +118,10 @@ echo "  -> resources/build/icon.icns"
 
 # Extract PNG fallbacks from the unmodified compiled icon; small-slot trimming is
 # only for the macOS .icns list representations.
-sips -s format png --resampleWidth 1024 "$TMP_DIR/icon.icns" --out "$BUILD_DIR/icon.png" >/dev/null 2>&1
+sips -s format png --resampleWidth 1024 "$LEGACY_DIR/icon.icns" --out "$BUILD_DIR/icon.png" >/dev/null 2>&1
 echo "  -> resources/build/icon.png (1024x1024)"
 
-sips -s format png --resampleWidth 256 "$TMP_DIR/icon.icns" --out "$RESOURCES_DIR/icon.png" >/dev/null 2>&1
+sips -s format png --resampleWidth 256 "$LEGACY_DIR/icon.icns" --out "$RESOURCES_DIR/icon.png" >/dev/null 2>&1
 echo "  -> resources/icon.png (256x256)"
 
 # Generate .ico for Windows. Icon Composer keeps the macOS safe-area inset in
