@@ -1033,7 +1033,11 @@ ipcMain.handle('ui:consumePendingSkillShare', () => {
 })
 
 ipcMain.on('ui:workspacePathBridgeReady', (event) => {
-  workspacePathBridgeAttached = !event.sender.isDestroyed()
+  // Why: popouts share this preload but never register the workspace listener, so only the main window may claim readiness.
+  if (!mainWindow || mainWindow.isDestroyed() || event.sender !== mainWindow.webContents) {
+    return
+  }
+  workspacePathBridgeAttached = true
   // Why direct to sender: these queued launches belong to whichever renderer just attached.
   for (const folderPath of workspacePathLaunchQueue.drain()) {
     event.sender.send('ui:openWorkspacePath', folderPath)

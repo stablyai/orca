@@ -36,13 +36,19 @@ describe('workspace path launch wiring', () => {
   it('flushes queued launches to the renderer that signals bridge readiness', () => {
     expect(mainSource).toContain("'ui:workspacePathBridgeReady'")
     const handlerIndex = mainSource.indexOf("ipcMain.on('ui:workspacePathBridgeReady'")
+    // Why: popouts share the preload, so a foreign sender must never claim readiness.
+    const senderGuardIndex = mainSource.indexOf(
+      'event.sender !== mainWindow.webContents',
+      handlerIndex
+    )
     const flushIndex = mainSource.indexOf('workspacePathLaunchQueue.drain()', handlerIndex)
     const senderSendIndex = mainSource.indexOf(
       "event.sender.send('ui:openWorkspacePath'",
       handlerIndex
     )
     expect(handlerIndex).toBeGreaterThan(-1)
-    expect(flushIndex).toBeGreaterThan(-1)
+    expect(senderGuardIndex).toBeGreaterThan(handlerIndex)
+    expect(flushIndex).toBeGreaterThan(senderGuardIndex)
     expect(senderSendIndex).toBeGreaterThan(flushIndex)
   })
 
