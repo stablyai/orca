@@ -570,7 +570,8 @@
           "dsh_label": "DeepSeek Harness",
           "qoder_label": "Qoder CLI",
           "opencode2_label": "OpenCode 2",
-          "qoder_cn_label": "Qoder CLI China"
+          "qoder_cn_label": "Qoder CLI China",
+          "junie_label": "Junie"
         },
         "skill": {
           "cli": {

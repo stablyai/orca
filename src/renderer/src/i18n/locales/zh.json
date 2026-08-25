@@ -570,7 +570,8 @@
           "freebuff_label": "Freebuff",
           "dsh_label": "DeepSeek Harness",
           "qoder_label": "Qoder CLI",
-          "qoder_cn_label": "Qoder CLI China"
+          "qoder_cn_label": "Qoder CLI China",
+          "junie_label": "Junie"
         },
         "skill": {
           "cli": {

@@ -6,7 +6,7 @@ import { parseKimiSessionFile } from './session-scanner-kimi-parser'
 import {
   clearKimiSessionIndexCache,
   hasKimiSessionIndexCacheEntryForTests,
-  KIMI_WORK_DIR_CACHE_MAX_INDEX_PATHS,
+  SESSION_INDEX_CACHE_MAX_PATHS,
   readKimiWorkDirBySessionId
 } from './session-scanner-kimi-paths'
 import type { FileWithMtime } from './session-scanner-types'
@@ -229,7 +229,7 @@ describe('parseKimiSessionFile', () => {
     tempDirs.push(root)
     const indexPaths: string[] = []
 
-    for (let index = 0; index <= KIMI_WORK_DIR_CACHE_MAX_INDEX_PATHS; index += 1) {
+    for (let index = 0; index <= SESSION_INDEX_CACHE_MAX_PATHS; index += 1) {
       const home = join(root, `home-${index}`)
       await mkdir(home, { recursive: true })
       const indexPath = join(home, 'session_index.jsonl')
@@ -240,17 +240,17 @@ describe('parseKimiSessionFile', () => {
       indexPaths.push(indexPath)
     }
 
-    for (const indexPath of indexPaths.slice(0, KIMI_WORK_DIR_CACHE_MAX_INDEX_PATHS)) {
+    for (const indexPath of indexPaths.slice(0, SESSION_INDEX_CACHE_MAX_PATHS)) {
       await readKimiWorkDirBySessionId(indexPath)
     }
     const refreshedFirst = await readKimiWorkDirBySessionId(indexPaths[0])
     expect(refreshedFirst.get('session_0')).toBe('/tmp/kimi-0')
-    await readKimiWorkDirBySessionId(indexPaths[KIMI_WORK_DIR_CACHE_MAX_INDEX_PATHS])
+    await readKimiWorkDirBySessionId(indexPaths[SESSION_INDEX_CACHE_MAX_PATHS])
 
     expect(hasKimiSessionIndexCacheEntryForTests(indexPaths[0])).toBe(true)
     expect(hasKimiSessionIndexCacheEntryForTests(indexPaths[1])).toBe(false)
-    expect(
-      hasKimiSessionIndexCacheEntryForTests(indexPaths[KIMI_WORK_DIR_CACHE_MAX_INDEX_PATHS])
-    ).toBe(true)
+    expect(hasKimiSessionIndexCacheEntryForTests(indexPaths[SESSION_INDEX_CACHE_MAX_PATHS])).toBe(
+      true
+    )
   })
 })

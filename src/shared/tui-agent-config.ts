@@ -351,6 +351,16 @@ const TUI_AGENT_CONFIG_SOURCE: Record<TuiAgent, TuiAgentConfigSource> = {
   },
   // prettier-ignore
   jcode: { detectCmd: 'jcode', launchCmd: 'jcode', expectedProcess: 'jcode', promptInjectionMode: 'stdin-after-start' }
+  junie: {
+    detectCmd: 'junie',
+    launchCmd: 'junie',
+    expectedProcess: 'junie',
+    // Why: positional `junie "text"` is a headless batch run that exits; `--prompt <text>`
+    // starts the interactive TUI with the prompt auto-submitted.
+    // Why plain 'junie' is the process: the PATH shim and the versioned launcher both `exec`,
+    // and the jpackage app loads the JVM in-process, so no `java` child survives to be seen.
+    promptInjectionMode: 'flag-prompt'
+  }
 }
 
 export const TUI_AGENT_CONFIG: Record<TuiAgent, TuiAgentConfig> = Object.fromEntries(

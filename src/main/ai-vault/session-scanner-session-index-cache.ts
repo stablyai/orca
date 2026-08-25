@@ -1,24 +1,27 @@
-export type KimiSessionIndexIdentity = {
+export type SessionIndexIdentity = {
   changeTimeMs: number
   mtimeMs: number
   sizeBytes: number
 }
 
-type KimiSessionIndexCacheEntry = {
+type SessionIndexCacheEntry<V> = {
   expiresAt: number
   generation: number
-  identity: KimiSessionIndexIdentity
+  identity: SessionIndexIdentity
   timer: NodeJS.Timeout | null
-  value: Promise<Map<string, string>>
+  value: Promise<V>
 }
 
-export const KIMI_WORK_DIR_CACHE_MAX_INDEX_PATHS = 64
+export const SESSION_INDEX_CACHE_MAX_PATHS = 64
 // Active Vault scans refresh this window; closing the surface releases parsed
-// index maps soon without making a live Kimi session reread on every scan.
-export const KIMI_WORK_DIR_CACHE_TTL_MS = 5 * 60_000
+// index maps soon without making a live session reread its index on every scan.
+export const SESSION_INDEX_CACHE_TTL_MS = 5 * 60_000
 
-export class KimiSessionIndexCache {
-  private readonly entries = new Map<string, KimiSessionIndexCacheEntry>()
+// Why: agents whose sessions share one registry file (Kimi's session_index.jsonl, Junie's
+// index.jsonl) would re-read it once per session — O(n^2) on a scan. Memoize by path plus
+// file identity, generic over the parsed value each agent needs.
+export class SessionIndexCache<V = Map<string, string>> {
+  private readonly entries = new Map<string, SessionIndexCacheEntry<V>>()
   private minimumCacheGeneration = 0
   private nextGeneration = 0
 
@@ -48,10 +51,10 @@ export class KimiSessionIndexCache {
 
   get(
     indexPath: string,
-    identity: KimiSessionIndexIdentity,
+    identity: SessionIndexIdentity,
     generation: number,
-    load: () => Promise<Map<string, string>>
-  ): Promise<Map<string, string>> {
+    load: () => Promise<V>
+  ): Promise<V> {
     if (generation < this.minimumCacheGeneration) {
       return load()
     }
@@ -67,8 +70,8 @@ export class KimiSessionIndexCache {
       return load()
     }
 
-    const entry: KimiSessionIndexCacheEntry = {
-      expiresAt: now + KIMI_WORK_DIR_CACHE_TTL_MS,
+    const entry: SessionIndexCacheEntry<V> = {
+      expiresAt: now + SESSION_INDEX_CACHE_TTL_MS,
       generation,
       identity,
       timer: null,
@@ -86,7 +89,7 @@ export class KimiSessionIndexCache {
     return this.entries.size
   }
 
-  private forget(indexPath: string, entry: KimiSessionIndexCacheEntry): void {
+  private forget(indexPath: string, entry: SessionIndexCacheEntry<V>): void {
     if (this.entries.get(indexPath) !== entry) {
       return
     }
@@ -96,7 +99,7 @@ export class KimiSessionIndexCache {
     this.entries.delete(indexPath)
   }
 
-  private remember(indexPath: string, entry: KimiSessionIndexCacheEntry, now: number): void {
+  private remember(indexPath: string, entry: SessionIndexCacheEntry<V>, now: number): void {
     const replaced = this.entries.get(indexPath)
     if (replaced?.timer && replaced !== entry) {
       clearTimeout(replaced.timer)
@@ -104,13 +107,13 @@ export class KimiSessionIndexCache {
     if (entry.timer) {
       clearTimeout(entry.timer)
     }
-    entry.expiresAt = now + KIMI_WORK_DIR_CACHE_TTL_MS
-    entry.timer = setTimeout(() => this.forget(indexPath, entry), KIMI_WORK_DIR_CACHE_TTL_MS)
+    entry.expiresAt = now + SESSION_INDEX_CACHE_TTL_MS
+    entry.timer = setTimeout(() => this.forget(indexPath, entry), SESSION_INDEX_CACHE_TTL_MS)
     entry.timer.unref()
     this.entries.delete(indexPath)
     this.entries.set(indexPath, entry)
 
-    while (this.entries.size > KIMI_WORK_DIR_CACHE_MAX_INDEX_PATHS) {
+    while (this.entries.size > SESSION_INDEX_CACHE_MAX_PATHS) {
       const oldest = this.entries.entries().next().value
       if (!oldest) {
         return
@@ -120,7 +123,7 @@ export class KimiSessionIndexCache {
   }
 }
 
-function identitiesMatch(left: KimiSessionIndexIdentity, right: KimiSessionIndexIdentity): boolean {
+function identitiesMatch(left: SessionIndexIdentity, right: SessionIndexIdentity): boolean {
   return (
     left.changeTimeMs === right.changeTimeMs &&
     left.mtimeMs === right.mtimeMs &&

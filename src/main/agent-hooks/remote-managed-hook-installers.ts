@@ -16,6 +16,7 @@ import { droidHookService } from '../droid/hook-service'
 import { grokHookService } from '../grok/hook-service'
 import { hermesHookService } from '../hermes/hook-service'
 import { jcodeHookService } from '../jcode/hook-service'
+import { junieHookService } from '../junie/hook-service'
 import { kimiHookService } from '../kimi/hook-service'
 import { kiroHookService } from '../kiro/hook-service'
 import { dshHookService } from '../dsh/hook-service'
@@ -95,7 +96,8 @@ const REMOTE_MANAGED_HOOK_INSTALLERS: readonly RemoteManagedHookInstaller[] = [
     'kiro',
     (sftp, remoteHome, options) =>
       kiroHookService.installRemote(sftp, remoteHome, options?.kiroHomeDir)
-  ]
+  ],
+  ['junie', (sftp, remoteHome) => junieHookService.installRemote(sftp, remoteHome)]
 ]
 
 /** Agents wired into the remote (SSH) hook installer. Exported so an invariant
