@@ -28,6 +28,8 @@ import { parseAntigravitySessionFile } from './scanners/antigravity/session-scan
 import { parseDroidSessionFile } from './scanners/droid/session-scanner-droid-parser'
 import { parseMessageGraphSessionFile } from './scanners/session-scanner-graph-parsers'
 import { parseGrokSessionFile } from './scanners/grok/session-scanner-grok-parser'
+import { parseJunieSessionFile } from './session-scanner-junie-parser'
+import { clearJunieSessionIndexCache } from './session-scanner-junie-paths'
 import { parseKimiSessionFile } from './scanners/kimi/session-scanner-kimi-parser'
 import { clearKimiSessionIndexCache } from './scanners/kimi/session-scanner-kimi-paths'
 
@@ -57,6 +59,7 @@ beforeEach(() => {
   opened.length = 0
   interfaces.length = 0
   clearKimiSessionIndexCache()
+  clearJunieSessionIndexCache()
   mocks.openStream.mockReset()
   mocks.readFile.mockReset()
   mocks.stat.mockReset()
@@ -130,6 +133,18 @@ describe('session parsers that stop consuming a gated transcript early', () => {
     ).resolves.toBeTruthy()
 
     expect(lastOpened().path).toContain('wire.jsonl')
+    expectStreamTornDown()
+  })
+
+  it('destroys the events stream when the Junie parse swallows the failure', async () => {
+    // No index.jsonl, so only the transcript opens a stream.
+    mocks.stat.mockRejectedValue(Object.assign(new Error('ENOENT'), { code: 'ENOENT' }))
+
+    await expect(
+      parseJunieSessionFile(file('/w/.junie/sessions/session-260501-101200-abcd/events.jsonl'))
+    ).resolves.toBeTruthy()
+
+    expect(lastOpened().path).toContain('events.jsonl')
     expectStreamTornDown()
   })
 })

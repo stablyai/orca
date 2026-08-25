@@ -12,6 +12,7 @@ import {
   AGENT_SESSION_ZCODE_RESUME_RUNTIME_CAPABILITY,
   AGENT_SESSION_OPENCODE2_RESUME_RUNTIME_CAPABILITY,
   AGENT_SESSION_HERMES_RESUME_RUNTIME_CAPABILITY,
+  AGENT_SESSION_JUNIE_RESUME_RUNTIME_CAPABILITY,
   AGENT_SESSION_KIRO_RESUME_RUNTIME_CAPABILITY
 } from '../../../../../../shared/agent-session/lifecycle/agent-session-resume-runtime-capabilities'
 import { AGENT_SESSION_OMP_RESUME_PATH_RUNTIME_CAPABILITY } from '../../../../../../shared/agent-session/agent-session-runtime-capabilities'
@@ -48,7 +49,8 @@ const RESUME_HOST_AUTHORITY_CAPABILITY_BY_AGENT = {
   // Why: jcode resumed by id (--resume <id>) through the same host-authority session enum the generic probe covers.
   jcode: undefined,
   kiro: AGENT_SESSION_KIRO_RESUME_RUNTIME_CAPABILITY,
-  hermes: AGENT_SESSION_HERMES_RESUME_RUNTIME_CAPABILITY
+  hermes: AGENT_SESSION_HERMES_RESUME_RUNTIME_CAPABILITY,
+  junie: AGENT_SESSION_JUNIE_RESUME_RUNTIME_CAPABILITY
 } satisfies Record<ResumableTuiAgent, RuntimeCapability | undefined>
 
 export function agentResumeHostAuthorityCapability(

@@ -66,7 +66,7 @@ export function normalizeHookPayload(
     state.claudeUnconfirmedRestoredStatusPaneKeys.delete(stampedPaneKey)
   }
   const sessions = readPaneSessionContext(state, source, envelope, eventName)
-  const { providerSession, statusAdmissionSession } = sessions
+  let { providerSession, statusAdmissionSession } = sessions
   // Before prompt and tool caches: a helper's turn must not reset the root turn's caches either.
   const helper = routeJcodeHelperHook(state, source, envelope, options.bindingStatusByPaneKey)
   if (helper !== undefined) {
@@ -117,6 +117,9 @@ export function normalizeHookPayload(
   // Track only resolved tokens or stale shared-server stamps can poison the live pane cache.
   if (tuiAdmission !== 'preserve-poster') {
     trackOpenCodePaneLaunchToken(state, paneKey, launchToken)
+  }
+  if (source === 'junie') {
+    providerSession = resolveJunieProviderSession(state, paneKey, launchToken, providerSession)
   }
   const providerPromptId =
     source === 'claude'
@@ -311,4 +314,28 @@ export function normalizeHookPayload(
     ...(dispatched.replyCandidate ? { replyCandidate: dispatched.replyCandidate } : {}),
     payload: transportPayload
   }
+}
+
+/**
+ * Junie reports `session_id` only on SessionStart and UserPromptSubmit; PreToolUse, Stop,
+ * StopFailure, SessionEnd and PermissionRequest omit it. Since each event replaces the pane's
+ * stored row wholesale, a finished turn would otherwise lose the identity `--resume` needs.
+ *
+ * Keyed by launch token as well as pane: a relaunch mints a new token, so a session whose
+ * SessionStart was missed can never inherit the previous session's id and silently resume the
+ * wrong conversation (Junie ids stay globally resolvable, so nothing would error).
+ */
+function resolveJunieProviderSession(
+  state: HookListenerState,
+  paneKey: string,
+  launchToken: string | undefined,
+  providerSession: AgentProviderSessionMetadata | null
+): AgentProviderSessionMetadata | null {
+  const cacheKey = launchToken ? `${paneKey}\0${launchToken}` : paneKey
+  if (providerSession) {
+    state.junieSessionByPaneKey.set(cacheKey, providerSession.id)
+    return providerSession
+  }
+  const cachedId = state.junieSessionByPaneKey.get(cacheKey)
+  return cachedId ? { key: 'session_id', id: cachedId } : null
 }

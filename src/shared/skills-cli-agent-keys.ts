@@ -43,6 +43,8 @@ export const SKILLS_CLI_AGENT_KEY_BY_TUI_AGENT = {
   copilot: 'github-copilot',
   grok: 'grok',
   devin: 'devin',
+  // Why: the skills CLI has no confirmed Junie key yet; null drops it rather than guessing.
+  junie: null,
   ante: null,
   // Only TRAE CN ships the traecli alias Orca detects.
   trae: 'trae-cn',
