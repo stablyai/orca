@@ -651,6 +651,53 @@ describe('GrokHookService', () => {
     expect(service.getStatus().managedHooksPresent).toBe(false)
   })
 
+  // Why: a runtime-scoped identity cannot be compared, so it was treated as never-stale. Any
+  // surviving owner blocks removal, so ONE such record left by a crash disabled quit-time removal
+  // and reconciliation permanently. A confirmed-absent pid is gone whatever its identity looked
+  // like, so liveness has to be checked before scope.
+  it('prunes a dead owner whose identity could not be compared', async () => {
+    const service = new GrokHookService()
+    const configPath = join(homeDir, '.grok', 'hooks', 'orca-status.json')
+
+    expect(service.install().state).toBe('installed')
+    writeOwnersRecordFor(homeDir, [
+      {
+        pid: 2_147_483_646,
+        hostScope: 'runtime',
+        hostDigest: 'unknown',
+        processIdentity: 'runtime:from-a-crashed-session'
+      }
+    ])
+
+    await service.removeAsync()
+
+    expect(existsSync(configPath)).toBe(false)
+    expect(existsSync(ownersPathFor(homeDir))).toBe(false)
+  })
+
+  // Why: a symlinked config is written THROUGH on removal rather than unlinked, so after a quit it
+  // is an empty file WE emptied -- byte-identical to one a user cleared. Letting the user-cleared
+  // heuristic see it meant a symlinked config was silently never reinstalled after the first quit.
+  it('reinstalls into a symlinked config on the launch after a quit', async () => {
+    const service = new GrokHookService()
+    const configPath = join(homeDir, '.grok', 'hooks', 'orca-status.json')
+    const realConfig = join(homeDir, 'dotfiles', 'orca-status.json')
+
+    expect(service.install().state).toBe('installed')
+    mkdirSync(dirname(realConfig), { recursive: true })
+    renameSync(configPath, realConfig)
+    symlinkSync(realConfig, configPath)
+    await service.claimSession()
+    await service.removeAsync()
+    expect(service.getStatus().managedHooksPresent).toBe(false)
+
+    expect(new GrokHookService().install().state).toBe('installed')
+
+    expect(lstatSync(configPath).isSymbolicLink()).toBe(true)
+    expect(existsSync(realConfig)).toBe(true)
+    expect(service.getStatus().managedHooksPresent).toBe(true)
+  })
+
   it('preserves user-authored hook entries in the Orca Grok config file', () => {
     const configPath = join(homeDir, '.grok', 'hooks', 'orca-status.json')
     mkdirSync(dirname(configPath), { recursive: true })

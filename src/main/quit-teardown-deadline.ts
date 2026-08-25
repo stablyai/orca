@@ -33,3 +33,23 @@ export async function settleTeardownWithinDeadline(
   clearTimeout(timer)
   return outcome === 'deadline' ? [...pendingNames] : []
 }
+
+/**
+ * Resolves to the settled value, or `null` once `timeoutMs` elapses. Why null rather than a throw:
+ * every quit-path teardown is best-effort, and a rejection here would have to be caught at each
+ * call site anyway. The timer is unref'd so it can never itself hold the process open.
+ */
+export async function settleWithinMs<T>(promise: Promise<T>, timeoutMs: number): Promise<T | null> {
+  let timer: ReturnType<typeof setTimeout> | undefined
+  try {
+    return await Promise.race([
+      promise.catch(() => null),
+      new Promise<null>((resolve) => {
+        timer = setTimeout(() => resolve(null), timeoutMs)
+        timer.unref?.()
+      })
+    ])
+  } finally {
+    clearTimeout(timer)
+  }
+}

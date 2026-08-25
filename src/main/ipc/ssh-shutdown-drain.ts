@@ -12,7 +12,11 @@ import { teardownActiveSshSession } from './ssh-session-teardown'
 // observes its cancellation at the next checkpoint, and one blocked in the transport handshake can
 // sit there for the whole SSH timeout. A per-phase timeout lets any single phase consume the global
 // quit deadline; a shared absolute deadline cannot.
-export const SSH_SHUTDOWN_BUDGET_MS = 6_000
+// Why 8s and not 6s: the managed-hook cleanup now gates disconnectAll and is charged against this
+// same absolute deadline, so leaving it at 6s silently cut the pre-existing drain/join/final-drain
+// phases to ~4s -- a reduction that only bites when the remote is already unhealthy, which is
+// exactly when those phases need the time.
+export const SSH_SHUTDOWN_BUDGET_MS = 8_000
 
 export type SshShutdownPhase = 'drain' | 'in-flight-join' | 'final-drain'
 export type SshShutdownUnfinished = { targetId: string; phase: SshShutdownPhase }

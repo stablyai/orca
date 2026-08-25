@@ -126,21 +126,29 @@ async function probeSelf(): Promise<GrokHookSessionOwner> {
 }
 
 async function isStale(owner: GrokHookSessionOwner): Promise<boolean> {
-  // Why never stale: a runtime-scoped identity is a fresh random value per process, so it can never
-  // match a recorded one. Comparing it would declare a live owner dead and delete its hooks.
+  const self = await describeSelf()
+  // Why short-circuit self: describeSelf is memoized, so answering from it costs no probe at all.
+  if (owner.pid === process.pid) {
+    return owner.processIdentity !== self.processIdentity
+  }
+  const currentIdentity = await readManagedHookProcessIdentity(owner.pid)
+  // Why this runs FIRST, before any scope check: a confirmed-absent process is gone whatever its
+  // identity looked like. Checking scope first made a runtime-scoped record unprunable, and since
+  // any surviving owner blocks removal, one such record left behind by a crash disabled quit-time
+  // removal and reconciliation permanently -- the whole mechanism, dead, with no way back.
+  if (currentIdentity === null) {
+    return true
+  }
+  // Why not stale below here: a runtime-scoped identity is a fresh random value per process, so it
+  // can never match a recorded one, and `undefined` means the probe could not answer. Neither is
+  // evidence of death, and treating either as death deletes a live Orca's hooks.
   if (owner.hostScope === 'runtime' || owner.processIdentity.startsWith('runtime:')) {
     return false
   }
-  const self = await describeSelf()
   if (self.hostScope === 'durable' && self.hostDigest !== owner.hostDigest) {
     return false
   }
-  const currentIdentity = await readManagedHookProcessIdentity(owner.pid)
-  // Why only these two: `undefined` means the probe was unavailable, which must count as live.
-  return (
-    currentIdentity === null ||
-    (typeof currentIdentity === 'string' && currentIdentity !== owner.processIdentity)
-  )
+  return typeof currentIdentity === 'string' && currentIdentity !== owner.processIdentity
 }
 
 function isWellFormedOwner(value: unknown): value is GrokHookSessionOwner {

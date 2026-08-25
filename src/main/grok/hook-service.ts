@@ -124,6 +124,14 @@ function getManagedScript(target: 'local' | 'posix' = 'local'): string {
   ].join('\n')
 }
 
+function isSymbolicLinkSync(configPath: string): boolean {
+  try {
+    return lstatSync(configPath).isSymbolicLink()
+  } catch {
+    return false
+  }
+}
+
 function readGrokHookConfigRawSync(configPath: string): string | null {
   try {
     return readFileSync(configPath, 'utf8')
@@ -219,10 +227,15 @@ export class GrokHookService {
     // workaround for #15518 was emptying it by hand. Why userInitiated overrides: turning the
     // setting back on is an equally explicit choice, and the later one. Without this the toggle
     // silently does nothing forever and the only way back is deleting a file in a hidden directory.
+    // Why the symlink exclusion: a config the user symlinked is written THROUGH on removal rather
+    // than unlinked, so after a quit it is an empty file we emptied ourselves -- indistinguishable
+    // by content from one the user cleared. Applying the heuristic there meant a symlinked config
+    // was never reinstalled again after the first quit, silently.
     if (
       options?.userInitiated !== true &&
       snapshot.raw !== null &&
-      Object.keys(config.hooks ?? {}).length === 0
+      Object.keys(config.hooks ?? {}).length === 0 &&
+      !isSymbolicLinkSync(configPath)
     ) {
       return this.getStatus()
     }
@@ -273,7 +286,7 @@ export class GrokHookService {
     // Why the symlink check: unlinking would delete the user's link, not our file. A config they
     // symlinked into a dotfiles repo is theirs -- strip our entries and write through it instead.
     // writeHooksJson already resolves the link, so the file they version-control stays connected.
-    if (isOrcaOwnedRemnant(cleanup.config) && !lstatSync(configPath).isSymbolicLink()) {
+    if (isOrcaOwnedRemnant(cleanup.config) && !isSymbolicLinkSync(configPath)) {
       rmSync(configPath, { force: true })
     } else {
       writeHooksJson(configPath, cleanup.config)

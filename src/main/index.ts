@@ -318,7 +318,7 @@ import { buildHeadlessAutomationWorktreeCreateArgs } from './automations/headles
 import { AgentAwakeService } from './agent-awake-service'
 import { normalizeComputerAwakeMode } from '../shared/computer-awake-mode'
 import { registerSystemResumeBroadcast } from './system-resume-broadcast'
-import { settleTeardownWithinDeadline } from './quit-teardown-deadline'
+import { settleTeardownWithinDeadline, settleWithinMs } from './quit-teardown-deadline'
 import { quitTeardownStartGate } from './quit-teardown-start-gate'
 import { beginSshShutdown } from './ipc/ssh-shutdown-drain'
 import { PluginService } from './plugins/plugin-service'
@@ -3389,6 +3389,9 @@ app.on('before-quit', () => {
 
 // Why: will-quit fires twice — first pass preventDefaults and runs teardown; second pass exits.
 let daemonDisconnectDone = false
+// Why 2s: matches the WSL leg's per-distro bound; a config delete is best-effort, not durable state.
+const GROK_HOOK_CLEANUP_DEADLINE_MS = 2_000
+
 app.on('will-quit', (e) => {
   // Why return instead of re-running teardown: the second pass is Electron re-firing after
   // our own app.quit(), so every step below already ran and every durable write already
@@ -3435,7 +3438,17 @@ app.on('will-quit', (e) => {
   setUnreadDockBadgeCount(0)
   agentHookServer.stop()
   // Why: Grok reads global hooks after Orca closes; remove them without blocking the main thread.
-  const grokHookCleanup = removeManagedAgentHooksAsync({ agents: ['grok'] }).then((statuses) => {
+  // Why bounded here: every other teardown member carries its own ceiling, and this one reaches
+  // $GROK_HOME -- which can be a stalled network mount, where the fs calls never settle and the
+  // shared 20s deadline becomes the only thing ending the quit.
+  const grokHookCleanup = settleWithinMs(
+    removeManagedAgentHooksAsync({ agents: ['grok'] }),
+    GROK_HOOK_CLEANUP_DEADLINE_MS
+  ).then((statuses) => {
+    if (!statuses) {
+      console.warn('[agent-hooks] Grok hook cleanup on quit timed out')
+      return
+    }
     // Why: these report failure as a status rather than a throw, so without this a quit that failed
     // to remove the hooks looks identical to one that succeeded.
     for (const status of statuses.filter((entry) => entry.detail)) {
