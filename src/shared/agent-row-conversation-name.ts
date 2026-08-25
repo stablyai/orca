@@ -100,6 +100,10 @@ function aiVaultTitleOwnsRow(
   return paneLiveTitle === undefined && agentType === title.agent
 }
 
+/**
+ * The usable name inside an agent-set live title, or null when the title is
+ * pure status/identity/cwd noise and the caller should keep its own label.
+ */
 function conversationNameFromLiveTitle(
   liveTitle: string,
   agentType: AgentType | null | undefined,
