@@ -194,11 +194,12 @@ for (const platform of RELAY_BUILD_PLATFORMS) {
 // so a single platform-independent bundle suffices; it ships inside the
 // Windows app via the same out/relay extraResources mapping.
 {
-  const wslEntry = join(ROOT, 'src', 'relay', 'wsl-agent-hook-relay.ts')
+  const wslHookEntry = join(ROOT, 'src', 'relay', 'wsl-agent-hook-relay.ts')
+  const wslBrowserNetworkEntry = join(ROOT, 'src', 'relay', 'wsl-browser-network-relay.ts')
   const outDir = join(OUT_ROOT, 'wsl')
   mkdirSync(outDir, { recursive: true })
   await build({
-    entryPoints: [wslEntry],
+    entryPoints: [wslHookEntry],
     bundle: true,
     platform: 'node',
     target: 'node18',
@@ -214,6 +215,27 @@ for (const platform of RELAY_BUILD_PLATFORMS) {
   const hash = createHash('sha256').update(content).digest('hex').slice(0, 12)
   writeFileSync(join(outDir, '.version'), `${RELAY_VERSION}+${hash}`)
   console.log(`Built WSL hook relay → ${outDir}/wsl-agent-hook-relay.js`)
+
+  await build({
+    entryPoints: [wslBrowserNetworkEntry],
+    bundle: true,
+    platform: 'node',
+    target: 'node18',
+    format: 'cjs',
+    outfile: join(outDir, 'wsl-browser-network-relay.js'),
+    sourcemap: false,
+    minify: true,
+    define: {
+      'process.env.NODE_ENV': '"production"'
+    }
+  })
+  const browserNetworkContent = readFileSync(join(outDir, 'wsl-browser-network-relay.js'))
+  const browserNetworkHash = createHash('sha256')
+    .update(browserNetworkContent)
+    .digest('hex')
+    .slice(0, 12)
+  writeFileSync(join(outDir, '.browser-network-version'), `${RELAY_VERSION}+${browserNetworkHash}`)
+  console.log(`Built WSL browser network relay → ${outDir}/wsl-browser-network-relay.js`)
 }
 
 console.log('Relay build complete.')

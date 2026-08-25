@@ -15,6 +15,12 @@ import {
   parseRichMarkdownContextMenuTableTarget
 } from './editable-context-menu'
 import type { CreateMainWindowOptions } from './main-window-contracts'
+import { browserRouteWebContentsRegistry } from '../browser/browser-route-session-runtime'
+import {
+  attachBrowserClientPageRenderer,
+  retireBrowserClientPageRenderer
+} from '../browser/browser-client-page-renderer-runtime'
+import { registerRendererDocumentNavigation } from './renderer-document-navigation'
 
 export type MainWindowFocusLifecycle = {
   dispose: () => void
@@ -125,6 +131,25 @@ export function installMainWindowFocusLifecycle(args: {
     shortcutRecorderFocused = false
   }
   let rendererProcessGone = false
+  const rendererWebContents = mainWindow.webContents
+  registerRendererDocumentNavigation(rendererWebContents, () => {
+    const frame = rendererWebContents.mainFrame
+    retireBrowserClientPageRenderer(rendererWebContents)
+    resetMarkdownEditorFocus()
+    resetTerminalInputFocus()
+    resetFloatingTerminalInputFocus()
+    resetShortcutRecorderFocus()
+    return () => {
+      if (
+        rendererProcessGone ||
+        rendererWebContents.isDestroyed() ||
+        rendererWebContents.mainFrame !== frame
+      ) {
+        return
+      }
+      attachBrowserClientPageRenderer(rendererWebContents)
+    }
+  })
   let rendererRecoveryTimer: ReturnType<typeof setTimeout> | null = null
   // Why: stop a deterministic per-load renderer fault from auto-reloading forever; breaker opens after too many recoveries in a rolling window.
   const rendererRecoveryCircuitBreaker = new RendererRecoveryCircuitBreaker({
@@ -177,6 +202,8 @@ export function installMainWindowFocusLifecycle(args: {
   }
   mainWindow.webContents.on('render-process-gone', (_event, details) => {
     rendererProcessGone = true
+    retireBrowserClientPageRenderer(rendererWebContents)
+    browserRouteWebContentsRegistry.retireRenderer(rendererWebContentsId)
     resetMarkdownEditorFocus()
     resetTerminalInputFocus()
     resetFloatingTerminalInputFocus()
@@ -192,21 +219,15 @@ export function installMainWindowFocusLifecycle(args: {
     scheduleRendererRecovery(details)
   })
   mainWindow.webContents.on('destroyed', () => {
+    retireBrowserClientPageRenderer(rendererWebContents)
     resetMarkdownEditorFocus()
     resetTerminalInputFocus()
     resetFloatingTerminalInputFocus()
     resetShortcutRecorderFocus()
   })
-  mainWindow.webContents.on('did-start-navigation', (_e, _url, _isInPlace, isMainFrame) => {
-    if (isMainFrame) {
-      resetMarkdownEditorFocus()
-      resetTerminalInputFocus()
-      resetFloatingTerminalInputFocus()
-      resetShortcutRecorderFocus()
-    }
-  })
   mainWindow.webContents.on('did-finish-load', () => {
     rendererProcessGone = false
+    attachBrowserClientPageRenderer(rendererWebContents)
     clearRendererRecoveryTimer()
   })
 

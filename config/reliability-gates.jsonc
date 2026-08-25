@@ -2573,7 +2573,7 @@
       "knownGaps": [
         "Live paired-server validation currently covers macOS host and client only.",
         "The transport drop is an explicit runtime disconnect; real sleep/wake and network partitions are not yet exercised by this gate.",
-        "Browser screencast subscribers share the fixed contract but have no dedicated reveal journey; the web and mobile clients run parallel transports and are unaffected."
+        "Browser screencast subscribers now have deterministic shared-stream fanout coverage; a full headed reveal journey for multiple simultaneous viewers remains uncollected, while web and mobile clients continue to use their parallel transports."
       ],
       "demotionRule": "Demote if a retired runtime transport can leave a renderer subscription without a close event, if a close is delivered more than once, if one failing teardown strands its sibling subscriptions, if payload frames from a retired transport reach the renderer, or if a revealed remote terminal can stay blank or reject input after a reconnect."
     },
@@ -2592,7 +2592,7 @@
       "platforms": ["macos", "linux", "windows"],
       "providers": ["remote-runtime", "ssh"],
       "coveredPlatforms": ["macos"],
-      "coveredProviders": ["remote-runtime", "ssh"],
+      "coveredProviders": [],
       "coverageNotes": "A headed macOS desktop host and separate paired Electron client exercise a real mirrored terminal link, owner-asserted host browser creation, exact host/client page identity, rendered DOM, explicit browser-tab activation, client external-browser suppression, exact host/client close convergence, and continued original-PTY liveness. Unit contracts cover OSC, WebLinksAddon, click fallback, explicit System Browser routing, failed creation, incapable runtimes, and unchanged direct SSH behavior.",
       "motivatingLinks": [
         "https://stablygroup.slack.com/archives/C0AK2T3JEF4/p1786567689897109",
@@ -3079,6 +3079,1529 @@
         "Direct SSH remote file URLs remain intentionally unsupported and local file previews retain their existing path."
       ],
       "demotionRule": "Demote if one paired HTML action can create duplicate client or host browser identities, lose the requested split, steal editor focus before an explicit browser click, lose browser focus after that click, or remove unrelated editor or terminal state on close."
+    },
+    {
+      "id": "browser-network-tunnel.bounded-fail-closed-route",
+      "title": "Client-hosted browser routes stay bounded and fail closed",
+      "maturity": "experimental",
+      "protection": "partial",
+      "owner": "browser-runtime",
+      "layer": "shared-protocol-main-network-contract",
+      "surfaces": [
+        "client-hosted browser tunnel framing",
+        "execution-host TCP credit flow",
+        "capability-gated native and SSH execution-host adapters",
+        "main-owned loopback SOCKS5 route",
+        "runtime-owned browser-host lease and placement authority",
+        "exact live client-page placement admission",
+        "bounded client page-command dispatch and replay",
+        "server-owned page-command issue and result ledger",
+        "same-socket paired-runtime control requests",
+        "paired desktop browser-host lifecycle composition",
+        "same-pairing browser-host authority replacement",
+        "bounded client-page reconciliation execution",
+        "proof-driven server page-reconciliation orchestration",
+        "capability-gated client-page reconciliation commands",
+        "dedicated paired-runtime E2EE tunnel subscription"
+      ],
+      "platforms": ["macos", "linux", "windows"],
+      "providers": ["local", "remote-runtime", "ssh", "wsl"],
+      "coveredPlatforms": ["macos"],
+      "coveredProviders": ["remote-runtime", "ssh"],
+      "coverageNotes": "Deterministic protocol, registry, injected-socket, and loopback-listener tests cover strict framing, remote-DNS targets, exact destination-write and source-consumption credit, at most 16 pending opens, 128 admitted opens per 10-second monotonic window, an 8 MiB per-route application-buffer ledger, shared 32 MiB browser-host and 128 MiB process ledgers across application copies, encrypted client queues, and native WebSocket bufferedAmount, bounded byte/claim/socket-source counts, a four-frame queued-drain quantum, authority epochs, exact host selection, one host per authenticated connection, four hosts per paired device, eight global browser-host polls with four per authenticated paired device, a shared ask/host ceiling that retains one quarter for waits, bounded initial and reconnect runtime_busy recovery, long-poll metering and disconnect abort, monotonic host/page/route generations without page tombstones, two-phase exact page retirement with cancellation, connection-owned cleanup, exact client revocation, stale and replaced fences, retired stream IDs, half-close and close ordering, SOCKS CONNECT, bind/close races, listener wildcard normalization, unsupported commands, unavailable routes, and raw/terminal binary-handler isolation. Page commands use a separately echoed v1 attach negotiation, exact authority/host/page generations, bounded command IDs and sequences, and bounded create/navigate payloads; legacy attaches still receive only the unchanged ready/revoked event shapes. A second optional reconciliation subprotocol gates bounded reclaim, close, and restore payloads behind exact attach/ready echo, complete inventory, command negotiation, reconnect authority, and command-result authority; the production client advertises it only with the matching command and inventory capabilities. Exact guest or app-renderer loss marks one page generation outcome-unknown, coalesces a bounded negotiated inventory reattach, closes or retires the dead generation, and allocates a fresh generation before URL restore; explicit close is not misclassified as a crash. Mixed-version mutation tests project hidden client pages before activate, close, split, reorder, and move-to-group admission, preserve hidden raw order slots, translate visible insertion indices, and project mutation snapshots. A production server orchestrator consumes each immutable inventory once, reserves target generations without exposing placement, emits only negotiated ledger commands, commits after exact completed proof, preserves unrelated and server placements, aborts an attempt when connection authority enters reconnect grace, and requires fresh inventory after failure or abort. The production client dispatcher additionally proves per-page FIFO execution, exact payload-matched duplicate replay, frozen command/result snapshots, a global retired-generation floor, transactional admission, bounded pages/active commands/queues/per-page and global result cache/concurrency, create dependency failure, cancellation, deduplicated retirement joining, and bounded close without late-result overwrite. The server ledger owns issue order and immutable command/result snapshots, bounds outstanding commands, active pages, and per-page/global replay caches, releases active-page capacity after an exact completed close while retaining bounded result replay, validates the shared wire payload before admission, requires live delivery and exact placement, authenticates results to the negotiated connection and paired lease, rejects gaps and conflicting replay, and fences outstanding outcomes at exact retirement. Negotiated command results reuse the authenticated attach socket through bounded nested JSON requests; exact ID routing, reverse-order replies, unknown and duplicate IDs, timeout teardown, serialization failure, aggregate queue accounting, acknowledgement validation, and the unchanged non-v1 path are deterministic. A stable local listener rejects CONNECT while offline or reconnecting, retains its address across replacement, requires a strictly increasing tunnel generation, ignores late superseded callbacks, propagates tunnel protocol failure to the route owner, and recycles exhausted stream IDs only after generation replacement. Reconnect uses the unchanged native v1 attach payload and capability pair; SSH descriptors alone add an execution-host capability and require a runtime-minted grant bound to the exact browser-host lease. Exact SSH provider epoch and connection generation fence ssh2 forwardOut and one non-interactive standalone system-SSH dynamic forward per route. Unit tests preserve domain-form SOCKS requests, sanitize remote errors, bound stderr, cancel startup, release timed-out and synchronously failed sockets, and release routes once. An ephemeral Docker sshd resolves a container-only domain and returns a unique HTTP marker through both ssh2 and the actual system-OpenSSH dynamic-forward adapter without touching the user's SSH files; authority loss fences the ssh2 route. The execution runtime charges route application bytes to the same per-host/process policy; its existing E2EE owner separately caps native outbound buffers process-wide. Production-registered browser-host and paired-runtime methods lease one exact host, prove attach, command delivery, and result settlement share one exact connection identity, then carry SOCKS and HTTP bytes over a dedicated E2EE socket to the fenced execution-host revision and prove route close destroys the destination socket. The production desktop adapter now composes one exact host per environment pairing revision with the page executor, current renderer selector, route Session/WebContents registries, and one reference-counted route per canonical execution-host key. Negotiated same-client control reconnect retains exact authority, placements, grants, dispatcher dedupe, executor guests, and listener addresses; it fences tunnels immediately, blocks route admission, reattaches command delivery only after ready, and replays unsettled commands without repeating completed mutations. Terminal release, replacement, legacy disconnect, and reconnect-grace expiry make only the exact host generation's client placements non-cancellable retirement-pending while retaining capacity until exact cleanup; reconnect grace preserves them. Environment replacement and app shutdown still serialize transport closure before page cleanup and force-close every remaining route. The production placement preparation starts the exact desktop adapter and advertises host/tunnel capabilities only when the paired Electron client is eligible. Node stream-internal high-water bytes, strict cross-route scheduling, and physical cross-platform evidence remain uncovered.",
+      "motivatingLinks": [
+        "https://linear.app/stably/issue/STA-4150/refactor-remote-browser-to-client-hosted-electron-webviews"
+      ],
+      "invariant": "A client-hosted browser network route exists only for an exact live server-owned browser-host lease, authority epoch, host generation, paired identity, execution-host revision or SSH provider authority, and server-owned route generation. A client page is usable only when its runtime ID, authority epoch, host identity and generation, logical page ID, page-host generation, current placement, and still-live lease all match atomically; a retired, retirement-pending, or server-placed page cannot be claimed as live client placement. Live logical placements and their identities are bounded, an occupied logical page cannot change placement until exact two-phase retirement completes, cancellation restores the same authority, and the runtime-wide page generation stays monotonic without tombstones. Server-issued page commands and results remain bounded, FIFO per page, immutable after admission, authenticated to the exact paired lease, attach connection, and live placement, and replayable only when byte-equivalent. Negotiated transient result-transport loss retains exact authority and replays unsettled commands through the preserved client dedupe cache; terminal authority loss makes outstanding outcomes unknown and makes only the exact host generation's placements non-cancellable retirement-pending until exact cleanup or reconciliation proof. Desktop composition installs exact command authority before delivery, keeps result settlements below nested-request capacity, suspends every tunnel without closing guests on negotiated loss, gates handlers through route recovery, and synchronously suspends routes and revokes exact retained navigation grants before asynchronous transport or handler cleanup on terminal loss. Navigation-revocation failure remains observable without preventing guest destruction and route cleanup. One environment pairing revision owns at most one composed desktop host and one reference-counted route per canonical execution-host key; pairing replacement and shutdown close control transport before pages and force-close routes even when guest cleanup remains ambiguous. Non-native descriptors require explicit capability negotiation and an exact runtime-minted lease-bound execution-host grant. Host selection never chooses arbitrarily, stale cleanup or settlement cannot remove a replacement, destination names remain unresolved until the execution host, credit returns only after writes settle, and route loss never falls back to desktop DNS or sockets. A main-owned local listener remains stable across upstream transport loss, rejects CONNECT while offline, accepts only a strictly newer tunnel generation, ignores superseded callbacks, and never reuses a stream ID within one generation. Pending opens, admitted open rate, nested control requests, per-route application bytes, aggregate browser-host/process bytes, claims, and socket sources remain bounded with exact release on settlement and retirement. Queued transport drain yields after a bounded quantum. The local SOCKS endpoint accepts only loopback CONNECT and rejects unsupported commands.",
+      "oracle": "Attach two browser hosts and require unqualified selection to fail ambiguous while exact selection succeeds. Reject a second identity on one connection and a fifth identity for one paired device, release one exact lease, then admit its replacement without starving another device. Admit four hosts from one authenticated device and a host from a second, reject the first device's fifth host, and release only the first device's exact counters while the second remains live. Fill asks and hosts to their shared ceiling, retain a quarter of the total budget for ordinary waits, close both sockets, and prove every global, class, and device counter releases. Reject one initial host attach with the unchanged runtime_busy response, then require bounded client-specific jitter to attach when capacity returns; repeated rejection and explicit close must release every timer and subscription. Replace one same-device connection, require the old subscription and route to fence, then prove late old cleanup leaves the new generation live. Mint an exact execution-host grant, reject a different key, prove late old grant cleanup leaves its replacement, and invalidate every grant with lease replacement. Reject client-to-client, client-to-server, server-to-server, and server-to-client placement overwrite until exact retirement. Begin retirement once idempotently, reject client use and every replacement while pending, cancel the exact token to restore the same placement, and reject delayed cancellation or completion after a newer retirement begins. On explicit release, replacement, legacy disconnect, and reconnect-grace expiry, require only the exact host generation's client placements to become non-cancellable retirement-pending before lease settlement; preserve negotiated grace, other hosts, server placements, replacements, and capacity until exact completion. Complete only the exact pending token, retain capacity until completion, and require a reused client page ID to receive a higher global generation without retaining a tombstone. Require a client page through the exact runtime, epoch, host, and page tuple; reject every mismatch, released or replaced leases, retirement-pending pages, retired pages, server placements, invalid identities, and the 257th live placement. Admit 16 pending destination opens and reject the seventeenth until one connects; admit 128 opens in one monotonic 10-second window and reject the 129th until the window expires. Fill 8 MiB across destination-to-client queues and separately across unsettled client-to-destination writes, release one exact retired stream, admit one replacement, and require the next byte claim to close the route without stale-callback or reentrant-close underflow. Across multiple routes, charge application copies, encrypted queue entries, and dynamic native socket bytes to one 32 MiB browser-host and 128 MiB process ceiling; reject zero-byte claim/socket-source floods, fence released leases, synchronously release JavaScript queue claims while retaining native claims through exact socket close, and yield a parked queue after four frames without reordering. Route nested responses by exact ID under reordering, reject unknown and duplicate IDs, cap pending requests and queued bytes, and tear down every concurrent waiter once on timeout or close. Drive one real paired attach, command, and result through one exact connection ID; reject missing send support and malformed or wrong-runtime acknowledgements while preserving old non-v1 attaches. Drop an authenticated transport, require the same listener to reject CONNECT before and during reconnect, attach the exact existing native v1 payload and capability pair to a strictly newer generation, ignore late old callbacks, and roll an exhausted stream-ID ledger only by replacing the generation. Require SSH descriptors to add an execution-host capability and exact grant, reject missing grants and stale provider authority before resolver or binary registration, pass exact domains to ssh2 and system-SSH SOCKS without local resolution, sanitize connector diagnostics, and close every stream and standalone route process once on timeout, synchronous failure, or rotation. Drive the accepted lease through real paired E2EE native SOCKS-to-HTTP and ephemeral Docker ssh2 remote-only DNS journeys, then exercise exact frame, credit, half-close, stale-stream, remote-DNS, unsupported-command, offline, and teardown assertions.",
+      "commands": [
+        "pnpm exec vitest run --config config/vitest.config.ts src/main/browser/browser-route-webcontents-registry.test.ts src/main/browser/browser-client-page-unavailability.test.ts src/main/browser/paired-runtime-browser-client-host-reconnect.test.ts src/main/browser/paired-runtime-browser-client-host-composition.test.ts src/main/runtime/runtime-browser-client-page-recovery.test.ts src/main/runtime/rpc/methods/session-tab-browser-placement-mutations.test.ts src/main/runtime/rpc/methods/session-tab-browser-placement-projection.test.ts",
+        "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/browser-host-page-retirement.test.ts src/main/runtime/browser-host-page-placement-replacement.test.ts src/main/runtime/browser-host-page-placement.test.ts src/main/runtime/browser-host-lease-registry.test.ts",
+        "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/browser-host-lease-placement-retirement.test.ts src/main/runtime/browser-host-page-retirement.test.ts src/main/runtime/browser-host-page-placement-replacement.test.ts src/main/runtime/browser-host-page-placement.test.ts src/main/runtime/browser-host-lease-registry.test.ts",
+        "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/browser-host-page-reconciliation-plan.test.ts src/main/runtime/browser-host-page-reconciliation-executor.test.ts",
+        "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/browser-host-page-reconciliation-orchestration.test.ts src/main/runtime/browser-host-command-ledger.test.ts src/main/runtime/browser-host-page-placement.test.ts src/main/runtime/browser-host-lease-registry.test.ts",
+        "pnpm exec vitest run --config config/vitest.config.ts src/shared/browser-client-host-reconciliation-protocol.test.ts src/main/browser/paired-runtime-browser-host-reconciliation-negotiation.test.ts src/main/runtime/rpc/methods/browser-client-host-reconciliation.test.ts src/main/runtime/browser-host-lease-registry.test.ts src/main/browser/paired-runtime-browser-client-host.test.ts",
+        "pnpm exec vitest run --config config/vitest.config.ts src/shared/browser-client-host-protocol.test.ts src/main/browser/browser-client-host-attach-request.test.ts src/main/browser/browser-client-page-command-executor.test.ts src/main/browser/browser-client-page-command-integration.test.ts src/main/browser/browser-client-page-inventory.test.ts src/main/browser/paired-runtime-browser-client-host-composition.test.ts src/main/browser/paired-runtime-browser-client-host.test.ts src/main/browser/paired-runtime-browser-host-lease.test.ts src/main/runtime/browser-host-lease-registry.test.ts src/main/runtime/rpc/methods/browser-client-host.test.ts src/main/runtime/browser-host-page-reconciliation-plan.test.ts",
+        "pnpm exec vitest run --config config/vitest.config.ts src/main/browser/browser-client-host-reconciliation-command-order.test.ts src/main/browser/browser-client-page-reconciliation-adapters.test.ts src/main/browser/browser-route-prepared-page-rekey.test.ts",
+        "pnpm exec vitest run --config config/vitest.config.ts src/shared/browser-network-capabilities.test.ts src/shared/browser-network-tunnel-protocol.test.ts src/main/browser/browser-network-tunnel-session.test.ts src/main/browser/remote-browser-socks-server.test.ts",
+        "pnpm exec vitest run --config config/vitest.config.ts src/main/browser/browser-network-tunnel-client.test.ts src/main/browser/paired-runtime-browser-network-route.test.ts src/main/runtime/runtime-binary-message-router.test.ts src/main/runtime/rpc/methods/browser-network-tunnel.test.ts src/main/runtime/browser-network-tunnel-paired-runtime.integration.test.ts",
+        "pnpm exec vitest run --config config/vitest.config.ts src/main/browser/browser-network-tunnel-outbound-memory-budget.test.ts src/main/browser/browser-network-tunnel-client-memory-budget.test.ts src/main/browser/browser-network-tunnel-session-aggregate-memory.test.ts src/shared/ws-outbound-backpressure-queue.test.ts src/shared/remote-runtime-client.test.ts",
+        "pnpm exec vitest run --config config/vitest.config.ts src/shared/browser-client-host-protocol.test.ts src/shared/ws-outbound-backpressure-queue.test.ts src/shared/remote-runtime-client.test.ts src/main/runtime/browser-host-lease-registry.test.ts src/main/runtime/runtime-rpc-browser-host-admission.test.ts src/main/runtime/rpc/methods/browser-client-host.test.ts src/main/runtime/rpc/methods/browser-network-tunnel.test.ts src/main/browser/paired-runtime-browser-host-lease.test.ts src/main/browser/paired-runtime-browser-network-route.test.ts src/main/runtime/browser-network-tunnel-paired-runtime.integration.test.ts src/main/browser/browser-network-tunnel-client.test.ts src/main/browser/browser-network-tunnel-client-memory-budget.test.ts src/main/browser/browser-network-tunnel-session.test.ts src/main/browser/browser-network-tunnel-session-aggregate-memory.test.ts src/main/browser/browser-network-tunnel-outbound-memory-budget.test.ts src/main/browser/remote-browser-socks-server.test.ts",
+        "pnpm exec vitest run --config config/vitest.config.ts src/shared/browser-client-host-protocol.test.ts src/main/runtime/browser-host-lease-registry.test.ts src/main/runtime/runtime-rpc-browser-host-admission.test.ts src/main/runtime/rpc/methods/browser-client-host.test.ts src/main/runtime/rpc/methods/browser-network-tunnel.test.ts src/main/browser/paired-runtime-browser-host-lease.test.ts src/main/browser/paired-runtime-browser-network-route.test.ts src/main/runtime/browser-network-tunnel-paired-runtime.integration.test.ts src/main/browser/browser-network-tunnel-client.test.ts src/main/browser/browser-network-tunnel-session.test.ts src/main/browser/remote-browser-socks-server.test.ts",
+        "pnpm exec vitest run --config config/vitest.config.ts src/shared/remote-runtime-client.test.ts",
+        "pnpm exec vitest run --config config/vitest.config.ts src/shared/remote-runtime-subscription-request.test.ts",
+        "pnpm exec vitest run --config config/vitest.config.ts src/main/browser/browser-client-host-command-dispatcher.test.ts",
+        "pnpm exec vitest run --config config/vitest.config.ts src/main/browser/paired-runtime-browser-client-host.test.ts src/main/browser/paired-runtime-browser-host-lease.test.ts src/main/browser/browser-client-host-command-dispatcher.test.ts",
+        "pnpm exec vitest run --config config/vitest.config.ts src/main/browser/paired-runtime-browser-client-host.test.ts src/main/browser/paired-runtime-browser-client-host-reconnect.test.ts src/main/browser/paired-runtime-browser-host-lease.test.ts src/main/browser/paired-runtime-browser-host-lease-reconnect.test.ts src/main/browser/browser-host-lease-reconnect-delay.test.ts src/main/browser/browser-client-host-command-dispatcher.test.ts",
+        "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/runtime-rpc-browser-host-admission.test.ts src/main/browser/paired-runtime-browser-host-lease-reconnect.test.ts",
+        "pnpm exec vitest run --config config/vitest.config.ts src/shared/browser-client-host-protocol.test.ts src/main/browser/browser-client-host-attach-request.test.ts src/main/browser/browser-client-network-route-registry.test.ts src/main/browser/paired-runtime-browser-client-host-composition.test.ts src/main/browser/paired-runtime-browser-client-host.test.ts src/main/browser/paired-runtime-browser-client-host-reconnect.test.ts src/main/browser/paired-runtime-browser-host-lease.test.ts src/main/browser/paired-runtime-browser-host-lease-reconnect.test.ts src/main/browser/browser-host-lease-reconnect-delay.test.ts src/main/browser/paired-runtime-browser-network-route.test.ts src/main/runtime/browser-host-command-ledger.test.ts src/main/runtime/browser-host-command-ledger-capacity.test.ts src/main/runtime/browser-host-lease-registry.test.ts src/main/runtime/rpc/methods/browser-client-host.test.ts",
+        "pnpm exec vitest run --config config/vitest.config.ts src/shared/browser-client-host-protocol.test.ts src/main/browser/browser-client-host-attach-request.test.ts src/main/browser/browser-client-network-route-registry.test.ts src/main/browser/paired-runtime-browser-client-host-composition.test.ts src/main/browser/paired-runtime-browser-client-host.test.ts src/main/browser/paired-runtime-browser-client-host-reconnect.test.ts src/main/browser/paired-runtime-browser-host-lease.test.ts src/main/browser/paired-runtime-browser-host-lease-reconnect.test.ts src/main/browser/browser-host-lease-reconnect-delay.test.ts src/main/browser/paired-runtime-browser-network-route.test.ts src/main/runtime/browser-host-command-ledger.test.ts src/main/runtime/browser-host-command-ledger-capacity.test.ts src/main/runtime/browser-host-lease-registry.test.ts src/main/runtime/runtime-rpc-browser-host-admission.test.ts src/main/runtime/rpc/methods/browser-client-host.test.ts",
+        "pnpm exec vitest run --config config/vitest.config.ts src/shared/browser-client-host-protocol.test.ts src/main/browser/browser-client-host-attach-request.test.ts src/main/browser/browser-client-network-route-registry.test.ts src/main/browser/paired-runtime-browser-client-host-composition.test.ts src/main/browser/paired-runtime-browser-client-host.test.ts src/main/browser/paired-runtime-browser-client-host-reconnect.test.ts src/main/browser/paired-runtime-browser-host-lease.test.ts src/main/browser/paired-runtime-browser-host-lease-reconnect.test.ts src/main/browser/browser-host-lease-reconnect-delay.test.ts src/main/browser/paired-runtime-browser-network-route.test.ts src/main/runtime/browser-host-command-ledger.test.ts src/main/runtime/browser-host-command-ledger-capacity.test.ts src/main/runtime/browser-host-lease-placement-retirement.test.ts src/main/runtime/browser-host-lease-registry.test.ts src/main/runtime/runtime-rpc-browser-host-admission.test.ts src/main/runtime/rpc/methods/browser-client-host.test.ts",
+        "pnpm exec vitest run --config config/vitest.config.ts src/main/browser/browser-client-network-route-registry.test.ts src/main/browser/paired-runtime-browser-client-host-composition.test.ts src/main/browser/paired-runtime-browser-client-host-registry.test.ts src/main/browser/paired-runtime-browser-client-host-runtime.test.ts src/main/browser/browser-client-page-command-executor.test.ts src/main/browser/browser-session-startup.test.ts src/main/ipc/runtime-environments-subscription-teardown.test.ts",
+        "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/browser-host-command-ledger.test.ts src/main/runtime/browser-host-command-ledger-capacity.test.ts src/main/runtime/browser-host-lease-registry.test.ts src/main/runtime/rpc/methods/browser-client-host.test.ts",
+        "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/browser-host-lease-registry.test.ts src/main/browser/browser-network-deferred-socket.test.ts src/main/browser/browser-network-execution-route.test.ts src/main/browser/paired-runtime-browser-network-route.test.ts src/main/runtime/rpc/methods/browser-network-tunnel.test.ts src/main/browser/ssh-browser-network-execution-route.test.ts src/main/browser/system-ssh-socks-client-socket.test.ts src/main/ssh/system-ssh-dynamic-forward-process.test.ts src/shared/browser-client-host-protocol.test.ts src/shared/browser-network-capabilities.test.ts src/main/ssh/system-ssh-forward-process.test.ts src/main/ssh/ssh-system-fallback.test.ts src/main/ssh/ssh-port-forward.test.ts",
+        "ORCA_RUN_DOCKER_SSH_BROWSER_E2E=1 pnpm exec vitest run --config config/vitest.config.ts tests/e2e/ssh-browser-network-execution-route.docker.unit.test.ts"
+      ],
+      "testFiles": [
+        "src/main/browser/browser-route-webcontents-registry.test.ts",
+        "src/main/browser/browser-client-page-unavailability.test.ts",
+        "src/main/runtime/runtime-browser-client-page-recovery.test.ts",
+        "src/main/runtime/rpc/methods/session-tab-browser-placement-mutations.test.ts",
+        "src/main/runtime/rpc/methods/session-tab-browser-placement-projection.test.ts",
+        "src/shared/browser-network-capabilities.test.ts",
+        "src/shared/browser-client-host-protocol.test.ts",
+        "src/shared/browser-client-host-reconciliation-protocol.test.ts",
+        "src/shared/browser-network-tunnel-protocol.test.ts",
+        "src/main/runtime/browser-host-lease-placement-retirement.test.ts",
+        "src/main/runtime/browser-host-page-retirement.test.ts",
+        "src/main/runtime/browser-host-page-placement-replacement.test.ts",
+        "src/main/runtime/browser-host-page-placement.test.ts",
+        "src/main/runtime/browser-host-page-reconciliation-plan.test.ts",
+        "src/main/runtime/browser-host-page-reconciliation-executor.test.ts",
+        "src/main/runtime/browser-host-page-reconciliation-orchestration.test.ts",
+        "src/main/runtime/browser-host-command-ledger.test.ts",
+        "src/main/runtime/browser-host-command-ledger-capacity.test.ts",
+        "src/main/runtime/browser-host-lease-registry.test.ts",
+        "src/main/runtime/runtime-rpc-browser-host-admission.test.ts",
+        "src/main/runtime/rpc/methods/browser-client-host.test.ts",
+        "src/main/runtime/rpc/methods/browser-client-host-reconciliation.test.ts",
+        "src/main/browser/paired-runtime-browser-host-lease.test.ts",
+        "src/main/browser/paired-runtime-browser-host-lease-reconnect.test.ts",
+        "src/main/browser/paired-runtime-browser-host-reconciliation-negotiation.test.ts",
+        "src/main/browser/browser-host-lease-reconnect-delay.test.ts",
+        "src/main/browser/paired-runtime-browser-client-host.test.ts",
+        "src/main/browser/paired-runtime-browser-client-host-reconnect.test.ts",
+        "src/main/browser/browser-client-network-route-registry.test.ts",
+        "src/main/browser/paired-runtime-browser-client-host-composition.test.ts",
+        "src/main/browser/paired-runtime-browser-client-host-registry.test.ts",
+        "src/main/browser/paired-runtime-browser-client-host-runtime.test.ts",
+        "src/main/browser/browser-client-host-attach-request.test.ts",
+        "src/main/browser/browser-client-host-reconciliation-command-order.test.ts",
+        "src/main/browser/browser-client-page-command-executor.test.ts",
+        "src/main/browser/browser-client-page-command-integration.test.ts",
+        "src/main/browser/browser-client-page-reconciliation-adapters.test.ts",
+        "src/main/browser/browser-client-page-inventory.test.ts",
+        "src/main/browser/browser-route-prepared-page-rekey.test.ts",
+        "src/main/browser/browser-session-startup.test.ts",
+        "src/main/ipc/runtime-environments-subscription-teardown.test.ts",
+        "src/main/browser/browser-client-host-command-dispatcher.test.ts",
+        "src/main/browser/browser-network-tunnel-session.test.ts",
+        "src/main/browser/browser-network-tunnel-session-aggregate-memory.test.ts",
+        "src/main/browser/browser-network-tunnel-client.test.ts",
+        "src/main/browser/browser-network-tunnel-client-memory-budget.test.ts",
+        "src/main/browser/browser-network-tunnel-outbound-memory-budget.test.ts",
+        "src/main/browser/browser-network-deferred-socket.test.ts",
+        "src/main/browser/browser-network-execution-route.test.ts",
+        "src/main/browser/paired-runtime-browser-network-route.test.ts",
+        "src/main/browser/ssh-browser-network-execution-route.test.ts",
+        "src/main/browser/system-ssh-socks-client-socket.test.ts",
+        "src/main/ssh/system-ssh-dynamic-forward-process.test.ts",
+        "src/main/ssh/ssh-port-forward.test.ts",
+        "src/main/browser/remote-browser-socks-server.test.ts",
+        "src/main/runtime/runtime-binary-message-router.test.ts",
+        "src/main/runtime/rpc/methods/browser-network-tunnel.test.ts",
+        "src/main/runtime/browser-network-tunnel-paired-runtime.integration.test.ts",
+        "src/shared/remote-runtime-client.test.ts",
+        "src/shared/remote-runtime-subscription-request.test.ts",
+        "src/shared/ws-outbound-backpressure-queue.test.ts",
+        "tests/e2e/ssh-browser-network-execution-route.docker.unit.test.ts"
+      ],
+      "assertionRefs": [
+        {
+          "file": "src/main/runtime/browser-host-lease-placement-retirement.test.ts",
+          "assertions": [
+            "terminal release fences exact host-generation placements before lease settlement and makes retirement non-cancellable",
+            "terminal fencing upgrades an existing retirement without touching server placements or another host generation",
+            "negotiated reconnect grace preserves placement while grace expiry and legacy disconnect retire it",
+            "late old-generation cleanup cannot retire a replacement and capacity remains occupied until exact completion"
+          ]
+        },
+        {
+          "file": "src/main/runtime/browser-host-page-retirement.test.ts",
+          "assertions": [
+            "pending retirement fences exact client-page use and every replacement",
+            "retirement begin is idempotent while exact cancellation restores the same authority",
+            "delayed cancellation or completion cannot settle a newer retirement",
+            "capacity releases only after exact completion and reused page generations remain monotonic",
+            "completion serializes against cancellation and recursion while hook failure stays retryable",
+            "server placements use the same two-phase settlement barrier"
+          ]
+        },
+        {
+          "file": "src/main/runtime/browser-host-page-placement-replacement.test.ts",
+          "assertions": [
+            "client and server placements cannot overwrite an occupied logical page",
+            "occupied page IDs reject replacement before client-host selection",
+            "placement capacity remains occupied until exact retirement",
+            "stale cleanup cannot retire a replacement and page generations remain monotonic"
+          ]
+        },
+        {
+          "file": "src/main/runtime/browser-host-page-placement.test.ts",
+          "assertions": [
+            "client placement requires the exact runtime, epoch, host, and page generation on a live lease",
+            "lease release and replacement fence an otherwise matching client placement",
+            "retired, replaced, and server placements cannot be claimed as live client pages",
+            "live placement count and page/host identities are bounded before generation allocation"
+          ]
+        },
+        {
+          "file": "src/main/runtime/browser-host-page-reconciliation-plan.test.ts",
+          "assertions": [
+            "exact current pages retain without navigation while runtime-missing pages restore and client orphans close",
+            "profile, execution-host, authority, generation, and outcome-unknown mismatches require a close-before-restore barrier",
+            "old-epoch reclaim requires one exact persisted previous authority on the same runtime, authenticated paired-device provenance, an epoch transition, and the same browser-host client identity while allowing counters to restart under the new epoch",
+            "a runtime-authority change, including an SSH page whose route key omits runtime identity, requires close-before-restore instead of DOM-preserving reclaim",
+            "duplicate and over-capacity inventories fail atomically before returning a partial plan",
+            "invalid identities, generations, URLs, states, limits, duplicate inventories, and over-capacity inventories fail atomically while valid records and action lists are immutable"
+          ]
+        },
+        {
+          "file": "src/main/runtime/browser-host-lease-registry.test.ts",
+          "assertions": [
+            "multiple live hosts require exact selection instead of first-connected routing",
+            "one connection and one paired device cannot retain more than their exact host limits",
+            "same-device replacement increments generation and fences the old connection",
+            "negotiated disconnect keeps exact authority and placement unavailable until same-device reattach or grace expiry",
+            "an exact reconnect arriving before old cleanup supersedes only the connection while preserving authority and fencing tunnels",
+            "foreign device, capability mismatch, explicit release, and late reattach cannot resume fenced authority",
+            "disconnect fences every tunnel immediately while retaining command, placement, and execution-host state through grace",
+            "late cleanup cannot remove a newer lease or route generation",
+            "execution-host grants bind to one exact lease and key while stale cleanup cannot remove a replacement",
+            "lease replacement invalidates every grant from the old host generation",
+            "late page cleanup cannot remove a replacement client generation or server placement",
+            "retired page placement leaves no tombstone and a reused ID receives a higher global generation",
+            "page placement generations are monotonic and stale lease authority is rejected",
+            "incomplete, unsupported-version, duplicate, over-budget, and foreign-client inventories fail before lease replacement",
+            "a previous-runtime inventory remains eligible for exact persisted-authority restart reconciliation",
+            "the exact authenticated lease retains an immutable inventory snapshot",
+            "reconciliation requires command and complete-inventory negotiation",
+            "reconnect cannot change reconciliation negotiation in place",
+            "legacy command leases reject reconciliation variants before delivery"
+          ]
+        },
+        {
+          "file": "src/main/runtime/runtime-rpc-browser-host-admission.test.ts",
+          "assertions": [
+            "browser-host attachment has a dedicated sub-cap that preserves ordinary wait admission",
+            "one paired device cannot consume the second device's reserved browser-host share",
+            "asks and browser hosts share a ceiling that retains one quarter of total capacity for waits",
+            "socket close aborts the exact host and wait handlers and releases both counters"
+          ]
+        },
+        {
+          "file": "src/shared/browser-client-host-protocol.test.ts",
+          "assertions": [
+            "page-command v1 negotiation is optional and independent of the legacy ready/revoked stream",
+            "lease reconnect v1 is optional, stripped by old decoders, and valid only beside complete page inventory v1",
+            "page-inventory v1 is optional, independently echoed, authority-bound, duplicate-free, capped at 256 pages and 768 KiB, and stripped by old attach and ready decoders",
+            "inventory-only identities are capped after JSON escaping so 256 worst-case valid page records remain within budget without narrowing legacy fields",
+            "create and navigate commands bind bounded IDs and sequences to exact runtime, epoch, host, and page generations",
+            "unknown versions, command kinds, invalid generations, and oversized identities fail before delivery",
+            "command-result acknowledgements require an explicit boolean accepted field"
+          ]
+        },
+        {
+          "file": "src/shared/browser-client-host-reconciliation-protocol.test.ts",
+          "assertions": [
+            "old attach and ready decoders strip the optional reconciliation version",
+            "reclaim, close, and restore commands require exact reconciliation negotiation",
+            "reclaim and close bind the previous page to exact authority while restore inputs remain bounded",
+            "legacy create and navigate command payloads remain unchanged"
+          ]
+        },
+        {
+          "file": "src/main/browser/paired-runtime-browser-host-lease.test.ts",
+          "assertions": [
+            "a client requests commands only with a delivery handler and accepts them only after an exact v1 echo",
+            "an old host that omits the echo cannot deliver a command",
+            "one complete inventory snapshot is sampled before attach, a missing echo stays unsupported, and an unsolicited echo closes the lease",
+            "stale authority commands close the exact lease before handler delivery",
+            "completed and failed results submit exact command authority on the established subscription",
+            "missing result transport, handler failure, server rejection, and malformed or wrong-runtime acknowledgement close the lease",
+            "exact duplicate result acknowledgement remains idempotent",
+            "result settlement concurrency stays below nested-request capacity and excess unsettled results fail closed"
+          ]
+        },
+        {
+          "file": "src/main/browser/paired-runtime-browser-host-lease-reconnect.test.ts",
+          "assertions": [
+            "initial runtime_busy admission retries on bounded deterministic jitter and attaches when capacity returns",
+            "initial admission expiry and explicit close release every timer and subscription",
+            "runtime_busy during negotiated reconnect remains inside the existing grace without replacing authority",
+            "only an echoed reconnect v1 plus complete inventory preserves exact authority after recoverable transport loss",
+            "duplicate and stale transport callbacks cannot start extra attempts or fence the current subscription",
+            "repeated reconnects retain bounded timers and subscriptions while authority changes and explicit revocation fail terminally",
+            "missing echo preserves legacy teardown and grace expiry closes every retained attempt exactly once",
+            "malformed and unsolicited reconnect echoes fail closed",
+            "outstanding command replay reuses exact active result admissions without double-charging settlement capacity",
+            "an unencodable reconnect inventory cannot silently replace exact authority or fall back to legacy"
+          ]
+        },
+        {
+          "file": "src/main/browser/paired-runtime-browser-host-reconciliation-negotiation.test.ts",
+          "assertions": [
+            "the optional reconciliation request is retained only after exact ready echo",
+            "an older host can omit the echo without enabling reconciliation",
+            "unsolicited and dependency-inconsistent echoes fail closed",
+            "exact reconnect rejects reconciliation downgrade"
+          ]
+        },
+        {
+          "file": "src/main/browser/browser-host-lease-reconnect-delay.test.ts",
+          "assertions": [
+            "client-specific retry jitter is deterministic and remains inside exponential, two-second, and grace ceilings",
+            "invalid timer delays fail before starting a subscription"
+          ]
+        },
+        {
+          "file": "src/main/browser/paired-runtime-browser-client-host.test.ts",
+          "assertions": [
+            "reconciliation is advertised only when the composed host explicitly enables it beside complete inventory",
+            "exact dispatcher authority exists before the first same-socket command can arrive",
+            "explicit close shuts transport before aborting every owned page handler",
+            "dispatcher abort still runs when lease cleanup rejects",
+            "lease transport failure aborts every owned handler and reports one terminal error",
+            "retirement and forgetting accept only the exact owned page generation",
+            "timed-out retirement stays fenced until the exact late handler settles",
+            "bounded host close exposes exact eventual settlement for deferred page cleanup"
+          ]
+        },
+        {
+          "file": "src/main/browser/paired-runtime-browser-client-host-reconnect.test.ts",
+          "assertions": [
+            "an acknowledged mutation replay uses the preserved dispatcher result without rerunning its handler"
+          ]
+        },
+        {
+          "file": "src/main/browser/paired-runtime-browser-client-host-composition.test.ts",
+          "assertions": [
+            "exact route authority activates before the first page command",
+            "each initial or reconnect attach samples a fresh exact executor inventory while the compatibility gate binds to the latest published snapshot",
+            "control loss suspends routes without closing pages and command admission waits for exact route recovery",
+            "one command gate spans repeated loss while stale route recoveries cannot close the replacement",
+            "page retirement settles dispatcher ownership before guest cleanup and ledger forget",
+            "terminal close suspends routes and fences every navigation grant before control cleanup can await handlers",
+            "shutdown closes control transport before executor pages and every retained route",
+            "non-settling handlers remove network reach immediately and defer page cleanup until exact late settlement",
+            "deferred executor cleanup failures remain fenced and emit an observable composition error",
+            "same-pairing runtime replacement retires old routes, fences guest navigation, waits for old handlers, and activates retained inventory only after exact reconciliation echo",
+            "a legacy replacement remains available for empty inventory but cannot activate routes for unreconciled retained pages",
+            "retired-route cleanup failure closes the composition before replacement authority can activate",
+            "late callbacks from a replaced host generation cannot suspend or close its replacement",
+            "cleanly absent failed creates are forgotten while unresolved cleanup remains fenced"
+          ]
+        },
+        {
+          "file": "src/main/browser/browser-client-host-attach-request.test.ts",
+          "assertions": [
+            "an unencodable optional inventory is omitted without changing legacy page-command negotiation",
+            "reconnect negotiation is emitted only beside an encoded complete inventory"
+          ]
+        },
+        {
+          "file": "src/main/browser/browser-client-host-reconciliation-command-order.test.ts",
+          "assertions": [
+            "reclaim, restore, and close are valid first commands only after exact reconciliation negotiation",
+            "reclaim and restore failure cancels later navigation without running it",
+            "nested prior authority is immutable and exact duplicate matching rejects mutation on both ledgers",
+            "successful close is terminal while failed close releases the fence and successful reclaim can continue with navigation"
+          ]
+        },
+        {
+          "file": "src/main/browser/browser-client-page-command-executor.test.ts",
+          "assertions": [
+            "in-flight create, ambiguous cleanup, and stale renderer authority snapshot as outcome unknown",
+            "a destroyed exact guest snapshots as outcome unknown before executor retirement",
+            "create-to-active transition emits one exact page record without duplicate identity",
+            "successful normalized navigation updates the immutable current URL snapshot unless normalization exceeds the URL field bound",
+            "legacy-valid command identities remain executable even when optional inventory cannot encode them",
+            "executor capacity cannot exceed the shared 256-page attach limit",
+            "failed retirement leaves immutable outcome-unknown inventory without a retryable live-page handle",
+            "authority transition retains page inventory while fencing old navigation and uses the replacement connection identity for future pages",
+            "in-flight old-authority creation rechecks transition state and releases its route without committing a page",
+            "transition revocation failure keeps later commands fenced while exact cleanup still completes",
+            "ordinary navigation requires the page inventory to match the exact command authority",
+            "terminal navigation fencing revokes retained grants once and blocks late in-flight creation without inferring destruction",
+            "revocation failure remains observable while exact guest, renderer, Session, and route cleanup still run"
+          ]
+        },
+        {
+          "file": "src/main/browser/browser-client-page-reconciliation-adapters.test.ts",
+          "assertions": [
+            "reclaim moves one exact retained guest to a new authority without remounting",
+            "DOM-preserving reclaim is rejected when the runtime authority changes",
+            "restore creates fresh authority and destroys it when initial navigation cannot be proven",
+            "close targets only exact prior authority",
+            "renderer failure or abort after main rekey retires both possible exact renderer identities, preserves unrelated pages, destroys the guest, and reports outcome unknown"
+          ]
+        },
+        {
+          "file": "src/main/browser/browser-route-prepared-page-rekey.test.ts",
+          "assertions": [
+            "prepared authority rekeys without changing its opaque capability token",
+            "stale, occupied, cross-page, and cross-renderer targets fail without mutation"
+          ]
+        },
+        {
+          "file": "src/main/browser/browser-client-page-command-integration.test.ts",
+          "assertions": [
+            "spontaneous exact guest destruction revokes active inventory before explicit page retirement"
+          ]
+        },
+        {
+          "file": "src/main/browser/browser-client-page-inventory.test.ts",
+          "assertions": [
+            "optional URLs compact by deterministic codepoint order without dropping required page identity",
+            "an unencodable complete snapshot declines inventory negotiation instead of dropping a page"
+          ]
+        },
+        {
+          "file": "src/main/browser/paired-runtime-browser-client-host-registry.test.ts",
+          "assertions": [
+            "one environment pairing revision shares one host composition",
+            "a same-pairing runtime change preserves that composition and delegates exact authority replacement",
+            "a failed authority replacement retains a cleanup tombstone and cannot expose a half-active successor",
+            "a changed pairing revision closes before its replacement starts",
+            "unsettled host cleanup retains a bounded tombstone, blocks replacement, and releases only when deferred cleanup proves completion",
+            "unresolved deferred cleanup remains fail-closed until authenticated reconciliation or process restart",
+            "environment retirement permits a later exact restart",
+            "app shutdown permanently fences new host admission before closing every environment"
+          ]
+        },
+        {
+          "file": "src/main/browser/browser-client-network-route-registry.test.ts",
+          "assertions": [
+            "canonical execution-host keys share one route until the final page release",
+            "native routes must name the exact authority runtime",
+            "aborted startup releases without admitting a route handle",
+            "suspension blocks new retention and reconnect preserves the exact listener address",
+            "one transient route failure retries without closing healthy routes",
+            "a superseded route recovery retains no retry timer",
+            "persistent route failure exhausts bounded grace without leaking retry timers",
+            "authority retirement blocks admission and reconnect while retaining suspended SSH routes until exact page release",
+            "final shutdown force-closes retained retired routes",
+            "registry shutdown closes every route and rejects later admission"
+          ]
+        },
+        {
+          "file": "src/main/browser/paired-runtime-browser-client-host-runtime.test.ts",
+          "assertions": ["pairing resolution failures preserve the asynchronous start contract"]
+        },
+        {
+          "file": "src/main/browser/browser-client-host-command-dispatcher.test.ts",
+          "assertions": [
+            "commands execute FIFO per page while only exact payload-matched duplicates replay without rerunning side effects",
+            "authority, sequence, generation, and create dependencies fence stale or ambiguous commands",
+            "failed admission consumes no page authority and every resource class stays bounded",
+            "retirement and close cancel immediately but retain a fence until non-cooperative handlers settle",
+            "bounded close exposes one exact eventual-settlement barrier after late handlers finish",
+            "a handler cannot reenter retirement before its bounded join is installed",
+            "an abort listener cannot reenter before the shared retirement operation is published",
+            "retiring a queued generation removes its stale scheduler entry before replacement",
+            "forgotten pages retain a global stale-generation floor and cached results have a global ceiling",
+            "lease authority and command identity are immutable snapshots while replacement releases retired cache"
+          ]
+        },
+        {
+          "file": "src/main/runtime/browser-host-command-ledger.test.ts",
+          "assertions": [
+            "server-issued commands are delivered FIFO per page and settle only in exact sequence",
+            "reattached delivery replays every unsettled command without replacing its immutable identity",
+            "partial replay delivery failure detaches transport without discarding unsettled commands",
+            "exact result replay is idempotent while conflicting, stale, or gapped results fail closed",
+            "outstanding commands and pages remain bounded before admission side effects",
+            "lease loss or exact page retirement makes every outstanding outcome unknown"
+          ]
+        },
+        {
+          "file": "src/main/runtime/browser-host-command-ledger-capacity.test.ts",
+          "assertions": [
+            "per-page and global result replay caches expire at exact ceilings",
+            "accepted authority, command, and result payloads remain immutable",
+            "oversized wire payloads fail before page, sequence, or delivery admission",
+            "new issue delivery failure closes the ledger and fences every outstanding outcome"
+          ]
+        },
+        {
+          "file": "src/main/runtime/rpc/methods/browser-client-host.test.ts",
+          "assertions": [
+            "the control method stays out of production registration",
+            "only a negotiated authenticated paired-runtime connection receives a server-owned epoch and generation",
+            "page-command v1 is echoed only to an explicit v1 attach while legacy event shapes remain unchanged",
+            "page-inventory v1 is echoed only after a complete authenticated inventory is retained on the exact lease",
+            "negotiated exact reattach emits ready before replaying the unchanged unsettled command",
+            "reattach before old cleanup preserves the same authority and ends only the superseded connection stream",
+            "only the exact negotiated connection, paired device, and live page placement can settle a server-owned command",
+            "an unnegotiated runtime connection cannot submit command results",
+            "exact duplicate results are idempotent while conflicts and stale or retired placement fail closed",
+            "a second browser-host identity on one authenticated connection is rejected",
+            "legacy cleanup emits exact revocation while negotiated cleanup enters bounded unavailable grace"
+          ]
+        },
+        {
+          "file": "src/main/runtime/rpc/methods/browser-client-host-reconciliation.test.ts",
+          "assertions": [
+            "the authenticated server echoes and retains reconciliation only when explicitly requested",
+            "command result settlement requires the exact negotiated reconciliation authority"
+          ]
+        },
+        {
+          "file": "src/shared/browser-network-tunnel-protocol.test.ts",
+          "assertions": [
+            "remote DNS names round-trip without client resolution",
+            "unknown versions, opcodes, oversized payloads, and length mismatches fail closed"
+          ]
+        },
+        {
+          "file": "src/main/browser/browser-network-tunnel-session.test.ts",
+          "assertions": [
+            "destination writes replenish client credit only after settlement",
+            "stale generations and reused stream IDs cannot replace the current destination",
+            "late frames for retired or reserved stream IDs leave concurrent destinations alive while never-reserved IDs fail closed",
+            "pending opens and admitted open rate remain bounded and recover only after exact release or window expiry",
+            "both traffic directions share an 8 MiB application-retention ledger with exact settlement, retirement, stale-callback, and reentrant-close release",
+            "unsettled client-to-destination writes retain at most 256 chunks per stream independently of byte credit"
+          ]
+        },
+        {
+          "file": "src/main/browser/browser-network-tunnel-session-aggregate-memory.test.ts",
+          "assertions": [
+            "multiple execution-host routes share browser-host application-byte admission in both traffic directions",
+            "route close releases aggregate claims exactly before stale destination-write callbacks"
+          ]
+        },
+        {
+          "file": "src/main/browser/browser-network-tunnel-client.test.ts",
+          "assertions": [
+            "source writes never exceed granted credit or the bounded data-frame size",
+            "destination credit tracks only browser-facing socket writes that settle after readable consumption",
+            "pending tiny frames stay chunk-bounded and data drains before remote close retirement",
+            "late local settlement after remote close sends no stale credit and leaves the tunnel usable",
+            "stale generations cannot open a stream and route close destroys every source",
+            "late frames for retired stream IDs leave concurrent sources alive while never-allocated IDs fail closed",
+            "stream IDs never repeat within one tunnel generation after the bounded ledger exhausts"
+          ]
+        },
+        {
+          "file": "src/main/browser/browser-network-tunnel-client-memory-budget.test.ts",
+          "assertions": [
+            "multiple client routes on one browser host share source-write application admission",
+            "destination copies remain charged through browser-facing socket settlement",
+            "credited transport handoff transfers application ownership before callback settlement"
+          ]
+        },
+        {
+          "file": "src/main/browser/browser-network-tunnel-outbound-memory-budget.test.ts",
+          "assertions": [
+            "application, encrypted-queue, and native socket bytes share one host ceiling",
+            "distinct hosts share one process ceiling with exact release",
+            "zero-byte claims, socket sources, hosts, and leases have independent bounds",
+            "released leases cannot admit work and retained owners keep exact accounting alive",
+            "unavailable native-buffer evidence fails closed until its exact source releases"
+          ]
+        },
+        {
+          "file": "src/main/runtime/runtime-binary-message-router.test.ts",
+          "assertions": [
+            "dedicated raw tunnel traffic cannot replace or be decoded as terminal stream traffic on the same connection"
+          ]
+        },
+        {
+          "file": "src/main/browser/remote-browser-socks-server.test.ts",
+          "assertions": [
+            "domain CONNECT preserves the final execution-host DNS target",
+            "unsupported commands and unavailable routes open no fallback destination"
+          ]
+        },
+        {
+          "file": "src/main/runtime/rpc/methods/browser-network-tunnel.test.ts",
+          "assertions": [
+            "the production RPC registry excludes the tunnel until route authorization exists",
+            "unnegotiated, self-asserted, stale, wrong-execution-revision, and stale-SSH-authority browser hosts register no binary handler",
+            "SSH execution-host descriptors require a separately negotiated capability",
+            "ungranted or wrong-key SSH routes are rejected before resolver, memory, or binary registration",
+            "connector diagnostics are mapped to a stable public error without local path disclosure",
+            "grant revocation aborts connector startup immediately and cannot race through route admission",
+            "execution-host invalidation closes the session and releases its connector exactly once",
+            "memory exhaustion opens no route or binary handler",
+            "the server allocates route generations and fences the replaced route",
+            "subscription cleanup removes the exact connection-owned raw handler",
+            "raw-handler cleanup failure cannot retain route memory or lease authority"
+          ]
+        },
+        {
+          "file": "src/main/browser/paired-runtime-browser-network-route.test.ts",
+          "assertions": [
+            "route teardown closes a subscription that resolves after startup cancellation",
+            "close after subscription acquisition settles the pending readiness wait",
+            "post-auth readiness has a deadline and runtime close tears down the local route",
+            "listener teardown failures remain visible to the route owner",
+            "the route binds and releases its exact host/process memory lease and four-frame drain quantum",
+            "one listener stays fail-closed and address-stable through reconnect",
+            "replacement generations advance strictly and remain fenced after ready-close races",
+            "reconnect retains the exact existing native v1 attach payload and capability pair",
+            "only an SSH descriptor adds the execution-host capability",
+            "late superseded callbacks cannot replace or close the current transport",
+            "a current-generation protocol failure retires the transport and remains reconnectable",
+            "stream-ID exhaustion replaces the generation before recycling an ID"
+          ]
+        },
+        {
+          "file": "src/main/browser/browser-network-deferred-socket.test.ts",
+          "assertions": [
+            "destroy before source attachment emits one close and destroys a late source",
+            "source close after destroy cannot emit duplicate wrapper close"
+          ]
+        },
+        {
+          "file": "src/main/browser/browser-network-execution-route.test.ts",
+          "assertions": [
+            "execution-host route keys cannot collide on delimiter-containing identities",
+            "native routing accepts only the exact runtime revision without retaining an invalidation callback"
+          ]
+        },
+        {
+          "file": "src/main/browser/ssh-browser-network-execution-route.test.ts",
+          "assertions": [
+            "missing and stale SSH provider authority is rejected before destination open",
+            "ssh2 forwardOut receives the exact domain and port without desktop resolution",
+            "a synchronous forwardOut disconnect releases the exact deferred socket once",
+            "provider rotation invalidates and releases the exact route once",
+            "one system-SSH dynamic forward is owned by the whole route",
+            "grant revocation aborts an in-progress system-SSH dynamic forward"
+          ]
+        },
+        {
+          "file": "src/main/browser/system-ssh-socks-client-socket.test.ts",
+          "assertions": [
+            "the internal SOCKS5 client encodes the exact destination as a domain request"
+          ]
+        },
+        {
+          "file": "src/main/ssh/system-ssh-dynamic-forward-process.test.ts",
+          "assertions": [
+            "system SSH uses BatchMode=yes, disables ControlMaster, and positions one dynamic forward before the destination",
+            "authority invalidation cancels an in-progress SSH launch and destroys its active readiness probe immediately"
+          ]
+        },
+        {
+          "file": "src/main/ssh/ssh-port-forward.test.ts",
+          "assertions": [
+            "static system-SSH forwards receive the connection's complete resolved build options"
+          ]
+        },
+        {
+          "file": "tests/e2e/ssh-browser-network-execution-route.docker.unit.test.ts",
+          "assertions": [
+            "an ephemeral sshd resolves a container-only domain and returns a unique HTTP marker",
+            "the real ssh2 forwardOut receives that exact domain and provider loss fences the route",
+            "one non-interactive system-OpenSSH dynamic forward passes the same remote-only oracle and closes cleanly"
+          ]
+        },
+        {
+          "file": "src/main/runtime/browser-network-tunnel-paired-runtime.integration.test.ts",
+          "assertions": [
+            "attach, page-command delivery, and result settlement share one exact authenticated connection and paired identity",
+            "same-runtime authority replacement commits placement only after the exact completed client result",
+            "SOCKS HTTP bytes cross the dedicated authenticated E2EE subscription to runtime-native TCP",
+            "closing the route destroys the execution-host destination socket"
+          ]
+        },
+        {
+          "file": "src/shared/remote-runtime-subscription-request.test.ts",
+          "assertions": [
+            "nested JSON responses route by exact request ID under reverse-order delivery",
+            "unknown and duplicate response IDs fail the authenticated subscription",
+            "serialization failure consumes no pending capacity and the 33rd concurrent request is rejected",
+            "one timeout rejects every concurrent waiter exactly once and closes the subscription",
+            "queued control bytes release once while native socket ownership remains charged through exact close",
+            "socket-registration and queue-claim denial report terminal failure exactly once"
+          ]
+        },
+        {
+          "file": "src/shared/remote-runtime-client.test.ts",
+          "assertions": [
+            "the authenticated socket binds the optional tunnel capability",
+            "the dedicated outbound queue reports hard overflow instead of dropping a frame",
+            "encrypted queue claims release synchronously while native socket ownership remains charged through exact close"
+          ]
+        },
+        {
+          "file": "src/shared/ws-outbound-backpressure-queue.test.ts",
+          "assertions": [
+            "direct and already-retained queued frames use distinct aggregate admission semantics",
+            "queued drain yields after its configured frame quantum without reordering",
+            "aggregate queue claims release on drain, denial, disposal, and close"
+          ]
+        }
+      ],
+      "evidenceRuns": [
+        {
+          "date": "2026-08-15",
+          "runner": "local",
+          "platform": "macos",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/shared/browser-client-host-protocol.test.ts src/main/browser/browser-client-host-attach-request.test.ts src/main/browser/browser-client-network-route-registry.test.ts src/main/browser/paired-runtime-browser-client-host-composition.test.ts src/main/browser/paired-runtime-browser-client-host.test.ts src/main/browser/paired-runtime-browser-client-host-reconnect.test.ts src/main/browser/paired-runtime-browser-host-lease.test.ts src/main/browser/paired-runtime-browser-host-lease-reconnect.test.ts src/main/browser/browser-host-lease-reconnect-delay.test.ts src/main/browser/paired-runtime-browser-network-route.test.ts src/main/runtime/browser-host-command-ledger.test.ts src/main/runtime/browser-host-command-ledger-capacity.test.ts src/main/runtime/browser-host-lease-placement-retirement.test.ts src/main/runtime/browser-host-lease-registry.test.ts src/main/runtime/runtime-rpc-browser-host-admission.test.ts src/main/runtime/rpc/methods/browser-client-host.test.ts",
+          "result": "passed",
+          "durationSeconds": 3.61,
+          "summary": "On the #14753 tip, sixteen files passed 167 exact terminal navigation/route fencing, retained reconnect grace, placement retirement, attach, command, result, route recovery, admission, and mixed-version protocol assertions. The new composition oracle was 1 failed / 10 passed before implementation because terminal host loss started asynchronous close without first suspending routes or revoking navigation."
+        },
+        {
+          "date": "2026-08-15",
+          "runner": "local",
+          "platform": "macos",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/browser-host-lease-placement-retirement.test.ts src/main/runtime/browser-host-page-retirement.test.ts src/main/runtime/browser-host-page-placement-replacement.test.ts src/main/runtime/browser-host-page-placement.test.ts src/main/runtime/browser-host-lease-registry.test.ts",
+          "result": "passed",
+          "durationSeconds": 0.32,
+          "summary": "On origin/main@5b7f44278a, the new oracle was 6 failed / 1 passed before implementation because terminal host fencing left exact placements cancellable; the candidate passed 44/44 terminal release, replacement, legacy disconnect, grace expiry, reconnect preservation, exact-generation isolation, capacity retention, and two-phase settlement assertions."
+        },
+        {
+          "date": "2026-08-15",
+          "runner": "local",
+          "platform": "macos",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/runtime-rpc-browser-host-admission.test.ts src/main/browser/paired-runtime-browser-host-lease-reconnect.test.ts",
+          "result": "passed",
+          "durationSeconds": 7.89,
+          "summary": "On origin/main@5b7f44278a, two files passed 16 authenticated per-device/global browser-host admission, shared wait reservation, exact socket-counter release, bounded initial runtime_busy retry, explicit-close cleanup, and reconnect-grace authority-preservation tests."
+        },
+        {
+          "date": "2026-08-15",
+          "runner": "local",
+          "platform": "macos",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/shared/browser-client-host-protocol.test.ts src/main/browser/browser-client-host-attach-request.test.ts src/main/browser/browser-client-network-route-registry.test.ts src/main/browser/paired-runtime-browser-client-host-composition.test.ts src/main/browser/paired-runtime-browser-client-host.test.ts src/main/browser/paired-runtime-browser-client-host-reconnect.test.ts src/main/browser/paired-runtime-browser-host-lease.test.ts src/main/browser/paired-runtime-browser-host-lease-reconnect.test.ts src/main/browser/browser-host-lease-reconnect-delay.test.ts src/main/browser/paired-runtime-browser-network-route.test.ts src/main/runtime/browser-host-command-ledger.test.ts src/main/runtime/browser-host-command-ledger-capacity.test.ts src/main/runtime/browser-host-lease-registry.test.ts src/main/runtime/runtime-rpc-browser-host-admission.test.ts src/main/runtime/rpc/methods/browser-client-host.test.ts",
+          "result": "passed",
+          "durationSeconds": 7.18,
+          "summary": "On origin/main@5b7f44278a, fifteen files passed 159 mixed-version attach, exact authority, bounded admission and recovery, reconnect, route suspension, page-command replay, result-ledger, and authenticated lease tests."
+        },
+        {
+          "date": "2026-08-14",
+          "runner": "local",
+          "platform": "macos",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/shared/browser-client-host-protocol.test.ts src/main/browser/browser-client-host-attach-request.test.ts src/main/browser/browser-client-network-route-registry.test.ts src/main/browser/paired-runtime-browser-client-host-composition.test.ts src/main/browser/paired-runtime-browser-client-host.test.ts src/main/browser/paired-runtime-browser-client-host-reconnect.test.ts src/main/browser/paired-runtime-browser-host-lease.test.ts src/main/browser/paired-runtime-browser-host-lease-reconnect.test.ts src/main/browser/browser-host-lease-reconnect-delay.test.ts src/main/browser/paired-runtime-browser-network-route.test.ts src/main/runtime/browser-host-command-ledger.test.ts src/main/runtime/browser-host-command-ledger-capacity.test.ts src/main/runtime/browser-host-lease-registry.test.ts src/main/runtime/rpc/methods/browser-client-host.test.ts",
+          "result": "passed",
+          "durationSeconds": 2.23,
+          "summary": "Fourteen files passed 150 negotiated same-client reconnect, legacy skew, active takeover, exact authority, immediate route suspension, independently bounded route retry, stable fail-closed SOCKS, ready-before-replay, completed-mutation dedupe, partial-replay delivery recovery, repeated-loss, stale-callback, explicit-revocation, grace cleanup, and deterministic jittered-backoff tests."
+        },
+        {
+          "date": "2026-08-14",
+          "runner": "local",
+          "platform": "macos",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/shared/browser-client-host-protocol.test.ts src/main/browser/browser-client-host-attach-request.test.ts src/main/browser/browser-client-page-command-executor.test.ts src/main/browser/browser-client-page-command-integration.test.ts src/main/browser/browser-client-page-inventory.test.ts src/main/browser/paired-runtime-browser-client-host-composition.test.ts src/main/browser/paired-runtime-browser-client-host.test.ts src/main/browser/paired-runtime-browser-host-lease.test.ts src/main/runtime/browser-host-lease-registry.test.ts src/main/runtime/rpc/methods/browser-client-host.test.ts src/main/runtime/browser-host-page-reconciliation-plan.test.ts",
+          "result": "passed",
+          "durationSeconds": 7.3,
+          "summary": "Eleven files passed 145 exact inventory negotiation, 256-page and 768 KiB atomic bounds, worst-case JSON-escaped inventory identities, deterministic optional-URL compaction, legacy-command preservation when inventory is unencodable, legacy strip, immutable authenticated lease snapshot, strict v1/duplicate/foreign-client rejection, paired-device-bound previous-runtime restart admission, missing and unsolicited echo, create-to-active deduplication, renderer/guest-stale outcome-unknown classification, normalized URL bounds, composition sampling, RPC retention, and reconciliation tests."
+        },
+        {
+          "date": "2026-08-14",
+          "runner": "local",
+          "platform": "macos",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/main/browser/paired-runtime-browser-client-host.test.ts src/main/browser/paired-runtime-browser-host-lease.test.ts src/main/browser/browser-client-host-command-dispatcher.test.ts",
+          "result": "passed",
+          "durationSeconds": 0.8,
+          "summary": "Fifty tests passed synchronous authority activation, hard 16/256 result bounds, exact transport-close-before-handler-abort ordering, cleanup rejection with guaranteed abort, same-socket result settlement, exact page retirement and forgetting, and late non-cooperative retirement settlement. The broader runtime/browser/shared run passed 9,711 tests with 24 existing skips."
+        },
+        {
+          "date": "2026-08-14",
+          "runner": "local",
+          "platform": "macos",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/shared/remote-runtime-subscription-request.test.ts",
+          "result": "passed",
+          "durationSeconds": 0.4,
+          "summary": "Ten tests passed same-socket nested JSON request delivery, reverse-order exact-ID routing, unknown and duplicate response rejection, 32-request admission, serialization rollback, concurrent timeout teardown, queued/native memory release, and exact-once socket-registration and queue-claim denial."
+        },
+        {
+          "date": "2026-08-14",
+          "runner": "local",
+          "platform": "macos",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/main/browser/browser-client-host-command-dispatcher.test.ts",
+          "result": "passed",
+          "durationSeconds": 0.2,
+          "summary": "Sixteen tests passed immutable lease/command/result snapshots, exact-authority FIFO dispatch, payload-matched duplicate replay, transactional bounded admission, create dependency failure, stale and forgotten-generation fencing, scheduler replacement, retired-cache release, per-page and global cached-result expiry, pre-abort shared retirement publication, deduplicated/reentrant joining, cancellation, and bounded close."
+        },
+        {
+          "date": "2026-08-14",
+          "runner": "local",
+          "platform": "macos",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/browser-host-command-ledger.test.ts src/main/runtime/browser-host-command-ledger-capacity.test.ts src/main/runtime/browser-host-lease-registry.test.ts src/main/runtime/rpc/methods/browser-client-host.test.ts",
+          "result": "passed",
+          "durationSeconds": 1.88,
+          "summary": "Four files passed 31 server-owned issue order, shared-schema payload validation, immutable authority and payload, exact result connection authentication and replay, stale and retirement fencing, outstanding/page/cache ceilings, transactional lifecycle settlement, delivery failure, and outcome-unknown tests."
+        },
+        {
+          "date": "2026-08-14",
+          "runner": "local",
+          "platform": "macos",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/shared/browser-client-host-protocol.test.ts src/shared/ws-outbound-backpressure-queue.test.ts src/shared/remote-runtime-client.test.ts src/main/runtime/browser-host-lease-registry.test.ts src/main/runtime/runtime-rpc-browser-host-admission.test.ts src/main/runtime/rpc/methods/browser-client-host.test.ts src/main/runtime/rpc/methods/browser-network-tunnel.test.ts src/main/browser/paired-runtime-browser-host-lease.test.ts src/main/browser/paired-runtime-browser-network-route.test.ts src/main/runtime/browser-network-tunnel-paired-runtime.integration.test.ts src/main/browser/browser-network-tunnel-client.test.ts src/main/browser/browser-network-tunnel-client-memory-budget.test.ts src/main/browser/browser-network-tunnel-session.test.ts src/main/browser/browser-network-tunnel-session-aggregate-memory.test.ts src/main/browser/browser-network-tunnel-outbound-memory-budget.test.ts src/main/browser/remote-browser-socks-server.test.ts",
+          "result": "passed",
+          "durationSeconds": 3.9,
+          "summary": "Sixteen files passed 154 bounded page-command negotiation, legacy ready/revoked compatibility, exact authority, unnegotiated and stale-command delivery, lease, tunnel, memory, flow-control, SOCKS, and paired E2EE tests."
+        },
+        {
+          "date": "2026-08-14",
+          "runner": "local",
+          "platform": "macos",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/browser-host-page-retirement.test.ts src/main/runtime/browser-host-page-placement-replacement.test.ts src/main/runtime/browser-host-page-placement.test.ts src/main/runtime/browser-host-lease-registry.test.ts",
+          "result": "passed",
+          "durationSeconds": 0.2,
+          "summary": "Four files passed 26 two-phase retirement, exact replacement, pre-selection admission, runtime/epoch/host/page authority, live-lease fencing, monotonic generation, invalid-identity, default 256-placement capacity, and stale-settlement tests."
+        },
+        {
+          "date": "2026-08-14",
+          "runner": "local",
+          "platform": "macos",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/browser-host-lease-registry.test.ts src/main/browser/browser-network-deferred-socket.test.ts src/main/browser/browser-network-execution-route.test.ts src/main/browser/paired-runtime-browser-network-route.test.ts src/main/runtime/rpc/methods/browser-network-tunnel.test.ts src/main/browser/ssh-browser-network-execution-route.test.ts src/main/browser/system-ssh-socks-client-socket.test.ts src/main/ssh/system-ssh-dynamic-forward-process.test.ts src/shared/browser-client-host-protocol.test.ts src/shared/browser-network-capabilities.test.ts src/main/ssh/system-ssh-forward-process.test.ts src/main/ssh/ssh-system-fallback.test.ts src/main/ssh/ssh-port-forward.test.ts",
+          "result": "passed",
+          "durationSeconds": 2.6,
+          "summary": "Thirteen files passed 142 structural route-key, native-shape, live lease-bound SSH grant, startup cancellation, diagnostic redaction, deferred-socket release, capability negotiation, exact SSH authority and client, ssh2 forwarding, standalone system-SSH dynamic-forward, active-probe cleanup, static-forward option reuse, internal SOCKS domain, and exact release tests."
+        },
+        {
+          "date": "2026-08-14",
+          "runner": "local",
+          "platform": "macos",
+          "command": "ORCA_RUN_DOCKER_SSH_BROWSER_E2E=1 pnpm exec vitest run --config config/vitest.config.ts tests/e2e/ssh-browser-network-execution-route.docker.unit.test.ts",
+          "result": "passed",
+          "durationSeconds": 1.3,
+          "summary": "Two tests passed: an ephemeral Linux sshd resolved remote-only.internal and returned the sta-4150-remote-only HTTP marker over real ssh2 forwardOut and one real system-OpenSSH dynamic forward; the ssh2 route also fenced on authority invalidation."
+        },
+        {
+          "date": "2026-08-14",
+          "runner": "local",
+          "platform": "macos",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/shared/browser-client-host-protocol.test.ts src/shared/ws-outbound-backpressure-queue.test.ts src/shared/remote-runtime-client.test.ts src/main/runtime/browser-host-lease-registry.test.ts src/main/runtime/runtime-rpc-browser-host-admission.test.ts src/main/runtime/rpc/methods/browser-client-host.test.ts src/main/runtime/rpc/methods/browser-network-tunnel.test.ts src/main/browser/paired-runtime-browser-host-lease.test.ts src/main/browser/paired-runtime-browser-network-route.test.ts src/main/runtime/browser-network-tunnel-paired-runtime.integration.test.ts src/main/browser/browser-network-tunnel-client.test.ts src/main/browser/browser-network-tunnel-client-memory-budget.test.ts src/main/browser/browser-network-tunnel-session.test.ts src/main/browser/browser-network-tunnel-session-aggregate-memory.test.ts src/main/browser/browser-network-tunnel-outbound-memory-budget.test.ts src/main/browser/remote-browser-socks-server.test.ts",
+          "result": "passed",
+          "durationSeconds": 7.7,
+          "summary": "Sixteen files passed 131 route, lease, aggregate application/encrypted/native memory, exact release, bounded-drain, stable-listener and protocol-failure reconnect, v1 reattach compatibility, generation/stream-ID fencing, SOCKS, and real paired E2EE tests; the full runtime-RPC suite separately passed 1,349 tests with one skip."
+        },
+        {
+          "date": "2026-08-14",
+          "runner": "local",
+          "platform": "macos",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/shared/browser-client-host-protocol.test.ts src/main/runtime/browser-host-lease-registry.test.ts src/main/runtime/runtime-rpc-browser-host-admission.test.ts src/main/runtime/rpc/methods/browser-client-host.test.ts src/main/runtime/rpc/methods/browser-network-tunnel.test.ts src/main/browser/paired-runtime-browser-host-lease.test.ts src/main/browser/paired-runtime-browser-network-route.test.ts src/main/runtime/browser-network-tunnel-paired-runtime.integration.test.ts src/main/browser/browser-network-tunnel-client.test.ts src/main/browser/browser-network-tunnel-session.test.ts src/main/browser/remote-browser-socks-server.test.ts",
+          "result": "passed",
+          "durationSeconds": 6.9,
+          "summary": "Eleven files passed 73 admission, lease, route-generation, bidirectional retained-byte/chunk, pending-open/rate, exact-release, SOCKS, and real paired E2EE tests; the full runtime-RPC suite separately passed 1,347 tests with one skip."
+        },
+        {
+          "date": "2026-08-14",
+          "runner": "local",
+          "platform": "macos",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/shared/browser-client-host-protocol.test.ts src/main/runtime/browser-host-lease-registry.test.ts src/main/runtime/runtime-rpc-browser-host-admission.test.ts src/main/runtime/rpc/methods/browser-client-host.test.ts src/main/runtime/rpc/methods/browser-network-tunnel.test.ts src/main/browser/paired-runtime-browser-host-lease.test.ts src/main/browser/paired-runtime-browser-network-route.test.ts src/main/runtime/browser-network-tunnel-paired-runtime.integration.test.ts src/main/browser/browser-network-tunnel-client.test.ts src/main/browser/browser-network-tunnel-session.test.ts src/main/browser/remote-browser-socks-server.test.ts",
+          "result": "passed",
+          "durationSeconds": 3.4,
+          "summary": "Eleven files passed 67 lease, reserved long-poll and host admission, token-safe placement retirement, authority, capability, route-generation, adversarial-revocation, lifecycle, flow-control, SOCKS, and real paired E2EE tests."
+        },
+        {
+          "date": "2026-08-13",
+          "runner": "local",
+          "platform": "macos",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/shared/browser-network-capabilities.test.ts src/shared/browser-network-tunnel-protocol.test.ts src/main/browser/browser-network-tunnel-session.test.ts src/main/browser/remote-browser-socks-server.test.ts",
+          "result": "passed",
+          "durationSeconds": 0.4,
+          "summary": "Four files passed 25 deterministic capability, codec, credit, generation, half-close, SOCKS routing, remote-DNS, and fail-closed tests."
+        },
+        {
+          "date": "2026-08-14",
+          "runner": "local",
+          "platform": "macos",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/main/browser/browser-network-tunnel-client.test.ts src/main/browser/paired-runtime-browser-network-route.test.ts src/main/runtime/runtime-binary-message-router.test.ts src/main/runtime/rpc/methods/browser-network-tunnel.test.ts src/main/runtime/browser-network-tunnel-paired-runtime.integration.test.ts",
+          "result": "passed",
+          "durationSeconds": 4.7,
+          "summary": "Five files passed 19 source-flow, settled-consumption, chunk-bound, ordered-close, readiness-deadline, cleanup-failure, binary-routing, attach-authorization, and real paired-runtime E2EE SOCKS-to-HTTP tests."
+        },
+        {
+          "date": "2026-08-14",
+          "runner": "local",
+          "platform": "macos",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/shared/remote-runtime-client.test.ts",
+          "result": "passed",
+          "durationSeconds": 3.0,
+          "summary": "Seventeen authenticated subscription tests passed, including tunnel capability binding and hard outbound-queue overflow rejection."
+        }
+      ],
+      "runtimeBudget": {
+        "p95Seconds": 10,
+        "scope": "deterministic lease, protocol, aggregate-memory, flow-control, loopback, RPC, and paired-runtime test files"
+      },
+      "flakeHistory": {
+        "status": "unknown",
+        "evidence": "The deterministic and paired-runtime suites passed locally; CI and soak history have not started for the stacked route stage."
+      },
+      "redGreenEvidence": {
+        "status": "partial",
+        "evidence": "The protocol and tunnel-session oracles fail on origin/main 3246b73add because the modules do not exist, then pass on the candidate. The lease registry and control-client suites were recorded red at missing modules before implementation. The unchanged tunnel authorization oracle was behaviorally red because an authenticated socket could self-assert its paired device ID and received ready generation 7 without a lease; it is green after server-owned lease and route fencing. On c9a41abf24, the unchanged admission oracle failed three ways: a second identity on one connection and a fifth identity for one paired device were both admitted, and closed page placement had no retirement API. All three pass after bounded admission and tombstone-free global page generations. Before the admission-fairness stage, one paired device's four hosts filled the global host cap and rejected a second device, initial runtime_busy was terminal, and reconnect runtime_busy ended preserved authority. Raising only the host cap then let asks and hosts starve ordinary waits. The reviewed candidate caps hosts at eight globally and four per authenticated paired device, caps asks plus hosts at twelve of sixteen polls, and retries runtime_busy only inside the existing attach or reconnect deadline; the unchanged oracle passes all 16 focused assertions with exact counter, subscription, and timer release. On parent 81eb14c849, the initial three replacement-barrier tests failed because occupied client and server pages could be overwritten without retirement; the candidate rejects every placement-kind overwrite before host selection, preserves capacity until exact retirement, and keeps replacement generations monotonic. On parent 32c0c7f309, all five two-phase retirement tests failed because retirement had only an immediate-delete API; the candidate fences pending pages, restores exact cancellation, rejects delayed tokens, and releases capacity only after exact completion. On parent 392d13be9f, the deterministic resource oracle admitted 17 pending opens, admitted a 129th open inside 10 seconds, and retained more than 8 MiB across one route; all three failed assertions pass on the candidate, which also covers unsettled writes and reentrant exact release. With aggregate enforcement replaced by a no-op scaffold on parent b32610e365, all three host/process memory assertions failed: host bytes, process bytes, claims, and socket sources were independently unbounded. They pass with exact owner release, client and execution-host application charging, encrypted queue/native socket charging, and bounded drain. On parent a089829521, stream exhaustion was not distinguishable, transport loss closed the local listener with ECONNREFUSED, reconnect opened no replacement subscription, and a ready generation that closed before await continuation could be replayed. The initial reconnect candidate also retained a dead transport after a client-side protocol failure and therefore refused replacement. The reviewed candidate keeps one fail-closed address, propagates protocol closure, strictly fences observed generations, ignores superseded callbacks, and recycles stream IDs only after replacement while preserving the v1 attach shape. Parent 9889adf4c5 accepts only a native executionHost schema and its handler unconditionally reads native runtimeId and revision; widening the schema made node typecheck fail at those exact assumptions before adapter integration. The candidate keeps native subscription bytes and capabilities unchanged, capability-gates SSH, rejects stale authority before binary registration, and passes exact domains through both adapter contracts. Before the reviewed authorization and lifecycle fix, 10 of 34 focused assertions failed: an ungranted SSH key reached the resolver, grants did not exist, native routes exposed a global never-settling invalidation promise, pre-attach destroy emitted no close, synchronous forwardOut escaped without cleanup, OpenSSH did not force a standalone process, and raw connector detail crossed the RPC boundary. The same 34 assertions pass with exact tokenized grants, optional native invalidation, one-close deferred sockets, caught synchronous opens, standalone OpenSSH, and stable public errors. The real paired journey failed at the missing network.browserTunnel method before explicit test injection, then passed with an exact control lease while both production registries remained closed. Full mutation/revert evidence remains to be collected before promotion."
+      },
+      "performanceBudget": {
+        "required": true,
+        "evidence": "Data frames, send credit, pending bytes and chunk counts in both directions, streams, SOCKS handshake, and pipelined application bytes are bounded. Each route admits at most 16 pending opens, 128 opens per monotonic 10-second window, and 8 MiB of session-owned queued or unsettled application bytes with exact settlement and retirement release. Multiple client routes share a 32 MiB browser-host and 128 MiB process ceiling across application copies, encrypted queue frames, and dynamic native socket buffers; the execution runtime uses the same per-host/process application policy. Claims, socket sources, host records, and leases have independent count caps; explicit close releases JavaScript queue claims synchronously while native socket ownership remains charged until exact socket close. Parked encrypted queues hand at most four frames to the native socket per immediate cooperative drain turn. One authenticated connection retains at most one browser host and one paired device at most four, with exact release restoring admission. Permanent browser-host polls use at most eight of sixteen slots and four per authenticated paired device; asks plus hosts use at most twelve, preserving four slots for ordinary waits. Admission retry adds no polling or subprocess: it owns one attach subscription and one timer at a time, uses deterministic client-specific jitter, and cannot outlive the existing attach timeout or negotiated reconnect grace. Each SSH route owns one ssh2 authority or one standalone system-SSH dynamic-forward process, keeps at most 64 KiB of stderr tail, and releases every adapter/socket on exact route close or provider rotation. The system-SSH process exposes a separate no-auth loopback SOCKS listener outside application stream/rate/memory accounting under the documented same-user desktop trust boundary. Credit returns only after the execution-host or browser-facing socket write settles, and the injected transport must explicitly accept each frame. Node stream-internal high-water bytes and strict cross-route scheduling evidence remain required before live tunnel advertisement."
+      },
+      "promotionCriteria": [
+        "Charge Node stream-internal high-water bytes and prove cross-route fairness under slow physical links; add a strict scheduler if the four-frame yield quantum is insufficient.",
+        "Approve all same-host local processes and users as inside the desktop trust boundary or replace SOCKS no-auth with Chromium-compatible process isolation.",
+        "Isolate or authenticate the system-SSH dynamic SOCKS listener, prove the bound listener belongs to the owned child, and preserve authenticated ControlMaster-only targets without persistent forwarding.",
+        "Add old/new peer coverage to the dedicated paired-runtime binary tunnel journey.",
+        "Add WSL, headed Linux, and physical Windows evidence.",
+        "Prove an Electron partition routes loopback, DNS, HTTP, HTTPS, WebSocket, workers, and speculative traffic without desktop fallback."
+      ],
+      "knownGaps": [
+        "Eligible paired Electron clients advertise the runtime capabilities, use the production paired-tunnel method, and select the prepared route partition; older and ineligible clients do not.",
+        "The two-phase token-safe page-retirement API has no production lifecycle caller until client placement activates.",
+        "Application, encrypted queue, and native WebSocket bytes are aggregated, but Node stream-internal high-water bytes are only per-stream bounded and not charged to the host/process ledger.",
+        "A four-frame queued-drain quantum yields between timers, but strict cross-route fairness and slow-link soak evidence are not complete.",
+        "The loopback SOCKS endpoint uses Chromium-compatible no-auth and is not safe to activate until its desktop trust boundary is approved or isolated.",
+        "The system-SSH adapter opens another no-auth loopback SOCKS listener outside tunnel accounting; its release-and-bind port can be claimed by a sibling process, and readiness proves only that some TCP listener answered.",
+        "Standalone system-SSH cleanup is exact, but targets that require an already-authenticated ControlMaster, passphrase, PIN, or keyboard-interactive prompt can fail non-interactive route startup.",
+        "Execution-host grant keys are not independently capped or ref-counted; activation requires one server-owned page or partition lifetime and bounded per-lease grant admission.",
+        "Same-authority replay and concrete client reclaim, restore, and close application are deterministic, but server placement reconciliation still lacks dedicated authenticated command issuance and proof-driven placement rekey after runtime restart.",
+        "SSH2 and system OpenSSH have isolated Docker evidence, but WSL, browserless serve, Electron proxy policy, UDP denial, and desktop DNS/socket capture are not exercised."
+      ],
+      "demotionRule": "Keep experimental or demote if a self-asserted or ambiguous host can receive a route, an SSH descriptor bypasses capability, lease-bound grant, or provider-authority checks, late cleanup can remove a replacement, a route can resolve names on the desktop, exceed a byte or stream bound, replenish credit before destination settlement, accept a stale or non-increasing generation, reuse a stream ID within one generation, lose or bypass its fail-closed listener during reconnect, expose the SOCKS listener off-loopback, accept BIND/UDP, or fall back when the selected route is unavailable."
+    },
+    {
+      "id": "browser-client-host.route-partition-policy",
+      "title": "Client-hosted browser partitions apply route policy before attachment",
+      "maturity": "experimental",
+      "protection": "partial",
+      "owner": "browser-runtime",
+      "layer": "electron-main-session-security-boundary",
+      "surfaces": [
+        "route- and profile-scoped Electron partitions",
+        "persistent partition binding metadata",
+        "fixed SOCKS5 session policy",
+        "webview partition allowlist"
+      ],
+      "platforms": ["macos", "linux", "windows"],
+      "providers": ["remote-runtime", "ssh", "wsl"],
+      "coveredPlatforms": ["macos"],
+      "coveredProviders": [],
+      "coverageNotes": "Deterministic main-process tests cover versioned delimiter-safe aggregate partition derivation, path-safe opaque names, durable collision metadata, oversized or corrupt metadata refusal, missing-sidecar Chromium-data refusal, bounded binding/live-page admission, immediate SOCKS5 setup with Chromium loopback bypass disabled, inherited-connection closure, exact proxy verification before allowlisting, concurrent setup coalescing, live proxy-retarget refusal, token-safe page replacement, existing browser-profile policy installation, active Orca-profile storage scoping, blank-only initial attachment, arbitrary initial-navigation denial, and fail-closed per-guest WebRTC policy through delayed or failed cleanup. The production client-page executor prepares, registers, and grants the exact route page. A real Electron A/B capture proves HTTP, HTTPS, WebSocket, redirects, subresources, downloads, and a `.test` hostname traverse SOCKS with no direct target connection. A two-launch control proves immediate setProxy routes a forced persisted-worker wake and later worker fetch. A separate capture proves the protected guest sends zero direct STUN packets. A further capture proves non-WebRTC UDP is also contained: a WebTransport session and a fetch forced onto QUIC both reach the desktop directly in the control arm and emit zero datagrams through the route partition, and the shipped disable-features list hides the Direct Sockets constructors whose mere construction kills a control-arm renderer. DNS prefetch is a tripwire over an accepted residual rather than a guard: Electron 43 inherits Chromium's PrefetchDNS, so a `<link rel=\"dns-prefetch\">` host resolves on the desktop resolver outside the tunnel, and a source census keeps any DoH host-resolver mode from widening that leak. Network-service restart and provider journeys remain uncovered.",
+      "motivatingLinks": [
+        "https://linear.app/stably/issue/STA-4150/refactor-remote-browser-to-client-hosted-electron-webviews"
+      ],
+      "invariant": "A client-hosted partition is derived only in main from stable Orca-profile, browser-profile, authority-connection, and execution-host identities. Raw identities and individually linkable component hashes never enter its path-safe partition name. Durable binding metadata must match and precede Chromium partition data before reuse. One live partition never changes execution host or proxy endpoint. Fixed SOCKS5 setup starts immediately after Session creation, before policy installation can yield or a persisted worker is awakened; no partition enters the webview allowlist until browser policy is installed, inherited connections are closed, and resolveProxy returns exactly that one listener. Initial route-partition attachment is blank-only. Its exact WebContents is quarantined before applying non-proxied WebRTC denial and remains navigation- and popup-denied if policy application or cleanup fails. Distinct live partitions, retained logical page generations, durable bindings, and binding-file reads remain bounded. No UDP transport a route-partition page can reach — WebRTC, WebTransport, or forced QUIC — emits a datagram to the desktop, the Direct Sockets constructors stay absent from every guest so no page can kill its renderer, and the process never enables a DoH host-resolver mode.",
+      "oracle": "Derive two delimiter-adversarial identities and require distinct full-digest path-safe partitions with no raw IDs or component hashes. Persist one binding, reload it, and reject replacement, malformed or oversized state, Chromium data without matching metadata, and the 513th binding. Prepare one partition and require setProxy with <-loopback> to be invoked immediately after getSession and before policy setup, then closeAllConnections and exact SOCKS5 resolveProxy while isAllowedPartition remains false; only then may it become live. Under real Electron, require direct controls for HTTP, HTTPS, WebSocket, redirects, subresources, and downloads, then require the fixed SOCKS session to route every equivalent request plus an otherwise-unresolvable `.test` hostname with zero direct target connections. Across two Electron launches, require immediate setProxy to route a forced worker wake and post-verification fetch. Reject DIRECT, endpoint retargeting, and capacity overflow. Require quarantine before disable_non_proxied_udp and admission; under real Electron require the unprotected control to emit STUN and the protected guest to emit zero direct UDP packets. Under real Electron require a direct control to emit WebTransport and forced-QUIC datagrams and the SOCKS partition to emit none, require an explicitly enabled Direct Sockets control to expose the constructors and die on construction, and require the shipped disable-features list to leave them undefined with the renderer alive. Capture a route partition's netLog across a dns-prefetch load and require the prefetched host to appear on a local resolver task while an unreferenced control host appears nowhere; require no source file to set a non-'off' secureDnsMode.",
+      "commands": [
+        "pnpm exec vitest run --config config/vitest.config.ts src/main/browser/browser-route-identity.test.ts src/main/browser/browser-route-partition-binding-store.test.ts src/main/browser/browser-route-session-registry.test.ts src/main/browser/browser-session-registry.test.ts src/main/browser/browser-session-startup.test.ts src/main/window/createMainWindow.test.ts",
+        "pnpm exec vitest run --config config/vitest.config.ts src/main/browser/browser-route-webcontents-registry.test.ts src/main/browser/browser-route-webrtc-egress.electron.test.ts",
+        "pnpm exec vitest run --config config/vitest.config.ts src/main/browser/browser-route-session-registry.test.ts src/main/browser/browser-route-persisted-worker-egress.electron.test.ts src/main/browser/browser-route-webrtc-egress.electron.test.ts",
+        "pnpm exec vitest run --config config/vitest.config.ts src/main/browser/browser-route-tcp-egress.electron.test.ts",
+        "pnpm exec vitest run --config config/vitest.config.ts src/main/browser/browser-route-h3-egress.electron.test.ts src/main/browser/browser-route-dns-prefetch.electron.test.ts src/main/startup/secure-dns-census.test.ts"
+      ],
+      "testFiles": [
+        "src/main/browser/browser-route-identity.test.ts",
+        "src/main/browser/browser-route-partition-binding-store.test.ts",
+        "src/main/browser/browser-route-session-registry.test.ts",
+        "src/main/browser/browser-route-persisted-worker-egress.electron.test.ts",
+        "src/main/browser/browser-route-tcp-egress.electron.test.ts",
+        "src/main/browser/browser-route-webrtc-egress.electron.test.ts",
+        "src/main/browser/browser-route-h3-egress.electron.test.ts",
+        "src/main/browser/browser-route-dns-prefetch.electron.test.ts",
+        "src/main/startup/secure-dns-census.test.ts",
+        "src/main/browser/browser-route-webcontents-registry.test.ts",
+        "src/main/browser/browser-session-registry.test.ts",
+        "src/main/browser/browser-session-startup.test.ts",
+        "src/main/window/createMainWindow.test.ts"
+      ],
+      "assertionRefs": [
+        {
+          "file": "src/main/browser/browser-route-identity.test.ts",
+          "assertions": [
+            "aggregate partition and durable binding fingerprints are stable and opaque",
+            "delimiter-containing identities remain structurally distinct",
+            "individual component equality and Windows-illegal path separators are absent",
+            "empty and unbounded identity components are rejected"
+          ]
+        },
+        {
+          "file": "src/main/browser/browser-route-partition-binding-store.test.ts",
+          "assertions": [
+            "opaque bindings survive restart",
+            "replacement and malformed metadata fail closed",
+            "oversized metadata and Chromium data without a binding fail closed",
+            "persisted binding count is bounded"
+          ]
+        },
+        {
+          "file": "src/main/browser/browser-route-session-registry.test.ts",
+          "assertions": [
+            "policy, proxy, connection closure, and verification finish before allowlisting",
+            "DIRECT and endpoint retargeting are rejected",
+            "non-loopback listeners and invalid page generations are rejected before persistence",
+            "missing browser profiles consume no durable binding capacity",
+            "partial setup cleanup and concurrent setup settle exactly once",
+            "partition and page-generation counts are bounded",
+            "stale page cleanup cannot retire its replacement"
+          ]
+        },
+        {
+          "file": "src/main/browser/browser-route-persisted-worker-egress.electron.test.ts",
+          "assertions": [
+            "a forced persisted-worker wake before proxy setup reaches the direct desktop control endpoint",
+            "getAllRunning is empty immediately after persistent Session creation in either arm",
+            "invoking setProxy before the forced wake routes it through SOCKS with no direct target request",
+            "a later worker message fetch remains routed after exact proxy verification"
+          ]
+        },
+        {
+          "file": "src/main/browser/browser-route-tcp-egress.electron.test.ts",
+          "assertions": [
+            "the unprotected Electron control reaches HTTP, HTTPS, WebSocket, redirect, subresource, and download targets directly",
+            "the fixed SOCKS session routes every equivalent TCP surface with zero direct target connections",
+            "an otherwise-unresolvable `.test` hostname is carried to SOCKS rather than desktop DNS"
+          ]
+        },
+        {
+          "file": "src/main/browser/browser-route-webrtc-egress.electron.test.ts",
+          "assertions": [
+            "the unprotected SOCKS-partition control emits direct STUN packets",
+            "disable_non_proxied_udp leaves the exact guest with zero direct UDP packets"
+          ]
+        },
+        {
+          "file": "src/main/browser/browser-route-h3-egress.electron.test.ts",
+          "assertions": [
+            "the direct control reaches a WebTransport endpoint over UDP and the route partition sends zero datagrams",
+            "a fetch forced onto QUIC by --origin-to-force-quic-on emits UDP directly and zero through the route partition",
+            "an explicit --enable-features exposes the Direct Sockets constructors in the control arm",
+            "constructing a TCPSocket in the control arm kills the guest renderer",
+            "the shipped disable-features list leaves every Direct Sockets constructor undefined and the renderer alive"
+          ]
+        },
+        {
+          "file": "src/main/browser/browser-route-dns-prefetch.electron.test.ts",
+          "assertions": [
+            "a dns-prefetch hostname in a SOCKS route partition still opens a local host-resolver job",
+            "that job runs as a system or built-in DNS task, neither of which traverses the partition proxy",
+            "a hostname the page never references produces no host-resolver events"
+          ]
+        },
+        {
+          "file": "src/main/startup/secure-dns-census.test.ts",
+          "assertions": [
+            "no source file configures a host resolver with a non-'off' secureDnsMode",
+            "the census matcher flags a known DoH offender"
+          ]
+        },
+        {
+          "file": "src/main/browser/browser-route-webcontents-registry.test.ts",
+          "assertions": [
+            "route guests apply non-proxied WebRTC denial before admission",
+            "policy failure remains quarantined through delayed or failed guest close"
+          ]
+        },
+        {
+          "file": "src/main/window/createMainWindow.test.ts",
+          "assertions": [
+            "a live route partition may attach only the normalized blank document",
+            "an arbitrary URL cannot be the initial route-partition document"
+          ]
+        }
+      ],
+      "evidenceRuns": [
+        {
+          "date": "2026-08-20",
+          "runner": "local",
+          "platform": "macos",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/main/browser/browser-route-h3-egress.electron.test.ts src/main/browser/browser-route-dns-prefetch.electron.test.ts src/main/startup/secure-dns-census.test.ts",
+          "result": "passed",
+          "durationSeconds": 21,
+          "summary": "The direct control emitted 5 WebTransport and 6 forced-QUIC datagrams while the SOCKS route partition emitted zero of each. With Direct Sockets explicitly enabled the control exposed TCPSocket/UDPSocket/TCPServerSocket and constructing one killed the guest renderer; the shipped disable-features list left all three undefined and the renderer alive. The dns-prefetch tripwire recorded HOST_RESOLVER_SYSTEM_TASK for the prefetched host with zero events for an unreferenced control host, documenting the accepted local-resolution residual.",
+          "notes": "The dns-prefetch expectation intentionally asserts the leak. Flip it to an empty event list when the upstream Electron PrefetchDNS fix lands."
+        },
+        {
+          "date": "2026-08-17",
+          "runner": "local",
+          "platform": "macos",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/main/browser/browser-route-tcp-egress.electron.test.ts",
+          "result": "passed",
+          "durationSeconds": 1,
+          "summary": "The real Electron direct control reached all six TCP request surfaces; the fixed SOCKS session carried HTTP, HTTPS, WebSocket, redirects, subresources, downloads, and remote DNS with zero direct target connections."
+        },
+        {
+          "date": "2026-08-16",
+          "runner": "local",
+          "platform": "macos",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/main/browser/browser-route-session-registry.test.ts src/main/browser/browser-route-persisted-worker-egress.electron.test.ts src/main/browser/browser-route-webrtc-egress.electron.test.ts",
+          "result": "passed",
+          "durationSeconds": 10,
+          "summary": "Three files passed 28 tests. The two-launch worker control reached desktop localhost before proxy setup; immediate setProxy invocation routed the same wake and a later worker fetch through SOCKS with path-attributed direct counts remaining zero. Both resolved and rejected proxy setup keep failed-policy retries joined through connection cleanup. The protected WebRTC guest emitted zero direct UDP packets."
+        },
+        {
+          "date": "2026-08-16",
+          "runner": "local",
+          "platform": "macos",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/main/browser/browser-route-webcontents-registry.test.ts src/main/browser/browser-route-webrtc-egress.electron.test.ts",
+          "result": "passed",
+          "durationSeconds": 8,
+          "summary": "Two files passed 24 assertions; the real Electron control emitted direct STUN, while the exact per-guest policy emitted zero desktop UDP packets and policy failure remained quarantined through delayed or failed close."
+        },
+        {
+          "date": "2026-08-14",
+          "runner": "local",
+          "platform": "macos",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/main/browser/browser-route-identity.test.ts src/main/browser/browser-route-partition-binding-store.test.ts src/main/browser/browser-route-session-registry.test.ts src/main/browser/browser-session-registry.test.ts src/main/browser/browser-session-startup.test.ts src/main/window/createMainWindow.test.ts",
+          "result": "passed",
+          "durationSeconds": 0.5,
+          "summary": "Six files passed 150 opaque identity, durable collision binding, bounded partition/page, proxy-before-allowlist, policy reuse, profile startup, and blank-only attach tests."
+        }
+      ],
+      "runtimeBudget": {
+        "p95Seconds": 2,
+        "scope": "deterministic identity, binding-store, session-policy, and window-boundary tests"
+      },
+      "flakeHistory": {
+        "status": "unknown",
+        "evidence": "The deterministic suite passes locally; CI and real Electron soak history have not started."
+      },
+      "redGreenEvidence": {
+        "status": "partial",
+        "evidence": "The TCP A/B control first reached all six target paths directly, while the fixed SOCKS arm routed the same HTTP, HTTPS, WebSocket, redirect, subresource, and download traffic plus remote DNS with zero direct target connections. The two-launch worker control reached desktop localhost before setProxy; immediate setProxy routed the same wake and later fetch through SOCKS. The WebRTC control emitted four direct STUN packets until disable_non_proxied_udp reduced the capture to zero. Non-WebRTC UDP and network-service restart remain explicit residuals."
+      },
+      "performanceBudget": {
+        "required": true,
+        "evidence": "Derivation performs one bounded full SHA-256 aggregate partition hash and one binding hash. The registry admits at most 64 live or pending partitions, 64 logical page generations per partition, and 512 durable bindings per Orca profile. Concurrent preparation shares one promise and one Electron proxy application per partition. Binding-file reads are capped at 128 KiB. Writes are bounded synchronous profile-local JSON, fsync the temporary file before Windows-retried rename, and fsync the containing directory where supported."
+      },
+      "promotionCriteria": [
+        "Use the production paired journey to prove proxy application precedes the first popup and speculative request.",
+        "Prove spontaneous persisted-worker background events cannot issue network requests between Session creation and immediate proxy invocation on macOS, Linux, and Windows; add a worker hold only if that evidence requires it.",
+        "Prove network-service restart cannot reset the partition to DIRECT or system proxy.",
+        "Activate a trusted exact-WebContents registration/grant flow before navigation, and fence reload, popup, restore, profile-switch, renderer-crash, and stale-cleanup paths.",
+        "Disable or capture every remaining UDP, QUIC, DoH, and non-SOCKS desktop egress path on macOS, Linux, and Windows."
+      ],
+      "knownGaps": [
+        "The production client-page executor calls preparePage before renderer mounting and navigation grant.",
+        "A forced persisted worker is routed once setProxy is invoked immediately after Session creation; spontaneous background-event wake timing beyond the two-launch oracle still needs cross-platform soak evidence.",
+        "The route partition permits only blank initial attachment; the production executor registers and grants only the exact main-observed WebContents.",
+        "Network-service recovery, speculative requests, and popup traffic remain incompletely captured.",
+        "QUIC, DoH, WebTransport, and non-WebRTC UDP/direct-network paths are not yet disabled or proven fail closed.",
+        "Partition deletion, download/transfer draining, idle route release, disk quotas, and browser-profile cloning are later lifecycle stages.",
+        "Binding writes serialize in Electron main, and packaged hosts rely on Orca's per-userData single-instance lock. Activation still needs an explicit guard for dev instances that share userData or a cross-process CAS/lock.",
+        "Sequential proxy or policy setup failures retain durable bindings and can exhaust the 512-binding ledger. Activation requires bounded tombstone recovery and partition garbage collection.",
+        "Each preparePage synchronously reads and parses bounded binding metadata on Electron main; activation requires latency evidence or a safely invalidated cache before this becomes frequent."
+      ],
+      "demotionRule": "Keep experimental or demote if raw identities enter a partition path, a durable binding mismatch is reused, a partition retargets to another execution host or live listener, a route partition becomes attachable before exact proxy verification, initial attachment can navigate beyond blank, stale cleanup retires a replacement, admission exceeds a declared cap, or any browser request reaches desktop DNS, TCP, UDP, localhost, or system proxy outside the selected route."
+    },
+    {
+      "id": "browser-client-host.webcontents-quarantine",
+      "title": "Route guests stay blank and popup-denied until exact registration",
+      "maturity": "experimental",
+      "protection": "partial",
+      "owner": "browser-runtime",
+      "layer": "electron-main-webcontents-authority",
+      "surfaces": [
+        "route guest did-attach lifecycle",
+        "exact host renderer and WebContents ownership",
+        "top-frame preload request admission",
+        "document-owned retained renderer webviews",
+        "logical page-generation registration",
+        "post-registration navigation grant",
+        "route popup fail-closed policy"
+      ],
+      "platforms": ["macos", "linux", "windows"],
+      "providers": ["remote-runtime", "ssh", "wsl"],
+      "coveredPlatforms": ["macos"],
+      "coveredProviders": [],
+      "coverageNotes": "Deterministic main-process fakes cover route-Session recognition after logical release, prepared-page renderer ownership, stale and live waiters sharing pending partition setup, generic-policy-before-route-lockdown ordering, blank quarantine, exact guest/renderer/partition/logical-page registration, opaque page-authority replacement, a separate navigation grant, repeated navigation, invalid-scheme denial, dynamic page-authority revocation, popup denial, delayed/failed admission closure, exact page-release closure, retirement-start and destroyed-inspection failure, shared-partition retirement ordering, policy retention until every destroyed acknowledgement, guest process loss/destruction, opaque lifecycle claims across spontaneous destruction and WebContents ID reuse, owning-renderer process loss before, during, and after registration, mutable input isolation, page conflicts, and token-safe destroyed cleanup. The production page-command executor additionally retains an exact execution-host route, prepares its immutable partition, mounts one trusted renderer generation blank, registers and grants its exact guest, loads only normalized HTTP(S), and attempts every safe generation-scoped cleanup after failure, abort, or retirement while holding network resources without destruction proof. A production main-process bridge binds mount and retirement requests to the exact current renderer object and document generation, rejects sender spoofing and WebContents-ID reuse, carries no target URL, bounds pending requests, aborts, timeouts, malformed replies, and lifecycle replacement, and restores only an exact surviving renderer document after blocked or failed provisional navigation. The top-frame preload now queues and validates bounded requests before one replaceable subscriber, while a document-owned renderer registry mounts only blank route webviews, bounds global and per-partition guests, and fences attachment, retirement, destruction, and renderer loss by the full page tuple. Real Electron 43.1.0 proves exact main-frame reply admission, delayed guest-ID readiness, blank attachment, host ownership, destruction, and fail-closed denied attachment. Normal browser Sessions and paired web clients bypass the renderer registry. Production host composition and client placement activate the executor only after capability-gated placement preparation. Process/document swaps, worker/request/download settlement, traffic containment, and provider journeys remain uncovered.",
+      "motivatingLinks": [
+        "https://linear.app/stably/issue/STA-4150/refactor-remote-browser-to-client-hosted-electron-webviews"
+      ],
+      "invariant": "A prepared route page binds its opaque authority to one exact main-observed renderer WebContents while that page generation is active or retiring. Before requesting a blank guest, the production command executor must retain the exact execution-host route, verify its key, and prepare the route/profile partition for one still-current renderer generation. Main sends the approved opaque partition and exact page generation, but no target URL, through one bounded request admitted against the exact current renderer object and document generation; only a schema-valid reply from that same object, request, operation, and page generation can settle it. Preload accepts requests only in the top frame, binds outcomes to the admitted request, fails overflow and unavailable subscribers within a bounded interval, and fences callbacks replaced by a newer document subscriber. Renderer retains each blank webview under one non-React document host keyed by the exact partition, page ID, and generation, never reparents it, and holds an attached or process-lost generation until exact destruction. Renderer replacement, WebContents-ID reuse, abort, timeout, malformed reply, disposal, and process loss fence pending work without admitting a late reply. Renderer-document replacement retires before commit, while blocked external navigation is ignored and failed or cancelled provisional navigation restores only the exact surviving frame. A WebContents whose Electron Session has belonged to a prepared route partition is quarantined synchronously after generic guest policy installation, including when page authority disappears between will-attach and did-attach. It must be a live blank webview owned by the exact renderer WebContents. Nonblank navigation remains denied until main matches the exact partition, browser page, page-host generation, guest WebContents, renderer WebContents, and opaque live page authority, then issues a separate grant. Every later navigation rechecks the same opaque guest incarnation and page authority, so reusing a logical tuple or WebContents ID cannot revive a stale guest. Releasing that authority, losing or destroying the guest process, or losing its owning renderer before, during, or after registration synchronously fences pending authority admission, ends exact logical authority, revokes navigation, and closes any attached guest through the same retirement barrier. Failed, aborted, or retired creation attempts revoke the exact guest and renderer mount before releasing the Session and route, attempt every safe cleanup, and never clear or admit a replacement generation after uncertain cleanup. Session and route release require exact guest destruction proof; an ambiguous mount outcome retains them. If close is delayed or fails, the partition stays outside attachment admission and route policies remain installed until the exact destroyed acknowledgement. Route popups remain denied throughout. Active and retiring page maps and pending renderer requests are bounded, stale callbacks cannot retire or clear replacements, and non-route browser guests retain existing behavior.",
+      "oracle": "Prepare a page for one renderer and require authority lookup and registration by a sibling renderer to fail; reject owner replacement while the generation is active or retiring, then lose the owning renderer before guest registration and require only its prepared pages to retire. Pause partition setup, lose the owner, and require its waiter to fail without authority; add a live sibling waiter to the same pending setup and require only that waiter to admit; exceed the configured waiter cap and require immediate refusal. Make policy cleanup throw in the first of two owned partitions and require the sweep to retire both without restoring admission. Through the production executor, retain one exact route, prepare its partition, mount blank on one current renderer, register and grant the exact guest in order, then load only its normalized HTTP(S) URL. Queue renderer requests before subscription, replace one subscriber, overflow both request and page budgets, race attachment with retirement, delay guest identity until DOM readiness, lose the guest renderer, and require exact bounded settlement without reparenting or cross-partition collision. Under real Electron, require the main bridge to accept only the actual main-frame reply, match the positive renderer WebContents ID to did-attach-webview, destroy it on retirement, and reject and remove a denied unprepared guest. Reject a mismatched route, stale renderer or page generation, and file URL without touching Chromium. Abort or fail registration after mount and require exact guest, renderer, Session, and route cleanup in that order; make renderer cleanup reject but require destruction before later release, and keep the generation fenced from replacement. Make guest retirement fail or mount outcome ambiguous and require every safe cleanup while Session and route remain retained. Destroy a guest spontaneously before command cleanup, reuse its WebContents identity, and require the old opaque claim not to retire the replacement while the replacement claim still can. Attach a blank route guest and require nonblank navigation plus every popup to be denied. Reject a wrong renderer, wrong page generation, nonblank initial document, wrong WebContents type, destroyed guest, and excess attachment; delay or fail its close and require navigation and popups to remain denied. Register the exact prepared tuple and prove navigation remains denied until a second grant; then allow repeated HTTP(S) navigation while continuing to deny file navigation and popups. Release logical page authority with delayed guest close; require immediate navigation revocation, one exact close, no partition admission, no policy cleanup, and same-tuple preparation refusal until destroyed acknowledgement. Make destroyed inspection throw and require retirement plus navigation to remain fail-closed until the explicit destroyed event. Acknowledge destruction, require one policy cleanup, reprepare the tuple, replay stale acknowledgement, and prove the replacement remains admitted. Make retirement startup throw and require policy plus capacity to remain fail-closed. Retire two pages sharing one partition and require cleanup only after both exact acknowledgements. Emit guest render-process-gone and destroyed, and emit owning-renderer process loss through the main-window boundary; require exact logical retirement, close, and grant revocation while unrelated renderer guests and prepared pages survive. Reject retirement for the wrong opaque authority. Reprepare after ordinary release, require a new opaque authority, deny the stale guest, and admit an exact replacement. Destroy a registered guest under real destroyed state, verify best-effort listener release, replay stale cleanup, and prove its replacement remains grantable. Mutate caller input after registration and prove main-owned authority is unchanged. Attach a normal browser Session and require no route-registry mutation.",
+      "commands": [
+        "pnpm exec vitest run --config config/vitest.config.ts src/main/browser/browser-client-page-command-executor.test.ts src/main/browser/browser-client-page-command-integration.test.ts src/main/browser/browser-client-page-renderer-bridge.test.ts src/main/browser/browser-client-page-renderer-lifecycle.electron.test.ts src/main/browser/browser-client-page-renderer-runtime.test.ts src/main/browser/browser-route-session-registry.test.ts src/main/browser/browser-route-webcontents-registry.test.ts src/preload/browser-client-page-renderer-requests.test.ts src/renderer/src/components/browser-pane/browser-client-page-retained-registry.test.ts src/renderer/src/components/browser-pane/browser-client-page-renderer-installation.test.ts src/main/window/createMainWindow.test.ts src/main/window/renderer-document-navigation.test.ts",
+        "pnpm exec vitest run --config config/vitest.config.ts src/main/browser/browser-client-page-command-executor.test.ts src/main/browser/browser-client-page-command-integration.test.ts src/main/browser/browser-client-page-renderer-bridge.test.ts src/main/browser/browser-client-page-renderer-runtime.test.ts src/main/browser/browser-route-session-registry.test.ts src/main/browser/browser-route-webcontents-registry.test.ts src/main/window/createMainWindow.test.ts src/main/window/renderer-document-navigation.test.ts",
+        "pnpm exec vitest run --config config/vitest.config.ts src/main/browser/browser-client-page-reconciliation-adapters.test.ts src/main/browser/browser-route-prepared-page-rekey.test.ts"
+      ],
+      "testFiles": [
+        "src/main/browser/browser-client-page-command-executor.test.ts",
+        "src/main/browser/browser-client-page-command-integration.test.ts",
+        "src/main/browser/browser-client-page-reconciliation-adapters.test.ts",
+        "src/main/browser/browser-client-page-renderer-bridge.test.ts",
+        "src/main/browser/browser-client-page-renderer-lifecycle.electron.test.ts",
+        "src/main/browser/browser-client-page-renderer-runtime.test.ts",
+        "src/main/browser/browser-route-session-registry.test.ts",
+        "src/main/browser/browser-route-prepared-page-rekey.test.ts",
+        "src/main/browser/browser-route-webcontents-registry.test.ts",
+        "src/preload/browser-client-page-renderer-requests.test.ts",
+        "src/renderer/src/components/browser-pane/browser-client-page-retained-registry.test.ts",
+        "src/renderer/src/components/browser-pane/browser-client-page-renderer-installation.test.ts",
+        "src/main/window/createMainWindow.test.ts",
+        "src/main/window/renderer-document-navigation.test.ts"
+      ],
+      "assertionRefs": [
+        {
+          "file": "src/main/browser/browser-client-page-command-executor.test.ts",
+          "assertions": [
+            "exact execution route and trusted renderer precede blank guest registration and grant",
+            "navigation targets only the retained opaque guest incarnation and exact generation and rejects local files",
+            "abort, failed registration, ambiguous mount, and retirement attempt every safe exact cleanup without releasing network resources before destruction proof or admitting a replacement after failure",
+            "close racing creation cannot retain a late page, cleanly absent creates remain forgettable, and unresolved cleanup stays generation-fenced",
+            "navigation fencing revokes retained exact claims once and rejects late in-flight creation before guest registration or grant"
+          ]
+        },
+        {
+          "file": "src/main/browser/browser-client-page-command-integration.test.ts",
+          "assertions": [
+            "a fresh new-authority dispatcher reclaims an old-authority executor page while real route Session and WebContents registries preserve exact cleanup"
+          ]
+        },
+        {
+          "file": "src/main/browser/browser-client-page-reconciliation-adapters.test.ts",
+          "assertions": [
+            "exact reclaim preserves the guest while rekeying renderer, Session, lifecycle claim, and navigation authority",
+            "rekey uncertainty retires both possible renderer identities and failed restore navigation destroys the affected guest before releasing retained resources"
+          ]
+        },
+        {
+          "file": "src/main/browser/browser-client-page-renderer-bridge.test.ts",
+          "assertions": [
+            "mount requests carry only the main-approved partition and exact page generation to the exact current main-frame document",
+            "sender spoofing, subframe replies, stale document frames, malformed replies, renderer replacement, WebContents-ID reuse, abort, and late replies fail closed",
+            "timeout, send failure, and request-ID collision release only their exact admission",
+            "pending mount and retirement requests share one bounded admission ledger and release it exactly once"
+          ]
+        },
+        {
+          "file": "src/main/browser/browser-client-page-renderer-runtime.test.ts",
+          "assertions": [
+            "one app-lifetime reply listener binds the exact current Electron renderer to the bridge",
+            "mount settlement and renderer retirement use the production IPC channel wiring"
+          ]
+        },
+        {
+          "file": "src/main/browser/browser-client-page-renderer-lifecycle.electron.test.ts",
+          "assertions": [
+            "real Electron binds replies to the current main frame and matches the renderer guest ID to did-attach-webview",
+            "a document-owned blank webview survives attachment and is destroyed without reparenting on retirement",
+            "an unprepared partition is denied and its renderer host settles and disappears"
+          ]
+        },
+        {
+          "file": "src/preload/browser-client-page-renderer-requests.test.ts",
+          "assertions": [
+            "top-frame-only requests queue before subscription and fail overflow or missing subscribers within bounded limits",
+            "latest-subscriber replacement fences prior callbacks and outcomes cannot spoof request identity or operation"
+          ]
+        },
+        {
+          "file": "src/renderer/src/components/browser-pane/browser-client-page-retained-registry.test.ts",
+          "assertions": [
+            "full partition, page, and generation tuples retain one exact blank guest with global and per-partition budgets",
+            "attachment, DOM readiness, retirement, destruction, process loss, and denied-attachment timeout settle exact state",
+            "cross-partition page IDs coexist while an attached retiring generation remains fenced until destruction"
+          ]
+        },
+        {
+          "file": "src/main/browser/browser-route-session-registry.test.ts",
+          "assertions": [
+            "a prepared Electron Session remains recognizable for late-attachment quarantine",
+            "prepared authority is bound to one renderer and owner loss retires unregistered pages",
+            "page release removes logical authority and tuple reuse receives a new opaque token",
+            "route policy stays installed and tuple reuse stays blocked until delayed exact-guest destruction settles"
+          ]
+        },
+        {
+          "file": "src/main/browser/browser-route-prepared-page-rekey.test.ts",
+          "assertions": [
+            "prepared authority moves only across an exact same-page same-renderer generation change",
+            "rekey preserves the opaque authority and leaves stale or conflicting input unchanged"
+          ]
+        },
+        {
+          "file": "src/main/browser/browser-route-webcontents-registry.test.ts",
+          "assertions": [
+            "route guests remain blank and popup-denied before exact registration and grant",
+            "guest, renderer, partition, and logical page generation must all match",
+            "later navigation rechecks live page authority and invalid schemes remain denied",
+            "only the exact opaque guest lifecycle claim can revoke navigation without destroying the guest",
+            "late, excess, and close-failed attachments remain navigation- and popup-denied",
+            "opaque authority replacement, page conflicts, mutable inputs, and stale cleanup fail closed",
+            "exact page retirement revokes and closes only the authority-matched guest",
+            "guest process loss and owning-renderer retirement end the exact authority while unrelated guests survive",
+            "normal browser Sessions remain outside the route registry"
+          ]
+        },
+        {
+          "file": "src/main/window/createMainWindow.test.ts",
+          "assertions": [
+            "generic guest policy installs before route lockdown can override popup behavior",
+            "every attached webview is offered to the route registry without changing normal guests",
+            "main-renderer process loss retires every route guest owned by that renderer",
+            "process loss and renderer-document replacement retire the exact client-page renderer generation, while blocked external, failed provisional, and same-document navigation preserve or restore only the surviving document"
+          ]
+        },
+        {
+          "file": "src/main/window/renderer-document-navigation.test.ts",
+          "assertions": [
+            "only packaged or same-origin development renderer-document replacement starts a lifecycle fence",
+            "failed, cancelled, and blocked provisional navigation restore the surviving document without clearing a committed fence",
+            "a delayed failure from a committed attempt cannot cancel a live same-URL replacement while its main frame is still loading",
+            "concurrent failure plus blocked replacement converges when the unchanged document becomes idle"
+          ]
+        }
+      ],
+      "evidenceRuns": [
+        {
+          "date": "2026-08-15",
+          "runner": "local",
+          "platform": "macos",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/main/browser/browser-client-page-command-executor.test.ts src/main/browser/browser-client-page-command-integration.test.ts src/main/browser/browser-client-page-renderer-bridge.test.ts src/main/browser/browser-client-page-renderer-lifecycle.electron.test.ts src/main/browser/browser-client-page-renderer-runtime.test.ts src/main/browser/browser-route-session-registry.test.ts src/main/browser/browser-route-webcontents-registry.test.ts src/preload/browser-client-page-renderer-requests.test.ts src/renderer/src/components/browser-pane/browser-client-page-retained-registry.test.ts src/renderer/src/components/browser-pane/browser-client-page-renderer-installation.test.ts src/main/window/createMainWindow.test.ts src/main/window/renderer-document-navigation.test.ts",
+          "result": "passed",
+          "durationSeconds": 1.22,
+          "summary": "On the candidate atop #14753, twelve files passed 132 exact opaque-claim navigation revocation, in-flight create fencing, revocation-error cleanup, retained guest destruction separation, route Session, renderer bridge/registry, Electron lifecycle, and main-window document assertions."
+        },
+        {
+          "date": "2026-08-14",
+          "runner": "local",
+          "platform": "macos",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/main/browser/browser-client-page-command-executor.test.ts src/main/browser/browser-client-page-command-integration.test.ts src/main/browser/browser-client-page-renderer-bridge.test.ts src/main/browser/browser-client-page-renderer-runtime.test.ts src/main/browser/browser-route-session-registry.test.ts src/main/browser/browser-route-webcontents-registry.test.ts src/main/window/createMainWindow.test.ts src/main/window/renderer-document-navigation.test.ts",
+          "result": "passed",
+          "durationSeconds": 0.8,
+          "summary": "Eight files and 174 tests passed deterministic route retention, trusted-renderer create ordering, exact renderer WebContents and main-frame-document fencing, subframe and stale-frame rejection, wrong-page and wrong-operation rejection, timeout/send/collision settlement, renderer-document replacement retirement, blocked external and same-document preservation, failed provisional restoration, stale same-URL failure rejection during a live replacement, concurrent failure plus blocked replacement convergence, production IPC wiring, composed real Session/WebContents registry lifecycle, abort and cleanup fencing, Session-index and prepared-owner fencing, bounded pending waiters, late/rejected route-WebContents quarantine, opaque-authority and process-loss fencing, fail-closed shared-partition release barriers, exact registration and navigation, popup denial, and main-window ordering tests."
+        },
+        {
+          "date": "2026-08-14",
+          "runner": "local",
+          "platform": "macos",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/main/browser/browser-client-page-command-executor.test.ts src/main/browser/browser-client-page-command-integration.test.ts src/main/browser/browser-client-page-renderer-bridge.test.ts src/main/browser/browser-client-page-renderer-lifecycle.electron.test.ts src/main/browser/browser-client-page-renderer-runtime.test.ts src/main/browser/browser-route-session-registry.test.ts src/main/browser/browser-route-webcontents-registry.test.ts src/preload/browser-client-page-renderer-requests.test.ts src/renderer/src/components/browser-pane/browser-client-page-retained-registry.test.ts src/renderer/src/components/browser-pane/browser-client-page-renderer-installation.test.ts src/main/window/createMainWindow.test.ts src/main/window/renderer-document-navigation.test.ts",
+          "result": "passed",
+          "durationSeconds": 2.7,
+          "summary": "Twelve files and 199 tests passed the existing main authority gate plus top-frame preload queueing, bounded outcomes, exact retained renderer tuples, delayed guest-ID readiness, idempotent retirement, resource budgets, process-loss fencing, and real Electron main-frame reply, blank attachment, denial, and destruction lifecycle."
+        }
+      ],
+      "runtimeBudget": {
+        "p95Seconds": 15,
+        "scope": "deterministic route Session and WebContents authority plus one isolated real-Electron renderer lifecycle"
+      },
+      "flakeHistory": {
+        "status": "unknown",
+        "evidence": "The deterministic and isolated real-Electron suite passes locally; CI and cross-platform soak history have not started."
+      },
+      "redGreenEvidence": {
+        "status": "partial",
+        "evidence": "The route-WebContents oracle first failed because no registry existed, and the Session oracle failed because no exact Session/page index existed. A first candidate blocked every navigation after the initial document committed because it incorrectly required the current URL to remain blank; repeated-navigation evidence failed until blank validation was limited to registration and grant. Mutable-input evidence then proved caller-owned data could alter stored authority until the registry copied it. Fresh review found late and rejected attachments could keep generic navigation policy, destroyed cleanup skipped listener release, and tuple reuse revived stale grants; the added deterministic cases fail that candidate and pass with retained Session recognition, deny-first admission, best-effort destroyed cleanup, and opaque authority tokens. The page-release oracle then failed because no exact retirement handshake existed; it passes with synchronous revocation plus policy cleanup held behind the exact destroyed callback. Guest-process, guest-destruction, and owning-renderer loss tests then failed because none ended logical page authority; the candidate routes all three through exact fenced retirement. Prepared-owner tests subsequently failed because a sibling renderer received the same live authority and no pre-registration renderer-retirement method existed; the candidate binds live authority to the exact owner and sweeps only that renderer's prepared pages. Fresh review then reproduced cleanup-failure sweep abort, pending authority resurrection, and live-partition success after owner loss; snapshot-first retirement, best-effort cleanup, renderer epochs, and the final async-boundary check now fence stale work while allowing an unrelated live waiter to admit the verified partition. The executor baseline lacked the module, exact guest navigation, and unregistered retirement. Later deterministic probes caught early route release after renderer failure, ambiguous mount leakage, failed-create readmission, discarded destruction proof, proof-ledger eviction, WebContents ID reuse, and stale navigation; the candidate keeps a bounded failed-page fence and retains an immutable opaque guest claim whose destruction promise, retirement, and navigation survive spontaneous loss without targeting a replacement. Renderer-lifecycle review then reproduced blocked-navigation detachment, stale same-URL cancellation, and a concurrent failure plus blocked-replacement stuck fence; constant document-generation and idle-state tracking makes those exact sequences green without retaining a navigation list. The renderer baseline had no preload consumer or retained page registry. Its first real-Electron candidate failed because getWebContentsId was transiently unavailable at did-attach, then because pre-attach destruction released state without rejecting the mount; DOM-readiness retry and exact pre-attach destruction settlement make both sequences green. A later deterministic sequence proved did-attach cancelled the timeout before a guest ID existed and retirement released the observed guest without destruction; retaining the deadline through valid identity and recording observed attachment make both sequences green. Fresh review then caught cached re-advertisement after guest identity became unreadable and an unhandled rejection when reply transport threw; exact live-ID comparison now fences the stale incarnation, while safe reply construction and transport containment leave main's timeout as the bounded recovery. Real Electron mutation/revert, lifetime page-generation authority, worker/request settlement, and traffic evidence remain required before activation."
+      },
+      "performanceBudget": {
+        "required": true,
+        "evidence": "Session, guest, page, and exact-owner lookups are O(1), install no polling, and retain at most 256 attached route guests in registry maps in addition to the lower 64-partition and 64-active-or-retiring-page-per-partition bounds. The production executor retains at most 256 active, creating, or failed page IDs; each observed guest owns one immutable lifecycle claim and one destruction promise, with no global tombstone ledger. The renderer bridge retains at most 512 pending mount or retirement requests, one timer and optional abort listener per request, and one app-lifetime IPC reply listener; settlement, abort, timeout, replacement, and disposal remove each exactly once. Preload independently retains at most 512 validated requests and one timer each, removes queued identifiers on every settlement, and exposes one replaceable subscriber. The renderer retains at most 256 exact page tuples and 64 per partition, one host, webview, timer, promise, and four lifecycle listeners each; attached retirement keeps bounded fail-closed tombstones until destruction. Renderer-document tracking retains only constant generation, active-fence, and cancellation state across concurrent navigation events. At most 64 callers per partition can await one setup promise. Renderer loss scans at most 256 guests plus 4,096 bounded active pages and snapshots only exact owner matches. Each guest retains at most one retirement callback. Historical Session recognition uses weak keys. Normal guests perform one bounded Session lookup at did-attach. Destroyed guests synchronously release exact mappings and attempt each listener removal independently."
+      },
+      "promotionCriteria": [
+        "Use Playwright CDP in real Electron to prove did-attach lockdown precedes page script, popup, redirect, worker, and speculative activity.",
+        "Extend exact WebContents release fencing to service workers, downloads, active requests, network-service recovery, ordinary document/process swaps, profile switch, lease replacement, and app shutdown.",
+        "Implement bounded generation-scoped popup reservations without any shell.openExternal or native-window fallback."
+      ],
+      "knownGaps": [
+        "The production host lifecycle, route resolver, and retained renderer surface are active for eligible paired Electron clients; headed and headless paired-runtime product journeys cover the normal creation path on macOS.",
+        "Real Electron main-frame reply, delayed guest-ID readiness, denial, destruction, and retained visible attachment are covered locally; process swaps, traffic isolation, and physical-platform behavior remain unvalidated.",
+        "Guest and owning-renderer process-loss fencing is deterministic only; real Electron crash/reload ordering and WebContents process recovery remain unvalidated.",
+        "Logical page release now revokes and closes the exact WebContents while holding policy cleanup for destroyed acknowledgement, but does not yet prove service-worker, download, active-request, connection, or persistent-storage settlement.",
+        "A close that never reaches destroyed or a retirement that cannot start intentionally keeps the route policy and capacity reserved; bounded force-close recovery must not clear policy under a live or unknown guest.",
+        "A failed or ambiguous create remains fenced until authenticated inventory reconciliation proves whether the guest exists; a real transport-loss recovery journey remains to be recorded.",
+        "The runtime-owned placement registry supplies monotonic page generations after retirement; persistence across a full authority restart remains deterministic rather than a packaged-upgrade journey.",
+        "Popup reservations do not exist; every route guest popup is denied.",
+        "The production caller derives renderer, page, host generation, and route identity from live main-owned state; physical Windows and Linux Electron ordering remain unvalidated."
+      ],
+      "demotionRule": "Demote if a route guest can navigate nonblank before exact registration and grant, a mismatched, released, crashed, or ownerless page remains authoritative, tuple reuse revives stale authority, page release clears route policy before exact guest destruction, a stale retirement clears a replacement, a popup reaches shell.openExternal or an unregistered native window, a rejected attachment retains navigation or popup capability, stale cleanup retires a replacement, normal browser guests change behavior, or any claimed exact identity is sourced only from renderer input."
+    },
+    {
+      "id": "browser-client-host.activated-placement",
+      "title": "Eligible paired Electron clients host new browser pages without dual execution",
+      "maturity": "experimental",
+      "protection": "partial",
+      "owner": "browser-runtime",
+      "layer": "paired-runtime-product-placement-and-materialization",
+      "surfaces": [
+        "browser tab creation from the renderer store",
+        "paired Electron host preparation",
+        "runtime-owned browser placement publication",
+        "retained client webview materialization",
+        "client-hosted automation routing",
+        "new-page-only kill switch"
+      ],
+      "platforms": ["macos", "linux", "windows", "ios"],
+      "providers": ["remote-runtime", "ssh", "wsl"],
+      "coveredPlatforms": ["macos", "ios"],
+      "coveredProviders": ["remote-runtime", "ssh", "wsl"],
+      "coverageNotes": "Fresh-build Playwright journeys run the same production store action against an isolated headed Electron server and a real headless orca serve host. They prove one immutable client placement owns one real retained guest on the viewing desktop, the server owns no duplicate guest, no screencast frame renders, browser.snapshot reaches the client guest, disabling the setting preserves that guest, and the next page uses the legacy server engine. Deterministic contracts cover omitted placement, missing capabilities, explicit server placement, exact renderer-store materialization after delayed publication, no fallback after client-create failure, folder workspaces, git worktrees, browserless hosts, native and WSL routes, exact connected SSH authority, reconnect command replay, lease replacement, imported-inventory cleanup, bounded retirement, and shared remote screencast fanout for multiple independent viewers. A published v1.4.184 package runs both skew directions: an old client omits placement against the current host, while a current client capability-downgrades against the old host; each creates one server guest, no client guest, and returns the exact snapshot marker. A current iOS Simulator client paired to that legacy packaged host visibly loads Example Domain through the preserved server-hosted surface. A Docker OpenSSH target proves container-only DNS and localhost through both ssh2 and system-SSH routes. Physical Windows/Linux Electron and physical mobile journeys remain gaps.",
+      "motivatingLinks": [
+        "https://linear.app/stably/issue/STA-4150/refactor-remote-browser-to-client-hosted-electron-webviews"
+      ],
+      "invariant": "Placement is selected exactly once before page creation. An eligible, capable paired Electron desktop creates one client-hosted guest; old, ineligible, web/mobile, browserless-client, or explicit-server callers use the unchanged server path. Omitted placement remains server-hosted. Once client placement is selected, failure is surfaced and must not create, migrate, or fall back to a server guest. The acknowledged exact environment, worktree or folder workspace, remote page, and target group must materialize before the renderer reports success. Client pages bypass screencast and remote-input rendering, while agent and CLI automation routes only to the exact client guest. Disabling the kill switch affects only later pages. Reconnect, replacement, and cleanup preserve exact authority and never revive or retire another generation.",
+      "oracle": "Create through the normal renderer-store action with client hosting enabled. Require client placement, one client-owned guest at the fixture URL, zero server-owned guests, no remote-browser frame, a visible retained marker, and a browser.snapshot marker from the same remote page. Disable the setting and require that guest to survive; create another page and require one server-owned guest, zero matching client guests, and a visible server screencast. Delay renderer publication after tabCreate acknowledgement and require one exact bounded subscription to materialize the page without polling or cleanup. Reject a client create and require no server fallback. Omit placement or capabilities and require no client-host RPC. During replacement, admit close-first only for negotiated reconciliation of imported inventory; ordinary close-first and navigate-first remain rejected. Run the same placement oracle against headed and headless paired hosts, plus deterministic native, SSH, WSL, folder, worktree, reconnect, retirement, and browserless-host contracts.",
+      "commands": [
+        "pnpm exec playwright test tests/e2e/paired-client-hosted-browser.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1",
+        "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/runtime/web-runtime-session-browser-client-placement.test.ts src/renderer/src/runtime/web-runtime-session-browser-create-failure.test.ts src/main/runtime/orca-runtime-browser-client-hosted.test.ts src/main/runtime/runtime-browser-client-page-creation.test.ts src/main/runtime/browser-host-page-reconciliation-orchestration.test.ts src/main/runtime/browser-host-command-ledger.test.ts",
+        "pnpm exec vitest run --config config/vitest.config.ts src/shared/browser-client-host-protocol.test.ts src/shared/remote-runtime-client.test.ts src/main/runtime/browser-host-capability-selection.test.ts src/main/runtime/rpc/methods/browser-tab-create-schema.test.ts src/main/ipc/runtime-environment-browser-client-host-handler.test.ts",
+        "pnpm exec vitest run --config config/vitest.config.ts tests/e2e/cross-version-wire/cross-version-browser-placement.unit.test.ts",
+        "SKIP_BUILD=1 ORCA_CROSS_VERSION_PACKAGED_EXECUTABLE=/Applications/Orca.app/Contents/MacOS/Orca pnpm exec playwright test tests/e2e/packaged-mixed-version-browser-placement.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1",
+        "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/browser-network-tunnel-paired-runtime.integration.test.ts src/main/browser/paired-runtime-browser-network-route.test.ts src/main/browser/browser-network-execution-route.test.ts src/main/browser/wsl-browser-network-execution-route.test.ts src/main/browser/wsl-browser-network-relay-launch.test.ts src/main/runtime/runtime-browser-network-execution-host.test.ts",
+        "pnpm exec vitest run --config config/vitest.config.ts src/main/browser/browser-screencast-lifecycle.test.ts src/main/browser/browser-screencast-stream.test.ts src/main/runtime/orca-runtime-browser-screencast-fanout.test.ts",
+        "ORCA_RUN_DOCKER_SSH_BROWSER_E2E=1 pnpm exec vitest run --config config/vitest.config.ts tests/e2e/ssh-browser-network-execution-route.docker.unit.test.ts",
+        "Manual iOS 26.5 simulator: pair current mobile code to packaged Orca 1.4.184; create Browser; navigate to https://example.com; require one visible Example Domain tab on the server-hosted surface"
+      ],
+      "testFiles": [
+        "tests/e2e/paired-client-hosted-browser.spec.ts",
+        "src/renderer/src/runtime/web-runtime-session-browser-client-placement.test.ts",
+        "src/renderer/src/runtime/web-runtime-session-browser-create-failure.test.ts",
+        "src/main/runtime/orca-runtime-browser-client-hosted.test.ts",
+        "src/main/runtime/runtime-browser-client-page-creation.test.ts",
+        "src/main/runtime/browser-host-page-reconciliation-orchestration.test.ts",
+        "src/main/runtime/browser-host-command-ledger.test.ts",
+        "src/shared/browser-client-host-protocol.test.ts",
+        "src/shared/remote-runtime-client.test.ts",
+        "src/main/runtime/browser-host-capability-selection.test.ts",
+        "src/main/runtime/rpc/methods/browser-tab-create-schema.test.ts",
+        "src/main/ipc/runtime-environment-browser-client-host-handler.test.ts",
+        "tests/e2e/cross-version-wire/cross-version-browser-placement.unit.test.ts",
+        "tests/e2e/packaged-mixed-version-browser-placement.spec.ts",
+        "src/main/runtime/browser-network-tunnel-paired-runtime.integration.test.ts",
+        "src/main/browser/paired-runtime-browser-network-route.test.ts",
+        "src/main/browser/browser-network-execution-route.test.ts",
+        "src/main/browser/wsl-browser-network-execution-route.test.ts",
+        "src/main/browser/wsl-browser-network-relay-launch.test.ts",
+        "src/main/runtime/runtime-browser-network-execution-host.test.ts",
+        "src/main/browser/browser-screencast-lifecycle.test.ts",
+        "src/main/browser/browser-screencast-stream.test.ts",
+        "src/main/runtime/orca-runtime-browser-screencast-fanout.test.ts",
+        "tests/e2e/ssh-browser-network-execution-route.docker.unit.test.ts"
+      ],
+      "assertionRefs": [
+        {
+          "file": "tests/e2e/paired-client-hosted-browser.spec.ts",
+          "assertions": [
+            "headed and headless product actions select one client placement with one viewing-desktop guest and no server duplicate",
+            "client pages render without a remote screencast and browser.snapshot reaches the exact retained guest",
+            "the kill switch preserves existing client pages and selects server placement only for the next page"
+          ]
+        },
+        {
+          "file": "src/renderer/src/runtime/web-runtime-session-browser-client-placement.test.ts",
+          "assertions": [
+            "eligible desktops prepare exact client placement while legacy and explicit-server requests omit placement",
+            "client preparation failure surfaces without server fallback",
+            "acknowledged client pages wait for exact renderer-store materialization"
+          ]
+        },
+        {
+          "file": "tests/e2e/cross-version-wire/cross-version-browser-placement.unit.test.ts",
+          "assertions": [
+            "a real stable release has no client-host or browser-tunnel capability constants",
+            "the old server schema strips additive placement without changing legacy fields",
+            "the current schema accepts the old request with placement omitted"
+          ]
+        },
+        {
+          "file": "tests/e2e/packaged-mixed-version-browser-placement.spec.ts",
+          "assertions": [
+            "an old packaged client omits placement and creates exactly one current-host guest with no client guest",
+            "a current client detects an old packaged host, keeps server placement, and creates no local guest",
+            "both skew directions return the exact server-hosted snapshot marker"
+          ]
+        },
+        {
+          "file": "src/main/runtime/browser-host-command-ledger.test.ts",
+          "assertions": [
+            "reconciliation may close imported inventory before a create command in the replacement ledger",
+            "ordinary close-first and navigate-first commands remain rejected"
+          ]
+        },
+        {
+          "file": "tests/e2e/ssh-browser-network-execution-route.docker.unit.test.ts",
+          "assertions": [
+            "ssh2 and system OpenSSH resolve a container-only domain and localhost on the execution host"
+          ]
+        },
+        {
+          "file": "src/main/runtime/orca-runtime-browser-screencast-fanout.test.ts",
+          "assertions": [
+            "two independent viewers share one physical CDP screencast without evicting one another",
+            "viewer-specific backpressure and viewport ownership survive attach, detach, and replacement"
+          ]
+        }
+      ],
+      "evidenceRuns": [
+        {
+          "date": "2026-08-16",
+          "runner": "local",
+          "platform": "macos",
+          "command": "pnpm exec playwright test tests/e2e/paired-client-hosted-browser.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1",
+          "result": "passed",
+          "durationSeconds": 48.8,
+          "summary": "Two fresh-build production journeys passed against isolated headed Electron and real headless orca serve hosts, including client ownership, visible retained content, automation, no screencast, new-page-only kill switch, and server fallback without duplicate execution."
+        },
+        {
+          "date": "2026-08-16",
+          "runner": "local",
+          "platform": "macos",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts tests/e2e/cross-version-wire/cross-version-browser-placement.unit.test.ts",
+          "result": "passed",
+          "durationSeconds": 0.23,
+          "summary": "Three assertions passed against published v1.4.182 and the current tree: the release lacks the negotiated capabilities, strips additive placement without changing legacy fields, and the current server preserves an old request with omitted placement."
+        },
+        {
+          "date": "2026-08-16",
+          "runner": "local",
+          "platform": "macos",
+          "command": "SKIP_BUILD=1 ORCA_CROSS_VERSION_PACKAGED_EXECUTABLE=/Applications/Orca.app/Contents/MacOS/Orca pnpm exec playwright test tests/e2e/packaged-mixed-version-browser-placement.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1",
+          "result": "passed",
+          "durationSeconds": 10.3,
+          "summary": "Two packaged v1.4.184 skew journeys passed four times (9.6, 10.3, 9.5, and 10.3 seconds), including after the latest-main rebase: old client to current host and current client to old host each selected server placement, owned one host guest and zero client guests, and returned packaged-skew-marker through browser.snapshot."
+        },
+        {
+          "date": "2026-08-16",
+          "runner": "local",
+          "platform": "macos",
+          "command": "ORCA_RUN_DOCKER_SSH_BROWSER_E2E=1 pnpm exec vitest run --config config/vitest.config.ts tests/e2e/ssh-browser-network-execution-route.docker.unit.test.ts",
+          "result": "passed",
+          "durationSeconds": 3.31,
+          "summary": "Two real Docker/OpenSSH routes resolved and loaded a container-only HTTP target through ssh2 and system SSH."
+        },
+        {
+          "date": "2026-08-16",
+          "runner": "manual",
+          "platform": "ios",
+          "command": "Manual iOS 26.5 simulator: pair current mobile code to packaged Orca 1.4.184; create Browser; navigate to https://example.com; require one visible Example Domain tab on the server-hosted surface",
+          "result": "passed",
+          "durationSeconds": 180,
+          "summary": "Current mobile code paired to an isolated legacy packaged host, created one Browser tab, and visibly progressed from about:blank through loading to Example Domain at https://example.com/ on the server-hosted mobile surface."
+        },
+        {
+          "date": "2026-08-17",
+          "runner": "local",
+          "platform": "macos",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/main/browser/browser-screencast-lifecycle.test.ts src/main/browser/browser-screencast-stream.test.ts src/main/runtime/orca-runtime-browser-screencast-fanout.test.ts",
+          "result": "passed",
+          "durationSeconds": 1.2,
+          "summary": "22 screencast lifecycle, stream, and shared-fanout tests passed; the suite confirms one physical CDP stream fans out independently to multiple viewers, preserves viewport ownership, and cleans up without cross-viewer eviction."
+        }
+      ],
+      "runtimeBudget": {
+        "p95Seconds": 300,
+        "scope": "fresh-build headed and headless paired Electron journeys plus deterministic placement, compatibility, reconnect, route, and Docker SSH contracts"
+      },
+      "flakeHistory": {
+        "status": "unknown",
+        "evidence": "The fresh headed/headless and deterministic matrices pass locally; CI and cross-platform soak history have not started for the activated cumulative tip."
+      },
+      "redGreenEvidence": {
+        "status": "partial",
+        "evidence": "Before activation, production capability advertisement, client-host RPC registration, placement preparation, runtime client creation, logical publication, retained mounting, and automation routing were absent. During cumulative validation, delayed post-ack renderer publication caused the real paired journey to declare failure before the exact page materialized; the new deterministic delayed-publication test was red until a bounded exact Zustand subscription replaced the immediate check. Reconnect validation was then red 3 of 116 because the activation ordering guard rejected replacement-ledger close-first reconciliation for client-reported imported inventory; admitting only reconciliation close-first made the unchanged lifecycle package green 116 of 116 while a new unit oracle keeps ordinary close-first rejected. The paired tunnel integration was red 3 of 3 because its fixture duplicated methods now registered by the production registry; exercising ALL_RPC_METHODS directly is green 3 of 3. Packaged old/new skew and a current-mobile/legacy-host journey are now green; full candidate-revert evidence remains to be collected before promotion."
+      },
+      "performanceBudget": {
+        "required": true,
+        "evidence": "Placement preparation performs one fresh capability/status check and starts or reuses one exact browser host. Materialization uses one bounded exact store subscription with no polling and releases it on match or timeout. Each client page owns one retained non-reparented webview, one route/profile partition, one reference-counted execution-host grant, and bounded command/result state. Automation reuses the existing AgentBrowserBridge through one bounded negotiated envelope rather than duplicating browser methods. Headed and headless journeys each create exactly one client guest and one later server guest with no duplicate engine."
+      },
+      "promotionCriteria": [
+        "Run the same production placement and traffic-isolation oracle on physical Windows and Linux Electron hosts, including headed and headless where supported.",
+        "Capture real Electron HTTP, HTTPS, WebSocket, worker, redirect, speculative, DNS, WebRTC, and UDP/DoH behavior to prove no desktop-network fallback.",
+        "Complete fresh architecture, compatibility, lifecycle, security, performance, and test reviews on the rebased landing stack."
+      ],
+      "knownGaps": [
+        "Live production journeys are macOS-only; WSL is deterministic and SSH uses Docker Linux rather than physical Windows/Linux Electron.",
+        "The packaged skew journey uses one published old package plus the current E2E artifact on macOS; packaged Windows/Linux and a second independently released post-feature package remain unrecorded.",
+        "The live fixture proves routed HTTP, HTTPS, WebSocket, redirect, subresource, and download ownership plus remote DNS through the fixed SOCKS session; worker, speculative, WebRTC, UDP, and DoH containment remain unrecorded.",
+        "The setting currently requires explicit enablement while product rollout policy is decided; disabling it is intentionally new-page-only."
+      ],
+      "demotionRule": "Demote if placement changes after creation, a client failure creates a server fallback page, one logical page owns two engines, an omitted or unnegotiated field activates client hosting, the execution route resolves on the viewing desktop, a client page uses screencast/input RPC rendering, automation reaches a different page or engine, delayed publication leaks listeners or causes cleanup of a materialized page, or the kill switch mutates an existing page."
     },
     {
       "id": "browser-stream.bounded-reconnect",

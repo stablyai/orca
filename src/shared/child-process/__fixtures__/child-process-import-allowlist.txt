@@ -9,6 +9,12 @@
 # Migrating a file means replacing its spawn/execFile calls with
 # runProcess/spawnProcess and deleting its line here.
 #
+# browser-route-egress-electron-launch.ts, browser-route-persisted-worker-electron-process.ts
+# and system-ssh-dynamic-forward-process.ts need spawn options ProcessSpec cannot express:
+# `detached: true` for a process-group kill, a synchronous taskkill, and an stdio shape other
+# than all-pipes (a long-lived `ssh -N` must not be handed a stdin pipe nobody closes).
+# Migrating them means teaching run-process.ts those options first.
+#
 # The src/main/git/command-runner/* entries are the seven spawn sites that used
 # to live in the single line src/main/git/runner.ts; splitting that file moved
 # them, it did not add any.
@@ -33,6 +39,8 @@ src/main/automations/external-manager.ts
 src/main/automations/precheck-runner.ts
 src/main/browser/agent-browser-bridge.ts
 src/main/browser/browser-cookie-import.ts
+src/main/browser/browser-route-egress-electron-launch.ts
+src/main/browser/browser-route-persisted-worker-electron-process.ts
 src/main/claude-accounts/keychain.ts
 src/main/codex-accounts/runtime-home-service.ts
 src/main/codex-accounts/service.ts
@@ -126,6 +134,7 @@ src/main/ssh/ssh-connection.ts
 src/main/ssh/ssh-proxy-command.ts
 src/main/ssh/ssh-remote-cli-host-passthrough.ts
 src/main/ssh/system-ssh-command.ts
+src/main/ssh/system-ssh-dynamic-forward-process.ts
 src/main/ssh/system-ssh-file-transfer.ts
 src/main/ssh/system-ssh-forward-process.ts
 src/main/ssh/system-ssh-operation-lifecycle.ts

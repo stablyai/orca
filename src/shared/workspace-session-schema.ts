@@ -26,6 +26,9 @@ import {
   browserPageSchema,
   browserWorkspaceSchema
 } from './workspace-session-browser-schema'
+import { clientHostedBrowserCloseIntentSchema } from './client-hosted-browser-close-intent'
+import { persistedClientHostedBrowserPageSchema } from './client-hosted-browser-page-record'
+import { persistedOpenFileSchema } from './workspace-session-editor-schema'
 import { sleepingAgentSessionsByPaneKeySchema } from './workspace-session-sleeping-agents'
 import { salvagedField, salvagedOptional, salvagingArray, salvagingRecord } from './zod-salvage'
 
@@ -185,22 +188,6 @@ const tabGroupLayoutNodeSchema: z.ZodType<TabGroupLayoutNode> = z.lazy(() =>
   ])
 )
 
-// ─── Editor ─────────────────────────────────────────────────────────
-
-const persistedOpenFileSchema = z.object({
-  filePath: z.string(),
-  relativePath: z.string(),
-  worktreeId: z.string(),
-  language: z.string(),
-  isPreview: z.boolean().optional(),
-  runtimeEnvironmentId: z.string().nullable().optional(),
-  externalSshTargetId: z.string().trim().min(1).optional(),
-  dirtyDraftContent: z.string().optional(),
-  lastKnownDiskSignature: z.string().optional(),
-  readOnly: z.boolean().optional(),
-  liveTail: z.boolean().optional()
-})
-
 // ─── Workspace session ──────────────────────────────────────────────
 
 const terminalSurfaceTombstoneSchema = z.object({
@@ -260,6 +247,14 @@ export const workspaceSessionStateSchema: z.ZodType<WorkspaceSessionState> = z.o
   activeBrowserTabIdByWorktree: salvagedOptional(
     'activeBrowserTabIdByWorktree',
     salvagingRecord(worktreeIdSchema, z.string().nullable())
+  ),
+  clientHostedBrowserPagesByWorktree: salvagedOptional(
+    'clientHostedBrowserPagesByWorktree',
+    salvagingRecord(worktreeIdSchema, salvagingArray(persistedClientHostedBrowserPageSchema))
+  ),
+  clientHostedBrowserCloseIntentsByEnvironment: salvagedOptional(
+    'clientHostedBrowserCloseIntentsByEnvironment',
+    salvagingRecord(z.string().min(1), salvagingArray(clientHostedBrowserCloseIntentSchema))
   ),
   activeTabTypeByWorktree: salvagedOptional(
     'activeTabTypeByWorktree',

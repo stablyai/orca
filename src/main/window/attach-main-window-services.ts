@@ -504,7 +504,10 @@ function registerRuntimeWindowLifecycle(
     nativeChatLaunchDraftResolved: (tabId, resolution) =>
       send('runtime:nativeChatLaunchDraftResolved', { tabId, ...resolution }),
     browserDriverChanged: (browserPageId, driver) =>
-      send('runtime:browserDriverChanged', { browserPageId, driver })
+      send('runtime:browserDriverChanged', { browserPageId, driver }),
+    browserRemoteViewersChanged: (browserPageId, hasRemoteViewers) =>
+      send('runtime:browserRemoteViewersChanged', { browserPageId, hasRemoteViewers }),
+    clientHostedBrowserRowsChanged: (event) => send('runtime:clientHostedBrowserRowsChanged', event)
   })
   registerRendererDocumentNavigation(mainWebContents, () => {
     rendererNotifications.onMainFrameReloadStarted()

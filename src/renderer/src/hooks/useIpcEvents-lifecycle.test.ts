@@ -22,6 +22,8 @@ const EXPECTED_DIRECT_CALLBACK_METHODS = [
   'remoteWorkspace.onChanged',
   'repos.onChanged',
   'runtime.onBrowserDriverChanged',
+  'runtime.onBrowserRemoteViewersChanged',
+  'runtime.onClientHostedBrowserRowsChanged',
   'runtime.onNativeChatLaunchDraftResolved',
   'runtime.onTerminalDriverChanged',
   'runtime.onTerminalFitOverrideChanged',
@@ -189,7 +191,9 @@ const EXPECTED_CALLBACK_REGISTRATION_SEQUENCE = [
   'runtime.onTerminalFitOverrideChanged',
   'runtime.onTerminalDriverChanged',
   'runtime.onNativeChatLaunchDraftResolved',
-  'runtime.onBrowserDriverChanged'
+  'runtime.onBrowserDriverChanged',
+  'runtime.onBrowserRemoteViewersChanged',
+  'runtime.onClientHostedBrowserRowsChanged'
 ] as const
 
 type ListenerRecord = {
@@ -423,18 +427,26 @@ describe('useIpcEvents App-lifetime lifecycle', () => {
         'runtime.onTerminalDriverChanged',
         'runtime.onNativeChatLaunchDraftResolved',
         'runtime.onBrowserDriverChanged',
+        'runtime.onBrowserRemoteViewersChanged',
+        'runtime.onClientHostedBrowserRowsChanged',
+        'runtime.getClientHostedBrowserRows',
         'runtime.getTerminalFitOverrides',
         'runtime.getTerminalDrivers',
-        'runtime.getBrowserDrivers'
+        'runtime.getBrowserDrivers',
+        'runtime.getBrowserRemoteViewerPages'
       ])
     ).toEqual([
       'runtime.onTerminalFitOverrideChanged',
       'runtime.onTerminalDriverChanged',
       'runtime.onNativeChatLaunchDraftResolved',
       'runtime.onBrowserDriverChanged',
+      'runtime.onBrowserRemoteViewersChanged',
+      'runtime.onClientHostedBrowserRowsChanged',
+      'runtime.getClientHostedBrowserRows',
       'runtime.getTerminalFitOverrides',
       'runtime.getTerminalDrivers',
-      'runtime.getBrowserDrivers'
+      'runtime.getBrowserDrivers',
+      'runtime.getBrowserRemoteViewerPages'
     ])
     expect(
       [...listeners.values()].every((records) => records.filter((item) => item.active).length === 1)

@@ -539,8 +539,11 @@ jobs:
 
       # A path filter that matches nothing exits 1 ("No test files found"), so this
       # lane cannot report success while running zero tests.
-      - name: Old/new client and server terminal journey
-        run: pnpm exec vitest run --config config/vitest.config.ts tests/e2e/cross-version-wire/cross-version-terminal-wire.unit.test.ts
+      - name: Old/new client and server compatibility journeys
+        run: >-
+          pnpm exec vitest run --config config/vitest.config.ts
+          tests/e2e/cross-version-wire/cross-version-browser-placement.unit.test.ts
+          tests/e2e/cross-version-wire/cross-version-terminal-wire.unit.test.ts
 
   managed_hook_node18:
     name: managed hooks on Node 18
@@ -592,6 +595,15 @@ jobs:
       - uses: ./.github/actions/install-node-dependencies
         with:
           native-runtime: electron
+
+      - name: Test Linux Electron lifecycle boundary
+        run: >-
+          xvfb-run --auto-servernum pnpm exec vitest run --config config/vitest.config.ts
+          src/main/browser/browser-client-page-renderer-lifecycle.electron.test.ts
+          src/main/browser/browser-route-tcp-egress.electron.test.ts
+          src/main/browser/browser-route-webrtc-egress.electron.test.ts
+          src/main/browser/browser-route-h3-egress.electron.test.ts
+          src/main/browser/browser-route-dns-prefetch.electron.test.ts
 
       - name: Build package inputs
         run: |
@@ -681,6 +693,11 @@ jobs:
         run: >-
           pnpm exec vitest run --config config/vitest.config.ts
           config/scripts/rebuild-native-deps.test.mjs
+          src/main/browser/browser-client-page-renderer-lifecycle.electron.test.ts
+          src/main/browser/browser-route-tcp-egress.electron.test.ts
+          src/main/browser/browser-route-webrtc-egress.electron.test.ts
+          src/main/browser/browser-route-h3-egress.electron.test.ts
+          src/main/browser/browser-route-dns-prefetch.electron.test.ts
           src/main/providers/windows-conpty-wide-char-duplication.node-pty.test.ts
           src/main/providers/pty-repaint-wide-char-buffer.node-pty.test.ts
           src/shared/child-process/windows-command-line.win32.test.ts

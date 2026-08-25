@@ -1,10 +1,11 @@
 import { focusTerminalTabSurface } from '@/lib/focus-terminal-tab-surface'
 import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
 import {
-  closeWebRuntimeSessionTab,
   createWebRuntimeSessionTerminal,
   isWebRuntimeSessionActive
 } from '@/runtime/web-runtime-session'
+import { closeBrowserWorkspaceTabOnHosts } from '@/runtime/browser-workspace-tab-close'
+import { destroyWorkspaceWebviews } from '@/store/slices/browser-webview-cleanup'
 import {
   guardPinnedTabClose,
   isUnifiedTabPinned,
@@ -96,21 +97,38 @@ export function registerTabLifecycleIpcBridge(unsubs: (() => void)[]): void {
         const worktreeId = store.activeWorktreeId
         const closeActiveBrowserTab = (): void => {
           const currentStore = useAppStore.getState()
-          const environmentId = getWorktreeRuntimeEnvironmentId(worktreeId)
-          if (environmentId && worktreeId) {
-            if (!isWebRuntimeSessionActive(environmentId)) {
-              currentStore.closeBrowserTab(tabId)
-              return
-            }
-            void closeWebRuntimeSessionTab({
-              worktreeId,
-              tabId,
-              environmentId,
-              reason: 'user'
-            })
+          if (!worktreeId) {
+            currentStore.closeBrowserTab(tabId)
             return
           }
-          currentStore.closeBrowserTab(tabId)
+          // Why: the menu's Close Tab used to decide ownership itself — "runtime connected means
+          // the host owns it" — which fires an inert close at a local-only or still-staged tab.
+          // The shared plan is the one authority on who tears a browser workspace down.
+          const plan = closeBrowserWorkspaceTabOnHosts({
+            state: currentStore,
+            worktreeId,
+            workspaceId: tabId,
+            visibleTabId: tabId,
+            focusedEnvironmentId: getRuntimeEnvironmentIdForWorktree(currentStore, worktreeId)
+          })
+          if (plan.closesLocally) {
+            // Why before the teardown: closeBrowserTab announces the MRU page selection, and a
+            // guest torn down first leaves the fallback picking registration order (#16306).
+            currentStore.closeBrowserTab(
+              tabId,
+              plan.localCloseReason ? { reason: plan.localCloseReason } : undefined
+            )
+            destroyWorkspaceWebviews(currentStore.browserPagesByWorkspace, tabId)
+            return
+          }
+          if (plan.removesVisibleTab) {
+            const mirroredTab = (currentStore.unifiedTabsByWorktree[worktreeId] ?? []).find(
+              (candidate) => candidate.contentType === 'browser' && candidate.entityId === tabId
+            )
+            if (mirroredTab) {
+              currentStore.closeUnifiedTab(mirroredTab.id)
+            }
+          }
         }
         if (worktreeId && isUnifiedTabPinned(store, worktreeId, tabId)) {
           guardPinnedTabClose({

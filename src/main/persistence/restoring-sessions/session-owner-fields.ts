@@ -5,6 +5,19 @@ import {
   getWorktreeIdFromHostIdentity,
   isWorktreeHostIdentity
 } from '../../../shared/worktree/host-qualified-identity'
+import { SESSION_FIELDS_PRUNED_BY_OWNER_KEY } from '../../orca-profiles/profile-project-session-field-disposition'
+
+/**
+ * The census fields this path deletes by indexing the owner key.
+ *
+ * Two classified fields are handled separately below: the topology revision is keyed by repo
+ * rather than by owner, so removing one owner advances it instead of dropping it; and the recency
+ * map also holds host-qualified keys, so it is scanned rather than indexed.
+ */
+export const OWNER_KEYED_SESSION_FIELDS_DELETED_WITH_THEIR_OWNER =
+  SESSION_FIELDS_PRUNED_BY_OWNER_KEY.filter(
+    (field) => field !== 'terminalTopologyRevisionByRepoId' && field !== 'lastVisitedAtByWorktreeId'
+  )
 
 export function createMinimalPersistedTerminalTab(args: {
   worktreeId: string
@@ -60,12 +73,6 @@ export function deleteOwnerKeyedSessionFields(
       [repoId]: previousTopologyRevision + 1
     }
   }
-  if (next.openFilesByWorktree) {
-    delete next.openFilesByWorktree[ownerKey]
-  }
-  if (next.activeFileIdByWorktree) {
-    delete next.activeFileIdByWorktree[ownerKey]
-  }
   const browserWorkspaces = next.browserTabsByWorktree?.[ownerKey] ?? []
   if (next.browserTabsByWorktree) {
     delete next.browserTabsByWorktree[ownerKey]
@@ -75,27 +82,15 @@ export function deleteOwnerKeyedSessionFields(
       delete next.browserPagesByWorkspace[workspace.id]
     }
   }
-  if (next.activeBrowserTabIdByWorktree) {
-    delete next.activeBrowserTabIdByWorktree[ownerKey]
+  // Driven by the same census the repo-removal path uses, so a field added to the session type
+  // cannot be dropped there and forgotten here -- which is how the client-hosted rows were missed.
+  for (const field of OWNER_KEYED_SESSION_FIELDS_DELETED_WITH_THEIR_OWNER) {
+    const record = next[field] as Record<string, unknown> | undefined
+    if (record) {
+      delete record[ownerKey]
+    }
   }
-  if (next.activeTabTypeByWorktree) {
-    delete next.activeTabTypeByWorktree[ownerKey]
-  }
-  if (next.activeTabIdByWorktree) {
-    delete next.activeTabIdByWorktree[ownerKey]
-  }
-  if (next.unifiedTabs) {
-    delete next.unifiedTabs[ownerKey]
-  }
-  if (next.tabGroups) {
-    delete next.tabGroups[ownerKey]
-  }
-  if (next.tabGroupLayouts) {
-    delete next.tabGroupLayouts[ownerKey]
-  }
-  if (next.activeGroupIdByWorktree) {
-    delete next.activeGroupIdByWorktree[ownerKey]
-  }
+  // Scanned, not indexed: this map also holds `${executionHostId}|${worktreeId}` keys.
   if (next.lastVisitedAtByWorktreeId) {
     for (const key of Object.keys(next.lastVisitedAtByWorktreeId)) {
       const rawId = isWorktreeHostIdentity(key) ? getWorktreeIdFromHostIdentity(key) : key
@@ -103,9 +98,6 @@ export function deleteOwnerKeyedSessionFields(
         delete next.lastVisitedAtByWorktreeId[key]
       }
     }
-  }
-  if (next.defaultTerminalTabsAppliedByWorktreeId) {
-    delete next.defaultTerminalTabsAppliedByWorktreeId[ownerKey]
   }
   if (next.activeWorkspaceKey === ownerKey) {
     next.activeWorkspaceKey = null

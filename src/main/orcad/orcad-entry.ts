@@ -165,6 +165,9 @@ async function startOrcadRuntime(
 
   // Why: same post-registration reconciliation `--serve` performs. Skipping it leaves
   // restored orchestration rows claiming an authority this host never took over.
+  // Why before the RPC server binds: a client host attaching first would find no pages to recover.
+  runtime.rehydrateClientHostedBrowserPages()
+
   await runtime.refreshRestoredOrchestrationAuthority()
   await runtime.reconcileLegacyWorkerTerminals()
 

@@ -27,11 +27,77 @@
       "certificateChallengeExpired": "This certificate approval expired. Retry the page to request a new one.",
       "certificateChallengeChanged": "The certificate request changed. Retry the page and review the new warning.",
       "certificateChallengeUnavailable": "This certificate request is no longer available. Retry the page to request a new one.",
-      "certificateProceedFailed": "Orca could not approve this certificate request. Retry the page and try again."
+      "certificateProceedFailed": "Orca could not approve this certificate request. Retry the page and try again.",
+      "sshRoutedHint": "This page browses through the workspace's SSH host — the host may be disconnected or unable to reach this site.",
+      "recheckSshRoute": "Run connection check"
     },
     "guestRecovery": {
       "title": "Browser page stopped",
       "failed": "The browser page stopped unexpectedly. Retry to restore it."
+    },
+    "clientHosted": {
+      "preparationFailed": "Couldn't start the remote browser on this desktop. Check the paired connection and try again.",
+      "unavailableTitle": "Client-hosted browser unavailable",
+      "unavailableDescription": "This page is attached to a different desktop or is no longer available.",
+      "download": {
+        "started": "Downloading {{filename}}…",
+        "completed": "Downloaded {{filename}}",
+        "canceled": "Download canceled.",
+        "failed": "Couldn't finish the download."
+      },
+      "popupBlocked": "Popup blocked: {{origin}}",
+      "hostPaneOfflineTitle": "That device is no longer connected",
+      "hostPaneNamedTitle": "Showing on {{device}}",
+      "hostPaneTitle": "Showing on another device",
+      "hostPaneOfflineDescription": "This page stays listed so you can close it from here. It will come back when the device reconnects.",
+      "hostPaneDescription": "This page renders on the paired desktop that opened it.",
+      "hostRowClose": "Close hosted page",
+      "hostRowCloseFailed": "Couldn't close this page. The device hosting it may be busy — try again.",
+      "hostRowOfflineNamed": "Offline — was hosted on {{device}}",
+      "hostRowOffline": "Offline — the device hosting it quit",
+      "hostRowNamed": "Hosted on {{device}}",
+      "hostRow": "Hosted on another device"
+    },
+    "navigation": {
+      "back": "Back",
+      "forward": "Forward",
+      "reload": "Reload"
+    },
+    "reopenOnServer": {
+      "action": "Reopen on server",
+      "pending": "Reopening…",
+      "caveat": "This opens a new page on the remote host at this page’s last address. Signed-in and other transient page state may differ, and a page that came from a form submission opens blank.",
+      "failed": "Couldn't open this page on the remote host. Check the connection and try again."
+    },
+    "sshRoute": {
+      "preparingTitle": "Connecting through the SSH host",
+      "errorTitle": "SSH browser routing unavailable",
+      "errorDescription": "Pages in this workspace browse through its SSH host, and that connection is not available right now.",
+      "retry": "Retry",
+      "tryAnyway": "Try anyway",
+      "browseLocally": "Browse from this device instead",
+      "forwardingBlockedTitle": "The SSH server blocks browser traffic",
+      "sshUnavailableTitle": "SSH connection unavailable",
+      "forwardingBlockedDescription": "This server refuses TCP forwarding (often “AllowTcpForwarding no” in its sshd config), which browsing through it requires. Ask its administrator to allow forwarding, or browse from this device instead.",
+      "sshUnavailableDescription": "Pages in this workspace browse through its SSH host, and that connection isn't available right now. Reconnect the host, then retry.",
+      "showDetails": "Show details"
+    },
+    "sshEgress": {
+      "routedTooltip": "Browsing through {{value0}}",
+      "localTooltip": "Browsing from this device, not {{value0}}",
+      "localChip": "This device",
+      "routedDetail": "Network traffic and DNS go through the workspace's SSH host.",
+      "localDetail": "Pages load from this machine and its network.",
+      "settingsLink": "Routing settings"
+    },
+    "remoteEgress": {
+      "clientHostedTooltip": "Browsing through {{value0}}",
+      "streamedTooltip": "Browsing on {{value0}}",
+      "clientHostedDetail": "The page renders on this device. Network traffic and DNS go through the remote host.",
+      "streamedDetail": "The page runs on the remote host and streams to this device."
+    },
+    "remote": {
+      "findUnavailable": "Find in page is not available while this page streams from the remote host."
     }
   },
   "githubChecks": {
@@ -65,6 +131,37 @@
       "menuBarIcon": {
         "title": "Show Menu Bar Icon",
         "description": "Keep an Orca shortcut and activity indicator in the macOS menu bar."
+      }
+    },
+    "browser": {
+      "clientHostedRemote": {
+        "title": "Host remote browser pages on this device",
+        "description": "Render remote workspace pages on this desktop; network traffic still goes through the remote host. Applies to new pages only.",
+        "optionDevice": "This device",
+        "optionDeviceTooltip": "Pages render on this desktop, so input and popups behave natively.",
+        "optionServer": "Server (streamed)",
+        "optionServerTooltip": "Pages render on the remote server and stream to this device.",
+        "rowTitle": "Remote server workspaces",
+        "rowDescription": "Where pages render. Traffic always goes through the remote server. Applies to new pages only."
+      },
+      "sshWorkspaceRouting": {
+        "title": "Browse through SSH workspace hosts",
+        "description": "Browser pages in SSH workspaces send their traffic through the workspace's SSH host, with DNS resolved there. Off means pages browse from this machine.",
+        "disabledHosts": "Hosts browsing from this device instead:",
+        "enableHost": "Route again",
+        "optionHost": "SSH host",
+        "optionHostTooltip": "Traffic and DNS go through the workspace's SSH host.",
+        "optionDevice": "This device",
+        "optionDeviceTooltip": "Pages browse from this machine's network.",
+        "rowTitle": "SSH workspaces",
+        "rowDescription": "Where browser traffic leaves from. Pages always render on this device.",
+        "useHost": "Use SSH host",
+        "probeSkippedHosts": "Hosts routed without the connection check (Try anyway):",
+        "probeAgain": "Check again"
+      },
+      "remoteBrowsing": {
+        "heading": "Remote browsing",
+        "headingDescription": "Where remote workspace pages render, and where their network traffic leaves from."
       }
     }
   },
@@ -798,7 +895,12 @@
               "undecryptableUnknown": "{{value0}} cookies could not be decrypted and were skipped. Close the source browser completely and try the import again.",
               "unrecognizedWarning": "The cookie import finished with a warning this version of Orca does not recognize. Update Orca to see the details, then check this profile before relying on its cookies.",
               "undecryptableUnrecognizedReason": "{{value0}} cookies could not be decrypted and were skipped for a reason this version of Orca does not recognize. Update Orca to see the details, then try the import again.",
-              "partitionSkipped": "{{value0}} cookies were not imported because their site-partition could not be read. Sign in to those sites again in Orca."
+              "partitionSkipped": "{{value0}} cookies were not imported because their site-partition could not be read. Sign in to those sites again in Orca.",
+              "locationClientHosted": "Read from this device and stored here for the {{value0}} workspace.",
+              "locationRemoteHost": "Read from browsers on {{value0}} and stored there.",
+              "googleCookiesSkippedLocal": "Google cookies were not imported. Open a browser in Orca with this profile, then sign into Google.",
+              "googleCookiesSkippedClientHosted": "Google cookies were not imported. Open a browser tab in the {{value0}} workspace with this profile — it opens on this device — then sign into Google.",
+              "googleCookiesSkippedRemoteWorkspace": "Google cookies were not imported. Open a browser tab in the {{value0}} workspace with this profile, then sign into Google."
             }
           }
         }
@@ -14764,6 +14866,16 @@
                       "title": "Find the results",
                       "body": "Runs show when automations ran, what happened, and where to inspect their output."
                     }
+                  },
+                  "client": {
+                    "hosted": {
+                      "browser": {
+                        "intro": {
+                          "title": "This page renders on your desktop",
+                          "body": "Remote browser tabs now render on this device. Network traffic still goes through the remote host."
+                        }
+                      }
+                    }
                   }
                 }
               }
@@ -14994,6 +15106,9 @@
                 }
               }
             }
+          },
+          "download": {
+            "savedToRemote": "Saved to {{value1}} on {{value2}}"
           },
           "annotate": {
             "use": {
@@ -15930,6 +16045,12 @@
         "expiredCompact": "Expired",
         "typeMarkdown": "Markdown",
         "typeHtml": "HTML"
+      },
+      "BrowserCookieImportMachineNotice": {
+        "clientLabel": "Browsers on this device",
+        "remoteLabel": "Browsers on {{value0}}",
+        "clientNoteLocalStorage": "Imports read this device’s browsers. Cookies are stored locally.",
+        "remoteNoteRemoteStorage": "Imports read browsers on {{value0}}. Cookies are stored on that machine, and a permission prompt may appear on its screen."
       }
     },
     "i18n": {

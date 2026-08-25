@@ -11,6 +11,8 @@ export function createBrowserApi(): NonNullable<Partial<PreloadApi>['browser']> 
     openDevTools: () => Promise.resolve(false),
     setViewportOverride: () => Promise.resolve(false),
     setAnnotationViewportBridge: () => Promise.resolve(false),
+    // A web client never hosts pages, so it has no lease to publish over.
+    publishClientPageMetadata: () => Promise.resolve({ status: 'refused' as const }),
     onGuestLoadFailed: () => noopUnsubscribe,
     onCertificateFailureChanged: () => noopUnsubscribe,
     proceedCertificate: () => Promise.resolve({ ok: false, reason: 'missing' }),
@@ -62,6 +64,9 @@ export function createBrowserApi(): NonNullable<Partial<PreloadApi>['browser']> 
     onGrabModeToggle: () => noopUnsubscribe,
     onGrabActionShortcut: () => noopUnsubscribe,
     sessionListProfiles: () => Promise.resolve([]),
+    // Web clients render remote workspaces through the server; no local SSH routing exists.
+    prepareSshWorkspacePartition: () =>
+      Promise.reject(new Error('browser_local_route_unavailable')),
     sessionCreateProfile: () => Promise.resolve(null),
     sessionDeleteProfile: () => Promise.resolve(false),
     sessionImportCookies: () =>
@@ -75,6 +80,9 @@ export function createBrowserApi(): NonNullable<Partial<PreloadApi>['browser']> 
       }),
     sessionResolvePartition: () => Promise.resolve(null),
     sessionDetectBrowsers: () => Promise.resolve([]),
+    sessionDetectBrowsersForClientHost: () => Promise.resolve(null),
+    sessionImportFromBrowserForClientHost: () => Promise.resolve(null),
+    sessionClientRouteImportSources: () => Promise.resolve({}),
     sessionImportFromBrowser: () =>
       Promise.resolve({
         ok: false,

@@ -33,6 +33,26 @@ export async function removeRegisteredSshTarget(targetId: string): Promise<void>
     }
     persistedStore?.removeSshRemotePtyLeases(targetId)
     store.removeTarget(targetId)
+    // Why: removal is the storage boundary — the target's browser cookie jars
+    // must not outlive the record that scoped them.
+    try {
+      const [partitions, storage] = await Promise.all([
+        import('../browser/local-ssh-browser-partitions'),
+        import('../browser/browser-route-partition-storage-runtime')
+      ])
+      await partitions.releaseLocalSshBrowserPartitionsForTarget(targetId)
+      await storage.clearBrowserRoutePartitionStorageForLocalSshTarget(targetId)
+      // Why (review P2-2): a prepare racing the removal can re-register between
+      // release and clear; one delayed second pass reclaims what slipped
+      // through (mirrors the environment-removal retry).
+      await new Promise((resolve) => setTimeout(resolve, 500))
+      await partitions.releaseLocalSshBrowserPartitionsForTarget(targetId)
+      await storage.clearBrowserRoutePartitionStorageForLocalSshTarget(targetId)
+    } catch (error) {
+      console.warn(
+        `[ssh] Failed to clear browser partitions for removed target ${targetId}: ${error instanceof Error ? error.message : String(error)}`
+      )
+    }
   })
 }
 

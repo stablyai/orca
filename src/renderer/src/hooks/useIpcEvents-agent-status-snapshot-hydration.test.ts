@@ -201,7 +201,9 @@ describe('useIpcEvents agent status snapshot integration', () => {
           onBrowserDriverChanged: (listener: MobileBrowserDriverListener) => {
             refs.browserDriver = listener
             return unsubscribeBrowserDriver
-          }
+          },
+          onClientHostedBrowserRowsChanged: () => () => {},
+          getClientHostedBrowserRows: async () => []
         }
       })
     )

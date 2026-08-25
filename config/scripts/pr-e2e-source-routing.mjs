@@ -89,6 +89,32 @@ export const PR_E2E_SOURCE_ROUTES = [
       /^(?:src\/renderer\/src\/components\/terminal-pane\/(?:remote-pane-layout-push|TerminalPane)\.tsx?|src\/renderer\/src\/lib\/terminal-layout-equality\.ts|src\/renderer\/src\/runtime\/web-session-tabs-sync\.ts|src\/renderer\/src\/store\/slices\/terminals\.ts)$/.test(
         file
       )
+  },
+  {
+    // Why: the host's row for a client-rendered page only exists across two real Electron
+    // apps, so this spec is the only gate on it. The high-churn seams it also rides
+    // (ipc/runtime, useIpcEvents, preload) are left out deliberately: routing on those runs a
+    // two-app e2e on most PRs, and their client-hosted share is already covered by the
+    // main-process integration test.
+    id: 'client-hosted-browser.host-strip',
+    specs: ['tests/e2e/paired-client-hosted-browser-host-strip.spec.ts'],
+    matches: (file) =>
+      isProductSource(file) &&
+      /^src\/.*(?:[Cc]lient-?[Hh]osted-?[Bb]rowser|BrowserPaneOverlayLayer)/.test(file)
+  },
+  {
+    // Why a second, wider pattern: restart survival breaks from seams that never say
+    // "client-hosted" - page adoption, the host lease/reconciliation plan, the session-tab
+    // snapshot the client culls rows against. orca-runtime.ts is included despite its churn: it
+    // publishes the snapshot flag the client holds its rows on, and no narrower path names that
+    // seam.
+    id: 'client-hosted-browser.restart-survival',
+    specs: ['tests/e2e/paired-client-hosted-browser-restart-survival.spec.ts'],
+    matches: (file) =>
+      isProductSource(file) &&
+      /^src\/.*(?:[Cc]lient-?[Hh]osted|browser-host-(?:lease|page|client-page)|browser-client-(?:host|page)|runtime-browser-(?:client-)?page|session-tabs-sync|host-session-snapshot-authority|orca-runtime(?:-browser)?\.ts|\/runtime-(?:status|types)\.ts)/.test(
+        file
+      )
   }
 ]
 

@@ -1,5 +1,6 @@
 /* eslint-disable max-lines -- main-process entry point; owns app lifecycle, service wiring, window creation, and hook/daemon startup with no cleaner split seam. */
 import { existsSync, statSync } from 'node:fs'
+import { randomUUID } from 'node:crypto'
 import { isAbsolute, join } from 'node:path'
 import os from 'node:os'
 import {
@@ -234,6 +235,7 @@ import {
   ensureAutoUpdaterConfigured
 } from './window/attach-main-window-services'
 import { createMainWindow, loadMainWindow } from './window/createMainWindow'
+import { shutdownPairedRuntimeBrowserClientHosts } from './browser/paired-runtime-browser-client-host-runtime'
 import {
   getDashboardPopoutWindow,
   zoomDashboardPopoutIfFocused
@@ -305,10 +307,14 @@ import { getRepoIdFromWorktreeId } from '../shared/worktree/id'
 import { parseWorkspaceKey } from '../shared/workspace-scope'
 import { setMigrationUnsupportedPtyListener } from './agent-hooks/migration-unsupported-pty-state'
 import { AgentBrowserBridge } from './browser/agent-browser-bridge'
+import { configureBrowserClientPageAutomationRuntime } from './browser/browser-client-page-automation-runtime'
+import { BrowserClientPageCommandError } from './browser/browser-client-page-command-failure'
 import { EmulatorBridge } from './emulator/emulator-bridge'
 import { browserCertificateTrustController, browserManager } from './browser/browser-manager'
+import { RpcDispatcher } from './runtime/rpc/dispatcher'
 import { OffscreenBrowserBackend } from './browser/offscreen-browser-backend'
 import { initializeBrowserSessionsForApp } from './browser/browser-session-startup'
+import { initializeBrowserClientHostId } from './browser/browser-client-host-id'
 import { setUnreadDockBadgeCount } from './dock/unread-badge'
 import { AutomationService } from './automations/service'
 import { createHeadlessAutomationOutputSnapshotBuffer } from './automations/headless-dispatch'
@@ -2315,6 +2321,9 @@ void app.whenReady().then(async () => {
   )
 
   const activeOrcaProfile = ensureActiveOrcaProfile()
+  // Why this early: the first window stamps the hosting id into its renderer's argv, so the durable
+  // read has to have happened by then or the renderer and the browser-host lease disagree.
+  initializeBrowserClientHostId(activeOrcaProfile.profileDirectory)
   store = new Store({ dataFile: activeOrcaProfile.dataFile })
   // Why here and not at install time: the report remembers what it last said, and that
   // state lives beside the profile data file, which does not exist until now.
@@ -2418,7 +2427,16 @@ void app.whenReady().then(async () => {
   // Why: browser sessions serve desktop webviews and runtime profile commands, so init at app startup rather than via a renderer IPC path.
   initializeBrowserSessionsForApp({
     orcaProfileId: activeOrcaProfile.profile.id,
-    profileDirectory: activeOrcaProfile.profileDirectory
+    profileDirectory: activeOrcaProfile.profileDirectory,
+    // Why: local direct-SSH partitions are scoped to targets, and the orphan
+    // sweep must see the live target list or it would clear their cookie jars.
+    listLocalSshTargetIds: () => {
+      if (!store) {
+        // Why: an empty list would read as "every SSH jar is an orphan"; throwing skips the sweep.
+        throw new Error('ssh target store unavailable at partition sweep')
+      }
+      return store.getSshTargets().map((target) => target.id)
+    }
   })
   unsubscribeSystemResumeBroadcast = registerSystemResumeBroadcast()
   agentAwakeService = new AgentAwakeService()
@@ -2732,6 +2750,10 @@ void app.whenReady().then(async () => {
       agentHookServer.reconcileEndedProcessForPaneKeys(paneKeys)
     },
     canRecoverPersistentLocalPtys: () => getDaemonProvider() !== null,
+    // Why: evaluated per call, not captured — the RPC server that owns the device registry is
+    // constructed with this runtime and does not exist yet at this point.
+    getPairedDeviceName: (pairedDeviceId) =>
+      runtimeRpc?.getDeviceRegistry()?.getDevice(pairedDeviceId)?.name ?? null,
     // Why: source codex-home here (runs in window AND serve) so aiVault.listSessions includes managed-Codex sessions; registerCoreHandlers is window-only.
     getAdditionalAiVaultCodexHomePaths: () =>
       codexRuntimeHome ? codexRuntimeHome.getHostCodexHomePathsForSessionDiscovery() : [],
@@ -2747,6 +2769,9 @@ void app.whenReady().then(async () => {
   })
   runtime = runtimeService
   runtimeService.prepareLegacyWorkerTerminalRecovery()
+  // Why before anything can attach: a client host that reattaches to a restarted runtime is only
+  // handed its pages back if the runtime found them first.
+  runtimeService.rehydrateClientHostedBrowserPages()
   publishProviderSessionChanges(agentHookServer.getProviderSessionIdentities())
   browserManager.setBrowserGuestStateChangedListener((worktreeId) => {
     runtimeService.notifyMobileSessionTabsChanged(worktreeId)
@@ -2994,11 +3019,30 @@ void app.whenReady().then(async () => {
   starNag = new StarNagService(store, stats)
   starNag.start()
   starNag.registerIpcHandlers()
-  runtimeService.setAgentBrowserBridge(
-    new AgentBrowserBridge(browserManager, {
-      onTabsChanged: (worktreeId) => runtimeService.notifyMobileSessionTabsChanged(worktreeId)
-    })
-  )
+  const agentBrowserBridge = new AgentBrowserBridge(browserManager, {
+    onTabsChanged: (worktreeId) => runtimeService.notifyMobileSessionTabsChanged(worktreeId)
+  })
+  runtimeService.setAgentBrowserBridge(agentBrowserBridge)
+  const browserClientAutomationDispatcher = new RpcDispatcher({ runtime: runtimeService })
+  configureBrowserClientPageAutomationRuntime({
+    browserManager,
+    getAgentBrowserBridge: () => agentBrowserBridge,
+    executeRpc: async (method, params, signal) => {
+      const response = await browserClientAutomationDispatcher.dispatch(
+        {
+          id: randomUUID(),
+          authToken: 'local-browser-client-automation',
+          method,
+          params
+        },
+        { signal }
+      )
+      if (!response.ok) {
+        throw new BrowserClientPageCommandError(response.error.code)
+      }
+      return response.result
+    }
+  })
 
   // Emulator bridge (serve-sim). macOS-only feature (gated in CLI/runtime); always ship like agent-browser.
   // Why: externally started serve-sim processes must stay independent — only Orca-managed/attached helpers belong to a workspace.
@@ -3439,6 +3483,11 @@ app.on('will-quit', (e) => {
   runtime?.getAgentBrowserBridge()?.destroyAllSessions()
   // Why: headless offscreen browser windows are main-process owned; tear them down explicitly on quit.
   runtime?.getOffscreenBrowserBackend()?.destroyAll?.()
+  // Why (review P2-4): local SSH browser routes own loopback listeners and, on the
+  // system-ssh path, `ssh -N -D` children that would otherwise outlive the app.
+  const localSshRouteShutdown = import('./browser/local-ssh-browser-route')
+    .then((routes) => routes.closeAllLocalSshBrowserRoutes())
+    .catch(() => {})
   browserManager.setBrowserGuestStateChangedListener(null)
   const emulatorShutdown = runtime?.getEmulatorBridge()?.destroyAllSessions() ?? Promise.resolve()
   // Why immediately before store.flushAsync() with no await in between: beginSshShutdown() marks every
@@ -3454,6 +3503,7 @@ app.on('will-quit', (e) => {
     codexUsage?.flush(),
     openCodeUsage?.flush()
   ]).then(() => {})
+  const browserClientHostShutdown = shutdownPairedRuntimeBrowserClientHosts()
   const skillUploadShutdown = runtime?.disposeSkillUploadSessions() ?? Promise.resolve()
 
   // Why: capture pid/runtimeId synchronously (before any await) so a later teardown path can't null them out mid-chain.
@@ -3487,6 +3537,8 @@ app.on('will-quit', (e) => {
     { name: 'runtime-rpc', promise: rpcStopAndClear },
     { name: 'watchers', promise: watcherShutdown },
     { name: 'emulator', promise: emulatorShutdown },
+    { name: 'browser-client-hosts', promise: browserClientHostShutdown },
+    { name: 'local-ssh-browser-routes', promise: localSshRouteShutdown },
     { name: 'ssh', promise: sshShutdown },
     { name: 'plugin-hosts', promise: pluginHostShutdown },
     { name: 'skill-uploads', promise: skillUploadShutdown },

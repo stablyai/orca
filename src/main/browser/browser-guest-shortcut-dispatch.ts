@@ -5,7 +5,7 @@ import {
 import { keybindingMatchesAction, type KeybindingOverrides } from '../../shared/keybindings'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../shared/constants'
 import type { BrowserPageZoomDirection } from '../../shared/browser-page-zoom'
-import type { BrowserFindSource } from '../../shared/browser-find-source'
+import type { BrowserFindTarget } from '../../shared/browser-find-source'
 import type { ResolveRenderer } from './browser-guest-renderer-target'
 
 export type ShouldForwardDictationShortcut = () => boolean
@@ -144,15 +144,12 @@ export function forwardGuestShortcutInput(
     // Why: forward soft reload so the renderer's reload() hits the parked-webview eviction the guest's built-in shortcut skips.
     renderer.send('ui:reloadBrowserPage')
   } else if (keybindingMatchesAction('browser.find', input, process.platform, keybindings)) {
-    const browserWorkspaceId = resolveWorkspaceId?.(browserTabId)
-    if (browserWorkspaceId) {
-      const source: BrowserFindSource = {
-        browserPageId: browserTabId,
-        browserWorkspaceId
-      }
-      // Why: active browser splits share one renderer; preserve the registered guest owner so only its Find bar opens.
-      renderer.send('ui:findInBrowserPage', source)
-    }
+    // Why: active browser splits share one renderer; preserve the registered guest owner so only
+    // its Find bar opens. A client-hosted guest has no registered workspace, and dropping the
+    // chord there both suppressed it in the guest and delivered nothing.
+    const browserWorkspaceId = resolveWorkspaceId?.(browserTabId) || undefined
+    const target: BrowserFindTarget = { browserPageId: browserTabId, browserWorkspaceId }
+    renderer.send('ui:findInBrowserPage', target)
   } else if (keybindingMatchesAction('browser.back', input, process.platform, keybindings)) {
     // Why: macOS Logitech side-button remaps arrive as history keystrokes, not mouse events; forward so the renderer can goBack().
     renderer.send('ui:browserHistoryNavigate', 'back')
