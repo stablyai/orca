@@ -201,3 +201,36 @@ describe('Linear issue workspace detail state', () => {
     expect(runtimeMocks.linearIssueComments).toHaveBeenCalledWith(sourceContext, 'b', 'workspace-1')
   })
 })
+
+describe('mergeLinearIssueHydration project preservation', () => {
+  // Why: Linear *list* issues never carry `project` — only getIssue maps it, via
+  // includeProject: true. So `project` must never join the preserved-from-current
+  // set: an edit made while getIssue is in flight would overwrite the hydrated
+  // project with the list issue's undefined, permanently blanking it.
+  it('takes project from the hydrated detail even when the user has edited', () => {
+    const listIssue = { ...issue('ENG-1'), project: undefined }
+    const hydrated = { ...issue('ENG-1'), project: { id: 'p1', name: 'Compiler' } }
+
+    const merged = mergeLinearIssueHydration(hydrated, listIssue, true)
+
+    expect(merged.project).toEqual({ id: 'p1', name: 'Compiler' })
+  })
+
+  it('still preserves the fields the user actually edits', () => {
+    const edited = { ...issue('ENG-1'), title: 'my edit', priority: 1 }
+    const hydrated = { ...issue('ENG-1'), title: 'server title', priority: 4 }
+
+    const merged = mergeLinearIssueHydration(hydrated, edited, true)
+
+    expect(merged.title).toBe('my edit')
+    expect(merged.priority).toBe(1)
+  })
+
+  it('keeps project out of the preserved-field set', () => {
+    // Guards the list itself: adding 'project' here is the exact regression.
+    const listIssue = { ...issue('ENG-1'), project: undefined }
+    const hydrated = { ...issue('ENG-1'), project: { id: 'p2', name: 'Runtime' } }
+
+    expect(mergeLinearIssueHydration(hydrated, listIssue, true).project?.id).toBe('p2')
+  })
+})
