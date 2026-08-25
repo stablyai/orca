@@ -80,6 +80,14 @@ export class RelayReconnectController {
     if (this.recoveryGate === 'external-signal') {
       this.liftGate()
     }
+    // Manual app-resume retries bypass transport cooldown, but never a fresh-credential gate.
+    if (
+      reason === 'app-resume' &&
+      logical.getState() === 'disconnected' &&
+      this.recoveryGate !== 'fresh-credential'
+    ) {
+      this.reset()
+    }
     if (
       this.recoveryGate !== 'fresh-credential' &&
       logical.getActivePath() === 'relay' &&
