@@ -15,6 +15,7 @@ export type NestedRepoTelemetryRuntimeKind = (typeof NESTED_REPO_TELEMETRY_RUNTI
 export const NESTED_REPO_SCAN_RESULTS = [
   'review_shown',
   'git_repo',
+  'repo_managed',
   'no_nested_repos',
   'scan_failed'
 ] as const
@@ -150,9 +151,11 @@ export function buildNestedRepoScanTelemetry(args: {
       ? 'scan_failed'
       : args.scan.selectedPathKind === 'git_repo'
         ? 'git_repo'
-        : foundCount > 0
-          ? 'review_shown'
-          : 'no_nested_repos'
+        : args.scan.selectedPathKind === 'repo_managed'
+          ? 'repo_managed'
+          : foundCount > 0
+            ? 'review_shown'
+            : 'no_nested_repos'
 
   return {
     attempt_id: args.attemptId,

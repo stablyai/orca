@@ -45,6 +45,25 @@ describe('nested repo telemetry payloads', () => {
     expect(bucketNestedRepoTelemetryCount(16)).toBe('16+')
   })
 
+  it('classifies a repo-managed checkout without nested review', () => {
+    expect(
+      buildNestedRepoScanTelemetry({
+        attemptId,
+        surface: 'sidebar',
+        runtimeKind: 'local',
+        scan: {
+          ...scanResult,
+          selectedPathKind: 'repo_managed',
+          repos: []
+        }
+      })
+    ).toMatchObject({
+      result: 'repo_managed',
+      selected_path_kind: 'repo_managed',
+      found_count: 0
+    })
+  })
+
   it('classifies a scan that should show nested repo review', () => {
     expect(
       buildNestedRepoScanTelemetry({

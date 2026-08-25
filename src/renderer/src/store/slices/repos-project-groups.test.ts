@@ -108,6 +108,9 @@ beforeEach(() => {
         list: folderWorkspacesList,
         getPathStatus: folderWorkspacesGetPathStatus,
         create: folderWorkspacesCreate,
+        deriveRepoManaged: vi.fn(),
+        probeRepoCli: vi.fn(),
+        installRepoCli: vi.fn(),
         update: folderWorkspacesUpdate,
         delete: folderWorkspacesDelete
       },

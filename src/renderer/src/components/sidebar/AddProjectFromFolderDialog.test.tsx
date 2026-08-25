@@ -17,12 +17,14 @@ const mocks = vi.hoisted(() => ({
     closeModal: vi.fn(),
     openModal: vi.fn(),
     addRepoPath: vi.fn(),
+    scanNestedRepos: vi.fn(),
     fetchWorktrees: vi.fn(),
     setHideDefaultBranchWorkspace: vi.fn(),
     clearOrcaHookTrustForRepo: vi.fn(),
     repos: [] as Repo[]
   },
   addRemote: vi.fn(),
+  completeRepoManagedOpen: vi.fn(),
   toastSuccess: vi.fn(),
   finishProjectAddWithDefaultCheckout: vi.fn()
 }))
@@ -97,6 +99,10 @@ vi.mock('./project-added-default-checkout', () => ({
   finishProjectAddWithDefaultCheckout: mocks.finishProjectAddWithDefaultCheckout
 }))
 
+vi.mock('./complete-repo-managed-open', () => ({
+  completeRepoManagedOpen: mocks.completeRepoManagedOpen
+}))
+
 function makeRepo(overrides: Partial<Repo> = {}): Repo {
   return {
     id: 'repo-1',
@@ -132,6 +138,7 @@ describe('AddProjectFromFolderDialog', () => {
     mocks.state.activeModal = 'confirm-add-project-from-folder'
     mocks.state.modalData = { folderPath: '/projects/child' }
     mocks.state.repos = []
+    mocks.state.scanNestedRepos.mockResolvedValue(null)
     mocks.state.fetchWorktrees.mockResolvedValue(true)
     vi.stubGlobal('window', {
       api: {
@@ -169,6 +176,31 @@ describe('AddProjectFromFolderDialog', () => {
       'confirm-non-git-folder',
       expect.anything()
     )
+  })
+  it('opens a repo-managed folder as a project group before adding it as a plain Git repo', async () => {
+    const repoManagedScan = {
+      selectedPath: '/projects/child',
+      selectedPathKind: 'repo_managed' as const,
+      repos: [],
+      truncated: false,
+      timedOut: false,
+      stopped: false,
+      durationMs: 1,
+      maxDepth: 3,
+      maxRepos: 100,
+      timeoutMs: null
+    }
+    mocks.state.scanNestedRepos.mockResolvedValue(repoManagedScan)
+    mocks.state.addRepoPath.mockResolvedValue(makeRepo())
+    const { default: AddProjectFromFolderDialog } = await import('./AddProjectFromFolderDialog')
+
+    renderToStaticMarkup(<AddProjectFromFolderDialog />)
+    await clickAddProject()
+
+    expect(mocks.state.scanNestedRepos).toHaveBeenCalledWith('/projects/child', undefined, {
+      runtimeEnvironmentId: null
+    })
+    expect(mocks.state.addRepoPath).not.toHaveBeenCalled()
   })
 
   it('leaves local non-Git folders on the existing Open as Folder confirmation path', async () => {
@@ -289,7 +321,7 @@ describe('AddProjectFromFolderDialog', () => {
 
     renderToStaticMarkup(<AddProjectFromFolderDialog />)
     const addPromise = getButton('Add Project').onClick?.()
-    await Promise.resolve()
+    await vi.waitFor(() => expect(mocks.state.fetchWorktrees).toHaveBeenCalled())
     expect(mocks.state.fetchWorktrees).toHaveBeenCalledWith(repo.id, {
       requireAuthoritative: true,
       executionHostId: 'local'

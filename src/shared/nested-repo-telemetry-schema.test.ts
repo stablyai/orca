@@ -20,6 +20,20 @@ describe('nested repo import telemetry schemas', () => {
     ).toBe(true)
 
     expect(
+      eventSchemas.add_repo_nested_scan_result.safeParse({
+        attempt_id: attemptId,
+        surface: 'sidebar',
+        runtime_kind: 'local',
+        result: 'repo_managed',
+        selected_path_kind: 'repo_managed',
+        found_count: 0,
+        found_count_bucket: '0',
+        truncated: false,
+        timed_out: false
+      }).success
+    ).toBe(true)
+
+    expect(
       eventSchemas.add_repo_nested_import_action.safeParse({
         attempt_id: attemptId,
         surface: 'sidebar',

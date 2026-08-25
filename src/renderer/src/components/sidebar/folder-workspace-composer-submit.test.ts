@@ -87,6 +87,32 @@ describe('submitFolderWorkspaceCreate', () => {
     vi.restoreAllMocks()
   })
 
+  it('activates an existing main workspace without creating another folder workspace', async () => {
+    const createFolderWorkspace = vi.fn(async () => makeFolderWorkspace())
+    const existing = makeFolderWorkspace({ id: 'main-workspace', name: 'AOSP' })
+    const onOpenChange = vi.fn()
+
+    await submitFolderWorkspaceCreate({
+      projectGroup: makeProjectGroup(),
+      name: 'task',
+      lastAutoName: '',
+      linkedWorkItem: null,
+      note: '',
+      quickAgent: null,
+      autoRenameBranchFromWork: false,
+      agentCmdOverrides: {},
+      existingWorkspace: existing,
+      createFolderWorkspace,
+      onOpenChange
+    })
+
+    expect(createFolderWorkspace).not.toHaveBeenCalled()
+    expect(mocks.activateAndRevealFolderWorkspace).toHaveBeenCalledWith('main-workspace', {
+      runtimeEnvironmentId: null
+    })
+    expect(onOpenChange).toHaveBeenCalledWith(false)
+  })
+
   it('closes the composer after creation even when reveal fails', async () => {
     const createFolderWorkspace = vi.fn(async () => makeFolderWorkspace())
     const onOpenChange = vi.fn()

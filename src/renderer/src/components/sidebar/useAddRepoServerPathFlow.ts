@@ -14,6 +14,8 @@ import type { WorktreeFetchOptions } from '@/store/slices/worktree-helpers'
 import { createNestedRepoScanId } from './add-repo-dialog-types'
 import { worktreeRefreshOptions } from './add-repo-runtime-owner'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
+import { isRepoManagedScan } from '../../../../shared/repo-managed-project'
+import { completeRepoManagedOpen } from './complete-repo-managed-open'
 
 type ShowNestedRepoReview = (args: {
   scan: NestedRepoScanResult
@@ -143,6 +145,18 @@ export function useAddRepoServerPathFlow({
               scan
             })
           )
+          if (isRepoManagedScan(scan)) {
+            await completeRepoManagedOpen({
+              scan,
+              generation: gen,
+              currentGeneration: () => serverAddGenRef.current,
+              scanId,
+              runtimeEnvironmentId: activeRuntimeEnvironmentId,
+              closeModal,
+              setIsAdding: setIsAddingServerPath
+            })
+            return
+          }
           if (scan?.selectedPathKind === 'non_git_folder' && scan.repos.length > 0) {
             showNestedRepoReview({
               scan,

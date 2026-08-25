@@ -54,7 +54,7 @@ const ProjectGroupCreate = z.object({
   parentPath: OptionalString,
   connectionId: OptionalString.nullable().optional(),
   parentGroupId: OptionalString.nullable().optional(),
-  createdFrom: z.enum(['manual', 'folder-scan', 'migration']).optional()
+  createdFrom: z.enum(['manual', 'folder-scan', 'migration', 'repo-managed']).optional()
 })
 
 const ProjectGroupUpdate = z.object({

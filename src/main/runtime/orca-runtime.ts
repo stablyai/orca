@@ -1228,6 +1228,8 @@ import {
   resolveNestedRepoSelection
 } from '../project-groups/nested-repo-import'
 import { createNestedRepoImportTargetResolver } from '../project-groups/nested-repo-import-target'
+import { importRepoManagedProject } from '../project-groups/repo-managed-import'
+import { deriveRepoManagedFolderWorkspace } from '../project-groups/repo-managed-derive'
 
 function sanitizeNestedRepoRuntimeImportError(context: string, error: unknown): string {
   console.warn(`[project-groups] ${context}`, error)
@@ -20813,6 +20815,31 @@ export class OrcaRuntimeService {
     return workspace
   }
 
+  async deriveRepoManagedFolderWorkspace(input: {
+    projectGroupId: string
+    name?: string
+    connectionId?: string | null
+    linkedTask?: FolderWorkspace['linkedTask']
+    linkedTaskSourceContext?: FolderWorkspace['linkedTaskSourceContext']
+    createdWithAgent?: FolderWorkspace['createdWithAgent']
+    pendingFirstAgentMessageRename?: boolean
+  }): Promise<FolderWorkspace> {
+    if (!this.store?.createFolderWorkspace || !this.store.getSettings) {
+      throw new Error('runtime_unavailable')
+    }
+    const runtimeStore = this.store
+    const workspace = await deriveRepoManagedFolderWorkspace({
+      store: {
+        getSettings: () => runtimeStore.getSettings(),
+        getProjectGroups: () => runtimeStore.getProjectGroups?.() ?? [],
+        createFolderWorkspace: runtimeStore.createFolderWorkspace
+      },
+      ...input
+    })
+    this.notifyReposChanged()
+    return workspace
+  }
+
   async getFolderWorkspacePathStatus(
     request: FolderWorkspacePathStatusRequest
   ): Promise<FolderWorkspacePathStatus> {
@@ -20951,6 +20978,29 @@ export class OrcaRuntimeService {
       throw new Error('Project path must be an absolute path')
     }
     const scan = await scanNestedRepos({ path: args.parentPath, options: { timeoutMs: 15_000 } })
+    if (scan.selectedPathKind === 'repo_managed') {
+      const runtimeStore = this.store
+      if (
+        !runtimeStore?.createProjectGroup ||
+        !runtimeStore.getFolderWorkspaces ||
+        !runtimeStore.createFolderWorkspace
+      ) {
+        throw new Error('runtime_unavailable')
+      }
+      const result = importRepoManagedProject({
+        store: {
+          getProjectGroups: () => runtimeStore.getProjectGroups?.() ?? [],
+          createProjectGroup: runtimeStore.createProjectGroup,
+          getFolderWorkspaces: () => runtimeStore.getFolderWorkspaces?.() ?? [],
+          createFolderWorkspace: runtimeStore.createFolderWorkspace
+        },
+        parentPath: scan.selectedPath,
+        groupName: args.groupName,
+        connectionId: null
+      })
+      this.notifyReposChanged()
+      return result
+    }
     const selection = resolveNestedRepoSelection({ scan, projectPaths: args.projectPaths })
     const groupResolver = createNestedProjectGroupResolver({
       parentPath: args.parentPath,

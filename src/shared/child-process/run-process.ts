@@ -39,6 +39,9 @@ export type ProcessSpec = {
   maxOutputBytes?: number
   /** Kills the process when aborted; the result still reports the exit. */
   signal?: AbortSignal
+  /** Observe output incrementally while it is still captured for the final result. */
+  onStdout?: (chunk: string) => void
+  onStderr?: (chunk: string) => void
 }
 
 export type ProcessResult = {
@@ -182,8 +185,14 @@ export function runProcess(spec: ProcessSpec): Promise<ProcessResult> {
       act()
     }
 
-    child.stdout?.on('data', (chunk: Buffer | string) => stdout.write(chunk))
-    child.stderr?.on('data', (chunk: Buffer | string) => stderr.write(chunk))
+    child.stdout?.on('data', (chunk: Buffer | string) => {
+      stdout.write(chunk)
+      spec.onStdout?.(Buffer.isBuffer(chunk) ? chunk.toString('utf8') : chunk)
+    })
+    child.stderr?.on('data', (chunk: Buffer | string) => {
+      stderr.write(chunk)
+      spec.onStderr?.(Buffer.isBuffer(chunk) ? chunk.toString('utf8') : chunk)
+    })
     // Why listeners that do nothing: an unhandled `error` on a stream is an
     // uncaught exception, and that takes the whole main process down. A child
     // that exits without reading makes the queued stdin write fail with EPIPE,
