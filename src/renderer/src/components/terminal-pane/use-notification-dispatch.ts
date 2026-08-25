@@ -224,7 +224,9 @@ export function dispatchTerminalNotification(
       worktreeLabel: worktree?.displayName || worktree?.branch || worktreeId,
       hasMultipleActiveRepos: countReposNeedingNotificationDisambiguation(state) > 1,
       terminalTitle: event.terminalTitle,
-      isActiveWorktree: state.activeWorktreeId === worktreeId,
+      // The dashboard covers the workspace surface, so a completion there is
+      // not already visible even when it belongs to the selected worktree.
+      isActiveWorktree: state.activeWorktreeId === worktreeId && !state.agentDashboardDrawerOpen,
       ...agentSnapshot
     })
     .then((result) => {
