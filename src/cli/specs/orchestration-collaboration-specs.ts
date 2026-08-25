@@ -42,6 +42,20 @@ export const ORCHESTRATION_COLLABORATION_COMMAND_SPECS: CommandSpec[] = [
     ]
   },
   {
+    path: ['orchestration', 'collaboration-configure'],
+    summary: 'Configure collaboration topology for the current Run',
+    usage:
+      'orca orchestration collaboration-configure --steps <json_array> [--run <run_id>] [--from <handle>] [--retry-request <id>] [--json]',
+    allowedFlags: [...GLOBAL_FLAGS, 'run', 'from', 'steps', 'retry-request'],
+    notes: [
+      'Coordinator-owned: only the coordinator configures collaboration topology for a Run.',
+      'Every task in --steps must already belong to the Run.',
+      'Each requiredPublishesTo must be a subset of publishesTo and must have a subscriber in the topology.',
+      'Configure once per runtime Run; reconfiguring an already-configured Run is an error.',
+      '--retry-request is only for exact recovery after an unknown mutation result.'
+    ]
+  },
+  {
     path: ['orchestration', 'collaboration-ack'],
     summary: 'Acknowledge collaboration messages consumed by this Task',
     usage:

@@ -50,6 +50,17 @@ describe('orchestration collaboration command specs', () => {
     expect(checkpoint.allowedFlags).not.toContain('publication-id')
   })
 
+  it('defines collaboration-configure with run/steps and no identity flags', () => {
+    const configure = spec('orchestration collaboration-configure')
+    expect(effectiveAllowedFlags(configure)).toEqual([
+      ...new Set([...GLOBAL_FLAGS, 'run', 'from', 'steps', 'retry-request'])
+    ])
+    expect(configure.allowedFlags).not.toContain('task-id')
+    expect(configure.allowedFlags).not.toContain('dispatch-id')
+    expect(configure.allowedFlags).not.toContain('subscriber')
+    expect(configure.allowedFlags).not.toContain('publication-id')
+  })
+
   it('defines collaboration-ack with message-ids and no identity flags', () => {
     const ack = spec('orchestration collaboration-ack')
     expect(effectiveAllowedFlags(ack)).toEqual([
