@@ -13,12 +13,11 @@ import type { PersistedState } from '../../../shared/persisted-state-types'
 import type { Repo } from '../../../shared/repo-types'
 import { getRepoExecutionHostId, normalizeExecutionHostId } from '../../../shared/execution-host'
 import { normalizeProjectRuntimePreference } from '../../../shared/project-execution-runtime'
-import type { StoreOwnedPersistedState } from '../loading-store/store-owned-state'
 import { makeProjectHostSetupId } from './project-host-compatibility'
 import { repoGitUsernameCacheKey } from './repo-hydration'
 
 export type ProjectHostMutationOperations = {
-  state: StoreOwnedPersistedState
+  state: PersistedState
   gitUsernameCache: Map<string, string>
   hydrateRepo: (repo: Repo) => Repo
   updateRepoBackedProjectHostSetup: (
