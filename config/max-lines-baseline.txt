@@ -32,7 +32,6 @@ inline src/main/github/pr-refresh-coordinator.ts
 inline src/main/github/project-view.ts
 inline src/main/github/project-view/mutations.ts
 inline src/main/github/work-item-details.ts
-inline src/main/gitlab/client.ts
 inline src/main/index.ts
 inline src/main/ipc/filesystem-watcher.ts
 inline src/main/ipc/filesystem.ts
@@ -41,10 +40,8 @@ inline src/main/ipc/repos.ts
 inline src/main/ipc/ssh.ts
 inline src/main/ipc/worktree-remote.ts
 inline src/main/ipc/worktrees.ts
-inline src/main/jira/issues.ts
 inline src/main/keybindings/keybinding-file.ts
 inline src/main/linear/issues.ts
-inline src/main/linear/projects.ts
 inline src/main/memory/collector.ts
 inline src/main/opencode/hook-service.ts
 inline src/main/persistence/loading-store/store.ts
