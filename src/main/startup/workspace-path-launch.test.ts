@@ -8,6 +8,7 @@ import {
   resolveExistingDirectoryPath
 } from './workspace-path-launch'
 
+/** Builds an injectable is-directory probe from the set of paths that exist as directories. */
 function dirs(...paths: string[]): (path: string) => boolean {
   return new Set(paths).has.bind(new Set(paths))
 }

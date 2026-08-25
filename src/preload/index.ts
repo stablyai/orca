@@ -3715,12 +3715,14 @@ const api = {
     },
     consumePendingSkillShare: (): Promise<string | null> =>
       ipcRenderer.invoke('ui:consumePendingSkillShare'),
+    /** Subscribes to folder-launch intents pushed while the app is already running. */
     onOpenWorkspacePath: (callback: (folderPath: string) => void): (() => void) => {
       const listener = (_event: Electron.IpcRendererEvent, folderPath: string): void =>
         callback(folderPath)
       ipcRenderer.on('ui:openWorkspacePath', listener)
       return () => ipcRenderer.removeListener('ui:openWorkspacePath', listener)
     },
+    /** Pulls launch intents queued before the renderer attached its listener. */
     consumePendingWorkspacePathLaunches: (): Promise<string[]> =>
       ipcRenderer.invoke('ui:consumePendingWorkspacePathLaunches'),
     onOpenSetupGuide: (callback: () => void): (() => void) => {

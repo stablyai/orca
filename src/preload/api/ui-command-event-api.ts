@@ -42,7 +42,9 @@ export type UiCommandEventApi = {
   consumePendingOpenSettings: () => Promise<boolean>
   onOpenSkillShare: (callback: (shareId: string) => void) => () => void
   consumePendingSkillShare: () => Promise<string | null>
+  /** Subscribes to folder-launch intents pushed while the app is already running. */
   onOpenWorkspacePath: (callback: (folderPath: string) => void) => () => void
+  /** Pulls launch intents queued before the renderer attached its listener. */
   consumePendingWorkspacePathLaunches: () => Promise<string[]>
   onOpenSetupGuide: (callback: () => void) => () => void
   onOpenFeatureTour: (callback: () => void) => () => void

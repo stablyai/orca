@@ -9,6 +9,14 @@ export type WorkspacePathLaunchArgvOptions = {
   cwd?: string
 }
 
+/**
+ * Resolves one candidate string to an existing local directory.
+ *
+ * Returns the normalized absolute path when the candidate is path-shaped
+ * (absolute, `~`-prefixed, explicit relative, or a Windows drive/UNC form) and
+ * points at a directory on disk; returns null for anything else so callers can
+ * skip it silently.
+ */
 export function resolveExistingDirectoryPath(
   candidate: string,
   options: { cwd?: string; allowBareDotSegments?: boolean } = {},
@@ -26,6 +34,12 @@ export function resolveExistingDirectoryPath(
   return isDirectory(absolute) ? absolute : null
 }
 
+/**
+ * Returns the first launch argument that resolves to an existing directory.
+ *
+ * Flags (`-…`) are skipped, and bare `.`/`..` app indicators are only accepted
+ * in packaged launches where they cannot be Electron's dev app indicator.
+ */
 export function extractWorkspacePathFromArgv(
   argv: readonly string[],
   options: WorkspacePathLaunchArgvOptions,
@@ -52,10 +66,13 @@ export function extractWorkspacePathFromArgv(
   return null
 }
 
-/** Queued folder-open intents that arrived before the renderer could receive pushed events. */
+/**
+ * Queued folder-open intents that arrived before the renderer could receive pushed events.
+ */
 export class WorkspacePathLaunchQueue {
   private pendingFolderPaths: string[] = []
 
+  /** Buffers an intent until the renderer pulls it via the drain endpoint. */
   queue(folderPath: string): void {
     this.pendingFolderPaths.push(folderPath)
   }
@@ -68,6 +85,7 @@ export class WorkspacePathLaunchQueue {
   }
 }
 
+/** Probe used in production; injectable in tests to avoid touching real files. */
 function defaultIsDirectory(path: string): boolean {
   try {
     return statSync(path).isDirectory()
@@ -76,6 +94,7 @@ function defaultIsDirectory(path: string): boolean {
   }
 }
 
+/** Expands a leading `~` (bare or before a separator) to the user's home directory. */
 function expandHomeTilde(candidate: string): string {
   if (/^~[\\/]/.test(candidate)) {
     return `${homedir()}/${candidate.slice(2)}`
@@ -86,6 +105,12 @@ function expandHomeTilde(candidate: string): string {
   return candidate
 }
 
+/**
+ * Whether the candidate even looks like a filesystem path.
+ *
+ * Guards against subcommand words and other bare tokens being mistaken for
+ * project folders; bare dot segments are gated by `allowBareDotSegments`.
+ */
 function isWorkspacePathLike(
   candidate: string,
   options: { allowBareDotSegments: boolean }
@@ -102,6 +127,12 @@ function isWorkspacePathLike(
   return candidate.startsWith('./') || candidate.startsWith('../')
 }
 
+/**
+ * Normalizes Windows drive-letter and UNC candidates with win32 rules.
+ *
+ * Returns null for anything else; using `win32.normalize` keeps the result
+ * stable no matter which platform the app is running on.
+ */
 function windowsAbsolutePath(candidate: string): string | null {
   if (!WINDOWS_ABSOLUTE_PATH_PATTERN.test(candidate)) {
     return null

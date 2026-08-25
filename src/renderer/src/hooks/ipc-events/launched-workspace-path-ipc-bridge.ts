@@ -1,6 +1,7 @@
 import { useAppStore } from '../../store'
 import { isGitRepoKind } from '../../../../shared/repo-kind'
 
+/** Fetches a freshly added git repo's worktrees and activates its main (or first) one. */
 async function revealAddedRepo(repoId: string): Promise<void> {
   await useAppStore.getState().fetchWorktrees(repoId)
   const worktrees = useAppStore.getState().worktreesByRepo[repoId] ?? []
@@ -13,6 +14,10 @@ async function revealAddedRepo(repoId: string): Promise<void> {
   activateAndRevealWorktree(mainWorktree.id, { sidebarRevealBehavior: 'auto' })
 }
 
+/**
+ * Adds each launched folder as a project through the existing add-project
+ * pipeline and reveals its workspace; one failing path never blocks the rest.
+ */
 export async function openLaunchedWorkspacePaths(folderPaths: readonly string[]): Promise<void> {
   for (const folderPath of folderPaths) {
     try {
@@ -26,6 +31,10 @@ export async function openLaunchedWorkspacePaths(folderPaths: readonly string[])
   }
 }
 
+/**
+ * Subscribes to pushed launch intents and drains intents queued before mount,
+ * so a folder passed at launch opens exactly once regardless of timing.
+ */
 export function registerLaunchedWorkspacePathIpcBridge(unsubs: (() => void)[]): void {
   unsubs.push(
     window.api.ui.onOpenWorkspacePath?.((folderPath) => {

@@ -19,6 +19,7 @@ vi.mock('@/lib/worktree-activation', () => ({
 
 import { openLaunchedWorkspacePaths } from './launched-workspace-path-ipc-bridge'
 
+/** Resets the fake store state, optionally seeding worktrees by repo id. */
 function givenStore(worktreesByRepo: Record<string, unknown[]> = {}): void {
   mocks.storeState = {
     addRepoPath: mocks.addRepoPath,

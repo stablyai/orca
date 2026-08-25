@@ -747,15 +747,20 @@ function focusExistingWindow(): void {
   })
 }
 
+/**
+ * Hands a validated folder-launch intent to the renderer: pushed live when a
+ * window can receive it, otherwise queued for the mount-time drain endpoint.
+ */
 function deliverWorkspacePathLaunch(folderPath: string): void {
-  if (mainWindow && !mainWindow.isDestroyed()) {
+  // Why isLoading: a created-but-still-loading window has no listeners attached yet, so a push there would be lost.
+  if (mainWindow && !mainWindow.isDestroyed() && !mainWindow.webContents.isLoading()) {
     mainWindow.webContents.send('ui:openWorkspacePath', folderPath)
     return
   }
-  // Why: the renderer pulls queued intents on mount, so a launch that races window creation is not lost.
   workspacePathLaunchQueue.queue(folderPath)
 }
 
+/** Extracts the first existing-directory argument from launch argv and opens it as a project. */
 function openWorkspacePathFromArgv(argv: readonly string[]): void {
   const folderPath = extractWorkspacePathFromArgv(argv, { isPackaged: app.isPackaged })
   if (folderPath) {

@@ -23,10 +23,16 @@ describe('workspace path launch wiring', () => {
     expect(gateIndex).toBeGreaterThan(captureIndex)
   })
 
-  it('delivers to the live renderer first and queues only when no window can receive it', () => {
+  it('delivers to a fully loaded renderer first and queues while the window is still loading', () => {
     const deliverIndex = mainSource.indexOf("mainWindow.webContents.send('ui:openWorkspacePath'")
+    const isLoadingGuardIndex = mainSource.indexOf(
+      '!mainWindow.webContents.isLoading()',
+      mainSource.indexOf('function deliverWorkspacePathLaunch(')
+    )
     const queueIndex = mainSource.indexOf('workspacePathLaunchQueue.queue(folderPath)')
     expect(deliverIndex).toBeGreaterThan(-1)
+    expect(isLoadingGuardIndex).toBeGreaterThan(-1)
+    expect(isLoadingGuardIndex).toBeLessThan(deliverIndex)
     expect(queueIndex).toBeGreaterThan(deliverIndex)
   })
 
