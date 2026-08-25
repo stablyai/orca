@@ -1,4 +1,5 @@
 import { BulkActionBar } from '../commit/bulk-action-bar'
+import { SourceControlBranchSwitcher } from './branch-switcher'
 import { SourceControlHeaderToolbar } from './header-toolbar'
 import { SourceControlNotesShelf } from '../notes/notes-shelf'
 import { SourceControlPanelContent } from './panel-content'
@@ -12,6 +13,7 @@ export function SourceControlPanelReady(props: SourceControlPanelReadyProps) {
     activeGroupId,
     activeWorktreeId,
     branchLineTotal,
+    branchSwitch,
     branchSummary,
     bulkStagePaths,
     bulkUnstagePaths,
@@ -82,6 +84,14 @@ export function SourceControlPanelReady(props: SourceControlPanelReadyProps) {
           onExpandNotes={() => setDiffCommentsExpanded(true)}
           branchSummary={branchSummary}
           branchLineTotal={branchLineTotal}
+          branchSwitcher={
+            gitIdentityDisplay?.kind === 'branch' && branchSwitch.canSwitch ? (
+              <SourceControlBranchSwitcher
+                branchName={gitIdentityDisplay.branchName}
+                branchSwitch={branchSwitch}
+              />
+            ) : null
+          }
           compareBaseRef={compareBaseRef}
           headDisplay={gitIdentityDisplay}
           upstreamStatus={remoteStatus}

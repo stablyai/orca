@@ -11820,7 +11820,20 @@
             "c7d4e2f801": "Change base ref: {{value0}}",
             "f3a1b8c204": "upstream",
             "createPrIntentEmptyGeneratedBody": "Generated review details did not include a description. Retry Create PR.",
-            "createPrIntentGenerateDetailsFailed": "Could not generate review details. Retry Create PR."
+            "createPrIntentGenerateDetailsFailed": "Could not generate review details. Retry Create PR.",
+            "4ec1304f7b": "Create branch {{value0}}",
+            "96fb1f9512": "Invalid branch name",
+            "97b0560280": "current",
+            "419ab6fb4e": "Checked out in {{value0}}",
+            "e000af1035": "Current branch: {{value0}}. Activate to switch branch.",
+            "22f3ebc156": "Search or create branch…",
+            "55704e8f60": "Loading branches…",
+            "68f9e0ee45": "No matching branches",
+            "4bc4d3b0dc": "Created {{value0}}",
+            "c1e2e60a6b": "Switched to {{value0}}",
+            "ac1edbe604": "This host does not support creating branches. Update Orca on the remote host.",
+            "7da2448a29": "Create branch failed",
+            "f4b9a48c43": "Switch branch failed"
           },
           "SourceControlAgentActionDialog": {
             "8e856842d1": "Could not start the selected agent.",

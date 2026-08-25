@@ -23,6 +23,7 @@ import type { HostedReviewProvider } from '../../../shared/hosted-review'
 import type { ResolvedSourceControlAiGenerationParams } from '../../../shared/source-control-ai'
 import { getCommitMessageModelDiscoveryHostKeyForScope } from '../../../shared/commit-message-host-key'
 import type { GitHistoryOptions, GitHistoryResult } from '../../../shared/git-history'
+import type { GitLocalBranchListing } from '../../../shared/git-local-branches'
 import { REBASE_FROM_BASE_RPC_TIMEOUT_MS } from '../../../shared/git-rebase-source'
 import { getRepoIdFromWorktreeId, splitWorktreeIdForFilesystem } from '../../../shared/worktree/id'
 import { callRuntimeRpc, getActiveRuntimeTarget } from './runtime-rpc-client'
@@ -349,6 +350,66 @@ export async function abortRuntimeGitRebase(context: RuntimeGitContext): Promise
     'git.abortRebase',
     { worktree: toRuntimeWorktreeSelector(context.worktreeId) },
     { timeoutMs: 30_000 }
+  )
+}
+
+export async function listRuntimeGitLocalBranches(
+  context: RuntimeGitContext
+): Promise<GitLocalBranchListing> {
+  const target = getActiveRuntimeTarget(context.settings)
+  if (target.kind === 'local' || !context.worktreeId) {
+    return window.api.git.localBranches({
+      worktreePath: resolveLocalWorktreePath(context),
+      connectionId: context.connectionId
+    })
+  }
+  return callRuntimeRpc<GitLocalBranchListing>(
+    target,
+    'git.localBranches',
+    { worktree: toRuntimeWorktreeSelector(context.worktreeId) },
+    { timeoutMs: 15_000 }
+  )
+}
+
+export async function checkoutRuntimeGitBranch(
+  context: RuntimeGitContext,
+  branch: string
+): Promise<void> {
+  const target = getActiveRuntimeTarget(context.settings)
+  if (target.kind === 'local' || !context.worktreeId) {
+    await window.api.git.checkout({
+      worktreePath: resolveLocalWorktreePath(context),
+      branch,
+      connectionId: context.connectionId
+    })
+    return
+  }
+  await callRuntimeRpc(
+    target,
+    'git.checkout',
+    { worktree: toRuntimeWorktreeSelector(context.worktreeId), branch },
+    { timeoutMs: 60_000 }
+  )
+}
+
+export async function createRuntimeGitBranch(
+  context: RuntimeGitContext,
+  branch: string
+): Promise<void> {
+  const target = getActiveRuntimeTarget(context.settings)
+  if (target.kind === 'local' || !context.worktreeId) {
+    await window.api.git.createBranch({
+      worktreePath: resolveLocalWorktreePath(context),
+      branch,
+      connectionId: context.connectionId
+    })
+    return
+  }
+  await callRuntimeRpc(
+    target,
+    'git.createBranch',
+    { worktree: toRuntimeWorktreeSelector(context.worktreeId), branch },
+    { timeoutMs: 60_000 }
   )
 }
 

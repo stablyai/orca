@@ -9,6 +9,16 @@ export type GitOperationApi = {
   appendGitignore: (args: { worktreePath: string; folderName: string }) => Promise<boolean>
   abortMerge: (args: { worktreePath: string; connectionId?: string }) => Promise<void>
   abortRebase: (args: { worktreePath: string; connectionId?: string }) => Promise<void>
+  checkout: (args: {
+    worktreePath: string
+    branch: string
+    connectionId?: string
+  }) => Promise<void>
+  createBranch: (args: {
+    worktreePath: string
+    branch: string
+    connectionId?: string
+  }) => Promise<void>
   fetch: (args: {
     worktreePath: string
     connectionId?: string

@@ -13,6 +13,7 @@ import type {
 import type { RemoveWorktreeResult } from '../../shared/worktree/create-types'
 import type { GitPushTarget, GitWorktreeInfo } from '../../shared/worktree/types'
 import type { GitHistoryOptions, GitHistoryResult } from '../../shared/git-history'
+import type { GitLocalBranchListing } from '../../shared/git-local-branches'
 import type { CommitMessageDraftContext } from '../../shared/commit-message-generation'
 import type { GitProviderStatusOptions } from './git-provider-status-options'
 
@@ -45,7 +46,8 @@ export type IGitProvider = {
   abortMerge(worktreePath: string): Promise<void>
   abortRebase(worktreePath: string): Promise<void>
   checkoutBranch(worktreePath: string, branch: string): Promise<void>
-  listLocalBranches(worktreePath: string): Promise<{ current: string | null; branches: string[] }>
+  createBranch(worktreePath: string, branch: string): Promise<void>
+  listLocalBranches(worktreePath: string): Promise<GitLocalBranchListing>
   getBranchCompare(worktreePath: string, baseRef: string): Promise<GitBranchCompareResult>
   getCommitCompare(worktreePath: string, commitId: string): Promise<GitCommitCompareResult>
   getUpstreamStatus(worktreePath: string, pushTarget?: GitPushTarget): Promise<GitUpstreamStatus>

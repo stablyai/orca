@@ -3,6 +3,7 @@ import type {
   GitCommitCompareResult
 } from '../../shared/git-diff-compare-types'
 import type { GitHistoryOptions, GitHistoryResult } from '../../shared/git-history'
+import type { GitLocalBranchListing } from '../../shared/git-local-branches'
 import type { GitConflictOperation } from '../../shared/git-status-types'
 import { SshGitNoninteractiveProvider } from './ssh-git-noninteractive-provider'
 
@@ -97,13 +98,16 @@ export class SshGitWorkingTreeProvider extends SshGitNoninteractiveProvider {
     })
   }
 
-  async listLocalBranches(
-    worktreePath: string
-  ): Promise<{ current: string | null; branches: string[] }> {
-    return (await this.mux.request('git.localBranches', { worktreePath })) as {
-      current: string | null
-      branches: string[]
-    }
+  async createBranch(worktreePath: string, branch: string): Promise<void> {
+    await this.runWithGitReadInvalidation(async () => {
+      await this.mux.request('git.createBranch', { worktreePath, branch })
+    })
+  }
+
+  async listLocalBranches(worktreePath: string): Promise<GitLocalBranchListing> {
+    return (await this.mux.request('git.localBranches', {
+      worktreePath
+    })) as GitLocalBranchListing
   }
 
   async getBranchCompare(worktreePath: string, baseRef: string): Promise<GitBranchCompareResult> {

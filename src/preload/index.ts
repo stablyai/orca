@@ -3525,6 +3525,18 @@ const api = {
       ipcRenderer.invoke('git:abortMerge', args),
     abortRebase: (args: { worktreePath: string; connectionId?: string }): Promise<void> =>
       ipcRenderer.invoke('git:abortRebase', args),
+    localBranches: (args: { worktreePath: string; connectionId?: string }): Promise<unknown> =>
+      ipcRenderer.invoke('git:localBranches', args),
+    checkout: (args: {
+      worktreePath: string
+      branch: string
+      connectionId?: string
+    }): Promise<void> => ipcRenderer.invoke('git:checkout', args),
+    createBranch: (args: {
+      worktreePath: string
+      branch: string
+      connectionId?: string
+    }): Promise<void> => ipcRenderer.invoke('git:createBranch', args),
     diff: (args: {
       worktreePath: string
       filePath: string

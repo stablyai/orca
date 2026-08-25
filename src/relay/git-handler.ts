@@ -13,6 +13,11 @@ import {
 } from './git-handler-utils'
 import { parseNumstat } from '../shared/git-uncommitted-line-stats'
 import {
+  LOCAL_BRANCH_LISTING_ARGV,
+  parseLocalBranchListing
+} from '../shared/git-local-branches'
+import { assertValidGitBranchName } from '../shared/git-branch-name'
+import {
   computeDiff,
   branchCompare as branchCompareOp,
   branchDiffEntries,
@@ -273,6 +278,7 @@ export class GitHandler {
     this.dispatcher.onRequest('git.abortRebase', (p) => this.abortRebase(p))
     this.dispatcher.onRequest('git.checkout', (p) => this.checkout(p))
     this.dispatcher.onRequest('git.localBranches', (p) => this.localBranches(p))
+    this.dispatcher.onRequest('git.createBranch', (p) => this.createBranch(p))
     this.dispatcher.onRequest('git.discard', (p) => this.discard(p))
     this.dispatcher.onRequest('git.bulkDiscard', (p) => this.bulkDiscard(p))
     this.dispatcher.onRequest('git.conflictOperation', (p) => this.conflictOperation(p))
@@ -661,10 +667,11 @@ export class GitHandler {
     this.clearGitMutationReadCaches()
     const worktreePath = params.worktreePath as string
     const branch = params.branch as string
-    // Defense-in-depth: reject `-`-prefixed branch tokens to block flag injection (this relay entrypoint is reachable independently of the RPC schema).
-    if (typeof branch !== 'string' || branch.length === 0 || branch.startsWith('-')) {
+    // Defense-in-depth: this relay entrypoint is reachable independently of the RPC schema.
+    if (typeof branch !== 'string') {
       throw new Error('invalid_branch_name')
     }
+    assertValidGitBranchName(branch)
     try {
       await this.git(['checkout', branch, '--'], worktreePath)
       return { ok: true as const, branch }
@@ -673,29 +680,26 @@ export class GitHandler {
     }
   }
 
+  private async createBranch(params: Record<string, unknown>) {
+    this.clearGitMutationReadCaches()
+    const worktreePath = params.worktreePath as string
+    const branch = params.branch as string
+    if (typeof branch !== 'string') {
+      throw new Error('invalid_branch_name')
+    }
+    assertValidGitBranchName(branch)
+    try {
+      await this.git(['checkout', '-b', branch, '--'], worktreePath)
+      return { ok: true as const, branch }
+    } finally {
+      this.clearGitMutationReadCaches()
+    }
+  }
+
   private async localBranches(params: Record<string, unknown>) {
     const worktreePath = params.worktreePath as string
-    const { stdout } = await this.git(
-      ['for-each-ref', '--format=%(HEAD)%09%(refname:short)', 'refs/heads/'],
-      worktreePath
-    )
-    let current: string | null = null
-    const branches: string[] = []
-    for (const line of stdout.split('\n')) {
-      if (line.length === 0) {
-        continue
-      }
-      const [marker, name] = line.split('\t')
-      if (!name) {
-        continue
-      }
-      if (marker === '*') {
-        current = name
-      }
-      branches.push(name)
-    }
-    branches.sort((a, b) => (a === current ? -1 : b === current ? 1 : 0))
-    return { current, branches }
+    const { stdout } = await this.git([...LOCAL_BRANCH_LISTING_ARGV], worktreePath)
+    return parseLocalBranchListing(stdout)
   }
 
   private normalizeGitPathForCompare(filePath: string): string {

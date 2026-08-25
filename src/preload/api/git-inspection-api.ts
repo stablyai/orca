@@ -11,6 +11,7 @@ import type {
 } from '../../shared/git-status-types'
 import type { GitPushTarget } from '../../shared/worktree/types'
 import type { GitHistoryOptions, GitHistoryResult } from '../../shared/git-history'
+import type { GitLocalBranchListing } from '../../shared/git-local-branches'
 import type {
   CommitMessageAgentCapability,
   CommitMessageModelCapability
@@ -55,6 +56,10 @@ export type GitInspectionApi = {
     worktreePath: string
     connectionId?: string
   }) => Promise<GitConflictOperation>
+  localBranches: (args: {
+    worktreePath: string
+    connectionId?: string
+  }) => Promise<GitLocalBranchListing>
   diff: (args: {
     worktreePath: string
     filePath: string
