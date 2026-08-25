@@ -72,8 +72,6 @@ inline src/renderer/src/components/WorktreeJumpPalette.tsx
 inline src/renderer/src/components/activity/ActivityPrototypePage.tsx
 inline src/renderer/src/components/automations/AutomationsPage.tsx
 inline src/renderer/src/components/editor/CombinedDiffViewer.tsx
-inline src/renderer/src/components/editor/EditorContent.tsx
-inline src/renderer/src/components/editor/IpynbViewer.tsx
 inline src/renderer/src/components/editor/MarkdownPreview.tsx
 inline src/renderer/src/components/feature-wall/EditorAnimatedVisual.tsx
 inline src/renderer/src/components/floating-terminal/FloatingTerminalPanel.tsx
@@ -96,7 +94,6 @@ inline src/renderer/src/components/terminal-pane/pty-transport.ts
 inline src/renderer/src/components/terminal-pane/remote-runtime-pty-transport.ts
 inline src/renderer/src/components/terminal-pane/use-terminal-pane-lifecycle.ts
 inline src/renderer/src/hooks/useAutomationDispatchEvents.ts
-inline src/renderer/src/hooks/useEditorExternalWatch.ts
 inline src/renderer/src/hooks/useSettingsNavigationMetadata.ts
 inline src/renderer/src/lib/pane-manager/pane-terminal-output-scheduler.ts
 inline src/renderer/src/lib/pane-manager/pane-tree-ops.ts
