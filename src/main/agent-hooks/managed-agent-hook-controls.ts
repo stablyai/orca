@@ -5,7 +5,6 @@ import {
 } from '../../shared/managed-agent-hook-targets'
 import { normalizeDisabledTuiAgents } from '../../shared/tui-agent-selection'
 import type { GlobalSettings } from '../../shared/global-settings-types'
-import type { ManagedAgentHookSessionLifecycle } from './managed-agent-hook-registry'
 import { detectLocalManagedAgentCliPresence } from './local-agent-cli-presence'
 import {
   MANAGED_AGENT_HOOK_ASYNC_REMOVERS,
@@ -15,7 +14,8 @@ import {
   MANAGED_AGENT_HOOK_SESSION_CLAIMERS,
   MANAGED_AGENT_HOOK_SESSION_RECONCILERS,
   MANAGED_AGENT_HOOK_STATUS_READERS,
-  type ManagedAgentHookInstaller
+  type ManagedAgentHookInstaller,
+  type ManagedAgentHookSessionLifecycle
 } from './managed-agent-hook-registry'
 
 export { MANAGED_AGENT_HOOK_INSTALLERS } from './managed-agent-hook-registry'
