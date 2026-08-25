@@ -15,7 +15,7 @@
 # host-level flag like --status / --list that the guest-command API cannot
 # express because it always prepends --exec.
 main/agent-hooks/wsl-hook-relay-launch.ts
-main/claude-accounts/service.ts
+main/claude-accounts/claude-command-process.ts
 main/codex-accounts/runtime-home-service.ts
 main/codex-accounts/service.ts
 main/codex/codex-state-db-backfill-recovery.ts
