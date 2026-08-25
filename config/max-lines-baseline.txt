@@ -27,14 +27,11 @@ inline src/main/daemon/pty-subprocess.ts
 inline src/main/git/runner.ts
 inline src/main/git/status.ts
 inline src/main/git/worktree.ts
-inline src/main/github/pr-refresh-coordinator.ts
 inline src/main/github/project-view.ts
 inline src/main/github/project-view/mutations.ts
-inline src/main/github/work-item-details.ts
 inline src/main/index.ts
 inline src/main/ipc/filesystem-watcher.ts
 inline src/main/ipc/filesystem.ts
-inline src/main/ipc/github.ts
 inline src/main/ipc/repos.ts
 inline src/main/ipc/ssh.ts
 inline src/main/ipc/worktree-remote.ts
