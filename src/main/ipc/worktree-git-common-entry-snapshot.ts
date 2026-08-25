@@ -33,20 +33,24 @@ export type GitCommonEntrySnapshot = {
   indexSignature: string | null
   headLogSignature: string | null
 }
+export type GitCommonIoRunner = <T>(operation: () => Promise<T>) => Promise<T>
+
+const runGitCommonIoDirectly: GitCommonIoRunner = (operation) => operation()
 
 export async function snapshotGitCommonEntry(
   entryPath: string,
   previous: GitCommonEntrySnapshot | undefined,
-  forceFullScan: boolean
+  forceFullScan: boolean,
+  runIo: GitCommonIoRunner = runGitCommonIoDirectly
 ): Promise<GitCommonEntrySnapshot> {
   // Structural leaves change in place every tick; only index uses the entry-dir gate.
   const structuralSignatures = new Map<string, string>()
   const [nextDirSignature, headLogSignature] = await Promise.all([
-    gitCommonDirectorySignature(entryPath),
-    gitCommonFileSignature(join(entryPath, HEAD_LOG_FILE)),
+    runIo(() => gitCommonDirectorySignature(entryPath)),
+    runIo(() => gitCommonFileSignature(join(entryPath, HEAD_LOG_FILE))),
     Promise.all(
       STRUCTURAL_METADATA_FILES.map(async (name) => {
-        const signature = await gitCommonFileSignature(join(entryPath, name))
+        const signature = await runIo(() => gitCommonFileSignature(join(entryPath, name)))
         if (signature !== null) {
           structuralSignatures.set(name, signature)
         }
@@ -65,7 +69,7 @@ export async function snapshotGitCommonEntry(
   }
   const shouldReadIndex = forceFullScan || !previous || previous.dirSignature !== nextDirSignature
   const indexSignature = shouldReadIndex
-    ? await gitCommonFileSignature(join(entryPath, INDEX_FILE))
+    ? await runIo(() => gitCommonFileSignature(join(entryPath, INDEX_FILE)))
     : previous.indexSignature
   return {
     dirSignature: nextDirSignature,

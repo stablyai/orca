@@ -16,6 +16,11 @@ import { notifyReposChanged } from './repos'
 import { notifyWorktreesChanged } from './worktree-remote'
 import { setFolderRepoGitUpgradeWakeListener } from './folder-repo-git-upgrade-wake'
 import {
+  gitMetadataPollScheduler,
+  runGitMetadataFilesystemIo,
+  type GitMetadataPollSchedule
+} from './git-metadata-poll-scheduler'
+import {
   createWorktreePollerWindowVisibility,
   WORKTREE_BASE_BACKSTOP_TICKS,
   WORKTREE_BASE_POLL_INTERVAL_MS,
@@ -31,11 +36,9 @@ type UpgradeWatch = {
   mainWindow: BrowserWindow
   hasCandidates: boolean
   visibility: WorktreePollerWindowVisibility
-  unsubscribeVisibility: () => void
+  schedule: GitMetadataPollSchedule | null
   pollIntervalMs: number
   idlePollIntervalMs: number
-  timer: ReturnType<typeof setTimeout> | null
-  parkedWhileHidden: boolean
   disposed: boolean
 }
 
@@ -74,7 +77,7 @@ function hasExtraFolderWorkspaces(store: Store, repo: Repo): boolean {
 /** Identity of the `.git` entry, or null when there is none. */
 async function readGitMarkerSignature(repoPath: string): Promise<string | null> {
   try {
-    const marker = await stat(join(repoPath, '.git'))
+    const marker = await runGitMetadataFilesystemIo(() => stat(join(repoPath, '.git')))
     return `${marker.mtimeMs}:${marker.ctimeMs}:${marker.ino}`
   } catch {
     return null
@@ -176,43 +179,13 @@ async function pollOnce(watch: UpgradeWatch): Promise<void> {
   }
 }
 
-function scheduleTick(watch: UpgradeWatch): void {
-  const delay = watch.hasCandidates ? watch.pollIntervalMs : watch.idlePollIntervalMs
-  watch.timer = setTimeout(() => void runTick(watch), delay)
-  watch.timer.unref?.()
-}
-
 function wakeWatch(watch: UpgradeWatch): void {
   if (watch.disposed) {
     return
   }
   watch.hasCandidates = true
-  if (!watch.timer) {
-    return
-  }
-  clearTimeout(watch.timer)
-  watch.timer = null
-  scheduleTick(watch)
-}
-
-async function runTick(watch: UpgradeWatch): Promise<void> {
-  watch.timer = null
-  if (watch.disposed) {
-    return
-  }
-  if (!watch.visibility.isWindowVisible()) {
-    // Parked: the visibility listener resumes the loop, so no timer is rescheduled.
-    watch.parkedWhileHidden = true
-    return
-  }
-  try {
-    await pollOnce(watch)
-  } catch {
-    // Transient fs error: retry on the next tick.
-  }
-  if (!watch.disposed) {
-    scheduleTick(watch)
-  }
+  watch.schedule?.setIntervalMs(watch.pollIntervalMs)
+  watch.schedule?.reschedule(watch.pollIntervalMs)
 }
 
 /**
@@ -243,23 +216,29 @@ export function startFolderRepoGitUpgradeWatch(
     // path; the tick itself settles the cadence once it has seen the repo list.
     hasCandidates: true,
     visibility: createWorktreePollerWindowVisibility(() => watch.mainWindow),
-    unsubscribeVisibility: () => {},
+    schedule: null,
     pollIntervalMs: options.pollIntervalMs ?? WORKTREE_BASE_POLL_INTERVAL_MS,
     idlePollIntervalMs: options.idlePollIntervalMs ?? IDLE_POLL_INTERVAL_MS,
-    timer: null,
-    parkedWhileHidden: false,
     disposed: false
   }
   activeWatch = watch
   setFolderRepoGitUpgradeWakeListener(() => wakeWatch(watch))
-  watch.unsubscribeVisibility = watch.visibility.onWindowBecameVisible(() => {
-    if (watch.disposed || !watch.parkedWhileHidden) {
-      return
+  watch.schedule = gitMetadataPollScheduler.schedule({
+    key: 'folder-repo-git-upgrade',
+    intervalMs: watch.pollIntervalMs,
+    visibility: watch.visibility,
+    run: async () => {
+      try {
+        await pollOnce(watch)
+      } catch {
+        // Transient fs error: retry on the next tick.
+      } finally {
+        watch.schedule?.setIntervalMs(
+          watch.hasCandidates ? watch.pollIntervalMs : watch.idlePollIntervalMs
+        )
+      }
     }
-    watch.parkedWhileHidden = false
-    void runTick(watch)
   })
-  scheduleTick(watch)
 }
 
 export function stopFolderRepoGitUpgradeWatch(): void {
@@ -271,9 +250,6 @@ export function stopFolderRepoGitUpgradeWatch(): void {
   watch.disposed = true
   setFolderRepoGitUpgradeWakeListener(null)
   rejectedMarkers.clear()
-  if (watch.timer) {
-    clearTimeout(watch.timer)
-    watch.timer = null
-  }
-  watch.unsubscribeVisibility()
+  watch.schedule?.unsubscribe()
+  watch.schedule = null
 }

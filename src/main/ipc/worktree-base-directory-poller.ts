@@ -1,6 +1,11 @@
 import { readdir, stat } from 'node:fs/promises'
 import { join } from 'node:path'
 import { normalizeRuntimePathForComparison } from '../../shared/cross-platform-path'
+import {
+  gitMetadataPollScheduler,
+  runGitMetadataFilesystemIo,
+  type GitMetadataWindowVisibility
+} from './git-metadata-poll-scheduler'
 import { isMainWindowVisible, onMainWindowBecameVisible } from '../window/main-window-visibility'
 import type {
   WorktreeBaseRepoWatchConfig,
@@ -12,10 +17,7 @@ export type WorktreeBasePollEvent = { type: 'create' | 'update' | 'delete'; path
 
 export type WorktreeBaseSubscription = { unsubscribe: () => Promise<void> }
 
-export type WorktreePollerWindowVisibility = {
-  isWindowVisible: () => boolean
-  onWindowBecameVisible: (listener: () => void) => () => void
-}
+export type WorktreePollerWindowVisibility = GitMetadataWindowVisibility
 
 type WorktreePollerWindow = {
   isDestroyed: () => boolean
@@ -98,7 +100,7 @@ function statSignature(s: { mtimeMs: number; ctimeMs: number; ino: number }): st
 
 async function dirSignature(path: string): Promise<string> {
   try {
-    return statSignature(await stat(path))
+    return statSignature(await runGitMetadataFilesystemIo(() => stat(path)))
   } catch {
     return 'missing'
   }
@@ -106,7 +108,7 @@ async function dirSignature(path: string): Promise<string> {
 
 async function hasGitMarker(dir: string): Promise<boolean> {
   try {
-    await stat(join(dir, '.git'))
+    await runGitMetadataFilesystemIo(() => stat(join(dir, '.git')))
     return true
   } catch {
     return false
@@ -146,7 +148,7 @@ async function snapshotBase(
 
   let rootEntries
   try {
-    rootEntries = await readdir(rootPath, { withFileTypes: true })
+    rootEntries = await runGitMetadataFilesystemIo(() => readdir(rootPath, { withFileTypes: true }))
   } catch {
     // Root vanished: an empty snapshot diffs into delete events for every
     // previously-known worktree dir, matching the old watcher's error path.
@@ -167,7 +169,9 @@ async function snapshotBase(
       gateSignatures.push(await dirSignature(entryPath))
       let subEntries
       try {
-        subEntries = await readdir(entryPath, { withFileTypes: true })
+        subEntries = await runGitMetadataFilesystemIo(() =>
+          readdir(entryPath, { withFileTypes: true })
+        )
       } catch {
         subEntries = []
       }
@@ -209,11 +213,8 @@ async function startBasePoller(
   options: WorktreeBasePollerOptions
 ): Promise<WorktreeBaseSubscription> {
   let disposed = false
-  let ticking = false
   let tickCount = 0
   let snapshot = await snapshotBase(target.path, getRepos())
-  let timer: ReturnType<typeof setTimeout> | null = null
-  let parkedWhileHidden = false
   const pendingMarkerMaxTicks = options.pendingMarkerMaxTicks ?? PENDING_MARKER_MAX_TICKS
   // dir → first probe tick; null means backstop scans only
   const markerProbeStartedAt = new Map<string, number | null>()
@@ -292,62 +293,23 @@ async function startBasePoller(
     }
   }
 
-  const tick = async (forceFullScan = false): Promise<void> => {
-    timer = null
-    if (disposed) {
-      return
+  const schedule = gitMetadataPollScheduler.schedule({
+    key: `worktree-base:${target.key}`,
+    intervalMs: pollIntervalMs,
+    visibility,
+    run: async ({ isVisibilityCatchUp }) => {
+      try {
+        await poll(isVisibilityCatchUp)
+      } catch {
+        // Transient fs error: keep the previous snapshot and retry next tick.
+      }
     }
-    if (!visibility.isWindowVisible()) {
-      parkedWhileHidden = true
-      return
-    }
-    if (ticking) {
-      return
-    }
-    ticking = true
-    // Why: measure from tick start so the cadence is start-to-start (like the old setInterval), not
-    // gap-after-completion — otherwise each visible refresh lands a full scan-duration late every tick.
-    const startedAt = Date.now()
-    try {
-      await poll(forceFullScan)
-    } catch {
-      // Transient fs error: keep the previous snapshot and retry next tick.
-    } finally {
-      ticking = false
-    }
-    if (!disposed) {
-      // Why: clamp to [0, pollIntervalMs]. Date.now() is not monotonic — a backward wall-clock jump (NTP) would
-      // otherwise make elapsed negative and push the next tick out by the adjustment (suppressing refreshes for
-      // minutes); the upper clamp caps the wait at one interval, the lower clamp keeps a long scan from going negative.
-      const nextDelay = Math.max(
-        0,
-        Math.min(pollIntervalMs, pollIntervalMs - (Date.now() - startedAt))
-      )
-      timer = setTimeout(() => void tick(), nextDelay)
-      timer.unref?.()
-    }
-  }
-
-  const unsubscribeVisibility = visibility.onWindowBecameVisible(() => {
-    if (disposed || !parkedWhileHidden) {
-      return
-    }
-    parkedWhileHidden = false
-    // Why: the ordinary dir-signature gate can miss same-granule changes made
-    // while hidden; resume must diff a fresh full snapshot against the baseline.
-    void tick(true)
   })
-
-  timer = setTimeout(() => void tick(), pollIntervalMs)
-  timer.unref?.()
 
   return {
     unsubscribe: async () => {
       disposed = true
-      if (timer) {
-        clearTimeout(timer)
-      }
-      unsubscribeVisibility()
+      schedule.unsubscribe()
     }
   }
 }
