@@ -246,6 +246,9 @@ export type RuntimeMobileSessionTerminalTab = {
   type: 'terminal'
   id: string
   title: string
+  /** Explicit desktop tab rename. Main keeps this ahead of later PTY/OSC
+   *  title ticks when projecting the mobile session tab label. */
+  customTitle?: string | null
   quickCommandLabel?: string | null
   parentTabId: string
   leafId: string
