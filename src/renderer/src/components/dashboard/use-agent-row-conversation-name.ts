@@ -9,6 +9,7 @@ type WorktreeTabs = NonNullable<AppState['tabsByWorktree'][string]>
 
 const tabIndexByTabs = new WeakMap<WorktreeTabs, ReadonlyMap<string, WorktreeTabs[number]>>()
 
+/** Looks a tab up in the per-array index, building the index on first use. */
 function getIndexedTab(
   tabs: WorktreeTabs | undefined,
   tabId: string

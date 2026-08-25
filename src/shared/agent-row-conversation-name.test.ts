@@ -4,6 +4,7 @@ import {
   type ConversationNameTab
 } from './agent-row-conversation-name'
 
+/** A conversation-name tab with every source empty unless a test overrides it. */
 function makeTab(overrides: Partial<ConversationNameTab> = {}): ConversationNameTab {
   return { customTitle: null, title: '', ...overrides }
 }

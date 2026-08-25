@@ -266,6 +266,7 @@ describe('useAgentRowConversationName', () => {
   })
 
   describe('AI Vault session titles', () => {
+    /** A Codex row whose entry optionally carries a provider session id. */
     function codexAgent(providerSessionId?: string): DashboardAgentRow {
       return makeAgent({
         agentType: 'codex',
@@ -298,6 +299,7 @@ describe('useAgentRowConversationName', () => {
     })
 
     it('updates when the synced title changes on the live tab', () => {
+      /** Points the live store tab's synced AI Vault title at a new name. */
       const writeStore = (title: string): void => {
         storeState.current = {
           settings: {},
