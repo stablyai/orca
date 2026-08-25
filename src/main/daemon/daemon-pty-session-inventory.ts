@@ -21,14 +21,27 @@ export abstract class DaemonPtySessionInventory extends DaemonPtyProcessInspecti
     // be reconciled away below.
     const preRequestActiveIds = new Set(this.activeSessionIds)
     try {
+      // Why retry: this inventory is what destructive teardown consults, and a
+      // dead host pipe surfaced as `connect ENOENT \\?\\pipe\\orca-terminal-host-...`
+      // that failed worktree removal until the app was restarted (#10087). Spawn
+      // already recovered from exactly this; inventory did not, so the one path
+      // that must not get stuck was the only one that could not heal.
+      //
+      // Why the request is inside too: a host that dies between connect and
+      // listSessions throws the same daemon-gone error, so retrying only the
+      // connect would still fail. The reconciliation below stays outside --
+      // retrying that would double-apply it.
+      //
       // Why: connect + listSessions share the caller's one absolute deadline so a
       // wedged handshake cannot burn the whole teardown budget before the list issues.
-      await this.ensureConnected(opts?.deadlineMs)
-      const result = await this.client.request<ListSessionsResult>(
-        'listSessions',
-        undefined,
-        remainingDaemonRequestTimeoutMs(opts?.deadlineMs)
-      )
+      const result = await this.withDaemonRetry(async () => {
+        await this.ensureConnected(opts?.deadlineMs)
+        return this.client.request<ListSessionsResult>(
+          'listSessions',
+          undefined,
+          remainingDaemonRequestTimeoutMs(opts?.deadlineMs)
+        )
+      })
       const admission = new PtyProcessListAdmission()
       const processes: PtyProcessInfo[] = []
       const aliveSessionIds = new Set<string>()
