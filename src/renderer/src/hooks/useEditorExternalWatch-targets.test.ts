@@ -40,12 +40,13 @@ describe('getEditorExternalWatchTargets', () => {
 
   const makeOpenFile = (
     worktreeId: string,
-    isDirty = false
+    isDirty = false,
+    filePath = `${worktreeId}/notes.md`
   ): EditorExternalWatchTargetState['openFiles'][number] =>
     ({
       id: `${worktreeId}-file`,
       worktreeId,
-      filePath: `/repo/${worktreeId}/notes.md`,
+      filePath,
       relativePath: 'notes.md',
       language: 'markdown',
       mode: 'edit',
@@ -83,14 +84,105 @@ describe('getEditorExternalWatchTargets', () => {
           } as EditorExternalWatchTargetState['settings'])
   })
 
+
+  it('watches the containing directory of an open file outside the worktree root (#15612)', () => {
+    const repo = makeRepo('repo-scratch')
+    const worktree = makeWorktree(repo.id, 'wt-scratch')
+    const scratchFile = {
+      ...makeOpenFile(worktree.id, false, '/tmp/claude-scratch/plan.md')
+    }
+
+    const { targets } = getEditorExternalWatchTargets(
+      makeState({ repo, worktree, openFiles: [scratchFile] })
+    )
+
+    expect(targets).toEqual([
+      {
+        worktreeId: 'wt-scratch',
+        worktreePath: '/repo-scratch/worktree',
+        connectionId: undefined,
+        runtimeEnvironmentId: null
+      },
+      {
+        worktreeId: 'wt-scratch',
+        worktreePath: '/tmp/claude-scratch',
+        connectionId: undefined,
+        runtimeEnvironmentId: null
+      }
+    ])
+  })
+
+  it('deduplicates out-of-root directory watches for files sharing a directory', () => {
+    const repo = makeRepo('repo-dedupe')
+    const worktree = makeWorktree(repo.id, 'wt-dedupe')
+    const openFiles = [
+      makeOpenFile(worktree.id, false, '/tmp/agent-docs/plan.md'),
+      { ...makeOpenFile(worktree.id, false, '/tmp/agent-docs/report.md'), id: 'report-file' }
+    ]
+
+    const { targets } = getEditorExternalWatchTargets(makeState({ repo, worktree, openFiles }))
+
+    expect(targets.filter((target) => target.worktreePath === '/tmp/agent-docs')).toHaveLength(1)
+  })
+
+  it('does not watch a directory that contains the worktree root', () => {
+    const repo = makeRepo('repo-parent')
+    const worktree = makeWorktree(repo.id, 'wt-parent')
+    // A sibling of the worktree root: its containing directory ALSO contains the root.
+    const siblingFile = makeOpenFile(worktree.id, false, '/repo-parent/notes.md')
+
+    const { targets } = getEditorExternalWatchTargets(
+      makeState({ repo, worktree, openFiles: [siblingFile] })
+    )
+
+    expect(targets).toEqual([
+      {
+        worktreeId: 'wt-parent',
+        worktreePath: '/repo-parent/worktree',
+        connectionId: undefined,
+        runtimeEnvironmentId: null
+      }
+    ])
+  })
+
+  it('skips files owned by a different SSH target', () => {
+    const repo = makeRepo('repo-ssh-external')
+    const worktree = makeWorktree(repo.id, 'wt-ssh-external')
+    const externalFile = {
+      ...makeOpenFile(worktree.id, false, '/remote-scratch/plan.md'),
+      externalSshTargetId: 'ssh-other'
+    }
+
+    const { targets } = getEditorExternalWatchTargets(
+      makeState({ repo, worktree, openFiles: [externalFile] })
+    )
+
+    expect(targets).toHaveLength(1)
+    expect(targets[0].worktreePath).toBe('/repo-ssh-external/worktree')
+  })
+
+  it('bounds the number of out-of-root directory watches', () => {
+    const repo = makeRepo('repo-many')
+    const worktree = makeWorktree(repo.id, 'wt-many')
+    const openFiles = Array.from({ length: 12 }, (_, i) => ({
+      ...makeOpenFile(worktree.id, false, `/tmp/dir-${i}/file-${i}.md`),
+      id: `file-${i}`
+    }))
+
+    const { targets } = getEditorExternalWatchTargets(makeState({ repo, worktree, openFiles }))
+
+    const dirTargets = targets.filter((target) => target.worktreePath.startsWith('/tmp/dir-'))
+    expect(dirTargets).toHaveLength(8)
+  })
+
   it('preserves the snapshot when open-file metadata changes without changing watched roots', () => {
     const repo = makeRepo('repo-1')
     const worktree = makeWorktree(repo.id, 'wt-1')
     const first = getEditorExternalWatchTargets(
-      makeState({ repo, worktree, openFiles: [makeOpenFile(worktree.id, false)] })
+      makeState({ repo, worktree, openFiles: [makeOpenFile(worktree.id, false, '/repo-1/worktree/notes.md')] })
     )
     const second = getEditorExternalWatchTargets(
-      makeState({ repo, worktree, openFiles: [makeOpenFile(worktree.id, true)] })
+      makeState({ repo, worktree, openFiles: [makeOpenFile(worktree.id, true, '/repo-1/worktree/notes.md')] })
     )
 
     expect(second).toBe(first)
@@ -109,7 +201,7 @@ describe('getEditorExternalWatchTargets', () => {
     const worktree = makeWorktree(repo.id, 'wt-local-drive')
     worktree.path = 'C:\\repo'
     worktree.hostId = 'local'
-    const state = makeState({ repo, worktree, openFiles: [makeOpenFile(worktree.id)] })
+    const state = makeState({ repo, worktree, openFiles: [makeOpenFile(worktree.id, false, 'C:' + String.fromCharCode(92) + 'repo' + String.fromCharCode(92) + 'notes.md')] })
     state.repos = [makeRepo(repo.id, 'ssh-1', 'ssh:ssh-1'), repo]
 
     expect(getEditorExternalWatchTargets(state).targets).toEqual([
@@ -128,7 +220,7 @@ describe('getEditorExternalWatchTargets', () => {
     const worktree = makeWorktree(repo.id, 'wt-unresolved')
     worktree.path = 'C:\\repo'
     worktree.hostId = 'local'
-    const state = makeState({ repo, worktree, openFiles: [makeOpenFile(worktree.id)] })
+    const state = makeState({ repo, worktree, openFiles: [makeOpenFile(worktree.id, false, 'C:' + String.fromCharCode(92) + 'repo' + String.fromCharCode(92) + 'notes.md')] })
     state.repos = []
 
     expect(getEditorExternalWatchTargets(state).targets).toEqual([
@@ -155,7 +247,7 @@ describe('getEditorExternalWatchTargets', () => {
       }
 
       const target = getEditorExternalWatchTargets(
-        makeState({ repo, worktree, openFiles: [makeOpenFile(worktree.id)] })
+        makeState({ repo, worktree, openFiles: [makeOpenFile(worktree.id, false, 'C:' + String.fromCharCode(92) + 'repo' + String.fromCharCode(92) + 'notes.md')] })
       ).targets[0]
 
       expect(target).not.toHaveProperty('allowLocalWindowsWslAliases')
@@ -177,7 +269,7 @@ describe('getEditorExternalWatchTargets', () => {
       }
 
       const target = getEditorExternalWatchTargets(
-        makeState({ repo, worktree, openFiles: [makeOpenFile(worktree.id)] })
+        makeState({ repo, worktree, openFiles: [makeOpenFile(worktree.id, false, 'C:' + String.fromCharCode(92) + 'repo' + String.fromCharCode(92) + 'notes.md')] })
       ).targets[0]
 
       expect(target).not.toHaveProperty('allowLocalWindowsWslAliases')
@@ -192,7 +284,7 @@ describe('getEditorExternalWatchTargets', () => {
     const state = makeState({
       repo,
       worktree,
-      openFiles: [makeOpenFile(workspaceKey)]
+      openFiles: [makeOpenFile(workspaceKey, false, 'C:' + String.fromCharCode(92) + 'folder' + String.fromCharCode(92) + 'notes.md')]
     })
     state.folderWorkspaces = [
       {
@@ -234,7 +326,7 @@ describe('getEditorExternalWatchTargets', () => {
       const state = makeState({
         repo,
         worktree,
-        openFiles: [makeOpenFile(workspaceKey)]
+        openFiles: [makeOpenFile(workspaceKey, false, 'C:' + String.fromCharCode(92) + 'folder' + String.fromCharCode(92) + 'notes.md')]
       })
       state.folderWorkspaces = [
         {
@@ -428,13 +520,13 @@ describe('getEditorExternalWatchTargets', () => {
     const remoteRepo = makeRepo('repo-remote', 'ssh-1')
     const worktree = makeWorktree(localRepo.id, 'wt-remote')
     const local = getEditorExternalWatchTargets(
-      makeState({ repo: localRepo, worktree, openFiles: [makeOpenFile(worktree.id)] })
+      makeState({ repo: localRepo, worktree, openFiles: [makeOpenFile(worktree.id, false, '/repo-remote/worktree/notes.md')] })
     )
     const remote = getEditorExternalWatchTargets(
       makeState({
         repo: remoteRepo,
         worktree,
-        openFiles: [makeOpenFile(worktree.id)],
+        openFiles: [makeOpenFile(worktree.id, false, '/repo-remote/worktree/notes.md')],
         runtimeEnvironmentId: ' runtime-1 '
       })
     )
@@ -453,9 +545,9 @@ describe('getEditorExternalWatchTargets', () => {
   it('creates separate watch targets for local and runtime-owned tabs in the same worktree', () => {
     const repo = makeRepo('repo-mixed')
     const worktree = makeWorktree(repo.id, 'wt-mixed')
-    const localFile = makeOpenFile(worktree.id)
+    const localFile = makeOpenFile(worktree.id, false, '/repo-mixed/worktree/notes.md')
     const runtimeFile = {
-      ...makeOpenFile(worktree.id),
+      ...makeOpenFile(worktree.id, false, '/repo-mixed/worktree/notes.md'),
       id: 'runtime-file',
       runtimeEnvironmentId: 'env-1'
     }
@@ -489,12 +581,12 @@ describe('getEditorExternalWatchTargets', () => {
     const repo = makeRepo('repo-restored')
     const worktree = makeWorktree(repo.id, 'wt-restored')
     const restoredLocalFile = {
-      ...makeOpenFile(worktree.id),
+      ...makeOpenFile(worktree.id, false, '/repo-restored/worktree/notes.md'),
       id: 'restored-local-file',
       runtimeEnvironmentId: undefined
     }
     const runtimeFile = {
-      ...makeOpenFile(worktree.id),
+      ...makeOpenFile(worktree.id, false, '/repo-restored/worktree/notes.md'),
       id: 'runtime-file',
       runtimeEnvironmentId: 'env-1'
     }
