@@ -1,5 +1,6 @@
 import { stat } from 'node:fs/promises'
 import { join } from 'node:path'
+import { gitMetadataPollScheduler, runGitMetadataFilesystemIo } from './git-metadata-poll-scheduler'
 import type {
   WorktreeBasePollEvent,
   WorktreeBaseSubscription,
@@ -14,18 +15,21 @@ type PrimaryMetadataSnapshot = {
 
 async function snapshotPrimaryCheckoutMetadata(
   commonDirPath: string,
-  getStatusRefPaths: () => readonly string[]
+  getStatusRefPaths: () => readonly string[],
+  includePrimary: boolean
 ): Promise<PrimaryMetadataSnapshot> {
   const signatures = new Map<string, string>()
   const statusRefPaths = new Set(getStatusRefPaths())
   const paths = [
-    ...PRIMARY_CHECKOUT_METADATA_FILES.map((name) => join(commonDirPath, name)),
+    ...(includePrimary
+      ? PRIMARY_CHECKOUT_METADATA_FILES.map((name) => join(commonDirPath, name))
+      : []),
     ...statusRefPaths
   ]
   await Promise.all(
     paths.map(async (filePath) => {
       try {
-        const value = await stat(filePath)
+        const value = await runGitMetadataFilesystemIo(() => stat(filePath))
         if (value.isFile()) {
           signatures.set(filePath, `${value.mtimeMs}:${value.ctimeMs}:${value.ino}:${value.size}`)
         }
@@ -78,71 +82,47 @@ export async function startGitCommonPrimaryPolling(
   onEvents: (events: WorktreeBasePollEvent[]) => void,
   pollIntervalMs: number,
   visibility: WorktreePollerWindowVisibility,
-  onFullScan?: () => void
+  onFullScan?: () => void,
+  includePrimary = true
 ): Promise<WorktreeBaseSubscription> {
   let disposed = false
-  let ticking = false
-  let snapshot = await snapshotPrimaryCheckoutMetadata(commonDirPath, getStatusRefPaths)
-  let timer: ReturnType<typeof setTimeout> | null = null
-  let parkedWhileHidden = false
-
-  const tick = async (): Promise<void> => {
-    timer = null
-    if (disposed) {
-      return
-    }
-    if (!visibility.isWindowVisible()) {
-      parkedWhileHidden = true
-      return
-    }
-    if (ticking) {
-      return
-    }
-    ticking = true
-    const startedAt = Date.now()
-    onFullScan?.()
-    try {
-      const next = await snapshotPrimaryCheckoutMetadata(commonDirPath, getStatusRefPaths)
-      if (disposed) {
-        return
+  let snapshot = await snapshotPrimaryCheckoutMetadata(
+    commonDirPath,
+    getStatusRefPaths,
+    includePrimary
+  )
+  const schedule = gitMetadataPollScheduler.schedule({
+    key: `git-common-primary:${commonDirPath}`,
+    intervalMs: pollIntervalMs,
+    visibility,
+    run: async () => {
+      if (includePrimary) {
+        onFullScan?.()
       }
-      const events = diffPrimaryMetadata(snapshot, next)
-      snapshot = next
-      if (events.length > 0) {
-        onEvents(events)
+      try {
+        const next = await snapshotPrimaryCheckoutMetadata(
+          commonDirPath,
+          getStatusRefPaths,
+          includePrimary
+        )
+        if (disposed) {
+          return
+        }
+        const events = diffPrimaryMetadata(snapshot, next)
+        snapshot = next
+        if (events.length > 0) {
+          onEvents(events)
+        }
+      } catch {
+        // Transient fs error: keep the previous snapshot and retry next tick.
       }
-    } catch {
-      // Transient fs error: keep the previous snapshot and retry next tick.
-    } finally {
-      ticking = false
     }
-    if (!disposed) {
-      const nextDelay = Math.max(
-        0,
-        Math.min(pollIntervalMs, pollIntervalMs - (Date.now() - startedAt))
-      )
-      timer = setTimeout(() => void tick(), nextDelay)
-      timer.unref?.()
-    }
-  }
-
-  const unsubscribeVisibility = visibility.onWindowBecameVisible(() => {
-    if (disposed || !parkedWhileHidden) {
-      return
-    }
-    parkedWhileHidden = false
-    void tick()
   })
-  timer = setTimeout(() => void tick(), pollIntervalMs)
-  timer.unref?.()
 
   return {
     unsubscribe: async () => {
       disposed = true
-      if (timer) {
-        clearTimeout(timer)
-      }
-      unsubscribeVisibility()
+      schedule.unsubscribe()
     }
   }
 }
