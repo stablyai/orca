@@ -61,7 +61,6 @@ inline src/main/text-generation/commit-message-text-generation.ts
 inline src/main/updater.ts
 inline src/main/window/attach-main-window-services.ts
 inline src/main/window/createMainWindow.ts
-inline src/main/workspace-space-analysis.ts
 inline src/preload/index.ts
 inline src/relay/dispatcher.ts
 inline src/relay/git-handler.ts
@@ -90,8 +89,6 @@ inline src/renderer/src/components/right-sidebar/checks-panel-content.tsx
 inline src/renderer/src/components/settings/AccountsPane.tsx
 inline src/renderer/src/components/settings/RuntimeEnvironmentsPane.tsx
 inline src/renderer/src/components/settings/Settings.tsx
-inline src/renderer/src/components/sidebar/WorkspaceKanbanDrawer.tsx
-inline src/renderer/src/components/sidebar/WorktreeContextMenu.tsx
 inline src/renderer/src/components/sidebar/use-workspace-kanban-area-selection.ts
 inline src/renderer/src/components/status-bar/ResourceUsageStatusSegment.tsx
 inline src/renderer/src/components/status-bar/StatusBar.tsx
@@ -124,7 +121,6 @@ inline src/renderer/src/store/slices/linear.ts
 inline src/renderer/src/store/slices/repos.ts
 inline src/renderer/src/store/slices/tabs.ts
 inline src/renderer/src/store/slices/ui.ts
-inline src/renderer/src/store/slices/workspace-cleanup.ts
 inline src/renderer/src/web/web-runtime-client.ts
 inline src/shared/automation-schedules.ts
 inline src/shared/commit-message-agent-spec.ts
