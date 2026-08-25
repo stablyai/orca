@@ -62,6 +62,9 @@ const checkpointFixture = (overrides: Record<string, unknown> = {}) =>
 const ackFixture = (overrides: Record<string, unknown> = {}) =>
   okFixture('req_ack', { messageIds: ['m1'], duplicate: false, ...overrides })
 
+const configureFixture = (overrides: Record<string, unknown> = {}) =>
+  okFixture('req_configure', { runId: 'run_1', stepCount: 1, ...overrides })
+
 describe('orchestration collaboration handlers', () => {
   let logSpy: ReturnType<typeof vi.spyOn>
   let errorSpy: ReturnType<typeof vi.spyOn>
@@ -323,6 +326,188 @@ describe('orchestration collaboration handlers', () => {
 
       expect(process.exitCode).toBe(0)
       expect(output()).toBe('Collaboration checkpoint cancelled.')
+    })
+  })
+
+  describe('collaboration-configure', () => {
+    it('maps steps and optional run into collaborationConfigure with the env coordinator sender', async () => {
+      process.env.ORCA_TERMINAL_HANDLE = 'term_coord'
+      queueFixtures(
+        callMock,
+        okFixture('req_show', { terminal: { handle: 'term_coord' } }),
+        configureFixture({ stepCount: 2 })
+      )
+
+      const steps = [
+        {
+          taskId: 't1',
+          publishesTo: ['topology'],
+          subscribesTo: ['results'],
+          admission: { acceptedTypes: ['proposal'], minPriority: 'high' }
+        },
+        { taskId: 't2', requiredPublishesTo: ['results'] }
+      ]
+      await main(
+        [
+          'orchestration',
+          'collaboration-configure',
+          '--steps',
+          JSON.stringify(steps),
+          '--run',
+          'run_1'
+        ],
+        '/tmp/repo'
+      )
+
+      expect(process.exitCode).toBe(0)
+      expect(callMock).toHaveBeenCalledTimes(2)
+      expect(paramsFor('orchestration.collaborationConfigure')).toEqual({
+        run: 'run_1',
+        from: 'term_coord',
+        steps
+      })
+      expect(optionsFor('orchestration.collaborationConfigure')).toBeUndefined()
+      expect(output()).toBe('Configured collaboration for Run run_1: 2 step(s).')
+    })
+
+    it('omits run and resolves the sender implicitly when no env handle is set', async () => {
+      getTerminalHandleMock.mockResolvedValue('term_implicit')
+      queueFixtures(callMock, configureFixture({ runId: 'run_7' }))
+
+      await main(
+        ['orchestration', 'collaboration-configure', '--steps', '[{"taskId":"t1"}]'],
+        '/tmp/repo'
+      )
+
+      expect(process.exitCode).toBe(0)
+      expect(paramsFor('orchestration.collaborationConfigure')).toEqual({
+        run: undefined,
+        from: 'term_implicit',
+        steps: [{ taskId: 't1' }]
+      })
+    })
+
+    it('maps --retry-request to orchestrationRequestId through callOrchestrationMutation', async () => {
+      process.env.ORCA_TERMINAL_HANDLE = 'term_coord'
+      queueFixtures(
+        callMock,
+        okFixture('req_show', { terminal: { handle: 'term_coord' } }),
+        configureFixture()
+      )
+
+      await main(
+        [
+          'orchestration',
+          'collaboration-configure',
+          '--steps',
+          '[{"taskId":"t1"}]',
+          '--retry-request',
+          'mutation_3'
+        ],
+        '/tmp/repo'
+      )
+
+      expect(process.exitCode).toBe(0)
+      expect(optionsFor('orchestration.collaborationConfigure')).toEqual({
+        orchestrationRequestId: 'mutation_3'
+      })
+    })
+
+    it.each([
+      ['malformed JSON', 'not-json'],
+      ['empty array', '[]'],
+      ['non-array', '{"taskId":"t1"}'],
+      [
+        'over 64 steps',
+        JSON.stringify(Array.from({ length: 65 }, (_, i) => ({ taskId: `t${i}` })))
+      ],
+      ['foreign step shape', '[{"taskId":123}]'],
+      ['empty taskId', '[{"taskId":""}]'],
+      ['topic list not an array', '[{"taskId":"t1","publishesTo":"topology"}]'],
+      [
+        'over 32 topics',
+        JSON.stringify([
+          { taskId: 't1', subscribesTo: Array.from({ length: 33 }, (_, i) => `t${i}`) }
+        ])
+      ],
+      ['admission missing acceptedTypes', '[{"taskId":"t1","admission":{"minPriority":"normal"}}]'],
+      [
+        'admission bad minPriority',
+        '[{"taskId":"t1","admission":{"acceptedTypes":["a"],"minPriority":"critical"}}]'
+      ]
+    ])('rejects %s before any RPC', async (_label, rawSteps) => {
+      await main(['orchestration', 'collaboration-configure', '--steps', rawSteps], '/tmp/repo')
+
+      expect(process.exitCode).toBe(1)
+      expect(callMock).not.toHaveBeenCalled()
+    })
+
+    it('rejects an empty acceptedTypes before any RPC with a specific message', async () => {
+      await main(
+        [
+          'orchestration',
+          'collaboration-configure',
+          '--steps',
+          '[{"taskId":"t1","admission":{"acceptedTypes":[],"minPriority":"normal"}}]'
+        ],
+        '/tmp/repo'
+      )
+
+      expect(process.exitCode).toBe(1)
+      expect(errorSpy.mock.calls.map((call) => String(call[0])).join('\n')).toContain(
+        '--steps admission.acceptedTypes must be a JSON array of 1..32 non-empty strings.'
+      )
+      expect(callMock).not.toHaveBeenCalled()
+    })
+
+    it('preserves requiredPublishesTo verbatim', async () => {
+      process.env.ORCA_TERMINAL_HANDLE = 'term_coord'
+      queueFixtures(
+        callMock,
+        okFixture('req_show', { terminal: { handle: 'term_coord' } }),
+        configureFixture({ runId: 'run_9', stepCount: 1 })
+      )
+
+      const steps = [{ taskId: 't1', requiredPublishesTo: ['results', 'events'] }]
+      await main(
+        ['orchestration', 'collaboration-configure', '--steps', JSON.stringify(steps)],
+        '/tmp/repo'
+      )
+
+      expect(process.exitCode).toBe(0)
+      expect(paramsFor('orchestration.collaborationConfigure')).toEqual({
+        run: undefined,
+        from: 'term_coord',
+        steps
+      })
+      expect(output()).toBe('Configured collaboration for Run run_9: 1 step(s).')
+    })
+
+    it('JSON mode emits the standard printResult envelope', async () => {
+      process.env.ORCA_TERMINAL_HANDLE = 'term_coord'
+      queueFixtures(
+        callMock,
+        okFixture('req_show', { terminal: { handle: 'term_coord' } }),
+        configureFixture({ stepCount: 3 })
+      )
+
+      await main(
+        [
+          'orchestration',
+          'collaboration-configure',
+          '--steps',
+          '[{"taskId":"t1"},{"taskId":"t2"},{"taskId":"t3"}]',
+          '--json'
+        ],
+        '/tmp/repo'
+      )
+
+      expect(process.exitCode).toBe(0)
+      expect(JSON.parse(output())).toMatchObject({
+        id: 'req_configure',
+        ok: true,
+        result: { runId: 'run_1', stepCount: 3 }
+      })
     })
   })
 
