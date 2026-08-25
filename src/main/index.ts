@@ -701,9 +701,10 @@ if (app.isPackaged && process.platform !== 'win32') {
       mergePathSegments(result.segments)
       return
     }
-    // Why: on failure the seeded fallbacks stay in front, which for an nvm user means
-    // the newest install rather than their `default`. Name the reason so that shows up
-    // in a log bundle instead of as an unexplained missing CLI.
+    // Why: on failure the seeded fallbacks stay in front. For an nvm user that is
+    // now their `default` version rather than the newest install, so it is usually
+    // survivable — but it is still not what their shell would have resolved. Name
+    // the reason so it shows up in a log bundle instead of as a missing CLI.
     console.warn(
       `[shell-path] login-shell probe failed (${result.failureReason}); using seeded PATH`
     )
