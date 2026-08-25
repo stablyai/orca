@@ -46,13 +46,20 @@ export const SYNTHETIC_AGENT_TITLE_PROFILES: Record<string, SyntheticAgentTitleP
     workingLabel: 'Pi',
     permissionLabel: 'Pi - action required',
     idleLabel: 'Pi ready',
-    titleIdentityGroup: 'pi-compatible'
+    titleIdentityGroup: 'pi-compatible',
+    // Why: Pi owns its working OSC title (`π ⠋ <session>`) and animates it itself. Synthesizing
+    // over it replaced the session label and fought its frames at 80ms. Terminal states still
+    // synthesize: they carry the pane's agent identity downstream, and Pi is quiet at rest.
+    synthesizeWorkingTitle: false
   },
   omp: {
     workingLabel: 'OMP',
     permissionLabel: 'OMP - action required',
     idleLabel: 'OMP ready',
-    titleIdentityGroup: 'pi-compatible'
+    titleIdentityGroup: 'pi-compatible',
+    // Why: on an Orca-hosted pane it is Orca's own injected titlebar extension writing the
+    // working title (src/main/pi/titlebar-extension-source.ts). See pi above.
+    synthesizeWorkingTitle: false
   },
   droid: {
     workingLabel: 'Droid',
