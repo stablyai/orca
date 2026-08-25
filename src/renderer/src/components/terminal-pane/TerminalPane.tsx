@@ -642,6 +642,15 @@ function TerminalPane(
     },
     [chatLeafId, setTabViewMode, unifiedTabId]
   )
+  // Why a ref and not store state: the hold is scoped to this one pane's lifetime and is
+  // consulted exactly once, synchronously, right when handleConfirmedAgentExit runs — no
+  // other component needs to read or react to it, so it does not belong in shared state.
+  // Keyed by ptyId (not just a boolean) so a hold armed for an earlier pty on this same
+  // leaf can never suppress a later, unrelated exit.
+  const chatRestartHoldRef = useRef<{ ptyId: string; expiresAt: number } | null>(null)
+  const holdChatForAgentRestart = useCallback((ptyId: string, holdMs: number): void => {
+    chatRestartHoldRef.current = { ptyId, expiresAt: Date.now() + holdMs }
+  }, [])
   const handleConfirmedAgentExit = useCallback(
     (leafId: string): void => {
       if (leafId !== chatLeafId) {
@@ -649,6 +658,13 @@ function TerminalPane(
       }
       const panes = managerRef.current?.getPanes() ?? []
       const activeLeafId = managerRef.current?.getActivePane()?.leafId ?? null
+      const exitingPane = panes.find((pane) => pane.leafId === chatLeafId)
+      const exitingPtyId = exitingPane
+        ? (paneTransportsRef.current.get(exitingPane.id)?.getPtyId() ?? null)
+        : null
+      const hold = chatRestartHoldRef.current
+      const holdChatForAgentRestartActive =
+        hold !== null && hold.ptyId === exitingPtyId && hold.expiresAt > Date.now()
       applyNativeChatLeafRoute(
         resolveNativeChatLeafRoute({
           isChatViewMode,
@@ -656,7 +672,8 @@ function TerminalPane(
           activeLeafId,
           chatLeafStillMounted: panes.some((pane) => pane.leafId === chatLeafId),
           activeLeafIsEligible: isChatEligibleForLeaf(activeLeafId),
-          chatLeafHasConfirmedAgentExit: true
+          chatLeafHasConfirmedAgentExit: true,
+          holdChatForAgentRestart: holdChatForAgentRestartActive
         })
       )
     },
@@ -3147,6 +3164,7 @@ function TerminalPane(
                 resolvedAgent={chatPaneResolvedAgent}
                 onSwitchToTerminal={switchNativeChatToTerminal}
                 readTerminalScreen={readNativeChatTerminalScreen}
+                onHoldChatForAgentRestart={holdChatForAgentRestart}
                 contextMenuActions={{
                   onSplitRight: () => contextMenu.runForPane(chatPane.id, contextMenu.onSplitRight),
                   onSplitDown: () => contextMenu.runForPane(chatPane.id, contextMenu.onSplitDown),

@@ -25,3 +25,19 @@ export function deriveNativeChatCanSend(driver: DriverState | null | undefined):
 export function shouldChatTakeOverMobileSurface(viewMode: 'terminal' | 'chat'): boolean {
   return viewMode === 'chat'
 }
+
+/**
+ * True once the pane's foreground process is proven back at a shell — the agent this chat
+ * surface was talking to is no longer running, so a send would type into the shell instead
+ * of the agent (the reported repro: authorizing a Codex update, Codex exits to restart, and
+ * chat sends kept landing in PowerShell). Gated on `!isRemote`: `shellForeground` is a
+ * local-only OSC 133;D signal (see pane-foreground-agent-tracker.ts) — remote panes never
+ * produce it, so treating its absence as "gone" there would lock every remote chat pane
+ * permanently. Same caveat as the identical gate in use-tab-agent.ts.
+ */
+export function isNativeChatAgentForegroundGone(args: {
+  shellForeground: boolean
+  isRemote: boolean
+}): boolean {
+  return !args.isRemote && args.shellForeground
+}

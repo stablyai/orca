@@ -1,6 +1,7 @@
 import { translate } from '@/i18n/i18n'
 import { isRemoteRuntimePtyId } from '@/runtime/runtime-terminal-inspection'
 import type { getSettingsForAgentTabRuntimeOwner } from '@/lib/agent-paste-draft'
+import type { NativeChatSendLock } from './use-native-chat-can-send'
 
 export type NativeChatResolvedTarget = {
   ptyId: string
@@ -11,7 +12,11 @@ export type NativeChatResolvedTarget = {
  *  pathological clipboard can't stall the round-trip. */
 export const NATIVE_CHAT_CONTEXT_PASTE_MAX_BYTES = 16 * 1024 * 1024
 
-export function nativeChatComposerPlaceholder(hasPty: boolean, canSend: boolean): string {
+export function nativeChatComposerPlaceholder(
+  hasPty: boolean,
+  canSend: boolean,
+  lockedReason: NativeChatSendLock = null
+): string {
   if (!hasPty) {
     return translate(
       'components.native-chat.composer.noPty',
@@ -19,6 +24,12 @@ export function nativeChatComposerPlaceholder(hasPty: boolean, canSend: boolean)
     )
   }
   if (!canSend) {
+    if (lockedReason === 'agent-gone') {
+      return translate(
+        'components.native-chat.composer.agentGone',
+        "The agent isn't running — toggle back to the terminal."
+      )
+    }
     return translate('components.native-chat.composer.locked', 'Input is held by another device.')
   }
   return translate('components.native-chat.composer.placeholder', 'Send a message…')

@@ -1,5 +1,6 @@
 import type { AgentType } from '../../../../shared/agent-status-types'
 import type { NativeChatLaunchDraft } from '@/lib/native-chat-launch-prompt'
+import type { NativeChatSendLock } from './use-native-chat-can-send'
 
 export type NativeChatComposerProps = {
   /** Tab hosting the agent; used to resolve the live ptyId + runtime settings. */
@@ -9,8 +10,12 @@ export type NativeChatComposerProps = {
   /** Specific split-pane PTY this chat view owns. */
   targetPtyId: string | null
   agent: AgentType
-  /** Guard desktop sends while a mobile client owns the terminal input lease. */
+  /** Guard desktop sends while a mobile client owns the terminal input lease, or while the
+   *  agent's foreground evidence shows it is no longer running. */
   canSend?: boolean
+  /** Why `!canSend`, for the placeholder copy — "another device has it" vs. "nothing is
+   *  running" call for different next actions. Ignored when `canSend` is true. */
+  lockedReason?: NativeChatSendLock
   /** True while the hosted TUI reports an in-flight turn; swaps Send to Stop. */
   isWorking?: boolean
   /** Interrupt the hosted agent, usually by sending ESC into the PTY. */

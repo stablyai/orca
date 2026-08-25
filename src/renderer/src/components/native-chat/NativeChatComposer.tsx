@@ -35,6 +35,7 @@ import { useNativeChatSendLifecycle } from './use-native-chat-send-lifecycle'
 import { useNativeChatSessionOptions } from './use-native-chat-session-options'
 import { useNativeChatFileAttachmentActions } from './use-native-chat-file-attachment-actions'
 import { useNativeChatDictationActions } from './use-native-chat-dictation-actions'
+import { useNativeChatDictationState } from './use-native-chat-dictation-state'
 import { useNativeChatSessionOptionCommand } from './use-native-chat-session-option-command'
 import { useNativeChatPickerState } from './use-native-chat-picker-state'
 import { useNativeChatPickerCommandDispatch } from './use-native-chat-picker-command-dispatch'
@@ -71,6 +72,7 @@ export const NativeChatComposer = forwardRef<NativeChatComposerHandle, NativeCha
       targetPtyId,
       agent,
       canSend = true,
+      lockedReason = null,
       isWorking = false,
       onStop,
       onOptimisticSend,
@@ -83,10 +85,9 @@ export const NativeChatComposer = forwardRef<NativeChatComposerHandle, NativeCha
     },
     ref
   ): React.JSX.Element {
-    // Scope key shared with image attachments so an unsent draft + its attached
-    // images survive both TUI/GUI toggles and PTY replacement on reconnect.
-    // Why: local, SSH, and runtime reconnects can replace or temporarily clear
-    // the PTY id. Pane identity is the stable ownership key for unsent input.
+    // Scope key shared with image attachments so an unsent draft + its attached images
+    // survive both TUI/GUI toggles and PTY replacement on reconnect — local, SSH, and
+    // runtime reconnects can replace or clear the PTY id, so pane identity is the anchor.
     const draftScopeKey = paneKey
     const { draft, setDraft } = useNativeChatDraft(draftScopeKey)
     const [caret, setCaret] = useState(draft.length)
@@ -110,19 +111,11 @@ export const NativeChatComposer = forwardRef<NativeChatComposerHandle, NativeCha
       targetPtyId,
       onOptimisticSendCanceled
     )
-    const dictationState = useAppStore((store) => store.dictationState)
-    const voiceSettings = useAppStore((store) => store.settings?.voice)
-    const isDictationHoldMode = voiceSettings?.dictationMode === 'hold'
-    const dictationDisabled = voiceSettings?.enabled !== true || !voiceSettings.sttModel
-    const isDictating =
-      dictationPressed ||
-      dictationState === 'starting' ||
-      dictationState === 'listening' ||
-      dictationState === 'stopping'
+    const { isDictating, isDictationHoldMode, dictationDisabled } =
+      useNativeChatDictationState(dictationPressed)
 
-    // Place the caret at the end of the (possibly restored) draft when the
-    // composer is reused for a different pane. Adjusted during render (matching
-    // the draft reload) so caret and text stay consistent on the first paint.
+    // Place the caret at the end of the (possibly restored) draft on pane reuse; adjusted
+    // during render (matching the draft reload) so caret and text stay consistent on paint.
     const lastDraftScopeKey = useRef(draftScopeKey)
     if (lastDraftScopeKey.current !== draftScopeKey) {
       lastDraftScopeKey.current = draftScopeKey
@@ -398,6 +391,7 @@ export const NativeChatComposer = forwardRef<NativeChatComposerHandle, NativeCha
         disabled={disabled}
         hasPty={hasPty}
         canSend={canSend}
+        lockedReason={lockedReason}
         autocomplete={autocomplete}
         activeSuggestion={activeSuggestion}
         notice={notice}

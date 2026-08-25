@@ -197,6 +197,48 @@ describe('resolveNativeChatLeafRoute', () => {
     ).toEqual({ chatLeafId: 'restored-agent', exitChat: false })
   })
 
+  it('holds chat open on a confirmed agent exit while an authorized restart is in flight', () => {
+    expect(
+      resolveNativeChatLeafRoute({
+        isChatViewMode: true,
+        chatLeafId: 'restarting-agent',
+        activeLeafId: 'restarting-agent',
+        chatLeafStillMounted: true,
+        activeLeafIsEligible: true,
+        chatLeafHasConfirmedAgentExit: true,
+        holdChatForAgentRestart: true
+      })
+    ).toEqual({ chatLeafId: 'restarting-agent', exitChat: false })
+  })
+
+  it('still exits chat once the hold expires even if the exit was already confirmed', () => {
+    expect(
+      resolveNativeChatLeafRoute({
+        isChatViewMode: true,
+        chatLeafId: 'restarting-agent',
+        activeLeafId: 'restarting-agent',
+        chatLeafStillMounted: true,
+        activeLeafIsEligible: true,
+        chatLeafHasConfirmedAgentExit: true,
+        holdChatForAgentRestart: false
+      })
+    ).toEqual({ chatLeafId: null, exitChat: true })
+  })
+
+  it('a restart hold does not override the leaf actually closing', () => {
+    expect(
+      resolveNativeChatLeafRoute({
+        isChatViewMode: true,
+        chatLeafId: 'closed-agent',
+        activeLeafId: 'shell-leaf',
+        chatLeafStillMounted: false,
+        activeLeafIsEligible: false,
+        chatLeafHasConfirmedAgentExit: true,
+        holdChatForAgentRestart: true
+      })
+    ).toEqual({ chatLeafId: null, exitChat: true })
+  })
+
   it('clears leaf ownership after returning to terminal view', () => {
     expect(
       resolveNativeChatLeafRoute({

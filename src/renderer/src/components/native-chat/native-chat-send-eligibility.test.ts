@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   deriveNativeChatCanSend,
+  isNativeChatAgentForegroundGone,
   shouldChatTakeOverMobileSurface
 } from './native-chat-send-eligibility'
 
@@ -20,6 +21,20 @@ describe('deriveNativeChatCanSend', () => {
   it('treats an unresolved driver (null/undefined) as unlocked', () => {
     expect(deriveNativeChatCanSend(null)).toBe(true)
     expect(deriveNativeChatCanSend(undefined)).toBe(true)
+  })
+})
+
+describe('isNativeChatAgentForegroundGone', () => {
+  it('blocks a local pane once the foreground is proven back at the shell', () => {
+    expect(isNativeChatAgentForegroundGone({ shellForeground: true, isRemote: false })).toBe(true)
+  })
+
+  it('allows a local pane while the agent still owns the foreground', () => {
+    expect(isNativeChatAgentForegroundGone({ shellForeground: false, isRemote: false })).toBe(false)
+  })
+
+  it('never blocks a remote pane — shellForeground has no producer there (use-tab-agent.ts parity)', () => {
+    expect(isNativeChatAgentForegroundGone({ shellForeground: true, isRemote: true })).toBe(false)
   })
 })
 
