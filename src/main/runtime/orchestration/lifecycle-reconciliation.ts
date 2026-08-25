@@ -48,6 +48,7 @@ export type LifecycleRejectionCode =
   | 'unknown_task'
   | 'unknown_dispatch'
   | 'task_dispatch_mismatch'
+  | 'collaboration_publish_incomplete'
   | 'inactive_dispatch'
   | 'stale_dispatch'
 
