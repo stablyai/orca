@@ -3,6 +3,7 @@ import type { AdmissionPolicy } from './collaboration-admission'
 export type CollaborationTopologyStep = {
   taskId: string
   readonly publishesTo?: readonly string[]
+  readonly requiredPublishesTo?: readonly string[]
   readonly subscribesTo?: readonly string[]
   admission?: AdmissionPolicy
 }
@@ -50,10 +51,30 @@ export function createCollaborationTopology(
       ...(step.publishesTo !== undefined && {
         publishesTo: dedupePreservingOrder(step.publishesTo)
       }),
+      ...(step.requiredPublishesTo !== undefined && {
+        requiredPublishesTo: dedupePreservingOrder(step.requiredPublishesTo)
+      }),
       ...(subscribesTo !== undefined && { subscribesTo }),
       ...(step.admission !== undefined && { admission: copyPolicy(step.admission) })
     }
   })
+  for (const step of copiedSteps) {
+    const required = step.requiredPublishesTo
+    if (required === undefined) {
+      continue
+    }
+    const publishes = step.publishesTo ?? []
+    for (const topic of required) {
+      if (!publishes.includes(topic)) {
+        throw new Error(
+          `step ${step.taskId} requires publishing topic ${topic} but does not publish it`
+        )
+      }
+      if (!copiedSteps.some((s) => s.subscribesTo?.includes(topic) ?? false)) {
+        throw new Error(`required topic ${topic} of step ${step.taskId} has no subscribers`)
+      }
+    }
+  }
   return { steps: copiedSteps }
 }
 
@@ -62,6 +83,13 @@ export function allowedPublishTopicsForTask(
   taskId: string
 ): readonly string[] {
   return topology.steps.find((step) => step.taskId === taskId)?.publishesTo ?? []
+}
+
+export function requiredPublishTopicsForTask(
+  topology: CollaborationTopology,
+  taskId: string
+): readonly string[] {
+  return [...(topology.steps.find((step) => step.taskId === taskId)?.requiredPublishesTo ?? [])]
 }
 
 export function subscribersForTopic(

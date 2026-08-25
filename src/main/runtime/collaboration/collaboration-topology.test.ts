@@ -4,6 +4,7 @@ import {
   admissionPolicyForTask,
   allowedPublishTopicsForTask,
   createCollaborationTopology,
+  requiredPublishTopicsForTask,
   subscribersForTopic,
   type CollaborationTopologyStep
 } from './collaboration-topology'
@@ -87,6 +88,58 @@ describe('createCollaborationTopology', () => {
     expect(topology.steps[0].admission?.acceptedTypes).toEqual(['status'])
   })
 
+  it('rejects a required topic not present in the same step publishesTo', () => {
+    expect(() =>
+      createCollaborationTopology([
+        step({ taskId: 'a', publishesTo: ['t1', 't2'], requiredPublishesTo: ['t1', 't3'] }),
+        step({ taskId: 'b', subscribesTo: ['t1', 't2'], admission: policy() })
+      ])
+    ).toThrow(/does not publish.*t3|t3.*does not publish/)
+    expect(() =>
+      createCollaborationTopology([step({ taskId: 'a', requiredPublishesTo: ['t1'] })])
+    ).toThrow(/requiredPublishesTo|does not publish/)
+  })
+
+  it('rejects a required topic with no subscriber anywhere in the topology', () => {
+    expect(() =>
+      createCollaborationTopology([
+        step({ taskId: 'a', publishesTo: ['t1'], requiredPublishesTo: ['t1'] }),
+        step({ taskId: 'b', subscribesTo: ['t2'], admission: policy() })
+      ])
+    ).toThrow(/subscriber/)
+  })
+
+  it('accepts a required topic that has a subscriber elsewhere', () => {
+    const topology = createCollaborationTopology([
+      step({ taskId: 'a', publishesTo: ['t1'], requiredPublishesTo: ['t1'] }),
+      step({ taskId: 'b', subscribesTo: ['t1'], admission: policy() })
+    ])
+    expect(topology.steps[0].requiredPublishesTo).toEqual(['t1'])
+  })
+
+  it('dedupes requiredPublishesTo preserving first occurrence order', () => {
+    const topology = createCollaborationTopology([
+      step({
+        taskId: 'a',
+        publishesTo: ['t2', 't1', 't3'],
+        requiredPublishesTo: ['t2', 't1', 't2', 't3']
+      }),
+      step({ taskId: 'b', subscribesTo: ['t2', 't1', 't3'], admission: policy() })
+    ])
+    expect(topology.steps[0].requiredPublishesTo).toEqual(['t2', 't1', 't3'])
+  })
+
+  it('copies the requiredPublishesTo array instead of retaining the caller reference', () => {
+    const requiredPublishesTo = ['t1']
+    const topology = createCollaborationTopology([
+      step({ taskId: 'a', publishesTo: ['t1'], requiredPublishesTo }),
+      step({ taskId: 'b', subscribesTo: ['t1'], admission: policy() })
+    ])
+    expect(topology.steps[0].requiredPublishesTo).not.toBe(requiredPublishesTo)
+    ;(requiredPublishesTo as string[]).push('t9')
+    expect(topology.steps[0].requiredPublishesTo).toEqual(['t1'])
+  })
+
   it('preserves undefined optional fields', () => {
     const topology = createCollaborationTopology([step({ taskId: 'a' })])
     expect(topology.steps[0].publishesTo).toBeUndefined()
@@ -151,5 +204,38 @@ describe('admissionPolicyForTask', () => {
   it('returns undefined for an unknown taskId', () => {
     const topology = createCollaborationTopology([step({ taskId: 'a' })])
     expect(admissionPolicyForTask(topology, 'nope')).toBeUndefined()
+  })
+})
+
+describe('requiredPublishTopicsForTask', () => {
+  it('returns the deduped topics a task is required to publish', () => {
+    const topology = createCollaborationTopology([
+      step({ taskId: 'a', publishesTo: ['t1', 't2'], requiredPublishesTo: ['t2', 't1', 't2'] }),
+      step({ taskId: 'b', subscribesTo: ['t1', 't2'], admission: policy() })
+    ])
+    expect(requiredPublishTopicsForTask(topology, 'a')).toEqual(['t2', 't1'])
+  })
+
+  it('returns an empty array when the task has no required topics', () => {
+    const topology = createCollaborationTopology([step({ taskId: 'a' })])
+    expect(requiredPublishTopicsForTask(topology, 'a')).toEqual([])
+  })
+
+  it('returns an empty array for an unknown taskId', () => {
+    const topology = createCollaborationTopology([step({ taskId: 'a' })])
+    expect(requiredPublishTopicsForTask(topology, 'nope')).toEqual([])
+  })
+
+  it('returns a fresh array each call', () => {
+    const topology = createCollaborationTopology([
+      step({ taskId: 'a', publishesTo: ['t1'], requiredPublishesTo: ['t1'] }),
+      step({ taskId: 'b', subscribesTo: ['t1'], admission: policy() })
+    ])
+    const first = requiredPublishTopicsForTask(topology, 'a')
+    const second = requiredPublishTopicsForTask(topology, 'a')
+    expect(first).not.toBe(second)
+    expect(first).not.toBe(topology.steps[0].requiredPublishesTo)
+    ;(first as string[]).push('t9')
+    expect(topology.steps[0].requiredPublishesTo).toEqual(['t1'])
   })
 })
