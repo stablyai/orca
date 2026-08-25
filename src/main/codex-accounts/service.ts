@@ -40,6 +40,7 @@ import { getSystemCodexHomePath } from '../codex/codex-home-paths'
 import { MANAGED_HOOK_TIMEOUT_SECONDS } from '../agent-hooks/installer-utils'
 import { readCodexTopLevelModelProvider } from '../codex/codex-model-provider-config'
 import { resolveCodexCommand } from '../codex-cli/command'
+import { withCliRuntimeOnPath } from '../../shared/node-cli-command-resolution'
 import type { Store } from '../persistence'
 import type { RateLimitService } from '../rate-limits/service'
 import { parseWslUncPath } from '../../shared/wsl-paths'
@@ -1736,10 +1737,10 @@ export class CodexAccountService {
             return {
               command: spawnCmd,
               args: spawnArgs,
-              env: {
+              env: withCliRuntimeOnPath(codexCommand, {
                 ...process.env,
                 CODEX_HOME: managedHomePath
-              },
+              }),
               codexCommand,
               interactiveLogin
             }

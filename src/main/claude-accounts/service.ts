@@ -13,6 +13,7 @@ import type {
 import type { Store } from '../persistence'
 import type { RateLimitService } from '../rate-limits/service'
 import { resolveClaudeCommand } from '../codex-cli/command'
+import { withCliRuntimeOnPath } from '../../shared/node-cli-command-resolution'
 import type { ClaudeRuntimeAuthService } from './runtime-auth-service'
 import {
   getClaudeManagedAccountsRoot,
@@ -1050,17 +1051,21 @@ export class ClaudeAccountService {
         configDir.wslDistro === null &&
         args[0] === 'auth' &&
         args[1] === 'login'
+      // Why lazy: the WSL branch runs `claude` inside the distro, so resolving a
+      // host binary there would be wasted filesystem probing for a path never used.
+      let cachedHostClaudeCommand: string | null = null
+      const hostClaudeCommand = (): string => (cachedHostClaudeCommand ??= resolveClaudeCommand())
       const interactiveLogin = isWindowsHostInteractiveLogin
-        ? buildWindowsHostInteractiveLoginSpawn(resolveClaudeCommand(), args)
+        ? buildWindowsHostInteractiveLoginSpawn(hostClaudeCommand(), args)
         : null
       const spawnConfig = interactiveLogin
         ? {
             command: interactiveLogin.command,
             args: interactiveLogin.args,
-            env: {
+            env: withCliRuntimeOnPath(hostClaudeCommand(), {
               ...process.env,
               CLAUDE_CONFIG_DIR: configDir.windowsPath
-            },
+            }),
             shell: false,
             windowsVerbatimArguments: false
           }
@@ -1081,20 +1086,20 @@ export class ClaudeAccountService {
             }
           : process.platform === 'win32'
             ? {
-                ...buildWindowsCommandInvocation(resolveClaudeCommand(), args),
-                env: {
+                ...buildWindowsCommandInvocation(hostClaudeCommand(), args),
+                env: withCliRuntimeOnPath(hostClaudeCommand(), {
                   ...process.env,
                   CLAUDE_CONFIG_DIR: configDir.windowsPath
-                },
+                }),
                 shell: false
               }
             : {
-                command: resolveClaudeCommand(),
+                command: hostClaudeCommand(),
                 args,
-                env: {
+                env: withCliRuntimeOnPath(hostClaudeCommand(), {
                   ...process.env,
                   CLAUDE_CONFIG_DIR: configDir.windowsPath
-                },
+                }),
                 shell: false,
                 windowsVerbatimArguments: false
               }
