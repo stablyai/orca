@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto'
-import { readFile, rename, rm, writeFile } from 'node:fs/promises'
+import { lstat, readFile, realpath, rename, rm, writeFile } from 'node:fs/promises'
 import { parseHooksJsonText } from '../agent-hooks/hooks-json-read'
 import type { HooksConfig } from '../agent-hooks/installer-utils'
 
@@ -30,10 +30,13 @@ export async function writeGrokHookConfigIfUnchanged(
   if ((await readFileOrNull(targetPath)) !== expectedContents) {
     return false
   }
-  const tempPath = `${targetPath}.${process.pid}.${randomUUID()}.tmp`
+  // Why resolve first: renaming onto the link path would REPLACE a config the user has symlinked
+  // into a dotfiles repo with a plain file, silently detaching it. Write through the link instead.
+  const writePath = await resolveWriteTarget(targetPath)
+  const tempPath = `${writePath}.${process.pid}.${randomUUID()}.tmp`
   try {
     await writeFile(tempPath, contents, 'utf8')
-    await renameWithWindowsRetry(tempPath, targetPath)
+    await renameWithWindowsRetry(tempPath, writePath)
     return true
   } catch (error) {
     await rm(tempPath, { force: true })
@@ -41,6 +44,10 @@ export async function writeGrokHookConfigIfUnchanged(
   }
 }
 
+/**
+ * Removes the managed config. Returns false when the caller must write through instead: a config
+ * the user has symlinked belongs to them, so we strip our entries rather than unlink their link.
+ */
 export async function removeGrokHookConfigIfUnchanged(
   targetPath: string,
   expectedContents: string
@@ -50,6 +57,19 @@ export async function removeGrokHookConfigIfUnchanged(
   }
   await rm(targetPath, { force: true })
   return true
+}
+
+/** True when the config is a symlink, so it must be written through and never unlinked. */
+export async function isGrokHookConfigSymlink(targetPath: string): Promise<boolean> {
+  try {
+    return (await lstat(targetPath)).isSymbolicLink()
+  } catch {
+    return false
+  }
+}
+
+async function resolveWriteTarget(targetPath: string): Promise<string> {
+  return (await isGrokHookConfigSymlink(targetPath)) ? await realpath(targetPath) : targetPath
 }
 
 async function readFileOrNull(targetPath: string): Promise<string | null> {

@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto'
-import { mkdirSync, readFileSync, rmSync } from 'node:fs'
+import { lstatSync, mkdirSync, readFileSync, rmSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import type { SFTPWrapper } from 'ssh2'
 import type { AgentHookInstallState, AgentHookInstallStatus } from '../../shared/agent-hook-types'
@@ -23,6 +23,7 @@ import { isOrcaOwnedRemnant, removeManagedGrokHookEntries } from './grok-hook-co
 import { buildInstalledGrokConfig, GROK_EVENTS, GROK_TOOL_EVENT_MATCHER } from './grok-hook-config'
 import { installRemoteGrokHook, removeRemoteGrokHook } from './grok-hook-remote-mutations'
 import {
+  isGrokHookConfigSymlink,
   readGrokHookConfigSnapshot,
   removeGrokHookConfigIfUnchanged,
   writeGrokHookConfigIfUnchanged
@@ -269,7 +270,10 @@ export class GrokHookService {
     if (readGrokHookConfigRawSync(configPath) !== snapshot.raw) {
       return notInstalledStatus(configPath, 'Grok hook config changed during cleanup')
     }
-    if (isOrcaOwnedRemnant(cleanup.config)) {
+    // Why the symlink check: unlinking would delete the user's link, not our file. A config they
+    // symlinked into a dotfiles repo is theirs -- strip our entries and write through it instead.
+    // writeHooksJson already resolves the link, so the file they version-control stays connected.
+    if (isOrcaOwnedRemnant(cleanup.config) && !lstatSync(configPath).isSymbolicLink()) {
       rmSync(configPath, { force: true })
     } else {
       writeHooksJson(configPath, cleanup.config)
@@ -339,7 +343,9 @@ export class GrokHookService {
     if (!cleanup.removedAny) {
       return notInstalledStatus(configPath)
     }
-    const updated = isOrcaOwnedRemnant(cleanup.config)
+    const unlinkable =
+      isOrcaOwnedRemnant(cleanup.config) && !(await isGrokHookConfigSymlink(configPath))
+    const updated = unlinkable
       ? await removeGrokHookConfigIfUnchanged(configPath, snapshot.raw)
       : await writeGrokHookConfigIfUnchanged(
           configPath,

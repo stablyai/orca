@@ -423,6 +423,17 @@ export class SshRelaySession {
     return this.remoteCliBridgeEnv?.hostPlatform ?? this.hostPlatform
   }
 
+  /**
+   * Why one predicate for install AND removal: they used different platform sources, so a Windows
+   * remote whose bridge env was incomplete got hooks installed and never removed -- leaving exactly
+   * the persistent global hooks this change exists to clean up (#15518). Removing only where we
+   * install is the property that matters, so both sides must read the same field.
+   */
+  private skipsManagedHookMutation(): boolean {
+    const platform = this.remoteCliBridgeEnv?.hostPlatform
+    return Boolean(platform && isWindowsRemoteHost(platform))
+  }
+
   getAiVaultHostInfo(): SshRelayAiVaultHostInfo | null {
     const env = this.remoteCliBridgeEnv
     if (!env) {
@@ -901,11 +912,7 @@ export class SshRelaySession {
 
   async removeManagedHooksOnRemote(): Promise<void> {
     const mux = this.mux
-    if (
-      !mux ||
-      mux.isDisposed() ||
-      (this.hostPlatform !== null && isWindowsRemoteHost(this.hostPlatform))
-    ) {
+    if (!mux || mux.isDisposed() || this.skipsManagedHookMutation()) {
       return
     }
     try {
@@ -1331,10 +1338,7 @@ export class SshRelaySession {
     ) {
       return
     }
-    if (
-      this.remoteCliBridgeEnv?.hostPlatform &&
-      isWindowsRemoteHost(this.remoteCliBridgeEnv.hostPlatform)
-    ) {
+    if (this.skipsManagedHookMutation()) {
       // Why: managed hook installers emit POSIX-only scripts/paths; Windows remotes rely on relay-injected env + plugin overlays instead.
       return
     }

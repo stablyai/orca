@@ -1,6 +1,16 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { spawn } from 'node:child_process'
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import {
+  existsSync,
+  lstatSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  renameSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync
+} from 'node:fs'
 import { createServer } from 'node:http'
 import { tmpdir } from 'node:os'
 import { createHash } from 'node:crypto'
@@ -602,6 +612,43 @@ describe('GrokHookService', () => {
 
     expect(readFileSync(configPath, 'utf8')).not.toBe(userCleared)
     expect(service.getStatus().managedHooksPresent).toBe(true)
+  })
+
+  // Why: hook-config-write-path.ts exists because users symlink these configs into dotfiles repos.
+  // Unlinking or renaming onto the link path destroys that link and silently detaches the file they
+  // version-control. Their file is theirs -- strip our entries and write through it.
+  it('writes through a symlinked config instead of destroying the link', async () => {
+    const service = new GrokHookService()
+    const configPath = join(homeDir, '.grok', 'hooks', 'orca-status.json')
+    const realConfig = join(homeDir, 'dotfiles', 'orca-status.json')
+
+    expect(service.install().state).toBe('installed')
+    mkdirSync(dirname(realConfig), { recursive: true })
+    renameSync(configPath, realConfig)
+    symlinkSync(realConfig, configPath)
+
+    await service.removeAsync({ force: true })
+
+    expect(lstatSync(configPath).isSymbolicLink()).toBe(true)
+    expect(existsSync(realConfig)).toBe(true)
+    expect(service.getStatus().managedHooksPresent).toBe(false)
+  })
+
+  it('writes through a symlinked config on the sync remove path too', () => {
+    const service = new GrokHookService()
+    const configPath = join(homeDir, '.grok', 'hooks', 'orca-status.json')
+    const realConfig = join(homeDir, 'dotfiles', 'orca-status.json')
+
+    expect(service.install().state).toBe('installed')
+    mkdirSync(dirname(realConfig), { recursive: true })
+    renameSync(configPath, realConfig)
+    symlinkSync(realConfig, configPath)
+
+    expect(service.remove().state).toBe('not_installed')
+
+    expect(lstatSync(configPath).isSymbolicLink()).toBe(true)
+    expect(existsSync(realConfig)).toBe(true)
+    expect(service.getStatus().managedHooksPresent).toBe(false)
   })
 
   it('preserves user-authored hook entries in the Orca Grok config file', () => {

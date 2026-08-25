@@ -152,4 +152,37 @@ describe('SshRelaySession managed hooks', () => {
       { timeoutMs: 2_000 }
     )
   })
+
+  // Why: install and removal read the platform from different fields, so a Windows remote whose
+  // bridge env was incomplete had hooks installed and never removed -- stranding exactly the
+  // persistent global hooks #15518 is about, on the platform it was reported on. Whatever the
+  // skip rule is, the two sides must agree, or the fix silently does not apply.
+  it('removes hooks from every remote it installs them on', async () => {
+    muxRequestMock.mockImplementation(async (method: string) => {
+      if (method === 'preflight.detectAgents') {
+        return { agents: ['grok'] }
+      }
+      return { installers: 1, errors: 0 }
+    })
+    const { mockStore, mockPortForward, getMainWindow } = createMockDeps()
+    const connection = {
+      sftp: vi.fn(),
+      getHostKeyFingerprint: vi.fn(() => 'SHA256:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA')
+    } as unknown as SshConnection
+    const session = new SshRelaySession('target-1', getMainWindow, mockStore, mockPortForward)
+    await session.establish(connection)
+
+    // A host reported as Windows only through the fallback field, with no bridge env: the old
+    // removal gate skipped here while install had already run.
+    ;(session as unknown as { hostPlatform: { os: string } | null }).hostPlatform = { os: 'win32' }
+    muxRequestMock.mockClear()
+
+    await session.removeManagedHooksOnRemote()
+
+    expect(muxRequestMock).toHaveBeenCalledWith(
+      AGENT_HOOK_INSTALL_MANAGED_HOOKS_METHOD,
+      { agents: [], removeAgents: ['grok'] },
+      { timeoutMs: 2_000 }
+    )
+  })
 })
