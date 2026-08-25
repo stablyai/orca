@@ -66,6 +66,34 @@ describe('orchestration RPC methods', () => {
       })
     }
 
+    function mockExitedWorkerRelease(): void {
+      vi.mocked(runtime.showTerminal).mockResolvedValue({
+        handle: 'term_worker',
+        worktreeId: 'repo::worktree',
+        status: 'exited',
+        connected: false
+      } as never)
+      vi.spyOn(runtime, 'getOrchestrationDispatchAuthority').mockReturnValue({
+        terminalHandle: 'term_worker',
+        paneKey: 'tab_worker:leaf_worker',
+        processIncarnation: 'runtime_test:term_worker:1',
+        hostScope: { kind: 'local', hostId: 'local' }
+      } as never)
+      vi.spyOn(runtime, 'getExactWorkerProviderSession').mockReturnValue(null)
+      vi.spyOn(runtime, 'readTerminal').mockResolvedValue({
+        handle: 'term_worker',
+        status: 'exited',
+        tail: [],
+        truncated: false,
+        nextCursor: null
+      })
+      vi.spyOn(runtime, 'closeTerminal').mockResolvedValue({
+        handle: 'term_worker',
+        tabId: 'tab_worker',
+        ptyKilled: true
+      } as never)
+    }
+
     it('starts a fresh agent in the coordinator current worktree', async () => {
       setup()
       mockCurrentWorkerStart()
@@ -380,19 +408,27 @@ describe('orchestration RPC methods', () => {
           status: 'exited',
           exitCode: 0
         })
+        mockExitedWorkerRelease()
         const task = db.createTask({ spec: 'worker exits during startup' })
 
         const result = (await call('orchestration.workerStart', {
           task: task.id,
           from: 'term_coord',
           agent
-        })) as { state: string; failedStage: string; lastError: string }
+        })) as {
+          state: string
+          failedStage: string
+          lastError: string
+          residualResources: unknown[]
+        }
 
         expect(result).toMatchObject({
           state: 'failed',
           failedStage: 'agent_readiness',
-          lastError: 'Agent process exited before becoming ready with code 0.'
+          lastError: 'Agent process exited before becoming ready with code 0.',
+          residualResources: []
         })
+        expect(runtime.closeTerminal).toHaveBeenCalledWith('term_worker')
         expect(runtime.sendTerminalAgentPrompt).not.toHaveBeenCalled()
       }
     )
@@ -407,6 +443,7 @@ describe('orchestration RPC methods', () => {
         status: 'exited',
         exitCode: 1
       })
+      mockExitedWorkerRelease()
       vi.spyOn(runtime, 'readTerminal').mockResolvedValue({
         handle: 'term_worker',
         status: 'exited',
@@ -420,10 +457,12 @@ describe('orchestration RPC methods', () => {
         task: task.id,
         from: 'term_coord',
         agent: 'opencode'
-      })) as { lastError: string }
+      })) as { lastError: string; residualResources: unknown[] }
 
       expect(result.lastError).toContain('Diagnostic output:\nOpenCode startup failed:')
       expect(result.lastError).not.toContain('provider-secret')
+      expect(result.residualResources).toEqual([])
+      expect(runtime.closeTerminal).toHaveBeenCalledWith('term_worker')
       expect(runtime.readTerminal).toHaveBeenCalledWith('term_worker', { limit: 20 })
     })
 

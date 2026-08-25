@@ -21,6 +21,10 @@ import {
 import { failWorkerStartWithReceipt } from './orchestration-worker-start-receipt'
 import { prepareLocalWorkerStart } from './orchestration-worker-start-validation'
 import { getAgentReadinessFailure } from './orchestration-agent-readiness'
+import {
+  attachExitedWorkerTerminalAuthority,
+  releaseFailedWorkerStartTerminal
+} from './orchestration-worker-start-terminal-release'
 
 export const ORCHESTRATION_WORKER_START_METHODS: RpcMethod[] = [
   defineMethod({
@@ -127,6 +131,7 @@ export const ORCHESTRATION_WORKER_START_METHODS: RpcMethod[] = [
       let terminalHandle = params.terminal
       let terminalRevealWarning: string | undefined
       let failedStage = 'terminal_create'
+      let releaseExitedTerminal = false
       let setupReceipt: WorkerSetupReceipt = {
         requested: 'not_applicable',
         effective: 'not_applicable',
@@ -213,6 +218,10 @@ export const ORCHESTRATION_WORKER_START_METHODS: RpcMethod[] = [
           if (wait.status === 'unknown') {
             throw new OrchestrationError('operation_unknown', readinessFailure)
           }
+          releaseExitedTerminal = wait.status === 'exited' && !params.terminal
+          if (releaseExitedTerminal) {
+            attachExitedWorkerTerminalAuthority(runtime, setupStage)
+          }
           throw new Error(readinessFailure)
         }
         const terminalAuthority = requireWorkerAuthority(runtime, terminalHandle)
@@ -267,7 +276,7 @@ export const ORCHESTRATION_WORKER_START_METHODS: RpcMethod[] = [
           ...(terminalRevealWarning ? { warning: terminalRevealWarning } : {})
         }
       } catch (error) {
-        return failWorkerStartWithReceipt({
+        const failure = failWorkerStartWithReceipt({
           db,
           runId: run.id,
           taskId: task.id,
@@ -276,7 +285,16 @@ export const ORCHESTRATION_WORKER_START_METHODS: RpcMethod[] = [
           error,
           setup: setupReceipt,
           launch: launch.receipt
-        })
+        }) as Record<string, unknown>
+        return releaseExitedTerminal
+          ? releaseFailedWorkerStartTerminal({
+              runtime,
+              db,
+              dispatchId: started.dispatch.id,
+              failedStage,
+              failure
+            })
+          : failure
       }
     }
   })
