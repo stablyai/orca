@@ -1,6 +1,5 @@
 import {
   buildRegistry,
-  formatZodError,
   isStreamingMethod,
   type RpcAnyMethod,
   type RpcEnvelopeMeta,
@@ -24,7 +23,8 @@ import { orchestrationMigrationFence } from './orchestration-contract-fence'
 import { recordRuntimeFeatureInteraction } from './runtime-feature-interaction'
 import { OrchestrationLegacyCompatibility } from './orchestration-legacy-compatibility'
 import type { RpcDispatchStreamingOptions } from './dispatcher-stream-options'
-import { invalidArgumentResponse, mapDispatcherError } from './dispatcher-error-response'
+import { mapDispatcherError } from './dispatcher-error-response'
+import { parseRpcParams } from './dispatcher-param-parsing'
 
 export type DispatcherOptions = { runtime: OrcaRuntimeService; methods?: readonly RpcAnyMethod[] }
 
@@ -61,7 +61,7 @@ export class RpcDispatcher {
       return migrationFence
     }
 
-    const parsedParams = this.parseParams(request, method, meta)
+    const parsedParams = parseRpcParams(request, method, meta)
     if (parsedParams.error) {
       return parsedParams.error
     }
@@ -163,7 +163,7 @@ export class RpcDispatcher {
       return
     }
 
-    const parsedParams = this.parseParams(request, method, meta)
+    const parsedParams = parseRpcParams(request, method, meta)
     if (parsedParams.error) {
       reply(JSON.stringify(parsedParams.error))
       return
@@ -280,24 +280,6 @@ export class RpcDispatcher {
     } catch (error) {
       reply(JSON.stringify(mapDispatcherError(request, meta, error)))
     }
-  }
-
-  private parseParams(
-    request: RpcRequest,
-    method: RpcAnyMethod,
-    meta: RpcEnvelopeMeta
-  ): { value: unknown; error?: undefined } | { value?: undefined; error: RpcResponse } {
-    if (method.params === null) {
-      return { value: undefined }
-    }
-    const rawParams = request.params ?? {}
-    const result = method.params.safeParse(rawParams)
-    if (!result.success) {
-      return {
-        error: invalidArgumentResponse(request, meta, formatZodError(result.error))
-      }
-    }
-    return { value: result.data }
   }
 
   private meta(): RpcEnvelopeMeta {

@@ -53,4 +53,19 @@ describe('computer-use key specs', () => {
       expected
     )
   })
+
+  // STA-4818: these run inside zod superRefine, where a throw escapes safeParse.
+  it('stays total for absent and non-string input', () => {
+    for (const value of [undefined, null, 42, {}, ['Return']]) {
+      expect(computerUsePressKeyValidationMessage(value)).toEqual(
+        expect.stringContaining('Press-key accepts one key only')
+      )
+      expect(computerUseHotkeyValidationMessage(value)).toEqual(
+        expect.stringContaining('Hotkey requires a modifier and one key')
+      )
+      expect(computerUseClickModifiersValidationMessage(value)).toEqual(
+        expect.stringContaining('Click modifiers accept modifier keys only')
+      )
+    }
+  })
 })

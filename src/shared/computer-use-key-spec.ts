@@ -20,7 +20,13 @@ const PRESS_KEY_HINT =
 const CLICK_MODIFIERS_HINT =
   'Click modifiers accept modifier keys only, e.g. CmdOrCtrl or CmdOrCtrl+Shift.'
 
-export function computerUseHotkeyValidationMessage(key: string): string | null {
+// Why: these run inside zod superRefine, where a throw escapes safeParse and strands the RPC
+// caller with zero reply frames (STA-4818). A failed field-level check leaves the value absent,
+// so they must stay total over unknown input and report the hint instead.
+export function computerUseHotkeyValidationMessage(key: unknown): string | null {
+  if (typeof key !== 'string') {
+    return HOTKEY_HINT
+  }
   const parts = key.split('+').map((part) => part.trim())
   if (parts.length < 2 || parts.some((part) => part.length === 0)) {
     return HOTKEY_HINT
@@ -40,7 +46,10 @@ export function computerUseHotkeyValidationMessage(key: string): string | null {
   return null
 }
 
-export function computerUsePressKeyValidationMessage(key: string): string | null {
+export function computerUsePressKeyValidationMessage(key: unknown): string | null {
+  if (typeof key !== 'string') {
+    return PRESS_KEY_HINT
+  }
   const trimmed = key.trim()
   if (trimmed.length === 0) {
     return PRESS_KEY_HINT
@@ -51,7 +60,10 @@ export function computerUsePressKeyValidationMessage(key: string): string | null
   return null
 }
 
-export function computerUseClickModifiersValidationMessage(modifiers: string): string | null {
+export function computerUseClickModifiersValidationMessage(modifiers: unknown): string | null {
+  if (typeof modifiers !== 'string') {
+    return CLICK_MODIFIERS_HINT
+  }
   const parts = modifiers.split('+').map((part) => part.trim())
   if (
     parts.length === 0 ||

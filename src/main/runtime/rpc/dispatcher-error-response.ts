@@ -22,16 +22,26 @@ export function invalidArgumentResponse(
   )
 }
 
+// Why: one definition of "this error already carries a caller-facing validation message", shared
+// with the param-parsing guard so a thrown ZodError reads the same wherever it surfaced.
+export function validationErrorMessage(error: unknown): string | null {
+  if (error instanceof ZodError) {
+    return formatZodError(error)
+  }
+  if (error instanceof InvalidArgumentError) {
+    return error.message
+  }
+  return null
+}
+
 export function mapDispatcherError(
   request: RpcRequest,
   meta: RpcEnvelopeMeta,
   error: unknown
 ): RpcResponse {
-  if (error instanceof ZodError) {
-    return invalidArgumentResponse(request, meta, formatZodError(error))
-  }
-  if (error instanceof InvalidArgumentError) {
-    return invalidArgumentResponse(request, meta, error.message)
+  const validationMessage = validationErrorMessage(error)
+  if (validationMessage !== null) {
+    return invalidArgumentResponse(request, meta, validationMessage)
   }
   if (request.method.startsWith('browser.')) {
     return mapBrowserError(request.id, meta, error)

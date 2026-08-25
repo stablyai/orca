@@ -1678,8 +1678,50 @@ export class OrcaRuntimeRpcServer {
       return
     }
 
-    const abortRegistration = ws ? this.registerWebSocketDispatchAbort(ws) : null
+    // Why: names the slot we actually hold. admitLongPoll only increments when it returns null, so
+    // releasing on the rejection path would free someone else's slot.
+    const heldLongPoll = longPoll
+    let abortRegistration: ReturnType<typeof this.registerWebSocketDispatchAbort> | null = null
 
+    try {
+      abortRegistration = ws ? this.registerWebSocketDispatchAbort(ws) : null
+      await this.dispatchAuthenticatedWebSocketRequest(request, reply, sendBinary, device, token, {
+        ws,
+        authenticatedSocket,
+        abortRegistration
+      })
+    } catch (error) {
+      // Why: this handler is fired with `void` (see onText), so an escape here becomes an unhandled
+      // rejection and the client gets zero frames and hangs until its own timeout (STA-4818). The
+      // try opens at the acquisition so the finally always releases what was taken.
+      reply(
+        JSON.stringify(
+          this.buildError(
+            request.id,
+            'internal_error',
+            error instanceof Error ? error.message : String(error)
+          )
+        )
+      )
+    } finally {
+      abortRegistration?.dispose()
+      this.releaseLongPoll(heldLongPoll)
+    }
+  }
+
+  private async dispatchAuthenticatedWebSocketRequest(
+    request: RpcRequest,
+    reply: (response: string) => void,
+    sendBinary: (response: Uint8Array<ArrayBufferLike>) => boolean | void,
+    device: DeviceEntry,
+    token: string,
+    context: {
+      ws?: WebSocket
+      authenticatedSocket?: AuthenticatedMobileSocket
+      abortRegistration: { signal: AbortSignal; dispose: () => void } | null
+    }
+  ): Promise<void> {
+    const { ws, authenticatedSocket, abortRegistration } = context
     // Why: older pairings may lack scope metadata, so stamp the authenticated scope onto status.get.
     const replyForRequest =
       request.method === 'status.get'
@@ -1711,26 +1753,21 @@ export class OrcaRuntimeRpcServer {
               )
           }
         : undefined
-    try {
-      await this.dispatcher.dispatchStreaming(request, replyForRequest, {
-        // Why: the validated credential preserves existing federation ownership without trusting request fields.
-        authenticatedCallerFingerprint: fingerprintAuthenticatedPairingCredential(token),
-        connectionId,
-        clientId: token,
-        pairedDeviceId: device.deviceId,
-        // Why: gates the mobile-only payload diet so full-screen web/desktop clients aren't truncated.
-        clientKind: device.scope,
-        clientCapabilities: authenticatedSocket?.clientCapabilities,
-        pairing: pairingContext,
-        signal: abortRegistration?.signal,
-        sendBinary,
-        registerBinaryStreamHandler: (streamId, handler) =>
-          this.registerBinaryStreamHandler(connectionId, streamId, handler)
-      })
-    } finally {
-      abortRegistration?.dispose()
-      this.releaseLongPoll(longPoll)
-    }
+    await this.dispatcher.dispatchStreaming(request, replyForRequest, {
+      // Why: the validated credential preserves existing federation ownership without trusting request fields.
+      authenticatedCallerFingerprint: fingerprintAuthenticatedPairingCredential(token),
+      connectionId,
+      clientId: token,
+      pairedDeviceId: device.deviceId,
+      // Why: gates the mobile-only payload diet so full-screen web/desktop clients aren't truncated.
+      clientKind: device.scope,
+      clientCapabilities: authenticatedSocket?.clientCapabilities,
+      pairing: pairingContext,
+      signal: abortRegistration?.signal,
+      sendBinary,
+      registerBinaryStreamHandler: (streamId, handler) =>
+        this.registerBinaryStreamHandler(connectionId, streamId, handler)
+    })
   }
 
   private buildError(id: string, code: string, message: string): RpcResponse {
