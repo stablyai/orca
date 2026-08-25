@@ -1,5 +1,6 @@
 import { deriveGeneratedTabTitle } from '../../../../shared/agent-tab-title'
 import { isDecorativeAgentTitleFrameChange } from '../../../../shared/agent-decorative-title-signature'
+import { relabelCompatibleAgentIdentityFrameForOwner } from '../../../../shared/agent-title-owner'
 import { parseLegacyNumericPaneKey, parsePaneKey } from '../../../../shared/stable-pane-id'
 import type { Tab } from '../../../../shared/tab-types'
 import type { TerminalTab } from '../../../../shared/terminal-tab-types'
@@ -179,7 +180,10 @@ export function applyTerminalTabTitleUpdates(
     if (!currentTab || !tabIndexes) {
       continue
     }
-    const nextTitle = title.trim() || getFallbackTabTitle(currentTab)
+    // Why: a wrapped harness emits the inner agent's identity (OMP wraps Pi), so pin those frames
+    // to the launch owner — otherwise the alternating label defeats the decorative check below.
+    const ownedTitle = relabelCompatibleAgentIdentityFrameForOwner(title, currentTab.launchAgent)
+    const nextTitle = ownedTitle.trim() || getFallbackTabTitle(currentTab)
     if (isDecorativeAgentTitleFrameChange(currentTab.title, nextTitle)) {
       updateStageUnifiedLabel(stage, tabId, 'label', currentTab.title)
       continue

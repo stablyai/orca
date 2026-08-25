@@ -1,4 +1,6 @@
 import { isDecorativeAgentTitleFrameChange } from '../../../../shared/agent-decorative-title-signature'
+import { relabelCompatibleAgentIdentityFrameForOwner } from '../../../../shared/agent-title-owner'
+import { getPiCompatibleSyntheticAgentLabel } from '../../../../shared/pi-compatible-synthetic-title'
 import { scheduleRuntimeGraphSync } from '@/runtime/sync-runtime-graph'
 import { classifyTitleActivity } from '@/lib/pane-agent-evidence'
 import {
@@ -10,7 +12,20 @@ import {
   getTerminalTabOwnerWorktreeId
 } from '../slices/terminal-tab-owner-index'
 import { getTabIdFromPaneKey } from './terminal-pty-identities'
+import type { TuiAgent } from '../../../../shared/tui-agent'
+import type { AppState } from '../types'
 import type { TerminalSlice, TerminalStoreGet, TerminalStoreSet } from './terminal-state'
+
+function getTabLaunchAgent(
+  state: Pick<AppState, 'tabsByWorktree'>,
+  tabId: string
+): TuiAgent | undefined {
+  const ownerWorktreeId = getTerminalTabOwnerWorktreeId(state.tabsByWorktree, tabId)
+  if (!ownerWorktreeId) {
+    return undefined
+  }
+  return state.tabsByWorktree[ownerWorktreeId]?.find((tab) => tab.id === tabId)?.launchAgent
+}
 
 export function createTerminalTabPresentationActions(
   set: TerminalStoreSet,
@@ -142,8 +157,13 @@ export function createTerminalTabPresentationActions(
         return { tabsByWorktree: { ...s.tabsByWorktree, [ownerWorktreeId]: nextTabs } }
       })
     },
-    setRuntimePaneTitle: (tabId, paneId, title) => {
+    setRuntimePaneTitle: (tabId, paneId, rawTitle) => {
       set((s) => {
+        // Why: same-group frames (OMP wraps Pi) must read as the launch owner or the alternating
+        // label defeats the decorative check below; the owner lookup stays off the common path.
+        const title = getPiCompatibleSyntheticAgentLabel(rawTitle)
+          ? relabelCompatibleAgentIdentityFrameForOwner(rawTitle, getTabLaunchAgent(s, tabId))
+          : rawTitle
         const currentByPane = s.runtimePaneTitlesByTabId[tabId] ?? {}
         const prevTitle = currentByPane[paneId]
         if (prevTitle === title) {
