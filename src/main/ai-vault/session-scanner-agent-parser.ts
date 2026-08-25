@@ -11,6 +11,7 @@ import {
   parseMessageGraphSessionFile,
   parseRovoSessionFile
 } from './scanners/session-scanner-graph-parsers'
+import { parseJunieSessionFile } from './session-scanner-junie-parser'
 import { parseKimiSessionFile } from './scanners/kimi/session-scanner-kimi-parser'
 import { parseMuseSessionFile } from './scanners/muse/session-scanner-muse-parser'
 import { splitOpenCodeSqliteCandidate } from '../../shared/opencode-sqlite-session-path'
@@ -150,5 +151,7 @@ export async function parseAgentSessionFile(
       return parseJcodeSessionFile(candidate.file, platform, messages)
     case 'kiro':
       return parseKiroSessionFile(candidate.file, platform, messages, onSkippedRecords)
+    case 'junie':
+      return parseJunieSessionFile(candidate.file, platform)
   }
 }

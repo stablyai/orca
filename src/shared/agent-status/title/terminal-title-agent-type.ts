@@ -182,6 +182,8 @@ function computeAgentLabel(title: string): string | null {
   }
   if (titleHasAgentName(title, 'jcode')) {
     return 'Jcode'
+  if (titleHasAgentName(title, 'junie')) {
+    return 'Junie'
   }
   if (titleHasAgentName(title, 'antigravity') || AGY_AGENT_NAME_RE.test(title)) {
     return 'Antigravity'
@@ -234,6 +236,7 @@ const TITLE_LABEL_TO_AGENT: Partial<Record<string, TerminalAgent>> = {
   Grok: 'grok',
   Devin: 'devin',
   Jcode: 'jcode',
+  Junie: 'junie',
   Antigravity: 'antigravity',
   OpenCode: 'opencode',
   'OpenCode 2': 'opencode2',
