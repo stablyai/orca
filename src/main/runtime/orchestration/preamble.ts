@@ -33,6 +33,11 @@ export type PreambleParams = {
   workerKind?: 'prompt-returning-agent' | 'bare-shell'
   // Why gated: advertising a verb the depth cap will reject just burns a turn.
   canDispatchSubWorkers?: boolean
+  // Why: the coordinator may inject task-required protocol actions (extra
+  // reports, custom steps) that must complete before worker_done. Inserted
+  // verbatim (trimmed) as its own block inside CLI COMMANDS ahead of the
+  // worker_done report so agents read the full protocol in execution order.
+  preCompletionProtocol?: string
 }
 
 // Why: 5 minutes is frequent enough that the coordinator's stale-heartbeat
@@ -58,6 +63,9 @@ export function buildDispatchPreamble(params: PreambleParams): string {
   const capabilityFlag = params.dispatchCapability
     ? ` --dispatch-capability ${params.dispatchCapability}`
     : ''
+  const preCompletionBlock = params.preCompletionProtocol?.trim()
+    ? `\n${params.preCompletionProtocol.trim()}\n`
+    : ''
 
   // Why: one-line recipes paste unchanged in POSIX shells, PowerShell, and cmd.exe.
   // Why fenced: keeps the shell comments executable without rendering them as Chat UI headings.
@@ -69,7 +77,7 @@ You talk to the coordinator only through the CLI commands below. Do not use
 Slack, GitHub comments, or any other channel to reach a human during the run.
 
 === CLI COMMANDS ===
-
+${preCompletionBlock}
 \`\`\`sh
   # Report the terminal task outcome (REQUIRED exactly once).
   #
@@ -85,6 +93,11 @@ Slack, GitHub comments, or any other channel to reach a human during the run.
   # Never encode failure only in prose and never silently exit.
   # Include BOTH taskId and dispatchId in the payload so a late completion
   # from a failed retry cannot complete the current dispatch.
+  #
+  # RULE: worker_done is the FINAL Dispatch-scoped protocol action. Complete
+  # every other task-required protocol action (ask, escalation, heartbeat)
+  # before sending it; once worker_done is accepted, later Dispatch-scoped
+  # actions may be rejected.
   ${cli} orchestration send --from ${params.workerHandle}${capabilityFlag} --type worker_done --subject "<short status>" --body "<3-sentence summary: what you did, what you found, what's left>" --task-id ${params.taskId} --dispatch-id ${params.dispatchId} --outcome succeeded
 
   # BEHAVIOR RULE: send a heartbeat every ${HEARTBEAT_INTERVAL_MIN} minutes
