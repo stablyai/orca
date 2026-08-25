@@ -115,6 +115,8 @@ type PtyShutdownOperation = {
 const ptyShutdownOperations = new Map<string, PtyShutdownOperation>()
 type PendingLocalPtySpawn = {
   canceled: boolean
+  cancel: () => void
+  cancellation: Promise<never>
 }
 const pendingLocalPtySpawns = new Map<string, Set<PendingLocalPtySpawn>>()
 const ptyShellName = new Map<string, string>()
@@ -368,12 +370,21 @@ async function awaitCancelableLocalPtySpawn<T>(
   id: string,
   operation: () => Promise<T> | T
 ): Promise<T> {
-  const pendingSpawn: PendingLocalPtySpawn = { canceled: false }
+  let cancel!: () => void
+  const cancellation = new Promise<never>((_, reject) => {
+    cancel = () => reject(new Error(`PTY spawn canceled: ${id}`))
+  })
+  const pendingSpawn: PendingLocalPtySpawn = { canceled: false, cancel, cancellation }
   const pending = pendingLocalPtySpawns.get(id) ?? new Set()
   pending.add(pendingSpawn)
   pendingLocalPtySpawns.set(id, pending)
   try {
-    const result = await operation()
+    // Why: shutdown must reject the caller while an app-level environment hook
+    // is still pending; the hook itself may not support cancellation.
+    const result = await Promise.race([
+      Promise.resolve().then(operation),
+      pendingSpawn.cancellation
+    ])
     if (pendingSpawn.canceled) {
       throw new Error(`PTY spawn canceled: ${id}`)
     }
@@ -397,7 +408,10 @@ function cancelPendingLocalPtySpawns(id: string): void {
     return
   }
   for (const pendingSpawn of pending) {
-    pendingSpawn.canceled = true
+    if (!pendingSpawn.canceled) {
+      pendingSpawn.canceled = true
+      pendingSpawn.cancel()
+    }
   }
 }
 

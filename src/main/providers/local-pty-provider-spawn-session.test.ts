@@ -338,9 +338,9 @@ describe('LocalPtyProvider', () => {
       await vi.waitFor(() => expect(buildSpawnEnv).toHaveBeenCalledOnce())
 
       await provider.shutdown('pending-environment-session', { immediate: true })
-      finishEnvironmentBuild()
       await canceledSpawn
       expect(spawnMock).not.toHaveBeenCalled()
+      finishEnvironmentBuild()
 
       provider.configure({ buildSpawnEnv: (_id, env) => env })
       await expect(

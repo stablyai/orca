@@ -4,6 +4,13 @@ import { spawnSync } from 'node:child_process'
 import { tmpdir } from 'node:os'
 import { dirname, join, win32 as pathWin32 } from 'node:path'
 
+const execFileMock = vi.hoisted(() => vi.fn())
+
+vi.mock('node:child_process', async (importOriginal) => ({
+  ...(await importOriginal()),
+  execFile: execFileMock
+}))
+
 import { MANAGED_HOOK_TIMEOUT_SECONDS } from '../agent-hooks/installer-utils'
 import { POSIX_HOOK_STDIN_DRAIN_COMMAND } from '../agent-hooks/hook-stdin-contract'
 import {
@@ -17,12 +24,21 @@ import {
 } from './config-toml-trust'
 import {
   _internals,
+  CodexHookService,
   createCodexWslRuntimeHookInstallPlan,
   type CodexWslRuntimeHookInstallPlan
 } from './hook-service'
-import type { CodexHookTrustGrantRequest } from './codex-app-server-client'
+import { _internals as wslPlanInternals } from './codex-wsl-hook-install-plan'
+import type {
+  CodexHookTrustGrantRequest,
+  CodexHookTrustGrantSessionResult
+} from './codex-app-server-client'
 import { codexAppServerCapabilityCache } from './codex-app-server-capability-cache'
 import { _internals as trustGrantInternals } from './codex-hook-trust-grant'
+import {
+  resetCodexHookTransactionQueueForTests,
+  runCodexHookTransaction
+} from './codex-hook-transaction-queue'
 
 type HooksConfig = {
   hooks: Record<string, { hooks?: { command?: string }[] }[]>
@@ -39,9 +55,18 @@ const managedEvents = [
   'Stop'
 ] as const
 
+const originalPlatform = process.platform
 let tempRoots: string[] = []
 
+function setPlatform(platform: NodeJS.Platform): void {
+  Object.defineProperty(process, 'platform', { configurable: true, value: platform })
+}
+
 afterEach(() => {
+  setPlatform(originalPlatform)
+  resetCodexHookTransactionQueueForTests()
+  execFileMock.mockReset()
+  wslPlanInternals.resetWslCanonicalPathCache()
   for (const root of tempRoots) {
     rmSync(root, { recursive: true, force: true })
   }
@@ -482,6 +507,67 @@ describe('Codex WSL runtime hook install app-server grant lane', () => {
     } else {
       process.env.ORCA_USER_DATA_PATH = previousUserDataPath
     }
+  })
+
+  it('preserves trust when a missing path settlement arrives during a delayed grant', async () => {
+    setPlatform('win32')
+    const runtimeHome = mkdtempSync(join(tmpdir(), 'orca-wsl-settlement-race-'))
+    tempRoots.push(runtimeHome)
+    const configPath = join(runtimeHome, 'hooks.json')
+    const tomlPath = join(runtimeHome, 'config.toml')
+    writeFileSync(configPath, '{"hooks":{}}\n', 'utf-8')
+    writeFileSync(tomlPath, '', 'utf-8')
+
+    let finishGrant!: () => void
+    const runner = vi.fn((request: CodexHookTrustGrantRequest) => {
+      const entries = request.expectedTrustKeys.map((key) => {
+        const parsed = parseTrustKey(key)!
+        return {
+          sourcePath: parsed.sourcePath,
+          eventLabel: parsed.eventLabel,
+          groupIndex: parsed.groupIndex,
+          handlerIndex: parsed.handlerIndex,
+          command: request.managedCommand,
+          trustedHash: `sha256:codex-${parsed.eventLabel}`
+        }
+      })
+      upsertHookTrustEntries(tomlPath, entries)
+      return new Promise<CodexHookTrustGrantSessionResult>((resolve) => {
+        finishGrant = () =>
+          resolve({
+            outcome: 'granted',
+            wroteTrust: true,
+            entries: request.expectedTrustKeys.map((key) => ({
+              key,
+              normalizedKey: normalizeHookTrustKeyForLookup(key),
+              trustedHash: `sha256:codex-${parseTrustKey(key)!.eventLabel}`
+            }))
+          })
+      })
+    })
+    trustGrantInternals.setGrantSessionRunnerSync(runner)
+
+    const service = new CodexHookService()
+    const install = service.installForRuntimeHome(runtimeHome, {
+      runtime: 'wsl',
+      wslDistro: 'Ubuntu'
+    })
+    await vi.waitFor(() => {
+      expect(runner).toHaveBeenCalledOnce()
+      expect(execFileMock).toHaveBeenCalledOnce()
+    })
+    expect(readHookTrustEntries(tomlPath).size).toBeGreaterThan(0)
+
+    const callback = execFileMock.mock.calls[0]?.[3] as (
+      error: Error | null,
+      stdout: string
+    ) => void
+    callback(null, '__ORCA_WSL_PATH_MISSING__\n')
+    finishGrant()
+
+    await expect(install).resolves.toMatchObject({ state: 'installed' })
+    await runCodexHookTransaction(() => undefined)
+    expect(readHookTrustEntries(tomlPath).size).toBeGreaterThan(0)
   })
 
   it('grants WSL managed trust through codex inside the distro instead of self-computed writes', async () => {

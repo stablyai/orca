@@ -1072,48 +1072,47 @@ export class CodexHookService {
   ): Promise<AgentHookInstallStatus | null> {
     const generation = this.supersedeWslReconciliation(runtimeHomePath)
     let installedTrustConfigPath: string | null = null
-    // Why: JS is single-threaded, so the synchronous install below finishes
-    // before any async `wsl.exe` settlement callback runs — this flag is
-    // always set by the time the callback reads it.
     let installSucceeded = false
     const onCanonicalPathSettled = (settlement: WslCanonicalPathSettlement): void => {
       if (!runtimeHomePath) {
         return
       }
       const key = getWslReconciliationKey(runtimeHomePath)
-      const resolvedPlan =
-        settlement.status === 'resolved'
-          ? createCodexWslRuntimeHookInstallPlan(
-              runtimeHomePath,
-              target,
-              () => settlement.canonicalPath
-            )
-          : null
-      const action = getWslHookReconciliationAction({
-        settlement,
-        isCurrentGeneration: this.wslReconciliationGeneration.get(key) === generation,
-        installedTrustConfigPath,
-        resolvedTrustConfigPath: resolvedPlan?.trustConfigPath ?? null,
-        installSucceeded
-      })
-      if (action === 'none') {
-        return
-      }
-      if (action === 'remove') {
-        try {
-          removeStaleWslRuntimeManagedHookTrustEntries(
-            pathWin32.join(runtimeHomePath, 'config.toml'),
-            []
-          )
-        } catch (error) {
-          console.warn('[codex-hook-service] failed to revoke stale WSL hook trust', error)
-        }
-        return
-      }
-      if (!resolvedPlan) {
-        return
-      }
       runWslHookReconciliation(async () => {
+        // Why: settlement can queue behind the initial grant; decide only
+        // after that transaction updates the current install state.
+        const resolvedPlan =
+          settlement.status === 'resolved'
+            ? createCodexWslRuntimeHookInstallPlan(
+                runtimeHomePath,
+                target,
+                () => settlement.canonicalPath
+              )
+            : null
+        const action = getWslHookReconciliationAction({
+          settlement,
+          isCurrentGeneration: this.wslReconciliationGeneration.get(key) === generation,
+          installedTrustConfigPath,
+          resolvedTrustConfigPath: resolvedPlan?.trustConfigPath ?? null,
+          installSucceeded
+        })
+        if (action === 'none') {
+          return
+        }
+        if (action === 'remove') {
+          try {
+            removeStaleWslRuntimeManagedHookTrustEntries(
+              pathWin32.join(runtimeHomePath, 'config.toml'),
+              []
+            )
+          } catch (error) {
+            console.warn('[codex-hook-service] failed to revoke stale WSL hook trust', error)
+          }
+          return
+        }
+        if (!resolvedPlan) {
+          return
+        }
         const status = await installManagedHooksIntoWslRuntime(resolvedPlan)
         if (status.state === 'error') {
           console.warn('[codex-hook-service] failed to reconcile WSL hook path', status.detail)
