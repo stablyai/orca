@@ -20,6 +20,11 @@ describe('detectLanguage', () => {
     expect(detectLanguage('/home/alice/.ocamlinit')).toBe('ocaml')
   })
 
+  it('maps MLX files to their own language id, not plain ocaml', () => {
+    // Why: MLX is OCaml with JSX expressions and has a separate grammar.
+    expect(detectLanguage('src/app.mlx')).toBe('ocaml.mlx')
+  })
+
   it('leaves ocamllex and Menhir sources as plaintext', () => {
     // Why: .mll and .mly are separate grammars that only embed OCaml, so
     // colouring them as OCaml would mis-highlight their rule sections.

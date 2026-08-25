@@ -89,6 +89,9 @@ const EXT_TO_LANGUAGE: Record<string, string> = {
   '.hs': 'haskell',
   '.ml': 'ocaml',
   '.mli': 'ocaml',
+  // Why: MLX is OCaml with JSX expressions and has its own grammar, so it maps
+  // to a separate language id rather than onto 'ocaml'.
+  '.mlx': 'ocaml.mlx',
   '.clj': 'clojure',
   '.vue': 'vue',
   '.svelte': 'svelte',

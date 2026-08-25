@@ -112,6 +112,7 @@ export const FILE_ICON_BY_EXTENSION: Record<string, LucideIcon> = {
   mkv: FileVideo,
   ml: FileCode,
   mli: FileCode,
+  mlx: FileCode,
   mmd: FileChartColumn,
   mov: FileVideo,
   mp3: FileMusic,

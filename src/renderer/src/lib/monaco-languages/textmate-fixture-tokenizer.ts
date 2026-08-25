@@ -1,6 +1,7 @@
 import { createRequire } from 'node:module'
 import { readFile } from 'node:fs/promises'
 import { join } from 'node:path'
+import { expect } from 'vitest'
 import { createOnigScanner, createOnigString, loadWASM } from 'vscode-oniguruma'
 import type { IOnigLib } from 'vscode-textmate'
 import { createTextMateTokensProvider } from './textmate-token-provider'
@@ -72,5 +73,37 @@ export async function tokenizeFixture(options: TokenizeFixtureOptions): Promise<
     // Why: the leftover state is what an editor carries into the rest of the
     // file, so one more line surfaces any comment or string left open.
     trailingScopes: provider.tokenize(options.trailingLine, state).tokens.map((t) => t.scopes)
+  }
+}
+
+export type FixtureQueries = {
+  /** Tokens of the single line containing `fragment`, optionally `lineOffset` below it. */
+  lineWith: (fragment: string, lineOffset?: number) => FixtureToken[]
+  scopesOf: (fragment: string, lineOffset?: number) => string[]
+  /** Scope of the token equal to `text` on the line containing `fragment`. */
+  scopeOnLine: (fragment: string, text: string) => string | undefined
+  /** Scope shared by every token equal to `text` anywhere in the fixture. */
+  uniqueScopeOf: (text: string) => string | undefined
+}
+
+export function createFixtureQueries(fixture: TokenizedFixture): FixtureQueries {
+  function lineWith(fragment: string, lineOffset = 0): FixtureToken[] {
+    // Why: the fragment must be unique as well as present — `let octa` also
+    // matches `let octal`, which would assert against the wrong line.
+    const matches = fixture.lines.filter((line) => line.includes(fragment))
+    expect(matches, `fixture lines containing ${fragment}`).toHaveLength(1)
+    return fixture.tokensByLine[fixture.lines.indexOf(matches[0]!) + lineOffset]!
+  }
+
+  return {
+    lineWith,
+    scopesOf: (fragment, lineOffset) => lineWith(fragment, lineOffset).map((t) => t.scope),
+    scopeOnLine: (fragment, text) => lineWith(fragment).find((t) => t.text === text)?.scope,
+    uniqueScopeOf: (text) => {
+      const matches = fixture.allTokens.filter((token) => token.text === text)
+      expect(matches, `fixture tokens equal to ${text}`).not.toHaveLength(0)
+      expect(new Set(matches.map((t) => t.scope)), `scopes for ${text}`).toHaveLength(1)
+      return matches[0]!.scope
+    }
   }
 }

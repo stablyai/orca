@@ -2,19 +2,25 @@ import { join } from 'node:path'
 import { beforeAll, describe, expect, it, vi } from 'vitest'
 import {
   OCAML_LANGUAGE_ID,
+  OCAML_MLX_LANGUAGE_ID,
+  OCAML_MLX_TEXTMATE_SCOPE,
   OCAML_TEXTMATE_SCOPE,
   loadOcamlTextMateGrammar,
   ocamlLanguageConfiguration,
-  registerOcamlLanguage
+  registerOcamlLanguage,
+  registerOcamlMlxLanguage
 } from './register-ocaml'
-import { tokenizeFixture } from './textmate-fixture-tokenizer'
-import type { FixtureToken, TokenizedFixture } from './textmate-fixture-tokenizer'
+import { createFixtureQueries, tokenizeFixture } from './textmate-fixture-tokenizer'
+import type { TokenizedFixture } from './textmate-fixture-tokenizer'
 
-function tokenizeOcamlFixture(fixtureName: string): Promise<TokenizedFixture> {
+function tokenizeOcamlFixture(
+  fixtureName: string,
+  scopeName = OCAML_TEXTMATE_SCOPE
+): Promise<TokenizedFixture> {
   return tokenizeFixture({
     fixtureDir: join(import.meta.dirname, '__fixtures__'),
     fixtureName,
-    scopeName: OCAML_TEXTMATE_SCOPE,
+    scopeName,
     loadGrammar: loadOcamlTextMateGrammar,
     trailingLine: 'let after = 1'
   })
@@ -106,26 +112,13 @@ describe('loadOcamlTextMateGrammar', () => {
 
 describe('OCaml tokenization', () => {
   let fixture: TokenizedFixture
+  let scopesOf: ReturnType<typeof createFixtureQueries>['scopesOf']
+  let scopeOnLine: ReturnType<typeof createFixtureQueries>['scopeOnLine']
 
   beforeAll(async () => {
     fixture = await tokenizeOcamlFixture('ocaml-syntax-traps.ml')
+    ;({ scopesOf, scopeOnLine } = createFixtureQueries(fixture))
   })
-
-  function lineWith(fragment: string, lineOffset = 0): FixtureToken[] {
-    // Why: the fragment must be unique as well as present — `let octa` also
-    // matches `let octal`, which would assert against the wrong line.
-    const matches = fixture.lines.filter((line) => line.includes(fragment))
-    expect(matches, `fixture lines containing ${fragment}`).toHaveLength(1)
-    return fixture.tokensByLine[fixture.lines.indexOf(matches[0]!) + lineOffset]!
-  }
-
-  function scopesOf(fragment: string, lineOffset = 0): string[] {
-    return lineWith(fragment, lineOffset).map((token) => token.scope)
-  }
-
-  function scopeOnLine(fragment: string, text: string): string | undefined {
-    return lineWith(fragment).find((token) => token.text === text)?.scope
-  }
 
   it('keeps nested comments inside the comment scope and closes them', () => {
     expect(new Set(scopesOf('innermost'))).toEqual(new Set(['comment.block.ocaml']))
@@ -215,17 +208,12 @@ describe('OCaml signature tokenization', () => {
   // Why: `.mli` tokenizes under `source.ocaml`, which reaches the interface
   // rules only through its `source.ocaml.interface#bindings` include.
   let fixture: TokenizedFixture
+  let uniqueScopeOf: ReturnType<typeof createFixtureQueries>['uniqueScopeOf']
 
   beforeAll(async () => {
     fixture = await tokenizeOcamlFixture('ocaml-signature-traps.mli')
+    ;({ uniqueScopeOf } = createFixtureQueries(fixture))
   })
-
-  function uniqueScopeOf(text: string): string | undefined {
-    const matches = fixture.allTokens.filter((token) => token.text === text)
-    expect(matches, `fixture tokens equal to ${text}`).not.toHaveLength(0)
-    expect(new Set(matches.map((token) => token.scope)), `scopes for ${text}`).toHaveLength(1)
-    return matches[0]!.scope
-  }
 
   it('scopes signature-only binding keywords and the names they bind', () => {
     for (const keyword of ['val', 'external', 'method']) {
@@ -251,5 +239,68 @@ describe('OCaml signature tokenization', () => {
   it('leaves no comment state open after a trailing doc comment', () => {
     expect(fixture.trailingScopes[0]).toBe('keyword.ocaml')
     expect(fixture.trailingScopes).not.toContain('comment.doc.ocaml')
+  })
+})
+
+describe('registerOcamlMlxLanguage', () => {
+  it('registers .mlx as its own language id sharing the OCaml configuration', () => {
+    const monaco = createMonacoMock()
+
+    registerOcamlMlxLanguage(monaco as never)
+
+    expect(monaco.languages.register).toHaveBeenCalledWith({
+      id: OCAML_MLX_LANGUAGE_ID,
+      extensions: ['.mlx'],
+      aliases: ['OCaml.mlx', 'ocaml.mlx']
+    })
+    expect(monaco.languages.setLanguageConfiguration).toHaveBeenCalledWith(
+      OCAML_MLX_LANGUAGE_ID,
+      ocamlLanguageConfiguration
+    )
+  })
+
+  it('serves the MLX grammar for its own scope', async () => {
+    await expect(loadOcamlTextMateGrammar(OCAML_MLX_TEXTMATE_SCOPE)).resolves.toMatchObject({
+      name: 'OCaml.mlx',
+      scopeName: OCAML_MLX_TEXTMATE_SCOPE
+    })
+  })
+})
+
+describe('MLX tokenization', () => {
+  let fixture: TokenizedFixture
+  let scopeOnLine: ReturnType<typeof createFixtureQueries>['scopeOnLine']
+
+  beforeAll(async () => {
+    fixture = await tokenizeOcamlFixture('ocaml-mlx-syntax-traps.mlx', OCAML_MLX_TEXTMATE_SCOPE)
+    ;({ scopeOnLine } = createFixtureQueries(fixture))
+  })
+
+  it('scopes tag delimiters, names and attributes as markup', () => {
+    expect(scopeOnLine('let plain', '<')).toBe('punctuation.definition.tag.begin.js')
+    expect(scopeOnLine('let plain', '>')).toBe('punctuation.definition.tag.end.js')
+    expect(scopeOnLine('let plain', '</')).toBe('punctuation.definition.tag.begin.js')
+    expect(scopeOnLine('let plain', 'div')).toBe('entity.name.tag.inline.any.html')
+    expect(scopeOnLine('let plain', 'className')).toBe('entity.other.attribute-name.namespace.js')
+    expect(scopeOnLine('let self_closing', '/>')).toBe('punctuation.definition.tag.end.js')
+  })
+
+  it('keeps OCaml scopes for expressions embedded in braces', () => {
+    expect(scopeOnLine('let plain', 'React')).toBe('constant.language.capital-identifier.ocaml')
+    expect(scopeOnLine('let capitalised', 'fun')).toBe('keyword.other.ocaml')
+    expect(scopeOnLine('let capitalised', 'true')).toBe('constant.language.boolean.ocaml')
+    expect(scopeOnLine('let plain', 'card')).toBe('string.quoted.double.ocaml')
+  })
+
+  it('reads a real comparison as an operator rather than opening a tag', () => {
+    // Why: `<` and `>` are OCaml operators, so the grammar must not treat every
+    // one of them as markup — that would swallow the rest of the file.
+    expect(scopeOnLine('let compared', '<')).toBe('keyword.operator.ocaml')
+    expect(scopeOnLine('let compared', '>')).toBe('keyword.operator.ocaml')
+  })
+
+  it('leaves no markup or comment state open at the end of the fixture', () => {
+    expect(fixture.trailingScopes[0]).toBe('keyword.ocaml')
+    expect(fixture.trailingScopes.join(',')).not.toContain('tag')
   })
 })
