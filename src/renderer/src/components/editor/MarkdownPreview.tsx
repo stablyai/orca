@@ -21,6 +21,10 @@ import rehypeRaw from 'rehype-raw'
 import rehypeSanitize, { defaultSchema } from 'rehype-sanitize'
 import rehypeSlug from 'rehype-slug'
 import { extractFrontMatter } from './markdown-frontmatter'
+import { MarkdownFrontMatterView } from './MarkdownFrontMatterView'
+import { remarkGithubAlerts } from './markdown-github-alerts'
+import { rehypeWrapMathBlocks } from './rehype-wrap-math-blocks'
+import { getGithubAlertType, getGithubAlertTitle, GithubAlertIcon } from './MarkdownGithubAlert'
 import {
   Check,
   ChevronDown,
@@ -293,6 +297,27 @@ function hasMarkdownPreviewNestedBlock(node: MarkdownPreviewPositionNode | undef
   return Boolean(node?.children?.some((child) => child.tagName && blockTags.has(child.tagName)))
 }
 
+// Reads the fenced-code language off the code child's `language-*` class.
+// Returns null for plain fences (no language) so no label is shown. Reads the
+// className prop rather than matching on element type: react-markdown wraps the
+// child in the custom `code` component, so its type isn't the string 'code'.
+function extractCodeBlockLanguage(children: React.ReactNode): string | null {
+  for (const child of React.Children.toArray(children)) {
+    if (!React.isValidElement(child)) {
+      continue
+    }
+    const className = (child.props as { className?: unknown }).className
+    // Why: bounded charset (not \S+) — sanitize passes any `language-*` class, and
+    // the label renders raw; `#+.` keep c#/f#/c++/vb.net intact.
+    const match =
+      typeof className === 'string' ? className.match(/(?:^|\s)language-([\w#+.-]{1,32})/) : null
+    if (match) {
+      return match[1]
+    }
+  }
+  return null
+}
+
 const markdownPreviewSanitizeSchema = {
   ...defaultSchema,
   tagNames: [...(defaultSchema.tagNames ?? []), 'details', 'summary', 'kbd', 'sub', 'sup', 'ins'],
@@ -306,6 +331,10 @@ const markdownPreviewSanitizeSchema = {
     ...defaultSchema.attributes,
     '*': [...(defaultSchema.attributes?.['*'] ?? []), 'id'],
     a: [...(defaultSchema.attributes?.a ?? []), 'href', 'title'],
+    blockquote: [
+      ...(defaultSchema.attributes?.blockquote ?? []),
+      ['className', 'markdown-alert', /^markdown-alert-\w+$/]
+    ],
     code: [
       ...(defaultSchema.attributes?.code ?? []),
       ['className', /^language-[\w-]+$/, 'math-inline', 'math-display']
@@ -339,6 +368,8 @@ const markdownPreviewSanitizeSchema = {
 type MarkdownPluginList = NonNullable<ReactMarkdownOptions['remarkPlugins']>
 const MARKDOWN_REMARK_PLUGINS: MarkdownPluginList = [
   remarkGfm,
+  // Why: must run before remark-breaks so the `[!TYPE]` marker and body share one text node.
+  remarkGithubAlerts,
   remarkBreaks,
   remarkFrontmatter,
   remarkMath,
@@ -350,6 +381,9 @@ const MARKDOWN_REHYPE_PLUGINS: MarkdownPluginList = [
   [rehypeSanitize, markdownPreviewSanitizeSchema],
   rehypeSlug,
   rehypeHighlight,
+  // Why: must run before rehype-katex, which otherwise replaces block math with a
+  // position-less span the annotation layer can't anchor a note to.
+  rehypeWrapMathBlocks,
   rehypeKatex
 ]
 
@@ -663,15 +697,6 @@ export default function MarkdownPreview({
     () => createMarkdownDocumentIndex(markdownDocuments),
     [markdownDocuments]
   )
-  const frontMatterInner = useMemo(() => {
-    if (!frontMatter) {
-      return ''
-    }
-    return frontMatter.raw
-      .replace(/^(?:---|\+\+\+)\r?\n/, '')
-      .replace(/\r?\n(?:---|\+\+\+)\r?\n?$/, '')
-      .trim()
-  }, [frontMatter])
   // Why: front matter is visible by default; the store map only carries per-file hide overrides.
   const toggleableSourceFileId: string | null = sourceFileId ?? null
   const frontmatterVisible = toggleableSourceFileId
@@ -1323,9 +1348,14 @@ export default function MarkdownPreview({
         return rendered
       }
       const hasReviewNotes = getMarkdownCommentsForRange(range).length > 0
+      const isActive = activeAnnotationBlockKey === blockKey
       return (
         <div
-          className={`markdown-annotation-block ${hasReviewNotes ? 'has-review-notes' : ''}`.trim()}
+          className={`markdown-annotation-block ${hasReviewNotes ? 'has-review-notes' : ''} ${
+            isActive ? 'is-active' : ''
+          }`
+            .replace(/\s+/g, ' ')
+            .trim()}
           data-source-line={range.startLine}
           data-source-end-line={range.endLine}
           data-annotation-block-key={blockKey}
@@ -1336,7 +1366,12 @@ export default function MarkdownPreview({
         </div>
       )
     },
-    [getMarkdownCommentsForRange, handleAnnotatedMarkdownBlockClick, renderAnnotationControls]
+    [
+      activeAnnotationBlockKey,
+      getMarkdownCommentsForRange,
+      handleAnnotatedMarkdownBlockClick,
+      renderAnnotationControls
+    ]
   )
 
   const components: Components = useMemo(() => {
@@ -1695,17 +1730,49 @@ export default function MarkdownPreview({
         return wrapAnnotatedBlock(
           'pre',
           node as MarkdownPreviewPositionNode,
-          <CodeBlockCopyButton {...props}>{children}</CodeBlockCopyButton>
+          <CodeBlockCopyButton language={extractCodeBlockLanguage(children)} {...props}>
+            {children}
+          </CodeBlockCopyButton>
         )
       },
       p: ({ node, children, ...props }) =>
         wrapAnnotatedBlock('p', node as MarkdownPreviewPositionNode, <p {...props}>{children}</p>),
-      blockquote: ({ node, children, ...props }) =>
-        wrapAnnotatedBlock(
-          'blockquote',
-          node as MarkdownPreviewPositionNode,
-          <blockquote {...props}>{children}</blockquote>
-        ),
+      // Why: block math is wrapped in <div class="math-block"> by rehypeWrapMathBlocks
+      // so it can be annotated like other blocks; route just that div through the
+      // annotation wrapper. Every other div passes through untouched.
+      div: ({ node, className, children, ...props }) => {
+        const rendered = (
+          <div className={className} {...props}>
+            {children}
+          </div>
+        )
+        if (!/\bmath-block\b/.test(className ?? '')) {
+          return rendered
+        }
+        return wrapAnnotatedBlock('div', node as MarkdownPreviewPositionNode, rendered)
+      },
+      blockquote: ({ node, children, className, ...props }) => {
+        const alertType = getGithubAlertType(className)
+        const rendered = (
+          <blockquote className={className} {...props}>
+            {alertType ? (
+              <p className="markdown-alert-title">
+                <GithubAlertIcon type={alertType} />
+                {getGithubAlertTitle(alertType)}
+              </p>
+            ) : null}
+            {children}
+          </blockquote>
+        )
+        // Why: a blockquote (incl. alerts) always wraps block children that are
+        // themselves annotatable; annotating the blockquote too would show a second
+        // "+" and render a comment twice (both ranges match the note). Defer to the
+        // inner blocks, mirroring the list-item renderer.
+        if (hasMarkdownPreviewNestedBlock(node as MarkdownPreviewPositionNode)) {
+          return rendered
+        }
+        return wrapAnnotatedBlock('blockquote', node as MarkdownPreviewPositionNode, rendered)
+      },
       table: ({ node, children, ...props }) =>
         wrapAnnotatedBlock(
           'table',
@@ -1732,7 +1799,9 @@ export default function MarkdownPreview({
             <div
               className={`markdown-annotation-list-block ${
                 hasReviewNotes ? 'has-review-notes' : ''
-              }`.trim()}
+              } ${activeAnnotationBlockKey === blockKey ? 'is-active' : ''}`
+                .replace(/\s+/g, ' ')
+                .trim()}
               data-source-line={range.startLine}
               data-source-end-line={range.endLine}
               // Why: only advertise the block to the add-review-note shortcut when the composer can render (mirrors wrapAnnotatedBlock).
@@ -1995,9 +2064,7 @@ export default function MarkdownPreview({
               <div className="mb-1 text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
                 {translate('auto.components.editor.MarkdownPreview.2b2b31382c', 'Front Matter')}
               </div>
-              <pre className="max-h-48 overflow-auto whitespace-pre-wrap text-xs text-muted-foreground font-mono scrollbar-editor">
-                {frontMatterInner}
-              </pre>
+              <MarkdownFrontMatterView raw={frontMatter.raw} maxHeightClass="max-h-48" />
             </div>
           ) : null}
           <MarkdownBody content={renderedContent} components={components} />
