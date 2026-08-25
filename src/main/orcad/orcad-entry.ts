@@ -2,12 +2,14 @@
  * `orcad` — the Orca runtime served from plain Node, with no Electron.
  *
  * Installs the Node host adapters, constructs the same `OrcaRuntimeService` the
- * desktop uses, installs a PTY controller via `registerPtyHandlers(null, …)`, and
+ * desktop uses, installs a PTY controller via `registerHeadlessPtyRuntime`, and
  * serves runtime RPC. See docs/design/node-only-runtime-backend.html.
  *
  * The desktop-only surfaces are deliberately left uninstalled: no notifications, no
- * renderer window, no browser panes. Those are declared rather than faked — see
- * `runtime-desktop-surface.ts` and `pty-host-bindings.ts`.
+ * renderer window, no browser panes. Most are declared rather than faked — see
+ * `runtime-desktop-surface.ts` and `pty-host-bindings.ts`. The renderer window is the
+ * exception: `registerPtyHandlers` takes a non-null `BrowserWindow`, so the headless
+ * path still fakes one that reports itself destroyed.
  */
 import { homedir, tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -144,7 +146,7 @@ export async function startOrcad(options: OrcadOptions = {}): Promise<OrcadHandl
     getDesktopWindowStatus: () => 'blocked'
   })
 
-  // Why the headless entry point rather than registerPtyHandlers(null, …): this is the
+  // Why the headless entry point rather than registerPtyHandlers directly: this is the
   // same call `--serve` makes, and it threads the store through. Without the store the
   // handlers install fine and every terminal.create then fails at persistence time.
   //

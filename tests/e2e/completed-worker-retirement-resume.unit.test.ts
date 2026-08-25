@@ -206,7 +206,7 @@ function completeRecordedWorker(
     worktreeId: WORKTREE_ID,
     agent: 'codex',
     providerSession,
-    state: 'working',
+    state: 'done',
     origin: 'live'
   })
   return record!
@@ -424,7 +424,7 @@ describe('completed background-worker retirement resume matrix', () => {
     expect(useAppStore.getState().ptyIdsByTabId[ORIGINAL_TAB_ID]).toBeUndefined()
     expect(useAppStore.getState().sleepingAgentSessionsByPaneKey[ORIGINAL_PANE_KEY]).toMatchObject({
       origin: 'live',
-      state: 'working',
+      state: 'done',
       providerSession: { key: 'session_id', id: PROVIDER_SESSION_ID }
     })
     await releaseCompletedWorker('exited')
