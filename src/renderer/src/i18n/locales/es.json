@@ -13661,6 +13661,12 @@
           "eaa02014f8": "Activado",
           "29baf8f4c2": "Source"
         },
+        "AutomationAgentOptionsFields": {
+          "model": "Modelo",
+          "effort": "Esfuerzo",
+          "agentDefault": "Predeterminado del agente",
+          "modelDefault": "Predeterminado del modelo"
+        },
         "AutomationEditorDialog": {
           "fb1896a5e7": "Cancelar",
           "57b722cbba": "Agente",

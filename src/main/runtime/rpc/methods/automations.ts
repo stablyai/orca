@@ -48,6 +48,16 @@ const AutomationPrecheck = z
   .nullable()
   .optional()
 
+const AutomationLaunchPreferences = z
+  .object({
+    model: z.string().trim().min(1).max(512).optional(),
+    effort: z.string().trim().min(1).max(512).optional(),
+    mode: z.string().trim().min(1).max(512).optional()
+  })
+  .strict()
+  .nullable()
+  .optional()
+
 const OptionalNullablePlainString = z
   .unknown()
   .transform((value) => (value === null || typeof value === 'string' ? value : undefined))
@@ -104,6 +114,7 @@ const AutomationCreate = z.object({
   prompt: requiredString('Missing automation prompt'),
   precheck: AutomationPrecheck,
   agentId: TuiAgent,
+  launchPreferences: AutomationLaunchPreferences,
   runContext: WorkspaceRunContext,
   sourceContext: TaskSourceContext,
   repo: OptionalString,
@@ -124,6 +135,7 @@ const AutomationUpdateFields = z.object({
   prompt: OptionalString,
   precheck: AutomationPrecheck,
   agentId: TuiAgent.optional(),
+  launchPreferences: AutomationLaunchPreferences,
   runContext: WorkspaceRunContext,
   sourceContext: TaskSourceContext,
   repo: OptionalString,

@@ -166,6 +166,29 @@ describe('launchAgentBackgroundSession', () => {
     expect(result).toMatchObject({ tabId, paneKey, ptyId: 'pty-1' })
   })
 
+  it('applies automation model preferences ahead of the prompt', async () => {
+    const { launchAgentBackgroundSession } = await import('./launch-agent-background-session')
+
+    const result = await launchAgentBackgroundSession({
+      agent: 'codex',
+      worktreeId: 'wt-1',
+      prompt: 'review the branch',
+      launchPreferences: { model: 'gpt-5.6-sol', effort: 'high' }
+    })
+
+    expect(mockSpawn).toHaveBeenCalledWith(
+      expect.objectContaining({
+        command: expect.stringContaining(
+          "codex '--dangerously-bypass-approvals-and-sandbox' '-m' 'gpt-5.6-sol' '-c' 'model_reasoning_effort=high' 'review the branch'"
+        )
+      })
+    )
+    expect(result?.startupPlan.sessionOptions).toEqual({
+      model: 'gpt-5.6-sol',
+      effort: 'high'
+    })
+  })
+
   it('does not create or mount the tab while the explicit PTY spawn is unresolved', async () => {
     let resolveSpawn!: (result: { id: string }) => void
     mockSpawn.mockReturnValueOnce(

@@ -34,6 +34,7 @@ import {
   computerAwakeSettingsForMode,
   normalizeComputerAwakeMode
 } from '../../shared/computer-awake-mode'
+import { getAppStartupSettings, setAppStartupSettings } from '../app-startup-settings'
 
 // Why: the whitelist is the source-of-truth for which keys we emit on. Casting
 // to a Set once at module load lets the IPC handler's per-key membership
@@ -94,6 +95,15 @@ export function registerSettingsHandlers(
 
   ipcMain.handle('settings:get', () => {
     return store.getSettings()
+  })
+
+  ipcMain.handle('settings:get-app-startup', () => getAppStartupSettings())
+
+  ipcMain.handle('settings:set-app-startup', (_event, args?: { openAtLogin?: unknown }) => {
+    if (typeof args?.openAtLogin !== 'boolean') {
+      throw new Error('Invalid launch at login setting')
+    }
+    return setAppStartupSettings(args.openAtLogin)
   })
 
   ipcMain.handle(

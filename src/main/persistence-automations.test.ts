@@ -286,6 +286,7 @@ describe('Store', () => {
       name: 'Nightly',
       prompt: 'Run checks',
       agentId: 'claude',
+      launchPreferences: { model: 'opus', effort: 'high' },
       projectId: 'r1',
       workspaceMode: 'existing',
       workspaceId: 'wt1',
@@ -299,9 +300,14 @@ describe('Store', () => {
 
     expect(run.runContext).toEqual(automation.runContext)
     expect(run.sourceContext).toEqual(automation.sourceContext)
+    expect(run.launchPreferences).toEqual({ model: 'opus', effort: 'high' })
+    expect(
+      store.updateAutomation(automation.id, { launchPreferences: null }).launchPreferences
+    ).toBeNull()
     expect(store.listAutomationRuns(automation.id)[0]).toMatchObject({
       runContext: automation.runContext,
-      sourceContext: automation.sourceContext
+      sourceContext: automation.sourceContext,
+      launchPreferences: { model: 'opus', effort: 'high' }
     })
   })
 

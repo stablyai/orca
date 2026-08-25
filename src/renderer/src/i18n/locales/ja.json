@@ -13661,6 +13661,12 @@
           "eaa02014f8": "有効",
           "29baf8f4c2": "ソース"
         },
+        "AutomationAgentOptionsFields": {
+          "model": "モデル",
+          "effort": "推論強度",
+          "agentDefault": "Agent のデフォルト",
+          "modelDefault": "モデルのデフォルト"
+        },
         "AutomationEditorDialog": {
           "fb1896a5e7": "キャンセル",
           "57b722cbba": "Agent",

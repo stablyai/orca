@@ -4,12 +4,15 @@ import type {
   WarpThemeImportSource
 } from '../../shared/terminal-custom-themes'
 import type { GhosttyImportPreview, GlobalSettings } from '../../shared/global-settings-types'
+import type { AppStartupSettings } from '../../shared/app-startup-types'
 
 export type SettingsApi = {
   get: () => Promise<GlobalSettings>
   /** Synchronous persisted-settings read for startup decisions that can't wait for async hydration. Blocking IPC — call sparingly. */
   getSync: () => GlobalSettings | null
   set: (args: Partial<GlobalSettings>) => Promise<GlobalSettings>
+  getAppStartup: () => Promise<AppStartupSettings>
+  setAppStartup: (args: { openAtLogin: boolean }) => Promise<AppStartupSettings>
   setActiveRuntimeEnvironmentPreference: (args: {
     environmentId: string | null
   }) => Promise<GlobalSettings>

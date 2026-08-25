@@ -17,6 +17,10 @@ import type { AutomationTargetAvailability } from './automation-target-availabil
 import { getAutomationSourceDisplay } from './automation-source-display'
 import { translate } from '@/i18n/i18n'
 import { AutomationPromptDisclosure } from './AutomationPromptDisclosure'
+import {
+  findCatalogModel,
+  getAgentSessionOptionCatalog
+} from '../../../../shared/agent-session-option-catalog'
 
 type AutomationDetailProps = {
   automation: Automation | null
@@ -67,12 +71,14 @@ function ToolbarIconButton({
   label,
   children,
   onClick,
-  className
+  className,
+  testId
 }: {
   label: string
   children: React.ReactNode
   onClick: () => void
   className?: string
+  testId?: string
 }): React.JSX.Element {
   return (
     <Tooltip>
@@ -82,6 +88,7 @@ function ToolbarIconButton({
           variant="ghost"
           size="icon-sm"
           aria-label={label}
+          data-testid={testId}
           onClick={onClick}
           className={className}
         >
@@ -128,6 +135,15 @@ export function AutomationDetail({
         : 'No runs'
   const agentLabel =
     getAgentCatalog().find((agent) => agent.id === automation.agentId)?.label ?? automation.agentId
+  const optionCatalog = getAgentSessionOptionCatalog(automation.agentId)
+  const modelLabel = automation.launchPreferences?.model
+    ? ((optionCatalog
+        ? findCatalogModel(optionCatalog, automation.launchPreferences.model)?.label
+        : null) ?? automation.launchPreferences.model)
+    : translate(
+        'auto.components.automations.AutomationAgentOptionsFields.agentDefault',
+        'Agent default'
+      )
   const runLocationLabel =
     automation.workspaceMode === 'new_per_run'
       ? (automation.baseBranch ?? projectDefaultBaseRef ?? 'Project default')
@@ -173,6 +189,7 @@ export function AutomationDetail({
             ) : null}
           </Tooltip>
           <ToolbarIconButton
+            testId="automation-detail-edit"
             label={translate(
               'auto.components.automations.AutomationDetail.4b1ea02d2e',
               'Edit automation'
@@ -226,6 +243,28 @@ export function AutomationDetail({
       ) : null}
 
       <div className="grid grid-cols-[repeat(auto-fit,minmax(9rem,1fr))] gap-5 rounded-md border border-border/50 bg-muted/30 px-4 py-3 shadow-sm">
+        <DetailMetric
+          label={translate(
+            'auto.components.automations.AutomationAgentOptionsFields.model',
+            'Model'
+          )}
+          value={modelLabel}
+        />
+        {automation.launchPreferences?.model ? (
+          <DetailMetric
+            label={translate(
+              'auto.components.automations.AutomationAgentOptionsFields.effort',
+              'Effort'
+            )}
+            value={
+              automation.launchPreferences.effort ??
+              translate(
+                'auto.components.automations.AutomationAgentOptionsFields.modelDefault',
+                'Model default'
+              )
+            }
+          />
+        ) : null}
         <DetailMetric
           label={translate('auto.components.automations.AutomationDetail.18763ded26', 'Schedule')}
           value={formatUiAutomationSchedule(automation.rrule)}

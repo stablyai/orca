@@ -30,6 +30,7 @@ describe('automation RPC methods', () => {
         prompt: 'Review changes',
         precheck: { command: 'test -f ready', timeoutSeconds: 30 },
         agentId: 'codex',
+        launchPreferences: { model: 'gpt-5.6-sol', effort: 'high' },
         runContext: {
           kind: 'workspace-run',
           projectId: 'github:stablyai/orca',
@@ -78,6 +79,7 @@ describe('automation RPC methods', () => {
         prompt: 'Review changes',
         precheck: { command: 'test -f ready', timeoutSeconds: 30 },
         agentId: 'codex',
+        launchPreferences: { model: 'gpt-5.6-sol', effort: 'high' },
         runContext: expect.objectContaining({ hostId: 'runtime:gpu' }),
         sourceContext: expect.objectContaining({ hostId: 'local' }),
         repo: 'repo-1',

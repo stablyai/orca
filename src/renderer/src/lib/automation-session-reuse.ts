@@ -3,6 +3,8 @@ import type { AutomationRun } from '../../../shared/automations-types'
 import type { TuiAgent } from '../../../shared/tui-agent'
 import { parsePaneKey } from '../../../shared/stable-pane-id'
 import type { AppState } from '@/store/types'
+import type { AgentLaunchPreferences } from '../../../shared/agent-session-host-authority'
+import { automationLaunchPreferencesEqual } from '../../../shared/automation-launch-preferences'
 
 export type ReusableAutomationSession = {
   tabId: string
@@ -15,13 +17,14 @@ export function findReusableAutomationSession(args: {
   agentId: TuiAgent
   worktreeId: string
   currentRunId: string
+  launchPreferences?: AgentLaunchPreferences | null
   runs: AutomationRun[]
   state: Pick<
     AppState,
     'agentStatusByPaneKey' | 'ptyIdsByTabId' | 'terminalLayoutsByTabId' | 'unifiedTabsByWorktree'
   >
 }): ReusableAutomationSession | null {
-  const { automationId, agentId, worktreeId, currentRunId, runs, state } = args
+  const { automationId, agentId, worktreeId, currentRunId, launchPreferences, runs, state } = args
   const worktreeTabs = state.unifiedTabsByWorktree[worktreeId] ?? []
   const terminalTabIds = new Set(
     worktreeTabs.filter((tab) => tab.contentType === 'terminal').map((tab) => tab.entityId)
@@ -33,6 +36,7 @@ export function findReusableAutomationSession(args: {
         run.automationId === automationId &&
         run.workspaceId === worktreeId &&
         run.status === 'completed' &&
+        automationLaunchPreferencesEqual(run.launchPreferences, launchPreferences) &&
         Boolean(run.terminalPaneKey) &&
         Boolean(run.terminalPtyId)
     )

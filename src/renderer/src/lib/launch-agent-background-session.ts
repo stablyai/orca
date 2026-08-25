@@ -40,6 +40,7 @@ import {
 } from '@/lib/adopt-agent-background-session-tab'
 import { createBackgroundAgentStatusConsumer } from '@/lib/background-agent-status-consumer'
 import { isWslUncPath } from '../../../shared/wsl-paths'
+import { automationLaunchPreferenceStartupProps } from '../../../shared/automation-launch-preferences'
 
 export async function launchAgentBackgroundSession(
   args: LaunchAgentBackgroundSessionArgs
@@ -84,13 +85,13 @@ export async function launchAgentBackgroundSession(
   const hasPrompt = trimmedPrompt.length > 0
   const isFollowupPath = requireTuiAgentConfig(agent).promptInjectionMode === 'stdin-after-start'
 
-  const pasteDraftAfterLaunch = hasPrompt && isFollowupPath ? trimmedPrompt : null
   const startupPlan = buildAgentStartupPlan({
     agent,
     prompt: hasPrompt && !isFollowupPath ? trimmedPrompt : '',
     cmdOverrides,
     agentArgs,
     agentEnv,
+    ...automationLaunchPreferenceStartupProps(args.launchPreferences),
     platform: launchPlatform,
     shell: startupShell,
     isRemote,
@@ -293,8 +294,8 @@ export async function launchAgentBackgroundSession(
     // can double-spawn, while later tracking can miss user takeover.
     requestBackgroundTerminalWorktreeMount({ worktreeId, tabIds: [tab.id] })
 
-    if (pasteDraftAfterLaunch !== null) {
-      scheduleAgentBackgroundDraft(tab.id, pasteDraftAfterLaunch, agent)
+    if (hasPrompt && isFollowupPath) {
+      scheduleAgentBackgroundDraft(tab.id, trimmedPrompt, agent)
     }
 
     return { tabId: tab.id, paneKey, ptyId, startupPlan, terminalOwnership }

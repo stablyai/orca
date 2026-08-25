@@ -2124,6 +2124,11 @@ const api = {
     set: (args: Record<string, unknown>): Promise<unknown> =>
       ipcRenderer.invoke('settings:set', args),
 
+    getAppStartup: (): Promise<unknown> => ipcRenderer.invoke('settings:get-app-startup'),
+
+    setAppStartup: (args: { openAtLogin: boolean }): Promise<unknown> =>
+      ipcRenderer.invoke('settings:set-app-startup', args),
+
     setActiveRuntimeEnvironmentPreference: (args: {
       environmentId: string | null
     }): Promise<unknown> =>

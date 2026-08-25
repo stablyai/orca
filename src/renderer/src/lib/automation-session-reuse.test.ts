@@ -144,6 +144,35 @@ describe('automation session reuse', () => {
     expect(session).toBeNull()
   })
 
+  it('does not reuse a session launched with different model preferences', () => {
+    const session = findReusableAutomationSession({
+      automationId: 'auto-1',
+      agentId: 'claude',
+      worktreeId: 'wt-1',
+      currentRunId: 'run-current',
+      launchPreferences: { model: 'opus', effort: 'high' },
+      runs: [
+        run({
+          id: 'run-new',
+          launchPreferences: { model: 'sonnet', effort: 'high' },
+          createdAt: 2
+        })
+      ],
+      state: {
+        agentStatusByPaneKey: { [paneKey]: status() },
+        ptyIdsByTabId: { 'tab-1': ['pty-1'] },
+        terminalLayoutsByTabId: {
+          'tab-1': { ptyIdsByLeafId: { [leafId]: 'pty-1' } }
+        },
+        unifiedTabsByWorktree: {
+          'wt-1': [{ contentType: 'terminal', entityId: 'tab-1' }]
+        }
+      } as never
+    })
+
+    expect(session).toBeNull()
+  })
+
   it('does not reuse an unrelated split pane for a run with exact pane identity', () => {
     const session = findReusableAutomationSession({
       automationId: 'auto-1',
