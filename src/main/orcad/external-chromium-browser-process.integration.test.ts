@@ -7,6 +7,13 @@ import { resolveOrcadBrowserProvider } from './orcad-browser-provider'
 
 const executablePath = process.env.ORCA_BROWSER_EXECUTABLE
 
+// Why 120s rather than the 30s global default: one macOS run took 30s and timed out,
+// while a Linux run with an empty ~/.agent-browser was 2.8s — so the cost looks like a
+// one-time Gatekeeper/codesign verification of the Rust binary, not a Linux cold start.
+// Sized for the slow observation anyway: headroom on a passing test is free, and a
+// timeout here would land as a flaky required check.
+const COLD_BROWSER_START_TIMEOUT_MS = 120_000
+
 describe('ExternalChromiumBrowserProcess integration', () => {
   it.runIf(Boolean(executablePath))(
     'navigates, evaluates, and screenshots with the operator executable',
@@ -58,6 +65,7 @@ describe('ExternalChromiumBrowserProcess integration', () => {
         await provider?.stop()
         await rm(root, { recursive: true, force: true })
       }
-    }
+    },
+    COLD_BROWSER_START_TIMEOUT_MS
   )
 })

@@ -223,6 +223,11 @@ export class ElectronServeBrowserProcess {
         this.tabs.require(requestedPageId, worktreeId)
         return { browserPageId: requestedPageId }
       }
+      // Why drop `page`: the runtime advertises browser.tabCreate.known-id.v1, so web
+      // clients send a provisional id for a page that does not exist yet. The sidecar
+      // mints its own id and the caller's is adopted as the public one below; passing
+      // the unknown id through would make the generic branch require() a missing page.
+      delete params.page
     }
 
     if (method === 'browserTabCurrent' && worktreeId) {
@@ -241,7 +246,7 @@ export class ElectronServeBrowserProcess {
         params.page = targetPage.sidecarPageId
         delete params.index
       }
-    } else if (requestedPageId) {
+    } else if (requestedPageId && method !== 'browserTabCreate') {
       targetPage = this.tabs.require(requestedPageId, worktreeId)
       params.page = targetPage.sidecarPageId
     } else if (worktreeId && !TARGETLESS_BROWSER_METHODS[method]) {

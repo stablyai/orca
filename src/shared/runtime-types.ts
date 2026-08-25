@@ -67,10 +67,60 @@ export type RuntimeBrowserDriverState = RuntimeTerminalDriverState
 
 export const BROWSER_UNAVAILABLE_ERROR_CODE = 'browser_unavailable' as const
 
+/**
+ * Why a host declined browser automation. Members are opaque to clients: new ones
+ * ship without a protocol bump, so render `message` and never switch exhaustively
+ * (same contract as RuntimeTerminalWaitBlockedReason).
+ */
+export type RuntimeBrowserUnavailableReason =
+  | 'unconfigured'
+  | 'driver_missing'
+  | 'executable_not_found'
+  | 'executable_not_executable'
+  | 'electron_start_failed'
+  | 'chromium_start_failed'
+  | 'provider_unhealthy'
+  | 'desktop_window_unavailable'
+  | 'unknown'
+
+// Why: one sentence per cause, each naming the thing the operator can change. The host
+// renders these so an older client still shows an accurate reason it cannot decode.
+const BROWSER_UNAVAILABLE_MESSAGES: Record<RuntimeBrowserUnavailableReason, string> = {
+  unconfigured:
+    'Browser automation has no backend on this host. Install the Orca desktop app, or set ORCA_BROWSER_EXECUTABLE to a Chromium executable.',
+  driver_missing:
+    'ORCA_BROWSER_EXECUTABLE is set, but the bundled agent-browser driver is missing or not executable on this host, so Chromium cannot be driven.',
+  executable_not_found: 'ORCA_BROWSER_EXECUTABLE points at a path that does not exist.',
+  executable_not_executable:
+    'ORCA_BROWSER_EXECUTABLE points at a file that is not executable by this host.',
+  electron_start_failed: 'The installed Electron browser provider failed to start.',
+  chromium_start_failed:
+    'The Chromium browser provider named by ORCA_BROWSER_EXECUTABLE failed to start.',
+  provider_unhealthy: 'The browser provider started but is no longer answering health checks.',
+  desktop_window_unavailable:
+    'Browser automation on this host needs a desktop window, and none is available.',
+  unknown: 'Browser automation is unavailable on this host, and the cause could not be determined.'
+}
+
+export function browserUnavailableMessage(
+  reason: RuntimeBrowserUnavailableReason,
+  detail?: string
+): string {
+  const base = BROWSER_UNAVAILABLE_MESSAGES[reason]
+  return detail ? `${base} (${detail})` : base
+}
+
 export type RuntimeDegradation = {
   code: typeof BROWSER_UNAVAILABLE_ERROR_CODE
   capability: 'browser.headless.v1'
   message: string
+  /**
+   * Machine-readable cause. Optional for mixed-version peers: absence means the host
+   * predates structured causes, NOT that the cause is 'unconfigured'.
+   */
+  reason?: RuntimeBrowserUnavailableReason
+  /** Underlying error text when the host has one. Diagnostic only; never load-bearing. */
+  detail?: string
 }
 
 export type RuntimeStatus = {

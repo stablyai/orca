@@ -426,7 +426,9 @@ import type {
 } from '../../shared/linear/agent-access'
 import {
   BROWSER_UNAVAILABLE_ERROR_CODE,
+  browserUnavailableMessage,
   HEADLESS_RUNTIME_WINDOW_ID,
+  type RuntimeDegradation,
   type RuntimeDesktopWindowStatus,
   type RuntimeGraphStatus,
   type RuntimeRepoSearchRefs,
@@ -661,7 +663,8 @@ import type { AutomationService } from '../automations/service'
 import type { RuntimeBrowserCommands } from './orca-runtime-browser'
 import {
   createRuntimeBrowserCommands,
-  runtimeBrowserCommandsFactoryIsHeadless
+  runtimeBrowserCommandsFactoryIsHeadless,
+  runtimeBrowserUnavailableCause
 } from './runtime-browser-commands-factory'
 import { RemoteRuntimeTerminalCreateIdempotency } from './remote-runtime-terminal-create-idempotency'
 import { deriveRemoteRuntimeTerminalCreateHandle } from './remote-runtime-terminal-create-identity'
@@ -6156,17 +6159,21 @@ export class OrcaRuntimeService {
     if (canBrowse) {
       capabilities.push(BROWSER_CERTIFICATE_TRUST_RUNTIME_CAPABILITY)
     }
-    const degradations =
-      canBrowse || hasHeadlessCommands
-        ? []
-        : [
-            {
-              code: BROWSER_UNAVAILABLE_ERROR_CODE,
-              capability: BROWSER_HEADLESS_RUNTIME_CAPABILITY,
-              message:
-                'Browser automation requires the Electron provider or ORCA_BROWSER_EXECUTABLE.'
-            }
-          ]
+    // Why the cause and not one fixed sentence: the operator can only act on the reason
+    // that actually applies, and a host that says "set ORCA_BROWSER_EXECUTABLE" to someone
+    // who already set it sends them to fix a thing that is not broken.
+    const cause = canBrowse || hasHeadlessCommands ? null : runtimeBrowserUnavailableCause()
+    const degradations: RuntimeDegradation[] = cause
+      ? [
+          {
+            code: BROWSER_UNAVAILABLE_ERROR_CODE,
+            capability: BROWSER_HEADLESS_RUNTIME_CAPABILITY,
+            message: browserUnavailableMessage(cause.reason, cause.detail),
+            reason: cause.reason,
+            ...(cause.detail ? { detail: cause.detail } : {})
+          }
+        ]
+      : []
     return {
       runtimeId: this.runtimeId,
       rendererGraphEpoch: this.rendererGraphEpoch,

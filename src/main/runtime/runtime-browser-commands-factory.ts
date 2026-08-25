@@ -1,5 +1,8 @@
 import { BrowserError } from '../browser/browser-error'
-import { BROWSER_UNAVAILABLE_ERROR_CODE } from '../../shared/runtime-types'
+import {
+  BROWSER_UNAVAILABLE_ERROR_CODE,
+  type RuntimeBrowserUnavailableReason
+} from '../../shared/runtime-types'
 import type { RuntimeBrowserCommandHost, RuntimeBrowserCommands } from './orca-runtime-browser'
 
 /**
@@ -52,6 +55,37 @@ export function runtimeBrowserCommandsFactoryIsAvailable(): boolean {
 
 export function runtimeBrowserCommandsFactoryIsHeadless(): boolean {
   return runtimeBrowserCommandsFactoryIsAvailable() && currentOptions.headless === true
+}
+
+export type RuntimeBrowserUnavailableCause = {
+  reason: RuntimeBrowserUnavailableReason
+  detail?: string
+}
+
+let unavailableCause: RuntimeBrowserUnavailableCause | null = null
+
+/**
+ * Recorded by whoever tried to resolve a provider, because only that code can tell a
+ * missing driver from an unset env var from a launch that threw. Null once one resolves.
+ */
+export function setRuntimeBrowserUnavailableCause(
+  cause: RuntimeBrowserUnavailableCause | null
+): void {
+  unavailableCause = cause
+}
+
+/**
+ * The cause this process can prove. An installed factory outranks any recorded note: it
+ * means resolution succeeded, so the failure is later and elsewhere — a dead provider, or
+ * a renderer-backed factory with no window. Unknown beats guessing.
+ */
+export function runtimeBrowserUnavailableCause(): RuntimeBrowserUnavailableCause {
+  if (currentFactory) {
+    return runtimeBrowserCommandsFactoryIsAvailable()
+      ? { reason: 'desktop_window_unavailable' }
+      : { reason: 'provider_unhealthy' }
+  }
+  return unavailableCause ?? { reason: 'unknown' }
 }
 
 /**

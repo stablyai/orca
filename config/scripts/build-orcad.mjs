@@ -7,6 +7,7 @@
  * the only ones that statically import `node:sqlite`, so dropping them is what keeps
  * the host Node floor at 18 instead of 22.5+.
  */
+import { spawnSync } from 'node:child_process'
 import { build } from 'esbuild'
 import { chmodSync, copyFileSync, mkdirSync, rmSync } from 'node:fs'
 import { arch, platform } from 'node:os'
@@ -17,6 +18,7 @@ const ROOT = join(import.meta.dirname, '..', '..')
 const OUT_DIR = join(ROOT, 'out', 'orcad')
 const ENTRY = join(ROOT, 'src/main/orcad/main.ts')
 const AGENT_BROWSER_NAME = `agent-browser-${platform()}-${arch()}${process.platform === 'win32' ? '.exe' : ''}`
+const OUT_FILE = join(OUT_DIR, 'orcad.js')
 const AGENT_BROWSER_SOURCE = join(ROOT, 'node_modules', 'agent-browser', 'bin', AGENT_BROWSER_NAME)
 const AGENT_BROWSER_OUTPUT = join(OUT_DIR, AGENT_BROWSER_NAME)
 
@@ -63,7 +65,7 @@ const result = await build({
   platform: 'node',
   target: 'node18',
   format: 'cjs',
-  outfile: join(OUT_DIR, 'orcad.js'),
+  outfile: OUT_FILE,
   external: EXTERNAL,
   plugins: [jsoncParserEsm, externalNativeAddons],
   metafile: true,
@@ -120,6 +122,31 @@ if (graphErrors.length > 0) {
   // point so the two numbers cannot drift.
   process.exitCode = 1
 } else {
+  // Why smoke-load and not just read the metafile: the import scan proves no module
+  // *names* electron, but a graph can still fail to resolve under plain Node — a
+  // dynamic require, a missing native, a top-level throw. The plain-node-entry-guard
+  // smoke-loads its entries for exactly this reason, and orcad cannot join that guard
+  // because it is an esbuild artifact rather than a rollup input.
+  const smoke = spawnSync(process.execPath, [OUT_FILE, '--orcad-smoke-load-check'], {
+    encoding: 'utf8',
+    timeout: 60_000
+  })
+  const smokeOutput = `${smoke.stdout ?? ''}${smoke.stderr ?? ''}`
+  if (
+    smoke.error ||
+    smoke.signal ||
+    !/Unknown argument: --orcad-smoke-load-check/.test(smokeOutput)
+  ) {
+    console.error(
+      `[build-orcad] the bundle did not load under plain Node.\n` +
+        `Expected argv rejection, got signal=${smoke.signal ?? 'none'} ` +
+        `error=${smoke.error?.message ?? 'none'}\n${smokeOutput.slice(0, 2000)}`
+    )
+    process.exitCode = 1
+  }
+}
+
+if (process.exitCode !== 1) {
   console.log(
     `[build-orcad] ok — ${(output.bytes / 1024 / 1024).toFixed(2)} MB, ${Object.keys(output.inputs).length} modules, zero electron and node:sqlite imports.`
   )

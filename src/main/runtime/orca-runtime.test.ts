@@ -1,7 +1,10 @@
 /* eslint-disable max-lines -- Why: runtime behavior is stateful and cross-cutting, so these tests stay in one file to preserve the end-to-end invariants around handles, waits, and graph sync. */
 import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest'
 import { RuntimeBrowserCommands } from './orca-runtime-browser'
-import { setRuntimeBrowserCommandsFactory } from './runtime-browser-commands-factory'
+import {
+  setRuntimeBrowserCommandsFactory,
+  setRuntimeBrowserUnavailableCause
+} from './runtime-browser-commands-factory'
 import { setRuntimeDesktopSurface } from './runtime-desktop-surface'
 import { installFakeAppEnvironment } from '../../../config/scripts/vitest-host-ports-setup'
 import type * as GitUsernameModule from '../git/git-username'
@@ -687,6 +690,7 @@ function resetRuntimeTestMocks(): void {
   // production installs this at the Electron entry. A Node host installs none and the
   // browser RPCs reject rather than silently succeeding.
   setRuntimeBrowserCommandsFactory((host) => new RuntimeBrowserCommands(host))
+  setRuntimeBrowserUnavailableCause(null)
   // Why: the runtime's notification, window lookup and tab-create-reply channel are
   // injected now, so the electron mock alone is inert. Back the surface with the same
   // mocks so every existing expectation still holds.
@@ -2355,8 +2359,14 @@ describe('OrcaRuntimeService', () => {
     available = false
     const degraded = createRuntime().getStatus()
     expect(degraded.capabilities).not.toContain('browser.headless.v1')
+    // A provider that resolved and then died is a health failure, never a config mistake.
     expect(degraded.degradations).toEqual([
-      expect.objectContaining({ code: 'browser_unavailable' })
+      {
+        code: 'browser_unavailable',
+        capability: 'browser.headless.v1',
+        reason: 'provider_unhealthy',
+        message: 'The browser provider started but is no longer answering health checks.'
+      }
     ])
   })
   it('surfaces live offscreen load failures in headless browser snapshots', () => {
@@ -2498,7 +2508,9 @@ describe('OrcaRuntimeService', () => {
       {
         code: 'browser_unavailable',
         capability: 'browser.headless.v1',
-        message: 'Browser automation requires the Electron provider or ORCA_BROWSER_EXECUTABLE.'
+        reason: 'unknown',
+        message:
+          'Browser automation is unavailable on this host, and the cause could not be determined.'
       }
     ])
     const browserCalls = Object.entries(runtime).filter(
@@ -2518,6 +2530,66 @@ describe('OrcaRuntimeService', () => {
         code: 'browser_unavailable'
       })
     }
+  })
+
+  it('reports the driver as missing instead of telling a configured operator to configure it', () => {
+    setRuntimeBrowserCommandsFactory(null)
+    setRuntimeBrowserUnavailableCause({ reason: 'driver_missing' })
+
+    const [degradation] = createRuntime().getStatus().degradations ?? []
+
+    expect(degradation).toEqual({
+      code: 'browser_unavailable',
+      capability: 'browser.headless.v1',
+      reason: 'driver_missing',
+      message:
+        'ORCA_BROWSER_EXECUTABLE is set, but the bundled agent-browser driver is missing or not executable on this host, so Chromium cannot be driven.'
+    })
+    // The whole point: never send someone to set a variable they already set.
+    expect(degradation?.message).not.toMatch(/set ORCA_BROWSER_EXECUTABLE/)
+  })
+
+  it('carries the underlying error to the client when a provider failed to start', () => {
+    setRuntimeBrowserCommandsFactory(null)
+    setRuntimeBrowserUnavailableCause({
+      reason: 'electron_start_failed',
+      detail: 'sidecar exited with code 1'
+    })
+
+    const [degradation] = createRuntime().getStatus().degradations ?? []
+
+    expect(degradation).toEqual({
+      code: 'browser_unavailable',
+      capability: 'browser.headless.v1',
+      reason: 'electron_start_failed',
+      detail: 'sidecar exited with code 1',
+      message:
+        'The installed Electron browser provider failed to start. (sidecar exited with code 1)'
+    })
+  })
+
+  it('blames the missing desktop window when a renderer-backed factory is installed', () => {
+    const [degradation] = createRuntime().getStatus().degradations ?? []
+
+    expect(degradation).toMatchObject({
+      reason: 'desktop_window_unavailable',
+      message: 'Browser automation on this host needs a desktop window, and none is available.'
+    })
+  })
+
+  it('keeps the degradation wire-safe for peers that predate structured causes', () => {
+    setRuntimeBrowserCommandsFactory(null)
+    setRuntimeBrowserUnavailableCause({ reason: 'executable_not_found', detail: '/nope/chromium' })
+
+    const [degradation] = createRuntime().getStatus().degradations ?? []
+
+    // Old clients read only these three: the closed code must not move and the human
+    // sentence must stand alone without the optional fields.
+    expect(degradation?.code).toBe('browser_unavailable')
+    expect(degradation?.capability).toBe('browser.headless.v1')
+    expect(degradation?.message).toBe(
+      'ORCA_BROWSER_EXECUTABLE points at a path that does not exist. (/nope/chromium)'
+    )
   })
 
   it('closes a worktree’s offscreen browser pages when its metadata is removed (leak fix)', () => {

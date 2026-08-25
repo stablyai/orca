@@ -2,7 +2,11 @@ import { access, mkdir } from 'node:fs/promises'
 import { constants } from 'node:fs'
 import { homedir } from 'node:os'
 import { posix, win32 } from 'node:path'
-import type { RuntimeBrowserCommandsFactory } from '../runtime/runtime-browser-commands-factory'
+import {
+  setRuntimeBrowserUnavailableCause,
+  type RuntimeBrowserCommandsFactory,
+  type RuntimeBrowserUnavailableCause
+} from '../runtime/runtime-browser-commands-factory'
 import {
   ExternalChromiumBrowserProcess,
   type ExternalChromiumLaunch
@@ -24,13 +28,33 @@ export type OrcadBrowserProviderOptions = {
   resolveAgentBrowserBinary?: () => string | null
 }
 
-async function executableExists(path: string): Promise<boolean> {
+type ExecutableProbe = 'ok' | 'missing' | 'not_executable'
+
+/** Splits the two failures apart: a wrong path and a forgotten chmod +x need different fixes. */
+async function probeExecutable(path: string): Promise<ExecutableProbe> {
+  const mode = process.platform === 'win32' ? constants.F_OK : constants.X_OK
   try {
-    await access(path, process.platform === 'win32' ? constants.F_OK : constants.X_OK)
-    return true
+    await access(path, mode)
+    return 'ok'
   } catch {
-    return false
+    if (mode === constants.F_OK) {
+      return 'missing'
+    }
   }
+  try {
+    await access(path, constants.F_OK)
+    return 'not_executable'
+  } catch {
+    return 'missing'
+  }
+}
+
+async function executableExists(path: string): Promise<boolean> {
+  return (await probeExecutable(path)) === 'ok'
+}
+
+function errorDetail(error: unknown): string {
+  return error instanceof Error ? error.message : String(error)
 }
 
 export function installedElectronCandidates(
@@ -115,27 +139,50 @@ export async function resolveOrcadBrowserProvider(
   const environment = options.environment ?? process.env
   await mkdir(options.userDataPath, { recursive: true, mode: 0o700 })
 
+  const declined = (cause: RuntimeBrowserUnavailableCause): null => {
+    setRuntimeBrowserUnavailableCause(cause)
+    return null
+  }
+
   const installedElectronExecutable = await (
     options.resolveInstalledElectronExecutable ?? resolveInstalledElectronExecutable
   )()
+  // Why held rather than reported now: Chromium may still resolve, and if it does not, its
+  // own concrete fault is the more actionable one for an operator who set the env var.
+  let electronFailure: RuntimeBrowserUnavailableCause | null = null
   if (installedElectronExecutable) {
     try {
+      setRuntimeBrowserUnavailableCause(null)
       return await startElectronServeProvider(installedElectronExecutable)
     } catch (error) {
       console.warn('[orcad] Installed Electron browser provider unavailable:', error)
+      electronFailure = { reason: 'electron_start_failed', detail: errorDetail(error) }
     }
   }
-  const agentBrowserPath = (options.resolveAgentBrowserBinary ?? resolveOrcadAgentBrowserBinary)()
 
-  if (!agentBrowserPath) {
-    return null
-  }
-
+  // Why the env var is read before the driver: with it set, a missing driver is a driver
+  // problem, not an unconfigured host. Telling someone to set ORCA_BROWSER_EXECUTABLE when
+  // they already did is the misdirection this ordering exists to prevent.
   const chromiumExecutable = environment.ORCA_BROWSER_EXECUTABLE?.trim()
-  if (!chromiumExecutable || !(await executableExists(chromiumExecutable))) {
-    return null
+  if (!chromiumExecutable) {
+    return declined(electronFailure ?? { reason: 'unconfigured' })
   }
+
+  const agentBrowserPath = (options.resolveAgentBrowserBinary ?? resolveOrcadAgentBrowserBinary)()
+  if (!agentBrowserPath) {
+    return declined({ reason: 'driver_missing' })
+  }
+
+  const probe = await probeExecutable(chromiumExecutable)
+  if (probe !== 'ok') {
+    return declined({
+      reason: probe === 'missing' ? 'executable_not_found' : 'executable_not_executable',
+      detail: chromiumExecutable
+    })
+  }
+
   try {
+    setRuntimeBrowserUnavailableCause(null)
     return await startProvider(
       agentBrowserPath,
       { executablePath: chromiumExecutable, provider: 'chromium' },
@@ -143,6 +190,6 @@ export async function resolveOrcadBrowserProvider(
     )
   } catch (error) {
     console.warn('[orcad] External Chromium browser provider unavailable:', error)
-    return null
+    return declined({ reason: 'chromium_start_failed', detail: errorDetail(error) })
   }
 }
