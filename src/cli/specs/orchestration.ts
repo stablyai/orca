@@ -1,5 +1,6 @@
 import type { CommandSpec } from '../args'
 import { GLOBAL_FLAGS } from '../args'
+import { ORCHESTRATION_COLLABORATION_COMMAND_SPECS } from './orchestration-collaboration-specs'
 import { ORCHESTRATION_WORKER_COMMAND_SPECS } from './orchestration-worker-specs'
 
 export const ORCHESTRATION_COMMAND_SPECS: CommandSpec[] = [
@@ -274,5 +275,6 @@ export const ORCHESTRATION_COMMAND_SPECS: CommandSpec[] = [
     usage:
       'orca orchestration reset (--all | --tasks | --messages) [--retry-request <id>] [--json]',
     allowedFlags: [...GLOBAL_FLAGS, 'all', 'tasks', 'messages', 'retry-request']
-  }
+  },
+  ...ORCHESTRATION_COLLABORATION_COMMAND_SPECS
 ]
