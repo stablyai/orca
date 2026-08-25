@@ -3,7 +3,7 @@ import type { CollaborationTopology } from './collaboration-topology'
 
 const registrationsByRuntime = new WeakMap<OrcaRuntimeService, Map<string, CollaborationTopology>>()
 
-export function register(
+export function registerCollaborationRuntimeTopology(
   runtime: OrcaRuntimeService,
   runId: string,
   topology: CollaborationTopology
@@ -19,11 +19,17 @@ export function register(
   runs.set(runId, topology)
 }
 
-export function get(runtime: OrcaRuntimeService, runId: string): CollaborationTopology | undefined {
+export function getCollaborationRuntimeTopology(
+  runtime: OrcaRuntimeService,
+  runId: string
+): CollaborationTopology | undefined {
   return registrationsByRuntime.get(runtime)?.get(runId)
 }
 
-export function unregister(runtime: OrcaRuntimeService, runId: string): void {
+export function unregisterCollaborationRuntimeTopology(
+  runtime: OrcaRuntimeService,
+  runId: string
+): void {
   const runs = registrationsByRuntime.get(runtime)
   if (!runs) {
     return
