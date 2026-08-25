@@ -1,5 +1,6 @@
 import { useAppStore } from '../../store'
 import type { TabSplitDirection } from '../../store/slices/tabs'
+import type { TabGroupLayoutNode } from '../../../../shared/tab-types'
 import { mirrorWebRuntimeTabMove } from './web-runtime-tab-move-mirror'
 
 type TabMovePaneColumnState = Pick<
@@ -34,11 +35,24 @@ export function canMoveTabToNewPaneColumn(unifiedTabId: string, groupId: string)
   return canMoveTabToNewPaneColumnFromState(useAppStore.getState(), unifiedTabId, groupId)
 }
 
+function flattenLayoutLeaves(node: TabGroupLayoutNode | undefined): string[] {
+  if (!node) {
+    return []
+  }
+  if (node.type === 'leaf') {
+    return [node.groupId]
+  }
+  return [...flattenLayoutLeaves(node.first), ...flattenLayoutLeaves(node.second)]
+}
+
 /**
- * Moves the active tab of the active group into a new pane column. Returns whether a move
- * happened so keybinding callers can fall through instead of consuming the chord on a no-op.
+ * Moves the active tab of the active group to the next pane column, mirroring VS Code's
+ * "move editor to next group": join the existing next group when there is one (the emptied
+ * source group collapses), otherwise split the tab off into a new column. Returns whether a
+ * move happened so keybinding callers can fall through instead of consuming the chord on a
+ * no-op.
  */
-export function moveActiveTabToNewPaneColumn(direction: TabSplitDirection): boolean {
+export function moveActiveTabToNextPaneColumn(direction: TabSplitDirection): boolean {
   const state = useAppStore.getState()
   const worktreeId = state.activeWorktreeId
   if (!worktreeId) {
@@ -54,6 +68,23 @@ export function moveActiveTabToNewPaneColumn(direction: TabSplitDirection): bool
   const unifiedTabId = group?.activeTabId
   if (!unifiedTabId) {
     return false
+  }
+  const leaves = flattenLayoutLeaves(state.layoutByWorktree[worktreeId])
+  const activeLeafIndex = leaves.indexOf(groupId)
+  const nextGroupId = activeLeafIndex === -1 ? undefined : leaves[activeLeafIndex + 1]
+  if (nextGroupId) {
+    const moved = state.moveUnifiedTabToGroup(unifiedTabId, nextGroupId, { activate: true })
+    if (moved) {
+      // Why: VS Code focuses the target group after the move; without this the source group keeps focus when it still has tabs.
+      useAppStore.getState().focusGroup(worktreeId, nextGroupId)
+      mirrorWebRuntimeTabMove({
+        kind: 'move-to-group',
+        worktreeId,
+        tabId: unifiedTabId,
+        targetGroupId: nextGroupId
+      })
+    }
+    return moved
   }
   return moveTabToNewPaneColumn({ unifiedTabId, groupId, direction })
 }

@@ -3,7 +3,7 @@ import { useAppStore } from '../../store'
 import type { Tab } from '../../../../shared/tab-types'
 import {
   canMoveTabToNewPaneColumn,
-  moveActiveTabToNewPaneColumn,
+  moveActiveTabToNextPaneColumn,
   moveTabToNewPaneColumn
 } from './tab-move-to-pane-column'
 
@@ -120,21 +120,82 @@ describe('tab-move-to-pane-column', () => {
     expect(mocks.mirrorWebRuntimeTabMove).not.toHaveBeenCalled()
   })
 
-  it('moves the active tab of the active group', () => {
+  it('splits the active tab into a new column when no next group exists', () => {
     const dropUnifiedTab = vi.fn(() => true)
     useAppStore.setState({
       dropUnifiedTab,
       activeGroupIdByWorktree: { [WT]: 'group-1' }
     } as Partial<ReturnType<typeof useAppStore.getState>>)
 
-    expect(moveActiveTabToNewPaneColumn('right')).toBe(true)
+    expect(moveActiveTabToNextPaneColumn('right')).toBe(true)
     expect(dropUnifiedTab).toHaveBeenCalledWith('tab-a', {
       groupId: 'group-1',
       splitDirection: 'right'
     })
   })
 
-  it('is a no-op for the active tab when the group has a single tab', () => {
+  it('joins the existing next group instead of splitting', () => {
+    const moveUnifiedTabToGroup = vi.fn(() => true)
+    const focusGroup = vi.fn()
+    useAppStore.setState({
+      moveUnifiedTabToGroup,
+      focusGroup,
+      activeGroupIdByWorktree: { [WT]: 'group-1' },
+      groupsByWorktree: {
+        [WT]: [
+          { id: 'group-1', worktreeId: WT, activeTabId: 'tab-a', tabOrder: ['tab-a', 'tab-b'] },
+          { id: 'group-2', worktreeId: WT, activeTabId: null, tabOrder: [] }
+        ]
+      },
+      layoutByWorktree: {
+        [WT]: {
+          type: 'split',
+          direction: 'horizontal',
+          first: { type: 'leaf', groupId: 'group-1' },
+          second: { type: 'leaf', groupId: 'group-2' }
+        }
+      }
+    } as Partial<ReturnType<typeof useAppStore.getState>>)
+
+    expect(moveActiveTabToNextPaneColumn('right')).toBe(true)
+    expect(moveUnifiedTabToGroup).toHaveBeenCalledWith('tab-a', 'group-2', { activate: true })
+    expect(focusGroup).toHaveBeenCalledWith(WT, 'group-2')
+    expect(mocks.mirrorWebRuntimeTabMove).toHaveBeenCalledWith({
+      kind: 'move-to-group',
+      worktreeId: WT,
+      tabId: 'tab-a',
+      targetGroupId: 'group-2'
+    })
+  })
+
+  it('moves a lone tab into the existing next group', () => {
+    const moveUnifiedTabToGroup = vi.fn(() => true)
+    const focusGroup = vi.fn()
+    useAppStore.setState({
+      moveUnifiedTabToGroup,
+      focusGroup,
+      activeGroupIdByWorktree: { [WT]: 'group-1' },
+      groupsByWorktree: {
+        [WT]: [
+          { id: 'group-1', worktreeId: WT, activeTabId: 'tab-a', tabOrder: ['tab-a'] },
+          { id: 'group-2', worktreeId: WT, activeTabId: 'tab-b', tabOrder: ['tab-b'] }
+        ]
+      },
+      layoutByWorktree: {
+        [WT]: {
+          type: 'split',
+          direction: 'horizontal',
+          first: { type: 'leaf', groupId: 'group-1' },
+          second: { type: 'leaf', groupId: 'group-2' }
+        }
+      }
+    } as Partial<ReturnType<typeof useAppStore.getState>>)
+
+    expect(moveActiveTabToNextPaneColumn('right')).toBe(true)
+    expect(moveUnifiedTabToGroup).toHaveBeenCalledWith('tab-a', 'group-2', { activate: true })
+  })
+
+  it('is a no-op for a lone tab in a lone group', () => {
     const dropUnifiedTab = vi.fn(() => true)
     useAppStore.setState({
       dropUnifiedTab,
@@ -144,7 +205,7 @@ describe('tab-move-to-pane-column', () => {
       }
     } as Partial<ReturnType<typeof useAppStore.getState>>)
 
-    expect(moveActiveTabToNewPaneColumn('right')).toBe(false)
+    expect(moveActiveTabToNextPaneColumn('right')).toBe(false)
     expect(dropUnifiedTab).not.toHaveBeenCalled()
   })
 
@@ -156,7 +217,7 @@ describe('tab-move-to-pane-column', () => {
       activeGroupIdByWorktree: {}
     } as Partial<ReturnType<typeof useAppStore.getState>>)
 
-    expect(moveActiveTabToNewPaneColumn('right')).toBe(false)
+    expect(moveActiveTabToNextPaneColumn('right')).toBe(false)
     expect(dropUnifiedTab).not.toHaveBeenCalled()
   })
 })
