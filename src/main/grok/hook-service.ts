@@ -294,11 +294,25 @@ export class GrokHookService {
     }
   }
 
-  /** Claims the installed config for this process so the next launch can detect an unclean exit. */
+  /**
+   * Claims the installed config for this process so the next launch can detect an unclean exit.
+   * Why it does not overwrite a live owner: two Orcas can share one $GROK_HOME (packaged and dev
+   * do not share the single-instance lock). If a later starter took the record and then crashed,
+   * the next launch would read that dead owner and remove the config the FIRST, still-running
+   * Orca is using. Keeping the earliest live claimant means a stale record always implies every
+   * recorded owner is gone.
+   */
   async claimSession(): Promise<void> {
-    if (this.getStatus().managedHooksPresent) {
-      await writeGrokHookSessionOwner(getSessionOwnerPath())
+    if (!this.getStatus().managedHooksPresent) {
+      return
     }
+    const ownerPath = getSessionOwnerPath()
+    const owner = await readGrokHookSessionOwner(ownerPath)
+    if (owner && !(await isGrokHookSessionOwnerStale(owner))) {
+      return
+    }
+    await clearGrokHookSessionOwner(ownerPath)
+    await writeGrokHookSessionOwner(ownerPath)
   }
 
   async removeAsync(): Promise<AgentHookInstallStatus> {

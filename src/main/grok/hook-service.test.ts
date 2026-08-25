@@ -29,7 +29,10 @@ vi.mock('os', async () => {
 import { getGrokToolEventMatcherForTests, GrokHookService } from './hook-service'
 import { buildWindowsGrokHookScript } from './windows-grok-hook-script'
 import { POSIX_HOOK_STDIN_READER } from '../agent-hooks/hook-stdin-contract'
-import { readManagedHookHostIdentity } from '../agent-hooks/managed-hook-owner-identity'
+import {
+  readManagedHookHostIdentity,
+  readManagedHookProcessIdentity
+} from '../agent-hooks/managed-hook-owner-identity'
 
 const GROK_SCRIPT_FILE_NAME = process.platform === 'win32' ? 'grok-hook.cmd' : 'grok-hook.sh'
 const WINDOWS_POWERSHELL_LAUNCHER =
@@ -472,6 +475,59 @@ describe('GrokHookService', () => {
       'orca-status.json',
       'orca-status.json.orca-owner'
     ])
+  })
+
+  // Why: two Orcas can share one $GROK_HOME (packaged and dev do not share the single-instance
+  // lock). If a later starter overwrote the record and then crashed, the next launch would read
+  // that dead owner and remove the config the first, still-running Orca is still using.
+  // Why a real child process: a second GrokHookService in THIS process records the same pid and
+  // process identity, so the record is byte-identical either way and the assertion proves nothing.
+  it('does not take the ownership record from another live instance', async () => {
+    const service = new GrokHookService()
+    const ownerPath = join(homeDir, '.grok', 'hooks', 'orca-status.json.orca-owner')
+    const child = spawn(process.execPath, ['-e', 'setTimeout(() => {}, 60000)'], {
+      stdio: 'ignore'
+    })
+    try {
+      const childPid = child.pid
+      expect(childPid).toBeDefined()
+      const childIdentity = await readManagedHookProcessIdentity(childPid!)
+      expect(typeof childIdentity).toBe('string')
+      const otherOwner = JSON.stringify({
+        pid: childPid,
+        hostIdentity: await readManagedHookHostIdentity(),
+        processIdentity: childIdentity
+      })
+      expect(service.install().state).toBe('installed')
+      writeFileSync(ownerPath, otherOwner, 'utf8')
+
+      await service.claimSession()
+
+      expect(readFileSync(ownerPath, 'utf8')).toBe(otherOwner)
+    } finally {
+      child.kill()
+    }
+  })
+
+  it('takes over the ownership record when the recorded owner is gone', async () => {
+    const service = new GrokHookService()
+    const ownerPath = join(homeDir, '.grok', 'hooks', 'orca-status.json.orca-owner')
+
+    expect(service.install().state).toBe('installed')
+    writeFileSync(
+      ownerPath,
+      JSON.stringify({
+        pid: 2_147_483_646,
+        hostIdentity: await readManagedHookHostIdentity(),
+        processIdentity: 'gone:previous-boot'
+      }),
+      'utf8'
+    )
+
+    await service.claimSession()
+
+    const owner = JSON.parse(readFileSync(ownerPath, 'utf8')) as { pid: number }
+    expect(owner.pid).toBe(process.pid)
   })
 
   it('preserves user-authored hook entries in the Orca Grok config file', () => {
