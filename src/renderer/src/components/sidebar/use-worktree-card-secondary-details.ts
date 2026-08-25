@@ -42,7 +42,8 @@ export function useWorktreeCardSecondaryDetails({
   workspacePorts,
   openTaskPage,
   updateWorktreeMeta,
-  settings
+  settings,
+  forceInlineAgents = false
 }: Pick<WorktreeCardProps, 'worktree' | 'repo' | 'statusPrDisplay'> &
   Pick<
     Foundation,
@@ -60,6 +61,8 @@ export function useWorktreeCardSecondaryDetails({
     ReviewDetails,
     'prDisplay' | 'linkedGitLabMR' | 'linkedBitbucketPR' | 'linkedAzureDevOpsPR' | 'linkedGiteaPR'
   > & {
+    // Why: Current sidebar view shows the active workspace's conversations as chat rows regardless of the card display toggle.
+    forceInlineAgents?: boolean
     showStatus: boolean
     showIssue: boolean
     showLinearIssue: boolean
@@ -85,7 +88,8 @@ export function useWorktreeCardSecondaryDetails({
   const metaAutomationProvenance = showAutomation ? worktree.automationProvenance : null
   const metaCliProvenance = showCli ? worktree.cliProvenance : null
   const metaComment = showComment ? hoverComment : null
-  const showInlineAgentList = cardProps.includes('inline-agents') && (newCardStyle || !compactCards)
+  const showInlineAgentList =
+    (forceInlineAgents || cardProps.includes('inline-agents')) && (newCardStyle || !compactCards)
   const compactInlineAgentRows = useWorktreeAgentRows(
     worktree.id,
     showInlineAgentList && agentActivityDisplayMode === 'compact'

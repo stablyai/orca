@@ -2,6 +2,7 @@ import React from 'react'
 import { FolderPlus, Plus } from 'lucide-react'
 import { useAppStore } from '@/store'
 import { Button } from '@/components/ui/button'
+import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
 import SidebarWorkspaceOptionsMenu from './SidebarWorkspaceOptionsMenu'
 import { useShortcutLabel } from '@/hooks/useShortcutLabel'
@@ -18,17 +19,38 @@ const SidebarHeader = React.memo(function SidebarHeader({
   const openModal = useAppStore((s) => s.openModal)
   const newWorktreeShortcutLabel = useShortcutLabel('workspace.create')
   const groupBy = useAppStore((s) => s.groupBy)
-  const sidebarTitle = groupBy === 'repo' ? 'Projects' : 'Workspaces'
+  const sidebarViewMode = useAppStore((s) => s.sidebarViewMode)
+  const setSidebarViewMode = useAppStore((s) => s.setSidebarViewMode)
 
   return (
     <div className="mt-2 flex h-8 items-center justify-between px-2 gap-2">
       <div className="flex min-w-0 items-center gap-1">
-        <span
-          className="pl-2 pr-0.5 text-xs font-semibold text-muted-foreground/80 select-none"
+        <ToggleGroup
+          type="single"
+          value={sidebarViewMode}
+          onValueChange={(value) => {
+            if (value === 'project' || value === 'current') {
+              setSidebarViewMode(value)
+            }
+          }}
+          variant="outline"
+          size="sm"
+          className="h-6"
           data-sidebar-section-title={groupBy === 'repo' ? 'projects' : 'workspaces'}
         >
-          {sidebarTitle}
-        </span>
+          <ToggleGroupItem
+            value="project"
+            className="h-6 px-2 text-[10px] data-[state=on]:bg-foreground/10 data-[state=on]:font-semibold data-[state=on]:text-foreground"
+          >
+            {translate('auto.components.sidebar.SidebarHeader.viewMode.project', 'Project')}
+          </ToggleGroupItem>
+          <ToggleGroupItem
+            value="current"
+            className="h-6 px-2 text-[10px] data-[state=on]:bg-foreground/10 data-[state=on]:font-semibold data-[state=on]:text-foreground"
+          >
+            {translate('auto.components.sidebar.SidebarHeader.viewMode.current', 'Current')}
+          </ToggleGroupItem>
+        </ToggleGroup>
       </div>
       <div className="flex items-center gap-1.5 shrink-0">
         <SidebarWorkspaceOptionsMenu

@@ -30,6 +30,7 @@ export function useVisibleSidebarWorktrees(args: {
   worktreeLineageById: Record<string, WorktreeLineage>
   settings: AppState['settings']
   agentSendTargetWorktreeId: string | null
+  forcedVisibleWorktreeId?: string | null
 }) {
   const { filterState, sortBy, sortedIds, repoMap, worktreeLineageById, settings } = args
   const {
@@ -94,12 +95,14 @@ export function useVisibleSidebarWorktrees(args: {
       visibleWorkspaceHostIds,
       defaultHostId: getSettingsFocusedExecutionHostId(settings),
       worktreeLineageById,
-      forcedVisibleWorktreeIds: args.agentSendTargetWorktreeId
-        ? [args.agentSendTargetWorktreeId]
-        : undefined
+      forcedVisibleWorktreeIds: [
+        args.agentSendTargetWorktreeId,
+        args.forcedVisibleWorktreeId
+      ].filter((id): id is string => Boolean(id))
     })
   }, [
     args.agentSendTargetWorktreeId,
+    args.forcedVisibleWorktreeId,
     agentStatusEpoch,
     filterRepoIds,
     showSleepingWorkspaces,
