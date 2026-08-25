@@ -146,7 +146,6 @@ inline src/renderer/src/store/slices/tabs.ts
 inline src/renderer/src/store/slices/terminals.ts
 inline src/renderer/src/store/slices/ui.ts
 inline src/renderer/src/store/slices/workspace-cleanup.ts
-inline src/renderer/src/web/web-preload-api.ts
 inline src/renderer/src/web/web-runtime-client.ts
 inline src/shared/agent-hook-listener.ts
 inline src/shared/automation-schedules.ts
