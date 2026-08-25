@@ -440,6 +440,8 @@ const recoveryReloadInFlight = createWebContentsTimedFlag()
 const pendingOpenSettings = createWebContentsTimedFlag()
 const skillShareDeepLinks = new SkillShareDeepLinkState()
 const workspacePathLaunchQueue = new WorkspacePathLaunchQueue()
+// Why explicit handshake: loading heuristics cannot tell whether the bridge's listener is attached.
+let workspacePathBridgeAttached = false
 let firstWindowStartupServicesReady: Promise<void> = Promise.resolve()
 let managedWslCliReconciliationReady: Promise<void> = Promise.resolve()
 let managedWslCliStartupBarrierReady: Promise<void> = Promise.resolve()
@@ -748,12 +750,12 @@ function focusExistingWindow(): void {
 }
 
 /**
- * Hands a validated folder-launch intent to the renderer: pushed live when a
- * window can receive it, otherwise queued for the mount-time drain endpoint.
+ * Hands a validated folder-launch intent to the renderer: pushed live once the
+ * bridge has signalled readiness, otherwise queued for that handshake so no
+ * launch is lost to a renderer that has not attached listeners yet.
  */
 function deliverWorkspacePathLaunch(folderPath: string): void {
-  // Why isLoading: a created-but-still-loading window has no listeners attached yet, so a push there would be lost.
-  if (mainWindow && !mainWindow.isDestroyed() && !mainWindow.webContents.isLoading()) {
+  if (mainWindow && !mainWindow.isDestroyed() && workspacePathBridgeAttached) {
     mainWindow.webContents.send('ui:openWorkspacePath', folderPath)
     return
   }
@@ -1030,8 +1032,12 @@ ipcMain.handle('ui:consumePendingSkillShare', () => {
   return skillShareDeepLinks.consume()
 })
 
-ipcMain.handle('ui:consumePendingWorkspacePathLaunches', () => {
-  return workspacePathLaunchQueue.drain()
+ipcMain.on('ui:workspacePathBridgeReady', (event) => {
+  workspacePathBridgeAttached = !event.sender.isDestroyed()
+  // Why direct to sender: these queued launches belong to whichever renderer just attached.
+  for (const folderPath of workspacePathLaunchQueue.drain()) {
+    event.sender.send('ui:openWorkspacePath', folderPath)
+  }
 })
 
 ipcMain.handle(

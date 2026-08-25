@@ -23,21 +23,27 @@ describe('workspace path launch wiring', () => {
     expect(gateIndex).toBeGreaterThan(captureIndex)
   })
 
-  it('delivers to a fully loaded renderer first and queues while the window is still loading', () => {
+  it('delivers only after the bridge-ready handshake and queues everything before it', () => {
+    const functionIndex = mainSource.indexOf('function deliverWorkspacePathLaunch(')
+    const readyGuardIndex = mainSource.indexOf('workspacePathBridgeAttached', functionIndex)
     const deliverIndex = mainSource.indexOf("mainWindow.webContents.send('ui:openWorkspacePath'")
-    const isLoadingGuardIndex = mainSource.indexOf(
-      '!mainWindow.webContents.isLoading()',
-      mainSource.indexOf('function deliverWorkspacePathLaunch(')
-    )
     const queueIndex = mainSource.indexOf('workspacePathLaunchQueue.queue(folderPath)')
-    expect(deliverIndex).toBeGreaterThan(-1)
-    expect(isLoadingGuardIndex).toBeGreaterThan(-1)
-    expect(isLoadingGuardIndex).toBeLessThan(deliverIndex)
+    expect(readyGuardIndex).toBeGreaterThan(functionIndex)
+    expect(deliverIndex).toBeGreaterThan(readyGuardIndex)
     expect(queueIndex).toBeGreaterThan(deliverIndex)
   })
 
-  it('exposes a drain endpoint for intents queued before the renderer mounted', () => {
-    expect(mainSource).toContain("'ui:consumePendingWorkspacePathLaunches'")
+  it('flushes queued launches to the renderer that signals bridge readiness', () => {
+    expect(mainSource).toContain("'ui:workspacePathBridgeReady'")
+    const handlerIndex = mainSource.indexOf("ipcMain.on('ui:workspacePathBridgeReady'")
+    const flushIndex = mainSource.indexOf('workspacePathLaunchQueue.drain()', handlerIndex)
+    const senderSendIndex = mainSource.indexOf(
+      "event.sender.send('ui:openWorkspacePath'",
+      handlerIndex
+    )
+    expect(handlerIndex).toBeGreaterThan(-1)
+    expect(flushIndex).toBeGreaterThan(-1)
+    expect(senderSendIndex).toBeGreaterThan(flushIndex)
   })
 
   it('accepts Finder/Dock folder opens through the open-file event', () => {

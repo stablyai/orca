@@ -3722,9 +3722,10 @@ const api = {
       ipcRenderer.on('ui:openWorkspacePath', listener)
       return () => ipcRenderer.removeListener('ui:openWorkspacePath', listener)
     },
-    /** Pulls launch intents queued before the renderer attached its listener. */
-    consumePendingWorkspacePathLaunches: (): Promise<string[]> =>
-      ipcRenderer.invoke('ui:consumePendingWorkspacePathLaunches'),
+    /** Signals main that this renderer receives folder-launch intents, flushing any queued ones. */
+    notifyWorkspacePathBridgeReady: (): void => {
+      ipcRenderer.send('ui:workspacePathBridgeReady')
+    },
     onOpenSetupGuide: (callback: () => void): (() => void) => {
       const listener = (_event: Electron.IpcRendererEvent) => callback()
       ipcRenderer.on('ui:openSetupGuide', listener)

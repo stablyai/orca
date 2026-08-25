@@ -17,7 +17,10 @@ vi.mock('@/lib/worktree-activation', () => ({
   activateAndRevealWorktree: mocks.activateAndRevealWorktree
 }))
 
-import { openLaunchedWorkspacePaths } from './launched-workspace-path-ipc-bridge'
+import {
+  openLaunchedWorkspacePaths,
+  registerLaunchedWorkspacePathIpcBridge
+} from './launched-workspace-path-ipc-bridge'
 
 /** Resets the fake store state, optionally seeding worktrees by repo id. */
 function givenStore(worktreesByRepo: Record<string, unknown[]> = {}): void {
@@ -92,5 +95,28 @@ describe('openLaunchedWorkspacePaths', () => {
     await openLaunchedWorkspacePaths(['/repos/bad', '/repos/good'])
 
     expect(mocks.addRepoPath).toHaveBeenCalledTimes(2)
+  })
+
+  it('subscribes to pushed launches before signalling bridge readiness', () => {
+    const calls: string[] = []
+    vi.stubGlobal('window', {
+      api: {
+        ui: {
+          onOpenWorkspacePath: () => {
+            calls.push('subscribe')
+            return () => {}
+          },
+          notifyWorkspacePathBridgeReady: () => {
+            calls.push('ready')
+          }
+        }
+      }
+    })
+    const unsubscribers: (() => void)[] = []
+    registerLaunchedWorkspacePathIpcBridge(unsubscribers)
+
+    expect(calls).toEqual(['subscribe', 'ready'])
+    expect(unsubscribers).toHaveLength(1)
+    vi.unstubAllGlobals()
   })
 })

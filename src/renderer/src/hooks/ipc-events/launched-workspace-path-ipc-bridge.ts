@@ -32,8 +32,9 @@ export async function openLaunchedWorkspacePaths(folderPaths: readonly string[])
 }
 
 /**
- * Subscribes to pushed launch intents and drains intents queued before mount,
- * so a folder passed at launch opens exactly once regardless of timing.
+ * Subscribes to pushed launch intents, then tells main this renderer can
+ * receive them so queued intents flush immediately instead of waiting for a
+ * remount that may never come.
  */
 export function registerLaunchedWorkspacePathIpcBridge(unsubs: (() => void)[]): void {
   unsubs.push(
@@ -41,16 +42,5 @@ export function registerLaunchedWorkspacePathIpcBridge(unsubs: (() => void)[]): 
       void openLaunchedWorkspacePaths([folderPath])
     }) ?? (() => {})
   )
-
-  // Why: a launch intent can queue in main before this bridge attaches; pull it once on mount.
-  const pendingLaunches = window.api.ui.consumePendingWorkspacePathLaunches?.()
-  if (pendingLaunches && typeof pendingLaunches.then === 'function') {
-    void pendingLaunches
-      .then((folderPaths) => {
-        if (folderPaths.length > 0) {
-          void openLaunchedWorkspacePaths(folderPaths)
-        }
-      })
-      .catch(() => {})
-  }
+  window.api.ui.notifyWorkspacePathBridgeReady?.()
 }
