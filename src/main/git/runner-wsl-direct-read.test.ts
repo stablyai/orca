@@ -253,6 +253,76 @@ describe('WSL direct Git reads', () => {
     })
   })
 
+  it('fences parsed output from a barrier Git login-shell fallback', async () => {
+    await withPlatform('win32', async () => {
+      seedWslGitReadEnvironmentForTests(DISTRO, LOGIN_ENVIRONMENT)
+      spawnMock.mockImplementation((_command, args) => {
+        const child = createMockChild()
+        queueMicrotask(() => {
+          const capturedCommand = args?.find((arg) =>
+            String(arg).includes('__ORCA_WSL_CAPTURE_BEGIN_')
+          )
+          const fenced = fencedProbeStdout(capturedCommand, 'fork-point\n')
+          const echoedMarker = fenced.match(/__ORCA_WSL_CAPTURE_BEGIN_[^_]+__/)?.[0] ?? ''
+          child.stdout.emit('data', Buffer.from(`${echoedMarker}shell trace\n${fenced}`))
+          child.emit('close', 0, null)
+        })
+        return child
+      })
+
+      await expect(
+        gitExecFileAsync(['merge-base', '--fork-point', 'upstream/main', 'HEAD'], {
+          cwd: String.raw`C:\repo`,
+          env: { GIT_CONFIG_GLOBAL: '/home/user/custom.gitconfig' },
+          wslDistro: DISTRO,
+          captureWslLoginShellOutput: true,
+          terminationBarrier: true
+        })
+      ).resolves.toEqual({ stdout: 'fork-point\n', stderr: '' })
+
+      expect(spawnMock.mock.calls[0]?.[1]?.join(' ')).toContain('setsid --wait')
+      expect(spawnMock.mock.calls[0]?.[1]?.join(' ')).toContain('__ORCA_WSL_CAPTURE_BEGIN_')
+    })
+  })
+
+  it('verifies the WSL guest process group before settling an abort', async () => {
+    await withPlatform('win32', async () => {
+      seedWslGitReadEnvironmentForTests(DISTRO, LOGIN_ENVIRONMENT)
+      const command = createMockChild()
+      spawnMock.mockImplementation((_program, args) => {
+        if (spawnMock.mock.calls.length === 1) {
+          queueMicrotask(() => {
+            const marker = String(args?.join(' ')).match(
+              /(__ORCA_WSL_PROCESS_GROUP_[0-9a-f-]+__=)/
+            )?.[1]
+            command.stderr.emit('data', Buffer.from(`${marker}4321\n`))
+          })
+          return command
+        }
+        const terminator = createMockChild()
+        queueMicrotask(() => terminator.emit('close', 0, null))
+        return terminator
+      })
+      const controller = new AbortController()
+      const pending = gitExecFileAsync(['status'], {
+        cwd: String.raw`C:\repo`,
+        env: { GIT_CONFIG_GLOBAL: '/home/user/custom.gitconfig' },
+        wslDistro: DISTRO,
+        signal: controller.signal,
+        terminationBarrier: true
+      })
+      await vi.waitFor(() => expect(spawnMock).toHaveBeenCalledTimes(1))
+      await Promise.resolve()
+
+      controller.abort()
+
+      await expect(pending).rejects.toMatchObject({ name: 'AbortError' })
+      expect(command.kill).not.toHaveBeenCalled()
+      expect(spawnMock.mock.calls[1]?.[1]?.join(' ')).toContain('kill -TERM')
+      expect(spawnMock.mock.calls[1]?.[1]).toContain('4321')
+    })
+  })
+
   it('ignores unchanged ambient host Git variables when selecting the direct path', async () => {
     await withPlatform('win32', async () => {
       const originalAskpass = process.env.GIT_ASKPASS

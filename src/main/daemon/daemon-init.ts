@@ -18,7 +18,8 @@ import {
   type DaemonProcessHandle
 } from './daemon-spawner'
 import { DAEMON_EXIT_ENDPOINT_OCCUPIED } from './daemon-endpoint-ownership'
-import { DaemonPtyAdapter, type DaemonRespawnReason } from './daemon-pty-adapter'
+import { DaemonPtyAdapter } from './daemon-pty-adapter'
+import type { DaemonRespawnReason } from './daemon-pty-runtime-state'
 import { DaemonPtyRouter } from './daemon-pty-router'
 import { DaemonClient } from './client'
 import {

@@ -13,35 +13,51 @@ import {
   clearAllListenerCaches,
   clearPaneCacheState,
   paneHasStateClaims,
-  clearClaudeAnsweredQuestionWait,
   createHookListenerState,
-  getEndpointFileName,
-  hasCodexTranscriptSubagents,
-  hasPendingAgentResultText,
-  HOOK_REQUEST_SLOWLORIS_MS,
-  isNewTurnEvent,
-  markClaudeLeadTurnInterrupted,
-  markCodexLeadTurnInterrupted,
-  MAX_PANE_KEY_LEN,
   movePaneCacheState,
-  canAcceptClaudeCompactTransition,
-  normalizeClaudePromptId,
-  normalizeHookPayload,
-  parseFormEncodedBody,
-  readRequestBody,
-  reapRestoredClaudeSubagentsForDeadPane,
-  reconcileRemoteCodexState,
-  resolveCachedClaudeCompactOwnership,
-  resolveHookSource,
-  preparePendingGrokResultDiscovery,
-  seedClaudeLeadTurnFromPersistedStatus,
-  seedClaudeSubagentRosterFromSnapshots,
-  seedCodexStateFromSnapshot,
-  warnOnHookEnvOrVersionMismatch,
-  writeEndpointFile,
-  type AgentHookEventPayload,
   type HookListenerState
-} from '../../shared/agent-hook-listener'
+} from '../../shared/agent-hook-listener/listener-state'
+import {
+  clearClaudeAnsweredQuestionWait,
+  markClaudeLeadTurnInterrupted,
+  reapRestoredClaudeSubagentsForDeadPane,
+  seedClaudeLeadTurnFromPersistedStatus,
+  seedClaudeSubagentRosterFromSnapshots
+} from '../../shared/agent-hook-listener/providers/claude-roster-state'
+import {
+  getEndpointFileName,
+  writeEndpointFile
+} from '../../shared/agent-hook-listener/endpoint-publication'
+import {
+  hasCodexTranscriptSubagents,
+  markCodexLeadTurnInterrupted,
+  reconcileRemoteCodexState,
+  seedCodexStateFromSnapshot
+} from '../../shared/agent-hook-listener/providers/codex-state'
+import {
+  hasPendingAgentResultText,
+  preparePendingGrokResultDiscovery
+} from '../../shared/agent-hook-listener/grok-result-discovery'
+import {
+  HOOK_REQUEST_SLOWLORIS_MS,
+  MAX_PANE_KEY_LEN,
+  normalizeClaudePromptId,
+  warnOnHookEnvOrVersionMismatch
+} from '../../shared/agent-hook-listener/listener-limits'
+import { isNewTurnEvent } from '../../shared/agent-hook-listener/provider-event-routing'
+import { normalizeHookPayload } from '../../shared/agent-hook-listener'
+import {
+  parseFormEncodedBody,
+  readRequestBody
+} from '../../shared/agent-hook-listener/request-body'
+import { resolveHookSource } from '../../shared/agent-hook-listener/source-routing'
+import type { AgentHookEventPayload } from '../../shared/agent-hook-listener/listener-event'
+import {
+  canAcceptClaudeCompactCompletion,
+  isClaudeCompactCompletionConsumed,
+  markClaudeCompactCompletionConsumed,
+  resolveLegacyCompactTrigger
+} from '../../shared/claude-compact-completion'
 import {
   createHookTransportInterferenceTracker,
   describeHookTransportInterference,
@@ -73,6 +89,7 @@ import {
   type ParsedAgentStatusPayload,
   normalizeAgentStatusPayload
 } from '../../shared/agent-status-types'
+import { terminalStatusPayloadMatchesHook } from '../../shared/agent-terminal-status-equivalence'
 import {
   AgentStatusObservationSequencer,
   createAgentStatusAuthorityId,
@@ -447,30 +464,6 @@ function toAgentStatusIpcPayload(entry: EnrichedAgentHookEventPayload): AgentSta
     ...(entry.observation ? { observation: entry.observation } : {}),
     ...entry.payload
   }
-}
-
-// Why: OSC never carries model/children; omit both so an equivalent OSC ping preserves the hook-cached identity graph.
-function equivalentParsedAgentStatusPayload(
-  a: ParsedAgentStatusPayload,
-  b: ParsedAgentStatusPayload,
-  preserveActiveTurnStamp = false
-): boolean {
-  return (
-    a.state === b.state &&
-    a.prompt === b.prompt &&
-    a.agentType === b.agentType &&
-    a.toolName === b.toolName &&
-    a.toolInput === b.toolInput &&
-    a.interactivePrompt === b.interactivePrompt &&
-    (a.lastAssistantMessage === b.lastAssistantMessage ||
-      (preserveActiveTurnStamp && b.lastAssistantMessage === undefined)) &&
-    a.interrupted === b.interrupted &&
-    // Why: a session-boundary done must never be deduped against a cached real done —
-    // the flag has to reach receivers deterministically (STA-3386).
-    a.sessionBoundary === b.sessionBoundary &&
-    (a.turnCompletedAt === b.turnCompletedAt ||
-      (preserveActiveTurnStamp && b.turnCompletedAt === undefined))
-  )
 }
 
 function trackEmptyPaneKeyHook(body: unknown): void {
@@ -1040,6 +1033,7 @@ export class AgentHookServer {
       providerSession: existing.providerSession,
       payload: {
         state: restored.state,
+        ...(restored.workingMode ? { workingMode: restored.workingMode } : {}),
         prompt: payload.prompt,
         agentType: payload.agentType,
         ...(restored.state === 'done' && restored.interrupted ? { interrupted: true } : {}),
@@ -1542,10 +1536,9 @@ export class AgentHookServer {
     if (!identity.inheritedFromActivePane) {
       this.maybeTrackAgentPromptSent(effectivePayload, previous)
     }
-    const cachedPayload = resolveCachedClaudeCompactOwnership(previous, boundaryAwarePayload)
     const enriched = {
-      ...this.attachStatusTiming(cachedPayload, now),
-      observation: this.stampObservation(cachedPayload, origin, now)
+      ...this.attachStatusTiming(boundaryAwarePayload, now),
+      observation: this.stampObservation(boundaryAwarePayload, origin, now)
     }
     if (
       typeof enriched.payload.turnCompletedAt === 'number' &&
@@ -2202,7 +2195,7 @@ export class AgentHookServer {
       previous?.connectionId === connectionId &&
       previous.tabId === tabId &&
       previous.worktreeId === worktreeId &&
-      equivalentParsedAgentStatusPayload(previous.payload, event.payload, preserveActiveTurnStamp)
+      terminalStatusPayloadMatchesHook(previous.payload, event.payload, preserveActiveTurnStamp)
     ) {
       return
     }
@@ -2379,39 +2372,59 @@ export class AgentHookServer {
       this.state.lastStatusByPaneKey.get(paneKey)?.payload
     )
     const previousStatus = this.state.lastStatusByPaneKey.get(paneKey)
+    let acceptedCompactCompletion = false
     if (hookEventName === 'PreCompact' || hookEventName === 'PostCompact') {
-      if (
-        source !== 'claude' ||
-        compactTrigger === undefined ||
-        normalizedPayload.agentType !== source
-      ) {
+      // Why: PreCompact is never registered and proves nothing (an aborted compact emits it alone);
+      // reject it here too so a host on any version cannot drive pane state from it.
+      if (hookEventName === 'PreCompact' || source !== 'claude') {
+        return
+      }
+      // Why: a relay predating this change strips `compactTrigger` from its cached PostCompact
+      // before replaying it, so the replay has no manual/auto discriminator. That relay's mapping is
+      // fixed and known — manual produced `done`, auto produced `working` — so the payload state
+      // stands in for the missing trigger. Trigger substitution only; ownership is still checked.
+      const effectiveTrigger = resolveLegacyCompactTrigger(compactTrigger, normalizedPayload.state)
+      // Why: an auto compact happens inside a turn that resumes and emits its own Stop. An older
+      // relay maps it to `working`, and this ingest applies the relay's payload verbatim — so
+      // without this drop, every auto compact on such a host mints exactly the stuck `working` this
+      // change removes.
+      if (effectiveTrigger !== 'manual' || normalizedPayload.agentType !== source) {
         return
       }
       if (
-        hookEventName === 'PreCompact' &&
-        envelope.isReplay === true &&
-        (previousStatus?.hookEventName !== 'PreCompact' ||
-          previousStatus.compactTrigger !== compactTrigger ||
-          previousStatus.providerPromptId !== providerPromptId)
-      ) {
-        return
-      }
-      if (
-        !canAcceptClaudeCompactTransition(previousStatus, {
+        isClaudeCompactCompletionConsumed(
+          this.state.claudeConsumedCompactPromptIdByPaneKey,
+          paneKey,
+          providerPromptId
+        ) ||
+        !canAcceptClaudeCompactCompletion(previousStatus, {
           source,
           connectionId: trimmedConnectionId,
-          hookEventName,
           providerPromptId,
-          compactTrigger,
           providerSession
         })
       ) {
         return
       }
+      markClaudeCompactCompletionConsumed(
+        this.state.claudeConsumedCompactPromptIdByPaneKey,
+        paneKey,
+        providerPromptId
+      )
+      // Why: an older relay built this payload before the boundary flag existed, so it arrives as a
+      // plain `done` — which every completion-reactive consumer reads as a finished turn. Stamp the
+      // boundary here so a compact stays silent regardless of which relay normalized it.
+      if (normalizedPayload.sessionBoundary !== true) {
+        normalizedPayload = { ...normalizedPayload, sessionBoundary: true }
+      }
+      acceptedCompactCompletion = true
     }
+    // Why: keyed on "did we accept a completion", not on the trigger surviving the wire — the
+    // trigger-stripped replay is exactly the shape that arrives without one, and it is still the
+    // compact's own promptless event, so it still needs the summarized turn's label.
     if (
       source === 'claude' &&
-      compactTrigger !== undefined &&
+      (compactTrigger !== undefined || acceptedCompactCompletion) &&
       normalizedPayload.prompt.length === 0 &&
       previousStatus?.payload.prompt
     ) {
@@ -3030,7 +3043,12 @@ export class AgentHookServer {
         ...(state !== 'done' && restoredUnconfirmed ? { restoredUnconfirmed: true } : {}),
         receivedAt: reconciledAt,
         stateStartedAt: stateChanged ? reconciledAt : enriched.stateStartedAt,
-        payload: { ...enriched.payload, state, subagents }
+        payload: {
+          ...enriched.payload,
+          state,
+          workingMode: state === 'working' ? enriched.payload.workingMode : undefined,
+          subagents
+        }
       }
       this.state.lastStatusByPaneKey.set(paneKey, reconciled)
     }

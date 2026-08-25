@@ -78,7 +78,12 @@ export function WorkspaceCleanupFilterBar({
         <PopoverContent
           align="end"
           sideOffset={6}
-          className="flex h-[min(471px,var(--radix-popover-content-available-height))] w-[320px] flex-col p-0"
+          // Why popover-wheel-scroll and not popover-scroll-content: this popover portals
+          // outside the dialog subtree, so react-remove-scroll cancels wheel here and only
+          // the scrollbar drag worked. It needs the shim but not the styling half --
+          // popover-scroll-content caps height at 15rem, which would crush this panel's
+          // 471px flex column.
+          className="popover-wheel-scroll flex h-[min(471px,var(--radix-popover-content-available-height))] w-[320px] flex-col p-0"
         >
           {/* 471px preserves the 420px facet viewport plus the fixed footer at full height. */}
           <ScrollArea className="min-h-0 flex-1">

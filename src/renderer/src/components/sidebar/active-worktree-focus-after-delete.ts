@@ -86,7 +86,8 @@ function focusNextWorktreeAfterActiveDelete(
   }
   const nextWorktreeId = pickNextWorktreeIdAfterDelete(state, repoId, deletedWorktreeId)
   if (nextWorktreeId) {
-    activateAndRevealWorktree(nextWorktreeId)
+    // Keep successor focus from replacing the deleted row's spatial context.
+    activateAndRevealWorktree(nextWorktreeId, { revealInSidebar: false })
   }
 }
 

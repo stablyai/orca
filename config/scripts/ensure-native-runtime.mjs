@@ -7,6 +7,7 @@ import { release } from 'node:os'
 import { basename, resolve } from 'node:path'
 
 const require = createRequire(import.meta.url)
+const { assertNodePtyJobOwnership } = require('./node-pty-job-ownership.cjs')
 const scriptPath = import.meta.filename
 const projectDir = resolve(import.meta.dirname, '../..')
 const runtime = readRuntimeArg()
@@ -277,6 +278,7 @@ function loadNodePtyNativeModule() {
   // terminal is created, so require('node-pty') alone can miss ABI mismatches.
   const native = loadNativeModule(nativeName)
   assertNodePtyWindowsConptyRuntime(native?.dir)
+  assertNodePtyJobOwnership({ nativeName, native })
   if (requiresPatchedNodePtySourceBuild() && !isNodePtyReleaseBuildDir(native?.dir)) {
     throw new Error(
       `node-pty resolved to ${native.dir}; expected build/Release so Orca's node-pty patch is active`

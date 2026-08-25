@@ -1,6 +1,7 @@
 import { __resetSshWorktreeCreateFetchCacheForTests } from './worktree-remote'
 import { invalidateAuthorizedRootsCache } from './registered-worktree-roots-cache'
-import { __resetDetectedWorktreeScanCacheForTests, registerWorktreeHandlers } from './worktrees'
+import { registerWorktreeHandlers } from './worktrees'
+import { __resetDetectedWorktreeScanCacheForTests } from './worktrees/listing/detected-worktree-scan-cache'
 import { clearConfiguredWorktreeSharedDirectoriesCacheForTests } from '../git/worktree-shared-directories'
 import { resetRetirementCollisionKeyCacheForTests } from '../worktree-name-retirement'
 import { resetSshProviderAuthorities } from '../ssh/ssh-provider-authority'

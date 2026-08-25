@@ -449,7 +449,7 @@ function shouldIncludeOpenTabInRecentSection({
       unreadAgentCompletionPanes
     })
   })
-  return badge != null && badge !== 'done'
+  return badge != null && badge !== 'done' && badge !== 'interrupted'
 }
 
 function PaletteRowShortcutBadge({
@@ -2579,7 +2579,7 @@ function WorktreeJumpPaletteContent({
       const activation = activateBrowserPagePaletteResult(result)
       if (activation.status === 'failed') {
         toast.error(
-          activation.reason === 'missing-page'
+          activation.reason !== 'missing-worktree'
             ? translate(
                 'auto.components.WorktreeJumpPalette.d7d496a451',
                 'Browser page no longer exists'

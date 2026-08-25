@@ -282,14 +282,19 @@ describe('connectPanePty', () => {
     )
   })
 
-  it('uses the SSH relay replay for a reconnect even when main has an alt-screen model', async () => {
+  // Why both directions: #15166 dropped #14844's reconnect model-paint gate and pinned the
+  // degraded relay-only paint here. The gate's contract is that the relay wins only when the
+  // replay SHOWS the app left the alternate screen, so pin the veto and its absence together.
+  async function reconnectWithAltScreenModel(
+    replay: string
+  ): Promise<{ writes: string[]; transport: MockTransport }> {
     const { connectPanePty } = await import('./pty-connection')
     const restoredPtyId = toAppSshPtyId('target-a', 'pty-restored-relay')
     const transport = createMockTransport(restoredPtyId)
     transport.connect.mockResolvedValue({
       id: restoredPtyId,
       isReattach: true,
-      replay: '9l\r\n$ real-shell-output'
+      replay
     })
     transportFactoryQueue.push(transport)
     const pendingRetry = {
@@ -347,11 +352,36 @@ describe('connectPanePty', () => {
       }) as never
     )
     await flushAsyncTicks(20)
+    return { writes, transport }
+  }
 
+  it('paints a reconnect from the alt-screen model when the replay shows no alt-screen exit', async () => {
+    // The tail begins mid-escape — the ESC of its `?1049l` was evicted with the bytes before
+    // it — so it carries no readable transition and cannot rebuild the frame it no longer
+    // holds. Known limit of lastAlternateScreenTransition, and the model is the better paint.
+    const { writes, transport } = await reconnectWithAltScreenModel('9l\r\n$ real-shell-output')
+
+    expect(window.api.pty.getMainBufferSnapshot).toHaveBeenCalled()
+    expect(writes.join('')).toContain('MODEL-ALT-FRAME')
+    expect(transport.resize).not.toHaveBeenCalledWith(119, 40)
+  })
+
+  it('paints a reconnect from the alt-screen model when the relay has no replay', async () => {
+    const { writes } = await reconnectWithAltScreenModel('')
+
+    expect(window.api.pty.getMainBufferSnapshot).toHaveBeenCalledTimes(1)
+    expect(writes.join('')).toContain('MODEL-ALT-FRAME')
+  })
+
+  it('uses the SSH relay replay for a reconnect once the replay shows the app left alt screen', async () => {
+    const { writes } = await reconnectWithAltScreenModel('\x1b[?1049l\r\n$ real-shell-output')
+
+    // Vetoed before the probe is even issued: the model still reports alternateScreen because
+    // it never consumed those bytes, so painting it would freeze a dead frame AND discard the
+    // shell output only the replay holds.
     expect(window.api.pty.getMainBufferSnapshot).not.toHaveBeenCalled()
     expect(writes.join('')).toContain('real-shell-output')
     expect(writes.join('')).not.toContain('MODEL-ALT-FRAME')
-    expect(transport.resize).not.toHaveBeenCalledWith(119, 40)
   })
 
   it('rejects expired reattach state after its direct SSH retry lease is revoked', async () => {

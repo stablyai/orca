@@ -105,7 +105,8 @@ describe('web GitHub preload API', () => {
 
     const globals = installBrowserGlobals('Linux')
     writeStoredRuntimeEnvironment(globals.storage)
-    const { GITHUB_WEB_RPC_METHODS, installWebPreloadApi } = await import('./web-preload-api')
+    const { installWebPreloadApi } = await import('./web-preload-api')
+    const { GITHUB_WEB_RPC_METHODS } = await import('./preload-api/web-github-routes')
     installWebPreloadApi()
     const api = globals.window.api
     const repoPath = '/workspace/repo'

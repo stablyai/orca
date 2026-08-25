@@ -1,5 +1,8 @@
 import { beforeEach, describe, expect, it } from 'vitest'
-import { createHookListenerState, type HookListenerState } from './agent-hook-listener'
+import {
+  createHookListenerState,
+  type HookListenerState
+} from './agent-hook-listener/listener-state'
 import { normalizeAndAccept, PANE_KEY } from './agent-hook-listener-test-harness'
 
 describe('shared agent-hook-listener: aug (Auggie)', () => {

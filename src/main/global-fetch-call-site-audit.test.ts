@@ -35,7 +35,7 @@ const AUDITED_GLOBAL_FETCH_LINES = new Map<string, number>([
   // fetch appears only inside injected-page script source strings, not as a
   // call this process makes
   ['main/amp/agent-status-plugin-source.ts', 1],
-  ['main/opencode/hook-service.ts', 1],
+  ['main/opencode/status-plugin-post-source.ts', 1],
   ['main/pi/agent-status-extension-source.ts', 1],
   // local identifiers named `fetch` (git fetch), not HTTP
   ['main/ipc/worktree-remote.ts', 2],

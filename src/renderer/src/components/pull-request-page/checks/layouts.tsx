@@ -1,7 +1,7 @@
 import React from 'react'
 import { CircleDashed, LoaderCircle } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { CHECK_COLOR } from '@/components/right-sidebar/checks-panel-content'
+import { CHECK_COLOR } from '@/components/right-sidebar/checks-panel/check-presentation'
 import { getCheckCountChips, type getCheckCounts } from '@/components/pr-check-counts'
 import { getCheckDetailsKey } from '@/components/github/pr-check-presentation'
 import { translate } from '@/i18n/i18n'

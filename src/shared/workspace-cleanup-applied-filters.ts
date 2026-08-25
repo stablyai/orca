@@ -35,7 +35,6 @@ type Formatters = {
   pathPrefix: (value: string) => string
   presence: (kind: string, mode: string) => string
   completelyEmpty: () => string
-  selectableOnly: () => string
 }
 
 /**
@@ -94,10 +93,14 @@ export function listAppliedWorkspaceCleanupFilters(
   }
 
   if (status.workspaceStatuses.length > 0) {
-    add('status.workspaceStatuses', format.list('status', status.workspaceStatuses.length), (f) => ({
-      ...f,
-      status: { ...f.status, workspaceStatuses: [] }
-    }))
+    add(
+      'status.workspaceStatuses',
+      format.list('status', status.workspaceStatuses.length),
+      (f) => ({
+        ...f,
+        status: { ...f.status, workspaceStatuses: [] }
+      })
+    )
   }
   if (!status.matchStatusless) {
     add('status.matchStatusless', format.excludesStatusless(), (f) => ({
@@ -122,10 +125,14 @@ export function listAppliedWorkspaceCleanupFilters(
     }))
   }
   if (agent.retainedDoneAgents !== 'any') {
-    add('agent.retainedDoneAgents', format.triState('retainedAgents', agent.retainedDoneAgents), (f) => ({
-      ...f,
-      agent: { ...f.agent, retainedDoneAgents: 'any' }
-    }))
+    add(
+      'agent.retainedDoneAgents',
+      format.triState('retainedAgents', agent.retainedDoneAgents),
+      (f) => ({
+        ...f,
+        agent: { ...f.agent, retainedDoneAgents: 'any' }
+      })
+    )
   }
 
   if (git.states.length > 0) {
@@ -232,22 +239,10 @@ export function listAppliedWorkspaceCleanupFilters(
       safety: { ...f.safety, blockers: [] }
     }))
   }
-  if (safety.tiers.length > 0) {
-    add('safety.tiers', format.list('tier', safety.tiers.length), (f) => ({
-      ...f,
-      safety: { ...f.safety, tiers: [] }
-    }))
-  }
   if (safety.dismissed !== 'any') {
     add('safety.dismissed', format.triState('dismissed', safety.dismissed), (f) => ({
       ...f,
       safety: { ...f.safety, dismissed: 'any' }
-    }))
-  }
-  if (safety.selectableOnly) {
-    add('safety.selectableOnly', format.selectableOnly(), (f) => ({
-      ...f,
-      safety: { ...f.safety, selectableOnly: false }
     }))
   }
 

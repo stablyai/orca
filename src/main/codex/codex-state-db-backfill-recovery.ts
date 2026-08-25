@@ -8,6 +8,7 @@ import { withManagedHookInstallLock } from '../agent-hooks/managed-hook-install-
 import { readManagedHookHostIdentity } from '../agent-hooks/managed-hook-owner-identity'
 import { buildWslCodexAppServerArgs } from '../codex-accounts/wsl-codex-command'
 import { resolveCodexCommand } from '../codex-cli/command'
+import { withCliRuntimeOnPath } from '../../shared/node-cli-command-resolution'
 import { CODEX_READ_ONLY_APP_SERVER_ARGS } from '../codex-cli/codex-read-only-app-server-args'
 import { terminateCodexProbeChild } from '../rate-limits/codex-probe-termination'
 import { getSpawnArgsForWindows } from '../win32-utils'
@@ -110,7 +111,7 @@ function spawnRecoveryProcess(
     cwd: codexHomePath,
     stdio: ['pipe', 'ignore', 'ignore'],
     windowsHide: true,
-    env: { ...process.env, CODEX_HOME: codexHomePath }
+    env: withCliRuntimeOnPath(command, { ...process.env, CODEX_HOME: codexHomePath })
   })
 }
 

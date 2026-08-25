@@ -16,7 +16,6 @@ import type {
 import { buildDirectSshSnapshotApplyToken } from './direct-ssh-reconnect-coordinator'
 import { resolveDirectSshTargetScope } from '../lib/direct-ssh-target-scope'
 import { applyDirectSshRemoteWorkspaceSnapshot } from './remote-workspace-snapshot-apply'
-export { isDirectSshRemoteWorkspaceApplyInProgress } from './remote-workspace-snapshot-apply'
 
 const WORKSPACE_HYDRATION_TIMEOUT_MS = 10_000
 

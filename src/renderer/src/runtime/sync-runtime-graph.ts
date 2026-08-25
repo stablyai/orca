@@ -620,6 +620,7 @@ function serializeRuntimeMobileAgentStatusEntry(
     paneKey,
     entryPaneKey: entry.paneKey,
     state: entry.state,
+    workingMode: entry.workingMode ?? null,
     prompt: entry.prompt,
     updatedAtBucket: Math.floor(entry.updatedAt / AGENT_STATUS_SYNC_UPDATED_AT_BUCKET_MS),
     stateStartedAt: entry.stateStartedAt,

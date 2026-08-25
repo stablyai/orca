@@ -15,14 +15,13 @@
 # host-level flag like --status / --list that the guest-command API cannot
 # express because it always prepends --exec.
 main/agent-hooks/wsl-hook-relay-launch.ts
-main/claude-accounts/service.ts
+main/claude-accounts/claude-command-process.ts
 main/codex-accounts/runtime-home-service.ts
 main/codex-accounts/service.ts
 main/codex/codex-state-db-backfill-recovery.ts
 main/codex/codex-trust-grant-host.ts
 main/codex/codex-wsl-hook-install-plan.ts
-main/daemon/pty-subprocess.ts
-main/git/runner.ts
+main/git/command-runner/wsl-command-resolution.ts
 main/git/wsl-git-read-environment.ts
 main/ipc/filesystem-watcher-wsl.ts
 main/local-worktree-filesystem.ts

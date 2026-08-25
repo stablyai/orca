@@ -611,6 +611,7 @@ function sleepingRecordFromEntry(args: {
     worktreeId: args.worktreeId,
     agent,
     providerSession: args.entry.providerSession,
+    ...(args.entry.connectionId !== undefined ? { connectionId: args.entry.connectionId } : {}),
     prompt: args.entry.prompt,
     state: args.entry.state,
     capturedAt: args.capturedAt,
@@ -897,11 +898,14 @@ function recoveryRecordMatches(
   if (!existing) {
     return false
   }
+  // Why: completion or interruption must replace a pre-status working checkpoint.
   return (
     existing.origin === next.origin &&
     existing.agent === next.agent &&
     existing.worktreeId === next.worktreeId &&
     existing.tabId === next.tabId &&
+    existing.state === next.state &&
+    existing.interrupted === next.interrupted &&
     agentProviderSessionsEqual(existing.agent, existing.providerSession, next.providerSession) &&
     launchConfigsEqual(existing.launchConfig, next.launchConfig)
   )
@@ -2017,6 +2021,13 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
         const existingRecordMatchesProviderSession =
           existingRecord?.agent === agent &&
           agentProviderSessionsEqual(agent, existingRecord.providerSession, providerSession)
+        // Why: provider-session heartbeats can arrive after the turn is complete; preserve the
+        // completed checkpoint so a late heartbeat cannot make it eligible for ghost resume.
+        const preservesCompletedRecoveryRecord =
+          existingRecordMatchesProviderSession && existingRecord?.state === 'done'
+        // Why: an explicit quit capture must remain the resume handle until a new provider session replaces it.
+        const preservesQuitOrigin =
+          existingRecordMatchesProviderSession && existingRecord?.origin === 'quit'
         const launchConfig =
           (registryMatches ? registryEntry?.launchConfig : undefined) ??
           (existingRecordMatchesProviderSession ? existingRecord.launchConfig : undefined)
@@ -2028,7 +2039,7 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
           providerSession,
           prompt: '',
           // Why: durable process/session identity, not visible turn state; a non-done value keeps cold restore eligible.
-          state: 'working',
+          state: preservesCompletedRecoveryRecord ? 'done' : 'working',
           capturedAt: updatedAt,
           updatedAt,
           ...(existingStatus?.terminalTitle
@@ -2046,7 +2057,10 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
           existingRecord.automaticResumeBlockedBy === 'legacy-orchestration-worker'
             ? { automaticResumeBlockedBy: 'legacy-orchestration-worker' }
             : {}),
-          origin: 'live'
+          ...(preservesCompletedRecoveryRecord && existingRecord.interrupted !== undefined
+            ? { interrupted: existingRecord.interrupted }
+            : {}),
+          origin: preservesQuitOrigin ? 'quit' : 'live'
         }
         removedLiveStatus = existingStatus !== undefined
         const nextLive = removedLiveStatus ? { ...s.agentStatusByPaneKey } : s.agentStatusByPaneKey
@@ -2304,6 +2318,7 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
           matchedSleepingLaunchConfig
         const entry: AgentStatusEntry = {
           state: payload.state,
+          workingMode: payload.workingMode,
           prompt: payload.prompt,
           updatedAt,
           stateStartedAt,
@@ -2322,7 +2337,9 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
             ? { connectionId: routing.connectionId }
             : existing?.connectionId !== undefined
               ? { connectionId: existing.connectionId }
-              : {}),
+              : s.sleepingAgentSessionsByPaneKey[paneKey]?.connectionId !== undefined
+                ? { connectionId: s.sleepingAgentSessionsByPaneKey[paneKey].connectionId }
+                : {}),
           tabId: statusTabId,
           terminalTitle: effectiveTitle,
           stateHistory: history,
@@ -2398,6 +2415,7 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
           existing?.state === 'done' &&
           entry.state === 'done' &&
           agentEntryCompletionAt(existing) !== agentEntryCompletionAt(entry)
+        const workingModeChanged = existing?.workingMode !== entry.workingMode
         const sortRelevantChange =
           !existing ||
           existing.state !== payload.state ||
@@ -2423,7 +2441,10 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
             entry.providerSession !== existing.providerSession ||
             entry.interrupted !== existing.interrupted)
         const retentionRelevantChange =
-          sortRelevantChange || attributionChanged || doneRetentionFieldsChanged
+          sortRelevantChange ||
+          attributionChanged ||
+          workingModeChanged ||
+          doneRetentionFieldsChanged
         // Why: a fresh status means the agent is live again — lift its one-shot retention suppressor.
         // Clone the map only when a suppressor exists, else every high-frequency ping churns the ref.
         const hasSuppressor = paneKey in s.retentionSuppressedPaneKeys
@@ -2451,9 +2472,12 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
         const liveRecoveryRecord = liveRecoveryWorktreeId
           ? sleepingRecordFromEntry({
               state: s,
-              // Why: a completed resumable-agent turn leaves the TUI session alive — keep resume identity active without representing done as pending work.
+              // Why: keep the resume identity of a finished turn without its text,
+              // but never restate `done` as pending work — the resume sweep reads
+              // that state to tell an interrupted agent from a completed one, and
+              // a lie there respawns every finished agent whose pane was killed.
               entry: retainsResumableRecoveryIdentity
-                ? { ...entry, state: 'working', prompt: '', lastAssistantMessage: undefined }
+                ? { ...entry, prompt: '', lastAssistantMessage: undefined }
                 : entry,
               worktreeId: liveRecoveryWorktreeId,
               capturedAt: updatedAt,

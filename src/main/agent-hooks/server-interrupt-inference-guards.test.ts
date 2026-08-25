@@ -228,6 +228,7 @@ describe('AgentHookServer listener replay', () => {
       const baseline = server.getStatusSnapshot()[0]
 
       expect(baseline).not.toHaveProperty('claudeRunningNonAgentTask')
+      expect(baseline).toMatchObject({ state: 'working', workingMode: 'monitoring' })
       expect(
         server.inferInterrupt({
           paneKey: PANE,

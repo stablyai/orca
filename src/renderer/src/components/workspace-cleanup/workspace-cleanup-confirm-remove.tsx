@@ -6,10 +6,13 @@ import { Progress } from '@/components/ui/progress'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { cn } from '@/lib/utils'
 import { translate } from '@/i18n/i18n'
-import type { WorkspaceCleanupCandidate } from '../../../../shared/workspace-cleanup'
+import {
+  shouldForceWorkspaceCleanupRemoval,
+  type WorkspaceCleanupCandidate
+} from '../../../../shared/workspace-cleanup'
 import type { WorkspaceCleanupRemovalProgress } from './workspace-cleanup-background-removal'
 import {
-  getCandidateFactStatus,
+  getCandidateFactStatuses,
   formatContextDetailLabels,
   getDirtyGitLabel,
   getReviewPillTone,
@@ -60,6 +63,7 @@ export function WorkspaceCleanupConfirmRemove({
 }): React.JSX.Element {
   const [scrollElement, setScrollElement] = React.useState<HTMLDivElement | null>(null)
   const count = candidates.length
+  const riskCount = candidates.filter(shouldForceWorkspaceCleanupRemoval).length
   const deleting = progress !== null
   const progressValue = progress
     ? Math.min(100, Math.max(0, (progress.processedCount / progress.totalCount) * 100))
@@ -136,6 +140,21 @@ export function WorkspaceCleanupConfirmRemove({
               { value0: count }
             )}
           </div>
+          {riskCount > 0 ? (
+            <div className="text-xs text-destructive">
+              {riskCount === 1
+                ? translate(
+                    'components.workspace.cleanup.browse.forceDeleteProjectionOne',
+                    '{{count}} workspace currently shows risk and may need a force delete',
+                    { count: riskCount }
+                  )
+                : translate(
+                    'components.workspace.cleanup.browse.forceDeleteProjectionMany',
+                    '{{count}} workspaces currently show risk and may need a force delete',
+                    { count: riskCount }
+                  )}
+            </div>
+          ) : null}
         </div>
         <ScrollArea className="min-h-0 flex-1" viewportRef={setScrollElement}>
           <WorkspaceCleanupCandidateList
@@ -206,7 +225,7 @@ function ConfirmRemoveRow({
   const branchDiffersFromName = candidate.branch !== candidate.displayName
   const contextPillLabels = formatContextDetailLabels(candidate)
   const showGitMetadataChip = shouldShowGitMetadataChip(candidate)
-  const factStatus = getCandidateFactStatus(candidate)
+  const factStatuses = getCandidateFactStatuses(candidate)
   const hostLabel = getWorkspaceCleanupCandidateHostLabel(candidate)
   return (
     <div
@@ -230,7 +249,11 @@ function ConfirmRemoveRow({
           )}{' '}
           {formatWorkspaceCleanupRelativeTime(candidate.lastActivityAt, now)}
         </span>
-        {factStatus ? <StatusPill tone={factStatus.tone}>{factStatus.label}</StatusPill> : null}
+        {factStatuses.map((status) => (
+          <StatusPill key={status.label} tone={status.tone}>
+            {status.label}
+          </StatusPill>
+        ))}
         {reviewInfo.label ? (
           <StatusPill tone={getReviewPillTone(reviewInfo)}>{reviewInfo.label}</StatusPill>
         ) : null}

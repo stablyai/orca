@@ -5,11 +5,10 @@ import { getRepoExecutionHostId } from '../../../shared/execution-host'
 import { isLegacyRepoForExternalWorktreeVisibility } from '../../../shared/external-worktree-visibility'
 import { normalizeRepoSourceControlAiOverrides } from '../../../shared/source-control-ai'
 import { normalizeWorktreeVisibilitySourcePreferences } from '../../../shared/worktree/visibility-sources'
-import type { StoreOwnedPersistedState } from '../loading-store/store-owned-state'
 import { sanitizeRepoUpdatesForPersistence } from './repo-sanitization'
 
 export type RepoUpdateMutationOperations = {
-  state: StoreOwnedPersistedState
+  state: PersistedState
   syncProjectHostSetupCompatibilityState: () => void
   scheduleSave: () => void
   hydrateRepo: (repo: Repo) => Repo

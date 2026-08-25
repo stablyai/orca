@@ -3,7 +3,10 @@ import type { ExecutionHostId } from '../../../shared/execution-host'
 import { isBlankBrowserUrl } from './browser-palette-search'
 import { activateAndRevealWorktree } from './worktree-activation'
 
-export type BrowserPagePaletteActivationFailure = 'missing-page' | 'missing-worktree'
+export type BrowserPagePaletteActivationFailure =
+  | 'missing-page'
+  | 'missing-tab'
+  | 'missing-worktree'
 
 export type BrowserPageFocusTarget = 'address-bar' | 'webview'
 
@@ -57,6 +60,16 @@ export function activateBrowserPagePaletteResult({
   }
 
   const state = useAppStore.getState()
+  const matchingUnifiedTab = (state.unifiedTabsByWorktree[worktree.id] ?? []).find(
+    (candidate) => candidate.contentType === 'browser' && candidate.entityId === workspace.id
+  )
+  // Why: the pane renders whatever the group's active tab is, so without a unified
+  // tab the browser state would go active behind a tab that never shows the page.
+  if (!matchingUnifiedTab) {
+    return { status: 'failed', reason: 'missing-tab' }
+  }
+  state.focusGroup(worktree.id, matchingUnifiedTab.groupId)
+  state.activateTab(matchingUnifiedTab.id)
   state.setActiveBrowserTab(workspace.id)
   state.setActiveBrowserPage(workspace.id, pageId)
   return { status: 'activated', pageId, focusTarget }

@@ -8,6 +8,10 @@
 #
 # Migrating a file means replacing its spawn/execFile calls with
 # runProcess/spawnProcess and deleting its line here.
+#
+# The src/main/git/command-runner/* entries are the seven spawn sites that used
+# to live in the single line src/main/git/runner.ts; splitting that file moved
+# them, it did not add any.
 src/cli/handlers/account.ts
 src/cli/handlers/core.ts
 src/cli/handlers/interactive-login-interruption.ts
@@ -30,8 +34,6 @@ src/main/automations/precheck-runner.ts
 src/main/browser/agent-browser-bridge.ts
 src/main/browser/browser-cookie-import.ts
 src/main/claude-accounts/keychain.ts
-src/main/claude-accounts/service.ts
-src/main/cli/cli-installer.ts
 src/main/codex-accounts/runtime-home-service.ts
 src/main/codex-accounts/service.ts
 src/main/codex/codex-app-server-client.ts
@@ -58,7 +60,13 @@ src/main/emulator/serve-sim-runtime-materializer.ts
 src/main/emulator/simctl-simulator-devices.ts
 src/main/emulator/simulator-app-visibility.ts
 src/main/external-editor-launch.ts
-src/main/git/runner.ts
+src/main/git/command-runner/exec-file-capture.ts
+src/main/git/command-runner/git-exec-file.ts
+src/main/git/command-runner/git-spawn.ts
+src/main/git/command-runner/git-stream-stdout.ts
+src/main/git/command-runner/spawn-command-capture.ts
+src/main/git/command-runner/spawned-command-tree-kill.ts
+src/main/git/command-runner/wsl-aware-spawn.ts
 src/main/git/wsl-git-read-environment.ts
 src/main/github/gh-utils.ts
 src/main/hooks.ts
@@ -85,7 +93,7 @@ src/main/ipc/parcel-watcher-supervisor-disposal.ts
 src/main/ipc/parcel-watcher-supervisor-message.ts
 src/main/ipc/parcel-watcher-supervisor-subscribe.ts
 src/main/ipc/preflight-command-exec.ts
-src/main/ipc/repos.ts
+src/main/ipc/repos/repo-clone-lifecycle.ts
 src/main/ipc/worktree-apfs-clone.ts
 src/main/ipc/wsl-watcher-process-exit.ts
 src/main/linux-lid-sleep-assertion.ts
@@ -127,7 +135,6 @@ src/main/startup/hydrate-shell-path.ts
 src/main/startup/packaged-cli-entry-redirect.ts
 src/main/startup/windows-install-dir-acl-probe.ts
 src/main/startup/windows-user-data-acl.ts
-src/main/text-generation/commit-message-text-generation.ts
 src/main/win32-utils.ts
 src/main/window/clipboard-ipc-handlers.ts
 src/main/windows-process-tree-kill.ts

@@ -8,7 +8,10 @@ const PROJECT_VIEW_SOURCE = readFileSync(
   'utf8'
 )
 const COMPOSER_MODAL_SOURCE = readFileSync(join(__dirname, 'NewWorkspaceComposerModal.tsx'), 'utf8')
-const COMPOSER_STATE_SOURCE = readFileSync(join(__dirname, '../hooks/useComposerState.ts'), 'utf8')
+const QUICK_SUBMIT_PREPARATION_SOURCE =
+  readFileSync(join(__dirname, '../hooks/composer-state/quick-submit-preparation.ts'), 'utf8') +
+  readFileSync(join(__dirname, '../hooks/composer-state/quick-creation-execution.ts'), 'utf8') +
+  readFileSync(join(__dirname, '../hooks/composer-state/quick-creation-request.ts'), 'utf8')
 
 function sourceBetween(source: string, startPattern: string, endPattern: string): string {
   const start = source.indexOf(startPattern)
@@ -47,15 +50,13 @@ describe('TaskPage workspace creation source boundaries', () => {
     expect(COMPOSER_MODAL_SOURCE).toContain(
       'enableIssueAutomation: modalData.enableIssueAutomation === true'
     )
-    const quickSubmit = sourceBetween(
-      COMPOSER_STATE_SOURCE,
-      'const submitQuick = useCallback(',
-      'const createGateInput = {'
-    )
+    const quickSubmit = QUICK_SUBMIT_PREPARATION_SOURCE
     expect(quickSubmit).toContain('readAndConfirmRuntimeIssueCommand(')
     expect(quickSubmit).toContain('selectedRepoExecutionHostId')
     expect(quickSubmit).toContain('isSubmissionCancelled')
-    expect(quickSubmit).toContain('...(issueCommand ? { issueCommand } : {})')
+    expect(quickSubmit).toContain(
+      '...(input.issueCommand ? { issueCommand: input.issueCommand } : {})'
+    )
   })
 
   it('routes TaskPage GitHub starts directly to the composer', () => {

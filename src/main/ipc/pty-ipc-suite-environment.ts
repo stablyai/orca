@@ -54,7 +54,15 @@ import { __resetShellStartupEnvCache } from '../pty/shell-startup-env'
 import { _resetWslCachesForTests } from '../wsl'
 
 /** The mocked webContents each suite asserts sends against. */
-export type PtyIpcTestWebContents = { on: Mock; send: Mock; removeListener: Mock }
+export type PtyIpcTestWebContents = {
+  on: Mock
+  send: Mock
+  removeListener: Mock
+  // Why real Electron has this: webContents can be destroyed a beat before its BrowserWindow
+  // during close, so renderer-liveness guards check both. Omitting it here let those guards
+  // pass vacuously in every suite (STA-2373 / STA-5373).
+  isDestroyed: Mock
+}
 
 /** The mocked BrowserWindow handed to registerPtyHandlers. */
 export type PtyIpcTestMainWindow = {
@@ -83,12 +91,18 @@ export function createPtyIpcSuiteEnvironment(): PtyIpcSuiteEnvironment {
     webContents: {
       on: vi.fn(),
       send: vi.fn(),
-      removeListener: vi.fn()
+      removeListener: vi.fn(),
+      isDestroyed: vi.fn(() => false)
     }
   }
   const mainWindowIpcEvent = { sender: mainWindow.webContents }
   const foreignWindowIpcEvent = {
-    sender: { on: vi.fn(), send: vi.fn(), removeListener: vi.fn() }
+    sender: {
+      on: vi.fn(),
+      send: vi.fn(),
+      removeListener: vi.fn(),
+      isDestroyed: vi.fn(() => false)
+    }
   }
   const envScope = createPtyIpcProcessEnvScope()
 
@@ -155,6 +169,10 @@ export function createPtyIpcSuiteEnvironment(): PtyIpcSuiteEnvironment {
     mainWindow.webContents.on.mockReset()
     mainWindow.webContents.send.mockReset()
     mainWindow.webContents.removeListener.mockReset()
+    // Why re-stub, not just reset: a bare mockReset returns undefined, which reads as "alive"
+    // by accident rather than by intent, and hides a test that forgot to restore liveness.
+    mainWindow.webContents.isDestroyed.mockReset()
+    mainWindow.webContents.isDestroyed.mockReturnValue(false)
     // Why: hidden-delivery gate state is module-level (PTY-keyed), so tests must not leak hidden bits across cases.
     _resetHiddenRendererPtyDeliveryGateForTest()
     __resetShellStartupEnvCache()

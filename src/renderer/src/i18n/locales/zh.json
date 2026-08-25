@@ -232,7 +232,10 @@
         "workspace": {
           "cleanup": {
             "9d6e531da6": "工作区不再存在。",
-            "changedSinceConfirmation": "工作区在确认后发生了更改。请刷新并在删除前重新检查。"
+            "changedSinceConfirmation": "工作区在确认后发生了更改。请刷新并在删除前重新检查。",
+            "gitStatusUnavailable": "Orca 无法检查此工作区的 Git 状态。请重试，或从对应主机的侧边栏或项目列表中将其删除。",
+            "gitStatusUnavailableOlderPeer": "Orca 无法将此 Git 状态检查失败与主机匹配。请更新较旧的已连接端，或从对应主机的侧边栏或项目列表中删除该工作区。",
+            "forceNeedsApproval": "请先检查并确认此工作区，然后再强制删除。"
           }
         },
         "worktrees": {
@@ -3237,6 +3240,14 @@
             "workspaceConflict": "工作区冲突",
             "workspaceSyncError": "工作区同步错误"
           },
+          "CaffeinateStatusSegment": {
+            "active": "生效中",
+            "inactive": "未生效",
+            "ariaLabel": "{{title}}，{{status}}",
+            "onDescription": "始终防止此电脑进入睡眠状态",
+            "autoDescription": "智能体工作时防止电脑进入睡眠状态",
+            "offDescription": "允许系统正常进入睡眠状态"
+          },
           "StatusBar": {
             "9659e38343": "端口",
             "d1e1a7a6bf": "资源管理器",
@@ -3972,6 +3983,45 @@
         "SkillUpdateRow": {
           "oneLocation": "1 location",
           "manyLocations": "{{value0}} locations"
+        },
+        "count": {
+          "deleteOne": "删除 {{count}} 个技能",
+          "deleteOther": "删除 {{count}} 个技能",
+          "deletedOne": "已删除 {{count}} 个技能",
+          "deletedOther": "已删除 {{count}} 个技能",
+          "deleteFolderOne": "{{count}} 个文件夹",
+          "deleteFolderOther": "{{count}} 个文件夹",
+          "deleteLinkOne": "{{count}} 个链接",
+          "deleteLinkOther": "{{count}} 个链接"
+        },
+        "host": {
+          "local": "此机器",
+          "remote": "已连接的运行时"
+        },
+        "SkillDelete": {
+          "dismissResults": "关闭",
+          "reasonBundled": "Orca 内置技能 — 删除后会恢复",
+          "reasonPlugin": "由插件安装 — 请改为移除插件",
+          "reasonUnowned": "此技能位于 Orca 技能文件夹之外 — 请在其存储位置删除",
+          "reasonMissing": "此技能已不在磁盘上",
+          "reasonStale": "此技能在列表加载后发生了变化 — 请刷新后重试",
+          "placementSummaryParts": "将在 {{roots}} 中删除 {{parts}}。",
+          "placementJoin": " 和 ",
+          "retainedSource": "技能本体仍保留在 {{path}}。",
+          "blockedLine": "{{count}} × {{reason}}",
+          "resultLine": "{{count}} × {{label}}",
+          "statusSkipped": "已跳过",
+          "statusBusy": "忙碌 — 另一项技能操作正在进行",
+          "statusPartial": "部分移除 — 某些文件仍以隐藏名称保留在磁盘上",
+          "statusFailed": "失败 — 未进行任何更改",
+          "statusDeleted": "已删除",
+          "confirmHost": "位于 {{host}}。",
+          "confirmPermanent": "此操作无法撤销。",
+          "failed": "无法删除技能",
+          "hostUnresolved": "仍在查找存储这些技能的计算机。",
+          "hostUpdateRequired": "请更新所选机器上的 Orca 以删除技能。",
+          "nothingOne": "无法从这里删除该技能。",
+          "nothingOther": "所选的 {{count}} 个技能均无法从这里删除。"
         }
       },
       "sidebar": {
@@ -9178,7 +9228,13 @@
         "agent-awake-copy": {
           "e5995ce268": "智能体工作时保持电脑唤醒",
           "95d3031db2": "在智能体工作时保持此电脑和显示器唤醒。合盖行为遵循此设备的电源设置。",
-          "a42f6fbdd8": "在智能体工作时保持此电脑和显示器唤醒。Orca 还会根据电源策略，在合盖时请求此设备保持唤醒。"
+          "a42f6fbdd8": "在智能体工作时保持此电脑和显示器唤醒。Orca 还会根据电源策略，在合盖时请求此设备保持唤醒。",
+          "modeTitle": "防止电脑休眠"
+        },
+        "AgentAwakeSetting": {
+          "on": "开启",
+          "auto": "智能体",
+          "off": "关闭"
         },
         "agent-status-hooks-copy": {
           "7707c15abb": "智能体状态钩子",
@@ -14559,6 +14615,11 @@
           "githubPullRequestNumber": "PR #{{value0}}"
         },
         "browse": {
+          "gitStatusCheckFailed": "Git 状态检查失败",
+          "gitStatusUnverified": "无法验证 Git 状态",
+          "deleteAnyway": "仍然删除",
+          "forceDeleteProjectionOne": "当前有 {{count}} 个工作区显示风险，可能需要强制删除",
+          "forceDeleteProjectionMany": "当前有 {{count}} 个工作区显示风险，可能需要强制删除",
           "appliedFilters": "已应用的筛选",
           "removeFilter": "移除筛选 {{value0}}",
           "chip": {

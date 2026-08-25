@@ -18,11 +18,15 @@ export function resolveWatcherProcessEntryPath(
 ): string {
   // Why: ELECTRON_RUN_AS_NODE bypasses Electron's asar integration, so the
   // packaged entry must be forked from app.asar.unpacked.
-  const basePath = isPackaged ? appPath.replace('app.asar', 'app.asar.unpacked') : appPath
+  const usesAsarArchive = isPackaged && appPath.includes('app.asar')
+  const basePath = usesAsarArchive ? appPath.replace('app.asar', 'app.asar.unpacked') : appPath
   const adjacentBuildEntry = join(basePath, 'parcel-watcher-process-entry.js')
   // Why: electron-vite's unpackaged appPath is already out/main. Appending
   // out/main again silently disables crash isolation in dev and E2E builds.
-  if (!isPackaged && pathExists(adjacentBuildEntry)) {
+  // Why asar and not isPackaged: orcad is a packaged non-Electron host whose app root
+  // holds orcad.js and this child side by side. Only the asar layout nests it under
+  // out/main, and only there is the adjacent probe guaranteed to miss.
+  if (!usesAsarArchive && pathExists(adjacentBuildEntry)) {
     return adjacentBuildEntry
   }
   return join(basePath, 'out', 'main', 'parcel-watcher-process-entry.js')

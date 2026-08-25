@@ -303,7 +303,10 @@
             "9d6e531da6": "Workspace no longer exists.",
             "changedSinceConfirmation": "Workspace changed after confirmation. Refresh to review it before removing.",
             "hostCollision": "Error: this workspace exists on multiple hosts at the same path",
-            "hostUnresolved": "Orca cannot tell which host owns this workspace. Refresh projects and review it again."
+            "hostUnresolved": "Orca cannot tell which host owns this workspace. Refresh projects and review it again.",
+            "gitStatusUnavailable": "Orca couldn't check this workspace's git status. Try again, or delete it from its host-specific sidebar or project list.",
+            "gitStatusUnavailableOlderPeer": "Orca couldn't match this git-status failure to a host. Update the older connected peer, or delete the workspace from its host-specific sidebar or project list.",
+            "forceNeedsApproval": "Review and confirm this workspace before force deleting it."
           }
         },
         "worktrees": {
@@ -3754,13 +3757,9 @@
             }
           },
           "CaffeinateStatusSegment": {
-            "on": "On",
-            "auto": "Agent",
-            "off": "Off",
             "active": "Active",
             "inactive": "Inactive",
-            "ariaLabel": "Caffeinate, {{status}}",
-            "title": "Caffeinate",
+            "ariaLabel": "{{title}}, {{status}}",
             "onDescription": "Keep this computer awake continuously",
             "autoDescription": "Stay awake while an agent is working",
             "offDescription": "Allow normal system sleep behavior"
@@ -4148,7 +4147,8 @@
           "retry": "Retry",
           "remoteShareNotice": "These skills live on {{host}}. Open Skills on that machine to share them.",
           "viewSwitch": "Show",
-          "searchLinks": "Search links"
+          "searchLinks": "Search links",
+          "deleteSkills": "Delete skills…"
         },
         "SkillFreshnessNudge": {
           "titleOne": "An installed Orca skill is out of date",
@@ -4354,7 +4354,8 @@
           "27672470d9": "Opening the link does not install anything. Review the immutable version first.",
           "66cff7a804": "https://app.orca.dev/skills/share/…",
           "93eb0fe8c7": "Orca skill link",
-          "releaseNotes": "Release notes:"
+          "releaseNotes": "Release notes:",
+          "targetHeader": "Installation Target"
         },
         "SkillInstallTargetFields": {
           "8e6a972229": "No workspaces are known on this machine.",
@@ -4373,6 +4374,10 @@
           "0785d0a503": "— update required",
           "8562dd1e6e": "This computer",
           "b8a0b706ad": "Machine"
+        },
+        "SkillInstallWorkspaceCombobox": {
+          "search": "Search workspaces...",
+          "empty": "No workspaces found."
         },
         "SkillShareReviewContent": {
           "e3caf6baeb": "Revoking this link blocks future access. It does not remove copies already installed on recipients’ machines.",
@@ -4476,7 +4481,9 @@
           "detailSource": "Source",
           "detailContents": "Contents",
           "skillActions": "Actions for {{value0}}",
-          "viewDetails": "View details"
+          "viewDetails": "View details",
+          "deleteSkill": "Delete…",
+          "notDeletable": "Not deletable"
         },
         "SkillSelectionBar": {
           "selectAll": "Select all {{count}} eligible",
@@ -4516,7 +4523,15 @@
           "retryOne": "Retry {{count}} skill",
           "retryOther": "Retry {{count}} skills",
           "linkOne": "{{count}} link",
-          "linkOther": "{{count}} links"
+          "linkOther": "{{count}} links",
+          "deleteOne": "Delete {{count}} skill",
+          "deleteOther": "Delete {{count}} skills",
+          "deletedOne": "Deleted {{count}} skill",
+          "deletedOther": "Deleted {{count}} skills",
+          "deleteFolderOne": "{{count}} folder",
+          "deleteFolderOther": "{{count}} folders",
+          "deleteLinkOne": "{{count}} link",
+          "deleteLinkOther": "{{count}} links"
         },
         "host": {
           "local": "This machine",
@@ -4574,7 +4589,15 @@
           "supportingFileWarning": "The selected skills include {{fileCount}} beyond SKILL.md.",
           "agentAccessWarning": "Skills contain instructions your agent may follow. Continue only if you trust the source of this share link.",
           "fileBinary": "binary",
-          "fileRunnable": "runnable"
+          "fileRunnable": "runnable",
+          "agentsCountBadge": "{{count}} selected",
+          "agentsCountLabel": "{{count}} {{label}}",
+          "targetAgentsHeader": "Target Agents",
+          "deselectAll": "Deselect optional",
+          "selectAll": "Select all",
+          "canonicalHeader": "Standard Agents (Always Included)",
+          "canonicalExplanation": "These agents natively read {{root}}, which Orca installs to by default:",
+          "additionalAgentsHeader": "Additional Agent Directories"
         },
         "filter": {
           "allAgents": "All agents",
@@ -4585,7 +4608,8 @@
           "exitTooltip": "Exit selection · Esc",
           "title": "Select skills to share",
           "selectAll": "Select all {{count}} eligible",
-          "clear": "Clear"
+          "clear": "Clear",
+          "deleteTitle": "Select skills to delete"
         },
         "SkillDetailDialog": {
           "agents": "Agents",
@@ -4639,6 +4663,32 @@
           "supportingFilesDescription": "Includes readable reference files beyond the main instructions.",
           "runnableFilesDescription": "Includes scripts that an agent may run with your access.",
           "binaryFilesDescription": "Includes opaque assets and an executable binary."
+        },
+        "SkillDelete": {
+          "dismissResults": "Dismiss",
+          "reasonBundled": "Bundled with Orca — it would be restored",
+          "reasonPlugin": "Installed by a plugin — remove the plugin instead",
+          "reasonUnowned": "This skill lives outside Orca’s skill folders — delete it where it is stored",
+          "reasonMissing": "This skill is no longer on disk",
+          "reasonStale": "This skill changed since the list was loaded — refresh and try again",
+          "blockedLine": "{{count}} × {{reason}}",
+          "resultLine": "{{count}} × {{label}}",
+          "statusSkipped": "Skipped",
+          "statusBusy": "Busy — another skill operation is in progress",
+          "statusPartial": "Partly removed — some files are still on disk under a hidden name",
+          "statusFailed": "Failed — nothing changed",
+          "statusDeleted": "Deleted",
+          "confirmHost": "On {{host}}.",
+          "confirmPermanent": "This cannot be undone.",
+          "failed": "Could not delete skills",
+          "hostUnavailable": "Could not reach the selected machine. Refresh and try again.",
+          "hostUnresolved": "Still finding the machine that owns these skills.",
+          "hostUpdateRequired": "Update Orca on the selected machine to delete skills.",
+          "nothingOne": "That skill cannot be deleted from here.",
+          "nothingOther": "None of the {{count}} selected skills can be deleted from here.",
+          "placementSummaryParts": "Removes {{parts}} across {{roots}}.",
+          "placementJoin": " and ",
+          "retainedSource": "The skill itself stays at {{path}}."
         }
       },
       "sidebar": {
@@ -16231,6 +16281,11 @@
           "measuringSizes": "Scanning sizes",
           "measureSizesFailed": "Could not scan workspace sizes",
           "selectedCount": "{{value0}} selected",
+          "gitStatusCheckFailed": "Git status check failed",
+          "gitStatusUnverified": "Git status could not be verified",
+          "deleteAnyway": "Delete anyway",
+          "forceDeleteProjectionOne": "{{count}} workspace currently shows risk and may need a force delete",
+          "forceDeleteProjectionMany": "{{count}} workspaces currently show risk and may need a force delete",
           "selectionWithheldOne": "1 selected workspace is hidden by the current filters and was deselected.",
           "selectionWithheld": "{{value0}} selected workspaces are hidden by the current filters and were deselected.",
           "selectAllCountOne": "Select 1 safety-checked workspace",

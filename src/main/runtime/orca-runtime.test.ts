@@ -1,7 +1,10 @@
 /* eslint-disable max-lines -- Why: runtime behavior is stateful and cross-cutting, so these tests stay in one file to preserve the end-to-end invariants around handles, waits, and graph sync. */
 import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest'
 import { RuntimeBrowserCommands } from './orca-runtime-browser'
-import { setRuntimeBrowserCommandsFactory } from './runtime-browser-commands-factory'
+import {
+  setRuntimeBrowserCommandsFactory,
+  setRuntimeBrowserUnavailableCause
+} from './runtime-browser-commands-factory'
 import { setRuntimeDesktopSurface } from './runtime-desktop-surface'
 import { installFakeAppEnvironment } from '../../../config/scripts/vitest-host-ports-setup'
 import type * as GitUsernameModule from '../git/git-username'
@@ -687,6 +690,7 @@ function resetRuntimeTestMocks(): void {
   // production installs this at the Electron entry. A Node host installs none and the
   // browser RPCs reject rather than silently succeeding.
   setRuntimeBrowserCommandsFactory((host) => new RuntimeBrowserCommands(host))
+  setRuntimeBrowserUnavailableCause(null)
   // Why: the runtime's notification, window lookup and tab-create-reply channel are
   // injected now, so the electron mock alone is inert. Back the surface with the same
   // mocks so every existing expectation still holds.
@@ -1280,6 +1284,13 @@ function setInMemoryOrchestrationMessages(
   db: InMemoryOrchestrationMessages
 ): void {
   runtime.setOrchestrationDb(db as unknown as OrchestrationDb)
+}
+
+function pendingMailPointerRepoints(runtime: OrcaRuntimeService): number {
+  const internals = runtime as unknown as {
+    mailPointerRepointScheduler: { pendingCount: number }
+  }
+  return internals.mailPointerRepointScheduler.pendingCount
 }
 
 function bindSinglePtyRun(db: InMemoryOrchestrationMessages, terminalHandle: string): string {
@@ -2331,6 +2342,33 @@ describe('OrcaRuntimeService', () => {
     expect(capabilities).toContain('browser.headless.v1')
     expect(capabilities).toContain('browser.certificate-trust.v1')
   })
+
+  it('advertises only while headless browser commands remain live', () => {
+    let available = true
+    setRuntimeBrowserCommandsFactory((host) => new RuntimeBrowserCommands(host), {
+      headless: true,
+      isAvailable: () => available
+    })
+    const status = createRuntime().getStatus()
+
+    expect(status.capabilities).toContain('browser.headless.v1')
+    expect(status.capabilities).not.toContain('browser.screencast.v1')
+    expect(status.capabilities).not.toContain('browser.certificate-trust.v1')
+    expect(status.degradations).toBeUndefined()
+
+    available = false
+    const degraded = createRuntime().getStatus()
+    expect(degraded.capabilities).not.toContain('browser.headless.v1')
+    // A provider that resolved and then died is a health failure, never a config mistake.
+    expect(degraded.degradations).toEqual([
+      {
+        code: 'browser_unavailable',
+        capability: 'browser.headless.v1',
+        reason: 'provider_unhealthy',
+        message: 'The browser provider started but is no longer answering health checks.'
+      }
+    ])
+  })
   it('surfaces live offscreen load failures in headless browser snapshots', () => {
     const runtime = createRuntime()
     runtime.setOffscreenBrowserBackend({ createTab: vi.fn(), closeTab: vi.fn() })
@@ -2458,11 +2496,100 @@ describe('OrcaRuntimeService', () => {
     expect(runtime.getStatus().capabilities).toContain('browser.certificate-trust.v1')
   })
 
-  it('does not advertise certificate trust when no browser backend is available', () => {
+  it('declares browser unavailability when no browser provider resolves', async () => {
+    setRuntimeBrowserCommandsFactory(null)
     const runtime = createRuntime()
+    const status = runtime.getStatus()
 
-    expect(runtime.getStatus().capabilities).not.toContain('browser.certificate-trust.v1')
-    expect(runtime.getStatus().capabilities).not.toContain('browser.screencast.v1')
+    expect(status.capabilities).not.toContain('browser.headless.v1')
+    expect(status.capabilities).not.toContain('browser.certificate-trust.v1')
+    expect(status.capabilities).not.toContain('browser.screencast.v1')
+    expect(status.degradations).toEqual([
+      {
+        code: 'browser_unavailable',
+        capability: 'browser.headless.v1',
+        reason: 'unknown',
+        message:
+          'Browser automation is unavailable on this host, and the cause could not be determined.'
+      }
+    ])
+    const browserCalls = Object.entries(runtime).filter(
+      ([name, value]) => /^browser[A-Z]/.test(name) && typeof value === 'function'
+    )
+    expect(browserCalls.length).toBeGreaterThan(50)
+    for (const [name, call] of browserCalls) {
+      const invoke =
+        name === 'browserScreencast'
+          ? () =>
+              (call as CallableFunction)(
+                { format: 'jpeg' },
+                { sendBinary: () => true, emit: () => undefined }
+              )
+          : () => (call as CallableFunction)({})
+      await expect(Promise.resolve().then(invoke)).rejects.toMatchObject({
+        code: 'browser_unavailable'
+      })
+    }
+  })
+
+  it('reports the driver as missing instead of telling a configured operator to configure it', () => {
+    setRuntimeBrowserCommandsFactory(null)
+    setRuntimeBrowserUnavailableCause({ reason: 'driver_missing' })
+
+    const [degradation] = createRuntime().getStatus().degradations ?? []
+
+    expect(degradation).toEqual({
+      code: 'browser_unavailable',
+      capability: 'browser.headless.v1',
+      reason: 'driver_missing',
+      message:
+        'ORCA_BROWSER_EXECUTABLE is set, but the bundled agent-browser driver is missing or not executable on this host, so Chromium cannot be driven.'
+    })
+    // The whole point: never send someone to set a variable they already set.
+    expect(degradation?.message).not.toMatch(/set ORCA_BROWSER_EXECUTABLE/)
+  })
+
+  it('carries the underlying error to the client when a provider failed to start', () => {
+    setRuntimeBrowserCommandsFactory(null)
+    setRuntimeBrowserUnavailableCause({
+      reason: 'electron_start_failed',
+      detail: 'sidecar exited with code 1'
+    })
+
+    const [degradation] = createRuntime().getStatus().degradations ?? []
+
+    expect(degradation).toEqual({
+      code: 'browser_unavailable',
+      capability: 'browser.headless.v1',
+      reason: 'electron_start_failed',
+      detail: 'sidecar exited with code 1',
+      message:
+        'The installed Electron browser provider failed to start. (sidecar exited with code 1)'
+    })
+  })
+
+  it('blames the missing desktop window when a renderer-backed factory is installed', () => {
+    const [degradation] = createRuntime().getStatus().degradations ?? []
+
+    expect(degradation).toMatchObject({
+      reason: 'desktop_window_unavailable',
+      message: 'Browser automation on this host needs a desktop window, and none is available.'
+    })
+  })
+
+  it('keeps the degradation wire-safe for peers that predate structured causes', () => {
+    setRuntimeBrowserCommandsFactory(null)
+    setRuntimeBrowserUnavailableCause({ reason: 'executable_not_found', detail: '/nope/chromium' })
+
+    const [degradation] = createRuntime().getStatus().degradations ?? []
+
+    // Old clients read only these three: the closed code must not move and the human
+    // sentence must stand alone without the optional fields.
+    expect(degradation?.code).toBe('browser_unavailable')
+    expect(degradation?.capability).toBe('browser.headless.v1')
+    expect(degradation?.message).toBe(
+      'ORCA_BROWSER_EXECUTABLE points at a path that does not exist. (/nope/chromium)'
+    )
   })
 
   it('closes a worktree’s offscreen browser pages when its metadata is removed (leak fix)', () => {
@@ -19893,9 +20020,9 @@ describe('OrcaRuntimeService', () => {
         ptysById: Map<string, { lastOscTitle: string | null; lastAgentStatus: string | null }>
       }
     ).ptysById.get('pty-1')
-    expect(pty?.lastOscTitle).toBe('Pi')
+    expect(pty?.lastOscTitle).toBe('π - my-project')
     expect(pty?.lastAgentStatus).toBe('idle')
-    // Why: worktree.ps / mobile re-detect from stored lastOscTitle, not the raw OSC frame; bare "Pi" must still classify as idle after normalize.
+    // Why: worktree.ps / mobile re-detect from stored lastOscTitle, not the raw OSC frame; the preserved π title must still classify as idle after normalize.
     expect(detectAgentStatusFromTitle(pty?.lastOscTitle ?? '')).toBe('idle')
   })
 
@@ -19922,7 +20049,7 @@ describe('OrcaRuntimeService', () => {
         applySeededAgentStatus: (ptyId: string, title: string) => void
       }
     ).applySeededAgentStatus('pty-1', 'π - my-project')
-    expect(pty?.lastOscTitle).toBe('Pi')
+    expect(pty?.lastOscTitle).toBe('π - my-project')
     expect(detectAgentStatusFromTitle(pty?.lastOscTitle ?? '')).toBe('idle')
   })
 
@@ -25740,7 +25867,7 @@ describe('OrcaRuntimeService', () => {
     expect(result.tabs[0]).toEqual(
       expect.objectContaining({
         type: 'terminal',
-        title: '\u280b OMP'
+        title: '\u280b OMP - tmp'
       })
     )
     expect(result.tabs[0]).not.toHaveProperty('launchAgent')
@@ -35712,7 +35839,7 @@ describe('OrcaRuntimeService', () => {
 
       await vi.advanceTimersByTimeAsync(20_000)
       expect(pendingReads).not.toHaveBeenCalled()
-      expect(vi.getTimerCount()).toBe(0)
+      expect(pendingMailPointerRepoints(runtime)).toBe(0)
 
       runtime.onPtyData('pty-1', '\x1b]0;Codex done\x07', 101)
       expect(pendingReads).toHaveBeenCalledTimes(1)
@@ -35799,7 +35926,7 @@ describe('OrcaRuntimeService', () => {
             typeof payload === 'string' && payload.includes('orca orchestration check')
         )
       ).toHaveLength(1)
-      expect(vi.getTimerCount()).toBe(0)
+      expect(pendingMailPointerRepoints(runtime)).toBe(0)
       db.close()
     } finally {
       vi.useRealTimers()
@@ -37709,6 +37836,261 @@ describe('OrcaRuntimeService', () => {
       })
     ])
     expect(summary).toMatchObject({ hasHostSidebarActivity: true, status: 'working' })
+  })
+
+  it('projects monitoring for folder workspaces without assuming a git worktree', async () => {
+    const now = Date.now()
+    const folderWorkspace = makeFolderWorkspace({ name: 'GG' })
+    const projectGroup = makeFolderProjectGroup({ name: 'Store' })
+    const runtime = new OrcaRuntimeService(
+      createFolderWorkspaceRuntimeStore(folderWorkspace, projectGroup) as never,
+      undefined,
+      {
+        getAgentStatusSnapshot: () => [
+          {
+            paneKey: 'folder-pane',
+            worktreeId: TEST_FOLDER_WORKSPACE_KEY,
+            state: 'working',
+            workingMode: 'monitoring',
+            prompt: 'watch tests',
+            agentType: 'claude',
+            connectionId: null,
+            receivedAt: now,
+            stateStartedAt: now - 100
+          }
+        ]
+      }
+    )
+
+    const { worktrees } = await runtime.getWorktreePs()
+    const summary = worktrees.find((worktree) => worktree.worktreeId === TEST_FOLDER_WORKSPACE_KEY)
+
+    expect(summary).toMatchObject({
+      workspaceKind: 'folder-workspace',
+      status: 'working',
+      workingMode: 'monitoring'
+    })
+  })
+  it('projects monitoring over a title-derived working status', async () => {
+    const now = Date.now()
+    const runtime = new OrcaRuntimeService(store, undefined, {
+      getAgentStatusSnapshot: () => [
+        {
+          paneKey: 'tab-1:1',
+          worktreeId: TEST_WORKTREE_ID,
+          tabId: 'tab-1',
+          state: 'working',
+          workingMode: 'monitoring',
+          prompt: 'watch tests',
+          agentType: 'claude',
+          connectionId: null,
+          receivedAt: now,
+          stateStartedAt: now - 100
+        }
+      ]
+    })
+    syncSinglePty(runtime, 'pty-1', { paneTitle: 'claude working' })
+
+    const { worktrees } = await runtime.getWorktreePs()
+    const summary = worktrees.find((worktree) => worktree.worktreeId === TEST_WORKTREE_ID)
+
+    expect(summary).toMatchObject({ status: 'working', workingMode: 'monitoring' })
+  })
+  it('keeps hook monitoring mode when a newer mode-less OSC row reports the same work', async () => {
+    const now = Date.now()
+    const runtime = new OrcaRuntimeService(store, undefined, {
+      getAgentStatusSnapshot: () => [
+        {
+          paneKey: 'tab-1:1',
+          worktreeId: TEST_WORKTREE_ID,
+          tabId: 'tab-1',
+          state: 'working',
+          workingMode: 'monitoring',
+          prompt: 'watch tests',
+          agentType: 'claude',
+          connectionId: null,
+          receivedAt: now - 100,
+          stateStartedAt: now - 200
+        }
+      ]
+    })
+    syncSinglePty(runtime)
+    runtime.onPtyData(
+      'pty-1',
+      '\x1b]9999;{"state":"working","prompt":"watch tests","agentType":"claude"}\x07',
+      1
+    )
+
+    const { worktrees } = await runtime.getWorktreePs()
+    const summary = worktrees.find((worktree) => worktree.worktreeId === TEST_WORKTREE_ID)
+
+    expect(summary).toMatchObject({ status: 'working', workingMode: 'monitoring' })
+    expect(summary?.agents).toEqual([
+      expect.objectContaining({
+        state: 'working',
+        workingMode: 'monitoring',
+        prompt: 'watch tests'
+      })
+    ])
+  })
+  it('does not carry hook monitoring mode into a newer OSC turn', async () => {
+    const now = Date.now()
+    const runtime = new OrcaRuntimeService(store, undefined, {
+      getAgentStatusSnapshot: () => [
+        {
+          paneKey: 'tab-1:1',
+          worktreeId: TEST_WORKTREE_ID,
+          tabId: 'tab-1',
+          state: 'working',
+          workingMode: 'monitoring',
+          prompt: 'watch tests',
+          agentType: 'claude',
+          connectionId: null,
+          receivedAt: now - 100,
+          stateStartedAt: now - 200
+        }
+      ]
+    })
+    syncSinglePty(runtime)
+    runtime.onPtyData(
+      'pty-1',
+      '\x1b]9999;{"state":"working","prompt":"fix tests","agentType":"claude"}\x07',
+      1
+    )
+
+    const { worktrees } = await runtime.getWorktreePs()
+    const summary = worktrees.find((worktree) => worktree.worktreeId === TEST_WORKTREE_ID)
+
+    expect(summary).toMatchObject({ status: 'working' })
+    expect(summary).not.toHaveProperty('workingMode')
+    expect(summary?.agents).toEqual([
+      expect.objectContaining({ state: 'working', prompt: 'fix tests' })
+    ])
+  })
+  it('keeps title-only foreground work ahead of monitoring in another pane', async () => {
+    const now = Date.now()
+    const monitoringLeafId = '33333333-3333-4333-8333-333333333333'
+    const foregroundLeafId = '44444444-4444-4444-8444-444444444444'
+    const runtime = new OrcaRuntimeService(store, undefined, {
+      getAgentStatusSnapshot: () => [
+        {
+          paneKey: `monitoring-tab:${monitoringLeafId}`,
+          worktreeId: TEST_WORKTREE_ID,
+          tabId: 'monitoring-tab',
+          state: 'working',
+          workingMode: 'monitoring',
+          prompt: 'watch tests',
+          agentType: 'claude',
+          connectionId: null,
+          receivedAt: now,
+          stateStartedAt: now - 100
+        }
+      ]
+    })
+    runtime.attachWindow(1)
+    runtime.syncWindowGraph(1, {
+      tabs: [
+        {
+          tabId: 'monitoring-tab',
+          worktreeId: TEST_WORKTREE_ID,
+          title: 'Claude',
+          activeLeafId: monitoringLeafId,
+          layout: null
+        },
+        {
+          tabId: 'foreground-tab',
+          worktreeId: TEST_WORKTREE_ID,
+          title: 'Claude',
+          activeLeafId: foregroundLeafId,
+          layout: null
+        }
+      ],
+      leaves: [
+        {
+          tabId: 'monitoring-tab',
+          worktreeId: TEST_WORKTREE_ID,
+          leafId: monitoringLeafId,
+          paneRuntimeId: 1,
+          ptyId: 'monitoring-pty',
+          paneTitle: 'claude'
+        },
+        {
+          tabId: 'foreground-tab',
+          worktreeId: TEST_WORKTREE_ID,
+          leafId: foregroundLeafId,
+          paneRuntimeId: 2,
+          ptyId: 'foreground-pty',
+          paneTitle: 'claude working'
+        }
+      ]
+    })
+
+    const { worktrees } = await runtime.getWorktreePs()
+    const summary = worktrees.find((worktree) => worktree.worktreeId === TEST_WORKTREE_ID)
+
+    expect(summary).toMatchObject({ status: 'working' })
+    expect(summary).not.toHaveProperty('workingMode')
+    expect(summary?.agents).toEqual([
+      expect.objectContaining({ paneKey: `monitoring-tab:${monitoringLeafId}` })
+    ])
+  })
+  it('keeps title-only foreground work ahead of monitoring in another split pane', async () => {
+    const now = Date.now()
+    const tabId = 'split-tab'
+    const monitoringLeafId = '33333333-3333-4333-8333-333333333333'
+    const foregroundLeafId = '44444444-4444-4444-8444-444444444444'
+    const runtime = new OrcaRuntimeService(store, undefined, {
+      getAgentStatusSnapshot: () => [
+        {
+          paneKey: `${tabId}:${monitoringLeafId}`,
+          worktreeId: TEST_WORKTREE_ID,
+          tabId,
+          state: 'working',
+          workingMode: 'monitoring',
+          prompt: 'watch tests',
+          agentType: 'claude',
+          connectionId: null,
+          receivedAt: now,
+          stateStartedAt: now - 100
+        }
+      ]
+    })
+    runtime.attachWindow(1)
+    runtime.syncWindowGraph(1, {
+      tabs: [
+        {
+          tabId,
+          worktreeId: TEST_WORKTREE_ID,
+          title: 'Claude',
+          activeLeafId: monitoringLeafId,
+          layout: null
+        }
+      ],
+      leaves: [
+        {
+          tabId,
+          worktreeId: TEST_WORKTREE_ID,
+          leafId: monitoringLeafId,
+          paneRuntimeId: 1,
+          ptyId: 'monitoring-pty',
+          paneTitle: 'claude'
+        },
+        {
+          tabId,
+          worktreeId: TEST_WORKTREE_ID,
+          leafId: foregroundLeafId,
+          paneRuntimeId: 2,
+          ptyId: 'foreground-pty',
+          paneTitle: 'claude working'
+        }
+      ]
+    })
+
+    const { worktrees } = await runtime.getWorktreePs()
+    const summary = worktrees.find((worktree) => worktree.worktreeId === TEST_WORKTREE_ID)
+
+    expect(summary).toMatchObject({ status: 'working' })
+    expect(summary).not.toHaveProperty('workingMode')
   })
 
   it('suppresses restored-unconfirmed hook rows from worktree.ps', async () => {
