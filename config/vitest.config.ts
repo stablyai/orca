@@ -10,7 +10,11 @@ export default defineConfig({
   resolve: {
     alias: {
       '@renderer': resolve('src/renderer/src'),
-      '@': resolve('src/renderer/src')
+      '@': resolve('src/renderer/src'),
+      // Why: src/shared is reachable from main/preload/relay/tests via relative
+      // paths, but the renderer imports it as `@shared/...` and tests need the
+      // same alias to resolve without rewriting every test fixture.
+      '@shared': resolve('src/shared')
     }
   },
   test: {

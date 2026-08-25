@@ -3,7 +3,7 @@ import React from 'react'
 import { lazyWithRetry as lazy } from '@/lib/lazy-with-retry'
 import { AlertCircle, RefreshCw } from 'lucide-react'
 import { detectLanguage } from '@/lib/language-detect'
-import { joinPath } from '@/lib/path'
+import { joinPath, basename } from '@/lib/path'
 import { useAppStore } from '@/store'
 import { Button } from '@/components/ui/button'
 import { ChangesModeView } from './ChangesModeView'
@@ -30,6 +30,12 @@ import { getDiffContentSignature } from './diff-content-signature'
 import { translate } from '@/i18n/i18n'
 import { CheckRunDetailsPanel } from './CheckRunDetailsPanel'
 import { ExternalFileChangeBanner } from './ExternalFileChangeBanner'
+// Why: keep MIME literals in sync with the main-process whitelist so the
+// renderer's dispatch matches the bytes the read path actually delivers.
+import { PREVIEWABLE_BINARY_MIME_TYPES } from '../../../../shared/previewable-binary-mime-types'
+
+const DOCX_MIME = PREVIEWABLE_BINARY_MIME_TYPES['.docx']
+const XLSX_MIME = PREVIEWABLE_BINARY_MIME_TYPES['.xlsx']
 
 const MonacoEditor = lazy(() => import('./MonacoEditor'))
 const DiffViewer = lazy(() => import('./DiffViewer'))
@@ -43,6 +49,8 @@ const ImageDiffViewer = lazy(() => import('./ImageDiffViewer'))
 const MermaidViewer = lazy(() => import('./MermaidViewer'))
 const CsvViewer = lazy(() => import('./CsvViewer'))
 const IpynbViewer = lazy(() => import('./IpynbViewer'))
+const DocxViewer = lazy(() => import('./DocxViewer').then((m) => ({ default: m.DocxViewer })))
+const XlsxViewer = lazy(() => import('./XlsxViewer').then((m) => ({ default: m.XlsxViewer })))
 
 // Why: module-level for a stable no-op identity so read-only tabs don't rebuild callbacks each render.
 const noopEditorContentChange = (_content: string): void => {}
@@ -79,6 +87,41 @@ type FileContent = {
 }
 
 const noopCloseMarkdownTableOfContents = (): void => {}
+
+// Why: docx/xlsx/image binaries share the same dispatch shape (mimeType → viewer)
+// across the active-file and conflict-review branches. Centralize so adding a
+// new previewable MIME touches one place instead of two parallel if-ladders.
+function renderBinaryViewer(
+  fc: FileContent,
+  filePath: string,
+  fileName: string,
+  imageViewerScrollKey: string | undefined
+): React.JSX.Element {
+  if (fc.mimeType === DOCX_MIME) {
+    return <DocxViewer filePath={filePath} fileName={fileName} content={fc.content} />
+  }
+  if (fc.mimeType === XLSX_MIME) {
+    return <XlsxViewer filePath={filePath} fileName={fileName} content={fc.content} />
+  }
+  if (fc.isImage) {
+    return (
+      <ImageViewer
+        content={fc.content}
+        filePath={filePath}
+        mimeType={fc.mimeType}
+        scrollCacheKey={imageViewerScrollKey}
+      />
+    )
+  }
+  return (
+    <div className="flex items-center justify-center h-full text-muted-foreground text-sm">
+      {translate(
+        'auto.components.editor.EditorContent.b9de81ba52',
+        'Binary file — cannot display'
+      )}
+    </div>
+  )
+}
 
 function matchesPendingEditorReveal(
   reveal: PendingEditorReveal | null,
@@ -199,6 +242,7 @@ export function EditorContent({
     Record<string, number>
   >({})
   const md = useMarkdownDocuments(activeFile, isMarkdown, mdViewMode, handleSave)
+  const activeFileName = React.useMemo(() => basename(activeFile.filePath), [activeFile.filePath])
   const activeConflictEntry =
     worktreeEntries.find((entry) => entry.path === activeFile.relativePath) ?? null
   const selectedConflictReviewFile =
@@ -499,25 +543,14 @@ export function EditorContent({
       )
     }
     if (fc.isBinary) {
-      if (fc.isImage) {
-        return (
-          <div className={className}>
-            <ImageViewer
-              content={fc.content}
-              filePath={contentFile.filePath}
-              mimeType={fc.mimeType}
-            />
-          </div>
-        )
-      }
       return (
         <div className={className}>
-          <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
-            {translate(
-              'auto.components.editor.EditorContent.b9de81ba52',
-              'Binary file — cannot display'
-            )}
-          </div>
+          {renderBinaryViewer(
+            fc,
+            contentFile.filePath,
+            basename(contentFile.filePath),
+            undefined
+          )}
         </div>
       )
     }
@@ -745,24 +778,7 @@ export function EditorContent({
       return <FileLoadErrorView message={fc.loadError} onRetry={() => reloadContent(activeFile)} />
     }
     if (fc.isBinary) {
-      if (fc.isImage) {
-        return (
-          <ImageViewer
-            content={fc.content}
-            filePath={activeFile.filePath}
-            mimeType={fc.mimeType}
-            scrollCacheKey={pdfViewStateKey}
-          />
-        )
-      }
-      return (
-        <div className="flex items-center justify-center h-full text-muted-foreground text-sm">
-          {translate(
-            'auto.components.editor.EditorContent.b9de81ba52',
-            'Binary file — cannot display'
-          )}
-        </div>
-      )
+      return renderBinaryViewer(fc, activeFile.filePath, activeFileName, pdfViewStateKey)
     }
     const externalChangeBanner =
       activeFile.externalMutation === 'changed' ? (

@@ -153,6 +153,7 @@
     "electron-updater": "^6.8.9",
     "i18next": "^26.3.1",
     "jsonc-parser": "^3.3.1",
+    "mammoth": "^1.12.1",
     "node-pty": "^1.1.0",
     "posthog-node": "^5.33.3",
     "psl": "1.15.0",
@@ -213,6 +214,7 @@
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "cmdk": "^1.1.1",
+    "docx": "^9.7.1",
     "dompurify": "^3.4.13",
     "electron": "^43.1.0",
     "electron-builder": "^26.15.3",
@@ -293,7 +295,8 @@
   "packageManager": "pnpm@10.24.0+sha512.01ff8ae71b4419903b65c60fb2dc9d34cf8bb6e06d03bde112ef38f7a34d6904c424ba66bea5cdcf12890230bf39f9580473140ed9c946fef328b6e5238a345a",
   "pnpm": {
     "overrides": {
-      "monaco-editor>dompurify": "3.4.13"
+      "monaco-editor>dompurify": "3.4.13",
+      "xlsx": "https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz"
     },
     "supportedArchitectures": {
       "os": [

@@ -36,6 +36,17 @@ import {
 } from '../../shared/remote-rpc-content-budget'
 import { PhysicalExitTracker } from '../../shared/physical-exit-tracker'
 import { sortDirEntries } from '../../shared/file-name-sort'
+import {
+  PREVIEWABLE_BINARY_MIME_TYPES,
+  MAX_PREVIEWABLE_BINARY_BYTES
+} from '../../shared/previewable-binary-mime-types'
+
+// Why: runtime host exposes the same whitelist as local IPC and the SSH relay
+// so a remote worktree preview of a .docx does not silently fall back to
+// "Binary file — cannot display". Re-exported for callers that already import
+// the runtime const; new code should import from the shared module directly.
+export const RUNTIME_PREVIEWABLE_BINARY_MIME_TYPES = PREVIEWABLE_BINARY_MIME_TYPES
+
 import type {
   RuntimeFileListResult,
   RuntimeFileOpenResult,
@@ -111,7 +122,9 @@ const MOBILE_FILE_PATH_SEARCH_CACHE_LIMIT = 20_000
 const MOBILE_FILE_PATH_SEARCH_CACHE_ENTRIES = 8
 const MOBILE_FILE_PATH_SEARCH_CACHE_TTL_MS = 30_000
 const MOBILE_FILE_READ_MAX_BYTES = 512 * 1024
-const LOCAL_PREVIEWABLE_BINARY_MAX_BYTES = 10 * 1024 * 1024
+// Why: when no RPC budget is supplied (e.g. local file-explorer path), fall back to the
+// same cap the local IPC handler uses so a 15 MB .docx behaves the same on either path.
+const LOCAL_PREVIEWABLE_BINARY_MAX_BYTES = MAX_PREVIEWABLE_BINARY_BYTES
 const PREVIEWABLE_BINARY_EMPTY_RESULT_BYTES = Buffer.byteLength(
   JSON.stringify({
     content: '',
@@ -256,18 +269,6 @@ function isMobilePreviewableImagePath(relativePath: string): boolean {
     return false
   }
   return MOBILE_PREVIEWABLE_IMAGE_EXTENSIONS.has(basename.slice(dotIndex).toLowerCase())
-}
-
-const RUNTIME_PREVIEWABLE_BINARY_MIME_TYPES: Record<string, string> = {
-  '.png': 'image/png',
-  '.jpg': 'image/jpeg',
-  '.jpeg': 'image/jpeg',
-  '.gif': 'image/gif',
-  '.svg': 'image/svg+xml',
-  '.webp': 'image/webp',
-  '.bmp': 'image/bmp',
-  '.ico': 'image/x-icon',
-  '.pdf': 'application/pdf'
 }
 
 function trackRuntimeFileWatcherUnsubscribe(

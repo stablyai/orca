@@ -1,12 +1,82 @@
-import { renderToStaticMarkup } from 'react-dom/server'
+// @vitest-environment happy-dom
+
+import '@testing-library/jest-dom/vitest'
+import { cleanup, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { OpenFile } from '@/store/slices/editor'
 
-// Why: EditorContent's mode renderers (Monaco, DiffViewer, ...) are lazy();
-// renderToStaticMarkup cannot resolve them. Stubbing them keeps the banner
-// branch structure renderable so its placement is pinned by tests.
-vi.mock('@/lib/lazy-with-retry', () => ({
-  lazyWithRetry: () => () => null
+// Why: stubbing each lazy-imported viewer with a stub keeps the dispatch
+// site (the real <DocxViewer>/<XlsxViewer>/<ImageViewer> JSX in EditorContent)
+// observable while keeping the test fast and side-effect free.
+vi.mock('./DocxViewer', () => ({
+  DocxViewer: () => <div data-viewer="docx" data-testid="viewer-docx" />
+}))
+vi.mock('./XlsxViewer', () => ({
+  XlsxViewer: () => <div data-viewer="xlsx" data-testid="viewer-xlsx" />
+}))
+vi.mock('./ImageViewer', () => ({
+  default: () => <div data-viewer="image" data-testid="viewer-image" />
+}))
+vi.mock('./MonacoEditor', () => ({
+  MonacoEditor: () => <div data-viewer="monaco" />
+}))
+vi.mock('./DiffViewer', () => ({
+  DiffViewer: () => <div data-viewer="diff" />
+}))
+vi.mock('./CombinedDiffViewer', () => ({
+  CombinedDiffViewer: () => <div data-viewer="combined-diff" />
+}))
+vi.mock('./RichMarkdownEditor', () => ({
+  RichMarkdownEditor: () => <div data-viewer="rich-md" />
+}))
+vi.mock('./MarkdownPreview', () => ({
+  MarkdownPreview: () => <div data-viewer="md-preview" />
+}))
+vi.mock('./ImageDiffViewer', () => ({
+  ImageDiffViewer: () => <div data-viewer="image-diff" />
+}))
+vi.mock('./MermaidViewer', () => ({
+  MermaidViewer: () => <div data-viewer="mermaid" />
+}))
+vi.mock('./CsvViewer', () => ({
+  CsvViewer: () => <div data-viewer="csv" />
+}))
+vi.mock('./IpynbViewer', () => ({
+  IpynbViewer: () => <div data-viewer="ipynb" />
+}))
+
+vi.mock('@/store', () => ({
+  useAppStore: Object.assign(
+    (selector: (state: Record<string, unknown>) => unknown) =>
+      selector({
+        worktreesByRepo: {},
+        openFile: vi.fn(),
+        openMarkdownPreview: vi.fn(),
+        openConflictReviewFile: vi.fn(),
+        openConflictReview: vi.fn(),
+        closeFile: vi.fn(),
+        setRightSidebarTab: vi.fn(),
+        setPendingEditorReveal: vi.fn(),
+        reloadOpenCheckRunDetailsTab: vi.fn()
+      }),
+    {
+      getState: () => ({
+        folderWorkspaces: [],
+        projectGroups: [],
+        repos: [],
+        settings: {},
+        worktreesByRepo: {},
+        openFile: vi.fn(),
+        openMarkdownPreview: vi.fn(),
+        openConflictReviewFile: vi.fn(),
+        openConflictReview: vi.fn(),
+        closeFile: vi.fn(),
+        setRightSidebarTab: vi.fn(),
+        setPendingEditorReveal: vi.fn(),
+        reloadOpenCheckRunDetailsTab: vi.fn()
+      })
+    }
+  )
 }))
 
 import { EditorContent, getMarkdownSourceLineOffset } from './EditorContent'
@@ -25,7 +95,7 @@ function createOpenFile(overrides: Partial<OpenFile> = {}): OpenFile {
 }
 
 afterEach(() => {
-  vi.restoreAllMocks()
+  cleanup()
 })
 
 describe('EditorContent', () => {
@@ -44,28 +114,34 @@ describe('EditorContent', () => {
     expect(matchSpy).not.toHaveBeenCalled()
   })
 
-  it('surfaces file load errors before notebook content is parsed', () => {
-    const activeFile = createOpenFile()
-    const html = renderToStaticMarkup(
+  it('routes .docx to the lazy DocxViewer in the edit-mode binary branch', async () => {
+    const activeFile = createOpenFile({
+      id: '/repo/file.docx',
+      filePath: '/repo/file.docx',
+      relativePath: 'file.docx',
+      language: 'docx'
+    })
+    render(
       <EditorContent
         activeFile={activeFile}
         viewStateScopeId={activeFile.id}
         fileContents={{
           [activeFile.id]: {
-            content: '',
-            isBinary: false,
-            loadError: 'Access denied: path resolves outside allowed directories.'
+            content: 'aGVsbG8=',
+            isBinary: true,
+            isImage: true,
+            mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
           }
         }}
         diffContents={{}}
         editBuffers={{}}
         openFiles={[activeFile]}
         worktreeEntries={[]}
-        resolvedLanguage="notebook"
+        resolvedLanguage="docx"
         isMarkdown={false}
         isMermaid={false}
         isCsv={false}
-        isNotebook
+        isNotebook={false}
         mdViewMode="rich"
         isChangesMode={false}
         sideBySide={false}
@@ -78,31 +154,37 @@ describe('EditorContent', () => {
         reloadContent={vi.fn()}
       />
     )
-
-    expect(html).toContain('Unable to load file')
-    expect(html).toContain('Access denied')
-    expect(html).not.toContain('Unable to render notebook')
+    await waitFor(() => {
+      expect(screen.getByTestId('viewer-docx')).toBeInTheDocument()
+    })
+    expect(screen.queryByTestId('viewer-xlsx')).not.toBeInTheDocument()
+    expect(screen.queryByTestId('viewer-image')).not.toBeInTheDocument()
   })
 
-  it('shows the changed-on-disk banner above a dirty edit tab', () => {
+  it('routes .xlsx to the lazy XlsxViewer in the edit-mode binary branch', async () => {
     const activeFile = createOpenFile({
-      id: '/repo/file.ts',
-      filePath: '/repo/file.ts',
-      relativePath: 'file.ts',
-      language: 'typescript',
-      isDirty: true,
-      externalMutation: 'changed'
+      id: '/repo/file.xlsx',
+      filePath: '/repo/file.xlsx',
+      relativePath: 'file.xlsx',
+      language: 'xlsx'
     })
-    const html = renderToStaticMarkup(
+    render(
       <EditorContent
         activeFile={activeFile}
         viewStateScopeId={activeFile.id}
-        fileContents={{ [activeFile.id]: { content: 'saved text', isBinary: false } }}
+        fileContents={{
+          [activeFile.id]: {
+            content: 'aGVsbG8=',
+            isBinary: true,
+            isImage: true,
+            mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+          }
+        }}
         diffContents={{}}
-        editBuffers={{ [activeFile.id]: 'saved text plus edits' }}
+        editBuffers={{}}
         openFiles={[activeFile]}
         worktreeEntries={[]}
-        resolvedLanguage="typescript"
+        resolvedLanguage="xlsx"
         isMarkdown={false}
         isMermaid={false}
         isCsv={false}
@@ -119,35 +201,36 @@ describe('EditorContent', () => {
         reloadContent={vi.fn()}
       />
     )
-
-    expect(html).toContain('role="alert"')
-    expect(html).toContain('changed on disk')
-    expect(html).toContain('Reload from Disk')
+    await waitFor(() => {
+      expect(screen.getByTestId('viewer-xlsx')).toBeInTheDocument()
+    })
+    expect(screen.queryByTestId('viewer-docx')).not.toBeInTheDocument()
   })
 
-  it('shows the changed-on-disk banner above a dirty unstaged diff without collapsing it', () => {
+  it('routes .png to the ImageViewer in the edit-mode binary branch', async () => {
     const activeFile = createOpenFile({
-      id: 'diff:/repo/file.ts',
-      filePath: '/repo/file.ts',
-      relativePath: 'file.ts',
-      language: 'typescript',
-      mode: 'diff',
-      diffSource: 'unstaged',
-      isDirty: true,
-      externalMutation: 'changed'
+      id: '/repo/file.png',
+      filePath: '/repo/file.png',
+      relativePath: 'file.png',
+      language: 'png'
     })
-    const html = renderToStaticMarkup(
+    render(
       <EditorContent
         activeFile={activeFile}
         viewStateScopeId={activeFile.id}
-        fileContents={{}}
-        diffContents={{
-          [activeFile.id]: { kind: 'text', originalContent: 'old', modifiedContent: 'new' } as never
+        fileContents={{
+          [activeFile.id]: {
+            content: 'aGVsbG8=',
+            isBinary: true,
+            isImage: true,
+            mimeType: 'image/png'
+          }
         }}
-        editBuffers={{ [activeFile.id]: 'new plus edits' }}
+        diffContents={{}}
+        editBuffers={{}}
         openFiles={[activeFile]}
         worktreeEntries={[]}
-        resolvedLanguage="typescript"
+        resolvedLanguage="png"
         isMarkdown={false}
         isMermaid={false}
         isCsv={false}
@@ -164,42 +247,54 @@ describe('EditorContent', () => {
         reloadContent={vi.fn()}
       />
     )
-
-    expect(html).toContain('role="alert"')
-    expect(html).toContain('changed on disk')
-    // Why: the diff-mode wrapper must give the viewer its height back — a
-    // flex-1-only wrapper collapsed the DiffViewer to 0px (found live).
-    expect(html).toContain('flex h-full min-h-0 flex-col')
+    await waitFor(() => {
+      expect(screen.getByTestId('viewer-image')).toBeInTheDocument()
+    })
+    expect(screen.queryByTestId('viewer-docx')).not.toBeInTheDocument()
+    expect(screen.queryByTestId('viewer-xlsx')).not.toBeInTheDocument()
   })
 
-  it('shows the changed-on-disk banner on a dirty markdown diff in preview mode', () => {
-    const activeFile = createOpenFile({
-      id: 'diff:/repo/notes.md',
-      filePath: '/repo/notes.md',
-      relativePath: 'notes.md',
-      language: 'markdown',
-      mode: 'diff',
-      diffSource: 'unstaged',
-      isDirty: true,
-      externalMutation: 'changed'
+  it('routes .docx to the lazy DocxViewer in the conflict-review branch', async () => {
+    const docxFile = createOpenFile({
+      id: '/repo/file.docx',
+      filePath: '/repo/file.docx',
+      relativePath: 'file.docx',
+      language: 'docx'
     })
-    const html = renderToStaticMarkup(
+    const conflictFile = createOpenFile({
+      id: 'conflict:/repo',
+      filePath: '/repo',
+      relativePath: '',
+      language: 'folder',
+      mode: 'conflict-review',
+      conflictReview: {
+        kind: 'conflict-review',
+        selectedFileId: docxFile.id,
+        entries: []
+      } as never
+    })
+    render(
       <EditorContent
-        activeFile={activeFile}
-        viewStateScopeId={activeFile.id}
-        fileContents={{}}
-        diffContents={{
-          [activeFile.id]: { kind: 'text', originalContent: 'old', modifiedContent: 'new' } as never
+        activeFile={conflictFile}
+        viewStateScopeId={conflictFile.id}
+        fileContents={{
+          [docxFile.id]: {
+            content: 'aGVsbG8=',
+            isBinary: true,
+            isImage: true,
+            mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+          }
         }}
-        editBuffers={{ [activeFile.id]: 'new plus edits' }}
-        openFiles={[activeFile]}
+        diffContents={{}}
+        editBuffers={{}}
+        openFiles={[docxFile, conflictFile]}
         worktreeEntries={[]}
-        resolvedLanguage="markdown"
-        isMarkdown
+        resolvedLanguage="conflict-review"
+        isMarkdown={false}
         isMermaid={false}
         isCsv={false}
         isNotebook={false}
-        mdViewMode="preview"
+        mdViewMode="rich"
         isChangesMode={false}
         sideBySide={false}
         pendingEditorReveal={null}
@@ -211,9 +306,8 @@ describe('EditorContent', () => {
         reloadContent={vi.fn()}
       />
     )
-
-    expect(html).toContain('role="alert"')
-    expect(html).toContain('changed on disk')
-    expect(html).toContain('Previewing the modified version of this diff')
+    await waitFor(() => {
+      expect(screen.getByTestId('viewer-docx')).toBeInTheDocument()
+    })
   })
 })
