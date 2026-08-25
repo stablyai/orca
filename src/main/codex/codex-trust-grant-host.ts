@@ -65,6 +65,7 @@ export function resolveCodexTrustGrantHost(host: CodexTrustGrantHost): ResolvedC
         invocation: {
           command: spawnCmd,
           args: spawnArgs,
+          cliPath: command,
           ...(useDefaultCodexHome
             ? { envToDelete: ['CODEX_HOME'] }
             : { env: { CODEX_HOME: input.runtimeHomePath } }),

@@ -1,6 +1,7 @@
 import { spawn, type ChildProcess, type ChildProcessWithoutNullStreams } from 'node:child_process'
 import { waitForProcessExitUntil } from './codex-process-exit-deadline'
 import { stderrIndicatesMissingAppServer } from './codex-app-server-capability-signal'
+import { withCliRuntimeOnPath } from '../../shared/node-cli-command-resolution'
 
 // Why: `codex app-server` is Orca's sanctioned RPC surface into Codex-owned
 // state (hook trust hashes, the sqlite thread index). This module owns the
@@ -10,6 +11,13 @@ import { stderrIndicatesMissingAppServer } from './codex-app-server-capability-s
 export type CodexAppServerInvocation = {
   command: string
   args: string[]
+  /**
+   * The resolved CLI path, when `command` is a wrapper such as cmd.exe. Used to
+   * pair the CLI with the `node` it was installed against; without it a CLI
+   * resolved out of a version-manager directory runs under whatever node leads
+   * PATH and dies on a NODE_MODULE_VERSION mismatch (stablyai/orca#10932).
+   */
+  cliPath?: string
   /** Overlay applied on top of the inherited environment (e.g. CODEX_HOME). */
   env?: Record<string, string>
   /** Env keys stripped from the inherited environment before spawn (e.g. an
@@ -111,8 +119,9 @@ export async function runCodexAppServerSession<T>(
   for (const key of invocation.envToDelete ?? []) {
     delete childEnv[key]
   }
+  const pairedEnv = withCliRuntimeOnPath(invocation.cliPath ?? invocation.command, childEnv)
   const child = spawnImpl(invocation.command, invocation.args, {
-    env: childEnv,
+    env: pairedEnv,
     stdio: ['pipe', 'pipe', 'pipe'],
     windowsHide: true
   }) as ChildProcessWithoutNullStreams

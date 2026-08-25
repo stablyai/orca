@@ -16,13 +16,16 @@ function getExecutableNames(platform: NodeJS.Platform, commandName: string): str
   return [commandName]
 }
 
-function splitPath(pathEnv: string | null | undefined): string[] {
+function splitPath(
+  pathEnv: string | null | undefined,
+  pathDelimiter: string = delimiter
+): string[] {
   if (!pathEnv) {
     return []
   }
 
   return pathEnv
-    .split(delimiter)
+    .split(pathDelimiter)
     .map((entry) => entry.trim())
     .filter(Boolean)
 }
@@ -221,7 +224,7 @@ export function resolveClaudeCommand(options: ResolveCommandOptions = {}): strin
  * installed against instead.
  *
  * Only prepends when the sibling `node` really exists, so a CLI resolved from a
- * plain directory (Homebrew, /usr/local/bin) leaves PATH untouched.
+ * directory that ships no node is left alone.
  */
 export function withCliRuntimeOnPath<T extends NodeJS.ProcessEnv>(
   commandPath: string,
@@ -238,7 +241,7 @@ export function withCliRuntimeOnPath<T extends NodeJS.ProcessEnv>(
   }
   const pathKey = platform === 'win32' && env.Path !== undefined ? 'Path' : 'PATH'
   const pathDelimiter = platform === 'win32' ? ';' : delimiter
-  const segments = splitPath(env[pathKey])
+  const segments = splitPath(env[pathKey], pathDelimiter)
   if (segments[0] === commandDirectory) {
     return env
   }

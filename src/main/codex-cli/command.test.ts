@@ -363,10 +363,15 @@ describe('withCliRuntimeOnPath', () => {
     const v20 = join(root, '.nvm', 'versions', 'node', 'v20.11.0', 'bin')
     makeExecutable(join(v20, 'node.exe'))
     makeExecutable(join(v20, 'codex.cmd'))
-    const env = { Path: 'C:\\Windows' }
+    // Why both keys: with only `Path` seeded the assertion is vacuous — the
+    // helper cannot invent a `PATH` key, so the dedupe loop could be deleted
+    // wholesale and this test would still pass.
+    const env = { Path: 'C:\\Windows;C:\\Windows\\System32', PATH: 'C:\\Stale' }
 
     const paired = withCliRuntimeOnPath(join(v20, 'codex.cmd'), env, { platform: 'win32' })
-    expect(paired.Path.split(';')[0]).toBe(v20)
-    expect((paired as NodeJS.ProcessEnv).PATH).toBeUndefined()
+    expect(Object.keys(paired)).toEqual(['Path'])
+    // Why the whole string: splitting on the host delimiter while joining on ';'
+    // shredded every drive letter into `C;\\Windows`.
+    expect(paired.Path).toBe([v20, 'C:\\Windows', 'C:\\Windows\\System32'].join(';'))
   })
 })
