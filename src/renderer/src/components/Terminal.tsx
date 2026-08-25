@@ -182,6 +182,10 @@ import { showTerminalShortcutCaptureNotification } from '@/lib/terminal-shortcut
 import { useContextualTour } from './contextual-tours/use-contextual-tour'
 import { openTabBarEntry, type TabCreateEntryArgs } from './tab-bar/tab-create-entry-action'
 import { closeTerminalTab } from './terminal/terminal-tab-actions'
+import {
+  collectBulkTerminalTabIds,
+  guardBulkTerminalClose
+} from './terminal/bulk-terminal-close-guard'
 import { translate } from '@/i18n/i18n'
 import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
 import { getResolvedExecutionHostIdForWorktree } from '@/lib/resolved-worktree-execution-host'
@@ -1832,6 +1836,22 @@ function Terminal(): React.JSX.Element | null {
     [consumeSuppressedPtyExit]
   )
 
+  const handleActivateTab = useCallback(
+    (tabId: string) => {
+      const runtimeEnvironmentId = getActiveWorktreeRuntimeEnvironmentId(activeWorktreeId)
+      if (activeWorktreeId && isWebRuntimeSessionActive(runtimeEnvironmentId)) {
+        void activateWebRuntimeSessionTab({
+          worktreeId: activeWorktreeId,
+          tabId,
+          environmentId: runtimeEnvironmentId
+        })
+      }
+      setActiveTab(tabId)
+      setActiveTabType('terminal')
+    },
+    [activeWorktreeId, setActiveTab, setActiveTabType]
+  )
+
   // Bulk-close for the tab bar: unlike closeUnifiedTab it must route each id to
   // its backend (web-runtime sessions, terminals, editor files, browser tabs),
   // skip pinned tabs, and defer dirty editor files to the confirm flow.
@@ -1840,63 +1860,79 @@ function Terminal(): React.JSX.Element | null {
       if (!activeWorktreeId) {
         return
       }
-      const state = useAppStore.getState()
-      const dirtyFileIds: string[] = []
-      for (const id of tabIds) {
-        const unifiedTab = (state.unifiedTabsByWorktree[activeWorktreeId] ?? []).find(
-          (candidate) => candidate.id === id || candidate.entityId === id
-        )
-        if (unifiedTab?.isPinned) {
-          continue
-        }
-        const runtimeEnvironmentId = getActiveWorktreeRuntimeEnvironmentId(activeWorktreeId)
-        if (
-          isWebRuntimeSessionActive(runtimeEnvironmentId) &&
-          (unifiedTab?.contentType === 'terminal' ||
-            (unifiedTab?.contentType === 'browser' &&
-              browserWorkspaceHasRemoteOwner(state, unifiedTab.entityId, runtimeEnvironmentId)))
-        ) {
-          if (unifiedTab.contentType === 'terminal') {
-            // Why: paired-host bulk close must revoke renderer resume and hook authority, not just remove the host session tab.
-            // No running-process prompt: "Close Others" over N busy tabs would be a modal storm.
-            closeTerminalTab(unifiedTab.entityId, { skipRunningProcessConfirm: true })
-          } else {
-            void closeWebRuntimeSessionTab({
-              worktreeId: activeWorktreeId,
-              tabId: unifiedTab.id,
-              environmentId: runtimeEnvironmentId,
-              reason: 'user'
-            })
-          }
-          continue
-        }
-        if ((state.tabsByWorktree[activeWorktreeId] ?? []).some((tab) => tab.id === id)) {
-          closeTab(id)
-        } else if (
-          state.openFiles.some((file) => file.worktreeId === activeWorktreeId && file.id === id)
-        ) {
-          const file = state.openFiles.find((candidate) => candidate.id === id)
-          if (file?.isDirty) {
-            dirtyFileIds.push(id)
+      const worktreeId = activeWorktreeId
+      // Why: re-read state inside the proceed closure — the aggregated running-process
+      // prompt can sit open arbitrarily long before this actually runs.
+      const performClose = (): void => {
+        const state = useAppStore.getState()
+        const dirtyFileIds: string[] = []
+        for (const id of tabIds) {
+          const unifiedTab = (state.unifiedTabsByWorktree[worktreeId] ?? []).find(
+            (candidate) => candidate.id === id || candidate.entityId === id
+          )
+          if (unifiedTab?.isPinned) {
             continue
           }
-          closeFile(id)
-        } else if (
-          (state.browserTabsByWorktree[activeWorktreeId] ?? []).some((tab) => tab.id === id)
-        ) {
-          closeBrowserTab(id)
-          destroyWorkspaceWebviews(state.browserPagesByWorkspace, id)
-        } else if (unifiedTab?.contentType === 'simulator') {
-          // Why: simulator tabs live only in the unified-tab store, so the
-          // entity-store checks above never match them.
-          state.closeUnifiedTab(unifiedTab.id)
+          const runtimeEnvironmentId = getActiveWorktreeRuntimeEnvironmentId(worktreeId)
+          if (
+            isWebRuntimeSessionActive(runtimeEnvironmentId) &&
+            (unifiedTab?.contentType === 'terminal' ||
+              (unifiedTab?.contentType === 'browser' &&
+                browserWorkspaceHasRemoteOwner(state, unifiedTab.entityId, runtimeEnvironmentId)))
+          ) {
+            if (unifiedTab.contentType === 'terminal') {
+              // Why: paired-host bulk close must revoke renderer resume and hook authority, not just remove the host session tab.
+              // The single aggregated prompt already ran above, so skip the per-tab one.
+              closeTerminalTab(unifiedTab.entityId, { skipRunningProcessConfirm: true })
+            } else {
+              void closeWebRuntimeSessionTab({
+                worktreeId,
+                tabId: unifiedTab.id,
+                environmentId: runtimeEnvironmentId,
+                reason: 'user'
+              })
+            }
+            continue
+          }
+          if ((state.tabsByWorktree[worktreeId] ?? []).some((tab) => tab.id === id)) {
+            closeTab(id)
+          } else if (
+            state.openFiles.some((file) => file.worktreeId === worktreeId && file.id === id)
+          ) {
+            const file = state.openFiles.find((candidate) => candidate.id === id)
+            if (file?.isDirty) {
+              dirtyFileIds.push(id)
+              continue
+            }
+            closeFile(id)
+          } else if ((state.browserTabsByWorktree[worktreeId] ?? []).some((tab) => tab.id === id)) {
+            closeBrowserTab(id)
+            destroyWorkspaceWebviews(state.browserPagesByWorkspace, id)
+          } else if (unifiedTab?.contentType === 'simulator') {
+            // Why: simulator tabs live only in the unified-tab store, so the
+            // entity-store checks above never match them.
+            state.closeUnifiedTab(unifiedTab.id)
+          }
+        }
+        if (dirtyFileIds.length > 0) {
+          queueEditorCloseRequests(dirtyFileIds)
         }
       }
-      if (dirtyFileIds.length > 0) {
-        queueEditorCloseRequests(dirtyFileIds)
-      }
+      guardBulkTerminalClose({
+        worktreeId,
+        terminalTabIds: collectBulkTerminalTabIds(useAppStore.getState(), worktreeId, tabIds),
+        revealTab: handleActivateTab,
+        onProceed: performClose
+      })
     },
-    [activeWorktreeId, closeBrowserTab, closeFile, closeTab, queueEditorCloseRequests]
+    [
+      activeWorktreeId,
+      closeBrowserTab,
+      closeFile,
+      closeTab,
+      handleActivateTab,
+      queueEditorCloseRequests
+    ]
   )
 
   const handleCloseOthers = useCallback(
@@ -1959,22 +1995,6 @@ function Terminal(): React.JSX.Element | null {
       queueEditorCloseRequests(dirtyFileIds)
     }
   }, [activeWorktreeId, closeFile, queueEditorCloseRequests])
-
-  const handleActivateTab = useCallback(
-    (tabId: string) => {
-      const runtimeEnvironmentId = getActiveWorktreeRuntimeEnvironmentId(activeWorktreeId)
-      if (activeWorktreeId && isWebRuntimeSessionActive(runtimeEnvironmentId)) {
-        void activateWebRuntimeSessionTab({
-          worktreeId: activeWorktreeId,
-          tabId,
-          environmentId: runtimeEnvironmentId
-        })
-      }
-      setActiveTab(tabId)
-      setActiveTabType('terminal')
-    },
-    [activeWorktreeId, setActiveTab, setActiveTabType]
-  )
 
   const handleTogglePaneExpand = useCallback(
     (tabId: string) => {

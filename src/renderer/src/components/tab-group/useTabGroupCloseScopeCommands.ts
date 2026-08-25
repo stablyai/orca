@@ -1,6 +1,10 @@
 import { useCallback } from 'react'
 import type { Tab, TabGroup } from '../../../../shared/tab-types'
 import { useAppStore } from '../../store'
+import {
+  collectBulkTerminalTabIds,
+  guardBulkTerminalClose
+} from '../terminal/bulk-terminal-close-guard'
 
 export function useTabGroupCloseScopeCommands({
   groupId,
@@ -9,29 +13,44 @@ export function useTabGroupCloseScopeCommands({
   groupTabs,
   closeItem,
   closeMany,
-  leaveWorktreeIfEmpty
+  leaveWorktreeIfEmpty,
+  revealTerminal
 }: {
   groupId: string
   worktreeId: string
   group: TabGroup | null
   groupTabs: Tab[]
-  closeItem: (itemId: string, opts?: { skipEmptyCheck?: boolean }) => void
+  closeItem: (
+    itemId: string,
+    opts?: { skipEmptyCheck?: boolean; skipRunningProcessConfirm?: boolean }
+  ) => void
   closeMany: (itemIds: string[]) => void
   leaveWorktreeIfEmpty: () => void
+  /** Activates a terminal so a bulk close can jump to each busy tab before asking. */
+  revealTerminal: (terminalTabId: string) => void
 }) {
   const closeEmptyGroup = useAppStore((state) => state.closeEmptyGroup)
 
   const closeGroup = useCallback(() => {
-    const items = [...(useAppStore.getState().unifiedTabsByWorktree[worktreeId] ?? [])].filter(
-      (item) => item.groupId === groupId
-    )
-    for (const item of items) {
-      closeItem(item.id, { skipEmptyCheck: true })
-    }
-    // Why: closing tabs doesn't remove the group shell; empty split groups are layout state, collapse the placeholder pane here.
-    closeEmptyGroup(worktreeId, groupId)
-    leaveWorktreeIfEmpty()
-  }, [closeEmptyGroup, closeItem, groupId, leaveWorktreeIfEmpty, worktreeId])
+    const itemIds = (useAppStore.getState().unifiedTabsByWorktree[worktreeId] ?? [])
+      .filter((item) => item.groupId === groupId)
+      .map((item) => item.id)
+    // Why: one aggregated running-process prompt for the whole pane, matching the
+    // Close Others / to-the-side actions, instead of a modal per busy tab.
+    guardBulkTerminalClose({
+      worktreeId,
+      terminalTabIds: collectBulkTerminalTabIds(useAppStore.getState(), worktreeId, itemIds),
+      revealTab: revealTerminal,
+      onProceed: () => {
+        for (const itemId of itemIds) {
+          closeItem(itemId, { skipEmptyCheck: true, skipRunningProcessConfirm: true })
+        }
+        // Why: closing tabs doesn't remove the group shell; empty split groups are layout state, collapse the placeholder pane here.
+        closeEmptyGroup(worktreeId, groupId)
+        leaveWorktreeIfEmpty()
+      }
+    })
+  }, [closeEmptyGroup, closeItem, groupId, leaveWorktreeIfEmpty, revealTerminal, worktreeId])
 
   const closeAllEditorTabsInGroup = useCallback(() => {
     for (const item of groupTabs) {

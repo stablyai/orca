@@ -7,6 +7,7 @@ import { closeWebRuntimeSessionTab, isWebRuntimeSessionActive } from '@/runtime/
 import { useAppStore } from '@/store'
 import { reconcileTabOrder } from '../tab-bar/reconcile-order'
 import { closeLocalTerminalTabState } from './close-local-terminal-tab-state'
+import { collectBulkTerminalTabIds, guardBulkTerminalClose } from './bulk-terminal-close-guard'
 
 const EDITOR_TAB_CONTENT_TYPES = new Set<TabContentType>([
   'editor',
@@ -38,29 +39,40 @@ export function closeOtherTerminalTabs(tabId: string, activeWorktreeId: string |
     return
   }
   const currentTabs = state.tabsByWorktree[activeWorktreeId] ?? []
-  state.setActiveTab(tabId)
-  const runtimeEnvironmentId = resolveTerminalWorktreeRoute(
-    state,
-    activeWorktreeId
-  )?.runtimeEnvironmentId
-  const closeHostTerminalTabs = isWebRuntimeSessionActive(runtimeEnvironmentId)
-  for (const tab of currentTabs) {
-    if (tab.id === tabId || isPinnedVisibleTab(state, activeWorktreeId, tab.id)) {
-      continue
-    }
-    if (closeHostTerminalTabs) {
-      // Why: prune the mirror immediately, then close on its authoritative host so snapshots converge.
-      closeLocalTerminalTabState(tab.id, { remoteCloseOwnedByHost: true })
-      void closeWebRuntimeSessionTab({
-        worktreeId: activeWorktreeId,
-        tabId: tab.id,
-        environmentId: runtimeEnvironmentId,
-        reason: 'user'
-      })
-    } else {
-      state.closeTab(tab.id)
+  const closableIds = currentTabs
+    .map((tab) => tab.id)
+    .filter((id) => id !== tabId && !isPinnedVisibleTab(state, activeWorktreeId, id))
+  // Why: activate and close only once the aggregated running-process prompt is answered, so
+  // cancelling leaves both the tab strip and the running work untouched.
+  const performClose = (): void => {
+    const latest = useAppStore.getState()
+    latest.setActiveTab(tabId)
+    const runtimeEnvironmentId = resolveTerminalWorktreeRoute(
+      latest,
+      activeWorktreeId
+    )?.runtimeEnvironmentId
+    const closeHostTerminalTabs = isWebRuntimeSessionActive(runtimeEnvironmentId)
+    for (const id of closableIds) {
+      if (closeHostTerminalTabs) {
+        // Why: prune the mirror immediately, then close on its authoritative host so snapshots converge.
+        closeLocalTerminalTabState(id, { remoteCloseOwnedByHost: true })
+        void closeWebRuntimeSessionTab({
+          worktreeId: activeWorktreeId,
+          tabId: id,
+          environmentId: runtimeEnvironmentId,
+          reason: 'user'
+        })
+      } else {
+        latest.closeTab(id)
+      }
     }
   }
+  guardBulkTerminalClose({
+    worktreeId: activeWorktreeId,
+    terminalTabIds: collectBulkTerminalTabIds(state, activeWorktreeId, closableIds),
+    revealTab: (terminalTabId) => useAppStore.getState().setActiveTab(terminalTabId),
+    onProceed: performClose
+  })
 }
 
 export function closeTerminalTabsToRight(tabId: string, activeWorktreeId: string | null): void {
@@ -91,30 +103,38 @@ export function closeTerminalTabsToRight(tabId: string, activeWorktreeId: string
   if (index === -1) {
     return
   }
-  for (const id of orderedIds.slice(index + 1)) {
-    if (isPinnedVisibleTab(state, activeWorktreeId, id)) {
-      continue
-    }
-    if (terminalIdSet.has(id)) {
-      if (closeHostTerminalTabs) {
-        // Why: prune the mirror immediately, then close on its authoritative host so snapshots converge.
-        closeLocalTerminalTabState(id, { remoteCloseOwnedByHost: true })
-        void closeWebRuntimeSessionTab({
-          worktreeId: activeWorktreeId,
-          tabId: id,
-          environmentId: runtimeEnvironmentId,
-          reason: 'user'
-        })
-      } else {
-        state.closeTab(id)
+  const closableIds = orderedIds
+    .slice(index + 1)
+    .filter((id) => !isPinnedVisibleTab(state, activeWorktreeId, id))
+  const performClose = (): void => {
+    for (const id of closableIds) {
+      if (terminalIdSet.has(id)) {
+        if (closeHostTerminalTabs) {
+          // Why: prune the mirror immediately, then close on its authoritative host so snapshots converge.
+          closeLocalTerminalTabState(id, { remoteCloseOwnedByHost: true })
+          void closeWebRuntimeSessionTab({
+            worktreeId: activeWorktreeId,
+            tabId: id,
+            environmentId: runtimeEnvironmentId,
+            reason: 'user'
+          })
+        } else {
+          useAppStore.getState().closeTab(id)
+        }
+        continue
       }
-      continue
-    }
-    const unifiedTab = (state.unifiedTabsByWorktree?.[activeWorktreeId] ?? []).find(
-      (tab) => tab.entityId === id && EDITOR_TAB_CONTENT_TYPES.has(tab.contentType)
-    )
-    if (!unifiedTab?.isPinned) {
-      useAppStore.getState().closeFile(id)
+      const unifiedTab = (
+        useAppStore.getState().unifiedTabsByWorktree?.[activeWorktreeId] ?? []
+      ).find((tab) => tab.entityId === id && EDITOR_TAB_CONTENT_TYPES.has(tab.contentType))
+      if (!unifiedTab?.isPinned) {
+        useAppStore.getState().closeFile(id)
+      }
     }
   }
+  guardBulkTerminalClose({
+    worktreeId: activeWorktreeId,
+    terminalTabIds: closableIds.filter((id) => terminalIdSet.has(id)),
+    revealTab: (terminalTabId) => useAppStore.getState().setActiveTab(terminalTabId),
+    onProceed: performClose
+  })
 }

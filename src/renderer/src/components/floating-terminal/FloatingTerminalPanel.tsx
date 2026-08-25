@@ -59,6 +59,10 @@ import {
   type FloatingWorkspaceGuestSelectIndexDetail
 } from '@/lib/floating-workspace-guest-bridge'
 import { closeTerminalTab } from '@/components/terminal/terminal-tab-actions'
+import {
+  collectBulkTerminalTabIds,
+  guardBulkTerminalClose
+} from '@/components/terminal/bulk-terminal-close-guard'
 import { guardPinnedTabClose, resolvePinnedTabLabel } from '@/store/pinned-tab-close-guard'
 import { extractIpcErrorMessage } from '@/lib/ipc-error'
 import { getShortcutPlatform } from '@/lib/shortcut-platform'
@@ -879,41 +883,66 @@ export function FloatingTerminalPanel({
 
   const closeFloatingItems = useCallback(
     (visibleIds: string[]) => {
-      const state = useAppStore.getState()
-      const currentGroupTabs = activeGroup
-        ? (state.unifiedTabsByWorktree[FLOATING_TERMINAL_WORKTREE_ID] ?? []).filter(
-            (tab) => tab.groupId === activeGroup.id
-          )
-        : (state.unifiedTabsByWorktree[FLOATING_TERMINAL_WORKTREE_ID] ?? [])
-      const items = visibleIds
-        .map((visibleId) => resolveGroupTabFromVisibleId(currentGroupTabs, visibleId))
-        .filter((item): item is Tab => item !== null && !item.isPinned)
-      if (items.length === 0) {
+      const resolveItems = (): Tab[] => {
+        const latest = useAppStore.getState()
+        const currentGroupTabs = activeGroup
+          ? (latest.unifiedTabsByWorktree[FLOATING_TERMINAL_WORKTREE_ID] ?? []).filter(
+              (tab) => tab.groupId === activeGroup.id
+            )
+          : (latest.unifiedTabsByWorktree[FLOATING_TERMINAL_WORKTREE_ID] ?? [])
+        return visibleIds
+          .map((visibleId) => resolveGroupTabFromVisibleId(currentGroupTabs, visibleId))
+          .filter((item): item is Tab => item !== null && !item.isPinned)
+      }
+      if (resolveItems().length === 0) {
         return
       }
-      const dirtyEditorFileIds: string[] = []
-      for (const item of items) {
-        if (item.contentType === 'terminal') {
-          closeTab(item.entityId, { reason: 'cleanup' })
-        } else if (item.contentType === 'browser') {
-          closeBrowserTab(item.entityId)
-          destroyWorkspaceWebviews(state.browserPagesByWorkspace, item.entityId)
-        } else if (item.contentType === 'simulator') {
-          closeUnifiedTab(item.id)
-        } else {
-          const file = state.openFiles.find((candidate) => candidate.id === item.entityId)
-          if (file?.isDirty) {
-            dirtyEditorFileIds.push(item.entityId)
-            continue
+      // Why: re-resolve inside the proceed closure — the aggregated running-process prompt
+      // can sit open arbitrarily long before the close actually runs.
+      const performClose = (): void => {
+        const state = useAppStore.getState()
+        const dirtyEditorFileIds: string[] = []
+        for (const item of resolveItems()) {
+          if (item.contentType === 'terminal') {
+            closeTab(item.entityId, { reason: 'cleanup' })
+          } else if (item.contentType === 'browser') {
+            closeBrowserTab(item.entityId)
+            destroyWorkspaceWebviews(state.browserPagesByWorkspace, item.entityId)
+          } else if (item.contentType === 'simulator') {
+            closeUnifiedTab(item.id)
+          } else {
+            const file = state.openFiles.find((candidate) => candidate.id === item.entityId)
+            if (file?.isDirty) {
+              dirtyEditorFileIds.push(item.entityId)
+              continue
+            }
+            closeFile(item.entityId)
           }
-          closeFile(item.entityId)
+        }
+        if (dirtyEditorFileIds.length > 0) {
+          queueEditorCloseRequests(dirtyEditorFileIds)
         }
       }
-      if (dirtyEditorFileIds.length > 0) {
-        queueEditorCloseRequests(dirtyEditorFileIds)
-      }
+      guardBulkTerminalClose({
+        worktreeId: FLOATING_TERMINAL_WORKTREE_ID,
+        terminalTabIds: collectBulkTerminalTabIds(
+          useAppStore.getState(),
+          FLOATING_TERMINAL_WORKTREE_ID,
+          visibleIds
+        ),
+        revealTab: activateFloatingItem,
+        onProceed: performClose
+      })
     },
-    [activeGroup, closeBrowserTab, closeFile, closeTab, closeUnifiedTab, queueEditorCloseRequests]
+    [
+      activateFloatingItem,
+      activeGroup,
+      closeBrowserTab,
+      closeFile,
+      closeTab,
+      closeUnifiedTab,
+      queueEditorCloseRequests
+    ]
   )
 
   // Single confirmed-close authority for one floating item; every content type routes through a pin

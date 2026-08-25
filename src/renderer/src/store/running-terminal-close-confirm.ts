@@ -7,7 +7,10 @@ export type RunningTerminalCloseConfirmRequest = {
   terminalTabId: string
   tabLabel: string
   copyKind: CloseTerminalDialogCopyKind
-  onConfirm: () => void
+  /** `dontAskAgain` lets a caller mid-way through a set of prompts stop asking about the
+   *  rest: the persisted setting only lands after an IPC round-trip, so reading it back
+   *  from the store on the next tab would still say "keep asking". */
+  onConfirm: (result: { dontAskAgain: boolean }) => void
   onCancel?: () => void
 }
 
@@ -29,9 +32,9 @@ function mergeRequests(
 ): RunningTerminalCloseConfirmRequest {
   return {
     ...pending,
-    onConfirm: () => {
-      pending.onConfirm()
-      duplicate.onConfirm()
+    onConfirm: (result) => {
+      pending.onConfirm(result)
+      duplicate.onConfirm(result)
     },
     onCancel: () => {
       pending.onCancel?.()
@@ -55,6 +58,10 @@ export const useRunningTerminalCloseConfirmStore = create<RunningTerminalCloseCo
   // kill a second running process unseen. Matches the sibling pinned-tab confirmation.
   const INTER_REQUEST_ACTION_GUARD_MS = 350
   let nextRequestActionAllowedAt = 0
+  // Why: a bulk close asks about one tab at a time by raising the next prompt from inside
+  // the previous one's callback, which lands in the empty visible slot rather than the
+  // queue. Without noticing that re-entry the mis-click guard below would never arm for it.
+  let resolvingRequest = false
 
   /** Reveals the next queued request, and reports whether one took the visible slot. */
   const advanceRequest = (): boolean => {
@@ -66,6 +73,16 @@ export const useRunningTerminalCloseConfirmStore = create<RunningTerminalCloseCo
   const guardNextAction = (revealedNextRequest: boolean): void => {
     if (revealedNextRequest) {
       nextRequestActionAllowedAt = Date.now() + INTER_REQUEST_ACTION_GUARD_MS
+    }
+  }
+
+  /** Runs a resolved request's callback with re-entrant prompts treated as "next request". */
+  const resolveWith = (callback: () => void): void => {
+    resolvingRequest = true
+    try {
+      callback()
+    } finally {
+      resolvingRequest = false
     }
   }
 
@@ -94,6 +111,7 @@ export const useRunningTerminalCloseConfirmStore = create<RunningTerminalCloseCo
         return
       }
       set({ runningTerminalCloseConfirm: request })
+      guardNextAction(resolvingRequest)
     },
 
     confirmRunningTerminalClose: () => {
@@ -104,7 +122,7 @@ export const useRunningTerminalCloseConfirmStore = create<RunningTerminalCloseCo
       // Why: advance before running onConfirm so a re-entrant close queues behind the
       // next real request instead of seeing the stale one.
       guardNextAction(advanceRequest())
-      request.onConfirm()
+      resolveWith(() => request.onConfirm({ dontAskAgain: false }))
     },
 
     confirmAllRunningTerminalCloses: () => {
@@ -113,9 +131,10 @@ export const useRunningTerminalCloseConfirmStore = create<RunningTerminalCloseCo
       }
       const pending = [get().runningTerminalCloseConfirm, ...queuedRequests.splice(0)]
       set({ runningTerminalCloseConfirm: null })
-      // No guard to arm: the queue is empty, so there is no next prompt to mis-click.
+      // No guard to arm: the queue is empty, so there is no next prompt to mis-click, and
+      // a bulk close chaining off onConfirm sees the opt-out and stops asking.
       for (const request of pending) {
-        request?.onConfirm()
+        request?.onConfirm({ dontAskAgain: true })
       }
     },
 
@@ -126,7 +145,7 @@ export const useRunningTerminalCloseConfirmStore = create<RunningTerminalCloseCo
       }
       guardNextAction(advanceRequest())
       // Why: callers such as the tab-group model resume their own cleanup on cancel.
-      request.onCancel?.()
+      resolveWith(() => request.onCancel?.())
     }
   }
 })

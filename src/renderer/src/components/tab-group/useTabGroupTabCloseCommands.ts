@@ -8,15 +8,22 @@ import {
   isWebRuntimeSessionActive
 } from '../../runtime/web-runtime-session'
 import { closeTerminalTab } from '../terminal/terminal-tab-actions'
+import {
+  collectBulkTerminalTabIds,
+  guardBulkTerminalClose
+} from '../terminal/bulk-terminal-close-guard'
 import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
 import { browserWorkspaceHasRemoteOwner } from '@/runtime/remote-browser-tab-ownership'
 
 export function useTabGroupTabCloseCommands({
   worktreeId,
-  groupTabs
+  groupTabs,
+  revealTerminal
 }: {
   worktreeId: string
   groupTabs: Tab[]
+  /** Activates a terminal so a bulk close can jump to each busy tab before asking. */
+  revealTerminal: (terminalTabId: string) => void
 }) {
   const closeUnifiedTab = useAppStore((state) => state.closeUnifiedTab)
   const closeTab = useAppStore((state) => state.closeTab)
@@ -62,7 +69,7 @@ export function useTabGroupTabCloseCommands({
   }, [setActiveWorktree, worktreeId])
 
   const closeItem = useCallback(
-    (itemId: string, opts?: { skipEmptyCheck?: boolean }) => {
+    (itemId: string, opts?: { skipEmptyCheck?: boolean; skipRunningProcessConfirm?: boolean }) => {
       const item = groupTabs.find((candidate) => candidate.id === itemId)
       if (!item) {
         return
@@ -77,10 +84,11 @@ export function useTabGroupTabCloseCommands({
       if (item.contentType === 'terminal') {
         // Why: closeTerminalTab can defer behind a pin / running-process dialog, so the
         // empty check has to run on the actual close — never on cancel.
-        closeTerminalTab(
-          item.entityId,
-          opts?.skipEmptyCheck ? undefined : { onClosed: leaveWorktreeIfEmpty }
-        )
+        closeTerminalTab(item.entityId, {
+          ...(opts?.skipEmptyCheck ? {} : { onClosed: leaveWorktreeIfEmpty }),
+          // Why: a whole-group close already asked once for the whole set.
+          ...(opts?.skipRunningProcessConfirm ? { skipRunningProcessConfirm: true } : {})
+        })
         return
       }
       if (item.contentType === 'browser') {
@@ -127,54 +135,72 @@ export function useTabGroupTabCloseCommands({
 
   const closeMany = useCallback(
     (itemIds: string[]) => {
-      for (const itemId of itemIds) {
-        const item = groupTabs.find((candidate) => candidate.id === itemId)
-        if (!item || item.isPinned) {
-          continue
-        }
-        const runtimeEnvironmentId = getRuntimeEnvironmentIdForWorktree(
-          useAppStore.getState(),
-          worktreeId
-        )
-        if (item.contentType === 'terminal' && isWebRuntimeSessionActive(runtimeEnvironmentId)) {
-          // Why: revoke local resume + hook authority before the host removes its canonical tab.
-          // No running-process prompt: a bulk close of N busy tabs would be a modal storm.
-          closeTerminalTab(item.entityId, { skipRunningProcessConfirm: true })
-          continue
-        }
-        if (item.contentType === 'browser') {
-          // Why: see closeItem — host-close a remote-owned browser or pageless host-mirror; always remove the visible tab.
-          const browserState = useAppStore.getState()
-          const hasLocalPages =
-            (browserState.browserPagesByWorkspace[item.entityId] ?? []).length > 0
-          const shouldCloseOnHost =
-            isWebRuntimeSessionActive(runtimeEnvironmentId) &&
-            (browserWorkspaceHasRemoteOwner(browserState, item.entityId, runtimeEnvironmentId) ||
-              !hasLocalPages)
-          if (shouldCloseOnHost) {
-            void closeWebRuntimeSessionTab({
-              worktreeId,
-              tabId: item.id,
-              environmentId: runtimeEnvironmentId,
-              reason: 'user'
-            })
+      // Why: re-resolve inside the proceed closure — the aggregated running-process prompt
+      // can sit open arbitrarily long before the close actually runs.
+      const performClose = (): void => {
+        for (const itemId of itemIds) {
+          const item = groupTabs.find((candidate) => candidate.id === itemId)
+          if (!item || item.isPinned) {
+            continue
           }
-          closeBrowserTab(item.entityId)
-          destroyWorkspaceWebviews(browserState.browserPagesByWorkspace, item.entityId)
-          closeUnifiedTab(item.id)
-        } else if (item.contentType === 'terminal') {
-          closeTab(item.entityId)
-        } else if (item.contentType === 'simulator') {
-          closeUnifiedTab(item.id)
-        } else {
-          const canCloseTab = closeEditorIfUnreferenced(item.entityId, item.id)
-          if (canCloseTab) {
+          const runtimeEnvironmentId = getRuntimeEnvironmentIdForWorktree(
+            useAppStore.getState(),
+            worktreeId
+          )
+          if (item.contentType === 'terminal' && isWebRuntimeSessionActive(runtimeEnvironmentId)) {
+            // Why: revoke local resume + hook authority before the host removes its canonical tab.
+            // The single aggregated prompt already ran, so skip the per-tab one.
+            closeTerminalTab(item.entityId, { skipRunningProcessConfirm: true })
+            continue
+          }
+          if (item.contentType === 'browser') {
+            // Why: see closeItem — host-close a remote-owned browser or pageless host-mirror; always remove the visible tab.
+            const browserState = useAppStore.getState()
+            const hasLocalPages =
+              (browserState.browserPagesByWorkspace[item.entityId] ?? []).length > 0
+            const shouldCloseOnHost =
+              isWebRuntimeSessionActive(runtimeEnvironmentId) &&
+              (browserWorkspaceHasRemoteOwner(browserState, item.entityId, runtimeEnvironmentId) ||
+                !hasLocalPages)
+            if (shouldCloseOnHost) {
+              void closeWebRuntimeSessionTab({
+                worktreeId,
+                tabId: item.id,
+                environmentId: runtimeEnvironmentId,
+                reason: 'user'
+              })
+            }
+            closeBrowserTab(item.entityId)
+            destroyWorkspaceWebviews(browserState.browserPagesByWorkspace, item.entityId)
             closeUnifiedTab(item.id)
+          } else if (item.contentType === 'terminal') {
+            closeTab(item.entityId)
+          } else if (item.contentType === 'simulator') {
+            closeUnifiedTab(item.id)
+          } else {
+            const canCloseTab = closeEditorIfUnreferenced(item.entityId, item.id)
+            if (canCloseTab) {
+              closeUnifiedTab(item.id)
+            }
           }
         }
       }
+      guardBulkTerminalClose({
+        worktreeId,
+        terminalTabIds: collectBulkTerminalTabIds(useAppStore.getState(), worktreeId, itemIds),
+        revealTab: revealTerminal,
+        onProceed: performClose
+      })
     },
-    [closeBrowserTab, closeEditorIfUnreferenced, closeTab, closeUnifiedTab, groupTabs, worktreeId]
+    [
+      closeBrowserTab,
+      closeEditorIfUnreferenced,
+      closeTab,
+      closeUnifiedTab,
+      groupTabs,
+      revealTerminal,
+      worktreeId
+    ]
   )
 
   return { closeItem, closeMany, leaveWorktreeIfEmpty }

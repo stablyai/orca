@@ -22,8 +22,9 @@ export type RunningTerminalCloseGuardOptions = {
 export const RUNNING_CLOSE_PROBE_TIMEOUT_MS = 4_000
 
 /** Whether this close is an interactive user action that should stop and ask before
- *  killing a live child process. Lifecycle echoes, bulk closes, CLI/RPC closes and the
- *  post-confirmation re-entry are all excluded. */
+ *  killing a live child process. Lifecycle echoes, CLI/RPC closes and the
+ *  post-confirmation re-entry are all excluded, as are bulk closes — those raise one
+ *  aggregated prompt up front (see bulk-terminal-close-guard) and opt each tab out here. */
 export function shouldConfirmRunningTerminalClose(
   options?: RunningTerminalCloseGuardOptions
 ): boolean {
@@ -43,7 +44,7 @@ export function shouldConfirmRunningTerminalClose(
  *  the store's own teardown collector unions both for exactly that reason — reading only
  *  the map would let a close slip through the window with no prompt. A stale id costs
  *  nothing: its probe fails and the guard falls open. */
-function collectTabPtyIds(
+export function collectTabPtyIds(
   state: Pick<AppState, 'ptyIdsByTabId' | 'terminalLayoutsByTabId'>,
   terminalTabId: string
 ): string[] {

@@ -46,8 +46,9 @@ export function closeTerminalTab(
     hostCloseReason?: TerminalTabCloseReason
     /** PTY whose lifecycle event initiated the host close. */
     lifecyclePtyId?: string
-    /** Set by callers that must never raise a modal (bulk closes, CLI/RPC, lifecycle
-     *  fallbacks) and by the re-entry that runs once the user confirmed. */
+    /** Set by callers that must never raise a modal here (CLI/RPC, lifecycle fallbacks,
+     *  and bulk closes that already asked once for the whole set) and by the re-entry
+     *  that runs once the user confirmed. */
     skipRunningProcessConfirm?: boolean
     captureRecentlyClosed?: boolean
     localPtyTeardownOwnedExternally?: boolean

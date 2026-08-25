@@ -48,9 +48,13 @@ export function useTabGroupWorkspaceModel({
   const { group, groupTabs, activeTab, terminalTabs, editorItems, browserItems, tabBarOrder } =
     useTabGroupItemProjections({ groupId, worktreeId, worktreeState })
 
+  const { activateTerminal, toggleTerminalPaneExpand, activateEditor, activateBrowser } =
+    useTabGroupActivationCommands({ groupId, worktreeId, groupTabs, worktreeState })
+
   const { closeItem, closeMany, leaveWorktreeIfEmpty } = useTabGroupTabCloseCommands({
     worktreeId,
-    groupTabs
+    groupTabs,
+    revealTerminal: activateTerminal
   })
 
   const { closeGroup, closeAllEditorTabsInGroup, closeOthers, closeToRight, closeToLeft } =
@@ -61,11 +65,9 @@ export function useTabGroupWorkspaceModel({
       groupTabs,
       closeItem,
       closeMany,
-      leaveWorktreeIfEmpty
+      leaveWorktreeIfEmpty,
+      revealTerminal: activateTerminal
     })
-
-  const { activateTerminal, toggleTerminalPaneExpand, activateEditor, activateBrowser } =
-    useTabGroupActivationCommands({ groupId, worktreeId, groupTabs, worktreeState })
 
   const creationCommands = useTabGroupCreationCommands({ groupId, worktreeId, worktreeState })
 
