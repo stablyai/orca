@@ -78,6 +78,12 @@ describe('orchestration skill guidance', () => {
     expect(migration).toContain('task-list --run <adopted_run_id>')
     expect(migration).toContain('Legacy inspection remains available without consuming mail')
     expect(migration).toContain('run-use --id <adopted_run_id> --takeover-legacy')
+    // Why: #12034 — takeover needs live-agent current authority; plain bind covers
+    // ownerless adopted Runs once legacy Dispatches are no longer pending.
+    expect(migration).toContain('run-use --id <adopted_run_id> --json')
+    expect(migration).toContain(
+      'Legacy takeover must be invoked by the live coordinator agent terminal it will bind'
+    )
     expect(migration).toContain('Takeover fences only the old coordinator')
     expect(migration).toContain('Live legacy workers keep their original Tasks, Dispatches')
     expect(migration).toContain(

@@ -88,14 +88,31 @@ orca terminal read --terminal <legacy_handle> --json
 orca terminal wait --terminal <legacy_handle> --for tui-idle --timeout-ms 60000 --json
 ```
 
-If the original coordinator is unavailable or cannot prove its retained authority, a current coordinator may explicitly take over the adopted Run from its own live agent terminal:
+If the original coordinator is unavailable or cannot prove its retained authority, rebind the adopted Run from a **live agent terminal** (Claude/Codex/etc. with current launch proof — not a bare shell, and not via `--from` naming another handle):
 
 ```bash
+# Inspect first: is this the auto-adopted recovery Run, and is legacy work still live?
+orca orchestration run-show --id <adopted_run_id> --json
+orca orchestration task-list --run <adopted_run_id> --json
+
+# No live legacy Dispatch left (no pending/dispatched rows still on the legacy
+# contract) and coordinator_handle is null: plain bind is enough.
+orca orchestration run-use --id <adopted_run_id> --json
+
+# Live legacy Dispatch still pending/dispatched: explicit takeover required.
 orca orchestration run-use --id <adopted_run_id> --takeover-legacy --json
 orca orchestration check --run <adopted_run_id> --json
 ```
 
-Takeover fences only the old coordinator, binds the current one, and moves pending worker mail into current Run Delivery. It is bound to the authenticated invoking terminal; `--from` cannot name another coordinator. Live legacy workers keep their original Tasks, Dispatches, processes, filesystems, and old prompt commands; their later questions, escalations, and completion reports route to the current coordinator. Do not use takeover while the original coordinator is still actively coordinating, because its later lifecycle mutations are rejected.
+Preconditions for `--takeover-legacy` (all of them):
+
+- Target is the **automatically adopted** recovery Run (objective like "Recovered orchestration work from a contract update"), not an arbitrary current Run you created.
+- Invoked **inside** the agent terminal that will become coordinator. The runtime must see matching current-authority proof for that pane (`callerAuthority`); a plain shell or a mismatched `--from` returns `legacy_read_only` with "Legacy takeover must be invoked by the live coordinator agent terminal it will bind."
+- Prefer a **fresh agent pane** when an older pane lost its launch token or hooks are untrusted — ordinary `run-use` to a different Run succeeding from the same pane does not prove takeover authority.
+
+Takeover fences only the old coordinator, binds the current one, and moves pending worker mail into current Run Delivery. Live legacy workers keep their original Tasks, Dispatches, processes, filesystems, and old prompt commands; their later questions, escalations, and completion reports route to the current coordinator. Do not use takeover while the original coordinator is still actively coordinating, because its later lifecycle mutations are rejected.
+
+If both plain bind and attested takeover fail and mutations stay `legacy_read_only` with `effectsApplied: false`, treat the Run as inspect-only: keep reading `task-list` / `terminal read`, finish or stop workers out-of-band, then create a **new** current Run and recreate remaining work rather than falsifying Task outcomes on the frozen graph.
 
 Do not launch a replacement editor merely because the desktop app or runtime was updated. If adoption cannot prove continuing authority, keep the original worker as the only editor until it reaches a stable handoff point, then use a new current Dispatch in a conflict-free placement for any remaining work.
 
