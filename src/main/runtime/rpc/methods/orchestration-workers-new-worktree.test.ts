@@ -7,6 +7,8 @@ import { OrcaRuntimeService } from '../../orca-runtime'
 import { OrchestrationDb } from '../../orchestration/db'
 import { RpcDispatcher } from '../dispatcher'
 import type { RpcRequest } from '../core'
+import { registerCollaborationRuntimeTopology } from '../../collaboration/collaboration-runtime-registry'
+import { createCollaborationTopology } from '../../collaboration/collaboration-topology'
 import { ORCHESTRATION_METHODS } from './orchestration'
 
 describe('orchestration new-worktree workers', () => {
@@ -233,6 +235,72 @@ describe('orchestration new-worktree workers', () => {
     expect(prompt).toContain('orca-ide orchestration send')
     expect(prompt).toMatch(/--dispatch-capability dcap_[A-Za-z0-9_-]+/)
     expect(prompt).not.toMatch(/(^|\s)orca orchestration send/)
+  })
+
+  it('injects the collaboration protocol before worker_done when a run topology covers the task', async () => {
+    mockCreatedWorktree()
+    const task = db.createTask({ spec: 'collaboration worker', runId })
+    registerCollaborationRuntimeTopology(
+      runtime,
+      runId,
+      createCollaborationTopology([
+        {
+          taskId: task.id,
+          publishesTo: ['/finding'],
+          requiredPublishesTo: ['/finding'],
+          subscribesTo: ['/context'],
+          admission: { acceptedTypes: ['context'], minPriority: 'normal' }
+        },
+        {
+          taskId: db.createTask({ spec: 'finding subscriber', runId }).id,
+          subscribesTo: ['/finding'],
+          admission: { acceptedTypes: ['finding'], minPriority: 'normal' }
+        }
+      ])
+    )
+    const method = ORCHESTRATION_METHODS.find(
+      (candidate) => candidate.name === 'orchestration.workerStart'
+    )
+    if (!method) {
+      throw new Error('workerStart method is not registered')
+    }
+
+    const result = await method.handler(
+      method.params!.parse({
+        task: task.id,
+        from: 'term_coord',
+        worktree: 'new-child',
+        name: 'collab-worker',
+        agent: 'codex'
+      }),
+      { runtime }
+    )
+
+    expect(result).toMatchObject({ state: 'ready' })
+    const prompt = vi.mocked(runtime.sendTerminalAgentPrompt).mock.calls[0]?.[1] ?? ''
+    const normalized = prompt.replace(/\s+/g, ' ')
+    expect(normalized).toContain('collaboration-publish')
+    expect(normalized).toMatch(/collaboration-checkpoint .*--wait --timeout-ms 60000/)
+    expect(normalized).toContain('collaboration-ack')
+    expect(prompt).toMatch(/REQUIRED publish topics[\s\S]*?\/finding/)
+    expect(prompt).toContain('/context')
+    const collaborationIndex = prompt.indexOf('collaboration-publish')
+    const workerDoneIndex = prompt.indexOf('--type worker_done')
+    expect(collaborationIndex).toBeGreaterThanOrEqual(0)
+    expect(collaborationIndex).toBeLessThan(workerDoneIndex)
+  })
+
+  it('omits collaboration protocol when no run topology covers the task', async () => {
+    mockCreatedWorktree()
+
+    const { result } = await startWorker()
+
+    expect(result).toMatchObject({ state: 'ready' })
+    const prompt = vi.mocked(runtime.sendTerminalAgentPrompt).mock.calls[0]?.[1] ?? ''
+    expect(prompt).not.toContain('collaboration-publish')
+    expect(prompt).not.toContain('collaboration-checkpoint')
+    expect(prompt).not.toContain('collaboration-ack')
+    expect(prompt).not.toMatch(/COLLABORATION/)
   })
 
   it('passes exact repo, base, metadata, lineage, and setup choices to worktree creation', async () => {

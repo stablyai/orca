@@ -1,4 +1,6 @@
 import type { TuiAgent } from '../../../../shared/tui-agent'
+import { buildCollaborationWorkerProtocol } from '../../collaboration/collaboration-worker-protocol'
+import { getCollaborationRuntimeTopology } from '../../collaboration/collaboration-runtime-registry'
 import { buildDispatchPreamble } from '../../orchestration/preamble'
 import { OrchestrationError } from '../../orchestration/orchestration-error'
 import { defineMethod, type RpcMethod } from '../core'
@@ -244,6 +246,22 @@ export const ORCHESTRATION_WORKER_START_METHODS: RpcMethod[] = [
         })
 
         failedStage = 'dispatch_input'
+        const cliCommand = runtime.getTerminalOrchestrationCliCommand(terminalHandle)
+        // Why: the run topology may grant this task publish/subscribe grants; the
+        // collaboration playbook must land in the same prompt, ahead of worker_done.
+        const collaborationStep = getCollaborationRuntimeTopology(runtime, run.id)?.steps.find(
+          (step) => step.taskId === task.id
+        )
+        const preCompletionProtocol = collaborationStep
+          ? buildCollaborationWorkerProtocol({
+              cli: params.devMode ? 'orca-dev' : (cliCommand ?? 'orca'),
+              workerHandle: terminalHandle,
+              dispatchCapability: capability,
+              publishesTo: collaborationStep.publishesTo ?? [],
+              requiredPublishesTo: collaborationStep.requiredPublishesTo ?? [],
+              subscribesTo: collaborationStep.subscribesTo ?? []
+            })
+          : undefined
         const preamble = buildDispatchPreamble({
           canDispatchSubWorkers: started.dispatch.depth < runtime.getNestedWorkerMaxDepth(),
           taskId: task.id,
@@ -253,7 +271,8 @@ export const ORCHESTRATION_WORKER_START_METHODS: RpcMethod[] = [
           workerHandle: terminalHandle,
           dispatchCapability: capability,
           devMode: params.devMode,
-          cliCommand: runtime.getTerminalOrchestrationCliCommand(terminalHandle)
+          cliCommand,
+          preCompletionProtocol
         })
         await runtime.sendTerminalAgentPrompt(terminalHandle, preamble)
         effects.push({
