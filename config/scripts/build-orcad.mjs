@@ -9,10 +9,25 @@
  */
 import { fork, spawnSync } from 'node:child_process'
 import { build } from 'esbuild'
-import { chmodSync, copyFileSync, mkdirSync, mkdtempSync, rmSync } from 'node:fs'
+import { createHash } from 'node:crypto'
+import {
+  chmodSync,
+  copyFileSync,
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync
+} from 'node:fs'
 import { arch, platform, tmpdir } from 'node:os'
 import { join } from 'node:path'
 import process from 'node:process'
+import {
+  ORCAD_VERSION,
+  ORCAD_VERSION_FILENAME,
+  orcadArtifactFilenames
+} from '../../src/shared/orcad-artifacts.ts'
 
 const ROOT = join(import.meta.dirname, '..', '..')
 const OUT_DIR = join(ROOT, 'out', 'orcad')
@@ -226,9 +241,26 @@ if (graphErrors.length > 0) {
   }
 }
 
+// Why a content hash and not ORCAD_VERSION alone: the remote install directory is keyed on
+// this string, so two different builds carrying one version would share a directory — and an
+// already-`.install-complete` dir is never re-uploaded. The deploy would silently run stale
+// bytes while reporting the new version.
 if (process.exitCode !== 1) {
+  const hash = createHash('sha256')
+  for (const filename of orcadArtifactFilenames()) {
+    const artifactPath = join(OUT_DIR, filename)
+    if (!existsSync(artifactPath)) {
+      throw new Error(
+        `orcad declares ${filename} in ORCAD_ARTIFACTS but never emitted it. Add the build ` +
+          'step, or drop it from src/shared/orcad-artifacts.ts.'
+      )
+    }
+    hash.update(readFileSync(artifactPath))
+  }
+  const fullVersion = `${ORCAD_VERSION}+${hash.digest('hex').slice(0, 12)}`
+  writeFileSync(join(OUT_DIR, ORCAD_VERSION_FILENAME), fullVersion)
   console.log(
-    `[build-orcad] ok — ${(output.bytes / 1024 / 1024).toFixed(2)} MB, ${Object.keys(output.inputs).length} modules, zero electron and node:sqlite imports.`
+    `[build-orcad] ok — ${fullVersion}, ${(output.bytes / 1024 / 1024).toFixed(2)} MB, ${Object.keys(output.inputs).length} modules, zero electron and node:sqlite imports.`
   )
 }
 
