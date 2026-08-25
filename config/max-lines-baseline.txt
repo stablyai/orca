@@ -3,7 +3,6 @@
 # split the oversized file instead (AGENTS.md → "Do Not Disable Max Lines").
 # Regenerate/prune: pnpm check:max-lines-ratchet --prune   (removes stale entries only)
 inline src/cli/handlers/automations.ts
-inline src/cli/handlers/orchestration.ts
 inline src/cli/help.ts
 inline src/main/agent-hooks/server.ts
 inline src/main/automations/external-manager.ts
