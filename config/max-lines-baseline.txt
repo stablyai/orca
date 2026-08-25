@@ -24,7 +24,6 @@ inline src/main/daemon/daemon-init.ts
 inline src/main/daemon/daemon-pty-adapter.ts
 inline src/main/daemon/daemon-server.ts
 inline src/main/daemon/pty-subprocess.ts
-inline src/main/git/repo.ts
 inline src/main/git/runner.ts
 inline src/main/git/status.ts
 inline src/main/git/worktree.ts
@@ -49,7 +48,6 @@ inline src/main/ports/advertised-url-watcher.ts
 inline src/main/ports/local-workspace-port-scanner.ts
 inline src/main/project-groups/nested-repo-discovery.ts
 inline src/main/providers/local-pty-provider.ts
-inline src/main/providers/ssh-git-provider.ts
 inline src/main/rate-limits/claude-fetcher.ts
 inline src/main/rate-limits/claude-pty.ts
 inline src/main/rate-limits/codex-fetcher.ts
