@@ -425,7 +425,7 @@ export function createAgentCompletionCoordinator(
     if (requiresFreshWorking || lastCompletedTurn === currentTurn) {
       return false
     }
-    if (!options.isLive() || !hasAgentRunEvidence) {
+    if (!options.isLive(optionsOverride.agentStatus) || !hasAgentRunEvidence) {
       return false
     }
     const now = Date.now()
@@ -475,6 +475,13 @@ export function createAgentCompletionCoordinator(
         quietedHookDone: false,
         agentStatus: optionsOverride.agentStatus
       })
+    } else if (optionsOverride.agentStatus?.remotePaneEvidence) {
+      // Why: a raw remote frame may precede store hydration, so its pane proof must reach the dispatch gate.
+      options.dispatchCompletion(title, {
+        source,
+        quietedHookDone: false,
+        agentStatus: optionsOverride.agentStatus
+      })
     } else {
       options.dispatchCompletion(title)
     }
@@ -489,7 +496,7 @@ export function createAgentCompletionCoordinator(
   }
 
   function dispatchAttention(payload: AgentCompletionStatusSnapshot): void {
-    if (!options.dispatchAttention || !options.isLive() || !hasAgentRunEvidence) {
+    if (!options.dispatchAttention || !options.isLive(payload) || !hasAgentRunEvidence) {
       return
     }
     const token = hookAttentionToken(payload)
@@ -504,7 +511,7 @@ export function createAgentCompletionCoordinator(
       clearPendingCodexAttention()
       pendingCodexAttentionTimer = setTimeout(() => {
         pendingCodexAttentionTimer = null
-        if (!options.isLive() || !hasAgentRunEvidence) {
+        if (!options.isLive(payload) || !hasAgentRunEvidence) {
           return
         }
         dispatchAttentionNotification(payload)
@@ -1154,7 +1161,41 @@ export function createAgentCompletionCoordinator(
     if (isFiniteTurnCompletedAt(turnCompletedAt)) {
       rememberHandledTurnCompletedAt(turnCompletedAt)
     }
-    observeHookStatus(unstampedPayload)
+    if (payload.state === 'working') {
+      observeHookStatus(unstampedPayload)
+      return
+    }
+    recordPaneActivity()
+    if (options.shouldSuppressHookCompletion?.(payload)) {
+      clearPendingHookDone()
+      clearPendingCodexAttention()
+      return
+    }
+    if (isRecognizedAgentType(payload.agentType)) {
+      establishAgentEvidence()
+    }
+    clearPendingHookDone()
+    clearPendingCodexAttention()
+    if (isAttentionHookState(payload.state)) {
+      lastAttentionToken = hookAttentionToken(payload)
+      return
+    }
+    if (payload.state === 'done' && payload.sessionBoundary === true) {
+      return
+    }
+    const identity = hookCompletionIdentity(payload)
+    if (!identity) {
+      return
+    }
+    lastCompletionIdentity = {
+      source: 'hook',
+      identity,
+      agentIdentity: hookCompletionAgentIdentity(payload),
+      ...(isFiniteTurnCompletedAt(turnCompletedAt)
+        ? { lastTurnCompletedAtNotified: turnCompletedAt }
+        : {})
+    }
+    lastCompletionIdentityByPaneKey.set(options.paneKey, lastCompletionIdentity)
   }
 
   function markTitleCompletionNotified(title: string): void {

@@ -108,6 +108,36 @@ describe('agent completion coordinator', () => {
     expect(dispatchCompletion).not.toHaveBeenCalled()
   })
 
+  it('does not let a suppressed cold seed silence a later real permission prompt', () => {
+    const dispatchAttention = vi.fn()
+    let suppress = true
+    const coordinator = createAgentCompletionCoordinator({
+      paneKey: 'tab-1:leaf-1',
+      getPtyId: () => 'pty-1',
+      getSettings: () => null,
+      inspectProcess: vi.fn(),
+      dispatchCompletion: vi.fn(),
+      dispatchAttention,
+      isLive: () => true,
+      shouldSuppressHookCompletion: (payload) => suppress && payload.state === 'waiting'
+    })
+    const working = { state: 'working' as const, prompt: 'ship it', agentType: 'codex' as const }
+    const waiting = {
+      state: 'waiting' as const,
+      prompt: 'ship it',
+      agentType: 'codex' as const,
+      stateStartedAt: 100
+    }
+
+    coordinator.observeHookStatus(working)
+    coordinator.seedHookStatus(waiting)
+    suppress = false
+    coordinator.observeHookStatus(waiting)
+    vi.advanceTimersByTime(CODEX_ATTENTION_QUIET_MS)
+
+    expect(dispatchAttention).toHaveBeenCalledTimes(1)
+  })
+
   it('does not dispatch completion when a blocked state arrives mid-turn', () => {
     const dispatchCompletion = vi.fn()
     const dispatchAttention = vi.fn()

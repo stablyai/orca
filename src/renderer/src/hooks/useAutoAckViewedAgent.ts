@@ -258,13 +258,16 @@ export function useAutoAckViewedAgent(floatingPanelVisible: boolean): void {
           }
           const worktreeId = target.worktreeId
           acknowledgeViewedAgentAttention(current, {
-            activeWorktreeId: shouldClearViewedAgentWorktreeUnread(current, {
-              activeWorktreeId: worktreeId,
-              activeTabId: tabId,
-              paneKeysToClear
-            })
-              ? worktreeId
-              : null,
+            // Why: row acknowledgement does not own coarse unread; only the completion-source marker may auto-clear it.
+            activeWorktreeId:
+              activePaneKey &&
+              shouldClearViewedAgentWorktreeUnread(current, {
+                activeWorktreeId: worktreeId,
+                activeTabId: tabId,
+                paneKeysToClear
+              })
+                ? worktreeId
+                : null,
             activeTabId: tabId,
             paneKeys: toAck,
             activePaneKey

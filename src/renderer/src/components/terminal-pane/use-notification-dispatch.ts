@@ -26,6 +26,7 @@ import {
   isOrcaWindowForegroundFocused,
   isVisibleForegroundPaneKey
 } from './terminal-notification-pane-visibility'
+import { isCurrentWebSessionTabsNotificationPaneEvidence } from '@/runtime/web-session-tabs-notification-reconciler'
 
 const AGENT_NOTIFICATION_SNAPSHOT_MAX_AGE_MS = 10_000
 
@@ -59,6 +60,7 @@ export type TerminalNotificationEvent = {
   agentStatusSnapshot?: AgentCompletionStatusSnapshot
   agentCompletionSource?: AgentCompletionDispatchMeta['source']
   suppressOsNotification?: boolean
+  attentionRequired?: boolean
 }
 
 /**
@@ -120,6 +122,15 @@ export function dispatchTerminalNotification(
   ) {
     return
   }
+  const remotePaneEvidence = eventAgentStatusSnapshot?.remotePaneEvidence
+  const hasCurrentRemotePaneEvidence = Boolean(
+    remotePaneEvidence &&
+    event.paneKey &&
+    isCurrentWebSessionTabsNotificationPaneEvidence(remotePaneEvidence, event.paneKey)
+  )
+  if (remotePaneEvidence && !hasCurrentRemotePaneEvidence) {
+    return
+  }
   const agentNotificationStateStartedAt =
     eventAgentStatusSnapshot?.stateStartedAt ?? freshStoredAgentStatus?.stateStartedAt
   // Why: main-process hook IPC can update inactive/unmounted worktrees before
@@ -147,9 +158,11 @@ export function dispatchTerminalNotification(
       // Why: delayed completion hooks from a closed split pane can arrive while
       // another pane in the tab is still live; stale leaf completions must not
       // create unread state or OS notifications.
-      const isCurrentPane = hasLivePty
-        ? isCurrentLivePaneKey(state, worktreeId, event.paneKey)
-        : isCurrentKnownPaneKey(state, worktreeId, event.paneKey)
+      const isCurrentPane =
+        hasCurrentRemotePaneEvidence ||
+        (hasLivePty
+          ? isCurrentLivePaneKey(state, worktreeId, event.paneKey)
+          : isCurrentKnownPaneKey(state, worktreeId, event.paneKey))
       if (!tabId || !isCurrentPane) {
         return
       }
@@ -157,14 +170,16 @@ export function dispatchTerminalNotification(
 
     // Why: a focused worktree can still hide other terminal tabs/split panes;
     // only the exact active pane counts as already viewed.
-    const shouldMarkUnread = event.paneKey
-      ? !isVisibleForegroundPaneKey(state, worktreeId, event.paneKey)
-      : state.activeWorktreeId !== worktreeId || !isOrcaWindowForegroundFocused()
+    const shouldMarkUnread =
+      event.attentionRequired === true ||
+      (event.paneKey
+        ? !isVisibleForegroundPaneKey(state, worktreeId, event.paneKey)
+        : state.activeWorktreeId !== worktreeId || !isOrcaWindowForegroundFocused())
     if (shouldMarkUnread) {
       // Why: activeWorktreeId is only in-app selection. If Orca is backgrounded,
       // a selected chat finishing still needs unread/Dock attention.
       state.markWorktreeUnread(worktreeId)
-      if (event.paneKey) {
+      if (event.paneKey && !event.attentionRequired) {
         // Why: focus-return auto-ack needs an agent-specific source marker;
         // generic pane unread also covers BEL and must still show until interact.
         state.markAgentCompletionPaneUnread(event.paneKey)
@@ -225,6 +240,7 @@ export function dispatchTerminalNotification(
       hasMultipleActiveRepos: countReposNeedingNotificationDisambiguation(state) > 1,
       terminalTitle: event.terminalTitle,
       isActiveWorktree: state.activeWorktreeId === worktreeId,
+      ...(event.attentionRequired ? { attentionRequired: true } : {}),
       ...agentSnapshot
     })
     .then((result) => {

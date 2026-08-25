@@ -160,6 +160,34 @@ describe('registerNotificationHandlers', () => {
     expect(notificationCtorMock).not.toHaveBeenCalled()
   })
 
+  it('delivers recovered hidden attention after the worktree regains focus', async () => {
+    getAllWindowsMock.mockReturnValue([
+      {
+        isDestroyed: () => false,
+        isFocused: () => true
+      } as never
+    ])
+    registerNotificationHandlers({
+      getSettings: () => ({
+        notifications: {
+          enabled: true,
+          agentTaskComplete: true,
+          terminalBell: true,
+          suppressWhenFocused: true
+        }
+      })
+    } as never)
+
+    const handler = getDispatchHandler()
+    expect(
+      await handler(
+        {},
+        { source: 'agent-task-complete', isActiveWorktree: true, attentionRequired: true }
+      )
+    ).toEqual({ delivered: true })
+    expect(notificationShowMock).toHaveBeenCalledTimes(1)
+  })
+
   describe('minimized tray attention dot', () => {
     function registerEnabledNotifications(): void {
       registerNotificationHandlers({

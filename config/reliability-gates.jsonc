@@ -4822,6 +4822,7 @@
         "paired viewer-local structured agent focus",
         "headed desktop remote-server pairing",
         "headless remote-server parity",
+        "visibility-resume completion and permission attention",
         "daemon and relay reconnect",
         "remote completion classification across disconnect and reconnect",
         "terminal exit retirement and restart restore",
@@ -4838,9 +4839,10 @@
         "https://github.com/stablyai/orca/issues/9352",
         "https://github.com/stablyai/orca/pull/9687",
         "https://github.com/stablyai/orca/issues/10192",
-        "https://github.com/stablyai/orca/pull/10193"
+        "https://github.com/stablyai/orca/pull/10193",
+        "https://github.com/stablyai/orca/issues/16102"
       ],
-      "invariant": "For every claim-capable execution route, one provider-session identity has at most one live PTY owner and one canonical host surface across concurrent clients, retries, reconnects, and stale publications. For paired structured fresh and resume requests, the authenticated owning runtime creates in background without a renderer window; activate=true focuses the exact requested leaf only on the requesting viewer, while activate=false changes no viewer focus. A live orphan may be adopted only when the controller proves its exact handle and incarnation, its worktree and host owner match, no competing visual owner exists, and a host topology CAS wins. A viewer may classify completion only from successful host/provider inspection or explicit lifecycle evidence; transport, handle, or provider unavailability remains unknown and breaks any consecutive-idle proof. A physical exit retires that exact incarnation durably so stale client state and host restart cannot recreate it. Mixed-version routes select the unchanged legacy request before any authority side effect or execution-owner-local filesystem access.",
+      "invariant": "For every claim-capable execution route, one provider-session identity has at most one live PTY owner and one canonical host surface across concurrent clients, retries, reconnects, and stale publications. For paired structured fresh and resume requests, the authenticated owning runtime creates in background without a renderer window; activate=true focuses the exact requested leaf only on the requesting viewer, while activate=false changes no viewer focus. A live orphan may be adopted only when the controller proves its exact handle and incarnation, its worktree and host owner match, no competing visual owner exists, and a host topology CAS wins. A viewer may classify completion only from successful host/provider inspection or explicit lifecycle evidence; transport, handle, or provider unavailability remains unknown and breaks any consecutive-idle proof. A visibility resubscription announces each newly accepted remote done/blocked/waiting transition once, while cold inventory and unchanged reconnect replay remain silent. A physical exit retires that exact incarnation durably so stale client state and host restart cannot recreate it. Mixed-version routes select the unchanged legacy request before any authority side effect or execution-owner-local filesystem access.",
       "oracle": "Race independent clients and repeated operation IDs, then assert one physical spawn and one canonical PTY/surface; inject exit-before-reply, provider disconnect, conflicting claim scope, old daemon/relay capabilities, reused handles, stale incarnations, owner mismatch, and topology revision conflict; assert safe adoption or explicit failure without a second spawn or wrong-process attachment. Run fresh/resume with activate true/false against an isolated headed desktop host and a separate paired client, then against isolated headless serve: assert host presentation stays background, only the requesting viewer focuses the exact leaf, inactive calls preserve client/DOM focus, a same-version publication replay cannot lose focus intent, and sibling-first split publication cannot consume exact-leaf intent. Restore legacy split panes and groups beside a newer host-owned tab, preserving exact predecessor/new/successor order, output, input, resize, titles, tab/leaf identity, active group, and multi-client convergence. For completion, drive a known running agent through outer transport loss, authoritative provider rejection, reconnect, explicit stop, real exit status, and successful hook completion; assert unavailable evidence never dispatches completion and two fresh authoritative idle samples are required after the gap. After exact exit, assert terminal and tab listings omit the surface, a stale publication cannot restore it, restart cannot resurrect it, exact tokened fixture PIDs are dead, and unrelated tabs/processes survive until scoped cleanup.",
       "commands": [
         "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/rpc/methods/agent-session.test.ts src/renderer/src/runtime/web-runtime-session.test.ts src/renderer/src/runtime/web-session-tabs-sync.test.ts src/renderer/src/runtime/web-session-intent-owner.test.ts src/renderer/src/runtime/remote-server-parity.test.ts",
@@ -4853,8 +4855,10 @@
         "VITE_EXPOSE_STORE=true pnpm run build:web",
         "ORCA_E2E_WEB_CLIENT=1 SKIP_BUILD=1 pnpm exec playwright test tests/e2e/remote-agent-session-focus-authority.spec.ts --config tests/playwright.config.ts --project electron-headful --workers=1",
         "Manual headed paired-server journey: isolated Orca desktop host + separate paired web client + real Codex process + 20-second WebSocket fault + reconnect + explicit stop",
+        "pnpm exec playwright test tests/e2e/paired-remote-agent-visibility-notifications.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1",
         "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/orca-runtime.test.ts src/main/runtime/terminal-orphan-owner.test.ts src/main/runtime/terminal-orphan-topology.test.ts src/renderer/src/runtime/web-session-terminal-orphan-recovery.test.ts src/renderer/src/runtime/web-session-terminal-orphan-mixed-version.test.ts src/renderer/src/runtime/web-session-tabs-sync.test.ts --maxWorkers=1",
         "pnpm exec vitest run --config config/vitest.config.ts src/main/providers/pty-process-inspection.test.ts src/main/daemon/terminal-host.test.ts src/main/daemon/daemon-pty-router.test.ts src/main/daemon/degraded-daemon-pty-provider.test.ts src/relay/pty-handler-spawn-admission.test.ts src/main/daemon/daemon-pty-adapter.test.ts src/main/runtime/orca-runtime.test.ts tests/e2e/remote-agent-completion-authority.unit.test.ts src/renderer/src/runtime/runtime-terminal-inspection.test.ts src/renderer/src/components/terminal-pane/agent-completion-coordinator-process-cadence.test.ts src/renderer/src/components/terminal-pane/agent-completion-coordinator-pending-title-inspection.test.ts",
+        "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/runtime/web-session-tabs-visibility-resume-notifications.test.tsx src/renderer/src/runtime/web-session-tabs-notification-receipt-order.test.tsx src/renderer/src/runtime/web-session-tabs-notification-reconciler.test.ts src/renderer/src/runtime/web-session-tabs-new-pane-notification.test.ts src/renderer/src/hooks/agent-hook-completion-notifications-inventory.test.ts src/renderer/src/hooks/useAutoAckViewedAgent.attention.test.tsx src/renderer/src/components/terminal-pane/use-notification-dispatch.test.ts src/main/ipc/notifications-delivery-gating.test.ts",
         "pnpm exec vitest run --config config/vitest.config.ts tests/e2e/remote-agent-completion-authority.unit.test.ts src/main/providers/pty-process-inspection.test.ts src/main/daemon/terminal-host.test.ts src/main/daemon/daemon-pty-router.test.ts src/main/daemon/degraded-daemon-pty-provider.test.ts src/relay/pty-handler-spawn-admission.test.ts src/main/daemon/daemon-pty-adapter.test.ts src/renderer/src/runtime/runtime-terminal-inspection.test.ts src/renderer/src/components/terminal-pane/agent-completion-coordinator-process-cadence.test.ts src/renderer/src/components/terminal-pane/agent-completion-coordinator-pending-title-inspection.test.ts src/renderer/src/components/terminal-pane/pty-connection-task-complete-dispatch.test.ts src/renderer/src/lib/codex-session-restart.test.ts"
       ],
       "testFiles": [
@@ -4865,6 +4869,15 @@
         "src/relay/pty-handler-spawn-admission.test.ts",
         "src/main/runtime/orca-runtime.test.ts",
         "tests/e2e/remote-agent-completion-authority.unit.test.ts",
+        "tests/e2e/paired-remote-agent-visibility-notifications.spec.ts",
+        "src/renderer/src/runtime/web-session-tabs-visibility-resume-notifications.test.tsx",
+        "src/renderer/src/runtime/web-session-tabs-notification-receipt-order.test.tsx",
+        "src/renderer/src/runtime/web-session-tabs-notification-reconciler.test.ts",
+        "src/renderer/src/runtime/web-session-tabs-new-pane-notification.test.ts",
+        "src/renderer/src/hooks/agent-hook-completion-notifications-inventory.test.ts",
+        "src/renderer/src/hooks/useAutoAckViewedAgent.attention.test.tsx",
+        "src/renderer/src/components/terminal-pane/use-notification-dispatch.test.ts",
+        "src/main/ipc/notifications-delivery-gating.test.ts",
         "src/renderer/src/runtime/runtime-terminal-inspection.test.ts",
         "src/renderer/src/components/terminal-pane/agent-completion-coordinator-process-cadence.test.ts",
         "src/renderer/src/components/terminal-pane/agent-completion-coordinator-pending-title-inspection.test.ts",
@@ -4929,6 +4942,40 @@
             "transport loss remains unknown through reconnect and cannot dispatch completion",
             "returned unavailability or a thrown transport failure interrupts consecutive-idle proof and requires two fresh authoritative idle samples",
             "explicit stop, real exit status, and genuine successful completion remain distinct"
+          ]
+        },
+        {
+          "file": "src/renderer/src/runtime/web-session-tabs-visibility-resume-notifications.test.tsx",
+          "assertions": [
+            "a hidden paired mirror recovers done, blocked, and waiting exactly once through notification dispatch and unread badge state",
+            "cold inventory, same-turn reconnect replay, and duplicate frames remain silent",
+            "the active scoped stream may win resume ordering without losing or duplicating attention"
+          ]
+        },
+        {
+          "file": "src/renderer/src/runtime/web-session-tabs-notification-receipt-order.test.tsx",
+          "assertions": [
+            "notification order is independent of slow or failed terminal-orphan recovery",
+            "a failed cold recovery remains silent while a failed live transition still alerts"
+          ]
+        },
+        {
+          "file": "src/renderer/src/components/terminal-pane/use-notification-dispatch.test.ts",
+          "assertions": [
+            "attention recovered after hidden parking marks unread even when its pane is focused on reveal"
+          ]
+        },
+        {
+          "file": "src/main/ipc/notifications-delivery-gating.test.ts",
+          "assertions": [
+            "attention recovered after hidden parking bypasses focus suppression exactly for that dispatch"
+          ]
+        },
+        {
+          "file": "src/renderer/src/hooks/agent-hook-completion-notifications-inventory.test.ts",
+          "assertions": [
+            "cold done and blocked inventory seeds notification identity without dispatching",
+            "later done, blocked, and stamped Claude completion identities dispatch once"
           ]
         },
         {

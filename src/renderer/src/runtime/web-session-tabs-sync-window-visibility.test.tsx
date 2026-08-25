@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { tagRuntimeSubscriptionReplayResponse } from '../../../shared/runtime-subscription-replay'
 import type { RuntimeMobileSessionTabsResult } from '../../../shared/runtime-types'
 import { resetStaleDocumentVisibilityForTesting } from '@/components/terminal-pane/stale-document-visibility'
+import { makeWorktree } from '@/store/slices/worktrees-slice-test-fixtures'
 import type * as WorktreeRuntimeOwnerModule from '@/lib/worktree-runtime-owner'
 import type * as WebRuntimeSessionModule from './web-runtime-session'
 
@@ -191,7 +192,17 @@ function seedRemoteMirrorState(): void {
       runtimeStatusByEnvironmentId: new Map([
         [ENV_A, { status: { runtimeId: 'runtime-a' }, connectionGeneration: 1 }],
         [ENV_B, { status: { runtimeId: 'runtime-b' }, connectionGeneration: 2 }]
-      ]) as AppState['runtimeStatusByEnvironmentId']
+      ]) as AppState['runtimeStatusByEnvironmentId'],
+      worktreesByRepo: {
+        'repo-a': [
+          makeWorktree({
+            id: WORKTREE,
+            repoId: 'repo-a',
+            path: '/worktree-a',
+            runtimeOwnerEnvironmentId: ENV_A
+          })
+        ]
+      }
     },
     true
   )
@@ -652,6 +663,7 @@ describe('useWebSessionTabsSync window visibility', () => {
       vi.advanceTimersByTime(WINDOW_VISIBILITY_SUBSCRIPTION_PARK_DELAY_MS)
     })
     mocks.runtimeSessionMirrorEnvironmentKey.mockReturnValue(MIRROR_KEY.split('\u0000')[1])
+    useAppStore.setState({ worktreesByRepo: { 'repo-a': [] } })
     hook.rerender()
     await act(settle)
 

@@ -2,11 +2,16 @@ import type { ParsedAgentStatusPayload } from '../../../../shared/agent-status-t
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import type { RecognizedAgentProcess } from '../../../../shared/agent-process-recognition'
 import type { RuntimeTerminalProcessInspection } from '@/runtime/runtime-terminal-inspection'
+import type { WebSessionTabsNotificationPaneEvidence } from '@/runtime/web-session-tabs-notification-reconciler'
 
 export type AgentCompletionStatusSnapshot = ParsedAgentStatusPayload & {
   stateStartedAt?: number
   /** Renderer-local boundary used only to reject a delayed cross-host completion. */
   localStateStartedAt?: number
+  /** The transition was recovered after hidden subscription parking. */
+  attentionRequired?: boolean
+  /** Renderer-local proof that the accepted remote frame still contains this pane. */
+  remotePaneEvidence?: WebSessionTabsNotificationPaneEvidence
 }
 
 export type AgentCompletionDispatchMeta = {
@@ -38,7 +43,7 @@ export type AgentCompletionCoordinatorOptions = {
     replacement: RecognizedAgentProcess
   ) => boolean
   shouldSuppressConfirmedProcessExitCompletion?: (exited: RecognizedAgentProcess) => boolean
-  isLive: () => boolean
+  isLive: (agentStatus?: AgentCompletionStatusSnapshot) => boolean
   shouldPollProcessCadence?: () => boolean
   // Why: on hosts where one inspection forks a whole-process-table scan (local
   // Windows PowerShell/CIM), panes without agent evidence relax to a slow

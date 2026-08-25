@@ -36,6 +36,8 @@ export type NotificationDispatchRequest = {
   hasMultipleActiveRepos?: boolean
   terminalTitle?: string
   isActiveWorktree?: boolean
+  /** Bypass focus suppression for an event recovered after the window was hidden. */
+  attentionRequired?: boolean
   agentType?: AgentType
   agentState?: AgentStatusState
   agentPrompt?: string

@@ -449,6 +449,24 @@ describe('dispatchTerminalNotification', () => {
     expect(mockState.markAgentCompletionPaneUnread).toHaveBeenCalledWith(paneKey)
   })
 
+  it('preserves attention recovered after hiding when the pane is focused on reveal', () => {
+    mockState.activeWorktreeId = 'wt-primary'
+    stubDocumentFocus({ visibilityState: 'visible', focused: true })
+
+    dispatchTerminalNotification('wt-primary', {
+      source: 'agent-task-complete',
+      terminalTitle: 'codex',
+      paneKey,
+      attentionRequired: true
+    })
+
+    expect(mockState.markWorktreeUnread).toHaveBeenCalledWith('wt-primary')
+    expect(mockState.markAgentCompletionPaneUnread).not.toHaveBeenCalled()
+    expect(window.api.notifications.dispatch).toHaveBeenCalledWith(
+      expect.objectContaining({ attentionRequired: true, isActiveWorktree: true })
+    )
+  })
+
   it('drops a pane key when its tab is hydrated under another worktree', () => {
     mockState.tabsByWorktree = {
       'wt-secondary': [{ id: 'tab-1' }]

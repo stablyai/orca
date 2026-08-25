@@ -851,7 +851,8 @@ export async function refreshWebRuntimeSessionTabsSnapshot(
     const {
       applyWebSessionTabsSnapshot,
       applyWebSessionTabsStorePatch,
-      decideWebSessionTabsSnapshot
+      decideWebSessionTabsSnapshot,
+      recordReceivedWebSessionTabsSnapshot
     } = await import('./web-session-tabs-sync')
     if (getRuntimeEnvironmentRevision(environmentId) !== expectedEnvironmentPairingRevision) {
       return
@@ -859,6 +860,7 @@ export async function refreshWebRuntimeSessionTabsSnapshot(
     // Why: this list is the host answering, but only the frame's own decision
     // says whether that answer is evidence — a workspace the mirror never
     // writes is discarded with nothing accepted behind it.
+    const receivedFrame = recordReceivedWebSessionTabsSnapshot(environmentId, snapshot)
     const decision = decideWebSessionTabsSnapshot(snapshot, environmentId)
     const settleMirror = applyWebSessionTabsStorePatch(
       (state) => {
@@ -868,8 +870,7 @@ export async function refreshWebRuntimeSessionTabsSnapshot(
           : state
         return patch === state ? state : patch
       },
-      { frames: [{ environmentId, worktreeId: snapshot.worktree, decision }] },
-      snapshot
+      { frames: [{ environmentId, snapshot, decision, receivedFrame }] }
     )
     settleMirror()
   } catch (error) {

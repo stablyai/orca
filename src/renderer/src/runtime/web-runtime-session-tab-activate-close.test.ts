@@ -44,6 +44,7 @@ vi.mock('./web-session-tabs-sync', () => ({
   acceptReplayedWebSessionTabsSnapshot: mocks.acceptReplayedWebSessionTabsSnapshot,
   applyWebSessionTabsSnapshot: mocks.applyWebSessionTabsSnapshot,
   decideWebSessionTabsSnapshot: mocks.decideWebSessionTabsSnapshot,
+  recordReceivedWebSessionTabsSnapshot: vi.fn(() => 1),
   applyWebSessionTabsStorePatch: (buildPatch: (state: unknown) => unknown) => {
     mocks.setState(buildPatch)
     // The production caller invokes the returned settle receipt.

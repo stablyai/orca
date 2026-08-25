@@ -1,4 +1,4 @@
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
 import { randomUUID } from 'node:crypto'
 import os from 'node:os'
 import path from 'node:path'
@@ -10,6 +10,7 @@ import {
 } from '@stablyai/playwright-test'
 
 import { getE2ECompletedOnboardingProfile } from './e2e-completed-onboarding-profile'
+import { removeE2EProfile } from './e2e-profile-removal'
 import { getOrcaElectronLaunchArgs } from './electron-launch-args'
 import { cleanupE2EDaemons, closeElectronAppForE2E } from './electron-process-shutdown'
 import {
@@ -46,6 +47,7 @@ export type PairedWebClient = {
   dispose: () => Promise<void>
 }
 
+type BeforeRendererReady = (app: ElectronApplication) => Promise<void>
 const DIRECT_SSH_PROBE_CANARY_TARGET_ID = '__orca_e2e_direct_ssh_probe_canary__'
 
 function readDirectSshAttemptTargetIds(probePath: string): string[] {
@@ -56,20 +58,6 @@ function readDirectSshAttemptTargetIds(probePath: string): string[] {
       .map((line) => JSON.parse(line) as string)
   } catch {
     return []
-  }
-}
-
-async function removeProfile(userDataDir: string): Promise<void> {
-  for (let attempt = 0; attempt < 5; attempt += 1) {
-    try {
-      rmSync(userDataDir, { recursive: true, force: true })
-      return
-    } catch (error) {
-      if (attempt === 4) {
-        throw error
-      }
-      await new Promise((resolve) => setTimeout(resolve, 250 * (attempt + 1)))
-    }
   }
 }
 
@@ -142,7 +130,7 @@ export async function launchPairedElectronClient(
   offer: RuntimeDesktopPairingOffer,
   testInfo: TestInfo,
   name: string,
-  options: { extraEnv?: Record<string, string> } = {}
+  options: { beforeRendererReady?: BeforeRendererReady; extraEnv?: Record<string, string> } = {}
 ): Promise<PairedElectronClient> {
   const userDataDir = mkdtempSync(path.join(os.tmpdir(), 'orca-e2e-paired-desktop-'))
   const directSshProbePath = path.join(userDataDir, 'forbidden-local-ssh-connects.jsonl')
@@ -170,6 +158,7 @@ export async function launchPairedElectronClient(
   })
 
   try {
+    await options.beforeRendererReady?.(app)
     assertElectronResolvedIsolatedHome(
       await app.evaluate(({ app: electronApp }) => electronApp.getPath('home')),
       homeIsolation
@@ -241,20 +230,19 @@ export async function launchPairedElectronClient(
       dispose: async () => {
         await closeElectronAppForE2E(app)
         await cleanupE2EDaemons(userDataDir)
-        await removeProfile(userDataDir)
+        await removeE2EProfile(userDataDir)
       },
-      getDirectSshAttemptTargetIds: async () => {
-        return readDirectSshAttemptTargetIds(directSshProbePath).filter(
+      getDirectSshAttemptTargetIds: async () =>
+        readDirectSshAttemptTargetIds(directSshProbePath).filter(
           (targetId) => targetId !== DIRECT_SSH_PROBE_CANARY_TARGET_ID
-        )
-      },
+        ),
       installDirectSshAttemptProbe: async () => {},
       replacePairingInPlace
     }
   } catch (error) {
     await closeElectronAppForE2E(app)
     await cleanupE2EDaemons(userDataDir)
-    await removeProfile(userDataDir)
+    await removeE2EProfile(userDataDir)
     throw error
   }
 }

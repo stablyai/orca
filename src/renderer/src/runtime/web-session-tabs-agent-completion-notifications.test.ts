@@ -26,6 +26,7 @@ import {
   applyWebSessionTabsSnapshot,
   applyWebSessionTabsStorePatch,
   decideWebSessionTabsSnapshot,
+  recordReceivedWebSessionTabsSnapshot,
   resetWebSessionTabsSnapshotFreshnessForTests
 } from './web-session-tabs-sync'
 
@@ -40,7 +41,7 @@ function makeAgentSnapshot(
   snapshotVersion: number,
   updatedAt: number,
   turnCompletedAt?: number,
-  state: 'working' | 'done' = 'working'
+  state: 'working' | 'done' | 'blocked' = 'working'
 ): RuntimeMobileSessionTabsResult {
   return {
     worktree: WORKTREE_ID,
@@ -76,13 +77,12 @@ function makeAgentSnapshot(
   }
 }
 
-function applySnapshot(snapshot: RuntimeMobileSessionTabsResult, live: boolean): void {
+function applySnapshot(snapshot: RuntimeMobileSessionTabsResult, _live: boolean): void {
+  recordReceivedWebSessionTabsSnapshot(ENVIRONMENT_ID, snapshot)
   const decision = decideWebSessionTabsSnapshot(snapshot, ENVIRONMENT_ID)
   applyWebSessionTabsStorePatch(
     (state) => applyWebSessionTabsSnapshot(state, snapshot, ENVIRONMENT_ID, NOW),
-    { frames: [{ environmentId: ENVIRONMENT_ID, worktreeId: snapshot.worktree, decision }] },
-    snapshot,
-    live
+    { frames: [{ environmentId: ENVIRONMENT_ID, snapshot, decision }] }
   )
 }
 
@@ -126,6 +126,17 @@ describe('paired session-tab agent completion notifications', () => {
 
     applySnapshot(makeAgentSnapshot(4, NOW + 3_000, turnCompletedAt + 1_000), false)
     expect(mocks.observeAgentHookCompletionForNotification).toHaveBeenCalledTimes(4)
+  })
+
+  it.each(['done', 'blocked'] as const)('forwards cold %s inventory as a silent seed', (state) => {
+    applySnapshot(makeAgentSnapshot(1, NOW, undefined, state), false)
+
+    expect(mocks.observeAgentHookCompletionForNotification).toHaveBeenCalledWith({
+      paneKey: makePaneKey(toWebTerminalSurfaceTabId(HOST_TAB_ID), LEAF_ID),
+      worktreeId: WORKTREE_ID,
+      seedOnly: true,
+      payload: expect.objectContaining({ state, stateStartedAt: NOW })
+    })
   })
 
   it('announces one live stamped completion after a late-pair working seed', () => {

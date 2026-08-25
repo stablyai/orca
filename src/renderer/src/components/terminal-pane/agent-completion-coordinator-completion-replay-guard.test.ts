@@ -8,6 +8,29 @@ import {
 describe('agent completion coordinator', () => {
   useAgentCompletionCoordinatorLifecycle()
 
+  it('does not seed a completion identity from an idle session boundary', () => {
+    const dispatchCompletion = vi.fn()
+    const coordinator = createAgentCompletionCoordinator({
+      paneKey: 'tab-1:leaf-1',
+      getPtyId: () => 'pty-1',
+      getSettings: () => null,
+      inspectProcess: vi.fn(),
+      dispatchCompletion,
+      isLive: () => true
+    })
+
+    coordinator.seedHookStatus({
+      state: 'done',
+      prompt: '',
+      agentType: 'claude',
+      sessionBoundary: true,
+      stateStartedAt: 1_700_000_000_000
+    })
+    coordinator.observeClassifiedTitleCompletion('Claude done')
+
+    expect(dispatchCompletion).toHaveBeenCalledTimes(1)
+  })
+
   it('allows later done-only hook completions from the same long-lived process', () => {
     const dispatchCompletion = vi.fn()
     const coordinator = createAgentCompletionCoordinator({
