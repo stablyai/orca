@@ -131,11 +131,23 @@ async function isStale(owner: GrokHookSessionOwner): Promise<boolean> {
   if (owner.pid === process.pid) {
     return owner.processIdentity !== self.processIdentity
   }
+  // Why attribute the record to a host first: pids do not carry across machines, so a record from
+  // another host is absent from OUR process table as a matter of course. Pruning on that would let
+  // one host delete a config another host is actively using whenever HOME is shared (NFS, a shared
+  // container volume). We cannot observe a foreign process table, and loss of contact is not
+  // evidence of death -- so a foreign record is left alone and its own host cleans it up.
+  const sameHostScope =
+    owner.hostScope === 'runtime' ||
+    self.hostScope === 'runtime' ||
+    self.hostDigest === owner.hostDigest
+  if (!sameHostScope) {
+    return false
+  }
   const currentIdentity = await readManagedHookProcessIdentity(owner.pid)
-  // Why this runs FIRST, before any scope check: a confirmed-absent process is gone whatever its
-  // identity looked like. Checking scope first made a runtime-scoped record unprunable, and since
-  // any surviving owner blocks removal, one such record left behind by a crash disabled quit-time
-  // removal and reconciliation permanently -- the whole mechanism, dead, with no way back.
+  // Why liveness before the identity comparison: a confirmed-absent process is gone whatever its
+  // identity looked like. Checking comparability first made a runtime-scoped record unprunable,
+  // and since any surviving owner blocks removal, one such record left by a crash disabled
+  // quit-time removal and reconciliation permanently.
   if (currentIdentity === null) {
     return true
   }
@@ -143,9 +155,6 @@ async function isStale(owner: GrokHookSessionOwner): Promise<boolean> {
   // can never match a recorded one, and `undefined` means the probe could not answer. Neither is
   // evidence of death, and treating either as death deletes a live Orca's hooks.
   if (owner.hostScope === 'runtime' || owner.processIdentity.startsWith('runtime:')) {
-    return false
-  }
-  if (self.hostScope === 'durable' && self.hostDigest !== owner.hostDigest) {
     return false
   }
   return typeof currentIdentity === 'string' && currentIdentity !== owner.processIdentity

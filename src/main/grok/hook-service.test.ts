@@ -698,6 +698,28 @@ describe('GrokHookService', () => {
     expect(service.getStatus().managedHooksPresent).toBe(true)
   })
 
+  // Why: pids do not carry across machines, so another host's record is absent from OUR process
+  // table as a matter of course. Pruning on that alone lets one host delete a config another host
+  // is actively using whenever HOME is shared (NFS, a shared container volume).
+  it('does not prune an owner recorded by a different host', async () => {
+    const service = new GrokHookService()
+    const configPath = join(homeDir, '.grok', 'hooks', 'orca-status.json')
+
+    expect(service.install().state).toBe('installed')
+    writeOwnersRecordFor(homeDir, [
+      {
+        pid: 2_147_483_646,
+        hostScope: 'durable',
+        hostDigest: 'a-different-machine',
+        processIdentity: 'linux:ns:boot:12345'
+      }
+    ])
+
+    await service.removeAsync()
+
+    expect(existsSync(configPath)).toBe(true)
+  })
+
   it('preserves user-authored hook entries in the Orca Grok config file', () => {
     const configPath = join(homeDir, '.grok', 'hooks', 'orca-status.json')
     mkdirSync(dirname(configPath), { recursive: true })
