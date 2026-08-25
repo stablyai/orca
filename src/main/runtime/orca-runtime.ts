@@ -20844,10 +20844,25 @@ export class OrcaRuntimeService {
     if (!this.store?.createProjectGroup) {
       throw new Error('runtime_unavailable')
     }
+    const parentGroup = input.parentGroupId
+      ? (this.store.getProjectGroups?.() ?? []).find((group) => group.id === input.parentGroupId)
+      : undefined
+    if (input.parentGroupId && !parentGroup) {
+      throw new Error('project_group_not_found')
+    }
+    const requestedConnectionId = input.connectionId?.trim() || null
+    const parentConnectionId = parentGroup?.connectionId?.trim() || null
+    if (
+      parentGroup &&
+      input.connectionId !== undefined &&
+      requestedConnectionId !== parentConnectionId
+    ) {
+      throw new Error('project_group_host_mismatch')
+    }
     const group = this.store.createProjectGroup({
       name: input.name,
       parentPath: input.parentPath ?? null,
-      connectionId: input.connectionId ?? null,
+      connectionId: parentGroup ? parentConnectionId : requestedConnectionId,
       parentGroupId: input.parentGroupId ?? null,
       createdFrom: input.createdFrom ?? 'manual'
     })
@@ -20857,10 +20872,21 @@ export class OrcaRuntimeService {
 
   async updateProjectGroup(
     groupId: string,
-    updates: Partial<Pick<ProjectGroup, 'name' | 'isCollapsed' | 'tabOrder' | 'color'>>
+    updates: Partial<Pick<ProjectGroup, 'name' | 'isCollapsed' | 'tabOrder' | 'color'>>,
+    connectionId?: string | null
   ): Promise<ProjectGroup | null> {
     if (!this.store?.updateProjectGroup) {
       throw new Error('runtime_unavailable')
+    }
+    if (connectionId !== undefined) {
+      const wanted = connectionId?.trim() || null
+      const group = (this.store.getProjectGroups?.() ?? []).find(
+        (candidate) =>
+          candidate.id === groupId && (candidate.connectionId?.trim() || null) === wanted
+      )
+      if (!group) {
+        return null
+      }
     }
     const updated = this.store.updateProjectGroup(groupId, updates)
     if (updated) {
@@ -20869,9 +20895,22 @@ export class OrcaRuntimeService {
     return updated
   }
 
-  async deleteProjectGroup(groupId: string): Promise<{ deleted: boolean }> {
+  async deleteProjectGroup(
+    groupId: string,
+    connectionId?: string | null
+  ): Promise<{ deleted: boolean }> {
     if (!this.store?.deleteProjectGroup) {
       throw new Error('runtime_unavailable')
+    }
+    if (connectionId !== undefined) {
+      const wanted = connectionId?.trim() || null
+      const group = (this.store.getProjectGroups?.() ?? []).find(
+        (candidate) =>
+          candidate.id === groupId && (candidate.connectionId?.trim() || null) === wanted
+      )
+      if (!group) {
+        return { deleted: false }
+      }
     }
     const deleted = this.store.deleteProjectGroup(groupId)
     if (deleted) {
@@ -21564,8 +21603,8 @@ export class OrcaRuntimeService {
     return this.store.getRepo(repo.id) ?? repo
   }
 
-  async showRepo(repoSelector: string): Promise<Repo> {
-    return await this.resolveRepoSelector(repoSelector)
+  async showRepo(repoSelector: string, connectionId?: string | null): Promise<Repo> {
+    return await this.resolveRepoSelectorForConnection(repoSelector, connectionId)
   }
 
   async setRepoBaseRef(repoSelector: string, baseRef: string): Promise<Repo> {
@@ -21613,12 +21652,13 @@ export class OrcaRuntimeService {
       externalWorktreeVisibility?: Repo['externalWorktreeVisibility'] | null
       sourceControlAi?: Repo['sourceControlAi'] | null
       externalWorktreeDiscoverySuppressedAt?: Repo['externalWorktreeDiscoverySuppressedAt'] | null
-    }
+    },
+    connectionId?: string | null
   ): Promise<Repo> {
     if (!this.store) {
       throw new Error('runtime_unavailable')
     }
-    const repo = await this.resolveRepoSelector(repoSelector)
+    const repo = await this.resolveRepoSelectorForConnection(repoSelector, connectionId)
     const sanitizedUpdates = omitUndefinedProperties(updates)
     if ('worktreeBasePath' in updates && updates.worktreeBasePath === undefined) {
       sanitizedUpdates.worktreeBasePath = undefined
@@ -21635,7 +21675,21 @@ export class OrcaRuntimeService {
     if ('sourceControlAi' in updates && updates.sourceControlAi === null) {
       sanitizedUpdates.sourceControlAi = null
     }
-    const updated = this.store.updateRepo(repo.id, sanitizedUpdates)
+    if (typeof sanitizedUpdates.projectGroupId === 'string') {
+      const projectGroup = (this.store.getProjectGroups?.() ?? []).find(
+        (group) => group.id === sanitizedUpdates.projectGroupId
+      )
+      if (!projectGroup) {
+        throw new Error('project_group_not_found')
+      }
+      const projectGroupHostId = projectGroup.connectionId
+        ? toSshExecutionHostId(projectGroup.connectionId)
+        : LOCAL_EXECUTION_HOST_ID
+      if (projectGroupHostId !== getRepoExecutionHostId(repo)) {
+        throw new Error('project_group_host_mismatch')
+      }
+    }
+    const updated = this.store.updateRepo(repo.id, sanitizedUpdates, getRepoExecutionHostId(repo))
     if (!updated) {
       throw new Error('repo_not_found')
     }
@@ -21651,11 +21705,14 @@ export class OrcaRuntimeService {
     return updated
   }
 
-  async removeProject(repoSelector: string): Promise<{ removed: true }> {
+  async removeProject(
+    repoSelector: string,
+    connectionId?: string | null
+  ): Promise<{ removed: true }> {
     if (!this.store?.removeProject) {
       throw new Error('runtime_unavailable')
     }
-    const repo = await this.resolveRepoSelector(repoSelector)
+    const repo = await this.resolveRepoSelectorForConnection(repoSelector, connectionId)
     // Why: removeProject is id-only, but the same id may be registered on a sibling
     // execution host; a path:/name: selector resolves one row and must remove only it.
     const hostId = getRepoExecutionHostId(repo)

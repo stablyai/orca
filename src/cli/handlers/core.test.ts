@@ -53,6 +53,7 @@ describe('orca claude-teams CLI handler', () => {
       flags: new Map(),
       client,
       cwd: '/tmp/repo',
+      env: process.env,
       json: false,
       rawArgs: []
     }

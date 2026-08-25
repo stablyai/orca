@@ -52,6 +52,7 @@ export const BOOLEAN_FLAGS = new Set([
   'tab',
   'tasks',
   'text-stdin',
+  'ungroup',
   'unread',
   'value-stdin',
   'wait'
@@ -231,6 +232,7 @@ export function isCommandGroup(commandPath: string[]): boolean {
         'vm'
       ].includes(commandPath[0])) ||
     (commandPath.length === 2 && commandPath[0] === 'agent' && commandPath[1] === 'hooks') ||
+    (commandPath.length === 2 && commandPath[0] === 'repo' && commandPath[1] === 'group') ||
     (commandPath.length === 2 &&
       commandPath[0] === 'storage' &&
       ['local', 'session'].includes(commandPath[1]))

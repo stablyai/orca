@@ -6,6 +6,7 @@ export type HandlerContext = {
   flags: Map<string, string | boolean>
   client: RuntimeClient
   cwd: string
+  env?: Readonly<NodeJS.ProcessEnv>
   json: boolean
   rawArgs?: string[]
 }

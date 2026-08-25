@@ -154,6 +154,7 @@ export async function main(
         return client
       },
       cwd,
+      env: process.env,
       json
     })
   } catch (error) {
@@ -171,6 +172,7 @@ async function runClaudeTeams(argv: string[], cwd: string): Promise<void> {
       flags: new Map(),
       client,
       cwd,
+      env: process.env,
       json: false,
       rawArgs: argv
     })

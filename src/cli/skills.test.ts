@@ -126,6 +126,7 @@ describe('orca skills CLI', () => {
         throw new Error('skills get accessed RuntimeClient')
       },
       cwd: '/tmp/repo',
+      env: process.env,
       json: false
     })
 
