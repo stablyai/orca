@@ -564,8 +564,8 @@ describe('worktree git-common narrow watch (local native platforms)', () => {
     await mkdir(worktreesDir)
     await vi.waitFor(() => {
       expect(subscribeMock).toHaveBeenCalledTimes(2)
+      expect(received.flat()).toContainEqual({ type: 'create', path: worktreesDir })
     })
-    expect(received.flat()).toContainEqual({ type: 'create', path: worktreesDir })
   })
 
   it('drops both visibility subscriptions on dispose', async () => {
@@ -637,7 +637,9 @@ describe('worktree git-common narrow watch (local native platforms)', () => {
 
       await replaceWorktreesRoot(commonDir, worktreesDir, retainedEntry)
       await vi.advanceTimersByTimeAsync(POLL_MS * RECONCILIATION_TICKS * 4)
-      expect(subscribeMock).toHaveBeenCalledTimes(3)
+      await vi.waitFor(() => {
+        expect(subscribeMock).toHaveBeenCalledTimes(3)
+      })
       expect(staleSubscription.unsubscribe).toHaveBeenCalledOnce()
 
       const beforeStaleEvent = received.length
