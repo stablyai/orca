@@ -84,7 +84,9 @@ export type WorkspaceSessionState = {
    *  and worktreeNavHistory (Back/Forward stack). See
    *  docs/cmd-j-empty-query-ordering.md. Absent in sessions written by
    *  older builds — hydration tolerates missing/partial maps and the
-   *  active worktree is seeded on first restore. */
+   *  active worktree is seeded on first restore. New host-qualified keys use
+   *  `${executionHostId}|${worktreeId}`; legacy bare keys remain readable
+   *  during migration and remote snapshot projection. */
   lastVisitedAtByWorktreeId?: Record<string, number>
   /** Worktrees whose repo-defined default terminal tabs have already been
    *  considered. Persisted so closing all tabs and re-opening the workspace

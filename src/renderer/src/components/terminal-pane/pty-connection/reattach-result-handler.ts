@@ -32,6 +32,7 @@ type ReattachResultSession = ReattachPayloadSession &
     | 'disposed'
     | 'getSshMainModelSnapshotProbe'
     | 'handleReattachResult'
+    | 'followsDirectSshReconnect'
     | 'mountFollowsTerminalPark'
     | 'registerEffectiveLaunchConfig'
     | 'registerPaneSerializerFor'
@@ -206,6 +207,17 @@ export function bindHandleReattachResult(sessionBag: ConnectPanePtySession): voi
       session.mountFollowsTerminalPark &&
       (connectResult?.isReattach === true || isRemoteRuntimePtyId(ptyId))
     session.mountFollowsTerminalPark = false
+    // An SSH reconnect remounts the pane (tab.generation is its React key), so it also paints into
+    // a fresh xterm — but unlike a park it may only use the model for a FULL-SCREEN app. See
+    // sshReconnectPaintsFromModel for why.
+    //
+    // NOT consume-once, unlike mountFollowsTerminalPark: followsDirectSshReconnect is captured per
+    // connectPanePty and never cleared, so this re-arms if one connect reaches handleReattachResult
+    // twice. Bounded by connectStarted and by the emptiness/alt-screen gates rather than by the
+    // read itself. It still reads the PENDING retry rather than directSshRetryAttempt, which also
+    // accepts the live binding and so stays truthy for every later remount of the generation.
+    const reconnectMayUseModel =
+      Boolean(session.followsDirectSshReconnect) && !revealFollowsTerminalPark
     // Why: ordinary parking destroys xterm. Rebuild from the authoritative
     // host snapshot before releasing queued live bytes; null falls back to
     // the subscribe screen without keeping the old xterm mounted.
@@ -229,6 +241,10 @@ export function bindHandleReattachResult(sessionBag: ConnectPanePtySession): voi
         return false
       }
     }
+    // A reconnect with no relay tail can still restore main's model. Keep that probe and paint in
+    // the structural transaction so live output cannot overtake the snapshot.
+    const shouldApplyStructuralPayload =
+      hasStructuralReplay || prefetchedParkModelSnapshot !== null || reconnectMayUseModel
     const reattachPayload: ReattachPayloadContext = {
       isCurrentReattachPayload,
       connectResult,
@@ -236,16 +252,17 @@ export function bindHandleReattachResult(sessionBag: ConnectPanePtySession): voi
       attemptGeneration,
       prefetchedParkModelSnapshot,
       revealFollowsTerminalPark,
+      reconnectMayUseModel,
       fetchSshMainModelReattachSnapshot,
-      hasStructuralReplay,
+      shouldApplyStructuralPayload,
       coldRestoreStartup,
-      reattachPayloadApplied: !hasStructuralReplay && prefetchedParkModelSnapshot === null
+      reattachPayloadApplied: !shouldApplyStructuralPayload
     }
     const { applyReattachPayload, fitAfterReattachRestore } = createReattachPayloadHandlers(
       session,
       reattachPayload
     )
-    if (hasStructuralReplay || prefetchedParkModelSnapshot) {
+    if (shouldApplyStructuralPayload) {
       await session.structuralReplayCoordinator.run(applyReattachPayload, {
         shouldRestore: isCurrentReattachPayload,
         afterRestore: fitAfterReattachRestore

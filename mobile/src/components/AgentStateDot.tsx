@@ -1,4 +1,5 @@
 import { useEffect, useRef } from 'react'
+import { Radio } from 'lucide-react-native'
 import { Animated, Easing, StyleSheet, View } from 'react-native'
 import type { AgentDotState } from '../worktree/agent-row-display'
 
@@ -7,13 +8,14 @@ import type { AgentDotState } from '../worktree/agent-row-display'
 // emerald for 'done', red for blocked/waiting/interrupted (attention), neutral
 // for idle. Distinct from the worktree-level AgentSpinner, which collapses the
 // agent vocabulary into the 5-state rollup the sidebar dot uses.
-const DOT_COLORS: Record<Exclude<AgentDotState, 'working'>, string> = {
+const DOT_COLORS: Record<Exclude<AgentDotState, 'working' | 'monitoring'>, string> = {
   done: '#10b981',
   blocked: '#ef4444',
   waiting: '#ef4444',
   interrupted: '#ef4444',
   idle: 'rgba(115,115,115,0.4)'
 }
+const WORKING_COLOR = '#eab308'
 
 export function AgentStateDot({ state }: { state: AgentDotState }) {
   const spinValue = useRef(new Animated.Value(0)).current
@@ -44,6 +46,14 @@ export function AgentStateDot({ state }: { state: AgentDotState }) {
     )
   }
 
+  if (state === 'monitoring') {
+    return (
+      <View style={styles.wrapper} accessibilityLabel="Monitoring background tasks">
+        <Radio size={10} color={WORKING_COLOR} />
+      </View>
+    )
+  }
+
   return (
     <View style={styles.wrapper}>
       <View style={[styles.dot, { backgroundColor: DOT_COLORS[state] }]} />
@@ -59,7 +69,7 @@ const styles = StyleSheet.create({
     height: 6,
     borderRadius: 3,
     borderWidth: 1.5,
-    borderColor: '#eab308',
+    borderColor: WORKING_COLOR,
     borderTopColor: 'transparent'
   }
 })

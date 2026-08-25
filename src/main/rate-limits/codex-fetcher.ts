@@ -19,12 +19,20 @@ import {
   type CodexRateWindowSnapshot
 } from './codex-rate-limit-window-classification'
 import { resolveCodexCommand } from '../codex-cli/command'
+// Why: import from the shared module, not the codex-cli re-export, so a test that
+// mocks '../codex-cli/command' does not have to restate this pure helper.
+import { withCliRuntimeOnPath } from '../../shared/node-cli-command-resolution'
 import { CODEX_READ_ONLY_APP_SERVER_ARGS } from '../codex-cli/codex-read-only-app-server-args'
 import { withMacTailscaleDnsHint } from '../network/macos-tailscale-dns-diagnostic'
 import { getCmdExePath, getSpawnArgsForWindows } from '../win32-utils'
 import { cleanupHiddenRateLimitPty, registerHiddenRateLimitPty } from './hidden-pty-cleanup'
 import { parseWslUncPath } from '../../shared/wsl-paths'
 import { extractCodexAuthError, isCodexAuthError } from '../../shared/codex-auth-errors'
+import {
+  excerptAgentFailureOutput,
+  sanitizeAgentFailureDetail
+} from '../../shared/commit-message-agent-output'
+import { redactString } from '../observability/redactor'
 import { buildWslExecArgs, buildWslLoginShellCommand } from '../../shared/wsl-login-shell-command'
 import {
   getHiddenRateLimitWslCwdSetupCommands,
@@ -643,10 +651,10 @@ async function fetchViaRpc(options?: FetchCodexRateLimitsOptions): Promise<Provi
       // Why: scope the selected account to this subprocess only; never mutate process.env globally.
       // Why windowsHide: without it, background cmd.exe /c polls flash a console window on Windows.
       windowsHide: true,
-      env: {
+      env: withCliRuntimeOnPath(codexCommand, {
         ...(wslCodex ? cloneProcessEnvWithoutCodexHome() : process.env),
         ...(options?.codexHomePath && !wslCodex ? { CODEX_HOME: options.codexHomePath } : {})
-      }
+      })
     })
 
     let timeout: ReturnType<typeof setTimeout> | null = null
@@ -863,17 +871,40 @@ async function fetchViaRpc(options?: FetchCodexRateLimitsOptions): Promise<Provi
       child.stdin.off('error', onStdinError)
     }
 
-    function onClose(): void {
+    function onClose(code: number | null, signal: NodeJS.Signals | null): void {
       settle({
         provider: 'codex',
         session: null,
         weekly: null,
         updatedAt: Date.now(),
-        error: withMacTailscaleDnsHint('RPC process exited unexpectedly', stderr),
+        error: describeCodexRpcExit(code, signal, stderr),
         status: 'error'
       })
     }
   })
+}
+
+// Why: surfaced text drives re-auth classification, so diagnosis and classification must use the same sanitized value.
+function describeCodexRpcExit(
+  code: number | null,
+  signal: NodeJS.Signals | null,
+  stderr: string
+): string {
+  if (extractCodexAuthError(stderr)) {
+    // Fixed copy cannot leak paths/tokens and is exactly what the renderer classifies.
+    return 'Your ChatGPT session could not be refreshed. Please sign in again.'
+  }
+  const reason =
+    code !== null ? `exit code ${code}` : signal ? `signal ${signal}` : 'no exit status'
+  const detail = sanitizeAgentFailureDetail(
+    redactString(excerptAgentFailureOutput('', stderr) ?? '')
+  )
+  return withMacTailscaleDnsHint(
+    detail
+      ? `Codex RPC process exited (${reason}): ${detail}`
+      : `Codex RPC process exited (${reason})`,
+    stderr
+  )
 }
 
 // ---------------------------------------------------------------------------
@@ -977,11 +1008,11 @@ async function fetchViaPty(options?: FetchCodexRateLimitsOptions): Promise<Provi
       cols: 120,
       rows: 40,
       cwd: resolveHiddenRateLimitPtyCwd(),
-      env: {
+      env: withCliRuntimeOnPath(codexCommand, {
         ...(wslCodex ? cloneProcessEnvWithoutCodexHome() : process.env),
         TERM: 'xterm-256color',
         ...(options?.codexHomePath && !wslCodex ? { CODEX_HOME: options.codexHomePath } : {})
-      }
+      })
     })
     const termDisposables: { dispose: () => void }[] = [registerHiddenRateLimitPty(term)]
 

@@ -91,6 +91,21 @@ describe('registerPtyHandlers', () => {
     ).resolves.toBe(null)
     expect(hasPty).not.toHaveBeenCalled()
   })
+  it.each(['remote:env-1@@terminal-1', 'ssh:missing-host@@pty-1'])(
+    'never routes process inspection for %s to the local provider',
+    async (id) => {
+      const inspectProcess = vi.fn()
+      registerPtyHandlers(mainWindow as never)
+      setLocalPtyProvider({ inspectProcess } as never)
+
+      await expect(handlers.get('pty:inspectProcess')!(null, { id })).resolves.toEqual({
+        foregroundProcess: null,
+        hasChildProcesses: false,
+        unavailable: true
+      })
+      expect(inspectProcess).not.toHaveBeenCalled()
+    }
+  )
   it('lists duplicate SSH relay session ids as distinct app sessions', async () => {
     registerPtyHandlers(mainWindow as never)
     const shutdownA = vi.fn(async () => undefined)

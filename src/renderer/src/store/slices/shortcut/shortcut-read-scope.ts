@@ -4,7 +4,7 @@ import type {
   ShortcutStory,
   ShortcutWorkspaceSelection
 } from '../../../../../shared/shortcut-types'
-import type { CacheEntry } from '../github'
+import type { CacheEntry } from '../../github/cache-model'
 import { getProviderRuntimeContextKey } from '@/lib/provider-runtime-context'
 import {
   getTaskSourceCacheScope,

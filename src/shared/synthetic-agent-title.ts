@@ -1,4 +1,5 @@
 import type { AgentStatusState, AgentType } from './agent-status-types'
+import type { TuiAgent } from './tui-agent'
 
 export type SyntheticAgentTitleProfile = {
   workingLabel: string
@@ -8,6 +9,17 @@ export type SyntheticAgentTitleProfile = {
   synthesizeTerminalTitle?: boolean
   synthesizeWorkingTitle?: boolean
 }
+
+export const SYNTHETIC_AGENT_TITLE_AGENTS = [
+  'codex',
+  'cursor',
+  'opencode',
+  'pi',
+  'omp',
+  'droid',
+  'hermes',
+  'devin'
+] as const satisfies readonly TuiAgent[]
 
 export const SYNTHETIC_AGENT_TITLE_PROFILES: Record<string, SyntheticAgentTitleProfile> = {
   codex: {

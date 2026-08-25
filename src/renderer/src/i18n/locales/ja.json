@@ -3225,6 +3225,14 @@
             "workspaceConflict": "ワークスペースの競合",
             "workspaceSyncError": "ワークスペースの同期エラー"
           },
+          "CaffeinateStatusSegment": {
+            "active": "アクティブ",
+            "inactive": "非アクティブ",
+            "ariaLabel": "{{title}}、{{status}}",
+            "onDescription": "このコンピュータを常にスリープさせない",
+            "autoDescription": "Agent の作業中はスリープさせない",
+            "offDescription": "通常のシステムスリープを許可する"
+          },
           "StatusBar": {
             "9659e38343": "ポート",
             "d1e1a7a6bf": "リソースマネージャー",
@@ -9203,7 +9211,13 @@
         "agent-awake-copy": {
           "e5995ce268": "Agent 作業中はコンピュータを起きたままにする",
           "95d3031db2": "Agent が作業している間、このコンピュータとディスプレイを起きたままにします。蓋を閉じたときの動作は、このデバイスの電源設定に従います。",
-          "a42f6fbdd8": "Agent が作業している間、このコンピュータとディスプレイを起きたままにします。Orca は電源ポリシーに従い、蓋が閉じているときもこのデバイスを起きたままにするよう要求します。"
+          "a42f6fbdd8": "Agent が作業している間、このコンピュータとディスプレイを起きたままにします。Orca は電源ポリシーに従い、蓋が閉じているときもこのデバイスを起きたままにするよう要求します。",
+          "modeTitle": "コンピュータをスリープさせない"
+        },
+        "AgentAwakeSetting": {
+          "on": "オン",
+          "auto": "Agent",
+          "off": "オフ"
         },
         "agent-status-hooks-copy": {
           "7707c15abb": "Agent 状態フック",

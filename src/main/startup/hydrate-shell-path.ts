@@ -32,6 +32,23 @@ export type HydrationResult =
 
 let cached: Promise<HydrationResult> | null = null
 let probeQueue = Promise.resolve()
+// Why: patchPackagedProcessPath seeds a version manager's newest install dir
+// ahead of PATH. nvm's startup `use` honors whatever node is already on PATH over
+// the user's `default` alias, so a probe inheriting that seed comes back pinned to
+// the newest install and every terminal loses the global CLIs installed under
+// `default`. Snapshot PATH here instead: module init runs while the import graph is
+// evaluated, strictly before any statement in main's body, so it cannot observe the
+// seeds — and unlike an explicit hand-off from the seeding site, there is no call
+// ordering left for a later refactor to break. Windows keys it `Path`, and a Git Bash
+// user whose nvm uses the POSIX ~/.nvm/versions/node layout is seeded there too, so
+// capture the key alongside the value.
+const LAUNCH_PATH_KEY =
+  process.platform === 'win32' && process.env.Path !== undefined ? 'Path' : 'PATH'
+const LAUNCH_PATH = process.env[LAUNCH_PATH_KEY] ?? null
+// Why: rc files that exec into a multiplexer or start a heavy prompt can outrun the
+// probe budget. This lets them detect the probe and take a fast path.
+const PROBE_MARKER_ENV_VAR = 'ORCA_SHELL_PATH_PROBE'
+let launchPathOverride: { key: string; value: string } | null = null
 let configuredWindowsShell = 'powershell.exe'
 let configuredWindowsGitBashPath: string | null = null
 let configuredWindowsFallbackShell: string | null = null
@@ -42,6 +59,7 @@ const windowsPathOwnership = new WindowsShellPathOwnership()
 export function _resetHydrateShellPathCache(): void {
   cached = null
   probeQueue = Promise.resolve()
+  launchPathOverride = null
   configuredWindowsShell = 'powershell.exe'
   configuredWindowsGitBashPath = null
   configuredWindowsFallbackShell = null
@@ -94,6 +112,60 @@ function parseCapturedPath(stdout: string, pathDelimiter: string = delimiter): s
   ]
 }
 
+/** @internal - tests need a launch PATH the runner's own environment cannot supply. */
+export function _setLaunchPathForTests(value: string, key = 'PATH'): void {
+  launchPathOverride = { key, value }
+}
+
+function isLaunchPathKey(name: string, key: string): boolean {
+  return process.platform === 'win32' ? name.toLowerCase() === key.toLowerCase() : name === key
+}
+
+function applyLaunchPath(env: NodeJS.ProcessEnv, key: string, value: string | null): void {
+  if (value === null) {
+    return
+  }
+  // Why: Windows resolves env names case-insensitively even though a spread is
+  // a plain object, so never leave both the captured key and another casing.
+  for (const name of Object.keys(env)) {
+    if (name !== key && isLaunchPathKey(name, key)) {
+      delete env[name]
+    }
+  }
+  env[key] = value
+}
+
+function shellProbeEnv(): NodeJS.ProcessEnv {
+  const env: NodeJS.ProcessEnv = { ...process.env, [PROBE_MARKER_ENV_VAR]: '1' }
+  const key = launchPathOverride?.key ?? LAUNCH_PATH_KEY
+  const value = launchPathOverride?.value ?? LAUNCH_PATH
+  applyLaunchPath(env, key, value)
+  return env
+}
+
+/** Run a synchronous launcher without passing Orca's seeded PATH to its child. */
+export function runWithLaunchPath<T>(action: () => T): T {
+  const key = launchPathOverride?.key ?? LAUNCH_PATH_KEY
+  const value = launchPathOverride?.value ?? LAUNCH_PATH
+  if (value === null) {
+    return action()
+  }
+  const previous = Object.entries(process.env).filter(([name]) => isLaunchPathKey(name, key))
+  applyLaunchPath(process.env, key, value)
+  try {
+    return action()
+  } finally {
+    for (const name of Object.keys(process.env)) {
+      if (isLaunchPathKey(name, key)) {
+        delete process.env[name]
+      }
+    }
+    for (const [name, previousValue] of previous) {
+      process.env[name] = previousValue
+    }
+  }
+}
+
 function shellPathProbe(shell: string): { args: string[]; pathDelimiter: string } {
   if (process.platform !== 'win32') {
     const command = `printf '%s' '${DELIMITER}'; printf '%s' "$PATH"; printf '%s' '${DELIMITER}'`
@@ -125,7 +197,7 @@ function spawnShellAndReadPath(shell: string): Promise<HydrationResult> {
       // it layer its own rc files on top. Do NOT forward stdio — some shells
       // (oh-my-zsh setups, powerlevel10k) print a lot to stderr on startup,
       // and we don't want that in Orca's console.
-      env: process.env,
+      env: shellProbeEnv(),
       stdio: ['ignore', 'pipe', 'ignore'],
       detached: false,
       windowsHide: true

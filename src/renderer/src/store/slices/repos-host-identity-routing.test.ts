@@ -366,6 +366,31 @@ describe('repo slice host identity routing', () => {
     expect(ptyKill).not.toHaveBeenCalledWith('remote-pty')
   })
 
+  it('preserves qualified recency for an exact-id sibling host', async () => {
+    const worktreeId = 'same-repo::/shared/wt'
+    const localWorktree = makeWorktree({ id: worktreeId, repoId: 'same-repo' })
+    const remoteWorktree = makeWorktree({
+      id: worktreeId,
+      repoId: 'same-repo',
+      hostId: 'runtime:env-1'
+    })
+    const store = createTestStore()
+    store.setState({
+      repos: [localDuplicate, remoteDuplicate],
+      worktreesByRepo: { 'same-repo': [localWorktree, remoteWorktree] },
+      lastVisitedAtByWorktreeId: {
+        [`local|${worktreeId}`]: 10,
+        [`runtime:env-1|${worktreeId}`]: 20
+      }
+    })
+
+    await store.getState().removeProject('same-repo', { hostId: 'local' })
+
+    expect(store.getState().lastVisitedAtByWorktreeId).toEqual({
+      [`runtime:env-1|${worktreeId}`]: 20
+    })
+  })
+
   it('removeProject with an explicit hostId routes to that host, not the focused one', async () => {
     runtimeEnvironmentCall.mockResolvedValue({
       id: 'rpc-explicit-host',

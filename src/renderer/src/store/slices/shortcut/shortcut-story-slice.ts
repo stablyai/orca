@@ -1,7 +1,7 @@
 import type { StateCreator } from 'zustand'
 import type { AppState } from '../../types'
 import type { ShortcutStory, ShortcutStoryFilter } from '../../../../../shared/shortcut-types'
-import type { CacheEntry } from '../github'
+import type { CacheEntry } from '../../github/cache-model'
 import { isIntegrationCredentialDecryptionError } from '../../../../../shared/integration-credential-errors'
 import { shortcutGetStory } from '@/runtime/runtime-shortcut-client'
 import { getTaskSourceCacheScope } from '../../../../../shared/task-source-context'

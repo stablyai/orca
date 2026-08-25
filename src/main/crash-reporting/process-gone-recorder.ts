@@ -7,12 +7,17 @@ import {
   type CrashReportBreadcrumbData
 } from '../../shared/crash-reporting'
 import { decodePosixWaitStatus, describePosixWaitStatus } from '../../shared/posix-wait-status'
+import { rendererCrashBreadcrumbOrigin } from '../../shared/crash-breadcrumb-origin'
 import type { CrashReportStore } from './crash-report-store'
 import { getCrashBreadcrumbSnapshot } from './crash-breadcrumb-store'
 import {
   recordCoalescedDurableCrashBreadcrumb,
   recordDurableCrashBreadcrumb
 } from './durable-crash-breadcrumb'
+import {
+  correlateChildProcessDeath,
+  trackRendererSiblingAttribution
+} from './process-gone-sibling-attribution'
 import {
   shouldRecordProcessGoneCrash,
   type ExpectedTeardownScope,
@@ -25,6 +30,10 @@ import {
   processGoneDedupe,
   type ProcessGoneDedupe
 } from './process-gone-dedupe'
+import {
+  findSiblingChildDeaths,
+  siblingProcessDeathDetails
+} from './process-gone-sibling-correlation'
 import { getMainProcessLifecycleIdentity } from './main-process-lifecycle-identity'
 import {
   captureMinidumpSignature,
@@ -41,6 +50,7 @@ export type ProcessGoneCrashEvent = {
   exitCode: number | null
   expectedTeardown: ExpectedTeardownScope
   details: Record<string, unknown>
+  webContentsId?: number
 }
 
 type CrashReportRecorderStore = Pick<CrashReportStore, 'record' | 'attachDetails'>
@@ -72,6 +82,12 @@ const SUPPRESSED_PROCESS_GONE_COALESCE_MS = 30_000
 
 function processGoneBreadcrumbData(event: ProcessGoneCrashEvent) {
   return buildSuppressedProcessGoneBreadcrumbData(event)
+}
+
+function processGoneRendererOrigin(event: ProcessGoneCrashEvent): string | undefined {
+  return event.webContentsId === undefined
+    ? undefined
+    : rendererCrashBreadcrumbOrigin(event.webContentsId)
 }
 
 // Why: key off the emitted breadcrumb, not the crash-report dedupe key, so two
@@ -161,6 +177,18 @@ export function recordProcessGoneCrash(
   if (!isCrashReportReason(event.reason)) {
     return
   }
+  const goneAt = Date.now()
+  const serviceName =
+    typeof event.details.serviceName === 'string' ? event.details.serviceName : undefined
+  if (event.source === 'child') {
+    correlateChildProcessDeath({
+      at: goneAt,
+      processType: event.processType,
+      ...(serviceName ? { serviceName } : {}),
+      reason: event.reason,
+      exitCode: event.exitCode
+    })
+  }
   // Crashpad captures suppressed service crashes too; keep a crash loop from
   // filling the disk even when no user-facing report is created.
   scheduleCrashpadDumpPrune()
@@ -168,8 +196,7 @@ export function recordProcessGoneCrash(
     !shouldRecordProcessGoneCrash({
       source: event.source,
       processType: event.processType,
-      serviceName:
-        typeof event.details.serviceName === 'string' ? event.details.serviceName : undefined,
+      serviceName,
       reason: event.reason,
       exitCode: event.exitCode,
       expectedTeardown: event.expectedTeardown
@@ -179,11 +206,15 @@ export function recordProcessGoneCrash(
     // 1459/min) and each suppressed event costs a span plus a forced disk flush,
     // which both floods the 30-entry ring and evicts the real pre-crash trail.
     const suppressedData = processGoneBreadcrumbData(event)
+    const origin = processGoneRendererOrigin(event)
     recordCoalescedDurableCrashBreadcrumb({
       name: 'process_gone_suppressed',
       data: suppressedData,
-      coalesceKey: suppressedProcessGoneCoalesceKey(suppressedData),
-      minIntervalMs: SUPPRESSED_PROCESS_GONE_COALESCE_MS
+      coalesceKey: origin
+        ? `${origin}\u0000${suppressedProcessGoneCoalesceKey(suppressedData)}`
+        : suppressedProcessGoneCoalesceKey(suppressedData),
+      minIntervalMs: SUPPRESSED_PROCESS_GONE_COALESCE_MS,
+      ...(origin ? { origin } : {})
     })
     return
   }
@@ -191,25 +222,40 @@ export function recordProcessGoneCrash(
     recordDurableCrashBreadcrumb(
       'crash_report_store_unavailable',
       processGoneBreadcrumbData(event),
-      'Crash report store unavailable'
+      'Crash report store unavailable',
+      processGoneRendererOrigin(event)
     )
     return
   }
 
-  const key = getProcessGoneDedupeKey(event.source, event.processType, event.reason, event.exitCode)
+  const key = getProcessGoneDedupeKey(
+    event.source,
+    event.processType,
+    event.reason,
+    event.exitCode,
+    event.webContentsId
+  )
   const claim = dedupe.tryClaim(key)
   if (!claim) {
     return
   }
   const mainProcessLifecycle = getMainProcessLifecycleIdentity()
+  const siblingDeaths =
+    event.source === 'renderer'
+      ? findSiblingChildDeaths({ reason: event.reason, exitCode: event.exitCode, at: goneAt })
+      : []
+  const siblingDetails =
+    siblingDeaths.length > 0 ? siblingProcessDeathDetails(siblingDeaths, goneAt) : {}
   const crashDetails = buildProcessGoneCrashDetails(
     {
       ...event.details,
-      ...mainProcessLifecycle
+      ...mainProcessLifecycle,
+      ...siblingDetails
     },
     event.processType
   )
-  const breadcrumbs = getCrashBreadcrumbSnapshot()
+  const breadcrumbs = getCrashBreadcrumbSnapshot(processGoneRendererOrigin(event))
+  const reportBreadcrumbs = breadcrumbs?.map(({ origin: _origin, ...breadcrumb }) => breadcrumb)
   const span = startSpan('electron.process_gone', {
     attributes: {
       'crash.source': event.source,
@@ -227,7 +273,7 @@ export function recordProcessGoneCrash(
       'app.main_process.launch_id': mainProcessLifecycle.mainProcessLaunchId,
       'app.main_process.started_at': mainProcessLifecycle.mainProcessStartedAt,
       details: crashDetails,
-      breadcrumbs
+      breadcrumbs: reportBreadcrumbs
     }
   })
   // Why: a renderer crash can be followed by another process exit before the
@@ -239,21 +285,30 @@ export function recordProcessGoneCrash(
 
   const crashedAtMs = Date.now()
   const expectedProcessType = expectedCrashpadProcessType(event)
-  void store
-    .record({
-      source: event.source,
-      processType: event.processType,
-      reason: event.reason,
-      exitCode: event.exitCode,
-      appVersion: app.getVersion(),
-      platform: process.platform,
-      osRelease: os.release(),
-      arch: process.arch,
-      electronVersion: process.versions.electron ?? 'unknown',
-      chromeVersion: process.versions.chrome ?? 'unknown',
-      details: crashDetails,
-      breadcrumbs
-    })
+  const recorded = store.record({
+    source: event.source,
+    processType: event.processType,
+    reason: event.reason,
+    exitCode: event.exitCode,
+    appVersion: app.getVersion(),
+    platform: process.platform,
+    osRelease: os.release(),
+    arch: process.arch,
+    electronVersion: process.versions.electron ?? 'unknown',
+    chromeVersion: process.versions.chrome ?? 'unknown',
+    details: crashDetails,
+    breadcrumbs: reportBreadcrumbs
+  })
+  trackRendererSiblingAttribution(
+    event,
+    goneAt,
+    siblingDeaths,
+    (reportId, details) => store.attachDetails(reportId, details),
+    recorded,
+    processGoneBreadcrumbData(event),
+    processGoneRendererOrigin(event)
+  )
+  void recorded
     .then((report) => {
       // Why: kept off the returned chain so a minidump failure can never reach
       // the persist-failure handler below and release a claim that did persist.
@@ -268,7 +323,8 @@ export function recordProcessGoneCrash(
         recordDurableCrashBreadcrumb(
           'minidump_signature_attach_failed',
           processGoneBreadcrumbData(event),
-          error instanceof Error ? error.message : String(error)
+          error instanceof Error ? error.message : String(error),
+          processGoneRendererOrigin(event)
         )
       })
     })
@@ -279,7 +335,8 @@ export function recordProcessGoneCrash(
       recordDurableCrashBreadcrumb(
         'crash_report_persist_failed',
         data,
-        `${String(data.errorName)}: ${String(data.errorMessage)}`
+        `${String(data.errorName)}: ${String(data.errorMessage)}`,
+        processGoneRendererOrigin(event)
       )
     })
 }

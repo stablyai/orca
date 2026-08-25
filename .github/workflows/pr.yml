@@ -475,6 +475,44 @@ jobs:
             --exclude=tests/e2e/cross-version-wire/** \
             --shard=${{ matrix.shard }}/${{ matrix.shard_total }}
 
+  # Why a separate job: the test needs a real Chrome, and the 32-way `test` matrix
+  # would pay for it 32 times to run one file in whichever shard it landed in.
+  orcad_browser:
+    name: orcad browser provider
+    needs: [code_paths]
+    if: needs.code_paths.outputs.should_run == 'true'
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      # Why no native-runtime: the provider drives the prebuilt agent-browser binary
+      # shipped in node_modules and never touches node-pty.
+      - uses: ./.github/actions/install-node-dependencies
+
+      # Why the runner's Google Chrome and not its chromium: Ubuntu 24.04 only ships an
+      # AppArmor userns profile for the Chrome .deb, so chromium dies with "No usable
+      # sandbox" and the provider passes no --no-sandbox. Why fail instead of skip: an
+      # unset ORCA_BROWSER_EXECUTABLE is exactly how this test went uncovered for so long.
+      - name: Resolve Chrome for the browser provider
+        run: |
+          set -euo pipefail
+          chrome="$(command -v google-chrome || command -v google-chrome-stable || true)"
+          if [ -z "$chrome" ]; then
+            echo "::error::No Google Chrome on the runner; the browser provider test would silently skip."
+            exit 1
+          fi
+          "$chrome" --version
+          echo "ORCA_BROWSER_EXECUTABLE=$chrome" >> "$GITHUB_ENV"
+
+      - name: Test external Chromium browser provider
+        run: |
+          pnpm exec vitest run --config config/vitest.config.ts \
+            src/main/orcad/external-chromium-browser-process.integration.test.ts
+
   cross-version-wire:
     name: cross-version wire compatibility
     needs: [code_paths]
@@ -642,6 +680,7 @@ jobs:
       - name: Test Windows-specific boundaries
         run: >-
           pnpm exec vitest run --config config/vitest.config.ts
+          config/scripts/rebuild-native-deps.test.mjs
           src/main/providers/windows-conpty-wide-char-duplication.node-pty.test.ts
           src/main/providers/pty-repaint-wide-char-buffer.node-pty.test.ts
           src/shared/child-process/windows-command-line.win32.test.ts
@@ -658,6 +697,8 @@ jobs:
           src/main/runtime/repo-worktree-admin-fingerprint.test.ts
           src/main/runtime/worktree-scan-admin-fingerprint-gate.test.ts
           src/shared/secure-file-fsync-flags.test.ts
+          src/main/ipc/pty-codex-account-attribution.test.ts
+          src/main/ipc/pty-spawn-env-codex-resume-provenance.test.ts
 
       # Why the :parallel variant: identical to build:release except the three
       # electron-vite targets overlap instead of running back to back. The Linux package
@@ -672,6 +713,9 @@ jobs:
         env:
           ORCA_REUSE_PREPARED_NATIVE_RUNTIME: '1'
         run: pnpm exec electron-builder --config config/electron-builder.config.cjs --dir
+
+      - name: Smoke packaged Windows PTY native capability
+        run: pnpm run smoke:windows-pty-native-capability -- --exe=dist/win-unpacked/Orca.exe
 
       - name: Smoke packaged CLI
         run: node config/scripts/smoke-packaged-cli.mjs --app-dir=dist/win-unpacked
@@ -707,38 +751,9 @@ jobs:
           BASE="${{ github.event.pull_request.base.sha }}"
           HEAD="${{ github.event.pull_request.head.sha }}"
           CHANGED="$(git diff --name-only --diff-filter=AMCR --merge-base "$BASE" "$HEAD")"
-          TEST_FILES="$(printf '%s\n' "$CHANGED" | grep -E '^tests/e2e/.*\.spec\.ts$' || true)"
-          if printf '%s\n' "$CHANGED" | grep -Eq '^src/(main/ephemeral-vm-(runtime-(service|provisioning-persistence)|failed-start-cleanup)|shared/(ephemeral-vm-runtime-(store|feature-store|rollback-projection|runtimes)|ephemeral-vm-recipes|orca-yaml-hook-types))\.ts$'; then
-            TEST_FILES="$(printf '%s\n%s\n' "$TEST_FILES" 'tests/e2e/ephemeral-vm-provisioned-root.spec.ts' | sort -u)"
-          fi
-          # Why: the Docker-SSH specs only ever ran when someone edited a spec, so four
-          # pane-restore regressions shipped from SSH source edits that touched no test.
-          # Unit tests are excluded because they prove the same source without Docker.
-          # ssh-startup-exec-readiness.spec.ts is listed to route e2e.yml's dedicated
-          # ssh-docker-watcher-isolation lane, which filters it out of changed-e2e.
-          if printf '%s\n' "$CHANGED" | grep -Ev '\.test\.tsx?$' | grep -Eq '^(src/main/ssh/|src/main/providers/ssh-|src/main/ipc/(ssh-|pty)|src/relay/|src/renderer/src/components/terminal-pane/(pty-|ssh-|remote-runtime-|terminal-parked-pty))'; then
-            TEST_FILES="$(printf '%s\n' "$TEST_FILES" \
-              'tests/e2e/pty-input-write-queue-ssh.spec.ts' \
-              'tests/e2e/ssh-cold-activation-restore.spec.ts' \
-              'tests/e2e/ssh-docker-reconnect-pane-restore.spec.ts' \
-              'tests/e2e/ssh-startup-exec-readiness.spec.ts' \
-              'tests/e2e/ssh-terminal-window-wake-stale-grid-repro.spec.ts' | sort -u)"
-          fi
-          # Why: same lesson as the SSH specs above. The IME e2e suite asserts real pty bytes and
-          # real overlay geometry, but only ran when someone edited a spec, so every IME fix in the
-          # 1.4.18x window shipped without it - including one whose diagnosis hardware later refuted.
-          # config/patches is listed because the terminal's input handling lives in the xterm patch.
-          if printf '%s\n' "$CHANGED" | grep -Ev '\.test\.tsx?$' | grep -Eq '^(config/patches/|src/renderer/src/components/terminal-pane/(terminal-ime-|use-terminal-pane-lifecycle|xterm-bypass-policy|terminal-option-shortcut-policy))'; then
-            TEST_FILES="$(printf '%s\n' "$TEST_FILES" \
-              'tests/e2e/terminal-cjk-ime-committed-text.spec.ts' \
-              'tests/e2e/terminal-hangul-wrap-boundary-bytes.spec.ts' \
-              'tests/e2e/terminal-ime-exact-byte.spec.ts' \
-              'tests/e2e/terminal-korean-composing-chord-order.spec.ts' \
-              'tests/e2e/terminal-korean-endofrow-preedit-cell-span.spec.ts' \
-              'tests/e2e/terminal-korean-midline-preedit-occlusion.spec.ts' \
-              'tests/e2e/terminal-korean-preedit-visibility.spec.ts' | sort -u)"
-          fi
-          TEST_FILES_JSON="$(printf '%s\n' "$TEST_FILES" | jq --raw-input --slurp --compact-output 'split("\n") | map(select(length > 0))')"
+          # Source routes are executable contracts so a test can prove exact
+          # authorities, exclusions, and sentinels without evaluating workflow shell.
+          TEST_FILES_JSON="$(printf '%s\n' "$CHANGED" | node config/scripts/pr-e2e-source-routing.mjs)"
           echo "test_files=$TEST_FILES_JSON" >> "$GITHUB_OUTPUT"
           if [ "$TEST_FILES_JSON" != '[]' ]; then
             echo "should_run=true" >> "$GITHUB_OUTPUT"
@@ -770,6 +785,7 @@ jobs:
       - xterm_patch_sync
       - shell_contracts
       - test
+      - orcad_browser
       - managed_hook_node18
       - package
       - package_windows
@@ -795,6 +811,7 @@ jobs:
           XTERM_PATCH_SYNC: ${{ needs.xterm_patch_sync.result }}
           SHELL_CONTRACTS: ${{ needs.shell_contracts.result }}
           TEST: ${{ needs.test.result }}
+          ORCAD_BROWSER: ${{ needs.orcad_browser.result }}
           MANAGED_HOOK_NODE18: ${{ needs.managed_hook_node18.result }}
           PACKAGE: ${{ needs.package.result }}
           PACKAGE_WINDOWS: ${{ needs.package_windows.result }}
@@ -814,6 +831,7 @@ jobs:
               "$XTERM_PATCH_SYNC" \
               "$SHELL_CONTRACTS" \
               "$TEST" \
+              "$ORCAD_BROWSER" \
               "$MANAGED_HOOK_NODE18" \
               "$PACKAGE" \
               "$PACKAGE_WINDOWS"; do
@@ -833,6 +851,7 @@ jobs:
             "$XTERM_PATCH_SYNC" \
             "$SHELL_CONTRACTS" \
             "$TEST" \
+            "$ORCAD_BROWSER" \
             "$MANAGED_HOOK_NODE18" \
             "$PACKAGE" \
             "$PACKAGE_WINDOWS"; do

@@ -13583,7 +13583,10 @@ export default function TaskPage(): React.JSX.Element {
                       <ChevronDown className="size-3 text-muted-foreground" />
                     </Button>
                   </PopoverTrigger>
-                  <PopoverContent align="start" className="w-64 p-1">
+                  <PopoverContent
+                    align="start"
+                    className="popover-scroll-content scrollbar-sleek w-64 p-1"
+                  >
                     <div className="text-[10px] font-semibold text-muted-foreground px-2 py-1.5 uppercase tracking-wider">
                       {translate('auto.components.TaskPage.4f3cb99f41', 'Switch Team')}
                     </div>
@@ -13677,7 +13680,10 @@ export default function TaskPage(): React.JSX.Element {
                     <ChevronDown className="size-3 text-muted-foreground/70" />
                   </button>
                 </PopoverTrigger>
-                <PopoverContent align="start" className="w-56 p-1">
+                <PopoverContent
+                  align="start"
+                  className="popover-scroll-content scrollbar-sleek w-56 p-1"
+                >
                   <div className="text-[10px] font-semibold text-muted-foreground px-2 py-1 uppercase tracking-wider">
                     {translate('auto.components.TaskPage.154b0fa623', 'Status')}
                   </div>
@@ -13686,7 +13692,7 @@ export default function TaskPage(): React.JSX.Element {
                       <LoaderCircle className="size-4 animate-spin text-muted-foreground" />
                     </div>
                   ) : (
-                    <div className="max-h-60 overflow-y-auto scrollbar-sleek">
+                    <div>
                       {newLinearStates.data.map((s) => (
                         <button
                           key={s.id}
@@ -13757,7 +13763,10 @@ export default function TaskPage(): React.JSX.Element {
                     <ChevronDown className="size-3 text-muted-foreground/70" />
                   </button>
                 </PopoverTrigger>
-                <PopoverContent align="start" className="w-64 p-1">
+                <PopoverContent
+                  align="start"
+                  className="popover-scroll-content scrollbar-sleek w-64 p-1"
+                >
                   <div className="text-[10px] font-semibold text-muted-foreground px-2 py-1 uppercase tracking-wider">
                     {translate('auto.components.TaskPage.d2a876ca53', 'Assignee')}
                   </div>
@@ -13766,7 +13775,7 @@ export default function TaskPage(): React.JSX.Element {
                       <LoaderCircle className="size-4 animate-spin text-muted-foreground" />
                     </div>
                   ) : (
-                    <div className="max-h-60 overflow-y-auto scrollbar-sleek">
+                    <div>
                       <button
                         type="button"
                         onClick={() => setNewLinearIssueAssigneeId(null)}
@@ -13842,7 +13851,10 @@ export default function TaskPage(): React.JSX.Element {
                     <ChevronDown className="size-3 text-muted-foreground/70" />
                   </button>
                 </PopoverTrigger>
-                <PopoverContent align="start" className="w-48 p-1">
+                <PopoverContent
+                  align="start"
+                  className="popover-scroll-content scrollbar-sleek w-48 p-1"
+                >
                   <div className="text-[10px] font-semibold text-muted-foreground px-2 py-1 uppercase tracking-wider">
                     {translate('auto.components.TaskPage.c8d5bec5f7', 'Priority')}
                   </div>
@@ -13898,7 +13910,10 @@ export default function TaskPage(): React.JSX.Element {
                     <ChevronDown className="size-3 text-muted-foreground/70" />
                   </button>
                 </PopoverTrigger>
-                <PopoverContent align="start" className="w-64 p-1">
+                <PopoverContent
+                  align="start"
+                  className="popover-scroll-content scrollbar-sleek w-64 p-1"
+                >
                   <div className="text-[10px] font-semibold text-muted-foreground px-2 py-1 uppercase tracking-wider">
                     {translate('auto.components.TaskPage.00022ec0ba', 'Project')}
                   </div>
@@ -13907,7 +13922,7 @@ export default function TaskPage(): React.JSX.Element {
                       <LoaderCircle className="size-4 animate-spin text-muted-foreground" />
                     </div>
                   ) : (
-                    <div className="max-h-60 overflow-y-auto scrollbar-sleek">
+                    <div>
                       <button
                         type="button"
                         onClick={() => setNewLinearIssueProjectId(null)}
@@ -13976,7 +13991,10 @@ export default function TaskPage(): React.JSX.Element {
                     <ChevronDown className="size-3 text-muted-foreground/70" />
                   </button>
                 </PopoverTrigger>
-                <PopoverContent align="start" className="w-64 p-1">
+                <PopoverContent
+                  align="start"
+                  className="popover-scroll-content scrollbar-sleek w-64 p-1"
+                >
                   <div className="text-[10px] font-semibold text-muted-foreground px-2 py-1 uppercase tracking-wider">
                     {translate('auto.components.TaskPage.d0ca4aa1d0', 'Labels')}
                   </div>
@@ -13985,7 +14003,7 @@ export default function TaskPage(): React.JSX.Element {
                       <LoaderCircle className="size-4 animate-spin text-muted-foreground" />
                     </div>
                   ) : (
-                    <div className="max-h-60 overflow-y-auto scrollbar-sleek">
+                    <div>
                       {newLinearLabels.data.map((l) => {
                         const isSelected = newLinearIssueLabelIds.includes(l.id)
                         return (

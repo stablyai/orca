@@ -3,7 +3,7 @@ import { hasPtySerializer } from '../pty-buffer-serializer'
 import { writeTerminalOutput } from '@/lib/pane-manager/pane-terminal-output-scheduler'
 
 import { STARTUP_CWD_FALLBACK_NOTICE } from './startup-cwd-fallback-notice'
-import { pendingSpawnByPaneKey } from './pty-connect-limits'
+import { pendingSpawnByPaneKey, pendingSpawnGenerationByPaneKey } from './pty-connect-limits'
 import { shouldWritePtyOutputForeground } from './foreground-output-scan'
 import { isRemoteRuntimePtyId } from './paired-parked-terminal-restore'
 import { toProcessExitStartup } from './process-exit-startup'
@@ -14,6 +14,7 @@ import type {
 } from './fresh-spawn-types'
 
 import type { ConnectPanePtySession } from './connect-pane-pty-session'
+import { resolveTerminalTabId } from './terminal-tab-id'
 
 export function bindStartFreshSpawn(session: ConnectPanePtySession): void {
   session.startFreshSpawn = (
@@ -56,6 +57,15 @@ export function bindStartFreshSpawn(session: ConnectPanePtySession): void {
     const preSignalPromise = session.runtimeEnvironmentId
       ? Promise.resolve(null)
       : window.api.pty.declarePendingPaneSerializer(session.cacheKey).catch(() => null)
+    const clearPreSignaledSerializer = (): void => {
+      // A disposed pre-bind connect must not keep a successor behind a slow
+      // serializer declaration. Cleanup can finish independently of spawn ownership.
+      void preSignalPromise.then((gen) => {
+        if (typeof gen === 'number') {
+          void window.api.pty.clearPendingPaneSerializer(session.cacheKey, gen).catch(() => {})
+        }
+      })
+    }
 
     session.transportConnectInFlightSince = Date.now()
     const effectiveStartup = startupOverride === undefined ? session.paneStartup : startupOverride
@@ -86,6 +96,51 @@ export function bindStartFreshSpawn(session: ConnectPanePtySession): void {
       ...(coldRestoreOverride ? { launchToken: coldRestoreOverride.launchToken } : {}),
       ...(coldRestoreOverride ? { launchAgent: coldRestoreOverride.agent } : {}),
       ...(session.shouldDeclareHiddenAtSpawn() ? { initiallyHidden: true } : {}),
+      shouldContinue: () => {
+        const state = useAppStore.getState()
+        const unifiedTab = state.getTab?.(session.deps.tabId)
+        const initialOwnerWorktreeId =
+          state.getTerminalTabOwnerWorktreeId?.(session.deps.tabId) ??
+          (unifiedTab?.contentType === 'terminal'
+            ? state.getTerminalTabOwnerWorktreeId?.(unifiedTab.entityId)
+            : null)
+        const terminalTabId = resolveTerminalTabId(
+          {
+            getTab: state.getTab,
+            hasTerminalTab: (candidateId) =>
+              Boolean(
+                state.tabsByWorktree[session.deps.worktreeId]?.some(
+                  (candidate) => candidate.id === candidateId
+                ) ||
+                (initialOwnerWorktreeId
+                  ? state.tabsByWorktree[initialOwnerWorktreeId]?.some(
+                      (candidate) => candidate.id === candidateId
+                    )
+                  : false)
+              )
+          },
+          session.deps.tabId
+        )
+        const ownerWorktreeId =
+          state.getTerminalTabOwnerWorktreeId?.(terminalTabId) ?? initialOwnerWorktreeId
+        const terminalTab =
+          state.tabsByWorktree[session.deps.worktreeId]?.find(
+            (candidate) => candidate.id === terminalTabId
+          ) ??
+          (ownerWorktreeId
+            ? state.tabsByWorktree[ownerWorktreeId]?.find(
+                (candidate) => candidate.id === terminalTabId
+              )
+            : undefined)
+        const fallbackTab = Object.values(state.tabsByWorktree)
+          .find((tabs) => tabs.some((candidate) => candidate.id === terminalTabId))
+          ?.find((candidate) => candidate.id === terminalTabId)
+        const currentTab =
+          terminalTab ??
+          fallbackTab ??
+          (unifiedTab && 'generation' in unifiedTab ? unifiedTab : null)
+        return !session.disposed && (currentTab?.generation ?? 0) === session.tabGeneration
+      },
       callbacks: outputCallbacks.callbacks
     })
 
@@ -98,10 +153,7 @@ export function bindStartFreshSpawn(session: ConnectPanePtySession): void {
       .then(async (spawnedPtyId) => {
         if (outputCallbacks.generation !== session.transportStreamGeneration) {
           session.finishReattachLiveDataDeferral(false, outputCallbacks.generation)
-          const gen = await preSignalPromise
-          if (typeof gen === 'number') {
-            void window.api.pty.clearPendingPaneSerializer(session.cacheKey, gen).catch(() => {})
-          }
+          clearPreSignaledSerializer()
           return null
         }
         const resolvedPtyId =
@@ -114,10 +166,7 @@ export function bindStartFreshSpawn(session: ConnectPanePtySession): void {
           session.finishReattachLiveDataDeferral(false, outputCallbacks.generation)
           // Why: an outstanding declare keeps main's cooperation gate suppressing
           // this paneKey's daemon-snapshot seed until something releases it.
-          const gen = await preSignalPromise
-          if (typeof gen === 'number') {
-            void window.api.pty.clearPendingPaneSerializer(session.cacheKey, gen).catch(() => {})
-          }
+          clearPreSignaledSerializer()
           return null
         }
         const connectResult =
@@ -196,6 +245,11 @@ export function bindStartFreshSpawn(session: ConnectPanePtySession): void {
         if (resolvedPtyId) {
           session.reconcilePtySizeAfterSpawn(resolvedPtyId, session.cols, session.rows)
         }
+        if (!resolvedPtyId) {
+          clearPreSignaledSerializer()
+          session.finishReattachLiveDataDeferral(false, outputCallbacks.generation)
+          return null
+        }
         const gen = await preSignalPromise
         // Why: a bound PTY owns the renderer serializer even when the declare was
         // rejected; the gen token only settles or clears the pending declaration.
@@ -206,8 +260,6 @@ export function bindStartFreshSpawn(session: ConnectPanePtySession): void {
           if (typeof gen === 'number') {
             void window.api.pty.settlePaneSerializer(session.cacheKey, gen).catch(() => {})
           }
-        } else if (typeof gen === 'number') {
-          void window.api.pty.clearPendingPaneSerializer(session.cacheKey, gen).catch(() => {})
         }
         if (resolvedPtyId && session.connectionId) {
           if (
@@ -229,15 +281,13 @@ export function bindStartFreshSpawn(session: ConnectPanePtySession): void {
         ) {
           session.clearRegisteredStartupLaunchConfig()
         }
-        const gen = await preSignalPromise
-        if (typeof gen === 'number') {
-          void window.api.pty.clearPendingPaneSerializer(session.cacheKey, gen).catch(() => {})
-        }
+        clearPreSignaledSerializer()
         return null
       })
       .finally(() => {
         if (pendingSpawnByPaneKey.get(session.pendingSpawnKey) === trackedPromise) {
           pendingSpawnByPaneKey.delete(session.pendingSpawnKey)
+          pendingSpawnGenerationByPaneKey.delete(session.pendingSpawnKey)
         }
       })
     session.armDirectSshPaneRetryTimeout(trackedPromise, session.directSshRetryAttempt)
@@ -259,6 +309,7 @@ export function bindStartFreshSpawn(session: ConnectPanePtySession): void {
     // Why: split panes in the same tab can spawn concurrently. Key by pane
     // as well as tab so a remount cannot attach to a sibling setup pane's PTY.
     pendingSpawnByPaneKey.set(session.pendingSpawnKey, trackedPromise)
+    pendingSpawnGenerationByPaneKey.set(session.pendingSpawnKey, session.tabGeneration)
     return trackedPromise
   }
 }

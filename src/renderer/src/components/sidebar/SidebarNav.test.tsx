@@ -453,6 +453,7 @@ describe('SidebarNav', () => {
       'button[aria-label="Search worktrees and browser tabs"]'
     )
     expect(searchButton).not.toBeNull()
+    expect(searchButton?.className).toContain('bg-worktree-sidebar-foreground/5')
 
     const shortcuts = searchButton?.querySelector('span.hidden')
     expect(shortcuts?.className).toContain('hidden')

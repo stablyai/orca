@@ -601,6 +601,13 @@ function cleanupLegacySystemManagedHooks(): void {
   // Why: the pre-write guard below compares against these bytes; a separate
   // later read would let a concurrent save land between parse and snapshot.
   const { raw: previousRaw, config } = readHooksJsonWithRaw(legacyConfigPath)
+  // Why: `config === null` with no raw is the "could not read" answer, not the
+  // "no hooks here" one — the branch below removes managed trust entries AND
+  // their grant-ledger record, so acting on it would discard approvals over a
+  // read that merely failed. A genuine absence still returns `config: {}`.
+  if (config === null && previousRaw === null) {
+    return
+  }
   if (!config?.hooks || previousRaw === null) {
     if (hasRecordedRealHomeGrant) {
       removeSystemManagedHookTrustEntries(systemHomePath, legacyConfigPath)
@@ -1637,6 +1644,7 @@ export class CodexHookService {
 export const codexHookService = new CodexHookService()
 
 export const _internals = {
+  cleanupLegacySystemManagedHooks,
   getManagedScript,
   installManagedHooksIntoWslRuntime,
   refreshWslRuntimeUserHooks,

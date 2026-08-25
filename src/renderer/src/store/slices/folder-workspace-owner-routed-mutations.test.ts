@@ -427,5 +427,39 @@ describe('folder workspace owner-routed mutations', () => {
       timeoutMs: 15_000
     })
     expect(folderWorkspacesDelete).not.toHaveBeenCalled()
+    expect(store.getState().folderWorkspaces).toEqual([])
+  })
+
+  it('deletes only the host-qualified folder when ids collide', async () => {
+    const localFolder = makeFolderWorkspace({ executionHostId: 'local' })
+    const runtimeFolder = makeFolderWorkspace({ executionHostId: 'runtime:env-owner' })
+    runtimeEnvironmentCall.mockResolvedValue({
+      id: 'rpc-delete-folder',
+      ok: true,
+      result: { deleted: true },
+      _meta: { runtimeId: 'runtime-owner' }
+    })
+    const store = createTestStore()
+    store.setState({
+      activeWorktreeId: `folder:${runtimeFolder.id}`,
+      activeWorkspaceExecutionHostId: 'runtime:env-owner',
+      settings: { activeRuntimeEnvironmentId: 'env-owner' } as never,
+      projectGroups: [{ ...projectGroup, executionHostId: 'local' }],
+      folderWorkspaces: [localFolder, runtimeFolder]
+    })
+
+    await expect(
+      store
+        .getState()
+        .deleteFolderWorkspace(runtimeFolder.id, { executionHostId: 'runtime:env-owner' })
+    ).resolves.toBe(true)
+
+    expect(runtimeEnvironmentCall).toHaveBeenCalledWith({
+      selector: 'env-owner',
+      method: 'folderWorkspace.delete',
+      params: { folderWorkspaceId: runtimeFolder.id },
+      timeoutMs: 15_000
+    })
+    expect(store.getState().folderWorkspaces).toEqual([localFolder])
   })
 })

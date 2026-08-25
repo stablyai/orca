@@ -5,9 +5,7 @@ import {
   titleHasAgentName
 } from './agent-name-token-match'
 import { containsAgentSpinnerGlyph, isCursorAgentTitle } from './agent-title-core'
-import { stripLeadingAgentTitleDecorationOrEmpty } from './agent-title-decoration'
 import { isOpenCodeNativeTitle } from './opencode-terminal-title'
-import { getWrapperTitleSegments } from './terminal-title-wrapper-segments'
 import {
   getPiCompatibleSyntheticAgentLabel,
   isLegacyPiCompatibleTitle
@@ -247,25 +245,7 @@ function hasGenericClaudeStatusPrefix(title: string): boolean {
   )
 }
 
-// Claude's own name plus, at most, one of its status words — never free-form task text.
-const CLAUDE_IDENTITY_FRAME_RE =
-  /^claude(?: code)?(?:\s+(?:ready|idle|done|working|thinking|running))?(?:\s*-\s*action required)?$/
-
-/**
- * Whether a title PRESENTS Claude rather than merely mentioning it, once its leading
- * status decoration is stripped. A "claude" token inside free-form task text is a mention,
- * so it must not take a pane away from its known owner (#8940) — owner-blind consumers
- * keep using `resolveExplicitTerminalTitleAgentType`, whose token match is looser.
- */
-export function isClaudeIdentityFrameTitle(title: string): boolean {
-  // Why segments: a multiplexer prefix (`zsh | ⠋ Claude Code`) would otherwise read as task
-  // text and cost a genuine Claude pane its identity.
-  return getWrapperTitleSegments(title).some((segment) =>
-    CLAUDE_IDENTITY_FRAME_RE.test(
-      stripLeadingAgentTitleDecorationOrEmpty(segment).trim().toLowerCase()
-    )
-  )
-}
+export { isClaudeIdentityFrameTitle } from './agent-title-core'
 
 function isGenericClaudeStatusClaim(title: string, titleAgent: TuiAgent | null): boolean {
   return (

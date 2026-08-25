@@ -232,7 +232,10 @@
         "workspace": {
           "cleanup": {
             "9d6e531da6": "工作区不再存在。",
-            "changedSinceConfirmation": "工作区在确认后发生了更改。请刷新并在删除前重新检查。"
+            "changedSinceConfirmation": "工作区在确认后发生了更改。请刷新并在删除前重新检查。",
+            "gitStatusUnavailable": "Orca 无法检查此工作区的 Git 状态。请重试，或从对应主机的侧边栏或项目列表中将其删除。",
+            "gitStatusUnavailableOlderPeer": "Orca 无法将此 Git 状态检查失败与主机匹配。请更新较旧的已连接端，或从对应主机的侧边栏或项目列表中删除该工作区。",
+            "forceNeedsApproval": "请先检查并确认此工作区，然后再强制删除。"
           }
         },
         "worktrees": {
@@ -3236,6 +3239,14 @@
             "connecting": "正在连接…",
             "workspaceConflict": "工作区冲突",
             "workspaceSyncError": "工作区同步错误"
+          },
+          "CaffeinateStatusSegment": {
+            "active": "生效中",
+            "inactive": "未生效",
+            "ariaLabel": "{{title}}，{{status}}",
+            "onDescription": "始终防止此电脑进入睡眠状态",
+            "autoDescription": "智能体工作时防止电脑进入睡眠状态",
+            "offDescription": "允许系统正常进入睡眠状态"
           },
           "StatusBar": {
             "9659e38343": "端口",
@@ -9178,7 +9189,13 @@
         "agent-awake-copy": {
           "e5995ce268": "智能体工作时保持电脑唤醒",
           "95d3031db2": "在智能体工作时保持此电脑和显示器唤醒。合盖行为遵循此设备的电源设置。",
-          "a42f6fbdd8": "在智能体工作时保持此电脑和显示器唤醒。Orca 还会根据电源策略，在合盖时请求此设备保持唤醒。"
+          "a42f6fbdd8": "在智能体工作时保持此电脑和显示器唤醒。Orca 还会根据电源策略，在合盖时请求此设备保持唤醒。",
+          "modeTitle": "防止电脑休眠"
+        },
+        "AgentAwakeSetting": {
+          "on": "开启",
+          "auto": "智能体",
+          "off": "关闭"
         },
         "agent-status-hooks-copy": {
           "7707c15abb": "智能体状态钩子",
@@ -14557,6 +14574,59 @@
         "presentation": {
           "gitlabMergeRequestNumber": "MR #{{value0}}",
           "githubPullRequestNumber": "PR #{{value0}}"
+        },
+        "browse": {
+          "gitStatusCheckFailed": "Git 状态检查失败",
+          "gitStatusUnverified": "无法验证 Git 状态",
+          "deleteAnyway": "仍然删除",
+          "forceDeleteProjectionOne": "当前有 {{count}} 个工作区显示风险，可能需要强制删除",
+          "forceDeleteProjectionMany": "当前有 {{count}} 个工作区显示风险，可能需要强制删除",
+          "appliedFilters": "已应用的筛选",
+          "removeFilter": "移除筛选 {{value0}}",
+          "chip": {
+            "idleDays": "闲置 {{value0}} 天以上",
+            "neverVisited": "从未访问",
+            "minSize": "至少 {{value0}} MB",
+            "maxSize": "最多 {{value0}} MB",
+            "excludesUnsized": "仅已测量",
+            "excludesStatusless": "有状态",
+            "list": "{{value0}}：{{value1}}",
+            "triState": "{{value0}}：{{value1}}",
+            "only": "仅",
+            "exclude": "排除",
+            "minAhead": "领先 {{value0}} 个以上",
+            "minBehind": "落后 {{value0}} 个以上",
+            "branchQuery": "分支：{{value0}}",
+            "pathPrefix": "路径：{{value0}}",
+            "presence": "{{value0}}：{{value1}}",
+            "has": "有",
+            "none": "无",
+            "completelyEmpty": "没有可丢失的内容",
+            "selectableOnly": "仅可删除",
+            "kind": {
+              "status": "状态",
+              "agent": "代理",
+              "git": "Git",
+              "review": "审查",
+              "reviewState": "审查状态",
+              "reviewProvider": "提供方",
+              "ticket": "工单",
+              "ticketSource": "工单来源",
+              "context": "上下文",
+              "host": "主机",
+              "repo": "仓库",
+              "blocker": "阻塞项",
+              "tier": "安全",
+              "dismissed": "已忽略",
+              "archived": "已归档",
+              "pinned": "已固定",
+              "unread": "未读",
+              "comment": "评论",
+              "prunable": "可修剪",
+              "locked": "已锁定",
+              "retainedAgents": "已完成的代理"
+            }
+          }
         }
       }
     },

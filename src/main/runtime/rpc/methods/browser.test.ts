@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { RpcDispatcher } from '../dispatcher'
 import type { RpcRequest } from '../core'
 import type { OrcaRuntimeService } from '../../orca-runtime'
+import { setRuntimeBrowserCommandsFactory } from '../../runtime-browser-commands-factory'
 import {
   CLIPBOARD_TEXT_MEASURE_YIELD_CODE_UNITS,
   CLIPBOARD_TEXT_WRITE_MAX_BYTES,
@@ -155,6 +156,32 @@ describe('browser RPC methods', () => {
       cleanupSubscription: vi.fn()
     } as unknown as OrcaRuntimeService
     const dispatcher = new RpcDispatcher({ runtime, methods: BROWSER_SCREENCAST_METHODS })
+    setRuntimeBrowserCommandsFactory(() => ({}) as never)
+
+    try {
+      const response = await dispatcher.dispatch(
+        makeRequest('browser.screencast.unsubscribe', {
+          subscriptionId: 'browser-screencast:page-1:test'
+        })
+      )
+
+      expect(runtime.cleanupSubscription).toHaveBeenCalledWith('browser-screencast:page-1:test')
+      expect(response).toMatchObject({
+        ok: true,
+        result: { unsubscribed: true }
+      })
+    } finally {
+      setRuntimeBrowserCommandsFactory(null)
+    }
+  })
+
+  it('rejects browser screencast unsubscribe when no provider resolved', async () => {
+    setRuntimeBrowserCommandsFactory(null)
+    const runtime = {
+      getRuntimeId: () => 'test-runtime',
+      cleanupSubscription: vi.fn()
+    } as unknown as OrcaRuntimeService
+    const dispatcher = new RpcDispatcher({ runtime, methods: BROWSER_SCREENCAST_METHODS })
 
     const response = await dispatcher.dispatch(
       makeRequest('browser.screencast.unsubscribe', {
@@ -162,11 +189,11 @@ describe('browser RPC methods', () => {
       })
     )
 
-    expect(runtime.cleanupSubscription).toHaveBeenCalledWith('browser-screencast:page-1:test')
     expect(response).toMatchObject({
-      ok: true,
-      result: { unsubscribed: true }
+      ok: false,
+      error: { code: 'browser_unavailable' }
     })
+    expect(runtime.cleanupSubscription).not.toHaveBeenCalled()
   })
 
   it('routes browser session and environment controls to the runtime server', async () => {

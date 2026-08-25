@@ -33,6 +33,7 @@ import {
   isPreHandlerPtyStateDiscarded
 } from './pty-pre-handler-buffer'
 import { createPtyInputWriteQueue } from './pty-input-write-queue'
+import { waitAtTerminalPtyPreSpawnE2EBarrier } from './terminal-pty-pre-spawn-e2e-barrier'
 import type { PtyDataMeta } from './pty-dispatcher'
 import type { IpcPtyTransportOptions, PtyConnectResult, PtyTransport } from './pty-transport-types'
 import { createBellDetector } from '../../../../shared/terminal-bell-detector'
@@ -807,6 +808,16 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
       }
 
       try {
+        const preSpawnBarrier = waitAtTerminalPtyPreSpawnE2EBarrier()
+        if (preSpawnBarrier) {
+          await preSpawnBarrier
+          if (destroyed) {
+            return
+          }
+        }
+        if (options.shouldContinue && !options.shouldContinue()) {
+          return
+        }
         // Why: cwd fallback is only for fresh local spawns — reattach keeps the session's cwd and SSH transports resolve cwd on the remote host.
         const shouldSendLocalCwdFallback =
           cwdFallback === 'worktree' && !connectionId && !admittedSessionId

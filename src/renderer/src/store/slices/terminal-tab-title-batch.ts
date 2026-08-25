@@ -1,9 +1,14 @@
 import { deriveGeneratedTabTitle } from '../../../../shared/agent-tab-title'
 import { isDecorativeAgentTitleFrameChange } from '../../../../shared/agent-decorative-title-signature'
+import { relabelCompatibleAgentIdentityFrameForOwner } from '../../../../shared/agent-title-owner'
 import { parseLegacyNumericPaneKey, parsePaneKey } from '../../../../shared/stable-pane-id'
 import type { Tab } from '../../../../shared/tab-types'
 import type { TerminalTab } from '../../../../shared/terminal-tab-types'
 import type { AppState } from '../types'
+import {
+  adoptTerminalTabOwnerMetadataOnlyBuckets,
+  getTerminalTabOwners
+} from './terminal-tab-owner-index'
 
 export type TerminalTabTitleUpdate = { tabId: string; title: string }
 
@@ -46,16 +51,6 @@ function getFallbackTabTitle(tab: TerminalTab): string {
 
 function getTabIdFromPaneKey(paneKey: string): string | null {
   return parsePaneKey(paneKey)?.tabId ?? parseLegacyNumericPaneKey(paneKey)?.tabId ?? null
-}
-
-function buildOwnerIndex(tabsByWorktree: TitleState['tabsByWorktree']): Map<string, string> {
-  const ownerByTabId = new Map<string, string>()
-  for (const [worktreeId, tabs] of Object.entries(tabsByWorktree)) {
-    for (const tab of tabs) {
-      ownerByTabId.set(tab.id, worktreeId)
-    }
-  }
-  return ownerByTabId
 }
 
 function getOwnerStage(
@@ -157,14 +152,21 @@ function finishTitleStages(
   if (sortEpochIncrement > 0) {
     patch.sortEpoch = state.sortEpoch + sortEpochIncrement
   }
+  if (patch.tabsByWorktree) {
+    adoptTerminalTabOwnerMetadataOnlyBuckets(
+      state.tabsByWorktree,
+      patch.tabsByWorktree,
+      stages.keys()
+    )
+  }
   return { patch, runtimeGraphChanged: tabsChanged }
 }
 
 export function applyTerminalTabTitleUpdates(
   state: TitleState,
-  updates: readonly TerminalTabTitleUpdate[],
-  ownerByTabId = buildOwnerIndex(state.tabsByWorktree)
+  updates: readonly TerminalTabTitleUpdate[]
 ): TitleUpdateResult {
+  const ownerByTabId = getTerminalTabOwners(state.tabsByWorktree)
   const stages = new Map<string, OwnerStage>()
   let sortEpochIncrement = 0
   for (const { tabId, title } of updates) {
@@ -178,7 +180,10 @@ export function applyTerminalTabTitleUpdates(
     if (!currentTab || !tabIndexes) {
       continue
     }
-    const nextTitle = title.trim() || getFallbackTabTitle(currentTab)
+    // Why: a wrapped harness emits the inner agent's identity (OMP wraps Pi), so pin those frames
+    // to the launch owner — otherwise the alternating label defeats the decorative check below.
+    const ownedTitle = relabelCompatibleAgentIdentityFrameForOwner(title, currentTab.launchAgent)
+    const nextTitle = ownedTitle.trim() || getFallbackTabTitle(currentTab)
     if (isDecorativeAgentTitleFrameChange(currentTab.title, nextTitle)) {
       updateStageUnifiedLabel(stage, tabId, 'label', currentTab.title)
       continue
@@ -204,9 +209,9 @@ export function applyTerminalTabTitleUpdates(
 
 export function applyGeneratedTabTitleUpdates(
   state: TitleState,
-  updates: readonly GeneratedTabTitleUpdate[],
-  ownerByTabId = buildOwnerIndex(state.tabsByWorktree)
+  updates: readonly GeneratedTabTitleUpdate[]
 ): TitleUpdateResult {
+  const ownerByTabId = getTerminalTabOwners(state.tabsByWorktree)
   if (state.settings?.tabAutoGenerateTitle !== true) {
     return { patch: null, runtimeGraphChanged: false }
   }

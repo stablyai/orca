@@ -39,6 +39,7 @@ function hasTransferredSessionState(session: WorkspaceSessionState): boolean {
     Object.keys(session.browserTabsByWorktree ?? {}).length > 0 ||
     Object.keys(session.unifiedTabs ?? {}).length > 0 ||
     Object.keys(session.tabGroups ?? {}).length > 0 ||
+    Object.keys(session.lastVisitedAtByWorktreeId ?? {}).length > 0 ||
     Object.keys(session.terminalTopologyRevisionByRepoId ?? {}).length > 0
   )
 }
