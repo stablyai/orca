@@ -50,7 +50,12 @@ export function runClaudeCommandProcess(
     const interactiveLogin = isWindowsHostInteractiveLogin
       ? buildWindowsHostInteractiveLoginSpawn(hostClaudeCommand(), args)
       : null
-    const spawnConfig = resolveClaudeInvocation(args, configDir, interactiveLogin, hostClaudeCommand)
+    const spawnConfig = resolveClaudeInvocation(
+      args,
+      configDir,
+      interactiveLogin,
+      hostClaudeCommand
+    )
     const child = spawnProcess({
       program: spawnConfig.command,
       args: spawnConfig.args,

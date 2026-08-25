@@ -99,10 +99,11 @@ describe('listAppliedWorkspaceCleanupFilters', () => {
     filters.size.includeUnsized = false
     filters.status.matchStatusless = false
 
-    expect(list(filters).map((a) => a.id).sort()).toEqual([
-      'size.includeUnsized',
-      'status.matchStatusless'
-    ])
+    expect(
+      list(filters)
+        .map((a) => a.id)
+        .sort()
+    ).toEqual(['size.includeUnsized', 'status.matchStatusless'])
   })
 
   it('gives every constraint a unique, stable id', () => {
