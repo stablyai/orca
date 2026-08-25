@@ -3983,6 +3983,45 @@
         "SkillUpdateRow": {
           "oneLocation": "1 location",
           "manyLocations": "{{value0}} locations"
+        },
+        "count": {
+          "deleteOne": "删除 {{count}} 个技能",
+          "deleteOther": "删除 {{count}} 个技能",
+          "deletedOne": "已删除 {{count}} 个技能",
+          "deletedOther": "已删除 {{count}} 个技能",
+          "deleteFolderOne": "{{count}} 个文件夹",
+          "deleteFolderOther": "{{count}} 个文件夹",
+          "deleteLinkOne": "{{count}} 个链接",
+          "deleteLinkOther": "{{count}} 个链接"
+        },
+        "host": {
+          "local": "此机器",
+          "remote": "已连接的运行时"
+        },
+        "SkillDelete": {
+          "dismissResults": "关闭",
+          "reasonBundled": "Orca 内置技能 — 删除后会恢复",
+          "reasonPlugin": "由插件安装 — 请改为移除插件",
+          "reasonUnowned": "此技能位于 Orca 技能文件夹之外 — 请在其存储位置删除",
+          "reasonMissing": "此技能已不在磁盘上",
+          "reasonStale": "此技能在列表加载后发生了变化 — 请刷新后重试",
+          "placementSummaryParts": "将在 {{roots}} 中删除 {{parts}}。",
+          "placementJoin": " 和 ",
+          "retainedSource": "技能本体仍保留在 {{path}}。",
+          "blockedLine": "{{count}} × {{reason}}",
+          "resultLine": "{{count}} × {{label}}",
+          "statusSkipped": "已跳过",
+          "statusBusy": "忙碌 — 另一项技能操作正在进行",
+          "statusPartial": "部分移除 — 某些文件仍以隐藏名称保留在磁盘上",
+          "statusFailed": "失败 — 未进行任何更改",
+          "statusDeleted": "已删除",
+          "confirmHost": "位于 {{host}}。",
+          "confirmPermanent": "此操作无法撤销。",
+          "failed": "无法删除技能",
+          "hostUnresolved": "仍在查找存储这些技能的计算机。",
+          "hostUpdateRequired": "请更新所选机器上的 Orca 以删除技能。",
+          "nothingOne": "无法从这里删除该技能。",
+          "nothingOther": "所选的 {{count}} 个技能均无法从这里删除。"
         }
       },
       "sidebar": {

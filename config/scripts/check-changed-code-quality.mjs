@@ -155,9 +155,9 @@ export function collectBaseLineBlocks(root, comparisonBase, files = null) {
   // (it filters to ACMRTUB), so read every path the diff touches, deletions included.
   const paths =
     files ??
-    splitNullDelimited(
-      runGit(root, ['diff', '--name-only', '-z', comparisonBase, '--'])
-    ).filter((file) => SOURCE_FILE_PATTERN.test(file))
+    splitNullDelimited(runGit(root, ['diff', '--name-only', '-z', comparisonBase, '--'])).filter(
+      (file) => SOURCE_FILE_PATTERN.test(file)
+    )
   const blocks = []
   for (const file of paths) {
     const result = spawnSync('git', ['show', `${comparisonBase}:${file}`], {
@@ -168,7 +168,12 @@ export function collectBaseLineBlocks(root, comparisonBase, files = null) {
     if (result.status !== 0 || typeof result.stdout !== 'string') {
       continue
     }
-    blocks.push(result.stdout.split(/\r?\n/).map(normalizeSourceLine).filter((line) => line !== ''))
+    blocks.push(
+      result.stdout
+        .split(/\r?\n/)
+        .map(normalizeSourceLine)
+        .filter((line) => line !== '')
+    )
   }
   return blocks
 }
@@ -237,7 +242,10 @@ export function diagnosticTouchesAddedLines(
     if (lineRange === null || !overlapsAddedLines(lineRange.start, lineRange.end, ranges)) {
       return false
     }
-    return !isMovedCode(diagnosticHighlightedLines(root, diagnostic.filename, label.span), baseBlocks)
+    return !isMovedCode(
+      diagnosticHighlightedLines(root, diagnostic.filename, label.span),
+      baseBlocks
+    )
   })
 }
 

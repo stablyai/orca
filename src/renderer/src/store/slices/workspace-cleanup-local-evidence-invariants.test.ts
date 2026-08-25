@@ -1,11 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { composeWorktreeHostIdentity } from '../../../../shared/worktree/host-qualified-identity'
 import { shouldPreserveCleanupInspection } from './workspace-cleanup-local-evidence'
-import {
-  WORKTREE_ID,
-  makeCandidate,
-  makeState
-} from './workspace-cleanup-slice-test-harness'
+import { WORKTREE_ID, makeCandidate, makeState } from './workspace-cleanup-slice-test-harness'
 
 describe('cleanup inspection grace survives upgrades', () => {
   // Why: viewed marks are persisted. Any extra field required of `viewed` is

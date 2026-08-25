@@ -4148,7 +4148,8 @@
           "retry": "Retry",
           "remoteShareNotice": "These skills live on {{host}}. Open Skills on that machine to share them.",
           "viewSwitch": "Show",
-          "searchLinks": "Search links"
+          "searchLinks": "Search links",
+          "deleteSkills": "Delete skills…"
         },
         "SkillFreshnessNudge": {
           "titleOne": "An installed Orca skill is out of date",
@@ -4481,7 +4482,9 @@
           "detailSource": "Source",
           "detailContents": "Contents",
           "skillActions": "Actions for {{value0}}",
-          "viewDetails": "View details"
+          "viewDetails": "View details",
+          "deleteSkill": "Delete…",
+          "notDeletable": "Not deletable"
         },
         "SkillSelectionBar": {
           "selectAll": "Select all {{count}} eligible",
@@ -4521,7 +4524,15 @@
           "retryOne": "Retry {{count}} skill",
           "retryOther": "Retry {{count}} skills",
           "linkOne": "{{count}} link",
-          "linkOther": "{{count}} links"
+          "linkOther": "{{count}} links",
+          "deleteOne": "Delete {{count}} skill",
+          "deleteOther": "Delete {{count}} skills",
+          "deletedOne": "Deleted {{count}} skill",
+          "deletedOther": "Deleted {{count}} skills",
+          "deleteFolderOne": "{{count}} folder",
+          "deleteFolderOther": "{{count}} folders",
+          "deleteLinkOne": "{{count}} link",
+          "deleteLinkOther": "{{count}} links"
         },
         "host": {
           "local": "This machine",
@@ -4598,7 +4609,8 @@
           "exitTooltip": "Exit selection · Esc",
           "title": "Select skills to share",
           "selectAll": "Select all {{count}} eligible",
-          "clear": "Clear"
+          "clear": "Clear",
+          "deleteTitle": "Select skills to delete"
         },
         "SkillDetailDialog": {
           "agents": "Agents",
@@ -4652,6 +4664,32 @@
           "supportingFilesDescription": "Includes readable reference files beyond the main instructions.",
           "runnableFilesDescription": "Includes scripts that an agent may run with your access.",
           "binaryFilesDescription": "Includes opaque assets and an executable binary."
+        },
+        "SkillDelete": {
+          "dismissResults": "Dismiss",
+          "reasonBundled": "Bundled with Orca — it would be restored",
+          "reasonPlugin": "Installed by a plugin — remove the plugin instead",
+          "reasonUnowned": "This skill lives outside Orca’s skill folders — delete it where it is stored",
+          "reasonMissing": "This skill is no longer on disk",
+          "reasonStale": "This skill changed since the list was loaded — refresh and try again",
+          "blockedLine": "{{count}} × {{reason}}",
+          "resultLine": "{{count}} × {{label}}",
+          "statusSkipped": "Skipped",
+          "statusBusy": "Busy — another skill operation is in progress",
+          "statusPartial": "Partly removed — some files are still on disk under a hidden name",
+          "statusFailed": "Failed — nothing changed",
+          "statusDeleted": "Deleted",
+          "confirmHost": "On {{host}}.",
+          "confirmPermanent": "This cannot be undone.",
+          "failed": "Could not delete skills",
+          "hostUnavailable": "Could not reach the selected machine. Refresh and try again.",
+          "hostUnresolved": "Still finding the machine that owns these skills.",
+          "hostUpdateRequired": "Update Orca on the selected machine to delete skills.",
+          "nothingOne": "That skill cannot be deleted from here.",
+          "nothingOther": "None of the {{count}} selected skills can be deleted from here.",
+          "placementSummaryParts": "Removes {{parts}} across {{roots}}.",
+          "placementJoin": " and ",
+          "retainedSource": "The skill itself stays at {{path}}."
         }
       },
       "sidebar": {

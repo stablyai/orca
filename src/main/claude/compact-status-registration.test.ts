@@ -209,7 +209,7 @@ describe('an auto compact claims nothing', () => {
     expect(state.lastStatusByPaneKey.get(PANE_KEY)?.payload.state).toBe('done')
   })
 
-  it('writes no compact-scoped state, so it cannot spend the pane\'s consumed-compact slot', () => {
+  it("writes no compact-scoped state, so it cannot spend the pane's consumed-compact slot", () => {
     const state = createHookListenerState()
     startTurn(state)
 

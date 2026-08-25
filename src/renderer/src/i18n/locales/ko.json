@@ -3973,6 +3973,10 @@
         "SkillUpdateRow": {
           "oneLocation": "1 location",
           "manyLocations": "{{value0}} locations"
+        },
+        "host": {
+          "local": "이 컴퓨터",
+          "remote": "연결된 런타임"
         }
       },
       "sidebar": {

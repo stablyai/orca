@@ -93,10 +93,14 @@ export function listAppliedWorkspaceCleanupFilters(
   }
 
   if (status.workspaceStatuses.length > 0) {
-    add('status.workspaceStatuses', format.list('status', status.workspaceStatuses.length), (f) => ({
-      ...f,
-      status: { ...f.status, workspaceStatuses: [] }
-    }))
+    add(
+      'status.workspaceStatuses',
+      format.list('status', status.workspaceStatuses.length),
+      (f) => ({
+        ...f,
+        status: { ...f.status, workspaceStatuses: [] }
+      })
+    )
   }
   if (!status.matchStatusless) {
     add('status.matchStatusless', format.excludesStatusless(), (f) => ({
@@ -121,10 +125,14 @@ export function listAppliedWorkspaceCleanupFilters(
     }))
   }
   if (agent.retainedDoneAgents !== 'any') {
-    add('agent.retainedDoneAgents', format.triState('retainedAgents', agent.retainedDoneAgents), (f) => ({
-      ...f,
-      agent: { ...f.agent, retainedDoneAgents: 'any' }
-    }))
+    add(
+      'agent.retainedDoneAgents',
+      format.triState('retainedAgents', agent.retainedDoneAgents),
+      (f) => ({
+        ...f,
+        agent: { ...f.agent, retainedDoneAgents: 'any' }
+      })
+    )
   }
 
   if (git.states.length > 0) {

@@ -3968,6 +3968,10 @@
         "SkillUpdateRow": {
           "oneLocation": "1 件の場所",
           "manyLocations": "{{value0}} 件の場所"
+        },
+        "host": {
+          "local": "このマシン",
+          "remote": "接続済みランタイム"
         }
       },
       "sidebar": {
