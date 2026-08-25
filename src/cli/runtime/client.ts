@@ -1,5 +1,10 @@
 import { randomUUID } from 'node:crypto'
 import type { CliStatusResult, RuntimeStatus } from '../../shared/runtime-types'
+import type {
+  RemoteServerUpdateInstallResult,
+  RemoteServerUpdaterSnapshot,
+  RemoteServerUpdaterWaitResult
+} from '../../shared/remote-server-update'
 import type { RuntimeOrchestrationEnvelope } from '../../shared/runtime-rpc-envelope'
 import {
   isOrchestrationMutation,
@@ -140,7 +145,8 @@ export class RuntimeClient {
   private resolveMethodTimeoutMs(method: string, params?: unknown): number {
     if (
       (method === 'orchestration.check' && isWaitingCheck(params)) ||
-      method === 'terminal.wait'
+      method === 'terminal.wait' ||
+      method === 'updater.wait'
     ) {
       const inner = Number(getTimeoutMsParam(params))
       if (Number.isFinite(inner) && inner > 0) {
@@ -183,6 +189,36 @@ export class RuntimeClient {
       }
     }
     return getCliStatus(this.userDataPath)
+  }
+
+  /** Reads the updater snapshot (app version, install support, status, revision) without triggering a check. */
+  async getUpdateStatus(): Promise<RuntimeRpcSuccess<RemoteServerUpdaterSnapshot>> {
+    return await this.call('updater.getStatus')
+  }
+
+  /** Long-polls until the updater status changes past `afterRevision` or the bounded server wait expires. */
+  async waitForUpdateStatus(
+    afterRevision: number,
+    timeoutMs: number
+  ): Promise<RuntimeRpcSuccess<RemoteServerUpdaterWaitResult>> {
+    return await this.call('updater.wait', { afterRevision, timeoutMs })
+  }
+
+  /** Asks the app to start an update check. */
+  async checkForUpdate(
+    includePrerelease = false
+  ): Promise<RuntimeRpcSuccess<RemoteServerUpdaterSnapshot>> {
+    return await this.call('updater.check', { includePrerelease })
+  }
+
+  /** Asks the app to begin downloading the available update. */
+  async downloadUpdate(): Promise<RuntimeRpcSuccess<RemoteServerUpdaterSnapshot>> {
+    return await this.call('updater.download')
+  }
+
+  /** Requests quit-and-install of the downloaded update. */
+  async installUpdate(): Promise<RuntimeRpcSuccess<RemoteServerUpdateInstallResult>> {
+    return await this.call('updater.install')
   }
 
   private async ensureOrchestrationContractCompatible(timeoutMs: number): Promise<void> {

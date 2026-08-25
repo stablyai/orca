@@ -11,6 +11,8 @@ Startup:
   open                      Launch Orca and wait for the runtime to be reachable
   serve                     Start a headless Orca runtime server
   status                    Show app/runtime/graph readiness
+  version                   Show the bundled Orca app and CLI version
+  update                    Check for or install an Orca desktop app update
 
 Diagnostics:
   diagnostics memory        Collect a memory snapshot for Orca and managed terminals
@@ -224,6 +226,8 @@ Common Commands:
   orca open [--json]
   orca serve [--port <port>] [--pairing-address <host>] [--mobile-pairing] [--no-pairing] [--project-root <path>] [--recipe-json] [--json]
   orca status [--json]
+  orca version [--json]
+  orca update [--check] [--prerelease] [--json]
   orca diagnostics memory [--json]
   orca agent-context [--json]
   orca account add [--agent claude|codex] [--json]

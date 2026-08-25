@@ -11,6 +11,7 @@ import type {
 import type {
   RemoteServerUpdateInstallResult,
   RemoteServerUpdaterSnapshot,
+  RemoteServerUpdaterWaitResult,
   RemoteServerUpdateSupport
 } from '../shared/remote-server-update'
 import {
@@ -120,6 +121,8 @@ const UPDATE_CHECK_STALL_TIMEOUT_MS = 45_000
 
 let mainWindowRef: BrowserWindow | null = null
 let currentStatus: UpdateStatus = { state: 'idle' }
+let updateStatusRevision = 0
+const updateStatusListeners = new Set<() => void>()
 let userInitiatedCheck = false
 let onBeforeQuitCleanup: (() => void | Promise<void>) | null = null
 let autoUpdaterInitialized = false
@@ -359,6 +362,10 @@ function sendStatus(status: UpdateStatus, options?: { force?: boolean }): void {
     return
   }
   currentStatus = decoratedStatus
+  updateStatusRevision += 1
+  for (const listener of updateStatusListeners) {
+    listener()
+  }
   mainWindowRef?.webContents.send('updater:status', decoratedStatus)
 }
 
@@ -1196,8 +1203,51 @@ export function getRemoteServerUpdaterSnapshot(runtimeId: string): RemoteServerU
     appVersion: app.getVersion(),
     runtimeId,
     support: getRemoteServerUpdateSupport(),
-    status: getUpdateStatus()
+    status: getUpdateStatus(),
+    // Why: monotonic change counter lets callers long-poll via updater.wait for the
+    // next status without high-frequency polling.
+    revision: updateStatusRevision
   }
+}
+
+/**
+ * Long-polls for the next updater status revision after `afterRevision`, resolving
+ * early on a status change or caller cancellation, otherwise after `timeoutMs`.
+ */
+export function waitForRemoteServerUpdate(
+  runtimeId: string,
+  afterRevision: number,
+  timeoutMs: number,
+  signal?: AbortSignal
+): Promise<RemoteServerUpdaterWaitResult> {
+  if (updateStatusRevision !== afterRevision) {
+    return Promise.resolve({ ...getRemoteServerUpdaterSnapshot(runtimeId), timedOut: false })
+  }
+
+  return new Promise((resolve) => {
+    let settled = false
+    const finish = (timedOut: boolean): void => {
+      if (settled) {
+        return
+      }
+      settled = true
+      clearTimeout(timeout)
+      updateStatusListeners.delete(onChange)
+      signal?.removeEventListener('abort', onAbort)
+      resolve({ ...getRemoteServerUpdaterSnapshot(runtimeId), timedOut })
+    }
+    const onChange = (): void => finish(false)
+    const onAbort = (): void => finish(true)
+    const timeout = setTimeout(() => finish(true), timeoutMs)
+    timeout.unref?.()
+    updateStatusListeners.add(onChange)
+    signal?.addEventListener('abort', onAbort, { once: true })
+
+    // Why: a pre-aborted transport must not leave a waiter registered until timeout.
+    if (signal?.aborted) {
+      finish(true)
+    }
+  })
 }
 
 function assertRemoteServerUpdateAvailable(): void {
@@ -1211,6 +1261,11 @@ export function checkForRemoteServerUpdate(
   options?: UpdateCheckOptions
 ): RemoteServerUpdaterSnapshot {
   assertRemoteServerUpdateAvailable()
+  // Why: a check restarts the flow and would abandon an active download, so if one
+  // is already in flight/finished, attach to it instead of re-checking.
+  if (currentStatus.state === 'downloading' || currentStatus.state === 'downloaded') {
+    return getRemoteServerUpdaterSnapshot(runtimeId)
+  }
   checkForUpdatesFromMenu(options)
   return getRemoteServerUpdaterSnapshot(runtimeId)
 }

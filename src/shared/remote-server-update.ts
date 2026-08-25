@@ -22,6 +22,14 @@ export type RemoteServerUpdaterSnapshot = {
   runtimeId: string
   support: RemoteServerUpdateSupport
   status: UpdateStatus
+  // Why: monotonic counter bumped on every status change; callers pass it back to
+  // updater.wait to long-poll for the next change instead of high-frequency polling.
+  revision: number
+}
+
+/** A snapshot plus whether the wait ended on the bounded timeout rather than a change. */
+export type RemoteServerUpdaterWaitResult = RemoteServerUpdaterSnapshot & {
+  timedOut: boolean
 }
 
 export type RemoteServerUpdateInstallResult = {

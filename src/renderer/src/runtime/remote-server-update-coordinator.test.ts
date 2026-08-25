@@ -52,7 +52,8 @@ const availableSnapshot: RemoteServerUpdaterSnapshot = {
   appVersion: '1.4.0',
   runtimeId: 'runtime-old',
   support: { installMode: 'supervised-headless-serve', automatic: true, reason: 'available' },
-  status: { state: 'available', version: '1.5.0', changelog: null }
+  status: { state: 'available', version: '1.5.0', changelog: null },
+  revision: 1
 }
 
 function transport(

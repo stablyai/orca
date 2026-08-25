@@ -37,7 +37,7 @@ function snapshot(
   status: RemoteServerUpdaterSnapshot['status'],
   runtimeId = 'runtime-old'
 ): RemoteServerUpdaterSnapshot {
-  return { appVersion: '1.4.0', runtimeId, support, status }
+  return { appVersion: '1.4.0', runtimeId, support, status, revision: 0 }
 }
 
 describe('readRemoteServerInstallFailure', () => {

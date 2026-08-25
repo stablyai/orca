@@ -78,6 +78,10 @@ export function printResult<TResult>(
 export function formatCliError(error: unknown, context: CliErrorContext = {}): string {
   const message = error instanceof Error ? error.message : String(error)
   if (error instanceof RuntimeClientError && error.code === 'runtime_unavailable') {
+    const nextSteps = nextStepsFromData(error.data)
+    if (nextSteps.length > 0) {
+      return formatMessageWithNextSteps(message, nextSteps)
+    }
     if (hasOrchestrationRequestId(error.data)) {
       return message
     }

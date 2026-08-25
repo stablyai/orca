@@ -446,7 +446,8 @@ type LongPollClass = 'ask' | 'wait'
 
 // Why: single classifier for long-poll requests (handlers that block on an external event), shared by counter/abort/keepalive. See §3.1.
 function longPollClassOf(request: RpcRequest): LongPollClass | null {
-  if (request.method === 'terminal.wait') {
+  // Why: updater.wait blocks on the next updater status change (bounded server slice), so it shares the wait keepalive/abort wiring.
+  if (request.method === 'terminal.wait' || request.method === 'updater.wait') {
     return 'wait'
   }
   // Why: orchestration.ask blocks unconditionally (default 600 s) holding the

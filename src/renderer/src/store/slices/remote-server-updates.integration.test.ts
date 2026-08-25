@@ -161,7 +161,8 @@ describe('remote server updates mixed inventory', () => {
           automatic: true,
           reason: 'available' as const
         },
-        status: { state: 'available' as const, version: '1.6.0-rc.1.perf', changelog: null }
+        status: { state: 'available' as const, version: '1.6.0-rc.1.perf', changelog: null },
+        revision: 0
       },
       _meta: { runtimeId: `${selector}-runtime` }
     }))

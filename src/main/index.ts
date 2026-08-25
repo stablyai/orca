@@ -135,7 +135,8 @@ import {
   getRemoteServerUpdaterSnapshot,
   installRemoteServerUpdate,
   isQuittingForUpdate,
-  resolveUpdateInstallMode
+  resolveUpdateInstallMode,
+  waitForRemoteServerUpdate
 } from './updater'
 import { configureRemoteServerUpdater } from './runtime/remote-server-updater'
 import type { UpdateCheckOptions } from '../shared/update-status-types'
@@ -689,6 +690,7 @@ installUnhandledRejectionLogging()
 process.env.ORCA_APP_VERSION = app.getVersion()
 configureRemoteServerUpdater({
   getSnapshot: getRemoteServerUpdaterSnapshot,
+  wait: waitForRemoteServerUpdate,
   check: checkForRemoteServerUpdate,
   download: downloadRemoteServerUpdate,
   install: installRemoteServerUpdate

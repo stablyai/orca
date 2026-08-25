@@ -23,9 +23,11 @@ describe('remote server updater adapter', () => {
       appVersion: '1.5.0',
       runtimeId: 'runtime-2',
       support: { installMode: 'interactive', automatic: true, reason: 'available' },
-      status: { state: 'available', version: '1.5.1', changelog: null }
+      status: { state: 'available', version: '1.5.1', changelog: null },
+      revision: 2
     } as const
     const getSnapshot = vi.fn(() => snapshot)
+    const wait = vi.fn(async () => ({ ...snapshot, timedOut: false }))
     const check = vi.fn(() => snapshot)
     const download = vi.fn(() => snapshot)
     const install = vi.fn(() => ({
@@ -34,7 +36,7 @@ describe('remote server updater adapter', () => {
       targetVersion: '1.5.1',
       runtimeId: 'runtime-2'
     }))
-    configureRemoteServerUpdater({ getSnapshot, check, download, install })
+    configureRemoteServerUpdater({ getSnapshot, wait, check, download, install })
 
     expect(getRemoteServerUpdaterSnapshot('runtime-2')).toBe(snapshot)
     expect(checkRemoteServerUpdater('runtime-2')).toBe(snapshot)

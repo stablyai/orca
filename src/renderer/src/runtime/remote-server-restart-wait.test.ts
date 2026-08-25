@@ -23,7 +23,8 @@ const idleSnapshot: RemoteServerUpdaterSnapshot = {
   appVersion: '1.4.0',
   runtimeId: 'runtime-old',
   support,
-  status: { state: 'downloaded', version: '1.5.0' }
+  status: { state: 'downloaded', version: '1.5.0' },
+  revision: 0
 }
 
 function runtime(version: string, runtimeId: string): RuntimeStatus {

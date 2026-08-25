@@ -7,7 +7,8 @@ const snapshot = {
   appVersion: '1.5.0',
   runtimeId: 'runtime-rpc',
   support: { installMode: 'interactive', automatic: true, reason: 'available' },
-  status: { state: 'available', version: '1.5.1', changelog: null }
+  status: { state: 'available', version: '1.5.1', changelog: null },
+  revision: 2
 } as const
 
 function handler(methods: typeof UPDATER_METHODS, name: string) {
@@ -20,6 +21,7 @@ function handler(methods: typeof UPDATER_METHODS, name: string) {
 
 describe('runtime updater RPC methods', () => {
   const getSnapshot = vi.fn(() => snapshot)
+  const wait = vi.fn(async () => ({ ...snapshot, timedOut: false }))
   const check = vi.fn(() => snapshot)
   const download = vi.fn(() => snapshot)
   const install = vi.fn(() => ({
@@ -35,7 +37,7 @@ describe('runtime updater RPC methods', () => {
 
   beforeEach(() => {
     vi.clearAllMocks()
-    configureRemoteServerUpdater({ getSnapshot, check, download, install })
+    configureRemoteServerUpdater({ getSnapshot, wait, check, download, install })
   })
 
   it('exposes status and each update transition', async () => {
@@ -56,6 +58,16 @@ describe('runtime updater RPC methods', () => {
       includePrerelease: false,
       includePerfPrerelease: true
     })
+  })
+
+  it('long-polls for the next status revision, forwarding the abort signal', async () => {
+    const context = { runtime, signal: undefined } as never
+    const result = await handler(UPDATER_METHODS, 'updater.wait')(
+      { afterRevision: 2, timeoutMs: 25_000 },
+      context
+    )
+    expect(result).toMatchObject({ timedOut: false, revision: 2 })
+    expect(wait).toHaveBeenCalledWith('runtime-rpc', 2, 25_000, undefined)
   })
 
   it('enriches status.get without changing the runtime status source', async () => {

@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { quoteCliCommandArgument } from './shell-command-quote'
-import { RuntimeRpcFailureError } from './runtime-client'
+import { RuntimeClientError, RuntimeRpcFailureError } from './runtime-client'
 import {
   formatCliError,
   formatAutomationShow,
@@ -63,6 +63,18 @@ function worktree(overrides: Partial<RuntimeWorktreeRecord> = {}): RuntimeWorktr
 }
 
 describe('formatCliError', () => {
+  it('uses command-specific recovery for an unavailable runtime', () => {
+    const error = new RuntimeClientError(
+      'runtime_unavailable',
+      "Could not reach Orca's desktop updater.",
+      { nextSteps: ['Open Orca, then retry the command.'] }
+    )
+
+    expect(formatCliError(error)).toBe(
+      "Could not reach Orca's desktop updater.\nNext step: Open Orca, then retry the command."
+    )
+  })
+
   it('prints structured computer-use startup recovery steps', () => {
     const error = new RuntimeRpcFailureError({
       id: 'req_1',
