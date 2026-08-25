@@ -8,6 +8,10 @@
 #
 # Migrating a file means replacing its spawn/execFile calls with
 # runProcess/spawnProcess and deleting its line here.
+#
+# The src/main/git/command-runner/* entries are the seven spawn sites that used
+# to live in the single line src/main/git/runner.ts; splitting that file moved
+# them, it did not add any.
 src/cli/handlers/account.ts
 src/cli/handlers/core.ts
 src/cli/handlers/interactive-login-interruption.ts
@@ -56,7 +60,13 @@ src/main/emulator/serve-sim-runtime-materializer.ts
 src/main/emulator/simctl-simulator-devices.ts
 src/main/emulator/simulator-app-visibility.ts
 src/main/external-editor-launch.ts
-src/main/git/runner.ts
+src/main/git/command-runner/exec-file-capture.ts
+src/main/git/command-runner/git-exec-file.ts
+src/main/git/command-runner/git-spawn.ts
+src/main/git/command-runner/git-stream-stdout.ts
+src/main/git/command-runner/spawn-command-capture.ts
+src/main/git/command-runner/spawned-command-tree-kill.ts
+src/main/git/command-runner/wsl-aware-spawn.ts
 src/main/git/wsl-git-read-environment.ts
 src/main/github/gh-utils.ts
 src/main/hooks.ts
