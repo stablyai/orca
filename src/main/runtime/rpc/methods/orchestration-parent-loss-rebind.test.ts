@@ -132,4 +132,46 @@ describe('orchestration parent checkpoint and approved rebind RPC', () => {
       approval_id: null
     })
   })
+
+  it('rejects a legacy Run atomically before changing its Dispatch or checkpoint', async () => {
+    const { db, runtime, ctx, activeRunId } = harness.setup()
+    if (!activeRunId) throw new Error('expected an active Run fixture')
+    const task = db.createTask({ spec: 'legacy parent' })
+    const dispatch = db.createDispatchContext(task.id, 'term_worker')
+    const checkpoint = db.createParentLossCheckpoint({
+      dispatchId: dispatch.id,
+      oldParent: 'term_coord',
+      checkpoint: 'state'
+    })
+    db.db.prepare('UPDATE runs SET legacy = 1 WHERE id = ?').run(activeRunId)
+    vi.mocked(runtime.getLiveTerminalPaneKey).mockImplementation((handle) =>
+      handle === 'term_new_coord'
+        ? 'tab-new:cccccccc-cccc-4ccc-8ccc-cccccccccccc'
+        : harness.coordinatorPaneKey
+    )
+
+    await expect(
+      harness.call(
+        'orchestration.parentRebind',
+        {
+          checkpoint: checkpoint.id,
+          newParent: 'term_new_coord',
+          newParentPaneKey: 'tab-new:cccccccc-cccc-4ccc-8ccc-cccccccccccc',
+          approvedBy: 'human:maintainer',
+          approvalId: 'approval-legacy',
+          leaseMs: 60_000
+        },
+        ctx
+      )
+    ).rejects.toMatchObject({
+      code: 'rebind_not_available',
+      data: { effectsApplied: false, checkpointId: checkpoint.id }
+    })
+    expect(db.getDispatchContextById(dispatch.id)).toMatchObject({ status: 'dispatched' })
+    expect(db.getParentLossCheckpoint(checkpoint.id)).toMatchObject({
+      status: 'checkpointed',
+      approval_id: null,
+      new_parent: null
+    })
+  })
 })

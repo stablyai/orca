@@ -20,21 +20,6 @@ export function createParentLossCheckpoint(
   const id = generateId('checkpoint')
   const checkpointHash = createHash('sha256').update(params.checkpoint).digest('hex')
   try {
-    const updatedRun = this.db
-      .prepare(
-        `UPDATE runs
-         SET coordinator_handle = ?, coordinator_pane_key = ?,
-             consumer_generation = consumer_generation + 1, updated_at = datetime('now')
-         WHERE id = ? AND legacy = 0`
-      )
-      .run(params.newParent, params.newParentPaneKey, checkpoint.run_id)
-    if (updatedRun.changes !== 1) {
-      throw new OrchestrationError(
-        'rebind_not_available',
-        'A non-legacy run is required for parent rebind.',
-        { effectsApplied: false, checkpointId: checkpoint.id }
-      )
-    }
     this.db
       .prepare(
         `INSERT INTO parent_loss_checkpoints
@@ -157,6 +142,21 @@ export function approveParentLossRebind(
           effectsApplied: false,
           checkpointId: checkpoint.id
         }
+      )
+    }
+    const updatedRun = this.db
+      .prepare(
+        `UPDATE runs
+         SET coordinator_handle = ?, coordinator_pane_key = ?,
+             consumer_generation = consumer_generation + 1, updated_at = datetime('now')
+         WHERE id = ? AND legacy = 0`
+      )
+      .run(params.newParent, params.newParentPaneKey, checkpoint.run_id)
+    if (updatedRun.changes !== 1) {
+      throw new OrchestrationError(
+        'rebind_not_available',
+        'A non-legacy run is required for parent rebind.',
+        { effectsApplied: false, checkpointId: checkpoint.id }
       )
     }
     this.db

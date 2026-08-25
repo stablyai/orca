@@ -109,6 +109,26 @@ describe('cross-plane ACK contract', () => {
       missing: expect.arrayContaining(['identityLink.distinctIdentities'])
     })
   })
+
+  it('rejects an empty external control-plane identity', () => {
+    expect(
+      verifyCrossPlaneAck(
+        evidence({
+          identityLink: {
+            orcaIdentity: 'dispatch:ctx_1',
+            externalPlane: '   ',
+            externalIdentity: 'pane:42',
+            linkedBy: 'neutral_coordinator',
+            evidenceId: 'link_1'
+          }
+        })
+      )
+    ).toMatchObject({
+      verified: false,
+      effectsApplied: false,
+      missing: expect.arrayContaining(['identityLink.externalPlane'])
+    })
+  })
 })
 
 describe('cross-plane ACK runtime query-back', () => {
