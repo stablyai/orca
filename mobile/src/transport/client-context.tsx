@@ -11,6 +11,7 @@ import {
   type ReactNode
 } from 'react'
 import type { RpcClient } from './rpc-client'
+import type { StableLogicalRpcClient } from './stable-logical-rpc-client'
 import { subscribeConnectionRevivalTriggers } from './connection-revival-triggers'
 import { HostClientOpenRegistry } from './host-client-open-registry'
 import {
@@ -238,6 +239,13 @@ export function RpcClientProvider({ children }: { children: ReactNode }) {
   const forceReconnect = useCallback(
     async (hostId: string) => {
       const entry = storeRef.current.get(hostId)
+      const logical = entry?.client as Partial<StableLogicalRpcClient> | undefined
+      if (entry && entry.state !== 'auth-failed' && logical?.getActivePath?.() === 'relay') {
+        // Keep a Relay-active host on its existing recovery state; rebuilding the
+        // facade starts the unreachable direct endpoint before Relay can race it.
+        entry.client.notifyForeground('app-resume')
+        return
+      }
       // Why: ownership survives explicit close/re-pair while observers never become synthetic owners.
       const savedRefCount = acquisitionsRef.current.count(hostId)
       manualDemandRef.current.add(hostId)
