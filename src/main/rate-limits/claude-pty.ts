@@ -38,6 +38,11 @@ const FABLE_WEEKLY_LABEL_RE = new RegExp(
   'i'
 )
 const PERCENT_RE = /(\d{1,3})(?:\.\d+)?\s*%\s*(used|consumed|left|remaining|available)/i
+// Claude's plan-usage panel may put the subscription on its own line, for
+// example "Max 20x" or "Pro 5x". Keep this deliberately narrow so a random
+// occurrence of "pro" in the TUI cannot become a package label.
+const PLAN_LABEL_RE =
+  /^(?:(?:current|active)\s+)?(?:(?:subscription|plan)(?:\s+(?:tier|type))?\s*[:-]\s*)?(?:claude\s+)?(max|pro|team|enterprise|go)(?:\s+(\d+(?:\.\d+)?)\s*x?)?$/i
 const ESC = String.fromCharCode(27)
 const BEL = String.fromCharCode(7)
 const OSC_SEQUENCE_RE = new RegExp(`${ESC}\\][^${BEL}]*(?:${BEL}|${ESC}\\\\)`, 'g')
@@ -94,13 +99,32 @@ function extractPercentAfterLabel(
   return null
 }
 
+function extractPlanType(lines: string[]): string | null {
+  // Only inspect the header before the first usage section. This avoids
+  // treating model names or prose in the usage details as a subscription.
+  const firstUsageLine = lines.findIndex(isSectionLabel)
+  const headerLines = firstUsageLine !== -1 ? lines.slice(0, firstUsageLine) : lines
+  for (const line of headerLines) {
+    const match = PLAN_LABEL_RE.exec(line.trim().replace(/\s+/g, ' '))
+    if (!match) {
+      continue
+    }
+    const tier = match[1]
+    const multiplier = match[2]
+    return `${tier.charAt(0).toUpperCase()}${tier.slice(1).toLowerCase()}${multiplier ? ` ${multiplier}x` : ''}`
+  }
+  return null
+}
+
 function parsePtyUsage(output: string): {
   session: RateLimitWindow | null
   weekly: RateLimitWindow | null
   fableWeekly: RateLimitWindow | null
+  planType: string | null
 } {
   const lines = output.split(/\r\n|\n|\r/)
 
+  const planType = extractPlanType(lines)
   const sessionPct = extractPercentAfterLabel(lines, (line) => SESSION_RE.test(line))
   const weeklyPct = extractPercentAfterLabel(lines, matchesWeeklyLabel)
   const fableWeeklyPct = extractPercentAfterLabel(lines, matchesFableUsageLabel)
@@ -146,7 +170,7 @@ function parsePtyUsage(output: string): {
         }
       : null
 
-  return { session, weekly, fableWeekly }
+  return { session, weekly, fableWeekly, planType }
 }
 
 // Why: these substrings indicate the /usage TUI panel has finished
@@ -352,13 +376,14 @@ export async function fetchViaPty(options?: {
         cleanupHiddenRateLimitPty(term, termDisposables, { kill: true })
         // Even on timeout, try to parse whatever we collected
         const clean = stripTerminalControlSequences(output)
-        const { session, weekly, fableWeekly } = parsePtyUsage(clean)
+        const { session, weekly, fableWeekly, planType } = parsePtyUsage(clean)
         if (session || weekly || fableWeekly) {
           resolve({
             provider: 'claude',
             session,
             weekly,
             fableWeekly,
+            planType,
             updatedAt: Date.now(),
             error: null,
             status: 'ok'
@@ -407,7 +432,7 @@ export async function fetchViaPty(options?: {
       cleanupHiddenRateLimitPty(term, termDisposables, { kill: true })
 
       const clean = stripTerminalControlSequences(output)
-      const { session, weekly, fableWeekly } = parsePtyUsage(clean)
+      const { session, weekly, fableWeekly, planType } = parsePtyUsage(clean)
 
       if (!session && !weekly && !fableWeekly) {
         resolve({
@@ -424,6 +449,7 @@ export async function fetchViaPty(options?: {
           session,
           weekly,
           fableWeekly,
+          planType,
           updatedAt: Date.now(),
           error: null,
           status: 'ok'
@@ -508,12 +534,13 @@ export async function fetchViaPty(options?: {
           timeout = null
         }
         const clean = stripTerminalControlSequences(output)
-        const { session, weekly, fableWeekly } = parsePtyUsage(clean)
+        const { session, weekly, fableWeekly, planType } = parsePtyUsage(clean)
         resolve({
           provider: 'claude',
           session,
           weekly,
           fableWeekly,
+          planType,
           updatedAt: Date.now(),
           error:
             session || weekly || fableWeekly

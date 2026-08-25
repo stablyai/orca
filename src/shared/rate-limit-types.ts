@@ -78,7 +78,7 @@ export type ProviderRateLimits = {
       grantedAt: number | null
     }[]
   } | null
-  /** Subscription plan tier for the active account (Codex `plan_type`, e.g. "plus"). */
+  /** Provider-reported subscription tier/package label (for example "plus" or "Max 20x"). */
   planType?: string | null
   /** Unix ms timestamp of the last successful data update. */
   updatedAt: number

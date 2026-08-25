@@ -87,6 +87,21 @@ describe('UsageRow', () => {
     expect(markup).not.toContain('width:25%')
   })
 
+  it('renders the package label beside the provider name', () => {
+    const markup = renderToStaticMarkup(
+      <UsageRow
+        p={{ ...signedOutCodex, planType: 'pro_5x' }}
+        display="used"
+        state={{ kind: 'sign-in', statusLabel: 'not signed in' }}
+        showSignInAction={false}
+        now={mocks.now}
+      />
+    )
+
+    expect(markup).toContain('Codex')
+    expect(markup).toContain('Pro 5x')
+  })
+
   it('uses one shared clock for live reset labels across the roster', () => {
     const sessionReset = mocks.now + 2 * 60_000
     const weeklyReset = mocks.now + 7 * 24 * 60 * 60_000

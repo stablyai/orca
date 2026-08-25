@@ -448,6 +448,25 @@ describe('getWindowSections', () => {
 })
 
 describe('ProviderPanel reset rendering', () => {
+  it('renders a provider-reported subscription package in the detail header', () => {
+    const p = provider({
+      provider: 'claude',
+      status: 'ok',
+      planType: 'max_20x',
+      session: {
+        usedPercent: 20,
+        windowMinutes: 300,
+        resetsAt: null,
+        resetDescription: null
+      }
+    })
+
+    const markup = renderToStaticMarkup(ProviderPanel({ p }))
+
+    expect(markup).toContain('Claude')
+    expect(markup).toContain('Max 20x')
+  })
+
   it('renders the Fable reset countdown when Claude reports a reset timestamp', () => {
     vi.useFakeTimers()
     vi.setSystemTime(new Date(2026, 6, 3, 20, 0))

@@ -1,8 +1,8 @@
 // Pure formatting for the consolidated Usage roster, split out so it can be unit
 // tested without pulling in React / UI dependencies.
 
-// "plus" -> "Plus", "chatgpt_business" -> "ChatGPT Business". Codex is the only
-// provider that reports a plan today; others render just the name.
+// "plus" -> "Plus", "chatgpt_business" -> "ChatGPT Business". Provider
+// adapters own the raw value; this only turns it into a compact display label.
 export function formatPlanLabel(planType: string | null | undefined): string | null {
   const trimmed = planType?.trim()
   if (!trimmed) {
