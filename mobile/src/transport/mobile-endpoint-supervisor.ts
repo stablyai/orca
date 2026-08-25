@@ -1,5 +1,6 @@
 import type { MobileEndpointSupervisorDependencies } from './mobile-endpoint-supervisor-contract'
 import { DirectReturnProbe } from './mobile-direct-return-probe'
+import { HostDirectEndpointRefresh } from './mobile-direct-endpoint-refresh'
 import { RelayReconnectController } from './mobile-relay-reconnect-controller'
 import { RelayLeaseRotationTimer } from './mobile-relay-lease-rotation-timer'
 import { MobileEndpointHysteresis } from './mobile-endpoint-hysteresis'
@@ -44,6 +45,7 @@ export class MobileEndpointSupervisor {
   private readonly directProbe: DirectReturnProbe
   private readonly directGrace: MobileRelayDirectGraceTimer
   private readonly sessionEstablisher: MobileRelaySessionEstablisher
+  private readonly directEndpointRefresh: HostDirectEndpointRefresh
 
   constructor(
     private readonly logical: StableLogicalRpcClient,
@@ -78,6 +80,7 @@ export class MobileEndpointSupervisor {
     this.directGrace = new MobileRelayDirectGraceTimer(dependencies, logical, () => {
       void this.recoverRelay(true, true)
     })
+    this.directEndpointRefresh = new HostDirectEndpointRefresh(dependencies.saveHost)
     this.sessionEstablisher = new MobileRelaySessionEstablisher({
       logical,
       controller: this.relayReconnect,
@@ -103,6 +106,9 @@ export class MobileEndpointSupervisor {
       scheduleLease: (expiry) =>
         this.leaseRotation.scheduleFromLease(this.stopped || !this.foreground ? null : expiry),
       scheduleDirectProbe: () => this.directProbe.schedule(),
+      refreshDirectEndpoints: async (client) => {
+        this.host = await this.directEndpointRefresh.apply(client, this.host)
+      },
       onBookkeepingError: (error) =>
         this.logRelay('relay bookkeeping failed after migration', error.message.slice(0, 80)),
       onDialFailure: (error) =>
@@ -111,6 +117,9 @@ export class MobileEndpointSupervisor {
     this.directProbe = new DirectReturnProbe(dependencies, {
       hysteresis: this.hysteresis,
       host: () => this.host,
+      refreshDirectEndpoints: async () => {
+        this.host = await this.directEndpointRefresh.apply(this.logical, this.host)
+      },
       canSchedule: () =>
         !this.stopped && this.foreground && this.logical.getActivePath() === 'relay',
       canAttempt: () => !this.stopped && this.foreground && !this.operationInFlight,
@@ -344,4 +353,5 @@ export class MobileEndpointSupervisor {
       }
     }
   }
+
 }

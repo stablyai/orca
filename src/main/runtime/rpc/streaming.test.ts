@@ -24,6 +24,7 @@ describe('RpcDispatcher streaming', () => {
   it('passes pairing authority to streaming handlers', async () => {
     const pairing = {
       getEndpoints: vi.fn(),
+      getDirectEndpoints: vi.fn(),
       provisionRelay: vi.fn()
     }
     let receivedPairing: unknown
