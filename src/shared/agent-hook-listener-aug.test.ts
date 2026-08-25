@@ -81,7 +81,7 @@ describe('shared agent-hook-listener: aug (Auggie)', () => {
     expect(event?.payload.lastAssistantMessage).toBe('file contents')
   })
 
-  it('resolves the prompt from nested conversation.userPrompt on Stop', () => {
+  it('resolves the prompt from nested conversation.userPrompt on Stop and marks it explicit', () => {
     const event = normalizeAndAccept(state, 'aug', {
       hook_event_name: 'Stop',
       agent_stop_cause: 'end_turn',
@@ -90,6 +90,7 @@ describe('shared agent-hook-listener: aug (Auggie)', () => {
     expect(event?.payload.state).toBe('done')
     expect(event?.payload.prompt).toBe('fix the bug')
     expect(event?.payload.lastAssistantMessage).toBe('done, fixed it')
+    expect(event?.hasExplicitPrompt).toBe(true)
   })
 
   it('marks interrupted when agent_stop_cause is interrupted', () => {

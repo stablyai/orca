@@ -210,13 +210,8 @@ export function clearPaneCacheState(state: HookListenerState, paneKey: string): 
   state.codexLeadStateByPaneKey.delete(paneKey)
 }
 
-/** Does this pane still hold anything that can ASSERT a state — a stored row, or a Claude latch that
- *  `resolveClaudePaneState` would re-gate `working` from on the pane's next event?
- *
- *  Deliberately lives next to `clearPaneCacheState` above and enumerates the claim-bearing subset of
- *  what that function deletes: the two must be edited together, and keeping them three lines apart in
- *  one file is what makes that obvious. Prompt/tool/transcript caches are excluded — they render a
- *  row, they never create one. */
+/** Claim-bearing subset of what `clearPaneCacheState` deletes (edit both together); excludes
+ *  prompt/tool/transcript caches, which render a row but never create one. */
 export function paneHasStateClaims(state: HookListenerState, paneKey: string): boolean {
   return (
     state.lastStatusByPaneKey.has(paneKey) ||
@@ -4698,6 +4693,8 @@ export function normalizeHookPayload(
   const promptText = extractedPrompt.text
   let resolvedPromptText = promptText
   let hasTranscriptPromptEvidence = false
+  // Why: Auggie's Stop-only nested conversation.userPrompt isn't visible to extractedPrompt/hasExplicitUserPrompt.
+  let auggieStopPromptExplicit = false
   // Why: exhaustive switch so a new AgentHookSource fails typecheck here instead of silently misrouting.
   let payload: ParsedAgentStatusPayload | null
   switch (source) {
@@ -4823,8 +4820,7 @@ export function normalizeHookPayload(
       payload = normalizeKimiEvent(state, eventName, promptText, paneKey, hookPayloadRecord)
       break
     case 'aug':
-      // Why: Auggie's only prompt field is the nested conversation.userPrompt, present only on
-      // Stop (with includeConversationData) — extractPromptText only reads top-level keys.
+      // Why: Auggie's only prompt field is nested conversation.userPrompt (Stop only); extractPromptText misses it.
       if (
         typeof hookPayloadRecord.conversation === 'object' &&
         hookPayloadRecord.conversation !== null
@@ -4835,6 +4831,7 @@ export function normalizeHookPayload(
         )
         if (conversationPrompt) {
           resolvedPromptText = conversationPrompt
+          auggieStopPromptExplicit = true
         }
       }
       payload = normalizeAuggieEvent(
@@ -4874,13 +4871,15 @@ export function normalizeHookPayload(
             ? hasExplicitPromptForSource(source, eventName, promptText, hookPayloadRecord)
               ? true
               : undefined
-            : hasExplicitUserPrompt(
-                source,
-                eventName,
-                extractedPrompt,
-                resolvedPromptText,
-                hasTranscriptPromptEvidence
-              ),
+            : source === 'aug' && auggieStopPromptExplicit
+              ? true
+              : hasExplicitUserPrompt(
+                  source,
+                  eventName,
+                  extractedPrompt,
+                  resolvedPromptText,
+                  hasTranscriptPromptEvidence
+                ),
         promptInteractionKey,
         hookEventName: typeof eventName === 'string' ? eventName : undefined,
         providerPromptId,

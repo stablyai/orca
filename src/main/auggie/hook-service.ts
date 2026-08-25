@@ -1,3 +1,4 @@
+import { posix as pathPosix } from 'node:path'
 import type { SFTPWrapper } from 'ssh2'
 import type { AgentHookInstallState, AgentHookInstallStatus } from '../../shared/agent-hook-types'
 import {
@@ -30,8 +31,7 @@ import {
   removeManagedHooks
 } from './hook-settings'
 
-// Why: Auggie treats stdout as control JSON (permissionDecision/hookSpecificOutput); unlike
-// Claude's PreToolUse hooks, Orca's is observe-only, so the script must print nothing.
+// Why: Auggie treats stdout as control JSON, unlike Claude, so the script must print nothing.
 function getManagedScript(target: 'local' | 'posix' = 'local'): string {
   if (target === 'local' && process.platform === 'win32') {
     return [
@@ -55,8 +55,7 @@ function getManagedScript(target: 'local' | 'posix' = 'local'): string {
     'if [ -z "$ORCA_AGENT_HOOK_PORT" ] || [ -z "$ORCA_AGENT_HOOK_TOKEN" ] || [ -z "$ORCA_PANE_KEY" ]; then',
     '  exit 0',
     'fi',
-    // Why: post form fields because path-bearing payloads are unsafe in hand-built JSON.
-    // Why: pipe payload to curl stdin (`payload@-`) to keep large tool output off the command line.
+    // Why: form fields (not hand-built JSON) with payload piped to curl stdin, keeping it off the command line.
     'printf \'%s\' "$payload" | curl -sS -X POST "http://127.0.0.1:${ORCA_AGENT_HOOK_PORT}/hook/aug" \\',
     '  --connect-timeout 0.5 --max-time 1.5 \\',
     '  -H "Content-Type: application/x-www-form-urlencoded" \\',
@@ -131,7 +130,12 @@ export class AuggieHookService {
   async installRemote(sftp: SFTPWrapper, remoteHome: string): Promise<AgentHookInstallStatus> {
     const remoteConfigPath = getRemoteConfigPath(remoteHome)
     const remoteScriptFileName = getPosixManagedScriptFileName()
-    const remoteScriptPath = `${remoteHome.replace(/\/$/, '')}/.orca/agent-hooks/${remoteScriptFileName}`
+    const remoteScriptPath = pathPosix.join(
+      remoteHome,
+      '.orca',
+      'agent-hooks',
+      remoteScriptFileName
+    )
     try {
       const config = await readHooksJsonRemote(sftp, remoteConfigPath)
       if (!config) {

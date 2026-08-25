@@ -1,5 +1,5 @@
 import { homedir } from 'node:os'
-import { join } from 'node:path'
+import { join, posix as pathPosix } from 'node:path'
 import {
   buildManagedCommandHook,
   createManagedCommandMatcher,
@@ -11,9 +11,8 @@ import {
   type HooksConfig
 } from '../agent-hooks/installer-utils'
 
-// Why: Auggie's `command` field must be a path to a script ending in .sh/.ps1/.cmd/.bat — a
-// compound shell string (the wrappers every other Claude-shaped agent uses) is rejected. The
-// managed command is therefore the bare absolute script path, not a wrapped invocation.
+// Why: Auggie's `command` must be a bare script path (.sh/.ps1/.cmd/.bat) — it rejects the
+// compound shell wrapper every other Claude-shaped agent uses.
 export type AuggieEventDefinition = {
   eventName: 'SessionStart' | 'SessionEnd' | 'PreToolUse' | 'PostToolUse' | 'Stop' | 'PromptSubmit'
   // Why: matcher is unsupported (and unused) on session/turn-boundary events per the docs.
@@ -39,12 +38,11 @@ export function getConfigPath(): string {
 }
 
 export function getRemoteConfigPath(remoteHome: string): string {
-  return `${remoteHome.replace(/\/$/, '')}/.augment/settings.json`
+  return pathPosix.join(remoteHome, '.augment', 'settings.json')
 }
 
-// Why: `.sh` has no Windows interpreter and `.cmd` runs via cmd.exe — platforms cannot share one file.
-// Filename is prefixed with the 'aug' agent id (not 'auggie') to match the `${agent}-hook.*`
-// convention every other managed script follows (enforced by managed-hook-script-refresh.test.ts).
+// Why: `.sh`/`.cmd` can't share one file across platforms; filename uses agent id 'aug' (not
+// 'auggie') to match the `${agent}-hook.*` convention every managed script follows.
 export function getManagedScriptFileName(): string {
   return process.platform === 'win32' ? 'aug-hook.cmd' : getPosixManagedScriptFileName()
 }
@@ -57,9 +55,8 @@ export function getManagedScriptPath(): string {
   return getSharedManagedScriptPath(getManagedScriptFileName())
 }
 
-// Why: no wrapping — Auggie validates the extension and rejects a compound shell command, so
-// the config command is the literal absolute path (loses $HOME-relative portability; Kimi
-// already accepts the same tradeoff for its non-standard invocation shape).
+// Why: no wrapping — the literal absolute path loses $HOME-relative portability, a tradeoff
+// Kimi already accepts for its own non-standard invocation shape.
 export function getManagedHook(scriptPath: string): HookCommandConfig {
   return buildManagedCommandHook(scriptPath, MANAGED_HOOK_TIMEOUT_MILLISECONDS)
 }
