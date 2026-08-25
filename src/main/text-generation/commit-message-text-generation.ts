@@ -54,6 +54,7 @@ import type { SourceControlAiOperation } from '../../shared/source-control-ai-ty
 import { formatLinkedIssueTemplateValue } from '../../shared/source-control-ai-action-variables'
 import { renderSourceControlActionCommandTemplate } from '../../shared/source-control-ai-actions'
 import { resolveCliCommand } from '../codex-cli/command'
+import { withCliRuntimeOnPath } from '../../shared/node-cli-command-resolution'
 import {
   resolveCodexHomeProcessLockKeyForSpawnEnv,
   withCodexHomeProcessLock
@@ -344,7 +345,7 @@ export async function discoverCommitMessageModelsLocal(
               : planned.plan.binary
           const { spawnCmd, spawnArgs } = getSpawnArgsForWindows(resolvedBinary, planned.plan.args)
           child = spawn(spawnCmd, spawnArgs, {
-            env: spawnEnv,
+            env: withCliRuntimeOnPath(resolvedBinary, spawnEnv),
             stdio: [stdinMode, 'pipe', 'pipe'],
             windowsHide: true
           })

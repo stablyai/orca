@@ -14,7 +14,8 @@ import {
 } from '../../main/claude-accounts/keychain'
 import {
   getVersionManagerBinPaths,
-  resolveCliCommand
+  resolveCliCommand,
+  withCliRuntimeOnPath
 } from '../../shared/node-cli-command-resolution'
 import {
   getSpawnArgsForWindows,
@@ -113,7 +114,13 @@ async function runAgentLoginInTerminal(
       )
       return
     }
-    const env = addAgentNodePaths({ ...stripElectronRunAsNode(process.env), ...extraEnv })
+    // Why paired after the seed: addAgentNodePaths prepends the *newest* version
+    // manager bin, which is not necessarily where this CLI lives. Pairing last puts
+    // the CLI's own node in front of that seed (stablyai/orca#10932).
+    const env = withCliRuntimeOnPath(
+      resolvedCommand,
+      addAgentNodePaths({ ...stripElectronRunAsNode(process.env), ...extraEnv })
+    )
     const consoleStdio = stdioForWindowsInteractiveChild(json)
     let child: ReturnType<typeof spawn>
     try {

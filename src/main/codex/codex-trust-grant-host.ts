@@ -43,6 +43,8 @@ export function resolveCodexTrustGrantHost(host: CodexTrustGrantHost): ResolvedC
       buildRequest: (input) => ({
         invocation: {
           command: 'wsl.exe',
+          // Why null: the guest resolves `codex` inside the distro, so a host path pairs nothing.
+          cliPath: null,
           args: buildWslCodexAppServerArgs(host.distro, host.linuxRuntimeHome),
           timeoutMs: WSL_GRANT_TIMEOUT_MS
         },
