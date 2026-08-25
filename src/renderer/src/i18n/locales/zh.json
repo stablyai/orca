@@ -3240,6 +3240,14 @@
             "workspaceConflict": "工作区冲突",
             "workspaceSyncError": "工作区同步错误"
           },
+          "CaffeinateStatusSegment": {
+            "active": "生效中",
+            "inactive": "未生效",
+            "ariaLabel": "{{title}}，{{status}}",
+            "onDescription": "始终防止此电脑进入睡眠状态",
+            "autoDescription": "智能体工作时防止电脑进入睡眠状态",
+            "offDescription": "允许系统正常进入睡眠状态"
+          },
           "StatusBar": {
             "9659e38343": "端口",
             "d1e1a7a6bf": "资源管理器",
@@ -9181,7 +9189,13 @@
         "agent-awake-copy": {
           "e5995ce268": "智能体工作时保持电脑唤醒",
           "95d3031db2": "在智能体工作时保持此电脑和显示器唤醒。合盖行为遵循此设备的电源设置。",
-          "a42f6fbdd8": "在智能体工作时保持此电脑和显示器唤醒。Orca 还会根据电源策略，在合盖时请求此设备保持唤醒。"
+          "a42f6fbdd8": "在智能体工作时保持此电脑和显示器唤醒。Orca 还会根据电源策略，在合盖时请求此设备保持唤醒。",
+          "modeTitle": "防止电脑休眠"
+        },
+        "AgentAwakeSetting": {
+          "on": "开启",
+          "auto": "智能体",
+          "off": "关闭"
         },
         "agent-status-hooks-copy": {
           "7707c15abb": "智能体状态钩子",

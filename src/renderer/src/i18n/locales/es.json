@@ -3225,6 +3225,14 @@
             "workspaceConflict": "Conflicto del espacio de trabajo",
             "workspaceSyncError": "Error de sincronización del espacio de trabajo"
           },
+          "CaffeinateStatusSegment": {
+            "active": "Activo",
+            "inactive": "Inactivo",
+            "ariaLabel": "{{title}}, {{status}}",
+            "onDescription": "Mantener esta computadora activa en todo momento",
+            "autoDescription": "Mantener la computadora activa mientras un agente está trabajando",
+            "offDescription": "Permitir que el sistema entre en suspensión normalmente"
+          },
           "StatusBar": {
             "9659e38343": "Puertos",
             "d1e1a7a6bf": "Administrador de recursos",
@@ -9181,7 +9189,13 @@
         "agent-awake-copy": {
           "e5995ce268": "Mantener la computadora activa mientras los agentes están trabajando",
           "95d3031db2": "Mantiene esta computadora y la pantalla activas mientras los agentes están trabajando. El comportamiento al cerrar la tapa sigue la configuración de energía de este dispositivo.",
-          "a42f6fbdd8": "Mantiene esta computadora y la pantalla activas mientras los agentes están trabajando. Orca también le pide a este dispositivo que permanezca activo cuando la tapa está cerrada, sujeto a su política de energía."
+          "a42f6fbdd8": "Mantiene esta computadora y la pantalla activas mientras los agentes están trabajando. Orca también le pide a este dispositivo que permanezca activo cuando la tapa está cerrada, sujeto a su política de energía.",
+          "modeTitle": "Mantener la computadora activa"
+        },
+        "AgentAwakeSetting": {
+          "on": "Activado",
+          "auto": "Agente",
+          "off": "Desactivado"
         },
         "agent-status-hooks-copy": {
           "7707c15abb": "Hooks de estado del agente",
