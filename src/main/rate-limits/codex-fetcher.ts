@@ -19,6 +19,9 @@ import {
   type CodexRateWindowSnapshot
 } from './codex-rate-limit-window-classification'
 import { resolveCodexCommand } from '../codex-cli/command'
+// Why: import from the shared module, not the codex-cli re-export, so a test that
+// mocks '../codex-cli/command' does not have to restate this pure helper.
+import { withCliRuntimeOnPath } from '../../shared/node-cli-command-resolution'
 import { CODEX_READ_ONLY_APP_SERVER_ARGS } from '../codex-cli/codex-read-only-app-server-args'
 import { withMacTailscaleDnsHint } from '../network/macos-tailscale-dns-diagnostic'
 import { getCmdExePath, getSpawnArgsForWindows } from '../win32-utils'
@@ -648,10 +651,10 @@ async function fetchViaRpc(options?: FetchCodexRateLimitsOptions): Promise<Provi
       // Why: scope the selected account to this subprocess only; never mutate process.env globally.
       // Why windowsHide: without it, background cmd.exe /c polls flash a console window on Windows.
       windowsHide: true,
-      env: {
+      env: withCliRuntimeOnPath(codexCommand, {
         ...(wslCodex ? cloneProcessEnvWithoutCodexHome() : process.env),
         ...(options?.codexHomePath && !wslCodex ? { CODEX_HOME: options.codexHomePath } : {})
-      }
+      })
     })
 
     let timeout: ReturnType<typeof setTimeout> | null = null
@@ -1005,11 +1008,11 @@ async function fetchViaPty(options?: FetchCodexRateLimitsOptions): Promise<Provi
       cols: 120,
       rows: 40,
       cwd: resolveHiddenRateLimitPtyCwd(),
-      env: {
+      env: withCliRuntimeOnPath(codexCommand, {
         ...(wslCodex ? cloneProcessEnvWithoutCodexHome() : process.env),
         TERM: 'xterm-256color',
         ...(options?.codexHomePath && !wslCodex ? { CODEX_HOME: options.codexHomePath } : {})
-      }
+      })
     })
     const termDisposables: { dispose: () => void }[] = [registerHiddenRateLimitPty(term)]
 

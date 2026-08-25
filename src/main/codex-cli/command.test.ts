@@ -4,6 +4,7 @@ import { delimiter, dirname, join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import {
   getVersionManagerBinPaths,
+  withCliRuntimeOnPath,
   resolveClaudeCommand,
   resolveCliCommands,
   resolveCodexCommand
@@ -311,5 +312,61 @@ describe('getVersionManagerBinPaths', () => {
 
     expect(paths).toContain(join(root, '.local', 'bin'))
     expect(paths).toContain(join(root, 'AppData', 'Roaming', 'npm'))
+  })
+})
+
+describe('withCliRuntimeOnPath', () => {
+  it('pairs a version-manager CLI with its sibling node (stablyai/orca#10932)', () => {
+    const root = mkdtempSync(join(tmpdir(), 'orca-pair-'))
+    const v20 = join(root, '.nvm', 'versions', 'node', 'v20.11.0', 'bin')
+    const v22 = join(root, '.nvm', 'versions', 'node', 'v22.9.0', 'bin')
+    makeExecutable(join(v20, 'node'))
+    makeExecutable(join(v20, 'codex'))
+    makeExecutable(join(v22, 'node'))
+
+    // default is v22, but codex only exists under v20
+    const env = { PATH: [v22, '/usr/bin'].join(delimiter) }
+    const codex = resolveCodexCommand({ platform: 'darwin', pathEnv: env.PATH, homePath: root })
+    expect(codex).toBe(join(v20, 'codex'))
+
+    const paired = withCliRuntimeOnPath(codex, env, { platform: 'darwin' })
+    // the shebang's `node` must now come from v20, not v22
+    expect(paired.PATH.split(delimiter)[0]).toBe(v20)
+  })
+
+  it('leaves PATH untouched for a CLI whose directory ships no node', () => {
+    const root = mkdtempSync(join(tmpdir(), 'orca-pair-'))
+    const brew = join(root, 'opt', 'homebrew', 'bin')
+    makeExecutable(join(brew, 'codex'))
+    const env = { PATH: '/usr/bin' }
+
+    expect(withCliRuntimeOnPath(join(brew, 'codex'), env, { platform: 'darwin' })).toBe(env)
+  })
+
+  it('leaves PATH untouched for a bare command name', () => {
+    const env = { PATH: '/usr/bin' }
+    expect(withCliRuntimeOnPath('codex', env, { platform: 'darwin' })).toBe(env)
+  })
+
+  it('is a no-op when the runtime directory already leads PATH', () => {
+    const root = mkdtempSync(join(tmpdir(), 'orca-pair-'))
+    const v20 = join(root, '.nvm', 'versions', 'node', 'v20.11.0', 'bin')
+    makeExecutable(join(v20, 'node'))
+    makeExecutable(join(v20, 'codex'))
+    const env = { PATH: [v20, '/usr/bin'].join(delimiter) }
+
+    expect(withCliRuntimeOnPath(join(v20, 'codex'), env, { platform: 'darwin' })).toBe(env)
+  })
+
+  it('writes the Windows Path key without leaving a differently-cased twin', () => {
+    const root = mkdtempSync(join(tmpdir(), 'orca-pair-'))
+    const v20 = join(root, '.nvm', 'versions', 'node', 'v20.11.0', 'bin')
+    makeExecutable(join(v20, 'node.exe'))
+    makeExecutable(join(v20, 'codex.cmd'))
+    const env = { Path: 'C:\\Windows' }
+
+    const paired = withCliRuntimeOnPath(join(v20, 'codex.cmd'), env, { platform: 'win32' })
+    expect(paired.Path.split(';')[0]).toBe(v20)
+    expect((paired as NodeJS.ProcessEnv).PATH).toBeUndefined()
   })
 })

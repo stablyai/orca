@@ -1,6 +1,6 @@
 import { accessSync, constants, existsSync, readdirSync, statSync } from 'node:fs'
 import { homedir } from 'node:os'
-import { delimiter, dirname, join } from 'node:path'
+import { delimiter, dirname, isAbsolute, join } from 'node:path'
 
 type ResolveCommandOptions = {
   pathEnv?: string | null
@@ -207,6 +207,55 @@ export function resolveCodexCommand(options: ResolveCommandOptions = {}): string
 
 export function resolveClaudeCommand(options: ResolveCommandOptions = {}): string {
   return resolveCliCommand('claude', options)
+}
+
+/**
+ * Put a resolved CLI's own directory ahead of PATH when that directory ships a
+ * sibling `node`.
+ *
+ * Why: `resolveCliCommand` falls back to scanning every version-manager install
+ * when PATH misses, so it can hand back `~/.nvm/versions/node/v20.x/bin/codex`
+ * while PATH still leads with v22. The CLI's `#!/usr/bin/env node` shebang then
+ * loads a v20-built native module under a v22 ABI and the agent dies on first
+ * require (stablyai/orca#10932). Pair the binary with the runtime it was
+ * installed against instead.
+ *
+ * Only prepends when the sibling `node` really exists, so a CLI resolved from a
+ * plain directory (Homebrew, /usr/local/bin) leaves PATH untouched.
+ */
+export function withCliRuntimeOnPath<T extends NodeJS.ProcessEnv>(
+  commandPath: string,
+  env: T,
+  options: Pick<ResolveCommandOptions, 'platform'> = {}
+): T {
+  const platform = options.platform ?? process.platform
+  if (!isAbsolute(commandPath)) {
+    return env
+  }
+  const commandDirectory = dirname(commandPath)
+  if (!findFirstExecutable(platform, [commandDirectory], getExecutableNames(platform, 'node'))) {
+    return env
+  }
+  const pathKey = platform === 'win32' && env.Path !== undefined ? 'Path' : 'PATH'
+  const pathDelimiter = platform === 'win32' ? ';' : delimiter
+  const segments = splitPath(env[pathKey])
+  if (segments[0] === commandDirectory) {
+    return env
+  }
+  const next = [commandDirectory, ...segments.filter((entry) => entry !== commandDirectory)].join(
+    pathDelimiter
+  )
+  const paired = { ...env, [pathKey]: next }
+  if (platform === 'win32') {
+    // Why: the spread is case-sensitive while Windows env lookup is not, so a
+    // differently-cased twin would keep shadowing the value we just wrote.
+    for (const name of Object.keys(paired)) {
+      if (name !== pathKey && name.toLowerCase() === pathKey.toLowerCase()) {
+        delete (paired as NodeJS.ProcessEnv)[name]
+      }
+    }
+  }
+  return paired as T
 }
 
 // Why: Node-script CLIs need their version-manager sibling `node` on PATH.

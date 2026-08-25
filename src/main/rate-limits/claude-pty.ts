@@ -4,6 +4,9 @@ make the lifecycle harder to audit. */
 import type { ProviderRateLimits, RateLimitWindow } from '../../shared/rate-limit-types'
 import { buildConfiguredProxyEnv, type NetworkProxySettings } from '../../shared/network-proxy'
 import { resolveClaudeCommand } from '../codex-cli/command'
+// Why: import from the shared module, not the codex-cli re-export, so a test that
+// mocks '../codex-cli/command' does not have to restate this pure helper.
+import { withCliRuntimeOnPath } from '../../shared/node-cli-command-resolution'
 import type { ClaudeRuntimeAuthPreparation } from '../claude-accounts/runtime-auth-service'
 import { applyClaudeEnvPatch } from '../claude-accounts/environment'
 import { withMacTailscaleDnsHint } from '../network/macos-tailscale-dns-diagnostic'
@@ -292,7 +295,7 @@ export async function fetchViaPty(options?: {
       // Why: hidden usage PTYs must not inherit the process cwd (e.g. / or a
       // drive root), which can trigger unbounded file discovery.
       cwd: resolveHiddenRateLimitPtyCwd(),
-      env: spawnEnv
+      env: withCliRuntimeOnPath(claudeCommand, spawnEnv)
     })
     const termDisposables: { dispose: () => void }[] = [registerHiddenRateLimitPty(term)]
     let enterInterval: ReturnType<typeof setInterval> | null = null
