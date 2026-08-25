@@ -237,6 +237,7 @@ const MOBILE_RPC_METHOD_ALLOWLIST = new Set([
   'git.commit',
   'git.commitCompare',
   'git.commitDiff',
+  'git.createBranch',
   'git.discard',
   'git.discoverCommitMessageModels',
   'git.diff',

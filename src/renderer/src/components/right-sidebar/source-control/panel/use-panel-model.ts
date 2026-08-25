@@ -7,6 +7,7 @@ import { useSourceControlActionDispatch } from '../review/use-action-dispatch'
 import { useSourceControlActionModel } from '../review/use-action-model'
 import { useSourceControlCreatePrIntentFlows } from '../review/use-create-pr-intent-flows'
 import { useSourceControlReviewFlows } from '../review/use-review-flows'
+import { useSourceControlBranchSwitch } from '../sync/use-branch-switch'
 import { useSourceControlUpstreamStatusFetch } from '../sync/use-upstream-status-fetch'
 import { useSourceControlPanelFoundation } from './use-panel-foundation'
 
@@ -162,7 +163,17 @@ export function useSourceControlPanelModel() {
     refreshActiveGitStatusAfterMutation
   })
 
+  const branchSwitch = useSourceControlBranchSwitch({
+    activeRepoSettings,
+    activeWorktreeId,
+    refreshActiveGitStatusAfterMutation,
+    refreshBranchCompareRef: foundation.refreshBranchCompareRef,
+    refreshGitHistoryRef: foundation.refreshGitHistoryRef,
+    worktreePath
+  })
+
   return {
+    branchSwitch,
     ...foundation,
     ...commitFlows,
     ...reviewFlows,

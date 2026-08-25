@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { isValidGitBranchName } from '../../../../shared/git-branch-name'
 
 export const WorktreeSelector = z.object({
   worktree: z
@@ -249,6 +250,17 @@ export const GitCheckout = WorktreeSelector.extend({
         // Why: never let a branch arg be parsed as a git flag (arg injection).
         .refine((value) => !value.startsWith('-'), 'Branch must not start with -')
     )
+})
+
+/**
+ * Create takes a user-typed name, so it gets the full `check-ref-format` rule set
+ * rather than checkout's narrower flag-injection guard.
+ */
+export const GitCreateBranch = WorktreeSelector.extend({
+  branch: z
+    .unknown()
+    .transform((v) => (typeof v === 'string' ? v : ''))
+    .pipe(z.string().refine(isValidGitBranchName, 'Invalid branch name'))
 })
 
 export const GitRemoteFileUrl = WorktreeSelector.extend({

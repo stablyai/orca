@@ -60,6 +60,8 @@ import {
   getCommitDiff
 } from '../git/status'
 import { getHistory } from '../git/history'
+import { checkoutBranch, createAndCheckoutBranch, listLocalBranches } from '../git/checkout'
+import type { GitLocalBranchListing } from '../../shared/git-local-branches'
 import {
   cancelGenerateCommitMessageLocal,
   cancelGeneratePullRequestFieldsLocal,
@@ -1391,6 +1393,75 @@ export function registerFilesystemHandlers(
         worktreePath
       )
       await abortRebase(worktreePath, gitOptions)
+    }
+  )
+
+  ipcMain.handle(
+    'git:localBranches',
+    async (
+      _event,
+      args: { worktreePath: string; connectionId?: string }
+    ): Promise<GitLocalBranchListing> => {
+      if (args.connectionId) {
+        const provider = getSshGitProvider(args.connectionId)
+        if (!provider) {
+          throw new Error(SSH_GIT_PROVIDER_UNAVAILABLE_MESSAGE)
+        }
+        return provider.listLocalBranches(args.worktreePath)
+      }
+      const worktreePath = await resolveRegisteredWorktreePath(args.worktreePath, store)
+      const gitOptions = getLocalGitOptionsForRegisteredWorktree(
+        store,
+        args.worktreePath,
+        worktreePath
+      )
+      return listLocalBranches(worktreePath, gitOptions)
+    }
+  )
+
+  ipcMain.handle(
+    'git:checkout',
+    async (
+      _event,
+      args: { worktreePath: string; branch: string; connectionId?: string }
+    ): Promise<void> => {
+      if (args.connectionId) {
+        const provider = getSshGitProvider(args.connectionId)
+        if (!provider) {
+          throw new Error(SSH_GIT_PROVIDER_UNAVAILABLE_MESSAGE)
+        }
+        return provider.checkoutBranch(args.worktreePath, args.branch)
+      }
+      const worktreePath = await resolveRegisteredWorktreePath(args.worktreePath, store)
+      const gitOptions = getLocalGitOptionsForRegisteredWorktree(
+        store,
+        args.worktreePath,
+        worktreePath
+      )
+      await checkoutBranch(worktreePath, args.branch, gitOptions)
+    }
+  )
+
+  ipcMain.handle(
+    'git:createBranch',
+    async (
+      _event,
+      args: { worktreePath: string; branch: string; connectionId?: string }
+    ): Promise<void> => {
+      if (args.connectionId) {
+        const provider = getSshGitProvider(args.connectionId)
+        if (!provider) {
+          throw new Error(SSH_GIT_PROVIDER_UNAVAILABLE_MESSAGE)
+        }
+        return provider.createBranch(args.worktreePath, args.branch)
+      }
+      const worktreePath = await resolveRegisteredWorktreePath(args.worktreePath, store)
+      const gitOptions = getLocalGitOptionsForRegisteredWorktree(
+        store,
+        args.worktreePath,
+        worktreePath
+      )
+      await createAndCheckoutBranch(worktreePath, args.branch, gitOptions)
     }
   )
 

@@ -1,4 +1,5 @@
 /* eslint-disable max-lines -- Why: shared type definitions for all runtime RPC methods live in one file for discoverability and import simplicity. */
+import type { GitLocalBranchListing } from './git-local-branches'
 import type {
   AgentStatusEntry,
   AgentStatusOrchestrationContext,
@@ -880,10 +881,7 @@ export type RuntimeWorktreePsSummary = {
   agents: RuntimeWorktreeAgentRow[]
 }
 
-export type RuntimeGitLocalBranches = {
-  current: string | null
-  branches: string[]
-}
+export type RuntimeGitLocalBranches = GitLocalBranchListing
 
 /** One speech model as presented to the mobile dictation-setup sheet: catalog
  *  metadata joined with live download/ready state. */

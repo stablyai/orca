@@ -43,6 +43,8 @@ type SourceControlHeaderToolbarProps = {
   upstreamStatus?: GitUpstreamStatus
   manualReviewUrl?: string | null
   branchLineTotal?: GitBranchLineTotal | null
+  /** Branch picker rendered in place of the static HEAD label. */
+  branchSwitcher?: React.ReactNode
 }
 
 function HostedReviewToolbarLink({
@@ -149,7 +151,8 @@ export function SourceControlHeaderToolbar({
   headDisplay = null,
   upstreamStatus,
   manualReviewUrl,
-  branchLineTotal
+  branchLineTotal,
+  branchSwitcher
 }: SourceControlHeaderToolbarProps): React.JSX.Element {
   const filterInputRef = useRef<HTMLInputElement>(null)
   const normalizedFilter = filterQuery.trim()
@@ -297,6 +300,7 @@ export function SourceControlHeaderToolbar({
             upstreamStatus={upstreamStatus}
             manualReviewUrl={manualReviewUrl}
             branchLineTotal={branchLineTotal}
+            headSlot={branchSwitcher}
             onChangeBaseRef={onChangeBaseRef}
             onRetry={onRefreshBranchCompare}
           />

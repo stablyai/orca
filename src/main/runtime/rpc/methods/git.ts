@@ -8,6 +8,7 @@ import {
   GitCheckout,
   GitCommit,
   GitCommitCompare,
+  GitCreateBranch,
   GitFilePath,
   GitForkSync,
   GitHistory,
@@ -92,6 +93,12 @@ export const GIT_METHODS: RpcMethod[] = [
     params: GitCheckout,
     handler: async (params, { runtime }) =>
       runtime.checkoutRuntimeGitBranch(params.worktree, params.branch)
+  }),
+  defineMethod({
+    name: 'git.createBranch',
+    params: GitCreateBranch,
+    handler: async (params, { runtime }) =>
+      runtime.createRuntimeGitBranch(params.worktree, params.branch)
   }),
   defineMethod({
     name: 'git.localBranches',
