@@ -5,6 +5,7 @@ import {
   setRuntimeBrowserCommandsFactory,
   setRuntimeBrowserUnavailableCause
 } from './runtime-browser-commands-factory'
+import { setRuntimeTerminalUnavailableCause } from './native-terminal-availability'
 import { setRuntimeDesktopSurface } from './runtime-desktop-surface'
 import { installFakeAppEnvironment } from '../../../config/scripts/vitest-host-ports-setup'
 import type * as GitUsernameModule from '../git/git-username'
@@ -691,6 +692,7 @@ function resetRuntimeTestMocks(): void {
   // browser RPCs reject rather than silently succeeding.
   setRuntimeBrowserCommandsFactory((host) => new RuntimeBrowserCommands(host))
   setRuntimeBrowserUnavailableCause(null)
+  setRuntimeTerminalUnavailableCause(null)
   // Why: the runtime's notification, window lookup and tab-create-reply channel are
   // injected now, so the electron mock alone is inert. Back the surface with the same
   // mocks so every existing expectation still holds.
@@ -2590,6 +2592,43 @@ describe('OrcaRuntimeService', () => {
     expect(degradation?.message).toBe(
       'ORCA_BROWSER_EXECUTABLE points at a path that does not exist. (/nope/chromium)'
     )
+  })
+
+  it('reports a host that cannot load node-pty, instead of that host never answering', () => {
+    // The alternative to reporting it is the process dying inside the dynamic loader,
+    // which reaches a client as a dropped connection with no cause attached.
+    setRuntimeTerminalUnavailableCause({
+      reason: 'libc_floor',
+      detail: 'the binary requires GLIBC_2.34'
+    })
+
+    const degradations = createRuntime().getStatus().degradations ?? []
+
+    expect(degradations).toContainEqual({
+      code: 'terminal_unavailable',
+      capability: 'terminal.pty.v1',
+      reason: 'libc_floor',
+      detail: 'the binary requires GLIBC_2.34',
+      message:
+        "This host's node-pty binary was built against a newer C library than the host provides, so the dynamic loader refuses it. Rebuild node-pty on this host, or deploy a build whose prebuilt binary matches this platform's libc. (the binary requires GLIBC_2.34)"
+    })
+  })
+
+  it('reports browser and terminal loss together, because they fail independently', () => {
+    setRuntimeBrowserCommandsFactory(null)
+    setRuntimeBrowserUnavailableCause({ reason: 'unconfigured' })
+    setRuntimeTerminalUnavailableCause({ reason: 'dependency_missing' })
+
+    const codes = (createRuntime().getStatus().degradations ?? []).map((entry) => entry.code)
+
+    expect(codes).toEqual(['browser_unavailable', 'terminal_unavailable'])
+  })
+
+  it('says nothing about terminals when no precondition proved them broken', () => {
+    // Silence must mean "nothing proved it broken", never "proved working" — a host that
+    // never ran the precondition has no verdict to publish.
+    const degradations = createRuntime().getStatus().degradations ?? []
+    expect(degradations.map((entry) => entry.code)).not.toContain('terminal_unavailable')
   })
 
   it('closes a worktree’s offscreen browser pages when its metadata is removed (leak fix)', () => {
