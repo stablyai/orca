@@ -4,7 +4,7 @@ import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { RelayAgentHookServer } from '../../relay/agent-hook-server'
-import { seedClaudeSubagentRosterFromSnapshots } from '../../shared/agent-hook-listener'
+import { seedClaudeSubagentRosterFromSnapshots } from '../../shared/agent-hook-listener/providers/claude-roster-state'
 import type { AgentHookRelayEnvelope } from '../../shared/agent-hook-relay'
 import { makePaneKey } from '../../shared/stable-pane-id'
 import { AgentHookServer } from './server'

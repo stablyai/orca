@@ -14,14 +14,14 @@ import {
   normalizeWorkspaceLinkedItem
 } from '../../../shared/workspace-linked-item'
 import { isWorkspaceLinkedItemSourceContextMatch } from '../../../shared/workspace-linked-item-source-context'
-import type { StoreOwnedPersistedState } from '../loading-store/store-owned-state'
+import type { PersistedState } from '../../../shared/persisted-state-types'
 
 // Why: worktrees deleted outside Orca orphan their worktreeMeta, so the map grew monotonically (63% dead on a heavy install).
 // GC stays narrow: local-host entries only (a local existsSync would falsely condemn SSH/WSL remote paths) and only after a 30-day idle grace.
 export const WORKTREE_META_GC_GRACE_MS = 30 * 24 * 60 * 60 * 1000
 export const STALE_DURABLE_WRITE_TEMP_AGE_MS = 24 * 60 * 60 * 1000
 
-export function gcStaleWorktreeMeta(state: StoreOwnedPersistedState): number {
+export function gcStaleWorktreeMeta(state: PersistedState): number {
   // Why: a hand-corrupted "worktreeMeta": null overrides the defaults merge; normalize here instead of throwing.
   // Companion lineage maps get the same guard because the deletes below index them directly.
   state.worktreeMeta ??= {}
@@ -80,7 +80,7 @@ export function gcStaleWorktreeMeta(state: StoreOwnedPersistedState): number {
   return removed
 }
 
-export function normalizeWorktreeLinkedItemMetadata(state: StoreOwnedPersistedState): boolean {
+export function normalizeWorktreeLinkedItemMetadata(state: PersistedState): boolean {
   // Why: a hand-corrupted null lineage map would throw on the companion deletes below. The repair
   // itself is dirty state — without it the map stays null on disk and is repaired again every load.
   let changed =

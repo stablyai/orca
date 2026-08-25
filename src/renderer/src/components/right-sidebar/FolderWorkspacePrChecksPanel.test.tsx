@@ -12,7 +12,7 @@ import type { HostedReviewInfo } from '../../../../shared/hosted-review'
 import { folderWorkspaceKey, worktreeWorkspaceKey } from '../../../../shared/workspace-scope'
 import { getHostedReviewCacheKey } from '@/store/slices/hosted-review'
 import { getGitHubRepoCacheKey } from '@/store/slices/github-cache-key'
-import { prChecksCacheSuffix } from '@/store/slices/github'
+import { prChecksCacheSuffix } from '@/store/github/cache-identity'
 
 type MockStoreState = {
   activeWorktreeId: string | null

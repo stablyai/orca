@@ -18,11 +18,14 @@
  *   - a paired client can list worktrees and create a terminal,
  *   - a command run in that terminal produces its output,
  *   - the server exits when asked.
+ * Optional `--browser` assertions:
+ *   - create, navigate, evaluate, and screenshot through the selected host provider.
  */
 import { spawn, spawnSync } from 'node:child_process'
 import { existsSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
+import { pathToFileURL } from 'node:url'
 import { randomBytes } from 'node:crypto'
 import process from 'node:process'
 
@@ -274,6 +277,50 @@ async function main() {
       throw new Error('worktree.create succeeded but worktree.show cannot resolve it')
     }
     log(`server resolves ${shown.id}`)
+    if (process.argv.includes('--browser')) {
+      const status = orca(pairingCode, ['status'])
+      if (!status?.runtime?.capabilities?.includes('browser.headless.v1')) {
+        throw new Error(
+          `status omitted browser.headless.v1: ${JSON.stringify(status?.runtime?.capabilities)}`
+        )
+      }
+      const fixturePath = join(userDataDir, 'browser-smoke.html')
+      writeFileSync(
+        fixturePath,
+        '<!doctype html><title>Orcad Browser Smoke</title><main>browser-ready</main>'
+      )
+      const browserPageId = orca(pairingCode, [
+        'tab',
+        'create',
+        '--worktree',
+        created.id,
+        '--url',
+        'about:blank'
+      ])?.browserPageId
+      if (!browserPageId) {
+        throw new Error('browser.tabCreate returned no browser page id')
+      }
+      const targetFlags = ['--worktree', created.id, '--page', browserPageId]
+      const targetUrl = pathToFileURL(fixturePath).href
+      const navigation = orca(pairingCode, ['goto', ...targetFlags, '--url', targetUrl])
+      if (navigation?.url !== targetUrl || navigation?.title !== 'Orcad Browser Smoke') {
+        throw new Error(`browser.goto returned the wrong page: ${JSON.stringify(navigation)}`)
+      }
+      const evaluated = orca(pairingCode, [
+        'eval',
+        ...targetFlags,
+        '--expression',
+        'document.querySelector("main")?.textContent'
+      ])
+      if (evaluated?.result !== 'browser-ready') {
+        throw new Error(`browser.eval returned ${JSON.stringify(evaluated)}`)
+      }
+      const screenshot = orca(pairingCode, ['screenshot', ...targetFlags])
+      if (screenshot?.format !== 'png' || typeof screenshot.data !== 'string' || !screenshot.data) {
+        throw new Error('browser.screenshot returned no PNG data')
+      }
+      log('browser navigate/evaluate/screenshot round trip OK')
+    }
 
     const terminal = orca(pairingCode, ['terminal', 'create', '--worktree', created.id])?.terminal
     if (!terminal?.handle) {

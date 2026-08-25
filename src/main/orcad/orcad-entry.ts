@@ -2,12 +2,14 @@
  * `orcad` — the Orca runtime served from plain Node, with no Electron.
  *
  * Installs the Node host adapters, constructs the same `OrcaRuntimeService` the
- * desktop uses, installs a PTY controller via `registerPtyHandlers(null, …)`, and
+ * desktop uses, installs a PTY controller via `registerHeadlessPtyRuntime`, and
  * serves runtime RPC. See docs/design/node-only-runtime-backend.html.
  *
- * The desktop-only surfaces are deliberately left uninstalled: no notifications, no
- * renderer window, no browser panes. Those are declared rather than faked — see
- * `runtime-desktop-surface.ts` and `pty-host-bindings.ts`.
+ * Desktop UI surfaces stay uninstalled: no notifications, no renderer window. The
+ * renderer window is faked as a destroyed one because `registerPtyHandlers` takes a
+ * non-null `BrowserWindow`. Browser automation is different — it is installed through
+ * the runtime factory, but only when an Electron serve sidecar or an operator-supplied
+ * Chromium proves available at startup.
  */
 import { homedir, tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -15,6 +17,8 @@ import process from 'node:process'
 import { setAppEnvironment, type AppEnvironment } from '../../shared/app-environment'
 import { setSecretStore, type SecretStore } from '../../shared/secret-store'
 import type { ServeReadiness } from '../server/serve-readiness'
+import { setRuntimeBrowserCommandsFactory } from '../runtime/runtime-browser-commands-factory'
+import { resolveOrcadBrowserProvider, type OrcadBrowserProvider } from './orcad-browser-provider'
 
 /** XDG-ish data root. `$ORCA_USER_DATA` wins so a smoke test can isolate state. */
 function resolveUserDataPath(): string {
@@ -25,13 +29,14 @@ function resolveUserDataPath(): string {
   const xdg = process.env.XDG_DATA_HOME
   return xdg ? join(xdg, 'Orca') : join(homedir(), '.orca')
 }
+let runOrcadQuitHandlers = (): void => {}
 
 function createNodeAppEnvironment(): AppEnvironment {
   const userData = resolveUserDataPath()
   const quitHandlers: (() => void)[] = []
-  // Why SIGTERM/SIGINT: this is the Node equivalent of electron's will-quit, and the
-  // runtime's teardown (daemon disconnect, PTY kill, store flush) hangs off it.
-  const runQuitHandlers = (): void => {
+  // The main signal handler awaits runtime and browser teardown before process.exit.
+  // Keep will-quit callbacks synchronous, but never let them pre-empt that async barrier.
+  runOrcadQuitHandlers = (): void => {
     for (const handler of quitHandlers.splice(0)) {
       try {
         handler()
@@ -40,14 +45,6 @@ function createNodeAppEnvironment(): AppEnvironment {
       }
     }
   }
-  process.once('SIGTERM', () => {
-    runQuitHandlers()
-    process.exit(0)
-  })
-  process.once('SIGINT', () => {
-    runQuitHandlers()
-    process.exit(0)
-  })
   return {
     getPath: (name) => (name === 'home' ? homedir() : name === 'temp' ? tmpdir() : userData),
     getAppPath: () => process.cwd(),
@@ -103,7 +100,26 @@ export type OrcadHandle = {
  */
 export async function startOrcad(options: OrcadOptions = {}): Promise<OrcadHandle> {
   installOrcadHostAdapters()
+  const userDataPath = resolveUserDataPath()
+  const browserProvider = await resolveOrcadBrowserProvider({ userDataPath })
+  setRuntimeBrowserCommandsFactory(browserProvider?.factory ?? null, {
+    headless: browserProvider !== null,
+    ...(browserProvider ? { isAvailable: () => browserProvider.isAvailable() } : {})
+  })
+  try {
+    return await startOrcadRuntime(options, browserProvider)
+  } catch (error) {
+    await browserProvider?.stop()
+    setRuntimeBrowserCommandsFactory(null)
+    runOrcadQuitHandlers()
+    throw error
+  }
+}
 
+async function startOrcadRuntime(
+  options: OrcadOptions,
+  browserProvider: OrcadBrowserProvider | null
+): Promise<OrcadHandle> {
   const { OrcaRuntimeService } = await import('../runtime/orca-runtime')
   const { OrcaRuntimeRpcServer } = await import('../runtime/runtime-rpc')
   const { registerHeadlessPtyRuntime, getLocalPtyProvider, getSshPtyProvider } =
@@ -116,9 +132,9 @@ export async function startOrcad(options: OrcadOptions = {}): Promise<OrcadHandl
     await import('../orca-profiles/profile-index-store')
   const { initSshHostKeyStoreFile } = await import('../ssh/ssh-host-key-store')
 
-  const userDataPath = getAppEnvironment().getPath('userData')
+  const runtimeUserDataPath = getAppEnvironment().getPath('userData')
   initOrcaProfilePaths()
-  const profile = ensureActiveOrcaProfile(userDataPath)
+  const profile = ensureActiveOrcaProfile(runtimeUserDataPath)
   // Why a real Store: without one every persistence-backed RPC throws `runtime_unavailable`
   // and the read paths that use `this.store?.x ?? []` quietly answer "empty" instead —
   // a server that pairs and lists nothing looks healthy and is not.
@@ -144,7 +160,7 @@ export async function startOrcad(options: OrcadOptions = {}): Promise<OrcadHandl
     getDesktopWindowStatus: () => 'blocked'
   })
 
-  // Why the headless entry point rather than registerPtyHandlers(null, …): this is the
+  // Why the headless entry point rather than registerPtyHandlers directly: this is the
   // same call `--serve` makes, and it threads the store through. Without the store the
   // handlers install fine and every terminal.create then fails at persistence time.
   //
@@ -160,7 +176,7 @@ export async function startOrcad(options: OrcadOptions = {}): Promise<OrcadHandl
 
   const rpc = new OrcaRuntimeRpcServer({
     runtime,
-    userDataPath,
+    userDataPath: runtimeUserDataPath,
     enableWebSocket: true,
     exposeNetworkByDefault: true,
     ...(options.port !== undefined ? { wsPort: options.port, preferPinnedWsPort: true } : {})
@@ -210,7 +226,13 @@ export async function startOrcad(options: OrcadOptions = {}): Promise<OrcadHandl
   return {
     readiness,
     stop: async () => {
-      await rpc.stop()
+      try {
+        await rpc.stop()
+      } finally {
+        await browserProvider?.stop()
+        setRuntimeBrowserCommandsFactory(null)
+        runOrcadQuitHandlers()
+      }
     }
   }
 }

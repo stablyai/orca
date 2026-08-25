@@ -60,7 +60,6 @@ describe('worktree remote runtime mutations', () => {
       method: 'worktree.rm',
       params: {
         worktree: `id:${wt.id}`,
-        hostId: 'runtime:env-1',
         force: false,
         allowUnverifiedPtyStop: false,
         runHooks: true
@@ -80,6 +79,68 @@ describe('worktree remote runtime mutations', () => {
       backendOwnsPtyTeardown: true
     })
     expect(store.getState().worktreesByRepo.repo1).toEqual([])
+  })
+
+  it('cleans up a preserved branch through the same host qualifier the removal used', async () => {
+    const store = createTestStore()
+    const wt = makeWorktree({
+      id: 'repo1::/path/wt1',
+      repoId: 'repo1',
+      path: '/path/wt1',
+      hostId: 'runtime:env-1'
+    })
+    runtimeEnvironmentCall
+      .mockResolvedValueOnce({
+        id: 'rpc-rm',
+        ok: true,
+        result: { preservedBranch: { branchName: 'feature/x', head: 'saved-head' } },
+        _meta: { runtimeId: 'runtime-remote' }
+      })
+      .mockResolvedValueOnce({
+        id: 'rpc-force-delete-branch',
+        ok: true,
+        result: { deleted: true },
+        _meta: { runtimeId: 'runtime-remote' }
+      })
+    store.setState({
+      settings: { activeRuntimeEnvironmentId: 'env-1' } as never,
+      trustedOrcaHooks: { repo1: { all: { approvedAt: 1 } } },
+      worktreesByRepo: { repo1: [wt] }
+    } as Partial<AppState>)
+
+    await store.getState().removeWorktree({ id: wt.id, executionHostId: 'runtime:env-1' })
+
+    const forceResult = await store
+      .getState()
+      .forceDeletePreservedBranch(wt.id, 'feature/x', 'saved-head', {
+        hostId: 'runtime:env-1',
+        runtimeEnvironmentId: 'env-1'
+      })
+
+    expect(forceResult).toEqual({ ok: true, deleted: true })
+    expect(runtimeEnvironmentCall).toHaveBeenNthCalledWith(1, {
+      selector: 'env-1',
+      method: 'worktree.rm',
+      params: {
+        worktree: `id:${wt.id}`,
+        force: undefined,
+        allowUnverifiedPtyStop: false,
+        runHooks: true
+      },
+      timeoutMs: 60_000,
+      expectedEnvironmentPairingRevision: undefined,
+      expectedRuntimeId: undefined
+    })
+    expect(runtimeEnvironmentCall).toHaveBeenNthCalledWith(2, {
+      selector: 'env-1',
+      method: 'worktree.forceDeleteBranch',
+      params: {
+        worktree: `id:${wt.id}`,
+        branchName: 'feature/x',
+        expectedHead: 'saved-head'
+      },
+      timeoutMs: 15_000
+    })
   })
 
   it('does not clean up a hidden same-id VM owned by another host', async () => {

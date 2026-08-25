@@ -13,33 +13,45 @@ import {
   clearAllListenerCaches,
   clearPaneCacheState,
   paneHasStateClaims,
-  clearClaudeAnsweredQuestionWait,
   createHookListenerState,
-  getEndpointFileName,
-  hasCodexTranscriptSubagents,
-  hasPendingAgentResultText,
-  HOOK_REQUEST_SLOWLORIS_MS,
-  isNewTurnEvent,
-  markClaudeLeadTurnInterrupted,
-  markCodexLeadTurnInterrupted,
-  MAX_PANE_KEY_LEN,
   movePaneCacheState,
-  normalizeClaudePromptId,
-  normalizeHookPayload,
-  parseFormEncodedBody,
-  readRequestBody,
-  reapRestoredClaudeSubagentsForDeadPane,
-  reconcileRemoteCodexState,
-  resolveHookSource,
-  preparePendingGrokResultDiscovery,
-  seedClaudeLeadTurnFromPersistedStatus,
-  seedClaudeSubagentRosterFromSnapshots,
-  seedCodexStateFromSnapshot,
-  warnOnHookEnvOrVersionMismatch,
-  writeEndpointFile,
-  type AgentHookEventPayload,
   type HookListenerState
-} from '../../shared/agent-hook-listener'
+} from '../../shared/agent-hook-listener/listener-state'
+import {
+  clearClaudeAnsweredQuestionWait,
+  markClaudeLeadTurnInterrupted,
+  reapRestoredClaudeSubagentsForDeadPane,
+  seedClaudeLeadTurnFromPersistedStatus,
+  seedClaudeSubagentRosterFromSnapshots
+} from '../../shared/agent-hook-listener/providers/claude-roster-state'
+import {
+  getEndpointFileName,
+  writeEndpointFile
+} from '../../shared/agent-hook-listener/endpoint-publication'
+import {
+  hasCodexTranscriptSubagents,
+  markCodexLeadTurnInterrupted,
+  reconcileRemoteCodexState,
+  seedCodexStateFromSnapshot
+} from '../../shared/agent-hook-listener/providers/codex-state'
+import {
+  hasPendingAgentResultText,
+  preparePendingGrokResultDiscovery
+} from '../../shared/agent-hook-listener/grok-result-discovery'
+import {
+  HOOK_REQUEST_SLOWLORIS_MS,
+  MAX_PANE_KEY_LEN,
+  normalizeClaudePromptId,
+  warnOnHookEnvOrVersionMismatch
+} from '../../shared/agent-hook-listener/listener-limits'
+import { isNewTurnEvent } from '../../shared/agent-hook-listener/provider-event-routing'
+import { normalizeHookPayload } from '../../shared/agent-hook-listener'
+import {
+  parseFormEncodedBody,
+  readRequestBody
+} from '../../shared/agent-hook-listener/request-body'
+import { resolveHookSource } from '../../shared/agent-hook-listener/source-routing'
+import type { AgentHookEventPayload } from '../../shared/agent-hook-listener/listener-event'
 import {
   canAcceptClaudeCompactCompletion,
   isClaudeCompactCompletionConsumed,

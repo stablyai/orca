@@ -8,13 +8,17 @@
  * the host Node floor at 18 instead of 22.5+.
  */
 import { build } from 'esbuild'
-import { mkdirSync, rmSync } from 'node:fs'
+import { chmodSync, copyFileSync, mkdirSync, rmSync } from 'node:fs'
+import { arch, platform } from 'node:os'
 import { join } from 'node:path'
 import process from 'node:process'
 
 const ROOT = join(import.meta.dirname, '..', '..')
 const OUT_DIR = join(ROOT, 'out', 'orcad')
 const ENTRY = join(ROOT, 'src/main/orcad/main.ts')
+const AGENT_BROWSER_NAME = `agent-browser-${platform()}-${arch()}${process.platform === 'win32' ? '.exe' : ''}`
+const AGENT_BROWSER_SOURCE = join(ROOT, 'node_modules', 'agent-browser', 'bin', AGENT_BROWSER_NAME)
+const AGENT_BROWSER_OUTPUT = join(OUT_DIR, AGENT_BROWSER_NAME)
 
 // Native addons must exist on the host; they cannot be bundled.
 // `electron` is external so a residual import fails loudly at require() time rather
@@ -48,6 +52,10 @@ const externalNativeAddons = {
 
 rmSync(OUT_DIR, { recursive: true, force: true })
 mkdirSync(OUT_DIR, { recursive: true })
+copyFileSync(AGENT_BROWSER_SOURCE, AGENT_BROWSER_OUTPUT)
+if (process.platform !== 'win32') {
+  chmodSync(AGENT_BROWSER_OUTPUT, 0o755)
+}
 
 const result = await build({
   entryPoints: [ENTRY],
@@ -78,12 +86,34 @@ for (const [file, info] of Object.entries(result.metafile.inputs)) {
     }
   }
 }
+const sqliteImporters = new Set()
+for (const [file, info] of Object.entries(result.metafile.inputs)) {
+  for (const imported of info.imports ?? []) {
+    const specifier = imported.original ?? imported.path
+    if (specifier === 'node:sqlite') {
+      sqliteImporters.add(file)
+    }
+  }
+}
 
+const graphErrors = []
 if (electronImporters.size > 0) {
-  console.error(
-    `[build-orcad] ${electronImporters.size} module(s) in the bundle import electron:
-${[...electronImporters].map((f) => `  - ${f}`).join('\n')}`
+  graphErrors.push(
+    `${electronImporters.size} module(s) in the bundle import electron:\n${[...electronImporters]
+      .map((file) => `  - ${file}`)
+      .join('\n')}`
   )
+}
+if (sqliteImporters.size > 0) {
+  graphErrors.push(
+    `${sqliteImporters.size} module(s) in the bundle import node:sqlite:\n${[...sqliteImporters]
+      .map((file) => `  - ${file}`)
+      .join('\n')}`
+  )
+}
+
+if (graphErrors.length > 0) {
+  console.error(`[build-orcad] ${graphErrors.join('\n')}`)
   // Why this can exceed the ratchet baseline: the ratchet measures the graph reachable
   // from orca-runtime + runtime-rpc, but this entry also imports ipc/pty directly to
   // install the PTY controller. Once orcad ships, it should become a ratchet entry
@@ -91,6 +121,6 @@ ${[...electronImporters].map((f) => `  - ${f}`).join('\n')}`
   process.exitCode = 1
 } else {
   console.log(
-    `[build-orcad] ok — ${(output.bytes / 1024 / 1024).toFixed(2)} MB, ${Object.keys(output.inputs).length} modules, zero electron imports.`
+    `[build-orcad] ok — ${(output.bytes / 1024 / 1024).toFixed(2)} MB, ${Object.keys(output.inputs).length} modules, zero electron and node:sqlite imports.`
   )
 }

@@ -11,7 +11,7 @@ import type {
   JiraSiteSelection,
   JiraViewer
 } from '../../../../shared/jira-types'
-import type { CacheEntry } from './github'
+import type { CacheEntry } from '../github/cache-model'
 import { isIntegrationCredentialDecryptionError } from '../../../../shared/integration-credential-errors'
 import {
   jiraConnect,

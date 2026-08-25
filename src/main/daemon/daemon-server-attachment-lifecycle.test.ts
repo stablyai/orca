@@ -35,9 +35,13 @@ type DaemonAttachmentPrivate = {
     createOrAttach: (options: CreateOrAttachOptions) => Promise<CreateOrAttachResult>
     sessions: Map<string, { hasAttachedClients: boolean }>
   }
-  clients: Map<string, { streamSocket: Socket | null }>
-  streamClientIdBySessionId: Map<string, string>
-  attachTokenBySessionId: Map<string, symbol>
+  connections: {
+    clients: Map<string, { streamSocket: Socket | null }>
+  }
+  attachments: {
+    clientIdBySessionId: Map<string, string>
+    tokenBySessionId: Map<string, symbol>
+  }
 }
 
 describe('DaemonServer attachment lifecycle', () => {
@@ -73,7 +77,7 @@ describe('DaemonServer attachment lifecycle', () => {
     await createSession('transport-owned-session')
     const daemon = server as unknown as DaemonAttachmentPrivate
     const detachClients = vi.spyOn(daemon.host, 'detachClients')
-    const streamSocket = [...daemon.clients.values()][0]?.streamSocket
+    const streamSocket = [...daemon.connections.clients.values()][0]?.streamSocket
 
     streamSocket?.destroy()
 
@@ -82,8 +86,8 @@ describe('DaemonServer attachment lifecycle', () => {
       { sessionId: 'transport-owned-session', token: expect.any(Symbol) }
     ])
     expect(daemon.host.sessions.get('transport-owned-session')?.hasAttachedClients).toBe(false)
-    expect(daemon.streamClientIdBySessionId.has('transport-owned-session')).toBe(false)
-    expect(daemon.attachTokenBySessionId.has('transport-owned-session')).toBe(false)
+    expect(daemon.attachments.clientIdBySessionId.has('transport-owned-session')).toBe(false)
+    expect(daemon.attachments.tokenBySessionId.has('transport-owned-session')).toBe(false)
   })
 
   it('parks only the requesting client attachment on explicit detach', async () => {
@@ -95,8 +99,8 @@ describe('DaemonServer attachment lifecycle', () => {
 
     expect(detach).toHaveBeenCalledWith('explicitly-detached-session', expect.any(Symbol))
     expect(daemon.host.sessions.get('explicitly-detached-session')?.hasAttachedClients).toBe(false)
-    expect(daemon.streamClientIdBySessionId.has('explicitly-detached-session')).toBe(false)
-    expect(daemon.attachTokenBySessionId.has('explicitly-detached-session')).toBe(false)
+    expect(daemon.attachments.clientIdBySessionId.has('explicitly-detached-session')).toBe(false)
+    expect(daemon.attachments.tokenBySessionId.has('explicitly-detached-session')).toBe(false)
   })
 
   it('parks an attachment completed after its transport already closed', async () => {
@@ -122,7 +126,7 @@ describe('DaemonServer attachment lifecycle', () => {
     await created
 
     client.disconnect()
-    await vi.waitFor(() => expect(daemon.clients.size).toBe(0))
+    await vi.waitFor(() => expect(daemon.connections.clients.size).toBe(0))
     expect(daemon.host.sessions.get('close-race-session')?.hasAttachedClients).toBe(true)
     finishRequest()
 
@@ -130,7 +134,7 @@ describe('DaemonServer attachment lifecycle', () => {
     await vi.waitFor(() =>
       expect(daemon.host.sessions.get('close-race-session')?.hasAttachedClients).toBe(false)
     )
-    expect(daemon.streamClientIdBySessionId.has('close-race-session')).toBe(false)
-    expect(daemon.attachTokenBySessionId.has('close-race-session')).toBe(false)
+    expect(daemon.attachments.clientIdBySessionId.has('close-race-session')).toBe(false)
+    expect(daemon.attachments.tokenBySessionId.has('close-race-session')).toBe(false)
   })
 })

@@ -1,10 +1,9 @@
 import type { PersistedState } from '../../../shared/persisted-state-types'
 import type { SshRemotePtyLease } from '../../../shared/ssh-types'
 import { isTerminalLeafId } from '../../../shared/stable-pane-id'
-import type { StoreOwnedPersistedState } from '../loading-store/store-owned-state'
 
 export type SshPtyLeaseOperations = {
-  state: StoreOwnedPersistedState
+  state: PersistedState
   toStoredPtyId: (targetId: string, ptyId: string) => string
   clearBindingsForTarget: (targetId: string) => void
   clearBindingsForLeases: (targetId: string, leases: SshRemotePtyLease[]) => boolean

@@ -425,6 +425,7 @@ import type {
   LinearStatusSetResult
 } from '../../shared/linear/agent-access'
 import {
+  BROWSER_UNAVAILABLE_ERROR_CODE,
   HEADLESS_RUNTIME_WINDOW_ID,
   type RuntimeDesktopWindowStatus,
   type RuntimeGraphStatus,
@@ -658,7 +659,10 @@ import {
 import { advertisedUrlWatcher } from '../ports/advertised-url-watcher'
 import type { AutomationService } from '../automations/service'
 import type { RuntimeBrowserCommands } from './orca-runtime-browser'
-import { createRuntimeBrowserCommands } from './runtime-browser-commands-factory'
+import {
+  createRuntimeBrowserCommands,
+  runtimeBrowserCommandsFactoryIsHeadless
+} from './runtime-browser-commands-factory'
 import { RemoteRuntimeTerminalCreateIdempotency } from './remote-runtime-terminal-create-idempotency'
 import { deriveRemoteRuntimeTerminalCreateHandle } from './remote-runtime-terminal-create-identity'
 import {
@@ -6132,6 +6136,7 @@ export class OrcaRuntimeService {
     // so they must not fall back to a local desktop browser tab.
     const hasRenderer = Boolean(this.getAvailableAuthoritativeWindow())
     const hasOffscreen = !hasRenderer && Boolean(this.offscreenBrowserBackend)
+    const hasHeadlessCommands = runtimeBrowserCommandsFactoryIsHeadless()
     const canBrowse = hasRenderer || hasOffscreen
     const capabilities: RuntimeCapability[] = RUNTIME_CAPABILITIES.filter(
       (capability) =>
@@ -6142,7 +6147,7 @@ export class OrcaRuntimeService {
         (process.env.ORCA_E2E_DISABLE_PAIRED_TERMINAL_PARKING !== '1' ||
           capability !== TERMINAL_PAIRED_PARKING_RUNTIME_CAPABILITY)
     )
-    if (hasOffscreen) {
+    if (hasOffscreen || hasHeadlessCommands) {
       capabilities.push(BROWSER_HEADLESS_RUNTIME_CAPABILITY)
     }
     // Why: certificate proceed is owned by the browser-hosting process for both
@@ -6151,6 +6156,17 @@ export class OrcaRuntimeService {
     if (canBrowse) {
       capabilities.push(BROWSER_CERTIFICATE_TRUST_RUNTIME_CAPABILITY)
     }
+    const degradations =
+      canBrowse || hasHeadlessCommands
+        ? []
+        : [
+            {
+              code: BROWSER_UNAVAILABLE_ERROR_CODE,
+              capability: BROWSER_HEADLESS_RUNTIME_CAPABILITY,
+              message:
+                'Browser automation requires the Electron provider or ORCA_BROWSER_EXECUTABLE.'
+            }
+          ]
     return {
       runtimeId: this.runtimeId,
       rendererGraphEpoch: this.rendererGraphEpoch,
@@ -6164,6 +6180,7 @@ export class OrcaRuntimeService {
       // Why: headless orca serve cannot create/stream BrowserViews, so clients
       // must not treat browser panes as supported just because runtime RPC is up.
       capabilities,
+      ...(degradations.length > 0 ? { degradations } : {}),
       hostPlatform: process.platform,
       terminalWindowsShell: this.store?.getSettings?.().terminalWindowsShell ?? null,
       floatingWorkspaceEnabled: this.store?.getSettings?.().floatingTerminalEnabled !== false,

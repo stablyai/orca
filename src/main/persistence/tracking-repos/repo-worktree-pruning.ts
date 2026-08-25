@@ -1,7 +1,7 @@
 import type { WorkspaceKey } from '../../../shared/folder-workspace-types'
 import { LOCAL_EXECUTION_HOST_ID, type ExecutionHostId } from '../../../shared/execution-host'
 import { parseWorkspaceKey } from '../../../shared/workspace-scope'
-import type { StoreOwnedPersistedState } from '../loading-store/store-owned-state'
+import type { PersistedState } from '../../../shared/persisted-state-types'
 import { removeWorkspaceSessionOwners } from '../restoring-sessions/session-owner-removal'
 import {
   getWorktreeIdFromHostIdentity,
@@ -9,7 +9,7 @@ import {
 } from '../../../shared/worktree/host-qualified-identity'
 
 export function pruneWorktreeStateForRepo(
-  state: StoreOwnedPersistedState,
+  state: PersistedState,
   id: string,
   hostId: ExecutionHostId | null,
   pruneMobileClientTabSelections: (matchesWorktreeId: (worktreeId: string) => boolean) => void

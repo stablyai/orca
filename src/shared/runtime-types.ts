@@ -65,6 +65,14 @@ export type RuntimeTerminalDriverState =
 
 export type RuntimeBrowserDriverState = RuntimeTerminalDriverState
 
+export const BROWSER_UNAVAILABLE_ERROR_CODE = 'browser_unavailable' as const
+
+export type RuntimeDegradation = {
+  code: typeof BROWSER_UNAVAILABLE_ERROR_CODE
+  capability: 'browser.headless.v1'
+  message: string
+}
+
 export type RuntimeStatus = {
   runtimeId: string
   /** Authenticated requester identity. Missing for in-process callers and older hosts. */
@@ -80,6 +88,11 @@ export type RuntimeStatus = {
   runtimeProtocolVersion?: number
   minCompatibleRuntimeClientVersion?: number
   capabilities?: RuntimeCapability[]
+  /**
+   * Optional for mixed-version peers. Absence means the host predates structured
+   * degradation reporting, not that the host proved every optional feature available.
+   */
+  degradations?: RuntimeDegradation[]
   // Why: optional fields let updated clients inventory both new and legacy paired servers.
   appVersion?: string
   remoteUpdateSupport?: RemoteServerUpdateSupport
@@ -123,6 +136,7 @@ export type CliStatusResult = {
     appVersion?: string
     remoteUpdateSupport?: RemoteServerUpdateSupport
     capabilities?: RuntimeCapability[]
+    degradations?: RuntimeDegradation[]
   }
   graph: {
     state: RuntimeGraphStatus | 'not_running' | 'starting'
@@ -1297,6 +1311,11 @@ export type BrowserTabCreateResult = {
 }
 
 export type BrowserErrorCode =
+  | typeof BROWSER_UNAVAILABLE_ERROR_CODE
+  | 'browser_command_unavailable'
+  | 'browser_profile_unavailable'
+  | 'browser_screencast_unavailable'
+  | 'browser_certificate_trust_unavailable'
   | 'browser_no_tab'
   | 'browser_tab_not_found'
   | 'browser_tab_closed'
