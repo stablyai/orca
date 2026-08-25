@@ -442,8 +442,6 @@ describe('selectWorktreeAgentActivitySummary', () => {
   })
 })
 
-// Why: process-table identity is what lets the dot attribute a bare agent status
-// title to the pane that owns it, so the summary must carry it per worktree.
 describe('selectWorktreeAgentActivitySummary foreground agent panes', () => {
   const worktreeId = 'repo::/wt-1'
 

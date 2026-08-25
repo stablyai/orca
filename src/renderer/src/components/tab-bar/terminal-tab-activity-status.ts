@@ -133,12 +133,10 @@ type ForegroundAgentPaneIdsCache = {
   paneIdsByTabId: Map<string, Set<string>>
 }
 
-// Why: same per-snapshot bucketing as the flags cache above — this map is read by
-// every tab's selector on every store write.
+// Why: same per-snapshot bucketing as the flags cache above — every tab's selector reads it on every store write.
 let foregroundAgentPaneIdsCache: ForegroundAgentPaneIdsCache | null = null
 
-/** Buckets process-table pane identity by tab, once per store snapshot. Mirrors the
- *  sidebar summary's index so the tab dot and the worktree dot attribute alike. */
+/** Buckets process-table pane identity by tab, so the tab dot and the worktree dot attribute alike. */
 function getForegroundAgentPaneIdsByTabId(
   paneForegroundAgentByPaneKey: Record<string, PaneForegroundAgentEntry> | undefined
 ): Map<string, Set<string>> {
@@ -180,9 +178,7 @@ type TerminalTabActivityInput = {
   runtimePaneTitlesByTabId?: Record<string, Record<number, string>>
   ptyIdsByTabId?: Record<string, string[]>
   terminalLayout?: TerminalLayoutSnapshot
-  // Why: process-table identity attributes a bare spinner title to the agent that
-  // owns the pane, which is the only durable signal for an agent the user started
-  // by hand — see titleStatusIsAgentAttributable.
+  // Why: the only durable signal for an agent the user started by hand — see titleStatusIsAgentAttributable.
   paneForegroundAgentByPaneKey?: Record<string, PaneForegroundAgentEntry>
 }
 

@@ -93,11 +93,7 @@ function tabHasStatus(
       ) {
         continue
       }
-      // Why: same layout-hydration gap the agent-row branch above covers — process
-      // evidence is keyed by stable leaf id, so before the layout lands there is
-      // nothing to match a numeric runtime pane id against. With one title and one
-      // agent pane the pairing is unambiguous, so attribute it instead of stalling
-      // the spinner until hydration.
+      // Why: same pre-hydration gap as the agent-row branch above; one title and one agent pane pair unambiguously.
       const hasSingleUnmappedForegroundAgentPane =
         leafId === null && foregroundAgentPaneIds?.size === 1 && paneTitleEntries.length === 1
       const paneRunsAgentProcess =
@@ -117,9 +113,7 @@ function tabHasStatus(
   if (agentStatusPaneIds && agentStatusPaneIds.size > 0) {
     return false
   }
-  // Why: this branch has no pane titles to map process evidence onto, so an agent
-  // process in any of the tab's panes attributes its title — the same tab-wide reach
-  // `launchAgent` already has here.
+  // Why: no pane titles to map process evidence onto, so any agent pane attributes the tab title — the same reach `launchAgent` has here.
   return (
     classifyTitleActivity(tab.title) === status &&
     titleStatusIsAgentAttributable(
@@ -139,11 +133,7 @@ function titleStatusIsAgentAttributable(
   if (resolveAgentTypeFromTerminalTitle(title) !== null) {
     return true
   }
-  // Why: process-table identity settles ownership outright, so the title only has to
-  // carry the activity. It is the sole durable signal for an agent the user started by
-  // hand: launchAgent is cleared on exit and persists as null, and Claude's generated
-  // session title names Claude only by accident — so a working session showed the quiet
-  // 'active' dot whenever that title happened not to say "claude".
+  // Why: the process table is the only durable identity for a hand-started agent — launchAgent persists as null and the generated title names Claude only by accident.
   if (paneRunsAgentProcess) {
     return true
   }

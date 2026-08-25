@@ -109,9 +109,7 @@ function getWorktreeAgentActivitySummaries(
     return summary
   }
 
-  // Why: process-table identity is the only durable proof that a pane runs an agent
-  // when the user started it by hand — `tab.launchAgent` is cleared on exit and
-  // persists as null, and Claude's auto session title names Claude only by accident.
+  // Why: the process table is the only durable proof of an agent the user started by hand.
   for (const [paneKey, entry] of Object.entries(paneForegroundAgentByPaneKey ?? {})) {
     if (!entry.agent) {
       continue
@@ -290,8 +288,7 @@ function addAgentStatusPaneId(
   paneIds.add(paneId)
 }
 
-/** Records a pane whose foreground process is a recognized agent, so the status
- *  dot can attribute a bare agent status title to the pane that owns it. */
+/** Records a pane whose foreground process is a recognized agent. */
 function addForegroundAgentPaneId(
   summary: WorktreeAgentActivitySummary,
   tabId: string,

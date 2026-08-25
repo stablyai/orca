@@ -5,8 +5,7 @@ import { getWorktreeStatus } from './worktree-status'
 const LEAF_A = '11111111-1111-4111-8111-111111111111'
 const LEAF_B = '22222222-2222-4222-8222-222222222222'
 
-// A real Claude Code busy title: a quarter-circle spinner frame plus the
-// auto-generated session summary. The summary names Claude only by accident.
+// A real Claude Code busy title: spinner frame plus generated summary, naming Claude only by accident.
 const CLAUDE_BUSY_TITLE = '◐ Orca automatic session title renaming'
 const CLAUDE_BUSY_TITLE_NAMING_CLAUDE = '◐ Claude status missing from to-do workspaces'
 
@@ -38,12 +37,7 @@ function tab(overrides: Partial<TerminalTab> = {}): TerminalTab {
   return { id: 'tab-1', title: 'bash', ...overrides } as TerminalTab
 }
 
-// Why: Claude Code's busy OSC title is a status frame plus its own generated session
-// summary, and `tab.launchAgent` is cleared when an agent exits and persists as null.
-// So the dot's attribution gate had no identity to work with for a `claude` the user
-// started by hand, and every such working session rendered the quiet emerald 'active'
-// dot — the same glyph as 'done' — unless the generated summary happened to contain
-// the word "claude". Process-table identity settles ownership without the title.
+// Why: neither the busy title nor the null `launchAgent` identifies a hand-started agent (#15776); the process table does.
 describe('worktree dot attributes a title status to the pane process running the agent', () => {
   it('spins when the pane foreground process is an agent and the title never names one', () => {
     const status = getWorktreeStatus(
@@ -75,14 +69,11 @@ describe('worktree dot attributes a title status to the pane process running the
     expect(status).toBe('working')
   })
 
-  // Why: pins the #9647 gate — the process table is the new identity source, not a
-  // licence for any spinner. A pane with no agent process still cannot spin the dot.
+  // Why: pins the #9647 gate — process evidence is a new identity source, not a licence for any spinner.
   it('stays active for the same title when no pane runs an agent process', () => {
     expect(getWorktreeStatus([tab({ title: CLAUDE_BUSY_TITLE })], [], livePty())).toBe('active')
   })
 
-  // Control: the pre-existing named-title path resolves the same way, so the fix
-  // closes a gap rather than changing what a named title means.
   it('spins without process evidence when the title happens to name the agent', () => {
     expect(
       getWorktreeStatus([tab({ title: CLAUDE_BUSY_TITLE_NAMING_CLAUDE })], [], livePty())
@@ -104,9 +95,7 @@ describe('worktree dot attributes a title status to the pane process running the
     expect(status).toBe('active')
   })
 
-  // Why: process evidence is keyed by stable leaf id, so a runtime pane title that
-  // arrives before the layout (SSH/replay) has nothing to match against. One title and
-  // one agent pane pair unambiguously — mirrors the agent-row branch's same fallback.
+  // Why: process evidence is keyed by leaf id, so a title arriving before the layout (SSH/replay) has nothing to match.
   it('attributes a lone pane title to a lone agent pane before the layout hydrates', () => {
     const status = getWorktreeStatus(
       [tab()],

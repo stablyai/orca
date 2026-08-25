@@ -326,9 +326,6 @@ describe('terminalTabActivityToAgentDotState', () => {
   })
 })
 
-// Why: the tab dot runs the same attribution gate as the sidebar card, so a Claude
-// whose busy title carries only its status frame and generated session summary must
-// spin here too once the process table names the pane's agent.
 describe('resolveTerminalTabActivityStatus foreground agent attribution', () => {
   const CLAUDE_BUSY_TITLE = '◐ Orca automatic session title renaming'
 
