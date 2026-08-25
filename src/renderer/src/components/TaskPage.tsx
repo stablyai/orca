@@ -10119,7 +10119,7 @@ export default function TaskPage(): React.JSX.Element {
                             "Couldn't load issues from"
                           )}{' '}
                           <span className="font-mono">
-                            {err.source.owner}/{err.source.repo}
+                            {err.source ? `${err.source.owner}/${err.source.repo}` : s.repoPath}
                           </span>{' '}
                           — {err.message}
                         </span>
