@@ -509,7 +509,8 @@ import {
   WORKTREE_ID_SEPARATOR,
   getRepoIdFromWorktreeId,
   splitWorktreeId,
-  splitWorktreeIdForFilesystem
+  splitWorktreeIdForFilesystem,
+  worktreeIdComparisonKey
 } from '../../shared/worktree/id'
 import {
   getProjectIdForProviderIdentity,
@@ -31535,6 +31536,16 @@ export class OrcaRuntimeService {
       const worktreeId = explicitWorktreeId ?? selector.slice(3)
       candidates = worktrees.filter((worktree) => worktree.id === worktreeId)
       if (candidates.length === 0) {
+        // Why (#16243): `id:` is the only shape the renderer can send, and a stored id can spell
+        // its path differently from the scan — the divergence `path:` has always absorbed.
+        // The bare unprefixed branch below stays byte-exact on purpose: only `id:` reaches a
+        // renderer caller, so `id:repo::p/` folds here while bare `repo::p/` still misses.
+        const comparisonKey = worktreeIdComparisonKey(worktreeId)
+        candidates = comparisonKey
+          ? worktrees.filter((worktree) => worktreeIdComparisonKey(worktree.id) === comparisonKey)
+          : candidates
+      }
+      if (candidates.length === 0) {
         const parsed = splitWorktreeIdForFilesystem(worktreeId)
         const repo = parsed ? this.store?.getRepo(parsed.repoId) : null
         const fallback =
@@ -40544,12 +40555,8 @@ function runtimePathsEqual(left: string, right: string): boolean {
  * Windows/WSL/SSH ids still match themselves across hosts.
  */
 function runtimeWorktreeIdsEqual(left: string, right: string): boolean {
-  const parsedLeft = splitWorktreeId(left)
-  const parsedRight = splitWorktreeId(right)
-  return parsedLeft && parsedRight
-    ? parsedLeft.repoId === parsedRight.repoId &&
-        runtimePathsEqual(parsedLeft.worktreePath, parsedRight.worktreePath)
-    : left === right
+  const leftKey = worktreeIdComparisonKey(left)
+  return leftKey === null ? left === right : leftKey === worktreeIdComparisonKey(right)
 }
 
 function runtimeWorktreeIdentityKey(worktreeId: string): string {

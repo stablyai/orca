@@ -1,4 +1,8 @@
-import { splitWorktreeId, splitWorktreeIdForFilesystem } from '../../shared/worktree/id'
+import {
+  splitWorktreeId,
+  splitWorktreeIdForFilesystem,
+  worktreeIdComparisonKey
+} from '../../shared/worktree/id'
 import { getRepoExecutionHostId, type ExecutionHostId } from '../../shared/execution-host'
 import { isFolderRepo } from '../../shared/repo-kind'
 import { projectResolvedWorktreeLineage } from '../../shared/resolved-worktree-lineage'
@@ -195,5 +199,18 @@ export async function resolveScopedWorktreeIdRow(
     resolveLocalProjectRuntimesForRepos(store, [repo])
   )
   const projected = projectResolvedWorktreeLineage(rows, store.getAllWorktreeLineage?.() ?? {})
-  return projected.find((worktree) => worktree.id === worktreeId) ?? null
+  const exact = projected.find((worktree) => worktree.id === worktreeId)
+  if (exact) {
+    return exact
+  }
+  // Why (#16243): the scan can spell this id's path differently — the divergence `path:` absorbs.
+  // One equivalent row may stand in; two is an ambiguity a scoped lookup must refuse, not guess.
+  const comparisonKey = worktreeIdComparisonKey(worktreeId)
+  if (comparisonKey === null) {
+    return null
+  }
+  const equivalent = projected.filter(
+    (worktree) => worktreeIdComparisonKey(worktree.id) === comparisonKey
+  )
+  return equivalent.length === 1 ? equivalent[0] : null
 }
