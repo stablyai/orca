@@ -1,12 +1,14 @@
 import { describe, expect, it } from 'vitest'
 import type { TaskSourceContext } from '../../../shared/task-source-context'
+import type { GlobalSettings } from '../../../shared/global-settings-types'
 import { getActiveRuntimeTarget } from '../runtime/runtime-rpc-client'
 import {
   canUseGitHubRepoContext,
   getGitHubMutationRoutingSettings,
   getGitHubRuntimeRepoId,
   getGitHubSourceRuntimeHost,
-  getGitHubSourceRuntimeTarget
+  getGitHubSourceRuntimeTarget,
+  resolveGitHubSourceSettings
 } from './github-source-runtime-context'
 import type { RepoRuntimeOwnerState } from './repo-runtime-owner'
 
@@ -53,6 +55,48 @@ describe('GitHub source runtime context', () => {
     expect(
       getGitHubRuntimeRepoId({ ...runtimeSourceContext, provider: 'gitlab' }, 'fallback')
     ).toBe('fallback')
+  })
+
+  it('keeps the repo owner runtime when the GitHub source is local', () => {
+    const repoOwnerSettings: Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> = {
+      activeRuntimeEnvironmentId: 'repo-owner-env'
+    }
+
+    const resolved = resolveGitHubSourceSettings(repoOwnerSettings, {
+      ...runtimeSourceContext,
+      hostId: 'local'
+    })
+
+    expect(resolved).toBe(repoOwnerSettings)
+  })
+
+  it('keeps the repo owner runtime for SSH and non-GitHub sources', () => {
+    const repoOwnerSettings: Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> = {
+      activeRuntimeEnvironmentId: 'repo-owner-env'
+    }
+
+    expect(
+      resolveGitHubSourceSettings(repoOwnerSettings, {
+        ...runtimeSourceContext,
+        hostId: 'ssh:connection-1'
+      })
+    ).toBe(repoOwnerSettings)
+    expect(
+      resolveGitHubSourceSettings(repoOwnerSettings, {
+        ...runtimeSourceContext,
+        provider: 'gitlab'
+      })
+    ).toBe(repoOwnerSettings)
+  })
+
+  it('uses the GitHub source runtime when it is remote', () => {
+    const repoOwnerSettings: Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> = {
+      activeRuntimeEnvironmentId: 'repo-owner-env'
+    }
+
+    expect(resolveGitHubSourceSettings(repoOwnerSettings, runtimeSourceContext)).toEqual({
+      activeRuntimeEnvironmentId: 'env-1'
+    })
   })
 })
 

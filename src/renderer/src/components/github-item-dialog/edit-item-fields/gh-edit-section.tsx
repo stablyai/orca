@@ -3,12 +3,10 @@ import { useShallow } from 'zustand/react/shallow'
 import { useAppStore } from '@/store'
 import { useRepoLabels, useRepoAssignees, useImmediateMutation } from '@/hooks/useIssueMetadata'
 import { useRepoLabelsBySlug, useRepoAssigneesBySlug } from '@/hooks/useGitHubSlugMetadata'
-import {
-  getTaskSourceRuntimeSettings,
-  type TaskSourceContext
-} from '../../../../../shared/task-source-context'
+import type { TaskSourceContext } from '../../../../../shared/task-source-context'
 import type { GitHubWorkItem } from '../../../../../shared/github/work-item-types'
 import { getSettingsForRepoRuntimeOwner } from '@/lib/repo-runtime-owner'
+import { resolveGitHubSourceSettings } from '@/lib/github-source-runtime-context'
 import {
   getTaskPageGitHubDuplicateCandidates,
   getTaskPageGitHubDuplicateTargetErrorMessage,
@@ -96,16 +94,10 @@ export function GHEditSection({
     })
   )
   const repoOwnerSettings = useAppStore(
-    useShallow((s) => getSettingsForRepoRuntimeOwner(s, item.repoId ?? null))
+    useShallow((s) => getSettingsForRepoRuntimeOwner(s, repoId ?? item.repoId ?? null))
   )
   const sourceSettings = useMemo(
-    () =>
-      sourceContext?.provider === 'github'
-        ? ({
-            ...repoOwnerSettings,
-            ...getTaskSourceRuntimeSettings(sourceContext)
-          } as typeof repoOwnerSettings)
-        : repoOwnerSettings,
+    () => resolveGitHubSourceSettings(repoOwnerSettings, sourceContext),
     [repoOwnerSettings, sourceContext]
   )
   const { isPending, run } = useImmediateMutation()

@@ -7,10 +7,10 @@ import { cn } from '@/lib/utils'
 import { useAppStore } from '@/store'
 import { useImmediateMutation, useRepoAssignees, useRepoLabels } from '@/hooks/useIssueMetadata'
 import { useRepoAssigneesBySlug, useRepoLabelsBySlug } from '@/hooks/useGitHubSlugMetadata'
-import { getTaskSourceRuntimeSettings } from '../../../../../shared/task-source-context'
 import type { TaskSourceContext } from '../../../../../shared/task-source-context'
 import type { GitHubWorkItem } from '../../../../../shared/github/work-item-types'
 import { getSettingsForRepoRuntimeOwner } from '@/lib/repo-runtime-owner'
+import { resolveGitHubSourceSettings } from '@/lib/github-source-runtime-context'
 import { getStateLabel } from '@/components/github/work-item-state-presentation'
 import { translate } from '@/i18n/i18n'
 import type { PullRequestPageProjectOrigin } from '../page-types'
@@ -56,13 +56,7 @@ export function GHEditSection({
     useShallow((s) => getSettingsForRepoRuntimeOwner(s, item.repoId ?? repoId ?? null))
   )
   const sourceSettings = useMemo(
-    () =>
-      sourceContext?.provider === 'github'
-        ? ({
-            ...repoOwnerSettings,
-            ...getTaskSourceRuntimeSettings(sourceContext)
-          } as typeof repoOwnerSettings)
-        : repoOwnerSettings,
+    () => resolveGitHubSourceSettings(repoOwnerSettings, sourceContext),
     [repoOwnerSettings, sourceContext]
   )
   const { isPending, run } = useImmediateMutation()

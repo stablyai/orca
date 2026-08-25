@@ -39,11 +39,21 @@ export function getGitHubMutationRoutingSettings(
   repoId: string | null | undefined,
   sourceContext: TaskSourceContext | null | undefined
 ): Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> {
+  return resolveGitHubSourceSettings(
+    { activeRuntimeEnvironmentId: getExplicitRuntimeOwnerEnvironmentId(state, repoId) },
+    sourceContext
+  )
+}
+
+// Why: a local source context must not erase the runtime that owns the repo;
+// only an explicit GitHub runtime source may override repo-owner routing.
+export function resolveGitHubSourceSettings<
+  T extends Pick<GlobalSettings, 'activeRuntimeEnvironmentId'>
+>(repoOwnerSettings: T, sourceContext: TaskSourceContext | null | undefined): T {
   const sourceHost = getGitHubSourceRuntimeHost(sourceContext)
-  return {
-    activeRuntimeEnvironmentId:
-      sourceHost?.environmentId ?? getExplicitRuntimeOwnerEnvironmentId(state, repoId)
-  }
+  return sourceHost
+    ? { ...repoOwnerSettings, activeRuntimeEnvironmentId: sourceHost.environmentId }
+    : repoOwnerSettings
 }
 
 export function canUseGitHubRepoContext(

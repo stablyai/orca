@@ -15,12 +15,10 @@ import {
 } from '@/components/github/github-work-item-identity'
 import { runIssueUpdate } from '@/components/github/github-work-item-edit-mutations'
 import { ReviewerAvatar } from '@/components/github/work-item-state-presentation'
-import {
-  getTaskSourceRuntimeSettings,
-  type TaskSourceContext
-} from '../../../../shared/task-source-context'
+import type { TaskSourceContext } from '../../../../shared/task-source-context'
 import type { GitHubAssignableUser } from '../../../../shared/github/pull-request-types'
 import type { GitHubWorkItem } from '../../../../shared/github/work-item-types'
+import { resolveGitHubSourceSettings } from '@/lib/github-source-runtime-context'
 
 export function PRAssigneesPanel({
   item,
@@ -50,13 +48,7 @@ export function PRAssigneesPanel({
     useShallow((s) => getSettingsForRepoRuntimeOwner(s, item.repoId ?? null))
   )
   const sourceSettings = useMemo(
-    () =>
-      sourceContext?.provider === 'github'
-        ? ({
-            ...repoOwnerSettings,
-            ...getTaskSourceRuntimeSettings(sourceContext)
-          } as typeof repoOwnerSettings)
-        : repoOwnerSettings,
+    () => resolveGitHubSourceSettings(repoOwnerSettings, sourceContext),
     [repoOwnerSettings, sourceContext]
   )
   const { isPending, run } = useImmediateMutation()
