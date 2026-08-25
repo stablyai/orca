@@ -20,6 +20,7 @@ import {
 } from './host-client-acquisition-registry'
 import { HostOpenRetryScheduler } from './host-open-retry-scheduler'
 import { openHostClientEntry, type HostClientStoreEntry } from './host-entry-opener'
+import { shouldPreserveActiveRelay } from './relay-reconnect-preservation'
 import {
   createHostClientSelectors,
   listHostClients,
@@ -240,12 +241,7 @@ export function RpcClientProvider({ children }: { children: ReactNode }) {
     async (hostId: string) => {
       const entry = storeRef.current.get(hostId)
       const logical = entry?.client as Partial<StableLogicalRpcClient> | undefined
-      if (
-        entry &&
-        entry.state !== 'auth-failed' &&
-        !logical?.isPairingRejected?.() &&
-        logical?.getActivePath?.() === 'relay'
-      ) {
+      if (entry && shouldPreserveActiveRelay(entry, logical)) {
         // Keep a Relay-active host on its existing recovery state; rebuilding the
         // facade starts the unreachable direct endpoint before Relay can race it.
         entry.client.notifyForeground('app-resume')
