@@ -63,6 +63,11 @@ describe('agent session resume metadata', () => {
       'kimi',
       { session_id: 'session_431324d7-2165-42f0-9ecd-9f93437b3201' },
       { key: 'session_id', id: 'session_431324d7-2165-42f0-9ecd-9f93437b3201' }
+    ],
+    [
+      'junie',
+      { session_id: 'session-260501-101200-abcd' },
+      { key: 'session_id', id: 'session-260501-101200-abcd' }
     ]
   ] as const)('extracts %s provider session ids', (source, payload, expected) => {
     expect(extractAgentProviderSession(source, payload)).toEqual(expected)
@@ -94,6 +99,12 @@ describe('agent session resume metadata', () => {
       'kimi',
       { key: 'session_id', id: 'session_431324d7' },
       ['kimi', '--session', 'session_431324d7']
+    ],
+    // Why pinned by id: bare `--resume` reopens the globally most-recent session.
+    [
+      'junie',
+      { key: 'session_id', id: 'session-260501-101200-abcd' },
+      ['junie', '--resume', '--session-id', 'session-260501-101200-abcd']
     ]
   ] as const)('builds %s resume argv', (agent, providerSession, expected) => {
     expect(getAgentResumeArgv(agent, providerSession)).toEqual(expected)

@@ -210,6 +210,9 @@ function buildAgentResumeInvocation(
       return `${baseCommand} --session ${sessionArg}`
     case 'copilot':
       return `${baseCommand} --resume=${sessionArg}`
+    // Why: `--resume` alone picks the globally most-recent session; pin the id.
+    case 'junie':
+      return `${baseCommand} --resume --session-id ${sessionArg}`
     case 'claude':
     case 'cursor':
     case 'gemini':

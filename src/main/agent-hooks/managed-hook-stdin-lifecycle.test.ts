@@ -59,6 +59,7 @@ import { DevinHookService } from '../devin/hook-service'
 import { DroidHookService } from '../droid/hook-service'
 import { GeminiHookService } from '../gemini/hook-service'
 import { GrokHookService } from '../grok/hook-service'
+import { JunieHookService } from '../junie/hook-service'
 import { KimiHookService } from '../kimi/hook-service'
 import { openClaudeHookService } from '../openclaude/hook-service'
 import { wrapPosixHookCommand, wrapWindowsHookCommand } from './installer-utils'
@@ -117,6 +118,10 @@ const REMOTE_INSTALLERS = [
   {
     agent: 'kimi',
     install: (sftp: SFTPWrapper) => new KimiHookService().installRemote(sftp, REMOTE_HOME)
+  },
+  {
+    agent: 'junie',
+    install: (sftp: SFTPWrapper) => new JunieHookService().installRemote(sftp, REMOTE_HOME)
   }
 ] as const
 
@@ -132,7 +137,8 @@ const LOCAL_INSTALLERS = [
   { agent: 'droid', install: () => new DroidHookService().install() },
   { agent: 'gemini', install: () => new GeminiHookService().install() },
   { agent: 'grok', install: () => new GrokHookService().install() },
-  { agent: 'kimi', install: () => new KimiHookService().install() }
+  { agent: 'kimi', install: () => new KimiHookService().install() },
+  { agent: 'junie', install: () => new JunieHookService().install() }
 ] as const
 
 type HookRun = {
@@ -241,7 +247,8 @@ describe('Windows managed hook stdin structure', () => {
         (name) => name.endsWith('-hook.cmd') && !name.startsWith('antigravity-')
       )
       mainBatchScripts.push('antigravity-hook.cmd')
-      expect(mainBatchScripts).toHaveLength(10)
+      // One managed `.cmd` per script-writing agent (openclaude reuses Claude's).
+      expect(mainBatchScripts).toHaveLength(11)
       for (const fileName of mainBatchScripts) {
         const script = readFileSync(join(hooksDir, fileName), 'utf8')
         // Why: missing-env path must not touch more.com — hang class from #11549.

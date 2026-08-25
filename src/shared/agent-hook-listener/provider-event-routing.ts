@@ -78,6 +78,9 @@ export function isNewTurnEvent(source: AgentHookSource, eventName: unknown): boo
     case 'devin':
       // Why: SessionStart is handled by an early return in normalizeDevinEvent, so UserPromptSubmit is Devin's real new-turn boundary here.
       return eventName === 'UserPromptSubmit'
+    case 'junie':
+      // Why: same shape as Devin — SessionStart early-returns in normalizeJunieEvent, so UserPromptSubmit is the new-turn boundary.
+      return eventName === 'UserPromptSubmit'
   }
 }
 
@@ -169,6 +172,9 @@ export function extractToolFields(
     case 'hermes':
       return extractHermesToolFields(eventName, hookPayload)
     case 'devin':
+      return extractClaudeToolFields(eventName, hookPayload)
+    case 'junie':
+      // Why: Junie's PreToolUse/PermissionRequest carry Claude-compatible tool_name/tool_input fields.
       return extractClaudeToolFields(eventName, hookPayload)
   }
 }

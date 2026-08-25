@@ -7,6 +7,7 @@ import { createAntigravitySessionResumeState } from './session-scanner-antigravi
 import { parseAgentSessionFile } from './session-scanner-agent-parser'
 import { createCodexSessionResumeState } from './session-scanner-codex-parser'
 import { createDroidSessionResumeState } from './session-scanner-droid-parser'
+import { createJunieSessionResumeState } from './session-scanner-junie-parser'
 import { createMessageGraphSessionResumeState } from './session-scanner-graph-parsers'
 import { createClaudeSessionResumeState } from './session-scanner-primary-parsers'
 import { createGeminiJsonlSessionResumeState } from './session-scanner-gemini-parsers'
@@ -73,6 +74,11 @@ function resumableStateFactoryFor(
         : null
     case 'antigravity':
       return () => createAntigravitySessionResumeState(candidate.file)
+    // Why: Junie transcripts reach hundreds of megabytes on a single active session, so a
+    // full re-parse per scan is the exact regression this cache exists to prevent. Its
+    // finalize re-reads the (memoized) index.jsonl for title/cwd, which a plain fold cannot.
+    case 'junie':
+      return () => createJunieSessionResumeState(candidate.file)
     case 'devin':
     case 'grok':
     case 'hermes':

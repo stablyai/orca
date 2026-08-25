@@ -45,6 +45,7 @@ export type WellKnownAgentType =
   | 'grok'
   | 'hermes'
   | 'devin'
+  | 'junie'
   | 'ante'
   | 'trae'
   | 'unknown'

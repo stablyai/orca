@@ -31,7 +31,8 @@ const ROUTES = {
   '/hook/copilot': 'copilot',
   '/hook/hermes': 'hermes',
   '/hook/devin': 'devin',
-  '/hook/kimi': 'kimi'
+  '/hook/kimi': 'kimi',
+  '/hook/junie': 'junie'
 } as const
 function normalizeProviderState(
   source: (typeof ROUTES)[keyof typeof ROUTES],
@@ -69,6 +70,11 @@ describe('agent hook extraction boundaries', () => {
       ['prime-agent', 'agent_end', 'done'],
       ['kimi', 'PermissionRequest', 'waiting'],
       ['kimi', 'StopFailure', 'done'],
+      ['junie', 'UserPromptSubmit', 'working'],
+      ['junie', 'PreToolUse', 'working'],
+      ['junie', 'PermissionRequest', 'waiting'],
+      ['junie', 'StopFailure', 'done'],
+      ['junie', 'SessionEnd', 'done'],
       ['hermes', 'on_session_finalize', 'done'],
       ['hermes', 'on_session_reset', 'done']
     ] as const
@@ -79,7 +85,14 @@ describe('agent hook extraction boundaries', () => {
         agentType: source
       })
     }
-    for (const source of ['devin', 'mimo-code', 'prime-agent', 'kimi', 'hermes'] as const) {
+    for (const source of [
+      'devin',
+      'mimo-code',
+      'prime-agent',
+      'kimi',
+      'hermes',
+      'junie'
+    ] as const) {
       expect(normalizeProviderState(source, 'UnknownEvent')).toBeNull()
     }
   })

@@ -49,4 +49,5 @@ export type AgentHooksApi = {
   copilotStatus: () => Promise<AgentHookInstallStatus>
   hermesStatus: () => Promise<AgentHookInstallStatus>
   devinStatus: () => Promise<AgentHookInstallStatus>
+  junieStatus: () => Promise<AgentHookInstallStatus>
 }
