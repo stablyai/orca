@@ -75,10 +75,8 @@ inline src/main/window/createMainWindow.ts
 inline src/main/workspace-space-analysis.ts
 inline src/preload/index.ts
 inline src/relay/dispatcher.ts
-inline src/relay/external-automations-handler.ts
 inline src/relay/git-handler.ts
 inline src/relay/pty-handler.ts
-inline src/relay/relay.ts
 inline src/relay/workspace-space-scan.ts
 inline src/renderer/src/components/GitLabItemDialog.tsx
 inline src/renderer/src/components/JiraIssueWorkspace.tsx
