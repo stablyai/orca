@@ -131,15 +131,32 @@ export const LOCALE_PHRASE_FIXES = {
     ...KO_PHRASE_FIXES_ROUND4
   ],
   zh: [
-    { pattern: /客服人员/g, replacement: '代理', whenEnIncludes: 'agent' },
+    {
+      pattern: /客服人员/g,
+      replacement: '智能体',
+      whenEnMatches: /(?<!user[- ])\bagents?\b/i
+    },
     { pattern: /会议/g, replacement: '会话', whenEnIncludes: 'session' },
     { pattern: /港口/g, replacement: '端口', whenEnIncludes: 'ort' },
     { pattern: /公关/g, replacement: 'PR', whenEnIncludes: 'PR' },
     { pattern: /虎鲸:\/\//g, replacement: 'orca://', whenEnIncludes: 'orca://' },
-    { pattern: /代理商/g, replacement: '代理', whenEnIncludes: 'agent' },
-    { pattern: /智能体/g, replacement: '代理', whenEnIncludes: 'agent' },
+    {
+      pattern: /代理商/g,
+      replacement: '智能体',
+      whenEnMatches: /(?<!user[- ])\bagents?\b/i
+    },
+    // Why: 代理 remains correct for network proxies, so only agent-token source copy uses 智能体.
+    {
+      pattern: /代理/g,
+      replacement: '智能体',
+      whenEnMatches: /(?<!user[- ])\bagents?\b/i
+    },
     { pattern: /分支机构/g, replacement: '分支', whenEnIncludes: 'ranch' },
-    { pattern: /座席/g, replacement: '代理', whenEnIncludes: 'agent' },
+    {
+      pattern: /座席/g,
+      replacement: '智能体',
+      whenEnMatches: /(?<!user[- ])\bagents?\b/i
+    },
     { pattern: /汽车/g, replacement: '自动', whenEnIncludes: 'Auto' },
     { pattern: /清爽/g, replacement: '刷新中', whenEnIncludes: 'Refreshing' },
     { pattern: /瓦斯尔/g, replacement: 'WSL', whenEnIncludes: 'wsl' },
@@ -157,11 +174,20 @@ export const LOCALE_PHRASE_FIXES = {
     { pattern: /电脑使用/g, replacement: '计算机控制', whenEnIncludes: 'Computer Use' },
     { pattern: /快捷方式/g, replacement: '快捷键', whenEnIncludes: 'Shortcuts' },
     { pattern: /入职清单/g, replacement: '入门清单', whenEnIncludes: 'Onboarding checklist' },
-    { pattern: /发射代理/g, replacement: '启动代理', whenEnIncludes: 'Launch agent' },
+    {
+      pattern: /发射(?:代理|智能体)/g,
+      replacement: '启动智能体',
+      whenEnMatches: /\bLaunch agent\b/i
+    },
     { pattern: /地位/g, replacement: '状态', whenEnIncludes: 'Status' },
     { pattern: /受让人/g, replacement: '负责人', whenEnIncludes: 'assignee' },
     { pattern: /开放工作区/g, replacement: '打开工作区', whenEnIncludes: 'Open workspace' },
-    { pattern: /工作空间/g, replacement: '工作区', whenEnIncludes: 'Workspace' },
+    { pattern: /工作空间/g, replacement: '工作区', whenEnMatches: /\bworkspaces?\b/i },
+    {
+      pattern: /存储库/g,
+      replacement: '仓库',
+      whenEnMatches: /\b(?:repos?|repositories?)\b/i
+    },
     { pattern: /丢失的/g, replacement: '缺失', whenEnIncludes: 'Missing' },
     {
       pattern: /聆听捷径/g,
@@ -323,6 +349,31 @@ export const LOCALE_PHRASE_FIXES = {
     { pattern: /新特征/g, replacement: '新功能', whenEnIncludes: 'New features' },
     { pattern: /审稿人/g, replacement: '评审人', whenEnIncludes: 'reviewer' },
     { pattern: /审阅者/g, replacement: '评审人', whenEnIncludes: 'reviewer' },
+    { pattern: /评论主题/g, replacement: '评审线程', whenEnMatches: /\breview threads?\b/i },
+    {
+      pattern: /(?<!评审)评论/g,
+      replacement: '评审评论',
+      whenEnMatches: /\breview comments?\b/i
+    },
+    {
+      pattern: /(?:评论|复习)笔记|评论注释/g,
+      replacement: '评审笔记',
+      whenEnMatches: /\breview notes?\b/i
+    },
+    { pattern: /托管评论/g, replacement: '托管评审', whenEnMatches: /\bhosted reviews?\b/i },
+    { pattern: /审查详情/g, replacement: '评审详情', whenEnMatches: /\breview details\b/i },
+    {
+      pattern: /正在创建审查/g,
+      replacement: '正在创建评审',
+      whenEnMatches: /\bcreating review\b/i
+    },
+    { pattern: /审查页面/g, replacement: '评审页面', whenEnMatches: /\breview page\b/i },
+    { pattern: /需审核/g, replacement: '待评审', whenEnMatches: /\bneeds review\b/i },
+    {
+      pattern: /检查和审核/g,
+      replacement: '检查和评审',
+      whenEnMatches: /\bchecks and review\b/i
+    },
     { pattern: /电话/g, replacement: '手机', whenEnIncludes: 'phone' },
     { pattern: /发射器/g, replacement: '启动器', whenEnIncludes: 'launcher' },
     { pattern: /发射/g, replacement: '启动', whenEnIncludes: 'launch' },
