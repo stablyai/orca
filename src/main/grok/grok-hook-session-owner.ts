@@ -8,6 +8,18 @@ import {
 
 const OWNERS_VERSION = 1
 
+// Why memoized: describeSelf() is consulted once per recorded owner while pruning, and the identity
+// probe forks a subprocess on macOS and Windows. Without this a prune costs O(owners) spawns.
+// Self identity cannot change within a process, so one probe is authoritative for its lifetime.
+let selfOwnerPromise: Promise<GrokHookSessionOwner> | undefined
+
+// Why a fallback identity for THIS process: the probe forks `ps` on macOS with a short timeout, so
+// a loaded machine returns "could not tell" and we would record no owner at all -- leaving crash
+// reconciliation inert exactly when it is most likely to be needed. Windows already falls back this
+// way for self. A runtime-scoped identity can never be matched by a later process, so a record
+// carrying one is treated as never-provably-stale: conservative, never destructive.
+const selfRuntimeIdentity = `runtime:${randomUUID()}`
+
 type GrokHookSessionOwner = {
   pid: number
   /** 'runtime' means the host probe was unavailable, so the scope cannot be compared. */
@@ -53,12 +65,6 @@ export async function readLiveGrokHookSessionOwners(
 
 export async function claimGrokHookSession(ownersPath: string): Promise<void> {
   const self = await describeSelf()
-  if (!self) {
-    // Why loud: without a record a later crash leaves the config stranded with nothing to
-    // reconcile it, which is the failure this whole mechanism exists to prevent.
-    console.warn('[agent-hooks] Could not identify this process; Grok hook ownership not recorded')
-    return
-  }
   const live = await readLiveGrokHookSessionOwners(ownersPath)
   const others = live.filter((owner) => owner.pid !== self.pid)
   await writeOwners(ownersPath, [...others, self])
@@ -100,21 +106,22 @@ async function writeOwners(ownersPath: string, owners: GrokHookSessionOwner[]): 
   }
 }
 
-async function describeSelf(): Promise<GrokHookSessionOwner | null> {
+async function describeSelf(): Promise<GrokHookSessionOwner> {
+  return await (selfOwnerPromise ??= probeSelf())
+}
+
+async function probeSelf(): Promise<GrokHookSessionOwner> {
   const [hostIdentity, processIdentity] = await Promise.all([
     readManagedHookHostIdentity(),
     readManagedHookProcessIdentity(process.pid)
   ])
-  if (typeof processIdentity !== 'string') {
-    return null
-  }
   return {
     pid: process.pid,
     hostScope: hostIdentity.startsWith('runtime:') ? 'runtime' : 'durable',
     // Why a digest: hostIdentity can carry the durable managed-hook host token that lock ownership
     // is keyed on, and staleness only ever compares it for equality.
     hostDigest: createHash('sha256').update(hostIdentity).digest('hex'),
-    processIdentity
+    processIdentity: typeof processIdentity === 'string' ? processIdentity : selfRuntimeIdentity
   }
 }
 
@@ -125,7 +132,7 @@ async function isStale(owner: GrokHookSessionOwner): Promise<boolean> {
     return false
   }
   const self = await describeSelf()
-  if (self && self.hostScope === 'durable' && self.hostDigest !== owner.hostDigest) {
+  if (self.hostScope === 'durable' && self.hostDigest !== owner.hostDigest) {
     return false
   }
   const currentIdentity = await readManagedHookProcessIdentity(owner.pid)

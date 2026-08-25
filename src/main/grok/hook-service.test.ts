@@ -574,6 +574,36 @@ describe('GrokHookService', () => {
     expect(existsSync(ownersPathFor(homeDir))).toBe(false)
   })
 
+  // Why: the reported workaround for #15518 was emptying this file by hand, so Orca must not
+  // rewrite it on startup. But then turning the setting back on has to work, or the toggle
+  // silently lies and the only way back is deleting a file in a hidden directory.
+  it('leaves a user-cleared config alone on a startup install', () => {
+    const service = new GrokHookService()
+    const configPath = join(homeDir, '.grok', 'hooks', 'orca-status.json')
+    const userCleared = '{  "hooks" : {}  }\n'
+
+    expect(service.install().state).toBe('installed')
+    writeFileSync(configPath, userCleared, 'utf8')
+
+    service.install()
+
+    expect(readFileSync(configPath, 'utf8')).toBe(userCleared)
+  })
+
+  it('restores a user-cleared config when the user turns hooks back on', () => {
+    const service = new GrokHookService()
+    const configPath = join(homeDir, '.grok', 'hooks', 'orca-status.json')
+    const userCleared = '{  "hooks" : {}  }\n'
+
+    expect(service.install().state).toBe('installed')
+    writeFileSync(configPath, userCleared, 'utf8')
+
+    expect(service.install({ userInitiated: true }).state).toBe('installed')
+
+    expect(readFileSync(configPath, 'utf8')).not.toBe(userCleared)
+    expect(service.getStatus().managedHooksPresent).toBe(true)
+  })
+
   it('preserves user-authored hook entries in the Orca Grok config file', () => {
     const configPath = join(homeDir, '.grok', 'hooks', 'orca-status.json')
     mkdirSync(dirname(configPath), { recursive: true })

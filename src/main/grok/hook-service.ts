@@ -199,7 +199,7 @@ export class GrokHookService {
     return { agent: 'grok', state, configPath, managedHooksPresent, detail }
   }
 
-  install(): AgentHookInstallStatus {
+  install(options?: { userInitiated?: boolean }): AgentHookInstallStatus {
     const configPath = getConfigPath()
     const scriptPath = getManagedScriptPath()
     const snapshot = readHooksJsonWithRaw(configPath)
@@ -214,8 +214,15 @@ export class GrokHookService {
       }
     }
 
-    // Why: an existing empty file is an explicit user choice, not a missing config.
-    if (snapshot.raw !== null && Object.keys(config.hooks ?? {}).length === 0) {
+    // Why: an existing empty file is an explicit user choice, not a missing config -- the reported
+    // workaround for #15518 was emptying it by hand. Why userInitiated overrides: turning the
+    // setting back on is an equally explicit choice, and the later one. Without this the toggle
+    // silently does nothing forever and the only way back is deleting a file in a hidden directory.
+    if (
+      options?.userInitiated !== true &&
+      snapshot.raw !== null &&
+      Object.keys(config.hooks ?? {}).length === 0
+    ) {
       return this.getStatus()
     }
 

@@ -26,6 +26,8 @@ type ManagedHookSettings = Partial<
 > | null
 
 type InstallOptions = {
+  /** Set only for an explicit user action, never for startup reconciliation. */
+  userInitiated?: boolean
   shouldHydrateShellPath?: boolean
   onInstallError?: (agent: AgentHookTarget, error: unknown) => void
   shouldContinue?: (agent: AgentHookTarget) => boolean
@@ -89,11 +91,12 @@ function selectedInstallers(options: InstallOptions): readonly ManagedAgentHookI
 
 function runInstaller(
   entry: ManagedAgentHookInstaller,
-  onInstallError: InstallOptions['onInstallError']
+  onInstallError: InstallOptions['onInstallError'],
+  userInitiated?: boolean
 ): AgentHookInstallStatus {
   const [agent, install] = entry
   try {
-    return install()
+    return install({ userInitiated })
   } catch (error) {
     console.error(`[agent-hooks] Failed to install ${agent} managed hooks:`, error)
     try {
@@ -196,7 +199,7 @@ export async function installManagedAgentHooks(
       )
       continue
     }
-    results.push(runInstaller(entry, options.onInstallError))
+    results.push(runInstaller(entry, options.onInstallError, options.userInitiated))
   }
   await runSessionLifecycle(MANAGED_AGENT_HOOK_SESSION_CLAIMERS, options)
   return results
