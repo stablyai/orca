@@ -87,9 +87,7 @@ inline src/renderer/src/components/editor/CombinedDiffViewer.tsx
 inline src/renderer/src/components/editor/EditorContent.tsx
 inline src/renderer/src/components/editor/IpynbViewer.tsx
 inline src/renderer/src/components/editor/MarkdownPreview.tsx
-inline src/renderer/src/components/feature-wall/BrowserAnimatedVisual.tsx
 inline src/renderer/src/components/feature-wall/EditorAnimatedVisual.tsx
-inline src/renderer/src/components/feature-wall/WorkbenchAnimatedVisual.tsx
 inline src/renderer/src/components/floating-terminal/FloatingTerminalPanel.tsx
 inline src/renderer/src/components/github-project/ProjectCell.tsx
 inline src/renderer/src/components/github-project/ProjectPicker.tsx
