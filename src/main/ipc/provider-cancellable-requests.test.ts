@@ -1,9 +1,9 @@
 import { describe, expect, it, vi } from 'vitest'
-import { JiraCancellableRequests } from './jira-cancellable-requests'
+import { ProviderCancellableRequests } from './provider-cancellable-requests'
 
-describe('JiraCancellableRequests', () => {
+describe('ProviderCancellableRequests', () => {
   it('aborts a late run when cancel arrived before registration', async () => {
-    const requests = new JiraCancellableRequests()
+    const requests = new ProviderCancellableRequests()
     requests.cancel('req-1')
 
     const signals: AbortSignal[] = []
@@ -21,7 +21,7 @@ describe('JiraCancellableRequests', () => {
   })
 
   it('aborts an in-flight run on cancel', async () => {
-    const requests = new JiraCancellableRequests()
+    const requests = new ProviderCancellableRequests()
     const resolveBox: { current?: (value: string) => void } = {}
     const started = new Promise<AbortSignal>((resolve) => {
       void requests.run('req-2', (signal) => {
@@ -47,7 +47,7 @@ describe('JiraCancellableRequests', () => {
   })
 
   it('ignores blank request ids', async () => {
-    const requests = new JiraCancellableRequests()
+    const requests = new ProviderCancellableRequests()
     const task = vi.fn(async () => 'ok')
     await expect(requests.run('   ', task)).resolves.toBe('ok')
     requests.cancel('   ')

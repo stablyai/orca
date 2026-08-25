@@ -415,6 +415,9 @@
               }
             }
           }
+        },
+        "shortcut": {
+          "superseded": "Shortcut connection was superseded by a newer request."
         }
       }
     },
@@ -2081,7 +2084,37 @@
         "linearModeHasWorktreeTooltip": "Linear tickets linked to an Orca workspace",
         "linearEmptyHasWorktree": "No Linear tickets are linked to an Orca workspace yet. Start work from a Linear issue to see it here.",
         "linearOpenAttachedWorkspace": "Open workspace attached to {{value0}}",
-        "linearWorktreesColumn": "Workspaces"
+        "linearWorktreesColumn": "Workspaces",
+        "shortcutTeamsFailed": "Failed to load Shortcut teams.",
+        "shortcutCreateFailed": "Failed to create Shortcut story.",
+        "shortcutCreated": "Created sc-{{value0}}",
+        "shortcutLinkSourceUnavailable": "Couldn’t link this Shortcut story. Reconnect Shortcut or pick the matching workspace, then try again.",
+        "shortcutSwitchFailed": "Failed to switch Shortcut workspace.",
+        "allShortcutWorkspaces": "All Shortcut workspaces",
+        "newShortcutStory": "New Shortcut story",
+        "refreshShortcutStories": "Refresh Shortcut stories",
+        "shortcutSearchPlaceholder": "Shortcut search, e.g. owner:me state:\"In Progress\"",
+        "connectShortcutTitle": "Connect your Shortcut workspace",
+        "connectShortcutBody": "Browse, edit, create, and start work from Shortcut stories directly from here.",
+        "connectShortcut": "Connect Shortcut",
+        "hideShortcut": "Hide Shortcut",
+        "shortcutStories": "Shortcut stories",
+        "noShortcutStories": "No Shortcut stories found",
+        "shortcutTryDifferentQuery": "Try a different search query.",
+        "shortcutNoPresetMatches": "No stories match the selected preset.",
+        "newShortcutStoryInTeam": "Creates a new story in {{value0}}.",
+        "newShortcutStoryDefaultWorkflow": "Creates a new story in the default workflow of the selected workspace.",
+        "shortcutTeam": "Team",
+        "shortcutTeamsLoading": "Loading…",
+        "shortcutNoTeam": "No team",
+        "shortcutStoryType": "Type",
+        "shortcutStoryTitlePlaceholder": "Story title",
+        "shortcutStoryBodyPlaceholder": "Description (Markdown, optional)",
+        "createShortcutStory": "Create story",
+        "shortcutSourceLabel": "Shortcut",
+        "shortcutRequested": "Requested",
+        "openInShortcutItem": "Open {{value0}} in Shortcut",
+        "openInShortcut": "Open in Shortcut"
       },
       "Terminal": {
         "73768427cf": "Close",
@@ -5063,7 +5096,8 @@
           "fee535205b": "Tasks",
           "d599269755": "Hide from sidebar",
           "artifacts": "Artifacts",
-          "skills": "Skills"
+          "skills": "Skills",
+          "openShortcutTasks": "Open Shortcut tasks"
         },
         "SidebarRepositoryFilterSection": {
           "d3a9c4cea1": "Clear",
@@ -8175,7 +8209,13 @@
           "integrationsHint": "Credentials for all providers also live under",
           "integrationsLink": "Integrations",
           "skillHint": ". After Linear is connected, usage examples stay under Settings → Linear.",
-          "incompleteBannerBodyWithLinear": "Hide providers you do not use, or expand a card and finish its steps. For Linear: API access, the agent skill, and Show in Tasks."
+          "incompleteBannerBodyWithLinear": "Hide providers you do not use, or expand a card and finish its steps. For Linear: API access, the agent skill, and Show in Tasks.",
+          "connectShortcutTitle": "Connect Shortcut",
+          "connectShortcutDescription": "Add a Shortcut workspace with an API token.",
+          "manageShortcut": "Manage keys",
+          "addShortcut": "Add Shortcut access",
+          "shortcutLabel": "Shortcut",
+          "shortcutDescription": "Connect Shortcut with an API token and show it in Tasks."
         },
         "TerminalAppearanceSection": {
           "a14a427ae4": "Thickness of the pane divider line.",
@@ -9377,7 +9417,9 @@
             "7166b9090c": "GitHub authentication via the gh CLI.",
             "f16e41cc72": "GitHub Integration",
             "760e2446e0": "Bitbucket Cloud authentication with a saved API token or environment variables.",
-            "af5ae87847": "access token"
+            "af5ae87847": "access token",
+            "shortcutTitle": "Shortcut Integration",
+            "shortcutDescription": "Connect Shortcut or update Shortcut API token credentials."
           }
         },
         "jira": {
@@ -11343,6 +11385,30 @@
         },
         "shortcutDefinitionCatalog": {
           "missionControlConflict": "Blocked by Mission Control. Remap here or change it in System Settings."
+        },
+        "shortcut": {
+          "integration": {
+            "card": {
+              "credentialCopyRemote": "Connect a Shortcut workspace with an API token. Credentials are sent to the selected remote runtime and stored there with runtime-supported encryption.",
+              "credentialCopyLocal": "Connect a Shortcut workspace with an API token. Credentials are stored locally and encrypted when local runtime storage supports it.",
+              "connectedCount": "{{value0}} workspace{{value1}} connected",
+              "checking": "Checking Shortcut access before showing setup actions.",
+              "pitch": "Browse, create, and start work from Shortcut stories.",
+              "statusConnected": "Connected",
+              "statusNotConnected": "Not connected",
+              "addWorkspace": "Add Shortcut workspace",
+              "connect": "Connect Shortcut",
+              "accountScopePrefix": "Account scope",
+              "verified": "Verified",
+              "testing": "Testing...",
+              "test": "Test",
+              "disconnectOne": "Disconnect {{value0}}",
+              "tokenPerWorkspace": "Each connected Shortcut workspace has one token stored by the active runtime.",
+              "staleList": "Shortcut is connected for this runtime. Re-check if the connected workspace list looks stale.",
+              "recheck": "Re-check",
+              "disconnectAll": "Disconnect"
+            }
+          }
         }
       },
       "right": {
@@ -15930,6 +15996,58 @@
         "expiredCompact": "Expired",
         "typeMarkdown": "Markdown",
         "typeHtml": "HTML"
+      },
+      "ShortcutStoryWorkspace": {
+        "copied": "{{value0}} copied",
+        "copyFailed": "Failed to copy {{value0}}",
+        "openInShortcut": "Open in Shortcut",
+        "copyUrl": "Copy URL",
+        "copyId": "Copy story ID",
+        "copyBranch": "Copy suggested branch name",
+        "copyPrompt": "Copy prompt",
+        "urlLabel": "URL",
+        "storyIdLabel": "Story ID",
+        "branchNameLabel": "Branch name",
+        "promptLabel": "Prompt",
+        "storyTitle": "Shortcut story",
+        "sheetDescription": "Preview, edit, and start work from the selected story.",
+        "startWorkspace": "Start workspace",
+        "closePreview": "Close Shortcut story preview",
+        "close": "Close",
+        "addOwner": "+ Owner",
+        "unassigned": "Unassigned",
+        "commentPlaceholder": "Add a Shortcut comment...",
+        "commentFieldLabel": "Add a Shortcut comment",
+        "comment": "Comment",
+        "title": "Title",
+        "labels": "Labels",
+        "labelsPlaceholder": "backend, bug",
+        "noDescription": "No description provided.",
+        "comments": "Comments",
+        "retry": "Retry",
+        "noComments": "No comments yet.",
+        "unknown": "Unknown",
+        "commentTooLarge": "Comment is too large to submit safely.",
+        "commentFailed": "Failed to add comment.",
+        "commentsLoadFailed": "Failed to load comments.",
+        "updateFailed": "Failed to update Shortcut story."
+      },
+      "shortcut": {
+        "connect": {
+          "dialog": {
+            "remoteStorage": "Your token is sent to the selected remote runtime and stored there with runtime-supported encryption.",
+            "localStorage": "Your token is stored locally and encrypted when local runtime storage supports it.",
+            "title": "Connect Shortcut workspace",
+            "description": "Use a Shortcut API token to browse stories. The token identifies its workspace automatically.",
+            "tokenLabel": "API token",
+            "tokenPlaceholder": "Shortcut API token",
+            "tokenHint": "Create a token in",
+            "tokenSettingsLink": "Shortcut account settings",
+            "cancel": "Cancel",
+            "verifying": "Verifying…",
+            "connect": "Connect"
+          }
+        }
       }
     },
     "i18n": {

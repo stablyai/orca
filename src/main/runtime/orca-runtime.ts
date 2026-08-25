@@ -294,6 +294,13 @@ import type {
   JiraIssueUpdate,
   JiraSiteSelection
 } from '../../shared/jira-types'
+import type {
+  ShortcutConnectArgs,
+  ShortcutCreateStoryArgs,
+  ShortcutStoryFilter,
+  ShortcutStoryUpdate,
+  ShortcutWorkspaceSelection
+} from '../../shared/shortcut-types'
 import type { LinearCustomViewModel, LinearProjectSummary } from '../../shared/linear/project-types'
 import type { LinearWorkspaceSelection } from '../../shared/linear/workspace-types'
 import type {
@@ -972,6 +979,29 @@ import {
   searchIssues as searchJiraIssues,
   updateIssue as updateJiraIssue
 } from '../jira/issues'
+import {
+  connect as connectShortcut,
+  disconnect as disconnectShortcut,
+  getStatus as getShortcutStatus,
+  selectWorkspace as selectShortcutWorkspace,
+  testConnection as testShortcutConnection
+} from '../shortcut/client'
+import {
+  getStory as getShortcutStory,
+  getStoryComments as getShortcutStoryComments,
+  listStories as listShortcutStories,
+  searchStories as searchShortcutStories
+} from '../shortcut/stories'
+import {
+  addStoryComment as addShortcutStoryComment,
+  createStory as createShortcutStory,
+  updateStory as updateShortcutStory
+} from '../shortcut/story-mutations'
+import {
+  listMembers as listShortcutMembers,
+  listTeams as listShortcutTeams,
+  listWorkflows as listShortcutWorkflows
+} from '../shortcut/workspace-directory'
 import {
   clearProjectItemFieldValue,
   getProjectViewTable,
@@ -38285,6 +38315,97 @@ export class OrcaRuntimeService {
     siteId?: string
   ): ReturnType<typeof getJiraProjectStatusOrder> {
     return getJiraProjectStatusOrder(projectKey, siteId)
+  }
+
+  // ── Shortcut integration ──
+
+  shortcutConnect(args: ShortcutConnectArgs): ReturnType<typeof connectShortcut> {
+    return connectShortcut(args)
+  }
+
+  shortcutDisconnect(workspaceId?: string): { ok: true } {
+    disconnectShortcut(workspaceId)
+    return { ok: true }
+  }
+
+  shortcutSelectWorkspace(
+    workspaceId: ShortcutWorkspaceSelection
+  ): ReturnType<typeof getShortcutStatus> {
+    return selectShortcutWorkspace(workspaceId)
+  }
+
+  shortcutStatus(): ReturnType<typeof getShortcutStatus> {
+    return getShortcutStatus()
+  }
+
+  shortcutReadStatus(): ReturnType<typeof getShortcutStatus> {
+    return getShortcutStatus()
+  }
+
+  shortcutTestConnection(workspaceId?: string): ReturnType<typeof testShortcutConnection> {
+    return testShortcutConnection(workspaceId)
+  }
+
+  shortcutSearchStories(
+    query: string,
+    limit = 30,
+    workspaceId?: ShortcutWorkspaceSelection,
+    signal?: AbortSignal
+  ): ReturnType<typeof searchShortcutStories> {
+    return searchShortcutStories(query, Math.min(Math.max(1, limit), 100), workspaceId, signal)
+  }
+
+  shortcutListStories(
+    filter?: ShortcutStoryFilter,
+    limit = 30,
+    workspaceId?: ShortcutWorkspaceSelection
+  ): ReturnType<typeof listShortcutStories> {
+    return listShortcutStories(filter, Math.min(Math.max(1, limit), 100), workspaceId)
+  }
+
+  shortcutGetStory(storyId: string, workspaceId?: string): ReturnType<typeof getShortcutStory> {
+    return getShortcutStory(storyId, workspaceId)
+  }
+
+  shortcutCreateStory(args: ShortcutCreateStoryArgs): ReturnType<typeof createShortcutStory> {
+    return createShortcutStory(args)
+  }
+
+  shortcutUpdateStory(
+    storyId: string,
+    updates: ShortcutStoryUpdate,
+    workspaceId?: string
+  ): ReturnType<typeof updateShortcutStory> {
+    return updateShortcutStory(storyId, updates, workspaceId)
+  }
+
+  shortcutAddStoryComment(
+    storyId: string,
+    body: string,
+    workspaceId?: string
+  ): ReturnType<typeof addShortcutStoryComment> {
+    return addShortcutStoryComment(storyId, body, workspaceId)
+  }
+
+  shortcutStoryComments(
+    storyId: string,
+    workspaceId?: string
+  ): ReturnType<typeof getShortcutStoryComments> {
+    return getShortcutStoryComments(storyId, workspaceId)
+  }
+
+  shortcutListTeams(
+    workspaceId?: ShortcutWorkspaceSelection
+  ): ReturnType<typeof listShortcutTeams> {
+    return listShortcutTeams(workspaceId)
+  }
+
+  shortcutListWorkflows(workspaceId?: string): ReturnType<typeof listShortcutWorkflows> {
+    return listShortcutWorkflows(workspaceId)
+  }
+
+  shortcutListMembers(workspaceId?: string): ReturnType<typeof listShortcutMembers> {
+    return listShortcutMembers(workspaceId)
   }
 
   // ── Browser automation ──

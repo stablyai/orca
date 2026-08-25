@@ -9,6 +9,7 @@ import {
 } from './worktree-nav-history'
 import type { GitHubWorkItem } from '../../../../shared/github/work-item-types'
 import type { JiraIssue } from '../../../../shared/jira-types'
+import type { ShortcutStory } from '../../../../shared/shortcut-types'
 import type { LinearIssue } from '../../../../shared/linear/issue-types'
 import type { PersistedTrustedOrcaHooks } from '../../../../shared/orca-yaml-hook-types'
 import type { PersistedUIState } from '../../../../shared/persisted-ui-state-types'
@@ -330,6 +331,12 @@ const VALID_JIRA_PRESETS = new Set<NonNullable<TaskResumeState['jiraPreset']>>([
   'all',
   'done'
 ])
+const VALID_SHORTCUT_PRESETS = new Set<NonNullable<TaskResumeState['shortcutPreset']>>([
+  'assigned',
+  'requested',
+  'all',
+  'done'
+])
 
 function resolvePaneKeyWorktreeIdFromTabs(state: AppState, paneKey: string): string | null {
   const parsed = parsePaneKey(paneKey)
@@ -588,6 +595,17 @@ function sanitizeTaskResumeState(value: unknown): TaskResumeState | undefined {
   if (typeof input.jiraQuery === 'string') {
     next.jiraQuery = input.jiraQuery
   }
+  if (
+    typeof input.shortcutPreset === 'string' &&
+    VALID_SHORTCUT_PRESETS.has(
+      input.shortcutPreset as NonNullable<TaskResumeState['shortcutPreset']>
+    )
+  ) {
+    next.shortcutPreset = input.shortcutPreset as NonNullable<TaskResumeState['shortcutPreset']>
+  }
+  if (typeof input.shortcutQuery === 'string') {
+    next.shortcutQuery = input.shortcutQuery
+  }
 
   return Object.keys(next).length > 0 ? next : undefined
 }
@@ -698,6 +716,8 @@ export type UISlice = {
     openLinearSourceContext?: TaskSourceContext | null
     openJiraIssue?: JiraIssue
     openJiraSourceContext?: TaskSourceContext | null
+    openShortcutStory?: ShortcutStory
+    openShortcutSourceContext?: TaskSourceContext | null
   }
   taskResumeState: TaskResumeState | undefined
   setTaskResumeState: (updates: Partial<TaskResumeState>) => void
@@ -717,7 +737,7 @@ export type UISlice = {
     note: string
     attachments: string[]
     linkedWorkItem: {
-      provider?: 'github' | 'gitlab' | 'linear' | 'jira'
+      provider?: 'github' | 'gitlab' | 'linear' | 'jira' | 'shortcut'
       type: 'issue' | 'pr' | 'mr'
       number: number
       title: string
@@ -1301,6 +1321,9 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
     if (data.openJiraIssue) {
       get().recordFeatureInteraction?.('jira-tasks')
     }
+    if (data.openShortcutStory) {
+      get().recordFeatureInteraction?.('shortcut-tasks')
+    }
     // Why: record a Tasks visit in shared back/forward history; all task-source variants collapse to one deduped 'tasks' entry.
     const detailEntry = data.openGitHubWorkItem
       ? ({
@@ -1331,7 +1354,14 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
                 issue: data.openJiraIssue,
                 sourceContext: data.openJiraSourceContext
               } as const)
-            : null
+            : data.openShortcutStory
+              ? ({
+                  kind: 'task-detail',
+                  source: 'shortcut',
+                  story: data.openShortcutStory,
+                  sourceContext: data.openShortcutSourceContext
+                } as const)
+              : null
     const currentEntry = get().worktreeNavHistory[get().worktreeNavHistoryIndex]
     const currentIsTaskStack =
       currentEntry === 'tasks' ||

@@ -13,7 +13,7 @@ export function getAutomationSourceDisplay(
   if (!sourceContext) {
     return null
   }
-  const providerLabel = getProviderLabel(sourceContext.provider)
+  const providerLabel = getTaskProviderDisplayLabel(sourceContext.provider)
   const hostLabel =
     hostLabelById?.get(sourceContext.hostId) ?? getExecutionHostLabel(sourceContext.hostId)
   const identityLabel = getSourceIdentityLabel(sourceContext)
@@ -31,7 +31,7 @@ export function getAutomationSourceDisplay(
   return { label, title }
 }
 
-function getProviderLabel(provider: TaskSourceContext['provider']): string {
+export function getTaskProviderDisplayLabel(provider: TaskSourceContext['provider']): string {
   switch (provider) {
     case 'github':
       return 'GitHub'
@@ -41,6 +41,8 @@ function getProviderLabel(provider: TaskSourceContext['provider']): string {
       return 'Linear'
     case 'jira':
       return 'Jira'
+    case 'shortcut':
+      return 'Shortcut'
   }
 }
 
@@ -58,6 +60,8 @@ function getSourceIdentityLabel(sourceContext: TaskSourceContext): string | null
         return identity.workspaceName ?? identity.workspaceId ?? null
       case 'jira':
         return identity.siteUrl ?? identity.siteId ?? null
+      case 'shortcut':
+        return identity.workspaceSlug ?? identity.workspaceId ?? null
     }
   }
   return sourceContext.accountLabel ?? sourceContext.repoId ?? null

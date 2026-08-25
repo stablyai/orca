@@ -2060,6 +2060,26 @@ const api = {
     }): Promise<JiraProjectStatusOrder> => ipcRenderer.invoke('jira:getProjectStatusOrder', args)
   },
 
+  shortcut: {
+    connect: (args) => ipcRenderer.invoke('shortcut:connect', args),
+    disconnect: (args) => ipcRenderer.invoke('shortcut:disconnect', args),
+    selectWorkspace: (args) => ipcRenderer.invoke('shortcut:selectWorkspace', args),
+    status: () => ipcRenderer.invoke('shortcut:status'),
+    readStatus: () => ipcRenderer.invoke('shortcut:readStatus'),
+    testConnection: (args) => ipcRenderer.invoke('shortcut:testConnection', args),
+    searchStories: (args) => ipcRenderer.invoke('shortcut:searchStories', args),
+    cancelSearchStories: (args) => ipcRenderer.invoke('shortcut:cancelSearchStories', args),
+    listStories: (args) => ipcRenderer.invoke('shortcut:listStories', args),
+    getStory: (args) => ipcRenderer.invoke('shortcut:getStory', args),
+    createStory: (args) => ipcRenderer.invoke('shortcut:createStory', args),
+    updateStory: (args) => ipcRenderer.invoke('shortcut:updateStory', args),
+    addStoryComment: (args) => ipcRenderer.invoke('shortcut:addStoryComment', args),
+    storyComments: (args) => ipcRenderer.invoke('shortcut:storyComments', args),
+    listTeams: (args) => ipcRenderer.invoke('shortcut:listTeams', args),
+    listWorkflows: (args) => ipcRenderer.invoke('shortcut:listWorkflows', args),
+    listMembers: (args) => ipcRenderer.invoke('shortcut:listMembers', args)
+  } satisfies PreloadApi['shortcut'],
+
   starNag: {
     onShow: (
       callback: (payload?: { mode?: 'gh' | 'web'; surface?: 'card' | 'toast' }) => void

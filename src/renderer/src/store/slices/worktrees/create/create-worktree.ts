@@ -127,6 +127,17 @@ export function createCreateWorktree(
               'Update the remote runtime to link Jira'
             )
           }
+          if (
+            target.kind === 'environment' &&
+            (linkedWorkItem?.provider === 'shortcut' ||
+              linkedTaskSourceContext?.provider === 'shortcut')
+          ) {
+            await assertRuntimeEnvironmentCapability(
+              target.environmentId,
+              WORKTREE_LINKED_WORK_ITEM_CONTEXT_RUNTIME_CAPABILITY,
+              'Update the remote runtime to link Shortcut'
+            )
+          }
           if (provisionedRoot && target.kind !== 'local') {
             throw new Error('Provisioned-root recipes currently require a direct SSH connection.')
           }
