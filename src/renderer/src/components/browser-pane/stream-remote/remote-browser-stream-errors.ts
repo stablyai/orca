@@ -56,6 +56,12 @@ export function isRemoteBrowserPageMissingError(error: unknown): boolean {
   return isRemoteBrowserPageMissingCode(readErrorCode(error))
 }
 
+// Why: a host predating an RPC answers `method_not_found` before dispatch, so nothing happened on
+// the page and the legacy call sequence can be retried in its place.
+export function isRemoteBrowserMethodUnsupportedError(error: unknown): boolean {
+  return readErrorCode(error) === 'method_not_found'
+}
+
 // Why: restart retries must stop for failures the host cannot recover from on its own; anything
 // else is unproven and must keep retrying rather than strand the pane with a dead subscription.
 export function isPermanentRemoteBrowserStreamFailure(error: unknown): boolean {

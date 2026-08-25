@@ -96,8 +96,10 @@ export function RemoteBrowserPagePane({
   const {
     enqueueRemoteInput,
     clearPendingRemoteWheel,
+    clearPendingRemotePress,
     resetRemoteInputQueue,
     pendingRemoteWheelRef,
+    pendingPressRef,
     remoteWheelFrameRef,
     remoteWheelInFlightRef
   } = useRemoteBrowserPageInputQueue()
@@ -131,6 +133,7 @@ export function RemoteBrowserPagePane({
     setPaneNotice,
     setPaneBusy,
     clearPendingRemoteWheel,
+    clearPendingRemotePress,
     resetRemoteInputQueue
   })
 
@@ -199,6 +202,7 @@ export function RemoteBrowserPagePane({
     getRemoteImagePoint,
     handleRemotePointerDown,
     handleRemotePointerUp,
+    handleRemotePointerCancel,
     handleRemoteScreenshotKeyDown
   } = useRemoteBrowserPageInput({
     busy,
@@ -207,6 +211,7 @@ export function RemoteBrowserPagePane({
     remoteCssViewportSizeRef,
     remoteViewportSizeRef,
     frameMetadata,
+    frameUrl,
     runtimeTarget,
     lifecycle,
     runtimeWorktree,
@@ -215,7 +220,8 @@ export function RemoteBrowserPagePane({
     isCurrentRemoteOperationToken,
     closeMissingRemotePage,
     scheduleRemoteTabInfoRefresh,
-    setPaneNotice
+    setPaneNotice,
+    pendingPressRef
   })
 
   useRemoteBrowserPageWheel({
@@ -344,6 +350,7 @@ export function RemoteBrowserPagePane({
         onReconnect={reconnectRemoteStream}
         handleRemotePointerDown={handleRemotePointerDown}
         handleRemotePointerUp={handleRemotePointerUp}
+        handleRemotePointerCancel={handleRemotePointerCancel}
         handleRemoteContextMenu={handleRemoteContextMenu}
         handleRemoteScreenshotKeyDown={handleRemoteScreenshotKeyDown}
       />

@@ -30,6 +30,7 @@ export function useRemoteBrowserPageLifecycle({
   setPaneNotice,
   setPaneBusy,
   clearPendingRemoteWheel,
+  clearPendingRemotePress,
   resetRemoteInputQueue
 }: {
   browserTab: BrowserPageState
@@ -39,6 +40,7 @@ export function useRemoteBrowserPageLifecycle({
   setPaneNotice: (notice: RemoteBrowserPaneNotice | null) => void
   setPaneBusy: (busy: boolean) => void
   clearPendingRemoteWheel: () => void
+  clearPendingRemotePress: () => void
   resetRemoteInputQueue: () => void
 }) {
   const [frameUrl, setFrameUrl] = useState<string | null>(null)
@@ -214,13 +216,15 @@ export function useRemoteBrowserPageLifecycle({
   }, [clearPendingRemoteWheel, lifecycle])
 
   useEffect(() => {
-    // Why: only reset frame/wheel on identity change; bumping the stream/operation generations here races the streaming effect and wedges the pane.
+    // Why: only reset frame/wheel/press on identity change; bumping the stream/operation generations here races the streaming effect and wedges the pane.
     lifecycle.forgetStreamViewportSize()
     clearPendingRemoteWheel()
+    clearPendingRemotePress()
     clearStreamFrame()
   }, [
     activeRuntimeEnvironmentId,
     browserTab.id,
+    clearPendingRemotePress,
     clearPendingRemoteWheel,
     clearStreamFrame,
     lifecycle

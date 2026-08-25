@@ -47,6 +47,7 @@ export function RemoteBrowserPageViewport({
   onReconnect,
   handleRemotePointerDown,
   handleRemotePointerUp,
+  handleRemotePointerCancel,
   handleRemoteContextMenu,
   handleRemoteScreenshotKeyDown
 }: {
@@ -70,6 +71,7 @@ export function RemoteBrowserPageViewport({
   onReconnect: () => void
   handleRemotePointerDown: (event: React.PointerEvent<HTMLImageElement>) => void
   handleRemotePointerUp: (event: React.PointerEvent<HTMLImageElement>) => void
+  handleRemotePointerCancel: () => void
   handleRemoteContextMenu: (event: React.MouseEvent<HTMLImageElement>) => void
   handleRemoteScreenshotKeyDown: (event: React.KeyboardEvent<HTMLImageElement>) => void
 }): React.JSX.Element {
@@ -106,6 +108,7 @@ export function RemoteBrowserPageViewport({
           className="absolute top-0 left-0 max-w-none cursor-default bg-white outline-none"
           onPointerDown={handleRemotePointerDown}
           onPointerUp={handleRemotePointerUp}
+          onPointerCancel={handleRemotePointerCancel}
           onContextMenu={handleRemoteContextMenu}
           onKeyDown={handleRemoteScreenshotKeyDown}
           draggable={false}

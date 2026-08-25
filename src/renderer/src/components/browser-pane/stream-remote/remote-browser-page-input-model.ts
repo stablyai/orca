@@ -84,6 +84,70 @@ export function getRemoteBrowserMouseButton(button: number): 'left' | 'middle' |
   return null
 }
 
+export type RemoteBrowserPressState = {
+  environmentId: string
+  pageId: string
+  button: 'left' | 'middle'
+  point: RemoteBrowserImagePoint
+  modified: boolean
+}
+
+// A press held this long is an interaction in its own right (long-press menu, hold-to-repeat,
+// drag-start affordance, :active feedback), so the button goes down on the page now instead of
+// waiting for a release that would compress the whole hold into one instantaneous click.
+export const REMOTE_BROWSER_PRESS_HOLD_MS = 350
+
+// Backstop for a press whose hold never armed the button (a suspended or throttled renderer can
+// stall the hold timer): past this it is stale, and replaying it would fabricate a press the user
+// never made at coordinates the page has since scrolled away from.
+export const REMOTE_BROWSER_PRESS_MAX_AGE_MS = 5_000
+
+export type PendingRemoteBrowserPress = {
+  press: RemoteBrowserPressState
+  target: RemoteBrowserRuntimeTarget
+  operationToken: RemoteBrowserOperationToken
+  pointerId: number
+  pressedAt: number
+  holdTimer: number | null
+  // Set when the hold put the button down remotely; the release then only has to lift it.
+  holdDispatched: boolean
+  // Drops the press, releasing the remote button first when the hold already put it down.
+  abandon: () => void
+}
+
+// Mouse jitter inside a press; wider slop would swallow short intentional drags.
+const REMOTE_BROWSER_CLICK_SLOP_PX = 3
+
+export function hasRemoteBrowserClickModifier(event: {
+  altKey: boolean
+  ctrlKey: boolean
+  metaKey: boolean
+  shiftKey: boolean
+}): boolean {
+  return event.altKey || event.ctrlKey || event.metaKey || event.shiftKey
+}
+
+// Why: only a same-target, unmodified, non-drag pair is reproducible as one atomic browser.mouseClick;
+// modifiers change activation semantics and the move/down/up chain carries none of them.
+export function isSimpleRemoteBrowserClick(
+  press: RemoteBrowserPressState,
+  release: RemoteBrowserPressState
+): boolean {
+  if (
+    press.environmentId !== release.environmentId ||
+    press.pageId !== release.pageId ||
+    press.button !== release.button ||
+    press.modified ||
+    release.modified
+  ) {
+    return false
+  }
+  return (
+    Math.hypot(release.point.x - press.point.x, release.point.y - press.point.y) <=
+    REMOTE_BROWSER_CLICK_SLOP_PX
+  )
+}
+
 export function buildRemoteContextMenuExpression(x: number, y: number): string {
   return `(() => {
     const target = document.elementFromPoint(${JSON.stringify(x)}, ${JSON.stringify(y)});
