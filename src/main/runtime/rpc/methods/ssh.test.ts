@@ -6,11 +6,13 @@ import { SSH_METHODS } from './ssh'
 
 const {
   connectRegisteredSshTargetMock,
+  ensureRegisteredSshConfigTargetMock,
   getRegisteredSshStateMock,
   listRegisteredSshTargetsMock,
   listRegisteredRemovedSshTargetLabelsMock
 } = vi.hoisted(() => ({
   connectRegisteredSshTargetMock: vi.fn(),
+  ensureRegisteredSshConfigTargetMock: vi.fn(),
   getRegisteredSshStateMock: vi.fn(),
   listRegisteredSshTargetsMock: vi.fn(),
   listRegisteredRemovedSshTargetLabelsMock: vi.fn()
@@ -18,6 +20,7 @@ const {
 
 vi.mock('../../../ssh/ssh-target-registry', () => ({
   connectRegisteredSshTarget: connectRegisteredSshTargetMock,
+  ensureRegisteredSshConfigTarget: ensureRegisteredSshConfigTargetMock,
   getRegisteredSshState: getRegisteredSshStateMock,
   listRegisteredSshTargets: listRegisteredSshTargetsMock,
   listRegisteredRemovedSshTargetLabels: listRegisteredRemovedSshTargetLabelsMock
@@ -28,6 +31,34 @@ function makeRequest(method: string, params?: unknown): RpcRequest {
 }
 
 describe('ssh RPC methods', () => {
+  it('ensures one SSH config target without exposing its connection details', async () => {
+    ensureRegisteredSshConfigTargetMock.mockResolvedValueOnce({
+      created: true,
+      target: {
+        id: 'ssh-1',
+        label: 'devbox',
+        host: 'private.internal',
+        port: 22,
+        username: 'me',
+        proxyCommand: 'secret proxy'
+      }
+    })
+    const runtime = { getRuntimeId: () => 'test-runtime' } as unknown as OrcaRuntimeService
+    const dispatcher = new RpcDispatcher({ runtime, methods: SSH_METHODS })
+
+    const response = await dispatcher.dispatch(
+      makeRequest('ssh.ensureConfigTarget', { alias: 'devbox' })
+    )
+
+    expect(ensureRegisteredSshConfigTargetMock).toHaveBeenCalledWith('devbox')
+    expect(response).toMatchObject({
+      ok: true,
+      result: { created: true, target: { id: 'ssh-1', label: 'devbox' } }
+    })
+    expect(JSON.stringify(response)).not.toContain('private.internal')
+    expect(JSON.stringify(response)).not.toContain('secret proxy')
+  })
+
   it('returns the registered SSH target state', async () => {
     const state = {
       targetId: 'ssh-1',

@@ -372,6 +372,7 @@ import {
   type ExecutionHostId
 } from '../../shared/execution-host'
 import { preservedBranchCleanupScopeKey } from '../../shared/preserved-branch-cleanup'
+import { setupRegisteredSshProjectExistingFolder } from '../ssh/ssh-project-setup-registry'
 import { getRegisteredSshState } from '../ssh/ssh-target-registry'
 import type {
   AgentProviderSessionMetadata,
@@ -20688,6 +20689,9 @@ export class OrcaRuntimeService {
   ): Promise<ProjectHostSetupResult> {
     if (!this.store) {
       throw new Error('runtime_unavailable')
+    }
+    if (parseExecutionHostId(args.hostId)?.kind === 'ssh') {
+      return setupRegisteredSshProjectExistingFolder(args)
     }
     assertProjectHostSetupHostIsSupported(args.hostId)
     const knownRepoIds = new Set(this.listRepos().map((repo) => repo.id))

@@ -3,6 +3,20 @@ import { GLOBAL_FLAGS } from '../args'
 
 export const ENVIRONMENT_COMMAND_SPECS: CommandSpec[] = [
   {
+    path: ['host', 'add'],
+    summary: 'Add one SSH config host to Orca',
+    usage: 'orca host add --ssh-config <alias> [--connect] [--json]',
+    allowedFlags: [...GLOBAL_FLAGS, 'ssh-config', 'connect'],
+    notes: [
+      'The alias must be a concrete Host entry in ~/.ssh/config.',
+      'Repeated calls for the same alias return the existing Orca SSH target.'
+    ],
+    examples: [
+      'orca host add --ssh-config devbox --connect',
+      'orca host add --ssh-config devbox --json'
+    ]
+  },
+  {
     path: ['host', 'list'],
     summary: 'List every machine this Orca host can target, and how to name each one',
     usage: 'orca host list [--json]',

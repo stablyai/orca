@@ -31,6 +31,7 @@ Skills:
   skills update             Update already-installed Orca skills via the community skills CLI
 
 Hosts:
+  host add                  Add one SSH config host to Orca
   host list                 List targetable machines and how to name each one
 
 Environments:
@@ -228,6 +229,7 @@ Common Commands:
   orca agent-context [--json]
   orca account add [--agent claude|codex] [--json]
   orca account list [--json]
+  orca host add --ssh-config <alias> [--connect] [--json]
   orca host list [--json]
   orca environment add --name <name> --pairing-code <code> [--json]
   orca environment list [--json]

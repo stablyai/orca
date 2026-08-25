@@ -14,6 +14,22 @@ import {
 } from '../runtime/environments'
 
 export const ENVIRONMENT_HANDLERS: Record<string, CommandHandler> = {
+  'host add': async ({ client, flags, json }) => {
+    const alias = getRequiredStringFlag(flags, 'ssh-config')
+    const ensured = await client.call<{
+      target: { id: string; label: string }
+      created: boolean
+    }>('ssh.ensureConfigTarget', { alias })
+    const connect = flags.get('connect') === true
+    if (connect) {
+      await client.call('ssh.connect', { targetId: ensured.result.target.id })
+    }
+    printResult(ensured, json, ({ target, created }) => {
+      const action = created ? 'Added' : 'Found'
+      const connection = connect ? ' and connected' : ''
+      return `${action} SSH host ${target.label} (${target.id})${connection}.`
+    })
+  },
   'environment add': async ({ flags, json }) => {
     const name = getRequiredStringFlag(flags, 'name')
     const pairingCode = getRequiredStringFlag(flags, 'pairing-code')
