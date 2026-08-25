@@ -60,20 +60,24 @@ import { githubProjectHost } from '../../shared/github/project-identity'
 // Re-export the public API so existing `./project-view` call sites keep working; the split is internal-only.
 export { isValidOwnerSlug, isValidRepoSlug } from './project-view/internals'
 export { classifyProjectError } from './project-view/project-error-classification'
+export { updateIssueBySlug } from './project-view/mutations'
 export {
   updateProjectItemFieldValue,
-  clearProjectItemFieldValue,
-  updateIssueBySlug,
-  updatePullRequestBySlug,
+  clearProjectItemFieldValue
+} from './project-view/project-field-mutations'
+export { updatePullRequestBySlug } from './project-view/pull-request-mutation'
+export {
   addIssueCommentBySlug,
   updateIssueCommentBySlug,
-  deleteIssueCommentBySlug,
+  deleteIssueCommentBySlug
+} from './project-view/issue-comment-mutations'
+export {
   listLabelsBySlug,
   listAssignableUsersBySlug,
-  listIssueTypesBySlug,
-  updateIssueTypeBySlug,
-  getWorkItemDetailsBySlug
-} from './project-view/mutations'
+  listIssueTypesBySlug
+} from './project-view/repository-field-options'
+export { updateIssueTypeBySlug } from './project-view/issue-type-mutation'
+export { getWorkItemDetailsBySlug } from './project-view/work-item-details'
 
 // ─── Constants ─────────────────────────────────────────────────────────
 
