@@ -46,6 +46,8 @@ import {
   markHostSessionMirrorHydrated,
   markHostSessionMirrorWorktreeHydrated
 } from './host-session-mirror-hydration'
+import { probeHostLiveTerminals } from './host-live-terminal-probe'
+import { getRuntimeEnvironmentConnectionGeneration } from '@/store/slices/runtime-status'
 import {
   createWebRuntimeSessionTerminal,
   HOST_TERMINAL_SURFACE_SEPARATOR,
@@ -3704,6 +3706,32 @@ export type HostSessionMirrorPatchVerdict = {
   fullInventory?: { environmentId: string; publishedSnapshotCount: number }
 }
 
+/**
+ * An inventory that published nothing is the one shape carrying no host
+ * evidence at all: `settles.length === publishedSnapshotCount` is `0 === 0`, so
+ * a live host answering `[]` before its renderer's first publish used to be
+ * upgraded into an environment-wide "the host has spoken" — draining parked
+ * resumes into forking a second agent onto a PTY the host still runs.
+ *
+ * The distinguisher has to be host readiness, not list emptiness: a host with
+ * genuinely zero terminals must still settle or its panes park forever. Only
+ * `none` settles; `live` and `unverifiable` leave waiters for the next
+ * inventory or per-worktree frame.
+ */
+function settleEmptyHostInventoryOnlyIfHostHasNoTerminals(environmentId: string): void {
+  const probedGeneration = getRuntimeEnvironmentConnectionGeneration(environmentId)
+  void probeHostLiveTerminals(environmentId, undefined, probedGeneration).then((verdict) => {
+    // Why: the probe is a round trip, and a reconnect in between would make its
+    // answer speak for a connection whose PTYs nobody listed.
+    if (
+      verdict === 'none' &&
+      getRuntimeEnvironmentConnectionGeneration(environmentId) === probedGeneration
+    ) {
+      markHostSessionMirrorHydrated(environmentId)
+    }
+  })
+}
+
 function createHostSessionMirrorSettle(
   verdict: HostSessionMirrorPatchVerdict
 ): HostSessionMirrorSettle {
@@ -3711,6 +3739,10 @@ function createHostSessionMirrorSettle(
     const { frames, fullInventory } = verdict
     const settles = frames.filter(({ decision }) => decision.settlesHostMirror)
     if (fullInventory && settles.length === fullInventory.publishedSnapshotCount) {
+      if (fullInventory.publishedSnapshotCount === 0) {
+        settleEmptyHostInventoryOnlyIfHostHasNoTerminals(fullInventory.environmentId)
+        return
+      }
       markHostSessionMirrorHydrated(fullInventory.environmentId)
       return
     }
