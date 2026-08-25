@@ -33,6 +33,13 @@ const PageReconciliationProtocolVersion = z.literal(
 )
 const FileChannelProtocolVersion = z.literal(BROWSER_CLIENT_FILE_CHANNEL_PROTOCOL_VERSION)
 
+/**
+ * Sent when an attach names a runtime id this process does not have. It means "a newer authority
+ * exists", not "this host is broken" — a client that still holds live guests should wait for the
+ * replacement rather than tear them down.
+ */
+export const BROWSER_CLIENT_HOST_AUTHORITY_MISMATCH_CODE = 'browser_client_host_authority_mismatch'
+
 export const BrowserHostLeaseAuthority = z.object({
   authorityRuntimeId: Identity,
   authorityEpoch: Identity,
@@ -56,7 +63,10 @@ export const BrowserClientHostedPageInventory = z.object({
   browserProfileId: PageInventoryIdentity,
   executionHostKey: PageInventoryIdentity,
   state: z.enum(['active', 'outcomeUnknown']),
-  currentUrl: z.string().max(BROWSER_CLIENT_HOST_PAGE_INVENTORY_URL_MAX_LENGTH).optional()
+  currentUrl: z.string().max(BROWSER_CLIENT_HOST_PAGE_INVENTORY_URL_MAX_LENGTH).optional(),
+  // Echoed back from the createPage command so a restarted runtime can rebuild the page record it
+  // lost with its memory. Absent for pages placed by a runtime that predates the field.
+  workspaceId: PageInventoryIdentity.optional()
 })
 
 export type BrowserClientHostedPageInventory = z.infer<typeof BrowserClientHostedPageInventory>
@@ -224,7 +234,10 @@ const BrowserClientPageCommandAuthority = BrowserClientHostLeaseAuthority.extend
 const BrowserClientHostCreatePageCommand = z.object({
   type: z.literal('createPage'),
   browserProfileId: Identity,
-  executionHostKey: Identity
+  executionHostKey: Identity,
+  // The client never interprets this; it only echoes it back in the page inventory so a restarted
+  // runtime can rebuild the workspace association it holds nowhere else.
+  workspaceId: Identity.optional()
 })
 
 const BrowserClientHostNavigateCommand = z.object({
@@ -236,7 +249,8 @@ const BrowserClientHostReclaimPageCommand = z.object({
   type: z.literal('reclaimPage'),
   previousAuthority: BrowserClientHostedPageAuthority,
   browserProfileId: Identity,
-  executionHostKey: Identity
+  executionHostKey: Identity,
+  workspaceId: Identity.optional()
 })
 
 const BrowserClientHostClosePageCommand = z.object({
@@ -248,7 +262,8 @@ const BrowserClientHostRestorePageCommand = z.object({
   type: z.literal('restorePage'),
   browserProfileId: Identity,
   executionHostKey: Identity,
-  url: z.string().min(1).max(8192).optional()
+  url: z.string().min(1).max(8192).optional(),
+  workspaceId: Identity.optional()
 })
 
 export const BrowserClientHostPageCommand = z.discriminatedUnion('type', [

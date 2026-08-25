@@ -90,11 +90,15 @@ function createHarness(
       return options.retirementSettled ?? true
     }),
     bindingStore: {
-      get: vi.fn((partition) => bindings.get(partition) ?? null),
-      set: vi.fn((partition, fingerprint) => {
+      get: vi.fn((partition: string) => bindings.get(partition) ?? null),
+      set: vi.fn((partition: string, fingerprint: string) => {
         order.push('persist-binding')
         bindings.set(partition, fingerprint)
-      })
+        return []
+      }),
+      touch: vi.fn(),
+      findPartitionByFingerprint: vi.fn(() => null),
+      rebind: vi.fn()
     },
     maxLivePartitions: options.maxLivePartitions,
     maxPagesPerPartition: options.maxPagesPerPartition

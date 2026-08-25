@@ -1,29 +1,22 @@
-import { closeSync, existsSync, fstatSync, mkdirSync, openSync, readSync, statSync } from 'node:fs'
+import { existsSync, mkdirSync, statSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { grantDirAcl, isPermissionError } from '../win32-utils'
 import { durableWriteTempPath, writeFileDurableSync } from '../durable-file-write'
-import { isBrowserRoutePartition } from './browser-route-identity'
+import {
+  assertBinding,
+  assertStorageScope,
+  BINDING_STORE_VERSION,
+  parseBindings,
+  readBoundedUtf8File,
+  type BrowserRoutePartitionBinding
+} from './browser-route-partition-binding-file'
 
-const BINDING_STORE_VERSION = 2
-const LEGACY_BINDING_STORE_VERSION = 1
+export type { BrowserRoutePartitionBinding } from './browser-route-partition-binding-file'
+
 const DEFAULT_MAX_BINDINGS = 512
 const DEFAULT_MAX_FILE_BYTES = 256 * 1024
-const FINGERPRINT_RE = /^[a-f0-9]{64}$/
+const TOUCH_INTERVAL_MS = 24 * 60 * 60 * 1000
 const PERSIST_PARTITION_PREFIX = 'persist:'
-
-/**
- * Persisted binding for one route partition.
- *
- * `storageScope` names the environment record that owns the partition so
- * explicit lifecycle events (environment removal) and orphan collection can
- * find it without re-deriving an identity that needs a live connection.
- * `null` marks a pre-scope entry from the per-boot partition scheme, whose
- * partition name can no longer be derived and is therefore always an orphan.
- */
-export type BrowserRoutePartitionBinding = {
-  fingerprint: string
-  storageScope: string | null
-}
 
 type BindingState = {
   bindings: Record<string, BrowserRoutePartitionBinding>
@@ -32,6 +25,7 @@ type BindingState = {
 export class BrowserRoutePartitionBindingStore {
   private readonly maxBindings: number
   private readonly maxFileBytes: number
+  private readonly isPartitionRetained: (partition: string) => boolean
 
   constructor(
     private readonly options: {
@@ -39,10 +33,17 @@ export class BrowserRoutePartitionBindingStore {
       partitionDataRoot?: string
       maxBindings?: number
       maxFileBytes?: number
+      /**
+       * Retained partitions are never evicted: their storage is in use right now.
+       * Absent means the caller cannot tell, so nothing is evictable and capacity
+       * throws as before -- evicting a live partition would destroy storage in use.
+       */
+      isPartitionRetained?: (partition: string) => boolean
     }
   ) {
     this.maxBindings = options.maxBindings ?? DEFAULT_MAX_BINDINGS
     this.maxFileBytes = options.maxFileBytes ?? DEFAULT_MAX_FILE_BYTES
+    this.isPartitionRetained = options.isPartitionRetained ?? (() => true)
   }
 
   get(partition: string): string | null {
@@ -74,24 +75,102 @@ export class BrowserRoutePartitionBindingStore {
     return removed
   }
 
-  set(partition: string, fingerprint: string, storageScope: string): void {
+  /** Partition already bound to `fingerprint`: where that identity's storage already lives. */
+  findPartitionByFingerprint(fingerprint: string): string | null {
+    for (const [partition, binding] of Object.entries(this.load().bindings)) {
+      if (binding.fingerprint === fingerprint) {
+        return partition
+      }
+    }
+    return null
+  }
+
+  /** Re-points a bound partition at a new fingerprint, so an identity-scheme change keeps its storage. */
+  rebind(partition: string, fingerprint: string, storageScope: string): void {
+    assertBinding(partition, fingerprint)
+    assertStorageScope(storageScope)
+    const state = this.load()
+    if (state.bindings[partition] === undefined) {
+      throw new Error('browser_route_partition_binding_invalid')
+    }
+    this.persist({
+      bindings: {
+        ...state.bindings,
+        [partition]: { fingerprint, storageScope, lastUsedAt: Date.now() }
+      }
+    })
+  }
+
+  /** Records continued use, so eviction reaches abandoned partitions before live ones. */
+  touch(partition: string): void {
+    const state = this.load()
+    const existing = state.bindings[partition]
+    if (existing) {
+      this.refreshIfStale(state, partition, existing)
+    }
+  }
+
+  /**
+   * Binds a partition, evicting least-recently-used releasable bindings at capacity.
+   *
+   * Returns the evicted partitions: their metadata is gone, so the caller owns
+   * destroying their storage. Capacity throws only when every binding is retained.
+   */
+  set(partition: string, fingerprint: string, storageScope: string): readonly string[] {
     assertBinding(partition, fingerprint)
     assertStorageScope(storageScope)
     const state = this.load()
     this.assertMetadataPrecedesPartitionData(partition, state)
     const existing = state.bindings[partition]
     if (existing?.fingerprint === fingerprint && existing.storageScope === storageScope) {
-      return
+      this.refreshIfStale(state, partition, existing)
+      return []
     }
     if (existing !== undefined && existing.fingerprint !== fingerprint) {
       throw new Error('browser_route_partition_binding_conflict')
     }
-    if (existing === undefined && Object.keys(state.bindings).length >= this.maxBindings) {
-      throw new Error('browser_route_partition_binding_capacity')
+    const bindings = { ...state.bindings }
+    const evicted: string[] = []
+    while (existing === undefined && Object.keys(bindings).length >= this.maxBindings) {
+      const victim = this.leastRecentlyUsedReleasable(bindings)
+      if (victim === null) {
+        throw new Error('browser_route_partition_binding_capacity')
+      }
+      delete bindings[victim]
+      evicted.push(victim)
+    }
+    bindings[partition] = { fingerprint, storageScope, lastUsedAt: Date.now() }
+    this.persist({ bindings })
+    return evicted
+  }
+
+  private refreshIfStale(
+    state: BindingState,
+    partition: string,
+    binding: BrowserRoutePartitionBinding
+  ): void {
+    const now = Date.now()
+    // Why: preparing a page must not cost a store write, so coarse recency is enough for LRU.
+    if (now - binding.lastUsedAt < TOUCH_INTERVAL_MS) {
+      return
     }
     this.persist({
-      bindings: { ...state.bindings, [partition]: { fingerprint, storageScope } }
+      bindings: { ...state.bindings, [partition]: { ...binding, lastUsedAt: now } }
     })
+  }
+
+  private leastRecentlyUsedReleasable(
+    bindings: Record<string, BrowserRoutePartitionBinding>
+  ): string | null {
+    let victim: string | null = null
+    let victimLastUsedAt = Number.POSITIVE_INFINITY
+    for (const [partition, binding] of Object.entries(bindings)) {
+      if (binding.lastUsedAt < victimLastUsedAt && !this.isPartitionRetained(partition)) {
+        victim = partition
+        victimLastUsedAt = binding.lastUsedAt
+      }
+    }
+    return victim
   }
 
   private persist(state: BindingState): void {
@@ -159,101 +238,6 @@ export class BrowserRoutePartitionBindingStore {
   }
 }
 
-function readBoundedUtf8File(filePath: string, maxBytes: number): string {
-  const fd = openSync(filePath, 'r')
-  try {
-    const size = fstatSync(fd).size
-    if (!Number.isSafeInteger(size) || size < 0 || size > maxBytes) {
-      throw new Error('binding file size invalid')
-    }
-    const contents = Buffer.alloc(size)
-    let offset = 0
-    while (offset < size) {
-      const bytesRead = readSync(fd, contents, offset, size - offset, null)
-      if (bytesRead === 0) {
-        throw new Error('binding file truncated')
-      }
-      offset += bytesRead
-    }
-    const overflowProbe = Buffer.alloc(1)
-    if (readSync(fd, overflowProbe, 0, 1, null) !== 0) {
-      throw new Error('binding file grew during read')
-    }
-    return contents.toString('utf8')
-  } finally {
-    closeSync(fd)
-  }
-}
-
 function hasErrorCode(error: unknown, code: string): boolean {
   return Boolean(error && typeof error === 'object' && 'code' in error && error.code === code)
-}
-
-function parseBindings(
-  value: unknown,
-  maxBindings: number
-): Record<string, BrowserRoutePartitionBinding> | null {
-  if (!value || typeof value !== 'object' || Array.isArray(value)) {
-    return null
-  }
-  const candidate = value as { version?: unknown; bindings?: unknown }
-  const version = candidate.version
-  if (
-    (version !== BINDING_STORE_VERSION && version !== LEGACY_BINDING_STORE_VERSION) ||
-    !candidate.bindings ||
-    typeof candidate.bindings !== 'object' ||
-    Array.isArray(candidate.bindings)
-  ) {
-    return null
-  }
-  const entries = Object.entries(candidate.bindings as Record<string, unknown>)
-  if (entries.length > maxBindings) {
-    return null
-  }
-  const bindings: Record<string, BrowserRoutePartitionBinding> = {}
-  for (const [partition, entry] of entries) {
-    const binding = parseBinding(version === LEGACY_BINDING_STORE_VERSION, entry)
-    if (!binding) {
-      return null
-    }
-    try {
-      assertBinding(partition, binding.fingerprint)
-    } catch {
-      return null
-    }
-    bindings[partition] = binding
-  }
-  return bindings
-}
-
-function parseBinding(legacy: boolean, entry: unknown): BrowserRoutePartitionBinding | null {
-  if (legacy) {
-    return typeof entry === 'string' ? { fingerprint: entry, storageScope: null } : null
-  }
-  if (!entry || typeof entry !== 'object' || Array.isArray(entry)) {
-    return null
-  }
-  const candidate = entry as { fingerprint?: unknown; storageScope?: unknown }
-  if (typeof candidate.fingerprint !== 'string') {
-    return null
-  }
-  if (candidate.storageScope === null) {
-    return { fingerprint: candidate.fingerprint, storageScope: null }
-  }
-  if (typeof candidate.storageScope !== 'string' || !FINGERPRINT_RE.test(candidate.storageScope)) {
-    return null
-  }
-  return { fingerprint: candidate.fingerprint, storageScope: candidate.storageScope }
-}
-
-function assertBinding(partition: string, fingerprint: string): void {
-  if (!isBrowserRoutePartition(partition) || !FINGERPRINT_RE.test(fingerprint)) {
-    throw new Error('browser_route_partition_binding_invalid')
-  }
-}
-
-function assertStorageScope(storageScope: string): void {
-  if (!FINGERPRINT_RE.test(storageScope)) {
-    throw new Error('browser_route_partition_binding_invalid')
-  }
 }

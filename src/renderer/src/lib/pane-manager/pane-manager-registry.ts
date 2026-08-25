@@ -4,6 +4,8 @@ import type { PaneRenderingDiagnostics } from './pane-manager-types'
 
 type RegisteredPaneManager = {
   resetWebglTextureAtlases(): void
+  clearWebglTextureAtlases?: () => void
+  presentForcedViewports?: () => void
   fitAllPanes?: () => void
   refreshAllPanes?: () => void
   getRenderingDiagnostics?: () => PaneRenderingDiagnostics[]
@@ -60,9 +62,17 @@ export function resetAndRefreshAllTerminalWebglAtlases(reason?: string): void {
     ...(reason ? { reason } : {})
   })
   const resetManagers: RegisteredPaneManager[] = []
+  // Why: clearTextureAtlas() is module-global. Clearing then presenting per
+  // pane interleaves a present against generation N with the next pane's wipe
+  // to N+1, so the first synchronized-output column keeps pre-hide footer pixels.
+  // Wipe every recovered atlas first; present only once the generation is final.
   for (const manager of recoveryManagers) {
     try {
-      manager.resetWebglTextureAtlases()
+      if (manager.clearWebglTextureAtlases) {
+        manager.clearWebglTextureAtlases()
+      } else {
+        manager.resetWebglTextureAtlases()
+      }
       resetManagers.push(manager)
     } catch {
       // Why: recovery is best-effort during pane teardown; a disposed manager
@@ -71,7 +81,11 @@ export function resetAndRefreshAllTerminalWebglAtlases(reason?: string): void {
   }
   for (const manager of resetManagers) {
     try {
-      manager.refreshAllPanes?.()
+      if (manager.presentForcedViewports) {
+        manager.presentForcedViewports()
+      } else {
+        manager.refreshAllPanes?.()
+      }
     } catch {
       // Why: a pane can unmount between atlas reset and repaint; later
       // managers still need to repaint from their xterm buffers.

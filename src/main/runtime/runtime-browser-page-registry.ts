@@ -12,6 +12,11 @@ export type RuntimeBrowserClientPage = Readonly<{
   browserProfileId: string
   executionHostKey: string
   placement: RuntimeBrowserClientPlacement
+  /**
+   * The paired device that asked for this page. Survives the lease, which the placement does not:
+   * a retained page has no lease left to look its host's name up through.
+   */
+  pairedDeviceId?: string
   url: string
   title: string
   loading: boolean
@@ -33,7 +38,10 @@ type RuntimeBrowserClientPageInput = Pick<
   | 'active'
 > &
   Partial<
-    Pick<RuntimeBrowserClientPage, 'title' | 'canGoBack' | 'canGoForward' | 'metadataRevision'>
+    Pick<
+      RuntimeBrowserClientPage,
+      'pairedDeviceId' | 'title' | 'canGoBack' | 'canGoForward' | 'metadataRevision'
+    >
   >
 
 type RuntimeBrowserPageUpdate = Partial<
@@ -149,10 +157,23 @@ export class RuntimeBrowserPageRegistry {
   replaceClientPagePlacement(
     browserPageId: string,
     expected: RuntimeBrowserClientPlacement,
-    placement: RuntimeBrowserClientPlacement
+    placement: RuntimeBrowserClientPlacement,
+    /** The route key the replacing host was actually placed under; keys do not survive a restart. */
+    executionHostKey?: string
   ): RuntimeBrowserClientPage {
     const current = this.requireExactPage(browserPageId, expected)
-    const next = freezePage({ ...current, placement: Object.freeze({ ...placement }) })
+    if (executionHostKey !== undefined) {
+      assertIdentity(executionHostKey)
+    }
+    // Why the revision restarts: it is the replacing host's own counter, and a host that just took
+    // this placement over counts from zero. Keeping the old high-water mark deafens the page to
+    // that host until it catches up.
+    const next = freezePage({
+      ...current,
+      ...(executionHostKey === undefined ? {} : { executionHostKey }),
+      metadataRevision: 0,
+      placement: Object.freeze({ ...placement })
+    })
     this.pages.set(browserPageId, next)
     return next
   }

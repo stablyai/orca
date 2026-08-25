@@ -11,6 +11,10 @@ import {
   getBrowserClientHostedRemoteDescription,
   getBrowserClientHostedRemoteTitle
 } from './browser-client-hosted-remote-copy'
+import {
+  getBrowserSshWorkspaceRoutingDescription,
+  getBrowserSshWorkspaceRoutingTitle
+} from './browser-ssh-workspace-routing-copy'
 
 export type BrowserShortcutPlatform = {
   isMac: boolean
@@ -250,6 +254,33 @@ export function getBrowserPaneSearchEntries(
         ...translateSearchKeyword(
           'auto.components.settings.browser.search.clientHostedRemote.placement',
           'placement'
+        )
+      ]
+    },
+    {
+      title: getBrowserSshWorkspaceRoutingTitle(),
+      description: getBrowserSshWorkspaceRoutingDescription(),
+      keywords: [
+        ...translateSearchKeyword('auto.components.settings.browser.search.2d2d995c58', 'browser'),
+        ...translateSearchKeyword(
+          'auto.components.settings.browser.search.sshWorkspaceRouting.ssh',
+          'ssh'
+        ),
+        ...translateSearchKeyword(
+          'auto.components.settings.browser.search.sshWorkspaceRouting.proxy',
+          'proxy'
+        ),
+        ...translateSearchKeyword(
+          'auto.components.settings.browser.search.sshWorkspaceRouting.tunnel',
+          'tunnel'
+        ),
+        ...translateSearchKeyword(
+          'auto.components.settings.browser.search.sshWorkspaceRouting.routing',
+          'routing'
+        ),
+        ...translateSearchKeyword(
+          'auto.components.settings.browser.search.sshWorkspaceRouting.network',
+          'network'
         )
       ]
     }

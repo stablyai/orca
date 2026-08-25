@@ -68,7 +68,10 @@ vi.mock('electron', () => ({
 }))
 
 vi.mock('../ipc/repos', () => ({
-  registerRepoHandlers: registerRepoHandlersMock,
+  registerRepoHandlers: registerRepoHandlersMock
+}))
+
+vi.mock('../ipc/repos/repos-changed-notification', () => ({
   setRepoRemoteClientNotifier: setRepoRemoteClientNotifierMock
 }))
 

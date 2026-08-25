@@ -5,8 +5,9 @@ import {
   selectBrowserProfile,
   type DetectedBrowser
 } from './browser-cookie-import'
+import { recordClientRouteCookieImportSource } from './client-route-cookie-import-source-store'
 import { currentBrowserRoutePartitionBindingStore } from './browser-route-partition-binding-runtime'
-import { deriveBrowserRoutePartition } from './browser-route-identity'
+import { resolveBrowserRoutePartitionBinding } from './browser-route-partition-migration'
 import { browserSessionRegistry } from './browser-session-registry'
 import { getPairedRuntimeBrowserClientRouteIdentity } from './paired-runtime-browser-client-host-runtime'
 
@@ -47,15 +48,47 @@ export async function importCookiesIntoClientRoutePartition(
     return { ok: false, reason: error instanceof Error ? error.message : String(error) }
   }
   const result = await importCookiesFromBrowser(browser.source, partition)
+  // Why: the import runs for seconds. A host replacement inside that window retargets the
+  // route, so reporting success here would badge a partition no page will ever read from.
+  const settled = settledRoutePartition(request)
+  if (settled !== partition) {
+    return {
+      ok: false,
+      reason:
+        settled === null
+          ? 'The connection to this server ended during the import. Reconnect and try again.'
+          : 'This server was re-paired during the import. Try again.'
+    }
+  }
   if (!result.ok) {
     return result
   }
-  browserSessionRegistry.updateProfileSource(request.browserProfileId, {
-    browserFamily: browser.source.family,
-    profileName: importedProfileName(browser.source),
-    importedAt: Date.now()
+  // Why: per-environment, not the local registry — the badge must describe the jar
+  // that received the cookies (this desktop's route partition for THIS server),
+  // never the local profile jar the import deliberately bypassed.
+  recordClientRouteCookieImportSource({
+    environmentId: request.environmentId,
+    profileId: request.browserProfileId,
+    source: {
+      browserFamily: browser.source.family,
+      profileName: importedProfileName(browser.source),
+      importedAt: Date.now()
+    }
   })
   return { ...result, profileId: request.browserProfileId }
+}
+
+/** Partition the route resolves to now, or null when the host no longer serves this environment. */
+function settledRoutePartition(request: ClientRouteCookieImportRequest): string | null {
+  const routeIdentity = getPairedRuntimeBrowserClientRouteIdentity(request.environmentId)
+  if (!routeIdentity) {
+    return null
+  }
+  try {
+    return bindRoutePartition(routeIdentity, request.browserProfileId)
+  } catch {
+    return null
+  }
 }
 
 function bindRoutePartition(
@@ -63,13 +96,23 @@ function bindRoutePartition(
   browserProfileId: string
 ): string {
   browserSessionRegistry.requireRouteBrowserProfile(browserProfileId)
-  const derived = deriveBrowserRoutePartition({
-    orcaProfileId: routeIdentity.orcaProfileId,
-    browserProfileId,
-    authorityConnectionIdentity: routeIdentity.authorityConnectionIdentity,
-    executionHostIdentity: routeIdentity.executionHostIdentity
-  })
   const bindings = currentBrowserRoutePartitionBindingStore()
+  const derived = resolveBrowserRoutePartitionBinding({
+    bindings,
+    identity: {
+      orcaProfileId: routeIdentity.orcaProfileId,
+      browserProfileId,
+      authorityConnectionIdentity: routeIdentity.authorityConnectionIdentity,
+      executionHostIdentity: routeIdentity.executionHostIdentity
+    },
+    legacyIdentity: {
+      orcaProfileId: routeIdentity.orcaProfileId,
+      browserProfileId,
+      authorityConnectionIdentity: routeIdentity.legacyAuthorityConnectionIdentity,
+      executionHostIdentity: routeIdentity.legacyExecutionHostIdentity
+    },
+    storageScope: routeIdentity.storageScope
+  })
   const persisted = bindings.get(derived.partition)
   if (persisted === null) {
     bindings.set(derived.partition, derived.bindingFingerprint, routeIdentity.storageScope)

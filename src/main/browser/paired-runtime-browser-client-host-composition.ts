@@ -4,15 +4,18 @@ import type {
   BrowserClientHostCommandResult,
   BrowserClientHostLeaseAuthority
 } from '../../shared/browser-client-host-protocol'
+import { isBrowserClientHostAuthorityReplaced } from './browser-client-host-authority-replacement'
+import { BrowserClientHostAuthorityReplacementWait } from './browser-client-host-authority-replacement-wait'
+import {
+  asCompositionError,
+  closeBrowserClientHostComposition
+} from './paired-runtime-browser-client-host-teardown'
 import type { BrowserClientPageNetworkRoute } from './browser-client-page-cleanup'
+import type { BrowserClientPageAuthorityIdentity as BrowserClientHostAuthorityTransitionInput } from './browser-client-page-command-executor-dependencies'
 import {
   type ComposedBrowserClientNetworkRoutes,
   PairedRuntimeBrowserClientHostRouteSets
 } from './paired-runtime-browser-client-host-route-sets'
-
-type BrowserClientHostAuthorityTransitionInput = {
-  authorityConnectionIdentity: string
-}
 
 type ComposedPageExecutor = {
   handle(
@@ -23,7 +26,7 @@ type ComposedPageExecutor = {
   hasUnresolvedPage(browserPageId: string, pageHostGeneration: number): boolean
   snapshotPageInventory(): readonly BrowserClientHostedPageInventory[]
   beginAuthorityTransition(): void
-  completeAuthorityTransition(authorityConnectionIdentity: string): void
+  completeAuthorityTransition(input: BrowserClientHostAuthorityTransitionInput): void
   fenceNavigation(): void
   close(): Promise<void>
 }
@@ -71,6 +74,8 @@ type PairedRuntimeBrowserClientHostCompositionOptions<
   onError?: (error: Error) => void
   /** Runs as closing begins, before teardown: the point after which this composition owns nothing. */
   onClosing?: () => void
+  /** Injected so the grace a restart depends on is drivable; production supplies the real deadline. */
+  createAuthorityReplacementWait?: () => BrowserClientHostAuthorityReplacementWait
 }
 
 export class PairedRuntimeBrowserClientHostComposition<
@@ -86,8 +91,11 @@ export class PairedRuntimeBrowserClientHostComposition<
   private closed = false
   private errorReported = false
   private inventoryRefreshPromise: Promise<void> | null = null
+  private readonly authorityReplacementWait: BrowserClientHostAuthorityReplacementWait
 
   constructor(private readonly options: PairedRuntimeBrowserClientHostCompositionOptions<Start>) {
+    this.authorityReplacementWait =
+      options.createAuthorityReplacementWait?.() ?? new BrowserClientHostAuthorityReplacementWait()
     this.routeSets = new PairedRuntimeBrowserClientHostRouteSets({
       createRoutes: options.createRoutes,
       onRecoveryError: (error) => this.handleHostError(error),
@@ -113,6 +121,7 @@ export class PairedRuntimeBrowserClientHostComposition<
       return Promise.reject(new Error('paired_runtime_browser_client_host_composition_closed'))
     }
     const error = new Error('Browser client host runtime authority was replaced')
+    this.authorityReplacementWait.cancel()
     this.hostGeneration += 1
     try {
       this.routeSets.retireCurrent(error)
@@ -146,11 +155,12 @@ export class PairedRuntimeBrowserClientHostComposition<
   close(error = new Error('Browser client host composition is closed')): Promise<boolean> {
     if (!this.closed) {
       this.closed = true
+      this.authorityReplacementWait.cancel()
       this.hostGeneration += 1
       try {
         this.options.onClosing?.()
       } catch (closingError) {
-        this.reportCleanupError(asError(closingError))
+        this.reportCleanupError(asCompositionError(closingError))
       }
       this.fenceTerminalAuthority(error)
     }
@@ -200,10 +210,22 @@ export class PairedRuntimeBrowserClientHostComposition<
           this.routeSets.reconnect(authority)
         }
       },
+      // A replaced authority is armed rather than handled: handleHostError would close the
+      // composition and latch `errorReported`, swallowing the next genuinely fatal error.
       onError: (error) => {
-        if (this.hostGeneration === generation) {
-          this.handleHostError(error)
+        const fatal = (): void => {
+          if (!this.closed && this.hostGeneration === generation) {
+            this.handleHostError(error)
+          }
         }
+        if (this.hostGeneration !== generation) {
+          return
+        }
+        if (this.closed || !isBrowserClientHostAuthorityReplaced(error)) {
+          this.handleHostError(error)
+          return
+        }
+        this.authorityReplacementWait.arm(fatal)
       }
     })
   }
@@ -220,7 +242,7 @@ export class PairedRuntimeBrowserClientHostComposition<
     if (this.closed) {
       throw new Error('paired_runtime_browser_client_host_composition_closed')
     }
-    this.executor.completeAuthorityTransition(input.authorityConnectionIdentity)
+    this.executor.completeAuthorityTransition(input)
     const replacementHost = this.createHost(input, true)
     this.host = replacementHost
     return replacementHost.start()
@@ -248,7 +270,7 @@ export class PairedRuntimeBrowserClientHostComposition<
     const refresh = this.host.refreshPageInventory()
     this.inventoryRefreshPromise = refresh
     void refresh
-      .catch((error) => this.handleHostError(asError(error)))
+      .catch((error) => this.handleHostError(asCompositionError(error)))
       .finally(() => {
         if (this.inventoryRefreshPromise === refresh) {
           this.inventoryRefreshPromise = null
@@ -261,43 +283,25 @@ export class PairedRuntimeBrowserClientHostComposition<
     try {
       this.executor.fenceNavigation()
     } catch (navigationError) {
-      this.reportCleanupError(asError(navigationError))
+      this.reportCleanupError(asCompositionError(navigationError))
     }
   }
 
-  private async closeComposition(error: Error): Promise<boolean> {
-    const failures: unknown[] = []
-    let handlersSettled = false
-    try {
-      handlersSettled = await this.host.close(error)
-    } catch (hostError) {
-      failures.push(hostError)
-    }
-    if (handlersSettled) {
-      try {
-        await this.executor.close()
-      } catch (executorError) {
-        failures.push(executorError)
-      }
-    } else {
-      this.deferredExecutorClose = this.host.whenHandlersSettled().then(() => this.executor.close())
-      void this.deferredExecutorClose.catch((cleanupError) =>
-        this.reportCleanupError(asError(cleanupError))
-      )
-    }
-    try {
-      await this.routeSets.close(error)
-    } catch (routeError) {
-      failures.push(routeError)
-    }
-    if (failures.length > 0) {
-      throw new AggregateError(failures, 'Browser client host composition cleanup failed')
-    }
-    return handlersSettled
+  private closeComposition(error: Error): Promise<boolean> {
+    return closeBrowserClientHostComposition({
+      host: this.host,
+      executor: this.executor,
+      routeSets: this.routeSets,
+      error,
+      deferExecutorClose: (close) => {
+        this.deferredExecutorClose = close
+      },
+      reportCleanupError: (cleanupError) => this.reportCleanupError(cleanupError)
+    })
   }
 
   private handleHostError(error: Error): void {
-    void this.close(error).catch((closeError) => this.reportError(asError(closeError)))
+    void this.close(error).catch((closeError) => this.reportError(asCompositionError(closeError)))
     this.reportError(error)
   }
 
@@ -316,8 +320,4 @@ export class PairedRuntimeBrowserClientHostComposition<
       this.options.onError?.(error)
     } catch {}
   }
-}
-
-function asError(error: unknown): Error {
-  return error instanceof Error ? error : new Error(String(error))
 }

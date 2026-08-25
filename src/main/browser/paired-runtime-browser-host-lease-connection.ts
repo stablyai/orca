@@ -3,7 +3,10 @@ import {
   type BrowserClientHostCommandEvent,
   type BrowserClientHostLeaseAuthority
 } from '../../shared/browser-client-host-protocol'
-import { BROWSER_CLIENT_HOST_RUNTIME_CAPABILITY } from '../../shared/protocol-version'
+import {
+  BROWSER_CLIENT_HOST_RUNTIME_CAPABILITY,
+  BROWSER_CLIENT_PAGE_METADATA_RUNTIME_CAPABILITY
+} from '../../shared/protocol-version'
 import {
   subscribeRemoteRuntimeRequest,
   type RemoteRuntimeSubscription,
@@ -67,9 +70,13 @@ export class PairedRuntimeBrowserHostLeaseConnection {
           this.callbacks(request),
           {
             ...this.options.lease.subscription,
+            // Why metadata is advertised here: page metadata is published back over this very
+            // connection (the runtime refuses page traffic from any other), and its handler gates
+            // on the capability being declared by the connection it arrives on.
             clientCapabilities: [
               ...(this.options.lease.subscription?.clientCapabilities ?? []),
-              BROWSER_CLIENT_HOST_RUNTIME_CAPABILITY
+              BROWSER_CLIENT_HOST_RUNTIME_CAPABILITY,
+              BROWSER_CLIENT_PAGE_METADATA_RUNTIME_CAPABILITY
             ]
           }
         )

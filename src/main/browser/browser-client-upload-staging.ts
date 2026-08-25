@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto'
+import { rmSync } from 'node:fs'
 import { mkdir, rm, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 
@@ -32,7 +33,17 @@ type StagingFilesystem = {
   mkdir(directory: string): Promise<void>
   writeFile(filePath: string, contents: Buffer): Promise<void>
   removeDirectory(directory: string): Promise<void>
+  removeDirectorySync(directory: string): void
 }
+
+// Why: Chromium and AV scanners hold a staged file open briefly, which is EBUSY/EPERM on Windows;
+// `force` only swallows ENOENT, so without retries a transient handle strands the directory.
+const stagingRemovalOptions = {
+  recursive: true,
+  force: true,
+  maxRetries: 3,
+  retryDelay: 50
+} as const
 
 const nodeStagingFilesystem: StagingFilesystem = {
   mkdir: async (directory) => {
@@ -42,7 +53,10 @@ const nodeStagingFilesystem: StagingFilesystem = {
     await writeFile(filePath, contents, { mode: 0o600 })
   },
   removeDirectory: async (directory) => {
-    await rm(directory, { recursive: true, force: true })
+    await rm(directory, stagingRemovalOptions)
+  },
+  removeDirectorySync: (directory) => {
+    rmSync(directory, stagingRemovalOptions)
   }
 }
 
@@ -61,6 +75,13 @@ export class BrowserClientUploadStaging {
     filesystem: StagingFilesystem = nodeStagingFilesystem
   ) {
     this.filesystem = filesystem
+    try {
+      // Why: an abnormal exit leaves staged remote bytes behind, and nothing else ever revisits this
+      // root — the scope is a pure function of the environment id, so a relaunch reuses it.
+      this.filesystem.removeDirectorySync(stagingRoot)
+    } catch {
+      // A root that cannot be swept still accepts fresh per-command directories.
+    }
   }
 
   async stage(input: {
@@ -102,7 +123,9 @@ export class BrowserClientUploadStaging {
       await this.evictPageOverflow(record)
       return { stagingId, localFilePaths }
     } catch (error) {
-      await this.release(stagingId)
+      // Why: the staging failure is the one worth reporting; a removal that fails here keeps its
+      // record so a later release retries the directory.
+      await this.release(stagingId).catch(() => undefined)
       throw error
     }
   }
@@ -134,8 +157,10 @@ export class BrowserClientUploadStaging {
     if (!record) {
       return false
     }
-    this.staged.delete(stagingId)
+    // Why: every recovery path iterates `staged`, so dropping the record before the removal lands
+    // would leave the directory unreachable for the life of the machine.
     await this.filesystem.removeDirectory(record.directory)
+    this.staged.delete(stagingId)
     return true
   }
 
@@ -145,15 +170,26 @@ export class BrowserClientUploadStaging {
         record.browserPageId === browserPageId &&
         (pageHostGeneration === undefined || record.pageHostGeneration === pageHostGeneration)
     )
-    for (const record of owned) {
-      await this.release(record.stagingId)
-    }
+    await this.releaseEach(owned.map((record) => record.stagingId))
     return owned.length
   }
 
   async releaseAll(): Promise<void> {
-    for (const stagingId of Array.from(this.staged.keys())) {
-      await this.release(stagingId)
+    await this.releaseEach(Array.from(this.staged.keys()))
+  }
+
+  /** Every id gets an attempt: one directory that cannot be removed must not strand the rest. */
+  private async releaseEach(stagingIds: readonly string[]): Promise<void> {
+    const failures: unknown[] = []
+    for (const stagingId of stagingIds) {
+      try {
+        await this.release(stagingId)
+      } catch (error) {
+        failures.push(error)
+      }
+    }
+    if (failures.length > 0) {
+      throw new AggregateError(failures, 'Browser client upload staging release failed')
     }
   }
 

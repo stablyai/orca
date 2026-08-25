@@ -160,6 +160,54 @@ describe('paired runtime browser-host reconciliation negotiation', () => {
     )
     await lease.close()
   })
+
+  it('refuses a page command that drops the negotiated reconciliation protocol', async () => {
+    const callbacks: { current?: RemoteRuntimeSubscriptionCallbacks } = {}
+    const close = vi.fn()
+    subscribeRemoteRuntimeRequestMock.mockImplementationOnce(
+      async (...args: unknown[]): Promise<RemoteRuntimeSubscription> => {
+        callbacks.current = args[4] as RemoteRuntimeSubscriptionCallbacks
+        return { requestId: 'browser-host', close, sendBinary: () => false, sendRequest: vi.fn() }
+      }
+    )
+    const onError = vi.fn()
+    const onPageCommand = vi.fn()
+    const lease = createLease({ onError, onPageCommand })
+    const starting = lease.start()
+    await vi.waitFor(() => expect(callbacks.current).toBeDefined())
+    callbacks.current!.onResponse(readyResponse({ pageReconciliationProtocolVersion: 1 }))
+    await starting
+
+    // Why: a host that negotiated reconciliation must never issue a command that omits it.
+    callbacks.current!.onResponse({
+      id: 'browser-host',
+      ok: true,
+      result: {
+        type: 'command',
+        pageCommandProtocolVersion: 1,
+        authorityRuntimeId: 'runtime-a',
+        authorityEpoch: 'epoch-a',
+        browserHostClientId: 'host-a',
+        browserHostGeneration: 4,
+        browserPageId: 'page-a',
+        pageHostGeneration: 1,
+        commandSequence: 1,
+        commandId: 'command-a',
+        command: {
+          type: 'createPage',
+          browserProfileId: 'default',
+          executionHostKey: 'native:runtime-a:1'
+        }
+      },
+      _meta: { runtimeId: 'runtime-a' }
+    })
+
+    await vi.waitFor(() => expect(close).toHaveBeenCalledOnce())
+    expect(onPageCommand).not.toHaveBeenCalled()
+    expect(onError).toHaveBeenCalledWith(
+      expect.objectContaining({ message: 'Unnegotiated browser host page command' })
+    )
+  })
 })
 
 function createLease(

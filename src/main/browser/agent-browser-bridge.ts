@@ -2611,7 +2611,15 @@ export class AgentBrowserBridge {
         child = execFile(
           this.agentBrowserBin,
           ['--session', sessionName, 'close'],
-          { env: this.agentBrowserEnv, timeout: STALE_SESSION_CLOSE_TIMEOUT_MS },
+          // Why windowsHide: agent-browser is console-subsystem and Orca's main
+          // process owns no console, so each spawn gets a fresh visible conhost
+          // that takes foreground -- keystrokes typed into a terminal at that
+          // moment land in the black box (#14543).
+          {
+            env: this.agentBrowserEnv,
+            timeout: STALE_SESSION_CLOSE_TIMEOUT_MS,
+            windowsHide: true
+          },
           (error) =>
             finish(
               error
@@ -2674,6 +2682,9 @@ export class AgentBrowserBridge {
         {
           timeout: execOptions?.timeoutMs ?? EXEC_TIMEOUT_MS,
           maxBuffer: 50 * 1024 * 1024,
+          // Why windowsHide: see the stale-session close above -- every
+          // agent-browser invocation would otherwise flash a console (#14543).
+          windowsHide: true,
           env: execOptions?.envOverrides
             ? { ...this.agentBrowserEnv, ...execOptions.envOverrides }
             : this.agentBrowserEnv

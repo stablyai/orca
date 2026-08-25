@@ -26,7 +26,12 @@ export async function runPersistedWorkerElectron(
       ? ['--auto-servernum', electronBinary, ...electronArgs, '--no-sandbox']
       : electronArgs
   const { ELECTRON_RUN_AS_NODE: _electronRunAsNode, ...env } = process.env
-  const child = spawn(executable, args, { detached: true, env, stdio: ['ignore', 'pipe', 'pipe'] })
+  const child = spawn(executable, args, {
+    detached: true,
+    env,
+    stdio: ['ignore', 'pipe', 'pipe'],
+    windowsHide: true
+  })
   const exit = waitForExit(child)
   let timedOut = false
   let termination: Promise<void> | null = null
@@ -89,7 +94,10 @@ async function terminateProcessTree(child: ChildProcess): Promise<void> {
     return
   }
   if (process.platform === 'win32') {
-    spawnSync('taskkill', ['/pid', String(child.pid), '/t', '/f'], { stdio: 'ignore' })
+    spawnSync('taskkill', ['/pid', String(child.pid), '/t', '/f'], {
+      stdio: 'ignore',
+      windowsHide: true
+    })
     await waitForTermination(child, 5_000)
     return
   }

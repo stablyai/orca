@@ -647,7 +647,7 @@ describe('OrcaRuntimeRpcServer', () => {
     )
     expect(mocks.browserTabCreate).toHaveBeenCalledWith(
       { worktree: 'id:wt-1', url: 'about:blank' },
-      { pairedDeviceId: mobile.deviceId }
+      { pairedDeviceId: mobile.deviceId, clientKind: 'mobile' }
     )
     expect(mocks.browserSetViewport).toHaveBeenCalledWith({
       worktree: 'id:wt-1',

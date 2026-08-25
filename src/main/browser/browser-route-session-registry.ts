@@ -2,6 +2,10 @@ import {
   deriveBrowserRoutePartition,
   type DerivedBrowserRoutePartition
 } from './browser-route-identity'
+import {
+  persistBrowserRouteSessionBinding,
+  resolveBrowserRouteSessionPartition
+} from './browser-route-session-partition-binding'
 import type {
   BrowserRoutePageAuthority,
   BrowserRoutePageOwnerIdentity
@@ -126,9 +130,12 @@ export class BrowserRouteSessionRegistry {
     input: BrowserRoutePreparePageInput,
     rendererFence: BrowserRouteRendererPrepareFence
   ): Promise<BrowserRouteSessionHandle> {
-    const derived = this.derivePartition(input.identity)
     this.dependencies.validateProfile(input.identity.browserProfileId)
-    this.assertBinding(derived)
+    const derived = resolveBrowserRouteSessionPartition(
+      this.dependencies,
+      input,
+      this.derivePartition
+    )
     let state = this.live.get(derived.partition)
     if (state) {
       this.assertReusable(state, derived, input.proxyEndpoint)
@@ -150,13 +157,7 @@ export class BrowserRouteSessionRegistry {
     if (this.live.size + this.pending.size >= this.maxLivePartitions) {
       throw new Error('browser_route_partition_capacity')
     }
-    if (this.dependencies.bindingStore.get(derived.partition) === null) {
-      this.dependencies.bindingStore.set(
-        derived.partition,
-        derived.bindingFingerprint,
-        input.storageScope
-      )
-    }
+    persistBrowserRouteSessionBinding(this.dependencies, derived, input.storageScope)
     const promise = this.preparePartition(
       derived,
       input.identity.browserProfileId,
@@ -218,13 +219,6 @@ export class BrowserRouteSessionRegistry {
           this.clearUnadmittedPartition(pending.state)
         }
       }
-    }
-  }
-
-  private assertBinding(derived: DerivedBrowserRoutePartition): void {
-    const persisted = this.dependencies.bindingStore.get(derived.partition)
-    if (persisted !== null && persisted !== derived.bindingFingerprint) {
-      throw new Error('browser_route_partition_binding_conflict')
     }
   }
 

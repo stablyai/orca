@@ -7,6 +7,7 @@ import {
   type BrowserClientHostedPageInventory,
   type BrowserClientHostCommandEvent
 } from '../../shared/browser-client-host-protocol'
+import { BrowserClientPageMetadataParams } from '../../shared/browser-client-page-metadata-protocol'
 import type { BrowserClientPageRenderer } from './browser-client-page-cleanup'
 import { BrowserClientPageCommandError } from './browser-client-page-command-failure'
 import type { BrowserRouteGuestLifecycleClaim } from './browser-route-page-authority'
@@ -27,7 +28,8 @@ export function createBrowserClientPageInventory(
     pageHostGeneration: event.pageHostGeneration,
     browserProfileId: event.command.browserProfileId,
     executionHostKey: event.command.executionHostKey,
-    state
+    state,
+    ...(event.command.workspaceId ? { workspaceId: event.command.workspaceId } : {})
   })
 }
 
@@ -132,6 +134,28 @@ export function prepareBrowserClientPageInventoryForAttach(
   }
   const prepared = BrowserClientHostedPageInventoryList.safeParse(inventory)
   return prepared.success ? prepared.data : undefined
+}
+
+/**
+ * Records where a guest actually is, from the metadata publish that reports every navigation.
+ *
+ * Without this the inventory only ever names URLs the runtime navigated to, so a page the user
+ * browsed away from -- a link, a form, a redirect -- would be restored at the address it was
+ * opened with rather than where they left it.
+ */
+export function recordBrowserClientPagePublishedUrl(
+  pages: ReadonlyMap<string, { generation: number; inventory: BrowserClientHostedPageInventory }>,
+  params: unknown
+): void {
+  const metadata = BrowserClientPageMetadataParams.safeParse(params)
+  if (!metadata.success) {
+    return
+  }
+  const page = pages.get(metadata.data.browserPageId)
+  if (!page || page.generation !== metadata.data.pageHostGeneration) {
+    return
+  }
+  page.inventory = updateBrowserClientPageInventoryCurrentUrl(page.inventory, metadata.data.url)
 }
 
 export function updateBrowserClientPageInventoryCurrentUrl(

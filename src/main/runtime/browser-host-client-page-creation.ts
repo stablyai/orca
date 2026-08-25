@@ -1,11 +1,12 @@
 import type { BrowserClientHostCommandResult } from '../../shared/browser-client-host-protocol'
+import {
+  DEFAULT_CLIENT_PAGE_CREATION_TIMEOUT_MS,
+  MAX_CLIENT_PAGE_CREATION_TIMEOUT_MS
+} from '../../shared/browser-client-page-creation-timeouts'
 import { assertBrowserHostPageCommandAdmission } from './browser-host-page-command-admission'
 import type { BrowserHostLease, BrowserHostLeaseState } from './browser-host-lease-records'
 import type { BrowserHostPagePlacementRegistry } from './browser-host-page-placement'
 import type { RuntimeBrowserClientPlacement } from '../../shared/runtime-browser-placement'
-
-const DEFAULT_CLIENT_PAGE_CREATION_TIMEOUT_MS = 30_000
-const MAX_CLIENT_PAGE_CREATION_TIMEOUT_MS = 60_000
 
 export type BrowserClientPageExecutionHostGrant = {
   placement: RuntimeBrowserClientPlacement
@@ -13,16 +14,19 @@ export type BrowserClientPageExecutionHostGrant = {
   release: () => void
 }
 
+export type BrowserHostClientPageCreateOptions = {
+  browserPageId: string
+  browserHostClientId: string
+  pairedDeviceId: string
+  browserProfileId: string
+  executionHostKey: string
+  requiredCapabilities?: readonly string[]
+  timeoutMs?: number
+  workspaceId?: string
+}
+
 export async function createBrowserHostClientPage(
-  options: {
-    browserPageId: string
-    browserHostClientId: string
-    pairedDeviceId: string
-    browserProfileId: string
-    executionHostKey: string
-    requiredCapabilities?: readonly string[]
-    timeoutMs?: number
-  },
+  options: BrowserHostClientPageCreateOptions,
   dependencies: {
     selectLease(
       browserHostClientId: string,
@@ -62,7 +66,8 @@ export async function createBrowserHostClientPage(
     const command = {
       type: 'createPage' as const,
       browserProfileId: options.browserProfileId,
-      executionHostKey: options.executionHostKey
+      executionHostKey: options.executionHostKey,
+      ...(options.workspaceId ? { workspaceId: options.workspaceId } : {})
     }
     assertBrowserHostPageCommandAdmission(lease, command, (executionHostKey) =>
       state.executionHostGrants.require(executionHostKey)

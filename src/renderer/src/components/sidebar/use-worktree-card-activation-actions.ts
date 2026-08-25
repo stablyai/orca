@@ -1,4 +1,4 @@
-import React, { useCallback } from 'react'
+import React, { useCallback, useLayoutEffect, useRef } from 'react'
 
 import { getRepoExecutionHostId } from '../../../../shared/execution-host'
 import { recordRendererCrashBreadcrumb } from '@/lib/crash-diagnostics'
@@ -37,6 +37,10 @@ export function useWorktreeCardActivationActions({
 > &
   Pick<Foundation, 'isSshDisconnected' | 'updateWorktreeMeta' | 'openModal'> &
   Pick<LinkedDetails, 'isDeleting'>) {
+  const worktreeRef = useRef(worktree)
+  useLayoutEffect(() => {
+    worktreeRef.current = worktree
+  }, [worktree])
   // Stable click handler – ignore clicks that are really text selections.
   const handleClick = useCallback(
     (event: React.MouseEvent<HTMLDivElement>) => {
@@ -58,7 +62,7 @@ export function useWorktreeCardActivationActions({
       }
       const selectionOnly = affiliateListMode
         ? false
-        : (onSelectionGesture?.(event, worktree.id) ?? false)
+        : (onSelectionGesture?.(event, worktreeRef.current) ?? false)
       if (selectionOnly) {
         event.preventDefault()
         event.stopPropagation()

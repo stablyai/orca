@@ -1,13 +1,28 @@
-import { mkdtemp, readFile, readdir, realpath, rm } from 'node:fs/promises'
+import { existsSync } from 'node:fs'
+import type * as NodeFsPromises from 'node:fs/promises'
+import { mkdir, mkdtemp, readFile, readdir, realpath, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import {
   BROWSER_CLIENT_UPLOAD_STAGING_MAX_BYTES_PER_PAGE,
   BROWSER_CLIENT_UPLOAD_STAGING_MAX_COMMANDS_PER_PAGE,
   BrowserClientUploadStaging
 } from './browser-client-upload-staging'
+
+const nodeRemovals = vi.hoisted(() => ({ rm: [] as { target: unknown; options: unknown }[] }))
+
+vi.mock('node:fs/promises', async (importOriginal) => {
+  const actual = await importOriginal<typeof NodeFsPromises>()
+  return {
+    ...actual,
+    rm: (target: unknown, options: unknown) => {
+      nodeRemovals.rm.push({ target, options })
+      return (actual.rm as (t: unknown, o: unknown) => Promise<void>)(target, options)
+    }
+  }
+})
 
 let stagingRoot = ''
 
@@ -19,6 +34,13 @@ beforeEach(async () => {
 afterEach(async () => {
   await rm(stagingRoot, { recursive: true, force: true })
 })
+
+/** Release reports every failed removal together, so assert on the aggregate's contents. */
+async function releaseFailures(release: Promise<unknown>): Promise<string[]> {
+  const failure = await release.catch((error: unknown) => error)
+  expect(failure).toBeInstanceOf(AggregateError)
+  return (failure as AggregateError).errors.map((error: Error) => error.message)
+}
 
 describe('BrowserClientUploadStaging', () => {
   it('writes remote bytes under main-owned directories and keeps the remote basename', async () => {
@@ -95,6 +117,7 @@ describe('BrowserClientUploadStaging', () => {
     const staging = new BrowserClientUploadStaging(stagingRoot, {
       mkdir: async () => {},
       writeFile: async () => {},
+      removeDirectorySync: () => {},
       removeDirectory: async (directory) => {
         removed.push(directory)
       }
@@ -152,6 +175,7 @@ describe('BrowserClientUploadStaging', () => {
         writes += 1
         throw new Error('disk full')
       },
+      removeDirectorySync: () => {},
       removeDirectory: async () => {}
     })
 
@@ -188,6 +212,121 @@ describe('BrowserClientUploadStaging', () => {
       })
     ).rejects.toThrow('browser_client_upload_too_large')
 
-    expect(await readdir(stagingRoot)).toHaveLength(0)
+    expect(staging.activeStagingCount()).toBe(0)
+    expect(existsSync(stagingRoot)).toBe(false)
+  })
+
+  it('sweeps staged bytes an abnormal exit left in the root', async () => {
+    const orphan = path.join(stagingRoot, 'abandoned', '0')
+    await mkdir(orphan, { recursive: true })
+    await writeFile(path.join(orphan, 'report.pdf'), 'remote-bytes')
+
+    new BrowserClientUploadStaging(stagingRoot)
+
+    expect(existsSync(path.join(stagingRoot, 'abandoned'))).toBe(false)
+  })
+
+  it('keeps the staged record when its removal fails so a later release retries it', async () => {
+    const attempts: string[] = []
+    const staging = new BrowserClientUploadStaging(stagingRoot, {
+      mkdir: async () => {},
+      writeFile: async () => {},
+      removeDirectorySync: () => {},
+      removeDirectory: async (directory) => {
+        attempts.push(directory)
+        if (attempts.length === 1) {
+          throw new Error('EBUSY: resource busy or locked')
+        }
+      }
+    })
+    const staged = await staging.stage({
+      browserPageId: 'page-1',
+      pageHostGeneration: 1,
+      files: [{ remotePath: 'a.txt', contents: Buffer.from('a') }]
+    })
+    const directory = staging.stagedDirectory(staged.stagingId)
+
+    expect(await releaseFailures(staging.releasePage('page-1'))).toEqual([
+      expect.stringContaining('EBUSY')
+    ])
+    expect(staging.activeStagingCount()).toBe(1)
+
+    expect(await staging.releasePage('page-1')).toBe(1)
+    expect(staging.activeStagingCount()).toBe(0)
+    expect(attempts).toEqual([directory, directory])
+  })
+
+  it('attempts every staged record even when one removal fails', async () => {
+    const attempts: string[] = []
+    const staging = new BrowserClientUploadStaging(stagingRoot, {
+      mkdir: async () => {},
+      writeFile: async () => {},
+      removeDirectorySync: () => {},
+      removeDirectory: async (directory) => {
+        attempts.push(directory)
+        if (attempts.length === 1) {
+          throw new Error('EBUSY: resource busy or locked')
+        }
+      }
+    })
+    const first = await staging.stage({
+      browserPageId: 'page-1',
+      pageHostGeneration: 1,
+      files: [{ remotePath: 'a.txt', contents: Buffer.from('a') }]
+    })
+    const second = await staging.stage({
+      browserPageId: 'page-1',
+      pageHostGeneration: 1,
+      files: [{ remotePath: 'b.txt', contents: Buffer.from('b') }]
+    })
+    const directories = [first, second].map((staged) => staging.stagedDirectory(staged.stagingId))
+
+    expect(await releaseFailures(staging.releasePage('page-1'))).toHaveLength(1)
+
+    expect(attempts).toEqual(directories)
+    expect(staging.activeStagingCount()).toBe(1)
+  })
+
+  it('reports the staging failure, not the cleanup failure, when both fail', async () => {
+    const staging = new BrowserClientUploadStaging(stagingRoot, {
+      mkdir: async () => {},
+      writeFile: async () => {
+        throw new Error('disk full')
+      },
+      removeDirectorySync: () => {},
+      removeDirectory: async () => {
+        throw new Error('EBUSY: resource busy or locked')
+      }
+    })
+
+    await expect(
+      staging.stage({
+        browserPageId: 'page-1',
+        pageHostGeneration: 1,
+        files: [{ remotePath: 'a.txt', contents: Buffer.from('a') }]
+      })
+    ).rejects.toThrow('disk full')
+    // Why: the retained record is the only handle a later release has on the orphaned directory.
+    expect(staging.activeStagingCount()).toBe(1)
+  })
+
+  it('retries the staged removal so a briefly held file is not orphaned', async () => {
+    const staging = new BrowserClientUploadStaging(stagingRoot)
+    const staged = await staging.stage({
+      browserPageId: 'page-1',
+      pageHostGeneration: 1,
+      files: [{ remotePath: 'a.txt', contents: Buffer.from('a') }]
+    })
+    const directory = staging.stagedDirectory(staged.stagingId)
+    nodeRemovals.rm.length = 0
+
+    expect(await staging.release(staged.stagingId)).toBe(true)
+
+    expect(nodeRemovals.rm).toEqual([
+      {
+        target: directory,
+        options: { recursive: true, force: true, maxRetries: 3, retryDelay: 50 }
+      }
+    ])
   })
 })

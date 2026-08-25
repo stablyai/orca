@@ -6,6 +6,8 @@ import type {
   BrowserClientHostLeaseAuthority
 } from '../../shared/browser-client-host-protocol'
 import { sameRuntimeBrowserPlacement } from '../../shared/runtime-browser-placement'
+import { isRestoredClientHostedBrowserPlacement } from './client-hosted-browser-page-persistence'
+import type { BrowserExecutionHostKeyResolution } from './runtime-browser-client-page-adoption'
 import type { BrowserHostLeaseRegistry } from './browser-host-lease-registry'
 import type {
   RuntimeBrowserClientPage,
@@ -44,6 +46,23 @@ export async function recoverUnavailableRuntimeBrowserClientPages(options: {
   authority: RecoveryAuthority
   pages: RuntimeBrowserPageRegistry
   notifyWorkspace(workspaceId: string): void
+  /** Drops a page whose placement recovery destroyed without replacing it. */
+  releaseUnrecoverablePage?: (page: RuntimeBrowserClientPage) => void
+  /**
+   * Pages an adoption pass just rebuilt from this same inventory. Their entries still describe the
+   * predecessor runtime's authority by construction, so every inventory comparison below would call
+   * them unhealthy and re-tear-down what adoption just settled.
+   */
+  adoptedPageIds?: ReadonlySet<string>
+  /**
+   * The execution-host key a page in that workspace would be created under NOW.
+   *
+   * Required only for rehydrated pages, whose persisted record deliberately carries no key: the
+   * route key names the runtime process that minted it, so replaying one places the page under a
+   * predecessor the client refuses. Adoption re-resolves for the same reason.
+   */
+  resolveExecutionHostKey?: (workspaceId: string) => Promise<BrowserExecutionHostKeyResolution>
+  signal?: AbortSignal
 }): Promise<void> {
   const inventory = options.lease.pageInventory
   if (
@@ -58,13 +77,90 @@ export async function recoverUnavailableRuntimeBrowserClientPages(options: {
     .listPages()
     .filter(
       (page) =>
-        page.placement.browserHostClientId === options.lease.browserHostClientId &&
-        page.placement.browserHostGeneration === options.lease.browserHostGeneration &&
+        !options.adoptedPageIds?.has(page.browserPageId) &&
+        isRecoverableByLease(page, options.lease) &&
         !isActiveExactPage(page, inventoryByPageId.get(page.browserPageId), options.lease)
     )
-  await mapWithConcurrency(pages, MAX_RECOVERY_CONCURRENCY, async (page) => {
-    await recoverPage(page, inventoryByPageId.get(page.browserPageId), options)
-  })
+  await mapWithConcurrency(
+    pages,
+    MAX_RECOVERY_CONCURRENCY,
+    async (page) => {
+      try {
+        await recoverPage(page, inventoryByPageId.get(page.browserPageId), options)
+      } catch (error) {
+        // Why: recovery failures are page-scoped (a refused URL, a creation timeout). Rejecting
+        // here aborts the whole attach and fences the lease, taking every healthy page with it.
+        console.warn('[browser-host-lease] client page recovery failed:', {
+          browserPageId: page.browserPageId,
+          error
+        })
+        releaseUnhostablePage(page, options)
+      }
+    },
+    options.signal
+  )
+}
+
+/**
+ * Whether this lease is the one allowed to take a page back.
+ *
+ * A page placed by this desktop's current process names its `browserHostClientId`, and a page
+ * retained across a host quit still names the generation that placed it, so recovery has to reach
+ * back past this lease's own generation to pick it up again.
+ *
+ * A rehydrated page names neither: a desktop re-mints `browserHostClientId` per process, so the
+ * persisted record deliberately carries only the paired device, and the device is what
+ * re-authenticates the host. Matching on it is what keeps a second paired device -- or a device
+ * whose pairing was revoked and later re-made -- from inheriting someone else's tab; such a row
+ * stays host-absent and closable rather than being recovered to the wrong desktop.
+ */
+function isRecoverableByLease(
+  page: RuntimeBrowserClientPage,
+  lease: BrowserClientHostLeaseAuthority & { pairedDeviceId: string }
+): boolean {
+  if (isRestoredClientHostedBrowserPlacement(page.placement)) {
+    return page.pairedDeviceId === lease.pairedDeviceId
+  }
+  return (
+    page.placement.browserHostClientId === lease.browserHostClientId &&
+    page.placement.browserHostGeneration <= lease.browserHostGeneration
+  )
+}
+
+/**
+ * The key this recovery must place the page under, or null to leave the row held.
+ *
+ * A page this runtime still holds a key for keeps it: it was minted by this process and is still
+ * current. A rehydrated one has none, so the workspace is asked where its pages route now. A
+ * workspace that is gone drops its page; one whose route is merely not up yet is a "not now", and
+ * the row waits host-absent for a later attach rather than being torn down on the strength of it.
+ */
+async function resolveRecoveryExecutionHostKey(
+  page: RuntimeBrowserClientPage,
+  options: Parameters<typeof recoverUnavailableRuntimeBrowserClientPages>[0]
+): Promise<string | null> {
+  if (!isRestoredClientHostedBrowserPlacement(page.placement)) {
+    return page.executionHostKey
+  }
+  const resolved = await options.resolveExecutionHostKey?.(page.workspaceId)
+  if (resolved?.status === 'resolved') {
+    return resolved.executionHostKey
+  }
+  if (resolved?.status === 'workspace-gone') {
+    options.releaseUnrecoverablePage?.(page)
+  }
+  return null
+}
+
+/** Retires a page left with no placement at all; anything still placed can retry on a later attach. */
+function releaseUnhostablePage(
+  page: RuntimeBrowserClientPage,
+  options: Parameters<typeof recoverUnavailableRuntimeBrowserClientPages>[0]
+): void {
+  if (options.authority.getPlacement(page.browserPageId)) {
+    return
+  }
+  options.releaseUnrecoverablePage?.(page)
 }
 
 async function recoverPage(
@@ -72,6 +168,10 @@ async function recoverPage(
   inventory: BrowserClientHostedPageInventory | undefined,
   options: Parameters<typeof recoverUnavailableRuntimeBrowserClientPages>[0]
 ): Promise<void> {
+  const executionHostKey = await resolveRecoveryExecutionHostKey(page, options)
+  if (executionHostKey === null) {
+    return
+  }
   const currentPlacement = options.authority.getPlacement(page.browserPageId)
   if (currentPlacement && !sameRuntimeBrowserPlacement(currentPlacement, page.placement)) {
     if (
@@ -101,13 +201,15 @@ async function recoverPage(
     browserHostClientId: options.lease.browserHostClientId,
     pairedDeviceId: options.lease.pairedDeviceId,
     browserProfileId: page.browserProfileId,
-    executionHostKey: page.executionHostKey,
-    requiredCapabilities: [BROWSER_CLIENT_AUTOMATION_HOST_CAPABILITY]
+    executionHostKey,
+    requiredCapabilities: [BROWSER_CLIENT_AUTOMATION_HOST_CAPABILITY],
+    workspaceId: page.workspaceId
   })
   const recovered = options.pages.replaceClientPagePlacement(
     page.browserPageId,
     page.placement,
-    placement
+    placement,
+    executionHostKey
   )
   const url = inventory?.currentUrl ?? page.url
   if (url && url !== 'about:blank') {
@@ -217,11 +319,12 @@ function assertInventoryAuthority(
 async function mapWithConcurrency<T>(
   values: readonly T[],
   concurrency: number,
-  operation: (value: T) => Promise<void>
+  operation: (value: T) => Promise<void>,
+  signal?: AbortSignal
 ): Promise<void> {
   let index = 0
   const worker = async (): Promise<void> => {
-    while (index < values.length) {
+    while (index < values.length && !signal?.aborted) {
       const value = values[index]
       index += 1
       if (value !== undefined) {

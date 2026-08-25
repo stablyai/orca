@@ -134,7 +134,7 @@ vi.mock('@/components/ui/tooltip', () => ({
   }
 }))
 
-vi.mock('../browser-pane/browser-runtime', () => ({
+vi.mock('../browser-pane/describe-page/live-browser-url-registry', () => ({
   getLiveBrowserUrl: () => null
 }))
 

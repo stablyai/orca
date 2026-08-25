@@ -1,5 +1,11 @@
 import { readdir } from 'node:fs/promises'
 import { join } from 'node:path'
+import { PRIMARY_CHECKOUT_METADATA_FILES } from './worktree-git-common-metadata-files'
+import {
+  diffGitCommon,
+  gitCommonDirectoryIdentity,
+  type GitCommonSnapshot
+} from './worktree-git-common-snapshot-diff'
 import type {
   WorktreeBasePollEvent,
   WorktreeBaseSubscription,
@@ -12,32 +18,10 @@ import {
   type GitCommonEntrySnapshot
 } from './worktree-git-common-entry-snapshot'
 
-// Shared with the darwin primary-metadata poll so platforms cannot drift.
-// `logs/HEAD` catches head moves; `config.worktree` carries the sparse flag;
-// `config` gains branch.<name>.remote/merge on an external `git push -u`.
-export const PRIMARY_CHECKOUT_METADATA_FILES = [
-  'HEAD',
-  'packed-refs',
-  'index',
-  'config',
-  'config.worktree',
-  'logs/HEAD'
-]
-const LINKED_WORKTREE_INDEX_FILE = 'index'
-const LINKED_WORKTREE_HEAD_LOG_FILE = join('logs', 'HEAD')
 // Why: the entry-dir signature gate can miss same-granule index rewrites on
 // coarse-mtime filesystems; a periodic ungated re-stat bounds that miss the
 // same way the base poller's backstop rescan does.
 const INDEX_BACKSTOP_TICKS = 15
-
-type GitCommonSnapshot = {
-  worktreesDirSignature: string
-  entries: Map<string, GitCommonEntrySnapshot>
-  primarySignatures: Map<string, string>
-  statusRefPaths: Set<string>
-  statusRefSignatures: Map<string, string>
-  didFullScan: boolean
-}
 
 async function snapshotStatusRefSignatures(
   paths: ReadonlySet<string>
@@ -118,6 +102,7 @@ async function snapshotGitCommon(
   // rather than the always-run worktrees-dir readdir.
   return {
     worktreesDirSignature,
+    worktreesDirIdentity: gitCommonDirectoryIdentity(worktreesDirSignature),
     entries,
     primarySignatures,
     statusRefPaths,
@@ -126,96 +111,9 @@ async function snapshotGitCommon(
   }
 }
 
-function classifySignatureDiff(
-  prevSignature: string | null | undefined,
-  nextSignature: string | null | undefined
-): 'create' | 'update' | 'delete' | null {
-  if (prevSignature == null && nextSignature == null) {
-    return null
-  }
-  if (prevSignature == null) {
-    return 'create'
-  }
-  if (nextSignature == null) {
-    return 'delete'
-  }
-  return prevSignature === nextSignature ? null : 'update'
-}
-
-function diffSignatureMaps(
-  prev: Map<string, string>,
-  next: Map<string, string>,
-  resolvePath: (name: string) => string
-): WorktreeBasePollEvent[] {
-  const events: WorktreeBasePollEvent[] = []
-  const names = new Set([...prev.keys(), ...next.keys()])
-  for (const name of names) {
-    const type = classifySignatureDiff(prev.get(name), next.get(name))
-    if (type) {
-      events.push({ type, path: resolvePath(name) })
-    }
-  }
-  return events
-}
-
-function diffGitCommon(
-  commonDirPath: string,
-  prev: GitCommonSnapshot,
-  next: GitCommonSnapshot
-): WorktreeBasePollEvent[] {
-  const events: WorktreeBasePollEvent[] = []
-  const worktreesDir = join(commonDirPath, 'worktrees')
-  const worktreesDirDiff = classifySignatureDiff(
-    prev.worktreesDirSignature,
-    next.worktreesDirSignature
-  )
-  if (worktreesDirDiff) {
-    events.push({ type: worktreesDirDiff, path: worktreesDir })
-  }
-  for (const [entryPath, entry] of next.entries) {
-    const prevEntry = prev.entries.get(entryPath)
-    if (!prevEntry) {
-      events.push({ type: 'create', path: entryPath })
-      continue
-    }
-    events.push(
-      ...diffSignatureMaps(prevEntry.structuralSignatures, entry.structuralSignatures, (name) =>
-        join(entryPath, name)
-      )
-    )
-    const indexDiff = classifySignatureDiff(prevEntry.indexSignature, entry.indexSignature)
-    if (indexDiff) {
-      events.push({ type: indexDiff, path: join(entryPath, LINKED_WORKTREE_INDEX_FILE) })
-    }
-    const headLogDiff = classifySignatureDiff(prevEntry.headLogSignature, entry.headLogSignature)
-    if (headLogDiff) {
-      events.push({ type: headLogDiff, path: join(entryPath, LINKED_WORKTREE_HEAD_LOG_FILE) })
-    }
-  }
-  for (const entryPath of prev.entries.keys()) {
-    if (!next.entries.has(entryPath)) {
-      events.push({ type: 'delete', path: entryPath })
-    }
-  }
-  events.push(
-    ...diffSignatureMaps(prev.primarySignatures, next.primarySignatures, (name) =>
-      join(commonDirPath, name)
-    )
-  )
-  for (const path of next.statusRefPaths) {
-    // A newly selected ref is a baseline change, not a filesystem event.
-    if (!prev.statusRefPaths.has(path)) {
-      continue
-    }
-    const type = classifySignatureDiff(
-      prev.statusRefSignatures.get(path),
-      next.statusRefSignatures.get(path)
-    )
-    if (type) {
-      events.push({ type, path })
-    }
-  }
-  return events
+export type GitCommonPollingOptions = {
+  /** Reconciliation backstop: never trust the per-entry gate, re-stat every tick. */
+  forceFullScanEveryTick?: boolean
 }
 
 export async function startGitCommonPolling(
@@ -225,7 +123,8 @@ export async function startGitCommonPolling(
   visibility: WorktreePollerWindowVisibility,
   onFullScan?: () => void,
   includePrimary = true,
-  getStatusRefPaths: () => readonly string[] = () => []
+  getStatusRefPaths: () => readonly string[] = () => [],
+  options: GitCommonPollingOptions = {}
 ): Promise<WorktreeBaseSubscription> {
   let disposed = false
   let ticking = false
@@ -257,7 +156,10 @@ export async function startGitCommonPolling(
     // land each visible refresh a full scan-duration late every tick).
     const startedAt = Date.now()
     tickCount++
-    const shouldForceFullScan = forceFullScan || tickCount % INDEX_BACKSTOP_TICKS === 0
+    const shouldForceFullScan =
+      options.forceFullScanEveryTick === true ||
+      forceFullScan ||
+      tickCount % INDEX_BACKSTOP_TICKS === 0
     try {
       const next = await snapshotGitCommon(
         commonDirPath,

@@ -578,8 +578,7 @@ describe('BrowserHostLeaseRegistry', () => {
         pairedDeviceId: 'device-a'
       })
     ).toThrow('browser_host_lease_stale')
-    const clientRetirement = leases.beginPageRetirement('page-a', client)
-    expect(leases.completePageRetirement(clientRetirement)).toBe(true)
+    expect(leases.getPlacement('page-a')).toBeUndefined()
     expect(leases.placeClientPage('page-a', 'host-a')).toMatchObject({
       browserHostGeneration: 2,
       pageHostGeneration: 2

@@ -78,7 +78,40 @@ describe('browser file channel reconnect degradation', () => {
     expect(attempts[1]!.sendRequest).toHaveBeenCalledOnce()
     await lease.close()
   })
+
+  it('ignores a superseded connection failure and reports no channel once closed', async () => {
+    const attempts = mockAttempts()
+    const onError = vi.fn()
+    const lease = createLease({ onError })
+    const starting = lease.start()
+    await vi.waitFor(() => expect(attempts).toHaveLength(1))
+    attempts[0]!.callbacks.onResponse(readyResponse({ fileChannel: true }))
+    await starting
+    attempts[0]!.callbacks.onError(recoverableError())
+    await vi.waitFor(() => expect(attempts).toHaveLength(2))
+    attempts[1]!.callbacks.onResponse(readyResponse({ fileChannel: true }))
+    await vi.waitFor(() => expect(lease.fileChannelNegotiated).toBe(true))
+
+    // Why: the superseded connection's late failure must never fence the lease that replaced it.
+    attempts[0]!.callbacks.onError(new RemoteRuntimeClientError('bad_request', 'superseded'))
+    await flushMicrotasks()
+
+    expect(onError).not.toHaveBeenCalled()
+    expect(lease.fileChannelNegotiated).toBe(true)
+
+    await lease.close()
+    expect(lease.fileChannelNegotiated).toBe(false)
+    expect(() =>
+      lease.sendFileChannelRequest('browser.clientHost.fileChannel.read', {}, 10)
+    ).toThrow('Remote runtime browser file channel is unavailable.')
+  })
 })
+
+async function flushMicrotasks(): Promise<void> {
+  for (let index = 0; index < 10; index += 1) {
+    await Promise.resolve()
+  }
+}
 
 function createLease(overrides: {
   onError?: (error: Error) => void

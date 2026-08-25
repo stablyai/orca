@@ -2,9 +2,9 @@ import { BrowserNetworkTunnelSession } from '../../../browser/browser-network-tu
 import { BrowserNetworkTunnelOutboundMemoryBudgetRegistry } from '../../../browser/browser-network-tunnel-outbound-memory-budget'
 import {
   browserNetworkExecutionHostKey,
-  resolveNativeBrowserNetworkExecutionRoute,
   type BrowserNetworkExecutionRouteResolver
 } from '../../../browser/browser-network-execution-route'
+import { resolveBrowserNetworkExecutionRoute } from '../../../browser/browser-network-execution-route-dispatch'
 import { BrowserNetworkTunnelAttachParams } from '../../../../shared/browser-client-host-protocol'
 import {
   BROWSER_CLIENT_HOST_RUNTIME_CAPABILITY,
@@ -238,29 +238,3 @@ function publicExecutionRouteError(error: unknown): Error {
 
 // Why: tests inject this until a live lease and server-owned route generation authorize TCP opens.
 export const BROWSER_NETWORK_TUNNEL_METHODS = createBrowserNetworkTunnelMethods()
-
-async function resolveBrowserNetworkExecutionRoute(
-  context: Parameters<BrowserNetworkExecutionRouteResolver>[0]
-) {
-  if (context.executionHost.kind === 'native') {
-    return resolveNativeBrowserNetworkExecutionRoute(context)
-  }
-  if (context.executionHost.kind === 'wsl') {
-    const wslRoute = await import('../../../browser/wsl-browser-network-execution-route')
-    return wslRoute.resolveWslBrowserNetworkExecutionRoute(context)
-  }
-  const [{ getSshConnectionManager }, authority, sshRoute] = await Promise.all([
-    import('../../../ipc/ssh'),
-    import('../../../ssh/ssh-provider-authority'),
-    import('../../../browser/ssh-browser-network-execution-route')
-  ])
-  const connectionManager = getSshConnectionManager()
-  if (!connectionManager) {
-    throw new Error('browser_tunnel_execution_host_unavailable')
-  }
-  return sshRoute.resolveSshBrowserNetworkExecutionRoute(context, {
-    connectionManager,
-    isCurrentAuthority: authority.isCurrentSshProviderAuthority,
-    registerAuthorityAbort: authority.registerSshProviderRequestAbort
-  })
-}

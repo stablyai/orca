@@ -24,10 +24,16 @@ export type BrowserScreencastViewport = Pick<
   'viewportWidth' | 'viewportHeight' | 'deviceScaleFactor' | 'mobile'
 >
 
+export type BrowserScreencastFrameBudget = Pick<
+  BrowserScreencastOptions,
+  'quality' | 'maxWidth' | 'maxHeight' | 'everyNthFrame' | 'minFrameIntervalMs'
+>
+
 export type BrowserScreencastSession = {
   stop: () => void
   done: Promise<void>
   updateViewport: (viewport: BrowserScreencastViewport) => Promise<void>
+  updateFrameBudget: (budget: BrowserScreencastFrameBudget) => Promise<void>
 }
 
 export type BrowserScreencastEvent =

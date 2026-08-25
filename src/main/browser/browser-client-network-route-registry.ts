@@ -3,8 +3,16 @@ import type {
   BrowserNetworkExecutionHost
 } from '../../shared/browser-client-host-protocol'
 import type { BrowserClientPageNetworkRoute } from './browser-client-page-cleanup'
+import {
+  assertBrowserClientNetworkRouteAddress,
+  sameBrowserClientNetworkRouteAddress
+} from './browser-client-network-route-address'
 import { reconnectBrowserClientNetworkRoutes } from './browser-client-network-route-recovery'
-import { browserNetworkExecutionHostStorageIdentity } from './browser-execution-host-storage-identity'
+import {
+  browserNetworkExecutionHostStorageIdentity,
+  legacyBrowserNetworkExecutionHostStorageIdentity
+} from './browser-execution-host-storage-identity'
+import { createRouteRetirement, waitForRoute } from './browser-client-network-route-settlement'
 import { resolveBrowserHostReconnectDelay } from './browser-host-lease-reconnect-delay'
 import { parseBrowserNetworkExecutionHostKey } from './browser-network-execution-route'
 
@@ -17,6 +25,8 @@ type BrowserClientNetworkRoute = {
 
 type BrowserClientNetworkRouteRegistryOptions = {
   authority: BrowserHostLeaseAuthority
+  /** Durable name for the authority's machine; its runtimeId is per-process and must not reach storage. */
+  authorityStorageKey: string
   reconnectGraceMs?: number
   reconnectRetryDelayMs?: number
   createRoute(
@@ -30,6 +40,8 @@ type RetainedRoute = {
   route: BrowserClientNetworkRoute
   references: number
   address?: { host: string; port: number }
+  /** Set while teardown runs; cleared only when the teardown outcome is unknown. */
+  closing?: Promise<void>
 }
 
 export class BrowserClientNetworkRouteRegistry {
@@ -58,6 +70,7 @@ export class BrowserClientNetworkRouteRegistry {
     ) {
       throw new Error('browser_client_network_route_authority_mismatch')
     }
+    await this.settleClosingRoute(key, signal)
     let retained = this.routes.get(key)
     const existing = retained !== undefined
     if (!retained) {
@@ -70,13 +83,13 @@ export class BrowserClientNetworkRouteRegistry {
     }
     retained.references += 1
     try {
-      const address = await waitForRouteAddress(
+      const address = await waitForRoute(
         existing ? retained.route.reconnect() : retained.route.start(),
         signal
       )
       this.assertAdmission(signal)
-      assertRouteAddress(address)
-      if (retained.address && !sameRouteAddress(retained.address, address)) {
+      assertBrowserClientNetworkRouteAddress(address)
+      if (retained.address && !sameBrowserClientNetworkRouteAddress(retained.address, address)) {
         throw new Error('browser_client_network_route_address_changed')
       }
       retained.address = address
@@ -84,7 +97,12 @@ export class BrowserClientNetworkRouteRegistry {
       return {
         key,
         // Why: the route key fences per-boot generations; storage must outlive them.
-        executionHostIdentity: browserNetworkExecutionHostStorageIdentity(executionHost),
+        executionHostIdentity: browserNetworkExecutionHostStorageIdentity(
+          executionHost,
+          this.options.authorityStorageKey
+        ),
+        legacyExecutionHostIdentity:
+          legacyBrowserNetworkExecutionHostStorageIdentity(executionHost),
         proxyEndpoint: { host: '127.0.0.1', port: address.port },
         release: async () => {
           if (released) {
@@ -181,9 +199,9 @@ export class BrowserClientNetworkRouteRegistry {
       browserHostClientId: this.options.authority.browserHostClientId
     })
     for (const [index, address] of addresses.entries()) {
-      assertRouteAddress(address)
+      assertBrowserClientNetworkRouteAddress(address)
       const previous = retained[index]?.address
-      if (previous && !sameRouteAddress(previous, address)) {
+      if (previous && !sameBrowserClientNetworkRouteAddress(previous, address)) {
         throw new Error('browser_client_network_route_address_changed')
       }
     }
@@ -207,6 +225,16 @@ export class BrowserClientNetworkRouteRegistry {
     }
   }
 
+  /** A closing route can never be revived, so a retain waits it out and then mints a fresh one. */
+  private async settleClosingRoute(key: string, signal: AbortSignal): Promise<void> {
+    let closing = this.routes.get(key)?.closing
+    while (closing) {
+      await waitForRoute(closing, signal)
+      this.assertAdmission(signal)
+      closing = this.routes.get(key)?.closing
+    }
+  }
+
   private async release(retained: RetainedRoute): Promise<void> {
     if (retained.references < 1) {
       return
@@ -215,7 +243,15 @@ export class BrowserClientNetworkRouteRegistry {
     if (retained.references !== 0 || this.routes.get(retained.key) !== retained) {
       return
     }
-    await retained.route.close()
+    const closing = retained.route.close()
+    retained.closing = closing
+    try {
+      await closing
+    } catch (error) {
+      // Why: an unprovable teardown keeps the closed route in place so the key stays fenced.
+      retained.closing = undefined
+      throw error
+    }
     if (this.routes.get(retained.key) === retained) {
       this.routes.delete(retained.key)
     }
@@ -254,60 +290,4 @@ export class BrowserClientNetworkRouteRegistry {
       this.retirement.resolve()
     }
   }
-}
-
-function createRouteRetirement(): {
-  promise: Promise<void>
-  resolve: () => void
-  reject: (error: unknown) => void
-} {
-  let resolve = (): void => {}
-  let reject = (_error: unknown): void => {}
-  const promise = new Promise<void>((innerResolve, innerReject) => {
-    resolve = innerResolve
-    reject = innerReject
-  })
-  void promise.catch(() => undefined)
-  return { promise, resolve, reject }
-}
-
-function assertRouteAddress(address: { host: string; port: number }): void {
-  if (
-    address.host !== '127.0.0.1' ||
-    !Number.isInteger(address.port) ||
-    address.port < 1 ||
-    address.port > 65_535
-  ) {
-    throw new Error('browser_client_network_route_address_invalid')
-  }
-}
-
-function sameRouteAddress(
-  left: { host: string; port: number },
-  right: { host: string; port: number }
-): boolean {
-  return left.host === right.host && left.port === right.port
-}
-
-function waitForRouteAddress(
-  route: Promise<{ host: string; port: number }>,
-  signal: AbortSignal
-): Promise<{ host: string; port: number }> {
-  if (signal.aborted) {
-    return Promise.reject(new Error('browser_client_network_route_aborted'))
-  }
-  return new Promise((resolve, reject) => {
-    const abort = (): void => reject(new Error('browser_client_network_route_aborted'))
-    signal.addEventListener('abort', abort, { once: true })
-    void route.then(
-      (address) => {
-        signal.removeEventListener('abort', abort)
-        resolve(address)
-      },
-      (error) => {
-        signal.removeEventListener('abort', abort)
-        reject(error)
-      }
-    )
-  })
 }

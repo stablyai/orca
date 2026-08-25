@@ -489,14 +489,18 @@ class RemoteRuntimeTerminalMultiplexer {
 
     const stream: RemoteRuntimeMultiplexedTerminal = {
       streamId,
-      sendInput: (text) => this.sendInput(state, text),
+      sendInput: (text) => this.isRegisteredStream(state) && this.sendInput(state, text),
       resize: (cols, rows) =>
+        this.isRegisteredStream(state) &&
         this.sendFrame(
           streamId,
           TerminalStreamOpcode.Resize,
           encodeTerminalStreamJson({ cols, rows })
         ),
       claimViewport: (cols, rows) => {
+        if (!this.isRegisteredStream(state)) {
+          return false
+        }
         const claimed = this.sendFrame(
           streamId,
           TerminalStreamOpcode.ClaimViewport,
@@ -1207,6 +1211,11 @@ class RemoteRuntimeTerminalMultiplexer {
       TerminalStreamOpcode.Ack,
       encodeTerminalStreamJson({ bytes })
     )
+  }
+
+  // Why: sendFrame gates on readiness alone; a dropped handle would still report success.
+  private isRegisteredStream(stream: RemoteRuntimeMultiplexedTerminalState): boolean {
+    return this.streams.get(stream.streamId) === stream
   }
 
   private sendInput(stream: RemoteRuntimeMultiplexedTerminalState, text: string): boolean {

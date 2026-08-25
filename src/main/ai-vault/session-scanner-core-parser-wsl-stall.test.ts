@@ -29,6 +29,8 @@ import {
   resetSessionParseCacheForTests
 } from './session-scanner-parse-cache'
 import {
+  resetWslTranscriptFsGateForTests,
+  WSL_TRANSCRIPT_FS_ROUTE_QUARANTINE_BASE_MS,
   WSL_TRANSCRIPT_FS_SCAN_TIMEOUT_MS,
   WslTranscriptFsError
 } from '../native-chat/wsl-transcript-fs-gate'
@@ -107,8 +109,19 @@ function missing(): Error {
   return Object.assign(new Error('ENOENT'), { code: 'ENOENT' })
 }
 
+// Complete: UNC readdir results pass through the child dispatcher's dirent
+// serializer, which reads every kind flag.
 function dirent(name: string) {
-  return { name, isFile: () => true }
+  return {
+    name,
+    isBlockDevice: () => false,
+    isCharacterDevice: () => false,
+    isDirectory: () => false,
+    isFIFO: () => false,
+    isFile: () => true,
+    isSocket: () => false,
+    isSymbolicLink: () => false
+  }
 }
 
 function candidate(agent: SessionFileCandidate['agent'], path: string): SessionFileCandidate {
@@ -132,13 +145,18 @@ async function expectRefusal(target: SessionFileCandidate): Promise<void> {
   await refusal
 }
 
+// A result that lands past the deadline never lifts the route quarantine, so
+// recovery waits out the back-off window the same way production does.
 async function releaseAndSettle(): Promise<void> {
   releaseStall?.()
   releaseStall = undefined
-  await vi.advanceTimersByTimeAsync(0)
+  await vi.advanceTimersByTimeAsync(WSL_TRANSCRIPT_FS_ROUTE_QUARANTINE_BASE_MS)
 }
 
 beforeEach(() => {
+  // blockedRoutes is persistent gate state: a prior stall must not quarantine
+  // this test's route.
+  resetWslTranscriptFsGateForTests()
   resetSessionParseCacheForTests()
   mocks.open.mockReset()
   mocks.readFile.mockReset()
@@ -146,7 +164,8 @@ beforeEach(() => {
   mocks.stat.mockReset()
   releaseStall = undefined
   mocks.stat.mockRejectedValue(missing())
-  vi.useFakeTimers()
+  // performance.now drives the route quarantine clock, so it must be faked too.
+  vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'Date', 'performance'] })
 })
 
 afterEach(async () => {

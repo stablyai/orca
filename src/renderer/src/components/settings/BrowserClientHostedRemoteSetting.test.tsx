@@ -1,51 +1,54 @@
-import { renderToStaticMarkup } from 'react-dom/server'
-import { describe, expect, it, vi } from 'vitest'
+// @vitest-environment happy-dom
+import { cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { afterEach, describe, expect, it, vi } from 'vitest'
+import { TooltipProvider } from '../ui/tooltip'
 import { BrowserClientHostedRemoteSetting } from './BrowserClientHostedRemoteSetting'
 import { getBrowserPaneSearchEntries } from './browser-search'
 import { getBrowserClientHostedRemoteTitle } from './browser-client-hosted-remote-copy'
+import type { GlobalSettings } from '../../../../shared/global-settings-types'
 
 vi.mock('../../store', () => ({
   useAppStore: (selector: (state: { settingsSearchQuery: string }) => unknown) =>
     selector({ settingsSearchQuery: '' })
 }))
 
+function renderSetting(
+  settings: Pick<GlobalSettings, 'browserClientHostedRemoteEnabled'>,
+  updateSettings: (updates: Partial<GlobalSettings>) => void = vi.fn()
+): void {
+  render(
+    <TooltipProvider>
+      <BrowserClientHostedRemoteSetting settings={settings} updateSettings={updateSettings} />
+    </TooltipProvider>
+  )
+}
+
 describe('BrowserClientHostedRemoteSetting', () => {
-  it('is on when the profile predates the flag and states new-pages-only semantics', () => {
-    const markup = renderToStaticMarkup(
-      <BrowserClientHostedRemoteSetting settings={{}} updateSettings={vi.fn()} />
-    )
-
-    expect(markup).toContain('Host remote browser pages on this device')
-    expect(markup).toContain('aria-checked="true"')
-    expect(markup).toContain('new pages only')
-    expect(markup).toContain('never moves a live page')
+  afterEach(() => {
+    cleanup()
   })
 
-  it('reads an explicit opt-out as off', () => {
-    const markup = renderToStaticMarkup(
-      <BrowserClientHostedRemoteSetting
-        settings={{ browserClientHostedRemoteEnabled: false }}
-        updateSettings={vi.fn()}
-      />
+  it('defaults to this-device rendering when the profile predates the flag', () => {
+    renderSetting({})
+    expect(screen.getByRole('radio', { name: 'This device' }).getAttribute('aria-checked')).toBe(
+      'true'
     )
-
-    expect(markup).toContain('aria-checked="false"')
+    expect(screen.getByText(/new pages only/i)).toBeTruthy()
   })
 
-  it('writes the inverse of the effective value through the global settings path', () => {
+  it('reads an explicit opt-out as server-streamed rendering', () => {
+    renderSetting({ browserClientHostedRemoteEnabled: false })
+    expect(
+      screen.getByRole('radio', { name: 'Server (streamed)' }).getAttribute('aria-checked')
+    ).toBe('true')
+  })
+
+  it('writes the chosen placement through the global settings path', () => {
     const updateSettings = vi.fn()
-    const enabled = { browserClientHostedRemoteEnabled: true }
-
-    BrowserClientHostedRemoteSetting({
-      settings: enabled,
-      updateSettings
-    }).props.children.props.onChange()
+    renderSetting({ browserClientHostedRemoteEnabled: true }, updateSettings)
+    fireEvent.click(screen.getByRole('radio', { name: 'Server (streamed)' }))
     expect(updateSettings).toHaveBeenLastCalledWith({ browserClientHostedRemoteEnabled: false })
-
-    BrowserClientHostedRemoteSetting({
-      settings: { browserClientHostedRemoteEnabled: false },
-      updateSettings
-    }).props.children.props.onChange()
+    fireEvent.click(screen.getByRole('radio', { name: 'This device' }))
     expect(updateSettings).toHaveBeenLastCalledWith({ browserClientHostedRemoteEnabled: true })
   })
 

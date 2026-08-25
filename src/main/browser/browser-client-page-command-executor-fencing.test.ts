@@ -85,7 +85,10 @@ describe('BrowserClientPageCommandExecutor authority fencing', () => {
       errorCode: 'browser_client_page_executor_closed'
     })
 
-    executor.completeAuthorityTransition('authority-record-b')
+    executor.completeAuthorityTransition({
+      authorityConnectionIdentity: 'authority-record-b',
+      legacyAuthorityConnectionIdentity: 'legacy-authority-record-b'
+    })
     await expect(
       executor.handle(
         createCommand('navigate', {
@@ -141,7 +144,10 @@ describe('BrowserClientPageCommandExecutor authority fencing', () => {
     expect(executor.snapshotPageInventory()).toEqual([])
     expect(dependencies.routeWebContents.grantNavigation).not.toHaveBeenCalled()
     expect(order).toEqual(['release-route'])
-    executor.completeAuthorityTransition('authority-record-b')
+    executor.completeAuthorityTransition({
+      authorityConnectionIdentity: 'authority-record-b',
+      legacyAuthorityConnectionIdentity: 'legacy-authority-record-b'
+    })
     await executor.close()
   })
 

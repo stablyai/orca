@@ -28,7 +28,101 @@ afterEach(() => {
   vi.restoreAllMocks()
 })
 
+async function postClaudeHook(
+  server: AgentHookServer,
+  payload: Record<string, unknown>
+): Promise<Response> {
+  const env = server.buildPtyEnv()
+  return fetch(`http://127.0.0.1:${env.ORCA_AGENT_HOOK_PORT}/hook/claude`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-Orca-Agent-Hook-Token': env.ORCA_AGENT_HOOK_TOKEN
+    },
+    body: JSON.stringify(buildBody(payload))
+  })
+}
+
 describe('AgentHookServer listener replay', () => {
+  it('caches and notifies status/main/plugin before retry scheduling and HTTP response', async () => {
+    const server = new AgentHookServer()
+    await server.start({ env: 'production' })
+    const order: string[] = []
+    const internal = server as unknown as {
+      scheduleAssistantMessageRetry: (...args: unknown[]) => void
+      scheduleCodexSubagentPoll: (...args: unknown[]) => void
+    }
+    const originalAssistantRetry = internal.scheduleAssistantMessageRetry.bind(server)
+    const originalCodexRetry = internal.scheduleCodexSubagentPoll.bind(server)
+    const assistantRetry = vi
+      .spyOn(internal, 'scheduleAssistantMessageRetry')
+      .mockImplementation((...args) => {
+        order.push('assistant-retry')
+        originalAssistantRetry(...args)
+      })
+    const codexRetry = vi
+      .spyOn(internal, 'scheduleCodexSubagentPoll')
+      .mockImplementation((...args) => {
+        order.push('codex-retry')
+        originalCodexRetry(...args)
+      })
+    const unsubscribeStatus = server.subscribeStatusChanges(() => order.push('status-change'))
+    server.setListener(() => {
+      expect(server.getStatusSnapshotForPane(PANE)).toHaveLength(1)
+      order.push('main-listener')
+    })
+    const unsubscribePlugin = server.subscribeEnrichedStatus(() => order.push('plugin-listener'))
+    try {
+      const response = await postClaudeHook(server, {
+        hook_event_name: 'UserPromptSubmit',
+        prompt: 'ordered'
+      })
+      order.push('response')
+      expect(response.status).toBe(204)
+      expect(order).toEqual([
+        'status-change',
+        'main-listener',
+        'plugin-listener',
+        'assistant-retry',
+        'codex-retry',
+        'response'
+      ])
+    } finally {
+      unsubscribeStatus()
+      unsubscribePlugin()
+      assistantRetry.mockRestore()
+      codexRetry.mockRestore()
+      server.stop()
+    }
+  })
+
+  it('fails open after a throwing callback with cache retained and retries skipped', async () => {
+    const server = new AgentHookServer()
+    await server.start({ env: 'production' })
+    const internal = server as unknown as {
+      scheduleAssistantMessageRetry: (...args: unknown[]) => void
+      scheduleCodexSubagentPoll: (...args: unknown[]) => void
+    }
+    const assistantRetry = vi.spyOn(internal, 'scheduleAssistantMessageRetry')
+    const codexRetry = vi.spyOn(internal, 'scheduleCodexSubagentPoll')
+    server.setListener(() => {
+      throw new Error('listener failed')
+    })
+    try {
+      const response = await postClaudeHook(server, {
+        hook_event_name: 'UserPromptSubmit',
+        prompt: 'cached before callback'
+      })
+      expect(response.status).toBe(204)
+      expect(server.getStatusSnapshotForPane(PANE)).toHaveLength(1)
+      expect(assistantRetry).not.toHaveBeenCalled()
+      expect(codexRetry).not.toHaveBeenCalled()
+    } finally {
+      assistantRetry.mockRestore()
+      codexRetry.mockRestore()
+      server.stop()
+    }
+  })
   it('ignores local nested Claude Stop while a parent Codex hook status is active', async () => {
     const server = new AgentHookServer()
     await server.start({ env: 'production' })

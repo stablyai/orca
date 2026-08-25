@@ -194,10 +194,10 @@ export class BrowserHostPagePlacementRegistry {
     return retirement
   }
 
-  /** Returns the pages fenced by this host, so their runtime-side resources can be released. */
-  fenceClientHostPlacements(host: BrowserHostPlacementIdentity): string[] {
+  /** Returns each fenced page's retirement, so the caller can complete what the client never will. */
+  fenceClientHostPlacements(host: BrowserHostPlacementIdentity): BrowserPageRetirement[] {
     assertBrowserHostPlacementIdentity(host)
-    const fenced: string[] = []
+    const fenced: BrowserPageRetirement[] = []
     for (const [browserPageId, state] of this.placementsByPageId) {
       const placement = state.placement
       if (
@@ -209,7 +209,10 @@ export class BrowserHostPagePlacementRegistry {
       }
       state.retirement ??= Object.freeze({ browserPageId, placement })
       state.retirementTerminal = true
-      fenced.push(browserPageId)
+      // A completion already running owns the delete; completing again would throw.
+      if (!state.retirementCompletionInProgress) {
+        fenced.push(state.retirement)
+      }
     }
     return fenced
   }

@@ -184,7 +184,9 @@ describe('RuntimeBrowserCommands client-hosted routing', () => {
       pairedDeviceId: 'device-a',
       browserProfileId: 'default',
       executionHostKey: JSON.stringify(['native', 'runtime-a', 7]),
-      requiredCapabilities: ['automation-v1']
+      requiredCapabilities: ['automation-v1'],
+      // Carried to the client so its page inventory can name the workspace after a restart.
+      workspaceId: 'wt-1'
     })
     expect(issueClientPageCommand).toHaveBeenCalledWith(
       expect.objectContaining({ browserPageId: 'page-stable' }),
@@ -192,6 +194,107 @@ describe('RuntimeBrowserCommands client-hosted routing', () => {
     )
     expect(offscreenCreate).not.toHaveBeenCalled()
     expect(send).not.toHaveBeenCalled()
+  })
+
+  it('moves a user-created client page into the clicked split group', async () => {
+    const { RuntimeBrowserCommands } = await import('./orca-runtime-browser')
+    const markHeadlessBrowserSessionTabActive = vi.fn()
+    const host = createHost({
+      resolveBrowserNetworkExecutionHost: vi.fn(async () => ({
+        kind: 'native' as const,
+        runtimeId: 'runtime-a',
+        revision: 7
+      })),
+      markHeadlessBrowserSessionTabActive,
+      getBrowserHostLeaseRegistry: () =>
+        ({
+          authorityRuntimeId: 'runtime-a',
+          authorityEpoch: 'epoch-a',
+          createClientPage: vi.fn(async () => ({
+            kind: 'client' as const,
+            browserHostClientId: 'host-a',
+            browserHostGeneration: 3,
+            pageHostGeneration: 9
+          })),
+          issueClientPageCommand: vi.fn(() => ({
+            event: {} as never,
+            result: Promise.resolve({ status: 'completed' as const })
+          }))
+        }) as never
+    })
+    const commands = new RuntimeBrowserCommands(host)
+
+    await commands.browserTabCreate(
+      {
+        worktree: 'id:wt-1',
+        page: 'page-grouped',
+        activate: true,
+        targetGroupId: 'group-right',
+        placement: { kind: 'client', browserHostClientId: 'host-a' }
+      },
+      { pairedDeviceId: 'device-a' }
+    )
+    expect(markHeadlessBrowserSessionTabActive).toHaveBeenCalledWith('wt-1', 'page-grouped', {
+      targetGroupId: 'group-right',
+      focusesHost: true,
+      caller: { clientNavigationId: 'device-a', navigation: 'all' }
+    })
+
+    markHeadlessBrowserSessionTabActive.mockClear()
+    await commands.browserTabCreate(
+      {
+        worktree: 'id:wt-1',
+        page: 'page-background',
+        placement: { kind: 'client', browserHostClientId: 'host-a' }
+      },
+      { pairedDeviceId: 'device-a' }
+    )
+    // Why: agent/background creates must not yank a connected client to the new tab.
+    expect(markHeadlessBrowserSessionTabActive).not.toHaveBeenCalled()
+  })
+
+  it('keeps a background client page out of the workspace current-page slot', async () => {
+    const { RuntimeBrowserCommands } = await import('./orca-runtime-browser')
+    const registry = new RuntimeBrowserPageRegistry()
+    const commands = new RuntimeBrowserCommands(
+      createHost({
+        resolveBrowserNetworkExecutionHost: vi.fn(async () => ({
+          kind: 'native' as const,
+          runtimeId: 'runtime-a',
+          revision: 7
+        })),
+        getRuntimeBrowserPageRegistry: () => registry,
+        getBrowserHostLeaseRegistry: () =>
+          ({
+            authorityRuntimeId: 'runtime-a',
+            authorityEpoch: 'epoch-a',
+            createClientPage: vi.fn(async () => ({
+              kind: 'client' as const,
+              browserHostClientId: 'host-a',
+              browserHostGeneration: 3,
+              pageHostGeneration: 9
+            })),
+            issueClientPageCommand: vi.fn(() => ({
+              event: {} as never,
+              result: Promise.resolve({ status: 'completed' as const })
+            }))
+          }) as never
+      })
+    )
+
+    // `active` is what browser.tabCurrent resolves for agents, so an opted-out create must not
+    // take the slot from the page the user is actually on.
+    await commands.browserTabCreate(
+      {
+        worktree: 'id:wt-1',
+        page: 'page-background',
+        activate: false,
+        placement: { kind: 'client', browserHostClientId: 'host-a' }
+      },
+      { pairedDeviceId: 'device-a' }
+    )
+
+    expect(registry.getPage('page-background')).toMatchObject({ active: false })
   })
 
   it('publishes the proven client page before navigation and scopes it to the worktree', async () => {
@@ -496,7 +599,8 @@ describe('RuntimeBrowserCommands client-hosted routing', () => {
             issueClientPageCommand,
             requireClientPage,
             beginPageRetirement,
-            completePageRetirement
+            completePageRetirement,
+            getPlacement: () => registry.getPage('page-client')?.placement
           }) as never,
         resolveBrowserWorkspace: vi.fn(async () => ({ id: 'wt-1' })),
         retireRuntimeOwnedBrowserSessionTab,
@@ -519,6 +623,45 @@ describe('RuntimeBrowserCommands client-hosted routing', () => {
     expect(registry.getPage('page-client')).toBeUndefined()
     expect(retireRuntimeOwnedBrowserSessionTab).toHaveBeenCalledWith('wt-1', 'page-client')
     expect(notifyHeadlessBrowserSessionTabsChanged).not.toHaveBeenCalled()
+  })
+
+  it('closes a retained client page whose host is gone without commanding it', async () => {
+    const { RuntimeBrowserCommands } = await import('./orca-runtime-browser')
+    const registry = new RuntimeBrowserPageRegistry()
+    publishClientPage(registry, { browserPageId: 'page-client' })
+    const issueClientPageCommand = vi.fn()
+    const requireClientPage = vi.fn(() => {
+      throw new Error('browser_host_lease_required')
+    })
+    const retireRuntimeOwnedBrowserSessionTab = vi.fn()
+    const commands = new RuntimeBrowserCommands(
+      createHost({
+        getAgentBrowserBridge: () => null,
+        getRuntimeBrowserPageRegistry: () => registry,
+        getBrowserHostLeaseRegistry: () =>
+          ({
+            authorityRuntimeId: 'runtime-a',
+            authorityEpoch: 'epoch-a',
+            issueClientPageCommand,
+            requireClientPage,
+            beginPageRetirement: vi.fn(),
+            completePageRetirement: vi.fn(() => true),
+            // The fence released the placement while keeping the page listed.
+            getPlacement: () => undefined
+          }) as never,
+        resolveBrowserWorkspace: vi.fn(async () => ({ id: 'wt-1' })),
+        retireRuntimeOwnedBrowserSessionTab,
+        notifyHeadlessBrowserSessionTabsChanged: vi.fn()
+      })
+    )
+
+    await expect(
+      commands.browserTabClose({ worktree: 'id:wt-1', page: 'page-client' })
+    ).resolves.toEqual({ closed: true })
+    expect(issueClientPageCommand).not.toHaveBeenCalled()
+    expect(requireClientPage).not.toHaveBeenCalled()
+    expect(registry.getPage('page-client')).toBeUndefined()
+    expect(retireRuntimeOwnedBrowserSessionTab).toHaveBeenCalledWith('wt-1', 'page-client')
   })
 
   it('does not fall back to a server page after explicit client placement fails', async () => {

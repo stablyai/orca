@@ -18,4 +18,5 @@ export type BrowserClientRetainedRendererPage = {
   onReady: EventListener
   onDestroyed: EventListener
   onRendererGone: EventListener
+  releaseDragPassthroughSurface: () => void
 }

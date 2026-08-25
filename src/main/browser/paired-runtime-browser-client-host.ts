@@ -119,6 +119,13 @@ export class PairedRuntimeBrowserClientHost {
     return this.lease.sendFileChannelRequest(method, params, timeoutMs)
   }
 
+  sendPageMetadataRequest(
+    params: unknown,
+    timeoutMs: number
+  ): Promise<RuntimeRpcResponse<unknown>> {
+    return this.lease.sendPageMetadataRequest(params, timeoutMs)
+  }
+
   refreshPageInventory(): Promise<void> {
     if (this.closed) {
       return Promise.reject(new Error('Browser client host is closed'))

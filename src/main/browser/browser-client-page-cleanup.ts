@@ -8,6 +8,8 @@ import type { BrowserClientRetainedPage } from './browser-client-page-retained-s
 export type BrowserClientPageNetworkRoute = {
   key: string
   executionHostIdentity: string
+  /** Pre-migration identity of the same host, so its existing partition can be adopted. */
+  legacyExecutionHostIdentity: string
   proxyEndpoint: BrowserRouteProxyEndpoint
   release(): void | Promise<void>
 }
@@ -90,6 +92,7 @@ export async function cleanupRetainedBrowserClientPage(
       pageHostGeneration: number
       registration: BrowserClientRetainedPage['registration']
     }): Promise<void>
+    releaseUploadStaging?(): void | Promise<void>
   },
   previousRendererPage?: BrowserClientPageRendererIdentity
 ): Promise<void> {
@@ -121,6 +124,10 @@ export async function cleanupRetainedBrowserClientPage(
   } catch (error) {
     failures.push(error)
   }
+  // Why: staged upload copies of remote files must not outlive the page, but a temp file the guest
+  // still holds open must not strand the guest, its route, or its partition either. Runs last so
+  // the removal sees a destroyed guest.
+  await collectCleanupFailure(() => dependencies.releaseUploadStaging?.(), failures)
   if (failures.length > 0) {
     throw new AggregateError(failures, 'Browser client page cleanup failed')
   }

@@ -226,7 +226,8 @@ function reconciliationCreateEvent(
     command: {
       type: 'createPage',
       browserProfileId: event.command.browserProfileId,
-      executionHostKey: event.command.executionHostKey
+      executionHostKey: event.command.executionHostKey,
+      ...(event.command.workspaceId ? { workspaceId: event.command.workspaceId } : {})
     }
   }
 }

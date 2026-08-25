@@ -48,6 +48,12 @@ describe('BrowserClientPageCommandExecutor', () => {
         authorityConnectionIdentity: 'authority-record-a',
         executionHostIdentity: 'execution-host-record-a'
       },
+      legacyIdentity: {
+        orcaProfileId: 'orca-profile-a',
+        browserProfileId: 'profile-a',
+        authorityConnectionIdentity: 'legacy-authority-record-a',
+        executionHostIdentity: 'legacy-execution-host-record-a'
+      },
       storageScope: 'a'.repeat(64),
       browserPageId: 'page-a',
       pageHostGeneration: 7,
@@ -457,6 +463,8 @@ describe('BrowserClientPageCommandExecutor', () => {
       expect.objectContaining({ browserPageId: 'page-a', state: 'outcomeUnknown' })
     ])
     expect(Object.isFrozen(inventory[0])).toBe(true)
+    // The unresolved record answers for its exact generation only.
+    expect(executor.hasUnresolvedPage('page-a', 8)).toBe(false)
     await expect(executor.retirePage('page-a', 7)).resolves.toBe(false)
     await expect(
       executor.handle(
@@ -467,6 +475,60 @@ describe('BrowserClientPageCommandExecutor', () => {
       status: 'failed',
       errorCode: 'browser_client_page_generation_conflict'
     })
+    // Close must report the unresolved page rather than claim a clean teardown.
+    await expect(executor.close()).rejects.toMatchObject({
+      message: 'Browser client page executor cleanup failed',
+      errors: [expect.objectContaining({ message: 'browser_client_page_cleanup_unresolved' })]
+    })
+  })
+
+  it('reports every page whose cleanup fails during close', async () => {
+    const { executor, order, renderer } = createHarness()
+    await executor.handle(createCommand('createPage'), new AbortController().signal)
+    renderer.retirePage.mockImplementationOnce(async () => {
+      order.push('retire-renderer-page')
+      throw new Error('renderer cleanup failed')
+    })
+
+    await expect(executor.close()).rejects.toMatchObject({
+      message: 'Browser client page executor cleanup failed',
+      errors: [expect.objectContaining({ message: 'Browser client page cleanup failed' })]
+    })
+  })
+
+  it('joins an in-flight retirement instead of running cleanup twice', async () => {
+    const { executor, order } = createHarness()
+    await executor.handle(createCommand('createPage'), new AbortController().signal)
+
+    const [first, second] = await Promise.all([
+      executor.retirePage('page-a', 7),
+      executor.retirePage('page-a', 7)
+    ])
+
+    expect([first, second]).toEqual([true, true])
+    expect(order.filter((step) => step === 'release-route')).toHaveLength(1)
+    expect(order.filter((step) => step === 'release-session')).toHaveLength(1)
+  })
+
+  it('refuses an authority transition on a closed executor', async () => {
+    const { executor } = createHarness()
+    await executor.handle(createCommand('createPage'), new AbortController().signal)
+    await executor.close()
+
+    expect(() => executor.beginAuthorityTransition()).toThrow(
+      'browser_client_page_authority_transition_unavailable'
+    )
+  })
+
+  it('refuses to complete an authority transition that never began', () => {
+    const { executor } = createHarness()
+
+    expect(() =>
+      executor.completeAuthorityTransition({
+        authorityConnectionIdentity: 'authority-record-b',
+        legacyAuthorityConnectionIdentity: 'legacy-authority-record-b'
+      })
+    ).toThrow('browser_client_page_authority_transition_unavailable')
   })
 
   it('waits for guest destruction when renderer retirement fails', async () => {

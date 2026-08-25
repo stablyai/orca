@@ -11,6 +11,8 @@ const toastMocks = vi.hoisted(() => ({
 
 vi.mock('sonner', () => ({ toast: toastMocks }))
 
+import { TooltipProvider } from '@/components/ui/tooltip'
+import { installClientHostedPaneApi, paneChannel } from './client-hosted-browser-pane-test-rig'
 import { ClientHostedBrowserPagePane } from './ClientHostedBrowserPagePane'
 
 type PopupEvent = {
@@ -19,26 +21,11 @@ type PopupEvent = {
   action: 'opened-in-orca' | 'opened-external' | 'blocked'
 }
 
-let popupListeners: ((event: PopupEvent) => void)[] = []
+let popups = paneChannel<PopupEvent>()
 
 beforeEach(() => {
-  popupListeners = []
-  Object.defineProperty(window, 'api', {
-    configurable: true,
-    value: {
-      browser: {
-        onDownloadRequested: () => () => {},
-        onDownloadFinished: () => () => {},
-        onPopup: (callback: (event: PopupEvent) => void) => {
-          popupListeners.push(callback)
-          return () => {
-            popupListeners = popupListeners.filter((entry) => entry !== callback)
-          }
-        }
-      },
-      runtimeEnvironments: { call: vi.fn(async () => ({})) }
-    }
-  })
+  popups = paneChannel<PopupEvent>()
+  installClientHostedPaneApi({ browser: { onPopup: popups.subscribe } })
 })
 
 afterEach(() => {
@@ -48,29 +35,33 @@ afterEach(() => {
 
 function renderPane(): void {
   render(
-    <ClientHostedBrowserPagePane
-      browserTab={
-        {
-          id: 'page-a',
-          url: 'https://example.internal/app',
-          title: 'App',
-          loading: false,
-          canGoBack: false,
-          canGoForward: false
-        } as never
-      }
-      runtimeEnvironmentId="environment-a"
-      worktreeId="worktree-a"
-      placement={{
-        kind: 'client',
-        browserHostClientId: 'client-a',
-        browserHostGeneration: 3,
-        pageHostGeneration: 7
-      }}
-      isActive
-      onUpdatePageState={vi.fn()}
-      onSetUrl={vi.fn()}
-    />
+    <TooltipProvider>
+      <ClientHostedBrowserPagePane
+        browserTab={
+          {
+            id: 'page-a',
+            url: 'https://example.internal/app',
+            title: 'App',
+            loading: false,
+            canGoBack: false,
+            canGoForward: false
+          } as never
+        }
+        workspaceId="workspace-a"
+        chromeShortcutScope="focused"
+        runtimeEnvironmentId="environment-a"
+        worktreeId="worktree-a"
+        placement={{
+          kind: 'client',
+          browserHostClientId: 'client-a',
+          browserHostGeneration: 3,
+          pageHostGeneration: 7
+        }}
+        isActive
+        onUpdatePageState={vi.fn()}
+        onSetUrl={vi.fn()}
+      />
+    </TooltipProvider>
   )
 }
 
@@ -81,11 +72,7 @@ function emitPopup(overrides: Partial<PopupEvent> = {}): void {
     action: 'blocked',
     ...overrides
   }
-  act(() => {
-    for (const listener of popupListeners) {
-      listener(event)
-    }
-  })
+  act(() => popups.emit(event))
 }
 
 describe('ClientHostedBrowserPagePane popup notices', () => {
@@ -94,9 +81,10 @@ describe('ClientHostedBrowserPagePane popup notices', () => {
 
     emitPopup()
 
-    expect(toastMocks.message).toHaveBeenCalledWith('Popup blocked: https://accounts.example.com', {
-      id: 'browser-popup-blocked:page-a:https://accounts.example.com'
-    })
+    expect(toastMocks.message).toHaveBeenCalledWith(
+      'https://accounts.example.com tried to open a popup Orca does not support here.',
+      { id: 'browser-popup:page-a:blocked:https://accounts.example.com' }
+    )
   })
 
   it('collapses a retrying site onto one notice per origin', () => {
@@ -111,11 +99,29 @@ describe('ClientHostedBrowserPagePane popup notices', () => {
     expect(new Set(ids).size).toBe(1)
   })
 
-  it('stays silent for popups Orca actually opened', () => {
+  // Why: the local pane reports all three outcomes; only "blocked" reaching this pane left a page
+  // that silently opened somewhere else looking like it did nothing.
+  it('reports where a popup Orca did open actually went', () => {
     renderPane()
 
     emitPopup({ action: 'opened-in-orca' })
     emitPopup({ action: 'opened-external' })
+
+    expect(toastMocks.message).toHaveBeenNthCalledWith(
+      1,
+      'https://accounts.example.com opened a new page in Orca.',
+      { id: 'browser-popup:page-a:opened-in-orca:https://accounts.example.com' }
+    )
+    expect(toastMocks.message).toHaveBeenNthCalledWith(
+      2,
+      'https://accounts.example.com opened a new window in your default browser.',
+      { id: 'browser-popup:page-a:opened-external:https://accounts.example.com' }
+    )
+  })
+
+  it('ignores popups belonging to another page', () => {
+    renderPane()
+
     emitPopup({ browserPageId: 'page-b' })
 
     expect(toastMocks.message).not.toHaveBeenCalled()

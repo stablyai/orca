@@ -13,6 +13,8 @@ export type BrowserRouteSessionHandle = Readonly<{
 
 export type BrowserRoutePreparePageInput = Readonly<{
   identity: BrowserRoutePartitionIdentity
+  /** Pre-migration identity, so an existing partition keeps serving this route. */
+  legacyIdentity?: BrowserRoutePartitionIdentity
   storageScope: string
   browserPageId: string
   pageHostGeneration: number

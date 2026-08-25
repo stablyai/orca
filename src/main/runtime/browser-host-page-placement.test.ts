@@ -57,24 +57,23 @@ describe('browser host page placement authority', () => {
     ).toThrow('browser_client_page_placement_required')
   })
 
-  it('fences the placement when its lease is released or replaced', () => {
+  it('releases the placement when its lease is released or replaced', () => {
     const leases = registry()
     const firstHost = attachHost(leases)
-    const firstPlacement = leases.placeClientPage('page-a', 'host-a')
+    leases.placeClientPage('page-a', 'host-a')
 
     firstHost.release()
+    expect(leases.getPlacement('page-a')).toBeUndefined()
     expect(() => leases.requireClientPage(pageAuthority(1))).toThrow(
-      'browser_page_retirement_pending'
+      'browser_client_page_placement_required'
     )
 
     attachHost(leases, 'connection-b')
-    expect(() => leases.requireClientPage(pageAuthority(1))).toThrow(
-      'browser_page_retirement_pending'
-    )
-    const firstRetirement = leases.beginPageRetirement('page-a', firstPlacement)
-    expect(leases.completePageRetirement(firstRetirement)).toBe(true)
     const replacement = leases.placeClientPage('page-a', 'host-a')
     expect(leases.requireClientPage(pageAuthority(2, 2))).toBe(replacement)
+
+    attachHost(leases, 'connection-c')
+    expect(leases.getPlacement('page-a')).toBeUndefined()
   })
 
   it('rejects retired, replaced, and server page placements', () => {

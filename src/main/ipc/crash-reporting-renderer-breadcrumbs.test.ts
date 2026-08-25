@@ -76,8 +76,11 @@ function registerHandlersWithStubStore(): void {
   } as never)
 }
 
-function emitRendererBreadcrumb(args: unknown): void {
-  listeners.get('crashReports:recordBreadcrumb')?.(null, args)
+function emitRendererBreadcrumb(args: unknown, senderId?: number): void {
+  listeners.get('crashReports:recordBreadcrumb')?.(
+    senderId === undefined ? null : { sender: { id: senderId } },
+    args
+  )
 }
 
 describe('renderer breadcrumb IPC routing', () => {
@@ -119,6 +122,17 @@ describe('renderer breadcrumb IPC routing', () => {
       }
     })
     expect(spanEndMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('routes the trusted sender identity into renderer breadcrumb attribution', () => {
+    emitRendererBreadcrumb({ name: 'renderer_error', data: { message: 'boom' } }, 42)
+
+    expect(recordCoalescedCrashBreadcrumbMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        origin: 'renderer:42',
+        coalesceKey: expect.stringContaining('renderer:42')
+      })
+    )
   })
 
   it('coalesces renderer rejection breadcrumbs by reason message', () => {

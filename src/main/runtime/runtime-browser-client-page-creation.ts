@@ -15,6 +15,7 @@ type RuntimeBrowserClientPageCreation = {
   pairedDeviceId: string
   browserProfileId: string
   executionHost: BrowserNetworkExecutionHost
+  workspaceId?: string
 }
 
 type RuntimeBrowserClientPageNavigation = {
@@ -38,7 +39,8 @@ export async function createRuntimeBrowserClientPage(
     pairedDeviceId: input.pairedDeviceId,
     browserProfileId: input.browserProfileId,
     executionHostKey: browserNetworkExecutionHostKey(input.executionHost),
-    requiredCapabilities: [BROWSER_CLIENT_AUTOMATION_HOST_CAPABILITY]
+    requiredCapabilities: [BROWSER_CLIENT_AUTOMATION_HOST_CAPABILITY],
+    ...(input.workspaceId ? { workspaceId: input.workspaceId } : {})
   })
   return { browserPageId: input.browserPageId, placement }
 }

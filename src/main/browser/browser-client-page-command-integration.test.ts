@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from 'vitest'
 import type { BrowserClientHostCommandEvent } from '../../shared/browser-client-host-protocol'
 import { BrowserClientHostCommandDispatcher } from './browser-client-host-command-dispatcher'
 import { BrowserClientPageCommandExecutor } from './browser-client-page-command-executor'
+import { createBrowserRoutePartitionBindingStoreFake } from './browser-route-partition-binding-store-fake'
 import { BrowserRouteSessionRegistry } from './browser-route-session-registry'
 import { BrowserRouteWebContentsRegistry } from './browser-route-webcontents-registry'
 
@@ -25,7 +26,7 @@ describe('BrowserClientPageCommandExecutor integration', () => {
       clearPolicies,
       retirePageAuthority: (retirement) =>
         webContentsRegistry?.retirePageAuthority(retirement) ?? false,
-      bindingStore: { get: () => null, set: vi.fn() }
+      bindingStore: createBrowserRoutePartitionBindingStoreFake()
     })
     webContentsRegistry = new BrowserRouteWebContentsRegistry({
       getPartitionForSession: (session) => sessionRegistry.getPartitionForSession(session),
@@ -46,10 +47,12 @@ describe('BrowserClientPageCommandExecutor integration', () => {
     const executor = new BrowserClientPageCommandExecutor({
       orcaProfileId: 'orca-profile-a',
       authorityConnectionIdentity: 'authority-record-a',
+      legacyAuthorityConnectionIdentity: 'legacy-authority-record-a',
       storageScope: 'a'.repeat(64),
       retainNetworkRoute: vi.fn(async () => ({
         key: 'execution-host-a',
         executionHostIdentity: 'execution-host-record-a',
+        legacyExecutionHostIdentity: 'legacy-execution-host-record-a',
         proxyEndpoint: { host: '127.0.0.1' as const, port: 43123 },
         release: routeRelease
       })),

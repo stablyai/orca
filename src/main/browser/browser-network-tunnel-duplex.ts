@@ -17,6 +17,9 @@ export class BrowserNetworkTunnelDuplex extends Duplex {
       allowHalfOpen: true,
       readableHighWaterMark: BROWSER_NETWORK_TUNNEL_INITIAL_WINDOW_BYTES
     })
+    // Why: retirement destroys with an error before any consumer holds the duplex
+    // (pre-open failures, opened-frame races), and an unobserved 'error' crashes the process.
+    this.on('error', () => {})
     this.options = options
   }
 

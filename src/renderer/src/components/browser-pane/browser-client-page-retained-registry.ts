@@ -14,6 +14,7 @@ import { rekeyBrowserClientRetainedPage } from './browser-client-page-retained-r
 import type { BrowserClientRetainedRendererPage as RetainedPage } from './browser-client-page-retained-state'
 import {
   attachBrowserClientRetainedPage,
+  enrolRetainedHostDragPassthrough,
   type BrowserClientPageVisibleAttachment
 } from './browser-client-page-visible-attachment'
 import {
@@ -160,7 +161,7 @@ export class BrowserClientPageRetainedRegistry {
   }
 
   private createPage(identity: RendererPageIdentity, key: string): RetainedPage {
-    const host = createBrowserClientPageRetainedHost(this.options.document)
+    const host = createBrowserClientPageRetainedHost(this.options.document, identity.browserPageId)
     const webview = createBrowserClientPageWebview({
       createWebview: this.options.createWebview,
       document: this.options.document,
@@ -200,6 +201,7 @@ export class BrowserClientPageRetainedRegistry {
       onDestroyed,
       onRendererGone
     })
+    page.releaseDragPassthroughSurface = enrolRetainedHostDragPassthrough(page)
     webview.addEventListener('did-attach', onAttached)
     webview.addEventListener('dom-ready', onReady)
     webview.addEventListener('destroyed', onDestroyed)
@@ -281,6 +283,7 @@ export class BrowserClientPageRetainedRegistry {
       return
     }
     clearTimeout(page.attachTimer)
+    page.releaseDragPassthroughSurface()
     page.webview.removeEventListener('did-attach', page.onAttached)
     page.webview.removeEventListener('dom-ready', page.onReady)
     page.webview.removeEventListener('destroyed', page.onDestroyed)

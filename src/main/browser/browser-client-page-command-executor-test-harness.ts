@@ -54,6 +54,7 @@ export function createHarness(options: { maxPages?: number } = {}) {
   const route = {
     key: 'execution-host-a',
     executionHostIdentity: 'execution-host-record-a',
+    legacyExecutionHostIdentity: 'legacy-execution-host-record-a',
     proxyEndpoint: { host: '127.0.0.1' as const, port: 43123 },
     release: vi.fn(async () => {
       order.push('release-route')
@@ -79,6 +80,7 @@ export function createHarness(options: { maxPages?: number } = {}) {
   const dependencies = {
     orcaProfileId: 'orca-profile-a',
     authorityConnectionIdentity: 'authority-record-a',
+    legacyAuthorityConnectionIdentity: 'legacy-authority-record-a',
     storageScope: 'a'.repeat(64),
     maxPages: options.maxPages,
     retainNetworkRoute: vi.fn(async () => {

@@ -41,7 +41,9 @@ export async function executeBrowserClientUploadCommand(options: {
   try {
     return await options.run({ ...options.params, files: [...staged.localFilePaths] })
   } catch (error) {
-    await staging.release(staged.stagingId)
+    // Why: the upload failure is the one worth reporting; a removal that fails here keeps its
+    // record so a later page release retries the directory.
+    await staging.release(staged.stagingId).catch(() => undefined)
     throw error
   }
 }

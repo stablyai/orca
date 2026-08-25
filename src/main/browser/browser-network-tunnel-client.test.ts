@@ -10,7 +10,10 @@ import {
   encodeBrowserNetworkTunnelWindowUpdate,
   type BrowserNetworkTunnelFrame
 } from '../../shared/browser-network-tunnel-protocol'
-import { BROWSER_NETWORK_TUNNEL_INITIAL_WINDOW_BYTES } from './browser-network-tunnel-stream-state'
+import {
+  BROWSER_NETWORK_TUNNEL_CONNECT_TIMEOUT_MS,
+  BROWSER_NETWORK_TUNNEL_INITIAL_WINDOW_BYTES
+} from './browser-network-tunnel-stream-state'
 import { BrowserNetworkTunnelClient } from './browser-network-tunnel-client'
 
 function frame(
@@ -179,6 +182,47 @@ describe('BrowserNetworkTunnelClient', () => {
     const nextSocket = await nextOpening
     nextSocket.on('error', () => {})
     client.close()
+  })
+
+  it('rejects a destination failure before opening without an unhandled socket error', async () => {
+    const client = new BrowserNetworkTunnelClient({
+      tunnelGeneration: 7,
+      sendBinary: () => true
+    })
+    const opening = client.open({ host: 'refused.internal', port: 443 })
+
+    client.handleBinary(
+      frame(BrowserNetworkTunnelOpcode.Error, new TextEncoder().encode('destination_error'))
+    )
+
+    await expect(opening).rejects.toThrow('Browser tunnel destination failed: destination_error')
+    // Why: the errored destroy emits on a later tick; an unobserved 'error' fails the run here.
+    await new Promise((resolve) => setImmediate(resolve))
+    client.close()
+  })
+
+  it('fails a never-connected stream on timeout and notifies the remote', async () => {
+    vi.useFakeTimers()
+    let opening: Promise<unknown>
+    const sent: Uint8Array<ArrayBufferLike>[] = []
+    try {
+      const client = new BrowserNetworkTunnelClient({
+        tunnelGeneration: 7,
+        sendBinary: (bytes) => {
+          sent.push(bytes)
+          return true
+        }
+      })
+      opening = client.open({ host: 'unreachable.internal', port: 443 })
+      sent.length = 0
+      vi.advanceTimersByTime(BROWSER_NETWORK_TUNNEL_CONNECT_TIMEOUT_MS)
+    } finally {
+      vi.useRealTimers()
+    }
+
+    await expect(opening).rejects.toThrow('Browser tunnel destination connect timed out')
+    expect(decodeBrowserNetworkTunnelFrame(sent[0]!)?.opcode).toBe(BrowserNetworkTunnelOpcode.Error)
+    await new Promise((resolve) => setImmediate(resolve))
   })
 
   it('ignores a retired stream frame but rejects a never-allocated stream ID', async () => {

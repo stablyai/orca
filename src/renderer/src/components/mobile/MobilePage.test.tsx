@@ -56,12 +56,14 @@ vi.mock('./MobilePageContent', () => ({
     beforeCustomAddressChange: (address: string) => Promise<boolean>
     handleContinue: () => void
     pairQrDataUrl: string | null
+    pairQrSize: number | null
     pairingUrl: string | null
     pairingQrError: boolean
     relayMintFailure: MobileRelayMintFailure | null
     onRetryRelay: () => void
     selectedAddress: string | undefined
     loadNetworkInterfaces: () => void
+    openAndroidInstallGuide: () => void
     refreshingNetworkInterfaces: boolean
     stage: string | null
     stepIdx: number
@@ -72,6 +74,7 @@ vi.mock('./MobilePageContent', () => ({
       <span data-testid="mode">{props.connectionMode}</span>
       <span data-testid="can-generate">{String(props.canGeneratePairing)}</span>
       <span data-testid="pairing-qr">{props.pairQrDataUrl ?? 'none'}</span>
+      <span data-testid="pairing-qr-size">{props.pairQrSize ?? 'none'}</span>
       <span data-testid="pairing-url">{props.pairingUrl ?? 'none'}</span>
       <span data-testid="pairing-qr-error">{String(props.pairingQrError)}</span>
       <span data-testid="relay-failure">{props.relayMintFailure?.stage ?? 'none'}</span>
@@ -99,6 +102,9 @@ vi.mock('./MobilePageContent', () => ({
       </button>
       <button type="button" onClick={props.loadNetworkInterfaces}>
         Refresh addresses
+      </button>
+      <button type="button" onClick={props.openAndroidInstallGuide}>
+        Open Android install guide
       </button>
       <button
         type="button"
@@ -132,6 +138,7 @@ describe('MobilePage pairing connection mode', () => {
     getPairingQR.mockReset().mockResolvedValue({
       available: true,
       qrDataUrl: 'data:image/png;base64,qr',
+      qrSize: 218,
       pairingUrl: 'orca://pair#automatic'
     })
     listNetworkInterfaces.mockReset().mockResolvedValue({ interfaces: [] })
@@ -165,12 +172,22 @@ describe('MobilePage pairing connection mode', () => {
     await user.click(screen.getByRole('button', { name: 'Continue' }))
   }
 
+  it('opens Android troubleshooting in the system browser', async () => {
+    const user = userEvent.setup()
+    render(<MobilePage />)
+
+    await user.click(screen.getByRole('button', { name: 'Open Android install guide' }))
+
+    expect(window.api.shell.openUrl).toHaveBeenCalledWith('https://www.onorca.dev/docs/android-apk')
+  })
+
   it('defaults signed-in pairing to Anywhere and remints when same-network is selected', async () => {
     const user = userEvent.setup()
     await openPairingStep()
 
     await waitFor(() => expect(getPairingQR).toHaveBeenCalledWith({ connectionMode: 'automatic' }))
     await waitFor(() => expect(screen.getByTestId('pairing-qr')).toHaveTextContent('base64,qr'))
+    expect(screen.getByTestId('pairing-qr-size')).toHaveTextContent('218')
     expect(screen.getByTestId('mode')).toHaveTextContent('automatic')
 
     let resolveRotatedLocalQr: ((value: Record<string, unknown>) => void) | undefined

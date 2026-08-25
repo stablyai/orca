@@ -31,11 +31,18 @@ function createBindingStorePath(): string {
   )
 }
 
-function createRegistry(host: BrowserNetworkExecutionHost): BrowserClientNetworkRouteRegistry {
+const storageKeyA = 'a'.repeat(64)
+const storageKeyB = 'b'.repeat(64)
+
+function createRegistry(
+  host: BrowserNetworkExecutionHost,
+  authorityStorageKey: string
+): BrowserClientNetworkRouteRegistry {
   return new BrowserClientNetworkRouteRegistry({
     // Why: native/WSL routes are admitted only under their own runtime's authority.
     authority:
       host.kind === 'ssh' ? authority : { ...authority, authorityRuntimeId: host.runtimeId },
+    authorityStorageKey,
     createRoute: () => ({
       start: vi.fn(async () => ({ host: '127.0.0.1', port: 43123 })),
       reconnect: vi.fn(async () => ({ host: '127.0.0.1', port: 43123 })),
@@ -46,8 +53,11 @@ function createRegistry(host: BrowserNetworkExecutionHost): BrowserClientNetwork
 }
 
 /** Full client-hosted derivation: route key -> retained route -> partition name. */
-async function partitionFor(host: BrowserNetworkExecutionHost): Promise<string> {
-  const registry = createRegistry(host)
+async function partitionFor(
+  host: BrowserNetworkExecutionHost,
+  authorityStorageKey = storageKeyA
+): Promise<string> {
+  const registry = createRegistry(host, authorityStorageKey)
   const route = await registry.retain(
     browserNetworkExecutionHostKey(host),
     new AbortController().signal
@@ -61,8 +71,12 @@ async function partitionFor(host: BrowserNetworkExecutionHost): Promise<string> 
   return derived.partition
 }
 
-async function bindPartition(host: BrowserNetworkExecutionHost, filePath: string): Promise<string> {
-  const registry = createRegistry(host)
+async function bindPartition(
+  host: BrowserNetworkExecutionHost,
+  filePath: string,
+  authorityStorageKey = storageKeyA
+): Promise<string> {
+  const registry = createRegistry(host, authorityStorageKey)
   const route = await registry.retain(
     browserNetworkExecutionHostKey(host),
     new AbortController().signal
@@ -83,12 +97,14 @@ async function bindPartition(host: BrowserNetworkExecutionHost, filePath: string
 describe('client-hosted route partition stability', () => {
   it('keeps one partition and one binding across remote runtime restarts', async () => {
     const filePath = createBindingStorePath()
+    // Why: the remote mints runtimeId with randomUUID() per process, so a restart moves BOTH
+    // runtimeId and revision -- holding runtimeId fixed here would pass without testing anything.
     const before = await bindPartition(
       { kind: 'native', runtimeId: 'runtime-a', revision: 1_700_000_000 },
       filePath
     )
     const after = await bindPartition(
-      { kind: 'native', runtimeId: 'runtime-a', revision: 1_800_000_000 },
+      { kind: 'native', runtimeId: 'runtime-restarted', revision: 1_800_000_000 },
       filePath
     )
 
@@ -153,9 +169,9 @@ describe('client-hosted route partition stability', () => {
       revision: 1,
       distro: 'Debian'
     })
-    const sameDistroNewRevision = await partitionFor({
+    const sameDistroRestartedRuntime = await partitionFor({
       kind: 'wsl',
-      runtimeId: 'runtime-a',
+      runtimeId: 'runtime-restarted',
       revision: 99,
       distro: 'Ubuntu'
     })
@@ -166,21 +182,16 @@ describe('client-hosted route partition stability', () => {
     })
 
     expect(debian).not.toBe(ubuntu)
-    expect(sameDistroNewRevision).toBe(ubuntu)
+    expect(sameDistroRestartedRuntime).toBe(ubuntu)
     expect(native).not.toBe(ubuntu)
   })
 
-  it('separates distinct runtimes and never leaks raw host identity', async () => {
-    const first = await partitionFor({
-      kind: 'native',
-      runtimeId: 'runtime-a',
-      revision: 1
-    })
-    const second = await partitionFor({
-      kind: 'native',
-      runtimeId: 'runtime-b',
-      revision: 1
-    })
+  it('separates distinct environment records and never leaks raw host identity', async () => {
+    const first = await partitionFor({ kind: 'native', runtimeId: 'runtime-a', revision: 1 })
+    const second = await partitionFor(
+      { kind: 'native', runtimeId: 'runtime-a', revision: 1 },
+      storageKeyB
+    )
 
     expect(second).not.toBe(first)
     expect(first).toMatch(/^persist:orca-browser-v1-[a-f0-9]{64}$/)

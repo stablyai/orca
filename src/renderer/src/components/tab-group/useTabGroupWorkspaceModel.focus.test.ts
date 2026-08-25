@@ -143,6 +143,7 @@ function resetStore(): void {
     closeFile: mocks.closeFile,
     closeTab: mocks.closeTab,
     closeUnifiedTab: mocks.closeUnifiedTab,
+    recordClientHostedBrowserCloseIntents: vi.fn(),
     createBrowserTab: mocks.createBrowserTab,
     createEmptySplitGroup: mocks.createEmptySplitGroup,
     createTab: mocks.createTab,
@@ -454,7 +455,7 @@ describe('useTabGroupWorkspaceModel terminal activation focus', () => {
       storeBox.state.browserPagesByWorkspace,
       'browser-workspace-1'
     )
-    expect(mocks.closeBrowserTab).toHaveBeenCalledWith('browser-workspace-1')
+    expect(mocks.closeBrowserTab).toHaveBeenCalledWith('browser-workspace-1', undefined)
   })
 
   it('retains a remote-owned browser guest until the host close settles', async () => {
@@ -563,7 +564,13 @@ describe('useTabGroupWorkspaceModel terminal activation focus', () => {
 
     model.commands.closeItem('browser-unified-1')
 
-    expect(mocks.closeWebRuntimeSessionTab).not.toHaveBeenCalled()
+    // Why: a workspace whose pages span two environments has a tab mirror on each host. This
+    // used to resolve as "ambiguous" and close nothing at all, leaving the X inert.
+    expect(
+      mocks.closeWebRuntimeSessionTab.mock.calls
+        .map((call) => (call[0] as { environmentId: string }).environmentId)
+        .sort()
+    ).toEqual(['other-runtime', 'remote-runtime'])
     expect(mocks.destroyWorkspaceWebviews).not.toHaveBeenCalled()
     expect(mocks.closeBrowserTab).not.toHaveBeenCalled()
     expect(mocks.closeUnifiedTab).not.toHaveBeenCalled()
@@ -656,6 +663,6 @@ describe('useTabGroupWorkspaceModel terminal activation focus', () => {
     expect(mocks.closeWebRuntimeSessionTab).toHaveBeenCalledWith(
       expect.objectContaining({ worktreeId: 'wt-1', tabId: 'browser-unified-1' })
     )
-    expect(mocks.closeUnifiedTab).toHaveBeenCalledWith('browser-unified-1')
+    expect(mocks.closeUnifiedTab).toHaveBeenCalledWith('browser-unified-1', undefined)
   })
 })

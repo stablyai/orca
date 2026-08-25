@@ -8,8 +8,17 @@ export function createBrowserClientPageRetainedRoot(document: Document): HTMLDiv
   return root
 }
 
-export function createBrowserClientPageRetainedHost(document: Document): HTMLDivElement {
+/**
+ * `browserPageId` is stamped because the guest never enters its pane's subtree -- the host is a
+ * fixed-position overlay tracking the pane's rect -- so DOM containment cannot say which row a
+ * `<webview>` belongs to. The id is invariant across rekeys, unlike the generation.
+ */
+export function createBrowserClientPageRetainedHost(
+  document: Document,
+  browserPageId: string
+): HTMLDivElement {
   const host = document.createElement('div')
+  host.dataset.browserClientPageId = browserPageId
   host.inert = true
   host.setAttribute('aria-hidden', 'true')
   Object.assign(host.style, {

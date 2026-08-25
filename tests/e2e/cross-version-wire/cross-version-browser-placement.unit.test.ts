@@ -8,6 +8,31 @@ import { materializeReleaseCheckout, resolveBaselineReleaseRef } from './release
 
 type Schema = { parse: (value: unknown) => Record<string, unknown> }
 
+// Why candidates: the baseline is whichever stable release is newest when this runs,
+// and v1.4.185 moved the tab-create schema out of browser-schemas.ts and renamed it.
+// Pinning one module name makes the harness break on an unrelated release refactor.
+const BASELINE_TAB_CREATE_SOURCES = [
+  ['browser-tab-create-schema.ts', 'BrowserTabCreateParams'],
+  ['browser-schemas.ts', 'TabCreate']
+] as const
+
+async function importBaselineTabCreate(root: string): Promise<Schema> {
+  const attempted: string[] = []
+  for (const [file, exportName] of BASELINE_TAB_CREATE_SOURCES) {
+    attempted.push(`${file}#${exportName}`)
+    const loaded = await import(
+      /* @vite-ignore */ `${root}/src/main/runtime/rpc/methods/${file}`
+    ).catch(() => null)
+    const schema = loaded?.[exportName] as Schema | undefined
+    if (schema?.parse) {
+      return schema
+    }
+  }
+  throw new Error(
+    `Baseline release at ${root} exposes no tab-create schema (tried ${attempted.join(', ')}).`
+  )
+}
+
 const legacyRequest = {
   url: 'https://example.test',
   worktree: 'id:worktree-a',
@@ -26,11 +51,11 @@ beforeAll(async () => {
   baselineRef = resolveBaselineReleaseRef()
   const checkout = materializeReleaseCheckout(baselineRef)
   baselineRevision = checkout.commit
-  const [schemas, protocol] = await Promise.all([
-    import(/* @vite-ignore */ `${checkout.root}/src/main/runtime/rpc/methods/browser-schemas.ts`),
+  const [tabCreate, protocol] = await Promise.all([
+    importBaselineTabCreate(checkout.root),
     import(/* @vite-ignore */ `${checkout.root}/src/shared/protocol-version.ts`)
   ])
-  baselineTabCreate = schemas.TabCreate as Schema
+  baselineTabCreate = tabCreate
   baselineProtocol = protocol
 })
 

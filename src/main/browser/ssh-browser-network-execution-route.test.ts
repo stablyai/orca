@@ -1,7 +1,8 @@
 import { EventEmitter, once } from 'node:events'
 import type { ChildProcess } from 'node:child_process'
+import { createServer, type AddressInfo } from 'node:net'
 import { PassThrough } from 'node:stream'
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { SshConnection } from '../ssh/ssh-connection'
 import type { SshProviderEpoch } from '../../shared/ssh-types'
 import { resolveSshBrowserNetworkExecutionRoute } from './ssh-browser-network-execution-route'
@@ -33,6 +34,14 @@ function fakeConnection(client: unknown): SshConnection {
     getSystemSshBuildArgsOptions: () => ({})
   } as unknown as SshConnection
 }
+
+const servers: ReturnType<typeof createServer>[] = []
+
+afterEach(async () => {
+  await Promise.all(
+    servers.splice(0).map((server) => new Promise<void>((resolve) => server.close(() => resolve())))
+  )
+})
 
 describe('SSH browser network execution route', () => {
   it('rejects an unavailable or stale authority before opening a destination', async () => {
@@ -196,6 +205,45 @@ describe('SSH browser network execution route', () => {
     await route.close()
     expect(dispose).toHaveBeenCalledOnce()
     expect(close).toHaveBeenCalledOnce()
+  })
+
+  it('fails a stale system SSH socket loudly instead of closing it silently', async () => {
+    const listener = createServer()
+    servers.push(listener)
+    await new Promise<void>((resolve) => listener.listen(0, '127.0.0.1', resolve))
+    const connection = fakeConnection(null)
+    const forwardProcess = new EventEmitter() as EventEmitter & {
+      exitCode: number | null
+      signalCode: NodeJS.Signals | null
+    }
+    forwardProcess.exitCode = null
+    forwardProcess.signalCode = null
+    const route = await resolveSshBrowserNetworkExecutionRoute(
+      { executionHost, runtimeId: 'runtime-a', runtimeRevision: 1 },
+      {
+        connectionManager: { getConnection: () => connection },
+        isCurrentAuthority: () => true,
+        registerAuthorityAbort: () => () => {},
+        startDynamicForward: async () => ({
+          localPort: (listener.address() as AddressInfo).port,
+          process: forwardProcess as unknown as ChildProcess,
+          stderrTail: () => '',
+          dispose: () => {},
+          close: async () => {}
+        })
+      }
+    )
+
+    forwardProcess.exitCode = 0
+    const socket = route.connect({ host: 'stale.internal', port: 443 })
+    const events: string[] = []
+    socket.on('error', (error) => events.push(`error:${error.message}`))
+    socket.on('close', () => events.push('close'))
+
+    // A bare close reaches the tunnel session as a pre-connect close, which fences the whole tunnel.
+    await vi.waitFor(() => expect(events).toContain('close'))
+    expect(events[0]).toBe('error:browser_tunnel_execution_host_stale')
+    await route.close()
   })
 
   it('aborts system SSH startup when route authorization is revoked', async () => {

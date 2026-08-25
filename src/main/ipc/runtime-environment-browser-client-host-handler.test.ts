@@ -136,6 +136,48 @@ describe('runtime environment browser client host handler', () => {
     expect(closeHostMock).not.toHaveBeenCalled()
   })
 
+  it('answers server placement when the fresh probe never reaches the host', async () => {
+    getRuntimeEnvironmentStatusMock.mockResolvedValue({
+      id: 'status.get',
+      ok: false,
+      error: { code: 'runtime_unavailable', message: 'socket closed before ready' },
+      _meta: { runtimeId: 'runtime-a' }
+    })
+    register(true)
+    const prepare = handler<{ selector: string }, { kind: string }>(
+      'runtimeEnvironments:prepareBrowserClientHostPlacement'
+    )
+
+    // A create that would have gone server-side anyway must not fail because the probe it now
+    // always makes could not complete.
+    await expect(prepare(null, { selector: 'environment-a' })).resolves.toEqual({ kind: 'server' })
+    expect(startHostMock).not.toHaveBeenCalled()
+  })
+
+  // Why this guard carries the case alone now: a probe that cannot answer resolves to server
+  // placement instead of throwing, so nothing else notices that the user detached the runtime
+  // while it was in flight.
+  it('rejects a manual disconnect that lands while the probe is in flight', async () => {
+    getRuntimeEnvironmentStatusMock.mockImplementation(async () => {
+      manuallyDisconnectedMock.mockReturnValue(true)
+      return {
+        id: 'status.get',
+        ok: false,
+        error: { code: 'runtime_unavailable', message: 'disconnected mid-probe' },
+        _meta: { runtimeId: 'runtime-a' }
+      }
+    })
+    register(true)
+    const prepare = handler<{ selector: string }, unknown>(
+      'runtimeEnvironments:prepareBrowserClientHostPlacement'
+    )
+
+    await expect(prepare(null, { selector: 'environment-a' })).rejects.toThrow(
+      'runtime_manually_disconnected'
+    )
+    expect(startHostMock).not.toHaveBeenCalled()
+  })
+
   it('rejects manual disconnect before probing or attaching', async () => {
     manuallyDisconnectedMock.mockReturnValue(true)
     register(true)

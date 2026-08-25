@@ -5,6 +5,8 @@ import type {
 import type { BrowserNetworkTunnelOpen } from '../../shared/browser-network-tunnel-protocol'
 import type { PairingOffer } from '../../shared/pairing'
 import type { RemoteRuntimeSubscriptionOptions } from '../../shared/remote-runtime-client'
+import { resolveBrowserHostReconnectDelay } from './browser-host-lease-reconnect-delay'
+import { retryBrowserNetworkRouteReconnect } from './browser-network-route-reconnect-retry'
 import {
   BrowserNetworkTunnelOutboundMemoryBudgetRegistry,
   type BrowserNetworkTunnelOutboundMemoryLease
@@ -23,7 +25,11 @@ type PairedRuntimeBrowserNetworkRouteOptions = {
   subscription?: RemoteRuntimeSubscriptionOptions
   outboundMemoryBudgetRegistry?: BrowserNetworkTunnelOutboundMemoryBudgetRegistry
   maxStreamIdsPerTunnel?: number
+  recoveryGraceMs?: number
+  recoveryRetryDelayMs?: number
   onError?: (error: Error) => void
+  /** The route stayed dark after bounded recovery; its pages cannot reach the network. */
+  onUnavailable?: (error: Error) => void
 }
 
 type BrowserNetworkRouteAddress = { host: string; port: number }
@@ -37,12 +43,17 @@ export class PairedRuntimeBrowserNetworkRoute {
   private reconnectPromise: Promise<BrowserNetworkRouteAddress> | null = null
   private closePromise: Promise<void> | null = null
   private address: BrowserNetworkRouteAddress | null = null
+  private recovery: { abort: AbortController; promise: Promise<void> } | null = null
+  private readonly recoveryGraceMs: number
+  private readonly recoveryRetryDelayMs: number
   private lastTunnelGeneration = 0
   private started = false
   private closed = false
 
   constructor(options: PairedRuntimeBrowserNetworkRouteOptions) {
     this.options = options
+    this.recoveryGraceMs = resolveBrowserHostReconnectDelay(options.recoveryGraceMs, 15_000)
+    this.recoveryRetryDelayMs = resolveBrowserHostReconnectDelay(options.recoveryRetryDelayMs)
     this.socks = new RemoteBrowserSocksServer({
       open: (target) => this.openTarget(target)
     })
@@ -73,6 +84,7 @@ export class PairedRuntimeBrowserNetworkRoute {
     if (this.closed) {
       return
     }
+    this.cancelRecovery()
     const transport = this.transport
     this.transport = null
     this.reconnectPromise = null
@@ -86,6 +98,7 @@ export class PairedRuntimeBrowserNetworkRoute {
       return this.closePromise
     }
     this.closed = true
+    this.cancelRecovery()
     this.closePromise = this.closeRoute(error)
     return this.closePromise
   }
@@ -216,6 +229,63 @@ export class PairedRuntimeBrowserNetworkRoute {
     this.reportError(error)
     for (const failure of cleanupFailures) {
       this.reportError(failure)
+    }
+    this.beginRecovery(error)
+  }
+
+  /**
+   * The tunnel attaches on its own subscription, so a tunnel-only death is invisible to the
+   * client-host channel that drives registry-level suspend/reconnect. Without a rebuild here the
+   * route stays dark and every page request fails until an unrelated retain happens to revive it.
+   */
+  private beginRecovery(error: Error): void {
+    if (this.closed || !this.started || this.recovery) {
+      return
+    }
+    const abort = new AbortController()
+    // Assigned before the first attempt so a synchronous rebuild failure re-enters this guard.
+    const recovery = { abort, promise: Promise.resolve() }
+    this.recovery = recovery
+    recovery.promise = retryBrowserNetworkRouteReconnect({
+      reconnect: () => this.reconnect(),
+      signal: abort.signal,
+      deadline: Date.now() + this.recoveryGraceMs,
+      retryDelayMs: this.recoveryRetryDelayMs,
+      recoveryKey: `${this.options.lease.browserHostClientId}:transport`
+    })
+      .then(
+        () => undefined,
+        (recoveryError: unknown) => {
+          if (!abort.signal.aborted && !this.closed) {
+            this.reportUnavailable(asError(recoveryError), error)
+          }
+        }
+      )
+      .finally(() => {
+        if (this.recovery === recovery) {
+          this.recovery = null
+        }
+      })
+  }
+
+  private cancelRecovery(): void {
+    this.recovery?.abort.abort()
+    this.recovery = null
+  }
+
+  private reportUnavailable(recoveryError: Error, transportError: Error): void {
+    const unavailable = new AggregateError(
+      [transportError, recoveryError],
+      `Browser network route transport closed and could not be rebuilt: ${transportError.message}`
+    )
+    if (!this.options.onUnavailable) {
+      this.reportError(unavailable)
+      return
+    }
+    try {
+      this.options.onUnavailable(unavailable)
+    } catch {
+      // A reporting callback cannot keep a dead route alive.
     }
   }
 

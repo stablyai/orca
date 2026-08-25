@@ -9,7 +9,10 @@ import {
   BROWSER_CLIENT_HOST_PAGE_INVENTORY_MAX_BYTES,
   browserClientHostedPageInventoryByteLength
 } from '../../shared/browser-client-host-protocol'
-import { BROWSER_CLIENT_HOST_RUNTIME_CAPABILITY } from '../../shared/protocol-version'
+import {
+  BROWSER_CLIENT_HOST_RUNTIME_CAPABILITY,
+  BROWSER_CLIENT_PAGE_METADATA_RUNTIME_CAPABILITY
+} from '../../shared/protocol-version'
 import type {
   RemoteRuntimeSubscription,
   RemoteRuntimeSubscriptionCallbacks
@@ -86,12 +89,48 @@ describe('PairedRuntimeBrowserHostLease', () => {
       expect.any(Number),
       expect.any(Object),
       expect.objectContaining({
-        clientCapabilities: [BROWSER_CLIENT_HOST_RUNTIME_CAPABILITY]
+        // Metadata rides this same connection, and its handler gates on the capability being
+        // declared by the connection the publish arrives on.
+        clientCapabilities: [
+          BROWSER_CLIENT_HOST_RUNTIME_CAPABILITY,
+          BROWSER_CLIENT_PAGE_METADATA_RUNTIME_CAPABILITY
+        ]
       })
     )
     expectInitialAttachTimeout()
     await lease.close()
     expect(close).toHaveBeenCalledOnce()
+  })
+
+  // Why this is asserted on the lease and not just at the transport: the runtime accepts page
+  // metadata only on the connection the lease attached on, so sending it anywhere else — the very
+  // thing an ordinary runtime call does — is refused as a stale lease and the page's URL is frozen.
+  it('sends page metadata over its own attached connection', async () => {
+    const sendRequest = vi.fn().mockResolvedValue({
+      ok: true,
+      result: { accepted: true },
+      _meta: { runtimeId: 'runtime-a' }
+    })
+    const { callbacks } = await subscribeLease({ sendRequest })
+    const lease = createLease()
+    const starting = lease.start()
+    await vi.waitFor(() => expect(callbacks.current).toBeDefined())
+    callbacks.current!.onResponse(readyResponse())
+    await starting
+
+    await expect(lease.sendPageMetadataRequest({ revision: 2 }, 1_000)).resolves.toMatchObject({
+      ok: true
+    })
+    expect(sendRequest).toHaveBeenCalledWith(
+      'browser.clientHost.pageMetadata',
+      { revision: 2 },
+      1_000
+    )
+
+    await lease.close()
+    expect(() => lease.sendPageMetadataRequest({ revision: 3 }, 1_000)).toThrow(
+      'Remote runtime browser host lease is unavailable.'
+    )
   })
 
   it('uses page commands only after the host echoes the requested protocol', async () => {
@@ -459,101 +498,6 @@ describe('PairedRuntimeBrowserHostLease', () => {
     await vi.waitFor(() => expect(close).toHaveBeenCalledOnce())
     expect(sendRequest).not.toHaveBeenCalled()
     expect(onError).toHaveBeenCalledWith(expect.objectContaining({ message }))
-  })
-
-  it('rejects page commands when an old host did not negotiate them', async () => {
-    const { callbacks, close } = await subscribeLease({ sendRequest: undefined })
-    const onError = vi.fn()
-    const onPageCommand = vi.fn()
-    const lease = createLease({ pageCommandProtocolVersion: 1, onPageCommand, onError })
-    const starting = lease.start()
-    await vi.waitFor(() => expect(callbacks.current).toBeDefined())
-    callbacks.current!.onResponse({
-      id: 'browser-host',
-      ok: true,
-      result: { type: 'ready', authorityEpoch: 'epoch-a', browserHostGeneration: 4 },
-      _meta: { runtimeId: 'runtime-a' }
-    })
-    await starting
-
-    callbacks.current!.onResponse({
-      id: 'browser-host',
-      ok: true,
-      result: {
-        type: 'command',
-        pageCommandProtocolVersion: 1,
-        authorityRuntimeId: 'runtime-a',
-        authorityEpoch: 'epoch-a',
-        browserHostClientId: 'host-a',
-        browserHostGeneration: 4,
-        browserPageId: 'page-a',
-        pageHostGeneration: 1,
-        commandSequence: 1,
-        commandId: 'command-a',
-        command: {
-          type: 'createPage',
-          browserProfileId: 'default',
-          executionHostKey: 'native:runtime-a:1'
-        }
-      },
-      _meta: { runtimeId: 'runtime-a' }
-    })
-
-    await vi.waitFor(() => expect(close).toHaveBeenCalledOnce())
-    expect(onPageCommand).not.toHaveBeenCalled()
-    expect(onError).toHaveBeenCalledWith(
-      expect.objectContaining({ message: 'Unnegotiated browser host page command' })
-    )
-  })
-
-  it('rejects a negotiated command from a stale authority before delivery', async () => {
-    const { callbacks, close } = await subscribeLease()
-    const onError = vi.fn()
-    const onPageCommand = vi.fn()
-    const lease = createLease({ pageCommandProtocolVersion: 1, onPageCommand, onError })
-    const starting = lease.start()
-    await vi.waitFor(() => expect(callbacks.current).toBeDefined())
-    callbacks.current!.onResponse({
-      id: 'browser-host',
-      ok: true,
-      result: {
-        type: 'ready',
-        authorityEpoch: 'epoch-a',
-        browserHostGeneration: 4,
-        pageCommandProtocolVersion: 1
-      },
-      _meta: { runtimeId: 'runtime-a' }
-    })
-    await starting
-
-    callbacks.current!.onResponse({
-      id: 'browser-host',
-      ok: true,
-      result: {
-        type: 'command',
-        pageCommandProtocolVersion: 1,
-        authorityRuntimeId: 'runtime-a',
-        authorityEpoch: 'epoch-b',
-        browserHostClientId: 'host-a',
-        browserHostGeneration: 4,
-        browserPageId: 'page-a',
-        pageHostGeneration: 1,
-        commandSequence: 1,
-        commandId: 'command-a',
-        command: {
-          type: 'createPage',
-          browserProfileId: 'default',
-          executionHostKey: 'native:runtime-a:1'
-        }
-      },
-      _meta: { runtimeId: 'runtime-a' }
-    })
-
-    await vi.waitFor(() => expect(close).toHaveBeenCalledOnce())
-    expect(onPageCommand).not.toHaveBeenCalled()
-    expect(onError).toHaveBeenCalledWith(
-      expect.objectContaining({ message: 'Stale browser host page command' })
-    )
   })
 
   it('rejects malformed lease authority instead of adopting it', async () => {

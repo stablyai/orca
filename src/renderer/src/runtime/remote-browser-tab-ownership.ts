@@ -8,12 +8,17 @@ type RemoteBrowserTabOwnershipState = Pick<
 export type BrowserWorkspaceRemoteOwnership =
   | { kind: 'none' }
   | { kind: 'exact'; environmentId: string }
-  | { kind: 'ambiguous' }
+  | { kind: 'ambiguous'; environmentIds: string[] }
 
-export function getBrowserWorkspaceRemoteOwnership(
+/**
+ * Every runtime environment holding at least one of this browser workspace's pages. A workspace
+ * spans more than one when pages were opened against different environments, and each of those
+ * hosts keeps its own mirror of the tab — so closing it means telling all of them.
+ */
+export function getBrowserWorkspaceRemoteOwnerEnvironmentIds(
   state: RemoteBrowserTabOwnershipState,
   workspaceId: string
-): BrowserWorkspaceRemoteOwnership {
+): string[] {
   const environmentIds = new Set<string>()
   for (const page of state.browserPagesByWorkspace[workspaceId] ?? []) {
     const environmentId =
@@ -23,13 +28,21 @@ export function getBrowserWorkspaceRemoteOwnership(
       environmentIds.add(environmentId)
     }
   }
-  if (environmentIds.size === 0) {
+  return [...environmentIds]
+}
+
+export function getBrowserWorkspaceRemoteOwnership(
+  state: RemoteBrowserTabOwnershipState,
+  workspaceId: string
+): BrowserWorkspaceRemoteOwnership {
+  const environmentIds = getBrowserWorkspaceRemoteOwnerEnvironmentIds(state, workspaceId)
+  if (environmentIds.length === 0) {
     return { kind: 'none' }
   }
-  if (environmentIds.size > 1) {
-    return { kind: 'ambiguous' }
+  if (environmentIds.length > 1) {
+    return { kind: 'ambiguous', environmentIds }
   }
-  return { kind: 'exact', environmentId: [...environmentIds][0]! }
+  return { kind: 'exact', environmentId: environmentIds[0]! }
 }
 
 export function getBrowserWorkspaceRemoteOwnerEnvironmentId(

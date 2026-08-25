@@ -445,6 +445,100 @@ describe('PairedRuntimeBrowserNetworkRoute', () => {
     await route.close()
   })
 
+  it('rebuilds a retained route after its tunnel transport dies unprompted', async () => {
+    const attempts = mockSubscriptionAttempts()
+    const route = createRoute()
+    const starting = route.start()
+    await vi.waitFor(() => expect(attempts).toHaveLength(1))
+    ready(attempts[0]!, 7)
+    const address = await starting
+
+    // The tunnel attaches on its own subscription, so nothing outside the route observes this.
+    attempts[0]!.callbacks.onClose?.()
+
+    await vi.waitFor(() => expect(attempts).toHaveLength(2))
+    ready(attempts[1]!, 8)
+    const recovered = await connectSocks(address.host, address.port)
+    await greetSocks(recovered)
+    recovered.write(domainConnectRequest('recovered.internal', 443))
+    await vi.waitFor(() => expect(openFrames(attempts[1]!)).toHaveLength(1))
+    attempts[1]!.callbacks.onBinary?.(
+      encodeBrowserNetworkTunnelFrame({
+        opcode: BrowserNetworkTunnelOpcode.Opened,
+        tunnelGeneration: 8,
+        streamId: 1,
+        payload: new Uint8Array()
+      })
+    )
+    expect(Array.from(await readExact(recovered, 10))).toEqual([5, 0, 0, 1, 0, 0, 0, 0, 0, 0])
+
+    recovered.destroy()
+    await route.close()
+  })
+
+  it('recovers again after a second transport death', async () => {
+    const attempts = mockSubscriptionAttempts()
+    const route = createRoute()
+    const starting = route.start()
+    await vi.waitFor(() => expect(attempts).toHaveLength(1))
+    ready(attempts[0]!, 7)
+    const address = await starting
+
+    attempts[0]!.callbacks.onClose?.()
+    await vi.waitFor(() => expect(attempts).toHaveLength(2))
+    ready(attempts[1]!, 8)
+    // Drive a request through the rebuilt tunnel so the first recovery has fully settled before
+    // the next failure; an in-flight loop would otherwise cover both deaths by itself.
+    await expectSocksRoundTrip(address, attempts[1]!, 8, 'once-recovered.internal')
+
+    attempts[1]!.callbacks.onClose?.()
+    await vi.waitFor(() => expect(attempts).toHaveLength(3))
+    ready(attempts[2]!, 9)
+    await expectSocksRoundTrip(address, attempts[2]!, 9, 'twice-recovered.internal')
+
+    await route.close()
+  })
+
+  it('retries a failing rebuild and reports the terminal failure to the route owner', async () => {
+    const attempts = mockSubscriptionAttempts()
+    const onUnavailable = vi.fn()
+    const route = createRoute({ onUnavailable, recoveryGraceMs: 200, recoveryRetryDelayMs: 10 })
+    const starting = route.start()
+    await vi.waitFor(() => expect(attempts).toHaveLength(1))
+    ready(attempts[0]!, 7)
+    await starting
+
+    subscribeRemoteRuntimeRequestMock.mockRejectedValue(new Error('runtime unreachable'))
+    attempts[0]!.callbacks.onClose?.()
+
+    await vi.waitFor(() =>
+      expect(onUnavailable).toHaveBeenCalledWith(
+        expect.objectContaining({ message: expect.stringContaining('could not be rebuilt') })
+      )
+    )
+    expect(subscribeRemoteRuntimeRequestMock.mock.calls.length).toBeGreaterThan(2)
+    await route.close()
+  })
+
+  it('abandons transport recovery once the route is suspended', async () => {
+    const attempts = mockSubscriptionAttempts()
+    const route = createRoute({ recoveryGraceMs: 5_000 })
+    const starting = route.start()
+    await vi.waitFor(() => expect(attempts).toHaveLength(1))
+    ready(attempts[0]!, 7)
+    await starting
+
+    attempts[0]!.callbacks.onClose?.()
+    await vi.waitFor(() => expect(attempts).toHaveLength(2))
+    attempts[1]!.callbacks.onClose?.()
+    route.suspend()
+
+    const settled = attempts.length
+    await new Promise((resolve) => setTimeout(resolve, 250))
+    expect(attempts).toHaveLength(settled)
+    await route.close()
+  })
+
   it('rejects a non-increasing replacement generation and remains retryable', async () => {
     const attempts = mockSubscriptionAttempts()
     const route = createRoute()
@@ -545,10 +639,13 @@ function createRoute(
   overrides: {
     timeoutMs?: number
     onError?: (error: Error) => void
+    onUnavailable?: (error: Error) => void
     outboundMemoryBudgetRegistry?: BrowserNetworkTunnelOutboundMemoryBudgetRegistry
     maxStreamIdsPerTunnel?: number
     subscription?: RemoteRuntimeSubscriptionOptions
     executionHost?: BrowserNetworkExecutionHost
+    recoveryGraceMs?: number
+    recoveryRetryDelayMs?: number
   } = {}
 ): PairedRuntimeBrowserNetworkRoute {
   return new PairedRuntimeBrowserNetworkRoute({
@@ -610,6 +707,29 @@ function openFrames(attempt: SubscriptionAttempt) {
       (frame): frame is NonNullable<typeof frame> =>
         frame?.opcode === BrowserNetworkTunnelOpcode.Open
     )
+}
+
+/** Opens one SOCKS connection end to end, proving the route's current tunnel actually carries it. */
+async function expectSocksRoundTrip(
+  address: { host: string; port: number },
+  attempt: SubscriptionAttempt,
+  tunnelGeneration: number,
+  host: string
+): Promise<void> {
+  const socket = await connectSocks(address.host, address.port)
+  await greetSocks(socket)
+  socket.write(domainConnectRequest(host, 443))
+  await vi.waitFor(() => expect(openFrames(attempt)).toHaveLength(1))
+  attempt.callbacks.onBinary?.(
+    encodeBrowserNetworkTunnelFrame({
+      opcode: BrowserNetworkTunnelOpcode.Opened,
+      tunnelGeneration,
+      streamId: 1,
+      payload: new Uint8Array()
+    })
+  )
+  expect(Array.from(await readExact(socket, 10))).toEqual([5, 0, 0, 1, 0, 0, 0, 0, 0, 0])
+  socket.destroy()
 }
 
 async function connectSocks(host: string, port: number): Promise<Socket> {

@@ -72,12 +72,9 @@ describe('WSL skill discovery', () => {
   })
 
   it('builds a distro-side scan for enumeration, reads, and canonical identity', () => {
-    const command = buildWslSkillDiscoveryCommand([
+    const script = buildWslSkillDiscoveryCommand([
       { ...repoRoot, path: "/work/alice's project/.agents/skills" }
     ])
-    const encoded = /printf %s '([^']+)'/.exec(command)?.[1]
-    expect(encoded).toBeTruthy()
-    const script = Buffer.from(encoded!, 'base64').toString('utf8')
 
     expect(script).toContain('find -L "$root_path"')
     expect(script).toContain('realpath -- "$skill_file"')

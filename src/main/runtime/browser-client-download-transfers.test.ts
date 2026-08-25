@@ -90,6 +90,63 @@ describe('BrowserClientDownloadTransferStore', () => {
     })
   })
 
+  it('takes the next candidate when a concurrent transfer wins the destination name', async () => {
+    const attempted: string[] = []
+    const { store, removed } = createStore({
+      commit: async ({ finalRelativePath }) => {
+        attempted.push(finalRelativePath)
+        if (attempted.length === 1) {
+          throw Object.assign(new Error('EEXIST: file already exists, copyfile'), {
+            code: 'EEXIST'
+          })
+        }
+      }
+    })
+
+    const commit = await store.accept({ ...base, contentBase64: '', offset: 0, final: true })
+
+    expect(attempted).toEqual([
+      `${BROWSER_CLIENT_DOWNLOAD_WORKSPACE_DIRECTORY}/report.pdf`,
+      `${BROWSER_CLIENT_DOWNLOAD_WORKSPACE_DIRECTORY}/report (1).pdf`
+    ])
+    expect(commit).toEqual({
+      workspaceRelativePath: `${BROWSER_CLIENT_DOWNLOAD_WORKSPACE_DIRECTORY}/report (1).pdf`
+    })
+    // Why: the loser's fully transferred bytes must survive the retry, not be released.
+    expect(removed).toEqual([])
+  })
+
+  it('retries the relay collision rejection, which carries no errno code', async () => {
+    const attempted: string[] = []
+    const { store } = createStore({
+      commit: async ({ finalRelativePath }) => {
+        attempted.push(finalRelativePath)
+        if (attempted.length === 1) {
+          throw new Error('EEXIST: destination already exists')
+        }
+      }
+    })
+
+    expect(await store.accept({ ...base, contentBase64: '', offset: 0, final: true })).toEqual({
+      workspaceRelativePath: `${BROWSER_CLIENT_DOWNLOAD_WORKSPACE_DIRECTORY}/report (1).pdf`
+    })
+    expect(attempted).toHaveLength(2)
+  })
+
+  it('drops the transfer when the commit fails for a reason other than a collision', async () => {
+    const { store, removed } = createStore({
+      commit: async () => {
+        throw new Error('EACCES: permission denied')
+      }
+    })
+
+    await expect(
+      store.accept({ ...base, contentBase64: '', offset: 0, final: true })
+    ).rejects.toThrow('EACCES')
+    expect(removed).toHaveLength(1)
+    expect(store.activeTransferCount()).toBe(0)
+  })
+
   it('strips path separators from a remote-supplied filename', async () => {
     const { store } = createStore()
 

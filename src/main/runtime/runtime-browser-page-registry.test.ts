@@ -169,6 +169,44 @@ describe('runtime browser page registry', () => {
     expect(pages.retirePage('page-a', page.placement)).toBe(true)
     expect(() => pages.publishClientPage(clientPage('page-b', 'worktree-a'))).not.toThrow()
   })
+
+  // Why the revision cannot survive the placement: revisions are minted by the client's page
+  // object, and the page a recovered placement lands on is a freshly minted one counting from
+  // zero. Carrying the old high-water mark over would reject that client's first N publishes.
+  it('restarts the metadata revision when a placement is replaced', () => {
+    const pages = new RuntimeBrowserPageRegistry()
+    const page = pages.publishClientPage(clientPage('page-a', 'worktree-a'))
+    expect(
+      pages.updatePageMetadata('page-a', page.placement, {
+        revision: 5,
+        url: 'https://example.internal/before',
+        title: 'Before',
+        loading: false,
+        canGoBack: false,
+        canGoForward: false
+      })
+    ).toBe(true)
+
+    const recovered = { ...page.placement, pageHostGeneration: 9 }
+    expect(
+      pages.replaceClientPagePlacement('page-a', page.placement, recovered).metadataRevision
+    ).toBe(0)
+    expect(
+      pages.updatePageMetadata('page-a', recovered, {
+        revision: 1,
+        url: 'https://example.internal/after',
+        title: 'After',
+        loading: false,
+        canGoBack: false,
+        canGoForward: false
+      }),
+      'the replacing host starts at revision 1 and must be heard'
+    ).toBe(true)
+    expect(pages.getPage('page-a')).toMatchObject({
+      metadataRevision: 1,
+      url: 'https://example.internal/after'
+    })
+  })
 })
 
 function clientPage(browserPageId: string, workspaceId: string) {

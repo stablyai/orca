@@ -24,9 +24,12 @@ export function routePartitionDataRoot(): string {
   return join(app.getPath('userData'), PARTITION_DATA_DIRECTORY_NAME)
 }
 
-export function currentBrowserRoutePartitionBindingStore(): BrowserRoutePartitionBindingStore {
+export function currentBrowserRoutePartitionBindingStore(options?: {
+  isPartitionRetained?: (partition: string) => boolean
+}): BrowserRoutePartitionBindingStore {
   return new BrowserRoutePartitionBindingStore({
     filePath: bindingFilePathOverride ?? join(app.getPath('userData'), BINDING_FILE_NAME),
-    partitionDataRoot: routePartitionDataRoot()
+    partitionDataRoot: routePartitionDataRoot(),
+    isPartitionRetained: options?.isPartitionRetained
   })
 }

@@ -147,6 +147,7 @@ function createHealRig(options: {
     readLogFile,
     buildInvocation: (_systemCodexHomePath, timeoutMs) => ({
       command: process.execPath,
+      cliPath: null,
       args: [stubPath],
       env: {
         STUB_CONFIG: JSON.stringify({

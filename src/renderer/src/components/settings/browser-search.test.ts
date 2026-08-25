@@ -93,7 +93,8 @@ describe('browser link routing modifier copy', () => {
       'Show terminal link actions',
       'Localhost Worktree Labels',
       'Session & Cookies',
-      'Host remote browser pages on this device'
+      'Remote server workspaces',
+      'SSH workspaces'
     ])
   })
 

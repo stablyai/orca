@@ -79,17 +79,21 @@ export function advancedNativeChatUserContentCounts(
   return advanced
 }
 
-/** User texts that already have a later non-user turn (ready to prune echoes). */
-export function advancedNativeChatUserTexts(
+/** A transcript user turn, kept identifiable so a caller can decide which
+ *  pending sends it is allowed to represent. */
+export type NativeChatUserRow = { id: string; text: string }
+
+/** User rows that already have a later non-user turn (ready to prune echoes). */
+export function advancedNativeChatUserRows(
   messages: readonly NativeChatMessage[]
-): readonly string[] {
-  const advanced: string[] = []
-  const waiting: string[] = []
+): readonly NativeChatUserRow[] {
+  const advanced: NativeChatUserRow[] = []
+  const waiting: NativeChatUserRow[] = []
   for (const message of messages) {
     if (message.role === 'user') {
       const text = normalizedNativeChatUserMessageText(message)
       if (text) {
-        waiting.push(text)
+        waiting.push({ id: message.id, text })
       }
       continue
     }
@@ -99,18 +103,18 @@ export function advancedNativeChatUserTexts(
   return advanced
 }
 
-/** All user texts (for hiding optimistic echoes once the turn exists). */
-export function matchingNativeChatUserTexts(
+/** All user rows (for hiding optimistic echoes once the turn exists). */
+export function matchingNativeChatUserRows(
   messages: readonly NativeChatMessage[]
-): readonly string[] {
-  const texts: string[] = []
+): readonly NativeChatUserRow[] {
+  const rows: NativeChatUserRow[] = []
   for (const message of messages) {
     const text = normalizedNativeChatUserMessageText(message)
     if (text) {
-      texts.push(text)
+      rows.push({ id: message.id, text })
     }
   }
-  return texts
+  return rows
 }
 
 /**
@@ -149,32 +153,49 @@ export function countLeadingPendingTextsGluedToUserText(
   return 0
 }
 
+/** A transcript row a glue match may consume, carrying the send boundaries it
+ *  satisfies — this matcher has no clock of its own. */
+export type NativeChatGluedUserRow = {
+  text: string
+  /** Indices into `pending` this row landed after. A row that already existed
+   *  when a send was issued can never be that send's echo. */
+  representablePendingIndices: ReadonlySet<number>
+}
+
 /**
  * Mark pending entries represented only by multi-send glue (2+ consecutive
  * optimistic texts concatenated into one transcript user row). Exact single
  * matches stay in the content-key/occurrence path so repeated prompts and
  * send boundaries keep their existing semantics.
- *
- * `userTexts` must already be filtered to rows after the oldest entry's send
- * boundary — this matcher has no clock of its own.
  */
-export function selectPendingIndicesRepresentedByUserTexts(
+export function selectPendingIndicesRepresentedByUserRows(
   pending: readonly NativeChatPendingOccurrence[],
-  userTexts: readonly string[]
+  rows: readonly NativeChatGluedUserRow[]
 ): Set<number> {
   const represented = new Set<number>()
-  if (pending.length < 2 || userTexts.length === 0) {
+  if (pending.length < 2 || rows.length === 0) {
     return represented
   }
   const remaining = pending.map((entry, index) => ({
     index,
     text: normalizeNativeChatPendingText(entry.text)
   }))
-  for (const userText of userTexts) {
-    const open = remaining.filter((entry) => !represented.has(entry.index) && entry.text.length > 0)
+  for (const row of rows) {
+    const open: typeof remaining = []
+    for (const entry of remaining) {
+      if (represented.has(entry.index) || entry.text.length === 0) {
+        continue
+      }
+      // Glue consumes a leading run, so a send this row predates ends the run
+      // rather than being skipped over — adjacency is what makes it glue.
+      if (!row.representablePendingIndices.has(entry.index)) {
+        break
+      }
+      open.push(entry)
+    }
     const gluedCount = countLeadingPendingTextsGluedToUserText(
       open.map((entry) => entry.text),
-      userText
+      row.text
     )
     // Why: gluedCount === 1 is an exact match — leave it to occurrence counting.
     if (gluedCount < 2) {

@@ -8,7 +8,9 @@ import {
   cleanupRetainedBrowserClientPage,
   type BrowserClientPageRendererIdentity
 } from './browser-client-page-cleanup'
+import { assertBrowserClientPageAdmission } from './browser-client-page-admission'
 import { createReservedBrowserClientPage } from './browser-client-page-creation'
+import { retireSupersededExecutionHostPages } from './browser-client-page-execution-host-supersession'
 import {
   browserClientPageCommandFailureCode,
   BrowserClientPageCommandError,
@@ -16,9 +18,13 @@ import {
 } from './browser-client-page-command-failure'
 import { BrowserClientPageNavigationFence } from './browser-client-page-navigation-fence'
 import { executeBrowserClientPageReconciliationCommand } from './browser-client-page-reconciliation'
-import type { BrowserClientRetainedPage } from './browser-client-page-retained-state'
+import {
+  findBrowserClientPageByWebContentsId,
+  type BrowserClientRetainedPage
+} from './browser-client-page-retained-state'
 import {
   createBrowserClientPageInventory,
+  recordBrowserClientPagePublishedUrl,
   snapshotBrowserClientPageInventoryList
 } from './browser-client-page-inventory'
 import {
@@ -26,7 +32,10 @@ import {
   navigateBrowserClientPageCommand
 } from './browser-client-page-command-execution'
 import { markBrowserClientPageUnavailable } from './browser-client-page-availability'
-import type { BrowserClientPageCommandExecutorDependencies } from './browser-client-page-command-executor-dependencies'
+import type {
+  BrowserClientPageAuthorityIdentity,
+  BrowserClientPageCommandExecutorDependencies
+} from './browser-client-page-command-executor-dependencies'
 
 export class BrowserClientPageCommandExecutor {
   private readonly maxPages: number
@@ -36,11 +45,13 @@ export class BrowserClientPageCommandExecutor {
   private readonly navigationFence = new BrowserClientPageNavigationFence()
   private closePromise: Promise<void> | null = null
   private authorityConnectionIdentity: string
+  private legacyAuthorityConnectionIdentity: string
   private authorityTransitioning = false
   private closed = false
 
   constructor(private readonly dependencies: BrowserClientPageCommandExecutorDependencies) {
     this.authorityConnectionIdentity = dependencies.authorityConnectionIdentity
+    this.legacyAuthorityConnectionIdentity = dependencies.legacyAuthorityConnectionIdentity
     this.maxPages = dependencies.maxPages ?? BROWSER_CLIENT_HOST_PAGE_INVENTORY_MAX_PAGES
     if (
       !Number.isInteger(this.maxPages) ||
@@ -127,6 +138,9 @@ export class BrowserClientPageCommandExecutor {
     return this.failedPages.get(browserPageId)?.pageHostGeneration === pageHostGeneration
   }
 
+  readonly recordPublishedPageUrl = (params: unknown): void =>
+    recordBrowserClientPagePublishedUrl(this.pages, params)
+
   snapshotPageInventory(): readonly BrowserClientHostedPageInventory[] {
     return snapshotBrowserClientPageInventoryList(
       this.creatingPages,
@@ -160,11 +174,12 @@ export class BrowserClientPageCommandExecutor {
     )
   }
 
-  completeAuthorityTransition(authorityConnectionIdentity: string): void {
-    if (this.closed || !this.authorityTransitioning || !authorityConnectionIdentity) {
+  completeAuthorityTransition(input: BrowserClientPageAuthorityIdentity): void {
+    if (this.closed || !this.authorityTransitioning || !input.authorityConnectionIdentity) {
       throw new Error('browser_client_page_authority_transition_unavailable')
     }
-    this.authorityConnectionIdentity = authorityConnectionIdentity
+    this.authorityConnectionIdentity = input.authorityConnectionIdentity
+    this.legacyAuthorityConnectionIdentity = input.legacyAuthorityConnectionIdentity
     this.authorityTransitioning = false
   }
 
@@ -199,16 +214,11 @@ export class BrowserClientPageCommandExecutor {
     if (event.command.type !== 'createPage') {
       throw new BrowserClientPageCommandError('browser_client_page_command_invalid')
     }
-    if (
-      this.pages.has(event.browserPageId) ||
-      this.creatingPages.has(event.browserPageId) ||
-      this.failedPages.has(event.browserPageId)
-    ) {
-      throw new BrowserClientPageCommandError('browser_client_page_generation_conflict')
-    }
-    if (this.pages.size + this.creatingPages.size + this.failedPages.size >= this.maxPages) {
-      throw new BrowserClientPageCommandError('browser_client_page_capacity')
-    }
+    assertBrowserClientPageAdmission(
+      [this.pages, this.creatingPages, this.failedPages],
+      this.maxPages,
+      event.browserPageId
+    )
     const unknownInventory = createBrowserClientPageInventory(event, 'outcomeUnknown')
     this.creatingPages.set(event.browserPageId, unknownInventory)
     try {
@@ -230,7 +240,12 @@ export class BrowserClientPageCommandExecutor {
     await createReservedBrowserClientPage(
       {
         ...this.dependencies,
-        authorityConnectionIdentity: this.authorityConnectionIdentity
+        authorityConnectionIdentity: this.authorityConnectionIdentity,
+        legacyAuthorityConnectionIdentity: this.legacyAuthorityConnectionIdentity,
+        retireSupersededExecutionHostPages: (route) =>
+          retireSupersededExecutionHostPages(this.pages.values(), route, (id, generation) =>
+            this.retirePage(id, generation)
+          )
       },
       event,
       signal,
@@ -253,16 +268,7 @@ export class BrowserClientPageCommandExecutor {
 
   // Why: the download relay only knows the guest WebContents, and staging is keyed by page identity.
   findPageByWebContentsId(webContentsId: number): BrowserClientHostedPageInventory | undefined {
-    for (const page of this.pages.values()) {
-      if (
-        page.registration.webContentsId === webContentsId &&
-        !page.retiring &&
-        !page.reconciling
-      ) {
-        return page.inventory
-      }
-    }
-    return undefined
+    return findBrowserClientPageByWebContentsId(this.pages.values(), webContentsId)?.inventory
   }
 
   private async cleanupPage(
@@ -272,13 +278,14 @@ export class BrowserClientPageCommandExecutor {
     page.releaseAvailabilityWatch?.()
     page.releaseAvailabilityWatch = undefined
     this.dependencies.guestBinding.release(page.registration)
-    // Why: staged upload copies of remote files must not outlive the page that asked for them.
-    await this.dependencies.uploadStaging?.releasePage(page.inventory.browserPageId)
     return cleanupRetainedBrowserClientPage(
       page,
       {
         routeWebContents: this.dependencies.routeWebContents,
-        retireAutomation: this.dependencies.retireAutomation
+        retireAutomation: this.dependencies.retireAutomation,
+        releaseUploadStaging: async () => {
+          await this.dependencies.uploadStaging?.releasePage(page.inventory.browserPageId)
+        }
       },
       previousRendererPage
     )

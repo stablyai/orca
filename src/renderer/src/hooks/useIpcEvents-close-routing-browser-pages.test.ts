@@ -145,6 +145,8 @@ describe('useIpcEvents browser tab close routing', () => {
           onFocusTerminal: () => () => {},
           onFocusEditorTab: () => () => {},
           onCloseSessionTab: () => () => {},
+          onSessionTabCloseRequest: () => () => {},
+          respondSessionTabClose: () => {},
           onMoveSessionTab: () => () => {},
           onOpenFileFromMobile: () => () => {},
           onOpenDiffFromMobile: () => () => {},
@@ -218,7 +220,9 @@ describe('useIpcEvents browser tab close routing', () => {
           getBrowserDrivers: () => Promise.resolve([]),
           onTerminalFitOverrideChanged: () => () => {},
           onTerminalDriverChanged: () => () => {},
-          onBrowserDriverChanged: () => () => {}
+          onBrowserDriverChanged: () => () => {},
+          onClientHostedBrowserRowsChanged: () => () => {},
+          getClientHostedBrowserRows: async () => []
         },
         agentStatus: { onSet: () => () => {} }
       }
@@ -366,6 +370,8 @@ describe('useIpcEvents browser tab close routing', () => {
           onFocusTerminal: () => () => {},
           onFocusEditorTab: () => () => {},
           onCloseSessionTab: () => () => {},
+          onSessionTabCloseRequest: () => () => {},
+          respondSessionTabClose: () => {},
           onMoveSessionTab: () => () => {},
           onOpenFileFromMobile: () => () => {},
           onOpenDiffFromMobile: () => () => {},
@@ -439,7 +445,9 @@ describe('useIpcEvents browser tab close routing', () => {
           getBrowserDrivers: () => Promise.resolve([]),
           onTerminalFitOverrideChanged: () => () => {},
           onTerminalDriverChanged: () => () => {},
-          onBrowserDriverChanged: () => () => {}
+          onBrowserDriverChanged: () => () => {},
+          onClientHostedBrowserRowsChanged: () => () => {},
+          getClientHostedBrowserRows: async () => []
         },
         agentStatus: { onSet: () => () => {} }
       }
@@ -582,6 +590,8 @@ describe('useIpcEvents browser tab close routing', () => {
           onFocusTerminal: () => () => {},
           onFocusEditorTab: () => () => {},
           onCloseSessionTab: () => () => {},
+          onSessionTabCloseRequest: () => () => {},
+          respondSessionTabClose: () => {},
           onMoveSessionTab: () => () => {},
           onOpenFileFromMobile: () => () => {},
           onOpenDiffFromMobile: () => () => {},
@@ -655,7 +665,9 @@ describe('useIpcEvents browser tab close routing', () => {
           getBrowserDrivers: () => Promise.resolve([]),
           onTerminalFitOverrideChanged: () => () => {},
           onTerminalDriverChanged: () => () => {},
-          onBrowserDriverChanged: () => () => {}
+          onBrowserDriverChanged: () => () => {},
+          onClientHostedBrowserRowsChanged: () => () => {},
+          getClientHostedBrowserRows: async () => []
         },
         agentStatus: { onSet: () => () => {} }
       }

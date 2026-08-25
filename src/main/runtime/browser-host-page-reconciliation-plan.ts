@@ -18,6 +18,8 @@ export type BrowserHostRuntimePageIntent = BrowserHostPageAuthority &
     browserPageId: string
     browserProfileId: string
     executionHostKey: string
+    /** Round-tripped to the client so the page's inventory keeps naming its workspace. */
+    workspaceId?: string
     reclaimFrom?: BrowserHostPageAuthority & Readonly<{ pairedDeviceId: string }>
   }>
 

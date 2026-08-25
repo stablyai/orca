@@ -53,10 +53,16 @@ describe('PairedRuntimeBrowserClientHost', () => {
         pageInventory: [],
         leaseReconnectProtocolVersion: 1
       }),
-      15_000,
+      expect.any(Number),
       expect.any(Object),
       expect.any(Object)
     )
+    // Why a range: retries share one deadline, so the first attach gets whatever is
+    // left of the 15s budget — a clock tick between capturing it and reading it
+    // shaves a millisecond, which an exact 15_000 would fail on.
+    const attachTimeoutMs = subscribeRemoteRuntimeRequestMock.mock.calls[0]?.[3]
+    expect(attachTimeoutMs).toBeLessThanOrEqual(15_000)
+    expect(attachTimeoutMs).toBeGreaterThan(14_000)
     expect(subscribeRemoteRuntimeRequestMock.mock.calls[0]?.[2]).not.toHaveProperty(
       'pageReconciliationProtocolVersion'
     )

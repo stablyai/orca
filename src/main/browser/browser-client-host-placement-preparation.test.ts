@@ -110,18 +110,25 @@ describe('browser client host placement preparation', () => {
     )
   })
 
-  it('surfaces a failed fresh status probe without starting or falling back', async () => {
+  // Why this replaced a throw: the probe used to run only behind a cached "host can client-host"
+  // verdict, so a failed one meant a real problem for a pairing that wanted client hosting. Every
+  // create probes now, and a create that would have succeeded on the server must not die with it.
+  it.each([
+    ['an offline host', 'runtime_unavailable', 'offline'],
+    ['a timed-out probe', 'timeout', 'status.get timed out']
+  ])('keeps %s on the server instead of failing the create', async (_label, code, message) => {
     const harness = createHarness({
       status: {
         id: 'status.get',
         ok: false,
-        error: { code: 'runtime_unavailable', message: 'offline' },
+        error: { code, message },
         _meta: { runtimeId: 'runtime-a' }
       }
     })
 
-    await expect(harness.prepare()).rejects.toThrow('offline')
+    await expect(harness.prepare()).resolves.toEqual({ kind: 'server' })
     expect(harness.startHost).not.toHaveBeenCalled()
+    expect(harness.closeHost).not.toHaveBeenCalled()
   })
 })
 

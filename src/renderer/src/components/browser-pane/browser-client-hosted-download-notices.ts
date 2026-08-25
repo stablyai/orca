@@ -3,9 +3,11 @@ import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
 import type {
   BrowserDownloadFinishedEvent,
+  BrowserDownloadProgressEvent,
   BrowserDownloadRequestedEvent
 } from '../../../../shared/browser-guest-events'
 import { formatBrowserRemoteDownloadMessage } from './browser-download-destination-toast'
+import { formatByteCount } from './navigate/browser-notices'
 
 /** One toast per download, so progress, completion and failure replace each other in place. */
 function downloadToastId(downloadId: string): string {
@@ -36,6 +38,19 @@ export function useBrowserClientHostedDownloadNotices(browserPageId: string): vo
         )
       }
     )
+    // Why: progress carries no page id once the guest is gone, so a filename this pane recorded is
+    // what proves the download is ours — an unknown id belongs to another page and is ignored.
+    const releaseProgress = window.api.browser.onDownloadProgress(
+      (event: BrowserDownloadProgressEvent) => {
+        const filename = filenames.get(event.downloadId)
+        if (filename === undefined) {
+          return
+        }
+        toast.loading(formatBrowserClientHostedDownloadProgress(event, filename), {
+          id: downloadToastId(event.downloadId)
+        })
+      }
+    )
     const releaseFinished = window.api.browser.onDownloadFinished(
       (event: BrowserDownloadFinishedEvent) => {
         if (event.browserPageId !== browserPageId) {
@@ -48,10 +63,27 @@ export function useBrowserClientHostedDownloadNotices(browserPageId: string): vo
     )
     return () => {
       releaseRequested()
+      releaseProgress()
       releaseFinished()
       filenames.clear()
     }
   }, [browserPageId])
+}
+
+/** "Downloading report.pdf… 2.1 MB / 8 MB", falling back to the plain line when size is unknown. */
+export function formatBrowserClientHostedDownloadProgress(
+  event: Pick<BrowserDownloadProgressEvent, 'receivedBytes' | 'totalBytes'>,
+  filename: string
+): string {
+  const started = translate('browser.clientHosted.download.started', 'Downloading {{filename}}…', {
+    filename
+  })
+  const received = formatByteCount(event.receivedBytes)
+  const total = formatByteCount(event.totalBytes)
+  if (received && total) {
+    return `${started} ${received} / ${total}`
+  }
+  return received ? `${started} ${received}` : started
 }
 
 export function emitBrowserClientHostedDownloadNotice(

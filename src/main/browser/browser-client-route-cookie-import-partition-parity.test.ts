@@ -13,7 +13,13 @@ const {
   requireRouteBrowserProfileMock,
   updateProfileSourceMock
 } = vi.hoisted(() => ({
-  bindingStore: { get: vi.fn(() => null as string | null), set: vi.fn() },
+  bindingStore: {
+    get: vi.fn(() => null as string | null),
+    set: vi.fn(() => [] as readonly string[]),
+    touch: vi.fn(),
+    findPartitionByFingerprint: vi.fn(() => null as string | null),
+    rebind: vi.fn()
+  },
   detectInstalledBrowsersMock: vi.fn(),
   getProfileMock: vi.fn(),
   getRouteIdentityMock: vi.fn(),
@@ -43,7 +49,11 @@ vi.mock('./paired-runtime-browser-client-host-runtime', () => ({
 
 import { importCookiesIntoClientRoutePartition } from './browser-client-route-cookie-import'
 import { BrowserClientNetworkRouteRegistry } from './browser-client-network-route-registry'
-import { browserNativeExecutionHostStorageIdentity } from './browser-execution-host-storage-identity'
+import {
+  browserAuthorityExecutionHostStorageIdentity,
+  legacyBrowserNativeExecutionHostStorageIdentity
+} from './browser-execution-host-storage-identity'
+import { createBrowserRoutePartitionBindingStoreFake } from './browser-route-partition-binding-store-fake'
 import { browserNetworkExecutionHostKey } from './browser-network-execution-route'
 import {
   BrowserRouteSessionRegistry,
@@ -69,6 +79,7 @@ async function pagePartition(host: BrowserNetworkExecutionHost): Promise<string>
     // Why: native/WSL routes are admitted only under their own runtime's authority.
     authority:
       host.kind === 'ssh' ? authority : { ...authority, authorityRuntimeId: host.runtimeId },
+    authorityStorageKey: storageScope,
     createRoute: () => ({
       start: vi.fn(async () => ({ host: '127.0.0.1', port: 43123 })),
       reconnect: vi.fn(async () => ({ host: '127.0.0.1', port: 43123 })),
@@ -92,7 +103,7 @@ async function pagePartition(host: BrowserNetworkExecutionHost): Promise<string>
     setupPolicies: vi.fn(),
     clearPolicies: vi.fn(),
     retirePageAuthority: vi.fn(() => true),
-    bindingStore: { get: () => null, set: vi.fn() }
+    bindingStore: createBrowserRoutePartitionBindingStoreFake()
   })
   const handle = await sessions.preparePage({
     identity: {
@@ -127,7 +138,10 @@ async function importPartition(): Promise<string> {
     authorityConnectionIdentity,
     // Why: mirrors startPairedRuntimeBrowserClientHost — settings-level operations target the
     // server's own machine, so the identity comes from the same helper the host uses.
-    executionHostIdentity: browserNativeExecutionHostStorageIdentity(authorityRuntimeId),
+    executionHostIdentity: browserAuthorityExecutionHostStorageIdentity(storageScope),
+    legacyAuthorityConnectionIdentity: 'paired-runtime:legacy-authority-a',
+    legacyExecutionHostIdentity:
+      legacyBrowserNativeExecutionHostStorageIdentity(authorityRuntimeId),
     storageScope
   })
 

@@ -107,6 +107,7 @@ describe('browser route partition storage retirement', () => {
       pairingRevision: number
       authorityRuntimeId: string
       authorityConnectionIdentity: string
+      legacyAuthorityConnectionIdentity: string
     }>({
       createComposition: () =>
         new PairedRuntimeBrowserClientHostComposition({
@@ -114,7 +115,8 @@ describe('browser route partition storage retirement', () => {
             environmentId: 'environment-a',
             pairingRevision: 1,
             authorityRuntimeId: 'runtime-a',
-            authorityConnectionIdentity: 'authority-a'
+            authorityConnectionIdentity: 'authority-a',
+            legacyAuthorityConnectionIdentity: 'legacy-authority-a'
           },
           createRoutes: () => stubRoutes(),
           // Why: releasing the page's partition is what the executor close does in production.
@@ -130,7 +132,8 @@ describe('browser route partition storage retirement', () => {
       environmentId: 'environment-a',
       pairingRevision: 1,
       authorityRuntimeId: 'runtime-a',
-      authorityConnectionIdentity: 'authority-a'
+      authorityConnectionIdentity: 'authority-a',
+      legacyAuthorityConnectionIdentity: 'legacy-authority-a'
     })
 
     const retiring = retireBrowserRoutePartitionStorageForEnvironment({

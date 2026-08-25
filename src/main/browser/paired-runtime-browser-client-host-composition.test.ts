@@ -4,6 +4,8 @@ import type {
   BrowserClientHostCommandEvent,
   BrowserClientHostLeaseAuthority
 } from '../../shared/browser-client-host-protocol'
+import { BrowserClientHostAuthorityReplacementWait } from './browser-client-host-authority-replacement-wait'
+import { BROWSER_CLIENT_HOST_AUTHORITY_MISMATCH_CODE } from '../../shared/browser-client-host-protocol'
 import { PairedRuntimeBrowserClientHostComposition } from './paired-runtime-browser-client-host-composition'
 
 const authority: BrowserClientHostLeaseAuthority = {
@@ -23,8 +25,14 @@ const replacementAuthority: BrowserClientHostLeaseAuthority = {
   pageReconciliationProtocolVersion: 1
 }
 
-const initialInput = { authorityConnectionIdentity: 'authority-record-a' }
-const replacementInput = { authorityConnectionIdentity: 'authority-record-b' }
+const initialInput = {
+  authorityConnectionIdentity: 'authority-record-a',
+  legacyAuthorityConnectionIdentity: 'legacy-authority-record-a'
+}
+const replacementInput = {
+  authorityConnectionIdentity: 'authority-record-b',
+  legacyAuthorityConnectionIdentity: 'legacy-authority-record-b'
+}
 
 describe('PairedRuntimeBrowserClientHostComposition', () => {
   it('activates exact route authority before admitting page commands', async () => {
@@ -276,6 +284,122 @@ describe('PairedRuntimeBrowserClientHostComposition', () => {
     await composition.whenClosed()
   })
 
+  it('waits out the grace instead of tearing down when the authority was replaced', async () => {
+    vi.useFakeTimers()
+    try {
+      const rig = createRig()
+      const composition = rig.createComposition()
+      await composition.start()
+
+      rig.hostOptions.onError?.(authorityReplacedError())
+
+      // The guests are alive and still ours; the replacement runtime is on its way to reclaim them.
+      expect(rig.authorityReplacementWait.armed).toBe(true)
+      expect(rig.onError).not.toHaveBeenCalled()
+      expect(rig.order).toEqual(['activate-routes'])
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('tears the composition down once the grace expires with no replacement', async () => {
+    vi.useFakeTimers()
+    try {
+      const rig = createRig()
+      const composition = rig.createComposition()
+      await composition.start()
+      const replaced = authorityReplacedError()
+
+      rig.hostOptions.onError?.(replaced)
+      vi.advanceTimersByTime(1_000)
+
+      expect(rig.onError).toHaveBeenCalledWith(replaced)
+      expect(rig.order).toContain('closing')
+      await vi.runAllTimersAsync()
+      await composition.whenClosed()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('cancels the grace when the replacement authority actually arrives', async () => {
+    vi.useFakeTimers()
+    try {
+      const rig = createRig()
+      const composition = rig.createComposition()
+      await composition.start()
+      rig.hostOptions.onError?.(authorityReplacedError())
+
+      await composition.replaceAuthority(replacementInput)
+
+      // Released at the transition, not merely ignored when it fires: a deadline left running holds
+      // a timer for the whole grace and fires against a composition that has already moved on.
+      expect(rig.authorityReplacementWait.armed).toBe(false)
+      vi.advanceTimersByTime(10_000)
+      expect(rig.onError).not.toHaveBeenCalled()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('cancels the grace when the composition closes for another reason', async () => {
+    vi.useFakeTimers()
+    try {
+      const rig = createRig()
+      const composition = rig.createComposition()
+      await composition.start()
+      rig.hostOptions.onError?.(authorityReplacedError())
+
+      await composition.close()
+
+      expect(rig.authorityReplacementWait.armed).toBe(false)
+      vi.advanceTimersByTime(10_000)
+      // A grace that fired after close would report a second, bogus failure for a dead composition.
+      expect(rig.onError).not.toHaveBeenCalled()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('arms one deadline for a burst of mismatch errors', async () => {
+    vi.useFakeTimers()
+    try {
+      const rig = createRig()
+      const composition = rig.createComposition()
+      await composition.start()
+
+      rig.hostOptions.onError?.(authorityReplacedError())
+      vi.advanceTimersByTime(900)
+      rig.hostOptions.onError?.(authorityReplacedError())
+      vi.advanceTimersByTime(100)
+
+      expect(rig.onError).toHaveBeenCalledTimes(1)
+      await vi.runAllTimersAsync()
+      await composition.whenClosed()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('still tears down immediately for a host error that is not a replacement', async () => {
+    vi.useFakeTimers()
+    try {
+      const rig = createRig()
+      const composition = rig.createComposition()
+      await composition.start()
+      const fatal = new Error('browser host process exited')
+
+      rig.hostOptions.onError?.(fatal)
+
+      expect(rig.authorityReplacementWait.armed).toBe(false)
+      expect(rig.onError).toHaveBeenCalledWith(fatal)
+      await vi.runAllTimersAsync()
+      await composition.whenClosed()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it('fails closed without racing page cleanup when handlers do not settle', async () => {
     const rig = createRig({ hostSettled: false })
     const composition = rig.createComposition()
@@ -354,8 +478,12 @@ function createRig(
     pageInventory?: readonly BrowserClientHostedPageInventory[]
     replacementAuthority?: BrowserClientHostLeaseAuthority
     routeRetireError?: Error
+    authorityReplacementGraceMs?: number
   } = {}
 ) {
+  const authorityReplacementWait = new BrowserClientHostAuthorityReplacementWait(
+    options.authorityReplacementGraceMs ?? 1_000
+  )
   const order: string[] = []
   let onPageUnavailable = (_browserPageId: string, _pageHostGeneration: number): void => {}
   let settleHandlers = (): void => {}
@@ -458,6 +586,7 @@ function createRig(
   const onError = vi.fn()
   return {
     order,
+    authorityReplacementWait,
     routes,
     replacementRoutes,
     executor,
@@ -500,9 +629,16 @@ function createRig(
         onClosing: () => {
           order.push('closing')
         },
+        createAuthorityReplacementWait: () => authorityReplacementWait,
         onError
       })
   }
+}
+
+function authorityReplacedError(): Error {
+  return Object.assign(new Error('lease attach named a retired runtime'), {
+    code: BROWSER_CLIENT_HOST_AUTHORITY_MISMATCH_CODE
+  })
 }
 
 function retainedPageInventory(): BrowserClientHostedPageInventory {

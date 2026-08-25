@@ -9,6 +9,19 @@ export type ContextOnlyDispatchReleaseResult = {
   releasedCurrentTask: boolean
 }
 
+export function contextOnlyAbandonWarning(result: {
+  state: string
+  alreadySettled: boolean
+  releasedCurrentTask: boolean
+}): string {
+  if (result.alreadySettled) {
+    return `Dispatch was already ${result.state}; no state or process changed.`
+  }
+  return result.releasedCurrentTask
+    ? 'The assignment was abandoned; its unsupervised terminal process was retained.'
+    : 'The superseded assignment was abandoned without changing the current Task or terminal process.'
+}
+
 export function releaseContextOnlyDispatch(
   db: Database.Database,
   dispatch: DispatchContextRow,

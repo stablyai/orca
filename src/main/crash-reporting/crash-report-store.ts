@@ -96,7 +96,9 @@ export class CrashReportStore {
         createdAt: new Date().toISOString(),
         status: 'pending',
         details: sanitizeCrashReportDetails(input.details),
-        breadcrumbs: sanitizeCrashReportBreadcrumbs(input.breadcrumbs)
+        breadcrumbs: sanitizeCrashReportBreadcrumbs(input.breadcrumbs)?.map(
+          ({ origin: _origin, ...breadcrumb }) => breadcrumb
+        )
       }
       return {
         reports: [report, ...reports].slice(0, MAX_REPORTS),

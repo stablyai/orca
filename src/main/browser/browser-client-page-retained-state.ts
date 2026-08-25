@@ -34,3 +34,16 @@ export type BrowserClientRetainedPage = {
   reconciling: boolean
   releaseAvailabilityWatch?: () => void
 }
+
+/** The live page a guest WebContents belongs to; retiring/reconciling pages are not addressable. */
+export function findBrowserClientPageByWebContentsId(
+  pages: Iterable<BrowserClientRetainedPage>,
+  webContentsId: number
+): BrowserClientRetainedPage | undefined {
+  for (const page of pages) {
+    if (page.registration.webContentsId === webContentsId && !page.retiring && !page.reconciling) {
+      return page
+    }
+  }
+  return undefined
+}

@@ -52,10 +52,10 @@ describe('browser host capability selection', () => {
     expect(leases.getPlacement('page-a')).toBeUndefined()
   })
 
-  it('suspends placement after a reconnect capability downgrade', () => {
+  it('releases placement after a reconnect capability downgrade', () => {
     const leases = registry()
     attach(leases, 'a', ['webview', 'commands.v1'])
-    const placement = leases.placeClientPage('page-a', 'host-a', ['commands.v1'])
+    leases.placeClientPage('page-a', 'host-a', ['commands.v1'])
     attach(leases, 'a', ['webview'], 'connection-b')
 
     expect(() =>
@@ -67,13 +67,7 @@ describe('browser host capability selection', () => {
         browserHostGeneration: 1,
         pageHostGeneration: 1
       })
-    ).toThrow('browser_page_retirement_pending')
-    expect(() => leases.placeClientPage('page-a', 'host-a', ['commands.v1'])).toThrow(
-      'browser_page_replacement_requires_retirement'
-    )
-    expect(leases.getPlacement('page-a')).toBe(placement)
-    const retirement = leases.beginPageRetirement('page-a', placement)
-    expect(leases.completePageRetirement(retirement)).toBe(true)
+    ).toThrow('browser_client_page_placement_required')
     expect(() => leases.placeClientPage('page-a', 'host-a', ['commands.v1'])).toThrow(
       'browser_host_capability_unavailable'
     )

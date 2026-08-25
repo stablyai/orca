@@ -88,6 +88,9 @@ async function createHarness() {
   const runtime = {
     getRuntimeId: () => 'runtime-a',
     getStartedAt: () => 1,
+    // Attach adopts client-hosted pages from the reported inventory before recovery runs.
+    resolveBrowserExecutionHostKeyForWorkspace: async () => undefined,
+    markClientHostedPagesReconciled: () => {},
     registerSubscriptionCleanup: (id: string, cleanup: () => void) => cleanups.set(id, cleanup),
     notifyMobileSessionTabsChanged: notifySessionTabs
   } as unknown as OrcaRuntimeService

@@ -3,6 +3,8 @@ import { z } from 'zod'
 const Identity = z.string().min(1).max(256)
 const Generation = z.number().int().min(1).max(0xffff_ffff)
 
+export const BROWSER_CLIENT_PAGE_METADATA_METHOD = 'browser.clientHost.pageMetadata' as const
+
 export const BrowserClientPageMetadataParams = z.object({
   browserHostClientId: Identity,
   browserHostGeneration: Generation,
@@ -20,3 +22,16 @@ export type BrowserClientPageMetadataParams = z.infer<typeof BrowserClientPageMe
 
 export const BrowserClientPageMetadataAck = z.object({ accepted: z.boolean() })
 export type BrowserClientPageMetadataAck = z.infer<typeof BrowserClientPageMetadataAck>
+
+/**
+ * What the publishing renderer learns about its publish.
+ *
+ * `accepted: false` is not a failure — the runtime already holds a newer revision — but it is the
+ * signal that separates "the runtime has this page's URL" from "the runtime is still showing the
+ * URL the page was born with", so it is reported rather than discarded.
+ */
+export type BrowserClientPageMetadataPublishOutcome =
+  | { status: 'published'; accepted: boolean }
+  /** Main declined to forward it at all: untrusted sender or malformed params. */
+  | { status: 'refused' }
+  | { status: 'failed'; errorCode: string }

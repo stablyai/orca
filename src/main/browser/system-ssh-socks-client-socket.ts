@@ -75,6 +75,14 @@ export class SystemSshSocksClientSocket extends EventEmitter implements BrowserN
     return this
   }
 
+  fail(error: Error): void {
+    if (this.destroyed) {
+      return
+    }
+    this.emit('error', error)
+    this.socket.destroy()
+  }
+
   private onHandshakeData(bytes: Buffer): void {
     if (this.phase === 'ready') {
       this.emit('data', bytes)
@@ -124,14 +132,6 @@ export class SystemSshSocksClientSocket extends EventEmitter implements BrowserN
     if (remaining.byteLength > 0) {
       this.emit('data', remaining)
     }
-  }
-
-  private fail(error: Error): void {
-    if (this.destroyed) {
-      return
-    }
-    this.emit('error', error)
-    this.socket.destroy()
   }
 }
 

@@ -1,6 +1,7 @@
 import { BrowserWindow, ipcMain } from 'electron'
 import { browserSessionRegistry } from '../browser/browser-session-registry'
 import { importCookiesIntoClientRoutePartition } from '../browser/browser-client-route-cookie-import'
+import { clientRouteCookieImportSources } from '../browser/client-route-cookie-import-source-store'
 import { getPairedRuntimeBrowserClientRouteIdentity } from '../browser/paired-runtime-browser-client-host-runtime'
 import { isTrustedBrowserRenderer } from './browser-renderer-trust'
 import {
@@ -134,6 +135,20 @@ export function registerBrowserSessionProfileHandlers(): void {
         browserFamily: args.browserFamily,
         browserProfile: args.browserProfile
       })
+    }
+  )
+
+  ipcMain.removeHandler('browser:session:clientRouteImportSources')
+
+  // Why: the server's profile records can't know what this desktop imported into
+  // its client-hosted jars; the settings view overlays these onto the RPC list.
+  ipcMain.handle(
+    'browser:session:clientRouteImportSources',
+    (event, args: { environmentId: string }) => {
+      if (!isTrustedBrowserRenderer(event.sender) || typeof args?.environmentId !== 'string') {
+        return {}
+      }
+      return clientRouteCookieImportSources(args.environmentId)
     }
   )
 

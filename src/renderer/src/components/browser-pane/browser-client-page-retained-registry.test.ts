@@ -91,6 +91,31 @@ describe('browser client page retained registry', () => {
     await expect(mounted).resolves.toEqual({ webContentsId: 41 })
   })
 
+  // The guest lives in a fixed-position overlay, never inside its pane, so nothing in the DOM says
+  // which row a `<webview>` belongs to unless the host carries the page id. The paired restart e2e
+  // binds its marker read to exactly this stamp.
+  it('stamps the retained host with the page id it hosts, and keeps it across a rekey', async () => {
+    const { registry, webviews } = createRig()
+    const mounting = registry.mountPage(PAGE)
+    const webview = webviews[0]!
+
+    expect(
+      webview.closest('[data-browser-client-page-id]')?.getAttribute('data-browser-client-page-id')
+    ).toBe(PAGE.browserPageId)
+
+    attach(webview)
+    await expect(mounting).resolves.toEqual({ webContentsId: 41 })
+    // The generation moves on every reissue; the page id is what survives, so it is what binds.
+    const next = { ...PAGE, pageHostGeneration: 8 }
+    registry.rekeyPage(PAGE, next)
+    await expect(registry.mountPage(next)).resolves.toEqual({ webContentsId: 41 })
+
+    expect(
+      webview.closest('[data-browser-client-page-id]')?.getAttribute('data-browser-client-page-id')
+    ).toBe(PAGE.browserPageId)
+    expect(webviews).toHaveLength(1)
+  })
+
   it('shares concurrent exact mounts and reuses the attached incarnation', async () => {
     const { registry, webviews } = createRig()
     const first = registry.mountPage(PAGE)
@@ -147,6 +172,55 @@ describe('browser client page retained registry', () => {
     expect(retainedHost?.style.cssText).toContain('left: -10000px')
     expect(webview.isConnected).toBe(true)
     expect(registry.getMemoryProfile().attachedPageCount).toBe(1)
+  })
+
+  it('tracks a pure pane move that fires no resize or scroll event', async () => {
+    const frames: FrameRequestCallback[] = []
+    vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => {
+      frames.push(callback)
+      return frames.length
+    })
+    const cancelled = vi.fn()
+    vi.stubGlobal('cancelAnimationFrame', cancelled)
+    try {
+      const { registry, webviews } = createRig()
+      const mounting = registry.mountPage(PAGE)
+      attach(webviews[0]!)
+      await mounting
+      const retainedHost = webviews[0]!.parentElement as HTMLDivElement
+      const viewport = document.createElement('div')
+      const rect = (left: number): DOMRect =>
+        ({
+          bottom: 260,
+          height: 200,
+          left,
+          right: left + 300,
+          top: 60,
+          width: 300,
+          x: left,
+          y: 60,
+          toJSON: () => ({})
+        }) as DOMRect
+      const bounds = vi.spyOn(viewport, 'getBoundingClientRect').mockReturnValue(rect(40))
+      document.body.appendChild(viewport)
+      const attachment = registry.attachPage(
+        { browserPageId: PAGE.browserPageId, pageHostGeneration: PAGE.pageHostGeneration },
+        viewport
+      )
+      expect(retainedHost.style.cssText).toContain('left: 40px')
+
+      // Why: dragging a tab across an even split moves the pane without resizing it.
+      bounds.mockReturnValue(rect(700))
+      frames.splice(0).forEach((callback) => callback(0))
+      expect(retainedHost.style.cssText).toContain('left: 700px')
+      expect(retainedHost.style.cssText).toContain('width: 300px')
+
+      attachment.detach()
+      expect(cancelled).toHaveBeenCalled()
+      expect(retainedHost.style.cssText).toContain('left: -10000px')
+    } finally {
+      vi.unstubAllGlobals()
+    }
   })
 
   it('keeps metadata revisions monotonic across visible detach and reattach', async () => {

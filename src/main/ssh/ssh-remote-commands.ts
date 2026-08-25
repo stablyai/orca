@@ -1,3 +1,7 @@
+import {
+  RELAY_INSTALL_COMPLETE_FILENAME,
+  relayArtifactFilenames
+} from '../../shared/relay-artifacts'
 import type { RemoteHostPlatform } from './ssh-remote-platform'
 import { isWindowsRemoteHost, joinRemotePath, remoteDirname } from './ssh-remote-platform'
 import { powerShellCommand, powerShellLiteral, powerShellNativeArg } from './ssh-remote-powershell'
@@ -85,35 +89,31 @@ export function writeRemoteEmptyFileCommand(host: RemoteHostPlatform, remotePath
   )
 }
 
+/**
+ * A partial install must read as MISSING, so every file the manifest ships is
+ * probed — not a hand-kept subset. A relay that advertises the AI Vault title
+ * service but lacks the WSL transcript helper would otherwise pass this probe
+ * and then answer WSL title requests with silence.
+ */
 export function probeRelayInstalledCommand(
   host: RemoteHostPlatform,
   remoteRelayDir: string
 ): string {
-  const relayJs = joinRemotePath(host, remoteRelayDir, 'relay.js')
-  const relayWatcherJs = joinRemotePath(host, remoteRelayDir, 'relay-watcher.js')
-  const relayAiVaultServiceJs = joinRemotePath(host, remoteRelayDir, 'relay-ai-vault-service.js')
-  const managedHookRuntimeJs = joinRemotePath(host, remoteRelayDir, 'managed-hook-runtime.js')
-  const installComplete = joinRemotePath(host, remoteRelayDir, '.install-complete')
+  const required = [
+    ...relayArtifactFilenames(isWindowsRemoteHost(host)),
+    RELAY_INSTALL_COMPLETE_FILENAME
+  ].map((filename) => joinRemotePath(host, remoteRelayDir, filename))
   if (!isWindowsRemoteHost(host)) {
-    return (
-      `test -d ${shellEscape(remoteRelayDir)} ` +
-      `&& test -f ${shellEscape(relayJs)} ` +
-      `&& test -f ${shellEscape(relayWatcherJs)} ` +
-      `&& test -f ${shellEscape(relayAiVaultServiceJs)} ` +
-      `&& test -f ${shellEscape(managedHookRuntimeJs)} ` +
-      `&& test -f ${shellEscape(installComplete)} ` +
-      `&& echo OK || echo MISSING`
-    )
+    const fileTests = required.map((path) => `&& test -f ${shellEscape(path)} `).join('')
+    return `test -d ${shellEscape(remoteRelayDir)} ${fileTests}&& echo OK || echo MISSING`
   }
   return powerShellCommand(
     [
       `$dir = ${powerShellLiteral(remoteRelayDir)}`,
-      `$relay = ${powerShellLiteral(relayJs)}`,
-      `$watcher = ${powerShellLiteral(relayWatcherJs)}`,
-      `$aiVaultService = ${powerShellLiteral(relayAiVaultServiceJs)}`,
-      `$managedHooks = ${powerShellLiteral(managedHookRuntimeJs)}`,
-      `$complete = ${powerShellLiteral(installComplete)}`,
-      "if ((Test-Path -LiteralPath $dir -PathType Container) -and (Test-Path -LiteralPath $relay -PathType Leaf) -and (Test-Path -LiteralPath $watcher -PathType Leaf) -and (Test-Path -LiteralPath $aiVaultService -PathType Leaf) -and (Test-Path -LiteralPath $managedHooks -PathType Leaf) -and (Test-Path -LiteralPath $complete -PathType Leaf)) { 'OK' } else { 'MISSING' }"
+      `$required = @(${required.map((path) => powerShellLiteral(path)).join(', ')})`,
+      '$ok = Test-Path -LiteralPath $dir -PathType Container',
+      'foreach ($f in $required) { if (-not (Test-Path -LiteralPath $f -PathType Leaf)) { $ok = $false } }',
+      "if ($ok) { 'OK' } else { 'MISSING' }"
     ].join('; ')
   )
 }

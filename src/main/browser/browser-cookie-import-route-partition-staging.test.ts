@@ -100,7 +100,9 @@ beforeEach(() => {
       flushStore: vi.fn().mockResolvedValue(undefined)
     },
     clearData: vi.fn().mockResolvedValue(undefined),
-    setUserAgent: vi.fn()
+    setUserAgent: vi.fn(),
+    getStoragePath: () =>
+      join(tmpDir, 'userData', 'Partitions', routePartition.replace('persist:', ''))
   })
 })
 

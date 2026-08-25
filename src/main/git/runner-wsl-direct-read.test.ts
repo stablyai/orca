@@ -37,6 +37,14 @@ const LOGIN_ENVIRONMENT = {
   path: '/home/user/bin:/usr/bin:/bin'
 }
 
+/** Stand in for the guest shell: rc chatter first, then the payload inside the command's own fence. */
+function fencedProbeStdout(command: unknown, payload: string): string {
+  const nonce = /__ORCA_WSL_CAPTURE_BEGIN_([^_]+)__/.exec(String(command))?.[1] ?? ''
+  return `profile banner\n__ORCA_WSL_CAPTURE_BEGIN_${nonce}__${payload}__ORCA_WSL_CAPTURE_END_${nonce}__`
+}
+
+const LOGIN_ENVIRONMENT_FIELDS = `${LOGIN_ENVIRONMENT.path}\0${LOGIN_ENVIRONMENT.gitPath}\0${LOGIN_ENVIRONMENT.home}`
+
 type MockChild = EventEmitter & {
   stdout: EventEmitter
   stderr: EventEmitter
@@ -97,7 +105,10 @@ describe('WSL direct Git reads', () => {
     expect(execFileMock).toHaveBeenCalledTimes(1)
     completeProbe?.(
       null,
-      'profile banner\n\0ORCA_WSL_GIT_READ_ENV_V1\0/home/user/bin:/usr/bin\0/home/user/bin/git\0/home/user\0',
+      fencedProbeStdout(
+        execFileMock.mock.calls[0]?.[1]?.[5],
+        '/home/user/bin:/usr/bin\0/home/user/bin/git\0/home/user'
+      ),
       ''
     )
 
@@ -131,7 +142,7 @@ describe('WSL direct Git reads', () => {
         queueMicrotask(() =>
           callback?.(
             null,
-            `\0ORCA_WSL_GIT_READ_ENV_V1\0${LOGIN_ENVIRONMENT.path}\0${LOGIN_ENVIRONMENT.gitPath}\0${LOGIN_ENVIRONMENT.home}\0`,
+            fencedProbeStdout(execFileMock.mock.calls.at(-1)?.[1]?.[5], LOGIN_ENVIRONMENT_FIELDS),
             ''
           )
         )
@@ -184,7 +195,7 @@ describe('WSL direct Git reads', () => {
       let completeProbe: ((error: Error | null, stdout: string, stderr: string) => void) | undefined
       execFileMock.mockImplementation((_command, args, _options, callback) => {
         const child = createMockChild()
-        if ((args as string[])[5]?.includes('ORCA_WSL_GIT_READ_ENV_V1')) {
+        if ((args as string[])[5]?.includes('^GIT_')) {
           completeProbe = callback
         } else {
           queueMicrotask(() => callback?.(null, 'ok', ''))
@@ -203,7 +214,7 @@ describe('WSL direct Git reads', () => {
       expect(execFileMock.mock.calls[1]?.[1]?.slice(3, 5)).toEqual(['sh', '-lc'])
       completeProbe?.(
         null,
-        `\0ORCA_WSL_GIT_READ_ENV_V1\0${LOGIN_ENVIRONMENT.path}\0${LOGIN_ENVIRONMENT.gitPath}\0${LOGIN_ENVIRONMENT.home}\0`,
+        fencedProbeStdout(execFileMock.mock.calls[1]?.[1]?.[5], LOGIN_ENVIRONMENT_FIELDS),
         ''
       )
       await Promise.resolve()
@@ -239,6 +250,76 @@ describe('WSL direct Git reads', () => {
       })
 
       expect(execFileMock.mock.calls[0]?.[1]?.slice(3, 5)).toEqual(['sh', '-lc'])
+    })
+  })
+
+  it('fences parsed output from a barrier Git login-shell fallback', async () => {
+    await withPlatform('win32', async () => {
+      seedWslGitReadEnvironmentForTests(DISTRO, LOGIN_ENVIRONMENT)
+      spawnMock.mockImplementation((_command, args) => {
+        const child = createMockChild()
+        queueMicrotask(() => {
+          const capturedCommand = args?.find((arg) =>
+            String(arg).includes('__ORCA_WSL_CAPTURE_BEGIN_')
+          )
+          const fenced = fencedProbeStdout(capturedCommand, 'fork-point\n')
+          const echoedMarker = fenced.match(/__ORCA_WSL_CAPTURE_BEGIN_[^_]+__/)?.[0] ?? ''
+          child.stdout.emit('data', Buffer.from(`${echoedMarker}shell trace\n${fenced}`))
+          child.emit('close', 0, null)
+        })
+        return child
+      })
+
+      await expect(
+        gitExecFileAsync(['merge-base', '--fork-point', 'upstream/main', 'HEAD'], {
+          cwd: String.raw`C:\repo`,
+          env: { GIT_CONFIG_GLOBAL: '/home/user/custom.gitconfig' },
+          wslDistro: DISTRO,
+          captureWslLoginShellOutput: true,
+          terminationBarrier: true
+        })
+      ).resolves.toEqual({ stdout: 'fork-point\n', stderr: '' })
+
+      expect(spawnMock.mock.calls[0]?.[1]?.join(' ')).toContain('setsid --wait')
+      expect(spawnMock.mock.calls[0]?.[1]?.join(' ')).toContain('__ORCA_WSL_CAPTURE_BEGIN_')
+    })
+  })
+
+  it('verifies the WSL guest process group before settling an abort', async () => {
+    await withPlatform('win32', async () => {
+      seedWslGitReadEnvironmentForTests(DISTRO, LOGIN_ENVIRONMENT)
+      const command = createMockChild()
+      spawnMock.mockImplementation((_program, args) => {
+        if (spawnMock.mock.calls.length === 1) {
+          queueMicrotask(() => {
+            const marker = String(args?.join(' ')).match(
+              /(__ORCA_WSL_PROCESS_GROUP_[0-9a-f-]+__=)/
+            )?.[1]
+            command.stderr.emit('data', Buffer.from(`${marker}4321\n`))
+          })
+          return command
+        }
+        const terminator = createMockChild()
+        queueMicrotask(() => terminator.emit('close', 0, null))
+        return terminator
+      })
+      const controller = new AbortController()
+      const pending = gitExecFileAsync(['status'], {
+        cwd: String.raw`C:\repo`,
+        env: { GIT_CONFIG_GLOBAL: '/home/user/custom.gitconfig' },
+        wslDistro: DISTRO,
+        signal: controller.signal,
+        terminationBarrier: true
+      })
+      await vi.waitFor(() => expect(spawnMock).toHaveBeenCalledTimes(1))
+      await Promise.resolve()
+
+      controller.abort()
+
+      await expect(pending).rejects.toMatchObject({ name: 'AbortError' })
+      expect(command.kill).not.toHaveBeenCalled()
+      expect(spawnMock.mock.calls[1]?.[1]?.join(' ')).toContain('kill -TERM')
+      expect(spawnMock.mock.calls[1]?.[1]).toContain('4321')
     })
   })
 

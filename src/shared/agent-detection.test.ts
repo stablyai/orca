@@ -158,7 +158,7 @@ describe('Pi-compatible title detection', () => {
     ['OMP - action required', 'OMP', 'permission'],
     ['\u280b Pi', 'Pi', 'working'],
     ['Pi ready', 'Pi', 'idle'],
-    // Why: normalizeTerminalTitle collapses idle π frames to bare "Pi"; re-detection
+    // Why: titles stored by the old collapse are still bare "Pi"; re-detection
     // from stored lastOscTitle must still classify idle, not neutral.
     ['Pi', 'Pi', 'idle'],
     ['Pi - action required', 'Pi', 'permission']
@@ -168,7 +168,8 @@ describe('Pi-compatible title detection', () => {
   })
 
   it('re-detects status after display-title normalization for Pi idle frames', () => {
-    expect(normalizeTerminalTitle('π - my-project')).toBe('Pi')
+    // Normalization now preserves the session name and cwd (#16093).
+    expect(normalizeTerminalTitle('π - my-project')).toBe('π - my-project')
     expect(detectAgentStatusFromTitle(normalizeTerminalTitle('π - my-project'))).toBe('idle')
     expect(detectAgentStatusFromTitle(normalizeTerminalTitle('\u280b π - my-project'))).toBe(
       'working'
@@ -179,18 +180,28 @@ describe('Pi-compatible title detection', () => {
     ['\u280b Pi', 'omp', '\u280b OMP'],
     ['Pi ready', 'omp', 'OMP ready'],
     ['Pi - action required', 'omp', 'OMP - action required'],
-    ['π - tmp', 'omp', 'OMP ready'],
-    ['π: tmp', 'omp', 'OMP ready'],
-    ['\u280b π: tmp', 'omp', '\u280b OMP'],
-    ['\u280b π - tmp', 'omp', '\u280b OMP'],
+    // Why: the brand is swapped for the owner's label in place — the pane still reads as its
+    // launch owner, but the session name and cwd it chose survive (#16093).
+    ['π - tmp', 'omp', 'OMP - tmp'],
+    ['π: tmp', 'omp', 'OMP: tmp'],
+    ['\u280b π: tmp', 'omp', '\u280b OMP: tmp'],
+    ['\u280b π - tmp', 'omp', '\u280b OMP - tmp'],
     ['\u280b OMP', 'pi', '\u280b Pi'],
-    ['lucky-echidna | \u283c π - Diagnose Orca terminal title flicker - test', 'omp', '\u280b OMP'],
+    [
+      'lucky-echidna | \u283c π - Diagnose Orca terminal title flicker - test',
+      'omp',
+      'lucky-echidna | \u283c OMP - Diagnose Orca terminal title flicker - test'
+    ],
     ['lucky-echidna | Pi ready', 'omp', 'OMP ready'],
     ['Codex | Pi ready', 'omp', 'OMP ready'],
     // Why: the wrapped whole reads as a braille Claude title, but the re-ownable
     // synthetic pane suffix must still win.
     ['lucky-echidna | ⠋ OMP', 'omp', '⠋ OMP'],
-    ['lucky-echidna | \u283c π - Diagnose | test', 'omp', '\u280b OMP']
+    [
+      'lucky-echidna | \u283c π - Diagnose | test',
+      'omp',
+      'lucky-echidna | \u283c OMP - Diagnose | test'
+    ]
   ] as const)('normalizes %s to the authoritative %s owner', (title, owner, expectedTitle) => {
     expect(normalizeCompatibleAgentTitleForOwner(title, owner)).toBe(expectedTitle)
   })

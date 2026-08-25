@@ -99,7 +99,7 @@ describe('terminal multiplex RPC', () => {
       [sourceRange(flooded.length, flooded.length + trailing.length)]
     )
 
-    harness.cleanups.get('terminal-multiplex:conn-desktop-first-paint')?.()
+    harness.registry.cleanupSubscription('terminal-multiplex:conn-desktop-first-paint')
     await harness.dispatchPromise
   })
 
@@ -160,7 +160,7 @@ describe('terminal multiplex RPC', () => {
     expect(harness.commit).toHaveBeenCalledOnce()
     expect(harness.rollback).toHaveBeenCalledOnce()
     expect(harness.lifecycle).toEqual(['reserve', 'commit', 'rollback', 'cancel'])
-    harness.cleanups.get('terminal-multiplex:conn-desktop-first-paint')?.()
+    harness.registry.cleanupSubscription('terminal-multiplex:conn-desktop-first-paint')
     await harness.dispatchPromise
   })
 
@@ -205,7 +205,7 @@ describe('terminal multiplex RPC', () => {
     expect(harness.commit).not.toHaveBeenCalled()
     expect(harness.rollback).toHaveBeenCalledOnce()
     expect(harness.lifecycle).toEqual(['reserve', 'rollback', 'cancel'])
-    harness.cleanups.get('terminal-multiplex:conn-desktop-first-paint')?.()
+    harness.registry.cleanupSubscription('terminal-multiplex:conn-desktop-first-paint')
     await harness.dispatchPromise
   })
 
@@ -260,7 +260,7 @@ describe('terminal multiplex RPC', () => {
     expect(harness.commit).not.toHaveBeenCalled()
     expect(harness.rollback).toHaveBeenCalledOnce()
     expect(harness.lifecycle.slice(0, 3)).toEqual(['reserve', 'rollback', 'cancel'])
-    harness.cleanups.get('terminal-multiplex:conn-desktop-first-paint')?.()
+    harness.registry.cleanupSubscription('terminal-multiplex:conn-desktop-first-paint')
     await harness.dispatchPromise
   })
 
@@ -298,7 +298,7 @@ describe('terminal multiplex RPC', () => {
               'ack-pending-overflow'
         )
     ).toBe(false)
-    harness.cleanups.get('terminal-multiplex:conn-desktop-first-paint')?.()
+    harness.registry.cleanupSubscription('terminal-multiplex:conn-desktop-first-paint')
     await harness.dispatchPromise
   })
 
@@ -551,7 +551,7 @@ describe('terminal multiplex RPC', () => {
     await Promise.resolve()
     expect(serializeTerminalBuffer).toHaveBeenCalledTimes(2)
 
-    harness.cleanups.get('terminal-multiplex:conn-desktop-first-paint')?.()
+    harness.registry.cleanupSubscription('terminal-multiplex:conn-desktop-first-paint')
     await harness.dispatchPromise
   })
 

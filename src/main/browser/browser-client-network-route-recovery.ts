@@ -1,7 +1,4 @@
-import {
-  BrowserHostReconnectDelay,
-  nextBrowserHostReconnectDelay
-} from './browser-host-lease-reconnect-delay'
+import { retryBrowserNetworkRouteReconnect } from './browser-network-route-reconnect-retry'
 
 const MAX_CONCURRENT_ROUTE_RECONNECTS = 8
 
@@ -28,10 +25,13 @@ export async function reconnectBrowserClientNetworkRoutes(options: {
         const index = nextIndex
         nextIndex += 1
         try {
-          addresses[index] = await reconnectRoute({
-            ...options,
-            route: options.routes[index]!,
-            deadline
+          const route = options.routes[index]!
+          addresses[index] = await retryBrowserNetworkRouteReconnect({
+            reconnect: () => route.route.reconnect(),
+            signal: options.signal,
+            deadline,
+            retryDelayMs: options.retryDelayMs,
+            recoveryKey: `${options.browserHostClientId}:${route.key}`
           })
         } catch (error) {
           failures.push(error)
@@ -47,47 +47,4 @@ export async function reconnectBrowserClientNetworkRoutes(options: {
     throw new AggregateError(failures, 'Browser client network route reconnect failed')
   }
   return addresses
-}
-
-async function reconnectRoute(options: {
-  route: RecoverableRoute
-  signal: AbortSignal
-  deadline: number
-  retryDelayMs: number
-  browserHostClientId: string
-}): Promise<{ host: string; port: number }> {
-  const delay = new BrowserHostReconnectDelay()
-  const abort = (): void => delay.release()
-  options.signal.addEventListener('abort', abort, { once: true })
-  let attempt = 0
-  let lastError: unknown
-  try {
-    while (!options.signal.aborted) {
-      try {
-        return await options.route.route.reconnect()
-      } catch (error) {
-        lastError = error
-      }
-      if (options.signal.aborted) {
-        throw new Error('browser_client_network_route_recovery_superseded')
-      }
-      const remainingMs = options.deadline - Date.now()
-      if (remainingMs <= 0) {
-        throw lastError
-      }
-      await delay.wait(
-        nextBrowserHostReconnectDelay({
-          baseDelayMs: options.retryDelayMs,
-          attempt,
-          remainingMs,
-          browserHostClientId: `${options.browserHostClientId}:${options.route.key}`
-        })
-      )
-      attempt += 1
-    }
-    throw new Error('browser_client_network_route_recovery_superseded')
-  } finally {
-    options.signal.removeEventListener('abort', abort)
-    delay.release()
-  }
 }

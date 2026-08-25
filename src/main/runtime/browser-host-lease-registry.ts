@@ -15,7 +15,7 @@ import {
   type BrowserTunnelLeaseHandle
 } from './browser-host-lease-records'
 import { BrowserHostGenerationCounter } from './browser-host-generation-counter'
-import { assertBrowserHostPageCommandAdmission } from './browser-host-page-command-admission'
+import { issueBrowserHostClientPageCommand } from './browser-host-client-page-command-issue'
 import {
   BrowserHostPagePlacementRegistry,
   type BrowserClientPageAuthority,
@@ -32,8 +32,10 @@ import {
 } from './browser-host-capability-selection'
 import {
   createBrowserHostClientPage,
-  type BrowserClientPageExecutionHostGrant
+  type BrowserClientPageExecutionHostGrant,
+  type BrowserHostClientPageCreateOptions
 } from './browser-host-client-page-creation'
+import { adoptBrowserHostClientPages } from './browser-host-client-page-adoption'
 import { snapshotBrowserHostPageInventory } from './browser-host-page-inventory-snapshot'
 import { BrowserHostPageReconciliationOrchestrator } from './browser-host-page-reconciliation-orchestration'
 import type { BrowserHostRuntimePageIntent } from './browser-host-page-reconciliation-plan'
@@ -74,6 +76,12 @@ export class BrowserHostLeaseRegistry {
        * download transfers) is not stranded.
        */
       onClientPageReleased?: (browserPageId: string) => void
+      /**
+       * Called when a lease fence takes a client page's placement away. The page itself outlives
+       * the host that placed it, so this hands the runtime its record back to retain rather than
+       * to drop -- a host returning under the same identity recovers it from there.
+       */
+      onClientPageFenced?: (browserPageId: string, placement: RuntimeBrowserClientPlacement) => void
     }
   ) {
     this.authorityRuntimeId = options.authorityRuntimeId
@@ -194,15 +202,9 @@ export class BrowserHostLeaseRegistry {
     })
   }
 
-  async createClientPage(options: {
-    browserPageId: string
-    browserHostClientId: string
-    pairedDeviceId: string
-    browserProfileId: string
-    executionHostKey: string
-    requiredCapabilities?: readonly string[]
-    timeoutMs?: number
-  }): Promise<RuntimeBrowserClientPlacement> {
+  async createClientPage(
+    options: BrowserHostClientPageCreateOptions
+  ): Promise<RuntimeBrowserClientPlacement> {
     return createBrowserHostClientPage(options, {
       selectLease: (browserHostClientId, requiredCapabilities) =>
         this.select(browserHostClientId, [
@@ -219,12 +221,17 @@ export class BrowserHostLeaseRegistry {
     return requireLiveBrowserClientPage(this.pagePlacements, this.leasesByClientId, authority)
   }
 
-  reconcileClientPages(
+  adoptClientPages(
     identity: BrowserHostLeaseIdentity,
     intents: readonly BrowserHostRuntimePageIntent[],
     options: { maxConcurrency?: number; actionTimeoutMs?: number; signal?: AbortSignal } = {}
-  ) {
-    return this.pageReconciliations.reconcile(this.requireLeaseState(identity), intents, options)
+  ): Promise<readonly string[]> {
+    return adoptBrowserHostClientPages(intents, options, {
+      state: this.requireLeaseState(identity),
+      reconciliations: this.pageReconciliations,
+      placements: this.pagePlacements,
+      executionHostGrants: this.clientPageExecutionHostGrants
+    })
   }
 
   attachCommandDelivery(
@@ -246,23 +253,7 @@ export class BrowserHostLeaseRegistry {
     result: Promise<BrowserClientHostCommandResult>
   } {
     this.requireClientPage(authority)
-    const state = this.leasesByClientId.get(authority.browserHostClientId)
-    const ledger = state?.commandLedger
-    if (
-      !state ||
-      state.lease.browserHostGeneration !== authority.browserHostGeneration ||
-      !ledger
-    ) {
-      throw new Error('browser_host_command_protocol_required')
-    }
-    assertBrowserHostPageCommandAdmission(state.lease, command, (executionHostKey) =>
-      state.executionHostGrants.require(executionHostKey)
-    )
-    return ledger.issue({
-      browserPageId: authority.browserPageId,
-      pageHostGeneration: authority.pageHostGeneration,
-      command
-    })
+    return issueBrowserHostClientPageCommand(authority, command, this.leasesByClientId)
   }
 
   settleClientPageCommand(
@@ -322,7 +313,13 @@ export class BrowserHostLeaseRegistry {
       clearReconnect: (fenced) => this.reconnects.clear(fenced),
       fenceReconciliation: (fenced) => this.pageReconciliations.fence(fenced),
       fenceRoute: (route, routeReason) => this.tunnels.fence(route, routeReason),
-      onClientPageReleased: this.options.onClientPageReleased
+      releaseFencedPage: (retirement) => this.releaseFencedClientPage(retirement)
     })
+  }
+
+  private releaseFencedClientPage(retirement: BrowserPageRetirement): void {
+    if (this.completePageRetirement(retirement) && retirement.placement.kind === 'client') {
+      this.options.onClientPageFenced?.(retirement.browserPageId, retirement.placement)
+    }
   }
 }

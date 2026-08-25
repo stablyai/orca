@@ -83,6 +83,7 @@ function createHarness() {
   const route = {
     key: 'execution-host-a',
     executionHostIdentity: 'execution-host-record-a',
+    legacyExecutionHostIdentity: 'legacy-execution-host-record-a',
     proxyEndpoint: { host: '127.0.0.1' as const, port: 43123 },
     release: vi.fn()
   }
@@ -114,6 +115,7 @@ function createHarness() {
   const dependencies = {
     orcaProfileId: 'orca-profile-a',
     authorityConnectionIdentity: 'authority-record-a',
+    legacyAuthorityConnectionIdentity: 'legacy-authority-record-a',
     storageScope: 'a'.repeat(64),
     retainNetworkRoute: vi.fn(async () => route),
     selectRenderer: vi.fn(() => renderer),
@@ -302,6 +304,25 @@ describe('browser client page reconciliation adapters', () => {
     await expect(executor.handle(command('reclaimPage'), controller.signal)).resolves.toEqual({
       status: 'failed',
       errorCode: 'browser_client_page_command_aborted'
+    })
+
+    expect(routeWebContents.grantReconciledNavigation).not.toHaveBeenCalled()
+    expect(routeWebContents.beginGuestRetirement).toHaveBeenCalledOnce()
+    expect(executor.snapshotPageInventory()).toEqual([])
+  })
+
+  it('destroys a guest rekeyed during an authority transition instead of granting navigation', async () => {
+    const { executor, renderer, routeWebContents } = createHarness()
+    await executor.handle(command('createPage'), new AbortController().signal)
+    renderer.rekeyPage.mockImplementationOnce(async () => {
+      executor.beginAuthorityTransition()
+    })
+
+    await expect(
+      executor.handle(command('reclaimPage'), new AbortController().signal)
+    ).resolves.toEqual({
+      status: 'failed',
+      errorCode: 'browser_client_page_executor_closed'
     })
 
     expect(routeWebContents.grantReconciledNavigation).not.toHaveBeenCalled()

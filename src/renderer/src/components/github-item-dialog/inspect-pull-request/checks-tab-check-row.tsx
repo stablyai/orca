@@ -1,7 +1,7 @@
 import React from 'react'
 import { ChevronDown, CircleDashed } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { CHECK_COLOR, CHECK_ICON } from '@/components/right-sidebar/checks-panel-content'
+import { CHECK_COLOR, CHECK_ICON } from '@/components/right-sidebar/checks-panel/check-presentation'
 import type { CheckDetailsLoadState } from '@/components/github-checks-tab-state'
 import type { PRCheckDetail } from '../../../../../shared/github/check-types'
 import { getCheckConclusion } from '@/components/pr-check-counts'

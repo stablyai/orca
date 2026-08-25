@@ -1,5 +1,9 @@
 import type { BrowserSetAnnotationViewportBridgeArgs } from '../../shared/browser-annotation-viewport-bridge'
 import type {
+  BrowserClientPageMetadataParams,
+  BrowserClientPageMetadataPublishOutcome
+} from '../../shared/browser-client-page-metadata-protocol'
+import type {
   BrowserWebAuthnAccountRequest,
   BrowserWebAuthnAccountResponse
 } from '../../shared/browser-webauthn-account'
@@ -40,6 +44,8 @@ import type {
 } from '../../shared/browser-client-page-renderer-protocol'
 
 export type BrowserApi = {
+  /** Absent wherever this client hosts no guests of its own, which is how the web client reads. */
+  readClientHostId?: () => string | null
   onClientPageRendererRequest?: (
     callback: (
       request: BrowserClientPageRendererRequest
@@ -72,6 +78,11 @@ export type BrowserApi = {
     override: BrowserViewportOverride | null
   }) => Promise<boolean>
   setAnnotationViewportBridge: (args: BrowserSetAnnotationViewportBridgeArgs) => Promise<boolean>
+  /** Publishes a client-hosted page's url/title to its runtime over that runtime's host lease. */
+  publishClientPageMetadata: (args: {
+    environmentId: string
+    params: BrowserClientPageMetadataParams
+  }) => Promise<BrowserClientPageMetadataPublishOutcome>
   onGuestLoadFailed: (
     callback: (args: { browserPageId: string; loadError: BrowserLoadError }) => void
   ) => () => void
@@ -118,6 +129,12 @@ export type BrowserApi = {
     callback: (args: { browserPageId: string; key: 'c' | 's' }) => void
   ) => () => void
   sessionListProfiles: () => Promise<BrowserSessionProfile[]>
+  /** Resolves once the SSH workspace's partition is bound and proxy-verified; the webview must wait for it. */
+  prepareSshWorkspacePartition: (args: {
+    targetId: string
+    browserProfileId?: string
+    skipProbe?: boolean
+  }) => Promise<{ partition: string }>
   sessionCreateProfile: (
     args: {
       scope: BrowserSessionProfileScope
@@ -144,6 +161,10 @@ export type BrowserApi = {
     browserFamily: string
     browserProfile?: string
   }) => Promise<BrowserCookieImportResult | null>
+  /** Import-source badges for one environment's client-hosted jars, keyed by profile id. */
+  sessionClientRouteImportSources: (args: {
+    environmentId: string
+  }) => Promise<Record<string, BrowserSessionProfileSource>>
   sessionClearDefaultCookies: () => Promise<boolean>
   notifyActiveTabChanged: (args: { browserPageId: string }) => Promise<boolean>
 }

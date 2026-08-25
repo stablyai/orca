@@ -66,6 +66,23 @@ export function deriveBrowserRoutePartitionStorageScope(scope: {
   ])
 }
 
+/**
+ * Storage scope for a partition owned by a directly-connected SSH target (no
+ * paired environment). Distinct digest domain from environment scopes, so the
+ * two owner kinds can never collide; removing the SSH target clears it.
+ */
+export function deriveLocalSshBrowserRoutePartitionStorageScope(scope: {
+  orcaProfileId: string
+  targetId: string
+}): string {
+  return digest([
+    'orca-browser-route-partition-scope',
+    PARTITION_IDENTITY_VERSION,
+    ['orca-profile', scope.orcaProfileId],
+    ['local-ssh-target', scope.targetId]
+  ])
+}
+
 export function isBrowserRoutePartition(value: string): boolean {
   return BROWSER_ROUTE_PARTITION_RE.test(value)
 }

@@ -3,6 +3,11 @@ import { contextBridge, ipcRenderer, webFrame, webUtils } from 'electron'
 import { electronAPI } from '@electron-toolkit/preload'
 import { preloadE2EConfig } from './e2e-config'
 import { glApi } from './gitlab'
+import type {
+  SkillDeletePlan,
+  SkillDeleteRequest,
+  SkillDeleteResult
+} from '../shared/skill-delete-contract'
 import type { AppIdentity } from '../shared/app-identity'
 import type { MacCapturedDigitRowChord } from '../shared/macos-symbolic-hotkeys'
 import type { ComputerAwakeStatus } from '../shared/computer-awake-mode'
@@ -167,6 +172,7 @@ import type {
   SkillUpdateRun,
   SkillUpdateStartResult
 } from '../shared/skill-freshness'
+import type { ClientHostedBrowserRowsEvent } from '../shared/client-hosted-browser-rows'
 import type {
   RuntimeBrowserDriverState,
   RuntimeMobileSessionTabMove,
@@ -266,6 +272,7 @@ import {
 } from '../shared/keyboard-layout-events'
 import { createBrowserFindSubscriptions } from './browser-find-subscriptions'
 import { createBrowserClientPageRendererRequests } from './browser-client-page-renderer-requests'
+import { readBrowserClientHostIdArgument } from '../shared/browser-client-host-id-argument'
 import { createUsageProviderApi } from './usage-provider-api'
 import type { AppStarSource } from '../shared/gh-star-source'
 import type { ExecutionHostId } from '../shared/execution-host'
@@ -2633,6 +2640,12 @@ const api = {
       ipcRenderer.invoke('skills:previewBundleInstall', input),
     removeInstall: (input: SkillRemoveInput): Promise<SkillRemoveOperation> =>
       ipcRenderer.invoke('skills:removeInstall', input),
+    // Desktop always registers the delete IPC handlers in its own main process.
+    deleteSupported: (): Promise<boolean> => Promise.resolve(true),
+    previewDelete: (request: SkillDeleteRequest): Promise<SkillDeletePlan> =>
+      ipcRenderer.invoke('skills:previewDelete', request),
+    delete: (request: SkillDeleteRequest): Promise<SkillDeleteResult> =>
+      ipcRenderer.invoke('skills:delete', request),
     listManagedInstalls: (environmentId?: string): Promise<ManagedSkillInstallListOperation> =>
       ipcRenderer.invoke('skills:listManagedInstalls', environmentId),
     getPackage: (packageId: string): Promise<SkillCloudOperation<SkillCloudPackageDetails>> =>
@@ -2681,6 +2694,7 @@ const api = {
 
   browser: {
     onClientPageRendererRequest: browserClientPageRendererRequests.subscribe,
+    readClientHostId: (): string | null => readBrowserClientHostIdArgument(process.argv),
     registerGuest: (args: {
       browserPageId: string
       workspaceId: string
@@ -2736,6 +2750,9 @@ const api = {
 
     setAnnotationViewportBridge: (args): Promise<boolean> =>
       ipcRenderer.invoke('browser:setAnnotationViewportBridge', args),
+
+    publishClientPageMetadata: (args) =>
+      ipcRenderer.invoke('browser:publishClientPageMetadata', args),
 
     onGuestLoadFailed: (
       callback: (args: {
@@ -3005,6 +3022,13 @@ const api = {
     sessionListProfiles: (): Promise<unknown[]> =>
       ipcRenderer.invoke('browser:session:listProfiles'),
 
+    prepareSshWorkspacePartition: (args: {
+      targetId: string
+      browserProfileId?: string
+      skipProbe?: boolean
+    }): Promise<{ partition: string }> =>
+      ipcRenderer.invoke('browser:prepareSshWorkspacePartition', args),
+
     sessionCreateProfile: (args: {
       scope: 'default' | 'isolated' | 'imported'
       label: string
@@ -3046,6 +3070,11 @@ const api = {
     }): Promise<
       { ok: true; profileId: string; summary: unknown } | { ok: false; reason: string } | null
     > => ipcRenderer.invoke('browser:session:importFromBrowserForClientHost', args),
+
+    sessionClientRouteImportSources: (args: {
+      environmentId: string
+    }): Promise<Record<string, unknown>> =>
+      ipcRenderer.invoke('browser:session:clientRouteImportSources', args),
 
     sessionClearDefaultCookies: (): Promise<boolean> =>
       ipcRenderer.invoke('browser:session:clearDefaultCookies'),
@@ -3407,6 +3436,8 @@ const api = {
       connectionId?: string
       excludePaths?: string[]
       requestToken?: string
+      maxResults?: number
+      searchQuery?: string
     }): Promise<string[]> => ipcRenderer.invoke('fs:listFiles', args),
     cancelListFiles: (args: { requestToken: string }): Promise<void> =>
       ipcRenderer.invoke('fs:cancelListFiles', args),
@@ -3798,6 +3829,11 @@ const api = {
       const listener = (_event: Electron.IpcRendererEvent) => callback()
       ipcRenderer.on('ui:openTasks', listener)
       return () => ipcRenderer.removeListener('ui:openTasks', listener)
+    },
+    onToggleAgentDashboard: (callback: () => void): (() => void) => {
+      const listener = (_event: Electron.IpcRendererEvent) => callback()
+      ipcRenderer.on('ui:toggleAgentDashboard', listener)
+      return () => ipcRenderer.removeListener('ui:toggleAgentDashboard', listener)
     },
     onJumpToWorktreeIndex: (callback: (index: number) => void): (() => void) => {
       const listener = (_event: Electron.IpcRendererEvent, index: number) => callback(index)
@@ -4197,6 +4233,17 @@ const api = {
       ipcRenderer.on('ui:closeSessionTab', listener)
       return () => ipcRenderer.removeListener('ui:closeSessionTab', listener)
     },
+    onSessionTabCloseRequest: (callback) => {
+      const listener = (
+        _event: Electron.IpcRendererEvent,
+        request: Parameters<typeof callback>[0]
+      ) => callback(request)
+      ipcRenderer.on('ui:sessionTabCloseRequest', listener)
+      return () => ipcRenderer.removeListener('ui:sessionTabCloseRequest', listener)
+    },
+    respondSessionTabClose: (response) => {
+      ipcRenderer.send('ui:sessionTabCloseResponse', response)
+    },
     onMoveSessionTab: (
       callback: (data: { worktreeId: string } & RuntimeMobileSessionTabMove) => void
     ): (() => void) => {
@@ -4521,6 +4568,10 @@ const api = {
         driver: RuntimeBrowserDriverState
       }[]
     > => ipcRenderer.invoke('runtime:getBrowserDrivers'),
+    getBrowserRemoteViewerPages: (): Promise<string[]> =>
+      ipcRenderer.invoke('runtime:getBrowserRemoteViewerPages'),
+    getClientHostedBrowserRows: (): Promise<ClientHostedBrowserRowsEvent[]> =>
+      ipcRenderer.invoke('runtime:getClientHostedBrowserRows'),
     restoreTerminalFit: (ptyId: string): Promise<{ restored: boolean }> =>
       ipcRenderer.invoke('runtime:restoreTerminalFit', { ptyId }),
     reclaimBrowserForDesktop: (browserPageId: string): Promise<{ reclaimed: boolean }> =>
@@ -4580,6 +4631,27 @@ const api = {
       ) => callback(data)
       ipcRenderer.on('runtime:browserDriverChanged', listener)
       return () => ipcRenderer.removeListener('runtime:browserDriverChanged', listener)
+    },
+    onBrowserRemoteViewersChanged: (
+      callback: (event: { browserPageId: string; hasRemoteViewers: boolean }) => void
+    ): (() => void) => {
+      const listener = (
+        _event: Electron.IpcRendererEvent,
+        data: {
+          browserPageId: string
+          hasRemoteViewers: boolean
+        }
+      ) => callback(data)
+      ipcRenderer.on('runtime:browserRemoteViewersChanged', listener)
+      return () => ipcRenderer.removeListener('runtime:browserRemoteViewersChanged', listener)
+    },
+    onClientHostedBrowserRowsChanged: (
+      callback: (event: ClientHostedBrowserRowsEvent) => void
+    ): (() => void) => {
+      const listener = (_event: Electron.IpcRendererEvent, data: ClientHostedBrowserRowsEvent) =>
+        callback(data)
+      ipcRenderer.on('runtime:clientHostedBrowserRowsChanged', listener)
+      return () => ipcRenderer.removeListener('runtime:clientHostedBrowserRowsChanged', listener)
     }
   },
 
@@ -4908,6 +4980,8 @@ const api = {
       | {
           available: true
           qrDataUrl: string | null
+          /** Natural bitmap width and height in pixels. */
+          qrSize: number | null
           qrError?: 'encoding_failed'
           pairingUrl: string
           /** Null when no direct address was advertised — the QR pairs over Relay alone. */
@@ -5036,12 +5110,18 @@ const api = {
     drop: (paneKey: string): void => {
       ipcRenderer.send('agentStatus:drop', paneKey)
     },
+    reconcileEndedProcess: (paneKey: string): void => {
+      ipcRenderer.send('agentStatus:reconcileEndedProcess', paneKey)
+    },
     /** Drop all cached hook statuses under one terminal tab prefix; fired on explicit tab close even without a local row. */
     dropByTabPrefix: (tabId: string): void => {
       ipcRenderer.send('agentStatus:dropByTabPrefix', tabId)
     },
     retirePaneAuthority: (paneKey: string): void => {
       ipcRenderer.send('agentStatus:retirePaneAuthority', paneKey)
+    },
+    restorePaneAuthority: (paneKey: string): void => {
+      ipcRenderer.send('agentStatus:restorePaneAuthority', paneKey)
     },
     transferPaneAuthority: (args: {
       fromPaneKey: string

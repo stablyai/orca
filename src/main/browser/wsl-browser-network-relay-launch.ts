@@ -1,7 +1,7 @@
-import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process'
+import { spawnProcess } from '../../shared/child-process/run-process'
 import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { app } from 'electron'
+import { getAppEnvironment } from '../../shared/app-environment'
 import {
   WSL_BROWSER_NETWORK_RELAY_BUNDLE_NAME,
   WSL_BROWSER_NETWORK_RELAY_DIR,
@@ -15,6 +15,16 @@ const STARTUP_TIMEOUT_MS = 10_000
 const INSTALL_TIMEOUT_MS = 30_000
 const MAX_STDERR_BYTES = 32 * 1024
 
+/**
+ * The relay child. `spawnProcess` always pipes all three streams, so the non-null
+ * shape is a fact of the chokepoint rather than an assumption about this call.
+ */
+export type WslBrowserNetworkRelayChild = ReturnType<typeof spawnProcess> & {
+  stdin: NonNullable<ReturnType<typeof spawnProcess>['stdin']>
+  stdout: NonNullable<ReturnType<typeof spawnProcess>['stdout']>
+  stderr: NonNullable<ReturnType<typeof spawnProcess>['stderr']>
+}
+
 type WslBrowserNetworkRelayBundle = { jsPath: string; version: string }
 
 export function resolveWslBrowserNetworkRelayBundle(): WslBrowserNetworkRelayBundle | null {
@@ -27,11 +37,11 @@ export function resolveWslBrowserNetworkRelayBundle(): WslBrowserNetworkRelayBun
     candidates.push(join(process.resourcesPath, 'app.asar.unpacked', 'out', 'relay', 'wsl'))
   }
   try {
-    const appPath = app.getAppPath()
+    const appPath = getAppEnvironment().getAppPath()
     candidates.push(join(appPath, 'resources', 'relay', 'wsl'))
     candidates.push(join(appPath, 'out', 'relay', 'wsl'))
   } catch {
-    // Tests and early startup may not have an Electron app path yet.
+    // Tests, early startup and plain-Node hosts have no app path — env/resources candidates suffice.
   }
   for (const dir of candidates) {
     const jsPath = join(dir, WSL_BROWSER_NETWORK_RELAY_BUNDLE_NAME)
@@ -102,7 +112,7 @@ export function buildWslBrowserNetworkGuestInstallScript(bundle: Buffer, version
 export async function launchWslBrowserNetworkRelay(
   distro: string,
   signal: AbortSignal
-): Promise<ChildProcessWithoutNullStreams> {
+): Promise<WslBrowserNetworkRelayChild> {
   const bundle = resolveWslBrowserNetworkRelayBundle()
   if (!bundle || signal.aborted) {
     throw new Error('browser_tunnel_execution_host_unavailable')
@@ -131,17 +141,17 @@ async function startWslBrowserNetworkRelay(
   distro: string,
   version: string,
   signal: AbortSignal
-): Promise<{ child?: ChildProcessWithoutNullStreams; code?: number | null }> {
+): Promise<{ child?: WslBrowserNetworkRelayChild; code?: number | null }> {
   const command = `exec sh "${guestRelayDir(version)}/launch.sh"`
-  const child = spawn('wsl.exe', ['-d', distro, '--exec', 'sh', '-c', command], {
-    env: { ...process.env, WSL_UTF8: '1' },
-    stdio: ['pipe', 'pipe', 'pipe'],
-    windowsHide: true
-  })
+  const child = spawnProcess({
+    program: 'wsl.exe',
+    args: ['-d', distro, '--exec', 'sh', '-c', command],
+    env: { ...process.env, WSL_UTF8: '1' }
+  }) as WslBrowserNetworkRelayChild
   return new Promise((resolve) => {
     let settled = false
     let stderr = ''
-    const settle = (result: { child?: ChildProcessWithoutNullStreams; code?: number | null }) => {
+    const settle = (result: { child?: WslBrowserNetworkRelayChild; code?: number | null }) => {
       if (settled) {
         return
       }
@@ -172,11 +182,11 @@ function installWslBrowserNetworkRelay(
   bundle: WslBrowserNetworkRelayBundle,
   signal: AbortSignal
 ): Promise<boolean> {
-  const child = spawn('wsl.exe', ['-d', distro, '--exec', 'sh', '-s'], {
-    env: { ...process.env, WSL_UTF8: '1' },
-    stdio: ['pipe', 'pipe', 'pipe'],
-    windowsHide: true
-  })
+  const child = spawnProcess({
+    program: 'wsl.exe',
+    args: ['-d', distro, '--exec', 'sh', '-s'],
+    env: { ...process.env, WSL_UTF8: '1' }
+  }) as WslBrowserNetworkRelayChild
   return new Promise((resolve) => {
     let settled = false
     const settle = (installed: boolean): void => {

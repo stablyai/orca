@@ -1,4 +1,5 @@
 import type { BrowserTab as BrowserTabState } from '../../../../shared/browser-workspace-types'
+import type { ClientHostedBrowserRow } from '../../../../shared/client-hosted-browser-rows'
 import type { WorkspaceVisibleTabType } from '../../../../shared/tab-types'
 import type { TerminalTab } from '../../../../shared/terminal-tab-types'
 import type { OpenFile } from '../../store/slices/editor'
@@ -32,6 +33,10 @@ export type TabBarProps = {
   onTogglePaneExpand: (tabId: string) => void
   editorFiles?: (OpenFile & { tabId?: string })[]
   browserTabs?: (BrowserTabState & { tabId?: string })[]
+  /** Pages rendering on a paired client. Appended after the real tabs; never part of tab order. */
+  clientHostedBrowserRows?: readonly ClientHostedBrowserRow[]
+  /** The group's own active tab at render time; a client-hosted selection dies when it moves. */
+  groupActiveTabId?: string | null
   activeFileId?: string | null
   activeBrowserTabId?: string | null
   activeSimulatorTabId?: string | null

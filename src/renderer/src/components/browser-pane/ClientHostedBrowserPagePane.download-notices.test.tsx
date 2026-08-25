@@ -12,40 +12,27 @@ vi.mock('sonner', () => ({ toast: toastMocks }))
 
 import type {
   BrowserDownloadFinishedEvent,
+  BrowserDownloadProgressEvent,
   BrowserDownloadRequestedEvent
 } from '../../../../shared/browser-guest-events'
+import { TooltipProvider } from '@/components/ui/tooltip'
+import { installClientHostedPaneApi, paneChannel } from './client-hosted-browser-pane-test-rig'
 import { ClientHostedBrowserPagePane } from './ClientHostedBrowserPagePane'
 
-type Listeners = {
-  requested: ((event: BrowserDownloadRequestedEvent) => void)[]
-  finished: ((event: BrowserDownloadFinishedEvent) => void)[]
-}
-
-const listeners: Listeners = { requested: [], finished: [] }
+let requested = paneChannel<BrowserDownloadRequestedEvent>()
+let progress = paneChannel<BrowserDownloadProgressEvent>()
+let finished = paneChannel<BrowserDownloadFinishedEvent>()
 
 beforeEach(() => {
-  listeners.requested = []
-  listeners.finished = []
+  requested = paneChannel<BrowserDownloadRequestedEvent>()
+  progress = paneChannel<BrowserDownloadProgressEvent>()
+  finished = paneChannel<BrowserDownloadFinishedEvent>()
   // Only the preload boundary is faked: the pane subscribes through the real window.api surface.
-  Object.defineProperty(window, 'api', {
-    configurable: true,
-    value: {
-      browser: {
-        onDownloadRequested: (callback: (event: BrowserDownloadRequestedEvent) => void) => {
-          listeners.requested.push(callback)
-          return () => {
-            listeners.requested = listeners.requested.filter((entry) => entry !== callback)
-          }
-        },
-        onDownloadFinished: (callback: (event: BrowserDownloadFinishedEvent) => void) => {
-          listeners.finished.push(callback)
-          return () => {
-            listeners.finished = listeners.finished.filter((entry) => entry !== callback)
-          }
-        },
-        onPopup: () => () => {}
-      },
-      runtimeEnvironments: { call: vi.fn(async () => ({})) }
+  installClientHostedPaneApi({
+    browser: {
+      onDownloadRequested: requested.subscribe,
+      onDownloadProgress: progress.subscribe,
+      onDownloadFinished: finished.subscribe
     }
   })
 })
@@ -57,29 +44,33 @@ afterEach(() => {
 
 function renderPane(browserPageId = 'page-a'): void {
   render(
-    <ClientHostedBrowserPagePane
-      browserTab={
-        {
-          id: browserPageId,
-          url: 'https://example.internal/reports',
-          title: 'Reports',
-          loading: false,
-          canGoBack: false,
-          canGoForward: false
-        } as never
-      }
-      runtimeEnvironmentId="environment-a"
-      worktreeId="worktree-a"
-      placement={{
-        kind: 'client',
-        browserHostClientId: 'client-a',
-        browserHostGeneration: 3,
-        pageHostGeneration: 7
-      }}
-      isActive
-      onUpdatePageState={vi.fn()}
-      onSetUrl={vi.fn()}
-    />
+    <TooltipProvider>
+      <ClientHostedBrowserPagePane
+        browserTab={
+          {
+            id: browserPageId,
+            url: 'https://example.internal/reports',
+            title: 'Reports',
+            loading: false,
+            canGoBack: false,
+            canGoForward: false
+          } as never
+        }
+        workspaceId="workspace-a"
+        chromeShortcutScope="focused"
+        runtimeEnvironmentId="environment-a"
+        worktreeId="worktree-a"
+        placement={{
+          kind: 'client',
+          browserHostClientId: 'client-a',
+          browserHostGeneration: 3,
+          pageHostGeneration: 7
+        }}
+        isActive
+        onUpdatePageState={vi.fn()}
+        onSetUrl={vi.fn()}
+      />
+    </TooltipProvider>
   )
 }
 
@@ -95,11 +86,7 @@ function emitRequested(overrides: Partial<BrowserDownloadRequestedEvent> = {}): 
     status: 'downloading',
     ...overrides
   } as BrowserDownloadRequestedEvent
-  act(() => {
-    for (const listener of listeners.requested) {
-      listener(event)
-    }
-  })
+  act(() => requested.emit(event))
 }
 
 function emitFinished(overrides: Partial<BrowserDownloadFinishedEvent> = {}): void {
@@ -111,19 +98,26 @@ function emitFinished(overrides: Partial<BrowserDownloadFinishedEvent> = {}): vo
     error: null,
     ...overrides
   } as BrowserDownloadFinishedEvent
-  act(() => {
-    for (const listener of listeners.finished) {
-      listener(event)
-    }
-  })
+  act(() => finished.emit(event))
+}
+
+function emitProgress(overrides: Partial<BrowserDownloadProgressEvent> = {}): void {
+  const event = {
+    downloadId: 'download-1',
+    receivedBytes: 2_202_009,
+    totalBytes: 8_388_608,
+    state: 'progressing',
+    ...overrides
+  } as BrowserDownloadProgressEvent
+  act(() => progress.emit(event))
 }
 
 describe('ClientHostedBrowserPagePane download notices', () => {
   it('subscribes to the download lifecycle for the page it renders', () => {
     renderPane()
 
-    expect(listeners.requested).toHaveLength(1)
-    expect(listeners.finished).toHaveLength(1)
+    expect(requested.listenerCount()).toBe(1)
+    expect(finished.listenerCount()).toBe(1)
   })
 
   it('names the remote workspace destination when the download lands there', () => {
@@ -181,5 +175,40 @@ describe('ClientHostedBrowserPagePane download notices', () => {
 
     expect(toastMocks.loading).not.toHaveBeenCalled()
     expect(toastMocks.success).not.toHaveBeenCalled()
+  })
+
+  // Why: bytes for a client-hosted page land on the remote workspace, so this toast is the only
+  // place a long download shows any movement at all.
+  it('moves the toast forward as bytes arrive', () => {
+    renderPane()
+    emitRequested()
+    toastMocks.loading.mockClear()
+
+    emitProgress()
+
+    expect(toastMocks.loading).toHaveBeenCalledWith('Downloading report.pdf… 2.1 MB / 8.0 MB', {
+      id: 'browser-download:download-1'
+    })
+  })
+
+  it('keeps the plain line when the server never reported a size', () => {
+    renderPane()
+    emitRequested()
+    toastMocks.loading.mockClear()
+
+    emitProgress({ totalBytes: null })
+
+    expect(toastMocks.loading).toHaveBeenCalledWith('Downloading report.pdf… 2.1 MB', {
+      id: 'browser-download:download-1'
+    })
+  })
+
+  it('ignores progress for a download this pane never started', () => {
+    renderPane()
+    toastMocks.loading.mockClear()
+
+    emitProgress()
+
+    expect(toastMocks.loading).not.toHaveBeenCalled()
   })
 })

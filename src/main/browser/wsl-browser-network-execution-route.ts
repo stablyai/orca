@@ -1,4 +1,4 @@
-import type { ChildProcessWithoutNullStreams } from 'node:child_process'
+import type { WslBrowserNetworkRelayChild } from './wsl-browser-network-relay-launch'
 import {
   BrowserNetworkTunnelStreamFrameDecoder,
   BrowserNetworkTunnelStreamFrameWriter
@@ -12,7 +12,7 @@ import {
 } from './browser-network-execution-route'
 
 type WslBrowserNetworkExecutionRouteDependencies = {
-  launchRelay?: (distro: string, signal: AbortSignal) => Promise<ChildProcessWithoutNullStreams>
+  launchRelay?: (distro: string, signal: AbortSignal) => Promise<WslBrowserNetworkRelayChild>
 }
 
 export async function resolveWslBrowserNetworkExecutionRoute(
@@ -36,7 +36,7 @@ export async function resolveWslBrowserNetworkExecutionRoute(
   const launchRelay =
     dependencies.launchRelay ??
     (await import('./wsl-browser-network-relay-launch')).launchWslBrowserNetworkRelay
-  let child: ChildProcessWithoutNullStreams
+  let child: WslBrowserNetworkRelayChild
   try {
     child = await launchRelay(host.distro, routeAbort.signal)
   } catch (error) {

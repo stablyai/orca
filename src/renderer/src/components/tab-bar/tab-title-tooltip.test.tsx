@@ -112,7 +112,7 @@ vi.mock('@/store/selectors', () => ({
   useWorktreeById: () => ({ path: '/repo', repoId: 'repo-1' })
 }))
 
-vi.mock('../browser-pane/browser-runtime', () => ({
+vi.mock('../browser-pane/describe-page/live-browser-url-registry', () => ({
   getLiveBrowserUrl: () => 'https://live.example/not-the-tab-label'
 }))
 

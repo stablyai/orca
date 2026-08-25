@@ -4,13 +4,14 @@ import {
   type BrowserClientHostCommandResult as BrowserClientHostCommandResultType,
   type BrowserClientHostLeaseAuthority
 } from '../../shared/browser-client-host-protocol'
-import { RemoteRuntimeClientError } from '../../shared/remote-runtime-client-error'
+import { BROWSER_CLIENT_PAGE_METADATA_METHOD } from '../../shared/browser-client-page-metadata-protocol'
 import { assertBrowserClientHostAttachOptions } from './browser-client-host-attach-request'
 import {
   BrowserHostReconnectDelay,
   resolveBrowserHostReconnectDelay
 } from './browser-host-lease-reconnect-delay'
 import { reconnectBrowserHostLeaseUntil } from './browser-host-lease-reconnect-attempts'
+import { requireBrowserHostLeaseSendRequest } from './browser-host-lease-request-sender'
 import { submitBrowserHostCommandResult } from './browser-host-command-result-submission'
 import {
   BrowserHostCommandResultSettler,
@@ -75,15 +76,20 @@ export class PairedRuntimeBrowserHostLease {
     return !this.closed && this.fileChannelActive
   }
 
+  /** Unversioned, unlike the file channel: an older runtime answers with a reportable error. */
+  sendPageMetadataRequest(params: unknown, timeoutMs: number) {
+    // Closing drops the connection in the same turn, so its absence is what "closed" means here.
+    return requireBrowserHostLeaseSendRequest(
+      this.connection?.sendRequest,
+      'Remote runtime browser host lease is unavailable.'
+    )(BROWSER_CLIENT_PAGE_METADATA_METHOD, params, timeoutMs)
+  }
+
   sendFileChannelRequest(method: string, params: unknown, timeoutMs: number) {
-    const sendRequest = this.fileChannelNegotiated ? this.connection?.sendRequest : undefined
-    if (!sendRequest) {
-      throw new RemoteRuntimeClientError(
-        'remote_runtime_unavailable',
-        'Remote runtime browser file channel is unavailable.'
-      )
-    }
-    return sendRequest(method, params, timeoutMs)
+    return requireBrowserHostLeaseSendRequest(
+      this.fileChannelNegotiated ? this.connection?.sendRequest : undefined,
+      'Remote runtime browser file channel is unavailable.'
+    )(method, params, timeoutMs)
   }
 
   refreshPageInventory(): Promise<void> {
@@ -275,15 +281,11 @@ export class PairedRuntimeBrowserHostLease {
     if (this.closed) {
       return
     }
-    const sendRequest = this.connection?.sendRequest
-    if (!sendRequest) {
-      throw new RemoteRuntimeClientError(
-        'remote_runtime_unavailable',
-        'Remote runtime browser host command result transport is unavailable.'
-      )
-    }
     await submitBrowserHostCommandResult(
-      sendRequest,
+      requireBrowserHostLeaseSendRequest(
+        this.connection?.sendRequest,
+        'Remote runtime browser host command result transport is unavailable.'
+      ),
       command,
       candidate,
       this.options.timeoutMs ?? 15_000

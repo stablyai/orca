@@ -3,10 +3,9 @@ import { useAppStore } from '@/store'
 import { getWorktreeIdsWithLiveAgent } from '@/lib/worktree-activity-state'
 import type { AppState } from '@/store/types'
 import type { Repo } from '../../../../../../shared/repo-types'
-import type { Worktree } from '../../../../../../shared/worktree/types'
 import type { WorktreeLineage } from '../../../../../../shared/worktree/lineage-types'
 import { getSettingsFocusedExecutionHostId } from '../../../../../../shared/execution-host'
-import { computeVisibleWorktreeIds } from '../../visible-worktrees'
+import { computeVisibleWorktrees } from '../../visible-worktrees'
 import {
   EMPTY_PAIRED_DEVICE_IDS_BY_ENVIRONMENT,
   getPairedDeviceIdsByEnvironment
@@ -28,13 +27,11 @@ export function useVisibleSidebarWorktrees(args: {
   sortBy: SortBy
   sortedIds: string[]
   repoMap: Map<string, Repo>
-  worktreeMap: Map<string, Worktree>
   worktreeLineageById: Record<string, WorktreeLineage>
   settings: AppState['settings']
   agentSendTargetWorktreeId: string | null
 }) {
-  const { filterState, sortBy, sortedIds, repoMap, worktreeMap, worktreeLineageById, settings } =
-    args
+  const { filterState, sortBy, sortedIds, repoMap, worktreeLineageById, settings } = args
   const {
     showSleepingWorkspaces,
     filterRepoIds,
@@ -71,7 +68,7 @@ export function useVisibleSidebarWorktrees(args: {
 
   const recomputedVisibleWorktrees = useMemo(() => {
     void agentStatusEpoch
-    const ids = computeVisibleWorktreeIds(worktreesByRepo, sortedIds, {
+    return computeVisibleWorktrees(worktreesByRepo, sortedIds, {
       filterRepoIds,
       showSleepingWorkspaces,
       tabsByWorktree,
@@ -101,7 +98,6 @@ export function useVisibleSidebarWorktrees(args: {
         ? [args.agentSendTargetWorktreeId]
         : undefined
     })
-    return ids.map((id) => worktreeMap.get(id)).filter((w): w is Worktree => w != null)
   }, [
     args.agentSendTargetWorktreeId,
     agentStatusEpoch,
@@ -121,7 +117,6 @@ export function useVisibleSidebarWorktrees(args: {
     ptyIdsByTabId,
     browserTabsByWorktree,
     sortedIds,
-    worktreeMap,
     worktreeLineageById,
     worktreesByRepo,
     pairedDeviceIdsByEnvironment

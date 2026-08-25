@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { buildManagedWorktreeCreateArgs } from './worktree-create-args'
-import { WorktreeCreate } from './worktree-schemas'
+import { WorktreeCreate } from './worktree-create-schemas'
 
 const PROVENANCE = {
   automationProvenance: undefined,

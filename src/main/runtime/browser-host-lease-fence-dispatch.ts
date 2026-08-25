@@ -1,7 +1,10 @@
 import type { BrowserHostFenceReason } from './browser-host-lease-fence'
 import { fenceBrowserHostLease } from './browser-host-lease-fencing'
 import type { BrowserHostLeaseState, BrowserHostRouteState } from './browser-host-lease-records'
-import type { BrowserHostPagePlacementRegistry } from './browser-host-page-placement'
+import type {
+  BrowserHostPagePlacementRegistry,
+  BrowserPageRetirement
+} from './browser-host-page-placement'
 
 type BrowserHostLeaseFenceDependencies = {
   leasesByClientId: Map<string, BrowserHostLeaseState>
@@ -9,7 +12,7 @@ type BrowserHostLeaseFenceDependencies = {
   clearReconnect(state: BrowserHostLeaseState): void
   fenceReconciliation(state: BrowserHostLeaseState): void
   fenceRoute(route: BrowserHostRouteState, reason: BrowserHostFenceReason): void
-  onClientPageReleased?: (browserPageId: string) => void
+  releaseFencedPage(retirement: BrowserPageRetirement): void
 }
 
 /** Retires one lease: its reconnect timer, reconciliation, pages, routes, and per-page state. */
@@ -30,9 +33,19 @@ export function dispatchBrowserHostLeaseFence(
   fenceBrowserHostLease(state, reason, dependencies.leasesByClientId, (route, routeReason) =>
     dependencies.fenceRoute(route, routeReason)
   )
-  // Why: a fenced page never completes retirement through the client, so release its runtime-side
-  // state here or it stays stranded for the life of the runtime.
-  for (const browserPageId of fencedPages) {
-    dependencies.onClientPageReleased?.(browserPageId)
+  // Why: a fenced page never completes retirement through the client, so complete it here or the
+  // placement and its capacity stay stranded for the runtime's life. The runtime page record is
+  // deliberately kept — retention is what lets a returning host of the same identity recover the
+  // tab — see retainRuntimeBrowserClientPageRecord for what that costs.
+  for (const retirement of fencedPages) {
+    try {
+      dependencies.releaseFencedPage(retirement)
+    } catch (error) {
+      // One page's release must not abandon the rest of a lease already past the point of return.
+      console.warn('[browser-host-lease] fenced page release failed:', {
+        browserPageId: retirement.browserPageId,
+        error
+      })
+    }
   }
 }

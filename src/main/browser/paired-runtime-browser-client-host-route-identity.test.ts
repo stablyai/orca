@@ -23,6 +23,10 @@ vi.mock('./paired-runtime-browser-client-host-composition', () => ({
       return Promise.resolve({ authority: 'lease-a' })
     }
 
+    replaceAuthority(): Promise<unknown> {
+      return Promise.resolve({ authority: 'lease-a' })
+    }
+
     close(error?: Error): Promise<boolean> {
       if (error) {
         this.record.closed.push(error)
@@ -42,7 +46,10 @@ import {
   startPairedRuntimeBrowserClientHost
 } from './paired-runtime-browser-client-host-runtime'
 
-function pairedEnvironment(id: string): KnownRuntimeEnvironment {
+function pairedEnvironment(
+  id: string,
+  overrides: { pairingRevision?: number; publicKeyB64?: string } = {}
+): KnownRuntimeEnvironment {
   return {
     id,
     name: `Environment ${id}`,
@@ -50,20 +57,75 @@ function pairedEnvironment(id: string): KnownRuntimeEnvironment {
     updatedAt: 1,
     lastUsedAt: null,
     runtimeId: null,
+    ...(overrides.pairingRevision === undefined
+      ? {}
+      : { pairingRevision: overrides.pairingRevision }),
     preferredEndpointId: 'endpoint-a',
     endpoints: [
       {
         id: 'endpoint-a',
         endpoint: 'ws://127.0.0.1:9999',
         deviceToken: 'token-a',
-        publicKeyB64: 'key-a'
+        publicKeyB64: overrides.publicKeyB64 ?? 'key-a'
       }
     ]
   } as KnownRuntimeEnvironment
 }
 
+/** Authority identity the client host records for `environment` under `authorityRuntimeId`. */
+async function connectionIdentity(
+  environment: KnownRuntimeEnvironment,
+  authorityRuntimeId: string
+): Promise<{ current: string; legacy: string }> {
+  await startPairedRuntimeBrowserClientHost({ environment, authorityRuntimeId })
+  const identity = getPairedRuntimeBrowserClientRouteIdentity(environment.id)
+  if (!identity) {
+    throw new Error('missing route identity')
+  }
+  return {
+    current: identity.authorityConnectionIdentity,
+    legacy: identity.legacyAuthorityConnectionIdentity
+  }
+}
+
 beforeEach(() => {
   compositions.length = 0
+})
+
+describe('client host authority connection identity', () => {
+  // Why: authorityRuntimeId is a per-process UUID. Hashing it into the current identity is the
+  // regression that minted a fresh partition on every remote restart and logged the user out.
+  it('survives the remote restarting, and keeps the pre-migration identity distinct', async () => {
+    configurePairedRuntimeBrowserClientHostsForOrcaProfile({ orcaProfileId: 'profile-a' })
+    const environment = pairedEnvironment('environment-restart')
+
+    const before = await connectionIdentity(environment, 'runtime-a')
+    const after = await connectionIdentity(environment, 'runtime-restarted')
+
+    expect(after.current).toBe(before.current)
+    expect(after.legacy).not.toBe(before.legacy)
+    expect(before.legacy).not.toBe(before.current)
+  })
+
+  // Why: each of these names a different server or a different trust decision, so sharing an
+  // identity would serve one of them the other's cookies.
+  it('separates environments, pairing revisions, and server keys', async () => {
+    configurePairedRuntimeBrowserClientHostsForOrcaProfile({ orcaProfileId: 'profile-a' })
+    const identities = [
+      await connectionIdentity(pairedEnvironment('environment-a'), 'runtime-a'),
+      await connectionIdentity(pairedEnvironment('environment-b'), 'runtime-a'),
+      await connectionIdentity(
+        pairedEnvironment('environment-a', { pairingRevision: 2 }),
+        'runtime-a'
+      ),
+      await connectionIdentity(
+        pairedEnvironment('environment-a', { publicKeyB64: 'key-rotated' }),
+        'runtime-a'
+      )
+    ]
+
+    expect(new Set(identities.map((entry) => entry.current)).size).toBe(identities.length)
+  })
 })
 
 describe('client host route identity lifetime', () => {

@@ -26,8 +26,10 @@ import type { BrowserRouteSessionHandle } from './browser-route-session-state'
 type BrowserClientPageCreationDependencies = {
   orcaProfileId: string
   authorityConnectionIdentity: string
+  legacyAuthorityConnectionIdentity: string
   storageScope: string
   retainNetworkRoute(executionHostKey: string, signal: AbortSignal): Promise<RetainedNetworkRoute>
+  retireSupersededExecutionHostPages(route: RetainedNetworkRoute): Promise<void>
   selectRenderer(): BrowserClientPageRenderer
   routeSessions: Pick<BrowserRouteSessionRegistry, 'preparePage'>
   routeWebContents: BrowserClientPageLifecycleRegistry
@@ -57,6 +59,9 @@ export async function createReservedBrowserClientPage(
     if (route.key !== event.command.executionHostKey) {
       throw new BrowserClientPageCommandError('browser_client_page_execution_host_stale')
     }
+    // The started route proves this generation is current, so any page still holding an older key
+    // for the same host owns a fenced tunnel and the partition's previous proxy endpoint.
+    await dependencies.retireSupersededExecutionHostPages(route)
     assertBrowserClientPageCommandNotAborted(signal)
     assertAvailable()
     renderer = dependencies.selectRenderer()
@@ -67,6 +72,12 @@ export async function createReservedBrowserClientPage(
         browserProfileId: event.command.browserProfileId,
         authorityConnectionIdentity: dependencies.authorityConnectionIdentity,
         executionHostIdentity: route.executionHostIdentity
+      },
+      legacyIdentity: {
+        orcaProfileId: dependencies.orcaProfileId,
+        browserProfileId: event.command.browserProfileId,
+        authorityConnectionIdentity: dependencies.legacyAuthorityConnectionIdentity,
+        executionHostIdentity: route.legacyExecutionHostIdentity
       },
       storageScope: dependencies.storageScope,
       browserPageId: event.browserPageId,

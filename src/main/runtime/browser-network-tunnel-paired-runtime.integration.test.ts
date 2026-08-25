@@ -160,7 +160,7 @@ describe('paired runtime browser network tunnel', () => {
     }
     const grant = registry.grantExecutionHost(identity, 'native:integration')
     resources.push(grant.release)
-    const result = await registry.reconcileClientPages(identity, [
+    const adopted = await registry.adoptClientPages(identity, [
       {
         authorityRuntimeId: attached.authorityRuntimeId,
         authorityEpoch: attached.authorityEpoch,
@@ -174,7 +174,7 @@ describe('paired runtime browser network tunnel', () => {
       }
     ])
 
-    expect(result).toMatchObject({ reclaimed: 1 })
+    expect(adopted).toEqual([oldPage.browserPageId])
     expect(onPageCommand).toHaveBeenCalledWith(
       expect.objectContaining({ command: expect.objectContaining({ type: 'reclaimPage' }) })
     )

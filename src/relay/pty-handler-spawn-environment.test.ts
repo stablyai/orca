@@ -1,12 +1,14 @@
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest'
 import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs'
-import { tmpdir } from 'node:os'
+import { homedir, tmpdir } from 'node:os'
 import { join } from 'node:path'
 import {
   resolveSetupAgentSequenceLaunchCommand,
   SETUP_AGENT_SEQUENCE_STARTUP_COMMAND_ENV
 } from '../shared/setup-agent-sequencing'
 import { stripLegacyTerminalShimEnv } from '../main/pty/legacy-terminal-shim-dir'
+import { fishHistorySessionName, relayFishHistorySessionName } from '../main/fish-history-session'
+import { hashWorktreeId } from '../main/terminal-history-id'
 
 const { mockPtySpawn, mockPtyInstance, mockCreateShellPromptReadinessProbe } = vi.hoisted(() => ({
   mockPtySpawn: vi.fn(),
@@ -87,6 +89,84 @@ describe('PtyHandler', () => {
     expect(spawnOptions.env.PATH).toBe(expectedEnv.PATH)
   })
 
+  describe('half-activated conda env (#14195)', () => {
+    const CONDA_KEYS = [
+      'CONDA_SHLVL',
+      'CONDA_PREFIX',
+      'CONDA_DEFAULT_ENV',
+      'CONDA_PROMPT_MODIFIER',
+      'CONDA_EXE'
+    ] as const
+
+    const withRelayCondaEnv = async (
+      relayEnv: Partial<Record<(typeof CONDA_KEYS)[number], string>>,
+      spawnParams: Record<string, unknown>
+    ): Promise<Record<string, string>> => {
+      const saved = Object.fromEntries(CONDA_KEYS.map((key) => [key, process.env[key]]))
+      try {
+        for (const key of CONDA_KEYS) {
+          delete process.env[key]
+        }
+        Object.assign(process.env, relayEnv)
+        await dispatcher.callRequest('pty.spawn', { cols: 80, rows: 24, ...spawnParams })
+      } finally {
+        for (const key of CONDA_KEYS) {
+          const value = saved[key]
+          if (value === undefined) {
+            delete process.env[key]
+          } else {
+            process.env[key] = value
+          }
+        }
+      }
+      return (mockPtySpawn.mock.calls.at(-1)![2] as { env: Record<string, string> }).env
+    }
+
+    it('drops the sentinel the remote relay inherited without a prefix', async () => {
+      // Why the relay owns this: the execution host composes its own env, so a
+      // remote relay launched from a half-activated login shell would otherwise
+      // hand the broken pair to every SSH terminal.
+      const env = await withRelayCondaEnv(
+        {
+          CONDA_SHLVL: '1',
+          CONDA_DEFAULT_ENV: 'base',
+          CONDA_PROMPT_MODIFIER: '(base) ',
+          CONDA_EXE: '/opt/miniconda3/bin/conda'
+        },
+        {}
+      )
+
+      expect(env.CONDA_SHLVL).toBeUndefined()
+      expect(env.CONDA_DEFAULT_ENV).toBeUndefined()
+      expect(env.CONDA_PROMPT_MODIFIER).toBeUndefined()
+      expect(env.CONDA_EXE).toBe('/opt/miniconda3/bin/conda')
+    })
+
+    it('keeps activation state a client explicitly repaired', async () => {
+      const env = await withRelayCondaEnv(
+        { CONDA_SHLVL: '1', CONDA_DEFAULT_ENV: 'base' },
+        { env: { CONDA_PREFIX: '/opt/miniconda3' } }
+      )
+
+      expect(env.CONDA_PREFIX).toBe('/opt/miniconda3')
+      expect(env.CONDA_SHLVL).toBe('1')
+      expect(env.CONDA_DEFAULT_ENV).toBe('base')
+    })
+
+    it('drops the sentinel when the client deletes CONDA_PREFIX', async () => {
+      // Why: the relay's other inherited-env scrubbers run BEFORE envToDelete,
+      // so anchoring the coherence pass beside them would re-create the crash.
+      const env = await withRelayCondaEnv(
+        { CONDA_SHLVL: '1', CONDA_PREFIX: '/opt/miniconda3', CONDA_DEFAULT_ENV: 'base' },
+        { envToDelete: ['CONDA_PREFIX'] }
+      )
+
+      expect(env.CONDA_PREFIX).toBeUndefined()
+      expect(env.CONDA_SHLVL).toBeUndefined()
+      expect(env.CONDA_DEFAULT_ENV).toBeUndefined()
+    })
+  })
+
   it('does not inherit legacy attribution state from the relay process', async () => {
     const keys = ['ORCA_ENABLE_GIT_ATTRIBUTION', 'ORCA_ATTRIBUTION_SHIM_DIR', 'PATH'] as const
     const saved = Object.fromEntries(keys.map((key) => [key, process.env[key]]))
@@ -154,6 +234,187 @@ describe('PtyHandler', () => {
 
     const spawnOptions = mockPtySpawn.mock.calls[0][2] as { env: Record<string, string> }
     expect(spawnOptions.env.NODE_ENV).toBe('production')
+  })
+
+  describe('history isolation off', () => {
+    // Why isolation OFF: injectRelayFishHistoryEnv runs only for a fish pane with
+    // isolation on, but fish EXPORTS fish_history, so a relay launched from an Orca
+    // fish pane inherits one on EVERY path — and it names someone else's worktree
+    // (a desktop-minted name names a directory that does not exist here at all).
+    it.each([
+      [
+        'a relay-minted session',
+        relayFishHistorySessionName(hashWorktreeId('r::/other')),
+        undefined
+      ],
+      ['a desktop-minted session', fishHistorySessionName(hashWorktreeId('r::/other')), undefined],
+      ['a user value', 'mine', 'mine']
+    ])('%s inherited from the relay process env', async (_kind, inherited, expected) => {
+      const previous = process.env.fish_history
+      process.env.fish_history = inherited
+      try {
+        await dispatcher.callRequest('pty.spawn', { cols: 80, rows: 24 })
+      } finally {
+        if (previous === undefined) {
+          delete process.env.fish_history
+        } else {
+          process.env.fish_history = previous
+        }
+      }
+
+      const spawnEnv = mockPtySpawn.mock.calls.at(-1)?.[2]?.env as Record<string, string>
+      expect(spawnEnv.fish_history).toBe(expected)
+    })
+
+    it.each([
+      [
+        'a relay-minted path',
+        `${process.env.HOME ?? ''}/.orca-remote/terminal-history/aabbccddeeff0011-zsh_history`,
+        undefined
+      ],
+      [
+        'a desktop-minted path',
+        '/fake/userData/terminal-history/aabbccddeeff0011/zsh_history',
+        undefined
+      ],
+      ['a user value', '/home/me/.zsh_history', '/home/me/.zsh_history']
+    ])(
+      '%s inherited as HISTFILE from the relay process env',
+      async (_kind, inherited, expected) => {
+        const previous = process.env.HISTFILE
+        process.env.HISTFILE = inherited
+        try {
+          await dispatcher.callRequest('pty.spawn', { cols: 80, rows: 24 })
+        } finally {
+          if (previous === undefined) {
+            delete process.env.HISTFILE
+          } else {
+            process.env.HISTFILE = previous
+          }
+        }
+
+        const spawnEnv = mockPtySpawn.mock.calls.at(-1)?.[2]?.env as Record<string, string>
+        expect(spawnEnv.HISTFILE).toBe(expected)
+      }
+    )
+
+    // Why unconditionally, not only with isolation on: injectRelayHistoryEnv is
+    // what normally mints (and first clears) ORCA_HISTFILE, and it runs only
+    // with isolation on. An inherited one — the relay can be launched from an
+    // Orca pane — would otherwise reach the remote wrapper on the disabled and
+    // revive paths, re-exporting another worktree's history path (#11146) and
+    // wrapping a zsh pane nothing asked to wrap.
+    it.each([
+      [
+        'a relay-minted path',
+        `${process.env.HOME ?? ''}/.orca-remote/terminal-history/aabbccddeeff0011-zsh_history`
+      ],
+      ['a desktop-minted path', '/fake/userData/terminal-history/aabbccddeeff0011/zsh_history'],
+      ['a user value', '/home/me/.zsh_history']
+    ])(
+      'drops %s inherited as ORCA_HISTFILE from the relay process env',
+      async (_kind, inherited) => {
+        const previous = process.env.ORCA_HISTFILE
+        process.env.ORCA_HISTFILE = inherited
+        try {
+          await dispatcher.callRequest('pty.spawn', { cols: 80, rows: 24 })
+        } finally {
+          if (previous === undefined) {
+            delete process.env.ORCA_HISTFILE
+          } else {
+            process.env.ORCA_HISTFILE = previous
+          }
+        }
+
+        const spawnEnv = mockPtySpawn.mock.calls.at(-1)?.[2]?.env as Record<string, string>
+        expect(spawnEnv.ORCA_HISTFILE).toBeUndefined()
+      }
+    )
+
+    it('drops an ORCA_HISTFILE handed over in the client env', async () => {
+      await dispatcher.callRequest('pty.spawn', {
+        cols: 80,
+        rows: 24,
+        env: { ORCA_HISTFILE: '/fake/userData/terminal-history/aabbccddeeff0011/zsh_history' }
+      })
+
+      const spawnEnv = mockPtySpawn.mock.calls.at(-1)?.[2]?.env as Record<string, string>
+      expect(spawnEnv.ORCA_HISTFILE).toBeUndefined()
+    })
+
+    it('drops a desktop-minted session handed over in the client env', async () => {
+      await dispatcher.callRequest('pty.spawn', {
+        cols: 80,
+        rows: 24,
+        env: { fish_history: fishHistorySessionName(hashWorktreeId('r::/other')) }
+      })
+
+      const spawnEnv = mockPtySpawn.mock.calls.at(-1)?.[2]?.env as Record<string, string>
+      expect(spawnEnv.fish_history).toBeUndefined()
+    })
+  })
+
+  describe('history isolation for a Windows relay launching WSL', () => {
+    const wslWorktreeId = 'r::/remote/wsl-worktree'
+    const wslHistoryFile = join(
+      homedir(),
+      '.orca-remote',
+      'terminal-history',
+      `${hashWorktreeId(wslWorktreeId)}-bash_history`
+    )
+    let previousPlatform: PropertyDescriptor | undefined
+
+    beforeEach(() => {
+      previousPlatform = Object.getOwnPropertyDescriptor(process, 'platform')
+      Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
+    })
+
+    afterEach(() => {
+      if (previousPlatform) {
+        Object.defineProperty(process, 'platform', previousPlatform)
+      }
+      rmSync(wslHistoryFile, { force: true })
+    })
+
+    const spawnWslPane = (): Promise<unknown> =>
+      dispatcher.callRequest('pty.spawn', {
+        cols: 80,
+        rows: 24,
+        shellOverride: 'wsl.exe',
+        terminalWindowsWslDistro: 'Ubuntu',
+        worktreeId: wslWorktreeId,
+        historyIsolationEnabled: true
+      })
+
+    it('scopes HISTFILE past the wsl.exe wrapper and carries it over WSLENV', async () => {
+      await spawnWslPane()
+
+      const spawnEnv = mockPtySpawn.mock.calls.at(-1)?.[2]?.env as Record<string, string>
+      expect(spawnEnv.HISTFILE?.endsWith(`${hashWorktreeId(wslWorktreeId)}-bash_history`)).toBe(
+        true
+      )
+      expect(spawnEnv.WSLENV?.split(':')).toContain('HISTFILE')
+    })
+
+    // The injected file lives on the relay host, so the existing host-side
+    // unlink is the deletion counterpart — no distro-scoped root is involved.
+    it('deletes the injected file through the ordinary relay history deletion', async () => {
+      await spawnWslPane()
+      expect(existsSync(wslHistoryFile)).toBe(true)
+
+      await dispatcher.callRequest('pty.deleteWorktreeHistory', { worktreeId: wslWorktreeId })
+
+      expect(existsSync(wslHistoryFile)).toBe(false)
+    })
+
+    // Guest fish keeps its history inside the distro, where relay deletion cannot
+    // reach it, so wsl.exe panes intentionally stay on shared fish history.
+    it('does not mint a fish session for a WSL pane', async () => {
+      await spawnWslPane()
+
+      const spawnEnv = mockPtySpawn.mock.calls.at(-1)?.[2]?.env as Record<string, string>
+      expect(spawnEnv.fish_history).toBeUndefined()
+    })
   })
 
   it('guards SSH agent terminals after merging the relay inherited Git config', async () => {

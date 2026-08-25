@@ -12,9 +12,19 @@ import type {
   BrowserClientRetainedPage
 } from './browser-client-page-retained-state'
 
-export type BrowserClientPageCommandExecutorDependencies = {
-  orcaProfileId: string
+/**
+ * Storage identity of the connection a page's partition is derived from.
+ *
+ * The legacy half names the partition an older build already populated, so a client
+ * upgrade adopts that jar instead of deriving an empty one.
+ */
+export type BrowserClientPageAuthorityIdentity = {
   authorityConnectionIdentity: string
+  legacyAuthorityConnectionIdentity: string
+}
+
+export type BrowserClientPageCommandExecutorDependencies = BrowserClientPageAuthorityIdentity & {
+  orcaProfileId: string
   /** Environment record that owns this host's partitions for storage lifecycle. */
   storageScope: string
   retainNetworkRoute(

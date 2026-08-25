@@ -7,7 +7,9 @@ import { configurePairedRuntimeBrowserClientHostsForOrcaProfile } from './paired
 let initialized = false
 
 export function initializeBrowserSessionsForApp(
-  activeProfile?: BrowserSessionRegistryProfileOptions
+  activeProfile?: BrowserSessionRegistryProfileOptions & {
+    listLocalSshTargetIds?: () => string[]
+  }
 ): void {
   if (initialized) {
     return
@@ -22,9 +24,11 @@ export function initializeBrowserSessionsForApp(
     configurePairedRuntimeBrowserClientHostsForOrcaProfile({
       orcaProfileId: activeProfile.orcaProfileId
     })
-    void collectOrphanedBrowserRoutePartitionStorage().catch((error) => {
-      console.warn('[browser-route-partition] orphan collection failed:', error)
-    })
+    void collectOrphanedBrowserRoutePartitionStorage(activeProfile.listLocalSshTargetIds).catch(
+      (error) => {
+        console.warn('[browser-route-partition] orphan collection failed:', error)
+      }
+    )
   }
 
   // Why: cookie replay must happen before the first session.fromPartition()

@@ -265,11 +265,20 @@ export class BrowserClientDownloadTransferStore {
         continue
       }
       this.assertLive(session)
-      await this.dependencies.commit({
-        workspaceId: session.workspaceId,
-        tempRelativePath: session.tempRelativePath,
-        finalRelativePath
-      })
+      try {
+        await this.dependencies.commit({
+          workspaceId: session.workspaceId,
+          tempRelativePath: session.tempRelativePath,
+          finalRelativePath
+        })
+      } catch (error) {
+        // Why: both commit backends are exclusive, so a transfer that lost the name race between
+        // `exists` and here must take the next candidate instead of losing its transferred bytes.
+        if (!isDestinationExistsError(error)) {
+          throw error
+        }
+        continue
+      }
       this.settle(session)
       return { workspaceRelativePath: finalRelativePath }
     }
@@ -306,6 +315,18 @@ export class BrowserClientDownloadTransferStore {
       this.settled.delete(oldest.value)
     }
   }
+}
+
+// Why: the local backend rejects with an errno EEXIST, the SSH backend with the relay's re-thrown
+// message, which crosses the RPC boundary as text only.
+function isDestinationExistsError(error: unknown): boolean {
+  if (!(error instanceof Error)) {
+    return false
+  }
+  return (
+    (error as NodeJS.ErrnoException).code === 'EEXIST' ||
+    /\bEEXIST\b|already exists/i.test(error.message)
+  )
 }
 
 function sessionKey(browserPageId: string, transferId: string): string {

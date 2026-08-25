@@ -114,6 +114,8 @@ export function buildTerminalCreateWindow(args: {
         },
         onFocusEditorTab: () => () => {},
         onCloseSessionTab: () => () => {},
+        onSessionTabCloseRequest: () => () => {},
+        respondSessionTabClose: () => {},
         onMoveSessionTab: () => () => {},
         onOpenFileFromMobile: () => () => {},
         onOpenDiffFromMobile: () => () => {},
@@ -170,7 +172,9 @@ export function buildTerminalCreateWindow(args: {
         getBrowserDrivers: () => Promise.resolve([]),
         onTerminalFitOverrideChanged: () => () => {},
         onTerminalDriverChanged: () => () => {},
-        onBrowserDriverChanged: () => () => {}
+        onBrowserDriverChanged: () => () => {},
+        onClientHostedBrowserRowsChanged: () => () => {},
+        getClientHostedBrowserRows: async () => []
       },
       ssh: {
         listTargets: () => Promise.resolve([]),

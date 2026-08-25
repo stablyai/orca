@@ -209,7 +209,8 @@ async function createSystemSshExecutionRoute(
       sockets.add(socket)
       socket.once('close', () => sockets.delete(socket))
       if (!isValid()) {
-        queueMicrotask(() => socket.destroy())
+        // A bare destroy reaches the session as a pre-connect close; its siblings all fail loudly.
+        queueMicrotask(() => socket.fail(new Error('browser_tunnel_execution_host_stale')))
       }
       return socket
     },

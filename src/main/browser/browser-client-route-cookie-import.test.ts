@@ -7,17 +7,23 @@ const {
   getRouteIdentityMock,
   importCookiesFromBrowserMock,
   requireRouteBrowserProfileMock,
-  selectBrowserProfileMock,
-  updateProfileSourceMock
+  recordClientRouteImportSourceMock,
+  selectBrowserProfileMock
 } = vi.hoisted(() => ({
-  bindingStore: { get: vi.fn(() => null as string | null), set: vi.fn() },
+  bindingStore: {
+    get: vi.fn(() => null as string | null),
+    set: vi.fn(() => [] as readonly string[]),
+    touch: vi.fn(),
+    findPartitionByFingerprint: vi.fn(() => null as string | null),
+    rebind: vi.fn()
+  },
   detectInstalledBrowsersMock: vi.fn(),
   getProfileMock: vi.fn(),
   getRouteIdentityMock: vi.fn(),
   importCookiesFromBrowserMock: vi.fn(),
   requireRouteBrowserProfileMock: vi.fn(),
-  selectBrowserProfileMock: vi.fn(),
-  updateProfileSourceMock: vi.fn()
+  recordClientRouteImportSourceMock: vi.fn(),
+  selectBrowserProfileMock: vi.fn()
 }))
 
 vi.mock('./browser-cookie-import', () => ({
@@ -31,9 +37,11 @@ vi.mock('./browser-route-partition-binding-runtime', () => ({
 vi.mock('./browser-session-registry', () => ({
   browserSessionRegistry: {
     getProfile: getProfileMock,
-    requireRouteBrowserProfile: requireRouteBrowserProfileMock,
-    updateProfileSource: updateProfileSourceMock
+    requireRouteBrowserProfile: requireRouteBrowserProfileMock
   }
+}))
+vi.mock('./client-route-cookie-import-source-store', () => ({
+  recordClientRouteCookieImportSource: recordClientRouteImportSourceMock
 }))
 vi.mock('./paired-runtime-browser-client-host-runtime', () => ({
   getPairedRuntimeBrowserClientRouteIdentity: getRouteIdentityMock
@@ -46,7 +54,15 @@ const routeIdentity = {
   orcaProfileId: 'orca-profile-a',
   authorityConnectionIdentity: 'paired-runtime:authority-a',
   executionHostIdentity: 'execution-host-a',
+  legacyAuthorityConnectionIdentity: 'paired-runtime:legacy-authority-a',
+  legacyExecutionHostIdentity: 'legacy-execution-host-a',
   storageScope: 'e'.repeat(64)
+}
+
+/** The same server after a re-pair: a different durable identity, so a different partition. */
+const repairedRouteIdentity = {
+  ...routeIdentity,
+  authorityConnectionIdentity: 'paired-runtime:authority-b'
 }
 
 const chrome = {
@@ -85,10 +101,14 @@ describe('importCookiesIntoClientRoutePartition', () => {
       expect.stringMatching(/^[a-f0-9]{64}$/),
       routeIdentity.storageScope
     )
-    expect(updateProfileSourceMock).toHaveBeenCalledWith('default', {
-      browserFamily: 'chrome',
-      profileName: 'Person 1',
-      importedAt: expect.any(Number)
+    expect(recordClientRouteImportSourceMock).toHaveBeenCalledWith({
+      environmentId: 'env-a',
+      profileId: 'default',
+      source: {
+        browserFamily: 'chrome',
+        profileName: 'Person 1',
+        importedAt: expect.any(Number)
+      }
     })
   })
 
@@ -133,7 +153,46 @@ describe('importCookiesIntoClientRoutePartition', () => {
       ok: false,
       reason: 'locked database'
     })
-    expect(updateProfileSourceMock).not.toHaveBeenCalled()
+    expect(recordClientRouteImportSourceMock).not.toHaveBeenCalled()
+  })
+
+  // Why: the import takes seconds; a host replacement inside that window retargets the route, so
+  // reporting success would badge a partition none of the user's client-hosted tabs read from.
+  it('fails the import when the server is re-paired mid-import', async () => {
+    getRouteIdentityMock.mockReturnValueOnce(routeIdentity).mockReturnValue(repairedRouteIdentity)
+
+    const result = await importCookiesIntoClientRoutePartition(request)
+
+    expect(result).toEqual({
+      ok: false,
+      reason: 'This server was re-paired during the import. Try again.'
+    })
+    expect(importCookiesFromBrowserMock).toHaveBeenCalledOnce()
+    expect(recordClientRouteImportSourceMock).not.toHaveBeenCalled()
+  })
+
+  it('fails the import when the client host is retired mid-import', async () => {
+    getRouteIdentityMock.mockReturnValueOnce(routeIdentity).mockReturnValue(null)
+
+    const result = await importCookiesIntoClientRoutePartition(request)
+
+    expect(result).toEqual({
+      ok: false,
+      reason: 'The connection to this server ended during the import. Reconnect and try again.'
+    })
+    expect(recordClientRouteImportSourceMock).not.toHaveBeenCalled()
+  })
+
+  // Why: the durable identity outlives a remote restart, so a reconnect must not fail the import.
+  it('still succeeds when only the authority runtime id changed during the import', async () => {
+    getRouteIdentityMock.mockReturnValueOnce(routeIdentity).mockReturnValue({
+      ...routeIdentity,
+      legacyAuthorityConnectionIdentity: 'paired-runtime:legacy-authority-restarted',
+      legacyExecutionHostIdentity: 'legacy-execution-host-restarted'
+    })
+
+    expect(await importCookiesIntoClientRoutePartition(request)).toMatchObject({ ok: true })
+    expect(recordClientRouteImportSourceMock).toHaveBeenCalled()
   })
 
   it('rejects an unknown browser session profile', async () => {
