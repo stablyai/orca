@@ -142,7 +142,15 @@ function watchCodexConfigSyncStatus(
 export { getAccountsPaneSearchEntries }
 
 const EMPTY_WSL_DISTROS: string[] = []
-const MINIMAX_CONSOLE_URL = 'https://platform.minimax.io/console/usage'
+// Why: the open-in-browser link must point at whichever host the user
+// selected. CN users on the .com endpoint should not bounce to the .io
+// console — that one would just 404 / log them out.
+const MINIMAX_OVERSEAS_CONSOLE_URL = 'https://platform.minimax.io/console/usage'
+const MINIMAX_CN_CONSOLE_URL = 'https://www.minimaxi.com/console/usage'
+const MINIMAX_ENDPOINT_OPTIONS = [
+  { value: 'overseas', label: 'Overseas (platform.minimax.io)' },
+  { value: 'cn', label: 'China (www.minimaxi.com)' }
+] as const
 
 function formatMiniMaxRelativeRefresh(updatedAt: number, now: number): string {
   const diffMs = Math.max(0, now - updatedAt)
@@ -369,7 +377,9 @@ export function AccountsPane({
   const runtimeEnvironments = useAppStore((s) => s.runtimeEnvironments)
   const recordedOpenCodeSettingEditsRef = useRef<Set<'cookie' | 'workspaceId'>>(new Set())
   const [miniMaxCookieDraft, setMiniMaxCookieDraft] = useState('')
+  const [miniMaxApiKeyDraft, setMiniMaxApiKeyDraft] = useState('')
   const [miniMaxConfigured, setMiniMaxConfigured] = useState(false)
+  const [miniMaxApiKeyConfigured, setMiniMaxApiKeyConfigured] = useState(false)
   const [miniMaxCredentialBusy, setMiniMaxCredentialBusy] = useState(false)
   const localAccountRuntime = getSelectedAccountRuntime(
     settings,
@@ -522,7 +532,8 @@ export function AccountsPane({
   const refreshMiniMaxCredentialStatus = async (): Promise<void> => {
     try {
       const status = await window.api.minimaxCredentials.getStatus()
-      setMiniMaxConfigured(status.configured)
+      setMiniMaxConfigured(status.cookieConfigured)
+      setMiniMaxApiKeyConfigured(status.apiKeyConfigured)
     } catch (error) {
       console.error('Failed to load MiniMax credential status:', error)
     }
@@ -538,7 +549,7 @@ export function AccountsPane({
     setMiniMaxCredentialBusy(true)
     try {
       const status = await window.api.minimaxCredentials.saveCookie(miniMaxCookieDraft.trim())
-      if (!status.configured) {
+      if (!status.cookieConfigured) {
         throw new Error(
           translate(
             'auto.components.settings.AccountsPane.8e6f0cb1d8',
@@ -546,7 +557,7 @@ export function AccountsPane({
           )
         )
       }
-      setMiniMaxConfigured(status.configured)
+      setMiniMaxConfigured(status.cookieConfigured)
       setMiniMaxCookieDraft('')
       recordFeatureInteraction('usage-tracking')
       toast.success(
@@ -569,7 +580,7 @@ export function AccountsPane({
     setMiniMaxCredentialBusy(true)
     try {
       const status = await window.api.minimaxCredentials.clearCookie()
-      setMiniMaxConfigured(status.configured)
+      setMiniMaxConfigured(status.cookieConfigured)
       setMiniMaxCookieDraft('')
       recordFeatureInteraction('usage-tracking')
     } catch (error) {
@@ -583,6 +594,77 @@ export function AccountsPane({
     } finally {
       setMiniMaxCredentialBusy(false)
     }
+  }
+
+  const saveMiniMaxApiKey = async (): Promise<void> => {
+    if (!miniMaxApiKeyDraft.trim()) {
+      toast.error(
+        translate(
+          'auto.components.settings.AccountsPane.d6f1b9b6a2',
+          'MiniMax API key is required.'
+        )
+      )
+      return
+    }
+    setMiniMaxCredentialBusy(true)
+    try {
+      const status = await window.api.minimaxCredentials.saveApiKey(miniMaxApiKeyDraft.trim())
+      if (!status.apiKeyConfigured) {
+        throw new Error(
+          translate(
+            'auto.components.settings.AccountsPane.7c5d8a4e1b',
+            'MiniMax API key was not saved.'
+          )
+        )
+      }
+      setMiniMaxApiKeyConfigured(status.apiKeyConfigured)
+      setMiniMaxApiKeyDraft('')
+      recordFeatureInteraction('usage-tracking')
+      toast.success(
+        translate('auto.components.settings.AccountsPane.4d2c7b9e83', 'MiniMax API key saved.')
+      )
+    } catch (error) {
+      toast.error(
+        translate(
+          'auto.components.settings.AccountsPane.b43e761fe5',
+          'MiniMax credential update failed.'
+        ),
+        { description: String((error as Error)?.message ?? error) }
+      )
+    } finally {
+      setMiniMaxCredentialBusy(false)
+    }
+  }
+
+  const clearMiniMaxApiKey = async (): Promise<void> => {
+    setMiniMaxCredentialBusy(true)
+    try {
+      const status = await window.api.minimaxCredentials.clearApiKey()
+      setMiniMaxApiKeyConfigured(status.apiKeyConfigured)
+      setMiniMaxApiKeyDraft('')
+      recordFeatureInteraction('usage-tracking')
+    } catch (error) {
+      toast.error(
+        translate(
+          'auto.components.settings.AccountsPane.b43e761fe5',
+          'MiniMax credential update failed.'
+        ),
+        { description: String((error as Error)?.message ?? error) }
+      )
+    } finally {
+      setMiniMaxCredentialBusy(false)
+    }
+  }
+
+  const handleMiniMaxEndpointChange = (value: string): void => {
+    if (value !== 'overseas' && value !== 'cn') {
+      return
+    }
+    if (value === settings.minimaxEndpoint) {
+      return
+    }
+    recordFeatureInteraction('usage-tracking')
+    void updateSettings({ minimaxEndpoint: value })
   }
 
   useEffect(() => {
@@ -1770,7 +1852,11 @@ export function AccountsPane({
             </p>
           </div>
           <a
-            href={MINIMAX_CONSOLE_URL}
+            href={
+              settings.minimaxEndpoint === 'cn'
+                ? MINIMAX_CN_CONSOLE_URL
+                : MINIMAX_OVERSEAS_CONSOLE_URL
+            }
             target="_blank"
             rel="noopener noreferrer"
             className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
@@ -1780,28 +1866,63 @@ export function AccountsPane({
           </a>
         </div>
 
+        <SearchableSetting
+          title={translate('auto.components.settings.AccountsPane.f8a4b9d210', 'MiniMax endpoint')}
+          description={translate(
+            'auto.components.settings.AccountsPane.0b3a9f6c2e',
+            'Pick the host that matches your account. Both overseas (platform.minimax.io) and China (www.minimaxi.com) accept either a session cookie or an API key.'
+          )}
+          keywords={['minimax', 'endpoint', 'region', 'host', 'cn', 'china', 'overseas', 'api key']}
+          className="space-y-2"
+        >
+          <Label>
+            {translate('auto.components.settings.AccountsPane.f8a4b9d210', 'MiniMax endpoint')}
+          </Label>
+          <Select
+            value={settings.minimaxEndpoint}
+            onValueChange={handleMiniMaxEndpointChange}
+            disabled={miniMaxCredentialBusy}
+          >
+            <SelectTrigger className="h-8 w-full text-xs">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {MINIMAX_ENDPOINT_OPTIONS.map((option) => (
+                <SelectItem key={option.value} value={option.value}>
+                  {option.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </SearchableSetting>
+
         <div
           className={cn(
             'flex items-start gap-3 rounded-lg border bg-muted/20 p-3',
-            miniMaxConfigured ? 'border-border/60' : 'border-border/40'
+            miniMaxConfigured || miniMaxApiKeyConfigured ? 'border-border/60' : 'border-border/40'
           )}
         >
           <ShieldCheck
             className={cn(
               'mt-0.5 size-4 shrink-0',
-              miniMaxConfigured ? 'text-foreground' : 'text-muted-foreground'
+              miniMaxConfigured || miniMaxApiKeyConfigured
+                ? 'text-foreground'
+                : 'text-muted-foreground'
             )}
           />
           <div className="space-y-0.5">
             <p className="text-xs font-medium">
-              {miniMaxConfigured
+              {miniMaxConfigured || miniMaxApiKeyConfigured
                 ? translate('auto.components.settings.AccountsPane.0b8c1c7e02', 'Stored locally')
-                : translate('auto.components.settings.AccountsPane.1fd1b1b6b4', 'Cookie not set')}
+                : translate(
+                    'auto.components.settings.AccountsPane.1fd1b1b6b4',
+                    'Credentials not set'
+                  )}
             </p>
             <p className="text-xs text-muted-foreground">
               {translate(
                 'auto.components.settings.AccountsPane.5e08b0fe57',
-                'Stored locally and sent only to platform.minimax.io for usage refreshes.'
+                'Stored locally and sent only to the selected endpoint for usage refreshes.'
               )}
             </p>
           </div>
@@ -1894,6 +2015,12 @@ export function AccountsPane({
               'Open platform.minimax.io/console/usage in your browser, sign in, then copy the Cookie request header from DevTools (Network → any remains request → Cookie).'
             )}
           </p>
+          <p className="text-xs text-muted-foreground">
+            {translate(
+              'auto.components.settings.AccountsPane.c9e2a4b7d1',
+              'If a MiniMax API key is also configured, the API key takes priority and the cookie will be ignored.'
+            )}
+          </p>
           {miniMaxConfigured &&
           miniMaxRateLimits?.status === 'ok' &&
           miniMaxRateLimits.error === null ? (
@@ -1909,6 +2036,78 @@ export function AccountsPane({
             {translate(
               'auto.components.settings.AccountsPane.31d24a4e87',
               'Cookie expires when you sign out in the browser.'
+            )}
+          </p>
+        </SearchableSetting>
+
+        <SearchableSetting
+          title={translate('auto.components.settings.AccountsPane.83b6a1f7c4', 'MiniMax API key')}
+          description={translate(
+            'auto.components.settings.AccountsPane.5d7e1a0c93',
+            'Paste the API key from your MiniMax console → API keys. Works on both the overseas and China endpoints. The key never leaves this device; it is encrypted with safeStorage.'
+          )}
+          keywords={['minimax', 'api', 'key', 'cn', 'china', 'bearer', 'rate limit']}
+          className="space-y-2"
+        >
+          <div className="flex items-center justify-between gap-2">
+            <div className="flex items-center gap-2">
+              <Label>
+                {translate('auto.components.settings.AccountsPane.83b6a1f7c4', 'MiniMax API key')}
+              </Label>
+              <Badge
+                variant={miniMaxApiKeyConfigured ? 'secondary' : 'outline'}
+                className="h-5 gap-1 rounded-full px-2 text-[10px] font-medium text-muted-foreground"
+              >
+                {miniMaxApiKeyConfigured ? (
+                  <Lock className="size-3" />
+                ) : (
+                  <LockOpen className="size-3" />
+                )}
+                {miniMaxApiKeyConfigured
+                  ? translate('auto.components.settings.AccountsPane.73ea15f24b', 'Saved')
+                  : translate('auto.components.settings.AccountsPane.23afe8f226', 'Not saved')}
+              </Badge>
+            </div>
+          </div>
+          <div className="flex gap-2">
+            <Input
+              type="password"
+              value={miniMaxApiKeyDraft}
+              onChange={(e) => setMiniMaxApiKeyDraft(e.target.value)}
+              placeholder={translate(
+                'auto.components.settings.AccountsPane.4f2c8a7e1b',
+                'Paste your MiniMax API key'
+              )}
+              spellCheck={false}
+              className="flex-1 text-xs"
+            />
+            <Button
+              size="xs"
+              onClick={() => void saveMiniMaxApiKey()}
+              disabled={miniMaxCredentialBusy || !miniMaxApiKeyDraft.trim()}
+              className="h-7 shrink-0 text-xs"
+            >
+              {miniMaxCredentialBusy ? <Loader2 className="size-3 animate-spin" /> : null}
+              {miniMaxApiKeyConfigured
+                ? translate('auto.components.settings.AccountsPane.f38b9cc4bd', 'Replace')
+                : translate('auto.components.settings.AccountsPane.590a3130f9', 'Save')}
+            </Button>
+            {miniMaxApiKeyConfigured ? (
+              <Button
+                variant="ghost"
+                size="xs"
+                onClick={() => void clearMiniMaxApiKey()}
+                disabled={miniMaxCredentialBusy}
+                className="h-7 shrink-0 text-xs text-muted-foreground hover:text-foreground"
+              >
+                {translate('auto.components.settings.AccountsPane.a7b1e3c5d2', 'Forget key')}
+              </Button>
+            ) : null}
+          </div>
+          <p className="text-xs text-muted-foreground">
+            {translate(
+              'auto.components.settings.AccountsPane.2c8d4b6a91',
+              'If your account uses the session cookie flow instead, leave this blank and configure the cookie above.'
             )}
           </p>
         </SearchableSetting>

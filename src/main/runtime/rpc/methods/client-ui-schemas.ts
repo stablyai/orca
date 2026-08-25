@@ -158,6 +158,8 @@ export const SettingsUpdate = z
     compactWorktreeCards: z.boolean().optional(),
     minimaxGroupId: z.string().optional(),
     minimaxUsageModels: z.string().optional(),
+    minimaxEndpoint: z.enum(['overseas', 'cn']).optional(),
+    minimaxApiKeyConfigured: z.boolean().optional(),
     githubProjects: GitHubProjectSettings.optional(),
     prBotAuthorOverrides: z
       .unknown()

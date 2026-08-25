@@ -61,9 +61,10 @@ import {
 } from './tooltip'
 import { ClaudeIcon, GeminiIcon, MiniMaxIcon, OpenAIIcon, OpenCodeGoIcon } from './icons'
 import { AgentIcon } from '@/lib/agent-catalog'
-import { UsageRosterPanel, getTightestUsageSection } from './UsageRosterPanel'
+import { UsageRosterPanel, getTightestUsageSection, type UsageSection } from './UsageRosterPanel'
+import { usageTextColorClass } from './usage-roster-formatting'
 import { getUsageProviderAccountsSectionId } from './usage-provider-settings-target'
-import { formatRateLimitWindowChipLabel } from '@/lib/window-label-formatter'
+import { formatRateLimitWindowChipLabel, formatWindowLabel } from '@/lib/window-label-formatter'
 import { useResetCountdownClock } from '@/hooks/useResetCountdownClock'
 import {
   markLiveCodexSessionsForRestart,
@@ -963,6 +964,17 @@ export function ClaudeSwitcherMenu({
   )
 }
 
+function getStatusBarChipLabel(p: ProviderRateLimits, tightest: UsageSection): string {
+  // Why: time windows use `5h` / `wk`; named buckets keep their model name (more useful than a duration).
+  if (p.buckets?.some((b) => b.name === tightest.label)) {
+    return tightest.label
+  }
+  if (tightest.window === p.fableWeekly) {
+    return 'Fable'
+  }
+  return formatWindowLabel(tightest.window.windowMinutes)
+}
+
 function MiniBar({
   usedPct,
   display
@@ -1110,25 +1122,6 @@ function InlineUsageSkeleton(): React.JSX.Element {
   )
 }
 
-function WindowLabel({
-  w,
-  label,
-  display,
-  showLabel = true
-}: {
-  w: RateLimitWindow
-  label: string
-  display: UsagePercentageDisplay
-  showLabel?: boolean
-}): React.JSX.Element {
-  return (
-    <span className="tabular-nums">
-      {formatUsagePercentageLabel(w.usedPercent, display)}
-      {showLabel ? ` ${label}` : ''}
-    </span>
-  )
-}
-
 // Single-letter provider badge for the icon-only (narrow) status bar. Shared by
 // the roster trigger and ProviderDetailsMenu so the dot's has-data condition
 // and markup can't drift between the two.
@@ -1192,9 +1185,9 @@ function VerboseProviderUsage({
           </React.Fragment>
         ))}
         {visibleBuckets.length === 0 && p.session ? (
-          <WindowLabel
+          <WindowChip
             w={p.session}
-            label={formatRateLimitWindowChipLabel(p.session)}
+            label={formatWindowLabel(p.session.windowMinutes)}
             display={display}
           />
         ) : null}
@@ -1202,19 +1195,20 @@ function VerboseProviderUsage({
     )
   }
 
+  // Why: one chip per window ("5h [bar] 10%   wk [bar] 20%") instead of collapsing to a single tightest bar.
   const visibleWindows = [
     p.session
       ? {
           key: 'session',
           window: p.session,
-          label: formatRateLimitWindowChipLabel(p.session)
+          label: formatWindowLabel(p.session.windowMinutes)
         }
       : null,
     p.weekly
       ? {
           key: 'weekly',
           window: p.weekly,
-          label: formatRateLimitWindowChipLabel(p.weekly)
+          label: formatWindowLabel(p.weekly.windowMinutes)
         }
       : null,
     p.fableWeekly
@@ -1229,7 +1223,7 @@ function VerboseProviderUsage({
       ? {
           key: 'monthly',
           window: p.monthly,
-          label: formatRateLimitWindowChipLabel(p.monthly)
+          label: formatWindowLabel(p.monthly.windowMinutes)
         }
       : null
   ].filter((window): window is { key: string; window: RateLimitWindow; label: string } => {
@@ -1238,13 +1232,34 @@ function VerboseProviderUsage({
 
   return (
     <>
-      {visibleWindows.map((window, index) => (
-        <React.Fragment key={window.key}>
-          {index > 0 ? <span className="text-muted-foreground">·</span> : null}
-          <WindowLabel w={window.window} label={window.label} display={display} />
-        </React.Fragment>
+      {visibleWindows.map((window) => (
+        <WindowChip key={window.key} w={window.window} label={window.label} display={display} />
       ))}
     </>
+  )
+}
+
+/**
+ * Why: one chip per window (`<label> [bar] <percent>%`) so the inline
+ * trigger and the expanded popover stay in lockstep.
+ */
+function WindowChip({
+  w,
+  label,
+  display
+}: {
+  w: RateLimitWindow
+  label: string
+  display: UsagePercentageDisplay
+}): React.JSX.Element {
+  const used = clampUsedPercent(w.usedPercent)
+  const shown = getDisplayedUsagePercentage(used, display)
+  return (
+    <span data-usage-window={label} className="inline-flex shrink-0 items-center gap-1">
+      <span className="text-[10px] font-medium tabular-nums text-muted-foreground">{label}</span>
+      <MiniBar usedPct={used} display={display} />
+      <span className={`tabular-nums text-[11px] ${usageTextColorClass(used)}`}>{shown}%</span>
+    </span>
   )
 }
 
@@ -1273,9 +1288,13 @@ export function ProviderSegment({
   }
 
   const tightest = getTightestUsageSection(p)
+  // Why: status-bar compact shows ONE window. Session resets every 5h vs weekly 7d — its countdown is more actionable (#14264).
+  const compactSection: UsageSection | null = p.session
+    ? { label: '', window: p.session }
+    : tightest
 
   // Fetching with no prior data
-  if (p.status === 'fetching' && !tightest) {
+  if (p.status === 'fetching' && !compactSection) {
     return (
       <span className="inline-flex items-center gap-1 text-muted-foreground">
         <ProviderIcon provider={provider} />
@@ -1294,7 +1313,7 @@ export function ProviderSegment({
   }
 
   // Error with no data
-  if (p.status === 'error' && !tightest) {
+  if (p.status === 'error' && !compactSection) {
     return (
       <span className="inline-flex items-center gap-1 text-muted-foreground">
         <ProviderIcon provider={provider} />
@@ -1311,18 +1330,14 @@ export function ProviderSegment({
     <span className="inline-flex items-center gap-1.5">
       <ProviderIcon provider={provider} />
       {mode === 'verbose' ? (
-        <>
-          {tightest && !compact ? (
-            <MiniBar usedPct={clampUsedPercent(tightest.window.usedPercent)} display={display} />
-          ) : null}
-          <VerboseProviderUsage p={p} display={display} />
-        </>
-      ) : tightest ? (
-        <WindowLabel
-          w={tightest.window}
-          label={tightest.label}
+        // Why: VerboseProviderUsage renders one WindowChip per window (each with its own bar) — no standalone MiniBar to avoid doubling up.
+        <VerboseProviderUsage p={p} display={display} />
+      ) : compactSection ? (
+        <WindowChip
+          w={compactSection.window}
+          // Why: named buckets (Pro / Flash / Sonnet) keep their model name; time windows use `5h` / `wk`.
+          label={getStatusBarChipLabel(p, compactSection)}
           display={display}
-          showLabel={!compact}
         />
       ) : null}
       {isStale && <AlertTriangle size={11} className="text-muted-foreground/80" />}
@@ -2119,6 +2134,7 @@ function StatusBarInner({ floatingTerminalOpen }: StatusBarProps): React.JSX.Ele
     ...settings,
     antigravityUsageConfigured,
     minimaxCookieConfigured: rateLimits.minimaxCookieConfigured,
+    minimaxApiKeyConfigured: rateLimits.minimaxApiKeyConfigured,
     grokAuthConfigured: rateLimits.grokAuthConfigured
   }
   const visibleClaude = getVisibleUsageProvider('claude', claude, usageSettings)

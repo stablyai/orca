@@ -26,6 +26,7 @@ import type { KimiHomeResolution } from '../kimi/kimi-runtime-home'
 import { fetchGrokRateLimits } from './grok-fetcher'
 import { readGrokAuthSession } from './grok-auth'
 import { hasMiniMaxSessionCookie } from '../minimax/minimax-cookie-store'
+import { hasMiniMaxApiKey } from '../minimax/minimax-api-key-store'
 import { fetchMiniMaxRateLimits } from './minimax-fetcher'
 import { fetchOpenCodeGoRateLimits } from './opencode-go-usage-fetcher'
 import {
@@ -55,6 +56,14 @@ type MiniMaxRateLimitConfig = {
   sessionCookie: string
   groupId: string
   models: string
+  // Why: 'overseas' routes to platform.minimax.io (cookie-only), 'cn' routes
+  // to www.minimaxi.com (cookie or API key). Stored as a resolved string so
+  // the resolver doesn't have to know how to read it from settings.
+  endpoint: 'overseas' | 'cn'
+  // Why: the API key is only ever read by the resolver (which uses
+  // safeStorage); the fetcher receives it over a local function call. The
+  // service just plumbs the value through.
+  apiKey: string
 }
 
 type MiniMaxResolvedConfig = {
@@ -386,8 +395,11 @@ export class RateLimitService {
     this.pruneInactiveCodexState()
     return {
       ...this.state,
-      // Why: the cookie lives on the filesystem, not GlobalSettings; surface its presence so the renderer keeps the MiniMax bar across reloads.
+      // Why: the cookie + API key live on the filesystem, not GlobalSettings;
+      // surface their presence so the renderer keeps the MiniMax bar across
+      // reloads and between snapshot refreshes.
       minimaxCookieConfigured: hasMiniMaxSessionCookie(),
+      minimaxApiKeyConfigured: hasMiniMaxApiKey(),
       grokAuthConfigured: this.grokAuthConfigured,
       claudeTarget: this.claudeFetchTarget,
       codexTarget: this.codexFetchTarget,
@@ -1410,17 +1422,21 @@ export class RateLimitService {
         config: this.miniMaxConfigResolver?.() ?? {
           sessionCookie: '',
           groupId: '',
-          models: 'general'
+          models: 'general',
+          endpoint: 'overseas',
+          apiKey: ''
         },
         error: null
       }
     } catch (error) {
-      // Why: one unreadable cookie must not abort every provider's refresh; surface it as MiniMax-only state instead.
+      // Why: one unreadable cookie or key must not abort every provider's refresh; surface it as MiniMax-only state instead.
       return {
         config: {
           sessionCookie: '',
           groupId: '',
-          models: 'general'
+          models: 'general',
+          endpoint: 'overseas',
+          apiKey: ''
         },
         error: toErrorMessage(error)
       }
@@ -1633,6 +1649,8 @@ export class RateLimitService {
     const miniMaxCookie = miniMaxConfigResult.config.sessionCookie
     const miniMaxGroupId = miniMaxConfigResult.config.groupId
     const miniMaxModels = miniMaxConfigResult.config.models
+    const miniMaxEndpoint = miniMaxConfigResult.config.endpoint
+    const miniMaxApiKey = miniMaxConfigResult.config.apiKey
     const geminiCliOAuthEnabled = this.geminiCliOAuthEnabledResolver?.() ?? false
     // Why: getState() is hot (renderer pushes + mobile snapshots); keep Grok's sync auth-file probe on fetch cycles instead.
     const grokAuthReadResult = readGrokAuthSession()
@@ -1647,7 +1665,9 @@ export class RateLimitService {
     }
     const opencodeGeneration = this.opencodeFetchGeneration
 
-    const currentMiniMaxConfigHash = `${miniMaxCookie}|${miniMaxGroupId}|${miniMaxModels}|${miniMaxConfigResult.error ?? ''}`
+    // Why: include endpoint + apiKey in the hash so a switch in either flips
+    // the fetch generation and discards the stale cookie-mode snapshot.
+    const currentMiniMaxConfigHash = `${miniMaxCookie}|${miniMaxGroupId}|${miniMaxModels}|${miniMaxEndpoint}|${miniMaxApiKey ? 'k' : ''}|${miniMaxConfigResult.error ?? ''}`
     const miniMaxConfigChanged = currentMiniMaxConfigHash !== this.lastMiniMaxConfigHash
     if (miniMaxConfigChanged) {
       this.lastMiniMaxConfigHash = currentMiniMaxConfigHash
@@ -1720,7 +1740,9 @@ export class RateLimitService {
           : fetchMiniMaxRateLimits({
               cookie: miniMaxCookie,
               groupId: miniMaxGroupId,
-              models: miniMaxModels
+              models: miniMaxModels,
+              endpointMode: miniMaxEndpoint,
+              apiKey: miniMaxApiKey
             })
       ])
 

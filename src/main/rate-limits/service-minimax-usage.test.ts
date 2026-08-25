@@ -49,6 +49,10 @@ vi.mock('../minimax/minimax-cookie-store', () => ({
   hasMiniMaxSessionCookie: vi.fn(() => false)
 }))
 
+vi.mock('../minimax/minimax-api-key-store', () => ({
+  hasMiniMaxApiKey: vi.fn(() => false)
+}))
+
 describe('RateLimitService', () => {
   beforeEach(() => {
     resetRateLimitProviderMocks()
@@ -64,7 +68,9 @@ describe('RateLimitService', () => {
     service.setMiniMaxConfigResolver(() => ({
       sessionCookie: '_token=abc; minimax_group_id_v2=42',
       groupId: '',
-      models: 'general'
+      models: 'general',
+      endpoint: 'overseas',
+      apiKey: ''
     }))
     vi.mocked(hasMiniMaxSessionCookie).mockReturnValue(true)
     vi.mocked(fetchMiniMaxRateLimits).mockResolvedValueOnce(okProvider('minimax', 50, Date.now()))
@@ -75,7 +81,9 @@ describe('RateLimitService', () => {
     expect(fetchMiniMaxRateLimits).toHaveBeenCalledWith({
       cookie: '_token=abc; minimax_group_id_v2=42',
       groupId: '',
-      models: 'general'
+      models: 'general',
+      endpointMode: 'overseas',
+      apiKey: ''
     })
 
     const state = service.getState()
@@ -96,7 +104,9 @@ describe('RateLimitService', () => {
     service.setMiniMaxConfigResolver(() => ({
       sessionCookie: '_token=abc',
       groupId: '',
-      models
+      models,
+      endpoint: 'overseas',
+      apiKey: ''
     }))
     vi.mocked(hasMiniMaxSessionCookie).mockReturnValue(true)
     vi.mocked(fetchMiniMaxRateLimits)
@@ -121,7 +131,9 @@ describe('RateLimitService', () => {
     service.setMiniMaxConfigResolver(() => ({
       sessionCookie: '_token=abc',
       groupId: '',
-      models: 'general'
+      models: 'general',
+      endpoint: 'overseas',
+      apiKey: ''
     }))
     vi.mocked(fetchMiniMaxRateLimits)
       .mockImplementationOnce(() => firstMiniMax.promise)
@@ -155,7 +167,9 @@ describe('RateLimitService', () => {
     service.setMiniMaxConfigResolver(() => ({
       sessionCookie: '_token=abc',
       groupId: '',
-      models: 'general'
+      models: 'general',
+      endpoint: 'overseas',
+      apiKey: ''
     }))
     vi.mocked(fetchMiniMaxRateLimits).mockRejectedValueOnce(new Error('minimax down'))
     vi.mocked(fetchClaudeRateLimits).mockResolvedValueOnce(okProvider('claude', 10, Date.now()))
@@ -182,5 +196,58 @@ describe('RateLimitService', () => {
     expect(state.minimax?.status).toBe('error')
     expect(state.minimax?.error).toBe('MiniMax session cookie could not be decrypted')
     expect(state.claude?.status).toBe('ok')
+  })
+
+  it('passes the CN endpoint and API key to the fetcher when the resolver selects CN', async () => {
+    const service = new RateLimitService()
+    service.setMiniMaxConfigResolver(() => ({
+      sessionCookie: '',
+      groupId: '',
+      models: 'general',
+      endpoint: 'cn',
+      apiKey: 'sk-cn-key-9876'
+    }))
+    vi.mocked(fetchMiniMaxRateLimits).mockResolvedValueOnce(okProvider('minimax', 33, Date.now()))
+
+    await service.refresh()
+
+    expect(fetchMiniMaxRateLimits).toHaveBeenCalledWith({
+      cookie: '',
+      groupId: '',
+      models: 'general',
+      endpointMode: 'cn',
+      apiKey: 'sk-cn-key-9876'
+    })
+  })
+
+  it('bumps the MiniMax fetch generation when the endpoint or API key changes', async () => {
+    const service = new RateLimitService()
+    let endpointMode: 'overseas' | 'cn' = 'overseas'
+    let apiKey = ''
+    service.setMiniMaxConfigResolver(() => ({
+      sessionCookie: '_token=abc',
+      groupId: '',
+      models: 'general',
+      endpoint: endpointMode,
+      apiKey
+    }))
+    vi.mocked(fetchMiniMaxRateLimits)
+      .mockResolvedValueOnce(okProvider('minimax', 10, Date.now()))
+      .mockResolvedValueOnce(okProvider('minimax', 20, Date.now()))
+      .mockResolvedValueOnce(okProvider('minimax', 30, Date.now()))
+
+    await service.refresh()
+    expect(service.getState().minimax?.session?.usedPercent).toBe(10)
+
+    // Why: changing only the endpoint must invalidate the previous snapshot —
+    // the response shape and host differ, so the old data is misleading.
+    endpointMode = 'cn'
+    await service.refresh()
+    expect(service.getState().minimax?.session?.usedPercent).toBe(20)
+
+    // Why: adding an API key while staying on CN must also force a refresh.
+    apiKey = 'sk-cn-key-9876'
+    await service.refresh()
+    expect(service.getState().minimax?.session?.usedPercent).toBe(30)
   })
 })

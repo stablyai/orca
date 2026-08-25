@@ -42,6 +42,10 @@ import type {
   WorktreeVisibilitySourcePreferences
 } from './repo-types'
 
+/** MiniMax Coding Plan API endpoint selector. Determines which host the
+ *  fetcher hits and which auth mode (cookie vs API key) is preferred. */
+export type MiniMaxEndpoint = 'overseas' | 'cn'
+
 export type WorktreeVisibilityDefaults = {
   /** Default for worktrees outside a recognized source. */
   external?: ExternalWorktreeVisibility
@@ -345,6 +349,14 @@ export type GlobalSettings = {
   minimaxGroupId: string
   /** Comma-separated MiniMax model names to show in the status bar usage window. */
   minimaxUsageModels: string
+  /** MiniMax Coding Plan endpoint host selector. 'overseas' = platform.minimax.io
+   *  (cookie auth). 'cn' = www.minimaxi.com (cookie or API key). Defaults to
+   *  'overseas' so existing users see no behavior change. */
+  minimaxEndpoint: MiniMaxEndpoint
+  /** True when a MiniMax API key is persisted on disk in safeStorage. The key
+   *  itself is never written to settings.json — only the main process can read
+   *  it via the minimaxCredentials IPC. Mirrors minimaxCookieConfigured. */
+  minimaxApiKeyConfigured: boolean
   /** Extract OAuth credentials from the local Gemini CLI for rate-limit fetching. Off by default (explicit opt-in). */
   geminiCliOAuthEnabled: boolean
   /** Per-agent CLI command overrides. A missing key means use the catalog default binary name. */

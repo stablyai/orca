@@ -336,6 +336,7 @@ describe('getWindowSections', () => {
       status: 'ok'
     }
     const sections = getWindowSections(p)
+    // Why: time windows surface via formatWindowLabel (`5h` / `wk`); popover uses TitleCase (`Session` / `Weekly`).
     expect(sections).toEqual([
       { label: 'Session', window: p.session },
       { label: 'Weekly', window: p.weekly }
