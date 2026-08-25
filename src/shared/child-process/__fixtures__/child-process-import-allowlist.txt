@@ -83,7 +83,7 @@ src/main/ipc/parcel-watcher-supervisor-disposal.ts
 src/main/ipc/parcel-watcher-supervisor-message.ts
 src/main/ipc/parcel-watcher-supervisor-subscribe.ts
 src/main/ipc/preflight-command-exec.ts
-src/main/ipc/repos.ts
+src/main/ipc/repos/repo-clone-lifecycle.ts
 src/main/ipc/worktree-apfs-clone.ts
 src/main/ipc/wsl-watcher-process-exit.ts
 src/main/linux-lid-sleep-assertion.ts

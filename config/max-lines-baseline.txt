@@ -24,7 +24,6 @@ inline src/main/github/project-view.ts
 inline src/main/index.ts
 inline src/main/ipc/filesystem-watcher.ts
 inline src/main/ipc/filesystem.ts
-inline src/main/ipc/repos.ts
 inline src/main/ipc/ssh.ts
 inline src/main/ipc/worktree-remote.ts
 inline src/main/keybindings/keybinding-file.ts
