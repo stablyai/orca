@@ -81,11 +81,8 @@ export class RelayReconnectController {
       this.liftGate()
     }
     // Manual app-resume retries bypass transport cooldown, but never a fresh-credential gate.
-    if (
-      reason === 'app-resume' &&
-      logical.getState() === 'disconnected' &&
-      this.recoveryGate !== 'fresh-credential'
-    ) {
+    const disconnectedOnResume = reason === 'app-resume' && logical.getState() === 'disconnected'
+    if (disconnectedOnResume && this.recoveryGate !== 'fresh-credential') {
       this.reset()
     }
     if (
