@@ -125,9 +125,18 @@ export async function classifyHomeSkillTopology(
   const canonicalRoot = await realpath(canonicalRootPath).catch(() => resolve(canonicalRootPath))
   const homeBoundary = dirname(dirname(canonicalRootPath))
   const rootOrProviderParentLinked = await hasSymlinkedAncestor(root.path, homeBoundary)
+  const canonicalSkillPath = resolve(
+    canonicalRootPath,
+    normalize(unresolvedPath).split('/').pop() || ''
+  )
+  const resolvedCanonicalSkillPath = await realpath(canonicalSkillPath).catch(
+    () => canonicalSkillPath
+  )
   const isCanonicalTarget =
     normalizedSkillIdentityPath(dirname(resolvedPath)) ===
-    normalizedSkillIdentityPath(canonicalRoot)
+      normalizedSkillIdentityPath(canonicalRoot) ||
+    normalizedSkillIdentityPath(resolvedPath) ===
+      normalizedSkillIdentityPath(resolvedCanonicalSkillPath)
   let topology: SkillInstallationTopology
   if (linked) {
     topology = isCanonicalTarget ? 'provider-alias' : 'external-link'
