@@ -435,6 +435,7 @@ import {
   getLinearGroupOptions,
   getLinearModeOptions,
   getLinearOrderOptions,
+  getLinearPresets,
   getLinearPriorityLabel,
   getLinearViewOptions,
   getSourceOptions,
@@ -447,8 +448,10 @@ import {
   type LinearGroupBy,
   type LinearMode,
   type LinearOrderBy,
+  type LinearPresetId,
   type LinearViewMode
 } from '@/components/task-page-localized-options'
+import { TaskPresetButtons } from '@/components/task-preset-buttons'
 import { useGitHubTaskSearchCommit } from '@/components/use-github-task-search-commit'
 import {
   getDefaultPresetForGitHubTaskKind,
@@ -3166,6 +3169,7 @@ export default function TaskPage(): React.JSX.Element {
   const githubModeButtons = getGitHubModeButtons()
   const linearModeOptions = getLinearModeOptions()
   const jiraPresets = getJiraPresets()
+  const linearPresets = getLinearPresets()
   const gitLabIssueFilters = getGitLabIssueFilters()
   const gitLabMRFilters = getGitLabMRFilters()
   const linearViewOptions = getLinearViewOptions()
@@ -4397,6 +4401,7 @@ export default function TaskPage(): React.JSX.Element {
   const [linearError, setLinearError] = useState<string | null>(null)
   const [linearSearchInput, setLinearSearchInput] = useState('')
   const [appliedLinearSearch, setAppliedLinearSearch] = useState('')
+  const [activeLinearPreset, setActiveLinearPreset] = useState<LinearPresetId>('all')
   const [linearIssueFiltersByWorkspaceId, setLinearIssueFiltersByWorkspaceId] = useState<
     Record<string, LinearIssueAttributeFilter>
   >(() => ({}))
@@ -4696,6 +4701,7 @@ export default function TaskPage(): React.JSX.Element {
     setLinearMode(taskResumeState?.linearMode ?? 'issues')
     setLinearSearchInput(linearQuery)
     setAppliedLinearSearch(linearQuery)
+    setActiveLinearPreset(taskResumeState?.linearPreset ?? 'all')
 
     const linearIssueView = loadLinearIssueView()
     setLinearViewMode(linearIssueView.viewMode)
@@ -5255,6 +5261,21 @@ export default function TaskPage(): React.JSX.Element {
     linearAttributeFilterWorkspaceId,
     linearAttributePrimaryTeam?.id
   ])
+
+  // Why: presets are a server-side list scope, so switching one resets paging and clears
+  // the search box — a query and a preset are mutually exclusive reads of the same list.
+  const selectLinearPreset = useCallback(
+    (preset: LinearPresetId) => {
+      setLinearSearchInput('')
+      setAppliedLinearSearch('')
+      setActiveLinearPreset(preset)
+      setLinearIssueLimit(LINEAR_ITEM_LIMIT)
+      setLinearIssuePage(0)
+      setLinearIssueLoadingTargetPage(null)
+      setTaskResumeState({ linearPreset: preset, linearQuery: '' })
+    },
+    [setTaskResumeState]
+  )
 
   const linearSearchActive = isLinearIssueSearchActive(linearSearchInput, appliedLinearSearch)
   const showLinearAttributeFilters =
@@ -8037,7 +8058,7 @@ export default function TaskPage(): React.JSX.Element {
     const effectiveLinearIssueLimit = clampLinearIssueListLimit(linearIssueLimit)
     const searchActive = trimmed.length > 0
     const listReadArgs = buildLinearIssueListReadArgs({
-      filter: 'all',
+      filter: activeLinearPreset,
       limit: effectiveLinearIssueLimit,
       attributeFilter: linearAttributeFilter,
       searchActive,
@@ -8075,7 +8096,7 @@ export default function TaskPage(): React.JSX.Element {
     const requestSignature = buildLinearIssueListRequestSignature({
       sourceContext: linearTaskSourceContext,
       workspaceId: selectedLinearWorkspaceId,
-      filter: 'all',
+      filter: activeLinearPreset,
       limit: effectiveLinearIssueLimit,
       attributeFilter: linearAttributeFilter,
       searchQuery: searchActive ? trimmed : undefined
@@ -8167,6 +8188,7 @@ export default function TaskPage(): React.JSX.Element {
     linearConnected,
     selectedLinearWorkspaceId,
     appliedLinearSearch,
+    activeLinearPreset,
     linearIssueLimit,
     linearRefreshNonce,
     linearAttributeFilter,
@@ -9565,6 +9587,19 @@ export default function TaskPage(): React.JSX.Element {
                       </div>
                     </div>
 
+                    {linearMode === 'issues' ? (
+                      <TaskPresetButtons
+                        className="mt-3"
+                        presets={linearPresets}
+                        activeId={linearSearchActive ? null : activeLinearPreset}
+                        onSelect={selectLinearPreset}
+                        ariaLabel={translate(
+                          'auto.components.TaskPage.linearIssuePreset',
+                          'Linear issue preset'
+                        )}
+                      />
+                    ) : null}
+
                     {linearMode === 'issues' || linearMode === 'in-orca' ? (
                       <div className="mt-3 flex min-w-0 items-center gap-2">
                         {showLinearAttributeFilters ? (
@@ -9685,32 +9720,21 @@ export default function TaskPage(): React.JSX.Element {
                 ) : taskSource === 'jira' && jiraConnected ? (
                   <div className="rounded-md rounded-b-none border border-border/50 bg-muted/50 px-3 pt-2 pb-0 shadow-sm">
                     <div className="flex flex-wrap items-center justify-between gap-3">
-                      <div className="flex flex-wrap gap-2">
-                        {jiraPresets.map((preset) => {
-                          const active = !jiraSearchInput && activeJiraPreset === preset.id
-                          return (
-                            <button
-                              key={preset.id}
-                              type="button"
-                              onClick={() => {
-                                setJiraSearchInput('')
-                                setAppliedJiraSearch('')
-                                setActiveJiraPreset(preset.id)
-                                setTaskResumeState({ jiraPreset: preset.id, jiraQuery: '' })
-                                setJiraRefreshNonce((n) => n + 1)
-                              }}
-                              className={cn(
-                                'rounded-md border px-2 py-1 text-xs transition',
-                                active
-                                  ? 'border-border/50 bg-foreground/90 text-background backdrop-blur-md'
-                                  : 'border-border/50 bg-transparent text-foreground hover:bg-muted/50'
-                              )}
-                            >
-                              {preset.label}
-                            </button>
-                          )
-                        })}
-                      </div>
+                      <TaskPresetButtons
+                        presets={jiraPresets}
+                        activeId={jiraSearchInput ? null : activeJiraPreset}
+                        onSelect={(preset) => {
+                          setJiraSearchInput('')
+                          setAppliedJiraSearch('')
+                          setActiveJiraPreset(preset)
+                          setTaskResumeState({ jiraPreset: preset, jiraQuery: '' })
+                          setJiraRefreshNonce((n) => n + 1)
+                        }}
+                        ariaLabel={translate(
+                          'auto.components.TaskPage.jiraIssuePreset',
+                          'Jira issue preset'
+                        )}
+                      />
                       <div className="flex shrink-0 items-center gap-2">
                         <Tooltip>
                           <TooltipTrigger asChild>
@@ -9898,34 +9922,22 @@ export default function TaskPage(): React.JSX.Element {
                     >
                       <div className="flex min-w-0 flex-wrap items-center justify-between gap-3">
                         <div className="flex min-w-0 flex-wrap items-center gap-2">
-                          <div className="flex flex-wrap gap-2">
-                            {gitlabView === 'issues' || gitlabView === 'mrs'
-                              ? (gitlabView === 'issues'
-                                  ? gitLabIssueFilters
-                                  : gitLabMRFilters
-                                ).map(({ id, label }) => {
-                                  const active = activeGitlabFilter === id
-                                  return (
-                                    <button
-                                      key={id}
-                                      type="button"
-                                      onClick={() => {
-                                        setGitlabFilter(id)
-                                        setGitlabRefreshNonce((n) => n + 1)
-                                      }}
-                                      className={cn(
-                                        'rounded-md border px-2 py-1 text-xs transition',
-                                        active
-                                          ? 'border-border/50 bg-foreground/90 text-background backdrop-blur-md'
-                                          : 'border-border/50 bg-transparent text-foreground hover:bg-muted/50'
-                                      )}
-                                    >
-                                      {label}
-                                    </button>
-                                  )
-                                })
-                              : null}
-                          </div>
+                          {gitlabView === 'issues' || gitlabView === 'mrs' ? (
+                            <TaskPresetButtons
+                              presets={
+                                gitlabView === 'issues' ? gitLabIssueFilters : gitLabMRFilters
+                              }
+                              activeId={activeGitlabFilter}
+                              onSelect={(id) => {
+                                setGitlabFilter(id)
+                                setGitlabRefreshNonce((n) => n + 1)
+                              }}
+                              ariaLabel={translate(
+                                'auto.components.TaskPage.gitlabItemFilter',
+                                'GitLab item filter'
+                              )}
+                            />
+                          ) : null}
                         </div>
                         <div
                           className="flex shrink-0 items-center gap-2"

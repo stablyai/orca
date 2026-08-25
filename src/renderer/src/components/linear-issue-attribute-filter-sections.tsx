@@ -4,7 +4,7 @@ import {
   MultiSelectList,
   SingleSelectList,
   type PickerOption
-} from '@/components/github/PRFilterPickers'
+} from '@/components/task-filter-pickers'
 import { cn } from '@/lib/utils'
 import { translate } from '@/i18n/i18n'
 import {

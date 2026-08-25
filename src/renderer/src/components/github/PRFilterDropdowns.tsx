@@ -3,12 +3,13 @@
 // own collapsed Filters dropdown so the toolbar stays uncluttered when nothing
 // is set. Active filters surface as inline removable pills next to the button.
 import React, { useMemo, useState } from 'react'
-import { ListFilter, X } from 'lucide-react'
+import { ListFilter } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
+import { TaskFilterPill } from '@/components/task-filter-pill'
 import { cn } from '@/lib/utils'
 import { useRepoLabelsBySlug, useRepoAssigneesBySlug } from '@/hooks/useGitHubSlugMetadata'
-import type { PickerOption } from '@/components/github/PRFilterPickers'
+import type { PickerOption } from '@/components/task-filter-pickers'
 import {
   SectionDetail,
   SectionMenu,
@@ -39,35 +40,6 @@ export type { PRFilterChange } from '@/components/github/PRFilterSections'
 
 function userOptions(users: GitHubAssignableUser[]): PickerOption[] {
   return users.map((u) => ({ key: u.login, primary: u.login, secondary: u.name ?? undefined }))
-}
-
-function ActivePill({
-  label,
-  value,
-  onClear
-}: {
-  label: string
-  value: string
-  onClear: () => void
-}): React.JSX.Element {
-  return (
-    <span className="inline-flex h-6 items-center gap-1 rounded-full border border-border/60 bg-muted/50 pl-2 pr-1 text-[11px] text-foreground">
-      <span className="text-muted-foreground">{label}:</span>
-      <span className="max-w-[160px] truncate font-medium">{value}</span>
-      <button
-        type="button"
-        aria-label={translate(
-          'auto.components.github.PRFilterDropdowns.8a2ffbf9b3',
-          'Remove {{value0}} filter',
-          { value0: label }
-        )}
-        onClick={onClear}
-        className="rounded-full p-0.5 text-muted-foreground transition hover:bg-muted hover:text-foreground"
-      >
-        <X className="size-3" />
-      </button>
-    </span>
-  )
 }
 
 export default function PRFilterDropdowns({
@@ -245,28 +217,28 @@ export default function PRFilterDropdowns({
         </PopoverContent>
       </Popover>
       {statusPillValue ? (
-        <ActivePill
+        <TaskFilterPill
           label={translate('auto.components.github.PRFilterDropdowns.13b3ac0a84', 'Status')}
           value={statusPillValue}
           onClear={() => onChange({ state: 'open', draft: false })}
         />
       ) : null}
       {parsed.author ? (
-        <ActivePill
+        <TaskFilterPill
           label={translate('auto.components.github.PRFilterDropdowns.01f3f3d161', 'Author')}
           value={parsed.author}
           onClear={() => onChange({ author: null })}
         />
       ) : null}
       {parsed.labels.length > 0 ? (
-        <ActivePill
+        <TaskFilterPill
           label={translate('auto.components.github.PRFilterDropdowns.9d0f2eda6d', 'Label')}
           value={parsed.labels.length === 1 ? parsed.labels[0] : `${parsed.labels.length} labels`}
           onClear={() => onChange({ labels: [] })}
         />
       ) : null}
       {reviewerActive ? (
-        <ActivePill
+        <TaskFilterPill
           label={
             reviewerKind === 'reviewed-by'
               ? translate('auto.components.github.PRFilterDropdowns.7f1ba66c3e', 'Reviewed by')
@@ -277,7 +249,7 @@ export default function PRFilterDropdowns({
         />
       ) : null}
       {parsed.assignee ? (
-        <ActivePill
+        <TaskFilterPill
           label={translate('auto.components.github.PRFilterDropdowns.979be3cf6b', 'Assignee')}
           value={parsed.assignee}
           onClear={() => onChange({ assignee: null })}

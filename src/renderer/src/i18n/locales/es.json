@@ -1915,7 +1915,12 @@
         "jiraLinkSourceUnavailable": "Couldn’t link this Jira issue. Reconnect Jira or pick the matching site, then try again.",
         "loadPageUnreachable": "La página {{value0}} está más allá de lo que la búsqueda de GitHub puede devolver.",
         "loadPageFailed": "No se pudo cargar la página {{value0}} desde GitHub.",
-        "loadPageNoMoreResults": "No hay más resultados en la página {{value0}}."
+        "loadPageNoMoreResults": "No hay más resultados en la página {{value0}}.",
+        "1852574621": "Completado",
+        "f2b37f54a3": "Creado",
+        "linearIssuePreset": "Preset de issues de Linear",
+        "jiraIssuePreset": "Preset de issues de Jira",
+        "gitlabItemFilter": "Filtro de elementos de GitLab"
       },
       "Terminal": {
         "73768427cf": "Cerrar",
@@ -2243,13 +2248,7 @@
           "01f3f3d161": "Autor",
           "13b3ac0a84": "Estado",
           "79c54552f7": "Filtros",
-          "8a2ffbf9b3": "Quitar filtro {{value0}}",
           "19bb6f115f": "reviewed-by"
-        },
-        "PRFilterPickers": {
-          "fdf387297c": "Limpiar (",
-          "472c12ae03": "Limpiar",
-          "2d1f58eda6": "Usar"
         },
         "PRFilterSections": {
           "a00830d3f7": "Sin usuarios",
@@ -2257,8 +2256,6 @@
           "94b42b0edf": "Revisión solicitada",
           "de26e2eb06": "Sin etiquetas",
           "458ea3602b": "Sin autores",
-          "b69fa4fa20": "Volver",
-          "30ebb6ca44": "Limpiar todos los filtros",
           "8177eda37e": "Filtrar",
           "ea3416d646": "Asignado",
           "b1d9fdea08": "Etiqueta",
@@ -14194,6 +14191,26 @@
               "searchProjects": "Buscar proyectos...",
               "noMatches": "Ningún proyecto coincide con tu búsqueda.",
               "chooseSource": "Elige el origen de tareas"
+            }
+          }
+        },
+        "filter": {
+          "pickers": {
+            "96cc85e839": "Cargando…",
+            "2c3b81720a": "El texto de búsqueda es demasiado grande.",
+            "96b30a41bc": "Pulsa Intro para usar el valor escrito.",
+            "8776bc66db": "Sin coincidencias",
+            "783279c991": "Usar",
+            "d58aef2697": "Limpiar",
+            "f7690f6c74": "Limpiar ({{value0}})"
+          },
+          "pill": {
+            "6b2c72c3ca": "Quitar filtro {{value0}}"
+          },
+          "section": {
+            "menu": {
+              "5a186cbca7": "Limpiar todos los filtros",
+              "615d9351d4": "Volver"
             }
           }
         }

@@ -1,10 +1,14 @@
 import React from 'react'
-import { ChevronRight } from 'lucide-react'
 import {
   MultiSelectList,
   SingleSelectList,
   type PickerOption
-} from '@/components/github/PRFilterPickers'
+} from '@/components/task-filter-pickers'
+import {
+  FilterSectionBackButton,
+  FilterSectionMenu,
+  type FilterSectionRow
+} from '@/components/task-filter-section-menu'
 import { cn } from '@/lib/utils'
 import type { ParsedTaskQuery } from '../../../../shared/task-query'
 import { translate } from '@/i18n/i18n'
@@ -168,7 +172,7 @@ export function SectionMenu({
   onClearAll: (() => void) | null
 }): React.JSX.Element {
   const status = statusLabel(parsed)
-  const rows: { key: SectionKey; label: string; value: string | null }[] = [
+  const rows: FilterSectionRow<SectionKey>[] = [
     {
       key: 'status',
       label: translate('auto.components.github.PRFilterSections.764a0b4ce1', 'Status'),
@@ -206,38 +210,17 @@ export function SectionMenu({
   ]
   const subject = kind === 'prs' ? 'pull requests' : 'issues'
   return (
-    <div className="py-1 text-xs">
-      <div className="px-3 py-1.5 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
-        {translate('auto.components.github.PRFilterSections.8177eda37e', 'Filter')}{' '}
-        <span>{subject}</span>
-      </div>
-      {rows.map((row) => (
-        <button
-          key={row.key}
-          type="button"
-          onClick={() => onPick(row.key)}
-          className="flex w-full items-center justify-between gap-2 px-3 py-1.5 text-left transition hover:bg-muted/50"
-        >
-          <span>{row.label}</span>
-          <span className="flex items-center gap-1 text-muted-foreground">
-            {row.value ? <span className="max-w-[140px] truncate">{row.value}</span> : null}
-            <ChevronRight className="size-3.5" />
-          </span>
-        </button>
-      ))}
-      {onClearAll ? (
+    <FilterSectionMenu
+      heading={
         <>
-          <div className="my-1 h-px bg-border" />
-          <button
-            type="button"
-            onClick={onClearAll}
-            className="w-full px-3 py-1.5 text-left text-muted-foreground transition hover:bg-muted/50 hover:text-foreground"
-          >
-            {translate('auto.components.github.PRFilterSections.30ebb6ca44', 'Clear all filters')}
-          </button>
+          {translate('auto.components.github.PRFilterSections.8177eda37e', 'Filter')}{' '}
+          <span>{subject}</span>
         </>
-      ) : null}
-    </div>
+      }
+      rows={rows}
+      onPick={onPick}
+      onClearAll={onClearAll}
+    />
   )
 }
 
@@ -274,14 +257,7 @@ export function SectionDetail({
 }): React.JSX.Element {
   return (
     <div>
-      <button
-        type="button"
-        onClick={onBack}
-        className="flex w-full items-center gap-1 border-b border-border px-3 py-1.5 text-[11px] text-muted-foreground transition hover:bg-muted/50 hover:text-foreground"
-      >
-        <ChevronRight className="size-3 rotate-180" />
-        {translate('auto.components.github.PRFilterSections.b69fa4fa20', 'Back')}
-      </button>
+      <FilterSectionBackButton onBack={onBack} />
       {section === 'status' ? (
         <StatusSection parsed={parsed} kind={kind} onSelect={onSelect} />
       ) : null}
