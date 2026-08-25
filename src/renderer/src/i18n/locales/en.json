@@ -9226,7 +9226,15 @@
             "editorFontFamily": "Editor Font Family",
             "editorFontFamilyDesc": "Font used by file editors and diff views. Leave empty to follow the terminal font.",
             "externalWorktrees": "External worktrees",
-            "externalWorktreesDescription": "Choose whether worktrees created outside Orca appear by default."
+            "externalWorktreesDescription": "Choose whether worktrees created outside Orca appear by default.",
+            "launchAtLogin": "Launch Orca at login",
+            "launchAtLoginDescription": "Open Orca automatically after you sign in to this computer.",
+            "launchAtLoginKeyword": "launch at login",
+            "startupKeyword": "startup",
+            "loginKeyword": "login",
+            "bootKeyword": "boot",
+            "launchKeyword": "launch",
+            "autoStartKeyword": "autostart"
           }
         },
         "git": {
@@ -11305,6 +11313,15 @@
         },
         "shortcutDefinitionCatalog": {
           "missionControlConflict": "Blocked by Mission Control. Remap here or change it in System Settings."
+        },
+        "GeneralStartupSettingsSection": {
+          "loadFailed": "Failed to read the launch at login setting.",
+          "updateFailed": "Failed to update the launch at login setting.",
+          "launchAtLogin": "Launch Orca at login",
+          "installedOnly": "Available in the installed desktop app.",
+          "title": "Startup",
+          "description": "Choose whether Orca opens automatically when you sign in.",
+          "launchAtLoginDescription": "Open Orca automatically after you sign in to this computer."
         }
       },
       "right": {

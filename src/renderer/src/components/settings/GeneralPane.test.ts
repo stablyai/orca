@@ -109,6 +109,15 @@ describe('GeneralPane search entries', () => {
     expect(matchesSettingsSearch('red underline', entries)).toBe(true)
   })
 
+  it('includes launch at login and startup keywords', () => {
+    const entries = getGeneralPaneSearchEntries()
+
+    expect(entries).toContainEqual(expect.objectContaining({ title: 'Launch Orca at login' }))
+    expect(matchesSettingsSearch('launch at login', entries)).toBe(true)
+    expect(matchesSettingsSearch('startup', entries)).toBe(true)
+    expect(matchesSettingsSearch('autostart', entries)).toBe(true)
+  })
+
   it('omits the default project runtime setting when Windows runtimes are unsupported', () => {
     const entries = getGeneralPaneSearchEntries({ includeProjectRuntime: false })
 

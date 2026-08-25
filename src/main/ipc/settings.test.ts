@@ -11,7 +11,9 @@ const {
   previewWarpThemeImportMock,
   prepareLocalWorktreeRootsForReposMock,
   resolveEnvironmentMock,
-  rebuildAppMenuMock
+  rebuildAppMenuMock,
+  getAppStartupSettingsMock,
+  setAppStartupSettingsMock
 } = vi.hoisted(() => ({
   applyAppIconMock: vi.fn(),
   applyAgentStatusHooksEnabledMock: vi.fn(),
@@ -23,7 +25,9 @@ const {
   previewWarpThemeImportMock: vi.fn(),
   prepareLocalWorktreeRootsForReposMock: vi.fn(),
   resolveEnvironmentMock: vi.fn(),
-  rebuildAppMenuMock: vi.fn()
+  rebuildAppMenuMock: vi.fn(),
+  getAppStartupSettingsMock: vi.fn(),
+  setAppStartupSettingsMock: vi.fn()
 }))
 
 vi.mock('electron', () => ({
@@ -65,6 +69,11 @@ vi.mock('../../shared/runtime-environment-store', () => ({
   resolveEnvironment: resolveEnvironmentMock
 }))
 
+vi.mock('../app-startup-settings', () => ({
+  getAppStartupSettings: getAppStartupSettingsMock,
+  setAppStartupSettings: setAppStartupSettingsMock
+}))
+
 import { registerSettingsHandlers } from './settings'
 
 const settingsInvokeEvent = { sender: { id: 1 } }
@@ -100,6 +109,8 @@ describe('registerSettingsHandlers', () => {
       return { id: 'windows-2' }
     })
     rebuildAppMenuMock.mockClear()
+    getAppStartupSettingsMock.mockReset()
+    setAppStartupSettingsMock.mockReset()
     browserWindowGetAllWindowsMock.mockReset()
     store.getSettings.mockReset()
     store.updateSettings.mockReset()
@@ -110,6 +121,28 @@ describe('registerSettingsHandlers', () => {
     registerSettingsHandlers(store as never)
     const channels = handleMock.mock.calls.map((call) => call[0])
     expect(channels).toContain('settings:previewGhosttyImport')
+  })
+
+  it('reads and validates the native launch at login setting', () => {
+    const expected = { supported: true, canModify: true, openAtLogin: false }
+    getAppStartupSettingsMock.mockReturnValue(expected)
+    setAppStartupSettingsMock.mockReturnValue({ ...expected, openAtLogin: true })
+    registerSettingsHandlers(store as never)
+
+    const getHandler = handleMock.mock.calls.find(
+      (call) => call[0] === 'settings:get-app-startup'
+    )?.[1] as () => unknown
+    const setHandler = handleMock.mock.calls.find(
+      (call) => call[0] === 'settings:set-app-startup'
+    )?.[1] as (_event: unknown, args?: { openAtLogin?: unknown }) => unknown
+
+    expect(getHandler()).toEqual(expected)
+    expect(setHandler(null, { openAtLogin: true })).toEqual({ ...expected, openAtLogin: true })
+    expect(setAppStartupSettingsMock).toHaveBeenCalledWith(true)
+    expect(() => setHandler(null, { openAtLogin: 'yes' })).toThrow(
+      'Invalid launch at login setting'
+    )
+    expect(() => setHandler(null)).toThrow('Invalid launch at login setting')
   })
 
   it('answers the synchronous settings read with the persisted settings', () => {

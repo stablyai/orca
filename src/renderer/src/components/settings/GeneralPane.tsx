@@ -12,6 +12,7 @@ import {
   getGeneralEditorSearchEntries,
   getGeneralNavigationSearchEntries,
   getGeneralPaneSearchEntries,
+  getGeneralStartupSearchEntries,
   getGeneralSupportSearchEntries,
   getGeneralUpdateSearchEntries,
   getGeneralWorkspaceSearchEntries
@@ -24,6 +25,8 @@ import { SettingsSubsectionHeader, SettingsSwitchRow } from './SettingsFormContr
 import { translate } from '@/i18n/i18n'
 import { DefaultWindowsProjectRuntimeSetting } from './DefaultWindowsProjectRuntimeSetting'
 import { getActiveRuntimeTarget } from '@/runtime/runtime-rpc-client'
+import { GeneralStartupSettingsSection } from './GeneralStartupSettingsSection'
+import { isWebClientLocation } from '@/lib/web-client-location'
 
 export {
   createAutoSaveDelayDraftState,
@@ -120,6 +123,9 @@ export function GeneralPane({
   const projectRuntimeSearchEntries = wslSupportedPlatform
     ? getGeneralProjectRuntimeSearchEntries()
     : []
+  const desktopPlatform = getDesktopPlatformFromUserAgent(navigator.userAgent)
+  const showStartupSettings =
+    !isWebClientLocation() && (desktopPlatform === 'win32' || desktopPlatform === 'darwin')
 
   const visibleSections = [
     matchesSettingsSearch(searchQuery, generalNavigationSearchEntries) ? (
@@ -196,6 +202,9 @@ export function GeneralPane({
         />
       </section>
     ) : null,
+    showStartupSettings && matchesSettingsSearch(searchQuery, getGeneralStartupSearchEntries()) ? (
+      <GeneralStartupSettingsSection key="startup" />
+    ) : null,
     matchesSettingsSearch(searchQuery, getGeneralEditorSearchEntries()) ? (
       <GeneralEditorSettingsSection
         key="editor"
@@ -208,7 +217,7 @@ export function GeneralPane({
     matchesSettingsSearch(searchQuery, getGeneralCliSearchEntries()) ? (
       <CliSection
         key="cli"
-        currentPlatform={getDesktopPlatformFromUserAgent(navigator.userAgent)}
+        currentPlatform={desktopPlatform}
         settings={settings}
         wslSupportedPlatform={wslSupportedPlatform}
         wslAvailable={wslAvailable}

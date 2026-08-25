@@ -63,7 +63,10 @@ export function AutomationAgentOptionsFields({
             }))
           }
         >
-          <SelectTrigger className={`h-9 w-full min-w-0 ${pickerTriggerClassName}`}>
+          <SelectTrigger
+            className={`h-9 w-full min-w-0 ${pickerTriggerClassName}`}
+            data-testid="automation-model-select"
+          >
             <SelectValue />
           </SelectTrigger>
           <SelectContent position="popper" side="bottom" align="start" sideOffset={4}>
@@ -98,7 +101,10 @@ export function AutomationAgentOptionsFields({
               }))
             }
           >
-            <SelectTrigger className={`h-9 w-full min-w-0 ${pickerTriggerClassName}`}>
+            <SelectTrigger
+              className={`h-9 w-full min-w-0 ${pickerTriggerClassName}`}
+              data-testid="automation-effort-select"
+            >
               <SelectValue />
             </SelectTrigger>
             <SelectContent position="popper" side="bottom" align="start" sideOffset={4}>

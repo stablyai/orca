@@ -154,6 +154,36 @@ export const getGeneralNavigationSearchEntries = createLocalizedCatalog(() => [
   }
 ])
 
+export const getGeneralStartupSearchEntries = createLocalizedCatalog(() => [
+  {
+    title: translate(
+      'auto.components.settings.general.search.launchAtLogin',
+      'Launch Orca at login'
+    ),
+    description: translate(
+      'auto.components.settings.general.search.launchAtLoginDescription',
+      'Open Orca automatically after you sign in to this computer.'
+    ),
+    keywords: [
+      ...translateSearchKeyword(
+        'auto.components.settings.general.search.launchAtLoginKeyword',
+        'launch at login'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.general.search.startupKeyword',
+        'startup'
+      ),
+      ...translateSearchKeyword('auto.components.settings.general.search.loginKeyword', 'login'),
+      ...translateSearchKeyword('auto.components.settings.general.search.bootKeyword', 'boot'),
+      ...translateSearchKeyword('auto.components.settings.general.search.launchKeyword', 'launch'),
+      ...translateSearchKeyword(
+        'auto.components.settings.general.search.autoStartKeyword',
+        'autostart'
+      )
+    ]
+  }
+])
+
 export const getGeneralCliSearchEntries = createLocalizedCatalog(() => [
   {
     title: translate('auto.components.settings.general.search.327e3fa70d', 'Orca CLI'),
@@ -222,6 +252,7 @@ export function getGeneralPaneSearchEntries(
   return [
     ...getGeneralWorkspaceSearchEntries(),
     ...getGeneralNavigationSearchEntries(),
+    ...getGeneralStartupSearchEntries(),
     ...(options.includeProjectRuntime === false ? [] : getGeneralProjectRuntimeSearchEntries()),
     ...getGeneralEditorSearchEntries(),
     ...getGeneralCliSearchEntries(),

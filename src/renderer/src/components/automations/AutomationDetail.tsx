@@ -71,12 +71,14 @@ function ToolbarIconButton({
   label,
   children,
   onClick,
-  className
+  className,
+  testId
 }: {
   label: string
   children: React.ReactNode
   onClick: () => void
   className?: string
+  testId?: string
 }): React.JSX.Element {
   return (
     <Tooltip>
@@ -86,6 +88,7 @@ function ToolbarIconButton({
           variant="ghost"
           size="icon-sm"
           aria-label={label}
+          data-testid={testId}
           onClick={onClick}
           className={className}
         >
@@ -186,6 +189,7 @@ export function AutomationDetail({
             ) : null}
           </Tooltip>
           <ToolbarIconButton
+            testId="automation-detail-edit"
             label={translate(
               'auto.components.automations.AutomationDetail.4b1ea02d2e',
               'Edit automation'

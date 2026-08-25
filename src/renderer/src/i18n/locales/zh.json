@@ -8304,7 +8304,15 @@
             "editorFontFamily": "编辑器字体",
             "editorFontFamilyDesc": "文件编辑器和差异视图使用的字体，留空则跟随终端字体。",
             "externalWorktrees": "外部工作树",
-            "externalWorktreesDescription": "选择是否默认显示在 Orca 外部创建的工作树。"
+            "externalWorktreesDescription": "选择是否默认显示在 Orca 外部创建的工作树。",
+            "launchAtLogin": "登录时启动 Orca",
+            "launchAtLoginDescription": "登录这台电脑后自动打开 Orca。",
+            "launchAtLoginKeyword": "开机自启动 登录时启动",
+            "startupKeyword": "启动 开机 自启动",
+            "loginKeyword": "登录",
+            "bootKeyword": "开机",
+            "launchKeyword": "启动",
+            "autoStartKeyword": "自动启动 自启动"
           }
         },
         "git": {
@@ -8818,6 +8826,15 @@
         },
         "shortcutDefinitionCatalog": {
           "missionControlConflict": "已被调度中心拦截。在此重新映射，或在系统设置中更改。"
+        },
+        "GeneralStartupSettingsSection": {
+          "loadFailed": "无法读取登录时启动设置。",
+          "updateFailed": "无法更新登录时启动设置。",
+          "launchAtLogin": "登录时启动 Orca",
+          "installedOnly": "仅已安装的桌面应用支持此功能。",
+          "title": "启动",
+          "description": "选择登录系统后是否自动打开 Orca。",
+          "launchAtLoginDescription": "登录这台电脑后自动打开 Orca。"
         },
         "shortcuts": {
           "search": {
