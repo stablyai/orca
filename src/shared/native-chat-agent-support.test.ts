@@ -6,6 +6,15 @@ import {
   shouldStepNativeChatAskAnswer
 } from './native-chat-agent-support'
 
+describe('Hermes native chat support', () => {
+  it('recognizes Hermes as a supported transcript agent', () => {
+    expect(isNativeChatSupportedAgent('hermes')).toBe(true)
+    expect(resolveNativeChatTranscriptAgent('hermes')).toBe('hermes')
+    expect(nativeChatRequiresLocalTranscript('hermes')).toBe(false)
+    expect(shouldStepNativeChatAskAnswer('hermes')).toBe(false)
+  })
+})
+
 describe('resolveNativeChatTranscriptAgent', () => {
   it('maps OpenClaude onto the Claude transcript format', () => {
     expect(resolveNativeChatTranscriptAgent('openclaude')).toBe('claude')
@@ -16,6 +25,7 @@ describe('resolveNativeChatTranscriptAgent', () => {
     expect(resolveNativeChatTranscriptAgent('codex')).toBe('codex')
     expect(resolveNativeChatTranscriptAgent('grok')).toBe('grok')
     expect(resolveNativeChatTranscriptAgent('omp')).toBe('omp')
+    expect(resolveNativeChatTranscriptAgent('hermes')).toBe('hermes')
     expect(resolveNativeChatTranscriptAgent('cursor')).toBeNull()
     expect(resolveNativeChatTranscriptAgent(null)).toBeNull()
     expect(resolveNativeChatTranscriptAgent(undefined)).toBeNull()

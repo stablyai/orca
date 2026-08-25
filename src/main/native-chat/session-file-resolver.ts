@@ -1,3 +1,4 @@
+import { existsSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { basename, extname, join } from 'node:path'
 import type { AgentType } from '../../shared/native-chat-types'
@@ -9,6 +10,7 @@ import { isWslUncPath } from '../../shared/wsl-paths'
 import { walkSessionFiles } from '../ai-vault/session-scanner-discovery'
 import { OMP_SESSION_ARTIFACT_DIR_PATTERN } from '../ai-vault/session-scanner-omp-subagent-transcripts'
 import { normalizeAgentSessionsDir } from '../ai-vault/session-scanner-values'
+import { hasHermesSession } from './hermes-state-db-reader'
 import { resolveOrcaManagedCodexHomePath } from '../codex/codex-home-paths'
 import {
   findGrokChatHistoryBySessionId,
@@ -57,6 +59,14 @@ function ompSessionsDir(): string {
   )
 }
 
+const hermesHome = (): string => process.env.HERMES_HOME?.trim() || join(homedir(), '.hermes')
+const hermesStateDb = (sessionsDir?: string): string =>
+  join(sessionsDir ? join(sessionsDir, '..') : hermesHome(), 'state.db')
+
+function hermesSessionsDir(): string {
+  return join(hermesHome(), 'sessions')
+}
+
 export type ResolveSessionFileOptions = {
   /** Override the Claude projects root (used by tests / isolated scans). */
   claudeProjectsDir?: string
@@ -67,6 +77,10 @@ export type ResolveSessionFileOptions = {
   grokSessionsDir?: string
   /** Override the omp sessions root (`~/.omp/agent/sessions`). */
   ompSessionsDir?: string
+  /** Override the Hermes sessions root (tests / isolated scans). */
+  hermesSessionsDir?: string
+  /** Override the Hermes SQLite state database path. */
+  hermesStateDbPath?: string
   /** Authoritative transcript path reported by the agent hook
    *  (`providerSession.transcriptPath`). When set and the file exists, it is used
    *  directly — recent Claude Code names the transcript with a UUID that differs
@@ -157,6 +171,14 @@ async function resolveSessionFileById(
   }
   if (transcriptAgent === 'omp') {
     return resolveOmpSessionFile(trimmedId, options.ompSessionsDir ?? ompSessionsDir(), signal)
+  }
+  if (transcriptAgent === 'hermes') {
+    return resolveHermesSessionFile(
+      trimmedId,
+      options.hermesSessionsDir ?? hermesSessionsDir(),
+      options.hermesStateDbPath,
+      signal
+    )
   }
   // Why: a new transcript agent must pick its own resolver. Falling through to
   // OMP's scan would search the wrong root with a foreign session id, so fail
@@ -287,4 +309,16 @@ async function resolveOmpSessionFile(
     signal
   })
   return files[0] ?? null
+}
+
+/** Resolve the Hermes state database containing the requested session. */
+async function resolveHermesSessionFile(
+  sessionId: string,
+  sessionsDir: string,
+  stateDbPath?: string,
+  signal?: AbortSignal
+): Promise<string | null> {
+  signal?.throwIfAborted()
+  const path = stateDbPath ?? hermesStateDb(sessionsDir)
+  return existsSync(path) && hasHermesSession(path, sessionId) ? path : null
 }
