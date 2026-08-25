@@ -368,7 +368,10 @@ describe('STA-4823 D26 — an unreadable settings baseline must stall the mirror
 
     // Asserted against the file rather than the new observation API, so this
     // anchor still means something when the fix is reverted.
-    expect(JSON.parse(realFs.readFileSync(baselinePath(), 'utf-8'))).toMatchObject({ version: 2 })
+    expect(JSON.parse(realFs.readFileSync(baselinePath(), 'utf-8'))).toMatchObject({
+      version: 3,
+      sourceAuthority: 'mirrored'
+    })
   })
 
   it('still replaces a fully-read baseline rejected by the JSON structure limit', () => {
@@ -377,7 +380,10 @@ describe('STA-4823 D26 — an unreadable settings baseline must stall the mirror
 
     snapshotCodexRuntimeSettingsBaseline(runtimeHomePath)
 
-    expect(JSON.parse(realFs.readFileSync(baselinePath(), 'utf-8'))).toMatchObject({ version: 2 })
+    expect(JSON.parse(realFs.readFileSync(baselinePath(), 'utf-8'))).toMatchObject({
+      version: 3,
+      sourceAuthority: 'mirrored'
+    })
   })
 
   it('rebuilds an oversized baseline previously produced from a bounded runtime config', () => {
@@ -387,8 +393,13 @@ describe('STA-4823 D26 — an unreadable settings baseline must stall the mirror
     realFs.writeFileSync(join(runtimeHomePath, 'config.toml'), oversizedRuntimeConfig, 'utf-8')
 
     snapshotCodexRuntimeSettingsBaseline(runtimeHomePath)
-    expect(realFs.statSync(baselinePath()).size).toBeGreaterThan(MAX_AGENT_STATE_FILE_BYTES)
-    expect(observeCodexSettingsBaseline(runtimeHomePath)).toEqual({ kind: 'absent' })
+    expect(realFs.statSync(baselinePath()).size).toBeLessThan(MAX_AGENT_STATE_FILE_BYTES)
+    expect(JSON.parse(realFs.readFileSync(baselinePath(), 'utf-8'))).toMatchObject({
+      version: 2,
+      sourceAuthority: 'mirrored',
+      settings: {}
+    })
+    expect(observeCodexSettingsBaseline(runtimeHomePath).kind).toBe('present')
 
     realFs.writeFileSync(join(runtimeHomePath, 'config.toml'), 'model = "recovered"\n', 'utf-8')
     snapshotCodexRuntimeSettingsBaseline(runtimeHomePath)

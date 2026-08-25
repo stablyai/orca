@@ -33,3 +33,25 @@ export function resolveUntrackedCodexSetting(
   }
   return { action: 'preserve', conflict: existingConflict }
 }
+
+export function resolveUnlistedCodexSetting(
+  runtime: string | null,
+  system: string | null,
+  existingConflict?: CodexSettingsConflict
+): CodexSettingsConflictResolution {
+  if (runtime === system) {
+    return { action: 'aligned' }
+  }
+  if (!existingConflict) {
+    return { action: 'preserve', conflict: { runtime, system } }
+  }
+  const runtimeChanged = runtime !== existingConflict.runtime
+  const systemChanged = system !== existingConflict.system
+  if (!runtimeChanged && systemChanged) {
+    return { action: 'use-system' }
+  }
+  if (runtimeChanged) {
+    return { action: 'preserve', conflict: { runtime, system } }
+  }
+  return { action: 'preserve', conflict: existingConflict }
+}

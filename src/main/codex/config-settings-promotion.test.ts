@@ -201,7 +201,10 @@ describe('codex settings write-back promotion', () => {
     simulateCodexSettingWrite('model', '"o4"')
     syncSystemConfigIntoManagedCodexHome()
     expect(readSystemConfig()).toBe('model = "gpt-5"\n')
-    expect(JSON.parse(readFileSync(baselinePath(), 'utf-8'))).toMatchObject({ version: 2 })
+    expect(JSON.parse(readFileSync(baselinePath(), 'utf-8'))).toMatchObject({
+      version: 3,
+      sourceAuthority: 'mirrored'
+    })
 
     simulateCodexSettingWrite('model', '"o4"')
     syncSystemConfigIntoManagedCodexHome()
@@ -321,7 +324,7 @@ describe('codex settings write-back promotion', () => {
     expect(readRuntimeConfig()).toContain('model = "gpt-5"')
   })
 
-  it('ignores keys outside the allowlist', () => {
+  it('does not write an unlisted user-set key through into ~/.codex', () => {
     writeSystemConfig('model = "gpt-5"\n')
     syncSystemConfigIntoManagedCodexHome()
 
@@ -329,6 +332,7 @@ describe('codex settings write-back promotion', () => {
     syncSystemConfigIntoManagedCodexHome()
 
     expect(readSystemConfig()).toBe('model = "gpt-5"\n')
+    expect(readRuntimeConfig()).toContain('notify = ["custom-notifier"]')
   })
 
   it('ignores allowlisted keys inside tables such as [profiles.*]', () => {

@@ -59,6 +59,7 @@
     "../src/main/codex/config-settings-promotion-write-target.ts",
     "../src/main/codex/config-sync-stall.ts",
     "../src/main/codex/config-toml-deprecated-hook-flag.ts",
+    "../src/main/codex/config-toml-ordinary-settings.ts",
     "../src/main/codex/config-toml-key-path.ts",
     "../src/main/codex/config-toml-line-scan.ts",
     "../src/main/codex/config-toml-runtime-owned-sections.ts",

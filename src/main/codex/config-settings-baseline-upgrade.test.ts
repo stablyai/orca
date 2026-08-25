@@ -73,6 +73,8 @@ function readBaseline(): {
   version: number
   settings: Record<string, string | null>
   conflicts?: Record<string, { runtime: string | null; system: string | null }>
+  knownPromotedKeys?: string[]
+  sourceAuthority?: string
 } {
   return JSON.parse(readFileSync(baselinePath(), 'utf-8'))
 }
@@ -85,9 +87,11 @@ describe('Codex settings baseline schema upgrade', () => {
     syncSystemConfigIntoManagedCodexHome()
 
     expect(readBaseline()).toMatchObject({
-      version: 2,
-      settings: { model: '"gpt-5"', 'tui.theme': '"dark"' }
+      version: 3,
+      settings: { model: '"gpt-5"', 'tui.theme': '"dark"' },
+      sourceAuthority: 'mirrored'
     })
+    expect(readBaseline().knownPromotedKeys).toContain('tui.theme')
     expect(readBaseline().conflicts).toBeUndefined()
   })
 
@@ -231,6 +235,57 @@ describe('Codex settings baseline schema upgrade', () => {
     expect(readBaseline().conflicts).toEqual({
       approval_policy: { runtime: '"on-request"', system: '"never"' }
     })
+  })
+
+  it('migrates a promoted key omitted from an older v3 promoted-key set', () => {
+    prepareLegacyState(
+      'model = "gpt-5"\napproval_policy = "never"\n',
+      'model = "gpt-5"\napproval_policy = "on-request"\n'
+    )
+    writeFileSync(
+      baselinePath(),
+      `${JSON.stringify({
+        version: 3,
+        sourceAuthority: 'mirrored',
+        knownPromotedKeys: ['model'],
+        settings: { model: '"gpt-5"', approval_policy: '"never"' }
+      })}\n`,
+      'utf-8'
+    )
+
+    syncSystemConfigIntoManagedCodexHome()
+
+    expect(readFileSync(systemConfigPath(), 'utf-8')).toContain('approval_policy = "never"')
+    expect(readFileSync(runtimeConfigPath(), 'utf-8')).toContain('approval_policy = "on-request"')
+    expect(readBaseline().conflicts?.approval_policy).toEqual({
+      runtime: '"on-request"',
+      system: '"never"'
+    })
+
+    writeFileSync(runtimeConfigPath(), 'model = "gpt-5"\napproval_policy = "chosen"\n', 'utf-8')
+    syncSystemConfigIntoManagedCodexHome()
+
+    expect(readFileSync(systemConfigPath(), 'utf-8')).toContain('approval_policy = "chosen"')
+    expect(readBaseline().conflicts).toBeUndefined()
+  })
+
+  it('retries a promoted conflict after its authoritative source disappears', () => {
+    prepareLegacyState('model = "gpt-5"\n', 'model = "gpt-5"\napproval_policy = "on-request"\n')
+    syncSystemConfigIntoManagedCodexHome()
+    const anchoredBaseline = readFileSync(baselinePath(), 'utf-8')
+
+    rmSync(systemConfigPath())
+    writeFileSync(runtimeConfigPath(), 'model = "gpt-5"\napproval_policy = "never"\n', 'utf-8')
+    syncSystemConfigIntoManagedCodexHome()
+
+    expect(existsSync(systemConfigPath())).toBe(false)
+    expect(readFileSync(baselinePath(), 'utf-8')).toBe(anchoredBaseline)
+
+    writeFileSync(systemConfigPath(), 'model = "gpt-5"\n', 'utf-8')
+    syncSystemConfigIntoManagedCodexHome()
+
+    expect(readFileSync(systemConfigPath(), 'utf-8')).toContain('approval_policy = "never"')
+    expect(readBaseline().conflicts).toBeUndefined()
   })
 
   it('lets an incompatible system TOML shape win instead of stranding a conflict', () => {

@@ -23,6 +23,12 @@ const EXACT_PATH_CONFIG_KEYS = new Set([
   'sqlite_home'
 ])
 
+// Why: Orca rewrites these against ~/.codex so they keep working after the
+// managed-home remirror. A stale runtime path must not win that rewrite.
+export function isOrcaRewrittenCodexPreambleKey(key: string): boolean {
+  return EXACT_PATH_CONFIG_KEYS.has(key)
+}
+
 // Why: Orca mirrors config.toml into a managed CODEX_HOME, but Codex resolves
 // path-valued config settings from the file it read. Keep user-owned assets in
 // ~/.codex reachable after the mirror moves the TOML. Best-effort by design:

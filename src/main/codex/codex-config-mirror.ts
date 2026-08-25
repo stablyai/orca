@@ -87,7 +87,9 @@ export function syncSystemConfigIntoManagedCodexHome(
     // baseline at all, and promotion stays inert until one exists — bootstrap
     // it, since nothing is promotable yet and so nothing can be stranded.
     if (!readCodexSettingsBaseline(homes.runtimeHomePath)) {
-      snapshotCodexRuntimeSettingsBaseline(homes.runtimeHomePath)
+      snapshotCodexRuntimeSettingsBaseline(homes.runtimeHomePath, new Map(), {
+        sourceIsAuthoritative: false
+      })
     }
     return
   }
@@ -97,7 +99,8 @@ export function syncSystemConfigIntoManagedCodexHome(
     homes.runtimeHomePath,
     new Map(
       [...promotionPlan.conflicts].filter(([key]) => mirrorResult.preservedConflictKeys.has(key))
-    )
+    ),
+    { sourceIsAuthoritative: true }
   )
 }
 
@@ -179,9 +182,7 @@ function syncSystemConfigIntoManagedCodexHomeUnsafe(
   // it would erase every ordinary setting from an existing managed runtime, and
   // a 0-byte file is what a half-written or unhydrated cloud-synced home shows.
   if (rawSystemConfig.trim() === '') {
-    return runtimeConfigExists
-      ? { status: 'skipped-missing-source' }
-      : { status: 'mirrored', preservedConflictKeys: new Set() }
+    return { status: 'skipped-missing-source' }
   }
 
   const sourceConfigDir = resolveCodexConfigMirrorSourceDirectory(systemHomePath)

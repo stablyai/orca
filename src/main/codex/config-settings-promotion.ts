@@ -5,177 +5,82 @@ import { resolvePromotionWriteTarget } from './config-settings-promotion-write-t
 import { writeFileAtomically } from '../codex-accounts/fs-utils'
 import { parseWslUncPath } from '../../shared/wsl-paths'
 import { getOrcaManagedCodexHomePath, getSystemCodexHomePath } from './codex-home-paths'
-import {
-  createTomlLineScanState,
-  getTomlTableHeader,
-  isTomlStructuralLine,
-  updateTomlLineScanState
-} from './config-toml-line-scan'
-import { parseTomlKeyPath, parseTomlTableHeaderPath } from './config-toml-key-path'
-import { tuiStructuredKey, upsertPromotedSettingsInContent } from './codex-config-settings-upsert'
+import { upsertPromotedSettingsInContent } from './codex-config-settings-upsert'
+import { removePromotedSettingsFromContent } from './codex-config-settings-removal'
 import {
   observeCodexSettingsBaseline,
   writeCodexSettingsBaseline,
   type CodexSettingsBaseline,
   type CodexSettingsConflict
 } from './config-settings-baseline'
-import { resolveUntrackedCodexSetting } from './config-settings-conflict-resolution'
+import {
+  resolveUnlistedCodexSetting,
+  resolveUntrackedCodexSetting
+} from './config-settings-conflict-resolution'
+import {
+  collectOrdinaryCodexSettingKeys,
+  isOrdinarySettingBlocked,
+  isPromotedStructuredKey,
+  parseOrdinaryCodexSettingValues,
+  PROMOTED_STRUCTURED_KEYS,
+  type OrdinaryCodexSettingValue
+} from './config-toml-ordinary-settings'
 import { extractOrdinaryCodexSettings } from './config-toml-runtime-owned-sections'
 
 // Why: the mirror reverts in-Codex config changes each launch; promotion salvages them by diffing the last baseline.
 
-// Why: only scalars the Codex TUI persists; each key here is written to the user's real ~/.codex, so grow deliberately.
-export const PROMOTED_CODEX_SETTING_KEYS = [
-  'model',
-  'model_reasoning_effort',
-  'approval_policy',
-  'sandbox_mode'
-] as const
-
-// Why: the [tui] keys the Codex TUI's user-facing pickers persist (status line,
-// terminal title, theme). Like the top-level list, every key here gets written
-// into the user's real ~/.codex/config.toml on promotion — grow it deliberately.
-export const PROMOTED_CODEX_TUI_SETTING_KEYS = [
-  'status_line',
-  'status_line_use_colors',
-  'terminal_title',
-  'theme'
-] as const
-
-// Why: promotion diffs and upserts operate on structured keys — top-level keys
-// keep their bare name, [tui] keys are namespaced tui.<key> so their baseline
-// entries cannot collide with a top-level key of the same name.
-const PROMOTED_STRUCTURED_KEYS: readonly string[] = [
-  ...PROMOTED_CODEX_SETTING_KEYS,
-  ...PROMOTED_CODEX_TUI_SETTING_KEYS.map(tuiStructuredKey)
-]
-
-function isPromotedTuiKey(key: string): boolean {
-  return (PROMOTED_CODEX_TUI_SETTING_KEYS as readonly string[]).includes(key)
-}
-
-// Returns the structured tui key a scanned line's key represents, or null. In
-// the preamble it recognizes the dotted `tui.<key>` form a user may hand-author;
-// inside the first `[tui]` table body it recognizes the bare `<key>` form Codex
-// writes. Both map to the same structured key so either config shape promotes.
-function matchTuiStructuredKey(
-  keyPath: string[],
-  inPreamble: boolean,
-  tuiBodyActive: boolean
-): string | null {
-  if (inPreamble) {
-    const tuiKey = keyPath.length === 2 && keyPath[0] === 'tui' ? keyPath[1] : null
-    return tuiKey && isPromotedTuiKey(tuiKey) ? tuiStructuredKey(tuiKey) : null
-  }
-  const tuiKey = keyPath.length === 1 ? keyPath[0] : null
-  return tuiBodyActive && tuiKey && isPromotedTuiKey(tuiKey) ? tuiStructuredKey(tuiKey) : null
-}
-
-type TopLevelSettingValue = {
-  raw: string
-  // Why: a multiline string/array value can't be replaced line-by-line, so it's excluded from promotion.
-  multiline: boolean
-}
-
-function matchPromotedStructuredKey(
-  line: string,
-  inPreamble: boolean,
-  tuiBodyActive: boolean
-): { structuredKey: string; raw: string } | null {
-  const parsed = parseTomlKeyPath(line)
-  if (!parsed || line[parsed.end] !== '=') {
-    return null
-  }
-  const raw = line.slice(parsed.end + 1).trim()
-  const topLevelKey = parsed.segments.length === 1 ? parsed.segments[0] : null
-  if (
-    inPreamble &&
-    topLevelKey &&
-    (PROMOTED_CODEX_SETTING_KEYS as readonly string[]).includes(topLevelKey)
-  ) {
-    return { structuredKey: topLevelKey, raw }
-  }
-  const tuiKey = matchTuiStructuredKey(parsed.segments, inPreamble, tuiBodyActive)
-  return tuiKey ? { structuredKey: tuiKey, raw } : null
-}
-
-// Why: top-level preamble scalars keep the historical behavior; [tui] keys are
-// collected from the first bare [tui] table body or the dotted preamble form,
-// keyed by structured path. Any table header (including [tui.*] subtables) ends
-// the [tui] body, and [profiles.*]/other tables are still ignored.
-function readPromotedSettingValues(configPath: string): Map<string, TopLevelSettingValue> {
-  const result = new Map<string, TopLevelSettingValue>()
+function readOrdinarySettingValues(configPath: string): Map<string, OrdinaryCodexSettingValue> {
   // Why: an unreadable config held no settings only in the sense that we could
   // not read them. Returning an empty map says the user cleared every promoted
   // value, and the write below then acts on that.
   const observation = observeAgentStateFile(configPath)
   if (observation.kind === 'absent') {
-    return result
+    return new Map()
   }
   if (observation.kind === 'indeterminate') {
     throw observation.error
   }
-  const lines = observation.value.split('\n')
-  let state = createTomlLineScanState()
-  let inPreamble = true
-  let tuiTableSeen = false
-  let tuiBodyActive = false
-  for (const line of lines) {
-    if (isTomlStructuralLine(state)) {
-      const header = getTomlTableHeader(line)
-      if (header) {
-        const table = parseTomlTableHeaderPath(header)
-        tuiBodyActive =
-          table !== null &&
-          !table.isArray &&
-          table.segments.length === 1 &&
-          table.segments[0] === 'tui' &&
-          !tuiTableSeen
-        if (tuiBodyActive) {
-          tuiTableSeen = true
-        }
-        inPreamble = false
-        state = updateTomlLineScanState(state, line)
-        continue
-      }
-      const matched = matchPromotedStructuredKey(line, inPreamble, tuiBodyActive)
-      if (matched) {
-        const nextState = updateTomlLineScanState(state, line)
-        result.set(matched.structuredKey, {
-          raw: matched.raw,
-          multiline: !isTomlStructuralLine(nextState)
-        })
-        state = nextState
-        continue
-      }
-    }
-    state = updateTomlLineScanState(state, line)
-  }
-  return result
+  return parseOrdinaryCodexSettingValues(observation.value)
 }
 
 /**
- * Records the promotable settings the runtime config.toml holds after a mirror, so the next
- * promotion can tell "value Orca mirrored" from "value Codex wrote for the user".
+ * Records supported ordinary settings after a mirror so the next pass can identify runtime edits.
  * Call after a successful mirror only — advancing past an unpromoted change strands it forever.
  */
 export function snapshotCodexRuntimeSettingsBaseline(
   runtimeHomePath = getOrcaManagedCodexHomePath(),
-  conflicts: ReadonlyMap<string, CodexSettingsConflict> = new Map()
+  conflicts: ReadonlyMap<string, CodexSettingsConflict> = new Map(),
+  options: { sourceIsAuthoritative?: boolean } = {}
 ): void {
   try {
     const runtimeTomlPath = join(runtimeHomePath, 'config.toml')
     // Why: record an empty baseline even for a missing runtime config, so Codex's first write still diffs and promotes.
-    const runtimeValues = readPromotedSettingValues(runtimeTomlPath)
+    const runtimeValues = readOrdinarySettingValues(runtimeTomlPath)
     const settings = new Map<string, string | null>()
-    for (const key of PROMOTED_STRUCTURED_KEYS) {
+    const sourceIsAuthoritative = options.sourceIsAuthoritative ?? true
+    const keys = sourceIsAuthoritative ? runtimeValues.keys() : PROMOTED_STRUCTURED_KEYS
+    for (const key of keys) {
       const value = runtimeValues.get(key)
-      if (!conflicts.has(key) && !value?.multiline) {
+      if (!conflicts.has(key) && !value?.multiline && !value?.unsupported) {
         // Why: explicit nulls distinguish a schema-aware absence from a key added by a later schema.
         settings.set(key, value?.raw ?? null)
       }
     }
-    writeCodexSettingsBaseline(runtimeHomePath, { settings, conflicts })
+    for (const key of PROMOTED_STRUCTURED_KEYS) {
+      if (!conflicts.has(key) && !settings.has(key)) {
+        const value = runtimeValues.get(key)
+        if (!value?.multiline && !value?.unsupported) {
+          settings.set(key, value?.raw ?? null)
+        }
+      }
+    }
+    writeCodexSettingsBaseline(runtimeHomePath, {
+      settings,
+      conflicts,
+      knownPromotedKeys: new Set(PROMOTED_STRUCTURED_KEYS),
+      sourceIsAuthoritative,
+      tracksAllOrdinarySettings: sourceIsAuthoritative
+    })
   } catch (error) {
     console.warn('[codex-settings-promotion] failed to snapshot settings baseline', error)
   }
@@ -246,8 +151,26 @@ function promoteCodexRuntimeSettingsToSystemUnsafe(
     return emptyPromotionPlan()
   }
   const baseline = baselineObservation.baseline
-  const runtimeValues = readPromotedSettingValues(runtimeTomlPath)
-  const systemValues = readPromotedSettingValues(systemTomlPath)
+  const runtimeValues = readOrdinarySettingValues(runtimeTomlPath)
+  const systemTomlObservation = observeAgentStateFile(systemTomlPath)
+  if (systemTomlObservation.kind === 'indeterminate') {
+    throw systemTomlObservation.error
+  }
+  const systemSourceIsBlank =
+    systemTomlObservation.kind === 'present' && systemTomlObservation.value.trim() === ''
+  if (
+    baseline.sourceIsAuthoritative &&
+    (systemTomlObservation.kind === 'absent' || systemSourceIsBlank)
+  ) {
+    throw new Error('Authoritative Codex config source is unavailable')
+  }
+  if (systemSourceIsBlank) {
+    return emptyPromotionPlan()
+  }
+  const systemValues =
+    systemTomlObservation.kind === 'present'
+      ? parseOrdinaryCodexSettingValues(systemTomlObservation.value)
+      : new Map<string, OrdinaryCodexSettingValue>()
   const updates = new Map<string, string>()
   const conflicts = new Map<string, CodexSettingsConflict>()
   const runtimeValuesToPreserve = new Map<string, string | null>()
@@ -272,7 +195,7 @@ function promoteCodexRuntimeSettingsToSystemUnsafe(
   // the canonical config with settings derived from Orca's runtime copy. One
   // read replaces the old existsSync + read pair and its TOCTOU gap.
   // The indeterminate arm is a backstop rather than the live guard: an
-  // unreadable system config already refused in readPromotedSettingValues,
+  // unreadable system config already refused above,
   // because `writeTarget.path` always resolves to the same file as
   // `systemTomlPath` (its realpath, its dangling-link target, or itself).
   const writeTargetObservation = observeAgentStateFile(writeTarget.path)
@@ -287,7 +210,7 @@ function promoteCodexRuntimeSettingsToSystemUnsafe(
   const systemContent =
     writeTargetObservation.kind === 'present'
       ? writeTargetObservation.value
-      : extractOrdinaryCodexSettings(runtimeTomlObservation.value)
+      : getMissingSystemSeedContent(runtimeTomlObservation.value, runtimeValues)
   const nextContent = upsertPromotedSettingsInContent(systemContent, updates)
   if (nextContent === systemContent) {
     return { conflicts, runtimeValuesToPreserve }
@@ -305,15 +228,24 @@ function promoteCodexRuntimeSettingsToSystemUnsafe(
 
 type PromotionCollectionContext = {
   baseline: CodexSettingsBaseline
-  runtimeValues: ReadonlyMap<string, TopLevelSettingValue>
-  systemValues: ReadonlyMap<string, TopLevelSettingValue>
+  runtimeValues: ReadonlyMap<string, OrdinaryCodexSettingValue>
+  systemValues: ReadonlyMap<string, OrdinaryCodexSettingValue>
   updates: Map<string, string>
   conflicts: Map<string, CodexSettingsConflict>
   runtimeValuesToPreserve: Map<string, string | null>
 }
 
 function collectPromotionChanges(context: PromotionCollectionContext): void {
-  for (const key of PROMOTED_STRUCTURED_KEYS) {
+  for (const key of collectOrdinaryCodexSettingKeys(context.runtimeValues, context.systemValues, [
+    ...context.baseline.settings.keys(),
+    ...context.baseline.conflicts.keys()
+  ])) {
+    if (
+      isOrdinarySettingBlocked(context.runtimeValues, key) ||
+      isOrdinarySettingBlocked(context.systemValues, key)
+    ) {
+      continue
+    }
     const runtimeRaw = getComparableRaw(context.runtimeValues.get(key))
     const systemRaw = getComparableRaw(context.systemValues.get(key))
     if (runtimeRaw === undefined || systemRaw === undefined) {
@@ -321,10 +253,16 @@ function collectPromotionChanges(context: PromotionCollectionContext): void {
     }
 
     const existingConflict = context.baseline.conflicts.get(key)
-    if (existingConflict || !context.baseline.settings.has(key)) {
-      const resolution = resolveUntrackedCodexSetting(runtimeRaw, systemRaw, existingConflict)
+    const promoted = isPromotedStructuredKey(key)
+    const tracked = isTrackedSetting(context.baseline, key, promoted)
+    if (existingConflict || !tracked) {
+      const resolution = promoted
+        ? resolveUntrackedCodexSetting(runtimeRaw, systemRaw, existingConflict)
+        : resolveUnlistedCodexSetting(runtimeRaw, systemRaw, existingConflict)
       if (resolution.action === 'promote-runtime') {
-        context.updates.set(key, resolution.raw)
+        if (promoted) {
+          context.updates.set(key, resolution.raw)
+        }
       } else if (resolution.action === 'preserve') {
         // Why: a schema-new key has no three-way ancestor; preserve both values until content changes one side.
         context.conflicts.set(key, resolution.conflict)
@@ -333,22 +271,68 @@ function collectPromotionChanges(context: PromotionCollectionContext): void {
       continue
     }
 
-    if (runtimeRaw === null || runtimeRaw === context.baseline.settings.get(key)) {
+    const ancestor = context.baseline.settings.get(key) ?? null
+    if (runtimeRaw === ancestor) {
       continue
     }
-    // Why: ~/.codex remains source of truth when both sides changed from a known baseline.
-    if (systemRaw !== context.baseline.settings.get(key)) {
+    if (systemRaw !== ancestor) {
+      if (!promoted && runtimeRaw !== systemRaw) {
+        preserveLocalValue(context, key, runtimeRaw, systemRaw)
+      }
       continue
     }
-    context.updates.set(key, runtimeRaw)
+    if (promoted) {
+      if (runtimeRaw !== null) {
+        context.updates.set(key, runtimeRaw)
+      }
+    } else {
+      preserveLocalValue(context, key, runtimeRaw, systemRaw)
+    }
   }
 }
 
-function getComparableRaw(value: TopLevelSettingValue | undefined): string | null | undefined {
+function isTrackedSetting(
+  baseline: CodexSettingsBaseline,
+  key: string,
+  promoted: boolean
+): boolean {
+  if (promoted && baseline.tracksAllOrdinarySettings && !baseline.knownPromotedKeys.has(key)) {
+    return false
+  }
+  return baseline.settings.has(key) || (baseline.tracksAllOrdinarySettings && !promoted)
+}
+
+function preserveLocalValue(
+  context: PromotionCollectionContext,
+  key: string,
+  runtime: string | null,
+  system: string | null
+): void {
+  context.conflicts.set(key, { runtime, system })
+  context.runtimeValuesToPreserve.set(key, runtime)
+}
+
+function getMissingSystemSeedContent(
+  runtimeContent: string,
+  runtimeValues: ReadonlyMap<string, OrdinaryCodexSettingValue>
+): string {
+  const localOnlyKeys = new Set<string>()
+  for (const [key, value] of runtimeValues) {
+    if (!isPromotedStructuredKey(key) && !value.multiline && !value.unsupported) {
+      localOnlyKeys.add(key)
+    }
+  }
+  return removePromotedSettingsFromContent(
+    extractOrdinaryCodexSettings(runtimeContent),
+    localOnlyKeys
+  )
+}
+
+function getComparableRaw(value: OrdinaryCodexSettingValue | undefined): string | null | undefined {
   if (!value) {
     return null
   }
-  return value.multiline ? undefined : value.raw
+  return value.multiline || value.unsupported ? undefined : value.raw
 }
 
 function emptyPromotionPlan(): CodexSettingsPromotionPlan {
