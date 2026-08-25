@@ -7,6 +7,8 @@ import {
 import { buildWindowsCmdShimCommandLine, isCmdInterpretedProgram } from './windows-command-line'
 import { forceTerminateProcessTree, signalProcessTree } from './process-tree-termination'
 
+export type SpawnedProcess = ChildProcess
+
 /**
  * The single place Orca starts a child process.
  *

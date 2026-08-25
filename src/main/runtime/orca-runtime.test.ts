@@ -2338,6 +2338,27 @@ describe('OrcaRuntimeService', () => {
     expect(capabilities).toContain('browser.headless.v1')
     expect(capabilities).toContain('browser.certificate-trust.v1')
   })
+
+  it('advertises only while headless browser commands remain live', () => {
+    let available = true
+    setRuntimeBrowserCommandsFactory((host) => new RuntimeBrowserCommands(host), {
+      headless: true,
+      isAvailable: () => available
+    })
+    const status = createRuntime().getStatus()
+
+    expect(status.capabilities).toContain('browser.headless.v1')
+    expect(status.capabilities).not.toContain('browser.screencast.v1')
+    expect(status.capabilities).not.toContain('browser.certificate-trust.v1')
+    expect(status.degradations).toBeUndefined()
+
+    available = false
+    const degraded = createRuntime().getStatus()
+    expect(degraded.capabilities).not.toContain('browser.headless.v1')
+    expect(degraded.degradations).toEqual([
+      expect.objectContaining({ code: 'browser_unavailable' })
+    ])
+  })
   it('surfaces live offscreen load failures in headless browser snapshots', () => {
     const runtime = createRuntime()
     runtime.setOffscreenBrowserBackend({ createTab: vi.fn(), closeTab: vi.fn() })
@@ -2465,11 +2486,38 @@ describe('OrcaRuntimeService', () => {
     expect(runtime.getStatus().capabilities).toContain('browser.certificate-trust.v1')
   })
 
-  it('does not advertise certificate trust when no browser backend is available', () => {
+  it('declares browser unavailability when no browser provider resolves', async () => {
+    setRuntimeBrowserCommandsFactory(null)
     const runtime = createRuntime()
+    const status = runtime.getStatus()
 
-    expect(runtime.getStatus().capabilities).not.toContain('browser.certificate-trust.v1')
-    expect(runtime.getStatus().capabilities).not.toContain('browser.screencast.v1')
+    expect(status.capabilities).not.toContain('browser.headless.v1')
+    expect(status.capabilities).not.toContain('browser.certificate-trust.v1')
+    expect(status.capabilities).not.toContain('browser.screencast.v1')
+    expect(status.degradations).toEqual([
+      {
+        code: 'browser_unavailable',
+        capability: 'browser.headless.v1',
+        message: 'Browser automation requires the Electron provider or ORCA_BROWSER_EXECUTABLE.'
+      }
+    ])
+    const browserCalls = Object.entries(runtime).filter(
+      ([name, value]) => /^browser[A-Z]/.test(name) && typeof value === 'function'
+    )
+    expect(browserCalls.length).toBeGreaterThan(50)
+    for (const [name, call] of browserCalls) {
+      const invoke =
+        name === 'browserScreencast'
+          ? () =>
+              (call as CallableFunction)(
+                { format: 'jpeg' },
+                { sendBinary: () => true, emit: () => undefined }
+              )
+          : () => (call as CallableFunction)({})
+      await expect(Promise.resolve().then(invoke)).rejects.toMatchObject({
+        code: 'browser_unavailable'
+      })
+    }
   })
 
   it('closes a worktree’s offscreen browser pages when its metadata is removed (leak fix)', () => {
