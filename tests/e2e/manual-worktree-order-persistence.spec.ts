@@ -54,14 +54,14 @@ test('manual drag survives activity and persisted-profile reload', async ({
       }
       const state = store.getState()
       state.setGroupBy('none')
-      state.setSortBy('recent')
+      state.setSortBy('smart')
       state.setShowSleepingWorkspaces(true)
       const repoId = state.allWorktrees()[0]?.repoId
       if (!repoId) {
         throw new Error('seed repo was not loaded')
       }
       const names = ['manual-order-a', 'manual-order-b', 'manual-order-c']
-      const created = []
+      const created: string[] = []
       for (const name of names) {
         created.push((await state.createWorktree(repoId, name, undefined, 'skip')).worktree.id)
       }
@@ -116,14 +116,34 @@ test('manual drag survives activity and persisted-profile reload', async ({
       expectedOrder
     )
 
+    const sortOrdersBeforeActivity = new Map(
+      manualOrderAfterDrag.rows.map((row) => [row.id, row.sortOrder])
+    )
     await first.page.evaluate(async (activityId) => {
       const store = window.__store
       if (!store) {
         throw new Error('store unavailable')
       }
       store.getState().bumpWorktreeActivity(activityId)
-      await window.api.worktrees.persistSortOrder({ orderedIds: [activityId] })
+      const orderedIds = store
+        .getState()
+        .allWorktrees()
+        .map((worktree) => worktree.id)
+        .filter((id) => id !== activityId)
+      await window.api.worktrees.persistSortOrder({ orderedIds: [activityId, ...orderedIds] })
+      await store.getState().fetchAllWorktrees()
     }, targetId)
+    await expect
+      .poll(() =>
+        first.page.evaluate((activityId) => {
+          const row = window.__store
+            ?.getState()
+            .allWorktrees()
+            .find((worktree) => worktree.id === activityId)
+          return row?.sortOrder
+        }, targetId)
+      )
+      .not.toBe(sortOrdersBeforeActivity.get(targetId))
     await expect
       .poll(() =>
         visibleWorktreeIds(first.page).then((ids) => ids.filter((id) => createdIds.includes(id)))
@@ -174,7 +194,7 @@ test('manual drag survives activity and persisted-profile reload', async ({
         .then((page) =>
           page.evaluate(async (ids) => {
             for (const id of ids) {
-              await window.__store?.getState().removeWorktree(id, true)
+              await window.__store?.getState().removeWorktree({ id, executionHostId: null }, true)
             }
           }, createdIds)
         )

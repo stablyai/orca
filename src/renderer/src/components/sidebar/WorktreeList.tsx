@@ -36,6 +36,7 @@ import { useSidebarWorktreeSortOrder } from './worktree-list/listing/use-sort-or
 import { useVisibleSidebarWorktrees } from './worktree-list/listing/use-visible-worktrees'
 import { useWorktreeStatusMutations } from './worktree-list/drag/use-status-mutations'
 import { shouldFiltersHideAllRows } from './sidebar-empty-state-gate'
+import { buildWorktreeManualOrderCatalog } from './worktree-manual-order-catalog'
 
 type WorktreeListProps = {
   scrollOffsetRef: React.MutableRefObject<number>
@@ -105,6 +106,10 @@ const WorktreeList = React.memo(function WorktreeList({
   const agentSendTargetWorktreeId = useAgentSendTargetWorktreeId()
   const { filterState, hasFilters, clearFilters } = useSidebarWorktreeFilters()
   const sortedIds = useSidebarWorktreeSortOrder({ allWorktrees, repoMap, sortBy })
+  const manualOrderCatalog = useMemo(
+    () => buildWorktreeManualOrderCatalog({ worktrees: allWorktrees, folderWorkspaces }),
+    [allWorktrees, folderWorkspaces]
+  )
   const { visibleWorktrees, pairedDeviceIdsByEnvironment } = useVisibleSidebarWorktrees({
     filterState,
     sortBy,
@@ -174,7 +179,7 @@ const WorktreeList = React.memo(function WorktreeList({
     pinnedDisplayPolicy
   })
   const statusMutations = useWorktreeStatusMutations({
-    allWorktreeIds: sortedIds,
+    manualOrderCatalog,
     worktreeMap,
     workspaceStatuses,
     sortBy

@@ -119,7 +119,7 @@ export function buildManualOrderUpdatesForVisibleGroups(args: {
   dropIndex: number
   now: number
   rankByWorktreeId?: ReadonlyMap<string, number>
-  allWorktreeIds?: readonly string[]
+  allWorktreeIds: readonly string[]
 }): {
   changed: boolean
   orderedIds: string[]
@@ -163,7 +163,7 @@ export function buildManualOrderUpdatesForGroupDrop(args: {
   dropIndex: number
   now: number
   rankByWorktreeId?: ReadonlyMap<string, number>
-  allWorktreeIds?: readonly string[]
+  allWorktreeIds: readonly string[]
 }): {
   changed: boolean
   orderedIds: string[]

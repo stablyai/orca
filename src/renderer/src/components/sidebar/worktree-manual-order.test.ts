@@ -45,6 +45,18 @@ describe('buildSparseManualOrderUpdates durable migration', () => {
 
     expect([...result]).toEqual([['b', { manualOrder: 0 }]])
   })
+
+  it('never drops known rows when a stale visible sequence contains unknowns or duplicates', () => {
+    const result = buildSparseManualOrderUpdates({
+      orderedIds: ['unknown', 'b', 'b', 'a'],
+      movedIds: ['b'],
+      allWorktreeIds: ['a', 'b', 'hidden', 'c', 'c'],
+      rankByWorktreeId: new Map(),
+      now: 10_000
+    })
+
+    expect([...result.keys()]).toEqual(['b', 'a', 'hidden', 'c', 'unknown'])
+  })
 })
 
 describe('expandDraggedWorktreeIdsForVisibleLineage', () => {
@@ -277,6 +289,7 @@ describe('buildManualOrderUpdatesForVisibleGroups', () => {
       sourceGroupKey: 'workspace-status:todo',
       draggedIds: ['todo-b'],
       dropIndex: 0,
+      allWorktreeIds: ['todo-a', 'todo-b', 'done-a', 'done-b'],
       now: 10_000
     })
 
@@ -296,6 +309,7 @@ describe('buildManualOrderUpdatesForVisibleGroups', () => {
       sourceGroupKey: 'repo:one',
       draggedIds: ['a'],
       dropIndex: 1,
+      allWorktreeIds: ['a', 'b'],
       now: 10_000
     })
 
@@ -309,6 +323,7 @@ describe('buildManualOrderUpdatesForVisibleGroups', () => {
       sourceGroupKey: 'repo:one',
       draggedIds: ['b'],
       dropIndex: 4,
+      allWorktreeIds: ['a', 'b', 'c', 'd'],
       now: 10_000,
       rankByWorktreeId: new Map([
         ['a', 4000],
@@ -328,6 +343,7 @@ describe('buildManualOrderUpdatesForVisibleGroups', () => {
       sourceGroupKey: 'all',
       draggedIds: ['parent', 'child'],
       dropIndex: 3,
+      allWorktreeIds: ['parent', 'child', 'other'],
       now: 10_000,
       rankByWorktreeId: new Map([
         ['parent', 3000],
@@ -354,6 +370,7 @@ describe('buildManualOrderUpdatesForVisibleGroups', () => {
       sourceGroupKey: 'all',
       draggedIds: ['wt-0'],
       dropIndex: ids.length,
+      allWorktreeIds: ids,
       now: 10_000,
       rankByWorktreeId
     })
@@ -376,6 +393,7 @@ describe('buildManualOrderUpdatesForGroupDrop', () => {
       targetGroupKey: 'doing',
       draggedIds: ['todo-b'],
       dropIndex: 1,
+      allWorktreeIds: ['todo-a', 'todo-b', 'doing-a', 'doing-b'],
       now: 10_000
     })
 
@@ -398,6 +416,7 @@ describe('buildManualOrderUpdatesForGroupDrop', () => {
       targetGroupKey: 'doing',
       draggedIds: ['d', 'b'],
       dropIndex: 0,
+      allWorktreeIds: ['a', 'b', 'c', 'd'],
       now: 10_000
     })
 
@@ -410,6 +429,7 @@ describe('buildManualOrderUpdatesForGroupDrop', () => {
       targetGroupKey: 'doing',
       draggedIds: ['a'],
       dropIndex: 1,
+      allWorktreeIds: ['a', 'b'],
       now: 10_000
     })
 
@@ -426,6 +446,7 @@ describe('buildManualOrderUpdatesForGroupDrop', () => {
       targetGroupKey: 'doing',
       draggedIds: ['todo-b'],
       dropIndex: 1,
+      allWorktreeIds: ['todo-a', 'todo-b', 'doing-a', 'doing-b'],
       now: 10_000,
       rankByWorktreeId: new Map([
         ['todo-a', 4000],

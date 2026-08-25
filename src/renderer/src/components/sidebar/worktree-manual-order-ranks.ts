@@ -19,23 +19,23 @@ function mergeVisibleOrderIntoKnownOrder(
   knownIds: readonly string[],
   visibleOrder: readonly string[]
 ): string[] {
-  const visibleSet = new Set(visibleOrder)
-  if (!knownIds.some((id) => visibleSet.has(id))) {
-    return [...knownIds, ...visibleOrder.filter((id) => !knownIds.includes(id))]
-  }
+  const uniqueKnownIds = [...new Set(knownIds)]
+  const knownSet = new Set(uniqueKnownIds)
+  const uniqueVisibleOrder = [...new Set(visibleOrder)]
+  const knownVisibleOrder = uniqueVisibleOrder.filter((id) => knownSet.has(id))
+  const visibleSet = new Set(knownVisibleOrder)
 
   const merged: string[] = []
   let visibleIndex = 0
-  for (let index = 0; index < knownIds.length; index++) {
-    const id = knownIds[index]!
+  for (const id of uniqueKnownIds) {
     if (visibleSet.has(id)) {
-      merged.push(visibleOrder[visibleIndex] ?? id)
+      merged.push(knownVisibleOrder[visibleIndex] ?? id)
       visibleIndex++
       continue
     }
     merged.push(id)
   }
-  merged.push(...visibleOrder.slice(visibleIndex).filter((id) => !knownIds.includes(id)))
+  merged.push(...uniqueVisibleOrder.filter((id) => !knownSet.has(id)))
   return merged
 }
 
@@ -55,7 +55,7 @@ export function buildSparseManualOrderUpdates(args: {
   movedIds: readonly string[]
   rankByWorktreeId?: ReadonlyMap<string, number>
   /** Current order of every known row, including filtered/collapsed rows. */
-  allWorktreeIds?: readonly string[]
+  allWorktreeIds: readonly string[]
   now: number
 }): Map<string, WorktreeManualOrderUpdate> {
   const movedSet = new Set(args.movedIds)
@@ -64,16 +64,16 @@ export function buildSparseManualOrderUpdates(args: {
     return new Map()
   }
   if (!args.rankByWorktreeId) {
-    return buildFallbackManualOrderUpdates(args.orderedIds, args.now)
+    return buildFallbackManualOrderUpdates(
+      mergeVisibleOrderIntoKnownOrder(args.allWorktreeIds, args.orderedIds),
+      args.now
+    )
   }
 
   // Why: Manual is a durable sequence, not a rank for only the rendered slice.
   // Materialize every known row once when any row is still on the mutable
   // sortOrder fallback; subsequent drags can use sparse ranks again.
-  if (
-    args.allWorktreeIds &&
-    args.allWorktreeIds.some((id) => getManualOrderRank(args.rankByWorktreeId!, id) === null)
-  ) {
+  if (args.allWorktreeIds.some((id) => getManualOrderRank(args.rankByWorktreeId!, id) === null)) {
     return buildFallbackManualOrderUpdates(
       mergeVisibleOrderIntoKnownOrder(args.allWorktreeIds, args.orderedIds),
       args.now
