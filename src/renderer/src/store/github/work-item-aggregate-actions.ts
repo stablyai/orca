@@ -14,7 +14,12 @@ import {
   isGitHubWorkItemsQueryTooLarge
 } from '../slices/github-work-items-query-bounds'
 import { workItemsCacheKey, workItemsInflightRequestKey } from './cache-identity'
-import { GITHUB_SEARCH_RESULT_WINDOW, isFresh, WORK_ITEMS_CACHE_TTL } from './cache-policy'
+import {
+  GITHUB_SEARCH_RESULT_WINDOW,
+  isFresh,
+  withBoundedCacheEntry,
+  WORK_ITEMS_CACHE_TTL
+} from './cache-policy'
 import {
   acquireProviderRequestSlot as acquireWorkItemSlot,
   inflightWorkItemsRequests,
@@ -22,6 +27,7 @@ import {
 } from './request-coordination'
 import { findRepoForGitHubOwner } from './repository-routing'
 import {
+  classifyWorkItemsFetchFailure,
   countGitHubWorkItemsForRepo,
   getGitHubWorkItemRequestContext,
   getGitHubWorkItemSourceSettings,
@@ -31,6 +37,7 @@ import {
 } from './work-item-routing'
 
 export const createWorkItemAggregateActions = (
+  set: Parameters<StateCreator<AppState>>[0],
   get: Parameters<StateCreator<AppState>>[1]
 ): Pick<
   GitHubSlice,
@@ -86,6 +93,23 @@ export const createWorkItemAggregateActions = (
           }
           console.warn(`[workItems] ${r.repoId} failed:`, err)
           failedCount += 1
+          // Why: without this, a repo whose fetch throws leaves no cache entry
+          // at all, so sources stay null and error stays null, satisfying
+          // neither the error-row nor the unresolved-source render branch and
+          // vanishing from the list while still counted in failedCount
+          // (#16473). Write a minimal error entry so the banner count and the
+          // rendered rows can't diverge.
+          set((s) => {
+            const previousEntry = s.workItemsCache[key]
+            return {
+              workItemsCache: withBoundedCacheEntry(s.workItemsCache, key, {
+                data: previousEntry?.data ?? null,
+                fetchedAt: Date.now(),
+                ...(previousEntry?.sources ? { sources: previousEntry.sources } : {}),
+                error: classifyWorkItemsFetchFailure(err)
+              })
+            }
+          })
           return [] as GitHubWorkItem[]
         }
       })

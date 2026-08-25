@@ -497,4 +497,53 @@ describe('createGitHubSlice.fetchWorkItems source/error envelope', () => {
       consoleWarn.mockRestore()
     }
   })
+
+  it('writes a visible error entry for a repo counted as failed with no cache to fall back to (#16473)', async () => {
+    // Why: a repo whose first-ever fetch throws previously left the cache
+    // entry unwritten, and `sources: null, error: null` satisfies neither the
+    // error-row nor the unresolved-source render branch, so it vanished from
+    // the Tasks list while still incrementing `failedCount`. The cache entry
+    // must now carry an `error` so callers (TaskPage's perRepoSourceState)
+    // can render it.
+    const store = createTestStore()
+    const consoleWarn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    mockApi.gh.listWorkItems.mockRejectedValueOnce(new Error('boom: totally unexpected failure'))
+
+    try {
+      const result = await store
+        .getState()
+        .fetchWorkItemsAcrossRepos(
+          [{ repoId: 'never-cached-repo', path: '/server/never-cached-repo' }],
+          24,
+          100,
+          ''
+        )
+
+      expect(result.failedCount).toBe(1)
+      const { error } = store.getState().getWorkItemsSourcesAndError('never-cached-repo', 24, '')
+      expect(error).not.toBeNull()
+      expect(error?.message).toContain('boom: totally unexpected failure')
+    } finally {
+      consoleWarn.mockRestore()
+    }
+  })
+
+  it('surfaces an issues-side error even when its source never resolved', async () => {
+    // Why: previously an issues-side error with no resolved `sources.issues`
+    // was logged and dropped instead of cached, so the repo rendered as a
+    // silent zero. `source` is now optional on the cache error, so the row
+    // falls back to the repo path instead of disappearing (#16473).
+    const store = createTestStore()
+    mockApi.gh.listWorkItems.mockResolvedValueOnce({
+      items: [],
+      sources: { issues: null, prs: null, originCandidate: null, upstreamCandidate: null },
+      errors: { issues: { type: 'unknown', message: 'search unavailable' } }
+    })
+
+    await store.getState().fetchWorkItems('repo-id', '/repo', 24, '')
+
+    const result = store.getState().getWorkItemsSourcesAndError('repo-id', 24, '')
+    expect(result.error).toMatchObject({ type: 'unknown', message: 'search unavailable' })
+    expect(result.error?.source).toBeUndefined()
+  })
 })
