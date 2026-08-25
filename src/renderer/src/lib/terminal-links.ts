@@ -1,3 +1,4 @@
+import { trimFileLinkRangeTrailingNonAsciiLetters } from '../../../shared/file-link-trailing-prose'
 import { normalizeAbsolutePath } from './terminal-path-normalization'
 import { resolveExplicitFileLinkTarget } from './explicit-file-link-target'
 import { detectBareFilenameLinks } from './terminal-bare-file-link-detection'
@@ -10,6 +11,7 @@ import {
   type DetectedTerminalFileLinkRange
 } from './terminal-file-link-detection-ranges'
 import { detectTerminalFileUriLinks } from './terminal-file-uri-link'
+import { trimSpacedPathTrailingProse } from './terminal-spaced-path-trailing-prose'
 
 export type ParsedTerminalFileLink = {
   pathText: string
@@ -33,8 +35,11 @@ export type ResolvedTerminalFileLink = Pick<ParsedTerminalFileLink, 'line' | 'co
 // `:line` and `:col` suffixes (e.g. `src/foo.ts:12:3`, `./bin`, `/abs/path`).
 // Why: framework route files commonly use punctuation segments like
 // `app/(shop)/products/[id]/page.tsx`; keep those links whole.
+// Why \p{L}\p{M}\p{N}: an ASCII-only class truncated at the first non-Latin
+// character (#13396). Pair with trimFileLinkRangeTrailingNonAsciiLetters so
+// particles glued after an extension (`…/파일.md로`) are not swallowed.
 const LOCAL_PATH_REGEX =
-  /(?:~[\\/]|[\\/]|\.{1,2}[\\/]|[A-Za-z]:[\\/]|[A-Za-z0-9._-]+[\\/])[A-Za-z0-9._~\-/%+@\\()[\]]*(?::\d+)?(?::\d+)?/g
+  /(?:~[\\/]|[\\/]|\.{1,2}[\\/]|[A-Za-z]:[\\/]|[\p{L}\p{M}\p{N}._-]+[\\/])[\p{L}\p{M}\p{N}._~\-/%+@\\()[\]]*(?::\d+)?(?::\d+)?/gu
 
 // Matches separator paths whose file or folder names include spaces. This runs
 // before LOCAL_PATH_REGEX so `/Users/A/Foo Bar/file.ts` is claimed as one link
@@ -115,50 +120,6 @@ function isInsideUriScheme(lineText: string, range: DetectedTerminalFileLinkRang
   )
 }
 
-function trimSpacedPathTrailingProse(
-  range: DetectedTerminalFileLinkRange
-): DetectedTerminalFileLinkRange {
-  // Why: keep one extension-terminated path, but drop trailing prose or a
-  // second unrelated path that the broad spaced-path scan also captured. A
-  // line-end extension token only extends the span when the added segment is
-  // path-like (contains a separator) — "v1.2 reports/result.json" extends,
-  // prose like "failed to start app.py" must not be swallowed.
-  let selected: string | null = null
-  const extensionPrefixPattern = /\.[A-Za-z0-9_+-]+(?::\d+)?(?::\d+)?(?=\s+|$)/g
-  let match: RegExpExecArray | null
-  while ((match = extensionPrefixPattern.exec(range.text)) !== null) {
-    const end = match.index + match[0].length
-    const text = range.text.slice(0, end)
-    if (countPathStarts(text) > 1) {
-      continue
-    }
-    if (
-      end < range.text.length ||
-      selected === null ||
-      /[\\/]/.test(range.text.slice(selected.length, end))
-    ) {
-      selected = text
-    }
-  }
-  if (!selected) {
-    return range
-  }
-  return {
-    text: selected,
-    startIndex: range.startIndex,
-    endIndex: range.startIndex + selected.length
-  }
-}
-
-function countPathStarts(text: string): number {
-  let count = 0
-  for (const match of text.matchAll(/(?:^|\s)(?:~[\\/]|[\\/]|\.{1,2}[\\/]|[A-Za-z]:[\\/])/g)) {
-    void match
-    count += 1
-  }
-  return count
-}
-
 function trimTrailingWhitespace(
   range: DetectedTerminalFileLinkRange
 ): DetectedTerminalFileLinkRange {
@@ -217,7 +178,7 @@ function detectLocalPathLinks(
     if (!/[\\/]/.test(range.text)) {
       continue
     }
-    const link = toParsedTerminalFileLink(range)
+    const link = toParsedTerminalFileLink(trimFileLinkRangeTrailingNonAsciiLetters(range))
     if (link) {
       links.push(link)
     }
@@ -259,7 +220,9 @@ function detectSpacedLocalPathLinks(
       const candidateLinks = candidateRanges
         .map((candidateRange) =>
           toParsedTerminalFileLink(
-            trimSpacedPathTrailingProse(trimTrailingWhitespace(candidateRange))
+            trimFileLinkRangeTrailingNonAsciiLetters(
+              trimSpacedPathTrailingProse(trimTrailingWhitespace(candidateRange))
+            )
           )
         )
         .filter((link): link is ParsedTerminalFileLink => link !== null)

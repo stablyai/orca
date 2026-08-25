@@ -164,6 +164,27 @@ describe('matchFilePathAtColumn', () => {
     const line = '• Here you go: README.md'
     expect(matchFilePathAtColumn(line, colOf(line, 'Here'))).toBeNull()
   })
+
+  it('trims CJK particles from bare filenames under the tap', () => {
+    const line = 'See README.md로 for details'
+    expect(matchFilePathAtColumn(line, colOf(line, 'README'))).toEqual({
+      pathText: 'README.md',
+      line: null,
+      column: null
+    })
+    expect(matchFilePathAtColumn(line, colOf(line, '로'))).toBeNull()
+  })
+
+  it('matches non-Latin separator paths and trims trailing particles', () => {
+    const path = '/Users/me/docs/한글폴더/파일.md'
+    const line = `${path}로 열었습니다`
+    expect(matchFilePathAtColumn(line, colOf(line, '파일'))).toEqual({
+      pathText: path,
+      line: null,
+      column: null
+    })
+    expect(matchFilePathAtColumn(line, colOf(line, '로'))).toBeNull()
+  })
 })
 
 describe('injected matchFilePathAtColumn', () => {

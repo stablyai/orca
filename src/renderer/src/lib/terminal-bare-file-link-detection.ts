@@ -1,3 +1,4 @@
+import { trimFileLinkRangeTrailingNonAsciiLetters } from '../../../shared/file-link-trailing-prose'
 import {
   detectTerminalFileLinkRanges,
   terminalFileLinkRangesOverlap,
@@ -58,7 +59,10 @@ export function detectBareFilenameLinks(
     if (range.text.length > MAX_BARE_FILENAME_TOKEN_LENGTH) {
       continue
     }
-    const link = toParsedTerminalFileLink(range)
+    // Why: space-less languages glue particles onto bare filenames
+    // (`README.md로`); trim before the ASCII filename check or the token
+    // fails looksLikeFilename and never becomes a link.
+    const link = toParsedTerminalFileLink(trimFileLinkRangeTrailingNonAsciiLetters(range))
     if (!link || !looksLikeFilename(link.pathText)) {
       continue
     }
