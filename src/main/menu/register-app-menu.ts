@@ -8,6 +8,7 @@ import {
 import type { UpdateCheckOptions } from '../../shared/update-status-types'
 import { translateMain } from '../i18n/main-i18n'
 import { createAppMenuSelectionItem } from './app-menu-selection-item'
+import { resolveEditMenuTarget } from './edit-menu-focus-target'
 
 export type AppearanceMenuState = {
   showTasksButton: boolean
@@ -191,6 +192,12 @@ function buildAndApplyMenu(options: RegisterAppMenuOptions): void {
           // control, so raw Electron paste cannot know which Orca surface owns it.
           const focusedWindow = BrowserWindow.getFocusedWindow()
           if (focusedWindow) {
+            // Why: DevTools or a guest view can own the caret while this window is "focused".
+            const editTarget = resolveEditMenuTarget(focusedWindow)
+            if (editTarget) {
+              editTarget.paste()
+              return
+            }
             focusedWindow.webContents.send('ui:appMenuPaste')
             return
           }

@@ -20,6 +20,8 @@ export const notificationMock: Mock<(...args: unknown[]) => { show: MainWindowSp
     return { show: notificationShowMock }
   }
 )
+/** Mock for Electron's focused-WebContents lookup. Defaults to null. */
+export const getFocusedWebContentsMock: MainWindowSpy = vi.fn(() => null)
 export const powerMonitorOnMock: MainWindowSpy = vi.fn()
 export const powerMonitorRemoveListenerMock: MainWindowSpy = vi.fn()
 export const isMock = { dev: false }
@@ -52,6 +54,7 @@ export type ElectronModuleMock = {
     getDisplayMatching: () => { scaleFactor: number }
   }
   shell: { openExternal: MainWindowSpy }
+  webContents: { getFocusedWebContents: MainWindowSpy }
 }
 
 export type BrowserManagerModuleMock = {
@@ -76,7 +79,8 @@ export function electronModuleMock(): ElectronModuleMock {
       getPrimaryDisplay: () => ({ workAreaSize: { width: 1440, height: 900 } }),
       getDisplayMatching: () => ({ scaleFactor: 2 })
     },
-    shell: { openExternal: openExternalMock }
+    shell: { openExternal: openExternalMock },
+    webContents: { getFocusedWebContents: getFocusedWebContentsMock }
   }
 }
 
@@ -110,6 +114,8 @@ export function browserManagerMock(): BrowserManagerModuleMock {
 export function resetMainWindowMocks(): void {
   browserWindowMock.mockReset()
   openExternalMock.mockReset()
+  getFocusedWebContentsMock.mockReset()
+  getFocusedWebContentsMock.mockReturnValue(null)
   attachGuestPoliciesMock.mockReset()
   buildFromTemplateMock.mockClear()
   menuPopupMock.mockClear()
