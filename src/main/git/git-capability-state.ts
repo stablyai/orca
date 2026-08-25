@@ -1,15 +1,15 @@
 import { GitCapabilityCache } from '../../shared/git-capability-cache'
-import { parseWslUncPath } from '../../shared/wsl-paths'
+import {
+  gitExecutionHostForTarget,
+  gitExecutionHostKey,
+  type GitExecutionHostTarget
+} from './git-execution-host'
 import {
   isWslLinkedWorktreeGitRoutingCandidate,
   prepareWslLinkedWorktreeGitRouting
 } from './wsl-linked-worktree-git-routing'
 
-type LocalGitCapabilityTarget = {
-  cwd?: string
-  wslDistro?: string
-  signal?: AbortSignal
-}
+type LocalGitCapabilityTarget = GitExecutionHostTarget & { signal?: AbortSignal }
 
 const localCapabilitiesByExecutionHost = new Map<string, GitCapabilityCache>()
 // Why: reconnecting creates a new provider, while concurrent IPC/runtime users
@@ -17,9 +17,7 @@ const localCapabilitiesByExecutionHost = new Map<string, GitCapabilityCache>()
 let sshCapabilitiesByProvider = new WeakMap<object, GitCapabilityCache>()
 
 function getLocalGitExecutionHostKey(target: LocalGitCapabilityTarget): string {
-  const wslDistro =
-    target.wslDistro ?? (target.cwd ? parseWslUncPath(target.cwd)?.distro : undefined)
-  return wslDistro ? `wsl:${wslDistro}` : 'local'
+  return gitExecutionHostKey(gitExecutionHostForTarget(target))
 }
 
 export function getLocalGitCapabilityCache(
@@ -47,13 +45,7 @@ export function withLocalGitCapabilityCacheForExecution<T>(
   }
   return prepareWslLinkedWorktreeGitRouting(target.cwd, target.wslDistro, {
     signal: target.signal
-  }).then((usesHostGit) =>
-    run(
-      getLocalGitCapabilityCache(
-        usesHostGit ? { cwd: target.cwd } : { cwd: target.cwd, wslDistro: target.wslDistro }
-      )
-    )
-  )
+  }).then((usesHostGit) => run(getLocalGitCapabilityCache({ ...target, usesHostGit })))
 }
 
 export function getSshGitCapabilityCache(provider: object): GitCapabilityCache {

@@ -349,7 +349,9 @@ describe('WSL direct Git reads', () => {
     })
   })
 
-  it('leaves override-less WSL UNC routing on its existing non-login shell', async () => {
+  // The cwd already names Ubuntu, so an explicit opt-in used to be ignored purely
+  // because the caller had no `wslDistro` to repeat it with.
+  it('takes the shell-free route for an override-less WSL UNC cwd', async () => {
     await withPlatform('win32', async () => {
       seedWslGitReadEnvironmentForTests(DISTRO, LOGIN_ENVIRONMENT)
       succeedExecFile()
@@ -359,7 +361,10 @@ describe('WSL direct Git reads', () => {
         preferWslDirectGit: true
       })
 
-      expect(execFileMock.mock.calls[0]?.[1]?.slice(3, 5)).toEqual(['bash', '-c'])
+      const argv = execFileMock.mock.calls[0]?.[1] as string[]
+      expect(argv.slice(0, 4)).toEqual(['-d', DISTRO, '--exec', '/usr/bin/env'])
+      expect(argv).toContain(LOGIN_ENVIRONMENT.gitPath)
+      expect(argv).not.toContain('bash')
     })
   })
 

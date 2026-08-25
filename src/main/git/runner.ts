@@ -34,6 +34,7 @@ import {
   gitCredentialPromptGuardEnv
 } from '../../shared/git-credential-prompt-env'
 import { getSpawnArgsForWindows, isWindowsBatchScript, resolveWindowsCommand } from '../win32-utils'
+import { gitExecutionHostForTarget } from './git-execution-host'
 import { isWslDirectGitReadCommand } from './wsl-direct-git-read-commands'
 import {
   buildWslCapturedLoginShellCommand,
@@ -336,12 +337,11 @@ function resolveCommand(
 
   // Why: global gh callers (rate_limit, listAccessibleProjects) have no cwd to derive a distro from; a distro hint still routes through wsl.exe.
   // TODO(wsl-default-distro): no default-distro setting yet, so override-less global gh callers fall back to host gh.exe (ENOENT on WSL-only installs).
-  const cwdWsl = cwd ? parseWslPath(cwd) : null
-  const wsl: WslPathInfo | null =
-    cwdWsl ?? (wslDistroOverride ? { distro: wslDistroOverride, linuxPath: '' } : null)
-  if (!wsl) {
+  const host = gitExecutionHostForTarget({ cwd, wslDistro: wslDistroOverride })
+  if (host.kind !== 'wsl') {
     return { binary: command, args, cwd, wsl: null, wslMode: null }
   }
+  const wsl: WslPathInfo = { distro: host.distro, linuxPath: host.cwdLinuxPath ?? '' }
 
   const translatedArgs = translateArgsForWsl(args)
   // Why: env on wsl.exe stays Windows-side (WSLENV forwards only named vars), so the locale must ride the command string (issue #7808).
@@ -350,7 +350,7 @@ function resolveCommand(
   // Why: shell-escape each arg to prevent word splitting / glob expansion inside the bash -c string.
   const escapedArgs = translatedArgs.map(quotePosixShell)
   // Why: prepend `cd <linuxPath> &&` for a UNC cwd; skip it when only a distro override was given (global gh needs no cwd).
-  const linuxCwd = cwdWsl?.linuxPath ?? (cwd && wslDistroOverride ? translateArgForWsl(cwd) : null)
+  const linuxCwd = host.cwdLinuxPath ?? (cwd && wslDistroOverride ? translateArgForWsl(cwd) : null)
   const shellCmd = linuxCwd
     ? `cd ${quotePosixShell(linuxCwd)} && ${localePrefix}${escapedCommand} ${escapedArgs.join(' ')}`
     : `${localePrefix}${escapedCommand} ${escapedArgs.join(' ')}`
@@ -481,7 +481,8 @@ function wslDistroForCommand(cwd: string | undefined, override?: string): string
   if (process.platform !== 'win32') {
     return null
   }
-  return (cwd ? parseWslPath(cwd)?.distro : undefined) ?? override ?? null
+  const host = gitExecutionHostForTarget({ cwd, wslDistro: override })
+  return host.kind === 'wsl' ? host.distro : null
 }
 
 function resolveGitCommand(
@@ -494,9 +495,12 @@ function resolveGitCommand(
     // Why: WSL Git resolves a Windows-authored linked-worktree pointer relative to cwd.
     return { binary: 'git', args, cwd: options.cwd, wsl: null, wslMode: null }
   }
-  if (!forceLoginShell && shouldAttemptWslDirectGit(args, options)) {
-    const distro = wslDistroForCommand(options.cwd, options.wslDistro)
-    const environment = distro ? peekWslGitReadEnvironment(distro) : undefined
+  // Why the host and not `options.wslDistro`: a WSL UNC cwd already names the distro
+  // that will run git, so whether the caller also passed a hint must not decide
+  // which environment the read gets.
+  const distro = forceLoginShell ? null : wslDistroForCommand(options.cwd, options.wslDistro)
+  if (distro && shouldAttemptWslDirectGit(args, options)) {
+    const environment = peekWslGitReadEnvironment(distro)
     if (environment) {
       return resolveCommand('git', args, options.cwd, options.wslDistro, {
         wslGitReadEnvironment: environment,
@@ -504,16 +508,14 @@ function resolveGitCommand(
         terminationBarrier: options.terminationBarrier
       })
     }
-    if (distro) {
-      void getWslGitReadEnvironment(distro)
-    }
+    void getWslGitReadEnvironment(distro)
   }
   return resolveGitCommandWithoutProbe(args, options, captureLoginShellOutput)
 }
 
+/** Whether the command class and env are safe for the shell-free route; the caller supplies the host. */
 function shouldAttemptWslDirectGit(args: string[], options: GitExecOptions): boolean {
   return Boolean(
-    process.platform === 'win32' &&
     // Why either: callers can still opt in explicitly, but a plain read no
     // longer has to -- it needs nothing the login shell provides, and routing
     // it through one is what exposes callers to the shell's rc output.
@@ -522,8 +524,7 @@ function shouldAttemptWslDirectGit(args: string[], options: GitExecOptions): boo
     !Object.entries(options.env ?? {}).some(
       ([key, value]) =>
         key.startsWith('GIT_') && key !== 'GIT_OPTIONAL_LOCKS' && value !== process.env[key]
-    ) &&
-    options.wslDistro
+    )
   )
 }
 
@@ -2159,15 +2160,19 @@ export function translateWslOutputPaths(
   originalCwd: string,
   options: { wslDistro?: string } = {}
 ): string {
-  const wsl = parseWslPath(originalCwd)
-  const distro = wsl?.distro ?? options.wslDistro
-  if (!distro) {
+  const host = gitExecutionHostForTarget({
+    // Why the gate: off Windows a literal `//wsl$/x` is an ordinary directory whose
+    // git output needs no rewrite, though an explicit distro hint still does.
+    cwd: process.platform === 'win32' ? originalCwd : undefined,
+    wslDistro: options.wslDistro
+  })
+  if (host.kind !== 'wsl') {
     return output
   }
 
   // Rewrite absolute Linux paths in structured git output (e.g. "worktree /home/user/repo/feature") to Windows UNC.
   return output.replace(/(?<=worktree )(\/.+)$/gm, (_match, linuxPath: string) =>
-    toWindowsWslPath(linuxPath, distro)
+    toWindowsWslPath(linuxPath, host.distro)
   )
 }
 
