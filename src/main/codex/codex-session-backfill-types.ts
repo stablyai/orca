@@ -17,6 +17,7 @@ export type CodexSessionBackfillSummary = {
 export type CodexSessionBackfillPaths = {
   managedSessionsRoot: string
   systemSessionsRoot: string
+  systemArchivedSessionsRoot: string
   auditLogPath: string
   markerPath: string
 }

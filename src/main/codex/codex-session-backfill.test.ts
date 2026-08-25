@@ -1,7 +1,9 @@
+/* eslint-disable max-lines -- Why: backfill failure, race, archive, and marker scenarios share one hoisted filesystem mock whose state must reset uniformly. */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   appendFileSync,
   existsSync,
+  linkSync,
   lstatSync,
   mkdirSync,
   mkdtempSync,
@@ -27,13 +29,16 @@ const { fsMockState } = vi.hoisted(() => ({
     failLinkTransiently: false,
     failLinkPermission: false,
     raceTargetIntoExistence: false,
+    archivePathAfterLink: null as string | null,
+    failLstatPathAfterLink: null as string | null,
     failMarkerRm: false,
     failMarkerReplacement: false,
     failAuditMkdirOnce: false,
     failAuditWrites: false,
     failMkdirPath: null as string | null,
     failDirectoryPath: null as string | null,
-    failLstatPath: null as string | null
+    failLstatPath: null as string | null,
+    failUnlinkPath: null as string | null
   }
 }))
 
@@ -133,7 +138,25 @@ vi.mock('node:fs/promises', async () => {
         error.code = 'EACCES'
         throw error
       }
-      return actual.link(...args)
+      await actual.link(...args)
+      if (fsMockState.failLstatPathAfterLink) {
+        fsMockState.failLstatPath = fsMockState.failLstatPathAfterLink
+        fsMockState.failLstatPathAfterLink = null
+      }
+      if (fsMockState.archivePathAfterLink) {
+        const archivedPath = fsMockState.archivePathAfterLink
+        fsMockState.archivePathAfterLink = null
+        await actual.mkdir(dirname(archivedPath), { recursive: true })
+        await actual.link(args[0], archivedPath)
+      }
+    },
+    unlink: async (...args: Parameters<typeof actual.unlink>) => {
+      if (args[0] === fsMockState.failUnlinkPath) {
+        const error = new Error('EACCES: active session removal denied') as NodeJS.ErrnoException
+        error.code = 'EACCES'
+        throw error
+      }
+      return actual.unlink(...args)
     },
     opendir: (...args: Parameters<typeof actual.opendir>) => {
       if (args[0] === fsMockState.failDirectoryPath) {
@@ -167,6 +190,10 @@ let previousUserDataPath: string | undefined
 
 function getSystemSessionsRoot(): string {
   return join(fakeHomeDir, '.codex', 'sessions')
+}
+
+function getSystemArchivedSessionsRoot(): string {
+  return join(fakeHomeDir, '.codex', 'archived_sessions')
 }
 
 function getManagedSessionsRoot(): string {
@@ -217,6 +244,8 @@ beforeEach(() => {
   fsMockState.failLinkTransiently = false
   fsMockState.failLinkPermission = false
   fsMockState.raceTargetIntoExistence = false
+  fsMockState.archivePathAfterLink = null
+  fsMockState.failLstatPathAfterLink = null
   fsMockState.failMarkerRm = false
   fsMockState.failMarkerReplacement = false
   fsMockState.failAuditMkdirOnce = false
@@ -224,6 +253,7 @@ beforeEach(() => {
   fsMockState.failMkdirPath = null
   fsMockState.failDirectoryPath = null
   fsMockState.failLstatPath = null
+  fsMockState.failUnlinkPath = null
   fakeHomeDir = mkdtempSync(join(tmpdir(), 'orca-codex-backfill-home-'))
   userDataDir = mkdtempSync(join(tmpdir(), 'orca-codex-backfill-user-data-'))
   previousUserDataPath = process.env.ORCA_USER_DATA_PATH
@@ -304,6 +334,173 @@ describe('backfillManagedCodexSessionsIntoSystemHome', () => {
     expect(summary).toMatchObject({ scannedFiles: 1, linkedFiles: 0, skippedExistingFiles: 1 })
     expect(readFileSync(collidingPath, 'utf-8')).toBe('user contents\n')
     expect(readAuditActions()).toEqual(['existing', 'run-summary'])
+  })
+
+  it('treats an archived rollout as a durable tombstone across repeated runs', async () => {
+    const relativePath = join(
+      '2026',
+      '05',
+      '26',
+      'rollout-2026-05-26T10-00-00-019f0000-1111-7222-8333-000000000001.jsonl'
+    )
+    writeManagedSession(relativePath, 'managed contents\n')
+    const archivedPath = join(getSystemArchivedSessionsRoot(), relativePath.split(/[/\\]/).at(-1)!)
+    mkdirSync(dirname(archivedPath), { recursive: true })
+    writeFileSync(archivedPath, 'archived contents\n', 'utf-8')
+    const paths = resolveCodexSessionBackfillPaths()
+
+    const first = await backfillManagedCodexSessionsIntoSystemHome(paths)
+    const second = await backfillManagedCodexSessionsIntoSystemHome(paths)
+
+    expect(first).toMatchObject({ linkedFiles: 0, skippedExistingFiles: 1, failedFiles: 0 })
+    expect(second).toMatchObject({ linkedFiles: 0, skippedExistingFiles: 1, failedFiles: 0 })
+    expect(existsSync(join(getSystemSessionsRoot(), relativePath))).toBe(false)
+    expect(readFileSync(archivedPath, 'utf-8')).toBe('archived contents\n')
+    expect(readAuditActions()).toEqual(['run-summary'])
+  })
+
+  it('fails closed when the archived rollout cannot be inspected', async () => {
+    const relativePath = join(
+      '2026',
+      '05',
+      '26',
+      'rollout-2026-05-26T10-00-00-019f0000-1111-7222-8333-000000000005.jsonl'
+    )
+    writeManagedSession(relativePath, 'managed contents\n')
+    fsMockState.failLstatPath = join(
+      getSystemArchivedSessionsRoot(),
+      relativePath.split(/[/\\]/).at(-1)!
+    )
+
+    const summary = await backfillManagedCodexSessionsIntoSystemHome(
+      resolveCodexSessionBackfillPaths()
+    )
+
+    expect(summary).toMatchObject({ linkedFiles: 0, failedFiles: 1 })
+    expect(existsSync(join(getSystemSessionsRoot(), relativePath))).toBe(false)
+    expect(readAuditActions()).toEqual(['failed', 'run-summary'])
+  })
+
+  it('rolls back its new active link when an archive wins the publication race', async () => {
+    const relativePath = join(
+      '2026',
+      '05',
+      '26',
+      'rollout-2026-05-26T10-00-00-019f0000-1111-7222-8333-000000000003.jsonl'
+    )
+    writeManagedSession(relativePath, 'managed contents\n')
+    const archivedPath = join(getSystemArchivedSessionsRoot(), relativePath.split(/[/\\]/).at(-1)!)
+    fsMockState.archivePathAfterLink = archivedPath
+
+    const summary = await backfillManagedCodexSessionsIntoSystemHome(
+      resolveCodexSessionBackfillPaths()
+    )
+
+    expect(summary).toMatchObject({ linkedFiles: 0, skippedExistingFiles: 1, failedFiles: 0 })
+    expect(existsSync(join(getSystemSessionsRoot(), relativePath))).toBe(false)
+    expect(existsSync(archivedPath)).toBe(true)
+    expect(readAuditActions()).toEqual(['run-summary'])
+  })
+
+  it('rolls back its new active link when the archive race probe fails', async () => {
+    const relativePath = join(
+      '2026',
+      '05',
+      '26',
+      'rollout-2026-05-26T10-00-00-019f0000-1111-7222-8333-000000000006.jsonl'
+    )
+    writeManagedSession(relativePath, 'managed contents\n')
+    fsMockState.failLstatPathAfterLink = join(
+      getSystemArchivedSessionsRoot(),
+      relativePath.split(/[/\\]/).at(-1)!
+    )
+
+    const summary = await backfillManagedCodexSessionsIntoSystemHome(
+      resolveCodexSessionBackfillPaths()
+    )
+
+    expect(summary).toMatchObject({ linkedFiles: 0, failedFiles: 1 })
+    expect(existsSync(join(getSystemSessionsRoot(), relativePath))).toBe(false)
+    expect(readAuditActions()).toEqual(['failed', 'run-summary'])
+  })
+
+  it('removes an active duplicate when the same rollout is archived', async () => {
+    const relativePath = join(
+      '2026',
+      '05',
+      '26',
+      'rollout-2026-05-26T10-00-00-019f0000-1111-7222-8333-000000000002.jsonl'
+    )
+    const managedPath = writeManagedSession(relativePath, 'managed contents\n')
+    const activePath = join(getSystemSessionsRoot(), relativePath)
+    const archivedPath = join(getSystemArchivedSessionsRoot(), relativePath.split(/[/\\]/).at(-1)!)
+    mkdirSync(dirname(activePath), { recursive: true })
+    mkdirSync(dirname(archivedPath), { recursive: true })
+    linkSync(managedPath, activePath)
+    linkSync(managedPath, archivedPath)
+
+    const summary = await backfillManagedCodexSessionsIntoSystemHome(
+      resolveCodexSessionBackfillPaths()
+    )
+
+    expect(summary).toMatchObject({ linkedFiles: 0, skippedExistingFiles: 1, failedFiles: 0 })
+    expect(existsSync(activePath)).toBe(false)
+    expect(lstatSync(managedPath).ino).toBe(lstatSync(archivedPath).ino)
+    expect(readAuditActions()).toEqual(['run-summary'])
+  })
+
+  it('isolates an archived active-link removal failure and continues later files', async () => {
+    const archivedRelativePath = join('2026', '05', '26', 'rollout-a.jsonl')
+    const managedPath = writeManagedSession(archivedRelativePath, 'archived contents\n')
+    const activePath = join(getSystemSessionsRoot(), archivedRelativePath)
+    const archivedPath = join(getSystemArchivedSessionsRoot(), 'rollout-a.jsonl')
+    mkdirSync(dirname(activePath), { recursive: true })
+    mkdirSync(dirname(archivedPath), { recursive: true })
+    linkSync(managedPath, activePath)
+    linkSync(managedPath, archivedPath)
+    fsMockState.failUnlinkPath = activePath
+
+    const laterRelativePath = join('2026', '05', '26', 'rollout-b.jsonl')
+    writeManagedSession(laterRelativePath, 'later contents\n')
+
+    const summary = await backfillManagedCodexSessionsIntoSystemHome(
+      resolveCodexSessionBackfillPaths()
+    )
+
+    expect(summary).toMatchObject({
+      scannedFiles: 2,
+      linkedFiles: 1,
+      skippedExistingFiles: 0,
+      failedFiles: 1
+    })
+    expect(existsSync(activePath)).toBe(true)
+    expect(existsSync(join(getSystemSessionsRoot(), laterRelativePath))).toBe(true)
+    expect(readAuditActions().toSorted()).toEqual(['failed', 'hardlink', 'run-summary'].toSorted())
+  })
+
+  it('preserves an ambiguous active file when it differs from the archived rollout', async () => {
+    const relativePath = join(
+      '2026',
+      '05',
+      '26',
+      'rollout-2026-05-26T10-00-00-019f0000-1111-7222-8333-000000000004.jsonl'
+    )
+    writeManagedSession(relativePath, 'managed contents\n')
+    const activePath = join(getSystemSessionsRoot(), relativePath)
+    const archivedPath = join(getSystemArchivedSessionsRoot(), relativePath.split(/[/\\]/).at(-1)!)
+    mkdirSync(dirname(activePath), { recursive: true })
+    mkdirSync(dirname(archivedPath), { recursive: true })
+    writeFileSync(activePath, 'different active contents\n', 'utf-8')
+    writeFileSync(archivedPath, 'archived contents\n', 'utf-8')
+
+    const summary = await backfillManagedCodexSessionsIntoSystemHome(
+      resolveCodexSessionBackfillPaths()
+    )
+
+    expect(summary).toMatchObject({ linkedFiles: 0, skippedExistingFiles: 1, failedFiles: 0 })
+    expect(readFileSync(activePath, 'utf-8')).toBe('different active contents\n')
+    expect(readFileSync(archivedPath, 'utf-8')).toBe('archived contents\n')
+    expect(readAuditActions()).toEqual(['run-summary'])
   })
 
   it('enqueues a target that appears after the existence probe', async () => {

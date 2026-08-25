@@ -64,6 +64,7 @@ export function resolveCodexSessionIndexHealPaths(
   return {
     auditLogPath: backfillPaths.auditLogPath,
     systemSessionsRoot: backfillPaths.systemSessionsRoot,
+    systemArchivedSessionsRoot: backfillPaths.systemArchivedSessionsRoot,
     healLedgerPath: join(stateDir, 'index-heal-ledger.jsonl'),
     healMarkerPath: join(stateDir, 'index-heal-complete.json')
   }
