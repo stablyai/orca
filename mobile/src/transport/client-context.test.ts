@@ -38,7 +38,10 @@ type FakeClient = RpcClient & {
   closeMock: ReturnType<typeof vi.fn>
 }
 
-function makeFakeClient(initialState: ConnectionState): FakeClient {
+function makeFakeClient(
+  initialState: ConnectionState,
+  activePath: MobileConnectionPath = 'tailscale'
+): FakeClient {
   let state = initialState
   let pendingPath: MobileConnectionPath | null = null
   let pairingRejected = false
@@ -52,7 +55,7 @@ function makeFakeClient(initialState: ConnectionState): FakeClient {
     getState: () => state,
     getReconnectAttempt: () => 0,
     getLastConnectedAt: () => null,
-    getActivePath: () => 'tailscale',
+    getActivePath: () => activePath,
     getPendingPath: () => pendingPath,
     isPairingRejected: () => pairingRejected,
     onConnectionPathChange: (listener: () => void) => {
@@ -350,6 +353,70 @@ describe('useHostClient', () => {
       expect(first.closeMock).toHaveBeenCalled()
       expect(states.at(-1)).toBe('connecting')
       expect(states).not.toContain('disconnected')
+    } finally {
+      act(() => renderer?.unmount())
+    }
+  })
+
+  it('nudges an existing Relay session instead of starting a fresh direct dial', async () => {
+    const relayClient = makeFakeClient('disconnected', 'relay')
+    connectMock.mockReturnValue(relayClient)
+    loadHostsMock.mockResolvedValue([HOST])
+
+    let forceReconnect: ((hostId: string) => Promise<void>) | null = null
+    let renderer: ReactTestRenderer | null = null
+    function Probe(): null {
+      forceReconnect = useForceReconnect()
+      useHostClient(HOST.id)
+      return null
+    }
+
+    try {
+      await act(async () => {
+        renderer = create(createElement(RpcClientProvider, null, createElement(Probe)))
+        await Promise.resolve()
+      })
+
+      await act(async () => {
+        await forceReconnect?.(HOST.id)
+      })
+
+      expect(relayClient.closeMock).not.toHaveBeenCalled()
+      expect(relayClient.notifyForeground).toHaveBeenCalledWith('app-resume')
+      expect(connectMock).toHaveBeenCalledOnce()
+    } finally {
+      act(() => renderer?.unmount())
+    }
+  })
+
+  it('rebuilds a pairing-rejected Relay client so re-pairing credentials are re-read', async () => {
+    const rejectedRelayClient = makeFakeClient('disconnected', 'relay')
+    const replacement = makeFakeClient('connecting', 'tailscale')
+    connectMock.mockReturnValueOnce(rejectedRelayClient).mockReturnValueOnce(replacement)
+    loadHostsMock.mockResolvedValue([HOST])
+
+    let forceReconnect: ((hostId: string) => Promise<void>) | null = null
+    let renderer: ReactTestRenderer | null = null
+    function Probe(): null {
+      forceReconnect = useForceReconnect()
+      useHostClient(HOST.id)
+      return null
+    }
+
+    try {
+      await act(async () => {
+        renderer = create(createElement(RpcClientProvider, null, createElement(Probe)))
+        await Promise.resolve()
+      })
+      act(() => rejectedRelayClient.emitPairingRejected(true))
+
+      await act(async () => {
+        await forceReconnect?.(HOST.id)
+      })
+
+      expect(rejectedRelayClient.closeMock).toHaveBeenCalled()
+      expect(rejectedRelayClient.notifyForeground).not.toHaveBeenCalled()
+      expect(connectMock).toHaveBeenCalledTimes(2)
     } finally {
       act(() => renderer?.unmount())
     }
