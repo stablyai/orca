@@ -26,6 +26,7 @@ export default defineConfig({
     include: [
       'src/**/*.test.ts',
       'src/**/*.test.tsx',
+      'config/build-plugins/**/*.test.ts',
       'config/scripts/**/*.test.ts',
       'config/scripts/**/*.test.mjs',
       'tests/tools/**/*.test.mjs',

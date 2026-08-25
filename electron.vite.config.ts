@@ -5,7 +5,11 @@ import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
 import { createBootstrapFatalExitBanner } from './config/build-plugins/bootstrap-fatal-exit-banner'
 import { createPlainNodeEntryGuardPlugin } from './config/build-plugins/plain-node-entry-guard'
+import { createPreloadSandboxBuiltinGuardPlugin } from './config/build-plugins/preload-sandbox-builtin-guard'
 import packageJson from './package.json' with { type: 'json' }
+
+// The sandboxed preload the main config emits; the entry name and the guarded output must agree.
+const BROWSER_WINDOW_CLOSE_PRELOAD_ENTRY = 'browser-window-close-preload'
 
 const BUNDLED_MAIN_DEPENDENCIES = new Set([
   '@xterm/headless',
@@ -208,7 +212,7 @@ export const electronViteConfig: UserConfig = {
         input: {
           index: resolve('src/main/index.ts'),
           // Why: sandboxed webview preloads cannot load Rollup helper chunks.
-          'browser-window-close-preload': resolve('src/preload/browser-window-close.ts'),
+          [BROWSER_WINDOW_CLOSE_PRELOAD_ENTRY]: resolve('src/preload/browser-window-close.ts'),
           'daemon-entry': resolve('src/main/daemon/daemon-entry.ts'),
           'plugin-host-entry': resolve('src/main/plugins/plugin-host-entry.ts'),
           'computer-sidecar': resolve('src/main/computer/sidecar-entry.ts'),
@@ -260,7 +264,15 @@ export const electronViteConfig: UserConfig = {
           entryFileNames: '[name].js',
           chunkFileNames: 'chunks/[name]-[hash].js'
         },
-        plugins: [createMainBootstrapPlugin(), createPlainNodeEntryGuardPlugin()]
+        plugins: [
+          createMainBootstrapPlugin(),
+          createPlainNodeEntryGuardPlugin(),
+          // Why: this entry is a sandboxed guest-WebContents preload built by the main
+          // config, so it needs the same browser-safe guarantee as out/preload.
+          createPreloadSandboxBuiltinGuardPlugin({
+            include: [`${BROWSER_WINDOW_CLOSE_PRELOAD_ENTRY}.js`]
+          })
+        ]
       }
     },
     // Why: compile-time substitution for the telemetry gate. See the block
@@ -286,6 +298,12 @@ export const electronViteConfig: UserConfig = {
     build: {
       externalizeDeps: {
         exclude: ['@electron-toolkit/preload']
+      },
+      rollupOptions: {
+        // Electron is the only privileged preload external; bundling the npm
+        // package would pull its Node-only installer (fs/path/child_process).
+        external: ['electron'],
+        plugins: [createPreloadSandboxBuiltinGuardPlugin()]
       }
     }
   },
