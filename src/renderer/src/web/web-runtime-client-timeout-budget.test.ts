@@ -46,12 +46,16 @@ describe('WebRuntimeClient timeout budget', () => {
       resolveConnection = resolve
     })
     // Test seam: isolate call's connection and request phases from socket handshaking.
+    // Both phases live on the transport the client delegates call() to.
     const internals = client as unknown as {
-      waitForConnected: (timeoutMs?: number) => Promise<void>
-      sendEncrypted: (message: unknown) => boolean
+      transport: {
+        connectionWaiters: { wait: (timeoutMs?: number) => Promise<void> }
+        sendEncrypted: (message: unknown) => boolean
+      }
     }
-    internals.waitForConnected = vi.fn(() => connection)
-    internals.sendEncrypted = vi.fn(() => true)
+    const waitForConnected = vi.fn(() => connection)
+    internals.transport.connectionWaiters.wait = waitForConnected
+    internals.transport.sendEncrypted = vi.fn(() => true)
 
     const call = client.call('runtime.two-phase-timeout', undefined, { timeoutMs: 25 })
     let settled = false
@@ -66,7 +70,7 @@ describe('WebRuntimeClient timeout budget', () => {
 
     await vi.advanceTimersByTimeAsync(60_000)
     expect(settled).toBe(false)
-    expect(internals.waitForConnected).toHaveBeenCalledWith(25)
+    expect(waitForConnected).toHaveBeenCalledWith(25)
 
     resolveConnection()
     await Promise.resolve()

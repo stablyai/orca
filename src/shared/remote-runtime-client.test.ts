@@ -337,6 +337,26 @@ describe('sendRemoteRuntimeRequest', () => {
     })
   })
 
+  it('omits optional request fields for hosts that predate them', async () => {
+    let receivedRequest: Record<string, unknown> | null = null
+    const server = await createOneShotServer({
+      onRequest: (request) => {
+        receivedRequest = request
+      }
+    })
+
+    await sendRemoteRuntimeRequest(server.pairing, 'status.get', undefined, 1000)
+
+    expect(receivedRequest).toMatchObject({
+      deviceToken: 'device-token',
+      method: 'status.get'
+    })
+    expect(receivedRequest).not.toHaveProperty('params')
+    expect(receivedRequest).not.toHaveProperty('orchestrationCapability')
+    expect(receivedRequest).not.toHaveProperty('orchestrationContractVersion')
+    expect(receivedRequest).not.toHaveProperty('orchestrationRequestId')
+  })
+
   it('detaches one-shot socket listeners after a successful response', async () => {
     const offSpy = vi.spyOn(WebSocketClient.prototype, 'off')
     try {

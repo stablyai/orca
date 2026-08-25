@@ -97,14 +97,11 @@ inline src/renderer/src/store/slices/hosted-review.ts
 inline src/renderer/src/store/slices/linear.ts
 inline src/renderer/src/store/slices/tabs.ts
 inline src/renderer/src/store/slices/ui.ts
-inline src/renderer/src/web/web-runtime-client.ts
 inline src/shared/automation-schedules.ts
 inline src/shared/commit-message-agent-spec.ts
 inline src/shared/constants.ts
 inline src/shared/keybindings.ts
 inline src/shared/marine-creatures.ts
-inline src/shared/remote-runtime-client.ts
-inline src/shared/runtime-types.ts
 inline src/shared/telemetry-events.ts
 inline src/shared/text-search.ts
 inline tests/e2e/helpers/terminal.ts
