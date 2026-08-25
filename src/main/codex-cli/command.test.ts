@@ -358,6 +358,21 @@ describe('withCliRuntimeOnPath', () => {
     expect(withCliRuntimeOnPath(join(v20, 'codex'), env, { platform: 'darwin' })).toBe(env)
   })
 
+  it('reads the Windows path key the child will actually use, whatever its casing', () => {
+    const root = mkdtempSync(join(tmpdir(), 'orca-pair-'))
+    const v20 = join(root, '.nvm', 'versions', 'node', 'v20.11.0', 'bin')
+    makeExecutable(join(v20, 'node.exe'))
+    makeExecutable(join(v20, 'codex.cmd'))
+    // Why: win32 resolves env names case-insensitively, so a block may spell it
+    // any way. Reading a narrower set than the twin-dedupe deletes would drop
+    // this entry unread and hand the child a PATH containing only our directory.
+    const env = { path: 'C:\\Windows;C:\\Windows\\System32', HOME: 'x' }
+
+    const paired = withCliRuntimeOnPath(join(v20, 'codex.cmd'), env, { platform: 'win32' })
+    expect(paired.path).toBe([v20, 'C:\\Windows', 'C:\\Windows\\System32'].join(';'))
+    expect(Object.keys(paired).filter((key) => key.toLowerCase() === 'path')).toEqual(['path'])
+  })
+
   it('writes the Windows Path key without leaving a differently-cased twin', () => {
     const root = mkdtempSync(join(tmpdir(), 'orca-pair-'))
     const v20 = join(root, '.nvm', 'versions', 'node', 'v20.11.0', 'bin')

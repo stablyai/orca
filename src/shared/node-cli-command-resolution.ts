@@ -212,6 +212,21 @@ export function resolveClaudeCommand(options: ResolveCommandOptions = {}): strin
   return resolveCliCommand('claude', options)
 }
 
+// Why: Win32 resolves env names case-insensitively and object order preserves
+// the block order, so the entry the child will actually read is the FIRST
+// case-insensitive match — not necessarily `Path` or `PATH`. Reading a narrower
+// set than the dedupe below deletes would destroy a third spelling unread.
+// Mirrors resolvePathEnvKey in src/main/pty/windows-path-segment-merge.ts, which
+// src/shared must not import.
+function firstWindowsPathEnvKey(env: NodeJS.ProcessEnv): string {
+  for (const key of Object.keys(env)) {
+    if (key.toLowerCase() === 'path' && env[key] !== undefined) {
+      return key
+    }
+  }
+  return 'Path'
+}
+
 /**
  * Put a resolved CLI's own directory ahead of PATH when that directory ships a
  * sibling `node`.
@@ -239,7 +254,7 @@ export function withCliRuntimeOnPath<T extends NodeJS.ProcessEnv>(
   if (!findFirstExecutable(platform, [commandDirectory], getExecutableNames(platform, 'node'))) {
     return env
   }
-  const pathKey = platform === 'win32' && env.Path !== undefined ? 'Path' : 'PATH'
+  const pathKey = platform === 'win32' ? firstWindowsPathEnvKey(env) : 'PATH'
   const pathDelimiter = platform === 'win32' ? ';' : delimiter
   const segments = splitPath(env[pathKey], pathDelimiter)
   if (segments[0] === commandDirectory) {
