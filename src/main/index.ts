@@ -3435,7 +3435,13 @@ app.on('will-quit', (e) => {
   setUnreadDockBadgeCount(0)
   agentHookServer.stop()
   // Why: Grok reads global hooks after Orca closes; remove them without blocking the main thread.
-  const grokHookCleanup = removeManagedAgentHooksAsync({ agents: ['grok'] })
+  const grokHookCleanup = removeManagedAgentHooksAsync({ agents: ['grok'] }).then((statuses) => {
+    // Why: these report failure as a status rather than a throw, so without this a quit that failed
+    // to remove the hooks looks identical to one that succeeded.
+    for (const status of statuses.filter((entry) => entry.detail)) {
+      console.warn(`[agent-hooks] ${status.agent} hook cleanup on quit: ${status.detail}`)
+    }
+  })
   // Why: cancels relay restart/reinstall timers and kills wsl.exe children deterministically, not via stdio-pipe teardown.
   // Why awaited now: guest Grok hooks are removed over the relay's own mux first, so the kill is bounded (2s per distro)
   // rather than immediate; the teardown deadline below is what keeps that from holding the quit open.

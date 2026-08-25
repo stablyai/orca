@@ -1,4 +1,5 @@
-import { mkdir, readFile, rm, writeFile } from 'node:fs/promises'
+import { randomUUID } from 'node:crypto'
+import { mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises'
 import { dirname } from 'node:path'
 import {
   readManagedHookHostIdentity,
@@ -48,9 +49,23 @@ export async function writeGrokHookSessionOwner(ownerPath: string): Promise<void
   }
   const owner: GrokHookSessionOwner = { pid: process.pid, hostIdentity, processIdentity }
   await mkdir(dirname(ownerPath), { recursive: true })
-  // Why 0600: hostIdentity can carry the durable managed-hook host token, which lock ownership is
-  // keyed on. ~/.grok/hooks is not otherwise restricted, so keep the record owner-readable only.
-  await writeFile(ownerPath, JSON.stringify(owner), { encoding: 'utf8', mode: 0o600 })
+  // Why a draft plus rename rather than writing in place: a crash mid-write would leave
+  // unparseable JSON, which reads as "no owner" and silently disables the reconciliation this
+  // record exists to drive. Why wx+0600 on the draft and not mode on the final write: mode applies
+  // only on creation, so truncating an existing record would keep whatever mode it already had --
+  // and hostIdentity can carry the durable managed-hook host token that lock ownership is keyed on.
+  const draftPath = `${ownerPath}.${process.pid}.${randomUUID()}.draft`
+  try {
+    await writeFile(draftPath, JSON.stringify(owner), {
+      encoding: 'utf8',
+      flag: 'wx',
+      mode: 0o600
+    })
+    await rename(draftPath, ownerPath)
+  } catch (error) {
+    await rm(draftPath, { force: true })
+    throw error
+  }
 }
 
 export async function clearGrokHookSessionOwner(ownerPath: string): Promise<void> {
@@ -63,7 +78,14 @@ export async function clearGrokHookSessionOwner(ownerPath: string): Promise<void
  * live Orca is using.
  */
 export async function isGrokHookSessionOwnerStale(owner: GrokHookSessionOwner): Promise<boolean> {
-  if (owner.hostIdentity !== (await readManagedHookHostIdentity())) {
+  const hostIdentity = await readManagedHookHostIdentity()
+  // Why the runtime: prefix is exempt: with no durable host token (read-only /var/tmp, hardened
+  // container) the probe returns a per-process random identity, so a recorded one can never match
+  // and reconciliation would be dead on exactly those hosts. The process identity is already
+  // boot- and namespace-scoped, so it carries the comparison on its own.
+  const hostScopeIsComparable =
+    !hostIdentity.startsWith('runtime:') && !owner.hostIdentity.startsWith('runtime:')
+  if (hostScopeIsComparable && owner.hostIdentity !== hostIdentity) {
     return false
   }
   const currentIdentity = await readManagedHookProcessIdentity(owner.pid)

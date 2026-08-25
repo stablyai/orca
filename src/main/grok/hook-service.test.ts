@@ -1,6 +1,15 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { spawn } from 'node:child_process'
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  statSync,
+  writeFileSync
+} from 'node:fs'
 import { createServer } from 'node:http'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
@@ -428,6 +437,41 @@ describe('GrokHookService', () => {
 
     expect(existsSync(configPath)).toBe(false)
     expect(service.install().state).toBe('installed')
+  })
+
+  it('drops the ownership record when hooks are turned off', async () => {
+    const service = new GrokHookService()
+    const configPath = join(homeDir, '.grok', 'hooks', 'orca-status.json')
+
+    expect(service.install().state).toBe('installed')
+    await service.claimSession()
+    expect(existsSync(`${configPath}.orca-owner`)).toBe(true)
+
+    expect(service.remove().state).toBe('not_installed')
+
+    expect(existsSync(`${configPath}.orca-owner`)).toBe(false)
+  })
+
+  // Why: the record is written in place at every claim, so a crash mid-write would leave
+  // unparseable JSON, and an unreadable record reads as "nobody owns this" -- silently disabling
+  // the reconciliation the record exists to drive.
+  it('writes the ownership record without truncating it in place', async () => {
+    const service = new GrokHookService()
+    const ownerPath = join(homeDir, '.grok', 'hooks', 'orca-status.json.orca-owner')
+
+    expect(service.install().state).toBe('installed')
+    await service.claimSession()
+    const first = readFileSync(ownerPath, 'utf8')
+    await service.claimSession()
+
+    expect(readFileSync(ownerPath, 'utf8')).toBe(first)
+    if (process.platform !== 'win32') {
+      expect(statSync(ownerPath).mode & 0o077).toBe(0)
+    }
+    expect(readdirSync(join(homeDir, '.grok', 'hooks')).sort()).toEqual([
+      'orca-status.json',
+      'orca-status.json.orca-owner'
+    ])
   })
 
   it('preserves user-authored hook entries in the Orca Grok config file', () => {

@@ -10,8 +10,7 @@ import {
   wrapPosixHookCommand,
   wrapWindowsCmdHookCommand,
   writeHooksJson,
-  writeManagedScript,
-  type HooksConfig
+  writeManagedScript
 } from '../agent-hooks/installer-utils'
 import { refreshManagedScriptIfPresent } from '../agent-hooks/managed-hook-script-refresh'
 import { buildPosixHookPayloadCapture } from '../agent-hooks/hook-stdin-contract'
@@ -19,7 +18,7 @@ import {
   buildWindowsGrokHookScript,
   GROK_HOME_ENVELOPE_MAX_LENGTH
 } from './windows-grok-hook-script'
-import { removeManagedGrokHookEntries } from './grok-hook-config-cleanup'
+import { isOrcaOwnedRemnant, removeManagedGrokHookEntries } from './grok-hook-config-cleanup'
 import { buildInstalledGrokConfig, GROK_EVENTS, GROK_TOOL_EVENT_MATCHER } from './grok-hook-config'
 import { installRemoteGrokHook, removeRemoteGrokHook } from './grok-hook-remote-mutations'
 import {
@@ -131,14 +130,6 @@ function readGrokHookConfigRawSync(configPath: string): string | null {
     }
     throw error
   }
-}
-
-// Why not `Object.keys(config).length === 0`: orca-status.json is Orca-owned, so once no hook
-// entries remain the file has no reason to exist. Keying off total emptiness instead would leave a
-// stray non-hook key (a `$schema`, say) behind, and install()'s user-cleared guard would then read
-// that remnant as a deliberate opt-out and never reinstall.
-function isOrcaOwnedRemnant(config: HooksConfig): boolean {
-  return Object.keys(config.hooks ?? {}).length === 0
 }
 
 function notInstalledStatus(
@@ -274,6 +265,9 @@ export class GrokHookService {
     } else {
       writeHooksJson(configPath, cleanup.config)
     }
+    // Why here too: turning hooks off goes through this path, and a stranded record would keep the
+    // managed-hook host token in Grok's directory after Orca promised to remove what it installed.
+    rmSync(getSessionOwnerPath(), { force: true })
     return notInstalledStatus(configPath)
   }
 
@@ -289,7 +283,13 @@ export class GrokHookService {
       return
     }
     if (owner) {
-      await this.removeAsync()
+      // Why surfaced: removeAsync reports failure as a status, not a throw, so a stranded config
+      // that cannot be cleaned would otherwise be invisible -- and this path exists precisely to
+      // catch the case the user already reported.
+      const status = await this.removeAsync()
+      if (status.detail) {
+        console.warn(`[agent-hooks] Grok hook reconciliation after unclean exit: ${status.detail}`)
+      }
       await clearGrokHookSessionOwner(ownerPath)
     }
   }

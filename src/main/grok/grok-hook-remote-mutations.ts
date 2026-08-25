@@ -9,7 +9,7 @@ import {
   writeHooksJsonRemoteIfUnchanged
 } from '../agent-hooks/remote-hook-config-generation'
 import { buildInstalledGrokConfig } from './grok-hook-config'
-import { removeManagedGrokHookEntries } from './grok-hook-config-cleanup'
+import { isOrcaOwnedRemnant, removeManagedGrokHookEntries } from './grok-hook-config-cleanup'
 import { GROK_HOME_ENVELOPE_MAX_LENGTH } from './windows-grok-hook-script'
 
 function remoteStatus(configPath: string, detail: string | null = null): AgentHookInstallStatus {
@@ -95,10 +95,9 @@ export async function removeRemoteGrokHook(
     if (!cleanup.removedAny) {
       return remoteStatus(configPath)
     }
-    const updated =
-      Object.keys(cleanup.config).length === 0
-        ? await removeTextFileRemoteIfUnchanged(sftp, configPath, snapshot.raw)
-        : await writeHooksJsonRemoteIfUnchanged(sftp, configPath, snapshot.raw, cleanup.config)
+    const updated = isOrcaOwnedRemnant(cleanup.config)
+      ? await removeTextFileRemoteIfUnchanged(sftp, configPath, snapshot.raw)
+      : await writeHooksJsonRemoteIfUnchanged(sftp, configPath, snapshot.raw, cleanup.config)
     return updated
       ? remoteStatus(configPath)
       : remoteStatus(configPath, 'Remote Grok hook config changed during cleanup')
