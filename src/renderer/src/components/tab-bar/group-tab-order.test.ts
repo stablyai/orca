@@ -91,6 +91,32 @@ describe('getGroupVisibleTabOrder', () => {
     ])
   })
 
+  it('appends live group tabs missing from tabOrder and excludes stale ids (regression: #16389)', () => {
+    const group: TabGroup = {
+      id: 'g1',
+      worktreeId: 'wt',
+      activeTabId: 'tab-t1',
+      tabOrder: ['tab-t1', 'tab-phantom']
+    }
+    const tabs: Tab[] = [
+      terminalTab('tab-t1', 'g1', 'term-1', 0),
+      editorTab('tab-e1', 'g1', '/repo/file.md', 1)
+    ]
+
+    expect(
+      getGroupVisibleTabOrder(
+        group,
+        tabs,
+        new Set(['term-1']),
+        new Set(['/repo/file.md']),
+        new Set()
+      )
+    ).toEqual([
+      { type: 'terminal', id: 'term-1', tabId: 'tab-t1' },
+      { type: 'editor', id: '/repo/file.md', tabId: 'tab-e1' }
+    ])
+  })
+
   it('walks tabs in the reordered group.tabOrder sequence (regression: drag-reordered tabs)', () => {
     // Original visual order was [term-1, term-2, term-3]; user dragged
     // term-1 to the end so tabOrder is now [tab-t2, tab-t3, tab-t1]. The

@@ -32,13 +32,9 @@ export type ActiveTabNavOrderIds = {
  * unified tab id for exact split-group selection. That keeps both code paths
  * on the same order without collapsing the identifier domains.
  *
- * Note: TabBar's reconciler appends entities present in state but missing
- * from `group.tabOrder` (an invariant-repair fallback). This helper
- * intentionally does not mirror that append — appending silently would
- * reintroduce the class of order-drift this change fixes. In practice
- * `group.tabOrder` is kept in sync on tab create/close, so the divergence
- * only matters during hydration races and is preferable to cycling tabs
- * in a phantom order.
+ * Note: mirror TabBar's reconciler so stale order entries are dropped and
+ * live group tabs missing from `group.tabOrder` are appended in the same
+ * per-type natural order as the rendered strip.
  *
  * Scope is intentionally per-group: with split layouts each group has its
  * own tab strip, and users expect the shortcut to cycle within the strip
@@ -55,7 +51,42 @@ export function getGroupVisibleTabOrder(
   browserEntityIds: ReadonlySet<string>,
   simulatorTabIds: ReadonlySet<string> = new Set()
 ): VisibleTabRef[] {
-  const tabsById = new Map(groupTabs.map((t) => [t.id, t]))
+  const tabsById = new Map<string, Tab>()
+  const terminalTabIds: string[] = []
+  const editorTabIds: string[] = []
+  const browserTabIds: string[] = []
+  const liveSimulatorTabIds: string[] = []
+  for (const tab of groupTabs) {
+    if (tab.contentType === 'terminal') {
+      if (!terminalEntityIds.has(tab.entityId)) {
+        continue
+      }
+      terminalTabIds.push(tab.id)
+    } else if (tab.contentType === 'browser') {
+      if (!browserEntityIds.has(tab.entityId)) {
+        continue
+      }
+      browserTabIds.push(tab.id)
+    } else if (tab.contentType === 'simulator') {
+      if (!simulatorTabIds.has(tab.id)) {
+        continue
+      }
+      liveSimulatorTabIds.push(tab.id)
+    } else {
+      if (!editorEntityIds.has(tab.entityId)) {
+        continue
+      }
+      editorTabIds.push(tab.id)
+    }
+    tabsById.set(tab.id, tab)
+  }
+  const orderedTabIds = reconcileTabOrder(
+    group.tabOrder,
+    terminalTabIds,
+    editorTabIds,
+    browserTabIds,
+    liveSimulatorTabIds
+  )
   const result: VisibleTabRef[] = []
   // Dedupe per category: terminal/browser key by entityId (multiple tabs
   // can theoretically point at the same runtime entity), editor keys by
@@ -65,7 +96,7 @@ export function getGroupVisibleTabOrder(
   const seenBrowsers = new Set<string>()
   const seenEditors = new Set<string>()
   const seenSimulators = new Set<string>()
-  for (const unifiedId of group.tabOrder) {
+  for (const unifiedId of orderedTabIds) {
     const tab = tabsById.get(unifiedId)
     if (!tab) {
       continue
