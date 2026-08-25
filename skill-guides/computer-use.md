@@ -94,6 +94,11 @@ printf '%s' "$TEXT" | ORCA computer set-value --app <app> --element-index <index
 
 ## Action Rules
 
+- Read every action's verification separately from whether its provider call succeeded:
+  - `verified` means the changed value was read back.
+  - `unverified (accessibility action unasserted)` means the accessibility call succeeded but no post-state assertion was made.
+  - `unverified (synthetic input)` means input was fired into the void and is unverifiable.
+  - Missing verification metadata is unverified, including responses from older runtimes.
 - Prefer semantic actions: `set-value` for editable fields, `click` for controls, `perform-secondary-action` only for listed action names.
 - After any UI-changing action, use the returned state or rerun `get-app-state` before choosing the next element index.
 - Use `type-text` only after focusing a field and confirming the app has a focused text receiver; synthetic keyboard delivery is reported as unverified, so inspect the returned state before assuming text landed.

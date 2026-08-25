@@ -6,6 +6,7 @@ import { cn } from '@/lib/utils'
 import { translate } from '@/i18n/i18n'
 import { clampAutomationListSearchQueryInput } from './automation-list-search'
 import type { AutomationListFilter } from './automation-list-view'
+import type { AutomationListArrowKey } from './automation-list-keyboard-navigation'
 import { AutomationListFilterMenu, AutomationListFilterPills } from './AutomationListFilterMenu'
 import { AutomationListSearchField } from './AutomationListSearchField'
 import type { AutomationTemplate } from './automation-templates'
@@ -14,6 +15,7 @@ export function AutomationListToolbar({
   listSearchQuery,
   isListSearchQueryTooLarge,
   onListSearchQueryChange,
+  onSearchArrowNavigate,
   filter,
   onFilterChange,
   onRefresh,
@@ -23,6 +25,7 @@ export function AutomationListToolbar({
   listSearchQuery: string
   isListSearchQueryTooLarge: boolean
   onListSearchQueryChange: (query: string) => void
+  onSearchArrowNavigate: (key: AutomationListArrowKey) => void
   filter: AutomationListFilter
   onFilterChange: (filter: AutomationListFilter) => void
   onRefresh: () => void
@@ -41,6 +44,7 @@ export function AutomationListToolbar({
               onListSearchQueryChange(clampAutomationListSearchQueryInput(query))
             }
             onClear={() => onListSearchQueryChange('')}
+            onArrowNavigate={onSearchArrowNavigate}
           />
           <AutomationListFilterMenu filter={filter} onChange={onFilterChange} />
           <Tooltip>

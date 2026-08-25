@@ -236,9 +236,10 @@ class BrowserSessionRegistry {
     const meta = this.loadPersistedMeta()
     const pendingCookieImports = { ...meta.pendingCookieImports }
     delete pendingCookieImports[profile.partition]
+    const defaultPendingImport = pendingCookieImports[this.defaultPartition]
     this.persistMeta({
       pendingCookieImports,
-      pendingCookieDbPath: pendingCookieImports[this.defaultPartition] ?? null
+      pendingCookieDbPath: typeof defaultPendingImport === 'string' ? defaultPendingImport : null
     })
 
     // Why: clear the partition's storage so deleting a profile doesn't leave orphaned cookies/cache behind.

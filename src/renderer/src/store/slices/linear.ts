@@ -19,7 +19,7 @@ import type {
   LinearWorkspaceError,
   LinearWorkspaceSelection
 } from '../../../../shared/linear/workspace-types'
-import type { CacheEntry } from './github'
+import type { CacheEntry } from '../github/cache-model'
 import { clampLinearIssueListLimit } from '../../../../shared/linear/issue-read-limits'
 import { isIntegrationCredentialDecryptionError } from '../../../../shared/integration-credential-errors'
 import { clearLinearMetadataCache } from '../../hooks/useIssueMetadata'

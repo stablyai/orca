@@ -75,6 +75,30 @@ describe('registerPtyHandlers', () => {
       return write
     }
 
+    function setupProviderWithTransientAttachFailure(earlyExit = false): ReturnType<typeof vi.fn> {
+      const spawn = vi.fn(async (opts: { sessionId?: string }) => {
+        if (spawn.mock.calls.length > 1) {
+          if (earlyExit) {
+            return { id: opts.sessionId ?? 'daemon-pty', exitedBeforeSpawnReply: true as const }
+          }
+          throw new Error('transport unavailable')
+        }
+        return { id: opts.sessionId ?? 'daemon-pty' }
+      })
+      setLocalPtyProvider({
+        spawn,
+        write: vi.fn(),
+        resize: vi.fn(),
+        kill: vi.fn(),
+        shutdown: vi.fn(),
+        onData: vi.fn(() => vi.fn()),
+        onExit: vi.fn(() => vi.fn()),
+        listProcesses: vi.fn(async () => []),
+        getForegroundProcess: vi.fn(async () => null)
+      } as never)
+      return spawn
+    }
+
     const resizeListener = (): ((event: unknown, args: unknown) => void) => {
       const call = onMock.mock.calls.find((entry: unknown[]) => entry[0] === 'pty:resize')
       if (!call) {
@@ -149,6 +173,63 @@ describe('registerPtyHandlers', () => {
 
       const reported = await handlers.get('pty:getSize')!(null, { id })
       expect(reported).toEqual({ cols: 100, rows: 30 })
+    })
+    it('preserves cached geometry after a transient renderer attach failure', async () => {
+      setupProviderWithTransientAttachFailure()
+      handlers.clear()
+      registerPtyHandlers(mainWindow as never)
+      const request = { sessionId: 'daemon-existing-size', env: {} }
+      await handlers.get('pty:spawn')!(null, { ...request, cols: 200, rows: 50 })
+
+      await expect(
+        handlers.get('pty:spawn')!(null, { ...request, cols: 80, rows: 24 })
+      ).rejects.toThrow('transport unavailable')
+
+      await expect(handlers.get('pty:getSize')!(null, { id: request.sessionId })).resolves.toEqual({
+        cols: 200,
+        rows: 50
+      })
+    })
+    it('preserves cached geometry after a transient runtime attach failure', async () => {
+      setupProviderWithTransientAttachFailure()
+      let controller:
+        | {
+            spawn: (args: Record<string, unknown>) => Promise<unknown>
+            getSize: (id: string) => { cols: number; rows: number } | null
+          }
+        | undefined
+      const runtime = {
+        setPtyController: vi.fn((next) => {
+          controller = next
+        }),
+        registerPreAllocatedHandleForPty: vi.fn(),
+        registerPty: vi.fn()
+      }
+      handlers.clear()
+      registerPtyHandlers(mainWindow as never, runtime as never)
+      const request = { sessionId: 'runtime-existing-size' }
+      await controller!.spawn({ ...request, cols: 200, rows: 50 })
+
+      await expect(controller!.spawn({ ...request, cols: 80, rows: 24 })).rejects.toThrow(
+        'transport unavailable'
+      )
+
+      expect(controller!.getSize(request.sessionId)).toEqual({ cols: 200, rows: 50 })
+    })
+    it('clears cached geometry when the provider proves the PTY exited before reply', async () => {
+      setupProviderWithTransientAttachFailure(true)
+      handlers.clear()
+      registerPtyHandlers(mainWindow as never)
+      const request = { sessionId: 'daemon-exited-before-reply', env: {} }
+      await handlers.get('pty:spawn')!(null, { ...request, cols: 200, rows: 50 })
+
+      await expect(
+        handlers.get('pty:spawn')!(null, { ...request, cols: 80, rows: 24 })
+      ).rejects.toThrow('agent_session_exited_during_start')
+
+      await expect(
+        handlers.get('pty:getSize')!(null, { id: request.sessionId })
+      ).resolves.toBeNull()
     })
     it('fans out accepted desktop resizes to the runtime after provider resize', async () => {
       const resize = vi.fn()

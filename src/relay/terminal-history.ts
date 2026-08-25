@@ -11,6 +11,7 @@ import { homedir } from 'node:os'
 import { basename, join } from 'node:path'
 import { toLinuxPath } from '../shared/wsl-paths'
 import { hashWorktreeId } from '../main/terminal-history-id'
+import { dropInheritedOrcaHistFile } from '../main/worktree-history-file-path'
 import {
   deleteFishHistoryFile,
   dropInheritedOrcaFishHistory,
@@ -41,6 +42,10 @@ export function injectRelayHistoryEnv(
   // would otherwise survive every early return below and let the remote wrapper
   // re-export another worktree's history path.
   delete env.ORCA_HISTFILE
+  // Why: HISTFILE stays exported, so a relay (or a client) launched from an Orca
+  // pane carries the launching worktree's path into this one; honouring it below
+  // would scope every pane to that worktree's history file.
+  dropInheritedOrcaHistFile(env)
   if (env.HISTFILE) {
     return null
   }

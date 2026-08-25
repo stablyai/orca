@@ -210,10 +210,16 @@ export function buildDashboardSnapshot(
           ? layoutPtyId
           : null
       const dotState = row.state as DashboardCardDotState
+      const workingMode =
+        row.state === 'working' && row.entry.workingMode === 'monitoring'
+          ? row.entry.workingMode
+          : undefined
       const unseen =
         !isTitleDerived &&
         (state.acknowledgedAgentsByPaneKey?.[row.paneKey] ?? 0) < row.entry.stateStartedAt
-      const bucket = dashboardBucketForDotState(dashboardCardDisplayState({ dotState, unseen }))
+      const bucket = dashboardBucketForDotState(
+        dashboardCardDisplayState({ dotState, workingMode, unseen })
+      )
       // Why: only a live pty can open a preview terminal, and only a
       // card-rendering caller can open one — the sidebar's bucket counts must
       // not pay host resolution on every agent-status tick.
@@ -249,6 +255,7 @@ export function buildDashboardSnapshot(
         agentType: row.agentType,
         bucket,
         dotState,
+        ...(workingMode ? { workingMode } : {}),
         task: isTitleDerived ? '' : rowTask(row),
         repoId: workspace.projectId,
         worktreeId,

@@ -253,6 +253,7 @@ describe('useIpcEvents agent status snapshot integration', () => {
         {
           paneKey: FUTURE_PANE_KEY,
           state: 'working' as const,
+          workingMode: 'monitoring' as const,
           prompt: 'p',
           agentType: 'claude',
           receivedAt: 1_700_000_000_000,
@@ -340,7 +341,12 @@ describe('useIpcEvents agent status snapshot integration', () => {
     expect(setAgentStatuses.mock.calls[0]?.[0]).toHaveLength(1)
     expect(setAgentStatus).toHaveBeenCalledWith(
       FUTURE_PANE_KEY,
-      expect.objectContaining({ state: 'working', prompt: 'p', agentType: 'claude' }),
+      expect.objectContaining({
+        state: 'working',
+        workingMode: 'monitoring',
+        prompt: 'p',
+        agentType: 'claude'
+      }),
       'Future Tab',
       { updatedAt: 1_700_000_000_000, stateStartedAt: 1_699_999_999_000 },
       expectWorktreeRouting('wt-1'),

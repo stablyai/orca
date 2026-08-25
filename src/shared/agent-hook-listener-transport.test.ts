@@ -6,13 +6,15 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import {
   getEndpointFileName,
-  HOOK_REQUEST_MAX_BYTES,
   isShellSafeEndpointValue,
-  parseFormEncodedBody,
-  readRequestBody,
-  resolveHookSource,
   writeEndpointFile
-} from './agent-hook-listener'
+} from './agent-hook-listener/endpoint-publication'
+import {
+  HOOK_REQUEST_MAX_BYTES,
+  parseFormEncodedBody,
+  readRequestBody
+} from './agent-hook-listener/request-body'
+import { resolveHookSource } from './agent-hook-listener/source-routing'
 import { clearGrokSessionPathLookupCacheForTests } from './grok-session-paths'
 
 type FakeIncomingMessage = EventEmitter & {
@@ -66,6 +68,64 @@ describe('shared agent-hook-listener', () => {
 
     await expect(body).rejects.toThrow('payload too large')
     expect(req.destroy).toHaveBeenCalledTimes(1)
+    expectRequestParserListenersReleased(req)
+  })
+
+  it('accepts a JSON body at exactly the byte limit', async () => {
+    const req = createReadableRequest({ 'content-type': 'application/json' })
+    const text = JSON.stringify({ x: 'a'.repeat(HOOK_REQUEST_MAX_BYTES - 8) })
+    expect(Buffer.byteLength(text)).toBe(HOOK_REQUEST_MAX_BYTES)
+    const body = readRequestBody(req as unknown as IncomingMessage)
+
+    req.emit('data', Buffer.from(text))
+    req.emit('end')
+
+    await expect(body).resolves.toEqual({ x: 'a'.repeat(HOOK_REQUEST_MAX_BYTES - 8) })
+    expectRequestParserListenersReleased(req)
+  })
+
+  it('strips exactly one outer JSON BOM', async () => {
+    const req = createReadableRequest({ 'content-type': 'application/json' })
+    const body = readRequestBody(req as unknown as IncomingMessage)
+    req.emit('data', Buffer.concat([Buffer.from([0xef, 0xbb, 0xbf]), Buffer.from('{"ok":true}')]))
+    req.emit('end')
+    await expect(body).resolves.toEqual({ ok: true })
+  })
+
+  it('rejects JSON beyond the nesting-depth limit', async () => {
+    const req = createReadableRequest({ 'content-type': 'application/json' })
+    const body = readRequestBody(req as unknown as IncomingMessage)
+    req.emit('data', Buffer.from(`${'['.repeat(65)}0${']'.repeat(65)}`))
+    req.emit('end')
+    await expect(body).rejects.toThrow('JSON nesting exceeds 64 levels')
+    expectRequestParserListenersReleased(req)
+  })
+
+  it('rejects JSON beyond the 128K structural-token limit', async () => {
+    const req = createReadableRequest({ 'content-type': 'application/json' })
+    const body = readRequestBody(req as unknown as IncomingMessage)
+    req.emit('data', Buffer.from(`[${'0,'.repeat(128 * 1024)}0]`))
+    req.emit('end')
+    await expect(body).rejects.toThrow('JSON structure exceeds 131072 tokens')
+    expectRequestParserListenersReleased(req)
+  })
+
+  it('classifies a premature request error before its original error', async () => {
+    const req = createReadableRequest({ 'content-length': '10' })
+    const body = readRequestBody(req as unknown as IncomingMessage)
+    req.emit('data', Buffer.from('ab'))
+    req.emit('error', new Error('socket reset'))
+    await expect(body).rejects.toThrow('hook request truncated after 2 of 10 bytes')
+    expectRequestParserListenersReleased(req)
+  })
+
+  it('settles a premature close once and ignores late request events', async () => {
+    const req = createReadableRequest({ 'content-length': '10' })
+    const body = readRequestBody(req as unknown as IncomingMessage)
+    req.emit('data', Buffer.from('ab'))
+    req.emit('close')
+    req.emit('end')
+    await expect(body).rejects.toThrow('hook request truncated after 2 of 10 bytes')
     expectRequestParserListenersReleased(req)
   })
 

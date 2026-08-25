@@ -92,4 +92,29 @@ describe('WorkspaceCleanupSortHeader', () => {
       container?.querySelector<HTMLButtonElement>('[role="checkbox"]')?.getAttribute('aria-checked')
     ).toBe('mixed')
   })
+  it('states how many workspaces select-all would take', () => {
+    render({ field: 'name', direction: 'asc' }, { selectableCount: 12 })
+
+    expect(container?.textContent).toContain('Select all 12 safety-checked workspaces')
+  })
+
+  it('uses singular copy for one safety-checked workspace', () => {
+    render({ field: 'name', direction: 'asc' }, { selectableCount: 1 })
+
+    expect(container?.textContent).toContain('Select 1 safety-checked workspace')
+  })
+
+  it('does not report all-selected when the selected rows are not the selectable ones', () => {
+    const onToggleSelectAll = vi.fn()
+    render(
+      { field: 'name', direction: 'asc' },
+      { selectableCount: 3, selectedCount: 0, onToggleSelectAll }
+    )
+
+    const checkbox = container?.querySelector('[role="checkbox"]')
+    expect(checkbox?.getAttribute('aria-checked')).toBe('false')
+
+    act(() => (checkbox as HTMLElement | null)?.click())
+    expect(onToggleSelectAll).toHaveBeenCalledWith(true)
+  })
 })

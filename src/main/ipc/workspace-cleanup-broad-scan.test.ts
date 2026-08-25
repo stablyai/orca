@@ -119,8 +119,12 @@ function makeWorktreeMeta(overrides: Partial<WorktreeMeta> = {}): WorktreeMeta {
 const META_BY_WORKTREE_ID: Record<string, WorktreeMeta> = {
   'repo-1::/repo': makeWorktreeMeta({ lastActivityAt: NOW - 40 * DAY_MS }),
   'repo-1::/repo-old': makeWorktreeMeta({ lastActivityAt: NOW - 40 * DAY_MS }),
-  'repo-1::/repo-recent': makeWorktreeMeta({ lastActivityAt: NOW - 2 * DAY_MS }),
-  'repo-folder::/folder-workspace': makeWorktreeMeta({ lastActivityAt: NOW - 40 * DAY_MS })
+  'repo-1::/repo-recent': makeWorktreeMeta({
+    lastActivityAt: NOW - 2 * DAY_MS
+  }),
+  'repo-folder::/folder-workspace': makeWorktreeMeta({
+    lastActivityAt: NOW - 40 * DAY_MS
+  })
 }
 
 function makeStore(repos: Repo[] = [REPO], allMeta: Record<string, WorktreeMeta> = {}): Store {
@@ -154,7 +158,9 @@ describe('workspace cleanup broad scan opt-in', () => {
   })
 
   it('emits every worktree when the client opts into the full workspace list', async () => {
-    const result = await scanWorkspaceCleanup(makeStore(), { includeAllWorkspaces: true })
+    const result = await scanWorkspaceCleanup(makeStore(), {
+      includeAllWorkspaces: true
+    })
 
     expect(result.errors).toEqual([])
     expect(result.candidates.map((candidate) => candidate.worktreeId)).toEqual([
@@ -175,7 +181,9 @@ describe('workspace cleanup broad scan opt-in', () => {
         worktreeId === 'repo-1::/repo-old' ? runtimeMeta : META_BY_WORKTREE_ID[worktreeId]
     } as Store
 
-    const result = await scanWorkspaceCleanup(store, { includeAllWorkspaces: true })
+    const result = await scanWorkspaceCleanup(store, {
+      includeAllWorkspaces: true
+    })
 
     expect(
       result.candidates.find((candidate) => candidate.worktreeId === 'repo-1::/repo-old')
@@ -230,6 +238,56 @@ describe('workspace cleanup broad scan opt-in', () => {
     )
   })
 
+  it('reads git for a pinned target during focused preflight scans', async () => {
+    const worktreeId = 'repo-1::/repo-old'
+    const pinnedMeta = makeWorktreeMeta({
+      isPinned: true,
+      lastActivityAt: NOW - 40 * DAY_MS
+    })
+    const store = {
+      ...makeStore(),
+      getWorktreeMeta: (id: string) => (id === worktreeId ? pinnedMeta : META_BY_WORKTREE_ID[id])
+    } as Store
+
+    const result = await scanWorkspaceCleanup(store, {
+      worktreeIds: [worktreeId],
+      refreshActivity: true
+    })
+
+    expect(result.candidates[0]?.blockers).toContain('pinned')
+    expect(getStatusMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('continues to skip pinned git reads during broad scans', async () => {
+    const worktreeId = 'repo-1::/repo-old'
+    const pinnedMeta = makeWorktreeMeta({
+      isPinned: true,
+      lastActivityAt: NOW - 40 * DAY_MS
+    })
+    const store = {
+      ...makeStore(),
+      getWorktreeMeta: (id: string) => (id === worktreeId ? pinnedMeta : META_BY_WORKTREE_ID[id])
+    } as Store
+    listRepoWorktreesMock.mockResolvedValue([GIT_WORKTREES[1]])
+
+    await scanWorkspaceCleanup(store, { includeAllWorkspaces: true })
+
+    expect(getStatusMock).not.toHaveBeenCalled()
+  })
+
+  it('qualifies targeted repo-list failures with the execution host', async () => {
+    listRepoWorktreesMock.mockRejectedValue(new Error('listing failed'))
+
+    const result = await scanWorkspaceCleanup(makeStore(), {
+      worktreeIds: ['repo-1::/repo-old'],
+      refreshActivity: true
+    })
+
+    expect(result.errors).toEqual([
+      expect.objectContaining({ repoId: 'repo-1', executionHostId: 'local' })
+    ])
+  })
+
   it('keeps the legacy suggestion-only projection when the flag is absent', async () => {
     const result = await scanWorkspaceCleanup(makeStore())
 
@@ -239,7 +297,9 @@ describe('workspace cleanup broad scan opt-in', () => {
   })
 
   it('reports recent workspaces with no cleanup reasons', async () => {
-    const result = await scanWorkspaceCleanup(makeStore(), { includeAllWorkspaces: true })
+    const result = await scanWorkspaceCleanup(makeStore(), {
+      includeAllWorkspaces: true
+    })
 
     const recent = result.candidates.find(
       (candidate) => candidate.worktreeId === 'repo-1::/repo-recent'
@@ -253,7 +313,9 @@ describe('workspace cleanup broad scan opt-in', () => {
   })
 
   it('reports the main worktree with a main-worktree blocker', async () => {
-    const result = await scanWorkspaceCleanup(makeStore(), { includeAllWorkspaces: true })
+    const result = await scanWorkspaceCleanup(makeStore(), {
+      includeAllWorkspaces: true
+    })
 
     const main = result.candidates.find((candidate) => candidate.worktreeId === 'repo-1::/repo')
     expect(main).toMatchObject({
@@ -334,7 +396,9 @@ describe('workspace cleanup broad scan opt-in', () => {
   })
 
   it('defers git evidence for rows that no cleanup decision can use', async () => {
-    const result = await scanWorkspaceCleanup(makeStore(), { includeAllWorkspaces: true })
+    const result = await scanWorkspaceCleanup(makeStore(), {
+      includeAllWorkspaces: true
+    })
 
     // Why: only the inactive row can ever be queued, so it is the only row worth
     // a git read; the rest stream immediately with empty evidence.
@@ -342,7 +406,12 @@ describe('workspace cleanup broad scan opt-in', () => {
     expect(getStatusMock).toHaveBeenCalledWith('/repo-old', expect.anything())
     expect(
       result.candidates.find((candidate) => candidate.worktreeId === 'repo-1::/repo-recent')?.git
-    ).toEqual({ clean: null, upstreamAhead: null, upstreamBehind: null, checkedAt: null })
+    ).toEqual({
+      clean: null,
+      upstreamAhead: null,
+      upstreamBehind: null,
+      checkedAt: null
+    })
     expect(
       result.candidates.find((candidate) => candidate.worktreeId === 'repo-1::/repo-old')?.git
     ).toMatchObject({ clean: true, checkedAt: expect.any(Number) })
@@ -365,7 +434,9 @@ describe('workspace cleanup broad scan opt-in', () => {
       getWorktreeMeta: () => recentMeta
     } as unknown as Store
 
-    const result = await scanWorkspaceCleanup(store, { includeAllWorkspaces: true })
+    const result = await scanWorkspaceCleanup(store, {
+      includeAllWorkspaces: true
+    })
 
     expect(result.candidates).toHaveLength(recentWorktrees.length)
     expect(readFileMock).not.toHaveBeenCalled()
@@ -433,7 +504,9 @@ describe('workspace cleanup broad scan opt-in', () => {
   it('lists a repo once for a targeted Git-evidence batch', async () => {
     const targets = ['repo-1::/repo-recent', 'repo-1::/repo-old']
 
-    const result = await scanWorkspaceCleanup(makeStore(), { worktreeIds: targets })
+    const result = await scanWorkspaceCleanup(makeStore(), {
+      worktreeIds: targets
+    })
 
     expect(listRepoWorktreesMock).toHaveBeenCalledTimes(1)
     expect(getStatusMock).toHaveBeenCalledTimes(2)
@@ -469,7 +542,9 @@ describe('workspace cleanup broad scan opt-in', () => {
   it('lists disconnected SSH workspaces only on an opt-in scan', async () => {
     const sshRepo: Repo = { ...REPO, id: 'repo-ssh', connectionId: 'ssh-1' }
     const allMeta: Record<string, WorktreeMeta> = {
-      'repo-ssh::/remote/recent': makeWorktreeMeta({ lastActivityAt: NOW - 2 * DAY_MS })
+      'repo-ssh::/remote/recent': makeWorktreeMeta({
+        lastActivityAt: NOW - 2 * DAY_MS
+      })
     }
 
     const legacy = await scanWorkspaceCleanup(makeStore([sshRepo], allMeta))
@@ -536,7 +611,10 @@ describe('workspace cleanup broad scan opt-in', () => {
   })
 
   it('streams every row through scan progress on an opt-in scan', async () => {
-    const progress: { scannedWorktreeCount: number; totalWorktreeCount: number }[] = []
+    const progress: {
+      scannedWorktreeCount: number
+      totalWorktreeCount: number
+    }[] = []
 
     await scanWorkspaceCleanup(
       makeStore(),

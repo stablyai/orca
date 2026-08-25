@@ -1,3 +1,4 @@
+import type { RuntimeTerminalInteractiveWait } from '../../../../shared/runtime-types'
 import type { OrcaRuntimeService } from '../../orca-runtime'
 import type { OrchestrationDb } from '../../orchestration/db'
 import { OrchestrationError } from '../../orchestration/orchestration-error'
@@ -17,6 +18,8 @@ export async function inspectWorkerTerminal(
   status: 'unattached' | 'missing' | 'identity_changed' | 'live' | 'exited' | 'unverifiable'
   /** Set with `unverifiable`; names what we lost contact with. */
   reason?: string
+  /** Set only on a proven-exact worker parked on a prompt that needs a human. */
+  agentWait?: RuntimeTerminalInteractiveWait | null
 }> {
   const worker = db.getWorkerDispatch(dispatchId)
   const terminalHandle =
@@ -39,17 +42,23 @@ export async function inspectWorkerTerminal(
   // Why: the aggregate inventory only iterates registered providers, so a dropped
   // relay clears `connected` for every remote PTY at once. Lost contact is not a
   // death certificate, and the verdict is the only field that can tell them apart.
+  // Why reused rather than re-derived: showTerminal already scanned this pane's retained
+  // tail for the same verdict, and a second scan could also disagree with the one it published.
+  // Exact-gated by the early return above: a replaced process's prompt would attribute another
+  // lane's blocker to this worker.
+  const agentWait = terminal.agentWait
   const verdict = runtime.getTerminalLivenessVerdict?.(terminalHandle) ?? null
   if (verdict?.status === 'unverifiable') {
-    return { terminal, exact, status: 'unverifiable', reason: verdict.reason }
+    return { terminal, exact, status: 'unverifiable', reason: verdict.reason, agentWait }
   }
   if (verdict?.status === 'live') {
-    return { terminal, exact, status: 'live' }
+    return { terminal, exact, status: 'live', agentWait }
   }
   return {
     terminal,
     exact,
-    status: terminal.connected === false ? 'exited' : 'live'
+    status: terminal.connected === false ? 'exited' : 'live',
+    agentWait
   }
 }
 
@@ -84,7 +93,8 @@ export async function showContextOnlyWorker(
     observation: {
       status: observation.status,
       exactWorker: observation.exact,
-      ...(observation.reason ? { reason: observation.reason } : {})
+      ...(observation.reason ? { reason: observation.reason } : {}),
+      ...(observation.agentWait !== undefined ? { agentWait: observation.agentWait } : {})
     },
     terminalResource: null
   }
@@ -129,7 +139,13 @@ export async function callFederatedWorkerShow(
     residualResources: unknown[]
   }
   terminal: unknown
-  observation: { status: string; exactWorker: boolean; reason?: string }
+  observation: {
+    status: string
+    exactWorker: boolean
+    reason?: string
+    /** Absent from servers that predate the field; absence is unknown, not "not waiting". */
+    agentWait?: RuntimeTerminalInteractiveWait | null
+  }
 }> {
   return (await runtime.callOrchestrationWorkerServer(
     federated.environment_id,

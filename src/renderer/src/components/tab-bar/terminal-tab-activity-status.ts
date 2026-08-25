@@ -19,6 +19,8 @@ export type TerminalTabActivityStatus = WorktreeStatus
 type TerminalTabActivityFlags = {
   hasPermission: boolean
   hasLiveWorking: boolean
+  hasLiveMonitoring: boolean
+  hasInterrupted: boolean
   hasLiveDone: boolean
   paneIds: Set<string>
 }
@@ -75,11 +77,15 @@ function getTerminalTabActivityFlags(
     if (entry.state === 'blocked' || entry.state === 'waiting') {
       flags.hasPermission = true
     } else if (entry.state === 'working') {
-      flags.hasLiveWorking = true
+      if (entry.workingMode === 'monitoring') {
+        flags.hasLiveMonitoring = true
+      } else {
+        flags.hasLiveWorking = true
+      }
+    } else if (entry.interrupted === true) {
+      // Interrupted is encoded as done, so it must be checked first.
+      flags.hasInterrupted = true
     } else if (entry.state === 'done') {
-      // Why: an interrupted `done` still reads as completed here, matching the
-      // WorktreeCard dot (resolveWorktreeStatus has no interrupted state); only
-      // the smart-sort ordering treats interrupts as idle.
       flags.hasLiveDone = true
     }
   }
@@ -97,6 +103,8 @@ function getOrCreateTerminalTabActivityFlags(
     flags = {
       hasPermission: false,
       hasLiveWorking: false,
+      hasLiveMonitoring: false,
+      hasInterrupted: false,
       hasLiveDone: false,
       paneIds: new Set()
     }
@@ -157,6 +165,8 @@ export function resolveTerminalTabActivityStatus({
     terminalLayoutsByTabId: terminalLayout ? { [tab.id]: terminalLayout } : undefined,
     hasPermission: flags?.hasPermission ?? false,
     hasLiveWorking: flags?.hasLiveWorking ?? false,
+    hasLiveMonitoring: flags?.hasLiveMonitoring ?? false,
+    hasInterrupted: flags?.hasInterrupted ?? false,
     hasLiveDone: flags?.hasLiveDone ?? false,
     // Why: retained/orchestration promotions are worktree-aggregate concerns;
     // a tab reflects its own live panes and title only.
@@ -166,14 +176,20 @@ export function resolveTerminalTabActivityStatus({
 
 /** True while the tab shows a live in-turn signal (spinner or needs-input). */
 export function isTerminalTabActivityLive(status: TerminalTabActivityStatus): boolean {
-  return status === 'working' || status === 'permission'
+  return status === 'working' || status === 'monitoring' || status === 'permission'
 }
 
 /**
  * Glyph-bearing attention states for a terminal tab (tab bar + Cmd+J recent chats).
  * Quiet active/inactive map to null so identity icons stay clean.
  */
-export type TerminalTabAttentionBadge = 'working' | 'permission' | 'unread' | 'done'
+export type TerminalTabAttentionBadge =
+  | 'working'
+  | 'monitoring'
+  | 'permission'
+  | 'interrupted'
+  | 'unread'
+  | 'done'
 
 /**
  * Single priority ladder shared by the tab strip and Cmd+J recent rows:
@@ -192,11 +208,17 @@ export function resolveTerminalTabAttentionBadge({
   if (status === 'permission') {
     return 'permission'
   }
+  if (status === 'monitoring') {
+    return 'monitoring'
+  }
   if (hasUnread) {
     return 'unread'
   }
   if (status === 'done') {
     return 'done'
+  }
+  if (status === 'interrupted') {
+    return 'interrupted'
   }
   return null
 }
@@ -204,10 +226,12 @@ export function resolveTerminalTabAttentionBadge({
 /** Map a container activity status onto AgentStateDot's vocabulary (no unread — that's a bell). */
 export function terminalTabActivityToAgentDotState(
   status: TerminalTabActivityStatus
-): 'working' | 'permission' | 'done' | null {
+): 'working' | 'monitoring' | 'permission' | 'interrupted' | 'done' | null {
   switch (status) {
     case 'working':
+    case 'monitoring':
     case 'permission':
+    case 'interrupted':
     case 'done':
       return status
     case 'active':

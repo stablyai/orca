@@ -4,95 +4,42 @@
  * Why: the wrappers emit an OSC 777 marker after startup files finish, which the
  * readiness scanner watches for before a startup command is written.
  */
-import { mkdirSync, writeFileSync, chmodSync } from 'node:fs'
+import { buildZshStartupHook } from '../zsh-startup-wrapper-builder'
+import { writeShellWrapperFiles } from '../shell-wrapper-file-writer'
 import {
-  buildZshStartupWrapperFiles,
-  type ZshStartupWrapperSpec
-} from '../zsh-startup-wrapper-builder'
-import { getBashShellReadyRcfileContent } from './local-pty-shell-ready-bash-rcfile'
+  buildLocalShellReadyWrapperFiles,
+  getLocalZshWrapperSpec
+} from './local-pty-shell-ready-wrapper-fileset'
 import {
   getShellReadyWrapperRoot,
-  shellReadyWrappersExist,
-  SHELL_READY_MARKER_ESCAPED
+  shellReadyWrappersExist
 } from './local-pty-shell-ready-wrapper-root'
 
-let didEnsureShellReadyWrappers = false
+export function getZshShellReadyWrapperFile(): string {
+  return buildZshStartupHook(getLocalZshWrapperSpec())
+}
 
-function getLocalZshWrapperSpec(zshDir: string): ZshStartupWrapperSpec {
-  return {
-    headerLabel: 'Orca zsh shell-ready wrapper',
-    zshDir,
-    zshenvStrategy: 'discover-user-zdotdir',
-    readyMarkerEscaped: SHELL_READY_MARKER_ESCAPED,
-    osc133CommandMarkers: true,
-    skipUserZshrcWhenHomeIsWrapperDir: true,
-    interactiveRestoreComment:
-      "# Why: ~/.zshrc can export the user's default OpenCode config after spawn.",
-    loginRestoreComment:
-      '# Why: .zlogin is the final login startup file before the prompt is shown.',
-    restores: {
-      agentTeamsPath: true,
-      remoteCliBinDir: false,
-      codexHome: true,
-      codexLaunchPreflight: true
-    },
-    readyMarkerOrder: 'before-zdotdir-restore',
-    legacyFormatting: {
-      unindentedMimocodeRestore: true,
-      codexHomeRestoreComment:
-        "# Why: Codex must keep using Orca's runtime CODEX_HOME after rc files."
+/** True when every wrapper file is present and non-empty afterwards. */
+export function ensureShellReadyWrappersAt(root = getShellReadyWrapperRoot()): boolean {
+  // Why existence alone decides, with no per-process flag: the root is keyed by
+  // a hash of the exact bytes we would write, so a tree that is present and
+  // non-empty is a tree this build wrote. Rewriting it would replace a live file
+  // on the terminal-spawn path for no gain.
+  if (!shellReadyWrappersExist(root)) {
+    const written = writeShellWrapperFiles(buildLocalShellReadyWrapperFiles(root), '[shell-ready]')
+    if (!written || !shellReadyWrappersExist(root)) {
+      // Why no flag to reset: the next launch re-checks the files themselves, so
+      // a half-written tree is retried without any extra bookkeeping.
+      return false
     }
   }
+
+  return true
 }
 
-export function getZshShellReadyRcfileContent(): string {
-  return buildZshStartupWrapperFiles(getLocalZshWrapperSpec(`${getShellReadyWrapperRoot()}/zsh`))
-    .zshrc
-}
-
-export function ensureShellReadyWrappersAt(root = getShellReadyWrapperRoot()): void {
-  if (didEnsureShellReadyWrappers && shellReadyWrappersExist(root)) {
-    return
-  }
-  didEnsureShellReadyWrappers = true
-
-  const zshDir = `${root}/zsh`
-  const bashDir = `${root}/bash`
-
-  const zsh = buildZshStartupWrapperFiles(getLocalZshWrapperSpec(zshDir))
-  const bashRc = getBashShellReadyRcfileContent()
-
-  const files = [
-    [`${zshDir}/.zshenv`, zsh.zshenv],
-    [`${zshDir}/.zprofile`, zsh.zprofile],
-    [`${zshDir}/.zshrc`, zsh.zshrc],
-    [`${zshDir}/.zlogin`, zsh.zlogin],
-    [`${bashDir}/rcfile`, bashRc]
-  ] as const
-
-  try {
-    for (const [path, content] of files) {
-      const dir = path.slice(0, path.lastIndexOf('/'))
-      mkdirSync(dir, { recursive: true })
-      writeFileSync(path, content, 'utf8')
-      chmodSync(path, 0o644)
-    }
-  } catch (error) {
-    // Why: degrade gracefully — a failed wrapper (read-only FS, perms, disk) just means no ready marker, PTY stays usable.
-    const errorMessage =
-      error instanceof Error
-        ? `${error.message} (${(error as NodeJS.ErrnoException).code || 'unknown'})`
-        : String(error)
-    console.error(`[shell-ready] Failed to create wrapper files in ${root}: ${errorMessage}`)
-    console.error('[shell-ready] Shell will launch without wrapper (no shell-ready marker)')
-    // Reset the flag so next attempt will try again
-    didEnsureShellReadyWrappers = false
-  }
-}
-
-export function ensureShellReadyWrappers(): void {
+export function ensureShellReadyWrappers(): boolean {
   if (process.platform === 'win32') {
-    return
+    return false
   }
-  ensureShellReadyWrappersAt()
+  return ensureShellReadyWrappersAt()
 }

@@ -134,6 +134,52 @@ function buildEntries(overrides: Partial<Parameters<typeof buildSearchableWorksp
 }
 
 describe('workspace-tab-palette-search', () => {
+  it('stamps the row execution host so activation never resolves by id alone', () => {
+    // Why: worktree ids repeat across hosts, so a host-blind activation opened the other
+    // host's workspace behind a row labelled with this one's name and branch.
+    const worktree = makeWorktree({ hostId: 'ssh:box' })
+    const entries = buildEntries({ worktrees: [worktree] })
+    const [result] = searchWorkspaceTabs(entries, '')
+    expect(result.executionHostId).toBe('ssh:box')
+  })
+
+  it('keeps the resolvable twin when the first record under an id has no open file', () => {
+    // Why: dropping the id on sight would lose the row entirely — the leading
+    // record dies at the open-file lookup and the survivor never gets its turn.
+    const orphaned = makeUnifiedTab({
+      id: 'unified-editor-dup',
+      contentType: 'editor',
+      entityId: 'missing-file'
+    })
+    const resolvable = makeUnifiedTab({
+      id: 'unified-editor-dup',
+      contentType: 'editor',
+      entityId: SRC_APP_PATH
+    })
+    const entries = buildEntries({
+      unifiedTabsByWorktree: { 'wt-1': [orphaned, resolvable] },
+      openFiles: [makeOpenFile()]
+    })
+
+    expect(entries.map((entry) => entry.tab.id)).toEqual(['unified-editor-dup'])
+    expect(entries[0]?.secondaryText).toBe(SRC_APP_RELATIVE_PATH)
+  })
+  it('emits one entry per tab id when a session persisted the same id twice', () => {
+    // Why: the palette keys rows by tab id, and duplicated persisted records used
+    // to render the row twice under one React key, stranding a ghost row.
+    const duplicate = makeUnifiedTab({ id: 'unified-terminal-dup' })
+    const entries = buildEntries({
+      unifiedTabsByWorktree: {
+        'wt-1': [makeUnifiedTab(), duplicate, { ...duplicate }]
+      }
+    })
+
+    const tabIds = entries.map((entry) => entry.tab.id)
+    expect(tabIds).toEqual(['unified-terminal-1', 'unified-terminal-dup'])
+
+    const results = searchWorkspaceTabs(entries, 'unified')
+    expect(results.map((result) => result.tabId)).toEqual(tabIds)
+  })
   it('uses the same title precedence as the tab strip and honors generated-title disabling', () => {
     const enabledEntries = buildEntries({
       tabsByWorktree: {

@@ -1,24 +1,42 @@
 /**
- * The single source of the zsh startup wrapper files (.zshenv/.zprofile/.zshrc/
- * .zlogin) Orca writes for every transport: local PTY, daemon/SSH, and relay.
+ * The single `.zshenv` Orca writes for every transport: local PTY, daemon/SSH,
+ * and relay.
  *
- * Why: the three generators were copies that drifted apart, so a fix landed in
- * one transport and silently missed the other two. Everything they genuinely
- * disagree on is a field on ZshStartupWrapperSpec, so the disagreements are
- * visible in one place instead of spread across three template literals.
+ * Orca needs to run code AFTER the user's own zsh startup files. The old shape
+ * bought that by keeping ZDOTDIR pointed at Orca's wrapper dir for the whole of
+ * startup and sourcing each user file by hand — four generated files, and a
+ * fake ZDOTDIR live while `/etc/zshrc` ran. That one decision was the root of a
+ * whole bug family: `/etc/zshrc` assigns `HISTFILE=${ZDOTDIR:-$HOME}/.zsh_history`
+ * unconditionally, so history landed inside Orca's own dir (#11044); zsh's
+ * `sourcehome()` ignores ZDOTDIR once the shell enters sh/ksh emulation, so a
+ * user file ending in `emulate sh` hid every later wrapper file; and one wrapper
+ * dir shared by two installed builds could mix files from both.
+ *
+ * This shape gives ZDOTDIR back before anything else can observe it, then defers
+ * Orca's work to a `precmd` hook that runs at the first prompt — after
+ * `.zprofile`, `/etc/zshrc`, `.zshrc` and `.zlogin`, all of which zsh now reads
+ * from the user's own directory exactly as in an unwrapped shell. #11044 becomes
+ * unreachable rather than repaired, and the emulation and mixed-build classes
+ * stop existing.
+ *
+ * ORDER IS LOAD-BEARING: every function is defined ABOVE the `source` of the
+ * user's `.zshenv`. A user `.zshenv` ending in `emulate sh` puts the rest of
+ * this file under sh parsing rules, and zsh-only syntax then fails to parse,
+ * taking the whole wrapper with it. Function bodies are parsed at definition
+ * time, so defining them first makes them immune; `emulate -L zsh` inside the
+ * hook restores zsh option semantics for the body at call time.
  */
 import { getPosixOmpShellWrapper } from './pty/omp-shell-wrapper'
 import { getPosixCodexShellLaunchPreflight } from './pty/codex-shell-launch-preflight'
 import {
-  getZshEnvTemplate,
-  getZshFinalZdotdirRestoreBlock,
-  getZshOverlayEnvTemplate,
   getZshShellReadyMarkerRegistrationBlock,
-  getZshStartupFileSourceBlock,
-  ZSH_HISTFILE_RESTORE_BLOCK
+  SHELL_STARTUP_IDENTITY_MARKER_BLOCK,
+  ZSH_FEATURE_CHANNEL_BLOCK,
+  ZSH_USER_ZSHENV_SOURCE_BLOCK,
+  ZSH_ZDOTDIR_HANDBACK_BLOCK
 } from './shell-templates'
 
-/** Runtime values the wrapper re-exports after the user's own startup files ran. */
+/** Runtime values the hook re-exports after the user's own startup files ran. */
 export type ZshWrapperRestoreSpec = {
   /** Orca's agent-teams shim dir back onto PATH. */
   agentTeamsPath: boolean
@@ -30,171 +48,146 @@ export type ZshWrapperRestoreSpec = {
   codexLaunchPreflight: boolean
 }
 
-/**
- * Pre-existing cosmetic drift in the .zshrc restore block. Carried as explicit
- * fields so unifying the generators stays byte-identical; normalizing these
- * away is a follow-up, not part of the unification.
- */
-export type ZshWrapperLegacyFormatting = {
-  /** Local .zshrc lost the two-space indent on the MIMOCODE_HOME restore. */
-  unindentedMimocodeRestore?: boolean
-  /** Only local .zshrc carries a comment above the CODEX_HOME restore. */
-  codexHomeRestoreComment?: string
-}
-
-export type ZshStartupWrapperSpec = {
-  /** First line of every generated file, e.g. `# Orca zsh shell-ready wrapper`. */
+export type ZshStartupHookSpec = {
+  /** First line of the generated file, e.g. `# Orca zsh shell-ready wrapper`. */
   headerLabel: string
-  /** Wrapper ZDOTDIR baked into .zshenv as the fallback literal. */
-  zshDir: string
-  /**
-   * How .zshenv finds the user's real ZDOTDIR. `discover-user-zdotdir` sources
-   * the user .zshenv and reads what it exported; `overlay-user-zdotdir` trusts
-   * the inherited ZDOTDIR and republishes it as ORCA_USER_ZDOTDIR.
-   */
-  zshenvStrategy: 'discover-user-zdotdir' | 'overlay-user-zdotdir'
-  /** zsh expression the wrapper resolves the user's startup-file dir from. */
-  homeExpression?: string
   readyMarkerEscaped: string
-  /** OSC 133 command-lifecycle hooks in .zshrc. */
+  /** OSC 133 command-lifecycle hooks (behind the `markers` feature). */
   osc133CommandMarkers: boolean
-  /** Skip the user .zshrc when its dir is already the wrapper ZDOTDIR. */
-  skipUserZshrcWhenHomeIsWrapperDir: boolean
-  /** Comment heading the non-login restore block in .zshrc. */
-  interactiveRestoreComment: string
-  /** Comment heading the restore block in .zlogin. */
-  loginRestoreComment: string
+  /** Comment heading the overlay restores inside the hook. */
+  overlayRestoreComment: string
   restores: ZshWrapperRestoreSpec
-  /** Where the ready-marker widget lands relative to the final ZDOTDIR restore. */
-  readyMarkerOrder: 'before-zdotdir-restore' | 'after-zdotdir-restore'
-  legacyFormatting?: ZshWrapperLegacyFormatting
 }
 
-export type ZshStartupWrapperFiles = {
-  zshenv: string
-  zprofile: string
-  zshrc: string
-  zlogin: string
-}
-
-const AGENT_TEAMS_PATH_RESTORE_FUNCTION = `__orca_restore_agent_teams_path() {
+const AGENT_TEAMS_PATH_RESTORE_BLOCK = `__orca_restore_agent_teams_path() {
   [[ -n "\${ORCA_AGENT_TEAMS_SHIM_DIR:-}" ]] || return 0
   case "$PATH" in
     "\${ORCA_AGENT_TEAMS_SHIM_DIR}"|"\${ORCA_AGENT_TEAMS_SHIM_DIR}:"*) return 0 ;;
   esac
   export PATH="\${ORCA_AGENT_TEAMS_SHIM_DIR}:$PATH"
-}`
+}
+__orca_restore_agent_teams_path`
 
 const OPENCODE_CONFIG_DIR_RESTORE = `[[ -n "\${ORCA_OPENCODE_CONFIG_DIR:-}" ]] && export OPENCODE_CONFIG_DIR="\${ORCA_OPENCODE_CONFIG_DIR}"`
 const MIMOCODE_HOME_RESTORE = `[[ -n "\${ORCA_MIMOCODE_HOME:-}" ]] && export MIMOCODE_HOME="\${ORCA_MIMOCODE_HOME}"`
 const REMOTE_CLI_BIN_DIR_RESTORE = `[[ -n "\${ORCA_REMOTE_CLI_BIN_DIR:-}" ]] && case ":$PATH:" in *:"\${ORCA_REMOTE_CLI_BIN_DIR}":*) ;; *) export PATH="\${ORCA_REMOTE_CLI_BIN_DIR}:$PATH" ;; esac`
-const CODEX_HOME_RESTORE = `[[ -n "\${ORCA_CODEX_HOME:-}" ]] && export CODEX_HOME="\${ORCA_CODEX_HOME}"`
-
-const ZSH_OSC133_COMMAND_MARKER_BLOCK = `__orca_osc133_precmd() {
-  local exit_code=$?
-  if [[ -n "\${__orca_in_command:-}" ]]; then
-    printf "\\033]133;D;%s\\007" "$exit_code"
-    unset __orca_in_command
-  fi
-  printf "\\033]133;A\\007"
-}
-__orca_osc133_preexec() {
-  printf "\\033]133;C\\007"
-  __orca_in_command=1
-}
-# Why: prepend so Orca captures $? before user prompt hooks can overwrite it.
-precmd_functions=(__orca_osc133_precmd \${precmd_functions[@]})
-preexec_functions=(__orca_osc133_preexec \${preexec_functions[@]})`
+const CODEX_HOME_RESTORE = `# Why: Codex must keep using Orca's runtime CODEX_HOME after rc files.
+[[ -n "\${ORCA_CODEX_HOME:-}" ]] && export CODEX_HOME="\${ORCA_CODEX_HOME}"`
 
 /**
- * Blocks already carrying a trailing newline (the omp wrapper, the codex
- * preflight, the shared source/restore templates) keep it, so joining on a
- * single newline reproduces the blank-line spacing of the originals.
+ * The OSC 133 hooks, defined at top level so their bodies are parsed before the
+ * user's `.zshenv` can change the parsing mode.
  */
+const ZSH_OSC133_FUNCTION_BLOCK = `__orca_osc133_precmd() {
+  local exit_code=$?
+  if [[ -n "\${__orca_in_command:-}" ]]; then
+    builtin printf "\\033]133;D;%s\\007" "$exit_code"
+    builtin unset __orca_in_command
+  fi
+  builtin printf "\\033]133;A\\007"
+}
+__orca_osc133_preexec() {
+  builtin printf "\\033]133;C\\007"
+  # Why typeset -g: a plain assignment here creates a global inside a function,
+  # which prints a warning above every command under warn_create_global.
+  builtin typeset -g __orca_in_command=1
+}`
+
 function joinBlocks(blocks: (string | null)[]): string {
   return blocks.filter((block): block is string => block !== null).join('\n')
 }
 
+function indentBlock(block: string, indent: string): string {
+  return block
+    .split('\n')
+    .map((line) => (line.length > 0 ? `${indent}${line}` : line))
+    .join('\n')
+}
+
+/** One hook feature: `if __orca_has_feature <name>; then ... fi`. */
+function featureGuard(name: string, body: (string | null)[]): string | null {
+  const blocks = body.filter((block): block is string => block !== null)
+  if (blocks.length === 0) {
+    return null
+  }
+  return `  if __orca_has_feature ${name}; then\n${indentBlock(joinBlocks(blocks).replace(/\n$/, ''), '    ')}\n  fi`
+}
+
 /** The env/PATH restores that must outlast the user's own startup files. */
-function getRestoreLines(
-  spec: ZshStartupWrapperSpec,
-  indent: string,
-  legacyFormatting?: ZshWrapperLegacyFormatting
-): (string | null)[] {
-  const mimocodeIndent = legacyFormatting?.unindentedMimocodeRestore ? '' : indent
-  const codexHomeComment = legacyFormatting?.codexHomeRestoreComment
+function getOverlayRestoreBlocks(spec: ZshStartupHookSpec): (string | null)[] {
   return [
-    `${indent}${OPENCODE_CONFIG_DIR_RESTORE}`,
-    `${mimocodeIndent}${MIMOCODE_HOME_RESTORE}`,
-    spec.restores.remoteCliBinDir ? `${indent}${REMOTE_CLI_BIN_DIR_RESTORE}` : null,
-    `${indent}${getPosixOmpShellWrapper()}`,
-    spec.restores.codexHome && codexHomeComment ? `${indent}${codexHomeComment}` : null,
-    spec.restores.codexHome ? `${indent}${CODEX_HOME_RESTORE}` : null,
-    ZSH_HISTFILE_RESTORE_BLOCK,
-    spec.restores.codexLaunchPreflight ? `${indent}${getPosixCodexShellLaunchPreflight()}` : null
+    spec.overlayRestoreComment,
+    spec.restores.agentTeamsPath ? AGENT_TEAMS_PATH_RESTORE_BLOCK : null,
+    OPENCODE_CONFIG_DIR_RESTORE,
+    MIMOCODE_HOME_RESTORE,
+    spec.restores.remoteCliBinDir ? REMOTE_CLI_BIN_DIR_RESTORE : null,
+    getPosixOmpShellWrapper(),
+    spec.restores.codexHome ? CODEX_HOME_RESTORE : null,
+    spec.restores.codexLaunchPreflight ? getPosixCodexShellLaunchPreflight() : null
   ]
 }
 
-function buildZshrc(spec: ZshStartupWrapperSpec): string {
-  return `${joinBlocks([
-    `# ${spec.headerLabel}`,
-    getZshStartupFileSourceBlock({
-      fileName: '.zshrc',
-      homeExpression: spec.homeExpression,
-      interactiveOnly: true,
-      skipWhenHomeIsCurrentZdotdir: spec.skipUserZshrcWhenHomeIsWrapperDir
-    }),
-    spec.restores.agentTeamsPath
-      ? `${AGENT_TEAMS_PATH_RESTORE_FUNCTION}\n[[ ! -o login ]] && __orca_restore_agent_teams_path`
-      : null,
-    joinBlocks([
-      'if [[ ! -o login ]]; then',
-      `  ${spec.interactiveRestoreComment}`,
-      ...getRestoreLines(spec, '  ', spec.legacyFormatting),
-      'fi'
-    ]),
-    spec.osc133CommandMarkers ? ZSH_OSC133_COMMAND_MARKER_BLOCK : null,
-    `if [[ ! -o login ]]; then\n${getZshFinalZdotdirRestoreBlock(spec.homeExpression)}\nfi`
-  ])}\n`
+/**
+ * Everything Orca owns that must run after the user's config, in one function
+ * invoked from the first prompt's precmd sweep and then retired.
+ */
+function buildDeferredInit(spec: ZshStartupHookSpec): string {
+  // Why substitute in the markers case and remove otherwise: OSC 133 needs a
+  // permanent precmd, so swapping this hook for it keeps the array position the
+  // user's own hooks were registered around. With no permanent hook to leave
+  // behind, removing is what keeps a history-only pane observably identical to
+  // the unwrapped pane it was — no stray Orca name in `precmd_functions`.
+  // Verified on zsh 5.9 that self-removal mid-sweep skips no later hook, from
+  // the head, the middle and the tail of the array.
+  const permanentPrecmd = spec.osc133CommandMarkers
+    ? `  if __orca_has_feature markers; then
+    precmd_functions=(\${precmd_functions:/__orca_deferred_init/__orca_osc133_precmd})
+    preexec_functions=(__orca_osc133_preexec \${preexec_functions[@]})
+  else
+    precmd_functions=(\${precmd_functions:#__orca_deferred_init})
+  fi`
+    : `  precmd_functions=(\${precmd_functions:#__orca_deferred_init})`
+
+  return `__orca_deferred_init() {
+  # Why first: this body runs after the user's own config, so it would otherwise
+  # inherit whatever options that config left set. Under NO_UNSET an unset
+  # precmd_functions is fatal, and KSH_ARRAYS makes the 1-based feature lookup
+  # drop whichever feature is listed first.
+  builtin emulate -L zsh
+  (( $+_orca_deferred_init_done )) && return 0
+  builtin typeset -g _orca_deferred_init_done=1
+  builtin typeset -g precmd_functions
+${permanentPrecmd}
+${joinBlocks([
+  featureGuard('overlay', getOverlayRestoreBlocks(spec)),
+  // Why no /etc/zshrc repair branch: ZDOTDIR was handed back before that file
+  // ran, so the value it derives is the user's own path. #11044 is unreachable.
+  `  if [[ -n "\${_orca_histfile:-}" ]]; then
+    HISTFILE="$_orca_histfile"
+  fi`,
+  featureGuard('ready', [
+    indentBlock(getZshShellReadyMarkerRegistrationBlock(spec.readyMarkerEscaped), '')
+  ])
+])}
+${
+  spec.osc133CommandMarkers
+    ? `  # Why called here: we were appended during this prompt's own precmd sweep, so
+  # the permanent hook has not run yet and the first prompt would lose its mark.
+  __orca_has_feature markers && __orca_osc133_precmd\n`
+    : ''
+}  builtin unset _orca_shell_features _orca_histfile
+  builtin unfunction __orca_deferred_init __orca_has_feature
+}`
 }
 
-function buildZlogin(spec: ZshStartupWrapperSpec): string {
-  const finalZdotdirRestore = getZshFinalZdotdirRestoreBlock(spec.homeExpression)
-  const readyMarker = getZshShellReadyMarkerRegistrationBlock(spec.readyMarkerEscaped)
-  const tail =
-    spec.readyMarkerOrder === 'before-zdotdir-restore'
-      ? [readyMarker, finalZdotdirRestore]
-      : [finalZdotdirRestore, readyMarker]
-
+export function buildZshStartupHook(spec: ZshStartupHookSpec): string {
   return `${joinBlocks([
     `# ${spec.headerLabel}`,
-    getZshStartupFileSourceBlock({
-      fileName: '.zlogin',
-      homeExpression: spec.homeExpression,
-      interactiveOnly: true
-    }),
-    spec.restores.agentTeamsPath
-      ? `${AGENT_TEAMS_PATH_RESTORE_FUNCTION}\n__orca_restore_agent_teams_path`
-      : null,
-    joinBlocks([spec.loginRestoreComment, ...getRestoreLines(spec, '')]),
-    ...tail
+    ZSH_ZDOTDIR_HANDBACK_BLOCK,
+    ZSH_FEATURE_CHANNEL_BLOCK,
+    SHELL_STARTUP_IDENTITY_MARKER_BLOCK,
+    spec.osc133CommandMarkers ? ZSH_OSC133_FUNCTION_BLOCK : null,
+    buildDeferredInit(spec),
+    ZSH_USER_ZSHENV_SOURCE_BLOCK
   ])}\n`
-}
-
-export function buildZshStartupWrapperFiles(spec: ZshStartupWrapperSpec): ZshStartupWrapperFiles {
-  return {
-    zshenv:
-      spec.zshenvStrategy === 'discover-user-zdotdir'
-        ? getZshEnvTemplate(spec.zshDir, spec.headerLabel)
-        : getZshOverlayEnvTemplate(spec.zshDir, spec.headerLabel),
-    zprofile: `${joinBlocks([
-      `# ${spec.headerLabel}`,
-      getZshStartupFileSourceBlock({
-        fileName: '.zprofile',
-        homeExpression: spec.homeExpression
-      })
-    ])}\n`,
-    zshrc: buildZshrc(spec),
-    zlogin: buildZlogin(spec)
-  }
 }

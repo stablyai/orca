@@ -372,6 +372,23 @@ describe('ensureRealHomeCodexHookState (install)', () => {
 })
 
 describe('ensureRealHomeCodexHookState (opt-out sweep)', () => {
+  it('keeps the managed lane when hooks.json cannot be read', () => {
+    mkdirSync(getRealHooksJsonPath())
+
+    expect(ensureRealHomeCodexHookState({ hooksEnabled: false, userDataPath: userDataDir })).toBe(
+      'unavailable'
+    )
+  })
+
+  it('keeps the managed lane when hooks.json is malformed', () => {
+    writeFileSync(getRealHooksJsonPath(), '{ not json', 'utf-8')
+
+    expect(ensureRealHomeCodexHookState({ hooksEnabled: false, userDataPath: userDataDir })).toBe(
+      'unavailable'
+    )
+    expect(readFileSync(getRealHooksJsonPath(), 'utf-8')).toBe('{ not json')
+  })
+
   it('rebases trust when a user appended hooks after Orca installed', () => {
     grantSucceeds()
     const before = { type: 'command', command: 'before.sh' }

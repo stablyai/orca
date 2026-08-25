@@ -1,3 +1,4 @@
+import { resolveProcessExitCause, type TerminalExitCause } from '../../shared/terminal-exit-cause'
 import { HeadlessEmulator } from './headless-emulator'
 import { StartupDeviceAttributesQueryFilter } from './startup-device-attributes-responder'
 import { normalizePtySize } from './daemon-pty-size'
@@ -11,7 +12,7 @@ const PENDING_OUTPUT_MAX_BYTES = 2 * 1024 * 1024
 export type AttachedClient = {
   token: symbol
   onData: (data: string, rawLength?: number, transformed?: boolean, seq?: number) => void
-  onExit: (code: number, incarnationId: string) => void
+  onExit: (code: number, incarnationId: string, cause?: TerminalExitCause) => void
 }
 
 export type SessionOutputPlaneOptions = {
@@ -87,9 +88,12 @@ export class SessionOutputPlane {
     return this.attachedClients.slice()
   }
 
-  broadcastExit(code: number, incarnationId: string): void {
+  broadcastExit(code: number, incarnationId: string, cause?: TerminalExitCause): void {
+    // Why the fallback here: a handle that predates exit causes still reports a
+    // code, and every client deserves the same shape.
+    const resolved = cause ?? resolveProcessExitCause({ exitCode: code })
     for (const client of this.attachedClients) {
-      client.onExit(code, incarnationId)
+      client.onExit(code, incarnationId, resolved)
     }
   }
 

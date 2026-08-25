@@ -1,6 +1,7 @@
 import type { PairingRelay } from '../../../src/shared/mobile-relay-pairing-offer'
 import type { MobileRelayPairingJournal } from './mobile-relay-pairing-journal'
 import { RelayOuterError, type PairingCandidateClient } from './mobile-relay-physical-client'
+import { RelayDirectorMoveNotNewerError } from './mobile-relay-invite-director'
 import { createPairingRelayLogger, pairingRelayErrorDetail } from './pairing-relay-log'
 import { redactSocketEndpoint } from './socket-event-debug'
 import type { ConnectionLogSink } from './types'
@@ -88,6 +89,35 @@ export function createRecoveringPairingRelayCandidate(args: {
         return await client.sendRequest(method, params)
       } catch (error) {
         lastError = error
+        if (isCurrentAssignmentMove(error, relay)) {
+          log(
+            'info',
+            'Relay: director kept current assignment',
+            redactSocketEndpoint(relay.cellUrl)
+          )
+          client.close()
+          await backOff(attempt)
+          if (closed) {
+            throw new Error('relay pairing client closed')
+          }
+          try {
+            client = args.connect(relay, args.onLog)
+            return await client.sendRequest(method, params)
+          } catch (retryError) {
+            lastError = retryError
+            log(
+              'warn',
+              `Relay: recovery attempt ${attempt + 1} failed`,
+              pairingRelayErrorDetail(retryError)
+            )
+            if (!isDirectorRecoverable(retryError) || attempt + 1 >= maxAttempts) {
+              log('error', 'Relay: recovery gave up', `after ${attempt + 1} attempt(s)`)
+              throw retryError
+            }
+            await backOff(attempt)
+            continue
+          }
+        }
         log('warn', `Relay: recovery attempt ${attempt + 1} failed`, pairingRelayErrorDetail(error))
         if (!isDirectorRecoverable(error) || attempt + 1 >= maxAttempts) {
           log('error', 'Relay: recovery gave up', `after ${attempt + 1} attempt(s)`)
@@ -98,6 +128,16 @@ export function createRecoveringPairingRelayCandidate(args: {
     }
     throw lastError
   }
+}
+
+function isCurrentAssignmentMove(error: unknown, relay: PairingRelay): boolean {
+  return (
+    error instanceof RelayDirectorMoveNotNewerError &&
+    error.assignmentEpoch === relay.assignmentEpoch &&
+    error.cellUrl === relay.cellUrl &&
+    error.currentAssignmentEpoch === relay.assignmentEpoch &&
+    error.currentCellUrl === relay.cellUrl
+  )
 }
 
 function pairingRelayFromJournal(journal: MobileRelayPairingJournal): PairingRelay {

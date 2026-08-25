@@ -3,6 +3,11 @@ import { contextBridge, ipcRenderer, webFrame, webUtils } from 'electron'
 import { electronAPI } from '@electron-toolkit/preload'
 import { preloadE2EConfig } from './e2e-config'
 import { glApi } from './gitlab'
+import type {
+  SkillDeletePlan,
+  SkillDeleteRequest,
+  SkillDeleteResult
+} from '../shared/skill-delete-contract'
 import type { AppIdentity } from '../shared/app-identity'
 import type { MacCapturedDigitRowChord } from '../shared/macos-symbolic-hotkeys'
 import type { ComputerAwakeStatus } from '../shared/computer-awake-mode'
@@ -2628,6 +2633,12 @@ const api = {
       ipcRenderer.invoke('skills:previewBundleInstall', input),
     removeInstall: (input: SkillRemoveInput): Promise<SkillRemoveOperation> =>
       ipcRenderer.invoke('skills:removeInstall', input),
+    // Desktop always registers the delete IPC handlers in its own main process.
+    deleteSupported: (): Promise<boolean> => Promise.resolve(true),
+    previewDelete: (request: SkillDeleteRequest): Promise<SkillDeletePlan> =>
+      ipcRenderer.invoke('skills:previewDelete', request),
+    delete: (request: SkillDeleteRequest): Promise<SkillDeleteResult> =>
+      ipcRenderer.invoke('skills:delete', request),
     listManagedInstalls: (environmentId?: string): Promise<ManagedSkillInstallListOperation> =>
       ipcRenderer.invoke('skills:listManagedInstalls', environmentId),
     getPackage: (packageId: string): Promise<SkillCloudOperation<SkillCloudPackageDetails>> =>
@@ -3385,6 +3396,8 @@ const api = {
       connectionId?: string
       excludePaths?: string[]
       requestToken?: string
+      maxResults?: number
+      searchQuery?: string
     }): Promise<string[]> => ipcRenderer.invoke('fs:listFiles', args),
     cancelListFiles: (args: { requestToken: string }): Promise<void> =>
       ipcRenderer.invoke('fs:cancelListFiles', args),
@@ -3776,6 +3789,11 @@ const api = {
       const listener = (_event: Electron.IpcRendererEvent) => callback()
       ipcRenderer.on('ui:openTasks', listener)
       return () => ipcRenderer.removeListener('ui:openTasks', listener)
+    },
+    onToggleAgentDashboard: (callback: () => void): (() => void) => {
+      const listener = (_event: Electron.IpcRendererEvent) => callback()
+      ipcRenderer.on('ui:toggleAgentDashboard', listener)
+      return () => ipcRenderer.removeListener('ui:toggleAgentDashboard', listener)
     },
     onJumpToWorktreeIndex: (callback: (index: number) => void): (() => void) => {
       const listener = (_event: Electron.IpcRendererEvent, index: number) => callback(index)
@@ -5028,6 +5046,9 @@ const api = {
     /** Drop the cached hook status for a paneKey on both sides (memory + on-disk) so a relaunch can't resurrect a dismissed row. */
     drop: (paneKey: string): void => {
       ipcRenderer.send('agentStatus:drop', paneKey)
+    },
+    reconcileEndedProcess: (paneKey: string): void => {
+      ipcRenderer.send('agentStatus:reconcileEndedProcess', paneKey)
     },
     /** Drop all cached hook statuses under one terminal tab prefix; fired on explicit tab close even without a local row. */
     dropByTabPrefix: (tabId: string): void => {

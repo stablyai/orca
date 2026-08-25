@@ -132,6 +132,7 @@ function createStubRequest(options: {
     request: {
       invocation: {
         command: process.execPath,
+        cliPath: null,
         args: [stubPath],
         env: {
           STUB_CONFIG: JSON.stringify({
@@ -227,7 +228,7 @@ describe('runCodexHookTrustGrantSession', () => {
     const spawnImpl = vi.fn(() => child) as unknown as typeof spawn
 
     const session = runCodexAppServerSession(
-      { command: 'codex', args: ['app-server'], timeoutMs: 2_000 },
+      { command: 'codex', cliPath: null, args: ['app-server'], timeoutMs: 2_000 },
       async () => undefined,
       spawnImpl
     )
@@ -456,6 +457,7 @@ describe('runCodexHookTrustGrantSession', () => {
     const request: CodexHookTrustGrantRequest = {
       invocation: {
         command: join(tmpdir(), 'orca-codex-missing-binary-does-not-exist'),
+        cliPath: null,
         args: [],
         timeoutMs: 2_000
       },
@@ -479,7 +481,7 @@ describe('runCodexHookTrustGrantSessionSync', () => {
   }
 
   const baseRequest: CodexHookTrustGrantRequest = {
-    invocation: { command: 'codex', args: ['app-server'], timeoutMs: 1_000 },
+    invocation: { command: 'codex', cliPath: null, args: ['app-server'], timeoutMs: 1_000 },
     hooksListCwd: '/tmp',
     expectedTrustKeys: ['k'],
     managedCommand: MANAGED_COMMAND
