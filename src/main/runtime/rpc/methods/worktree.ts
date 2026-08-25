@@ -6,6 +6,7 @@ import {
 import { buildCliWorkspaceProvenance } from '../../../../shared/cli-workspace-provenance'
 import { defineMethod, type RpcMethod } from '../core'
 import { buildManagedWorktreeCreateArgs } from './worktree-create-args'
+import { resolvePairedCallerHostId } from './paired-caller-host-id'
 import { resolveRuntimeNavigationTarget } from '../../../../shared/runtime-navigation'
 import { resolveRpcWorkspaceCreatorProvenance } from '../workspace-creator-context'
 import { WorktreeCreate, WorktreePrefetchCreateBase } from './worktree-create-schemas'
@@ -204,10 +205,15 @@ export const WORKTREE_METHODS: RpcMethod[] = [
     name: 'worktree.rm',
     params: WorktreeRemove,
     handler: async (params, { runtime }) => {
+      // Translate a paired client's runtime-local host spelling before host-qualified reads.
+      let resolvedHostId = resolvePairedCallerHostId(
+        () => runtime.listRepos(),
+        params.worktree,
+        params.hostId
+      )
       // Older mobile clients omit hostId, so resolve through the ambiguity gate
       // before pinning removal. An ambiguous selector still fails closed: two
       // hosts own the id and an unqualified client cannot say which it meant.
-      let resolvedHostId = params.hostId
       if (!resolvedHostId) {
         try {
           resolvedHostId = (await runtime.showManagedWorktree(params.worktree)).hostId
@@ -237,18 +243,24 @@ export const WORKTREE_METHODS: RpcMethod[] = [
   defineMethod({
     name: 'worktree.forceDeleteBranch',
     params: WorktreeForceDeleteBranch,
-    handler: async (params, { runtime }) =>
-      params.hostId
+    handler: async (params, { runtime }) => {
+      const hostId = resolvePairedCallerHostId(
+        () => runtime.listRepos(),
+        params.worktree,
+        params.hostId
+      )
+      return hostId
         ? runtime.forceDeletePreservedBranch(
             params.worktree,
             params.branchName,
             params.expectedHead,
-            params.hostId
+            hostId
           )
         : runtime.forceDeletePreservedBranch(
             params.worktree,
             params.branchName,
             params.expectedHead
           )
+    }
   })
 ]
