@@ -48,7 +48,9 @@ export async function writeGrokHookSessionOwner(ownerPath: string): Promise<void
   }
   const owner: GrokHookSessionOwner = { pid: process.pid, hostIdentity, processIdentity }
   await mkdir(dirname(ownerPath), { recursive: true })
-  await writeFile(ownerPath, JSON.stringify(owner), 'utf8')
+  // Why 0600: hostIdentity can carry the durable managed-hook host token, which lock ownership is
+  // keyed on. ~/.grok/hooks is not otherwise restricted, so keep the record owner-readable only.
+  await writeFile(ownerPath, JSON.stringify(owner), { encoding: 'utf8', mode: 0o600 })
 }
 
 export async function clearGrokHookSessionOwner(ownerPath: string): Promise<void> {
