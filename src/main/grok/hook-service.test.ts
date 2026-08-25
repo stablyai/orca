@@ -434,8 +434,6 @@ describe('GrokHookService', () => {
     expect(service.install().state).toBe('installed')
   })
 
-  // Why a real child process: a second GrokHookService in THIS process has the same pid and
-  // process identity, so the record is byte-identical either way and proves nothing.
   it('keeps another live instance in the ownership record when claiming', async () => {
     const service = new GrokHookService()
     const child = spawn(process.execPath, ['-e', 'setTimeout(() => {}, 60000)'], {
@@ -466,33 +464,6 @@ describe('GrokHookService', () => {
       child.kill()
     }
   })
-  it('does not take the ownership record from another live instance', async () => {
-    const service = new GrokHookService()
-    const ownerPath = join(homeDir, '.grok', 'hooks', 'orca-status.json.orca-owner')
-    const child = spawn(process.execPath, ['-e', 'setTimeout(() => {}, 60000)'], {
-      stdio: 'ignore'
-    })
-    try {
-      const childPid = child.pid
-      expect(childPid).toBeDefined()
-      const childIdentity = await readManagedHookProcessIdentity(childPid!)
-      expect(typeof childIdentity).toBe('string')
-      const otherOwner = JSON.stringify({
-        pid: childPid,
-        hostIdentity: await readManagedHookHostIdentity(),
-        processIdentity: childIdentity
-      })
-      expect(service.install().state).toBe('installed')
-      writeFileSync(ownerPath, otherOwner, 'utf8')
-
-      await service.claimSession()
-
-      expect(readFileSync(ownerPath, 'utf8')).toBe(otherOwner)
-    } finally {
-      child.kill()
-    }
-  })
-
   it('clears a hook config stranded by a previous Orca that never quit cleanly', async () => {
     const service = new GrokHookService()
     const configPath = join(homeDir, '.grok', 'hooks', 'orca-status.json')
@@ -714,6 +685,41 @@ describe('GrokHookService', () => {
         processIdentity: 'linux:ns:boot:12345'
       }
     ])
+
+    await service.removeAsync()
+
+    expect(existsSync(configPath)).toBe(true)
+  })
+
+  // Why our own pid AND our own process identity: a pid is a small number and repeats across
+  // machines, so a record from another host can carry the SAME pid as this process. Matching on pid
+  // alone drops it, and the next quit then deletes a config that host is still using. Reusing our
+  // real process identity keeps the record un-prunable whether or not this machine has a durable
+  // host token, so the assertion is about the identity check and not about the test host's regime.
+  // The neighbouring cross-host test uses an impossible pid, so it can never hit the collision.
+  it('does not drop a different host record that happens to share our pid', async () => {
+    const service = new GrokHookService()
+    const configPath = join(homeDir, '.grok', 'hooks', 'orca-status.json')
+    const selfIdentity = await readManagedHookProcessIdentity(process.pid)
+    expect(typeof selfIdentity).toBe('string')
+
+    expect(service.install().state).toBe('installed')
+    writeOwnersRecordFor(homeDir, [
+      {
+        pid: process.pid,
+        hostScope: 'durable',
+        hostDigest: 'a-different-machine',
+        processIdentity: selfIdentity
+      }
+    ])
+
+    await service.claimSession()
+    const owners = (
+      JSON.parse(readFileSync(ownersPathFor(homeDir), 'utf8')) as {
+        owners: { hostDigest: string }[]
+      }
+    ).owners
+    expect(owners.map((owner) => owner.hostDigest)).toContain('a-different-machine')
 
     await service.removeAsync()
 

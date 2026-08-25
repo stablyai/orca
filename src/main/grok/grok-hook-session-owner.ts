@@ -66,14 +66,14 @@ export async function readLiveGrokHookSessionOwners(
 export async function claimGrokHookSession(ownersPath: string): Promise<void> {
   const self = await describeSelf()
   const live = await readLiveGrokHookSessionOwners(ownersPath)
-  const others = live.filter((owner) => owner.pid !== self.pid)
-  await writeOwners(ownersPath, [...others, self])
+  await writeOwners(ownersPath, [...live.filter((owner) => !isSelf(owner, self)), self])
 }
 
 /** Drops this process from the record. Returns true when no other live owner remains. */
 export async function releaseGrokHookSession(ownersPath: string): Promise<boolean> {
+  const self = await describeSelf()
   const live = await readLiveGrokHookSessionOwners(ownersPath)
-  const others = live.filter((owner) => owner.pid !== process.pid)
+  const others = live.filter((owner) => !isSelf(owner, self))
   if (others.length === 0) {
     await rm(ownersPath, { force: true })
     return true
@@ -125,10 +125,20 @@ async function probeSelf(): Promise<GrokHookSessionOwner> {
   }
 }
 
+// Why the host has to be part of identity: a pid is a small number and repeats across machines, so
+// matching on pid alone lets this process claim -- and then drop -- an owner belonging to another
+// host whenever HOME is shared. That silently removes the very record the staleness check preserves,
+// and the next quit then deletes a config the other host is still using.
+function isSelf(owner: GrokHookSessionOwner, self: GrokHookSessionOwner): boolean {
+  return owner.pid === self.pid && owner.hostDigest === self.hostDigest
+}
+
 async function isStale(owner: GrokHookSessionOwner): Promise<boolean> {
   const self = await describeSelf()
-  // Why short-circuit self: describeSelf is memoized, so answering from it costs no probe at all.
-  if (owner.pid === process.pid) {
+  // Why isSelf and not a bare pid match: a foreign host's record can carry our pid, and judging it
+  // by our own identity would call it stale and delete a config that host is still using. Answering
+  // for a genuine self-match from the memoized record costs no probe at all.
+  if (isSelf(owner, self)) {
     return owner.processIdentity !== self.processIdentity
   }
   // Why attribute the record to a host first: pids do not carry across machines, so a record from

@@ -34,18 +34,30 @@ export async function settleTeardownWithinDeadline(
   return outcome === 'deadline' ? [...pendingNames] : []
 }
 
+export type SettledWithinMs<T> =
+  | { outcome: 'settled'; value: T }
+  | { outcome: 'failed'; error: unknown }
+  | { outcome: 'timed-out' }
+
 /**
- * Resolves to the settled value, or `null` once `timeoutMs` elapses. Why null rather than a throw:
- * every quit-path teardown is best-effort, and a rejection here would have to be caught at each
- * call site anyway. The timer is unref'd so it can never itself hold the process open.
+ * Races a teardown against a deadline. Why the three-way result rather than a nullable value: a
+ * rejection and a timeout are different diagnoses on the quit path, and collapsing them makes a
+ * genuine failure read as "timed out" in the log. Every teardown here is best-effort, so this never
+ * throws. The timer is unref'd so it can never itself hold the process open.
  */
-export async function settleWithinMs<T>(promise: Promise<T>, timeoutMs: number): Promise<T | null> {
+export async function settleWithinMs<T>(
+  promise: Promise<T>,
+  timeoutMs: number
+): Promise<SettledWithinMs<T>> {
   let timer: ReturnType<typeof setTimeout> | undefined
   try {
     return await Promise.race([
-      promise.catch(() => null),
-      new Promise<null>((resolve) => {
-        timer = setTimeout(() => resolve(null), timeoutMs)
+      promise.then(
+        (value): SettledWithinMs<T> => ({ outcome: 'settled', value }),
+        (error): SettledWithinMs<T> => ({ outcome: 'failed', error })
+      ),
+      new Promise<SettledWithinMs<T>>((resolve) => {
+        timer = setTimeout(() => resolve({ outcome: 'timed-out' }), timeoutMs)
         timer.unref?.()
       })
     ])

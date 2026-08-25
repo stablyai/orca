@@ -3444,11 +3444,16 @@ app.on('will-quit', (e) => {
   const grokHookCleanup = settleWithinMs(
     removeManagedAgentHooksAsync({ agents: ['grok'] }),
     GROK_HOOK_CLEANUP_DEADLINE_MS
-  ).then((statuses) => {
-    if (!statuses) {
+  ).then((settled) => {
+    if (settled.outcome === 'timed-out') {
       console.warn('[agent-hooks] Grok hook cleanup on quit timed out')
       return
     }
+    if (settled.outcome === 'failed') {
+      console.warn('[agent-hooks] Grok hook cleanup on quit failed:', settled.error)
+      return
+    }
+    const statuses = settled.value
     // Why: these report failure as a status rather than a throw, so without this a quit that failed
     // to remove the hooks looks identical to one that succeeded.
     for (const status of statuses.filter((entry) => entry.detail)) {
