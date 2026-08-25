@@ -2,6 +2,11 @@ import type { AgentLaunchPreferences } from '../../../../shared/agent-session-ho
 import type { TuiAgent } from '../../../../shared/tui-agent'
 import type { OrcaRuntimeService } from '../../orca-runtime'
 import type { OrchestrationDb } from '../../orchestration/db'
+import {
+  resolvePiRpcWorkerTransportLaunch,
+  type PiRpcWorkerTransportLaunch,
+  type PiRpcWorkerTransportRequest
+} from './orchestration-pi-rpc-worker'
 
 export type WorkerEffect = {
   kind: 'worktree' | 'terminal' | 'setup' | 'dispatch_input'
@@ -19,6 +24,7 @@ export type WorkerEffect = {
   terminalId?: string
   surface?: 'visible' | 'background'
   warning?: string
+  transport?: 'pi-rpc'
 }
 
 export type WorkerSetupReceipt = {
@@ -51,36 +57,6 @@ export function requireWorkerAuthority(runtime: OrcaRuntimeService, terminalHand
     ...(authority?.launchTokenHash ? { launchTokenHash: authority.launchTokenHash } : {}),
     ...(authority?.hostScope ? { hostScope: JSON.stringify(authority.hostScope) } : {})
   }
-}
-
-export async function createExistingWorktreeWorkerTerminal(args: {
-  runtime: OrcaRuntimeService
-  worktreeId: string
-  agent: TuiAgent
-  launchPreferences?: AgentLaunchPreferences
-  taskId: string
-  effects: WorkerEffect[]
-}): Promise<{ handle: string; warning?: string }> {
-  const terminal = await args.runtime.createTerminal(`id:${args.worktreeId}`, {
-    // Why: the agent id is not a shell command — `cursor` resolves to the Cursor
-    // desktop app while its CLI is `cursor-agent`. Let the runtime build the
-    // configured launcher instead of executing the raw id.
-    startupAgent: args.agent,
-    ...(args.launchPreferences ? { launchPreferences: args.launchPreferences } : {}),
-    title: `worker-${args.taskId}`,
-    // Why: dispatching a worker is background work; it must not pull the sidebar
-    // to the worker's workspace while the user is reading somewhere else.
-    surfaceOwner: false
-  })
-  args.effects.push({
-    kind: 'terminal',
-    role: 'agent',
-    action: 'created',
-    id: terminal.handle,
-    surface: terminal.surface,
-    warning: terminal.warning
-  })
-  return { handle: terminal.handle, warning: terminal.warning }
 }
 
 export function applyWaitForSetupOutcome(
@@ -121,17 +97,27 @@ export async function createWorkerWorktree(args: {
   }
   agent: TuiAgent
   launchPreferences?: AgentLaunchPreferences
+  piRpc?: PiRpcWorkerTransportRequest
   effects: WorkerEffect[]
 }): Promise<{
   worktree: Awaited<ReturnType<OrcaRuntimeService['showManagedWorktree']>>
   terminalHandle: string
   setupReceipt: WorkerSetupReceipt
+  piRpcLaunch?: PiRpcWorkerTransportLaunch
 }> {
   const { runtime, db, dispatchId, requestedWorktree, coordinatorWorktree, params, effects } = args
   const setupDecision = params.setup ?? 'run'
+  const repoSelector = params.repo ?? coordinatorWorktree.repoId
+  const piRpcLaunch = args.piRpc
+    ? resolvePiRpcWorkerTransportLaunch({
+        runtime,
+        workspace: await runtime.showRepo(repoSelector),
+        request: args.piRpc
+      })
+    : undefined
   db.recordWorkerStage({ dispatchId, stage: 'worktree_creating', effects })
   const created = await runtime.createManagedWorktree({
-    repoSelector: params.repo ?? coordinatorWorktree.repoId,
+    repoSelector,
     name: params.name as string,
     baseBranch: params.baseBranch,
     displayName: params.displayName,
@@ -143,7 +129,16 @@ export async function createWorkerWorktree(args: {
     observeSetupCompletion: true,
     createdWithAgent: args.agent,
     startupAgent: args.agent,
-    ...(args.launchPreferences ? { startupLaunchPreferences: args.launchPreferences } : {}),
+    ...(piRpcLaunch
+      ? {
+          startup: {
+            command: piRpcLaunch.command,
+            env: piRpcLaunch.cliInvocation.env
+          }
+        }
+      : args.launchPreferences
+        ? { startupLaunchPreferences: args.launchPreferences }
+        : {}),
     activate: false,
     lineage: {
       parentWorktree: requestedWorktree === 'new-child' ? coordinatorWorktree.id : undefined,
@@ -191,7 +186,8 @@ export async function createWorkerWorktree(args: {
       action: terminal.handle === terminalHandle ? 'reused_agent_terminal' : 'created',
       id: terminal.handle,
       tabId: terminal.tabId,
-      leafId: terminal.leafId
+      leafId: terminal.leafId,
+      ...(piRpcLaunch && terminal.handle === terminalHandle ? { transport: 'pi-rpc' as const } : {})
     })
   }
   const setupTerminal = effects.find(
@@ -211,7 +207,8 @@ export async function createWorkerWorktree(args: {
   return {
     worktree: created.worktree as Awaited<ReturnType<OrcaRuntimeService['showManagedWorktree']>>,
     terminalHandle,
-    setupReceipt
+    setupReceipt,
+    ...(piRpcLaunch ? { piRpcLaunch } : {})
   }
 }
 

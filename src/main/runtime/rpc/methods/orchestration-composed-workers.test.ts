@@ -4,6 +4,7 @@ import { createOrchestrationRpcHarness } from './orchestration-rpc-test-harness'
 import type { OrchestrationDb } from '../../orchestration/db'
 import type { OrcaRuntimeService } from '../../orca-runtime'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
+import { PI_RPC_WORKER_TASK_SPEC_MAX_BYTES } from '../../../../shared/pi-rpc-worker-launch'
 
 describe('orchestration RPC methods', () => {
   const h = createOrchestrationRpcHarness()
@@ -59,6 +60,11 @@ describe('orchestration RPC methods', () => {
         handle === 'term_worker' ? 'runtime_test:term_worker:1' : null
       )
       vi.spyOn(runtime, 'getTerminalOrchestrationCliCommand').mockReturnValue('orca')
+      vi.spyOn(runtime, 'getPiRpcWorkerCliInvocation').mockReturnValue({
+        executable: '/trusted/bin/Orca',
+        argsPrefix: ['/trusted/app/out/cli/index.js'],
+        env: { ELECTRON_RUN_AS_NODE: '1' }
+      })
       vi.spyOn(runtime, 'sendTerminalAgentPrompt').mockResolvedValue({
         handle: 'term_worker',
         accepted: true,
@@ -104,6 +110,91 @@ describe('orchestration RPC methods', () => {
       )
     })
 
+    it('starts a fresh Pi worker through the private RPC supervisor', async () => {
+      setup()
+      mockCurrentWorkerStart()
+      vi.mocked(runtime.showManagedTerminalWorkspace).mockResolvedValue({
+        id: 'repo::worktree',
+        repoId: 'repo',
+        path: '/repo/worktree',
+        hostId: 'local'
+      } as never)
+      const task = db.createTask({ spec: 'implement through Pi RPC' })
+
+      const result = (await call('orchestration.workerStart', {
+        task: task.id,
+        from: 'term_coord',
+        agent: 'pi',
+        model: 'openai/gpt-5.4',
+        effort: 'high'
+      })) as {
+        dispatchId: string
+        state: string
+        transport: string
+        launch: {
+          requested: { agent: string; model: string; effort: string }
+          effective: { agent: string; model: string; effort: string }
+        }
+        effects: { kind: string; transport?: string }[]
+      }
+
+      expect(result).toMatchObject({
+        state: 'ready',
+        transport: 'pi-rpc',
+        launch: {
+          requested: { agent: 'pi', model: 'openai/gpt-5.4', effort: 'high' },
+          effective: { agent: 'pi', model: 'openai/gpt-5.4', effort: 'high' }
+        }
+      })
+      expect(runtime.createTerminal).toHaveBeenCalledWith('id:repo::worktree', {
+        command:
+          "'/trusted/bin/Orca' '/trusted/app/out/cli/index.js' 'pi-rpc-worker' '--model' 'openai/gpt-5.4' '--effort' 'high'",
+        env: { ELECTRON_RUN_AS_NODE: '1' },
+        launchAgent: 'pi',
+        title: `worker-${task.id}`,
+        surfaceOwner: false
+      })
+      expect(runtime.createTerminal).not.toHaveBeenCalledWith(
+        expect.anything(),
+        expect.objectContaining({ startupAgent: 'pi' })
+      )
+      expect(runtime.sendTerminalAgentPrompt).toHaveBeenCalledOnce()
+      const input = vi.mocked(runtime.sendTerminalAgentPrompt).mock.calls[0]?.[1] ?? ''
+      expect(JSON.parse(input)).toEqual({
+        protocol: 'orca.pi.rpc-worker.dispatch',
+        version: 1,
+        taskId: task.id,
+        dispatchId: result.dispatchId,
+        workerHandle: 'term_worker',
+        capability: expect.stringMatching(/^dcap_/),
+        taskSpec: 'implement through Pi RPC',
+        cliCommand: 'orca'
+      })
+      expect(input).not.toContain('You are working inside Orca')
+      expect(input).not.toContain('orchestration send')
+      expect(result.effects).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ kind: 'terminal', transport: 'pi-rpc' }),
+          expect.objectContaining({ kind: 'dispatch_input', transport: 'pi-rpc' })
+        ])
+      )
+      expect(JSON.parse(db.getWorkerDispatch(result.dispatchId)!.start_options)).toMatchObject({
+        agent: 'pi',
+        transport: 'pi-rpc',
+        launch: result.launch
+      })
+      expect(db.getDispatchContextById(result.dispatchId)).toMatchObject({
+        assignee_handle: 'term_worker',
+        process_incarnation: 'runtime_test:term_worker:1'
+      })
+      expect(db.getWorkerTerminalResourceByOwner(result.dispatchId)).toMatchObject({
+        terminal_handle: 'term_worker',
+        process_incarnation: 'runtime_test:term_worker:1',
+        ownership_state: 'owned',
+        release_state: 'not_requested'
+      })
+    })
+
     it('applies and reports opaque per-invocation model preferences', async () => {
       setup()
       mockCurrentWorkerStart()
@@ -141,6 +232,24 @@ describe('orchestration RPC methods', () => {
       expect(JSON.parse(db.getWorkerDispatch(result.dispatchId)!.start_options)).toMatchObject({
         launch: result.launch
       })
+    })
+
+    it('keeps the existing-terminal grammar unchanged for an explicit Pi agent', async () => {
+      setup()
+      mockCurrentWorkerStart()
+      vi.spyOn(runtime, 'isTerminalRunningAgent').mockResolvedValue(true)
+      const task = db.createTask({ spec: 'do not replace this exact agent' })
+
+      await expect(
+        call('orchestration.workerStart', {
+          task: task.id,
+          from: 'term_coord',
+          terminal: 'term_worker',
+          agent: 'pi'
+        })
+      ).rejects.toMatchObject({ code: 'invalid_argument' })
+      expect(runtime.createTerminal).not.toHaveBeenCalled()
+      expect(db.getDispatchContext(task.id)).toBeUndefined()
     })
 
     it('rejects launch preferences for an existing terminal before creating a Dispatch', async () => {
@@ -349,6 +458,122 @@ describe('orchestration RPC methods', () => {
       )
       expect(runtime.createTerminal).not.toHaveBeenCalled()
       expect(createWorktree).not.toHaveBeenCalled()
+      const input = vi.mocked(runtime.sendTerminalAgentPrompt).mock.calls[0]?.[1] ?? ''
+      expect(input).toContain('You are working inside Orca')
+      expect(input).not.toContain('orca.pi.rpc-worker.dispatch')
+    })
+
+    it('rejects fresh Pi RPC workers on SSH before terminal effects', async () => {
+      setup()
+      mockCurrentWorkerStart()
+      vi.mocked(runtime.showTerminal).mockResolvedValue({
+        handle: 'term_coord',
+        worktreeId: FLOATING_TERMINAL_WORKTREE_ID,
+        status: 'running'
+      } as never)
+      vi.mocked(runtime.showManagedTerminalWorkspace).mockResolvedValue({
+        id: 'folder:workspace-1',
+        repoId: 'folder-workspace:group-1',
+        path: '/srv/project',
+        hostId: 'ssh:ssh-target'
+      } as never)
+      const task = db.createTask({ spec: 'remote folder worker' })
+
+      await expect(
+        call('orchestration.workerStart', {
+          task: task.id,
+          from: 'term_coord',
+          worktree: 'folder:workspace-1',
+          agent: 'pi'
+        })
+      ).resolves.toMatchObject({
+        state: 'failed',
+        failedStage: 'terminal_create',
+        lastError: 'pi_rpc_worker_topology_unsupported'
+      })
+      expect(runtime.createTerminal).not.toHaveBeenCalled()
+      expect(runtime.sendTerminalAgentPrompt).not.toHaveBeenCalled()
+    })
+
+    it('rejects fresh Pi RPC workers through WSL before terminal effects', async () => {
+      setup()
+      mockCurrentWorkerStart()
+      vi.mocked(runtime.showManagedTerminalWorkspace).mockResolvedValue({
+        id: 'repo::C:\\repo',
+        repoId: 'repo',
+        path: 'C:\\repo',
+        hostId: 'local'
+      } as never)
+      vi.spyOn(runtime, 'resolveProjectRuntimeForWorktree').mockReturnValue({
+        status: 'resolved',
+        runtime: {
+          kind: 'wsl',
+          hostPlatform: 'wsl',
+          projectId: 'project',
+          distro: 'Ubuntu',
+          reason: 'project-override',
+          cacheKey: 'project:wsl:Ubuntu'
+        }
+      })
+      const task = db.createTask({ spec: 'WSL Pi worker' })
+
+      await expect(
+        call('orchestration.workerStart', {
+          task: task.id,
+          from: 'term_coord',
+          agent: 'pi'
+        })
+      ).resolves.toMatchObject({
+        state: 'failed',
+        failedStage: 'terminal_create',
+        lastError: 'pi_rpc_worker_topology_unsupported'
+      })
+      expect(runtime.createTerminal).not.toHaveBeenCalled()
+      expect(runtime.sendTerminalAgentPrompt).not.toHaveBeenCalled()
+    })
+
+    it('rejects connected-server Pi RPC placement before remote effects', async () => {
+      setup()
+      const resolveServer = vi.spyOn(runtime, 'resolveOrchestrationWorkerServer')
+      const task = db.createTask({ spec: 'unsupported relay worker' })
+
+      await expect(
+        call('orchestration.workerStart', {
+          task: task.id,
+          from: 'term_coord',
+          on: 'windows',
+          worktree: 'id:remote::C:\\repo',
+          agent: 'pi'
+        })
+      ).rejects.toMatchObject({ code: 'capability_unsupported' })
+      expect(resolveServer).not.toHaveBeenCalled()
+      expect(db.getDispatchContext(task.id)).toBeUndefined()
+    })
+
+    it('fails before ready when the private Pi envelope exceeds its bound', async () => {
+      setup()
+      mockCurrentWorkerStart()
+      vi.mocked(runtime.showManagedTerminalWorkspace).mockResolvedValue({
+        id: 'repo::worktree',
+        repoId: 'repo',
+        path: '/repo/worktree',
+        hostId: 'local'
+      } as never)
+      const task = db.createTask({ spec: 'x'.repeat(PI_RPC_WORKER_TASK_SPEC_MAX_BYTES + 1) })
+
+      const result = (await call('orchestration.workerStart', {
+        task: task.id,
+        from: 'term_coord',
+        agent: 'pi'
+      })) as { dispatchId: string; state: string; failedStage: string; lastError: string }
+
+      expect(result).toMatchObject({
+        state: 'failed',
+        failedStage: 'dispatch_input',
+        lastError: 'pi_rpc_worker_dispatch_envelope_too_large'
+      })
+      expect(runtime.sendTerminalAgentPrompt).not.toHaveBeenCalled()
+      expect(db.getWorkerDispatch(result.dispatchId)?.state).toBe('failed')
     })
 
     it('returns a failed receipt and preserves a created terminal as residual', async () => {
@@ -365,6 +590,39 @@ describe('orchestration RPC methods', () => {
       expect(result).toMatchObject({ state: 'failed', failedStage: 'agent_readiness' })
       expect(result.residualResources).toEqual([expect.objectContaining({ id: 'term_worker' })])
       expect(db.getTask(task.id)?.status).toBe('failed')
+      expect(runtime.sendTerminalAgentPrompt).not.toHaveBeenCalled()
+    })
+
+    it('never falls back to the Pi TUI when the RPC supervisor launch fails', async () => {
+      setup()
+      mockCurrentWorkerStart()
+      vi.mocked(runtime.showManagedTerminalWorkspace).mockResolvedValue({
+        id: 'repo::worktree',
+        repoId: 'repo',
+        path: '/repo/worktree',
+        hostId: 'local'
+      } as never)
+      vi.mocked(runtime.createTerminal).mockRejectedValueOnce(
+        new Error('supervisor spawn rejected')
+      )
+      const task = db.createTask({ spec: 'Pi supervisor failure' })
+
+      const result = (await call('orchestration.workerStart', {
+        task: task.id,
+        from: 'term_coord',
+        agent: 'pi'
+      })) as { state: string; failedStage: string; lastError: string }
+
+      expect(result).toMatchObject({
+        state: 'failed',
+        failedStage: 'terminal_create',
+        lastError: 'supervisor spawn rejected'
+      })
+      expect(runtime.createTerminal).toHaveBeenCalledOnce()
+      expect(runtime.createTerminal).not.toHaveBeenCalledWith(
+        expect.anything(),
+        expect.objectContaining({ startupAgent: 'pi' })
+      )
       expect(runtime.sendTerminalAgentPrompt).not.toHaveBeenCalled()
     })
 
@@ -386,6 +644,38 @@ describe('orchestration RPC methods', () => {
         residualResources: []
       })
       expect(runtime.sendTerminalAgentPrompt).not.toHaveBeenCalled()
+    })
+
+    it('returns a failure receipt without Pi TUI fallback when private input is rejected', async () => {
+      setup()
+      mockCurrentWorkerStart()
+      vi.mocked(runtime.showManagedTerminalWorkspace).mockResolvedValue({
+        id: 'repo::worktree',
+        repoId: 'repo',
+        path: '/repo/worktree',
+        hostId: 'local'
+      } as never)
+      vi.mocked(runtime.sendTerminalAgentPrompt).mockRejectedValueOnce(
+        new Error('private envelope rejected')
+      )
+      const task = db.createTask({ spec: 'private input failure' })
+
+      const result = (await call('orchestration.workerStart', {
+        task: task.id,
+        from: 'term_coord',
+        agent: 'pi'
+      })) as {
+        state: string
+        failedStage: string
+        residualResources: { kind: string; id: string }[]
+      }
+
+      expect(result).toMatchObject({ state: 'failed', failedStage: 'dispatch_input' })
+      expect(result.residualResources).toEqual(
+        expect.arrayContaining([expect.objectContaining({ kind: 'terminal', id: 'term_worker' })])
+      )
+      expect(runtime.createTerminal).toHaveBeenCalledOnce()
+      expect(runtime.sendTerminalAgentPrompt).toHaveBeenCalledOnce()
     })
 
     it('preserves the exact attached terminal when task input is rejected', async () => {

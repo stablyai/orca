@@ -1,12 +1,18 @@
 import type { TuiAgent } from '../../../../shared/tui-agent'
-import { buildDispatchPreamble } from '../../orchestration/preamble'
 import { OrchestrationError } from '../../orchestration/orchestration-error'
 import { defineMethod, type RpcMethod } from '../core'
 import { startFederatedWorker } from './orchestration-federated-worker-start'
 import { assertOrchestrationWorktreeCreationSupported } from './orchestration-folder-worktree-placement'
 import { WorkerStartParams } from './orchestration-worker-start-schema'
 import {
+  assertPiRpcWorkerFederationPlacement,
+  buildOrchestrationWorkerDispatchInput,
   createExistingWorktreeWorkerTerminal,
+  prepareOrchestrationWorkerStart,
+  validatePiRpcTerminalLaunch,
+  type PiRpcWorkerTransportLaunch
+} from './orchestration-pi-rpc-worker'
+import {
   createWorkerWorktree,
   monitorWorkerSetup,
   requireWorkerAuthority,
@@ -19,7 +25,6 @@ import {
   persistWorkerSetupWaitOutcome
 } from './orchestration-worker-setup-gate'
 import { failWorkerStartWithReceipt } from './orchestration-worker-start-receipt'
-import { prepareLocalWorkerStart } from './orchestration-worker-start-validation'
 
 export const ORCHESTRATION_WORKER_START_METHODS: RpcMethod[] = [
   defineMethod({
@@ -43,6 +48,7 @@ export const ORCHESTRATION_WORKER_START_METHODS: RpcMethod[] = [
         )
       }
 
+      assertPiRpcWorkerFederationPlacement(params)
       if (params.on) {
         return startFederatedWorker({
           params,
@@ -57,7 +63,8 @@ export const ORCHESTRATION_WORKER_START_METHODS: RpcMethod[] = [
       const requestedWorktree = params.worktree ?? 'current'
       const createsWorktree =
         requestedWorktree === 'new-child' || requestedWorktree === 'new-top-level'
-      const { agent, launch } = prepareLocalWorkerStart({ params, createsWorktree, runtime })
+      const { agent, launchPreferences, launchReceipt, usePiRpcTransport, piRpcRequest } =
+        prepareOrchestrationWorkerStart({ params, createsWorktree, runtime })
 
       const coordinatorTerminal = await runtime.showTerminal(params.from)
       const creationWorktree = createsWorktree
@@ -100,7 +107,8 @@ export const ORCHESTRATION_WORKER_START_METHODS: RpcMethod[] = [
         baseBranch: params.baseBranch ?? null,
         terminal: params.terminal ?? null,
         agent: agent ?? null,
-        launch: launch.receipt,
+        launch: launchReceipt,
+        ...(usePiRpcTransport ? { transport: 'pi-rpc' } : {}),
         timeoutMs: params.timeoutMs ?? 60_000,
         setup: createsWorktree ? (params.setup ?? 'run') : 'not_applicable',
         setupSource: createsWorktree
@@ -125,6 +133,7 @@ export const ORCHESTRATION_WORKER_START_METHODS: RpcMethod[] = [
       }
       let terminalHandle = params.terminal
       let terminalRevealWarning: string | undefined
+      let piRpcLaunch: PiRpcWorkerTransportLaunch | undefined
       let failedStage = 'terminal_create'
       let setupReceipt: WorkerSetupReceipt = {
         requested: 'not_applicable',
@@ -145,12 +154,14 @@ export const ORCHESTRATION_WORKER_START_METHODS: RpcMethod[] = [
             coordinatorWorktree: creationWorktree,
             params,
             agent: agent as TuiAgent,
-            launchPreferences: launch.preferences,
+            launchPreferences,
+            piRpc: piRpcRequest,
             effects
           })
           resolvedWorktree = created.worktree
           terminalHandle = created.terminalHandle
           setupReceipt = created.setupReceipt
+          piRpcLaunch = created.piRpcLaunch
         } else if (!terminalHandle) {
           db.recordWorkerStage({
             dispatchId: started.dispatch.id,
@@ -160,14 +171,16 @@ export const ORCHESTRATION_WORKER_START_METHODS: RpcMethod[] = [
           })
           const terminal = await createExistingWorktreeWorkerTerminal({
             runtime,
-            worktreeId: resolvedWorktree!.id,
+            worktree: resolvedWorktree!,
             agent: agent as TuiAgent,
-            launchPreferences: launch.preferences,
+            launchPreferences,
+            piRpc: piRpcRequest,
             taskId: task.id,
             effects
           })
           terminalHandle = terminal.handle
           terminalRevealWarning = terminal.warning
+          piRpcLaunch = terminal.piRpcLaunch
         } else {
           effects.push({
             kind: 'terminal',
@@ -209,6 +222,13 @@ export const ORCHESTRATION_WORKER_START_METHODS: RpcMethod[] = [
               : `Agent did not become ready (${wait.status}).`
           )
         }
+        validatePiRpcTerminalLaunch(
+          runtime,
+          terminalHandle,
+          usePiRpcTransport,
+          piRpcLaunch,
+          params.devMode
+        )
         const terminalAuthority = requireWorkerAuthority(runtime, terminalHandle)
         const capability = db.prepareStartingWorkerAuthority({
           dispatchId: started.dispatch.id,
@@ -221,22 +241,24 @@ export const ORCHESTRATION_WORKER_START_METHODS: RpcMethod[] = [
         })
 
         failedStage = 'dispatch_input'
-        const preamble = buildDispatchPreamble({
+        const dispatchInput = buildOrchestrationWorkerDispatchInput({
+          piRpcLaunch,
           taskId: task.id,
           dispatchId: started.dispatch.id,
           taskSpec: task.spec,
           coordinatorHandle: params.from,
           workerHandle: terminalHandle,
-          dispatchCapability: capability,
+          capability,
           devMode: params.devMode,
-          cliCommand: runtime.getTerminalOrchestrationCliCommand(terminalHandle)
+          legacyCliCommand: runtime.getTerminalOrchestrationCliCommand(terminalHandle)
         })
-        await runtime.sendTerminalAgentPrompt(terminalHandle, preamble)
+        await runtime.sendTerminalAgentPrompt(terminalHandle, dispatchInput)
         effects.push({
           kind: 'dispatch_input',
           role: 'agent',
           id: terminalHandle,
-          state: 'accepted'
+          state: 'accepted',
+          ...(piRpcLaunch ? { transport: 'pi-rpc' as const } : {})
         })
         const worker = db.markWorkerDispatchReady(started.dispatch.id, effects)
         monitorWorkerSetup({
@@ -254,7 +276,8 @@ export const ORCHESTRATION_WORKER_START_METHODS: RpcMethod[] = [
           state: worker.state,
           stage: worker.stage,
           setup: setupReceipt,
-          launch: launch.receipt,
+          launch: launchReceipt,
+          ...(piRpcLaunch ? { transport: 'pi-rpc' as const } : {}),
           timeoutMs: params.timeoutMs ?? 60_000,
           effects,
           residualResources: [],
@@ -269,7 +292,7 @@ export const ORCHESTRATION_WORKER_START_METHODS: RpcMethod[] = [
           failedStage,
           error,
           setup: setupReceipt,
-          launch: launch.receipt
+          launch: launchReceipt
         })
       }
     }

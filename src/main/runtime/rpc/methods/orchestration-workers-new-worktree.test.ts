@@ -48,6 +48,7 @@ describe('orchestration new-worktree workers', () => {
     } as never)
     vi.spyOn(runtime, 'showRepo').mockResolvedValue({
       id: 'repo',
+      path: '/repo',
       kind: 'git'
     } as never)
     vi.spyOn(runtime, 'createTerminal')
@@ -67,6 +68,11 @@ describe('orchestration new-worktree workers', () => {
       new Promise(() => undefined)
     )
     vi.spyOn(runtime, 'getTerminalOrchestrationCliCommand').mockReturnValue('orca')
+    vi.spyOn(runtime, 'getPiRpcWorkerCliInvocation').mockReturnValue({
+      executable: '/trusted/bin/Orca',
+      argsPrefix: ['/trusted/app/out/cli/index.js'],
+      env: { ELECTRON_RUN_AS_NODE: '1' }
+    })
     vi.spyOn(runtime, 'sendTerminalAgentPrompt').mockResolvedValue({
       handle: 'term_worker',
       accepted: true,
@@ -164,6 +170,75 @@ describe('orchestration new-worktree workers', () => {
     )
     expect(runtime.createTerminal).not.toHaveBeenCalled()
   })
+
+  it.each([
+    ['new-child', false, 'created_child'],
+    ['new-top-level', true, 'created_top_level']
+  ] as const)(
+    'creates a %s Pi RPC worktree with the custom supervisor as its first agent terminal',
+    async (worktree, noParent, worktreeEffect) => {
+      mockCreatedWorktree()
+
+      const { result, task } = await startWorker({
+        worktree,
+        agent: 'pi',
+        model: 'openai/gpt-5.4',
+        effort: 'high'
+      })
+      const dispatchId = (result as { dispatchId: string }).dispatchId
+
+      expect(runtime.createManagedWorktree).toHaveBeenCalledWith(
+        expect.objectContaining({
+          createdWithAgent: 'pi',
+          startupAgent: 'pi',
+          startup: {
+            command:
+              "'/trusted/bin/Orca' '/trusted/app/out/cli/index.js' 'pi-rpc-worker' '--model' 'openai/gpt-5.4' '--effort' 'high'",
+            env: { ELECTRON_RUN_AS_NODE: '1' }
+          },
+          activate: false,
+          lineage: expect.objectContaining({
+            noParent,
+            parentWorktree: noParent ? undefined : 'repo::parent'
+          })
+        })
+      )
+      expect(runtime.createManagedWorktree).toHaveBeenCalledWith(
+        expect.not.objectContaining({ startupLaunchPreferences: expect.anything() })
+      )
+      expect(result).toMatchObject({
+        state: 'ready',
+        transport: 'pi-rpc',
+        launch: {
+          requested: { agent: 'pi', model: 'openai/gpt-5.4', effort: 'high' },
+          effective: { agent: 'pi', model: 'openai/gpt-5.4', effort: 'high' }
+        },
+        effects: expect.arrayContaining([
+          expect.objectContaining({ kind: 'worktree', action: worktreeEffect }),
+          expect.objectContaining({
+            kind: 'terminal',
+            role: 'agent',
+            transport: 'pi-rpc'
+          }),
+          expect.objectContaining({ kind: 'dispatch_input', transport: 'pi-rpc' })
+        ])
+      })
+      expect(runtime.sendTerminalAgentPrompt).toHaveBeenCalledOnce()
+      expect(
+        JSON.parse(vi.mocked(runtime.sendTerminalAgentPrompt).mock.calls[0]?.[1] ?? '')
+      ).toEqual({
+        protocol: 'orca.pi.rpc-worker.dispatch',
+        version: 1,
+        taskId: task.id,
+        dispatchId,
+        workerHandle: 'term_worker',
+        capability: expect.stringMatching(/^dcap_/),
+        taskSpec: 'new-worktree task',
+        cliCommand: 'orca'
+      })
+      expect(runtime.createTerminal).not.toHaveBeenCalled()
+    }
+  )
 
   it('passes launch preferences into agent-first worktree creation', async () => {
     mockCreatedWorktree()
