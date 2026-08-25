@@ -51,12 +51,13 @@ function HookProbe(props: {
   repo: Repo
   onRefreshReview: () => Promise<void>
   pullRequest?: PRInfo
+  isGitLab?: boolean
 }): null {
   latest = useHostedReviewActions({
     review,
     githubPR: props.pullRequest ?? githubPR,
     repo: props.repo,
-    isGitLab: false,
+    isGitLab: props.isGitLab ?? false,
     shortLabel: 'PR',
     reviewLabel: 'pull request',
     defaultMergeMethod: 'squash',
@@ -69,13 +70,14 @@ function HookProbe(props: {
 async function renderHook(
   repo: Repo,
   onRefreshReview = vi.fn().mockResolvedValue(undefined),
-  pullRequest?: PRInfo
+  pullRequest?: PRInfo,
+  isGitLab = false
 ) {
   const container = document.createElement('div')
   document.body.appendChild(container)
   root = createRoot(container)
   await act(async () => {
-    root?.render(createElement(HookProbe, { repo, onRefreshReview, pullRequest }))
+    root?.render(createElement(HookProbe, { repo, onRefreshReview, pullRequest, isGitLab }))
   })
   return { onRefreshReview }
 }
@@ -148,6 +150,69 @@ describe('useHostedReviewActions', () => {
     })
     expect(runtimeRpcMocks.callRuntimeRpc).not.toHaveBeenCalled()
     expect(onRefreshReview).toHaveBeenCalledTimes(1)
+  })
+
+  // Why: guards that the hook's synthetic gitlab source context actually reaches
+  // routedGitLab — a dropped `sourceContext` would silently fall back to local IPC
+  // (the exact "unknown repository path" failure) and leave the routing test green.
+  it('routes runtime-owned GitLab MR merges through the runtime host', async () => {
+    const { onRefreshReview } = await renderHook(
+      makeRepo({ executionHostId: 'runtime:env-1' }),
+      undefined,
+      undefined,
+      true
+    )
+
+    await act(async () => {
+      await latest?.handleMerge('merge')
+    })
+
+    expect(runtimeRpcMocks.callRuntimeRpc).toHaveBeenCalledWith(
+      { kind: 'environment', environmentId: 'env-1' },
+      'gitlab.mergeMR',
+      { repo: 'id:repo-1', iid: 1015, method: 'merge' },
+      { timeoutMs: 30_000 }
+    )
+    expect(window.api.gl.mergeMR).not.toHaveBeenCalled()
+    expect(onRefreshReview).toHaveBeenCalledTimes(1)
+  })
+
+  it('routes runtime-owned GitLab MR close through updateMRState on the host', async () => {
+    await renderHook(makeRepo({ executionHostId: 'runtime:env-1' }), undefined, undefined, true)
+
+    await act(async () => {
+      await latest?.handleCloseReview()
+    })
+
+    expect(runtimeRpcMocks.callRuntimeRpc).toHaveBeenCalledWith(
+      { kind: 'environment', environmentId: 'env-1' },
+      'gitlab.updateMRState',
+      { repo: 'id:repo-1', iid: 1015, state: 'closed' },
+      { timeoutMs: 30_000 }
+    )
+    expect(window.api.gl.closeMR).not.toHaveBeenCalled()
+  })
+
+  it('keeps non-runtime GitLab MR actions on desktop IPC', async () => {
+    await renderHook(
+      makeRepo({ connectionId: 'ssh-target', executionHostId: 'ssh:ssh-target' }),
+      undefined,
+      undefined,
+      true
+    )
+
+    await act(async () => {
+      await latest?.handleMerge('merge')
+    })
+
+    expect(window.api.gl.mergeMR).toHaveBeenCalledWith({
+      repoPath: '/repo',
+      repoId: 'repo-1',
+      sourceContext: expect.objectContaining({ provider: 'gitlab' }),
+      iid: 1015,
+      method: 'merge'
+    })
+    expect(runtimeRpcMocks.callRuntimeRpc).not.toHaveBeenCalled()
   })
 
   it('confirms the downstack merge scope before merging a registered stack', async () => {

@@ -1,7 +1,10 @@
-import { useCallback, useState } from 'react'
+import { useCallback, useMemo, useState } from 'react'
 import { toast } from 'sonner'
 import { useConfirmationDialog } from '@/components/confirmation-dialog-context'
 import type { GitHubPRAutoMergeAction } from '@/components/github-pr-merge-state'
+import { routedGitLab } from '@/runtime/gitlab-runtime-routing'
+import { getRepoExecutionHostId } from '../../../../shared/execution-host'
+import { normalizeTaskSourceContext } from '../../../../shared/task-source-context'
 import type { HostedReviewInfo } from '../../../../shared/hosted-review'
 import type { GitHubPRMergeMethod, PRInfo } from '../../../../shared/github/pull-request-types'
 import type { Repo } from '../../../../shared/repo-types'
@@ -58,6 +61,19 @@ export function useHostedReviewActions({
   handleReopenReview: () => Promise<void>
 } {
   const confirm = useConfirmationDialog()
+  // Why: this hook has the repo but no task source context, so derive the routing host from the repo.
+  const gitlabSourceContext = useMemo(
+    () =>
+      isGitLab
+        ? normalizeTaskSourceContext({
+            provider: 'gitlab',
+            projectId: repo.id,
+            hostId: getRepoExecutionHostId(repo),
+            repoId: repo.id
+          })
+        : null,
+    [isGitLab, repo]
+  )
   const [merging, setMerging] = useState(false)
   const [stateUpdating, setStateUpdating] = useState<'open' | 'closed' | null>(null)
   const [actionError, setActionError] = useState<string | null>(null)
@@ -83,9 +99,10 @@ export function useHostedReviewActions({
       setActionError(null)
       try {
         const result = isGitLab
-          ? await window.api.gl.mergeMR({
+          ? await routedGitLab.mergeMR({
               repoPath: repo.path,
               repoId: repo.id,
+              sourceContext: gitlabSourceContext,
               iid: review.number,
               method
             })
@@ -108,6 +125,7 @@ export function useHostedReviewActions({
     },
     [
       confirm,
+      gitlabSourceContext,
       githubPR?.prRepo,
       githubPR?.mergeQueueRequired,
       githubPR?.stack,
@@ -186,14 +204,16 @@ export function useHostedReviewActions({
       try {
         const result = isGitLab
           ? isClosing
-            ? await window.api.gl.closeMR({
+            ? await routedGitLab.closeMR({
                 repoPath: repo.path,
                 repoId: repo.id,
+                sourceContext: gitlabSourceContext,
                 iid: review.number
               })
-            : await window.api.gl.reopenMR({
+            : await routedGitLab.reopenMR({
                 repoPath: repo.path,
                 repoId: repo.id,
+                sourceContext: gitlabSourceContext,
                 iid: review.number
               })
           : await updateGitHubHostedReviewState({
@@ -232,6 +252,7 @@ export function useHostedReviewActions({
     },
     [
       confirm,
+      gitlabSourceContext,
       githubPR?.prRepo,
       isGitLab,
       onRefreshReview,

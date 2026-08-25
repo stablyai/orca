@@ -418,6 +418,7 @@ import {
 } from './jira-issue-sorter'
 import { TaskPageJiraSortControls } from './task-page-jira-sort-controls'
 import { bindTaskPageJiraItemSourceContext } from './task-page-jira-item-source-context'
+import { routedGitLab } from '@/runtime/gitlab-runtime-routing'
 import {
   normalizeVisibleTaskProviders,
   restoreAvailableDefaultTaskProvider,
@@ -4939,7 +4940,7 @@ export default function TaskPage(): React.JSX.Element {
       gitlabView === 'issues'
         ? (repo: (typeof eligibleRepos)[0]) => {
             const isAssignedToMe = activeIssueFilter === 'assigned-to-me'
-            return window.api.gl
+            return routedGitLab
               .listIssues({
                 repoPath: repo.path,
                 repoId: repo.id,
@@ -4959,7 +4960,7 @@ export default function TaskPage(): React.JSX.Element {
               })
           }
         : (repo: (typeof eligibleRepos)[0]) =>
-            window.api.gl
+            routedGitLab
               .listMRs({
                 repoPath: repo.path,
                 repoId: repo.id,
@@ -5026,7 +5027,7 @@ export default function TaskPage(): React.JSX.Element {
     }
     let stale = false
     setGitlabTodosLoading(true)
-    void window.api.gl
+    void routedGitLab
       .todos({
         repoPath: primaryRepo.path,
         repoId: primaryRepo.id,
