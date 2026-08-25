@@ -10,3 +10,10 @@
 # desktop app whose own launcher picks its runtime; prepending a node directory
 # would only perturb the editor's inherited PATH.
 src/main/external-editor-launch.ts
+
+# Resolves codex, but never launches it here: the only exec is a `wsl.exe`
+# identity probe for the binary stamp, and the actual codex launch is built as a
+# CodexAppServerInvocation whose cliPath is paired centrally in
+# codex-app-server-session.ts. Delete this entry if this file ever execs the
+# resolved CLI itself.
+src/main/codex/codex-trust-grant-host.ts
