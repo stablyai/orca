@@ -1,7 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { useAppStore } from '../../store'
 import type { Tab } from '../../../../shared/tab-types'
-import { canMoveTabToNewPaneColumn, moveTabToNewPaneColumn } from './tab-move-to-pane-column'
+import {
+  canMoveTabToNewPaneColumn,
+  moveActiveTabToNewPaneColumn,
+  moveTabToNewPaneColumn
+} from './tab-move-to-pane-column'
 
 const WT = 'wt-1'
 
@@ -114,5 +118,45 @@ describe('tab-move-to-pane-column', () => {
       moveTabToNewPaneColumn({ unifiedTabId: 'tab-b', groupId: 'group-1', direction: 'right' })
     ).toBe(false)
     expect(mocks.mirrorWebRuntimeTabMove).not.toHaveBeenCalled()
+  })
+
+  it('moves the active tab of the active group', () => {
+    const dropUnifiedTab = vi.fn(() => true)
+    useAppStore.setState({
+      dropUnifiedTab,
+      activeGroupIdByWorktree: { [WT]: 'group-1' }
+    } as Partial<ReturnType<typeof useAppStore.getState>>)
+
+    expect(moveActiveTabToNewPaneColumn('right')).toBe(true)
+    expect(dropUnifiedTab).toHaveBeenCalledWith('tab-a', {
+      groupId: 'group-1',
+      splitDirection: 'right'
+    })
+  })
+
+  it('is a no-op for the active tab when the group has a single tab', () => {
+    const dropUnifiedTab = vi.fn(() => true)
+    useAppStore.setState({
+      dropUnifiedTab,
+      activeGroupIdByWorktree: { [WT]: 'group-1' },
+      groupsByWorktree: {
+        [WT]: [{ id: 'group-1', worktreeId: WT, activeTabId: 'tab-a', tabOrder: ['tab-a'] }]
+      }
+    } as Partial<ReturnType<typeof useAppStore.getState>>)
+
+    expect(moveActiveTabToNewPaneColumn('right')).toBe(false)
+    expect(dropUnifiedTab).not.toHaveBeenCalled()
+  })
+
+  it('is a no-op without an active worktree', () => {
+    const dropUnifiedTab = vi.fn(() => true)
+    useAppStore.setState({
+      dropUnifiedTab,
+      activeWorktreeId: null,
+      activeGroupIdByWorktree: {}
+    } as Partial<ReturnType<typeof useAppStore.getState>>)
+
+    expect(moveActiveTabToNewPaneColumn('right')).toBe(false)
+    expect(dropUnifiedTab).not.toHaveBeenCalled()
   })
 })

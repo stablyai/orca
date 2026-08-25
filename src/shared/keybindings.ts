@@ -69,6 +69,7 @@ export type KeybindingActionId =
   | 'tab.closeAll'
   | 'tab.rename'
   | 'tab.reopenClosed'
+  | 'tab.moveToNewPaneColumn'
   | 'tab.nextSameType'
   | 'tab.previousSameType'
   | 'tab.nextAllTypes'
@@ -655,6 +656,15 @@ export const KEYBINDING_DEFINITIONS: readonly KeybindingDefinition[] = [
     scope: 'tabs',
     searchKeywords: ['shortcut', 'tab', 'reopen', 'restore', 'closed'],
     defaultBindings: platformBindings(['Mod+Shift+T'])
+  },
+  {
+    id: 'tab.moveToNewPaneColumn',
+    title: 'Move tab to new pane column',
+    group: 'Tabs',
+    scope: 'tabs',
+    // Why: ships unbound — the context-menu action gains a bindable chord without claiming a default that could shadow app or terminal chords.
+    searchKeywords: ['shortcut', 'tab', 'move', 'pane', 'column', 'split', 'group'],
+    defaultBindings: platformBindings([])
   },
   {
     id: 'tab.nextSameType',

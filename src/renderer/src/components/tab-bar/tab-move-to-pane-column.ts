@@ -34,6 +34,30 @@ export function canMoveTabToNewPaneColumn(unifiedTabId: string, groupId: string)
   return canMoveTabToNewPaneColumnFromState(useAppStore.getState(), unifiedTabId, groupId)
 }
 
+/**
+ * Moves the active tab of the active group into a new pane column. Returns whether a move
+ * happened so keybinding callers can fall through instead of consuming the chord on a no-op.
+ */
+export function moveActiveTabToNewPaneColumn(direction: TabSplitDirection): boolean {
+  const state = useAppStore.getState()
+  const worktreeId = state.activeWorktreeId
+  if (!worktreeId) {
+    return false
+  }
+  const groupId = state.activeGroupIdByWorktree[worktreeId]
+  if (!groupId) {
+    return false
+  }
+  const group = (state.groupsByWorktree[worktreeId] ?? []).find(
+    (candidate) => candidate.id === groupId
+  )
+  const unifiedTabId = group?.activeTabId
+  if (!unifiedTabId) {
+    return false
+  }
+  return moveTabToNewPaneColumn({ unifiedTabId, groupId, direction })
+}
+
 export function moveTabToNewPaneColumn(args: {
   unifiedTabId: string
   groupId: string
