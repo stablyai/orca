@@ -23,6 +23,11 @@ Slack, GitHub comments, or any other channel to reach a human during the run.
   # Never encode failure only in prose and never silently exit.
   # Include BOTH taskId and dispatchId in the payload so a late completion
   # from a failed retry cannot complete the current dispatch.
+  #
+  # RULE: worker_done is the FINAL Dispatch-scoped protocol action. Complete
+  # every other task-required protocol action (ask, escalation, heartbeat)
+  # before sending it; once worker_done is accepted, later Dispatch-scoped
+  # actions may be rejected.
   orca orchestration send --from term_WORKER \\
     --type worker_done --subject "<short status>" \\
     --body "<3-sentence summary: what you did, what you found, what's left>" \\

@@ -33,6 +33,11 @@ export type PreambleParams = {
   workerKind?: 'prompt-returning-agent' | 'bare-shell'
   // Why gated: advertising a verb the depth cap will reject just burns a turn.
   canDispatchSubWorkers?: boolean
+  // Why: the coordinator may inject task-required protocol actions (extra
+  // reports, custom steps) that must complete before worker_done. Inserted
+  // verbatim (trimmed) as its own block inside CLI COMMANDS ahead of the
+  // worker_done report so agents read the full protocol in execution order.
+  preCompletionProtocol?: string
 }
 
 // Why: 5 minutes is frequent enough that the coordinator's stale-heartbeat
@@ -58,6 +63,9 @@ export function buildDispatchPreamble(params: PreambleParams): string {
   const capabilityFlag = params.dispatchCapability
     ? ` --dispatch-capability ${params.dispatchCapability}`
     : ''
+  const preCompletionBlock = params.preCompletionProtocol?.trim()
+    ? `\n${params.preCompletionProtocol.trim()}\n`
+    : ''
 
   const header = `You are working inside Orca, a multi-agent IDE. You are a dispatched worker.
 Your coordinator's terminal handle is: ${params.coordinatorHandle}
@@ -67,7 +75,7 @@ You talk to the coordinator only through the CLI commands below. Do not use
 Slack, GitHub comments, or any other channel to reach a human during the run.
 
 === CLI COMMANDS ===
-
+${preCompletionBlock}
   # Report the terminal task outcome (REQUIRED exactly once).
   #
   # RULE: --body must be a 3-sentence executive summary (what you did,
@@ -81,6 +89,11 @@ Slack, GitHub comments, or any other channel to reach a human during the run.
   # Never encode failure only in prose and never silently exit.
   # Include BOTH taskId and dispatchId in the payload so a late completion
   # from a failed retry cannot complete the current dispatch.
+  #
+  # RULE: worker_done is the FINAL Dispatch-scoped protocol action. Complete
+  # every other task-required protocol action (ask, escalation, heartbeat)
+  # before sending it; once worker_done is accepted, later Dispatch-scoped
+  # actions may be rejected.
   ${cli} orchestration send --from ${params.workerHandle}${capabilityFlag} \\
     --type worker_done --subject "<short status>" \\
     --body "<3-sentence summary: what you did, what you found, what's left>" \\

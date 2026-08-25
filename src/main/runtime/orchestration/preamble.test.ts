@@ -53,6 +53,48 @@ describe('buildDispatchPreamble', () => {
     expect(result).not.toContain('orchestration send --to term_coord')
   })
 
+  it('inserts preCompletionProtocol before the worker_done block inside CLI COMMANDS', () => {
+    const protocol =
+      '# COORDINATOR PROTOCOL: complete the audit report first.\n' +
+      'orca orchestration send --from term_worker --type audit_report ' +
+      '--task-id task_abc123 --dispatch-id ctx_def456'
+    const result = buildDispatchPreamble(baseParams({ preCompletionProtocol: protocol }))
+
+    // Inside CLI COMMANDS...
+    expect(result.indexOf(protocol)).toBeGreaterThan(result.indexOf('=== CLI COMMANDS ==='))
+    // ...but before the worker_done report block
+    expect(result.indexOf(protocol)).toBeLessThan(result.indexOf('--type worker_done'))
+    // ...and before the post-done section (post-done placement unchanged)
+    expect(result.indexOf(protocol)).toBeLessThan(
+      result.indexOf('=== AFTER YOU SEND worker_done ===')
+    )
+    // taskSpec untouched and still last
+    expect(result).toContain('Implement the login form')
+    expect(result.indexOf('=== TASK ===')).toBeGreaterThan(
+      result.indexOf('=== AFTER YOU SEND worker_done ===')
+    )
+  })
+
+  it('adds nothing when preCompletionProtocol is empty or whitespace', () => {
+    const baseline = buildDispatchPreamble(baseParams())
+    expect(buildDispatchPreamble(baseParams({ preCompletionProtocol: '' }))).toBe(baseline)
+    expect(buildDispatchPreamble(baseParams({ preCompletionProtocol: '   \n\t  ' }))).toBe(baseline)
+  })
+
+  it('trims surrounding whitespace from a non-empty preCompletionProtocol', () => {
+    const result = buildDispatchPreamble(
+      baseParams({ preCompletionProtocol: '  \n# trimmed protocol block\n  ' })
+    )
+    expect(result).toContain('# trimmed protocol block')
+  })
+
+  it('states worker_done is the final Dispatch-scoped protocol action', () => {
+    const result = buildDispatchPreamble(baseParams())
+    expect(result).toContain('worker_done is the FINAL Dispatch-scoped protocol action')
+    expect(result).toContain('later Dispatch-scoped')
+    expect(result).toContain('actions may be rejected')
+  })
+
   it(
     'CLI examples parse as valid shell (bash -n on the extracted block)',
     { timeout: 15_000 },
