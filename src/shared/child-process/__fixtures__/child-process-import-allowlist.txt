@@ -126,7 +126,6 @@ src/main/startup/hydrate-shell-path.ts
 src/main/startup/packaged-cli-entry-redirect.ts
 src/main/startup/windows-install-dir-acl-probe.ts
 src/main/startup/windows-user-data-acl.ts
-src/main/text-generation/commit-message-text-generation.ts
 src/main/win32-utils.ts
 src/main/window/clipboard-ipc-handlers.ts
 src/main/windows-process-tree-kill.ts

@@ -54,7 +54,6 @@ inline src/main/ssh/ssh-channel-multiplexer.ts
 inline src/main/ssh/ssh-connection.ts
 inline src/main/ssh/ssh-relay-deploy.ts
 inline src/main/ssh/ssh-relay-session.ts
-inline src/main/text-generation/commit-message-text-generation.ts
 inline src/main/updater.ts
 inline src/main/window/attach-main-window-services.ts
 inline src/main/window/createMainWindow.ts
@@ -120,7 +119,6 @@ inline src/shared/keybindings.ts
 inline src/shared/marine-creatures.ts
 inline src/shared/remote-runtime-client.ts
 inline src/shared/runtime-types.ts
-inline src/shared/source-control-ai.ts
 inline src/shared/telemetry-events.ts
 inline src/shared/text-search.ts
 inline tests/e2e/helpers/terminal.ts
