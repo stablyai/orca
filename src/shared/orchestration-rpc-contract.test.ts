@@ -28,6 +28,7 @@ describe('orchestration RPC contract', () => {
     ['orchestration.collaborationPublish', {}],
     ['orchestration.collaborationCheckpoint', {}],
     ['orchestration.collaborationAck', {}],
+    ['orchestration.collaborationConfigure', {}],
     ['orchestration.check', {}],
     ['orchestration.check', { wait: true }],
     ['orchestration.check', { unread: true }],
