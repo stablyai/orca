@@ -32,8 +32,10 @@ Linux outside an Orca-managed terminal, and `orca` everywhere else. Never try ba
 
 In every command example — fenced blocks, tables, and prose — `ORCA` is a documentation
 placeholder. Replace it with the chosen executable before running the command; do not
-create a shell variable or run `ORCA` literally. The command examples are intentionally
-shell-neutral for POSIX shells, PowerShell, and cmd.exe.
+create a shell variable or run `ORCA` literally. Unquoted and double-quoted examples are
+intentionally shell-neutral for POSIX shells, PowerShell, and cmd.exe. JSON arguments that
+use single quotes (gesture) are for POSIX shells and PowerShell only — cmd.exe does not
+treat `'` as a quoting character; use double quotes and escaped inner quotes there.
 
 ## When to use
 
@@ -89,20 +91,20 @@ issues `adb shell input` events; AVD names resolve to running adb serials.
 Use `--json` for agent-friendly output. Coordinates are **normalized 0..1**
 (top-left origin) — never pixels; Orca converts using the live screen size.
 
-| Goal                       | Command                                                        | Notes |
-|----------------------------|----------------------------------------------------------------|-------|
-| List devices + AVDs        | `ORCA emulator devices --json`                                 | Cross-platform; shows iOS + Android with a platform column, booted vs shutdown. |
-| Single tap                 | `ORCA emulator tap <x> <y> --device <serial>`                  | Normalized 0..1. Preferred for single taps. |
-| Swipe / gesture            | `ORCA emulator gesture '<json>' --device <serial>`             | adb approximates the path by its endpoints (start→end). |
-| Type text                  | `ORCA emulator type "user@example.com" --device <serial>`      | US ASCII; spaces handled. No newlines. |
-| Hardware button            | `ORCA emulator button back --device <serial>`                  | home, back, recents, power, volume_up, volume_down. |
-| Rotate                     | `ORCA emulator rotate landscape_left --device <serial>`        | Sets user_rotation (disables auto-rotate). |
-| Install an APK             | `ORCA emulator install ./app-debug.apk --reinstall --device <serial>` | `--reinstall` passes `-r`. |
-| Launch an app              | `ORCA emulator launch com.acme.app --activity .MainActivity --device <serial>` | Omit `--activity` to launch the default LAUNCHER activity. |
-| Grant a permission         | `ORCA emulator permissions grant com.acme.app android.permission.CAMERA --device <serial>` | grant / revoke / reset. |
-| Accessibility tree         | `ORCA emulator ax --device <serial> --json`                    | `uiautomator dump` parsed to a node tree. |
-| Logcat (one-shot)          | `ORCA emulator logcat --lines 200 --device <serial>`           | Dumps recent lines; parsed to entries. |
-| Raw adb shell              | `ORCA emulator exec --command "getprop ro.build.version.sdk" --device <serial>` | Runs `adb -s <serial> shell <command>`. |
+| Goal                | Command                                                                                    | Notes                                                                                                                                                         |
+| ------------------- | ------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| List devices + AVDs | `ORCA emulator devices --json`                                                             | Cross-platform; shows iOS + Android with a platform column, booted vs shutdown.                                                                               |
+| Single tap          | `ORCA emulator tap <x> <y> --device <serial>`                                              | Normalized 0..1. Preferred for single taps.                                                                                                                   |
+| Swipe / gesture     | `ORCA emulator gesture '<json>' --device <serial>`                                         | POSIX/PowerShell. On cmd.exe: `ORCA emulator gesture "[{\"type\":\"begin\",...}]" --device <serial>`. adb approximates the path by its endpoints (start→end). |
+| Type text           | `ORCA emulator type "user@example.com" --device <serial>`                                  | US ASCII; spaces handled. No newlines.                                                                                                                        |
+| Hardware button     | `ORCA emulator button back --device <serial>`                                              | home, back, recents, power, volume_up, volume_down.                                                                                                           |
+| Rotate              | `ORCA emulator rotate landscape_left --device <serial>`                                    | Sets user_rotation (disables auto-rotate).                                                                                                                    |
+| Install an APK      | `ORCA emulator install ./app-debug.apk --reinstall --device <serial>`                      | `--reinstall` passes `-r`.                                                                                                                                    |
+| Launch an app       | `ORCA emulator launch com.acme.app --activity .MainActivity --device <serial>`             | Omit `--activity` to launch the default LAUNCHER activity.                                                                                                    |
+| Grant a permission  | `ORCA emulator permissions grant com.acme.app android.permission.CAMERA --device <serial>` | grant / revoke / reset.                                                                                                                                       |
+| Accessibility tree  | `ORCA emulator ax --device <serial> --json`                                                | `uiautomator dump` parsed to a node tree.                                                                                                                     |
+| Logcat (one-shot)   | `ORCA emulator logcat --lines 200 --device <serial>`                                       | Dumps recent lines; parsed to entries.                                                                                                                        |
+| Raw adb shell       | `ORCA emulator exec --command "getprop ro.build.version.sdk" --device <serial>`            | Runs `adb -s <serial> shell <command>`.                                                                                                                       |
 
 ## Critical gotchas (teach agents)
 
@@ -117,6 +119,10 @@ Use `--json` for agent-friendly output. Coordinates are **normalized 0..1**
   not. For unicode-heavy input, use the app UI directly.
 - `gesture` is a straight swipe between the first and last point (adb limitation);
   fine for scroll/swipe, not for true multi-touch paths.
+- **cmd.exe and gesture JSON:** single quotes are not quoting in cmd.exe, so
+  `gesture '{"…"}'` arrives with the quotes and fails JSON parse. Use
+  `gesture "[{\"type\":\"begin\",…}]"` (double quotes, backslash-escape inner ones)
+  on cmd.exe.
 - Capability verbs `install/launch/permissions/logcat` are **Android-only** and
   fail against an iOS device with `emulator_unsupported`. `ax` works on **both**,
   with backend-specific output (Android: `uiautomator` node tree; iOS: serve-sim

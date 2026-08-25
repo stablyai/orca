@@ -23,8 +23,10 @@ Use this skill for desktop UI through `orca computer`. When the requested target
   `orca` first on unmanaged Linux because it normally resolves to the GNOME screen reader.
 - In every command example, `ORCA` is a documentation placeholder — including examples that
   name a specific shell. Replace it with that chosen executable before running the command;
-  do not create a shell variable or run `ORCA` literally. Blocks that name no shell are
-  intentionally shell-neutral for POSIX shells, PowerShell, and cmd.exe.
+  do not create a shell variable or run `ORCA` literally. Blocks that name no shell and use
+  unquoted or double-quoted arguments are intentionally shell-neutral for POSIX shells,
+  PowerShell, and cmd.exe. Single-quoted JSON arguments (if you invent any) are not
+  cmd.exe-safe — cmd.exe does not treat `'` as a quoting character.
 - Prefer `--json`; see Screenshots below for image output.
 - Do not push, submit forms, send messages, buy items, delete data, change account settings, or expose secrets unless the user explicitly asked for that action.
 - If an app contains sensitive content, read only what the user requested.

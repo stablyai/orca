@@ -181,6 +181,39 @@ describe('bundled skill guide generator', () => {
     }
   })
 
+  // Why: #12712 — single-quoted JSON is not cmd.exe-safe; guides must not claim full
+  // shell-neutrality without documenting the double-quote escape form for gesture.
+  it('documents cmd.exe quoting for single-quoted gesture JSON', async () => {
+    for (const name of ['orca-emulator', 'orca-emulator-android', 'orca-cli']) {
+      const source = await readFile(path.join(projectDir, 'skill-guides', `${name}.md`), 'utf8')
+      expect(source).toMatch(/gesture/i)
+      expect(source).toMatch(/cmd\.exe/i)
+      expect(source).toMatch(/double quotes|escaped inner|backslash-escape|\\"/i)
+      expect(source).not.toMatch(/^# cmd\.exe:/im)
+    }
+
+    const orcaCli = await readFile(path.join(projectDir, 'skill-guides', 'orca-cli.md'), 'utf8')
+    const command = orcaCli.match(
+      /On cmd\.exe,[\s\S]+?```text\n(?<command>ORCA emulator gesture .+)\n```/u
+    )?.groups?.command
+    const expectedCommand = String.raw`ORCA emulator gesture "[{\"type\":\"begin\",\"x\":0.5,\"y\":0.8},{\"type\":\"move\",\"x\":0.5,\"y\":0.4},{\"type\":\"end\",\"x\":0.5,\"y\":0.2}]" --json`
+    expect(command).toBe(expectedCommand)
+
+    const gestureJson = command?.match(/^ORCA emulator gesture "(?<json>.*)" --json$/u)?.groups
+      ?.json
+    expect(JSON.parse(gestureJson.replaceAll('\\"', '"'))).toEqual([
+      { type: 'begin', x: 0.5, y: 0.8 },
+      { type: 'move', x: 0.5, y: 0.4 },
+      { type: 'end', x: 0.5, y: 0.2 }
+    ])
+
+    const computerUse = await readFile(
+      path.join(projectDir, 'skill-guides', 'computer-use.md'),
+      'utf8'
+    )
+    expect(computerUse).toMatch(/cmd\.exe does not treat/i)
+  })
+
   it('builds deterministic artifacts and verifies the checked-in outputs', async () => {
     const first = await buildArtifacts(projectDir)
     const second = await buildArtifacts(projectDir)
