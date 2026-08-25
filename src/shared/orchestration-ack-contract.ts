@@ -43,6 +43,7 @@ function baseEvidenceMissing(evidence: CrossPlaneAckEvidence): string[] {
     ['receiverEpoch', evidence.receiverEpoch],
     ['identityLink.evidenceId', evidence.identityLink.evidenceId],
     ['identityLink.orcaIdentity', evidence.identityLink.orcaIdentity],
+    ['identityLink.externalPlane', evidence.identityLink.externalPlane],
     ['identityLink.externalIdentity', evidence.identityLink.externalIdentity]
   ] as const
   return required.filter(([, value]) => !value.trim()).map(([name]) => name)

@@ -110,12 +110,17 @@ export async function getCliStatus(
   }
 }
 
+function normalizeProfilePath(value: string): string {
+  const normalized = resolve(value)
+  return process.platform === 'win32' ? normalized.toLowerCase() : normalized
+}
+
 function profileSource(userDataPath: string): 'env' | 'default' | 'explicit' {
-  return process.env.ORCA_USER_DATA_PATH === userDataPath
+  const configured = process.env.ORCA_USER_DATA_PATH
+  if (!configured) return 'default'
+  return normalizeProfilePath(configured) === normalizeProfilePath(userDataPath)
     ? 'env'
-    : process.env.ORCA_USER_DATA_PATH
-      ? 'explicit'
-      : 'default'
+    : 'explicit'
 }
 
 export function getGuiProfileCandidate(
@@ -215,10 +220,15 @@ function buildBootstrapDiagnostics(
     reason,
     verification: { kind: 'process_signal_0', result: pidVerdict },
     recoveryCode,
-    recovery: [
-      'Confirm the CLI and desktop app use the same user-data path and OS user.',
-      'Restart Orca, then run `orca status --json` and require a new reachable runtimeId.'
-    ]
+    recovery:
+      recoveryCode === 'start_orca'
+        ? ['Start Orca, then run `orca status --json` and require a reachable runtimeId.']
+        : recoveryCode === 'restart_and_query_back'
+          ? ['Restart Orca, then run `orca status --json` and require a new reachable runtimeId.']
+          : [
+              'Confirm the CLI and desktop app use the same user-data path and OS user.',
+              'Restart Orca, then run `orca status --json` and require a new reachable runtimeId.'
+            ]
   }
 }
 

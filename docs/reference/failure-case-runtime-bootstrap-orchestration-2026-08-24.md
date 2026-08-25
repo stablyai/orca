@@ -86,3 +86,5 @@ A subsequent final fetch observed three more upstream commits and again changed 
 none touched the A1-D1 paths. A third six-commit rebase completed without conflict and restored
 0 behind / 6 ahead. Core A/B/C/D contracts passed 119/119 and canonical full typecheck exited 0 on
 that base.
+
+These receipts cover source-level verification only. The packaged runtime was not rebuilt or deployed.

@@ -223,7 +223,9 @@ export function formatCliStatus(status: CliStatusResult): string {
           `effectiveProfile: ${status.runtime.profileRouting.effectiveProfile}`,
           `guiProfileCandidate: ${status.runtime.profileRouting.guiProfileCandidate ?? 'unavailable'}`,
           `profileMatch: ${status.runtime.profileRouting.profileMatch ?? 'unknown'}`,
-          `routingVerdict: ${Object.values(status.runtime.profileRouting.routingVerdict).join(',')}`
+          `routingVerdictEffective: ${status.runtime.profileRouting.routingVerdict.effective}`,
+          `routingVerdictGui: ${status.runtime.profileRouting.routingVerdict.gui}`,
+          `routingVerdictRelationship: ${status.runtime.profileRouting.routingVerdict.relationship}`
         ]
       : []),
     `graphState: ${status.graph.state}`

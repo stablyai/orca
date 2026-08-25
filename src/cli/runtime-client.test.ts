@@ -242,10 +242,7 @@ describe.skipIf(process.platform === 'win32')('RuntimeClient', () => {
             result: 'unverifiable'
           },
           recoveryCode: 'start_orca',
-          recovery: [
-            'Confirm the CLI and desktop app use the same user-data path and OS user.',
-            'Restart Orca, then run `orca status --json` and require a new reachable runtimeId.'
-          ]
+          recovery: ['Start Orca, then run `orca status --json` and require a reachable runtimeId.']
         }
       },
       graph: {

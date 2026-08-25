@@ -18258,13 +18258,13 @@ export class OrcaRuntimeService {
     return this.getPaneKeyForTerminalHandle(handle)
   }
 
-  /** Rejects worker-originated mutations after the runtime can no longer prove its parent is live. */
   getAgentStatusOrchestrationContextForTerminal(
     handle: string
   ): AgentStatusOrchestrationContext | undefined {
     return this.getAgentStatusOrchestrationContextForHandle(handle)
   }
 
+  /** Rejects worker-originated mutations after the runtime can no longer prove its parent is live. */
   assertOrchestrationMutationAllowed(handle: string | undefined): void {
     if (!handle) {
       return

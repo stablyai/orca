@@ -191,7 +191,8 @@ const DashboardAgentRow = React.memo(function DashboardAgentRow({
 
   const titleParts = sendTargetDisabledReason ? [sendTargetDisabledReason, ...tsParts] : tsParts
   const orchestration = agent.entry.orchestration
-  const isParentFrozen = orchestration?.parentStatus === 'FROZEN'
+  const isParentFrozen =
+    orchestration?.parentStatus === 'FROZEN' || orchestration?.parentStatus === 'CHECKPOINTED'
   const parentPane = orchestration?.parentPaneKey ? parsePaneKey(orchestration.parentPaneKey) : null
   const handleActivateParent = useCallback(
     (event: React.MouseEvent<HTMLButtonElement>) => {
