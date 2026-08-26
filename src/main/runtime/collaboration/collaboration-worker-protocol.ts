@@ -52,7 +52,7 @@ export function buildCollaborationWorkerProtocolForTask(
   }
   const requiredPublishesTo = step.requiredPublishesTo ?? []
   const protocol = buildCollaborationWorkerProtocol({
-    cli: input.devMode ? 'orca-dev' : (input.cliCommand ?? 'orca'),
+    cli: input.cliCommand ?? (input.devMode ? 'orca-dev' : 'orca'),
     workerHandle: input.workerHandle,
     dispatchCapability: input.dispatchCapability,
     publishesTo: step.publishesTo ?? [],
@@ -77,19 +77,23 @@ function buildPublisherSection(input: CollaborationWorkerProtocolInput): string 
       ? `Allowed publish topics (granted by the Run topology):
 ${topicList(publishesTo)}`
       : ''
+  const admissionGuidance =
+    input.requiredPublishAdmission === undefined
+      ? ''
+      : `\n\nFor each required topic, choose one of the admitted semantic-type / minimum-priority
+combinations shown above. A higher priority than the listed minimum is also valid.`
+  const zeroSubscriberRecovery =
+    input.requiredPublishAdmission === undefined
+      ? 'retry with a task-appropriate semantic type/priority or escalate to the coordinator.'
+      : 'if no admitted combination is shown, or every valid attempt reaches zero subscribers, escalate to the coordinator.'
   const requiredBlock =
     requiredPublishesTo.length > 0
       ? `REQUIRED publish topics - each MUST return "Published ..." before worker_done:
-${requiredTopicList(requiredPublishesTo, input.requiredPublishAdmission)}
-
-For each required topic, choose one of the admitted semantic-type / minimum-priority
-combinations shown above. A higher priority than the listed minimum is also valid.
+${requiredTopicList(requiredPublishesTo, input.requiredPublishAdmission)}${admissionGuidance}
 
 Required topics gate completion: every required topic above must successfully
 return "Published <id> to N subscriber(s)." with N >= 1 before you send worker_done.
-"Published <id> to 0 subscriber(s)." does not satisfy a required topic; if no
-admitted combination is shown, or every valid attempt reaches zero subscribers,
-escalate to the coordinator.`
+"Published <id> to 0 subscriber(s)." does not satisfy a required topic; ${zeroSubscriberRecovery}`
       : ''
   return `=== COLLABORATION: PUBLISHER ===
 
