@@ -6,7 +6,8 @@ import { afterEach, describe, expect, it } from 'vitest'
 import { getRuntimeMetadataPath } from '../../shared/runtime-bootstrap'
 import type { RuntimeStatus } from '../../shared/runtime-types'
 import { RuntimeClient } from './client'
-import { projectRemoteAppStatus } from './status'
+import { projectRemoteAppStatus, projectRuntimeConnectFailure } from './status'
+import { RuntimeClientError } from './types'
 
 const servers = new Set<ReturnType<typeof createServer>>()
 const sockets = new Set<Socket>()
@@ -140,5 +141,26 @@ describe('projectRemoteAppStatus', () => {
     expect(
       projectRemoteAppStatus(remoteStatus({ desktopWindowStatus: 'available' })).pid
     ).toBeNull()
+  })
+})
+
+describe('projectRuntimeConnectFailure', () => {
+  it('does not report a live permission-denied runtime as starting', () => {
+    expect(
+      projectRuntimeConnectFailure(
+        new RuntimeClientError('runtime_permission_denied', 'denied'),
+        true
+      )
+    ).toEqual({
+      runtimeState: 'stale_bootstrap',
+      graphState: 'not_running'
+    })
+  })
+
+  it('retains starting for a live transient connection failure', () => {
+    expect(projectRuntimeConnectFailure(new Error('not ready'), true)).toEqual({
+      runtimeState: 'starting',
+      graphState: 'starting'
+    })
   })
 })

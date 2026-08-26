@@ -66,12 +66,12 @@ export async function sendRequest<TResult>(
     }
 
     socket.setEncoding('utf8')
-    socket.once('error', () => {
+    socket.once('error', (error: NodeJS.ErrnoException) => {
       finish({
         ok: false,
-        error: new RuntimeClientError(
-          'runtime_unavailable',
-          'Could not connect to the running Orca app. Restart Orca and try again.'
+        error: mapRuntimeConnectError(
+          error,
+          transport.kind === 'unix' ? 'unix' : 'named-pipe'
         )
       })
     })
@@ -195,4 +195,23 @@ export async function sendRequest<TResult>(
       )
     })
   })
+}
+
+export function mapRuntimeConnectError(
+  error: NodeJS.ErrnoException,
+  transportKind: 'unix' | 'named-pipe'
+): RuntimeClientError {
+  const permissionDenied = error.code === 'EPERM' || error.code === 'EACCES'
+  return new RuntimeClientError(
+    permissionDenied ? 'runtime_permission_denied' : 'runtime_unavailable',
+    permissionDenied
+      ? 'Permission denied while connecting to the Orca runtime transport. Restarting Orca will not change this transport permission.'
+      : 'Could not connect to the running Orca app. Restart Orca and try again.',
+    {
+      transportKind,
+      ...(error.code ? { osErrorCode: error.code } : {}),
+      ...(typeof error.errno === 'number' ? { osErrorNumber: error.errno } : {}),
+      ...(error.syscall ? { syscall: error.syscall } : {})
+    }
+  )
 }

@@ -6,7 +6,11 @@ import {
   projectRemoteAppStatus,
   resolveDesktopWindowStatus
 } from '../../shared/cli-app-status-projection'
-import { RuntimeRpcFailureError, type RuntimeRpcSuccess } from './types'
+import {
+  RuntimeClientError,
+  RuntimeRpcFailureError,
+  type RuntimeRpcSuccess
+} from './types'
 
 export { projectRemoteAppStatus, resolveDesktopWindowStatus }
 
@@ -63,22 +67,41 @@ export async function getCliStatus(
         state: graphState
       }
     })
-  } catch {
+  } catch (error) {
     const running = isProcessRunning(metadata.pid)
+    const failure = projectRuntimeConnectFailure(error, running)
     return buildCliStatusResponse({
       app: {
         running,
         pid: running ? metadata.pid : null
       },
       runtime: {
-        state: running ? 'starting' : 'stale_bootstrap',
+        state: failure.runtimeState,
         reachable: false,
         runtimeId: null
       },
       graph: {
-        state: running ? 'starting' : 'not_running'
+        state: failure.graphState
       }
     })
+  }
+}
+
+export function projectRuntimeConnectFailure(
+  error: unknown,
+  running: boolean
+): {
+  runtimeState: 'starting' | 'stale_bootstrap'
+  graphState: 'starting' | 'not_running'
+} {
+  const permissionDenied =
+    error instanceof RuntimeClientError && error.code === 'runtime_permission_denied'
+  if (running && !permissionDenied) {
+    return { runtimeState: 'starting', graphState: 'starting' }
+  }
+  return {
+    runtimeState: 'stale_bootstrap',
+    graphState: 'not_running'
   }
 }
 
