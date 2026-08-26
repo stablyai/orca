@@ -1243,22 +1243,26 @@
       "providers": ["lan", "tailscale", "cloud-relay"],
       "coveredPlatforms": ["macos"],
       "coveredProviders": ["lan", "tailscale", "cloud-relay"],
-      "coverageNotes": "Deterministic TypeScript tests cover shared close-code policy, foreground retry timers, continuous-outage escalation, persistent pairing-rejection escalation, direct-winner cancellation, credential-gated Relay presentation, and concurrent LAN/Tailscale authentication. Physical iOS/Android radios, GFE, and production relay recovery remain live-test gaps.",
+      "coverageNotes": "Deterministic TypeScript tests cover shared close-code policy, foreground retry timers, continuous-outage escalation, persistent pairing-rejection escalation, a bounded background Relay grace, direct-winner and background cancellation, credential-gated Relay presentation, and concurrent LAN/Tailscale authentication. Physical iOS/Android radios, GFE, and production relay recovery remain live-test gaps.",
       "motivatingLinks": [
         "https://github.com/stablyai/orca-cloud/pull/96",
         "https://linear.app/stably/issue/STA-4587",
         "https://linear.app/stably/issue/STA-4681"
       ],
-      "invariant": "A foregrounded paired phone must recover from relay HOST_OFFLINE without a foreground or network-change signal, while direct recovery must select the first authenticated configured LAN or Tailscale endpoint without serial timeout delays. Relay recovery presentation starts only for a failed active Relay or a dial backed by an eligible credential, remains pending through a genuine failed-dial cooldown, and exposes the supervisor's consecutive failed-dial count so a continuous outage escalates to unreachable. A relay credential the desktop keeps refusing escalates to re-pair once its transient-rejection budget is spent, and only an authenticated session clears that verdict. Backgrounding, direct success, or stop must cancel pending work, and losing probes must close without affecting the winner.",
-      "oracle": "Inject deterministic relay close codes, missing and expired credentials, delayed credential reads, random bytes, fake timers, and independently controlled direct clients. Require HOST_OFFLINE to replace any faster transport timer with one 5-15 second retry, require no retry before the selected delay, keep Relay presentation absent when no socket can open, clear it across lifecycle races, retain it through real dial cooldowns, establish Relay through the supervisor and require its active close plus 11 failed replacements to publish reconnect attempt 12 and a Relay-unreachable verdict, race all unique non-relay endpoints, select the first authenticated path, close every loser exactly once, and retain no retry after direct connectivity wins. Drive a supervisor-established Relay through four simulated hours of E2EE rejections and require the re-pair verdict, require it to survive a background/foreground cycle, require two rejections followed by acceptance to never latch it, and require a plain transport outage to still read Relay-unreachable.",
+      "invariant": "A foregrounded paired phone must recover from relay HOST_OFFLINE without a foreground or network-change signal, while direct recovery must select the first authenticated configured LAN or Tailscale endpoint without serial timeout delays. Relay recovery presentation starts only for a failed active Relay or a dial backed by an eligible credential, remains pending through a genuine failed-dial cooldown, and exposes the supervisor's consecutive failed-dial count so a continuous outage escalates to unreachable. A relay credential the desktop keeps refusing escalates to re-pair once its transient-rejection budget is spent, and only an authenticated session clears that verdict. A healthy Relay survives backgrounding for at most 30 seconds and is reused on a quick foreground without redial; expiry, transport failure, direct success, or stop cancels the grace safely, late confirmation bookkeeping preserves lease rotation for a retained live Relay, and losing probes or replacements close without affecting the winner.",
+      "oracle": "Inject deterministic relay close codes, missing and expired credentials, delayed credential reads, random bytes, fake timers, suspended timers, stale callbacks, and independently controlled direct clients. Require HOST_OFFLINE to replace any faster transport timer with one 5-15 second retry, require no retry before the selected delay, keep Relay presentation absent when no socket can open, clear it across lifecycle races, retain it through real dial cooldowns, retain one healthy Relay through 29,999 milliseconds of background time without a new dial, close it exactly once at 30 seconds or on a later foreground when the timer was suspended, reject a stale expiry after foreground, recover a retained Relay transport failure only after foreground, resume a lease rotation that came due during the grace, arm a lease whose confirmation persistence finishes during the grace, and leave healthy direct sessions unchanged. Establish Relay through the supervisor and require its active close plus 11 failed replacements to publish reconnect attempt 12 and a Relay-unreachable verdict, race all unique non-relay endpoints, select the first authenticated path, close every loser exactly once, and retain no retry after direct connectivity wins. Drive a supervisor-established Relay through four simulated hours of E2EE rejections and require the re-pair verdict, require it to survive a background/foreground cycle, require two rejections followed by acceptance to never latch it, and require a plain transport outage to still read Relay-unreachable.",
       "commands": [
+        "pnpm --dir mobile exec vitest run --root .. mobile/src/transport/mobile-direct-endpoint-probe.test.ts mobile/src/transport/mobile-relay-background-grace.test.ts mobile/src/transport/mobile-relay-background-lifecycle.test.ts mobile/src/transport/mobile-relay-reconnect-controller.test.ts mobile/src/transport/mobile-endpoint-supervisor.test.ts mobile/src/transport/mobile-endpoint-supervisor-nudge.test.ts mobile/src/transport/mobile-relay-outage-escalation.test.ts mobile/src/transport/mobile-relay-pairing-rejection-escalation.test.ts mobile/src/transport/stable-logical-rpc-client.test.ts mobile/src/transport/mobile-relay-runtime-failover.test.ts mobile/src/transport/connection-health.test.ts",
         "pnpm --dir mobile exec vitest run --root .. mobile/src/transport/mobile-direct-endpoint-probe.test.ts mobile/src/transport/mobile-relay-reconnect-controller.test.ts mobile/src/transport/mobile-endpoint-supervisor.test.ts mobile/src/transport/mobile-relay-outage-escalation.test.ts mobile/src/transport/mobile-relay-pairing-rejection-escalation.test.ts mobile/src/transport/stable-logical-rpc-client.test.ts mobile/src/transport/mobile-relay-runtime-failover.test.ts mobile/src/transport/connection-health.test.ts",
         "pnpm exec vitest run --config config/vitest.config.ts src/shared/mobile-relay-close-codes.test.ts --reporter=dot"
       ],
       "testFiles": [
         "mobile/src/transport/mobile-direct-endpoint-probe.test.ts",
+        "mobile/src/transport/mobile-relay-background-grace.test.ts",
+        "mobile/src/transport/mobile-relay-background-lifecycle.test.ts",
         "mobile/src/transport/mobile-relay-reconnect-controller.test.ts",
         "mobile/src/transport/mobile-endpoint-supervisor.test.ts",
+        "mobile/src/transport/mobile-endpoint-supervisor-nudge.test.ts",
         "mobile/src/transport/mobile-relay-outage-escalation.test.ts",
         "mobile/src/transport/mobile-relay-pairing-rejection-escalation.test.ts",
         "mobile/src/transport/stable-logical-rpc-client.test.ts",
@@ -1275,6 +1279,26 @@
           ]
         },
         {
+          "file": "mobile/src/transport/mobile-relay-background-grace.test.ts",
+          "assertions": [
+            "the grace expires exactly once at 30 seconds",
+            "foreground deadline checks enforce expiry when the OS suspended the timer",
+            "a stale expiry callback cannot close a foreground connection"
+          ]
+        },
+        {
+          "file": "mobile/src/transport/mobile-relay-background-lifecycle.test.ts",
+          "assertions": [
+            "a quick background round trip reuses Relay without a new dial",
+            "Relay closes exactly once at grace expiry and recovers only after foreground",
+            "foreground enforces an overdue grace when the OS suspended its timer",
+            "a retained Relay transport failure suspends without a background redial and recovers on foreground",
+            "a healthy direct connection is unchanged by the Relay-only grace",
+            "a lease rotation that becomes due during the grace starts promptly on foreground",
+            "lease rotation remains armed when confirmation persistence finishes during the grace"
+          ]
+        },
+        {
           "file": "mobile/src/transport/mobile-relay-reconnect-controller.test.ts",
           "assertions": [
             "HOST_OFFLINE replaces a pending capacity retry with the bounded host-offline delay",
@@ -1288,6 +1312,12 @@
             "a missing or expired credential never presents a Relay connection that cannot start",
             "backgrounding during credential selection cannot publish a stale Relay recovery path",
             "a genuine failed Relay dial remains pending through its retry cooldown"
+          ]
+        },
+        {
+          "file": "mobile/src/transport/mobile-endpoint-supervisor-nudge.test.ts",
+          "assertions": [
+            "a replacement Relay that authenticates after backgrounding withdraws without replacing the retained session"
           ]
         },
         {
@@ -1334,6 +1364,15 @@
       ],
       "evidenceRuns": [
         {
+          "date": "2026-08-26",
+          "runner": "local",
+          "platform": "macos",
+          "command": "pnpm --dir mobile exec vitest run --root .. mobile/src/transport/mobile-direct-endpoint-probe.test.ts mobile/src/transport/mobile-relay-background-grace.test.ts mobile/src/transport/mobile-relay-background-lifecycle.test.ts mobile/src/transport/mobile-relay-reconnect-controller.test.ts mobile/src/transport/mobile-endpoint-supervisor.test.ts mobile/src/transport/mobile-endpoint-supervisor-nudge.test.ts mobile/src/transport/mobile-relay-outage-escalation.test.ts mobile/src/transport/mobile-relay-pairing-rejection-escalation.test.ts mobile/src/transport/stable-logical-rpc-client.test.ts mobile/src/transport/mobile-relay-runtime-failover.test.ts mobile/src/transport/connection-health.test.ts",
+          "result": "passed",
+          "durationSeconds": 1.15,
+          "summary": "Eleven focused mobile transport files passed with 135 assertions, including 30-second Relay retention, supervisor-level timer-suspension recovery, mid-grace transport failure, late-persistence lease rotation, manual retry, and direct-path non-regression."
+        },
+        {
           "date": "2026-08-18",
           "runner": "local",
           "platform": "macos",
@@ -1362,11 +1401,11 @@
       },
       "redGreenEvidence": {
         "status": "complete",
-        "evidence": "Banking the pairing rejection after registerFailure's gated early return — the pre-fix placement — leaves the four-hour E2EE oracle on 'Connecting via Relay…' and reds 7 assertions while the 17 others stay green; moving it ahead of the gate turns them green. The pre-fix production-lifecycle oracle establishes Relay through the supervisor, then completes one active close plus 11 replacement failures while the public retry count remains 0; the candidate publishes 12 and reaches the existing Relay-unreachable verdict. The prior external-signal HOST_OFFLINE policy and serial direct probe also fail their respective retry and first-authenticated-endpoint timing oracles."
+        "evidence": "On 2026-08-26, the unchanged immediate-teardown implementation failed the new supervisor oracle at the first 29,999-millisecond assertion because suspendActiveSession had already run once; the candidate retained Relay until the exact deadline and rejected stale or OS-suspended timer paths. The first grace candidate also failed the persistence-straddles-background oracle because only one Relay open occurred after the lease rotation deadline; scheduling from retained Relay liveness restores the required second open. Banking the pairing rejection after registerFailure's gated early return — the pre-fix placement — leaves the four-hour E2EE oracle on 'Connecting via Relay…' and reds 7 assertions while the 17 others stay green; moving it ahead of the gate turns them green. The pre-fix production-lifecycle oracle establishes Relay through the supervisor, then completes one active close plus 11 replacement failures while the public retry count remains 0; the candidate publishes 12 and reaches the existing Relay-unreachable verdict. The prior external-signal HOST_OFFLINE policy and serial direct probe also fail their respective retry and first-authenticated-endpoint timing oracles."
       },
       "performanceBudget": {
         "required": true,
-        "evidence": "The production diff only projects existing supervisor state — the failure count and a consecutive-rejection latch — through local setters and subscribers; it adds no call to a Relay dial, timer, socket, probe, or wire API, and the four screens read both recovery inputs from one host subscription instead of two. The deterministic outage asserts exactly one successful establishment plus 11 failed replacements at the escalation boundary. All configured direct candidates start in one turn, the first authenticated candidate wins after 100 ms, and every losing client is closed."
+        "evidence": "The background grace adds at most one one-shot timer and retains at most the already-active Relay splice for 30 seconds; it adds no polling, new dial, probe, listener, or wire API. A quick foreground performs zero Relay opens, while expiry closes once and opens no replacement until foreground. The deterministic outage asserts exactly one successful establishment plus 11 failed replacements at the escalation boundary. All configured direct candidates start in one turn, the first authenticated candidate wins after 100 ms, and every losing client is closed."
       },
       "promotionCriteria": [
         "Collect 100 consecutive CI passes or 14 days of soak history.",
@@ -1376,7 +1415,8 @@
       "knownGaps": [
         "No physical iOS or Android device was exercised.",
         "The deterministic transport seam does not measure production GFE, carrier NAT, DNS, TLS, or Cloud SQL latency.",
-        "Background-to-foreground recovery remains covered by existing supervisor tests but lacks a physical sleep/wake run."
+        "React Native timer suspension means the client enforces an overdue deadline on foreground but cannot guarantee server-side splice release at exactly 30 seconds while JavaScript is frozen.",
+        "Background-to-foreground recovery remains covered by supervisor tests but lacks a physical sleep/wake run."
       ],
       "demotionRule": "Keep experimental or demote if focused tests flake, HOST_OFFLINE can park indefinitely, direct probes serialize configured endpoints, loser cleanup leaks clients, or physical-device radio cost exceeds the measured budget."
     },
