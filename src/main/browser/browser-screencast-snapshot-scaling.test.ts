@@ -20,7 +20,19 @@ function createMockWebContents(capturePage: () => Promise<unknown>) {
     attached = false
   })
   dbg.sendCommand = vi.fn(async () => ({}))
-  return { isDestroyed: vi.fn(() => false), debugger: dbg, capturePage: vi.fn(capturePage) }
+  const emitter = new EventEmitter()
+  let zoomLevel = 0
+  return {
+    isDestroyed: vi.fn(() => false),
+    debugger: dbg,
+    capturePage: vi.fn(capturePage),
+    on: emitter.on.bind(emitter),
+    off: emitter.off.bind(emitter),
+    getZoomLevel: () => zoomLevel,
+    setZoomLevel: (level: number) => {
+      zoomLevel = level
+    }
+  }
 }
 
 function createCapturedImage(width: number, height: number) {

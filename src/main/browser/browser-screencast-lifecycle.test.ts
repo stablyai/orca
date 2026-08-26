@@ -21,7 +21,18 @@ function createWebContents() {
     attached = false
   })
   debuggerApi.sendCommand = vi.fn(async () => ({}))
-  return { isDestroyed: vi.fn(() => false), debugger: debuggerApi }
+  const emitter = new EventEmitter()
+  let zoomLevel = 0
+  return {
+    isDestroyed: vi.fn(() => false),
+    debugger: debuggerApi,
+    on: emitter.on.bind(emitter),
+    off: emitter.off.bind(emitter),
+    getZoomLevel: () => zoomLevel,
+    setZoomLevel: (level: number) => {
+      zoomLevel = level
+    }
+  }
 }
 
 describe('browser screencast lifecycle', () => {

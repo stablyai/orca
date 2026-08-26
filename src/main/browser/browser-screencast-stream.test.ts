@@ -22,9 +22,18 @@ function createMockWebContents() {
   })
   dbg.sendCommand = vi.fn(async () => ({}))
 
+  let zoomLevel = 3
+  const emitter = new EventEmitter()
   return {
     isDestroyed: vi.fn(() => false),
-    debugger: dbg
+    debugger: dbg,
+    on: emitter.on.bind(emitter),
+    off: emitter.off.bind(emitter),
+    emit: emitter.emit.bind(emitter),
+    getZoomLevel: vi.fn(() => zoomLevel),
+    setZoomLevel: vi.fn((level: number) => {
+      zoomLevel = level
+    })
   }
 }
 
@@ -57,6 +66,27 @@ function jpegWithSize(width: number, height: number): Buffer {
 }
 
 describe('startBrowserScreencast', () => {
+  it('resets inherited origin zoom before the first frame', async () => {
+    const webContents = createMockWebContents()
+    const onFrame = vi.fn()
+
+    const session = await startBrowserScreencast(webContents as never, {
+      format: 'jpeg',
+      quality: 70,
+      maxWidth: 1440,
+      maxHeight: 1200,
+      everyNthFrame: 2,
+      minFrameIntervalMs: 0,
+      onFrame
+    })
+
+    expect(webContents.setZoomLevel).toHaveBeenCalledWith(0)
+    expect(webContents.getZoomLevel()).toBe(0)
+
+    session.stop()
+    await session.done
+  })
+
   it('emits an initial captured frame before CDP produces screencast events', async () => {
     const webContents = createMockWebContents()
     const firstFrame = Buffer.from('first-frame')
