@@ -163,7 +163,7 @@ export const createLocalDetectedAgentState: LocalDetectedAgentStateCreator = (se
       if (clearsLegacyDetect) {
         legacyDetectContextKey = null
       }
-      const exposesSupersededLegacy = Boolean(explicitContext) && clearsLegacyDetect
+      const exposesSupersededLegacy = clearsLegacyDetect
       if (exposesSupersededLegacy) {
         legacyRefreshContextKey = contextKey
       }

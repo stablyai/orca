@@ -161,6 +161,43 @@ describe('local detected agent context lifecycle', () => {
     expect(store.getState().detectedAgentIds).toEqual(['codex'])
   })
 
+  it('preserves legacy ownership when a Floating refresh supersedes an ordinary detect', async () => {
+    let resolveDetection: (agents: string[]) => void = () => {}
+    detectAgents.mockReturnValueOnce(
+      new Promise<string[]>((resolve) => {
+        resolveDetection = resolve
+      })
+    )
+    let resolveRefresh: (result: {
+      agents: string[]
+      pathSource: string
+      pathFailureReason: string
+    }) => void = () => {}
+    refreshAgents.mockReturnValueOnce(
+      new Promise((resolve) => {
+        resolveRefresh = resolve
+      })
+    )
+    const store = createTestStore([])
+
+    const ordinary = store.getState().ensureDetectedAgents()
+    const refresh = store.getState().refreshDetectedAgents(FLOATING_TERMINAL_WORKTREE_ID)
+    expect(store.getState().isRefreshingAgents).toBe(true)
+
+    resolveRefresh({
+      agents: ['codex'],
+      pathSource: 'process_env',
+      pathFailureReason: 'none'
+    })
+    await expect(refresh).resolves.toEqual(['codex'])
+    expect(store.getState().detectedAgentIds).toEqual(['codex'])
+    expect(store.getState().isRefreshingAgents).toBe(false)
+
+    resolveDetection(['stale'])
+    await expect(ordinary).resolves.toEqual(['stale'])
+    expect(store.getState().detectedAgentIds).toEqual(['codex'])
+  })
+
   it('evicts removed project contexts without retaining settled loading entries', async () => {
     const repo1 = makeRepo('repo-1')
     const repo2 = makeRepo('repo-2')
