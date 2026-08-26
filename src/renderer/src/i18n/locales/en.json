@@ -4377,7 +4377,8 @@
           "3af85f6add": "Done",
           "readyDescriptionV2": "Anyone with this unlisted link can inspect and install the skills.",
           "descriptionV2": "Review the exact files, then publish an immutable version behind an unlisted link.",
-          "publishBundle": "Publish bundle"
+          "publishBundle": "Publish bundle",
+          "cancelRequestFailed": "Orca could not send the cancellation request. The upload may still finish."
         },
         "SkillCard": {
           "d25a1b8ae6": "Share skill",
@@ -4670,6 +4671,23 @@
           "showMore": "Show more"
         },
         "install": {
+          "authorizing": "Authorizing package access…",
+          "installing": "Downloading, verifying, and installing…",
+          "selectSkill": "Select at least one skill.",
+          "chooseWorkspace": "Choose a workspace.",
+          "reconnectBeforeInstalling": "Reconnect your Orca account before installing.",
+          "bundleVerificationFailed": "Installation failed before Orca could verify the requested bundle.",
+          "destinationAlreadyFinished": "The destination had already finished this installation.",
+          "enterShareLink": "Enter an Orca skill share link.",
+          "shareUnavailable": "This share is unavailable. The link may be invalid, expired, or revoked.",
+          "requestedVersionVerificationFailed": "Installation failed before Orca could verify the requested version.",
+          "versionVerificationFailed": "Orca could not verify the requested version.",
+          "inspectManagedFailed": "Orca could not inspect managed installs on this machine.",
+          "reconnectForVersionHistory": "Reconnect your Orca account to load version history.",
+          "versionHistoryUnavailable": "Version history is unavailable for this skill.",
+          "bundleSkillsMissing": "This version does not contain any of the installed bundle skills.",
+          "reconnectBeforeVersionChange": "Reconnect your Orca account before changing versions.",
+          "removeFailed": "Orca could not safely remove this skill.",
           "agentsLabel": "Agents",
           "agentsCanonical": "Always installed for {{value0}}, which read {{value1}}.",
           "agentsNoneChosen": "No extra agents",
